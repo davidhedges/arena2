@@ -77,7 +77,7 @@ namespace Arena.Tests.Editor
             object? groundSlashDemo = method.Invoke(null, new object?[] { "VFXGraph_GroundSlash", null, "Arena_VerdantStand_Blockout", "ArenaMatch" });
             object? enterInstance = method.Invoke(null, new object?[] { "Arena_VerdantStand_Blockout", 99UL, "Arena_VerdantStand_Blockout", "ArenaMatch" });
             object? enterOpenWorld = method.Invoke(null, new object?[] { "ArenaMatch", null, "Arena_VerdantStand_Blockout", "ArenaMatch" });
-            object? preserveLoadedOpenWorld = method.Invoke(null, new object?[] { "Oasis_Day", null, "Giant_Skeleton", "ArenaMatch" });
+            object? preserveLoadedOpenWorld = method.Invoke(null, new object?[] { "Oasis_Day", null, "Golden_Valley_Sunny", "ArenaMatch" });
 
             Assert.That(training, Is.Null);
             Assert.That(characterCreation, Is.Null);
@@ -110,8 +110,8 @@ namespace Arena.Tests.Editor
             RequireMethod(coordinatorType, "OnPlayerWorldInsert", playerWorldType).Invoke(coordinator, new[] { currentWorld });
             loadedScenes.Clear();
 
-            activeScene = "Giant_Skeleton";
-            object preferredScene = Activator.CreateInstance(preferenceType, identity, "Giant_Skeleton")!;
+            activeScene = "Golden_Valley_Sunny";
+            object preferredScene = Activator.CreateInstance(preferenceType, identity, "Golden_Valley_Sunny")!;
             RequireMethod(coordinatorType, "OnPlayerOpenWorldSceneUpdate", preferenceType).Invoke(coordinator, new[] { preferredScene });
 
             Assert.That(loadedScenes, Is.Empty);
@@ -138,7 +138,7 @@ namespace Arena.Tests.Editor
             RequireMethod(coordinatorType, "OnPlayerWorldInsert", playerWorldType).Invoke(coordinator, new[] { currentWorld });
             Assert.That(loadedScenes, Is.Empty);
 
-            object requestedWorld = Activator.CreateInstance(playerWorldType, identity, "OPEN", null, "Giant_Skeleton")!;
+            object requestedWorld = Activator.CreateInstance(playerWorldType, identity, "OPEN", null, "Golden_Valley_Sunny")!;
             RequireMethod(coordinatorType, "OnPlayerWorldUpdate", playerWorldType).Invoke(coordinator, new[] { requestedWorld });
             Assert.That(loadedScenes, Is.Empty);
         }

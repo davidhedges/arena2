@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: 02b63d4491d14e4588a9177a05a9c58e
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 187092
+  packageName: Stylized Fantasy Newbie Outfits Pack
+  packageVersion: 2.5.3
+  assetPath: Assets/StylizedCharacter/Scripts/NHItem.cs
+  uploadId: 866372

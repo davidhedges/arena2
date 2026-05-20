@@ -9,20 +9,13 @@ namespace Arena.World
     public readonly struct OpenWorldSceneProfile
     {
         private const string OasisDaySceneName = "Oasis_Day";
-        private const string OasisNightSceneName = "Oasis_Night";
         private const string AdventureIslandSceneName = "Adventure_Island";
         private const string DesertDaySceneName = "Desert_Day";
-        private const string DesertNightSceneName = "Desert_Night";
         private const string DocksDaySceneName = "Docks_Day";
-        private const string DocksNightSceneName = "Docks_Night";
-        private const string GiantSkeletonSceneName = "Giant_Skeleton";
         private const string GoldenValleyOvercastSceneName = "Golden_Valley_Overcast";
         private const string GoldenValleySunnySceneName = "Golden_Valley_Sunny";
-        private const string GrasslandsSceneName = "Grasslands";
         private const string GreatHallDaySceneName = "Great_Hall_Day";
-        private const string GreatHallNightSceneName = "Great_Hall_Night";
         private const string IdolDaySceneName = "Idol_Day";
-        private const string IdolNightSceneName = "Idol_Night";
         private const string TempleGardensSceneName = "Temple_Gardens";
 
         private OpenWorldSceneProfile(
@@ -59,13 +52,6 @@ namespace Arena.World
             0.0f,
             new Vector3(62.22f, 12.358f, 79.47f));
 
-        public static OpenWorldSceneProfile OasisNight { get; } = new(
-            OasisNightSceneName,
-            "oasis_day",
-            12.358f,
-            0.0f,
-            new Vector3(62.22f, 12.358f, 79.47f));
-
         public static OpenWorldSceneProfile AdventureIsland { get; } = new(
             AdventureIslandSceneName,
             "adventure_island",
@@ -80,33 +66,12 @@ namespace Arena.World
             0.0f,
             new Vector3(-35.535f, 1.8f, 11.47f));
 
-        public static OpenWorldSceneProfile DesertNight { get; } = new(
-            DesertNightSceneName,
-            "desert_night",
-            1.8f,
-            0.0f,
-            new Vector3(-35.535f, 1.8f, 11.47f));
-
         public static OpenWorldSceneProfile DocksDay { get; } = new(
             DocksDaySceneName,
             "docks_day",
             52.608f,
             0.0f,
             new Vector3(413.772f, 52.608f, 370.805f));
-
-        public static OpenWorldSceneProfile DocksNight { get; } = new(
-            DocksNightSceneName,
-            "docks_day",
-            52.608f,
-            0.0f,
-            new Vector3(413.772f, 52.608f, 370.805f));
-
-        public static OpenWorldSceneProfile GiantSkeleton { get; } = new(
-            GiantSkeletonSceneName,
-            "giant_skeleton",
-            8.996f,
-            0.0f,
-            new Vector3(24.946f, 8.996f, -87.789f));
 
         public static OpenWorldSceneProfile GoldenValleyOvercast { get; } = new(
             GoldenValleyOvercastSceneName,
@@ -122,13 +87,6 @@ namespace Arena.World
             0.0f,
             new Vector3(356.842f, 86.013f, 330.988f));
 
-        public static OpenWorldSceneProfile Grasslands { get; } = new(
-            GrasslandsSceneName,
-            "grasslands",
-            15.11691f,
-            0.0f,
-            new Vector3(-34.94846f, 15.11691f, -200.3122f));
-
         public static OpenWorldSceneProfile GreatHallDay { get; } = new(
             GreatHallDaySceneName,
             "great_hall_day",
@@ -137,23 +95,8 @@ namespace Arena.World
             new Vector3(27.34f, -5.94f, -3.661f),
             useProceduralFallbackColliders: false);
 
-        public static OpenWorldSceneProfile GreatHallNight { get; } = new(
-            GreatHallNightSceneName,
-            "great_hall_day",
-            -5.94f,
-            0.0f,
-            new Vector3(27.34f, -5.94f, -3.661f),
-            useProceduralFallbackColliders: false);
-
         public static OpenWorldSceneProfile IdolDay { get; } = new(
             IdolDaySceneName,
-            "idol_day",
-            70.01f,
-            0.0f,
-            new Vector3(328.09f, 70.01f, 233.949f));
-
-        public static OpenWorldSceneProfile IdolNight { get; } = new(
-            IdolNightSceneName,
             "idol_day",
             70.01f,
             0.0f,
@@ -170,20 +113,13 @@ namespace Arena.World
         public static OpenWorldSceneProfile ForSceneName(string? sceneName)
             => sceneName switch
             {
-                OasisNightSceneName => OasisNight,
                 AdventureIslandSceneName => AdventureIsland,
                 DesertDaySceneName => DesertDay,
-                DesertNightSceneName => DesertNight,
                 DocksDaySceneName => DocksDay,
-                DocksNightSceneName => DocksNight,
-                GiantSkeletonSceneName => GiantSkeleton,
                 GoldenValleyOvercastSceneName => GoldenValleyOvercast,
                 GoldenValleySunnySceneName => GoldenValleySunny,
-                GrasslandsSceneName => Grasslands,
                 GreatHallDaySceneName => GreatHallDay,
-                GreatHallNightSceneName => GreatHallNight,
                 IdolDaySceneName => IdolDay,
-                IdolNightSceneName => IdolNight,
                 TempleGardensSceneName => TempleGardens,
                 _ => OasisDay,
             };

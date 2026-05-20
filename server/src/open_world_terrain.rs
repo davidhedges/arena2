@@ -1,10 +1,8 @@
 use crate::open_world_scene::{
     default_open_world_scene_profile, OpenWorldSceneProfile, ADVENTURE_ISLAND_PROFILE,
-    DESERT_DAY_PROFILE, DESERT_NIGHT_PROFILE, DOCKS_DAY_PROFILE, DOCKS_NIGHT_PROFILE,
-    GIANT_SKELETON_PROFILE, GOLDEN_VALLEY_OVERCAST_PROFILE, GOLDEN_VALLEY_SUNNY_PROFILE,
-    GRASSLANDS_PROFILE, GREAT_HALL_DAY_PROFILE, GREAT_HALL_NIGHT_PROFILE, IDOL_DAY_PROFILE,
-    IDOL_NIGHT_PROFILE, OASIS_DAY_PROFILE, OASIS_NIGHT_PROFILE, OPEN_WORLD_HEIGHTFIELD_JSON,
-    TEMPLE_GARDENS_PROFILE,
+    DESERT_DAY_PROFILE, DOCKS_DAY_PROFILE, GOLDEN_VALLEY_OVERCAST_PROFILE,
+    GOLDEN_VALLEY_SUNNY_PROFILE, GREAT_HALL_DAY_PROFILE, IDOL_DAY_PROFILE, OASIS_DAY_PROFILE,
+    OPEN_WORLD_HEIGHTFIELD_JSON, TEMPLE_GARDENS_PROFILE,
 };
 use serde::Deserialize;
 use std::sync::OnceLock;
@@ -25,37 +23,22 @@ fn open_world_heightfield_for_profile(
     profile: &OpenWorldSceneProfile,
 ) -> &'static OpenWorldHeightfieldConfig {
     static OPEN_WORLD_HEIGHTFIELD: OnceLock<OpenWorldHeightfieldConfig> = OnceLock::new();
-    static OASIS_NIGHT_HEIGHTFIELD: OnceLock<OpenWorldHeightfieldConfig> = OnceLock::new();
     static ADVENTURE_ISLAND_HEIGHTFIELD: OnceLock<OpenWorldHeightfieldConfig> = OnceLock::new();
     static DESERT_DAY_HEIGHTFIELD: OnceLock<OpenWorldHeightfieldConfig> = OnceLock::new();
-    static DESERT_NIGHT_HEIGHTFIELD: OnceLock<OpenWorldHeightfieldConfig> = OnceLock::new();
     static DOCKS_DAY_HEIGHTFIELD: OnceLock<OpenWorldHeightfieldConfig> = OnceLock::new();
-    static DOCKS_NIGHT_HEIGHTFIELD: OnceLock<OpenWorldHeightfieldConfig> = OnceLock::new();
-    static GIANT_SKELETON_HEIGHTFIELD: OnceLock<OpenWorldHeightfieldConfig> = OnceLock::new();
     static GOLDEN_VALLEY_OVERCAST_HEIGHTFIELD: OnceLock<OpenWorldHeightfieldConfig> =
         OnceLock::new();
     static GOLDEN_VALLEY_SUNNY_HEIGHTFIELD: OnceLock<OpenWorldHeightfieldConfig> = OnceLock::new();
-    static GRASSLANDS_HEIGHTFIELD: OnceLock<OpenWorldHeightfieldConfig> = OnceLock::new();
     static GREAT_HALL_DAY_HEIGHTFIELD: OnceLock<OpenWorldHeightfieldConfig> = OnceLock::new();
-    static GREAT_HALL_NIGHT_HEIGHTFIELD: OnceLock<OpenWorldHeightfieldConfig> = OnceLock::new();
     static IDOL_DAY_HEIGHTFIELD: OnceLock<OpenWorldHeightfieldConfig> = OnceLock::new();
-    static IDOL_NIGHT_HEIGHTFIELD: OnceLock<OpenWorldHeightfieldConfig> = OnceLock::new();
     static TEMPLE_GARDENS_HEIGHTFIELD: OnceLock<OpenWorldHeightfieldConfig> = OnceLock::new();
 
     let (heightfield, json) = if profile.scene_name == ADVENTURE_ISLAND_PROFILE.scene_name {
         (&ADVENTURE_ISLAND_HEIGHTFIELD, profile.heightfield_json)
-    } else if profile.scene_name == OASIS_NIGHT_PROFILE.scene_name {
-        (&OASIS_NIGHT_HEIGHTFIELD, profile.heightfield_json)
     } else if profile.scene_name == DESERT_DAY_PROFILE.scene_name {
         (&DESERT_DAY_HEIGHTFIELD, profile.heightfield_json)
-    } else if profile.scene_name == DESERT_NIGHT_PROFILE.scene_name {
-        (&DESERT_NIGHT_HEIGHTFIELD, profile.heightfield_json)
     } else if profile.scene_name == DOCKS_DAY_PROFILE.scene_name {
         (&DOCKS_DAY_HEIGHTFIELD, profile.heightfield_json)
-    } else if profile.scene_name == DOCKS_NIGHT_PROFILE.scene_name {
-        (&DOCKS_NIGHT_HEIGHTFIELD, profile.heightfield_json)
-    } else if profile.scene_name == GIANT_SKELETON_PROFILE.scene_name {
-        (&GIANT_SKELETON_HEIGHTFIELD, profile.heightfield_json)
     } else if profile.scene_name == GOLDEN_VALLEY_OVERCAST_PROFILE.scene_name {
         (
             &GOLDEN_VALLEY_OVERCAST_HEIGHTFIELD,
@@ -63,16 +46,10 @@ fn open_world_heightfield_for_profile(
         )
     } else if profile.scene_name == GOLDEN_VALLEY_SUNNY_PROFILE.scene_name {
         (&GOLDEN_VALLEY_SUNNY_HEIGHTFIELD, profile.heightfield_json)
-    } else if profile.scene_name == GRASSLANDS_PROFILE.scene_name {
-        (&GRASSLANDS_HEIGHTFIELD, profile.heightfield_json)
     } else if profile.scene_name == GREAT_HALL_DAY_PROFILE.scene_name {
         (&GREAT_HALL_DAY_HEIGHTFIELD, profile.heightfield_json)
-    } else if profile.scene_name == GREAT_HALL_NIGHT_PROFILE.scene_name {
-        (&GREAT_HALL_NIGHT_HEIGHTFIELD, profile.heightfield_json)
     } else if profile.scene_name == IDOL_DAY_PROFILE.scene_name {
         (&IDOL_DAY_HEIGHTFIELD, profile.heightfield_json)
-    } else if profile.scene_name == IDOL_NIGHT_PROFILE.scene_name {
-        (&IDOL_NIGHT_HEIGHTFIELD, profile.heightfield_json)
     } else if profile.scene_name == TEMPLE_GARDENS_PROFILE.scene_name {
         (&TEMPLE_GARDENS_HEIGHTFIELD, profile.heightfield_json)
     } else if profile.scene_name == OASIS_DAY_PROFILE.scene_name {

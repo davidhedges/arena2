@@ -25,7 +25,6 @@ namespace Arena.Editor
             "ToonAdventureIsland",
             "ToonDesertedTemples",
             "ToonEnchantedMeadow",
-            "ToonFantasyNature",
             "ToonGoldenValley",
         };
 

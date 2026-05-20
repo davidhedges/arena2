@@ -5,11 +5,10 @@ use crate::arena::{
 use crate::movement::GROUND_Y;
 use crate::open_world_scene::{
     default_open_world_scene_profile, open_world_scene_profile_for_scene, OpenWorldSceneProfile,
-    ADVENTURE_ISLAND_PROFILE, DESERT_DAY_PROFILE, DESERT_NIGHT_PROFILE, DOCKS_DAY_PROFILE,
-    DOCKS_NIGHT_PROFILE, GIANT_SKELETON_PROFILE, GOLDEN_VALLEY_OVERCAST_PROFILE,
-    GOLDEN_VALLEY_SUNNY_PROFILE, GRASSLANDS_PROFILE, GREAT_HALL_DAY_PROFILE,
-    GREAT_HALL_NIGHT_PROFILE, IDOL_DAY_PROFILE, IDOL_NIGHT_PROFILE, OASIS_DAY_PROFILE,
-    OASIS_NIGHT_PROFILE, OPEN_WORLD_GAMEPLAY_COLLISION_JSON, TEMPLE_GARDENS_PROFILE,
+    ADVENTURE_ISLAND_PROFILE, DESERT_DAY_PROFILE, DOCKS_DAY_PROFILE,
+    GOLDEN_VALLEY_OVERCAST_PROFILE, GOLDEN_VALLEY_SUNNY_PROFILE, GREAT_HALL_DAY_PROFILE,
+    IDOL_DAY_PROFILE, OASIS_DAY_PROFILE, OPEN_WORLD_GAMEPLAY_COLLISION_JSON,
+    TEMPLE_GARDENS_PROFILE,
 };
 use crate::open_world_terrain::{
     open_world_half_size_for_profile, open_world_heightfield_enabled_for_profile,
@@ -919,48 +918,25 @@ fn for_each_open_world_collider(profile: &OpenWorldSceneProfile, mut emit: impl 
 
 fn open_world_colliders(profile: &OpenWorldSceneProfile) -> &'static [Collider] {
     static OPEN_WORLD_COLLIDERS: OnceLock<Vec<Collider>> = OnceLock::new();
-    static OASIS_NIGHT_COLLIDERS: OnceLock<Vec<Collider>> = OnceLock::new();
     static ADVENTURE_ISLAND_COLLIDERS: OnceLock<Vec<Collider>> = OnceLock::new();
     static DESERT_DAY_COLLIDERS: OnceLock<Vec<Collider>> = OnceLock::new();
-    static DESERT_NIGHT_COLLIDERS: OnceLock<Vec<Collider>> = OnceLock::new();
     static DOCKS_DAY_COLLIDERS: OnceLock<Vec<Collider>> = OnceLock::new();
-    static DOCKS_NIGHT_COLLIDERS: OnceLock<Vec<Collider>> = OnceLock::new();
-    static GIANT_SKELETON_COLLIDERS: OnceLock<Vec<Collider>> = OnceLock::new();
     static GOLDEN_VALLEY_OVERCAST_COLLIDERS: OnceLock<Vec<Collider>> = OnceLock::new();
     static GOLDEN_VALLEY_SUNNY_COLLIDERS: OnceLock<Vec<Collider>> = OnceLock::new();
-    static GRASSLANDS_COLLIDERS: OnceLock<Vec<Collider>> = OnceLock::new();
     static GREAT_HALL_DAY_COLLIDERS: OnceLock<Vec<Collider>> = OnceLock::new();
-    static GREAT_HALL_NIGHT_COLLIDERS: OnceLock<Vec<Collider>> = OnceLock::new();
     static IDOL_DAY_COLLIDERS: OnceLock<Vec<Collider>> = OnceLock::new();
-    static IDOL_NIGHT_COLLIDERS: OnceLock<Vec<Collider>> = OnceLock::new();
     static TEMPLE_GARDENS_COLLIDERS: OnceLock<Vec<Collider>> = OnceLock::new();
 
     if profile.scene_name == ADVENTURE_ISLAND_PROFILE.scene_name {
         ADVENTURE_ISLAND_COLLIDERS
             .get_or_init(|| generate_open_world_colliders(profile))
             .as_slice()
-    } else if profile.scene_name == OASIS_NIGHT_PROFILE.scene_name {
-        OASIS_NIGHT_COLLIDERS
-            .get_or_init(|| generate_open_world_colliders(profile))
-            .as_slice()
     } else if profile.scene_name == DESERT_DAY_PROFILE.scene_name {
         DESERT_DAY_COLLIDERS
             .get_or_init(|| generate_open_world_colliders(profile))
             .as_slice()
-    } else if profile.scene_name == DESERT_NIGHT_PROFILE.scene_name {
-        DESERT_NIGHT_COLLIDERS
-            .get_or_init(|| generate_open_world_colliders(profile))
-            .as_slice()
     } else if profile.scene_name == DOCKS_DAY_PROFILE.scene_name {
         DOCKS_DAY_COLLIDERS
-            .get_or_init(|| generate_open_world_colliders(profile))
-            .as_slice()
-    } else if profile.scene_name == DOCKS_NIGHT_PROFILE.scene_name {
-        DOCKS_NIGHT_COLLIDERS
-            .get_or_init(|| generate_open_world_colliders(profile))
-            .as_slice()
-    } else if profile.scene_name == GIANT_SKELETON_PROFILE.scene_name {
-        GIANT_SKELETON_COLLIDERS
             .get_or_init(|| generate_open_world_colliders(profile))
             .as_slice()
     } else if profile.scene_name == GOLDEN_VALLEY_OVERCAST_PROFILE.scene_name {
@@ -971,24 +947,12 @@ fn open_world_colliders(profile: &OpenWorldSceneProfile) -> &'static [Collider] 
         GOLDEN_VALLEY_SUNNY_COLLIDERS
             .get_or_init(|| generate_open_world_colliders(profile))
             .as_slice()
-    } else if profile.scene_name == GRASSLANDS_PROFILE.scene_name {
-        GRASSLANDS_COLLIDERS
-            .get_or_init(|| generate_open_world_colliders(profile))
-            .as_slice()
     } else if profile.scene_name == GREAT_HALL_DAY_PROFILE.scene_name {
         GREAT_HALL_DAY_COLLIDERS
             .get_or_init(|| generate_open_world_colliders(profile))
             .as_slice()
-    } else if profile.scene_name == GREAT_HALL_NIGHT_PROFILE.scene_name {
-        GREAT_HALL_NIGHT_COLLIDERS
-            .get_or_init(|| generate_open_world_colliders(profile))
-            .as_slice()
     } else if profile.scene_name == IDOL_DAY_PROFILE.scene_name {
         IDOL_DAY_COLLIDERS
-            .get_or_init(|| generate_open_world_colliders(profile))
-            .as_slice()
-    } else if profile.scene_name == IDOL_NIGHT_PROFILE.scene_name {
-        IDOL_NIGHT_COLLIDERS
             .get_or_init(|| generate_open_world_colliders(profile))
             .as_slice()
     } else if profile.scene_name == TEMPLE_GARDENS_PROFILE.scene_name {
@@ -1013,50 +977,27 @@ fn open_world_gameplay_collision_boxes(
     profile: &OpenWorldSceneProfile,
 ) -> &'static [GameplayCollisionBox] {
     static OPEN_WORLD_GAMEPLAY_BOXES: OnceLock<Vec<GameplayCollisionBox>> = OnceLock::new();
-    static OASIS_NIGHT_GAMEPLAY_BOXES: OnceLock<Vec<GameplayCollisionBox>> = OnceLock::new();
     static ADVENTURE_ISLAND_GAMEPLAY_BOXES: OnceLock<Vec<GameplayCollisionBox>> = OnceLock::new();
     static DESERT_DAY_GAMEPLAY_BOXES: OnceLock<Vec<GameplayCollisionBox>> = OnceLock::new();
-    static DESERT_NIGHT_GAMEPLAY_BOXES: OnceLock<Vec<GameplayCollisionBox>> = OnceLock::new();
     static DOCKS_DAY_GAMEPLAY_BOXES: OnceLock<Vec<GameplayCollisionBox>> = OnceLock::new();
-    static DOCKS_NIGHT_GAMEPLAY_BOXES: OnceLock<Vec<GameplayCollisionBox>> = OnceLock::new();
-    static GIANT_SKELETON_GAMEPLAY_BOXES: OnceLock<Vec<GameplayCollisionBox>> = OnceLock::new();
     static GOLDEN_VALLEY_OVERCAST_GAMEPLAY_BOXES: OnceLock<Vec<GameplayCollisionBox>> =
         OnceLock::new();
     static GOLDEN_VALLEY_SUNNY_GAMEPLAY_BOXES: OnceLock<Vec<GameplayCollisionBox>> =
         OnceLock::new();
-    static GRASSLANDS_GAMEPLAY_BOXES: OnceLock<Vec<GameplayCollisionBox>> = OnceLock::new();
     static GREAT_HALL_DAY_GAMEPLAY_BOXES: OnceLock<Vec<GameplayCollisionBox>> = OnceLock::new();
-    static GREAT_HALL_NIGHT_GAMEPLAY_BOXES: OnceLock<Vec<GameplayCollisionBox>> = OnceLock::new();
     static IDOL_DAY_GAMEPLAY_BOXES: OnceLock<Vec<GameplayCollisionBox>> = OnceLock::new();
-    static IDOL_NIGHT_GAMEPLAY_BOXES: OnceLock<Vec<GameplayCollisionBox>> = OnceLock::new();
     static TEMPLE_GARDENS_GAMEPLAY_BOXES: OnceLock<Vec<GameplayCollisionBox>> = OnceLock::new();
 
     if profile.scene_name == ADVENTURE_ISLAND_PROFILE.scene_name {
         ADVENTURE_ISLAND_GAMEPLAY_BOXES
             .get_or_init(|| load_open_world_gameplay_collision_boxes(profile))
             .as_slice()
-    } else if profile.scene_name == OASIS_NIGHT_PROFILE.scene_name {
-        OASIS_NIGHT_GAMEPLAY_BOXES
-            .get_or_init(|| load_open_world_gameplay_collision_boxes(profile))
-            .as_slice()
     } else if profile.scene_name == DESERT_DAY_PROFILE.scene_name {
         DESERT_DAY_GAMEPLAY_BOXES
             .get_or_init(|| load_open_world_gameplay_collision_boxes(profile))
             .as_slice()
-    } else if profile.scene_name == DESERT_NIGHT_PROFILE.scene_name {
-        DESERT_NIGHT_GAMEPLAY_BOXES
-            .get_or_init(|| load_open_world_gameplay_collision_boxes(profile))
-            .as_slice()
     } else if profile.scene_name == DOCKS_DAY_PROFILE.scene_name {
         DOCKS_DAY_GAMEPLAY_BOXES
-            .get_or_init(|| load_open_world_gameplay_collision_boxes(profile))
-            .as_slice()
-    } else if profile.scene_name == DOCKS_NIGHT_PROFILE.scene_name {
-        DOCKS_NIGHT_GAMEPLAY_BOXES
-            .get_or_init(|| load_open_world_gameplay_collision_boxes(profile))
-            .as_slice()
-    } else if profile.scene_name == GIANT_SKELETON_PROFILE.scene_name {
-        GIANT_SKELETON_GAMEPLAY_BOXES
             .get_or_init(|| load_open_world_gameplay_collision_boxes(profile))
             .as_slice()
     } else if profile.scene_name == GOLDEN_VALLEY_OVERCAST_PROFILE.scene_name {
@@ -1067,24 +1008,12 @@ fn open_world_gameplay_collision_boxes(
         GOLDEN_VALLEY_SUNNY_GAMEPLAY_BOXES
             .get_or_init(|| load_open_world_gameplay_collision_boxes(profile))
             .as_slice()
-    } else if profile.scene_name == GRASSLANDS_PROFILE.scene_name {
-        GRASSLANDS_GAMEPLAY_BOXES
-            .get_or_init(|| load_open_world_gameplay_collision_boxes(profile))
-            .as_slice()
     } else if profile.scene_name == GREAT_HALL_DAY_PROFILE.scene_name {
         GREAT_HALL_DAY_GAMEPLAY_BOXES
             .get_or_init(|| load_open_world_gameplay_collision_boxes(profile))
             .as_slice()
-    } else if profile.scene_name == GREAT_HALL_NIGHT_PROFILE.scene_name {
-        GREAT_HALL_NIGHT_GAMEPLAY_BOXES
-            .get_or_init(|| load_open_world_gameplay_collision_boxes(profile))
-            .as_slice()
     } else if profile.scene_name == IDOL_DAY_PROFILE.scene_name {
         IDOL_DAY_GAMEPLAY_BOXES
-            .get_or_init(|| load_open_world_gameplay_collision_boxes(profile))
-            .as_slice()
-    } else if profile.scene_name == IDOL_NIGHT_PROFILE.scene_name {
-        IDOL_NIGHT_GAMEPLAY_BOXES
             .get_or_init(|| load_open_world_gameplay_collision_boxes(profile))
             .as_slice()
     } else if profile.scene_name == TEMPLE_GARDENS_PROFILE.scene_name {

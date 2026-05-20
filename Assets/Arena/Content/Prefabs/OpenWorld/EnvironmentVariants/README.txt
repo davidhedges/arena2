@@ -27,17 +27,16 @@ Assets/Arena/Content/Prefabs/OpenWorld/EnvironmentVariants/<ToonPackage>/<Vendor
 Example:
 
 Source:
-Assets/ThirdParty/AssetStore/Environments/ToonFantasyNature/Prefabs/Rocks/Rock_01.prefab
+Assets/ThirdParty/AssetStore/Environments/ToonGoldenValley/Prefabs/Rocks/Rock_01.prefab
 
 Variant:
-Assets/Arena/Content/Prefabs/OpenWorld/EnvironmentVariants/ToonFantasyNature/Rocks/Rock_01_Arena.prefab
+Assets/Arena/Content/Prefabs/OpenWorld/EnvironmentVariants/ToonGoldenValley/Rocks/Rock_01_Arena.prefab
 
 Included packages:
 
 ToonAdventureIsland
 ToonDesertedTemples
 ToonEnchantedMeadow
-ToonFantasyNature
 ToonGoldenValley
 
 Ignored packages:

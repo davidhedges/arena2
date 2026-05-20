@@ -26,19 +26,12 @@ namespace Arena.World
         {
             new("Adventure_Island", "Adventure Island"),
             new("Desert_Day", "Desert Day"),
-            new("Desert_Night", "Desert Night"),
             new("Docks_Day", "Docks Day"),
-            new("Docks_Night", "Docks Night"),
-            new("Giant_Skeleton", "Giant Skeleton"),
             new("Golden_Valley_Overcast", "Golden Valley Overcast"),
             new("Golden_Valley_Sunny", "Golden Valley Sunny"),
-            new("Grasslands", "Grasslands"),
             new("Great_Hall_Day", "Great Hall Day"),
-            new("Great_Hall_Night", "Great Hall Night"),
             new("Idol_Day", "Idol Day"),
-            new("Idol_Night", "Idol Night"),
             new("Oasis_Day", "Oasis Day"),
-            new("Oasis_Night", "Oasis Night"),
             new("Temple_Gardens", "Temple Gardens"),
         };
 
