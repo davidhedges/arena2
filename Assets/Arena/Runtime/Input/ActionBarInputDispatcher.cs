@@ -1,0 +1,177 @@
+#nullable enable
+
+using System.Collections.Generic;
+using Arena.Combat;
+using Arena.Debugging;
+using Arena.Entity;
+using Arena.Network;
+using Arena.Simulation;
+using SpacetimeDB.Types;
+
+namespace Arena.Input
+{
+    public static class ActionBarInputDispatcher
+    {
+        public static void ProcessSelectableBindings(
+            DbConnection conn,
+            LocalPlayerInputSource input,
+            bool shiftHeld,
+            SpellInputHandler spellInput)
+        {
+            var consumedPressKeys = new HashSet<UnityEngine.KeyCode>();
+
+            foreach (ActionBarSlotBinding binding in ActionBarKeymap.SelectableBindings)
+            {
+                if (binding.RequiresShift != shiftHeld) continue;
+                if (consumedPressKeys.Contains(binding.KeyCode)) continue;
+                if (!input.WasKeyPressedThisFrame(binding.KeyCode)) continue;
+
+                ActiveSelectableLoadoutAction resolved = ActiveLoadoutResolver.ResolveActiveSelectableAction(
+                    conn,
+                    conn.Identity,
+                    binding.SlotId);
+                if (!resolved.HasAssignedAction)
+                {
+                    LoadoutActionTrace.Trace(
+                        $"{binding.KeyLabel} -> {binding.SlotId} unresolved (assigned={resolved.HasAssignedAction})");
+                    continue;
+                }
+                consumedPressKeys.Add(binding.KeyCode);
+
+                TryTrigger(resolved, conn, spellInput, binding.KeyLabel, binding.SlotId);
+            }
+
+            var consumedReleaseKeys = new HashSet<UnityEngine.KeyCode>();
+            foreach (ActionBarSlotBinding binding in ActionBarKeymap.SelectableBindings)
+            {
+                if (binding.RequiresShift != shiftHeld) continue;
+                if (consumedReleaseKeys.Contains(binding.KeyCode)) continue;
+
+                ActiveSelectableLoadoutAction resolved = ActiveLoadoutResolver.ResolveActiveSelectableAction(
+                    conn,
+                    conn.Identity,
+                    binding.SlotId);
+                if (resolved.IsFixed)
+                {
+                    consumedReleaseKeys.Add(binding.KeyCode);
+                    bool isHeld = input.IsKeyHeldThisFrame(binding.KeyCode);
+                    if (input.WasKeyReleasedThisFrame(binding.KeyCode))
+                    {
+                        FixedActionDispatcher.TryRelease(resolved, conn);
+                    }
+                    else
+                    {
+                        FixedActionDispatcher.ReconcileHeldState(resolved, conn, isHeld);
+                    }
+                    continue;
+                }
+                string? actionId = resolved.ActionId;
+                if (string.IsNullOrWhiteSpace(actionId)) continue;
+                consumedReleaseKeys.Add(binding.KeyCode);
+                if (!resolved.IsSpellAbility)
+                    continue;
+                if (!SpellDefinitionContracts.CastsOnRelease(GetSpellDefinition(conn, actionId))) continue;
+                if (!input.WasKeyReleasedThisFrame(binding.KeyCode)) continue;
+                LoadoutActionTrace.Trace($"{binding.KeyLabel} release -> cast release {actionId}");
+                CastActionToken token = LocalCombatState.Instance.CurrentCastTokenForRelease(actionId);
+                conn.Reducers.ReleaseCastRequest(
+                    actionId,
+                    token.PredictedCastId,
+                    token.ClientActionSeq);
+            }
+        }
+
+        public static bool TryTrigger(ActiveSelectableLoadoutAction action, DbConnection? conn)
+        {
+            return TryTrigger(action, conn, SpellInputHandler.Instance, string.Empty, action.SlotId);
+        }
+
+        private static bool TryTrigger(
+            ActiveSelectableLoadoutAction action,
+            DbConnection? conn,
+            SpellInputHandler? spellInput,
+            string keyLabel,
+            string slotId)
+        {
+            if (conn == null || !action.HasAssignedAction)
+                return false;
+
+            if (action.IsFixed)
+            {
+                return FixedActionDispatcher.TryTrigger(action, conn);
+            }
+
+            if (!string.IsNullOrWhiteSpace(keyLabel))
+            {
+                LoadoutActionTrace.Trace(
+                    $"{keyLabel} -> {slotId} ability={action.AbilityId} kind={action.AbilityKind} authored={action.AuthoredActionId} runtime={action.ActionId}");
+            }
+
+            if (action.IsMeleeAbility)
+            {
+                return TryTriggerSelectableMeleeAction(conn, action.ActionId);
+            }
+
+            if (action.IsAutoAttackReplacementAbility)
+            {
+                LoadoutActionTrace.Trace($"auto-attack replacement dispatch arming {action.AbilityId}");
+                conn.Reducers.ArmAutoAttackReplacement(action.AbilityId);
+                return true;
+            }
+
+            if (action.IsCombatModeToggleAbility)
+            {
+                return CombatModeActionDispatcher.TryTrigger(conn, action);
+            }
+
+            if (action.IsMovementAbility)
+            {
+                return spellInput?.TryTriggerMovementFromActionBar(conn, action) == true;
+            }
+
+            if (!action.IsSpellAbility)
+            {
+                LoadoutActionTrace.Trace(
+                    $"action-bar dispatch rejected unsupported ability kind '{action.AbilityKind}' for {action.AbilityId}");
+                return false;
+            }
+
+            return spellInput?.TryTriggerSpellFromActionBar(conn, action.ActionId) == true;
+        }
+
+        private static SpellDefinition? GetSpellDefinition(DbConnection conn, string spellId)
+        {
+            return conn.Db.SpellDefinition.Kind.Find(spellId);
+        }
+
+        private static bool TryTriggerSelectableMeleeAction(DbConnection conn, string actionId)
+        {
+            return TryTriggerMeleeAction(conn, actionId, "selectable");
+        }
+
+        private static bool TryTriggerMeleeAction(
+            DbConnection conn,
+            string actionId,
+            string source)
+        {
+            PlayerEntity? entity = EntityRegistry.Instance?.LocalPlayerEntity;
+            if (entity == null || entity.IsDestroyed || !entity.IsAlive)
+            {
+                LoadoutActionTrace.Trace($"melee dispatch unavailable for {source}:{actionId} (no live local entity)");
+                return false;
+            }
+
+            string combatProfile = CombatProfileResolver.ResolveForEntity(conn, entity);
+            if (CombatActionIds.FindMeleeDefinition(conn, combatProfile, actionId) == null)
+            {
+                LoadoutActionTrace.Trace($"melee dispatch unavailable for {source}:{actionId} profile={combatProfile} (missing definition)");
+                return false;
+            }
+
+            bool accepted = MeleeInputHandler.Instance?.TryTriggerAction(conn, entity, actionId) == true;
+            if (!accepted)
+                LoadoutActionTrace.Trace($"melee dispatch declined locally for {source}:{actionId}");
+            return accepted;
+        }
+    }
+}

@@ -1,0 +1,29 @@
+name: Infrastructure
+
+on:
+  pull_request:
+    paths:
+      - "infrastructure/**"
+      - ".github/workflows/infrastructure.yml"
+  workflow_dispatch:
+
+jobs:
+  terraform:
+    name: Terraform Validate
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infrastructure/hetzner-spacetimedb
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+
+      - name: Format check
+        run: terraform fmt -check -recursive
+
+      - name: Init without backend
+        run: terraform init -backend=false
+
+      - name: Validate
+        run: terraform validate

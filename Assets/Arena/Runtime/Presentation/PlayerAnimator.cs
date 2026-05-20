@@ -1,0 +1,2972 @@
+#nullable enable
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+using Arena.Combat;
+using Arena.Simulation;
+using Arena.Input;
+using SpacetimeDB.Types;
+
+namespace Arena.Presentation
+{
+    /// <summary>
+    /// Receives authored combat AnimationEvents so Unity does not emit "no receiver"
+    /// warnings. Gameplay reads these events as clip timing data through
+    /// CombatAnimationEvents; these callbacks are intentionally no-ops.
+    /// </summary>
+    public sealed class CombatAnimationEventReceiver : MonoBehaviour
+    {
+        public static void EnsureOn(Animator? animator)
+        {
+            if (animator == null)
+                return;
+
+            if (animator.GetComponent<CombatAnimationEventReceiver>() == null)
+                animator.gameObject.AddComponent<CombatAnimationEventReceiver>();
+        }
+
+        public void OnReleaseFrame() { }
+        public void OnEnterComplete() { }
+        public void OnHoldFadeStart() { }
+        public void OnHoldFadeEnd() { }
+        public void OnLowerBodyUnlock() { }
+        public void OnLowerBodyBlendEnd() { }
+        public void OnVisualInterruptible() { }
+        public void OnStrikeHit() { }
+        public void OnPhaseLoopReady() { }
+        public void OnGroundedFrame() { }
+        public void OnParryWindowStart() { }
+        public void OnParryWindowEnd() { }
+        public void OnBlockReady() { }
+        public void OnWeaponHandoff() { }
+    }
+
+    /// <summary>
+    /// Drives the character Animator using the canonical Arena_Character controller.
+    ///
+    /// Clip variation per animation set is handled via AnimatorOverrideController -
+    /// the state machine topology never changes, only the clips playing in each slot.
+    ///
+    /// INVARIANT: Presentation only. No network access. Never gates input.
+    /// Input gating lives in SpellInputHandler / LocalCombatState exclusively.
+    /// </summary>
+    public class PlayerAnimator : MonoBehaviour
+    {
+        // Fixed canonical parameter contract. These hashes are computed once at class load.
+        // Never look up parameters by string at runtime — if the controller is missing a
+        // parameter, the Set* call silently no-ops, which is intentional and safe.
+        private static readonly int VelocityXHash        = Animator.StringToHash("VelocityX");
+        private static readonly int VelocityZHash        = Animator.StringToHash("VelocityZ");
+        private static readonly int StopXHash            = Animator.StringToHash("StopX");
+        private static readonly int StopZHash            = Animator.StringToHash("StopZ");
+        private static readonly int JumpXHash            = Animator.StringToHash("JumpX");
+        private static readonly int JumpZHash            = Animator.StringToHash("JumpZ");
+        private static readonly int TurnAngleHash        = Animator.StringToHash("TurnAngle");
+        private static readonly int MotionSpeedHash      = Animator.StringToHash("MotionSpeed");
+        private static readonly int GroundedHash         = Animator.StringToHash("Grounded");
+        private static readonly int JumpHash             = Animator.StringToHash("Jump");
+        private static readonly int FreeFallHash         = Animator.StringToHash("FreeFall");
+        private static readonly int IsDeadHash           = Animator.StringToHash("IsDead");
+        private static readonly int InCombatHash         = Animator.StringToHash("InCombat");
+        private static readonly int TriggerStrike1Hash   = Animator.StringToHash("TriggerStrike1");
+        private static readonly int TriggerStrike2Hash   = Animator.StringToHash("TriggerStrike2");
+        private static readonly int TriggerStrike3Hash   = Animator.StringToHash("TriggerStrike3");
+        private static readonly int TriggerStrike4Hash   = Animator.StringToHash("TriggerStrike4");
+        private static readonly int TriggerSpellAction1Hash = Animator.StringToHash("TriggerSpellAction1");
+        private static readonly int TriggerSpellAction2Hash = Animator.StringToHash("TriggerSpellAction2");
+        private static readonly int TriggerSpellAction3Hash = Animator.StringToHash("TriggerSpellAction3");
+        private static readonly int TriggerSpellAction4Hash = Animator.StringToHash("TriggerSpellAction4");
+        private static readonly int TriggerParryHitHash  = Animator.StringToHash("TriggerParryHit");
+        private static readonly int IsBlockingHash       = Animator.StringToHash("IsBlocking");
+        private static readonly int TriggerBlockStartHash = Animator.StringToHash("TriggerBlockStart");
+        private static readonly int TriggerBlockHitHash  = Animator.StringToHash("TriggerBlockHit");
+        private static readonly int BlockStartStateHash  = Animator.StringToHash("BlockStart");
+        private static readonly int BlockLoopStateHash   = Animator.StringToHash("BlockLoop");
+        private static readonly int BlockEndStateHash    = Animator.StringToHash("BlockEnd");
+        private static readonly int BlockHitStateHash    = Animator.StringToHash("BlockHit");
+        private static readonly int Strike1StateHash = Animator.StringToHash("Strike1");
+        private static readonly int Strike2StateHash = Animator.StringToHash("Strike2");
+        private static readonly int Strike3StateHash = Animator.StringToHash("Strike3");
+        private static readonly int Strike4StateHash = Animator.StringToHash("Strike4");
+        private static readonly int MeleeAttackStrike1FullPathHash = Animator.StringToHash("MeleeAttack.Strike1");
+        private static readonly int MeleeAttackStrike2FullPathHash = Animator.StringToHash("MeleeAttack.Strike2");
+        private static readonly int MeleeAttackStrike3FullPathHash = Animator.StringToHash("MeleeAttack.Strike3");
+        private static readonly int MeleeAttackStrike4FullPathHash = Animator.StringToHash("MeleeAttack.Strike4");
+        private static readonly int TriggerDodgeHash     = Animator.StringToHash("TriggerDodge");
+        private static readonly int DodgeXHash           = Animator.StringToHash("DodgeX");
+        private static readonly int DodgeZHash           = Animator.StringToHash("DodgeZ");
+        private static readonly int TriggerWalkStopHash  = Animator.StringToHash("TriggerWalkStop");
+        private static readonly int TriggerRunStopHash   = Animator.StringToHash("TriggerRunStop");
+        private static readonly int TriggerTurnHash      = Animator.StringToHash("TriggerTurn");
+        private static readonly int EnterCombatIdleStateHash = Animator.StringToHash("EnterCombatIdle");
+        private static readonly int EnterCombatWalkStateHash = Animator.StringToHash("EnterCombatWalk");
+        private static readonly int EnterCombatRunStateHash = Animator.StringToHash("EnterCombatRun");
+        private static readonly int ExitCombatIdleStateHash = Animator.StringToHash("ExitCombatIdle");
+        private static readonly int ExitCombatWalkStateHash = Animator.StringToHash("ExitCombatWalk");
+        private static readonly int ExitCombatRunStateHash = Animator.StringToHash("ExitCombatRun");
+        private static readonly int DrawWeaponStateHash  = Animator.StringToHash("DrawWeapon");
+        private static readonly int SheathWeaponStateHash = Animator.StringToHash("SheathWeapon");
+        private static readonly int UpperBodyEmptyStateHash = Animator.StringToHash("Empty");
+        private static readonly int UpperBodyDrawWeaponStateHash = Animator.StringToHash("UpperBodyDrawWeapon");
+        private static readonly int UpperBodySheathWeaponStateHash = Animator.StringToHash("UpperBodySheathWeapon");
+        private static readonly int UpperBodyBlockStartStateHash = Animator.StringToHash("UpperBodyBlockStart");
+        private static readonly int UpperBodyBlockLoopStateHash = Animator.StringToHash("UpperBodyBlockLoop");
+        private static readonly int UpperBodyBlockEndStateHash = Animator.StringToHash("UpperBodyBlockEnd");
+        private static readonly int UpperBodyBlockHitStateHash = Animator.StringToHash("UpperBodyBlockHit");
+        private static readonly int UpperBodySpellAction1StateHash = Animator.StringToHash("UpperBodySpellAction1");
+        private static readonly int UpperBodySpellAction2StateHash = Animator.StringToHash("UpperBodySpellAction2");
+        private static readonly int UpperBodySpellAction3StateHash = Animator.StringToHash("UpperBodySpellAction3");
+        private static readonly int UpperBodySpellAction4StateHash = Animator.StringToHash("UpperBodySpellAction4");
+        private static readonly int LeftGestureSpellAction1StateHash = Animator.StringToHash("LeftGestureSpellAction1");
+        private static readonly int LeftGestureSpellAction2StateHash = Animator.StringToHash("LeftGestureSpellAction2");
+        private static readonly int LeftGestureSpellAction3StateHash = Animator.StringToHash("LeftGestureSpellAction3");
+        private static readonly int LeftGestureSpellAction4StateHash = Animator.StringToHash("LeftGestureSpellAction4");
+        private static readonly int UpperBodyRecoveryAction1StateHash = Animator.StringToHash("UpperBodyRecoveryAction1");
+        private static readonly int SpellAction1StateHash = Animator.StringToHash("SpellAction1");
+        private static readonly int SpellAction2StateHash = Animator.StringToHash("SpellAction2");
+        private static readonly int SpellAction3StateHash = Animator.StringToHash("SpellAction3");
+        private static readonly int SpellAction4StateHash = Animator.StringToHash("SpellAction4");
+        private static readonly int SpellCastHoldAction1StateHash = Animator.StringToHash("SpellCastHoldAction1");
+        private static readonly int SpellCastHoldAction2StateHash = Animator.StringToHash("SpellCastHoldAction2");
+        private static readonly int SpellCastHoldAction3StateHash = Animator.StringToHash("SpellCastHoldAction3");
+        private static readonly int SpellCastHoldAction4StateHash = Animator.StringToHash("SpellCastHoldAction4");
+        private static readonly int SpellCastHoldAction1FullPathHash = Animator.StringToHash("SpellAction.SpellCastHoldAction1");
+        private static readonly int SpellCastHoldAction2FullPathHash = Animator.StringToHash("SpellAction.SpellCastHoldAction2");
+        private static readonly int SpellCastHoldAction3FullPathHash = Animator.StringToHash("SpellAction.SpellCastHoldAction3");
+        private static readonly int SpellCastHoldAction4FullPathHash = Animator.StringToHash("SpellAction.SpellCastHoldAction4");
+        private static readonly int JumpStartStateHash   = Animator.StringToHash("JumpStart");
+        private static readonly int JumpStartCombatStateHash = Animator.StringToHash("JumpStartCombat");
+        private static readonly int JumpLandStateHash    = Animator.StringToHash("JumpLand");
+        private static readonly int JumpLandCombatStateHash = Animator.StringToHash("JumpLandCombat");
+        private static readonly int DodgeStateHash       = Animator.StringToHash("Dodge");
+
+        private static readonly int IdleWalkRunBlendStateHash = Animator.StringToHash("Idle Walk Run Blend");
+        private static readonly int IdleCombatStateHash       = Animator.StringToHash("IdleCombat");
+
+        // Client presentation normalization follows the authoritative server move speed.
+        private const float BaseRunSpeed = GameplayTuning.BaseMoveSpeed;
+        private const float MovementDeadZone = 0.05f;
+        private const float StopTriggerThreshold = 0.1f;
+        private const float RunStopThreshold = 0.75f;
+        private const float StopTriggerCooldownSeconds = 0.2f;
+        private const float RejumpCrossFadeDurationSeconds = 0.04f;
+        private const float LocomotionRecoveryCrossFadeDurationSeconds = 0.32f;
+        private const float SpellCastHoldEnterToIdleNormalizedTime = 0.85f;
+        private const float SpellCastHoldEnterCrossFadeDurationSeconds = 0.22f;
+        private const float SpellCastHoldPhaseCrossFadeDurationSeconds = 0.15f;
+        private const float SpellCastHoldExitCrossFadeDurationSeconds = 0.28f;
+        // Hold the cast pose for this long after release fires before blending out.
+        // Keeps the legs/torso aligned with the spell motion until the release animation
+        // is mostly done, instead of snapping back to idle combat mid-cast.
+        private const float SpellCastHoldExitDelaySeconds = 0.35f;
+        // Strike bank states transition back to Empty at 0.9 normalized time.
+        // Segmented/phased melee advances slightly before that so start/loop/end
+        // segments never fall through to Empty between runtime-controlled plays.
+        private const float PhasedMeleeStartOnlyEndTriggerNormalizedTime = 0.82f;
+        private const float PhasedMeleeSegmentTransitionNormalizedTime = 0.84f;
+        private const float PhasedMeleeEndCompleteNormalizedTime = 0.88f;
+        private const float LandingRecoveryMinNormalizedTime = 0.16f;
+        private const float WeaponTransitionRecoveryMinNormalizedTime = 0.18f;
+        private const int BaseLayerIndex = 0;
+        private const int UpperBodyLayerIndex = 1;
+        private const int MeleeAttackLayerIndex = 3;
+        private const int SpellActionLayerIndex = 4;
+        private const int LeftGestureLayerIndex = 5;
+        private const string UpperBodyRecoverySlotName = "slot_upper_body_recovery_1";
+        private static readonly int MeleeAttackEmptyStateHash = Animator.StringToHash("Empty");
+        private static readonly int SpellActionEmptyStateHash = Animator.StringToHash("Empty");
+
+        private Animator? _animator;
+        private AnimatorOverrideController? _overrideController;
+        private ClientSimulationState? _simState;
+        private Transform? _motionSource;
+        private LocalPlayerMotor? _localPlayerMotor;
+        private WeaponAttachmentController? _weaponAttachments;
+        private MeleeAnimationGhostLayer? _meleeGhostLayer;
+        private AnimatedAutoAttackGhostLayer? _animatedAutoAttackGhostLayer;
+        private int _animatedAutoAttackGhostVisualVersion = -1;
+        private CombatAnimationSet? _animationSet;
+        private SharedActionProfile? _sharedActionProfile;
+        private bool _isLocalPlayer;
+        private bool _wasGrounded = true;
+        private Vector3 _prevPosition;
+        private float _smoothVelX;
+        private float _smoothVelZ;
+        private bool _inCombat;
+        private LocalPlayerStateProvider? _stateProvider;
+        private float _lastMoveVelX;
+        private float _lastMoveVelZ;
+        private bool _lastMoveWasRun;
+        private bool _wasMoving;
+        private float _lastFacingYawDegrees;
+        private float _stopTriggerCooldown;
+        private bool _isDead;
+        private bool _hitUsesAirVariant;
+        private bool _blockingPresentationActive;
+        private bool _parryArmedPresentationActive;
+        private ActiveMovementActionPresentation? _activeMovementPresentation;
+        private int _pendingWeaponHandoffLayerIndex = -1;
+        private int _pendingWeaponHandoffStateHash;
+        private bool _pendingWeaponHandoffTargetInCombat;
+        private bool _weaponHandoffStateEntered;
+        private float _latestLocomotionRawMagnitude;
+        private readonly CombatAnimationSetBinder _animationSetBinder = new();
+        private readonly CombatActionPlaybackController _actionPlayback = new();
+        private CombatStatusReactionController? _statusReactionController;
+
+        private CombatStatusReactionController StatusReactionController =>
+            _statusReactionController ??= new CombatStatusReactionController(
+                IsCurrentlyGrounded,
+                ApplyHitClipOverrides,
+                ClearPresentationForStagger);
+
+        private readonly struct ActiveMovementActionPresentation
+        {
+            public ActiveMovementActionPresentation(
+                string kind,
+                long startedAtMs,
+                long activeUntilMs,
+                long recoveryUntilMs)
+            {
+                Kind = kind;
+                StartedAtMs = startedAtMs;
+                ActiveUntilMs = activeUntilMs;
+                RecoveryUntilMs = recoveryUntilMs;
+            }
+
+            public string Kind { get; }
+            public long StartedAtMs { get; }
+            public long ActiveUntilMs { get; }
+            public long RecoveryUntilMs { get; }
+            public bool IsDodge => string.Equals(Kind, "DODGE", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private enum CombatStanceTransitionBand
+        {
+            Idle = 0,
+            Walk = 1,
+            Run = 2,
+        }
+
+        private readonly struct LocomotionSample
+        {
+            public readonly float velocityX;
+            public readonly float velocityZ;
+            public readonly float rawMagnitude;
+            public readonly float smoothMagnitude;
+            public readonly float facingYawDegrees;
+
+            public LocomotionSample(
+                float velocityX,
+                float velocityZ,
+                float rawMagnitude,
+                float smoothMagnitude,
+                float facingYawDegrees)
+            {
+                this.velocityX = velocityX;
+                this.velocityZ = velocityZ;
+                this.rawMagnitude = rawMagnitude;
+                this.smoothMagnitude = smoothMagnitude;
+                this.facingYawDegrees = facingYawDegrees;
+            }
+
+            public bool IsMoving => rawMagnitude >= StopTriggerThreshold;
+        }
+
+        public void Initialize(
+            ClientSimulationState simState,
+            bool isLocalPlayer,
+            Transform? motionSource = null,
+            Animator? animatorOverride = null)
+        {
+            _simState      = simState;
+            _isLocalPlayer = isLocalPlayer;
+            _motionSource  = motionSource;
+            _animator      = animatorOverride != null ? animatorOverride : GetComponentInChildren<Animator>();
+            if (_animator != null)
+            {
+                // Gameplay/root movement is driven externally by prediction or authoritative
+                // snapshots. Leaving clip root motion enabled can visually drag the mesh away
+                // from the true gameplay root, which is especially noticeable on authored
+                // attack and special-movement clips.
+                _animator.applyRootMotion = false;
+                CombatAnimationEventReceiver.EnsureOn(_animator);
+                EnsureOverrideController();
+                StatusReactionController.Bind(_animator, _overrideController);
+            }
+            _prevPosition  = (_motionSource ?? transform).position;
+            _stateProvider = GetComponent<LocalPlayerStateProvider>();
+            _localPlayerMotor = GetComponent<LocalPlayerMotor>();
+            _weaponAttachments = GetComponent<WeaponAttachmentController>();
+            _meleeGhostLayer = GetComponent<MeleeAnimationGhostLayer>();
+            if (_meleeGhostLayer == null)
+                _meleeGhostLayer = gameObject.AddComponent<MeleeAnimationGhostLayer>();
+            _meleeGhostLayer.SetSourceRoot(_motionSource);
+            _animatedAutoAttackGhostLayer = GetComponent<AnimatedAutoAttackGhostLayer>();
+            if (_animatedAutoAttackGhostLayer == null)
+                _animatedAutoAttackGhostLayer = gameObject.AddComponent<AnimatedAutoAttackGhostLayer>();
+            _animatedAutoAttackGhostLayer.SetSource(_animator, _motionSource);
+            _animatedAutoAttackGhostVisualVersion = -1;
+            _lastFacingYawDegrees = GetFacingYawDegrees();
+        }
+
+        public void BindAnimator(Animator animator)
+        {
+            if (animator == null)
+                return;
+
+            _animator = animator;
+            _animator.applyRootMotion = false;
+            CombatAnimationEventReceiver.EnsureOn(_animator);
+            EnsureOverrideController();
+            StatusReactionController.Bind(_animator, _overrideController);
+
+            if (_animationSet != null)
+                ApplyAnimationSet(_animationSet);
+            if (_sharedActionProfile != null)
+                ApplySharedActionProfile(_sharedActionProfile);
+
+            _weaponAttachments ??= GetComponent<WeaponAttachmentController>();
+            _meleeGhostLayer?.SetSourceRoot(_motionSource);
+            _animatedAutoAttackGhostLayer?.SetSource(_animator, _motionSource);
+            _animatedAutoAttackGhostVisualVersion = -1;
+
+            if (_overrideController == null)
+                return;
+
+            _animator.SetBool(InCombatHash, _inCombat);
+            _animator.SetBool(IsDeadHash, _isDead);
+            _animator.SetBool(GroundedHash, IsCurrentlyGrounded());
+            _animator.SetBool(IsBlockingHash, _blockingPresentationActive || _parryArmedPresentationActive);
+        }
+
+        /// <summary>
+        /// Swaps the clips inside the canonical controller for this animation set.
+        /// Safe to call any time after Initialize — does not reset animator state.
+        /// Null clip fields on the set fall through to the base controller's slot clips.
+        /// </summary>
+        public void ApplyAnimationSet(CombatAnimationSet set)
+        {
+            _animationSet = set;
+            if (_animator == null) return;
+            EnsureOverrideController();
+
+            StatusReactionController.Bind(_animator, _overrideController);
+            StatusReactionController.ApplyAnimationSet(set);
+            _animationSetBinder.Bind(set, _overrideController!);
+            ApplySharedActionOverrides(IsCurrentlyGrounded(), forceDodge: true);
+            ApplyHitClipOverrides(IsCurrentlyGrounded(), force: true);
+
+            _actionPlayback.ResetBanks(set);
+            CancelPhasedMeleePlayback();
+            _animatedAutoAttackGhostLayer?.InvalidateVisualClone();
+        }
+
+        public bool IsInCombat => _inCombat;
+
+        public void EnterCombatImmediate()
+        {
+            SetCombatVisualImmediate(true);
+        }
+
+        public void ExitCombatImmediate()
+        {
+            SetCombatVisualImmediate(false);
+        }
+
+        private void SetCombatVisualImmediate(bool inCombat)
+        {
+            _inCombat = inCombat;
+            ClearPendingWeaponHandoff();
+
+            if (_weaponAttachments == null)
+                _weaponAttachments = GetComponent<WeaponAttachmentController>();
+            _weaponAttachments?.SetInCombat(inCombat);
+
+            if (_animator == null)
+                return;
+
+            _animator.SetBool(InCombatHash, inCombat);
+            if (!CanDriveAnimatorState())
+                return;
+
+            int targetStateHash = inCombat ? IdleCombatStateHash : IdleWalkRunBlendStateHash;
+            _animator.Play(targetStateHash, BaseLayerIndex, 0f);
+            PlayUpperBodyState(UpperBodyEmptyStateHash, 0f);
+        }
+
+        /// <summary>
+        /// Draws or sheathes weapons and sets the InCombat animator parameter.
+        /// </summary>
+        public void SetInCombat(bool inCombat)
+        {
+            _inCombat = inCombat;
+            _animator?.SetBool(InCombatHash, inCombat);
+
+            if (_weaponAttachments == null)
+                _weaponAttachments = GetComponent<WeaponAttachmentController>();
+
+            if (_weaponAttachments == null)
+                return;
+
+            if (_animationSet == null || _animator == null)
+            {
+                ClearPendingWeaponHandoff();
+                _weaponAttachments.SetInCombat(inCombat);
+                return;
+            }
+
+            if (!CanDriveAnimatorState())
+            {
+                ClearPendingWeaponHandoff();
+                _weaponAttachments.SetInCombat(inCombat);
+                return;
+            }
+
+            if (HasPendingWeaponHandoffFor(inCombat))
+                return;
+
+            if (inCombat)
+            {
+                if (_weaponAttachments.IsInCombatVisual)
+                {
+                    ClearPendingWeaponHandoff();
+                    _weaponAttachments.SetInCombat(true);
+                    return;
+                }
+
+                if (TryResolveCombatStanceTransitionStateHash(
+                        enteringCombat: true,
+                        (int)ResolveCombatStanceTransitionBand(),
+                        _animationSet.enterCombatIdle != null,
+                        _animationSet.enterCombatWalk != null,
+                        _animationSet.enterCombatRun != null,
+                        out int baseStateHash))
+                {
+                    BeginWeaponHandoff(
+                        targetInCombat: true,
+                        layerIndex: BaseLayerIndex,
+                        stateHash: baseStateHash);
+                    _animator.CrossFadeInFixedTime(baseStateHash, LocomotionRecoveryCrossFadeDurationSeconds, BaseLayerIndex, 0f);
+                    return;
+                }
+
+                if (_animationSet.DrawWeaponClip == null)
+                {
+                    ClearPendingWeaponHandoff();
+                    _weaponAttachments.SetInCombat(true);
+                    return;
+                }
+
+                BeginWeaponHandoff(
+                    targetInCombat: true,
+                    layerIndex: UpperBodyLayerIndex,
+                    stateHash: UpperBodyDrawWeaponStateHash);
+                _animator.CrossFadeInFixedTime(IdleCombatStateHash, LocomotionRecoveryCrossFadeDurationSeconds, BaseLayerIndex, 0f);
+                PlayUpperBodyState(UpperBodyDrawWeaponStateHash, 0f);
+                return;
+            }
+
+            if (!_weaponAttachments.IsInCombatVisual)
+            {
+                ClearPendingWeaponHandoff();
+                _weaponAttachments.SetInCombat(false);
+                return;
+            }
+
+            if (TryResolveCombatStanceTransitionStateHash(
+                    enteringCombat: false,
+                    (int)ResolveCombatStanceTransitionBand(),
+                    _animationSet.exitCombatIdle != null,
+                    _animationSet.exitCombatWalk != null,
+                    _animationSet.exitCombatRun != null,
+                    out int exitStateHash))
+            {
+                BeginWeaponHandoff(
+                    targetInCombat: false,
+                    layerIndex: BaseLayerIndex,
+                    stateHash: exitStateHash);
+                _animator.CrossFadeInFixedTime(exitStateHash, LocomotionRecoveryCrossFadeDurationSeconds, BaseLayerIndex, 0f);
+                return;
+            }
+
+            if (_animationSet.SheathWeaponClip == null)
+            {
+                ClearPendingWeaponHandoff();
+                _weaponAttachments.SetInCombat(false);
+                return;
+            }
+
+            BeginWeaponHandoff(
+                targetInCombat: false,
+                layerIndex: UpperBodyLayerIndex,
+                stateHash: UpperBodySheathWeaponStateHash);
+            _animator.CrossFadeInFixedTime(IdleWalkRunBlendStateHash, LocomotionRecoveryCrossFadeDurationSeconds, BaseLayerIndex, 0f);
+            PlayUpperBodyState(UpperBodySheathWeaponStateHash, 0f);
+        }
+
+        public void SetDead(bool isDead)
+        {
+            bool wasDead = _isDead;
+            _isDead = isDead;
+            if (_animator != null && _overrideController != null)
+            {
+                if (isDead && !wasDead)
+                    ClearNonDeathPresentation();
+
+                _animator.SetBool(IsDeadHash, isDead);
+
+                if (!isDead && wasDead)
+                    RestoreAlivePresentationAfterDeath();
+            }
+        }
+
+        private void RestoreAlivePresentationAfterDeath()
+        {
+            if (!CanDriveAnimatorState())
+                return;
+
+            ClearNonDeathPresentation();
+            int targetStateHash = _inCombat ? IdleCombatStateHash : IdleWalkRunBlendStateHash;
+            _animator!.Play(targetStateHash, BaseLayerIndex, 0f);
+            _animator.Update(0f);
+        }
+
+        public void RequestCombatAnimation(in CombatAnimationRequest request)
+        {
+            if (_animator == null || _overrideController == null)
+                return;
+
+            CombatAnimationDecision decision = DecideCombatAnimationRequest(request);
+            if (decision == CombatAnimationDecision.IgnoreAsDuplicate)
+                return;
+
+            CombatPreemptionMode preemptionMode = CombatActionPlaybackController.ResolvePreemptionMode(
+                decision,
+                request.Category);
+
+            switch (preemptionMode)
+            {
+                case CombatPreemptionMode.SuppressIncomingWithGhost:
+                    CaptureSuppressedAutoAttackGhost(request);
+                    return;
+                case CombatPreemptionMode.InterruptWithGhost:
+                    PreemptLowerPriorityPresentationFor(captureGhost: true);
+                    break;
+                case CombatPreemptionMode.InterruptWithoutGhost:
+                    PreemptLowerPriorityPresentationFor(captureGhost: false);
+                    break;
+                case CombatPreemptionMode.HandoffComboFollowUp:
+                    break;
+                case CombatPreemptionMode.None:
+                default:
+                    break;
+            }
+
+            switch (request.Category)
+            {
+                case CombatAnimationCategory.Spell:
+                    PlaySpellAnimation(request);
+                    break;
+                case CombatAnimationCategory.AutoAttack:
+                case CombatAnimationCategory.MeleeSkill:
+                    PlayMeleeAnimation(request);
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        private CombatAnimationDecision DecideCombatAnimationRequest(in CombatAnimationRequest request)
+        {
+            bool isHigherPriority = IsHigherPriorityCombatPresentationActive();
+            bool isMeleeActive = IsMeleePresentationStateActive();
+            bool isSpellActive = IsAnySpellPresentationStateActive();
+            bool isComboFollowUp = false;
+            bool activeMeleeIsPhased = false;
+
+            if (request.Category != CombatAnimationCategory.AutoAttack && isMeleeActive)
+            {
+                isComboFollowUp = IsComboFollowUpOfActiveMelee(request);
+                if (isComboFollowUp)
+                {
+                    activeMeleeIsPhased = _actionPlayback.ActiveMeleePresentation.HasValue && _actionPlayback.ActiveMeleePresentation.Value.IsPhased;
+                }
+            }
+
+            bool shouldEvaluateVisualGate =
+                (request.Category == CombatAnimationCategory.AutoAttack && isHigherPriority)
+                || isSpellActive
+                || (request.Category != CombatAnimationCategory.AutoAttack && isMeleeActive && !isComboFollowUp);
+            bool gateEvaluated = false;
+            CombatVisualInterruptDecision visualDecision = CombatVisualInterruptDecision.PreserveExistingBehavior;
+            if (shouldEvaluateVisualGate)
+            {
+                gateEvaluated = TryDecideVisualInterruptForActive(
+                    request.Category,
+                    out visualDecision);
+            }
+
+            return CombatActionPlaybackController.DecideCombatAnimationRequest(
+                request.Category,
+                isHigherPriority,
+                isSpellActive,
+                isMeleeActive,
+                isComboFollowUp,
+                activeMeleeIsPhased,
+                gateEvaluated,
+                visualDecision);
+        }
+
+        private bool IsComboFollowUpOfActiveMelee(in CombatAnimationRequest request)
+        {
+            if (_animationSet == null || !_actionPlayback.ActiveMeleePresentation.HasValue)
+                return false;
+
+            ActiveMeleePresentation active = _actionPlayback.ActiveMeleePresentation.GetValueOrDefault();
+            if (active.StrikeIndex <= 0)
+                return false;
+
+            int incomingStrikeIndex = _animationSet.GetStrikeIndexForActionId(request.ActionId);
+            if (incomingStrikeIndex <= 0)
+                return false;
+
+            return IsComboFollowUp(
+                _animationSet.GetStrikeCombat(active.StrikeIndex),
+                _animationSet.GetStrikeCombat(incomingStrikeIndex));
+        }
+
+        private static bool IsComboFollowUp(
+            WeaponStrikeCombatAuthoring activeCombat,
+            WeaponStrikeCombatAuthoring incomingCombat)
+        {
+            string comboFrom = incomingCombat.ComboFromOrEmpty;
+            if (string.IsNullOrEmpty(comboFrom))
+                return false;
+
+            return string.Equals(
+                comboFrom,
+                activeCombat.AuthoredStrikeIdOrDefault,
+                StringComparison.OrdinalIgnoreCase);
+        }
+
+        private bool TryDecideVisualInterruptForActive(
+            CombatAnimationCategory incomingCategory,
+            out CombatVisualInterruptDecision decision)
+        {
+            decision = CombatVisualInterruptDecision.PreserveExistingBehavior;
+            if (_actionPlayback.ActiveMeleePresentation.HasValue && IsMeleePresentationStateActive())
+                return TryDecideVisualInterruptForActiveMelee(incomingCategory, out decision);
+            if (_actionPlayback.ActiveSpellPresentation.HasValue && IsActiveSpellPresentationStateActive())
+                return TryDecideVisualInterruptForActiveSpell(incomingCategory, out decision);
+            if (_actionPlayback.ActiveSpellCastHoldPresentation.HasValue && IsActiveSpellCastHoldStateActive())
+            {
+                decision = CombatVisualInterruptDecision.InterruptCurrentWithoutGhost;
+                return true;
+            }
+
+            return false;
+        }
+
+        private bool TryDecideVisualInterruptForActiveMelee(
+            CombatAnimationCategory incomingCategory,
+            out CombatVisualInterruptDecision decision)
+        {
+            decision = CombatVisualInterruptDecision.PreserveExistingBehavior;
+
+            ActiveMeleePresentation active = _actionPlayback.ActiveMeleePresentation.GetValueOrDefault();
+            bool hasAnimatorTiming = TryGetActiveMeleePresentationTiming(
+                active,
+                out float elapsedSeconds,
+                out float stateLengthSeconds,
+                out _);
+            if (!hasAnimatorTiming)
+            {
+                elapsedSeconds = 0f;
+                stateLengthSeconds = 0f;
+            }
+
+            float visualInterruptibleAtSeconds = CombatActionPlaybackController.ResolvePlaybackThresholdSeconds(
+                active.VisualInterruptibleAtSeconds,
+                stateLengthSeconds);
+
+            decision = CombatActionPlaybackController.DecideVisualInterrupt(
+                active.Category,
+                incomingCategory,
+                active.IsPhased,
+                elapsedSeconds,
+                visualInterruptibleAtSeconds);
+            return true;
+        }
+
+        private bool TryDecideVisualInterruptForActiveSpell(
+            CombatAnimationCategory incomingCategory,
+            out CombatVisualInterruptDecision decision)
+        {
+            decision = CombatVisualInterruptDecision.PreserveExistingBehavior;
+
+            ActiveSpellPresentation active = _actionPlayback.ActiveSpellPresentation.GetValueOrDefault();
+            bool hasAnimatorTiming = TryGetActiveSpellActionTiming(
+                active,
+                out float elapsedSeconds,
+                out float stateLengthSeconds);
+            if (!hasAnimatorTiming)
+            {
+                elapsedSeconds = 0f;
+                stateLengthSeconds = 0f;
+            }
+
+            float visualInterruptibleAtSeconds = CombatActionPlaybackController.ResolvePlaybackThresholdSeconds(
+                active.VisualInterruptibleAtSeconds,
+                stateLengthSeconds);
+
+            decision = CombatActionPlaybackController.DecideVisualInterrupt(
+                CombatAnimationCategory.Spell,
+                incomingCategory,
+                activeIsPhased: false,
+                elapsedSeconds,
+                visualInterruptibleAtSeconds);
+            return true;
+        }
+
+        private bool TryGetActiveMeleePresentationTiming(
+            ActiveMeleePresentation active,
+            out float elapsedSeconds,
+            out float stateLengthSeconds,
+            out float normalizedTime)
+        {
+            elapsedSeconds = 0f;
+            stateLengthSeconds = 0f;
+            normalizedTime = 0f;
+            if (_animator == null)
+                return false;
+
+            if (active.IsPhased)
+            {
+                bool gotPhasedTiming =
+                    TryGetPhasedMeleePresentationTiming(out elapsedSeconds, out stateLengthSeconds);
+                normalizedTime = GetPhasedMeleeCurrentNormalizedTime();
+                return gotPhasedTiming;
+            }
+
+            int layerIndex = MeleeAttackLayerIndex;
+            AnimatorStateInfo current = _animator.GetCurrentAnimatorStateInfo(layerIndex);
+            if (IsAnimatorStateForActiveMeleePresentation(current, active.IsPhased))
+            {
+                normalizedTime = Mathf.Max(0f, current.normalizedTime);
+                stateLengthSeconds = ResolveActiveMeleePlayedLength(active, current.length);
+                elapsedSeconds = Mathf.Max(0f, stateLengthSeconds * normalizedTime);
+                return true;
+            }
+
+            if (_animator.IsInTransition(layerIndex))
+            {
+                AnimatorStateInfo next = _animator.GetNextAnimatorStateInfo(layerIndex);
+                if (IsAnimatorStateForActiveMeleePresentation(next, active.IsPhased))
+                {
+                    normalizedTime = Mathf.Max(0f, next.normalizedTime);
+                    stateLengthSeconds = ResolveActiveMeleePlayedLength(active, next.length);
+                    elapsedSeconds = Mathf.Max(0f, stateLengthSeconds * normalizedTime);
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static float ResolveActiveMeleePlayedLength(
+            ActiveMeleePresentation active,
+            float fallbackStateLengthSeconds)
+        {
+            return active.PlayedLengthSeconds > 0f
+                ? active.PlayedLengthSeconds
+                : Mathf.Max(0f, fallbackStateLengthSeconds);
+        }
+
+        private static bool IsAnimatorStateForActiveMeleePresentation(AnimatorStateInfo state, bool activeIsPhased)
+        {
+            return activeIsPhased
+                ? IsStrikeState(state.shortNameHash) || state.shortNameHash == UpperBodyRecoveryAction1StateHash
+                : IsStrikeState(state.shortNameHash);
+        }
+
+        private void UpdateMeleeLowerBodyUnlock()
+        {
+            if (_animator == null || !_actionPlayback.ActiveMeleePresentation.HasValue || !_actionPlayback.ActiveMeleePresentationEntered)
+                return;
+
+            ActiveMeleePresentation active = _actionPlayback.ActiveMeleePresentation.GetValueOrDefault();
+            if (active.StrikeIndex <= 0)
+                return;
+
+            if (!TryGetActiveMeleePresentationTiming(
+                    active,
+                    out float elapsedSeconds,
+                    out float stateLengthSeconds,
+                    out float normalizedTime))
+                return;
+
+            float lowerBodyUnlockAtSeconds = CombatActionPlaybackController.ResolvePlaybackThresholdSeconds(
+                active.LowerBodyUnlockAtSeconds,
+                stateLengthSeconds);
+
+            if (!_actionPlayback.IsMeleeLowerBodyUnlocked)
+            {
+                if (elapsedSeconds < lowerBodyUnlockAtSeconds)
+                    return;
+                if (!ShouldReleaseLowerBodyToLocomotion())
+                    return;
+
+                if (!TryStartMeleeUpperBodyRecovery(active, normalizedTime))
+                    return;
+
+                _actionPlayback.MarkMeleeLowerBodyUnlocked(
+                    Time.time,
+                    active.LowerBodyBlendOutSeconds,
+                    _animator.GetLayerWeight(MeleeAttackLayerIndex));
+            }
+
+            float nextWeight = _actionPlayback.ResolveMeleeLowerBodyLayerWeight(Time.time);
+            _animator.SetLayerWeight(MeleeAttackLayerIndex, nextWeight);
+        }
+
+        private bool ShouldReleaseLowerBodyToLocomotion()
+        {
+            return _latestLocomotionRawMagnitude >= StopTriggerThreshold;
+        }
+
+        private bool TryStartMeleeUpperBodyRecovery(ActiveMeleePresentation active, float normalizedTime)
+        {
+            if (_animator == null || _overrideController == null || _animationSet == null)
+                return false;
+
+            AnimationClip? desiredClip = active.IsPhased
+                ? GetCurrentPhasedMeleeClip()
+                : _animationSet.GetStrikeClip(active.StrikeIndex);
+            if (desiredClip == null)
+                return false;
+
+            _overrideController[UpperBodyRecoverySlotName] = desiredClip;
+            PlayUpperBodyState(UpperBodyRecoveryAction1StateHash, normalizedTime);
+            if (active.IsPhased)
+                _actionPlayback.EnterPhasedMeleeUpperBodyMode();
+            return true;
+        }
+
+        private void ResetMeleeLowerBodyUnlockState(bool resetLayerWeight, bool clearUpperBodyRecovery)
+        {
+            bool shouldClearUpperBodyRecovery = _actionPlayback.ResetMeleeLowerBodyUnlock(clearUpperBodyRecovery);
+
+            if (_animator == null)
+                return;
+
+            if (resetLayerWeight)
+                _animator.SetLayerWeight(MeleeAttackLayerIndex, 1f);
+            if (shouldClearUpperBodyRecovery)
+                PlayUpperBodyState(UpperBodyEmptyStateHash, 0f);
+        }
+
+        private void SetActiveSpellPresentation(
+            string actionId,
+            int bankSlot,
+            WeaponSpellAnimationEntry spellEntry,
+            bool grounded)
+        {
+            _actionPlayback.SetActiveSpellPresentation(
+                actionId,
+                bankSlot,
+                spellEntry,
+                grounded);
+            ResetSpellLowerBodyUnlockState(resetLayerWeight: true, clearUpperBodySpell: false);
+        }
+
+        private void UpdateSpellLowerBodyUnlock()
+        {
+            if (_animator == null || !_actionPlayback.ActiveSpellPresentation.HasValue || !_actionPlayback.ActiveSpellPresentationEntered)
+                return;
+
+            ActiveSpellPresentation active = _actionPlayback.ActiveSpellPresentation.GetValueOrDefault();
+            if (!_actionPlayback.IsSpellLowerBodyUnlocked)
+            {
+                if (!TryGetActiveSpellActionTiming(active, out float elapsedSeconds, out float stateLengthSeconds))
+                    return;
+
+                float lowerBodyUnlockAtSeconds = CombatActionPlaybackController.ResolvePlaybackThresholdSeconds(
+                    active.LowerBodyUnlockAtSeconds,
+                    stateLengthSeconds);
+                if (elapsedSeconds < lowerBodyUnlockAtSeconds)
+                    return;
+                if (!ShouldReleaseLowerBodyToLocomotion())
+                    return;
+
+                float normalizedTime = stateLengthSeconds > 0f
+                    ? Mathf.Clamp01(elapsedSeconds / stateLengthSeconds)
+                    : 0f;
+                PlayUpperBodyState(ResolveUpperBodySpellStateHash(active.BankSlot), normalizedTime);
+                _actionPlayback.MarkSpellLowerBodyUnlocked(
+                    Time.time,
+                    active.LowerBodyBlendOutSeconds,
+                    _animator.GetLayerWeight(SpellActionLayerIndex));
+            }
+
+            float nextWeight = _actionPlayback.ResolveSpellLowerBodyLayerWeight(Time.time);
+            _animator.SetLayerWeight(SpellActionLayerIndex, nextWeight);
+        }
+
+        private bool TryGetActiveSpellActionTiming(
+            ActiveSpellPresentation active,
+            out float elapsedSeconds,
+            out float stateLengthSeconds)
+        {
+            elapsedSeconds = 0f;
+            stateLengthSeconds = 0f;
+            if (_animator == null)
+                return false;
+
+            int expectedStateHash = ResolveSpellActionStateHash(active.BankSlot);
+            AnimatorStateInfo current = _animator.GetCurrentAnimatorStateInfo(SpellActionLayerIndex);
+            if (current.shortNameHash == expectedStateHash)
+            {
+                stateLengthSeconds = Mathf.Max(0f, current.length);
+                elapsedSeconds = Mathf.Max(0f, stateLengthSeconds * current.normalizedTime);
+                return true;
+            }
+
+            if (_animator.IsInTransition(SpellActionLayerIndex))
+            {
+                AnimatorStateInfo next = _animator.GetNextAnimatorStateInfo(SpellActionLayerIndex);
+                if (next.shortNameHash == expectedStateHash)
+                {
+                    stateLengthSeconds = Mathf.Max(0f, next.length);
+                    elapsedSeconds = Mathf.Max(0f, stateLengthSeconds * next.normalizedTime);
+                    return true;
+                }
+            }
+
+            if (_actionPlayback.IsSpellLowerBodyUnlocked)
+            {
+                int upperBodyStateHash = ResolveUpperBodySpellStateHash(active.BankSlot);
+                AnimatorStateInfo upperCurrent = _animator.GetCurrentAnimatorStateInfo(UpperBodyLayerIndex);
+                if (upperCurrent.shortNameHash == upperBodyStateHash)
+                {
+                    stateLengthSeconds = Mathf.Max(0f, upperCurrent.length);
+                    elapsedSeconds = Mathf.Max(0f, stateLengthSeconds * upperCurrent.normalizedTime);
+                    return true;
+                }
+
+                if (_animator.IsInTransition(UpperBodyLayerIndex))
+                {
+                    AnimatorStateInfo upperNext = _animator.GetNextAnimatorStateInfo(UpperBodyLayerIndex);
+                    if (upperNext.shortNameHash == upperBodyStateHash)
+                    {
+                        stateLengthSeconds = Mathf.Max(0f, upperNext.length);
+                        elapsedSeconds = Mathf.Max(0f, stateLengthSeconds * upperNext.normalizedTime);
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        private bool IsActiveSpellPresentationStateActive()
+        {
+            if (_animator == null || !_actionPlayback.ActiveSpellPresentation.HasValue)
+                return false;
+
+            ActiveSpellPresentation active = _actionPlayback.ActiveSpellPresentation.Value;
+            int fullBodyStateHash = ResolveSpellActionStateHash(active.BankSlot);
+            int upperBodyStateHash = ResolveUpperBodySpellStateHash(active.BankSlot);
+
+            if (_animator.GetCurrentAnimatorStateInfo(SpellActionLayerIndex).shortNameHash == fullBodyStateHash)
+                return true;
+            if (_animator.IsInTransition(SpellActionLayerIndex)
+                && _animator.GetNextAnimatorStateInfo(SpellActionLayerIndex).shortNameHash == fullBodyStateHash)
+                return true;
+            if (_actionPlayback.IsSpellLowerBodyUnlocked
+                && _animator.GetCurrentAnimatorStateInfo(UpperBodyLayerIndex).shortNameHash == upperBodyStateHash)
+                return true;
+            if (_actionPlayback.IsSpellLowerBodyUnlocked
+                && _animator.IsInTransition(UpperBodyLayerIndex)
+                && _animator.GetNextAnimatorStateInfo(UpperBodyLayerIndex).shortNameHash == upperBodyStateHash)
+                return true;
+
+            return false;
+        }
+
+        private bool IsAnySpellPresentationStateActive()
+        {
+            return IsActiveSpellPresentationStateActive() || IsActiveSpellCastHoldStateActive();
+        }
+
+        private bool IsActiveSpellCastHoldStateActive()
+        {
+            if (_animator == null || !_actionPlayback.ActiveSpellCastHoldPresentation.HasValue)
+                return false;
+
+            ActiveSpellCastHoldPresentation active = _actionPlayback.ActiveSpellCastHoldPresentation.Value;
+            int enterStateHash = ResolveSpellCastHoldStateHash(active.PlaybackLayer, active.EnterBankSlot);
+            int idleStateHash = ResolveSpellCastHoldStateHash(active.PlaybackLayer, active.IdleBankSlot);
+            int layerIndex = ResolveSpellCastHoldLayerIndex(active.PlaybackLayer);
+
+            AnimatorStateInfo current = _animator.GetCurrentAnimatorStateInfo(layerIndex);
+            if (current.shortNameHash == enterStateHash || current.shortNameHash == idleStateHash)
+                return true;
+
+            if (_animator.IsInTransition(layerIndex))
+            {
+                AnimatorStateInfo next = _animator.GetNextAnimatorStateInfo(layerIndex);
+                if (next.shortNameHash == enterStateHash || next.shortNameHash == idleStateHash)
+                    return true;
+            }
+
+            return false;
+        }
+
+        private void ClearActiveSpellPresentation(bool resetLayerWeight, bool clearUpperBodySpell)
+        {
+            _actionPlayback.ClearActiveSpellPresentation();
+            ResetSpellLowerBodyUnlockState(resetLayerWeight, clearUpperBodySpell);
+            if (clearUpperBodySpell)
+                ClearLeftGestureSpellPresentation();
+        }
+
+        private void ClearActiveSpellCastHoldPresentation(
+            bool clearAnimatorState,
+            bool softFullBodyClear = false)
+        {
+            bool hadActivePresentation = _actionPlayback.ClearActiveSpellCastHoldPresentation();
+            if (_animator == null || !clearAnimatorState)
+                return;
+
+            if (softFullBodyClear && hadActivePresentation)
+            {
+                // Fade the SpellAction layer's weight from 1 to 0 over the exit duration so
+                // legs/torso blend back to the base IdleCombat pose instead of snapping to
+                // animator default values (which is what CrossFading state-to-Empty produces
+                // when the destination state has no motion clip).
+                float blendOut = SpellCastHoldExitCrossFadeDurationSeconds;
+                float delay = SpellCastHoldExitDelaySeconds;
+                if (_animationSet != null
+                    && _animationSet.TryGetDefaultSpellCastHoldProfile(out SpellCastHoldProfile holdProfile))
+                {
+                    blendOut = holdProfile.ResolveExitBlendOutSeconds(SpellCastHoldExitCrossFadeDurationSeconds);
+                    delay = holdProfile.ResolveExitDelaySeconds(SpellCastHoldExitDelaySeconds);
+                }
+                _actionPlayback.StartSpellCastHoldFadeOut(Time.time, blendOut, delay);
+                ClearLeftGestureSpellPresentation();
+                return;
+            }
+
+            _actionPlayback.ResetSpellCastHoldFadeOut();
+            _animator.SetLayerWeight(SpellActionLayerIndex, 1f);
+            _animator.Play(SpellActionEmptyStateHash, SpellActionLayerIndex, 0f);
+            PlayUpperBodyState(UpperBodyEmptyStateHash, 0f);
+            ClearLeftGestureSpellPresentation();
+        }
+
+        private void UpdateSpellCastHoldFadeOut()
+        {
+            if (_animator == null || !_actionPlayback.IsSpellCastHoldFadeOutActive)
+                return;
+
+            float weight = _actionPlayback.ResolveSpellCastHoldFadeOutLayerWeight(Time.time);
+            _animator.SetLayerWeight(SpellActionLayerIndex, weight);
+            if (weight > 0f)
+                return;
+
+            _animator.Play(SpellActionEmptyStateHash, SpellActionLayerIndex, 0f);
+            _animator.SetLayerWeight(SpellActionLayerIndex, 1f);
+            _actionPlayback.ResetSpellCastHoldFadeOut();
+        }
+
+        private void ResetSpellLowerBodyUnlockState(bool resetLayerWeight, bool clearUpperBodySpell)
+        {
+            bool shouldClearUpperBodySpell = _actionPlayback.ResetSpellLowerBodyUnlock(clearUpperBodySpell);
+
+            if (_animator == null)
+                return;
+
+            if (resetLayerWeight)
+                _animator.SetLayerWeight(SpellActionLayerIndex, 1f);
+            if (shouldClearUpperBodySpell)
+                PlayUpperBodyState(UpperBodyEmptyStateHash, 0f);
+        }
+
+        private void PreemptLowerPriorityPresentationFor(bool captureGhost)
+        {
+            PreemptMeleeAnimationIfActive(captureGhost);
+            ClearActiveSpellPresentation(resetLayerWeight: true, clearUpperBodySpell: true);
+            bool hadCastHold = _actionPlayback.ActiveSpellCastHoldPresentation.HasValue;
+            ClearActiveSpellCastHoldPresentation(clearAnimatorState: true, softFullBodyClear: hadCastHold);
+            if (!hadCastHold)
+                _animator?.Play(SpellActionEmptyStateHash, SpellActionLayerIndex, 0f);
+            ClearLeftGestureSpellPresentation();
+        }
+
+        private void CaptureSuppressedAutoAttackGhost(in CombatAnimationRequest request)
+        {
+            if (!CombatActionPlaybackController.CanCaptureSuppressedAutoAttackGhost(
+                    request.Category,
+                    request.HasFacingTargetPoint,
+                    out _))
+            {
+                return;
+            }
+
+            if (_animationSet != null && _animatedAutoAttackGhostLayer != null)
+            {
+                SyncAnimatedAutoAttackGhostVisuals();
+
+                int strikeIndex = _animationSet.GetStrikeIndexForActionId(request.ActionId);
+                if (strikeIndex > 0)
+                {
+                    int bankSlot = ResolveStrikeBankSlot(strikeIndex);
+                    AnimationClip? strikeClip = _animationSet.GetStrikeClip(strikeIndex);
+                    bool canUseControllerDefaultClip = strikeClip == null
+                        && strikeIndex <= CombatAnimationSet.AnimatorStrikeBankCount;
+                    if ((strikeClip != null || canUseControllerDefaultClip)
+                        && _animatedAutoAttackGhostLayer.PlayStrikeGhost(bankSlot, strikeClip, request.FacingTargetPoint))
+                    {
+                        return;
+                    }
+                }
+            }
+
+            _meleeGhostLayer?.CaptureFrozenPoseFacing(request.FacingTargetPoint);
+        }
+
+        private void SyncAnimatedAutoAttackGhostVisuals()
+        {
+            if (_animatedAutoAttackGhostLayer == null)
+                return;
+
+            if (_weaponAttachments == null)
+                _weaponAttachments = GetComponent<WeaponAttachmentController>();
+
+            int visualVersion = _weaponAttachments != null
+                ? _weaponAttachments.VisualVersion
+                : 0;
+            if (visualVersion == _animatedAutoAttackGhostVisualVersion)
+                return;
+
+            _animatedAutoAttackGhostLayer.InvalidateVisualClone();
+            _animatedAutoAttackGhostVisualVersion = visualVersion;
+        }
+
+        private void PlaySpellAnimation(in CombatAnimationRequest request)
+        {
+            switch (request.SpellPhase)
+            {
+                case CombatSpellAnimationPhase.HoldStart:
+                    PlaySpellCastHold(request);
+                    return;
+                case CombatSpellAnimationPhase.Cancel:
+                    ClearActiveSpellCastHoldPresentation(clearAnimatorState: true);
+                    return;
+                case CombatSpellAnimationPhase.Release:
+                default:
+                    // The preempt path may have already cleared ActiveSpellCastHoldPresentation
+                    // and started a soft fade-out before this switch ran. Treat an active fade
+                    // as evidence of a hold-to-release transition so the overlay branch does not
+                    // snap the SpellAction layer to Empty mid-fade.
+                    bool releasedFromCastHold = _actionPlayback.ActiveSpellCastHoldPresentation.HasValue
+                        || _actionPlayback.IsSpellCastHoldFadeOutActive;
+                    PlaySpellReleaseAnimation(request, preserveFullBodyHoldBlendOut: releasedFromCastHold);
+                    return;
+            }
+        }
+
+        private void PlaySpellReleaseAnimation(
+            in CombatAnimationRequest request,
+            bool preserveFullBodyHoldBlendOut)
+        {
+            PlaySpellAnimation(request, preserveFullBodyHoldBlendOut);
+        }
+
+        private void PlaySpellCastHold(in CombatAnimationRequest request)
+        {
+            if (_animator == null || _overrideController == null || _animationSet == null)
+                return;
+
+            if (!_animationSet.TryGetDefaultSpellCastHoldProfile(out SpellCastHoldProfile holdProfile))
+            {
+                Debug.LogWarning(
+                    $"[PlayerAnimator] Cast-time spell '{request.ActionId}' requested a hold, but animation set '{_animationSet.name}' has no playable default spell cast hold profile.");
+                return;
+            }
+
+            AnimationClip? enterClip = holdProfile.EnterOrIdle;
+            AnimationClip? idleClip = holdProfile.IdleOrEnter;
+            if (enterClip == null || idleClip == null)
+                return;
+
+            bool needsCombatVisualStance = !_inCombat || (_weaponAttachments != null && !_weaponAttachments.IsInCombatVisual);
+            if (needsCombatVisualStance)
+            {
+                EnterCombatImmediate();
+            }
+
+            int enterBankSlot = ResolveNextSpellBankSlot();
+            int idleBankSlot = ResolveNextSpellBankSlot();
+            if (!_actionPlayback.TryBindSpellBankClip(_overrideController, enterBankSlot, enterClip)
+                || !_actionPlayback.TryBindSpellBankClip(_overrideController, idleBankSlot, idleClip))
+            {
+                return;
+            }
+
+            ClearActiveSpellPresentation(resetLayerWeight: true, clearUpperBodySpell: true);
+            ClearActiveSpellCastHoldPresentation(clearAnimatorState: true);
+            ClearMeleePresentationForUpperBodySpell();
+
+            _actionPlayback.SetActiveSpellCastHoldPresentation(
+                request.ActionId,
+                enterBankSlot,
+                idleBankSlot,
+                holdProfile.playbackLayer);
+
+            PlaySpellCastHoldState(
+                holdProfile.playbackLayer,
+                enterBankSlot,
+                0f,
+                SpellCastHoldEnterCrossFadeDurationSeconds);
+        }
+
+        private void PlaySpellCastHoldState(
+            SpellPlaybackLayer playbackLayer,
+            int bankSlot,
+            float normalizedTime,
+            float transitionDurationSeconds)
+        {
+            int stateHash = playbackLayer == SpellPlaybackLayer.LeftGesture
+                ? ResolveLeftGestureSpellStateHash(bankSlot)
+                : playbackLayer == SpellPlaybackLayer.UpperBody
+                    || playbackLayer == SpellPlaybackLayer.UpperBodyWhileMoving
+                        ? ResolveUpperBodySpellStateHash(bankSlot)
+                        : ResolveSpellCastHoldActionStateHash(bankSlot);
+
+            switch (playbackLayer)
+            {
+                case SpellPlaybackLayer.LeftGesture:
+                    PlayUpperBodyState(UpperBodyEmptyStateHash, 0f);
+                    PlayLeftGestureState(stateHash, normalizedTime);
+                    break;
+                case SpellPlaybackLayer.UpperBody:
+                case SpellPlaybackLayer.UpperBodyWhileMoving:
+                    ClearLeftGestureSpellPresentation();
+                    PlayUpperBodyState(stateHash, normalizedTime);
+                    break;
+                case SpellPlaybackLayer.FullBody:
+                default:
+                    ClearLeftGestureSpellPresentation();
+                    _animator!.SetLayerWeight(SpellActionLayerIndex, 1f);
+                    int fullPathHash = ResolveSpellCastHoldActionFullPathHash(bankSlot);
+                    _animator.CrossFadeInFixedTime(
+                        fullPathHash,
+                        transitionDurationSeconds,
+                        SpellActionLayerIndex,
+                        Mathf.Clamp01(normalizedTime));
+                    break;
+            }
+        }
+
+        private static int ResolveSpellCastHoldLayerIndex(SpellPlaybackLayer playbackLayer)
+        {
+            return playbackLayer switch
+            {
+                SpellPlaybackLayer.LeftGesture => LeftGestureLayerIndex,
+                SpellPlaybackLayer.UpperBody => UpperBodyLayerIndex,
+                SpellPlaybackLayer.UpperBodyWhileMoving => UpperBodyLayerIndex,
+                _ => SpellActionLayerIndex,
+            };
+        }
+
+        private static int ResolveSpellCastHoldStateHash(SpellPlaybackLayer playbackLayer, int bankSlot)
+        {
+            return playbackLayer switch
+            {
+                SpellPlaybackLayer.LeftGesture => ResolveLeftGestureSpellStateHash(bankSlot),
+                SpellPlaybackLayer.UpperBody => ResolveUpperBodySpellStateHash(bankSlot),
+                SpellPlaybackLayer.UpperBodyWhileMoving => ResolveUpperBodySpellStateHash(bankSlot),
+                _ => ResolveSpellCastHoldActionStateHash(bankSlot),
+            };
+        }
+
+        private void UpdateSpellCastHoldPlayback()
+        {
+            if (_animator == null || !_actionPlayback.ActiveSpellCastHoldPresentation.HasValue)
+                return;
+
+            ActiveSpellCastHoldPresentation active = _actionPlayback.ActiveSpellCastHoldPresentation.Value;
+            if (_actionPlayback.SpellCastHoldPhase != SpellCastHoldPlaybackPhase.Enter)
+                return;
+
+            int layerIndex = ResolveSpellCastHoldLayerIndex(active.PlaybackLayer);
+            int enterStateHash = ResolveSpellCastHoldStateHash(active.PlaybackLayer, active.EnterBankSlot);
+            AnimatorStateInfo current = _animator.GetCurrentAnimatorStateInfo(layerIndex);
+            bool inEnter = current.shortNameHash == enterStateHash;
+            if (!inEnter && _animator.IsInTransition(layerIndex))
+            {
+                AnimatorStateInfo next = _animator.GetNextAnimatorStateInfo(layerIndex);
+                inEnter = next.shortNameHash == enterStateHash;
+                current = next;
+            }
+
+            if (!inEnter || current.normalizedTime < SpellCastHoldEnterToIdleNormalizedTime)
+                return;
+
+            _actionPlayback.SetSpellCastHoldPhase(SpellCastHoldPlaybackPhase.Idle);
+            PlaySpellCastHoldState(
+                active.PlaybackLayer,
+                active.IdleBankSlot,
+                0f,
+                SpellCastHoldPhaseCrossFadeDurationSeconds);
+        }
+
+        private void PlaySpellAnimation(in CombatAnimationRequest request, bool preserveFullBodyHoldBlendOut = false)
+        {
+            string spellKind = request.ActionId;
+            bool grounded = IsCurrentlyGrounded();
+            int bankSlot = ResolveNextSpellBankSlot();
+            if (!TryBindSpellClip(spellKind, grounded, bankSlot, out WeaponSpellAnimationEntry spellEntry))
+                return;
+
+            AnimationClip? spellClip = spellEntry.ResolveClip(grounded);
+            if (spellClip == null)
+                return;
+
+            float normalizedStart = ResolveSpellReleaseStartNormalizedTime(request, spellEntry, grounded, spellClip);
+
+            bool useOverlaySpellPlayback = spellEntry.ResolveUsesOverlayPlayback(
+                _latestLocomotionRawMagnitude,
+                StopTriggerThreshold);
+            bool needsCombatVisualStance = !_inCombat || (_weaponAttachments != null && !_weaponAttachments.IsInCombatVisual);
+            if (needsCombatVisualStance && spellEntry.ShouldEnterCombatImmediately(useOverlaySpellPlayback))
+            {
+                EnterCombatImmediate();
+                needsCombatVisualStance = false;
+            }
+
+            if (useOverlaySpellPlayback)
+            {
+                ClearActiveSpellPresentation(resetLayerWeight: true, clearUpperBodySpell: false);
+                if (!preserveFullBodyHoldBlendOut)
+                    _animator!.Play(SpellActionEmptyStateHash, SpellActionLayerIndex, 0f);
+
+                ClearMeleePresentationForUpperBodySpell();
+                if (spellEntry.UsesLeftGesture)
+                {
+                    PlayUpperBodyState(UpperBodyEmptyStateHash, 0f);
+                    PlayLeftGestureState(ResolveLeftGestureSpellStateHash(bankSlot), normalizedStart);
+                }
+                else
+                {
+                    ClearLeftGestureSpellPresentation();
+                    PlayUpperBodyState(ResolveUpperBodySpellStateHash(bankSlot), normalizedStart);
+                }
+                if (needsCombatVisualStance && spellEntry.ShouldEnterCombatAfterCastStarts(useOverlaySpellPlayback))
+                    SetInCombat(true);
+                return;
+            }
+
+            SetActiveSpellPresentation(spellKind, bankSlot, spellEntry, grounded);
+            ClearLeftGestureSpellPresentation();
+            int triggerHash = ResolveSpellActionTriggerHash(bankSlot);
+            CombatActionPlaybackController.PlayFullBodySpellAction(
+                _animator!,
+                SpellActionLayerIndex,
+                triggerHash,
+                ResolveSpellActionStateHash(bankSlot),
+                normalizedStart);
+            if (needsCombatVisualStance && spellEntry.ShouldEnterCombatAfterCastStarts(useOverlaySpellPlayback))
+                SetInCombat(true);
+        }
+
+        private float ResolveSpellReleaseStartNormalizedTime(
+            in CombatAnimationRequest request,
+            WeaponSpellAnimationEntry spellEntry,
+            bool grounded,
+            AnimationClip spellClip)
+        {
+            float clipLengthSeconds = Mathf.Max(0f, spellClip.length);
+            float authoredReleasePointSeconds = spellEntry.ResolveReleaseOffsetSeconds(grounded);
+
+            // request.StartedAtMs is the scheduled release-animation start, not the
+            // gameplay cast start. If the ActiveCast row arrives late or cast speed
+            // clamps the start to the beginning of the cast, reuse the remote catch-up
+            // policy but cap it before the authored release point so the hand-release
+            // pose is not skipped.
+            return CombatAnimationRemoteTiming.TryResolveStartNormalizedTime(
+                request,
+                _isLocalPlayer,
+                clipLengthSeconds,
+                clipLengthSeconds,
+                authoredReleasePointSeconds,
+                out float normalizedStart,
+                out _)
+                    ? normalizedStart
+                    : 0f;
+        }
+
+        private static int ResolveSpellActionStateHash(int bankSlot)
+        {
+            return CombatActionPlaybackController.ResolveBankedAnimatorHash(
+                bankSlot,
+                SpellAction1StateHash,
+                SpellAction2StateHash,
+                SpellAction3StateHash,
+                SpellAction4StateHash);
+        }
+
+        private static int ResolveSpellCastHoldActionStateHash(int bankSlot)
+        {
+            return CombatActionPlaybackController.ResolveBankedAnimatorHash(
+                bankSlot,
+                SpellCastHoldAction1StateHash,
+                SpellCastHoldAction2StateHash,
+                SpellCastHoldAction3StateHash,
+                SpellCastHoldAction4StateHash);
+        }
+
+        private static int ResolveSpellCastHoldActionFullPathHash(int bankSlot)
+        {
+            return CombatActionPlaybackController.ResolveBankedAnimatorHash(
+                bankSlot,
+                SpellCastHoldAction1FullPathHash,
+                SpellCastHoldAction2FullPathHash,
+                SpellCastHoldAction3FullPathHash,
+                SpellCastHoldAction4FullPathHash);
+        }
+
+        private static int ResolveUpperBodySpellStateHash(int bankSlot)
+        {
+            return CombatActionPlaybackController.ResolveBankedAnimatorHash(
+                bankSlot,
+                UpperBodySpellAction1StateHash,
+                UpperBodySpellAction2StateHash,
+                UpperBodySpellAction3StateHash,
+                UpperBodySpellAction4StateHash);
+        }
+
+        private static int ResolveLeftGestureSpellStateHash(int bankSlot)
+        {
+            return CombatActionPlaybackController.ResolveBankedAnimatorHash(
+                bankSlot,
+                LeftGestureSpellAction1StateHash,
+                LeftGestureSpellAction2StateHash,
+                LeftGestureSpellAction3StateHash,
+                LeftGestureSpellAction4StateHash);
+        }
+
+        private static int ResolveSpellActionTriggerHash(int bankSlot)
+        {
+            return CombatActionPlaybackController.ResolveBankedAnimatorHash(
+                bankSlot,
+                TriggerSpellAction1Hash,
+                TriggerSpellAction2Hash,
+                TriggerSpellAction3Hash,
+                TriggerSpellAction4Hash);
+        }
+
+        /// <summary>
+        /// Fires a melee strike animation. strikeIndex is 1-based within the authored
+        /// combat profile. The controller keeps four reusable strike states, so higher
+        /// strike ids hot-swap the needed clip into that bank before triggering it.
+        /// </summary>
+        private bool TriggerStrike(int strikeIndex)
+        {
+            if (_animator == null || _overrideController == null) return false;
+            int bankSlot = ResolveStrikeBankSlot(strikeIndex);
+            if (!TryBindStrikeClip(strikeIndex, bankSlot))
+                return false;
+
+            ResetMeleeLowerBodyUnlockState(resetLayerWeight: true, clearUpperBodyRecovery: true);
+            int hash = ResolveStrikeTriggerHash(bankSlot);
+            CombatActionPlaybackController.TriggerMeleeStrike(_animator, hash);
+            return true;
+        }
+
+        private bool PlayStrikeAtNormalizedTime(int strikeIndex, float normalizedTime)
+        {
+            if (_animator == null || _overrideController == null)
+                return false;
+
+            int bankSlot = ResolveStrikeBankSlot(strikeIndex);
+            if (!TryBindStrikeClip(strikeIndex, bankSlot))
+                return false;
+
+            int stateHash = ResolveStrikeStateHash(bankSlot);
+            if (stateHash == 0)
+                return false;
+            int fullPathStateHash = ResolveStrikeFullPathStateHash(bankSlot);
+
+            ResetMeleeLowerBodyUnlockState(resetLayerWeight: true, clearUpperBodyRecovery: true);
+            CombatActionPlaybackController.PlayMeleeStrikeState(
+                _animator,
+                MeleeAttackLayerIndex,
+                fullPathStateHash != 0 ? fullPathStateHash : stateHash,
+                normalizedTime);
+            return true;
+        }
+
+        private void PlayMeleeAnimation(in CombatAnimationRequest request)
+        {
+            bool grounded = IsCurrentlyGrounded();
+            EnsureCombatVisualForMeleePresentation(
+                suppressAnimatorState: IsSpecialMovementDrivenPhasedMeleeRequest(request, grounded));
+
+            string actionId = request.ActionId;
+            int strikeIndex = _animationSet?.GetStrikeIndexForActionId(actionId) ?? 0;
+
+            if (TryTriggerPhasedMeleeAction(request, grounded))
+            {
+                TriggerWeaponPresentationEffects(request, strikeIndex);
+                SetActiveMeleePresentation(request, strikeIndex, isPhased: true);
+                return;
+            }
+
+            if (strikeIndex <= 0)
+                return;
+
+            float appliedCatchupSeconds = 0f;
+            bool playedWithRemoteCatchup = TryPlayRemoteCatchupStrike(
+                request,
+                strikeIndex,
+                out appliedCatchupSeconds);
+            if (!playedWithRemoteCatchup && !TriggerStrike(strikeIndex))
+                return;
+
+            TriggerWeaponPresentationEffects(request, strikeIndex);
+            SetActiveMeleePresentation(request, strikeIndex, isPhased: false, appliedCatchupSeconds);
+        }
+
+        private bool IsSpecialMovementDrivenPhasedMeleeRequest(in CombatAnimationRequest request, bool grounded)
+        {
+            if (_animationSet == null || !request.DrivePhasesFromSpecialMovement)
+                return false;
+
+            return _animationSet.TryGetPhasedMeleeEntry(request.ActionId, out WeaponPhasedActionEntry entry)
+                && entry.drivePhasesFromSpecialMovement
+                && entry.TryResolveClipSet(grounded, out _);
+        }
+
+        private void EnsureCombatVisualForMeleePresentation(bool suppressAnimatorState)
+        {
+            bool needsCombatVisualStance = !_inCombat || (_weaponAttachments != null && !_weaponAttachments.IsInCombatVisual);
+            if (!needsCombatVisualStance)
+                return;
+
+            if (suppressAnimatorState)
+                SetCombatVisualFlagsForMeleePresentation();
+            else
+                EnterCombatImmediate();
+        }
+
+        private void SetCombatVisualFlagsForMeleePresentation()
+        {
+            _inCombat = true;
+            ClearPendingWeaponHandoff();
+
+            if (_weaponAttachments == null)
+                _weaponAttachments = GetComponent<WeaponAttachmentController>();
+            _weaponAttachments?.SetInCombat(true);
+            // Do not set InCombatHash here. Movement-driven phased attacks must not
+            // let the base layer enter a combat-stance transition before the phased set.
+        }
+
+        private bool TryPlayRemoteCatchupStrike(
+            in CombatAnimationRequest request,
+            int strikeIndex,
+            out float appliedCatchupSeconds)
+        {
+            appliedCatchupSeconds = 0f;
+            if (_animationSet == null)
+                return false;
+
+            AnimationClip? playedClip = _animationSet.GetStrikeClip(strikeIndex);
+            if (playedClip == null)
+                return false;
+
+            if (!CombatAnimationRemoteTiming.TryResolveStartNormalizedTime(
+                    request,
+                    _isLocalPlayer,
+                    _animationSet.GetStrikeTimingReferenceLengthSeconds(strikeIndex),
+                    playedClip.length,
+                    _animationSet.GetStrikeFirstHitWindowSeconds(strikeIndex),
+                    out float normalizedStart,
+                    out appliedCatchupSeconds))
+            {
+                return false;
+            }
+
+            return PlayStrikeAtNormalizedTime(strikeIndex, normalizedStart);
+        }
+
+        private void SetActiveMeleePresentation(
+            in CombatAnimationRequest request,
+            int strikeIndex,
+            bool isPhased,
+            float appliedCatchupSeconds = 0f)
+        {
+            _actionPlayback.SetActiveMeleePresentation(
+                request,
+                strikeIndex,
+                isPhased,
+                _animationSet,
+                appliedCatchupSeconds);
+            ResetMeleeLowerBodyUnlockState(resetLayerWeight: true, clearUpperBodyRecovery: false);
+        }
+
+        private void ClearActiveMeleePresentation()
+        {
+            bool wasPhased = _actionPlayback.ClearActiveMeleePresentation();
+            if (wasPhased)
+                CancelPhasedMeleePlayback(clearActivePresentation: false);
+            ResetMeleeLowerBodyUnlockState(resetLayerWeight: true, clearUpperBodyRecovery: true);
+        }
+
+        private void TriggerWeaponPresentationEffects(in CombatAnimationRequest request, int strikeIndex)
+        {
+            if (!request.HasConsumedModifier || _animationSet == null)
+                return;
+
+            if (_weaponAttachments == null)
+                _weaponAttachments = GetComponent<WeaponAttachmentController>();
+            if (_weaponAttachments == null)
+                return;
+
+            float totalDuration = strikeIndex > 0
+                ? _animationSet.GetStrikeTimingReferenceLengthSeconds(strikeIndex)
+                : 0f;
+            if (totalDuration <= 0.01f)
+                totalDuration = 0.45f;
+
+            foreach (WeaponPresentationEffectEntry effect in _animationSet.MatchingConsumedMeleeModifierEffects(
+                         request.ConsumedModifierStatusKind,
+                         request.ConsumedModifierStackGroup))
+            {
+                float scaleIn = effect.ScaleInSecondsOrDefault;
+                float scaleOut = effect.ScaleOutSecondsOrDefault;
+                float hold = Mathf.Max(0f, totalDuration - scaleIn - scaleOut);
+                _weaponAttachments.PlayScalePulse(
+                    effect.target,
+                    effect.itemId,
+                    effect.ScaleMultiplierOrDefault,
+                    scaleIn,
+                    hold,
+                    scaleOut);
+            }
+        }
+
+        private bool IsHigherPriorityCombatPresentationActive()
+        {
+            if (_animator == null)
+            {
+                return false;
+            }
+
+            return IsSkillPresentationStateActive(BaseLayerIndex, includeStrikeStates: false)
+                || IsStrikePresentationStateActiveOnMeleeLayer()
+                || IsSkillPresentationStateActive(UpperBodyLayerIndex, includeStrikeStates: false)
+                || IsSkillPresentationStateActive(SpellActionLayerIndex, includeStrikeStates: false)
+                || IsSkillPresentationStateActive(LeftGestureLayerIndex, includeStrikeStates: false);
+        }
+
+        private void PreemptMeleeAnimationIfActive(bool captureGhost = true)
+        {
+            if (_animator == null)
+                return;
+
+            if (!IsMeleePresentationStateActive())
+            {
+                ClearActiveMeleePresentation();
+                return;
+            }
+
+            if (captureGhost)
+            {
+                _meleeGhostLayer?.CaptureFrozenPose();
+            }
+
+            if (_actionPlayback.IsPhasedMeleeActive)
+                CancelPhasedMeleePlayback(clearActivePresentation: false);
+
+            if (IsStrikePresentationStateActiveOnMeleeLayer())
+                _animator.Play(MeleeAttackEmptyStateHash, MeleeAttackLayerIndex, 0f);
+
+            ClearActiveMeleePresentation();
+        }
+
+        private bool IsMeleePresentationStateActive()
+        {
+            if (_animator == null)
+                return false;
+
+            return IsPhasedMeleePresentationStateActive()
+                || IsStrikePresentationStateActiveOnMeleeLayer()
+                || IsUpperBodyMeleeRecoveryStateActive();
+        }
+
+        private bool IsPhasedMeleePresentationStateActive()
+        {
+            if (_animator == null || !_actionPlayback.IsPhasedMeleeActive)
+                return false;
+
+            return _actionPlayback.IsPhasedMeleeUpperBodyMode
+                ? IsUpperBodyMeleeRecoveryStateActive()
+                : IsStrikePresentationStateActiveOnMeleeLayer();
+        }
+
+        private bool IsStrikePresentationStateActiveOnMeleeLayer()
+        {
+            if (_animator == null)
+                return false;
+
+            return IsStrikeState(_animator.GetCurrentAnimatorStateInfo(MeleeAttackLayerIndex).shortNameHash)
+                || (_animator.IsInTransition(MeleeAttackLayerIndex)
+                    && IsStrikeState(_animator.GetNextAnimatorStateInfo(MeleeAttackLayerIndex).shortNameHash));
+        }
+
+        private bool IsUpperBodyMeleeRecoveryStateActive()
+        {
+            if (_animator == null || !_actionPlayback.IsMeleeUpperBodyRecoveryActive)
+                return false;
+
+            return _animator.GetCurrentAnimatorStateInfo(UpperBodyLayerIndex).shortNameHash == UpperBodyRecoveryAction1StateHash
+                || (_animator.IsInTransition(UpperBodyLayerIndex)
+                    && _animator.GetNextAnimatorStateInfo(UpperBodyLayerIndex).shortNameHash == UpperBodyRecoveryAction1StateHash);
+        }
+
+        private bool IsSkillPresentationStateActive(int layerIndex, bool includeStrikeStates)
+        {
+            if (_animator == null)
+                return false;
+
+            if (IsMatchingSkillPresentationState(_animator.GetCurrentAnimatorStateInfo(layerIndex), includeStrikeStates))
+                return true;
+
+            if (_animator.IsInTransition(layerIndex)
+                && IsMatchingSkillPresentationState(_animator.GetNextAnimatorStateInfo(layerIndex), includeStrikeStates))
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool IsMatchingSkillPresentationState(AnimatorStateInfo state, bool includeStrikeStates)
+        {
+            return state.shortNameHash == UpperBodySpellAction1StateHash
+                || state.shortNameHash == UpperBodySpellAction2StateHash
+                || state.shortNameHash == UpperBodySpellAction3StateHash
+                || state.shortNameHash == UpperBodySpellAction4StateHash
+                || state.shortNameHash == LeftGestureSpellAction1StateHash
+                || state.shortNameHash == LeftGestureSpellAction2StateHash
+                || state.shortNameHash == LeftGestureSpellAction3StateHash
+                || state.shortNameHash == LeftGestureSpellAction4StateHash
+                || state.shortNameHash == UpperBodyRecoveryAction1StateHash
+                || state.shortNameHash == SpellAction1StateHash
+                || state.shortNameHash == SpellAction2StateHash
+                || state.shortNameHash == SpellAction3StateHash
+                || state.shortNameHash == SpellAction4StateHash
+                || state.shortNameHash == SpellCastHoldAction1StateHash
+                || state.shortNameHash == SpellCastHoldAction2StateHash
+                || state.shortNameHash == SpellCastHoldAction3StateHash
+                || state.shortNameHash == SpellCastHoldAction4StateHash
+                || (includeStrikeStates && IsStrikeState(state.shortNameHash));
+        }
+
+        private static bool IsStrikeState(int shortNameHash)
+        {
+            return shortNameHash == Strike1StateHash
+                || shortNameHash == Strike2StateHash
+                || shortNameHash == Strike3StateHash
+                || shortNameHash == Strike4StateHash;
+        }
+
+        private void ClearMeleePresentationForUpperBodySpell()
+        {
+            if (_animator == null)
+                return;
+
+            if (IsStrikePresentationStateActiveOnMeleeLayer())
+                _animator.Play(MeleeAttackEmptyStateHash, MeleeAttackLayerIndex, 0f);
+
+            if (_actionPlayback.IsPhasedMeleeActive)
+                CancelPhasedMeleePlayback(clearActivePresentation: false);
+
+            ClearActiveMeleePresentation();
+        }
+
+        public void ApplySharedActionProfile(SharedActionProfile profile)
+        {
+            EnsureOverrideController();
+            _sharedActionProfile = profile;
+            ApplySharedActionOverrides(IsCurrentlyGrounded(), forceDodge: true);
+        }
+
+        private void ApplySharedActionOverrides(bool grounded, bool forceDodge = false)
+        {
+            if (_overrideController == null || _sharedActionProfile == null)
+                return;
+
+            ApplyDodgeClipOverrides(grounded, forceDodge);
+        }
+
+        private static int ResolveStrikeBankSlot(int strikeIndex)
+        {
+            return CombatActionPlaybackController.ResolveStrikeBankSlot(strikeIndex);
+        }
+
+        private static int ResolveStrikeStateHash(int bankSlot)
+        {
+            return CombatActionPlaybackController.ResolveBankedAnimatorHash(
+                bankSlot,
+                Strike1StateHash,
+                Strike2StateHash,
+                Strike3StateHash,
+                Strike4StateHash);
+        }
+
+        private static int ResolveStrikeFullPathStateHash(int bankSlot)
+        {
+            return CombatActionPlaybackController.ResolveBankedAnimatorHash(
+                bankSlot,
+                MeleeAttackStrike1FullPathHash,
+                MeleeAttackStrike2FullPathHash,
+                MeleeAttackStrike3FullPathHash,
+                MeleeAttackStrike4FullPathHash);
+        }
+
+        private static int ResolveStrikeTriggerHash(int bankSlot)
+        {
+            return CombatActionPlaybackController.ResolveBankedAnimatorHash(
+                bankSlot,
+                TriggerStrike1Hash,
+                TriggerStrike2Hash,
+                TriggerStrike3Hash,
+                TriggerStrike4Hash);
+        }
+
+        private bool TryBindStrikeClip(int strikeIndex, int bankSlot)
+        {
+            return _actionPlayback.TryBindStrikeClip(_overrideController, _animationSet, strikeIndex, bankSlot);
+        }
+
+        private int ResolveNextSpellBankSlot()
+        {
+            return _actionPlayback.ResolveNextSpellBankSlot();
+        }
+
+        private bool TryBindSpellClip(
+            string spellKind,
+            bool grounded,
+            int bankSlot,
+            out WeaponSpellAnimationEntry spellEntry)
+        {
+            return _actionPlayback.TryBindSpellClip(_overrideController, _animationSet, spellKind, grounded, bankSlot, out spellEntry);
+        }
+
+        public void TriggerParry()
+        {
+            if (_animator == null || _overrideController == null) return;
+            SetParryArmed(true);
+        }
+
+        public void TriggerParryHit()
+        {
+            if (_animator == null || _overrideController == null) return;
+            SetParryArmed(false);
+            _animator.ResetTrigger(TriggerParryHitHash);
+            _animator.SetTrigger(TriggerParryHitHash);
+        }
+
+        public void SetParryArmed(bool armed)
+        {
+            if (_animator == null || _overrideController == null) return;
+            if (armed == _parryArmedPresentationActive)
+            {
+                _animator.SetBool(IsBlockingHash, _blockingPresentationActive || _parryArmedPresentationActive);
+                return;
+            }
+
+            if (armed)
+            {
+                ArmParryPresentation();
+            }
+            else
+            {
+                DisarmParryPresentation();
+            }
+        }
+
+        private void ArmParryPresentation()
+        {
+            _parryArmedPresentationActive = true;
+            _animator!.SetBool(IsBlockingHash, true);
+            PlayUpperBodyState(UpperBodyBlockStartStateHash, 0f);
+        }
+
+        private void DisarmParryPresentation()
+        {
+            _parryArmedPresentationActive = false;
+            _animator!.SetBool(IsBlockingHash, _blockingPresentationActive);
+            if (!_blockingPresentationActive)
+                PlayUpperBodyState(UpperBodyEmptyStateHash, 0f);
+        }
+
+        public void SetBlocking(bool isBlocking)
+        {
+            if (_animator == null || _overrideController == null) return;
+            bool wasBlocking = _blockingPresentationActive;
+            _blockingPresentationActive = isBlocking;
+            _animator.SetBool(IsBlockingHash, _blockingPresentationActive || _parryArmedPresentationActive);
+            if (isBlocking && !wasBlocking)
+            {
+                PlayUpperBodyState(UpperBodyEmptyStateHash, 0f);
+                if (ShouldUseMovingBlockLoopTransition(
+                        IsCurrentlyGrounded(),
+                        _latestLocomotionRawMagnitude,
+                        _animationSet?.blockWalkLoop.HasAny == true))
+                {
+                    _animator.CrossFadeInFixedTime(BlockLoopStateHash, LocomotionRecoveryCrossFadeDurationSeconds, BaseLayerIndex, 0f);
+                    return;
+                }
+
+                _animator.ResetTrigger(TriggerBlockStartHash);
+                _animator.SetTrigger(TriggerBlockStartHash);
+            }
+            else if (!isBlocking && wasBlocking && !_parryArmedPresentationActive)
+            {
+                PlayUpperBodyState(UpperBodyEmptyStateHash, 0f);
+                if (ShouldUseMovingBlockLoopTransition(
+                        IsCurrentlyGrounded(),
+                        _latestLocomotionRawMagnitude,
+                        _animationSet?.blockWalkLoop.HasAny == true))
+                {
+                    int targetStateHash = _inCombat ? IdleCombatStateHash : IdleWalkRunBlendStateHash;
+                    _animator.CrossFadeInFixedTime(targetStateHash, LocomotionRecoveryCrossFadeDurationSeconds, BaseLayerIndex, 0f);
+                }
+            }
+        }
+
+        public void TriggerBlockHit()
+        {
+            if (_animator == null || _overrideController == null) return;
+            SetBlocking(false);
+            _animator.ResetTrigger(TriggerBlockHitHash);
+            _animator.SetTrigger(TriggerBlockHitHash);
+        }
+
+        public void TriggerDodge(MovementActionState movementAction)
+        {
+            _activeMovementPresentation = new ActiveMovementActionPresentation(
+                movementAction.Kind,
+                movementAction.StartedAt.MicrosecondsSinceUnixEpoch / 1000L,
+                movementAction.ActiveUntil.MicrosecondsSinceUnixEpoch / 1000L,
+                movementAction.RecoveryUntil.MicrosecondsSinceUnixEpoch / 1000L);
+            TriggerDodge(movementAction.DirX, movementAction.DirZ, movementAction.FacingYawStart);
+        }
+
+        private void TriggerDodge(float dirX, float dirZ, float facingYawRadians)
+        {
+            if (_animator == null || _overrideController == null) return;
+            EnsureSharedActionProfileLoaded();
+            ApplyDodgeClipOverrides(_wasGrounded, force: true);
+
+            float forwardX = Mathf.Sin(facingYawRadians);
+            float forwardZ = Mathf.Cos(facingYawRadians);
+            float rightX = Mathf.Cos(facingYawRadians);
+            float rightZ = -Mathf.Sin(facingYawRadians);
+            float localX = dirX * rightX + dirZ * rightZ;
+            float localZ = dirX * forwardX + dirZ * forwardZ;
+            if (Mathf.Abs(localX) < MovementDeadZone && Mathf.Abs(localZ) < MovementDeadZone)
+            {
+                if (_latestLocomotionRawMagnitude >= MovementDeadZone)
+                {
+                    localX = _lastMoveVelX;
+                    localZ = _lastMoveVelZ;
+                }
+                else
+                {
+                    localX = 0f;
+                    localZ = -1f;
+                }
+            }
+
+            float localMagnitude = Mathf.Sqrt(localX * localX + localZ * localZ);
+            if (localMagnitude >= MovementDeadZone)
+            {
+                localX /= localMagnitude;
+                localZ /= localMagnitude;
+            }
+            else
+            {
+                localX = 0f;
+                localZ = -1f;
+            }
+
+            _animator.SetFloat(DodgeXHash, Mathf.Clamp(localX, -1f, 1f));
+            _animator.SetFloat(DodgeZHash, Mathf.Clamp(localZ, -1f, 1f));
+            _animator.ResetTrigger(TriggerDodgeHash);
+            _animator.SetTrigger(TriggerDodgeHash);
+        }
+
+        private void ApplyDodgeClipOverrides(bool grounded, bool force = false)
+        {
+            if (_overrideController == null)
+                return;
+
+            EnsureSharedActionProfileLoaded();
+            bool useCombatVariant = _inCombat;
+            DirectionalClipSet desired = grounded
+                ? (useCombatVariant
+                    ? (_animationSet?.dodgeCombat.HasAny == true ? _animationSet.dodgeCombat : _sharedActionProfile?.dodge ?? _animationSet?.dodge ?? default)
+                    : (_animationSet?.dodge.HasAny == true ? _animationSet.dodge : _sharedActionProfile?.dodge ?? _animationSet?.dodgeCombat ?? default))
+                : (useCombatVariant
+                    ? (_animationSet?.airDodgeCombat.HasAny == true ? _animationSet.airDodgeCombat : _sharedActionProfile?.airDodge ?? _animationSet?.airDodge ?? _animationSet?.dodgeCombat ?? default)
+                    : (_animationSet?.airDodge.HasAny == true ? _animationSet.airDodge : _sharedActionProfile?.airDodge ?? _animationSet?.dodge ?? _animationSet?.airDodgeCombat ?? default));
+
+            if (!force && !desired.HasAny)
+                return;
+
+            _animationSetBinder.ApplyDirectionalOverrideSet(_overrideController, "slot_dodge", desired);
+        }
+
+        private bool IsCurrentlyGrounded()
+        {
+            bool grounded = _simState?.HasState == true ? _simState.IsGrounded : true;
+            if (_isLocalPlayer)
+            {
+                var motor = _localPlayerMotor != null ? _localPlayerMotor : GetComponent<LocalPlayerMotor>();
+                if (motor != null)
+                {
+                    _localPlayerMotor = motor;
+                    grounded = motor.IsGrounded;
+                }
+            }
+
+            return grounded;
+        }
+
+        private void ApplyHitClipOverrides(bool grounded, bool force = false)
+        {
+            if (_overrideController == null)
+                return;
+            CombatAnimationSet? animationSet = _animationSet;
+            if (animationSet == null)
+                return;
+
+            bool useAirVariant = !grounded;
+            if (!force && _hitUsesAirVariant == useAirVariant)
+                return;
+
+            _hitUsesAirVariant = useAirVariant;
+            _animationSetBinder.ApplyHitClipOverrides(_overrideController, animationSet, useAirVariant);
+        }
+
+        private bool TryTriggerPhasedMeleeAction(in CombatAnimationRequest request, bool grounded)
+        {
+            if (_animator == null || _overrideController == null || _animationSet == null)
+                return false;
+
+            if (!_animationSet.TryGetPhasedMeleeEntry(request.ActionId, out WeaponPhasedActionEntry phasedMeleeEntry))
+                return false;
+
+            if (!phasedMeleeEntry.TryResolveClipSet(grounded, out ResolvedWeaponPhasedActionClipSet clipSet))
+                return false;
+
+            int strikeIndex = _animationSet.GetStrikeIndexForActionId(request.ActionId);
+            if (strikeIndex <= 0)
+                return false;
+
+            _actionPlayback.BeginPhasedMelee(
+                ResolveStrikeBankSlot(strikeIndex),
+                clipSet.Start,
+                clipSet.Loop,
+                clipSet.End,
+                clipSet.ReleaseAfterStart,
+                specialMovementDriven: phasedMeleeEntry.drivePhasesFromSpecialMovement
+                    && request.DrivePhasesFromSpecialMovement);
+            PlayUpperBodyState(UpperBodyEmptyStateHash, 0f);
+            ResetMeleeLowerBodyUnlockState(resetLayerWeight: true, clearUpperBodyRecovery: true);
+            return PlayPhasedMeleeSegment(PhasedMeleePlaybackPhase.Start, 0f);
+        }
+
+        private void UpdatePhasedMeleePlayback()
+        {
+            if (!_actionPlayback.IsPhasedMeleeActive || _animator == null)
+                return;
+
+            if (_actionPlayback.ActiveMeleePresentation.HasValue
+                && _actionPlayback.ActiveMeleePresentation.GetValueOrDefault().IsPhased
+                && !_actionPlayback.ActiveMeleePresentationEntered)
+            {
+                return;
+            }
+
+            if (!TryGetPhasedMeleePhaseNormalizedTime(out float normalizedTime))
+            {
+                CancelPhasedMeleePlayback();
+                return;
+            }
+
+            if (_actionPlayback.IsPhasedMeleeSpecialMovementDriven)
+            {
+                UpdateSpecialMovementDrivenPhasedMeleePlayback(normalizedTime);
+                return;
+            }
+
+            if (!_actionPlayback.TryResolvePhasedMeleeTransition(
+                    normalizedTime,
+                    PhasedMeleeStartOnlyEndTriggerNormalizedTime,
+                    PhasedMeleeSegmentTransitionNormalizedTime,
+                    PhasedMeleeEndCompleteNormalizedTime,
+                    out PhasedMeleePlaybackPhase nextPhase,
+                    out bool shouldCancel))
+            {
+                return;
+            }
+
+            if (shouldCancel)
+            {
+                CancelPhasedMeleePlayback();
+                return;
+            }
+
+            AdvancePhasedMeleeSegment(nextPhase);
+        }
+
+        private void AdvancePhasedMeleeSegment(PhasedMeleePlaybackPhase nextPhase)
+        {
+            if (TryGetPhasedMeleePhaseNormalizedTime(out float normalizedTime))
+                _actionPlayback.AddCompletedPhasedMeleePhaseSeconds(normalizedTime);
+            if (!PlayPhasedMeleeSegment(nextPhase, 0f))
+            {
+                CancelPhasedMeleePlayback();
+                return;
+            }
+
+        }
+
+        public void RequestSpecialMovementDrivenPhasedMeleeEnd()
+        {
+            if (_animator == null || !_actionPlayback.RequestPhasedMeleeSpecialMovementEnd())
+                return;
+
+            if (_actionPlayback.PhasedMeleePhase == PhasedMeleePlaybackPhase.Loop)
+                AdvancePhasedMeleeSegment(PhasedMeleePlaybackPhase.End);
+        }
+
+        private void UpdateSpecialMovementDrivenPhasedMeleePlayback(float normalizedTime)
+        {
+            if (_actionPlayback.PhasedMeleePhase == PhasedMeleePlaybackPhase.Start)
+            {
+                float startExitNormalizedTime = _actionPlayback.PhasedMeleeReleaseAfterStart
+                    ? PhasedMeleeStartOnlyEndTriggerNormalizedTime
+                    : PhasedMeleeSegmentTransitionNormalizedTime;
+                if (normalizedTime < startExitNormalizedTime)
+                    return;
+
+                AdvancePhasedMeleeSegment(
+                    _actionPlayback.PhasedMeleeReleaseAfterStart
+                    || _actionPlayback.IsPhasedMeleeSpecialMovementEndRequested
+                        ? PhasedMeleePlaybackPhase.End
+                        : PhasedMeleePlaybackPhase.Loop);
+                return;
+            }
+
+            if (_actionPlayback.PhasedMeleePhase == PhasedMeleePlaybackPhase.Loop)
+            {
+                if (!_actionPlayback.IsPhasedMeleeSpecialMovementEndRequested)
+                    return;
+
+                AdvancePhasedMeleeSegment(PhasedMeleePlaybackPhase.End);
+                return;
+            }
+
+            if (_actionPlayback.PhasedMeleePhase == PhasedMeleePlaybackPhase.End
+                && normalizedTime >= PhasedMeleeEndCompleteNormalizedTime)
+            {
+                CancelPhasedMeleePlayback();
+            }
+        }
+
+        private bool PlayPhasedMeleeSegment(
+            PhasedMeleePlaybackPhase phase,
+            float normalizedTime)
+        {
+            if (_animator == null || _overrideController == null)
+                return false;
+
+            AnimationClip? clip = _actionPlayback.GetPhasedMeleeClip(phase);
+            if (clip == null)
+                return false;
+
+            normalizedTime = Mathf.Clamp01(normalizedTime);
+
+            if (_actionPlayback.IsPhasedMeleeUpperBodyMode)
+            {
+                _actionPlayback.SetPhasedMeleeSegment(
+                    phase,
+                    stateHash: 0,
+                    clip.length);
+                _overrideController[UpperBodyRecoverySlotName] = clip;
+                PlayUpperBodyState(UpperBodyRecoveryAction1StateHash, normalizedTime);
+                return true;
+            }
+
+            if (_actionPlayback.PhasedMeleeBankSlot <= 0)
+                return false;
+
+            if (!CombatActionPlaybackController.TryResolvePhasedMeleeLayerRoute(
+                    _actionPlayback.PhasedMeleeBankSlot,
+                    phase,
+                    Strike1StateHash,
+                    Strike2StateHash,
+                    Strike3StateHash,
+                    Strike4StateHash,
+                    out int segmentBankSlot,
+                    out int segmentStateHash))
+            {
+                return false;
+            }
+
+            _actionPlayback.SetPhasedMeleeSegment(
+                phase,
+                segmentStateHash,
+                clip.length);
+            _actionPlayback.OverrideStrikeBankSlot(_overrideController, segmentBankSlot, clip);
+            int fullPathStateHash = ResolveStrikeFullPathStateHash(segmentBankSlot);
+            bool hasFullPathState = fullPathStateHash != 0 && _animator.HasState(MeleeAttackLayerIndex, fullPathStateHash);
+            int playStateHash = hasFullPathState ? fullPathStateHash : segmentStateHash;
+            CombatActionPlaybackController.PlayMeleeStrikeState(
+                _animator,
+                MeleeAttackLayerIndex,
+                playStateHash,
+                normalizedTime);
+            return true;
+        }
+
+        private bool TryGetPhasedMeleePresentationTiming(out float elapsedSeconds, out float stateLengthSeconds)
+        {
+            elapsedSeconds = 0f;
+            stateLengthSeconds = Mathf.Max(0f, _actionPlayback.PhasedMeleeTotalLengthSeconds);
+            if (!_actionPlayback.IsPhasedMeleeActive)
+                return false;
+
+            if (!TryGetPhasedMeleePhaseNormalizedTime(out float normalizedTime))
+                return false;
+
+            return _actionPlayback.TryGetPhasedMeleePresentationTiming(
+                normalizedTime,
+                out elapsedSeconds,
+                out stateLengthSeconds);
+        }
+
+        private float GetPhasedMeleeCurrentNormalizedTime()
+        {
+            return TryGetPhasedMeleePhaseNormalizedTime(out float normalizedTime)
+                ? Mathf.Clamp01(normalizedTime)
+                : 0f;
+        }
+
+        private bool TryGetPhasedMeleePhaseNormalizedTime(out float normalizedTime)
+        {
+            normalizedTime = 0f;
+            if (_animator == null || !_actionPlayback.IsPhasedMeleeActive)
+                return false;
+
+            int layerIndex = _actionPlayback.IsPhasedMeleeUpperBodyMode ? UpperBodyLayerIndex : MeleeAttackLayerIndex;
+            int expectedStateHash = _actionPlayback.IsPhasedMeleeUpperBodyMode
+                ? UpperBodyRecoveryAction1StateHash
+                : _actionPlayback.PhasedMeleeStateHash;
+            if (expectedStateHash == 0)
+                return false;
+
+            AnimatorStateInfo current = _animator.GetCurrentAnimatorStateInfo(layerIndex);
+            if (current.shortNameHash == expectedStateHash)
+            {
+                normalizedTime = current.normalizedTime;
+                return true;
+            }
+
+            if (_animator.IsInTransition(layerIndex))
+            {
+                AnimatorStateInfo next = _animator.GetNextAnimatorStateInfo(layerIndex);
+                if (next.shortNameHash == expectedStateHash)
+                {
+                    normalizedTime = next.normalizedTime;
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private AnimationClip? GetCurrentPhasedMeleeClip() => _actionPlayback.GetCurrentPhasedMeleeClip();
+
+        private void CancelPhasedMeleePlayback(bool clearActivePresentation = true)
+        {
+            bool wasPhasedActive = _actionPlayback.CancelPhasedMelee();
+            if (clearActivePresentation
+                && _actionPlayback.ActiveMeleePresentation.HasValue
+                && _actionPlayback.ActiveMeleePresentation.Value.IsPhased
+                && (_actionPlayback.ActiveBaseCombatAnimationCategory == CombatAnimationCategory.MeleeSkill
+                    || _actionPlayback.ActiveBaseCombatAnimationCategory == CombatAnimationCategory.AutoAttack))
+            {
+                ClearActiveMeleePresentation();
+            }
+            if (wasPhasedActive)
+                _animator?.Play(MeleeAttackEmptyStateHash, MeleeAttackLayerIndex, 0f);
+        }
+
+        private void EnsureOverrideController()
+        {
+            if (_animator == null)
+                return;
+
+            if (_overrideController != null)
+            {
+                if (!ReferenceEquals(_animator.runtimeAnimatorController, _overrideController))
+                    _animator.runtimeAnimatorController = _overrideController;
+                return;
+            }
+
+            // Wrap the base controller exactly once. Reassigning runtimeAnimatorController
+            // resets the entire state machine, so this must never happen after init.
+            _overrideController = new AnimatorOverrideController(_animator.runtimeAnimatorController);
+            _animator.runtimeAnimatorController = _overrideController;
+        }
+
+        private void EnsureSharedActionProfileLoaded()
+        {
+            if (_sharedActionProfile != null)
+                return;
+
+            _sharedActionProfile = Resources.Load<SharedActionProfile>("ActionProfiles/SharedActions");
+            if (_sharedActionProfile == null)
+            {
+                if (_animationSet?.dodge.HasAny != true && _animationSet?.airDodge.HasAny != true)
+                {
+                    Debug.LogWarning("[PlayerAnimator] Shared action profile 'ActionProfiles/SharedActions' was not found, and the active animation set has no dodge clips. Dodge will use controller defaults.");
+                }
+                return;
+            }
+
+            if (_overrideController != null)
+            {
+                ApplySharedActionOverrides(_wasGrounded, forceDodge: true);
+            }
+        }
+
+        public void SetKnockedDown(bool isKnockedDown)
+        {
+            StatusReactionController.Bind(_animator, _overrideController);
+            StatusReactionController.SetKnockedDown(isKnockedDown);
+        }
+
+        public void SetHardCrowdControl(string? statusKind)
+        {
+            StatusReactionController.Bind(_animator, _overrideController);
+            StatusReactionController.SetHardCrowdControl(statusKind);
+        }
+
+        /// <summary>
+        /// Fires a directional hit-reaction trigger based on the world-space direction
+        /// FROM which the hit arrived. hitDirection should be normalized.
+        /// </summary>
+        public void TriggerHit(Vector3 hitDirection, Vector3 characterForward)
+        {
+            StatusReactionController.Bind(_animator, _overrideController);
+            StatusReactionController.TriggerHit(hitDirection, characterForward);
+        }
+
+        private void ClearNonDeathPresentation()
+        {
+            if (_animator == null)
+                return;
+
+            StatusReactionController.Bind(_animator, _overrideController);
+            StatusReactionController.ClearForNonDeath();
+            PreemptMeleeAnimationIfActive(captureGhost: false);
+            CancelPhasedMeleePlayback();
+            ClearActiveSpellPresentation(resetLayerWeight: true, clearUpperBodySpell: true);
+            ClearActiveSpellCastHoldPresentation(clearAnimatorState: true);
+
+            _blockingPresentationActive = false;
+            _parryArmedPresentationActive = false;
+            _animator.SetBool(IsBlockingHash, false);
+            _animator.ResetTrigger(TriggerBlockStartHash);
+            _animator.ResetTrigger(TriggerBlockHitHash);
+            _animator.ResetTrigger(TriggerParryHitHash);
+
+            PlayUpperBodyState(UpperBodyEmptyStateHash, 0f);
+            _animator.Play(SpellActionEmptyStateHash, SpellActionLayerIndex, 0f);
+        }
+
+        public void TriggerStagger(Vector3 hitDirection, Vector3 characterForward)
+        {
+            StatusReactionController.Bind(_animator, _overrideController);
+            StatusReactionController.TriggerStagger(hitDirection, characterForward);
+        }
+
+        private void ClearPresentationForStagger()
+        {
+            if (_animator == null)
+                return;
+
+            PreemptMeleeAnimationIfActive();
+            CancelPhasedMeleePlayback();
+            ClearActiveSpellPresentation(resetLayerWeight: true, clearUpperBodySpell: true);
+            ClearActiveSpellCastHoldPresentation(clearAnimatorState: true);
+            _animator.Play(SpellActionEmptyStateHash, SpellActionLayerIndex, 0f);
+            _blockingPresentationActive = false;
+            _parryArmedPresentationActive = false;
+            _animator.SetBool(IsBlockingHash, false);
+            _animator.ResetTrigger(TriggerBlockStartHash);
+            _animator.ResetTrigger(TriggerBlockHitHash);
+            PlayUpperBodyState(UpperBodyEmptyStateHash, 0f);
+        }
+
+        private void Update()
+        {
+            if (_animator == null || _simState == null || !_simState.HasState) return;
+            Animator animator = _animator;
+
+            bool grounded = _simState.IsGrounded;
+            if (_isLocalPlayer)
+            {
+                var motor = GetComponent<LocalPlayerMotor>();
+                if (motor != null) grounded = motor.IsGrounded;
+            }
+
+            bool presentationGrounded = ResolvePresentationGrounded(grounded);
+            LocomotionSample locomotion = UpdateLocomotion();
+            UpdateMovementOneShots(locomotion, presentationGrounded);
+            UpdateWeaponVisualHandoff();
+            UpdatePhasedMeleePlayback();
+            UpdateSpellCastHoldPlayback();
+            UpdateSpellCastHoldFadeOut();
+            UpdateMeleeLowerBodyUnlock();
+            UpdateSpellLowerBodyUnlock();
+            // Latch the "entered animator state" flag the first frame after a presentation
+            // is set. Without this latch the cleanup below races the animator: SetTrigger
+            // is called during another script's Update, but the animator doesn't process
+            // the trigger until after every Update has run, so a same-frame cleanup would
+            // observe Empty on the melee layer and discard the freshly-cached identity
+            // before the strike ever begins.
+            if (_actionPlayback.ActiveMeleePresentation.HasValue
+                && !_actionPlayback.ActiveMeleePresentationEntered
+                && IsMeleePresentationStateActive())
+            {
+                _actionPlayback.MarkActiveMeleePresentationEntered();
+            }
+            if (_actionPlayback.ActiveSpellPresentation.HasValue
+                && !_actionPlayback.ActiveSpellPresentationEntered
+                && IsActiveSpellPresentationStateActive())
+            {
+                _actionPlayback.MarkActiveSpellPresentationEntered();
+            }
+
+            if (_actionPlayback.ActiveBaseCombatAnimationCategory == CombatAnimationCategory.AutoAttack
+                && _actionPlayback.ActiveMeleePresentationEntered
+                && !IsMeleePresentationStateActive())
+            {
+                ClearActiveMeleePresentation();
+            }
+            else if (_actionPlayback.ActiveBaseCombatAnimationCategory == CombatAnimationCategory.MeleeSkill
+                && _actionPlayback.ActiveMeleePresentationEntered
+                && !IsMeleePresentationStateActive()
+                && !_actionPlayback.IsPhasedMeleeActive)
+            {
+                ClearActiveMeleePresentation();
+            }
+            if (_actionPlayback.ActiveSpellPresentationEntered && !IsActiveSpellPresentationStateActive())
+            {
+                bool clearCastHoldAfterOverlayRelease = _actionPlayback.ActiveSpellCastHoldPresentation.HasValue;
+                ClearActiveSpellPresentation(resetLayerWeight: true, clearUpperBodySpell: true);
+                if (clearCastHoldAfterOverlayRelease)
+                    ClearActiveSpellCastHoldPresentation(clearAnimatorState: true, softFullBodyClear: true);
+            }
+            RecoverLocomotionFromTransientStates(locomotion, presentationGrounded);
+
+            animator.SetBool(GroundedHash, presentationGrounded);
+            animator.SetBool(JumpHash, _wasGrounded && !presentationGrounded);
+            animator.SetBool(FreeFallHash, !presentationGrounded);
+            _wasGrounded = presentationGrounded;
+        }
+
+        private static bool ResolvePresentationGrounded(bool gameplayGrounded) => gameplayGrounded;
+
+
+        private void BeginWeaponHandoff(
+            bool targetInCombat,
+            int layerIndex,
+            int stateHash)
+        {
+            _pendingWeaponHandoffTargetInCombat = targetInCombat;
+            _pendingWeaponHandoffLayerIndex = layerIndex;
+            _pendingWeaponHandoffStateHash = stateHash;
+            _weaponHandoffStateEntered = false;
+        }
+
+        private void ClearPendingWeaponHandoff()
+        {
+            _pendingWeaponHandoffLayerIndex = -1;
+            _pendingWeaponHandoffStateHash = 0;
+            _pendingWeaponHandoffTargetInCombat = false;
+            _weaponHandoffStateEntered = false;
+        }
+
+        private bool HasPendingWeaponHandoffFor(bool targetInCombat)
+        {
+            return _pendingWeaponHandoffLayerIndex >= 0
+                && _pendingWeaponHandoffTargetInCombat == targetInCombat;
+        }
+
+        private void UpdateWeaponVisualHandoff()
+        {
+            if (_pendingWeaponHandoffLayerIndex < 0 || _animator == null)
+                return;
+
+            if (_weaponAttachments == null)
+                _weaponAttachments = GetComponent<WeaponAttachmentController>();
+            if (_weaponAttachments == null || _animationSet == null)
+                return;
+
+            int layerIndex = _pendingWeaponHandoffLayerIndex;
+            AnimatorStateInfo state = _animator.GetCurrentAnimatorStateInfo(layerIndex);
+            if (state.shortNameHash != _pendingWeaponHandoffStateHash)
+            {
+                if (!_weaponHandoffStateEntered)
+                    return;
+
+                if (!_animator.IsInTransition(layerIndex))
+                {
+                    bool handoffTargetInCombat = _pendingWeaponHandoffTargetInCombat;
+                    _weaponAttachments.SetInCombat(handoffTargetInCombat);
+                    ClearPendingWeaponHandoff();
+                }
+                return;
+            }
+
+            _weaponHandoffStateEntered = true;
+            float normalizedTime = Mathf.Clamp01(state.normalizedTime);
+            bool targetInCombat = _pendingWeaponHandoffTargetInCombat;
+            if (_weaponAttachments.ApplyTransitionProgress(targetInCombat, normalizedTime))
+            {
+                ClearPendingWeaponHandoff();
+            }
+        }
+
+        private void RecoverLocomotionFromTransientStates(LocomotionSample locomotion, bool grounded)
+        {
+            if (_animator == null || _animator.IsInTransition(0))
+                return;
+
+            AnimatorStateInfo state = _animator.GetCurrentAnimatorStateInfo(0);
+            if (!TryResolveLocomotionRecovery(
+                    state.shortNameHash,
+                    _inCombat,
+                    grounded,
+                    locomotion.IsMoving,
+                    ResolveMovementActionLocomotionUnlockGate(state.shortNameHash),
+                    ResolveDrawRecoveryGate(),
+                    ResolveSheathRecoveryGate(),
+                    out int targetStateHash,
+                    out float minNormalizedTime))
+            {
+                return;
+            }
+
+            if (state.normalizedTime < minNormalizedTime)
+                return;
+
+            _animator.CrossFadeInFixedTime(targetStateHash, LocomotionRecoveryCrossFadeDurationSeconds, 0, 0f);
+            if (state.shortNameHash == DodgeStateHash)
+                _activeMovementPresentation = null;
+        }
+
+        private void PlayUpperBodyState(int stateHash, float normalizedTime)
+        {
+            if (!CanDriveAnimatorState())
+                return;
+
+            _animator!.Play(stateHash, UpperBodyLayerIndex, normalizedTime);
+        }
+
+        private void PlayLeftGestureState(int stateHash, float normalizedTime)
+        {
+            if (!CanDriveAnimatorState())
+                return;
+
+            _animator!.SetLayerWeight(LeftGestureLayerIndex, 1f);
+            _animator!.Play(stateHash, LeftGestureLayerIndex, normalizedTime);
+        }
+
+        private void ClearLeftGestureSpellPresentation()
+        {
+            if (!CanDriveAnimatorState())
+                return;
+
+            _animator!.Play(UpperBodyEmptyStateHash, LeftGestureLayerIndex, 0f);
+        }
+
+        private bool CanDriveAnimatorState()
+        {
+            return _animator != null
+                && _animator.isActiveAndEnabled
+                && _animator.gameObject.activeInHierarchy;
+        }
+
+        private CombatStanceTransitionBand ResolveCombatStanceTransitionBand()
+        {
+            if (!IsCurrentlyGrounded() || _latestLocomotionRawMagnitude < StopTriggerThreshold)
+                return CombatStanceTransitionBand.Idle;
+
+            return _latestLocomotionRawMagnitude >= RunStopThreshold
+                ? CombatStanceTransitionBand.Run
+                : CombatStanceTransitionBand.Walk;
+        }
+
+        private static bool TryResolveCombatStanceTransitionStateHash(
+            bool enteringCombat,
+            int locomotionBandIndex,
+            bool hasIdleTransition,
+            bool hasWalkTransition,
+            bool hasRunTransition,
+            out int stateHash)
+        {
+            stateHash = 0;
+            CombatStanceTransitionBand band = (CombatStanceTransitionBand)Mathf.Clamp(
+                locomotionBandIndex,
+                (int)CombatStanceTransitionBand.Idle,
+                (int)CombatStanceTransitionBand.Run);
+
+            switch (band)
+            {
+                case CombatStanceTransitionBand.Idle when hasIdleTransition:
+                    stateHash = enteringCombat ? EnterCombatIdleStateHash : ExitCombatIdleStateHash;
+                    return true;
+                case CombatStanceTransitionBand.Walk when hasWalkTransition:
+                    stateHash = enteringCombat ? EnterCombatWalkStateHash : ExitCombatWalkStateHash;
+                    return true;
+                case CombatStanceTransitionBand.Run when hasRunTransition:
+                    stateHash = enteringCombat ? EnterCombatRunStateHash : ExitCombatRunStateHash;
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        private float ResolveDrawRecoveryGate()
+        {
+            if (_pendingWeaponHandoffLayerIndex == BaseLayerIndex && _pendingWeaponHandoffStateHash == DrawWeaponStateHash)
+                return 1.01f;
+
+            return WeaponTransitionRecoveryMinNormalizedTime;
+        }
+
+        private float ResolveSheathRecoveryGate()
+        {
+            if (_pendingWeaponHandoffLayerIndex == BaseLayerIndex && _pendingWeaponHandoffStateHash == SheathWeaponStateHash)
+                return 1.01f;
+
+            return WeaponTransitionRecoveryMinNormalizedTime;
+        }
+
+        private float ResolveMovementActionLocomotionUnlockGate(int stateHash)
+        {
+            if (stateHash != DodgeStateHash)
+                return 1.01f;
+
+            if (!_activeMovementPresentation.HasValue || !_activeMovementPresentation.Value.IsDodge)
+                return 1.01f;
+
+            long nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            ActiveMovementActionPresentation active = _activeMovementPresentation.Value;
+            if (nowMs < active.ActiveUntilMs)
+                return 1.01f;
+
+            return 0f;
+        }
+
+        private LocomotionSample UpdateLocomotion()
+        {
+            // Lazy-resolve: LocalPlayerStateProvider is added after PlayerAnimator.Initialize()
+            // by SetupLocalPlayer, so GetComponent at Initialize time returns null.
+            if (_isLocalPlayer && _stateProvider == null)
+                _stateProvider = GetComponent<LocalPlayerStateProvider>();
+
+            Vector3 worldVel = GetWorldVelocity();
+
+            // Build facing basis from predicted yaw for local player;
+            // transform.forward/right for remote (driven by server state).
+            Vector3 fwd, right;
+            if (_isLocalPlayer && _stateProvider != null && _stateProvider.HasPredictedState)
+            {
+                float yaw = _stateProvider.PredictedFacingYaw;
+                fwd   = new Vector3(Mathf.Sin(yaw), 0f,  Mathf.Cos(yaw));
+                right = new Vector3(Mathf.Cos(yaw), 0f, -Mathf.Sin(yaw));
+            }
+            else
+            {
+                fwd   = transform.forward;
+                right = transform.right;
+            }
+
+            float targetVelX = Mathf.Clamp(Vector3.Dot(worldVel, right) / BaseRunSpeed, -1f, 1f);
+            float targetVelZ = Mathf.Clamp(Vector3.Dot(worldVel, fwd)   / BaseRunSpeed, -1f, 1f);
+            float rawMagnitude = new Vector2(targetVelX, targetVelZ).magnitude;
+            float facingYawDegrees = Mathf.Atan2(fwd.x, fwd.z) * Mathf.Rad2Deg;
+
+            bool useForwardOnlyLocomotion = _isLocalPlayer &&
+                _localPlayerMotor != null &&
+                !_localPlayerMotor.UsesDirectionalLocomotion;
+            if (useForwardOnlyLocomotion)
+            {
+                targetVelX = 0f;
+                rawMagnitude = Mathf.Abs(targetVelZ);
+            }
+
+            // Dead zone: suppress blend tree "swimming" at near-zero velocity
+            if (rawMagnitude < MovementDeadZone)
+                targetVelX = targetVelZ = 0f;
+
+            // k=10 → ~100ms to settle. Snappy without jitter.
+            float t = 1f - Mathf.Exp(-10f * Time.deltaTime);
+            _smoothVelX = Mathf.Lerp(_smoothVelX, targetVelX, t);
+            _smoothVelZ = Mathf.Lerp(_smoothVelZ, targetVelZ, t);
+
+            float smoothMag = new Vector2(_smoothVelX, _smoothVelZ).magnitude;
+            _latestLocomotionRawMagnitude = rawMagnitude;
+
+            _animator!.SetFloat(VelocityXHash,   _smoothVelX);
+            _animator!.SetFloat(VelocityZHash,   _smoothVelZ);
+            _animator!.SetFloat(MotionSpeedHash, smoothMag);
+
+            return new LocomotionSample(targetVelX, targetVelZ, rawMagnitude, smoothMag, facingYawDegrees);
+        }
+
+        private Vector3 GetWorldVelocity()
+        {
+            // Always advance _prevPosition so remote player fallback stays current.
+            Vector3 pos = (_motionSource ?? transform).position;
+            Vector3 posDelta = (pos - _prevPosition) / Mathf.Max(Time.deltaTime, 0.001f);
+            _prevPosition = pos;
+            posDelta.y = 0f;
+
+            // Local player: use prediction system velocity — avoids reconciliation spikes.
+            // Note: _stateProvider already resolved by UpdateLocomotion before this is called.
+            if (_isLocalPlayer && _stateProvider != null && _stateProvider.HasPredictedState)
+            {
+                var vel = _stateProvider.PredictedVelocity;
+                vel.y = 0f;
+                return vel;
+            }
+
+            // Remote player: position delta (server-interpolated, smooth enough).
+            return posDelta;
+        }
+
+        private void UpdateMovementOneShots(LocomotionSample locomotion, bool grounded)
+        {
+            if (_animator == null) return;
+
+            bool jumpStarted = _wasGrounded && !grounded;
+            bool landed = !_wasGrounded && grounded;
+            Vector2 jumpLatchDirection = ResolveJumpLatchDirection(locomotion);
+
+            if (locomotion.IsMoving)
+            {
+                _lastMoveVelX = locomotion.velocityX;
+                _lastMoveVelZ = locomotion.velocityZ;
+                _lastMoveWasRun = locomotion.rawMagnitude >= RunStopThreshold;
+            }
+
+            if (jumpStarted)
+            {
+                LatchJumpDirection(jumpLatchDirection);
+                ForceDirectionalJumpRestartIfNeeded();
+            }
+
+            if (landed)
+            {
+                LatchJumpDirection(jumpLatchDirection);
+            }
+
+            _wasMoving = locomotion.IsMoving;
+            _lastFacingYawDegrees = locomotion.facingYawDegrees;
+        }
+
+        private Vector2 ResolveJumpLatchDirection(LocomotionSample locomotion)
+        {
+            if (_isLocalPlayer && _localPlayerMotor != null)
+            {
+                Vector2 intentDirection = new(_localPlayerMotor.CurrentIntentStrafe, _localPlayerMotor.CurrentIntentForward);
+                if (intentDirection.sqrMagnitude > 0.0001f)
+                    return intentDirection;
+            }
+
+            return new Vector2(locomotion.velocityX, locomotion.velocityZ);
+        }
+
+        private void LatchJumpDirection(Vector2 direction)
+        {
+            if (_animator == null) return;
+            Vector2 latched = SnapToCardinalOrCenter(direction, Vector2.zero);
+            _animator.SetFloat(JumpXHash, latched.x);
+            _animator.SetFloat(JumpZHash, latched.y);
+        }
+
+        private void ForceDirectionalJumpRestartIfNeeded()
+        {
+            if (_animator == null || _overrideController == null)
+                return;
+
+            if (!IsLandingStateActive())
+                return;
+
+            int targetStateHash = _inCombat ? JumpStartCombatStateHash : JumpStartStateHash;
+            _animator.CrossFadeInFixedTime(targetStateHash, RejumpCrossFadeDurationSeconds, 0, 0f);
+        }
+
+        private bool IsLandingStateActive()
+        {
+            if (_animator == null)
+                return false;
+
+            AnimatorStateInfo current = _animator.GetCurrentAnimatorStateInfo(0);
+            if (IsLandingState(current.shortNameHash))
+                return true;
+
+            if (_animator.IsInTransition(0))
+            {
+                AnimatorStateInfo next = _animator.GetNextAnimatorStateInfo(0);
+                if (IsLandingState(next.shortNameHash))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static bool IsLandingState(int shortNameHash)
+        {
+            return shortNameHash == JumpLandStateHash || shortNameHash == JumpLandCombatStateHash;
+        }
+
+        private static bool TryResolveLocomotionRecovery(
+            int stateHash,
+            bool inCombat,
+            bool grounded,
+            bool isMoving,
+            float movementActionLocomotionUnlockGate,
+            float drawRecoveryGate,
+            float sheathRecoveryGate,
+            out int targetStateHash,
+            out float minNormalizedTime)
+        {
+            targetStateHash = 0;
+            minNormalizedTime = 0f;
+
+            if (!grounded || !isMoving)
+                return false;
+
+            if (stateHash == JumpLandStateHash || stateHash == JumpLandCombatStateHash)
+            {
+                targetStateHash = inCombat ? IdleCombatStateHash : IdleWalkRunBlendStateHash;
+                minNormalizedTime = LandingRecoveryMinNormalizedTime;
+                return true;
+            }
+
+            if (stateHash == DodgeStateHash)
+            {
+                targetStateHash = inCombat ? IdleCombatStateHash : IdleWalkRunBlendStateHash;
+                minNormalizedTime = Mathf.Clamp01(movementActionLocomotionUnlockGate);
+                return true;
+            }
+
+            if (stateHash == DrawWeaponStateHash)
+            {
+                targetStateHash = IdleCombatStateHash;
+                minNormalizedTime = Mathf.Clamp01(drawRecoveryGate);
+                return true;
+            }
+
+            if (stateHash == SheathWeaponStateHash)
+            {
+                targetStateHash = IdleWalkRunBlendStateHash;
+                minNormalizedTime = Mathf.Clamp01(sheathRecoveryGate);
+                return true;
+            }
+
+            return false;
+        }
+        private static bool ShouldUseMovingBlockLoopTransition(
+            bool grounded,
+            float locomotionRawMagnitude,
+            bool hasDirectionalBlockLoop)
+        {
+            return grounded
+                && hasDirectionalBlockLoop
+                && locomotionRawMagnitude >= StopTriggerThreshold;
+        }
+
+        private static Vector2 SnapToCardinalOrCenter(Vector2 value, Vector2 fallback)
+        {
+            if (value.sqrMagnitude < 0.0001f)
+                value = fallback;
+
+            if (value.sqrMagnitude < 0.04f)
+                return Vector2.zero;
+
+            if (Mathf.Abs(value.x) >= Mathf.Abs(value.y))
+                return new Vector2(Mathf.Sign(value.x), 0f);
+
+            return new Vector2(0f, Mathf.Sign(value.y));
+        }
+
+        private static Vector2 SnapToCompass(Vector2 value)
+        {
+            if (value.sqrMagnitude < 0.0001f)
+                return Vector2.up;
+
+            Vector2 normalized = value.normalized;
+            Vector2[] directions =
+            {
+                Vector2.up,
+                new Vector2(Mathf.Sqrt(0.5f), Mathf.Sqrt(0.5f)),
+                Vector2.right,
+                new Vector2(Mathf.Sqrt(0.5f), -Mathf.Sqrt(0.5f)),
+                Vector2.down,
+                new Vector2(-Mathf.Sqrt(0.5f), -Mathf.Sqrt(0.5f)),
+                Vector2.left,
+                new Vector2(-Mathf.Sqrt(0.5f), Mathf.Sqrt(0.5f)),
+            };
+
+            float bestDot = float.NegativeInfinity;
+            Vector2 best = Vector2.up;
+            for (int i = 0; i < directions.Length; i++)
+            {
+                float dot = Vector2.Dot(normalized, directions[i]);
+                if (dot > bestDot)
+                {
+                    bestDot = dot;
+                    best = directions[i];
+                }
+            }
+
+            return best;
+        }
+
+        private float GetFacingYawDegrees()
+        {
+            if (_isLocalPlayer && _stateProvider != null && _stateProvider.HasPredictedState)
+                return _stateProvider.PredictedFacingYaw * Mathf.Rad2Deg;
+
+            return transform.eulerAngles.y;
+        }
+    }
+
+}

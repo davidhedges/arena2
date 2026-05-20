@@ -1,0 +1,1038 @@
+{
+    "profiles": [
+        {
+            "combat_profile": "SWORD_AND_SHIELD",
+            "stagger_duration_f_ms": 1000,
+            "stagger_duration_b_ms": 1000,
+            "stagger_duration_l_ms": 1000,
+            "stagger_duration_r_ms": 1000,
+            "auto_attack_strike_id": "AUTO_ATTACK_1",
+            "strikes": [
+                {
+                    "id": "SWORD_AND_SHIELD_LIGHT_COMBO_1",
+                    "slot_id": "light_combo_1",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 17
+                        }
+                    ],
+                    "recovery_ms": 250,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY",
+                    "projectile": {
+                        "projectile_id": "ARROW_STANDARD",
+                        "speed": 0,
+                        "max_distance": 0,
+                        "radius": 0,
+                        "spawn_forward": 0,
+                        "spawn_height": 0,
+                        "aim_height_scale": 0,
+                        "requires_initial_line_of_sight": true,
+                        "update_interval_seconds": 0
+                    }
+                },
+                {
+                    "id": "SWORD_AND_SHIELD_LIGHT_COMBO_2",
+                    "slot_id": "light_combo_2",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 58
+                        }
+                    ],
+                    "recovery_ms": 250,
+                    "is_gap_closer": false,
+                    "combo_from": "light_combo_1",
+                    "combo_open_ms": 380,
+                    "combo_grace_ms": 350,
+                    "aerial_execution_mode": "GROUNDED_ONLY",
+                    "projectile": {
+                        "projectile_id": "ARROW_STANDARD",
+                        "speed": 0,
+                        "max_distance": 0,
+                        "radius": 0,
+                        "spawn_forward": 0,
+                        "spawn_height": 0,
+                        "aim_height_scale": 0,
+                        "requires_initial_line_of_sight": true,
+                        "update_interval_seconds": 0
+                    }
+                },
+                {
+                    "id": "SWORD_AND_SHIELD_LIGHT_COMBO_3",
+                    "slot_id": "light_3",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 66
+                        }
+                    ],
+                    "recovery_ms": 300,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY",
+                    "projectile": {
+                        "projectile_id": "ARROW_STANDARD",
+                        "speed": 0,
+                        "max_distance": 0,
+                        "radius": 0,
+                        "spawn_forward": 0,
+                        "spawn_height": 0,
+                        "aim_height_scale": 0,
+                        "requires_initial_line_of_sight": true,
+                        "update_interval_seconds": 0
+                    }
+                },
+                {
+                    "id": "SWORD_AND_SHIELD_HEAVY_GAPCLOSE",
+                    "slot_id": "heavy_gapclose",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 300
+                        }
+                    ],
+                    "recovery_ms": 350,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY",
+                    "projectile": {
+                        "projectile_id": "ARROW_STANDARD",
+                        "speed": 0,
+                        "max_distance": 0,
+                        "radius": 0,
+                        "spawn_forward": 0,
+                        "spawn_height": 0,
+                        "aim_height_scale": 0,
+                        "requires_initial_line_of_sight": true,
+                        "update_interval_seconds": 0
+                    }
+                },
+                {
+                    "id": "SWORD_AND_SHIELD_ALT_LIGHT_1",
+                    "slot_id": "alt_light_1",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 18
+                        }
+                    ],
+                    "recovery_ms": 250,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY",
+                    "projectile": {
+                        "projectile_id": "ARROW_STANDARD",
+                        "speed": 0,
+                        "max_distance": 0,
+                        "radius": 0,
+                        "spawn_forward": 0,
+                        "spawn_height": 0,
+                        "aim_height_scale": 0,
+                        "requires_initial_line_of_sight": true,
+                        "update_interval_seconds": 0
+                    }
+                },
+                {
+                    "id": "SWORD_AND_SHIELD_ALT_LIGHT_2",
+                    "slot_id": "alt_light_2",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 59
+                        }
+                    ],
+                    "recovery_ms": 250,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY",
+                    "projectile": {
+                        "projectile_id": "ARROW_STANDARD",
+                        "speed": 0,
+                        "max_distance": 0,
+                        "radius": 0,
+                        "spawn_forward": 0,
+                        "spawn_height": 0,
+                        "aim_height_scale": 0,
+                        "requires_initial_line_of_sight": true,
+                        "update_interval_seconds": 0
+                    }
+                },
+                {
+                    "id": "SWORD_AND_SHIELD_ALT_LIGHT_3",
+                    "slot_id": "alt_light_3",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 75
+                        }
+                    ],
+                    "recovery_ms": 300,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY",
+                    "projectile": {
+                        "projectile_id": "ARROW_STANDARD",
+                        "speed": 0,
+                        "max_distance": 0,
+                        "radius": 0,
+                        "spawn_forward": 0,
+                        "spawn_height": 0,
+                        "aim_height_scale": 0,
+                        "requires_initial_line_of_sight": true,
+                        "update_interval_seconds": 0
+                    }
+                },
+                {
+                    "id": "SWORD_AND_SHIELD_ALT_HEAVY_GAPCLOSE",
+                    "slot_id": "alt_heavy_gapclose",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 267
+                        }
+                    ],
+                    "recovery_ms": 350,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY",
+                    "projectile": {
+                        "projectile_id": "ARROW_STANDARD",
+                        "speed": 0,
+                        "max_distance": 0,
+                        "radius": 0,
+                        "spawn_forward": 0,
+                        "spawn_height": 0,
+                        "aim_height_scale": 0,
+                        "requires_initial_line_of_sight": true,
+                        "update_interval_seconds": 0
+                    }
+                },
+                {
+                    "id": "SWORD_AND_SHIELD_UTILITY_1",
+                    "slot_id": "utility_1",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 18
+                        }
+                    ],
+                    "recovery_ms": 250,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY",
+                    "projectile": {
+                        "projectile_id": "ARROW_STANDARD",
+                        "speed": 0,
+                        "max_distance": 0,
+                        "radius": 0,
+                        "spawn_forward": 0,
+                        "spawn_height": 0,
+                        "aim_height_scale": 0,
+                        "requires_initial_line_of_sight": true,
+                        "update_interval_seconds": 0
+                    }
+                },
+                {
+                    "id": "SWORD_AND_SHIELD_UTILITY_2",
+                    "slot_id": "utility_2",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 71
+                        }
+                    ],
+                    "recovery_ms": 250,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY",
+                    "projectile": {
+                        "projectile_id": "ARROW_STANDARD",
+                        "speed": 0,
+                        "max_distance": 0,
+                        "radius": 0,
+                        "spawn_forward": 0,
+                        "spawn_height": 0,
+                        "aim_height_scale": 0,
+                        "requires_initial_line_of_sight": true,
+                        "update_interval_seconds": 0
+                    }
+                },
+                {
+                    "id": "SWORD_AND_SHIELD_UTILITY_3",
+                    "slot_id": "utility_3",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 115
+                        }
+                    ],
+                    "recovery_ms": 300,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY",
+                    "projectile": {
+                        "projectile_id": "ARROW_STANDARD",
+                        "speed": 0,
+                        "max_distance": 0,
+                        "radius": 0,
+                        "spawn_forward": 0,
+                        "spawn_height": 0,
+                        "aim_height_scale": 0,
+                        "requires_initial_line_of_sight": true,
+                        "update_interval_seconds": 0
+                    }
+                },
+                {
+                    "id": "SWORD_AND_SHIELD_UTILITY_4",
+                    "slot_id": "utility_4",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 243
+                        }
+                    ],
+                    "recovery_ms": 350,
+                    "is_gap_closer": false,
+                    "combo_from": "utility_3",
+                    "combo_open_ms": 450,
+                    "combo_grace_ms": 100,
+                    "aerial_execution_mode": "GROUNDED_ONLY",
+                    "projectile": {
+                        "projectile_id": "ARROW_STANDARD",
+                        "speed": 0,
+                        "max_distance": 0,
+                        "radius": 0,
+                        "spawn_forward": 0,
+                        "spawn_height": 0,
+                        "aim_height_scale": 0,
+                        "requires_initial_line_of_sight": true,
+                        "update_interval_seconds": 0
+                    }
+                },
+                {
+                    "id": "SWORD_AND_SHIELD_FINISHER_1",
+                    "slot_id": "finisher_1",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 18
+                        }
+                    ],
+                    "recovery_ms": 250,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY",
+                    "projectile": {
+                        "projectile_id": "ARROW_STANDARD",
+                        "speed": 0,
+                        "max_distance": 0,
+                        "radius": 0,
+                        "spawn_forward": 0,
+                        "spawn_height": 0,
+                        "aim_height_scale": 0,
+                        "requires_initial_line_of_sight": true,
+                        "update_interval_seconds": 0
+                    }
+                },
+                {
+                    "id": "SWORD_AND_SHIELD_FINISHER_4",
+                    "slot_id": "finisher_4",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 263
+                        }
+                    ],
+                    "recovery_ms": 350,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY",
+                    "projectile": {
+                        "projectile_id": "ARROW_STANDARD",
+                        "speed": 0,
+                        "max_distance": 0,
+                        "radius": 0,
+                        "spawn_forward": 0,
+                        "spawn_height": 0,
+                        "aim_height_scale": 0,
+                        "requires_initial_line_of_sight": true,
+                        "update_interval_seconds": 0
+                    }
+                },
+                {
+                    "id": "PALADIN_CHARGE",
+                    "slot_id": "paladin_charge_melee_slot",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 650
+                        }
+                    ],
+                    "recovery_ms": 250,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY",
+                    "projectile": {
+                        "projectile_id": "ARROW_STANDARD",
+                        "speed": 0,
+                        "max_distance": 0,
+                        "radius": 0,
+                        "spawn_forward": 0,
+                        "spawn_height": 0,
+                        "aim_height_scale": 0,
+                        "requires_initial_line_of_sight": true,
+                        "update_interval_seconds": 0
+                    }
+                },
+                {
+                    "id": "AUTO_ATTACK_1",
+                    "slot_id": "auto_attack_1",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 17
+                        }
+                    ],
+                    "recovery_ms": 250,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY",
+                    "projectile": {
+                        "projectile_id": "ARROW_STANDARD",
+                        "speed": 0,
+                        "max_distance": 0,
+                        "radius": 0,
+                        "spawn_forward": 0,
+                        "spawn_height": 0,
+                        "aim_height_scale": 0,
+                        "requires_initial_line_of_sight": true,
+                        "update_interval_seconds": 0
+                    }
+                }
+            ]
+        },
+        {
+            "combat_profile": "TWO_HANDED_SWORD",
+            "stagger_duration_f_ms": 1000,
+            "stagger_duration_b_ms": 1000,
+            "stagger_duration_l_ms": 1000,
+            "stagger_duration_r_ms": 1000,
+            "auto_attack_strike_id": "AUTO_ATTACK_1",
+            "strikes": [
+                {
+                    "id": "COMBO_ATTACK_1_1_HIGH_TO_LOW",
+                    "slot_id": "light_combo_1",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 292
+                        }
+                    ],
+                    "recovery_ms": 250,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY"
+                },
+                {
+                    "id": "WARRIOR_MAIM",
+                    "slot_id": "maim",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 292
+                        }
+                    ],
+                    "recovery_ms": 250,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY"
+                },
+                {
+                    "id": "COMBO_ATTACK_1_2_LOW_TO_HIGH",
+                    "slot_id": "light_combo_2",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 269
+                        }
+                    ],
+                    "recovery_ms": 250,
+                    "is_gap_closer": false,
+                    "combo_from": "light_combo_1",
+                    "combo_open_ms": 790,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY"
+                },
+                {
+                    "id": "COMBO_ATTACK_1_3_GROUND_TO_AIR",
+                    "slot_id": "light_3",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 256
+                        }
+                    ],
+                    "recovery_ms": 300,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY"
+                },
+                {
+                    "id": "COMBO_ATTACK_1_4_AIR_TO_GROUND",
+                    "slot_id": "heavy_gapclose",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 352
+                        },
+                        {
+                            "impact_delay_ms": 822
+                        }
+                    ],
+                    "recovery_ms": 350,
+                    "is_gap_closer": false,
+                    "combo_from": "light_3",
+                    "combo_open_ms": 600,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY"
+                },
+                {
+                    "id": "COMBO_ATTACK_2_1_SPIN",
+                    "slot_id": "alt_light_1",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 358
+                        }
+                    ],
+                    "recovery_ms": 250,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY"
+                },
+                {
+                    "id": "COMBO_ATTACK_2_2_HIGH_TO_LOW",
+                    "slot_id": "alt_light_2",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 399
+                        }
+                    ],
+                    "recovery_ms": 250,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY"
+                },
+                {
+                    "id": "COMBO_ATTACK_2_3_DISENGAGE",
+                    "slot_id": "alt_light_3",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 99
+                        }
+                    ],
+                    "recovery_ms": 300,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY"
+                },
+                {
+                    "id": "COMBO_ATTACK_2_4_LUNGE",
+                    "slot_id": "alt_heavy_gapclose",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 360
+                        }
+                    ],
+                    "recovery_ms": 350,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY"
+                },
+                {
+                    "id": "COMBO_ATTACK_3_1_LOW_TO_HIGH",
+                    "slot_id": "utility_1",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 935
+                        }
+                    ],
+                    "recovery_ms": 250,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY"
+                },
+                {
+                    "id": "COMBO_ATTACK_3_2_LOW_TO_HIGH",
+                    "slot_id": "utility_2",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 750
+                        }
+                    ],
+                    "recovery_ms": 250,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY"
+                },
+                {
+                    "id": "COMBO_ATTACK_3_3_GROUND_TO_AIR",
+                    "slot_id": "utility_3",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 227
+                        }
+                    ],
+                    "recovery_ms": 300,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY"
+                },
+                {
+                    "id": "COMBO_ATTACK_3_4_AIR_TO_GROUND",
+                    "slot_id": "utility_4",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 363
+                        }
+                    ],
+                    "recovery_ms": 350,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 450,
+                    "combo_grace_ms": 100,
+                    "aerial_execution_mode": "GROUNDED_ONLY"
+                },
+                {
+                    "id": "COMBO_ATTACK_4_1_SPIN",
+                    "slot_id": "combo_attack_4_1_spin",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 266
+                        }
+                    ],
+                    "recovery_ms": 250,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY"
+                },
+                {
+                    "id": "COMBO_ATTACK_4_4_LUNGING_SLASH",
+                    "slot_id": "finisher_4",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 256
+                        }
+                    ],
+                    "recovery_ms": 350,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY"
+                },
+                {
+                    "id": "SKYFALL_1",
+                    "slot_id": "skyfall_1_slot",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 602
+                        }
+                    ],
+                    "recovery_ms": 250,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_OR_AIRBORNE"
+                },
+                {
+                    "id": "SKYFALL_2",
+                    "slot_id": "skyfall_2_slot",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 417
+                        }
+                    ],
+                    "recovery_ms": 250,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_OR_AIRBORNE"
+                },
+                {
+                    "id": "SKYFALL_3",
+                    "slot_id": "skyfall_3_slot",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 341
+                        },
+                        {
+                            "impact_delay_ms": 500
+                        }
+                    ],
+                    "recovery_ms": 250,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY"
+                },
+                {
+                    "id": "WHIRLWIND",
+                    "slot_id": "finisher_1",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 333
+                        },
+                        {
+                            "impact_delay_ms": 667
+                        }
+                    ],
+                    "recovery_ms": 500,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY"
+                },
+                {
+                    "id": "WARRIOR_CHARGE",
+                    "slot_id": "warrior_charge_melee_slot",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 104
+                        }
+                    ],
+                    "recovery_ms": 250,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY"
+                },
+                {
+                    "id": "WARRIOR_IMPALE",
+                    "slot_id": "warrior_impale_melee_slot",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 303
+                        }
+                    ],
+                    "recovery_ms": 250,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY"
+                },
+                {
+                    "id": "WARRIOR_DISENGAGE_STRIKE",
+                    "slot_id": "warrior_disengage_strike_melee_slot",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 153
+                        }
+                    ],
+                    "recovery_ms": 250,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY"
+                },
+                {
+                    "id": "AUTO_ATTACK_1",
+                    "slot_id": "auto_attack_1",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 292
+                        }
+                    ],
+                    "recovery_ms": 250,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY"
+                }
+            ]
+        },
+        {
+            "combat_profile": "ARCHER_BOW",
+            "stagger_duration_f_ms": 1000,
+            "stagger_duration_b_ms": 1000,
+            "stagger_duration_l_ms": 1000,
+            "stagger_duration_r_ms": 1000,
+            "auto_attack_strike_id": "AUTO_ATTACK_1",
+            "strikes": [
+                {
+                    "id": "ARCHER_QUICK_SHOT",
+                    "slot_id": "quick_shot_slot",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 320
+                        }
+                    ],
+                    "recovery_ms": 250,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY",
+                    "projectile": {
+                        "projectile_id": "ARROW_STANDARD",
+                        "speed": 0,
+                        "max_distance": 0,
+                        "radius": 0,
+                        "spawn_forward": 0,
+                        "spawn_height": 0,
+                        "aim_height_scale": 0,
+                        "requires_initial_line_of_sight": true,
+                        "update_interval_seconds": 0
+                    }
+                },
+                {
+                    "id": "ARCHER_FOLLOW_THROUGH",
+                    "slot_id": "follow_through_slot",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 383
+                        }
+                    ],
+                    "recovery_ms": 250,
+                    "is_gap_closer": false,
+                    "combo_from": "quick_shot_slot",
+                    "combo_open_ms": 380,
+                    "combo_grace_ms": 350,
+                    "aerial_execution_mode": "GROUNDED_ONLY",
+                    "projectile": {
+                        "projectile_id": "ARROW_STANDARD",
+                        "speed": 0,
+                        "max_distance": 0,
+                        "radius": 0,
+                        "spawn_forward": 0,
+                        "spawn_height": 0,
+                        "aim_height_scale": 0,
+                        "requires_initial_line_of_sight": true,
+                        "update_interval_seconds": 0
+                    }
+                },
+                {
+                    "id": "ARCHER_LOW_DRAW",
+                    "slot_id": "low_draw_slot",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 475
+                        }
+                    ],
+                    "recovery_ms": 300,
+                    "is_gap_closer": false,
+                    "combo_from": "follow_through_slot",
+                    "combo_open_ms": 380,
+                    "combo_grace_ms": 350,
+                    "aerial_execution_mode": "GROUNDED_ONLY",
+                    "projectile": {
+                        "projectile_id": "ARROW_STANDARD",
+                        "speed": 0,
+                        "max_distance": 0,
+                        "radius": 0,
+                        "spawn_forward": 0,
+                        "spawn_height": 0,
+                        "aim_height_scale": 0,
+                        "requires_initial_line_of_sight": true,
+                        "update_interval_seconds": 0
+                    }
+                },
+                {
+                    "id": "ARCHER_FINISHING_SHOT",
+                    "slot_id": "finishing_shot_slot",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 538
+                        }
+                    ],
+                    "recovery_ms": 350,
+                    "is_gap_closer": false,
+                    "combo_from": "low_draw_slot",
+                    "combo_open_ms": 450,
+                    "combo_grace_ms": 200,
+                    "aerial_execution_mode": "GROUNDED_ONLY",
+                    "projectile": {
+                        "projectile_id": "ARROW_STANDARD",
+                        "speed": 0,
+                        "max_distance": 0,
+                        "radius": 0,
+                        "spawn_forward": 0,
+                        "spawn_height": 0,
+                        "aim_height_scale": 0,
+                        "requires_initial_line_of_sight": true,
+                        "update_interval_seconds": 0
+                    }
+                },
+                {
+                    "id": "ARCHER_POWER_SHOT",
+                    "slot_id": "power_shot_slot",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 793
+                        }
+                    ],
+                    "recovery_ms": 350,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY",
+                    "projectile": {
+                        "projectile_id": "ARROW_STANDARD",
+                        "speed": 0,
+                        "max_distance": 0,
+                        "radius": 0,
+                        "spawn_forward": 0,
+                        "spawn_height": 0,
+                        "aim_height_scale": 0,
+                        "requires_initial_line_of_sight": true,
+                        "update_interval_seconds": 0
+                    }
+                },
+                {
+                    "id": "ARCHER_RAIN_SHOT",
+                    "slot_id": "rain_shot_slot",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 982
+                        }
+                    ],
+                    "recovery_ms": 400,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY",
+                    "projectile": {
+                        "projectile_id": "ARROW_STANDARD",
+                        "speed": 0,
+                        "max_distance": 0,
+                        "radius": 0,
+                        "spawn_forward": 0,
+                        "spawn_height": 0,
+                        "aim_height_scale": 0,
+                        "requires_initial_line_of_sight": true,
+                        "update_interval_seconds": 0
+                    }
+                },
+                {
+                    "id": "ARCHER_EVASIVE_SHOT",
+                    "slot_id": "evasive_shot_slot",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 800
+                        }
+                    ],
+                    "recovery_ms": 350,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY",
+                    "projectile": {
+                        "projectile_id": "ARROW_STANDARD",
+                        "speed": 0,
+                        "max_distance": 0,
+                        "radius": 0,
+                        "spawn_forward": 0,
+                        "spawn_height": 0,
+                        "aim_height_scale": 0,
+                        "requires_initial_line_of_sight": true,
+                        "update_interval_seconds": 0
+                    }
+                },
+                {
+                    "id": "ARCHER_AIR_SHOT",
+                    "slot_id": "air_shot_slot",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 363
+                        }
+                    ],
+                    "recovery_ms": 300,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "AIRBORNE_ONLY",
+                    "projectile": {
+                        "projectile_id": "ARROW_STANDARD",
+                        "speed": 0,
+                        "max_distance": 0,
+                        "radius": 0,
+                        "spawn_forward": 0,
+                        "spawn_height": 0,
+                        "aim_height_scale": 0,
+                        "requires_initial_line_of_sight": true,
+                        "update_interval_seconds": 0
+                    }
+                },
+                {
+                    "id": "AUTO_ATTACK_1",
+                    "slot_id": "auto_attack_1",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 320
+                        }
+                    ],
+                    "recovery_ms": 250,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY",
+                    "projectile": {
+                        "projectile_id": "ARROW_STANDARD",
+                        "speed": 0,
+                        "max_distance": 0,
+                        "radius": 0,
+                        "spawn_forward": 0,
+                        "spawn_height": 0,
+                        "aim_height_scale": 0,
+                        "requires_initial_line_of_sight": true,
+                        "update_interval_seconds": 0
+                    }
+                }
+            ]
+        }
+    ]
+}

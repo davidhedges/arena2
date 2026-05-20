@@ -1,0 +1,18 @@
+[package]
+name = "arena"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[features]
+default = []
+projectile_load_harness = []
+spellcasting_terminal_harness = []
+
+[dependencies]
+spacetimedb = "2.0"
+log = "0.4"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"

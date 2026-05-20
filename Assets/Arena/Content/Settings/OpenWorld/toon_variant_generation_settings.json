@@ -1,0 +1,69 @@
+{
+  "packageRules": [
+    {
+      "packageName": "ToonAdventureIsland",
+      "skipColliderCategoryPaths": [
+        "Animals",
+        "Vegetation"
+      ],
+      "skipColliderPathContains": [
+        "Grass"
+      ],
+      "allowColliderPathContains": [
+        "Tree"
+      ]
+    },
+    {
+      "packageName": "ToonDesertedTemples",
+      "skipColliderCategoryPaths": [
+        "Background",
+        "Candles",
+        "Pottery",
+        "Props",
+        "Skeletons",
+        "Vegetation/Plants",
+        "Vegetation/Water Plants",
+        "Water Props"
+      ],
+      "skipColliderPathContains": [],
+      "allowColliderPathContains": []
+    },
+    {
+      "packageName": "ToonEnchantedMeadow",
+      "skipColliderCategoryPaths": [
+        "Background",
+        "Props/Food",
+        "Vegetation"
+      ],
+      "skipColliderPathContains": [],
+      "allowColliderPathContains": [
+        "Tree"
+      ]
+    },
+    {
+      "packageName": "ToonFantasyNature",
+      "skipColliderCategoryPaths": [
+        "Decals",
+        "Vegetation/Mushrooms",
+        "Vegetation/Plants",
+        "Vegetation/Water Plants"
+      ],
+      "skipColliderPathContains": [],
+      "allowColliderPathContains": []
+    },
+    {
+      "packageName": "ToonGoldenValley",
+      "skipColliderCategoryPaths": [
+        "Background",
+        "Props/Food",
+        "Vegetation/Billboards",
+        "Vegetation/Flowers",
+        "Vegetation/Grass",
+        "Vegetation/Mushrooms",
+        "Vegetation/Plants"
+      ],
+      "skipColliderPathContains": [],
+      "allowColliderPathContains": []
+    }
+  ]
+}

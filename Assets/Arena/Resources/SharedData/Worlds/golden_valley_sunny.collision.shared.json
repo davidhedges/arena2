@@ -1,0 +1,1595 @@
+{
+    "version": 1,
+    "boxes": [
+        {
+            "name": "Buildings & Props/TGV_Basement_Entrance_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                0.0000019073486328125,
+                1.472058653831482,
+                0.0036620497703552248
+            ],
+            "size": [
+                0.4000037610530853,
+                3.055882692337036,
+                2.0
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Basement_Entrance_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                0.0000019073486328125,
+                1.472058653831482,
+                0.0036620497703552248
+            ],
+            "size": [
+                0.4000037610530853,
+                3.055882692337036,
+                2.0
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Basement_Entrance_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                0.0000019073486328125,
+                1.472058653831482,
+                0.0036620497703552248
+            ],
+            "size": [
+                0.4000037610530853,
+                3.055882692337036,
+                2.0
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Bucket_02A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.01146000623703003,
+                0.3142353892326355,
+                -0.004136979579925537
+            ],
+            "size": [
+                0.9969805479049683,
+                0.6310116052627564,
+                0.9959944486618042
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Bucket_02A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.01146000623703003,
+                0.3142353892326355,
+                -0.004136979579925537
+            ],
+            "size": [
+                0.9969805479049683,
+                0.6310116052627564,
+                0.9959944486618042
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Bucket_02A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.01146000623703003,
+                0.3142353892326355,
+                -0.004136979579925537
+            ],
+            "size": [
+                0.9969805479049683,
+                0.6310116052627564,
+                0.9959944486618042
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Bucket_02A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.01146000623703003,
+                0.3142353892326355,
+                -0.004136979579925537
+            ],
+            "size": [
+                0.9969805479049683,
+                0.6310116052627564,
+                0.9959944486618042
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Bucket_02A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.01146000623703003,
+                0.3142353892326355,
+                -0.004136979579925537
+            ],
+            "size": [
+                0.9969805479049683,
+                0.6310116052627564,
+                0.9959944486618042
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Bucket_02A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.01146000623703003,
+                0.3142353892326355,
+                -0.004136979579925537
+            ],
+            "size": [
+                0.9969805479049683,
+                0.6310116052627564,
+                0.9959944486618042
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Bucket_02A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.01146000623703003,
+                0.3142353892326355,
+                -0.004136979579925537
+            ],
+            "size": [
+                0.9969805479049683,
+                0.6310116052627564,
+                0.9959944486618042
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Bucket_02A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.01146000623703003,
+                0.3142353892326355,
+                -0.004136979579925537
+            ],
+            "size": [
+                0.9969805479049683,
+                0.6310116052627564,
+                0.9959944486618042
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Bucket_02A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.01146000623703003,
+                0.3142353892326355,
+                -0.004136979579925537
+            ],
+            "size": [
+                0.9969805479049683,
+                0.6310116052627564,
+                0.9959944486618042
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Bucket_02A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.01146000623703003,
+                0.3142353892326355,
+                -0.004136979579925537
+            ],
+            "size": [
+                0.9969805479049683,
+                0.6310116052627564,
+                0.9959944486618042
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Bucket_02A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.01146000623703003,
+                0.3142353892326355,
+                -0.004136979579925537
+            ],
+            "size": [
+                0.9969805479049683,
+                0.6310116052627564,
+                0.9959944486618042
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Bucket_02A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.01146000623703003,
+                0.3142353892326355,
+                -0.004136979579925537
+            ],
+            "size": [
+                0.9969805479049683,
+                0.6310116052627564,
+                0.9959944486618042
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Bucket_02A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.01146000623703003,
+                0.3142353892326355,
+                -0.004136979579925537
+            ],
+            "size": [
+                0.9969805479049683,
+                0.6310116052627564,
+                0.9959944486618042
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Roof_03A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                0.12488269805908203,
+                2.2604169845581056,
+                -0.0013210773468017579
+            ],
+            "size": [
+                2.249776840209961,
+                6.6291656494140629,
+                6.913276672363281
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Roof_03A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                0.12488269805908203,
+                2.2604169845581056,
+                -0.0013210773468017579
+            ],
+            "size": [
+                2.249776840209961,
+                6.6291656494140629,
+                6.913276672363281
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Roof_04A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.0012285709381103516,
+                2.3436708450317385,
+                0.0
+            ],
+            "size": [
+                2.0024638175964357,
+                6.462657928466797,
+                6.454503059387207
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Roof_04A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.0012285709381103516,
+                2.3436708450317385,
+                0.0
+            ],
+            "size": [
+                2.0024638175964357,
+                6.462657928466797,
+                6.454503059387207
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Table_Cloth_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                0.0001817941665649414,
+                0.6503250002861023,
+                -0.0013275742530822754
+            ],
+            "size": [
+                1.9973475933074952,
+                0.41430890560150149,
+                1.3058775663375855
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Table_Cloth_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                0.0001817941665649414,
+                0.6503250002861023,
+                -0.0013275742530822754
+            ],
+            "size": [
+                1.9973475933074952,
+                0.41430890560150149,
+                1.3058775663375855
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Table_Cloth_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                0.0001817941665649414,
+                0.6503250002861023,
+                -0.0013275742530822754
+            ],
+            "size": [
+                1.9973475933074952,
+                0.41430890560150149,
+                1.3058775663375855
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Table_Cloth_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                0.0001817941665649414,
+                0.6503250002861023,
+                -0.0013275742530822754
+            ],
+            "size": [
+                1.9973475933074952,
+                0.41430890560150149,
+                1.3058775663375855
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Windmill_01A (1)/TGV_Windmill_01A_Door",
+            "shape": "obb_y",
+            "center": [
+                367.0341491699219,
+                87.80780029296875,
+                380.10919189453127
+            ],
+            "size": [
+                0.16256724298000337,
+                2.265779733657837,
+                0.9915351271629334
+            ],
+            "rotation_y_deg": 164.99996948242188
+        },
+        {
+            "name": "Buildings & Props/TGV_Windmill_01A (2)/TGV_Windmill_01A_Door",
+            "shape": "obb_y",
+            "center": [
+                420.2055969238281,
+                80.80280303955078,
+                368.28216552734377
+            ],
+            "size": [
+                0.16256719827651978,
+                2.265779733657837,
+                0.9915348887443543
+            ],
+            "rotation_y_deg": 194.99990844726563
+        },
+        {
+            "name": "Buildings & Props/TGV_Windmill_01A (7)/TGV_Windmill_01A_Door",
+            "shape": "obb_y",
+            "center": [
+                220.3250274658203,
+                72.98280334472656,
+                297.7835998535156
+            ],
+            "size": [
+                0.162567138671875,
+                2.265779733657837,
+                0.9915345311164856
+            ],
+            "rotation_y_deg": 75.00004577636719
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Barrel_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.000918954610824585,
+                0.6287393569946289,
+                -0.0011835098266601563
+            ],
+            "size": [
+                0.9188068509101868,
+                1.257478952407837,
+                0.9146938920021057
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Barrel_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.000918954610824585,
+                0.6287393569946289,
+                -0.0011835098266601563
+            ],
+            "size": [
+                0.9188068509101868,
+                1.257478952407837,
+                0.9146938920021057
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Barrel_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.000918954610824585,
+                0.6287393569946289,
+                -0.0011835098266601563
+            ],
+            "size": [
+                0.9188068509101868,
+                1.257478952407837,
+                0.9146938920021057
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Barrel_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.000918954610824585,
+                0.6287393569946289,
+                -0.0011835098266601563
+            ],
+            "size": [
+                0.9188068509101868,
+                1.257478952407837,
+                0.9146938920021057
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Barrel_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.000918954610824585,
+                0.6287393569946289,
+                -0.0011835098266601563
+            ],
+            "size": [
+                0.9188068509101868,
+                1.257478952407837,
+                0.9146938920021057
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Barrel_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.000918954610824585,
+                0.6287393569946289,
+                -0.0011835098266601563
+            ],
+            "size": [
+                0.9188068509101868,
+                1.257478952407837,
+                0.9146938920021057
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Barrel_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.000918954610824585,
+                0.6287393569946289,
+                -0.0011835098266601563
+            ],
+            "size": [
+                0.9188068509101868,
+                1.257478952407837,
+                0.9146938920021057
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Barrel_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.000918954610824585,
+                0.6287393569946289,
+                -0.0011835098266601563
+            ],
+            "size": [
+                0.9188068509101868,
+                1.257478952407837,
+                0.9146938920021057
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Barrel_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.000918954610824585,
+                0.6287393569946289,
+                -0.0011835098266601563
+            ],
+            "size": [
+                0.9188068509101868,
+                1.257478952407837,
+                0.9146938920021057
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Barrel_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.000918954610824585,
+                0.6287393569946289,
+                -0.0011835098266601563
+            ],
+            "size": [
+                0.9188068509101868,
+                1.257478952407837,
+                0.9146938920021057
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Barrel_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.000918954610824585,
+                0.6287393569946289,
+                -0.0011835098266601563
+            ],
+            "size": [
+                0.9188068509101868,
+                1.257478952407837,
+                0.9146938920021057
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Barrel_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.000918954610824585,
+                0.6287393569946289,
+                -0.0011835098266601563
+            ],
+            "size": [
+                0.9188068509101868,
+                1.257478952407837,
+                0.9146938920021057
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Barrel_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.000918954610824585,
+                0.6287393569946289,
+                -0.0011835098266601563
+            ],
+            "size": [
+                0.9188068509101868,
+                1.257478952407837,
+                0.9146938920021057
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Barrel_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.000918954610824585,
+                0.6287393569946289,
+                -0.0011835098266601563
+            ],
+            "size": [
+                0.9188068509101868,
+                1.257478952407837,
+                0.9146938920021057
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Barrel_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.000918954610824585,
+                0.6287393569946289,
+                -0.0011835098266601563
+            ],
+            "size": [
+                0.9188068509101868,
+                1.257478952407837,
+                0.9146938920021057
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Barrel_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.000918954610824585,
+                0.6287393569946289,
+                -0.0011835098266601563
+            ],
+            "size": [
+                0.9188068509101868,
+                1.257478952407837,
+                0.9146938920021057
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Barrel_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.000918954610824585,
+                0.6287393569946289,
+                -0.0011835098266601563
+            ],
+            "size": [
+                0.9188068509101868,
+                1.257478952407837,
+                0.9146938920021057
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Barrel_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.000918954610824585,
+                0.6287393569946289,
+                -0.0011835098266601563
+            ],
+            "size": [
+                0.9188068509101868,
+                1.257478952407837,
+                0.9146938920021057
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Barrel_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.000918954610824585,
+                0.6287393569946289,
+                -0.0011835098266601563
+            ],
+            "size": [
+                0.9188068509101868,
+                1.257478952407837,
+                0.9146938920021057
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Barrel_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.000918954610824585,
+                0.6287393569946289,
+                -0.0011835098266601563
+            ],
+            "size": [
+                0.9188068509101868,
+                1.257478952407837,
+                0.9146938920021057
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Barrel_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.000918954610824585,
+                0.6287393569946289,
+                -0.0011835098266601563
+            ],
+            "size": [
+                0.9188068509101868,
+                1.257478952407837,
+                0.9146938920021057
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Barrel_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.000918954610824585,
+                0.6287393569946289,
+                -0.0011835098266601563
+            ],
+            "size": [
+                0.9188068509101868,
+                1.257478952407837,
+                0.9146938920021057
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Barrel_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.000918954610824585,
+                0.6287393569946289,
+                -0.0011835098266601563
+            ],
+            "size": [
+                0.9188068509101868,
+                1.257478952407837,
+                0.9146938920021057
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Barrel_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.000918954610824585,
+                0.6287393569946289,
+                -0.0011835098266601563
+            ],
+            "size": [
+                0.9188068509101868,
+                1.257478952407837,
+                0.9146938920021057
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Barrel_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.000918954610824585,
+                0.6287393569946289,
+                -0.0011835098266601563
+            ],
+            "size": [
+                0.9188068509101868,
+                1.257478952407837,
+                0.9146938920021057
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Barrel_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.000918954610824585,
+                0.6287393569946289,
+                -0.0011835098266601563
+            ],
+            "size": [
+                0.9188068509101868,
+                1.257478952407837,
+                0.9146938920021057
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Barrel_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.000918954610824585,
+                0.6287393569946289,
+                -0.0011835098266601563
+            ],
+            "size": [
+                0.9188068509101868,
+                1.257478952407837,
+                0.9146938920021057
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Barrel_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.000918954610824585,
+                0.6287393569946289,
+                -0.0011835098266601563
+            ],
+            "size": [
+                0.9188068509101868,
+                1.257478952407837,
+                0.9146938920021057
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Barrel_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.000918954610824585,
+                0.6287393569946289,
+                -0.0011835098266601563
+            ],
+            "size": [
+                0.9188068509101868,
+                1.257478952407837,
+                0.9146938920021057
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Barrel_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.000918954610824585,
+                0.6287393569946289,
+                -0.0011835098266601563
+            ],
+            "size": [
+                0.9188068509101868,
+                1.257478952407837,
+                0.9146938920021057
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Barrel_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.000918954610824585,
+                0.6287393569946289,
+                -0.0011835098266601563
+            ],
+            "size": [
+                0.9188068509101868,
+                1.257478952407837,
+                0.9146938920021057
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Barrel_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.000918954610824585,
+                0.6287393569946289,
+                -0.0011835098266601563
+            ],
+            "size": [
+                0.9188068509101868,
+                1.257478952407837,
+                0.9146938920021057
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Barrel_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.000918954610824585,
+                0.6287393569946289,
+                -0.0011835098266601563
+            ],
+            "size": [
+                0.9188068509101868,
+                1.257478952407837,
+                0.9146938920021057
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Barrel_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.000918954610824585,
+                0.6287393569946289,
+                -0.0011835098266601563
+            ],
+            "size": [
+                0.9188068509101868,
+                1.257478952407837,
+                0.9146938920021057
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Barrel_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.000918954610824585,
+                0.6287393569946289,
+                -0.0011835098266601563
+            ],
+            "size": [
+                0.9188068509101868,
+                1.257478952407837,
+                0.9146938920021057
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Barrel_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.000918954610824585,
+                0.6287393569946289,
+                -0.0011835098266601563
+            ],
+            "size": [
+                0.9188068509101868,
+                1.257478952407837,
+                0.9146938920021057
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Barrel_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.000918954610824585,
+                0.6287393569946289,
+                -0.0011835098266601563
+            ],
+            "size": [
+                0.9188068509101868,
+                1.257478952407837,
+                0.9146938920021057
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Barrel_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.000918954610824585,
+                0.6287393569946289,
+                -0.0011835098266601563
+            ],
+            "size": [
+                0.9188068509101868,
+                1.257478952407837,
+                0.9146938920021057
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Barrel_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.000918954610824585,
+                0.6287393569946289,
+                -0.0011835098266601563
+            ],
+            "size": [
+                0.9188068509101868,
+                1.257478952407837,
+                0.9146938920021057
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Barrel_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.000918954610824585,
+                0.6287393569946289,
+                -0.0011835098266601563
+            ],
+            "size": [
+                0.9188068509101868,
+                1.257478952407837,
+                0.9146938920021057
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Barrel_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.000918954610824585,
+                0.6287393569946289,
+                -0.0011835098266601563
+            ],
+            "size": [
+                0.9188068509101868,
+                1.257478952407837,
+                0.9146938920021057
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Barrel_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.000918954610824585,
+                0.6287393569946289,
+                -0.0011835098266601563
+            ],
+            "size": [
+                0.9188068509101868,
+                1.257478952407837,
+                0.9146938920021057
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Barrel_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.000918954610824585,
+                0.6287393569946289,
+                -0.0011835098266601563
+            ],
+            "size": [
+                0.9188068509101868,
+                1.257478952407837,
+                0.9146938920021057
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Barrel_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.000918954610824585,
+                0.6287393569946289,
+                -0.0011835098266601563
+            ],
+            "size": [
+                0.9188068509101868,
+                1.257478952407837,
+                0.9146938920021057
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Barrel_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.000918954610824585,
+                0.6287393569946289,
+                -0.0011835098266601563
+            ],
+            "size": [
+                0.9188068509101868,
+                1.257478952407837,
+                0.9146938920021057
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Barrel_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.000918954610824585,
+                0.6287393569946289,
+                -0.0011835098266601563
+            ],
+            "size": [
+                0.9188068509101868,
+                1.257478952407837,
+                0.9146938920021057
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Barrel_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.000918954610824585,
+                0.6287393569946289,
+                -0.0011835098266601563
+            ],
+            "size": [
+                0.9188068509101868,
+                1.257478952407837,
+                0.9146938920021057
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Barrel_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.000918954610824585,
+                0.6287393569946289,
+                -0.0011835098266601563
+            ],
+            "size": [
+                0.9188068509101868,
+                1.257478952407837,
+                0.9146938920021057
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Barrel_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.000918954610824585,
+                0.6287393569946289,
+                -0.0011835098266601563
+            ],
+            "size": [
+                0.9188068509101868,
+                1.257478952407837,
+                0.9146938920021057
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Barrel_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.000918954610824585,
+                0.6287393569946289,
+                -0.0011835098266601563
+            ],
+            "size": [
+                0.9188068509101868,
+                1.257478952407837,
+                0.9146938920021057
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Barrel_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.000918954610824585,
+                0.6287393569946289,
+                -0.0011835098266601563
+            ],
+            "size": [
+                0.9188068509101868,
+                1.257478952407837,
+                0.9146938920021057
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Barrel_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.000918954610824585,
+                0.6287393569946289,
+                -0.0011835098266601563
+            ],
+            "size": [
+                0.9188068509101868,
+                1.257478952407837,
+                0.9146938920021057
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Barrel_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.000918954610824585,
+                0.6287393569946289,
+                -0.0011835098266601563
+            ],
+            "size": [
+                0.9188068509101868,
+                1.257478952407837,
+                0.9146938920021057
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Barrel_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.000918954610824585,
+                0.6287393569946289,
+                -0.0011835098266601563
+            ],
+            "size": [
+                0.9188068509101868,
+                1.257478952407837,
+                0.9146938920021057
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Barrel_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.000918954610824585,
+                0.6287393569946289,
+                -0.0011835098266601563
+            ],
+            "size": [
+                0.9188068509101868,
+                1.257478952407837,
+                0.9146938920021057
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Barrel_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.000918954610824585,
+                0.6287393569946289,
+                -0.0011835098266601563
+            ],
+            "size": [
+                0.9188068509101868,
+                1.257478952407837,
+                0.9146938920021057
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Barrel_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.000918954610824585,
+                0.6287393569946289,
+                -0.0011835098266601563
+            ],
+            "size": [
+                0.9188068509101868,
+                1.257478952407837,
+                0.9146938920021057
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Barrel_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.000918954610824585,
+                0.6287393569946289,
+                -0.0011835098266601563
+            ],
+            "size": [
+                0.9188068509101868,
+                1.257478952407837,
+                0.9146938920021057
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Barrel_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.000918954610824585,
+                0.6287393569946289,
+                -0.0011835098266601563
+            ],
+            "size": [
+                0.9188068509101868,
+                1.257478952407837,
+                0.9146938920021057
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Barrel_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.000918954610824585,
+                0.6287393569946289,
+                -0.0011835098266601563
+            ],
+            "size": [
+                0.9188068509101868,
+                1.257478952407837,
+                0.9146938920021057
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Crate_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.004931032657623291,
+                0.31589475274086,
+                -0.00629425048828125
+            ],
+            "size": [
+                0.6749943494796753,
+                0.6520053744316101,
+                1.0515632629394532
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Crate_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.004931032657623291,
+                0.31589475274086,
+                -0.00629425048828125
+            ],
+            "size": [
+                0.6749943494796753,
+                0.6520053744316101,
+                1.0515632629394532
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Crate_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.004931032657623291,
+                0.31589475274086,
+                -0.00629425048828125
+            ],
+            "size": [
+                0.6749943494796753,
+                0.6520053744316101,
+                1.0515632629394532
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Crate_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.004931032657623291,
+                0.31589475274086,
+                -0.00629425048828125
+            ],
+            "size": [
+                0.6749943494796753,
+                0.6520053744316101,
+                1.0515632629394532
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Crate_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.004931032657623291,
+                0.31589475274086,
+                -0.00629425048828125
+            ],
+            "size": [
+                0.6749943494796753,
+                0.6520053744316101,
+                1.0515632629394532
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Crate_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.004931032657623291,
+                0.31589475274086,
+                -0.00629425048828125
+            ],
+            "size": [
+                0.6749943494796753,
+                0.6520053744316101,
+                1.0515632629394532
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Crate_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.004931032657623291,
+                0.31589475274086,
+                -0.00629425048828125
+            ],
+            "size": [
+                0.6749943494796753,
+                0.6520053744316101,
+                1.0515632629394532
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Crate_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.004931032657623291,
+                0.31589475274086,
+                -0.00629425048828125
+            ],
+            "size": [
+                0.6749943494796753,
+                0.6520053744316101,
+                1.0515632629394532
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Crate_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.004931032657623291,
+                0.31589475274086,
+                -0.00629425048828125
+            ],
+            "size": [
+                0.6749943494796753,
+                0.6520053744316101,
+                1.0515632629394532
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Crate_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.004931032657623291,
+                0.31589475274086,
+                -0.00629425048828125
+            ],
+            "size": [
+                0.6749943494796753,
+                0.6520053744316101,
+                1.0515632629394532
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Crate_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.004931032657623291,
+                0.31589475274086,
+                -0.00629425048828125
+            ],
+            "size": [
+                0.6749943494796753,
+                0.6520053744316101,
+                1.0515632629394532
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Crate_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.004931032657623291,
+                0.31589475274086,
+                -0.00629425048828125
+            ],
+            "size": [
+                0.6749943494796753,
+                0.6520053744316101,
+                1.0515632629394532
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Crate_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.004931032657623291,
+                0.31589475274086,
+                -0.00629425048828125
+            ],
+            "size": [
+                0.6749943494796753,
+                0.6520053744316101,
+                1.0515632629394532
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Crate_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.004931032657623291,
+                0.31589475274086,
+                -0.00629425048828125
+            ],
+            "size": [
+                0.6749943494796753,
+                0.6520053744316101,
+                1.0515632629394532
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Crate_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.004931032657623291,
+                0.31589475274086,
+                -0.00629425048828125
+            ],
+            "size": [
+                0.6749943494796753,
+                0.6520053744316101,
+                1.0515632629394532
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Crate_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.004931032657623291,
+                0.31589475274086,
+                -0.00629425048828125
+            ],
+            "size": [
+                0.6749943494796753,
+                0.6520053744316101,
+                1.0515632629394532
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Crate_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.004931032657623291,
+                0.31589475274086,
+                -0.00629425048828125
+            ],
+            "size": [
+                0.6749943494796753,
+                0.6520053744316101,
+                1.0515632629394532
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "Buildings & Props/TGV_Wood_Crate_01A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.004931032657623291,
+                0.31589475274086,
+                -0.00629425048828125
+            ],
+            "size": [
+                0.6749943494796753,
+                0.6520053744316101,
+                1.0515632629394532
+            ],
+            "rotation_y_deg": 0.0
+        },
+        {
+            "name": "TGV_Bucket_02A_Arena/ArenaGameplayCollision",
+            "shape": "obb_y",
+            "center": [
+                -0.01146000623703003,
+                0.3142353892326355,
+                -0.004136979579925537
+            ],
+            "size": [
+                0.9969805479049683,
+                0.6310116052627564,
+                0.9959944486618042
+            ],
+            "rotation_y_deg": 0.0
+        }
+    ]
+}

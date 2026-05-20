@@ -1,0 +1,202 @@
+#cloud-config
+package_update: true
+package_upgrade: true
+
+packages:
+  - ca-certificates
+  - curl
+  - nginx
+  - ufw
+  - certbot
+  - python3-certbot-nginx
+
+ssh_pwauth: false
+
+users:
+  - default
+  - name: arena
+    gecos: Arena operator
+    groups: [sudo]
+    shell: /bin/bash
+    sudo: ["ALL=(ALL) NOPASSWD:ALL"]
+    ssh_authorized_keys:
+%{ for key in ssh_authorized_keys ~}
+      - ${key}
+%{ endfor ~}
+
+write_files:
+  - path: /etc/systemd/system/spacetimedb.service
+    owner: root:root
+    permissions: "0644"
+    content: |
+      [Unit]
+      Description=SpacetimeDB Server
+      Wants=network-online.target
+      After=network-online.target
+      Requires=arena-data-volume.service
+      After=arena-data-volume.service
+
+      [Service]
+      ExecStart=/stdb/spacetime --root-dir=/stdb start --listen-addr=127.0.0.1:3000
+      Restart=always
+      RestartSec=3
+      User=spacetimedb
+      WorkingDirectory=/stdb
+      Environment=HOME=/stdb
+
+      [Install]
+      WantedBy=multi-user.target
+
+  - path: /etc/systemd/system/arena-data-volume.service
+    owner: root:root
+    permissions: "0644"
+    content: |
+      [Unit]
+      Description=Mount Arena SpacetimeDB data volume
+      Wants=network-online.target
+      After=network-online.target
+      Before=spacetimedb.service
+
+      [Service]
+      Type=oneshot
+      RemainAfterExit=yes
+      ExecStart=/usr/local/sbin/arena-mount-data-volume.sh
+
+      [Install]
+      WantedBy=multi-user.target
+
+  - path: /etc/nginx/conf.d/spacetimedb-upgrade-map.conf
+    owner: root:root
+    permissions: "0644"
+    content: |
+      map $http_upgrade $connection_upgrade {
+          default upgrade;
+          '' close;
+      }
+
+  - path: /etc/nginx/sites-available/spacetimedb
+    owner: root:root
+    permissions: "0644"
+    content: |
+      server {
+          listen 80;
+          listen [::]:80;
+          server_name ${nginx_server_name};
+
+          client_max_body_size 64m;
+
+          location = /healthz {
+              access_log off;
+              allow 127.0.0.1;
+              allow ::1;
+              deny all;
+              root /var/www/html;
+              default_type text/plain;
+          }
+
+          location ^~ /.well-known/acme-challenge/ {
+              root /var/www/html;
+              allow all;
+          }
+
+          location ~ ^/v1/database/[^/]+/subscribe$ {
+              proxy_pass http://127.0.0.1:3000;
+              proxy_http_version 1.1;
+              proxy_set_header Upgrade $http_upgrade;
+              proxy_set_header Connection $connection_upgrade;
+              proxy_set_header Host $host;
+              proxy_read_timeout 3600s;
+              proxy_send_timeout 3600s;
+          }
+
+          location /v1/identity {
+              proxy_pass http://127.0.0.1:3000;
+              proxy_http_version 1.1;
+              proxy_set_header Upgrade $http_upgrade;
+              proxy_set_header Connection $connection_upgrade;
+              proxy_set_header Host $host;
+          }
+
+          # Keep publish/admin routes local-only. Publishing should happen over SSH
+          # with spacetime publish -s local on the host.
+          location / {
+              allow 127.0.0.1;
+              allow ::1;
+              deny all;
+          }
+      }
+
+  - path: /usr/local/sbin/arena-mount-data-volume.sh
+    owner: root:root
+    permissions: "0755"
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+
+      VOLUME_DEVICE="/dev/disk/by-id/scsi-0HC_Volume_${data_volume_id}"
+      MOUNT_PATH="/stdb"
+
+      mkdir -p "$MOUNT_PATH"
+
+      for _ in $(seq 1 120); do
+          if [ -e "$VOLUME_DEVICE" ]; then
+              break
+          fi
+          sleep 5
+      done
+
+      if [ ! -e "$VOLUME_DEVICE" ]; then
+          echo "Volume device not found: $VOLUME_DEVICE" >&2
+          exit 1
+      fi
+
+      if ! blkid "$VOLUME_DEVICE" >/dev/null 2>&1; then
+          mkfs.ext4 -F "$VOLUME_DEVICE"
+      fi
+
+      if ! grep -q " $MOUNT_PATH " /etc/fstab; then
+          UUID="$(blkid -s UUID -o value "$VOLUME_DEVICE")"
+          echo "UUID=$UUID $MOUNT_PATH ext4 defaults,nofail 0 2" >> /etc/fstab
+      fi
+
+      if ! findmnt -rno TARGET "$MOUNT_PATH" >/dev/null 2>&1; then
+          mount "$MOUNT_PATH"
+      fi
+
+  - path: /usr/local/sbin/arena-bootstrap-spacetimedb.sh
+    owner: root:root
+    permissions: "0755"
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+
+      /usr/local/sbin/arena-mount-data-volume.sh
+
+      mkdir -p /var/www/html
+      printf "ok\n" > /var/www/html/healthz
+      if ! id -u spacetimedb >/dev/null 2>&1; then
+          useradd --system --home-dir /stdb --shell /bin/bash spacetimedb
+      fi
+      chown -R spacetimedb:spacetimedb /stdb
+
+      if [ ! -x /stdb/spacetime ]; then
+          sudo -u spacetimedb env HOME=/stdb bash -lc \
+              'curl -sSf https://install.spacetimedb.com | sh -s -- --root-dir /stdb --yes'
+      fi
+
+      rm -f /etc/nginx/sites-enabled/default
+      ln -sf /etc/nginx/sites-available/spacetimedb /etc/nginx/sites-enabled/spacetimedb
+      nginx -t
+
+      systemctl daemon-reload
+      systemctl enable arena-data-volume
+      systemctl enable --now spacetimedb
+      systemctl enable --now nginx
+      systemctl reload-or-restart nginx
+
+      ufw allow OpenSSH
+      ufw allow 'Nginx Full'
+      ufw --force enable
+
+runcmd:
+  - ["/usr/local/sbin/arena-bootstrap-spacetimedb.sh"]

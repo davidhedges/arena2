@@ -1,0 +1,346 @@
+#nullable enable
+using UnityEngine;
+using UnityEngine.Rendering;
+using Arena.Entity;
+using Arena.Input;
+
+namespace Arena.Presentation
+{
+    /// <summary>
+    /// Ground-plane aim indicator for point-targeted spells (e.g. METEOR).
+    /// Shows a circle on the ground where the cursor raycasts to the ground plane.
+    /// Singleton — managed by SpellInputHandler.
+    /// </summary>
+    public class AimIndicator : MonoBehaviour
+    {
+        public static AimIndicator Instance { get; private set; } = null!;
+
+        private GameObject? _circle;
+        private Mesh? _circleMesh;
+        private Material? _circleMaterial;
+        private Color _color = new(1f, 0.02f, 0.015f, 0.72f);
+        private float _radius = 1f;
+        private Vector3 _lastCenter = new(float.PositiveInfinity, float.PositiveInfinity, float.PositiveInfinity);
+        private float _lastRadius = -1f;
+        private const float GroundOffset = 0.05f;
+        private const int SegmentCount = 144;
+        private const int RadialBandCount = 32;
+        private const float InnerFadeRadiusFraction = 0.20f;
+        private const float EdgeStartRadiusFraction = 0.96f;
+        private const float MaxAimRayDistance = 1000f;
+        private const float MinAimSurfaceUpDot = 0.35f;
+        private const float RebuildPositionEpsilonSquared = 0.000025f;
+        private static readonly RaycastHit[] AimRaycastHits = new RaycastHit[32];
+        private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
+        private static readonly int ColorId = Shader.PropertyToID("_Color");
+
+        /// <summary>Current aim point on the ground plane. Valid only when active.</summary>
+        public Vector3 AimPoint { get; private set; }
+        public bool IsActive => _circle != null && _circle.activeSelf;
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        private static void Bootstrap()
+        {
+            var go = new GameObject("AimIndicator");
+            DontDestroyOnLoad(go);
+            go.AddComponent<AimIndicator>();
+        }
+
+        private void Awake()
+        {
+            if (Instance != null && Instance != this) { Destroy(gameObject); return; }
+            Instance = this;
+        }
+
+        /// <summary>Show a circle indicator with the given radius.</summary>
+        public void ShowCircle(float radius, Color color)
+        {
+            if (_circle == null)
+                _circle = CreateCircle();
+
+            _radius = Mathf.Max(0.01f, radius);
+            _color = color;
+            _circle.SetActive(true);
+            RefreshCircleMesh(forceRebuild: Mathf.Abs(_lastRadius - _radius) > 0.0001f);
+        }
+
+        public void Hide()
+        {
+            if (_circle != null)
+                _circle.SetActive(false);
+        }
+
+        private void Update()
+        {
+            if (_circle == null || !_circle.activeSelf) return;
+
+            LocalPlayerInputSource? input = EntityRegistry.Instance?.LocalPlayerEntity?.GetLocalInputSource();
+            if (input == null) return;
+
+            RefreshFromCursor(input.MousePosition);
+        }
+
+        public bool RefreshFromCursor(Vector2 mousePosition)
+        {
+            var cam = Camera.main;
+            if (cam == null) return false;
+
+            var ray = cam.ScreenPointToRay(mousePosition);
+            if (!TryResolveAimPoint(ray, out Vector3 aimPoint))
+                return false;
+
+            AimPoint = aimPoint;
+            RefreshCircleMesh();
+            return true;
+        }
+
+        private static bool TryResolveAimPoint(Ray ray, out Vector3 aimPoint)
+        {
+            if (TryRaycastAimSurface(ray, out aimPoint))
+                return true;
+
+            var groundPlane = new Plane(Vector3.up, Vector3.zero);
+            if (!groundPlane.Raycast(ray, out float distance))
+            {
+                aimPoint = default;
+                return false;
+            }
+
+            Vector3 point = ray.GetPoint(distance);
+            float surfaceY = SampleSurfaceY(point);
+            aimPoint = new Vector3(point.x, surfaceY, point.z);
+            return true;
+        }
+
+        private static bool TryRaycastAimSurface(Ray ray, out Vector3 aimPoint)
+        {
+            int count = Physics.RaycastNonAlloc(
+                ray,
+                AimRaycastHits,
+                MaxAimRayDistance,
+                Physics.DefaultRaycastLayers,
+                QueryTriggerInteraction.Ignore);
+
+            float bestDistance = float.PositiveInfinity;
+            Vector3 bestPoint = default;
+            bool found = false;
+
+            for (int i = 0; i < count; i++)
+            {
+                RaycastHit hit = AimRaycastHits[i];
+                if (!IsAimSurfaceHit(hit) || hit.distance >= bestDistance)
+                    continue;
+
+                bestDistance = hit.distance;
+                bestPoint = hit.point;
+                found = true;
+            }
+
+            aimPoint = bestPoint;
+            return found;
+        }
+
+        private static bool IsAimSurfaceHit(RaycastHit hit)
+        {
+            Collider? collider = hit.collider;
+            if (collider == null || collider.isTrigger)
+                return false;
+
+            if (collider.GetComponent<PlayerView>() != null ||
+                collider.GetComponentInParent<PlayerView>() != null)
+            {
+                return false;
+            }
+
+            return Vector3.Dot(hit.normal, Vector3.up) >= MinAimSurfaceUpDot;
+        }
+
+        private GameObject CreateCircle()
+        {
+            var go = new GameObject("AimCircle");
+            go.transform.SetParent(transform, false);
+
+            var mf = go.AddComponent<MeshFilter>();
+            _circleMesh = new Mesh { name = "AimCircle_Surface" };
+            mf.sharedMesh = _circleMesh;
+
+            var mr = go.AddComponent<MeshRenderer>();
+            _circleMaterial = CreateTransparentMaterial();
+            mr.sharedMaterial = _circleMaterial;
+            mr.shadowCastingMode = ShadowCastingMode.Off;
+            mr.receiveShadows = false;
+
+            return go;
+        }
+
+        private static Material CreateTransparentMaterial()
+        {
+            Shader shader = Shader.Find("Arena/Presentation/TargetIndicatorVertexColor");
+            if (shader == null)
+                shader = Shader.Find("Sprites/Default");
+
+            var material = new Material(shader)
+            {
+                name = "AimIndicatorMaterial",
+                renderQueue = (int)RenderQueue.Transparent,
+            };
+
+            if (material.HasProperty(BaseColorId))
+                material.SetColor(BaseColorId, Color.white);
+
+            if (material.HasProperty(ColorId))
+                material.SetColor(ColorId, Color.white);
+            SetFloatIfPresent(material, "_Surface", 1f);
+            SetFloatIfPresent(material, "_Blend", 0f);
+            SetFloatIfPresent(material, "_Cull", 0f);
+            SetFloatIfPresent(material, "_SrcBlend", (float)BlendMode.SrcAlpha);
+            SetFloatIfPresent(material, "_DstBlend", (float)BlendMode.OneMinusSrcAlpha);
+            SetFloatIfPresent(material, "_ZWrite", 0f);
+            material.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+
+            return material;
+        }
+
+        private static void SetFloatIfPresent(Material material, string propertyName, float value)
+        {
+            if (material.HasProperty(propertyName))
+                material.SetFloat(propertyName, value);
+        }
+
+        private void RefreshCircleMesh(bool forceRebuild = false)
+        {
+            if (_circle == null || _circleMesh == null)
+                return;
+
+            Vector3 center = new(AimPoint.x, AimPoint.y + GroundOffset, AimPoint.z);
+            if (!forceRebuild
+                && Mathf.Abs(_lastRadius - _radius) < 0.0001f
+                && (center - _lastCenter).sqrMagnitude < RebuildPositionEpsilonSquared)
+            {
+                return;
+            }
+
+            _lastCenter = center;
+            _lastRadius = _radius;
+            _circle.transform.position = center;
+            _circle.transform.rotation = Quaternion.identity;
+            _circle.transform.localScale = Vector3.one;
+            RebuildCircleMesh(_circleMesh, center, _radius, _color);
+        }
+
+        private static void RebuildCircleMesh(Mesh mesh, Vector3 center, float radius, Color color)
+        {
+            int verticesPerRing = SegmentCount + 1;
+            int vertexCount = verticesPerRing * (RadialBandCount + 1);
+            var vertices = new Vector3[vertexCount];
+            var uvs = new Vector2[vertexCount];
+            var colors = new Color[vertexCount];
+            var triangles = new int[RadialBandCount * SegmentCount * 6];
+
+            float innerFadeRadius = radius * InnerFadeRadiusFraction;
+            float edgeStartRadius = radius * EdgeStartRadiusFraction;
+            for (int ring = 0; ring <= RadialBandCount; ring++)
+            {
+                float radialT = ring / (float)RadialBandCount;
+                float ringRadius = Mathf.Lerp(innerFadeRadius, radius, radialT);
+                float radialAlpha = EvaluateRadialAlpha(radialT, innerFadeRadius, radius, edgeStartRadius);
+
+                for (int segment = 0; segment <= SegmentCount; segment++)
+                {
+                    float radians = (segment / (float)SegmentCount) * Mathf.PI * 2f;
+                    int vertexIndex = ring * verticesPerRing + segment;
+                    WriteCircleVertex(vertices, uvs, vertexIndex, center, radians, ringRadius, radius);
+                    colors[vertexIndex] = new Color(color.r, color.g, color.b, color.a * radialAlpha);
+                }
+            }
+
+            WriteCircleTriangles(triangles);
+            mesh.Clear();
+            mesh.vertices = vertices;
+            mesh.uv = uvs;
+            mesh.colors = colors;
+            mesh.triangles = triangles;
+            mesh.RecalculateBounds();
+        }
+
+        private static float EvaluateRadialAlpha(
+            float radialT,
+            float innerFadeRadius,
+            float radius,
+            float edgeStartRadius)
+        {
+            float edgeStartT = Mathf.InverseLerp(innerFadeRadius, radius, edgeStartRadius);
+            float fill = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.08f, 0.76f, radialT)) * 0.34f;
+            float edge = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(edgeStartT, 0.98f, radialT)) * 0.72f;
+            return Mathf.Clamp01(fill + edge);
+        }
+
+        private static void WriteCircleVertex(
+            Vector3[] vertices,
+            Vector2[] uvs,
+            int index,
+            Vector3 center,
+            float radians,
+            float ringRadius,
+            float outerRadius)
+        {
+            float localX = Mathf.Cos(radians) * ringRadius;
+            float localZ = Mathf.Sin(radians) * ringRadius;
+            var world = new Vector3(center.x + localX, center.y, center.z + localZ);
+            float localY = SampleSurfaceY(world) - center.y + GroundOffset;
+
+            vertices[index] = new Vector3(localX, localY, localZ);
+            uvs[index] = new Vector2(
+                0.5f + localX / (outerRadius * 2f),
+                0.5f + localZ / (outerRadius * 2f));
+        }
+
+        private static void WriteCircleTriangles(int[] triangles)
+        {
+            int verticesPerRing = SegmentCount + 1;
+            for (int ring = 0; ring < RadialBandCount; ring++)
+            {
+                for (int segment = 0; segment < SegmentCount; segment++)
+                {
+                    int inner = ring * verticesPerRing + segment;
+                    int innerNext = inner + 1;
+                    int outer = (ring + 1) * verticesPerRing + segment;
+                    int outerNext = outer + 1;
+                    int triangleIndex = (ring * SegmentCount + segment) * 6;
+
+                    triangles[triangleIndex++] = inner;
+                    triangles[triangleIndex++] = innerNext;
+                    triangles[triangleIndex++] = outer;
+                    triangles[triangleIndex++] = outer;
+                    triangles[triangleIndex++] = innerNext;
+                    triangles[triangleIndex++] = outerNext;
+                }
+            }
+        }
+
+        private static float SampleSurfaceY(Vector3 world)
+        {
+            Terrain[] terrains = Terrain.activeTerrains;
+            for (int i = 0; i < terrains.Length; i++)
+            {
+                Terrain terrain = terrains[i];
+                if (terrain == null || terrain.terrainData == null)
+                    continue;
+
+                Vector3 terrainPosition = terrain.transform.position;
+                Vector3 size = terrain.terrainData.size;
+                if (world.x < terrainPosition.x ||
+                    world.z < terrainPosition.z ||
+                    world.x > terrainPosition.x + size.x ||
+                    world.z > terrainPosition.z + size.z)
+                {
+                    continue;
+                }
+
+                return terrain.SampleHeight(world) + terrainPosition.y;
+            }
+
+            return world.y;
+        }
+    }
+}

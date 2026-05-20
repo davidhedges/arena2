@@ -1,0 +1,40 @@
+name: Server Spellcasting Validation
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/server-spellcasting-validation.yml"
+      - "server/**"
+      - "docs/spellcasting-responsive-cancel-production-plan-2026-05-15.md"
+      - "ops/run-spellcasting-terminal-harness.sh"
+  workflow_dispatch:
+
+jobs:
+  spellcasting:
+    name: Spellcasting Harness Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust wasm target
+        run: |
+          set -euo pipefail
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          rustup target add wasm32-unknown-unknown
+
+      - name: Test default spellcasting slice
+        run: cargo test --manifest-path server/Cargo.toml spells::casting
+
+      - name: Test harness feature spellcasting slice
+        run: cargo test --manifest-path server/Cargo.toml --features spellcasting_terminal_harness spells::casting
+
+      - name: Build harness-enabled WASM
+        run: cargo build --manifest-path server/Cargo.toml --target wasm32-unknown-unknown --release --features spellcasting_terminal_harness
+
+      - name: Validate harness script syntax
+        run: bash -n ops/run-spellcasting-terminal-harness.sh

@@ -1,0 +1,3040 @@
+{
+  "combat_profiles": [
+    {
+      "combat_profile_id": "SWORD_AND_SHIELD",
+      "display_name": "Sword and Shield",
+      "sort_order": 10
+    },
+    {
+      "combat_profile_id": "TWO_HANDED_SWORD",
+      "display_name": "Greatsword",
+      "sort_order": 20
+    },
+    {
+      "combat_profile_id": "ARCHER_BOW",
+      "display_name": "Archer Bow",
+      "sort_order": 30
+    }
+  ],
+  "combat_modes": [
+    {
+      "combat_profile_id": "ARCHER_BOW",
+      "mode_id": "SHORT_DRAW",
+      "display_name": "Short Draw",
+      "is_default": false,
+      "sort_order": 10
+    },
+    {
+      "combat_profile_id": "ARCHER_BOW",
+      "mode_id": "FULL_DRAW",
+      "display_name": "Full Draw",
+      "is_default": true,
+      "sort_order": 20
+    }
+  ],
+  "classes": [
+    {
+      "class_id": "WARRIOR",
+      "display_name": "Warrior",
+      "default_combat_profile_id": "TWO_HANDED_SWORD",
+      "primary_resource_kind": "RAGE",
+      "max_saved_specs": 6,
+      "sort_order": 10
+    },
+    {
+      "class_id": "PALADIN",
+      "display_name": "Paladin",
+      "default_combat_profile_id": "SWORD_AND_SHIELD",
+      "primary_resource_kind": "VENGEANCE",
+      "max_saved_specs": 6,
+      "sort_order": 20
+    },
+    {
+      "class_id": "RANGER",
+      "display_name": "Ranger",
+      "default_combat_profile_id": "ARCHER_BOW",
+      "primary_resource_kind": "MANA",
+      "max_saved_specs": 6,
+      "sort_order": 30
+    }
+  ],
+  "resources": [
+    {
+      "resource_kind": "RAGE",
+      "display_name": "Rage",
+      "color_hex": "#D64242",
+      "base_max": 100.0,
+      "max_per_insight": 2.0,
+      "base_regen_per_second": 0.0,
+      "regen_per_insight": 0.0,
+      "gain_multiplier_per_insight": 0.02,
+      "flat_decay_per_second": 0.0,
+      "out_of_combat_flat_decay_per_second": 2.0,
+      "decay_per_current_point_per_second": 0.0,
+      "gain_per_damage_taken": 0.75,
+      "gain_per_damage_dealt": 0.0,
+      "gain_per_melee_hit": 8.0,
+      "gain_per_spell_cast": 0.0,
+      "starts_full": false,
+      "sort_order": 10
+    },
+    {
+      "resource_kind": "MANA",
+      "display_name": "Mana",
+      "color_hex": "#4A8CFF",
+      "base_max": 100.0,
+      "max_per_insight": 4.0,
+      "base_regen_per_second": 6.0,
+      "regen_per_insight": 0.35,
+      "gain_multiplier_per_insight": 0.02,
+      "flat_decay_per_second": 0.0,
+      "out_of_combat_flat_decay_per_second": 0.0,
+      "decay_per_current_point_per_second": 0.0,
+      "gain_per_damage_taken": 0.0,
+      "gain_per_damage_dealt": 0.0,
+      "gain_per_melee_hit": 0.0,
+      "gain_per_spell_cast": 0.0,
+      "starts_full": true,
+      "sort_order": 20
+    },
+    {
+      "resource_kind": "ENERGY",
+      "display_name": "Energy",
+      "color_hex": "#F0D83A",
+      "base_max": 100.0,
+      "max_per_insight": 3.0,
+      "base_regen_per_second": 12.0,
+      "regen_per_insight": 0.6,
+      "gain_multiplier_per_insight": 0.02,
+      "flat_decay_per_second": 0.0,
+      "out_of_combat_flat_decay_per_second": 0.0,
+      "decay_per_current_point_per_second": 0.0,
+      "gain_per_damage_taken": 0.0,
+      "gain_per_damage_dealt": 0.0,
+      "gain_per_melee_hit": 0.0,
+      "gain_per_spell_cast": 0.0,
+      "starts_full": true,
+      "sort_order": 30
+    },
+    {
+      "resource_kind": "CORRUPTION",
+      "display_name": "Corruption",
+      "color_hex": "#9253FF",
+      "base_max": 100.0,
+      "max_per_insight": 3.5,
+      "base_regen_per_second": 0.0,
+      "regen_per_insight": 0.0,
+      "gain_multiplier_per_insight": 0.02,
+      "flat_decay_per_second": 0.0,
+      "out_of_combat_flat_decay_per_second": 0.0,
+      "decay_per_current_point_per_second": 0.0,
+      "gain_per_damage_taken": 0.0,
+      "gain_per_damage_dealt": 0.0,
+      "gain_per_melee_hit": 0.0,
+      "gain_per_spell_cast": 10.0,
+      "starts_full": false,
+      "sort_order": 40
+    },
+    {
+      "resource_kind": "FERVOR",
+      "display_name": "Fervor",
+      "color_hex": "#E85C8B",
+      "base_max": 100.0,
+      "max_per_insight": 2.5,
+      "base_regen_per_second": 0.0,
+      "regen_per_insight": 0.0,
+      "gain_multiplier_per_insight": 0.02,
+      "flat_decay_per_second": 1.0,
+      "out_of_combat_flat_decay_per_second": 0.0,
+      "decay_per_current_point_per_second": 0.025,
+      "gain_per_damage_taken": 0.75,
+      "gain_per_damage_dealt": 0.0,
+      "gain_per_melee_hit": 8.0,
+      "gain_per_spell_cast": 0.0,
+      "starts_full": false,
+      "sort_order": 50
+    },
+    {
+      "resource_kind": "VENGEANCE",
+      "display_name": "Vengeance",
+      "color_hex": "#F8F8F8",
+      "base_max": 100.0,
+      "max_per_insight": 3.5,
+      "base_regen_per_second": 0.0,
+      "regen_per_insight": 0.0,
+      "gain_multiplier_per_insight": 0.02,
+      "flat_decay_per_second": 0.0,
+      "out_of_combat_flat_decay_per_second": 0.0,
+      "decay_per_current_point_per_second": 0.0,
+      "gain_per_damage_taken": 1.1,
+      "gain_per_damage_dealt": 0.0,
+      "gain_per_melee_hit": 4.0,
+      "gain_per_spell_cast": 0.0,
+      "starts_full": false,
+      "sort_order": 60
+    }
+  ],
+  "combat_rules": [
+    {
+      "combat_rule_id": "BASE_CRIT_CHANCE",
+      "scalar_value": 0.05,
+      "sort_order": 10
+    },
+    {
+      "combat_rule_id": "CRIT_DAMAGE_MULTIPLIER",
+      "scalar_value": 1.5,
+      "sort_order": 20
+    },
+    {
+      "combat_rule_id": "MAX_CRIT_CHANCE",
+      "scalar_value": 1.0,
+      "sort_order": 30
+    },
+    {
+      "combat_rule_id": "DEFAULT_GLOBAL_COOLDOWN_MS",
+      "scalar_value": 1500.0,
+      "sort_order": 36
+    },
+    {
+      "combat_rule_id": "STAGGER_SHOVE_DISTANCE_METERS",
+      "scalar_value": 0.45,
+      "sort_order": 40
+    },
+    {
+      "combat_rule_id": "STAGGER_SHOVE_DURATION_MS",
+      "scalar_value": 100.0,
+      "sort_order": 50
+    }
+  ],
+  "stat_scalings": [
+    {
+      "stat_scaling_id": "MIGHT_DAMAGE_MULTIPLIER_PER_POINT",
+      "stat_kind": "MIGHT",
+      "effect_kind": "DAMAGE_MULTIPLIER_PER_POINT",
+      "scalar_value": 0.02,
+      "sort_order": 10
+    },
+    {
+      "stat_scaling_id": "FINESSE_CRIT_CHANCE_PER_POINT",
+      "stat_kind": "FINESSE",
+      "effect_kind": "CRIT_CHANCE_PER_POINT",
+      "scalar_value": 0.01,
+      "sort_order": 20
+    },
+    {
+      "stat_scaling_id": "QUICKNESS_RUN_SPEED_MULTIPLIER_PER_POINT",
+      "stat_kind": "QUICKNESS",
+      "effect_kind": "RUN_SPEED_MULTIPLIER_PER_POINT",
+      "scalar_value": 0.015,
+      "sort_order": 30
+    },
+    {
+      "stat_scaling_id": "QUICKNESS_CAST_SPEED_MULTIPLIER_PER_POINT",
+      "stat_kind": "QUICKNESS",
+      "effect_kind": "CAST_SPEED_MULTIPLIER_PER_POINT",
+      "scalar_value": 0.015,
+      "sort_order": 40
+    },
+    {
+      "stat_scaling_id": "FORTITUDE_MAX_HP_PER_POINT",
+      "stat_kind": "FORTITUDE",
+      "effect_kind": "MAX_HP_PER_POINT",
+      "scalar_value": 12.0,
+      "sort_order": 50
+    },
+    {
+      "stat_scaling_id": "FORTITUDE_FORTIFY_TEMP_HP_MULTIPLIER_PER_POINT",
+      "stat_kind": "FORTITUDE",
+      "effect_kind": "FORTIFY_TEMP_HP_MULTIPLIER_PER_POINT",
+      "scalar_value": 0.02,
+      "sort_order": 60
+    }
+  ],
+  "abilities": [
+    {
+      "ability_id": "WARRIOR_HEW",
+      "class_id": "WARRIOR",
+      "action_id": "COMBO_ATTACK_1_1_HIGH_TO_LOW",
+      "display_name": "Hew",
+      "resource_kind": "RAGE",
+      "resource_cost": 20.0,
+      "ability_tags": [
+        "LOADOUT_ACTION",
+        "CORE_ABILITY"
+      ],
+      "sort_order": 10,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 30,
+        "applies_stagger": true,
+        "range": 2.5,
+        "cooldown_ms": 900,
+        "uses_global_cooldown": true,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET"
+      }
+    },
+    {
+      "ability_id": "WARRIOR_HEW_2",
+      "class_id": "WARRIOR",
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 30,
+        "applies_stagger": false,
+        "range": 2.5,
+        "cooldown_ms": 500,
+        "uses_global_cooldown": true,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET"
+      },
+      "action_id": "COMBO_ATTACK_1_2_LOW_TO_HIGH",
+      "display_name": "Hew II",
+      "resource_kind": "RAGE",
+      "resource_cost": 20.0,
+      "ability_tags": [
+        "COMBO_FOLLOWUP"
+      ],
+      "sort_order": 11
+    },
+    {
+      "ability_id": "WARRIOR_MAIM",
+      "class_id": "WARRIOR",
+      "action_id": "WARRIOR_MAIM",
+      "display_name": "Maim",
+      "resource_kind": "RAGE",
+      "resource_cost": 20.0,
+      "ability_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 12,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 10,
+        "applies_stagger": false,
+        "range": 2.5,
+        "cooldown_ms": 900,
+        "uses_global_cooldown": true,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET",
+        "melee_impact_effects": [
+          {
+            "kind": "APPLY_STATUS",
+            "status": {
+              "kind": "SLOW",
+              "duration_ms": 10000,
+              "slow_pct": 0.5
+            }
+          }
+        ]
+      }
+    },
+    {
+      "ability_id": "WARRIOR_GROUND_TO_AIR_PLACEHOLDER",
+      "class_id": "WARRIOR",
+      "action_id": "COMBO_ATTACK_1_3_GROUND_TO_AIR",
+      "display_name": "Ground to Air",
+      "resource_kind": "RAGE",
+      "resource_cost": 20.0,
+      "ability_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 10,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 30,
+        "applies_stagger": false,
+        "range": 8.0,
+        "cooldown_ms": 900,
+        "uses_global_cooldown": true,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET"
+      }
+    },
+    {
+      "ability_id": "WARRIOR_AIR_TO_GROUND_PLACEHOLDER",
+      "class_id": "WARRIOR",
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 30,
+        "applies_stagger": false,
+        "range": 2.5,
+        "cooldown_ms": 500,
+        "uses_global_cooldown": true,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET"
+      },
+      "action_id": "COMBO_ATTACK_1_4_AIR_TO_GROUND",
+      "display_name": "Air to Ground",
+      "resource_kind": "RAGE",
+      "resource_cost": 20.0,
+      "ability_tags": [
+        "COMBO_FOLLOWUP"
+      ],
+      "sort_order": 11
+    },
+    {
+      "ability_id": "WARRIOR_SKYFALL_1",
+      "class_id": "WARRIOR",
+      "action_id": "SKYFALL_1",
+      "display_name": "Skyfall I",
+      "resource_kind": "RAGE",
+      "resource_cost": 25.0,
+      "ability_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 20,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 30,
+        "applies_stagger": false,
+        "range": 2.5,
+        "cooldown_ms": 900,
+        "uses_global_cooldown": true,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET"
+      }
+    },
+    {
+      "ability_id": "WARRIOR_SKYFALL_2",
+      "class_id": "WARRIOR",
+      "action_id": "SKYFALL_2",
+      "display_name": "Skyfall 2",
+      "resource_kind": "RAGE",
+      "resource_cost": 30.0,
+      "ability_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 30,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 35,
+        "applies_stagger": false,
+        "range": 11.5,
+        "cooldown_ms": 900,
+        "uses_global_cooldown": true,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET",
+        "melee_targeting": {
+          "kind": "CASTER_CONE",
+          "requires_target": false,
+          "angle_degrees": 65
+        }
+      }
+    },
+    {
+      "ability_id": "WARRIOR_SKYFALL_3",
+      "class_id": "WARRIOR",
+      "action_id": "SKYFALL_3",
+      "display_name": "Skyfall III",
+      "resource_kind": "RAGE",
+      "resource_cost": 35.0,
+      "ability_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 40,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 40,
+        "applies_stagger": false,
+        "range": 3.0,
+        "cooldown_ms": 900,
+        "uses_global_cooldown": true,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET"
+      }
+    },
+    {
+      "ability_id": "WARRIOR_SKYFALL_4",
+      "class_id": "WARRIOR",
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 35,
+        "applies_stagger": false,
+        "range": 5.5,
+        "cooldown_ms": 1200,
+        "uses_global_cooldown": true,
+        "parry_behavior": "UNPARRYABLE",
+        "block_behavior": "UNBLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET"
+      },
+      "action_id": "COMBO_ATTACK_3_4_AIR_TO_GROUND",
+      "display_name": "Skyfall IV",
+      "resource_kind": "RAGE",
+      "resource_cost": 35.0,
+      "ability_tags": [
+        "COMBO_FOLLOWUP"
+      ],
+      "sort_order": 41
+    },
+    {
+      "ability_id": "WARRIOR_WHIRLWIND",
+      "class_id": "WARRIOR",
+      "action_id": "WHIRLWIND",
+      "display_name": "Whirlwind",
+      "resource_kind": "RAGE",
+      "resource_cost": 40.0,
+      "ability_tags": [
+        "LOADOUT_ACTION",
+        "CORE_ABILITY"
+      ],
+      "sort_order": 50,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 48,
+        "applies_stagger": false,
+        "range": 3.25,
+        "cooldown_ms": 2000,
+        "uses_global_cooldown": true,
+        "parry_behavior": "UNPARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET",
+        "melee_targeting": {
+          "kind": "CASTER_RADIUS",
+          "requires_target": false
+        }
+      }
+    },
+    {
+      "ability_id": "WARRIOR_SUNDER",
+      "class_id": "WARRIOR",
+      "action_id": "COMBO_ATTACK_4_4_LUNGING_SLASH",
+      "display_name": "Sunder",
+      "resource_kind": "RAGE",
+      "resource_cost": 35.0,
+      "ability_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 60,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 42,
+        "applies_stagger": false,
+        "range": 5.5,
+        "cooldown_ms": 1200,
+        "uses_global_cooldown": true,
+        "parry_behavior": "UNPARRYABLE",
+        "block_behavior": "UNBLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET"
+      }
+    },
+    {
+      "ability_id": "WARRIOR_CLEAVE",
+      "class_id": "WARRIOR",
+      "action_id": "COMBO_ATTACK_2_1_SPIN",
+      "display_name": "Cleave",
+      "resource_kind": "RAGE",
+      "resource_cost": 30.0,
+      "ability_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 70,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 34,
+        "applies_stagger": true,
+        "range": 2.5,
+        "cooldown_ms": 900,
+        "uses_global_cooldown": true,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET"
+      }
+    },
+    {
+      "ability_id": "WARRIOR_DREAD_STRIKE",
+      "class_id": "WARRIOR",
+      "action_id": "WARRIOR_DREAD_STRIKE",
+      "display_name": "Dread Strike",
+      "resource_kind": "RAGE",
+      "resource_cost": 20.0,
+      "ability_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 75,
+      "gameplay": {
+        "kind": "AUTO_ATTACK_REPLACEMENT"
+      }
+    },
+    {
+      "ability_id": "WARRIOR_EARTHSHATTER",
+      "class_id": "WARRIOR",
+      "action_id": "COMBO_ATTACK_3_4_AIR_TO_GROUND",
+      "display_name": "Earthshatter",
+      "resource_kind": "RAGE",
+      "resource_cost": 20.0,
+      "ability_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 76,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 30,
+        "applies_stagger": true,
+        "range": 8.0,
+        "cooldown_ms": 900,
+        "uses_global_cooldown": true,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET",
+        "gap_close": {
+          "kind": "LEAP",
+          "destination": "NEAREST_CONTACT_POINT",
+          "speed": 18.0,
+          "arrival_buffer": 1.44,
+          "arrival_epsilon": 0.10,
+          "impact_range": 2.5,
+          "collision_policy": "REQUIRE_CLEAR_PATH",
+          "require_arrival_for_swing": true,
+          "requires_target_facing": true
+        },
+        "melee_impact_area": {
+          "radius": 2.75,
+          "damage_multiplier": 0.65,
+          "hit_index": 0,
+          "include_primary_target": false
+        }
+      }
+    },
+    {
+      "ability_id": "WARRIOR_FIREBALL",
+      "class_id": "WARRIOR",
+      "action_id": "FIREBALL",
+      "display_name": "Fire",
+      "resource_kind": "RAGE",
+      "ability_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 1000,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 450,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "TARGET",
+        "requires_target": true,
+        "resource_cost": 0.0,
+        "arms_auto_attack_on_cast": true,
+        "delivery": {
+          "kind": "PROJECTILE",
+          "speed": 18.0,
+          "max_distance": 30.0,
+          "damage": 30,
+          "spawn_forward": 0,
+          "spawn_height": 1.2,
+          "turn_rate": 3.0,
+          "update_interval_seconds": 0.05,
+          "radius": 0.8,
+          "block_behavior": "BLOCKABLE",
+          "parry_behavior": "PARRYABLE",
+          "homing_window_seconds": 0.15,
+          "impact_effects": [
+            {
+              "kind": "BURN",
+              "duration_ms": 10000,
+              "tick_interval_ms": 1000,
+              "tick_damage": 3,
+              "status_stack_group": "FIREBALL_BURN"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "ability_id": "WARRIOR_GROUND_SLASH",
+      "class_id": "WARRIOR",
+      "action_id": "GROUND_SLASH",
+      "display_name": "Ground Slash",
+      "resource_kind": "RAGE",
+      "ability_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 1001,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 800,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "GROUNDED_STATIONARY",
+        "targeting": "TARGET",
+        "requires_target": true,
+        "resource_cost": 0.0,
+        "arms_auto_attack_on_cast": true,
+        "delivery": {
+          "kind": "PROJECTILE",
+          "speed": 20.0,
+          "max_distance": 16.0,
+          "damage": 28,
+          "spawn_forward": 1.0,
+          "spawn_height": 0.05,
+          "turn_rate": 0.0,
+          "update_interval_seconds": 0.05,
+          "radius": 0.65,
+          "block_behavior": "BLOCKABLE",
+          "parry_behavior": "PARRYABLE",
+          "homing_window_seconds": 0.0,
+          "terrain_conforming": true
+        }
+      }
+    },
+    {
+      "ability_id": "WARRIOR_ICICLE",
+      "class_id": "WARRIOR",
+      "action_id": "ICICLE",
+      "display_name": "Icicle",
+      "resource_kind": "RAGE",
+      "ability_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 1001,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 0,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 1500,
+        "cast_mobility": "GROUNDED_STATIONARY",
+        "targeting": "TARGET",
+        "requires_target": true,
+        "resource_cost": 0.0,
+        "arms_auto_attack_on_cast": true,
+        "delivery": {
+          "kind": "PROJECTILE",
+          "speed": 35.0,
+          "max_distance": 30.0,
+          "damage": 30,
+          "spawn_forward": 0,
+          "spawn_height": 1.2,
+          "turn_rate": 3.0,
+          "update_interval_seconds": 0.05,
+          "radius": 0.55,
+          "block_behavior": "BLOCKABLE",
+          "parry_behavior": "PARRYABLE",
+          "homing_window_seconds": 0.08
+        }
+      }
+    },
+    {
+      "ability_id": "WARRIOR_ORBITING_BLADES",
+      "class_id": "WARRIOR",
+      "action_id": "ORBITING_BLADES",
+      "display_name": "Orbiting Blades",
+      "resource_kind": "RAGE",
+      "ability_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 1002,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 1200,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "SELF",
+        "requires_target": false,
+        "resource_cost": 0.0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "PROJECTILE",
+          "damage": 18,
+          "update_interval_seconds": 0.05,
+          "block_behavior": "BLOCKABLE",
+          "parry_behavior": "PARRYABLE",
+          "motion": {
+            "kind": "ORBIT_CASTER",
+            "projectile_count": 3,
+            "orbit_radius": 2.0,
+            "orbit_height": 1.0,
+            "angular_speed_deg_per_sec": 180.0,
+            "lifetime_seconds": 10.0,
+            "hit_radius": 0.45,
+            "hit_cooldown_seconds": 0.35,
+            "max_hits_per_target": 1,
+            "phase_offset_deg": 0.0
+          },
+          "impact_effects": []
+        }
+      }
+    },
+    {
+      "ability_id": "WARRIOR_METEOR",
+      "class_id": "WARRIOR",
+      "action_id": "METEOR",
+      "display_name": "Meteor",
+      "resource_kind": "RAGE",
+      "ability_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 1003,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 1600,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 750,
+        "cast_mobility": "GROUNDED_STATIONARY",
+        "targeting": "POINT",
+        "requires_target": false,
+        "aim_radius": 2.2,
+        "resource_cost": 0.0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "AREA",
+          "damage": 45,
+          "spawn_height": 1.4,
+          "duration_seconds": 0.8,
+          "radius": 2.2,
+          "projectile_radius": 0.45,
+          "block_behavior": "BLOCKABLE",
+          "sky_origin": {
+            "height": 9.5,
+            "drift_x": 0.8,
+            "drift_z": -0.55
+          },
+          "impact_effects": [
+            {
+              "kind": "STUN",
+              "duration_ms": 4000
+            }
+          ]
+        }
+      }
+    },
+    {
+      "ability_id": "WARRIOR_LIGHTNING",
+      "class_id": "WARRIOR",
+      "action_id": "LIGHTNING",
+      "display_name": "Lightning",
+      "resource_kind": "RAGE",
+      "ability_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 1004,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 1400,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "POINT",
+        "requires_target": false,
+        "aim_radius": 2.6,
+        "resource_cost": 0.0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "AREA",
+          "max_distance": 12.0,
+          "damage": 34,
+          "radius": 2.6,
+          "block_behavior": "BLOCKABLE",
+          "impact_effects": []
+        }
+      }
+    },
+    {
+      "ability_id": "WARRIOR_ERUPTION",
+      "class_id": "WARRIOR",
+      "action_id": "ERUPTION",
+      "display_name": "Eruption",
+      "resource_kind": "RAGE",
+      "ability_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 1005,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 1400,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "POINT",
+        "requires_target": false,
+        "aim_radius": 2.4,
+        "resource_cost": 0.0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "AREA",
+          "max_distance": 12.0,
+          "damage": 38,
+          "impact_delay_ms": 500,
+          "radius": 2.4,
+          "block_behavior": "BLOCKABLE",
+          "impact_effects": []
+        }
+      }
+    },
+    {
+      "ability_id": "WARRIOR_ICE_SPIKES",
+      "class_id": "WARRIOR",
+      "action_id": "ICE_SPIKES",
+      "display_name": "Ice Spikes",
+      "resource_kind": "RAGE",
+      "ability_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 1006,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 2000,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "SELF",
+        "requires_target": false,
+        "resource_cost": 30.0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "AREA",
+          "max_distance": 7.5,
+          "damage": 35,
+          "block_behavior": "BLOCKABLE",
+          "shape": {
+            "kind": "CASTER_CONE",
+            "angle_degrees": 65,
+            "vertical_tolerance": 2.5
+          },
+          "impact_effects": [
+            {
+              "kind": "FREEZE",
+              "duration_ms": 1200
+            }
+          ]
+        }
+      }
+    },
+    {
+      "ability_id": "WARRIOR_BOOMERANG_ORB",
+      "class_id": "WARRIOR",
+      "action_id": "BOOMERANG_ORB",
+      "display_name": "Boomerang Orb",
+      "resource_kind": "RAGE",
+      "ability_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 1006,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 900,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "TARGET",
+        "requires_target": true,
+        "resource_cost": 0.0,
+        "arms_auto_attack_on_cast": true,
+        "delivery": {
+          "kind": "PROJECTILE",
+          "speed": 18.0,
+          "max_distance": 8.0,
+          "damage": 24,
+          "spawn_forward": 1.0,
+          "spawn_height": 1.2,
+          "turn_rate": 0.0,
+          "update_interval_seconds": 0.05,
+          "radius": 0.45,
+          "block_behavior": "BLOCKABLE",
+          "parry_behavior": "PARRYABLE",
+          "homing_window_seconds": 0.0,
+          "motion": {
+            "kind": "BOOMERANG_CASTER",
+            "outbound_distance": 8.0,
+            "return_speed": 22.0,
+            "lifetime_seconds": 3.0,
+            "hit_radius": 0.45,
+            "hit_cooldown_seconds": 0.25,
+            "max_hits_per_target": 1
+          },
+          "impact_effects": []
+        }
+      }
+    },
+    {
+      "ability_id": "WARRIOR_WITHERING_ORB",
+      "class_id": "WARRIOR",
+      "action_id": "WITHERING_ORB",
+      "display_name": "Withering Orb",
+      "resource_kind": "RAGE",
+      "ability_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 1007,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 1200,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "TARGET",
+        "requires_target": true,
+        "resource_cost": 0.0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "PROJECTILE",
+          "speed": 2.0,
+          "max_distance": 18.0,
+          "damage": 12,
+          "spawn_forward": 1.0,
+          "spawn_height": 1.2,
+          "turn_rate": 2.0,
+          "update_interval_seconds": 0.05,
+          "radius": 0.45,
+          "block_behavior": "BLOCKABLE",
+          "parry_behavior": "PARRYABLE",
+          "homing_window_seconds": 0.15,
+          "impact_effects": [
+            {
+              "kind": "SLOW",
+              "duration_ms": 3000,
+              "slow_pct": 0.1,
+              "status_stack_group": "WITHERING_ORB_SLOW",
+              "max_stacks": 10,
+              "stack_policy": "ADD_STACK_REFRESH"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "ability_id": "WARRIOR_INSTANT_BEAM",
+      "class_id": "WARRIOR",
+      "action_id": "INSTANT_BEAM",
+      "display_name": "Beam",
+      "resource_kind": "RAGE",
+      "sort_order": 1004,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 600,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 1200,
+        "cast_mobility": "GROUNDED_STATIONARY",
+        "targeting": "TARGET",
+        "requires_target": true,
+        "resource_cost": 0.0,
+        "arms_auto_attack_on_cast": true,
+        "delivery": {
+          "kind": "INSTANT_BEAM",
+          "max_distance": 30.0,
+          "damage": 20,
+          "block_behavior": "BLOCKABLE",
+          "charge_scaling": {
+            "min_damage_scale": 0.35,
+            "max_charges": 5
+          }
+        }
+      }
+    },
+    {
+      "ability_id": "WARRIOR_ELECTROCUTE",
+      "class_id": "WARRIOR",
+      "action_id": "ELECTROCUTE",
+      "display_name": "Elec",
+      "resource_kind": "RAGE",
+      "sort_order": 1004,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 1100,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "GROUNDED_STATIONARY",
+        "targeting": "TARGET",
+        "requires_target": true,
+        "resource_cost": 0.0,
+        "arms_auto_attack_on_cast": true,
+        "delivery": {
+          "kind": "CHANNEL",
+          "max_distance": 18.0,
+          "damage": 6,
+          "update_interval_seconds": 0.08,
+          "duration_seconds": 2.25,
+          "block_behavior": "BLOCKABLE"
+        }
+      }
+    },
+    {
+      "ability_id": "WARRIOR_FROST_NOVA",
+      "class_id": "WARRIOR",
+      "action_id": "FROST_NOVA",
+      "display_name": "Nova",
+      "resource_kind": "RAGE",
+      "ability_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 1007,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 1200,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "SELF",
+        "requires_target": false,
+        "resource_cost": 0.0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "AREA",
+          "damage": 28,
+          "radius": 4.6,
+          "block_behavior": "BLOCKABLE",
+          "impact_effects": [
+            {
+              "kind": "ROOT",
+              "duration_ms": 1200,
+              "status_stack_group": "ROOT"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "ability_id": "WARRIOR_NEGATE",
+      "class_id": "WARRIOR",
+      "action_id": "NEGATE",
+      "display_name": "Negate",
+      "resource_kind": "RAGE",
+      "sort_order": 1008,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 1800,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "TARGET",
+        "requires_target": false,
+        "resource_cost": 0.0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "AREA",
+          "speed": 30.0,
+          "max_distance": 6.0,
+          "damage": 0,
+          "radius": 6.0,
+          "block_behavior": "UNBLOCKABLE"
+        }
+      }
+    },
+    {
+      "ability_id": "WARRIOR_MOMENTUM",
+      "class_id": "WARRIOR",
+      "action_id": "MOMENTUM",
+      "display_name": "Momentum",
+      "resource_kind": "RAGE",
+      "ability_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 80,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 12000,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "SELF",
+        "requires_target": false,
+        "resource_cost": 20.0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "APPLY_STATUS",
+          "duration_ms": 4000,
+          "status_stack_group": "MOMENTUM",
+          "polarity": "BUFF",
+          "status": {
+            "kind": "MOVE_SLOW_IMMUNITY",
+            "modifier_scalar": 0.0,
+            "max_stacks": 1,
+            "stack_policy": "REFRESH"
+          }
+        }
+      }
+    },
+    {
+      "ability_id": "WARRIOR_FORTIFY",
+      "class_id": "WARRIOR",
+      "action_id": "FORTIFY",
+      "display_name": "Fortify",
+      "resource_kind": "RAGE",
+      "ability_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 81,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 12000,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "SELF",
+        "requires_target": false,
+        "resource_cost": 20.0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "APPLY_STATUS",
+          "duration_ms": 8000,
+          "status_stack_group": "FORTIFY",
+          "polarity": "BUFF",
+          "status": {
+            "kind": "TEMPORARY_HITPOINTS",
+            "modifier_scalar": 0.0,
+            "absorb_amount": 30,
+            "absorb_cap": 60,
+            "max_stacks": 2,
+            "stack_policy": "ADD_STACK_REFRESH"
+          }
+        }
+      }
+    },
+    {
+      "ability_id": "WARRIOR_BATTLE_CRY",
+      "class_id": "WARRIOR",
+      "action_id": "BATTLE_CRY",
+      "display_name": "Battle Cry",
+      "resource_kind": "RAGE",
+      "ability_tags": [
+        "LOADOUT_ACTION",
+        "CORE_ABILITY"
+      ],
+      "sort_order": 82,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 12000,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "SELF",
+        "target_audience": "PARTY_OR_SELF",
+        "requires_target": false,
+        "resource_cost": 0.0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "APPLY_STATUS",
+          "duration_ms": 300000,
+          "radius": 18.0,
+          "status_stack_group": "BATTLE_CRY",
+          "polarity": "BUFF",
+          "status": {
+            "kind": "DAMAGE_AMP",
+            "modifier_scalar": 0.1,
+            "max_stacks": 1,
+            "stack_policy": "REFRESH"
+          }
+        }
+      }
+    },
+    {
+      "ability_id": "WARRIOR_GIANT_SWING",
+      "class_id": "WARRIOR",
+      "action_id": "GIANT_SWING",
+      "display_name": "Giant Swing",
+      "resource_kind": "RAGE",
+      "ability_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 85,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 12000,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "SELF",
+        "requires_target": false,
+        "resource_cost": 0.0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "APPLY_STATUS",
+          "duration_ms": 12000,
+          "status_stack_group": "GIANT_SWING",
+          "polarity": "BUFF",
+          "status": {
+            "kind": "MELEE_ATTACK_MODIFIER",
+            "modifier_scalar": 0.0,
+            "max_stacks": 1,
+            "stack_policy": "REFRESH"
+          }
+        }
+      }
+    },
+    {
+      "ability_id": "WARRIOR_ENRAGE",
+      "class_id": "WARRIOR",
+      "action_id": "ENRAGE",
+      "display_name": "Enrage",
+      "resource_kind": "RAGE",
+      "ability_tags": [
+        "LOADOUT_ACTION",
+        "CORE_ABILITY"
+      ],
+      "sort_order": 90,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 12000,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "SELF",
+        "requires_target": false,
+        "resource_cost": 0.0,
+        "primary_resource_gain_on_cast": 50.0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "SELF_RESOURCE"
+        }
+      }
+    },
+    {
+      "ability_id": "WARRIOR_INTIMIDATE",
+      "class_id": "WARRIOR",
+      "action_id": "INTIMIDATE",
+      "display_name": "Intimidate",
+      "resource_kind": "RAGE",
+      "ability_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 95,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 5000,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "TARGET",
+        "requires_target": true,
+        "resource_cost": 0.0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "APPLY_STATUS",
+          "duration_ms": 4000,
+          "max_distance": 20.0,
+          "status_stack_group": "INTIMIDATED",
+          "polarity": "DEBUFF",
+          "block_behavior": "UNBLOCKABLE",
+          "parry_behavior": "UNPARRYABLE",
+          "status": {
+            "kind": "INTIMIDATED",
+            "modifier_scalar": 0.0,
+            "max_stacks": 1,
+            "stack_policy": "REFRESH"
+          }
+        }
+      }
+    },
+    {
+      "ability_id": "WARRIOR_CHARGE",
+      "class_id": "WARRIOR",
+      "action_id": "WARRIOR_CHARGE",
+      "display_name": "Charge",
+      "resource_kind": "RAGE",
+      "ability_tags": [
+        "LOADOUT_ACTION",
+        "CORE_ABILITY"
+      ],
+      "effects": [
+        {
+          "trigger": "ON_ACCEPTED",
+          "kind": "GRANT_PRIMARY_RESOURCE",
+          "amount": 20.0
+        }
+      ],
+      "sort_order": 100,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 32,
+        "applies_stagger": false,
+        "range": 18.0,
+        "cooldown_ms": 1600,
+        "uses_global_cooldown": true,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET",
+        "gap_close": {
+          "kind": "LINEAR",
+          "destination": "NEAREST_CONTACT_POINT",
+          "speed": 23.0,
+          "arrival_buffer": 1.44,
+          "arrival_epsilon": 0.05,
+          "impact_range": 2.5,
+          "collision_policy": "STOP_AT_BLOCK",
+          "require_arrival_for_swing": true,
+          "requires_target_facing": false
+        },
+        "melee_impact_effects": [
+          {
+            "kind": "APPLY_STATUS",
+            "status": {
+              "kind": "STUN",
+              "duration_ms": 5000,
+              "status_stack_group": "WARRIOR_CHARGE_STUN"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "ability_id": "WARRIOR_IMPALE",
+      "class_id": "WARRIOR",
+      "action_id": "WARRIOR_IMPALE",
+      "display_name": "Impale",
+      "resource_kind": "RAGE",
+      "ability_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "effects": [
+        {
+          "trigger": "ON_ACCEPTED",
+          "kind": "GRANT_PRIMARY_RESOURCE",
+          "amount": 20.0
+        }
+      ],
+      "sort_order": 105,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 32,
+        "applies_stagger": false,
+        "range": 18.0,
+        "cooldown_ms": 1600,
+        "uses_global_cooldown": true,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET",
+        "gap_close": {
+          "kind": "LINEAR",
+          "destination": "NEAREST_CONTACT_POINT",
+          "speed": 23.0,
+          "arrival_buffer": 1.44,
+          "arrival_epsilon": 0.05,
+          "impact_range": 2.5,
+          "collision_policy": "STOP_AT_BLOCK",
+          "require_arrival_for_swing": true,
+          "requires_target_facing": false
+        },
+        "melee_impact_effects": [
+          {
+            "kind": "APPLY_STATUS",
+            "status": {
+              "kind": "STUN",
+              "duration_ms": 5000,
+              "status_stack_group": "WARRIOR_IMPALE_STUN"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "ability_id": "WARRIOR_DISENGAGE_STRIKE",
+      "class_id": "WARRIOR",
+      "action_id": "WARRIOR_DISENGAGE_STRIKE",
+      "display_name": "Disengage Strike",
+      "resource_kind": "RAGE",
+      "ability_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "effects": [
+        {
+          "trigger": "ON_ACCEPTED",
+          "kind": "GRANT_PRIMARY_RESOURCE",
+          "amount": 20.0
+        }
+      ],
+      "sort_order": 106,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 28,
+        "applies_stagger": false,
+        "range": 2.5,
+        "cooldown_ms": 1600,
+        "uses_global_cooldown": true,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET",
+        "melee_timed_movement": {
+          "kind": "BACKSTEP",
+          "start_delay_ms": 220,
+          "direction": "BACKWARD",
+          "distance": 7.0,
+          "speed": 18.0,
+          "collision_policy": "STOP_AT_BLOCK",
+          "facing_policy": "FACE_START"
+        }
+      }
+    },
+    {
+      "ability_id": "PALADIN_SHIELD_PUMMEL",
+      "class_id": "PALADIN",
+      "action_id": "SWORD_AND_SHIELD_UTILITY_1",
+      "display_name": "Shield Pummel",
+      "resource_kind": "VENGEANCE",
+      "resource_cost": 20.0,
+      "ability_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 10,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 28,
+        "applies_stagger": false,
+        "range": 2.5,
+        "cooldown_ms": 900,
+        "uses_global_cooldown": true,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET"
+      }
+    },
+    {
+      "ability_id": "PALADIN_VINDICATOR_SLASH",
+      "class_id": "PALADIN",
+      "action_id": "SWORD_AND_SHIELD_UTILITY_2",
+      "display_name": "Vindicator Slash",
+      "resource_kind": "VENGEANCE",
+      "resource_cost": 24.0,
+      "ability_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 20,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 32,
+        "applies_stagger": false,
+        "range": 2.5,
+        "cooldown_ms": 900,
+        "uses_global_cooldown": true,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET"
+      }
+    },
+    {
+      "ability_id": "PALADIN_GUARDIAN_RUSH",
+      "class_id": "PALADIN",
+      "action_id": "SWORD_AND_SHIELD_UTILITY_3",
+      "display_name": "Guardian Rush",
+      "resource_kind": "VENGEANCE",
+      "resource_cost": 28.0,
+      "ability_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 30,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 36,
+        "applies_stagger": false,
+        "range": 3.0,
+        "cooldown_ms": 900,
+        "uses_global_cooldown": true,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET"
+      }
+    },
+    {
+      "ability_id": "PALADIN_RETRIBUTION",
+      "class_id": "PALADIN",
+      "action_id": "SWORD_AND_SHIELD_UTILITY_4",
+      "display_name": "Retribution",
+      "resource_kind": "VENGEANCE",
+      "resource_cost": 34.0,
+      "ability_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 40,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 40,
+        "applies_stagger": false,
+        "range": 5.5,
+        "cooldown_ms": 1200,
+        "uses_global_cooldown": true,
+        "parry_behavior": "UNPARRYABLE",
+        "block_behavior": "UNBLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET"
+      }
+    },
+    {
+      "ability_id": "PALADIN_CHARGE",
+      "class_id": "PALADIN",
+      "action_id": "PALADIN_CHARGE",
+      "display_name": "Charge",
+      "resource_kind": "VENGEANCE",
+      "ability_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 150,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 32,
+        "applies_stagger": false,
+        "range": 18.0,
+        "cooldown_ms": 1600,
+        "uses_global_cooldown": true,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET",
+        "gap_close": {
+          "kind": "LINEAR",
+          "destination": "NEAREST_CONTACT_POINT",
+          "speed": 23.0,
+          "arrival_buffer": 1.44,
+          "arrival_epsilon": 0.05,
+          "impact_range": 2.5,
+          "collision_policy": "STOP_AT_BLOCK",
+          "require_arrival_for_swing": true,
+          "requires_target_facing": false
+        },
+        "melee_impact_effects": [
+          {
+            "kind": "APPLY_STATUS",
+            "status": {
+              "kind": "STUN",
+              "duration_ms": 5000,
+              "status_stack_group": "PALADIN_CHARGE_STUN"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "ability_id": "ARCHER_POWER_SHOT",
+      "class_id": "RANGER",
+      "action_id": "ARCHER_POWER_SHOT",
+      "display_name": "Power Shot",
+      "resource_kind": "MANA",
+      "resource_cost": 20.0,
+      "ability_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 10,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 34,
+        "applies_stagger": false,
+        "range": 18.0,
+        "cooldown_ms": 900,
+        "uses_global_cooldown": true,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET"
+      }
+    },
+    {
+      "ability_id": "ARCHER_RAIN_SHOT",
+      "class_id": "RANGER",
+      "action_id": "ARCHER_RAIN_SHOT",
+      "display_name": "Rain Shot",
+      "resource_kind": "MANA",
+      "resource_cost": 35.0,
+      "ability_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 20,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 42,
+        "applies_stagger": false,
+        "range": 24.0,
+        "cooldown_ms": 1600,
+        "uses_global_cooldown": true,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET"
+      }
+    },
+    {
+      "ability_id": "ARCHER_EVASIVE_SHOT",
+      "class_id": "RANGER",
+      "action_id": "ARCHER_EVASIVE_SHOT",
+      "display_name": "Evasive Shot",
+      "resource_kind": "MANA",
+      "resource_cost": 25.0,
+      "ability_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 30,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 30,
+        "applies_stagger": false,
+        "range": 16.0,
+        "cooldown_ms": 1200,
+        "uses_global_cooldown": true,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET"
+      }
+    },
+    {
+      "ability_id": "ARCHER_AIR_SHOT",
+      "class_id": "RANGER",
+      "action_id": "ARCHER_AIR_SHOT",
+      "display_name": "Air Shot",
+      "resource_kind": "MANA",
+      "resource_cost": 18.0,
+      "ability_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 40,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 28,
+        "applies_stagger": false,
+        "range": 18.0,
+        "cooldown_ms": 900,
+        "uses_global_cooldown": true,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET"
+      }
+    },
+    {
+      "ability_id": "ARCHER_DRAW_MODE_TOGGLE",
+      "class_id": "RANGER",
+      "action_id": "TOGGLE_DRAW_MODE",
+      "display_name": "Draw Mode",
+      "resource_kind": "",
+      "resource_cost": 0.0,
+      "ability_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 45,
+      "gameplay": {
+        "kind": "COMBAT_MODE_TOGGLE"
+      }
+    }
+  ],
+  "auto_attacks": [
+    {
+      "combat_profile_id": "SWORD_AND_SHIELD",
+      "action_id": "AUTO_ATTACK_1",
+      "base_damage": 25,
+      "range": 2.5,
+      "cooldown_ms": 2000,
+      "movement_policy": "ALLOW_MOVING",
+      "uses_global_cooldown": false,
+      "parry_behavior": "PARRYABLE",
+      "block_behavior": "BLOCKABLE",
+      "airborne_targeting_mode": "ANY_TARGET",
+      "applies_stagger": false
+    },
+    {
+      "combat_profile_id": "TWO_HANDED_SWORD",
+      "action_id": "AUTO_ATTACK_1",
+      "base_damage": 25,
+      "range": 2.5,
+      "cooldown_ms": 3500,
+      "movement_policy": "ALLOW_MOVING",
+      "uses_global_cooldown": false,
+      "parry_behavior": "PARRYABLE",
+      "block_behavior": "BLOCKABLE",
+      "airborne_targeting_mode": "ANY_TARGET",
+      "applies_stagger": false
+    },
+    {
+      "combat_profile_id": "ARCHER_BOW",
+      "mode_id": "SHORT_DRAW",
+      "action_id": "AUTO_ATTACK_1",
+      "base_damage": 14,
+      "range": 11.0,
+      "cooldown_ms": 1500,
+      "movement_policy": "ALLOW_MOVING",
+      "uses_global_cooldown": false,
+      "parry_behavior": "PARRYABLE",
+      "block_behavior": "BLOCKABLE",
+      "airborne_targeting_mode": "ANY_TARGET",
+      "applies_stagger": false
+    },
+    {
+      "combat_profile_id": "ARCHER_BOW",
+      "mode_id": "FULL_DRAW",
+      "action_id": "AUTO_ATTACK_1",
+      "base_damage": 28,
+      "range": 18.0,
+      "cooldown_ms": 3000,
+      "movement_policy": "RESET_CADENCE_ON_VOLUNTARY_MOVE",
+      "uses_global_cooldown": false,
+      "parry_behavior": "PARRYABLE",
+      "block_behavior": "BLOCKABLE",
+      "airborne_targeting_mode": "ANY_TARGET",
+      "applies_stagger": false
+    }
+  ],
+  "auto_attack_replacements": [
+    {
+      "replacement_id": "WARRIOR_DREAD_STRIKE",
+      "combat_profile_id": "TWO_HANDED_SWORD",
+      "authored_melee_strike_id": "COMBO_ATTACK_2_4_LUNGE",
+      "base_damage": 30,
+      "range": 2.5,
+      "cooldown_ms": 900,
+      "uses_global_cooldown": false,
+      "parry_behavior": "PARRYABLE",
+      "block_behavior": "BLOCKABLE",
+      "airborne_targeting_mode": "ANY_TARGET",
+      "applies_stagger": false,
+      "grants_primary_resource_on_hit": false,
+      "expires_ms": 6000,
+      "sort_order": 10
+    }
+  ],
+  "action_presentations": [
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "WARRIOR_HEW",
+      "display_name": "Hew",
+      "description": "A reliable greatsword strike that opens pressure and spends Rage.",
+      "sort_order": 10
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "WARRIOR_MAIM",
+      "display_name": "Maim",
+      "description": "A low-damage greatsword strike that heavily slows the target.",
+      "sort_order": 12
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "WARRIOR_GROUND_TO_AIR_PLACEHOLDER",
+      "display_name": "Ground to Air",
+      "description": "Launches a grounded target into the air with an upward greatsword strike.",
+      "sort_order": 15
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "WARRIOR_SKYFALL_1",
+      "display_name": "Skyfall I",
+      "description": "Launches the first step of a rising greatsword sequence.",
+      "sort_order": 20
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "WARRIOR_SKYFALL_2",
+      "display_name": "Skyfall II",
+      "description": "Continues the Skyfall chain with a heavier follow-up hit.",
+      "sort_order": 30
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "WARRIOR_ICE_SPIKES",
+      "display_name": "Ice Spikes",
+      "description": "Drives a cone of ice spikes forward from the caster.",
+      "sort_order": 35
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "WARRIOR_SKYFALL_3",
+      "display_name": "Skyfall III",
+      "description": "Finishes the Skyfall chain with an upward greatsword blow.",
+      "sort_order": 40
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "WARRIOR_WHIRLWIND",
+      "display_name": "Whirlwind",
+      "description": "Spins through nearby enemies with a broad greatsword attack.",
+      "sort_order": 50
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "WARRIOR_SUNDER",
+      "display_name": "Sunder",
+      "description": "Lunges forward with a stagger-focused slash.",
+      "sort_order": 60
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "WARRIOR_CLEAVE",
+      "display_name": "Cleave",
+      "description": "Sweeps across the front arc for dependable area pressure.",
+      "sort_order": 70
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "WARRIOR_DREAD_STRIKE",
+      "display_name": "Dread Strike",
+      "description": "A committed lunging strike.",
+      "sort_order": 75
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "WARRIOR_EARTHSHATTER",
+      "display_name": "Earthshatter",
+      "description": "Leaps into the target with a heavy earth-splitting blow.",
+      "sort_order": 76
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "WARRIOR_FIREBALL",
+      "display_name": "Fire",
+      "description": "Launches a homing fire projectile at the target.",
+      "sort_order": 77
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "WARRIOR_GROUND_SLASH",
+      "display_name": "Ground Slash",
+      "description": "Sends a low slash projectile across the ground at the target.",
+      "sort_order": 78
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "WARRIOR_ICICLE",
+      "display_name": "Icicle",
+      "description": "Forms and releases a fast ice projectile at the target.",
+      "sort_order": 78
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "WARRIOR_ORBITING_BLADES",
+      "display_name": "Orbiting Blades",
+      "description": "Creates short-lived projectiles that circle the caster.",
+      "sort_order": 79
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "WARRIOR_METEOR",
+      "display_name": "Meteor",
+      "description": "Calls a fiery comet down at the targeted ground location.",
+      "sort_order": 80
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "WARRIOR_LIGHTNING",
+      "display_name": "Lightning",
+      "description": "Strikes the targeted ground location with lightning.",
+      "sort_order": 81
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "WARRIOR_ERUPTION",
+      "display_name": "Eruption",
+      "description": "Bursts magma from the targeted ground location.",
+      "sort_order": 82
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "WARRIOR_BOOMERANG_ORB",
+      "display_name": "Boomerang Orb",
+      "description": "Throws an orb that pierces enemies before returning to the caster.",
+      "sort_order": 85
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "WARRIOR_WITHERING_ORB",
+      "display_name": "Withering Orb",
+      "description": "Launches a slow orb that hinders the target's movement.",
+      "sort_order": 86
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "WARRIOR_MOMENTUM",
+      "display_name": "Momentum",
+      "description": "Grants brief immunity to movement slows.",
+      "sort_order": 83
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "WARRIOR_FORTIFY",
+      "display_name": "Fortify",
+      "description": "Grants temporary hitpoints for a short duration.",
+      "sort_order": 84
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "WARRIOR_BATTLE_CRY",
+      "display_name": "Battle Cry",
+      "description": "Rallies the warrior, increasing all damage dealt.",
+      "sort_order": 85
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "WARRIOR_FROST_NOVA",
+      "display_name": "Nova",
+      "description": "Releases a burst of ice around the caster.",
+      "sort_order": 84
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "WARRIOR_GIANT_SWING",
+      "display_name": "Giant Swing",
+      "description": "Empowers the next attack to reach farther and stagger enemies hit.",
+      "sort_order": 87
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "WARRIOR_ENRAGE",
+      "display_name": "Enrage",
+      "description": "Instantly generates Rage.",
+      "sort_order": 90
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "WARRIOR_INTIMIDATE",
+      "display_name": "Intimidate",
+      "description": "Locks down the target with intimidation.",
+      "sort_order": 95
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "WARRIOR_CHARGE",
+      "display_name": "Charge",
+      "description": "Rushes to the target and generates Rage.",
+      "sort_order": 100
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "WARRIOR_IMPALE",
+      "display_name": "Impale",
+      "description": "Rushes to the target with a committed thrust and generates Rage.",
+      "sort_order": 105
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "WARRIOR_DISENGAGE_STRIKE",
+      "display_name": "Disengage Strike",
+      "description": "Cuts the target early, then moves backward to reset spacing.",
+      "sort_order": 106
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "PALADIN_SHIELD_PUMMEL",
+      "display_name": "Shield Pummel",
+      "description": "Drives the shield into the target for controlled impact.",
+      "sort_order": 110
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "PALADIN_VINDICATOR_SLASH",
+      "display_name": "Vindicator Slash",
+      "description": "Cuts with a disciplined shield-and-sword follow-up.",
+      "sort_order": 120
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "PALADIN_GUARDIAN_RUSH",
+      "display_name": "Guardian Rush",
+      "description": "Surges into the target with a guarded strike.",
+      "sort_order": 130
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "PALADIN_RETRIBUTION",
+      "display_name": "Retribution",
+      "description": "Answers pressure with a forceful retaliatory attack.",
+      "sort_order": 140
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "PALADIN_CHARGE",
+      "display_name": "Charge",
+      "description": "Rushes to the target.",
+      "sort_order": 150
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "ARCHER_POWER_SHOT",
+      "display_name": "Power Shot",
+      "description": "Draws and releases a focused bow shot.",
+      "sort_order": 160
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "ARCHER_RAIN_SHOT",
+      "display_name": "Rain Shot",
+      "description": "Fires a committed shot for long-range pressure.",
+      "sort_order": 170
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "ARCHER_EVASIVE_SHOT",
+      "display_name": "Evasive Shot",
+      "description": "Uses a mobile bow attack to keep distance.",
+      "sort_order": 180
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "ARCHER_AIR_SHOT",
+      "display_name": "Air Shot",
+      "description": "Releases a bow shot while airborne.",
+      "sort_order": 190
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "ARCHER_DRAW_MODE_TOGGLE",
+      "display_name": "Draw Mode",
+      "description": "Toggles between short draw and full draw auto attack modes.",
+      "sort_order": 195
+    },
+    {
+      "presentation_kind": "FIXED",
+      "presentation_id": "DODGE",
+      "display_name": "Dodge",
+      "description": "Quickly evade in the chosen movement direction.",
+      "sort_order": 410
+    },
+    {
+      "presentation_kind": "FIXED",
+      "presentation_id": "PARRY",
+      "display_name": "Parry",
+      "description": "Ready a weapon parry against incoming melee and projectile attacks.",
+      "sort_order": 430
+    },
+    {
+      "presentation_kind": "STATUS",
+      "presentation_id": "MOMENTUM",
+      "display_name": "Momentum",
+      "description": "Immune to movement slows.",
+      "sort_order": 10010
+    },
+    {
+      "presentation_kind": "STATUS",
+      "presentation_id": "GIANT_SWING",
+      "display_name": "Giant Swing",
+      "description": "The next melee attack reaches farther and staggers enemies hit.",
+      "sort_order": 10020
+    },
+    {
+      "presentation_kind": "STATUS",
+      "presentation_id": "BATTLE_CRY",
+      "display_name": "Battle Cry",
+      "description": "Damage dealt increased by 10%.",
+      "sort_order": 10025
+    },
+    {
+      "presentation_kind": "STATUS",
+      "presentation_id": "INTIMIDATED",
+      "display_name": "Intimidated",
+      "description": "Unable to move or act.",
+      "sort_order": 10030
+    },
+    {
+      "presentation_kind": "STATUS",
+      "presentation_id": "WITHERING_ORB_SLOW",
+      "display_name": "Slowed",
+      "description": "Movement speed is reduced. Additional stacks increase the slow.",
+      "sort_order": 10040
+    },
+    {
+      "presentation_kind": "STATUS",
+      "presentation_id": "FIREBALL_BURN",
+      "display_name": "Burning",
+      "description": "Takes fire damage over time.",
+      "sort_order": 10045
+    },
+    {
+      "presentation_kind": "STATUS",
+      "presentation_id": "ROOT",
+      "display_name": "Rooted",
+      "description": "Unable to move.",
+      "sort_order": 10050
+    },
+    {
+      "presentation_kind": "STATUS",
+      "presentation_id": "FREEZE",
+      "display_name": "Frozen",
+      "description": "Frozen solid and unable to move or act.",
+      "sort_order": 10055
+    },
+    {
+      "presentation_kind": "STATUS",
+      "presentation_id": "STUN",
+      "display_name": "Stunned",
+      "description": "Unable to move or act.",
+      "sort_order": 10060
+    },
+    {
+      "presentation_kind": "STATUS",
+      "presentation_id": "STAGGER",
+      "display_name": "Staggered",
+      "description": "Interrupted and briefly shoved back.",
+      "sort_order": 10070
+    },
+    {
+      "presentation_kind": "STATUS",
+      "presentation_id": "KNOCKDOWN",
+      "display_name": "Knocked Down",
+      "description": "Knocked down and unable to act.",
+      "sort_order": 10080
+    }
+  ],
+  "combat_vfx_cues": [
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "WARRIOR_EARTHSHATTER",
+      "trigger": "MELEE_IMPACT",
+      "hit_index": 0,
+      "anchor": "GROUND_UNDER_TARGET",
+      "vfx_id": "VFX_FIRE_AREA_BURST_01_ARENA",
+      "attach_mode": "SPAWN_WORLD",
+      "duration_ms": 2500,
+      "sort_order": 10
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "WARRIOR_SKYFALL_2",
+      "trigger": "AREA_IMPACT",
+      "anchor": "AREA_ORIGIN",
+      "vfx_id": "VFX_EARTHSHATTER_FIRE_AREA_01",
+      "attach_mode": "WORLD_ALIGNED_TO_FACING",
+      "duration_ms": 2500,
+      "sort_order": 20
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "WARRIOR_ICE_SPIKES",
+      "trigger": "AREA_IMPACT",
+      "anchor": "AREA_ORIGIN",
+      "vfx_id": "VFX_ICE_SPIKES_AREA_01",
+      "attach_mode": "WORLD_ALIGNED_TO_FACING",
+      "duration_ms": 2500,
+      "sort_order": 30
+    },
+    {
+      "owner_kind": "SPELL",
+      "owner_id": "ICE_SPIKES",
+      "trigger": "AREA_IMPACT",
+      "anchor": "AREA_ORIGIN",
+      "vfx_id": "VFX_ICE_SPIKES_AREA_01",
+      "attach_mode": "WORLD_ALIGNED_TO_FACING",
+      "duration_ms": 2500,
+      "sort_order": 31
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "WARRIOR_FIREBALL",
+      "trigger": "SPELL_CAST",
+      "anchor": "LEFT_HAND",
+      "vfx_id": "VFX_FIRE_CAST_HAND_01",
+      "attach_mode": "FOLLOW_ANCHOR",
+      "vfx_role": "ATTACHED",
+      "lifecycle": "DURATION",
+      "duration_ms": 350,
+      "sort_order": 100
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "WARRIOR_FIREBALL",
+      "trigger": "SPELL_RELEASE",
+      "anchor": "LEFT_HAND",
+      "vfx_id": "VFX_FIREBALL_PROJECTILE_01",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "PROJECTILE_BODY",
+      "lifecycle": "UNTIL_TERMINAL_EVENT",
+      "projectile_sequence_index": 0,
+      "duration_ms": 0,
+      "sort_order": 110
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "WARRIOR_FIREBALL",
+      "trigger": "SPELL_IMPACT",
+      "anchor": "IMPACT_POINT",
+      "vfx_id": "VFX_FIREBALL_HIT_01",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "DURATION",
+      "duration_ms": 1000,
+      "sort_order": 120
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "WARRIOR_GROUND_SLASH",
+      "trigger": "SPELL_RELEASE",
+      "anchor": "CASTER",
+      "vfx_id": "VFX_GROUND_SLASH_PROJECTILE_01",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "PROJECTILE_BODY",
+      "lifecycle": "UNTIL_TERMINAL_EVENT",
+      "projectile_sequence_index": 0,
+      "duration_ms": 0,
+      "sort_order": 125
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "WARRIOR_ICICLE",
+      "trigger": "SPELL_CAST",
+      "anchor": "LEFT_HAND",
+      "vfx_id": "VFX_ICE_CAST_HAND_01",
+      "attach_mode": "FOLLOW_ANCHOR",
+      "vfx_role": "ATTACHED",
+      "lifecycle": "UNTIL_RELEASE_EVENT",
+      "duration_ms": 0,
+      "sort_order": 130
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "WARRIOR_ICICLE",
+      "trigger": "SPELL_RELEASE",
+      "anchor": "LEFT_HAND",
+      "vfx_id": "VFX_ICICLE_PROJECTILE_01",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "PROJECTILE_BODY",
+      "lifecycle": "UNTIL_TERMINAL_EVENT",
+      "projectile_sequence_index": 0,
+      "duration_ms": 0,
+      "sort_order": 140
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "WARRIOR_ICICLE",
+      "trigger": "SPELL_IMPACT",
+      "anchor": "IMPACT_POINT",
+      "vfx_id": "VFX_ICE_HIT_01",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "DURATION",
+      "duration_ms": 1000,
+      "sort_order": 150
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "WARRIOR_ORBITING_BLADES",
+      "trigger": "SPELL_CAST",
+      "anchor": "LEFT_HAND",
+      "vfx_id": "VFX_ICE_CAST_HAND_01",
+      "attach_mode": "FOLLOW_ANCHOR",
+      "vfx_role": "ATTACHED",
+      "lifecycle": "DURATION",
+      "duration_ms": 350,
+      "sort_order": 151
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "WARRIOR_ORBITING_BLADES",
+      "trigger": "SPELL_RELEASE",
+      "anchor": "LEFT_HAND",
+      "vfx_id": "VFX_ORBITING_BLADES_PROJECTILE_01",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "PROJECTILE_BODY",
+      "lifecycle": "UNTIL_TERMINAL_EVENT",
+      "projectile_sequence_index": 0,
+      "duration_ms": 0,
+      "sort_order": 152
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "WARRIOR_ORBITING_BLADES",
+      "trigger": "SPELL_IMPACT",
+      "anchor": "IMPACT_POINT",
+      "vfx_id": "VFX_ICE_HIT_01",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "DURATION",
+      "duration_ms": 700,
+      "sort_order": 153
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "WARRIOR_METEOR",
+      "trigger": "SPELL_RELEASE",
+      "anchor": "ORIGIN",
+      "vfx_id": "VFX_METEOR_HEAD_01",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "TRAVEL_BODY",
+      "lifecycle": "UNTIL_TERMINAL_EVENT",
+      "duration_ms": 0,
+      "sort_order": 168
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "WARRIOR_METEOR",
+      "trigger": "SPELL_IMPACT",
+      "anchor": "IMPACT_POINT",
+      "vfx_id": "VFX_METEOR_01",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "PARTICLE_SYSTEM",
+      "duration_ms": 0,
+      "sort_order": 170
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "WARRIOR_LIGHTNING",
+      "trigger": "SPELL_RELEASE",
+      "anchor": "IMPACT_POINT",
+      "vfx_id": "VFX_LIGHTNING_01",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "DURATION",
+      "duration_ms": 1200,
+      "sort_order": 175
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "WARRIOR_ERUPTION",
+      "trigger": "SPELL_RELEASE",
+      "anchor": "IMPACT_POINT",
+      "vfx_id": "VFX_ERUPTION_01",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "PARTICLE_SYSTEM",
+      "duration_ms": 0,
+      "sort_order": 176
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "WARRIOR_BOOMERANG_ORB",
+      "trigger": "SPELL_RELEASE",
+      "anchor": "LEFT_HAND",
+      "vfx_id": "VFX_BOOMERANG_ORB_PROJECTILE_01",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "PROJECTILE_BODY",
+      "lifecycle": "UNTIL_TERMINAL_EVENT",
+      "projectile_sequence_index": 0,
+      "duration_ms": 0,
+      "sort_order": 177
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "WARRIOR_BOOMERANG_ORB",
+      "trigger": "SPELL_IMPACT",
+      "anchor": "IMPACT_POINT",
+      "vfx_id": "VFX_BOOMERANG_ORB_HIT_01",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "DURATION",
+      "duration_ms": 700,
+      "sort_order": 153
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "WARRIOR_WITHERING_ORB",
+      "trigger": "SPELL_RELEASE",
+      "anchor": "LEFT_HAND",
+      "vfx_id": "VFX_WITHERING_ORB_PROJECTILE_01",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "PROJECTILE_BODY",
+      "lifecycle": "UNTIL_TERMINAL_EVENT",
+      "projectile_sequence_index": 0,
+      "duration_ms": 0,
+      "sort_order": 178
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "WARRIOR_WITHERING_ORB",
+      "trigger": "SPELL_IMPACT",
+      "anchor": "IMPACT_POINT",
+      "vfx_id": "VFX_WITHERING_ORB_HIT_01",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "DURATION",
+      "duration_ms": 700,
+      "sort_order": 153
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "WARRIOR_FROST_NOVA",
+      "trigger": "SPELL_RELEASE",
+      "anchor": "CASTER",
+      "vfx_id": "VFX_FROST_NOVA_01",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "PARTICLE_SYSTEM",
+      "duration_ms": 0,
+      "sort_order": 180
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "WARRIOR_BATTLE_CRY",
+      "trigger": "SPELL_RELEASE",
+      "anchor": "CASTER",
+      "vfx_id": "VFX_DARK_BURST_01_ARENA2",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "PARTICLE_SYSTEM",
+      "duration_ms": 0,
+      "sort_order": 182
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "WARRIOR_INSTANT_BEAM",
+      "trigger": "SPELL_RELEASE",
+      "anchor": "LEFT_HAND",
+      "vfx_id": "VFX_INSTANT_BEAM_01",
+      "attach_mode": "FOLLOW_ANCHOR",
+      "vfx_role": "ATTACHED",
+      "lifecycle": "DURATION",
+      "duration_ms": 500,
+      "sort_order": 185
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "WARRIOR_ELECTROCUTE",
+      "trigger": "SPELL_RELEASE",
+      "anchor": "LEFT_HAND",
+      "vfx_id": "VFX_ELECTROCUTE_BEAM_01",
+      "attach_mode": "FOLLOW_ANCHOR",
+      "vfx_role": "ATTACHED",
+      "lifecycle": "UNTIL_TERMINAL_EVENT",
+      "duration_ms": 2250,
+      "sort_order": 187
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "WARRIOR_NEGATE",
+      "trigger": "SPELL_RELEASE",
+      "anchor": "CASTER",
+      "vfx_id": "VFX_NEGATE_01",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "DURATION",
+      "duration_ms": 400,
+      "sort_order": 190
+    }
+  ],
+  "default_loadout_assignments": [
+    {
+      "class_id": "WARRIOR",
+      "slot_id": "slot_0_0",
+      "ability_id": "WARRIOR_HEW",
+      "sort_order": 10
+    },
+    {
+      "class_id": "WARRIOR",
+      "slot_id": "slot_0_1",
+      "ability_id": "WARRIOR_SKYFALL_1",
+      "sort_order": 20
+    },
+    {
+      "class_id": "WARRIOR",
+      "slot_id": "slot_0_2",
+      "ability_id": "WARRIOR_SKYFALL_2",
+      "sort_order": 30
+    },
+    {
+      "class_id": "WARRIOR",
+      "slot_id": "slot_0_3",
+      "ability_id": "WARRIOR_SKYFALL_3",
+      "sort_order": 40
+    },
+    {
+      "class_id": "WARRIOR",
+      "slot_id": "slot_0_4",
+      "ability_id": "WARRIOR_WHIRLWIND",
+      "sort_order": 50
+    },
+    {
+      "class_id": "WARRIOR",
+      "slot_id": "slot_0_5",
+      "ability_id": "WARRIOR_DISENGAGE_STRIKE",
+      "sort_order": 60
+    },
+    {
+      "class_id": "WARRIOR",
+      "slot_id": "slot_0_6",
+      "ability_id": "WARRIOR_CLEAVE",
+      "sort_order": 70
+    },
+    {
+      "class_id": "WARRIOR",
+      "slot_id": "slot_0_7",
+      "ability_id": "WARRIOR_MOMENTUM",
+      "sort_order": 80
+    },
+    {
+      "class_id": "WARRIOR",
+      "slot_id": "slot_0_8",
+      "ability_id": "WARRIOR_ENRAGE",
+      "sort_order": 90
+    },
+    {
+      "class_id": "WARRIOR",
+      "slot_id": "slot_1_0",
+      "action_kind": "FIXED",
+      "action_id": "DODGE",
+      "sort_order": 100
+    },
+    {
+      "class_id": "WARRIOR",
+      "slot_id": "slot_1_1",
+      "ability_id": "WARRIOR_CHARGE",
+      "sort_order": 110
+    },
+    {
+      "class_id": "WARRIOR",
+      "slot_id": "slot_1_2",
+      "ability_id": "WARRIOR_GIANT_SWING",
+      "sort_order": 120
+    },
+    {
+      "class_id": "WARRIOR",
+      "slot_id": "slot_1_3",
+      "action_kind": "ABILITY",
+      "action_id": "WARRIOR_DREAD_STRIKE",
+      "ability_id": "WARRIOR_DREAD_STRIKE",
+      "sort_order": 130
+    },
+    {
+      "class_id": "WARRIOR",
+      "slot_id": "slot_1_4",
+      "action_kind": "ABILITY",
+      "action_id": "WARRIOR_EARTHSHATTER",
+      "ability_id": "WARRIOR_EARTHSHATTER",
+      "sort_order": 140
+    },
+    {
+      "class_id": "WARRIOR",
+      "slot_id": "slot_1_5",
+      "action_kind": "FIXED",
+      "action_id": "PARRY",
+      "sort_order": 150
+    },
+    {
+      "class_id": "WARRIOR",
+      "slot_id": "slot_1_6",
+      "action_kind": "ABILITY",
+      "action_id": "WARRIOR_FIREBALL",
+      "ability_id": "WARRIOR_FIREBALL",
+      "sort_order": 160
+    },
+    {
+      "class_id": "WARRIOR",
+      "slot_id": "slot_1_7",
+      "ability_id": "WARRIOR_INTIMIDATE",
+      "sort_order": 170
+    },
+    {
+      "class_id": "WARRIOR",
+      "slot_id": "slot_1_8",
+      "action_kind": "ABILITY",
+      "action_id": "WARRIOR_ICICLE",
+      "ability_id": "WARRIOR_ICICLE",
+      "sort_order": 180
+    },
+    {
+      "class_id": "WARRIOR",
+      "slot_id": "slot_2_0",
+      "action_kind": "ABILITY",
+      "action_id": "WARRIOR_IMPALE",
+      "ability_id": "WARRIOR_IMPALE",
+      "sort_order": 185
+    },
+    {
+      "class_id": "WARRIOR",
+      "slot_id": "slot_2_1",
+      "action_kind": "ABILITY",
+      "action_id": "WARRIOR_BATTLE_CRY",
+      "ability_id": "WARRIOR_BATTLE_CRY",
+      "sort_order": 187
+    },
+    {
+      "class_id": "WARRIOR",
+      "slot_id": "slot_2_2",
+      "action_kind": "ABILITY",
+      "action_id": "WARRIOR_ORBITING_BLADES",
+      "ability_id": "WARRIOR_ORBITING_BLADES",
+      "sort_order": 190
+    },
+    {
+      "class_id": "WARRIOR",
+      "slot_id": "slot_2_3",
+      "action_kind": "ABILITY",
+      "action_id": "WARRIOR_FROST_NOVA",
+      "ability_id": "WARRIOR_FROST_NOVA",
+      "sort_order": 200
+    },
+    {
+      "class_id": "WARRIOR",
+      "slot_id": "slot_2_4",
+      "action_kind": "ABILITY",
+      "action_id": "WARRIOR_METEOR",
+      "ability_id": "WARRIOR_METEOR",
+      "sort_order": 210
+    },
+    {
+      "class_id": "WARRIOR",
+      "slot_id": "slot_2_5",
+      "action_kind": "ABILITY",
+      "action_id": "WARRIOR_LIGHTNING",
+      "ability_id": "WARRIOR_LIGHTNING",
+      "sort_order": 220
+    },
+    {
+      "class_id": "WARRIOR",
+      "slot_id": "slot_2_6",
+      "action_kind": "ABILITY",
+      "action_id": "WARRIOR_BOOMERANG_ORB",
+      "ability_id": "WARRIOR_BOOMERANG_ORB",
+      "sort_order": 230
+    },
+    {
+      "class_id": "WARRIOR",
+      "slot_id": "slot_2_7",
+      "action_kind": "ABILITY",
+      "action_id": "WARRIOR_ERUPTION",
+      "ability_id": "WARRIOR_ERUPTION",
+      "sort_order": 240
+    },
+    {
+      "class_id": "WARRIOR",
+      "slot_id": "slot_2_8",
+      "action_kind": "ABILITY",
+      "action_id": "WARRIOR_WITHERING_ORB",
+      "ability_id": "WARRIOR_WITHERING_ORB",
+      "sort_order": 250
+    },
+    {
+      "class_id": "PALADIN",
+      "slot_id": "slot_0_0",
+      "ability_id": "PALADIN_SHIELD_PUMMEL",
+      "sort_order": 110
+    },
+    {
+      "class_id": "PALADIN",
+      "slot_id": "slot_0_1",
+      "ability_id": "PALADIN_VINDICATOR_SLASH",
+      "sort_order": 120
+    },
+    {
+      "class_id": "PALADIN",
+      "slot_id": "slot_0_2",
+      "ability_id": "PALADIN_GUARDIAN_RUSH",
+      "sort_order": 130
+    },
+    {
+      "class_id": "PALADIN",
+      "slot_id": "slot_0_3",
+      "ability_id": "PALADIN_RETRIBUTION",
+      "sort_order": 140
+    },
+    {
+      "class_id": "PALADIN",
+      "slot_id": "slot_1_0",
+      "action_kind": "FIXED",
+      "action_id": "DODGE",
+      "sort_order": 150
+    },
+    {
+      "class_id": "PALADIN",
+      "slot_id": "slot_1_1",
+      "ability_id": "PALADIN_CHARGE",
+      "sort_order": 160
+    },
+    {
+      "class_id": "PALADIN",
+      "slot_id": "slot_1_2",
+      "action_kind": "FIXED",
+      "action_id": "PARRY",
+      "sort_order": 170
+    },
+    {
+      "class_id": "RANGER",
+      "slot_id": "slot_0_0",
+      "ability_id": "ARCHER_POWER_SHOT",
+      "sort_order": 180
+    },
+    {
+      "class_id": "RANGER",
+      "slot_id": "slot_0_1",
+      "ability_id": "ARCHER_RAIN_SHOT",
+      "sort_order": 190
+    },
+    {
+      "class_id": "RANGER",
+      "slot_id": "slot_0_2",
+      "ability_id": "ARCHER_EVASIVE_SHOT",
+      "sort_order": 200
+    },
+    {
+      "class_id": "RANGER",
+      "slot_id": "slot_0_3",
+      "ability_id": "ARCHER_AIR_SHOT",
+      "sort_order": 210
+    },
+    {
+      "class_id": "RANGER",
+      "slot_id": "slot_1_1",
+      "ability_id": "ARCHER_DRAW_MODE_TOGGLE",
+      "sort_order": 215
+    },
+    {
+      "class_id": "RANGER",
+      "slot_id": "slot_1_0",
+      "action_kind": "FIXED",
+      "action_id": "DODGE",
+      "sort_order": 220
+    },
+    {
+      "class_id": "RANGER",
+      "slot_id": "slot_1_2",
+      "action_kind": "FIXED",
+      "action_id": "PARRY",
+      "sort_order": 230
+    }
+  ],
+  "fixed_action_bindings": [],
+  "slots": [
+    {
+      "slot_id": "slot_0_0",
+      "ui_row": 0,
+      "ui_col": 0,
+      "slot_group": "LOADOUT_ACTION",
+      "accepts_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 10
+    },
+    {
+      "slot_id": "slot_0_1",
+      "ui_row": 0,
+      "ui_col": 1,
+      "slot_group": "LOADOUT_ACTION",
+      "accepts_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 20
+    },
+    {
+      "slot_id": "slot_0_2",
+      "ui_row": 0,
+      "ui_col": 2,
+      "slot_group": "LOADOUT_ACTION",
+      "accepts_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 30
+    },
+    {
+      "slot_id": "slot_0_3",
+      "ui_row": 0,
+      "ui_col": 3,
+      "slot_group": "LOADOUT_ACTION",
+      "accepts_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 40
+    },
+    {
+      "slot_id": "slot_0_4",
+      "ui_row": 0,
+      "ui_col": 4,
+      "slot_group": "LOADOUT_ACTION",
+      "accepts_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 50
+    },
+    {
+      "slot_id": "slot_0_5",
+      "ui_row": 0,
+      "ui_col": 5,
+      "slot_group": "LOADOUT_ACTION",
+      "accepts_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 60
+    },
+    {
+      "slot_id": "slot_0_6",
+      "ui_row": 0,
+      "ui_col": 6,
+      "slot_group": "LOADOUT_ACTION",
+      "accepts_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 70
+    },
+    {
+      "slot_id": "slot_0_7",
+      "ui_row": 0,
+      "ui_col": 7,
+      "slot_group": "LOADOUT_ACTION",
+      "accepts_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 80
+    },
+    {
+      "slot_id": "slot_0_8",
+      "ui_row": 0,
+      "ui_col": 8,
+      "slot_group": "LOADOUT_ACTION",
+      "accepts_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 90
+    },
+    {
+      "slot_id": "slot_1_0",
+      "ui_row": 1,
+      "ui_col": 0,
+      "slot_group": "LOADOUT_ACTION",
+      "accepts_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 100
+    },
+    {
+      "slot_id": "slot_1_1",
+      "ui_row": 1,
+      "ui_col": 1,
+      "slot_group": "LOADOUT_ACTION",
+      "accepts_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 110
+    },
+    {
+      "slot_id": "slot_1_2",
+      "ui_row": 1,
+      "ui_col": 2,
+      "slot_group": "LOADOUT_ACTION",
+      "accepts_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 120
+    },
+    {
+      "slot_id": "slot_1_3",
+      "ui_row": 1,
+      "ui_col": 3,
+      "slot_group": "LOADOUT_ACTION",
+      "accepts_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 130
+    },
+    {
+      "slot_id": "slot_1_4",
+      "ui_row": 1,
+      "ui_col": 4,
+      "slot_group": "LOADOUT_ACTION",
+      "accepts_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 140
+    },
+    {
+      "slot_id": "slot_1_5",
+      "ui_row": 1,
+      "ui_col": 5,
+      "slot_group": "LOADOUT_ACTION",
+      "accepts_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 150
+    },
+    {
+      "slot_id": "slot_1_6",
+      "ui_row": 1,
+      "ui_col": 6,
+      "slot_group": "LOADOUT_ACTION",
+      "accepts_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 160
+    },
+    {
+      "slot_id": "slot_1_7",
+      "ui_row": 1,
+      "ui_col": 7,
+      "slot_group": "LOADOUT_ACTION",
+      "accepts_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 170
+    },
+    {
+      "slot_id": "slot_1_8",
+      "ui_row": 1,
+      "ui_col": 8,
+      "slot_group": "LOADOUT_ACTION",
+      "accepts_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 180
+    },
+    {
+      "slot_id": "slot_2_0",
+      "ui_row": 2,
+      "ui_col": 0,
+      "slot_group": "LOADOUT_ACTION",
+      "accepts_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 190
+    },
+    {
+      "slot_id": "slot_2_1",
+      "ui_row": 2,
+      "ui_col": 1,
+      "slot_group": "LOADOUT_ACTION",
+      "accepts_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 200
+    },
+    {
+      "slot_id": "slot_2_2",
+      "ui_row": 2,
+      "ui_col": 2,
+      "slot_group": "LOADOUT_ACTION",
+      "accepts_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 210
+    },
+    {
+      "slot_id": "slot_2_3",
+      "ui_row": 2,
+      "ui_col": 3,
+      "slot_group": "LOADOUT_ACTION",
+      "accepts_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 220
+    },
+    {
+      "slot_id": "slot_2_4",
+      "ui_row": 2,
+      "ui_col": 4,
+      "slot_group": "LOADOUT_ACTION",
+      "accepts_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 230
+    },
+    {
+      "slot_id": "slot_2_5",
+      "ui_row": 2,
+      "ui_col": 5,
+      "slot_group": "LOADOUT_ACTION",
+      "accepts_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 240
+    },
+    {
+      "slot_id": "slot_2_6",
+      "ui_row": 2,
+      "ui_col": 6,
+      "slot_group": "LOADOUT_ACTION",
+      "accepts_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 250
+    },
+    {
+      "slot_id": "slot_2_7",
+      "ui_row": 2,
+      "ui_col": 7,
+      "slot_group": "LOADOUT_ACTION",
+      "accepts_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 260
+    },
+    {
+      "slot_id": "slot_2_8",
+      "ui_row": 2,
+      "ui_col": 8,
+      "slot_group": "LOADOUT_ACTION",
+      "accepts_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 270
+    }
+  ]
+}

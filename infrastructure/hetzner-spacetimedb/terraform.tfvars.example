@@ -1,0 +1,39 @@
+# Copy to terraform.tfvars and adjust before running apply.
+# terraform.tfvars is intentionally ignored by git.
+
+project_name = "arena"
+environment  = "dev"
+
+# Hetzner Singapore.
+location = "sin"
+
+# Small current-generation CPX dev host for first publish/connect tests.
+# Consider cpx32 if the game loop, memory, or player count requires it.
+server_type = "cpx22"
+
+data_volume_size_gb           = 20
+data_volume_delete_protection = true
+
+ssh_public_key_path = "~/.ssh/id_ed25519.pub"
+ssh_public_key_paths = [
+  "~/.ssh/arena_github_deploy.pub",
+]
+ssh_public_keys = [
+  # "ssh-ed25519 AAAAC3... dev@example.com",
+]
+
+# Replace these with your devs' current public IP ranges before production use.
+ssh_allowed_cidrs_ipv4 = [
+  "203.0.113.10/32",
+  "203.0.113.11/32",
+]
+ssh_allowed_cidrs_ipv6 = []
+
+# Cloudflare DNS. Requires CLOUDFLARE_API_TOKEN in the environment.
+# The record stays DNS-only by default; that is safer for first-pass websocket latency/debugging.
+domain_name                   = "arena.example.com"
+cloudflare_zone_name          = "example.com"
+cloudflare_zone_id            = ""
+cloudflare_record_name        = "arena.example.com"
+cloudflare_proxied             = false
+cloudflare_manage_tls_settings = false

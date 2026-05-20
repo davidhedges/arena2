@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: ebf1e114ad5e4f4aae2116c406c6cf56
+PrefabImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 156596
+  packageName: Human Spellcasting Animations
+  packageVersion: 2.0
+  assetPath: Assets/Kevin Iglesias/Human Animations/Unity Demo Scenes/Human Spellcasting
+    Animations/Prefabs/Spells/Human_SpellAura_Fire.prefab
+  uploadId: 824672

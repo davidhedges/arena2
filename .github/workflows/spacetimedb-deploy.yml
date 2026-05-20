@@ -1,0 +1,95 @@
+name: Deploy SpacetimeDB
+
+on:
+  workflow_dispatch:
+    inputs:
+      arena_host:
+        description: "Optional host override. Defaults to vars.ARENA_HOST or secrets.ARENA_HOST."
+        required: false
+        type: string
+      arena_database:
+        description: "SpacetimeDB database/module name."
+        required: false
+        default: "arena"
+        type: string
+
+concurrency:
+  group: spacetimedb-deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build and Publish Module
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    env:
+      ARENA_HOST: ${{ inputs.arena_host || vars.ARENA_HOST || secrets.ARENA_HOST }}
+      ARENA_SSH_USER: ${{ vars.ARENA_SSH_USER || 'arena' }}
+      ARENA_DATABASE: ${{ inputs.arena_database || vars.ARENA_DATABASE || 'arena' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate deploy configuration
+        env:
+          ARENA_SSH_PRIVATE_KEY: ${{ secrets.ARENA_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$ARENA_HOST" || { echo "ARENA_HOST is required. Set repo variable ARENA_HOST or pass arena_host."; exit 2; }
+          test -n "$ARENA_SSH_USER" || { echo "ARENA_SSH_USER is required."; exit 2; }
+          test -n "$ARENA_DATABASE" || { echo "ARENA_DATABASE is required."; exit 2; }
+          test -n "$ARENA_SSH_PRIVATE_KEY" || { echo "ARENA_SSH_PRIVATE_KEY secret is required."; exit 2; }
+
+      - name: Install Rust wasm target
+        run: |
+          set -euo pipefail
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          rustup target add wasm32-unknown-unknown
+
+      - name: Install wasm optimizer
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y binaryen
+
+      - name: Install SpacetimeDB CLI
+        run: |
+          set -euo pipefail
+          curl -sSf https://install.spacetimedb.com | sh -s -- --yes
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Verify toolchain
+        run: |
+          set -euo pipefail
+          rustc --version
+          cargo --version
+          wasm-opt --version
+          spacetime --version
+
+      - name: Configure SSH
+        env:
+          ARENA_SSH_PRIVATE_KEY: ${{ secrets.ARENA_SSH_PRIVATE_KEY }}
+          ARENA_SSH_KNOWN_HOSTS: ${{ secrets.ARENA_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.ssh"
+          chmod 700 "$HOME/.ssh"
+          printf '%s\n' "$ARENA_SSH_PRIVATE_KEY" > "$HOME/.ssh/id_ed25519"
+          chmod 600 "$HOME/.ssh/id_ed25519"
+
+          if [ -n "$ARENA_SSH_KNOWN_HOSTS" ]; then
+            printf '%s\n' "$ARENA_SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          else
+            ssh-keyscan -H "$ARENA_HOST" > "$HOME/.ssh/known_hosts"
+          fi
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+          ssh -o BatchMode=yes "$ARENA_SSH_USER@$ARENA_HOST" true
+
+      - name: Deploy SpacetimeDB module
+        run: |
+          set -euo pipefail
+          ops/deploy-spacetimedb.sh
