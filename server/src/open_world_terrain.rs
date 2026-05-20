@@ -1,8 +1,8 @@
 use crate::open_world_scene::{
     default_open_world_scene_profile, OpenWorldSceneProfile, ADVENTURE_ISLAND_PROFILE,
     DESERT_DAY_PROFILE, DOCKS_DAY_PROFILE, GOLDEN_VALLEY_OVERCAST_PROFILE,
-    GOLDEN_VALLEY_SUNNY_PROFILE, GREAT_HALL_DAY_PROFILE, IDOL_DAY_PROFILE, OASIS_DAY_PROFILE,
-    OPEN_WORLD_HEIGHTFIELD_JSON, TEMPLE_GARDENS_PROFILE,
+    GOLDEN_VALLEY_SUNNY_PROFILE, GREAT_HALL_DAY_PROFILE, GIANT_SKELETON_PROFILE,
+    IDOL_DAY_PROFILE, OASIS_DAY_PROFILE, OPEN_WORLD_HEIGHTFIELD_JSON, TEMPLE_GARDENS_PROFILE,
 };
 use serde::Deserialize;
 use std::sync::OnceLock;
@@ -26,6 +26,7 @@ fn open_world_heightfield_for_profile(
     static ADVENTURE_ISLAND_HEIGHTFIELD: OnceLock<OpenWorldHeightfieldConfig> = OnceLock::new();
     static DESERT_DAY_HEIGHTFIELD: OnceLock<OpenWorldHeightfieldConfig> = OnceLock::new();
     static DOCKS_DAY_HEIGHTFIELD: OnceLock<OpenWorldHeightfieldConfig> = OnceLock::new();
+    static GIANT_SKELETON_HEIGHTFIELD: OnceLock<OpenWorldHeightfieldConfig> = OnceLock::new();
     static GOLDEN_VALLEY_OVERCAST_HEIGHTFIELD: OnceLock<OpenWorldHeightfieldConfig> =
         OnceLock::new();
     static GOLDEN_VALLEY_SUNNY_HEIGHTFIELD: OnceLock<OpenWorldHeightfieldConfig> = OnceLock::new();
@@ -39,6 +40,8 @@ fn open_world_heightfield_for_profile(
         (&DESERT_DAY_HEIGHTFIELD, profile.heightfield_json)
     } else if profile.scene_name == DOCKS_DAY_PROFILE.scene_name {
         (&DOCKS_DAY_HEIGHTFIELD, profile.heightfield_json)
+    } else if profile.scene_name == GIANT_SKELETON_PROFILE.scene_name {
+        (&GIANT_SKELETON_HEIGHTFIELD, profile.heightfield_json)
     } else if profile.scene_name == GOLDEN_VALLEY_OVERCAST_PROFILE.scene_name {
         (
             &GOLDEN_VALLEY_OVERCAST_HEIGHTFIELD,

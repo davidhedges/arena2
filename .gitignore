@@ -56,3 +56,6 @@ Assets/**/*.unitypackage.meta
 !*.tfvars.example
 crash.log
 crash.*.log
+
+# Local recovery backups
+Backups/

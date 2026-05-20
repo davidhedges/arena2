@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: eb690ff23392b8e47ae60f6a5f3f0c7e
+PrefabImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 340468
+  packageName: URP Stylized VFX Bundle
+  packageVersion: 1.0.2
+  assetPath: Assets/Vefects/Stylized AoE URP/VFX/Poison/Particles/VFX_Poison_Burst_01.prefab
+  uploadId: 858570

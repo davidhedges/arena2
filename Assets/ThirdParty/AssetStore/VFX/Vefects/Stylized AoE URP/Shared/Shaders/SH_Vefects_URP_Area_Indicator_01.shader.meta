@@ -1,0 +1,21 @@
+fileFormatVersion: 2
+guid: 7a8e71f27b262744ca8e77e9cfc2385b
+ShaderImporter:
+  externalObjects: {}
+  defaultTextures:
+  - _LUT: {fileID: 2800000, guid: ebc6571ef101faa4a98d42416dea7ae5, type: 3}
+  - _Texture01: {fileID: 2800000, guid: 788d74a2951ba514fa76781ea2676e75, type: 3}
+  - _Texture02: {fileID: 2800000, guid: 788d74a2951ba514fa76781ea2676e75, type: 3}
+  - _DistortionTexture: {fileID: 2800000, guid: 6f282ed6b98e16f44a7a673df7b37443,
+      type: 3}
+  nonModifiableTextures: []
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 340468
+  packageName: URP Stylized VFX Bundle
+  packageVersion: 1.0.2
+  assetPath: Assets/Vefects/Stylized AoE URP/Shared/Shaders/SH_Vefects_URP_Area_Indicator_01.shader
+  uploadId: 858570

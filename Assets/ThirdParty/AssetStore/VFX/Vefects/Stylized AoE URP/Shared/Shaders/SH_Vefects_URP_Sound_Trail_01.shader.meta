@@ -1,0 +1,20 @@
+fileFormatVersion: 2
+guid: de76973ef829e6448a016d4239d92d65
+ShaderImporter:
+  externalObjects: {}
+  defaultTextures:
+  - _WPONoise: {fileID: 2800000, guid: 6f282ed6b98e16f44a7a673df7b37443, type: 3}
+  - _LUT: {fileID: 2800000, guid: 84bcbc9a0b0e4524eb36f647cd6fdac0, type: 3}
+  - _MainTexture: {fileID: 2800000, guid: 48ec51626e9df794c88ac1ef41216cc7, type: 3}
+  - _DistortionNoise: {fileID: 2800000, guid: 801b4be3075bc4840b14161c01e73734, type: 3}
+  nonModifiableTextures: []
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 340468
+  packageName: URP Stylized VFX Bundle
+  packageVersion: 1.0.2
+  assetPath: Assets/Vefects/Stylized AoE URP/Shared/Shaders/SH_Vefects_URP_Sound_Trail_01.shader
+  uploadId: 858570

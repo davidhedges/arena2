@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: ec36971ec11bfc94a880745c886fcbce
+ShaderImporter:
+  externalObjects: {}
+  defaultTextures:
+  - _DecalTexture: {fileID: 2800000, guid: 123b792a735506d4593764fa22a848de, type: 3}
+  - _LUT: {fileID: 2800000, guid: ebc6571ef101faa4a98d42416dea7ae5, type: 3}
+  nonModifiableTextures: []
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 340468
+  packageName: URP Stylized VFX Bundle
+  packageVersion: 1.0.2
+  assetPath: Assets/Vefects/Stylized AoE URP/Shared/Shaders/SH_Vefects_URP_Decal_Lit_01.shader
+  uploadId: 858570

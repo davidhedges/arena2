@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 78f5714aa1c785d4788e39637399bf40
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 340468
+  packageName: URP Stylized VFX Bundle
+  packageVersion: 1.0.2
+  assetPath: Assets/Vefects/Stylized AoE URP/Shared/Materials/M_VFX_Burnt_Decal_01.mat
+  uploadId: 858570

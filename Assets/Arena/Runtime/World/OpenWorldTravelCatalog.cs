@@ -27,6 +27,7 @@ namespace Arena.World
             new("Adventure_Island", "Adventure Island"),
             new("Desert_Day", "Desert Day"),
             new("Docks_Day", "Docks Day"),
+            new("Giant_Skeleton", "Giant Skeleton"),
             new("Golden_Valley_Overcast", "Golden Valley Overcast"),
             new("Golden_Valley_Sunny", "Golden Valley Sunny"),
             new("Great_Hall_Day", "Great Hall Day"),

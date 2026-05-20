@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: ae2088e1a08246c40a0e8e646abefd6e
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 340468
+  packageName: URP Stylized VFX Bundle
+  packageVersion: 1.0.2
+  assetPath: Assets/Vefects/Stylized AoE URP/VFX/Void/Materials/M_VFX_Area_Indicator_01_Void.mat
+  uploadId: 858570

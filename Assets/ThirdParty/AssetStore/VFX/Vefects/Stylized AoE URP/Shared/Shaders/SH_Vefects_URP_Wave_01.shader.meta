@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: a519be8d530d7ed4e80cbe70428b0ed5
+ShaderImporter:
+  externalObjects: {}
+  defaultTextures:
+  - _LUT: {fileID: 2800000, guid: ebc6571ef101faa4a98d42416dea7ae5, type: 3}
+  - _MainTexture: {fileID: 2800000, guid: d215674651e00e24d8405befbf505ac5, type: 3}
+  nonModifiableTextures: []
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 340468
+  packageName: URP Stylized VFX Bundle
+  packageVersion: 1.0.2
+  assetPath: Assets/Vefects/Stylized AoE URP/Shared/Shaders/SH_Vefects_URP_Wave_01.shader
+  uploadId: 858570

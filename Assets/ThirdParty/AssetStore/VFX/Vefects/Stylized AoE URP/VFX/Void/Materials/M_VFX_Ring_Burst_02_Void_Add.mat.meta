@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 5a2aecc49e24cf349a553e488b1f1d95
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 340468
+  packageName: URP Stylized VFX Bundle
+  packageVersion: 1.0.2
+  assetPath: Assets/Vefects/Stylized AoE URP/VFX/Void/Materials/M_VFX_Ring_Burst_02_Void_Add.mat
+  uploadId: 858570

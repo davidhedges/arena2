@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 1c440d56bdc2a8048ac857304b79d2ac
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 340468
+  packageName: URP Stylized VFX Bundle
+  packageVersion: 1.0.2
+  assetPath: Assets/Vefects/Stylized AoE URP/VFX/Poison/Materials/M_VFX_Cracks_01_Poison.mat
+  uploadId: 858570

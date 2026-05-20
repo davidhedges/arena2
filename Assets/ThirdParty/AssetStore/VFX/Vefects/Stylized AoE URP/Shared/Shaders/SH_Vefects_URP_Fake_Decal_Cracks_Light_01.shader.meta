@@ -1,0 +1,19 @@
+fileFormatVersion: 2
+guid: 381885124922223429ca9f38effd5ebb
+ShaderImporter:
+  externalObjects: {}
+  defaultTextures:
+  - _LUT: {fileID: 2800000, guid: 7fb4470a70cf9d0458756c082c7c6109, type: 3}
+  - _DecalTexture: {fileID: 2800000, guid: 1996d31bace918e49a84ef7a8e9a5678, type: 3}
+  - _NoiseEmissive: {fileID: 2800000, guid: 2ee23f48726cb264ebf439a2950dc996, type: 3}
+  nonModifiableTextures: []
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 340468
+  packageName: URP Stylized VFX Bundle
+  packageVersion: 1.0.2
+  assetPath: Assets/Vefects/Stylized AoE URP/Shared/Shaders/SH_Vefects_URP_Fake_Decal_Cracks_Light_01.shader
+  uploadId: 858570

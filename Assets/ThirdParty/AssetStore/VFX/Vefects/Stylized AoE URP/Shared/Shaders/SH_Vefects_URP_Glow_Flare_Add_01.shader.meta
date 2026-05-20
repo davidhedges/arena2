@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: 1b4d0904187710a4dbe01bd6abc5eb2c
+ShaderImporter:
+  externalObjects: {}
+  defaultTextures:
+  - _LUT: {fileID: 2800000, guid: 84bcbc9a0b0e4524eb36f647cd6fdac0, type: 3}
+  - _MainTexture: {fileID: 2800000, guid: 205ff18512f608544b5e2b5ea1452f77, type: 3}
+  nonModifiableTextures: []
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 340468
+  packageName: URP Stylized VFX Bundle
+  packageVersion: 1.0.2
+  assetPath: Assets/Vefects/Stylized AoE URP/Shared/Shaders/SH_Vefects_URP_Glow_Flare_Add_01.shader
+  uploadId: 858570

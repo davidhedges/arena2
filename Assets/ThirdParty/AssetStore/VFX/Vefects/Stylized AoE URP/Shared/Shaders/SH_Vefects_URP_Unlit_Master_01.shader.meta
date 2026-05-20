@@ -1,0 +1,22 @@
+fileFormatVersion: 2
+guid: f2eaceb64311a8a44bd8b1492f866790
+ShaderImporter:
+  externalObjects: {}
+  defaultTextures:
+  - _LUT: {fileID: 2800000, guid: ebc6571ef101faa4a98d42416dea7ae5, type: 3}
+  - _NoiseTexture: {fileID: 2800000, guid: a9e3ca617beadc84c9cafa940c488eb2, type: 3}
+  - _DistortionNoise: {fileID: 2800000, guid: 801b4be3075bc4840b14161c01e73734, type: 3}
+  - _SecondaryNoiseTexture: {fileID: 2800000, guid: a9e3ca617beadc84c9cafa940c488eb2,
+      type: 3}
+  - _CutoutTexture: {fileID: 2800000, guid: 31e0c2c4a297a6b42acec1b5af8c7447, type: 3}
+  nonModifiableTextures: []
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 340468
+  packageName: URP Stylized VFX Bundle
+  packageVersion: 1.0.2
+  assetPath: Assets/Vefects/Stylized AoE URP/Shared/Shaders/SH_Vefects_URP_Unlit_Master_01.shader
+  uploadId: 858570

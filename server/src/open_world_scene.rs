@@ -6,6 +6,8 @@ pub const DESERT_DAY_SCENE_NAME: &str = "Desert_Day";
 pub const DESERT_DAY_DISPLAY_NAME: &str = "Desert Day";
 pub const DOCKS_DAY_SCENE_NAME: &str = "Docks_Day";
 pub const DOCKS_DAY_DISPLAY_NAME: &str = "Docks Day";
+pub const GIANT_SKELETON_SCENE_NAME: &str = "Giant_Skeleton";
+pub const GIANT_SKELETON_DISPLAY_NAME: &str = "Giant Skeleton";
 pub const GOLDEN_VALLEY_OVERCAST_SCENE_NAME: &str = "Golden_Valley_Overcast";
 pub const GOLDEN_VALLEY_OVERCAST_DISPLAY_NAME: &str = "Golden Valley Overcast";
 pub const GOLDEN_VALLEY_SUNNY_SCENE_NAME: &str = "Golden_Valley_Sunny";
@@ -21,6 +23,7 @@ pub const KNOWN_OPEN_WORLD_SCENES: &[&str] = &[
     ADVENTURE_ISLAND_SCENE_NAME,
     DESERT_DAY_SCENE_NAME,
     DOCKS_DAY_SCENE_NAME,
+    GIANT_SKELETON_SCENE_NAME,
     GOLDEN_VALLEY_OVERCAST_SCENE_NAME,
     GOLDEN_VALLEY_SUNNY_SCENE_NAME,
     GREAT_HALL_DAY_SCENE_NAME,
@@ -46,6 +49,10 @@ const DOCKS_DAY_HEIGHTFIELD_JSON: &str =
     include_str!("world_data/docks_day.heightfield.shared.json");
 const DOCKS_DAY_GAMEPLAY_COLLISION_JSON: &str =
     include_str!("world_data/docks_day.collision.shared.json");
+const GIANT_SKELETON_HEIGHTFIELD_JSON: &str =
+    include_str!("world_data/giant_skeleton.heightfield.shared.json");
+const GIANT_SKELETON_GAMEPLAY_COLLISION_JSON: &str =
+    include_str!("world_data/giant_skeleton.collision.shared.json");
 const GOLDEN_VALLEY_SUNNY_HEIGHTFIELD_JSON: &str =
     include_str!("world_data/golden_valley_sunny.heightfield.shared.json");
 const GOLDEN_VALLEY_SUNNY_GAMEPLAY_COLLISION_JSON: &str =
@@ -116,6 +123,18 @@ pub const DOCKS_DAY_PROFILE: OpenWorldSceneProfile = OpenWorldSceneProfile {
     spawn_yaw: 0.0,
     heightfield_json: DOCKS_DAY_HEIGHTFIELD_JSON,
     gameplay_collision_json: DOCKS_DAY_GAMEPLAY_COLLISION_JSON,
+    use_procedural_fallback_colliders: true,
+};
+
+pub const GIANT_SKELETON_PROFILE: OpenWorldSceneProfile = OpenWorldSceneProfile {
+    scene_name: GIANT_SKELETON_SCENE_NAME,
+    display_name: GIANT_SKELETON_DISPLAY_NAME,
+    spawn_x: 24.946,
+    ground_y: 8.996,
+    spawn_z: -87.789,
+    spawn_yaw: 0.0,
+    heightfield_json: GIANT_SKELETON_HEIGHTFIELD_JSON,
+    gameplay_collision_json: GIANT_SKELETON_GAMEPLAY_COLLISION_JSON,
     use_procedural_fallback_colliders: true,
 };
 
@@ -208,6 +227,7 @@ pub const OPEN_WORLD_SCENE_PROFILES: &[OpenWorldSceneProfile] = &[
     ADVENTURE_ISLAND_PROFILE,
     DESERT_DAY_PROFILE,
     DOCKS_DAY_PROFILE,
+    GIANT_SKELETON_PROFILE,
     GOLDEN_VALLEY_OVERCAST_PROFILE,
     GOLDEN_VALLEY_SUNNY_PROFILE,
     GREAT_HALL_DAY_PROFILE,

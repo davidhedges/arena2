@@ -1,0 +1,13 @@
+Thanks for purchasing TOON Enchanted Meadow!
+Glad to have you as a customer.
+
+A few easy steps are required in order to ensure proper function of the pack.
+
+	1. Please make sure you install the proper version in your Unity Project. At the moment, only Built-in (2022.3.0 and later) and URP (2022.3.0 and later) are supported.
+
+	2.	Make sure to check the "Opaque Texture" option box in the "Universal Render Pipeline Asset" that you're using in your project.
+You can find it in the "Assets > Settings" folder.
+
+		Enable "Realtime Reflection Probes" in the Quality section of the Project Settings. (Edit > Project Settings)
+
+		This is required for the water shader to function with full features.

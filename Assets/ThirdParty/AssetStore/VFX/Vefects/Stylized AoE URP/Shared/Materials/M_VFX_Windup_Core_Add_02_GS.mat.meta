@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: da262cfa460728a43acb31abd7da903d
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 340468
+  packageName: URP Stylized VFX Bundle
+  packageVersion: 1.0.2
+  assetPath: Assets/Vefects/Stylized AoE URP/Shared/Materials/M_VFX_Windup_Core_Add_02_GS.mat
+  uploadId: 858570

@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 63b1f0198bfa53d489de466dd982c5f8
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 340468
+  packageName: URP Stylized VFX Bundle
+  packageVersion: 1.0.2
+  assetPath: Assets/Vefects/Stylized AoE URP/VFX/Fire/Materials/M_VFX_Fire_Cracks_01_Fire.mat
+  uploadId: 858570

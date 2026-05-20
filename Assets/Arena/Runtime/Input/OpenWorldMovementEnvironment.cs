@@ -12,6 +12,7 @@ namespace Arena.World
         private const string AdventureIslandSceneName = "Adventure_Island";
         private const string DesertDaySceneName = "Desert_Day";
         private const string DocksDaySceneName = "Docks_Day";
+        private const string GiantSkeletonSceneName = "Giant_Skeleton";
         private const string GoldenValleyOvercastSceneName = "Golden_Valley_Overcast";
         private const string GoldenValleySunnySceneName = "Golden_Valley_Sunny";
         private const string GreatHallDaySceneName = "Great_Hall_Day";
@@ -73,6 +74,13 @@ namespace Arena.World
             0.0f,
             new Vector3(413.772f, 52.608f, 370.805f));
 
+        public static OpenWorldSceneProfile GiantSkeleton { get; } = new(
+            GiantSkeletonSceneName,
+            "giant_skeleton",
+            8.996f,
+            0.0f,
+            new Vector3(24.946f, 8.996f, -87.789f));
+
         public static OpenWorldSceneProfile GoldenValleyOvercast { get; } = new(
             GoldenValleyOvercastSceneName,
             "golden_valley_sunny",
@@ -116,6 +124,7 @@ namespace Arena.World
                 AdventureIslandSceneName => AdventureIsland,
                 DesertDaySceneName => DesertDay,
                 DocksDaySceneName => DocksDay,
+                GiantSkeletonSceneName => GiantSkeleton,
                 GoldenValleyOvercastSceneName => GoldenValleyOvercast,
                 GoldenValleySunnySceneName => GoldenValleySunny,
                 GreatHallDaySceneName => GreatHallDay,

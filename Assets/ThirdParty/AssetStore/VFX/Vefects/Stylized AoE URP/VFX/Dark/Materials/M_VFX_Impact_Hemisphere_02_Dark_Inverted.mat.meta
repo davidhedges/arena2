@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 01798a0800146e2409b7448a30e7c1aa
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 340468
+  packageName: URP Stylized VFX Bundle
+  packageVersion: 1.0.2
+  assetPath: Assets/Vefects/Stylized AoE URP/VFX/Dark/Materials/M_VFX_Impact_Hemisphere_02_Dark_Inverted.mat
+  uploadId: 858570

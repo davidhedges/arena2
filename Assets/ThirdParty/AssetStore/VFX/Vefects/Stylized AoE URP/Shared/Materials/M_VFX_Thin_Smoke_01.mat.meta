@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 32359552f4e8a2a4e9a1bbff72365905
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 340468
+  packageName: URP Stylized VFX Bundle
+  packageVersion: 1.0.2
+  assetPath: Assets/Vefects/Stylized AoE URP/Shared/Materials/M_VFX_Thin_Smoke_01.mat
+  uploadId: 858570

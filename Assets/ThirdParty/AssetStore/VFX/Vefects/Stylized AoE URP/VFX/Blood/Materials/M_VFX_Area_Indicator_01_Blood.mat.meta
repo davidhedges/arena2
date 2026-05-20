@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 4c7656e51bf2a214eba9a2f8b8de8343
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 340468
+  packageName: URP Stylized VFX Bundle
+  packageVersion: 1.0.2
+  assetPath: Assets/Vefects/Stylized AoE URP/VFX/Blood/Materials/M_VFX_Area_Indicator_01_Blood.mat
+  uploadId: 858570

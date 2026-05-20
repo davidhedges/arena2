@@ -1,0 +1,19 @@
+fileFormatVersion: 2
+guid: c8821f553d062ed4ca5c72cc8a5fbcc8
+ShaderImporter:
+  externalObjects: {}
+  defaultTextures:
+  - _DistortionNoise: {fileID: 2800000, guid: 68605b0bf89549e44a292f62228c5350, type: 3}
+  - _DistortionDist: {fileID: 2800000, guid: 801b4be3075bc4840b14161c01e73734, type: 3}
+  - _CutoutTexture: {fileID: 2800000, guid: 33fec401cab050343a3ee851eca78e34, type: 3}
+  nonModifiableTextures: []
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 340468
+  packageName: URP Stylized VFX Bundle
+  packageVersion: 1.0.2
+  assetPath: Assets/Vefects/Stylized AoE URP/Shared/Shaders/SH_Vefects_URP_Refraction_Shockwave_01.shader
+  uploadId: 858570

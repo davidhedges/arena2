@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 042ec5ab5d5aa4649b06c50ca01a23e8
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 340468
+  packageName: URP Stylized VFX Bundle
+  packageVersion: 1.0.2
+  assetPath: Assets/Vefects/Stylized AoE URP/VFX/Air/Materials/M_VFX_Disc_Windup_Air_01.mat
+  uploadId: 858570

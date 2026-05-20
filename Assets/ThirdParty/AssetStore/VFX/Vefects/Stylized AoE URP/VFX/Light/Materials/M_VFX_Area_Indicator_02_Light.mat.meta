@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: cb038474695df064ea8d795e02c5b4f2
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 340468
+  packageName: URP Stylized VFX Bundle
+  packageVersion: 1.0.2
+  assetPath: Assets/Vefects/Stylized AoE URP/VFX/Light/Materials/M_VFX_Area_Indicator_02_Light.mat
+  uploadId: 858570

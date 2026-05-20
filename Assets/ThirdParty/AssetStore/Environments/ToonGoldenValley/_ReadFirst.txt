@@ -1,0 +1,14 @@
+Thanks for purchasing Toon Golden Valley!
+Glad to have you as a customer.
+
+A few easy steps are required in order to ensure proper function of the pack.
+
+	1. Please make sure you install the proper version in your Unity Project.
+		Open the "URP" installer, for Universal 3D projects, or
+		Open the "BuiltIn" installer, for Built-In Render Pipeline projects.
+
+	2. Depending on the Unity version, the Color Space might be set to "Gamma" by default. Make sure you set it to "Linear", in order for the lighting to function properly.
+You can find the Color Space setting in: "Edit > Project Settings > Player > Other Settings > Rendering"
+
+	3. Make sure to check the "Opaque Texture" option box in the "Universal Render Pipeline Asset" that you're using in your project.
+You can find it in the "Assets > Settings" folder. This is required for the particle material to function properly.

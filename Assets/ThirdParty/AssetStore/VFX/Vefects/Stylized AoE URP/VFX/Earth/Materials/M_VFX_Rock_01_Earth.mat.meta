@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: f44d489003367c34c9d24421a94546bb
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 340468
+  packageName: URP Stylized VFX Bundle
+  packageVersion: 1.0.2
+  assetPath: Assets/Vefects/Stylized AoE URP/VFX/Earth/Materials/M_VFX_Rock_01_Earth.mat
+  uploadId: 858570

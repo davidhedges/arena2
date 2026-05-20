@@ -6,8 +6,8 @@ use crate::movement::GROUND_Y;
 use crate::open_world_scene::{
     default_open_world_scene_profile, open_world_scene_profile_for_scene, OpenWorldSceneProfile,
     ADVENTURE_ISLAND_PROFILE, DESERT_DAY_PROFILE, DOCKS_DAY_PROFILE,
-    GOLDEN_VALLEY_OVERCAST_PROFILE, GOLDEN_VALLEY_SUNNY_PROFILE, GREAT_HALL_DAY_PROFILE,
-    IDOL_DAY_PROFILE, OASIS_DAY_PROFILE, OPEN_WORLD_GAMEPLAY_COLLISION_JSON,
+    GIANT_SKELETON_PROFILE, GOLDEN_VALLEY_OVERCAST_PROFILE, GOLDEN_VALLEY_SUNNY_PROFILE,
+    GREAT_HALL_DAY_PROFILE, IDOL_DAY_PROFILE, OASIS_DAY_PROFILE, OPEN_WORLD_GAMEPLAY_COLLISION_JSON,
     TEMPLE_GARDENS_PROFILE,
 };
 use crate::open_world_terrain::{
@@ -921,6 +921,7 @@ fn open_world_colliders(profile: &OpenWorldSceneProfile) -> &'static [Collider] 
     static ADVENTURE_ISLAND_COLLIDERS: OnceLock<Vec<Collider>> = OnceLock::new();
     static DESERT_DAY_COLLIDERS: OnceLock<Vec<Collider>> = OnceLock::new();
     static DOCKS_DAY_COLLIDERS: OnceLock<Vec<Collider>> = OnceLock::new();
+    static GIANT_SKELETON_COLLIDERS: OnceLock<Vec<Collider>> = OnceLock::new();
     static GOLDEN_VALLEY_OVERCAST_COLLIDERS: OnceLock<Vec<Collider>> = OnceLock::new();
     static GOLDEN_VALLEY_SUNNY_COLLIDERS: OnceLock<Vec<Collider>> = OnceLock::new();
     static GREAT_HALL_DAY_COLLIDERS: OnceLock<Vec<Collider>> = OnceLock::new();
@@ -937,6 +938,10 @@ fn open_world_colliders(profile: &OpenWorldSceneProfile) -> &'static [Collider] 
             .as_slice()
     } else if profile.scene_name == DOCKS_DAY_PROFILE.scene_name {
         DOCKS_DAY_COLLIDERS
+            .get_or_init(|| generate_open_world_colliders(profile))
+            .as_slice()
+    } else if profile.scene_name == GIANT_SKELETON_PROFILE.scene_name {
+        GIANT_SKELETON_COLLIDERS
             .get_or_init(|| generate_open_world_colliders(profile))
             .as_slice()
     } else if profile.scene_name == GOLDEN_VALLEY_OVERCAST_PROFILE.scene_name {
@@ -980,6 +985,7 @@ fn open_world_gameplay_collision_boxes(
     static ADVENTURE_ISLAND_GAMEPLAY_BOXES: OnceLock<Vec<GameplayCollisionBox>> = OnceLock::new();
     static DESERT_DAY_GAMEPLAY_BOXES: OnceLock<Vec<GameplayCollisionBox>> = OnceLock::new();
     static DOCKS_DAY_GAMEPLAY_BOXES: OnceLock<Vec<GameplayCollisionBox>> = OnceLock::new();
+    static GIANT_SKELETON_GAMEPLAY_BOXES: OnceLock<Vec<GameplayCollisionBox>> = OnceLock::new();
     static GOLDEN_VALLEY_OVERCAST_GAMEPLAY_BOXES: OnceLock<Vec<GameplayCollisionBox>> =
         OnceLock::new();
     static GOLDEN_VALLEY_SUNNY_GAMEPLAY_BOXES: OnceLock<Vec<GameplayCollisionBox>> =
@@ -998,6 +1004,10 @@ fn open_world_gameplay_collision_boxes(
             .as_slice()
     } else if profile.scene_name == DOCKS_DAY_PROFILE.scene_name {
         DOCKS_DAY_GAMEPLAY_BOXES
+            .get_or_init(|| load_open_world_gameplay_collision_boxes(profile))
+            .as_slice()
+    } else if profile.scene_name == GIANT_SKELETON_PROFILE.scene_name {
+        GIANT_SKELETON_GAMEPLAY_BOXES
             .get_or_init(|| load_open_world_gameplay_collision_boxes(profile))
             .as_slice()
     } else if profile.scene_name == GOLDEN_VALLEY_OVERCAST_PROFILE.scene_name {
