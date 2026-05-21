@@ -50,7 +50,8 @@ Current branch status:
 - Phase 1 server broadphase for existing exported gameplay boxes is implemented. It builds static per-scene 3D uniform grids, preserves original collider index order before narrowphase, and falls back to full scan for oversized queries.
 - Collision data is preloaded during server bootstrap so the first projectile query in a scene does not pay the broadphase build cost.
 - Projectile metrics now report world broadphase candidates, gameplay-box narrowphase tests, full-scan fallbacks, and generated open-world geometry point checks. The projectile load harness surfaces those numbers and fallback ratios.
-- The Unity project now has a `GameplayQueryCollision` layer and editor menu items to audit or mark selected `BoxCollider`/`MeshCollider` objects for future projectile/LOS query collision authoring.
+- The Unity project now has a `GameplayQueryCollision` layer and editor menu items to audit, mark, or prepare selected `BoxCollider`/`MeshCollider` objects for future projectile/LOS query collision authoring.
+- `Arena/OpenWorld/Scene Prep/3c Prepare Selected Variant Collision Roles` is the preferred manual cleanup tool for selected variant assets, selected Project folders containing variants, prefab-mode roots, scene instances, or scene containers. It expands Project folder selections to prefab assets underneath, expands scene/container selections to the placed prefab instance roots underneath, edits selected prefab assets by loading/saving prefab contents, keeps visual roots/LOD objects off collision layers, copies visual/root `BoxCollider`s onto dedicated `ArenaGameplayCollision*` children, copies those same author boxes to `ArenaGameplayQueryCollision*` when they are the best available query shape, preserves the original visual/root box components on `Default` as authoring source data, and otherwise creates `ArenaGameplayQueryCollision*` children from mesh colliders on `GameplayQueryCollision`.
 - Early audit of a placed rock showed ordinary X/Z tilt on environment props. The mesh/query design should therefore support full per-instance rotation instead of assuming Y-rotation-only sharing.
 - Query-collision export, mesh geometry export, prototype/instance encoding, and mesh narrowphase acceleration are not implemented yet.
 
@@ -64,6 +65,7 @@ Movement and body blocking should prefer cheap conservative geometry, but boxes 
 
 - `GameplayCollision` layer.
 - `BoxCollider`s where they are close enough.
+- Existing author `CapsuleCollider`s are useful source authoring data, especially for trunks, but they are not exported by the current server collision format. Either add explicit capsule export/server support, or convert them to generated box/hull collision before relying on them for authoritative movement/projectile results.
 - Generated compound convex hulls, simplified hulls, or other optimized movement collision for detailed props where boxes create unacceptable blocking.
 - Small hand-authored compound box setups only when they are actually practical.
 - False positives are acceptable. Blocking a player slightly early is usually better than expensive or fragile geometry.
@@ -75,6 +77,9 @@ Interim authoring decision for bad boxes:
 - Do not delete or disable existing `GameplayCollision` boxes just because they are bad projectile/LOS approximations.
 - Keep a bad box on `GameplayCollision` only as a temporary movement blocker if removing it would let players move through the asset.
 - Do not add bad boxes to `GameplayQueryCollision`.
+- Do not put visual roots or LOD renderer objects on either collision layer unless that exact `GameObject` owns the intended collider. Layers are per `GameObject`, not per collider component.
+- For confusing existing assets, select the Arena variant, scene instance, or a scene container containing many prefab instances and run `Arena/OpenWorld/Scene Prep/3c Prepare Selected Variant Collision Roles` instead of hand-editing root layers. If an asset has both a visual/root `BoxCollider` and an `ArenaGameplayCollision` child box, the tool should preserve the visual/root box shape by copying it to dedicated movement/query children, keep the dedicated child as the movement collider owner, and leave the visual/root box on `Default` as source authoring data.
+- If an asset has author `CapsuleCollider`s, keep them on `Default` for now. The cleanup tool should report them as preserved but unsupported until capsule export/server support or deterministic capsule-to-hull conversion is implemented.
 - Editor query-marking tools must skip existing `GameplayCollision` objects by default so they do not accidentally move temporary movement blockers onto the query layer.
 - Arena variant generation must not skip a third-party prefab solely because the source prefab already has a `BoxCollider`. Existing vendor box colliders may still need Arena-owned query collision, replacement movement collision, or explicit review.
 - Treat bad movement boxes as replacement candidates for generated movement collision, such as V-HACD/compound hull output.
@@ -444,9 +449,10 @@ This is lower priority than the broadphase and authoring split for current box d
 2. What triangle budget should be allowed per query mesh collider and per scene?
 3. What hull-count and vertices-per-hull budget should be allowed for generated movement collision?
 4. Should arrows keep their current radius-based swept segment behavior, or should they eventually use a thinner raycast with presentation-only forgiveness?
-5. Should movement collision use generated compound convex hulls only, or also allow carefully budgeted simplified concave/static meshes if the server library supports them deterministically?
-6. How should debug visualization work for exported projectile/LOS collision, generated movement collision, and server hit results?
-7. Should generated open-world colliders get their own broadphase in Phase 1, or is it acceptable as a Phase 1 follow-up after exported gameplay boxes?
+5. Should author `CapsuleCollider`s be exported as first-class server capsule primitives, or converted during export/tooling into boxes or generated hulls?
+6. Should movement collision use generated compound convex hulls only, or also allow carefully budgeted simplified concave/static meshes if the server library supports them deterministically?
+7. How should debug visualization work for exported projectile/LOS collision, generated movement collision, and server hit results?
+8. Should generated open-world colliders get their own broadphase in Phase 1, or is it acceptable as a Phase 1 follow-up after exported gameplay boxes?
 
 ## Recommended Next Step
 

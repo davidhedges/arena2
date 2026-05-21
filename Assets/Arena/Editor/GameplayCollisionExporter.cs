@@ -14,6 +14,8 @@ namespace Arena.Editor
     {
         private const string GameplayCollisionLayer = "GameplayCollision";
         private const string GameplayQueryCollisionLayer = "GameplayQueryCollision";
+        private const string GameplayCollisionChildName = "ArenaGameplayCollision";
+        private const string GameplayQueryCollisionChildName = "ArenaGameplayQueryCollision";
         private const float TransformCompatibilityScaleEpsilon = 0.001f;
         private const float TransformCompatibilityBasisEpsilon = 0.001f;
         private const string RelativeServerGameplayCollisionPath = "server/src/gameplay_collision.shared.json";
@@ -316,6 +318,92 @@ namespace Arena.Editor
                 $"Skipped {skippedMovement} existing {GameplayCollisionLayer} collider(s) so movement blockers are not moved to the query layer.");
         }
 
+        [MenuItem("Arena/OpenWorld/Scene Prep/3c Prepare Selected Variant Collision Roles", false, 360)]
+        public static void PrepareSelectedVariantCollisionRoles()
+        {
+            int gameplayCollisionLayer = LayerMask.NameToLayer(GameplayCollisionLayer);
+            int gameplayQueryCollisionLayer = LayerMask.NameToLayer(GameplayQueryCollisionLayer);
+            if (gameplayCollisionLayer < 0 || gameplayQueryCollisionLayer < 0)
+            {
+                Debug.LogError(
+                    $"[GameplayCollisionExporter] Required layers are missing: " +
+                    $"{GameplayCollisionLayer}={gameplayCollisionLayer}, {GameplayQueryCollisionLayer}={gameplayQueryCollisionLayer}.");
+                return;
+            }
+
+            GameObject[] sceneRoots = GetCollisionPreparationSceneRoots();
+            List<string> prefabAssetPaths = GetSelectedPrefabAssetPaths();
+            if (sceneRoots.Length == 0 && prefabAssetPaths.Count == 0)
+            {
+                Debug.LogError(
+                    "[GameplayCollisionExporter] Select one or more prefab assets, Project folders, prefab/scene roots, " +
+                    $"scene containers, or prefab instances to prepare. Current selection: {DescribeSelection()}");
+                return;
+            }
+
+            int movementObjectsTagged = 0;
+            int visualBoxCollidersMoved = 0;
+            int queryObjectsCreated = 0;
+            int queryObjectsUpdated = 0;
+            int visualCollisionLayersCleared = 0;
+            int unsupportedCapsuleColliders = 0;
+            int preparedRoots = 0;
+
+            Undo.SetCurrentGroupName("Prepare Variant Collision Roles");
+            int undoGroup = Undo.GetCurrentGroup();
+
+            foreach (GameObject root in sceneRoots)
+            {
+                PrepareCollisionRolesForRoot(
+                    root,
+                    gameplayCollisionLayer,
+                    gameplayQueryCollisionLayer,
+                    ref movementObjectsTagged,
+                    ref visualBoxCollidersMoved,
+                    ref queryObjectsCreated,
+                    ref queryObjectsUpdated,
+                    ref visualCollisionLayersCleared,
+                    ref unsupportedCapsuleColliders);
+                preparedRoots++;
+            }
+
+            foreach (string prefabAssetPath in prefabAssetPaths)
+            {
+                GameObject root = PrefabUtility.LoadPrefabContents(prefabAssetPath);
+                try
+                {
+                    PrepareCollisionRolesForRoot(
+                        root,
+                        gameplayCollisionLayer,
+                        gameplayQueryCollisionLayer,
+                        ref movementObjectsTagged,
+                        ref visualBoxCollidersMoved,
+                        ref queryObjectsCreated,
+                        ref queryObjectsUpdated,
+                        ref visualCollisionLayersCleared,
+                        ref unsupportedCapsuleColliders);
+                    PrefabUtility.SaveAsPrefabAsset(root, prefabAssetPath);
+                    preparedRoots++;
+                }
+                finally
+                {
+                    PrefabUtility.UnloadPrefabContents(root);
+                }
+            }
+
+            Undo.CollapseUndoOperations(undoGroup);
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+
+            Debug.Log(
+                $"[GameplayCollisionExporter] Prepared collision roles for {preparedRoots} root(s): " +
+                $"{movementObjectsTagged} movement object(s) on {GameplayCollisionLayer}, " +
+                $"{visualBoxCollidersMoved} visual/root box collider(s) copied to dedicated collision children, " +
+                $"{queryObjectsCreated} query object(s) created, {queryObjectsUpdated} query object(s) updated, " +
+                $"{visualCollisionLayersCleared} visual/root object(s) moved back to Default, " +
+                $"{unsupportedCapsuleColliders} capsule collider(s) preserved as source data but not exported by current server collision.");
+        }
+
         public static void ExportSelectedTerrainHeightfield()
         {
             Scene activeScene = SceneManager.GetActiveScene();
@@ -458,6 +546,143 @@ namespace Arena.Editor
             return roots.Length > 0;
         }
 
+        private static GameObject[] GetCollisionPreparationSceneRoots()
+        {
+            GameObject[] selected = Selection.gameObjects
+                .Where(go => go != null && !EditorUtility.IsPersistent(go) && go.scene.IsValid())
+                .Distinct()
+                .ToArray();
+            if (selected.Length == 0)
+            {
+                return Array.Empty<GameObject>();
+            }
+
+            var prefabRoots = new HashSet<GameObject>();
+            foreach (GameObject selection in selected)
+            {
+                foreach (Transform transform in selection.GetComponentsInChildren<Transform>(includeInactive: false))
+                {
+                    GameObject? prefabRoot = PrefabUtility.GetOutermostPrefabInstanceRoot(transform.gameObject);
+                    if (prefabRoot == null ||
+                        prefabRoot.scene != selection.scene ||
+                        !prefabRoot.transform.IsChildOf(selection.transform))
+                    {
+                        continue;
+                    }
+
+                    prefabRoots.Add(prefabRoot);
+                }
+            }
+
+            if (prefabRoots.Count > 0)
+            {
+                return prefabRoots
+                    .OrderBy(root => GetHierarchyPath(root.transform), StringComparer.Ordinal)
+                    .ToArray();
+            }
+
+            return selected;
+        }
+
+        private static List<string> GetSelectedPrefabAssetPaths()
+        {
+            var prefabPaths = new HashSet<string>(StringComparer.Ordinal);
+            var selectedPaths = new HashSet<string>(StringComparer.Ordinal);
+            foreach (UnityEngine.Object selected in Selection.objects)
+            {
+                string path = AssetDatabase.GetAssetPath(selected);
+                if (string.IsNullOrEmpty(path))
+                    continue;
+
+                selectedPaths.Add(path);
+            }
+
+            foreach (string guid in Selection.assetGUIDs)
+            {
+                string path = AssetDatabase.GUIDToAssetPath(guid);
+                if (!string.IsNullOrEmpty(path))
+                    selectedPaths.Add(path);
+            }
+
+            foreach (string path in selectedPaths)
+            {
+                if (path.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase))
+                {
+                    prefabPaths.Add(path);
+                    continue;
+                }
+
+                if (!AssetDatabase.IsValidFolder(path))
+                    continue;
+
+                foreach (string guid in AssetDatabase.FindAssets("t:Prefab", new[] { path }))
+                {
+                    string prefabPath = AssetDatabase.GUIDToAssetPath(guid);
+                    if (!string.IsNullOrEmpty(prefabPath) &&
+                        prefabPath.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase))
+                    {
+                        prefabPaths.Add(prefabPath);
+                    }
+                }
+            }
+
+            return prefabPaths
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(path => path, StringComparer.Ordinal)
+                .ToList();
+        }
+
+        private static string DescribeSelection()
+        {
+            var objectDescriptions = Selection.objects
+                .Select(selected =>
+                {
+                    string path = AssetDatabase.GetAssetPath(selected);
+                    string name = selected != null ? selected.name : "<null>";
+                    string type = selected != null ? selected.GetType().Name : "<null>";
+                    return string.IsNullOrEmpty(path) ? $"{name} ({type}, no asset path)" : $"{path} ({type})";
+                });
+            var guidDescriptions = Selection.assetGUIDs
+                .Select(guid => AssetDatabase.GUIDToAssetPath(guid))
+                .Where(path => !string.IsNullOrEmpty(path))
+                .Select(path => $"{path} (assetGUID)");
+            string description = string.Join(", ", objectDescriptions.Concat(guidDescriptions).Distinct());
+            return string.IsNullOrEmpty(description) ? "<empty>" : description;
+        }
+
+        private static void PrepareCollisionRolesForRoot(
+            GameObject root,
+            int gameplayCollisionLayer,
+            int gameplayQueryCollisionLayer,
+            ref int movementObjectsTagged,
+            ref int visualBoxCollidersMoved,
+            ref int queryObjectsCreated,
+            ref int queryObjectsUpdated,
+            ref int visualCollisionLayersCleared,
+            ref int unsupportedCapsuleColliders)
+        {
+            unsupportedCapsuleColliders += CountUnsupportedCapsuleColliders(root);
+            movementObjectsTagged += PrepareMovementCollision(
+                root,
+                gameplayCollisionLayer,
+                gameplayQueryCollisionLayer,
+                ref visualBoxCollidersMoved,
+                ref queryObjectsCreated,
+                ref queryObjectsUpdated);
+            PrepareQueryCollision(
+                root,
+                gameplayQueryCollisionLayer,
+                ref queryObjectsCreated,
+                ref queryObjectsUpdated);
+            visualCollisionLayersCleared += ClearCollisionLayersFromVisualOnlyObjects(
+                root,
+                gameplayCollisionLayer,
+                gameplayQueryCollisionLayer);
+
+            EditorUtility.SetDirty(root);
+            PrefabUtility.RecordPrefabInstancePropertyModifications(root);
+        }
+
         private static List<BoxCollider> CollectCandidateBoxColliders(IEnumerable<GameObject> roots)
         {
             var candidates = new List<BoxCollider>();
@@ -514,6 +739,369 @@ namespace Arena.Editor
 
         private static bool IsSupportedQueryCollider(Collider collider)
             => collider is BoxCollider || collider is MeshCollider;
+
+        private static int PrepareMovementCollision(
+            GameObject root,
+            int gameplayCollisionLayer,
+            int gameplayQueryCollisionLayer,
+            ref int visualBoxCollidersMoved,
+            ref int queryObjectsCreated,
+            ref int queryObjectsUpdated)
+        {
+            int changed = 0;
+            Scene rootScene = root.scene;
+            foreach (BoxCollider collider in root.GetComponentsInChildren<BoxCollider>(includeInactive: false)
+                         .OrderBy(collider => GetHierarchyPath(collider.transform), StringComparer.Ordinal))
+            {
+                if (collider == null ||
+                    !collider.enabled ||
+                    collider.isTrigger ||
+                    !collider.gameObject.activeInHierarchy ||
+                    collider.gameObject.scene != rootScene)
+                {
+                    continue;
+                }
+
+                GameObject owner = collider.gameObject;
+                if (owner.layer == gameplayQueryCollisionLayer ||
+                    owner.name.StartsWith(GameplayQueryCollisionChildName, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                if (owner.name == GameplayCollisionChildName || IsDedicatedColliderObject(owner))
+                {
+                    if (SetLayer(owner, gameplayCollisionLayer, "Prepare Movement Collision"))
+                        changed++;
+                    continue;
+                }
+
+                string childName = owner == root
+                    ? GameplayCollisionChildName
+                    : $"{GameplayCollisionChildName}_{SanitizeObjectName(owner.name)}";
+                GameObject movementChild = GetOrCreateColliderChild(root, childName, gameplayCollisionLayer);
+                CopyWorldTransformIntoRootChild(collider.transform, root.transform, movementChild.transform);
+                CopyBoxColliderToQueryChild(root, collider, gameplayQueryCollisionLayer, ref queryObjectsCreated, ref queryObjectsUpdated);
+                RemoveNonEquivalentBoxColliders(movementChild, collider);
+                if (!HasEquivalentBoxCollider(movementChild, collider))
+                {
+                    BoxCollider copy = Undo.AddComponent<BoxCollider>(movementChild);
+                    CopyBoxCollider(collider, copy);
+                    changed++;
+                }
+
+                if (SetLayer(movementChild, gameplayCollisionLayer, "Prepare Movement Collision"))
+                    changed++;
+
+                SetLayer(owner, 0, "Clear Source Collision Layer");
+                visualBoxCollidersMoved++;
+            }
+
+            return changed;
+        }
+
+        private static void PrepareQueryCollision(
+            GameObject root,
+            int gameplayQueryCollisionLayer,
+            ref int queryObjectsCreated,
+            ref int queryObjectsUpdated)
+        {
+            GameObject? existingQueryRoot = GetExistingChild(root, GameplayQueryCollisionChildName);
+            Transform? existingQueryRootTransform = existingQueryRoot != null ? existingQueryRoot.transform : null;
+            Scene rootScene = root.scene;
+            if (HasAnyQueryCollider(root))
+                return;
+
+            List<MeshCollider> meshColliders = root.GetComponentsInChildren<MeshCollider>(includeInactive: false)
+                .Where(collider =>
+                    collider != null &&
+                    collider.enabled &&
+                    !collider.isTrigger &&
+                    collider.sharedMesh != null &&
+                    collider.gameObject.activeInHierarchy &&
+                    collider.gameObject.scene == rootScene &&
+                    collider.gameObject.layer != gameplayQueryCollisionLayer &&
+                    !collider.gameObject.name.StartsWith(GameplayQueryCollisionChildName, StringComparison.Ordinal) &&
+                    (existingQueryRootTransform == null || !collider.transform.IsChildOf(existingQueryRootTransform)))
+                .OrderBy(collider => GetHierarchyPath(collider.transform), StringComparer.Ordinal)
+                .ToList();
+            List<MeshCollider> explicitMeshColliders = meshColliders
+                .Where(collider => collider.gameObject.name.Contains("MeshCollider", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            if (explicitMeshColliders.Count > 0)
+                meshColliders = explicitMeshColliders;
+
+            int meshIndex = 0;
+            foreach (MeshCollider source in meshColliders)
+            {
+                string childName = meshColliders.Count == 1
+                    ? GameplayQueryCollisionChildName
+                    : $"{GameplayQueryCollisionChildName}_{SanitizeObjectName(source.gameObject.name)}_{meshIndex + 1}";
+                GameObject? existing = GetExistingChild(root, childName);
+                GameObject queryChild;
+                if (existing == null)
+                {
+                    queryChild = new GameObject(childName);
+                    Undo.RegisterCreatedObjectUndo(queryChild, "Create Query Collision");
+                    queryChild.transform.SetParent(root.transform, false);
+                    queryObjectsCreated++;
+                }
+                else
+                {
+                    queryChild = existing;
+                    queryObjectsUpdated++;
+                }
+
+                Undo.RecordObject(queryChild, "Prepare Query Collision");
+                queryChild.layer = gameplayQueryCollisionLayer;
+                CopyWorldTransformIntoRootChild(source.transform, root.transform, queryChild.transform);
+
+                MeshCollider? target = queryChild.GetComponent<MeshCollider>();
+                if (target == null)
+                    target = Undo.AddComponent<MeshCollider>(queryChild);
+                CopyMeshCollider(source, target);
+                EditorUtility.SetDirty(queryChild);
+                meshIndex++;
+            }
+
+            List<BoxCollider> movementBoxes = root.GetComponentsInChildren<BoxCollider>(includeInactive: false)
+                .Where(collider =>
+                    collider != null &&
+                    collider.enabled &&
+                    !collider.isTrigger &&
+                    collider.gameObject.activeInHierarchy &&
+                    collider.gameObject.scene == rootScene &&
+                    collider.gameObject.layer != gameplayQueryCollisionLayer &&
+                    (collider.gameObject.name == GameplayCollisionChildName ||
+                     collider.gameObject.name.StartsWith($"{GameplayCollisionChildName}_", StringComparison.Ordinal)))
+                .OrderBy(collider => GetHierarchyPath(collider.transform), StringComparer.Ordinal)
+                .ToList();
+
+            int boxIndex = 0;
+            foreach (BoxCollider source in movementBoxes)
+            {
+                if (meshColliders.Count > 0 && HasAnyQueryCollider(root))
+                    break;
+
+                string childName = movementBoxes.Count == 1
+                    ? GameplayQueryCollisionChildName
+                    : $"{GameplayQueryCollisionChildName}_{SanitizeObjectName(source.gameObject.name)}_{boxIndex + 1}";
+                CopyBoxColliderToQueryChild(root, source, gameplayQueryCollisionLayer, childName, ref queryObjectsCreated, ref queryObjectsUpdated);
+                boxIndex++;
+            }
+        }
+
+        private static void CopyBoxColliderToQueryChild(
+            GameObject root,
+            BoxCollider source,
+            int gameplayQueryCollisionLayer,
+            ref int queryObjectsCreated,
+            ref int queryObjectsUpdated)
+            => CopyBoxColliderToQueryChild(
+                root,
+                source,
+                gameplayQueryCollisionLayer,
+                GameplayQueryCollisionChildName,
+                ref queryObjectsCreated,
+                ref queryObjectsUpdated);
+
+        private static void CopyBoxColliderToQueryChild(
+            GameObject root,
+            BoxCollider source,
+            int gameplayQueryCollisionLayer,
+            string childName,
+            ref int queryObjectsCreated,
+            ref int queryObjectsUpdated)
+        {
+            GameObject? existing = GetExistingChild(root, childName);
+            GameObject queryChild;
+            if (existing == null)
+            {
+                queryChild = new GameObject(childName);
+                Undo.RegisterCreatedObjectUndo(queryChild, "Create Query Collision");
+                queryChild.transform.SetParent(root.transform, false);
+                queryObjectsCreated++;
+            }
+            else
+            {
+                queryChild = existing;
+                queryObjectsUpdated++;
+            }
+
+            Undo.RecordObject(queryChild, "Prepare Query Collision");
+            queryChild.layer = gameplayQueryCollisionLayer;
+            CopyWorldTransformIntoRootChild(source.transform, root.transform, queryChild.transform);
+            RemoveMeshColliders(queryChild);
+            RemoveNonEquivalentBoxColliders(queryChild, source);
+            if (!HasEquivalentBoxCollider(queryChild, source))
+            {
+                BoxCollider target = Undo.AddComponent<BoxCollider>(queryChild);
+                CopyBoxCollider(source, target);
+            }
+
+            EditorUtility.SetDirty(queryChild);
+        }
+
+        private static int ClearCollisionLayersFromVisualOnlyObjects(
+            GameObject root,
+            int gameplayCollisionLayer,
+            int gameplayQueryCollisionLayer)
+        {
+            int changed = 0;
+            foreach (Transform transform in root.GetComponentsInChildren<Transform>(includeInactive: true))
+            {
+                GameObject gameObject = transform.gameObject;
+                if (gameObject.layer != gameplayCollisionLayer && gameObject.layer != gameplayQueryCollisionLayer)
+                    continue;
+                if (HasEnabledNonTriggerSupportedCollider(gameObject))
+                    continue;
+                if (gameObject.name == GameplayCollisionChildName || gameObject.name.StartsWith(GameplayQueryCollisionChildName, StringComparison.Ordinal))
+                    continue;
+
+                if (SetLayer(gameObject, 0, "Clear Visual Collision Layer"))
+                    changed++;
+            }
+
+            return changed;
+        }
+
+        private static GameObject GetOrCreateColliderChild(GameObject root, string childName, int layer)
+        {
+            GameObject? child = GetExistingChild(root, childName);
+            if (child != null)
+            {
+                SetLayer(child, layer, "Prepare Collider Child");
+                return child;
+            }
+
+            child = new GameObject(childName);
+            Undo.RegisterCreatedObjectUndo(child, "Create Collider Child");
+            child.transform.SetParent(root.transform, false);
+            child.layer = layer;
+            return child;
+        }
+
+        private static GameObject? GetExistingChild(GameObject root, string childName)
+        {
+            foreach (Transform child in root.transform)
+            {
+                if (child.name == childName)
+                    return child.gameObject;
+            }
+
+            return null;
+        }
+
+        private static bool IsDedicatedColliderObject(GameObject gameObject)
+            => gameObject.GetComponents<Collider>().Length > 0 &&
+               gameObject.GetComponentsInChildren<Renderer>(includeInactive: false).Length == 0;
+
+        private static bool HasEnabledNonTriggerSupportedCollider(GameObject gameObject)
+            => gameObject.GetComponents<Collider>()
+                .Any(collider => collider.enabled && !collider.isTrigger && IsSupportedQueryCollider(collider));
+
+        private static int CountUnsupportedCapsuleColliders(GameObject root)
+            => root.GetComponentsInChildren<CapsuleCollider>(includeInactive: false)
+                .Count(collider =>
+                    collider.enabled &&
+                    !collider.isTrigger &&
+                    collider.gameObject.activeInHierarchy);
+
+        private static bool HasAnyQueryCollider(GameObject root)
+            => root.GetComponentsInChildren<Collider>(includeInactive: false)
+                .Any(collider =>
+                    collider.enabled &&
+                    !collider.isTrigger &&
+                    collider.gameObject.name.StartsWith(GameplayQueryCollisionChildName, StringComparison.Ordinal));
+
+        private static bool HasEquivalentBoxCollider(GameObject targetObject, BoxCollider source)
+            => targetObject.GetComponents<BoxCollider>().Any(target =>
+                target.enabled == source.enabled &&
+                target.isTrigger == source.isTrigger &&
+                Approximately(target.center, source.center) &&
+                Approximately(target.size, source.size));
+
+        private static void RemoveNonEquivalentBoxColliders(GameObject targetObject, BoxCollider source)
+        {
+            foreach (BoxCollider target in targetObject.GetComponents<BoxCollider>())
+            {
+                if (target.enabled == source.enabled &&
+                    target.isTrigger == source.isTrigger &&
+                    Approximately(target.center, source.center) &&
+                    Approximately(target.size, source.size))
+                {
+                    continue;
+                }
+
+                Undo.DestroyObjectImmediate(target);
+            }
+        }
+
+        private static void RemoveMeshColliders(GameObject targetObject)
+        {
+            foreach (MeshCollider target in targetObject.GetComponents<MeshCollider>())
+                Undo.DestroyObjectImmediate(target);
+        }
+
+        private static void CopyBoxCollider(BoxCollider source, BoxCollider target)
+        {
+            target.enabled = source.enabled;
+            target.isTrigger = false;
+            target.sharedMaterial = source.sharedMaterial;
+            target.center = source.center;
+            target.size = source.size;
+        }
+
+        private static void CopyMeshCollider(MeshCollider source, MeshCollider target)
+        {
+            target.enabled = source.enabled;
+            target.isTrigger = false;
+            target.sharedMaterial = source.sharedMaterial;
+            target.convex = source.convex;
+            target.cookingOptions = source.cookingOptions;
+            target.sharedMesh = source.sharedMesh;
+        }
+
+        private static void CopyWorldTransformIntoRootChild(Transform source, Transform root, Transform target)
+        {
+            target.SetParent(root, worldPositionStays: false);
+            target.SetPositionAndRotation(source.position, source.rotation);
+            Vector3 rootScale = root.lossyScale;
+            Vector3 sourceScale = source.lossyScale;
+            target.localScale = new Vector3(
+                SafeScaleDivide(sourceScale.x, rootScale.x),
+                SafeScaleDivide(sourceScale.y, rootScale.y),
+                SafeScaleDivide(sourceScale.z, rootScale.z));
+        }
+
+        private static float SafeScaleDivide(float numerator, float denominator)
+            => Mathf.Abs(denominator) <= 0.0001f ? numerator : numerator / denominator;
+
+        private static bool SetLayer(GameObject gameObject, int layer, string undoName)
+        {
+            if (gameObject.layer == layer)
+                return false;
+
+            Undo.RecordObject(gameObject, undoName);
+            gameObject.layer = layer;
+            EditorUtility.SetDirty(gameObject);
+            PrefabUtility.RecordPrefabInstancePropertyModifications(gameObject);
+            return true;
+        }
+
+        private static string SanitizeObjectName(string name)
+        {
+            var chars = name.Select(c => char.IsLetterOrDigit(c) ? c : '_').ToArray();
+            string sanitized = new string(chars);
+            while (sanitized.Contains("__", StringComparison.Ordinal))
+                sanitized = sanitized.Replace("__", "_", StringComparison.Ordinal);
+            return sanitized.Trim('_');
+        }
+
+        private static bool Approximately(Vector3 a, Vector3 b)
+            => Mathf.Approximately(a.x, b.x) &&
+               Mathf.Approximately(a.y, b.y) &&
+               Mathf.Approximately(a.z, b.z);
 
         private static bool IsSharedPrototypeTransformCompatible(Transform transform, out string reason)
         {
