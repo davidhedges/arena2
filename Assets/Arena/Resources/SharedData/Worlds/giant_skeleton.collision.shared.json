@@ -33089,5 +33089,7 @@
             "rotation_y_deg": 0.0,
             "rotation": []
         }
-    ]
+    ],
+    "mesh_geometries": [],
+    "mesh_instances": []
 }
