@@ -54,7 +54,7 @@ Current branch status:
 - The Unity project now has a `GameplayQueryCollision` layer and editor menu items to audit, mark, or prepare selected `BoxCollider`/`MeshCollider` objects for future projectile/LOS query collision authoring.
 - Phase 2 box-only query-collision export is implemented. The exporter writes separate `*.query_collision.shared.json` files from `GameplayQueryCollision` `BoxCollider`s. During migration, the server raycast path queries both movement boxes and query boxes, then keeps the nearest hit, so partial query authoring cannot make every non-query-authored prop stop blocking projectiles.
 - `Arena/OpenWorld/Scene Prep/3c Prepare Selected Variant Collision Roles` is the preferred manual cleanup tool for selected variant assets, selected Project folders containing variants, prefab-mode roots, scene instances, or scene containers. It expands Project folder selections to prefab assets underneath, expands scene/container selections to the placed prefab instance roots underneath, edits selected prefab assets by loading/saving prefab contents, keeps visual roots/LOD objects off collision layers, copies visual/root `BoxCollider`s onto dedicated `ArenaGameplayCollision*` children, copies those same author boxes to `ArenaGameplayQueryCollision*` when they are the best available query shape, preserves the original visual/root box components on `Default` as authoring source data, and otherwise creates `ArenaGameplayQueryCollision*` children from mesh colliders on `GameplayQueryCollision`.
-- Early audit of placed rocks showed ordinary X/Z tilt on environment props. The mesh/query design should therefore support full per-instance rotation instead of assuming Y-rotation-only sharing. Until full-rotation query boxes or mesh query support exists, query-layer tilted `BoxCollider`s are skipped during export instead of being flattened to large world AABBs.
+- Early audit of placed rocks showed ordinary X/Z tilt on environment props. Full-rotation query `BoxCollider` support is now implemented as `obb_xyz` export data with quaternion rotation and server-side full-rotation OBB raycasts. Movement export can still flatten tilted boxes to conservative AABBs.
 - Mesh geometry export, prototype/instance encoding, and mesh narrowphase acceleration are not implemented yet.
 
 ## Design Direction
@@ -204,7 +204,7 @@ Recommended rules:
 - Keep `GameplayCollision` export unchanged.
 - Allow `BoxCollider` first. This is now implemented for arena and open-world scene exports.
 - During migration, projectile/LOS raycasts must augment the existing `GameplayCollision` set with the query set, not replace it scene-wide. Replacement is only safe later if coverage is complete or if the data model can suppress movement fallback per prefab/prototype.
-- For query export, reject or skip tilted `BoxCollider`s until full-rotation box narrowphase exists. Movement export may still flatten tilted movement boxes to conservative AABBs, but query collision should avoid knowingly baking huge false-positive boxes.
+- Query export supports full-rotation `BoxCollider`s as `obb_xyz` with quaternion rotation. Movement export may still flatten tilted movement boxes to conservative AABBs, but query collision should not knowingly bake huge false-positive AABBs.
 - Allow `MeshCollider` later once server mesh query support exists.
 - Provide an editor entry point parallel to the current gameplay collision export flow, and ensure CI or validation can detect stale generated collision data.
 
@@ -221,6 +221,13 @@ Editor tooling should validate:
 ## Phase 3: Export Simplified Mesh Collision
 
 For assets where boxes are not close enough, export simplified mesh collision data.
+
+Completed setup:
+
+- Full-rotation query boxes are supported before mesh export. This handles placed/tilted query `BoxCollider`s without converting them to oversized world AABBs.
+- Server broadphase indexes `obb_xyz` boxes by derived world AABB, and projectile/LOS narrowphase transforms rays into the box's local axes for deterministic OBB ray tests.
+- Invalid `obb_xyz` quaternions are load-time errors, not silently corrected to identity.
+- Movement collision exports must not contain `obb_xyz` until movement pushout supports true full-rotation OBBs. Current movement helpers retain a conservative AABB fallback only for synthetic/test data.
 
 Initial mesh policy:
 

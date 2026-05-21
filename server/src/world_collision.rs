@@ -105,6 +105,8 @@ struct GameplayCollisionBoxFile {
     shape: String,
     center: [f32; 3],
     size: [f32; 3],
+    #[serde(default)]
+    rotation: Vec<f32>,
     rotation_y_deg: f32,
 }
 
@@ -127,6 +129,23 @@ enum GameplayCollisionBox {
         half_x: f32,
         half_y: f32,
         half_z: f32,
+    },
+    ObbXyz {
+        center_x: f32,
+        center_y: f32,
+        center_z: f32,
+        half_x: f32,
+        half_y: f32,
+        half_z: f32,
+        axis_x_x: f32,
+        axis_x_y: f32,
+        axis_x_z: f32,
+        axis_y_x: f32,
+        axis_y_y: f32,
+        axis_y_z: f32,
+        axis_z_x: f32,
+        axis_z_y: f32,
+        axis_z_z: f32,
     },
 }
 
@@ -796,6 +815,20 @@ fn resolve_gameplay_horizontal_collision_y(
                     half_z,
                     player_radius,
                 ),
+                GameplayCollisionBox::ObbXyz { .. } => {
+                    // Movement files reject obb_xyz at load. This fallback exists only
+                    // to keep helper semantics conservative if test data constructs one.
+                    let bounds = Aabb3::from_gameplay_box(*collider);
+                    push_out_aabb_2d(
+                        out_x,
+                        out_z,
+                        (bounds.min_x + bounds.max_x) * 0.5,
+                        (bounds.min_z + bounds.max_z) * 0.5,
+                        (bounds.max_x - bounds.min_x) * 0.5,
+                        (bounds.max_z - bounds.min_z) * 0.5,
+                        player_radius,
+                    )
+                }
             };
         }
     }
@@ -858,6 +891,20 @@ fn resolve_open_world_gameplay_horizontal_collision_y(
                     half_z,
                     player_radius,
                 ),
+                GameplayCollisionBox::ObbXyz { .. } => {
+                    // Movement files reject obb_xyz at load. This fallback exists only
+                    // to keep helper semantics conservative if test data constructs one.
+                    let bounds = Aabb3::from_gameplay_box(*collider);
+                    push_out_aabb_2d(
+                        out_x,
+                        out_z,
+                        (bounds.min_x + bounds.max_x) * 0.5,
+                        (bounds.min_z + bounds.max_z) * 0.5,
+                        (bounds.max_x - bounds.min_x) * 0.5,
+                        (bounds.max_z - bounds.min_z) * 0.5,
+                        player_radius,
+                    )
+                }
             };
         }
     }
@@ -1011,6 +1058,13 @@ fn gameplay_box_overlaps_player_band(
         | GameplayCollisionBox::Aabb {
             center_y, half_y, ..
         } => (center_y, half_y),
+        GameplayCollisionBox::ObbXyz { .. } => {
+            let bounds = Aabb3::from_gameplay_box(collider);
+            (
+                (bounds.min_y + bounds.max_y) * 0.5,
+                (bounds.max_y - bounds.min_y) * 0.5,
+            )
+        }
     };
 
     head_y > center_y - half_y + COLLISION_EPSILON && foot_y < center_y + half_y - COLLISION_EPSILON
@@ -1028,6 +1082,7 @@ fn gameplay_box_top_y(collider: GameplayCollisionBox) -> f32 {
         | GameplayCollisionBox::Aabb {
             center_y, half_y, ..
         } => center_y + half_y,
+        GameplayCollisionBox::ObbXyz { .. } => Aabb3::from_gameplay_box(collider).max_y,
     }
 }
 
@@ -1058,6 +1113,13 @@ fn gameplay_box_contains_point_2d(collider: GameplayCollisionBox, x: f32, z: f32
             let local_z = rel_x * sin_y + rel_z * cos_y;
             local_x.abs() <= half_x + COLLISION_EPSILON
                 && local_z.abs() <= half_z + COLLISION_EPSILON
+        }
+        GameplayCollisionBox::ObbXyz { .. } => {
+            let bounds = Aabb3::from_gameplay_box(collider);
+            x >= bounds.min_x - COLLISION_EPSILON
+                && x <= bounds.max_x + COLLISION_EPSILON
+                && z >= bounds.min_z - COLLISION_EPSILON
+                && z <= bounds.max_z + COLLISION_EPSILON
         }
     }
 }
@@ -1406,7 +1468,9 @@ fn load_gameplay_collision_boxes() -> Vec<GameplayCollisionBox> {
     let file: GameplayCollisionLayoutFile = serde_json::from_str(GAMEPLAY_COLLISION_JSON)
         .expect("failed to parse gameplay_collision.shared.json");
 
-    parse_gameplay_collision_boxes(file)
+    let boxes = parse_gameplay_collision_boxes(file);
+    assert_no_full_rotation_movement_boxes(&boxes, "gameplay_collision.shared.json");
+    boxes
 }
 
 fn load_gameplay_query_collision_boxes() -> Vec<GameplayCollisionBox> {
@@ -1427,7 +1491,9 @@ fn load_open_world_gameplay_collision_boxes(
     let file: GameplayCollisionLayoutFile =
         serde_json::from_str(json).expect("failed to parse open-world gameplay collision JSON");
 
-    parse_gameplay_collision_boxes(file)
+    let boxes = parse_gameplay_collision_boxes(file);
+    assert_no_full_rotation_movement_boxes(&boxes, profile.scene_name);
+    boxes
 }
 
 fn load_open_world_gameplay_query_collision_boxes(
@@ -1464,6 +1530,37 @@ fn parse_gameplay_collision_boxes(file: GameplayCollisionLayoutFile) -> Vec<Game
                     half_y,
                     half_z,
                 },
+                "obb_xyz" => {
+                    let (
+                        axis_x_x,
+                        axis_x_y,
+                        axis_x_z,
+                        axis_y_x,
+                        axis_y_y,
+                        axis_y_z,
+                        axis_z_x,
+                        axis_z_y,
+                        axis_z_z,
+                    ) = quaternion_to_axes(&box_file.rotation)
+                        .expect("invalid obb_xyz rotation quaternion in gameplay collision data");
+                    GameplayCollisionBox::ObbXyz {
+                        center_x,
+                        center_y,
+                        center_z,
+                        half_x,
+                        half_y,
+                        half_z,
+                        axis_x_x,
+                        axis_x_y,
+                        axis_x_z,
+                        axis_y_x,
+                        axis_y_y,
+                        axis_y_z,
+                        axis_z_x,
+                        axis_z_y,
+                        axis_z_z,
+                    }
+                }
                 _ => {
                     let yaw = box_file.rotation_y_deg.to_radians();
                     GameplayCollisionBox::ObbY {
@@ -1480,6 +1577,62 @@ fn parse_gameplay_collision_boxes(file: GameplayCollisionLayoutFile) -> Vec<Game
             }
         })
         .collect()
+}
+
+fn assert_no_full_rotation_movement_boxes(boxes: &[GameplayCollisionBox], source: &str) {
+    assert!(
+        !boxes
+            .iter()
+            .any(|collider| matches!(collider, GameplayCollisionBox::ObbXyz { .. })),
+        "{source} contains obb_xyz boxes; full-rotation boxes are query-only until movement pushout supports true OBBs"
+    );
+}
+
+fn quaternion_to_axes(rotation: &[f32]) -> Option<(f32, f32, f32, f32, f32, f32, f32, f32, f32)> {
+    if rotation.len() < 4 {
+        return None;
+    }
+
+    let x = rotation[0];
+    let y = rotation[1];
+    let z = rotation[2];
+    let w = rotation[3];
+    if !x.is_finite() || !y.is_finite() || !z.is_finite() || !w.is_finite() {
+        return None;
+    }
+
+    let length_squared = x * x + y * y + z * z + w * w;
+    if length_squared <= COLLISION_EPSILON {
+        return None;
+    }
+
+    let inv_length = 1.0 / length_squared.sqrt();
+    let x = x * inv_length;
+    let y = y * inv_length;
+    let z = z * inv_length;
+    let w = w * inv_length;
+
+    let xx = x * x;
+    let yy = y * y;
+    let zz = z * z;
+    let xy = x * y;
+    let xz = x * z;
+    let yz = y * z;
+    let wx = w * x;
+    let wy = w * y;
+    let wz = w * z;
+
+    Some((
+        1.0 - 2.0 * (yy + zz),
+        2.0 * (xy + wz),
+        2.0 * (xz - wy),
+        2.0 * (xy - wz),
+        1.0 - 2.0 * (xx + zz),
+        2.0 * (yz + wx),
+        2.0 * (xz + wy),
+        2.0 * (yz - wx),
+        1.0 - 2.0 * (xx + yy),
+    ))
 }
 
 impl Aabb3 {
@@ -1518,6 +1671,38 @@ impl Aabb3 {
                     min_z: center_z - world_half_z,
                     max_x: center_x + world_half_x,
                     max_y: center_y + half_y,
+                    max_z: center_z + world_half_z,
+                }
+            }
+            GameplayCollisionBox::ObbXyz {
+                center_x,
+                center_y,
+                center_z,
+                half_x,
+                half_y,
+                half_z,
+                axis_x_x,
+                axis_x_y,
+                axis_x_z,
+                axis_y_x,
+                axis_y_y,
+                axis_y_z,
+                axis_z_x,
+                axis_z_y,
+                axis_z_z,
+            } => {
+                let world_half_x =
+                    axis_x_x.abs() * half_x + axis_y_x.abs() * half_y + axis_z_x.abs() * half_z;
+                let world_half_y =
+                    axis_x_y.abs() * half_x + axis_y_y.abs() * half_y + axis_z_y.abs() * half_z;
+                let world_half_z =
+                    axis_x_z.abs() * half_x + axis_y_z.abs() * half_y + axis_z_z.abs() * half_z;
+                Self {
+                    min_x: center_x - world_half_x,
+                    min_y: center_y - world_half_y,
+                    min_z: center_z - world_half_z,
+                    max_x: center_x + world_half_x,
+                    max_y: center_y + world_half_y,
                     max_z: center_z + world_half_z,
                 }
             }
@@ -2237,6 +2422,54 @@ fn try_world_gameplay_box_hit(
             half_y + request.radius,
             half_z + request.radius,
         ),
+        GameplayCollisionBox::ObbXyz {
+            center_x,
+            center_y,
+            center_z,
+            half_x,
+            half_y,
+            half_z,
+            axis_x_x,
+            axis_x_y,
+            axis_x_z,
+            axis_y_x,
+            axis_y_y,
+            axis_y_z,
+            axis_z_x,
+            axis_z_y,
+            axis_z_z,
+        } => {
+            let rel_origin_x = request.origin_x - center_x;
+            let rel_origin_y = request.origin_y - center_y;
+            let rel_origin_z = request.origin_z - center_z;
+
+            let local_origin_x =
+                rel_origin_x * axis_x_x + rel_origin_y * axis_x_y + rel_origin_z * axis_x_z;
+            let local_origin_y =
+                rel_origin_x * axis_y_x + rel_origin_y * axis_y_y + rel_origin_z * axis_y_z;
+            let local_origin_z =
+                rel_origin_x * axis_z_x + rel_origin_y * axis_z_y + rel_origin_z * axis_z_z;
+
+            let local_dir_x =
+                request.dir_x * axis_x_x + request.dir_y * axis_x_y + request.dir_z * axis_x_z;
+            let local_dir_y =
+                request.dir_x * axis_y_x + request.dir_y * axis_y_y + request.dir_z * axis_y_z;
+            let local_dir_z =
+                request.dir_x * axis_z_x + request.dir_y * axis_z_y + request.dir_z * axis_z_z;
+
+            raycast_centered_aabb(
+                local_origin_x,
+                local_origin_y,
+                local_origin_z,
+                local_dir_x,
+                local_dir_y,
+                local_dir_z,
+                request.max_distance,
+                half_x + request.radius,
+                half_y + request.radius,
+                half_z + request.radius,
+            )
+        }
     };
 
     let Some(t) = t else {
@@ -2306,9 +2539,11 @@ fn raycast_centered_aabb(
 #[cfg(test)]
 mod tests {
     use super::{
+        assert_no_full_rotation_movement_boxes, parse_gameplay_collision_boxes, quaternion_to_axes,
         raycast_gameplay_collision_boxes, raycast_movement_and_query_collision_boxes,
         resolve_world_spawn_position_with_layout_for_scene, try_world_gameplay_box_hit,
-        GameplayBoxBroadphase, GameplayCollisionBox,
+        GameplayBoxBroadphase, GameplayCollisionBox, GameplayCollisionBoxFile,
+        GameplayCollisionLayoutFile,
     };
     use crate::arena::{WorldRayHit, WorldRaycastRequest};
     use crate::open_world_scene::{
@@ -2341,6 +2576,71 @@ mod tests {
             half_z: 0.3,
             sin_y: yaw.sin(),
             cos_y: yaw.cos(),
+        }
+    }
+
+    fn test_obb_xyz_z_roll(center_x: f32, center_y: f32, center_z: f32) -> GameplayCollisionBox {
+        let half_angle = 90.0_f32.to_radians() * 0.5;
+        test_obb_xyz_from_quat(
+            center_x,
+            center_y,
+            center_z,
+            0.5,
+            2.0,
+            0.5,
+            [0.0, 0.0, half_angle.sin(), half_angle.cos()],
+        )
+    }
+
+    fn test_obb_xyz_from_quat(
+        center_x: f32,
+        center_y: f32,
+        center_z: f32,
+        half_x: f32,
+        half_y: f32,
+        half_z: f32,
+        rotation: [f32; 4],
+    ) -> GameplayCollisionBox {
+        let (
+            axis_x_x,
+            axis_x_y,
+            axis_x_z,
+            axis_y_x,
+            axis_y_y,
+            axis_y_z,
+            axis_z_x,
+            axis_z_y,
+            axis_z_z,
+        ) = quaternion_to_axes(&rotation).expect("test quaternion should be valid");
+        GameplayCollisionBox::ObbXyz {
+            center_x,
+            center_y,
+            center_z,
+            half_x,
+            half_y,
+            half_z,
+            axis_x_x,
+            axis_x_y,
+            axis_x_z,
+            axis_y_x,
+            axis_y_y,
+            axis_y_z,
+            axis_z_x,
+            axis_z_y,
+            axis_z_z,
+        }
+    }
+
+    fn assert_hit_t_close(actual: Option<WorldRayHit>, expected: Option<WorldRayHit>) {
+        match (actual, expected) {
+            (Some(actual), Some(expected)) => assert!(
+                (actual.t - expected.t).abs() < 0.001,
+                "expected hit t {}, got {}",
+                expected.t,
+                actual.t
+            ),
+            (None, None) => {}
+            (actual, expected) => panic!("hit mismatch: actual={actual:?}, expected={expected:?}"),
         }
     }
 
@@ -2384,6 +2684,133 @@ mod tests {
         let mut hit = None;
         raycast_gameplay_collision_boxes(&mut hit, request, colliders, &broadphase, None);
         hit
+    }
+
+    #[test]
+    fn obb_xyz_raycast_uses_full_rotation_axes() {
+        let collider = test_obb_xyz_z_roll(0.0, 0.0, 0.0);
+        let mut hit = None;
+
+        try_world_gameplay_box_hit(
+            &mut hit,
+            request(-3.0, 0.0, 0.0, 1.0, 0.0, 0.0, 8.0),
+            collider,
+        );
+
+        let hit = hit.expect("rolled OBB should expose its long local Y axis in world X");
+        assert!(
+            (hit.t - 0.9).abs() < 0.001,
+            "expected swept ray to hit expanded rolled OBB at t=0.9, got {}",
+            hit.t
+        );
+    }
+
+    #[test]
+    fn obb_xyz_identity_matches_aabb() {
+        let xyz = test_obb_xyz_from_quat(0.0, 0.0, 0.0, 0.45, 0.45, 0.45, [0.0, 0.0, 0.0, 1.0]);
+        let aabb = test_aabb(0.0, 0.0, 0.0);
+
+        for request in [
+            request(-2.0, 0.0, 0.0, 1.0, 0.0, 0.0, 5.0),
+            request(0.0, -2.0, 0.0, 0.0, 1.0, 0.0, 5.0),
+            request(0.0, 0.0, -2.0, 0.0, 0.0, 1.0, 5.0),
+            request(2.0, 2.0, 2.0, -0.57735026, -0.57735026, -0.57735026, 6.0),
+        ] {
+            assert_hit_t_close(
+                full_scan_hit(&[xyz], request),
+                full_scan_hit(&[aabb], request),
+            );
+        }
+    }
+
+    #[test]
+    fn obb_xyz_y_only_quaternion_matches_obb_y() {
+        let yaw_deg = 37.0_f32;
+        let half_yaw = yaw_deg.to_radians() * 0.5;
+        let xyz = test_obb_xyz_from_quat(
+            1.0,
+            0.5,
+            -2.0,
+            0.65,
+            0.4,
+            0.3,
+            [0.0, half_yaw.sin(), 0.0, half_yaw.cos()],
+        );
+        let obb_y = test_obb(1.0, 0.5, -2.0, yaw_deg);
+
+        for request in [
+            request(-2.0, 0.5, -2.0, 1.0, 0.0, 0.0, 8.0),
+            request(1.0, 0.5, -5.0, 0.0, 0.0, 1.0, 8.0),
+            request(3.0, 1.0, 1.0, -0.5345225, -0.26726124, -0.8017837, 8.0),
+        ] {
+            assert_hit_t_close(
+                full_scan_hit(&[xyz], request),
+                full_scan_hit(&[obb_y], request),
+            );
+        }
+    }
+
+    #[test]
+    fn obb_xyz_quaternion_sign_is_equivalent() {
+        let q = [0.2, -0.3, 0.4, 0.84];
+        let neg_q = [-q[0], -q[1], -q[2], -q[3]];
+        let positive = test_obb_xyz_from_quat(0.25, -0.5, 1.0, 0.75, 1.2, 0.5, q);
+        let negative = test_obb_xyz_from_quat(0.25, -0.5, 1.0, 0.75, 1.2, 0.5, neg_q);
+
+        for request in [
+            request(-4.0, -0.5, 1.0, 1.0, 0.0, 0.0, 8.0),
+            request(0.25, 3.0, 1.0, 0.0, -1.0, 0.0, 8.0),
+            request(2.5, 1.5, -2.0, -0.557086, -0.371391, 0.742781, 8.0),
+        ] {
+            assert_hit_t_close(
+                full_scan_hit(&[positive], request),
+                full_scan_hit(&[negative], request),
+            );
+        }
+    }
+
+    #[test]
+    fn obb_xyz_broadphase_matches_full_scan_hits() {
+        let mut colliders = vec![
+            test_obb_xyz_from_quat(2.0, 0.0, 0.0, 0.75, 1.2, 0.5, [0.2, -0.3, 0.4, 0.84]),
+            test_obb_xyz_z_roll(8.0, 0.0, 0.0),
+        ];
+        for offset in 0..8 {
+            colliders.push(test_aabb(100.0 + offset as f32 * 4.0, 0.0, 0.0));
+        }
+
+        for request in [
+            request(-4.0, 0.0, 0.0, 1.0, 0.0, 0.0, 16.0),
+            request(2.0, -4.0, 0.0, 0.0, 1.0, 0.0, 10.0),
+            request(8.0, 0.0, -4.0, 0.0, 0.0, 1.0, 10.0),
+            request(12.0, 2.0, 2.0, -0.8728715, -0.21821788, -0.43643576, 12.0),
+        ] {
+            assert_hit_t_close(
+                broadphase_hit(&colliders, request),
+                full_scan_hit(&colliders, request),
+            );
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "invalid obb_xyz rotation quaternion")]
+    fn obb_xyz_rejects_invalid_quaternion_at_parse() {
+        let _ = parse_gameplay_collision_boxes(GameplayCollisionLayoutFile {
+            boxes: vec![GameplayCollisionBoxFile {
+                shape: "obb_xyz".to_string(),
+                center: [0.0, 0.0, 0.0],
+                size: [1.0, 1.0, 1.0],
+                rotation: vec![0.0, 0.0, 0.0, 0.0],
+                rotation_y_deg: 0.0,
+            }],
+        });
+    }
+
+    #[test]
+    #[should_panic(expected = "full-rotation boxes are query-only")]
+    fn movement_collision_rejects_obb_xyz() {
+        let boxes = vec![test_obb_xyz_z_roll(0.0, 0.0, 0.0)];
+        assert_no_full_rotation_movement_boxes(&boxes, "test_movement.shared.json");
     }
 
     #[test]

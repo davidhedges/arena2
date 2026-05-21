@@ -44,6 +44,14 @@ namespace Arena.Editor
             public float[] center = Array.Empty<float>();
             public float[] size = Array.Empty<float>();
             public float rotation_y_deg;
+            public float[] rotation = Array.Empty<float>();
+        }
+
+        private enum TiltedBoxExportMode
+        {
+            WorldAabb,
+            FullRotation,
+            Reject,
         }
 
         [Serializable]
@@ -88,7 +96,7 @@ namespace Arena.Editor
                 queryWarnings,
                 queryErrors,
                 requireArenaEnvironmentVariantSource: false,
-                allowTiltedBoxes: false);
+                tiltedBoxExportMode: TiltedBoxExportMode.FullRotation);
             WriteExportLayout(RelativeServerGameplayQueryCollisionPath, RelativeBundledGameplayQueryCollisionPath, queryBoxes);
 
             SyncArenaLayoutToBundled(logSummary: false);
@@ -1156,7 +1164,7 @@ namespace Arena.Editor
                 warnings,
                 errors,
                 requireArenaEnvironmentVariantSource: true,
-                allowTiltedBoxes: false);
+                tiltedBoxExportMode: TiltedBoxExportMode.FullRotation);
             WriteExportLayout(SceneServerQueryCollisionPath(dataKey), SceneBundledQueryCollisionPath(dataKey), boxes);
 
             Debug.Log(
@@ -1172,7 +1180,7 @@ namespace Arena.Editor
             List<string> warnings,
             List<string>? errors = null,
             bool requireArenaEnvironmentVariantSource = false,
-            bool allowTiltedBoxes = true)
+            TiltedBoxExportMode tiltedBoxExportMode = TiltedBoxExportMode.WorldAabb)
         {
             var boxes = new List<ExportBox>();
             foreach (var collider in UnityEngine.Object.FindObjectsByType<BoxCollider>())
@@ -1196,7 +1204,7 @@ namespace Arena.Editor
                     continue;
                 }
 
-                if (TryBuildExportBox(collider, warnings, errors, allowTiltedBoxes, out ExportBox? exportBox))
+                if (TryBuildExportBox(collider, warnings, errors, tiltedBoxExportMode, out ExportBox? exportBox))
                     boxes.Add(exportBox!);
             }
 
@@ -1208,7 +1216,7 @@ namespace Arena.Editor
             BoxCollider collider,
             List<string> warnings,
             List<string>? errors,
-            bool allowTiltedBoxes,
+            TiltedBoxExportMode tiltedBoxExportMode,
             out ExportBox? exportBox)
         {
             Vector3 euler = collider.transform.rotation.eulerAngles;
@@ -1220,25 +1228,36 @@ namespace Arena.Editor
                 string message =
                     $"{GetHierarchyPath(collider.transform)} at {FormatVector3(collider.bounds.center)} " +
                     $"has X/Z rotation ({euler.x:F2}, {euler.z:F2}).";
-                if (!allowTiltedBoxes)
+                if (tiltedBoxExportMode == TiltedBoxExportMode.Reject)
                 {
                     errors?.Add($"{message} Skipping query export until full-rotation query boxes or mesh collision are supported.");
                     exportBox = null;
                     return false;
                 }
 
-                warnings.Add($"{message} Exporting as world AABB.");
+                if (tiltedBoxExportMode == TiltedBoxExportMode.WorldAabb)
+                    warnings.Add($"{message} Exporting as world AABB.");
             }
 
             Vector3 center;
             Vector3 size;
             string shape;
             float rotationYDeg;
-            if (isTilted)
+            Quaternion rotation = Quaternion.identity;
+            if (isTilted && tiltedBoxExportMode == TiltedBoxExportMode.WorldAabb)
             {
                 center = collider.bounds.center;
                 size = collider.bounds.size;
                 shape = "aabb";
+                rotationYDeg = 0f;
+            }
+            else if (isTilted)
+            {
+                center = collider.transform.TransformPoint(collider.center);
+                size = Vector3.Scale(collider.size, collider.transform.lossyScale);
+                size = new Vector3(Mathf.Abs(size.x), Mathf.Abs(size.y), Mathf.Abs(size.z));
+                rotation = collider.transform.rotation;
+                shape = "obb_xyz";
                 rotationYDeg = 0f;
             }
             else
@@ -1257,6 +1276,9 @@ namespace Arena.Editor
                 center = new[] { center.x, center.y, center.z },
                 size = new[] { size.x, size.y, size.z },
                 rotation_y_deg = rotationYDeg,
+                rotation = shape == "obb_xyz"
+                    ? new[] { rotation.x, rotation.y, rotation.z, rotation.w }
+                    : Array.Empty<float>(),
             };
             return true;
         }
