@@ -750,6 +750,8 @@ namespace Arena.Editor
         {
             int changed = 0;
             Scene rootScene = root.scene;
+            var clearedMovementChildren = new HashSet<GameObject>();
+            var clearedQueryChildren = new HashSet<GameObject>();
             foreach (BoxCollider collider in root.GetComponentsInChildren<BoxCollider>(includeInactive: false)
                          .OrderBy(collider => GetHierarchyPath(collider.transform), StringComparer.Ordinal))
             {
@@ -781,8 +783,15 @@ namespace Arena.Editor
                     : $"{GameplayCollisionChildName}_{SanitizeObjectName(owner.name)}";
                 GameObject movementChild = GetOrCreateColliderChild(root, childName, gameplayCollisionLayer);
                 CopyWorldTransformIntoRootChild(collider.transform, root.transform, movementChild.transform);
-                CopyBoxColliderToQueryChild(root, collider, gameplayQueryCollisionLayer, ref queryObjectsCreated, ref queryObjectsUpdated);
-                RemoveNonEquivalentBoxColliders(movementChild, collider);
+                CopyBoxColliderToQueryChild(
+                    root,
+                    collider,
+                    gameplayQueryCollisionLayer,
+                    ref queryObjectsCreated,
+                    ref queryObjectsUpdated,
+                    clearedQueryChildren);
+                if (clearedMovementChildren.Add(movementChild))
+                    RemoveBoxColliders(movementChild);
                 if (!HasEquivalentBoxCollider(movementChild, collider))
                 {
                     BoxCollider copy = Undo.AddComponent<BoxCollider>(movementChild);
@@ -878,6 +887,7 @@ namespace Arena.Editor
                 .ToList();
 
             int boxIndex = 0;
+            var clearedBoxQueryChildren = new HashSet<GameObject>();
             foreach (BoxCollider source in movementBoxes)
             {
                 if (meshColliders.Count > 0 && HasAnyQueryCollider(root))
@@ -886,7 +896,14 @@ namespace Arena.Editor
                 string childName = movementBoxes.Count == 1
                     ? GameplayQueryCollisionChildName
                     : $"{GameplayQueryCollisionChildName}_{SanitizeObjectName(source.gameObject.name)}_{boxIndex + 1}";
-                CopyBoxColliderToQueryChild(root, source, gameplayQueryCollisionLayer, childName, ref queryObjectsCreated, ref queryObjectsUpdated);
+                CopyBoxColliderToQueryChild(
+                    root,
+                    source,
+                    gameplayQueryCollisionLayer,
+                    childName,
+                    ref queryObjectsCreated,
+                    ref queryObjectsUpdated,
+                    clearedBoxQueryChildren);
                 boxIndex++;
             }
         }
@@ -896,14 +913,16 @@ namespace Arena.Editor
             BoxCollider source,
             int gameplayQueryCollisionLayer,
             ref int queryObjectsCreated,
-            ref int queryObjectsUpdated)
+            ref int queryObjectsUpdated,
+            HashSet<GameObject>? clearedQueryChildren = null)
             => CopyBoxColliderToQueryChild(
                 root,
                 source,
                 gameplayQueryCollisionLayer,
                 GameplayQueryCollisionChildName,
                 ref queryObjectsCreated,
-                ref queryObjectsUpdated);
+                ref queryObjectsUpdated,
+                clearedQueryChildren);
 
         private static void CopyBoxColliderToQueryChild(
             GameObject root,
@@ -911,7 +930,8 @@ namespace Arena.Editor
             int gameplayQueryCollisionLayer,
             string childName,
             ref int queryObjectsCreated,
-            ref int queryObjectsUpdated)
+            ref int queryObjectsUpdated,
+            HashSet<GameObject>? clearedQueryChildren = null)
         {
             GameObject? existing = GetExistingChild(root, childName);
             GameObject queryChild;
@@ -931,8 +951,11 @@ namespace Arena.Editor
             Undo.RecordObject(queryChild, "Prepare Query Collision");
             queryChild.layer = gameplayQueryCollisionLayer;
             CopyWorldTransformIntoRootChild(source.transform, root.transform, queryChild.transform);
-            RemoveMeshColliders(queryChild);
-            RemoveNonEquivalentBoxColliders(queryChild, source);
+            if (clearedQueryChildren == null || clearedQueryChildren.Add(queryChild))
+            {
+                RemoveMeshColliders(queryChild);
+                RemoveBoxColliders(queryChild);
+            }
             if (!HasEquivalentBoxCollider(queryChild, source))
             {
                 BoxCollider target = Undo.AddComponent<BoxCollider>(queryChild);
@@ -1021,20 +1044,10 @@ namespace Arena.Editor
                 Approximately(target.center, source.center) &&
                 Approximately(target.size, source.size));
 
-        private static void RemoveNonEquivalentBoxColliders(GameObject targetObject, BoxCollider source)
+        private static void RemoveBoxColliders(GameObject targetObject)
         {
             foreach (BoxCollider target in targetObject.GetComponents<BoxCollider>())
-            {
-                if (target.enabled == source.enabled &&
-                    target.isTrigger == source.isTrigger &&
-                    Approximately(target.center, source.center) &&
-                    Approximately(target.size, source.size))
-                {
-                    continue;
-                }
-
                 Undo.DestroyObjectImmediate(target);
-            }
         }
 
         private static void RemoveMeshColliders(GameObject targetObject)
