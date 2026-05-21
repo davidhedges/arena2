@@ -17,6 +17,7 @@ use crate::open_world_terrain::{
     procedural_open_world_enabled,
 };
 use serde::Deserialize;
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
@@ -64,6 +65,10 @@ const GAMEPLAY_BROADPHASE_MIN_CELL_SIZE: f32 = 2.0;
 const GAMEPLAY_BROADPHASE_MAX_CELL_SIZE: f32 = 16.0;
 const GAMEPLAY_BROADPHASE_FALLBACK_CELL_COUNT: i64 = 256;
 const GAMEPLAY_BROADPHASE_FALLBACK_CANDIDATE_DIVISOR: usize = 4;
+
+thread_local! {
+    static GAMEPLAY_BROADPHASE_CANDIDATE_SCRATCH: RefCell<Vec<usize>> = RefCell::new(Vec::new());
+}
 #[derive(Clone, Copy, Debug)]
 enum ColliderShape2d {
     Circle {
@@ -139,6 +144,10 @@ struct GameplayBoxBroadphase {
     cell_size: f32,
     cells: HashMap<(i32, i32, i32), Vec<usize>>,
     collider_count: usize,
+    index_entries: usize,
+    max_cell_occupancy: usize,
+    max_cells_per_collider: usize,
+    unindexed_collider_count: usize,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -147,6 +156,10 @@ pub(crate) struct WorldCollisionPreloadSummary {
     pub arena_gameplay_boxes: u32,
     pub open_world_gameplay_boxes: u32,
     pub broadphase_cells: u32,
+    pub broadphase_index_entries: u32,
+    pub broadphase_max_cell_occupancy: u32,
+    pub broadphase_max_cells_per_collider: u32,
+    pub broadphase_unindexed_colliders: u32,
     pub generated_open_world_colliders: u32,
 }
 
@@ -594,12 +607,19 @@ fn open_world_profile_from_name(scene_name: Option<&str>) -> &'static OpenWorldS
 
 pub(crate) fn preload_world_collision_data() -> WorldCollisionPreloadSummary {
     let arena_gameplay_boxes = gameplay_collision_boxes().len();
+    let arena_broadphase = gameplay_collision_broadphase();
     let mut summary = WorldCollisionPreloadSummary {
         scene_count: OPEN_WORLD_SCENE_PROFILES.len().min(u32::MAX as usize) as u32,
         arena_gameplay_boxes: arena_gameplay_boxes.min(u32::MAX as usize) as u32,
-        broadphase_cells: gameplay_collision_broadphase()
-            .cells
-            .len()
+        broadphase_cells: arena_broadphase.cells.len().min(u32::MAX as usize) as u32,
+        broadphase_index_entries: arena_broadphase.index_entries.min(u32::MAX as usize) as u32,
+        broadphase_max_cell_occupancy: arena_broadphase.max_cell_occupancy.min(u32::MAX as usize)
+            as u32,
+        broadphase_max_cells_per_collider: arena_broadphase
+            .max_cells_per_collider
+            .min(u32::MAX as usize) as u32,
+        broadphase_unindexed_colliders: arena_broadphase
+            .unindexed_collider_count
             .min(u32::MAX as usize) as u32,
         ..Default::default()
     };
@@ -607,9 +627,8 @@ pub(crate) fn preload_world_collision_data() -> WorldCollisionPreloadSummary {
     for profile in OPEN_WORLD_SCENE_PROFILES {
         let generated_colliders = open_world_colliders(profile).len();
         let gameplay_boxes = open_world_gameplay_collision_boxes(profile).len();
-        let broadphase_cells = open_world_gameplay_collision_broadphase(profile)
-            .cells
-            .len();
+        let broadphase = open_world_gameplay_collision_broadphase(profile);
+        let broadphase_cells = broadphase.cells.len();
 
         summary.generated_open_world_colliders = summary
             .generated_open_world_colliders
@@ -620,6 +639,18 @@ pub(crate) fn preload_world_collision_data() -> WorldCollisionPreloadSummary {
         summary.broadphase_cells = summary
             .broadphase_cells
             .saturating_add(broadphase_cells.min(u32::MAX as usize) as u32);
+        summary.broadphase_index_entries = summary
+            .broadphase_index_entries
+            .saturating_add(broadphase.index_entries.min(u32::MAX as usize) as u32);
+        summary.broadphase_max_cell_occupancy = summary
+            .broadphase_max_cell_occupancy
+            .max(broadphase.max_cell_occupancy.min(u32::MAX as usize) as u32);
+        summary.broadphase_max_cells_per_collider = summary
+            .broadphase_max_cells_per_collider
+            .max(broadphase.max_cells_per_collider.min(u32::MAX as usize) as u32);
+        summary.broadphase_unindexed_colliders = summary
+            .broadphase_unindexed_colliders
+            .saturating_add(broadphase.unindexed_collider_count.min(u32::MAX as usize) as u32);
     }
 
     summary
@@ -1374,6 +1405,7 @@ impl GameplayBoxBroadphase {
     fn build(colliders: &[GameplayCollisionBox]) -> Self {
         let mut bounds = Vec::with_capacity(colliders.len());
         let mut extents = Vec::with_capacity(colliders.len());
+        let mut unindexed_collider_count = 0usize;
         for collider in colliders {
             let aabb = Aabb3::from_gameplay_box(*collider);
             if aabb.is_finite() {
@@ -1393,16 +1425,29 @@ impl GameplayBoxBroadphase {
         );
 
         let mut cells: HashMap<(i32, i32, i32), Vec<usize>> = HashMap::new();
+        let mut max_cells_per_collider = 0usize;
         for (index, aabb) in bounds.into_iter().enumerate() {
             if !aabb.is_finite() {
+                unindexed_collider_count = unindexed_collider_count.saturating_add(1);
                 continue;
             }
 
             let Some((min_x, min_y, min_z, max_x, max_y, max_z)) =
                 cell_range_for_aabb(aabb, cell_size)
             else {
+                unindexed_collider_count = unindexed_collider_count.saturating_add(1);
                 continue;
             };
+
+            let cells_x = i64::from(max_x) - i64::from(min_x) + 1;
+            let cells_y = i64::from(max_y) - i64::from(min_y) + 1;
+            let cells_z = i64::from(max_z) - i64::from(min_z) + 1;
+            let cells_for_collider = cells_x
+                .checked_mul(cells_y)
+                .and_then(|count| count.checked_mul(cells_z))
+                .and_then(|count| usize::try_from(count).ok())
+                .unwrap_or(usize::MAX);
+            max_cells_per_collider = max_cells_per_collider.max(cells_for_collider);
 
             for cell_x in min_x..=max_x {
                 for cell_y in min_y..=max_y {
@@ -1415,11 +1460,17 @@ impl GameplayBoxBroadphase {
                 }
             }
         }
+        let index_entries = cells.values().map(Vec::len).sum();
+        let max_cell_occupancy = cells.values().map(Vec::len).max().unwrap_or(0);
 
         Self {
             cell_size,
             cells,
             collider_count: colliders.len(),
+            index_entries,
+            max_cell_occupancy,
+            max_cells_per_collider,
+            unindexed_collider_count,
         }
     }
 
@@ -1427,6 +1478,9 @@ impl GameplayBoxBroadphase {
         candidates.clear();
         if self.collider_count == 0 {
             return true;
+        }
+        if self.unindexed_collider_count > 0 {
+            return false;
         }
 
         let Some(query_bounds) = Aabb3::from_raycast_request(request) else {
@@ -1502,22 +1556,29 @@ fn raycast_gameplay_collision_boxes(
     stats: Option<&mut WorldRaycastStats>,
 ) {
     let mut stats = stats;
-    let mut candidate_indices = Vec::new();
-    if broadphase.query_into(request, &mut candidate_indices) {
-        if let Some(stats) = stats.as_deref_mut() {
-            let candidate_count = candidate_indices.len().min(u32::MAX as usize) as u32;
-            stats.world_gameplay_broadphase_candidates = stats
-                .world_gameplay_broadphase_candidates
-                .saturating_add(candidate_count);
-            stats.world_gameplay_narrowphase_tests = stats
-                .world_gameplay_narrowphase_tests
-                .saturating_add(candidate_count);
-        }
-        for index in candidate_indices.iter().copied() {
-            if let Some(collider) = colliders.get(index) {
-                try_world_gameplay_box_hit(best, request, *collider);
+    let broadphase_hit_tested = GAMEPLAY_BROADPHASE_CANDIDATE_SCRATCH.with(|scratch| {
+        let mut candidate_indices = scratch.borrow_mut();
+        if broadphase.query_into(request, &mut candidate_indices) {
+            if let Some(stats) = stats.as_deref_mut() {
+                let candidate_count = candidate_indices.len().min(u32::MAX as usize) as u32;
+                stats.world_gameplay_broadphase_candidates = stats
+                    .world_gameplay_broadphase_candidates
+                    .saturating_add(candidate_count);
+                stats.world_gameplay_narrowphase_tests = stats
+                    .world_gameplay_narrowphase_tests
+                    .saturating_add(candidate_count);
             }
+            for index in candidate_indices.iter().copied() {
+                if let Some(collider) = colliders.get(index) {
+                    try_world_gameplay_box_hit(best, request, *collider);
+                }
+            }
+            true
+        } else {
+            false
         }
+    });
+    if broadphase_hit_tested {
         return;
     }
 
@@ -1525,9 +1586,6 @@ fn raycast_gameplay_collision_boxes(
         let collider_count = colliders.len().min(u32::MAX as usize) as u32;
         stats.world_gameplay_full_scan_fallbacks =
             stats.world_gameplay_full_scan_fallbacks.saturating_add(1);
-        stats.world_gameplay_broadphase_candidates = stats
-            .world_gameplay_broadphase_candidates
-            .saturating_add(collider_count);
         stats.world_gameplay_narrowphase_tests = stats
             .world_gameplay_narrowphase_tests
             .saturating_add(collider_count);
@@ -2234,8 +2292,48 @@ mod tests {
             Some(&mut fallback_stats),
         );
         assert_eq!(fallback_stats.world_gameplay_full_scan_fallbacks, 1);
+        assert_eq!(fallback_stats.world_gameplay_broadphase_candidates, 0);
         assert_eq!(
             fallback_stats.world_gameplay_narrowphase_tests,
+            colliders.len() as u32
+        );
+    }
+
+    #[test]
+    fn gameplay_box_broadphase_falls_back_when_any_collider_is_unindexed() {
+        let colliders = vec![
+            GameplayCollisionBox::Aabb {
+                center_x: 0.0,
+                center_y: 0.0,
+                center_z: 0.0,
+                half_x: f32::NAN,
+                half_y: 0.45,
+                half_z: 0.45,
+            },
+            test_aabb(4.0, 0.0, 0.0),
+        ];
+        let broadphase = GameplayBoxBroadphase::build(&colliders);
+        assert_eq!(broadphase.unindexed_collider_count, 1);
+
+        let mut candidates = Vec::new();
+        assert!(
+            !broadphase.query_into(request(-1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 8.0), &mut candidates),
+            "queries must fall back while any collider is unindexed"
+        );
+
+        let mut hit = None;
+        let mut stats = super::WorldRaycastStats::default();
+        raycast_gameplay_collision_boxes(
+            &mut hit,
+            request(-1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 8.0),
+            &colliders,
+            &broadphase,
+            Some(&mut stats),
+        );
+        assert_eq!(stats.world_gameplay_full_scan_fallbacks, 1);
+        assert_eq!(stats.world_gameplay_broadphase_candidates, 0);
+        assert_eq!(
+            stats.world_gameplay_narrowphase_tests,
             colliders.len() as u32
         );
     }
@@ -2265,6 +2363,9 @@ mod tests {
         assert!(summary.arena_gameplay_boxes > 0);
         assert!(summary.open_world_gameplay_boxes > 0);
         assert!(summary.broadphase_cells > 0);
+        assert!(summary.broadphase_index_entries >= summary.broadphase_cells);
+        assert!(summary.broadphase_max_cell_occupancy > 0);
+        assert!(summary.broadphase_max_cells_per_collider > 0);
     }
 
     #[test]

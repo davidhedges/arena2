@@ -351,13 +351,23 @@ pub(crate) fn ensure_game_loop_schedule(ctx: &ReducerContext) {
 fn bootstrap_server_state(ctx: &ReducerContext) {
     let collision_summary = preload_world_collision_data();
     log::info!(
-        "[INIT] Preloaded world collision data scenes={} arena_gameplay_boxes={} open_world_gameplay_boxes={} broadphase_cells={} generated_open_world_colliders={}",
+        "[INIT] Preloaded world collision data scenes={} arena_gameplay_boxes={} open_world_gameplay_boxes={} broadphase_cells={} broadphase_index_entries={} broadphase_max_cell_occupancy={} broadphase_max_cells_per_collider={} broadphase_unindexed_colliders={} generated_open_world_colliders={}",
         collision_summary.scene_count,
         collision_summary.arena_gameplay_boxes,
         collision_summary.open_world_gameplay_boxes,
         collision_summary.broadphase_cells,
+        collision_summary.broadphase_index_entries,
+        collision_summary.broadphase_max_cell_occupancy,
+        collision_summary.broadphase_max_cells_per_collider,
+        collision_summary.broadphase_unindexed_colliders,
         collision_summary.generated_open_world_colliders
     );
+    if collision_summary.broadphase_unindexed_colliders > 0 {
+        log::warn!(
+            "[INIT] World collision broadphase left {} gameplay collider(s) unindexed; affected queries will fall back to full scan to avoid false negatives.",
+            collision_summary.broadphase_unindexed_colliders
+        );
+    }
 
     sync_progression_catalogs(ctx);
     sync_combat_projectile_definitions(ctx);

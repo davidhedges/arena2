@@ -39,6 +39,8 @@ use crate::combat::combat_projectile_tick_metrics as _;
 use crate::combat::projectile_presentation_event as _;
 
 const METRICS_ROW_KEY: &str = "latest";
+const WORLD_COLLISION_FALLBACK_WARN_RATIO_PER_MILLE: u32 = 100;
+const WORLD_COLLISION_FALLBACK_WARN_MIN_QUERIES: u32 = 10;
 
 struct ProjectileAdvance {
     impacted: bool,
@@ -1904,7 +1906,27 @@ fn record_projectile_tick_metrics(
             .saturating_add(u64::from(metrics.block_parry_events_emitted)),
     };
 
+    warn_on_high_world_collision_fallback_ratio(&row);
     upsert_projectile_tick_metrics_row(ctx, row);
+}
+
+fn warn_on_high_world_collision_fallback_ratio(row: &CombatProjectileTickMetrics) {
+    if row.world_collision_queries < WORLD_COLLISION_FALLBACK_WARN_MIN_QUERIES {
+        return;
+    }
+
+    let fallback_per_mille = row.world_gameplay_full_scan_fallbacks.saturating_mul(1000)
+        / row.world_collision_queries.max(1);
+    if fallback_per_mille >= WORLD_COLLISION_FALLBACK_WARN_RATIO_PER_MILLE {
+        log::warn!(
+            "[PROJECTILES] High world gameplay broadphase fallback ratio: fallbacks={} queries={} ratio={:.1}% narrowphase_tests={} candidates={}",
+            row.world_gameplay_full_scan_fallbacks,
+            row.world_collision_queries,
+            fallback_per_mille as f32 / 10.0,
+            row.world_gameplay_narrowphase_tests,
+            row.world_gameplay_broadphase_candidates
+        );
+    }
 }
 
 fn upsert_projectile_tick_metrics_row(ctx: &ReducerContext, row: CombatProjectileTickMetrics) {

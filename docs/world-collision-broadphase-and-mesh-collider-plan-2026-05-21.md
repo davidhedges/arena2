@@ -47,9 +47,10 @@ Arrows are not special-cased in the collision algorithm. `ARROW_STANDARD` is a n
 
 Current branch status:
 
-- Phase 1 server broadphase for existing exported gameplay boxes is implemented. It builds static per-scene 3D uniform grids, preserves original collider index order before narrowphase, and falls back to full scan for oversized queries.
+- Phase 1 server broadphase for existing exported gameplay boxes is implemented. It builds static per-scene 3D uniform grids, preserves original collider index order before narrowphase, and falls back to full scan for oversized queries or unindexed bad data.
 - Collision data is preloaded during server bootstrap so the first projectile query in a scene does not pay the broadphase build cost.
-- Projectile metrics now report world broadphase candidates, gameplay-box narrowphase tests, full-scan fallbacks, and generated open-world geometry point checks. The projectile load harness surfaces those numbers and fallback ratios.
+- Projectile metrics now report world broadphase candidates, gameplay-box narrowphase tests, full-scan fallbacks, and generated open-world geometry point checks. Phase 1 also logs broadphase occupancy/index health at bootstrap and warns when runtime fallback ratio is high.
+- The projectile load harness measurement is intentionally deferred; Phase 1 is considered wrapped without it for now.
 - The Unity project now has a `GameplayQueryCollision` layer and editor menu items to audit, mark, or prepare selected `BoxCollider`/`MeshCollider` objects for future projectile/LOS query collision authoring.
 - `Arena/OpenWorld/Scene Prep/3c Prepare Selected Variant Collision Roles` is the preferred manual cleanup tool for selected variant assets, selected Project folders containing variants, prefab-mode roots, scene instances, or scene containers. It expands Project folder selections to prefab assets underneath, expands scene/container selections to the placed prefab instance roots underneath, edits selected prefab assets by loading/saving prefab contents, keeps visual roots/LOD objects off collision layers, copies visual/root `BoxCollider`s onto dedicated `ArenaGameplayCollision*` children, copies those same author boxes to `ArenaGameplayQueryCollision*` when they are the best available query shape, preserves the original visual/root box components on `Default` as authoring source data, and otherwise creates `ArenaGameplayQueryCollision*` children from mesh colliders on `GameplayQueryCollision`.
 - Early audit of a placed rock showed ordinary X/Z tilt on environment props. The mesh/query design should therefore support full per-instance rotation instead of assuming Y-rotation-only sharing.
@@ -174,7 +175,8 @@ Metrics to add or expose:
 - Full-scan fallback count.
 - Full-scan fallback ratio by scene/query type, with warnings when the ratio exceeds a threshold such as `10%` over a rolling window.
 - First-query grid build time or eager-init time.
-- Worst tick time under projectile load harness.
+- Broadphase index health at preload time: cell count, index entries, max cell occupancy, max cells per collider, and unindexed collider count.
+- Worst tick time under projectile load harness is deferred until a dedicated projectile-load measurement pass.
 
 Success criteria:
 
@@ -182,7 +184,7 @@ Success criteria:
 - Existing collision tests pass.
 - Add property tests that compare full scan vs broadphase. For randomized scenes, collider boxes, ray segments, and projectile radii, the broadphase candidate set must include every collider that the full scan would hit.
 - Add deterministic-order tests. For identical data and query input, broadphase candidate order entering narrowphase must match original collider index order.
-- Projectile load harness shows substantially fewer world narrowphase checks in large scenes.
+- Projectile load harness proof is deferred by decision. Phase 1 completion relies on focused correctness tests, preload/index health metrics, fallback-ratio warnings, and existing projectile metrics.
 
 Initialization requirement:
 
