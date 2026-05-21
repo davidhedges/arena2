@@ -37,33 +37,51 @@ const OASIS_DAY_HEIGHTFIELD_JSON: &str =
     include_str!("world_data/oasis_day.heightfield.shared.json");
 const OASIS_DAY_GAMEPLAY_COLLISION_JSON: &str =
     include_str!("world_data/oasis_day.collision.shared.json");
+const OASIS_DAY_GAMEPLAY_QUERY_COLLISION_JSON: &str =
+    include_str!("world_data/oasis_day.query_collision.shared.json");
 const ADVENTURE_ISLAND_HEIGHTFIELD_JSON: &str =
     include_str!("world_data/adventure_island.heightfield.shared.json");
 const ADVENTURE_ISLAND_GAMEPLAY_COLLISION_JSON: &str =
     include_str!("world_data/adventure_island.collision.shared.json");
+const ADVENTURE_ISLAND_GAMEPLAY_QUERY_COLLISION_JSON: &str =
+    include_str!("world_data/adventure_island.query_collision.shared.json");
 const DESERT_DAY_HEIGHTFIELD_JSON: &str =
     include_str!("world_data/desert_day.heightfield.shared.json");
 const DESERT_DAY_GAMEPLAY_COLLISION_JSON: &str =
     include_str!("world_data/desert_day.collision.shared.json");
+const DESERT_DAY_GAMEPLAY_QUERY_COLLISION_JSON: &str =
+    include_str!("world_data/desert_day.query_collision.shared.json");
 const DOCKS_DAY_HEIGHTFIELD_JSON: &str =
     include_str!("world_data/docks_day.heightfield.shared.json");
 const DOCKS_DAY_GAMEPLAY_COLLISION_JSON: &str =
     include_str!("world_data/docks_day.collision.shared.json");
+const DOCKS_DAY_GAMEPLAY_QUERY_COLLISION_JSON: &str =
+    include_str!("world_data/docks_day.query_collision.shared.json");
 const GIANT_SKELETON_HEIGHTFIELD_JSON: &str =
     include_str!("world_data/giant_skeleton.heightfield.shared.json");
 const GIANT_SKELETON_GAMEPLAY_COLLISION_JSON: &str =
     include_str!("world_data/giant_skeleton.collision.shared.json");
+const GIANT_SKELETON_GAMEPLAY_QUERY_COLLISION_JSON: &str =
+    include_str!("world_data/giant_skeleton.query_collision.shared.json");
 const GOLDEN_VALLEY_SUNNY_HEIGHTFIELD_JSON: &str =
     include_str!("world_data/golden_valley_sunny.heightfield.shared.json");
 const GOLDEN_VALLEY_SUNNY_GAMEPLAY_COLLISION_JSON: &str =
     include_str!("world_data/golden_valley_sunny.collision.shared.json");
+const GOLDEN_VALLEY_SUNNY_GAMEPLAY_QUERY_COLLISION_JSON: &str =
+    include_str!("world_data/golden_valley_sunny.query_collision.shared.json");
 const GREAT_HALL_DAY_GAMEPLAY_COLLISION_JSON: &str =
     include_str!("world_data/great_hall_day.collision.shared.json");
+const GREAT_HALL_DAY_GAMEPLAY_QUERY_COLLISION_JSON: &str =
+    include_str!("world_data/great_hall_day.query_collision.shared.json");
 const IDOL_DAY_HEIGHTFIELD_JSON: &str = include_str!("world_data/idol_day.heightfield.shared.json");
 const IDOL_DAY_GAMEPLAY_COLLISION_JSON: &str =
     include_str!("world_data/idol_day.collision.shared.json");
+const IDOL_DAY_GAMEPLAY_QUERY_COLLISION_JSON: &str =
+    include_str!("world_data/idol_day.query_collision.shared.json");
 const TEMPLE_GARDENS_GAMEPLAY_COLLISION_JSON: &str =
     include_str!("world_data/temple_gardens.collision.shared.json");
+const TEMPLE_GARDENS_GAMEPLAY_QUERY_COLLISION_JSON: &str =
+    include_str!("world_data/temple_gardens.query_collision.shared.json");
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct OpenWorldSceneProfile {
@@ -75,6 +93,7 @@ pub struct OpenWorldSceneProfile {
     pub spawn_yaw: f32,
     pub heightfield_json: &'static str,
     pub gameplay_collision_json: &'static str,
+    pub gameplay_query_collision_json: &'static str,
     pub use_procedural_fallback_colliders: bool,
 }
 
@@ -87,6 +106,7 @@ pub const OASIS_DAY_PROFILE: OpenWorldSceneProfile = OpenWorldSceneProfile {
     spawn_yaw: 0.0,
     heightfield_json: OASIS_DAY_HEIGHTFIELD_JSON,
     gameplay_collision_json: OASIS_DAY_GAMEPLAY_COLLISION_JSON,
+    gameplay_query_collision_json: OASIS_DAY_GAMEPLAY_QUERY_COLLISION_JSON,
     use_procedural_fallback_colliders: true,
 };
 
@@ -99,6 +119,7 @@ pub const ADVENTURE_ISLAND_PROFILE: OpenWorldSceneProfile = OpenWorldSceneProfil
     spawn_yaw: 0.0,
     heightfield_json: ADVENTURE_ISLAND_HEIGHTFIELD_JSON,
     gameplay_collision_json: ADVENTURE_ISLAND_GAMEPLAY_COLLISION_JSON,
+    gameplay_query_collision_json: ADVENTURE_ISLAND_GAMEPLAY_QUERY_COLLISION_JSON,
     use_procedural_fallback_colliders: true,
 };
 
@@ -111,6 +132,7 @@ pub const DESERT_DAY_PROFILE: OpenWorldSceneProfile = OpenWorldSceneProfile {
     spawn_yaw: 0.0,
     heightfield_json: DESERT_DAY_HEIGHTFIELD_JSON,
     gameplay_collision_json: DESERT_DAY_GAMEPLAY_COLLISION_JSON,
+    gameplay_query_collision_json: DESERT_DAY_GAMEPLAY_QUERY_COLLISION_JSON,
     use_procedural_fallback_colliders: true,
 };
 
@@ -123,6 +145,7 @@ pub const DOCKS_DAY_PROFILE: OpenWorldSceneProfile = OpenWorldSceneProfile {
     spawn_yaw: 0.0,
     heightfield_json: DOCKS_DAY_HEIGHTFIELD_JSON,
     gameplay_collision_json: DOCKS_DAY_GAMEPLAY_COLLISION_JSON,
+    gameplay_query_collision_json: DOCKS_DAY_GAMEPLAY_QUERY_COLLISION_JSON,
     use_procedural_fallback_colliders: true,
 };
 
@@ -135,6 +158,7 @@ pub const GIANT_SKELETON_PROFILE: OpenWorldSceneProfile = OpenWorldSceneProfile 
     spawn_yaw: 0.0,
     heightfield_json: GIANT_SKELETON_HEIGHTFIELD_JSON,
     gameplay_collision_json: GIANT_SKELETON_GAMEPLAY_COLLISION_JSON,
+    gameplay_query_collision_json: GIANT_SKELETON_GAMEPLAY_QUERY_COLLISION_JSON,
     use_procedural_fallback_colliders: true,
 };
 
@@ -147,6 +171,7 @@ pub const GOLDEN_VALLEY_OVERCAST_PROFILE: OpenWorldSceneProfile = OpenWorldScene
     spawn_yaw: 0.0,
     heightfield_json: GOLDEN_VALLEY_SUNNY_HEIGHTFIELD_JSON,
     gameplay_collision_json: GOLDEN_VALLEY_SUNNY_GAMEPLAY_COLLISION_JSON,
+    gameplay_query_collision_json: GOLDEN_VALLEY_SUNNY_GAMEPLAY_QUERY_COLLISION_JSON,
     use_procedural_fallback_colliders: true,
 };
 
@@ -159,6 +184,7 @@ pub const GOLDEN_VALLEY_SUNNY_PROFILE: OpenWorldSceneProfile = OpenWorldScenePro
     spawn_yaw: 0.0,
     heightfield_json: GOLDEN_VALLEY_SUNNY_HEIGHTFIELD_JSON,
     gameplay_collision_json: GOLDEN_VALLEY_SUNNY_GAMEPLAY_COLLISION_JSON,
+    gameplay_query_collision_json: GOLDEN_VALLEY_SUNNY_GAMEPLAY_QUERY_COLLISION_JSON,
     use_procedural_fallback_colliders: true,
 };
 
@@ -171,6 +197,7 @@ pub const GREAT_HALL_DAY_PROFILE: OpenWorldSceneProfile = OpenWorldSceneProfile 
     spawn_yaw: 0.0,
     heightfield_json: NO_HEIGHTFIELD_JSON,
     gameplay_collision_json: GREAT_HALL_DAY_GAMEPLAY_COLLISION_JSON,
+    gameplay_query_collision_json: GREAT_HALL_DAY_GAMEPLAY_QUERY_COLLISION_JSON,
     use_procedural_fallback_colliders: false,
 };
 
@@ -183,6 +210,7 @@ pub const IDOL_DAY_PROFILE: OpenWorldSceneProfile = OpenWorldSceneProfile {
     spawn_yaw: 0.0,
     heightfield_json: IDOL_DAY_HEIGHTFIELD_JSON,
     gameplay_collision_json: IDOL_DAY_GAMEPLAY_COLLISION_JSON,
+    gameplay_query_collision_json: IDOL_DAY_GAMEPLAY_QUERY_COLLISION_JSON,
     use_procedural_fallback_colliders: true,
 };
 
@@ -195,6 +223,7 @@ pub const TEMPLE_GARDENS_PROFILE: OpenWorldSceneProfile = OpenWorldSceneProfile 
     spawn_yaw: 0.0,
     heightfield_json: NO_HEIGHTFIELD_JSON,
     gameplay_collision_json: TEMPLE_GARDENS_GAMEPLAY_COLLISION_JSON,
+    gameplay_query_collision_json: TEMPLE_GARDENS_GAMEPLAY_QUERY_COLLISION_JSON,
     use_procedural_fallback_colliders: false,
 };
 
@@ -203,6 +232,8 @@ pub const OPEN_WORLD_SPAWN_Z: f32 = OASIS_DAY_PROFILE.spawn_z;
 pub const OPEN_WORLD_SPAWN_YAW: f32 = OASIS_DAY_PROFILE.spawn_yaw;
 pub const OPEN_WORLD_HEIGHTFIELD_JSON: &str = OASIS_DAY_PROFILE.heightfield_json;
 pub const OPEN_WORLD_GAMEPLAY_COLLISION_JSON: &str = OASIS_DAY_PROFILE.gameplay_collision_json;
+pub const OPEN_WORLD_GAMEPLAY_QUERY_COLLISION_JSON: &str =
+    OASIS_DAY_PROFILE.gameplay_query_collision_json;
 
 pub fn open_world_scene_profile_for_scene(
     scene_name: &str,

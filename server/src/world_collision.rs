@@ -8,7 +8,7 @@ use crate::open_world_scene::{
     ADVENTURE_ISLAND_PROFILE, DESERT_DAY_PROFILE, DOCKS_DAY_PROFILE, GIANT_SKELETON_PROFILE,
     GOLDEN_VALLEY_OVERCAST_PROFILE, GOLDEN_VALLEY_SUNNY_PROFILE, GREAT_HALL_DAY_PROFILE,
     IDOL_DAY_PROFILE, OASIS_DAY_PROFILE, OPEN_WORLD_GAMEPLAY_COLLISION_JSON,
-    OPEN_WORLD_SCENE_PROFILES, TEMPLE_GARDENS_PROFILE,
+    OPEN_WORLD_GAMEPLAY_QUERY_COLLISION_JSON, OPEN_WORLD_SCENE_PROFILES, TEMPLE_GARDENS_PROFILE,
 };
 use crate::open_world_terrain::{
     open_world_half_size_for_profile, open_world_heightfield_enabled_for_profile,
@@ -22,6 +22,7 @@ use std::collections::HashMap;
 use std::sync::OnceLock;
 
 const GAMEPLAY_COLLISION_JSON: &str = include_str!("gameplay_collision.shared.json");
+const GAMEPLAY_QUERY_COLLISION_JSON: &str = include_str!("gameplay_query_collision.shared.json");
 const OPEN_WORLD_DECOR_MARGIN: f32 = 8.0;
 
 const OPEN_WORLD_TREE_COUNT: usize = 64;
@@ -154,7 +155,9 @@ struct GameplayBoxBroadphase {
 pub(crate) struct WorldCollisionPreloadSummary {
     pub scene_count: u32,
     pub arena_gameplay_boxes: u32,
+    pub arena_query_boxes: u32,
     pub open_world_gameplay_boxes: u32,
+    pub open_world_query_boxes: u32,
     pub broadphase_cells: u32,
     pub broadphase_index_entries: u32,
     pub broadphase_max_cell_occupancy: u32,
@@ -578,20 +581,24 @@ pub fn raycast_world_with_layout_for_scene_with_stats(
     };
 
     if arena_seed.is_some() {
-        raycast_gameplay_collision_boxes(
+        raycast_movement_and_query_collision_boxes(
             &mut best,
             request,
             gameplay_collision_boxes(),
             gameplay_collision_broadphase(),
+            gameplay_query_collision_boxes(),
+            gameplay_query_collision_broadphase(),
             stats.as_deref_mut(),
         );
     } else {
         let profile = open_world_profile_from_name(open_world_scene_name);
-        raycast_gameplay_collision_boxes(
+        raycast_movement_and_query_collision_boxes(
             &mut best,
             request,
             open_world_gameplay_collision_boxes(profile),
             open_world_gameplay_collision_broadphase(profile),
+            open_world_gameplay_query_collision_boxes(profile),
+            open_world_gameplay_query_collision_broadphase(profile),
             stats.as_deref_mut(),
         );
     }
@@ -607,28 +614,24 @@ fn open_world_profile_from_name(scene_name: Option<&str>) -> &'static OpenWorldS
 
 pub(crate) fn preload_world_collision_data() -> WorldCollisionPreloadSummary {
     let arena_gameplay_boxes = gameplay_collision_boxes().len();
+    let arena_query_boxes = gameplay_query_collision_boxes().len();
     let arena_broadphase = gameplay_collision_broadphase();
+    let arena_query_broadphase = gameplay_query_collision_broadphase();
     let mut summary = WorldCollisionPreloadSummary {
         scene_count: OPEN_WORLD_SCENE_PROFILES.len().min(u32::MAX as usize) as u32,
         arena_gameplay_boxes: arena_gameplay_boxes.min(u32::MAX as usize) as u32,
-        broadphase_cells: arena_broadphase.cells.len().min(u32::MAX as usize) as u32,
-        broadphase_index_entries: arena_broadphase.index_entries.min(u32::MAX as usize) as u32,
-        broadphase_max_cell_occupancy: arena_broadphase.max_cell_occupancy.min(u32::MAX as usize)
-            as u32,
-        broadphase_max_cells_per_collider: arena_broadphase
-            .max_cells_per_collider
-            .min(u32::MAX as usize) as u32,
-        broadphase_unindexed_colliders: arena_broadphase
-            .unindexed_collider_count
-            .min(u32::MAX as usize) as u32,
+        arena_query_boxes: arena_query_boxes.min(u32::MAX as usize) as u32,
         ..Default::default()
     };
+    accumulate_broadphase_preload_summary(&mut summary, arena_broadphase);
+    accumulate_broadphase_preload_summary(&mut summary, arena_query_broadphase);
 
     for profile in OPEN_WORLD_SCENE_PROFILES {
         let generated_colliders = open_world_colliders(profile).len();
         let gameplay_boxes = open_world_gameplay_collision_boxes(profile).len();
+        let query_boxes = open_world_gameplay_query_collision_boxes(profile).len();
         let broadphase = open_world_gameplay_collision_broadphase(profile);
-        let broadphase_cells = broadphase.cells.len();
+        let query_broadphase = open_world_gameplay_query_collision_broadphase(profile);
 
         summary.generated_open_world_colliders = summary
             .generated_open_world_colliders
@@ -636,24 +639,35 @@ pub(crate) fn preload_world_collision_data() -> WorldCollisionPreloadSummary {
         summary.open_world_gameplay_boxes = summary
             .open_world_gameplay_boxes
             .saturating_add(gameplay_boxes.min(u32::MAX as usize) as u32);
-        summary.broadphase_cells = summary
-            .broadphase_cells
-            .saturating_add(broadphase_cells.min(u32::MAX as usize) as u32);
-        summary.broadphase_index_entries = summary
-            .broadphase_index_entries
-            .saturating_add(broadphase.index_entries.min(u32::MAX as usize) as u32);
-        summary.broadphase_max_cell_occupancy = summary
-            .broadphase_max_cell_occupancy
-            .max(broadphase.max_cell_occupancy.min(u32::MAX as usize) as u32);
-        summary.broadphase_max_cells_per_collider = summary
-            .broadphase_max_cells_per_collider
-            .max(broadphase.max_cells_per_collider.min(u32::MAX as usize) as u32);
-        summary.broadphase_unindexed_colliders = summary
-            .broadphase_unindexed_colliders
-            .saturating_add(broadphase.unindexed_collider_count.min(u32::MAX as usize) as u32);
+        summary.open_world_query_boxes = summary
+            .open_world_query_boxes
+            .saturating_add(query_boxes.min(u32::MAX as usize) as u32);
+        accumulate_broadphase_preload_summary(&mut summary, broadphase);
+        accumulate_broadphase_preload_summary(&mut summary, query_broadphase);
     }
 
     summary
+}
+
+fn accumulate_broadphase_preload_summary(
+    summary: &mut WorldCollisionPreloadSummary,
+    broadphase: &GameplayBoxBroadphase,
+) {
+    summary.broadphase_cells = summary
+        .broadphase_cells
+        .saturating_add(broadphase.cells.len().min(u32::MAX as usize) as u32);
+    summary.broadphase_index_entries = summary
+        .broadphase_index_entries
+        .saturating_add(broadphase.index_entries.min(u32::MAX as usize) as u32);
+    summary.broadphase_max_cell_occupancy = summary
+        .broadphase_max_cell_occupancy
+        .max(broadphase.max_cell_occupancy.min(u32::MAX as usize) as u32);
+    summary.broadphase_max_cells_per_collider = summary
+        .broadphase_max_cells_per_collider
+        .max(broadphase.max_cells_per_collider.min(u32::MAX as usize) as u32);
+    summary.broadphase_unindexed_colliders = summary
+        .broadphase_unindexed_colliders
+        .saturating_add(broadphase.unindexed_collider_count.min(u32::MAX as usize) as u32);
 }
 
 fn resolve_open_world_horizontal_collision_y(
@@ -1121,6 +1135,19 @@ fn gameplay_collision_broadphase() -> &'static GameplayBoxBroadphase {
     GAMEPLAY_BOX_BROADPHASE.get_or_init(|| GameplayBoxBroadphase::build(gameplay_collision_boxes()))
 }
 
+fn gameplay_query_collision_boxes() -> &'static [GameplayCollisionBox] {
+    static GAMEPLAY_QUERY_BOXES: OnceLock<Vec<GameplayCollisionBox>> = OnceLock::new();
+    GAMEPLAY_QUERY_BOXES
+        .get_or_init(load_gameplay_query_collision_boxes)
+        .as_slice()
+}
+
+fn gameplay_query_collision_broadphase() -> &'static GameplayBoxBroadphase {
+    static GAMEPLAY_QUERY_BOX_BROADPHASE: OnceLock<GameplayBoxBroadphase> = OnceLock::new();
+    GAMEPLAY_QUERY_BOX_BROADPHASE
+        .get_or_init(|| GameplayBoxBroadphase::build(gameplay_query_collision_boxes()))
+}
+
 fn open_world_gameplay_collision_boxes(
     profile: &OpenWorldSceneProfile,
 ) -> &'static [GameplayCollisionBox] {
@@ -1181,6 +1208,69 @@ fn open_world_gameplay_collision_boxes(
     } else {
         OPEN_WORLD_GAMEPLAY_BOXES
             .get_or_init(|| load_open_world_gameplay_collision_boxes(profile))
+            .as_slice()
+    }
+}
+
+fn open_world_gameplay_query_collision_boxes(
+    profile: &OpenWorldSceneProfile,
+) -> &'static [GameplayCollisionBox] {
+    static OPEN_WORLD_QUERY_BOXES: OnceLock<Vec<GameplayCollisionBox>> = OnceLock::new();
+    static ADVENTURE_ISLAND_QUERY_BOXES: OnceLock<Vec<GameplayCollisionBox>> = OnceLock::new();
+    static DESERT_DAY_QUERY_BOXES: OnceLock<Vec<GameplayCollisionBox>> = OnceLock::new();
+    static DOCKS_DAY_QUERY_BOXES: OnceLock<Vec<GameplayCollisionBox>> = OnceLock::new();
+    static GIANT_SKELETON_QUERY_BOXES: OnceLock<Vec<GameplayCollisionBox>> = OnceLock::new();
+    static GOLDEN_VALLEY_OVERCAST_QUERY_BOXES: OnceLock<Vec<GameplayCollisionBox>> =
+        OnceLock::new();
+    static GOLDEN_VALLEY_SUNNY_QUERY_BOXES: OnceLock<Vec<GameplayCollisionBox>> = OnceLock::new();
+    static GREAT_HALL_DAY_QUERY_BOXES: OnceLock<Vec<GameplayCollisionBox>> = OnceLock::new();
+    static IDOL_DAY_QUERY_BOXES: OnceLock<Vec<GameplayCollisionBox>> = OnceLock::new();
+    static OASIS_DAY_QUERY_BOXES: OnceLock<Vec<GameplayCollisionBox>> = OnceLock::new();
+    static TEMPLE_GARDENS_QUERY_BOXES: OnceLock<Vec<GameplayCollisionBox>> = OnceLock::new();
+
+    if profile.scene_name == OASIS_DAY_PROFILE.scene_name {
+        OASIS_DAY_QUERY_BOXES
+            .get_or_init(|| load_open_world_gameplay_query_collision_boxes(profile))
+            .as_slice()
+    } else if profile.scene_name == ADVENTURE_ISLAND_PROFILE.scene_name {
+        ADVENTURE_ISLAND_QUERY_BOXES
+            .get_or_init(|| load_open_world_gameplay_query_collision_boxes(profile))
+            .as_slice()
+    } else if profile.scene_name == DESERT_DAY_PROFILE.scene_name {
+        DESERT_DAY_QUERY_BOXES
+            .get_or_init(|| load_open_world_gameplay_query_collision_boxes(profile))
+            .as_slice()
+    } else if profile.scene_name == DOCKS_DAY_PROFILE.scene_name {
+        DOCKS_DAY_QUERY_BOXES
+            .get_or_init(|| load_open_world_gameplay_query_collision_boxes(profile))
+            .as_slice()
+    } else if profile.scene_name == GIANT_SKELETON_PROFILE.scene_name {
+        GIANT_SKELETON_QUERY_BOXES
+            .get_or_init(|| load_open_world_gameplay_query_collision_boxes(profile))
+            .as_slice()
+    } else if profile.scene_name == GOLDEN_VALLEY_OVERCAST_PROFILE.scene_name {
+        GOLDEN_VALLEY_OVERCAST_QUERY_BOXES
+            .get_or_init(|| load_open_world_gameplay_query_collision_boxes(profile))
+            .as_slice()
+    } else if profile.scene_name == GOLDEN_VALLEY_SUNNY_PROFILE.scene_name {
+        GOLDEN_VALLEY_SUNNY_QUERY_BOXES
+            .get_or_init(|| load_open_world_gameplay_query_collision_boxes(profile))
+            .as_slice()
+    } else if profile.scene_name == GREAT_HALL_DAY_PROFILE.scene_name {
+        GREAT_HALL_DAY_QUERY_BOXES
+            .get_or_init(|| load_open_world_gameplay_query_collision_boxes(profile))
+            .as_slice()
+    } else if profile.scene_name == IDOL_DAY_PROFILE.scene_name {
+        IDOL_DAY_QUERY_BOXES
+            .get_or_init(|| load_open_world_gameplay_query_collision_boxes(profile))
+            .as_slice()
+    } else if profile.scene_name == TEMPLE_GARDENS_PROFILE.scene_name {
+        TEMPLE_GARDENS_QUERY_BOXES
+            .get_or_init(|| load_open_world_gameplay_query_collision_boxes(profile))
+            .as_slice()
+    } else {
+        OPEN_WORLD_QUERY_BOXES
+            .get_or_init(|| load_open_world_gameplay_query_collision_boxes(profile))
             .as_slice()
     }
 }
@@ -1249,9 +1339,79 @@ fn open_world_gameplay_collision_broadphase(
     }
 }
 
+fn open_world_gameplay_query_collision_broadphase(
+    profile: &OpenWorldSceneProfile,
+) -> &'static GameplayBoxBroadphase {
+    static OPEN_WORLD_QUERY_BROADPHASE: OnceLock<GameplayBoxBroadphase> = OnceLock::new();
+    static ADVENTURE_ISLAND_QUERY_BROADPHASE: OnceLock<GameplayBoxBroadphase> = OnceLock::new();
+    static DESERT_DAY_QUERY_BROADPHASE: OnceLock<GameplayBoxBroadphase> = OnceLock::new();
+    static DOCKS_DAY_QUERY_BROADPHASE: OnceLock<GameplayBoxBroadphase> = OnceLock::new();
+    static GIANT_SKELETON_QUERY_BROADPHASE: OnceLock<GameplayBoxBroadphase> = OnceLock::new();
+    static GOLDEN_VALLEY_OVERCAST_QUERY_BROADPHASE: OnceLock<GameplayBoxBroadphase> =
+        OnceLock::new();
+    static GOLDEN_VALLEY_SUNNY_QUERY_BROADPHASE: OnceLock<GameplayBoxBroadphase> = OnceLock::new();
+    static GREAT_HALL_DAY_QUERY_BROADPHASE: OnceLock<GameplayBoxBroadphase> = OnceLock::new();
+    static IDOL_DAY_QUERY_BROADPHASE: OnceLock<GameplayBoxBroadphase> = OnceLock::new();
+    static OASIS_DAY_QUERY_BROADPHASE: OnceLock<GameplayBoxBroadphase> = OnceLock::new();
+    static TEMPLE_GARDENS_QUERY_BROADPHASE: OnceLock<GameplayBoxBroadphase> = OnceLock::new();
+
+    if profile.scene_name == OASIS_DAY_PROFILE.scene_name {
+        OASIS_DAY_QUERY_BROADPHASE.get_or_init(|| {
+            GameplayBoxBroadphase::build(open_world_gameplay_query_collision_boxes(profile))
+        })
+    } else if profile.scene_name == ADVENTURE_ISLAND_PROFILE.scene_name {
+        ADVENTURE_ISLAND_QUERY_BROADPHASE.get_or_init(|| {
+            GameplayBoxBroadphase::build(open_world_gameplay_query_collision_boxes(profile))
+        })
+    } else if profile.scene_name == DESERT_DAY_PROFILE.scene_name {
+        DESERT_DAY_QUERY_BROADPHASE.get_or_init(|| {
+            GameplayBoxBroadphase::build(open_world_gameplay_query_collision_boxes(profile))
+        })
+    } else if profile.scene_name == DOCKS_DAY_PROFILE.scene_name {
+        DOCKS_DAY_QUERY_BROADPHASE.get_or_init(|| {
+            GameplayBoxBroadphase::build(open_world_gameplay_query_collision_boxes(profile))
+        })
+    } else if profile.scene_name == GIANT_SKELETON_PROFILE.scene_name {
+        GIANT_SKELETON_QUERY_BROADPHASE.get_or_init(|| {
+            GameplayBoxBroadphase::build(open_world_gameplay_query_collision_boxes(profile))
+        })
+    } else if profile.scene_name == GOLDEN_VALLEY_OVERCAST_PROFILE.scene_name {
+        GOLDEN_VALLEY_OVERCAST_QUERY_BROADPHASE.get_or_init(|| {
+            GameplayBoxBroadphase::build(open_world_gameplay_query_collision_boxes(profile))
+        })
+    } else if profile.scene_name == GOLDEN_VALLEY_SUNNY_PROFILE.scene_name {
+        GOLDEN_VALLEY_SUNNY_QUERY_BROADPHASE.get_or_init(|| {
+            GameplayBoxBroadphase::build(open_world_gameplay_query_collision_boxes(profile))
+        })
+    } else if profile.scene_name == GREAT_HALL_DAY_PROFILE.scene_name {
+        GREAT_HALL_DAY_QUERY_BROADPHASE.get_or_init(|| {
+            GameplayBoxBroadphase::build(open_world_gameplay_query_collision_boxes(profile))
+        })
+    } else if profile.scene_name == IDOL_DAY_PROFILE.scene_name {
+        IDOL_DAY_QUERY_BROADPHASE.get_or_init(|| {
+            GameplayBoxBroadphase::build(open_world_gameplay_query_collision_boxes(profile))
+        })
+    } else if profile.scene_name == TEMPLE_GARDENS_PROFILE.scene_name {
+        TEMPLE_GARDENS_QUERY_BROADPHASE.get_or_init(|| {
+            GameplayBoxBroadphase::build(open_world_gameplay_query_collision_boxes(profile))
+        })
+    } else {
+        OPEN_WORLD_QUERY_BROADPHASE.get_or_init(|| {
+            GameplayBoxBroadphase::build(open_world_gameplay_query_collision_boxes(profile))
+        })
+    }
+}
+
 fn load_gameplay_collision_boxes() -> Vec<GameplayCollisionBox> {
     let file: GameplayCollisionLayoutFile = serde_json::from_str(GAMEPLAY_COLLISION_JSON)
         .expect("failed to parse gameplay_collision.shared.json");
+
+    parse_gameplay_collision_boxes(file)
+}
+
+fn load_gameplay_query_collision_boxes() -> Vec<GameplayCollisionBox> {
+    let file: GameplayCollisionLayoutFile = serde_json::from_str(GAMEPLAY_QUERY_COLLISION_JSON)
+        .expect("failed to parse gameplay_query_collision.shared.json");
 
     parse_gameplay_collision_boxes(file)
 }
@@ -1266,6 +1426,20 @@ fn load_open_world_gameplay_collision_boxes(
     };
     let file: GameplayCollisionLayoutFile =
         serde_json::from_str(json).expect("failed to parse open-world gameplay collision JSON");
+
+    parse_gameplay_collision_boxes(file)
+}
+
+fn load_open_world_gameplay_query_collision_boxes(
+    profile: &OpenWorldSceneProfile,
+) -> Vec<GameplayCollisionBox> {
+    let json = if profile.scene_name == OASIS_DAY_PROFILE.scene_name {
+        OPEN_WORLD_GAMEPLAY_QUERY_COLLISION_JSON
+    } else {
+        profile.gameplay_query_collision_json
+    };
+    let file: GameplayCollisionLayoutFile = serde_json::from_str(json)
+        .expect("failed to parse open-world gameplay query collision JSON");
 
     parse_gameplay_collision_boxes(file)
 }
@@ -1593,6 +1767,37 @@ fn raycast_gameplay_collision_boxes(
     for collider in colliders {
         try_world_gameplay_box_hit(best, request, *collider);
     }
+}
+
+fn raycast_movement_and_query_collision_boxes(
+    best: &mut Option<WorldRayHit>,
+    request: WorldRaycastRequest,
+    movement_colliders: &[GameplayCollisionBox],
+    movement_broadphase: &GameplayBoxBroadphase,
+    query_colliders: &[GameplayCollisionBox],
+    query_broadphase: &GameplayBoxBroadphase,
+    stats: Option<&mut WorldRaycastStats>,
+) {
+    let mut stats = stats;
+    raycast_gameplay_collision_boxes(
+        best,
+        request,
+        movement_colliders,
+        movement_broadphase,
+        stats.as_deref_mut(),
+    );
+
+    if query_colliders.is_empty() {
+        return;
+    }
+
+    raycast_gameplay_collision_boxes(
+        best,
+        request,
+        query_colliders,
+        query_broadphase,
+        stats.as_deref_mut(),
+    );
 }
 
 fn generate_open_world_colliders(profile: &OpenWorldSceneProfile) -> Vec<Collider> {
@@ -2101,8 +2306,9 @@ fn raycast_centered_aabb(
 #[cfg(test)]
 mod tests {
     use super::{
-        raycast_gameplay_collision_boxes, resolve_world_spawn_position_with_layout_for_scene,
-        try_world_gameplay_box_hit, GameplayBoxBroadphase, GameplayCollisionBox,
+        raycast_gameplay_collision_boxes, raycast_movement_and_query_collision_boxes,
+        resolve_world_spawn_position_with_layout_for_scene, try_world_gameplay_box_hit,
+        GameplayBoxBroadphase, GameplayCollisionBox,
     };
     use crate::arena::{WorldRayHit, WorldRaycastRequest};
     use crate::open_world_scene::{
@@ -2297,6 +2503,39 @@ mod tests {
             fallback_stats.world_gameplay_narrowphase_tests,
             colliders.len() as u32
         );
+    }
+
+    #[test]
+    fn query_collision_augments_movement_collision_during_migration() {
+        let mut movement_colliders = vec![test_aabb(6.0, 0.0, 0.0)];
+        let mut query_colliders = vec![test_aabb(20.0, 0.0, 0.0)];
+        for offset in 0..8 {
+            movement_colliders.push(test_aabb(100.0 + offset as f32 * 4.0, 0.0, 0.0));
+            query_colliders.push(test_aabb(200.0 + offset as f32 * 4.0, 0.0, 0.0));
+        }
+        let movement_broadphase = GameplayBoxBroadphase::build(&movement_colliders);
+        let query_broadphase = GameplayBoxBroadphase::build(&query_colliders);
+        let mut hit = None;
+        let mut stats = super::WorldRaycastStats::default();
+
+        raycast_movement_and_query_collision_boxes(
+            &mut hit,
+            request(0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 30.0),
+            &movement_colliders,
+            &movement_broadphase,
+            &query_colliders,
+            &query_broadphase,
+            Some(&mut stats),
+        );
+
+        let hit =
+            hit.expect("movement boxes must still block when query boxes are partially authored");
+        assert!(
+            hit.t < 10.0,
+            "nearest movement hit should remain visible despite non-empty query set"
+        );
+        assert_eq!(stats.world_gameplay_full_scan_fallbacks, 0);
+        assert_eq!(stats.world_gameplay_narrowphase_tests, 2);
     }
 
     #[test]

@@ -18,9 +18,13 @@ namespace Arena.Editor
         private const string GameplayQueryCollisionChildName = "ArenaGameplayQueryCollision";
         private const float TransformCompatibilityScaleEpsilon = 0.001f;
         private const float TransformCompatibilityBasisEpsilon = 0.001f;
+        private const int MaxExportDiagnosticsToLog = 25;
+        private const string ArenaEnvironmentVariantPrefix = "Assets/Arena/Content/Prefabs/OpenWorld/EnvironmentVariants/";
         private const string RelativeServerGameplayCollisionPath = "server/src/gameplay_collision.shared.json";
+        private const string RelativeServerGameplayQueryCollisionPath = "server/src/gameplay_query_collision.shared.json";
         private const string RelativeServerArenaLayoutPath = "server/src/arena_layout.shared.json";
         private const string RelativeBundledGameplayCollisionPath = "Assets/Arena/Resources/SharedData/gameplay_collision.shared.json";
+        private const string RelativeBundledGameplayQueryCollisionPath = "Assets/Arena/Resources/SharedData/gameplay_query_collision.shared.json";
         private const string RelativeBundledArenaLayoutPath = "Assets/Arena/Resources/SharedData/arena_layout.shared.json";
         private const string RelativeServerWorldDataDirectory = "server/src/world_data";
         private const string RelativeBundledWorldDataDirectory = "Assets/Arena/Resources/SharedData/Worlds";
@@ -55,10 +59,13 @@ namespace Arena.Editor
 
         public static void Export()
         {
-            int layer = LayerMask.NameToLayer(GameplayCollisionLayer);
-            if (layer < 0)
+            int gameplayLayer = LayerMask.NameToLayer(GameplayCollisionLayer);
+            int queryLayer = LayerMask.NameToLayer(GameplayQueryCollisionLayer);
+            if (gameplayLayer < 0 || queryLayer < 0)
             {
-                Debug.LogError($"[GameplayCollisionExporter] Layer '{GameplayCollisionLayer}' does not exist.");
+                Debug.LogError(
+                    $"[GameplayCollisionExporter] Required layers are missing: " +
+                    $"{GameplayCollisionLayer}={gameplayLayer}, {GameplayQueryCollisionLayer}={queryLayer}.");
                 return;
             }
 
@@ -69,81 +76,30 @@ namespace Arena.Editor
                 return;
             }
 
-            var boxes = new List<ExportBox>();
-            var warnings = new List<string>();
+            List<string> gameplayWarnings = new();
+            List<ExportBox> gameplayBoxes = CollectExportBoxesForLayer(activeScene, gameplayLayer, gameplayWarnings);
+            WriteExportLayout(RelativeServerGameplayCollisionPath, RelativeBundledGameplayCollisionPath, gameplayBoxes);
 
-            foreach (var collider in UnityEngine.Object.FindObjectsByType<BoxCollider>())
-            {
-                if (collider == null ||
-                    !collider.enabled ||
-                    collider.isTrigger ||
-                    !collider.gameObject.activeInHierarchy ||
-                    collider.gameObject.layer != layer ||
-                    collider.gameObject.scene != activeScene)
-                {
-                    continue;
-                }
+            List<string> queryWarnings = new();
+            List<string> queryErrors = new();
+            List<ExportBox> queryBoxes = CollectExportBoxesForLayer(
+                activeScene,
+                queryLayer,
+                queryWarnings,
+                queryErrors,
+                requireArenaEnvironmentVariantSource: false,
+                allowTiltedBoxes: false);
+            WriteExportLayout(RelativeServerGameplayQueryCollisionPath, RelativeBundledGameplayQueryCollisionPath, queryBoxes);
 
-                Vector3 euler = collider.transform.rotation.eulerAngles;
-                float xTilt = DeltaAngleFromZero(euler.x);
-                float zTilt = DeltaAngleFromZero(euler.z);
-                bool isTilted = Mathf.Abs(xTilt) > 0.01f || Mathf.Abs(zTilt) > 0.01f;
-                if (isTilted)
-                {
-                    warnings.Add(
-                        $"{GetHierarchyPath(collider.transform)} at {FormatVector3(collider.bounds.center)} " +
-                        $"has X/Z rotation ({euler.x:F2}, {euler.z:F2}); exporting as world AABB.");
-                }
-
-                Vector3 center;
-                Vector3 size;
-                string shape;
-                float rotationYDeg;
-                if (isTilted)
-                {
-                    center = collider.bounds.center;
-                    size = collider.bounds.size;
-                    shape = "aabb";
-                    rotationYDeg = 0f;
-                }
-                else
-                {
-                    center = collider.transform.TransformPoint(collider.center);
-                    size = Vector3.Scale(collider.size, collider.transform.lossyScale);
-                    size = new Vector3(Mathf.Abs(size.x), Mathf.Abs(size.y), Mathf.Abs(size.z));
-                    shape = "obb_y";
-                    rotationYDeg = euler.y;
-                }
-
-                boxes.Add(new ExportBox
-                {
-                    name = GetHierarchyPath(collider.transform),
-                    shape = shape,
-                    center = new[] { center.x, center.y, center.z },
-                    size = new[] { size.x, size.y, size.z },
-                    rotation_y_deg = rotationYDeg,
-                });
-            }
-
-            boxes.Sort((a, b) => string.CompareOrdinal(a.name, b.name));
-
-            var layout = new ExportLayout
-            {
-                version = 1,
-                boxes = boxes.ToArray(),
-            };
-
-            string json = JsonUtility.ToJson(layout, true);
-            WriteProjectText(RelativeServerGameplayCollisionPath, json);
-            WriteProjectText(RelativeBundledGameplayCollisionPath, json);
             SyncArenaLayoutToBundled(logSummary: false);
             AssetDatabase.Refresh();
 
             Debug.Log(
-                $"[GameplayCollisionExporter] Exported {boxes.Count} box colliders to " +
-                $"{RelativeServerGameplayCollisionPath} and {RelativeBundledGameplayCollisionPath}");
-            foreach (string warning in warnings.Distinct())
-                Debug.LogWarning($"[GameplayCollisionExporter] {warning}");
+                $"[GameplayCollisionExporter] Exported arena collision: " +
+                $"{gameplayBoxes.Count} {GameplayCollisionLayer} box collider(s), " +
+                $"{queryBoxes.Count} {GameplayQueryCollisionLayer} box collider(s).");
+            LogExportWarnings(gameplayWarnings.Concat(queryWarnings));
+            LogExportErrors(queryErrors);
         }
 
         [MenuItem("Arena/OpenWorld/Scene Prep/4 Export Active Scene World Data", false, 400)]
@@ -158,6 +114,7 @@ namespace Arena.Editor
 
             string dataKey = BuildSceneDataKey(activeScene.name);
             ExportSceneGameplayCollision(activeScene, dataKey);
+            ExportSceneGameplayQueryCollision(activeScene, dataKey);
             ExportSelectedTerrainHeightfieldInternal(activeScene, dataKey);
             AssetDatabase.Refresh();
             Debug.Log($"[GameplayCollisionExporter] Exported scene world data for '{activeScene.name}' (key '{dataKey}').");
@@ -504,10 +461,11 @@ namespace Arena.Editor
         private static void SyncGameplayCollisionToBundled(bool logSummary)
         {
             CopyProjectFile(RelativeServerGameplayCollisionPath, RelativeBundledGameplayCollisionPath);
+            CopyProjectFile(RelativeServerGameplayQueryCollisionPath, RelativeBundledGameplayQueryCollisionPath);
             if (logSummary)
             {
                 Debug.Log(
-                    $"[GameplayCollisionExporter] Synced {RelativeServerGameplayCollisionPath} -> {RelativeBundledGameplayCollisionPath}");
+                    $"[GameplayCollisionExporter] Synced arena collision JSON into bundled Resources.");
             }
         }
 
@@ -1171,9 +1129,52 @@ namespace Arena.Editor
                 return;
             }
 
-            var boxes = new List<ExportBox>();
-            var warnings = new List<string>();
+            List<string> warnings = new();
+            List<ExportBox> boxes = CollectExportBoxesForLayer(activeScene, layer, warnings);
+            WriteExportLayout(SceneServerCollisionPath(dataKey), SceneBundledCollisionPath(dataKey), boxes);
 
+            Debug.Log(
+                $"[GameplayCollisionExporter] Exported {boxes.Count} scene box colliders to " +
+                $"{SceneServerCollisionPath(dataKey)} and {SceneBundledCollisionPath(dataKey)}");
+            LogExportWarnings(warnings);
+        }
+
+        private static void ExportSceneGameplayQueryCollision(Scene activeScene, string dataKey)
+        {
+            int layer = LayerMask.NameToLayer(GameplayQueryCollisionLayer);
+            if (layer < 0)
+            {
+                Debug.LogError($"[GameplayCollisionExporter] Layer '{GameplayQueryCollisionLayer}' does not exist.");
+                return;
+            }
+
+            List<string> warnings = new();
+            List<string> errors = new();
+            List<ExportBox> boxes = CollectExportBoxesForLayer(
+                activeScene,
+                layer,
+                warnings,
+                errors,
+                requireArenaEnvironmentVariantSource: true,
+                allowTiltedBoxes: false);
+            WriteExportLayout(SceneServerQueryCollisionPath(dataKey), SceneBundledQueryCollisionPath(dataKey), boxes);
+
+            Debug.Log(
+                $"[GameplayCollisionExporter] Exported {boxes.Count} scene query box colliders to " +
+                $"{SceneServerQueryCollisionPath(dataKey)} and {SceneBundledQueryCollisionPath(dataKey)}");
+            LogExportWarnings(warnings);
+            LogExportErrors(errors);
+        }
+
+        private static List<ExportBox> CollectExportBoxesForLayer(
+            Scene activeScene,
+            int layer,
+            List<string> warnings,
+            List<string>? errors = null,
+            bool requireArenaEnvironmentVariantSource = false,
+            bool allowTiltedBoxes = true)
+        {
+            var boxes = new List<ExportBox>();
             foreach (var collider in UnityEngine.Object.FindObjectsByType<BoxCollider>())
             {
                 if (collider == null ||
@@ -1186,49 +1187,117 @@ namespace Arena.Editor
                     continue;
                 }
 
-                Vector3 euler = collider.transform.rotation.eulerAngles;
-                float xTilt = DeltaAngleFromZero(euler.x);
-                float zTilt = DeltaAngleFromZero(euler.z);
-                bool isTilted = Mathf.Abs(xTilt) > 0.01f || Mathf.Abs(zTilt) > 0.01f;
-                if (isTilted)
+                if (requireArenaEnvironmentVariantSource &&
+                    !IsAllowedArenaEnvironmentVariantCollider(collider, out string sourcePath))
                 {
                     warnings.Add(
-                        $"{GetHierarchyPath(collider.transform)} at {FormatVector3(collider.bounds.center)} " +
-                        $"has X/Z rotation ({euler.x:F2}, {euler.z:F2}); exporting as world AABB.");
+                        $"Skipping {GetHierarchyPath(collider.transform)} on {GameplayQueryCollisionLayer}: " +
+                        $"source prefab is outside {ArenaEnvironmentVariantPrefix} (source='{sourcePath}').");
+                    continue;
                 }
 
-                Vector3 center;
-                Vector3 size;
-                string shape;
-                float rotationYDeg;
-                if (isTilted)
-                {
-                    center = collider.bounds.center;
-                    size = collider.bounds.size;
-                    shape = "aabb";
-                    rotationYDeg = 0f;
-                }
-                else
-                {
-                    center = collider.transform.TransformPoint(collider.center);
-                    size = Vector3.Scale(collider.size, collider.transform.lossyScale);
-                    size = new Vector3(Mathf.Abs(size.x), Mathf.Abs(size.y), Mathf.Abs(size.z));
-                    shape = "obb_y";
-                    rotationYDeg = euler.y;
-                }
-
-                boxes.Add(new ExportBox
-                {
-                    name = GetHierarchyPath(collider.transform),
-                    shape = shape,
-                    center = new[] { center.x, center.y, center.z },
-                    size = new[] { size.x, size.y, size.z },
-                    rotation_y_deg = rotationYDeg,
-                });
+                if (TryBuildExportBox(collider, warnings, errors, allowTiltedBoxes, out ExportBox? exportBox))
+                    boxes.Add(exportBox!);
             }
 
             boxes.Sort((a, b) => string.CompareOrdinal(a.name, b.name));
+            return boxes;
+        }
 
+        private static bool TryBuildExportBox(
+            BoxCollider collider,
+            List<string> warnings,
+            List<string>? errors,
+            bool allowTiltedBoxes,
+            out ExportBox? exportBox)
+        {
+            Vector3 euler = collider.transform.rotation.eulerAngles;
+            float xTilt = DeltaAngleFromZero(euler.x);
+            float zTilt = DeltaAngleFromZero(euler.z);
+            bool isTilted = Mathf.Abs(xTilt) > 0.01f || Mathf.Abs(zTilt) > 0.01f;
+            if (isTilted)
+            {
+                string message =
+                    $"{GetHierarchyPath(collider.transform)} at {FormatVector3(collider.bounds.center)} " +
+                    $"has X/Z rotation ({euler.x:F2}, {euler.z:F2}).";
+                if (!allowTiltedBoxes)
+                {
+                    errors?.Add($"{message} Skipping query export until full-rotation query boxes or mesh collision are supported.");
+                    exportBox = null;
+                    return false;
+                }
+
+                warnings.Add($"{message} Exporting as world AABB.");
+            }
+
+            Vector3 center;
+            Vector3 size;
+            string shape;
+            float rotationYDeg;
+            if (isTilted)
+            {
+                center = collider.bounds.center;
+                size = collider.bounds.size;
+                shape = "aabb";
+                rotationYDeg = 0f;
+            }
+            else
+            {
+                center = collider.transform.TransformPoint(collider.center);
+                size = Vector3.Scale(collider.size, collider.transform.lossyScale);
+                size = new Vector3(Mathf.Abs(size.x), Mathf.Abs(size.y), Mathf.Abs(size.z));
+                shape = "obb_y";
+                rotationYDeg = euler.y;
+            }
+
+            exportBox = new ExportBox
+            {
+                name = GetHierarchyPath(collider.transform),
+                shape = shape,
+                center = new[] { center.x, center.y, center.z },
+                size = new[] { size.x, size.y, size.z },
+                rotation_y_deg = rotationYDeg,
+            };
+            return true;
+        }
+
+        private static bool IsAllowedArenaEnvironmentVariantCollider(BoxCollider collider, out string sourcePath)
+        {
+            GameObject? prefabRoot = PrefabUtility.GetOutermostPrefabInstanceRoot(collider.gameObject);
+            sourcePath = prefabRoot != null
+                ? PrefabUtility.GetPrefabAssetPathOfNearestInstanceRoot(prefabRoot)
+                : string.Empty;
+
+            return sourcePath.StartsWith(ArenaEnvironmentVariantPrefix, StringComparison.Ordinal) &&
+                   sourcePath.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static void LogExportWarnings(IEnumerable<string> warnings)
+        {
+            List<string> distinct = warnings.Distinct(StringComparer.Ordinal).ToList();
+            foreach (string warning in distinct.Take(MaxExportDiagnosticsToLog))
+                Debug.LogWarning($"[GameplayCollisionExporter] {warning}");
+            if (distinct.Count > MaxExportDiagnosticsToLog)
+            {
+                Debug.LogWarning(
+                    $"[GameplayCollisionExporter] ...and {distinct.Count - MaxExportDiagnosticsToLog} more warning(s).");
+            }
+        }
+
+        private static void LogExportErrors(IEnumerable<string> errors)
+        {
+            List<string> distinct = errors.Distinct(StringComparer.Ordinal).ToList();
+            foreach (string error in distinct.Take(MaxExportDiagnosticsToLog))
+                Debug.LogError($"[GameplayCollisionExporter] {error}");
+            if (distinct.Count > MaxExportDiagnosticsToLog)
+            {
+                Debug.LogError(
+                    $"[GameplayCollisionExporter] ...and {distinct.Count - MaxExportDiagnosticsToLog} more error(s).");
+            }
+        }
+
+        private static void WriteExportLayout(string serverPath, string bundledPath, List<ExportBox> boxes)
+        {
             var layout = new ExportLayout
             {
                 version = 1,
@@ -1236,14 +1305,8 @@ namespace Arena.Editor
             };
 
             string json = JsonUtility.ToJson(layout, true);
-            WriteProjectText(SceneServerCollisionPath(dataKey), json);
-            WriteProjectText(SceneBundledCollisionPath(dataKey), json);
-
-            Debug.Log(
-                $"[GameplayCollisionExporter] Exported {boxes.Count} scene box colliders to " +
-                $"{SceneServerCollisionPath(dataKey)} and {SceneBundledCollisionPath(dataKey)}");
-            foreach (string warning in warnings.Distinct())
-                Debug.LogWarning($"[GameplayCollisionExporter] {warning}");
+            WriteProjectText(serverPath, json);
+            WriteProjectText(bundledPath, json);
         }
 
         private static string BuildSceneDataKey(string sceneName)
@@ -1264,6 +1327,12 @@ namespace Arena.Editor
 
         private static string SceneBundledCollisionPath(string dataKey)
             => $"{RelativeBundledWorldDataDirectory}/{dataKey}.collision.shared.json";
+
+        private static string SceneServerQueryCollisionPath(string dataKey)
+            => $"{RelativeServerWorldDataDirectory}/{dataKey}.query_collision.shared.json";
+
+        private static string SceneBundledQueryCollisionPath(string dataKey)
+            => $"{RelativeBundledWorldDataDirectory}/{dataKey}.query_collision.shared.json";
 
         private static string SceneServerHeightfieldPath(string dataKey)
             => $"{RelativeServerWorldDataDirectory}/{dataKey}.heightfield.shared.json";

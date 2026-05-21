@@ -52,9 +52,10 @@ Current branch status:
 - Projectile metrics now report world broadphase candidates, gameplay-box narrowphase tests, full-scan fallbacks, and generated open-world geometry point checks. Phase 1 also logs broadphase occupancy/index health at bootstrap and warns when runtime fallback ratio is high.
 - The projectile load harness measurement is intentionally deferred; Phase 1 is considered wrapped without it for now.
 - The Unity project now has a `GameplayQueryCollision` layer and editor menu items to audit, mark, or prepare selected `BoxCollider`/`MeshCollider` objects for future projectile/LOS query collision authoring.
+- Phase 2 box-only query-collision export is implemented. The exporter writes separate `*.query_collision.shared.json` files from `GameplayQueryCollision` `BoxCollider`s. During migration, the server raycast path queries both movement boxes and query boxes, then keeps the nearest hit, so partial query authoring cannot make every non-query-authored prop stop blocking projectiles.
 - `Arena/OpenWorld/Scene Prep/3c Prepare Selected Variant Collision Roles` is the preferred manual cleanup tool for selected variant assets, selected Project folders containing variants, prefab-mode roots, scene instances, or scene containers. It expands Project folder selections to prefab assets underneath, expands scene/container selections to the placed prefab instance roots underneath, edits selected prefab assets by loading/saving prefab contents, keeps visual roots/LOD objects off collision layers, copies visual/root `BoxCollider`s onto dedicated `ArenaGameplayCollision*` children, copies those same author boxes to `ArenaGameplayQueryCollision*` when they are the best available query shape, preserves the original visual/root box components on `Default` as authoring source data, and otherwise creates `ArenaGameplayQueryCollision*` children from mesh colliders on `GameplayQueryCollision`.
-- Early audit of a placed rock showed ordinary X/Z tilt on environment props. The mesh/query design should therefore support full per-instance rotation instead of assuming Y-rotation-only sharing.
-- Query-collision export, mesh geometry export, prototype/instance encoding, and mesh narrowphase acceleration are not implemented yet.
+- Early audit of placed rocks showed ordinary X/Z tilt on environment props. The mesh/query design should therefore support full per-instance rotation instead of assuming Y-rotation-only sharing. Until full-rotation query boxes or mesh query support exists, query-layer tilted `BoxCollider`s are skipped during export instead of being flattened to large world AABBs.
+- Mesh geometry export, prototype/instance encoding, and mesh narrowphase acceleration are not implemented yet.
 
 ## Design Direction
 
@@ -201,13 +202,16 @@ Recommended rules:
 - Only export colliders on an explicit projectile/LOS query layer, tentatively `GameplayQueryCollision`.
 - Ignore raw third-party prefabs outside the Arena variant tree.
 - Keep `GameplayCollision` export unchanged.
-- Allow `BoxCollider` first.
+- Allow `BoxCollider` first. This is now implemented for arena and open-world scene exports.
+- During migration, projectile/LOS raycasts must augment the existing `GameplayCollision` set with the query set, not replace it scene-wide. Replacement is only safe later if coverage is complete or if the data model can suppress movement fallback per prefab/prototype.
+- For query export, reject or skip tilted `BoxCollider`s until full-rotation box narrowphase exists. Movement export may still flatten tilted movement boxes to conservative AABBs, but query collision should avoid knowingly baking huge false-positive boxes.
 - Allow `MeshCollider` later once server mesh query support exists.
 - Provide an editor entry point parallel to the current gameplay collision export flow, and ensure CI or validation can detect stale generated collision data.
 
 Editor tooling should validate:
 
 - Projectile/LOS query collision exists only on allowed prefab variants.
+- Open-world scene query export only accepts colliders sourced from Arena-owned environment variant prefabs; raw third-party prefab instances must be skipped or reported.
 - Mesh collision is non-convex static collision data only.
 - Mesh triangle count is within a configured budget.
 - The mesh source is not accidentally a dense visual LOD0 mesh unless explicitly allowed.
