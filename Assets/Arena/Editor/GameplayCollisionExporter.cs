@@ -19,6 +19,9 @@ namespace Arena.Editor
         private const float TransformCompatibilityScaleEpsilon = 0.001f;
         private const float TransformCompatibilityBasisEpsilon = 0.001f;
         private const int MaxExportDiagnosticsToLog = 25;
+        private const int MaxQueryMeshTrianglesPerCollider = 512;
+        private const int MaxQueryMeshTrianglesPerScene = 50000;
+        private const float QueryMeshDegenerateTriangleAreaSquaredEpsilon = 0.000000000001f;
         private const string ArenaEnvironmentVariantPrefix = "Assets/Arena/Content/Prefabs/OpenWorld/EnvironmentVariants/";
         private const string RelativeServerGameplayCollisionPath = "server/src/gameplay_collision.shared.json";
         private const string RelativeServerGameplayQueryCollisionPath = "server/src/gameplay_query_collision.shared.json";
@@ -34,6 +37,8 @@ namespace Arena.Editor
         {
             public int version = 1;
             public ExportBox[] boxes = Array.Empty<ExportBox>();
+            public ExportMeshGeometry[] mesh_geometries = Array.Empty<ExportMeshGeometry>();
+            public ExportMeshInstance[] mesh_instances = Array.Empty<ExportMeshInstance>();
         }
 
         [Serializable]
@@ -45,6 +50,32 @@ namespace Arena.Editor
             public float[] size = Array.Empty<float>();
             public float rotation_y_deg;
             public float[] rotation = Array.Empty<float>();
+        }
+
+        [Serializable]
+        private sealed class ExportMeshGeometry
+        {
+            public string id = "";
+            public string source = "";
+            public int vertex_count;
+            public int triangle_count;
+            public float[] vertices = Array.Empty<float>();
+            public int[] indices = Array.Empty<int>();
+        }
+
+        [Serializable]
+        private sealed class ExportMeshInstance
+        {
+            public string name = "";
+            public string geometry_id = "";
+            public float[] transform = Array.Empty<float>();
+        }
+
+        private sealed class ExportCollisionData
+        {
+            public List<ExportBox> Boxes { get; } = new();
+            public List<ExportMeshGeometry> MeshGeometries { get; } = new();
+            public List<ExportMeshInstance> MeshInstances { get; } = new();
         }
 
         private enum TiltedBoxExportMode
@@ -90,14 +121,17 @@ namespace Arena.Editor
 
             List<string> queryWarnings = new();
             List<string> queryErrors = new();
-            List<ExportBox> queryBoxes = CollectExportBoxesForLayer(
+            ExportCollisionData queryCollision = CollectQueryCollisionDataForLayer(
                 activeScene,
                 queryLayer,
                 queryWarnings,
                 queryErrors,
                 requireArenaEnvironmentVariantSource: false,
                 tiltedBoxExportMode: TiltedBoxExportMode.FullRotation);
-            WriteExportLayout(RelativeServerGameplayQueryCollisionPath, RelativeBundledGameplayQueryCollisionPath, queryBoxes);
+            WriteExportLayout(
+                RelativeServerGameplayQueryCollisionPath,
+                RelativeBundledGameplayQueryCollisionPath,
+                queryCollision);
 
             SyncArenaLayoutToBundled(logSummary: false);
             AssetDatabase.Refresh();
@@ -105,7 +139,9 @@ namespace Arena.Editor
             Debug.Log(
                 $"[GameplayCollisionExporter] Exported arena collision: " +
                 $"{gameplayBoxes.Count} {GameplayCollisionLayer} box collider(s), " +
-                $"{queryBoxes.Count} {GameplayQueryCollisionLayer} box collider(s).");
+                $"{queryCollision.Boxes.Count} {GameplayQueryCollisionLayer} box collider(s), " +
+                $"{queryCollision.MeshInstances.Count} {GameplayQueryCollisionLayer} mesh instance(s) " +
+                $"using {queryCollision.MeshGeometries.Count} shared mesh geometries.");
             LogExportWarnings(gameplayWarnings.Concat(queryWarnings));
             LogExportErrors(queryErrors);
         }
@@ -1158,17 +1194,19 @@ namespace Arena.Editor
 
             List<string> warnings = new();
             List<string> errors = new();
-            List<ExportBox> boxes = CollectExportBoxesForLayer(
+            ExportCollisionData queryCollision = CollectQueryCollisionDataForLayer(
                 activeScene,
                 layer,
                 warnings,
                 errors,
                 requireArenaEnvironmentVariantSource: true,
                 tiltedBoxExportMode: TiltedBoxExportMode.FullRotation);
-            WriteExportLayout(SceneServerQueryCollisionPath(dataKey), SceneBundledQueryCollisionPath(dataKey), boxes);
+            WriteExportLayout(SceneServerQueryCollisionPath(dataKey), SceneBundledQueryCollisionPath(dataKey), queryCollision);
 
             Debug.Log(
-                $"[GameplayCollisionExporter] Exported {boxes.Count} scene query box colliders to " +
+                $"[GameplayCollisionExporter] Exported {queryCollision.Boxes.Count} scene query box collider(s) and " +
+                $"{queryCollision.MeshInstances.Count} scene query mesh instance(s) using " +
+                $"{queryCollision.MeshGeometries.Count} shared mesh geometries to " +
                 $"{SceneServerQueryCollisionPath(dataKey)} and {SceneBundledQueryCollisionPath(dataKey)}");
             LogExportWarnings(warnings);
             LogExportErrors(errors);
@@ -1210,6 +1248,64 @@ namespace Arena.Editor
 
             boxes.Sort((a, b) => string.CompareOrdinal(a.name, b.name));
             return boxes;
+        }
+
+        private static ExportCollisionData CollectQueryCollisionDataForLayer(
+            Scene activeScene,
+            int layer,
+            List<string> warnings,
+            List<string> errors,
+            bool requireArenaEnvironmentVariantSource,
+            TiltedBoxExportMode tiltedBoxExportMode)
+        {
+            var data = new ExportCollisionData();
+            data.Boxes.AddRange(CollectExportBoxesForLayer(
+                activeScene,
+                layer,
+                warnings,
+                errors,
+                requireArenaEnvironmentVariantSource,
+                tiltedBoxExportMode));
+
+            int sceneUniqueTriangleCount = 0;
+            var meshGeometriesById = new Dictionary<string, ExportMeshGeometry>(StringComparer.Ordinal);
+            foreach (var collider in UnityEngine.Object.FindObjectsByType<MeshCollider>())
+            {
+                if (collider == null ||
+                    !collider.enabled ||
+                    collider.isTrigger ||
+                    !collider.gameObject.activeInHierarchy ||
+                    collider.gameObject.layer != layer ||
+                    collider.gameObject.scene != activeScene)
+                {
+                    continue;
+                }
+
+                if (requireArenaEnvironmentVariantSource &&
+                    !IsAllowedArenaEnvironmentVariantCollider(collider, out string sourcePath))
+                {
+                    warnings.Add(
+                        $"Skipping {GetHierarchyPath(collider.transform)} mesh on {GameplayQueryCollisionLayer}: " +
+                        $"source prefab is outside {ArenaEnvironmentVariantPrefix} (source='{sourcePath}').");
+                    continue;
+                }
+
+                if (TryBuildExportMeshInstance(
+                        collider,
+                        warnings,
+                        errors,
+                        meshGeometriesById,
+                        ref sceneUniqueTriangleCount,
+                        out ExportMeshInstance? exportMeshInstance))
+                {
+                    data.MeshInstances.Add(exportMeshInstance!);
+                }
+            }
+
+            data.MeshGeometries.AddRange(meshGeometriesById.Values);
+            data.MeshGeometries.Sort((a, b) => string.CompareOrdinal(a.id, b.id));
+            data.MeshInstances.Sort((a, b) => string.CompareOrdinal(a.name, b.name));
+            return data;
         }
 
         private static bool TryBuildExportBox(
@@ -1283,7 +1379,180 @@ namespace Arena.Editor
             return true;
         }
 
-        private static bool IsAllowedArenaEnvironmentVariantCollider(BoxCollider collider, out string sourcePath)
+        private static bool TryBuildExportMeshInstance(
+            MeshCollider collider,
+            List<string> warnings,
+            List<string> errors,
+            Dictionary<string, ExportMeshGeometry> meshGeometriesById,
+            ref int sceneUniqueTriangleCount,
+            out ExportMeshInstance? exportMeshInstance)
+        {
+            exportMeshInstance = null;
+            Mesh? mesh = collider.sharedMesh;
+            string path = GetHierarchyPath(collider.transform);
+            if (mesh == null)
+            {
+                errors.Add($"Skipping {path} mesh query collision: MeshCollider has no shared mesh.");
+                return false;
+            }
+            if (collider.convex)
+            {
+                errors.Add($"Skipping {path} mesh query collision: convex MeshCollider export is not supported.");
+                return false;
+            }
+            if (!mesh.isReadable)
+            {
+                errors.Add($"Skipping {path} mesh query collision: mesh asset is not readable.");
+                return false;
+            }
+
+            string meshAssetPath = AssetDatabase.GetAssetPath(mesh);
+            string meshAssetGuid = string.IsNullOrEmpty(meshAssetPath)
+                ? string.Empty
+                : AssetDatabase.AssetPathToGUID(meshAssetPath);
+            if (string.IsNullOrEmpty(meshAssetGuid))
+            {
+                errors.Add($"Skipping {path} mesh query collision: mesh asset has no stable AssetDatabase GUID.");
+                return false;
+            }
+
+            int[] indices;
+            Vector3[] localVertices;
+            try
+            {
+                indices = mesh.triangles;
+                localVertices = mesh.vertices;
+            }
+            catch (Exception ex)
+            {
+                errors.Add($"Skipping {path} mesh query collision: failed to read mesh data ({ex.GetType().Name}).");
+                return false;
+            }
+
+            if (indices.Length == 0 || localVertices.Length == 0)
+            {
+                warnings.Add($"Skipping {path} mesh query collision: mesh is empty.");
+                return false;
+            }
+            if (indices.Length % 3 != 0)
+            {
+                errors.Add($"Skipping {path} mesh query collision: mesh index count {indices.Length} is not divisible by 3.");
+                return false;
+            }
+
+            var cleanedIndices = new List<int>(indices.Length);
+            int degenerateTriangleCount = 0;
+            for (int i = 0; i < indices.Length; i += 3)
+            {
+                int a = indices[i];
+                int b = indices[i + 1];
+                int c = indices[i + 2];
+                if (a < 0 || b < 0 || c < 0 ||
+                    a >= localVertices.Length || b >= localVertices.Length || c >= localVertices.Length)
+                {
+                    errors.Add($"Skipping {path} mesh query collision: mesh contains an out-of-range index.");
+                    return false;
+                }
+
+                if (IsDegenerateTriangle(localVertices[a], localVertices[b], localVertices[c]))
+                {
+                    degenerateTriangleCount++;
+                    continue;
+                }
+
+                cleanedIndices.Add(a);
+                cleanedIndices.Add(b);
+                cleanedIndices.Add(c);
+            }
+
+            int triangleCount = cleanedIndices.Count / 3;
+            if (triangleCount == 0)
+            {
+                warnings.Add($"Skipping {path} mesh query collision: mesh has no non-degenerate triangles.");
+                return false;
+            }
+            if (degenerateTriangleCount > 0)
+            {
+                warnings.Add(
+                    $"{path} mesh query collision removed {degenerateTriangleCount} degenerate triangle(s) before export.");
+            }
+            if (triangleCount > MaxQueryMeshTrianglesPerCollider)
+            {
+                errors.Add(
+                    $"Skipping {path} mesh query collision: {triangleCount} triangle(s) exceeds per-collider budget " +
+                    $"{MaxQueryMeshTrianglesPerCollider}.");
+                return false;
+            }
+
+            string geometryId = $"{meshAssetGuid}:{mesh.name}:{localVertices.Length}:{triangleCount}";
+            if (!meshGeometriesById.ContainsKey(geometryId) &&
+                sceneUniqueTriangleCount + triangleCount > MaxQueryMeshTrianglesPerScene)
+            {
+                errors.Add(
+                    $"Skipping {path} mesh query collision: scene unique mesh triangle budget would exceed " +
+                    $"{MaxQueryMeshTrianglesPerScene}.");
+                return false;
+            }
+
+            if (!meshGeometriesById.ContainsKey(geometryId))
+            {
+                var vertices = new float[localVertices.Length * 3];
+                for (int i = 0; i < localVertices.Length; i++)
+                {
+                    Vector3 local = localVertices[i];
+                    if (!IsFinite(local))
+                    {
+                        errors.Add($"Skipping {path} mesh query collision: mesh contains non-finite vertex data.");
+                        return false;
+                    }
+
+                    int output = i * 3;
+                    vertices[output] = local.x;
+                    vertices[output + 1] = local.y;
+                    vertices[output + 2] = local.z;
+                }
+
+                meshGeometriesById.Add(geometryId, new ExportMeshGeometry
+                {
+                    id = geometryId,
+                    source = string.IsNullOrEmpty(meshAssetPath) ? mesh.name : meshAssetPath,
+                    vertex_count = localVertices.Length,
+                    triangle_count = triangleCount,
+                    vertices = vertices,
+                    indices = cleanedIndices.ToArray(),
+                });
+                sceneUniqueTriangleCount += triangleCount;
+            }
+
+            exportMeshInstance = new ExportMeshInstance
+            {
+                name = path,
+                geometry_id = geometryId,
+                transform = MatrixToRowMajorArray(collider.transform.localToWorldMatrix),
+            };
+            return true;
+        }
+
+        private static bool IsDegenerateTriangle(Vector3 a, Vector3 b, Vector3 c)
+        {
+            if (!IsFinite(a) || !IsFinite(b) || !IsFinite(c))
+                return false;
+            return Vector3.Cross(b - a, c - a).sqrMagnitude <= QueryMeshDegenerateTriangleAreaSquaredEpsilon;
+        }
+
+        private static bool IsFinite(Vector3 value)
+            => float.IsFinite(value.x) && float.IsFinite(value.y) && float.IsFinite(value.z);
+
+        private static float[] MatrixToRowMajorArray(Matrix4x4 matrix)
+            => new[]
+            {
+                matrix.m00, matrix.m01, matrix.m02, matrix.m03,
+                matrix.m10, matrix.m11, matrix.m12, matrix.m13,
+                matrix.m20, matrix.m21, matrix.m22, matrix.m23,
+                matrix.m30, matrix.m31, matrix.m32, matrix.m33,
+            };
+
+        private static bool IsAllowedArenaEnvironmentVariantCollider(Collider collider, out string sourcePath)
         {
             GameObject? prefabRoot = PrefabUtility.GetOutermostPrefabInstanceRoot(collider.gameObject);
             sourcePath = prefabRoot != null
@@ -1319,11 +1588,29 @@ namespace Arena.Editor
         }
 
         private static void WriteExportLayout(string serverPath, string bundledPath, List<ExportBox> boxes)
+            => WriteExportLayout(
+                serverPath,
+                bundledPath,
+                boxes,
+                Array.Empty<ExportMeshGeometry>(),
+                Array.Empty<ExportMeshInstance>());
+
+        private static void WriteExportLayout(string serverPath, string bundledPath, ExportCollisionData data)
+            => WriteExportLayout(serverPath, bundledPath, data.Boxes, data.MeshGeometries, data.MeshInstances);
+
+        private static void WriteExportLayout(
+            string serverPath,
+            string bundledPath,
+            IReadOnlyCollection<ExportBox> boxes,
+            IReadOnlyCollection<ExportMeshGeometry> meshGeometries,
+            IReadOnlyCollection<ExportMeshInstance> meshInstances)
         {
             var layout = new ExportLayout
             {
                 version = 1,
                 boxes = boxes.ToArray(),
+                mesh_geometries = meshGeometries.ToArray(),
+                mesh_instances = meshInstances.ToArray(),
             };
 
             string json = JsonUtility.ToJson(layout, true);

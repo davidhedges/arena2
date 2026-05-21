@@ -351,12 +351,18 @@ pub(crate) fn ensure_game_loop_schedule(ctx: &ReducerContext) {
 fn bootstrap_server_state(ctx: &ReducerContext) {
     let collision_summary = preload_world_collision_data();
     log::info!(
-        "[INIT] Preloaded world collision data scenes={} arena_gameplay_boxes={} arena_query_boxes={} open_world_gameplay_boxes={} open_world_query_boxes={} broadphase_cells={} broadphase_index_entries={} broadphase_max_cell_occupancy={} broadphase_max_cells_per_collider={} broadphase_unindexed_colliders={} generated_open_world_colliders={}",
+        "[INIT] Preloaded world collision data scenes={} arena_gameplay_boxes={} arena_query_boxes={} arena_query_mesh_geometries={} arena_query_mesh_instances={} arena_query_mesh_triangles={} open_world_gameplay_boxes={} open_world_query_boxes={} open_world_query_mesh_geometries={} open_world_query_mesh_instances={} open_world_query_mesh_triangles={} broadphase_cells={} broadphase_index_entries={} broadphase_max_cell_occupancy={} broadphase_max_cells_per_collider={} broadphase_unindexed_colliders={} generated_open_world_colliders={}",
         collision_summary.scene_count,
         collision_summary.arena_gameplay_boxes,
         collision_summary.arena_query_boxes,
+        collision_summary.arena_query_mesh_geometries,
+        collision_summary.arena_query_mesh_instances,
+        collision_summary.arena_query_mesh_triangles,
         collision_summary.open_world_gameplay_boxes,
         collision_summary.open_world_query_boxes,
+        collision_summary.open_world_query_mesh_geometries,
+        collision_summary.open_world_query_mesh_instances,
+        collision_summary.open_world_query_mesh_triangles,
         collision_summary.broadphase_cells,
         collision_summary.broadphase_index_entries,
         collision_summary.broadphase_max_cell_occupancy,

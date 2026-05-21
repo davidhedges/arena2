@@ -23,6 +23,9 @@ use std::sync::OnceLock;
 
 const GAMEPLAY_COLLISION_JSON: &str = include_str!("gameplay_collision.shared.json");
 const GAMEPLAY_QUERY_COLLISION_JSON: &str = include_str!("gameplay_query_collision.shared.json");
+const MAX_QUERY_MESH_TRIANGLES_PER_COLLIDER: usize = 512;
+const MAX_QUERY_MESH_TRIANGLES_PER_SCENE: usize = 50000;
+const QUERY_MESH_DEGENERATE_TRIANGLE_AREA_SQUARED_EPSILON: f32 = 1.0e-12;
 const OPEN_WORLD_DECOR_MARGIN: f32 = 8.0;
 
 const OPEN_WORLD_TREE_COUNT: usize = 64;
@@ -97,6 +100,10 @@ struct Collider {
 struct GameplayCollisionLayoutFile {
     #[serde(default)]
     boxes: Vec<GameplayCollisionBoxFile>,
+    #[serde(default)]
+    mesh_geometries: Vec<GameplayQueryMeshGeometryFile>,
+    #[serde(default)]
+    mesh_instances: Vec<GameplayQueryMeshInstanceFile>,
 }
 
 #[derive(Deserialize)]
@@ -108,6 +115,23 @@ struct GameplayCollisionBoxFile {
     #[serde(default)]
     rotation: Vec<f32>,
     rotation_y_deg: f32,
+}
+
+#[derive(Deserialize)]
+struct GameplayQueryMeshGeometryFile {
+    id: String,
+    source: String,
+    vertex_count: usize,
+    triangle_count: usize,
+    vertices: Vec<f32>,
+    indices: Vec<usize>,
+}
+
+#[derive(Deserialize)]
+struct GameplayQueryMeshInstanceFile {
+    name: String,
+    geometry_id: String,
+    transform: Vec<f32>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -160,6 +184,29 @@ struct Aabb3 {
 }
 
 #[derive(Debug)]
+struct GameplayQueryMeshGeometry {
+    id: String,
+    source: String,
+    vertices: Vec<[f32; 3]>,
+    indices: Vec<usize>,
+    local_bounds: Aabb3,
+}
+
+#[derive(Debug)]
+struct GameplayQueryMeshInstance {
+    name: String,
+    geometry_index: usize,
+    transform: [f32; 16],
+    bounds: Aabb3,
+}
+
+#[derive(Debug, Default)]
+struct GameplayQueryMeshSet {
+    geometries: Vec<GameplayQueryMeshGeometry>,
+    instances: Vec<GameplayQueryMeshInstance>,
+}
+
+#[derive(Debug)]
 struct GameplayBoxBroadphase {
     cell_size: f32,
     cells: HashMap<(i32, i32, i32), Vec<usize>>,
@@ -175,8 +222,14 @@ pub(crate) struct WorldCollisionPreloadSummary {
     pub scene_count: u32,
     pub arena_gameplay_boxes: u32,
     pub arena_query_boxes: u32,
+    pub arena_query_mesh_geometries: u32,
+    pub arena_query_mesh_instances: u32,
+    pub arena_query_mesh_triangles: u32,
     pub open_world_gameplay_boxes: u32,
     pub open_world_query_boxes: u32,
+    pub open_world_query_mesh_geometries: u32,
+    pub open_world_query_mesh_instances: u32,
+    pub open_world_query_mesh_triangles: u32,
     pub broadphase_cells: u32,
     pub broadphase_index_entries: u32,
     pub broadphase_max_cell_occupancy: u32,
@@ -634,12 +687,18 @@ fn open_world_profile_from_name(scene_name: Option<&str>) -> &'static OpenWorldS
 pub(crate) fn preload_world_collision_data() -> WorldCollisionPreloadSummary {
     let arena_gameplay_boxes = gameplay_collision_boxes().len();
     let arena_query_boxes = gameplay_query_collision_boxes().len();
+    let arena_query_meshes = gameplay_query_meshes();
     let arena_broadphase = gameplay_collision_broadphase();
     let arena_query_broadphase = gameplay_query_collision_broadphase();
     let mut summary = WorldCollisionPreloadSummary {
         scene_count: OPEN_WORLD_SCENE_PROFILES.len().min(u32::MAX as usize) as u32,
         arena_gameplay_boxes: arena_gameplay_boxes.min(u32::MAX as usize) as u32,
         arena_query_boxes: arena_query_boxes.min(u32::MAX as usize) as u32,
+        arena_query_mesh_geometries: arena_query_meshes.geometries.len().min(u32::MAX as usize)
+            as u32,
+        arena_query_mesh_instances: arena_query_meshes.instances.len().min(u32::MAX as usize)
+            as u32,
+        arena_query_mesh_triangles: query_mesh_triangle_count(arena_query_meshes),
         ..Default::default()
     };
     accumulate_broadphase_preload_summary(&mut summary, arena_broadphase);
@@ -649,6 +708,7 @@ pub(crate) fn preload_world_collision_data() -> WorldCollisionPreloadSummary {
         let generated_colliders = open_world_colliders(profile).len();
         let gameplay_boxes = open_world_gameplay_collision_boxes(profile).len();
         let query_boxes = open_world_gameplay_query_collision_boxes(profile).len();
+        let query_meshes = open_world_gameplay_query_meshes(profile);
         let broadphase = open_world_gameplay_collision_broadphase(profile);
         let query_broadphase = open_world_gameplay_query_collision_broadphase(profile);
 
@@ -661,11 +721,29 @@ pub(crate) fn preload_world_collision_data() -> WorldCollisionPreloadSummary {
         summary.open_world_query_boxes = summary
             .open_world_query_boxes
             .saturating_add(query_boxes.min(u32::MAX as usize) as u32);
+        summary.open_world_query_mesh_geometries = summary
+            .open_world_query_mesh_geometries
+            .saturating_add(query_meshes.geometries.len().min(u32::MAX as usize) as u32);
+        summary.open_world_query_mesh_instances = summary
+            .open_world_query_mesh_instances
+            .saturating_add(query_meshes.instances.len().min(u32::MAX as usize) as u32);
+        summary.open_world_query_mesh_triangles = summary
+            .open_world_query_mesh_triangles
+            .saturating_add(query_mesh_triangle_count(query_meshes));
         accumulate_broadphase_preload_summary(&mut summary, broadphase);
         accumulate_broadphase_preload_summary(&mut summary, query_broadphase);
     }
 
     summary
+}
+
+fn query_mesh_triangle_count(meshes: &GameplayQueryMeshSet) -> u32 {
+    meshes
+        .geometries
+        .iter()
+        .map(|geometry| geometry.indices.len() / 3)
+        .sum::<usize>()
+        .min(u32::MAX as usize) as u32
 }
 
 fn accumulate_broadphase_preload_summary(
@@ -1210,6 +1288,11 @@ fn gameplay_query_collision_broadphase() -> &'static GameplayBoxBroadphase {
         .get_or_init(|| GameplayBoxBroadphase::build(gameplay_query_collision_boxes()))
 }
 
+fn gameplay_query_meshes() -> &'static GameplayQueryMeshSet {
+    static GAMEPLAY_QUERY_MESHES: OnceLock<GameplayQueryMeshSet> = OnceLock::new();
+    GAMEPLAY_QUERY_MESHES.get_or_init(load_gameplay_query_meshes)
+}
+
 fn open_world_gameplay_collision_boxes(
     profile: &OpenWorldSceneProfile,
 ) -> &'static [GameplayCollisionBox] {
@@ -1464,6 +1547,28 @@ fn open_world_gameplay_query_collision_broadphase(
     }
 }
 
+fn open_world_gameplay_query_meshes(
+    profile: &OpenWorldSceneProfile,
+) -> &'static GameplayQueryMeshSet {
+    static EMPTY_QUERY_MESH_SET: OnceLock<GameplayQueryMeshSet> = OnceLock::new();
+    static OPEN_WORLD_QUERY_MESHES: OnceLock<HashMap<&'static str, GameplayQueryMeshSet>> =
+        OnceLock::new();
+
+    OPEN_WORLD_QUERY_MESHES
+        .get_or_init(|| {
+            let mut meshes_by_scene = HashMap::new();
+            for profile in OPEN_WORLD_SCENE_PROFILES {
+                meshes_by_scene.insert(
+                    profile.scene_name,
+                    load_open_world_gameplay_query_meshes(profile),
+                );
+            }
+            meshes_by_scene
+        })
+        .get(profile.scene_name)
+        .unwrap_or_else(|| EMPTY_QUERY_MESH_SET.get_or_init(GameplayQueryMeshSet::default))
+}
+
 fn load_gameplay_collision_boxes() -> Vec<GameplayCollisionBox> {
     let file: GameplayCollisionLayoutFile = serde_json::from_str(GAMEPLAY_COLLISION_JSON)
         .expect("failed to parse gameplay_collision.shared.json");
@@ -1478,6 +1583,13 @@ fn load_gameplay_query_collision_boxes() -> Vec<GameplayCollisionBox> {
         .expect("failed to parse gameplay_query_collision.shared.json");
 
     parse_gameplay_collision_boxes(file)
+}
+
+fn load_gameplay_query_meshes() -> GameplayQueryMeshSet {
+    let file: GameplayCollisionLayoutFile = serde_json::from_str(GAMEPLAY_QUERY_COLLISION_JSON)
+        .expect("failed to parse gameplay_query_collision.shared.json");
+
+    parse_gameplay_query_meshes(file)
 }
 
 fn load_open_world_gameplay_collision_boxes(
@@ -1499,15 +1611,27 @@ fn load_open_world_gameplay_collision_boxes(
 fn load_open_world_gameplay_query_collision_boxes(
     profile: &OpenWorldSceneProfile,
 ) -> Vec<GameplayCollisionBox> {
-    let json = if profile.scene_name == OASIS_DAY_PROFILE.scene_name {
+    let file: GameplayCollisionLayoutFile =
+        serde_json::from_str(query_collision_json_for_profile(profile))
+            .expect("failed to parse open-world gameplay query collision JSON");
+
+    parse_gameplay_collision_boxes(file)
+}
+
+fn load_open_world_gameplay_query_meshes(profile: &OpenWorldSceneProfile) -> GameplayQueryMeshSet {
+    let file: GameplayCollisionLayoutFile =
+        serde_json::from_str(query_collision_json_for_profile(profile))
+            .expect("failed to parse open-world gameplay query collision JSON");
+
+    parse_gameplay_query_meshes(file)
+}
+
+fn query_collision_json_for_profile(profile: &OpenWorldSceneProfile) -> &'static str {
+    if profile.scene_name == OASIS_DAY_PROFILE.scene_name {
         OPEN_WORLD_GAMEPLAY_QUERY_COLLISION_JSON
     } else {
         profile.gameplay_query_collision_json
-    };
-    let file: GameplayCollisionLayoutFile = serde_json::from_str(json)
-        .expect("failed to parse open-world gameplay query collision JSON");
-
-    parse_gameplay_collision_boxes(file)
+    }
 }
 
 fn parse_gameplay_collision_boxes(file: GameplayCollisionLayoutFile) -> Vec<GameplayCollisionBox> {
@@ -1577,6 +1701,227 @@ fn parse_gameplay_collision_boxes(file: GameplayCollisionLayoutFile) -> Vec<Game
             }
         })
         .collect()
+}
+
+fn parse_gameplay_query_meshes(file: GameplayCollisionLayoutFile) -> GameplayQueryMeshSet {
+    let mut scene_triangle_count = 0usize;
+    let mut geometry_indices_by_id = HashMap::new();
+    let geometries: Vec<GameplayQueryMeshGeometry> = file
+        .mesh_geometries
+        .into_iter()
+        .enumerate()
+        .map(|(geometry_index, mesh_file)| {
+            assert!(
+                !mesh_file.id.is_empty(),
+                "query mesh geometry at index {geometry_index} has an empty id"
+            );
+            assert!(
+                geometry_indices_by_id
+                    .insert(mesh_file.id.clone(), geometry_index)
+                    .is_none(),
+                "duplicate query mesh geometry id '{}'",
+                mesh_file.id
+            );
+            assert!(
+                mesh_file.triangle_count <= MAX_QUERY_MESH_TRIANGLES_PER_COLLIDER,
+                "query mesh geometry '{}' has {} triangles, exceeding per-collider budget {}",
+                mesh_file.id,
+                mesh_file.triangle_count,
+                MAX_QUERY_MESH_TRIANGLES_PER_COLLIDER
+            );
+            scene_triangle_count = scene_triangle_count.saturating_add(mesh_file.triangle_count);
+            assert!(
+                scene_triangle_count <= MAX_QUERY_MESH_TRIANGLES_PER_SCENE,
+                "query mesh geometry data exceeds triangle budget {}",
+                MAX_QUERY_MESH_TRIANGLES_PER_SCENE
+            );
+            assert!(
+                mesh_file.vertex_count > 0 && mesh_file.triangle_count > 0,
+                "query mesh geometry '{}' is empty",
+                mesh_file.id
+            );
+            assert!(
+                mesh_file.vertices.len() == mesh_file.vertex_count * 3,
+                "query mesh geometry '{}' vertex buffer length {} does not match vertex_count {}",
+                mesh_file.id,
+                mesh_file.vertices.len(),
+                mesh_file.vertex_count
+            );
+            assert!(
+                mesh_file.indices.len() == mesh_file.triangle_count * 3,
+                "query mesh geometry '{}' index buffer length {} does not match triangle_count {}",
+                mesh_file.id,
+                mesh_file.indices.len(),
+                mesh_file.triangle_count
+            );
+
+            let mut vertices = Vec::with_capacity(mesh_file.vertex_count);
+            let mut bounds: Option<Aabb3> = None;
+            for vertex in mesh_file.vertices.chunks_exact(3) {
+                let x = vertex[0];
+                let y = vertex[1];
+                let z = vertex[2];
+                assert!(
+                    x.is_finite() && y.is_finite() && z.is_finite(),
+                    "query mesh geometry '{}' contains non-finite vertex data",
+                    mesh_file.id
+                );
+                vertices.push([x, y, z]);
+                bounds = Some(match bounds {
+                    Some(bounds) => Aabb3 {
+                        min_x: bounds.min_x.min(x),
+                        min_y: bounds.min_y.min(y),
+                        min_z: bounds.min_z.min(z),
+                        max_x: bounds.max_x.max(x),
+                        max_y: bounds.max_y.max(y),
+                        max_z: bounds.max_z.max(z),
+                    },
+                    None => Aabb3 {
+                        min_x: x,
+                        min_y: y,
+                        min_z: z,
+                        max_x: x,
+                        max_y: y,
+                        max_z: z,
+                    },
+                });
+            }
+
+            for index in &mesh_file.indices {
+                assert!(
+                    *index < mesh_file.vertex_count,
+                    "query mesh geometry '{}' index {} is outside vertex_count {}",
+                    mesh_file.id,
+                    index,
+                    mesh_file.vertex_count
+                );
+            }
+
+            for triangle in mesh_file.indices.chunks_exact(3) {
+                let a = vertices[triangle[0]];
+                let b = vertices[triangle[1]];
+                let c = vertices[triangle[2]];
+                assert!(
+                    triangle_area_squared(a, b, c)
+                        > QUERY_MESH_DEGENERATE_TRIANGLE_AREA_SQUARED_EPSILON,
+                    "query mesh geometry '{}' contains a degenerate triangle",
+                    mesh_file.id
+                );
+            }
+
+            GameplayQueryMeshGeometry {
+                id: mesh_file.id,
+                source: mesh_file.source,
+                vertices,
+                indices: mesh_file.indices,
+                local_bounds: bounds
+                    .expect("query mesh bounds should exist for non-empty geometry"),
+            }
+        })
+        .collect();
+
+    let instances = file
+        .mesh_instances
+        .into_iter()
+        .map(|instance_file| {
+            assert!(
+                !instance_file.name.is_empty(),
+                "query mesh instance has an empty name"
+            );
+            let geometry_index = *geometry_indices_by_id
+                .get(&instance_file.geometry_id)
+                .unwrap_or_else(|| {
+                    panic!(
+                        "query mesh instance '{}' references missing geometry '{}'",
+                        instance_file.name, instance_file.geometry_id
+                    )
+                });
+            assert!(
+                instance_file.transform.len() == 16,
+                "query mesh instance '{}' transform length {} does not equal 16",
+                instance_file.name,
+                instance_file.transform.len()
+            );
+            let mut transform = [0.0; 16];
+            for (index, value) in instance_file.transform.into_iter().enumerate() {
+                assert!(
+                    value.is_finite(),
+                    "query mesh instance '{}' contains non-finite transform data",
+                    instance_file.name
+                );
+                transform[index] = value;
+            }
+
+            let bounds = mesh_instance_bounds(&geometries[geometry_index], &transform);
+            assert!(
+                bounds.is_finite(),
+                "query mesh instance '{}' computed non-finite bounds",
+                instance_file.name
+            );
+
+            GameplayQueryMeshInstance {
+                name: instance_file.name,
+                geometry_index,
+                transform,
+                bounds,
+            }
+        })
+        .collect();
+
+    GameplayQueryMeshSet {
+        geometries,
+        instances,
+    }
+}
+
+fn mesh_instance_bounds(geometry: &GameplayQueryMeshGeometry, transform: &[f32; 16]) -> Aabb3 {
+    let mut bounds: Option<Aabb3> = None;
+    for vertex in &geometry.vertices {
+        let [x, y, z] = transform_point(transform, *vertex);
+        bounds = Some(match bounds {
+            Some(bounds) => Aabb3 {
+                min_x: bounds.min_x.min(x),
+                min_y: bounds.min_y.min(y),
+                min_z: bounds.min_z.min(z),
+                max_x: bounds.max_x.max(x),
+                max_y: bounds.max_y.max(y),
+                max_z: bounds.max_z.max(z),
+            },
+            None => Aabb3 {
+                min_x: x,
+                min_y: y,
+                min_z: z,
+                max_x: x,
+                max_y: y,
+                max_z: z,
+            },
+        });
+    }
+    bounds.expect("query mesh bounds should exist for non-empty geometry")
+}
+
+fn transform_point(transform: &[f32; 16], point: [f32; 3]) -> [f32; 3] {
+    // Future mesh narrowphase code must account for mirrored transforms before using winding for
+    // one-sided ray tests; this helper intentionally only applies the authored affine transform.
+    [
+        transform[0] * point[0] + transform[1] * point[1] + transform[2] * point[2] + transform[3],
+        transform[4] * point[0] + transform[5] * point[1] + transform[6] * point[2] + transform[7],
+        transform[8] * point[0]
+            + transform[9] * point[1]
+            + transform[10] * point[2]
+            + transform[11],
+    ]
+}
+
+fn triangle_area_squared(a: [f32; 3], b: [f32; 3], c: [f32; 3]) -> f32 {
+    let ab = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+    let ac = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+    let cross = [
+        ab[1] * ac[2] - ab[2] * ac[1],
+        ab[2] * ac[0] - ab[0] * ac[2],
+        ab[0] * ac[1] - ab[1] * ac[0],
+    ];
+    cross[0] * cross[0] + cross[1] * cross[1] + cross[2] * cross[2]
 }
 
 fn assert_no_full_rotation_movement_boxes(boxes: &[GameplayCollisionBox], source: &str) {
@@ -2539,11 +2884,13 @@ fn raycast_centered_aabb(
 #[cfg(test)]
 mod tests {
     use super::{
-        assert_no_full_rotation_movement_boxes, parse_gameplay_collision_boxes, quaternion_to_axes,
-        raycast_gameplay_collision_boxes, raycast_movement_and_query_collision_boxes,
+        assert_no_full_rotation_movement_boxes, parse_gameplay_collision_boxes,
+        parse_gameplay_query_meshes, quaternion_to_axes, raycast_gameplay_collision_boxes,
+        raycast_movement_and_query_collision_boxes,
         resolve_world_spawn_position_with_layout_for_scene, try_world_gameplay_box_hit,
         GameplayBoxBroadphase, GameplayCollisionBox, GameplayCollisionBoxFile,
-        GameplayCollisionLayoutFile,
+        GameplayCollisionLayoutFile, GameplayQueryMeshGeometryFile, GameplayQueryMeshInstanceFile,
+        MAX_QUERY_MESH_TRIANGLES_PER_COLLIDER,
     };
     use crate::arena::{WorldRayHit, WorldRaycastRequest};
     use crate::open_world_scene::{
@@ -2803,6 +3150,8 @@ mod tests {
                 rotation: vec![0.0, 0.0, 0.0, 0.0],
                 rotation_y_deg: 0.0,
             }],
+            mesh_geometries: Vec::new(),
+            mesh_instances: Vec::new(),
         });
     }
 
@@ -2811,6 +3160,401 @@ mod tests {
     fn movement_collision_rejects_obb_xyz() {
         let boxes = vec![test_obb_xyz_z_roll(0.0, 0.0, 0.0)];
         assert_no_full_rotation_movement_boxes(&boxes, "test_movement.shared.json");
+    }
+
+    #[test]
+    fn query_mesh_parse_validates_and_builds_bounds() {
+        let meshes = parse_gameplay_query_meshes(test_query_mesh_layout(
+            test_query_mesh_geometry(
+                "test_geometry",
+                multi_triangle_vertices(),
+                vec![0, 1, 2, 1, 3, 2],
+            ),
+            test_query_mesh_instance(
+                "test_mesh",
+                "test_geometry",
+                translated_transform(10.0, -5.0, 2.0),
+            ),
+        ));
+
+        assert_eq!(meshes.geometries.len(), 1);
+        assert_eq!(meshes.instances.len(), 1);
+        assert_eq!(meshes.geometries[0].id, "test_geometry");
+        assert_eq!(meshes.geometries[0].source, "test_source");
+        assert_eq!(meshes.geometries[0].vertices.len(), 4);
+        assert_eq!(meshes.geometries[0].indices.len(), 6);
+        assert_eq!(meshes.geometries[0].local_bounds.min_x, -1.0);
+        assert_eq!(meshes.geometries[0].local_bounds.max_x, 3.0);
+        assert_eq!(meshes.geometries[0].local_bounds.min_y, -2.0);
+        assert_eq!(meshes.geometries[0].local_bounds.max_y, 4.0);
+        assert_eq!(meshes.geometries[0].local_bounds.min_z, -3.0);
+        assert_eq!(meshes.geometries[0].local_bounds.max_z, 2.5);
+        assert_eq!(meshes.instances[0].name, "test_mesh");
+        assert_eq!(meshes.instances[0].geometry_index, 0);
+        assert_eq!(meshes.instances[0].transform[3], 10.0);
+        assert_eq!(meshes.instances[0].bounds.min_x, 9.0);
+        assert_eq!(meshes.instances[0].bounds.max_x, 13.0);
+        assert_eq!(meshes.instances[0].bounds.min_y, -7.0);
+        assert_eq!(meshes.instances[0].bounds.max_y, -1.0);
+        assert_eq!(meshes.instances[0].bounds.min_z, -1.0);
+        assert_eq!(meshes.instances[0].bounds.max_z, 4.5);
+    }
+
+    #[test]
+    fn query_mesh_parse_supports_multiple_instances_sharing_one_geometry() {
+        let meshes = parse_gameplay_query_meshes(test_query_mesh_layout_many(
+            vec![test_query_mesh_geometry(
+                "shared_geometry",
+                vec![0.0, 0.0, 0.0, 2.0, 0.0, 0.0, 0.0, 3.0, 0.0],
+                vec![0, 1, 2],
+            )],
+            vec![
+                test_query_mesh_instance(
+                    "instance_a",
+                    "shared_geometry",
+                    translated_transform(1.0, 2.0, 3.0),
+                ),
+                test_query_mesh_instance(
+                    "instance_b",
+                    "shared_geometry",
+                    translated_transform(-4.0, 0.5, 8.0),
+                ),
+            ],
+        ));
+
+        assert_eq!(meshes.geometries.len(), 1);
+        assert_eq!(meshes.instances.len(), 2);
+        assert_eq!(meshes.instances[0].geometry_index, 0);
+        assert_eq!(meshes.instances[1].geometry_index, 0);
+        assert_eq!(meshes.instances[0].bounds.min_x, 1.0);
+        assert_eq!(meshes.instances[0].bounds.max_y, 5.0);
+        assert_eq!(meshes.instances[1].bounds.min_x, -4.0);
+        assert_eq!(meshes.instances[1].bounds.max_z, 8.0);
+    }
+
+    #[test]
+    fn query_mesh_parse_matches_json_utility_shape() {
+        let file: GameplayCollisionLayoutFile = serde_json::from_str(
+            r#"{
+                "version": 1,
+                "boxes": [],
+                "mesh_geometries": [{
+                    "id": "guid:mesh:3:1",
+                    "source": "Assets/Test.prefab",
+                    "vertex_count": 3,
+                    "triangle_count": 1,
+                    "vertices": [0.0,0.0,0.0, 1.0,0.0,0.0, 0.0,1.0,0.0],
+                    "indices": [0,1,2]
+                }],
+                "mesh_instances": [{
+                    "name": "Root/MeshCollider",
+                    "geometry_id": "guid:mesh:3:1",
+                    "transform": [1.0,0.0,0.0,2.0, 0.0,1.0,0.0,3.0, 0.0,0.0,1.0,4.0, 0.0,0.0,0.0,1.0]
+                }]
+            }"#,
+        )
+        .expect("test JSON should parse");
+        let meshes = parse_gameplay_query_meshes(file);
+        assert_eq!(meshes.geometries.len(), 1);
+        assert_eq!(meshes.instances.len(), 1);
+        assert_eq!(meshes.instances[0].bounds.min_x, 2.0);
+        assert_eq!(meshes.instances[0].bounds.max_z, 4.0);
+    }
+
+    #[test]
+    #[should_panic(expected = "non-finite vertex data")]
+    fn query_mesh_parse_rejects_non_finite_vertex() {
+        let _ = parse_gameplay_query_meshes(test_query_mesh_layout(
+            test_query_mesh_geometry(
+                "bad_geometry",
+                vec![0.0, 0.0, 0.0, f32::NAN, 0.0, 0.0, 0.0, 1.0, 0.0],
+                vec![0, 1, 2],
+            ),
+            test_query_mesh_instance("bad_mesh", "bad_geometry", identity_transform()),
+        ));
+    }
+
+    #[test]
+    #[should_panic(expected = "does not match vertex_count")]
+    fn query_mesh_parse_rejects_mismatched_vertex_count() {
+        let _ = parse_gameplay_query_meshes(GameplayCollisionLayoutFile {
+            boxes: Vec::new(),
+            mesh_geometries: vec![GameplayQueryMeshGeometryFile {
+                id: "bad_geometry".to_string(),
+                source: "test".to_string(),
+                vertex_count: 4,
+                triangle_count: 1,
+                vertices: vec![0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                indices: vec![0, 1, 2],
+            }],
+            mesh_instances: vec![test_query_mesh_instance(
+                "bad_mesh",
+                "bad_geometry",
+                identity_transform(),
+            )],
+        });
+    }
+
+    #[test]
+    #[should_panic(expected = "exceeding per-collider budget")]
+    fn query_mesh_parse_rejects_per_geometry_triangle_budget_overflow() {
+        let _ = parse_gameplay_query_meshes(test_query_mesh_layout(
+            GameplayQueryMeshGeometryFile {
+                id: "too_big".to_string(),
+                source: "test_source".to_string(),
+                vertex_count: 0,
+                triangle_count: MAX_QUERY_MESH_TRIANGLES_PER_COLLIDER + 1,
+                vertices: Vec::new(),
+                indices: Vec::new(),
+            },
+            test_query_mesh_instance("bad_mesh", "too_big", identity_transform()),
+        ));
+    }
+
+    #[test]
+    #[should_panic(expected = "exceeds triangle budget")]
+    fn query_mesh_parse_rejects_scene_triangle_budget_overflow() {
+        let mut geometries = Vec::new();
+        let mut instances = Vec::new();
+        for index in 0..98 {
+            let id = format!("geometry_{index}");
+            geometries.push(test_repeated_triangle_geometry(
+                &id,
+                MAX_QUERY_MESH_TRIANGLES_PER_COLLIDER,
+            ));
+            instances.push(test_query_mesh_instance(
+                &format!("instance_{index}"),
+                &id,
+                identity_transform(),
+            ));
+        }
+
+        let _ = parse_gameplay_query_meshes(test_query_mesh_layout_many(geometries, instances));
+    }
+
+    #[test]
+    #[should_panic(expected = "duplicate query mesh geometry id")]
+    fn query_mesh_parse_rejects_duplicate_geometry_id() {
+        let _ = parse_gameplay_query_meshes(test_query_mesh_layout_many(
+            vec![
+                test_query_mesh_geometry(
+                    "duplicate",
+                    vec![0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                    vec![0, 1, 2],
+                ),
+                test_query_mesh_geometry(
+                    "duplicate",
+                    vec![0.0, 0.0, 0.0, 2.0, 0.0, 0.0, 0.0, 2.0, 0.0],
+                    vec![0, 1, 2],
+                ),
+            ],
+            vec![test_query_mesh_instance(
+                "bad_mesh",
+                "duplicate",
+                identity_transform(),
+            )],
+        ));
+    }
+
+    #[test]
+    #[should_panic(expected = "has an empty id")]
+    fn query_mesh_parse_rejects_empty_geometry_id() {
+        let _ = parse_gameplay_query_meshes(test_query_mesh_layout(
+            test_query_mesh_geometry(
+                "",
+                vec![0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                vec![0, 1, 2],
+            ),
+            test_query_mesh_instance("bad_mesh", "", identity_transform()),
+        ));
+    }
+
+    #[test]
+    #[should_panic(expected = "index buffer length 3 does not match triangle_count 2")]
+    fn query_mesh_parse_rejects_mismatched_triangle_count() {
+        let _ = parse_gameplay_query_meshes(GameplayCollisionLayoutFile {
+            boxes: Vec::new(),
+            mesh_geometries: vec![GameplayQueryMeshGeometryFile {
+                id: "bad_geometry".to_string(),
+                source: "test".to_string(),
+                vertex_count: 3,
+                triangle_count: 2,
+                vertices: vec![0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                indices: vec![0, 1, 2],
+            }],
+            mesh_instances: vec![test_query_mesh_instance(
+                "bad_mesh",
+                "bad_geometry",
+                identity_transform(),
+            )],
+        });
+    }
+
+    #[test]
+    #[should_panic(expected = "index 3 is outside vertex_count 3")]
+    fn query_mesh_parse_rejects_out_of_range_index() {
+        let _ = parse_gameplay_query_meshes(test_query_mesh_layout(
+            test_query_mesh_geometry(
+                "bad_geometry",
+                vec![0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                vec![0, 1, 3],
+            ),
+            test_query_mesh_instance("bad_mesh", "bad_geometry", identity_transform()),
+        ));
+    }
+
+    #[test]
+    #[should_panic(expected = "contains a degenerate triangle")]
+    fn query_mesh_parse_rejects_degenerate_triangle() {
+        let _ = parse_gameplay_query_meshes(test_query_mesh_layout(
+            test_query_mesh_geometry(
+                "bad_geometry",
+                vec![0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 2.0, 0.0, 0.0],
+                vec![0, 1, 2],
+            ),
+            test_query_mesh_instance("bad_mesh", "bad_geometry", identity_transform()),
+        ));
+    }
+
+    #[test]
+    #[should_panic(expected = "transform length 15 does not equal 16")]
+    fn query_mesh_parse_rejects_wrong_length_transform() {
+        let _ = parse_gameplay_query_meshes(test_query_mesh_layout(
+            test_query_mesh_geometry(
+                "good_geometry",
+                vec![0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                vec![0, 1, 2],
+            ),
+            test_query_mesh_instance("bad_mesh", "good_geometry", vec![0.0; 15]),
+        ));
+    }
+
+    #[test]
+    #[should_panic(expected = "contains non-finite transform data")]
+    fn query_mesh_parse_rejects_non_finite_transform() {
+        let mut transform = identity_transform();
+        transform[3] = f32::INFINITY;
+        let _ = parse_gameplay_query_meshes(test_query_mesh_layout(
+            test_query_mesh_geometry(
+                "good_geometry",
+                vec![0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                vec![0, 1, 2],
+            ),
+            test_query_mesh_instance("bad_mesh", "good_geometry", transform),
+        ));
+    }
+
+    #[test]
+    #[should_panic(expected = "references missing geometry")]
+    fn query_mesh_parse_rejects_missing_geometry_reference() {
+        let _ = parse_gameplay_query_meshes(test_query_mesh_layout(
+            test_query_mesh_geometry(
+                "good_geometry",
+                vec![0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                vec![0, 1, 2],
+            ),
+            test_query_mesh_instance("bad_mesh", "missing_geometry", identity_transform()),
+        ));
+    }
+
+    #[test]
+    #[should_panic(expected = "query mesh instance has an empty name")]
+    fn query_mesh_parse_rejects_empty_instance_name() {
+        let _ = parse_gameplay_query_meshes(test_query_mesh_layout(
+            test_query_mesh_geometry(
+                "good_geometry",
+                vec![0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                vec![0, 1, 2],
+            ),
+            test_query_mesh_instance("", "good_geometry", identity_transform()),
+        ));
+    }
+
+    fn test_query_mesh_layout(
+        geometry: GameplayQueryMeshGeometryFile,
+        instance: GameplayQueryMeshInstanceFile,
+    ) -> GameplayCollisionLayoutFile {
+        test_query_mesh_layout_many(vec![geometry], vec![instance])
+    }
+
+    fn test_query_mesh_layout_many(
+        geometries: Vec<GameplayQueryMeshGeometryFile>,
+        instances: Vec<GameplayQueryMeshInstanceFile>,
+    ) -> GameplayCollisionLayoutFile {
+        GameplayCollisionLayoutFile {
+            boxes: Vec::new(),
+            mesh_geometries: geometries,
+            mesh_instances: instances,
+        }
+    }
+
+    fn test_query_mesh_geometry(
+        id: &str,
+        vertices: Vec<f32>,
+        indices: Vec<usize>,
+    ) -> GameplayQueryMeshGeometryFile {
+        GameplayQueryMeshGeometryFile {
+            id: id.to_string(),
+            source: "test_source".to_string(),
+            vertex_count: vertices.len() / 3,
+            triangle_count: indices.len() / 3,
+            vertices,
+            indices,
+        }
+    }
+
+    fn test_query_mesh_instance(
+        name: &str,
+        geometry_id: &str,
+        transform: Vec<f32>,
+    ) -> GameplayQueryMeshInstanceFile {
+        GameplayQueryMeshInstanceFile {
+            name: name.to_string(),
+            geometry_id: geometry_id.to_string(),
+            transform,
+        }
+    }
+
+    fn identity_transform() -> Vec<f32> {
+        translated_transform(0.0, 0.0, 0.0)
+    }
+
+    fn translated_transform(x: f32, y: f32, z: f32) -> Vec<f32> {
+        vec![
+            1.0, 0.0, 0.0, x, 0.0, 1.0, 0.0, y, 0.0, 0.0, 1.0, z, 0.0, 0.0, 0.0, 1.0,
+        ]
+    }
+
+    fn multi_triangle_vertices() -> Vec<f32> {
+        vec![
+            -1.0, 2.0, 0.5, 3.0, -2.0, 1.0, 0.0, 4.0, -3.0, 2.0, 3.0, 2.5,
+        ]
+    }
+
+    fn test_repeated_triangle_geometry(
+        id: &str,
+        triangle_count: usize,
+    ) -> GameplayQueryMeshGeometryFile {
+        let mut vertices = Vec::with_capacity(triangle_count * 9);
+        let mut indices = Vec::with_capacity(triangle_count * 3);
+        for triangle_index in 0..triangle_count {
+            let base_vertex = triangle_index * 3;
+            let offset = triangle_index as f32 * 2.0;
+            vertices.extend_from_slice(&[
+                offset,
+                0.0,
+                0.0,
+                offset + 1.0,
+                0.0,
+                0.0,
+                offset,
+                1.0,
+                0.0,
+            ]);
+            indices.extend_from_slice(&[base_vertex, base_vertex + 1, base_vertex + 2]);
+        }
+
+        test_query_mesh_geometry(id, vertices, indices)
     }
 
     #[test]

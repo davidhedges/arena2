@@ -55,7 +55,7 @@ Current branch status:
 - Phase 2 box-only query-collision export is implemented. The exporter writes separate `*.query_collision.shared.json` files from `GameplayQueryCollision` `BoxCollider`s. During migration, the server raycast path queries both movement boxes and query boxes, then keeps the nearest hit, so partial query authoring cannot make every non-query-authored prop stop blocking projectiles.
 - `Arena/OpenWorld/Scene Prep/3c Prepare Selected Variant Collision Roles` is the preferred manual cleanup tool for selected variant assets, selected Project folders containing variants, prefab-mode roots, scene instances, or scene containers. It expands Project folder selections to prefab assets underneath, expands scene/container selections to the placed prefab instance roots underneath, edits selected prefab assets by loading/saving prefab contents, keeps visual roots/LOD objects off collision layers, copies visual/root `BoxCollider`s onto dedicated `ArenaGameplayCollision*` children, copies those same author boxes to `ArenaGameplayQueryCollision*` when they are the best available query shape, preserves the original visual/root box components on `Default` as authoring source data, and otherwise creates `ArenaGameplayQueryCollision*` children from mesh colliders on `GameplayQueryCollision`.
 - Early audit of placed rocks showed ordinary X/Z tilt on environment props. Full-rotation query `BoxCollider` support is now implemented as `obb_xyz` export data with quaternion rotation and server-side full-rotation OBB raycasts. Movement export can still flatten tilted boxes to conservative AABBs.
-- Mesh geometry export, prototype/instance encoding, and mesh narrowphase acceleration are not implemented yet.
+- Mesh query geometry export and server parse/preload are partially implemented as a data path. Meshes are not used for projectile/LOS hits yet; mesh narrowphase acceleration is still pending.
 
 ## Design Direction
 
@@ -228,6 +228,10 @@ Completed setup:
 - Server broadphase indexes `obb_xyz` boxes by derived world AABB, and projectile/LOS narrowphase transforms rays into the box's local axes for deterministic OBB ray tests.
 - Invalid `obb_xyz` quaternions are load-time errors, not silently corrected to identity.
 - Movement collision exports must not contain `obb_xyz` until movement pushout supports true full-rotation OBBs. Current movement helpers retain a conservative AABB fallback only for synthetic/test data.
+- Query `MeshCollider` export writes validated prototype/instance mesh data into query collision JSON under `mesh_geometries` and `mesh_instances`. Mesh geometry vertices remain in mesh-local/prototype-local space, and each scene placement records a transform instance.
+- Current mesh validation requires static non-trigger non-convex mesh colliders, readable mesh assets with stable AssetDatabase GUIDs, valid triangle indices, finite vertices/transforms, degenerate-triangle removal, a per-geometry budget of 512 triangles, and a per-scene budget of 50,000 unique mesh-geometry triangles.
+- Degenerate-triangle filtering uses the same `|cross(edge_a, edge_b)|^2 <= 1e-12` threshold in the Unity exporter and server parser so exported JSON cannot pass editor cleanup and then fail server preload.
+- Server preload parses query mesh geometries and instances, validates the exported buffers, derives local geometry bounds and per-instance world bounds server-side, and reports geometry/instance/triangle counts. Meshes are intentionally not consulted by projectile/LOS raycasts until the mesh narrowphase and acceleration structure are implemented.
 
 Initial mesh policy:
 
@@ -248,6 +252,7 @@ Exported data should include:
 - Vertices in prototype-local space, never pre-transformed for shared prototypes.
 - Triangle indices.
 - Prototype-local AABB.
+- Server-derived instance world AABB, not an exported second source of truth.
 - Optional material/surface identifier, if needed later.
 
 Projectile and LOS queries should choose the nearest hit across all enabled world surfaces: query-collision boxes, query-collision meshes, existing terrain/heightfield behavior, and generated open-world geometry. Heightfield export is out of scope for mesh authoring, but heightfield hits remain part of final world-hit selection where they already participate.
