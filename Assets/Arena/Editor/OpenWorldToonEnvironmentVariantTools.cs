@@ -124,12 +124,6 @@ namespace Arena.Editor
                         continue;
                     }
 
-                    if (HasBlockingBoxCollider(sourcePrefab))
-                    {
-                        stats.SkippedExistingBoxColliders++;
-                        continue;
-                    }
-
                     string variantPath = GetVariantPath(sourcePath);
                     GameObject? existingVariant = AssetDatabase.LoadAssetAtPath<GameObject>(variantPath);
                     if (existingVariant != null)
@@ -229,17 +223,6 @@ namespace Arena.Editor
             collider.size = ClampColliderSize(bounds.size);
             collider.isTrigger = false;
             return true;
-        }
-
-        private static bool HasBlockingBoxCollider(GameObject root)
-        {
-            foreach (BoxCollider collider in root.GetComponentsInChildren<BoxCollider>(true))
-            {
-                if (collider.enabled && !collider.isTrigger)
-                    return true;
-            }
-
-            return false;
         }
 
         private static bool HasGameplayBoxCollider(GameObject root)
@@ -560,7 +543,7 @@ namespace Arena.Editor
             Debug.Log(
                 $"[OpenWorldToonEnvironmentVariantTools] Generated Toon variants for {scope}. " +
                 $"Created: {stats.Created}, existing: {stats.Existing}, updated existing: {stats.UpdatedExisting}, " +
-                $"generated colliders: {stats.GeneratedColliders}, skipped existing BoxColliders: {stats.SkippedExistingBoxColliders}, " +
+                $"generated colliders: {stats.GeneratedColliders}, " +
                 $"skipped no renderer bounds: {stats.SkippedNoRendererBounds}, failed: {stats.Failed}.");
         }
 
@@ -588,7 +571,6 @@ namespace Arena.Editor
             public int Existing;
             public int UpdatedExisting;
             public int GeneratedColliders;
-            public int SkippedExistingBoxColliders;
             public int SkippedNoRendererBounds;
             public int Failed;
         }

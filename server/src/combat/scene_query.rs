@@ -7,7 +7,8 @@ use crate::arena::{
 use crate::combat::player_snapshot::PlayerSnapshot;
 use crate::practice::is_training_instance;
 use crate::world_collision::{
-    raycast_world_with_layout_for_scene, surface_height_for_world_at_y_with_layout_for_scene,
+    raycast_world_with_layout_for_scene, raycast_world_with_layout_for_scene_with_stats,
+    surface_height_for_world_at_y_with_layout_for_scene, WorldRaycastStats,
 };
 
 #[allow(unused_imports)]
@@ -154,6 +155,7 @@ pub(crate) fn first_hit_on_segment(
         end_z,
         radius,
         players.iter(),
+        None,
     )
 }
 
@@ -200,7 +202,7 @@ pub(crate) fn first_player_hit_on_segment_candidates(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn first_hit_on_segment_candidates(
+pub(crate) fn first_hit_on_segment_candidates_with_world_stats(
     ctx: &ReducerContext,
     caster: Identity,
     start_x: f32,
@@ -212,6 +214,38 @@ pub(crate) fn first_hit_on_segment_candidates(
     radius: f32,
     players: &[PlayerSnapshot],
     candidate_indices: &[usize],
+    world_stats: &mut WorldRaycastStats,
+) -> Option<SceneHit> {
+    first_hit_on_segment_candidates_with_stats(
+        ctx,
+        caster,
+        start_x,
+        start_y,
+        start_z,
+        end_x,
+        end_y,
+        end_z,
+        radius,
+        players,
+        candidate_indices,
+        Some(world_stats),
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn first_hit_on_segment_candidates_with_stats(
+    ctx: &ReducerContext,
+    caster: Identity,
+    start_x: f32,
+    start_y: f32,
+    start_z: f32,
+    end_x: f32,
+    end_y: f32,
+    end_z: f32,
+    radius: f32,
+    players: &[PlayerSnapshot],
+    candidate_indices: &[usize],
+    world_stats: Option<&mut WorldRaycastStats>,
 ) -> Option<SceneHit> {
     first_hit_on_segment_with_players(
         ctx,
@@ -226,6 +260,7 @@ pub(crate) fn first_hit_on_segment_candidates(
         candidate_indices
             .iter()
             .filter_map(|index| players.get(*index)),
+        world_stats,
     )
 }
 
@@ -241,6 +276,7 @@ fn first_hit_on_segment_with_players<'a, I>(
     end_z: f32,
     radius: f32,
     players: I,
+    mut world_stats: Option<&mut WorldRaycastStats>,
 ) -> Option<SceneHit>
 where
     I: IntoIterator<Item = &'a PlayerSnapshot>,
@@ -267,7 +303,7 @@ where
         Some(open_world_scene_name_for_identity(ctx, caster))
     };
 
-    if let Some(hit) = raycast_world_with_layout_for_scene(
+    if let Some(hit) = raycast_world_with_layout_for_scene_with_stats(
         seed,
         flat_ground_only,
         open_world_scene_name.as_deref(),
@@ -281,6 +317,7 @@ where
             max_distance: distance,
             radius,
         },
+        world_stats.as_deref_mut(),
     ) {
         let world_hit = SceneHit {
             kind: SceneHitKind::World,
@@ -316,7 +353,7 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn first_world_hit_on_segment(
+pub(crate) fn first_world_hit_on_segment_with_stats(
     ctx: &ReducerContext,
     caster: Identity,
     start_x: f32,
@@ -326,6 +363,34 @@ pub(crate) fn first_world_hit_on_segment(
     end_y: f32,
     end_z: f32,
     radius: f32,
+    world_stats: &mut WorldRaycastStats,
+) -> Option<SceneHit> {
+    first_world_hit_on_segment_with_optional_stats(
+        ctx,
+        caster,
+        start_x,
+        start_y,
+        start_z,
+        end_x,
+        end_y,
+        end_z,
+        radius,
+        Some(world_stats),
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn first_world_hit_on_segment_with_optional_stats(
+    ctx: &ReducerContext,
+    caster: Identity,
+    start_x: f32,
+    start_y: f32,
+    start_z: f32,
+    end_x: f32,
+    end_y: f32,
+    end_z: f32,
+    radius: f32,
+    world_stats: Option<&mut WorldRaycastStats>,
 ) -> Option<SceneHit> {
     let dx = end_x - start_x;
     let dy = end_y - start_y;
@@ -344,7 +409,7 @@ pub(crate) fn first_world_hit_on_segment(
         Some(open_world_scene_name_for_identity(ctx, caster))
     };
 
-    raycast_world_with_layout_for_scene(
+    raycast_world_with_layout_for_scene_with_stats(
         seed,
         flat_ground_only,
         open_world_scene_name.as_deref(),
@@ -358,6 +423,7 @@ pub(crate) fn first_world_hit_on_segment(
             max_distance: distance,
             radius,
         },
+        world_stats,
     )
     .map(|hit| SceneHit {
         kind: SceneHitKind::World,

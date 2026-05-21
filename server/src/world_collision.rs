@@ -5,10 +5,10 @@ use crate::arena::{
 use crate::movement::GROUND_Y;
 use crate::open_world_scene::{
     default_open_world_scene_profile, open_world_scene_profile_for_scene, OpenWorldSceneProfile,
-    ADVENTURE_ISLAND_PROFILE, DESERT_DAY_PROFILE, DOCKS_DAY_PROFILE,
-    GIANT_SKELETON_PROFILE, GOLDEN_VALLEY_OVERCAST_PROFILE, GOLDEN_VALLEY_SUNNY_PROFILE,
-    GREAT_HALL_DAY_PROFILE, IDOL_DAY_PROFILE, OASIS_DAY_PROFILE, OPEN_WORLD_GAMEPLAY_COLLISION_JSON,
-    TEMPLE_GARDENS_PROFILE,
+    ADVENTURE_ISLAND_PROFILE, DESERT_DAY_PROFILE, DOCKS_DAY_PROFILE, GIANT_SKELETON_PROFILE,
+    GOLDEN_VALLEY_OVERCAST_PROFILE, GOLDEN_VALLEY_SUNNY_PROFILE, GREAT_HALL_DAY_PROFILE,
+    IDOL_DAY_PROFILE, OASIS_DAY_PROFILE, OPEN_WORLD_GAMEPLAY_COLLISION_JSON,
+    OPEN_WORLD_SCENE_PROFILES, TEMPLE_GARDENS_PROFILE,
 };
 use crate::open_world_terrain::{
     open_world_half_size_for_profile, open_world_heightfield_enabled_for_profile,
@@ -60,6 +60,10 @@ const OPEN_WORLD_RAYCAST_REFINE_ITERS: usize = 7;
 
 const GAMEPLAY_BOX_STEP_UP_HEIGHT: f32 = 0.35;
 const WALKABLE_TOP_EPSILON: f32 = 0.05;
+const GAMEPLAY_BROADPHASE_MIN_CELL_SIZE: f32 = 2.0;
+const GAMEPLAY_BROADPHASE_MAX_CELL_SIZE: f32 = 16.0;
+const GAMEPLAY_BROADPHASE_FALLBACK_CELL_COUNT: i64 = 256;
+const GAMEPLAY_BROADPHASE_FALLBACK_CANDIDATE_DIVISOR: usize = 4;
 #[derive(Clone, Copy, Debug)]
 enum ColliderShape2d {
     Circle {
@@ -118,6 +122,32 @@ enum GameplayCollisionBox {
         half_y: f32,
         half_z: f32,
     },
+}
+
+#[derive(Clone, Copy, Debug)]
+struct Aabb3 {
+    min_x: f32,
+    min_y: f32,
+    min_z: f32,
+    max_x: f32,
+    max_y: f32,
+    max_z: f32,
+}
+
+#[derive(Debug)]
+struct GameplayBoxBroadphase {
+    cell_size: f32,
+    cells: HashMap<(i32, i32, i32), Vec<usize>>,
+    collider_count: usize,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct WorldCollisionPreloadSummary {
+    pub scene_count: u32,
+    pub arena_gameplay_boxes: u32,
+    pub open_world_gameplay_boxes: u32,
+    pub broadphase_cells: u32,
+    pub generated_open_world_colliders: u32,
 }
 
 fn default_gameplay_collision_shape() -> String {
@@ -360,6 +390,15 @@ pub struct OpenWorldRayHit {
     pub z: f32,
 }
 
+#[derive(Clone, Copy, Debug, Default)]
+pub struct WorldRaycastStats {
+    pub raycast_queries: u32,
+    pub world_gameplay_broadphase_candidates: u32,
+    pub world_gameplay_narrowphase_tests: u32,
+    pub world_gameplay_full_scan_fallbacks: u32,
+    pub open_world_geometry_point_checks: u32,
+}
+
 #[allow(dead_code)]
 pub fn raycast_open_world(
     origin_x: f32,
@@ -371,7 +410,7 @@ pub fn raycast_open_world(
     max_distance: f32,
     radius: f32,
 ) -> Option<OpenWorldRayHit> {
-    raycast_open_world_for_profile(
+    raycast_open_world_for_profile_with_stats(
         default_open_world_scene_profile(),
         origin_x,
         origin_y,
@@ -381,10 +420,11 @@ pub fn raycast_open_world(
         dir_z,
         max_distance,
         radius,
+        None,
     )
 }
 
-fn raycast_open_world_for_profile(
+fn raycast_open_world_for_profile_with_stats(
     profile: &OpenWorldSceneProfile,
     origin_x: f32,
     origin_y: f32,
@@ -394,12 +434,17 @@ fn raycast_open_world_for_profile(
     dir_z: f32,
     max_distance: f32,
     radius: f32,
+    mut stats: Option<&mut WorldRaycastStats>,
 ) -> Option<OpenWorldRayHit> {
     if max_distance <= 0.0 {
         return None;
     }
 
-    let intersects_at = |t: f32| -> bool {
+    let mut intersects_at = |t: f32| -> bool {
+        if let Some(stats) = stats.as_deref_mut() {
+            stats.open_world_geometry_point_checks =
+                stats.open_world_geometry_point_checks.saturating_add(1);
+        }
         let x = origin_x + dir_x * t;
         let y = origin_y + dir_y * t;
         let z = origin_z + dir_z * t;
@@ -473,6 +518,25 @@ pub fn raycast_world_with_layout_for_scene(
     open_world_scene_name: Option<&str>,
     request: WorldRaycastRequest,
 ) -> Option<WorldRayHit> {
+    raycast_world_with_layout_for_scene_with_stats(
+        arena_seed,
+        flat_ground_only,
+        open_world_scene_name,
+        request,
+        None,
+    )
+}
+
+pub fn raycast_world_with_layout_for_scene_with_stats(
+    arena_seed: Option<u64>,
+    flat_ground_only: bool,
+    open_world_scene_name: Option<&str>,
+    request: WorldRaycastRequest,
+    mut stats: Option<&mut WorldRaycastStats>,
+) -> Option<WorldRayHit> {
+    if let Some(stats) = stats.as_deref_mut() {
+        stats.raycast_queries = stats.raycast_queries.saturating_add(1);
+    }
     if flat_ground_only {
         return None;
     }
@@ -480,7 +544,7 @@ pub fn raycast_world_with_layout_for_scene(
     let mut best = if let Some(seed) = arena_seed {
         raycast_arena_world_with(seed, request)
     } else {
-        raycast_open_world_for_profile(
+        raycast_open_world_for_profile_with_stats(
             open_world_profile_from_name(open_world_scene_name),
             request.origin_x,
             request.origin_y,
@@ -490,6 +554,7 @@ pub fn raycast_world_with_layout_for_scene(
             request.dir_z,
             request.max_distance,
             request.radius,
+            stats.as_deref_mut(),
         )
         .map(|hit| WorldRayHit {
             t: hit.t,
@@ -499,14 +564,23 @@ pub fn raycast_world_with_layout_for_scene(
         })
     };
 
-    let gameplay_colliders = if arena_seed.is_some() {
-        gameplay_collision_boxes()
+    if arena_seed.is_some() {
+        raycast_gameplay_collision_boxes(
+            &mut best,
+            request,
+            gameplay_collision_boxes(),
+            gameplay_collision_broadphase(),
+            stats.as_deref_mut(),
+        );
     } else {
-        open_world_gameplay_collision_boxes(open_world_profile_from_name(open_world_scene_name))
-    };
-
-    for collider in gameplay_colliders {
-        try_world_gameplay_box_hit(&mut best, request, *collider);
+        let profile = open_world_profile_from_name(open_world_scene_name);
+        raycast_gameplay_collision_boxes(
+            &mut best,
+            request,
+            open_world_gameplay_collision_boxes(profile),
+            open_world_gameplay_collision_broadphase(profile),
+            stats.as_deref_mut(),
+        );
     }
 
     best
@@ -516,6 +590,39 @@ fn open_world_profile_from_name(scene_name: Option<&str>) -> &'static OpenWorldS
     scene_name
         .and_then(open_world_scene_profile_for_scene)
         .unwrap_or_else(default_open_world_scene_profile)
+}
+
+pub(crate) fn preload_world_collision_data() -> WorldCollisionPreloadSummary {
+    let arena_gameplay_boxes = gameplay_collision_boxes().len();
+    let mut summary = WorldCollisionPreloadSummary {
+        scene_count: OPEN_WORLD_SCENE_PROFILES.len().min(u32::MAX as usize) as u32,
+        arena_gameplay_boxes: arena_gameplay_boxes.min(u32::MAX as usize) as u32,
+        broadphase_cells: gameplay_collision_broadphase()
+            .cells
+            .len()
+            .min(u32::MAX as usize) as u32,
+        ..Default::default()
+    };
+
+    for profile in OPEN_WORLD_SCENE_PROFILES {
+        let generated_colliders = open_world_colliders(profile).len();
+        let gameplay_boxes = open_world_gameplay_collision_boxes(profile).len();
+        let broadphase_cells = open_world_gameplay_collision_broadphase(profile)
+            .cells
+            .len();
+
+        summary.generated_open_world_colliders = summary
+            .generated_open_world_colliders
+            .saturating_add(generated_colliders.min(u32::MAX as usize) as u32);
+        summary.open_world_gameplay_boxes = summary
+            .open_world_gameplay_boxes
+            .saturating_add(gameplay_boxes.min(u32::MAX as usize) as u32);
+        summary.broadphase_cells = summary
+            .broadphase_cells
+            .saturating_add(broadphase_cells.min(u32::MAX as usize) as u32);
+    }
+
+    summary
 }
 
 fn resolve_open_world_horizontal_collision_y(
@@ -978,6 +1085,11 @@ fn gameplay_collision_boxes() -> &'static [GameplayCollisionBox] {
         .as_slice()
 }
 
+fn gameplay_collision_broadphase() -> &'static GameplayBoxBroadphase {
+    static GAMEPLAY_BOX_BROADPHASE: OnceLock<GameplayBoxBroadphase> = OnceLock::new();
+    GAMEPLAY_BOX_BROADPHASE.get_or_init(|| GameplayBoxBroadphase::build(gameplay_collision_boxes()))
+}
+
 fn open_world_gameplay_collision_boxes(
     profile: &OpenWorldSceneProfile,
 ) -> &'static [GameplayCollisionBox] {
@@ -992,9 +1104,14 @@ fn open_world_gameplay_collision_boxes(
         OnceLock::new();
     static GREAT_HALL_DAY_GAMEPLAY_BOXES: OnceLock<Vec<GameplayCollisionBox>> = OnceLock::new();
     static IDOL_DAY_GAMEPLAY_BOXES: OnceLock<Vec<GameplayCollisionBox>> = OnceLock::new();
+    static OASIS_DAY_GAMEPLAY_BOXES: OnceLock<Vec<GameplayCollisionBox>> = OnceLock::new();
     static TEMPLE_GARDENS_GAMEPLAY_BOXES: OnceLock<Vec<GameplayCollisionBox>> = OnceLock::new();
 
-    if profile.scene_name == ADVENTURE_ISLAND_PROFILE.scene_name {
+    if profile.scene_name == OASIS_DAY_PROFILE.scene_name {
+        OASIS_DAY_GAMEPLAY_BOXES
+            .get_or_init(|| load_open_world_gameplay_collision_boxes(profile))
+            .as_slice()
+    } else if profile.scene_name == ADVENTURE_ISLAND_PROFILE.scene_name {
         ADVENTURE_ISLAND_GAMEPLAY_BOXES
             .get_or_init(|| load_open_world_gameplay_collision_boxes(profile))
             .as_slice()
@@ -1034,6 +1151,70 @@ fn open_world_gameplay_collision_boxes(
         OPEN_WORLD_GAMEPLAY_BOXES
             .get_or_init(|| load_open_world_gameplay_collision_boxes(profile))
             .as_slice()
+    }
+}
+
+fn open_world_gameplay_collision_broadphase(
+    profile: &OpenWorldSceneProfile,
+) -> &'static GameplayBoxBroadphase {
+    static OPEN_WORLD_GAMEPLAY_BROADPHASE: OnceLock<GameplayBoxBroadphase> = OnceLock::new();
+    static ADVENTURE_ISLAND_GAMEPLAY_BROADPHASE: OnceLock<GameplayBoxBroadphase> = OnceLock::new();
+    static DESERT_DAY_GAMEPLAY_BROADPHASE: OnceLock<GameplayBoxBroadphase> = OnceLock::new();
+    static DOCKS_DAY_GAMEPLAY_BROADPHASE: OnceLock<GameplayBoxBroadphase> = OnceLock::new();
+    static GIANT_SKELETON_GAMEPLAY_BROADPHASE: OnceLock<GameplayBoxBroadphase> = OnceLock::new();
+    static GOLDEN_VALLEY_OVERCAST_GAMEPLAY_BROADPHASE: OnceLock<GameplayBoxBroadphase> =
+        OnceLock::new();
+    static GOLDEN_VALLEY_SUNNY_GAMEPLAY_BROADPHASE: OnceLock<GameplayBoxBroadphase> =
+        OnceLock::new();
+    static GREAT_HALL_DAY_GAMEPLAY_BROADPHASE: OnceLock<GameplayBoxBroadphase> = OnceLock::new();
+    static IDOL_DAY_GAMEPLAY_BROADPHASE: OnceLock<GameplayBoxBroadphase> = OnceLock::new();
+    static OASIS_DAY_GAMEPLAY_BROADPHASE: OnceLock<GameplayBoxBroadphase> = OnceLock::new();
+    static TEMPLE_GARDENS_GAMEPLAY_BROADPHASE: OnceLock<GameplayBoxBroadphase> = OnceLock::new();
+
+    if profile.scene_name == OASIS_DAY_PROFILE.scene_name {
+        OASIS_DAY_GAMEPLAY_BROADPHASE.get_or_init(|| {
+            GameplayBoxBroadphase::build(open_world_gameplay_collision_boxes(profile))
+        })
+    } else if profile.scene_name == ADVENTURE_ISLAND_PROFILE.scene_name {
+        ADVENTURE_ISLAND_GAMEPLAY_BROADPHASE.get_or_init(|| {
+            GameplayBoxBroadphase::build(open_world_gameplay_collision_boxes(profile))
+        })
+    } else if profile.scene_name == DESERT_DAY_PROFILE.scene_name {
+        DESERT_DAY_GAMEPLAY_BROADPHASE.get_or_init(|| {
+            GameplayBoxBroadphase::build(open_world_gameplay_collision_boxes(profile))
+        })
+    } else if profile.scene_name == DOCKS_DAY_PROFILE.scene_name {
+        DOCKS_DAY_GAMEPLAY_BROADPHASE.get_or_init(|| {
+            GameplayBoxBroadphase::build(open_world_gameplay_collision_boxes(profile))
+        })
+    } else if profile.scene_name == GIANT_SKELETON_PROFILE.scene_name {
+        GIANT_SKELETON_GAMEPLAY_BROADPHASE.get_or_init(|| {
+            GameplayBoxBroadphase::build(open_world_gameplay_collision_boxes(profile))
+        })
+    } else if profile.scene_name == GOLDEN_VALLEY_OVERCAST_PROFILE.scene_name {
+        GOLDEN_VALLEY_OVERCAST_GAMEPLAY_BROADPHASE.get_or_init(|| {
+            GameplayBoxBroadphase::build(open_world_gameplay_collision_boxes(profile))
+        })
+    } else if profile.scene_name == GOLDEN_VALLEY_SUNNY_PROFILE.scene_name {
+        GOLDEN_VALLEY_SUNNY_GAMEPLAY_BROADPHASE.get_or_init(|| {
+            GameplayBoxBroadphase::build(open_world_gameplay_collision_boxes(profile))
+        })
+    } else if profile.scene_name == GREAT_HALL_DAY_PROFILE.scene_name {
+        GREAT_HALL_DAY_GAMEPLAY_BROADPHASE.get_or_init(|| {
+            GameplayBoxBroadphase::build(open_world_gameplay_collision_boxes(profile))
+        })
+    } else if profile.scene_name == IDOL_DAY_PROFILE.scene_name {
+        IDOL_DAY_GAMEPLAY_BROADPHASE.get_or_init(|| {
+            GameplayBoxBroadphase::build(open_world_gameplay_collision_boxes(profile))
+        })
+    } else if profile.scene_name == TEMPLE_GARDENS_PROFILE.scene_name {
+        TEMPLE_GARDENS_GAMEPLAY_BROADPHASE.get_or_init(|| {
+            GameplayBoxBroadphase::build(open_world_gameplay_collision_boxes(profile))
+        })
+    } else {
+        OPEN_WORLD_GAMEPLAY_BROADPHASE.get_or_init(|| {
+            GameplayBoxBroadphase::build(open_world_gameplay_collision_boxes(profile))
+        })
     }
 }
 
@@ -1094,6 +1275,266 @@ fn parse_gameplay_collision_boxes(file: GameplayCollisionLayoutFile) -> Vec<Game
             }
         })
         .collect()
+}
+
+impl Aabb3 {
+    fn from_gameplay_box(collider: GameplayCollisionBox) -> Self {
+        match collider {
+            GameplayCollisionBox::Aabb {
+                center_x,
+                center_y,
+                center_z,
+                half_x,
+                half_y,
+                half_z,
+            } => Self {
+                min_x: center_x - half_x,
+                min_y: center_y - half_y,
+                min_z: center_z - half_z,
+                max_x: center_x + half_x,
+                max_y: center_y + half_y,
+                max_z: center_z + half_z,
+            },
+            GameplayCollisionBox::ObbY {
+                center_x,
+                center_y,
+                center_z,
+                half_x,
+                half_y,
+                half_z,
+                sin_y,
+                cos_y,
+            } => {
+                let world_half_x = cos_y.abs() * half_x + sin_y.abs() * half_z;
+                let world_half_z = sin_y.abs() * half_x + cos_y.abs() * half_z;
+                Self {
+                    min_x: center_x - world_half_x,
+                    min_y: center_y - half_y,
+                    min_z: center_z - world_half_z,
+                    max_x: center_x + world_half_x,
+                    max_y: center_y + half_y,
+                    max_z: center_z + world_half_z,
+                }
+            }
+        }
+    }
+
+    fn from_raycast_request(request: WorldRaycastRequest) -> Option<Self> {
+        if !request.origin_x.is_finite()
+            || !request.origin_y.is_finite()
+            || !request.origin_z.is_finite()
+            || !request.dir_x.is_finite()
+            || !request.dir_y.is_finite()
+            || !request.dir_z.is_finite()
+            || !request.max_distance.is_finite()
+            || !request.radius.is_finite()
+            || request.max_distance < 0.0
+        {
+            return None;
+        }
+
+        let end_x = request.origin_x + request.dir_x * request.max_distance;
+        let end_y = request.origin_y + request.dir_y * request.max_distance;
+        let end_z = request.origin_z + request.dir_z * request.max_distance;
+        if !end_x.is_finite() || !end_y.is_finite() || !end_z.is_finite() {
+            return None;
+        }
+
+        let radius = request.radius.max(0.0);
+        Some(Self {
+            min_x: request.origin_x.min(end_x) - radius,
+            min_y: request.origin_y.min(end_y) - radius,
+            min_z: request.origin_z.min(end_z) - radius,
+            max_x: request.origin_x.max(end_x) + radius,
+            max_y: request.origin_y.max(end_y) + radius,
+            max_z: request.origin_z.max(end_z) + radius,
+        })
+    }
+
+    fn is_finite(self) -> bool {
+        self.min_x.is_finite()
+            && self.min_y.is_finite()
+            && self.min_z.is_finite()
+            && self.max_x.is_finite()
+            && self.max_y.is_finite()
+            && self.max_z.is_finite()
+            && self.min_x <= self.max_x
+            && self.min_y <= self.max_y
+            && self.min_z <= self.max_z
+    }
+
+    fn max_extent(self) -> f32 {
+        (self.max_x - self.min_x)
+            .max(self.max_y - self.min_y)
+            .max(self.max_z - self.min_z)
+    }
+}
+
+impl GameplayBoxBroadphase {
+    fn build(colliders: &[GameplayCollisionBox]) -> Self {
+        let mut bounds = Vec::with_capacity(colliders.len());
+        let mut extents = Vec::with_capacity(colliders.len());
+        for collider in colliders {
+            let aabb = Aabb3::from_gameplay_box(*collider);
+            if aabb.is_finite() {
+                extents.push(aabb.max_extent());
+            }
+            bounds.push(aabb);
+        }
+
+        extents.sort_by(|a, b| a.total_cmp(b));
+        let median_extent = extents
+            .get(extents.len().saturating_sub(1) / 2)
+            .copied()
+            .unwrap_or(OPEN_WORLD_OCCUPANCY_CELL_SIZE);
+        let cell_size = (median_extent * 2.0).clamp(
+            GAMEPLAY_BROADPHASE_MIN_CELL_SIZE,
+            GAMEPLAY_BROADPHASE_MAX_CELL_SIZE,
+        );
+
+        let mut cells: HashMap<(i32, i32, i32), Vec<usize>> = HashMap::new();
+        for (index, aabb) in bounds.into_iter().enumerate() {
+            if !aabb.is_finite() {
+                continue;
+            }
+
+            let Some((min_x, min_y, min_z, max_x, max_y, max_z)) =
+                cell_range_for_aabb(aabb, cell_size)
+            else {
+                continue;
+            };
+
+            for cell_x in min_x..=max_x {
+                for cell_y in min_y..=max_y {
+                    for cell_z in min_z..=max_z {
+                        cells
+                            .entry((cell_x, cell_y, cell_z))
+                            .or_default()
+                            .push(index);
+                    }
+                }
+            }
+        }
+
+        Self {
+            cell_size,
+            cells,
+            collider_count: colliders.len(),
+        }
+    }
+
+    fn query_into(&self, request: WorldRaycastRequest, candidates: &mut Vec<usize>) -> bool {
+        candidates.clear();
+        if self.collider_count == 0 {
+            return true;
+        }
+
+        let Some(query_bounds) = Aabb3::from_raycast_request(request) else {
+            return false;
+        };
+        let Some((min_x, min_y, min_z, max_x, max_y, max_z)) =
+            cell_range_for_aabb(query_bounds, self.cell_size)
+        else {
+            return false;
+        };
+        let cell_count_x = i64::from(max_x) - i64::from(min_x) + 1;
+        let cell_count_y = i64::from(max_y) - i64::from(min_y) + 1;
+        let cell_count_z = i64::from(max_z) - i64::from(min_z) + 1;
+        let Some(cell_count) = cell_count_x
+            .checked_mul(cell_count_y)
+            .and_then(|count| count.checked_mul(cell_count_z))
+        else {
+            return false;
+        };
+        if cell_count > GAMEPLAY_BROADPHASE_FALLBACK_CELL_COUNT {
+            return false;
+        }
+
+        for cell_x in min_x..=max_x {
+            for cell_y in min_y..=max_y {
+                for cell_z in min_z..=max_z {
+                    if let Some(indices) = self.cells.get(&(cell_x, cell_y, cell_z)) {
+                        candidates.extend(indices.iter().copied());
+                    }
+                }
+            }
+        }
+
+        candidates.sort_unstable();
+        candidates.dedup();
+
+        if candidates.len() * GAMEPLAY_BROADPHASE_FALLBACK_CANDIDATE_DIVISOR > self.collider_count {
+            candidates.clear();
+            return false;
+        }
+
+        true
+    }
+}
+
+fn cell_range_for_aabb(aabb: Aabb3, cell_size: f32) -> Option<(i32, i32, i32, i32, i32, i32)> {
+    if !aabb.is_finite() || !cell_size.is_finite() || cell_size <= 0.0 {
+        return None;
+    }
+
+    let min_x = cell_coord(aabb.min_x, cell_size)?;
+    let min_y = cell_coord(aabb.min_y, cell_size)?;
+    let min_z = cell_coord(aabb.min_z, cell_size)?;
+    let max_x = cell_coord(aabb.max_x, cell_size)?;
+    let max_y = cell_coord(aabb.max_y, cell_size)?;
+    let max_z = cell_coord(aabb.max_z, cell_size)?;
+    Some((min_x, min_y, min_z, max_x, max_y, max_z))
+}
+
+fn cell_coord(value: f32, cell_size: f32) -> Option<i32> {
+    let cell = (value / cell_size).floor();
+    if cell < i32::MIN as f32 || cell > i32::MAX as f32 {
+        return None;
+    }
+    Some(cell as i32)
+}
+
+fn raycast_gameplay_collision_boxes(
+    best: &mut Option<WorldRayHit>,
+    request: WorldRaycastRequest,
+    colliders: &[GameplayCollisionBox],
+    broadphase: &GameplayBoxBroadphase,
+    stats: Option<&mut WorldRaycastStats>,
+) {
+    let mut stats = stats;
+    let mut candidate_indices = Vec::new();
+    if broadphase.query_into(request, &mut candidate_indices) {
+        if let Some(stats) = stats.as_deref_mut() {
+            let candidate_count = candidate_indices.len().min(u32::MAX as usize) as u32;
+            stats.world_gameplay_broadphase_candidates = stats
+                .world_gameplay_broadphase_candidates
+                .saturating_add(candidate_count);
+            stats.world_gameplay_narrowphase_tests = stats
+                .world_gameplay_narrowphase_tests
+                .saturating_add(candidate_count);
+        }
+        for index in candidate_indices.iter().copied() {
+            if let Some(collider) = colliders.get(index) {
+                try_world_gameplay_box_hit(best, request, *collider);
+            }
+        }
+        return;
+    }
+
+    if let Some(stats) = stats.as_deref_mut() {
+        let collider_count = colliders.len().min(u32::MAX as usize) as u32;
+        stats.world_gameplay_full_scan_fallbacks =
+            stats.world_gameplay_full_scan_fallbacks.saturating_add(1);
+        stats.world_gameplay_broadphase_candidates = stats
+            .world_gameplay_broadphase_candidates
+            .saturating_add(collider_count);
+        stats.world_gameplay_narrowphase_tests = stats
+            .world_gameplay_narrowphase_tests
+            .saturating_add(collider_count);
+    }
+    for collider in colliders {
+        try_world_gameplay_box_hit(best, request, *collider);
+    }
 }
 
 fn generate_open_world_colliders(profile: &OpenWorldSceneProfile) -> Vec<Collider> {
@@ -1601,13 +2042,326 @@ fn raycast_centered_aabb(
 
 #[cfg(test)]
 mod tests {
-    use super::resolve_world_spawn_position_with_layout_for_scene;
+    use super::{
+        raycast_gameplay_collision_boxes, resolve_world_spawn_position_with_layout_for_scene,
+        try_world_gameplay_box_hit, GameplayBoxBroadphase, GameplayCollisionBox,
+    };
+    use crate::arena::{WorldRayHit, WorldRaycastRequest};
     use crate::open_world_scene::{
-        DOCKS_DAY_PROFILE, GREAT_HALL_DAY_PROFILE, IDOL_DAY_PROFILE, TEMPLE_GARDENS_PROFILE,
+        DESERT_DAY_PROFILE, DOCKS_DAY_PROFILE, GIANT_SKELETON_PROFILE, GREAT_HALL_DAY_PROFILE,
+        IDOL_DAY_PROFILE, OASIS_DAY_PROFILE, TEMPLE_GARDENS_PROFILE,
     };
 
     const TEST_PLAYER_RADIUS: f32 = 0.45;
     const TEST_PLAYER_HEIGHT: f32 = 1.8;
+
+    fn test_aabb(center_x: f32, center_y: f32, center_z: f32) -> GameplayCollisionBox {
+        GameplayCollisionBox::Aabb {
+            center_x,
+            center_y,
+            center_z,
+            half_x: 0.45,
+            half_y: 0.45,
+            half_z: 0.45,
+        }
+    }
+
+    fn test_obb(center_x: f32, center_y: f32, center_z: f32, yaw_deg: f32) -> GameplayCollisionBox {
+        let yaw = yaw_deg.to_radians();
+        GameplayCollisionBox::ObbY {
+            center_x,
+            center_y,
+            center_z,
+            half_x: 0.65,
+            half_y: 0.4,
+            half_z: 0.3,
+            sin_y: yaw.sin(),
+            cos_y: yaw.cos(),
+        }
+    }
+
+    fn request(
+        origin_x: f32,
+        origin_y: f32,
+        origin_z: f32,
+        dir_x: f32,
+        dir_y: f32,
+        dir_z: f32,
+        max_distance: f32,
+    ) -> WorldRaycastRequest {
+        WorldRaycastRequest {
+            origin_x,
+            origin_y,
+            origin_z,
+            dir_x,
+            dir_y,
+            dir_z,
+            max_distance,
+            radius: 0.1,
+        }
+    }
+
+    fn full_scan_hit(
+        colliders: &[GameplayCollisionBox],
+        request: WorldRaycastRequest,
+    ) -> Option<WorldRayHit> {
+        let mut hit = None;
+        for collider in colliders {
+            try_world_gameplay_box_hit(&mut hit, request, *collider);
+        }
+        hit
+    }
+
+    fn broadphase_hit(
+        colliders: &[GameplayCollisionBox],
+        request: WorldRaycastRequest,
+    ) -> Option<WorldRayHit> {
+        let broadphase = GameplayBoxBroadphase::build(colliders);
+        let mut hit = None;
+        raycast_gameplay_collision_boxes(&mut hit, request, colliders, &broadphase, None);
+        hit
+    }
+
+    #[test]
+    fn gameplay_box_broadphase_candidates_preserve_original_index_order() {
+        let mut colliders = vec![test_aabb(10.0, 0.0, 0.0), test_aabb(0.0, 0.0, 0.0)];
+        for offset in 0..8 {
+            colliders.push(test_aabb(100.0 + offset as f32 * 4.0, 0.0, 0.0));
+        }
+
+        let broadphase = GameplayBoxBroadphase::build(&colliders);
+        let mut candidates = Vec::new();
+        assert!(
+            broadphase.query_into(
+                request(-1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 12.0),
+                &mut candidates
+            ),
+            "small query should use broadphase candidates"
+        );
+
+        assert_eq!(candidates, vec![0, 1]);
+    }
+
+    #[test]
+    fn gameplay_box_broadphase_prunes_vertical_stacks() {
+        let colliders = vec![
+            test_aabb(0.0, 0.0, 0.0),
+            test_aabb(0.0, 10.0, 0.0),
+            test_aabb(10.0, 0.0, 0.0),
+            test_aabb(20.0, 0.0, 0.0),
+            test_aabb(30.0, 0.0, 0.0),
+        ];
+
+        let broadphase = GameplayBoxBroadphase::build(&colliders);
+        let mut candidates = Vec::new();
+        assert!(
+            broadphase.query_into(
+                request(-1.0, 10.0, 0.0, 1.0, 0.0, 0.0, 2.0),
+                &mut candidates
+            ),
+            "small query should use broadphase candidates"
+        );
+
+        assert_eq!(candidates, vec![1]);
+    }
+
+    #[test]
+    fn gameplay_box_broadphase_falls_back_for_huge_queries() {
+        let colliders = vec![test_aabb(0.0, 0.0, 0.0), test_aabb(1000.0, 0.0, 0.0)];
+        let broadphase = GameplayBoxBroadphase::build(&colliders);
+        let mut candidates = Vec::new();
+
+        assert!(
+            !broadphase.query_into(
+                request(
+                    -1_000_000_000.0,
+                    0.0,
+                    -1_000_000_000.0,
+                    1.0,
+                    0.0,
+                    1.0,
+                    2_000_000_000.0,
+                ),
+                &mut candidates,
+            ),
+            "huge queries should fall back to full scan"
+        );
+        assert!(candidates.is_empty());
+    }
+
+    #[test]
+    fn gameplay_box_raycast_stats_track_pruned_and_fallback_work() {
+        let mut colliders = vec![test_aabb(0.0, 0.0, 0.0), test_aabb(4.0, 0.0, 0.0)];
+        for offset in 0..16 {
+            colliders.push(test_aabb(100.0 + offset as f32 * 4.0, 0.0, 0.0));
+        }
+        let broadphase = GameplayBoxBroadphase::build(&colliders);
+
+        let mut hit = None;
+        let mut stats = super::WorldRaycastStats::default();
+        raycast_gameplay_collision_boxes(
+            &mut hit,
+            request(-1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 8.0),
+            &colliders,
+            &broadphase,
+            Some(&mut stats),
+        );
+        assert_eq!(stats.world_gameplay_full_scan_fallbacks, 0);
+        assert!(
+            stats.world_gameplay_narrowphase_tests < colliders.len() as u32,
+            "broadphase should prune far-away colliders"
+        );
+        assert_eq!(
+            stats.world_gameplay_broadphase_candidates,
+            stats.world_gameplay_narrowphase_tests
+        );
+
+        let mut fallback_hit = None;
+        let mut fallback_stats = super::WorldRaycastStats::default();
+        raycast_gameplay_collision_boxes(
+            &mut fallback_hit,
+            request(
+                -1_000_000_000.0,
+                0.0,
+                -1_000_000_000.0,
+                1.0,
+                0.0,
+                1.0,
+                2_000_000_000.0,
+            ),
+            &colliders,
+            &broadphase,
+            Some(&mut fallback_stats),
+        );
+        assert_eq!(fallback_stats.world_gameplay_full_scan_fallbacks, 1);
+        assert_eq!(
+            fallback_stats.world_gameplay_narrowphase_tests,
+            colliders.len() as u32
+        );
+    }
+
+    #[test]
+    fn world_raycast_stats_track_open_world_step_checks() {
+        let mut stats = super::WorldRaycastStats::default();
+        let _ = super::raycast_world_with_layout_for_scene_with_stats(
+            None,
+            false,
+            Some(DESERT_DAY_PROFILE.scene_name),
+            request(0.0, 4.0, 0.0, 1.0, 0.0, 0.0, 4.0),
+            Some(&mut stats),
+        );
+
+        assert_eq!(stats.raycast_queries, 1);
+        assert!(
+            stats.open_world_geometry_point_checks > 0,
+            "open-world fixed-step geometry path should be visible in stats"
+        );
+    }
+
+    #[test]
+    fn preload_world_collision_data_initializes_known_scene_indexes() {
+        let summary = super::preload_world_collision_data();
+        assert_eq!(summary.scene_count, 10);
+        assert!(summary.arena_gameplay_boxes > 0);
+        assert!(summary.open_world_gameplay_boxes > 0);
+        assert!(summary.broadphase_cells > 0);
+    }
+
+    #[test]
+    fn gameplay_box_broadphase_matches_full_scan_hits() {
+        let mut colliders = Vec::new();
+        for x in 0..6 {
+            for z in 0..4 {
+                let center_x = x as f32 * 4.0;
+                let center_z = z as f32 * 4.0;
+                if (x + z) % 2 == 0 {
+                    colliders.push(test_aabb(center_x, 0.0, center_z));
+                } else {
+                    colliders.push(test_obb(center_x, 0.0, center_z, 35.0));
+                }
+            }
+        }
+
+        let requests = [
+            request(-2.0, 0.0, 0.0, 1.0, 0.0, 0.0, 8.0),
+            request(6.0, 0.0, -2.0, 0.0, 0.0, 1.0, 14.0),
+            request(20.0, 0.0, 14.0, -0.70710677, 0.0, -0.70710677, 12.0),
+            request(1.5, 6.0, 1.5, 1.0, 0.0, 0.0, 8.0),
+            request(18.0, 0.0, -1.0, -0.4472136, 0.0, 0.8944272, 15.0),
+        ];
+
+        for request in requests {
+            let full = full_scan_hit(&colliders, request);
+            let broadphase = broadphase_hit(&colliders, request);
+            match (full, broadphase) {
+                (Some(full), Some(broadphase)) => {
+                    assert!(
+                        (full.t - broadphase.t).abs() < 0.0001,
+                        "full t={} broadphase t={}",
+                        full.t,
+                        broadphase.t
+                    );
+                }
+                (None, None) => {}
+                (full, broadphase) => panic!(
+                    "full scan and broadphase disagreed: full={full:?} broadphase={broadphase:?}"
+                ),
+            }
+        }
+    }
+
+    #[test]
+    fn gameplay_box_broadphase_matches_full_scan_for_exported_scene_samples() {
+        let scenes = [
+            DESERT_DAY_PROFILE.scene_name,
+            GIANT_SKELETON_PROFILE.scene_name,
+            GREAT_HALL_DAY_PROFILE.scene_name,
+            OASIS_DAY_PROFILE.scene_name,
+            TEMPLE_GARDENS_PROFILE.scene_name,
+        ];
+        let requests = [
+            request(-12.0, 4.0, -12.0, 1.0, 0.0, 0.0, 36.0),
+            request(0.0, 4.0, -18.0, 0.0, 0.0, 1.0, 36.0),
+            request(18.0, 8.0, 18.0, -0.70710677, 0.0, -0.70710677, 50.0),
+            request(-20.0, 14.0, 4.0, 0.8944272, -0.0, 0.4472136, 50.0),
+            request(4.0, 28.0, -20.0, 0.0, -0.4472136, 0.8944272, 45.0),
+        ];
+
+        for scene_name in scenes {
+            let profile = super::open_world_profile_from_name(Some(scene_name));
+            let colliders = super::open_world_gameplay_collision_boxes(profile);
+            assert!(
+                !colliders.is_empty(),
+                "expected exported gameplay colliders for scene {scene_name}"
+            );
+
+            for request in requests {
+                let full = full_scan_hit(colliders, request);
+                let mut broadphase = None;
+                raycast_gameplay_collision_boxes(
+                    &mut broadphase,
+                    request,
+                    colliders,
+                    super::open_world_gameplay_collision_broadphase(profile),
+                    None,
+                );
+                match (full, broadphase) {
+                    (Some(full), Some(broadphase)) => {
+                        assert!(
+                            (full.t - broadphase.t).abs() < 0.0001,
+                            "scene={scene_name} full t={} broadphase t={}",
+                            full.t,
+                            broadphase.t
+                        );
+                    }
+                    (None, None) => {}
+                    (full, broadphase) => panic!(
+                        "scene={scene_name} full scan and broadphase disagreed: full={full:?} broadphase={broadphase:?}"
+                    ),
+                }
+            }
+        }
+    }
 
     #[test]
     fn open_world_spawn_resolution_ignores_high_gameplay_box_tops() {

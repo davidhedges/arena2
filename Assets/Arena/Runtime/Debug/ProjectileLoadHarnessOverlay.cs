@@ -204,6 +204,10 @@ namespace Arena.Debugging
                 GUILayout.Label(
                     $"run totals: rows={serverMetrics.TotalRowsUpdated} scans={serverMetrics.TotalCollisionCandidateScans} world={serverMetrics.TotalWorldCollisionQueries} contacts={serverMetrics.TotalContactsResolved}");
                 GUILayout.Label(
+                    $"world broadphase: candidates={serverMetrics.WorldGameplayBroadphaseCandidates} narrowphase={serverMetrics.WorldGameplayNarrowphaseTests} " +
+                    $"fallbacks={serverMetrics.WorldGameplayFullScanFallbacks} ({RatioPercent(serverMetrics.WorldGameplayFullScanFallbacks, serverMetrics.WorldCollisionQueries):F1}%) " +
+                    $"open-world points={serverMetrics.OpenWorldGeometryPointChecks}");
+                GUILayout.Label(
                     $"events: update={serverMetrics.UpdateEventsEmitted} contact={serverMetrics.ContactEventsEmitted} terminal={serverMetrics.TerminalEventsEmitted} block/parry={serverMetrics.BlockParryEventsEmitted}");
                 GUILayout.Label(
                     $"motion: linear={serverMetrics.LinearProjectileCount} homing={serverMetrics.HomingProjectileCount} orbit={serverMetrics.OrbitProjectileCount} boomerang={serverMetrics.BoomerangProjectileCount}");
@@ -590,16 +594,30 @@ namespace Arena.Debugging
             builder.AppendLine($"server_rows_updated: {serverMetrics.RowsUpdated}");
             builder.AppendLine($"server_collision_candidate_scans: {serverMetrics.CollisionCandidateScans}");
             builder.AppendLine($"server_world_collision_queries: {serverMetrics.WorldCollisionQueries}");
+            builder.AppendLine($"server_world_gameplay_broadphase_candidates: {serverMetrics.WorldGameplayBroadphaseCandidates}");
+            builder.AppendLine($"server_world_gameplay_narrowphase_tests: {serverMetrics.WorldGameplayNarrowphaseTests}");
+            builder.AppendLine($"server_world_gameplay_full_scan_fallbacks: {serverMetrics.WorldGameplayFullScanFallbacks}");
+            builder.AppendLine($"server_world_gameplay_full_scan_fallback_ratio_pct: {RatioPercent(serverMetrics.WorldGameplayFullScanFallbacks, serverMetrics.WorldCollisionQueries):F1}");
+            builder.AppendLine($"server_open_world_geometry_point_checks: {serverMetrics.OpenWorldGeometryPointChecks}");
             builder.AppendLine($"server_contacts_resolved: {serverMetrics.ContactsResolved}");
             builder.AppendLine($"server_sample_sequence: {serverMetrics.SampleSequence}");
             builder.AppendLine($"server_peak_active_projectiles: {serverMetrics.PeakActiveProjectileCount}");
             builder.AppendLine($"server_peak_rows_updated: {serverMetrics.PeakRowsUpdated}");
             builder.AppendLine($"server_peak_collision_candidate_scans: {serverMetrics.PeakCollisionCandidateScans}");
             builder.AppendLine($"server_peak_world_collision_queries: {serverMetrics.PeakWorldCollisionQueries}");
+            builder.AppendLine($"server_peak_world_gameplay_broadphase_candidates: {serverMetrics.PeakWorldGameplayBroadphaseCandidates}");
+            builder.AppendLine($"server_peak_world_gameplay_narrowphase_tests: {serverMetrics.PeakWorldGameplayNarrowphaseTests}");
+            builder.AppendLine($"server_peak_world_gameplay_full_scan_fallbacks: {serverMetrics.PeakWorldGameplayFullScanFallbacks}");
+            builder.AppendLine($"server_peak_open_world_geometry_point_checks: {serverMetrics.PeakOpenWorldGeometryPointChecks}");
             builder.AppendLine($"server_peak_contacts_resolved: {serverMetrics.PeakContactsResolved}");
             builder.AppendLine($"server_total_rows_updated: {serverMetrics.TotalRowsUpdated}");
             builder.AppendLine($"server_total_collision_candidate_scans: {serverMetrics.TotalCollisionCandidateScans}");
             builder.AppendLine($"server_total_world_collision_queries: {serverMetrics.TotalWorldCollisionQueries}");
+            builder.AppendLine($"server_total_world_gameplay_broadphase_candidates: {serverMetrics.TotalWorldGameplayBroadphaseCandidates}");
+            builder.AppendLine($"server_total_world_gameplay_narrowphase_tests: {serverMetrics.TotalWorldGameplayNarrowphaseTests}");
+            builder.AppendLine($"server_total_world_gameplay_full_scan_fallbacks: {serverMetrics.TotalWorldGameplayFullScanFallbacks}");
+            builder.AppendLine($"server_total_world_gameplay_full_scan_fallback_ratio_pct: {RatioPercent(serverMetrics.TotalWorldGameplayFullScanFallbacks, serverMetrics.TotalWorldCollisionQueries):F1}");
+            builder.AppendLine($"server_total_open_world_geometry_point_checks: {serverMetrics.TotalOpenWorldGeometryPointChecks}");
             builder.AppendLine($"server_total_contacts_resolved: {serverMetrics.TotalContactsResolved}");
             builder.AppendLine($"server_total_update_events: {serverMetrics.TotalUpdateEventsEmitted}");
             builder.AppendLine($"server_total_contact_events: {serverMetrics.TotalContactEventsEmitted}");
@@ -628,6 +646,11 @@ namespace Arena.Debugging
         private float RunAverageFrameMs()
         {
             return _runFrameCount <= 0 ? 0f : _runFrameTotalMs / _runFrameCount;
+        }
+
+        private static float RatioPercent(ulong numerator, ulong denominator)
+        {
+            return denominator == 0UL ? 0f : (float)(100.0 * numerator / denominator);
         }
 
         private bool TryParseUInt(string text, string label, out uint value)

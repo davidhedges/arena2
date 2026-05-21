@@ -27,6 +27,14 @@ namespace SpacetimeDB.Types
         public uint CollisionCandidateScans;
         [DataMember(Name = "world_collision_queries")]
         public uint WorldCollisionQueries;
+        [DataMember(Name = "world_gameplay_broadphase_candidates")]
+        public uint WorldGameplayBroadphaseCandidates;
+        [DataMember(Name = "world_gameplay_narrowphase_tests")]
+        public uint WorldGameplayNarrowphaseTests;
+        [DataMember(Name = "world_gameplay_full_scan_fallbacks")]
+        public uint WorldGameplayFullScanFallbacks;
+        [DataMember(Name = "open_world_geometry_point_checks")]
+        public uint OpenWorldGeometryPointChecks;
         [DataMember(Name = "contacts_resolved")]
         public uint ContactsResolved;
         [DataMember(Name = "update_events_emitted")]
@@ -57,6 +65,14 @@ namespace SpacetimeDB.Types
         public uint PeakCollisionCandidateScans;
         [DataMember(Name = "peak_world_collision_queries")]
         public uint PeakWorldCollisionQueries;
+        [DataMember(Name = "peak_world_gameplay_broadphase_candidates")]
+        public uint PeakWorldGameplayBroadphaseCandidates;
+        [DataMember(Name = "peak_world_gameplay_narrowphase_tests")]
+        public uint PeakWorldGameplayNarrowphaseTests;
+        [DataMember(Name = "peak_world_gameplay_full_scan_fallbacks")]
+        public uint PeakWorldGameplayFullScanFallbacks;
+        [DataMember(Name = "peak_open_world_geometry_point_checks")]
+        public uint PeakOpenWorldGeometryPointChecks;
         [DataMember(Name = "peak_contacts_resolved")]
         public uint PeakContactsResolved;
         [DataMember(Name = "total_rows_updated")]
@@ -65,6 +81,14 @@ namespace SpacetimeDB.Types
         public ulong TotalCollisionCandidateScans;
         [DataMember(Name = "total_world_collision_queries")]
         public ulong TotalWorldCollisionQueries;
+        [DataMember(Name = "total_world_gameplay_broadphase_candidates")]
+        public ulong TotalWorldGameplayBroadphaseCandidates;
+        [DataMember(Name = "total_world_gameplay_narrowphase_tests")]
+        public ulong TotalWorldGameplayNarrowphaseTests;
+        [DataMember(Name = "total_world_gameplay_full_scan_fallbacks")]
+        public ulong TotalWorldGameplayFullScanFallbacks;
+        [DataMember(Name = "total_open_world_geometry_point_checks")]
+        public ulong TotalOpenWorldGeometryPointChecks;
         [DataMember(Name = "total_contacts_resolved")]
         public ulong TotalContactsResolved;
         [DataMember(Name = "total_update_events_emitted")]
@@ -84,6 +108,10 @@ namespace SpacetimeDB.Types
             uint RowsUpdated,
             uint CollisionCandidateScans,
             uint WorldCollisionQueries,
+            uint WorldGameplayBroadphaseCandidates,
+            uint WorldGameplayNarrowphaseTests,
+            uint WorldGameplayFullScanFallbacks,
+            uint OpenWorldGeometryPointChecks,
             uint ContactsResolved,
             uint UpdateEventsEmitted,
             uint ContactEventsEmitted,
@@ -99,10 +127,18 @@ namespace SpacetimeDB.Types
             uint PeakRowsUpdated,
             uint PeakCollisionCandidateScans,
             uint PeakWorldCollisionQueries,
+            uint PeakWorldGameplayBroadphaseCandidates,
+            uint PeakWorldGameplayNarrowphaseTests,
+            uint PeakWorldGameplayFullScanFallbacks,
+            uint PeakOpenWorldGeometryPointChecks,
             uint PeakContactsResolved,
             ulong TotalRowsUpdated,
             ulong TotalCollisionCandidateScans,
             ulong TotalWorldCollisionQueries,
+            ulong TotalWorldGameplayBroadphaseCandidates,
+            ulong TotalWorldGameplayNarrowphaseTests,
+            ulong TotalWorldGameplayFullScanFallbacks,
+            ulong TotalOpenWorldGeometryPointChecks,
             ulong TotalContactsResolved,
             ulong TotalUpdateEventsEmitted,
             ulong TotalContactEventsEmitted,
@@ -117,6 +153,10 @@ namespace SpacetimeDB.Types
             this.RowsUpdated = RowsUpdated;
             this.CollisionCandidateScans = CollisionCandidateScans;
             this.WorldCollisionQueries = WorldCollisionQueries;
+            this.WorldGameplayBroadphaseCandidates = WorldGameplayBroadphaseCandidates;
+            this.WorldGameplayNarrowphaseTests = WorldGameplayNarrowphaseTests;
+            this.WorldGameplayFullScanFallbacks = WorldGameplayFullScanFallbacks;
+            this.OpenWorldGeometryPointChecks = OpenWorldGeometryPointChecks;
             this.ContactsResolved = ContactsResolved;
             this.UpdateEventsEmitted = UpdateEventsEmitted;
             this.ContactEventsEmitted = ContactEventsEmitted;
@@ -132,10 +172,18 @@ namespace SpacetimeDB.Types
             this.PeakRowsUpdated = PeakRowsUpdated;
             this.PeakCollisionCandidateScans = PeakCollisionCandidateScans;
             this.PeakWorldCollisionQueries = PeakWorldCollisionQueries;
+            this.PeakWorldGameplayBroadphaseCandidates = PeakWorldGameplayBroadphaseCandidates;
+            this.PeakWorldGameplayNarrowphaseTests = PeakWorldGameplayNarrowphaseTests;
+            this.PeakWorldGameplayFullScanFallbacks = PeakWorldGameplayFullScanFallbacks;
+            this.PeakOpenWorldGeometryPointChecks = PeakOpenWorldGeometryPointChecks;
             this.PeakContactsResolved = PeakContactsResolved;
             this.TotalRowsUpdated = TotalRowsUpdated;
             this.TotalCollisionCandidateScans = TotalCollisionCandidateScans;
             this.TotalWorldCollisionQueries = TotalWorldCollisionQueries;
+            this.TotalWorldGameplayBroadphaseCandidates = TotalWorldGameplayBroadphaseCandidates;
+            this.TotalWorldGameplayNarrowphaseTests = TotalWorldGameplayNarrowphaseTests;
+            this.TotalWorldGameplayFullScanFallbacks = TotalWorldGameplayFullScanFallbacks;
+            this.TotalOpenWorldGeometryPointChecks = TotalOpenWorldGeometryPointChecks;
             this.TotalContactsResolved = TotalContactsResolved;
             this.TotalUpdateEventsEmitted = TotalUpdateEventsEmitted;
             this.TotalContactEventsEmitted = TotalContactEventsEmitted;

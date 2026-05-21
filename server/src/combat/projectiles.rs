@@ -6,9 +6,9 @@ use spacetimedb::{Identity, ReducerContext, Table, Timestamp};
 use crate::arena::players_share_world_context;
 use crate::combat::player_snapshot::{PlayerSnapshot, PlayerSnapshotSet};
 use crate::combat::scene_query::{
-    first_hit_on_segment_candidates, first_player_hit_on_segment_candidates,
-    first_world_hit_on_segment, raycast_capsule_with_padding, terrain_surface_y_for_caster,
-    SceneHitKind,
+    first_hit_on_segment_candidates_with_world_stats, first_player_hit_on_segment_candidates,
+    first_world_hit_on_segment_with_stats, raycast_capsule_with_padding,
+    terrain_surface_y_for_caster, SceneHitKind,
 };
 use crate::combat::{
     queue_effects, timestamp_to_micros, ActiveCombatProjectile, ActiveCombatProjectileTargetState,
@@ -25,6 +25,7 @@ use crate::resources::grant_primary_resource_for_melee_hit;
 use crate::spells::{
     spell_definition_by_str, ImpactEffect, SpellBehavior, SpellId, SpellRuntimeDefinition,
 };
+use crate::world_collision::WorldRaycastStats;
 
 #[allow(unused_imports)]
 use crate::combat::active_combat_projectile as _;
@@ -63,6 +64,10 @@ struct ProjectileTickMetricsFrame {
     orbit_projectile_count: u32,
     boomerang_projectile_count: u32,
     tick_micros: u32,
+    world_gameplay_broadphase_candidates: u32,
+    world_gameplay_narrowphase_tests: u32,
+    world_gameplay_full_scan_fallbacks: u32,
+    open_world_geometry_point_checks: u32,
 }
 
 #[allow(dead_code)]
@@ -787,7 +792,8 @@ fn advance_boomerang_segment(
     let end_y = start_y + projectile.dir_y * distance;
     let end_z = start_z + projectile.dir_z * distance;
 
-    let world_hit = first_world_hit_on_segment(
+    let mut world_stats = WorldRaycastStats::default();
+    let world_hit = first_world_hit_on_segment_with_stats(
         ctx,
         projectile.caster,
         start_x,
@@ -797,8 +803,9 @@ fn advance_boomerang_segment(
         end_y,
         end_z,
         projectile.radius,
+        &mut world_stats,
     );
-    metrics.world_collision_queries = metrics.world_collision_queries.saturating_add(1);
+    record_world_raycast_stats(metrics, world_stats);
     let segment_distance = world_hit.map(|hit| hit.t).unwrap_or(distance).min(distance);
     let segment_end_x = start_x + projectile.dir_x * segment_distance;
     let segment_end_y = start_y + projectile.dir_y * segment_distance;
@@ -1154,8 +1161,8 @@ fn advance_projectile_with_collision(
             candidate_indices,
         )
     } else {
-        metrics.world_collision_queries = metrics.world_collision_queries.saturating_add(1);
-        first_hit_on_segment_candidates(
+        let mut world_stats = WorldRaycastStats::default();
+        let hit = first_hit_on_segment_candidates_with_world_stats(
             ctx,
             projectile.caster,
             start_x,
@@ -1167,7 +1174,10 @@ fn advance_projectile_with_collision(
             projectile.radius,
             players,
             candidate_indices,
-        )
+            &mut world_stats,
+        );
+        record_world_raycast_stats(metrics, world_stats);
+        hit
     };
 
     if let Some(hit) = hit {
@@ -1674,6 +1684,27 @@ fn record_motion_kind(
     }
 }
 
+fn record_world_raycast_stats(
+    metrics: &mut ProjectileTickMetricsFrame,
+    world_stats: WorldRaycastStats,
+) {
+    metrics.world_collision_queries = metrics
+        .world_collision_queries
+        .saturating_add(world_stats.raycast_queries);
+    metrics.world_gameplay_broadphase_candidates = metrics
+        .world_gameplay_broadphase_candidates
+        .saturating_add(world_stats.world_gameplay_broadphase_candidates);
+    metrics.world_gameplay_narrowphase_tests = metrics
+        .world_gameplay_narrowphase_tests
+        .saturating_add(world_stats.world_gameplay_narrowphase_tests);
+    metrics.world_gameplay_full_scan_fallbacks = metrics
+        .world_gameplay_full_scan_fallbacks
+        .saturating_add(world_stats.world_gameplay_full_scan_fallbacks);
+    metrics.open_world_geometry_point_checks = metrics
+        .open_world_geometry_point_checks
+        .saturating_add(world_stats.open_world_geometry_point_checks);
+}
+
 fn record_emitted_event(event_type: &str, metrics: &mut ProjectileTickMetricsFrame) {
     match event_type {
         COMBAT_EVENT_UPDATE => {
@@ -1751,6 +1782,10 @@ fn record_projectile_tick_metrics(
         rows_updated: metrics.rows_updated,
         collision_candidate_scans: metrics.collision_candidate_scans,
         world_collision_queries: metrics.world_collision_queries,
+        world_gameplay_broadphase_candidates: metrics.world_gameplay_broadphase_candidates,
+        world_gameplay_narrowphase_tests: metrics.world_gameplay_narrowphase_tests,
+        world_gameplay_full_scan_fallbacks: metrics.world_gameplay_full_scan_fallbacks,
+        open_world_geometry_point_checks: metrics.open_world_geometry_point_checks,
         contacts_resolved: metrics.contacts_resolved,
         update_events_emitted: metrics.update_events_emitted,
         contact_events_emitted: metrics.contact_events_emitted,
@@ -1782,6 +1817,26 @@ fn record_projectile_tick_metrics(
             .map(|row| row.peak_world_collision_queries)
             .unwrap_or(0)
             .max(metrics.world_collision_queries),
+        peak_world_gameplay_broadphase_candidates: previous
+            .as_ref()
+            .map(|row| row.peak_world_gameplay_broadphase_candidates)
+            .unwrap_or(0)
+            .max(metrics.world_gameplay_broadphase_candidates),
+        peak_world_gameplay_narrowphase_tests: previous
+            .as_ref()
+            .map(|row| row.peak_world_gameplay_narrowphase_tests)
+            .unwrap_or(0)
+            .max(metrics.world_gameplay_narrowphase_tests),
+        peak_world_gameplay_full_scan_fallbacks: previous
+            .as_ref()
+            .map(|row| row.peak_world_gameplay_full_scan_fallbacks)
+            .unwrap_or(0)
+            .max(metrics.world_gameplay_full_scan_fallbacks),
+        peak_open_world_geometry_point_checks: previous
+            .as_ref()
+            .map(|row| row.peak_open_world_geometry_point_checks)
+            .unwrap_or(0)
+            .max(metrics.open_world_geometry_point_checks),
         peak_contacts_resolved: previous
             .as_ref()
             .map(|row| row.peak_contacts_resolved)
@@ -1802,6 +1857,26 @@ fn record_projectile_tick_metrics(
             .map(|row| row.total_world_collision_queries)
             .unwrap_or(0)
             .saturating_add(u64::from(metrics.world_collision_queries)),
+        total_world_gameplay_broadphase_candidates: previous
+            .as_ref()
+            .map(|row| row.total_world_gameplay_broadphase_candidates)
+            .unwrap_or(0)
+            .saturating_add(u64::from(metrics.world_gameplay_broadphase_candidates)),
+        total_world_gameplay_narrowphase_tests: previous
+            .as_ref()
+            .map(|row| row.total_world_gameplay_narrowphase_tests)
+            .unwrap_or(0)
+            .saturating_add(u64::from(metrics.world_gameplay_narrowphase_tests)),
+        total_world_gameplay_full_scan_fallbacks: previous
+            .as_ref()
+            .map(|row| row.total_world_gameplay_full_scan_fallbacks)
+            .unwrap_or(0)
+            .saturating_add(u64::from(metrics.world_gameplay_full_scan_fallbacks)),
+        total_open_world_geometry_point_checks: previous
+            .as_ref()
+            .map(|row| row.total_open_world_geometry_point_checks)
+            .unwrap_or(0)
+            .saturating_add(u64::from(metrics.open_world_geometry_point_checks)),
         total_contacts_resolved: previous
             .as_ref()
             .map(|row| row.total_contacts_resolved)

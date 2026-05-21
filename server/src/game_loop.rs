@@ -79,7 +79,7 @@ use crate::spells::{
     tick_bespoke_spells_with_snapshots,
 };
 use crate::world_collision::{
-    resolve_world_horizontal_collision_y_with_layout_for_scene,
+    preload_world_collision_data, resolve_world_horizontal_collision_y_with_layout_for_scene,
     surface_height_for_world_at_y_with_layout, surface_height_for_world_at_y_with_layout_for_scene,
 };
 
@@ -349,6 +349,16 @@ pub(crate) fn ensure_game_loop_schedule(ctx: &ReducerContext) {
 }
 
 fn bootstrap_server_state(ctx: &ReducerContext) {
+    let collision_summary = preload_world_collision_data();
+    log::info!(
+        "[INIT] Preloaded world collision data scenes={} arena_gameplay_boxes={} open_world_gameplay_boxes={} broadphase_cells={} generated_open_world_colliders={}",
+        collision_summary.scene_count,
+        collision_summary.arena_gameplay_boxes,
+        collision_summary.open_world_gameplay_boxes,
+        collision_summary.broadphase_cells,
+        collision_summary.generated_open_world_colliders
+    );
+
     sync_progression_catalogs(ctx);
     sync_combat_projectile_definitions(ctx);
     sync_spell_definitions(ctx);

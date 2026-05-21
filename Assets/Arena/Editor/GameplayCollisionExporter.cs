@@ -13,6 +13,9 @@ namespace Arena.Editor
     public static class GameplayCollisionExporter
     {
         private const string GameplayCollisionLayer = "GameplayCollision";
+        private const string GameplayQueryCollisionLayer = "GameplayQueryCollision";
+        private const float TransformCompatibilityScaleEpsilon = 0.001f;
+        private const float TransformCompatibilityBasisEpsilon = 0.001f;
         private const string RelativeServerGameplayCollisionPath = "server/src/gameplay_collision.shared.json";
         private const string RelativeServerArenaLayoutPath = "server/src/arena_layout.shared.json";
         private const string RelativeBundledGameplayCollisionPath = "Assets/Arena/Resources/SharedData/gameplay_collision.shared.json";
@@ -188,6 +191,53 @@ namespace Arena.Editor
             }
         }
 
+        [MenuItem("Arena/OpenWorld/Scene Prep/2b Audit Selected Query Colliders", false, 250)]
+        public static void AuditSelectedHierarchyQueryColliders()
+        {
+            if (!TryGetSelectedRoots(out GameObject[] roots))
+            {
+                Debug.LogError("[GameplayCollisionExporter] Select one or more root GameObjects to audit.");
+                return;
+            }
+
+            int layer = LayerMask.NameToLayer(GameplayQueryCollisionLayer);
+            if (layer < 0)
+            {
+                Debug.LogError($"[GameplayCollisionExporter] Layer '{GameplayQueryCollisionLayer}' does not exist.");
+                return;
+            }
+
+            List<Collider> candidates = CollectCandidateQueryColliders(roots);
+            int alreadyQuery = candidates.Count(c => c.gameObject.layer == layer);
+            int gameplayMovement = candidates.Count(c => c.gameObject.layer == LayerMask.NameToLayer(GameplayCollisionLayer));
+            int untagged = candidates.Count - alreadyQuery;
+            int boxes = candidates.Count(c => c is BoxCollider);
+            int meshes = candidates.Count(c => c is MeshCollider);
+            int fullTransformCompatible = candidates.Count(c => IsSharedPrototypeTransformCompatible(c.transform, out _));
+            int transformReviewRequired = candidates.Count - fullTransformCompatible;
+
+            Debug.Log(
+                $"[GameplayCollisionExporter] Audited {roots.Length} selected root(s): " +
+                $"{candidates.Count} candidate query colliders ({boxes} BoxCollider, {meshes} MeshCollider), " +
+                $"{alreadyQuery} already on {GameplayQueryCollisionLayer}, {gameplayMovement} currently on {GameplayCollisionLayer}, " +
+                $"{untagged} not yet tagged. " +
+                $"Full-transform shared-prototype compatible: {fullTransformCompatible}; transform review required: {transformReviewRequired}.");
+
+            foreach (Collider collider in candidates.Take(25))
+            {
+                bool shared = IsSharedPrototypeTransformCompatible(collider.transform, out string reason);
+                Debug.Log(
+                    $"[GameplayCollisionExporter] Query candidate: {GetHierarchyPath(collider.transform)} " +
+                    $"type={collider.GetType().Name} layer={LayerMask.LayerToName(collider.gameObject.layer)} " +
+                    $"prototype_transform={(shared ? "full_transform_shared" : "review")} reason={reason}");
+            }
+
+            if (candidates.Count > 25)
+            {
+                Debug.Log($"[GameplayCollisionExporter] ...and {candidates.Count - 25} more candidate query colliders.");
+            }
+        }
+
         [MenuItem("Arena/OpenWorld/Scene Prep/3 Mark Selected BoxColliders As GameplayCollision", false, 300)]
         public static void MarkSelectedHierarchyAsGameplayCollision()
         {
@@ -221,6 +271,49 @@ namespace Arena.Editor
             Debug.Log(
                 $"[GameplayCollisionExporter] Tagged {changed} GameObjects as {GameplayCollisionLayer} " +
                 $"from {candidates.Count} candidate BoxColliders across {roots.Length} selected root(s).");
+        }
+
+        [MenuItem("Arena/OpenWorld/Scene Prep/3b Mark Selected Query Colliders As GameplayQueryCollision", false, 350)]
+        public static void MarkSelectedHierarchyAsGameplayQueryCollision()
+        {
+            int layer = LayerMask.NameToLayer(GameplayQueryCollisionLayer);
+            if (layer < 0)
+            {
+                Debug.LogError($"[GameplayCollisionExporter] Layer '{GameplayQueryCollisionLayer}' does not exist.");
+                return;
+            }
+
+            if (!TryGetSelectedRoots(out GameObject[] roots))
+            {
+                Debug.LogError("[GameplayCollisionExporter] Select one or more root GameObjects to tag.");
+                return;
+            }
+
+            List<Collider> candidates = CollectCandidateQueryColliders(roots);
+            int gameplayCollisionLayer = LayerMask.NameToLayer(GameplayCollisionLayer);
+            int changed = 0;
+            int skippedMovement = 0;
+            Undo.SetCurrentGroupName("Mark Gameplay Query Collision");
+            foreach (Collider collider in candidates)
+            {
+                if (collider.gameObject.layer == layer)
+                    continue;
+                if (collider.gameObject.layer == gameplayCollisionLayer)
+                {
+                    skippedMovement++;
+                    continue;
+                }
+
+                Undo.RecordObject(collider.gameObject, "Mark Gameplay Query Collision");
+                collider.gameObject.layer = layer;
+                EditorUtility.SetDirty(collider.gameObject);
+                changed++;
+            }
+
+            Debug.Log(
+                $"[GameplayCollisionExporter] Tagged {changed} GameObjects as {GameplayQueryCollisionLayer} " +
+                $"from {candidates.Count} candidate query colliders across {roots.Length} selected root(s). " +
+                $"Skipped {skippedMovement} existing {GameplayCollisionLayer} collider(s) so movement blockers are not moved to the query layer.");
         }
 
         public static void ExportSelectedTerrainHeightfield()
@@ -389,6 +482,83 @@ namespace Arena.Editor
                 .Distinct()
                 .OrderBy(collider => GetHierarchyPath(collider.transform), StringComparer.Ordinal)
                 .ToList();
+        }
+
+        private static List<Collider> CollectCandidateQueryColliders(IEnumerable<GameObject> roots)
+        {
+            var candidates = new List<Collider>();
+            foreach (GameObject root in roots)
+            {
+                foreach (Collider collider in root.GetComponentsInChildren<Collider>(includeInactive: false))
+                {
+                    if (collider == null ||
+                        !collider.enabled ||
+                        collider.isTrigger ||
+                        !collider.gameObject.activeInHierarchy ||
+                        collider.gameObject.scene != SceneManager.GetActiveScene() ||
+                        !IsSupportedQueryCollider(collider))
+                    {
+                        continue;
+                    }
+
+                    candidates.Add(collider);
+                }
+            }
+
+            return candidates
+                .Distinct()
+                .OrderBy(collider => GetHierarchyPath(collider.transform), StringComparer.Ordinal)
+                .ThenBy(collider => collider.GetType().Name, StringComparer.Ordinal)
+                .ToList();
+        }
+
+        private static bool IsSupportedQueryCollider(Collider collider)
+            => collider is BoxCollider || collider is MeshCollider;
+
+        private static bool IsSharedPrototypeTransformCompatible(Transform transform, out string reason)
+        {
+            Matrix4x4 matrix = transform.localToWorldMatrix;
+            if (matrix.determinant < 0f)
+            {
+                reason = "negative_or_mirrored_scale";
+                return false;
+            }
+
+            Vector3 basisX = new(matrix.m00, matrix.m10, matrix.m20);
+            Vector3 basisY = new(matrix.m01, matrix.m11, matrix.m21);
+            Vector3 basisZ = new(matrix.m02, matrix.m12, matrix.m22);
+            float scaleX = basisX.magnitude;
+            float scaleY = basisY.magnitude;
+            float scaleZ = basisZ.magnitude;
+            if (scaleX <= TransformCompatibilityScaleEpsilon ||
+                scaleY <= TransformCompatibilityScaleEpsilon ||
+                scaleZ <= TransformCompatibilityScaleEpsilon)
+            {
+                reason = $"zero_or_near_zero_scale({scaleX:F3},{scaleY:F3},{scaleZ:F3})";
+                return false;
+            }
+
+            float xyDot = Mathf.Abs(Vector3.Dot(basisX / scaleX, basisY / scaleY));
+            float xzDot = Mathf.Abs(Vector3.Dot(basisX / scaleX, basisZ / scaleZ));
+            float yzDot = Mathf.Abs(Vector3.Dot(basisY / scaleY, basisZ / scaleZ));
+            if (xyDot > TransformCompatibilityBasisEpsilon ||
+                xzDot > TransformCompatibilityBasisEpsilon ||
+                yzDot > TransformCompatibilityBasisEpsilon)
+            {
+                reason = $"non_orthogonal_basis({xyDot:F4},{xzDot:F4},{yzDot:F4})";
+                return false;
+            }
+
+            if (Mathf.Abs(scaleX - scaleY) > TransformCompatibilityScaleEpsilon ||
+                Mathf.Abs(scaleX - scaleZ) > TransformCompatibilityScaleEpsilon)
+            {
+                reason = $"non_uniform_scale({scaleX:F3},{scaleY:F3},{scaleZ:F3})";
+                return false;
+            }
+
+            Vector3 euler = transform.rotation.eulerAngles;
+            reason = $"translation_uniform_scale_full_rotation({euler.x:F2},{euler.y:F2},{euler.z:F2})";
+            return true;
         }
 
         private static void ExportSceneGameplayCollision(Scene activeScene, string dataKey)
