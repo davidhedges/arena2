@@ -406,7 +406,15 @@ Mesh support needs two acceleration layers:
 1. World broadphase over object-level bounds.
 2. Per-mesh triangle acceleration structure.
 
-This is a solved-problem area. The project should not hand-roll triangle mesh BVHs, ray/triangle query code, or swept-shape math unless a library fails the constraints below.
+Completed setup:
+
+- Query meshes now build a deterministic per-geometry triangle BVH at server preload.
+- The BVH is shared by all mesh instances for that geometry. Runtime raycasts still use the top-level world broadphase over instance bounds first, then transform the ray into mesh-local space and traverse the shared per-geometry BVH.
+- Mesh metrics now distinguish world mesh instance candidates, BVH node tests, triangle tests, and mesh broadphase full-scan fallbacks.
+- Server bootstrap logs total mesh BVH node count so the in-memory acceleration structure size is visible alongside geometry and triangle counts.
+- Tests compare BVH ray results against the previous linear triangle scan and verify that the BVH prunes triangle tests for representative local queries.
+
+This is a solved-problem area. The in-repo BVH is the deterministic baseline for current static ray queries and for evaluating whether a library is worth the module-size/runtime tradeoff. The project should not hand-roll swept-shape math or broader physics behavior unless a library fails the constraints below.
 
 Recommended evaluation:
 
@@ -424,6 +432,7 @@ Library acceptance criteria:
 - Handles our transform policy cleanly: query instance world AABB in Arena broadphase, transform query into prototype-local space using the inverse instance transform, run mesh narrowphase, then transform hit back to world space.
 - Has acceptable cold-start cost for building per-prototype mesh acceleration structures, or supports precomputed/baked structures later. Mesh acceleration init should follow the same eager-init or measured first-query-latency policy as the box broadphase.
 - Is benchmarked against a minimal in-repo triangle-BVH baseline for representative mesh/query workloads before adoption. The baseline is for sizing and risk reduction, not a commitment to hand-roll production collision math.
+- The in-repo baseline now exists for exact ray-vs-triangle queries. Any library adoption should beat or materially simplify this baseline while preserving deterministic Arena-level hit behavior.
 - Has an acceptable license footprint for server distribution; Parry's Apache-2.0/MIT licensing is expected to be compatible.
 
 Useful references:
@@ -477,6 +486,6 @@ This is lower priority than the broadphase and authoring split for current box d
 
 ## Recommended Next Step
 
-Implement Phase 1 first: a world-collider broadphase for the existing exported gameplay boxes.
+Continue Phase 4 validation: measure representative projectile/LOS query workloads with exported mesh-heavy scenes, then decide whether the in-repo BVH is sufficient or whether Parry/swept-shape support is needed before implementing projectile-radius-aware mesh hits.
 
 That gives an immediate performance improvement, reduces the risk of future mesh support, and creates the candidate-query shape needed for mixed box and mesh collision later.

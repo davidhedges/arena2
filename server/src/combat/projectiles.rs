@@ -70,6 +70,7 @@ struct ProjectileTickMetricsFrame {
     world_gameplay_narrowphase_tests: u32,
     world_gameplay_full_scan_fallbacks: u32,
     world_query_mesh_broadphase_candidates: u32,
+    world_query_mesh_bvh_node_tests: u32,
     world_query_mesh_triangles_tested: u32,
     world_query_mesh_full_scan_fallbacks: u32,
     open_world_geometry_point_checks: u32,
@@ -1708,6 +1709,9 @@ fn record_world_raycast_stats(
     metrics.world_query_mesh_broadphase_candidates = metrics
         .world_query_mesh_broadphase_candidates
         .saturating_add(world_stats.world_query_mesh_broadphase_candidates);
+    metrics.world_query_mesh_bvh_node_tests = metrics
+        .world_query_mesh_bvh_node_tests
+        .saturating_add(world_stats.world_query_mesh_bvh_node_tests);
     metrics.world_query_mesh_triangles_tested = metrics
         .world_query_mesh_triangles_tested
         .saturating_add(world_stats.world_query_mesh_triangles_tested);
@@ -1800,6 +1804,7 @@ fn record_projectile_tick_metrics(
         world_gameplay_narrowphase_tests: metrics.world_gameplay_narrowphase_tests,
         world_gameplay_full_scan_fallbacks: metrics.world_gameplay_full_scan_fallbacks,
         world_query_mesh_broadphase_candidates: metrics.world_query_mesh_broadphase_candidates,
+        world_query_mesh_bvh_node_tests: metrics.world_query_mesh_bvh_node_tests,
         world_query_mesh_triangles_tested: metrics.world_query_mesh_triangles_tested,
         world_query_mesh_full_scan_fallbacks: metrics.world_query_mesh_full_scan_fallbacks,
         open_world_geometry_point_checks: metrics.open_world_geometry_point_checks,
@@ -1854,6 +1859,11 @@ fn record_projectile_tick_metrics(
             .map(|row| row.peak_world_query_mesh_broadphase_candidates)
             .unwrap_or(0)
             .max(metrics.world_query_mesh_broadphase_candidates),
+        peak_world_query_mesh_bvh_node_tests: previous
+            .as_ref()
+            .map(|row| row.peak_world_query_mesh_bvh_node_tests)
+            .unwrap_or(0)
+            .max(metrics.world_query_mesh_bvh_node_tests),
         peak_world_query_mesh_triangles_tested: previous
             .as_ref()
             .map(|row| row.peak_world_query_mesh_triangles_tested)
@@ -1909,6 +1919,11 @@ fn record_projectile_tick_metrics(
             .map(|row| row.total_world_query_mesh_broadphase_candidates)
             .unwrap_or(0)
             .saturating_add(u64::from(metrics.world_query_mesh_broadphase_candidates)),
+        total_world_query_mesh_bvh_node_tests: previous
+            .as_ref()
+            .map(|row| row.total_world_query_mesh_bvh_node_tests)
+            .unwrap_or(0)
+            .saturating_add(u64::from(metrics.world_query_mesh_bvh_node_tests)),
         total_world_query_mesh_triangles_tested: previous
             .as_ref()
             .map(|row| row.total_world_query_mesh_triangles_tested)
@@ -1979,10 +1994,11 @@ fn warn_on_high_world_collision_fallback_ratio(row: &CombatProjectileTickMetrics
         / row.world_collision_queries.max(1);
     if mesh_fallback_per_mille >= WORLD_COLLISION_FALLBACK_WARN_RATIO_PER_MILLE {
         log::warn!(
-            "[PROJECTILES] High world query mesh broadphase fallback ratio: fallbacks={} queries={} ratio={:.1}% triangle_tests={} candidates={}",
+            "[PROJECTILES] High world query mesh broadphase fallback ratio: fallbacks={} queries={} ratio={:.1}% bvh_node_tests={} triangle_tests={} candidates={}",
             row.world_query_mesh_full_scan_fallbacks,
             row.world_collision_queries,
             mesh_fallback_per_mille as f32 / 10.0,
+            row.world_query_mesh_bvh_node_tests,
             row.world_query_mesh_triangles_tested,
             row.world_query_mesh_broadphase_candidates
         );
