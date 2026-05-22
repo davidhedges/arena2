@@ -61,3 +61,8 @@ spacetime generate --yes --lang csharp --module-path server --out-dir Assets/Are
 ```
 
 Then let Unity recompile before testing.
+
+Projectile load harness reducers are feature-gated and are not included by the
+plain workflow above. Use the harness build/publish workflow in
+`docs/combat-projectile-load-harness-plan-2026-05-15.md` when running that
+overlay.

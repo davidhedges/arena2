@@ -165,7 +165,7 @@ namespace Arena.Debugging
             if (!connected)
                 GUILayout.Label("Connect to SpacetimeDB before running the harness.");
             else if (!harnessReducersAvailable)
-                GUILayout.Label("Projectile load harness reducers are not available on this server build.");
+                GUILayout.Label("Projectile load harness reducers are not available. Publish a server WASM built with projectile_load_harness.");
 
             GUILayout.EndVertical();
 
@@ -207,6 +207,9 @@ namespace Arena.Debugging
                     $"world broadphase: candidates={serverMetrics.WorldGameplayBroadphaseCandidates} narrowphase={serverMetrics.WorldGameplayNarrowphaseTests} " +
                     $"fallbacks={serverMetrics.WorldGameplayFullScanFallbacks} ({RatioPercent(serverMetrics.WorldGameplayFullScanFallbacks, serverMetrics.WorldCollisionQueries):F1}%) " +
                     $"open-world points={serverMetrics.OpenWorldGeometryPointChecks}");
+                GUILayout.Label(
+                    $"mesh query: candidates={serverMetrics.WorldQueryMeshBroadphaseCandidates} bvh-nodes={serverMetrics.WorldQueryMeshBvhNodeTests} " +
+                    $"triangles={serverMetrics.WorldQueryMeshTrianglesTested} fallbacks={serverMetrics.WorldQueryMeshFullScanFallbacks}");
                 GUILayout.Label(
                     $"events: update={serverMetrics.UpdateEventsEmitted} contact={serverMetrics.ContactEventsEmitted} terminal={serverMetrics.TerminalEventsEmitted} block/parry={serverMetrics.BlockParryEventsEmitted}");
                 GUILayout.Label(
@@ -342,12 +345,32 @@ namespace Arena.Debugging
                 return;
 
             if (_subscribedConnection != null)
+            {
                 _subscribedConnection.Db.ProjectilePresentationEvent.OnInsert -= OnProjectilePresentationEventInsert;
+                _subscribedConnection.OnUnhandledReducerError -= OnUnhandledReducerError;
+            }
 
             _subscribedConnection = conn;
 
             if (_subscribedConnection != null)
+            {
                 _subscribedConnection.Db.ProjectilePresentationEvent.OnInsert += OnProjectilePresentationEventInsert;
+                _subscribedConnection.OnUnhandledReducerError += OnUnhandledReducerError;
+            }
+        }
+
+        private void OnUnhandledReducerError(ReducerEventContext ctx, Exception error)
+        {
+            if (ctx.Event.Reducer is not Reducer.RunProjectileLoadHarness
+                and not Reducer.CleanupProjectileLoadHarness)
+            {
+                return;
+            }
+
+            _autoCleanupAt = -1f;
+            _pendingAutoCaptureAt = -1f;
+            _status = $"Harness reducer failed: {error.Message}";
+            UnityEngine.Debug.LogWarning($"[ProjectileLoadHarnessOverlay] {_status}");
         }
 
         private void OnDestroy()
@@ -599,6 +622,10 @@ namespace Arena.Debugging
             builder.AppendLine($"server_world_gameplay_full_scan_fallbacks: {serverMetrics.WorldGameplayFullScanFallbacks}");
             builder.AppendLine($"server_world_gameplay_full_scan_fallback_ratio_pct: {RatioPercent(serverMetrics.WorldGameplayFullScanFallbacks, serverMetrics.WorldCollisionQueries):F1}");
             builder.AppendLine($"server_open_world_geometry_point_checks: {serverMetrics.OpenWorldGeometryPointChecks}");
+            builder.AppendLine($"server_world_query_mesh_broadphase_candidates: {serverMetrics.WorldQueryMeshBroadphaseCandidates}");
+            builder.AppendLine($"server_world_query_mesh_bvh_node_tests: {serverMetrics.WorldQueryMeshBvhNodeTests}");
+            builder.AppendLine($"server_world_query_mesh_triangles_tested: {serverMetrics.WorldQueryMeshTrianglesTested}");
+            builder.AppendLine($"server_world_query_mesh_full_scan_fallbacks: {serverMetrics.WorldQueryMeshFullScanFallbacks}");
             builder.AppendLine($"server_contacts_resolved: {serverMetrics.ContactsResolved}");
             builder.AppendLine($"server_sample_sequence: {serverMetrics.SampleSequence}");
             builder.AppendLine($"server_peak_active_projectiles: {serverMetrics.PeakActiveProjectileCount}");
@@ -609,6 +636,10 @@ namespace Arena.Debugging
             builder.AppendLine($"server_peak_world_gameplay_narrowphase_tests: {serverMetrics.PeakWorldGameplayNarrowphaseTests}");
             builder.AppendLine($"server_peak_world_gameplay_full_scan_fallbacks: {serverMetrics.PeakWorldGameplayFullScanFallbacks}");
             builder.AppendLine($"server_peak_open_world_geometry_point_checks: {serverMetrics.PeakOpenWorldGeometryPointChecks}");
+            builder.AppendLine($"server_peak_world_query_mesh_broadphase_candidates: {serverMetrics.PeakWorldQueryMeshBroadphaseCandidates}");
+            builder.AppendLine($"server_peak_world_query_mesh_bvh_node_tests: {serverMetrics.PeakWorldQueryMeshBvhNodeTests}");
+            builder.AppendLine($"server_peak_world_query_mesh_triangles_tested: {serverMetrics.PeakWorldQueryMeshTrianglesTested}");
+            builder.AppendLine($"server_peak_world_query_mesh_full_scan_fallbacks: {serverMetrics.PeakWorldQueryMeshFullScanFallbacks}");
             builder.AppendLine($"server_peak_contacts_resolved: {serverMetrics.PeakContactsResolved}");
             builder.AppendLine($"server_total_rows_updated: {serverMetrics.TotalRowsUpdated}");
             builder.AppendLine($"server_total_collision_candidate_scans: {serverMetrics.TotalCollisionCandidateScans}");
@@ -618,6 +649,10 @@ namespace Arena.Debugging
             builder.AppendLine($"server_total_world_gameplay_full_scan_fallbacks: {serverMetrics.TotalWorldGameplayFullScanFallbacks}");
             builder.AppendLine($"server_total_world_gameplay_full_scan_fallback_ratio_pct: {RatioPercent(serverMetrics.TotalWorldGameplayFullScanFallbacks, serverMetrics.TotalWorldCollisionQueries):F1}");
             builder.AppendLine($"server_total_open_world_geometry_point_checks: {serverMetrics.TotalOpenWorldGeometryPointChecks}");
+            builder.AppendLine($"server_total_world_query_mesh_broadphase_candidates: {serverMetrics.TotalWorldQueryMeshBroadphaseCandidates}");
+            builder.AppendLine($"server_total_world_query_mesh_bvh_node_tests: {serverMetrics.TotalWorldQueryMeshBvhNodeTests}");
+            builder.AppendLine($"server_total_world_query_mesh_triangles_tested: {serverMetrics.TotalWorldQueryMeshTrianglesTested}");
+            builder.AppendLine($"server_total_world_query_mesh_full_scan_fallbacks: {serverMetrics.TotalWorldQueryMeshFullScanFallbacks}");
             builder.AppendLine($"server_total_contacts_resolved: {serverMetrics.TotalContactsResolved}");
             builder.AppendLine($"server_total_update_events: {serverMetrics.TotalUpdateEventsEmitted}");
             builder.AppendLine($"server_total_contact_events: {serverMetrics.TotalContactEventsEmitted}");

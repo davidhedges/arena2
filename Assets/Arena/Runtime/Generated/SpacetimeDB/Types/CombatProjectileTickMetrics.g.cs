@@ -33,6 +33,14 @@ namespace SpacetimeDB.Types
         public uint WorldGameplayNarrowphaseTests;
         [DataMember(Name = "world_gameplay_full_scan_fallbacks")]
         public uint WorldGameplayFullScanFallbacks;
+        [DataMember(Name = "world_query_mesh_broadphase_candidates")]
+        public uint WorldQueryMeshBroadphaseCandidates;
+        [DataMember(Name = "world_query_mesh_bvh_node_tests")]
+        public uint WorldQueryMeshBvhNodeTests;
+        [DataMember(Name = "world_query_mesh_triangles_tested")]
+        public uint WorldQueryMeshTrianglesTested;
+        [DataMember(Name = "world_query_mesh_full_scan_fallbacks")]
+        public uint WorldQueryMeshFullScanFallbacks;
         [DataMember(Name = "open_world_geometry_point_checks")]
         public uint OpenWorldGeometryPointChecks;
         [DataMember(Name = "contacts_resolved")]
@@ -71,6 +79,14 @@ namespace SpacetimeDB.Types
         public uint PeakWorldGameplayNarrowphaseTests;
         [DataMember(Name = "peak_world_gameplay_full_scan_fallbacks")]
         public uint PeakWorldGameplayFullScanFallbacks;
+        [DataMember(Name = "peak_world_query_mesh_broadphase_candidates")]
+        public uint PeakWorldQueryMeshBroadphaseCandidates;
+        [DataMember(Name = "peak_world_query_mesh_bvh_node_tests")]
+        public uint PeakWorldQueryMeshBvhNodeTests;
+        [DataMember(Name = "peak_world_query_mesh_triangles_tested")]
+        public uint PeakWorldQueryMeshTrianglesTested;
+        [DataMember(Name = "peak_world_query_mesh_full_scan_fallbacks")]
+        public uint PeakWorldQueryMeshFullScanFallbacks;
         [DataMember(Name = "peak_open_world_geometry_point_checks")]
         public uint PeakOpenWorldGeometryPointChecks;
         [DataMember(Name = "peak_contacts_resolved")]
@@ -87,6 +103,14 @@ namespace SpacetimeDB.Types
         public ulong TotalWorldGameplayNarrowphaseTests;
         [DataMember(Name = "total_world_gameplay_full_scan_fallbacks")]
         public ulong TotalWorldGameplayFullScanFallbacks;
+        [DataMember(Name = "total_world_query_mesh_broadphase_candidates")]
+        public ulong TotalWorldQueryMeshBroadphaseCandidates;
+        [DataMember(Name = "total_world_query_mesh_bvh_node_tests")]
+        public ulong TotalWorldQueryMeshBvhNodeTests;
+        [DataMember(Name = "total_world_query_mesh_triangles_tested")]
+        public ulong TotalWorldQueryMeshTrianglesTested;
+        [DataMember(Name = "total_world_query_mesh_full_scan_fallbacks")]
+        public ulong TotalWorldQueryMeshFullScanFallbacks;
         [DataMember(Name = "total_open_world_geometry_point_checks")]
         public ulong TotalOpenWorldGeometryPointChecks;
         [DataMember(Name = "total_contacts_resolved")]
@@ -111,6 +135,10 @@ namespace SpacetimeDB.Types
             uint WorldGameplayBroadphaseCandidates,
             uint WorldGameplayNarrowphaseTests,
             uint WorldGameplayFullScanFallbacks,
+            uint WorldQueryMeshBroadphaseCandidates,
+            uint WorldQueryMeshBvhNodeTests,
+            uint WorldQueryMeshTrianglesTested,
+            uint WorldQueryMeshFullScanFallbacks,
             uint OpenWorldGeometryPointChecks,
             uint ContactsResolved,
             uint UpdateEventsEmitted,
@@ -130,6 +158,10 @@ namespace SpacetimeDB.Types
             uint PeakWorldGameplayBroadphaseCandidates,
             uint PeakWorldGameplayNarrowphaseTests,
             uint PeakWorldGameplayFullScanFallbacks,
+            uint PeakWorldQueryMeshBroadphaseCandidates,
+            uint PeakWorldQueryMeshBvhNodeTests,
+            uint PeakWorldQueryMeshTrianglesTested,
+            uint PeakWorldQueryMeshFullScanFallbacks,
             uint PeakOpenWorldGeometryPointChecks,
             uint PeakContactsResolved,
             ulong TotalRowsUpdated,
@@ -138,6 +170,10 @@ namespace SpacetimeDB.Types
             ulong TotalWorldGameplayBroadphaseCandidates,
             ulong TotalWorldGameplayNarrowphaseTests,
             ulong TotalWorldGameplayFullScanFallbacks,
+            ulong TotalWorldQueryMeshBroadphaseCandidates,
+            ulong TotalWorldQueryMeshBvhNodeTests,
+            ulong TotalWorldQueryMeshTrianglesTested,
+            ulong TotalWorldQueryMeshFullScanFallbacks,
             ulong TotalOpenWorldGeometryPointChecks,
             ulong TotalContactsResolved,
             ulong TotalUpdateEventsEmitted,
@@ -156,6 +192,10 @@ namespace SpacetimeDB.Types
             this.WorldGameplayBroadphaseCandidates = WorldGameplayBroadphaseCandidates;
             this.WorldGameplayNarrowphaseTests = WorldGameplayNarrowphaseTests;
             this.WorldGameplayFullScanFallbacks = WorldGameplayFullScanFallbacks;
+            this.WorldQueryMeshBroadphaseCandidates = WorldQueryMeshBroadphaseCandidates;
+            this.WorldQueryMeshBvhNodeTests = WorldQueryMeshBvhNodeTests;
+            this.WorldQueryMeshTrianglesTested = WorldQueryMeshTrianglesTested;
+            this.WorldQueryMeshFullScanFallbacks = WorldQueryMeshFullScanFallbacks;
             this.OpenWorldGeometryPointChecks = OpenWorldGeometryPointChecks;
             this.ContactsResolved = ContactsResolved;
             this.UpdateEventsEmitted = UpdateEventsEmitted;
@@ -175,6 +215,10 @@ namespace SpacetimeDB.Types
             this.PeakWorldGameplayBroadphaseCandidates = PeakWorldGameplayBroadphaseCandidates;
             this.PeakWorldGameplayNarrowphaseTests = PeakWorldGameplayNarrowphaseTests;
             this.PeakWorldGameplayFullScanFallbacks = PeakWorldGameplayFullScanFallbacks;
+            this.PeakWorldQueryMeshBroadphaseCandidates = PeakWorldQueryMeshBroadphaseCandidates;
+            this.PeakWorldQueryMeshBvhNodeTests = PeakWorldQueryMeshBvhNodeTests;
+            this.PeakWorldQueryMeshTrianglesTested = PeakWorldQueryMeshTrianglesTested;
+            this.PeakWorldQueryMeshFullScanFallbacks = PeakWorldQueryMeshFullScanFallbacks;
             this.PeakOpenWorldGeometryPointChecks = PeakOpenWorldGeometryPointChecks;
             this.PeakContactsResolved = PeakContactsResolved;
             this.TotalRowsUpdated = TotalRowsUpdated;
@@ -183,6 +227,10 @@ namespace SpacetimeDB.Types
             this.TotalWorldGameplayBroadphaseCandidates = TotalWorldGameplayBroadphaseCandidates;
             this.TotalWorldGameplayNarrowphaseTests = TotalWorldGameplayNarrowphaseTests;
             this.TotalWorldGameplayFullScanFallbacks = TotalWorldGameplayFullScanFallbacks;
+            this.TotalWorldQueryMeshBroadphaseCandidates = TotalWorldQueryMeshBroadphaseCandidates;
+            this.TotalWorldQueryMeshBvhNodeTests = TotalWorldQueryMeshBvhNodeTests;
+            this.TotalWorldQueryMeshTrianglesTested = TotalWorldQueryMeshTrianglesTested;
+            this.TotalWorldQueryMeshFullScanFallbacks = TotalWorldQueryMeshFullScanFallbacks;
             this.TotalOpenWorldGeometryPointChecks = TotalOpenWorldGeometryPointChecks;
             this.TotalContactsResolved = TotalContactsResolved;
             this.TotalUpdateEventsEmitted = TotalUpdateEventsEmitted;

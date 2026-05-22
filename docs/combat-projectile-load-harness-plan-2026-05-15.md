@@ -290,6 +290,39 @@ Server diagnostics:
 - this is generic projectile instrumentation, not scenario logic; the load
   harness still only seeds and cleans up normal runtime rows
 
+Harness lockdown workflow:
+
+- The harness reducers are behind the server `projectile_load_harness` Cargo
+  feature. Plain `spacetime build` / `spacetime publish` does not include those
+  reducers and will make Unity report `no such reducer` when the overlay calls
+  `run_projectile_load_harness`.
+- Build the harness-enabled WASM directly with Cargo:
+
+```bash
+cargo build --manifest-path server/Cargo.toml --target wasm32-unknown-unknown --release --features projectile_load_harness
+```
+
+- Publish that exact WASM when testing the harness locally:
+
+```bash
+spacetime publish arena --bin-path server/target/wasm32-unknown-unknown/release/arena.wasm --delete-data=on-conflict --yes
+```
+
+- After adding or changing server tables, reducers, or generated types used by
+  the harness, regenerate Unity bindings from the same harness-enabled WASM:
+
+```bash
+spacetime generate --yes --lang csharp --bin-path server/target/wasm32-unknown-unknown/release/arena.wasm --out-dir Assets/Arena/Runtime/Generated/SpacetimeDB
+```
+
+- After Unity collision export changes server-baked JSON, rebuild and republish
+  the harness-enabled WASM. The server does not read Unity-exported collision
+  JSON live after it has already been published.
+- Restart Unity Play Mode or reconnect after publish so the client is connected
+  to the newly published module.
+- Prefer `server_sim` mode for server collision measurements. Use `full_client`
+  only when intentionally measuring Unity presentation/VFX pressure.
+
 Remaining measurement gap:
 
 - no known first-pass gaps for this harness slice

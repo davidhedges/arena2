@@ -50,12 +50,13 @@ Current branch status:
 - Phase 1 server broadphase for existing exported gameplay boxes is implemented. It builds static per-scene 3D uniform grids, preserves original collider index order before narrowphase, and falls back to full scan for oversized queries or unindexed bad data.
 - Collision data is preloaded during server bootstrap so the first projectile query in a scene does not pay the broadphase build cost.
 - Projectile metrics now report world broadphase candidates, gameplay-box narrowphase tests, full-scan fallbacks, and generated open-world geometry point checks. Phase 1 also logs broadphase occupancy/index health at bootstrap and warns when runtime fallback ratio is high.
-- The projectile load harness measurement is intentionally deferred; Phase 1 is considered wrapped without it for now.
-- The Unity project now has a `GameplayQueryCollision` layer and editor menu items to audit, mark, or prepare selected `BoxCollider`/`MeshCollider` objects for future projectile/LOS query collision authoring.
+- The projectile load harness measurement was intentionally deferred for Phase 1 completion, then used later to validate the mesh-query path. For the locked harness build/publish workflow, see `docs/combat-projectile-load-harness-plan-2026-05-15.md`.
+- The Unity project now has a `GameplayQueryCollision` layer and editor menu items to audit, mark, or prepare selected `BoxCollider`/`MeshCollider` objects for projectile/LOS query collision authoring.
 - Phase 2 box-only query-collision export is implemented. The exporter writes separate `*.query_collision.shared.json` files from `GameplayQueryCollision` `BoxCollider`s. During migration, the server raycast path queries both movement boxes and query boxes, then keeps the nearest hit, so partial query authoring cannot make every non-query-authored prop stop blocking projectiles.
 - `Arena/OpenWorld/Scene Prep/3c Prepare Selected Variant Collision Roles` is the preferred manual cleanup tool for selected variant assets, selected Project folders containing variants, prefab-mode roots, scene instances, or scene containers. It expands Project folder selections to prefab assets underneath, expands scene/container selections to the placed prefab instance roots underneath, edits selected prefab assets by loading/saving prefab contents, keeps visual roots/LOD objects off collision layers, copies visual/root `BoxCollider`s onto dedicated `ArenaGameplayCollision*` children, copies those same author boxes to `ArenaGameplayQueryCollision*` when they are the best available query shape, preserves the original visual/root box components on `Default` as authoring source data, and otherwise creates `ArenaGameplayQueryCollision*` children from mesh colliders on `GameplayQueryCollision`.
 - Early audit of placed rocks showed ordinary X/Z tilt on environment props. Full-rotation query `BoxCollider` support is now implemented as `obb_xyz` export data with quaternion rotation and server-side full-rotation OBB raycasts. Movement export can still flatten tilted boxes to conservative AABBs.
-- Mesh query geometry export and server parse/preload are partially implemented as a data path. Meshes are not used for projectile/LOS hits yet; mesh narrowphase acceleration is still pending.
+- Query mesh export, server parse/preload, prototype/instance encoding, per-instance broadphase, per-geometry deterministic BVH, and exact ray-vs-triangle projectile/LOS hits are implemented. Mesh hits are merged with query boxes, movement fallback boxes, heightfield behavior, and generated open-world geometry by nearest hit.
+- A harness run against a mesh-authored `giant_skeleton` setup validated the runtime path with `1,046` mesh broadphase candidates, `1,678` BVH node tests, `140` triangle tests, and `0` mesh full-scan fallbacks. This confirms the mesh path is active; broader performance campaigns and Unity `full_client` presentation costs remain separate work.
 
 ## Design Direction
 
@@ -79,6 +80,7 @@ Interim authoring decision for bad boxes:
 - Do not delete or disable existing `GameplayCollision` boxes just because they are bad projectile/LOS approximations.
 - Keep a bad box on `GameplayCollision` only as a temporary movement blocker if removing it would let players move through the asset.
 - Do not add bad boxes to `GameplayQueryCollision`.
+- If a query mesh exists for an asset, do not also author a bad `GameplayQueryCollision` box around that same shape unless the conservative box is intentionally allowed to win. The nearest-hit merge is correct, but an oversized query box can mask the mesh by reporting an earlier hit in empty space.
 - Do not put visual roots or LOD renderer objects on either collision layer unless that exact `GameObject` owns the intended collider. Layers are per `GameObject`, not per collider component.
 - For confusing existing assets, select the Arena variant, scene instance, or a scene container containing many prefab instances and run `Arena/OpenWorld/Scene Prep/3c Prepare Selected Variant Collision Roles` instead of hand-editing root layers. If an asset has both a visual/root `BoxCollider` and an `ArenaGameplayCollision` child box, the tool should preserve the visual/root box shape by copying it to dedicated movement/query children, keep the dedicated child as the movement collider owner, and leave the visual/root box on `Default` as source authoring data.
 - If an asset has author `CapsuleCollider`s, keep them on `Default` for now. The cleanup tool should report them as preserved but unsupported until capsule export/server support or deterministic capsule-to-hull conversion is implemented.
@@ -205,7 +207,7 @@ Recommended rules:
 - Allow `BoxCollider` first. This is now implemented for arena and open-world scene exports.
 - During migration, projectile/LOS raycasts must augment the existing `GameplayCollision` set with the query set, not replace it scene-wide. Replacement is only safe later if coverage is complete or if the data model can suppress movement fallback per prefab/prototype.
 - Query export supports full-rotation `BoxCollider`s as `obb_xyz` with quaternion rotation. Movement export may still flatten tilted movement boxes to conservative AABBs, but query collision should not knowingly bake huge false-positive AABBs.
-- Allow `MeshCollider` later once server mesh query support exists.
+- Allow `MeshCollider` on the query layer. Server mesh query support now exists for static projectile/LOS ray hits.
 - Provide an editor entry point parallel to the current gameplay collision export flow, and ensure CI or validation can detect stale generated collision data.
 
 Editor tooling should validate:
@@ -235,6 +237,8 @@ Completed setup:
 - Projectile/LOS raycasts now query a top-level broadphase over mesh instances, transform candidate rays into mesh-local space, test triangles, and merge the nearest mesh hit with existing box/heightfield/generated-world hits.
 - Projectile tick metrics track mesh broadphase candidates, triangle tests, and mesh broadphase full-scan fallbacks separately from box collision counters.
 - Current mesh narrowphase is exact ray-vs-triangle. It does not yet sweep projectile radius against triangles; existing box collision still applies projectile radius. Swept-sphere/capsule vs triangle remains a follow-up if arrow/projectile radius needs mesh-edge grazing coverage.
+- Unity-exported collision JSON is baked into the SpacetimeDB WASM at build time. After exporting collision data, rebuild and republish the server before expecting harness or gameplay tests to see the new data.
+- Harness validation of an authored `giant_skeleton` mesh setup confirmed that mesh candidates reached the BVH/triangle path with no mesh broadphase fallback.
 
 Initial mesh policy:
 
@@ -244,7 +248,7 @@ Initial mesh policy:
 - Intended for projectile and LOS queries, not player movement.
 - Use author-provided simplified `MeshCollider` meshes when available.
 - Prefer lower-detail collision meshes over visual LOD meshes.
-- Run a module-size budget check before landing mesh export, because SpacetimeDB modules ship as WASM and static collision data can affect deploy and cold-start behavior.
+- Continue running module-size budget checks before broad mesh adoption, because SpacetimeDB modules ship as WASM and static collision data can affect deploy and cold-start behavior.
 
 Exported data should include:
 
@@ -413,6 +417,8 @@ Completed setup:
 - Mesh metrics now distinguish world mesh instance candidates, BVH node tests, triangle tests, and mesh broadphase full-scan fallbacks.
 - Server bootstrap logs total mesh BVH node count so the in-memory acceleration structure size is visible alongside geometry and triangle counts.
 - Tests compare BVH ray results against the previous linear triangle scan and verify that the BVH prunes triangle tests for representative local queries.
+- The projectile load harness can now expose mesh-query work through `world_query_mesh_broadphase_candidates`, `world_query_mesh_bvh_node_tests`, `world_query_mesh_triangles_tested`, and `world_query_mesh_full_scan_fallbacks`.
+- A representative harness run near an authored query mesh reported `1,046` total mesh broadphase candidates, `1,678` total BVH node tests, `140` total triangle tests, and `0` mesh full-scan fallbacks. That validates the active mesh path, but it is not a final performance benchmark.
 
 This is a solved-problem area. The in-repo BVH is the deterministic baseline for current static ray queries and for evaluating whether a library is worth the module-size/runtime tradeoff. The project should not hand-roll swept-shape math or broader physics behavior unless a library fails the constraints below.
 
@@ -486,6 +492,13 @@ This is lower priority than the broadphase and authoring split for current box d
 
 ## Recommended Next Step
 
-Continue Phase 4 validation: measure representative projectile/LOS query workloads with exported mesh-heavy scenes, then decide whether the in-repo BVH is sufficient or whether Parry/swept-shape support is needed before implementing projectile-radius-aware mesh hits.
+Move on to generated collision optimization for assets where hand-authored boxes are not acceptable.
 
-That gives an immediate performance improvement, reduces the risk of future mesh support, and creates the candidate-query shape needed for mixed box and mesh collision later.
+Recommended first optimization slice:
+
+- Build an asset-scoped optimizer/evaluator workflow, not a blind scene-wide mutation.
+- Compare manual/source colliders, raw query meshes, simplified query meshes, and generated compound hulls on the same prefab variant.
+- Evaluate V-HACD, CoACD, or a deterministic equivalent for movement collision first, because movement is where bad boxes hurt most and raw concave meshes are not an acceptable final movement representation.
+- Keep projectile/LOS query meshes as the fidelity baseline. Use generated/simplified meshes only when raw query meshes are too large or too expensive.
+- Report fit, hull count, triangle count, exported bytes, WASM size impact, and server query counters before replacing existing authored collision.
+- Preserve the current server broadphase/BVH path as the baseline. Only adopt Parry or another library if it materially improves swept-shape support, query performance, implementation risk, or module-size tradeoffs.

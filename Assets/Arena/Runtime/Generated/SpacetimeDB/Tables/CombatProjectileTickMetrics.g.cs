@@ -49,6 +49,10 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Col<CombatProjectileTickMetrics, uint> WorldGameplayBroadphaseCandidates { get; }
         public global::SpacetimeDB.Col<CombatProjectileTickMetrics, uint> WorldGameplayNarrowphaseTests { get; }
         public global::SpacetimeDB.Col<CombatProjectileTickMetrics, uint> WorldGameplayFullScanFallbacks { get; }
+        public global::SpacetimeDB.Col<CombatProjectileTickMetrics, uint> WorldQueryMeshBroadphaseCandidates { get; }
+        public global::SpacetimeDB.Col<CombatProjectileTickMetrics, uint> WorldQueryMeshBvhNodeTests { get; }
+        public global::SpacetimeDB.Col<CombatProjectileTickMetrics, uint> WorldQueryMeshTrianglesTested { get; }
+        public global::SpacetimeDB.Col<CombatProjectileTickMetrics, uint> WorldQueryMeshFullScanFallbacks { get; }
         public global::SpacetimeDB.Col<CombatProjectileTickMetrics, uint> OpenWorldGeometryPointChecks { get; }
         public global::SpacetimeDB.Col<CombatProjectileTickMetrics, uint> ContactsResolved { get; }
         public global::SpacetimeDB.Col<CombatProjectileTickMetrics, uint> UpdateEventsEmitted { get; }
@@ -68,6 +72,10 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Col<CombatProjectileTickMetrics, uint> PeakWorldGameplayBroadphaseCandidates { get; }
         public global::SpacetimeDB.Col<CombatProjectileTickMetrics, uint> PeakWorldGameplayNarrowphaseTests { get; }
         public global::SpacetimeDB.Col<CombatProjectileTickMetrics, uint> PeakWorldGameplayFullScanFallbacks { get; }
+        public global::SpacetimeDB.Col<CombatProjectileTickMetrics, uint> PeakWorldQueryMeshBroadphaseCandidates { get; }
+        public global::SpacetimeDB.Col<CombatProjectileTickMetrics, uint> PeakWorldQueryMeshBvhNodeTests { get; }
+        public global::SpacetimeDB.Col<CombatProjectileTickMetrics, uint> PeakWorldQueryMeshTrianglesTested { get; }
+        public global::SpacetimeDB.Col<CombatProjectileTickMetrics, uint> PeakWorldQueryMeshFullScanFallbacks { get; }
         public global::SpacetimeDB.Col<CombatProjectileTickMetrics, uint> PeakOpenWorldGeometryPointChecks { get; }
         public global::SpacetimeDB.Col<CombatProjectileTickMetrics, uint> PeakContactsResolved { get; }
         public global::SpacetimeDB.Col<CombatProjectileTickMetrics, ulong> TotalRowsUpdated { get; }
@@ -76,6 +84,10 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Col<CombatProjectileTickMetrics, ulong> TotalWorldGameplayBroadphaseCandidates { get; }
         public global::SpacetimeDB.Col<CombatProjectileTickMetrics, ulong> TotalWorldGameplayNarrowphaseTests { get; }
         public global::SpacetimeDB.Col<CombatProjectileTickMetrics, ulong> TotalWorldGameplayFullScanFallbacks { get; }
+        public global::SpacetimeDB.Col<CombatProjectileTickMetrics, ulong> TotalWorldQueryMeshBroadphaseCandidates { get; }
+        public global::SpacetimeDB.Col<CombatProjectileTickMetrics, ulong> TotalWorldQueryMeshBvhNodeTests { get; }
+        public global::SpacetimeDB.Col<CombatProjectileTickMetrics, ulong> TotalWorldQueryMeshTrianglesTested { get; }
+        public global::SpacetimeDB.Col<CombatProjectileTickMetrics, ulong> TotalWorldQueryMeshFullScanFallbacks { get; }
         public global::SpacetimeDB.Col<CombatProjectileTickMetrics, ulong> TotalOpenWorldGeometryPointChecks { get; }
         public global::SpacetimeDB.Col<CombatProjectileTickMetrics, ulong> TotalContactsResolved { get; }
         public global::SpacetimeDB.Col<CombatProjectileTickMetrics, ulong> TotalUpdateEventsEmitted { get; }
@@ -95,6 +107,10 @@ namespace SpacetimeDB.Types
             WorldGameplayBroadphaseCandidates = new global::SpacetimeDB.Col<CombatProjectileTickMetrics, uint>(tableName, "world_gameplay_broadphase_candidates");
             WorldGameplayNarrowphaseTests = new global::SpacetimeDB.Col<CombatProjectileTickMetrics, uint>(tableName, "world_gameplay_narrowphase_tests");
             WorldGameplayFullScanFallbacks = new global::SpacetimeDB.Col<CombatProjectileTickMetrics, uint>(tableName, "world_gameplay_full_scan_fallbacks");
+            WorldQueryMeshBroadphaseCandidates = new global::SpacetimeDB.Col<CombatProjectileTickMetrics, uint>(tableName, "world_query_mesh_broadphase_candidates");
+            WorldQueryMeshBvhNodeTests = new global::SpacetimeDB.Col<CombatProjectileTickMetrics, uint>(tableName, "world_query_mesh_bvh_node_tests");
+            WorldQueryMeshTrianglesTested = new global::SpacetimeDB.Col<CombatProjectileTickMetrics, uint>(tableName, "world_query_mesh_triangles_tested");
+            WorldQueryMeshFullScanFallbacks = new global::SpacetimeDB.Col<CombatProjectileTickMetrics, uint>(tableName, "world_query_mesh_full_scan_fallbacks");
             OpenWorldGeometryPointChecks = new global::SpacetimeDB.Col<CombatProjectileTickMetrics, uint>(tableName, "open_world_geometry_point_checks");
             ContactsResolved = new global::SpacetimeDB.Col<CombatProjectileTickMetrics, uint>(tableName, "contacts_resolved");
             UpdateEventsEmitted = new global::SpacetimeDB.Col<CombatProjectileTickMetrics, uint>(tableName, "update_events_emitted");
@@ -114,6 +130,10 @@ namespace SpacetimeDB.Types
             PeakWorldGameplayBroadphaseCandidates = new global::SpacetimeDB.Col<CombatProjectileTickMetrics, uint>(tableName, "peak_world_gameplay_broadphase_candidates");
             PeakWorldGameplayNarrowphaseTests = new global::SpacetimeDB.Col<CombatProjectileTickMetrics, uint>(tableName, "peak_world_gameplay_narrowphase_tests");
             PeakWorldGameplayFullScanFallbacks = new global::SpacetimeDB.Col<CombatProjectileTickMetrics, uint>(tableName, "peak_world_gameplay_full_scan_fallbacks");
+            PeakWorldQueryMeshBroadphaseCandidates = new global::SpacetimeDB.Col<CombatProjectileTickMetrics, uint>(tableName, "peak_world_query_mesh_broadphase_candidates");
+            PeakWorldQueryMeshBvhNodeTests = new global::SpacetimeDB.Col<CombatProjectileTickMetrics, uint>(tableName, "peak_world_query_mesh_bvh_node_tests");
+            PeakWorldQueryMeshTrianglesTested = new global::SpacetimeDB.Col<CombatProjectileTickMetrics, uint>(tableName, "peak_world_query_mesh_triangles_tested");
+            PeakWorldQueryMeshFullScanFallbacks = new global::SpacetimeDB.Col<CombatProjectileTickMetrics, uint>(tableName, "peak_world_query_mesh_full_scan_fallbacks");
             PeakOpenWorldGeometryPointChecks = new global::SpacetimeDB.Col<CombatProjectileTickMetrics, uint>(tableName, "peak_open_world_geometry_point_checks");
             PeakContactsResolved = new global::SpacetimeDB.Col<CombatProjectileTickMetrics, uint>(tableName, "peak_contacts_resolved");
             TotalRowsUpdated = new global::SpacetimeDB.Col<CombatProjectileTickMetrics, ulong>(tableName, "total_rows_updated");
@@ -122,6 +142,10 @@ namespace SpacetimeDB.Types
             TotalWorldGameplayBroadphaseCandidates = new global::SpacetimeDB.Col<CombatProjectileTickMetrics, ulong>(tableName, "total_world_gameplay_broadphase_candidates");
             TotalWorldGameplayNarrowphaseTests = new global::SpacetimeDB.Col<CombatProjectileTickMetrics, ulong>(tableName, "total_world_gameplay_narrowphase_tests");
             TotalWorldGameplayFullScanFallbacks = new global::SpacetimeDB.Col<CombatProjectileTickMetrics, ulong>(tableName, "total_world_gameplay_full_scan_fallbacks");
+            TotalWorldQueryMeshBroadphaseCandidates = new global::SpacetimeDB.Col<CombatProjectileTickMetrics, ulong>(tableName, "total_world_query_mesh_broadphase_candidates");
+            TotalWorldQueryMeshBvhNodeTests = new global::SpacetimeDB.Col<CombatProjectileTickMetrics, ulong>(tableName, "total_world_query_mesh_bvh_node_tests");
+            TotalWorldQueryMeshTrianglesTested = new global::SpacetimeDB.Col<CombatProjectileTickMetrics, ulong>(tableName, "total_world_query_mesh_triangles_tested");
+            TotalWorldQueryMeshFullScanFallbacks = new global::SpacetimeDB.Col<CombatProjectileTickMetrics, ulong>(tableName, "total_world_query_mesh_full_scan_fallbacks");
             TotalOpenWorldGeometryPointChecks = new global::SpacetimeDB.Col<CombatProjectileTickMetrics, ulong>(tableName, "total_open_world_geometry_point_checks");
             TotalContactsResolved = new global::SpacetimeDB.Col<CombatProjectileTickMetrics, ulong>(tableName, "total_contacts_resolved");
             TotalUpdateEventsEmitted = new global::SpacetimeDB.Col<CombatProjectileTickMetrics, ulong>(tableName, "total_update_events_emitted");
