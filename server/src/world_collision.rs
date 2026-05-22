@@ -484,6 +484,9 @@ pub struct WorldRaycastStats {
     pub world_gameplay_broadphase_candidates: u32,
     pub world_gameplay_narrowphase_tests: u32,
     pub world_gameplay_full_scan_fallbacks: u32,
+    pub world_query_mesh_broadphase_candidates: u32,
+    pub world_query_mesh_triangles_tested: u32,
+    pub world_query_mesh_full_scan_fallbacks: u32,
     pub open_world_geometry_point_checks: u32,
 }
 
@@ -662,6 +665,13 @@ pub fn raycast_world_with_layout_for_scene_with_stats(
             gameplay_query_collision_broadphase(),
             stats.as_deref_mut(),
         );
+        raycast_gameplay_query_meshes(
+            &mut best,
+            request,
+            gameplay_query_meshes(),
+            gameplay_query_mesh_broadphase(),
+            stats.as_deref_mut(),
+        );
     } else {
         let profile = open_world_profile_from_name(open_world_scene_name);
         raycast_movement_and_query_collision_boxes(
@@ -671,6 +681,13 @@ pub fn raycast_world_with_layout_for_scene_with_stats(
             open_world_gameplay_collision_broadphase(profile),
             open_world_gameplay_query_collision_boxes(profile),
             open_world_gameplay_query_collision_broadphase(profile),
+            stats.as_deref_mut(),
+        );
+        raycast_gameplay_query_meshes(
+            &mut best,
+            request,
+            open_world_gameplay_query_meshes(profile),
+            open_world_gameplay_query_mesh_broadphase(profile),
             stats.as_deref_mut(),
         );
     }
@@ -690,6 +707,7 @@ pub(crate) fn preload_world_collision_data() -> WorldCollisionPreloadSummary {
     let arena_query_meshes = gameplay_query_meshes();
     let arena_broadphase = gameplay_collision_broadphase();
     let arena_query_broadphase = gameplay_query_collision_broadphase();
+    let arena_query_mesh_broadphase = gameplay_query_mesh_broadphase();
     let mut summary = WorldCollisionPreloadSummary {
         scene_count: OPEN_WORLD_SCENE_PROFILES.len().min(u32::MAX as usize) as u32,
         arena_gameplay_boxes: arena_gameplay_boxes.min(u32::MAX as usize) as u32,
@@ -703,6 +721,7 @@ pub(crate) fn preload_world_collision_data() -> WorldCollisionPreloadSummary {
     };
     accumulate_broadphase_preload_summary(&mut summary, arena_broadphase);
     accumulate_broadphase_preload_summary(&mut summary, arena_query_broadphase);
+    accumulate_broadphase_preload_summary(&mut summary, arena_query_mesh_broadphase);
 
     for profile in OPEN_WORLD_SCENE_PROFILES {
         let generated_colliders = open_world_colliders(profile).len();
@@ -711,6 +730,7 @@ pub(crate) fn preload_world_collision_data() -> WorldCollisionPreloadSummary {
         let query_meshes = open_world_gameplay_query_meshes(profile);
         let broadphase = open_world_gameplay_collision_broadphase(profile);
         let query_broadphase = open_world_gameplay_query_collision_broadphase(profile);
+        let query_mesh_broadphase = open_world_gameplay_query_mesh_broadphase(profile);
 
         summary.generated_open_world_colliders = summary
             .generated_open_world_colliders
@@ -732,6 +752,7 @@ pub(crate) fn preload_world_collision_data() -> WorldCollisionPreloadSummary {
             .saturating_add(query_mesh_triangle_count(query_meshes));
         accumulate_broadphase_preload_summary(&mut summary, broadphase);
         accumulate_broadphase_preload_summary(&mut summary, query_broadphase);
+        accumulate_broadphase_preload_summary(&mut summary, query_mesh_broadphase);
     }
 
     summary
@@ -1293,6 +1314,19 @@ fn gameplay_query_meshes() -> &'static GameplayQueryMeshSet {
     GAMEPLAY_QUERY_MESHES.get_or_init(load_gameplay_query_meshes)
 }
 
+fn gameplay_query_mesh_broadphase() -> &'static GameplayBoxBroadphase {
+    static GAMEPLAY_QUERY_MESH_BROADPHASE: OnceLock<GameplayBoxBroadphase> = OnceLock::new();
+    GAMEPLAY_QUERY_MESH_BROADPHASE.get_or_init(|| {
+        GameplayBoxBroadphase::build_from_aabbs(
+            gameplay_query_meshes().instances.len(),
+            gameplay_query_meshes()
+                .instances
+                .iter()
+                .map(|instance| instance.bounds),
+        )
+    })
+}
+
 fn open_world_gameplay_collision_boxes(
     profile: &OpenWorldSceneProfile,
 ) -> &'static [GameplayCollisionBox] {
@@ -1567,6 +1601,37 @@ fn open_world_gameplay_query_meshes(
         })
         .get(profile.scene_name)
         .unwrap_or_else(|| EMPTY_QUERY_MESH_SET.get_or_init(GameplayQueryMeshSet::default))
+}
+
+fn open_world_gameplay_query_mesh_broadphase(
+    profile: &OpenWorldSceneProfile,
+) -> &'static GameplayBoxBroadphase {
+    static EMPTY_QUERY_MESH_BROADPHASE: OnceLock<GameplayBoxBroadphase> = OnceLock::new();
+    static OPEN_WORLD_QUERY_MESH_BROADPHASES: OnceLock<
+        HashMap<&'static str, GameplayBoxBroadphase>,
+    > = OnceLock::new();
+
+    OPEN_WORLD_QUERY_MESH_BROADPHASES
+        .get_or_init(|| {
+            let mut broadphases_by_scene = HashMap::new();
+            for profile in OPEN_WORLD_SCENE_PROFILES {
+                let meshes = open_world_gameplay_query_meshes(profile);
+                broadphases_by_scene.insert(
+                    profile.scene_name,
+                    GameplayBoxBroadphase::build_from_aabbs(
+                        meshes.instances.len(),
+                        meshes.instances.iter().map(|instance| instance.bounds),
+                    ),
+                );
+            }
+            broadphases_by_scene
+        })
+        .get(profile.scene_name)
+        .unwrap_or_else(|| {
+            EMPTY_QUERY_MESH_BROADPHASE.get_or_init(|| {
+                GameplayBoxBroadphase::build_from_aabbs(0, std::iter::empty::<Aabb3>())
+            })
+        })
 }
 
 fn load_gameplay_collision_boxes() -> Vec<GameplayCollisionBox> {
@@ -2107,17 +2172,25 @@ impl Aabb3 {
 
 impl GameplayBoxBroadphase {
     fn build(colliders: &[GameplayCollisionBox]) -> Self {
-        let mut bounds = Vec::with_capacity(colliders.len());
-        let mut extents = Vec::with_capacity(colliders.len());
-        let mut unindexed_collider_count = 0usize;
-        for collider in colliders {
-            let aabb = Aabb3::from_gameplay_box(*collider);
+        Self::build_from_aabbs(
+            colliders.len(),
+            colliders
+                .iter()
+                .map(|collider| Aabb3::from_gameplay_box(*collider)),
+        )
+    }
+
+    fn build_from_aabbs(
+        collider_count: usize,
+        bounds_iter: impl IntoIterator<Item = Aabb3>,
+    ) -> Self {
+        let bounds: Vec<Aabb3> = bounds_iter.into_iter().collect();
+        let mut extents = Vec::with_capacity(bounds.len());
+        for aabb in &bounds {
             if aabb.is_finite() {
                 extents.push(aabb.max_extent());
             }
-            bounds.push(aabb);
         }
-
         extents.sort_by(|a, b| a.total_cmp(b));
         let median_extent = extents
             .get(extents.len().saturating_sub(1) / 2)
@@ -2130,6 +2203,7 @@ impl GameplayBoxBroadphase {
 
         let mut cells: HashMap<(i32, i32, i32), Vec<usize>> = HashMap::new();
         let mut max_cells_per_collider = 0usize;
+        let mut unindexed_collider_count = 0usize;
         for (index, aabb) in bounds.into_iter().enumerate() {
             if !aabb.is_finite() {
                 unindexed_collider_count = unindexed_collider_count.saturating_add(1);
@@ -2170,7 +2244,7 @@ impl GameplayBoxBroadphase {
         Self {
             cell_size,
             cells,
-            collider_count: colliders.len(),
+            collider_count,
             index_entries,
             max_cell_occupancy,
             max_cells_per_collider,
@@ -2328,6 +2402,56 @@ fn raycast_movement_and_query_collision_boxes(
         query_broadphase,
         stats.as_deref_mut(),
     );
+}
+
+fn raycast_gameplay_query_meshes(
+    best: &mut Option<WorldRayHit>,
+    request: WorldRaycastRequest,
+    meshes: &GameplayQueryMeshSet,
+    broadphase: &GameplayBoxBroadphase,
+    stats: Option<&mut WorldRaycastStats>,
+) {
+    if meshes.instances.is_empty() || meshes.geometries.is_empty() {
+        return;
+    }
+
+    let mut stats = stats;
+    let broadphase_hit_tested = GAMEPLAY_BROADPHASE_CANDIDATE_SCRATCH.with(|scratch| {
+        let mut candidate_indices = scratch.borrow_mut();
+        if broadphase.query_into(request, &mut candidate_indices) {
+            if let Some(stats) = stats.as_deref_mut() {
+                let candidate_count = candidate_indices.len().min(u32::MAX as usize) as u32;
+                stats.world_query_mesh_broadphase_candidates = stats
+                    .world_query_mesh_broadphase_candidates
+                    .saturating_add(candidate_count);
+            }
+            for index in candidate_indices.iter().copied() {
+                if let Some(instance) = meshes.instances.get(index) {
+                    try_world_gameplay_mesh_instance_hit(
+                        best,
+                        request,
+                        meshes,
+                        instance,
+                        stats.as_deref_mut(),
+                    );
+                }
+            }
+            true
+        } else {
+            false
+        }
+    });
+    if broadphase_hit_tested {
+        return;
+    }
+
+    if let Some(stats) = stats.as_deref_mut() {
+        stats.world_query_mesh_full_scan_fallbacks =
+            stats.world_query_mesh_full_scan_fallbacks.saturating_add(1);
+    }
+    for instance in &meshes.instances {
+        try_world_gameplay_mesh_instance_hit(best, request, meshes, instance, stats.as_deref_mut());
+    }
 }
 
 fn generate_open_world_colliders(profile: &OpenWorldSceneProfile) -> Vec<Collider> {
@@ -2833,6 +2957,169 @@ fn try_world_gameplay_box_hit(
     }
 }
 
+fn try_world_gameplay_mesh_instance_hit(
+    best: &mut Option<WorldRayHit>,
+    request: WorldRaycastRequest,
+    meshes: &GameplayQueryMeshSet,
+    instance: &GameplayQueryMeshInstance,
+    stats: Option<&mut WorldRaycastStats>,
+) {
+    let Some(geometry) = meshes.geometries.get(instance.geometry_index) else {
+        return;
+    };
+    let Some(inverse_transform) = invert_affine_transform(&instance.transform) else {
+        return;
+    };
+    let local_origin = transform_point(
+        &inverse_transform,
+        [request.origin_x, request.origin_y, request.origin_z],
+    );
+    let local_dir = transform_vector(
+        &inverse_transform,
+        [request.dir_x, request.dir_y, request.dir_z],
+    );
+
+    let mut closest_t = best.map(|hit| hit.t).unwrap_or(request.max_distance);
+    if closest_t > request.max_distance {
+        closest_t = request.max_distance;
+    }
+    let mut hit_t: Option<f32> = None;
+    let mut stats = stats;
+    // This is exact ray-vs-triangle today. Box queries expand by request.radius, but
+    // mesh queries do not until swept ray/sphere-vs-triangle support lands.
+    for triangle in geometry.indices.chunks_exact(3) {
+        if let Some(stats) = stats.as_deref_mut() {
+            stats.world_query_mesh_triangles_tested =
+                stats.world_query_mesh_triangles_tested.saturating_add(1);
+        }
+        let a = geometry.vertices[triangle[0]];
+        let b = geometry.vertices[triangle[1]];
+        let c = geometry.vertices[triangle[2]];
+        let Some(t) = raycast_triangle(local_origin, local_dir, a, b, c) else {
+            continue;
+        };
+        if t >= 0.0 && t <= closest_t {
+            closest_t = t;
+            hit_t = Some(t);
+        }
+    }
+
+    let Some(t) = hit_t else {
+        return;
+    };
+    let hit = WorldRayHit {
+        t,
+        x: request.origin_x + request.dir_x * t,
+        y: request.origin_y + request.dir_y * t,
+        z: request.origin_z + request.dir_z * t,
+    };
+    if best.is_none_or(|existing| hit.t < existing.t) {
+        *best = Some(hit);
+    }
+}
+
+fn invert_affine_transform(transform: &[f32; 16]) -> Option<[f32; 16]> {
+    let m00 = transform[0];
+    let m01 = transform[1];
+    let m02 = transform[2];
+    let tx = transform[3];
+    let m10 = transform[4];
+    let m11 = transform[5];
+    let m12 = transform[6];
+    let ty = transform[7];
+    let m20 = transform[8];
+    let m21 = transform[9];
+    let m22 = transform[10];
+    let tz = transform[11];
+
+    let c00 = m11 * m22 - m12 * m21;
+    let c01 = m02 * m21 - m01 * m22;
+    let c02 = m01 * m12 - m02 * m11;
+    let c10 = m12 * m20 - m10 * m22;
+    let c11 = m00 * m22 - m02 * m20;
+    let c12 = m02 * m10 - m00 * m12;
+    let c20 = m10 * m21 - m11 * m20;
+    let c21 = m01 * m20 - m00 * m21;
+    let c22 = m00 * m11 - m01 * m10;
+    let det = m00 * c00 + m01 * c10 + m02 * c20;
+    if !det.is_finite() || det.abs() <= COLLISION_EPSILON {
+        return None;
+    }
+    let inv_det = 1.0 / det;
+    let i00 = c00 * inv_det;
+    let i01 = c01 * inv_det;
+    let i02 = c02 * inv_det;
+    let i10 = c10 * inv_det;
+    let i11 = c11 * inv_det;
+    let i12 = c12 * inv_det;
+    let i20 = c20 * inv_det;
+    let i21 = c21 * inv_det;
+    let i22 = c22 * inv_det;
+    let itx = -(i00 * tx + i01 * ty + i02 * tz);
+    let ity = -(i10 * tx + i11 * ty + i12 * tz);
+    let itz = -(i20 * tx + i21 * ty + i22 * tz);
+
+    Some([
+        i00, i01, i02, itx, i10, i11, i12, ity, i20, i21, i22, itz, 0.0, 0.0, 0.0, 1.0,
+    ])
+}
+
+fn transform_vector(transform: &[f32; 16], vector: [f32; 3]) -> [f32; 3] {
+    [
+        transform[0] * vector[0] + transform[1] * vector[1] + transform[2] * vector[2],
+        transform[4] * vector[0] + transform[5] * vector[1] + transform[6] * vector[2],
+        transform[8] * vector[0] + transform[9] * vector[1] + transform[10] * vector[2],
+    ]
+}
+
+fn raycast_triangle(
+    origin: [f32; 3],
+    dir: [f32; 3],
+    a: [f32; 3],
+    b: [f32; 3],
+    c: [f32; 3],
+) -> Option<f32> {
+    let edge1 = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+    let edge2 = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+    let pvec = cross3(dir, edge2);
+    let det = dot3(edge1, pvec);
+    if !det.is_finite() || det.abs() <= COLLISION_EPSILON {
+        return None;
+    }
+
+    let inv_det = 1.0 / det;
+    let tvec = [origin[0] - a[0], origin[1] - a[1], origin[2] - a[2]];
+    let u = dot3(tvec, pvec) * inv_det;
+    if !(0.0..=1.0).contains(&u) {
+        return None;
+    }
+
+    let qvec = cross3(tvec, edge1);
+    let v = dot3(dir, qvec) * inv_det;
+    if v < 0.0 || u + v > 1.0 {
+        return None;
+    }
+
+    let t = dot3(edge2, qvec) * inv_det;
+    if t.is_finite() {
+        Some(t)
+    } else {
+        None
+    }
+}
+
+fn dot3(a: [f32; 3], b: [f32; 3]) -> f32 {
+    a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+}
+
+fn cross3(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
+    [
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0],
+    ]
+}
+
 fn raycast_centered_aabb(
     origin_x: f32,
     origin_y: f32,
@@ -2884,12 +3171,14 @@ fn raycast_centered_aabb(
 #[cfg(test)]
 mod tests {
     use super::{
-        assert_no_full_rotation_movement_boxes, parse_gameplay_collision_boxes,
-        parse_gameplay_query_meshes, quaternion_to_axes, raycast_gameplay_collision_boxes,
+        assert_no_full_rotation_movement_boxes, mesh_instance_bounds,
+        parse_gameplay_collision_boxes, parse_gameplay_query_meshes, quaternion_to_axes,
+        raycast_gameplay_collision_boxes, raycast_gameplay_query_meshes,
         raycast_movement_and_query_collision_boxes,
-        resolve_world_spawn_position_with_layout_for_scene, try_world_gameplay_box_hit,
+        resolve_world_spawn_position_with_layout_for_scene, try_world_gameplay_box_hit, Aabb3,
         GameplayBoxBroadphase, GameplayCollisionBox, GameplayCollisionBoxFile,
-        GameplayCollisionLayoutFile, GameplayQueryMeshGeometryFile, GameplayQueryMeshInstanceFile,
+        GameplayCollisionLayoutFile, GameplayQueryMeshGeometry, GameplayQueryMeshGeometryFile,
+        GameplayQueryMeshInstance, GameplayQueryMeshInstanceFile, GameplayQueryMeshSet,
         MAX_QUERY_MESH_TRIANGLES_PER_COLLIDER,
     };
     use crate::arena::{WorldRayHit, WorldRaycastRequest};
@@ -2988,6 +3277,15 @@ mod tests {
             ),
             (None, None) => {}
             (actual, expected) => panic!("hit mismatch: actual={actual:?}, expected={expected:?}"),
+        }
+    }
+
+    fn hit_at(request: &WorldRaycastRequest, t: f32) -> WorldRayHit {
+        WorldRayHit {
+            t,
+            x: request.origin_x + request.dir_x * t,
+            y: request.origin_y + request.dir_y * t,
+            z: request.origin_z + request.dir_z * t,
         }
     }
 
@@ -3470,6 +3768,156 @@ mod tests {
         ));
     }
 
+    #[test]
+    fn query_mesh_raycast_hits_transformed_instance_triangle() {
+        let meshes = test_runtime_mesh_set(vec![
+            translated_transform(5.0, 0.0, 0.0),
+            translated_transform(100.0, 0.0, 0.0),
+            translated_transform(110.0, 0.0, 0.0),
+            translated_transform(120.0, 0.0, 0.0),
+            translated_transform(130.0, 0.0, 0.0),
+        ]);
+        let broadphase = GameplayBoxBroadphase::build_from_aabbs(
+            meshes.instances.len(),
+            meshes.instances.iter().map(|instance| instance.bounds),
+        );
+        let request = request(5.25, 0.25, -2.0, 0.0, 0.0, 1.0, 10.0);
+        let mut hit = None;
+
+        let mut stats = super::WorldRaycastStats::default();
+        raycast_gameplay_query_meshes(&mut hit, request, &meshes, &broadphase, Some(&mut stats));
+
+        assert_hit_t_close(hit, Some(hit_at(&request, 2.0)));
+        assert_eq!(stats.world_query_mesh_broadphase_candidates, 1);
+        assert_eq!(stats.world_query_mesh_triangles_tested, 1);
+        assert_eq!(stats.world_query_mesh_full_scan_fallbacks, 0);
+    }
+
+    #[test]
+    fn query_mesh_raycast_hits_rotated_instance_triangle() {
+        let meshes = test_runtime_mesh_set(vec![z_rotation_transform(90.0, 0.0, 0.0, 0.0)]);
+        let broadphase = GameplayBoxBroadphase::build_from_aabbs(
+            meshes.instances.len(),
+            meshes.instances.iter().map(|instance| instance.bounds),
+        );
+        let request = request(-0.25, 0.25, -2.0, 0.0, 0.0, 1.0, 10.0);
+        let mut hit = None;
+
+        raycast_gameplay_query_meshes(&mut hit, request, &meshes, &broadphase, None);
+
+        assert_hit_t_close(hit, Some(hit_at(&request, 2.0)));
+    }
+
+    #[test]
+    fn query_mesh_raycast_preserves_t_for_uniform_scale() {
+        let meshes = test_runtime_mesh_set(vec![scale_transform(2.0, 2.0, 2.0, 0.0, 0.0, 0.0)]);
+        let broadphase = GameplayBoxBroadphase::build_from_aabbs(
+            meshes.instances.len(),
+            meshes.instances.iter().map(|instance| instance.bounds),
+        );
+        let request = request(1.5, 0.25, -3.0, 0.0, 0.0, 1.0, 10.0);
+        let mut hit = None;
+
+        raycast_gameplay_query_meshes(&mut hit, request, &meshes, &broadphase, None);
+
+        assert_hit_t_close(hit, Some(hit_at(&request, 3.0)));
+    }
+
+    #[test]
+    fn query_mesh_raycast_preserves_t_for_non_uniform_scale() {
+        let meshes = test_runtime_mesh_set(vec![scale_transform(2.0, 1.0, 1.0, 0.0, 0.0, 0.0)]);
+        let broadphase = GameplayBoxBroadphase::build_from_aabbs(
+            meshes.instances.len(),
+            meshes.instances.iter().map(|instance| instance.bounds),
+        );
+        let request = request(1.5, 0.25, -4.0, 0.0, 0.0, 1.0, 10.0);
+        let mut hit = None;
+
+        raycast_gameplay_query_meshes(&mut hit, request, &meshes, &broadphase, None);
+
+        assert_hit_t_close(hit, Some(hit_at(&request, 4.0)));
+    }
+
+    #[test]
+    fn query_mesh_raycast_misses_triangle() {
+        let meshes = test_runtime_mesh_set(vec![identity_transform()]);
+        let broadphase = GameplayBoxBroadphase::build_from_aabbs(
+            meshes.instances.len(),
+            meshes.instances.iter().map(|instance| instance.bounds),
+        );
+        let request = request(2.0, 2.0, -2.0, 0.0, 0.0, 1.0, 10.0);
+        let mut hit = None;
+
+        raycast_gameplay_query_meshes(&mut hit, request, &meshes, &broadphase, None);
+
+        assert_hit_t_close(hit, None);
+    }
+
+    #[test]
+    fn query_mesh_raycast_is_two_sided() {
+        let meshes = test_runtime_mesh_set(vec![identity_transform()]);
+        let broadphase = GameplayBoxBroadphase::build_from_aabbs(
+            meshes.instances.len(),
+            meshes.instances.iter().map(|instance| instance.bounds),
+        );
+        let request = request(0.25, 0.25, 2.0, 0.0, 0.0, -1.0, 10.0);
+        let mut hit = None;
+
+        raycast_gameplay_query_meshes(&mut hit, request, &meshes, &broadphase, None);
+
+        assert_hit_t_close(hit, Some(hit_at(&request, 2.0)));
+    }
+
+    #[test]
+    fn query_mesh_raycast_skips_non_invertible_transform() {
+        let meshes = test_runtime_mesh_set(vec![scale_transform(0.0, 1.0, 1.0, 0.0, 0.0, 0.0)]);
+        let broadphase = GameplayBoxBroadphase::build_from_aabbs(
+            meshes.instances.len(),
+            meshes.instances.iter().map(|instance| instance.bounds),
+        );
+        let request = request(0.0, 0.25, -2.0, 0.0, 0.0, 1.0, 10.0);
+        let mut hit = None;
+        let mut stats = super::WorldRaycastStats::default();
+
+        raycast_gameplay_query_meshes(&mut hit, request, &meshes, &broadphase, Some(&mut stats));
+
+        assert_hit_t_close(hit, None);
+        assert_eq!(stats.world_query_mesh_triangles_tested, 0);
+    }
+
+    #[test]
+    fn query_mesh_raycast_prefers_nearest_mesh_instance() {
+        let meshes = test_runtime_mesh_set(vec![
+            translated_transform(0.0, 0.0, 5.0),
+            translated_transform(0.0, 0.0, 2.0),
+        ]);
+        let broadphase = GameplayBoxBroadphase::build_from_aabbs(
+            meshes.instances.len(),
+            meshes.instances.iter().map(|instance| instance.bounds),
+        );
+        let request = request(0.25, 0.25, 0.0, 0.0, 0.0, 1.0, 10.0);
+        let mut hit = None;
+
+        raycast_gameplay_query_meshes(&mut hit, request, &meshes, &broadphase, None);
+
+        assert_hit_t_close(hit, Some(hit_at(&request, 2.0)));
+    }
+
+    #[test]
+    fn query_mesh_raycast_keeps_nearer_existing_box_hit() {
+        let meshes = test_runtime_mesh_set(vec![translated_transform(0.0, 0.0, 5.0)]);
+        let broadphase = GameplayBoxBroadphase::build_from_aabbs(
+            meshes.instances.len(),
+            meshes.instances.iter().map(|instance| instance.bounds),
+        );
+        let request = request(0.25, 0.25, 0.0, 0.0, 0.0, 1.0, 10.0);
+        let mut hit = Some(hit_at(&request, 1.0));
+
+        raycast_gameplay_query_meshes(&mut hit, request, &meshes, &broadphase, None);
+
+        assert_hit_t_close(hit, Some(hit_at(&request, 1.0)));
+    }
+
     fn test_query_mesh_layout(
         geometry: GameplayQueryMeshGeometryFile,
         instance: GameplayQueryMeshInstanceFile,
@@ -3525,6 +3973,21 @@ mod tests {
         ]
     }
 
+    fn z_rotation_transform(degrees: f32, x: f32, y: f32, z: f32) -> Vec<f32> {
+        let radians = degrees.to_radians();
+        let sin = radians.sin();
+        let cos = radians.cos();
+        vec![
+            cos, -sin, 0.0, x, sin, cos, 0.0, y, 0.0, 0.0, 1.0, z, 0.0, 0.0, 0.0, 1.0,
+        ]
+    }
+
+    fn scale_transform(sx: f32, sy: f32, sz: f32, x: f32, y: f32, z: f32) -> Vec<f32> {
+        vec![
+            sx, 0.0, 0.0, x, 0.0, sy, 0.0, y, 0.0, 0.0, sz, z, 0.0, 0.0, 0.0, 1.0,
+        ]
+    }
+
     fn multi_triangle_vertices() -> Vec<f32> {
         vec![
             -1.0, 2.0, 0.5, 3.0, -2.0, 1.0, 0.0, 4.0, -3.0, 2.0, 3.0, 2.5,
@@ -3555,6 +4018,42 @@ mod tests {
         }
 
         test_query_mesh_geometry(id, vertices, indices)
+    }
+
+    fn test_runtime_mesh_set(transforms: Vec<Vec<f32>>) -> GameplayQueryMeshSet {
+        let geometry = GameplayQueryMeshGeometry {
+            id: "runtime_geometry".to_string(),
+            source: "test_source".to_string(),
+            vertices: vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+            indices: vec![0, 1, 2],
+            local_bounds: Aabb3 {
+                min_x: 0.0,
+                min_y: 0.0,
+                min_z: 0.0,
+                max_x: 1.0,
+                max_y: 1.0,
+                max_z: 0.0,
+            },
+        };
+        let instances = transforms
+            .into_iter()
+            .enumerate()
+            .map(|(index, transform)| {
+                let transform: [f32; 16] =
+                    transform.try_into().expect("test transform has 16 values");
+                let bounds = mesh_instance_bounds(&geometry, &transform);
+                GameplayQueryMeshInstance {
+                    name: format!("instance_{index}"),
+                    geometry_index: 0,
+                    transform,
+                    bounds,
+                }
+            })
+            .collect();
+        GameplayQueryMeshSet {
+            geometries: vec![geometry],
+            instances,
+        }
     }
 
     #[test]

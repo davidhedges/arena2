@@ -231,7 +231,10 @@ Completed setup:
 - Query `MeshCollider` export writes validated prototype/instance mesh data into query collision JSON under `mesh_geometries` and `mesh_instances`. Mesh geometry vertices remain in mesh-local/prototype-local space, and each scene placement records a transform instance.
 - Current mesh validation requires static non-trigger non-convex mesh colliders, readable mesh assets with stable AssetDatabase GUIDs, valid triangle indices, finite vertices/transforms, degenerate-triangle removal, a per-geometry budget of 512 triangles, and a per-scene budget of 50,000 unique mesh-geometry triangles.
 - Degenerate-triangle filtering uses the same `|cross(edge_a, edge_b)|^2 <= 1e-12` threshold in the Unity exporter and server parser so exported JSON cannot pass editor cleanup and then fail server preload.
-- Server preload parses query mesh geometries and instances, validates the exported buffers, derives local geometry bounds and per-instance world bounds server-side, and reports geometry/instance/triangle counts. Meshes are intentionally not consulted by projectile/LOS raycasts until the mesh narrowphase and acceleration structure are implemented.
+- Server preload parses query mesh geometries and instances, validates the exported buffers, derives local geometry bounds and per-instance world bounds server-side, and reports geometry/instance/triangle counts.
+- Projectile/LOS raycasts now query a top-level broadphase over mesh instances, transform candidate rays into mesh-local space, test triangles, and merge the nearest mesh hit with existing box/heightfield/generated-world hits.
+- Projectile tick metrics track mesh broadphase candidates, triangle tests, and mesh broadphase full-scan fallbacks separately from box collision counters.
+- Current mesh narrowphase is exact ray-vs-triangle. It does not yet sweep projectile radius against triangles; existing box collision still applies projectile radius. Swept-sphere/capsule vs triangle remains a follow-up if arrow/projectile radius needs mesh-edge grazing coverage.
 
 Initial mesh policy:
 
