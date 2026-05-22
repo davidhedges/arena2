@@ -186,10 +186,13 @@ struct Aabb3 {
 
 #[derive(Debug)]
 struct GameplayQueryMeshGeometry {
+    #[allow(dead_code)]
     id: String,
+    #[allow(dead_code)]
     source: String,
     vertices: Vec<[f32; 3]>,
     indices: Vec<usize>,
+    #[allow(dead_code)]
     local_bounds: Aabb3,
     bvh: GameplayQueryMeshBvh,
 }
@@ -211,6 +214,7 @@ struct GameplayQueryMeshBvhNode {
 
 #[derive(Debug)]
 struct GameplayQueryMeshInstance {
+    #[allow(dead_code)]
     name: String,
     geometry_index: usize,
     transform: [f32; 16],
