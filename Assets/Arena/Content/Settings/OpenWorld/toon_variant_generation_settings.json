@@ -18,14 +18,17 @@
       "skipColliderCategoryPaths": [
         "Background",
         "Candles",
+        "Particles",
         "Pottery",
         "Props",
-        "Skeletons",
         "Vegetation/Plants",
         "Vegetation/Water Plants",
         "Water Props"
       ],
-      "skipColliderPathContains": [],
+      "skipColliderPathContains": [
+        "Rocks/TFD_Rock_Small",
+        "Rocks/TFD_Stone"
+      ],
       "allowColliderPathContains": []
     },
     {
@@ -44,6 +47,7 @@
       "packageName": "ToonGoldenValley",
       "skipColliderCategoryPaths": [
         "Background",
+        "Particles",
         "Props/Food",
         "Vegetation/Billboards",
         "Vegetation/Flowers",

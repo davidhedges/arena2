@@ -147,7 +147,9 @@ namespace Arena.Input
         private const float CollisionEpsilon = 0.0001f;
         private const float SurfaceSnapUp = 1.2f;
         private const float GameplayBoxStepUpHeight = 0.35f;
+        private const float GameplayMeshStepUpHeight = 0.65f;
         private const float WalkableTopEpsilon = 0.05f;
+        private const float MovementBlockerLogIntervalSeconds = 0.25f;
 
         private const uint DefaultSeed = 614670171;
         private const float LegacyWorldSize = 320.0f;
@@ -186,6 +188,7 @@ namespace Arena.Input
 
         private const ulong HashA = 0x9e37_79b9_7f4a_7c15;
         private const ulong HashB = 0xc2b2_ae3d_27d4_eb4f;
+        private static float s_nextMovementBlockerLogTime;
 
 #pragma warning disable CS0649
         [Serializable]
@@ -200,6 +203,7 @@ namespace Arena.Input
         [Serializable]
         private sealed class GameplayCollisionBoxFile
         {
+            public string name = "";
             public string shape = "obb_y";
             public float[] center = Array.Empty<float>();
             public float[] size = Array.Empty<float>();
@@ -211,6 +215,7 @@ namespace Arena.Input
         {
             public string id = "";
             public float[] vertices = Array.Empty<float>();
+            public int[] indices = Array.Empty<int>();
         }
 
         [Serializable]
@@ -345,6 +350,7 @@ namespace Arena.Input
         private readonly struct GameplayCollisionBox
         {
             public GameplayCollisionBox(
+                string name,
                 bool isAabb,
                 float centerX,
                 float centerY,
@@ -355,6 +361,7 @@ namespace Arena.Input
                 float sinY,
                 float cosY)
             {
+                Name = name;
                 IsAabb = isAabb;
                 CenterX = centerX;
                 CenterY = centerY;
@@ -366,6 +373,7 @@ namespace Arena.Input
                 CosY = cosY;
             }
 
+            public string Name { get; }
             public bool IsAabb { get; }
             public float CenterX { get; }
             public float CenterY { get; }
@@ -379,13 +387,17 @@ namespace Arena.Input
 
         private readonly struct GameplayMovementMeshHull
         {
-            public GameplayMovementMeshHull(float yMin, float yMax, Vector2[] footprint)
+            public GameplayMovementMeshHull(string name, int triangleIndex, float yMin, float yMax, Vector2[] footprint)
             {
+                Name = name;
+                TriangleIndex = triangleIndex;
                 YMin = yMin;
                 YMax = yMax;
                 Footprint = footprint;
             }
 
+            public string Name { get; }
+            public int TriangleIndex { get; }
             public float YMin { get; }
             public float YMax { get; }
             public Vector2[] Footprint { get; }
@@ -690,6 +702,15 @@ namespace Arena.Input
                             outZ,
                             playerRadius) is { } resolved)
                     {
+                        LogMovementBlocker(
+                            $"box '{collider.Name}' y=[{BoxMinY(collider):F2},{BoxMaxY(collider):F2}]",
+                            startX,
+                            startZ,
+                            outX,
+                            outZ,
+                            resolved.x,
+                            resolved.y,
+                            currentY);
                         if (resolved.x == startX && resolved.y == startZ)
                             return new Vector2(startX, startZ);
                         outX = resolved.x;
@@ -712,6 +733,15 @@ namespace Arena.Input
                             outZ,
                             playerRadius) is { } resolved)
                     {
+                        LogMovementBlocker(
+                            $"mesh '{hull.Name}' triangle={hull.TriangleIndex} y=[{hull.YMin:F2},{hull.YMax:F2}]",
+                            startX,
+                            startZ,
+                            outX,
+                            outZ,
+                            resolved.x,
+                            resolved.y,
+                            currentY);
                         if (resolved.x == startX && resolved.y == startZ)
                             return new Vector2(startX, startZ);
                         outX = resolved.x;
@@ -721,6 +751,29 @@ namespace Arena.Input
             }
 
             return new Vector2(outX, outZ);
+        }
+
+        private static void LogMovementBlocker(
+            string blocker,
+            float startX,
+            float startZ,
+            float targetX,
+            float targetZ,
+            float resolvedX,
+            float resolvedZ,
+            float currentY)
+        {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            if (Time.realtimeSinceStartup < s_nextMovementBlockerLogTime)
+                return;
+
+            s_nextMovementBlockerLogTime = Time.realtimeSinceStartup + MovementBlockerLogIntervalSeconds;
+            Debug.LogWarning(
+                $"[OpenWorldMovementEnvironment] Movement blocked by {blocker} " +
+                $"start=({startX:F2},{currentY:F2},{startZ:F2}) " +
+                $"target=({targetX:F2},{currentY:F2},{targetZ:F2}) " +
+                $"resolved=({resolvedX:F2},{currentY:F2},{resolvedZ:F2})");
+#endif
         }
 
         private void GetPlayableBounds(float playerRadius, out float minX, out float maxX, out float minZ, out float maxZ)
@@ -829,6 +882,7 @@ namespace Arena.Input
                 if (boxFile.shape == "aabb")
                 {
                     boxes[i] = new GameplayCollisionBox(
+                        boxFile.name,
                         true,
                         centerX,
                         centerY,
@@ -843,6 +897,7 @@ namespace Arena.Input
                 {
                     float yaw = boxFile.rotation_y_deg * Mathf.Deg2Rad;
                     boxes[i] = new GameplayCollisionBox(
+                        boxFile.name,
                         false,
                         centerX,
                         centerY,
@@ -890,45 +945,51 @@ namespace Arena.Input
                     continue;
                 }
 
-                if (TryBuildMovementMeshHull(instance, geometry, out GameplayMovementMeshHull hull))
-                    hulls.Add(hull);
+                hulls.AddRange(BuildMovementMeshHulls(instance, geometry));
             }
 
             return hulls.ToArray();
         }
 
-        private static bool TryBuildMovementMeshHull(
+        private static IEnumerable<GameplayMovementMeshHull> BuildMovementMeshHulls(
             GameplayCollisionMeshInstanceFile instance,
-            GameplayCollisionMeshGeometryFile geometry,
-            out GameplayMovementMeshHull hull)
+            GameplayCollisionMeshGeometryFile geometry)
         {
-            hull = default;
             float[] vertices = geometry.vertices ?? Array.Empty<float>();
+            int[] indices = geometry.indices ?? Array.Empty<int>();
             float[] transform = instance.transform ?? Array.Empty<float>();
-            if (vertices.Length < 9 || vertices.Length % 3 != 0 || transform.Length != 16)
-                return false;
+            if (vertices.Length < 9 || vertices.Length % 3 != 0 || indices.Length < 3 || indices.Length % 3 != 0 || transform.Length != 16)
+                yield break;
 
-            var points = new List<Vector2>(vertices.Length / 3);
-            float yMin = float.PositiveInfinity;
-            float yMax = float.NegativeInfinity;
-
-            for (int i = 0; i < vertices.Length; i += 3)
+            for (int i = 0; i < indices.Length; i += 3)
             {
-                Vector3 point = TransformPoint(transform, vertices[i], vertices[i + 1], vertices[i + 2]);
-                if (!float.IsFinite(point.x) || !float.IsFinite(point.y) || !float.IsFinite(point.z))
-                    return false;
+                int ia = indices[i];
+                int ib = indices[i + 1];
+                int ic = indices[i + 2];
+                int vertexCount = vertices.Length / 3;
+                if (ia < 0 || ib < 0 || ic < 0 || ia >= vertexCount || ib >= vertexCount || ic >= vertexCount)
+                    continue;
 
-                yMin = Mathf.Min(yMin, point.y);
-                yMax = Mathf.Max(yMax, point.y);
-                points.Add(new Vector2(point.x, point.z));
+                Vector3 a = TransformPoint(transform, vertices[ia * 3], vertices[ia * 3 + 1], vertices[ia * 3 + 2]);
+                Vector3 b = TransformPoint(transform, vertices[ib * 3], vertices[ib * 3 + 1], vertices[ib * 3 + 2]);
+                Vector3 c = TransformPoint(transform, vertices[ic * 3], vertices[ic * 3 + 1], vertices[ic * 3 + 2]);
+                if (!IsFinite(a) || !IsFinite(b) || !IsFinite(c))
+                    continue;
+
+                Vector2[] footprint = MovementTriangleFootprint2D(
+                    new Vector2(a.x, a.z),
+                    new Vector2(b.x, b.z),
+                    new Vector2(c.x, c.z));
+                if (footprint.Length < 2)
+                    continue;
+
+                yield return new GameplayMovementMeshHull(
+                    instance.name,
+                    i / 3,
+                    Mathf.Min(a.y, Mathf.Min(b.y, c.y)),
+                    Mathf.Max(a.y, Mathf.Max(b.y, c.y)),
+                    footprint);
             }
-
-            Vector2[] footprint = ConvexHull2D(points);
-            if (footprint.Length < 3 || Mathf.Abs(PolygonAreaSigned(footprint)) <= CollisionEpsilon)
-                return false;
-
-            hull = new GameplayMovementMeshHull(yMin, yMax, footprint);
-            return true;
         }
 
         private static void EmitOpenWorldTreeColliders(
@@ -1045,6 +1106,12 @@ namespace Arena.Input
             return topY <= footY + GameplayBoxStepUpHeight;
         }
 
+        private static float BoxMinY(GameplayCollisionBox collider)
+            => collider.CenterY - collider.HalfY;
+
+        private static float BoxMaxY(GameplayCollisionBox collider)
+            => collider.CenterY + collider.HalfY;
+
         private static bool GameplayMovementMeshHullOverlapsPlayerBand(
             GameplayMovementMeshHull hull,
             float footY,
@@ -1057,7 +1124,7 @@ namespace Arena.Input
 
         private static bool GameplayMovementMeshHullCanStepUp(GameplayMovementMeshHull hull, float footY)
         {
-            return hull.YMax <= footY + GameplayBoxStepUpHeight;
+            return hull.YMax <= footY + GameplayMeshStepUpHeight;
         }
 
         private static bool GameplayBoxContainsPoint2D(GameplayCollisionBox collider, float x, float z)
@@ -1223,8 +1290,10 @@ namespace Arena.Input
 
         private static bool ConvexFootprintOverlapsPoint2D(Vector2[] footprint, float x, float z, float padding)
         {
-            if (footprint.Length < 3 || !float.IsFinite(padding) || padding < 0.0f)
+            if (footprint.Length < 2 || !float.IsFinite(padding) || padding < 0.0f)
                 return false;
+            if (footprint.Length == 2)
+                return SegmentOverlapsPoint2D(footprint[0], footprint[1], x, z, padding);
 
             float area = PolygonAreaSigned(footprint);
             if (Mathf.Abs(area) <= CollisionEpsilon)
@@ -1269,8 +1338,10 @@ namespace Arena.Input
             Vector2[] footprint,
             float padding)
         {
-            if (footprint.Length < 3 || !float.IsFinite(padding) || padding < 0.0f)
+            if (footprint.Length < 2 || !float.IsFinite(padding) || padding < 0.0f)
                 return (x, z);
+            if (footprint.Length == 2)
+                return PushOutSegment2D(x, z, footprint[0], footprint[1], padding);
 
             float area = PolygonAreaSigned(footprint);
             if (Mathf.Abs(area) <= CollisionEpsilon)
@@ -1340,6 +1411,58 @@ namespace Arena.Input
             return (
                 x + bestOutsideDelta.x / distance * outsidePush,
                 z + bestOutsideDelta.y / distance * outsidePush);
+        }
+
+        private static (float, float) PushOutSegment2D(
+            float x,
+            float z,
+            Vector2 a,
+            Vector2 b,
+            float padding)
+        {
+            float edgeX = b.x - a.x;
+            float edgeZ = b.y - a.y;
+            float edgeLenSq = edgeX * edgeX + edgeZ * edgeZ;
+            if (edgeLenSq <= CollisionEpsilon)
+                return (x, z);
+
+            float t = Mathf.Clamp01(((x - a.x) * edgeX + (z - a.y) * edgeZ) / edgeLenSq);
+            float closestX = a.x + edgeX * t;
+            float closestZ = a.y + edgeZ * t;
+            float deltaX = x - closestX;
+            float deltaZ = z - closestZ;
+            float distanceSq = deltaX * deltaX + deltaZ * deltaZ;
+            float paddingSq = padding * padding;
+            if (distanceSq >= paddingSq)
+                return (x, z);
+
+            if (distanceSq <= CollisionEpsilon)
+            {
+                float edgeLen = Mathf.Sqrt(edgeLenSq);
+                float normalX = edgeZ / edgeLen;
+                float normalZ = -edgeX / edgeLen;
+                return (x + normalX * padding, z + normalZ * padding);
+            }
+
+            float distance = Mathf.Sqrt(distanceSq);
+            float push = padding - distance;
+            return (x + deltaX / distance * push, z + deltaZ / distance * push);
+        }
+
+        private static bool SegmentOverlapsPoint2D(Vector2 a, Vector2 b, float x, float z, float padding)
+        {
+            float edgeX = b.x - a.x;
+            float edgeZ = b.y - a.y;
+            float edgeLenSq = edgeX * edgeX + edgeZ * edgeZ;
+            if (edgeLenSq <= CollisionEpsilon)
+                return false;
+
+            float t = Mathf.Clamp01(((x - a.x) * edgeX + (z - a.y) * edgeZ) / edgeLenSq);
+            float closestX = a.x + edgeX * t;
+            float closestZ = a.y + edgeZ * t;
+            float deltaX = x - closestX;
+            float deltaZ = z - closestZ;
+            return deltaX * deltaX + deltaZ * deltaZ < padding * padding;
         }
 
         private static (float, float) PushOutCircle2D(float x, float z, float cx, float cz, float radius)
@@ -1426,13 +1549,14 @@ namespace Arena.Input
             return (x, z + zSign * penZ);
         }
 
-        private static Vector2[] ConvexHull2D(List<Vector2> points)
+        private static Vector2[] MovementTriangleFootprint2D(Vector2 a, Vector2 b, Vector2 c)
         {
+            var points = new List<Vector2> { a, b, c };
             points.RemoveAll(point => !float.IsFinite(point.x) || !float.IsFinite(point.y));
-            points.Sort((a, b) =>
+            points.Sort((left, right) =>
             {
-                int xCompare = a.x.CompareTo(b.x);
-                return xCompare != 0 ? xCompare : a.y.CompareTo(b.y);
+                int xCompare = left.x.CompareTo(right.x);
+                return xCompare != 0 ? xCompare : left.y.CompareTo(right.y);
             });
 
             for (int i = points.Count - 1; i > 0; i--)
@@ -1447,38 +1571,35 @@ namespace Arena.Input
             if (points.Count <= 2)
                 return points.ToArray();
 
-            var lower = new List<Vector2>();
-            foreach (Vector2 point in points)
+            float area = PolygonAreaSigned(new[] { a, b, c });
+            if (Mathf.Abs(area) > CollisionEpsilon)
+                return area > 0.0f ? new[] { a, b, c } : new[] { a, c, b };
+
+            Vector2[] best = { points[0], points[1] };
+            float bestLenSq = DistanceSq2D(points[0], points[1]);
+            Vector2[][] pairs =
             {
-                while (lower.Count >= 2 &&
-                       Cross2D(lower[lower.Count - 2], lower[lower.Count - 1], point) <= CollisionEpsilon)
+                new[] { points[0], points[2] },
+                new[] { points[1], points[2] },
+            };
+            foreach (Vector2[] pair in pairs)
+            {
+                float lenSq = DistanceSq2D(pair[0], pair[1]);
+                if (lenSq > bestLenSq)
                 {
-                    lower.RemoveAt(lower.Count - 1);
+                    best = pair;
+                    bestLenSq = lenSq;
                 }
-                lower.Add(point);
             }
 
-            var upper = new List<Vector2>();
-            for (int i = points.Count - 1; i >= 0; i--)
-            {
-                Vector2 point = points[i];
-                while (upper.Count >= 2 &&
-                       Cross2D(upper[upper.Count - 2], upper[upper.Count - 1], point) <= CollisionEpsilon)
-                {
-                    upper.RemoveAt(upper.Count - 1);
-                }
-                upper.Add(point);
-            }
-
-            lower.RemoveAt(lower.Count - 1);
-            upper.RemoveAt(upper.Count - 1);
-            lower.AddRange(upper);
-            return lower.ToArray();
+            return best;
         }
 
-        private static float Cross2D(Vector2 a, Vector2 b, Vector2 c)
+        private static float DistanceSq2D(Vector2 a, Vector2 b)
         {
-            return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+            float dx = a.x - b.x;
+            float dz = a.y - b.y;
+            return dx * dx + dz * dz;
         }
 
         private static float PolygonAreaSigned(Vector2[] points)
@@ -1503,6 +1624,11 @@ namespace Arena.Input
                 transform[0] * x + transform[1] * y + transform[2] * z + transform[3],
                 transform[4] * x + transform[5] * y + transform[6] * z + transform[7],
                 transform[8] * x + transform[9] * y + transform[10] * z + transform[11]);
+        }
+
+        private static bool IsFinite(Vector3 value)
+        {
+            return float.IsFinite(value.x) && float.IsFinite(value.y) && float.IsFinite(value.z);
         }
 
         private static uint FloatToUInt32Bits(float value)

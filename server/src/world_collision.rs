@@ -19,12 +19,15 @@ use crate::open_world_terrain::{
 use serde::Deserialize;
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::sync::OnceLock;
+use std::sync::{
+    atomic::{AtomicU32, Ordering},
+    OnceLock,
+};
 
 const GAMEPLAY_COLLISION_JSON: &str = include_str!("gameplay_collision.shared.json");
 const GAMEPLAY_QUERY_COLLISION_JSON: &str = include_str!("gameplay_query_collision.shared.json");
-const MAX_QUERY_MESH_TRIANGLES_PER_COLLIDER: usize = 512;
-const MAX_QUERY_MESH_TRIANGLES_PER_SCENE: usize = 50000;
+const MAX_QUERY_MESH_TRIANGLES_PER_COLLIDER: usize = 4096;
+const MAX_QUERY_MESH_TRIANGLES_PER_SCENE: usize = 200000;
 const QUERY_MESH_DEGENERATE_TRIANGLE_AREA_SQUARED_EPSILON: f32 = 1.0e-12;
 const OPEN_WORLD_DECOR_MARGIN: f32 = 8.0;
 
@@ -60,6 +63,7 @@ const OPEN_WORLD_OCCUPANCY_MAX_RADIUS: f32 =
 const OPEN_WORLD_OCCUPANCY_CELL_SIZE: f32 = 4.0;
 
 const OPEN_WORLD_COLLISION_ITERS: usize = 2;
+const GAMEPLAY_MESH_STEP_UP_HEIGHT: f32 = 0.65;
 const OPEN_WORLD_RAYCAST_STEP: f32 = 0.25;
 const OPEN_WORLD_RAYCAST_REFINE_ITERS: usize = 7;
 
@@ -70,6 +74,9 @@ const GAMEPLAY_BROADPHASE_MAX_CELL_SIZE: f32 = 16.0;
 const GAMEPLAY_BROADPHASE_FALLBACK_CELL_COUNT: i64 = 256;
 const GAMEPLAY_BROADPHASE_FALLBACK_CANDIDATE_DIVISOR: usize = 4;
 const QUERY_MESH_BVH_LEAF_TRIANGLE_COUNT: usize = 4;
+const MOVEMENT_BLOCKER_LOG_LIMIT: u32 = 100;
+
+static MOVEMENT_BLOCKER_LOG_COUNT: AtomicU32 = AtomicU32::new(0);
 
 thread_local! {
     static GAMEPLAY_BROADPHASE_CANDIDATE_SCRATCH: RefCell<Vec<usize>> = RefCell::new(Vec::new());
@@ -1264,6 +1271,10 @@ fn resolve_open_world_gameplay_horizontal_sweep_collision_y(
                 out_z,
                 player_radius,
             ) {
+                log_open_world_movement_blocker(
+                    profile, hull, start_x, start_z, out_x, out_z, resolved_x, resolved_z,
+                    current_y,
+                );
                 if resolved_x == start_x && resolved_z == start_z {
                     return (start_x, start_z);
                 }
@@ -1448,7 +1459,41 @@ fn gameplay_movement_mesh_hull_overlaps_player_band(
 }
 
 fn gameplay_movement_mesh_hull_can_step_up(hull: &GameplayMovementMeshHull, foot_y: f32) -> bool {
-    hull.y_max <= foot_y + GAMEPLAY_BOX_STEP_UP_HEIGHT
+    hull.y_max <= foot_y + GAMEPLAY_MESH_STEP_UP_HEIGHT
+}
+
+fn log_open_world_movement_blocker(
+    profile: &OpenWorldSceneProfile,
+    hull: &GameplayMovementMeshHull,
+    start_x: f32,
+    start_z: f32,
+    target_x: f32,
+    target_z: f32,
+    resolved_x: f32,
+    resolved_z: f32,
+    current_y: f32,
+) {
+    let count = MOVEMENT_BLOCKER_LOG_COUNT.fetch_add(1, Ordering::Relaxed);
+    if count >= MOVEMENT_BLOCKER_LOG_LIMIT {
+        return;
+    }
+
+    log::warn!(
+        "[WORLD_COLLISION] movement blocked scene={} blocker='{}' y=[{:.2},{:.2}] start=({:.2},{:.2},{:.2}) target=({:.2},{:.2},{:.2}) resolved=({:.2},{:.2},{:.2})",
+        profile.scene_name,
+        hull.name,
+        hull.y_min,
+        hull.y_max,
+        start_x,
+        current_y,
+        start_z,
+        target_x,
+        current_y,
+        target_z,
+        resolved_x,
+        current_y,
+        resolved_z,
+    );
 }
 
 fn gameplay_box_top_y(collider: GameplayCollisionBox) -> f32 {
@@ -2400,42 +2445,90 @@ fn parse_gameplay_movement_mesh_hulls(
     mesh_set
         .instances
         .iter()
-        .filter_map(|instance| {
+        .flat_map(|instance| {
             let geometry = &mesh_set.geometries[instance.geometry_index];
-            build_movement_mesh_hull(instance, geometry)
+            build_movement_mesh_hulls(instance, geometry)
         })
         .collect()
 }
 
-fn build_movement_mesh_hull(
+fn build_movement_mesh_hulls(
     instance: &GameplayQueryMeshInstance,
     geometry: &GameplayQueryMeshGeometry,
-) -> Option<GameplayMovementMeshHull> {
-    let mut points = Vec::with_capacity(geometry.vertices.len());
-    let mut y_min = f32::INFINITY;
-    let mut y_max = f32::NEG_INFINITY;
-    for vertex in &geometry.vertices {
-        let [x, y, z] = transform_point(&instance.transform, *vertex);
-        if !x.is_finite() || !y.is_finite() || !z.is_finite() {
-            return None;
+) -> Vec<GameplayMovementMeshHull> {
+    let mut segments = Vec::new();
+    for (triangle_index, triangle) in geometry.indices.chunks_exact(3).enumerate() {
+        let a = transform_point(&instance.transform, geometry.vertices[triangle[0]]);
+        let b = transform_point(&instance.transform, geometry.vertices[triangle[1]]);
+        let c = transform_point(&instance.transform, geometry.vertices[triangle[2]]);
+        if !point3_is_finite(a) || !point3_is_finite(b) || !point3_is_finite(c) {
+            continue;
         }
-        y_min = y_min.min(y);
-        y_max = y_max.max(y);
-        points.push([x, z]);
+
+        let y_min = a[1].min(b[1]).min(c[1]);
+        let y_max = a[1].max(b[1]).max(c[1]);
+        let footprint = movement_triangle_footprint_2d([a[0], a[2]], [b[0], b[2]], [c[0], c[2]]);
+        if footprint.len() < 2 {
+            continue;
+        }
+
+        segments.push(GameplayMovementMeshHull {
+            name: format!("{}#tri{}", instance.name, triangle_index),
+            y_min,
+            y_max,
+            footprint,
+            bounds: Aabb3 {
+                min_x: a[0].min(b[0]).min(c[0]),
+                min_y: y_min,
+                min_z: a[2].min(b[2]).min(c[2]),
+                max_x: a[0].max(b[0]).max(c[0]),
+                max_y: y_max,
+                max_z: a[2].max(b[2]).max(c[2]),
+            },
+        });
+    }
+    segments
+}
+
+fn movement_triangle_footprint_2d(a: [f32; 2], b: [f32; 2], c: [f32; 2]) -> Vec<[f32; 2]> {
+    let mut points = vec![a, b, c];
+    points.retain(|point| point[0].is_finite() && point[1].is_finite());
+    points.sort_by(|left, right| {
+        left[0]
+            .total_cmp(&right[0])
+            .then_with(|| left[1].total_cmp(&right[1]))
+    });
+    points.dedup_by(|left, right| {
+        (left[0] - right[0]).abs() <= COLLISION_EPSILON
+            && (left[1] - right[1]).abs() <= COLLISION_EPSILON
+    });
+    if points.len() <= 2 {
+        return points;
     }
 
-    let footprint = convex_hull_2d(points);
-    if footprint.len() < 3 || polygon_area_signed(&footprint).abs() <= COLLISION_EPSILON {
-        return None;
+    let area = polygon_area_signed(&[a, b, c]);
+    if area.abs() <= COLLISION_EPSILON {
+        let mut best = [points[0], points[1]];
+        let mut best_len_sq = distance_sq_2d(points[0], points[1]);
+        for pair in [[points[0], points[2]], [points[1], points[2]]] {
+            let len_sq = distance_sq_2d(pair[0], pair[1]);
+            if len_sq > best_len_sq {
+                best = pair;
+                best_len_sq = len_sq;
+            }
+        }
+        return best.to_vec();
     }
 
-    Some(GameplayMovementMeshHull {
-        name: instance.name.clone(),
-        y_min,
-        y_max,
-        footprint,
-        bounds: instance.bounds,
-    })
+    if area > 0.0 {
+        vec![a, b, c]
+    } else {
+        vec![a, c, b]
+    }
+}
+
+fn point3_is_finite(point: [f32; 3]) -> bool {
+    point[0].is_finite() && point[1].is_finite() && point[2].is_finite()
 }
 
 fn mesh_instance_bounds(geometry: &GameplayQueryMeshGeometry, transform: &[f32; 16]) -> Aabb3 {
@@ -3492,8 +3585,11 @@ fn push_out_convex_footprint_2d(
     footprint: &[[f32; 2]],
     padding: f32,
 ) -> (f32, f32) {
-    if footprint.len() < 3 || !padding.is_finite() || padding < 0.0 {
+    if footprint.len() < 2 || !padding.is_finite() || padding < 0.0 {
         return (x, z);
+    }
+    if footprint.len() == 2 {
+        return push_out_segment_2d(x, z, footprint[0], footprint[1], padding);
     }
 
     let area = polygon_area_signed(footprint);
@@ -3583,8 +3679,11 @@ fn convex_footprint_overlaps_point_2d(
     z: f32,
     padding: f32,
 ) -> bool {
-    if footprint.len() < 3 || !padding.is_finite() || padding < 0.0 {
+    if footprint.len() < 2 || !padding.is_finite() || padding < 0.0 {
         return false;
+    }
+    if footprint.len() == 2 {
+        return segment_overlaps_point_2d(footprint[0], footprint[1], x, z, padding);
     }
 
     let area = polygon_area_signed(footprint);
@@ -3629,6 +3728,62 @@ fn convex_footprint_overlaps_point_2d(
     inside || best_outside_distance_sq < padding * padding
 }
 
+fn push_out_segment_2d(x: f32, z: f32, a: [f32; 2], b: [f32; 2], padding: f32) -> (f32, f32) {
+    let edge_x = b[0] - a[0];
+    let edge_z = b[1] - a[1];
+    let edge_len_sq = edge_x * edge_x + edge_z * edge_z;
+    if edge_len_sq <= COLLISION_EPSILON {
+        return (x, z);
+    }
+
+    let t = (((x - a[0]) * edge_x + (z - a[1]) * edge_z) / edge_len_sq).clamp(0.0, 1.0);
+    let closest_x = a[0] + edge_x * t;
+    let closest_z = a[1] + edge_z * t;
+    let delta_x = x - closest_x;
+    let delta_z = z - closest_z;
+    let distance_sq = delta_x * delta_x + delta_z * delta_z;
+    let padding_sq = padding * padding;
+    if distance_sq >= padding_sq {
+        return (x, z);
+    }
+
+    if distance_sq <= COLLISION_EPSILON {
+        let edge_len = edge_len_sq.sqrt();
+        let normal_x = edge_z / edge_len;
+        let normal_z = -edge_x / edge_len;
+        return (x + normal_x * padding, z + normal_z * padding);
+    }
+
+    let distance = distance_sq.sqrt();
+    let push_amount = padding - distance;
+    (
+        x + delta_x / distance * push_amount,
+        z + delta_z / distance * push_amount,
+    )
+}
+
+fn segment_overlaps_point_2d(a: [f32; 2], b: [f32; 2], x: f32, z: f32, padding: f32) -> bool {
+    let edge_x = b[0] - a[0];
+    let edge_z = b[1] - a[1];
+    let edge_len_sq = edge_x * edge_x + edge_z * edge_z;
+    if edge_len_sq <= COLLISION_EPSILON {
+        return false;
+    }
+
+    let t = (((x - a[0]) * edge_x + (z - a[1]) * edge_z) / edge_len_sq).clamp(0.0, 1.0);
+    let closest_x = a[0] + edge_x * t;
+    let closest_z = a[1] + edge_z * t;
+    let delta_x = x - closest_x;
+    let delta_z = z - closest_z;
+    delta_x * delta_x + delta_z * delta_z < padding * padding
+}
+
+fn distance_sq_2d(a: [f32; 2], b: [f32; 2]) -> f32 {
+    let dx = a[0] - b[0];
+    let dz = a[1] - b[1];
+    dx * dx + dz * dz
+}
+
 fn resolve_swept_convex_footprint_2d(
     footprint: &[[f32; 2]],
     start_x: f32,
@@ -3651,47 +3806,6 @@ fn resolve_swept_convex_footprint_2d(
     Some(push_out_convex_footprint_2d(
         target_x, target_z, footprint, padding,
     ))
-}
-
-fn convex_hull_2d(mut points: Vec<[f32; 2]>) -> Vec<[f32; 2]> {
-    points.retain(|point| point[0].is_finite() && point[1].is_finite());
-    points.sort_by(|a, b| a[0].total_cmp(&b[0]).then_with(|| a[1].total_cmp(&b[1])));
-    points.dedup_by(|a, b| {
-        (a[0] - b[0]).abs() <= COLLISION_EPSILON && (a[1] - b[1]).abs() <= COLLISION_EPSILON
-    });
-
-    if points.len() <= 2 {
-        return points;
-    }
-
-    let mut lower: Vec<[f32; 2]> = Vec::new();
-    for point in &points {
-        while lower.len() >= 2
-            && cross_2d(lower[lower.len() - 2], lower[lower.len() - 1], *point) <= COLLISION_EPSILON
-        {
-            lower.pop();
-        }
-        lower.push(*point);
-    }
-
-    let mut upper: Vec<[f32; 2]> = Vec::new();
-    for point in points.iter().rev() {
-        while upper.len() >= 2
-            && cross_2d(upper[upper.len() - 2], upper[upper.len() - 1], *point) <= COLLISION_EPSILON
-        {
-            upper.pop();
-        }
-        upper.push(*point);
-    }
-
-    lower.pop();
-    upper.pop();
-    lower.extend(upper);
-    lower
-}
-
-fn cross_2d(a: [f32; 2], b: [f32; 2], c: [f32; 2]) -> f32 {
-    (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])
 }
 
 fn polygon_area_signed(points: &[[f32; 2]]) -> f32 {
@@ -4275,15 +4389,16 @@ fn raycast_centered_aabb(
 #[cfg(test)]
 mod tests {
     use super::{
-        assert_no_full_rotation_movement_boxes, mesh_instance_bounds,
-        parse_gameplay_collision_boxes, parse_gameplay_query_meshes, polygon_area_signed,
-        push_out_convex_footprint_2d, quaternion_to_axes, raycast_gameplay_collision_boxes,
-        raycast_gameplay_query_meshes, raycast_movement_and_query_collision_boxes,
-        raycast_query_mesh_geometry_bvh, raycast_query_mesh_geometry_linear,
-        resolve_swept_convex_footprint_2d, resolve_swept_gameplay_box_2d,
-        resolve_world_spawn_position_with_layout_for_scene, transform_point, transform_vector,
-        try_world_gameplay_box_hit, Aabb3, GameplayBoxBroadphase, GameplayCollisionBox,
-        GameplayCollisionBoxFile, GameplayCollisionLayoutFile, GameplayQueryMeshBvh,
+        assert_no_full_rotation_movement_boxes, gameplay_movement_mesh_hull_can_step_up,
+        mesh_instance_bounds, parse_gameplay_collision_boxes, parse_gameplay_movement_mesh_hulls,
+        parse_gameplay_query_meshes, polygon_area_signed, push_out_convex_footprint_2d,
+        quaternion_to_axes, raycast_gameplay_collision_boxes, raycast_gameplay_query_meshes,
+        raycast_movement_and_query_collision_boxes, raycast_query_mesh_geometry_bvh,
+        raycast_query_mesh_geometry_linear, resolve_swept_convex_footprint_2d,
+        resolve_swept_gameplay_box_2d, resolve_world_spawn_position_with_layout_for_scene,
+        transform_point, transform_vector, try_world_gameplay_box_hit, Aabb3,
+        GameplayBoxBroadphase, GameplayCollisionBox, GameplayCollisionBoxFile,
+        GameplayCollisionLayoutFile, GameplayMovementMeshHull, GameplayQueryMeshBvh,
         GameplayQueryMeshGeometry, GameplayQueryMeshGeometryFile, GameplayQueryMeshInstance,
         GameplayQueryMeshInstanceFile, GameplayQueryMeshSet, MAX_QUERY_MESH_TRIANGLES_PER_COLLIDER,
     };
@@ -4392,6 +4507,81 @@ mod tests {
 
         assert!((x - (1.0 + TEST_PLAYER_RADIUS)).abs() < 0.0001);
         assert_eq!(z, 0.0);
+    }
+
+    #[test]
+    fn movement_mesh_segments_preserve_projected_triangles() {
+        let segments = parse_gameplay_movement_mesh_hulls(test_query_mesh_layout(
+            test_query_mesh_geometry(
+                "wall",
+                vec![
+                    0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 2.0, 0.0, 0.0, 3.0, 0.0, 0.0, 2.0,
+                    0.0, 1.0,
+                ],
+                vec![0, 1, 2, 3, 4, 5],
+            ),
+            test_query_mesh_instance("wall_instance", "wall", identity_transform()),
+        ));
+
+        assert_eq!(segments.len(), 2);
+        assert_eq!(
+            segments[0].footprint.len(),
+            2,
+            "vertical triangle should become a line segment"
+        );
+        assert_eq!(
+            segments[1].footprint.len(),
+            3,
+            "horizontal triangle should keep area"
+        );
+    }
+
+    #[test]
+    fn swept_movement_blocks_outside_to_inside_mesh_line_segment() {
+        let footprint = vec![[0.0, 0.0], [0.0, 1.0]];
+
+        let resolved =
+            resolve_swept_convex_footprint_2d(&footprint, -1.0, 0.5, -0.2, 0.5, TEST_PLAYER_RADIUS);
+
+        assert_eq!(resolved, Some((-1.0, 0.5)));
+    }
+
+    #[test]
+    fn low_mesh_segments_are_step_over_but_taller_mesh_segments_block() {
+        let low_segment = GameplayMovementMeshHull {
+            name: "low".to_string(),
+            y_min: 9.07,
+            y_max: 9.63,
+            footprint: vec![[0.0, 0.0], [0.0, 1.0]],
+            bounds: Aabb3 {
+                min_x: 0.0,
+                min_y: 9.07,
+                min_z: 0.0,
+                max_x: 0.0,
+                max_y: 9.63,
+                max_z: 1.0,
+            },
+        };
+        let tall_segment = GameplayMovementMeshHull {
+            name: "tall".to_string(),
+            y_min: 9.07,
+            y_max: 9.75,
+            footprint: vec![[0.0, 0.0], [0.0, 1.0]],
+            bounds: Aabb3 {
+                min_x: 0.0,
+                min_y: 9.07,
+                min_z: 0.0,
+                max_x: 0.0,
+                max_y: 9.75,
+                max_z: 1.0,
+            },
+        };
+
+        assert!(gameplay_movement_mesh_hull_can_step_up(&low_segment, 9.04));
+        assert!(!gameplay_movement_mesh_hull_can_step_up(
+            &tall_segment,
+            9.04
+        ));
     }
 
     #[test]

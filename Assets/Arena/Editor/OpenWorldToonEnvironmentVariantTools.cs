@@ -17,7 +17,7 @@ namespace Arena.Editor
         private const string VariantRoot = "Assets/Arena/Content/Prefabs/OpenWorld/EnvironmentVariants";
         private const string SettingsPath = "Assets/Arena/Content/Settings/OpenWorld/toon_variant_generation_settings.json";
         private const string GameplayCollisionLayerName = "GameplayCollision";
-        private const string GeneratedCollisionChildName = "ArenaGameplayCollision";
+        private const string GameplayCollisionChildName = "ArenaGameplayCollision";
         private const string VariantSuffix = "_Arena";
 
         private static readonly HashSet<string> IncludedPackages = new HashSet<string>(StringComparer.Ordinal)
@@ -64,6 +64,37 @@ namespace Arena.Editor
         {
             ToonVariantGenerationSettings settings = LoadSettings();
             ReplaceDirectModelPrefabsInActiveScene(settings, dryRun: false);
+        }
+
+        [MenuItem("Arena/OpenWorld/Scene Prep/1c2 Replace Toon Prefabs With Existing Variants", false, 125)]
+        private static void ReplaceToonPrefabsWithExistingVariants()
+        {
+            ToonVariantGenerationSettings settings = LoadSettings();
+            ReplaceToonPrefabsInActiveScene(settings);
+            ReplaceDirectModelPrefabsInActiveScene(settings, dryRun: false);
+        }
+
+        [MenuItem("Arena/OpenWorld/Scene Prep/1d Generate Selected Toon Variants", false, 130)]
+        private static void GenerateSelectedToonVariants()
+        {
+            ToonVariantGenerationSettings settings = LoadSettings();
+            List<string> selectedSourcePaths = CollectSelectedSourcePrefabPaths();
+            List<string> sourcePaths = selectedSourcePaths
+                .Where(settings.ShouldGenerateCollider)
+                .ToList();
+            if (selectedSourcePaths.Count == 0)
+            {
+                Debug.LogError(
+                    "[OpenWorldToonEnvironmentVariantTools] Select one or more third-party Toon prefab assets, " +
+                    "Arena variant prefab assets, or Project folders under either Toon source prefabs or Arena variants.");
+                return;
+            }
+
+            VariantStats stats = EnsureVariants(sourcePaths);
+            LogVariantStats("selected Toon prefab assets/folders", stats);
+            Debug.Log(
+                $"[OpenWorldToonEnvironmentVariantTools] Skipped {selectedSourcePaths.Count - sourcePaths.Count} " +
+                "selected Toon prefab(s) because of package settings.");
         }
 
         private static void ReplaceToonPrefabsInActiveScene(ToonVariantGenerationSettings settings)
@@ -224,24 +255,10 @@ namespace Arena.Editor
                         if (HasGameplayCollisionCollider(existingVariant))
                         {
                             stats.Existing++;
-                            continue;
-                        }
-
-                        if (AddGeneratedColliderToExistingVariant(existingVariant, variantPath, previewScene, out bool generatedCollider))
-                        {
-                            if (generatedCollider)
-                            {
-                                stats.UpdatedExisting++;
-                                stats.GeneratedColliders++;
-                            }
-                            else
-                            {
-                                stats.Existing++;
-                            }
                         }
                         else
                         {
-                            stats.Failed++;
+                            stats.SkippedNoAuthorCollision++;
                         }
 
                         continue;
@@ -249,40 +266,13 @@ namespace Arena.Editor
 
                     EnsureAssetFolder(GetDirectoryName(variantPath));
 
-                    GameObject? instance = PrefabUtility.InstantiatePrefab(sourcePrefab, previewScene) as GameObject;
-                    if (instance == null)
+                    if (SaveVariantFromSource(sourcePrefab, sourcePath, variantPath, previewScene))
                     {
-                        stats.Failed++;
-                        Debug.LogWarning($"[OpenWorldToonEnvironmentVariantTools] Could not instantiate source prefab '{sourcePath}'.");
-                        continue;
+                        stats.Created++;
                     }
-
-                    try
+                    else
                     {
-                        instance.name = Path.GetFileNameWithoutExtension(variantPath);
-                        if (!EnsureGeneratedBoxCollider(instance))
-                        {
-                            stats.SkippedNoRendererBounds++;
-                            continue;
-                        }
-
-                        stats.GeneratedColliders++;
-
-                        bool success;
-                        PrefabUtility.SaveAsPrefabAsset(instance, variantPath, out success);
-                        if (success)
-                        {
-                            stats.Created++;
-                        }
-                        else
-                        {
-                            stats.Failed++;
-                            Debug.LogWarning($"[OpenWorldToonEnvironmentVariantTools] Failed to save variant '{variantPath}'.");
-                        }
-                    }
-                    finally
-                    {
-                        UnityEngine.Object.DestroyImmediate(instance);
+                        stats.SkippedNoAuthorCollision++;
                     }
                 }
             }
@@ -296,26 +286,49 @@ namespace Arena.Editor
             return stats;
         }
 
-        private static bool EnsureGeneratedBoxCollider(GameObject root)
+        private static bool SaveVariantFromSource(
+            GameObject sourcePrefab,
+            string sourcePath,
+            string variantPath,
+            Scene previewScene)
         {
-            if (HasGameplayCollisionCollider(root))
+            GameObject? instance = PrefabUtility.InstantiatePrefab(sourcePrefab, previewScene) as GameObject;
+            if (instance == null)
+            {
+                Debug.LogWarning($"[OpenWorldToonEnvironmentVariantTools] Could not instantiate source prefab '{sourcePath}'.");
                 return false;
+            }
 
-            if (!TryGetLocalRendererBounds(root.transform, out Bounds bounds))
-                return false;
+            try
+            {
+                instance.name = Path.GetFileNameWithoutExtension(variantPath);
+                EnableAuthorMeshColliderSources(instance);
+                if (!HasGameplayCollisionCollider(instance))
+                    return false;
 
-            GameObject collision = new GameObject(GeneratedCollisionChildName);
-            collision.transform.SetParent(root.transform, false);
+                bool success;
+                PrefabUtility.SaveAsPrefabAsset(instance, variantPath, out success);
+                if (!success)
+                    Debug.LogWarning($"[OpenWorldToonEnvironmentVariantTools] Failed to save variant '{variantPath}'.");
 
-            int gameplayCollisionLayer = LayerMask.NameToLayer(GameplayCollisionLayerName);
-            if (gameplayCollisionLayer >= 0)
-                collision.layer = gameplayCollisionLayer;
+                return success;
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(instance);
+            }
+        }
 
-            BoxCollider collider = collision.AddComponent<BoxCollider>();
-            collider.center = bounds.center;
-            collider.size = ClampColliderSize(bounds.size);
-            collider.isTrigger = false;
-            return true;
+        private static void EnableAuthorMeshColliderSources(GameObject root)
+        {
+            foreach (MeshCollider collider in root.GetComponentsInChildren<MeshCollider>(true))
+            {
+                if (collider == null || collider.sharedMesh == null || collider.isTrigger)
+                    continue;
+
+                collider.gameObject.SetActive(true);
+                collider.enabled = true;
+            }
         }
 
         private static bool HasGameplayCollisionCollider(GameObject root)
@@ -326,7 +339,7 @@ namespace Arena.Editor
                 if (!collider.enabled || collider.isTrigger)
                     continue;
 
-                if (collider.gameObject.name == GeneratedCollisionChildName)
+                if (collider.gameObject.name == GameplayCollisionChildName)
                     return true;
 
                 if (gameplayCollisionLayer >= 0 && collider.gameObject.layer == gameplayCollisionLayer)
@@ -335,111 +348,13 @@ namespace Arena.Editor
 
             foreach (MeshCollider collider in root.GetComponentsInChildren<MeshCollider>(true))
             {
-                if (!collider.enabled || collider.isTrigger)
+                if (collider.isTrigger || collider.sharedMesh == null)
                     continue;
 
-                if (collider.gameObject.name == GeneratedCollisionChildName)
-                    return true;
-
-                if (gameplayCollisionLayer >= 0 && collider.gameObject.layer == gameplayCollisionLayer)
-                    return true;
+                return true;
             }
 
             return false;
-        }
-
-        private static bool AddGeneratedColliderToExistingVariant(
-            GameObject existingVariant,
-            string variantPath,
-            Scene previewScene,
-            out bool generatedCollider)
-        {
-            generatedCollider = false;
-            GameObject? instance = PrefabUtility.InstantiatePrefab(existingVariant, previewScene) as GameObject;
-            if (instance == null)
-            {
-                Debug.LogWarning($"[OpenWorldToonEnvironmentVariantTools] Could not instantiate existing variant '{variantPath}'.");
-                return false;
-            }
-
-            try
-            {
-                generatedCollider = EnsureGeneratedBoxCollider(instance);
-                if (!generatedCollider)
-                    return true;
-
-                bool success;
-                PrefabUtility.SaveAsPrefabAsset(instance, variantPath, out success);
-                if (!success)
-                    Debug.LogWarning($"[OpenWorldToonEnvironmentVariantTools] Failed to update existing variant '{variantPath}'.");
-
-                return success;
-            }
-            finally
-            {
-                UnityEngine.Object.DestroyImmediate(instance);
-            }
-        }
-
-        private static bool TryGetLocalRendererBounds(Transform root, out Bounds bounds)
-        {
-            bounds = default;
-            bool hasBounds = false;
-
-            foreach (Renderer renderer in root.GetComponentsInChildren<Renderer>(true))
-            {
-                if (!ShouldUseRendererForColliderBounds(renderer))
-                    continue;
-
-                Bounds rendererBounds = renderer.bounds;
-                foreach (Vector3 worldCorner in GetBoundsCorners(rendererBounds))
-                {
-                    Vector3 localCorner = root.InverseTransformPoint(worldCorner);
-                    if (!hasBounds)
-                    {
-                        bounds = new Bounds(localCorner, Vector3.zero);
-                        hasBounds = true;
-                    }
-                    else
-                    {
-                        bounds.Encapsulate(localCorner);
-                    }
-                }
-            }
-
-            return hasBounds;
-        }
-
-        private static bool ShouldUseRendererForColliderBounds(Renderer renderer)
-        {
-            return renderer.enabled &&
-                   renderer is not ParticleSystemRenderer &&
-                   renderer is not TrailRenderer &&
-                   renderer is not LineRenderer;
-        }
-
-        private static IEnumerable<Vector3> GetBoundsCorners(Bounds bounds)
-        {
-            Vector3 min = bounds.min;
-            Vector3 max = bounds.max;
-
-            yield return new Vector3(min.x, min.y, min.z);
-            yield return new Vector3(min.x, min.y, max.z);
-            yield return new Vector3(min.x, max.y, min.z);
-            yield return new Vector3(min.x, max.y, max.z);
-            yield return new Vector3(max.x, min.y, min.z);
-            yield return new Vector3(max.x, min.y, max.z);
-            yield return new Vector3(max.x, max.y, min.z);
-            yield return new Vector3(max.x, max.y, max.z);
-        }
-
-        private static Vector3 ClampColliderSize(Vector3 size)
-        {
-            const float minimumSize = 0.01f;
-            return new Vector3(
-                Mathf.Max(size.x, minimumSize),
-                Mathf.Max(size.y, minimumSize),
-                Mathf.Max(size.z, minimumSize));
         }
 
         private static List<string> CollectSourcePrefabsForScene(string scenePath)
@@ -626,6 +541,60 @@ namespace Arena.Editor
             return TryGetModelPackageAndName(assetPath, out _, out _);
         }
 
+        private static List<string> CollectSelectedSourcePrefabPaths()
+        {
+            var selectedPaths = new HashSet<string>(StringComparer.Ordinal);
+            foreach (string path in EnumerateSelectedAssetPaths())
+            {
+                if (AssetDatabase.IsValidFolder(path))
+                {
+                    string[] prefabGuids = AssetDatabase.FindAssets("t:Prefab", new[] { path });
+                    foreach (string prefabGuid in prefabGuids)
+                    {
+                        string prefabPath = AssetDatabase.GUIDToAssetPath(prefabGuid);
+                        AddSelectedSourcePath(prefabPath, selectedPaths);
+                    }
+
+                    continue;
+                }
+
+                AddSelectedSourcePath(path, selectedPaths);
+            }
+
+            return selectedPaths
+                .OrderBy(path => path, StringComparer.Ordinal)
+                .ToList();
+        }
+
+        private static void AddSelectedSourcePath(string path, HashSet<string> selectedPaths)
+        {
+            if (IsIncludedSourcePrefab(path))
+            {
+                selectedPaths.Add(path);
+                return;
+            }
+
+            if (TryGetSourcePathFromVariantPath(path, out string sourcePath))
+                selectedPaths.Add(sourcePath);
+        }
+
+        private static IEnumerable<string> EnumerateSelectedAssetPaths()
+        {
+            foreach (UnityEngine.Object selected in Selection.objects)
+            {
+                string path = AssetDatabase.GetAssetPath(selected);
+                if (!string.IsNullOrEmpty(path))
+                    yield return path;
+            }
+
+            foreach (string guid in Selection.assetGUIDs)
+            {
+                string path = AssetDatabase.GUIDToAssetPath(guid);
+                if (!string.IsNullOrEmpty(path))
+                    yield return path;
+            }
+        }
+
         private static bool TryGetSourcePackageAndRelativePath(
             string assetPath,
             out string packageName,
@@ -799,9 +768,8 @@ namespace Arena.Editor
         {
             Debug.Log(
                 $"[OpenWorldToonEnvironmentVariantTools] Generated Toon variants for {scope}. " +
-                $"Created: {stats.Created}, existing: {stats.Existing}, updated existing: {stats.UpdatedExisting}, " +
-                $"generated colliders: {stats.GeneratedColliders}, " +
-                $"skipped no renderer bounds: {stats.SkippedNoRendererBounds}, failed: {stats.Failed}.");
+                $"Created: {stats.Created}, existing: {stats.Existing}, " +
+                $"skipped no author collision: {stats.SkippedNoAuthorCollision}, failed: {stats.Failed}.");
         }
 
         private static ToonVariantGenerationSettings LoadSettings()
@@ -826,9 +794,7 @@ namespace Arena.Editor
         {
             public int Created;
             public int Existing;
-            public int UpdatedExisting;
-            public int GeneratedColliders;
-            public int SkippedNoRendererBounds;
+            public int SkippedNoAuthorCollision;
             public int Failed;
         }
 

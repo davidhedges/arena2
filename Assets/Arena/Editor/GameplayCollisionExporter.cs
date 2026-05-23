@@ -19,12 +19,22 @@ namespace Arena.Editor
         private const float TransformCompatibilityScaleEpsilon = 0.001f;
         private const float TransformCompatibilityBasisEpsilon = 0.001f;
         private const int MaxExportDiagnosticsToLog = 25;
-        private const int MaxQueryMeshTrianglesPerCollider = 512;
-        private const int MaxQueryMeshTrianglesPerScene = 50000;
-        private const int MaxMovementMeshTrianglesPerCollider = 256;
-        private const int MaxMovementMeshTrianglesPerScene = 20000;
+        private const int MaxQueryMeshTrianglesPerCollider = 4096;
+        private const int MaxQueryMeshTrianglesPerScene = 200000;
+        private const int MaxMovementMeshTrianglesPerCollider = 4096;
+        private const int MaxMovementMeshTrianglesPerScene = 200000;
         private const float QueryMeshDegenerateTriangleAreaSquaredEpsilon = 0.000000000001f;
         private const string ArenaEnvironmentVariantPrefix = "Assets/Arena/Content/Prefabs/OpenWorld/EnvironmentVariants/";
+        private static readonly string[] DecorativeNoCollisionPathContains =
+        {
+            "Rocks/TFD_Rock_Small",
+            "Rocks/TFD_Stone",
+            "TFD_Rock_Small",
+            "TFD_Stone",
+            "Particles/",
+            "TFD_Fog_",
+            "TGV_Fog_",
+        };
         private const string RelativeServerGameplayCollisionPath = "server/src/gameplay_collision.shared.json";
         private const string RelativeServerGameplayQueryCollisionPath = "server/src/gameplay_query_collision.shared.json";
         private const string RelativeServerArenaLayoutPath = "server/src/arena_layout.shared.json";
@@ -154,7 +164,7 @@ namespace Arena.Editor
             Debug.Log(
                 $"[GameplayCollisionExporter] Exported arena collision: " +
                 $"{gameplayCollision.Boxes.Count} {GameplayCollisionLayer} box collider(s), " +
-                $"{gameplayCollision.MeshInstances.Count} {GameplayCollisionLayer} convex mesh hull instance(s), " +
+                $"{gameplayCollision.MeshInstances.Count} {GameplayCollisionLayer} mesh instance(s), " +
                 $"{queryCollision.Boxes.Count} {GameplayQueryCollisionLayer} box collider(s), " +
                 $"{queryCollision.MeshInstances.Count} {GameplayQueryCollisionLayer} mesh instance(s) " +
                 $"using {queryCollision.MeshGeometries.Count} shared mesh geometries.");
@@ -421,6 +431,70 @@ namespace Arena.Editor
                 $"{unsupportedCapsuleColliders} capsule collider(s) preserved as source data but not exported by current server collision.");
         }
 
+        public static int PreparePrefabCollisionRoles(IReadOnlyCollection<string> prefabAssetPaths)
+        {
+            int gameplayCollisionLayer = LayerMask.NameToLayer(GameplayCollisionLayer);
+            int gameplayQueryCollisionLayer = LayerMask.NameToLayer(GameplayQueryCollisionLayer);
+            if (gameplayCollisionLayer < 0 || gameplayQueryCollisionLayer < 0)
+            {
+                Debug.LogError(
+                    $"[GameplayCollisionExporter] Required layers are missing: " +
+                    $"{GameplayCollisionLayer}={gameplayCollisionLayer}, {GameplayQueryCollisionLayer}={gameplayQueryCollisionLayer}.");
+                return 0;
+            }
+
+            List<string> paths = prefabAssetPaths
+                .Where(path => !string.IsNullOrEmpty(path) && path.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase))
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(path => path, StringComparer.Ordinal)
+                .ToList();
+            if (paths.Count == 0)
+                return 0;
+
+            int movementObjectsTagged = 0;
+            int visualBoxCollidersMoved = 0;
+            int queryObjectsCreated = 0;
+            int queryObjectsUpdated = 0;
+            int visualCollisionLayersCleared = 0;
+            int unsupportedCapsuleColliders = 0;
+            int preparedRoots = 0;
+
+            foreach (string prefabAssetPath in paths)
+            {
+                GameObject root = PrefabUtility.LoadPrefabContents(prefabAssetPath);
+                try
+                {
+                    PrepareCollisionRolesForRoot(
+                        root,
+                        gameplayCollisionLayer,
+                        gameplayQueryCollisionLayer,
+                        ref movementObjectsTagged,
+                        ref visualBoxCollidersMoved,
+                        ref queryObjectsCreated,
+                        ref queryObjectsUpdated,
+                        ref visualCollisionLayersCleared,
+                        ref unsupportedCapsuleColliders);
+                    PrefabUtility.SaveAsPrefabAsset(root, prefabAssetPath);
+                    preparedRoots++;
+                }
+                finally
+                {
+                    PrefabUtility.UnloadPrefabContents(root);
+                }
+            }
+
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+            Debug.Log(
+                $"[GameplayCollisionExporter] Prepared collision roles for {preparedRoots} prefab asset(s): " +
+                $"{movementObjectsTagged} movement object(s) on {GameplayCollisionLayer}, " +
+                $"{visualBoxCollidersMoved} visual/root box collider(s) copied to dedicated collision children, " +
+                $"{queryObjectsCreated} query object(s) created, {queryObjectsUpdated} query object(s) updated, " +
+                $"{visualCollisionLayersCleared} visual/root object(s) moved back to Default, " +
+                $"{unsupportedCapsuleColliders} capsule collider(s) preserved as source data but not exported by current server collision.");
+            return preparedRoots;
+        }
+
         public static void ExportSelectedTerrainHeightfield()
         {
             Scene activeScene = SceneManager.GetActiveScene();
@@ -506,6 +580,68 @@ namespace Arena.Editor
                 path = $"{transform.name}/{path}";
             }
             return path;
+        }
+
+        private static bool ShouldExcludeFromGameplayCollision(GameObject gameObject)
+        {
+            string hierarchyPath = GetHierarchyPath(gameObject.transform);
+            if (MatchesDecorativeNoCollisionPath(hierarchyPath) ||
+                MatchesDecorativeNoCollisionPath(gameObject.name))
+            {
+                return true;
+            }
+
+            GameObject? prefabRoot = PrefabUtility.GetOutermostPrefabInstanceRoot(gameObject);
+            string prefabPath = prefabRoot != null
+                ? PrefabUtility.GetPrefabAssetPathOfNearestInstanceRoot(prefabRoot)
+                : PrefabUtility.GetPrefabAssetPathOfNearestInstanceRoot(gameObject);
+            return MatchesDecorativeNoCollisionPath(prefabPath);
+        }
+
+        private static bool MatchesDecorativeNoCollisionPath(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+                return false;
+
+            string normalized = value.Replace('\\', '/');
+            return DecorativeNoCollisionPathContains.Any(pattern =>
+                normalized.IndexOf(pattern, StringComparison.OrdinalIgnoreCase) >= 0);
+        }
+
+        private static int RemoveExcludedCollisionChildren(
+            GameObject root,
+            int gameplayCollisionLayer,
+            int gameplayQueryCollisionLayer)
+        {
+            int changed = 0;
+            List<Transform> excludedRoots = root.GetComponentsInChildren<Transform>(includeInactive: true)
+                .Where(transform =>
+                    ShouldExcludeFromGameplayCollision(transform.gameObject) &&
+                    (transform.parent == null || !ShouldExcludeFromGameplayCollision(transform.parent.gameObject)))
+                .ToList();
+
+            foreach (Transform excludedRoot in excludedRoots)
+            {
+                foreach (GameObject child in CollectDirectCollisionChildren(excludedRoot.gameObject, GameplayCollisionChildName)
+                             .Concat(CollectDirectCollisionChildren(excludedRoot.gameObject, GameplayQueryCollisionChildName))
+                             .ToList())
+                {
+                    Undo.DestroyObjectImmediate(child);
+                    changed++;
+                }
+
+                foreach (Transform transform in excludedRoot.GetComponentsInChildren<Transform>(includeInactive: true))
+                {
+                    GameObject gameObject = transform.gameObject;
+                    if (gameObject.layer != gameplayCollisionLayer && gameObject.layer != gameplayQueryCollisionLayer)
+                        continue;
+
+                    if (SetLayer(gameObject, 0, "Clear Decorative Collision Layer"))
+                        changed++;
+                }
+            }
+
+            return changed;
         }
 
         private static void SyncArenaLayoutToBundled(bool logSummary)
@@ -679,6 +815,8 @@ namespace Arena.Editor
             ref int visualCollisionLayersCleared,
             ref int unsupportedCapsuleColliders)
         {
+            RemoveExcludedCollisionChildren(root, gameplayCollisionLayer, gameplayQueryCollisionLayer);
+
             unsupportedCapsuleColliders += CountUnsupportedCapsuleColliders(root);
             movementObjectsTagged += PrepareMovementCollision(
                 root,
@@ -689,6 +827,7 @@ namespace Arena.Editor
                 ref queryObjectsUpdated);
             PrepareQueryCollision(
                 root,
+                gameplayCollisionLayer,
                 gameplayQueryCollisionLayer,
                 ref queryObjectsCreated,
                 ref queryObjectsUpdated);
@@ -712,6 +851,7 @@ namespace Arena.Editor
                         !collider.enabled ||
                         collider.isTrigger ||
                         !collider.gameObject.activeInHierarchy ||
+                        ShouldExcludeFromGameplayCollision(collider.gameObject) ||
                         collider.gameObject.scene != SceneManager.GetActiveScene())
                     {
                         continue;
@@ -739,6 +879,7 @@ namespace Arena.Editor
                         collider.isTrigger ||
                         !collider.gameObject.activeInHierarchy ||
                         collider.gameObject.scene != SceneManager.GetActiveScene() ||
+                        ShouldExcludeFromGameplayCollision(collider.gameObject) ||
                         !IsSupportedQueryCollider(collider))
                     {
                         continue;
@@ -777,6 +918,7 @@ namespace Arena.Editor
                     !collider.enabled ||
                     collider.isTrigger ||
                     !collider.gameObject.activeInHierarchy ||
+                    ShouldExcludeFromGameplayCollision(collider.gameObject) ||
                     collider.gameObject.scene != rootScene)
                 {
                     continue;
@@ -824,31 +966,20 @@ namespace Arena.Editor
                 visualBoxCollidersMoved++;
             }
 
-            return changed;
-        }
-
-        private static void PrepareQueryCollision(
-            GameObject root,
-            int gameplayQueryCollisionLayer,
-            ref int queryObjectsCreated,
-            ref int queryObjectsUpdated)
-        {
-            GameObject? existingQueryRoot = GetExistingChild(root, GameplayQueryCollisionChildName);
-            Transform? existingQueryRootTransform = existingQueryRoot != null ? existingQueryRoot.transform : null;
-            Scene rootScene = root.scene;
-            if (HasAnyQueryCollider(root))
-                return;
-
-            List<MeshCollider> meshColliders = root.GetComponentsInChildren<MeshCollider>(includeInactive: false)
+            Transform? existingMovementRootTransform = GetExistingChild(root, GameplayCollisionChildName)?.transform;
+            Transform? existingQueryRootTransform = GetExistingChild(root, GameplayQueryCollisionChildName)?.transform;
+            List<MeshCollider> meshColliders = root.GetComponentsInChildren<MeshCollider>(includeInactive: true)
                 .Where(collider =>
                     collider != null &&
-                    collider.enabled &&
                     !collider.isTrigger &&
                     collider.sharedMesh != null &&
-                    collider.gameObject.activeInHierarchy &&
                     collider.gameObject.scene == rootScene &&
+                    !ShouldExcludeFromGameplayCollision(collider.gameObject) &&
+                    collider.gameObject.layer != gameplayCollisionLayer &&
                     collider.gameObject.layer != gameplayQueryCollisionLayer &&
+                    !collider.gameObject.name.StartsWith(GameplayCollisionChildName, StringComparison.Ordinal) &&
                     !collider.gameObject.name.StartsWith(GameplayQueryCollisionChildName, StringComparison.Ordinal) &&
+                    (existingMovementRootTransform == null || !collider.transform.IsChildOf(existingMovementRootTransform)) &&
                     (existingQueryRootTransform == null || !collider.transform.IsChildOf(existingQueryRootTransform)))
                 .OrderBy(collider => GetHierarchyPath(collider.transform), StringComparer.Ordinal)
                 .ToList();
@@ -857,6 +988,95 @@ namespace Arena.Editor
                 .ToList();
             if (explicitMeshColliders.Count > 0)
                 meshColliders = explicitMeshColliders;
+
+            if (meshColliders.Count > 0)
+            {
+                foreach (GameObject movementRoot in CollectDirectCollisionChildren(root, GameplayCollisionChildName))
+                {
+                    Undo.DestroyObjectImmediate(movementRoot);
+                    changed++;
+                }
+                clearedMovementChildren.Clear();
+            }
+
+            int meshIndex = 0;
+            foreach (MeshCollider source in meshColliders)
+            {
+                string childName = meshColliders.Count == 1
+                    ? GameplayCollisionChildName
+                    : $"{GameplayCollisionChildName}_{SanitizeObjectName(source.gameObject.name)}_{meshIndex + 1}";
+                GameObject movementChild = GetOrCreateColliderChild(root, childName, gameplayCollisionLayer);
+                CopyWorldTransformIntoRootChild(source.transform, root.transform, movementChild.transform);
+                if (clearedMovementChildren.Add(movementChild))
+                {
+                    RemoveBoxColliders(movementChild);
+                    RemoveMeshColliders(movementChild);
+                }
+
+                MeshCollider? target = movementChild.GetComponent<MeshCollider>();
+                if (target == null)
+                    target = Undo.AddComponent<MeshCollider>(movementChild);
+                CopyMeshCollider(source, target);
+                if (SetLayer(movementChild, gameplayCollisionLayer, "Prepare Movement Mesh Collision"))
+                    changed++;
+                EditorUtility.SetDirty(movementChild);
+                changed++;
+                meshIndex++;
+            }
+
+            changed += EnableDirectCollisionMeshChildren(
+                root,
+                GameplayCollisionChildName,
+                gameplayCollisionLayer,
+                "Repair Movement Mesh Collision");
+
+            return changed;
+        }
+
+        private static void PrepareQueryCollision(
+            GameObject root,
+            int gameplayCollisionLayer,
+            int gameplayQueryCollisionLayer,
+            ref int queryObjectsCreated,
+            ref int queryObjectsUpdated)
+        {
+            Transform? existingMovementRootTransform = GetExistingChild(root, GameplayCollisionChildName)?.transform;
+            GameObject? existingQueryRoot = GetExistingChild(root, GameplayQueryCollisionChildName);
+            Transform? existingQueryRootTransform = existingQueryRoot != null ? existingQueryRoot.transform : null;
+            Scene rootScene = root.scene;
+
+            List<MeshCollider> meshColliders = root.GetComponentsInChildren<MeshCollider>(includeInactive: true)
+                .Where(collider =>
+                    collider != null &&
+                    !collider.isTrigger &&
+                    collider.sharedMesh != null &&
+                    collider.gameObject.scene == rootScene &&
+                    !ShouldExcludeFromGameplayCollision(collider.gameObject) &&
+                    collider.gameObject.layer != gameplayCollisionLayer &&
+                    collider.gameObject.layer != gameplayQueryCollisionLayer &&
+                    !collider.gameObject.name.StartsWith(GameplayCollisionChildName, StringComparison.Ordinal) &&
+                    !collider.gameObject.name.StartsWith(GameplayQueryCollisionChildName, StringComparison.Ordinal) &&
+                    (existingMovementRootTransform == null || !collider.transform.IsChildOf(existingMovementRootTransform)) &&
+                    (existingQueryRootTransform == null || !collider.transform.IsChildOf(existingQueryRootTransform)))
+                .OrderBy(collider => GetHierarchyPath(collider.transform), StringComparer.Ordinal)
+                .ToList();
+            List<MeshCollider> explicitMeshColliders = meshColliders
+                .Where(collider => collider.gameObject.name.Contains("MeshCollider", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            if (explicitMeshColliders.Count > 0)
+                meshColliders = explicitMeshColliders;
+
+            if (meshColliders.Count == 0 && HasAnyQueryCollider(root))
+                return;
+
+            if (meshColliders.Count > 0)
+            {
+                foreach (GameObject queryRoot in CollectDirectCollisionChildren(root, GameplayQueryCollisionChildName))
+                {
+                    Undo.DestroyObjectImmediate(queryRoot);
+                    queryObjectsUpdated++;
+                }
+            }
 
             int meshIndex = 0;
             foreach (MeshCollider source in meshColliders)
@@ -891,12 +1111,24 @@ namespace Arena.Editor
                 meshIndex++;
             }
 
+            int repairedExistingQueryMeshes = EnableDirectCollisionMeshChildren(
+                root,
+                GameplayQueryCollisionChildName,
+                gameplayQueryCollisionLayer,
+                "Repair Query Mesh Collision");
+            if (meshColliders.Count == 0 && repairedExistingQueryMeshes > 0)
+            {
+                queryObjectsUpdated += repairedExistingQueryMeshes;
+                return;
+            }
+
             List<BoxCollider> movementBoxes = root.GetComponentsInChildren<BoxCollider>(includeInactive: false)
                 .Where(collider =>
                     collider != null &&
                     collider.enabled &&
                     !collider.isTrigger &&
                     collider.gameObject.activeInHierarchy &&
+                    !ShouldExcludeFromGameplayCollision(collider.gameObject) &&
                     collider.gameObject.scene == rootScene &&
                     collider.gameObject.layer != gameplayQueryCollisionLayer &&
                     (collider.gameObject.name == GameplayCollisionChildName ||
@@ -1011,6 +1243,13 @@ namespace Arena.Editor
             GameObject? child = GetExistingChild(root, childName);
             if (child != null)
             {
+                if (!child.activeSelf)
+                {
+                    Undo.RecordObject(child, "Prepare Collider Child");
+                    child.SetActive(true);
+                    EditorUtility.SetDirty(child);
+                }
+
                 SetLayer(child, layer, "Prepare Collider Child");
                 return child;
             }
@@ -1055,6 +1294,62 @@ namespace Arena.Editor
                     !collider.isTrigger &&
                     collider.gameObject.name.StartsWith(GameplayQueryCollisionChildName, StringComparison.Ordinal));
 
+        private static List<GameObject> CollectDirectCollisionChildren(GameObject root, string childNamePrefix)
+        {
+            var children = new List<GameObject>();
+            foreach (Transform child in root.transform)
+            {
+                if (child.name == childNamePrefix ||
+                    child.name.StartsWith(childNamePrefix + "_", StringComparison.Ordinal))
+                {
+                    children.Add(child.gameObject);
+                }
+            }
+
+            return children;
+        }
+
+        private static int EnableDirectCollisionMeshChildren(
+            GameObject root,
+            string childNamePrefix,
+            int layer,
+            string undoName)
+        {
+            int changed = 0;
+            foreach (GameObject child in CollectDirectCollisionChildren(root, childNamePrefix))
+            {
+                if (!child.activeSelf)
+                {
+                    Undo.RecordObject(child, undoName);
+                    child.SetActive(true);
+                    EditorUtility.SetDirty(child);
+                    changed++;
+                }
+
+                if (SetLayer(child, layer, undoName))
+                    changed++;
+
+                foreach (MeshCollider collider in child.GetComponentsInChildren<MeshCollider>(includeInactive: true))
+                {
+                    if (collider == null || collider.sharedMesh == null)
+                    {
+                        continue;
+                    }
+
+                    if (!collider.enabled || collider.isTrigger)
+                    {
+                        Undo.RecordObject(collider, undoName);
+                        collider.enabled = true;
+                        collider.isTrigger = false;
+                        EditorUtility.SetDirty(collider);
+                        changed++;
+                    }
+                }
+            }
+
+            return changed;
+        }
+
         private static bool HasEquivalentBoxCollider(GameObject targetObject, BoxCollider source)
             => targetObject.GetComponents<BoxCollider>().Any(target =>
                 target.enabled == source.enabled &&
@@ -1085,7 +1380,7 @@ namespace Arena.Editor
 
         private static void CopyMeshCollider(MeshCollider source, MeshCollider target)
         {
-            target.enabled = source.enabled;
+            target.enabled = true;
             target.isTrigger = false;
             target.sharedMaterial = source.sharedMaterial;
             target.convex = source.convex;
@@ -1202,7 +1497,7 @@ namespace Arena.Editor
 
             Debug.Log(
                 $"[GameplayCollisionExporter] Exported {movementCollision.Boxes.Count} scene movement box collider(s) and " +
-                $"{movementCollision.MeshInstances.Count} scene movement convex mesh hull instance(s) using " +
+                $"{movementCollision.MeshInstances.Count} scene movement mesh instance(s) using " +
                 $"{movementCollision.MeshGeometries.Count} shared mesh geometries to " +
                 $"{SceneServerCollisionPath(dataKey)} and {SceneBundledCollisionPath(dataKey)}");
             LogExportWarnings(warnings);
@@ -1254,6 +1549,7 @@ namespace Arena.Editor
                     collider.isTrigger ||
                     !collider.gameObject.activeInHierarchy ||
                     collider.gameObject.layer != layer ||
+                    ShouldExcludeFromGameplayCollision(collider.gameObject) ||
                     collider.gameObject.scene != activeScene)
                 {
                     continue;
@@ -1352,6 +1648,7 @@ namespace Arena.Editor
                     collider.isTrigger ||
                     !collider.gameObject.activeInHierarchy ||
                     collider.gameObject.layer != layer ||
+                    ShouldExcludeFromGameplayCollision(collider.gameObject) ||
                     collider.gameObject.scene != activeScene)
                 {
                     continue;
@@ -1467,20 +1764,10 @@ namespace Arena.Editor
             exportMeshInstance = null;
             Mesh? mesh = collider.sharedMesh;
             string path = GetHierarchyPath(collider.transform);
-            string label = mode == MeshCollisionExportMode.Query ? "mesh query collision" : "movement convex mesh collision";
+            string label = mode == MeshCollisionExportMode.Query ? "mesh query collision" : "movement mesh collision";
             if (mesh == null)
             {
                 errors.Add($"Skipping {path} {label}: MeshCollider has no shared mesh.");
-                return false;
-            }
-            if (mode == MeshCollisionExportMode.Query && collider.convex)
-            {
-                errors.Add($"Skipping {path} {label}: convex MeshCollider export is not supported for query collision.");
-                return false;
-            }
-            if (mode == MeshCollisionExportMode.Movement && !collider.convex)
-            {
-                errors.Add($"Skipping {path} {label}: movement mesh export requires a convex MeshCollider.");
                 return false;
             }
             if (!mesh.isReadable)
