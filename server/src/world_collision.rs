@@ -228,6 +228,17 @@ struct GameplayQueryMeshSet {
 }
 
 #[derive(Debug)]
+struct GameplayMovementMeshHull {
+    #[allow(dead_code)]
+    name: String,
+    y_min: f32,
+    y_max: f32,
+    footprint: Vec<[f32; 2]>,
+    #[allow(dead_code)]
+    bounds: Aabb3,
+}
+
+#[derive(Debug)]
 struct GameplayBoxBroadphase {
     cell_size: f32,
     cells: HashMap<(i32, i32, i32), Vec<usize>>,
@@ -242,11 +253,15 @@ struct GameplayBoxBroadphase {
 pub(crate) struct WorldCollisionPreloadSummary {
     pub scene_count: u32,
     pub arena_gameplay_boxes: u32,
+    #[allow(dead_code)]
+    pub arena_gameplay_mesh_hulls: u32,
     pub arena_query_boxes: u32,
     pub arena_query_mesh_geometries: u32,
     pub arena_query_mesh_instances: u32,
     pub arena_query_mesh_triangles: u32,
     pub open_world_gameplay_boxes: u32,
+    #[allow(dead_code)]
+    pub open_world_gameplay_mesh_hulls: u32,
     pub open_world_query_boxes: u32,
     pub open_world_query_mesh_geometries: u32,
     pub open_world_query_mesh_instances: u32,
@@ -726,6 +741,7 @@ fn open_world_profile_from_name(scene_name: Option<&str>) -> &'static OpenWorldS
 
 pub(crate) fn preload_world_collision_data() -> WorldCollisionPreloadSummary {
     let arena_gameplay_boxes = gameplay_collision_boxes().len();
+    let arena_gameplay_mesh_hulls = gameplay_movement_mesh_hulls().len();
     let arena_query_boxes = gameplay_query_collision_boxes().len();
     let arena_query_meshes = gameplay_query_meshes();
     let arena_broadphase = gameplay_collision_broadphase();
@@ -734,6 +750,7 @@ pub(crate) fn preload_world_collision_data() -> WorldCollisionPreloadSummary {
     let mut summary = WorldCollisionPreloadSummary {
         scene_count: OPEN_WORLD_SCENE_PROFILES.len().min(u32::MAX as usize) as u32,
         arena_gameplay_boxes: arena_gameplay_boxes.min(u32::MAX as usize) as u32,
+        arena_gameplay_mesh_hulls: arena_gameplay_mesh_hulls.min(u32::MAX as usize) as u32,
         arena_query_boxes: arena_query_boxes.min(u32::MAX as usize) as u32,
         arena_query_mesh_geometries: arena_query_meshes.geometries.len().min(u32::MAX as usize)
             as u32,
@@ -750,6 +767,7 @@ pub(crate) fn preload_world_collision_data() -> WorldCollisionPreloadSummary {
     for profile in OPEN_WORLD_SCENE_PROFILES {
         let generated_colliders = open_world_colliders(profile).len();
         let gameplay_boxes = open_world_gameplay_collision_boxes(profile).len();
+        let gameplay_mesh_hulls = open_world_gameplay_movement_mesh_hulls(profile).len();
         let query_boxes = open_world_gameplay_query_collision_boxes(profile).len();
         let query_meshes = open_world_gameplay_query_meshes(profile);
         let broadphase = open_world_gameplay_collision_broadphase(profile);
@@ -762,6 +780,9 @@ pub(crate) fn preload_world_collision_data() -> WorldCollisionPreloadSummary {
         summary.open_world_gameplay_boxes = summary
             .open_world_gameplay_boxes
             .saturating_add(gameplay_boxes.min(u32::MAX as usize) as u32);
+        summary.open_world_gameplay_mesh_hulls = summary
+            .open_world_gameplay_mesh_hulls
+            .saturating_add(gameplay_mesh_hulls.min(u32::MAX as usize) as u32);
         summary.open_world_query_boxes = summary
             .open_world_query_boxes
             .saturating_add(query_boxes.min(u32::MAX as usize) as u32);
@@ -966,6 +987,15 @@ fn resolve_gameplay_horizontal_collision_y(
                 }
             };
         }
+
+        for hull in gameplay_movement_mesh_hulls() {
+            if !gameplay_movement_mesh_hull_overlaps_player_band(hull, current_y, player_height) {
+                continue;
+            }
+
+            (out_x, out_z) =
+                push_out_convex_footprint_2d(out_x, out_z, &hull.footprint, player_radius);
+        }
     }
 
     (out_x, out_z)
@@ -1041,6 +1071,18 @@ fn resolve_open_world_gameplay_horizontal_collision_y(
                     )
                 }
             };
+        }
+
+        for hull in open_world_gameplay_movement_mesh_hulls(profile) {
+            if !gameplay_movement_mesh_hull_overlaps_player_band(hull, current_y, player_height) {
+                continue;
+            }
+            if gameplay_movement_mesh_hull_can_step_up(hull, current_y) {
+                continue;
+            }
+
+            (out_x, out_z) =
+                push_out_convex_footprint_2d(out_x, out_z, &hull.footprint, player_radius);
         }
     }
 
@@ -1209,6 +1251,19 @@ fn gameplay_box_can_step_up(collider: GameplayCollisionBox, foot_y: f32) -> bool
     gameplay_box_top_y(collider) <= foot_y + GAMEPLAY_BOX_STEP_UP_HEIGHT
 }
 
+fn gameplay_movement_mesh_hull_overlaps_player_band(
+    hull: &GameplayMovementMeshHull,
+    foot_y: f32,
+    player_height: f32,
+) -> bool {
+    let head_y = foot_y + player_height;
+    head_y > hull.y_min + COLLISION_EPSILON && foot_y < hull.y_max - COLLISION_EPSILON
+}
+
+fn gameplay_movement_mesh_hull_can_step_up(hull: &GameplayMovementMeshHull, foot_y: f32) -> bool {
+    hull.y_max <= foot_y + GAMEPLAY_BOX_STEP_UP_HEIGHT
+}
+
 fn gameplay_box_top_y(collider: GameplayCollisionBox) -> f32 {
     match collider {
         GameplayCollisionBox::ObbY {
@@ -1361,6 +1416,13 @@ fn gameplay_query_mesh_broadphase() -> &'static GameplayBoxBroadphase {
                 .map(|instance| instance.bounds),
         )
     })
+}
+
+fn gameplay_movement_mesh_hulls() -> &'static [GameplayMovementMeshHull] {
+    static GAMEPLAY_MOVEMENT_MESH_HULLS: OnceLock<Vec<GameplayMovementMeshHull>> = OnceLock::new();
+    GAMEPLAY_MOVEMENT_MESH_HULLS
+        .get_or_init(load_gameplay_movement_mesh_hulls)
+        .as_slice()
 }
 
 fn open_world_gameplay_collision_boxes(
@@ -1670,6 +1732,30 @@ fn open_world_gameplay_query_mesh_broadphase(
         })
 }
 
+fn open_world_gameplay_movement_mesh_hulls(
+    profile: &OpenWorldSceneProfile,
+) -> &'static [GameplayMovementMeshHull] {
+    static EMPTY_MOVEMENT_MESH_HULLS: OnceLock<Vec<GameplayMovementMeshHull>> = OnceLock::new();
+    static OPEN_WORLD_MOVEMENT_MESH_HULLS: OnceLock<
+        HashMap<&'static str, Vec<GameplayMovementMeshHull>>,
+    > = OnceLock::new();
+
+    OPEN_WORLD_MOVEMENT_MESH_HULLS
+        .get_or_init(|| {
+            let mut hulls_by_scene = HashMap::new();
+            for profile in OPEN_WORLD_SCENE_PROFILES {
+                hulls_by_scene.insert(
+                    profile.scene_name,
+                    load_open_world_gameplay_movement_mesh_hulls(profile),
+                );
+            }
+            hulls_by_scene
+        })
+        .get(profile.scene_name)
+        .map(Vec::as_slice)
+        .unwrap_or_else(|| EMPTY_MOVEMENT_MESH_HULLS.get_or_init(Vec::new).as_slice())
+}
+
 fn load_gameplay_collision_boxes() -> Vec<GameplayCollisionBox> {
     let file: GameplayCollisionLayoutFile = serde_json::from_str(GAMEPLAY_COLLISION_JSON)
         .expect("failed to parse gameplay_collision.shared.json");
@@ -1691,6 +1777,13 @@ fn load_gameplay_query_meshes() -> GameplayQueryMeshSet {
         .expect("failed to parse gameplay_query_collision.shared.json");
 
     parse_gameplay_query_meshes(file)
+}
+
+fn load_gameplay_movement_mesh_hulls() -> Vec<GameplayMovementMeshHull> {
+    let file: GameplayCollisionLayoutFile = serde_json::from_str(GAMEPLAY_COLLISION_JSON)
+        .expect("failed to parse gameplay_collision.shared.json");
+
+    parse_gameplay_movement_mesh_hulls(file)
 }
 
 fn load_open_world_gameplay_collision_boxes(
@@ -1725,6 +1818,20 @@ fn load_open_world_gameplay_query_meshes(profile: &OpenWorldSceneProfile) -> Gam
             .expect("failed to parse open-world gameplay query collision JSON");
 
     parse_gameplay_query_meshes(file)
+}
+
+fn load_open_world_gameplay_movement_mesh_hulls(
+    profile: &OpenWorldSceneProfile,
+) -> Vec<GameplayMovementMeshHull> {
+    let json = if profile.scene_name == OASIS_DAY_PROFILE.scene_name {
+        OPEN_WORLD_GAMEPLAY_COLLISION_JSON
+    } else {
+        profile.gameplay_collision_json
+    };
+    let file: GameplayCollisionLayoutFile =
+        serde_json::from_str(json).expect("failed to parse open-world gameplay collision JSON");
+
+    parse_gameplay_movement_mesh_hulls(file)
 }
 
 fn query_collision_json_for_profile(profile: &OpenWorldSceneProfile) -> &'static str {
@@ -1974,6 +2081,51 @@ fn parse_gameplay_query_meshes(file: GameplayCollisionLayoutFile) -> GameplayQue
         geometries,
         instances,
     }
+}
+
+fn parse_gameplay_movement_mesh_hulls(
+    file: GameplayCollisionLayoutFile,
+) -> Vec<GameplayMovementMeshHull> {
+    let mesh_set = parse_gameplay_query_meshes(file);
+    mesh_set
+        .instances
+        .iter()
+        .filter_map(|instance| {
+            let geometry = &mesh_set.geometries[instance.geometry_index];
+            build_movement_mesh_hull(instance, geometry)
+        })
+        .collect()
+}
+
+fn build_movement_mesh_hull(
+    instance: &GameplayQueryMeshInstance,
+    geometry: &GameplayQueryMeshGeometry,
+) -> Option<GameplayMovementMeshHull> {
+    let mut points = Vec::with_capacity(geometry.vertices.len());
+    let mut y_min = f32::INFINITY;
+    let mut y_max = f32::NEG_INFINITY;
+    for vertex in &geometry.vertices {
+        let [x, y, z] = transform_point(&instance.transform, *vertex);
+        if !x.is_finite() || !y.is_finite() || !z.is_finite() {
+            return None;
+        }
+        y_min = y_min.min(y);
+        y_max = y_max.max(y);
+        points.push([x, z]);
+    }
+
+    let footprint = convex_hull_2d(points);
+    if footprint.len() < 3 || polygon_area_signed(&footprint).abs() <= COLLISION_EPSILON {
+        return None;
+    }
+
+    Some(GameplayMovementMeshHull {
+        name: instance.name.clone(),
+        y_min,
+        y_max,
+        footprint,
+        bounds: instance.bounds,
+    })
 }
 
 fn mesh_instance_bounds(geometry: &GameplayQueryMeshGeometry, transform: &[f32; 16]) -> Aabb3 {
@@ -3024,6 +3176,157 @@ fn push_out_aabb_2d(
     }
 }
 
+fn push_out_convex_footprint_2d(
+    x: f32,
+    z: f32,
+    footprint: &[[f32; 2]],
+    padding: f32,
+) -> (f32, f32) {
+    if footprint.len() < 3 || !padding.is_finite() || padding < 0.0 {
+        return (x, z);
+    }
+
+    let area = polygon_area_signed(footprint);
+    if area.abs() <= COLLISION_EPSILON {
+        return (x, z);
+    }
+
+    let ccw = area > 0.0;
+    let mut inside = true;
+    let mut best_inside_push = (f32::INFINITY, 0.0, 0.0);
+    let mut best_outside_distance_sq = f32::INFINITY;
+    let mut best_outside_delta = (0.0, 0.0);
+    let mut best_outside_normal = (0.0, 0.0);
+
+    for index in 0..footprint.len() {
+        let a = footprint[index];
+        let b = footprint[(index + 1) % footprint.len()];
+        let edge_x = b[0] - a[0];
+        let edge_z = b[1] - a[1];
+        let edge_len_sq = edge_x * edge_x + edge_z * edge_z;
+        if edge_len_sq <= COLLISION_EPSILON {
+            continue;
+        }
+
+        let edge_len = edge_len_sq.sqrt();
+        let outward = if ccw {
+            [edge_z / edge_len, -edge_x / edge_len]
+        } else {
+            [-edge_z / edge_len, edge_x / edge_len]
+        };
+        let signed_outward_distance = (x - a[0]) * outward[0] + (z - a[1]) * outward[1];
+        if signed_outward_distance > COLLISION_EPSILON {
+            inside = false;
+        }
+
+        let push_amount = padding - signed_outward_distance;
+        if push_amount >= 0.0 && push_amount < best_inside_push.0 {
+            best_inside_push = (push_amount, outward[0], outward[1]);
+        }
+
+        let segment_t = (((x - a[0]) * edge_x + (z - a[1]) * edge_z) / edge_len_sq).clamp(0.0, 1.0);
+        let closest_x = a[0] + edge_x * segment_t;
+        let closest_z = a[1] + edge_z * segment_t;
+        let delta_x = x - closest_x;
+        let delta_z = z - closest_z;
+        let distance_sq = delta_x * delta_x + delta_z * delta_z;
+        if distance_sq < best_outside_distance_sq {
+            best_outside_distance_sq = distance_sq;
+            best_outside_delta = (delta_x, delta_z);
+            best_outside_normal = (outward[0], outward[1]);
+        }
+    }
+
+    if inside {
+        if best_inside_push.0.is_finite() {
+            return (
+                x + best_inside_push.1 * best_inside_push.0,
+                z + best_inside_push.2 * best_inside_push.0,
+            );
+        }
+        return (x, z);
+    }
+
+    let padding_sq = padding * padding;
+    if best_outside_distance_sq >= padding_sq {
+        return (x, z);
+    }
+
+    if best_outside_distance_sq <= COLLISION_EPSILON {
+        return (
+            x + best_outside_normal.0 * padding,
+            z + best_outside_normal.1 * padding,
+        );
+    }
+
+    let distance = best_outside_distance_sq.sqrt();
+    let push_amount = padding - distance;
+    (
+        x + best_outside_delta.0 / distance * push_amount,
+        z + best_outside_delta.1 / distance * push_amount,
+    )
+}
+
+fn convex_hull_2d(mut points: Vec<[f32; 2]>) -> Vec<[f32; 2]> {
+    points.retain(|point| point[0].is_finite() && point[1].is_finite());
+    points.sort_by(|a, b| {
+        a[0].total_cmp(&b[0])
+            .then_with(|| a[1].total_cmp(&b[1]))
+    });
+    points.dedup_by(|a, b| {
+        (a[0] - b[0]).abs() <= COLLISION_EPSILON && (a[1] - b[1]).abs() <= COLLISION_EPSILON
+    });
+
+    if points.len() <= 2 {
+        return points;
+    }
+
+    let mut lower: Vec<[f32; 2]> = Vec::new();
+    for point in &points {
+        while lower.len() >= 2
+            && cross_2d(lower[lower.len() - 2], lower[lower.len() - 1], *point)
+                <= COLLISION_EPSILON
+        {
+            lower.pop();
+        }
+        lower.push(*point);
+    }
+
+    let mut upper: Vec<[f32; 2]> = Vec::new();
+    for point in points.iter().rev() {
+        while upper.len() >= 2
+            && cross_2d(upper[upper.len() - 2], upper[upper.len() - 1], *point)
+                <= COLLISION_EPSILON
+        {
+            upper.pop();
+        }
+        upper.push(*point);
+    }
+
+    lower.pop();
+    upper.pop();
+    lower.extend(upper);
+    lower
+}
+
+fn cross_2d(a: [f32; 2], b: [f32; 2], c: [f32; 2]) -> f32 {
+    (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])
+}
+
+fn polygon_area_signed(points: &[[f32; 2]]) -> f32 {
+    if points.len() < 3 {
+        return 0.0;
+    }
+
+    let mut area = 0.0;
+    for index in 0..points.len() {
+        let a = points[index];
+        let b = points[(index + 1) % points.len()];
+        area += a[0] * b[1] - b[0] * a[1];
+    }
+    area * 0.5
+}
+
 fn try_world_gameplay_box_hit(
     best: &mut Option<WorldRayHit>,
     request: WorldRaycastRequest,
@@ -3592,15 +3895,15 @@ fn raycast_centered_aabb(
 mod tests {
     use super::{
         assert_no_full_rotation_movement_boxes, mesh_instance_bounds,
-        parse_gameplay_collision_boxes, parse_gameplay_query_meshes, quaternion_to_axes,
-        raycast_gameplay_collision_boxes, raycast_gameplay_query_meshes,
-        raycast_movement_and_query_collision_boxes, raycast_query_mesh_geometry_bvh,
-        raycast_query_mesh_geometry_linear, resolve_world_spawn_position_with_layout_for_scene,
-        transform_point, transform_vector, try_world_gameplay_box_hit, Aabb3,
-        GameplayBoxBroadphase, GameplayCollisionBox, GameplayCollisionBoxFile,
-        GameplayCollisionLayoutFile, GameplayQueryMeshBvh, GameplayQueryMeshGeometry,
-        GameplayQueryMeshGeometryFile, GameplayQueryMeshInstance, GameplayQueryMeshInstanceFile,
-        GameplayQueryMeshSet, MAX_QUERY_MESH_TRIANGLES_PER_COLLIDER,
+        parse_gameplay_collision_boxes, parse_gameplay_query_meshes, polygon_area_signed,
+        push_out_convex_footprint_2d, quaternion_to_axes, raycast_gameplay_collision_boxes,
+        raycast_gameplay_query_meshes, raycast_movement_and_query_collision_boxes,
+        raycast_query_mesh_geometry_bvh, raycast_query_mesh_geometry_linear,
+        resolve_world_spawn_position_with_layout_for_scene, transform_point, transform_vector,
+        try_world_gameplay_box_hit, Aabb3, GameplayBoxBroadphase, GameplayCollisionBox,
+        GameplayCollisionBoxFile, GameplayCollisionLayoutFile, GameplayQueryMeshBvh,
+        GameplayQueryMeshGeometry, GameplayQueryMeshGeometryFile, GameplayQueryMeshInstance,
+        GameplayQueryMeshInstanceFile, GameplayQueryMeshSet, MAX_QUERY_MESH_TRIANGLES_PER_COLLIDER,
     };
     use crate::arena::{WorldRayHit, WorldRaycastRequest};
     use crate::open_world_scene::{
@@ -3686,6 +3989,27 @@ mod tests {
             axis_z_y,
             axis_z_z,
         }
+    }
+
+    #[test]
+    fn movement_mesh_footprint_pushout_exits_inside_point() {
+        let footprint = vec![[-1.0, -1.0], [1.0, -1.0], [1.0, 1.0], [-1.0, 1.0]];
+        assert!(polygon_area_signed(&footprint) > 0.0);
+
+        let (x, z) = push_out_convex_footprint_2d(0.0, 0.0, &footprint, TEST_PLAYER_RADIUS);
+
+        assert_eq!(x, 0.0);
+        assert!((z + 1.0 + TEST_PLAYER_RADIUS).abs() < 0.0001);
+    }
+
+    #[test]
+    fn movement_mesh_footprint_pushout_handles_near_outside_point() {
+        let footprint = vec![[-1.0, -1.0], [1.0, -1.0], [1.0, 1.0], [-1.0, 1.0]];
+
+        let (x, z) = push_out_convex_footprint_2d(1.2, 0.0, &footprint, TEST_PLAYER_RADIUS);
+
+        assert!((x - (1.0 + TEST_PLAYER_RADIUS)).abs() < 0.0001);
+        assert_eq!(z, 0.0);
     }
 
     fn assert_hit_t_close(actual: Option<WorldRayHit>, expected: Option<WorldRayHit>) {

@@ -1,0 +1,34 @@
+{
+  "treatArenaGameplayCollisionBoxesAsReplacementDebt": true,
+  "treatMissingMovementCollisionAsGenerationCandidate": true,
+  "badMovementBoxVolumeRatio": 2.5,
+  "badGeneratedHullSolidFitRatio": 1.35,
+  "maxMovementHullCount": 16,
+  "maxVerticesPerMovementHull": 64,
+  "maxQueryTrianglesPerMesh": 512,
+  "maxQueryTrianglesPerAsset": 4096,
+  "treatTinyNoQueryAssetsAsCollisionRemovalCandidates": true,
+  "tinyNoQueryCollisionMaxSourceExtent": 0.75,
+  "tinyNoQueryCollisionMaxSourceVolume": 0.25,
+  "enableAdaptiveCompoundMovementHulls": true,
+  "compoundHullMaxSegments": 3,
+  "compoundHullMinSourceMaxExtent": 3.0,
+  "compoundHullMinHeightRatio": 0.45,
+  "compoundHullTargetSegmentExtent": 8.0,
+  "compoundHullSegmentOverlapRatio": 0.08,
+  "generatedToolVersion": "support_silhouette_compound_adaptive_v1",
+  "generatedParameterProfile": "adaptive support silhouette with deterministic longest-axis compound slabs for large non-flat assets; flat/wide slabs remain single hulls; tall 7x8, balanced 5x12, wide/flat 4x14; actual source support points; 64 vertices max per hull",
+  "generatedMeshPathTokens": [
+    "GeneratedCollision",
+    "CollisionMesh",
+    "Simplified",
+    "VHACD",
+    "V-HACD",
+    "CoACD"
+  ],
+  "decompositionToolNames": [
+    "VHACD",
+    "V-HACD",
+    "CoACD"
+  ]
+}

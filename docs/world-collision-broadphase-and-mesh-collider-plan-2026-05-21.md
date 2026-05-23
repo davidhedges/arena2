@@ -57,6 +57,12 @@ Current branch status:
 - Early audit of placed rocks showed ordinary X/Z tilt on environment props. Full-rotation query `BoxCollider` support is now implemented as `obb_xyz` export data with quaternion rotation and server-side full-rotation OBB raycasts. Movement export can still flatten tilted boxes to conservative AABBs.
 - Query mesh export, server parse/preload, prototype/instance encoding, per-instance broadphase, per-geometry deterministic BVH, and exact ray-vs-triangle projectile/LOS hits are implemented. Mesh hits are merged with query boxes, movement fallback boxes, heightfield behavior, and generated open-world geometry by nearest hit.
 - A harness run against a mesh-authored `giant_skeleton` setup validated the runtime path with `1,046` mesh broadphase candidates, `1,678` BVH node tests, `140` triangle tests, and `0` mesh full-scan fallbacks. This confirms the mesh path is active; broader performance campaigns and Unity `full_client` presentation costs remain separate work.
+- The generated-collision optimization phase has started with an asset-scoped Unity editor evaluator, `Arena/OpenWorld/Collision Optimization/1 Evaluate Selected Variant Assets`. It loads selected Arena environment variant prefabs in isolation, compares source visual meshes, preserved author colliders, current movement boxes, raw query meshes, simplified/generated query meshes, generated convex movement hull candidates, and unsupported capsules, then writes `Assets/Arena/Content/Settings/OpenWorld/generated_collision_optimizer_evaluation_report.json`. The workflow is read-only for prefab collision and is controlled by `Assets/Arena/Content/Settings/OpenWorld/generated_collision_optimizer_settings.json`. Because the current generated `ArenaGameplayCollision` boxes are known broad placeholders, the evaluator treats them as replacement debt by default; assets with query/source solid geometry but no movement collision are also treated as generated movement-collision candidates.
+- The first asset-scoped generator entry point now exists at `Arena/OpenWorld/Collision Optimization/2 Generate Selected Movement Hull Candidates`. It generates explicit convex movement-candidate mesh assets under `Assets/Arena/Content/Prefabs/OpenWorld/GeneratedCollision/` from selected variant query-mesh geometry, attaches them under `ArenaGeneratedMovementCollision` review children on `Default`, and preserves the old movement boxes until evaluator/budget review passes. The current profile is `support_silhouette_compound_adaptive_v1`: large non-flat assets are split into deterministic longest-axis compound slabs, then each slab uses an adaptive support profile. Flat/wide slabs stay as one hull because horizontal partition hulls create misleading vertical movement blockers. Tall slabs use 7 height slices x 8 radial sectors, balanced slabs use 5 x 12, and flat/wide slabs use 4 x 14, all staying within 64 vertices per hull. Support points are selected from actual source mesh X/Z positions instead of projected beyond source bounds. This is a deterministic support-silhouette candidate workflow, not V-HACD decomposition yet.
+- Tiny no-query-mesh props can now be classified as collision-removal candidates instead of hull-generation candidates. The evaluator uses the configured `tinyNoQueryCollisionMaxSourceExtent` and `tinyNoQueryCollisionMaxSourceVolume` thresholds, and `Arena/OpenWorld/Collision Optimization/3 Remove Selected Tiny Collision` removes only Arena-owned collision children from selected tiny variants that pass that no-query-mesh gate.
+- Generated movement hulls now have their own fit gate, `badGeneratedHullSolidFitRatio`, so assets whose generated single hull is too conservative are flagged for a better compound/decomposition pass instead of being marked ready for replacement review.
+- Reviewed generated movement hulls can now be promoted with `Arena/OpenWorld/Collision Optimization/4 Accept Selected Generated Movement Collision`. The accept step copies enabled convex generated hull `MeshCollider`s onto the `GameplayCollision` layer under `ArenaGameplayCollision`, removes the old Arena-owned movement-collision roots for that selected variant, and leaves query collision untouched.
+- Movement collision export now writes convex `GameplayCollision` mesh hulls into the existing collision JSON `mesh_geometries` and `mesh_instances` fields alongside movement boxes. The server loads those accepted hulls from arena and open-world scene collision JSON, reduces each convex mesh to a world-space vertical band plus convex X/Z footprint, and uses iterative circle-vs-convex-footprint pushout for authoritative horizontal movement. This keeps generated hull runtime cost proportional to accepted hull count; it does not use raw visual triangle meshes for movement.
 
 ## Design Direction
 
@@ -89,6 +95,7 @@ Interim authoring decision for bad boxes:
 - Treat bad movement boxes as replacement candidates for generated movement collision, such as V-HACD/compound hull output.
 - Once generated movement collision exists and is exported for an asset, remove or disable the old bad `GameplayCollision` box.
 - Track these as intentional debt, not as acceptable final authoring.
+- Acceptance workflow is now explicit: evaluate selected variants, generate movement hull candidates, spot-check the generated review children, accept selected generated movement collision, then rerun the world-data exporter and rebuild the server so the baked JSON and WASM include the promoted hulls.
 
 ### Projectile and Line-of-Sight Collision
 
@@ -492,9 +499,9 @@ This is lower priority than the broadphase and authoring split for current box d
 
 ## Recommended Next Step
 
-Move on to generated collision optimization for assets where hand-authored boxes are not acceptable.
+Use the asset-scoped workflow to accept a small reviewed batch of rocks, export active-scene world data, rebuild the server, and test player movement around the accepted assets before accepting the whole folder.
 
-Recommended first optimization slice:
+Then continue generated collision optimization for assets where hand-authored boxes are not acceptable:
 
 - Build an asset-scoped optimizer/evaluator workflow, not a blind scene-wide mutation.
 - Compare manual/source colliders, raw query meshes, simplified query meshes, and generated compound hulls on the same prefab variant.
