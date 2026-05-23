@@ -292,6 +292,8 @@ namespace Arena.Input
         }
 
         public Vector2 ResolveHorizontalCollision(
+            float startX,
+            float startZ,
             float desiredX,
             float desiredZ,
             float playerRadius,
@@ -344,6 +346,16 @@ namespace Arena.Input
             }
 
             return ResolveGameplayHorizontalCollision(outX, outZ, playerRadius, playerHeight, currentY);
+        }
+
+        public Vector2 ResolveHorizontalCollision(
+            float desiredX,
+            float desiredZ,
+            float playerRadius,
+            float playerHeight,
+            float currentY)
+        {
+            return ResolveHorizontalCollision(desiredX, desiredZ, desiredX, desiredZ, playerRadius, playerHeight, currentY);
         }
 
         private Vector2 ResolveGameplayHorizontalCollision(

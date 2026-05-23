@@ -369,6 +369,68 @@ pub fn resolve_world_horizontal_collision_y_with_layout_for_scene(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
+pub fn resolve_world_horizontal_sweep_collision_y_with_layout_for_scene(
+    arena_seed: Option<u64>,
+    flat_ground_only: bool,
+    open_world_scene_name: Option<&str>,
+    start_x: f32,
+    start_z: f32,
+    target_x: f32,
+    target_z: f32,
+    player_radius: f32,
+    player_height: f32,
+    current_y: f32,
+) -> (f32, f32) {
+    if flat_ground_only {
+        return (target_x, target_z);
+    }
+
+    let profile = open_world_profile_from_name(open_world_scene_name);
+    let (out_x, out_z) = if let Some(seed) = arena_seed {
+        resolve_arena_horizontal_collision_y(
+            seed,
+            target_x,
+            target_z,
+            player_radius,
+            current_y,
+            player_height,
+        )
+    } else {
+        resolve_open_world_horizontal_collision_y(
+            profile,
+            target_x,
+            target_z,
+            player_radius,
+            player_height,
+            current_y,
+        )
+    };
+
+    if arena_seed.is_some() {
+        resolve_gameplay_horizontal_sweep_collision_y(
+            start_x,
+            start_z,
+            out_x,
+            out_z,
+            player_radius,
+            player_height,
+            current_y,
+        )
+    } else {
+        resolve_open_world_gameplay_horizontal_sweep_collision_y(
+            profile,
+            start_x,
+            start_z,
+            out_x,
+            out_z,
+            player_radius,
+            player_height,
+            current_y,
+        )
+    }
+}
+
 #[allow(dead_code)]
 pub fn surface_height_for_world_at_y(
     arena_seed: Option<u64>,
@@ -1089,6 +1151,131 @@ fn resolve_open_world_gameplay_horizontal_collision_y(
     (out_x, out_z)
 }
 
+fn resolve_gameplay_horizontal_sweep_collision_y(
+    start_x: f32,
+    start_z: f32,
+    target_x: f32,
+    target_z: f32,
+    player_radius: f32,
+    player_height: f32,
+    current_y: f32,
+) -> (f32, f32) {
+    let mut out_x = target_x;
+    let mut out_z = target_z;
+
+    for _ in 0..OPEN_WORLD_COLLISION_ITERS {
+        for collider in gameplay_collision_boxes() {
+            if !gameplay_box_overlaps_player_band(*collider, current_y, player_height) {
+                continue;
+            }
+
+            if let Some((resolved_x, resolved_z)) = resolve_swept_gameplay_box_2d(
+                *collider,
+                start_x,
+                start_z,
+                out_x,
+                out_z,
+                player_radius,
+            ) {
+                if resolved_x == start_x && resolved_z == start_z {
+                    return (start_x, start_z);
+                }
+                out_x = resolved_x;
+                out_z = resolved_z;
+            }
+        }
+
+        for hull in gameplay_movement_mesh_hulls() {
+            if !gameplay_movement_mesh_hull_overlaps_player_band(hull, current_y, player_height) {
+                continue;
+            }
+
+            if let Some((resolved_x, resolved_z)) = resolve_swept_convex_footprint_2d(
+                &hull.footprint,
+                start_x,
+                start_z,
+                out_x,
+                out_z,
+                player_radius,
+            ) {
+                if resolved_x == start_x && resolved_z == start_z {
+                    return (start_x, start_z);
+                }
+                out_x = resolved_x;
+                out_z = resolved_z;
+            }
+        }
+    }
+
+    (out_x, out_z)
+}
+
+fn resolve_open_world_gameplay_horizontal_sweep_collision_y(
+    profile: &OpenWorldSceneProfile,
+    start_x: f32,
+    start_z: f32,
+    target_x: f32,
+    target_z: f32,
+    player_radius: f32,
+    player_height: f32,
+    current_y: f32,
+) -> (f32, f32) {
+    let mut out_x = target_x;
+    let mut out_z = target_z;
+
+    for _ in 0..OPEN_WORLD_COLLISION_ITERS {
+        for collider in open_world_gameplay_collision_boxes(profile) {
+            if !gameplay_box_overlaps_player_band(*collider, current_y, player_height) {
+                continue;
+            }
+            if gameplay_box_can_step_up(*collider, current_y) {
+                continue;
+            }
+
+            if let Some((resolved_x, resolved_z)) = resolve_swept_gameplay_box_2d(
+                *collider,
+                start_x,
+                start_z,
+                out_x,
+                out_z,
+                player_radius,
+            ) {
+                if resolved_x == start_x && resolved_z == start_z {
+                    return (start_x, start_z);
+                }
+                out_x = resolved_x;
+                out_z = resolved_z;
+            }
+        }
+
+        for hull in open_world_gameplay_movement_mesh_hulls(profile) {
+            if !gameplay_movement_mesh_hull_overlaps_player_band(hull, current_y, player_height) {
+                continue;
+            }
+            if gameplay_movement_mesh_hull_can_step_up(hull, current_y) {
+                continue;
+            }
+
+            if let Some((resolved_x, resolved_z)) = resolve_swept_convex_footprint_2d(
+                &hull.footprint,
+                start_x,
+                start_z,
+                out_x,
+                out_z,
+                player_radius,
+            ) {
+                if resolved_x == start_x && resolved_z == start_z {
+                    return (start_x, start_z);
+                }
+                out_x = resolved_x;
+                out_z = resolved_z;
+            }
+        }
+    }
+
+    (out_x, out_z)
+}
+
 fn open_world_point_hits_geometry(
     profile: &OpenWorldSceneProfile,
     x: f32,
@@ -1312,6 +1499,129 @@ fn gameplay_box_contains_point_2d(collider: GameplayCollisionBox, x: f32, z: f32
                 && z <= bounds.max_z + COLLISION_EPSILON
         }
     }
+}
+
+fn gameplay_box_overlaps_point_2d(
+    collider: GameplayCollisionBox,
+    x: f32,
+    z: f32,
+    padding: f32,
+) -> bool {
+    if !padding.is_finite() || padding < 0.0 {
+        return false;
+    }
+
+    match collider {
+        GameplayCollisionBox::Aabb {
+            center_x,
+            center_z,
+            half_x,
+            half_z,
+            ..
+        } => aabb_overlaps_point_2d(x, z, center_x, center_z, half_x, half_z, padding),
+        GameplayCollisionBox::ObbY {
+            center_x,
+            center_z,
+            half_x,
+            half_z,
+            sin_y,
+            cos_y,
+            ..
+        } => {
+            let rel_x = x - center_x;
+            let rel_z = z - center_z;
+            let local_x = rel_x * cos_y - rel_z * sin_y;
+            let local_z = rel_x * sin_y + rel_z * cos_y;
+            aabb_overlaps_point_2d(local_x, local_z, 0.0, 0.0, half_x, half_z, padding)
+        }
+        GameplayCollisionBox::ObbXyz { .. } => {
+            let bounds = Aabb3::from_gameplay_box(collider);
+            aabb_overlaps_point_2d(
+                x,
+                z,
+                (bounds.min_x + bounds.max_x) * 0.5,
+                (bounds.min_z + bounds.max_z) * 0.5,
+                (bounds.max_x - bounds.min_x) * 0.5,
+                (bounds.max_z - bounds.min_z) * 0.5,
+                padding,
+            )
+        }
+    }
+}
+
+fn resolve_swept_gameplay_box_2d(
+    collider: GameplayCollisionBox,
+    start_x: f32,
+    start_z: f32,
+    target_x: f32,
+    target_z: f32,
+    padding: f32,
+) -> Option<(f32, f32)> {
+    let target_overlaps = gameplay_box_overlaps_point_2d(collider, target_x, target_z, padding);
+    if !target_overlaps {
+        return None;
+    }
+
+    let start_overlaps = gameplay_box_overlaps_point_2d(collider, start_x, start_z, padding);
+    if !start_overlaps {
+        return Some((start_x, start_z));
+    }
+
+    Some(push_out_gameplay_box_2d(
+        collider, target_x, target_z, padding,
+    ))
+}
+
+fn push_out_gameplay_box_2d(
+    collider: GameplayCollisionBox,
+    x: f32,
+    z: f32,
+    padding: f32,
+) -> (f32, f32) {
+    match collider {
+        GameplayCollisionBox::ObbY {
+            center_x,
+            center_z,
+            half_x,
+            half_z,
+            sin_y,
+            cos_y,
+            ..
+        } => push_out_obb_y_2d(
+            x, z, center_x, center_z, half_x, half_z, padding, sin_y, cos_y,
+        ),
+        GameplayCollisionBox::Aabb {
+            center_x,
+            center_z,
+            half_x,
+            half_z,
+            ..
+        } => push_out_aabb_2d(x, z, center_x, center_z, half_x, half_z, padding),
+        GameplayCollisionBox::ObbXyz { .. } => {
+            let bounds = Aabb3::from_gameplay_box(collider);
+            push_out_aabb_2d(
+                x,
+                z,
+                (bounds.min_x + bounds.max_x) * 0.5,
+                (bounds.min_z + bounds.max_z) * 0.5,
+                (bounds.max_x - bounds.min_x) * 0.5,
+                (bounds.max_z - bounds.min_z) * 0.5,
+                padding,
+            )
+        }
+    }
+}
+
+fn aabb_overlaps_point_2d(
+    x: f32,
+    z: f32,
+    cx: f32,
+    cz: f32,
+    half_x: f32,
+    half_z: f32,
+    padding: f32,
+) -> bool {
+    (x - cx).abs() < half_x + padding && (z - cz).abs() < half_z + padding
 }
 
 fn for_each_open_world_collider(profile: &OpenWorldSceneProfile, mut emit: impl FnMut(Collider)) {
@@ -3267,12 +3577,85 @@ fn push_out_convex_footprint_2d(
     )
 }
 
+fn convex_footprint_overlaps_point_2d(
+    footprint: &[[f32; 2]],
+    x: f32,
+    z: f32,
+    padding: f32,
+) -> bool {
+    if footprint.len() < 3 || !padding.is_finite() || padding < 0.0 {
+        return false;
+    }
+
+    let area = polygon_area_signed(footprint);
+    if area.abs() <= COLLISION_EPSILON {
+        return false;
+    }
+
+    let ccw = area > 0.0;
+    let mut inside = true;
+    let mut best_outside_distance_sq = f32::INFINITY;
+
+    for index in 0..footprint.len() {
+        let a = footprint[index];
+        let b = footprint[(index + 1) % footprint.len()];
+        let edge_x = b[0] - a[0];
+        let edge_z = b[1] - a[1];
+        let edge_len_sq = edge_x * edge_x + edge_z * edge_z;
+        if edge_len_sq <= COLLISION_EPSILON {
+            continue;
+        }
+
+        let edge_len = edge_len_sq.sqrt();
+        let outward = if ccw {
+            [edge_z / edge_len, -edge_x / edge_len]
+        } else {
+            [-edge_z / edge_len, edge_x / edge_len]
+        };
+        let signed_outward_distance = (x - a[0]) * outward[0] + (z - a[1]) * outward[1];
+        if signed_outward_distance > COLLISION_EPSILON {
+            inside = false;
+        }
+
+        let segment_t = (((x - a[0]) * edge_x + (z - a[1]) * edge_z) / edge_len_sq).clamp(0.0, 1.0);
+        let closest_x = a[0] + edge_x * segment_t;
+        let closest_z = a[1] + edge_z * segment_t;
+        let delta_x = x - closest_x;
+        let delta_z = z - closest_z;
+        best_outside_distance_sq =
+            best_outside_distance_sq.min(delta_x * delta_x + delta_z * delta_z);
+    }
+
+    inside || best_outside_distance_sq < padding * padding
+}
+
+fn resolve_swept_convex_footprint_2d(
+    footprint: &[[f32; 2]],
+    start_x: f32,
+    start_z: f32,
+    target_x: f32,
+    target_z: f32,
+    padding: f32,
+) -> Option<(f32, f32)> {
+    let target_overlaps =
+        convex_footprint_overlaps_point_2d(footprint, target_x, target_z, padding);
+    if !target_overlaps {
+        return None;
+    }
+
+    let start_overlaps = convex_footprint_overlaps_point_2d(footprint, start_x, start_z, padding);
+    if !start_overlaps {
+        return Some((start_x, start_z));
+    }
+
+    Some(push_out_convex_footprint_2d(
+        target_x, target_z, footprint, padding,
+    ))
+}
+
 fn convex_hull_2d(mut points: Vec<[f32; 2]>) -> Vec<[f32; 2]> {
     points.retain(|point| point[0].is_finite() && point[1].is_finite());
-    points.sort_by(|a, b| {
-        a[0].total_cmp(&b[0])
-            .then_with(|| a[1].total_cmp(&b[1]))
-    });
+    points.sort_by(|a, b| a[0].total_cmp(&b[0]).then_with(|| a[1].total_cmp(&b[1])));
     points.dedup_by(|a, b| {
         (a[0] - b[0]).abs() <= COLLISION_EPSILON && (a[1] - b[1]).abs() <= COLLISION_EPSILON
     });
@@ -3284,8 +3667,7 @@ fn convex_hull_2d(mut points: Vec<[f32; 2]>) -> Vec<[f32; 2]> {
     let mut lower: Vec<[f32; 2]> = Vec::new();
     for point in &points {
         while lower.len() >= 2
-            && cross_2d(lower[lower.len() - 2], lower[lower.len() - 1], *point)
-                <= COLLISION_EPSILON
+            && cross_2d(lower[lower.len() - 2], lower[lower.len() - 1], *point) <= COLLISION_EPSILON
         {
             lower.pop();
         }
@@ -3295,8 +3677,7 @@ fn convex_hull_2d(mut points: Vec<[f32; 2]>) -> Vec<[f32; 2]> {
     let mut upper: Vec<[f32; 2]> = Vec::new();
     for point in points.iter().rev() {
         while upper.len() >= 2
-            && cross_2d(upper[upper.len() - 2], upper[upper.len() - 1], *point)
-                <= COLLISION_EPSILON
+            && cross_2d(upper[upper.len() - 2], upper[upper.len() - 1], *point) <= COLLISION_EPSILON
         {
             upper.pop();
         }
@@ -3899,6 +4280,7 @@ mod tests {
         push_out_convex_footprint_2d, quaternion_to_axes, raycast_gameplay_collision_boxes,
         raycast_gameplay_query_meshes, raycast_movement_and_query_collision_boxes,
         raycast_query_mesh_geometry_bvh, raycast_query_mesh_geometry_linear,
+        resolve_swept_convex_footprint_2d, resolve_swept_gameplay_box_2d,
         resolve_world_spawn_position_with_layout_for_scene, transform_point, transform_vector,
         try_world_gameplay_box_hit, Aabb3, GameplayBoxBroadphase, GameplayCollisionBox,
         GameplayCollisionBoxFile, GameplayCollisionLayoutFile, GameplayQueryMeshBvh,
@@ -4010,6 +4392,33 @@ mod tests {
 
         assert!((x - (1.0 + TEST_PLAYER_RADIUS)).abs() < 0.0001);
         assert_eq!(z, 0.0);
+    }
+
+    #[test]
+    fn swept_movement_blocks_outside_to_inside_box_entry() {
+        let collider = GameplayCollisionBox::Aabb {
+            center_x: 0.0,
+            center_y: 0.0,
+            center_z: 0.0,
+            half_x: 0.5,
+            half_y: 1.0,
+            half_z: 0.5,
+        };
+
+        let resolved =
+            resolve_swept_gameplay_box_2d(collider, -1.0, 0.0, -0.9, 0.0, TEST_PLAYER_RADIUS);
+
+        assert_eq!(resolved, Some((-1.0, 0.0)));
+    }
+
+    #[test]
+    fn swept_movement_blocks_outside_to_inside_convex_entry() {
+        let footprint = vec![[-0.5, -0.5], [0.5, -0.5], [0.5, 0.5], [-0.5, 0.5]];
+
+        let resolved =
+            resolve_swept_convex_footprint_2d(&footprint, -1.0, 0.0, -0.9, 0.0, TEST_PLAYER_RADIUS);
+
+        assert_eq!(resolved, Some((-1.0, 0.0)));
     }
 
     fn assert_hit_t_close(actual: Option<WorldRayHit>, expected: Option<WorldRayHit>) {

@@ -79,7 +79,7 @@ use crate::spells::{
     tick_bespoke_spells_with_snapshots,
 };
 use crate::world_collision::{
-    preload_world_collision_data, resolve_world_horizontal_collision_y_with_layout_for_scene,
+    preload_world_collision_data, resolve_world_horizontal_sweep_collision_y_with_layout_for_scene,
     surface_height_for_world_at_y_with_layout, surface_height_for_world_at_y_with_layout_for_scene,
 };
 
@@ -782,16 +782,21 @@ fn simulate_non_dummy_player_kinematics(
     let mut next_z = physics.pos_z;
 
     for _ in 0..step_count {
-        let (resolved_x, resolved_z) = resolve_world_horizontal_collision_y_with_layout_for_scene(
-            arena_seed,
-            flat_ground_only,
-            Some(open_world_scene_name.as_str()),
-            next_x + step_x,
-            next_z + step_z,
-            hit_radius.max(0.1),
-            hit_height.max(0.5),
-            physics.pos_y,
-        );
+        let target_x = next_x + step_x;
+        let target_z = next_z + step_z;
+        let (resolved_x, resolved_z) =
+            resolve_world_horizontal_sweep_collision_y_with_layout_for_scene(
+                arena_seed,
+                flat_ground_only,
+                Some(open_world_scene_name.as_str()),
+                next_x,
+                next_z,
+                target_x,
+                target_z,
+                hit_radius.max(0.1),
+                hit_height.max(0.5),
+                physics.pos_y,
+            );
         next_x = resolved_x;
         next_z = resolved_z;
     }

@@ -193,6 +193,8 @@ namespace Arena.Input
         {
             public int version = 1;
             public GameplayCollisionBoxFile[] boxes = Array.Empty<GameplayCollisionBoxFile>();
+            public GameplayCollisionMeshGeometryFile[] mesh_geometries = Array.Empty<GameplayCollisionMeshGeometryFile>();
+            public GameplayCollisionMeshInstanceFile[] mesh_instances = Array.Empty<GameplayCollisionMeshInstanceFile>();
         }
 
         [Serializable]
@@ -202,6 +204,21 @@ namespace Arena.Input
             public float[] center = Array.Empty<float>();
             public float[] size = Array.Empty<float>();
             public float rotation_y_deg;
+        }
+
+        [Serializable]
+        private sealed class GameplayCollisionMeshGeometryFile
+        {
+            public string id = "";
+            public float[] vertices = Array.Empty<float>();
+        }
+
+        [Serializable]
+        private sealed class GameplayCollisionMeshInstanceFile
+        {
+            public string name = "";
+            public string geometry_id = "";
+            public float[] transform = Array.Empty<float>();
         }
 
         [Serializable]
@@ -360,6 +377,20 @@ namespace Arena.Input
             public float CosY { get; }
         }
 
+        private readonly struct GameplayMovementMeshHull
+        {
+            public GameplayMovementMeshHull(float yMin, float yMax, Vector2[] footprint)
+            {
+                YMin = yMin;
+                YMax = yMax;
+                Footprint = footprint;
+            }
+
+            public float YMin { get; }
+            public float YMax { get; }
+            public Vector2[] Footprint { get; }
+        }
+
         private readonly struct OpenWorldDisc
         {
             public OpenWorldDisc(float x, float z, float radius)
@@ -460,6 +491,7 @@ namespace Arena.Input
         private readonly OpenWorldSceneProfile _profile;
         private readonly OpenWorldCollider[] _openWorldColliders;
         private readonly GameplayCollisionBox[] _gameplayBoxes;
+        private readonly GameplayMovementMeshHull[] _gameplayMeshHulls;
         private readonly OpenWorldHeightfield? _heightfield;
 
         public static OpenWorldMovementEnvironment Shared => SharedLazy.Value;
@@ -482,11 +514,13 @@ namespace Arena.Input
             OpenWorldSceneProfile profile,
             OpenWorldCollider[] openWorldColliders,
             GameplayCollisionBox[] gameplayBoxes,
+            GameplayMovementMeshHull[] gameplayMeshHulls,
             OpenWorldHeightfield? heightfield)
         {
             _profile = profile;
             _openWorldColliders = openWorldColliders;
             _gameplayBoxes = gameplayBoxes;
+            _gameplayMeshHulls = gameplayMeshHulls;
             _heightfield = heightfield;
         }
 
@@ -544,6 +578,8 @@ namespace Arena.Input
         }
 
         public Vector2 ResolveHorizontalCollision(
+            float startX,
+            float startZ,
             float desiredX,
             float desiredZ,
             float playerRadius,
@@ -612,18 +648,30 @@ namespace Arena.Input
                 outZ = Mathf.Clamp(outZ, minZ, maxZ);
             }
 
-            return ResolveGameplayHorizontalCollision(outX, outZ, playerRadius, playerHeight, currentY);
+            return ResolveGameplayHorizontalCollision(startX, startZ, outX, outZ, playerRadius, playerHeight, currentY);
         }
 
-        private Vector2 ResolveGameplayHorizontalCollision(
-            float x,
-            float z,
+        public Vector2 ResolveHorizontalCollision(
+            float desiredX,
+            float desiredZ,
             float playerRadius,
             float playerHeight,
             float currentY)
         {
-            float outX = x;
-            float outZ = z;
+            return ResolveHorizontalCollision(desiredX, desiredZ, desiredX, desiredZ, playerRadius, playerHeight, currentY);
+        }
+
+        private Vector2 ResolveGameplayHorizontalCollision(
+            float startX,
+            float startZ,
+            float targetX,
+            float targetZ,
+            float playerRadius,
+            float playerHeight,
+            float currentY)
+        {
+            float outX = targetX;
+            float outZ = targetZ;
 
             for (int i = 0; i < OpenWorldCollisionIters; i++)
             {
@@ -634,25 +682,41 @@ namespace Arena.Input
                     if (GameplayBoxCanStepUp(collider, currentY))
                         continue;
 
-                    (outX, outZ) = collider.IsAabb
-                        ? PushOutAabb2D(
+                    if (ResolveSweptGameplayBox2D(
+                            collider,
+                            startX,
+                            startZ,
                             outX,
                             outZ,
-                            collider.CenterX,
-                            collider.CenterZ,
-                            collider.HalfX,
-                            collider.HalfZ,
-                            playerRadius)
-                        : PushOutObbY2D(
+                            playerRadius) is { } resolved)
+                    {
+                        if (resolved.x == startX && resolved.y == startZ)
+                            return new Vector2(startX, startZ);
+                        outX = resolved.x;
+                        outZ = resolved.y;
+                    }
+                }
+
+                foreach (GameplayMovementMeshHull hull in _gameplayMeshHulls)
+                {
+                    if (!GameplayMovementMeshHullOverlapsPlayerBand(hull, currentY, playerHeight))
+                        continue;
+                    if (GameplayMovementMeshHullCanStepUp(hull, currentY))
+                        continue;
+
+                    if (ResolveSweptConvexFootprint2D(
+                            hull.Footprint,
+                            startX,
+                            startZ,
                             outX,
                             outZ,
-                            collider.CenterX,
-                            collider.CenterZ,
-                            collider.HalfX,
-                            collider.HalfZ,
-                            playerRadius,
-                            collider.SinY,
-                            collider.CosY);
+                            playerRadius) is { } resolved)
+                    {
+                        if (resolved.x == startX && resolved.y == startZ)
+                            return new Vector2(startX, startZ);
+                        outX = resolved.x;
+                        outZ = resolved.y;
+                    }
                 }
             }
 
@@ -685,6 +749,7 @@ namespace Arena.Input
                 profile,
                 GenerateOpenWorldColliders(profile, heightfield),
                 LoadGameplayCollisionBoxes(profile),
+                LoadGameplayMovementMeshHulls(profile),
                 heightfield);
         }
 
@@ -791,6 +856,79 @@ namespace Arena.Input
             }
 
             return boxes;
+        }
+
+        private static GameplayMovementMeshHull[] LoadGameplayMovementMeshHulls(OpenWorldSceneProfile profile)
+        {
+            GameplayCollisionLayoutFile file =
+                MovementSharedDataLoader.LoadRequiredJson<GameplayCollisionLayoutFile>(
+                    profile.CollisionResourcePath,
+                    $"{profile.DataKey} gameplay collision");
+
+            GameplayCollisionMeshGeometryFile[] geometries =
+                file.mesh_geometries ?? Array.Empty<GameplayCollisionMeshGeometryFile>();
+            GameplayCollisionMeshInstanceFile[] instances =
+                file.mesh_instances ?? Array.Empty<GameplayCollisionMeshInstanceFile>();
+            if (geometries.Length == 0 || instances.Length == 0)
+                return Array.Empty<GameplayMovementMeshHull>();
+
+            var geometryById = new Dictionary<string, GameplayCollisionMeshGeometryFile>(StringComparer.Ordinal);
+            foreach (GameplayCollisionMeshGeometryFile geometry in geometries)
+            {
+                if (geometry == null || string.IsNullOrEmpty(geometry.id))
+                    continue;
+                geometryById[geometry.id] = geometry;
+            }
+
+            var hulls = new List<GameplayMovementMeshHull>(instances.Length);
+            foreach (GameplayCollisionMeshInstanceFile instance in instances)
+            {
+                if (instance == null ||
+                    string.IsNullOrEmpty(instance.geometry_id) ||
+                    !geometryById.TryGetValue(instance.geometry_id, out GameplayCollisionMeshGeometryFile geometry))
+                {
+                    continue;
+                }
+
+                if (TryBuildMovementMeshHull(instance, geometry, out GameplayMovementMeshHull hull))
+                    hulls.Add(hull);
+            }
+
+            return hulls.ToArray();
+        }
+
+        private static bool TryBuildMovementMeshHull(
+            GameplayCollisionMeshInstanceFile instance,
+            GameplayCollisionMeshGeometryFile geometry,
+            out GameplayMovementMeshHull hull)
+        {
+            hull = default;
+            float[] vertices = geometry.vertices ?? Array.Empty<float>();
+            float[] transform = instance.transform ?? Array.Empty<float>();
+            if (vertices.Length < 9 || vertices.Length % 3 != 0 || transform.Length != 16)
+                return false;
+
+            var points = new List<Vector2>(vertices.Length / 3);
+            float yMin = float.PositiveInfinity;
+            float yMax = float.NegativeInfinity;
+
+            for (int i = 0; i < vertices.Length; i += 3)
+            {
+                Vector3 point = TransformPoint(transform, vertices[i], vertices[i + 1], vertices[i + 2]);
+                if (!float.IsFinite(point.x) || !float.IsFinite(point.y) || !float.IsFinite(point.z))
+                    return false;
+
+                yMin = Mathf.Min(yMin, point.y);
+                yMax = Mathf.Max(yMax, point.y);
+                points.Add(new Vector2(point.x, point.z));
+            }
+
+            Vector2[] footprint = ConvexHull2D(points);
+            if (footprint.Length < 3 || Mathf.Abs(PolygonAreaSigned(footprint)) <= CollisionEpsilon)
+                return false;
+
+            hull = new GameplayMovementMeshHull(yMin, yMax, footprint);
+            return true;
         }
 
         private static void EmitOpenWorldTreeColliders(
@@ -907,6 +1045,21 @@ namespace Arena.Input
             return topY <= footY + GameplayBoxStepUpHeight;
         }
 
+        private static bool GameplayMovementMeshHullOverlapsPlayerBand(
+            GameplayMovementMeshHull hull,
+            float footY,
+            float playerHeight)
+        {
+            float headY = footY + Mathf.Max(playerHeight, 0.1f);
+            return headY > hull.YMin + CollisionEpsilon &&
+                   footY < hull.YMax - CollisionEpsilon;
+        }
+
+        private static bool GameplayMovementMeshHullCanStepUp(GameplayMovementMeshHull hull, float footY)
+        {
+            return hull.YMax <= footY + GameplayBoxStepUpHeight;
+        }
+
         private static bool GameplayBoxContainsPoint2D(GameplayCollisionBox collider, float x, float z)
         {
             if (collider.IsAabb)
@@ -921,6 +1074,84 @@ namespace Arena.Input
             float localZ = relX * collider.SinY + relZ * collider.CosY;
             return Mathf.Abs(localX) <= collider.HalfX + CollisionEpsilon &&
                    Mathf.Abs(localZ) <= collider.HalfZ + CollisionEpsilon;
+        }
+
+        private static Vector2? ResolveSweptGameplayBox2D(
+            GameplayCollisionBox collider,
+            float startX,
+            float startZ,
+            float targetX,
+            float targetZ,
+            float padding)
+        {
+            if (!GameplayBoxOverlapsPoint2D(collider, targetX, targetZ, padding))
+                return null;
+            if (!GameplayBoxOverlapsPoint2D(collider, startX, startZ, padding))
+                return new Vector2(startX, startZ);
+
+            (float pushedX, float pushedZ) = PushOutGameplayBox2D(collider, targetX, targetZ, padding);
+            return new Vector2(pushedX, pushedZ);
+        }
+
+        private static bool GameplayBoxOverlapsPoint2D(
+            GameplayCollisionBox collider,
+            float x,
+            float z,
+            float padding)
+        {
+            if (!float.IsFinite(padding) || padding < 0.0f)
+                return false;
+
+            if (collider.IsAabb)
+            {
+                return AabbOverlapsPoint2D(
+                    x,
+                    z,
+                    collider.CenterX,
+                    collider.CenterZ,
+                    collider.HalfX,
+                    collider.HalfZ,
+                    padding);
+            }
+
+            float relX = x - collider.CenterX;
+            float relZ = z - collider.CenterZ;
+            float localX = relX * collider.CosY - relZ * collider.SinY;
+            float localZ = relX * collider.SinY + relZ * collider.CosY;
+            return AabbOverlapsPoint2D(localX, localZ, 0.0f, 0.0f, collider.HalfX, collider.HalfZ, padding);
+        }
+
+        private static bool AabbOverlapsPoint2D(
+            float x,
+            float z,
+            float centerX,
+            float centerZ,
+            float halfX,
+            float halfZ,
+            float padding)
+        {
+            return Mathf.Abs(x - centerX) < halfX + padding &&
+                   Mathf.Abs(z - centerZ) < halfZ + padding;
+        }
+
+        private static (float, float) PushOutGameplayBox2D(
+            GameplayCollisionBox collider,
+            float x,
+            float z,
+            float padding)
+        {
+            return collider.IsAabb
+                ? PushOutAabb2D(x, z, collider.CenterX, collider.CenterZ, collider.HalfX, collider.HalfZ, padding)
+                : PushOutObbY2D(
+                    x,
+                    z,
+                    collider.CenterX,
+                    collider.CenterZ,
+                    collider.HalfX,
+                    collider.HalfZ,
+                    padding,
+                    collider.SinY,
+                    collider.CosY);
         }
 
         private static float SlopeRadiusAtY(
@@ -971,6 +1202,144 @@ namespace Arena.Input
 
             float positiveT = (radius - radiusBottom) / (radiusTop - radiusBottom);
             return yMin + (yMax - yMin) * positiveT;
+        }
+
+        private static Vector2? ResolveSweptConvexFootprint2D(
+            Vector2[] footprint,
+            float startX,
+            float startZ,
+            float targetX,
+            float targetZ,
+            float padding)
+        {
+            if (!ConvexFootprintOverlapsPoint2D(footprint, targetX, targetZ, padding))
+                return null;
+            if (!ConvexFootprintOverlapsPoint2D(footprint, startX, startZ, padding))
+                return new Vector2(startX, startZ);
+
+            (float pushedX, float pushedZ) = PushOutConvexFootprint2D(targetX, targetZ, footprint, padding);
+            return new Vector2(pushedX, pushedZ);
+        }
+
+        private static bool ConvexFootprintOverlapsPoint2D(Vector2[] footprint, float x, float z, float padding)
+        {
+            if (footprint.Length < 3 || !float.IsFinite(padding) || padding < 0.0f)
+                return false;
+
+            float area = PolygonAreaSigned(footprint);
+            if (Mathf.Abs(area) <= CollisionEpsilon)
+                return false;
+
+            bool ccw = area > 0.0f;
+            bool inside = true;
+            float bestOutsideDistanceSq = float.PositiveInfinity;
+
+            for (int index = 0; index < footprint.Length; index++)
+            {
+                Vector2 a = footprint[index];
+                Vector2 b = footprint[(index + 1) % footprint.Length];
+                float edgeX = b.x - a.x;
+                float edgeZ = b.y - a.y;
+                float edgeLenSq = edgeX * edgeX + edgeZ * edgeZ;
+                if (edgeLenSq <= CollisionEpsilon)
+                    continue;
+
+                float edgeLen = Mathf.Sqrt(edgeLenSq);
+                Vector2 outward = ccw
+                    ? new Vector2(edgeZ / edgeLen, -edgeX / edgeLen)
+                    : new Vector2(-edgeZ / edgeLen, edgeX / edgeLen);
+                float signedOutwardDistance = (x - a.x) * outward.x + (z - a.y) * outward.y;
+                if (signedOutwardDistance > CollisionEpsilon)
+                    inside = false;
+
+                float segmentT = Mathf.Clamp01(((x - a.x) * edgeX + (z - a.y) * edgeZ) / edgeLenSq);
+                float closestX = a.x + edgeX * segmentT;
+                float closestZ = a.y + edgeZ * segmentT;
+                float deltaX = x - closestX;
+                float deltaZ = z - closestZ;
+                bestOutsideDistanceSq = Mathf.Min(bestOutsideDistanceSq, deltaX * deltaX + deltaZ * deltaZ);
+            }
+
+            return inside || bestOutsideDistanceSq < padding * padding;
+        }
+
+        private static (float, float) PushOutConvexFootprint2D(
+            float x,
+            float z,
+            Vector2[] footprint,
+            float padding)
+        {
+            if (footprint.Length < 3 || !float.IsFinite(padding) || padding < 0.0f)
+                return (x, z);
+
+            float area = PolygonAreaSigned(footprint);
+            if (Mathf.Abs(area) <= CollisionEpsilon)
+                return (x, z);
+
+            bool ccw = area > 0.0f;
+            bool inside = true;
+            float bestInsidePush = float.PositiveInfinity;
+            Vector2 bestInsideNormal = Vector2.zero;
+            float bestOutsideDistanceSq = float.PositiveInfinity;
+            Vector2 bestOutsideDelta = Vector2.zero;
+            Vector2 bestOutsideNormal = Vector2.zero;
+
+            for (int index = 0; index < footprint.Length; index++)
+            {
+                Vector2 a = footprint[index];
+                Vector2 b = footprint[(index + 1) % footprint.Length];
+                float edgeX = b.x - a.x;
+                float edgeZ = b.y - a.y;
+                float edgeLenSq = edgeX * edgeX + edgeZ * edgeZ;
+                if (edgeLenSq <= CollisionEpsilon)
+                    continue;
+
+                float edgeLen = Mathf.Sqrt(edgeLenSq);
+                Vector2 outward = ccw
+                    ? new Vector2(edgeZ / edgeLen, -edgeX / edgeLen)
+                    : new Vector2(-edgeZ / edgeLen, edgeX / edgeLen);
+                float signedOutwardDistance = (x - a.x) * outward.x + (z - a.y) * outward.y;
+                if (signedOutwardDistance > CollisionEpsilon)
+                    inside = false;
+
+                float pushAmount = padding - signedOutwardDistance;
+                if (pushAmount >= 0.0f && pushAmount < bestInsidePush)
+                {
+                    bestInsidePush = pushAmount;
+                    bestInsideNormal = outward;
+                }
+
+                float segmentT = Mathf.Clamp01(((x - a.x) * edgeX + (z - a.y) * edgeZ) / edgeLenSq);
+                float closestX = a.x + edgeX * segmentT;
+                float closestZ = a.y + edgeZ * segmentT;
+                Vector2 delta = new(x - closestX, z - closestZ);
+                float distanceSq = delta.sqrMagnitude;
+                if (distanceSq < bestOutsideDistanceSq)
+                {
+                    bestOutsideDistanceSq = distanceSq;
+                    bestOutsideDelta = delta;
+                    bestOutsideNormal = outward;
+                }
+            }
+
+            if (inside)
+            {
+                if (float.IsFinite(bestInsidePush))
+                    return (x + bestInsideNormal.x * bestInsidePush, z + bestInsideNormal.y * bestInsidePush);
+                return (x, z);
+            }
+
+            float paddingSq = padding * padding;
+            if (bestOutsideDistanceSq >= paddingSq)
+                return (x, z);
+            if (bestOutsideDistanceSq <= CollisionEpsilon)
+                return (x + bestOutsideNormal.x * padding, z + bestOutsideNormal.y * padding);
+
+            float distance = Mathf.Sqrt(bestOutsideDistanceSq);
+            float outsidePush = padding - distance;
+            return (
+                x + bestOutsideDelta.x / distance * outsidePush,
+                z + bestOutsideDelta.y / distance * outsidePush);
         }
 
         private static (float, float) PushOutCircle2D(float x, float z, float cx, float cz, float radius)
@@ -1055,6 +1424,85 @@ namespace Arena.Input
 
             float zSign = dz >= 0.0f ? 1.0f : -1.0f;
             return (x, z + zSign * penZ);
+        }
+
+        private static Vector2[] ConvexHull2D(List<Vector2> points)
+        {
+            points.RemoveAll(point => !float.IsFinite(point.x) || !float.IsFinite(point.y));
+            points.Sort((a, b) =>
+            {
+                int xCompare = a.x.CompareTo(b.x);
+                return xCompare != 0 ? xCompare : a.y.CompareTo(b.y);
+            });
+
+            for (int i = points.Count - 1; i > 0; i--)
+            {
+                if (Mathf.Abs(points[i].x - points[i - 1].x) <= CollisionEpsilon &&
+                    Mathf.Abs(points[i].y - points[i - 1].y) <= CollisionEpsilon)
+                {
+                    points.RemoveAt(i);
+                }
+            }
+
+            if (points.Count <= 2)
+                return points.ToArray();
+
+            var lower = new List<Vector2>();
+            foreach (Vector2 point in points)
+            {
+                while (lower.Count >= 2 &&
+                       Cross2D(lower[lower.Count - 2], lower[lower.Count - 1], point) <= CollisionEpsilon)
+                {
+                    lower.RemoveAt(lower.Count - 1);
+                }
+                lower.Add(point);
+            }
+
+            var upper = new List<Vector2>();
+            for (int i = points.Count - 1; i >= 0; i--)
+            {
+                Vector2 point = points[i];
+                while (upper.Count >= 2 &&
+                       Cross2D(upper[upper.Count - 2], upper[upper.Count - 1], point) <= CollisionEpsilon)
+                {
+                    upper.RemoveAt(upper.Count - 1);
+                }
+                upper.Add(point);
+            }
+
+            lower.RemoveAt(lower.Count - 1);
+            upper.RemoveAt(upper.Count - 1);
+            lower.AddRange(upper);
+            return lower.ToArray();
+        }
+
+        private static float Cross2D(Vector2 a, Vector2 b, Vector2 c)
+        {
+            return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+        }
+
+        private static float PolygonAreaSigned(Vector2[] points)
+        {
+            if (points.Length < 3)
+                return 0.0f;
+
+            float area = 0.0f;
+            for (int index = 0; index < points.Length; index++)
+            {
+                Vector2 a = points[index];
+                Vector2 b = points[(index + 1) % points.Length];
+                area += a.x * b.y - b.x * a.y;
+            }
+
+            return area * 0.5f;
+        }
+
+        private static Vector3 TransformPoint(float[] transform, float x, float y, float z)
+        {
+            return new Vector3(
+                transform[0] * x + transform[1] * y + transform[2] * z + transform[3],
+                transform[4] * x + transform[5] * y + transform[6] * z + transform[7],
+                transform[8] * x + transform[9] * y + transform[10] * z + transform[11]);
         }
 
         private static uint FloatToUInt32Bits(float value)

@@ -78,7 +78,14 @@ namespace Arena.Input
     public interface IMovementEnvironment
     {
         float SampleGroundHeight(float x, float z, float probeY);
-        Vector2 ResolveHorizontalCollision(float desiredX, float desiredZ, float playerRadius, float playerHeight, float currentY);
+        Vector2 ResolveHorizontalCollision(
+            float startX,
+            float startZ,
+            float desiredX,
+            float desiredZ,
+            float playerRadius,
+            float playerHeight,
+            float currentY);
     }
 
     /// <summary>
@@ -238,6 +245,8 @@ namespace Arena.Input
             for (int i = 0; i < steps; i++)
             {
                 Vector2 resolved = environment.ResolveHorizontalCollision(
+                    x,
+                    z,
                     x + stepX,
                     z + stepZ,
                     playerRadius,

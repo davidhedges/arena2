@@ -49,6 +49,21 @@ namespace Arena.Editor
                 $"[OpenWorldToonEnvironmentVariantTools] Skipped {sceneSourcePaths.Count - sourcePaths.Count} " +
                 $"Toon prefab(s) in '{scene.name}' because of package settings.");
             ReplaceToonPrefabsInActiveScene(settings);
+            ReplaceDirectModelPrefabsInActiveScene(settings, dryRun: false);
+        }
+
+        [MenuItem("Arena/OpenWorld/Scene Prep/1b Audit Direct Model Prefab Instances", false, 110)]
+        private static void AuditDirectModelPrefabsInActiveScene()
+        {
+            ToonVariantGenerationSettings settings = LoadSettings();
+            ReplaceDirectModelPrefabsInActiveScene(settings, dryRun: true);
+        }
+
+        [MenuItem("Arena/OpenWorld/Scene Prep/1c Replace Direct Model Prefab Instances", false, 120)]
+        private static void ReplaceDirectModelPrefabsInActiveScene()
+        {
+            ToonVariantGenerationSettings settings = LoadSettings();
+            ReplaceDirectModelPrefabsInActiveScene(settings, dryRun: false);
         }
 
         private static void ReplaceToonPrefabsInActiveScene(ToonVariantGenerationSettings settings)
@@ -107,6 +122,84 @@ namespace Arena.Editor
                 $"Missing targets: {missingVariants}.");
         }
 
+        private static void ReplaceDirectModelPrefabsInActiveScene(ToonVariantGenerationSettings settings, bool dryRun)
+        {
+            Scene scene = SceneManager.GetActiveScene();
+            if (!scene.IsValid())
+            {
+                Debug.LogError("[OpenWorldToonEnvironmentVariantTools] No active scene is loaded.");
+                return;
+            }
+
+            List<PrefabReplacement> replacements = CollectDirectModelPrefabReplacements(scene, settings, out DirectModelRepairStats stats);
+            string mode = dryRun ? "Audit" : "Repair";
+
+            foreach (string warning in stats.Warnings)
+                Debug.LogWarning($"[OpenWorldToonEnvironmentVariantTools] {warning}");
+
+            if (dryRun)
+            {
+                foreach (PrefabReplacement replacement in replacements)
+                {
+                    Debug.Log(
+                        $"[OpenWorldToonEnvironmentVariantTools] Direct model instance '{replacement.Instance.name}' " +
+                        $"can be replaced: '{replacement.CurrentPrefabPath}' -> '{replacement.TargetPath}'.");
+                }
+
+                Debug.Log(
+                    $"[OpenWorldToonEnvironmentVariantTools] {mode} direct model prefab instances in '{scene.name}': " +
+                    $"scanned {stats.DirectModelInstances}, replaceable {replacements.Count}, unresolved {stats.Unresolved}.");
+                return;
+            }
+
+            if (replacements.Count == 0)
+            {
+                Debug.Log(
+                    $"[OpenWorldToonEnvironmentVariantTools] No replaceable direct model prefab instances found in '{scene.name}'. " +
+                    $"Scanned {stats.DirectModelInstances}, unresolved {stats.Unresolved}.");
+                return;
+            }
+
+            Undo.SetCurrentGroupName("Replace Direct Model Prefabs With Toon Prefabs");
+            int undoGroup = Undo.GetCurrentGroup();
+            int replaced = 0;
+            int missingTargets = 0;
+
+            foreach (PrefabReplacement replacement in replacements)
+            {
+                GameObject? targetPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(replacement.TargetPath);
+                if (targetPrefab == null)
+                {
+                    missingTargets++;
+                    Debug.LogWarning(
+                        $"[OpenWorldToonEnvironmentVariantTools] Missing direct model replacement target for " +
+                        $"'{replacement.CurrentPrefabPath}'. Expected '{replacement.TargetPath}'.");
+                    continue;
+                }
+
+                GameObject? newInstance = PrefabUtility.InstantiatePrefab(targetPrefab, scene) as GameObject;
+                if (newInstance == null)
+                {
+                    Debug.LogWarning($"[OpenWorldToonEnvironmentVariantTools] Failed to instantiate '{replacement.TargetPath}'.");
+                    continue;
+                }
+
+                Undo.RegisterCreatedObjectUndo(newInstance, "Replace Direct Model Prefab");
+                CopyScenePlacement(replacement.Instance, newInstance);
+                Undo.DestroyObjectImmediate(replacement.Instance);
+                replaced++;
+            }
+
+            Undo.CollapseUndoOperations(undoGroup);
+
+            if (replaced > 0)
+                EditorSceneManager.MarkSceneDirty(scene);
+
+            Debug.Log(
+                $"[OpenWorldToonEnvironmentVariantTools] Replaced {replaced} direct model prefab instance(s) in '{scene.name}'. " +
+                $"Scanned {stats.DirectModelInstances}, unresolved {stats.Unresolved}, missing targets: {missingTargets}.");
+        }
+
         private static VariantStats EnsureVariants(IReadOnlyCollection<string> sourcePaths)
         {
             var stats = new VariantStats();
@@ -128,7 +221,7 @@ namespace Arena.Editor
                     GameObject? existingVariant = AssetDatabase.LoadAssetAtPath<GameObject>(variantPath);
                     if (existingVariant != null)
                     {
-                        if (HasGameplayBoxCollider(existingVariant))
+                        if (HasGameplayCollisionCollider(existingVariant))
                         {
                             stats.Existing++;
                             continue;
@@ -205,7 +298,7 @@ namespace Arena.Editor
 
         private static bool EnsureGeneratedBoxCollider(GameObject root)
         {
-            if (HasGameplayBoxCollider(root))
+            if (HasGameplayCollisionCollider(root))
                 return false;
 
             if (!TryGetLocalRendererBounds(root.transform, out Bounds bounds))
@@ -225,10 +318,22 @@ namespace Arena.Editor
             return true;
         }
 
-        private static bool HasGameplayBoxCollider(GameObject root)
+        private static bool HasGameplayCollisionCollider(GameObject root)
         {
             int gameplayCollisionLayer = LayerMask.NameToLayer(GameplayCollisionLayerName);
             foreach (BoxCollider collider in root.GetComponentsInChildren<BoxCollider>(true))
+            {
+                if (!collider.enabled || collider.isTrigger)
+                    continue;
+
+                if (collider.gameObject.name == GeneratedCollisionChildName)
+                    return true;
+
+                if (gameplayCollisionLayer >= 0 && collider.gameObject.layer == gameplayCollisionLayer)
+                    return true;
+            }
+
+            foreach (MeshCollider collider in root.GetComponentsInChildren<MeshCollider>(true))
             {
                 if (!collider.enabled || collider.isTrigger)
                     continue;
@@ -348,10 +453,25 @@ namespace Arena.Editor
         private static List<PrefabReplacement> CollectPrefabReplacements(Scene scene, ToonVariantGenerationSettings settings)
         {
             var replacements = new List<PrefabReplacement>();
-            var visited = new HashSet<int>();
+            var visited = new HashSet<GameObject>();
 
             foreach (GameObject rootObject in scene.GetRootGameObjects())
                 CollectPrefabReplacements(rootObject.transform, settings, replacements, visited);
+
+            return replacements;
+        }
+
+        private static List<PrefabReplacement> CollectDirectModelPrefabReplacements(
+            Scene scene,
+            ToonVariantGenerationSettings settings,
+            out DirectModelRepairStats stats)
+        {
+            var replacements = new List<PrefabReplacement>();
+            var visited = new HashSet<GameObject>();
+            stats = new DirectModelRepairStats();
+
+            foreach (GameObject rootObject in scene.GetRootGameObjects())
+                CollectDirectModelPrefabReplacements(rootObject.transform, settings, replacements, visited, stats);
 
             return replacements;
         }
@@ -360,11 +480,11 @@ namespace Arena.Editor
             Transform transform,
             ToonVariantGenerationSettings settings,
             List<PrefabReplacement> replacements,
-            HashSet<int> visited)
+            HashSet<GameObject> visited)
         {
             GameObject gameObject = transform.gameObject;
             GameObject? outermostRoot = PrefabUtility.GetOutermostPrefabInstanceRoot(gameObject);
-            if (outermostRoot == gameObject && visited.Add(gameObject.GetInstanceID()))
+            if (outermostRoot == gameObject && visited.Add(gameObject))
             {
                 string currentPrefabPath = PrefabUtility.GetPrefabAssetPathOfNearestInstanceRoot(gameObject);
                 if (TryGetReplacementTargetPath(currentPrefabPath, settings, out string targetPath))
@@ -376,6 +496,41 @@ namespace Arena.Editor
 
             for (int i = 0; i < transform.childCount; i++)
                 CollectPrefabReplacements(transform.GetChild(i), settings, replacements, visited);
+        }
+
+        private static void CollectDirectModelPrefabReplacements(
+            Transform transform,
+            ToonVariantGenerationSettings settings,
+            List<PrefabReplacement> replacements,
+            HashSet<GameObject> visited,
+            DirectModelRepairStats stats)
+        {
+            GameObject gameObject = transform.gameObject;
+            GameObject? outermostRoot = PrefabUtility.GetOutermostPrefabInstanceRoot(gameObject);
+            if (outermostRoot == gameObject && visited.Add(gameObject))
+            {
+                string currentPrefabPath = PrefabUtility.GetPrefabAssetPathOfNearestInstanceRoot(gameObject);
+                if (IsIncludedModelPrefab(currentPrefabPath))
+                {
+                    stats.DirectModelInstances++;
+                    if (TryGetDirectModelReplacementTargetPath(
+                            currentPrefabPath,
+                            settings,
+                            out string targetPath,
+                            out string warning))
+                    {
+                        replacements.Add(new PrefabReplacement(gameObject, currentPrefabPath, targetPath));
+                        return;
+                    }
+
+                    stats.Unresolved++;
+                    if (!string.IsNullOrEmpty(warning))
+                        stats.Warnings.Add($"{gameObject.name}: {warning}");
+                }
+            }
+
+            for (int i = 0; i < transform.childCount; i++)
+                CollectDirectModelPrefabReplacements(transform.GetChild(i), settings, replacements, visited, stats);
         }
 
         private static bool TryGetReplacementTargetPath(
@@ -404,10 +559,41 @@ namespace Arena.Editor
             return false;
         }
 
+        private static bool TryGetDirectModelReplacementTargetPath(
+            string modelPrefabPath,
+            ToonVariantGenerationSettings settings,
+            out string targetPath,
+            out string warning)
+        {
+            targetPath = "";
+            warning = "";
+
+            if (!TryGetSourcePrefabPathFromModelPrefabPath(modelPrefabPath, out string sourcePrefabPath, out warning))
+                return false;
+
+            if (!settings.ShouldGenerateCollider(sourcePrefabPath))
+            {
+                targetPath = sourcePrefabPath;
+                return true;
+            }
+
+            string variantPath = GetVariantPath(sourcePrefabPath);
+            if (ShouldUseVariant(variantPath))
+            {
+                targetPath = variantPath;
+                return true;
+            }
+
+            warning =
+                $"Direct model prefab '{modelPrefabPath}' maps to '{sourcePrefabPath}', but the expected Arena variant " +
+                $"'{variantPath}' is missing or does not contain gameplay collision.";
+            return false;
+        }
+
         private static bool ShouldUseVariant(string variantPath)
         {
             GameObject? variantPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(variantPath);
-            return variantPrefab != null && HasGameplayBoxCollider(variantPrefab);
+            return variantPrefab != null && HasGameplayCollisionCollider(variantPrefab);
         }
 
         private static void CopyScenePlacement(GameObject source, GameObject target)
@@ -435,6 +621,11 @@ namespace Arena.Editor
             return TryGetSourcePackageAndRelativePath(assetPath, out _, out _);
         }
 
+        private static bool IsIncludedModelPrefab(string assetPath)
+        {
+            return TryGetModelPackageAndName(assetPath, out _, out _);
+        }
+
         private static bool TryGetSourcePackageAndRelativePath(
             string assetPath,
             out string packageName,
@@ -459,6 +650,72 @@ namespace Arena.Editor
                 return true;
             }
 
+            return false;
+        }
+
+        private static bool TryGetModelPackageAndName(
+            string assetPath,
+            out string packageName,
+            out string modelName)
+        {
+            packageName = "";
+            modelName = "";
+            if (string.IsNullOrEmpty(assetPath) || !assetPath.EndsWith(".fbx", StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            if (!assetPath.StartsWith(ThirdPartyEnvironmentRoot + "/", StringComparison.Ordinal))
+                return false;
+
+            foreach (string includedPackageName in IncludedPackages)
+            {
+                string packageModelRoot = $"{ThirdPartyEnvironmentRoot}/{includedPackageName}/Models/";
+                if (!assetPath.StartsWith(packageModelRoot, StringComparison.Ordinal))
+                    continue;
+
+                packageName = includedPackageName;
+                modelName = Path.GetFileNameWithoutExtension(assetPath);
+                return !string.IsNullOrEmpty(modelName);
+            }
+
+            return false;
+        }
+
+        private static bool TryGetSourcePrefabPathFromModelPrefabPath(
+            string modelPrefabPath,
+            out string sourcePrefabPath,
+            out string warning)
+        {
+            sourcePrefabPath = "";
+            warning = "";
+
+            if (!TryGetModelPackageAndName(modelPrefabPath, out string packageName, out string modelName))
+                return false;
+
+            string packagePrefabRoot = $"{ThirdPartyEnvironmentRoot}/{packageName}/Prefabs";
+            string[] guids = AssetDatabase.FindAssets($"{modelName} t:Prefab", new[] { packagePrefabRoot });
+            List<string> matches = guids
+                .Select(AssetDatabase.GUIDToAssetPath)
+                .Where(path =>
+                    IsIncludedSourcePrefab(path) &&
+                    string.Equals(Path.GetFileNameWithoutExtension(path), modelName, StringComparison.Ordinal))
+                .OrderBy(path => path, StringComparer.Ordinal)
+                .ToList();
+
+            if (matches.Count == 1)
+            {
+                sourcePrefabPath = matches[0];
+                return true;
+            }
+
+            if (matches.Count == 0)
+            {
+                warning = $"Direct model prefab '{modelPrefabPath}' has no matching source prefab named '{modelName}.prefab'.";
+                return false;
+            }
+
+            warning =
+                $"Direct model prefab '{modelPrefabPath}' has multiple matching source prefabs named '{modelName}.prefab': " +
+                string.Join(", ", matches);
             return false;
         }
 
@@ -573,6 +830,13 @@ namespace Arena.Editor
             public int GeneratedColliders;
             public int SkippedNoRendererBounds;
             public int Failed;
+        }
+
+        private sealed class DirectModelRepairStats
+        {
+            public int DirectModelInstances;
+            public int Unresolved;
+            public readonly List<string> Warnings = new List<string>();
         }
 
         [Serializable]
