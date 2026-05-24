@@ -148,6 +148,7 @@ namespace Arena.Input
         private const float SurfaceSnapUp = 1.2f;
         private const float GameplayBoxStepUpHeight = 0.35f;
         private const float GameplayMeshStepUpHeight = 0.65f;
+        private const float GameplayMeshGroundMinNormalY = 0.35f;
         private const float WalkableTopEpsilon = 0.05f;
         private const float MovementBlockerLogIntervalSeconds = 0.25f;
         private const float GameplayBroadphaseMinCellSize = 2.0f;
@@ -400,6 +401,10 @@ namespace Arena.Input
                 float minZ,
                 float maxX,
                 float maxZ,
+                Vector3 a,
+                Vector3 b,
+                Vector3 c,
+                float groundNormalYAbs,
                 Vector2[] footprint)
             {
                 Name = name;
@@ -410,6 +415,10 @@ namespace Arena.Input
                 MinZ = minZ;
                 MaxX = maxX;
                 MaxZ = maxZ;
+                A = a;
+                B = b;
+                C = c;
+                GroundNormalYAbs = groundNormalYAbs;
                 Footprint = footprint;
             }
 
@@ -421,6 +430,10 @@ namespace Arena.Input
             public float MinZ { get; }
             public float MaxX { get; }
             public float MaxZ { get; }
+            public Vector3 A { get; }
+            public Vector3 B { get; }
+            public Vector3 C { get; }
+            public float GroundNormalYAbs { get; }
             public Vector2[] Footprint { get; }
         }
 
@@ -812,6 +825,28 @@ namespace Arena.Input
                     surface = topY;
             }
 
+            GameplayBroadphaseAabb meshQueryBounds = new(
+                x - CollisionEpsilon,
+                surface - CollisionEpsilon,
+                z - CollisionEpsilon,
+                x + CollisionEpsilon,
+                ceiling,
+                z + CollisionEpsilon);
+
+            if (_gameplayMeshHullBroadphase.Query(meshQueryBounds, _gameplayBroadphaseCandidates))
+            {
+                foreach (int index in _gameplayBroadphaseCandidates)
+                {
+                    if (index >= 0 && index < _gameplayMeshHulls.Length)
+                        surface = SampleGameplayMeshHullGround(_gameplayMeshHulls[index], x, z, ceiling, surface);
+                }
+            }
+            else
+            {
+                foreach (GameplayMovementMeshHull hull in _gameplayMeshHulls)
+                    surface = SampleGameplayMeshHullGround(hull, x, z, ceiling, surface);
+            }
+
             return surface;
         }
 
@@ -1073,6 +1108,40 @@ namespace Arena.Input
                 Mathf.Max(startZ, targetZ) + radius);
         }
 
+        private static float SampleGameplayMeshHullGround(
+            GameplayMovementMeshHull hull,
+            float x,
+            float z,
+            float ceiling,
+            float surface)
+        {
+            if (hull.YMin > ceiling + CollisionEpsilon)
+                return surface;
+            if (hull.GroundNormalYAbs < GameplayMeshGroundMinNormalY)
+                return surface;
+            if (TriangleHeightAtXZ(hull.A, hull.B, hull.C, x, z) is not { } y)
+                return surface;
+            if (y <= ceiling + CollisionEpsilon && y > surface)
+                return y;
+            return surface;
+        }
+
+        private static float? TriangleHeightAtXZ(Vector3 a, Vector3 b, Vector3 c, float x, float z)
+        {
+            float denom = (b.z - c.z) * (a.x - c.x) + (c.x - b.x) * (a.z - c.z);
+            if (!float.IsFinite(denom) || Mathf.Abs(denom) <= CollisionEpsilon)
+                return null;
+
+            float alpha = ((b.z - c.z) * (x - c.x) + (c.x - b.x) * (z - c.z)) / denom;
+            float beta = ((c.z - a.z) * (x - c.x) + (a.x - c.x) * (z - c.z)) / denom;
+            float gamma = 1.0f - alpha - beta;
+            if (alpha < -CollisionEpsilon || beta < -CollisionEpsilon || gamma < -CollisionEpsilon)
+                return null;
+
+            float y = alpha * a.y + beta * b.y + gamma * c.y;
+            return float.IsFinite(y) ? y : null;
+        }
+
         private static void LogMovementBlocker(
             string blocker,
             float startX,
@@ -1312,8 +1381,21 @@ namespace Arena.Input
                     Mathf.Min(a.z, Mathf.Min(b.z, c.z)),
                     Mathf.Max(a.x, Mathf.Max(b.x, c.x)),
                     Mathf.Max(a.z, Mathf.Max(b.z, c.z)),
+                    a,
+                    b,
+                    c,
+                    TriangleNormalYAbs(a, b, c),
                     footprint);
             }
+        }
+
+        private static float TriangleNormalYAbs(Vector3 a, Vector3 b, Vector3 c)
+        {
+            Vector3 cross = Vector3.Cross(b - a, c - a);
+            float length = cross.magnitude;
+            if (length <= CollisionEpsilon)
+                return 0.0f;
+            return Mathf.Abs(cross.y / length);
         }
 
         private static void EmitOpenWorldTreeColliders(

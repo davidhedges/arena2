@@ -64,6 +64,7 @@ const OPEN_WORLD_OCCUPANCY_CELL_SIZE: f32 = 4.0;
 
 const OPEN_WORLD_COLLISION_ITERS: usize = 2;
 const GAMEPLAY_MESH_STEP_UP_HEIGHT: f32 = 0.65;
+const GAMEPLAY_MESH_GROUND_MIN_NORMAL_Y: f32 = 0.35;
 const OPEN_WORLD_RAYCAST_STEP: f32 = 0.25;
 const OPEN_WORLD_RAYCAST_REFINE_ITERS: usize = 7;
 
@@ -241,6 +242,8 @@ struct GameplayMovementMeshHull {
     y_min: f32,
     y_max: f32,
     footprint: Vec<[f32; 2]>,
+    triangle: [[f32; 3]; 3],
+    ground_normal_y_abs: f32,
     #[allow(dead_code)]
     bounds: Aabb3,
 }
@@ -1480,6 +1483,35 @@ fn open_world_surface_height_at_y(
         }
     }
 
+    let mesh_query_bounds = if ceiling.is_finite() {
+        Some(Aabb3 {
+            min_x: x - COLLISION_EPSILON,
+            min_y: surface - COLLISION_EPSILON,
+            min_z: z - COLLISION_EPSILON,
+            max_x: x + COLLISION_EPSILON,
+            max_y: ceiling,
+            max_z: z + COLLISION_EPSILON,
+        })
+    } else {
+        None
+    };
+
+    for hull in movement_mesh_hull_candidates(
+        open_world_gameplay_movement_mesh_hulls(profile),
+        open_world_gameplay_movement_mesh_broadphase(profile),
+        mesh_query_bounds,
+    ) {
+        if hull.y_min > ceiling + COLLISION_EPSILON {
+            continue;
+        }
+        let Some(y) = gameplay_movement_mesh_hull_surface_height_at_xz(hull, x, z) else {
+            continue;
+        };
+        if y <= ceiling + COLLISION_EPSILON && y > surface {
+            surface = y;
+        }
+    }
+
     surface
 }
 
@@ -1532,6 +1564,34 @@ fn gameplay_movement_mesh_hull_overlaps_player_band(
 
 fn gameplay_movement_mesh_hull_can_step_up(hull: &GameplayMovementMeshHull, foot_y: f32) -> bool {
     hull.y_max <= foot_y + GAMEPLAY_MESH_STEP_UP_HEIGHT
+}
+
+fn gameplay_movement_mesh_hull_surface_height_at_xz(
+    hull: &GameplayMovementMeshHull,
+    x: f32,
+    z: f32,
+) -> Option<f32> {
+    if hull.ground_normal_y_abs < GAMEPLAY_MESH_GROUND_MIN_NORMAL_Y {
+        return None;
+    }
+    triangle_height_at_xz(hull.triangle[0], hull.triangle[1], hull.triangle[2], x, z)
+}
+
+fn triangle_height_at_xz(a: [f32; 3], b: [f32; 3], c: [f32; 3], x: f32, z: f32) -> Option<f32> {
+    let denom = (b[2] - c[2]) * (a[0] - c[0]) + (c[0] - b[0]) * (a[2] - c[2]);
+    if !denom.is_finite() || denom.abs() <= COLLISION_EPSILON {
+        return None;
+    }
+
+    let alpha = ((b[2] - c[2]) * (x - c[0]) + (c[0] - b[0]) * (z - c[2])) / denom;
+    let beta = ((c[2] - a[2]) * (x - c[0]) + (a[0] - c[0]) * (z - c[2])) / denom;
+    let gamma = 1.0 - alpha - beta;
+    if alpha < -COLLISION_EPSILON || beta < -COLLISION_EPSILON || gamma < -COLLISION_EPSILON {
+        return None;
+    }
+
+    let y = alpha * a[1] + beta * b[1] + gamma * c[1];
+    y.is_finite().then_some(y)
 }
 
 fn movement_sweep_bounds(
@@ -2669,6 +2729,8 @@ fn build_movement_mesh_hulls(
             y_min,
             y_max,
             footprint,
+            triangle: [a, b, c],
+            ground_normal_y_abs: triangle_normal_y_abs(a, b, c),
             bounds: Aabb3 {
                 min_x: a[0].min(b[0]).min(c[0]),
                 min_y: y_min,
@@ -2680,6 +2742,17 @@ fn build_movement_mesh_hulls(
         });
     }
     segments
+}
+
+fn triangle_normal_y_abs(a: [f32; 3], b: [f32; 3], c: [f32; 3]) -> f32 {
+    let ab = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+    let ac = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+    let cross = cross3(ab, ac);
+    let length = (cross[0] * cross[0] + cross[1] * cross[1] + cross[2] * cross[2]).sqrt();
+    if length <= COLLISION_EPSILON {
+        return 0.0;
+    }
+    (cross[1] / length).abs()
 }
 
 fn movement_triangle_footprint_2d(a: [f32; 2], b: [f32; 2], c: [f32; 2]) -> Vec<[f32; 2]> {
@@ -4589,14 +4662,15 @@ fn raycast_centered_aabb(
 mod tests {
     use super::{
         assert_no_full_rotation_movement_boxes, gameplay_movement_mesh_hull_can_step_up,
-        mesh_instance_bounds, parse_gameplay_collision_boxes, parse_gameplay_movement_mesh_hulls,
+        gameplay_movement_mesh_hull_surface_height_at_xz, mesh_instance_bounds,
+        parse_gameplay_collision_boxes, parse_gameplay_movement_mesh_hulls,
         parse_gameplay_query_meshes, polygon_area_signed, push_out_convex_footprint_2d,
         quaternion_to_axes, raycast_gameplay_collision_boxes, raycast_gameplay_query_meshes,
         raycast_movement_and_query_collision_boxes, raycast_query_mesh_geometry_bvh,
         raycast_query_mesh_geometry_linear, resolve_swept_convex_footprint_2d,
         resolve_swept_gameplay_box_2d, resolve_world_spawn_position_with_layout_for_scene,
-        transform_point, transform_vector, try_world_gameplay_box_hit, Aabb3,
-        GameplayBoxBroadphase, GameplayCollisionBox, GameplayCollisionBoxFile,
+        transform_point, transform_vector, triangle_normal_y_abs, try_world_gameplay_box_hit,
+        Aabb3, GameplayBoxBroadphase, GameplayCollisionBox, GameplayCollisionBoxFile,
         GameplayCollisionLayoutFile, GameplayMovementMeshHull, GameplayQueryMeshBvh,
         GameplayQueryMeshGeometry, GameplayQueryMeshGeometryFile, GameplayQueryMeshInstance,
         GameplayQueryMeshInstanceFile, GameplayQueryMeshSet, MAX_QUERY_MESH_TRIANGLES_PER_COLLIDER,
@@ -4752,6 +4826,8 @@ mod tests {
             y_min: 9.07,
             y_max: 9.63,
             footprint: vec![[0.0, 0.0], [0.0, 1.0]],
+            triangle: [[0.0, 9.07, 0.0], [0.0, 9.63, 1.0], [1.0, 9.07, 0.0]],
+            ground_normal_y_abs: 0.7,
             bounds: Aabb3 {
                 min_x: 0.0,
                 min_y: 9.07,
@@ -4766,6 +4842,8 @@ mod tests {
             y_min: 9.07,
             y_max: 9.75,
             footprint: vec![[0.0, 0.0], [0.0, 1.0]],
+            triangle: [[0.0, 9.07, 0.0], [0.0, 9.75, 1.0], [1.0, 9.07, 0.0]],
+            ground_normal_y_abs: 0.7,
             bounds: Aabb3 {
                 min_x: 0.0,
                 min_y: 9.07,
@@ -4781,6 +4859,55 @@ mod tests {
             &tall_segment,
             9.04
         ));
+    }
+
+    #[test]
+    fn movement_mesh_surface_height_samples_walkable_triangle_only() {
+        let floor = GameplayMovementMeshHull {
+            name: "floor".to_string(),
+            y_min: 2.0,
+            y_max: 2.5,
+            footprint: vec![[0.0, 0.0], [2.0, 0.0], [0.0, 2.0]],
+            triangle: [[0.0, 2.0, 0.0], [2.0, 2.0, 0.0], [0.0, 2.5, 2.0]],
+            ground_normal_y_abs: triangle_normal_y_abs(
+                [0.0, 2.0, 0.0],
+                [2.0, 2.0, 0.0],
+                [0.0, 2.5, 2.0],
+            ),
+            bounds: Aabb3 {
+                min_x: 0.0,
+                min_y: 2.0,
+                min_z: 0.0,
+                max_x: 2.0,
+                max_y: 2.5,
+                max_z: 2.0,
+            },
+        };
+        let wall = GameplayMovementMeshHull {
+            name: "wall".to_string(),
+            y_min: 0.0,
+            y_max: 2.0,
+            footprint: vec![[0.0, 0.0], [0.0, 2.0]],
+            triangle: [[0.0, 0.0, 0.0], [0.0, 2.0, 0.0], [0.0, 0.0, 2.0]],
+            ground_normal_y_abs: triangle_normal_y_abs(
+                [0.0, 0.0, 0.0],
+                [0.0, 2.0, 0.0],
+                [0.0, 0.0, 2.0],
+            ),
+            bounds: Aabb3 {
+                min_x: 0.0,
+                min_y: 0.0,
+                min_z: 0.0,
+                max_x: 0.0,
+                max_y: 2.0,
+                max_z: 2.0,
+            },
+        };
+
+        let sampled = gameplay_movement_mesh_hull_surface_height_at_xz(&floor, 0.5, 0.5).unwrap();
+        assert!((sampled - 2.125).abs() < 0.0001);
+        assert!(gameplay_movement_mesh_hull_surface_height_at_xz(&floor, 2.0, 2.0).is_none());
+        assert!(gameplay_movement_mesh_hull_surface_height_at_xz(&wall, 0.0, 0.5).is_none());
     }
 
     #[test]
