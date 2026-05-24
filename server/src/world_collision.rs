@@ -76,7 +76,6 @@ const GAMEPLAY_BROADPHASE_FALLBACK_CELL_COUNT: i64 = 256;
 const GAMEPLAY_BROADPHASE_FALLBACK_CANDIDATE_DIVISOR: usize = 4;
 const QUERY_MESH_BVH_LEAF_TRIANGLE_COUNT: usize = 4;
 const MOVEMENT_BLOCKER_LOG_LIMIT: u32 = 100;
-const MOVEMENT_BROADPHASE_LOG_INTERVAL: u64 = 2048;
 
 static MOVEMENT_BLOCKER_LOG_COUNT: AtomicU32 = AtomicU32::new(0);
 static MOVEMENT_BOX_QUERY_COUNT: AtomicU64 = AtomicU64::new(0);
@@ -1376,7 +1375,13 @@ fn open_world_point_hits_geometry(
     z: f32,
     radius: f32,
 ) -> bool {
-    if y <= open_world_surface_height_at_y(profile, x, z, f32::MAX) + radius {
+    // LOS/projectile raycasts should only use the terrain heightfield for this
+    // broad open-world ground test. `open_world_surface_height_at_y` also folds
+    // walkable gameplay boxes and movement mesh hulls into a single projected
+    // surface, which is correct for grounding but creates invisible LOS blockers
+    // under/near overhanging authored meshes. Those colliders are tested by
+    // their precise box/query-mesh raycasts below.
+    if y <= open_world_surface_height_for_profile(profile, x, z) + radius {
         return true;
     }
 
@@ -1743,20 +1748,7 @@ fn record_movement_broadphase_metrics(
         fallback_count.load(Ordering::Relaxed)
     };
 
-    if queries % MOVEMENT_BROADPHASE_LOG_INTERVAL != 0 {
-        return;
-    }
-
-    log::info!(
-        "[WORLD_COLLISION] movement broadphase summary kind={} queries={} avg_candidates={:.1} fallbacks={} fallback_ratio={:.1}% last_candidates={} total_colliders={}",
-        kind,
-        queries,
-        total_candidates as f64 / queries.max(1) as f64,
-        fallbacks,
-        fallbacks as f64 * 100.0 / queries.max(1) as f64,
-        candidates,
-        total_colliders,
-    );
+    let _ = (kind, queries, total_candidates, fallbacks, candidates, total_colliders);
 }
 
 fn log_open_world_movement_blocker(
@@ -6749,5 +6741,55 @@ mod tests {
             temple_y < 12.0,
             "Temple spawn resolved too high: {temple_y}"
         );
+    }
+
+    #[test]
+    fn giant_skeleton_los_raycast_does_not_use_projected_movement_mesh_surface() {
+        let caster = (22.26_f32, 10.44_f32, -66.28_f32);
+        let target = (27.41_f32, 9.32_f32, -73.61_f32);
+        let hit_height = 1.8_f32;
+        let hit_radius = 0.28_f32;
+        let origin = (caster.0, caster.1 + hit_height * 0.85, caster.2);
+        let dx = target.0 - caster.0;
+        let dz = target.2 - caster.2;
+        let len = (dx * dx + dz * dz).sqrt();
+        let side_offset = hit_radius * 0.75;
+        let side_x = -dz / len * side_offset;
+        let side_z = dx / len * side_offset;
+
+        for height_fraction in [0.75_f32, 0.6_f32] {
+            let base = (target.0, target.1 + hit_height * height_fraction, target.2);
+            for endpoint in [
+                base,
+                (base.0 + side_x, base.1, base.2 + side_z),
+                (base.0 - side_x, base.1, base.2 - side_z),
+            ] {
+                let ray_dx = endpoint.0 - origin.0;
+                let ray_dy = endpoint.1 - origin.1;
+                let ray_dz = endpoint.2 - origin.2;
+                let distance = (ray_dx * ray_dx + ray_dy * ray_dy + ray_dz * ray_dz).sqrt();
+                let hit = super::raycast_world_with_layout_for_scene_with_stats(
+                    None,
+                    false,
+                    Some(GIANT_SKELETON_PROFILE.scene_name),
+                    WorldRaycastRequest {
+                        origin_x: origin.0,
+                        origin_y: origin.1,
+                        origin_z: origin.2,
+                        dir_x: ray_dx / distance,
+                        dir_y: ray_dy / distance,
+                        dir_z: ray_dz / distance,
+                        max_distance: distance,
+                        radius: 0.05,
+                    },
+                    None,
+                );
+
+                assert!(
+                    hit.is_none(),
+                    "torso LOS probe should be clear but hit {hit:?} toward endpoint {endpoint:?}"
+                );
+            }
+        }
     }
 }

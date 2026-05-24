@@ -18,6 +18,7 @@ use crate::player_intent::player_intent as _;
 const EPS: f32 = 0.0001;
 const LOS_PROBE_RADIUS: f32 = 0.05;
 const LOS_BLOCK_EPSILON: f32 = 0.01;
+const LOS_TARGET_SIDE_PROBE_FRACTION: f32 = 0.75;
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum SceneHitKind {
@@ -36,7 +37,9 @@ pub(crate) struct SceneHit {
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct LineOfSightBlocker {
+    pub target_x: f32,
     pub target_y: f32,
+    pub target_z: f32,
     pub hit: SceneHit,
 }
 
@@ -92,15 +95,9 @@ pub(crate) fn line_of_sight_blocker(
     let origin_y = caster.pos_y + caster.hit_height * 0.85;
     let origin_z = caster.pos_z;
 
-    // Probe multiple target points so short cover has to actually occlude the target capsule.
-    let target_points = [
-        target.pos_y + target.hit_height * 0.85,
-        target.pos_y + target.hit_height * 0.6,
-        target.pos_y + target.hit_height * 0.35,
-    ];
-
+    let target_points = line_of_sight_target_points(caster, target);
     let mut best_blocker: Option<LineOfSightBlocker> = None;
-    for target_y in target_points {
+    for (target_x, target_y, target_z) in target_points {
         let hit = match world_hit_on_segment(
             seed,
             flat_ground_only,
@@ -108,9 +105,9 @@ pub(crate) fn line_of_sight_blocker(
             origin_x,
             origin_y,
             origin_z,
-            target.pos_x,
+            target_x,
             target_y,
-            target.pos_z,
+            target_z,
             LOS_PROBE_RADIUS,
         ) {
             None => return None,
@@ -123,13 +120,53 @@ pub(crate) fn line_of_sight_blocker(
                 z: hit.z,
             },
         };
-        let blocker = LineOfSightBlocker { target_y, hit };
+        let blocker = LineOfSightBlocker {
+            target_x,
+            target_y,
+            target_z,
+            hit,
+        };
         if best_blocker.is_none_or(|best| blocker.hit.t < best.hit.t) {
             best_blocker = Some(blocker);
         }
     }
 
     best_blocker
+}
+
+fn line_of_sight_target_points(
+    caster: &PlayerSnapshot,
+    target: &PlayerSnapshot,
+) -> Vec<(f32, f32, f32)> {
+    let heights = [
+        target.pos_y + target.hit_height * 0.75,
+        target.pos_y + target.hit_height * 0.6,
+    ];
+
+    let dx = target.pos_x - caster.pos_x;
+    let dz = target.pos_z - caster.pos_z;
+    let horizontal_len_sq = dx * dx + dz * dz;
+    let side_offset = target.hit_radius.max(0.0) * LOS_TARGET_SIDE_PROBE_FRACTION;
+
+    let offsets = if horizontal_len_sq > EPS && side_offset > EPS {
+        let inv_len = 1.0 / horizontal_len_sq.sqrt();
+        let side_x = -dz * inv_len * side_offset;
+        let side_z = dx * inv_len * side_offset;
+        [(0.0, 0.0), (side_x, side_z), (-side_x, -side_z)]
+    } else {
+        [(0.0, 0.0), (0.0, 0.0), (0.0, 0.0)]
+    };
+
+    let mut points = Vec::with_capacity(heights.len() * offsets.len());
+    for target_y in heights {
+        for (offset_x, offset_z) in offsets {
+            if offset_x == 0.0 && offset_z == 0.0 && points.iter().any(|(_, y, _)| *y == target_y) {
+                continue;
+            }
+            points.push((target.pos_x + offset_x, target_y, target.pos_z + offset_z));
+        }
+    }
+    points
 }
 
 pub(crate) fn first_hit_on_segment(
@@ -873,7 +910,8 @@ fn shared_flat_ground_only_for_identities(ctx: &ReducerContext, a: Identity, b: 
 #[cfg(test)]
 mod tests {
     use super::{
-        aoe_hits_player, first_player_hit_on_segment, raycast_capsule_with_padding,
+        aoe_hits_player, first_player_hit_on_segment, line_of_sight_target_points,
+        raycast_capsule_with_padding,
         CombatAreaShape, PlayerSnapshot, SceneHitKind,
     };
     use spacetimedb::Identity;
@@ -944,6 +982,22 @@ mod tests {
 
         assert!(matches!(hit.kind, SceneHitKind::Player(id) if id == target));
         assert!((hit.t - 5.4).abs() < 0.001);
+    }
+
+    #[test]
+    fn line_of_sight_target_points_include_center_and_capsule_sides() {
+        let caster = snapshot(test_identity(1), 0.0, 0.0, 0.0);
+        let target = snapshot(test_identity(2), 10.0, 2.0, 0.0);
+
+        let points = line_of_sight_target_points(&caster, &target);
+
+        assert_eq!(points.len(), 6);
+        assert!((points[0].0 - 10.0).abs() < 0.001);
+        assert!((points[0].1 - 3.35).abs() < 0.001);
+        assert!((points[0].2 - 0.0).abs() < 0.001);
+        assert!((points[1].0 - 10.0).abs() < 0.001);
+        assert!((points[1].2 - 0.375).abs() < 0.001);
+        assert!((points[2].2 + 0.375).abs() < 0.001);
     }
 
     #[test]

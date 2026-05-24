@@ -151,7 +151,6 @@ namespace Arena.Input
         private const float GameplayMeshGroundMinNormalY = 0.35f;
         private const float WalkableTopEpsilon = 0.05f;
         private const float MovementBlockerLogIntervalSeconds = 0.25f;
-        private const int MovementBroadphaseLogInterval = 2048;
         private const float GameplayBroadphaseMinCellSize = 2.0f;
         private const float GameplayBroadphaseMaxCellSize = 16.0f;
         private const int GameplayBroadphaseFallbackCellCount = 256;
@@ -1195,17 +1194,6 @@ namespace Arena.Input
             if (fallback)
                 fallbacks++;
 
-            if (queries % MovementBroadphaseLogInterval != 0UL)
-                return;
-
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
-            double averageCandidates = queries == 0UL ? 0.0 : (double)totalCandidates / queries;
-            double fallbackRatio = queries == 0UL ? 0.0 : (double)fallbacks * 100.0 / queries;
-            Debug.Log(
-                $"[OpenWorldMovementEnvironment] Movement broadphase summary kind={kind} " +
-                $"queries={queries} avgCandidates={averageCandidates:F1} fallbacks={fallbacks} " +
-                $"fallbackRatio={fallbackRatio:F1}% lastCandidates={candidates} totalColliders={totalColliders}");
-#endif
         }
 
         private static void LogMovementBlocker(

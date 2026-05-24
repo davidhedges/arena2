@@ -1892,6 +1892,22 @@ pub(crate) fn tick_active_casts(ctx: &ReducerContext, now: Timestamp) -> Result<
             caster_state.grounded,
             &active_cast,
         ) {
+            let last_voluntary_move_input_tick = ctx
+                .db
+                .player_state()
+                .player_id()
+                .find(caster)
+                .map(|state| state.last_voluntary_move_input_tick)
+                .unwrap_or(0);
+            log::info!(
+                "[SPELL_CAST] caster={} spell={} active_cast={} fizzled reason=mobility_requirement grounded={} last_move_tick={} cast_input_tick={}",
+                &caster.to_hex()[..8],
+                kind.as_str(),
+                active_cast.cast_id.as_str(),
+                caster_state.grounded,
+                last_voluntary_move_input_tick,
+                active_cast.cast_authored_input_tick
+            );
             if BespokeRuntimeSpell::from_spell_id(kind) == Some(BespokeRuntimeSpell::InstantBeam) {
                 finish_active_cast(ctx, &active_cast, &caster_state, kind, now)?;
             } else {
@@ -2011,9 +2027,24 @@ fn process_spell_cast(
         }
 
         let Some(target) = resolve_target(ctx, state.player_id, target_id) else {
+            log_cast_rejected(
+                caster,
+                spell_kind,
+                "invalid_target",
+                &format!("mode={mode:?} target_id={target_id}"),
+            );
             return Ok(false);
         };
         if !target_audience_allows(ctx, caster, target.player_id, definition.target_audience) {
+            log_cast_rejected(
+                caster,
+                spell_kind,
+                "invalid_target_audience",
+                &format!(
+                    "mode={mode:?} target={}",
+                    &target.player_id.to_hex()[..8]
+                ),
+            );
             return Ok(false);
         }
         let target_is_in_facing_arc = if projectile_execute_uses_live_facing(mode, definition) {
@@ -2022,9 +2053,63 @@ fn process_spell_cast(
             is_target_within_facing_arc(state, &target, TARGET_FACING_ARC_RADIANS)
         };
         if !target_is_in_facing_arc {
+            log_cast_rejected(
+                caster,
+                spell_kind,
+                "target_facing_required",
+                &format!(
+                    "mode={mode:?} target={} caster=({:.2},{:.2}) target=({:.2},{:.2}) yaw={:.2}",
+                    &target.player_id.to_hex()[..8],
+                    state.pos_x,
+                    state.pos_z,
+                    target.pos_x,
+                    target.pos_z,
+                    state.facing_yaw
+                ),
+            );
             return Ok(false);
         }
         if !has_line_of_sight(ctx, state, &target) {
+            if let Some(blocker) = line_of_sight_blocker(ctx, state, &target) {
+                log_cast_rejected(
+                    caster,
+                    spell_kind,
+                    "line_of_sight_blocked",
+                    &format!(
+                        "mode={mode:?} target={} caster=({:.2},{:.2},{:.2}) target=({:.2},{:.2},{:.2}) hit=({:.2},{:.2},{:.2}) hit_t={:.2} target_probe=({:.2},{:.2},{:.2})",
+                        &target.player_id.to_hex()[..8],
+                        state.pos_x,
+                        state.pos_y,
+                        state.pos_z,
+                        target.pos_x,
+                        target.pos_y,
+                        target.pos_z,
+                        blocker.hit.x,
+                        blocker.hit.y,
+                        blocker.hit.z,
+                        blocker.hit.t,
+                        blocker.target_x,
+                        blocker.target_y,
+                        blocker.target_z
+                    ),
+                );
+            } else {
+                log_cast_rejected(
+                    caster,
+                    spell_kind,
+                    "line_of_sight_blocked",
+                    &format!(
+                        "mode={mode:?} target={} caster=({:.2},{:.2},{:.2}) target=({:.2},{:.2},{:.2})",
+                        &target.player_id.to_hex()[..8],
+                        state.pos_x,
+                        state.pos_y,
+                        state.pos_z,
+                        target.pos_x,
+                        target.pos_y,
+                        target.pos_z
+                    ),
+                );
+            }
             return Ok(false);
         }
         if mode == CastExecutionMode::Execute {
@@ -2721,7 +2806,7 @@ pub(crate) fn validate_movement_delivery_target(
     if !has_line_of_sight(ctx, state, &target) {
         if let Some(blocker) = line_of_sight_blocker(ctx, state, &target) {
             log::info!(
-                "[CHARGE] caster={} spell={} target={} rejected reason=line_of_sight_blocked caster=({:.2},{:.2},{:.2}) target=({:.2},{:.2},{:.2}) hit=({:.2},{:.2},{:.2}) hit_t={:.2} target_probe_y={:.2}",
+                "[CHARGE] caster={} spell={} target={} rejected reason=line_of_sight_blocked caster=({:.2},{:.2},{:.2}) target=({:.2},{:.2},{:.2}) hit=({:.2},{:.2},{:.2}) hit_t={:.2} target_probe=({:.2},{:.2},{:.2})",
                 &caster.to_hex()[..8],
                 spell_kind.as_str(),
                 &target.player_id.to_hex()[..8],
@@ -2735,7 +2820,9 @@ pub(crate) fn validate_movement_delivery_target(
                 blocker.hit.y,
                 blocker.hit.z,
                 blocker.hit.t,
-                blocker.target_y
+                blocker.target_x,
+                blocker.target_y,
+                blocker.target_z
             );
         } else {
             log::info!(

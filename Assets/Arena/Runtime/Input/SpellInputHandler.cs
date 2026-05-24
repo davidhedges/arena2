@@ -689,6 +689,9 @@ namespace Arena.Input
             if (row.Family != PredictedActionFamily.SpellCast)
                 return;
 
+            LoadoutActionTrace.Trace(
+                $"spell server result {row.Result} predicted={row.PredictedActionId}:{row.ClientActionSeq} action={row.ActionInstanceId}");
+
             string tokenKey = SpellTokenKey(row.PredictedActionId, row.ClientActionSeq);
             if (row.Result == ActionResultKind.Accepted)
             {
