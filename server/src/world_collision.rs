@@ -20,7 +20,7 @@ use serde::Deserialize;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::{
-    atomic::{AtomicU32, Ordering},
+    atomic::{AtomicU32, AtomicU64, Ordering},
     OnceLock,
 };
 
@@ -76,8 +76,15 @@ const GAMEPLAY_BROADPHASE_FALLBACK_CELL_COUNT: i64 = 256;
 const GAMEPLAY_BROADPHASE_FALLBACK_CANDIDATE_DIVISOR: usize = 4;
 const QUERY_MESH_BVH_LEAF_TRIANGLE_COUNT: usize = 4;
 const MOVEMENT_BLOCKER_LOG_LIMIT: u32 = 100;
+const MOVEMENT_BROADPHASE_LOG_INTERVAL: u64 = 2048;
 
 static MOVEMENT_BLOCKER_LOG_COUNT: AtomicU32 = AtomicU32::new(0);
+static MOVEMENT_BOX_QUERY_COUNT: AtomicU64 = AtomicU64::new(0);
+static MOVEMENT_BOX_CANDIDATE_COUNT: AtomicU64 = AtomicU64::new(0);
+static MOVEMENT_BOX_FALLBACK_COUNT: AtomicU64 = AtomicU64::new(0);
+static MOVEMENT_MESH_QUERY_COUNT: AtomicU64 = AtomicU64::new(0);
+static MOVEMENT_MESH_CANDIDATE_COUNT: AtomicU64 = AtomicU64::new(0);
+static MOVEMENT_MESH_FALLBACK_COUNT: AtomicU64 = AtomicU64::new(0);
 
 thread_local! {
     static GAMEPLAY_BROADPHASE_CANDIDATE_SCRATCH: RefCell<Vec<usize>> = RefCell::new(Vec::new());
@@ -1631,14 +1638,35 @@ fn movement_box_candidates<'a>(
     broadphase: &GameplayBoxBroadphase,
     query_bounds: Option<Aabb3>,
 ) -> Vec<&'a GameplayCollisionBox> {
-    movement_broadphase_indices(broadphase, query_bounds)
-        .map(|indices| {
+    match movement_broadphase_indices(broadphase, query_bounds) {
+        Some(indices) => {
+            record_movement_broadphase_metrics(
+                "box",
+                &MOVEMENT_BOX_QUERY_COUNT,
+                &MOVEMENT_BOX_CANDIDATE_COUNT,
+                &MOVEMENT_BOX_FALLBACK_COUNT,
+                indices.len(),
+                false,
+                colliders.len(),
+            );
             indices
                 .into_iter()
                 .filter_map(|index| colliders.get(index))
                 .collect()
-        })
-        .unwrap_or_else(|| colliders.iter().collect())
+        }
+        None => {
+            record_movement_broadphase_metrics(
+                "box",
+                &MOVEMENT_BOX_QUERY_COUNT,
+                &MOVEMENT_BOX_CANDIDATE_COUNT,
+                &MOVEMENT_BOX_FALLBACK_COUNT,
+                colliders.len(),
+                true,
+                colliders.len(),
+            );
+            colliders.iter().collect()
+        }
+    }
 }
 
 fn movement_mesh_hull_candidates<'a>(
@@ -1646,14 +1674,35 @@ fn movement_mesh_hull_candidates<'a>(
     broadphase: &GameplayBoxBroadphase,
     query_bounds: Option<Aabb3>,
 ) -> Vec<&'a GameplayMovementMeshHull> {
-    movement_broadphase_indices(broadphase, query_bounds)
-        .map(|indices| {
+    match movement_broadphase_indices(broadphase, query_bounds) {
+        Some(indices) => {
+            record_movement_broadphase_metrics(
+                "mesh",
+                &MOVEMENT_MESH_QUERY_COUNT,
+                &MOVEMENT_MESH_CANDIDATE_COUNT,
+                &MOVEMENT_MESH_FALLBACK_COUNT,
+                indices.len(),
+                false,
+                hulls.len(),
+            );
             indices
                 .into_iter()
                 .filter_map(|index| hulls.get(index))
                 .collect()
-        })
-        .unwrap_or_else(|| hulls.iter().collect())
+        }
+        None => {
+            record_movement_broadphase_metrics(
+                "mesh",
+                &MOVEMENT_MESH_QUERY_COUNT,
+                &MOVEMENT_MESH_CANDIDATE_COUNT,
+                &MOVEMENT_MESH_FALLBACK_COUNT,
+                hulls.len(),
+                true,
+                hulls.len(),
+            );
+            hulls.iter().collect()
+        }
+    }
 }
 
 fn movement_broadphase_indices(
@@ -1669,6 +1718,45 @@ fn movement_broadphase_indices(
             None
         }
     })
+}
+
+fn record_movement_broadphase_metrics(
+    kind: &str,
+    query_count: &AtomicU64,
+    candidate_count: &AtomicU64,
+    fallback_count: &AtomicU64,
+    candidates: usize,
+    fallback: bool,
+    total_colliders: usize,
+) {
+    let queries = query_count
+        .fetch_add(1, Ordering::Relaxed)
+        .saturating_add(1);
+    let total_candidates = candidate_count
+        .fetch_add(candidates.min(u64::MAX as usize) as u64, Ordering::Relaxed)
+        .saturating_add(candidates.min(u64::MAX as usize) as u64);
+    let fallbacks = if fallback {
+        fallback_count
+            .fetch_add(1, Ordering::Relaxed)
+            .saturating_add(1)
+    } else {
+        fallback_count.load(Ordering::Relaxed)
+    };
+
+    if queries % MOVEMENT_BROADPHASE_LOG_INTERVAL != 0 {
+        return;
+    }
+
+    log::info!(
+        "[WORLD_COLLISION] movement broadphase summary kind={} queries={} avg_candidates={:.1} fallbacks={} fallback_ratio={:.1}% last_candidates={} total_colliders={}",
+        kind,
+        queries,
+        total_candidates as f64 / queries.max(1) as f64,
+        fallbacks,
+        fallbacks as f64 * 100.0 / queries.max(1) as f64,
+        candidates,
+        total_colliders,
+    );
 }
 
 fn log_open_world_movement_blocker(
@@ -3037,6 +3125,20 @@ impl Aabb3 {
         }
     }
 
+    fn expanded(self, amount: f32) -> Self {
+        if !amount.is_finite() || amount <= 0.0 {
+            return self;
+        }
+        Self {
+            min_x: self.min_x - amount,
+            min_y: self.min_y - amount,
+            min_z: self.min_z - amount,
+            max_x: self.max_x + amount,
+            max_y: self.max_y + amount,
+            max_z: self.max_z + amount,
+        }
+    }
+
     fn from_triangle(a: [f32; 3], b: [f32; 3], c: [f32; 3]) -> Self {
         Self {
             min_x: a[0].min(b[0]).min(c[0]),
@@ -4238,18 +4340,22 @@ fn try_world_gameplay_mesh_instance_hit(
         &inverse_transform,
         [request.dir_x, request.dir_y, request.dir_z],
     );
+    let local_radius = local_radius_for_world_sphere(&inverse_transform, request.radius.max(0.0));
 
     let mut closest_t = best.map(|hit| hit.t).unwrap_or(request.max_distance);
     if closest_t > request.max_distance {
         closest_t = request.max_distance;
     }
     let mut stats = stats;
-    // This is exact ray-vs-triangle today. Box queries expand by request.radius, but
-    // mesh queries do not until swept ray/sphere-vs-triangle support lands.
     let hit_t = raycast_query_mesh_geometry_bvh(
         geometry,
+        &instance.transform,
+        [request.origin_x, request.origin_y, request.origin_z],
+        [request.dir_x, request.dir_y, request.dir_z],
         local_origin,
         local_dir,
+        request.radius.max(0.0),
+        local_radius,
         closest_t,
         stats.as_deref_mut(),
     );
@@ -4270,8 +4376,13 @@ fn try_world_gameplay_mesh_instance_hit(
 
 fn raycast_query_mesh_geometry_bvh(
     geometry: &GameplayQueryMeshGeometry,
+    instance_transform: &[f32; 16],
+    world_origin: [f32; 3],
+    world_dir: [f32; 3],
     local_origin: [f32; 3],
     local_dir: [f32; 3],
+    radius: f32,
+    local_radius: f32,
     max_distance: f32,
     stats: Option<&mut WorldRaycastStats>,
 ) -> Option<f32> {
@@ -4286,6 +4397,7 @@ fn raycast_query_mesh_geometry_bvh(
         0,
         local_origin,
         local_dir,
+        local_radius,
         closest_t,
         &mut stats,
     )
@@ -4293,9 +4405,14 @@ fn raycast_query_mesh_geometry_bvh(
     {
         raycast_query_mesh_bvh_node_after_bounds_hit(
             geometry,
+            instance_transform,
+            world_origin,
+            world_dir,
             0,
             local_origin,
             local_dir,
+            radius,
+            local_radius,
             &mut closest_t,
             &mut hit_t,
             &mut stats,
@@ -4309,6 +4426,7 @@ fn raycast_query_mesh_bvh_node_bounds(
     node_index: usize,
     local_origin: [f32; 3],
     local_dir: [f32; 3],
+    local_radius: f32,
     max_distance: f32,
     stats: &mut Option<&mut WorldRaycastStats>,
 ) -> Option<f32> {
@@ -4319,16 +4437,23 @@ fn raycast_query_mesh_bvh_node_bounds(
     raycast_aabb_bounds(
         local_origin,
         local_dir,
-        geometry.bvh.nodes[node_index].bounds,
+        geometry.bvh.nodes[node_index]
+            .bounds
+            .expanded(local_radius.max(0.0)),
         max_distance,
     )
 }
 
 fn raycast_query_mesh_bvh_node_after_bounds_hit(
     geometry: &GameplayQueryMeshGeometry,
+    instance_transform: &[f32; 16],
+    world_origin: [f32; 3],
+    world_dir: [f32; 3],
     node_index: usize,
     local_origin: [f32; 3],
     local_dir: [f32; 3],
+    radius: f32,
+    local_radius: f32,
     closest_t: &mut f32,
     hit_t: &mut Option<f32>,
     stats: &mut Option<&mut WorldRaycastStats>,
@@ -4349,9 +4474,20 @@ fn raycast_query_mesh_bvh_node_after_bounds_hit(
             let a = geometry.vertices[triangle[0]];
             let b = geometry.vertices[triangle[1]];
             let c = geometry.vertices[triangle[2]];
-            let Some(t) = raycast_triangle(local_origin, local_dir, a, b, c) else {
-                continue;
+            let t = if radius > COLLISION_EPSILON {
+                raycast_swept_sphere_triangle(
+                    world_origin,
+                    world_dir,
+                    radius,
+                    transform_point(instance_transform, a),
+                    transform_point(instance_transform, b),
+                    transform_point(instance_transform, c),
+                    *closest_t,
+                )
+            } else {
+                raycast_triangle(local_origin, local_dir, a, b, c)
             };
+            let Some(t) = t else { continue };
             if t >= 0.0 && t <= *closest_t {
                 *closest_t = t;
                 *hit_t = Some(t);
@@ -4365,6 +4501,7 @@ fn raycast_query_mesh_bvh_node_after_bounds_hit(
         node.left,
         local_origin,
         local_dir,
+        local_radius,
         *closest_t,
         stats,
     );
@@ -4373,6 +4510,7 @@ fn raycast_query_mesh_bvh_node_after_bounds_hit(
         node.right,
         local_origin,
         local_dir,
+        local_radius,
         *closest_t,
         stats,
     );
@@ -4382,18 +4520,28 @@ fn raycast_query_mesh_bvh_node_after_bounds_hit(
             if left_t <= right_t {
                 raycast_query_mesh_bvh_node_after_bounds_hit(
                     geometry,
+                    instance_transform,
+                    world_origin,
+                    world_dir,
                     node.left,
                     local_origin,
                     local_dir,
+                    radius,
+                    local_radius,
                     closest_t,
                     hit_t,
                     stats,
                 );
                 raycast_query_mesh_bvh_node_after_bounds_hit(
                     geometry,
+                    instance_transform,
+                    world_origin,
+                    world_dir,
                     node.right,
                     local_origin,
                     local_dir,
+                    radius,
+                    local_radius,
                     closest_t,
                     hit_t,
                     stats,
@@ -4401,18 +4549,28 @@ fn raycast_query_mesh_bvh_node_after_bounds_hit(
             } else {
                 raycast_query_mesh_bvh_node_after_bounds_hit(
                     geometry,
+                    instance_transform,
+                    world_origin,
+                    world_dir,
                     node.right,
                     local_origin,
                     local_dir,
+                    radius,
+                    local_radius,
                     closest_t,
                     hit_t,
                     stats,
                 );
                 raycast_query_mesh_bvh_node_after_bounds_hit(
                     geometry,
+                    instance_transform,
+                    world_origin,
+                    world_dir,
                     node.left,
                     local_origin,
                     local_dir,
+                    radius,
+                    local_radius,
                     closest_t,
                     hit_t,
                     stats,
@@ -4421,18 +4579,28 @@ fn raycast_query_mesh_bvh_node_after_bounds_hit(
         }
         (Some(_), None) => raycast_query_mesh_bvh_node_after_bounds_hit(
             geometry,
+            instance_transform,
+            world_origin,
+            world_dir,
             node.left,
             local_origin,
             local_dir,
+            radius,
+            local_radius,
             closest_t,
             hit_t,
             stats,
         ),
         (None, Some(_)) => raycast_query_mesh_bvh_node_after_bounds_hit(
             geometry,
+            instance_transform,
+            world_origin,
+            world_dir,
             node.right,
             local_origin,
             local_dir,
+            radius,
+            local_radius,
             closest_t,
             hit_t,
             stats,
@@ -4519,6 +4687,19 @@ fn transform_vector(transform: &[f32; 16], vector: [f32; 3]) -> [f32; 3] {
     ]
 }
 
+fn local_radius_for_world_sphere(inverse_transform: &[f32; 16], world_radius: f32) -> f32 {
+    if !world_radius.is_finite() || world_radius <= 0.0 {
+        return 0.0;
+    }
+
+    let x = transform_vector(inverse_transform, [world_radius, 0.0, 0.0]);
+    let y = transform_vector(inverse_transform, [0.0, world_radius, 0.0]);
+    let z = transform_vector(inverse_transform, [0.0, 0.0, world_radius]);
+    vector_length3(x)
+        .max(vector_length3(y))
+        .max(vector_length3(z))
+}
+
 fn raycast_triangle(
     origin: [f32; 3],
     dir: [f32; 3],
@@ -4553,6 +4734,197 @@ fn raycast_triangle(
     } else {
         None
     }
+}
+
+fn raycast_swept_sphere_triangle(
+    origin: [f32; 3],
+    dir: [f32; 3],
+    radius: f32,
+    a: [f32; 3],
+    b: [f32; 3],
+    c: [f32; 3],
+    max_distance: f32,
+) -> Option<f32> {
+    if !radius.is_finite() || radius <= COLLISION_EPSILON {
+        return raycast_triangle(origin, dir, a, b, c).filter(|t| *t >= 0.0 && *t <= max_distance);
+    }
+
+    let mut best = None;
+    consider_hit(
+        &mut best,
+        raycast_swept_sphere_triangle_face(origin, dir, radius, a, b, c, max_distance),
+        max_distance,
+    );
+    for (edge_a, edge_b) in [(a, b), (b, c), (c, a)] {
+        consider_hit(
+            &mut best,
+            raycast_capsule_segment(origin, dir, edge_a, edge_b, radius, max_distance),
+            max_distance,
+        );
+    }
+    best
+}
+
+fn raycast_swept_sphere_triangle_face(
+    origin: [f32; 3],
+    dir: [f32; 3],
+    radius: f32,
+    a: [f32; 3],
+    b: [f32; 3],
+    c: [f32; 3],
+    max_distance: f32,
+) -> Option<f32> {
+    let edge1 = sub3(b, a);
+    let edge2 = sub3(c, a);
+    let normal = cross3(edge1, edge2);
+    let normal_len = vector_length3(normal);
+    if normal_len <= COLLISION_EPSILON {
+        return None;
+    }
+    let n = [
+        normal[0] / normal_len,
+        normal[1] / normal_len,
+        normal[2] / normal_len,
+    ];
+    let start_distance = dot3(sub3(origin, a), n);
+    let denom = dot3(dir, n);
+
+    let mut candidates = [f32::INFINITY; 3];
+    let mut count = 0usize;
+    if start_distance.abs() <= radius + COLLISION_EPSILON {
+        candidates[count] = 0.0;
+        count += 1;
+    }
+    if denom.abs() > COLLISION_EPSILON {
+        for target_distance in [-radius, radius] {
+            let t = (target_distance - start_distance) / denom;
+            if t >= -COLLISION_EPSILON && t <= max_distance + COLLISION_EPSILON {
+                candidates[count] = t.max(0.0);
+                count += 1;
+            }
+        }
+    }
+
+    let mut best = None;
+    for t in candidates.into_iter().take(count) {
+        let center = add3(origin, mul3(dir, t));
+        let signed_distance = dot3(sub3(center, a), n);
+        let projected = sub3(center, mul3(n, signed_distance));
+        if point_in_triangle_3d(projected, a, b, c) {
+            consider_hit(&mut best, Some(t), max_distance);
+        }
+    }
+    best
+}
+
+fn raycast_capsule_segment(
+    origin: [f32; 3],
+    dir: [f32; 3],
+    a: [f32; 3],
+    b: [f32; 3],
+    radius: f32,
+    max_distance: f32,
+) -> Option<f32> {
+    let ba = sub3(b, a);
+    let oa = sub3(origin, a);
+    let baba = dot3(ba, ba);
+    if baba <= COLLISION_EPSILON {
+        return raycast_sphere(origin, dir, a, radius, max_distance);
+    }
+
+    let bard = dot3(ba, dir);
+    let baoa = dot3(ba, oa);
+    let rdoa = dot3(dir, oa);
+    let oaoa = dot3(oa, oa);
+    let cyl_a = baba - bard * bard;
+    let cyl_b = baba * rdoa - baoa * bard;
+    let cyl_c = baba * oaoa - baoa * baoa - radius * radius * baba;
+
+    let mut best = None;
+    if cyl_a.abs() > COLLISION_EPSILON {
+        let h = cyl_b * cyl_b - cyl_a * cyl_c;
+        if h >= 0.0 {
+            let t = (-cyl_b - h.sqrt()) / cyl_a;
+            let y = baoa + t * bard;
+            if y > 0.0 && y < baba {
+                consider_hit(&mut best, Some(t), max_distance);
+            }
+        }
+    }
+
+    consider_hit(
+        &mut best,
+        raycast_sphere(origin, dir, a, radius, max_distance),
+        max_distance,
+    );
+    consider_hit(
+        &mut best,
+        raycast_sphere(origin, dir, b, radius, max_distance),
+        max_distance,
+    );
+    best
+}
+
+fn raycast_sphere(
+    origin: [f32; 3],
+    dir: [f32; 3],
+    center: [f32; 3],
+    radius: f32,
+    max_distance: f32,
+) -> Option<f32> {
+    let oc = sub3(origin, center);
+    let a = dot3(dir, dir);
+    let b = 2.0 * dot3(oc, dir);
+    let c = dot3(oc, oc) - radius * radius;
+    if a <= COLLISION_EPSILON {
+        return None;
+    }
+    let discriminant = b * b - 4.0 * a * c;
+    if discriminant < 0.0 {
+        return None;
+    }
+    let sqrt_d = discriminant.sqrt();
+    let t0 = (-b - sqrt_d) / (2.0 * a);
+    let t1 = (-b + sqrt_d) / (2.0 * a);
+    if t0 >= -COLLISION_EPSILON && t0 <= max_distance + COLLISION_EPSILON {
+        Some(t0.max(0.0))
+    } else if t1 >= -COLLISION_EPSILON && t1 <= max_distance + COLLISION_EPSILON {
+        Some(t1.max(0.0))
+    } else {
+        None
+    }
+}
+
+fn consider_hit(best: &mut Option<f32>, candidate: Option<f32>, max_distance: f32) {
+    let Some(t) = candidate else {
+        return;
+    };
+    if !t.is_finite() || t < -COLLISION_EPSILON || t > max_distance + COLLISION_EPSILON {
+        return;
+    }
+    let t = t.max(0.0);
+    if best.is_none_or(|existing| t < existing) {
+        *best = Some(t);
+    }
+}
+
+fn point_in_triangle_3d(p: [f32; 3], a: [f32; 3], b: [f32; 3], c: [f32; 3]) -> bool {
+    let v0 = sub3(b, a);
+    let v1 = sub3(c, a);
+    let v2 = sub3(p, a);
+    let d00 = dot3(v0, v0);
+    let d01 = dot3(v0, v1);
+    let d11 = dot3(v1, v1);
+    let d20 = dot3(v2, v0);
+    let d21 = dot3(v2, v1);
+    let denom = d00 * d11 - d01 * d01;
+    if denom.abs() <= COLLISION_EPSILON {
+        return false;
+    }
+    let v = (d11 * d20 - d01 * d21) / denom;
+    let w = (d00 * d21 - d01 * d20) / denom;
+    let u = 1.0 - v - w;
+    u >= -COLLISION_EPSILON && v >= -COLLISION_EPSILON && w >= -COLLISION_EPSILON
 }
 
 fn raycast_aabb_bounds(
@@ -4600,6 +4972,22 @@ fn raycast_aabb_bounds(
 
 fn dot3(a: [f32; 3], b: [f32; 3]) -> f32 {
     a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+}
+
+fn add3(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
+    [a[0] + b[0], a[1] + b[1], a[2] + b[2]]
+}
+
+fn sub3(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
+    [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
+}
+
+fn mul3(a: [f32; 3], scalar: f32) -> [f32; 3] {
+    [a[0] * scalar, a[1] * scalar, a[2] * scalar]
+}
+
+fn vector_length3(a: [f32; 3]) -> f32 {
+    dot3(a, a).sqrt()
 }
 
 fn cross3(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
@@ -4663,17 +5051,18 @@ mod tests {
     use super::{
         assert_no_full_rotation_movement_boxes, gameplay_movement_mesh_hull_can_step_up,
         gameplay_movement_mesh_hull_surface_height_at_xz, mesh_instance_bounds,
-        parse_gameplay_collision_boxes, parse_gameplay_movement_mesh_hulls,
-        parse_gameplay_query_meshes, polygon_area_signed, push_out_convex_footprint_2d,
-        quaternion_to_axes, raycast_gameplay_collision_boxes, raycast_gameplay_query_meshes,
-        raycast_movement_and_query_collision_boxes, raycast_query_mesh_geometry_bvh,
-        raycast_query_mesh_geometry_linear, resolve_swept_convex_footprint_2d,
-        resolve_swept_gameplay_box_2d, resolve_world_spawn_position_with_layout_for_scene,
-        transform_point, transform_vector, triangle_normal_y_abs, try_world_gameplay_box_hit,
-        Aabb3, GameplayBoxBroadphase, GameplayCollisionBox, GameplayCollisionBoxFile,
-        GameplayCollisionLayoutFile, GameplayMovementMeshHull, GameplayQueryMeshBvh,
-        GameplayQueryMeshGeometry, GameplayQueryMeshGeometryFile, GameplayQueryMeshInstance,
-        GameplayQueryMeshInstanceFile, GameplayQueryMeshSet, MAX_QUERY_MESH_TRIANGLES_PER_COLLIDER,
+        movement_broadphase_indices, movement_sweep_bounds, parse_gameplay_collision_boxes,
+        parse_gameplay_movement_mesh_hulls, parse_gameplay_query_meshes, polygon_area_signed,
+        push_out_convex_footprint_2d, quaternion_to_axes, raycast_gameplay_collision_boxes,
+        raycast_gameplay_query_meshes, raycast_movement_and_query_collision_boxes,
+        raycast_query_mesh_geometry_bvh, raycast_query_mesh_geometry_linear,
+        resolve_swept_convex_footprint_2d, resolve_swept_gameplay_box_2d,
+        resolve_world_spawn_position_with_layout_for_scene, transform_point, transform_vector,
+        triangle_normal_y_abs, try_world_gameplay_box_hit, Aabb3, GameplayBoxBroadphase,
+        GameplayCollisionBox, GameplayCollisionBoxFile, GameplayCollisionLayoutFile,
+        GameplayMovementMeshHull, GameplayQueryMeshBvh, GameplayQueryMeshGeometry,
+        GameplayQueryMeshGeometryFile, GameplayQueryMeshInstance, GameplayQueryMeshInstanceFile,
+        GameplayQueryMeshSet, MAX_QUERY_MESH_TRIANGLES_PER_COLLIDER,
     };
     use crate::arena::{WorldRayHit, WorldRaycastRequest};
     use crate::open_world_scene::{
@@ -4817,6 +5206,80 @@ mod tests {
             resolve_swept_convex_footprint_2d(&footprint, -1.0, 0.5, -0.2, 0.5, TEST_PLAYER_RADIUS);
 
         assert_eq!(resolved, Some((-1.0, 0.5)));
+    }
+
+    #[test]
+    fn movement_box_broadphase_candidates_preserve_full_scan_blockers() {
+        let mut colliders = vec![
+            GameplayCollisionBox::Aabb {
+                center_x: 0.0,
+                center_y: 0.5,
+                center_z: 0.0,
+                half_x: 0.5,
+                half_y: 0.5,
+                half_z: 0.5,
+            },
+            GameplayCollisionBox::Aabb {
+                center_x: 50.0,
+                center_y: 0.5,
+                center_z: 50.0,
+                half_x: 0.5,
+                half_y: 0.5,
+                half_z: 0.5,
+            },
+        ];
+        for index in 0..8 {
+            colliders.push(GameplayCollisionBox::Aabb {
+                center_x: 50.0 + index as f32 * 4.0,
+                center_y: 0.5,
+                center_z: 50.0,
+                half_x: 0.5,
+                half_y: 0.5,
+                half_z: 0.5,
+            });
+        }
+        let broadphase = GameplayBoxBroadphase::build(&colliders);
+        let query_bounds =
+            movement_sweep_bounds(-2.0, 0.0, 0.25, 0.0, TEST_PLAYER_RADIUS, 0.0, 1.8);
+        let indices = movement_broadphase_indices(&broadphase, query_bounds)
+            .expect("small movement sweep should use broadphase");
+
+        assert_eq!(indices, vec![0]);
+        assert_eq!(
+            resolve_swept_gameplay_box_2d(colliders[0], -2.0, 0.0, 0.25, 0.0, TEST_PLAYER_RADIUS),
+            Some((-2.0, 0.0))
+        );
+    }
+
+    #[test]
+    fn movement_mesh_broadphase_candidates_preserve_full_scan_blockers() {
+        let mut hulls = vec![test_movement_hull("near", 0.0, 0.0)];
+        for index in 0..8 {
+            hulls.push(test_movement_hull(
+                &format!("far_{index}"),
+                50.0 + index as f32 * 4.0,
+                50.0,
+            ));
+        }
+        let broadphase =
+            GameplayBoxBroadphase::build_from_aabbs(hulls.len(), hulls.iter().map(|h| h.bounds));
+        let query_bounds =
+            movement_sweep_bounds(-2.0, 0.25, 0.25, 0.25, TEST_PLAYER_RADIUS, 0.0, 1.8);
+        let indices = movement_broadphase_indices(&broadphase, query_bounds)
+            .expect("small movement sweep should use broadphase");
+
+        assert_eq!(indices, vec![0]);
+        assert_eq!(
+            resolve_swept_convex_footprint_2d(
+                &hulls[0].footprint,
+                -2.0,
+                0.25,
+                0.25,
+                0.25,
+                TEST_PLAYER_RADIUS
+            ),
+            Some((-2.0, 0.25))
+        );
     }
 
     #[test]
@@ -4976,7 +5439,31 @@ mod tests {
             dir_y,
             dir_z,
             max_distance,
-            radius: 0.1,
+            radius: 0.0,
+        }
+    }
+
+    fn request_with_radius(
+        origin_x: f32,
+        origin_y: f32,
+        origin_z: f32,
+        dir_x: f32,
+        dir_y: f32,
+        dir_z: f32,
+        max_distance: f32,
+        radius: f32,
+    ) -> WorldRaycastRequest {
+        WorldRaycastRequest {
+            radius,
+            ..request(
+                origin_x,
+                origin_y,
+                origin_z,
+                dir_x,
+                dir_y,
+                dir_z,
+                max_distance,
+            )
         }
     }
 
@@ -5008,7 +5495,7 @@ mod tests {
 
         try_world_gameplay_box_hit(
             &mut hit,
-            request(-3.0, 0.0, 0.0, 1.0, 0.0, 0.0, 8.0),
+            request_with_radius(-3.0, 0.0, 0.0, 1.0, 0.0, 0.0, 8.0, 0.1),
             collider,
         );
 
@@ -5465,6 +5952,22 @@ mod tests {
     }
 
     #[test]
+    fn query_mesh_raycast_uses_projectile_radius_for_triangle_edges() {
+        let meshes = test_runtime_mesh_set(vec![identity_transform()]);
+        let broadphase = GameplayBoxBroadphase::build_from_aabbs(
+            meshes.instances.len(),
+            meshes.instances.iter().map(|instance| instance.bounds),
+        );
+        let request = request_with_radius(0.5, -0.05, -2.0, 0.0, 0.0, 1.0, 10.0, 0.1);
+        let mut hit = None;
+
+        raycast_gameplay_query_meshes(&mut hit, request, &meshes, &broadphase, None);
+
+        let expected_t = 2.0 - (0.1_f32 * 0.1 - 0.05_f32 * 0.05).sqrt();
+        assert_hit_t_close(hit, Some(hit_at(&request, expected_t)));
+    }
+
+    #[test]
     fn query_mesh_raycast_hits_rotated_instance_triangle() {
         let meshes = test_runtime_mesh_set(vec![z_rotation_transform(90.0, 0.0, 0.0, 0.0)]);
         let broadphase = GameplayBoxBroadphase::build_from_aabbs(
@@ -5605,8 +6108,13 @@ mod tests {
 
         let bvh_hit = raycast_query_mesh_geometry_bvh(
             geometry,
+            &identity_transform_array(),
             local_origin,
             local_dir,
+            local_origin,
+            local_dir,
+            0.0,
+            0.0,
             10.0,
             Some(&mut stats),
         );
@@ -5634,8 +6142,18 @@ mod tests {
         let local_origin = [10.25, 10.0, -1.0];
         let local_dir = [0.0, 0.0, 1.0];
 
-        let bvh_hit =
-            raycast_query_mesh_geometry_bvh(geometry, local_origin, local_dir, 10.0, None);
+        let bvh_hit = raycast_query_mesh_geometry_bvh(
+            geometry,
+            &identity_transform_array(),
+            local_origin,
+            local_dir,
+            local_origin,
+            local_dir,
+            0.0,
+            0.0,
+            10.0,
+            None,
+        );
         let linear_hit =
             raycast_query_mesh_geometry_linear(geometry, local_origin, local_dir, 10.0);
 
@@ -5723,6 +6241,31 @@ mod tests {
 
     fn identity_transform() -> Vec<f32> {
         translated_transform(0.0, 0.0, 0.0)
+    }
+
+    fn identity_transform_array() -> [f32; 16] {
+        [
+            1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0,
+        ]
+    }
+
+    fn test_movement_hull(name: &str, x: f32, z: f32) -> GameplayMovementMeshHull {
+        GameplayMovementMeshHull {
+            name: name.to_string(),
+            y_min: 0.0,
+            y_max: 1.0,
+            footprint: vec![[x, z], [x + 1.0, z], [x, z + 1.0]],
+            triangle: [[x, 0.0, z], [x + 1.0, 0.0, z], [x, 0.0, z + 1.0]],
+            ground_normal_y_abs: 1.0,
+            bounds: Aabb3 {
+                min_x: x,
+                min_y: 0.0,
+                min_z: z,
+                max_x: x + 1.0,
+                max_y: 1.0,
+                max_z: z + 1.0,
+            },
+        }
     }
 
     fn translated_transform(x: f32, y: f32, z: f32) -> Vec<f32> {

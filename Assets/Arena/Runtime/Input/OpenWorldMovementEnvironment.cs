@@ -151,6 +151,7 @@ namespace Arena.Input
         private const float GameplayMeshGroundMinNormalY = 0.35f;
         private const float WalkableTopEpsilon = 0.05f;
         private const float MovementBlockerLogIntervalSeconds = 0.25f;
+        private const int MovementBroadphaseLogInterval = 2048;
         private const float GameplayBroadphaseMinCellSize = 2.0f;
         private const float GameplayBroadphaseMaxCellSize = 16.0f;
         private const int GameplayBroadphaseFallbackCellCount = 256;
@@ -717,6 +718,12 @@ namespace Arena.Input
         private readonly GameplayMovementBroadphase _gameplayMeshHullBroadphase;
         private readonly List<int> _gameplayBroadphaseCandidates = new(128);
         private readonly OpenWorldHeightfield? _heightfield;
+        private ulong _movementBoxBroadphaseQueries;
+        private ulong _movementBoxBroadphaseCandidates;
+        private ulong _movementBoxBroadphaseFallbacks;
+        private ulong _movementMeshBroadphaseQueries;
+        private ulong _movementMeshBroadphaseCandidates;
+        private ulong _movementMeshBroadphaseFallbacks;
 
         public static OpenWorldMovementEnvironment Shared => SharedLazy.Value;
 
@@ -959,6 +966,14 @@ namespace Arena.Input
 
                 if (_gameplayBoxBroadphase.Query(queryBounds, _gameplayBroadphaseCandidates))
                 {
+                    RecordMovementBroadphaseMetrics(
+                        "box",
+                        _gameplayBroadphaseCandidates.Count,
+                        false,
+                        _gameplayBoxes.Length,
+                        ref _movementBoxBroadphaseQueries,
+                        ref _movementBoxBroadphaseCandidates,
+                        ref _movementBoxBroadphaseFallbacks);
                     foreach (int index in _gameplayBroadphaseCandidates)
                     {
                         if (index >= 0 && index < _gameplayBoxes.Length &&
@@ -968,6 +983,14 @@ namespace Arena.Input
                 }
                 else
                 {
+                    RecordMovementBroadphaseMetrics(
+                        "box",
+                        _gameplayBoxes.Length,
+                        true,
+                        _gameplayBoxes.Length,
+                        ref _movementBoxBroadphaseQueries,
+                        ref _movementBoxBroadphaseCandidates,
+                        ref _movementBoxBroadphaseFallbacks);
                     foreach (GameplayCollisionBox collider in _gameplayBoxes)
                     {
                         if (ResolveGameplayBoxCandidate(collider, startX, startZ, ref outX, ref outZ, playerRadius, playerHeight, currentY))
@@ -986,6 +1009,14 @@ namespace Arena.Input
 
                 if (_gameplayMeshHullBroadphase.Query(queryBounds, _gameplayBroadphaseCandidates))
                 {
+                    RecordMovementBroadphaseMetrics(
+                        "mesh",
+                        _gameplayBroadphaseCandidates.Count,
+                        false,
+                        _gameplayMeshHulls.Length,
+                        ref _movementMeshBroadphaseQueries,
+                        ref _movementMeshBroadphaseCandidates,
+                        ref _movementMeshBroadphaseFallbacks);
                     foreach (int index in _gameplayBroadphaseCandidates)
                     {
                         if (index >= 0 && index < _gameplayMeshHulls.Length &&
@@ -995,6 +1026,14 @@ namespace Arena.Input
                 }
                 else
                 {
+                    RecordMovementBroadphaseMetrics(
+                        "mesh",
+                        _gameplayMeshHulls.Length,
+                        true,
+                        _gameplayMeshHulls.Length,
+                        ref _movementMeshBroadphaseQueries,
+                        ref _movementMeshBroadphaseCandidates,
+                        ref _movementMeshBroadphaseFallbacks);
                     foreach (GameplayMovementMeshHull hull in _gameplayMeshHulls)
                     {
                         if (ResolveGameplayMeshHullCandidate(hull, startX, startZ, ref outX, ref outZ, playerRadius, playerHeight, currentY))
@@ -1140,6 +1179,33 @@ namespace Arena.Input
 
             float y = alpha * a.y + beta * b.y + gamma * c.y;
             return float.IsFinite(y) ? y : null;
+        }
+
+        private static void RecordMovementBroadphaseMetrics(
+            string kind,
+            int candidates,
+            bool fallback,
+            int totalColliders,
+            ref ulong queries,
+            ref ulong totalCandidates,
+            ref ulong fallbacks)
+        {
+            queries++;
+            totalCandidates += (ulong)Mathf.Max(candidates, 0);
+            if (fallback)
+                fallbacks++;
+
+            if (queries % MovementBroadphaseLogInterval != 0UL)
+                return;
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            double averageCandidates = queries == 0UL ? 0.0 : (double)totalCandidates / queries;
+            double fallbackRatio = queries == 0UL ? 0.0 : (double)fallbacks * 100.0 / queries;
+            Debug.Log(
+                $"[OpenWorldMovementEnvironment] Movement broadphase summary kind={kind} " +
+                $"queries={queries} avgCandidates={averageCandidates:F1} fallbacks={fallbacks} " +
+                $"fallbackRatio={fallbackRatio:F1}% lastCandidates={candidates} totalColliders={totalColliders}");
+#endif
         }
 
         private static void LogMovementBlocker(
