@@ -20,7 +20,7 @@ use serde::Deserialize;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::{
-    atomic::{AtomicU32, AtomicU64, Ordering},
+    atomic::{AtomicU32, Ordering},
     OnceLock,
 };
 
@@ -78,12 +78,6 @@ const QUERY_MESH_BVH_LEAF_TRIANGLE_COUNT: usize = 4;
 const MOVEMENT_BLOCKER_LOG_LIMIT: u32 = 100;
 
 static MOVEMENT_BLOCKER_LOG_COUNT: AtomicU32 = AtomicU32::new(0);
-static MOVEMENT_BOX_QUERY_COUNT: AtomicU64 = AtomicU64::new(0);
-static MOVEMENT_BOX_CANDIDATE_COUNT: AtomicU64 = AtomicU64::new(0);
-static MOVEMENT_BOX_FALLBACK_COUNT: AtomicU64 = AtomicU64::new(0);
-static MOVEMENT_MESH_QUERY_COUNT: AtomicU64 = AtomicU64::new(0);
-static MOVEMENT_MESH_CANDIDATE_COUNT: AtomicU64 = AtomicU64::new(0);
-static MOVEMENT_MESH_FALLBACK_COUNT: AtomicU64 = AtomicU64::new(0);
 
 thread_local! {
     static GAMEPLAY_BROADPHASE_CANDIDATE_SCRATCH: RefCell<Vec<usize>> = RefCell::new(Vec::new());
@@ -1644,33 +1638,11 @@ fn movement_box_candidates<'a>(
     query_bounds: Option<Aabb3>,
 ) -> Vec<&'a GameplayCollisionBox> {
     match movement_broadphase_indices(broadphase, query_bounds) {
-        Some(indices) => {
-            record_movement_broadphase_metrics(
-                "box",
-                &MOVEMENT_BOX_QUERY_COUNT,
-                &MOVEMENT_BOX_CANDIDATE_COUNT,
-                &MOVEMENT_BOX_FALLBACK_COUNT,
-                indices.len(),
-                false,
-                colliders.len(),
-            );
-            indices
-                .into_iter()
-                .filter_map(|index| colliders.get(index))
-                .collect()
-        }
-        None => {
-            record_movement_broadphase_metrics(
-                "box",
-                &MOVEMENT_BOX_QUERY_COUNT,
-                &MOVEMENT_BOX_CANDIDATE_COUNT,
-                &MOVEMENT_BOX_FALLBACK_COUNT,
-                colliders.len(),
-                true,
-                colliders.len(),
-            );
-            colliders.iter().collect()
-        }
+        Some(indices) => indices
+            .into_iter()
+            .filter_map(|index| colliders.get(index))
+            .collect(),
+        None => colliders.iter().collect(),
     }
 }
 
@@ -1680,33 +1652,11 @@ fn movement_mesh_hull_candidates<'a>(
     query_bounds: Option<Aabb3>,
 ) -> Vec<&'a GameplayMovementMeshHull> {
     match movement_broadphase_indices(broadphase, query_bounds) {
-        Some(indices) => {
-            record_movement_broadphase_metrics(
-                "mesh",
-                &MOVEMENT_MESH_QUERY_COUNT,
-                &MOVEMENT_MESH_CANDIDATE_COUNT,
-                &MOVEMENT_MESH_FALLBACK_COUNT,
-                indices.len(),
-                false,
-                hulls.len(),
-            );
-            indices
-                .into_iter()
-                .filter_map(|index| hulls.get(index))
-                .collect()
-        }
-        None => {
-            record_movement_broadphase_metrics(
-                "mesh",
-                &MOVEMENT_MESH_QUERY_COUNT,
-                &MOVEMENT_MESH_CANDIDATE_COUNT,
-                &MOVEMENT_MESH_FALLBACK_COUNT,
-                hulls.len(),
-                true,
-                hulls.len(),
-            );
-            hulls.iter().collect()
-        }
+        Some(indices) => indices
+            .into_iter()
+            .filter_map(|index| hulls.get(index))
+            .collect(),
+        None => hulls.iter().collect(),
     }
 }
 
@@ -1723,32 +1673,6 @@ fn movement_broadphase_indices(
             None
         }
     })
-}
-
-fn record_movement_broadphase_metrics(
-    kind: &str,
-    query_count: &AtomicU64,
-    candidate_count: &AtomicU64,
-    fallback_count: &AtomicU64,
-    candidates: usize,
-    fallback: bool,
-    total_colliders: usize,
-) {
-    let queries = query_count
-        .fetch_add(1, Ordering::Relaxed)
-        .saturating_add(1);
-    let total_candidates = candidate_count
-        .fetch_add(candidates.min(u64::MAX as usize) as u64, Ordering::Relaxed)
-        .saturating_add(candidates.min(u64::MAX as usize) as u64);
-    let fallbacks = if fallback {
-        fallback_count
-            .fetch_add(1, Ordering::Relaxed)
-            .saturating_add(1)
-    } else {
-        fallback_count.load(Ordering::Relaxed)
-    };
-
-    let _ = (kind, queries, total_candidates, fallbacks, candidates, total_colliders);
 }
 
 fn log_open_world_movement_blocker(

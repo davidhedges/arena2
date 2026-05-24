@@ -42,7 +42,6 @@ namespace Arena.Debugging
                 Lines.Dequeue();
             Lines.Enqueue(line);
             _snapshot = Lines.ToArray();
-            Debug.Log($"[LoadoutActionTrace] {message}");
         }
 
         private static void Unsubscribe()

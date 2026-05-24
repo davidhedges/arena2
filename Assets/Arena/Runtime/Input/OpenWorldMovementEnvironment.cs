@@ -717,12 +717,6 @@ namespace Arena.Input
         private readonly GameplayMovementBroadphase _gameplayMeshHullBroadphase;
         private readonly List<int> _gameplayBroadphaseCandidates = new(128);
         private readonly OpenWorldHeightfield? _heightfield;
-        private ulong _movementBoxBroadphaseQueries;
-        private ulong _movementBoxBroadphaseCandidates;
-        private ulong _movementBoxBroadphaseFallbacks;
-        private ulong _movementMeshBroadphaseQueries;
-        private ulong _movementMeshBroadphaseCandidates;
-        private ulong _movementMeshBroadphaseFallbacks;
 
         public static OpenWorldMovementEnvironment Shared => SharedLazy.Value;
 
@@ -965,14 +959,6 @@ namespace Arena.Input
 
                 if (_gameplayBoxBroadphase.Query(queryBounds, _gameplayBroadphaseCandidates))
                 {
-                    RecordMovementBroadphaseMetrics(
-                        "box",
-                        _gameplayBroadphaseCandidates.Count,
-                        false,
-                        _gameplayBoxes.Length,
-                        ref _movementBoxBroadphaseQueries,
-                        ref _movementBoxBroadphaseCandidates,
-                        ref _movementBoxBroadphaseFallbacks);
                     foreach (int index in _gameplayBroadphaseCandidates)
                     {
                         if (index >= 0 && index < _gameplayBoxes.Length &&
@@ -982,14 +968,6 @@ namespace Arena.Input
                 }
                 else
                 {
-                    RecordMovementBroadphaseMetrics(
-                        "box",
-                        _gameplayBoxes.Length,
-                        true,
-                        _gameplayBoxes.Length,
-                        ref _movementBoxBroadphaseQueries,
-                        ref _movementBoxBroadphaseCandidates,
-                        ref _movementBoxBroadphaseFallbacks);
                     foreach (GameplayCollisionBox collider in _gameplayBoxes)
                     {
                         if (ResolveGameplayBoxCandidate(collider, startX, startZ, ref outX, ref outZ, playerRadius, playerHeight, currentY))
@@ -1008,14 +986,6 @@ namespace Arena.Input
 
                 if (_gameplayMeshHullBroadphase.Query(queryBounds, _gameplayBroadphaseCandidates))
                 {
-                    RecordMovementBroadphaseMetrics(
-                        "mesh",
-                        _gameplayBroadphaseCandidates.Count,
-                        false,
-                        _gameplayMeshHulls.Length,
-                        ref _movementMeshBroadphaseQueries,
-                        ref _movementMeshBroadphaseCandidates,
-                        ref _movementMeshBroadphaseFallbacks);
                     foreach (int index in _gameplayBroadphaseCandidates)
                     {
                         if (index >= 0 && index < _gameplayMeshHulls.Length &&
@@ -1025,14 +995,6 @@ namespace Arena.Input
                 }
                 else
                 {
-                    RecordMovementBroadphaseMetrics(
-                        "mesh",
-                        _gameplayMeshHulls.Length,
-                        true,
-                        _gameplayMeshHulls.Length,
-                        ref _movementMeshBroadphaseQueries,
-                        ref _movementMeshBroadphaseCandidates,
-                        ref _movementMeshBroadphaseFallbacks);
                     foreach (GameplayMovementMeshHull hull in _gameplayMeshHulls)
                     {
                         if (ResolveGameplayMeshHullCandidate(hull, startX, startZ, ref outX, ref outZ, playerRadius, playerHeight, currentY))
@@ -1178,22 +1140,6 @@ namespace Arena.Input
 
             float y = alpha * a.y + beta * b.y + gamma * c.y;
             return float.IsFinite(y) ? y : null;
-        }
-
-        private static void RecordMovementBroadphaseMetrics(
-            string kind,
-            int candidates,
-            bool fallback,
-            int totalColliders,
-            ref ulong queries,
-            ref ulong totalCandidates,
-            ref ulong fallbacks)
-        {
-            queries++;
-            totalCandidates += (ulong)Mathf.Max(candidates, 0);
-            if (fallback)
-                fallbacks++;
-
         }
 
         private static void LogMovementBlocker(
