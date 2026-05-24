@@ -1000,7 +1000,21 @@ fn resolve_gameplay_horizontal_collision_y(
     let mut out_z = z;
 
     for _ in 0..OPEN_WORLD_COLLISION_ITERS {
-        for collider in gameplay_collision_boxes() {
+        let query_bounds = movement_sweep_bounds(
+            out_x,
+            out_z,
+            out_x,
+            out_z,
+            player_radius,
+            current_y,
+            player_height,
+        );
+
+        for collider in movement_box_candidates(
+            gameplay_collision_boxes(),
+            gameplay_collision_broadphase(),
+            query_bounds,
+        ) {
             if !gameplay_box_overlaps_player_band(*collider, current_y, player_height) {
                 continue;
             }
@@ -1057,7 +1071,11 @@ fn resolve_gameplay_horizontal_collision_y(
             };
         }
 
-        for hull in gameplay_movement_mesh_hulls() {
+        for hull in movement_mesh_hull_candidates(
+            gameplay_movement_mesh_hulls(),
+            gameplay_movement_mesh_broadphase(),
+            query_bounds,
+        ) {
             if !gameplay_movement_mesh_hull_overlaps_player_band(hull, current_y, player_height) {
                 continue;
             }
@@ -1082,7 +1100,21 @@ fn resolve_open_world_gameplay_horizontal_collision_y(
     let mut out_z = z;
 
     for _ in 0..OPEN_WORLD_COLLISION_ITERS {
-        for collider in open_world_gameplay_collision_boxes(profile) {
+        let query_bounds = movement_sweep_bounds(
+            out_x,
+            out_z,
+            out_x,
+            out_z,
+            player_radius,
+            current_y,
+            player_height,
+        );
+
+        for collider in movement_box_candidates(
+            open_world_gameplay_collision_boxes(profile),
+            open_world_gameplay_collision_broadphase(profile),
+            query_bounds,
+        ) {
             if !gameplay_box_overlaps_player_band(*collider, current_y, player_height) {
                 continue;
             }
@@ -1142,7 +1174,11 @@ fn resolve_open_world_gameplay_horizontal_collision_y(
             };
         }
 
-        for hull in open_world_gameplay_movement_mesh_hulls(profile) {
+        for hull in movement_mesh_hull_candidates(
+            open_world_gameplay_movement_mesh_hulls(profile),
+            open_world_gameplay_movement_mesh_broadphase(profile),
+            query_bounds,
+        ) {
             if !gameplay_movement_mesh_hull_overlaps_player_band(hull, current_y, player_height) {
                 continue;
             }
@@ -1171,7 +1207,21 @@ fn resolve_gameplay_horizontal_sweep_collision_y(
     let mut out_z = target_z;
 
     for _ in 0..OPEN_WORLD_COLLISION_ITERS {
-        for collider in gameplay_collision_boxes() {
+        let query_bounds = movement_sweep_bounds(
+            start_x,
+            start_z,
+            out_x,
+            out_z,
+            player_radius,
+            current_y,
+            player_height,
+        );
+
+        for collider in movement_box_candidates(
+            gameplay_collision_boxes(),
+            gameplay_collision_broadphase(),
+            query_bounds,
+        ) {
             if !gameplay_box_overlaps_player_band(*collider, current_y, player_height) {
                 continue;
             }
@@ -1192,7 +1242,11 @@ fn resolve_gameplay_horizontal_sweep_collision_y(
             }
         }
 
-        for hull in gameplay_movement_mesh_hulls() {
+        for hull in movement_mesh_hull_candidates(
+            gameplay_movement_mesh_hulls(),
+            gameplay_movement_mesh_broadphase(),
+            query_bounds,
+        ) {
             if !gameplay_movement_mesh_hull_overlaps_player_band(hull, current_y, player_height) {
                 continue;
             }
@@ -1231,7 +1285,21 @@ fn resolve_open_world_gameplay_horizontal_sweep_collision_y(
     let mut out_z = target_z;
 
     for _ in 0..OPEN_WORLD_COLLISION_ITERS {
-        for collider in open_world_gameplay_collision_boxes(profile) {
+        let query_bounds = movement_sweep_bounds(
+            start_x,
+            start_z,
+            out_x,
+            out_z,
+            player_radius,
+            current_y,
+            player_height,
+        );
+
+        for collider in movement_box_candidates(
+            open_world_gameplay_collision_boxes(profile),
+            open_world_gameplay_collision_broadphase(profile),
+            query_bounds,
+        ) {
             if !gameplay_box_overlaps_player_band(*collider, current_y, player_height) {
                 continue;
             }
@@ -1255,7 +1323,11 @@ fn resolve_open_world_gameplay_horizontal_sweep_collision_y(
             }
         }
 
-        for hull in open_world_gameplay_movement_mesh_hulls(profile) {
+        for hull in movement_mesh_hull_candidates(
+            open_world_gameplay_movement_mesh_hulls(profile),
+            open_world_gameplay_movement_mesh_broadphase(profile),
+            query_bounds,
+        ) {
             if !gameplay_movement_mesh_hull_overlaps_player_band(hull, current_y, player_height) {
                 continue;
             }
@@ -1460,6 +1532,83 @@ fn gameplay_movement_mesh_hull_overlaps_player_band(
 
 fn gameplay_movement_mesh_hull_can_step_up(hull: &GameplayMovementMeshHull, foot_y: f32) -> bool {
     hull.y_max <= foot_y + GAMEPLAY_MESH_STEP_UP_HEIGHT
+}
+
+fn movement_sweep_bounds(
+    start_x: f32,
+    start_z: f32,
+    target_x: f32,
+    target_z: f32,
+    player_radius: f32,
+    foot_y: f32,
+    player_height: f32,
+) -> Option<Aabb3> {
+    if !start_x.is_finite()
+        || !start_z.is_finite()
+        || !target_x.is_finite()
+        || !target_z.is_finite()
+        || !player_radius.is_finite()
+        || !foot_y.is_finite()
+        || !player_height.is_finite()
+    {
+        return None;
+    }
+
+    let radius = player_radius.max(0.0);
+    let height = player_height.max(0.1);
+    Some(Aabb3 {
+        min_x: start_x.min(target_x) - radius,
+        min_y: foot_y,
+        min_z: start_z.min(target_z) - radius,
+        max_x: start_x.max(target_x) + radius,
+        max_y: foot_y + height,
+        max_z: start_z.max(target_z) + radius,
+    })
+}
+
+fn movement_box_candidates<'a>(
+    colliders: &'a [GameplayCollisionBox],
+    broadphase: &GameplayBoxBroadphase,
+    query_bounds: Option<Aabb3>,
+) -> Vec<&'a GameplayCollisionBox> {
+    movement_broadphase_indices(broadphase, query_bounds)
+        .map(|indices| {
+            indices
+                .into_iter()
+                .filter_map(|index| colliders.get(index))
+                .collect()
+        })
+        .unwrap_or_else(|| colliders.iter().collect())
+}
+
+fn movement_mesh_hull_candidates<'a>(
+    hulls: &'a [GameplayMovementMeshHull],
+    broadphase: &GameplayBoxBroadphase,
+    query_bounds: Option<Aabb3>,
+) -> Vec<&'a GameplayMovementMeshHull> {
+    movement_broadphase_indices(broadphase, query_bounds)
+        .map(|indices| {
+            indices
+                .into_iter()
+                .filter_map(|index| hulls.get(index))
+                .collect()
+        })
+        .unwrap_or_else(|| hulls.iter().collect())
+}
+
+fn movement_broadphase_indices(
+    broadphase: &GameplayBoxBroadphase,
+    query_bounds: Option<Aabb3>,
+) -> Option<Vec<usize>> {
+    let query_bounds = query_bounds?;
+    GAMEPLAY_BROADPHASE_CANDIDATE_SCRATCH.with(|scratch| {
+        let mut candidate_indices = scratch.borrow_mut();
+        if broadphase.query_aabb_into(query_bounds, &mut candidate_indices) {
+            Some(candidate_indices.clone())
+        } else {
+            None
+        }
+    })
 }
 
 fn log_open_world_movement_blocker(
@@ -1778,6 +1927,18 @@ fn gameplay_movement_mesh_hulls() -> &'static [GameplayMovementMeshHull] {
     GAMEPLAY_MOVEMENT_MESH_HULLS
         .get_or_init(load_gameplay_movement_mesh_hulls)
         .as_slice()
+}
+
+fn gameplay_movement_mesh_broadphase() -> &'static GameplayBoxBroadphase {
+    static GAMEPLAY_MOVEMENT_MESH_BROADPHASE: OnceLock<GameplayBoxBroadphase> = OnceLock::new();
+    GAMEPLAY_MOVEMENT_MESH_BROADPHASE.get_or_init(|| {
+        GameplayBoxBroadphase::build_from_aabbs(
+            gameplay_movement_mesh_hulls().len(),
+            gameplay_movement_mesh_hulls()
+                .iter()
+                .map(|hull| hull.bounds),
+        )
+    })
 }
 
 fn open_world_gameplay_collision_boxes(
@@ -2109,6 +2270,37 @@ fn open_world_gameplay_movement_mesh_hulls(
         .get(profile.scene_name)
         .map(Vec::as_slice)
         .unwrap_or_else(|| EMPTY_MOVEMENT_MESH_HULLS.get_or_init(Vec::new).as_slice())
+}
+
+fn open_world_gameplay_movement_mesh_broadphase(
+    profile: &OpenWorldSceneProfile,
+) -> &'static GameplayBoxBroadphase {
+    static EMPTY_MOVEMENT_MESH_BROADPHASE: OnceLock<GameplayBoxBroadphase> = OnceLock::new();
+    static OPEN_WORLD_MOVEMENT_MESH_BROADPHASES: OnceLock<
+        HashMap<&'static str, GameplayBoxBroadphase>,
+    > = OnceLock::new();
+
+    OPEN_WORLD_MOVEMENT_MESH_BROADPHASES
+        .get_or_init(|| {
+            let mut broadphases_by_scene = HashMap::new();
+            for profile in OPEN_WORLD_SCENE_PROFILES {
+                let hulls = open_world_gameplay_movement_mesh_hulls(profile);
+                broadphases_by_scene.insert(
+                    profile.scene_name,
+                    GameplayBoxBroadphase::build_from_aabbs(
+                        hulls.len(),
+                        hulls.iter().map(|hull| hull.bounds),
+                    ),
+                );
+            }
+            broadphases_by_scene
+        })
+        .get(profile.scene_name)
+        .unwrap_or_else(|| {
+            EMPTY_MOVEMENT_MESH_BROADPHASE.get_or_init(|| {
+                GameplayBoxBroadphase::build_from_aabbs(0, std::iter::empty::<Aabb3>())
+            })
+        })
 }
 
 fn load_gameplay_collision_boxes() -> Vec<GameplayCollisionBox> {
@@ -2998,6 +3190,13 @@ impl GameplayBoxBroadphase {
     }
 
     fn query_into(&self, request: WorldRaycastRequest, candidates: &mut Vec<usize>) -> bool {
+        let Some(query_bounds) = Aabb3::from_raycast_request(request) else {
+            return false;
+        };
+        self.query_aabb_into(query_bounds, candidates)
+    }
+
+    fn query_aabb_into(&self, query_bounds: Aabb3, candidates: &mut Vec<usize>) -> bool {
         candidates.clear();
         if self.collider_count == 0 {
             return true;
@@ -3005,10 +3204,10 @@ impl GameplayBoxBroadphase {
         if self.unindexed_collider_count > 0 {
             return false;
         }
-
-        let Some(query_bounds) = Aabb3::from_raycast_request(request) else {
+        if !query_bounds.is_finite() {
             return false;
-        };
+        }
+
         let Some((min_x, min_y, min_z, max_x, max_y, max_z)) =
             cell_range_for_aabb(query_bounds, self.cell_size)
         else {

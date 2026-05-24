@@ -150,6 +150,10 @@ namespace Arena.Input
         private const float GameplayMeshStepUpHeight = 0.65f;
         private const float WalkableTopEpsilon = 0.05f;
         private const float MovementBlockerLogIntervalSeconds = 0.25f;
+        private const float GameplayBroadphaseMinCellSize = 2.0f;
+        private const float GameplayBroadphaseMaxCellSize = 16.0f;
+        private const int GameplayBroadphaseFallbackCellCount = 256;
+        private const int GameplayBroadphaseFallbackCandidateDivisor = 4;
 
         private const uint DefaultSeed = 614670171;
         private const float LegacyWorldSize = 320.0f;
@@ -387,12 +391,25 @@ namespace Arena.Input
 
         private readonly struct GameplayMovementMeshHull
         {
-            public GameplayMovementMeshHull(string name, int triangleIndex, float yMin, float yMax, Vector2[] footprint)
+            public GameplayMovementMeshHull(
+                string name,
+                int triangleIndex,
+                float yMin,
+                float yMax,
+                float minX,
+                float minZ,
+                float maxX,
+                float maxZ,
+                Vector2[] footprint)
             {
                 Name = name;
                 TriangleIndex = triangleIndex;
                 YMin = yMin;
                 YMax = yMax;
+                MinX = minX;
+                MinZ = minZ;
+                MaxX = maxX;
+                MaxZ = maxZ;
                 Footprint = footprint;
             }
 
@@ -400,7 +417,186 @@ namespace Arena.Input
             public int TriangleIndex { get; }
             public float YMin { get; }
             public float YMax { get; }
+            public float MinX { get; }
+            public float MinZ { get; }
+            public float MaxX { get; }
+            public float MaxZ { get; }
             public Vector2[] Footprint { get; }
+        }
+
+        private readonly struct GameplayBroadphaseAabb
+        {
+            public GameplayBroadphaseAabb(float minX, float minY, float minZ, float maxX, float maxY, float maxZ)
+            {
+                MinX = minX;
+                MinY = minY;
+                MinZ = minZ;
+                MaxX = maxX;
+                MaxY = maxY;
+                MaxZ = maxZ;
+            }
+
+            public float MinX { get; }
+            public float MinY { get; }
+            public float MinZ { get; }
+            public float MaxX { get; }
+            public float MaxY { get; }
+            public float MaxZ { get; }
+
+            public bool IsFinite =>
+                float.IsFinite(MinX) &&
+                float.IsFinite(MinY) &&
+                float.IsFinite(MinZ) &&
+                float.IsFinite(MaxX) &&
+                float.IsFinite(MaxY) &&
+                float.IsFinite(MaxZ) &&
+                MinX <= MaxX &&
+                MinY <= MaxY &&
+                MinZ <= MaxZ;
+
+            public float MaxExtent => Mathf.Max(MaxX - MinX, Mathf.Max(MaxY - MinY, MaxZ - MinZ));
+        }
+
+        private sealed class GameplayMovementBroadphase
+        {
+            private readonly float _cellSize;
+            private readonly Dictionary<(int, int, int), List<int>> _cells;
+            private readonly int _colliderCount;
+            private readonly int _unindexedColliderCount;
+
+            private GameplayMovementBroadphase(
+                float cellSize,
+                Dictionary<(int, int, int), List<int>> cells,
+                int colliderCount,
+                int unindexedColliderCount)
+            {
+                _cellSize = cellSize;
+                _cells = cells;
+                _colliderCount = colliderCount;
+                _unindexedColliderCount = unindexedColliderCount;
+            }
+
+            public static GameplayMovementBroadphase Build(IReadOnlyList<GameplayBroadphaseAabb> bounds)
+            {
+                var extents = new List<float>(bounds.Count);
+                foreach (GameplayBroadphaseAabb aabb in bounds)
+                {
+                    if (aabb.IsFinite)
+                        extents.Add(aabb.MaxExtent);
+                }
+
+                extents.Sort();
+                float medianExtent = extents.Count > 0 ? extents[(extents.Count - 1) / 2] : OpenWorldOccupancyCellSize;
+                float cellSize = Mathf.Clamp(medianExtent * 2.0f, GameplayBroadphaseMinCellSize, GameplayBroadphaseMaxCellSize);
+                var cells = new Dictionary<(int, int, int), List<int>>(bounds.Count * 2);
+                int unindexedColliderCount = 0;
+
+                for (int index = 0; index < bounds.Count; index++)
+                {
+                    GameplayBroadphaseAabb aabb = bounds[index];
+                    if (!TryCellRange(aabb, cellSize, out int minX, out int minY, out int minZ, out int maxX, out int maxY, out int maxZ))
+                    {
+                        unindexedColliderCount++;
+                        continue;
+                    }
+
+                    for (int cellX = minX; cellX <= maxX; cellX++)
+                    {
+                        for (int cellY = minY; cellY <= maxY; cellY++)
+                        {
+                            for (int cellZ = minZ; cellZ <= maxZ; cellZ++)
+                            {
+                                var key = (cellX, cellY, cellZ);
+                                if (!cells.TryGetValue(key, out List<int>? indices))
+                                {
+                                    indices = new List<int>();
+                                    cells[key] = indices;
+                                }
+                                indices.Add(index);
+                            }
+                        }
+                    }
+                }
+
+                return new GameplayMovementBroadphase(cellSize, cells, bounds.Count, unindexedColliderCount);
+            }
+
+            public bool Query(GameplayBroadphaseAabb queryBounds, List<int> candidates)
+            {
+                candidates.Clear();
+                if (_colliderCount == 0)
+                    return true;
+                if (_unindexedColliderCount > 0)
+                    return false;
+                if (!TryCellRange(queryBounds, _cellSize, out int minX, out int minY, out int minZ, out int maxX, out int maxY, out int maxZ))
+                    return false;
+
+                long cellCountX = (long)maxX - minX + 1;
+                long cellCountY = (long)maxY - minY + 1;
+                long cellCountZ = (long)maxZ - minZ + 1;
+                long cellCount = cellCountX * cellCountY * cellCountZ;
+                if (cellCount > GameplayBroadphaseFallbackCellCount)
+                    return false;
+
+                for (int cellX = minX; cellX <= maxX; cellX++)
+                {
+                    for (int cellY = minY; cellY <= maxY; cellY++)
+                    {
+                        for (int cellZ = minZ; cellZ <= maxZ; cellZ++)
+                        {
+                            if (_cells.TryGetValue((cellX, cellY, cellZ), out List<int>? indices))
+                                candidates.AddRange(indices);
+                        }
+                    }
+                }
+
+                candidates.Sort();
+                for (int i = candidates.Count - 1; i > 0; i--)
+                {
+                    if (candidates[i] == candidates[i - 1])
+                        candidates.RemoveAt(i);
+                }
+
+                if (candidates.Count * GameplayBroadphaseFallbackCandidateDivisor > _colliderCount)
+                {
+                    candidates.Clear();
+                    return false;
+                }
+
+                return true;
+            }
+
+            private static bool TryCellRange(
+                GameplayBroadphaseAabb aabb,
+                float cellSize,
+                out int minX,
+                out int minY,
+                out int minZ,
+                out int maxX,
+                out int maxY,
+                out int maxZ)
+            {
+                minX = minY = minZ = maxX = maxY = maxZ = 0;
+                if (!aabb.IsFinite || !float.IsFinite(cellSize) || cellSize <= 0.0f)
+                    return false;
+
+                return TryCellCoord(aabb.MinX, cellSize, out minX) &&
+                       TryCellCoord(aabb.MinY, cellSize, out minY) &&
+                       TryCellCoord(aabb.MinZ, cellSize, out minZ) &&
+                       TryCellCoord(aabb.MaxX, cellSize, out maxX) &&
+                       TryCellCoord(aabb.MaxY, cellSize, out maxY) &&
+                       TryCellCoord(aabb.MaxZ, cellSize, out maxZ);
+            }
+
+            private static bool TryCellCoord(float value, float cellSize, out int cell)
+            {
+                cell = 0;
+                float coord = Mathf.Floor(value / cellSize);
+                if (coord < int.MinValue || coord > int.MaxValue)
+                    return false;
+                cell = (int)coord;
+                return true;
+            }
         }
 
         private readonly struct OpenWorldDisc
@@ -504,6 +700,9 @@ namespace Arena.Input
         private readonly OpenWorldCollider[] _openWorldColliders;
         private readonly GameplayCollisionBox[] _gameplayBoxes;
         private readonly GameplayMovementMeshHull[] _gameplayMeshHulls;
+        private readonly GameplayMovementBroadphase _gameplayBoxBroadphase;
+        private readonly GameplayMovementBroadphase _gameplayMeshHullBroadphase;
+        private readonly List<int> _gameplayBroadphaseCandidates = new(128);
         private readonly OpenWorldHeightfield? _heightfield;
 
         public static OpenWorldMovementEnvironment Shared => SharedLazy.Value;
@@ -533,7 +732,34 @@ namespace Arena.Input
             _openWorldColliders = openWorldColliders;
             _gameplayBoxes = gameplayBoxes;
             _gameplayMeshHulls = gameplayMeshHulls;
+            _gameplayBoxBroadphase = GameplayMovementBroadphase.Build(BuildGameplayBoxBounds(gameplayBoxes));
+            _gameplayMeshHullBroadphase = GameplayMovementBroadphase.Build(BuildGameplayMeshHullBounds(gameplayMeshHulls));
             _heightfield = heightfield;
+        }
+
+        private static GameplayBroadphaseAabb[] BuildGameplayBoxBounds(GameplayCollisionBox[] boxes)
+        {
+            var bounds = new GameplayBroadphaseAabb[boxes.Length];
+            for (int i = 0; i < boxes.Length; i++)
+                bounds[i] = GameplayBoxBounds(boxes[i]);
+            return bounds;
+        }
+
+        private static GameplayBroadphaseAabb[] BuildGameplayMeshHullBounds(GameplayMovementMeshHull[] hulls)
+        {
+            var bounds = new GameplayBroadphaseAabb[hulls.Length];
+            for (int i = 0; i < hulls.Length; i++)
+            {
+                GameplayMovementMeshHull hull = hulls[i];
+                bounds[i] = new GameplayBroadphaseAabb(
+                    hull.MinX,
+                    hull.YMin,
+                    hull.MinZ,
+                    hull.MaxX,
+                    hull.YMax,
+                    hull.MaxZ);
+            }
+            return bounds;
         }
 
         public float SampleGroundHeight(float x, float z, float probeY)
@@ -687,70 +913,164 @@ namespace Arena.Input
 
             for (int i = 0; i < OpenWorldCollisionIters; i++)
             {
-                foreach (GameplayCollisionBox collider in _gameplayBoxes)
-                {
-                    if (!GameplayBoxOverlapsPlayerBand(collider, currentY, playerHeight))
-                        continue;
-                    if (GameplayBoxCanStepUp(collider, currentY))
-                        continue;
+                GameplayBroadphaseAabb queryBounds = MovementSweepBounds(
+                    startX,
+                    startZ,
+                    outX,
+                    outZ,
+                    playerRadius,
+                    currentY,
+                    playerHeight);
 
-                    if (ResolveSweptGameplayBox2D(
-                            collider,
-                            startX,
-                            startZ,
-                            outX,
-                            outZ,
-                            playerRadius) is { } resolved)
+                if (_gameplayBoxBroadphase.Query(queryBounds, _gameplayBroadphaseCandidates))
+                {
+                    foreach (int index in _gameplayBroadphaseCandidates)
                     {
-                        LogMovementBlocker(
-                            $"box '{collider.Name}' y=[{BoxMinY(collider):F2},{BoxMaxY(collider):F2}]",
-                            startX,
-                            startZ,
-                            outX,
-                            outZ,
-                            resolved.x,
-                            resolved.y,
-                            currentY);
-                        if (resolved.x == startX && resolved.y == startZ)
+                        if (index >= 0 && index < _gameplayBoxes.Length &&
+                            ResolveGameplayBoxCandidate(_gameplayBoxes[index], startX, startZ, ref outX, ref outZ, playerRadius, playerHeight, currentY))
                             return new Vector2(startX, startZ);
-                        outX = resolved.x;
-                        outZ = resolved.y;
+                    }
+                }
+                else
+                {
+                    foreach (GameplayCollisionBox collider in _gameplayBoxes)
+                    {
+                        if (ResolveGameplayBoxCandidate(collider, startX, startZ, ref outX, ref outZ, playerRadius, playerHeight, currentY))
+                            return new Vector2(startX, startZ);
                     }
                 }
 
-                foreach (GameplayMovementMeshHull hull in _gameplayMeshHulls)
-                {
-                    if (!GameplayMovementMeshHullOverlapsPlayerBand(hull, currentY, playerHeight))
-                        continue;
-                    if (GameplayMovementMeshHullCanStepUp(hull, currentY))
-                        continue;
+                queryBounds = MovementSweepBounds(
+                    startX,
+                    startZ,
+                    outX,
+                    outZ,
+                    playerRadius,
+                    currentY,
+                    playerHeight);
 
-                    if (ResolveSweptConvexFootprint2D(
-                            hull.Footprint,
-                            startX,
-                            startZ,
-                            outX,
-                            outZ,
-                            playerRadius) is { } resolved)
+                if (_gameplayMeshHullBroadphase.Query(queryBounds, _gameplayBroadphaseCandidates))
+                {
+                    foreach (int index in _gameplayBroadphaseCandidates)
                     {
-                        LogMovementBlocker(
-                            $"mesh '{hull.Name}' triangle={hull.TriangleIndex} y=[{hull.YMin:F2},{hull.YMax:F2}]",
-                            startX,
-                            startZ,
-                            outX,
-                            outZ,
-                            resolved.x,
-                            resolved.y,
-                            currentY);
-                        if (resolved.x == startX && resolved.y == startZ)
+                        if (index >= 0 && index < _gameplayMeshHulls.Length &&
+                            ResolveGameplayMeshHullCandidate(_gameplayMeshHulls[index], startX, startZ, ref outX, ref outZ, playerRadius, playerHeight, currentY))
                             return new Vector2(startX, startZ);
-                        outX = resolved.x;
-                        outZ = resolved.y;
+                    }
+                }
+                else
+                {
+                    foreach (GameplayMovementMeshHull hull in _gameplayMeshHulls)
+                    {
+                        if (ResolveGameplayMeshHullCandidate(hull, startX, startZ, ref outX, ref outZ, playerRadius, playerHeight, currentY))
+                            return new Vector2(startX, startZ);
                     }
                 }
             }
 
             return new Vector2(outX, outZ);
+        }
+
+        private static bool ResolveGameplayBoxCandidate(
+            GameplayCollisionBox collider,
+            float startX,
+            float startZ,
+            ref float outX,
+            ref float outZ,
+            float playerRadius,
+            float playerHeight,
+            float currentY)
+        {
+            if (!GameplayBoxOverlapsPlayerBand(collider, currentY, playerHeight))
+                return false;
+            if (GameplayBoxCanStepUp(collider, currentY))
+                return false;
+
+            if (ResolveSweptGameplayBox2D(
+                    collider,
+                    startX,
+                    startZ,
+                    outX,
+                    outZ,
+                    playerRadius) is not { } resolved)
+                return false;
+
+            LogMovementBlocker(
+                $"box '{collider.Name}' y=[{BoxMinY(collider):F2},{BoxMaxY(collider):F2}]",
+                startX,
+                startZ,
+                outX,
+                outZ,
+                resolved.x,
+                resolved.y,
+                currentY);
+            if (resolved.x == startX && resolved.y == startZ)
+                return true;
+
+            outX = resolved.x;
+            outZ = resolved.y;
+            return false;
+        }
+
+        private static bool ResolveGameplayMeshHullCandidate(
+            GameplayMovementMeshHull hull,
+            float startX,
+            float startZ,
+            ref float outX,
+            ref float outZ,
+            float playerRadius,
+            float playerHeight,
+            float currentY)
+        {
+            if (!GameplayMovementMeshHullOverlapsPlayerBand(hull, currentY, playerHeight))
+                return false;
+            if (GameplayMovementMeshHullCanStepUp(hull, currentY))
+                return false;
+
+            if (ResolveSweptConvexFootprint2D(
+                    hull.Footprint,
+                    startX,
+                    startZ,
+                    outX,
+                    outZ,
+                    playerRadius) is not { } resolved)
+                return false;
+
+            LogMovementBlocker(
+                $"mesh '{hull.Name}' triangle={hull.TriangleIndex} y=[{hull.YMin:F2},{hull.YMax:F2}]",
+                startX,
+                startZ,
+                outX,
+                outZ,
+                resolved.x,
+                resolved.y,
+                currentY);
+            if (resolved.x == startX && resolved.y == startZ)
+                return true;
+
+            outX = resolved.x;
+            outZ = resolved.y;
+            return false;
+        }
+
+        private static GameplayBroadphaseAabb MovementSweepBounds(
+            float startX,
+            float startZ,
+            float targetX,
+            float targetZ,
+            float playerRadius,
+            float footY,
+            float playerHeight)
+        {
+            float radius = Mathf.Max(playerRadius, 0.0f);
+            float height = Mathf.Max(playerHeight, 0.1f);
+            return new GameplayBroadphaseAabb(
+                Mathf.Min(startX, targetX) - radius,
+                footY,
+                Mathf.Min(startZ, targetZ) - radius,
+                Mathf.Max(startX, targetX) + radius,
+                footY + height,
+                Mathf.Max(startZ, targetZ) + radius);
         }
 
         private static void LogMovementBlocker(
@@ -988,6 +1308,10 @@ namespace Arena.Input
                     i / 3,
                     Mathf.Min(a.y, Mathf.Min(b.y, c.y)),
                     Mathf.Max(a.y, Mathf.Max(b.y, c.y)),
+                    Mathf.Min(a.x, Mathf.Min(b.x, c.x)),
+                    Mathf.Min(a.z, Mathf.Min(b.z, c.z)),
+                    Mathf.Max(a.x, Mathf.Max(b.x, c.x)),
+                    Mathf.Max(a.z, Mathf.Max(b.z, c.z)),
                     footprint);
             }
         }
@@ -1111,6 +1435,30 @@ namespace Arena.Input
 
         private static float BoxMaxY(GameplayCollisionBox collider)
             => collider.CenterY + collider.HalfY;
+
+        private static GameplayBroadphaseAabb GameplayBoxBounds(GameplayCollisionBox collider)
+        {
+            if (collider.IsAabb)
+            {
+                return new GameplayBroadphaseAabb(
+                    collider.CenterX - collider.HalfX,
+                    collider.CenterY - collider.HalfY,
+                    collider.CenterZ - collider.HalfZ,
+                    collider.CenterX + collider.HalfX,
+                    collider.CenterY + collider.HalfY,
+                    collider.CenterZ + collider.HalfZ);
+            }
+
+            float worldHalfX = Mathf.Abs(collider.CosY) * collider.HalfX + Mathf.Abs(collider.SinY) * collider.HalfZ;
+            float worldHalfZ = Mathf.Abs(collider.SinY) * collider.HalfX + Mathf.Abs(collider.CosY) * collider.HalfZ;
+            return new GameplayBroadphaseAabb(
+                collider.CenterX - worldHalfX,
+                collider.CenterY - collider.HalfY,
+                collider.CenterZ - worldHalfZ,
+                collider.CenterX + worldHalfX,
+                collider.CenterY + collider.HalfY,
+                collider.CenterZ + worldHalfZ);
+        }
 
         private static bool GameplayMovementMeshHullOverlapsPlayerBand(
             GameplayMovementMeshHull hull,
