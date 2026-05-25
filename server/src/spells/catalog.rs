@@ -316,6 +316,11 @@ enum ImpactEffectRow {
         #[serde(default)]
         status_stack_group: Option<String>,
     },
+    Intimidated {
+        duration_ms: u64,
+        #[serde(default)]
+        status_stack_group: Option<String>,
+    },
     Slow {
         duration_ms: u64,
         slow_pct: f32,
@@ -883,6 +888,17 @@ impl From<ImpactEffectRow> for ImpactEffect {
                 Duration::from_millis(duration_ms),
                 status_stack_group,
                 StatusStackGroupDefault::Global("ROOT"),
+                1,
+                StackPolicy::Refresh,
+            ),
+            ImpactEffectRow::Intimidated {
+                duration_ms,
+                status_stack_group,
+            } => StatusApplication::new(
+                StatusPayload::Intimidated,
+                Duration::from_millis(duration_ms),
+                status_stack_group,
+                StatusStackGroupDefault::ActionSuffix("INTIMIDATED"),
                 1,
                 StackPolicy::Refresh,
             ),
@@ -2625,51 +2641,50 @@ mod tests {
     }
 
     #[test]
-    fn apply_status_target_debuff_and_validation_are_behavior_tunables() {
+    fn intimidate_area_debuff_and_validation_are_behavior_tunables() {
         let definition = spell_definition_by_str("INTIMIDATE")
             .expect("Intimidate should be loaded from the catalog");
-        let apply_status = definition
-            .apply_status
-            .expect("Intimidate should define an apply-status payload");
-        let secondary = definition
+        let area = definition
             .secondary
-            .apply_status
-            .expect("Intimidate should define target apply-status secondary data");
+            .area
+            .as_ref()
+            .expect("Intimidate should define area secondary data");
 
-        assert_eq!(definition.behavior, SpellBehavior::ApplyStatus);
-        assert_eq!(definition.targeting, SpellTargeting::Target);
-        assert!(definition.requires_target);
+        assert_eq!(definition.behavior, SpellBehavior::Area);
+        assert_eq!(definition.targeting, SpellTargeting::Self_);
+        assert!(!definition.requires_target);
         assert_eq!(definition.cooldown, Duration::from_millis(5_000));
         assert_eq!(definition.block_behavior, BlockBehavior::Unblockable);
-        assert_eq!(secondary.parry_behavior, SpellParryBehavior::Unparryable);
-        assert_eq!(
-            definition.apply_status_polarity,
-            Some(StatusPolarity::Debuff)
-        );
-        assert_eq!(
-            definition.status_stack_group.as_deref(),
-            Some("INTIMIDATED")
-        );
-        assert_eq!(apply_status.kind, StatusEffectKind::Intimidated);
-        assert_eq!(definition.max_distance, 20.0);
-        assert!((definition.duration - 4.0).abs() < 0.0001);
+        assert_eq!(definition.target_audience, TargetAudience::Hostile);
+        assert_eq!(definition.damage, 0);
+        assert_eq!(definition.max_distance, 0.0);
+        assert_eq!(definition.radius, 6.0);
+        assert!(definition.apply_status.is_none());
+        assert_eq!(area.impact_effects.len(), 1);
+        let effect = &area.impact_effects[0];
+        assert_eq!(effect.payload().kind(), StatusEffectKind::Intimidated);
+        assert_eq!(effect.explicit_stack_group(), Some("INTIMIDATED"));
+        assert_eq!(effect.duration(), Duration::from_millis(4_000));
     }
 
     #[test]
-    fn target_apply_status_requires_positive_duration() {
+    fn area_intimidated_effect_requires_positive_duration() {
         let mut row = spell_rows_from_json(PROGRESSION_CATALOG_JSON)
             .expect("catalog should load")
             .into_iter()
             .find(|row| row.kind.as_str() == "INTIMIDATE")
             .expect("Intimidate row should exist");
         row.kind = SpellId::new("TEST_INTIMIDATE").expect("test id should be valid");
-        if let SpellCatalogDelivery::ApplyStatus { duration_ms, .. } = &mut row.delivery {
-            *duration_ms = 0;
+        if let SpellCatalogDelivery::Area { impact_effects, .. } = &mut row.delivery {
+            match &mut impact_effects[0] {
+                ImpactEffectRow::Intimidated { duration_ms, .. } => *duration_ms = 0,
+                other => panic!("unexpected Intimidate impact effect: {other:?}"),
+            }
         }
         let definition = row.into_definition().expect("row should convert");
 
         assert!(validate_definition(&definition)
-            .expect_err("APPLY_STATUS without duration should fail")
+            .expect_err("AREA impact effect without duration should fail")
             .contains("duration_ms"));
     }
 

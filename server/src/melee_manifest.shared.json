@@ -763,7 +763,7 @@
                     "slot_id": "warrior_disengage_strike_melee_slot",
                     "hit_windows": [
                         {
-                            "impact_delay_ms": 153
+                            "impact_delay_ms": 99
                         }
                     ],
                     "recovery_ms": 250,

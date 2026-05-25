@@ -2040,10 +2040,7 @@ fn process_spell_cast(
                 caster,
                 spell_kind,
                 "invalid_target_audience",
-                &format!(
-                    "mode={mode:?} target={}",
-                    &target.player_id.to_hex()[..8]
-                ),
+                &format!("mode={mode:?} target={}", &target.player_id.to_hex()[..8]),
             );
             return Ok(false);
         }

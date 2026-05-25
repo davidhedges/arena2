@@ -683,32 +683,32 @@ mod tests {
     }
 
     #[test]
-    fn intimidate_catalog_matches_target_status_defaults() {
+    fn intimidate_catalog_matches_area_status_defaults() {
         let definition = definition("INTIMIDATE");
 
         assert_eq!(definition.kind.as_str(), "INTIMIDATE");
         assert_eq!(definition.cooldown, Duration::from_millis(5_000));
         assert!(definition.uses_global_cooldown);
-        assert_eq!(definition.behavior.as_str(), "APPLY_STATUS");
-        assert_eq!(definition.targeting.as_str(), "TARGET");
-        assert!(definition.requires_target);
-        assert!((definition.duration - 4.0).abs() < 0.0001);
-        assert!((definition.max_distance - 20.0).abs() < 0.0001);
+        assert_eq!(definition.behavior.as_str(), "AREA");
+        assert_eq!(definition.targeting.as_str(), "SELF");
+        assert!(!definition.requires_target);
+        assert!((definition.radius - 6.0).abs() < 0.0001);
+        assert!((definition.max_distance - 0.0).abs() < 0.0001);
         assert!((definition.primary_resource_cost - 0.0).abs() < 0.0001);
-        assert_eq!(
-            definition.status_stack_group.as_deref(),
-            Some("INTIMIDATED")
-        );
-        assert_eq!(
-            definition.apply_status_polarity,
-            Some(crate::combat::StatusPolarity::Debuff)
-        );
-        let status = definition
-            .apply_status
-            .expect("Intimidate should define an apply-status payload");
-        assert_eq!(status.kind, StatusEffectKind::Intimidated);
-        assert_eq!(status.modifier_scalar, 0.0);
-        assert_eq!(status.max_stacks, 1);
-        assert_eq!(status.stack_policy, StackPolicy::Refresh);
+        assert!(definition.status_stack_group.is_none());
+        assert!(definition.apply_status_polarity.is_none());
+        assert!(definition.apply_status.is_none());
+        let area = definition
+            .secondary
+            .area
+            .as_ref()
+            .expect("Intimidate should define area secondary data");
+        assert_eq!(area.impact_effects.len(), 1);
+        let status = &area.impact_effects[0];
+        assert_eq!(status.payload().kind(), StatusEffectKind::Intimidated);
+        assert_eq!(status.explicit_stack_group(), Some("INTIMIDATED"));
+        assert_eq!(status.duration(), Duration::from_millis(4_000));
+        assert_eq!(status.max_stacks(), 1);
+        assert_eq!(status.stack_policy(), StackPolicy::Refresh);
     }
 }

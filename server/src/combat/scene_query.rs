@@ -911,8 +911,7 @@ fn shared_flat_ground_only_for_identities(ctx: &ReducerContext, a: Identity, b: 
 mod tests {
     use super::{
         aoe_hits_player, first_player_hit_on_segment, line_of_sight_target_points,
-        raycast_capsule_with_padding,
-        CombatAreaShape, PlayerSnapshot, SceneHitKind,
+        raycast_capsule_with_padding, CombatAreaShape, PlayerSnapshot, SceneHitKind,
     };
     use spacetimedb::Identity;
 

@@ -1302,24 +1302,22 @@
         "uses_global_cooldown": true,
         "cast_time_ms": 0,
         "cast_mobility": "MOBILE",
-        "targeting": "TARGET",
-        "requires_target": true,
+        "targeting": "SELF",
+        "requires_target": false,
         "resource_cost": 0.0,
         "arms_auto_attack_on_cast": false,
         "delivery": {
-          "kind": "APPLY_STATUS",
-          "duration_ms": 4000,
-          "max_distance": 20.0,
-          "status_stack_group": "INTIMIDATED",
-          "polarity": "DEBUFF",
+          "kind": "AREA",
+          "damage": 0,
+          "radius": 6.0,
           "block_behavior": "UNBLOCKABLE",
-          "parry_behavior": "UNPARRYABLE",
-          "status": {
-            "kind": "INTIMIDATED",
-            "modifier_scalar": 0.0,
-            "max_stacks": 1,
-            "stack_policy": "REFRESH"
-          }
+          "impact_effects": [
+            {
+              "kind": "INTIMIDATED",
+              "duration_ms": 4000,
+              "status_stack_group": "INTIMIDATED"
+            }
+          ]
         }
       }
     },
@@ -1973,7 +1971,7 @@
       "presentation_kind": "ABILITY",
       "presentation_id": "WARRIOR_INTIMIDATE",
       "display_name": "Intimidate",
-      "description": "Locks down the target with intimidation.",
+      "description": "Locks down enemies near the caster with intimidation.",
       "sort_order": 95
     },
     {
@@ -2446,6 +2444,18 @@
       "lifecycle": "PARTICLE_SYSTEM",
       "duration_ms": 0,
       "sort_order": 182
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "WARRIOR_INTIMIDATE",
+      "trigger": "SPELL_RELEASE",
+      "anchor": "CASTER",
+      "vfx_id": "VFX_VOID_AREA_01",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "PARTICLE_SYSTEM",
+      "duration_ms": 0,
+      "sort_order": 183
     },
     {
       "owner_kind": "ABILITY",
