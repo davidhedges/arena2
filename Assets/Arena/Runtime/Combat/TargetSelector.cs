@@ -10,11 +10,11 @@ using Arena.Presentation;
 namespace Arena.Combat
 {
     /// <summary>
-    /// Scene-level singleton that tracks the local player's selected target.
-    ///
-    /// Selection methods:
-    ///   Left-click                → raycast against player capsules
-    ///   Right-click release       → raycast, select target, and arm auto-attack
+        /// Scene-level singleton that tracks the local player's selected target.
+        ///
+        /// Selection methods:
+        ///   Left-click                → screen-space hit test against networked player capsules
+        ///   Right-click release       → select target and arm auto-attack
     ///   Tab                       → cycle through non-local players
     ///   Escape                    → clear selection and clear armed auto-attack
     ///
@@ -24,6 +24,12 @@ namespace Arena.Combat
     public class TargetSelector : MonoBehaviour
     {
         public static TargetSelector Instance { get; private set; } = null!;
+
+        private const float MaxTargetSelectDistance = 200f;
+        private const float MinTargetScreenRadiusPixels = 14f;
+        private const float MaxTargetScreenRadiusPixels = 80f;
+        private const float TargetScreenPaddingPixels = 4f;
+        private const float TargetDepthTieBreakScale = 0.0001f;
 
         public PlayerEntity? SelectedTarget { get; private set; }
         public PlayerEntity? HoveredTarget { get; private set; }
@@ -141,28 +147,7 @@ namespace Arena.Combat
             LocalPlayerInputSource? input = EntityRegistry.Instance?.LocalPlayerEntity?.GetLocalInputSource();
             if (input == null) return null;
 
-            var ray = cam.ScreenPointToRay(input.MousePosition);
-            if (!Physics.Raycast(ray, out var hit, 200f)) return null;
-
-            // Check the hit collider (or its parent) for a PlayerView component.
-            var view = hit.collider.GetComponent<PlayerView>()
-                    ?? hit.collider.GetComponentInParent<PlayerView>();
-            if (view == null) return null;
-
-            var registry = EntityRegistry.Instance;
-            if (registry == null) return null;
-            var local = registry.LocalPlayerEntity;
-
-            foreach (var entity in registry.AllPlayers)
-            {
-                if (entity.View != view) continue;
-                if (local != null && entity.Identity == local.Identity) continue; // skip self
-                if (!entity.IsAlive) continue;
-
-                return entity;
-            }
-
-            return null;
+            return ResolveTargetAtScreenPoint(cam, input.MousePosition);
         }
 
         private static bool CanSelect(PlayerEntity entity) => entity.IsAlive;
@@ -190,26 +175,87 @@ namespace Arena.Combat
             var cam = Camera.main;
             if (cam == null) { HoveredTarget = null; return; }
 
-            var ray = cam.ScreenPointToRay(mousePosition);
-            if (!Physics.Raycast(ray, out var hit, 200f)) { HoveredTarget = null; return; }
+            HoveredTarget = ResolveTargetAtScreenPoint(cam, mousePosition);
+        }
 
-            var view = hit.collider.GetComponent<PlayerView>()
-                    ?? hit.collider.GetComponentInParent<PlayerView>();
-            if (view == null) { HoveredTarget = null; return; }
-
+        private static PlayerEntity? ResolveTargetAtScreenPoint(Camera cam, Vector2 screenPoint)
+        {
             var registry = EntityRegistry.Instance;
-            if (registry == null) { HoveredTarget = null; return; }
+            if (registry == null) return null;
             var local = registry.LocalPlayerEntity;
 
+            PlayerEntity? best = null;
+            float bestScore = float.PositiveInfinity;
             foreach (var entity in registry.AllPlayers)
             {
-                if (entity.View != view) continue;
-                if (local != null && entity.Identity == local.Identity) continue;
+                if (local != null && entity.Identity == local.Identity) continue; // skip self
                 if (!entity.IsAlive) continue;
-                HoveredTarget = entity;
-                return;
+                if (!TryGetScreenCapsuleScore(cam, entity, screenPoint, out float score)) continue;
+
+                if (score < bestScore)
+                {
+                    bestScore = score;
+                    best = entity;
+                }
             }
-            HoveredTarget = null;
+
+            return best;
+        }
+
+        private static bool TryGetScreenCapsuleScore(
+            Camera cam,
+            PlayerEntity entity,
+            Vector2 screenPoint,
+            out float score)
+        {
+            score = default;
+
+            Vector3 basePosition = entity.SimState.GetRenderPosition();
+            float radius = Mathf.Max(entity.SimState.HitRadius, MovementPrediction.DefaultHitRadius);
+            float height = Mathf.Max(entity.SimState.HitHeight, radius * 2f);
+            Vector3 bottom = basePosition + Vector3.up * radius;
+            Vector3 top = basePosition + Vector3.up * Mathf.Max(radius, height - radius);
+            Vector3 center = basePosition + Vector3.up * (height * 0.5f);
+
+            Vector3 screenBottom = cam.WorldToScreenPoint(bottom);
+            Vector3 screenTop = cam.WorldToScreenPoint(top);
+            Vector3 screenCenter = cam.WorldToScreenPoint(center);
+            if (screenBottom.z <= 0f || screenTop.z <= 0f || screenCenter.z <= 0f)
+                return false;
+            if (screenCenter.z > MaxTargetSelectDistance)
+                return false;
+
+            Vector3 screenRadiusPoint = cam.WorldToScreenPoint(center + cam.transform.right * radius);
+            if (screenRadiusPoint.z <= 0f)
+                return false;
+
+            Vector2 capsuleStart = new(screenBottom.x, screenBottom.y);
+            Vector2 capsuleEnd = new(screenTop.x, screenTop.y);
+            float screenRadius = Mathf.Clamp(
+                Vector2.Distance(
+                    new Vector2(screenCenter.x, screenCenter.y),
+                    new Vector2(screenRadiusPoint.x, screenRadiusPoint.y)),
+                MinTargetScreenRadiusPixels,
+                MaxTargetScreenRadiusPixels);
+            float paddedRadius = screenRadius + TargetScreenPaddingPixels;
+            float distance = DistanceToSegment(screenPoint, capsuleStart, capsuleEnd);
+            if (distance > paddedRadius)
+                return false;
+
+            score = distance / paddedRadius + screenCenter.z * TargetDepthTieBreakScale;
+            return true;
+        }
+
+        private static float DistanceToSegment(Vector2 point, Vector2 a, Vector2 b)
+        {
+            Vector2 ab = b - a;
+            float lengthSq = ab.sqrMagnitude;
+            if (lengthSq <= 0.0001f)
+                return Vector2.Distance(point, a);
+
+            float t = Mathf.Clamp01(Vector2.Dot(point - a, ab) / lengthSq);
+            Vector2 closest = a + ab * t;
+            return Vector2.Distance(point, closest);
         }
 
         private void CycleTarget()

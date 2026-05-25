@@ -8,7 +8,7 @@ namespace Arena.Presentation
 {
     /// <summary>
     /// Ground-plane aim indicator for point-targeted spells (e.g. METEOR).
-    /// Shows a circle on the ground where the cursor raycasts to the ground plane.
+    /// Shows a circle where the cursor ray intersects the client movement surface.
     /// Singleton — managed by SpellInputHandler.
     /// </summary>
     public class AimIndicator : MonoBehaviour
@@ -28,9 +28,10 @@ namespace Arena.Presentation
         private const float InnerFadeRadiusFraction = 0.20f;
         private const float EdgeStartRadiusFraction = 0.96f;
         private const float MaxAimRayDistance = 1000f;
-        private const float MinAimSurfaceUpDot = 0.35f;
+        private const float AimRayStepMeters = 0.5f;
+        private const int AimRayRefinementSteps = 16;
+        private const float AimRayCeilingOffset = 1.2f;
         private const float RebuildPositionEpsilonSquared = 0.000025f;
-        private static readonly RaycastHit[] AimRaycastHits = new RaycastHit[32];
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
         private static readonly int ColorId = Shader.PropertyToID("_Color");
 
@@ -96,7 +97,7 @@ namespace Arena.Presentation
 
         private static bool TryResolveAimPoint(Ray ray, out Vector3 aimPoint)
         {
-            if (TryRaycastAimSurface(ray, out aimPoint))
+            if (TryRaycastMovementSurface(ray, out aimPoint))
                 return true;
 
             var groundPlane = new Plane(Vector3.up, Vector3.zero);
@@ -112,47 +113,65 @@ namespace Arena.Presentation
             return true;
         }
 
-        private static bool TryRaycastAimSurface(Ray ray, out Vector3 aimPoint)
+        private static bool TryRaycastMovementSurface(Ray ray, out Vector3 aimPoint)
         {
-            int count = Physics.RaycastNonAlloc(
-                ray,
-                AimRaycastHits,
-                MaxAimRayDistance,
-                Physics.DefaultRaycastLayers,
-                QueryTriggerInteraction.Ignore);
+            aimPoint = default;
+            if (!TryGetMovementEnvironment(out IMovementEnvironment? environment) || environment == null)
+                return false;
 
-            float bestDistance = float.PositiveInfinity;
-            Vector3 bestPoint = default;
-            bool found = false;
-
-            for (int i = 0; i < count; i++)
+            float previousDistance = 0f;
+            if (HeightDelta(ray.GetPoint(previousDistance), environment) <= 0f)
             {
-                RaycastHit hit = AimRaycastHits[i];
-                if (!IsAimSurfaceHit(hit) || hit.distance >= bestDistance)
-                    continue;
-
-                bestDistance = hit.distance;
-                bestPoint = hit.point;
-                found = true;
+                Vector3 point = ray.GetPoint(previousDistance);
+                aimPoint = new Vector3(point.x, SampleSurfaceY(point, environment), point.z);
+                return true;
             }
 
-            aimPoint = bestPoint;
-            return found;
+            for (float distance = AimRayStepMeters;
+                 distance <= MaxAimRayDistance;
+                 distance += AimRayStepMeters)
+            {
+                Vector3 point = ray.GetPoint(distance);
+                float delta = HeightDelta(point, environment);
+                if (delta > 0f)
+                {
+                    previousDistance = distance;
+                    continue;
+                }
+
+                float low = previousDistance;
+                float high = distance;
+                for (int i = 0; i < AimRayRefinementSteps; i++)
+                {
+                    float mid = (low + high) * 0.5f;
+                    Vector3 midPoint = ray.GetPoint(mid);
+                    if (HeightDelta(midPoint, environment) > 0f)
+                        low = mid;
+                    else
+                        high = mid;
+                }
+
+                Vector3 hit = ray.GetPoint(high);
+                aimPoint = new Vector3(hit.x, SampleSurfaceY(hit, environment), hit.z);
+                return true;
+            }
+
+            return false;
         }
 
-        private static bool IsAimSurfaceHit(RaycastHit hit)
+        private static float HeightDelta(Vector3 point, IMovementEnvironment environment)
         {
-            Collider? collider = hit.collider;
-            if (collider == null || collider.isTrigger)
-                return false;
+            return point.y - SampleSurfaceY(point, environment);
+        }
 
-            if (collider.GetComponent<PlayerView>() != null ||
-                collider.GetComponentInParent<PlayerView>() != null)
-            {
-                return false;
-            }
+        private static bool TryGetMovementEnvironment(out IMovementEnvironment? environment)
+        {
+            var registry = EntityRegistry.Instance;
+            if (registry != null && registry.TryGetLocalPredictionEnvironment(out environment))
+                return environment != null;
 
-            return Vector3.Dot(hit.normal, Vector3.up) >= MinAimSurfaceUpDot;
+            environment = null;
+            return false;
         }
 
         private GameObject CreateCircle()
@@ -320,27 +339,15 @@ namespace Arena.Presentation
 
         private static float SampleSurfaceY(Vector3 world)
         {
-            Terrain[] terrains = Terrain.activeTerrains;
-            for (int i = 0; i < terrains.Length; i++)
-            {
-                Terrain terrain = terrains[i];
-                if (terrain == null || terrain.terrainData == null)
-                    continue;
-
-                Vector3 terrainPosition = terrain.transform.position;
-                Vector3 size = terrain.terrainData.size;
-                if (world.x < terrainPosition.x ||
-                    world.z < terrainPosition.z ||
-                    world.x > terrainPosition.x + size.x ||
-                    world.z > terrainPosition.z + size.z)
-                {
-                    continue;
-                }
-
-                return terrain.SampleHeight(world) + terrainPosition.y;
-            }
+            if (TryGetMovementEnvironment(out IMovementEnvironment? environment) && environment != null)
+                return SampleSurfaceY(world, environment);
 
             return world.y;
+        }
+
+        private static float SampleSurfaceY(Vector3 world, IMovementEnvironment environment)
+        {
+            return environment.SampleGroundHeight(world.x, world.z, world.y - AimRayCeilingOffset);
         }
     }
 }

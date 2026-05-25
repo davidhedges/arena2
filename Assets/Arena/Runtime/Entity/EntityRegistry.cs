@@ -217,9 +217,6 @@ namespace Arena.Entity
 
             var motor = go.AddComponent<LocalPlayerMotor>();
             var commandHistory = new MovementCommandBuffer(MovementNetcodeConfig.MaxPendingCommands);
-            // Must match the authoritative server hit capsule.
-            // The CharacterController dimensions are visual/physics shell only —
-            // prediction collision uses these authoritative values.
             motor.Initialize(inputSource, GameplayTuning.DefaultHitRadius, GameplayTuning.DefaultHitHeight);
 
             var netDriver = go.AddComponent<MovementNetDriver>();

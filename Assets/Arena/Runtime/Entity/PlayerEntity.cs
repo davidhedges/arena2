@@ -91,14 +91,6 @@ namespace Arena.Entity
                     // CharacterController must be destroyed after ThirdPersonController
                     // (which has [RequireComponent(typeof(CharacterController))]).
                     DestroyComponent<CharacterController>(GameObject);
-
-                    // Add a CapsuleCollider for targeting raycasts.
-                    // Must be added explicitly because Destroy(CharacterController) is
-                    // deferred to end-of-frame, so GetComponent<Collider>() still finds it.
-                    var cc = GameObject.AddComponent<CapsuleCollider>();
-                    cc.center = new Vector3(0f, 1f, 0f);
-                    cc.radius = 0.4f;
-                    cc.height = 2f;
                 }
 
                 _renderers = GameObject.GetComponentsInChildren<Renderer>();
@@ -125,6 +117,7 @@ namespace Arena.Entity
             {
                 // Fallback: capsule primitive (works without any prefab).
                 GameObject = UnityEngine.GameObject.CreatePrimitive(PrimitiveType.Capsule);
+                Object.Destroy(GameObject.GetComponent<Collider>());
                 _presentationRoot = null;
                 _renderers = GameObject.GetComponentsInChildren<Renderer>();
                 _avatarController = GameObject.GetComponent<RuntimeAvatarController>();
@@ -266,7 +259,6 @@ namespace Arena.Entity
 
             if (IsDestroyed) return;
 
-            ApplyHitCapsule(state.HitRadius, state.HitHeight);
             var localMotor = GameObject.GetComponent<LocalPlayerMotor>();
             localMotor?.SetHitCapsule(state.HitRadius, state.HitHeight);
 
@@ -280,40 +272,12 @@ namespace Arena.Entity
                     if (r != null) r.enabled = !state.Eliminated;
             }
 
-            var col = GameObject.GetComponent<Collider>();
-            if (col != null) col.enabled = state.Alive;
-
             _worldHpBar.SetHealth(state.Hp, state.MaxHp);
             _animator?.SetDead(!state.Alive);
             if (IsDummy && !string.IsNullOrWhiteSpace(CombatProfile))
                 SetInCombat(true);
 
             RefreshSelectedTargetIndicator();
-        }
-
-        private void ApplyHitCapsule(float hitRadius, float hitHeight)
-        {
-            if (IsDestroyed) return;
-
-            float radius = Mathf.Max(hitRadius, 0.1f);
-            float height = Mathf.Max(hitHeight, radius * 2.0f);
-            Vector3 center = new(0f, height * 0.5f, 0f);
-
-            var capsule = GameObject.GetComponent<CapsuleCollider>();
-            if (capsule != null)
-            {
-                capsule.radius = radius;
-                capsule.height = height;
-                capsule.center = center;
-            }
-
-            var characterController = GameObject.GetComponent<CharacterController>();
-            if (characterController != null)
-            {
-                characterController.radius = radius;
-                characterController.height = height;
-                characterController.center = center;
-            }
         }
 
         public void RequestCombatAnimation(in CombatAnimationRequest request) => _animator?.RequestCombatAnimation(request);
