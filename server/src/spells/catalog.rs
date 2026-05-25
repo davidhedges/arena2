@@ -1652,6 +1652,7 @@ mod tests {
                 "BATTLE_CRY",
                 "GIANT_SWING",
                 "ENRAGE",
+                "SHOCKWAVE",
                 "INTIMIDATE",
             ]
         );
@@ -1686,6 +1687,7 @@ mod tests {
             "BATTLE_CRY",
             "GIANT_SWING",
             "ENRAGE",
+            "SHOCKWAVE",
             "INTIMIDATE",
         ] {
             assert!(

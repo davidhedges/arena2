@@ -1287,6 +1287,40 @@
       }
     },
     {
+      "ability_id": "WARRIOR_SHOCKWAVE",
+      "class_id": "WARRIOR",
+      "action_id": "SHOCKWAVE",
+      "display_name": "Shockwave",
+      "resource_kind": "RAGE",
+      "ability_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 92,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 2000,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "SELF",
+        "requires_target": false,
+        "resource_cost": 0.0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "AREA",
+          "damage": 28,
+          "radius": 4.6,
+          "block_behavior": "BLOCKABLE",
+          "impact_effects": [
+            {
+              "kind": "STAGGER",
+              "duration_ms": 1000
+            }
+          ]
+        }
+      }
+    },
+    {
       "ability_id": "WARRIOR_INTIMIDATE",
       "class_id": "WARRIOR",
       "action_id": "INTIMIDATE",
@@ -1969,6 +2003,13 @@
     },
     {
       "presentation_kind": "ABILITY",
+      "presentation_id": "WARRIOR_SHOCKWAVE",
+      "display_name": "Shockwave",
+      "description": "Releases a shockwave around the warrior.",
+      "sort_order": 92
+    },
+    {
+      "presentation_kind": "ABILITY",
       "presentation_id": "WARRIOR_INTIMIDATE",
       "display_name": "Intimidate",
       "description": "Locks down enemies near the caster with intimidation.",
@@ -2447,6 +2488,18 @@
     },
     {
       "owner_kind": "ABILITY",
+      "owner_id": "WARRIOR_SHOCKWAVE",
+      "trigger": "SPELL_RELEASE",
+      "anchor": "CASTER",
+      "vfx_id": "VFX_AIR_BURST_01_ARENA",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "PARTICLE_SYSTEM",
+      "duration_ms": 0,
+      "sort_order": 183
+    },
+    {
+      "owner_kind": "ABILITY",
       "owner_id": "WARRIOR_INTIMIDATE",
       "trigger": "SPELL_RELEASE",
       "anchor": "CASTER",
@@ -2455,7 +2508,7 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "PARTICLE_SYSTEM",
       "duration_ms": 0,
-      "sort_order": 183
+      "sort_order": 184
     },
     {
       "owner_kind": "ABILITY",

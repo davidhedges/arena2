@@ -23,6 +23,7 @@ namespace Arena.Combat
         public const string GiantSwing = "GIANT_SWING";
         public const string Intimidate = "INTIMIDATE";
         public const string Enrage = "ENRAGE";
+        public const string Shockwave = "SHOCKWAVE";
 
         public static bool UsesChargedReleasePresentation(string? spellId)
         {

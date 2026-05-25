@@ -525,6 +525,7 @@ mod tests {
             "MOMENTUM",
             "INTIMIDATE",
             "ENRAGE",
+            "SHOCKWAVE",
         ] {
             assert_ne!(
                 definition(id).cast_mobility,
@@ -555,6 +556,7 @@ mod tests {
             "GIANT_SWING",
             "INTIMIDATE",
             "ENRAGE",
+            "SHOCKWAVE",
         ] {
             assert!(!definition(id).arms_auto_attack_on_cast);
         }
@@ -680,6 +682,33 @@ mod tests {
         assert!((definition.primary_resource_cost - 0.0).abs() < 0.0001);
         assert!((definition.primary_resource_gain_on_cast - 50.0).abs() < 0.0001);
         assert!(definition.generates_primary_resource_on_cast);
+    }
+
+    #[test]
+    fn shockwave_catalog_matches_self_area_damage_defaults() {
+        let definition = definition("SHOCKWAVE");
+
+        assert_eq!(definition.kind.as_str(), "SHOCKWAVE");
+        assert_eq!(definition.cooldown, Duration::from_millis(2_000));
+        assert_eq!(definition.behavior.as_str(), "AREA");
+        assert_eq!(definition.targeting.as_str(), "SELF");
+        assert!(!definition.requires_target);
+        assert_eq!(definition.damage, 28);
+        assert!((definition.radius - 4.6).abs() < 0.0001);
+        assert!((definition.max_distance - 0.0).abs() < 0.0001);
+        assert_eq!(definition.apply_status, None);
+        assert!((definition.primary_resource_cost - 0.0).abs() < 0.0001);
+        assert!((definition.primary_resource_gain_on_cast - 0.0).abs() < 0.0001);
+        assert!(!definition.generates_primary_resource_on_cast);
+        let area = definition
+            .secondary
+            .area
+            .as_ref()
+            .expect("Shockwave should define area secondary data");
+        assert_eq!(area.impact_effects.len(), 1);
+        let effect = &area.impact_effects[0];
+        assert_eq!(effect.payload().kind(), StatusEffectKind::Stagger);
+        assert_eq!(effect.duration(), Duration::from_millis(1_000));
     }
 
     #[test]
