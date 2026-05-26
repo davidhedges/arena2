@@ -48,6 +48,7 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Col<AutoAttackCatalog, ulong> CooldownMs { get; }
         public global::SpacetimeDB.Col<AutoAttackCatalog, string> MovementPolicy { get; }
         public global::SpacetimeDB.Col<AutoAttackCatalog, bool> UsesGlobalCooldown { get; }
+        public global::SpacetimeDB.Col<AutoAttackCatalog, ulong> GlobalCooldownMs { get; }
         public global::SpacetimeDB.Col<AutoAttackCatalog, string> ParryBehavior { get; }
         public global::SpacetimeDB.Col<AutoAttackCatalog, string> BlockBehavior { get; }
         public global::SpacetimeDB.Col<AutoAttackCatalog, string> AirborneTargetingMode { get; }
@@ -64,6 +65,7 @@ namespace SpacetimeDB.Types
             CooldownMs = new global::SpacetimeDB.Col<AutoAttackCatalog, ulong>(tableName, "cooldown_ms");
             MovementPolicy = new global::SpacetimeDB.Col<AutoAttackCatalog, string>(tableName, "movement_policy");
             UsesGlobalCooldown = new global::SpacetimeDB.Col<AutoAttackCatalog, bool>(tableName, "uses_global_cooldown");
+            GlobalCooldownMs = new global::SpacetimeDB.Col<AutoAttackCatalog, ulong>(tableName, "global_cooldown_ms");
             ParryBehavior = new global::SpacetimeDB.Col<AutoAttackCatalog, string>(tableName, "parry_behavior");
             BlockBehavior = new global::SpacetimeDB.Col<AutoAttackCatalog, string>(tableName, "block_behavior");
             AirborneTargetingMode = new global::SpacetimeDB.Col<AutoAttackCatalog, string>(tableName, "airborne_targeting_mode");

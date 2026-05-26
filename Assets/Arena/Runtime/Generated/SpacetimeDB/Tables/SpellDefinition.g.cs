@@ -42,6 +42,7 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Col<SpellDefinition, string> Kind { get; }
         public global::SpacetimeDB.Col<SpellDefinition, ulong> CooldownMs { get; }
         public global::SpacetimeDB.Col<SpellDefinition, bool> UsesGlobalCooldown { get; }
+        public global::SpacetimeDB.Col<SpellDefinition, ulong> GlobalCooldownMs { get; }
         public global::SpacetimeDB.Col<SpellDefinition, ulong> CastTimeMs { get; }
         public global::SpacetimeDB.Col<SpellDefinition, string> Behavior { get; }
         public global::SpacetimeDB.Col<SpellDefinition, string> Targeting { get; }
@@ -72,6 +73,7 @@ namespace SpacetimeDB.Types
             Kind = new global::SpacetimeDB.Col<SpellDefinition, string>(tableName, "kind");
             CooldownMs = new global::SpacetimeDB.Col<SpellDefinition, ulong>(tableName, "cooldown_ms");
             UsesGlobalCooldown = new global::SpacetimeDB.Col<SpellDefinition, bool>(tableName, "uses_global_cooldown");
+            GlobalCooldownMs = new global::SpacetimeDB.Col<SpellDefinition, ulong>(tableName, "global_cooldown_ms");
             CastTimeMs = new global::SpacetimeDB.Col<SpellDefinition, ulong>(tableName, "cast_time_ms");
             Behavior = new global::SpacetimeDB.Col<SpellDefinition, string>(tableName, "behavior");
             Targeting = new global::SpacetimeDB.Col<SpellDefinition, string>(tableName, "targeting");

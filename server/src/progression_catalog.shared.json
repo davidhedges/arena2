@@ -1480,6 +1480,7 @@
         "range": 2.5,
         "cooldown_ms": 1600,
         "uses_global_cooldown": true,
+        "global_cooldown_ms": 250,
         "parry_behavior": "PARRYABLE",
         "block_behavior": "BLOCKABLE",
         "airborne_targeting_mode": "ANY_TARGET",

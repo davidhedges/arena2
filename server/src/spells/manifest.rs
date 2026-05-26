@@ -367,6 +367,7 @@ pub(crate) struct SpellDefinition {
     pub kind: SpellId,
     pub cooldown: Duration,
     pub uses_global_cooldown: bool,
+    pub global_cooldown: Duration,
     pub cast_time: Duration,
     pub cast_mobility: SpellCastMobility,
     pub behavior: SpellBehavior,

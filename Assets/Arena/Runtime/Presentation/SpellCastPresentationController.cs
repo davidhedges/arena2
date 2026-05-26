@@ -191,8 +191,7 @@ namespace Arena.Presentation
             long endsAtMs,
             float authoredReleaseOffsetSeconds)
         {
-            // CombatAnimationSet stores the release point in normalized clip time,
-            // then resolves it to "seconds before release" for the authored clip.
+            // Release alignment is authored by OnReleaseFrame in clip seconds.
             // ActiveCast is the authoritative, cast-speed-scaled server window.
             // Clamp the authored lead-in so fast casts never schedule release before
             // the server says the cast actually started.

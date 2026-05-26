@@ -27,6 +27,8 @@ namespace SpacetimeDB.Types
         public ulong CooldownMs;
         [DataMember(Name = "uses_global_cooldown")]
         public bool UsesGlobalCooldown;
+        [DataMember(Name = "global_cooldown_ms")]
+        public ulong GlobalCooldownMs;
         [DataMember(Name = "parry_behavior")]
         public string ParryBehavior;
         [DataMember(Name = "block_behavior")]
@@ -62,6 +64,7 @@ namespace SpacetimeDB.Types
             float Range,
             ulong CooldownMs,
             bool UsesGlobalCooldown,
+            ulong GlobalCooldownMs,
             string ParryBehavior,
             string BlockBehavior,
             string AirborneTargetingMode,
@@ -84,6 +87,7 @@ namespace SpacetimeDB.Types
             this.Range = Range;
             this.CooldownMs = CooldownMs;
             this.UsesGlobalCooldown = UsesGlobalCooldown;
+            this.GlobalCooldownMs = GlobalCooldownMs;
             this.ParryBehavior = ParryBehavior;
             this.BlockBehavior = BlockBehavior;
             this.AirborneTargetingMode = AirborneTargetingMode;

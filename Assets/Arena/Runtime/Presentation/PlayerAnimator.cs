@@ -30,7 +30,6 @@ namespace Arena.Presentation
         public void OnHoldFadeStart() { }
         public void OnHoldFadeEnd() { }
         public void OnLowerBodyUnlock() { }
-        public void OnLowerBodyBlendEnd() { }
         public void OnVisualInterruptible() { }
         public void OnStrikeHit() { }
         public void OnPhaseLoopReady() { }
@@ -1521,7 +1520,7 @@ namespace Arena.Presentation
             if (TryTriggerPhasedMeleeAction(request, grounded))
             {
                 TriggerWeaponPresentationEffects(request, strikeIndex);
-                SetActiveMeleePresentation(request, strikeIndex, isPhased: true);
+                SetActiveMeleePresentation(request, strikeIndex, isPhased: true, grounded: grounded);
                 return;
             }
 
@@ -1537,7 +1536,12 @@ namespace Arena.Presentation
                 return;
 
             TriggerWeaponPresentationEffects(request, strikeIndex);
-            SetActiveMeleePresentation(request, strikeIndex, isPhased: false, appliedCatchupSeconds);
+            SetActiveMeleePresentation(
+                request,
+                strikeIndex,
+                isPhased: false,
+                grounded: grounded,
+                appliedCatchupSeconds: appliedCatchupSeconds);
         }
 
         private bool IsSpecialMovementDrivenPhasedMeleeRequest(in CombatAnimationRequest request, bool grounded)
@@ -1606,6 +1610,7 @@ namespace Arena.Presentation
             in CombatAnimationRequest request,
             int strikeIndex,
             bool isPhased,
+            bool grounded,
             float appliedCatchupSeconds = 0f)
         {
             _actionPlayback.SetActiveMeleePresentation(
@@ -1613,6 +1618,7 @@ namespace Arena.Presentation
                 strikeIndex,
                 isPhased,
                 _animationSet,
+                grounded,
                 appliedCatchupSeconds);
             ResetMeleeLowerBodyUnlockState(resetLayerWeight: true, clearUpperBodyRecovery: false);
         }

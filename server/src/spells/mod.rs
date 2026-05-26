@@ -61,7 +61,7 @@ pub(crate) use casting::{
 };
 pub(crate) use catalog::spell_definition_by_str;
 pub(crate) use cooldowns::{
-    is_on_global_cooldown, is_on_named_cooldown, stamp_global_cooldown,
+    is_on_global_cooldown, is_on_named_cooldown, stamp_global_cooldown_for_duration,
     stamp_named_cooldown_for_duration,
 };
 pub(crate) use events::Vec3 as SpellVec3;
@@ -273,6 +273,7 @@ pub struct SpellDefinition {
     pub kind: String,
     pub cooldown_ms: u64,
     pub uses_global_cooldown: bool,
+    pub global_cooldown_ms: u64,
     pub cast_time_ms: u64,
     pub behavior: String,
     pub targeting: String,
@@ -484,6 +485,11 @@ pub(crate) fn sync_spell_definitions(ctx: &ReducerContext) {
             kind: key.clone(),
             cooldown_ms: definition.cooldown.as_millis() as u64,
             uses_global_cooldown: definition.uses_global_cooldown,
+            global_cooldown_ms: if definition.uses_global_cooldown {
+                definition.global_cooldown.as_millis() as u64
+            } else {
+                0
+            },
             cast_time_ms: definition.cast_time.as_millis() as u64,
             behavior: definition.behavior.as_str().to_string(),
             targeting: definition.targeting.as_str().to_string(),

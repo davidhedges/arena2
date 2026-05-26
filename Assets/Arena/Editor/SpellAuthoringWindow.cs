@@ -486,11 +486,11 @@ namespace Arena.Editor
                 requiresCombatStance = true,
                 combatEntryMode = CombatEntryMode.AnimatedAfterCast,
                 playbackLayer = SpellPlaybackLayer.UpperBody,
-                groundEffectTime = 0.35f,
-                airEffectTime = 0.35f,
-                lowerBodyUnlockAtSeconds = 0.01f,
-                lowerBodyBlendOutSeconds = 0.12f,
-                visualInterruptibleAtSeconds = 0.75f,
+                groundEffectTime = 0f,
+                airEffectTime = 0f,
+                lowerBodyUnlockAtSeconds = 0f,
+                lowerBodyBlendOutSeconds = 0f,
+                visualInterruptibleAtSeconds = 0f,
             });
             animationSet.spells = spells
                 .OrderBy(entry => entry.SpellIdOrEmpty, StringComparer.Ordinal)

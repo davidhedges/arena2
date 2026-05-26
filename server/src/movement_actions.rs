@@ -21,7 +21,8 @@ use crate::resources::{
     resolve_ability_action_resource_cost_amount,
 };
 use crate::spells::{
-    is_on_global_cooldown, is_on_named_cooldown, stamp_global_cooldown, SpellId, SpellVec3,
+    is_on_global_cooldown, is_on_named_cooldown, stamp_global_cooldown_for_duration, SpellId,
+    SpellVec3,
 };
 
 #[allow(unused_imports)]
@@ -452,7 +453,12 @@ pub(crate) fn start_movement_delivery_request(
         return Ok(());
     }
     if delivery.uses_global_cooldown {
-        stamp_global_cooldown(ctx, owner, now);
+        stamp_global_cooldown_for_duration(
+            ctx,
+            owner,
+            Duration::from_millis(delivery.global_cooldown_ms.max(1)),
+            now,
+        );
     }
     Ok(())
 }

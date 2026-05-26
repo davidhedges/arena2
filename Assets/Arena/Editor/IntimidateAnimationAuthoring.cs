@@ -200,11 +200,11 @@ namespace Arena.Editor
             entry.requiresCombatStance = true;
             entry.combatEntryMode = CombatEntryMode.AnimatedAfterCast;
             entry.playbackLayer = SpellPlaybackLayer.LeftGesture;
-            entry.groundEffectTime = 0.35f;
-            entry.airEffectTime = 0.35f;
-            entry.lowerBodyUnlockAtSeconds = 0.01f;
-            entry.lowerBodyBlendOutSeconds = 0.12f;
-            entry.visualInterruptibleAtSeconds = 0.75f;
+            entry.groundEffectTime = 0f;
+            entry.airEffectTime = 0f;
+            entry.lowerBodyUnlockAtSeconds = 0f;
+            entry.lowerBodyBlendOutSeconds = 0f;
+            entry.visualInterruptibleAtSeconds = 0f;
 
             if (index >= 0)
                 spells[index] = entry;

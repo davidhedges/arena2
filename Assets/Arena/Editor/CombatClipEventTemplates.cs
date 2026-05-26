@@ -68,9 +68,6 @@ namespace Arena.Editor
                         "OnLowerBodyUnlock", 0.70f, required: false,
                         "When locomotion may regain lower-body control."),
                     new CombatClipEventTemplate(
-                        "OnLowerBodyBlendEnd", 0.80f, required: false,
-                        "When the lower-body blend back to locomotion is complete. Optional — if absent, runtime uses OnLowerBodyUnlock + DefaultLowerBodyBlendDurationSeconds."),
-                    new CombatClipEventTemplate(
                         "OnVisualInterruptible", 0.85f, required: false,
                         "Earliest point at which this visual may be cleanly preempted."),
                 },
@@ -81,13 +78,10 @@ namespace Arena.Editor
                         "OnStrikeHit", 0.40f, required: true,
                         "Visible hit moment. VFX/audio cue. Damage timing remains server-authoritative."),
                     new CombatClipEventTemplate(
-                        "OnLowerBodyUnlock", 0.70f, required: false,
+                        "OnLowerBodyUnlock", 0.70f, required: true,
                         "When locomotion may regain lower-body control."),
                     new CombatClipEventTemplate(
-                        "OnLowerBodyBlendEnd", 0.80f, required: false,
-                        "When the lower-body blend back to locomotion is complete. Optional — if absent, runtime uses OnLowerBodyUnlock + DefaultLowerBodyBlendDurationSeconds."),
-                    new CombatClipEventTemplate(
-                        "OnVisualInterruptible", 0.85f, required: false,
+                        "OnVisualInterruptible", 0.85f, required: true,
                         "Earliest point at which this visual may be cleanly preempted."),
                 },
                 [CombatClipRole.PhasedMeleeStart] = new[]
@@ -114,10 +108,7 @@ namespace Arena.Editor
                         "OnLowerBodyUnlock", 0.70f, required: false,
                         "When locomotion may regain lower-body control."),
                     new CombatClipEventTemplate(
-                        "OnLowerBodyBlendEnd", 0.80f, required: false,
-                        "When the lower-body blend back to locomotion is complete. Optional — if absent, runtime uses OnLowerBodyUnlock + DefaultLowerBodyBlendDurationSeconds."),
-                    new CombatClipEventTemplate(
-                        "OnVisualInterruptible", 0.85f, required: false,
+                        "OnVisualInterruptible", 0.85f, required: true,
                         "Earliest point at which this visual may be cleanly preempted."),
                 },
 

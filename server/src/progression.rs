@@ -76,6 +76,9 @@ const ACTION_KIND_ABILITY: &str = "ABILITY";
 const ACTION_KIND_FIXED: &str = "FIXED";
 const FIXED_ACTION_DODGE: &str = "DODGE";
 const FIXED_ACTION_PARRY: &str = "PARRY";
+const RULE_DEFAULT_GLOBAL_COOLDOWN_MS: &str = "DEFAULT_GLOBAL_COOLDOWN_MS";
+const FALLBACK_DEFAULT_GLOBAL_COOLDOWN_MS: u64 = 1500;
+const MAX_DEFAULT_GLOBAL_COOLDOWN_MS: u64 = 60_000;
 pub(crate) const COMBAT_PROFILE_ARCHER_BOW: &str = "ARCHER_BOW";
 pub(crate) const COMBAT_MODE_SHORT_DRAW: &str = "SHORT_DRAW";
 pub(crate) const COMBAT_MODE_FULL_DRAW: &str = "FULL_DRAW";
@@ -264,6 +267,8 @@ struct AbilityGameplayDefinition {
     range: Option<f32>,
     cooldown_ms: Option<u64>,
     uses_global_cooldown: Option<bool>,
+    #[serde(default)]
+    global_cooldown_ms: Option<u64>,
     parry_behavior: Option<String>,
     block_behavior: Option<String>,
     airborne_targeting_mode: Option<String>,
@@ -305,6 +310,8 @@ struct MovementDeliveryDefinition {
     kind: String,
     cooldown_ms: u64,
     uses_global_cooldown: bool,
+    #[serde(default)]
+    global_cooldown_ms: Option<u64>,
     cast_time_ms: u64,
     cast_mobility: String,
     targeting: String,
@@ -589,6 +596,7 @@ pub(crate) struct MovementDeliveryRuntime {
     pub kind: String,
     pub cooldown_ms: u64,
     pub uses_global_cooldown: bool,
+    pub global_cooldown_ms: u64,
     pub cast_time_ms: u64,
     pub cast_mobility: String,
     pub targeting: String,
@@ -690,6 +698,8 @@ struct AutoAttackDefinition {
     #[serde(default = "default_auto_attack_movement_policy")]
     movement_policy: String,
     uses_global_cooldown: bool,
+    #[serde(default)]
+    global_cooldown_ms: Option<u64>,
     parry_behavior: String,
     block_behavior: String,
     airborne_targeting_mode: String,
@@ -710,6 +720,8 @@ struct AutoAttackReplacementDefinition {
     range: f32,
     cooldown_ms: u64,
     uses_global_cooldown: bool,
+    #[serde(default)]
+    global_cooldown_ms: Option<u64>,
     parry_behavior: String,
     block_behavior: String,
     airborne_targeting_mode: String,
@@ -1155,6 +1167,7 @@ pub struct MeleeAbilityCatalog {
     pub range: f32,
     pub cooldown_ms: u64,
     pub uses_global_cooldown: bool,
+    pub global_cooldown_ms: u64,
     pub parry_behavior: String,
     pub block_behavior: String,
     pub airborne_targeting_mode: String,
@@ -1197,6 +1210,7 @@ pub struct AutoAttackCatalog {
     pub cooldown_ms: u64,
     pub movement_policy: String,
     pub uses_global_cooldown: bool,
+    pub global_cooldown_ms: u64,
     pub parry_behavior: String,
     pub block_behavior: String,
     pub airborne_targeting_mode: String,
@@ -1213,6 +1227,7 @@ pub struct AutoAttackReplacementCatalog {
     pub range: f32,
     pub cooldown_ms: u64,
     pub uses_global_cooldown: bool,
+    pub global_cooldown_ms: u64,
     pub parry_behavior: String,
     pub block_behavior: String,
     pub airborne_targeting_mode: String,
@@ -2240,6 +2255,10 @@ fn movement_delivery_runtime_from_definition(
         kind: normalize_identifier(movement.kind.as_str()),
         cooldown_ms: movement.cooldown_ms,
         uses_global_cooldown: movement.uses_global_cooldown,
+        global_cooldown_ms: resolved_global_cooldown_ms(
+            movement.uses_global_cooldown,
+            movement.global_cooldown_ms,
+        ),
         cast_time_ms: movement.cast_time_ms,
         cast_mobility: normalize_identifier(movement.cast_mobility.as_str()),
         targeting: normalize_identifier(movement.targeting.as_str()),
@@ -2360,6 +2379,25 @@ pub(crate) fn combat_rule_value(combat_rule_id: &str) -> f32 {
         })
         .map(|definition| definition.scalar_value)
         .unwrap_or(0.0)
+}
+
+pub(crate) fn default_global_cooldown_ms() -> u64 {
+    let configured = combat_rule_value(RULE_DEFAULT_GLOBAL_COOLDOWN_MS);
+    if configured.is_finite() && configured > 0.0 {
+        (configured.round() as u64).clamp(1, MAX_DEFAULT_GLOBAL_COOLDOWN_MS)
+    } else {
+        FALLBACK_DEFAULT_GLOBAL_COOLDOWN_MS
+    }
+}
+
+fn resolved_global_cooldown_ms(
+    uses_global_cooldown: bool,
+    authored_global_cooldown_ms: Option<u64>,
+) -> u64 {
+    if !uses_global_cooldown {
+        return 0;
+    }
+    authored_global_cooldown_ms.unwrap_or_else(default_global_cooldown_ms)
 }
 
 fn sync_combat_profile_catalog(ctx: &ReducerContext) {
@@ -2695,6 +2733,11 @@ fn sync_melee_ability_catalog(ctx: &ReducerContext) {
         let ability_id = normalize_identifier(definition.ability_id.as_str());
         let impact_area = definition.gameplay.melee_impact_area.as_ref();
         let targeting = resolved_melee_targeting_for_catalog(&definition.gameplay);
+        let uses_global_cooldown = required_melee_field(
+            definition.gameplay.uses_global_cooldown,
+            &ability_id,
+            "uses_global_cooldown",
+        );
         let row = MeleeAbilityCatalog {
             ability_id: ability_id.clone(),
             action_id: AuthoredActionId::new(definition.action_id.as_str()).into_string(),
@@ -2714,10 +2757,10 @@ fn sync_melee_ability_catalog(ctx: &ReducerContext) {
                 &ability_id,
                 "cooldown_ms",
             ),
-            uses_global_cooldown: required_melee_field(
-                definition.gameplay.uses_global_cooldown,
-                &ability_id,
-                "uses_global_cooldown",
+            uses_global_cooldown,
+            global_cooldown_ms: resolved_global_cooldown_ms(
+                uses_global_cooldown,
+                definition.gameplay.global_cooldown_ms,
             ),
             parry_behavior: normalize_identifier(required_melee_string_field(
                 definition.gameplay.parry_behavior.as_deref(),
@@ -2914,6 +2957,10 @@ fn sync_auto_attack_catalog(ctx: &ReducerContext) {
             cooldown_ms: definition.cooldown_ms,
             movement_policy: normalize_identifier(definition.movement_policy.as_str()),
             uses_global_cooldown: definition.uses_global_cooldown,
+            global_cooldown_ms: resolved_global_cooldown_ms(
+                definition.uses_global_cooldown,
+                definition.global_cooldown_ms,
+            ),
             parry_behavior: normalize_identifier(definition.parry_behavior.as_str()),
             block_behavior: normalize_identifier(definition.block_behavior.as_str()),
             airborne_targeting_mode: normalize_identifier(
@@ -2966,6 +3013,10 @@ fn sync_auto_attack_replacement_catalog(ctx: &ReducerContext) {
             range: definition.range,
             cooldown_ms: definition.cooldown_ms,
             uses_global_cooldown: definition.uses_global_cooldown,
+            global_cooldown_ms: resolved_global_cooldown_ms(
+                definition.uses_global_cooldown,
+                definition.global_cooldown_ms,
+            ),
             parry_behavior: normalize_identifier(definition.parry_behavior.as_str()),
             block_behavior: normalize_identifier(definition.block_behavior.as_str()),
             airborne_targeting_mode: normalize_identifier(
@@ -4156,6 +4207,11 @@ fn validate_auto_attack_catalog() {
             attack.action_id,
             attack.movement_policy
         );
+        validate_authored_global_cooldown_ms(
+            attack.action_id.as_str(),
+            Some(attack.uses_global_cooldown),
+            attack.global_cooldown_ms,
+        );
 
         if normalize_identifier(attack.combat_profile_id.as_str()) == COMBAT_PROFILE_ARCHER_BOW
             && AuthoredActionId::new(attack.action_id.as_str()).as_str() == "AUTO_ATTACK_1"
@@ -4169,6 +4225,14 @@ fn validate_auto_attack_catalog() {
             && archer_modes.contains(COMBAT_MODE_FULL_DRAW),
         "ARCHER_BOW AUTO_ATTACK_1 must define SHORT_DRAW and FULL_DRAW rows"
     );
+
+    for replacement in &progression_catalog().auto_attack_replacements {
+        validate_authored_global_cooldown_ms(
+            replacement.replacement_id.as_str(),
+            Some(replacement.uses_global_cooldown),
+            replacement.global_cooldown_ms,
+        );
+    }
 }
 
 fn validate_ability_catalog() {
@@ -4200,6 +4264,10 @@ fn validate_ability_catalog() {
                     && !ability.gameplay.arms_auto_attack_on_cast,
                 "movement ability '{ability_id}' must define execution fields inside gameplay.delivery"
             );
+            assert!(
+                ability.gameplay.global_cooldown_ms.is_none(),
+                "movement ability '{ability_id}' must define global_cooldown_ms inside gameplay.delivery"
+            );
         } else if ability_kind == "MELEE" {
             assert!(
                 ability.gameplay.cast_time_ms.is_none()
@@ -4223,6 +4291,7 @@ fn validate_ability_catalog() {
                     && ability.gameplay.melee_targeting.is_none()
                     && ability.gameplay.melee_impact_effects.is_empty()
                     && ability.gameplay.resource_cost.is_none()
+                    && ability.gameplay.global_cooldown_ms.is_none()
                     && ability.gameplay.primary_resource_gain_on_cast == 0.0
                     && !ability.gameplay.arms_auto_attack_on_cast
                     && ability.gameplay.delivery.is_none(),
@@ -4279,6 +4348,11 @@ fn validate_melee_gameplay_fields(ability_id: &str, gameplay: &AbilityGameplayDe
     assert!(
         range.is_finite() && range > 0.0,
         "melee ability '{ability_id}' range must be positive"
+    );
+    validate_authored_global_cooldown_ms(
+        ability_id,
+        gameplay.uses_global_cooldown,
+        gameplay.global_cooldown_ms,
     );
 
     let Some(targeting) = gameplay.melee_targeting.as_ref() else {
@@ -4469,6 +4543,11 @@ fn validate_spell_gameplay(ability_id: &str, gameplay: &AbilityGameplayDefinitio
         gameplay.uses_global_cooldown.is_some(),
         "spell ability '{ability_id}' must define gameplay.uses_global_cooldown"
     );
+    validate_authored_global_cooldown_ms(
+        ability_id,
+        gameplay.uses_global_cooldown,
+        gameplay.global_cooldown_ms,
+    );
     assert!(
         gameplay.cast_time_ms.is_some(),
         "spell ability '{ability_id}' must define gameplay.cast_time_ms"
@@ -4491,6 +4570,24 @@ fn validate_spell_gameplay(ability_id: &str, gameplay: &AbilityGameplayDefinitio
     );
 }
 
+fn validate_authored_global_cooldown_ms(
+    ability_id: &str,
+    uses_global_cooldown: Option<bool>,
+    global_cooldown_ms: Option<u64>,
+) {
+    if global_cooldown_ms.is_none() {
+        return;
+    }
+    assert!(
+        uses_global_cooldown == Some(true),
+        "ability '{ability_id}' must only define global_cooldown_ms when uses_global_cooldown is true"
+    );
+    assert!(
+        global_cooldown_ms.unwrap_or(0) > 0,
+        "ability '{ability_id}' global_cooldown_ms must be positive"
+    );
+}
+
 fn validate_movement_delivery(ability_id: &str, movement: &MovementDeliveryDefinition) {
     assert_eq!(
         normalize_identifier(movement.kind.as_str()),
@@ -4505,6 +4602,11 @@ fn validate_movement_delivery(ability_id: &str, movement: &MovementDeliveryDefin
     assert!(
         movement.uses_global_cooldown,
         "movement ability '{ability_id}' must currently use the global cooldown"
+    );
+    validate_authored_global_cooldown_ms(
+        ability_id,
+        Some(movement.uses_global_cooldown),
+        movement.global_cooldown_ms,
     );
     assert!(
         movement.cast_time_ms > 0,
@@ -7063,6 +7165,14 @@ mod tests {
         assert_eq!(movement.speed, 18.0);
         assert_eq!(movement.collision_policy, "STOP_AT_BLOCK");
         assert_eq!(movement.facing_policy, "FACE_START");
+        let ability = progression_catalog()
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "WARRIOR_DISENGAGE_STRIKE")
+            .expect("disengage strike ability should exist");
+        assert_eq!(ability.gameplay.cooldown_ms, Some(1600));
+        assert_eq!(ability.gameplay.uses_global_cooldown, Some(true));
+        assert_eq!(ability.gameplay.global_cooldown_ms, Some(650));
     }
 
     #[test]

@@ -19,6 +19,8 @@ namespace SpacetimeDB.Types
         public ulong CooldownMs;
         [DataMember(Name = "uses_global_cooldown")]
         public bool UsesGlobalCooldown;
+        [DataMember(Name = "global_cooldown_ms")]
+        public ulong GlobalCooldownMs;
         [DataMember(Name = "cast_time_ms")]
         public ulong CastTimeMs;
         [DataMember(Name = "behavior")]
@@ -72,6 +74,7 @@ namespace SpacetimeDB.Types
             string Kind,
             ulong CooldownMs,
             bool UsesGlobalCooldown,
+            ulong GlobalCooldownMs,
             ulong CastTimeMs,
             string Behavior,
             string Targeting,
@@ -101,6 +104,7 @@ namespace SpacetimeDB.Types
             this.Kind = Kind;
             this.CooldownMs = CooldownMs;
             this.UsesGlobalCooldown = UsesGlobalCooldown;
+            this.GlobalCooldownMs = GlobalCooldownMs;
             this.CastTimeMs = CastTimeMs;
             this.Behavior = Behavior;
             this.Targeting = Targeting;

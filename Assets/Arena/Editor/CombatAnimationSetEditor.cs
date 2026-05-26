@@ -78,10 +78,6 @@ namespace Arena.Editor
             Path.GetFullPath(Path.Combine(Application.dataPath, "..", "Backups", "melee-authoring"));
         internal static readonly string AnimationSetBackupRootPath =
             Path.GetFullPath(Path.Combine(Application.dataPath, "..", "Backups", "combat-animation-sets"));
-        private const string CharacterAnimatorControllerPath = "Assets/Arena/Content/Animation/Arena_Character.controller";
-        private const string UpperBodyLayerName = "UpperBody";
-        private const string UpperBodyRecoveryStateName = "UpperBodyRecoveryAction1";
-        private const string UpperBodyRecoverySlotName = "slot_upper_body_recovery_1";
         private static readonly Dictionary<string, PendingAnimationSetPersist> PendingPersists =
             new(StringComparer.OrdinalIgnoreCase);
         private static readonly Dictionary<string, CachedAvatarValidation> CachedAvatarValidations =
@@ -232,14 +228,6 @@ namespace Arena.Editor
                         ? "Strict rig validation found 1 animated-prop mismatch on the resolved runtime avatar prefab. Runtime weapon attachment can still be correct. Enable Strict Rig Validation to inspect it."
                         : $"Strict rig validation found {avatarPropWarnings.Count} animated-prop mismatches on the resolved runtime avatar prefab. Runtime weapon attachment can still be correct. Enable Strict Rig Validation to inspect them.",
                     MessageType.Info);
-            }
-
-            string lowerBodyUnlockCoverage = BuildLowerBodyUnlockCoverageSummary(set);
-            if (!string.IsNullOrEmpty(lowerBodyUnlockCoverage))
-            {
-                EditorGUILayout.Space(8);
-                EditorGUILayout.LabelField("Melee Presentation Coverage", EditorStyles.boldLabel);
-                EditorGUILayout.HelpBox(lowerBodyUnlockCoverage, MessageType.None);
             }
 
             List<(MessageType type, string message)> strikeValidationMessages =
@@ -533,9 +521,6 @@ namespace Arena.Editor
                 SerializedProperty clipProperty = attackProperty.FindPropertyRelative("clip");
                 SerializedProperty combatProperty = attackProperty.FindPropertyRelative("combat");
                 SerializedProperty presentationModeProperty = attackProperty.FindPropertyRelative("presentationMode");
-                SerializedProperty lowerBodyUnlockAtSecondsProperty = attackProperty.FindPropertyRelative("lowerBodyUnlockAtSeconds");
-                SerializedProperty lowerBodyBlendOutSecondsProperty = attackProperty.FindPropertyRelative("lowerBodyBlendOutSeconds");
-                SerializedProperty visualInterruptibleAtSecondsProperty = attackProperty.FindPropertyRelative("visualInterruptibleAtSeconds");
                 SerializedProperty phasedGroundProperty = attackProperty.FindPropertyRelative("phasedGround");
                 SerializedProperty phasedAirProperty = attackProperty.FindPropertyRelative("phasedAir");
                 SerializedProperty drivePhasesFromSpecialMovementProperty = attackProperty.FindPropertyRelative("drivePhasesFromSpecialMovement");
@@ -628,131 +613,17 @@ namespace Arena.Editor
                     EditorGUILayout.PropertyField(clipProperty, new GUIContent("Clip"));
                 }
 
-                float timingReferenceLengthSeconds = set.GetStrikeTimingReferenceLengthSeconds(strikeIndex);
-                DrawTimelineSecondsAtField(
-                    lowerBodyUnlockAtSecondsProperty,
-                    timingReferenceLengthSeconds,
-                    new GUIContent(
-                        "Lower Body Unlock At",
-                        usesPhasedPresentation
-                            ? "Presentation-only timestamp in seconds when locomotion may regain lower-body control. For phased attacks this is measured against runtime segmented elapsed time."
-                            : "Presentation-only timestamp in seconds when locomotion may regain lower-body control. Auto uses the timing reference length and preserves existing full-body behavior."));
-                DrawBlendOutSecondsField(
-                    lowerBodyBlendOutSecondsProperty,
-                    new GUIContent(
-                        "Lower Body Blend Out",
-                        "Presentation-only blend-out duration in seconds after lower-body unlock. Default uses 0.12s; 0 disables blend-out."));
-                DrawTimelineSecondsAtField(
-                    visualInterruptibleAtSecondsProperty,
-                    timingReferenceLengthSeconds,
-                    new GUIContent(
-                        "Visual Interruptible At",
-                        usesPhasedPresentation
-                            ? "After this runtime segmented elapsed time in seconds, another combat animation may replace this phased visual without creating a ghost. Presentation only; does not affect Hit Windows."
-                            : "After this time in seconds, another combat animation may replace this visual without creating a ghost. Auto uses the timing reference length. Presentation only; does not affect hit timing."));
+                EditorGUILayout.HelpBox(
+                    usesPhasedPresentation
+                        ? "Presentation timing is read from stamped events on the phased clips: OnLowerBodyUnlock and OnVisualInterruptible. Lower-body blend-out uses the runtime default."
+                        : "Presentation timing is read from stamped events on the clip: OnStrikeHit, OnLowerBodyUnlock, and OnVisualInterruptible. Lower-body blend-out uses the runtime default.",
+                    MessageType.None);
 
                 EditorGUILayout.Space(4);
                 EditorGUILayout.LabelField("Combat", EditorStyles.boldLabel);
                 EditorGUILayout.PropertyField(combatProperty, new GUIContent("Combat"), true);
                 EditorGUILayout.EndVertical();
             }
-        }
-
-        private static void DrawTimelineSecondsAtField(
-            SerializedProperty secondsProperty,
-            float timingReferenceLengthSeconds,
-            GUIContent label)
-        {
-            float fallbackSeconds = Mathf.Max(0f, timingReferenceLengthSeconds);
-            float storedSeconds = secondsProperty.floatValue;
-            bool hasTimingReference = fallbackSeconds > 0f;
-            bool isAuto = storedSeconds <= 0f || (hasTimingReference && storedSeconds > fallbackSeconds);
-
-            using (new EditorGUILayout.HorizontalScope())
-            {
-                EditorGUILayout.PrefixLabel(label);
-
-                EditorGUI.BeginChangeCheck();
-                bool nextAuto = GUILayout.Toggle(
-                    isAuto,
-                    new GUIContent("Auto", "Use this attack's timing reference length."),
-                    EditorStyles.miniButton,
-                    GUILayout.Width(52f));
-                if (EditorGUI.EndChangeCheck())
-                {
-                    secondsProperty.floatValue = nextAuto
-                        ? 0f
-                        : Mathf.Max(0.001f, isAuto ? fallbackSeconds : storedSeconds);
-                    isAuto = nextAuto;
-                    storedSeconds = secondsProperty.floatValue;
-                }
-
-                using (new EditorGUI.DisabledScope(isAuto))
-                {
-                    float displayedSeconds = isAuto ? fallbackSeconds : storedSeconds;
-                    EditorGUI.BeginChangeCheck();
-                    displayedSeconds = EditorGUILayout.DelayedFloatField(
-                        displayedSeconds,
-                        GUILayout.MinWidth(80f));
-                    if (EditorGUI.EndChangeCheck())
-                    {
-                        secondsProperty.floatValue = Mathf.Max(0.001f, displayedSeconds);
-                        isAuto = false;
-                    }
-                }
-
-                GUILayout.Label("s", GUILayout.Width(14f));
-            }
-
-            if (isAuto)
-            {
-                string resolvedText = hasTimingReference
-                    ? $"Auto resolves to {fallbackSeconds:0.###}s from the timing reference."
-                    : "Auto currently resolves to 0s because this attack has no timing reference clip.";
-                EditorGUILayout.HelpBox(resolvedText, hasTimingReference ? MessageType.None : MessageType.Warning);
-            }
-        }
-
-        private static void DrawBlendOutSecondsField(
-            SerializedProperty secondsProperty,
-            GUIContent label)
-        {
-            bool usesDefault = secondsProperty.floatValue < 0f;
-            using (new EditorGUILayout.HorizontalScope())
-            {
-                EditorGUILayout.PrefixLabel(label);
-
-                EditorGUI.BeginChangeCheck();
-                bool nextDefault = GUILayout.Toggle(
-                    usesDefault,
-                    new GUIContent("Default", "Use the default 0.12s blend-out."),
-                    EditorStyles.miniButton,
-                    GUILayout.Width(64f));
-                if (EditorGUI.EndChangeCheck())
-                {
-                    secondsProperty.floatValue = nextDefault ? -1f : 0.12f;
-                    usesDefault = nextDefault;
-                }
-
-                using (new EditorGUI.DisabledScope(usesDefault))
-                {
-                    float displayedSeconds = usesDefault ? 0.12f : Mathf.Max(0f, secondsProperty.floatValue);
-                    EditorGUI.BeginChangeCheck();
-                    displayedSeconds = EditorGUILayout.DelayedFloatField(
-                        displayedSeconds,
-                        GUILayout.MinWidth(80f));
-                    if (EditorGUI.EndChangeCheck())
-                    {
-                        secondsProperty.floatValue = Mathf.Max(0f, displayedSeconds);
-                        usesDefault = false;
-                    }
-                }
-
-                GUILayout.Label("s", GUILayout.Width(14f));
-            }
-
-            if (usesDefault)
-                EditorGUILayout.HelpBox("Default resolves to 0.12s. Set 0s to disable blend-out.", MessageType.None);
         }
 
         private void DrawMeleeAnimationPreviewPane(CombatAnimationSet set)
@@ -1259,14 +1130,6 @@ namespace Arena.Editor
             CombatAnimationSet set)
         {
             var messages = new List<(MessageType type, string message)>();
-            if (HasAuthoredSingleClipLowerBodyUnlock(set)
-                && !CombatUpperBodyRecoveryControllerIsReady(out string recoveryControllerProblem))
-            {
-                messages.Add((
-                    MessageType.Error,
-                    $"Lower-body unlock is authored on at least one single-clip melee attack, but the Animator Controller is not ready for upper-body recovery: {recoveryControllerProblem}"));
-            }
-
             var strikeIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             for (int i = 1; i <= set.MeleeAttackCount; i++)
             {
@@ -1325,43 +1188,6 @@ namespace Arena.Editor
                     messages.Add((MessageType.Error, $"{strikeLabel}: attack timing could not be derived from its presentation clips."));
                 if (hitWindows.Length == 0)
                     messages.Add((MessageType.Error, $"{strikeLabel}: at least one hit window is required."));
-
-                if (timingReferenceLengthSeconds > 0f)
-                {
-                    if (attack.lowerBodyUnlockAtSeconds > timingReferenceLengthSeconds)
-                    {
-                        messages.Add((
-                            MessageType.Warning,
-                            $"{strikeLabel}: lower-body unlock is after the timing reference and will resolve to Auto."));
-                    }
-
-                    if (attack.visualInterruptibleAtSeconds > timingReferenceLengthSeconds)
-                    {
-                        messages.Add((
-                            MessageType.Warning,
-                            $"{strikeLabel}: visual interruptible time is after the timing reference and will resolve to Auto."));
-                    }
-
-                    if (attack.lowerBodyUnlockAtSeconds > 0f
-                        && attack.visualInterruptibleAtSeconds > 0f
-                        && attack.lowerBodyUnlockAtSeconds > attack.visualInterruptibleAtSeconds)
-                    {
-                        messages.Add((
-                            MessageType.Warning,
-                            $"{strikeLabel}: lower-body unlock happens after visual interruption. This is unusual; unlock should normally be earlier."));
-                    }
-
-                    if (attack.lowerBodyUnlockAtSeconds > 0f && hitWindows.Length > 0)
-                    {
-                        float firstHitSeconds = hitWindows[0].ImpactDelayMs(timingReferenceLengthSeconds) / 1000f;
-                        if (attack.lowerBodyUnlockAtSeconds < firstHitSeconds)
-                        {
-                            messages.Add((
-                                MessageType.Warning,
-                                $"{strikeLabel}: lower-body unlock happens before the first Hit Window. Keep this explicit; most attacks should unlock after hit/release."));
-                        }
-                    }
-                }
 
                 if (usesPhasedPresentation)
                 {
@@ -1470,124 +1296,6 @@ namespace Arena.Editor
             }
 
             return messages;
-        }
-
-        private static string BuildLowerBodyUnlockCoverageSummary(CombatAnimationSet set)
-        {
-            if (set.meleeAttacks == null || set.meleeAttacks.Count == 0)
-                return string.Empty;
-
-            int singleClipCount = 0;
-            int explicitUnlockCount = 0;
-            var legacyFallbackIds = new List<string>();
-
-            for (int strikeIndex = 1; strikeIndex <= set.MeleeAttackCount; strikeIndex++)
-            {
-                WeaponMeleeAttackAuthoring attack = set.meleeAttacks[strikeIndex - 1];
-                if (attack.UsesPhasedPresentation)
-                    continue;
-
-                singleClipCount++;
-                string authoredId = attack.combat.AuthoredStrikeIdOrDefault;
-                if (attack.lowerBodyUnlockAtSeconds > 0f)
-                {
-                    explicitUnlockCount++;
-                    continue;
-                }
-
-                legacyFallbackIds.Add(string.IsNullOrWhiteSpace(authoredId)
-                    ? $"Strike {strikeIndex}"
-                    : authoredId);
-            }
-
-            if (singleClipCount == 0)
-                return "No single-clip melee attacks are authored on this animation set. Phased melee uses segmented lower-body unlock on the runtime action layer.";
-
-            var builder = new StringBuilder();
-            builder
-                .Append(explicitUnlockCount)
-                .Append(" / ")
-                .Append(singleClipCount)
-                .Append(" single-clip melee attacks have explicit lower-body unlock timing. ");
-
-            if (legacyFallbackIds.Count == 0)
-            {
-                builder.Append("All single-clip melee attacks have been tuned for lower-body recovery.");
-            }
-            else
-            {
-                builder
-                    .Append("Legacy full-body fallback remains on: ")
-                    .Append(string.Join(", ", legacyFallbackIds))
-                    .Append('.');
-            }
-
-            return builder.ToString();
-        }
-
-        private static bool HasAuthoredSingleClipLowerBodyUnlock(CombatAnimationSet set)
-        {
-            if (set.meleeAttacks == null)
-                return false;
-
-            foreach (WeaponMeleeAttackAuthoring attack in set.meleeAttacks)
-            {
-                if (!attack.UsesPhasedPresentation && attack.lowerBodyUnlockAtSeconds > 0f)
-                    return true;
-            }
-
-            return false;
-        }
-
-        private static bool CombatUpperBodyRecoveryControllerIsReady(out string problem)
-        {
-            UnityEditor.Animations.AnimatorController controller =
-                AssetDatabase.LoadAssetAtPath<UnityEditor.Animations.AnimatorController>(CharacterAnimatorControllerPath);
-            if (controller == null)
-            {
-                problem = $"{CharacterAnimatorControllerPath} could not be loaded.";
-                return false;
-            }
-
-            int upperBodyLayerIndex = -1;
-            for (int layerIndex = 0; layerIndex < controller.layers.Length; layerIndex++)
-            {
-                UnityEditor.Animations.AnimatorControllerLayer layer = controller.layers[layerIndex];
-                if (!string.Equals(layer.name, UpperBodyLayerName, StringComparison.Ordinal))
-                    continue;
-
-                upperBodyLayerIndex = layerIndex;
-                break;
-            }
-
-            if (upperBodyLayerIndex < 0)
-            {
-                problem = $"layer '{UpperBodyLayerName}' is missing.";
-                return false;
-            }
-
-            UnityEditor.Animations.AnimatorControllerLayer upperBodyLayer =
-                controller.layers[upperBodyLayerIndex];
-            foreach (UnityEditor.Animations.ChildAnimatorState childState in upperBodyLayer.stateMachine.states)
-            {
-                UnityEditor.Animations.AnimatorState state = childState.state;
-                if (!string.Equals(state.name, UpperBodyRecoveryStateName, StringComparison.Ordinal))
-                    continue;
-
-                if (state.motion != null
-                    && string.Equals(state.motion.name, UpperBodyRecoverySlotName, StringComparison.Ordinal))
-                {
-                    problem = string.Empty;
-                    return true;
-                }
-
-                problem =
-                    $"state '{UpperBodyRecoveryStateName}' must use motion '{UpperBodyRecoverySlotName}'.";
-                return false;
-            }
-
-            problem = $"state '{UpperBodyRecoveryStateName}' is missing from layer '{UpperBodyLayerName}'.";
-            return false;
         }
 
         private static bool IsUpperSnakeIdentifier(string value)

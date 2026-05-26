@@ -14,7 +14,6 @@ namespace Arena.Presentation
         public const string OnHoldFadeStart = "OnHoldFadeStart";
         public const string OnHoldFadeEnd = "OnHoldFadeEnd";
         public const string OnLowerBodyUnlock = "OnLowerBodyUnlock";
-        public const string OnLowerBodyBlendEnd = "OnLowerBodyBlendEnd";
         public const string OnVisualInterruptible = "OnVisualInterruptible";
         public const string OnStrikeHit = "OnStrikeHit";
         public const string OnPhaseLoopReady = "OnPhaseLoopReady";
@@ -52,6 +51,23 @@ namespace Arena.Presentation
 
         public static float GetEventTimeOrFallback(AnimationClip? clip, string functionName, float fallbackSeconds)
             => TryGetEventTime(clip, functionName, out float seconds) ? seconds : fallbackSeconds;
+
+        public static float GetRequiredEventTimeOrFallback(
+            AnimationClip? clip,
+            string functionName,
+            float fallbackSeconds,
+            string context)
+        {
+            if (TryGetEventTime(clip, functionName, out float seconds))
+                return seconds;
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            string clipName = clip != null ? clip.name : "<missing clip>";
+            Debug.LogError(
+                $"[CombatAnimationEvents] Missing required animation event '{functionName}' on {clipName} for {context}. Using conservative fallback {fallbackSeconds:0.000}s.");
+#endif
+            return Mathf.Max(0f, fallbackSeconds);
+        }
 
         public static bool AppendEventTimes(
             AnimationClip? clip,
@@ -442,15 +458,15 @@ namespace Arena.Presentation
         [Tooltip("How this spell should present relative to locomotion. UpperBodyWhileMoving preserves locomotion only while moving; FullBody always uses the spell-action layer; UpperBody always uses the upper-body layer; LeftGesture uses a single masked pelvis/spine/left-arm overlay.")]
         [FormerlySerializedAs("movingPlaybackMode")]
         public SpellPlaybackLayer playbackLayer;
-        [Tooltip("Normalized point in the grounded release clip where the visible spell release leaves the hand. Used to align cast-time release animation to server release.")]
+        [Tooltip("Obsolete serialized compatibility field. Runtime reads OnReleaseFrame from the selected clip instead.")]
         [Range(0f, 1f)] public float groundEffectTime;
-        [Tooltip("Normalized point in the airborne release clip where the visible spell release leaves the hand. Used to align cast-time release animation to server release.")]
+        [Tooltip("Obsolete serialized compatibility field. Runtime reads OnReleaseFrame from the selected clip instead.")]
         [Range(0f, 1f)] public float airEffectTime;
-        [Tooltip("Presentation-only timestamp in seconds when a full-body cast may release lower-body control. Unset/invalid values fall back to the selected clip length.")]
+        [Tooltip("Obsolete serialized compatibility field. Runtime reads OnLowerBodyUnlock from the selected clip instead.")]
         public float lowerBodyUnlockAtSeconds;
-        [Tooltip("Presentation-only lower-body blend-out duration in seconds after lower-body unlock. Negative values use the default; 0 disables blend-out.")]
+        [Tooltip("Obsolete serialized compatibility field. Runtime uses the default lower-body blend-out duration.")]
         public float lowerBodyBlendOutSeconds;
-        [Tooltip("Presentation-only timestamp in seconds after which this spell visual may be interrupted cleanly. Unset/invalid values fall back to the selected clip length.")]
+        [Tooltip("Obsolete serialized compatibility field. Runtime reads OnVisualInterruptible from the selected clip instead.")]
         public float visualInterruptibleAtSeconds;
 
         public string SpellIdOrEmpty => string.IsNullOrWhiteSpace(spellId)
@@ -503,10 +519,11 @@ namespace Arena.Presentation
 
         public float ResolveReleaseTimeNormalized(bool grounded)
         {
-            float effectTime = !grounded && air != null
-                ? airEffectTime
-                : groundEffectTime;
-            return Mathf.Clamp01(effectTime);
+            AnimationClip? clip = ResolveClip(grounded);
+            if (clip == null || clip.length <= 0.001f)
+                return 0f;
+
+            return Mathf.Clamp01(ResolveReleaseOffsetSeconds(grounded) / clip.length);
         }
 
         public float ResolveTimingReferenceLengthSeconds(bool grounded)
@@ -517,33 +534,39 @@ namespace Arena.Presentation
 
         public float ResolveReleaseOffsetSeconds(bool grounded)
         {
-            return ResolveReleaseTimeNormalized(grounded) * ResolveTimingReferenceLengthSeconds(grounded);
+            AnimationClip? clip = ResolveClip(grounded);
+            return CombatAnimationEvents.GetRequiredEventTimeOrFallback(
+                clip,
+                CombatAnimationEvents.OnReleaseFrame,
+                fallbackSeconds: 0f,
+                context: $"spell '{SpellIdOrEmpty}' release alignment");
         }
 
         public float ResolveLowerBodyUnlockAtSeconds(bool grounded)
         {
-            float fallback = ResolveTimingReferenceLengthSeconds(grounded);
-            if (lowerBodyUnlockAtSeconds <= 0f || lowerBodyUnlockAtSeconds > fallback)
-                return fallback;
-
-            return lowerBodyUnlockAtSeconds;
+            AnimationClip? clip = ResolveClip(grounded);
+            float fallback = clip != null ? clip.length : 0f;
+            return CombatAnimationEvents.GetRequiredEventTimeOrFallback(
+                clip,
+                CombatAnimationEvents.OnLowerBodyUnlock,
+                fallback,
+                $"spell '{SpellIdOrEmpty}' lower-body unlock");
         }
 
-        public float ResolveLowerBodyBlendOutSeconds()
+        public float ResolveLowerBodyBlendOutSeconds(float defaultBlendOutSeconds)
         {
-            if (lowerBodyBlendOutSeconds < 0f)
-                return 0.12f;
-
-            return lowerBodyBlendOutSeconds;
+            return Mathf.Max(0f, defaultBlendOutSeconds);
         }
 
         public float ResolveVisualInterruptibleAtSeconds(bool grounded)
         {
-            float fallback = ResolveTimingReferenceLengthSeconds(grounded);
-            if (visualInterruptibleAtSeconds <= 0f || visualInterruptibleAtSeconds > fallback)
-                return fallback;
-
-            return visualInterruptibleAtSeconds;
+            AnimationClip? clip = ResolveClip(grounded);
+            float fallback = clip != null ? clip.length : 0f;
+            return CombatAnimationEvents.GetRequiredEventTimeOrFallback(
+                clip,
+                CombatAnimationEvents.OnVisualInterruptible,
+                fallback,
+                $"spell '{SpellIdOrEmpty}' visual interrupt");
         }
     }
 
@@ -730,11 +753,11 @@ namespace Arena.Presentation
         public WeaponStrikeCombatAuthoring combat;
         [Tooltip("How this attack is presented. Single Clip plays the Clip field directly. Phased stitches start/loop/end clips together.")]
         public WeaponMeleePresentationMode presentationMode;
-        [Tooltip("Presentation-only timestamp in seconds when locomotion may regain lower-body control. Unset/invalid values fall back to the timing reference length.")]
+        [Tooltip("Obsolete serialized compatibility field. Runtime reads OnLowerBodyUnlock from the selected clip or phased segment instead.")]
         public float lowerBodyUnlockAtSeconds;
-        [Tooltip("Presentation-only lower-body blend-out duration in seconds after lower-body unlock. Negative values use the default; 0 disables blend-out.")]
+        [Tooltip("Obsolete serialized compatibility field. Runtime uses the default lower-body blend-out duration.")]
         public float lowerBodyBlendOutSeconds;
-        [Tooltip("Presentation-only timestamp in seconds after which a single-clip melee visual may be interrupted without creating a ghost. Unset/invalid values fall back to the timing reference length.")]
+        [Tooltip("Obsolete serialized compatibility field. Runtime reads OnVisualInterruptible from the selected clip or phased segment instead.")]
         public float visualInterruptibleAtSeconds;
         [Tooltip("Grounded phased clips for this attack when Presentation Mode is Phased.")]
         public WeaponPhasedActionClipSet phasedGround;
@@ -776,28 +799,114 @@ namespace Arena.Presentation
 
         public float ResolveVisualInterruptibleAtSeconds()
         {
-            float fallback = ResolveTimingReferenceLengthSeconds();
-            if (visualInterruptibleAtSeconds <= 0f || visualInterruptibleAtSeconds > fallback)
-                return fallback;
-
-            return visualInterruptibleAtSeconds;
+            return ResolveSingleClipEventTimeOrFallback(
+                CombatAnimationEvents.OnVisualInterruptible,
+                "visual interrupt");
         }
 
         public float ResolveLowerBodyUnlockAtSeconds()
         {
-            float fallback = ResolveTimingReferenceLengthSeconds();
-            if (lowerBodyUnlockAtSeconds <= 0f || lowerBodyUnlockAtSeconds > fallback)
-                return fallback;
-
-            return lowerBodyUnlockAtSeconds;
+            return ResolveSingleClipEventTimeOrFallback(
+                CombatAnimationEvents.OnLowerBodyUnlock,
+                "lower-body unlock");
         }
 
-        public float ResolveLowerBodyBlendOutSeconds()
+        public float ResolveLowerBodyBlendOutSeconds(float defaultBlendOutSeconds)
         {
-            if (lowerBodyBlendOutSeconds < 0f)
-                return 0.12f;
+            return Mathf.Max(0f, defaultBlendOutSeconds);
+        }
 
-            return lowerBodyBlendOutSeconds;
+        public float ResolveVisualInterruptibleAtSeconds(bool grounded)
+        {
+            return ResolveMeleeEventTimeOrFallback(
+                grounded,
+                CombatAnimationEvents.OnVisualInterruptible,
+                "visual interrupt");
+        }
+
+        public float ResolveLowerBodyUnlockAtSeconds(bool grounded)
+        {
+            return ResolveMeleeEventTimeOrFallback(
+                grounded,
+                CombatAnimationEvents.OnLowerBodyUnlock,
+                "lower-body unlock");
+        }
+
+        private float ResolveSingleClipEventTimeOrFallback(string eventName, string timingLabel)
+        {
+            float fallback = ResolveTimingReferenceLengthSeconds();
+            return CombatAnimationEvents.GetRequiredEventTimeOrFallback(
+                clip,
+                eventName,
+                fallback,
+                $"melee '{combat.AuthoredStrikeIdOrDefault}' {timingLabel}");
+        }
+
+        private float ResolveMeleeEventTimeOrFallback(bool grounded, string eventName, string timingLabel)
+        {
+            float fallback = ResolveTimingReferenceLengthSeconds();
+            if (!UsesPhasedPresentation)
+                return ResolveSingleClipEventTimeOrFallback(eventName, timingLabel);
+
+            if (TryResolvePhasedEventTime(grounded, eventName, out float eventTime))
+                return eventTime;
+
+            CombatAnimationEvents.GetRequiredEventTimeOrFallback(
+                null,
+                eventName,
+                fallback,
+                $"phased melee '{combat.AuthoredStrikeIdOrDefault}' {timingLabel}");
+            return fallback;
+        }
+
+        private bool TryResolvePhasedEventTime(bool grounded, string eventName, out float eventTime)
+        {
+            WeaponPhasedActionClipSet preferred = grounded ? phasedGround : phasedAir;
+            if (TryResolvePhasedEventTime(preferred, eventName, out eventTime))
+                return true;
+
+            WeaponPhasedActionClipSet fallback = grounded ? phasedAir : phasedGround;
+            return TryResolvePhasedEventTime(fallback, eventName, out eventTime);
+        }
+
+        private static bool TryResolvePhasedEventTime(
+            WeaponPhasedActionClipSet clipSet,
+            string eventName,
+            out float eventTime)
+        {
+            eventTime = 0f;
+            if (!clipSet.TryResolvePlayback(out ResolvedWeaponPhasedActionClipSet resolved))
+                return false;
+
+            bool found = false;
+            float offset = 0f;
+            if (CombatAnimationEvents.TryGetEventTime(resolved.Start, eventName, out float startTime))
+            {
+                eventTime = startTime;
+                found = true;
+            }
+
+            offset += Mathf.Max(0f, resolved.Start.length);
+            if (!resolved.ReleaseAfterStart)
+            {
+                if (CombatAnimationEvents.TryGetEventTime(resolved.Loop, eventName, out float loopTime)
+                    && (!found || offset + loopTime < eventTime))
+                {
+                    eventTime = offset + loopTime;
+                    found = true;
+                }
+
+                offset += Mathf.Max(0f, resolved.Loop.length);
+            }
+
+            if (CombatAnimationEvents.TryGetEventTime(resolved.End, eventName, out float endTime)
+                && (!found || offset + endTime < eventTime))
+            {
+                eventTime = offset + endTime;
+                found = true;
+            }
+
+            return found;
         }
 
         public bool TryGetStrikeHitEventTimesSeconds(out float[] eventTimesSeconds)
@@ -865,16 +974,13 @@ namespace Arena.Presentation
 
         private static float ResolvePhasedClipSetLengthSeconds(WeaponPhasedActionClipSet clipSet)
         {
-            if (!clipSet.IsPlayable)
+            if (!clipSet.TryResolvePlayback(out ResolvedWeaponPhasedActionClipSet resolved))
                 return 0f;
 
-            float total = 0f;
-            if (clipSet.start != null)
-                total += clipSet.start.length;
-            if (clipSet.loop != null)
-                total += clipSet.loop.length;
-            if (clipSet.end != null)
-                total += clipSet.end.length;
+            float total = Mathf.Max(0f, resolved.Start.length);
+            if (!resolved.ReleaseAfterStart)
+                total += Mathf.Max(0f, resolved.Loop.length);
+            total += Mathf.Max(0f, resolved.End.length);
             return total;
         }
     }
@@ -1160,7 +1266,7 @@ namespace Arena.Presentation
             return meleeAttacks[zeroBasedIndex].combat.FirstImpactDelayMs(timingReferenceLengthSeconds) / 1000f;
         }
 
-        public float GetVisualInterruptibleAtSeconds(int strikeIndex)
+        public float GetVisualInterruptibleAtSeconds(int strikeIndex, bool grounded)
         {
             if (strikeIndex <= 0)
                 return 0f;
@@ -1168,11 +1274,11 @@ namespace Arena.Presentation
             EnsureMeleeAttackListInitialized();
             int zeroBasedIndex = strikeIndex - 1;
             if (zeroBasedIndex >= 0 && zeroBasedIndex < meleeAttacks.Count)
-                return meleeAttacks[zeroBasedIndex].ResolveVisualInterruptibleAtSeconds();
+                return meleeAttacks[zeroBasedIndex].ResolveVisualInterruptibleAtSeconds(grounded);
             return 0f;
         }
 
-        public float GetLowerBodyUnlockAtSeconds(int strikeIndex)
+        public float GetLowerBodyUnlockAtSeconds(int strikeIndex, bool grounded)
         {
             if (strikeIndex <= 0)
                 return 0f;
@@ -1180,20 +1286,20 @@ namespace Arena.Presentation
             EnsureMeleeAttackListInitialized();
             int zeroBasedIndex = strikeIndex - 1;
             if (zeroBasedIndex >= 0 && zeroBasedIndex < meleeAttacks.Count)
-                return meleeAttacks[zeroBasedIndex].ResolveLowerBodyUnlockAtSeconds();
+                return meleeAttacks[zeroBasedIndex].ResolveLowerBodyUnlockAtSeconds(grounded);
             return 0f;
         }
 
-        public float GetLowerBodyBlendOutSeconds(int strikeIndex)
+        public float GetLowerBodyBlendOutSeconds(int strikeIndex, float defaultBlendOutSeconds)
         {
             if (strikeIndex <= 0)
-                return 0f;
+                return Mathf.Max(0f, defaultBlendOutSeconds);
 
             EnsureMeleeAttackListInitialized();
             int zeroBasedIndex = strikeIndex - 1;
             if (zeroBasedIndex >= 0 && zeroBasedIndex < meleeAttacks.Count)
-                return meleeAttacks[zeroBasedIndex].ResolveLowerBodyBlendOutSeconds();
-            return 0f;
+                return meleeAttacks[zeroBasedIndex].ResolveLowerBodyBlendOutSeconds(defaultBlendOutSeconds);
+            return Mathf.Max(0f, defaultBlendOutSeconds);
         }
 
         public int GetStrikeIndexForActionId(string actionId)
@@ -1567,7 +1673,7 @@ namespace Arena.Presentation
                 combat = WeaponStrikeCombatAuthoring.CreateDefault(authoredId),
                 presentationMode = WeaponMeleePresentationMode.SingleClip,
                 lowerBodyUnlockAtSeconds = 0f,
-                lowerBodyBlendOutSeconds = -1f,
+                lowerBodyBlendOutSeconds = 0f,
                 visualInterruptibleAtSeconds = 0f,
                 phasedGround = default,
                 phasedAir = default,

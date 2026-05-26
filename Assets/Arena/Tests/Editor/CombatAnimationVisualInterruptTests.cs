@@ -305,7 +305,7 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
-        public void CombatActionPlaybackController_CreateSpellPresentationUsesAuthoredSpellTiming()
+        public void CombatActionPlaybackController_CreateSpellPresentationUsesStampedSpellEvents()
         {
             Type playbackControllerType = RequireRuntimeType("Arena.Presentation.CombatActionPlaybackController");
             Type spellEntryType = RequireRuntimeType("Arena.Presentation.WeaponSpellAnimationEntry");
@@ -315,9 +315,10 @@ namespace Arena.Tests.Editor
             try
             {
                 RequireField(spellEntryType, "ground").SetValue(spellEntry, clip);
-                RequireField(spellEntryType, "lowerBodyUnlockAtSeconds").SetValue(spellEntry, 0.4f);
-                RequireField(spellEntryType, "lowerBodyBlendOutSeconds").SetValue(spellEntry, 0.2f);
-                RequireField(spellEntryType, "visualInterruptibleAtSeconds").SetValue(spellEntry, 0.6f);
+                SetClipEvents(
+                    clip,
+                    ("OnLowerBodyUnlock", 0.4f),
+                    ("OnVisualInterruptible", 0.6f));
 
                 object presentation = RequireMethod(
                         playbackControllerType,
@@ -331,7 +332,7 @@ namespace Arena.Tests.Editor
                 Assert.That(RequireField(presentation.GetType(), "ActionId").GetValue(presentation), Is.EqualTo("FIREBALL"));
                 Assert.That(RequireField(presentation.GetType(), "BankSlot").GetValue(presentation), Is.EqualTo(3));
                 Assert.That((float)RequireField(presentation.GetType(), "LowerBodyUnlockAtSeconds").GetValue(presentation)!, Is.EqualTo(0.4f).Within(0.001f));
-                Assert.That((float)RequireField(presentation.GetType(), "LowerBodyBlendOutSeconds").GetValue(presentation)!, Is.EqualTo(0.2f).Within(0.001f));
+                Assert.That((float)RequireField(presentation.GetType(), "LowerBodyBlendOutSeconds").GetValue(presentation)!, Is.EqualTo(0.12f).Within(0.001f));
                 Assert.That((float)RequireField(presentation.GetType(), "VisualInterruptibleAtSeconds").GetValue(presentation)!, Is.EqualTo(0.6f).Within(0.001f));
             }
             finally
@@ -370,8 +371,9 @@ namespace Arena.Tests.Editor
                     typeof(int),
                     typeof(bool),
                     animationSetType,
+                    typeof(bool),
                     typeof(float))
-                .Invoke(controller, new[] { request, 0, false, null, 0.25f })!;
+                .Invoke(controller, new[] { request, 0, false, null, true, 0.25f })!;
 
             Assert.That(RequireProperty(playbackControllerType, "ActiveBaseCombatAnimationCategory").GetValue(controller), Is.EqualTo(autoAttackCategory));
             Assert.That(RequireField(presentation.GetType(), "ActionId").GetValue(presentation), Is.EqualTo("basic_attack"));
@@ -840,7 +842,7 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
-        public void CombatAnimationSet_VisualInterruptibleFallbackTreatsInvalidAsUnset()
+        public void CombatAnimationSet_VisualInterruptibleReadsStampedEvent()
         {
             Type setType = RequireRuntimeType("Arena.Presentation.CombatAnimationSet");
             Type attackType = RequireRuntimeType("Arena.Presentation.WeaponMeleeAttackAuthoring");
@@ -860,20 +862,12 @@ namespace Arena.Tests.Editor
                 object attack = attacks[0]!;
                 RequireField(attackType, "clip").SetValue(attack, clip);
 
-                FieldInfo visualInterruptibleAtSeconds = RequireField(attackType, "visualInterruptibleAtSeconds");
-                MethodInfo resolver = RequireMethod(setType, "GetVisualInterruptibleAtSeconds", typeof(int));
+                RequireField(attackType, "visualInterruptibleAtSeconds").SetValue(attack, 0.42f);
+                SetClipEvents(clip, ("OnVisualInterruptible", 0.38f));
+                MethodInfo resolver = RequireMethod(setType, "GetVisualInterruptibleAtSeconds", typeof(int), typeof(bool));
 
-                visualInterruptibleAtSeconds.SetValue(attack, 0.42f);
                 attacks[0] = attack;
-                Assert.That((float)resolver.Invoke(set, new object[] { 1 })!, Is.EqualTo(0.42f).Within(0.001f));
-
-                visualInterruptibleAtSeconds.SetValue(attack, 2f);
-                attacks[0] = attack;
-                Assert.That((float)resolver.Invoke(set, new object[] { 1 })!, Is.EqualTo(1f).Within(0.001f));
-
-                visualInterruptibleAtSeconds.SetValue(attack, 0f);
-                attacks[0] = attack;
-                Assert.That((float)resolver.Invoke(set, new object[] { 1 })!, Is.EqualTo(1f).Within(0.001f));
+                Assert.That((float)resolver.Invoke(set, new object[] { 1, true })!, Is.EqualTo(0.38f).Within(0.001f));
             }
             finally
             {
@@ -883,7 +877,7 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
-        public void CombatAnimationSet_LowerBodyUnlockFallbackTreatsInvalidAsUnset()
+        public void CombatAnimationSet_LowerBodyUnlockReadsStampedEvent()
         {
             Type setType = RequireRuntimeType("Arena.Presentation.CombatAnimationSet");
             Type attackType = RequireRuntimeType("Arena.Presentation.WeaponMeleeAttackAuthoring");
@@ -903,20 +897,12 @@ namespace Arena.Tests.Editor
                 object attack = attacks[0]!;
                 RequireField(attackType, "clip").SetValue(attack, clip);
 
-                FieldInfo lowerBodyUnlockAtSeconds = RequireField(attackType, "lowerBodyUnlockAtSeconds");
-                MethodInfo resolver = RequireMethod(setType, "GetLowerBodyUnlockAtSeconds", typeof(int));
+                RequireField(attackType, "lowerBodyUnlockAtSeconds").SetValue(attack, 0.42f);
+                SetClipEvents(clip, ("OnLowerBodyUnlock", 0.37f));
+                MethodInfo resolver = RequireMethod(setType, "GetLowerBodyUnlockAtSeconds", typeof(int), typeof(bool));
 
-                lowerBodyUnlockAtSeconds.SetValue(attack, 0.42f);
                 attacks[0] = attack;
-                Assert.That((float)resolver.Invoke(set, new object[] { 1 })!, Is.EqualTo(0.42f).Within(0.001f));
-
-                lowerBodyUnlockAtSeconds.SetValue(attack, 2f);
-                attacks[0] = attack;
-                Assert.That((float)resolver.Invoke(set, new object[] { 1 })!, Is.EqualTo(1f).Within(0.001f));
-
-                lowerBodyUnlockAtSeconds.SetValue(attack, 0f);
-                attacks[0] = attack;
-                Assert.That((float)resolver.Invoke(set, new object[] { 1 })!, Is.EqualTo(1f).Within(0.001f));
+                Assert.That((float)resolver.Invoke(set, new object[] { 1, true })!, Is.EqualTo(0.37f).Within(0.001f));
             }
             finally
             {
@@ -926,7 +912,7 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
-        public void CombatAnimationSet_LowerBodyBlendOutDefaultAllowsZeroOverride()
+        public void CombatAnimationSet_LowerBodyBlendOutUsesExplicitDefault()
         {
             Type setType = RequireRuntimeType("Arena.Presentation.CombatAnimationSet");
             Type attackType = RequireRuntimeType("Arena.Presentation.WeaponMeleeAttackAuthoring");
@@ -938,19 +924,19 @@ namespace Arena.Tests.Editor
                 IList attacks = (IList)RequireField(setType, "meleeAttacks").GetValue(set)!;
                 object attack = attacks[0]!;
                 FieldInfo lowerBodyBlendOutSeconds = RequireField(attackType, "lowerBodyBlendOutSeconds");
-                MethodInfo resolver = RequireMethod(setType, "GetLowerBodyBlendOutSeconds", typeof(int));
+                MethodInfo resolver = RequireMethod(setType, "GetLowerBodyBlendOutSeconds", typeof(int), typeof(float));
 
                 lowerBodyBlendOutSeconds.SetValue(attack, -1f);
                 attacks[0] = attack;
-                Assert.That((float)resolver.Invoke(set, new object[] { 1 })!, Is.EqualTo(0.12f).Within(0.001f));
+                Assert.That((float)resolver.Invoke(set, new object[] { 1, 0.12f })!, Is.EqualTo(0.12f).Within(0.001f));
 
                 lowerBodyBlendOutSeconds.SetValue(attack, 0f);
                 attacks[0] = attack;
-                Assert.That((float)resolver.Invoke(set, new object[] { 1 })!, Is.EqualTo(0f).Within(0.001f));
+                Assert.That((float)resolver.Invoke(set, new object[] { 1, 0.12f })!, Is.EqualTo(0.12f).Within(0.001f));
 
                 lowerBodyBlendOutSeconds.SetValue(attack, 0.25f);
                 attacks[0] = attack;
-                Assert.That((float)resolver.Invoke(set, new object[] { 1 })!, Is.EqualTo(0.25f).Within(0.001f));
+                Assert.That((float)resolver.Invoke(set, new object[] { 1, 0.12f })!, Is.EqualTo(0.12f).Within(0.001f));
             }
             finally
             {
@@ -959,7 +945,7 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
-        public void WeaponSpellAnimationEntry_LowerBodyUnlockUsesSelectedClipLengthFallback()
+        public void WeaponSpellAnimationEntry_LowerBodyAndVisualTimingUseStampedEvents()
         {
             Type spellEntryType = RequireRuntimeType("Arena.Presentation.WeaponSpellAnimationEntry");
             AnimationClip clip = new AnimationClip();
@@ -973,25 +959,17 @@ namespace Arena.Tests.Editor
 
                 object entry = Activator.CreateInstance(spellEntryType)!;
                 RequireField(spellEntryType, "ground").SetValue(entry, clip);
-                FieldInfo lowerBodyUnlockAtSeconds = RequireField(spellEntryType, "lowerBodyUnlockAtSeconds");
-                FieldInfo visualInterruptibleAtSeconds = RequireField(spellEntryType, "visualInterruptibleAtSeconds");
+                RequireField(spellEntryType, "lowerBodyUnlockAtSeconds").SetValue(entry, 0.35f);
+                RequireField(spellEntryType, "visualInterruptibleAtSeconds").SetValue(entry, 0.65f);
+                SetClipEvents(
+                    clip,
+                    ("OnLowerBodyUnlock", 0.25f),
+                    ("OnVisualInterruptible", 0.75f));
                 MethodInfo resolver = RequireMethod(spellEntryType, "ResolveLowerBodyUnlockAtSeconds", typeof(bool));
                 MethodInfo visualResolver = RequireMethod(spellEntryType, "ResolveVisualInterruptibleAtSeconds", typeof(bool));
 
-                lowerBodyUnlockAtSeconds.SetValue(entry, 0.35f);
-                Assert.That((float)resolver.Invoke(entry, new object[] { true })!, Is.EqualTo(0.35f).Within(0.001f));
-
-                lowerBodyUnlockAtSeconds.SetValue(entry, 2f);
-                Assert.That((float)resolver.Invoke(entry, new object[] { true })!, Is.EqualTo(1f).Within(0.001f));
-
-                lowerBodyUnlockAtSeconds.SetValue(entry, 0f);
-                Assert.That((float)resolver.Invoke(entry, new object[] { true })!, Is.EqualTo(1f).Within(0.001f));
-
-                visualInterruptibleAtSeconds.SetValue(entry, 0.65f);
-                Assert.That((float)visualResolver.Invoke(entry, new object[] { true })!, Is.EqualTo(0.65f).Within(0.001f));
-
-                visualInterruptibleAtSeconds.SetValue(entry, 2f);
-                Assert.That((float)visualResolver.Invoke(entry, new object[] { true })!, Is.EqualTo(1f).Within(0.001f));
+                Assert.That((float)resolver.Invoke(entry, new object[] { true })!, Is.EqualTo(0.25f).Within(0.001f));
+                Assert.That((float)visualResolver.Invoke(entry, new object[] { true })!, Is.EqualTo(0.75f).Within(0.001f));
             }
             finally
             {
@@ -1183,16 +1161,17 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
-        public void CombatAnimationSetEditor_PhasedMelee_ExposesPhaseTimingFields()
+        public void CombatAnimationSetEditor_PhasedMelee_UsesStampedTimingEvents()
         {
             string source = ReadAssetText("Scripts/Editor/CombatAnimationSetEditor.cs");
             string drawMeleeAttacks = ExtractMethodBody(source, "private void DrawMeleeAttackAuthoringSection");
 
             Assert.That(drawMeleeAttacks, Does.Contain("usesPhasedPresentation"));
-            Assert.That(drawMeleeAttacks, Does.Contain("lowerBodyUnlockAtSecondsProperty"));
-            Assert.That(drawMeleeAttacks, Does.Contain("runtime segmented elapsed time"));
-            Assert.That(drawMeleeAttacks, Does.Contain("visualInterruptibleAtSecondsProperty"));
-            Assert.That(drawMeleeAttacks, Does.Not.Contain("if (!usesPhasedPresentation && timingReferenceLengthSeconds > 0f)"));
+            Assert.That(drawMeleeAttacks, Does.Contain("OnLowerBodyUnlock"));
+            Assert.That(drawMeleeAttacks, Does.Contain("OnVisualInterruptible"));
+            Assert.That(drawMeleeAttacks, Does.Contain("Lower-body blend-out uses the runtime default"));
+            Assert.That(drawMeleeAttacks, Does.Not.Contain("lowerBodyUnlockAtSecondsProperty"));
+            Assert.That(drawMeleeAttacks, Does.Not.Contain("visualInterruptibleAtSecondsProperty"));
         }
 
         [Test]
@@ -1477,6 +1456,19 @@ namespace Arena.Tests.Editor
                 propertyName: "localPosition.x",
                 curve: AnimationCurve.Linear(0f, 0f, 1f, 1f));
             return clip;
+        }
+
+        private static void SetClipEvents(AnimationClip clip, params (string FunctionName, float Time)[] events)
+        {
+            AnimationUtility.SetAnimationEvents(
+                clip,
+                events
+                    .Select(item => new AnimationEvent
+                    {
+                        functionName = item.FunctionName,
+                        time = item.Time,
+                    })
+                    .ToArray());
         }
 
         private static string ReadAssetText(string relativeAssetPath)

@@ -2,7 +2,8 @@ use std::time::Duration;
 
 use spacetimedb::{Identity, ReducerContext, Table, Timestamp};
 
-use crate::progression::combat_rule_value;
+#[cfg(feature = "spellcasting_terminal_harness")]
+use crate::progression::default_global_cooldown_ms;
 
 use super::{GlobalCooldown, SpellCooldown, SpellId};
 
@@ -10,10 +11,6 @@ use super::{GlobalCooldown, SpellCooldown, SpellId};
 use crate::spells::global_cooldown as _;
 #[allow(unused_imports)]
 use crate::spells::spell_cooldown as _;
-
-const RULE_DEFAULT_GLOBAL_COOLDOWN_MS: &str = "DEFAULT_GLOBAL_COOLDOWN_MS";
-const FALLBACK_DEFAULT_GLOBAL_COOLDOWN_MS: u64 = 1500;
-const MAX_DEFAULT_GLOBAL_COOLDOWN_MS: u64 = 60_000;
 
 struct CooldownKey {
     caster: Identity,
@@ -103,6 +100,7 @@ pub(crate) fn is_on_global_cooldown(
     now < gcd.started_at + Duration::from_millis(gcd.duration_ms.max(1))
 }
 
+#[cfg(feature = "spellcasting_terminal_harness")]
 pub(crate) fn stamp_global_cooldown(ctx: &ReducerContext, caster: Identity, now: Timestamp) {
     // Cast-time spells stamp GCD with the same `now` passed to begin_active_cast.
     // Premature self-cancel refunds rely on that timestamp pairing as the match key.
@@ -143,13 +141,9 @@ pub(crate) fn clear_global_cooldown_if_matches(
     }
 }
 
+#[cfg(feature = "spellcasting_terminal_harness")]
 fn default_global_cooldown_duration() -> Duration {
-    let configured = combat_rule_value(RULE_DEFAULT_GLOBAL_COOLDOWN_MS);
-    if configured.is_finite() && configured > 0.0 {
-        Duration::from_millis((configured.round() as u64).clamp(1, MAX_DEFAULT_GLOBAL_COOLDOWN_MS))
-    } else {
-        Duration::from_millis(FALLBACK_DEFAULT_GLOBAL_COOLDOWN_MS)
-    }
+    Duration::from_millis(default_global_cooldown_ms())
 }
 
 fn global_cooldown_started_at_matches(gcd: Option<&GlobalCooldown>, started_at: Timestamp) -> bool {

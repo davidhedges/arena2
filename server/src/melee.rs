@@ -59,7 +59,7 @@ use crate::spells::{
     aoe_hits_player, approach_line_contact_point_xz, bake_linear_special_movement,
     begin_special_movement, begin_special_movement_with_facing_policy, contact_distance_from_radii,
     horizontal_movement_duration_ms, is_on_global_cooldown, is_on_named_cooldown,
-    stamp_global_cooldown, stamp_named_cooldown_for_duration, SpellVec3,
+    stamp_global_cooldown_for_duration, stamp_named_cooldown_for_duration, SpellVec3,
     SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK, SPECIAL_MOVEMENT_FACING_FACE_START,
 };
 use crate::world_collision::{
@@ -784,6 +784,7 @@ struct ResolvedMeleeGameplay {
     range: f32,
     cooldown_ms: u64,
     uses_global_cooldown: bool,
+    global_cooldown_ms: u64,
     parry_behavior: ParryBehavior,
     block_behavior: BlockBehavior,
     airborne_targeting_mode: AirborneTargetingMode,
@@ -1167,6 +1168,7 @@ fn melee_gameplay_from_catalog_rows(
         range: melee.range,
         cooldown_ms: melee.cooldown_ms,
         uses_global_cooldown: melee.uses_global_cooldown,
+        global_cooldown_ms: melee.global_cooldown_ms,
         parry_behavior: ParryBehavior::from_wire(melee.parry_behavior.as_str())?,
         block_behavior: BlockBehavior::from_wire(melee.block_behavior.as_str())?,
         airborne_targeting_mode: AirborneTargetingMode::from_wire(
@@ -1338,6 +1340,7 @@ fn auto_attack_melee_gameplay_from_catalog(
         range: row.range,
         cooldown_ms: row.cooldown_ms,
         uses_global_cooldown: row.uses_global_cooldown,
+        global_cooldown_ms: row.global_cooldown_ms,
         parry_behavior: ParryBehavior::from_wire(row.parry_behavior.as_str())?,
         block_behavior: BlockBehavior::from_wire(row.block_behavior.as_str())?,
         airborne_targeting_mode: AirborneTargetingMode::from_wire(
@@ -1359,6 +1362,7 @@ fn auto_attack_replacement_melee_gameplay_from_catalog(
         range: row.range,
         cooldown_ms: row.cooldown_ms,
         uses_global_cooldown: row.uses_global_cooldown,
+        global_cooldown_ms: row.global_cooldown_ms,
         parry_behavior: ParryBehavior::from_wire(row.parry_behavior.as_str())?,
         block_behavior: BlockBehavior::from_wire(row.block_behavior.as_str())?,
         airborne_targeting_mode: AirborneTargetingMode::from_wire(
@@ -1886,7 +1890,12 @@ fn finalize_melee_cast(
 ) {
     if policy.uses_shared_cooldowns {
         if gameplay.uses_global_cooldown {
-            stamp_global_cooldown(ctx, caster, now);
+            stamp_global_cooldown_for_duration(
+                ctx,
+                caster,
+                Duration::from_millis(gameplay.global_cooldown_ms.max(1)),
+                now,
+            );
         }
         let cooldown_key = cooldown_key_override.unwrap_or(runtime_action_id.as_str());
         stamp_named_cooldown_for_duration(

@@ -105,6 +105,7 @@ namespace Arena.Editor
             ValidateCastTimeHandCueLifecycles(catalog, errors);
             ValidateSpellAnimationTiming(catalog, errors);
             ValidateCueAnchorContract(catalog, errors);
+            ValidateGreatswordCombatAnimationEvents(errors);
 
             return errors;
         }
@@ -403,14 +404,213 @@ namespace Arena.Editor
             if (clip == null)
                 return;
 
+            string stance = grounded ? "ground" : "air";
+            if (!TryGetEventTime(clip, CombatAnimationEvents.OnReleaseFrame, out float releaseOffsetSeconds))
+            {
+                errors.Add(
+                    $"spell ability '{abilityId}' action '{actionId}' {stance} release clip '{ClipLabel(clip)}' in CombatAnimationSet '{animationSet.name}' is missing required event {CombatAnimationEvents.OnReleaseFrame}.");
+                return;
+            }
+
             float castSeconds = castTimeMs / 1000f;
-            float releaseOffsetSeconds = entry.ResolveReleaseOffsetSeconds(grounded);
             if (releaseOffsetSeconds <= castSeconds + ReleaseTimingToleranceSeconds)
                 return;
 
-            string stance = grounded ? "ground" : "air";
             errors.Add(
                 $"spell ability '{abilityId}' action '{actionId}' {stance} release offset in CombatAnimationSet '{animationSet.name}' is {releaseOffsetSeconds:0.000}s, but gameplay.cast_time_ms is {castSeconds:0.000}s. The release offset must fit inside the cast time. Tolerance is {ReleaseTimingToleranceSeconds:0.000}s.");
+        }
+
+        private static void ValidateGreatswordCombatAnimationEvents(List<string> errors)
+        {
+            foreach (CombatAnimationSet animationSet in Resources.LoadAll<CombatAnimationSet>("CombatAnimationSets"))
+            {
+                if (!string.Equals(animationSet.CombatProfileIdOrDefault, "TWO_HANDED_SWORD", StringComparison.Ordinal))
+                    continue;
+
+                ValidateGreatswordSpellReleaseEvents(animationSet, errors);
+                ValidateGreatswordMeleeEvents(animationSet, errors);
+                ValidateGreatswordStaggerEvents(animationSet, errors);
+            }
+        }
+
+        private static void ValidateGreatswordSpellReleaseEvents(
+            CombatAnimationSet animationSet,
+            List<string> errors)
+        {
+            if (animationSet.spells == null)
+                return;
+
+            foreach (WeaponSpellAnimationEntry entry in animationSet.spells)
+            {
+                var clips = new List<(AnimationClip Clip, string Label)>();
+                AddUniqueClip(clips, entry.ground, "ground");
+                AddUniqueClip(clips, entry.air, "air");
+                if (clips.Count == 0)
+                    continue;
+
+                bool mayPlayFullBody = entry.playbackLayer == SpellPlaybackLayer.FullBody
+                    || entry.playbackLayer == SpellPlaybackLayer.UpperBodyWhileMoving;
+                foreach ((AnimationClip clip, string label) in clips)
+                {
+                    string context = $"CombatAnimationSet '{animationSet.name}' spell '{entry.SpellIdOrEmpty}' {label} release clip";
+                    RequireClipEvent(errors, clip, CombatAnimationEvents.OnReleaseFrame, context);
+                    if (mayPlayFullBody)
+                    {
+                        RequireClipEvent(errors, clip, CombatAnimationEvents.OnLowerBodyUnlock, context);
+                        RequireClipEvent(errors, clip, CombatAnimationEvents.OnVisualInterruptible, context);
+                    }
+
+                    RejectDeprecatedLowerBodyBlendEnd(errors, clip, context);
+                }
+            }
+        }
+
+        private static void ValidateGreatswordMeleeEvents(
+            CombatAnimationSet animationSet,
+            List<string> errors)
+        {
+            if (animationSet.meleeAttacks == null)
+                return;
+
+            for (int index = 0; index < animationSet.meleeAttacks.Count; index++)
+            {
+                WeaponMeleeAttackAuthoring attack = animationSet.meleeAttacks[index];
+                string strikeLabel = string.IsNullOrWhiteSpace(attack.combat.AuthoredStrikeIdOrDefault)
+                    ? $"Strike {index + 1}"
+                    : attack.combat.AuthoredStrikeIdOrDefault;
+
+                if (!attack.UsesPhasedPresentation)
+                {
+                    AnimationClip? clip = attack.clip;
+                    if (clip == null)
+                        continue;
+
+                    string context = $"CombatAnimationSet '{animationSet.name}' melee '{strikeLabel}' clip";
+                    RequireClipEvent(errors, clip, CombatAnimationEvents.OnStrikeHit, context);
+                    RequireClipEvent(errors, clip, CombatAnimationEvents.OnLowerBodyUnlock, context);
+                    RequireClipEvent(errors, clip, CombatAnimationEvents.OnVisualInterruptible, context);
+                    RejectDeprecatedLowerBodyBlendEnd(errors, clip, context);
+                    continue;
+                }
+
+                ValidateGreatswordPhasedMeleeEvents(
+                    animationSet,
+                    attack.phasedGround,
+                    $"{strikeLabel} ground phased",
+                    errors);
+                ValidateGreatswordPhasedMeleeEvents(
+                    animationSet,
+                    attack.phasedAir,
+                    $"{strikeLabel} air phased",
+                    errors);
+            }
+        }
+
+        private static void ValidateGreatswordPhasedMeleeEvents(
+            CombatAnimationSet animationSet,
+            WeaponPhasedActionClipSet clipSet,
+            string label,
+            List<string> errors)
+        {
+            if (!clipSet.HasAny)
+                return;
+
+            var clips = new List<(AnimationClip Clip, string Label)>();
+            AddUniqueClip(clips, clipSet.start, "start");
+            AddUniqueClip(clips, clipSet.loop, "loop");
+            AddUniqueClip(clips, clipSet.end, "end");
+            foreach ((AnimationClip clip, string segmentLabel) in clips)
+            {
+                string context = $"CombatAnimationSet '{animationSet.name}' melee '{label}' {segmentLabel} clip";
+                RejectDeprecatedLowerBodyBlendEnd(errors, clip, context);
+            }
+
+            if (clipSet.end == null)
+                return;
+
+            string endContext = $"CombatAnimationSet '{animationSet.name}' melee '{label}' end clip";
+            RequireClipEvent(errors, clipSet.end, CombatAnimationEvents.OnLowerBodyUnlock, endContext);
+            RequireClipEvent(errors, clipSet.end, CombatAnimationEvents.OnVisualInterruptible, endContext);
+        }
+
+        private static void ValidateGreatswordStaggerEvents(
+            CombatAnimationSet animationSet,
+            List<string> errors)
+        {
+            ValidateStaggerClip(animationSet, animationSet.staggerF, "staggerF", errors);
+            ValidateStaggerClip(animationSet, animationSet.staggerB, "staggerB", errors);
+            ValidateStaggerClip(animationSet, animationSet.staggerL, "staggerL", errors);
+            ValidateStaggerClip(animationSet, animationSet.staggerR, "staggerR", errors);
+        }
+
+        private static void ValidateStaggerClip(
+            CombatAnimationSet animationSet,
+            AnimationClip? clip,
+            string fieldName,
+            List<string> errors)
+        {
+            if (clip == null)
+                return;
+
+            string context = $"CombatAnimationSet '{animationSet.name}' {fieldName}";
+            if (TryGetEventTime(clip, CombatAnimationEvents.OnLowerBodyUnlock, out _))
+            {
+                errors.Add(
+                    $"{context} clip '{ClipLabel(clip)}' must not author {CombatAnimationEvents.OnLowerBodyUnlock}; stagger remains full-body.");
+            }
+
+            RejectDeprecatedLowerBodyBlendEnd(errors, clip, context);
+        }
+
+        private static void RequireClipEvent(
+            List<string> errors,
+            AnimationClip clip,
+            string eventName,
+            string context)
+        {
+            if (TryGetEventTime(clip, eventName, out _))
+                return;
+
+            errors.Add($"{context} '{ClipLabel(clip)}' is missing required event {eventName}.");
+        }
+
+        private static void RejectDeprecatedLowerBodyBlendEnd(
+            List<string> errors,
+            AnimationClip clip,
+            string context)
+        {
+            const string deprecatedEventName = "OnLowerBodyBlendEnd";
+            if (!TryGetEventTime(clip, deprecatedEventName, out _))
+                return;
+
+            errors.Add(
+                $"{context} '{ClipLabel(clip)}' authors deprecated event {deprecatedEventName}. Runtime ignores it; use {CombatAnimationEvents.OnLowerBodyUnlock} plus the default lower-body blend-out.");
+        }
+
+        private static bool TryGetEventTime(AnimationClip clip, string eventName, out float seconds)
+            => CombatAnimationEvents.TryGetEventTime(clip, eventName, out seconds);
+
+        private static void AddUniqueClip(
+            List<(AnimationClip Clip, string Label)> clips,
+            AnimationClip? clip,
+            string label)
+        {
+            if (clip == null)
+                return;
+
+            for (int index = 0; index < clips.Count; index++)
+            {
+                if (clips[index].Clip == clip)
+                    return;
+            }
+
+            clips.Add((clip, label));
+        }
+
+        private static string ClipLabel(AnimationClip clip)
+        {
+            string path = AssetDatabase.GetAssetPath(clip);
+            return string.IsNullOrWhiteSpace(path) ? clip.name : path;
         }
 
         private static Dictionary<string, string> BuildCombatProfileByClass(ProgressionCatalogDocument catalog)

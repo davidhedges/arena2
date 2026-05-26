@@ -9,6 +9,7 @@ use crate::combat::{
     AuthoredStatusPayload, StackPolicy, StatusApplication, StatusEffectKind, StatusPayload,
     StatusPolarity, StatusStackGroupDefault,
 };
+use crate::progression::default_global_cooldown_ms;
 use crate::relations::{default_spell_target_audience, TargetAudience};
 
 use super::manifest::{
@@ -28,6 +29,7 @@ struct SpellCatalogRow {
     kind: SpellId,
     cooldown_ms: u64,
     uses_global_cooldown: bool,
+    global_cooldown_ms: u64,
     cast_time_ms: u64,
     cast_mobility: SpellCastMobility,
     targeting: SpellTargeting,
@@ -388,6 +390,7 @@ struct SpellAbilityCatalogRow {
 struct SpellGameplayCatalogRow {
     cooldown_ms: u64,
     uses_global_cooldown: bool,
+    global_cooldown_ms: u64,
     cast_time_ms: u64,
     cast_mobility: SpellCastMobility,
     targeting: SpellTargeting,
@@ -412,6 +415,8 @@ struct AbilityGameplayCatalogRow {
     cooldown_ms: Option<u64>,
     #[serde(default)]
     uses_global_cooldown: Option<bool>,
+    #[serde(default)]
+    global_cooldown_ms: Option<u64>,
     #[serde(default)]
     cast_time_ms: Option<u64>,
     #[serde(default)]
@@ -450,14 +455,42 @@ fn require_spell_gameplay_field<T>(
     value.ok_or_else(|| format!("spell ability '{ability_id}' must define gameplay.{field_name}"))
 }
 
+fn resolve_spell_global_cooldown_ms(
+    ability_id: &str,
+    uses_global_cooldown: bool,
+    authored_global_cooldown_ms: Option<u64>,
+) -> Result<u64, String> {
+    if !uses_global_cooldown {
+        if authored_global_cooldown_ms.is_some() {
+            return Err(format!(
+                "spell ability '{ability_id}' must only define gameplay.global_cooldown_ms when uses_global_cooldown is true"
+            ));
+        }
+        return Ok(0);
+    }
+    let global_cooldown_ms = authored_global_cooldown_ms.unwrap_or_else(default_global_cooldown_ms);
+    if global_cooldown_ms == 0 {
+        return Err(format!(
+            "spell ability '{ability_id}' gameplay.global_cooldown_ms must be positive"
+        ));
+    }
+    Ok(global_cooldown_ms)
+}
+
 impl AbilityGameplayCatalogRow {
     fn into_spell_gameplay(self, ability_id: &str) -> Result<SpellGameplayCatalogRow, String> {
+        let uses_global_cooldown = require_spell_gameplay_field(
+            self.uses_global_cooldown,
+            ability_id,
+            "uses_global_cooldown",
+        )?;
         Ok(SpellGameplayCatalogRow {
             cooldown_ms: require_spell_gameplay_field(self.cooldown_ms, ability_id, "cooldown_ms")?,
-            uses_global_cooldown: require_spell_gameplay_field(
-                self.uses_global_cooldown,
+            uses_global_cooldown,
+            global_cooldown_ms: resolve_spell_global_cooldown_ms(
                 ability_id,
-                "uses_global_cooldown",
+                uses_global_cooldown,
+                self.global_cooldown_ms,
             )?,
             cast_time_ms: require_spell_gameplay_field(
                 self.cast_time_ms,
@@ -534,6 +567,7 @@ impl SpellGameplayCatalogRow {
             })?,
             cooldown_ms: self.cooldown_ms,
             uses_global_cooldown: self.uses_global_cooldown,
+            global_cooldown_ms: self.global_cooldown_ms,
             cast_time_ms: self.cast_time_ms,
             cast_mobility: self.cast_mobility,
             targeting: self.targeting,
@@ -575,6 +609,7 @@ impl SpellCatalogRow {
             kind: self.kind,
             cooldown: Duration::from_millis(self.cooldown_ms),
             uses_global_cooldown: self.uses_global_cooldown,
+            global_cooldown: Duration::from_millis(self.global_cooldown_ms),
             cast_time: Duration::from_millis(self.cast_time_ms),
             cast_mobility: self.cast_mobility,
             behavior: SpellBehavior::Projectile,
@@ -969,6 +1004,12 @@ fn validate_definition(def: &SpellDefinition) -> Result<(), String> {
     if !def.uses_global_cooldown && def.cooldown.as_millis() == 0 {
         return Err(format!(
             "{} off-GCD spells still require an own cooldown",
+            def.kind.as_str()
+        ));
+    }
+    if def.uses_global_cooldown && def.global_cooldown.as_millis() == 0 {
+        return Err(format!(
+            "{} GCD spells require a positive global cooldown",
             def.kind.as_str()
         ));
     }

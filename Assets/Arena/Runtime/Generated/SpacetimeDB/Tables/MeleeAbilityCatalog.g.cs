@@ -46,6 +46,7 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Col<MeleeAbilityCatalog, float> Range { get; }
         public global::SpacetimeDB.Col<MeleeAbilityCatalog, ulong> CooldownMs { get; }
         public global::SpacetimeDB.Col<MeleeAbilityCatalog, bool> UsesGlobalCooldown { get; }
+        public global::SpacetimeDB.Col<MeleeAbilityCatalog, ulong> GlobalCooldownMs { get; }
         public global::SpacetimeDB.Col<MeleeAbilityCatalog, string> ParryBehavior { get; }
         public global::SpacetimeDB.Col<MeleeAbilityCatalog, string> BlockBehavior { get; }
         public global::SpacetimeDB.Col<MeleeAbilityCatalog, string> AirborneTargetingMode { get; }
@@ -69,6 +70,7 @@ namespace SpacetimeDB.Types
             Range = new global::SpacetimeDB.Col<MeleeAbilityCatalog, float>(tableName, "range");
             CooldownMs = new global::SpacetimeDB.Col<MeleeAbilityCatalog, ulong>(tableName, "cooldown_ms");
             UsesGlobalCooldown = new global::SpacetimeDB.Col<MeleeAbilityCatalog, bool>(tableName, "uses_global_cooldown");
+            GlobalCooldownMs = new global::SpacetimeDB.Col<MeleeAbilityCatalog, ulong>(tableName, "global_cooldown_ms");
             ParryBehavior = new global::SpacetimeDB.Col<MeleeAbilityCatalog, string>(tableName, "parry_behavior");
             BlockBehavior = new global::SpacetimeDB.Col<MeleeAbilityCatalog, string>(tableName, "block_behavior");
             AirborneTargetingMode = new global::SpacetimeDB.Col<MeleeAbilityCatalog, string>(tableName, "airborne_targeting_mode");

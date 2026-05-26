@@ -59,9 +59,11 @@ use crate::world_collision::{
     surface_height_for_world_at_y_with_layout_for_scene,
 };
 
+#[cfg(feature = "spellcasting_terminal_harness")]
+use super::cooldowns::stamp_global_cooldown;
 use super::cooldowns::{
     clear_global_cooldown_if_matches, is_on_cooldown, is_on_global_cooldown, stamp_cooldown,
-    stamp_global_cooldown, stamp_named_cooldown_for_duration,
+    stamp_global_cooldown_for_duration, stamp_named_cooldown_for_duration,
 };
 use super::events::{
     emit_spell_combat_event, emit_spell_combat_event_with_damage, next_spell_instance_id,
@@ -842,7 +844,7 @@ pub(crate) fn cast_spell_for(
         }
         try_arm_auto_attack_for_spell_start(ctx, caster, spell_kind, target_id, now);
         if uses_global_cooldown {
-            stamp_global_cooldown(ctx, caster, now);
+            stamp_global_cooldown_for_duration(ctx, caster, definition.global_cooldown, now);
         }
         stamp_cooldown(ctx, caster, spell_kind, now);
         return Ok(());
@@ -934,7 +936,12 @@ pub(crate) fn cast_spell_for(
         }
         try_arm_auto_attack_for_spell_start(ctx, caster, spell_kind, target_id, now);
         if uses_global_cooldown {
-            stamp_global_cooldown(ctx, caster, cast_started_at);
+            stamp_global_cooldown_for_duration(
+                ctx,
+                caster,
+                definition.global_cooldown,
+                cast_started_at,
+            );
         }
         return Ok(());
     }
@@ -1056,7 +1063,7 @@ pub(crate) fn cast_spell_for(
     try_arm_auto_attack_for_spell_start(ctx, caster, spell_kind, target_id, now);
 
     if uses_global_cooldown {
-        stamp_global_cooldown(ctx, caster, now);
+        stamp_global_cooldown_for_duration(ctx, caster, definition.global_cooldown, now);
     }
     stamp_cooldown(ctx, caster, spell_kind, now);
     Ok(())

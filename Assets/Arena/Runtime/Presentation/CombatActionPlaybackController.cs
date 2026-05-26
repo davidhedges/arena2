@@ -125,6 +125,8 @@ namespace Arena.Presentation
 
     internal sealed class CombatActionPlaybackController
     {
+        public const float DefaultLowerBodyBlendOutSeconds = 0.12f;
+
         private readonly AnimationClip?[] _strikeBankClips = new AnimationClip?[CombatAnimationSet.AnimatorStrikeBankCount];
         private readonly AnimationClip?[] _spellBankClips = new AnimationClip?[CombatAnimationSet.AnimatorSpellBankCount];
         private LowerBodyUnlockPlaybackState _meleeLowerBodyUnlock;
@@ -689,7 +691,7 @@ namespace Arena.Presentation
                 actionId,
                 bankSlot,
                 spellEntry.ResolveLowerBodyUnlockAtSeconds(grounded),
-                spellEntry.ResolveLowerBodyBlendOutSeconds(),
+                spellEntry.ResolveLowerBodyBlendOutSeconds(DefaultLowerBodyBlendOutSeconds),
                 spellEntry.ResolveVisualInterruptibleAtSeconds(grounded));
         }
 
@@ -698,32 +700,24 @@ namespace Arena.Presentation
             int strikeIndex,
             bool isPhased,
             CombatAnimationSet? animationSet,
+            bool grounded,
             float appliedCatchupSeconds = 0f)
         {
             CombatAnimationCategory category = CombatAnimationRequest.ResolveMeleeCategory(request.Source);
-            float timingReferenceLengthSeconds = strikeIndex > 0
-                ? animationSet?.GetStrikeTimingReferenceLengthSeconds(strikeIndex) ?? 0f
-                : 0f;
             float playedLengthSeconds = ResolvePlayedMeleeLengthSeconds(
                 animationSet,
                 strikeIndex,
                 isPhased,
                 PhasedMeleeTotalLengthSeconds);
             float visualInterruptibleAtSeconds = strikeIndex > 0
-                ? ScaleAuthoredMeleeSeconds(
-                    animationSet?.GetVisualInterruptibleAtSeconds(strikeIndex) ?? 0f,
-                    timingReferenceLengthSeconds,
-                    playedLengthSeconds)
+                ? animationSet?.GetVisualInterruptibleAtSeconds(strikeIndex, grounded) ?? 0f
                 : 0f;
             float lowerBodyUnlockAtSeconds = strikeIndex > 0
-                ? ScaleAuthoredMeleeSeconds(
-                    animationSet?.GetLowerBodyUnlockAtSeconds(strikeIndex) ?? 0f,
-                    timingReferenceLengthSeconds,
-                    playedLengthSeconds)
+                ? animationSet?.GetLowerBodyUnlockAtSeconds(strikeIndex, grounded) ?? 0f
                 : 0f;
             float lowerBodyBlendOutSeconds = strikeIndex > 0
-                ? animationSet?.GetLowerBodyBlendOutSeconds(strikeIndex) ?? 0f
-                : 0f;
+                ? animationSet?.GetLowerBodyBlendOutSeconds(strikeIndex, DefaultLowerBodyBlendOutSeconds) ?? DefaultLowerBodyBlendOutSeconds
+                : DefaultLowerBodyBlendOutSeconds;
 
             ActiveBaseCombatAnimationCategory = category;
             return new ActiveMeleePresentation(
@@ -797,6 +791,7 @@ namespace Arena.Presentation
             int strikeIndex,
             bool isPhased,
             CombatAnimationSet? animationSet,
+            bool grounded,
             float appliedCatchupSeconds = 0f)
         {
             ActiveMeleePresentation = CreateMeleePresentation(
@@ -804,6 +799,7 @@ namespace Arena.Presentation
                 strikeIndex,
                 isPhased,
                 animationSet,
+                grounded,
                 appliedCatchupSeconds);
             ActiveMeleePresentationEntered = false;
         }
