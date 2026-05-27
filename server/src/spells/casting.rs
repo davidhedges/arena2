@@ -387,7 +387,9 @@ pub(crate) fn queue_pending_cast_request(
         log_cast_rejected(caster, spell_kind, "caster_dead", "");
         return Ok(());
     }
-    if has_active_disabling_status(ctx, caster, ctx.timestamp) {
+    if has_active_disabling_status(ctx, caster, ctx.timestamp)
+        && !spell_can_be_cast_while_disabled(definition)
+    {
         record_spell_prediction_result(
             ctx,
             caster,
@@ -641,20 +643,6 @@ pub(crate) fn cast_spell_for(
         last_processed_tick: validated_snapshot.last_processed_tick,
         ..caster_state
     };
-    if has_active_disabling_status(ctx, caster, ctx.timestamp) {
-        record_spell_prediction_result(
-            ctx,
-            caster,
-            "",
-            predicted_cast_id.as_str(),
-            client_action_seq,
-            SPELL_PREDICTION_RESULT_REJECTED,
-            ctx.timestamp,
-        );
-        log_cast_rejected(caster, spell_kind, "active_disabling_status", "");
-        return Ok(());
-    }
-
     let now = ctx.timestamp;
     let Some(definition) = super::catalog::spell_definition(spell_kind) else {
         record_spell_prediction_result(
@@ -669,6 +657,21 @@ pub(crate) fn cast_spell_for(
         log_cast_rejected(caster, spell_kind, "unknown_spell", "");
         return Ok(());
     };
+    if has_active_disabling_status(ctx, caster, ctx.timestamp)
+        && !spell_can_be_cast_while_disabled(definition)
+    {
+        record_spell_prediction_result(
+            ctx,
+            caster,
+            "",
+            predicted_cast_id.as_str(),
+            client_action_seq,
+            SPELL_PREDICTION_RESULT_REJECTED,
+            ctx.timestamp,
+        );
+        log_cast_rejected(caster, spell_kind, "active_disabling_status", "");
+        return Ok(());
+    }
     let uses_global_cooldown = definition.uses_global_cooldown;
     let Some(primary_resource_cost) =
         resolved_primary_resource_cost_for_action(ctx, caster, spell_kind)
@@ -1838,7 +1841,9 @@ pub(crate) fn tick_active_casts(ctx: &ReducerContext, now: Timestamp) -> Result<
             );
             continue;
         }
-        if has_active_disabling_status(ctx, caster, now) {
+        if has_active_disabling_status(ctx, caster, now)
+            && !definition.is_some_and(spell_can_be_cast_while_disabled)
+        {
             fizzle_active_cast_row_for_interrupt(
                 ctx,
                 &active_cast,
@@ -1963,6 +1968,10 @@ fn ability_id_for_spell(ctx: &ReducerContext, caster: Identity, spell_kind: &Spe
         .unwrap_or_default()
 }
 
+fn spell_can_be_cast_while_disabled(definition: &SpellDefinition) -> bool {
+    definition.behavior == SpellBehavior::RemoveStatus
+}
+
 fn process_spell_cast(
     ctx: &ReducerContext,
     state: &PlayerSnapshot,
@@ -1983,7 +1992,7 @@ fn process_spell_cast(
 
     if matches!(
         definition.behavior,
-        SpellBehavior::ApplyStatus | SpellBehavior::SelfResource
+        SpellBehavior::ApplyStatus | SpellBehavior::RemoveStatus | SpellBehavior::SelfResource
     ) {
         if mode == CastExecutionMode::Execute {
             match definition.behavior {
@@ -1995,6 +2004,16 @@ fn process_spell_cast(
                         spell_kind,
                         target_id,
                         mode,
+                        action_instance_id,
+                        ability_id,
+                    );
+                }
+                SpellBehavior::RemoveStatus => {
+                    cast_remove_status(
+                        ctx,
+                        caster,
+                        state,
+                        spell_kind,
                         action_instance_id,
                         ability_id,
                     );
@@ -5520,6 +5539,59 @@ fn cast_self_resource(
     debug_assert!(
         definition.primary_resource_gain_on_cast > 0.0,
         "SELF_RESOURCE spells must define a resource gain"
+    );
+}
+
+fn cast_remove_status(
+    ctx: &ReducerContext,
+    caster: Identity,
+    state: &PlayerSnapshot,
+    kind: &SpellId,
+    action_instance_id: &str,
+    ability_id: &str,
+) {
+    let now = ctx.timestamp;
+    let definition = super::catalog::spell_definition(kind)
+        .expect("validated REMOVE_STATUS spell must resolve to a definition");
+    let remove_status = definition
+        .secondary
+        .remove_status
+        .as_ref()
+        .expect("REMOVE_STATUS spells must define statuses");
+    let spell_id = action_instance_id.to_string();
+
+    emit_spell_combat_event(
+        ctx,
+        SpellCombatEventPayload {
+            action_instance_id: spell_id.as_str(),
+            ability_id,
+            kind,
+            event_type: EVENT_RELEASE,
+            caster,
+            hit: caster,
+            origin: Vec3::new(state.pos_x, state.pos_y, state.pos_z),
+            direction: default_forward_direction(state),
+            speed: 0.0,
+            max_distance: 0.0,
+            scalar: SpellCombatEventScalar::None,
+            sequence_index: 0,
+            sequence_count: 1,
+            point: Vec3::new(state.pos_x, state.pos_y, state.pos_z),
+            now,
+        },
+    );
+
+    queue_effects(
+        ctx,
+        remove_status
+            .statuses
+            .iter()
+            .map(|status| EffectPacket::RemoveStatus {
+                target: caster,
+                kind: status.kind,
+                stack_group: status.stack_group.clone().unwrap_or_default(),
+            })
+            .collect(),
     );
 }
 

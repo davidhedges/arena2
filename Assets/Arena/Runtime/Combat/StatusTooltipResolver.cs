@@ -94,6 +94,7 @@ namespace Arena.Combat
                 "STUN" => "Prevents movement and actions.",
                 "FREEZE" => "Prevents movement and actions.",
                 "INTIMIDATED" => "Prevents movement and actions.",
+                "FEAR" => "Prevents movement and actions.",
                 "STAGGER" => "Interrupts actions and briefly shoves the target.",
                 "KNOCKDOWN" => "Knocks the target down and prevents actions.",
                 "SLOW" => $"Reduces movement speed by {FormatPercent(status.SlowPct * stacks)}.",

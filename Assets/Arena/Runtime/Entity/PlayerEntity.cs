@@ -196,6 +196,7 @@ namespace Arena.Entity
             { "freeze",     new Color(0.35f, 0.85f, 1.0f) },
             { "FREEZE",     new Color(0.35f, 0.85f, 1.0f) },
             { "INTIMIDATED", new Color(0.75f, 0.35f, 1.0f) },
+            { "FEAR",        new Color(0.75f, 0.35f, 1.0f) },
             { "KNOCKDOWN",  new Color(0.95f, 0.55f, 0.2f) },
             { "burn",       new Color(1.0f, 0.4f, 0.1f) },
             { "DOT",        new Color(1.0f, 0.4f, 0.1f) },

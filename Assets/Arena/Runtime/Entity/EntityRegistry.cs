@@ -37,6 +37,7 @@ namespace Arena.Entity
         private const string StunStatusKind = "STUN";
         private const string FreezeStatusKind = "FREEZE";
         private const string IntimidatedStatusKind = "INTIMIDATED";
+        private const string FearStatusKind = "FEAR";
         private const string DefenseBlockKind = "BLOCK";
         private const string DefenseParryKind = "PARRY";
 
@@ -1083,7 +1084,8 @@ namespace Arena.Entity
         private static bool IsHardCrowdControlStatusKind(string statusKind) =>
             IsStatusKind(statusKind, StunStatusKind)
             || IsStatusKind(statusKind, FreezeStatusKind)
-            || IsStatusKind(statusKind, IntimidatedStatusKind);
+            || IsStatusKind(statusKind, IntimidatedStatusKind)
+            || IsStatusKind(statusKind, FearStatusKind);
 
         private static string? SelectHardCrowdControlStatusKind(string? current, string candidate)
         {

@@ -1329,6 +1329,7 @@ pub enum StatusEffectKind {
     Stun,
     Freeze,
     Intimidated,
+    Fear,
     // Status CC only.
     Stagger,
     Knockdown,
@@ -1352,6 +1353,7 @@ impl StatusEffectKind {
             Self::Stun => "STUN",
             Self::Freeze => "FREEZE",
             Self::Intimidated => "INTIMIDATED",
+            Self::Fear => "FEAR",
             Self::Stagger => "STAGGER",
             Self::Knockdown => "KNOCKDOWN",
             Self::Slow => "SLOW",
@@ -1374,6 +1376,7 @@ impl StatusEffectKind {
             "STUN" => Some(Self::Stun),
             "FREEZE" => Some(Self::Freeze),
             "INTIMIDATED" => Some(Self::Intimidated),
+            "FEAR" => Some(Self::Fear),
             "STAGGER" => Some(Self::Stagger),
             "KNOCKDOWN" => Some(Self::Knockdown),
             "SLOW" => Some(Self::Slow),
@@ -1398,6 +1401,7 @@ pub enum StatusPayload {
     Stun,
     Freeze,
     Intimidated,
+    Fear,
     Stagger,
     Knockdown,
     Slow {
@@ -1495,6 +1499,7 @@ impl AuthoredStatusPayload {
             StatusEffectKind::Stun => StatusPayload::Stun,
             StatusEffectKind::Freeze => StatusPayload::Freeze,
             StatusEffectKind::Intimidated => StatusPayload::Intimidated,
+            StatusEffectKind::Fear => StatusPayload::Fear,
             StatusEffectKind::Stagger => StatusPayload::Stagger,
             StatusEffectKind::Knockdown => StatusPayload::Knockdown,
             StatusEffectKind::Slow => StatusPayload::Slow {
@@ -1657,6 +1662,7 @@ impl StatusPayload {
             Self::Stun => StatusEffectKind::Stun,
             Self::Freeze => StatusEffectKind::Freeze,
             Self::Intimidated => StatusEffectKind::Intimidated,
+            Self::Fear => StatusEffectKind::Fear,
             Self::Stagger => StatusEffectKind::Stagger,
             Self::Knockdown => StatusEffectKind::Knockdown,
             Self::Slow { .. } => StatusEffectKind::Slow,
@@ -1679,6 +1685,7 @@ impl StatusPayload {
             | Self::Stun
             | Self::Freeze
             | Self::Intimidated
+            | Self::Fear
             | Self::Stagger
             | Self::Knockdown
             | Self::MoveSlowImmunity
@@ -1767,6 +1774,7 @@ impl StatusPayload {
             StatusEffectKind::Stun => Self::Stun,
             StatusEffectKind::Freeze => Self::Freeze,
             StatusEffectKind::Intimidated => Self::Intimidated,
+            StatusEffectKind::Fear => Self::Fear,
             StatusEffectKind::Stagger => Self::Stagger,
             StatusEffectKind::Knockdown => Self::Knockdown,
             StatusEffectKind::Slow => Self::Slow {
@@ -1812,6 +1820,7 @@ impl StatusPayload {
             | Self::Stun
             | Self::Freeze
             | Self::Intimidated
+            | Self::Fear
             | Self::Stagger
             | Self::Knockdown
             | Self::MoveSlowImmunity
@@ -1851,6 +1860,7 @@ impl StatusPayload {
             | Self::Stun
             | Self::Freeze
             | Self::Intimidated
+            | Self::Fear
             | Self::Stagger
             | Self::Knockdown
             | Self::MoveSlowImmunity
@@ -1929,6 +1939,7 @@ impl StatusPayload {
             | Self::Stun
             | Self::Freeze
             | Self::Intimidated
+            | Self::Fear
             | Self::Stagger
             | Self::Knockdown
             | Self::MoveSlowImmunity
@@ -2675,6 +2686,10 @@ fn apply_pending_remove_status_fields(
     let Some(kind) = StatusEffectKind::from_wire(status_kind) else {
         return;
     };
+    if stack_group.is_empty() {
+        remove_status_kind(ctx, target, kind);
+        return;
+    }
     remove_status_group(ctx, target, kind, stack_group);
 }
 
@@ -3328,6 +3343,21 @@ fn remove_status_group(
     }
 }
 
+fn remove_status_kind(ctx: &ReducerContext, target: Identity, kind: StatusEffectKind) {
+    let remove_ids: Vec<u64> = ctx
+        .db
+        .status_effect()
+        .target()
+        .filter(target)
+        .filter(|effect| effect.effect_kind == kind.as_str())
+        .map(|effect| effect.status_id)
+        .collect();
+
+    for status_id in remove_ids {
+        ctx.db.status_effect().status_id().delete(status_id);
+    }
+}
+
 pub(crate) fn remove_active_status_group(
     ctx: &ReducerContext,
     target: Identity,
@@ -3936,6 +3966,7 @@ impl StatusRuntimeView {
                     | StatusEffectKind::Stun
                     | StatusEffectKind::Freeze
                     | StatusEffectKind::Intimidated
+                    | StatusEffectKind::Fear
                     | StatusEffectKind::Stagger
                     | StatusEffectKind::Knockdown
                     | StatusEffectKind::Slow
@@ -4480,6 +4511,11 @@ mod tests {
                 StatusPayload::Intimidated,
             ),
             (
+                StatusPayload::Fear,
+                StatusEffectKind::Fear,
+                StatusPayload::Fear,
+            ),
+            (
                 StatusPayload::Stagger,
                 StatusEffectKind::Stagger,
                 StatusPayload::Stagger,
@@ -4916,6 +4952,7 @@ mod tests {
             StatusEffectKind::Stun,
             StatusEffectKind::Freeze,
             StatusEffectKind::Intimidated,
+            StatusEffectKind::Fear,
             StatusEffectKind::Stagger,
             StatusEffectKind::Knockdown,
         ];
@@ -4928,6 +4965,7 @@ mod tests {
                 StatusEffectKind::Stun => StatusPayload::Stun,
                 StatusEffectKind::Freeze => StatusPayload::Freeze,
                 StatusEffectKind::Intimidated => StatusPayload::Intimidated,
+                StatusEffectKind::Fear => StatusPayload::Fear,
                 StatusEffectKind::Stagger => StatusPayload::Stagger,
                 StatusEffectKind::Knockdown => StatusPayload::Knockdown,
                 _ => unreachable!("controls only contains hard crowd-control kinds"),
@@ -5127,6 +5165,7 @@ pub fn is_hard_crowd_control_kind(kind: StatusEffectKind) -> bool {
         StatusEffectKind::Stun
             | StatusEffectKind::Freeze
             | StatusEffectKind::Intimidated
+            | StatusEffectKind::Fear
             | StatusEffectKind::Stagger
             | StatusEffectKind::Knockdown
     )

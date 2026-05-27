@@ -140,6 +140,7 @@ pub(crate) enum SpellBehavior {
     InstantBeam,
     Channel,
     ApplyStatus,
+    RemoveStatus,
     SelfResource,
 }
 
@@ -151,6 +152,7 @@ impl SpellBehavior {
             Self::InstantBeam => "INSTANT_BEAM",
             Self::Channel => "CHANNEL",
             Self::ApplyStatus => "APPLY_STATUS",
+            Self::RemoveStatus => "REMOVE_STATUS",
             Self::SelfResource => "SELF_RESOURCE",
         }
     }
@@ -260,6 +262,7 @@ pub(crate) struct SpellSecondaryTunables {
     pub area: Option<AreaSecondaryTunables>,
     pub instant_beam: Option<InstantBeamSecondaryTunables>,
     pub apply_status: Option<ApplyStatusSecondaryTunables>,
+    pub remove_status: Option<RemoveStatusSecondaryTunables>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -360,6 +363,17 @@ pub(crate) struct InstantBeamChargeScaling {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct ApplyStatusSecondaryTunables {
     pub parry_behavior: SpellParryBehavior,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct RemoveStatusSecondaryTunables {
+    pub statuses: Vec<RemoveStatusDefinition>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct RemoveStatusDefinition {
+    pub kind: StatusEffectKind,
+    pub stack_group: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -481,6 +495,18 @@ mod tests {
                         def.kind.as_str()
                     );
                 }
+                super::SpellBehavior::RemoveStatus => {
+                    assert!(
+                        def.apply_status.is_none(),
+                        "REMOVE_STATUS spell '{}' should not define apply_status",
+                        def.kind.as_str()
+                    );
+                    assert!(
+                        def.secondary.remove_status.is_some(),
+                        "REMOVE_STATUS spell '{}' must define remove_status secondary data",
+                        def.kind.as_str()
+                    );
+                }
                 super::SpellBehavior::SelfResource => {
                     assert!(
                         def.apply_status.is_none(),
@@ -556,6 +582,7 @@ mod tests {
             "BATTLE_CRY",
             "GIANT_SWING",
             "INTIMIDATE",
+            "IRON_WILL",
             "ENRAGE",
             "SHOCKWAVE",
         ] {
@@ -640,6 +667,37 @@ mod tests {
         assert_eq!(status.absorb_cap, 60);
         assert_eq!(status.max_stacks, 2);
         assert_eq!(status.stack_policy, StackPolicy::AddStackRefresh);
+    }
+
+    #[test]
+    fn iron_will_catalog_removes_intimidated_and_fear() {
+        let definition = definition("IRON_WILL");
+
+        assert_eq!(definition.kind.as_str(), "IRON_WILL");
+        assert_eq!(definition.cooldown, Duration::from_millis(30_000));
+        assert!(!definition.uses_global_cooldown);
+        assert_eq!(definition.behavior.as_str(), "REMOVE_STATUS");
+        assert_eq!(definition.targeting.as_str(), "SELF");
+        assert!(!definition.requires_target);
+        assert!((definition.primary_resource_cost - 0.0).abs() < 0.0001);
+        let remove_status = definition
+            .secondary
+            .remove_status
+            .as_ref()
+            .expect("Iron Will should define remove-status payloads");
+        let kinds: Vec<_> = remove_status
+            .statuses
+            .iter()
+            .map(|status| status.kind)
+            .collect();
+        assert_eq!(
+            kinds,
+            vec![StatusEffectKind::Intimidated, StatusEffectKind::Fear]
+        );
+        assert!(remove_status
+            .statuses
+            .iter()
+            .all(|status| status.stack_group.is_none()));
     }
 
     #[test]

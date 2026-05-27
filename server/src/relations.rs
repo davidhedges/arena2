@@ -166,6 +166,7 @@ pub(crate) fn default_spell_target_audience(
             Some(crate::combat::StatusPolarity::Debuff) => TargetAudience::Hostile,
             None => TargetAudience::Hostile,
         },
+        crate::spells::SpellBehavior::RemoveStatus => TargetAudience::SelfOnly,
         crate::spells::SpellBehavior::SelfResource => TargetAudience::SelfOnly,
         _ => TargetAudience::Hostile,
     }

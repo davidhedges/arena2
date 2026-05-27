@@ -17,8 +17,9 @@ use super::manifest::{
     BespokeRuntimeSpell, BlockBehavior, BoomerangCasterProjectileTunables, ImpactEffect,
     InstantBeamChargeScaling, InstantBeamSecondaryTunables, MeteorSkyOrigin,
     OrbitCasterProjectileTunables, ProjectileMotionTunables, ProjectileSecondaryTunables,
-    SpellBehavior, SpellCastMobility, SpellDefinition, SpellId, SpellParryBehavior,
-    SpellSecondaryTunables, SpellTargeting, SPELL_METEOR,
+    RemoveStatusDefinition, RemoveStatusSecondaryTunables, SpellBehavior, SpellCastMobility,
+    SpellDefinition, SpellId, SpellParryBehavior, SpellSecondaryTunables, SpellTargeting,
+    SPELL_METEOR,
 };
 
 const PROGRESSION_CATALOG_JSON: &str = include_str!("../progression_catalog.shared.json");
@@ -133,7 +134,18 @@ enum SpellCatalogDelivery {
         parry_behavior: Option<SpellParryBehavior>,
         status: ApplyStatusDefinition,
     },
+    RemoveStatus {
+        statuses: Vec<RemoveStatusRow>,
+    },
     SelfResource {},
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct RemoveStatusRow {
+    kind: StatusEffectKind,
+    #[serde(default)]
+    stack_group: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
@@ -780,6 +792,19 @@ impl SpellCatalogRow {
                     parry_behavior: parry_behavior.unwrap_or(SpellParryBehavior::Unparryable),
                 });
             }
+            SpellCatalogDelivery::RemoveStatus { statuses } => {
+                definition.behavior = SpellBehavior::RemoveStatus;
+                definition.block_behavior = BlockBehavior::Unblockable;
+                definition.secondary.remove_status = Some(RemoveStatusSecondaryTunables {
+                    statuses: statuses
+                        .into_iter()
+                        .map(|status| RemoveStatusDefinition {
+                            kind: status.kind,
+                            stack_group: status.stack_group,
+                        })
+                        .collect(),
+                });
+            }
             SpellCatalogDelivery::SelfResource {} => {
                 definition.behavior = SpellBehavior::SelfResource;
                 definition.block_behavior = BlockBehavior::Unblockable;
@@ -1168,7 +1193,7 @@ fn validate_secondary_tunables(def: &SpellDefinition) -> Result<(), String> {
             for effect in &projectile.impact_effects {
                 validate_impact_effect(def, effect)?;
             }
-            ensure_no_secondary(def, false, true, true, true)?;
+            ensure_no_secondary(def, false, true, true, true, true)?;
         }
         SpellBehavior::Area => {
             let Some(area) = def.secondary.area.as_ref() else {
@@ -1273,7 +1298,7 @@ fn validate_secondary_tunables(def: &SpellDefinition) -> Result<(), String> {
                     def.kind.as_str()
                 ));
             }
-            ensure_no_secondary(def, true, false, true, true)?;
+            ensure_no_secondary(def, true, false, true, true, true)?;
         }
         SpellBehavior::InstantBeam => {
             let Some(instant_beam) = def.secondary.instant_beam else {
@@ -1305,7 +1330,7 @@ fn validate_secondary_tunables(def: &SpellDefinition) -> Result<(), String> {
                     def.kind.as_str()
                 ));
             }
-            ensure_no_secondary(def, true, true, false, true)?;
+            ensure_no_secondary(def, true, true, false, true, true)?;
         }
         SpellBehavior::ApplyStatus => {
             let Some(apply_status) = def.secondary.apply_status else {
@@ -1327,7 +1352,36 @@ fn validate_secondary_tunables(def: &SpellDefinition) -> Result<(), String> {
                 "delivery.duration_ms",
                 Duration::from_secs_f32(def.duration),
             )?;
-            ensure_no_secondary(def, true, true, true, false)?;
+            ensure_no_secondary(def, true, true, true, false, true)?;
+        }
+        SpellBehavior::RemoveStatus => {
+            let Some(remove_status) = def.secondary.remove_status.as_ref() else {
+                return Err(format!(
+                    "{} REMOVE_STATUS must define secondary remove-status data",
+                    def.kind.as_str()
+                ));
+            };
+            if def.targeting != SpellTargeting::Self_ || def.requires_target {
+                return Err(format!(
+                    "{} REMOVE_STATUS must use SELF targeting without a target requirement",
+                    def.kind.as_str()
+                ));
+            }
+            if remove_status.statuses.is_empty() {
+                return Err(format!(
+                    "{} REMOVE_STATUS must define at least one status",
+                    def.kind.as_str()
+                ));
+            }
+            for status in &remove_status.statuses {
+                if status.stack_group.as_deref().is_some_and(str::is_empty) {
+                    return Err(format!(
+                        "{} REMOVE_STATUS status stack_group must not be empty",
+                        def.kind.as_str()
+                    ));
+                }
+            }
+            ensure_no_secondary(def, true, true, true, true, false)?;
         }
         SpellBehavior::Channel | SpellBehavior::SelfResource => {
             if def.secondary != SpellSecondaryTunables::default() {
@@ -1464,6 +1518,7 @@ fn ensure_no_secondary(
     no_area: bool,
     no_instant_beam: bool,
     no_apply_status: bool,
+    no_remove_status: bool,
 ) -> Result<(), String> {
     if no_projectile && def.secondary.projectile.is_some() {
         return Err(format!(
@@ -1486,6 +1541,12 @@ fn ensure_no_secondary(
     if no_apply_status && def.secondary.apply_status.is_some() {
         return Err(format!(
             "{} must not define apply-status secondary data",
+            def.kind.as_str()
+        ));
+    }
+    if no_remove_status && def.secondary.remove_status.is_some() {
+        return Err(format!(
+            "{} must not define remove-status secondary data",
             def.kind.as_str()
         ));
     }
@@ -1690,6 +1751,7 @@ mod tests {
                 "NEGATE",
                 "MOMENTUM",
                 "FORTIFY",
+                "IRON_WILL",
                 "BATTLE_CRY",
                 "GIANT_SWING",
                 "ENRAGE",
@@ -1725,6 +1787,7 @@ mod tests {
             "NEGATE",
             "MOMENTUM",
             "FORTIFY",
+            "IRON_WILL",
             "BATTLE_CRY",
             "GIANT_SWING",
             "ENRAGE",

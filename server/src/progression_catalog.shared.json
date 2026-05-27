@@ -1189,6 +1189,39 @@
       }
     },
     {
+      "ability_id": "WARRIOR_IRON_WILL",
+      "class_id": "WARRIOR",
+      "action_id": "IRON_WILL",
+      "display_name": "Iron Will",
+      "resource_kind": "RAGE",
+      "ability_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 82,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 30000,
+        "uses_global_cooldown": false,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "SELF",
+        "requires_target": false,
+        "resource_cost": 0.0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "REMOVE_STATUS",
+          "statuses": [
+            {
+              "kind": "INTIMIDATED"
+            },
+            {
+              "kind": "FEAR"
+            }
+          ]
+        }
+      }
+    },
+    {
       "ability_id": "WARRIOR_BATTLE_CRY",
       "class_id": "WARRIOR",
       "action_id": "BATTLE_CRY",
@@ -1975,6 +2008,13 @@
       "presentation_id": "WARRIOR_FORTIFY",
       "display_name": "Fortify",
       "description": "Grants temporary hitpoints for a short duration.",
+      "sort_order": 84
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "WARRIOR_IRON_WILL",
+      "display_name": "Iron Will",
+      "description": "Breaks intimidation and fear effects on the warrior.",
       "sort_order": 84
     },
     {

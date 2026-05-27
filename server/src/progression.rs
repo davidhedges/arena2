@@ -1010,6 +1010,7 @@ fn known_status_kind_ids() -> HashSet<String> {
         StatusEffectKind::Stun,
         StatusEffectKind::Freeze,
         StatusEffectKind::Intimidated,
+        StatusEffectKind::Fear,
         StatusEffectKind::Stagger,
         StatusEffectKind::Knockdown,
         StatusEffectKind::Slow,
@@ -7536,6 +7537,33 @@ mod tests {
     }
 
     #[test]
+    fn warrior_iron_will_resolves_via_spell_catalog_without_default_placement() {
+        let catalog = progression_catalog();
+        let ability = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "WARRIOR_IRON_WILL")
+            .expect("expected Warrior Iron Will ability");
+
+        assert_eq!(
+            normalize_identifier(ability.action_id.as_str()),
+            "IRON_WILL"
+        );
+        let definition = spell_definition_by_str(ability.action_id.as_str())
+            .expect("Iron Will should resolve through the spell catalog");
+        assert_eq!(
+            definition.behavior,
+            crate::spells::SpellBehavior::RemoveStatus
+        );
+        assert!(!catalog
+            .default_loadout_assignments
+            .iter()
+            .any(|assignment| {
+                assignment.action_kind == "ABILITY" && assignment.ability_id == "WARRIOR_IRON_WILL"
+            }));
+    }
+
+    #[test]
     fn spell_abilities_do_not_define_positive_resource_costs() {
         let catalog = progression_catalog();
 
@@ -7569,6 +7597,10 @@ mod tests {
         assert!(
             animation_set_spell_ids.contains("FORTIFY"),
             "expected Fortify spell animation entry in the derived greatsword animation set"
+        );
+        assert!(
+            animation_set_spell_ids.contains("IRON_WILL"),
+            "expected Iron Will spell animation entry in the derived greatsword animation set"
         );
     }
 
