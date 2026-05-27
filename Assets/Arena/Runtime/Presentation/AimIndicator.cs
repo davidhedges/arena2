@@ -19,9 +19,11 @@ namespace Arena.Presentation
         private Mesh? _circleMesh;
         private Material? _circleMaterial;
         private Color _color = new(1f, 0.02f, 0.015f, 0.72f);
+        private Color _lastColor = new(float.NaN, float.NaN, float.NaN, float.NaN);
         private float _radius = 1f;
         private Vector3 _lastCenter = new(float.PositiveInfinity, float.PositiveInfinity, float.PositiveInfinity);
         private float _lastRadius = -1f;
+        private bool _hasAimPoint;
         private const float GroundOffset = 0.05f;
         private const int SegmentCount = 144;
         private const int RadialBandCount = 32;
@@ -61,14 +63,27 @@ namespace Arena.Presentation
 
             _radius = Mathf.Max(0.01f, radius);
             _color = color;
+
+            if (!_hasAimPoint)
+            {
+                _circle.SetActive(false);
+                return;
+            }
+
             _circle.SetActive(true);
-            RefreshCircleMesh(forceRebuild: Mathf.Abs(_lastRadius - _radius) > 0.0001f);
+            RefreshCircleMesh(forceRebuild:
+                Mathf.Abs(_lastRadius - _radius) > 0.0001f ||
+                !ApproximatelySameColor(_lastColor, _color));
         }
 
         public void Hide()
         {
             if (_circle != null)
                 _circle.SetActive(false);
+            _hasAimPoint = false;
+            _lastCenter = new Vector3(float.PositiveInfinity, float.PositiveInfinity, float.PositiveInfinity);
+            _lastRadius = -1f;
+            _lastColor = new Color(float.NaN, float.NaN, float.NaN, float.NaN);
         }
 
         private void Update()
@@ -91,6 +106,7 @@ namespace Arena.Presentation
                 return false;
 
             AimPoint = aimPoint;
+            _hasAimPoint = true;
             RefreshCircleMesh();
             return true;
         }
@@ -241,10 +257,19 @@ namespace Arena.Presentation
 
             _lastCenter = center;
             _lastRadius = _radius;
+            _lastColor = _color;
             _circle.transform.position = center;
             _circle.transform.rotation = Quaternion.identity;
             _circle.transform.localScale = Vector3.one;
             RebuildCircleMesh(_circleMesh, center, _radius, _color);
+        }
+
+        private static bool ApproximatelySameColor(Color a, Color b)
+        {
+            return Mathf.Abs(a.r - b.r) < 0.001f
+                && Mathf.Abs(a.g - b.g) < 0.001f
+                && Mathf.Abs(a.b - b.b) < 0.001f
+                && Mathf.Abs(a.a - b.a) < 0.001f;
         }
 
         private static void RebuildCircleMesh(Mesh mesh, Vector3 center, float radius, Color color)

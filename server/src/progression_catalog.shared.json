@@ -1770,7 +1770,7 @@
         "cast_mobility": "MOBILE",
         "targeting": "POINT",
         "requires_target": false,
-        "aim_radius": 3.0,
+        "aim_radius": 3.4,
         "resource_cost": 1.0,
         "arms_auto_attack_on_cast": false,
         "delivery": {
@@ -1778,7 +1778,7 @@
           "max_distance": 12.0,
           "damage": 38,
           "impact_delay_ms": 2000,
-          "radius": 3.0,
+          "radius": 3.4,
           "block_behavior": "BLOCKABLE",
           "impact_effects": [
             {
