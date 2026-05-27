@@ -377,7 +377,7 @@
                     "slot_id": "paladin_charge_melee_slot",
                     "hit_windows": [
                         {
-                            "impact_delay_ms": 650
+                            "impact_delay_ms": 504
                         }
                     ],
                     "recovery_ms": 250,
@@ -385,18 +385,22 @@
                     "combo_from": "",
                     "combo_open_ms": 0,
                     "combo_grace_ms": 0,
-                    "aerial_execution_mode": "GROUNDED_ONLY",
-                    "projectile": {
-                        "projectile_id": "ARROW_STANDARD",
-                        "speed": 0,
-                        "max_distance": 0,
-                        "radius": 0,
-                        "spawn_forward": 0,
-                        "spawn_height": 0,
-                        "aim_height_scale": 0,
-                        "requires_initial_line_of_sight": true,
-                        "update_interval_seconds": 0
-                    }
+                    "aerial_execution_mode": "GROUNDED_ONLY"
+                },
+                {
+                    "id": "PALADIN_AVENGE",
+                    "slot_id": "paladin_avenge_melee_slot",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 415
+                        }
+                    ],
+                    "recovery_ms": 250,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY"
                 },
                 {
                     "id": "AUTO_ATTACK_1",

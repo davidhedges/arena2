@@ -45,7 +45,7 @@
       "class_id": "PALADIN",
       "display_name": "Paladin",
       "default_combat_profile_id": "SWORD_AND_SHIELD",
-      "primary_resource_kind": "VENGEANCE",
+      "primary_resource_kind": "ZEAL",
       "max_saved_specs": 6,
       "sort_order": 20
     },
@@ -155,8 +155,8 @@
       "sort_order": 50
     },
     {
-      "resource_kind": "VENGEANCE",
-      "display_name": "Vengeance",
+      "resource_kind": "ZEAL",
+      "display_name": "Zeal",
       "color_hex": "#F8F8F8",
       "base_max": 100.0,
       "max_per_insight": 3.5,
@@ -1569,8 +1569,8 @@
       "class_id": "PALADIN",
       "action_id": "SWORD_AND_SHIELD_UTILITY_1",
       "display_name": "Shield Pummel",
-      "resource_kind": "VENGEANCE",
-      "resource_cost": 20.0,
+      "resource_kind": "ZEAL",
+      "resource_cost": 1.0,
       "ability_tags": [
         "LOADOUT_ACTION"
       ],
@@ -1592,8 +1592,8 @@
       "class_id": "PALADIN",
       "action_id": "SWORD_AND_SHIELD_UTILITY_2",
       "display_name": "Vindicator Slash",
-      "resource_kind": "VENGEANCE",
-      "resource_cost": 24.0,
+      "resource_kind": "ZEAL",
+      "resource_cost": 1.0,
       "ability_tags": [
         "LOADOUT_ACTION"
       ],
@@ -1615,8 +1615,8 @@
       "class_id": "PALADIN",
       "action_id": "SWORD_AND_SHIELD_UTILITY_3",
       "display_name": "Guardian Rush",
-      "resource_kind": "VENGEANCE",
-      "resource_cost": 28.0,
+      "resource_kind": "ZEAL",
+      "resource_cost": 1.0,
       "ability_tags": [
         "LOADOUT_ACTION"
       ],
@@ -1638,8 +1638,8 @@
       "class_id": "PALADIN",
       "action_id": "SWORD_AND_SHIELD_UTILITY_4",
       "display_name": "Retribution",
-      "resource_kind": "VENGEANCE",
-      "resource_cost": 34.0,
+      "resource_kind": "ZEAL",
+      "resource_cost": 1.0,
       "ability_tags": [
         "LOADOUT_ACTION"
       ],
@@ -1661,7 +1661,8 @@
       "class_id": "PALADIN",
       "action_id": "PALADIN_CHARGE",
       "display_name": "Charge",
-      "resource_kind": "VENGEANCE",
+      "resource_kind": "ZEAL",
+      "resource_cost": 1.0,
       "ability_tags": [
         "LOADOUT_ACTION"
       ],
@@ -1698,6 +1699,94 @@
             }
           }
         ]
+      }
+    },
+    {
+      "ability_id": "PALADIN_AVENGE",
+      "class_id": "PALADIN",
+      "action_id": "PALADIN_AVENGE",
+      "display_name": "Avenge",
+      "resource_kind": "ZEAL",
+      "resource_cost": 1.0,
+      "ability_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 155,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 32,
+        "applies_stagger": false,
+        "range": 18.0,
+        "minimum_range": 5.0,
+        "cooldown_ms": 1600,
+        "uses_global_cooldown": true,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET",
+        "gap_close": {
+          "kind": "LINEAR",
+          "destination": "NEAREST_CONTACT_POINT",
+          "speed": 23.0,
+          "arrival_buffer": 1.44,
+          "arrival_epsilon": 0.05,
+          "impact_range": 2.5,
+          "collision_policy": "STOP_AT_BLOCK",
+          "require_arrival_for_swing": true,
+          "requires_target_facing": false
+        },
+        "melee_impact_area": {
+          "radius": 2.75,
+          "damage_multiplier": 0.65,
+          "hit_index": 0,
+          "include_primary_target": false
+        },
+        "melee_impact_effects": [
+          {
+            "kind": "APPLY_STATUS",
+            "status": {
+              "kind": "STUN",
+              "duration_ms": 5000,
+              "status_stack_group": "PALADIN_AVENGE_STUN"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "ability_id": "PALADIN_CONSECRATE",
+      "class_id": "PALADIN",
+      "action_id": "CONSECRATE",
+      "display_name": "Consecrate",
+      "resource_kind": "ZEAL",
+      "ability_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 156,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 1400,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "POINT",
+        "requires_target": false,
+        "aim_radius": 2.6,
+        "resource_cost": 1.0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "AREA",
+          "max_distance": 12.0,
+          "damage": 38,
+          "impact_delay_ms": 2000,
+          "radius": 2.6,
+          "block_behavior": "BLOCKABLE",
+          "impact_effects": [
+            {
+              "kind": "STUN",
+              "duration_ms": 4000
+            }
+          ]
+        }
       }
     },
     {
@@ -2158,6 +2247,20 @@
     },
     {
       "presentation_kind": "ABILITY",
+      "presentation_id": "PALADIN_AVENGE",
+      "display_name": "Avenge",
+      "description": "Rushes to the target.",
+      "sort_order": 155
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "PALADIN_CONSECRATE",
+      "display_name": "Consecrate",
+      "description": "Consecrates the targeted ground location, damaging and stunning enemies after a short delay.",
+      "sort_order": 156
+    },
+    {
+      "presentation_kind": "ABILITY",
       "presentation_id": "ARCHER_POWER_SHOT",
       "display_name": "Power Shot",
       "description": "Draws and releases a focused bow shot.",
@@ -2294,6 +2397,29 @@
       "attach_mode": "SPAWN_WORLD",
       "duration_ms": 2500,
       "sort_order": 10
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "PALADIN_AVENGE",
+      "trigger": "MELEE_IMPACT",
+      "hit_index": 0,
+      "anchor": "GROUND_UNDER_TARGET",
+      "vfx_id": "VFX_LIGHT_BURST_01_ARENA",
+      "attach_mode": "SPAWN_WORLD",
+      "duration_ms": 2500,
+      "sort_order": 11
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "PALADIN_CONSECRATE",
+      "trigger": "SPELL_RELEASE",
+      "anchor": "IMPACT_POINT",
+      "vfx_id": "VFX_LIGHT_AREA_01_ARENA",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "PARTICLE_SYSTEM",
+      "duration_ms": 0,
+      "sort_order": 12
     },
     {
       "owner_kind": "ABILITY",
@@ -2859,6 +2985,18 @@
       "slot_id": "slot_1_1",
       "ability_id": "PALADIN_CHARGE",
       "sort_order": 160
+    },
+    {
+      "class_id": "PALADIN",
+      "slot_id": "slot_1_3",
+      "ability_id": "PALADIN_AVENGE",
+      "sort_order": 165
+    },
+    {
+      "class_id": "PALADIN",
+      "slot_id": "slot_1_4",
+      "ability_id": "PALADIN_CONSECRATE",
+      "sort_order": 175
     },
     {
       "class_id": "PALADIN",
