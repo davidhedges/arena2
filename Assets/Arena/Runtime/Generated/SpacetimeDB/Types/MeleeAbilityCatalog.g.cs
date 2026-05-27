@@ -23,6 +23,8 @@ namespace SpacetimeDB.Types
         public bool AppliesStagger;
         [DataMember(Name = "range")]
         public float Range;
+        [DataMember(Name = "minimum_range")]
+        public float MinimumRange;
         [DataMember(Name = "cooldown_ms")]
         public ulong CooldownMs;
         [DataMember(Name = "uses_global_cooldown")]
@@ -62,6 +64,7 @@ namespace SpacetimeDB.Types
             int BaseDamage,
             bool AppliesStagger,
             float Range,
+            float MinimumRange,
             ulong CooldownMs,
             bool UsesGlobalCooldown,
             ulong GlobalCooldownMs,
@@ -85,6 +88,7 @@ namespace SpacetimeDB.Types
             this.BaseDamage = BaseDamage;
             this.AppliesStagger = AppliesStagger;
             this.Range = Range;
+            this.MinimumRange = MinimumRange;
             this.CooldownMs = CooldownMs;
             this.UsesGlobalCooldown = UsesGlobalCooldown;
             this.GlobalCooldownMs = GlobalCooldownMs;

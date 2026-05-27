@@ -223,6 +223,17 @@ namespace Arena.Input
                             : $"melee rejected: {slotId} out of range dist={horizDist:F2} allowed={strictAllowedDistance:F2} range={strikeRange:F2} target_radius={targetRadius:F2}");
                     return false;
                 }
+                float minimumRange = Mathf.Max(0f, gameplay.MinimumRange);
+                if (minimumRange > 0f)
+                {
+                    float strictMinimumDistance = minimumRange + targetRadius;
+                    if (horizDist < strictMinimumDistance)
+                    {
+                        LoadoutActionTrace.Trace(
+                            $"melee rejected: {slotId} inside minimum range dist={horizDist:F2} min={strictMinimumDistance:F2} minimum_range={minimumRange:F2} target_radius={targetRadius:F2}");
+                        return false;
+                    }
+                }
             }
 
             // Send to server for authoritative validation, damage, and remote sync.

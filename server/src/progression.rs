@@ -265,6 +265,8 @@ struct AbilityGameplayDefinition {
     base_damage: Option<i32>,
     applies_stagger: Option<bool>,
     range: Option<f32>,
+    #[serde(default)]
+    minimum_range: Option<f32>,
     cooldown_ms: Option<u64>,
     uses_global_cooldown: Option<bool>,
     #[serde(default)]
@@ -1165,6 +1167,7 @@ pub struct MeleeAbilityCatalog {
     pub base_damage: i32,
     pub applies_stagger: bool,
     pub range: f32,
+    pub minimum_range: f32,
     pub cooldown_ms: u64,
     pub uses_global_cooldown: bool,
     pub global_cooldown_ms: u64,
@@ -2752,6 +2755,7 @@ fn sync_melee_ability_catalog(ctx: &ReducerContext) {
                 "applies_stagger",
             ),
             range: required_melee_field(definition.gameplay.range, &ability_id, "range"),
+            minimum_range: definition.gameplay.minimum_range.unwrap_or(0.0).max(0.0),
             cooldown_ms: required_melee_field(
                 definition.gameplay.cooldown_ms,
                 &ability_id,
@@ -4259,6 +4263,7 @@ fn validate_ability_catalog() {
                     && ability.gameplay.requires_target.is_none()
                     && ability.gameplay.aim_radius.is_none()
                     && ability.gameplay.melee_targeting.is_none()
+                    && ability.gameplay.minimum_range.is_none()
                     && ability.gameplay.resource_cost.is_none()
                     && ability.gameplay.primary_resource_gain_on_cast == 0.0
                     && !ability.gameplay.arms_auto_attack_on_cast,
@@ -4290,6 +4295,7 @@ fn validate_ability_catalog() {
                     && ability.gameplay.aim_radius.is_none()
                     && ability.gameplay.melee_targeting.is_none()
                     && ability.gameplay.melee_impact_effects.is_empty()
+                    && ability.gameplay.minimum_range.is_none()
                     && ability.gameplay.resource_cost.is_none()
                     && ability.gameplay.global_cooldown_ms.is_none()
                     && ability.gameplay.primary_resource_gain_on_cast == 0.0
@@ -4348,6 +4354,15 @@ fn validate_melee_gameplay_fields(ability_id: &str, gameplay: &AbilityGameplayDe
     assert!(
         range.is_finite() && range > 0.0,
         "melee ability '{ability_id}' range must be positive"
+    );
+    let minimum_range = gameplay.minimum_range.unwrap_or(0.0);
+    assert!(
+        minimum_range.is_finite() && minimum_range >= 0.0,
+        "melee ability '{ability_id}' minimum_range must be non-negative"
+    );
+    assert!(
+        minimum_range < range,
+        "melee ability '{ability_id}' minimum_range must be less than range"
     );
     validate_authored_global_cooldown_ms(
         ability_id,
@@ -4567,6 +4582,10 @@ fn validate_spell_gameplay(ability_id: &str, gameplay: &AbilityGameplayDefinitio
     assert!(
         gameplay.delivery.is_some(),
         "spell ability '{ability_id}' must define gameplay.delivery"
+    );
+    assert!(
+        gameplay.minimum_range.is_none(),
+        "spell ability '{ability_id}' must not define gameplay.minimum_range"
     );
 }
 
@@ -6769,6 +6788,7 @@ mod tests {
             "base_damage",
             "applies_stagger",
             "range",
+            "minimum_range",
             "parry_behavior",
             "block_behavior",
             "airborne_targeting_mode",
@@ -7084,6 +7104,7 @@ mod tests {
             assert_eq!(ability.gameplay.base_damage, Some(32));
             assert_eq!(ability.gameplay.applies_stagger, Some(false));
             assert_eq!(ability.gameplay.range, Some(18.0));
+            assert_eq!(ability.gameplay.minimum_range, Some(5.0));
             assert_eq!(ability.gameplay.cooldown_ms, Some(1600));
             assert_eq!(ability.gameplay.uses_global_cooldown, Some(true));
             assert_eq!(

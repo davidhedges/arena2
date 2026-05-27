@@ -782,6 +782,7 @@ struct ResolvedMeleeGameplay {
     ability_id: Option<String>,
     base_damage: i32,
     range: f32,
+    minimum_range: f32,
     cooldown_ms: u64,
     uses_global_cooldown: bool,
     global_cooldown_ms: u64,
@@ -1166,6 +1167,7 @@ fn melee_gameplay_from_catalog_rows(
         ability_id: Some(ability.ability_id.clone()),
         base_damage: melee.base_damage,
         range: melee.range,
+        minimum_range: melee.minimum_range.max(0.0),
         cooldown_ms: melee.cooldown_ms,
         uses_global_cooldown: melee.uses_global_cooldown,
         global_cooldown_ms: melee.global_cooldown_ms,
@@ -1338,6 +1340,7 @@ fn auto_attack_melee_gameplay_from_catalog(
         ability_id: None,
         base_damage: row.base_damage,
         range: row.range,
+        minimum_range: 0.0,
         cooldown_ms: row.cooldown_ms,
         uses_global_cooldown: row.uses_global_cooldown,
         global_cooldown_ms: row.global_cooldown_ms,
@@ -1360,6 +1363,7 @@ fn auto_attack_replacement_melee_gameplay_from_catalog(
         ability_id: None,
         base_damage: row.base_damage,
         range: row.range,
+        minimum_range: 0.0,
         cooldown_ms: row.cooldown_ms,
         uses_global_cooldown: row.uses_global_cooldown,
         global_cooldown_ms: row.global_cooldown_ms,
@@ -2770,6 +2774,22 @@ fn perform_melee_attack_for_internal(
                 gap_close.as_ref().map(|row| row.ability_id.as_str()).unwrap_or("")
             );
             return Ok(MeleeAttackDispatch::Rejected);
+        }
+        if gameplay.minimum_range > 0.0 {
+            let minimum_allowed_distance = gameplay.minimum_range + target_state.hit_radius;
+            if horiz_dist < minimum_allowed_distance {
+                log::info!(
+                    "[MELEE] owner={} source={} strike={} rejected_minimum_range dist={:.2} min={:.2} minimum_range={:.2} target_radius={:.2}",
+                    short_identity(caster),
+                    policy.source_label(),
+                    strike.id,
+                    horiz_dist,
+                    minimum_allowed_distance,
+                    gameplay.minimum_range,
+                    target_state.hit_radius
+                );
+                return Ok(MeleeAttackDispatch::Rejected);
+            }
         }
 
         Some((target, target_state, target_phys, dx, dz, horiz_dist))

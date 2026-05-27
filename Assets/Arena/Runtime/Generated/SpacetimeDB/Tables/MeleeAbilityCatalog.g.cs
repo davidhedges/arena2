@@ -44,6 +44,7 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Col<MeleeAbilityCatalog, int> BaseDamage { get; }
         public global::SpacetimeDB.Col<MeleeAbilityCatalog, bool> AppliesStagger { get; }
         public global::SpacetimeDB.Col<MeleeAbilityCatalog, float> Range { get; }
+        public global::SpacetimeDB.Col<MeleeAbilityCatalog, float> MinimumRange { get; }
         public global::SpacetimeDB.Col<MeleeAbilityCatalog, ulong> CooldownMs { get; }
         public global::SpacetimeDB.Col<MeleeAbilityCatalog, bool> UsesGlobalCooldown { get; }
         public global::SpacetimeDB.Col<MeleeAbilityCatalog, ulong> GlobalCooldownMs { get; }
@@ -68,6 +69,7 @@ namespace SpacetimeDB.Types
             BaseDamage = new global::SpacetimeDB.Col<MeleeAbilityCatalog, int>(tableName, "base_damage");
             AppliesStagger = new global::SpacetimeDB.Col<MeleeAbilityCatalog, bool>(tableName, "applies_stagger");
             Range = new global::SpacetimeDB.Col<MeleeAbilityCatalog, float>(tableName, "range");
+            MinimumRange = new global::SpacetimeDB.Col<MeleeAbilityCatalog, float>(tableName, "minimum_range");
             CooldownMs = new global::SpacetimeDB.Col<MeleeAbilityCatalog, ulong>(tableName, "cooldown_ms");
             UsesGlobalCooldown = new global::SpacetimeDB.Col<MeleeAbilityCatalog, bool>(tableName, "uses_global_cooldown");
             GlobalCooldownMs = new global::SpacetimeDB.Col<MeleeAbilityCatalog, ulong>(tableName, "global_cooldown_ms");
