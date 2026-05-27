@@ -1222,6 +1222,40 @@
       }
     },
     {
+      "ability_id": "WARRIOR_DEFIANCE",
+      "class_id": "WARRIOR",
+      "action_id": "DEFIANCE",
+      "display_name": "Defiance",
+      "resource_kind": "RAGE",
+      "ability_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 83,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 60000,
+        "uses_global_cooldown": false,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "SELF",
+        "requires_target": false,
+        "resource_cost": 0.0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "APPLY_STATUS",
+          "duration_ms": 5000,
+          "status_stack_group": "DEFIANCE",
+          "polarity": "BUFF",
+          "status": {
+            "kind": "DAMAGE_TAKEN_REDUCTION",
+            "modifier_scalar": 0.1,
+            "max_stacks": 1,
+            "stack_policy": "REFRESH"
+          }
+        }
+      }
+    },
+    {
       "ability_id": "WARRIOR_BATTLE_CRY",
       "class_id": "WARRIOR",
       "action_id": "BATTLE_CRY",
@@ -2016,6 +2050,13 @@
       "display_name": "Iron Will",
       "description": "Breaks intimidation and fear effects on the warrior.",
       "sort_order": 84
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "WARRIOR_DEFIANCE",
+      "display_name": "Defiance",
+      "description": "Briefly reduces incoming damage, scaling stronger at lower health.",
+      "sort_order": 85
     },
     {
       "presentation_kind": "ABILITY",

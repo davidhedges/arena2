@@ -1019,6 +1019,7 @@ fn known_status_kind_ids() -> HashSet<String> {
         StatusEffectKind::MoveSlowImmunity,
         StatusEffectKind::DamageAmp,
         StatusEffectKind::DirectDamageAmp,
+        StatusEffectKind::DamageTakenReduction,
         StatusEffectKind::HealingTakenReduction,
         StatusEffectKind::MeleeAttackModifier,
         StatusEffectKind::AttackSpeed,
@@ -7564,6 +7565,31 @@ mod tests {
     }
 
     #[test]
+    fn warrior_defiance_resolves_via_spell_catalog_without_default_placement() {
+        let catalog = progression_catalog();
+        let ability = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "WARRIOR_DEFIANCE")
+            .expect("expected Warrior Defiance ability");
+
+        assert_eq!(normalize_identifier(ability.action_id.as_str()), "DEFIANCE");
+        let definition = spell_definition_by_str(ability.action_id.as_str())
+            .expect("Defiance should resolve through the spell catalog");
+        assert_eq!(
+            definition.behavior,
+            crate::spells::SpellBehavior::ApplyStatus
+        );
+        assert!(!definition.uses_global_cooldown);
+        assert!(!catalog
+            .default_loadout_assignments
+            .iter()
+            .any(|assignment| {
+                assignment.action_kind == "ABILITY" && assignment.ability_id == "WARRIOR_DEFIANCE"
+            }));
+    }
+
+    #[test]
     fn spell_abilities_do_not_define_positive_resource_costs() {
         let catalog = progression_catalog();
 
@@ -7601,6 +7627,10 @@ mod tests {
         assert!(
             animation_set_spell_ids.contains("IRON_WILL"),
             "expected Iron Will spell animation entry in the derived greatsword animation set"
+        );
+        assert!(
+            animation_set_spell_ids.contains("DEFIANCE"),
+            "expected Defiance spell animation entry in the derived greatsword animation set"
         );
     }
 

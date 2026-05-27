@@ -5345,6 +5345,18 @@ fn scale_apply_status_payload_for_caster(
     kind: &SpellId,
     payload: StatusPayload,
 ) -> StatusPayload {
+    if kind.as_str() == "DEFIANCE" {
+        let StatusPayload::DamageTakenReduction { .. } = payload else {
+            return payload;
+        };
+        let Some(state) = ctx.db.player_state().player_id().find(caster) else {
+            return payload;
+        };
+        return StatusPayload::DamageTakenReduction {
+            modifier_scalar: defiance_damage_taken_reduction_for_health(state.hp, state.max_hp),
+        };
+    }
+
     if kind.as_str() != "FORTIFY" {
         return payload;
     }
@@ -5363,6 +5375,20 @@ fn scale_apply_status_payload_for_caster(
         absorb_amount: scale_fortify_temporary_hitpoints_from_allocations(absorb_amount, allocated),
         absorb_cap: scale_fortify_temporary_hitpoints_from_allocations(absorb_cap, allocated),
     }
+}
+
+fn defiance_damage_taken_reduction_for_health(current_hp: i32, max_hp: i32) -> f32 {
+    const MIN_REDUCTION: f32 = 0.10;
+    const MAX_REDUCTION: f32 = 1.0;
+    const FULL_IMMUNITY_HP_PCT: f32 = 0.01;
+
+    let hp_pct = if max_hp <= 0 {
+        1.0
+    } else {
+        (current_hp.max(0) as f32 / max_hp.max(1) as f32).clamp(FULL_IMMUNITY_HP_PCT, 1.0)
+    };
+    let missing_scale = (1.0 - hp_pct) / (1.0 - FULL_IMMUNITY_HP_PCT);
+    MIN_REDUCTION + (MAX_REDUCTION - MIN_REDUCTION) * missing_scale
 }
 
 fn apply_status_to_target(
@@ -5824,9 +5850,9 @@ mod tests {
     use super::{
         active_cast_cancel_receive_window_allows, active_cast_interrupt_terminal_policy,
         approach_line_contact_point_xz, area_contact_direction, contact_distance_from_radii,
-        fixed_y_terrain_blocks_special_movement, has_arrived_at_contact_distance,
-        has_movement_intent, has_voluntary_movement_after_cast, horizontal_movement_duration_ms,
-        is_generic_area_spell, is_target_within_facing_arc,
+        defiance_damage_taken_reduction_for_health, fixed_y_terrain_blocks_special_movement,
+        has_arrived_at_contact_distance, has_movement_intent, has_voluntary_movement_after_cast,
+        horizontal_movement_duration_ms, is_generic_area_spell, is_target_within_facing_arc,
         normal_cast_time_spell_refunds_gcd_on_self_cancel, projectile_execute_uses_live_facing,
         resolve_generic_area_center, resolve_special_movement_y,
         spell_primary_resource_cost_for_action, valid_cast_action_token,
@@ -5870,6 +5896,14 @@ mod tests {
 
     fn spell_id(id: &str) -> SpellId {
         SpellId::new(id).expect("test spell id should be valid")
+    }
+
+    #[test]
+    fn defiance_damage_reduction_scales_continuously_from_real_health_pct() {
+        assert!((defiance_damage_taken_reduction_for_health(100, 100) - 0.10).abs() < 0.0001);
+        assert!((defiance_damage_taken_reduction_for_health(50, 100) - 0.55454546).abs() < 0.0001);
+        assert!((defiance_damage_taken_reduction_for_health(25, 100) - 0.7818182).abs() < 0.0001);
+        assert!((defiance_damage_taken_reduction_for_health(1, 100) - 1.0).abs() < 0.0001);
     }
 
     fn test_active_cast(ends_at: Timestamp) -> ActiveCast {

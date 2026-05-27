@@ -583,6 +583,7 @@ mod tests {
             "GIANT_SWING",
             "INTIMIDATE",
             "IRON_WILL",
+            "DEFIANCE",
             "ENRAGE",
             "SHOCKWAVE",
         ] {
@@ -698,6 +699,32 @@ mod tests {
             .statuses
             .iter()
             .all(|status| status.stack_group.is_none()));
+    }
+
+    #[test]
+    fn defiance_catalog_matches_damage_reduction_buff_defaults() {
+        let definition = definition("DEFIANCE");
+
+        assert_eq!(definition.kind.as_str(), "DEFIANCE");
+        assert_eq!(definition.cooldown, Duration::from_millis(60_000));
+        assert!(!definition.uses_global_cooldown);
+        assert_eq!(definition.behavior.as_str(), "APPLY_STATUS");
+        assert_eq!(definition.targeting.as_str(), "SELF");
+        assert!(!definition.requires_target);
+        assert!((definition.duration - 5.0).abs() < 0.0001);
+        assert!((definition.primary_resource_cost - 0.0).abs() < 0.0001);
+        assert_eq!(definition.status_stack_group.as_deref(), Some("DEFIANCE"));
+        assert_eq!(
+            definition.apply_status_polarity,
+            Some(crate::combat::StatusPolarity::Buff)
+        );
+        let status = definition
+            .apply_status
+            .expect("Defiance should define an apply-status payload");
+        assert_eq!(status.kind, StatusEffectKind::DamageTakenReduction);
+        assert!((status.modifier_scalar - 0.1).abs() < 0.0001);
+        assert_eq!(status.max_stacks, 1);
+        assert_eq!(status.stack_policy, StackPolicy::Refresh);
     }
 
     #[test]

@@ -1649,6 +1649,7 @@ fn validate_apply_status_kind_for_self(
         StatusEffectKind::MoveSlowImmunity
         | StatusEffectKind::DamageAmp
         | StatusEffectKind::DirectDamageAmp
+        | StatusEffectKind::DamageTakenReduction
         | StatusEffectKind::MeleeAttackModifier
         | StatusEffectKind::AttackSpeed
         | StatusEffectKind::CastSpeed
@@ -1752,6 +1753,7 @@ mod tests {
                 "MOMENTUM",
                 "FORTIFY",
                 "IRON_WILL",
+                "DEFIANCE",
                 "BATTLE_CRY",
                 "GIANT_SWING",
                 "ENRAGE",
@@ -1788,6 +1790,7 @@ mod tests {
             "MOMENTUM",
             "FORTIFY",
             "IRON_WILL",
+            "DEFIANCE",
             "BATTLE_CRY",
             "GIANT_SWING",
             "ENRAGE",

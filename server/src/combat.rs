@@ -142,6 +142,7 @@ pub(crate) const COMBAT_METADATA_NONE: &str = "";
 pub(crate) const COMBAT_METADATA_CONSUMED_MELEE_MODIFIER: &str = "CONSUMED_MELEE_MODIFIER";
 const MIN_SLOW_PCT: f32 = f32::EPSILON;
 const MIN_ATTACK_SPEED_MULTIPLIER: f32 = 0.05;
+const MAX_DAMAGE_TAKEN_REDUCTION: f32 = 1.0;
 const MAX_HEALING_TAKEN_REDUCTION: f32 = 1.0;
 const PENDING_EFFECT_SEQUENCE_KEY: u8 = 0;
 
@@ -1339,6 +1340,7 @@ pub enum StatusEffectKind {
     MoveSlowImmunity,
     DamageAmp,
     DirectDamageAmp,
+    DamageTakenReduction,
     HealingTakenReduction,
     MeleeAttackModifier,
     AttackSpeed,
@@ -1362,6 +1364,7 @@ impl StatusEffectKind {
             Self::MoveSlowImmunity => "MOVE_SLOW_IMMUNITY",
             Self::DamageAmp => "DAMAGE_AMP",
             Self::DirectDamageAmp => "DIRECT_DAMAGE_AMP",
+            Self::DamageTakenReduction => "DAMAGE_TAKEN_REDUCTION",
             Self::HealingTakenReduction => "HEALING_TAKEN_REDUCTION",
             Self::MeleeAttackModifier => "MELEE_ATTACK_MODIFIER",
             Self::AttackSpeed => "ATTACK_SPEED",
@@ -1385,6 +1388,7 @@ impl StatusEffectKind {
             "MOVE_SLOW_IMMUNITY" => Some(Self::MoveSlowImmunity),
             "DAMAGE_AMP" => Some(Self::DamageAmp),
             "DIRECT_DAMAGE_AMP" => Some(Self::DirectDamageAmp),
+            "DAMAGE_TAKEN_REDUCTION" => Some(Self::DamageTakenReduction),
             "HEALING_TAKEN_REDUCTION" => Some(Self::HealingTakenReduction),
             "MELEE_ATTACK_MODIFIER" => Some(Self::MeleeAttackModifier),
             "ATTACK_SPEED" => Some(Self::AttackSpeed),
@@ -1420,6 +1424,9 @@ pub enum StatusPayload {
         modifier_scalar: f32,
     },
     DirectDamageAmp {
+        modifier_scalar: f32,
+    },
+    DamageTakenReduction {
         modifier_scalar: f32,
     },
     HealingTakenReduction {
@@ -1520,6 +1527,9 @@ impl AuthoredStatusPayload {
             StatusEffectKind::DirectDamageAmp => StatusPayload::DirectDamageAmp {
                 modifier_scalar: self.modifier_scalar,
             },
+            StatusEffectKind::DamageTakenReduction => StatusPayload::DamageTakenReduction {
+                modifier_scalar: self.modifier_scalar,
+            },
             StatusEffectKind::HealingTakenReduction => StatusPayload::HealingTakenReduction {
                 modifier_scalar: self.modifier_scalar,
             },
@@ -1586,6 +1596,7 @@ impl AuthoredStatusPayload {
             }
             StatusEffectKind::DamageAmp
             | StatusEffectKind::DirectDamageAmp
+            | StatusEffectKind::DamageTakenReduction
             | StatusEffectKind::HealingTakenReduction
             | StatusEffectKind::CastSpeed => {
                 if !self.modifier_scalar.is_finite() || self.modifier_scalar <= 0.0 {
@@ -1671,6 +1682,7 @@ impl StatusPayload {
             Self::MoveSlowImmunity => StatusEffectKind::MoveSlowImmunity,
             Self::DamageAmp { .. } => StatusEffectKind::DamageAmp,
             Self::DirectDamageAmp { .. } => StatusEffectKind::DirectDamageAmp,
+            Self::DamageTakenReduction { .. } => StatusEffectKind::DamageTakenReduction,
             Self::HealingTakenReduction { .. } => StatusEffectKind::HealingTakenReduction,
             Self::MeleeAttackModifier => StatusEffectKind::MeleeAttackModifier,
             Self::AttackSpeed { .. } => StatusEffectKind::AttackSpeed,
@@ -1737,6 +1749,14 @@ impl StatusPayload {
                 absorb_amount: 0,
                 absorb_cap: 0,
             },
+            Self::DamageTakenReduction { modifier_scalar } => StatusEffectColumns {
+                slow_pct: 0.0,
+                tick_amount: 0,
+                tick_interval_ms: 0,
+                modifier_scalar: modifier_scalar.clamp(0.0, MAX_DAMAGE_TAKEN_REDUCTION),
+                absorb_amount: 0,
+                absorb_cap: 0,
+            },
             Self::HealingTakenReduction { modifier_scalar } => StatusEffectColumns {
                 slow_pct: 0.0,
                 tick_amount: 0,
@@ -1795,6 +1815,11 @@ impl StatusPayload {
             StatusEffectKind::DirectDamageAmp => Self::DirectDamageAmp {
                 modifier_scalar: columns.modifier_scalar.max(0.0),
             },
+            StatusEffectKind::DamageTakenReduction => Self::DamageTakenReduction {
+                modifier_scalar: columns
+                    .modifier_scalar
+                    .clamp(0.0, MAX_DAMAGE_TAKEN_REDUCTION),
+            },
             StatusEffectKind::HealingTakenReduction => Self::HealingTakenReduction {
                 modifier_scalar: columns
                     .modifier_scalar
@@ -1838,6 +1863,11 @@ impl StatusPayload {
             | Self::DirectDamageAmp { modifier_scalar }
             | Self::CastSpeed { modifier_scalar } => {
                 !modifier_scalar.is_finite() || modifier_scalar <= 0.0
+            }
+            Self::DamageTakenReduction { modifier_scalar } => {
+                !modifier_scalar.is_finite()
+                    || modifier_scalar <= 0.0
+                    || modifier_scalar > MAX_DAMAGE_TAKEN_REDUCTION
             }
             Self::HealingTakenReduction { modifier_scalar } => {
                 !modifier_scalar.is_finite()
@@ -1901,6 +1931,17 @@ impl StatusPayload {
                 }
                 Ok(())
             }
+            Self::DamageTakenReduction { modifier_scalar } => {
+                if !modifier_scalar.is_finite()
+                    || modifier_scalar <= 0.0
+                    || modifier_scalar > MAX_DAMAGE_TAKEN_REDUCTION
+                {
+                    return Err(format!(
+                        "{subject} {path}.modifier_scalar must be > 0 and <= 1"
+                    ));
+                }
+                Ok(())
+            }
             Self::HealingTakenReduction { modifier_scalar } => {
                 if !modifier_scalar.is_finite()
                     || modifier_scalar <= 0.0
@@ -1951,6 +1992,12 @@ impl StatusPayload {
             | Self::DirectDamageAmp { modifier_scalar }
             | Self::CastSpeed { modifier_scalar } => {
                 modifier_scalar > existing.modifier_scalar.max(0.0)
+            }
+            Self::DamageTakenReduction { modifier_scalar } => {
+                modifier_scalar
+                    > existing
+                        .modifier_scalar
+                        .clamp(0.0, MAX_DAMAGE_TAKEN_REDUCTION)
             }
             Self::HealingTakenReduction { modifier_scalar } => {
                 modifier_scalar
@@ -2760,10 +2807,11 @@ fn resolve_damage_amount(
 ) -> ResolvedEffectAmount {
     let delivery = DamageDelivery::from_wire(hit.damage_delivery.as_str());
     let non_crit_multiplier = if hit.source == Identity::ZERO {
-        1.0
+        temporary_modifiers.damage_taken_multiplier_for(&hit.target)
     } else {
         temporary_modifiers.damage_multiplier_for(&hit.source, delivery)
             * derived_combat_stats_for_owner(ctx, hit.source).damage_multiplier
+            * temporary_modifiers.damage_taken_multiplier_for(&hit.target)
     };
     resolve_effect_amount(ctx, hit, non_crit_multiplier)
 }
@@ -3941,6 +3989,16 @@ impl StatusRuntimeView {
                         *entry = (*entry)
                             .max(effect.modifier_scalar.max(0.0) * effect.stacks.max(1) as f32);
                     }
+                    StatusEffectKind::DamageTakenReduction => {
+                        let entry = modifiers
+                            .damage_taken_reduction_by_target
+                            .entry(*target)
+                            .or_insert(0.0);
+                        *entry = (*entry).max(
+                            (effect.modifier_scalar.max(0.0) * effect.stacks.max(1) as f32)
+                                .clamp(0.0, MAX_DAMAGE_TAKEN_REDUCTION),
+                        );
+                    }
                     StatusEffectKind::HealingTakenReduction => {
                         let entry = modifiers
                             .healing_taken_reduction_by_target
@@ -3987,6 +4045,7 @@ pub struct TemporaryCombatModifiers {
     move_slow_immune: HashSet<Identity>,
     damage_amp_by_target: HashMap<Identity, f32>,
     direct_damage_amp_by_target: HashMap<Identity, f32>,
+    damage_taken_reduction_by_target: HashMap<Identity, f32>,
     healing_taken_reduction_by_target: HashMap<Identity, f32>,
     attack_speed_multiplier_by_target: HashMap<Identity, f32>,
     cast_speed_by_target: HashMap<Identity, f32>,
@@ -4014,6 +4073,16 @@ impl TemporaryCombatModifiers {
             0.0
         };
         1.0 + base_amp + direct_amp
+    }
+
+    pub fn damage_taken_multiplier_for(&self, identity: &Identity) -> f32 {
+        let reduction = self
+            .damage_taken_reduction_by_target
+            .get(identity)
+            .copied()
+            .unwrap_or(0.0)
+            .clamp(0.0, MAX_DAMAGE_TAKEN_REDUCTION);
+        1.0 - reduction
     }
 
     pub fn healing_taken_multiplier_for(&self, identity: &Identity) -> f32 {
@@ -4576,6 +4645,15 @@ mod tests {
                 },
             ),
             (
+                StatusPayload::DamageTakenReduction {
+                    modifier_scalar: 0.45,
+                },
+                StatusEffectKind::DamageTakenReduction,
+                StatusPayload::DamageTakenReduction {
+                    modifier_scalar: 0.45,
+                },
+            ),
+            (
                 StatusPayload::HealingTakenReduction {
                     modifier_scalar: 0.35,
                 },
@@ -5054,6 +5132,15 @@ mod tests {
             now + Duration::from_secs(5),
         );
         healing_reduction.stacks = 2;
+        let mut damage_taken_reduction = test_status_effect(
+            target,
+            StatusPayload::DamageTakenReduction {
+                modifier_scalar: 0.60,
+            },
+            now,
+            now + Duration::from_secs(5),
+        );
+        damage_taken_reduction.stacks = 2;
 
         let view = status_runtime_view(
             vec![
@@ -5074,6 +5161,7 @@ mod tests {
                     now + Duration::from_secs(5),
                 ),
                 direct_amp,
+                damage_taken_reduction,
                 healing_reduction,
                 test_status_effect(
                     target,
@@ -5129,6 +5217,7 @@ mod tests {
             (modifiers.damage_multiplier_for(&target, DamageDelivery::Periodic) - 1.40).abs()
                 < 0.0001
         );
+        assert_eq!(modifiers.damage_taken_multiplier_for(&target), 0.0);
         assert_eq!(modifiers.healing_taken_multiplier_for(&target), 0.0);
         assert!((modifiers.attack_speed_multiplier_for(&target) - 0.9625).abs() < 0.0001);
         assert!((modifiers.cast_speed_multiplier_for(&target) - 1.30).abs() < 0.0001);
