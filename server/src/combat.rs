@@ -1069,6 +1069,7 @@ fn set_combat_stacking_passive_stacks(
             expires_at,
             spec.max_stacks,
             Some(stacks),
+            String::new(),
         );
         ctx.db.status_effect().status_id().update(existing);
     } else {
@@ -1083,6 +1084,7 @@ fn set_combat_stacking_passive_stacks(
             payload,
             now,
             expires_at,
+            String::new(),
         );
         effect.stacks = stacks;
         ctx.db.status_effect().insert(effect);
@@ -1260,6 +1262,7 @@ pub struct PendingApplyStatus {
     pub status_modifier_scalar: f32,
     pub status_absorb_amount: i32,
     pub status_absorb_cap: i32,
+    pub dispel_types: String,
     pub stack_group: String,
     pub max_stacks: u32,
     pub stack_policy: String,
@@ -1316,6 +1319,7 @@ pub struct StatusEffect {
     // Kind-specific remaining and maximum absorb values used by temporary hitpoints.
     pub absorb_amount: i32,
     pub absorb_cap: i32,
+    pub dispel_types: String,
     pub next_tick_at: Timestamp,
     // Mirrors `next_tick_at` for indexed range scans; must stay in sync with next_tick_at.
     #[index(btree)]
@@ -2043,6 +2047,63 @@ impl StatusPolarity {
     }
 }
 
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Hash, Serialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub(crate) enum StatusDispelType {
+    Magic,
+    Physical,
+    Poison,
+    Disease,
+    Curse,
+    Bleed,
+    Enrage,
+}
+
+impl StatusDispelType {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::Magic => "MAGIC",
+            Self::Physical => "PHYSICAL",
+            Self::Poison => "POISON",
+            Self::Disease => "DISEASE",
+            Self::Curse => "CURSE",
+            Self::Bleed => "BLEED",
+            Self::Enrage => "ENRAGE",
+        }
+    }
+
+    fn from_wire(value: &str) -> Option<Self> {
+        match value {
+            "MAGIC" => Some(Self::Magic),
+            "PHYSICAL" => Some(Self::Physical),
+            "POISON" => Some(Self::Poison),
+            "DISEASE" => Some(Self::Disease),
+            "CURSE" => Some(Self::Curse),
+            "BLEED" => Some(Self::Bleed),
+            "ENRAGE" => Some(Self::Enrage),
+            _ => None,
+        }
+    }
+}
+
+pub(crate) fn encode_status_dispel_types(types: &[StatusDispelType]) -> String {
+    let mut values: Vec<&'static str> = types
+        .iter()
+        .map(|dispel_type| dispel_type.as_str())
+        .collect();
+    values.sort_unstable();
+    values.dedup();
+    values.join("|")
+}
+
+pub(crate) fn decode_status_dispel_types(value: &str) -> Vec<StatusDispelType> {
+    value
+        .split('|')
+        .filter(|part| !part.is_empty())
+        .filter_map(StatusDispelType::from_wire)
+        .collect()
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum StackPolicy {
@@ -2089,6 +2150,7 @@ pub struct StatusApplication {
     stack_group_default: StatusStackGroupDefault,
     max_stacks: u32,
     stack_policy: StackPolicy,
+    dispel_types: Vec<StatusDispelType>,
 }
 
 impl StatusApplication {
@@ -2107,7 +2169,13 @@ impl StatusApplication {
             stack_group_default,
             max_stacks,
             stack_policy,
+            dispel_types: Vec::new(),
         }
+    }
+
+    pub(crate) fn with_dispel_types(mut self, dispel_types: Vec<StatusDispelType>) -> Self {
+        self.dispel_types = dispel_types;
+        self
     }
 
     pub fn payload(&self) -> StatusPayload {
@@ -2214,6 +2282,7 @@ impl StatusApplication {
             stack_group: self.stack_group(action_key, spell_id),
             max_stacks: self.max_stacks(),
             stack_policy: self.stack_policy(),
+            dispel_types: self.dispel_types.clone(),
         }
     }
 }
@@ -2246,6 +2315,7 @@ pub enum EffectPacket {
         stack_group: String,
         max_stacks: u32,
         stack_policy: StackPolicy,
+        dispel_types: Vec<StatusDispelType>,
     },
     RemoveStatus {
         target: Identity,
@@ -2318,6 +2388,7 @@ fn queue_effect(ctx: &ReducerContext, effect: EffectPacket) {
             stack_group,
             max_stacks,
             stack_policy,
+            dispel_types,
         } => {
             if payload.is_invalid() {
                 log::warn!(
@@ -2348,6 +2419,7 @@ fn queue_effect(ctx: &ReducerContext, effect: EffectPacket) {
                     stack_group,
                     max_stacks,
                     stack_policy,
+                    encode_status_dispel_types(&dispel_types),
                 ));
         }
         EffectPacket::RemoveStatus {
@@ -2437,6 +2509,7 @@ fn new_pending_apply_status(
     stack_group: String,
     max_stacks: u32,
     stack_policy: StackPolicy,
+    dispel_types: String,
 ) -> PendingApplyStatus {
     PendingApplyStatus {
         apply_status_id: 0,
@@ -2453,6 +2526,7 @@ fn new_pending_apply_status(
         status_modifier_scalar: columns.modifier_scalar,
         status_absorb_amount: columns.absorb_amount,
         status_absorb_cap: columns.absorb_cap,
+        dispel_types,
         stack_group,
         max_stacks,
         stack_policy: stack_policy.as_str().to_string(),
@@ -2555,6 +2629,7 @@ impl DuePendingEffect {
                     row.status_modifier_scalar,
                     row.status_absorb_amount,
                     row.status_absorb_cap,
+                    row.dispel_types.as_str(),
                     row.stack_group.as_str(),
                     row.max_stacks,
                     row.stack_policy.as_str(),
@@ -2679,6 +2754,7 @@ fn apply_pending_status_fields(
     status_modifier_scalar: f32,
     status_absorb_amount: i32,
     status_absorb_cap: i32,
+    dispel_types: &str,
     stack_group: &str,
     max_stacks: u32,
     stack_policy: &str,
@@ -2721,6 +2797,7 @@ fn apply_pending_status_fields(
         max_stacks.max(1),
         stack_policy,
         target_audience,
+        decode_status_dispel_types(dispel_types),
     );
 }
 
@@ -3046,6 +3123,7 @@ fn apply_status(
     max_stacks: u32,
     stack_policy: StackPolicy,
     target_audience: TargetAudience,
+    dispel_types: Vec<StatusDispelType>,
 ) {
     if duration.is_zero() {
         return;
@@ -3111,6 +3189,7 @@ fn apply_status(
                     expires_at,
                     max_stacks.max(1),
                     Some(1),
+                    encode_status_dispel_types(&dispel_types),
                 );
                 ctx.db.status_effect().status_id().update(existing);
                 if kind == StatusEffectKind::Stagger {
@@ -3133,6 +3212,7 @@ fn apply_status(
                     expires_at,
                     max_stacks.max(1),
                     Some(next_stacks),
+                    encode_status_dispel_types(&dispel_types),
                 );
                 ctx.db.status_effect().status_id().update(existing);
                 if kind == StatusEffectKind::Stagger {
@@ -3157,6 +3237,7 @@ fn apply_status(
                     expires_at,
                     max_stacks.max(1),
                     Some(1),
+                    encode_status_dispel_types(&dispel_types),
                 );
                 ctx.db.status_effect().status_id().update(existing);
                 if kind == StatusEffectKind::Stagger {
@@ -3178,6 +3259,7 @@ fn apply_status(
         payload,
         now,
         expires_at,
+        encode_status_dispel_types(&dispel_types),
     ));
     if kind == StatusEffectKind::Stagger {
         apply_stagger_status_side_effects(ctx, now, source, target);
@@ -3335,6 +3417,7 @@ fn apply_status_update(
     expires_at: Timestamp,
     max_stacks: u32,
     stacks_override: Option<u32>,
+    dispel_types: String,
 ) {
     let mut columns = payload.encode();
     if matches!(payload, StatusPayload::TemporaryHitpoints { .. }) {
@@ -3365,6 +3448,7 @@ fn apply_status_update(
     existing.modifier_scalar = columns.modifier_scalar;
     existing.absorb_amount = columns.absorb_amount;
     existing.absorb_cap = columns.absorb_cap;
+    existing.dispel_types = dispel_types;
     set_status_next_tick(existing, next_status_tick(now, columns.tick_interval_ms));
     if let Some(stacks) = stacks_override {
         existing.stacks = stacks.min(existing.max_stacks).max(1);
@@ -4264,6 +4348,7 @@ mod tests {
             payload,
             now,
             expires_at,
+            String::new(),
         )
     }
 
@@ -4431,6 +4516,7 @@ mod tests {
             now + Duration::from_secs(9),
             2,
             Some(2),
+            String::new(),
         );
         assert_eq!(effect.absorb_amount, 60);
         assert_eq!(effect.absorb_cap, 60);
@@ -4450,6 +4536,7 @@ mod tests {
             now + Duration::from_secs(10),
             2,
             Some(2),
+            String::new(),
         );
         assert_eq!(effect.absorb_amount, 60);
         assert_eq!(effect.stacks, 2);
@@ -4811,6 +4898,7 @@ mod tests {
             stack_group: "TEST_STUN".to_string(),
             max_stacks: 1,
             stack_policy: StackPolicy::Refresh,
+            dispel_types: Vec::new(),
         };
 
         let EffectPacket::ApplyStatus { payload, .. } = packet else {
@@ -5280,6 +5368,7 @@ fn new_status_effect(
     payload: StatusPayload,
     now: Timestamp,
     expires_at: Timestamp,
+    dispel_types: String,
 ) -> StatusEffect {
     let kind = payload.kind();
     let columns = payload.encode();
@@ -5303,6 +5392,7 @@ fn new_status_effect(
         modifier_scalar: columns.modifier_scalar,
         absorb_amount: columns.absorb_amount,
         absorb_cap: columns.absorb_cap,
+        dispel_types,
         next_tick_at: now,
         next_tick_at_micros: 0,
         spell_id: spell_id.to_string(),
@@ -5383,6 +5473,7 @@ pub fn run_status_runtime_harness(ctx: &ReducerContext) -> Result<(), String> {
         StatusPayload::Root,
         now,
         now + Duration::from_secs(2),
+        String::new(),
     ));
 
     let mut harness_dot = new_status_effect(
@@ -5399,6 +5490,7 @@ pub fn run_status_runtime_harness(ctx: &ReducerContext) -> Result<(), String> {
         },
         now,
         now + Duration::from_secs(5),
+        String::new(),
     );
     // Harness intentionally fires one periodic tick in the same reducer invocation.
     set_status_next_tick(&mut harness_dot, now);

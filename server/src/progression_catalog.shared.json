@@ -1783,8 +1783,75 @@
           "impact_effects": [
             {
               "kind": "STUN",
-              "duration_ms": 4000
+              "duration_ms": 4000,
+              "dispel_types": [
+                "MAGIC"
+              ]
             }
+          ]
+        }
+      }
+    },
+    {
+      "ability_id": "PALADIN_CLEANSING_TOUCH",
+      "class_id": "PALADIN",
+      "action_id": "CLEANSING_TOUCH",
+      "display_name": "Cleansing Touch",
+      "resource_kind": "ZEAL",
+      "ability_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 157,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 1200,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "TARGET",
+        "target_audience": "PARTY_OR_SELF",
+        "requires_target": false,
+        "resource_cost": 1.0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "REMOVE_STATUS",
+          "max_distance": 2.5,
+          "max_count": 1,
+          "polarity": "DEBUFF",
+          "dispel_types": [
+            "MAGIC"
+          ]
+        }
+      }
+    },
+    {
+      "ability_id": "PALADIN_ABSOLUTION",
+      "class_id": "PALADIN",
+      "action_id": "ABSOLUTION",
+      "display_name": "Absolution",
+      "resource_kind": "ZEAL",
+      "ability_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 158,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 120000,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "TARGET",
+        "target_audience": "PARTY_OR_SELF",
+        "requires_target": false,
+        "resource_cost": 1.0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "REMOVE_STATUS",
+          "max_distance": 30.0,
+          "max_count": 0,
+          "polarity": "DEBUFF",
+          "dispel_types": [
+            "MAGIC"
           ]
         }
       }
@@ -2258,6 +2325,20 @@
       "display_name": "Consecrate",
       "description": "Consecrates the targeted ground location, damaging and stunning enemies after a short delay.",
       "sort_order": 156
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "PALADIN_CLEANSING_TOUCH",
+      "display_name": "Cleansing Touch",
+      "description": "Removes one magical debuff from a nearby ally or yourself.",
+      "sort_order": 157
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "PALADIN_ABSOLUTION",
+      "display_name": "Absolution",
+      "description": "Removes all magical debuffs from a distant ally or yourself.",
+      "sort_order": 158
     },
     {
       "presentation_kind": "ABILITY",
@@ -2997,6 +3078,18 @@
       "slot_id": "slot_1_4",
       "ability_id": "PALADIN_CONSECRATE",
       "sort_order": 175
+    },
+    {
+      "class_id": "PALADIN",
+      "slot_id": "slot_1_5",
+      "ability_id": "PALADIN_CLEANSING_TOUCH",
+      "sort_order": 180
+    },
+    {
+      "class_id": "PALADIN",
+      "slot_id": "slot_1_6",
+      "ability_id": "PALADIN_ABSOLUTION",
+      "sort_order": 185
     },
     {
       "class_id": "PALADIN",

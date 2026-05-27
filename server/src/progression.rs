@@ -9,7 +9,7 @@ use spacetimedb::{reducer, table, Identity, ReducerContext, Table, Timestamp};
 use crate::action_ids::{normalize_authored_action_id, AuthoredActionId};
 use crate::appearance::sync_character_appearance_outfit_for_class;
 use crate::combat::{
-    AuthoredStatusPayload, StackPolicy, StatusApplication, StatusEffectKind,
+    AuthoredStatusPayload, StackPolicy, StatusApplication, StatusDispelType, StatusEffectKind,
     StatusStackGroupDefault,
 };
 use crate::melee::sync_melee_attack_modifier_catalog;
@@ -376,6 +376,8 @@ struct MovementDeliveryImpactStatusDefinition {
     max_stacks: u32,
     #[serde(default = "default_status_stack_policy")]
     stack_policy: StackPolicy,
+    #[serde(default)]
+    dispel_types: Vec<StatusDispelType>,
 }
 
 #[derive(Clone, Deserialize)]
@@ -409,6 +411,8 @@ struct MeleeImpactStatusDefinition {
     max_stacks: u32,
     #[serde(default = "default_status_stack_policy")]
     stack_policy: StackPolicy,
+    #[serde(default)]
+    dispel_types: Vec<StatusDispelType>,
 }
 
 fn default_one_status_stack() -> u32 {
@@ -502,6 +506,7 @@ fn status_application_from_definition(
         status.absorb_cap,
         status.max_stacks,
         status.stack_policy,
+        status.dispel_types.clone(),
         default,
     )
 }
@@ -523,6 +528,7 @@ fn movement_status_application_from_definition(
         status.absorb_cap,
         status.max_stacks,
         status.stack_policy,
+        status.dispel_types.clone(),
         default,
     )
 }
@@ -541,6 +547,7 @@ fn status_application_from_parts(
     absorb_cap: i32,
     max_stacks: u32,
     stack_policy: StackPolicy,
+    dispel_types: Vec<StatusDispelType>,
     default: StatusStackGroupDefault,
 ) -> StatusApplication {
     let normalized = normalize_identifier(kind);
@@ -565,6 +572,7 @@ fn status_application_from_parts(
         max_stacks,
         stack_policy,
     )
+    .with_dispel_types(dispel_types)
 }
 
 fn authored_status_stack_group_default(kind: &str) -> StatusStackGroupDefault {

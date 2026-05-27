@@ -5,8 +5,8 @@ use crate::combat::scene_query::CombatAreaShape;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::combat::{
-    AuthoredStatusPayload, StackPolicy, StatusApplication, StatusEffectKind, StatusPayload,
-    StatusPolarity,
+    AuthoredStatusPayload, StackPolicy, StatusApplication, StatusDispelType, StatusEffectKind,
+    StatusPayload, StatusPolarity,
 };
 use crate::relations::TargetAudience;
 
@@ -216,7 +216,7 @@ impl SpellParryBehavior {
     }
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct ApplyStatusDefinition {
     pub kind: StatusEffectKind,
@@ -235,6 +235,8 @@ pub(crate) struct ApplyStatusDefinition {
     pub absorb_cap: i32,
     pub max_stacks: u32,
     pub stack_policy: StackPolicy,
+    #[serde(default)]
+    pub dispel_types: Vec<StatusDispelType>,
 }
 
 impl ApplyStatusDefinition {
@@ -368,6 +370,9 @@ pub(crate) struct ApplyStatusSecondaryTunables {
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct RemoveStatusSecondaryTunables {
     pub statuses: Vec<RemoveStatusDefinition>,
+    pub max_count: u32,
+    pub polarity: Option<StatusPolarity>,
+    pub dispel_types: Vec<StatusDispelType>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -419,7 +424,8 @@ mod tests {
     use std::collections::HashSet;
     use std::time::Duration;
 
-    use crate::combat::{StackPolicy, StatusEffectKind};
+    use crate::combat::{StackPolicy, StatusDispelType, StatusEffectKind};
+    use crate::relations::TargetAudience;
 
     use crate::spells::spell_definition_by_str;
 
@@ -610,6 +616,7 @@ mod tests {
         );
         let status = definition
             .apply_status
+            .as_ref()
             .expect("Momentum should define an apply-status payload");
         assert_eq!(status.kind, StatusEffectKind::MoveSlowImmunity);
         assert_eq!(status.modifier_scalar, 0.0);
@@ -636,6 +643,7 @@ mod tests {
         );
         let status = definition
             .apply_status
+            .as_ref()
             .expect("Battle Cry should define an apply-status payload");
         assert_eq!(status.kind, StatusEffectKind::DamageAmp);
         assert!((status.modifier_scalar - 0.1).abs() < 0.0001);
@@ -662,6 +670,7 @@ mod tests {
         );
         let status = definition
             .apply_status
+            .as_ref()
             .expect("Fortify should define an apply-status payload");
         assert_eq!(status.kind, StatusEffectKind::TemporaryHitpoints);
         assert_eq!(status.absorb_amount, 30);
@@ -702,6 +711,57 @@ mod tests {
     }
 
     #[test]
+    fn cleansing_touch_catalog_filters_magic_debuffs_in_melee_range() {
+        let definition = definition("CLEANSING_TOUCH");
+
+        assert_eq!(definition.kind.as_str(), "CLEANSING_TOUCH");
+        assert_eq!(definition.behavior.as_str(), "REMOVE_STATUS");
+        assert_eq!(definition.targeting.as_str(), "TARGET");
+        assert!(!definition.requires_target);
+        assert!((definition.max_distance - 2.5).abs() < 0.0001);
+        assert_eq!(definition.target_audience, TargetAudience::PartyOrSelf);
+
+        let remove_status = definition
+            .secondary
+            .remove_status
+            .as_ref()
+            .expect("Cleansing Touch should define remove-status filters");
+        assert!(remove_status.statuses.is_empty());
+        assert_eq!(remove_status.max_count, 1);
+        assert_eq!(
+            remove_status.polarity,
+            Some(crate::combat::StatusPolarity::Debuff)
+        );
+        assert_eq!(remove_status.dispel_types, vec![StatusDispelType::Magic]);
+    }
+
+    #[test]
+    fn absolution_catalog_filters_all_magic_debuffs_at_range() {
+        let definition = definition("ABSOLUTION");
+
+        assert_eq!(definition.kind.as_str(), "ABSOLUTION");
+        assert_eq!(definition.cooldown, Duration::from_millis(120_000));
+        assert_eq!(definition.behavior.as_str(), "REMOVE_STATUS");
+        assert_eq!(definition.targeting.as_str(), "TARGET");
+        assert!(!definition.requires_target);
+        assert!((definition.max_distance - 30.0).abs() < 0.0001);
+        assert_eq!(definition.target_audience, TargetAudience::PartyOrSelf);
+
+        let remove_status = definition
+            .secondary
+            .remove_status
+            .as_ref()
+            .expect("Absolution should define remove-status filters");
+        assert!(remove_status.statuses.is_empty());
+        assert_eq!(remove_status.max_count, 0);
+        assert_eq!(
+            remove_status.polarity,
+            Some(crate::combat::StatusPolarity::Debuff)
+        );
+        assert_eq!(remove_status.dispel_types, vec![StatusDispelType::Magic]);
+    }
+
+    #[test]
     fn defiance_catalog_matches_damage_reduction_buff_defaults() {
         let definition = definition("DEFIANCE");
 
@@ -720,6 +780,7 @@ mod tests {
         );
         let status = definition
             .apply_status
+            .as_ref()
             .expect("Defiance should define an apply-status payload");
         assert_eq!(status.kind, StatusEffectKind::DamageTakenReduction);
         assert!((status.modifier_scalar - 0.1).abs() < 0.0001);
@@ -749,6 +810,7 @@ mod tests {
         );
         let status = definition
             .apply_status
+            .as_ref()
             .expect("Giant Swing should define an apply-status payload");
         assert_eq!(status.kind, StatusEffectKind::MeleeAttackModifier);
         assert_eq!(status.modifier_scalar, 0.0);

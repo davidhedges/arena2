@@ -6,8 +6,8 @@ use serde::{de, Deserialize, Deserializer, Serialize};
 
 use crate::combat::scene_query::CombatAreaShape;
 use crate::combat::{
-    AuthoredStatusPayload, StackPolicy, StatusApplication, StatusEffectKind, StatusPayload,
-    StatusPolarity, StatusStackGroupDefault,
+    AuthoredStatusPayload, StackPolicy, StatusApplication, StatusDispelType, StatusEffectKind,
+    StatusPayload, StatusPolarity, StatusStackGroupDefault,
 };
 use crate::progression::default_global_cooldown_ms;
 use crate::relations::{default_spell_target_audience, TargetAudience};
@@ -135,7 +135,16 @@ enum SpellCatalogDelivery {
         status: ApplyStatusDefinition,
     },
     RemoveStatus {
+        #[serde(default)]
         statuses: Vec<RemoveStatusRow>,
+        #[serde(default)]
+        max_distance: f32,
+        #[serde(default)]
+        max_count: u32,
+        #[serde(default)]
+        polarity: Option<StatusPolarity>,
+        #[serde(default)]
+        dispel_types: Vec<StatusDispelType>,
     },
     SelfResource {},
 }
@@ -312,34 +321,50 @@ enum ImpactEffectRow {
         tick_damage: i32,
         #[serde(default)]
         status_stack_group: Option<String>,
+        #[serde(default)]
+        dispel_types: Vec<StatusDispelType>,
     },
     Stun {
         duration_ms: u64,
+        #[serde(default)]
+        dispel_types: Vec<StatusDispelType>,
     },
     Freeze {
         duration_ms: u64,
+        #[serde(default)]
+        dispel_types: Vec<StatusDispelType>,
     },
     Knockdown {
         duration_ms: u64,
+        #[serde(default)]
+        dispel_types: Vec<StatusDispelType>,
     },
     Stagger {
         duration_ms: u64,
+        #[serde(default)]
+        dispel_types: Vec<StatusDispelType>,
     },
     Root {
         duration_ms: u64,
         #[serde(default)]
         status_stack_group: Option<String>,
+        #[serde(default)]
+        dispel_types: Vec<StatusDispelType>,
     },
     Intimidated {
         duration_ms: u64,
         #[serde(default)]
         status_stack_group: Option<String>,
+        #[serde(default)]
+        dispel_types: Vec<StatusDispelType>,
     },
     Slow {
         duration_ms: u64,
         slow_pct: f32,
         #[serde(default)]
         status_stack_group: Option<String>,
+        #[serde(default)]
+        dispel_types: Vec<StatusDispelType>,
         #[serde(default = "default_one_stack")]
         max_stacks: u32,
         #[serde(default = "default_refresh_stack_policy")]
@@ -792,8 +817,15 @@ impl SpellCatalogRow {
                     parry_behavior: parry_behavior.unwrap_or(SpellParryBehavior::Unparryable),
                 });
             }
-            SpellCatalogDelivery::RemoveStatus { statuses } => {
+            SpellCatalogDelivery::RemoveStatus {
+                statuses,
+                max_distance,
+                max_count,
+                polarity,
+                dispel_types,
+            } => {
                 definition.behavior = SpellBehavior::RemoveStatus;
+                definition.max_distance = max_distance;
                 definition.block_behavior = BlockBehavior::Unblockable;
                 definition.secondary.remove_status = Some(RemoveStatusSecondaryTunables {
                     statuses: statuses
@@ -803,6 +835,9 @@ impl SpellCatalogRow {
                             stack_group: status.stack_group,
                         })
                         .collect(),
+                    max_count,
+                    polarity,
+                    dispel_types,
                 });
             }
             SpellCatalogDelivery::SelfResource {} => {
@@ -892,6 +927,7 @@ impl From<ImpactEffectRow> for ImpactEffect {
                 tick_interval_ms,
                 tick_damage,
                 status_stack_group,
+                dispel_types,
             } => StatusApplication::new(
                 AuthoredStatusPayload::new(
                     StatusEffectKind::Dot,
@@ -907,42 +943,60 @@ impl From<ImpactEffectRow> for ImpactEffect {
                 StatusStackGroupDefault::InstanceScopedActionSuffix("BURN"),
                 1,
                 StackPolicy::Refresh,
-            ),
-            ImpactEffectRow::Stun { duration_ms } => StatusApplication::new(
+            )
+            .with_dispel_types(dispel_types),
+            ImpactEffectRow::Stun {
+                duration_ms,
+                dispel_types,
+            } => StatusApplication::new(
                 StatusPayload::Stun,
                 Duration::from_millis(duration_ms),
                 None,
                 StatusStackGroupDefault::ActionSuffix("STUN"),
                 1,
                 StackPolicy::Refresh,
-            ),
-            ImpactEffectRow::Freeze { duration_ms } => StatusApplication::new(
+            )
+            .with_dispel_types(dispel_types),
+            ImpactEffectRow::Freeze {
+                duration_ms,
+                dispel_types,
+            } => StatusApplication::new(
                 StatusPayload::Freeze,
                 Duration::from_millis(duration_ms),
                 None,
                 StatusStackGroupDefault::ActionSuffix("FREEZE"),
                 1,
                 StackPolicy::Refresh,
-            ),
-            ImpactEffectRow::Knockdown { duration_ms } => StatusApplication::new(
+            )
+            .with_dispel_types(dispel_types),
+            ImpactEffectRow::Knockdown {
+                duration_ms,
+                dispel_types,
+            } => StatusApplication::new(
                 StatusPayload::Knockdown,
                 Duration::from_millis(duration_ms),
                 None,
                 StatusStackGroupDefault::ActionSuffix("KNOCKDOWN"),
                 1,
                 StackPolicy::Refresh,
-            ),
-            ImpactEffectRow::Stagger { duration_ms } => StatusApplication::new(
+            )
+            .with_dispel_types(dispel_types),
+            ImpactEffectRow::Stagger {
+                duration_ms,
+                dispel_types,
+            } => StatusApplication::new(
                 StatusPayload::Stagger,
                 Duration::from_millis(duration_ms),
                 None,
                 StatusStackGroupDefault::Global("STAGGER"),
                 1,
                 StackPolicy::Refresh,
-            ),
+            )
+            .with_dispel_types(dispel_types),
             ImpactEffectRow::Root {
                 duration_ms,
                 status_stack_group,
+                dispel_types,
             } => StatusApplication::new(
                 StatusPayload::Root,
                 Duration::from_millis(duration_ms),
@@ -950,10 +1004,12 @@ impl From<ImpactEffectRow> for ImpactEffect {
                 StatusStackGroupDefault::Global("ROOT"),
                 1,
                 StackPolicy::Refresh,
-            ),
+            )
+            .with_dispel_types(dispel_types),
             ImpactEffectRow::Intimidated {
                 duration_ms,
                 status_stack_group,
+                dispel_types,
             } => StatusApplication::new(
                 StatusPayload::Intimidated,
                 Duration::from_millis(duration_ms),
@@ -961,11 +1017,13 @@ impl From<ImpactEffectRow> for ImpactEffect {
                 StatusStackGroupDefault::ActionSuffix("INTIMIDATED"),
                 1,
                 StackPolicy::Refresh,
-            ),
+            )
+            .with_dispel_types(dispel_types),
             ImpactEffectRow::Slow {
                 duration_ms,
                 slow_pct,
                 status_stack_group,
+                dispel_types,
                 max_stacks,
                 stack_policy,
             } => StatusApplication::new(
@@ -976,7 +1034,8 @@ impl From<ImpactEffectRow> for ImpactEffect {
                 StatusStackGroupDefault::ActionSuffix("SLOW"),
                 max_stacks,
                 stack_policy,
-            ),
+            )
+            .with_dispel_types(dispel_types),
         }
     }
 }
@@ -1089,7 +1148,7 @@ fn validate_definition(def: &SpellDefinition) -> Result<(), String> {
 
     match def.behavior {
         SpellBehavior::ApplyStatus => {
-            let Some(status) = def.apply_status else {
+            let Some(status) = def.apply_status.as_ref() else {
                 return Err(format!(
                     "{} APPLY_STATUS must define status",
                     def.kind.as_str()
@@ -1101,7 +1160,7 @@ fn validate_definition(def: &SpellDefinition) -> Result<(), String> {
                     def.kind.as_str()
                 ));
             };
-            validate_apply_status(def, status, polarity)?;
+            validate_apply_status(def, status.clone(), polarity)?;
         }
         SpellBehavior::SelfResource => {
             if def.targeting != SpellTargeting::Self_ || def.requires_target {
@@ -1361,15 +1420,47 @@ fn validate_secondary_tunables(def: &SpellDefinition) -> Result<(), String> {
                     def.kind.as_str()
                 ));
             };
-            if def.targeting != SpellTargeting::Self_ || def.requires_target {
-                return Err(format!(
-                    "{} REMOVE_STATUS must use SELF targeting without a target requirement",
-                    def.kind.as_str()
-                ));
+            match def.targeting {
+                SpellTargeting::Self_ => {
+                    if def.requires_target {
+                        return Err(format!(
+                            "{} SELF REMOVE_STATUS must not require a target",
+                            def.kind.as_str()
+                        ));
+                    }
+                }
+                SpellTargeting::Target => {
+                    if !def.requires_target
+                        && !matches!(
+                            def.target_audience,
+                            TargetAudience::SelfOnly
+                                | TargetAudience::PartyOrSelf
+                                | TargetAudience::Assistable
+                        )
+                    {
+                        return Err(format!(
+                            "{} optional-target REMOVE_STATUS must allow self fallback",
+                            def.kind.as_str()
+                        ));
+                    }
+                    ensure_positive_f32(
+                        def.kind.as_str(),
+                        "delivery.max_distance",
+                        def.max_distance,
+                    )?;
+                }
+                SpellTargeting::Point => {
+                    return Err(format!(
+                        "{} REMOVE_STATUS supports SELF or TARGET targeting",
+                        def.kind.as_str()
+                    ));
+                }
             }
-            if remove_status.statuses.is_empty() {
+            let uses_filter =
+                remove_status.polarity.is_some() || !remove_status.dispel_types.is_empty();
+            if remove_status.statuses.is_empty() && !uses_filter {
                 return Err(format!(
-                    "{} REMOVE_STATUS must define at least one status",
+                    "{} REMOVE_STATUS must define statuses or a status filter",
                     def.kind.as_str()
                 ));
             }
@@ -1759,6 +1850,9 @@ mod tests {
                 "ENRAGE",
                 "SHOCKWAVE",
                 "INTIMIDATE",
+                "CONSECRATE",
+                "CLEANSING_TOUCH",
+                "ABSOLUTION",
             ]
         );
     }

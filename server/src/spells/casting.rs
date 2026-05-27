@@ -26,12 +26,13 @@ use crate::combat::scene_query::{
     first_hit_on_segment, has_line_of_sight, is_direction_within_facing_arc, line_of_sight_blocker,
     terrain_surface_y_for_caster, CombatAreaShape, SceneHitKind,
 };
+use crate::combat::status_effect;
 use crate::combat::{
-    has_active_disabling_status, mark_harmful_combat_action, queue_effects,
-    temporary_combat_modifiers, timestamp_to_micros, ActiveCombatProjectile, CombatEvent,
-    DamageDelivery, EffectPacket, ProjectilePresentationEvent, StatusApplication, StatusPayload,
-    StatusPolarity, StatusStackGroupDefault, COMBAT_METADATA_NONE, COMBAT_SCALAR_NONE,
-    COMBAT_SEQUENCE_NONE,
+    decode_status_dispel_types, has_active_disabling_status, mark_harmful_combat_action,
+    queue_effects, temporary_combat_modifiers, timestamp_to_micros, ActiveCombatProjectile,
+    CombatEvent, DamageDelivery, EffectPacket, ProjectilePresentationEvent, StatusApplication,
+    StatusDispelType, StatusEffectKind, StatusPayload, StatusPolarity, StatusStackGroupDefault,
+    COMBAT_METADATA_NONE, COMBAT_SCALAR_NONE, COMBAT_SEQUENCE_NONE,
 };
 use crate::defense::{
     clear_interruptible_defense_for_owner, resolve_defensible_combat_hit, CombatHitDeliveryKind,
@@ -1970,6 +1971,7 @@ fn ability_id_for_spell(ctx: &ReducerContext, caster: Identity, spell_kind: &Spe
 
 fn spell_can_be_cast_while_disabled(definition: &SpellDefinition) -> bool {
     definition.behavior == SpellBehavior::RemoveStatus
+        && definition.targeting == super::manifest::SpellTargeting::Self_
 }
 
 fn process_spell_cast(
@@ -2009,11 +2011,13 @@ fn process_spell_cast(
                     );
                 }
                 SpellBehavior::RemoveStatus => {
-                    cast_remove_status(
+                    return cast_remove_status(
                         ctx,
                         caster,
                         state,
                         spell_kind,
+                        target_id,
+                        mode,
                         action_instance_id,
                         ability_id,
                     );
@@ -2033,6 +2037,9 @@ fn process_spell_cast(
         }
         if definition.behavior == SpellBehavior::ApplyStatus {
             return cast_apply_status(ctx, caster, state, spell_kind, target_id, mode, "", "");
+        }
+        if definition.behavior == SpellBehavior::RemoveStatus {
+            return cast_remove_status(ctx, caster, state, spell_kind, target_id, mode, "", "");
         }
         return Ok(true);
     }
@@ -5239,6 +5246,7 @@ fn apply_status_to_self(
     let now = ctx.timestamp;
     let status = definition
         .apply_status
+        .clone()
         .expect("APPLY_STATUS spells must define a status payload");
     let spell_id = action_instance_id.to_string();
     let application = apply_status_application_for_caster(
@@ -5337,6 +5345,7 @@ fn apply_status_application_for_caster(
         status.max_stacks,
         status.stack_policy,
     )
+    .with_dispel_types(status.dispel_types)
 }
 
 fn scale_apply_status_payload_for_caster(
@@ -5404,6 +5413,7 @@ fn apply_status_to_target(
     let now = ctx.timestamp;
     let status = definition
         .apply_status
+        .clone()
         .expect("APPLY_STATUS spells must define a status payload");
     let application = apply_status_application_for_caster(
         ctx,
@@ -5573,9 +5583,11 @@ fn cast_remove_status(
     caster: Identity,
     state: &PlayerSnapshot,
     kind: &SpellId,
+    target_id: &str,
+    mode: CastExecutionMode,
     action_instance_id: &str,
     ability_id: &str,
-) {
+) -> Result<bool, String> {
     let now = ctx.timestamp;
     let definition = super::catalog::spell_definition(kind)
         .expect("validated REMOVE_STATUS spell must resolve to a definition");
@@ -5584,6 +5596,27 @@ fn cast_remove_status(
         .remove_status
         .as_ref()
         .expect("REMOVE_STATUS spells must define statuses");
+    let target = match definition.targeting {
+        super::manifest::SpellTargeting::Self_ => caster,
+        super::manifest::SpellTargeting::Target => {
+            let Some(target) = resolve_remove_status_target(
+                ctx,
+                caster,
+                state,
+                target_id,
+                definition.target_audience,
+                definition.requires_target,
+                definition.max_distance,
+            ) else {
+                return Ok(false);
+            };
+            target
+        }
+        super::manifest::SpellTargeting::Point => return Ok(false),
+    };
+    if mode != CastExecutionMode::Execute {
+        return Ok(true);
+    }
     let spell_id = action_instance_id.to_string();
 
     emit_spell_combat_event(
@@ -5594,11 +5627,11 @@ fn cast_remove_status(
             kind,
             event_type: EVENT_RELEASE,
             caster,
-            hit: caster,
+            hit: target,
             origin: Vec3::new(state.pos_x, state.pos_y, state.pos_z),
             direction: default_forward_direction(state),
             speed: 0.0,
-            max_distance: 0.0,
+            max_distance: definition.max_distance,
             scalar: SpellCombatEventScalar::None,
             sequence_index: 0,
             sequence_count: 1,
@@ -5607,18 +5640,113 @@ fn cast_remove_status(
         },
     );
 
-    queue_effects(
-        ctx,
-        remove_status
-            .statuses
-            .iter()
-            .map(|status| EffectPacket::RemoveStatus {
-                target: caster,
-                kind: status.kind,
-                stack_group: status.stack_group.clone().unwrap_or_default(),
+    let mut effects: Vec<EffectPacket> = remove_status
+        .statuses
+        .iter()
+        .map(|status| EffectPacket::RemoveStatus {
+            target,
+            kind: status.kind,
+            stack_group: status.stack_group.clone().unwrap_or_default(),
+        })
+        .collect();
+    effects.extend(filtered_remove_status_effects(ctx, target, remove_status));
+    queue_effects(ctx, effects);
+    Ok(true)
+}
+
+fn resolve_remove_status_target(
+    ctx: &ReducerContext,
+    caster: Identity,
+    state: &PlayerSnapshot,
+    target_id: &str,
+    target_audience: TargetAudience,
+    requires_target: bool,
+    max_distance: f32,
+) -> Option<Identity> {
+    let fallback_self =
+        !requires_target && target_audience.allows(crate::relations::CombatRelation::Self_);
+    let Some(target) = resolve_target(ctx, caster, target_id) else {
+        return fallback_self.then_some(caster);
+    };
+    if !target_audience_allows(ctx, caster, target.player_id, target_audience) {
+        return fallback_self.then_some(caster);
+    }
+    if target.player_id == caster {
+        return Some(caster);
+    }
+    if !is_target_within_facing_arc(state, &target, TARGET_FACING_ARC_RADIANS) {
+        return None;
+    }
+    if !has_line_of_sight(ctx, state, &target) {
+        return None;
+    }
+    if distance_to_target(state, &target) > max_distance {
+        return None;
+    }
+    Some(target.player_id)
+}
+
+fn filtered_remove_status_effects(
+    ctx: &ReducerContext,
+    target: Identity,
+    remove_status: &super::manifest::RemoveStatusSecondaryTunables,
+) -> Vec<EffectPacket> {
+    if remove_status.max_count == 0
+        && (remove_status.polarity.is_none() && remove_status.dispel_types.is_empty())
+    {
+        return Vec::new();
+    }
+
+    let mut matches: Vec<_> = ctx
+        .db
+        .status_effect()
+        .target()
+        .filter(target)
+        .filter(|effect| {
+            remove_status
+                .polarity
+                .is_none_or(|polarity| effect.polarity == polarity.as_str())
+                && status_matches_any_dispel_type(
+                    effect.dispel_types.as_str(),
+                    remove_status.dispel_types.as_slice(),
+                )
+        })
+        .collect();
+    matches.sort_by_key(|effect| effect.status_id);
+
+    matches
+        .into_iter()
+        .filter_map(|effect| {
+            let kind = StatusEffectKind::from_wire(effect.effect_kind.as_str())?;
+            Some(EffectPacket::RemoveStatus {
+                target,
+                kind,
+                stack_group: effect.stack_group,
             })
-            .collect(),
-    );
+        })
+        .take(remove_status_max_count(remove_status.max_count))
+        .collect()
+}
+
+fn remove_status_max_count(max_count: u32) -> usize {
+    if max_count == 0 {
+        usize::MAX
+    } else {
+        max_count as usize
+    }
+}
+
+fn status_matches_any_dispel_type(
+    encoded_status_types: &str,
+    filter_types: &[StatusDispelType],
+) -> bool {
+    if filter_types.is_empty() {
+        return true;
+    }
+    let status_types = decode_status_dispel_types(encoded_status_types);
+    filter_types
+        .iter()
+        .any(|filter_type| status_types.contains(filter_type))
 }
 
 fn resolve_movement_delivery_hit(

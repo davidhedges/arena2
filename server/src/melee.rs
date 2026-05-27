@@ -4308,6 +4308,7 @@ fn push_stagger_effect_with_duration_if_applicable(
         stack_group: "STAGGER".to_string(),
         max_stacks: 1,
         stack_policy: StackPolicy::Refresh,
+        dispel_types: Vec::new(),
     });
 }
 

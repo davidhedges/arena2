@@ -39,6 +39,8 @@ namespace SpacetimeDB.Types
         public int StatusAbsorbAmount;
         [DataMember(Name = "status_absorb_cap")]
         public int StatusAbsorbCap;
+        [DataMember(Name = "dispel_types")]
+        public string DispelTypes;
         [DataMember(Name = "stack_group")]
         public string StackGroup;
         [DataMember(Name = "max_stacks")]
@@ -68,6 +70,7 @@ namespace SpacetimeDB.Types
             float StatusModifierScalar,
             int StatusAbsorbAmount,
             int StatusAbsorbCap,
+            string DispelTypes,
             string StackGroup,
             uint MaxStacks,
             string StackPolicy,
@@ -90,6 +93,7 @@ namespace SpacetimeDB.Types
             this.StatusModifierScalar = StatusModifierScalar;
             this.StatusAbsorbAmount = StatusAbsorbAmount;
             this.StatusAbsorbCap = StatusAbsorbCap;
+            this.DispelTypes = DispelTypes;
             this.StackGroup = StackGroup;
             this.MaxStacks = MaxStacks;
             this.StackPolicy = StackPolicy;
@@ -104,6 +108,7 @@ namespace SpacetimeDB.Types
             this.SpellId = "";
             this.StatusKind = "";
             this.StatusPolarity = "";
+            this.DispelTypes = "";
             this.StackGroup = "";
             this.StackPolicy = "";
             this.TargetAudience = "";

@@ -107,6 +107,7 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Col<StatusEffect, float> ModifierScalar { get; }
         public global::SpacetimeDB.Col<StatusEffect, int> AbsorbAmount { get; }
         public global::SpacetimeDB.Col<StatusEffect, int> AbsorbCap { get; }
+        public global::SpacetimeDB.Col<StatusEffect, string> DispelTypes { get; }
         public global::SpacetimeDB.Col<StatusEffect, SpacetimeDB.Timestamp> NextTickAt { get; }
         public global::SpacetimeDB.Col<StatusEffect, long> NextTickAtMicros { get; }
         public global::SpacetimeDB.Col<StatusEffect, string> SpellId { get; }
@@ -131,6 +132,7 @@ namespace SpacetimeDB.Types
             ModifierScalar = new global::SpacetimeDB.Col<StatusEffect, float>(tableName, "modifier_scalar");
             AbsorbAmount = new global::SpacetimeDB.Col<StatusEffect, int>(tableName, "absorb_amount");
             AbsorbCap = new global::SpacetimeDB.Col<StatusEffect, int>(tableName, "absorb_cap");
+            DispelTypes = new global::SpacetimeDB.Col<StatusEffect, string>(tableName, "dispel_types");
             NextTickAt = new global::SpacetimeDB.Col<StatusEffect, SpacetimeDB.Timestamp>(tableName, "next_tick_at");
             NextTickAtMicros = new global::SpacetimeDB.Col<StatusEffect, long>(tableName, "next_tick_at_micros");
             SpellId = new global::SpacetimeDB.Col<StatusEffect, string>(tableName, "spell_id");

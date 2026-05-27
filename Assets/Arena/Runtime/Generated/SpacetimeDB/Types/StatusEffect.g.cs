@@ -49,6 +49,8 @@ namespace SpacetimeDB.Types
         public int AbsorbAmount;
         [DataMember(Name = "absorb_cap")]
         public int AbsorbCap;
+        [DataMember(Name = "dispel_types")]
+        public string DispelTypes;
         [DataMember(Name = "next_tick_at")]
         public SpacetimeDB.Timestamp NextTickAt;
         [DataMember(Name = "next_tick_at_micros")]
@@ -75,6 +77,7 @@ namespace SpacetimeDB.Types
             float ModifierScalar,
             int AbsorbAmount,
             int AbsorbCap,
+            string DispelTypes,
             SpacetimeDB.Timestamp NextTickAt,
             long NextTickAtMicros,
             string SpellId
@@ -98,6 +101,7 @@ namespace SpacetimeDB.Types
             this.ModifierScalar = ModifierScalar;
             this.AbsorbAmount = AbsorbAmount;
             this.AbsorbCap = AbsorbCap;
+            this.DispelTypes = DispelTypes;
             this.NextTickAt = NextTickAt;
             this.NextTickAtMicros = NextTickAtMicros;
             this.SpellId = SpellId;
@@ -109,6 +113,7 @@ namespace SpacetimeDB.Types
             this.Polarity = "";
             this.StackGroup = "";
             this.StackPolicy = "";
+            this.DispelTypes = "";
             this.SpellId = "";
         }
     }
