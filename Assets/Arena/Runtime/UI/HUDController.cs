@@ -38,6 +38,7 @@ namespace Arena.UI
             "CharacterCustomization",
         };
         private const string UnitFrameSpritePath = "UI/UnitFrame/UnitFrame";
+        private const string TemporaryHitpointsStatusKind = "TEMPORARY_HITPOINTS";
 
         // --- Colors (WoW-inspired) ---
         private static readonly Color FrameBg       = Hex("#1a1a1a");
@@ -130,7 +131,7 @@ namespace Arena.UI
         // --- Player Frame ---
         private Text  _playerName   = null!;
         private Image _playerHpFill = null!;
-        private Image _playerShield = null!;
+        private Image _playerTempHpFill = null!;
         private Text  _playerHpText = null!;
         private Image _playerPrimaryFill = null!;
         private Text  _playerPrimaryText = null!;
@@ -138,6 +139,7 @@ namespace Arena.UI
         // --- Target Frame ---
         private GameObject _targetRoot  = null!;
         private Text       _targetName  = null!;
+        private Image _targetTempHpFill = null!;
         private Image _targetHpFill = null!;
         private Text       _targetHpText = null!;
         private Image _targetPrimaryFill = null!;
@@ -269,19 +271,19 @@ namespace Arena.UI
                 new Vector2(86f, 20f), new Vector2(13f, 54f),
                 13, Color.white, TextAnchor.MiddleCenter);
 
+            _playerTempHpFill = BuildUnitFrameBarFill(
+                frame.transform,
+                "TempHp",
+                UnitFrameHealthShape,
+                ShieldGold);
+            _playerTempHpFill.fillAmount = 0f;
+            _playerTempHpFill.gameObject.SetActive(false);
+
             _playerHpFill = BuildUnitFrameBarFill(
                 frame.transform,
                 "Hp",
                 UnitFrameHealthShape,
                 HealthGreen);
-
-            _playerShield = BuildUnitFrameBarFill(
-                frame.transform,
-                "Shield",
-                UnitFrameHealthShape,
-                ShieldGold);
-            _playerShield.fillAmount = 0f;
-            _playerShield.gameObject.SetActive(false);
 
             _playerHpText = Label(frame.transform, "HpText",
                 new Vector2(0, 0), new Vector2(0, 0),
@@ -331,6 +333,15 @@ namespace Arena.UI
 
             Vector2 mirroredHealthPos = MirroredUnitFramePos(UnitFrameHealthPos, UnitFrameHealthSize);
             Vector2 mirroredResourcePos = MirroredUnitFramePos(UnitFrameResourcePos, UnitFrameResourceSize);
+            _targetTempHpFill = BuildUnitFrameBarFill(
+                _targetRoot.transform,
+                "TempHp",
+                MirroredUnitFrameShape(UnitFrameHealthShape),
+                ShieldGold,
+                fillFromRight: true);
+            _targetTempHpFill.fillAmount = 0f;
+            _targetTempHpFill.gameObject.SetActive(false);
+
             _targetHpFill = BuildUnitFrameBarFill(
                 _targetRoot.transform,
                 "Hp",
@@ -402,6 +413,14 @@ namespace Arena.UI
                     new Vector2(13f, 54f) * PartyUnitFrameScale,
                     10, Color.white, TextAnchor.MiddleCenter);
 
+                var tempHpFill = BuildUnitFrameBarFill(
+                    frame.transform,
+                    "TempHp",
+                    partyHealthShape,
+                    ShieldGold);
+                tempHpFill.fillAmount = 0f;
+                tempHpFill.gameObject.SetActive(false);
+
                 var hpFill = BuildUnitFrameBarFill(
                     frame.transform,
                     "Hp",
@@ -421,6 +440,7 @@ namespace Arena.UI
                 _partyFrames.Add(new PartyFrameView(
                     root,
                     name,
+                    tempHpFill,
                     hpFill,
                     hpText,
                     debuffRow,
@@ -740,10 +760,13 @@ namespace Arena.UI
         private void UpdatePlayerFrame(PlayerEntity p)
         {
             SetTextIfChanged(_playerName, string.IsNullOrEmpty(p.Username) ? "Player" : p.Username);
-            float frac = p.MaxHp > 0 ? Mathf.Clamp01((float)p.Hp / p.MaxHp) : 0f;
-            SetUnitFrameBarFill(_playerHpFill, frac);
-            SetTextIfChanged(_playerHpText, $"{p.Hp} / {p.MaxHp}");
-            SetActiveIfChanged(_playerShield.gameObject, false);
+            HealthBarPresentation health = ResolveHealthBarPresentation(
+                NetworkManager.Instance?.Conn,
+                p.Identity,
+                p.Hp,
+                p.MaxHp);
+            SetHealthBarFill(_playerHpFill, _playerTempHpFill, health);
+            SetTextIfChanged(_playerHpText, health.Text);
 
             var primaryPresentation = ResolvePrimaryResourcePresentation(p);
             if (primaryPresentation.isVisible)
@@ -798,9 +821,13 @@ namespace Arena.UI
                     _nextTargetStatusRefreshTime = 0f;
             }
 
-            float frac = target.MaxHp > 0 ? Mathf.Clamp01((float)target.Hp / target.MaxHp) : 0f;
-            SetUnitFrameBarFill(_targetHpFill, frac);
-            SetTextIfChanged(_targetHpText, $"{target.Hp} / {target.MaxHp}");
+            HealthBarPresentation health = ResolveHealthBarPresentation(
+                NetworkManager.Instance?.Conn,
+                target.Identity,
+                target.Hp,
+                target.MaxHp);
+            SetHealthBarFill(_targetHpFill, _targetTempHpFill, health);
+            SetTextIfChanged(_targetHpText, health.Text);
 
             var primaryPresentation = ResolvePrimaryResourcePresentation(target);
             if (primaryPresentation.isVisible)
@@ -880,13 +907,10 @@ namespace Arena.UI
                 string name = entity != null && !string.IsNullOrEmpty(entity.Username)
                     ? entity.Username
                     : ShortIdentity(member);
-                float hp = entity != null && entity.MaxHp > 0
-                    ? Mathf.Clamp01((float)entity.Hp / entity.MaxHp)
-                    : 0f;
-                string hpText = entity != null
-                    ? $"{entity.Hp} / {entity.MaxHp}"
-                    : "";
-                _partyFrames[i].Set(member, name, hp, hpText);
+                HealthBarPresentation health = entity != null
+                    ? ResolveHealthBarPresentation(conn, entity.Identity, entity.Hp, entity.MaxHp)
+                    : HealthBarPresentation.Empty;
+                _partyFrames[i].Set(member, name, health, health.Text);
                 if (refreshDebuffs)
                     RefreshDebuffIcons(member, _partyFrames[i].DebuffRow, _partyFrames[i].DebuffIcons);
             }
@@ -1016,6 +1040,69 @@ namespace Arena.UI
                 _ => RelationNeutralColor,
             };
 
+        private static HealthBarPresentation ResolveHealthBarPresentation(
+            DbConnection? conn,
+            SpacetimeDB.Identity owner,
+            int hp,
+            int maxHp)
+        {
+            int temporaryHitpoints = ResolveTemporaryHitpoints(conn, owner);
+            float displayedCapacity = Mathf.Max(1f, Mathf.Max(hp, maxHp) + temporaryHitpoints);
+            float healthFraction = Mathf.Clamp01(Mathf.Max(0, hp) / displayedCapacity);
+            float protectedFraction = Mathf.Clamp01((Mathf.Max(0, hp) + temporaryHitpoints) / displayedCapacity);
+            string text = temporaryHitpoints > 0
+                ? $"{hp} / {maxHp} +{temporaryHitpoints}"
+                : $"{hp} / {maxHp}";
+
+            return new HealthBarPresentation(
+                healthFraction,
+                protectedFraction,
+                temporaryHitpoints,
+                text);
+        }
+
+        private static int ResolveTemporaryHitpoints(DbConnection? conn, SpacetimeDB.Identity owner)
+        {
+            if (conn == null)
+                return 0;
+
+            long nowUs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() * 1000L;
+            long total = 0;
+            foreach (StatusEffect status in conn.Db.StatusEffect.Target.Filter(owner))
+            {
+                if (!IsTemporaryHitpointsStatus(status))
+                    continue;
+                if (status.ExpiresAtMicros > 0 && status.ExpiresAtMicros < nowUs)
+                    continue;
+                if (status.AbsorbAmount <= 0)
+                    continue;
+
+                total += status.AbsorbAmount;
+                if (total >= int.MaxValue)
+                    return int.MaxValue;
+            }
+
+            return (int)total;
+        }
+
+        private static bool IsTemporaryHitpointsStatus(StatusEffect status) =>
+            string.Equals(
+                WireIdentifier.Normalize(status.EffectKind),
+                TemporaryHitpointsStatusKind,
+                StringComparison.Ordinal);
+
+        private static void SetHealthBarFill(
+            Image healthFill,
+            Image temporaryHitpointsFill,
+            HealthBarPresentation health)
+        {
+            SetUnitFrameBarFill(temporaryHitpointsFill, health.ProtectedFraction);
+            SetUnitFrameBarFill(healthFill, health.HealthFraction);
+            SetActiveIfChanged(
+                temporaryHitpointsFill.gameObject,
+                health.TemporaryHitpoints > 0 && health.ProtectedFraction > health.HealthFraction + 0.0005f);
+        }
+
         // --- Self Buffs ---
 
         private void UpdateSelfBuffs(PlayerEntity local)
@@ -1094,7 +1181,7 @@ namespace Arena.UI
                     long expMs = se.ExpiresAtMicros / 1000L;
                     float left = Mathf.Max(0f, (expMs - nowMs) / 1000f);
                     SetTextIfChanged(view.Time, left > 1f ? $"{left:F0}" : left > 0.1f ? $"{left:F1}" : "");
-                    string tooltipKey = $"{se.StatusId}:{se.EffectKind}:{se.Stacks}:{se.ExpiresAtMicros}";
+                    string tooltipKey = $"{se.StatusId}:{se.EffectKind}:{se.Stacks}:{se.AbsorbAmount}:{se.ExpiresAtMicros}";
                     if (!string.Equals(view.TooltipKey, tooltipKey, StringComparison.Ordinal))
                     {
                         view.TooltipKey = tooltipKey;
@@ -1683,6 +1770,7 @@ namespace Arena.UI
 
             private readonly Action<SpacetimeDB.Identity> _onSelected;
             private readonly Text _name;
+            private readonly Image _tempHpFill;
             private readonly Image _hpFill;
             private readonly Text _hpText;
             private SpacetimeDB.Identity? _member;
@@ -1690,6 +1778,7 @@ namespace Arena.UI
             public PartyFrameView(
                 GameObject root,
                 Text name,
+                Image tempHpFill,
                 Image hpFill,
                 Text hpText,
                 Transform debuffRow,
@@ -1700,17 +1789,18 @@ namespace Arena.UI
                 DebuffRow = debuffRow;
                 _onSelected = onSelected;
                 _name = name;
+                _tempHpFill = tempHpFill;
                 _hpFill = hpFill;
                 _hpText = hpText;
                 clickTarget.Configure(SelectCurrentMember);
             }
 
-            public void Set(SpacetimeDB.Identity member, string name, float hpFraction, string hpText)
+            public void Set(SpacetimeDB.Identity member, string name, HealthBarPresentation health, string hpText)
             {
                 _member = member;
                 SetActiveIfChanged(Root, true);
                 SetTextIfChanged(_name, name);
-                SetFillIfChanged(_hpFill, Mathf.Clamp01(hpFraction));
+                SetHealthBarFill(_hpFill, _tempHpFill, health);
                 SetTextIfChanged(_hpText, hpText);
             }
 
@@ -1718,6 +1808,28 @@ namespace Arena.UI
             {
                 if (_member.HasValue)
                     _onSelected(_member.Value);
+            }
+        }
+
+        private readonly struct HealthBarPresentation
+        {
+            public static readonly HealthBarPresentation Empty = new(0f, 0f, 0, string.Empty);
+
+            public readonly float HealthFraction;
+            public readonly float ProtectedFraction;
+            public readonly int TemporaryHitpoints;
+            public readonly string Text;
+
+            public HealthBarPresentation(
+                float healthFraction,
+                float protectedFraction,
+                int temporaryHitpoints,
+                string text)
+            {
+                HealthFraction = healthFraction;
+                ProtectedFraction = protectedFraction;
+                TemporaryHitpoints = temporaryHitpoints;
+                Text = text;
             }
         }
 
