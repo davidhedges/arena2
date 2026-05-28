@@ -141,6 +141,7 @@ pub(crate) enum SpellBehavior {
     Channel,
     ApplyStatus,
     RemoveStatus,
+    Aura,
     SelfResource,
 }
 
@@ -153,6 +154,7 @@ impl SpellBehavior {
             Self::Channel => "CHANNEL",
             Self::ApplyStatus => "APPLY_STATUS",
             Self::RemoveStatus => "REMOVE_STATUS",
+            Self::Aura => "AURA",
             Self::SelfResource => "SELF_RESOURCE",
         }
     }
@@ -265,6 +267,7 @@ pub(crate) struct SpellSecondaryTunables {
     pub instant_beam: Option<InstantBeamSecondaryTunables>,
     pub apply_status: Option<ApplyStatusSecondaryTunables>,
     pub remove_status: Option<RemoveStatusSecondaryTunables>,
+    pub aura: Option<AuraSecondaryTunables>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -379,6 +382,13 @@ pub(crate) struct RemoveStatusSecondaryTunables {
 pub(crate) struct RemoveStatusDefinition {
     pub kind: StatusEffectKind,
     pub stack_group: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct AuraSecondaryTunables {
+    pub radius: f32,
+    pub tick_interval: Duration,
+    pub effects: Vec<ImpactEffect>,
 }
 
 #[derive(Clone, Debug, PartialEq)]

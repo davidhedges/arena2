@@ -1857,6 +1857,43 @@
       }
     },
     {
+      "ability_id": "PALADIN_FERVOR",
+      "class_id": "PALADIN",
+      "action_id": "FERVOR",
+      "display_name": "Fervor",
+      "resource_kind": "ZEAL",
+      "resource_cost": 1.0,
+      "ability_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 159,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 1200,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "SELF",
+        "target_audience": "PARTY_OR_SELF",
+        "requires_target": false,
+        "resource_cost": 1.0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "AURA",
+          "radius": 20.0,
+          "tick_interval_ms": 250,
+          "effects": [
+            {
+              "kind": "MOVE_SPEED",
+              "duration_ms": 750,
+              "modifier_scalar": 0.1,
+              "status_stack_group": "PALADIN_FERVOR_MOVE_SPEED"
+            }
+          ]
+        }
+      }
+    },
+    {
       "ability_id": "ARCHER_POWER_SHOT",
       "class_id": "RANGER",
       "action_id": "ARCHER_POWER_SHOT",
@@ -2339,6 +2376,13 @@
       "display_name": "Absolution",
       "description": "Removes all magical debuffs from a distant ally or yourself.",
       "sort_order": 158
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "PALADIN_FERVOR",
+      "display_name": "Fervor",
+      "description": "Increases nearby party movement speed by 10%.",
+      "sort_order": 159
     },
     {
       "presentation_kind": "ABILITY",
@@ -3090,6 +3134,12 @@
       "slot_id": "slot_1_6",
       "ability_id": "PALADIN_ABSOLUTION",
       "sort_order": 185
+    },
+    {
+      "class_id": "PALADIN",
+      "slot_id": "slot_1_7",
+      "ability_id": "PALADIN_FERVOR",
+      "sort_order": 190
     },
     {
       "class_id": "PALADIN",

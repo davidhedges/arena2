@@ -586,6 +586,7 @@ fn authored_status_stack_group_default(kind: &str) -> StatusStackGroupDefault {
         "INTIMIDATED" => StatusStackGroupDefault::ActionSuffix("INTIMIDATED"),
         "KNOCKDOWN" => StatusStackGroupDefault::ActionSuffix("KNOCKDOWN"),
         "SLOW" => StatusStackGroupDefault::ActionSuffix("SLOW"),
+        "MOVE_SPEED" => StatusStackGroupDefault::ActionSuffix("MOVE_SPEED"),
         "MOVE_SLOW_IMMUNITY" => StatusStackGroupDefault::ActionSuffix("MOVE_SLOW_IMMUNITY"),
         "DAMAGE_AMP" => StatusStackGroupDefault::ActionSuffix("DAMAGE_AMP"),
         "DIRECT_DAMAGE_AMP" => StatusStackGroupDefault::ActionSuffix("DIRECT_DAMAGE_AMP"),
@@ -4894,7 +4895,8 @@ mod tests {
         action_ref_for_default_assignment, authored_status_presentation_ids,
         canonical_loadout_slot_id, combat_vfx_cue_key, derived_combat_profile_id_for_class,
         derived_spell_action_presentation_rows, melee_impact_effects_for_ability_id,
-        normalize_identifier, primary_resource_gain_on_action_accept, progression_catalog,
+        normalize_identifier, normalize_optional_target_audience,
+        primary_resource_gain_on_action_accept, progression_catalog,
         projectile_body_vfx_id_for_spell, resolved_melee_targeting_for_catalog,
         saved_spec_total_for_stat, selectable_slot_ids, validate_auto_attack_catalog,
         validate_combat_mode_catalog, validate_progression_catalog_authoring_contract,
@@ -7181,6 +7183,58 @@ mod tests {
                 }]
             );
         }
+    }
+
+    #[test]
+    fn paladin_fervor_authors_castable_move_speed_aura() {
+        let catalog = progression_catalog();
+        let ability = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "PALADIN_FERVOR")
+            .expect("PALADIN_FERVOR must exist");
+
+        assert_eq!(ability.class_id, "PALADIN");
+        assert_eq!(ability_gameplay_kind(ability), "SPELL");
+        assert_eq!(ability.gameplay.cast_time_ms, Some(0));
+        assert_eq!(
+            normalize_identifier(ability.gameplay.targeting.as_str()),
+            "SELF"
+        );
+        assert_eq!(
+            normalize_optional_target_audience(ability.gameplay.target_audience.as_str()),
+            "PARTY_OR_SELF"
+        );
+        let definition =
+            spell_definition_by_str(ability.action_id.as_str()).expect("Fervor spell definition");
+        assert_eq!(definition.behavior, crate::spells::SpellBehavior::Aura);
+        assert_eq!(definition.radius, 20.0);
+        assert_eq!(definition.target_audience.as_str(), "PARTY_OR_SELF");
+        let aura = definition
+            .secondary
+            .aura
+            .as_ref()
+            .expect("Fervor must define aura secondary tunables");
+        assert_eq!(aura.tick_interval, std::time::Duration::from_millis(250));
+        let [effect] = aura.effects.as_slice() else {
+            panic!("Fervor must author exactly one aura status effect");
+        };
+        assert_eq!(
+            effect.payload(),
+            StatusPayload::MoveSpeed {
+                modifier_scalar: 0.1
+            }
+        );
+        assert_eq!(effect.duration(), std::time::Duration::from_millis(750));
+        assert!(effect.dispel_types().is_empty());
+        assert!(catalog
+            .default_loadout_assignments
+            .iter()
+            .any(|assignment| {
+                normalize_identifier(assignment.class_id.as_str()) == "PALADIN"
+                    && canonical_loadout_slot_id(assignment.slot_id.as_str()) == "SLOT_1_7"
+                    && normalize_identifier(assignment.ability_id.as_str()) == "PALADIN_FERVOR"
+            }));
     }
 
     #[test]

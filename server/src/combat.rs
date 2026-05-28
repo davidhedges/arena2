@@ -27,8 +27,8 @@ use crate::resources::{
 };
 use crate::spells::{
     bake_linear_special_movement, begin_special_movement_with_facing_policy,
-    fizzle_active_cast_for_interrupt, SpellVec3, SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK,
-    SPECIAL_MOVEMENT_FACING_FACE_START,
+    fizzle_active_cast_for_interrupt, spell_definition_by_str, SpellBehavior, SpellVec3,
+    SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK, SPECIAL_MOVEMENT_FACING_FACE_START,
 };
 use crate::world_collision::{
     resolve_world_spawn_position, resolve_world_spawn_position_with_layout_for_scene,
@@ -50,6 +50,8 @@ pub(crate) use projectiles::{
 use crate::arena::arena_instance as _;
 #[allow(unused_imports)]
 use crate::arena::player_world as _;
+#[allow(unused_imports)]
+use crate::combat::active_aura as _;
 #[allow(unused_imports)]
 use crate::combat::active_combat_projectile as _;
 #[allow(unused_imports)]
@@ -114,6 +116,7 @@ const COMBAT_REASON_HELPFUL_ASSIST: &str = "HELPFUL_ASSIST";
 const RESTLESS_PASSIVE_ID: &str = "WARRIOR_RESTLESS";
 const WARRIOR_CLASS_ID: &str = "WARRIOR";
 const PASSIVE_STATUS_REFRESH_DURATION: Duration = Duration::from_secs(60 * 60);
+const AURA_STACK_GROUP_PREFIX: &str = "AURA:";
 
 // Current authored open-world spawn target.
 // Scene ownership should live in open_world_scene.rs rather than scattered constants.
@@ -141,6 +144,7 @@ pub(crate) const COMBAT_SEQUENCE_BEAM: &str = "BEAM";
 pub(crate) const COMBAT_METADATA_NONE: &str = "";
 pub(crate) const COMBAT_METADATA_CONSUMED_MELEE_MODIFIER: &str = "CONSUMED_MELEE_MODIFIER";
 const MIN_SLOW_PCT: f32 = f32::EPSILON;
+const MAX_MOVE_SPEED_MULTIPLIER: f32 = 3.0;
 const MIN_ATTACK_SPEED_MULTIPLIER: f32 = 0.05;
 const MAX_DAMAGE_TAKEN_REDUCTION: f32 = 1.0;
 const MAX_HEALING_TAKEN_REDUCTION: f32 = 1.0;
@@ -443,6 +447,16 @@ pub struct CombatStackingPassiveRuntime {
     pub next_stack_at: Timestamp,
     pub last_direct_damage_at: Timestamp,
     pub last_consumed_action_key: String,
+}
+
+#[table(accessor = active_aura)]
+#[derive(Clone)]
+pub struct ActiveAura {
+    #[primary_key]
+    pub owner: Identity,
+    pub spell_id: String,
+    pub ability_id: String,
+    pub activated_at: Timestamp,
 }
 
 #[table(accessor = combat_projectile_definition, public)]
@@ -810,6 +824,223 @@ pub fn tick_combat_stacking_passives(ctx: &ReducerContext, now: Timestamp) {
 
     for owner in owners {
         tick_combat_stacking_passive_for_owner(ctx, owner, &spec, now);
+    }
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+struct AuraStatusKey {
+    source: Identity,
+    target: Identity,
+    kind: StatusEffectKind,
+    stack_group: String,
+}
+
+pub fn tick_auras(ctx: &ReducerContext, now: Timestamp) {
+    let mut owners: HashSet<Identity> = ctx.db.active_aura().iter().map(|row| row.owner).collect();
+    owners.extend(
+        ctx.db
+            .status_effect()
+            .iter()
+            .filter(|effect| effect.stack_group.starts_with(AURA_STACK_GROUP_PREFIX))
+            .map(|effect| effect.source),
+    );
+
+    let candidate_targets: Vec<_> = ctx
+        .db
+        .player_state()
+        .iter()
+        .filter(|state| state.alive && !state.is_dummy)
+        .map(|state| state.player_id)
+        .collect();
+    let mut expected = HashSet::new();
+
+    for owner in owners {
+        let owner_alive = ctx
+            .db
+            .player_state()
+            .player_id()
+            .find(owner)
+            .is_some_and(|state| state.alive && !state.is_dummy);
+        if !owner_alive {
+            ctx.db.active_aura().owner().delete(owner);
+            continue;
+        }
+        let Some(owner_physics) = ctx.db.player_physics().identity().find(owner) else {
+            continue;
+        };
+        let Some(active_aura) = ctx.db.active_aura().owner().find(owner) else {
+            continue;
+        };
+        let Some(definition) = spell_definition_by_str(active_aura.spell_id.as_str()) else {
+            ctx.db.active_aura().owner().delete(owner);
+            continue;
+        };
+        if definition.behavior != SpellBehavior::Aura {
+            ctx.db.active_aura().owner().delete(owner);
+            continue;
+        };
+        let Some(aura) = definition.secondary.aura.as_ref() else {
+            ctx.db.active_aura().owner().delete(owner);
+            continue;
+        };
+
+        let target_audience = definition.target_audience;
+        let radius = aura.radius.max(0.0);
+        if radius <= 0.0 {
+            continue;
+        }
+        let radius_sq = radius * radius;
+
+        for target in &candidate_targets {
+            if !players_share_world_context(ctx, owner, *target)
+                || !target_audience_allows(ctx, owner, *target, target_audience)
+            {
+                continue;
+            }
+            let Some(target_physics) = ctx.db.player_physics().identity().find(*target) else {
+                continue;
+            };
+            let dx = owner_physics.pos_x - target_physics.pos_x;
+            let dy = owner_physics.pos_y - target_physics.pos_y;
+            let dz = owner_physics.pos_z - target_physics.pos_z;
+            if dx.mul_add(dx, dy.mul_add(dy, dz * dz)) > radius_sq {
+                continue;
+            }
+
+            for effect in &aura.effects {
+                let payload = effect.payload();
+                let stack_group = aura_stack_group(
+                    owner,
+                    active_aura.ability_id.as_str(),
+                    active_aura.spell_id.as_str(),
+                    payload.kind(),
+                );
+                expected.insert(AuraStatusKey {
+                    source: owner,
+                    target: *target,
+                    kind: payload.kind(),
+                    stack_group: stack_group.clone(),
+                });
+                if !should_refresh_aura_status(
+                    ctx,
+                    *target,
+                    payload.kind(),
+                    stack_group.as_str(),
+                    now,
+                    aura.tick_interval,
+                ) {
+                    continue;
+                }
+                apply_status_internal(
+                    ctx,
+                    now,
+                    owner,
+                    *target,
+                    active_aura.spell_id.as_str(),
+                    payload,
+                    StatusPolarity::Buff,
+                    effect.duration(),
+                    stack_group.as_str(),
+                    effect.max_stacks(),
+                    effect.stack_policy(),
+                    target_audience,
+                    Vec::new(),
+                    false,
+                );
+            }
+        }
+    }
+
+    let stale_status_ids: Vec<_> = ctx
+        .db
+        .status_effect()
+        .iter()
+        .filter(|effect| effect.stack_group.starts_with(AURA_STACK_GROUP_PREFIX))
+        .filter(|effect| {
+            let Some(kind) = StatusEffectKind::from_wire(effect.effect_kind.as_str()) else {
+                return true;
+            };
+            !expected.contains(&AuraStatusKey {
+                source: effect.source,
+                target: effect.target,
+                kind,
+                stack_group: effect.stack_group.clone(),
+            })
+        })
+        .map(|effect| effect.status_id)
+        .collect();
+    for status_id in stale_status_ids {
+        ctx.db.status_effect().status_id().delete(status_id);
+    }
+}
+
+fn should_refresh_aura_status(
+    ctx: &ReducerContext,
+    target: Identity,
+    kind: StatusEffectKind,
+    stack_group: &str,
+    now: Timestamp,
+    tick_interval: Duration,
+) -> bool {
+    let refresh_interval = tick_interval.max(Duration::from_millis(1));
+    let mut matches: Vec<_> = ctx
+        .db
+        .status_effect()
+        .target()
+        .filter(target)
+        .filter(|effect| effect.effect_kind == kind.as_str() && effect.stack_group == stack_group)
+        .collect();
+    matches.sort_by_key(|effect| effect.status_id);
+    let Some(effect) = matches.into_iter().next() else {
+        return true;
+    };
+    now >= effect.expires_at || now >= effect.applied_at + refresh_interval
+}
+
+fn aura_stack_group(
+    owner: Identity,
+    ability_id: &str,
+    fallback_spell_id: &str,
+    kind: StatusEffectKind,
+) -> String {
+    let aura_id = if ability_id.trim().is_empty() {
+        fallback_spell_id
+    } else {
+        ability_id
+    };
+    format!(
+        "{}{}:{}:{}",
+        AURA_STACK_GROUP_PREFIX,
+        normalize_aura_stack_component(aura_id),
+        owner.to_hex(),
+        kind.as_str()
+    )
+}
+
+fn normalize_aura_stack_component(value: &str) -> String {
+    value
+        .trim()
+        .to_ascii_uppercase()
+        .replace(char::is_whitespace, "_")
+}
+
+pub fn set_active_aura(
+    ctx: &ReducerContext,
+    owner: Identity,
+    spell_id: &str,
+    ability_id: &str,
+    now: Timestamp,
+) {
+    let row = ActiveAura {
+        owner,
+        spell_id: spell_id.trim().to_ascii_uppercase(),
+        ability_id: ability_id.trim().to_ascii_uppercase(),
+        activated_at: now,
+    };
+    if ctx.db.active_aura().owner().find(owner).is_some() {
+        ctx.db.active_aura().owner().update(row);
+    } else {
+        ctx.db.active_aura().insert(row);
     }
 }
 
@@ -1327,7 +1558,7 @@ pub struct StatusEffect {
     pub spell_id: String,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Hash, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum StatusEffectKind {
     Root,
@@ -1339,6 +1570,7 @@ pub enum StatusEffectKind {
     Stagger,
     Knockdown,
     Slow,
+    MoveSpeed,
     Dot,
     Hot,
     MoveSlowImmunity,
@@ -1363,6 +1595,7 @@ impl StatusEffectKind {
             Self::Stagger => "STAGGER",
             Self::Knockdown => "KNOCKDOWN",
             Self::Slow => "SLOW",
+            Self::MoveSpeed => "MOVE_SPEED",
             Self::Dot => "DOT",
             Self::Hot => "HOT",
             Self::MoveSlowImmunity => "MOVE_SLOW_IMMUNITY",
@@ -1387,6 +1620,7 @@ impl StatusEffectKind {
             "STAGGER" => Some(Self::Stagger),
             "KNOCKDOWN" => Some(Self::Knockdown),
             "SLOW" => Some(Self::Slow),
+            "MOVE_SPEED" => Some(Self::MoveSpeed),
             "DOT" => Some(Self::Dot),
             "HOT" => Some(Self::Hot),
             "MOVE_SLOW_IMMUNITY" => Some(Self::MoveSlowImmunity),
@@ -1414,6 +1648,9 @@ pub enum StatusPayload {
     Knockdown,
     Slow {
         slow_pct: f32,
+    },
+    MoveSpeed {
+        modifier_scalar: f32,
     },
     Dot {
         tick_damage: i32,
@@ -1516,6 +1753,9 @@ impl AuthoredStatusPayload {
             StatusEffectKind::Slow => StatusPayload::Slow {
                 slow_pct: self.slow_pct,
             },
+            StatusEffectKind::MoveSpeed => StatusPayload::MoveSpeed {
+                modifier_scalar: self.modifier_scalar,
+            },
             StatusEffectKind::Dot => StatusPayload::Dot {
                 tick_damage: self.tick_damage,
                 tick_interval: Duration::from_millis(self.tick_interval_ms),
@@ -1598,7 +1838,8 @@ impl AuthoredStatusPayload {
                     return Err(format!("{subject} {path} has fields irrelevant to HOT"));
                 }
             }
-            StatusEffectKind::DamageAmp
+            StatusEffectKind::MoveSpeed
+            | StatusEffectKind::DamageAmp
             | StatusEffectKind::DirectDamageAmp
             | StatusEffectKind::DamageTakenReduction
             | StatusEffectKind::HealingTakenReduction
@@ -1681,6 +1922,7 @@ impl StatusPayload {
             Self::Stagger => StatusEffectKind::Stagger,
             Self::Knockdown => StatusEffectKind::Knockdown,
             Self::Slow { .. } => StatusEffectKind::Slow,
+            Self::MoveSpeed { .. } => StatusEffectKind::MoveSpeed,
             Self::Dot { .. } => StatusEffectKind::Dot,
             Self::Hot { .. } => StatusEffectKind::Hot,
             Self::MoveSlowImmunity => StatusEffectKind::MoveSlowImmunity,
@@ -1718,6 +1960,14 @@ impl StatusPayload {
                 tick_amount: 0,
                 tick_interval_ms: 0,
                 modifier_scalar: 0.0,
+                absorb_amount: 0,
+                absorb_cap: 0,
+            },
+            Self::MoveSpeed { modifier_scalar } => StatusEffectColumns {
+                slow_pct: 0.0,
+                tick_amount: 0,
+                tick_interval_ms: 0,
+                modifier_scalar: modifier_scalar.max(0.0),
                 absorb_amount: 0,
                 absorb_cap: 0,
             },
@@ -1804,6 +2054,9 @@ impl StatusPayload {
             StatusEffectKind::Slow => Self::Slow {
                 slow_pct: columns.slow_pct.clamp(MIN_SLOW_PCT, 0.95),
             },
+            StatusEffectKind::MoveSpeed => Self::MoveSpeed {
+                modifier_scalar: columns.modifier_scalar.max(0.0),
+            },
             StatusEffectKind::Dot => Self::Dot {
                 tick_damage: columns.tick_amount.max(0),
                 tick_interval: Duration::from_millis(columns.tick_interval_ms.max(1)),
@@ -1855,6 +2108,9 @@ impl StatusPayload {
             | Self::MoveSlowImmunity
             | Self::MeleeAttackModifier => false,
             Self::Slow { slow_pct } => !(MIN_SLOW_PCT..=0.95).contains(&slow_pct),
+            Self::MoveSpeed { modifier_scalar } => {
+                !modifier_scalar.is_finite() || modifier_scalar <= 0.0
+            }
             Self::Dot {
                 tick_damage,
                 tick_interval,
@@ -1902,6 +2158,12 @@ impl StatusPayload {
             Self::Slow { slow_pct } => {
                 if !(MIN_SLOW_PCT..=0.95).contains(&slow_pct) {
                     return Err(format!("{subject} {path}.slow_pct must be > 0 and <= 0.95"));
+                }
+                Ok(())
+            }
+            Self::MoveSpeed { modifier_scalar } => {
+                if !modifier_scalar.is_finite() || modifier_scalar <= 0.0 {
+                    return Err(format!("{subject} {path}.modifier_scalar must be positive"));
                 }
                 Ok(())
             }
@@ -1990,6 +2252,9 @@ impl StatusPayload {
             | Self::MoveSlowImmunity
             | Self::MeleeAttackModifier => true,
             Self::Slow { slow_pct } => slow_pct > existing.slow_pct,
+            Self::MoveSpeed { modifier_scalar } => {
+                modifier_scalar > existing.modifier_scalar.max(0.0)
+            }
             Self::Dot { tick_damage, .. } => tick_damage > existing.tick_amount.max(0),
             Self::Hot { tick_heal, .. } => tick_heal > existing.tick_amount.max(0),
             Self::DamageAmp { modifier_scalar }
@@ -2200,6 +2465,10 @@ impl StatusApplication {
 
     pub fn stack_policy(&self) -> StackPolicy {
         self.stack_policy
+    }
+
+    pub fn dispel_types(&self) -> &[StatusDispelType] {
+        &self.dispel_types
     }
 
     pub fn requires_positive_damage(&self) -> bool {
@@ -3125,6 +3394,41 @@ fn apply_status(
     target_audience: TargetAudience,
     dispel_types: Vec<StatusDispelType>,
 ) {
+    apply_status_internal(
+        ctx,
+        now,
+        source,
+        target,
+        spell_id,
+        payload,
+        polarity,
+        duration,
+        stack_group,
+        max_stacks,
+        stack_policy,
+        target_audience,
+        dispel_types,
+        true,
+    );
+}
+
+#[allow(clippy::too_many_arguments)]
+fn apply_status_internal(
+    ctx: &ReducerContext,
+    now: Timestamp,
+    source: Identity,
+    target: Identity,
+    spell_id: &str,
+    payload: StatusPayload,
+    polarity: StatusPolarity,
+    duration: Duration,
+    stack_group: &str,
+    max_stacks: u32,
+    stack_policy: StackPolicy,
+    target_audience: TargetAudience,
+    dispel_types: Vec<StatusDispelType>,
+    marks_combat: bool,
+) {
     if duration.is_zero() {
         return;
     }
@@ -3156,12 +3460,14 @@ fn apply_status(
     }
 
     expire_statuses_for_target(ctx, target, now);
-    match polarity {
-        StatusPolarity::Debuff => {
-            mark_harmful_combat_action(ctx, source, target, now, COMBAT_REASON_DEBUFF);
-        }
-        StatusPolarity::Buff => {
-            mark_helpful_combat_assist(ctx, source, target, now);
+    if marks_combat {
+        match polarity {
+            StatusPolarity::Debuff => {
+                mark_harmful_combat_action(ctx, source, target, now, COMBAT_REASON_DEBUFF);
+            }
+            StatusPolarity::Buff => {
+                mark_helpful_combat_assist(ctx, source, target, now);
+            }
         }
     }
 
@@ -3823,6 +4129,7 @@ pub fn clear_statuses_for_dead_players(ctx: &ReducerContext) {
 
     for identity in dead_players {
         ctx.db.status_effect().target().delete(identity);
+        ctx.db.active_aura().owner().delete(identity);
         clear_combat_engagement_for_identity(ctx, identity);
         clear_combat_stacking_passive_runtime_for_identity(ctx, identity);
     }
@@ -3882,6 +4189,7 @@ pub struct MovementModifiers {
     rooted: HashSet<Identity>,
     disabled: HashSet<Identity>,
     slow_pct_by_target: HashMap<Identity, f32>,
+    move_speed_bonus_by_target: HashMap<Identity, f32>,
     move_slow_immune: HashSet<Identity>,
 }
 
@@ -3891,6 +4199,7 @@ impl Default for MovementModifiers {
             rooted: HashSet::new(),
             disabled: HashSet::new(),
             slow_pct_by_target: HashMap::new(),
+            move_speed_bonus_by_target: HashMap::new(),
             move_slow_immune: HashSet::new(),
         }
     }
@@ -3913,19 +4222,24 @@ impl MovementModifiers {
         if self.blocks_movement(identity) {
             return 0.0;
         }
-        if self.move_slow_immune.contains(identity) {
-            return 1.0;
-        }
-        // Future snares and speed buffs should all resolve into
-        // this single derived multiplier so movement prediction only needs one
-        // authoritative speed input.
-        let slow_pct = self
-            .slow_pct_by_target
+        // Snares and speed buffs resolve into this single derived multiplier
+        // so movement prediction only needs one authoritative speed input.
+        let slow_pct = if self.move_slow_immune.contains(identity) {
+            0.0
+        } else {
+            self.slow_pct_by_target
+                .get(identity)
+                .copied()
+                .unwrap_or(0.0)
+                .clamp(0.0, 0.95)
+        };
+        let speed_bonus = self
+            .move_speed_bonus_by_target
             .get(identity)
             .copied()
             .unwrap_or(0.0)
-            .clamp(0.0, 0.95);
-        (1.0 - slow_pct).clamp(0.05, 1.0)
+            .max(0.0);
+        ((1.0 + speed_bonus) * (1.0 - slow_pct)).clamp(0.05, MAX_MOVE_SPEED_MULTIPLIER)
     }
 }
 
@@ -4041,6 +4355,14 @@ impl StatusRuntimeView {
                         let entry = modifiers.slow_pct_by_target.entry(*target).or_insert(0.0);
                         *entry = (*entry).max(stacked_slow_pct(effect.slow_pct, effect.stacks));
                     }
+                    StatusEffectKind::MoveSpeed => {
+                        let entry = modifiers
+                            .move_speed_bonus_by_target
+                            .entry(*target)
+                            .or_insert(0.0);
+                        *entry = (*entry)
+                            .max(effect.modifier_scalar.max(0.0) * effect.stacks.max(1) as f32);
+                    }
                     kind if is_hard_crowd_control_kind(kind) => {
                         modifiers.disabled.insert(*target);
                     }
@@ -4112,6 +4434,7 @@ impl StatusRuntimeView {
                     | StatusEffectKind::Stagger
                     | StatusEffectKind::Knockdown
                     | StatusEffectKind::Slow
+                    | StatusEffectKind::MoveSpeed
                     | StatusEffectKind::Dot
                     | StatusEffectKind::Hot
                     | StatusEffectKind::MeleeAttackModifier
@@ -4600,6 +4923,26 @@ mod tests {
     }
 
     #[test]
+    fn movement_modifiers_apply_move_speed_bonus_without_blocking_movement() {
+        let identity = test_identity();
+        let mut modifiers = MovementModifiers::default();
+        modifiers.move_speed_bonus_by_target.insert(identity, 0.10);
+
+        assert!(!modifiers.blocks_movement(&identity));
+        assert!((modifiers.move_speed_multiplier(&identity, 10) - 1.1).abs() < 0.0001);
+    }
+
+    #[test]
+    fn movement_modifiers_combine_move_speed_bonus_with_slow() {
+        let identity = test_identity();
+        let mut modifiers = MovementModifiers::default();
+        modifiers.slow_pct_by_target.insert(identity, 0.3);
+        modifiers.move_speed_bonus_by_target.insert(identity, 0.10);
+
+        assert!((modifiers.move_speed_multiplier(&identity, 10) - 0.77).abs() < 0.0001);
+    }
+
+    #[test]
     fn stacked_slow_pct_adds_per_stack_and_clamps() {
         assert!((stacked_slow_pct(0.10, 1) - 0.10).abs() < 0.0001);
         assert!((stacked_slow_pct(0.10, 4) - 0.40).abs() < 0.0001);
@@ -4614,6 +4957,17 @@ mod tests {
         modifiers.move_slow_immune.insert(identity);
 
         assert!((modifiers.move_speed_multiplier(&identity, 10) - 1.0).abs() < 0.0001);
+    }
+
+    #[test]
+    fn movement_modifiers_keep_move_speed_bonus_when_slow_immune() {
+        let identity = test_identity();
+        let mut modifiers = MovementModifiers::default();
+        modifiers.slow_pct_by_target.insert(identity, 0.7);
+        modifiers.move_speed_bonus_by_target.insert(identity, 0.10);
+        modifiers.move_slow_immune.insert(identity);
+
+        assert!((modifiers.move_speed_multiplier(&identity, 10) - 1.1).abs() < 0.0001);
     }
 
     #[test]
@@ -4685,6 +5039,15 @@ mod tests {
                 StatusPayload::Slow { slow_pct: 0.45 },
                 StatusEffectKind::Slow,
                 StatusPayload::Slow { slow_pct: 0.45 },
+            ),
+            (
+                StatusPayload::MoveSpeed {
+                    modifier_scalar: 0.10,
+                },
+                StatusEffectKind::MoveSpeed,
+                StatusPayload::MoveSpeed {
+                    modifier_scalar: 0.10,
+                },
             ),
             (
                 StatusPayload::Dot {
@@ -4801,6 +5164,13 @@ mod tests {
                 "valid slow",
                 AuthoredStatusPayload::new(StatusEffectKind::Slow, 0.25, 0, 0, 0, 0.0),
                 Some(StatusPayload::Slow { slow_pct: 0.25 }),
+            ),
+            (
+                "valid move speed",
+                AuthoredStatusPayload::new(StatusEffectKind::MoveSpeed, 0.0, 0, 0, 0, 0.10),
+                Some(StatusPayload::MoveSpeed {
+                    modifier_scalar: 0.10,
+                }),
             ),
             (
                 "valid dot",

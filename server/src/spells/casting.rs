@@ -29,10 +29,10 @@ use crate::combat::scene_query::{
 use crate::combat::status_effect;
 use crate::combat::{
     decode_status_dispel_types, has_active_disabling_status, mark_harmful_combat_action,
-    queue_effects, temporary_combat_modifiers, timestamp_to_micros, ActiveCombatProjectile,
-    CombatEvent, DamageDelivery, EffectPacket, ProjectilePresentationEvent, StatusApplication,
-    StatusDispelType, StatusEffectKind, StatusPayload, StatusPolarity, StatusStackGroupDefault,
-    COMBAT_METADATA_NONE, COMBAT_SCALAR_NONE, COMBAT_SEQUENCE_NONE,
+    queue_effects, set_active_aura, temporary_combat_modifiers, timestamp_to_micros,
+    ActiveCombatProjectile, CombatEvent, DamageDelivery, EffectPacket, ProjectilePresentationEvent,
+    StatusApplication, StatusDispelType, StatusEffectKind, StatusPayload, StatusPolarity,
+    StatusStackGroupDefault, COMBAT_METADATA_NONE, COMBAT_SCALAR_NONE, COMBAT_SEQUENCE_NONE,
 };
 use crate::defense::{
     clear_interruptible_defense_for_owner, resolve_defensible_combat_hit, CombatHitDeliveryKind,
@@ -1994,7 +1994,10 @@ fn process_spell_cast(
 
     if matches!(
         definition.behavior,
-        SpellBehavior::ApplyStatus | SpellBehavior::RemoveStatus | SpellBehavior::SelfResource
+        SpellBehavior::ApplyStatus
+            | SpellBehavior::RemoveStatus
+            | SpellBehavior::Aura
+            | SpellBehavior::SelfResource
     ) {
         if mode == CastExecutionMode::Execute {
             match definition.behavior {
@@ -2022,6 +2025,9 @@ fn process_spell_cast(
                         ability_id,
                     );
                 }
+                SpellBehavior::Aura => {
+                    cast_aura(ctx, caster, spell_kind, ability_id);
+                }
                 SpellBehavior::SelfResource => {
                     cast_self_resource(
                         ctx,
@@ -2040,6 +2046,9 @@ fn process_spell_cast(
         }
         if definition.behavior == SpellBehavior::RemoveStatus {
             return cast_remove_status(ctx, caster, state, spell_kind, target_id, mode, "", "");
+        }
+        if definition.behavior == SpellBehavior::Aura {
+            return Ok(true);
         }
         return Ok(true);
     }
@@ -5576,6 +5585,14 @@ fn cast_self_resource(
         definition.primary_resource_gain_on_cast > 0.0,
         "SELF_RESOURCE spells must define a resource gain"
     );
+}
+
+fn cast_aura(ctx: &ReducerContext, caster: Identity, kind: &SpellId, ability_id: &str) {
+    let Some(definition) = super::catalog::spell_definition(kind) else {
+        return;
+    };
+    debug_assert_eq!(definition.behavior, SpellBehavior::Aura);
+    set_active_aura(ctx, caster, kind.as_str(), ability_id, ctx.timestamp);
 }
 
 fn cast_remove_status(

@@ -14,8 +14,8 @@ use crate::relations::{default_spell_target_audience, TargetAudience};
 
 use super::manifest::{
     ApplyStatusDefinition, ApplyStatusSecondaryTunables, AreaSecondaryTunables,
-    BespokeRuntimeSpell, BlockBehavior, BoomerangCasterProjectileTunables, ImpactEffect,
-    InstantBeamChargeScaling, InstantBeamSecondaryTunables, MeteorSkyOrigin,
+    AuraSecondaryTunables, BespokeRuntimeSpell, BlockBehavior, BoomerangCasterProjectileTunables,
+    ImpactEffect, InstantBeamChargeScaling, InstantBeamSecondaryTunables, MeteorSkyOrigin,
     OrbitCasterProjectileTunables, ProjectileMotionTunables, ProjectileSecondaryTunables,
     RemoveStatusDefinition, RemoveStatusSecondaryTunables, SpellBehavior, SpellCastMobility,
     SpellDefinition, SpellId, SpellParryBehavior, SpellSecondaryTunables, SpellTargeting,
@@ -145,6 +145,12 @@ enum SpellCatalogDelivery {
         polarity: Option<StatusPolarity>,
         #[serde(default)]
         dispel_types: Vec<StatusDispelType>,
+    },
+    Aura {
+        radius: f32,
+        tick_interval_ms: u64,
+        #[serde(default)]
+        effects: Vec<ImpactEffectRow>,
     },
     SelfResource {},
 }
@@ -365,6 +371,16 @@ enum ImpactEffectRow {
         status_stack_group: Option<String>,
         #[serde(default)]
         dispel_types: Vec<StatusDispelType>,
+        #[serde(default = "default_one_stack")]
+        max_stacks: u32,
+        #[serde(default = "default_refresh_stack_policy")]
+        stack_policy: StackPolicy,
+    },
+    MoveSpeed {
+        duration_ms: u64,
+        modifier_scalar: f32,
+        #[serde(default)]
+        status_stack_group: Option<String>,
         #[serde(default = "default_one_stack")]
         max_stacks: u32,
         #[serde(default = "default_refresh_stack_policy")]
@@ -840,6 +856,20 @@ impl SpellCatalogRow {
                     dispel_types,
                 });
             }
+            SpellCatalogDelivery::Aura {
+                radius,
+                tick_interval_ms,
+                effects,
+            } => {
+                definition.behavior = SpellBehavior::Aura;
+                definition.radius = radius;
+                definition.block_behavior = BlockBehavior::Unblockable;
+                definition.secondary.aura = Some(AuraSecondaryTunables {
+                    radius,
+                    tick_interval: Duration::from_millis(tick_interval_ms),
+                    effects: effects.into_iter().map(Into::into).collect(),
+                });
+            }
             SpellCatalogDelivery::SelfResource {} => {
                 definition.behavior = SpellBehavior::SelfResource;
                 definition.block_behavior = BlockBehavior::Unblockable;
@@ -1036,6 +1066,28 @@ impl From<ImpactEffectRow> for ImpactEffect {
                 stack_policy,
             )
             .with_dispel_types(dispel_types),
+            ImpactEffectRow::MoveSpeed {
+                duration_ms,
+                modifier_scalar,
+                status_stack_group,
+                max_stacks,
+                stack_policy,
+            } => StatusApplication::new(
+                AuthoredStatusPayload::new(
+                    StatusEffectKind::MoveSpeed,
+                    0.0,
+                    0,
+                    0,
+                    0,
+                    modifier_scalar,
+                )
+                .payload(),
+                Duration::from_millis(duration_ms),
+                status_stack_group,
+                StatusStackGroupDefault::ActionSuffix("MOVE_SPEED"),
+                max_stacks,
+                stack_policy,
+            ),
         }
     }
 }
@@ -1240,6 +1292,13 @@ fn validate_impact_effect(def: &SpellDefinition, effect: &ImpactEffect) -> Resul
 }
 
 fn validate_secondary_tunables(def: &SpellDefinition) -> Result<(), String> {
+    if def.behavior != SpellBehavior::Aura && def.secondary.aura.is_some() {
+        return Err(format!(
+            "{} must not define aura secondary data",
+            def.kind.as_str()
+        ));
+    }
+
     match def.behavior {
         SpellBehavior::Projectile => {
             let Some(projectile) = def.secondary.projectile.as_ref() else {
@@ -1473,6 +1532,48 @@ fn validate_secondary_tunables(def: &SpellDefinition) -> Result<(), String> {
                 }
             }
             ensure_no_secondary(def, true, true, true, true, false)?;
+        }
+        SpellBehavior::Aura => {
+            let Some(aura) = def.secondary.aura.as_ref() else {
+                return Err(format!(
+                    "{} AURA must define secondary aura data",
+                    def.kind.as_str()
+                ));
+            };
+            if def.targeting != SpellTargeting::Self_ || def.requires_target {
+                return Err(format!(
+                    "{} AURA must use SELF targeting without a target requirement",
+                    def.kind.as_str()
+                ));
+            }
+            if def.target_audience != TargetAudience::PartyOrSelf {
+                return Err(format!(
+                    "{} AURA must use PARTY_OR_SELF target_audience",
+                    def.kind.as_str()
+                ));
+            }
+            ensure_positive_f32(def.kind.as_str(), "delivery.radius", aura.radius)?;
+            ensure_positive_duration(
+                def.kind.as_str(),
+                "delivery.tick_interval_ms",
+                aura.tick_interval,
+            )?;
+            if aura.effects.is_empty() {
+                return Err(format!(
+                    "{} AURA must define at least one delivery.effects entry",
+                    def.kind.as_str()
+                ));
+            }
+            for effect in &aura.effects {
+                if !effect.dispel_types().is_empty() {
+                    return Err(format!(
+                        "{} AURA effects must not define dispel_types",
+                        def.kind.as_str()
+                    ));
+                }
+                validate_impact_effect(def, effect)?;
+            }
+            ensure_no_secondary(def, true, true, true, true, true)?;
         }
         SpellBehavior::Channel | SpellBehavior::SelfResource => {
             if def.secondary != SpellSecondaryTunables::default() {
@@ -1853,6 +1954,7 @@ mod tests {
                 "CONSECRATE",
                 "CLEANSING_TOUCH",
                 "ABSOLUTION",
+                "FERVOR",
             ]
         );
     }
@@ -1890,6 +1992,10 @@ mod tests {
             "ENRAGE",
             "SHOCKWAVE",
             "INTIMIDATE",
+            "CONSECRATE",
+            "CLEANSING_TOUCH",
+            "ABSOLUTION",
+            "FERVOR",
         ] {
             assert!(
                 spell_definition_by_str(id).is_some(),

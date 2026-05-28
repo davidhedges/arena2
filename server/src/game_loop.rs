@@ -42,7 +42,7 @@ use crate::combat::{
     clear_statuses_for_dead_players, expire_combat_engagements, expire_status_effects,
     has_due_pending_effects, movement_modifiers, normalize_legacy_hot_status_rows,
     process_periodic_status_ticks, prune_combat_events, resolve_pending_effects, respawn_player,
-    sync_combat_projectile_definitions, sync_player_state_derived_stats,
+    sync_combat_projectile_definitions, sync_player_state_derived_stats, tick_auras,
     tick_combat_projectiles_with_snapshots, tick_combat_stacking_passives, MovementModifiers,
 };
 use crate::defense::prune_defense_states;
@@ -529,6 +529,7 @@ fn run_pre_tick_housekeeping_phase(
         resolve_combat_cycle(ctx, now);
     }
     tick_combat_stacking_passives(ctx, now);
+    tick_auras(ctx, now);
     expire_combat_engagements(ctx, now);
     expire_status_effects(ctx, now);
 
