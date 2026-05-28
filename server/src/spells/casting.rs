@@ -5656,6 +5656,16 @@ fn cast_remove_status(
             now,
         },
     );
+    emit_remove_status_impact_event(
+        ctx,
+        caster,
+        state,
+        kind,
+        target,
+        spell_id.as_str(),
+        ability_id,
+        now,
+    );
 
     let mut effects: Vec<EffectPacket> = remove_status
         .statuses
@@ -5669,6 +5679,47 @@ fn cast_remove_status(
     effects.extend(filtered_remove_status_effects(ctx, target, remove_status));
     queue_effects(ctx, effects);
     Ok(true)
+}
+
+fn emit_remove_status_impact_event(
+    ctx: &ReducerContext,
+    caster: Identity,
+    state: &PlayerSnapshot,
+    kind: &SpellId,
+    target: Identity,
+    action_instance_id: &str,
+    ability_id: &str,
+    now: Timestamp,
+) {
+    let origin = Vec3::new(state.pos_x, state.pos_y, state.pos_z);
+    let target_snapshot = player_snapshot_for(ctx, target);
+    let point = target_snapshot
+        .map(|target| Vec3::new(target.pos_x, target.pos_y, target.pos_z))
+        .unwrap_or(origin);
+    let direction = normalize_vec3(point.x - origin.x, 0.0, point.z - origin.z)
+        .map(|(x, y, z)| Vec3::new(x, y, z))
+        .unwrap_or_else(|| default_forward_direction(state));
+
+    emit_spell_combat_event(
+        ctx,
+        SpellCombatEventPayload {
+            action_instance_id,
+            ability_id,
+            kind,
+            event_type: EVENT_IMPACT,
+            caster,
+            hit: target,
+            origin,
+            direction,
+            speed: 0.0,
+            max_distance: 0.0,
+            scalar: SpellCombatEventScalar::None,
+            sequence_index: 0,
+            sequence_count: 1,
+            point,
+            now,
+        },
+    );
 }
 
 fn resolve_remove_status_target(

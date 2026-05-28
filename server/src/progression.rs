@@ -7238,6 +7238,29 @@ mod tests {
     }
 
     #[test]
+    fn paladin_cleansing_touch_authors_target_impact_vfx() {
+        let cue = progression_catalog()
+            .combat_vfx_cues
+            .iter()
+            .find(|cue| {
+                normalize_identifier(cue.owner_kind.as_str()) == "ABILITY"
+                    && normalize_identifier(cue.owner_id.as_str()) == "PALADIN_CLEANSING_TOUCH"
+                    && normalize_identifier(cue.trigger.as_str()) == "SPELL_IMPACT"
+            })
+            .expect("Cleansing Touch should author a target-side impact VFX cue");
+
+        assert_eq!(normalize_identifier(cue.anchor.as_str()), "TARGET");
+        assert_eq!(
+            normalize_identifier(cue.attach_mode.as_str()),
+            "FOLLOW_ANCHOR"
+        );
+        assert_eq!(
+            normalize_identifier(cue.vfx_id.as_str()),
+            "VFX_CLEANSE_HOLY_01"
+        );
+    }
+
+    #[test]
     fn warrior_disengage_strike_authors_timed_backstep() {
         let movement = melee_timed_movement_for_ability_id("WARRIOR_DISENGAGE_STRIKE")
             .expect("disengage strike should author timed movement");
