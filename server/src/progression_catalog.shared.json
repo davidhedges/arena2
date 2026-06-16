@@ -1894,6 +1894,47 @@
       }
     },
     {
+      "ability_id": "PALADIN_SACRED_FLAME",
+      "class_id": "PALADIN",
+      "action_id": "SACRED_FLAME",
+      "display_name": "Sacred Flame",
+      "resource_kind": "ZEAL",
+      "ability_tags": [
+        "LOADOUT_ACTION"
+      ],
+      "sort_order": 160,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 1200,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "TARGET",
+        "target_audience": "HOSTILE",
+        "requires_target": true,
+        "resource_cost": 1.0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "APPLY_STATUS",
+          "duration_ms": 8000,
+          "max_distance": 30.0,
+          "polarity": "DEBUFF",
+          "status_stack_group": "PALADIN_SACRED_FLAME_DOT",
+          "status": {
+            "kind": "DOT",
+            "modifier_scalar": 0.0,
+            "tick_interval_ms": 1000,
+            "tick_damage": 4,
+            "max_stacks": 1,
+            "stack_policy": "REFRESH",
+            "dispel_types": [
+              "MAGIC"
+            ]
+          }
+        }
+      }
+    },
+    {
       "ability_id": "ARCHER_POWER_SHOT",
       "class_id": "RANGER",
       "action_id": "ARCHER_POWER_SHOT",
@@ -2386,6 +2427,13 @@
     },
     {
       "presentation_kind": "ABILITY",
+      "presentation_id": "PALADIN_SACRED_FLAME",
+      "display_name": "Sacred Flame",
+      "description": "Brands an enemy with holy damage over time.",
+      "sort_order": 160
+    },
+    {
+      "presentation_kind": "ABILITY",
       "presentation_id": "ARCHER_POWER_SHOT",
       "display_name": "Power Shot",
       "description": "Draws and releases a focused bow shot.",
@@ -2477,6 +2525,13 @@
     },
     {
       "presentation_kind": "STATUS",
+      "presentation_id": "PALADIN_SACRED_FLAME_DOT",
+      "display_name": "Sacred Flame",
+      "description": "Takes holy damage over time.",
+      "sort_order": 10046
+    },
+    {
+      "presentation_kind": "STATUS",
       "presentation_id": "ROOT",
       "display_name": "Rooted",
       "description": "Unable to move.",
@@ -2557,6 +2612,18 @@
       "lifecycle": "PARTICLE_SYSTEM",
       "duration_ms": 0,
       "sort_order": 13
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "PALADIN_SACRED_FLAME",
+      "trigger": "SPELL_IMPACT",
+      "anchor": "IMPACT_POINT",
+      "vfx_id": "VFX_SACRED_FLAME_HIT_01",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "PARTICLE_SYSTEM",
+      "duration_ms": 0,
+      "sort_order": 14
     },
     {
       "owner_kind": "ABILITY",
@@ -3152,6 +3219,12 @@
       "slot_id": "slot_1_7",
       "ability_id": "PALADIN_FERVOR",
       "sort_order": 190
+    },
+    {
+      "class_id": "PALADIN",
+      "slot_id": "slot_1_8",
+      "ability_id": "PALADIN_SACRED_FLAME",
+      "sort_order": 195
     },
     {
       "class_id": "PALADIN",

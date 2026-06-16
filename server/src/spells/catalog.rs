@@ -1863,7 +1863,8 @@ fn validate_apply_status_kind_for_target(
         | StatusEffectKind::Freeze
         | StatusEffectKind::Intimidated
         | StatusEffectKind::Stagger
-        | StatusEffectKind::Knockdown => Ok(()),
+        | StatusEffectKind::Knockdown
+        | StatusEffectKind::Dot => Ok(()),
         other => Err(format!(
             "{spell_id} TARGET APPLY_STATUS status '{}' is not supported",
             other.as_str()

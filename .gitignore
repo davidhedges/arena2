@@ -45,6 +45,10 @@ Backups/**/*.bak
 Assets/**/*.unitypackage
 Assets/**/*.unitypackage.meta
 
+# Imported local package
+Assets/NHance/
+Assets/NHance.meta
+
 # Infrastructure local state and secrets
 .env
 .env.local

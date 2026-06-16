@@ -4879,12 +4879,14 @@ fn encode_tags(tags: &[String]) -> String {
 #[cfg(test)]
 mod tests {
     use std::collections::{HashMap, HashSet};
+    use std::time::Duration;
 
     use crate::animation_set_test_utils::{
         animation_set_assets_by_combat_profile, parse_top_level_animation_set_field,
     };
     use crate::combat::{
-        StackPolicy, StatusApplication, StatusPayload, StatusStackGroupDefault, DEFAULT_HIT_RADIUS,
+        StackPolicy, StatusApplication, StatusDispelType, StatusPayload, StatusStackGroupDefault,
+        DEFAULT_HIT_RADIUS,
     };
     use crate::melee::profile_supports_action_reference;
     use crate::progression::melee_timed_movement_for_ability_id;
@@ -7258,6 +7260,74 @@ mod tests {
             normalize_identifier(cue.vfx_id.as_str()),
             "VFX_CLEANSE_HOLY_01"
         );
+    }
+
+    #[test]
+    fn paladin_sacred_flame_authors_non_projectile_dot_and_landing_vfx() {
+        let catalog = progression_catalog();
+        let ability = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "PALADIN_SACRED_FLAME")
+            .expect("PALADIN_SACRED_FLAME must exist");
+
+        assert_eq!(ability.class_id, "PALADIN");
+        assert_eq!(ability_gameplay_kind(ability), "SPELL");
+        assert_eq!(ability.action_id, "SACRED_FLAME");
+        assert_eq!(ability.gameplay.resource_cost, Some(1.0));
+
+        let definition =
+            spell_definition_by_str("SACRED_FLAME").expect("Sacred Flame spell definition");
+        assert_eq!(
+            definition.behavior,
+            crate::spells::SpellBehavior::ApplyStatus
+        );
+        assert_eq!(definition.target_audience.as_str(), "HOSTILE");
+        assert!(definition.secondary.projectile.is_none());
+        assert_eq!(
+            definition
+                .apply_status
+                .as_ref()
+                .expect("Sacred Flame should apply a status")
+                .payload(),
+            StatusPayload::Dot {
+                tick_damage: 4,
+                tick_interval: Duration::from_secs(1),
+            }
+        );
+        assert_eq!(
+            definition
+                .apply_status
+                .as_ref()
+                .expect("Sacred Flame should apply a status")
+                .dispel_types,
+            vec![StatusDispelType::Magic]
+        );
+
+        let cue = catalog
+            .combat_vfx_cues
+            .iter()
+            .find(|cue| {
+                normalize_identifier(cue.owner_kind.as_str()) == "ABILITY"
+                    && normalize_identifier(cue.owner_id.as_str()) == "PALADIN_SACRED_FLAME"
+                    && normalize_identifier(cue.trigger.as_str()) == "SPELL_IMPACT"
+            })
+            .expect("Sacred Flame should author an initial landing VFX cue");
+
+        assert_eq!(normalize_identifier(cue.anchor.as_str()), "IMPACT_POINT");
+        assert_eq!(
+            normalize_identifier(cue.vfx_id.as_str()),
+            "VFX_SACRED_FLAME_HIT_01"
+        );
+        assert!(catalog
+            .default_loadout_assignments
+            .iter()
+            .any(|assignment| {
+                normalize_identifier(assignment.class_id.as_str()) == "PALADIN"
+                    && canonical_loadout_slot_id(assignment.slot_id.as_str()) == "SLOT_1_8"
+                    && normalize_identifier(assignment.ability_id.as_str())
+                        == "PALADIN_SACRED_FLAME"
+            }));
     }
 
     #[test]
