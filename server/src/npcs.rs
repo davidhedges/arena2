@@ -9,7 +9,7 @@ use crate::combat::{
     COMBAT_EVENT_CAST, COMBAT_EVENT_IMPACT, COMBAT_METADATA_NONE, COMBAT_SCALAR_NONE,
     COMBAT_SEQUENCE_NONE,
 };
-use crate::movement::FIXED_TICK_SECONDS;
+use crate::movement::{FIXED_TICK_SECONDS, MOVE_SPEED};
 use crate::practice::is_training_instance;
 use crate::relations::can_harm;
 use crate::world_collision::{
@@ -172,7 +172,7 @@ pub(crate) fn npc_template(template_id: &str) -> Option<NpcTemplate> {
             hit_height: 1.35,
             aggro_radius: 8.0,
             attack_range: 1.90,
-            move_speed: 2.6,
+            move_speed: MOVE_SPEED,
             attack_damage: 8,
             attack_cadence_ms: 1800,
         }),
@@ -185,7 +185,7 @@ pub(crate) fn npc_template(template_id: &str) -> Option<NpcTemplate> {
             hit_height: 1.35,
             aggro_radius: 9.0,
             attack_range: 2.40,
-            move_speed: 2.45,
+            move_speed: MOVE_SPEED,
             attack_damage: 7,
             attack_cadence_ms: 1900,
         }),
@@ -198,7 +198,7 @@ pub(crate) fn npc_template(template_id: &str) -> Option<NpcTemplate> {
             hit_height: 1.25,
             aggro_radius: 8.5,
             attack_range: 1.80,
-            move_speed: 3.1,
+            move_speed: MOVE_SPEED + 0.5,
             attack_damage: 6,
             attack_cadence_ms: 1400,
         }),
@@ -211,7 +211,7 @@ pub(crate) fn npc_template(template_id: &str) -> Option<NpcTemplate> {
             hit_height: 1.45,
             aggro_radius: 8.0,
             attack_range: 1.95,
-            move_speed: 2.25,
+            move_speed: MOVE_SPEED,
             attack_damage: 10,
             attack_cadence_ms: 2100,
         }),
@@ -389,6 +389,12 @@ pub(crate) fn tick_npc_combat(ctx: &ReducerContext, now: Timestamp) {
                 next_attack_at_micros: timestamp_to_micros(now),
             });
 
+        if now < runtime.next_attack_at {
+            face_npc_target(ctx, now, &physics, &target);
+            upsert_npc_combat_runtime(ctx, runtime);
+            continue;
+        }
+
         if target.distance > npc_attack_reach(template, &target) {
             chase_npc_toward_target(ctx, now, &npc, &physics, template, &target);
             runtime.next_attack_at = now;
@@ -398,11 +404,6 @@ pub(crate) fn tick_npc_combat(ctx: &ReducerContext, now: Timestamp) {
         }
 
         let physics = face_npc_target(ctx, now, &physics, &target);
-
-        if now < runtime.next_attack_at {
-            upsert_npc_combat_runtime(ctx, runtime);
-            continue;
-        }
 
         perform_npc_melee_attack(ctx, now, &npc, &physics, template, &target);
         runtime.next_attack_at = now + Duration::from_millis(template.attack_cadence_ms);
