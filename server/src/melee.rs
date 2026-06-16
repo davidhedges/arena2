@@ -2946,9 +2946,7 @@ fn perform_melee_attack_for_internal(
     );
     let timed_movement = gameplay.timed_movement.clone();
     let (target, target_point_x, target_point_y, target_point_z, dx, dz, horiz_dist) =
-        if let Some((target, target_snapshot, dx, dz, horiz_dist)) =
-            target_context.as_ref()
-        {
+        if let Some((target, target_snapshot, dx, dz, horiz_dist)) = target_context.as_ref() {
             mark_harmful_combat_action(ctx, caster, *target, now, strike.id.as_str());
             (
                 *target,

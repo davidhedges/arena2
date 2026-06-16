@@ -128,6 +128,12 @@ namespace Arena.Entity
             RefreshSelectedTargetIndicator();
         }
 
+        public void PlayAttack()
+        {
+            if (!IsDestroyed && IsAlive)
+                _animationController.PlayAttack();
+        }
+
         public void Destroy()
         {
             if (!IsDestroyed)

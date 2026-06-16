@@ -87,9 +87,9 @@ use crate::melee::pending_melee_timed_movement as _;
 #[allow(unused_imports)]
 use crate::melee::queued_melee_followup as _;
 #[allow(unused_imports)]
-use crate::npcs::npc_state as _;
-#[allow(unused_imports)]
 use crate::movement_actions::movement_action_state as _;
+#[allow(unused_imports)]
+use crate::npcs::npc_state as _;
 #[allow(unused_imports)]
 use crate::player_physics::player_physics as _;
 #[allow(unused_imports)]

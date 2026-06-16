@@ -60,6 +60,7 @@ use crate::movement_actions::{
     reset_dodge_charge_state_to_full, sync_all_fixed_action_charge_states,
     tick_fixed_action_charge_states, tick_movement_actions,
 };
+use crate::npcs::tick_npc_combat;
 use crate::party::expire_party_invites;
 use crate::player_input::{
     clear_pending_player_commands, clear_pending_player_commands_through_tick, pop_command_for_tick,
@@ -502,6 +503,7 @@ fn run_pre_tick_housekeeping_phase(
     // transition timing has elapsed.
     tick_queued_melee_followups(ctx, now);
     tick_auto_attacks(ctx, now);
+    tick_npc_combat(ctx, now);
 
     // Pass A: resolve effects already queued (casts/reducers from previous frame boundary).
     resolve_combat_cycle_if_needed(ctx, now);

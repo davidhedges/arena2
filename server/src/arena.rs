@@ -20,13 +20,13 @@ use crate::arena::player_open_world_scene as _;
 #[allow(unused_imports)]
 use crate::arena::player_world as _;
 #[allow(unused_imports)]
-use crate::npcs::npc_instance as _;
-#[allow(unused_imports)]
 use crate::combat::match_participant_stats as _;
 use crate::combat::{clear_combat_engagement_for_identity, clear_statuses_for_identity};
 use crate::combat::{
     emit_player_spawned, reset_player_state_to_spawn, DEFAULT_HIT_HEIGHT, DEFAULT_HIT_RADIUS,
 };
+#[allow(unused_imports)]
+use crate::npcs::npc_instance as _;
 use crate::open_world_scene::{
     default_open_world_scene_profile, is_known_open_world_scene, open_world_scene_profile_for_scene,
 };

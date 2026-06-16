@@ -65,6 +65,15 @@ namespace Arena.Presentation
                 _returnToIdleAt = Time.time + ResolveClipLength(stateName, DefaultHitReturnDelay) + 0.05f;
         }
 
+        public void PlayAttack()
+        {
+            if (_dead)
+                return;
+
+            if (TryCrossFade(AttackStateCandidatesForTemplate(), out string? stateName) && stateName != null)
+                _returnToIdleAt = Time.time + ResolveClipLength(stateName, DefaultHitReturnDelay) + 0.05f;
+        }
+
         public void PlayDeath()
         {
             if (_dead)
@@ -122,6 +131,18 @@ namespace Arena.Presentation
                 KoboldThiefDualSword => new[] { "Combat_1H_Ready", "Combat_Unarmed_Ready", IdleStateName },
                 KoboldKnightSwordShield => new[] { "Combat_Defend_Ready", "Combat_1H_Ready", "Combat_Unarmed_Ready", IdleStateName },
                 _ => new[] { "Combat_Unarmed_Ready", IdleStateName },
+            };
+        }
+
+        private string[] AttackStateCandidatesForTemplate()
+        {
+            return _templateId switch
+            {
+                KoboldWarriorSwordShield => new[] { "Combat_1H_Attack", "Combat_Defend_Attack", "Combat_Unarmed_Attack" },
+                KoboldWarriorSpear => new[] { "Combat_2HL_Attack", "Combat_2HL_Attack01", "Combat_Unarmed_Attack" },
+                KoboldThiefDualSword => new[] { "Combat_1H_AttackDual", "Combat_1H_Attack", "Combat_Unarmed_Attack" },
+                KoboldKnightSwordShield => new[] { "Combat_1H_Attack", "Combat_Defend_Attack", "Combat_Unarmed_Attack" },
+                _ => new[] { "Combat_Unarmed_Attack" },
             };
         }
 

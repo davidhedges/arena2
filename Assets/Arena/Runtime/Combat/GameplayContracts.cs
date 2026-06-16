@@ -52,6 +52,7 @@ namespace Arena.Combat
         public const string QueuedFollowup = "queued_followup";
         public const string AutoAttack = "auto_attack";
         public const string Practice = "practice";
+        public const string NpcMelee = "NPC_MELEE";
 
         public static bool IsPredictedLocalMeleeSource(string? source)
         {

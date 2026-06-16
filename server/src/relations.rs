@@ -93,6 +93,10 @@ pub(crate) fn combat_relation(
         };
     }
 
+    if npc_faction(ctx, source) == Some(NpcFaction::Hostile) && target_is_player(ctx, target) {
+        return CombatRelation::Hostile;
+    }
+
     // Playground-only override for local targeting and party-frame testing. This
     // is not a general faction, NPC, or bot relationship system.
     if let Some(kind) = playground_target_kind_for_relation(ctx, source, target) {
@@ -187,6 +191,10 @@ fn target_is_dummy(ctx: &ReducerContext, target: Identity) -> bool {
         .player_id()
         .find(target)
         .is_some_and(|state| state.is_dummy)
+}
+
+fn target_is_player(ctx: &ReducerContext, target: Identity) -> bool {
+    ctx.db.player_state().player_id().find(target).is_some()
 }
 
 fn match_context_makes_hostile(ctx: &ReducerContext, source: Identity, target: Identity) -> bool {

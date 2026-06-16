@@ -1012,6 +1012,14 @@ namespace Arena.Entity
                 return;
             }
 
+            if (row.EventType == CombatEventTypes.Cast
+                && string.Equals(row.SourceKind, CombatEventSources.NpcMelee, System.StringComparison.Ordinal)
+                && TryGetLiveNpc(row.Caster, out var npcCaster))
+            {
+                npcCaster.PlayAttack();
+                return;
+            }
+
             if (row.EventType != CombatEventTypes.Cast)
                 return;
 
