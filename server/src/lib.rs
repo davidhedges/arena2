@@ -26,6 +26,7 @@ pub(crate) mod game_loop;
 mod melee;
 mod movement;
 mod movement_actions;
+mod npcs;
 mod open_world_scene;
 mod open_world_terrain;
 mod party;

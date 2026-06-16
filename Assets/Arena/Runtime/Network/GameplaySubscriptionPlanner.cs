@@ -87,6 +87,9 @@ namespace Arena.Network
                 BuildScopedCharacterAppearanceQuery(new QueryBuilder(), scope),
                 BuildScopedPlayerPhysicsQuery(new QueryBuilder(), scope),
                 BuildScopedPlayerStateQuery(new QueryBuilder(), scope),
+                BuildScopedNpcInstanceQuery(new QueryBuilder(), scope),
+                BuildScopedNpcPhysicsQuery(new QueryBuilder(), scope),
+                BuildScopedNpcStateQuery(new QueryBuilder(), scope),
                 BuildScopedCombatEngagementQuery(new QueryBuilder(), scope),
                 BuildScopedPlayerResourceQuery(new QueryBuilder(), scope),
                 BuildScopedDefenseStateQuery(new QueryBuilder(), scope),
@@ -190,6 +193,70 @@ namespace Arena.Network
                     .RightSemijoin(qb.From.PlayerState(), (world, state) => world.Identity.Eq(state.PlayerId))
                     .ToSql(),
                 _ => throw new InvalidOperationException("Scoped player-state query requested for GameplayScope.None"),
+            };
+        }
+
+        private static string BuildScopedNpcInstanceQuery(QueryBuilder qb, NetworkManager.GameplayScope scope)
+        {
+            return scope.Kind switch
+            {
+                NetworkManager.GameplayScopeKind.OpenWorld => qb
+                    .From
+                    .NpcInstance()
+                    .Where(c => c.WorldKind.Eq("OPEN"))
+                    .Where(c => c.OpenWorldSceneName.Eq(OpenWorldSceneName(scope)))
+                    .ToSql(),
+                NetworkManager.GameplayScopeKind.Instance => qb
+                    .From
+                    .NpcInstance()
+                    .Where(c => c.WorldKind.Eq("INSTANCE"))
+                    .Where(c => c.InstanceId.Eq(scope.InstanceId.GetValueOrDefault()))
+                    .ToSql(),
+                _ => throw new InvalidOperationException("Scoped NPC instance query requested for GameplayScope.None"),
+            };
+        }
+
+        private static string BuildScopedNpcPhysicsQuery(QueryBuilder qb, NetworkManager.GameplayScope scope)
+        {
+            return scope.Kind switch
+            {
+                NetworkManager.GameplayScopeKind.OpenWorld => qb
+                    .From
+                    .NpcInstance()
+                    .Where(c => c.WorldKind.Eq("OPEN"))
+                    .Where(c => c.OpenWorldSceneName.Eq(OpenWorldSceneName(scope)))
+                    .RightSemijoin(qb.From.NpcPhysics(), (npc, physics) => npc.Identity.Eq(physics.Identity))
+                    .ToSql(),
+                NetworkManager.GameplayScopeKind.Instance => qb
+                    .From
+                    .NpcInstance()
+                    .Where(c => c.WorldKind.Eq("INSTANCE"))
+                    .Where(c => c.InstanceId.Eq(scope.InstanceId.GetValueOrDefault()))
+                    .RightSemijoin(qb.From.NpcPhysics(), (npc, physics) => npc.Identity.Eq(physics.Identity))
+                    .ToSql(),
+                _ => throw new InvalidOperationException("Scoped NPC physics query requested for GameplayScope.None"),
+            };
+        }
+
+        private static string BuildScopedNpcStateQuery(QueryBuilder qb, NetworkManager.GameplayScope scope)
+        {
+            return scope.Kind switch
+            {
+                NetworkManager.GameplayScopeKind.OpenWorld => qb
+                    .From
+                    .NpcInstance()
+                    .Where(c => c.WorldKind.Eq("OPEN"))
+                    .Where(c => c.OpenWorldSceneName.Eq(OpenWorldSceneName(scope)))
+                    .RightSemijoin(qb.From.NpcState(), (npc, state) => npc.Identity.Eq(state.Identity))
+                    .ToSql(),
+                NetworkManager.GameplayScopeKind.Instance => qb
+                    .From
+                    .NpcInstance()
+                    .Where(c => c.WorldKind.Eq("INSTANCE"))
+                    .Where(c => c.InstanceId.Eq(scope.InstanceId.GetValueOrDefault()))
+                    .RightSemijoin(qb.From.NpcState(), (npc, state) => npc.Identity.Eq(state.Identity))
+                    .ToSql(),
+                _ => throw new InvalidOperationException("Scoped NPC state query requested for GameplayScope.None"),
             };
         }
 

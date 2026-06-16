@@ -2677,16 +2677,16 @@ fn perform_melee_attack_for_internal(
         if target == caster {
             return Ok(MeleeAttackDispatch::Rejected);
         }
-        let Some(target_state) = ctx.db.player_state().player_id().find(target) else {
+        let Some(target_snapshot) = player_snapshot_for(ctx, target) else {
             log::warn!(
-                "[MELEE] {} {} — target {} has no player_state",
+                "[MELEE] {} {} — target {} has no combat snapshot",
                 &caster.to_hex()[..8],
                 authored_action_id.as_str(),
                 &target.to_hex()[..8]
             );
             return Ok(MeleeAttackDispatch::Rejected);
         };
-        if !target_state.alive {
+        if !target_snapshot.alive {
             log::warn!(
                 "[MELEE] {} {} — target {} is dead",
                 &caster.to_hex()[..8],
@@ -2714,18 +2714,9 @@ fn perform_melee_attack_for_internal(
             );
             return Ok(MeleeAttackDispatch::Rejected);
         }
-        let Some(target_phys) = ctx.db.player_physics().identity().find(target) else {
-            log::warn!(
-                "[MELEE] {} {} — target {} has no player_physics",
-                &caster.to_hex()[..8],
-                authored_action_id.as_str(),
-                &target.to_hex()[..8]
-            );
-            return Ok(MeleeAttackDispatch::Rejected);
-        };
         if !gameplay
             .airborne_targeting_mode
-            .allows_target(caster_phys.grounded, target_phys.grounded)
+            .allows_target(caster_phys.grounded, target_snapshot.grounded)
         {
             log::info!(
                 "[MELEE] owner={} source={} strike={} rejected_airborne_targeting required={} caster_grounded={} target_grounded={}",
@@ -2734,13 +2725,13 @@ fn perform_melee_attack_for_internal(
                 strike.id,
                 gameplay.airborne_targeting_mode.as_str(),
                 caster_phys.grounded,
-                target_phys.grounded
+                target_snapshot.grounded
             );
             return Ok(MeleeAttackDispatch::Rejected);
         }
 
-        let dx = target_phys.pos_x - caster_phys.pos_x;
-        let dz = target_phys.pos_z - caster_phys.pos_z;
+        let dx = target_snapshot.pos_x - caster_phys.pos_x;
+        let dz = target_snapshot.pos_z - caster_phys.pos_z;
         if !is_direction_within_facing_arc(
             caster_phys.yaw,
             dx,
@@ -2755,28 +2746,28 @@ fn perform_melee_attack_for_internal(
                 strike.id,
                 caster_phys.pos_x,
                 caster_phys.pos_z,
-                target_phys.pos_x,
-                target_phys.pos_z,
+                target_snapshot.pos_x,
+                target_snapshot.pos_z,
                 caster_phys.yaw
             );
             return Ok(MeleeAttackDispatch::Rejected);
         }
         let horiz_dist = (dx * dx + dz * dz).sqrt();
-        if horiz_dist > effective_range + target_state.hit_radius {
+        if horiz_dist > effective_range + target_snapshot.hit_radius {
             log::warn!(
                 "[MELEE] {} {} — range check failed: dist={:.2} max={:.2} (range={:.2} radius={:.2}) gap_close={}",
                 &caster.to_hex()[..8],
                 authored_action_id.as_str(),
                 horiz_dist,
-                effective_range + target_state.hit_radius,
+                effective_range + target_snapshot.hit_radius,
                 effective_range,
-                target_state.hit_radius,
+                target_snapshot.hit_radius,
                 gap_close.as_ref().map(|row| row.ability_id.as_str()).unwrap_or("")
             );
             return Ok(MeleeAttackDispatch::Rejected);
         }
         if gameplay.minimum_range > 0.0 {
-            let minimum_allowed_distance = gameplay.minimum_range + target_state.hit_radius;
+            let minimum_allowed_distance = gameplay.minimum_range + target_snapshot.hit_radius;
             if horiz_dist < minimum_allowed_distance {
                 log::info!(
                     "[MELEE] owner={} source={} strike={} rejected_minimum_range dist={:.2} min={:.2} minimum_range={:.2} target_radius={:.2}",
@@ -2786,13 +2777,13 @@ fn perform_melee_attack_for_internal(
                     horiz_dist,
                     minimum_allowed_distance,
                     gameplay.minimum_range,
-                    target_state.hit_radius
+                    target_snapshot.hit_radius
                 );
                 return Ok(MeleeAttackDispatch::Rejected);
             }
         }
 
-        Some((target, target_state, target_phys, dx, dz, horiz_dist))
+        Some((target, target_snapshot, dx, dz, horiz_dist))
     } else {
         None
     };
@@ -2856,7 +2847,7 @@ fn perform_melee_attack_for_internal(
 
     let mut gap_close_failure: Option<GapCloseResolveFailure> = None;
     let resolved_gap_close = if let Some(gap_close) = gap_close.as_ref() {
-        let Some((_, target_state, target_phys, _, _, _)) = target_context.as_ref() else {
+        let Some((_, target_snapshot, _, _, _)) = target_context.as_ref() else {
             return Ok(MeleeAttackDispatch::Rejected);
         };
         match resolve_melee_gap_close(
@@ -2872,12 +2863,12 @@ fn perform_melee_attack_for_internal(
                 hit_height: caster_state.hit_height,
             },
             GapCloseActorSnapshot {
-                pos_x: target_phys.pos_x,
-                pos_y: target_phys.pos_y,
-                pos_z: target_phys.pos_z,
-                yaw: target_phys.yaw,
-                hit_radius: target_state.hit_radius,
-                hit_height: target_state.hit_height,
+                pos_x: target_snapshot.pos_x,
+                pos_y: target_snapshot.pos_y,
+                pos_z: target_snapshot.pos_z,
+                yaw: target_snapshot.facing_yaw,
+                hit_radius: target_snapshot.hit_radius,
+                hit_height: target_snapshot.hit_height,
             },
         ) {
             Ok(resolved) => Some(resolved),
@@ -2955,15 +2946,15 @@ fn perform_melee_attack_for_internal(
     );
     let timed_movement = gameplay.timed_movement.clone();
     let (target, target_point_x, target_point_y, target_point_z, dx, dz, horiz_dist) =
-        if let Some((target, _target_state, target_phys, dx, dz, horiz_dist)) =
+        if let Some((target, target_snapshot, dx, dz, horiz_dist)) =
             target_context.as_ref()
         {
             mark_harmful_combat_action(ctx, caster, *target, now, strike.id.as_str());
             (
                 *target,
-                target_phys.pos_x,
-                target_phys.pos_y,
-                target_phys.pos_z,
+                target_snapshot.pos_x,
+                target_snapshot.pos_y,
+                target_snapshot.pos_z,
                 *dx,
                 *dz,
                 *horiz_dist,
@@ -3968,10 +3959,10 @@ fn resolve_pending_melee_target_impact(
         return;
     }
 
-    let Some(target_state) = ctx.db.player_state().player_id().find(row.target) else {
+    let Some(target_snapshot) = player_snapshot_for(ctx, row.target) else {
         return;
     };
-    if !target_state.alive {
+    if !target_snapshot.alive {
         return;
     }
 
@@ -3985,12 +3976,8 @@ fn resolve_pending_melee_target_impact(
     let Some(caster_phys) = ctx.db.player_physics().identity().find(row.source) else {
         return;
     };
-    let Some(target_phys) = ctx.db.player_physics().identity().find(row.target) else {
-        return;
-    };
-
-    let dx = target_phys.pos_x - caster_phys.pos_x;
-    let dz = target_phys.pos_z - caster_phys.pos_z;
+    let dx = target_snapshot.pos_x - caster_phys.pos_x;
+    let dz = target_snapshot.pos_z - caster_phys.pos_z;
     let horiz_dist = (dx * dx + dz * dz).sqrt();
     let (dir_x, dir_z) = if horiz_dist > 0.001 {
         (dx / horiz_dist, dz / horiz_dist)
@@ -4000,9 +3987,9 @@ fn resolve_pending_melee_target_impact(
     if !target_within_area_range_xz(
         caster_phys.pos_x,
         caster_phys.pos_z,
-        target_phys.pos_x,
-        target_phys.pos_z,
-        target_state.hit_radius,
+        target_snapshot.pos_x,
+        target_snapshot.pos_z,
+        target_snapshot.hit_radius,
         row.range,
     ) {
         return;
@@ -4020,9 +4007,9 @@ fn resolve_pending_melee_target_impact(
             source_x: caster_phys.pos_x,
             source_y: caster_phys.pos_y,
             source_z: caster_phys.pos_z,
-            impact_x: target_phys.pos_x,
-            impact_y: target_phys.pos_y + target_state.hit_height * 0.5,
-            impact_z: target_phys.pos_z,
+            impact_x: target_snapshot.pos_x,
+            impact_y: target_snapshot.pos_y + target_snapshot.hit_height * 0.5,
+            impact_z: target_snapshot.pos_z,
             dir_x,
             dir_y: 0.0,
             dir_z,
@@ -4045,7 +4032,9 @@ fn resolve_pending_melee_target_impact(
                 row,
                 now,
                 &caster_phys,
-                &target_phys,
+                target_snapshot.pos_x,
+                target_snapshot.pos_y,
+                target_snapshot.pos_z,
                 dx,
                 dz,
                 horiz_dist,
@@ -4069,7 +4058,9 @@ fn resolve_pending_melee_target_impact(
                 row,
                 now,
                 &caster_phys,
-                &target_phys,
+                target_snapshot.pos_x,
+                target_snapshot.pos_y,
+                target_snapshot.pos_z,
                 dx,
                 dz,
                 horiz_dist,
@@ -4112,9 +4103,9 @@ fn resolve_pending_melee_target_impact(
         sequence_kind: COMBAT_SEQUENCE_NONE.to_string(),
         sequence_index: 0,
         sequence_count: 0,
-        point_x: target_phys.pos_x,
-        point_y: target_phys.pos_y,
-        point_z: target_phys.pos_z,
+        point_x: target_snapshot.pos_x,
+        point_y: target_snapshot.pos_y,
+        point_z: target_snapshot.pos_z,
         created_at: now,
         created_at_micros: timestamp_to_micros(now),
         damage: row.damage,
@@ -4146,9 +4137,9 @@ fn resolve_pending_melee_target_impact(
         &mut effects,
         row,
         player_snapshots,
-        target_phys.pos_x,
-        target_phys.pos_y,
-        target_phys.pos_z,
+        target_snapshot.pos_x,
+        target_snapshot.pos_y,
+        target_snapshot.pos_z,
     );
     queue_effects(ctx, effects);
     grant_primary_resource_for_melee_event_hit(
@@ -4335,7 +4326,9 @@ fn emit_parry_event(
     row: &PendingMeleeImpact,
     now: Timestamp,
     caster_phys: &crate::player_physics::PlayerPhysics,
-    target_phys: &crate::player_physics::PlayerPhysics,
+    target_x: f32,
+    target_y: f32,
+    target_z: f32,
     dx: f32,
     dz: f32,
     horiz_dist: f32,
@@ -4368,9 +4361,9 @@ fn emit_parry_event(
         sequence_kind: COMBAT_SEQUENCE_NONE.to_string(),
         sequence_index: 0,
         sequence_count: 0,
-        point_x: target_phys.pos_x,
-        point_y: target_phys.pos_y,
-        point_z: target_phys.pos_z,
+        point_x: target_x,
+        point_y: target_y,
+        point_z: target_z,
         created_at: now,
         created_at_micros: timestamp_to_micros(now),
         damage: 0,
@@ -4385,7 +4378,9 @@ fn emit_block_event(
     row: &PendingMeleeImpact,
     now: Timestamp,
     caster_phys: &crate::player_physics::PlayerPhysics,
-    target_phys: &crate::player_physics::PlayerPhysics,
+    target_x: f32,
+    target_y: f32,
+    target_z: f32,
     dx: f32,
     dz: f32,
     horiz_dist: f32,
@@ -4419,9 +4414,9 @@ fn emit_block_event(
         sequence_kind: COMBAT_SEQUENCE_NONE.to_string(),
         sequence_index: 0,
         sequence_count: 0,
-        point_x: target_phys.pos_x,
-        point_y: target_phys.pos_y,
-        point_z: target_phys.pos_z,
+        point_x: target_x,
+        point_y: target_y,
+        point_z: target_z,
         created_at: now,
         created_at_micros: timestamp_to_micros(now),
         damage: 0,

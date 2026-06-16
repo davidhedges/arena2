@@ -362,7 +362,7 @@ namespace Arena.Presentation
 
             if (!string.IsNullOrWhiteSpace(targetId)
                 && EntityRegistry.Instance != null
-                && EntityRegistry.Instance.TryGetEntityByHex(targetId, out PlayerEntity target))
+                && EntityRegistry.Instance.TryGetCombatTargetByHex(targetId, out ICombatTargetEntity target))
             {
                 return target.GetPresentationRoot().position + Vector3.up;
             }

@@ -87,6 +87,8 @@ use crate::melee::pending_melee_timed_movement as _;
 #[allow(unused_imports)]
 use crate::melee::queued_melee_followup as _;
 #[allow(unused_imports)]
+use crate::npcs::npc_state as _;
+#[allow(unused_imports)]
 use crate::movement_actions::movement_action_state as _;
 #[allow(unused_imports)]
 use crate::player_physics::player_physics as _;
@@ -3100,11 +3102,25 @@ fn apply_damage(
         return false;
     }
 
-    // PlayerState HP changes happen only here and drive death events below.
-    let Some(mut state) = ctx.db.player_state().player_id().find(target) else {
+    if let Some(state) = ctx.db.player_state().player_id().find(target) {
+        return apply_damage_to_player_state(ctx, hit, temporary_modifiers, state);
+    }
+
+    let Some(npc_state) = ctx.db.npc_state().identity().find(target) else {
         return false;
     };
 
+    apply_damage_to_npc_state(ctx, hit, temporary_modifiers, npc_state)
+}
+
+fn apply_damage_to_player_state(
+    ctx: &ReducerContext,
+    hit: &PendingHit,
+    temporary_modifiers: &TemporaryCombatModifiers,
+    mut state: PlayerState,
+) -> bool {
+    let source = hit.source;
+    let target = hit.target;
     if !state.alive {
         return false;
     }
@@ -3144,6 +3160,54 @@ fn apply_damage(
     record_match_damage_done(ctx, source, hp_damage.max(0));
     emit_combat_effect_event(ctx, hit, EFFECT_TYPE_DAMAGE, resolved);
     defeated_instance_id.is_some()
+}
+
+fn apply_damage_to_npc_state(
+    ctx: &ReducerContext,
+    hit: &PendingHit,
+    temporary_modifiers: &TemporaryCombatModifiers,
+    mut state: crate::npcs::NpcState,
+) -> bool {
+    let source = hit.source;
+    let target = hit.target;
+    if !state.alive {
+        return false;
+    }
+
+    let mut resolved = resolve_damage_amount(ctx, hit, temporary_modifiers);
+    let resolved_amount = resolved.final_amount;
+    if hit.amount > 0 {
+        mark_harmful_combat_action(ctx, source, target, ctx.timestamp, COMBAT_REASON_DAMAGE);
+    }
+
+    let hp_damage =
+        absorb_damage_with_temporary_hitpoints(ctx, target, resolved_amount, ctx.timestamp);
+    resolved.final_amount = hp_damage;
+    state.hp -= hp_damage;
+    let defeated = state.hp <= 0;
+    if defeated {
+        state.hp = 0;
+        state.alive = false;
+        clear_statuses_for_target(ctx, target);
+        clear_combat_engagement_for_identity(ctx, target);
+        clear_combat_stacking_passive_runtime_for_identity(ctx, target);
+    }
+
+    ctx.db.npc_state().identity().update(state);
+    grant_primary_resource_for_damage_dealt(ctx, source, hp_damage, ctx.timestamp);
+    if hp_damage > 0
+        && DamageDelivery::from_wire(hit.damage_delivery.as_str()) == DamageDelivery::Direct
+    {
+        let action_key = if hit.direct_action_key.trim().is_empty() {
+            hit.spell_id.as_str()
+        } else {
+            hit.direct_action_key.as_str()
+        };
+        record_successful_direct_damage(ctx, source, action_key, ctx.timestamp);
+    }
+    record_match_damage_done(ctx, source, hp_damage.max(0));
+    emit_combat_effect_event(ctx, hit, EFFECT_TYPE_DAMAGE, resolved);
+    defeated
 }
 
 fn resolve_damage_amount(

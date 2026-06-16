@@ -98,7 +98,7 @@ namespace Arena.Presentation
         private static bool TryResolveEntityTransform(Identity identity, out Transform transform)
         {
             if (EntityRegistry.Instance != null
-                && EntityRegistry.Instance.TryGetEntity(identity, out PlayerEntity entity))
+                && EntityRegistry.Instance.TryGetCombatTarget(identity, out ICombatTargetEntity entity))
             {
                 transform = entity.GetPresentationRoot();
                 return transform != null;

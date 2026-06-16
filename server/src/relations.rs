@@ -4,6 +4,7 @@ use spacetimedb::{Identity, ReducerContext};
 use crate::arena::{
     players_share_world_context, ArenaInstance, MATCH_PHASE_COUNTDOWN, MATCH_PHASE_IN_PROGRESS,
 };
+use crate::npcs::{npc_faction, NpcFaction};
 use crate::party::same_party;
 use crate::playground_targets::{playground_target_kind_for_relation, PlaygroundTargetKind};
 
@@ -84,17 +85,20 @@ pub(crate) fn combat_relation(
         return CombatRelation::Self_;
     }
 
+    if let Some(faction) = npc_faction(ctx, target) {
+        return match faction {
+            NpcFaction::Hostile => CombatRelation::Hostile,
+            NpcFaction::Neutral => CombatRelation::Neutral,
+            NpcFaction::Friendly => CombatRelation::PartyAlly,
+        };
+    }
+
     // Playground-only override for local targeting and party-frame testing. This
     // is not a general faction, NPC, or bot relationship system.
     if let Some(kind) = playground_target_kind_for_relation(ctx, source, target) {
         return match kind {
-            PlaygroundTargetKind::Hostile | PlaygroundTargetKind::MobHostile => {
-                CombatRelation::Hostile
-            }
-            PlaygroundTargetKind::Neutral | PlaygroundTargetKind::MobNeutral => {
-                CombatRelation::Neutral
-            }
-            PlaygroundTargetKind::MobFriendly => CombatRelation::PartyAlly,
+            PlaygroundTargetKind::Hostile => CombatRelation::Hostile,
+            PlaygroundTargetKind::Neutral => CombatRelation::Neutral,
             PlaygroundTargetKind::PartyMember => {
                 if source != Identity::ZERO && same_party(ctx, source, target) {
                     CombatRelation::PartyAlly

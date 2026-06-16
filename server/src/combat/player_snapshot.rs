@@ -2,9 +2,14 @@ use std::collections::HashMap;
 
 use spacetimedb::{Identity, ReducerContext, Table};
 
+use crate::npcs::{NpcPhysics, NpcState};
 use crate::player_physics::PlayerPhysics;
 use crate::player_state::PlayerState;
 
+#[allow(unused_imports)]
+use crate::npcs::npc_physics as _;
+#[allow(unused_imports)]
+use crate::npcs::npc_state as _;
 #[allow(unused_imports)]
 use crate::player_physics::player_physics as _;
 #[allow(unused_imports)]
@@ -42,6 +47,21 @@ impl PlayerSnapshot {
             last_processed_tick: physics.last_processed_tick,
         }
     }
+
+    fn from_npc_rows(state: &NpcState, physics: &NpcPhysics) -> Self {
+        Self {
+            player_id: state.identity,
+            alive: state.alive,
+            pos_x: physics.pos_x,
+            pos_y: physics.pos_y,
+            pos_z: physics.pos_z,
+            facing_yaw: physics.yaw,
+            grounded: true,
+            hit_radius: state.hit_radius,
+            hit_height: state.hit_height,
+            last_processed_tick: 0,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -69,6 +89,22 @@ impl PlayerSnapshotSet {
             let index = players.len();
             players.push(PlayerSnapshot::from_rows(&state, physics));
             index_by_id.insert(state.player_id, index);
+        }
+
+        let npc_physics_by_id: HashMap<Identity, NpcPhysics> = ctx
+            .db
+            .npc_physics()
+            .iter()
+            .map(|physics| (physics.identity, physics))
+            .collect();
+
+        for state in ctx.db.npc_state().iter() {
+            let Some(physics) = npc_physics_by_id.get(&state.identity) else {
+                continue;
+            };
+            let index = players.len();
+            players.push(PlayerSnapshot::from_npc_rows(&state, physics));
+            index_by_id.insert(state.identity, index);
         }
 
         let spatial_index = PlayerSpatialIndex::build(&players);
@@ -257,9 +293,14 @@ pub(crate) fn player_snapshot_for(
     ctx: &ReducerContext,
     player_id: Identity,
 ) -> Option<PlayerSnapshot> {
-    let state = ctx.db.player_state().player_id().find(player_id)?;
-    let physics = ctx.db.player_physics().identity().find(player_id)?;
-    Some(PlayerSnapshot::from_rows(&state, &physics))
+    if let Some(state) = ctx.db.player_state().player_id().find(player_id) {
+        let physics = ctx.db.player_physics().identity().find(player_id)?;
+        return Some(PlayerSnapshot::from_rows(&state, &physics));
+    }
+
+    let state = ctx.db.npc_state().identity().find(player_id)?;
+    let physics = ctx.db.npc_physics().identity().find(player_id)?;
+    Some(PlayerSnapshot::from_npc_rows(&state, &physics))
 }
 
 pub(crate) fn collect_player_snapshots(ctx: &ReducerContext) -> Vec<PlayerSnapshot> {
@@ -268,7 +309,7 @@ pub(crate) fn collect_player_snapshots(ctx: &ReducerContext) -> Vec<PlayerSnapsh
 
 #[cfg(test)]
 mod tests {
-    use super::{PlayerSnapshot, PlayerSnapshotSet, PlayerSpatialIndex};
+    use super::{NpcPhysics, NpcState, PlayerSnapshot, PlayerSnapshotSet, PlayerSpatialIndex};
     use std::collections::HashMap;
 
     use spacetimedb::Identity;
@@ -357,5 +398,37 @@ mod tests {
         assert!(ids.contains(&identity(1)));
         assert!(ids.contains(&identity(2)));
         assert!(!ids.contains(&identity(3)));
+    }
+
+    #[test]
+    fn npc_rows_map_to_combat_snapshot() {
+        let state = NpcState {
+            identity: identity(9),
+            alive: true,
+            hp: 42,
+            max_hp: 100,
+            hit_radius: 0.45,
+            hit_height: 1.35,
+        };
+        let physics = NpcPhysics {
+            identity: identity(9),
+            pos_x: 3.0,
+            pos_y: 0.25,
+            pos_z: -7.0,
+            yaw: 1.25,
+            updated_at: spacetimedb::Timestamp::UNIX_EPOCH,
+        };
+
+        let snapshot = PlayerSnapshot::from_npc_rows(&state, &physics);
+
+        assert_eq!(snapshot.player_id, state.identity);
+        assert!(snapshot.alive);
+        assert_eq!(snapshot.pos_x, physics.pos_x);
+        assert_eq!(snapshot.pos_y, physics.pos_y);
+        assert_eq!(snapshot.pos_z, physics.pos_z);
+        assert_eq!(snapshot.facing_yaw, physics.yaw);
+        assert!(snapshot.grounded);
+        assert_eq!(snapshot.hit_radius, state.hit_radius);
+        assert_eq!(snapshot.hit_height, state.hit_height);
     }
 }

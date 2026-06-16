@@ -40,10 +40,6 @@ namespace Arena.Entity
         private const string FearStatusKind = "FEAR";
         private const string DefenseBlockKind = "BLOCK";
         private const string DefenseParryKind = "PARRY";
-        private const string PlaygroundKindMobHostile = "MOB_HOSTILE";
-        private const string PlaygroundKindMobNeutral = "MOB_NEUTRAL";
-        private const string PlaygroundKindMobFriendly = "MOB_FRIENDLY";
-        private const string KoboldWarriorRedResourcePath = "Mobs/KoboldWarriorRed";
 
         public static EntityRegistry Instance { get; private set; } = null!;
 
@@ -58,6 +54,7 @@ namespace Arena.Entity
         [SerializeField] private SharedActionProfile? _sharedActionProfile;
 
         private readonly Dictionary<Identity, PlayerEntity> _players = new();
+        private readonly Dictionary<Identity, NpcEntity> _npcs = new();
         private readonly Dictionary<Identity, long> _lastDefenseStartMicros = new();
         private readonly List<PendingHitReaction> _pendingHitReactions = new();
         private readonly LocalWorldRuntimeCoordinator _localWorldCoordinator = new(new LocalMovementWorldContext());
@@ -81,6 +78,18 @@ namespace Arena.Entity
             get
             {
                 foreach (var entity in _players.Values)
+                {
+                    if (!entity.IsDestroyed)
+                        yield return entity;
+                }
+            }
+        }
+
+        public IEnumerable<NpcEntity> AllNpcs
+        {
+            get
+            {
+                foreach (var entity in _npcs.Values)
                 {
                     if (!entity.IsDestroyed)
                         yield return entity;
@@ -143,6 +152,7 @@ namespace Arena.Entity
         {
             SceneManager.sceneLoaded -= OnSceneLoaded;
             ClearAllPlayers();
+            ClearAllNpcs();
             if (Instance == this)
                 Instance = null!;
         }
@@ -158,11 +168,14 @@ namespace Arena.Entity
             if (ShouldSuppressPresentationInScene(scene.name))
             {
                 ClearAllPlayers();
+                ClearAllNpcs();
                 return;
             }
 
             RehydratePlayersFromScopedCache();
+            RehydrateNpcsFromCache();
             RefreshPlayerPresentationForScene(scene.name);
+            RefreshNpcPresentationForScene(scene.name);
 
             // Re-target the Cinemachine camera in the new scene to the local player.
             if (LocalPlayerEntity != null && !LocalPlayerEntity.IsDestroyed && !ShouldSuppressPresentationInScene(scene.name))
@@ -182,6 +195,7 @@ namespace Arena.Entity
             _localWorldCoordinator.ClearForNetworkReconnect();
             _lastDefenseStartMicros.Clear();
             ClearAllPlayers();
+            ClearAllNpcs();
         }
 
         // -------------------------------------------------------------------
@@ -354,6 +368,67 @@ namespace Arena.Entity
         public void OnPlayerWorldDelete(EventContext ctx, PlayerWorld row)
         {
             _localWorldCoordinator.OnPlayerWorldDelete(row);
+        }
+
+        // -------------------------------------------------------------------
+        // NPC table callbacks
+        // -------------------------------------------------------------------
+
+        public void OnNpcInstanceInsert(EventContext ctx, NpcInstance row)
+        {
+            SpawnOrUpdateNpc(row);
+        }
+
+        public void OnNpcInstanceUpdate(EventContext ctx, NpcInstance oldRow, NpcInstance newRow)
+        {
+            SpawnOrUpdateNpc(newRow);
+        }
+
+        public void OnNpcInstanceDelete(EventContext ctx, NpcInstance row)
+        {
+            if (!_npcs.TryGetValue(row.Identity, out var entity))
+                return;
+
+            entity.Destroy();
+            _npcs.Remove(row.Identity);
+        }
+
+        public void OnNpcPhysicsInsert(EventContext ctx, NpcPhysics row)
+        {
+            ArenaServerClock.RecordObservedServerTimestampMicros(row.UpdatedAt.MicrosecondsSinceUnixEpoch);
+            ApplyNpcPhysics(row);
+        }
+
+        public void OnNpcPhysicsUpdate(EventContext ctx, NpcPhysics oldRow, NpcPhysics newRow)
+        {
+            ArenaServerClock.RecordObservedServerTimestampMicros(newRow.UpdatedAt.MicrosecondsSinceUnixEpoch);
+            ApplyNpcPhysics(newRow);
+        }
+
+        public void OnNpcPhysicsDelete(EventContext ctx, NpcPhysics row)
+        {
+            if (!_npcs.TryGetValue(row.Identity, out var entity))
+                return;
+
+            entity.Destroy();
+            _npcs.Remove(row.Identity);
+        }
+
+        public void OnNpcStateInsert(EventContext ctx, NpcState row)
+        {
+            ApplyNpcState(row);
+        }
+
+        public void OnNpcStateUpdate(EventContext ctx, NpcState oldRow, NpcState newRow)
+        {
+            ApplyNpcState(newRow);
+        }
+
+        public void OnNpcStateDelete(EventContext ctx, NpcState row)
+        {
+            if (_npcs.TryGetValue(row.Identity, out var entity))
+                entity.Destroy();
+            _npcs.Remove(row.Identity);
         }
 
         public void OnPlayerOpenWorldSceneInsert(EventContext ctx, PlayerOpenWorldScene row)
@@ -584,9 +659,58 @@ namespace Arena.Entity
             return false;
         }
 
+        public bool TryGetNpc(Identity id, out NpcEntity entity)
+            => TryGetLiveNpc(id, out entity);
+
+        public bool TryGetCombatTarget(Identity id, out ICombatTargetEntity entity)
+        {
+            if (TryGetLivePlayer(id, out var player))
+            {
+                entity = player;
+                return true;
+            }
+
+            if (TryGetLiveNpc(id, out var npc))
+            {
+                entity = npc;
+                return true;
+            }
+
+            entity = null!;
+            return false;
+        }
+
+        public bool TryGetCombatTargetByHex(string identityHex, out ICombatTargetEntity entity)
+        {
+            foreach (var pair in _players)
+            {
+                if (string.Equals(pair.Key.ToString(), identityHex, System.StringComparison.OrdinalIgnoreCase)
+                    && TryGetLivePlayer(pair.Key, out var player))
+                {
+                    entity = player;
+                    return true;
+                }
+            }
+
+            foreach (var pair in _npcs)
+            {
+                if (string.Equals(pair.Key.ToString(), identityHex, System.StringComparison.OrdinalIgnoreCase)
+                    && TryGetLiveNpc(pair.Key, out var npc))
+                {
+                    entity = npc;
+                    return true;
+                }
+            }
+
+            entity = null!;
+            return false;
+        }
+
         public bool IsIdentityVisible(Identity id)
         {
             if (_players.ContainsKey(id))
+                return true;
+            if (_npcs.ContainsKey(id))
                 return true;
 
             var conn = NetworkManager.Instance?.Conn;
@@ -630,6 +754,95 @@ namespace Arena.Entity
                 row.Yaw,
                 row.Grounded,
                 row.LastProcessedTick);
+
+        private void SpawnOrUpdateNpc(NpcInstance row)
+        {
+            if (ShouldSuppressPresentationInCurrentScene())
+            {
+                if (_npcs.Count > 0)
+                    ClearAllNpcs();
+                return;
+            }
+
+            if (_npcs.TryGetValue(row.Identity, out var existing) && !existing.IsDestroyed)
+            {
+                existing.ApplyInstance(row);
+                return;
+            }
+
+            var conn = NetworkManager.Instance?.Conn;
+            NpcPhysics? physics = conn?.Db.NpcPhysics.Identity.Find(row.Identity);
+            NpcState? state = conn?.Db.NpcState.Identity.Find(row.Identity);
+
+            if (!NpcVisualCatalog.TryLoadDefault(out var catalog, out string catalogError))
+            {
+                Debug.LogWarning($"[EntityRegistry] Cannot spawn NPC '{row.TemplateId}': {catalogError}");
+                return;
+            }
+
+            if (!catalog.TryGetPrefab(row.TemplateId, out var prefab))
+            {
+                Debug.LogWarning($"[EntityRegistry] Cannot spawn NPC '{row.TemplateId}': template has no visual prefab.");
+                return;
+            }
+
+            try
+            {
+                var entity = new NpcEntity(row, physics, state, prefab);
+                entity.GameObject.SetActive(!ShouldSuppressPresentationInCurrentScene() && (state == null || state.Alive));
+                _npcs[row.Identity] = entity;
+                Debug.Log($"[EntityRegistry] Spawned NPC {row.DisplayName} {row.Identity} template={row.TemplateId}");
+            }
+            catch (System.Exception error)
+            {
+                Debug.LogWarning($"[EntityRegistry] Cannot spawn NPC '{row.TemplateId}' visual: {error.Message}");
+            }
+        }
+
+        private void ApplyNpcPhysics(NpcPhysics row)
+        {
+            if (_npcs.TryGetValue(row.Identity, out var entity) && !entity.IsDestroyed)
+            {
+                entity.ApplyPhysics(row);
+                return;
+            }
+
+            var instance = NetworkManager.Instance?.Conn?.Db.NpcInstance.Identity.Find(row.Identity);
+            if (instance != null)
+                SpawnOrUpdateNpc(instance);
+        }
+
+        private void ApplyNpcState(NpcState row)
+        {
+            if (_npcs.TryGetValue(row.Identity, out var entity) && !entity.IsDestroyed)
+            {
+                entity.ApplyState(row);
+                return;
+            }
+
+            var instance = NetworkManager.Instance?.Conn?.Db.NpcInstance.Identity.Find(row.Identity);
+            if (instance != null)
+                SpawnOrUpdateNpc(instance);
+        }
+
+        private void RehydrateNpcsFromCache()
+        {
+            if (ShouldSuppressPresentationInCurrentScene())
+            {
+                ClearAllNpcs();
+                return;
+            }
+
+            var conn = NetworkManager.Instance?.Conn;
+            if (conn == null)
+            {
+                ClearAllNpcs();
+                return;
+            }
+
+            foreach (var row in conn.Db.NpcInstance.Iter())
+                SpawnOrUpdateNpc(row);
+        }
 
         private void PurgeScenePlacedPlayers()
         {
@@ -683,7 +896,6 @@ namespace Arena.Entity
                         _scopedPlayerCacheHydrator.Capture(conn),
                         row.Identity,
                         this);
-                    RefreshPlaygroundTargetPresentation(row.Identity);
                 }
             }
 
@@ -700,7 +912,6 @@ namespace Arena.Entity
             ApplyOwnerCombatProfile(row.Identity);
             if (_sharedActionProfile != null)
                 entity.SetSharedActionProfile(_sharedActionProfile);
-            RefreshPlaygroundTargetPresentation(row.Identity);
         }
 
         private void ApplyCharacterProgression(CharacterProgression row)
@@ -733,73 +944,8 @@ namespace Arena.Entity
             if (!TryGetLivePlayer(row.Owner, out var entity))
                 return;
 
-            if (TryGetPlaygroundTarget(row.Owner, out var playground) && IsPlaygroundMobKind(playground.Kind))
-                return;
-
             entity.ApplyAppearance(row);
         }
-
-        public void OnPlaygroundTargetInsert(EventContext ctx, PlaygroundTarget row)
-        {
-            ApplyPlaygroundTargetPresentation(row);
-        }
-
-        public void OnPlaygroundTargetUpdate(EventContext ctx, PlaygroundTarget oldRow, PlaygroundTarget newRow)
-        {
-            ApplyPlaygroundTargetPresentation(newRow);
-        }
-
-        public void OnPlaygroundTargetDelete(EventContext ctx, PlaygroundTarget row)
-        {
-            if (TryGetLivePlayer(row.Identity, out var entity))
-                entity.RefreshTargetingPresentation();
-        }
-
-        private void RefreshPlaygroundTargetPresentation(Identity identity)
-        {
-            if (TryGetPlaygroundTarget(identity, out var row))
-                ApplyPlaygroundTargetPresentation(row);
-        }
-
-        private bool TryGetPlaygroundTarget(Identity identity, out PlaygroundTarget row)
-        {
-            var conn = NetworkManager.Instance?.Conn;
-            row = null!;
-            if (conn == null)
-                return false;
-
-            PlaygroundTarget? found = conn.Db.PlaygroundTarget.Identity.Find(identity);
-            if (found == null)
-                return false;
-
-            row = found;
-            return true;
-        }
-
-        private void ApplyPlaygroundTargetPresentation(PlaygroundTarget row)
-        {
-            if (!TryGetLivePlayer(row.Identity, out var entity))
-                return;
-
-            string normalizedKind = NormalizePlaygroundKind(row.Kind);
-            if (IsPlaygroundMobKind(normalizedKind))
-                entity.ApplyPrefabAppearance(KoboldWarriorRedResourcePath, $"playground:{normalizedKind}:kobold_warrior_red");
-
-            entity.RefreshTargetingPresentation();
-        }
-
-        private static bool IsPlaygroundMobKind(string? kind)
-        {
-            string normalizedKind = NormalizePlaygroundKind(kind);
-            return string.Equals(normalizedKind, PlaygroundKindMobHostile, System.StringComparison.Ordinal)
-                || string.Equals(normalizedKind, PlaygroundKindMobNeutral, System.StringComparison.Ordinal)
-                || string.Equals(normalizedKind, PlaygroundKindMobFriendly, System.StringComparison.Ordinal);
-        }
-
-        private static string NormalizePlaygroundKind(string? kind)
-            => string.IsNullOrWhiteSpace(kind)
-                ? string.Empty
-                : kind.Trim().ToUpperInvariant();
 
         private static bool HasSameVisualAppearance(CharacterAppearance oldRow, CharacterAppearance newRow)
         {
@@ -1235,10 +1381,28 @@ namespace Arena.Entity
             LocalDefensePrediction.Reset();
         }
 
+        private void ClearAllNpcs()
+        {
+            foreach (var entity in _npcs.Values)
+                entity.Destroy();
+
+            _npcs.Clear();
+        }
+
         private void RefreshPlayerPresentationForScene(string sceneName)
         {
             bool visible = !ShouldSuppressPresentationInScene(sceneName);
             foreach (var entity in _players.Values)
+            {
+                if (!entity.IsDestroyed)
+                    entity.GameObject.SetActive(visible);
+            }
+        }
+
+        private void RefreshNpcPresentationForScene(string sceneName)
+        {
+            bool visible = !ShouldSuppressPresentationInScene(sceneName);
+            foreach (var entity in _npcs.Values)
             {
                 if (!entity.IsDestroyed)
                     entity.GameObject.SetActive(visible);
@@ -1254,6 +1418,19 @@ namespace Arena.Entity
                 return true;
 
             RemovePlayerReference(id, entity);
+            entity = null!;
+            return false;
+        }
+
+        private bool TryGetLiveNpc(Identity id, out NpcEntity entity)
+        {
+            if (!_npcs.TryGetValue(id, out entity!))
+                return false;
+
+            if (!entity.IsDestroyed)
+                return true;
+
+            _npcs.Remove(id);
             entity = null!;
             return false;
         }

@@ -23,7 +23,7 @@ namespace Arena.Entity
     /// INVARIANT: Created and destroyed only by EntityRegistry.
     ///            Does NOT touch the network.
     /// </summary>
-    public class PlayerEntity
+    public class PlayerEntity : ICombatTargetEntity
     {
         public readonly Identity Identity;
         public readonly ClientSimulationState SimState;
@@ -47,6 +47,11 @@ namespace Arena.Entity
         public bool GameplayInCombat { get; private set; }
         public Timestamp GameplayCombatExpiresAt { get; private set; }
         public string GameplayCombatReason { get; private set; } = string.Empty;
+        public Identity TargetIdentity => Identity;
+        public GameObject TargetGameObject => GameObject;
+        public float HitRadius => SimState.HitRadius;
+        public float HitHeight => SimState.HitHeight;
+        public string DisplayName => string.IsNullOrWhiteSpace(Username) ? Identity.ToString() : Username;
 
         private readonly Dictionary<string, int> _effectCounts = new();
         private readonly Transform? _presentationRoot;
@@ -371,31 +376,6 @@ namespace Arena.Entity
             _appliedAppearanceSignature = binding.AppearanceSignature;
         }
 
-        public void ApplyPrefabAppearance(string resourcePath, string appearanceSignature)
-        {
-            if (IsDestroyed)
-                return;
-
-            if (_avatarController == null)
-            {
-                _avatarController = GameObject.GetComponent<RuntimeAvatarController>();
-                if (_avatarController == null)
-                    _avatarController = GameObject.AddComponent<RuntimeAvatarController>();
-                _avatarController.SetVisualRootParent(_presentationRoot ?? GameObject.transform);
-            }
-
-            if (!_avatarController.ApplyPrefabResource(resourcePath, appearanceSignature, out RuntimeAvatarBinding binding, out string error))
-            {
-                Debug.LogWarning($"[{nameof(PlayerEntity)}] Failed to apply prefab appearance to '{GameObject.name}': {error}");
-                return;
-            }
-
-            _hasExplicitAppearance = true;
-            _classDefaultAvatarClassId = string.Empty;
-            BindRuntimeAvatar(binding);
-            _appliedAppearanceSignature = binding.AppearanceSignature;
-        }
-
         private void ApplyClassDefaultAppearanceIfNeeded(bool force = false)
         {
             if (IsDestroyed || _hasExplicitAppearance)
@@ -548,6 +528,11 @@ namespace Arena.Entity
         public Transform GetPresentationRoot()
         {
             return _presentationRoot ?? GameObject.transform;
+        }
+
+        public Vector3 GetRenderPosition()
+        {
+            return SimState.GetRenderPosition();
         }
 
         public void SetHighlight(bool highlighted)

@@ -20,6 +20,8 @@ use crate::arena::player_open_world_scene as _;
 #[allow(unused_imports)]
 use crate::arena::player_world as _;
 #[allow(unused_imports)]
+use crate::npcs::npc_instance as _;
+#[allow(unused_imports)]
 use crate::combat::match_participant_stats as _;
 use crate::combat::{clear_combat_engagement_for_identity, clear_statuses_for_identity};
 use crate::combat::{
@@ -977,19 +979,31 @@ fn resolve_player_world_context(
     ctx: &ReducerContext,
     identity: Identity,
 ) -> Option<ResolvedWorldContext> {
-    let world = ctx.db.player_world().identity().find(identity)?;
+    if let Some(world) = ctx.db.player_world().identity().find(identity) {
+        if world_kind_is_open(world.world_kind.as_str()) {
+            let scene_name = if is_known_open_world_scene(world.open_world_scene_name.as_str()) {
+                world.open_world_scene_name
+            } else {
+                open_world_scene_name_for_identity(ctx, identity)
+            };
+            return Some(ResolvedWorldContext::Open(scene_name));
+        }
 
-    if world_kind_is_open(world.world_kind.as_str()) {
-        let scene_name = if is_known_open_world_scene(world.open_world_scene_name.as_str()) {
-            world.open_world_scene_name
-        } else {
-            open_world_scene_name_for_identity(ctx, identity)
-        };
-        return Some(ResolvedWorldContext::Open(scene_name));
+        if world_kind_is_instance(world.world_kind.as_str()) {
+            return world.instance_id.map(ResolvedWorldContext::Instance);
+        }
+
+        return None;
     }
 
-    if world_kind_is_instance(world.world_kind.as_str()) {
-        return world.instance_id.map(ResolvedWorldContext::Instance);
+    let npc = ctx.db.npc_instance().identity().find(identity)?;
+
+    if world_kind_is_open(npc.world_kind.as_str()) {
+        return Some(ResolvedWorldContext::Open(npc.open_world_scene_name));
+    }
+
+    if world_kind_is_instance(npc.world_kind.as_str()) {
+        return npc.instance_id.map(ResolvedWorldContext::Instance);
     }
 
     None

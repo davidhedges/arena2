@@ -5,6 +5,7 @@ use spacetimedb::{reducer, table, Identity, ReducerContext, Table, Timestamp};
 use crate::action_ids::AuthoredActionId;
 use crate::arena::players_share_world_context;
 use crate::combat::has_active_disabling_status;
+use crate::combat::player_snapshot::player_snapshot_for;
 use crate::combat::temporary_combat_modifiers;
 use crate::defense::is_defense_active;
 use crate::melee::{
@@ -337,9 +338,9 @@ pub(crate) fn tick_auto_attacks(ctx: &ReducerContext, now: Timestamp) {
             continue;
         }
 
-        let Some(target_state) = ctx.db.player_state().player_id().find(row.target) else {
+        let Some(target_snapshot) = player_snapshot_for(ctx, row.target) else {
             log::info!(
-                "[AUTO_ATTACK] owner={} clear reason=missing_target_state target={}",
+                "[AUTO_ATTACK] owner={} clear reason=missing_target_snapshot target={}",
                 short_identity(row.owner),
                 short_identity(row.target)
             );
@@ -349,12 +350,12 @@ pub(crate) fn tick_auto_attacks(ctx: &ReducerContext, now: Timestamp) {
         let shared_world = players_share_world_context(ctx, row.owner, row.target);
         let relation = combat_relation(ctx, row.owner, row.target);
         let can_harm_target = can_harm(ctx, row.owner, row.target);
-        if !target_state.alive || !shared_world || !can_harm_target {
+        if !target_snapshot.alive || !shared_world || !can_harm_target {
             log::info!(
                 "[AUTO_ATTACK] owner={} clear reason=invalid_target target={} target_alive={} shared_world={} relation={:?} can_harm={}",
                 short_identity(row.owner),
                 short_identity(row.target),
-                target_state.alive,
+                target_snapshot.alive,
                 shared_world,
                 relation,
                 can_harm_target
@@ -439,26 +440,16 @@ pub(crate) fn tick_auto_attacks(ctx: &ReducerContext, now: Timestamp) {
             clear_auto_attack_for_owner(ctx, row.owner);
             continue;
         };
-        let Some(target_phys) = ctx.db.player_physics().identity().find(row.target) else {
-            log::info!(
-                "[AUTO_ATTACK] owner={} clear reason=missing_target_physics target={}",
-                short_identity(row.owner),
-                short_identity(row.target)
-            );
-            clear_auto_attack_for_owner(ctx, row.owner);
-            continue;
-        };
-
-        let dx = target_phys.pos_x - caster_phys.pos_x;
-        let dz = target_phys.pos_z - caster_phys.pos_z;
+        let dx = target_snapshot.pos_x - caster_phys.pos_x;
+        let dz = target_snapshot.pos_z - caster_phys.pos_z;
         let horiz_dist = (dx * dx + dz * dz).sqrt();
-        if horiz_dist > gameplay.range + target_state.hit_radius {
+        if horiz_dist > gameplay.range + target_snapshot.hit_radius {
             log::debug!(
                 "[AUTO_ATTACK] owner={} target={} due_out_of_range dist={:.2} max={:.2} strike={}",
                 short_identity(row.owner),
                 short_identity(row.target),
                 horiz_dist,
-                gameplay.range + target_state.hit_radius,
+                gameplay.range + target_snapshot.hit_radius,
                 row.strike_id
             );
             mark_pending_due(ctx, &row);
@@ -713,15 +704,15 @@ fn resolve_live_target(ctx: &ReducerContext, owner: Identity, target_id: &str) -
         );
         return None;
     }
-    let Some(target_state) = ctx.db.player_state().player_id().find(target) else {
+    let Some(target_snapshot) = player_snapshot_for(ctx, target) else {
         log::info!(
-            "[AUTO_ATTACK] owner={} target_rejected reason=missing_target_state target={}",
+            "[AUTO_ATTACK] owner={} target_rejected reason=missing_target_snapshot target={}",
             short_identity(owner),
             short_identity(target)
         );
         return None;
     };
-    if !target_state.alive {
+    if !target_snapshot.alive {
         log::info!(
             "[AUTO_ATTACK] owner={} target_rejected reason=target_dead target={}",
             short_identity(owner),

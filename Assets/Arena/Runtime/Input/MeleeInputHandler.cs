@@ -152,7 +152,7 @@ namespace Arena.Input
 
             bool requiresTarget = RequiresTarget(gameplay);
 
-            PlayerEntity? target = null;
+            ICombatTargetEntity? target = null;
             if (requiresTarget)
             {
                 target = TargetSelector.Instance?.SelectedTarget;
@@ -170,7 +170,7 @@ namespace Arena.Input
                 {
                     var relation = PartyRelationship.RelationToLocal(target);
                     LoadoutActionTrace.Trace(
-                        $"melee rejected: {slotId} target audience {TraceAudience(gameplay.TargetAudience)} rejects relation={relation} target={target.Username}");
+                        $"melee rejected: {slotId} target audience {TraceAudience(gameplay.TargetAudience)} rejects relation={relation} target={target.DisplayName}");
                     return false;
                 }
             }
@@ -209,11 +209,11 @@ namespace Arena.Input
                     entity.Identity,
                     gameplay.Range,
                     nowMs);
-                var targetPos = target!.GameObject.transform.position;
+                var targetPos = target!.GetPresentationRoot().position;
                 float horizDist = Mathf.Sqrt(
                     (localPos.x - targetPos.x) * (localPos.x - targetPos.x) +
                     (localPos.z - targetPos.z) * (localPos.z - targetPos.z));
-                float targetRadius = Mathf.Max(0f, target.SimState.HitRadius);
+                float targetRadius = Mathf.Max(0f, target.HitRadius);
                 float strictAllowedDistance = strikeRange + targetRadius;
                 if (horizDist > strictAllowedDistance)
                 {
@@ -247,7 +247,7 @@ namespace Arena.Input
                 : ActionPredictionToken.None(slotId);
             conn.Reducers.MeleeAttack(
                 slotId,
-                requiresTarget ? target!.Identity.ToString() : string.Empty,
+                requiresTarget ? target!.TargetIdentity.ToString() : string.Empty,
                 localPos.x,
                 localPos.y,
                 localPos.z,
@@ -333,9 +333,9 @@ namespace Arena.Input
             return null;
         }
 
-        private static bool IsTargetWithinFacingArc(PlayerEntity entity, PlayerEntity target)
+        private static bool IsTargetWithinFacingArc(PlayerEntity entity, ICombatTargetEntity target)
         {
-            Vector3 delta = target.GameObject.transform.position - entity.GameObject.transform.position;
+            Vector3 delta = target.GetPresentationRoot().position - entity.GameObject.transform.position;
             delta.y = 0.0f;
             if (delta.sqrMagnitude <= 0.0001f)
                 return true;

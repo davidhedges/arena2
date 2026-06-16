@@ -43,7 +43,7 @@ namespace Arena.Presentation
             bool relevant = registry.IsIdentityVisible(row.Source) || registry.IsIdentityVisible(row.Target);
             if (!relevant) return;
 
-            if (!registry.TryGetEntity(row.Target, out PlayerEntity targetEntity)) return;
+            if (!registry.TryGetCombatTarget(row.Target, out ICombatTargetEntity targetEntity)) return;
 
             bool isHeal = string.Equals(row.EffectType, "HEAL", System.StringComparison.OrdinalIgnoreCase);
             string prefix = isHeal ? "+" : "";
@@ -52,7 +52,7 @@ namespace Arena.Presentation
                 ? (row.WasCritical ? new Color(0.35f, 1f, 0.45f) : new Color(0.55f, 1f, 0.65f))
                 : (row.WasCritical ? new Color(1f, 0.52f, 0.18f) : new Color(1f, 0.95f, 0.65f));
 
-            var pos = targetEntity.GameObject.transform.position + Vector3.up * 2.0f;
+            var pos = targetEntity.GetPresentationRoot().position + Vector3.up * targetEntity.HitHeight;
             SpawnFloatingText(pos, $"{prefix}{row.FinalAmount}{suffix}", color, row.WasCritical ? 34 : 28);
         }
 

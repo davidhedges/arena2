@@ -31,25 +31,25 @@ namespace Arena.Combat
         private const float TargetScreenPaddingPixels = 4f;
         private const float TargetDepthTieBreakScale = 0.0001f;
 
-        public PlayerEntity? SelectedTarget { get; private set; }
-        public PlayerEntity? HoveredTarget { get; private set; }
+        public ICombatTargetEntity? SelectedTarget { get; private set; }
+        public ICombatTargetEntity? HoveredTarget { get; private set; }
 
-        private PlayerEntity? _prevHovered;
-        private PlayerEntity? _prevSelected;
+        private ICombatTargetEntity? _prevHovered;
+        private ICombatTargetEntity? _prevSelected;
 
         /// <summary>
         /// Identity string expected by the CastRequest reducer's targetId argument.
         /// Empty string when no target is selected.
         /// </summary>
-        public string SelectedTargetId => SelectedTarget?.Identity.ToString() ?? "";
+        public string SelectedTargetId => SelectedTarget?.TargetIdentity.ToString() ?? "";
 
-        public bool SelectTarget(PlayerEntity entity)
+        public bool SelectTarget(ICombatTargetEntity entity)
         {
             if (!CanSelect(entity))
                 return false;
 
             SelectedTarget = entity;
-            Debug.Log($"[TargetSelector] Target: {entity.Username} ({entity.Identity})");
+            Debug.Log($"[TargetSelector] Target: {entity.DisplayName} ({entity.TargetIdentity})");
             return true;
         }
 
@@ -118,7 +118,7 @@ namespace Arena.Combat
 
         private void TrySelectTargetAtCursor(bool armAutoAttack)
         {
-            PlayerEntity? entity = ResolveTargetAtCursor();
+            ICombatTargetEntity? entity = ResolveTargetAtCursor();
             if (entity == null)
                 return;
 
@@ -126,7 +126,7 @@ namespace Arena.Combat
             {
                 var relation = PartyRelationship.RelationToLocal(entity);
                 Debug.Log(
-                    $"[TargetSelector] Auto-attack rejected: target {entity.Username} relation={relation} is not Hostile");
+                    $"[TargetSelector] Auto-attack rejected: target {entity.DisplayName} relation={relation} is not Hostile");
                 return;
             }
 
@@ -140,7 +140,7 @@ namespace Arena.Combat
             }
         }
 
-        private PlayerEntity? ResolveTargetAtCursor()
+        private ICombatTargetEntity? ResolveTargetAtCursor()
         {
             var cam = Camera.main;
             if (cam == null) return null;
@@ -150,15 +150,15 @@ namespace Arena.Combat
             return ResolveTargetAtScreenPoint(cam, input.MousePosition);
         }
 
-        private static bool CanSelect(PlayerEntity entity) => entity.IsAlive;
+        private static bool CanSelect(ICombatTargetEntity entity) => entity.IsAlive;
 
-        private static void ArmAutoAttackOnServer(PlayerEntity entity)
+        private static void ArmAutoAttackOnServer(ICombatTargetEntity entity)
         {
             var conn = NetworkManager.Instance?.Conn;
             if (conn == null)
                 return;
 
-            conn.Reducers.ArmAutoAttackTarget(entity.Identity.ToString());
+            conn.Reducers.ArmAutoAttackTarget(entity.TargetIdentity.ToString());
         }
 
         private static void ClearAutoAttackOnServer()
@@ -178,41 +178,55 @@ namespace Arena.Combat
             HoveredTarget = ResolveTargetAtScreenPoint(cam, mousePosition);
         }
 
-        private static PlayerEntity? ResolveTargetAtScreenPoint(Camera cam, Vector2 screenPoint)
+        private static ICombatTargetEntity? ResolveTargetAtScreenPoint(Camera cam, Vector2 screenPoint)
         {
             var registry = EntityRegistry.Instance;
             if (registry == null) return null;
             var local = registry.LocalPlayerEntity;
 
-            PlayerEntity? best = null;
+            ICombatTargetEntity? best = null;
             float bestScore = float.PositiveInfinity;
             foreach (var entity in registry.AllPlayers)
             {
                 if (local != null && entity.Identity == local.Identity) continue; // skip self
-                if (!entity.IsAlive) continue;
-                if (!TryGetScreenCapsuleScore(cam, entity, screenPoint, out float score)) continue;
-
-                if (score < bestScore)
-                {
-                    bestScore = score;
-                    best = entity;
-                }
+                ConsiderTarget(entity, cam, screenPoint, ref best, ref bestScore);
+            }
+            foreach (var entity in registry.AllNpcs)
+            {
+                ConsiderTarget(entity, cam, screenPoint, ref best, ref bestScore);
             }
 
             return best;
         }
 
+        private static void ConsiderTarget(
+            ICombatTargetEntity entity,
+            Camera cam,
+            Vector2 screenPoint,
+            ref ICombatTargetEntity? best,
+            ref float bestScore)
+        {
+            if (!entity.IsAlive) return;
+            if (!TryGetScreenCapsuleScore(cam, entity, screenPoint, out float score)) return;
+
+            if (score < bestScore)
+            {
+                bestScore = score;
+                best = entity;
+            }
+        }
+
         private static bool TryGetScreenCapsuleScore(
             Camera cam,
-            PlayerEntity entity,
+            ICombatTargetEntity entity,
             Vector2 screenPoint,
             out float score)
         {
             score = default;
 
-            Vector3 basePosition = entity.SimState.GetRenderPosition();
-            float radius = Mathf.Max(entity.SimState.HitRadius, MovementPrediction.DefaultHitRadius);
-            float height = Mathf.Max(entity.SimState.HitHeight, radius * 2f);
+            Vector3 basePosition = entity.GetRenderPosition();
+            float radius = Mathf.Max(entity.HitRadius, MovementPrediction.DefaultHitRadius);
+            float height = Mathf.Max(entity.HitHeight, radius * 2f);
             Vector3 bottom = basePosition + Vector3.up * radius;
             Vector3 top = basePosition + Vector3.up * Mathf.Max(radius, height - radius);
             Vector3 center = basePosition + Vector3.up * (height * 0.5f);
@@ -264,11 +278,19 @@ namespace Arena.Combat
             if (registry == null) return;
             var local = registry.LocalPlayerEntity;
 
-            var candidates = registry.AllPlayers
-                .Where(e => e.IsAlive
-                            && (local == null || e.Identity != local.Identity)
-                            && PartyRelationship.IsHostileToLocal(e))
-                .ToList();
+            var candidates = new List<ICombatTargetEntity>();
+            foreach (var entity in registry.AllPlayers)
+            {
+                if (entity.IsAlive
+                    && (local == null || entity.Identity != local.Identity)
+                    && PartyRelationship.IsHostileToLocal(entity))
+                    candidates.Add(entity);
+            }
+            foreach (var entity in registry.AllNpcs)
+            {
+                if (entity.IsAlive && PartyRelationship.IsHostileToLocal(entity))
+                    candidates.Add(entity);
+            }
 
             if (candidates.Count == 0) { SelectedTarget = null; return; }
 
@@ -282,7 +304,7 @@ namespace Arena.Combat
                 SelectedTarget = candidates[(idx + 1) % candidates.Count];
             }
 
-            Debug.Log($"[TargetSelector] Cycled → {SelectedTarget.Username}");
+            Debug.Log($"[TargetSelector] Cycled -> {SelectedTarget.DisplayName}");
         }
     }
 }

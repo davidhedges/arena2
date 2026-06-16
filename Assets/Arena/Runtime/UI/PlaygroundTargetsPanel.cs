@@ -19,9 +19,12 @@ namespace Arena.UI
         private const string KindHostile = "HOSTILE";
         private const string KindNeutral = "NEUTRAL";
         private const string KindPartyMember = "PARTY_MEMBER";
-        private const string KindMobHostile = "MOB_HOSTILE";
-        private const string KindMobNeutral = "MOB_NEUTRAL";
-        private const string KindMobFriendly = "MOB_FRIENDLY";
+        private const string FactionHostile = "HOSTILE";
+        private const string FactionNeutral = "NEUTRAL";
+        private const string FactionFriendly = "FRIENDLY";
+        private const string KoboldWarriorRed = "KOBOLD_WARRIOR_RD_SWORD_SHIELD";
+        private const string KoboldWarriorGreen = "KOBOLD_WARRIOR_GN_SPEAR";
+        private const string KoboldThiefBlack = "KOBOLD_THIEF_BK_DUAL_SWORD";
 
         private GameObject _menuRoot = null!;
         private Text _statusText = null!;
@@ -59,9 +62,9 @@ namespace Arena.UI
             BuildTargetButton("HostileButton", "PLAYER HOSTILE", 0, false, () => SpawnTarget(KindHostile));
             BuildTargetButton("NeutralButton", "PLAYER NEUTRAL", 1, false, () => SpawnTarget(KindNeutral));
             BuildTargetButton("PartyMemberButton", "PLAYER FRIENDLY", 2, false, () => SpawnTarget(KindPartyMember));
-            BuildTargetButton("MobHostileButton", "KOBOLD HOSTILE", 3, false, () => SpawnTarget(KindMobHostile));
-            BuildTargetButton("MobNeutralButton", "KOBOLD NEUTRAL", 4, false, () => SpawnTarget(KindMobNeutral));
-            BuildTargetButton("MobFriendlyButton", "KOBOLD FRIENDLY", 5, false, () => SpawnTarget(KindMobFriendly));
+            BuildTargetButton("NpcHostileButton", "KOBOLD HOSTILE", 3, false, () => SpawnNpc(KoboldWarriorRed, FactionHostile, "KOBOLD HOSTILE"));
+            BuildTargetButton("NpcNeutralButton", "KOBOLD NEUTRAL", 4, false, () => SpawnNpc(KoboldWarriorGreen, FactionNeutral, "KOBOLD NEUTRAL"));
+            BuildTargetButton("NpcFriendlyButton", "KOBOLD FRIENDLY", 5, false, () => SpawnNpc(KoboldThiefBlack, FactionFriendly, "KOBOLD FRIENDLY"));
             BuildTargetButton("ClearButton", "CLEAR", 6, true, ClearTargets);
 
             _statusText = Label(_menuRoot.transform, "Status",
@@ -138,6 +141,27 @@ namespace Arena.UI
             }
         }
 
+        private void SpawnNpc(string templateId, string faction, string label)
+        {
+            var conn = NetworkManager.Instance?.Conn;
+            if (conn == null)
+            {
+                SetStatus("NO CONNECTION", true);
+                return;
+            }
+
+            try
+            {
+                conn.Reducers.SpawnNpc(templateId, faction);
+                SetStatus($"{label} SENT", false);
+            }
+            catch (Exception error)
+            {
+                SetStatus("SPAWN FAILED", true);
+                Debug.LogWarning($"[{nameof(PlaygroundTargetsPanel)}] NPC spawn request failed locally: {error.Message}");
+            }
+        }
+
         private void ClearTargets()
         {
             var conn = NetworkManager.Instance?.Conn;
@@ -150,6 +174,7 @@ namespace Arena.UI
             try
             {
                 conn.Reducers.DespawnAllPlaygroundTargets();
+                conn.Reducers.DespawnAllNpcs();
                 SetStatus("CLEAR SENT", false);
             }
             catch (Exception error)
@@ -183,7 +208,10 @@ namespace Arena.UI
         {
             if (ctx.Event.Reducer is not Reducer.SpawnPlaygroundTarget
                 and not Reducer.DespawnAllPlaygroundTargets
-                and not Reducer.DespawnPlaygroundTarget)
+                and not Reducer.DespawnPlaygroundTarget
+                and not Reducer.SpawnNpc
+                and not Reducer.DespawnAllNpcs
+                and not Reducer.DespawnNpc)
             {
                 return;
             }
@@ -211,9 +239,6 @@ namespace Arena.UI
                 KindHostile => "PLAYER HOSTILE",
                 KindNeutral => "PLAYER NEUTRAL",
                 KindPartyMember => "PLAYER FRIENDLY",
-                KindMobHostile => "KOBOLD HOSTILE",
-                KindMobNeutral => "KOBOLD NEUTRAL",
-                KindMobFriendly => "KOBOLD FRIENDLY",
                 _ => "SPAWN",
             };
         }

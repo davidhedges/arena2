@@ -811,10 +811,10 @@ namespace Arena.UI
             }
 
             SetActiveIfChanged(_targetRoot, true);
-            bool targetChanged = !_lastTargetIdentity.HasValue || _lastTargetIdentity.Value != target.Identity;
+            bool targetChanged = !_lastTargetIdentity.HasValue || _lastTargetIdentity.Value != target.TargetIdentity;
             if (targetChanged || Time.unscaledTime >= _nextTargetStaticRefreshTime)
             {
-                _lastTargetIdentity = target.Identity;
+                _lastTargetIdentity = target.TargetIdentity;
                 _nextTargetStaticRefreshTime = Time.unscaledTime + PartyRosterRefreshInterval;
                 RefreshTargetStatic(target);
                 if (targetChanged)
@@ -823,23 +823,26 @@ namespace Arena.UI
 
             HealthBarPresentation health = ResolveHealthBarPresentation(
                 NetworkManager.Instance?.Conn,
-                target.Identity,
+                target.TargetIdentity,
                 target.Hp,
                 target.MaxHp);
             SetHealthBarFill(_targetHpFill, _targetTempHpFill, health);
             SetTextIfChanged(_targetHpText, health.Text);
 
-            var primaryPresentation = ResolvePrimaryResourcePresentation(target);
-            if (primaryPresentation.isVisible)
+            PlayerEntity? targetPlayer = target as PlayerEntity;
+            var primaryPresentation = targetPlayer != null
+                ? ResolvePrimaryResourcePresentation(targetPlayer)
+                : (isVisible: false, label: string.Empty, color: ResourceBlue);
+            if (targetPlayer != null && primaryPresentation.isVisible)
             {
-                float primaryFrac = target.MaxPrimaryResource > 0.001f
-                    ? Mathf.Clamp01(target.CurrentPrimaryResource / target.MaxPrimaryResource)
+                float primaryFrac = targetPlayer.MaxPrimaryResource > 0.001f
+                    ? Mathf.Clamp01(targetPlayer.CurrentPrimaryResource / targetPlayer.MaxPrimaryResource)
                     : 0f;
                 SetColorIfChanged(_targetPrimaryFill, primaryPresentation.color);
                 SetUnitFrameBarFill(_targetPrimaryFill, primaryFrac);
                 SetTextIfChanged(
                     _targetPrimaryText,
-                    $"{primaryPresentation.label} {Mathf.RoundToInt(target.CurrentPrimaryResource)} / {Mathf.RoundToInt(target.MaxPrimaryResource)}");
+                    $"{primaryPresentation.label} {Mathf.RoundToInt(targetPlayer.CurrentPrimaryResource)} / {Mathf.RoundToInt(targetPlayer.MaxPrimaryResource)}");
             }
             else
             {
@@ -851,18 +854,20 @@ namespace Arena.UI
             if (Time.unscaledTime >= _nextTargetStatusRefreshTime)
             {
                 _nextTargetStatusRefreshTime = Time.unscaledTime + StatusIconRefreshInterval;
-                RefreshStatusIcons(target.Identity, _tgtBuffRow, _tgtBuffIcons, _tgtDebuffRow, _tgtDebuffIcons);
+                RefreshStatusIcons(target.TargetIdentity, _tgtBuffRow, _tgtBuffIcons, _tgtDebuffRow, _tgtDebuffIcons);
             }
         }
 
-        private void RefreshTargetStatic(PlayerEntity target)
+        private void RefreshTargetStatic(ICombatTargetEntity target)
         {
             var relation = PartyRelationship.RelationToLocal(target);
-            SetTextIfChanged(_targetName, string.IsNullOrEmpty(target.Username) ? "???" : target.Username);
+            SetTextIfChanged(_targetName, string.IsNullOrEmpty(target.DisplayName) ? "???" : target.DisplayName);
             SetColorIfChanged(_targetName, RelationColor(relation));
             SetTextIfChanged(_targetRelation, RelationLabel(relation));
             SetColorIfChanged(_targetRelation, RelationColor(relation));
-            SetActiveIfChanged(_targetInviteButton.gameObject, PartyRelationship.CanInvite(target));
+            SetActiveIfChanged(
+                _targetInviteButton.gameObject,
+                target is PlayerEntity playerTarget && PartyRelationship.CanInvite(playerTarget));
         }
 
         private void UpdatePartyFrames(PlayerEntity local)
@@ -988,10 +993,10 @@ namespace Arena.UI
         {
             var target = TargetSelector.Instance?.SelectedTarget;
             var conn = NetworkManager.Instance?.Conn;
-            if (target == null || conn == null || !PartyRelationship.CanInvite(target))
+            if (target is not PlayerEntity playerTarget || conn == null || !PartyRelationship.CanInvite(playerTarget))
                 return;
 
-            conn.Reducers.InviteToParty(target.Identity.ToString());
+            conn.Reducers.InviteToParty(playerTarget.Identity.ToString());
         }
 
         private void OnAcceptActiveInvite()

@@ -131,7 +131,7 @@ namespace Arena.Debugging
         private void UpdateGuide()
         {
             PlayerEntity? local = EntityRegistry.Instance?.LocalPlayerEntity;
-            PlayerEntity? target = TargetSelector.Instance?.SelectedTarget;
+            ICombatTargetEntity? target = TargetSelector.Instance?.SelectedTarget;
 
             if (local == null || target == null || local.IsDestroyed || target.IsDestroyed)
             {
@@ -142,10 +142,10 @@ namespace Arena.Debugging
             }
 
             Vector3 casterBase = local.SimState.GetServerPosition();
-            Vector3 targetBase = target.SimState.GetServerPosition();
+            Vector3 targetBase = target.GetRenderPosition();
             float casterHeight = Mathf.Max(local.SimState.HitHeight, 0.5f);
-            float targetHeight = Mathf.Max(target.SimState.HitHeight, 0.5f);
-            float targetRadius = Mathf.Max(target.SimState.HitRadius, 0f);
+            float targetHeight = Mathf.Max(target.HitHeight, 0.5f);
+            float targetRadius = Mathf.Max(target.HitRadius, 0f);
             Vector3 origin = casterBase + Vector3.up * (casterHeight * 0.85f);
             LocalPlayerStateProvider? stateProvider = local.GetLocalStateProvider();
             float facingYaw = stateProvider?.HasPredictedState == true
@@ -218,7 +218,9 @@ namespace Arena.Debugging
                     : $"SERVER LOS: BLOCKED by {ShortenBlocker(closestBlocker)}";
             string facingResult = targetInFacingArc ? "facing OK" : "target outside front 180 arc";
             string movementResult = HasCurrentMovementInput(local) ? "movement input active" : "no movement input";
-            string targetName = string.IsNullOrWhiteSpace(target.Username) ? target.Identity.ToString() : target.Username;
+            string targetName = string.IsNullOrWhiteSpace(target.DisplayName)
+                ? target.TargetIdentity.ToString()
+                : target.DisplayName;
             _status = $"Target: {targetName}  distance={distance:F2}m  {facingResult}  {movementResult}  {serverResult}";
             _probeStatus = string.Join("\n", probeDetails);
         }

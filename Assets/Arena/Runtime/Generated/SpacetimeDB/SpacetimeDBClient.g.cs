@@ -57,6 +57,9 @@ namespace SpacetimeDB.Types
             AddTable(MeleeDefinition = new(conn));
             AddTable(MeleeGapCloseCatalog = new(conn));
             AddTable(MovementActionState = new(conn));
+            AddTable(NpcInstance = new(conn));
+            AddTable(NpcPhysics = new(conn));
+            AddTable(NpcState = new(conn));
             AddTable(Party = new(conn));
             AddTable(PartyInvite = new(conn));
             AddTable(PartyMember = new(conn));
@@ -606,6 +609,9 @@ namespace SpacetimeDB.Types
             new QueryBuilder().From.MeleeDefinition().ToSql(),
             new QueryBuilder().From.MeleeGapCloseCatalog().ToSql(),
             new QueryBuilder().From.MovementActionState().ToSql(),
+            new QueryBuilder().From.NpcInstance().ToSql(),
+            new QueryBuilder().From.NpcPhysics().ToSql(),
+            new QueryBuilder().From.NpcState().ToSql(),
             new QueryBuilder().From.Party().ToSql(),
             new QueryBuilder().From.PartyInvite().ToSql(),
             new QueryBuilder().From.PartyMember().ToSql(),
@@ -665,6 +671,9 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Table<MeleeDefinition, MeleeDefinitionCols, MeleeDefinitionIxCols> MeleeDefinition() => new("melee_definition", new MeleeDefinitionCols("melee_definition"), new MeleeDefinitionIxCols("melee_definition"));
         public global::SpacetimeDB.Table<MeleeGapCloseCatalog, MeleeGapCloseCatalogCols, MeleeGapCloseCatalogIxCols> MeleeGapCloseCatalog() => new("melee_gap_close_catalog", new MeleeGapCloseCatalogCols("melee_gap_close_catalog"), new MeleeGapCloseCatalogIxCols("melee_gap_close_catalog"));
         public global::SpacetimeDB.Table<MovementActionState, MovementActionStateCols, MovementActionStateIxCols> MovementActionState() => new("movement_action_state", new MovementActionStateCols("movement_action_state"), new MovementActionStateIxCols("movement_action_state"));
+        public global::SpacetimeDB.Table<NpcInstance, NpcInstanceCols, NpcInstanceIxCols> NpcInstance() => new("npc_instance", new NpcInstanceCols("npc_instance"), new NpcInstanceIxCols("npc_instance"));
+        public global::SpacetimeDB.Table<NpcPhysics, NpcPhysicsCols, NpcPhysicsIxCols> NpcPhysics() => new("npc_physics", new NpcPhysicsCols("npc_physics"), new NpcPhysicsIxCols("npc_physics"));
+        public global::SpacetimeDB.Table<NpcState, NpcStateCols, NpcStateIxCols> NpcState() => new("npc_state", new NpcStateCols("npc_state"), new NpcStateIxCols("npc_state"));
         public global::SpacetimeDB.Table<Party, PartyCols, PartyIxCols> Party() => new("party", new PartyCols("party"), new PartyIxCols("party"));
         public global::SpacetimeDB.Table<PartyInvite, PartyInviteCols, PartyInviteIxCols> PartyInvite() => new("party_invite", new PartyInviteCols("party_invite"), new PartyInviteIxCols("party_invite"));
         public global::SpacetimeDB.Table<PartyMember, PartyMemberCols, PartyMemberIxCols> PartyMember() => new("party_member", new PartyMemberCols("party_member"), new PartyMemberIxCols("party_member"));
@@ -785,7 +794,9 @@ namespace SpacetimeDB.Types
                 Reducer.CreateSavedSpec args => Reducers.InvokeCreateSavedSpec(eventContext, args),
                 Reducer.DeclinePartyInvite args => Reducers.InvokeDeclinePartyInvite(eventContext, args),
                 Reducer.DeleteSavedSpec args => Reducers.InvokeDeleteSavedSpec(eventContext, args),
+                Reducer.DespawnAllNpcs args => Reducers.InvokeDespawnAllNpcs(eventContext, args),
                 Reducer.DespawnAllPlaygroundTargets args => Reducers.InvokeDespawnAllPlaygroundTargets(eventContext, args),
+                Reducer.DespawnNpc args => Reducers.InvokeDespawnNpc(eventContext, args),
                 Reducer.DespawnPlaygroundTarget args => Reducers.InvokeDespawnPlaygroundTarget(eventContext, args),
                 Reducer.InviteToParty args => Reducers.InvokeInviteToParty(eventContext, args),
                 Reducer.JoinInstance args => Reducers.InvokeJoinInstance(eventContext, args),
@@ -807,6 +818,7 @@ namespace SpacetimeDB.Types
                 Reducer.SetCombatMode args => Reducers.InvokeSetCombatMode(eventContext, args),
                 Reducer.SetOpenWorldScene args => Reducers.InvokeSetOpenWorldScene(eventContext, args),
                 Reducer.SetSavedSpecStatAllocation args => Reducers.InvokeSetSavedSpecStatAllocation(eventContext, args),
+                Reducer.SpawnNpc args => Reducers.InvokeSpawnNpc(eventContext, args),
                 Reducer.SpawnPlaygroundTarget args => Reducers.InvokeSpawnPlaygroundTarget(eventContext, args),
                 Reducer.StartBlock args => Reducers.InvokeStartBlock(eventContext, args),
                 Reducer.StartDodge args => Reducers.InvokeStartDodge(eventContext, args),

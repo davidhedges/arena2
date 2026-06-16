@@ -26,9 +26,16 @@ namespace Arena.Combat
         public const string PlaygroundKindHostile = "HOSTILE";
         public const string PlaygroundKindNeutral = "NEUTRAL";
         public const string PlaygroundKindPartyMember = "PARTY_MEMBER";
-        public const string PlaygroundKindMobHostile = "MOB_HOSTILE";
-        public const string PlaygroundKindMobNeutral = "MOB_NEUTRAL";
-        public const string PlaygroundKindMobFriendly = "MOB_FRIENDLY";
+
+        public static ClientCombatRelation RelationToLocal(ICombatTargetEntity? target)
+        {
+            var local = EntityRegistry.Instance?.LocalPlayerEntity;
+            if (local == null || target == null)
+                return ClientCombatRelation.Neutral;
+
+            bool targetIsDummy = target is PlayerEntity player && player.IsDummy;
+            return Relation(local.Identity, target.TargetIdentity, targetIsDummy);
+        }
 
         public static ClientCombatRelation RelationToLocal(PlayerEntity? target)
         {
@@ -49,6 +56,9 @@ namespace Arena.Combat
             if (TryPlaygroundRelation(source, target, out var playgroundRelation))
                 return playgroundRelation;
 
+            if (TryNpcRelation(target, out var npcRelation))
+                return npcRelation;
+
             if (targetIsDummy)
                 return ClientCombatRelation.Hostile;
 
@@ -63,6 +73,9 @@ namespace Arena.Combat
         }
 
         public static bool IsHostileToLocal(PlayerEntity? target)
+            => RelationToLocal(target) == ClientCombatRelation.Hostile;
+
+        public static bool IsHostileToLocal(ICombatTargetEntity? target)
             => RelationToLocal(target) == ClientCombatRelation.Hostile;
 
         public static bool IsPartyAllyToLocal(PlayerEntity? target)
@@ -84,6 +97,17 @@ namespace Arena.Combat
         public static bool TargetAudienceAllowsLocal(PlayerEntity? target, string? targetAudience)
         {
             var relation = RelationToLocal(target);
+            return TargetAudienceAllowsRelation(relation, targetAudience);
+        }
+
+        public static bool TargetAudienceAllowsLocal(ICombatTargetEntity? target, string? targetAudience)
+        {
+            var relation = RelationToLocal(target);
+            return TargetAudienceAllowsRelation(relation, targetAudience);
+        }
+
+        private static bool TargetAudienceAllowsRelation(ClientCombatRelation relation, string? targetAudience)
+        {
             return NormalizeAudience(targetAudience) switch
             {
                 TargetAudienceSelfOnly => relation == ClientCombatRelation.Self,
@@ -142,8 +166,8 @@ namespace Arena.Combat
             {
                 relation = kind switch
                 {
-                    PlaygroundKindHostile or PlaygroundKindMobHostile => ClientCombatRelation.Hostile,
-                    PlaygroundKindPartyMember or PlaygroundKindMobFriendly => ClientCombatRelation.PartyAlly,
+                    PlaygroundKindHostile => ClientCombatRelation.Hostile,
+                    PlaygroundKindPartyMember => ClientCombatRelation.PartyAlly,
                     _ => ClientCombatRelation.Neutral,
                 };
                 return true;
@@ -152,6 +176,23 @@ namespace Arena.Combat
             relation = kind == PlaygroundKindPartyMember && ArePartyMembers(source, target)
                 ? ClientCombatRelation.PartyAlly
                 : ClientCombatRelation.Neutral;
+            return true;
+        }
+
+        private static bool TryNpcRelation(Identity target, out ClientCombatRelation relation)
+        {
+            relation = ClientCombatRelation.Neutral;
+            var conn = NetworkManager.Instance?.Conn;
+            NpcInstance? npc = conn?.Db.NpcInstance.Identity.Find(target);
+            if (npc == null)
+                return false;
+
+            relation = NormalizePlaygroundKind(npc.Faction) switch
+            {
+                PlaygroundKindHostile => ClientCombatRelation.Hostile,
+                PlaygroundKindPartyMember or "FRIENDLY" => ClientCombatRelation.PartyAlly,
+                _ => ClientCombatRelation.Neutral,
+            };
             return true;
         }
 

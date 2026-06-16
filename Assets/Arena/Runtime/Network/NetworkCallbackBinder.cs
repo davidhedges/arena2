@@ -41,9 +41,17 @@ namespace Arena.Network
             conn.Db.PlayerWorld.OnUpdate += registry.OnPlayerWorldUpdate;
             conn.Db.PlayerWorld.OnDelete += registry.OnPlayerWorldDelete;
 
-            conn.Db.PlaygroundTarget.OnInsert += registry.OnPlaygroundTargetInsert;
-            conn.Db.PlaygroundTarget.OnUpdate += registry.OnPlaygroundTargetUpdate;
-            conn.Db.PlaygroundTarget.OnDelete += registry.OnPlaygroundTargetDelete;
+            conn.Db.NpcInstance.OnInsert += registry.OnNpcInstanceInsert;
+            conn.Db.NpcInstance.OnUpdate += registry.OnNpcInstanceUpdate;
+            conn.Db.NpcInstance.OnDelete += registry.OnNpcInstanceDelete;
+
+            conn.Db.NpcPhysics.OnInsert += registry.OnNpcPhysicsInsert;
+            conn.Db.NpcPhysics.OnUpdate += registry.OnNpcPhysicsUpdate;
+            conn.Db.NpcPhysics.OnDelete += registry.OnNpcPhysicsDelete;
+
+            conn.Db.NpcState.OnInsert += registry.OnNpcStateInsert;
+            conn.Db.NpcState.OnUpdate += registry.OnNpcStateUpdate;
+            conn.Db.NpcState.OnDelete += registry.OnNpcStateDelete;
 
             conn.Db.PlayerOpenWorldScene.OnInsert += registry.OnPlayerOpenWorldSceneInsert;
             conn.Db.PlayerOpenWorldScene.OnUpdate += registry.OnPlayerOpenWorldSceneUpdate;

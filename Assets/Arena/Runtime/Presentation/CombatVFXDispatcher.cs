@@ -762,10 +762,10 @@ namespace Arena.Presentation
         {
             Vector3 casterPosition = ResolveLocalCasterPosition(caster);
             Vector3 basePosition = casterPosition + Vector3.up * spellDef.SpawnHeight;
-            PlayerEntity? target = TargetSelector.Instance?.SelectedTarget;
+            ICombatTargetEntity? target = TargetSelector.Instance?.SelectedTarget;
             if (target == null
                 || (!string.IsNullOrWhiteSpace(targetId)
-                    && !string.Equals(target.Identity.ToString(), targetId, StringComparison.Ordinal)))
+                    && !string.Equals(target.TargetIdentity.ToString(), targetId, StringComparison.Ordinal)))
             {
                 origin = default;
                 direction = default;
