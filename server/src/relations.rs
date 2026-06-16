@@ -88,8 +88,13 @@ pub(crate) fn combat_relation(
     // is not a general faction, NPC, or bot relationship system.
     if let Some(kind) = playground_target_kind_for_relation(ctx, source, target) {
         return match kind {
-            PlaygroundTargetKind::Hostile => CombatRelation::Hostile,
-            PlaygroundTargetKind::Neutral => CombatRelation::Neutral,
+            PlaygroundTargetKind::Hostile | PlaygroundTargetKind::MobHostile => {
+                CombatRelation::Hostile
+            }
+            PlaygroundTargetKind::Neutral | PlaygroundTargetKind::MobNeutral => {
+                CombatRelation::Neutral
+            }
+            PlaygroundTargetKind::MobFriendly => CombatRelation::PartyAlly,
             PlaygroundTargetKind::PartyMember => {
                 if source != Identity::ZERO && same_party(ctx, source, target) {
                     CombatRelation::PartyAlly

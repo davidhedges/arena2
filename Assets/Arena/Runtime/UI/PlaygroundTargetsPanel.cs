@@ -1,5 +1,7 @@
 #nullable enable
+using System;
 using Arena.Network;
+using SpacetimeDB.Types;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -17,8 +19,14 @@ namespace Arena.UI
         private const string KindHostile = "HOSTILE";
         private const string KindNeutral = "NEUTRAL";
         private const string KindPartyMember = "PARTY_MEMBER";
+        private const string KindMobHostile = "MOB_HOSTILE";
+        private const string KindMobNeutral = "MOB_NEUTRAL";
+        private const string KindMobFriendly = "MOB_FRIENDLY";
 
         private GameObject _menuRoot = null!;
+        private Text _statusText = null!;
+        private DbConnection? _subscribedConnection;
+        private float _statusUntilTime;
 
         private void Awake()
         {
@@ -35,7 +43,7 @@ namespace Arena.UI
 
             _menuRoot = Panel("PlaygroundTargetsMenu", transform,
                 new Vector2(1f, 1f), new Vector2(1f, 1f),
-                new Vector2(190f, 150f), new Vector2(-Pad, -MenuTopOffset));
+                new Vector2(206f, 268f), new Vector2(-Pad, -MenuTopOffset));
             Img(_menuRoot, new Color(0.025f, 0.025f, 0.035f, 0.92f));
             var outline = _menuRoot.AddComponent<Outline>();
             outline.effectColor = new Color(0.38f, 0.22f, 0.52f, 0.95f);
@@ -43,25 +51,37 @@ namespace Arena.UI
 
             var title = Label(_menuRoot.transform, "Title",
                 new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
-                new Vector2(174f, 22f), new Vector2(0f, -8f),
+                new Vector2(190f, 22f), new Vector2(0f, -8f),
                 11, new Color(0.86f, 0.72f, 1f), TextAnchor.MiddleCenter);
             title.text = "PLAYGROUND TARGETS";
             title.fontStyle = FontStyle.Bold;
 
-            BuildTargetButton("HostileButton", "HOSTILE", 0, () => SpawnTarget(KindHostile));
-            BuildTargetButton("NeutralButton", "NEUTRAL", 1, () => SpawnTarget(KindNeutral));
-            BuildTargetButton("PartyMemberButton", "PARTY MEMBER", 2, () => SpawnTarget(KindPartyMember));
-            BuildTargetButton("ClearButton", "CLEAR", 3, ClearTargets);
+            BuildTargetButton("HostileButton", "PLAYER HOSTILE", 0, false, () => SpawnTarget(KindHostile));
+            BuildTargetButton("NeutralButton", "PLAYER NEUTRAL", 1, false, () => SpawnTarget(KindNeutral));
+            BuildTargetButton("PartyMemberButton", "PLAYER FRIENDLY", 2, false, () => SpawnTarget(KindPartyMember));
+            BuildTargetButton("MobHostileButton", "KOBOLD HOSTILE", 3, false, () => SpawnTarget(KindMobHostile));
+            BuildTargetButton("MobNeutralButton", "KOBOLD NEUTRAL", 4, false, () => SpawnTarget(KindMobNeutral));
+            BuildTargetButton("MobFriendlyButton", "KOBOLD FRIENDLY", 5, false, () => SpawnTarget(KindMobFriendly));
+            BuildTargetButton("ClearButton", "CLEAR", 6, true, ClearTargets);
+
+            _statusText = Label(_menuRoot.transform, "Status",
+                new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
+                new Vector2(190f, 18f), new Vector2(0f, -238f),
+                9, new Color(0.75f, 0.80f, 0.90f), TextAnchor.MiddleCenter);
+            _statusText.text = string.Empty;
+            _statusText.resizeTextForBestFit = true;
+            _statusText.resizeTextMinSize = 6;
+            _statusText.resizeTextMaxSize = 9;
 
             _menuRoot.SetActive(false);
         }
 
-        private void BuildTargetButton(string name, string label, int row, UnityEngine.Events.UnityAction action)
+        private void BuildTargetButton(string name, string label, int row, bool destructive, UnityEngine.Events.UnityAction action)
         {
             var button = MakeHudButton(_menuRoot.transform, name, label,
                 new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
-                new Vector2(160f, 24f), new Vector2(0f, -36f - row * 28f),
-                row == 3
+                new Vector2(176f, 24f), new Vector2(0f, -36f - row * 28f),
+                destructive
                     ? new Color(0.28f, 0.08f, 0.10f, 0.94f)
                     : new Color(0.12f, 0.13f, 0.18f, 0.94f));
             button.onClick.AddListener(action);
@@ -72,14 +92,130 @@ namespace Arena.UI
             _menuRoot.SetActive(!_menuRoot.activeSelf);
         }
 
-        private static void SpawnTarget(string kind)
+        private void OnEnable()
         {
-            NetworkManager.Instance?.Conn?.Reducers.SpawnPlaygroundTarget(kind);
+            TrySubscribeToReducerErrors();
         }
 
-        private static void ClearTargets()
+        private void Update()
         {
-            NetworkManager.Instance?.Conn?.Reducers.DespawnAllPlaygroundTargets();
+            TrySubscribeToReducerErrors();
+            if (_statusText != null && _statusUntilTime > 0f && Time.unscaledTime >= _statusUntilTime)
+            {
+                _statusText.text = string.Empty;
+                _statusUntilTime = 0f;
+            }
+        }
+
+        private void OnDisable()
+        {
+            UnsubscribeFromReducerErrors();
+        }
+
+        private void OnDestroy()
+        {
+            UnsubscribeFromReducerErrors();
+        }
+
+        private void SpawnTarget(string kind)
+        {
+            var conn = NetworkManager.Instance?.Conn;
+            if (conn == null)
+            {
+                SetStatus("NO CONNECTION", true);
+                return;
+            }
+
+            try
+            {
+                conn.Reducers.SpawnPlaygroundTarget(kind);
+                SetStatus($"{LabelForKind(kind)} SENT", false);
+            }
+            catch (Exception error)
+            {
+                SetStatus("SPAWN FAILED", true);
+                Debug.LogWarning($"[{nameof(PlaygroundTargetsPanel)}] Spawn request failed locally: {error.Message}");
+            }
+        }
+
+        private void ClearTargets()
+        {
+            var conn = NetworkManager.Instance?.Conn;
+            if (conn == null)
+            {
+                SetStatus("NO CONNECTION", true);
+                return;
+            }
+
+            try
+            {
+                conn.Reducers.DespawnAllPlaygroundTargets();
+                SetStatus("CLEAR SENT", false);
+            }
+            catch (Exception error)
+            {
+                SetStatus("CLEAR FAILED", true);
+                Debug.LogWarning($"[{nameof(PlaygroundTargetsPanel)}] Clear request failed locally: {error.Message}");
+            }
+        }
+
+        private void TrySubscribeToReducerErrors()
+        {
+            DbConnection? conn = NetworkManager.Instance?.Conn;
+            if (conn == null || ReferenceEquals(_subscribedConnection, conn))
+                return;
+
+            UnsubscribeFromReducerErrors();
+            _subscribedConnection = conn;
+            _subscribedConnection.OnUnhandledReducerError += OnUnhandledReducerError;
+        }
+
+        private void UnsubscribeFromReducerErrors()
+        {
+            if (_subscribedConnection == null)
+                return;
+
+            _subscribedConnection.OnUnhandledReducerError -= OnUnhandledReducerError;
+            _subscribedConnection = null;
+        }
+
+        private void OnUnhandledReducerError(ReducerEventContext ctx, Exception error)
+        {
+            if (ctx.Event.Reducer is not Reducer.SpawnPlaygroundTarget
+                and not Reducer.DespawnAllPlaygroundTargets
+                and not Reducer.DespawnPlaygroundTarget)
+            {
+                return;
+            }
+
+            SetStatus(error.Message, true);
+            Debug.LogWarning($"[{nameof(PlaygroundTargetsPanel)}] Playground reducer rejected: {error.Message}");
+        }
+
+        private void SetStatus(string message, bool error)
+        {
+            if (_statusText == null)
+                return;
+
+            _statusText.color = error
+                ? new Color(1f, 0.45f, 0.36f)
+                : new Color(0.65f, 0.95f, 0.75f);
+            _statusText.text = message;
+            _statusUntilTime = Time.unscaledTime + 4f;
+        }
+
+        private static string LabelForKind(string kind)
+        {
+            return kind switch
+            {
+                KindHostile => "PLAYER HOSTILE",
+                KindNeutral => "PLAYER NEUTRAL",
+                KindPartyMember => "PLAYER FRIENDLY",
+                KindMobHostile => "KOBOLD HOSTILE",
+                KindMobNeutral => "KOBOLD NEUTRAL",
+                KindMobFriendly => "KOBOLD FRIENDLY",
+                _ => "SPAWN",
+            };
         }
 
         private static GameObject Panel(

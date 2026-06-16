@@ -133,6 +133,51 @@ namespace Arena.Presentation.Appearance
             return Apply(selection, SignatureFor(selection), out binding, out error, catalogs);
         }
 
+        public bool ApplyPrefabResource(string resourcePath, string appearanceSignature, out RuntimeAvatarBinding binding, out string error)
+        {
+            binding = null!;
+            resourcePath = string.IsNullOrWhiteSpace(resourcePath) ? string.Empty : resourcePath.Trim();
+            appearanceSignature = string.IsNullOrWhiteSpace(appearanceSignature)
+                ? $"prefab:{resourcePath}"
+                : appearanceSignature.Trim();
+
+            if (_currentBinding != null
+                && string.Equals(_currentBinding.AppearanceSignature, appearanceSignature, StringComparison.Ordinal))
+            {
+                binding = _currentBinding;
+                error = string.Empty;
+                return true;
+            }
+
+            if (string.IsNullOrWhiteSpace(resourcePath))
+            {
+                error = "Prefab resource path is required.";
+                return false;
+            }
+
+            GameObject? prefab = Resources.Load<GameObject>(resourcePath);
+            if (prefab == null)
+            {
+                error = $"Prefab resource '{resourcePath}' was not found.";
+                return false;
+            }
+
+            Transform root = GetOrCreateVisualRoot();
+            GameObject avatar = Instantiate(prefab, root, false);
+            avatar.name = prefab.name;
+            DestroyAvatar(_activeAvatar);
+            _activeAvatar = avatar;
+
+            HideLegacySkinnedVisuals();
+            EnsureNamedSocketMounts(avatar);
+            if (!TryCreateBinding(appearanceSignature, out binding, out error))
+                return false;
+
+            _currentBinding = binding;
+            RefreshRenderers();
+            return true;
+        }
+
         public bool Apply(
             CharacterAppearanceSelection selection,
             string appearanceSignature,
@@ -220,6 +265,51 @@ namespace Arena.Presentation.Appearance
             _visualRoot.SetLocalPositionAndRotation(Vector3.zero, Quaternion.identity);
             _visualRoot.localScale = Vector3.one;
             return _visualRoot;
+        }
+
+        private static void EnsureNamedSocketMounts(GameObject avatar)
+        {
+            AvatarWeaponMounts? mounts = avatar.GetComponent<AvatarWeaponMounts>();
+            if (mounts == null)
+                mounts = avatar.GetComponentInChildren<AvatarWeaponMounts>(includeInactive: true);
+            if (mounts == null)
+                mounts = avatar.AddComponent<AvatarWeaponMounts>();
+
+            Transform? mainHand = FindDeepChild(avatar.transform, "weapon_r_socket")
+                ?? FindDeepChild(avatar.transform, "weapon_r");
+            Transform? offHand = FindDeepChild(avatar.transform, "weapon_l_socket")
+                ?? FindDeepChild(avatar.transform, "weapon_l");
+            Transform? shield = FindDeepChild(avatar.transform, "weapon_shield_socket");
+
+            if (mainHand != null)
+            {
+                mounts.SetOrReplaceMount(AvatarWeaponMounts.MainHandMountId, mainHand);
+                mounts.SetOrReplaceMount(AvatarWeaponMounts.GreatswordHandMountId, mainHand);
+                mounts.SetOrReplaceMount(AvatarWeaponMounts.ArcherBowHandMountId, mainHand);
+            }
+
+            if (offHand != null)
+                mounts.SetOrReplaceMount(AvatarWeaponMounts.OffHandMountId, offHand);
+            if (shield != null)
+                mounts.SetOrReplaceMount(AvatarWeaponMounts.OffStowedMountId, shield);
+        }
+
+        private static Transform? FindDeepChild(Transform parent, string name)
+        {
+            if (parent == null || string.IsNullOrWhiteSpace(name))
+                return null;
+
+            foreach (Transform child in parent)
+            {
+                if (string.Equals(child.name, name, StringComparison.Ordinal))
+                    return child;
+
+                Transform? nested = FindDeepChild(child, name);
+                if (nested != null)
+                    return nested;
+            }
+
+            return null;
         }
 
         private bool TryCreateBinding(string appearanceSignature, out RuntimeAvatarBinding binding, out string error)

@@ -29,10 +29,14 @@ use crate::playground_targets::playground_target as _;
 pub(crate) const PLAYGROUND_TARGET_KIND_HOSTILE: &str = "HOSTILE";
 pub(crate) const PLAYGROUND_TARGET_KIND_NEUTRAL: &str = "NEUTRAL";
 pub(crate) const PLAYGROUND_TARGET_KIND_PARTY_MEMBER: &str = "PARTY_MEMBER";
+pub(crate) const PLAYGROUND_TARGET_KIND_MOB_HOSTILE: &str = "MOB_HOSTILE";
+pub(crate) const PLAYGROUND_TARGET_KIND_MOB_NEUTRAL: &str = "MOB_NEUTRAL";
+pub(crate) const PLAYGROUND_TARGET_KIND_MOB_FRIENDLY: &str = "MOB_FRIENDLY";
 
 const WORLD_KIND_OPEN: &str = "OPEN";
 const WORLD_KIND_INSTANCE: &str = "INSTANCE";
 const PLAYGROUND_TARGET_HP: i32 = DEFAULT_MAX_HP * 50;
+const PLAYGROUND_TARGET_SPAWN_FORWARD: f32 = 2.5;
 const PLAYGROUND_TARGET_MAGIC: u128 = 0x706c_6179_6772_6f75_6e64_5f746172_00;
 
 #[table(accessor = playground_target, public)]
@@ -57,16 +61,29 @@ pub(crate) enum PlaygroundTargetKind {
     Hostile,
     Neutral,
     PartyMember,
+    MobHostile,
+    MobNeutral,
+    MobFriendly,
 }
 
 impl PlaygroundTargetKind {
-    pub(crate) const ALL: [Self; 3] = [Self::Hostile, Self::Neutral, Self::PartyMember];
+    pub(crate) const ALL: [Self; 6] = [
+        Self::Hostile,
+        Self::Neutral,
+        Self::PartyMember,
+        Self::MobHostile,
+        Self::MobNeutral,
+        Self::MobFriendly,
+    ];
 
     pub(crate) fn as_str(self) -> &'static str {
         match self {
             Self::Hostile => PLAYGROUND_TARGET_KIND_HOSTILE,
             Self::Neutral => PLAYGROUND_TARGET_KIND_NEUTRAL,
             Self::PartyMember => PLAYGROUND_TARGET_KIND_PARTY_MEMBER,
+            Self::MobHostile => PLAYGROUND_TARGET_KIND_MOB_HOSTILE,
+            Self::MobNeutral => PLAYGROUND_TARGET_KIND_MOB_NEUTRAL,
+            Self::MobFriendly => PLAYGROUND_TARGET_KIND_MOB_FRIENDLY,
         }
     }
 
@@ -75,6 +92,9 @@ impl PlaygroundTargetKind {
             PLAYGROUND_TARGET_KIND_HOSTILE => Some(Self::Hostile),
             PLAYGROUND_TARGET_KIND_NEUTRAL => Some(Self::Neutral),
             PLAYGROUND_TARGET_KIND_PARTY_MEMBER => Some(Self::PartyMember),
+            PLAYGROUND_TARGET_KIND_MOB_HOSTILE => Some(Self::MobHostile),
+            PLAYGROUND_TARGET_KIND_MOB_NEUTRAL => Some(Self::MobNeutral),
+            PLAYGROUND_TARGET_KIND_MOB_FRIENDLY => Some(Self::MobFriendly),
             _ => None,
         }
     }
@@ -84,6 +104,9 @@ impl PlaygroundTargetKind {
             Self::Hostile => 1,
             Self::Neutral => 2,
             Self::PartyMember => 4_u8.saturating_add(slot),
+            Self::MobHostile => 16,
+            Self::MobNeutral => 17,
+            Self::MobFriendly => 18,
         }
     }
 
@@ -92,6 +115,9 @@ impl PlaygroundTargetKind {
             Self::Hostile => "Hostile",
             Self::Neutral => "Neutral",
             Self::PartyMember => "Party Member",
+            Self::MobHostile => "Hostile Kobold",
+            Self::MobNeutral => "Neutral Kobold",
+            Self::MobFriendly => "Friendly Kobold",
         }
     }
 }
@@ -119,6 +145,8 @@ pub fn spawn_playground_target(ctx: &ReducerContext, kind: String) -> Result<(),
 
     let (identity, slot) = next_playground_target_identity(ctx, owner, kind)?;
     let target_yaw = wrap_yaw(owner_physics.yaw + std::f32::consts::PI);
+    let spawn_x = owner_physics.pos_x + owner_physics.yaw.sin() * PLAYGROUND_TARGET_SPAWN_FORWARD;
+    let spawn_z = owner_physics.pos_z + owner_physics.yaw.cos() * PLAYGROUND_TARGET_SPAWN_FORWARD;
 
     let is_instance = owner_world
         .world_kind
@@ -142,9 +170,9 @@ pub fn spawn_playground_target(ctx: &ReducerContext, kind: String) -> Result<(),
             identity,
             username: playground_target_username(kind, slot),
             class_id: "WARRIOR".to_string(),
-            pos_x: owner_physics.pos_x,
+            pos_x: spawn_x,
             pos_y: owner_physics.pos_y,
-            pos_z: owner_physics.pos_z,
+            pos_z: spawn_z,
             yaw: target_yaw,
             vel_x: 0.0,
             vel_y: 0.0,
@@ -405,7 +433,9 @@ fn wrap_yaw(yaw: f32) -> f32 {
 mod tests {
     use super::{
         playground_target_identity, PlaygroundTargetKind, PLAYGROUND_TARGET_KIND_HOSTILE,
-        PLAYGROUND_TARGET_KIND_NEUTRAL, PLAYGROUND_TARGET_KIND_PARTY_MEMBER,
+        PLAYGROUND_TARGET_KIND_MOB_FRIENDLY, PLAYGROUND_TARGET_KIND_MOB_HOSTILE,
+        PLAYGROUND_TARGET_KIND_MOB_NEUTRAL, PLAYGROUND_TARGET_KIND_NEUTRAL,
+        PLAYGROUND_TARGET_KIND_PARTY_MEMBER,
     };
     use spacetimedb::Identity;
 
@@ -424,8 +454,24 @@ mod tests {
             PLAYGROUND_TARGET_KIND_PARTY_MEMBER
         );
         assert_eq!(
+            PlaygroundTargetKind::MobHostile.as_str(),
+            PLAYGROUND_TARGET_KIND_MOB_HOSTILE
+        );
+        assert_eq!(
+            PlaygroundTargetKind::MobNeutral.as_str(),
+            PLAYGROUND_TARGET_KIND_MOB_NEUTRAL
+        );
+        assert_eq!(
+            PlaygroundTargetKind::MobFriendly.as_str(),
+            PLAYGROUND_TARGET_KIND_MOB_FRIENDLY
+        );
+        assert_eq!(
             PlaygroundTargetKind::from_wire("party_member"),
             Some(PlaygroundTargetKind::PartyMember)
+        );
+        assert_eq!(
+            PlaygroundTargetKind::from_wire("mob_hostile"),
+            Some(PlaygroundTargetKind::MobHostile)
         );
     }
 
@@ -439,8 +485,11 @@ mod tests {
         let hostile_b =
             playground_target_identity(owner, PlaygroundTargetKind::Hostile, 0).unwrap();
         let neutral = playground_target_identity(owner, PlaygroundTargetKind::Neutral, 0).unwrap();
+        let mob_hostile =
+            playground_target_identity(owner, PlaygroundTargetKind::MobHostile, 0).unwrap();
         assert_eq!(hostile_a, hostile_b);
         assert_ne!(hostile_a, neutral);
+        assert_ne!(hostile_a, mob_hostile);
     }
 
     #[test]

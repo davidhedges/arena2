@@ -40,6 +40,10 @@ namespace Arena.Entity
         private const string FearStatusKind = "FEAR";
         private const string DefenseBlockKind = "BLOCK";
         private const string DefenseParryKind = "PARRY";
+        private const string PlaygroundKindMobHostile = "MOB_HOSTILE";
+        private const string PlaygroundKindMobNeutral = "MOB_NEUTRAL";
+        private const string PlaygroundKindMobFriendly = "MOB_FRIENDLY";
+        private const string KoboldWarriorRedResourcePath = "Mobs/KoboldWarriorRed";
 
         public static EntityRegistry Instance { get; private set; } = null!;
 
@@ -679,6 +683,7 @@ namespace Arena.Entity
                         _scopedPlayerCacheHydrator.Capture(conn),
                         row.Identity,
                         this);
+                    RefreshPlaygroundTargetPresentation(row.Identity);
                 }
             }
 
@@ -695,6 +700,7 @@ namespace Arena.Entity
             ApplyOwnerCombatProfile(row.Identity);
             if (_sharedActionProfile != null)
                 entity.SetSharedActionProfile(_sharedActionProfile);
+            RefreshPlaygroundTargetPresentation(row.Identity);
         }
 
         private void ApplyCharacterProgression(CharacterProgression row)
@@ -727,8 +733,73 @@ namespace Arena.Entity
             if (!TryGetLivePlayer(row.Owner, out var entity))
                 return;
 
+            if (TryGetPlaygroundTarget(row.Owner, out var playground) && IsPlaygroundMobKind(playground.Kind))
+                return;
+
             entity.ApplyAppearance(row);
         }
+
+        public void OnPlaygroundTargetInsert(EventContext ctx, PlaygroundTarget row)
+        {
+            ApplyPlaygroundTargetPresentation(row);
+        }
+
+        public void OnPlaygroundTargetUpdate(EventContext ctx, PlaygroundTarget oldRow, PlaygroundTarget newRow)
+        {
+            ApplyPlaygroundTargetPresentation(newRow);
+        }
+
+        public void OnPlaygroundTargetDelete(EventContext ctx, PlaygroundTarget row)
+        {
+            if (TryGetLivePlayer(row.Identity, out var entity))
+                entity.RefreshTargetingPresentation();
+        }
+
+        private void RefreshPlaygroundTargetPresentation(Identity identity)
+        {
+            if (TryGetPlaygroundTarget(identity, out var row))
+                ApplyPlaygroundTargetPresentation(row);
+        }
+
+        private bool TryGetPlaygroundTarget(Identity identity, out PlaygroundTarget row)
+        {
+            var conn = NetworkManager.Instance?.Conn;
+            row = null!;
+            if (conn == null)
+                return false;
+
+            PlaygroundTarget? found = conn.Db.PlaygroundTarget.Identity.Find(identity);
+            if (found == null)
+                return false;
+
+            row = found;
+            return true;
+        }
+
+        private void ApplyPlaygroundTargetPresentation(PlaygroundTarget row)
+        {
+            if (!TryGetLivePlayer(row.Identity, out var entity))
+                return;
+
+            string normalizedKind = NormalizePlaygroundKind(row.Kind);
+            if (IsPlaygroundMobKind(normalizedKind))
+                entity.ApplyPrefabAppearance(KoboldWarriorRedResourcePath, $"playground:{normalizedKind}:kobold_warrior_red");
+
+            entity.RefreshTargetingPresentation();
+        }
+
+        private static bool IsPlaygroundMobKind(string? kind)
+        {
+            string normalizedKind = NormalizePlaygroundKind(kind);
+            return string.Equals(normalizedKind, PlaygroundKindMobHostile, System.StringComparison.Ordinal)
+                || string.Equals(normalizedKind, PlaygroundKindMobNeutral, System.StringComparison.Ordinal)
+                || string.Equals(normalizedKind, PlaygroundKindMobFriendly, System.StringComparison.Ordinal);
+        }
+
+        private static string NormalizePlaygroundKind(string? kind)
+            => string.IsNullOrWhiteSpace(kind)
+                ? string.Empty
+                : kind.Trim().ToUpperInvariant();
 
         private static bool HasSameVisualAppearance(CharacterAppearance oldRow, CharacterAppearance newRow)
         {

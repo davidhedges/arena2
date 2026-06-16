@@ -371,6 +371,31 @@ namespace Arena.Entity
             _appliedAppearanceSignature = binding.AppearanceSignature;
         }
 
+        public void ApplyPrefabAppearance(string resourcePath, string appearanceSignature)
+        {
+            if (IsDestroyed)
+                return;
+
+            if (_avatarController == null)
+            {
+                _avatarController = GameObject.GetComponent<RuntimeAvatarController>();
+                if (_avatarController == null)
+                    _avatarController = GameObject.AddComponent<RuntimeAvatarController>();
+                _avatarController.SetVisualRootParent(_presentationRoot ?? GameObject.transform);
+            }
+
+            if (!_avatarController.ApplyPrefabResource(resourcePath, appearanceSignature, out RuntimeAvatarBinding binding, out string error))
+            {
+                Debug.LogWarning($"[{nameof(PlayerEntity)}] Failed to apply prefab appearance to '{GameObject.name}': {error}");
+                return;
+            }
+
+            _hasExplicitAppearance = true;
+            _classDefaultAvatarClassId = string.Empty;
+            BindRuntimeAvatar(binding);
+            _appliedAppearanceSignature = binding.AppearanceSignature;
+        }
+
         private void ApplyClassDefaultAppearanceIfNeeded(bool force = false)
         {
             if (IsDestroyed || _hasExplicitAppearance)

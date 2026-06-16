@@ -41,6 +41,10 @@ namespace Arena.Network
             conn.Db.PlayerWorld.OnUpdate += registry.OnPlayerWorldUpdate;
             conn.Db.PlayerWorld.OnDelete += registry.OnPlayerWorldDelete;
 
+            conn.Db.PlaygroundTarget.OnInsert += registry.OnPlaygroundTargetInsert;
+            conn.Db.PlaygroundTarget.OnUpdate += registry.OnPlaygroundTargetUpdate;
+            conn.Db.PlaygroundTarget.OnDelete += registry.OnPlaygroundTargetDelete;
+
             conn.Db.PlayerOpenWorldScene.OnInsert += registry.OnPlayerOpenWorldSceneInsert;
             conn.Db.PlayerOpenWorldScene.OnUpdate += registry.OnPlayerOpenWorldSceneUpdate;
             conn.Db.PlayerOpenWorldScene.OnDelete += registry.OnPlayerOpenWorldSceneDelete;

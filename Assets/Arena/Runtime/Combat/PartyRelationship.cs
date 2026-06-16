@@ -26,6 +26,9 @@ namespace Arena.Combat
         public const string PlaygroundKindHostile = "HOSTILE";
         public const string PlaygroundKindNeutral = "NEUTRAL";
         public const string PlaygroundKindPartyMember = "PARTY_MEMBER";
+        public const string PlaygroundKindMobHostile = "MOB_HOSTILE";
+        public const string PlaygroundKindMobNeutral = "MOB_NEUTRAL";
+        public const string PlaygroundKindMobFriendly = "MOB_FRIENDLY";
 
         public static ClientCombatRelation RelationToLocal(PlayerEntity? target)
         {
@@ -139,8 +142,8 @@ namespace Arena.Combat
             {
                 relation = kind switch
                 {
-                    PlaygroundKindHostile => ClientCombatRelation.Hostile,
-                    PlaygroundKindPartyMember => ClientCombatRelation.PartyAlly,
+                    PlaygroundKindHostile or PlaygroundKindMobHostile => ClientCombatRelation.Hostile,
+                    PlaygroundKindPartyMember or PlaygroundKindMobFriendly => ClientCombatRelation.PartyAlly,
                     _ => ClientCombatRelation.Neutral,
                 };
                 return true;
