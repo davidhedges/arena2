@@ -16,6 +16,7 @@ namespace Arena.Entity
 
         private readonly NameTag _nameTag;
         private readonly WorldHealthBar _worldHealthBar;
+        private readonly NpcAnimationController _animationController;
         private NpcInstance _instance;
         private NpcState? _state;
         private bool _isHighlighted;
@@ -49,6 +50,8 @@ namespace Arena.Entity
             _nameTag = NameTag.Create(GameObject.transform, isLocalPlayer: false);
             _nameTag.SetName(instance.DisplayName);
             _worldHealthBar = WorldHealthBar.Create(GameObject.transform, isLocalPlayer: false);
+            _animationController = NpcAnimationController.Attach(GameObject);
+            _animationController.SetTemplate(instance.TemplateId);
             if (state != null)
                 _worldHealthBar.SetHealth(state.Hp, state.MaxHp);
 
@@ -64,6 +67,7 @@ namespace Arena.Entity
 
             GameObject.name = $"NPC_{SafeName(instance.DisplayName)}_{instance.Identity}";
             _nameTag.SetName(instance.DisplayName);
+            _animationController.SetTemplate(instance.TemplateId);
         }
 
         public void ApplyPhysics(NpcPhysics physics)
@@ -78,13 +82,23 @@ namespace Arena.Entity
 
         public void ApplyState(NpcState state)
         {
+            NpcState? previous = _state;
             _state = state;
             if (IsDestroyed)
                 return;
 
             _worldHealthBar.SetHealth(state.Hp, state.MaxHp);
             RefreshTargetingPresentation();
-            GameObject.SetActive(state.Alive);
+            if (state.Alive)
+            {
+                _animationController.Revive();
+                if (previous != null && previous.Alive && state.Hp < previous.Hp)
+                    _animationController.PlayHit();
+            }
+            else if (previous == null || previous.Alive)
+            {
+                _animationController.PlayDeath();
+            }
         }
 
         public Transform GetPresentationRoot()
