@@ -17,6 +17,15 @@ namespace SpacetimeDB.Types
         {
             protected override string RemoteTableName => "inventory_container";
 
+            public sealed class AnchorKeyIndex : BTreeIndexBase<string>
+            {
+                protected override string GetKey(InventoryContainer row) => row.AnchorKey;
+
+                public AnchorKeyIndex(InventoryContainerHandle table) : base(table) { }
+            }
+
+            public readonly AnchorKeyIndex AnchorKey;
+
             public sealed class ContainerIdUniqueIndex : UniqueIndexBase<string>
             {
                 protected override string GetKey(InventoryContainer row) => row.ContainerId;
@@ -35,10 +44,21 @@ namespace SpacetimeDB.Types
 
             public readonly ContainerKindIndex ContainerKind;
 
+            public sealed class OwnerKeyIndex : BTreeIndexBase<string>
+            {
+                protected override string GetKey(InventoryContainer row) => row.OwnerKey;
+
+                public OwnerKeyIndex(InventoryContainerHandle table) : base(table) { }
+            }
+
+            public readonly OwnerKeyIndex OwnerKey;
+
             internal InventoryContainerHandle(DbConnection conn) : base(conn)
             {
+                AnchorKey = new(this);
                 ContainerId = new(this);
                 ContainerKind = new(this);
+                OwnerKey = new(this);
             }
 
             protected override object GetPrimaryKey(InventoryContainer row) => row.ContainerId;
@@ -51,7 +71,9 @@ namespace SpacetimeDB.Types
     {
         public global::SpacetimeDB.Col<InventoryContainer, string> ContainerId { get; }
         public global::SpacetimeDB.Col<InventoryContainer, string> ContainerKind { get; }
+        public global::SpacetimeDB.Col<InventoryContainer, string> OwnerKey { get; }
         public global::SpacetimeDB.Col<InventoryContainer, SpacetimeDB.Identity> Owner { get; }
+        public global::SpacetimeDB.Col<InventoryContainer, string> AnchorKey { get; }
         public global::SpacetimeDB.Col<InventoryContainer, SpacetimeDB.Identity> AnchorIdentity { get; }
         public global::SpacetimeDB.Col<InventoryContainer, string> WorldKind { get; }
         public global::SpacetimeDB.Col<InventoryContainer, ulong> InstanceId { get; }
@@ -70,7 +92,9 @@ namespace SpacetimeDB.Types
         {
             ContainerId = new global::SpacetimeDB.Col<InventoryContainer, string>(tableName, "container_id");
             ContainerKind = new global::SpacetimeDB.Col<InventoryContainer, string>(tableName, "container_kind");
+            OwnerKey = new global::SpacetimeDB.Col<InventoryContainer, string>(tableName, "owner_key");
             Owner = new global::SpacetimeDB.Col<InventoryContainer, SpacetimeDB.Identity>(tableName, "owner");
+            AnchorKey = new global::SpacetimeDB.Col<InventoryContainer, string>(tableName, "anchor_key");
             AnchorIdentity = new global::SpacetimeDB.Col<InventoryContainer, SpacetimeDB.Identity>(tableName, "anchor_identity");
             WorldKind = new global::SpacetimeDB.Col<InventoryContainer, string>(tableName, "world_kind");
             InstanceId = new global::SpacetimeDB.Col<InventoryContainer, ulong>(tableName, "instance_id");
@@ -91,11 +115,15 @@ namespace SpacetimeDB.Types
     {
         public global::SpacetimeDB.IxCol<InventoryContainer, string> ContainerId { get; }
         public global::SpacetimeDB.IxCol<InventoryContainer, string> ContainerKind { get; }
+        public global::SpacetimeDB.IxCol<InventoryContainer, string> OwnerKey { get; }
+        public global::SpacetimeDB.IxCol<InventoryContainer, string> AnchorKey { get; }
 
         public InventoryContainerIxCols(string tableName)
         {
             ContainerId = new global::SpacetimeDB.IxCol<InventoryContainer, string>(tableName, "container_id");
             ContainerKind = new global::SpacetimeDB.IxCol<InventoryContainer, string>(tableName, "container_kind");
+            OwnerKey = new global::SpacetimeDB.IxCol<InventoryContainer, string>(tableName, "owner_key");
+            AnchorKey = new global::SpacetimeDB.IxCol<InventoryContainer, string>(tableName, "anchor_key");
         }
     }
 }

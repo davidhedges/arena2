@@ -23,19 +23,14 @@ spacetime build
 spacetime start
 ```
 
-4. Publish the local `arena` database. This clears existing local database data:
+4. Publish the local `arena` database. This clears existing local database data
+   and regenerates matching Unity bindings:
 
 ```bash
-spacetime publish arena --clear-database
+ops/republish-local-clear.sh
 ```
 
-5. Generate the Unity C# bindings after server schema changes:
-
-```bash
-spacetime generate --yes --lang csharp --module-path server --out-dir Assets/Arena/Runtime/Generated/SpacetimeDB
-```
-
-6. Return to Unity and let the editor recompile.
+5. Return to Unity and let the editor recompile.
 
 ## Project Layout
 
@@ -52,15 +47,19 @@ See `docs/project-structure.md` for the full folder map.
 
 ## Common Workflow
 
-After changing server tables, reducers, or generated types:
+After changing server tables, reducers, generated types, or when you want a
+fresh local database:
 
 ```bash
-spacetime build
-spacetime publish arena --clear-database
-spacetime generate --yes --lang csharp --module-path server --out-dir Assets/Arena/Runtime/Generated/SpacetimeDB
+ops/republish-local-clear.sh
 ```
 
-Then let Unity recompile before testing.
+The script builds the server module, publishes `arena` with cleared data,
+regenerates Unity bindings, and runs `dotnet build Assembly-CSharp.csproj` when
+that project file is present. It defaults to the local projectile-load-harness
+feature so regenerated bindings keep matching the checked-in Unity debug overlay.
+Set `ARENA_PROJECTILE_LOAD_HARNESS=0` only when intentionally publishing the
+plain server shape.
 
 Projectile load harness reducers are feature-gated and are not included by the
 plain workflow above. Use the harness build/publish workflow in

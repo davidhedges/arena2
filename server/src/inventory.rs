@@ -1,7 +1,7 @@
 use spacetimedb::{reducer, table, Identity, ReducerContext, Table, Timestamp};
 
 use crate::arena::{open_world_scene_name_for_identity, player_world as _};
-use crate::npcs::{npc_instance as _, npc_physics as _};
+use crate::npcs::{npc_instance as _, npc_physics as _, npc_state as _};
 use crate::player::DEFAULT_COMBAT_PROFILE;
 use crate::player_physics::player_physics as _;
 use crate::progression::{sync_active_combat_mode_for_owner, COMBAT_PROFILE_ARCHER_BOW};
@@ -88,6 +88,8 @@ pub struct ItemInstance {
     pub item_instance_id: String,
     #[index(btree)]
     pub item_def_id: String,
+    #[index(btree)]
+    pub current_owner_key: String,
     pub current_owner: Option<Identity>,
     pub quantity: u32,
     pub created_at: Timestamp,
@@ -100,7 +102,11 @@ pub struct InventoryContainer {
     pub container_id: String,
     #[index(btree)]
     pub container_kind: String,
+    #[index(btree)]
+    pub owner_key: String,
     pub owner: Option<Identity>,
+    #[index(btree)]
+    pub anchor_key: String,
     pub anchor_identity: Option<Identity>,
     pub world_kind: String,
     pub instance_id: Option<u64>,
@@ -316,6 +322,86 @@ pub fn publish_item_definitions(ctx: &ReducerContext) -> Result<(), String> {
 }
 
 #[reducer]
+pub fn open_loot_npc(ctx: &ReducerContext, npc_identity: Identity) -> Result<(), String> {
+    sync_item_definitions(ctx);
+
+    let state = ctx
+        .db
+        .npc_state()
+        .identity()
+        .find(npc_identity)
+        .ok_or_else(|| "NPC state row not found".to_string())?;
+    if state.alive {
+        return Err("NPC is still alive".to_string());
+    }
+
+    validate_npc_loot_access(ctx, ctx.sender(), npc_identity)?;
+    create_corpse_loot_for_npc(ctx, npc_identity, ctx.sender());
+    ctx.db
+        .inventory_container()
+        .container_id()
+        .find(corpse_container_id(npc_identity))
+        .ok_or_else(|| "corpse loot container was not created".to_string())?;
+    Ok(())
+}
+
+fn validate_npc_loot_access(
+    ctx: &ReducerContext,
+    owner: Identity,
+    npc_identity: Identity,
+) -> Result<(), String> {
+    let npc = ctx
+        .db
+        .npc_instance()
+        .identity()
+        .find(npc_identity)
+        .ok_or_else(|| "NPC row not found".to_string())?;
+    let npc_physics = ctx
+        .db
+        .npc_physics()
+        .identity()
+        .find(npc_identity)
+        .ok_or_else(|| "NPC physics row not found".to_string())?;
+    let player_world = ctx
+        .db
+        .player_world()
+        .identity()
+        .find(owner)
+        .ok_or_else(|| "player has no world row".to_string())?;
+    if !player_world
+        .world_kind
+        .eq_ignore_ascii_case(npc.world_kind.as_str())
+    {
+        return Err("player is not in the NPC world kind".to_string());
+    }
+    if player_world.world_kind.eq_ignore_ascii_case("INSTANCE") {
+        if player_world.instance_id != npc.instance_id {
+            return Err("player is not in the NPC instance".to_string());
+        }
+    } else if player_world.world_kind.eq_ignore_ascii_case("OPEN") {
+        let scene_name = open_world_scene_name_for_identity(ctx, owner);
+        if !scene_name.eq_ignore_ascii_case(npc.open_world_scene_name.as_str()) {
+            return Err("player is not in the NPC open-world scene".to_string());
+        }
+    }
+
+    let player_physics = ctx
+        .db
+        .player_physics()
+        .identity()
+        .find(owner)
+        .ok_or_else(|| "player has no physics row".to_string())?;
+    let dx = player_physics.pos_x - npc_physics.pos_x;
+    let dy = player_physics.pos_y - npc_physics.pos_y;
+    let dz = player_physics.pos_z - npc_physics.pos_z;
+    let distance_sq = dx * dx + dy * dy + dz * dz;
+    if distance_sq > LOOT_INTERACT_RANGE * LOOT_INTERACT_RANGE {
+        return Err("player is too far from the NPC corpse".to_string());
+    }
+    Ok(())
+}
+
+#[reducer]
 pub fn move_item(
     ctx: &ReducerContext,
     source_container_id: String,
@@ -377,6 +463,7 @@ pub fn move_item(
             definition.width,
             definition.height,
         );
+        item.current_owner_key = destination_item_owner_key(owner, &destination_container);
         item.current_owner = destination_item_owner(owner, &destination_container);
         ctx.db.item_instance().item_instance_id().update(item);
     } else {
@@ -388,6 +475,7 @@ pub fn move_item(
         let split_item = ItemInstance {
             item_instance_id: next_item_instance_id(ctx, owner),
             item_def_id: item.item_def_id,
+            current_owner_key: destination_item_owner_key(owner, &destination_container),
             current_owner: destination_item_owner(owner, &destination_container),
             quantity,
             created_at: ctx.timestamp,
@@ -672,8 +760,8 @@ pub(crate) fn clear_inventory_for_owner(ctx: &ReducerContext, owner: Identity) {
     let container_ids: Vec<_> = ctx
         .db
         .inventory_container()
-        .iter()
-        .filter(|row| row.owner == Some(owner))
+        .owner_key()
+        .filter(identity_key(owner).as_str())
         .map(|row| row.container_id)
         .collect();
     for container_id in container_ids {
@@ -683,8 +771,8 @@ pub(crate) fn clear_inventory_for_owner(ctx: &ReducerContext, owner: Identity) {
     let item_ids: Vec<_> = ctx
         .db
         .item_instance()
-        .iter()
-        .filter(|row| row.current_owner == Some(owner))
+        .current_owner_key()
+        .filter(identity_key(owner).as_str())
         .map(|row| row.item_instance_id)
         .collect();
     for item_id in item_ids {
@@ -705,6 +793,19 @@ pub(crate) fn clear_inventory_for_owner(ctx: &ReducerContext, owner: Identity) {
     }
     if ctx.db.inventory_counter().owner().find(owner).is_some() {
         ctx.db.inventory_counter().owner().delete(owner);
+    }
+}
+
+pub(crate) fn clear_loot_for_anchor(ctx: &ReducerContext, anchor_identity: Identity) {
+    let container_ids: Vec<_> = ctx
+        .db
+        .inventory_container()
+        .anchor_key()
+        .filter(identity_key(anchor_identity).as_str())
+        .map(|row| row.container_id)
+        .collect();
+    for container_id in container_ids {
+        delete_container_items_and_slots(ctx, container_id.as_str());
     }
 }
 
@@ -732,7 +833,9 @@ pub(crate) fn create_corpse_loot_for_npc(
         ctx.db.inventory_container().insert(InventoryContainer {
             container_id: container_id.clone(),
             container_kind: CONTAINER_KIND_CORPSE.to_string(),
+            owner_key: String::new(),
             owner: None,
+            anchor_key: identity_key(npc_identity),
             anchor_identity: Some(npc_identity),
             world_kind: npc.world_kind,
             instance_id: npc.instance_id,
@@ -768,6 +871,7 @@ pub(crate) fn create_corpse_loot_for_npc(
     let item = ItemInstance {
         item_instance_id: next_item_instance_id(ctx, counter_owner),
         item_def_id: "CRACKED_KOBOLD_CHARM".to_string(),
+        current_owner_key: String::new(),
         current_owner: None,
         quantity: 1,
         created_at: ctx.timestamp,
@@ -829,7 +933,9 @@ fn ensure_player_bag(ctx: &ReducerContext, owner: Identity) -> InventoryContaine
     let container = InventoryContainer {
         container_id,
         container_kind: CONTAINER_KIND_PLAYER_BAG.to_string(),
+        owner_key: identity_key(owner),
         owner: Some(owner),
+        anchor_key: identity_key(owner),
         anchor_identity: Some(owner),
         world_kind: String::new(),
         instance_id: None,
@@ -1425,6 +1531,15 @@ fn destination_item_owner(
     }
 }
 
+fn destination_item_owner_key(
+    owner: Identity,
+    destination_container: &InventoryContainer,
+) -> String {
+    destination_item_owner(owner, destination_container)
+        .map(identity_key)
+        .unwrap_or_default()
+}
+
 fn delete_container_and_slots(ctx: &ReducerContext, container_id: &str) {
     let slot_keys: Vec<_> = ctx
         .db
@@ -1450,6 +1565,32 @@ fn delete_container_and_slots(ctx: &ReducerContext, container_id: &str) {
     }
 }
 
+fn delete_container_items_and_slots(ctx: &ReducerContext, container_id: &str) {
+    let item_ids: Vec<_> = ctx
+        .db
+        .inventory_slot()
+        .container_id()
+        .filter(container_id)
+        .map(|slot| item_instance_id_from_slot(slot))
+        .collect();
+    delete_container_and_slots(ctx, container_id);
+    for item_id in item_ids {
+        if ctx
+            .db
+            .item_instance()
+            .item_instance_id()
+            .find(item_id.clone())
+            .is_some()
+        {
+            ctx.db.item_instance().item_instance_id().delete(item_id);
+        }
+    }
+}
+
+fn item_instance_id_from_slot(slot: InventorySlot) -> String {
+    slot.item_instance_id
+}
+
 fn next_item_instance_id(ctx: &ReducerContext, owner: Identity) -> String {
     let mut counter = ctx
         .db
@@ -1460,14 +1601,32 @@ fn next_item_instance_id(ctx: &ReducerContext, owner: Identity) -> String {
             owner,
             next_item_sequence: 1,
         });
-    let id = format!("item:{}:{}", owner.to_hex(), counter.next_item_sequence);
-    counter.next_item_sequence = counter.next_item_sequence.saturating_add(1);
-    if ctx.db.inventory_counter().owner().find(owner).is_some() {
-        ctx.db.inventory_counter().owner().update(counter);
-    } else {
-        ctx.db.inventory_counter().insert(counter);
+
+    if counter.next_item_sequence == 0 {
+        counter.next_item_sequence = 1;
     }
-    id
+
+    loop {
+        let sequence = counter.next_item_sequence;
+        let id = format!("item:{}:{}", owner.to_hex(), sequence);
+        counter.next_item_sequence = counter.next_item_sequence.checked_add(1).unwrap_or(1);
+        if ctx
+            .db
+            .item_instance()
+            .item_instance_id()
+            .find(id.clone())
+            .is_some()
+        {
+            continue;
+        }
+
+        if ctx.db.inventory_counter().owner().find(owner).is_some() {
+            ctx.db.inventory_counter().owner().update(counter);
+        } else {
+            ctx.db.inventory_counter().insert(counter);
+        }
+        return id;
+    }
 }
 
 fn player_bag_container_id(owner: Identity) -> String {
@@ -1488,6 +1647,10 @@ fn normalize_id(value: &str) -> String {
         .replace('-', "_")
         .replace(' ', "_")
         .to_ascii_uppercase()
+}
+
+fn identity_key(identity: Identity) -> String {
+    identity.to_hex().to_string()
 }
 
 #[cfg(test)]

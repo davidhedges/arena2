@@ -8,7 +8,6 @@ namespace Arena.Presentation
     public sealed class NpcAnimationController : MonoBehaviour
     {
         private const float CrossFadeDuration = 0.06f;
-        private const float DefaultDeathHideDelay = 2.8f;
         private const float HitCooldownSeconds = 0.18f;
         private const float DefaultHitReturnDelay = 0.75f;
         private const float LocomotionTimeoutSeconds = 0.2f;
@@ -185,7 +184,7 @@ namespace Arena.Presentation
                 gameObject.SetActive(true);
 
             TryCrossFade(new[] { "Death" }, out _);
-            _hideAt = Time.time + ResolveClipLength("Death", DefaultDeathHideDelay) + 0.15f;
+            _hideAt = -1f;
         }
 
         private void Update()

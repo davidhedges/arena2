@@ -9,6 +9,7 @@ use crate::combat::{
     EffectPacket, COMBAT_EVENT_CAST, COMBAT_EVENT_IMPACT, COMBAT_METADATA_NONE, COMBAT_SCALAR_NONE,
     COMBAT_SEQUENCE_NONE,
 };
+use crate::inventory::clear_loot_for_anchor;
 use crate::movement::{FIXED_TICK_SECONDS, MOVE_SPEED};
 use crate::practice::is_training_instance;
 use crate::relations::can_harm;
@@ -713,6 +714,7 @@ fn template_attack_range_for_event(template_id: &str) -> f32 {
 
 fn despawn_npc_identity(ctx: &ReducerContext, identity: Identity) {
     clear_npc_combat_runtime(ctx, identity);
+    clear_loot_for_anchor(ctx, identity);
     if ctx.db.npc_instance().identity().find(identity).is_some() {
         ctx.db.npc_instance().identity().delete(identity);
     }

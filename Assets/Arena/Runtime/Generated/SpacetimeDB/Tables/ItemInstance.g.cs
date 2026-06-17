@@ -17,6 +17,15 @@ namespace SpacetimeDB.Types
         {
             protected override string RemoteTableName => "item_instance";
 
+            public sealed class CurrentOwnerKeyIndex : BTreeIndexBase<string>
+            {
+                protected override string GetKey(ItemInstance row) => row.CurrentOwnerKey;
+
+                public CurrentOwnerKeyIndex(ItemInstanceHandle table) : base(table) { }
+            }
+
+            public readonly CurrentOwnerKeyIndex CurrentOwnerKey;
+
             public sealed class ItemDefIdIndex : BTreeIndexBase<string>
             {
                 protected override string GetKey(ItemInstance row) => row.ItemDefId;
@@ -37,6 +46,7 @@ namespace SpacetimeDB.Types
 
             internal ItemInstanceHandle(DbConnection conn) : base(conn)
             {
+                CurrentOwnerKey = new(this);
                 ItemDefId = new(this);
                 ItemInstanceId = new(this);
             }
@@ -51,6 +61,7 @@ namespace SpacetimeDB.Types
     {
         public global::SpacetimeDB.Col<ItemInstance, string> ItemInstanceId { get; }
         public global::SpacetimeDB.Col<ItemInstance, string> ItemDefId { get; }
+        public global::SpacetimeDB.Col<ItemInstance, string> CurrentOwnerKey { get; }
         public global::SpacetimeDB.Col<ItemInstance, SpacetimeDB.Identity> CurrentOwner { get; }
         public global::SpacetimeDB.Col<ItemInstance, uint> Quantity { get; }
         public global::SpacetimeDB.Col<ItemInstance, SpacetimeDB.Timestamp> CreatedAt { get; }
@@ -59,6 +70,7 @@ namespace SpacetimeDB.Types
         {
             ItemInstanceId = new global::SpacetimeDB.Col<ItemInstance, string>(tableName, "item_instance_id");
             ItemDefId = new global::SpacetimeDB.Col<ItemInstance, string>(tableName, "item_def_id");
+            CurrentOwnerKey = new global::SpacetimeDB.Col<ItemInstance, string>(tableName, "current_owner_key");
             CurrentOwner = new global::SpacetimeDB.Col<ItemInstance, SpacetimeDB.Identity>(tableName, "current_owner");
             Quantity = new global::SpacetimeDB.Col<ItemInstance, uint>(tableName, "quantity");
             CreatedAt = new global::SpacetimeDB.Col<ItemInstance, SpacetimeDB.Timestamp>(tableName, "created_at");
@@ -69,11 +81,13 @@ namespace SpacetimeDB.Types
     {
         public global::SpacetimeDB.IxCol<ItemInstance, string> ItemInstanceId { get; }
         public global::SpacetimeDB.IxCol<ItemInstance, string> ItemDefId { get; }
+        public global::SpacetimeDB.IxCol<ItemInstance, string> CurrentOwnerKey { get; }
 
         public ItemInstanceIxCols(string tableName)
         {
             ItemInstanceId = new global::SpacetimeDB.IxCol<ItemInstance, string>(tableName, "item_instance_id");
             ItemDefId = new global::SpacetimeDB.IxCol<ItemInstance, string>(tableName, "item_def_id");
+            CurrentOwnerKey = new global::SpacetimeDB.IxCol<ItemInstance, string>(tableName, "current_owner_key");
         }
     }
 }

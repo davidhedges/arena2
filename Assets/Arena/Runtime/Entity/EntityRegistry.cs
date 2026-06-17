@@ -793,7 +793,7 @@ namespace Arena.Entity
             try
             {
                 var entity = new NpcEntity(row, physics, state, prefab);
-                entity.GameObject.SetActive(!ShouldSuppressPresentationInCurrentScene() && (state == null || state.Alive));
+                entity.GameObject.SetActive(!ShouldSuppressPresentationInCurrentScene());
                 _npcs[row.Identity] = entity;
                 Debug.Log($"[EntityRegistry] Spawned NPC {row.DisplayName} {row.Identity} template={row.TemplateId}");
             }

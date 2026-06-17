@@ -17,8 +17,12 @@ namespace SpacetimeDB.Types
         public string ContainerId;
         [DataMember(Name = "container_kind")]
         public string ContainerKind;
+        [DataMember(Name = "owner_key")]
+        public string OwnerKey;
         [DataMember(Name = "owner")]
         public SpacetimeDB.Identity? Owner;
+        [DataMember(Name = "anchor_key")]
+        public string AnchorKey;
         [DataMember(Name = "anchor_identity")]
         public SpacetimeDB.Identity? AnchorIdentity;
         [DataMember(Name = "world_kind")]
@@ -49,7 +53,9 @@ namespace SpacetimeDB.Types
         public InventoryContainer(
             string ContainerId,
             string ContainerKind,
+            string OwnerKey,
             SpacetimeDB.Identity? Owner,
+            string AnchorKey,
             SpacetimeDB.Identity? AnchorIdentity,
             string WorldKind,
             ulong? InstanceId,
@@ -67,7 +73,9 @@ namespace SpacetimeDB.Types
         {
             this.ContainerId = ContainerId;
             this.ContainerKind = ContainerKind;
+            this.OwnerKey = OwnerKey;
             this.Owner = Owner;
+            this.AnchorKey = AnchorKey;
             this.AnchorIdentity = AnchorIdentity;
             this.WorldKind = WorldKind;
             this.InstanceId = InstanceId;
@@ -87,6 +95,8 @@ namespace SpacetimeDB.Types
         {
             this.ContainerId = "";
             this.ContainerKind = "";
+            this.OwnerKey = "";
+            this.AnchorKey = "";
             this.WorldKind = "";
             this.OpenWorldSceneName = "";
             this.State = "";

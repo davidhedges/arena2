@@ -17,6 +17,8 @@ namespace SpacetimeDB.Types
         public string ItemInstanceId;
         [DataMember(Name = "item_def_id")]
         public string ItemDefId;
+        [DataMember(Name = "current_owner_key")]
+        public string CurrentOwnerKey;
         [DataMember(Name = "current_owner")]
         public SpacetimeDB.Identity? CurrentOwner;
         [DataMember(Name = "quantity")]
@@ -27,6 +29,7 @@ namespace SpacetimeDB.Types
         public ItemInstance(
             string ItemInstanceId,
             string ItemDefId,
+            string CurrentOwnerKey,
             SpacetimeDB.Identity? CurrentOwner,
             uint Quantity,
             SpacetimeDB.Timestamp CreatedAt
@@ -34,6 +37,7 @@ namespace SpacetimeDB.Types
         {
             this.ItemInstanceId = ItemInstanceId;
             this.ItemDefId = ItemDefId;
+            this.CurrentOwnerKey = CurrentOwnerKey;
             this.CurrentOwner = CurrentOwner;
             this.Quantity = Quantity;
             this.CreatedAt = CreatedAt;
@@ -43,6 +47,7 @@ namespace SpacetimeDB.Types
         {
             this.ItemInstanceId = "";
             this.ItemDefId = "";
+            this.CurrentOwnerKey = "";
         }
     }
 }

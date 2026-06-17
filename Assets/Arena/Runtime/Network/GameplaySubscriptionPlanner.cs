@@ -24,6 +24,7 @@ namespace Arena.Network
                 new QueryBuilder().From.CombatModeCatalog().ToSql(),
                 new QueryBuilder().From.FixedActionBindingCatalog().ToSql(),
                 new QueryBuilder().From.LoadoutSlotCatalog().ToSql(),
+                new QueryBuilder().From.ItemDefinition().ToSql(),
                 new QueryBuilder().From.SpellDefinition().ToSql(),
                 new QueryBuilder().From.MeleeDefinition().ToSql(),
                 new QueryBuilder().From.MeleeAbilityCatalog().ToSql(),
@@ -73,6 +74,10 @@ namespace Arena.Network
                 new QueryBuilder().From.FixedActionChargeState().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
                 new QueryBuilder().From.ActiveCombatMode().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
                 new QueryBuilder().From.PartyInvite().Where(c => c.Invitee.Eq(localIdentity)).ToSql(),
+                new QueryBuilder().From.EquipmentLoadout().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
+                new QueryBuilder().From.InventoryContainer().ToSql(),
+                new QueryBuilder().From.InventorySlot().ToSql(),
+                new QueryBuilder().From.ItemInstance().ToSql(),
             };
         }
 
@@ -102,12 +107,35 @@ namespace Arena.Network
                 BuildScopedNpcCombatEventQuery(new QueryBuilder(), scope),
                 BuildScopedProjectilePresentationEventQuery(new QueryBuilder(), scope),
                 BuildScopedPlayerEventQuery(new QueryBuilder(), scope),
+                BuildScopedLootContainerQuery(new QueryBuilder(), scope),
             };
 
             if (scope.Kind == NetworkManager.GameplayScopeKind.Instance)
                 queries.Add(BuildScopedMatchParticipantStatsQuery(new QueryBuilder(), scope).ToSql());
 
             return queries.ToArray();
+        }
+
+        private static string BuildScopedLootContainerQuery(QueryBuilder qb, NetworkManager.GameplayScope scope)
+        {
+            return scope.Kind switch
+            {
+                NetworkManager.GameplayScopeKind.OpenWorld => qb
+                    .From
+                    .InventoryContainer()
+                    .Where(c => c.OwnerKey.Eq(string.Empty))
+                    .Where(c => c.WorldKind.Eq("OPEN"))
+                    .Where(c => c.OpenWorldSceneName.Eq(OpenWorldSceneName(scope)))
+                    .ToSql(),
+                NetworkManager.GameplayScopeKind.Instance => qb
+                    .From
+                    .InventoryContainer()
+                    .Where(c => c.OwnerKey.Eq(string.Empty))
+                    .Where(c => c.WorldKind.Eq("INSTANCE"))
+                    .Where(c => c.InstanceId.Eq(scope.InstanceId.GetValueOrDefault()))
+                    .ToSql(),
+                _ => throw new InvalidOperationException("Scoped loot-container query requested for GameplayScope.None"),
+            };
         }
 
         private static string BuildScopedPlayerQuery(QueryBuilder qb, NetworkManager.GameplayScope scope)

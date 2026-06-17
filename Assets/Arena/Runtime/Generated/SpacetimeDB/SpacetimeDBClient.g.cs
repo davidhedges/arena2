@@ -823,6 +823,7 @@ namespace SpacetimeDB.Types
                 Reducer.MeleeAttack args => Reducers.InvokeMeleeAttack(eventContext, args),
                 Reducer.MergeStack args => Reducers.InvokeMergeStack(eventContext, args),
                 Reducer.MoveItem args => Reducers.InvokeMoveItem(eventContext, args),
+                Reducer.OpenLootNpc args => Reducers.InvokeOpenLootNpc(eventContext, args),
                 Reducer.PromotePartyLeader args => Reducers.InvokePromotePartyLeader(eventContext, args),
                 Reducer.PublishItemDefinitions args => Reducers.InvokePublishItemDefinitions(eventContext, args),
                 Reducer.PublishProgressionCatalogs args => Reducers.InvokePublishProgressionCatalogs(eventContext, args),
