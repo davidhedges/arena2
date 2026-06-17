@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using Arena.Presentation;
+using System.Collections.Generic;
 using NHance.Assets.Scripts;
 using NHance.Assets.Scripts.Enums;
 using NHance.Assets.Scripts.Items;
@@ -68,7 +69,8 @@ namespace Arena.Presentation.Appearance
             out GameObject avatar,
             out string error,
             GameObject? existingAvatar = null,
-            CharacterAvatarAssembler? owner = null)
+            CharacterAvatarAssembler? owner = null,
+            IReadOnlyDictionary<string, string>? equippedArmorBySlot = null)
         {
             selection.NormalizeInPlace();
 
@@ -114,7 +116,7 @@ namespace Arena.Presentation.Appearance
                 ApplyPart(catalogs.PartCatalog, nhAvatar, AvatarPartSlot.Face, selection.faceId, selection.raceId, selection.sexId);
                 ApplyPart(catalogs.PartCatalog, nhAvatar, AvatarPartSlot.Hair, selection.hairId, selection.raceId, selection.sexId);
                 ApplyPart(catalogs.PartCatalog, nhAvatar, AvatarPartSlot.Eyes, selection.eyesId, selection.raceId, selection.sexId);
-                ApplyOutfit(catalogs.OutfitCatalog, nhAvatar, selection.outfitId);
+                ApplyOutfit(catalogs.OutfitCatalog, nhAvatar, selection.outfitId, equippedArmorBySlot);
                 nhAvatar.Compile();
                 EnsureArenaWeaponMounts(instance, nhAvatar);
                 CombatAnimationEventReceiver.EnsureOn(ResolveAnimator(instance));
@@ -140,7 +142,8 @@ namespace Arena.Presentation.Appearance
             GameObject instance,
             CharacterAppearanceSelection selection,
             CharacterAppearanceCatalogSet catalogs,
-            out string error)
+            out string error,
+            IReadOnlyDictionary<string, string>? equippedArmorBySlot = null)
         {
             selection.NormalizeInPlace();
 
@@ -174,7 +177,7 @@ namespace Arena.Presentation.Appearance
                 ApplyPart(catalogs.PartCatalog, nhAvatar, AvatarPartSlot.Face, selection.faceId, selection.raceId, selection.sexId);
                 ApplyPart(catalogs.PartCatalog, nhAvatar, AvatarPartSlot.Hair, selection.hairId, selection.raceId, selection.sexId);
                 ApplyPart(catalogs.PartCatalog, nhAvatar, AvatarPartSlot.Eyes, selection.eyesId, selection.raceId, selection.sexId);
-                ApplyOutfit(catalogs.OutfitCatalog, nhAvatar, selection.outfitId);
+                ApplyOutfit(catalogs.OutfitCatalog, nhAvatar, selection.outfitId, equippedArmorBySlot);
                 nhAvatar.Compile();
                 EnsureArenaWeaponMounts(instance, nhAvatar);
                 CombatAnimationEventReceiver.EnsureOn(ResolveAnimator(instance));
@@ -218,7 +221,11 @@ namespace Arena.Presentation.Appearance
             avatar.SetItem(item);
         }
 
-        private static void ApplyOutfit(OutfitCatalog catalog, NHAvatar avatar, string outfitId)
+        private static void ApplyOutfit(
+            OutfitCatalog catalog,
+            NHAvatar avatar,
+            string outfitId,
+            IReadOnlyDictionary<string, string>? equippedArmorBySlot)
         {
             if (string.IsNullOrWhiteSpace(outfitId))
                 return;
@@ -231,6 +238,8 @@ namespace Arena.Presentation.Appearance
                 OutfitCatalog.OutfitItem slot = outfit.items[i];
                 if (slot == null || slot.item == null)
                     continue;
+                if (equippedArmorBySlot != null && !ShouldApplyOutfitItem(slot.expectedItemType, equippedArmorBySlot))
+                    continue;
 
                 if (slot.item.Type != slot.expectedItemType)
                 {
@@ -240,6 +249,23 @@ namespace Arena.Presentation.Appearance
 
                 avatar.SetItem(slot.item);
             }
+        }
+
+        private static bool ShouldApplyOutfitItem(
+            ItemTypeEnum itemType,
+            IReadOnlyDictionary<string, string> equippedArmorBySlot)
+        {
+            return itemType switch
+            {
+                ItemTypeEnum.Helmet => equippedArmorBySlot.ContainsKey("HEAD"),
+                ItemTypeEnum.Shoulders => equippedArmorBySlot.ContainsKey("SHOULDER"),
+                ItemTypeEnum.Cape => equippedArmorBySlot.ContainsKey("CAPE"),
+                ItemTypeEnum.ChestSkin or ItemTypeEnum.Chest => equippedArmorBySlot.ContainsKey("CHEST"),
+                ItemTypeEnum.PantsSkin or ItemTypeEnum.Pants => equippedArmorBySlot.ContainsKey("LEGS"),
+                ItemTypeEnum.Boots => equippedArmorBySlot.ContainsKey("BOOTS"),
+                ItemTypeEnum.GlovesSkin or ItemTypeEnum.Gloves => equippedArmorBySlot.ContainsKey("GLOVES"),
+                _ => false,
+            };
         }
 
         private static void EnsureArenaWeaponMounts(GameObject instance, NHAvatar nhAvatar)

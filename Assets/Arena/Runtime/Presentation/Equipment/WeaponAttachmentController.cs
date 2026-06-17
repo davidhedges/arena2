@@ -74,6 +74,11 @@ namespace Arena.Presentation
 
         public void ApplyAnimationSet(CombatAnimationSet set)
         {
+            ApplyAnimationSet(set, allowedVisualItemIds: null);
+        }
+
+        public void ApplyAnimationSet(CombatAnimationSet set, ISet<string>? allowedVisualItemIds)
+        {
             _missingMountWarnings.Clear();
             ClearVisuals();
             if (_mounts == null)
@@ -95,6 +100,8 @@ namespace Arena.Presentation
                 string itemId = string.IsNullOrWhiteSpace(binding.itemId)
                     ? binding.prefab.name
                     : binding.itemId;
+                if (allowedVisualItemIds != null && !allowedVisualItemIds.Contains(itemId))
+                    continue;
 
                 var instance = Instantiate(binding.prefab, transform);
                 instance.name = itemId;

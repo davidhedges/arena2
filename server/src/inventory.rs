@@ -4,7 +4,9 @@ use crate::arena::{open_world_scene_name_for_identity, player_world as _};
 use crate::npcs::{npc_instance as _, npc_physics as _, npc_state as _};
 use crate::player::DEFAULT_COMBAT_PROFILE;
 use crate::player_physics::player_physics as _;
-use crate::progression::{sync_active_combat_mode_for_owner, COMBAT_PROFILE_ARCHER_BOW};
+use crate::progression::{
+    runtime_class_id_for_owner, sync_active_combat_mode_for_owner, COMBAT_PROFILE_ARCHER_BOW,
+};
 
 #[allow(unused_imports)]
 use crate::inventory::equipment_loadout as _;
@@ -183,6 +185,35 @@ struct ItemDefinitionSpec {
     combat_profile_id: &'static str,
 }
 
+#[derive(Clone, Copy)]
+struct StarterEquipmentSpec {
+    slot_id: &'static str,
+    item_def_id: &'static str,
+}
+
+const STARTER_ARMOR_EQUIPMENT: &[StarterEquipmentSpec] = &[
+    starter_equipment(EQUIP_SLOT_HEAD, "IRON_HELM"),
+    starter_equipment(EQUIP_SLOT_SHOULDER, "IRON_SHOULDERS"),
+    starter_equipment(EQUIP_SLOT_CAPE, "TRAVELER_CAPE"),
+    starter_equipment(EQUIP_SLOT_CHEST, "IRON_CHESTPLATE"),
+    starter_equipment(EQUIP_SLOT_LEGS, "IRON_LEGGINGS"),
+    starter_equipment(EQUIP_SLOT_BOOTS, "IRON_BOOTS"),
+    starter_equipment(EQUIP_SLOT_GLOVES, "IRON_GLOVES"),
+];
+
+const WARRIOR_STARTER_WEAPONS: &[StarterEquipmentSpec] = &[starter_equipment(
+    EQUIP_SLOT_MAIN_HAND,
+    "TRAINING_TWO_HAND_SWORD",
+)];
+
+const PALADIN_STARTER_WEAPONS: &[StarterEquipmentSpec] = &[
+    starter_equipment(EQUIP_SLOT_MAIN_HAND, "TRAINING_ONE_HAND_SWORD"),
+    starter_equipment(EQUIP_SLOT_OFF_HAND, "TRAINING_SHIELD"),
+];
+
+const RANGER_STARTER_WEAPONS: &[StarterEquipmentSpec] =
+    &[starter_equipment(EQUIP_SLOT_MAIN_HAND, "TRAINING_BOW")];
+
 const STARTER_ITEM_DEFINITIONS: &[ItemDefinitionSpec] = &[
     armor("IRON_HELM", "Iron Helm", EQUIP_SLOT_HEAD),
     armor("IRON_SHOULDERS", "Iron Shoulders", EQUIP_SLOT_SHOULDER),
@@ -312,6 +343,16 @@ const fn weapon(
         hand_requirement,
         unique_equipped: false,
         combat_profile_id,
+    }
+}
+
+const fn starter_equipment(
+    slot_id: &'static str,
+    item_def_id: &'static str,
+) -> StarterEquipmentSpec {
+    StarterEquipmentSpec {
+        slot_id,
+        item_def_id,
     }
 }
 
@@ -619,7 +660,7 @@ pub fn equip_item(
         return Err("items must be moved into player inventory before equipping".to_string());
     }
 
-    let mut equipment = ensure_equipment_loadout(ctx, owner);
+    let (mut equipment, _) = ensure_equipment_loadout(ctx, owner);
     let normalized_slot = normalize_equipment_slot(target_slot.as_str());
     validate_equip_request(ctx, &equipment, &definition, normalized_slot.as_str())?;
     if let Some(existing_item_id) = equipment_item_at_slot(&equipment, normalized_slot.as_str()) {
@@ -666,7 +707,7 @@ pub fn unequip_item(
     sync_item_definitions(ctx);
 
     let owner = ctx.sender();
-    let mut equipment = ensure_equipment_loadout(ctx, owner);
+    let (mut equipment, _) = ensure_equipment_loadout(ctx, owner);
     let normalized_slot = normalize_equipment_slot(source_slot.as_str());
     let Some(item_instance_id) =
         equipment_item_at_slot(&equipment, normalized_slot.as_str()).cloned()
@@ -752,7 +793,10 @@ pub(crate) fn sync_item_definitions(ctx: &ReducerContext) {
 pub(crate) fn ensure_player_inventory_for_identity(ctx: &ReducerContext, owner: Identity) {
     sync_item_definitions(ctx);
     ensure_player_bag(ctx, owner);
-    ensure_equipment_loadout(ctx, owner);
+    let (equipment, created) = ensure_equipment_loadout(ctx, owner);
+    if created {
+        seed_starter_equipment(ctx, owner, equipment);
+    }
     sync_active_combat_mode_for_owner(ctx, owner, ctx.timestamp);
 }
 
@@ -954,9 +998,9 @@ fn ensure_player_bag(ctx: &ReducerContext, owner: Identity) -> InventoryContaine
     container
 }
 
-fn ensure_equipment_loadout(ctx: &ReducerContext, owner: Identity) -> EquipmentLoadout {
+fn ensure_equipment_loadout(ctx: &ReducerContext, owner: Identity) -> (EquipmentLoadout, bool) {
     if let Some(loadout) = ctx.db.equipment_loadout().owner().find(owner) {
-        return loadout;
+        return (loadout, false);
     }
 
     let loadout = EquipmentLoadout {
@@ -977,7 +1021,65 @@ fn ensure_equipment_loadout(ctx: &ReducerContext, owner: Identity) -> EquipmentL
         updated_at: ctx.timestamp,
     };
     ctx.db.equipment_loadout().insert(loadout.clone());
-    loadout
+    (loadout, true)
+}
+
+fn seed_starter_equipment(ctx: &ReducerContext, owner: Identity, mut equipment: EquipmentLoadout) {
+    let class_id = runtime_class_id_for_owner(ctx, owner).unwrap_or_else(|| "WARRIOR".to_string());
+    for spec in STARTER_ARMOR_EQUIPMENT
+        .iter()
+        .chain(starter_weapon_equipment_for_class(class_id.as_str()).iter())
+    {
+        if equipment_item_at_slot(&equipment, spec.slot_id).is_some() {
+            continue;
+        }
+        let item_def_id = normalize_id(spec.item_def_id);
+        if ctx
+            .db
+            .item_definition()
+            .item_def_id()
+            .find(item_def_id.clone())
+            .is_none()
+        {
+            log::warn!(
+                "[INVENTORY] Starter equipment definition '{}' is missing for owner {}",
+                item_def_id,
+                &owner.to_hex()[..8]
+            );
+            continue;
+        }
+
+        let item_instance_id = next_item_instance_id(ctx, owner);
+        ctx.db.item_instance().insert(ItemInstance {
+            item_instance_id: item_instance_id.clone(),
+            item_def_id,
+            current_owner_key: identity_key(owner),
+            current_owner: Some(owner),
+            quantity: 1,
+            created_at: ctx.timestamp,
+        });
+        if let Err(error) = set_equipment_slot(&mut equipment, spec.slot_id, Some(item_instance_id))
+        {
+            log::warn!(
+                "[INVENTORY] Failed to seed starter equipment slot '{}' for owner {}: {}",
+                spec.slot_id,
+                &owner.to_hex()[..8],
+                error
+            );
+        }
+    }
+
+    equipment.revision = equipment.revision.saturating_add(1);
+    equipment.updated_at = ctx.timestamp;
+    ctx.db.equipment_loadout().owner().update(equipment);
+}
+
+fn starter_weapon_equipment_for_class(class_id: &str) -> &'static [StarterEquipmentSpec] {
+    match normalize_id(class_id).as_str() {
+        "PALADIN" => PALADIN_STARTER_WEAPONS,
+        "RANGER" => RANGER_STARTER_WEAPONS,
+        _ => WARRIOR_STARTER_WEAPONS,
+    }
 }
 
 fn require_player_bag(ctx: &ReducerContext, owner: Identity) -> Result<InventoryContainer, String> {
@@ -1762,5 +1864,34 @@ mod tests {
             None
         )
         .is_err());
+    }
+
+    #[test]
+    fn starter_weapon_mapping_matches_class_equipment_contract() {
+        assert_eq!(starter_weapon_equipment_for_class("WARRIOR").len(), 1);
+        assert_eq!(
+            starter_weapon_equipment_for_class("WARRIOR")[0].item_def_id,
+            "TRAINING_TWO_HAND_SWORD"
+        );
+        assert_eq!(
+            starter_weapon_equipment_for_class("WARRIOR")[0].slot_id,
+            EQUIP_SLOT_MAIN_HAND
+        );
+
+        assert_eq!(starter_weapon_equipment_for_class("PALADIN").len(), 2);
+        assert_eq!(
+            starter_weapon_equipment_for_class("PALADIN")[0].item_def_id,
+            "TRAINING_ONE_HAND_SWORD"
+        );
+        assert_eq!(
+            starter_weapon_equipment_for_class("PALADIN")[1].item_def_id,
+            "TRAINING_SHIELD"
+        );
+
+        assert_eq!(starter_weapon_equipment_for_class("RANGER").len(), 1);
+        assert_eq!(
+            starter_weapon_equipment_for_class("RANGER")[0].item_def_id,
+            "TRAINING_BOW"
+        );
     }
 }

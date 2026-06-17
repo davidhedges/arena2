@@ -55,6 +55,11 @@ namespace Arena.Presentation.Appearance
         private Transform? _visualRoot;
         private GameObject? _activeAvatar;
         private RuntimeAvatarBinding? _currentBinding;
+        private readonly Dictionary<string, string> _equippedArmorBySlot = new(System.StringComparer.Ordinal);
+        private CharacterAppearanceSelection _currentSelection;
+        private string _baseAppearanceSignature = string.Empty;
+        private bool _hasCurrentSelection;
+        private bool _hasEquipmentAppearanceOverride;
         private bool _legacyVisualsHidden;
 
         public Transform? VisualRoot => _visualRoot;
@@ -148,6 +153,38 @@ namespace Arena.Presentation.Appearance
             return Apply(selection, appearanceSignature, out binding, out error, catalogs);
         }
 
+        public bool SetEquipmentAppearanceOverride(
+            IReadOnlyDictionary<string, string> equippedArmorBySlot,
+            out RuntimeAvatarBinding binding,
+            out string error)
+        {
+            _equippedArmorBySlot.Clear();
+            foreach (var pair in equippedArmorBySlot)
+            {
+                string slotId = CharacterAppearanceIds.Normalize(pair.Key);
+                if (string.IsNullOrWhiteSpace(slotId) || string.IsNullOrWhiteSpace(pair.Value))
+                    continue;
+
+                _equippedArmorBySlot[slotId] = CharacterAppearanceIds.Normalize(pair.Value);
+            }
+
+            _hasEquipmentAppearanceOverride = true;
+            if (!_hasCurrentSelection)
+            {
+                binding = null!;
+                error = string.Empty;
+                return false;
+            }
+
+            if (!CharacterAppearanceCatalogSet.TryLoadDefault(out CharacterAppearanceCatalogSet catalogs, out error))
+            {
+                binding = null!;
+                return false;
+            }
+
+            return Apply(_currentSelection, _baseAppearanceSignature, out binding, out error, catalogs);
+        }
+
         public Renderer[] RefreshRenderers()
         {
             if (_currentBinding == null || _activeAvatar == null)
@@ -173,14 +210,28 @@ namespace Arena.Presentation.Appearance
             CharacterAppearanceCatalogSet catalogs)
         {
             selection.NormalizeInPlace();
-            appearanceSignature = string.IsNullOrWhiteSpace(appearanceSignature)
+            string baseAppearanceSignature = string.IsNullOrWhiteSpace(appearanceSignature)
                 ? SignatureFor(selection)
                 : appearanceSignature;
+            _currentSelection = selection;
+            _baseAppearanceSignature = baseAppearanceSignature;
+            _hasCurrentSelection = true;
+            string effectiveAppearanceSignature = BuildEffectiveAppearanceSignature(baseAppearanceSignature);
+            IReadOnlyDictionary<string, string>? equippedArmorBySlot = _hasEquipmentAppearanceOverride
+                ? _equippedArmorBySlot
+                : null;
 
             bool applied = false;
             error = string.Empty;
             if (_activeAvatar != null)
-                applied = CharacterAvatarAssembler.TryApplyToExisting(_activeAvatar, selection, catalogs, out error);
+            {
+                applied = CharacterAvatarAssembler.TryApplyToExisting(
+                    _activeAvatar,
+                    selection,
+                    catalogs,
+                    out error,
+                    equippedArmorBySlot);
+            }
 
             if (!applied)
             {
@@ -191,7 +242,8 @@ namespace Arena.Presentation.Appearance
                         root,
                         out GameObject avatar,
                         out error,
-                        existingAvatar: _activeAvatar))
+                        existingAvatar: _activeAvatar,
+                        equippedArmorBySlot: equippedArmorBySlot))
                 {
                     binding = null!;
                     return false;
@@ -201,12 +253,24 @@ namespace Arena.Presentation.Appearance
             }
 
             HideLegacySkinnedVisuals();
-            if (!TryCreateBinding(appearanceSignature, out binding, out error))
+            if (!TryCreateBinding(effectiveAppearanceSignature, out binding, out error))
                 return false;
 
             _currentBinding = binding;
             RefreshRenderers();
             return true;
+        }
+
+        private string BuildEffectiveAppearanceSignature(string baseAppearanceSignature)
+        {
+            if (!_hasEquipmentAppearanceOverride)
+                return baseAppearanceSignature;
+
+            var parts = new List<string>(_equippedArmorBySlot.Count);
+            foreach (var pair in _equippedArmorBySlot)
+                parts.Add($"{pair.Key}:{pair.Value}");
+            parts.Sort(System.StringComparer.Ordinal);
+            return $"{baseAppearanceSignature}|gear={string.Join(",", parts)}";
         }
 
         private Transform GetOrCreateVisualRoot()

@@ -1,4 +1,5 @@
 #nullable enable
+using System.Collections.Generic;
 using UnityEngine;
 using Arena.Simulation;
 using Arena.Presentation;
@@ -8,7 +9,6 @@ using Arena.Input;
 using Arena.Combat;
 using SpacetimeDB;
 using SpacetimeDB.Types;
-using System.Collections.Generic;
 
 namespace Arena.Entity
 {
@@ -68,6 +68,8 @@ namespace Arena.Entity
         private WeaponAttachmentController? _weaponAttachments;
         private LocalPlayerStateProvider? _stateProvider;
         private CombatAnimationSet? _combatAnimationSet;
+        private readonly HashSet<string> _equippedWeaponVisualItemIds = new(System.StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, string> _equippedArmorItemDefIdsBySlot = new(System.StringComparer.Ordinal);
         private SharedActionProfile? _sharedActionProfile;
         private SpellCastPresentationController? _spellCastPresentation;
         private string _appliedAppearanceSignature = string.Empty;
@@ -340,7 +342,49 @@ namespace Arena.Entity
         {
             _combatAnimationSet = set;
             _animator?.ApplyAnimationSet(set);
-            _weaponAttachments?.ApplyAnimationSet(set);
+            _weaponAttachments?.ApplyAnimationSet(set, _equippedWeaponVisualItemIds);
+        }
+
+        public void SetEquippedWeaponVisualItemIds(IEnumerable<string> visualItemIds)
+        {
+            _equippedWeaponVisualItemIds.Clear();
+            foreach (string visualItemId in visualItemIds)
+            {
+                if (string.IsNullOrWhiteSpace(visualItemId))
+                    continue;
+
+                _equippedWeaponVisualItemIds.Add(visualItemId.Trim());
+            }
+
+            if (_combatAnimationSet != null)
+                _weaponAttachments?.ApplyAnimationSet(_combatAnimationSet, _equippedWeaponVisualItemIds);
+        }
+
+        public void SetEquippedArmorItemDefIdsBySlot(Dictionary<string, string> itemDefIdsBySlot)
+        {
+            _equippedArmorItemDefIdsBySlot.Clear();
+            foreach (var pair in itemDefIdsBySlot)
+            {
+                if (string.IsNullOrWhiteSpace(pair.Key) || string.IsNullOrWhiteSpace(pair.Value))
+                    continue;
+
+                _equippedArmorItemDefIdsBySlot[pair.Key.Trim().ToUpperInvariant()] = pair.Value.Trim().ToUpperInvariant();
+            }
+
+            if (_avatarController == null)
+                return;
+
+            if (!_avatarController.SetEquipmentAppearanceOverride(
+                    _equippedArmorItemDefIdsBySlot,
+                    out RuntimeAvatarBinding binding,
+                    out string error))
+            {
+                if (!string.IsNullOrWhiteSpace(error))
+                    Debug.LogWarning($"[{nameof(PlayerEntity)}] Failed to apply equipment appearance to '{GameObject.name}': {error}");
+                return;
+            }
+
+            BindRuntimeAvatar(binding);
         }
 
         public void ApplyAppearance(CharacterAppearance row)
@@ -363,6 +407,10 @@ namespace Arena.Entity
                     _avatarController = GameObject.AddComponent<RuntimeAvatarController>();
                 _avatarController.SetVisualRootParent(_presentationRoot ?? GameObject.transform);
             }
+            _avatarController.SetEquipmentAppearanceOverride(
+                _equippedArmorItemDefIdsBySlot,
+                out _,
+                out _);
 
             if (!_avatarController.Apply(row, out RuntimeAvatarBinding binding, out string error))
             {
@@ -398,6 +446,10 @@ namespace Arena.Entity
                     _avatarController = GameObject.AddComponent<RuntimeAvatarController>();
                 _avatarController.SetVisualRootParent(_presentationRoot ?? GameObject.transform);
             }
+            _avatarController.SetEquipmentAppearanceOverride(
+                _equippedArmorItemDefIdsBySlot,
+                out _,
+                out _);
 
             if (!_avatarController.ApplyClassDefault(normalizedClass, out RuntimeAvatarBinding binding, out string error))
             {

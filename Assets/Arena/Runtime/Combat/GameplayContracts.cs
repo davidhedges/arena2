@@ -381,6 +381,10 @@ namespace Arena.Combat
             if (conn == null || !owner.HasValue)
                 return CombatProfileIds.Default;
 
+            string? equipmentProfile = ResolveForEquipment(conn, owner.Value);
+            if (!string.IsNullOrWhiteSpace(equipmentProfile))
+                return CombatProfileIds.Normalize(equipmentProfile);
+
             CharacterProgression? progression = conn.Db.CharacterProgression.Owner.Find(owner.Value);
             if (progression != null)
                 return ResolveForClass(conn, progression.ClassId);
@@ -389,6 +393,40 @@ namespace Arena.Combat
             return player == null
                 ? CombatProfileIds.Default
                 : ResolveForPlayer(conn, player);
+        }
+
+        private static string? ResolveForEquipment(DbConnection conn, SpacetimeDB.Identity owner)
+        {
+            EquipmentLoadout? loadout = conn.Db.EquipmentLoadout.Owner.Find(owner);
+            if (loadout == null)
+                return null;
+
+            ItemDefinition? mainHand = FindEquippedDefinition(conn, loadout.MainHandItemId);
+            if (mainHand != null && !string.IsNullOrWhiteSpace(mainHand.CombatProfileId))
+                return mainHand.CombatProfileId;
+
+            ItemDefinition? offHand = FindEquippedDefinition(conn, loadout.OffHandItemId);
+            if (offHand != null
+                && string.Equals(
+                    WireIdentifier.Normalize(offHand.WeaponKind),
+                    "SHIELD",
+                    StringComparison.Ordinal))
+            {
+                return CombatProfileIds.SwordAndShield;
+            }
+
+            return null;
+        }
+
+        private static ItemDefinition? FindEquippedDefinition(DbConnection conn, string? itemInstanceId)
+        {
+            if (string.IsNullOrWhiteSpace(itemInstanceId))
+                return null;
+
+            ItemInstance? item = conn.Db.ItemInstance.ItemInstanceId.Find(itemInstanceId.Trim());
+            return item == null
+                ? null
+                : conn.Db.ItemDefinition.ItemDefId.Find(item.ItemDefId);
         }
 
         public static string ResolveForEntity(DbConnection? conn, PlayerEntity? entity)

@@ -335,6 +335,52 @@ namespace Arena.Entity
             ApplyOwnerCombatProfile(row.Owner);
         }
 
+        public void OnEquipmentLoadoutInsert(EventContext ctx, EquipmentLoadout row)
+        {
+            ApplyEquipmentLoadout(row);
+        }
+
+        public void OnEquipmentLoadoutUpdate(EventContext ctx, EquipmentLoadout oldRow, EquipmentLoadout newRow)
+        {
+            ApplyEquipmentLoadout(newRow);
+        }
+
+        public void OnEquipmentLoadoutDelete(EventContext ctx, EquipmentLoadout row)
+        {
+            if (!TryGetLivePlayer(row.Owner, out var entity))
+                return;
+
+            entity.SetEquippedWeaponVisualItemIds(System.Array.Empty<string>());
+            entity.SetEquippedArmorItemDefIdsBySlot(new Dictionary<string, string>(System.StringComparer.Ordinal));
+            ApplyOwnerCombatProfile(row.Owner);
+        }
+
+        public void OnItemInstanceInsert(EventContext ctx, ItemInstance row)
+        {
+            ApplyEquipmentForNullableOwner(row.CurrentOwner);
+        }
+
+        public void OnItemInstanceUpdate(EventContext ctx, ItemInstance oldRow, ItemInstance newRow)
+        {
+            ApplyEquipmentForNullableOwner(oldRow.CurrentOwner);
+            ApplyEquipmentForNullableOwner(newRow.CurrentOwner);
+        }
+
+        public void OnItemInstanceDelete(EventContext ctx, ItemInstance row)
+        {
+            ApplyEquipmentForNullableOwner(row.CurrentOwner);
+        }
+
+        public void OnItemDefinitionInsert(EventContext ctx, ItemDefinition row)
+        {
+            ApplyAllEquipmentLoadouts();
+        }
+
+        public void OnItemDefinitionUpdate(EventContext ctx, ItemDefinition oldRow, ItemDefinition newRow)
+        {
+            ApplyAllEquipmentLoadouts();
+        }
+
         public void OnCombatEngagementInsert(EventContext ctx, CombatEngagement row)
         {
             ApplyCombatEngagement(row);
@@ -901,6 +947,9 @@ namespace Arena.Entity
                         row.Identity,
                         this);
                 }
+
+                ApplyOwnerEquipmentPresentation(row.Identity);
+                ApplyOwnerCombatProfile(row.Identity);
             }
 
             entity.SimState.PushSnapshot(SnapshotFrom(row));
@@ -925,6 +974,137 @@ namespace Arena.Entity
 
             entity.SetClassId(row.ClassId);
             ApplyOwnerCombatProfile(row.Owner);
+        }
+
+        private void ApplyEquipmentLoadout(EquipmentLoadout row)
+        {
+            ApplyOwnerEquipmentPresentation(row.Owner, row);
+            ApplyOwnerCombatProfile(row.Owner);
+        }
+
+        private void ApplyEquipmentForNullableOwner(Identity? owner)
+        {
+            if (!owner.HasValue)
+                return;
+
+            ApplyOwnerEquipmentPresentation(owner.Value);
+            ApplyOwnerCombatProfile(owner.Value);
+        }
+
+        private void ApplyAllEquipmentLoadouts()
+        {
+            foreach (var entity in AllPlayers)
+            {
+                ApplyOwnerEquipmentPresentation(entity.Identity);
+                ApplyOwnerCombatProfile(entity.Identity);
+            }
+        }
+
+        private void ApplyOwnerEquipmentPresentation(Identity owner, EquipmentLoadout? loadout = null)
+        {
+            if (!TryGetLivePlayer(owner, out var entity))
+                return;
+
+            var conn = NetworkManager.Instance?.Conn;
+            entity.SetEquippedWeaponVisualItemIds(BuildEquippedWeaponVisualIds(conn, owner, loadout));
+            entity.SetEquippedArmorItemDefIdsBySlot(BuildEquippedArmorItemDefIdsBySlot(conn, owner, loadout));
+        }
+
+        private static HashSet<string> BuildEquippedWeaponVisualIds(
+            DbConnection? conn,
+            Identity owner,
+            EquipmentLoadout? loadout)
+        {
+            var visualIds = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
+            if (conn == null)
+                return visualIds;
+
+            loadout ??= conn.Db.EquipmentLoadout.Owner.Find(owner);
+            if (loadout == null)
+                return visualIds;
+
+            AddWeaponVisualIds(conn, loadout.MainHandItemId, visualIds);
+            AddWeaponVisualIds(conn, loadout.OffHandItemId, visualIds);
+            return visualIds;
+        }
+
+        private static Dictionary<string, string> BuildEquippedArmorItemDefIdsBySlot(
+            DbConnection? conn,
+            Identity owner,
+            EquipmentLoadout? loadout)
+        {
+            var itemDefIdsBySlot = new Dictionary<string, string>(System.StringComparer.Ordinal);
+            if (conn == null)
+                return itemDefIdsBySlot;
+
+            loadout ??= conn.Db.EquipmentLoadout.Owner.Find(owner);
+            if (loadout == null)
+                return itemDefIdsBySlot;
+
+            AddArmorItemDefId(conn, "HEAD", loadout.HeadItemId, itemDefIdsBySlot);
+            AddArmorItemDefId(conn, "SHOULDER", loadout.ShoulderItemId, itemDefIdsBySlot);
+            AddArmorItemDefId(conn, "CAPE", loadout.CapeItemId, itemDefIdsBySlot);
+            AddArmorItemDefId(conn, "CHEST", loadout.ChestItemId, itemDefIdsBySlot);
+            AddArmorItemDefId(conn, "LEGS", loadout.LegsItemId, itemDefIdsBySlot);
+            AddArmorItemDefId(conn, "BOOTS", loadout.BootsItemId, itemDefIdsBySlot);
+            AddArmorItemDefId(conn, "GLOVES", loadout.GlovesItemId, itemDefIdsBySlot);
+            return itemDefIdsBySlot;
+        }
+
+        private static void AddArmorItemDefId(
+            DbConnection conn,
+            string slotId,
+            string? itemInstanceId,
+            Dictionary<string, string> itemDefIdsBySlot)
+        {
+            if (string.IsNullOrWhiteSpace(itemInstanceId))
+                return;
+
+            ItemInstance? item = conn.Db.ItemInstance.ItemInstanceId.Find(itemInstanceId.Trim());
+            if (item == null)
+                return;
+
+            ItemDefinition? definition = conn.Db.ItemDefinition.ItemDefId.Find(item.ItemDefId);
+            if (definition == null
+                || !string.Equals(WireIdentifier.Normalize(definition.ItemKind), "ARMOR", System.StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            itemDefIdsBySlot[slotId] = definition.ItemDefId;
+        }
+
+        private static void AddWeaponVisualIds(DbConnection conn, string? itemInstanceId, HashSet<string> visualIds)
+        {
+            if (string.IsNullOrWhiteSpace(itemInstanceId))
+                return;
+
+            ItemInstance? item = conn.Db.ItemInstance.ItemInstanceId.Find(itemInstanceId.Trim());
+            if (item == null)
+                return;
+
+            ItemDefinition? definition = conn.Db.ItemDefinition.ItemDefId.Find(item.ItemDefId);
+            if (definition == null)
+                return;
+
+            switch (WireIdentifier.Normalize(definition.WeaponKind))
+            {
+                case "TWO_HAND_SWORD":
+                case "TWO_HANDED_SWORD":
+                    visualIds.Add("greatsword");
+                    break;
+                case "ONE_HAND_SWORD":
+                    visualIds.Add("sword");
+                    break;
+                case "SHIELD":
+                    visualIds.Add("shield");
+                    break;
+                case "BOW":
+                    visualIds.Add("bow_drawn");
+                    visualIds.Add("bow_stowed");
+                    visualIds.Add("quiver");
+                    break;
+            }
         }
 
         private void ApplyOwnerCombatProfile(Identity owner)
@@ -1470,6 +1650,7 @@ namespace Arena.Entity
 
         void IScopedPlayerCacheSink.ApplyUsername(Player row) => ApplyUsername(row);
         void IScopedPlayerCacheSink.ApplyCharacterAppearance(CharacterAppearance row) => ApplyCharacterAppearance(row);
+        void IScopedPlayerCacheSink.ApplyEquipmentLoadout(EquipmentLoadout row) => ApplyEquipmentLoadout(row);
         void IScopedPlayerCacheSink.ApplyState(PlayerState row) => ApplyState(row);
         void IScopedPlayerCacheSink.ApplyCombatEngagement(CombatEngagement row) => ApplyCombatEngagement(row);
         void IScopedPlayerCacheSink.ApplyPlayerResource(PlayerResource row) => ApplyPlayerResource(row);

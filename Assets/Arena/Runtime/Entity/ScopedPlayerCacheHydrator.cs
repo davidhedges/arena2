@@ -12,6 +12,7 @@ namespace Arena.Entity
         public PlayerPhysics[] PlayerPhysicsRows = Array.Empty<PlayerPhysics>();
         public Player[] PlayerRows = Array.Empty<Player>();
         public CharacterAppearance[] CharacterAppearanceRows = Array.Empty<CharacterAppearance>();
+        public EquipmentLoadout[] EquipmentLoadoutRows = Array.Empty<EquipmentLoadout>();
         public PlayerState[] PlayerStateRows = Array.Empty<PlayerState>();
         public CombatEngagement[] CombatEngagementRows = Array.Empty<CombatEngagement>();
         public PlayerResource[] PlayerResourceRows = Array.Empty<PlayerResource>();
@@ -26,6 +27,7 @@ namespace Arena.Entity
     {
         void ApplyUsername(Player row);
         void ApplyCharacterAppearance(CharacterAppearance row);
+        void ApplyEquipmentLoadout(EquipmentLoadout row);
         void ApplyState(PlayerState row);
         void ApplyCombatEngagement(CombatEngagement row);
         void ApplyPlayerResource(PlayerResource row);
@@ -46,6 +48,7 @@ namespace Arena.Entity
                 PlayerPhysicsRows = conn.Db.PlayerPhysics.Iter().ToArray(),
                 PlayerRows = conn.Db.Player.Iter().ToArray(),
                 CharacterAppearanceRows = conn.Db.CharacterAppearance.Iter().ToArray(),
+                EquipmentLoadoutRows = conn.Db.EquipmentLoadout.Iter().ToArray(),
                 PlayerStateRows = conn.Db.PlayerState.Iter().ToArray(),
                 CombatEngagementRows = conn.Db.CombatEngagement.Iter().ToArray(),
                 PlayerResourceRows = conn.Db.PlayerResource.Iter().ToArray(),
@@ -88,6 +91,10 @@ namespace Arena.Entity
             var appearance = snapshot.CharacterAppearanceRows.FirstOrDefault(row => row.Owner == identity);
             if (appearance != null)
                 sink.ApplyCharacterAppearance(appearance);
+
+            var equipment = snapshot.EquipmentLoadoutRows.FirstOrDefault(row => row.Owner == identity);
+            if (equipment != null)
+                sink.ApplyEquipmentLoadout(equipment);
 
             var state = snapshot.PlayerStateRows.FirstOrDefault(row => row.PlayerId == identity);
             if (state != null)
