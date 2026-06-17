@@ -481,7 +481,9 @@ namespace Arena.Entity
             if (oldRow.EffectKind != newRow.EffectKind)
             {
                 if (TryGetLivePlayer(oldRow.Target, out var e)) e.RemoveStatusEffect(oldRow.EffectKind);
+                else if (TryGetLiveNpc(oldRow.Target, out var n)) n.RemoveStatusEffect(oldRow.EffectKind);
                 if (TryGetLivePlayer(newRow.Target, out var e2)) e2.ApplyStatusEffect(newRow.EffectKind);
+                else if (TryGetLiveNpc(newRow.Target, out var n2)) n2.ApplyStatusEffect(newRow.EffectKind);
             }
             RefreshStatusPresentation(oldRow.Target);
             if (oldRow.Target != newRow.Target)
@@ -500,6 +502,8 @@ namespace Arena.Entity
         {
             if (TryGetLivePlayer(row.Target, out var entity))
                 entity.RemoveStatusEffect(row.EffectKind);
+            else if (TryGetLiveNpc(row.Target, out var npc))
+                npc.RemoveStatusEffect(row.EffectKind);
             RefreshStatusPresentation(row.Target, row.StatusId);
         }
 
@@ -1205,6 +1209,10 @@ namespace Arena.Entity
                 {
                     LoadoutActionTrace.Trace("local MOVE_SLOW_IMMUNITY status applied");
                 }
+            }
+            else if (TryGetLiveNpc(row.Target, out var npc))
+            {
+                npc.ApplyStatusEffect(row.EffectKind);
             }
         }
 

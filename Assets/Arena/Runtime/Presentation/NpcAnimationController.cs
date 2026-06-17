@@ -1,4 +1,6 @@
 #nullable enable
+using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace Arena.Presentation
@@ -9,7 +11,11 @@ namespace Arena.Presentation
         private const float DefaultDeathHideDelay = 2.8f;
         private const float HitCooldownSeconds = 0.18f;
         private const float DefaultHitReturnDelay = 0.75f;
+        private const float LocomotionTimeoutSeconds = 0.2f;
+        private const float RunSpeedThreshold = 2f;
         private const string IdleStateName = "Idle01";
+        private const string WalkForwardStateName = "Walk_Forward";
+        private const string RunForwardStateName = "Run_Forward";
         private const string KoboldWarriorSwordShield = "KOBOLD_WARRIOR_RD_SWORD_SHIELD";
         private const string KoboldWarriorSpear = "KOBOLD_WARRIOR_GN_SPEAR";
         private const string KoboldThiefDualSword = "KOBOLD_THIEF_BK_DUAL_SWORD";
@@ -27,8 +33,16 @@ namespace Arena.Presentation
         private string _templateId = string.Empty;
         private float _hideAt = -1f;
         private float _returnToIdleAt = -1f;
+        private float _locomotionTimeoutAt = -1f;
         private float _nextHitAllowedAt;
         private bool _dead;
+        private bool _locomotionActive;
+        private string _activeStateName = string.Empty;
+        private string _locomotionStateName = string.Empty;
+        private string _hardCrowdControlStatusKind = string.Empty;
+        private RuntimeAnimatorController? _statusReactionBaseController;
+        private AnimatorOverrideController? _statusReactionOverrideController;
+        private readonly Dictionary<string, NpcStatusReactionEntry> _statusReactions = new(StringComparer.Ordinal);
 
         public static NpcAnimationController Attach(GameObject root)
         {
@@ -46,18 +60,102 @@ namespace Arena.Presentation
                 : templateId.Trim().ToUpperInvariant();
         }
 
+        public void SetStatusReactions(IEnumerable<NpcStatusReactionEntry>? reactions)
+        {
+            _statusReactions.Clear();
+            if (reactions == null)
+                return;
+
+            foreach (NpcStatusReactionEntry reaction in reactions)
+            {
+                if (reaction == null || !reaction.HasAny)
+                    continue;
+
+                string key = reaction.StatusKindOrEmpty;
+                if (!string.IsNullOrEmpty(key))
+                    _statusReactions[key] = reaction;
+            }
+        }
+
+        public void SetHardCrowdControl(string? statusKind)
+        {
+            string normalized = NormalizeStatusKind(statusKind);
+            if (string.Equals(_hardCrowdControlStatusKind, normalized, StringComparison.Ordinal))
+                return;
+
+            if (string.IsNullOrEmpty(normalized))
+            {
+                ClearHardCrowdControl();
+                return;
+            }
+
+            _hardCrowdControlStatusKind = normalized;
+            _returnToIdleAt = -1f;
+            _locomotionActive = false;
+            _locomotionTimeoutAt = -1f;
+            _locomotionStateName = string.Empty;
+
+            if (!_dead && gameObject.activeSelf && TryPlayStatusReaction(normalized))
+                return;
+
+            RestoreStatusReactionController();
+            if (!_dead && gameObject.activeSelf)
+                TryCrossFade(ReadyStateCandidatesForTemplate(), out _);
+        }
+
         public void Revive()
         {
             _dead = false;
             _hideAt = -1f;
             _returnToIdleAt = -1f;
+            _locomotionTimeoutAt = -1f;
+            _hardCrowdControlStatusKind = string.Empty;
+            RestoreStatusReactionController();
+            _locomotionActive = false;
             if (!gameObject.activeSelf)
                 gameObject.SetActive(true);
         }
 
+        public void SetLocomotionSpeed(float horizontalSpeed, bool forceRun)
+        {
+            if (_dead || HasHardCrowdControl)
+                return;
+
+            if (horizontalSpeed <= 0.05f)
+            {
+                StopLocomotion();
+                return;
+            }
+
+            _locomotionActive = true;
+            _locomotionTimeoutAt = Time.time + LocomotionTimeoutSeconds;
+            _locomotionStateName = forceRun || horizontalSpeed >= RunSpeedThreshold
+                ? RunForwardStateName
+                : WalkForwardStateName;
+
+            if (_returnToIdleAt <= 0f)
+                PlayLocomotion();
+        }
+
+        public void StopLocomotion()
+        {
+            if (HasHardCrowdControl)
+                return;
+
+            if (!_locomotionActive)
+                return;
+
+            _locomotionActive = false;
+            _locomotionTimeoutAt = -1f;
+            _locomotionStateName = string.Empty;
+
+            if (!_dead && _returnToIdleAt <= 0f)
+                TryCrossFade(ReadyStateCandidatesForTemplate(), out _);
+        }
+
         public void PlayHit()
         {
-            if (_dead || Time.time < _nextHitAllowedAt)
+            if (_dead || HasHardCrowdControl || Time.time < _nextHitAllowedAt)
                 return;
 
             _nextHitAllowedAt = Time.time + HitCooldownSeconds;
@@ -67,7 +165,7 @@ namespace Arena.Presentation
 
         public void PlayAttack()
         {
-            if (_dead)
+            if (_dead || HasHardCrowdControl)
                 return;
 
             if (TryCrossFade(AttackStateCandidatesForTemplate(), out string? stateName) && stateName != null)
@@ -81,6 +179,8 @@ namespace Arena.Presentation
 
             _dead = true;
             _returnToIdleAt = -1f;
+            _hardCrowdControlStatusKind = string.Empty;
+            RestoreStatusReactionController();
             if (!gameObject.activeSelf)
                 gameObject.SetActive(true);
 
@@ -90,10 +190,25 @@ namespace Arena.Presentation
 
         private void Update()
         {
+            if (HasHardCrowdControl)
+                return;
+
             if (!_dead && _returnToIdleAt > 0f && Time.time >= _returnToIdleAt)
             {
                 _returnToIdleAt = -1f;
-                TryCrossFade(ReadyStateCandidatesForTemplate(), out _);
+                if (_locomotionActive)
+                    PlayLocomotion();
+                else
+                    TryCrossFade(ReadyStateCandidatesForTemplate(), out _);
+            }
+
+            if (!_dead && _locomotionActive && _locomotionTimeoutAt > 0f && Time.time >= _locomotionTimeoutAt)
+            {
+                _locomotionActive = false;
+                _locomotionTimeoutAt = -1f;
+                _locomotionStateName = string.Empty;
+                if (_returnToIdleAt <= 0f)
+                    TryCrossFade(ReadyStateCandidatesForTemplate(), out _);
             }
 
             if (_hideAt > 0f && Time.time >= _hideAt)
@@ -120,6 +235,79 @@ namespace Arena.Presentation
             }
 
             return false;
+        }
+
+        private void PlayLocomotion()
+        {
+            if (HasHardCrowdControl || !_locomotionActive || string.IsNullOrEmpty(_locomotionStateName))
+                return;
+
+            if (_activeStateName == _locomotionStateName)
+                return;
+
+            string fallback = _locomotionStateName == RunForwardStateName
+                ? WalkForwardStateName
+                : RunForwardStateName;
+            TryCrossFade(new[] { _locomotionStateName, fallback, IdleStateName }, out _);
+        }
+
+        private bool TryPlayStatusReaction(string statusKind)
+        {
+            if (!_statusReactions.TryGetValue(statusKind, out NpcStatusReactionEntry reaction)
+                || reaction.loop == null
+                || !EnsureAnimator())
+            {
+                return false;
+            }
+
+            if (reaction.requireHumanoidAvatar && !HasValidHumanoidAvatar())
+                return false;
+
+            RestoreStatusReactionController();
+            AnimationClip? slotClip = ResolveControllerClip(IdleStateName);
+            RuntimeAnimatorController? baseController = _animator!.runtimeAnimatorController;
+            if (slotClip == null || baseController == null)
+                return false;
+
+            _statusReactionBaseController = baseController;
+            _statusReactionOverrideController = new AnimatorOverrideController(baseController);
+            _statusReactionOverrideController[slotClip.name] = reaction.loop;
+            _animator.runtimeAnimatorController = _statusReactionOverrideController;
+            _activeStateName = string.Empty;
+            return TryCrossFade(new[] { IdleStateName }, out _);
+        }
+
+        private void ClearHardCrowdControl()
+        {
+            _hardCrowdControlStatusKind = string.Empty;
+            RestoreStatusReactionController();
+
+            if (_dead || !gameObject.activeSelf)
+                return;
+
+            if (_locomotionActive)
+                PlayLocomotion();
+            else
+                TryCrossFade(ReadyStateCandidatesForTemplate(), out _);
+        }
+
+        private void RestoreStatusReactionController()
+        {
+            if (_animator != null && _statusReactionBaseController != null)
+                _animator.runtimeAnimatorController = _statusReactionBaseController;
+
+            _statusReactionOverrideController = null;
+            _statusReactionBaseController = null;
+            _activeStateName = string.Empty;
+        }
+
+        private bool HasValidHumanoidAvatar()
+        {
+            if (!EnsureAnimator())
+                return false;
+
+            Avatar? avatar = _animator!.avatar;
+            return avatar != null && avatar.isValid && avatar.isHuman;
         }
 
         private string[] ReadyStateCandidatesForTemplate()
@@ -162,6 +350,7 @@ namespace Arena.Presentation
                 {
                     layer = i;
                     stateHash = fullPathHash;
+                    _activeStateName = stateName;
                     return true;
                 }
 
@@ -170,6 +359,7 @@ namespace Arena.Presentation
                 {
                     layer = i;
                     stateHash = shortHash;
+                    _activeStateName = stateName;
                     return true;
                 }
             }
@@ -191,6 +381,26 @@ namespace Arena.Presentation
 
             return fallback;
         }
+
+        private AnimationClip? ResolveControllerClip(string clipName)
+        {
+            if (!EnsureAnimator() || _animator!.runtimeAnimatorController == null)
+                return null;
+
+            AnimationClip[] clips = _animator.runtimeAnimatorController.animationClips;
+            for (int i = 0; i < clips.Length; i++)
+            {
+                if (clips[i] != null && string.Equals(clips[i].name, clipName, StringComparison.Ordinal))
+                    return clips[i];
+            }
+
+            return clips.Length > 0 ? clips[0] : null;
+        }
+
+        private bool HasHardCrowdControl => !string.IsNullOrEmpty(_hardCrowdControlStatusKind);
+
+        private static string NormalizeStatusKind(string? value)
+            => string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim().ToUpperInvariant();
 
         private bool EnsureAnimator()
         {

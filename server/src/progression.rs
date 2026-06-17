@@ -12,6 +12,7 @@ use crate::combat::{
     AuthoredStatusPayload, StackPolicy, StatusApplication, StatusDispelType, StatusEffectKind,
     StatusStackGroupDefault,
 };
+use crate::inventory::equipment_combat_profile_id_for_owner;
 use crate::melee::sync_melee_attack_modifier_catalog;
 use crate::player::Player;
 use crate::relations::TARGET_AUDIENCE_HOSTILE;
@@ -1881,8 +1882,26 @@ pub(crate) fn derived_combat_profile_id_for_owner(
     ctx: &ReducerContext,
     owner: Identity,
 ) -> Option<String> {
+    if let Some(profile_id) = equipment_combat_profile_id_for_owner(ctx, owner)
+        .filter(|profile_id| combat_profile_exists(ctx, profile_id.as_str()))
+    {
+        return Some(profile_id);
+    }
+
     let class_id = runtime_class_id_for_owner(ctx, owner)?;
     derived_combat_profile_id_for_class(class_id.as_str())
+}
+
+pub(crate) fn sync_active_combat_mode_for_owner(
+    ctx: &ReducerContext,
+    owner: Identity,
+    now: Timestamp,
+) {
+    if let Some(combat_profile_id) = derived_combat_profile_id_for_owner(ctx, owner) {
+        normalize_active_combat_mode_for_profile(ctx, owner, combat_profile_id.as_str(), now);
+    } else if ctx.db.active_combat_mode().owner().find(owner).is_some() {
+        ctx.db.active_combat_mode().owner().delete(owner);
+    }
 }
 
 pub(crate) fn resolved_auto_attack_mode_for_owner(
@@ -1971,6 +1990,14 @@ fn combat_mode_is_valid_for_profile(
         .combat_mode_catalog()
         .key()
         .find(combat_mode_key(combat_profile_id, mode_id))
+        .is_some()
+}
+
+fn combat_profile_exists(ctx: &ReducerContext, combat_profile_id: &str) -> bool {
+    ctx.db
+        .combat_profile_catalog()
+        .combat_profile_id()
+        .find(normalize_identifier(combat_profile_id))
         .is_some()
 }
 

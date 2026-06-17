@@ -5,8 +5,8 @@ use spacetimedb::{reducer, table, Identity, ReducerContext, Table, Timestamp};
 use crate::arena::open_world_scene_name_for_identity;
 use crate::arena::players_share_world_context;
 use crate::combat::{
-    queue_effects, timestamp_to_micros, CombatEvent, DamageDelivery, EffectPacket,
-    COMBAT_EVENT_CAST, COMBAT_EVENT_IMPACT, COMBAT_METADATA_NONE, COMBAT_SCALAR_NONE,
+    movement_modifiers, queue_effects, timestamp_to_micros, CombatEvent, DamageDelivery,
+    EffectPacket, COMBAT_EVENT_CAST, COMBAT_EVENT_IMPACT, COMBAT_METADATA_NONE, COMBAT_SCALAR_NONE,
     COMBAT_SEQUENCE_NONE,
 };
 use crate::movement::{FIXED_TICK_SECONDS, MOVE_SPEED};
@@ -343,6 +343,7 @@ pub(crate) fn npc_faction(ctx: &ReducerContext, identity: Identity) -> Option<Np
 }
 
 pub(crate) fn tick_npc_combat(ctx: &ReducerContext, now: Timestamp) {
+    let movement_modifiers = movement_modifiers(ctx, now);
     let npcs: Vec<NpcInstance> = ctx.db.npc_instance().iter().collect();
     for npc in npcs {
         let Some(faction) = NpcFaction::from_wire(npc.faction.as_str()) else {
@@ -389,6 +390,11 @@ pub(crate) fn tick_npc_combat(ctx: &ReducerContext, now: Timestamp) {
                 next_attack_at_micros: timestamp_to_micros(now),
             });
 
+        if movement_modifiers.is_disabled(&npc.identity) {
+            upsert_npc_combat_runtime(ctx, runtime);
+            continue;
+        }
+
         if now < runtime.next_attack_at {
             face_npc_target(ctx, now, &physics, &target);
             upsert_npc_combat_runtime(ctx, runtime);
@@ -396,7 +402,20 @@ pub(crate) fn tick_npc_combat(ctx: &ReducerContext, now: Timestamp) {
         }
 
         if target.distance > npc_attack_reach(template, &target) {
-            chase_npc_toward_target(ctx, now, &npc, &physics, template, &target);
+            let move_speed_multiplier = movement_modifiers.move_speed_multiplier(&npc.identity, 0);
+            if move_speed_multiplier > 0.0 {
+                chase_npc_toward_target(
+                    ctx,
+                    now,
+                    &npc,
+                    &physics,
+                    template,
+                    &target,
+                    move_speed_multiplier,
+                );
+            } else {
+                face_npc_target(ctx, now, &physics, &target);
+            }
             runtime.next_attack_at = now;
             runtime.next_attack_at_micros = timestamp_to_micros(now);
             upsert_npc_combat_runtime(ctx, runtime);
@@ -489,11 +508,12 @@ fn chase_npc_toward_target(
     physics: &NpcPhysics,
     template: NpcTemplate,
     target: &NpcAttackTarget,
+    move_speed_multiplier: f32,
 ) -> NpcPhysics {
     let desired_yaw = yaw_for_direction(target.dir_x, target.dir_z);
     let stop_distance = (npc_attack_reach(template, target) - NPC_CHASE_STOP_EPSILON).max(0.0);
     let remaining = (target.distance - stop_distance).max(0.0);
-    let travel = (template.move_speed * FIXED_TICK_SECONDS).min(remaining);
+    let travel = (template.move_speed * move_speed_multiplier * FIXED_TICK_SECONDS).min(remaining);
     if travel <= f32::EPSILON {
         return update_npc_facing(ctx, now, physics, desired_yaw);
     }

@@ -47,6 +47,7 @@ use crate::combat::{
 };
 use crate::defense::prune_defense_states;
 use crate::derived_stats::derived_combat_stats_for_owner;
+use crate::inventory::sync_item_definitions;
 use crate::melee::{
     has_due_pending_melee_impacts, has_due_pending_projectile_releases,
     resolve_pending_melee_impacts, resolve_pending_projectile_releases, sync_melee_definitions,
@@ -380,6 +381,7 @@ fn bootstrap_server_state(ctx: &ReducerContext) {
     }
 
     sync_progression_catalogs(ctx);
+    sync_item_definitions(ctx);
     sync_combat_projectile_definitions(ctx);
     sync_spell_definitions(ctx);
     sync_melee_definitions(ctx);

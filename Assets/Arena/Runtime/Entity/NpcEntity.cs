@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using System.Collections.Generic;
 using Arena.Combat;
 using Arena.Presentation;
 using Arena.Presentation.Targeting;
@@ -17,10 +18,15 @@ namespace Arena.Entity
         private readonly NameTag _nameTag;
         private readonly WorldHealthBar _worldHealthBar;
         private readonly NpcAnimationController _animationController;
+        private readonly Dictionary<string, int> _effectCounts = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Renderer[] _renderers;
+        private readonly Dictionary<Material, Color> _baseMaterialColors = new();
         private NpcInstance _instance;
         private NpcState? _state;
         private bool _isHighlighted;
         private bool _isSelected;
+        private bool _hasPhysicsSample;
+        private float _lastPhysicsSampleTime;
         private SelectedTargetIndicator? _selectedTargetIndicator;
 
         public bool IsDestroyed => GameObject == null;
@@ -37,6 +43,13 @@ namespace Arena.Entity
         private static readonly Color TargetIndicatorHostile = new(1f, 0.02f, 0.015f, 1f);
         private static readonly Color TargetIndicatorNeutral = new(1f, 0.82f, 0.18f, 1f);
         private static readonly Color TargetIndicatorParty = new(0.2f, 0.75f, 0.3f, 1f);
+        private static readonly string[] HardCrowdControlAnimationPriority =
+        {
+            "STUN",
+            "FREEZE",
+            "FEAR",
+            "INTIMIDATED",
+        };
 
         public NpcEntity(NpcInstance instance, NpcPhysics? physics, NpcState? state, UnityEngine.Object prefabAsset)
         {
@@ -46,12 +59,15 @@ namespace Arena.Entity
 
             GameObject = InstantiateRoot(prefabAsset);
             GameObject.name = $"NPC_{SafeName(instance.DisplayName)}_{instance.Identity}";
+            _renderers = GameObject.GetComponentsInChildren<Renderer>(includeInactive: true);
+            CaptureBaseMaterialColors();
 
             _nameTag = NameTag.Create(GameObject.transform, isLocalPlayer: false);
             _nameTag.SetName(instance.DisplayName);
             _worldHealthBar = WorldHealthBar.Create(GameObject.transform, isLocalPlayer: false);
             _animationController = NpcAnimationController.Attach(GameObject);
             _animationController.SetTemplate(instance.TemplateId);
+            ConfigureAnimationProfile(instance.TemplateId);
             if (state != null)
                 _worldHealthBar.SetHealth(state.Hp, state.MaxHp);
 
@@ -68,6 +84,33 @@ namespace Arena.Entity
             GameObject.name = $"NPC_{SafeName(instance.DisplayName)}_{instance.Identity}";
             _nameTag.SetName(instance.DisplayName);
             _animationController.SetTemplate(instance.TemplateId);
+            ConfigureAnimationProfile(instance.TemplateId);
+            RefreshHardCrowdControlAnimation();
+        }
+
+        public void ApplyStatusEffect(string effectKind)
+        {
+            string normalized = NormalizeEffectKind(effectKind);
+            if (string.IsNullOrEmpty(normalized))
+                return;
+
+            _effectCounts[normalized] = (_effectCounts.TryGetValue(normalized, out int count) ? count : 0) + 1;
+            RefreshEffectTint();
+            RefreshHardCrowdControlAnimation();
+        }
+
+        public void RemoveStatusEffect(string effectKind)
+        {
+            string normalized = NormalizeEffectKind(effectKind);
+            if (string.IsNullOrEmpty(normalized))
+                return;
+
+            if (_effectCounts.TryGetValue(normalized, out int count) && count > 1)
+                _effectCounts[normalized] = count - 1;
+            else
+                _effectCounts.Remove(normalized);
+            RefreshEffectTint();
+            RefreshHardCrowdControlAnimation();
         }
 
         public void ApplyPhysics(NpcPhysics physics)
@@ -75,9 +118,25 @@ namespace Arena.Entity
             if (IsDestroyed)
                 return;
 
+            Vector3 previousPosition = GameObject.transform.position;
+            Vector3 nextPosition = new(physics.PosX, physics.PosY, physics.PosZ);
             GameObject.transform.SetPositionAndRotation(
-                new Vector3(physics.PosX, physics.PosY, physics.PosZ),
+                nextPosition,
                 Quaternion.Euler(0f, physics.Yaw * Mathf.Rad2Deg, 0f));
+
+            float now = Time.time;
+            if (_hasPhysicsSample && IsAlive)
+            {
+                Vector2 previousHorizontal = new(previousPosition.x, previousPosition.z);
+                Vector2 nextHorizontal = new(nextPosition.x, nextPosition.z);
+                float horizontalDistance = Vector2.Distance(previousHorizontal, nextHorizontal);
+                float elapsed = Mathf.Max(now - _lastPhysicsSampleTime, Time.deltaTime, 1f / 30f);
+                float horizontalSpeed = horizontalDistance / elapsed;
+                _animationController.SetLocomotionSpeed(horizontalSpeed, IsCombatFaction());
+            }
+
+            _hasPhysicsSample = true;
+            _lastPhysicsSampleTime = now;
         }
 
         public void ApplyState(NpcState state)
@@ -92,6 +151,7 @@ namespace Arena.Entity
             if (state.Alive)
             {
                 _animationController.Revive();
+                RefreshHardCrowdControlAnimation();
                 if (previous != null && previous.Alive && state.Hp < previous.Hp)
                     _animationController.PlayHit();
             }
@@ -148,6 +208,7 @@ namespace Arena.Entity
 
             _selectedTargetIndicator?.SetColor(ResolveSelectedTargetIndicatorColor());
             _selectedTargetIndicator?.SetVisible(shouldShow);
+            RefreshEffectTint();
         }
 
         private Color ResolveSelectedTargetIndicatorColor()
@@ -160,10 +221,104 @@ namespace Arena.Entity
             };
         }
 
+        private static readonly Dictionary<string, Color> EffectColors = new(StringComparer.OrdinalIgnoreCase)
+        {
+            { "ROOT", new Color(0.3f, 0.5f, 1.0f) },
+            { "SLOW", new Color(0.4f, 0.9f, 0.9f) },
+            { "STUN", new Color(1.0f, 0.9f, 0.2f) },
+            { "FREEZE", new Color(0.35f, 0.85f, 1.0f) },
+            { "INTIMIDATED", new Color(0.75f, 0.35f, 1.0f) },
+            { "FEAR", new Color(0.75f, 0.35f, 1.0f) },
+            { "STAGGER", new Color(0.95f, 0.55f, 0.2f) },
+            { "KNOCKDOWN", new Color(0.95f, 0.55f, 0.2f) },
+            { "DOT", new Color(1.0f, 0.4f, 0.1f) },
+            { "DAMAGE_TAKEN_REDUCTION", new Color(1.0f, 0.72f, 0.18f) },
+        };
+
+        private void CaptureBaseMaterialColors()
+        {
+            foreach (Renderer renderer in _renderers)
+            {
+                if (renderer == null)
+                    continue;
+
+                foreach (Material material in renderer.materials)
+                {
+                    if (material != null && material.HasProperty("_Color") && !_baseMaterialColors.ContainsKey(material))
+                        _baseMaterialColors.Add(material, material.color);
+                }
+            }
+        }
+
+        private void RefreshEffectTint()
+        {
+            Color? statusColor = null;
+            foreach (string effectKind in _effectCounts.Keys)
+            {
+                statusColor = EffectColors.TryGetValue(effectKind, out Color color)
+                    ? color
+                    : new Color(1f, 0.5f, 0.2f);
+                break;
+            }
+
+            foreach (Renderer renderer in _renderers)
+            {
+                if (renderer == null)
+                    continue;
+
+                foreach (Material material in renderer.materials)
+                {
+                    if (material == null || !material.HasProperty("_Color"))
+                        continue;
+
+                    Color color = statusColor ?? (_baseMaterialColors.TryGetValue(material, out Color baseColor)
+                        ? baseColor
+                        : Color.white);
+                    if (_isSelected)
+                        color = Color.Lerp(color, Color.yellow, 0.35f);
+                    else if (_isHighlighted)
+                        color = Color.Lerp(color, Color.white, 0.3f);
+                    material.color = color;
+                }
+            }
+        }
+
+        private void ConfigureAnimationProfile(string templateId)
+        {
+            if (NpcVisualCatalog.TryLoadDefault(out NpcVisualCatalog catalog, out _)
+                && catalog.TryGetEntry(templateId, out NpcVisualCatalogEntry entry))
+            {
+                _animationController.SetStatusReactions(entry.statusReactions);
+                return;
+            }
+
+            _animationController.SetStatusReactions(null);
+        }
+
+        private void RefreshHardCrowdControlAnimation()
+        {
+            foreach (string effectKind in HardCrowdControlAnimationPriority)
+            {
+                if (_effectCounts.TryGetValue(effectKind, out int count) && count > 0)
+                {
+                    _animationController.SetHardCrowdControl(effectKind);
+                    return;
+                }
+            }
+
+            _animationController.SetHardCrowdControl(null);
+        }
+
+        private bool IsCombatFaction()
+            => string.Equals(_instance.Faction, "HOSTILE", StringComparison.OrdinalIgnoreCase);
+
         private static string SafeName(string value)
             => string.IsNullOrWhiteSpace(value)
                 ? "Npc"
                 : value.Trim().Replace(' ', '_');
+
+        private static string NormalizeEffectKind(string? value)
+            => string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim().ToUpperInvariant();
 
         private static GameObject InstantiateRoot(UnityEngine.Object prefabAsset)
         {

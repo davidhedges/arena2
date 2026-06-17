@@ -2,6 +2,7 @@ use spacetimedb::{Identity, ReducerContext, Table};
 
 use crate::arena::{clear_player_world, upsert_player_world};
 use crate::combat::clear_player_combat_state;
+use crate::inventory::clear_inventory_for_owner;
 use crate::movement_actions::{
     clear_fixed_action_charge_states_for_owner, clear_movement_action_for_owner,
     ensure_dodge_charge_state,
@@ -132,6 +133,7 @@ pub(crate) fn despawn_actor_bundle(
     }
 
     clear_player_combat_state(ctx, identity);
+    clear_inventory_for_owner(ctx, identity);
     clear_movement_action_for_owner(ctx, identity);
     clear_fixed_action_charge_states_for_owner(ctx, identity);
     clear_player_resources(ctx, identity);

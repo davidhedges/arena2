@@ -15,6 +15,7 @@ use crate::arena::{
     MATCH_PHASE_ENDED, MATCH_PHASE_IN_PROGRESS,
 };
 use crate::derived_stats::derived_combat_stats_for_owner;
+use crate::inventory::create_corpse_loot_for_npc;
 use crate::open_world_scene::{OPEN_WORLD_SPAWN_X, OPEN_WORLD_SPAWN_YAW, OPEN_WORLD_SPAWN_Z};
 use crate::player_state::PlayerState;
 use crate::practice::{is_training_instance, resolve_respawn_pose};
@@ -3191,6 +3192,7 @@ fn apply_damage_to_npc_state(
         clear_statuses_for_target(ctx, target);
         clear_combat_engagement_for_identity(ctx, target);
         clear_combat_stacking_passive_runtime_for_identity(ctx, target);
+        create_corpse_loot_for_npc(ctx, target, source);
     }
 
     ctx.db.npc_state().identity().update(state);
@@ -3508,10 +3510,7 @@ fn apply_status_internal(
         return;
     }
 
-    let Some(state) = ctx.db.player_state().player_id().find(target) else {
-        return;
-    };
-    if !state.alive {
+    if !target_is_alive_for_status(ctx, target) {
         return;
     }
     if source != Identity::ZERO && !players_share_world_context(ctx, source, target) {
@@ -3634,6 +3633,24 @@ fn apply_status_internal(
     if kind == StatusEffectKind::Stagger {
         apply_stagger_status_side_effects(ctx, now, source, target);
     }
+}
+
+fn target_is_alive_for_status(ctx: &ReducerContext, target: Identity) -> bool {
+    if ctx
+        .db
+        .player_state()
+        .player_id()
+        .find(target)
+        .is_some_and(|state| state.alive)
+    {
+        return true;
+    }
+
+    ctx.db
+        .npc_state()
+        .identity()
+        .find(target)
+        .is_some_and(|state| state.alive)
 }
 
 fn apply_stagger_status_side_effects(
@@ -4336,14 +4353,7 @@ pub struct StatusRuntimeView {
 
 impl StatusRuntimeView {
     pub fn collect(ctx: &ReducerContext, now: Timestamp) -> Self {
-        let alive_targets: HashSet<Identity> = ctx
-            .db
-            .player_state()
-            .alive()
-            .filter(true)
-            .map(|state| state.player_id)
-            .collect();
-
+        let alive_targets = alive_status_target_identities(ctx);
         Self::from_status_effects(ctx.db.status_effect().iter(), &alive_targets, now)
     }
 
@@ -4597,13 +4607,7 @@ pub fn process_periodic_status_ticks(ctx: &ReducerContext, now: Timestamp) -> us
         return 0;
     }
     due_effects.sort_by_key(|effect| effect.status_id);
-    let alive_targets: HashSet<Identity> = ctx
-        .db
-        .player_state()
-        .alive()
-        .filter(true)
-        .map(|state| state.player_id)
-        .collect();
+    let alive_targets = alive_status_target_identities(ctx);
 
     let mut queued = Vec::new();
 
@@ -4671,6 +4675,24 @@ pub fn process_periodic_status_ticks(ctx: &ReducerContext, now: Timestamp) -> us
 
 pub fn movement_modifiers(ctx: &ReducerContext, now: Timestamp) -> MovementModifiers {
     StatusRuntimeView::collect(ctx, now).movement_modifiers()
+}
+
+fn alive_status_target_identities(ctx: &ReducerContext) -> HashSet<Identity> {
+    let mut alive_targets: HashSet<Identity> = ctx
+        .db
+        .player_state()
+        .alive()
+        .filter(true)
+        .map(|state| state.player_id)
+        .collect();
+    alive_targets.extend(
+        ctx.db
+            .npc_state()
+            .alive()
+            .filter(true)
+            .map(|state| state.identity),
+    );
+    alive_targets
 }
 
 fn stacked_slow_pct(slow_pct: f32, stacks: u32) -> f32 {
@@ -5470,6 +5492,33 @@ mod tests {
         assert!(view.has_status(alive, StatusEffectKind::Slow));
         assert!(!view.has_status(alive, StatusEffectKind::Root));
         assert!(!view.has_status(dead, StatusEffectKind::Stun));
+    }
+
+    #[test]
+    fn status_runtime_view_keeps_effects_for_any_alive_identity() {
+        let now = Timestamp::UNIX_EPOCH + Duration::from_secs(10);
+        let npc_identity = test_identity_number(42);
+
+        let view = status_runtime_view(
+            vec![test_status_effect(
+                npc_identity,
+                StatusPayload::Slow { slow_pct: 0.25 },
+                now,
+                now + Duration::from_secs(5),
+            )],
+            &[npc_identity],
+            now,
+        );
+
+        assert!(view.has_status(npc_identity, StatusEffectKind::Slow));
+        assert!(
+            (view
+                .movement_modifiers()
+                .move_speed_multiplier(&npc_identity, 0)
+                - 0.75)
+                .abs()
+                < 0.0001
+        );
     }
 
     #[test]

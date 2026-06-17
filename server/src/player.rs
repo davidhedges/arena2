@@ -22,6 +22,7 @@ use crate::appearance::ensure_default_character_appearance_for_identity;
 use crate::arena::player_world as _;
 use crate::arena::{ensure_player_open_world_scene, set_player_open_world};
 use crate::combat::new_player_spawn_state;
+use crate::inventory::ensure_player_inventory_for_identity;
 use crate::party::remove_player_from_party_state;
 use crate::playground_targets::despawn_all_playground_targets_for_owner;
 use crate::progression::{default_class_id, ensure_default_progression_for_identity};
@@ -65,6 +66,7 @@ pub fn client_connected(ctx: &ReducerContext) -> Result<(), String> {
         }
         ensure_default_progression_for_identity(ctx, identity)?;
         ensure_default_character_appearance_for_identity(ctx, identity)?;
+        ensure_player_inventory_for_identity(ctx, identity);
         sync_primary_resource_for_player(ctx, identity, now);
         log::info!(
             "[CONNECT] Player {} reconnected with existing actor rows",
@@ -100,6 +102,7 @@ pub fn client_connected(ctx: &ReducerContext) -> Result<(), String> {
     set_player_open_world(ctx, identity)?;
     ensure_default_progression_for_identity(ctx, identity)?;
     ensure_default_character_appearance_for_identity(ctx, identity)?;
+    ensure_player_inventory_for_identity(ctx, identity);
     sync_primary_resource_for_player(ctx, identity, now);
 
     log::info!(

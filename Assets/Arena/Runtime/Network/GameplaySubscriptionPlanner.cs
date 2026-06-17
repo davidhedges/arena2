@@ -97,6 +97,7 @@ namespace Arena.Network
                 BuildScopedMovementActionStateQuery(new QueryBuilder(), scope),
                 BuildScopedSpecialMovementRuntimeQuery(new QueryBuilder(), scope),
                 BuildScopedStatusEffectQuery(new QueryBuilder(), scope),
+                BuildScopedNpcStatusEffectQuery(new QueryBuilder(), scope),
                 BuildScopedCombatEventQuery(new QueryBuilder(), scope),
                 BuildScopedNpcCombatEventQuery(new QueryBuilder(), scope),
                 BuildScopedProjectilePresentationEventQuery(new QueryBuilder(), scope),
@@ -390,6 +391,28 @@ namespace Arena.Network
                     .RightSemijoin(qb.From.StatusEffect(), (world, effect) => world.Identity.Eq(effect.Target))
                     .ToSql(),
                 _ => throw new InvalidOperationException("Scoped status-effect query requested for GameplayScope.None"),
+            };
+        }
+
+        private static string BuildScopedNpcStatusEffectQuery(QueryBuilder qb, NetworkManager.GameplayScope scope)
+        {
+            return scope.Kind switch
+            {
+                NetworkManager.GameplayScopeKind.OpenWorld => qb
+                    .From
+                    .NpcInstance()
+                    .Where(c => c.WorldKind.Eq("OPEN"))
+                    .Where(c => c.OpenWorldSceneName.Eq(OpenWorldSceneName(scope)))
+                    .RightSemijoin(qb.From.StatusEffect(), (npc, effect) => npc.Identity.Eq(effect.Target))
+                    .ToSql(),
+                NetworkManager.GameplayScopeKind.Instance => qb
+                    .From
+                    .NpcInstance()
+                    .Where(c => c.WorldKind.Eq("INSTANCE"))
+                    .Where(c => c.InstanceId.Eq(scope.InstanceId.GetValueOrDefault()))
+                    .RightSemijoin(qb.From.StatusEffect(), (npc, effect) => npc.Identity.Eq(effect.Target))
+                    .ToSql(),
+                _ => throw new InvalidOperationException("Scoped NPC status-effect query requested for GameplayScope.None"),
             };
         }
 
