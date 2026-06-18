@@ -44,6 +44,7 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Col<AutoAttackCatalog, string> ModeId { get; }
         public global::SpacetimeDB.Col<AutoAttackCatalog, string> ActionId { get; }
         public global::SpacetimeDB.Col<AutoAttackCatalog, int> BaseDamage { get; }
+        public global::SpacetimeDB.Col<AutoAttackCatalog, string> DamageType { get; }
         public global::SpacetimeDB.Col<AutoAttackCatalog, float> Range { get; }
         public global::SpacetimeDB.Col<AutoAttackCatalog, ulong> CooldownMs { get; }
         public global::SpacetimeDB.Col<AutoAttackCatalog, string> MovementPolicy { get; }
@@ -61,6 +62,7 @@ namespace SpacetimeDB.Types
             ModeId = new global::SpacetimeDB.Col<AutoAttackCatalog, string>(tableName, "mode_id");
             ActionId = new global::SpacetimeDB.Col<AutoAttackCatalog, string>(tableName, "action_id");
             BaseDamage = new global::SpacetimeDB.Col<AutoAttackCatalog, int>(tableName, "base_damage");
+            DamageType = new global::SpacetimeDB.Col<AutoAttackCatalog, string>(tableName, "damage_type");
             Range = new global::SpacetimeDB.Col<AutoAttackCatalog, float>(tableName, "range");
             CooldownMs = new global::SpacetimeDB.Col<AutoAttackCatalog, ulong>(tableName, "cooldown_ms");
             MovementPolicy = new global::SpacetimeDB.Col<AutoAttackCatalog, string>(tableName, "movement_policy");

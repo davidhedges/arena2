@@ -21,6 +21,8 @@ namespace SpacetimeDB.Types
         public string AuthoredMeleeStrikeId;
         [DataMember(Name = "base_damage")]
         public int BaseDamage;
+        [DataMember(Name = "damage_type")]
+        public string DamageType;
         [DataMember(Name = "range")]
         public float Range;
         [DataMember(Name = "cooldown_ms")]
@@ -49,6 +51,7 @@ namespace SpacetimeDB.Types
             string CombatProfileId,
             string AuthoredMeleeStrikeId,
             int BaseDamage,
+            string DamageType,
             float Range,
             ulong CooldownMs,
             bool UsesGlobalCooldown,
@@ -66,6 +69,7 @@ namespace SpacetimeDB.Types
             this.CombatProfileId = CombatProfileId;
             this.AuthoredMeleeStrikeId = AuthoredMeleeStrikeId;
             this.BaseDamage = BaseDamage;
+            this.DamageType = DamageType;
             this.Range = Range;
             this.CooldownMs = CooldownMs;
             this.UsesGlobalCooldown = UsesGlobalCooldown;
@@ -84,6 +88,7 @@ namespace SpacetimeDB.Types
             this.ReplacementId = "";
             this.CombatProfileId = "";
             this.AuthoredMeleeStrikeId = "";
+            this.DamageType = "";
             this.ParryBehavior = "";
             this.BlockBehavior = "";
             this.AirborneTargetingMode = "";

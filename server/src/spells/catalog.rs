@@ -6,8 +6,8 @@ use serde::{de, Deserialize, Deserializer, Serialize};
 
 use crate::combat::scene_query::CombatAreaShape;
 use crate::combat::{
-    AuthoredStatusPayload, StackPolicy, StatusApplication, StatusDispelType, StatusEffectKind,
-    StatusPayload, StatusPolarity, StatusStackGroupDefault,
+    AuthoredStatusPayload, DamageType, StackPolicy, StatusApplication, StatusDispelType,
+    StatusEffectKind, StatusPayload, StatusPolarity, StatusStackGroupDefault,
 };
 use crate::progression::default_global_cooldown_ms;
 use crate::relations::{default_spell_target_audience, TargetAudience};
@@ -58,6 +58,8 @@ enum SpellCatalogDelivery {
         max_distance: f32,
         damage: i32,
         #[serde(default)]
+        damage_type: String,
+        #[serde(default)]
         spawn_forward: f32,
         #[serde(default)]
         spawn_height: f32,
@@ -86,6 +88,8 @@ enum SpellCatalogDelivery {
         #[serde(default)]
         damage: i32,
         #[serde(default)]
+        damage_type: String,
+        #[serde(default)]
         impact_delay_ms: u64,
         #[serde(default)]
         spawn_forward: f32,
@@ -108,6 +112,8 @@ enum SpellCatalogDelivery {
     InstantBeam {
         max_distance: f32,
         damage: i32,
+        #[serde(default)]
+        damage_type: String,
         block_behavior: BlockBehavior,
         #[serde(default)]
         charge_scaling: Option<InstantBeamChargeScalingRow>,
@@ -115,6 +121,8 @@ enum SpellCatalogDelivery {
     Channel {
         max_distance: f32,
         damage: i32,
+        #[serde(default)]
+        damage_type: String,
         update_interval_seconds: f32,
         duration_seconds: f32,
         block_behavior: BlockBehavior,
@@ -673,6 +681,7 @@ impl SpellCatalogRow {
             speed: 0.0,
             max_distance: 0.0,
             damage: 0,
+            damage_type: DamageType::Physical,
             spawn_forward: 0.0,
             spawn_height: 0.0,
             turn_rate: 0.0,
@@ -696,6 +705,7 @@ impl SpellCatalogRow {
                 speed,
                 max_distance,
                 damage,
+                damage_type,
                 spawn_forward,
                 spawn_height,
                 turn_rate,
@@ -710,6 +720,7 @@ impl SpellCatalogRow {
             } => {
                 definition.behavior = SpellBehavior::Projectile;
                 definition.damage = damage;
+                definition.damage_type = DamageType::from_wire(damage_type.as_str());
                 definition.spawn_forward = spawn_forward;
                 definition.spawn_height = spawn_height;
                 definition.turn_rate = turn_rate;
@@ -747,6 +758,7 @@ impl SpellCatalogRow {
                 speed,
                 max_distance,
                 damage,
+                damage_type,
                 impact_delay_ms,
                 spawn_forward,
                 spawn_height,
@@ -770,6 +782,7 @@ impl SpellCatalogRow {
                 definition.speed = speed;
                 definition.max_distance = max_distance;
                 definition.damage = damage;
+                definition.damage_type = DamageType::from_wire(damage_type.as_str());
                 definition.spawn_forward = spawn_forward;
                 definition.spawn_height = spawn_height;
                 definition.duration = duration_seconds;
@@ -786,12 +799,14 @@ impl SpellCatalogRow {
             SpellCatalogDelivery::InstantBeam {
                 max_distance,
                 damage,
+                damage_type,
                 block_behavior,
                 charge_scaling,
             } => {
                 definition.behavior = SpellBehavior::InstantBeam;
                 definition.max_distance = max_distance;
                 definition.damage = damage;
+                definition.damage_type = DamageType::from_wire(damage_type.as_str());
                 definition.block_behavior = block_behavior;
                 definition.secondary.instant_beam = Some(InstantBeamSecondaryTunables {
                     charge_scaling: charge_scaling.map(Into::into),
@@ -800,6 +815,7 @@ impl SpellCatalogRow {
             SpellCatalogDelivery::Channel {
                 max_distance,
                 damage,
+                damage_type,
                 update_interval_seconds,
                 duration_seconds,
                 block_behavior,
@@ -807,6 +823,7 @@ impl SpellCatalogRow {
                 definition.behavior = SpellBehavior::Channel;
                 definition.max_distance = max_distance;
                 definition.damage = damage;
+                definition.damage_type = DamageType::from_wire(damage_type.as_str());
                 definition.update_interval = update_interval_seconds;
                 definition.duration = duration_seconds;
                 definition.block_behavior = block_behavior;
@@ -2603,6 +2620,7 @@ mod tests {
             vec![StatusApplication::new(
                 StatusPayload::Dot {
                     tick_damage: 3,
+                    damage_type: DamageType::Physical,
                     tick_interval: Duration::from_secs(1),
                 },
                 Duration::from_secs(10),

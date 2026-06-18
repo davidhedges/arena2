@@ -5,8 +5,8 @@ use crate::combat::scene_query::CombatAreaShape;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::combat::{
-    AuthoredStatusPayload, StackPolicy, StatusApplication, StatusDispelType, StatusEffectKind,
-    StatusPayload, StatusPolarity,
+    AuthoredStatusPayload, DamageType, StackPolicy, StatusApplication, StatusDispelType,
+    StatusEffectKind, StatusPayload, StatusPolarity,
 };
 use crate::relations::TargetAudience;
 
@@ -228,6 +228,8 @@ pub(crate) struct ApplyStatusDefinition {
     #[serde(default)]
     pub tick_damage: i32,
     #[serde(default)]
+    pub damage_type: String,
+    #[serde(default)]
     pub tick_heal: i32,
     #[serde(default)]
     pub tick_interval_ms: u64,
@@ -243,7 +245,7 @@ pub(crate) struct ApplyStatusDefinition {
 
 impl ApplyStatusDefinition {
     pub(crate) fn authored_payload(&self) -> AuthoredStatusPayload {
-        AuthoredStatusPayload::new_with_absorb(
+        let mut payload = AuthoredStatusPayload::new_with_absorb(
             self.kind,
             self.slow_pct,
             self.tick_damage,
@@ -252,7 +254,9 @@ impl ApplyStatusDefinition {
             self.modifier_scalar,
             self.absorb_amount,
             self.absorb_cap,
-        )
+        );
+        payload.damage_type = DamageType::from_wire(self.damage_type.as_str());
+        payload
     }
 
     pub(crate) fn payload(&self) -> StatusPayload {
@@ -407,6 +411,7 @@ pub(crate) struct SpellDefinition {
     pub speed: f32,
     pub max_distance: f32,
     pub damage: i32,
+    pub damage_type: DamageType,
     pub spawn_forward: f32,
     pub spawn_height: f32,
     pub turn_rate: f32,

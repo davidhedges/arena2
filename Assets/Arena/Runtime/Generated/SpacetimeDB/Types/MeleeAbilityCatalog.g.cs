@@ -19,6 +19,8 @@ namespace SpacetimeDB.Types
         public string ActionId;
         [DataMember(Name = "base_damage")]
         public int BaseDamage;
+        [DataMember(Name = "damage_type")]
+        public string DamageType;
         [DataMember(Name = "applies_stagger")]
         public bool AppliesStagger;
         [DataMember(Name = "range")]
@@ -62,6 +64,7 @@ namespace SpacetimeDB.Types
             string AbilityId,
             string ActionId,
             int BaseDamage,
+            string DamageType,
             bool AppliesStagger,
             float Range,
             float MinimumRange,
@@ -86,6 +89,7 @@ namespace SpacetimeDB.Types
             this.AbilityId = AbilityId;
             this.ActionId = ActionId;
             this.BaseDamage = BaseDamage;
+            this.DamageType = DamageType;
             this.AppliesStagger = AppliesStagger;
             this.Range = Range;
             this.MinimumRange = MinimumRange;
@@ -111,6 +115,7 @@ namespace SpacetimeDB.Types
         {
             this.AbilityId = "";
             this.ActionId = "";
+            this.DamageType = "";
             this.ParryBehavior = "";
             this.BlockBehavior = "";
             this.AirborneTargetingMode = "";

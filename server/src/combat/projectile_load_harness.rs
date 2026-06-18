@@ -379,6 +379,7 @@ fn spawn_projectiles(
                 update_accum: 0.0,
                 update_interval_seconds: spec.update_interval_seconds,
                 damage: spec.damage,
+                damage_type: crate::combat::DamageType::Physical.as_str().to_string(),
                 parry_behavior: "PARRYABLE".to_string(),
                 block_behavior: "BLOCKABLE".to_string(),
                 grants_primary_resource_on_hit: false,

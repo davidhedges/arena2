@@ -339,6 +339,7 @@ namespace Arena.Combat
                 "WARRIOR" => Warrior,
                 "PALADIN" => Paladin,
                 "ARCHER" => Ranger,
+                "HUNTER" => Ranger,
                 _ => normalized,
             };
         }

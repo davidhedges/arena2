@@ -9,10 +9,10 @@ use spacetimedb::{reducer, table, Identity, ReducerContext, Table, Timestamp};
 use crate::action_ids::{normalize_authored_action_id, AuthoredActionId};
 use crate::appearance::sync_character_appearance_outfit_for_class;
 use crate::combat::{
-    AuthoredStatusPayload, StackPolicy, StatusApplication, StatusDispelType, StatusEffectKind,
-    StatusStackGroupDefault,
+    AuthoredStatusPayload, DamageType, StackPolicy, StatusApplication, StatusDispelType,
+    StatusEffectKind, StatusStackGroupDefault,
 };
-use crate::inventory::equipment_combat_profile_id_for_owner;
+use crate::inventory::{ensure_starter_equipment_for_class, equipment_combat_profile_id_for_owner};
 use crate::melee::sync_melee_attack_modifier_catalog;
 use crate::player::Player;
 use crate::relations::TARGET_AUDIENCE_HOSTILE;
@@ -264,6 +264,8 @@ struct AbilityDefinition {
 struct AbilityGameplayDefinition {
     kind: String,
     base_damage: Option<i32>,
+    #[serde(default)]
+    damage_type: Option<String>,
     applies_stagger: Option<bool>,
     range: Option<f32>,
     #[serde(default)]
@@ -328,6 +330,8 @@ struct MovementDeliveryDefinition {
     speed: f32,
     max_distance: f32,
     damage: i32,
+    #[serde(default)]
+    damage_type: String,
     radius: f32,
     block_behavior: String,
     #[serde(default)]
@@ -364,6 +368,8 @@ struct MovementDeliveryImpactStatusDefinition {
     #[serde(default)]
     tick_damage: i32,
     #[serde(default)]
+    damage_type: String,
+    #[serde(default)]
     tick_heal: i32,
     #[serde(default)]
     tick_interval_ms: u64,
@@ -398,6 +404,8 @@ struct MeleeImpactStatusDefinition {
     slow_pct: f32,
     #[serde(default)]
     tick_damage: i32,
+    #[serde(default)]
+    damage_type: String,
     #[serde(default)]
     tick_heal: i32,
     #[serde(default)]
@@ -500,6 +508,7 @@ fn status_application_from_definition(
         status.status_stack_group.clone(),
         status.slow_pct,
         status.tick_damage,
+        status.damage_type.as_str(),
         status.tick_heal,
         status.tick_interval_ms,
         status.modifier_scalar,
@@ -522,6 +531,7 @@ fn movement_status_application_from_definition(
         status.status_stack_group.clone(),
         status.slow_pct,
         status.tick_damage,
+        status.damage_type.as_str(),
         status.tick_heal,
         status.tick_interval_ms,
         status.modifier_scalar,
@@ -541,6 +551,7 @@ fn status_application_from_parts(
     status_stack_group: Option<String>,
     slow_pct: f32,
     tick_damage: i32,
+    damage_type: &str,
     tick_heal: i32,
     tick_interval_ms: u64,
     modifier_scalar: f32,
@@ -554,7 +565,7 @@ fn status_application_from_parts(
     let normalized = normalize_identifier(kind);
     let kind = StatusEffectKind::from_wire(normalized.as_str())
         .unwrap_or_else(|| panic!("unknown status kind '{kind}'"));
-    let payload = AuthoredStatusPayload::new_with_absorb(
+    let mut authored = AuthoredStatusPayload::new_with_absorb(
         kind,
         slow_pct,
         tick_damage,
@@ -563,8 +574,9 @@ fn status_application_from_parts(
         modifier_scalar,
         absorb_amount,
         absorb_cap,
-    )
-    .payload();
+    );
+    authored.damage_type = DamageType::from_wire(damage_type);
+    let payload = authored.payload();
     StatusApplication::new(
         payload,
         Duration::from_millis(duration_ms),
@@ -619,6 +631,7 @@ pub(crate) struct MovementDeliveryRuntime {
     pub speed: f32,
     pub max_distance: f32,
     pub damage: i32,
+    pub damage_type: String,
     pub radius: f32,
     pub block_behavior: String,
     pub parry_behavior: String,
@@ -705,6 +718,8 @@ struct AutoAttackDefinition {
     mode_id: String,
     action_id: String,
     base_damage: i32,
+    #[serde(default)]
+    damage_type: String,
     range: f32,
     cooldown_ms: u64,
     #[serde(default = "default_auto_attack_movement_policy")]
@@ -729,6 +744,8 @@ struct AutoAttackReplacementDefinition {
     combat_profile_id: String,
     authored_melee_strike_id: String,
     base_damage: i32,
+    #[serde(default)]
+    damage_type: String,
     range: f32,
     cooldown_ms: u64,
     uses_global_cooldown: bool,
@@ -1177,6 +1194,7 @@ pub struct MeleeAbilityCatalog {
     pub ability_id: String,
     pub action_id: String,
     pub base_damage: i32,
+    pub damage_type: String,
     pub applies_stagger: bool,
     pub range: f32,
     pub minimum_range: f32,
@@ -1221,6 +1239,7 @@ pub struct AutoAttackCatalog {
     pub mode_id: String,
     pub action_id: String,
     pub base_damage: i32,
+    pub damage_type: String,
     pub range: f32,
     pub cooldown_ms: u64,
     pub movement_policy: String,
@@ -1239,6 +1258,7 @@ pub struct AutoAttackReplacementCatalog {
     pub combat_profile_id: String,
     pub authored_melee_strike_id: String,
     pub base_damage: i32,
+    pub damage_type: String,
     pub range: f32,
     pub cooldown_ms: u64,
     pub uses_global_cooldown: bool,
@@ -1672,6 +1692,7 @@ pub fn switch_loadout_class(ctx: &ReducerContext, class_id: String) -> Result<()
         }
     }
 
+    ensure_starter_equipment_for_class(ctx, owner, normalized_class_id.as_str());
     sync_character_appearance_outfit_for_class(ctx, owner, normalized_class_id.as_str())?;
     normalize_active_combat_mode_for_profile(
         ctx,
@@ -2310,6 +2331,7 @@ fn movement_delivery_runtime_from_definition(
         speed: movement.speed,
         max_distance: movement.max_distance,
         damage: movement.damage,
+        damage_type: normalize_damage_type(movement.damage_type.as_str()),
         radius: movement.radius,
         block_behavior: normalize_identifier(movement.block_behavior.as_str()),
         parry_behavior: normalize_identifier(movement.parry_behavior.as_str()),
@@ -2787,6 +2809,13 @@ fn sync_melee_ability_catalog(ctx: &ReducerContext) {
                 &ability_id,
                 "base_damage",
             ),
+            damage_type: normalize_damage_type(
+                definition
+                    .gameplay
+                    .damage_type
+                    .as_deref()
+                    .unwrap_or("PHYSICAL"),
+            ),
             applies_stagger: required_melee_field(
                 definition.gameplay.applies_stagger,
                 &ability_id,
@@ -2995,6 +3024,7 @@ fn sync_auto_attack_catalog(ctx: &ReducerContext) {
             mode_id: normalize_identifier(definition.mode_id.as_str()),
             action_id: AuthoredActionId::new(definition.action_id.as_str()).into_string(),
             base_damage: definition.base_damage,
+            damage_type: normalize_damage_type(definition.damage_type.as_str()),
             range: definition.range,
             cooldown_ms: definition.cooldown_ms,
             movement_policy: normalize_identifier(definition.movement_policy.as_str()),
@@ -3052,6 +3082,7 @@ fn sync_auto_attack_replacement_catalog(ctx: &ReducerContext) {
             )
             .into_string(),
             base_damage: definition.base_damage,
+            damage_type: normalize_damage_type(definition.damage_type.as_str()),
             range: definition.range,
             cooldown_ms: definition.cooldown_ms,
             uses_global_cooldown: definition.uses_global_cooldown,
@@ -3540,6 +3571,7 @@ fn canonical_class_id(value: &str) -> String {
         "WARRIOR" => return "WARRIOR".to_string(),
         "PALADIN" => return "PALADIN".to_string(),
         "ARCHER" => return "RANGER".to_string(),
+        "HUNTER" => return "RANGER".to_string(),
         _ => {}
     }
     if progression_catalog()
@@ -4866,6 +4898,10 @@ fn combat_vfx_cue_key(definition: &CombatVfxCueDefinition) -> String {
 
 fn normalize_identifier(value: &str) -> String {
     normalize_authored_action_id(value)
+}
+
+fn normalize_damage_type(value: &str) -> String {
+    DamageType::from_wire(value).as_str().to_string()
 }
 
 fn normalize_optional_target_audience(value: &str) -> String {
@@ -7319,6 +7355,7 @@ mod tests {
                 .payload(),
             StatusPayload::Dot {
                 tick_damage: 4,
+                damage_type: crate::combat::DamageType::Physical,
                 tick_interval: Duration::from_secs(1),
             }
         );

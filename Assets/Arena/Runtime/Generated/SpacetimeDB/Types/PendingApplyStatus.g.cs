@@ -33,6 +33,8 @@ namespace SpacetimeDB.Types
         public int StatusTickAmount;
         [DataMember(Name = "status_tick_interval_ms")]
         public ulong StatusTickIntervalMs;
+        [DataMember(Name = "status_damage_type")]
+        public string StatusDamageType;
         [DataMember(Name = "status_modifier_scalar")]
         public float StatusModifierScalar;
         [DataMember(Name = "status_absorb_amount")]
@@ -67,6 +69,7 @@ namespace SpacetimeDB.Types
             float StatusSlowPct,
             int StatusTickAmount,
             ulong StatusTickIntervalMs,
+            string StatusDamageType,
             float StatusModifierScalar,
             int StatusAbsorbAmount,
             int StatusAbsorbCap,
@@ -90,6 +93,7 @@ namespace SpacetimeDB.Types
             this.StatusSlowPct = StatusSlowPct;
             this.StatusTickAmount = StatusTickAmount;
             this.StatusTickIntervalMs = StatusTickIntervalMs;
+            this.StatusDamageType = StatusDamageType;
             this.StatusModifierScalar = StatusModifierScalar;
             this.StatusAbsorbAmount = StatusAbsorbAmount;
             this.StatusAbsorbCap = StatusAbsorbCap;
@@ -108,6 +112,7 @@ namespace SpacetimeDB.Types
             this.SpellId = "";
             this.StatusKind = "";
             this.StatusPolarity = "";
+            this.StatusDamageType = "";
             this.DispelTypes = "";
             this.StackGroup = "";
             this.StackPolicy = "";

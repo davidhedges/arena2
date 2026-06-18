@@ -16,6 +16,7 @@ namespace Arena.Presentation.Appearance
         [SerializeField] private AvatarPartCatalog? partCatalog;
         [SerializeField] private OutfitCatalog? outfitCatalog;
         [SerializeField] private ClassOutfitCatalog? classOutfitCatalog;
+        [SerializeField] private EquipmentAppearanceCatalog? equipmentAppearanceCatalog;
 
         private GameObject? _currentAvatar;
 
@@ -116,7 +117,7 @@ namespace Arena.Presentation.Appearance
                 ApplyPart(catalogs.PartCatalog, nhAvatar, AvatarPartSlot.Face, selection.faceId, selection.raceId, selection.sexId);
                 ApplyPart(catalogs.PartCatalog, nhAvatar, AvatarPartSlot.Hair, selection.hairId, selection.raceId, selection.sexId);
                 ApplyPart(catalogs.PartCatalog, nhAvatar, AvatarPartSlot.Eyes, selection.eyesId, selection.raceId, selection.sexId);
-                ApplyOutfit(catalogs.OutfitCatalog, nhAvatar, selection.outfitId, equippedArmorBySlot);
+                ApplyOutfit(catalogs, nhAvatar, selection, equippedArmorBySlot);
                 nhAvatar.Compile();
                 EnsureArenaWeaponMounts(instance, nhAvatar);
                 CombatAnimationEventReceiver.EnsureOn(ResolveAnimator(instance));
@@ -177,7 +178,7 @@ namespace Arena.Presentation.Appearance
                 ApplyPart(catalogs.PartCatalog, nhAvatar, AvatarPartSlot.Face, selection.faceId, selection.raceId, selection.sexId);
                 ApplyPart(catalogs.PartCatalog, nhAvatar, AvatarPartSlot.Hair, selection.hairId, selection.raceId, selection.sexId);
                 ApplyPart(catalogs.PartCatalog, nhAvatar, AvatarPartSlot.Eyes, selection.eyesId, selection.raceId, selection.sexId);
-                ApplyOutfit(catalogs.OutfitCatalog, nhAvatar, selection.outfitId, equippedArmorBySlot);
+                ApplyOutfit(catalogs, nhAvatar, selection, equippedArmorBySlot);
                 nhAvatar.Compile();
                 EnsureArenaWeaponMounts(instance, nhAvatar);
                 CombatAnimationEventReceiver.EnsureOn(ResolveAnimator(instance));
@@ -196,7 +197,12 @@ namespace Arena.Presentation.Appearance
         {
             if (baseCatalog != null && partCatalog != null && outfitCatalog != null && classOutfitCatalog != null)
             {
-                catalogs = new CharacterAppearanceCatalogSet(baseCatalog, partCatalog, outfitCatalog, classOutfitCatalog);
+                catalogs = new CharacterAppearanceCatalogSet(
+                    baseCatalog,
+                    partCatalog,
+                    outfitCatalog,
+                    classOutfitCatalog,
+                    equipmentAppearanceCatalog);
                 error = string.Empty;
                 return true;
             }
@@ -222,50 +228,106 @@ namespace Arena.Presentation.Appearance
         }
 
         private static void ApplyOutfit(
-            OutfitCatalog catalog,
+            CharacterAppearanceCatalogSet catalogs,
             NHAvatar avatar,
-            string outfitId,
+            CharacterAppearanceSelection selection,
             IReadOnlyDictionary<string, string>? equippedArmorBySlot)
         {
-            if (string.IsNullOrWhiteSpace(outfitId))
+            if (string.IsNullOrWhiteSpace(selection.outfitId))
                 return;
 
-            if (!catalog.TryGetOutfit(outfitId, out OutfitCatalog.Entry outfit))
-                throw new InvalidOperationException($"Outfit '{outfitId}' is not available.");
+            if (!catalogs.OutfitCatalog.TryGetOutfit(selection.outfitId, out OutfitCatalog.Entry outfit))
+                throw new InvalidOperationException($"Outfit '{selection.outfitId}' is not available.");
 
+            var explicitlyAppliedSlots = new HashSet<string>(StringComparer.Ordinal);
             for (int i = 0; i < outfit.items.Count; i++)
             {
                 OutfitCatalog.OutfitItem slot = outfit.items[i];
                 if (slot == null || slot.item == null)
                     continue;
-                if (equippedArmorBySlot != null && !ShouldApplyOutfitItem(slot.expectedItemType, equippedArmorBySlot))
-                    continue;
 
-                if (slot.item.Type != slot.expectedItemType)
+                if (!TryGetEquipmentSlotForItemType(slot.expectedItemType, out string equipSlot))
                 {
-                    throw new InvalidOperationException(
-                        $"Outfit '{outfitId}' expected item type {slot.expectedItemType} but found {slot.item.Type} on '{slot.item.name}'.");
+                    if (equippedArmorBySlot == null)
+                        ApplyValidatedOutfitItem(avatar, slot, selection.outfitId);
+                    continue;
                 }
 
-                avatar.SetItem(slot.item);
+                if (equippedArmorBySlot != null)
+                {
+                    if (!equippedArmorBySlot.TryGetValue(equipSlot, out string itemDefId))
+                        continue;
+
+                    if (!explicitlyAppliedSlots.Add(equipSlot))
+                        continue;
+
+                    if (catalogs.EquipmentAppearanceCatalog != null
+                        && catalogs.EquipmentAppearanceCatalog.TryGetItems(
+                            itemDefId,
+                            equipSlot,
+                            selection.raceId,
+                            selection.sexId,
+                            out EquipmentAppearanceCatalog.Entry equipmentEntry))
+                    {
+                        ApplyEquipmentEntry(avatar, equipmentEntry);
+                    }
+
+                    continue;
+                }
+
+                ApplyValidatedOutfitItem(avatar, slot, selection.outfitId);
             }
         }
 
-        private static bool ShouldApplyOutfitItem(
-            ItemTypeEnum itemType,
-            IReadOnlyDictionary<string, string> equippedArmorBySlot)
+        private static bool TryGetEquipmentSlotForItemType(ItemTypeEnum itemType, out string equipSlot)
         {
-            return itemType switch
+            equipSlot = itemType switch
             {
-                ItemTypeEnum.Helmet => equippedArmorBySlot.ContainsKey("HEAD"),
-                ItemTypeEnum.Shoulders => equippedArmorBySlot.ContainsKey("SHOULDER"),
-                ItemTypeEnum.Cape => equippedArmorBySlot.ContainsKey("CAPE"),
-                ItemTypeEnum.ChestSkin or ItemTypeEnum.Chest => equippedArmorBySlot.ContainsKey("CHEST"),
-                ItemTypeEnum.PantsSkin or ItemTypeEnum.Pants => equippedArmorBySlot.ContainsKey("LEGS"),
-                ItemTypeEnum.Boots => equippedArmorBySlot.ContainsKey("BOOTS"),
-                ItemTypeEnum.GlovesSkin or ItemTypeEnum.Gloves => equippedArmorBySlot.ContainsKey("GLOVES"),
-                _ => false,
+                ItemTypeEnum.Helmet => "HEAD",
+                ItemTypeEnum.Shoulders => "SHOULDER",
+                ItemTypeEnum.Cape => "CAPE",
+                ItemTypeEnum.ChestSkin or ItemTypeEnum.Chest => "CHEST",
+                ItemTypeEnum.PantsSkin or ItemTypeEnum.Pants => "LEGS",
+                ItemTypeEnum.Boots => "BOOTS",
+                ItemTypeEnum.GlovesSkin or ItemTypeEnum.Gloves => "GLOVES",
+                _ => string.Empty,
             };
+            return !string.IsNullOrWhiteSpace(equipSlot);
+        }
+
+        private static void ApplyEquipmentEntry(NHAvatar avatar, EquipmentAppearanceCatalog.Entry entry)
+        {
+            for (int i = 0; i < entry.items.Count; i++)
+            {
+                EquipmentAppearanceCatalog.EquipmentItem item = entry.items[i];
+                if (item == null || item.item == null)
+                    continue;
+
+                if (item.item.Type != item.expectedItemType)
+                {
+                    throw new InvalidOperationException(
+                        $"Equipment visual '{entry.itemDefId}' expected item type {item.expectedItemType} but found {item.item.Type} on '{item.item.name}'.");
+                }
+
+                avatar.SetItem(item.item);
+            }
+        }
+
+        private static void ApplyValidatedOutfitItem(
+            NHAvatar avatar,
+            OutfitCatalog.OutfitItem slot,
+            string outfitId)
+        {
+            if (slot.item == null)
+                return;
+
+            if (slot.item.Type != slot.expectedItemType)
+            {
+                throw new InvalidOperationException(
+                    $"Outfit '{outfitId}' expected item type {slot.expectedItemType} but found {slot.item.Type} on '{slot.item.name}'.");
+            }
+
+            avatar.SetItem(slot.item);
         }
 
         private static void EnsureArenaWeaponMounts(GameObject instance, NHAvatar nhAvatar)

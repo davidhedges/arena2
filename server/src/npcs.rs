@@ -652,6 +652,7 @@ fn perform_npc_melee_attack(
         ctx,
         vec![EffectPacket::Damage {
             amount: template.attack_damage,
+            damage_type: crate::combat::DamageType::Physical,
             source: npc.identity,
             target: target.identity,
             spell_id: action_instance_id,

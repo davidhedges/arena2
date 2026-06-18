@@ -27,6 +27,7 @@ pub(crate) const CONTAINER_KIND_CORPSE: &str = "CORPSE";
 pub(crate) const CONTAINER_KIND_CHEST: &str = "CHEST";
 
 const CONTAINER_STATE_ACTIVE: &str = "ACTIVE";
+const MAX_EQUIPMENT_PHYSICAL_RESISTANCE: f32 = 0.75;
 const PLAYER_BAG_WIDTH: u32 = 10;
 const PLAYER_BAG_HEIGHT: u32 = 4;
 const CORPSE_CONTAINER_WIDTH: u32 = 4;
@@ -81,6 +82,7 @@ pub struct ItemDefinition {
     pub hand_requirement: String,
     pub unique_equipped: bool,
     pub combat_profile_id: String,
+    pub physical_resistance: f32,
 }
 
 #[table(accessor = item_instance, public)]
@@ -183,6 +185,7 @@ struct ItemDefinitionSpec {
     hand_requirement: &'static str,
     unique_equipped: bool,
     combat_profile_id: &'static str,
+    physical_resistance: f32,
 }
 
 #[derive(Clone, Copy)]
@@ -191,7 +194,7 @@ struct StarterEquipmentSpec {
     item_def_id: &'static str,
 }
 
-const STARTER_ARMOR_EQUIPMENT: &[StarterEquipmentSpec] = &[
+const WARRIOR_STARTER_ARMOR: &[StarterEquipmentSpec] = &[
     starter_equipment(EQUIP_SLOT_HEAD, "IRON_HELM"),
     starter_equipment(EQUIP_SLOT_SHOULDER, "IRON_SHOULDERS"),
     starter_equipment(EQUIP_SLOT_CAPE, "TRAVELER_CAPE"),
@@ -199,6 +202,26 @@ const STARTER_ARMOR_EQUIPMENT: &[StarterEquipmentSpec] = &[
     starter_equipment(EQUIP_SLOT_LEGS, "IRON_LEGGINGS"),
     starter_equipment(EQUIP_SLOT_BOOTS, "IRON_BOOTS"),
     starter_equipment(EQUIP_SLOT_GLOVES, "IRON_GLOVES"),
+];
+
+const PALADIN_STARTER_ARMOR: &[StarterEquipmentSpec] = &[
+    starter_equipment(EQUIP_SLOT_HEAD, "GILDED_HELM"),
+    starter_equipment(EQUIP_SLOT_SHOULDER, "GILDED_SHOULDERS"),
+    starter_equipment(EQUIP_SLOT_CAPE, "GILDED_CAPE"),
+    starter_equipment(EQUIP_SLOT_CHEST, "GILDED_CHESTPLATE"),
+    starter_equipment(EQUIP_SLOT_LEGS, "GILDED_LEGGINGS"),
+    starter_equipment(EQUIP_SLOT_BOOTS, "GILDED_BOOTS"),
+    starter_equipment(EQUIP_SLOT_GLOVES, "GILDED_GLOVES"),
+];
+
+const RANGER_STARTER_ARMOR: &[StarterEquipmentSpec] = &[
+    starter_equipment(EQUIP_SLOT_HEAD, "LEATHER_HELM"),
+    starter_equipment(EQUIP_SLOT_SHOULDER, "LEATHER_SHOULDERS"),
+    starter_equipment(EQUIP_SLOT_CAPE, "LEATHER_CAPE"),
+    starter_equipment(EQUIP_SLOT_CHEST, "LEATHER_CHESTPIECE"),
+    starter_equipment(EQUIP_SLOT_LEGS, "LEATHER_LEGGINGS"),
+    starter_equipment(EQUIP_SLOT_BOOTS, "LEATHER_BOOTS"),
+    starter_equipment(EQUIP_SLOT_GLOVES, "LEATHER_GLOVES"),
 ];
 
 const WARRIOR_STARTER_WEAPONS: &[StarterEquipmentSpec] = &[starter_equipment(
@@ -215,13 +238,62 @@ const RANGER_STARTER_WEAPONS: &[StarterEquipmentSpec] =
     &[starter_equipment(EQUIP_SLOT_MAIN_HAND, "TRAINING_BOW")];
 
 const STARTER_ITEM_DEFINITIONS: &[ItemDefinitionSpec] = &[
-    armor("IRON_HELM", "Iron Helm", EQUIP_SLOT_HEAD),
-    armor("IRON_SHOULDERS", "Iron Shoulders", EQUIP_SLOT_SHOULDER),
-    armor("TRAVELER_CAPE", "Traveler Cape", EQUIP_SLOT_CAPE),
-    armor("IRON_CHESTPLATE", "Iron Chestplate", EQUIP_SLOT_CHEST),
-    armor("IRON_LEGGINGS", "Iron Leggings", EQUIP_SLOT_LEGS),
-    armor("IRON_BOOTS", "Iron Boots", EQUIP_SLOT_BOOTS),
-    armor("IRON_GLOVES", "Iron Gloves", EQUIP_SLOT_GLOVES),
+    armor("IRON_HELM", "Iron Helm", EQUIP_SLOT_HEAD, 0.020),
+    armor(
+        "IRON_SHOULDERS",
+        "Iron Shoulders",
+        EQUIP_SLOT_SHOULDER,
+        0.030,
+    ),
+    armor("TRAVELER_CAPE", "Traveler Cape", EQUIP_SLOT_CAPE, 0.005),
+    armor(
+        "IRON_CHESTPLATE",
+        "Iron Chestplate",
+        EQUIP_SLOT_CHEST,
+        0.060,
+    ),
+    armor("IRON_LEGGINGS", "Iron Leggings", EQUIP_SLOT_LEGS, 0.040),
+    armor("IRON_BOOTS", "Iron Boots", EQUIP_SLOT_BOOTS, 0.020),
+    armor("IRON_GLOVES", "Iron Gloves", EQUIP_SLOT_GLOVES, 0.020),
+    armor("GILDED_HELM", "Gilded Helm", EQUIP_SLOT_HEAD, 0.025),
+    armor(
+        "GILDED_SHOULDERS",
+        "Gilded Shoulders",
+        EQUIP_SLOT_SHOULDER,
+        0.035,
+    ),
+    armor("GILDED_CAPE", "Gilded Cape", EQUIP_SLOT_CAPE, 0.010),
+    armor(
+        "GILDED_CHESTPLATE",
+        "Gilded Chestplate",
+        EQUIP_SLOT_CHEST,
+        0.070,
+    ),
+    armor("GILDED_LEGGINGS", "Gilded Leggings", EQUIP_SLOT_LEGS, 0.045),
+    armor("GILDED_BOOTS", "Gilded Boots", EQUIP_SLOT_BOOTS, 0.025),
+    armor("GILDED_GLOVES", "Gilded Gloves", EQUIP_SLOT_GLOVES, 0.025),
+    armor("LEATHER_HELM", "Leather Helm", EQUIP_SLOT_HEAD, 0.010),
+    armor(
+        "LEATHER_SHOULDERS",
+        "Leather Shoulders",
+        EQUIP_SLOT_SHOULDER,
+        0.015,
+    ),
+    armor("LEATHER_CAPE", "Leather Cape", EQUIP_SLOT_CAPE, 0.005),
+    armor(
+        "LEATHER_CHESTPIECE",
+        "Leather Chestpiece",
+        EQUIP_SLOT_CHEST,
+        0.035,
+    ),
+    armor(
+        "LEATHER_LEGGINGS",
+        "Leather Leggings",
+        EQUIP_SLOT_LEGS,
+        0.025,
+    ),
+    armor("LEATHER_BOOTS", "Leather Boots", EQUIP_SLOT_BOOTS, 0.010),
+    armor("LEATHER_GLOVES", "Leather Gloves", EQUIP_SLOT_GLOVES, 0.010),
     jewelry("BRONZE_RING", "Bronze Ring", EQUIP_SLOT_RING, true),
     jewelry("IRON_RING", "Iron Ring", EQUIP_SLOT_RING, true),
     jewelry("BRONZE_AMULET", "Bronze Amulet", EQUIP_SLOT_AMULET, false),
@@ -274,6 +346,7 @@ const STARTER_ITEM_DEFINITIONS: &[ItemDefinitionSpec] = &[
         hand_requirement: HAND_REQUIREMENT_NONE,
         unique_equipped: false,
         combat_profile_id: "",
+        physical_resistance: 0.0,
     },
 ];
 
@@ -281,6 +354,7 @@ const fn armor(
     item_def_id: &'static str,
     display_name: &'static str,
     equip_slot: &'static str,
+    physical_resistance: f32,
 ) -> ItemDefinitionSpec {
     ItemDefinitionSpec {
         item_def_id,
@@ -296,6 +370,7 @@ const fn armor(
         hand_requirement: HAND_REQUIREMENT_NONE,
         unique_equipped: false,
         combat_profile_id: "",
+        physical_resistance,
     }
 }
 
@@ -319,6 +394,7 @@ const fn jewelry(
         hand_requirement: HAND_REQUIREMENT_NONE,
         unique_equipped,
         combat_profile_id: "",
+        physical_resistance: 0.0,
     }
 }
 
@@ -343,6 +419,7 @@ const fn weapon(
         hand_requirement,
         unique_equipped: false,
         combat_profile_id,
+        physical_resistance: 0.0,
     }
 }
 
@@ -775,6 +852,9 @@ pub(crate) fn sync_item_definitions(ctx: &ReducerContext) {
             hand_requirement: normalize_id(spec.hand_requirement),
             unique_equipped: spec.unique_equipped,
             combat_profile_id: normalize_id(spec.combat_profile_id),
+            physical_resistance: spec
+                .physical_resistance
+                .clamp(0.0, MAX_EQUIPMENT_PHYSICAL_RESISTANCE),
         };
         if ctx
             .db
@@ -795,8 +875,22 @@ pub(crate) fn ensure_player_inventory_for_identity(ctx: &ReducerContext, owner: 
     ensure_player_bag(ctx, owner);
     let (equipment, created) = ensure_equipment_loadout(ctx, owner);
     if created {
-        seed_starter_equipment(ctx, owner, equipment);
+        if let Some(class_id) = runtime_class_id_for_owner(ctx, owner) {
+            seed_starter_equipment_for_class(ctx, owner, equipment, class_id.as_str(), true, true);
+        }
     }
+    sync_active_combat_mode_for_owner(ctx, owner, ctx.timestamp);
+}
+
+pub(crate) fn ensure_starter_equipment_for_class(
+    ctx: &ReducerContext,
+    owner: Identity,
+    class_id: &str,
+) {
+    sync_item_definitions(ctx);
+    ensure_player_bag(ctx, owner);
+    let (equipment, _) = ensure_equipment_loadout(ctx, owner);
+    seed_starter_equipment_for_class(ctx, owner, equipment, class_id, true, true);
     sync_active_combat_mode_for_owner(ctx, owner, ctx.timestamp);
 }
 
@@ -963,6 +1057,18 @@ pub(crate) fn equipment_combat_profile_id_for_owner(
     None
 }
 
+pub(crate) fn physical_resistance_for_owner(ctx: &ReducerContext, owner: Identity) -> f32 {
+    let Some(equipment) = ctx.db.equipment_loadout().owner().find(owner) else {
+        return 0.0;
+    };
+
+    equipment_item_ids(&equipment)
+        .filter_map(|item_id| item_definition_for_instance(ctx, item_id))
+        .map(|definition| definition.physical_resistance.max(0.0))
+        .sum::<f32>()
+        .clamp(0.0, MAX_EQUIPMENT_PHYSICAL_RESISTANCE)
+}
+
 fn ensure_player_bag(ctx: &ReducerContext, owner: Identity) -> InventoryContainer {
     let container_id = player_bag_container_id(owner);
     if let Some(container) = ctx
@@ -1024,11 +1130,29 @@ fn ensure_equipment_loadout(ctx: &ReducerContext, owner: Identity) -> (Equipment
     (loadout, true)
 }
 
-fn seed_starter_equipment(ctx: &ReducerContext, owner: Identity, mut equipment: EquipmentLoadout) {
-    let class_id = runtime_class_id_for_owner(ctx, owner).unwrap_or_else(|| "WARRIOR".to_string());
-    for spec in STARTER_ARMOR_EQUIPMENT
+fn seed_starter_equipment_for_class(
+    ctx: &ReducerContext,
+    owner: Identity,
+    mut equipment: EquipmentLoadout,
+    class_id: &str,
+    seed_armor: bool,
+    reconcile_starter_weapons: bool,
+) {
+    if seed_armor {
+        clear_equipped_starter_armor(ctx, &mut equipment);
+    }
+    if reconcile_starter_weapons && equipment_weapon_slots_are_empty_or_starter(ctx, &equipment) {
+        clear_equipped_starter_weapons(ctx, &mut equipment);
+    }
+
+    let armor_specs: &[StarterEquipmentSpec] = if seed_armor {
+        starter_armor_equipment_for_class(class_id)
+    } else {
+        &[]
+    };
+    for spec in armor_specs
         .iter()
-        .chain(starter_weapon_equipment_for_class(class_id.as_str()).iter())
+        .chain(starter_weapon_equipment_for_class(class_id).iter())
     {
         if equipment_item_at_slot(&equipment, spec.slot_id).is_some() {
             continue;
@@ -1074,10 +1198,120 @@ fn seed_starter_equipment(ctx: &ReducerContext, owner: Identity, mut equipment: 
     ctx.db.equipment_loadout().owner().update(equipment);
 }
 
+fn equipment_weapon_slots_are_empty_or_starter(
+    ctx: &ReducerContext,
+    equipment: &EquipmentLoadout,
+) -> bool {
+    [
+        equipment.main_hand_item_id.as_ref(),
+        equipment.off_hand_item_id.as_ref(),
+    ]
+    .iter()
+    .all(|item_id| {
+        item_id
+            .as_deref()
+            .and_then(|item_id| item_definition_for_instance(ctx, item_id))
+            .map(|definition| is_starter_weapon_definition_id(definition.item_def_id.as_str()))
+            .unwrap_or(true)
+    })
+}
+
+fn clear_equipped_starter_armor(ctx: &ReducerContext, equipment: &mut EquipmentLoadout) {
+    for slot_id in [
+        EQUIP_SLOT_HEAD,
+        EQUIP_SLOT_SHOULDER,
+        EQUIP_SLOT_CAPE,
+        EQUIP_SLOT_CHEST,
+        EQUIP_SLOT_LEGS,
+        EQUIP_SLOT_BOOTS,
+        EQUIP_SLOT_GLOVES,
+    ] {
+        let Some(item_instance_id) = equipment_item_at_slot(equipment, slot_id).cloned() else {
+            continue;
+        };
+        let should_clear = item_definition_for_instance(ctx, item_instance_id.as_str())
+            .map(|definition| is_starter_armor_definition_id(definition.item_def_id.as_str()))
+            .unwrap_or(false);
+        if !should_clear {
+            continue;
+        }
+
+        if let Some(slot) = ctx
+            .db
+            .inventory_slot()
+            .item_instance_id()
+            .filter(item_instance_id.as_str())
+            .next()
+        {
+            ctx.db.inventory_slot().key().delete(slot.key);
+        }
+        ctx.db
+            .item_instance()
+            .item_instance_id()
+            .delete(item_instance_id);
+        let _ = set_equipment_slot(equipment, slot_id, None);
+    }
+}
+
+fn clear_equipped_starter_weapons(ctx: &ReducerContext, equipment: &mut EquipmentLoadout) {
+    for slot_id in [EQUIP_SLOT_MAIN_HAND, EQUIP_SLOT_OFF_HAND] {
+        let Some(item_instance_id) = equipment_item_at_slot(equipment, slot_id).cloned() else {
+            continue;
+        };
+        let should_clear = item_definition_for_instance(ctx, item_instance_id.as_str())
+            .map(|definition| is_starter_weapon_definition_id(definition.item_def_id.as_str()))
+            .unwrap_or(false);
+        if !should_clear {
+            continue;
+        }
+
+        if let Some(slot) = ctx
+            .db
+            .inventory_slot()
+            .item_instance_id()
+            .filter(item_instance_id.as_str())
+            .next()
+        {
+            ctx.db.inventory_slot().key().delete(slot.key);
+        }
+        ctx.db
+            .item_instance()
+            .item_instance_id()
+            .delete(item_instance_id);
+        let _ = set_equipment_slot(equipment, slot_id, None);
+    }
+}
+
+fn is_starter_armor_definition_id(item_def_id: &str) -> bool {
+    let normalized = normalize_id(item_def_id);
+    WARRIOR_STARTER_ARMOR
+        .iter()
+        .chain(PALADIN_STARTER_ARMOR.iter())
+        .chain(RANGER_STARTER_ARMOR.iter())
+        .any(|spec| spec.item_def_id == normalized.as_str())
+}
+
+fn is_starter_weapon_definition_id(item_def_id: &str) -> bool {
+    let normalized = normalize_id(item_def_id);
+    WARRIOR_STARTER_WEAPONS
+        .iter()
+        .chain(PALADIN_STARTER_WEAPONS.iter())
+        .chain(RANGER_STARTER_WEAPONS.iter())
+        .any(|spec| spec.item_def_id == normalized.as_str())
+}
+
+fn starter_armor_equipment_for_class(class_id: &str) -> &'static [StarterEquipmentSpec] {
+    match normalize_id(class_id).as_str() {
+        "PALADIN" => PALADIN_STARTER_ARMOR,
+        "RANGER" | "HUNTER" => RANGER_STARTER_ARMOR,
+        _ => WARRIOR_STARTER_ARMOR,
+    }
+}
+
 fn starter_weapon_equipment_for_class(class_id: &str) -> &'static [StarterEquipmentSpec] {
     match normalize_id(class_id).as_str() {
         "PALADIN" => PALADIN_STARTER_WEAPONS,
-        "RANGER" => RANGER_STARTER_WEAPONS,
+        "RANGER" | "HUNTER" => RANGER_STARTER_WEAPONS,
         _ => WARRIOR_STARTER_WEAPONS,
     }
 }
@@ -1794,6 +2028,7 @@ mod tests {
             hand_requirement: hand_requirement.to_string(),
             unique_equipped: false,
             combat_profile_id: String::new(),
+            physical_resistance: 0.0,
         }
     }
 
@@ -1893,5 +2128,70 @@ mod tests {
             starter_weapon_equipment_for_class("RANGER")[0].item_def_id,
             "TRAINING_BOW"
         );
+    }
+
+    #[test]
+    fn starter_armor_mapping_matches_class_equipment_contract() {
+        assert_eq!(starter_armor_equipment_for_class("WARRIOR").len(), 7);
+        assert_eq!(
+            starter_armor_equipment_for_class("WARRIOR")[0].item_def_id,
+            "IRON_HELM"
+        );
+
+        assert_eq!(starter_armor_equipment_for_class("PALADIN").len(), 7);
+        assert_eq!(
+            starter_armor_equipment_for_class("PALADIN")[0].item_def_id,
+            "GILDED_HELM"
+        );
+
+        assert_eq!(starter_armor_equipment_for_class("RANGER").len(), 7);
+        assert_eq!(
+            starter_armor_equipment_for_class("RANGER")[0].item_def_id,
+            "LEATHER_HELM"
+        );
+        assert_eq!(
+            starter_armor_equipment_for_class("HUNTER")[0].item_def_id,
+            "LEATHER_HELM"
+        );
+    }
+
+    #[test]
+    fn starter_armor_authors_physical_resistance_by_item() {
+        fn starter_set_physical_resistance(class_id: &str) -> f32 {
+            starter_armor_equipment_for_class(class_id)
+                .iter()
+                .map(|equipment| {
+                    STARTER_ITEM_DEFINITIONS
+                        .iter()
+                        .find(|definition| definition.item_def_id == equipment.item_def_id)
+                        .expect("starter equipment should have an item definition")
+                        .physical_resistance
+                })
+                .sum()
+        }
+
+        let warrior = starter_set_physical_resistance("WARRIOR");
+        let paladin = starter_set_physical_resistance("PALADIN");
+        let ranger = starter_set_physical_resistance("RANGER");
+
+        assert!((warrior - 0.195).abs() < 0.0001);
+        assert!((paladin - 0.235).abs() < 0.0001);
+        assert!((ranger - 0.110).abs() < 0.0001);
+        assert!(ranger < warrior);
+        assert!(warrior < paladin);
+    }
+
+    #[test]
+    fn starter_item_classifiers_only_match_authored_starters() {
+        assert!(is_starter_weapon_definition_id("training_two_hand_sword"));
+        assert!(is_starter_weapon_definition_id("TRAINING_SHIELD"));
+        assert!(is_starter_weapon_definition_id("training-bow"));
+        assert!(!is_starter_weapon_definition_id("EPIC_PLAYER_SWORD"));
+
+        assert!(is_starter_armor_definition_id("iron_helm"));
+        assert!(is_starter_armor_definition_id("gilded_helm"));
+        assert!(is_starter_armor_definition_id("leather_helm"));
+        assert!(is_starter_armor_definition_id("traveler-cape"));
+        assert!(!is_starter_armor_definition_id("EPIC_PLAYER_HELM"));
     }
 }

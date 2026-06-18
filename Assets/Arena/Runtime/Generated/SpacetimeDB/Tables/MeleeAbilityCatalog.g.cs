@@ -42,6 +42,7 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Col<MeleeAbilityCatalog, string> AbilityId { get; }
         public global::SpacetimeDB.Col<MeleeAbilityCatalog, string> ActionId { get; }
         public global::SpacetimeDB.Col<MeleeAbilityCatalog, int> BaseDamage { get; }
+        public global::SpacetimeDB.Col<MeleeAbilityCatalog, string> DamageType { get; }
         public global::SpacetimeDB.Col<MeleeAbilityCatalog, bool> AppliesStagger { get; }
         public global::SpacetimeDB.Col<MeleeAbilityCatalog, float> Range { get; }
         public global::SpacetimeDB.Col<MeleeAbilityCatalog, float> MinimumRange { get; }
@@ -67,6 +68,7 @@ namespace SpacetimeDB.Types
             AbilityId = new global::SpacetimeDB.Col<MeleeAbilityCatalog, string>(tableName, "ability_id");
             ActionId = new global::SpacetimeDB.Col<MeleeAbilityCatalog, string>(tableName, "action_id");
             BaseDamage = new global::SpacetimeDB.Col<MeleeAbilityCatalog, int>(tableName, "base_damage");
+            DamageType = new global::SpacetimeDB.Col<MeleeAbilityCatalog, string>(tableName, "damage_type");
             AppliesStagger = new global::SpacetimeDB.Col<MeleeAbilityCatalog, bool>(tableName, "applies_stagger");
             Range = new global::SpacetimeDB.Col<MeleeAbilityCatalog, float>(tableName, "range");
             MinimumRange = new global::SpacetimeDB.Col<MeleeAbilityCatalog, float>(tableName, "minimum_range");

@@ -53,6 +53,7 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Col<SpellDefinition, float> Speed { get; }
         public global::SpacetimeDB.Col<SpellDefinition, float> MaxDistance { get; }
         public global::SpacetimeDB.Col<SpellDefinition, int> Damage { get; }
+        public global::SpacetimeDB.Col<SpellDefinition, string> DamageType { get; }
         public global::SpacetimeDB.Col<SpellDefinition, float> SpawnForward { get; }
         public global::SpacetimeDB.Col<SpellDefinition, float> SpawnHeight { get; }
         public global::SpacetimeDB.Col<SpellDefinition, float> TurnRate { get; }
@@ -84,6 +85,7 @@ namespace SpacetimeDB.Types
             Speed = new global::SpacetimeDB.Col<SpellDefinition, float>(tableName, "speed");
             MaxDistance = new global::SpacetimeDB.Col<SpellDefinition, float>(tableName, "max_distance");
             Damage = new global::SpacetimeDB.Col<SpellDefinition, int>(tableName, "damage");
+            DamageType = new global::SpacetimeDB.Col<SpellDefinition, string>(tableName, "damage_type");
             SpawnForward = new global::SpacetimeDB.Col<SpellDefinition, float>(tableName, "spawn_forward");
             SpawnHeight = new global::SpacetimeDB.Col<SpellDefinition, float>(tableName, "spawn_height");
             TurnRate = new global::SpacetimeDB.Col<SpellDefinition, float>(tableName, "turn_rate");

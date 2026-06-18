@@ -104,6 +104,7 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Col<StatusEffect, float> SlowPct { get; }
         public global::SpacetimeDB.Col<StatusEffect, int> TickAmount { get; }
         public global::SpacetimeDB.Col<StatusEffect, ulong> TickIntervalMs { get; }
+        public global::SpacetimeDB.Col<StatusEffect, string> DamageType { get; }
         public global::SpacetimeDB.Col<StatusEffect, float> ModifierScalar { get; }
         public global::SpacetimeDB.Col<StatusEffect, int> AbsorbAmount { get; }
         public global::SpacetimeDB.Col<StatusEffect, int> AbsorbCap { get; }
@@ -129,6 +130,7 @@ namespace SpacetimeDB.Types
             SlowPct = new global::SpacetimeDB.Col<StatusEffect, float>(tableName, "slow_pct");
             TickAmount = new global::SpacetimeDB.Col<StatusEffect, int>(tableName, "tick_amount");
             TickIntervalMs = new global::SpacetimeDB.Col<StatusEffect, ulong>(tableName, "tick_interval_ms");
+            DamageType = new global::SpacetimeDB.Col<StatusEffect, string>(tableName, "damage_type");
             ModifierScalar = new global::SpacetimeDB.Col<StatusEffect, float>(tableName, "modifier_scalar");
             AbsorbAmount = new global::SpacetimeDB.Col<StatusEffect, int>(tableName, "absorb_amount");
             AbsorbCap = new global::SpacetimeDB.Col<StatusEffect, int>(tableName, "absorb_cap");

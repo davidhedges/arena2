@@ -25,6 +25,8 @@ namespace SpacetimeDB.Types
         public int Amount;
         [DataMember(Name = "is_heal")]
         public bool IsHeal;
+        [DataMember(Name = "damage_type")]
+        public string DamageType;
         [DataMember(Name = "target_audience")]
         public string TargetAudience;
         [DataMember(Name = "damage_delivery")]
@@ -45,6 +47,7 @@ namespace SpacetimeDB.Types
             string SpellId,
             int Amount,
             bool IsHeal,
+            string DamageType,
             string TargetAudience,
             string DamageDelivery,
             string DirectActionKey,
@@ -59,6 +62,7 @@ namespace SpacetimeDB.Types
             this.SpellId = SpellId;
             this.Amount = Amount;
             this.IsHeal = IsHeal;
+            this.DamageType = DamageType;
             this.TargetAudience = TargetAudience;
             this.DamageDelivery = DamageDelivery;
             this.DirectActionKey = DirectActionKey;
@@ -70,6 +74,7 @@ namespace SpacetimeDB.Types
         public PendingHit()
         {
             this.SpellId = "";
+            this.DamageType = "";
             this.TargetAudience = "";
             this.DamageDelivery = "";
             this.DirectActionKey = "";

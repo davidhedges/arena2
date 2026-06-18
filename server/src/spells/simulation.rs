@@ -383,6 +383,7 @@ fn tick_meteor_spell(
                 }
                 effects.push(EffectPacket::Damage {
                     amount: definition.damage,
+                    damage_type: definition.damage_type,
                     source: spell.caster,
                     target: player.player_id,
                     spell_id: spell_id.clone(),

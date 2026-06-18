@@ -31,6 +31,8 @@ namespace SpacetimeDB.Types
         public uint HitIndex;
         [DataMember(Name = "damage")]
         public int Damage;
+        [DataMember(Name = "damage_type")]
+        public string DamageType;
         [DataMember(Name = "range")]
         public float Range;
         [DataMember(Name = "impact_at")]
@@ -74,6 +76,7 @@ namespace SpacetimeDB.Types
             string AbilityId,
             uint HitIndex,
             int Damage,
+            string DamageType,
             float Range,
             SpacetimeDB.Timestamp ImpactAt,
             SpacetimeDB.Timestamp ActiveUntil,
@@ -101,6 +104,7 @@ namespace SpacetimeDB.Types
             this.AbilityId = AbilityId;
             this.HitIndex = HitIndex;
             this.Damage = Damage;
+            this.DamageType = DamageType;
             this.Range = Range;
             this.ImpactAt = ImpactAt;
             this.ActiveUntil = ActiveUntil;
@@ -125,6 +129,7 @@ namespace SpacetimeDB.Types
             this.SpellId = "";
             this.Kind = "";
             this.AbilityId = "";
+            this.DamageType = "";
             this.ParryBehavior = "";
             this.BlockBehavior = "";
             this.AirborneTargetingMode = "";

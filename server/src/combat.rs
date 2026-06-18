@@ -15,7 +15,7 @@ use crate::arena::{
     MATCH_PHASE_ENDED, MATCH_PHASE_IN_PROGRESS,
 };
 use crate::derived_stats::derived_combat_stats_for_owner;
-use crate::inventory::create_corpse_loot_for_npc;
+use crate::inventory::{create_corpse_loot_for_npc, physical_resistance_for_owner};
 use crate::open_world_scene::{OPEN_WORLD_SPAWN_X, OPEN_WORLD_SPAWN_YAW, OPEN_WORLD_SPAWN_Z};
 use crate::player_state::PlayerState;
 use crate::practice::{is_training_instance, resolve_respawn_pose};
@@ -152,6 +152,46 @@ const MIN_ATTACK_SPEED_MULTIPLIER: f32 = 0.05;
 const MAX_DAMAGE_TAKEN_REDUCTION: f32 = 1.0;
 const MAX_HEALING_TAKEN_REDUCTION: f32 = 1.0;
 const PENDING_EFFECT_SEQUENCE_KEY: u8 = 0;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DamageType {
+    Physical,
+    Fire,
+    Cold,
+    Lightning,
+    Poison,
+    Holy,
+    Shadow,
+    Arcane,
+}
+
+impl DamageType {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Physical => "PHYSICAL",
+            Self::Fire => "FIRE",
+            Self::Cold => "COLD",
+            Self::Lightning => "LIGHTNING",
+            Self::Poison => "POISON",
+            Self::Holy => "HOLY",
+            Self::Shadow => "SHADOW",
+            Self::Arcane => "ARCANE",
+        }
+    }
+
+    pub fn from_wire(value: &str) -> Self {
+        match value.trim().to_ascii_uppercase().as_str() {
+            "FIRE" => Self::Fire,
+            "COLD" => Self::Cold,
+            "LIGHTNING" => Self::Lightning,
+            "POISON" => Self::Poison,
+            "HOLY" => Self::Holy,
+            "SHADOW" => Self::Shadow,
+            "ARCANE" => Self::Arcane,
+            _ => Self::Physical,
+        }
+    }
+}
 
 struct CombatProjectileDefinitionSpec {
     projectile_id: &'static str,
@@ -583,6 +623,7 @@ pub struct ActiveCombatProjectile {
     pub update_accum: f32,
     pub update_interval_seconds: f32,
     pub damage: i32,
+    pub damage_type: String,
     pub parry_behavior: String,
     pub block_behavior: String,
     pub grants_primary_resource_on_hit: bool,
@@ -1439,6 +1480,7 @@ pub struct PendingHit {
     pub spell_id: String,
     pub amount: i32,
     pub is_heal: bool,
+    pub damage_type: String,
     pub target_audience: String,
     pub damage_delivery: String,
     pub direct_action_key: String,
@@ -1493,6 +1535,7 @@ pub struct PendingApplyStatus {
     pub status_slow_pct: f32,
     pub status_tick_amount: i32,
     pub status_tick_interval_ms: u64,
+    pub status_damage_type: String,
     pub status_modifier_scalar: f32,
     pub status_absorb_amount: i32,
     pub status_absorb_cap: i32,
@@ -1548,6 +1591,7 @@ pub struct StatusEffect {
     // Kind-specific periodic amount (DOT damage or HOT heal), always non-negative.
     pub tick_amount: i32,
     pub tick_interval_ms: u64,
+    pub damage_type: String,
     // Kind-specific percentage/scalar modifier used by buff-style effects.
     pub modifier_scalar: f32,
     // Kind-specific remaining and maximum absorb values used by temporary hitpoints.
@@ -1657,6 +1701,7 @@ pub enum StatusPayload {
     },
     Dot {
         tick_damage: i32,
+        damage_type: DamageType,
         tick_interval: Duration,
     },
     Hot {
@@ -1694,6 +1739,7 @@ pub struct AuthoredStatusPayload {
     pub kind: StatusEffectKind,
     pub slow_pct: f32,
     pub tick_damage: i32,
+    pub damage_type: DamageType,
     pub tick_heal: i32,
     pub tick_interval_ms: u64,
     pub modifier_scalar: f32,
@@ -1714,6 +1760,7 @@ impl AuthoredStatusPayload {
             kind,
             slow_pct,
             tick_damage,
+            damage_type: DamageType::Physical,
             tick_heal,
             tick_interval_ms,
             modifier_scalar,
@@ -1736,6 +1783,7 @@ impl AuthoredStatusPayload {
             kind,
             slow_pct,
             tick_damage,
+            damage_type: DamageType::Physical,
             tick_heal,
             tick_interval_ms,
             modifier_scalar,
@@ -1761,6 +1809,7 @@ impl AuthoredStatusPayload {
             },
             StatusEffectKind::Dot => StatusPayload::Dot {
                 tick_damage: self.tick_damage,
+                damage_type: self.damage_type,
                 tick_interval: Duration::from_millis(self.tick_interval_ms),
             },
             StatusEffectKind::Hot => StatusPayload::Hot {
@@ -1909,6 +1958,7 @@ struct StatusEffectColumns {
     slow_pct: f32,
     tick_amount: i32,
     tick_interval_ms: u64,
+    damage_type: DamageType,
     modifier_scalar: f32,
     absorb_amount: i32,
     absorb_cap: i32,
@@ -1954,6 +2004,7 @@ impl StatusPayload {
                 slow_pct: 0.0,
                 tick_amount: 0,
                 tick_interval_ms: 0,
+                damage_type: DamageType::Physical,
                 modifier_scalar: 0.0,
                 absorb_amount: 0,
                 absorb_cap: 0,
@@ -1962,6 +2013,7 @@ impl StatusPayload {
                 slow_pct: slow_pct.clamp(MIN_SLOW_PCT, 0.95),
                 tick_amount: 0,
                 tick_interval_ms: 0,
+                damage_type: DamageType::Physical,
                 modifier_scalar: 0.0,
                 absorb_amount: 0,
                 absorb_cap: 0,
@@ -1970,17 +2022,20 @@ impl StatusPayload {
                 slow_pct: 0.0,
                 tick_amount: 0,
                 tick_interval_ms: 0,
+                damage_type: DamageType::Physical,
                 modifier_scalar: modifier_scalar.max(0.0),
                 absorb_amount: 0,
                 absorb_cap: 0,
             },
             Self::Dot {
                 tick_damage,
+                damage_type,
                 tick_interval,
             } => StatusEffectColumns {
                 slow_pct: 0.0,
                 tick_amount: tick_damage.max(0),
                 tick_interval_ms: tick_interval.as_millis().max(1) as u64,
+                damage_type,
                 modifier_scalar: 0.0,
                 absorb_amount: 0,
                 absorb_cap: 0,
@@ -1992,6 +2047,7 @@ impl StatusPayload {
                 slow_pct: 0.0,
                 tick_amount: tick_heal.max(0),
                 tick_interval_ms: tick_interval.as_millis().max(1) as u64,
+                damage_type: DamageType::Physical,
                 modifier_scalar: 0.0,
                 absorb_amount: 0,
                 absorb_cap: 0,
@@ -2002,6 +2058,7 @@ impl StatusPayload {
                 slow_pct: 0.0,
                 tick_amount: 0,
                 tick_interval_ms: 0,
+                damage_type: DamageType::Physical,
                 modifier_scalar: modifier_scalar.max(0.0),
                 absorb_amount: 0,
                 absorb_cap: 0,
@@ -2010,6 +2067,7 @@ impl StatusPayload {
                 slow_pct: 0.0,
                 tick_amount: 0,
                 tick_interval_ms: 0,
+                damage_type: DamageType::Physical,
                 modifier_scalar: modifier_scalar.clamp(0.0, MAX_DAMAGE_TAKEN_REDUCTION),
                 absorb_amount: 0,
                 absorb_cap: 0,
@@ -2018,6 +2076,7 @@ impl StatusPayload {
                 slow_pct: 0.0,
                 tick_amount: 0,
                 tick_interval_ms: 0,
+                damage_type: DamageType::Physical,
                 modifier_scalar: modifier_scalar.clamp(0.0, MAX_HEALING_TAKEN_REDUCTION),
                 absorb_amount: 0,
                 absorb_cap: 0,
@@ -2026,6 +2085,7 @@ impl StatusPayload {
                 slow_pct: 0.0,
                 tick_amount: 0,
                 tick_interval_ms: 0,
+                damage_type: DamageType::Physical,
                 modifier_scalar,
                 absorb_amount: 0,
                 absorb_cap: 0,
@@ -2037,6 +2097,7 @@ impl StatusPayload {
                 slow_pct: 0.0,
                 tick_amount: 0,
                 tick_interval_ms: 0,
+                damage_type: DamageType::Physical,
                 modifier_scalar: 0.0,
                 absorb_amount: absorb_amount.max(0).min(absorb_cap.max(0)),
                 absorb_cap: absorb_cap.max(0),
@@ -2062,6 +2123,7 @@ impl StatusPayload {
             },
             StatusEffectKind::Dot => Self::Dot {
                 tick_damage: columns.tick_amount.max(0),
+                damage_type: columns.damage_type,
                 tick_interval: Duration::from_millis(columns.tick_interval_ms.max(1)),
             },
             StatusEffectKind::Hot => Self::Hot {
@@ -2116,6 +2178,7 @@ impl StatusPayload {
             }
             Self::Dot {
                 tick_damage,
+                damage_type: _,
                 tick_interval,
             } => tick_damage <= 0 || tick_interval.is_zero(),
             Self::Hot {
@@ -2172,6 +2235,7 @@ impl StatusPayload {
             }
             Self::Dot {
                 tick_damage,
+                damage_type: _,
                 tick_interval,
             } => {
                 if tick_damage <= 0 || tick_interval.is_zero() {
@@ -2563,6 +2627,7 @@ impl StatusApplication {
 pub enum EffectPacket {
     Damage {
         amount: i32,
+        damage_type: DamageType,
         source: Identity,
         target: Identity,
         spell_id: String,
@@ -2608,6 +2673,7 @@ fn queue_effect(ctx: &ReducerContext, effect: EffectPacket) {
     match effect {
         EffectPacket::Damage {
             amount,
+            damage_type,
             source,
             target,
             spell_id,
@@ -2623,6 +2689,7 @@ fn queue_effect(ctx: &ReducerContext, effect: EffectPacket) {
                 spell_id,
                 amount,
                 false,
+                damage_type,
                 TargetAudience::Hostile,
                 delivery,
                 direct_action_key,
@@ -2644,6 +2711,7 @@ fn queue_effect(ctx: &ReducerContext, effect: EffectPacket) {
                 spell_id,
                 amount,
                 true,
+                DamageType::Physical,
                 target_audience,
                 DamageDelivery::Direct,
                 String::new(),
@@ -2745,6 +2813,7 @@ fn new_pending_hit(
     spell_id: String,
     amount: i32,
     is_heal: bool,
+    damage_type: DamageType,
     target_audience: TargetAudience,
     damage_delivery: DamageDelivery,
     direct_action_key: String,
@@ -2756,6 +2825,7 @@ fn new_pending_hit(
         spell_id,
         amount,
         is_heal,
+        damage_type: damage_type.as_str().to_string(),
         target_audience: target_audience.as_str().to_string(),
         damage_delivery: damage_delivery.as_str().to_string(),
         direct_action_key,
@@ -2795,6 +2865,7 @@ fn new_pending_apply_status(
         status_slow_pct: columns.slow_pct,
         status_tick_amount: columns.tick_amount,
         status_tick_interval_ms: columns.tick_interval_ms,
+        status_damage_type: columns.damage_type.as_str().to_string(),
         status_modifier_scalar: columns.modifier_scalar,
         status_absorb_amount: columns.absorb_amount,
         status_absorb_cap: columns.absorb_cap,
@@ -2898,6 +2969,7 @@ impl DuePendingEffect {
                     row.status_slow_pct,
                     row.status_tick_amount,
                     row.status_tick_interval_ms,
+                    row.status_damage_type.as_str(),
                     row.status_modifier_scalar,
                     row.status_absorb_amount,
                     row.status_absorb_cap,
@@ -3023,6 +3095,7 @@ fn apply_pending_status_fields(
     status_slow_pct: f32,
     status_tick_amount: i32,
     status_tick_interval_ms: u64,
+    status_damage_type: &str,
     status_modifier_scalar: f32,
     status_absorb_amount: i32,
     status_absorb_cap: i32,
@@ -3051,6 +3124,7 @@ fn apply_pending_status_fields(
             slow_pct: status_slow_pct,
             tick_amount: status_tick_amount,
             tick_interval_ms: status_tick_interval_ms,
+            damage_type: DamageType::from_wire(status_damage_type),
             modifier_scalar: status_modifier_scalar,
             absorb_amount: status_absorb_amount,
             absorb_cap: status_absorb_cap,
@@ -3218,14 +3292,23 @@ fn resolve_damage_amount(
     temporary_modifiers: &TemporaryCombatModifiers,
 ) -> ResolvedEffectAmount {
     let delivery = DamageDelivery::from_wire(hit.damage_delivery.as_str());
+    let resistance_multiplier = resistance_multiplier_for_damage_type(ctx, hit);
     let non_crit_multiplier = if hit.source == Identity::ZERO {
-        temporary_modifiers.damage_taken_multiplier_for(&hit.target)
+        resistance_multiplier * temporary_modifiers.damage_taken_multiplier_for(&hit.target)
     } else {
         temporary_modifiers.damage_multiplier_for(&hit.source, delivery)
             * derived_combat_stats_for_owner(ctx, hit.source).damage_multiplier
+            * resistance_multiplier
             * temporary_modifiers.damage_taken_multiplier_for(&hit.target)
     };
     resolve_effect_amount(ctx, hit, non_crit_multiplier)
+}
+
+fn resistance_multiplier_for_damage_type(ctx: &ReducerContext, hit: &PendingHit) -> f32 {
+    match DamageType::from_wire(hit.damage_type.as_str()) {
+        DamageType::Physical => (1.0 - physical_resistance_for_owner(ctx, hit.target)).max(0.0),
+        _ => 1.0,
+    }
 }
 
 #[derive(Default)]
@@ -4633,6 +4716,7 @@ pub fn process_periodic_status_ticks(ctx: &ReducerContext, now: Timestamp) -> us
                 if base > 0 {
                     queued.push(EffectPacket::Damage {
                         amount: base.saturating_mul(stacks),
+                        damage_type: DamageType::from_wire(effect.damage_type.as_str()),
                         source: effect.source,
                         target: effect.target,
                         spell_id: effect.spell_id.clone(),
@@ -5138,11 +5222,13 @@ mod tests {
             (
                 StatusPayload::Dot {
                     tick_damage: 12,
+                    damage_type: crate::combat::DamageType::Physical,
                     tick_interval: Duration::from_millis(250),
                 },
                 StatusEffectKind::Dot,
                 StatusPayload::Dot {
                     tick_damage: 12,
+                    damage_type: crate::combat::DamageType::Physical,
                     tick_interval: Duration::from_millis(250),
                 },
             ),
@@ -5263,6 +5349,7 @@ mod tests {
                 AuthoredStatusPayload::new(StatusEffectKind::Dot, 0.0, 12, 0, 250, 0.0),
                 Some(StatusPayload::Dot {
                     tick_damage: 12,
+                    damage_type: crate::combat::DamageType::Physical,
                     tick_interval: Duration::from_millis(250),
                 }),
             ),
@@ -5872,6 +5959,7 @@ fn new_status_effect(
         slow_pct: columns.slow_pct,
         tick_amount: columns.tick_amount,
         tick_interval_ms: columns.tick_interval_ms,
+        damage_type: columns.damage_type.as_str().to_string(),
         modifier_scalar: columns.modifier_scalar,
         absorb_amount: columns.absorb_amount,
         absorb_cap: columns.absorb_cap,
@@ -5969,6 +6057,7 @@ pub fn run_status_runtime_harness(ctx: &ReducerContext) -> Result<(), String> {
         "HARNESS",
         StatusPayload::Dot {
             tick_damage: 10,
+            damage_type: DamageType::Physical,
             tick_interval: Duration::from_millis(100),
         },
         now,

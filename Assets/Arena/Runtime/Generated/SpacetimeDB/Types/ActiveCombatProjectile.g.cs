@@ -93,6 +93,8 @@ namespace SpacetimeDB.Types
         public float UpdateIntervalSeconds;
         [DataMember(Name = "damage")]
         public int Damage;
+        [DataMember(Name = "damage_type")]
+        public string DamageType;
         [DataMember(Name = "parry_behavior")]
         public string ParryBehavior;
         [DataMember(Name = "block_behavior")]
@@ -145,6 +147,7 @@ namespace SpacetimeDB.Types
             float UpdateAccum,
             float UpdateIntervalSeconds,
             int Damage,
+            string DamageType,
             string ParryBehavior,
             string BlockBehavior,
             bool GrantsPrimaryResourceOnHit,
@@ -192,6 +195,7 @@ namespace SpacetimeDB.Types
             this.UpdateAccum = UpdateAccum;
             this.UpdateIntervalSeconds = UpdateIntervalSeconds;
             this.Damage = Damage;
+            this.DamageType = DamageType;
             this.ParryBehavior = ParryBehavior;
             this.BlockBehavior = BlockBehavior;
             this.GrantsPrimaryResourceOnHit = GrantsPrimaryResourceOnHit;
@@ -208,6 +212,7 @@ namespace SpacetimeDB.Types
             this.ActionKind = "";
             this.AbilityId = "";
             this.MotionKind = "";
+            this.DamageType = "";
             this.ParryBehavior = "";
             this.BlockBehavior = "";
         }

@@ -16,6 +16,7 @@ namespace Arena.EditorTools
         private const string PartCatalogPath = CatalogFolder + "/AvatarPartCatalog.asset";
         private const string OutfitCatalogPath = CatalogFolder + "/OutfitCatalog.asset";
         private const string ClassOutfitCatalogPath = CatalogFolder + "/ClassOutfitCatalog.asset";
+        private const string EquipmentAppearanceCatalogPath = CatalogFolder + "/EquipmentAppearanceCatalog.asset";
 
         [MenuItem("Arena/Appearance/Rebuild Default Catalog Assets")]
         public static void RebuildDefaultCatalogAssetsFromMenu()
@@ -108,10 +109,110 @@ namespace Arena.EditorTools
                 ClassOutfit("RANGER", "HUMAN_MALE_ARCHER_STARTER"),
             });
 
+            EquipmentAppearanceCatalog equipmentAppearanceCatalog =
+                LoadOrCreate<EquipmentAppearanceCatalog>(EquipmentAppearanceCatalogPath);
+            equipmentAppearanceCatalog.SetEntriesForEditor(new List<EquipmentAppearanceCatalog.Entry>
+            {
+                EquipmentVisual(
+                    "IRON_HELM",
+                    "HEAD",
+                    EquipmentItem(ItemTypeEnum.Helmet, "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Equipment/Helmet/Hu_M_Helm_NWarrior_Bl.prefab")),
+                EquipmentVisual(
+                    "IRON_SHOULDERS",
+                    "SHOULDER",
+                    EquipmentItem(ItemTypeEnum.Shoulders, "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Equipment/Shoulder/Hu_M_Shoulders_NWarrior_Bl.prefab")),
+                EquipmentVisual(
+                    "TRAVELER_CAPE",
+                    "CAPE",
+                    EquipmentItem(ItemTypeEnum.Cape, "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Equipment/Cape/Hu_M_Cape_NWarrior_Bl.prefab")),
+                EquipmentVisual(
+                    "IRON_CHESTPLATE",
+                    "CHEST",
+                    EquipmentItem(ItemTypeEnum.ChestSkin, "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Equipment/ChestSkin/ChestSkin_NWarrior_U_Bl.prefab"),
+                    EquipmentItem(ItemTypeEnum.Chest, "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Equipment/Chest/Hu_M_Chest_NWarrior_Bl.prefab")),
+                EquipmentVisual(
+                    "IRON_LEGGINGS",
+                    "LEGS",
+                    EquipmentItem(ItemTypeEnum.PantsSkin, "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Equipment/PantsSkin/Pants_NWarrior_U_Bl.prefab"),
+                    EquipmentItem(ItemTypeEnum.Pants, "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Equipment/Pants/Hu_M_Pants_NWarrior_Bl.prefab")),
+                EquipmentVisual(
+                    "IRON_BOOTS",
+                    "BOOTS",
+                    EquipmentItem(ItemTypeEnum.Boots, "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Equipment/Boots/Hu_M_Boots_NWarrior_Bl.prefab")),
+                EquipmentVisual(
+                    "IRON_GLOVES",
+                    "GLOVES",
+                    EquipmentItem(ItemTypeEnum.GlovesSkin, "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Equipment/GlovesSkin/GlovesSkin_NWarrior_Bl.prefab"),
+                    EquipmentItem(ItemTypeEnum.Gloves, "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Equipment/Gloves/Hu_M_Gloves_NWarrior_Bl.prefab")),
+                EquipmentVisual(
+                    "GILDED_HELM",
+                    "HEAD",
+                    EquipmentItem(ItemTypeEnum.Helmet, "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Equipment/Helmet/Hu_M_Helm_NWarrior_Gn.prefab")),
+                EquipmentVisual(
+                    "GILDED_SHOULDERS",
+                    "SHOULDER",
+                    EquipmentItem(ItemTypeEnum.Shoulders, "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Equipment/Shoulder/Hu_M_Shoulders_NWarrior_Gn.prefab")),
+                EquipmentVisual(
+                    "GILDED_CAPE",
+                    "CAPE",
+                    EquipmentItem(ItemTypeEnum.Cape, "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Equipment/Cape/Hu_M_Cape_NWarrior_Gn.prefab")),
+                EquipmentVisual(
+                    "GILDED_CHESTPLATE",
+                    "CHEST",
+                    EquipmentItem(ItemTypeEnum.ChestSkin, "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Equipment/ChestSkin/ChestSkin_NWarrior_U_Gn.prefab"),
+                    EquipmentItem(ItemTypeEnum.Chest, "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Equipment/Chest/Hu_M_Chest_NWarrior_Gn.prefab")),
+                EquipmentVisual(
+                    "GILDED_LEGGINGS",
+                    "LEGS",
+                    EquipmentItem(ItemTypeEnum.PantsSkin, "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Equipment/PantsSkin/Pants_NWarrior_U_Gn.prefab"),
+                    EquipmentItem(ItemTypeEnum.Pants, "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Equipment/Pants/Hu_M_Pants_NWarrior_Gn.prefab")),
+                EquipmentVisual(
+                    "GILDED_BOOTS",
+                    "BOOTS",
+                    EquipmentItem(ItemTypeEnum.Boots, "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Equipment/Boots/Hu_M_Boots_NWarrior_Gn.prefab")),
+                EquipmentVisual(
+                    "GILDED_GLOVES",
+                    "GLOVES",
+                    EquipmentItem(ItemTypeEnum.GlovesSkin, "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Equipment/GlovesSkin/GlovesSkin_NWarrior_Gn.prefab"),
+                    EquipmentItem(ItemTypeEnum.Gloves, "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Equipment/Gloves/Hu_M_Gloves_NWarrior_Gn.prefab")),
+                EquipmentVisual(
+                    "LEATHER_HELM",
+                    "HEAD",
+                    EquipmentItem(ItemTypeEnum.Helmet, "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Equipment/Helmet/Hu_M_Helm_NRanger_Gn.prefab")),
+                EquipmentVisual(
+                    "LEATHER_SHOULDERS",
+                    "SHOULDER",
+                    EquipmentItem(ItemTypeEnum.Shoulders, "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Equipment/Shoulder/Hu_M_Shoulders_NRanger_Gn.prefab")),
+                EquipmentVisual(
+                    "LEATHER_CAPE",
+                    "CAPE",
+                    EquipmentItem(ItemTypeEnum.Cape, "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Equipment/Cape/Hu_M_Cape_NRanger_Gn.prefab")),
+                EquipmentVisual(
+                    "LEATHER_CHESTPIECE",
+                    "CHEST",
+                    EquipmentItem(ItemTypeEnum.ChestSkin, "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Equipment/ChestSkin/ChestSkin_NRanger_U_Gn.prefab"),
+                    EquipmentItem(ItemTypeEnum.Chest, "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Equipment/Chest/Hu_M_Chest_NRanger_Gn.prefab")),
+                EquipmentVisual(
+                    "LEATHER_LEGGINGS",
+                    "LEGS",
+                    EquipmentItem(ItemTypeEnum.PantsSkin, "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Equipment/PantsSkin/Pants_NRanger_U_Gn.prefab"),
+                    EquipmentItem(ItemTypeEnum.Pants, "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Equipment/Pants/Hu_M_Pants.prefab")),
+                EquipmentVisual(
+                    "LEATHER_BOOTS",
+                    "BOOTS",
+                    EquipmentItem(ItemTypeEnum.Boots, "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Equipment/Boots/Hu_M_Boots_NRanger_Gn.prefab")),
+                EquipmentVisual(
+                    "LEATHER_GLOVES",
+                    "GLOVES",
+                    EquipmentItem(ItemTypeEnum.GlovesSkin, "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Equipment/GlovesSkin/GlovesSkin_NRanger_Gn.prefab"),
+                    EquipmentItem(ItemTypeEnum.Gloves, "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Equipment/Gloves/Hu_M_Gloves_NRanger_Gn.prefab")),
+            });
+
             EditorUtility.SetDirty(baseCatalog);
             EditorUtility.SetDirty(partCatalog);
             EditorUtility.SetDirty(outfitCatalog);
             EditorUtility.SetDirty(classOutfitCatalog);
+            EditorUtility.SetDirty(equipmentAppearanceCatalog);
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
         }
@@ -171,6 +272,33 @@ namespace Arena.EditorTools
         private static OutfitCatalog.OutfitItem OutfitItem(ItemTypeEnum expectedItemType, string path)
         {
             return new OutfitCatalog.OutfitItem
+            {
+                expectedItemType = expectedItemType,
+                item = LoadRequiredItem(path, expectedItemType),
+            };
+        }
+
+        private static EquipmentAppearanceCatalog.Entry EquipmentVisual(
+            string itemDefId,
+            string equipSlot,
+            params EquipmentAppearanceCatalog.EquipmentItem[] items)
+        {
+            return new EquipmentAppearanceCatalog.Entry
+            {
+                itemDefId = itemDefId,
+                equipSlot = equipSlot,
+                raceId = CharacterAppearanceIds.RaceHuman,
+                sexId = CharacterAppearanceIds.SexMale,
+                enabled = true,
+                items = new List<EquipmentAppearanceCatalog.EquipmentItem>(items),
+            };
+        }
+
+        private static EquipmentAppearanceCatalog.EquipmentItem EquipmentItem(
+            ItemTypeEnum expectedItemType,
+            string path)
+        {
+            return new EquipmentAppearanceCatalog.EquipmentItem
             {
                 expectedItemType = expectedItemType,
                 item = LoadRequiredItem(path, expectedItemType),

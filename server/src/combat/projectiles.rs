@@ -1334,6 +1334,7 @@ fn queue_spell_projectile_hit_effects(
 ) {
     let mut effects = vec![EffectPacket::Damage {
         amount: projectile.damage,
+        damage_type: crate::combat::DamageType::from_wire(projectile.damage_type.as_str()),
         source: projectile.caster,
         target,
         spell_id: projectile.projectile_instance_id.clone(),
@@ -1365,6 +1366,7 @@ fn queue_weapon_projectile_hit_effects(
             ctx,
             vec![EffectPacket::Damage {
                 amount: projectile.damage,
+                damage_type: crate::combat::DamageType::from_wire(projectile.damage_type.as_str()),
                 source: projectile.caster,
                 target,
                 spell_id: projectile.projectile_instance_id.clone(),
@@ -2118,6 +2120,7 @@ mod tests {
             update_accum: 0.0,
             update_interval_seconds: 0.05,
             damage: 18,
+            damage_type: crate::combat::DamageType::Physical.as_str().to_string(),
             parry_behavior: "PARRYABLE".to_string(),
             block_behavior: "BLOCKABLE".to_string(),
             grants_primary_resource_on_hit: false,

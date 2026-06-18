@@ -33,6 +33,8 @@ namespace SpacetimeDB.Types
         public uint HitIndex;
         [DataMember(Name = "damage")]
         public int Damage;
+        [DataMember(Name = "damage_type")]
+        public string DamageType;
         [DataMember(Name = "speed")]
         public float Speed;
         [DataMember(Name = "max_distance")]
@@ -71,6 +73,7 @@ namespace SpacetimeDB.Types
             string ProjectileId,
             uint HitIndex,
             int Damage,
+            string DamageType,
             float Speed,
             float MaxDistance,
             float Radius,
@@ -96,6 +99,7 @@ namespace SpacetimeDB.Types
             this.ProjectileId = ProjectileId;
             this.HitIndex = HitIndex;
             this.Damage = Damage;
+            this.DamageType = DamageType;
             this.Speed = Speed;
             this.MaxDistance = MaxDistance;
             this.Radius = Radius;
@@ -118,6 +122,7 @@ namespace SpacetimeDB.Types
             this.ActionKind = "";
             this.AbilityId = "";
             this.ProjectileId = "";
+            this.DamageType = "";
             this.ParryBehavior = "";
             this.BlockBehavior = "";
         }

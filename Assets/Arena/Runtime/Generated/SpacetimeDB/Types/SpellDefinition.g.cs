@@ -41,6 +41,8 @@ namespace SpacetimeDB.Types
         public float MaxDistance;
         [DataMember(Name = "damage")]
         public int Damage;
+        [DataMember(Name = "damage_type")]
+        public string DamageType;
         [DataMember(Name = "spawn_forward")]
         public float SpawnForward;
         [DataMember(Name = "spawn_height")]
@@ -85,6 +87,7 @@ namespace SpacetimeDB.Types
             float Speed,
             float MaxDistance,
             int Damage,
+            string DamageType,
             float SpawnForward,
             float SpawnHeight,
             float TurnRate,
@@ -115,6 +118,7 @@ namespace SpacetimeDB.Types
             this.Speed = Speed;
             this.MaxDistance = MaxDistance;
             this.Damage = Damage;
+            this.DamageType = DamageType;
             this.SpawnForward = SpawnForward;
             this.SpawnHeight = SpawnHeight;
             this.TurnRate = TurnRate;
@@ -137,6 +141,7 @@ namespace SpacetimeDB.Types
             this.Behavior = "";
             this.Targeting = "";
             this.TargetAudience = "";
+            this.DamageType = "";
             this.StatusStackGroup = "";
             this.BlockBehavior = "";
         }

@@ -43,6 +43,8 @@ namespace SpacetimeDB.Types
         public int TickAmount;
         [DataMember(Name = "tick_interval_ms")]
         public ulong TickIntervalMs;
+        [DataMember(Name = "damage_type")]
+        public string DamageType;
         [DataMember(Name = "modifier_scalar")]
         public float ModifierScalar;
         [DataMember(Name = "absorb_amount")]
@@ -74,6 +76,7 @@ namespace SpacetimeDB.Types
             float SlowPct,
             int TickAmount,
             ulong TickIntervalMs,
+            string DamageType,
             float ModifierScalar,
             int AbsorbAmount,
             int AbsorbCap,
@@ -98,6 +101,7 @@ namespace SpacetimeDB.Types
             this.SlowPct = SlowPct;
             this.TickAmount = TickAmount;
             this.TickIntervalMs = TickIntervalMs;
+            this.DamageType = DamageType;
             this.ModifierScalar = ModifierScalar;
             this.AbsorbAmount = AbsorbAmount;
             this.AbsorbCap = AbsorbCap;
@@ -113,6 +117,7 @@ namespace SpacetimeDB.Types
             this.Polarity = "";
             this.StackGroup = "";
             this.StackPolicy = "";
+            this.DamageType = "";
             this.DispelTypes = "";
             this.SpellId = "";
         }

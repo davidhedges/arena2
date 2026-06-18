@@ -30,9 +30,10 @@ use crate::combat::status_effect;
 use crate::combat::{
     decode_status_dispel_types, has_active_disabling_status, mark_harmful_combat_action,
     queue_effects, set_active_aura, temporary_combat_modifiers, timestamp_to_micros,
-    ActiveCombatProjectile, CombatEvent, DamageDelivery, EffectPacket, ProjectilePresentationEvent,
-    StatusApplication, StatusDispelType, StatusEffectKind, StatusPayload, StatusPolarity,
-    StatusStackGroupDefault, COMBAT_METADATA_NONE, COMBAT_SCALAR_NONE, COMBAT_SEQUENCE_NONE,
+    ActiveCombatProjectile, CombatEvent, DamageDelivery, DamageType, EffectPacket,
+    ProjectilePresentationEvent, StatusApplication, StatusDispelType, StatusEffectKind,
+    StatusPayload, StatusPolarity, StatusStackGroupDefault, COMBAT_METADATA_NONE,
+    COMBAT_SCALAR_NONE, COMBAT_SEQUENCE_NONE,
 };
 use crate::defense::{
     clear_interruptible_defense_for_owner, resolve_defensible_combat_hit, CombatHitDeliveryKind,
@@ -3080,6 +3081,7 @@ fn spawn_tracking_projectile(
             update_accum: 0.0,
             update_interval_seconds: definition.update_interval,
             damage: definition.damage,
+            damage_type: definition.damage_type.as_str().to_string(),
             parry_behavior: parry_behavior.to_string(),
             block_behavior: definition.block_behavior.as_str().to_string(),
             grants_primary_resource_on_hit: false,
@@ -3199,6 +3201,7 @@ fn spawn_orbit_projectiles(
                 update_accum: 0.0,
                 update_interval_seconds: definition.update_interval,
                 damage: definition.damage,
+                damage_type: definition.damage_type.as_str().to_string(),
                 parry_behavior: projectile_tunables.parry_behavior.as_str().to_string(),
                 block_behavior: definition.block_behavior.as_str().to_string(),
                 grants_primary_resource_on_hit: false,
@@ -4321,6 +4324,7 @@ fn queue_electrocute_damage(ctx: &ReducerContext, active_cast: &ActiveCast, targ
         ctx,
         vec![EffectPacket::Damage {
             amount: definition.damage,
+            damage_type: definition.damage_type,
             source: active_cast.caster,
             target: target_id,
             spell_id: runtime.spell_instance_id.clone(),
@@ -4608,6 +4612,7 @@ fn spawn_instant_beam(
                         ctx,
                         vec![EffectPacket::Damage {
                             amount: scaled_damage,
+                            damage_type: definition.damage_type,
                             source: caster,
                             target: target_id,
                             spell_id: sequence_effect_id.clone(),
@@ -4986,6 +4991,7 @@ fn resolve_area_impact(ctx: &ReducerContext, impact: AreaImpactResolution<'_>) {
         }
         effects.push(EffectPacket::Damage {
             amount: impact.definition.damage,
+            damage_type: impact.definition.damage_type,
             source: impact.caster,
             target: player.player_id,
             spell_id: impact.spell_id.to_string(),
@@ -5923,6 +5929,7 @@ fn resolve_movement_delivery_hit(
 
     let mut effects = vec![EffectPacket::Damage {
         amount: movement.damage,
+        damage_type: DamageType::from_wire(movement.damage_type.as_str()),
         source: caster,
         target: target.player_id,
         spell_id: action_instance_id.to_string(),

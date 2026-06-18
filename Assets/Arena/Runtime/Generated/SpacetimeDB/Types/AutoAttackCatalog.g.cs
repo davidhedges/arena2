@@ -23,6 +23,8 @@ namespace SpacetimeDB.Types
         public string ActionId;
         [DataMember(Name = "base_damage")]
         public int BaseDamage;
+        [DataMember(Name = "damage_type")]
+        public string DamageType;
         [DataMember(Name = "range")]
         public float Range;
         [DataMember(Name = "cooldown_ms")]
@@ -48,6 +50,7 @@ namespace SpacetimeDB.Types
             string ModeId,
             string ActionId,
             int BaseDamage,
+            string DamageType,
             float Range,
             ulong CooldownMs,
             string MovementPolicy,
@@ -64,6 +67,7 @@ namespace SpacetimeDB.Types
             this.ModeId = ModeId;
             this.ActionId = ActionId;
             this.BaseDamage = BaseDamage;
+            this.DamageType = DamageType;
             this.Range = Range;
             this.CooldownMs = CooldownMs;
             this.MovementPolicy = MovementPolicy;
@@ -81,6 +85,7 @@ namespace SpacetimeDB.Types
             this.CombatProfileId = "";
             this.ModeId = "";
             this.ActionId = "";
+            this.DamageType = "";
             this.MovementPolicy = "";
             this.ParryBehavior = "";
             this.BlockBehavior = "";

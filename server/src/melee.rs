@@ -29,10 +29,10 @@ use crate::combat::{
     combat_projectile_definition_for_id, has_active_disabling_status, has_active_status_group,
     has_due_pending_effects, mark_harmful_combat_action, queue_effects, remove_active_status_group,
     resolve_pending_effects, ActiveCombatProjectile, CombatEvent, CombatProjectileDefinition,
-    DamageDelivery, EffectPacket, ProjectilePresentationEvent, StackPolicy, StatusEffectKind,
-    StatusPayload, StatusPolarity, COMBAT_EVENT_AREA_IMPACT, COMBAT_EVENT_BLOCK, COMBAT_EVENT_CAST,
-    COMBAT_EVENT_FIZZLE, COMBAT_EVENT_IMPACT, COMBAT_EVENT_PARRY, COMBAT_EVENT_RELEASE,
-    COMBAT_METADATA_CONSUMED_MELEE_MODIFIER, COMBAT_METADATA_NONE,
+    DamageDelivery, DamageType, EffectPacket, ProjectilePresentationEvent, StackPolicy,
+    StatusEffectKind, StatusPayload, StatusPolarity, COMBAT_EVENT_AREA_IMPACT, COMBAT_EVENT_BLOCK,
+    COMBAT_EVENT_CAST, COMBAT_EVENT_FIZZLE, COMBAT_EVENT_IMPACT, COMBAT_EVENT_PARRY,
+    COMBAT_EVENT_RELEASE, COMBAT_METADATA_CONSUMED_MELEE_MODIFIER, COMBAT_METADATA_NONE,
     COMBAT_SCALAR_MELEE_RELEASE_DELAY_SECONDS, COMBAT_SCALAR_NONE, COMBAT_SEQUENCE_NONE,
 };
 use crate::defense::{
@@ -705,6 +705,7 @@ pub struct PendingMeleeImpact {
     pub ability_id: String,
     pub hit_index: u32,
     pub damage: i32,
+    pub damage_type: String,
     pub range: f32,
     pub impact_at: Timestamp,
     pub active_until: Timestamp,
@@ -761,6 +762,7 @@ pub struct PendingProjectileRelease {
     pub projectile_id: String,
     pub hit_index: u32,
     pub damage: i32,
+    pub damage_type: String,
     pub speed: f32,
     pub max_distance: f32,
     pub radius: f32,
@@ -781,6 +783,7 @@ pub struct PendingProjectileRelease {
 struct ResolvedMeleeGameplay {
     ability_id: Option<String>,
     base_damage: i32,
+    damage_type: DamageType,
     range: f32,
     minimum_range: f32,
     cooldown_ms: u64,
@@ -1166,6 +1169,7 @@ fn melee_gameplay_from_catalog_rows(
     Some(ResolvedMeleeGameplay {
         ability_id: Some(ability.ability_id.clone()),
         base_damage: melee.base_damage,
+        damage_type: DamageType::from_wire(melee.damage_type.as_str()),
         range: melee.range,
         minimum_range: melee.minimum_range.max(0.0),
         cooldown_ms: melee.cooldown_ms,
@@ -1339,6 +1343,7 @@ fn auto_attack_melee_gameplay_from_catalog(
     Some(ResolvedMeleeGameplay {
         ability_id: None,
         base_damage: row.base_damage,
+        damage_type: DamageType::from_wire(row.damage_type.as_str()),
         range: row.range,
         minimum_range: 0.0,
         cooldown_ms: row.cooldown_ms,
@@ -1362,6 +1367,7 @@ fn auto_attack_replacement_melee_gameplay_from_catalog(
     Some(ResolvedMeleeGameplay {
         ability_id: None,
         base_damage: row.base_damage,
+        damage_type: DamageType::from_wire(row.damage_type.as_str()),
         range: row.range,
         minimum_range: 0.0,
         cooldown_ms: row.cooldown_ms,
@@ -3092,6 +3098,7 @@ fn perform_melee_attack_for_internal(
                     projectile_id: projectile.projectile_id.clone(),
                     hit_index: hit_index as u32,
                     damage,
+                    damage_type: gameplay.damage_type.as_str().to_string(),
                     speed: projectile.speed,
                     max_distance: projectile_max_distance,
                     radius: projectile.radius,
@@ -3135,6 +3142,7 @@ fn perform_melee_attack_for_internal(
             ability_id: gameplay.ability_id.clone().unwrap_or_default(),
             hit_index: hit_index as u32,
             damage,
+            damage_type: gameplay.damage_type.as_str().to_string(),
             range: impact_range,
             impact_at,
             active_until,
@@ -3684,6 +3692,7 @@ fn resolve_pending_projectile_release(
             update_accum: 0.0,
             update_interval_seconds: row.update_interval_seconds,
             damage: row.damage,
+            damage_type: row.damage_type.clone(),
             parry_behavior: row.parry_behavior.clone(),
             block_behavior: row.block_behavior.clone(),
             grants_primary_resource_on_hit: row.grants_primary_resource_on_hit,
@@ -4114,6 +4123,7 @@ fn resolve_pending_melee_target_impact(
 
     let mut effects = vec![EffectPacket::Damage {
         amount: row.damage,
+        damage_type: DamageType::from_wire(row.damage_type.as_str()),
         source: row.source,
         target: row.target,
         spell_id: format!("{}:damage:{}", row.spell_id, row.hit_index),
@@ -4198,6 +4208,7 @@ fn push_melee_impact_area_effects(
 
         effects.push(EffectPacket::Damage {
             amount: row.impact_area_damage,
+            damage_type: DamageType::from_wire(row.damage_type.as_str()),
             source: row.source,
             target: player.player_id,
             spell_id: format!("{}:area:{}", row.spell_id, row.hit_index),
@@ -4546,6 +4557,7 @@ mod tests {
             ability_id: "TEST_TARGETLESS".to_string(),
             hit_index: 0,
             damage: 10,
+            damage_type: crate::combat::DamageType::Physical.as_str().to_string(),
             range,
             impact_at: now,
             active_until: now,
@@ -5155,6 +5167,7 @@ mod tests {
             ability_id: "WARRIOR_CHARGE".to_string(),
             hit_index: 0,
             damage: 32,
+            damage_type: crate::combat::DamageType::Physical.as_str().to_string(),
             range: 2.5,
             impact_at: now,
             active_until: now,
