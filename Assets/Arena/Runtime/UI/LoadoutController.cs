@@ -431,6 +431,10 @@ namespace Arena.UI
                 Color fill = action.IsFixed
                     ? FixedActionColor(action.ActionId)
                     : AbilityColor(action.AbilityId);
+                Sprite? iconSprite = ActionIconResolver.ResolveForAvailableAction(
+                    action.ActionKind,
+                    action.ActionId,
+                    action.AbilityId);
                 Color textColor = Color.white;
                 Vector2 position = AvailableActionCellPosition(i);
 
@@ -439,7 +443,8 @@ namespace Arena.UI
                     _availableActionsRoot,
                     action.DisplayName,
                     fill,
-                    textColor);
+                    textColor,
+                    iconSprite);
                 SetRect((RectTransform)cell.transform, position, new Vector2(AvailableActionSlotWidth, AvailableActionSlotHeight));
 
                 Outline outline = cell.gameObject.AddComponent<Outline>();
@@ -552,6 +557,7 @@ namespace Arena.UI
                     string keyText = LoadoutGridKeyLabel(row, col);
                     Color fill = new(0.04f, 0.05f, 0.06f, 0.92f);
                     Color textColor = new(1f, 1f, 1f, 0.36f);
+                    Sprite? iconSprite = null;
                     TooltipData tooltipData = default;
                     ActiveSelectableLoadoutAction resolved = default;
 
@@ -568,7 +574,8 @@ namespace Arena.UI
                             assignment);
                         if (resolved.HasAssignedAction)
                         {
-                            labelText = resolved.DisplayName;
+                            iconSprite = ActionIconResolver.ResolveForAction(resolved);
+                            labelText = iconSprite == null ? resolved.DisplayName : string.Empty;
                             fill = resolved.IsFixed
                                 ? FixedActionColor(resolved.ActionId)
                                 : AbilityColor(resolved.AbilityId);
@@ -582,7 +589,8 @@ namespace Arena.UI
                         _abilityGridRoot,
                         labelText,
                         fill,
-                        textColor);
+                        textColor,
+                        iconSprite);
                     SetRect((RectTransform)cell.transform, cellPosition, ActionBarLayout.SlotVector);
 
                     if (!HasPrefabFrame(cell))
@@ -1151,18 +1159,47 @@ namespace Arena.UI
             return button;
         }
 
-        private static GameObject CreateAbilityCell(string name, Transform parent, string text, Color fill, Color textColor)
+        private static GameObject CreateAbilityCell(
+            string name,
+            Transform parent,
+            string text,
+            Color fill,
+            Color textColor,
+            Sprite? iconSprite = null)
         {
             GameObject go = CreateActionBarSlot(name, parent);
             Image image = go.GetComponent<Image>() ?? go.AddComponent<Image>();
             image.color = HasPrefabFrame(go) ? TransparentSlotInput : fill;
             image.raycastTarget = true;
 
+            if (iconSprite != null)
+            {
+                GameObject iconGo = new("Icon");
+                iconGo.transform.SetParent(go.transform, false);
+                RectTransform iconRt = iconGo.AddComponent<RectTransform>();
+                iconRt.anchorMin = Vector2.zero;
+                iconRt.anchorMax = Vector2.one;
+                iconRt.offsetMin = Vector2.zero;
+                iconRt.offsetMax = Vector2.zero;
+
+                Image icon = iconGo.AddComponent<Image>();
+                icon.sprite = iconSprite;
+                icon.color = Color.white;
+                icon.preserveAspect = true;
+                icon.raycastTarget = false;
+            }
+
             TMP_Text label = MakeLabel("Text", go.transform, 10, TextAnchor.MiddleCenter, textColor);
             label.text = text;
             SetStretch(label.rectTransform);
             label.rectTransform.offsetMin = new Vector2(5f, 5f);
             label.rectTransform.offsetMax = new Vector2(-5f, -5f);
+            if (iconSprite != null && !string.IsNullOrWhiteSpace(text))
+            {
+                Shadow shadow = label.gameObject.AddComponent<Shadow>();
+                shadow.effectColor = new Color(0f, 0f, 0f, 0.82f);
+                shadow.effectDistance = new Vector2(1f, -1f);
+            }
             return go;
         }
 

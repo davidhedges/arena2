@@ -172,6 +172,7 @@ namespace Arena.UI
         private GameObject? _selfCombatModeIcon;
 
         // --- Action Bars ---
+        private readonly Image[] _abilityGridIcons = new Image[ActionBarLayout.CellCount];
         private readonly Image[] _abilityGridCd   = new Image[ActionBarLayout.CellCount];
         private readonly Text[]  _abilityGridText = new Text[ActionBarLayout.CellCount];
         private readonly Text[]  _abilityGridChargeText = new Text[ActionBarLayout.CellCount];
@@ -528,6 +529,7 @@ namespace Arena.UI
                         grid.transform,
                         key,
                         null,
+                        out _abilityGridIcons[index],
                         out _abilityGridCd[index],
                         out _abilityGridText[index],
                         out _abilityGridChargeText[index],
@@ -543,6 +545,7 @@ namespace Arena.UI
         }
 
         private void BuildSlot(Transform parent, string key, string? label,
+            out Image iconImg,
             out Image cdImg,
             out Text cdTxt,
             out Text chargeTxt,
@@ -581,6 +584,17 @@ namespace Arena.UI
             dropSlot = slot.AddComponent<LoadoutActionDropSlot>();
             dragSource = slot.AddComponent<LoadoutActionDragSource>();
             dragSource.Configure(_canvas, null, null);
+
+            var iconGo = Child(slot.transform, "Icon");
+            Stretch(iconGo);
+            var iconRt = (RectTransform)iconGo.transform;
+            iconRt.offsetMin = Vector2.zero;
+            iconRt.offsetMax = Vector2.zero;
+            iconImg = iconGo.AddComponent<Image>();
+            iconImg.color = Color.white;
+            iconImg.preserveAspect = true;
+            iconImg.raycastTarget = false;
+            iconImg.enabled = false;
 
             // Keybind label (top-left)
             var kt = Label(slot.transform, "Key",
@@ -1388,7 +1402,7 @@ namespace Arena.UI
                 {
                     int index = GridIndex(row, col);
                     _abilityGridStates[index] = ActionBarSlotState.Empty(KeyLabelForCell(row, col));
-                    SetActionBarSlotPresentation(_abilityGridCd[index], _abilityGridStates[index], SlotBg);
+                    SetActionBarSlotPresentation(_abilityGridCd[index], _abilityGridIcons[index], _abilityGridStates[index], SlotBg, null);
                     if (row > 0)
                         _abilityGridTooltips[index].Configure(_canvas, default);
                     _abilityGridClicks[index].Configure(null);
@@ -1409,6 +1423,7 @@ namespace Arena.UI
 
                 bool isVisible = resolved.HasAssignedAction;
                 string label = isVisible ? resolved.DisplayName : string.Empty;
+                Sprite? iconSprite = isVisible ? ActionIconResolver.ResolveForAction(resolved) : null;
                 Color slotColor = resolved.IsFixed
                     ? (FixedActionDispatcher.IsEnabled(resolved.ActionId, conn)
                         ? FixedActionColor(resolved.ActionId)
@@ -1422,12 +1437,12 @@ namespace Arena.UI
                         StringComparison.Ordinal);
                 _abilityGridStates[index] = new ActionBarSlotState(
                     binding.KeyLabel,
-                    label,
+                    iconSprite == null ? label : string.Empty,
                     isVisible,
                     resolved.IsFixed,
                     resolved.ActionId,
                     !resolved.IsCombatModeToggleAbility && UsesGlobalCooldown(resolved.ActionId, string.Empty));
-                SetActionBarSlotPresentation(_abilityGridCd[index], _abilityGridStates[index], slotColor);
+                SetActionBarSlotPresentation(_abilityGridCd[index], _abilityGridIcons[index], _abilityGridStates[index], slotColor, iconSprite);
                 _abilityGridClicks[index].Configure(
                     isVisible ? () => TriggerActionRef(conn, resolved) : null,
                     isVisible && usesHoldInput ? () => ReleaseActionRef(conn, resolved) : null,
@@ -1630,13 +1645,21 @@ namespace Arena.UI
 
         private static void SetActionBarSlotPresentation(
             Image overlay,
+            Image icon,
             ActionBarSlotState state,
-            Color slotColor)
+            Color slotColor,
+            Sprite? iconSprite)
         {
             var slot = overlay.transform.parent;
             var slotImage = slot.GetComponent<Image>();
             if (slotImage != null)
                 SetColorIfChanged(slotImage, slot.Find("Frame") != null ? TransparentSlotInput : slotColor);
+
+            if (icon != null)
+            {
+                icon.sprite = iconSprite;
+                icon.enabled = state.IsVisible && iconSprite != null;
+            }
 
             var keyText = slot.Find("Key")?.GetComponent<Text>();
             if (keyText != null)

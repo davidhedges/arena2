@@ -1,0 +1,78 @@
+{
+  "output_root": "Assets/Arena/Resources/UI/AbilityIcons",
+  "sheets": [
+    {
+      "source": "Assets/Arena/Content/Art/UI/AbilityIconSheets/warrior_primary_sheet.png",
+      "columns": 4,
+      "rows": 4,
+      "cells": [
+        {"kind": "ABILITY", "id": "WARRIOR_HEW"},
+        {"kind": "ABILITY", "id": "WARRIOR_MAIM"},
+        {"kind": "ABILITY", "id": "WARRIOR_GROUND_TO_AIR_PLACEHOLDER"},
+        {"kind": "ABILITY", "id": "WARRIOR_SKYFALL_1"},
+        {"kind": "ABILITY", "id": "WARRIOR_SKYFALL_2"},
+        {"kind": "ABILITY", "id": "WARRIOR_ICE_SPIKES"},
+        {"kind": "ABILITY", "id": "WARRIOR_SKYFALL_3"},
+        {"kind": "ABILITY", "id": "WARRIOR_WHIRLWIND"},
+        {"kind": "ABILITY", "id": "WARRIOR_SUNDER"},
+        {"kind": "ABILITY", "id": "WARRIOR_CLEAVE"},
+        {"kind": "ABILITY", "id": "WARRIOR_DREAD_STRIKE"},
+        {"kind": "ABILITY", "id": "WARRIOR_EARTHSHATTER"},
+        {"kind": "ABILITY", "id": "WARRIOR_FIREBALL"},
+        {"kind": "ABILITY", "id": "WARRIOR_GROUND_SLASH"},
+        {"kind": "ABILITY", "id": "WARRIOR_ICICLE"},
+        {"kind": "ABILITY", "id": "WARRIOR_ORBITING_BLADES"}
+      ]
+    },
+    {
+      "source": "Assets/Arena/Content/Art/UI/AbilityIconSheets/warrior_special_fixed_sheet.png",
+      "columns": 5,
+      "rows": 4,
+      "cells": [
+        {"kind": "ABILITY", "id": "WARRIOR_METEOR"},
+        {"kind": "ABILITY", "id": "WARRIOR_LIGHTNING"},
+        {"kind": "ABILITY", "id": "WARRIOR_ERUPTION"},
+        {"kind": "ABILITY", "id": "WARRIOR_BOOMERANG_ORB"},
+        {"kind": "ABILITY", "id": "WARRIOR_WITHERING_ORB"},
+        {"kind": "ABILITY", "id": "WARRIOR_MOMENTUM"},
+        {"kind": "ABILITY", "id": "WARRIOR_FORTIFY"},
+        {"kind": "ABILITY", "id": "WARRIOR_IRON_WILL"},
+        {"kind": "ABILITY", "id": "WARRIOR_DEFIANCE"},
+        {"kind": "ABILITY", "id": "WARRIOR_BATTLE_CRY"},
+        {"kind": "ABILITY", "id": "WARRIOR_FROST_NOVA"},
+        {"kind": "ABILITY", "id": "WARRIOR_GIANT_SWING"},
+        {"kind": "ABILITY", "id": "WARRIOR_ENRAGE"},
+        {"kind": "ABILITY", "id": "WARRIOR_SHOCKWAVE"},
+        {"kind": "ABILITY", "id": "WARRIOR_INTIMIDATE"},
+        {"kind": "ABILITY", "id": "WARRIOR_CHARGE"},
+        {"kind": "ABILITY", "id": "WARRIOR_IMPALE"},
+        {"kind": "ABILITY", "id": "WARRIOR_DISENGAGE_STRIKE"},
+        {"kind": "FIXED", "id": "DODGE"},
+        {"kind": "FIXED", "id": "PARRY"}
+      ]
+    },
+    {
+      "source": "Assets/Arena/Content/Art/UI/AbilityIconSheets/paladin_archer_sheet.png",
+      "columns": 5,
+      "rows": 4,
+      "cells": [
+        {"kind": "ABILITY", "id": "PALADIN_SHIELD_PUMMEL"},
+        {"kind": "ABILITY", "id": "PALADIN_VINDICATOR_SLASH"},
+        {"kind": "ABILITY", "id": "PALADIN_GUARDIAN_RUSH"},
+        {"kind": "ABILITY", "id": "PALADIN_RETRIBUTION"},
+        {"kind": "ABILITY", "id": "PALADIN_CHARGE"},
+        {"kind": "ABILITY", "id": "PALADIN_AVENGE"},
+        {"kind": "ABILITY", "id": "PALADIN_CONSECRATE"},
+        {"kind": "ABILITY", "id": "PALADIN_CLEANSING_TOUCH"},
+        {"kind": "ABILITY", "id": "PALADIN_ABSOLUTION"},
+        {"kind": "ABILITY", "id": "PALADIN_FERVOR"},
+        {"kind": "ABILITY", "id": "PALADIN_SACRED_FLAME"},
+        {"kind": "ABILITY", "id": "ARCHER_POWER_SHOT"},
+        {"kind": "ABILITY", "id": "ARCHER_RAIN_SHOT"},
+        {"kind": "ABILITY", "id": "ARCHER_EVASIVE_SHOT"},
+        {"kind": "ABILITY", "id": "ARCHER_AIR_SHOT"},
+        {"kind": "ABILITY", "id": "ARCHER_DRAW_MODE_TOGGLE"}
+      ]
+    }
+  ]
+}
