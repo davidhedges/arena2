@@ -53,6 +53,8 @@ namespace SpacetimeDB.Types
             AddTable(GlobalCooldown = new(conn));
             AddTable(InventoryContainer = new(conn));
             AddTable(InventorySlot = new(conn));
+            AddTable(ItemAffixDefinition = new(conn));
+            AddTable(ItemAffixInstance = new(conn));
             AddTable(ItemDefinition = new(conn));
             AddTable(ItemInstance = new(conn));
             AddTable(LoadoutSlotCatalog = new(conn));
@@ -610,6 +612,8 @@ namespace SpacetimeDB.Types
             new QueryBuilder().From.GlobalCooldown().ToSql(),
             new QueryBuilder().From.InventoryContainer().ToSql(),
             new QueryBuilder().From.InventorySlot().ToSql(),
+            new QueryBuilder().From.ItemAffixDefinition().ToSql(),
+            new QueryBuilder().From.ItemAffixInstance().ToSql(),
             new QueryBuilder().From.ItemDefinition().ToSql(),
             new QueryBuilder().From.ItemInstance().ToSql(),
             new QueryBuilder().From.LoadoutSlotCatalog().ToSql(),
@@ -677,6 +681,8 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Table<GlobalCooldown, GlobalCooldownCols, GlobalCooldownIxCols> GlobalCooldown() => new("global_cooldown", new GlobalCooldownCols("global_cooldown"), new GlobalCooldownIxCols("global_cooldown"));
         public global::SpacetimeDB.Table<InventoryContainer, InventoryContainerCols, InventoryContainerIxCols> InventoryContainer() => new("inventory_container", new InventoryContainerCols("inventory_container"), new InventoryContainerIxCols("inventory_container"));
         public global::SpacetimeDB.Table<InventorySlot, InventorySlotCols, InventorySlotIxCols> InventorySlot() => new("inventory_slot", new InventorySlotCols("inventory_slot"), new InventorySlotIxCols("inventory_slot"));
+        public global::SpacetimeDB.Table<ItemAffixDefinition, ItemAffixDefinitionCols, ItemAffixDefinitionIxCols> ItemAffixDefinition() => new("item_affix_definition", new ItemAffixDefinitionCols("item_affix_definition"), new ItemAffixDefinitionIxCols("item_affix_definition"));
+        public global::SpacetimeDB.Table<ItemAffixInstance, ItemAffixInstanceCols, ItemAffixInstanceIxCols> ItemAffixInstance() => new("item_affix_instance", new ItemAffixInstanceCols("item_affix_instance"), new ItemAffixInstanceIxCols("item_affix_instance"));
         public global::SpacetimeDB.Table<ItemDefinition, ItemDefinitionCols, ItemDefinitionIxCols> ItemDefinition() => new("item_definition", new ItemDefinitionCols("item_definition"), new ItemDefinitionIxCols("item_definition"));
         public global::SpacetimeDB.Table<ItemInstance, ItemInstanceCols, ItemInstanceIxCols> ItemInstance() => new("item_instance", new ItemInstanceCols("item_instance"), new ItemInstanceIxCols("item_instance"));
         public global::SpacetimeDB.Table<LoadoutSlotCatalog, LoadoutSlotCatalogCols, LoadoutSlotCatalogIxCols> LoadoutSlotCatalog() => new("loadout_slot_catalog", new LoadoutSlotCatalogCols("loadout_slot_catalog"), new LoadoutSlotCatalogIxCols("loadout_slot_catalog"));
@@ -825,6 +831,7 @@ namespace SpacetimeDB.Types
                 Reducer.MoveItem args => Reducers.InvokeMoveItem(eventContext, args),
                 Reducer.OpenLootNpc args => Reducers.InvokeOpenLootNpc(eventContext, args),
                 Reducer.PromotePartyLeader args => Reducers.InvokePromotePartyLeader(eventContext, args),
+                Reducer.PublishItemAffixDefinitions args => Reducers.InvokePublishItemAffixDefinitions(eventContext, args),
                 Reducer.PublishItemDefinitions args => Reducers.InvokePublishItemDefinitions(eventContext, args),
                 Reducer.PublishProgressionCatalogs args => Reducers.InvokePublishProgressionCatalogs(eventContext, args),
                 Reducer.PublishSpellDefinitions args => Reducers.InvokePublishSpellDefinitions(eventContext, args),

@@ -47,7 +47,9 @@ use crate::combat::{
 };
 use crate::defense::prune_defense_states;
 use crate::derived_stats::derived_combat_stats_for_owner;
-use crate::inventory::sync_item_definitions;
+use crate::inventory::{
+    equipment_modifier_totals_for_owner, sync_item_definitions, tick_equipment_periodic_effects,
+};
 use crate::melee::{
     has_due_pending_melee_impacts, has_due_pending_projectile_releases,
     resolve_pending_melee_impacts, resolve_pending_projectile_releases, sync_melee_definitions,
@@ -523,7 +525,9 @@ fn run_pre_tick_housekeeping_phase(
 
     // Periodic DOT/HOT effects can enqueue additional rows in the same frame.
     let periodic_queued = process_periodic_status_ticks(ctx, now);
+    let equipment_periodic_queued = tick_equipment_periodic_effects(ctx, now, dt);
     if periodic_queued > 0
+        || equipment_periodic_queued > 0
         || has_due_pending_melee_impacts(ctx, now)
         || has_due_pending_projectile_releases(ctx, now)
         || has_due_pending_area_impacts(ctx, now)
@@ -1330,6 +1334,8 @@ fn tick_player(
 
     let derived_stats = derived_combat_stats_for_owner(ctx, identity);
     move_speed_multiplier *= derived_stats.run_speed_multiplier;
+    move_speed_multiplier *=
+        equipment_modifier_totals_for_owner(ctx, identity).move_speed_multiplier();
 
     let grounded_before_step = physics.grounded;
     simulate_non_dummy_player_kinematics(

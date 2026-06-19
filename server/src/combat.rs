@@ -15,7 +15,7 @@ use crate::arena::{
     MATCH_PHASE_ENDED, MATCH_PHASE_IN_PROGRESS,
 };
 use crate::derived_stats::derived_combat_stats_for_owner;
-use crate::inventory::{create_corpse_loot_for_npc, physical_resistance_for_owner};
+use crate::inventory::{create_corpse_loot_for_npc, equipment_modifier_totals_for_owner};
 use crate::open_world_scene::{OPEN_WORLD_SPAWN_X, OPEN_WORLD_SPAWN_YAW, OPEN_WORLD_SPAWN_Z};
 use crate::player_state::PlayerState;
 use crate::practice::{is_training_instance, resolve_respawn_pose};
@@ -24,7 +24,8 @@ use crate::relations::{
     can_apply_status_polarity, can_harm, target_audience_allows, TargetAudience,
 };
 use crate::resources::{
-    grant_primary_resource_for_damage_dealt, grant_primary_resource_for_damage_taken,
+    grant_primary_resource_amount_for_kind, grant_primary_resource_for_damage_dealt,
+    grant_primary_resource_for_damage_taken,
 };
 use crate::spells::{
     bake_linear_special_movement, begin_special_movement_with_facing_policy,
@@ -112,6 +113,10 @@ const RULE_STAGGER_SHOVE_DURATION_MS: &str = "STAGGER_SHOVE_DURATION_MS";
 const STAGGER_SHOVE_KIND: &str = "STAGGER_SHOVE";
 const EFFECT_TYPE_DAMAGE: &str = "DAMAGE";
 const EFFECT_TYPE_HEAL: &str = "HEAL";
+pub(crate) const DAMAGE_SOURCE_KIND_MELEE: &str = "MELEE";
+pub(crate) const DAMAGE_SOURCE_KIND_SPELL: &str = "SPELL";
+pub(crate) const DAMAGE_SOURCE_KIND_PROJECTILE: &str = "PROJECTILE";
+pub(crate) const DAMAGE_SOURCE_KIND_PERIODIC: &str = "PERIODIC";
 const DEFAULT_COMBAT_ENGAGEMENT_DURATION: Duration = Duration::from_secs(5);
 const COMBAT_REASON_DAMAGE: &str = "DAMAGE";
 const COMBAT_REASON_DEBUFF: &str = "DEBUFF";
@@ -1483,6 +1488,7 @@ pub struct PendingHit {
     pub damage_type: String,
     pub target_audience: String,
     pub damage_delivery: String,
+    pub damage_source_kind: String,
     pub direct_action_key: String,
     pub queued_at: Timestamp,
     #[index(btree)]
@@ -2632,6 +2638,7 @@ pub enum EffectPacket {
         target: Identity,
         spell_id: String,
         delivery: DamageDelivery,
+        source_kind: String,
         direct_action_key: String,
     },
     Heal {
@@ -2678,6 +2685,7 @@ fn queue_effect(ctx: &ReducerContext, effect: EffectPacket) {
             target,
             spell_id,
             delivery,
+            source_kind,
             direct_action_key,
         } => {
             ctx.db.pending_hit().insert(new_pending_hit(
@@ -2692,6 +2700,7 @@ fn queue_effect(ctx: &ReducerContext, effect: EffectPacket) {
                 damage_type,
                 TargetAudience::Hostile,
                 delivery,
+                source_kind,
                 direct_action_key,
             ));
         }
@@ -2714,6 +2723,7 @@ fn queue_effect(ctx: &ReducerContext, effect: EffectPacket) {
                 DamageType::Physical,
                 target_audience,
                 DamageDelivery::Direct,
+                String::new(),
                 String::new(),
             ));
         }
@@ -2816,6 +2826,7 @@ fn new_pending_hit(
     damage_type: DamageType,
     target_audience: TargetAudience,
     damage_delivery: DamageDelivery,
+    damage_source_kind: String,
     direct_action_key: String,
 ) -> PendingHit {
     PendingHit {
@@ -2828,6 +2839,7 @@ fn new_pending_hit(
         damage_type: damage_type.as_str().to_string(),
         target_audience: target_audience.as_str().to_string(),
         damage_delivery: damage_delivery.as_str().to_string(),
+        damage_source_kind,
         direct_action_key,
         queued_at,
         queued_at_micros,
@@ -3222,6 +3234,7 @@ fn apply_damage_to_player_state(
         conclude_match_if_needed(ctx, instance_id);
     }
     grant_primary_resource_for_damage_dealt(ctx, source, hp_damage, ctx.timestamp);
+    apply_equipment_melee_steal(ctx, hit, hp_damage);
     if hp_damage > 0
         && DamageDelivery::from_wire(hit.damage_delivery.as_str()) == DamageDelivery::Direct
     {
@@ -3271,6 +3284,7 @@ fn apply_damage_to_npc_state(
 
     ctx.db.npc_state().identity().update(state);
     grant_primary_resource_for_damage_dealt(ctx, source, hp_damage, ctx.timestamp);
+    apply_equipment_melee_steal(ctx, hit, hp_damage);
     if hp_damage > 0
         && DamageDelivery::from_wire(hit.damage_delivery.as_str()) == DamageDelivery::Direct
     {
@@ -3298,16 +3312,71 @@ fn resolve_damage_amount(
     } else {
         temporary_modifiers.damage_multiplier_for(&hit.source, delivery)
             * derived_combat_stats_for_owner(ctx, hit.source).damage_multiplier
+            * equipment_damage_multiplier_for_hit(ctx, hit)
             * resistance_multiplier
             * temporary_modifiers.damage_taken_multiplier_for(&hit.target)
     };
-    resolve_effect_amount(ctx, hit, non_crit_multiplier)
+    resolve_effect_amount(
+        ctx,
+        hit,
+        non_crit_multiplier,
+        equipment_crit_chance_bonus(ctx, hit),
+    )
 }
 
 fn resistance_multiplier_for_damage_type(ctx: &ReducerContext, hit: &PendingHit) -> f32 {
-    match DamageType::from_wire(hit.damage_type.as_str()) {
-        DamageType::Physical => (1.0 - physical_resistance_for_owner(ctx, hit.target)).max(0.0),
-        _ => 1.0,
+    let resistance = equipment_modifier_totals_for_owner(ctx, hit.target)
+        .resistance_for_damage_type(&hit.damage_type);
+    (1.0 - resistance).max(0.0)
+}
+
+fn equipment_damage_multiplier_for_hit(ctx: &ReducerContext, hit: &PendingHit) -> f32 {
+    if hit.source == Identity::ZERO {
+        return 1.0;
+    }
+    if DamageType::from_wire(hit.damage_type.as_str()) != DamageType::Physical {
+        return 1.0;
+    }
+    equipment_modifier_totals_for_owner(ctx, hit.source).physical_damage_multiplier()
+}
+
+fn equipment_crit_chance_bonus(ctx: &ReducerContext, hit: &PendingHit) -> f32 {
+    if hit.source == Identity::ZERO || hit.amount <= 0 {
+        return 0.0;
+    }
+    equipment_modifier_totals_for_owner(ctx, hit.source).crit_chance_bonus
+}
+
+fn apply_equipment_melee_steal(ctx: &ReducerContext, hit: &PendingHit, hp_damage: i32) {
+    if hp_damage <= 0
+        || hit.source == Identity::ZERO
+        || hit.damage_source_kind.as_str() != DAMAGE_SOURCE_KIND_MELEE
+    {
+        return;
+    }
+    let totals = equipment_modifier_totals_for_owner(ctx, hit.source);
+    let life_steal_amount = ((hp_damage as f32) * totals.melee_life_steal).round() as i32;
+    if life_steal_amount > 0 {
+        queue_effects(
+            ctx,
+            vec![EffectPacket::Heal {
+                amount: life_steal_amount,
+                source: hit.source,
+                target: hit.source,
+                spell_id: "EQUIPMENT_TRANSFERENCE".to_string(),
+                target_audience: TargetAudience::PartyOrSelf,
+            }],
+        );
+    }
+    let mana_steal_amount = (hp_damage as f32) * totals.melee_mana_steal;
+    if mana_steal_amount > 0.0 {
+        grant_primary_resource_amount_for_kind(
+            ctx,
+            hit.source,
+            "MANA",
+            mana_steal_amount,
+            ctx.timestamp,
+        );
     }
 }
 
@@ -3394,20 +3463,20 @@ fn resolve_heal_amount(
     temporary_modifiers: &TemporaryCombatModifiers,
 ) -> ResolvedEffectAmount {
     let non_crit_multiplier = temporary_modifiers.healing_taken_multiplier_for(&hit.target);
-    resolve_effect_amount(ctx, hit, non_crit_multiplier)
+    resolve_effect_amount(ctx, hit, non_crit_multiplier, 0.0)
 }
 
 fn resolve_effect_amount(
     ctx: &ReducerContext,
     hit: &PendingHit,
     non_crit_multiplier: f32,
+    additive_crit_chance: f32,
 ) -> ResolvedEffectAmount {
     let base_amount = hit.amount.max(0);
     let crit_chance = if hit.source == Identity::ZERO {
         0.0
     } else {
-        derived_combat_stats_for_owner(ctx, hit.source)
-            .crit_chance
+        (derived_combat_stats_for_owner(ctx, hit.source).crit_chance + additive_crit_chance)
             .clamp(0.0, 1.0)
     };
     resolve_effect_amount_from_roll(
@@ -4721,6 +4790,7 @@ pub fn process_periodic_status_ticks(ctx: &ReducerContext, now: Timestamp) -> us
                         target: effect.target,
                         spell_id: effect.spell_id.clone(),
                         delivery: DamageDelivery::Periodic,
+                        source_kind: DAMAGE_SOURCE_KIND_PERIODIC.to_string(),
                         direct_action_key: String::new(),
                     });
                 }

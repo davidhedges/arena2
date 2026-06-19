@@ -33,7 +33,7 @@ use crate::combat::{
     ActiveCombatProjectile, CombatEvent, DamageDelivery, DamageType, EffectPacket,
     ProjectilePresentationEvent, StatusApplication, StatusDispelType, StatusEffectKind,
     StatusPayload, StatusPolarity, StatusStackGroupDefault, COMBAT_METADATA_NONE,
-    COMBAT_SCALAR_NONE, COMBAT_SEQUENCE_NONE,
+    COMBAT_SCALAR_NONE, COMBAT_SEQUENCE_NONE, DAMAGE_SOURCE_KIND_SPELL,
 };
 use crate::defense::{
     clear_interruptible_defense_for_owner, resolve_defensible_combat_hit, CombatHitDeliveryKind,
@@ -4329,6 +4329,7 @@ fn queue_electrocute_damage(ctx: &ReducerContext, active_cast: &ActiveCast, targ
             target: target_id,
             spell_id: runtime.spell_instance_id.clone(),
             delivery: DamageDelivery::Direct,
+            source_kind: DAMAGE_SOURCE_KIND_SPELL.to_string(),
             direct_action_key: runtime.spell_instance_id,
         }],
     );
@@ -4617,6 +4618,7 @@ fn spawn_instant_beam(
                             target: target_id,
                             spell_id: sequence_effect_id.clone(),
                             delivery: DamageDelivery::Direct,
+                            source_kind: DAMAGE_SOURCE_KIND_SPELL.to_string(),
                             direct_action_key: sequence_effect_id,
                         }],
                     );
@@ -4996,6 +4998,7 @@ fn resolve_area_impact(ctx: &ReducerContext, impact: AreaImpactResolution<'_>) {
             target: player.player_id,
             spell_id: impact.spell_id.to_string(),
             delivery: DamageDelivery::Direct,
+            source_kind: DAMAGE_SOURCE_KIND_SPELL.to_string(),
             direct_action_key: impact.spell_id.to_string(),
         });
         if let Some(area) = impact.definition.secondary.area.as_ref() {
@@ -5934,6 +5937,7 @@ fn resolve_movement_delivery_hit(
         target: target.player_id,
         spell_id: action_instance_id.to_string(),
         delivery: DamageDelivery::Direct,
+        source_kind: DAMAGE_SOURCE_KIND_SPELL.to_string(),
         direct_action_key: action_instance_id.to_string(),
     }];
     let impact_effects = movement_impact_effects(&movement);

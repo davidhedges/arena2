@@ -617,7 +617,7 @@ namespace Arena.UI
             return conn.Db.InventoryContainer.ContainerId.Find(containerId);
         }
 
-        private static TooltipData BuildItemTooltip(ItemInstance? item, ItemDefinition? definition)
+        private static TooltipData BuildItemTooltip(DbConnection? conn, ItemInstance? item, ItemDefinition? definition)
         {
             if (item == null)
                 return default;
@@ -626,7 +626,7 @@ namespace Arena.UI
                 ? definition.DisplayName
                 : item.ItemInstanceId;
             string subtitle = BuildItemSubtitle(definition);
-            string description = BuildItemDescription(item, definition);
+            string description = BuildItemDescription(conn, item, definition);
             return new TooltipData(name, subtitle, description);
         }
 
@@ -642,7 +642,7 @@ namespace Arena.UI
             return string.Join(" - ", parts);
         }
 
-        private static string BuildItemDescription(ItemInstance item, ItemDefinition? definition)
+        private static string BuildItemDescription(DbConnection? conn, ItemInstance item, ItemDefinition? definition)
         {
             List<string> parts = new();
             if (item.Quantity > 1)
@@ -654,11 +654,57 @@ namespace Arena.UI
                 AppendLabeledTooltipPart(parts, "Weapon", definition.WeaponKind);
                 AppendLabeledTooltipPart(parts, "Hands", definition.HandRequirement);
                 AppendLabeledTooltipPart(parts, "Profile", definition.CombatProfileId);
+                if (definition.PhysicalResistance > 0.0001f)
+                    parts.Add($"Physical Resistance: {FormatAffixValue("PHYSICAL_RESISTANCE", definition.PhysicalResistance)}");
                 if (definition.UniqueEquipped)
                     parts.Add("Unique-equipped");
             }
 
+            AppendAffixTooltipParts(conn, item.ItemInstanceId, parts);
+
             return string.Join("\n", parts);
+        }
+
+        private static void AppendAffixTooltipParts(DbConnection? conn, string itemInstanceId, List<string> parts)
+        {
+            if (conn == null || string.IsNullOrWhiteSpace(itemInstanceId))
+                return;
+
+            List<ItemAffixInstance> affixes = new();
+            foreach (ItemAffixInstance affix in conn.Db.ItemAffixInstance.ItemInstanceId.Filter(itemInstanceId))
+                affixes.Add(affix);
+            affixes.Sort((left, right) =>
+            {
+                int sort = left.SortOrder.CompareTo(right.SortOrder);
+                return sort != 0
+                    ? sort
+                    : string.Compare(left.Key, right.Key, StringComparison.Ordinal);
+            });
+
+            foreach (ItemAffixInstance affix in affixes)
+            {
+                ItemAffixDefinition? definition = conn.Db.ItemAffixDefinition.AffixId.Find(affix.AffixId);
+                string label = !string.IsNullOrWhiteSpace(definition?.DisplayName)
+                    ? definition.DisplayName
+                    : FormatTooltipValue(affix.ModifierKind);
+                if (string.IsNullOrWhiteSpace(label))
+                    continue;
+                parts.Add($"{label}: {FormatAffixValue(affix.ModifierKind, affix.Value)}");
+            }
+        }
+
+        private static string FormatAffixValue(string modifierKind, float value)
+        {
+            string normalized = string.IsNullOrWhiteSpace(modifierKind)
+                ? string.Empty
+                : modifierKind.Trim().Replace('-', '_').ToUpperInvariant();
+
+            return normalized switch
+            {
+                "MANA_REGEN" or "HEALTH_REGEN" => $"+{value:0.##}/s",
+                "AWARENESS" or "LIGHT" => $"+{value:0.##}",
+                _ => $"+{value * 100f:0.#}%"
+            };
         }
 
         private static void AppendNormalizedTooltipPart(List<string> parts, string value)
@@ -1211,7 +1257,10 @@ namespace Arena.UI
                     _label.text = item == null || iconSprite == null ? (definition?.DisplayName ?? _emptyLabel) : string.Empty;
 
                 if (_tooltip != null && controller._canvas != null)
-                    _tooltip.Configure(controller._canvas, BuildItemTooltip(item, definition), pollHover: true);
+                    _tooltip.Configure(
+                        controller._canvas,
+                        BuildItemTooltip(NetworkManager.Instance?.Conn, item, definition),
+                        pollHover: true);
             }
 
             public void OnPointerClick(PointerEventData eventData)
@@ -1305,7 +1354,10 @@ namespace Arena.UI
                     _quantity.text = item != null && item.Quantity > 1 ? item.Quantity.ToString() : string.Empty;
 
                 if (_tooltip != null && controller._canvas != null)
-                    _tooltip.Configure(controller._canvas, BuildItemTooltip(item, definition), pollHover: true);
+                    _tooltip.Configure(
+                        controller._canvas,
+                        BuildItemTooltip(NetworkManager.Instance?.Conn, item, definition),
+                        pollHover: true);
             }
 
             public void OnPointerClick(PointerEventData eventData)

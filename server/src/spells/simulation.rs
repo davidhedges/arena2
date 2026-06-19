@@ -5,7 +5,7 @@ use crate::combat::player_snapshot::{PlayerSnapshot, PlayerSnapshotSet};
 use crate::combat::scene_query::{aoe_hits_player, first_hit_on_segment, SceneHitKind};
 use crate::combat::{
     finish_combat_projectile_with_event, queue_effects, ActiveCombatProjectile, DamageDelivery,
-    EffectPacket, StatusPolarity,
+    EffectPacket, StatusPolarity, DAMAGE_SOURCE_KIND_SPELL,
 };
 use crate::relations::target_audience_allows;
 
@@ -389,6 +389,7 @@ fn tick_meteor_spell(
                     spell_id: spell_id.clone(),
                     delivery: DamageDelivery::Direct,
                     direct_action_key: spell.spell_id.clone(),
+                    source_kind: DAMAGE_SOURCE_KIND_SPELL.to_string(),
                 });
                 if let Some(area) = definition.secondary.area.as_ref() {
                     push_impact_effect_packets(

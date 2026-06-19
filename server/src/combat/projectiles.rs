@@ -15,7 +15,7 @@ use crate::combat::{
     CombatEvent, CombatProjectileTickMetrics, DamageDelivery, EffectPacket,
     ProjectilePresentationEvent, StatusPolarity, COMBAT_EVENT_BLOCK, COMBAT_EVENT_CONTACT,
     COMBAT_EVENT_FIZZLE, COMBAT_EVENT_IMPACT, COMBAT_EVENT_PARRY, COMBAT_EVENT_UPDATE,
-    COMBAT_METADATA_NONE, COMBAT_SCALAR_NONE, COMBAT_SEQUENCE_NONE,
+    COMBAT_METADATA_NONE, COMBAT_SCALAR_NONE, COMBAT_SEQUENCE_NONE, DAMAGE_SOURCE_KIND_PROJECTILE,
 };
 use crate::defense::{
     resolve_defensible_combat_hit, CombatHitDeliveryKind, DefenseResolution, DefensibleCombatHit,
@@ -1339,6 +1339,7 @@ fn queue_spell_projectile_hit_effects(
         target,
         spell_id: projectile.projectile_instance_id.clone(),
         delivery: DamageDelivery::Direct,
+        source_kind: DAMAGE_SOURCE_KIND_PROJECTILE.to_string(),
         direct_action_key: projectile.projectile_instance_id.clone(),
     }];
     if let Some(projectile_tunables) = definition.secondary.projectile.as_ref() {
@@ -1371,6 +1372,7 @@ fn queue_weapon_projectile_hit_effects(
                 target,
                 spell_id: projectile.projectile_instance_id.clone(),
                 delivery: DamageDelivery::Direct,
+                source_kind: DAMAGE_SOURCE_KIND_PROJECTILE.to_string(),
                 direct_action_key: projectile.projectile_instance_id.clone(),
             }],
         );

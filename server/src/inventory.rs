@@ -1,21 +1,30 @@
 use spacetimedb::{reducer, table, Identity, ReducerContext, Table, Timestamp};
 
 use crate::arena::{open_world_scene_name_for_identity, player_world as _};
+use crate::combat::{queue_effects, EffectPacket};
 use crate::npcs::{npc_instance as _, npc_physics as _, npc_state as _};
 use crate::player::DEFAULT_COMBAT_PROFILE;
 use crate::player_physics::player_physics as _;
+use crate::player_state::player_state as _;
 use crate::progression::{
     runtime_class_id_for_owner, sync_active_combat_mode_for_owner, COMBAT_PROFILE_ARCHER_BOW,
 };
+use crate::relations::TargetAudience;
 
 #[allow(unused_imports)]
 use crate::inventory::equipment_loadout as _;
+#[allow(unused_imports)]
+use crate::inventory::equipment_periodic_runtime as _;
 #[allow(unused_imports)]
 use crate::inventory::inventory_container as _;
 #[allow(unused_imports)]
 use crate::inventory::inventory_counter as _;
 #[allow(unused_imports)]
 use crate::inventory::inventory_slot as _;
+#[allow(unused_imports)]
+use crate::inventory::item_affix_definition as _;
+#[allow(unused_imports)]
+use crate::inventory::item_affix_instance as _;
 #[allow(unused_imports)]
 use crate::inventory::item_definition as _;
 #[allow(unused_imports)]
@@ -28,6 +37,18 @@ pub(crate) const CONTAINER_KIND_CHEST: &str = "CHEST";
 
 const CONTAINER_STATE_ACTIVE: &str = "ACTIVE";
 const MAX_EQUIPMENT_PHYSICAL_RESISTANCE: f32 = 0.75;
+const MAX_EQUIPMENT_MAGIC_RESISTANCE: f32 = 0.75;
+const MAX_EQUIPMENT_SPECIFIC_MAGIC_RESISTANCE: f32 = 0.75;
+const MAX_EQUIPMENT_DAMAGE_BONUS: f32 = 5.0;
+const MAX_EQUIPMENT_CRIT_CHANCE_BONUS: f32 = 1.0;
+const MAX_EQUIPMENT_MOVE_SPEED_BONUS: f32 = 3.0;
+const MAX_EQUIPMENT_RESOURCE_REGEN: f32 = 100.0;
+const MAX_EQUIPMENT_HEALTH_REGEN: f32 = 100.0;
+const MAX_EQUIPMENT_STEAL_RATIO: f32 = 1.0;
+const MAX_ROLLED_ITEM_AFFIXES: usize = 3;
+const BASE_NPC_EQUIPMENT_DROP_CHANCE: f32 = 0.12;
+const HIDDEN_LOOT_QUALITY_DROP_SCALAR: f32 = 0.08;
+const HIDDEN_LOOT_QUALITY_AFFIX_SCALAR: f32 = 0.16;
 const PLAYER_BAG_WIDTH: u32 = 10;
 const PLAYER_BAG_HEIGHT: u32 = 4;
 const CORPSE_CONTAINER_WIDTH: u32 = 4;
@@ -65,6 +86,30 @@ const HAND_REQUIREMENT_OFF_HAND: &str = "OFF_HAND";
 const COMBAT_PROFILE_TWO_HANDED_SWORD: &str = "TWO_HANDED_SWORD";
 const COMBAT_PROFILE_DAGGERS: &str = "DAGGERS";
 
+pub(crate) const MODIFIER_PHYSICAL_RESISTANCE: &str = "PHYSICAL_RESISTANCE";
+pub(crate) const MODIFIER_MAGIC_RESISTANCE: &str = "MAGIC_RESISTANCE";
+pub(crate) const MODIFIER_FIRE_RESISTANCE: &str = "FIRE_RESISTANCE";
+pub(crate) const MODIFIER_COLD_RESISTANCE: &str = "COLD_RESISTANCE";
+pub(crate) const MODIFIER_LIGHTNING_RESISTANCE: &str = "LIGHTNING_RESISTANCE";
+pub(crate) const MODIFIER_POISON_RESISTANCE: &str = "POISON_RESISTANCE";
+pub(crate) const MODIFIER_HOLY_RESISTANCE: &str = "HOLY_RESISTANCE";
+pub(crate) const MODIFIER_SHADOW_RESISTANCE: &str = "SHADOW_RESISTANCE";
+pub(crate) const MODIFIER_ARCANE_RESISTANCE: &str = "ARCANE_RESISTANCE";
+pub(crate) const MODIFIER_PHYSICAL_DAMAGE: &str = "PHYSICAL_DAMAGE";
+pub(crate) const MODIFIER_CRIT_CHANCE: &str = "CRIT_CHANCE";
+pub(crate) const MODIFIER_MOVE_SPEED: &str = "MOVE_SPEED";
+pub(crate) const MODIFIER_MANA_REGEN: &str = "MANA_REGEN";
+pub(crate) const MODIFIER_HEALTH_REGEN: &str = "HEALTH_REGEN";
+pub(crate) const MODIFIER_TRANSFERENCE: &str = "TRANSFERENCE";
+pub(crate) const MODIFIER_REAPING: &str = "REAPING";
+pub(crate) const MODIFIER_AWARENESS: &str = "AWARENESS";
+pub(crate) const MODIFIER_LIGHT: &str = "LIGHT";
+pub(crate) const MODIFIER_STEALTH: &str = "STEALTH";
+
+const ALL_EQUIPMENT_SLOTS: &str =
+    "HEAD,SHOULDER,CAPE,CHEST,LEGS,BOOTS,GLOVES,RING,AMULET,MAIN_HAND,OFF_HAND";
+const JEWELRY_EQUIPMENT_SLOTS: &str = "RING,AMULET";
+
 #[table(accessor = item_definition, public)]
 #[derive(Clone)]
 pub struct ItemDefinition {
@@ -83,6 +128,34 @@ pub struct ItemDefinition {
     pub unique_equipped: bool,
     pub combat_profile_id: String,
     pub physical_resistance: f32,
+}
+
+#[table(accessor = item_affix_definition, public)]
+#[derive(Clone)]
+pub struct ItemAffixDefinition {
+    #[primary_key]
+    pub affix_id: String,
+    pub display_name: String,
+    pub modifier_kind: String,
+    pub value_min: f32,
+    pub value_max: f32,
+    pub allowed_item_kinds: String,
+    pub allowed_equip_slots: String,
+    pub jewelry_only: bool,
+    pub sort_order: u32,
+}
+
+#[table(accessor = item_affix_instance, public)]
+#[derive(Clone)]
+pub struct ItemAffixInstance {
+    #[primary_key]
+    pub key: String,
+    #[index(btree)]
+    pub item_instance_id: String,
+    pub affix_id: String,
+    pub modifier_kind: String,
+    pub value: f32,
+    pub sort_order: u32,
 }
 
 #[table(accessor = item_instance, public)]
@@ -170,6 +243,15 @@ pub struct InventoryCounter {
     pub next_item_sequence: u64,
 }
 
+#[table(accessor = equipment_periodic_runtime)]
+#[derive(Clone)]
+pub struct EquipmentPeriodicRuntime {
+    #[primary_key]
+    pub owner: Identity,
+    pub health_regen_accumulator: f32,
+    pub updated_at: Timestamp,
+}
+
 #[derive(Clone, Copy)]
 struct ItemDefinitionSpec {
     item_def_id: &'static str,
@@ -186,6 +268,36 @@ struct ItemDefinitionSpec {
     unique_equipped: bool,
     combat_profile_id: &'static str,
     physical_resistance: f32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct ItemAffixDefinitionSpec {
+    affix_id: &'static str,
+    display_name: &'static str,
+    modifier_kind: &'static str,
+    value_min: f32,
+    value_max: f32,
+    allowed_item_kinds: &'static str,
+    allowed_equip_slots: &'static str,
+    jewelry_only: bool,
+    sort_order: u32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct RolledAffixSpec {
+    affix: ItemAffixDefinitionSpec,
+    value: f32,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+struct LootRollContext {
+    source_kind: &'static str,
+    source_id: String,
+    template_id: String,
+    world_kind: String,
+    open_world_scene_name: String,
+    hidden_loot_quality: f32,
+    drop_chance: f32,
 }
 
 #[derive(Clone, Copy)]
@@ -238,7 +350,13 @@ const RANGER_STARTER_WEAPONS: &[StarterEquipmentSpec] =
     &[starter_equipment(EQUIP_SLOT_MAIN_HAND, "TRAINING_BOW")];
 
 const STARTER_ITEM_DEFINITIONS: &[ItemDefinitionSpec] = &[
-    armor("IRON_HELM", "Iron Helm", "iron_helm", EQUIP_SLOT_HEAD, 0.020),
+    armor(
+        "IRON_HELM",
+        "Iron Helm",
+        "iron_helm",
+        EQUIP_SLOT_HEAD,
+        0.020,
+    ),
     armor(
         "IRON_SHOULDERS",
         "Iron Shoulders",
@@ -267,7 +385,13 @@ const STARTER_ITEM_DEFINITIONS: &[ItemDefinitionSpec] = &[
         EQUIP_SLOT_LEGS,
         0.040,
     ),
-    armor("IRON_BOOTS", "Iron Boots", "iron_boots", EQUIP_SLOT_BOOTS, 0.020),
+    armor(
+        "IRON_BOOTS",
+        "Iron Boots",
+        "iron_boots",
+        EQUIP_SLOT_BOOTS,
+        0.020,
+    ),
     armor(
         "IRON_GLOVES",
         "Iron Gloves",
@@ -275,7 +399,13 @@ const STARTER_ITEM_DEFINITIONS: &[ItemDefinitionSpec] = &[
         EQUIP_SLOT_GLOVES,
         0.020,
     ),
-    armor("GILDED_HELM", "Gilded Helm", "gilded_helm", EQUIP_SLOT_HEAD, 0.025),
+    armor(
+        "GILDED_HELM",
+        "Gilded Helm",
+        "gilded_helm",
+        EQUIP_SLOT_HEAD,
+        0.025,
+    ),
     armor(
         "GILDED_SHOULDERS",
         "Gilded Shoulders",
@@ -440,6 +570,218 @@ const STARTER_ITEM_DEFINITIONS: &[ItemDefinitionSpec] = &[
     },
 ];
 
+const ITEM_AFFIX_DEFINITIONS: &[ItemAffixDefinitionSpec] = &[
+    affix(
+        "AFFIX_PHYSICAL_RESISTANCE_MINOR",
+        "Physical Resistance",
+        MODIFIER_PHYSICAL_RESISTANCE,
+        0.005,
+        0.030,
+        "ARMOR,JEWELRY",
+        ALL_EQUIPMENT_SLOTS,
+        false,
+        10,
+    ),
+    affix(
+        "AFFIX_MAGIC_RESISTANCE_MINOR",
+        "Magic Resistance",
+        MODIFIER_MAGIC_RESISTANCE,
+        0.005,
+        0.030,
+        "ARMOR,JEWELRY",
+        ALL_EQUIPMENT_SLOTS,
+        false,
+        20,
+    ),
+    affix(
+        "AFFIX_FIRE_RESISTANCE_MINOR",
+        "Fire Resistance",
+        MODIFIER_FIRE_RESISTANCE,
+        0.005,
+        0.040,
+        "ARMOR,JEWELRY",
+        ALL_EQUIPMENT_SLOTS,
+        false,
+        30,
+    ),
+    affix(
+        "AFFIX_COLD_RESISTANCE_MINOR",
+        "Cold Resistance",
+        MODIFIER_COLD_RESISTANCE,
+        0.005,
+        0.040,
+        "ARMOR,JEWELRY",
+        ALL_EQUIPMENT_SLOTS,
+        false,
+        40,
+    ),
+    affix(
+        "AFFIX_LIGHTNING_RESISTANCE_MINOR",
+        "Lightning Resistance",
+        MODIFIER_LIGHTNING_RESISTANCE,
+        0.005,
+        0.040,
+        "ARMOR,JEWELRY",
+        ALL_EQUIPMENT_SLOTS,
+        false,
+        50,
+    ),
+    affix(
+        "AFFIX_POISON_RESISTANCE_MINOR",
+        "Poison Resistance",
+        MODIFIER_POISON_RESISTANCE,
+        0.005,
+        0.040,
+        "ARMOR,JEWELRY",
+        ALL_EQUIPMENT_SLOTS,
+        false,
+        60,
+    ),
+    affix(
+        "AFFIX_HOLY_RESISTANCE_MINOR",
+        "Holy Resistance",
+        MODIFIER_HOLY_RESISTANCE,
+        0.005,
+        0.040,
+        "ARMOR,JEWELRY",
+        ALL_EQUIPMENT_SLOTS,
+        false,
+        70,
+    ),
+    affix(
+        "AFFIX_SHADOW_RESISTANCE_MINOR",
+        "Shadow Resistance",
+        MODIFIER_SHADOW_RESISTANCE,
+        0.005,
+        0.040,
+        "ARMOR,JEWELRY",
+        ALL_EQUIPMENT_SLOTS,
+        false,
+        80,
+    ),
+    affix(
+        "AFFIX_ARCANE_RESISTANCE_MINOR",
+        "Arcane Resistance",
+        MODIFIER_ARCANE_RESISTANCE,
+        0.005,
+        0.040,
+        "ARMOR,JEWELRY",
+        ALL_EQUIPMENT_SLOTS,
+        false,
+        90,
+    ),
+    affix(
+        "AFFIX_PHYSICAL_DAMAGE_MINOR",
+        "Physical Damage",
+        MODIFIER_PHYSICAL_DAMAGE,
+        0.010,
+        0.060,
+        "WEAPON,ARMOR,JEWELRY",
+        ALL_EQUIPMENT_SLOTS,
+        false,
+        100,
+    ),
+    affix(
+        "AFFIX_CRIT_CHANCE_MINOR",
+        "Critical Chance",
+        MODIFIER_CRIT_CHANCE,
+        0.005,
+        0.030,
+        "WEAPON,ARMOR,JEWELRY",
+        ALL_EQUIPMENT_SLOTS,
+        false,
+        110,
+    ),
+    affix(
+        "AFFIX_MOVE_SPEED_MINOR",
+        "Movement Speed",
+        MODIFIER_MOVE_SPEED,
+        0.005,
+        0.030,
+        "ARMOR,JEWELRY",
+        ALL_EQUIPMENT_SLOTS,
+        false,
+        120,
+    ),
+    affix(
+        "AFFIX_MANA_REGEN_MINOR",
+        "Mana Regeneration",
+        MODIFIER_MANA_REGEN,
+        0.10,
+        0.75,
+        "ARMOR,JEWELRY",
+        ALL_EQUIPMENT_SLOTS,
+        false,
+        130,
+    ),
+    affix(
+        "AFFIX_HEALTH_REGEN_JEWELRY",
+        "Health Regeneration",
+        MODIFIER_HEALTH_REGEN,
+        0.05,
+        0.35,
+        "JEWELRY",
+        JEWELRY_EQUIPMENT_SLOTS,
+        true,
+        200,
+    ),
+    affix(
+        "AFFIX_TRANSFERENCE_JEWELRY",
+        "Transference",
+        MODIFIER_TRANSFERENCE,
+        0.010,
+        0.050,
+        "JEWELRY",
+        JEWELRY_EQUIPMENT_SLOTS,
+        true,
+        210,
+    ),
+    affix(
+        "AFFIX_REAPING_JEWELRY",
+        "Reaping",
+        MODIFIER_REAPING,
+        0.010,
+        0.050,
+        "JEWELRY",
+        JEWELRY_EQUIPMENT_SLOTS,
+        true,
+        220,
+    ),
+    affix(
+        "AFFIX_AWARENESS_JEWELRY",
+        "Awareness",
+        MODIFIER_AWARENESS,
+        1.0,
+        5.0,
+        "JEWELRY",
+        JEWELRY_EQUIPMENT_SLOTS,
+        true,
+        230,
+    ),
+    affix(
+        "AFFIX_LIGHT_JEWELRY",
+        "Light",
+        MODIFIER_LIGHT,
+        1.0,
+        5.0,
+        "JEWELRY",
+        JEWELRY_EQUIPMENT_SLOTS,
+        true,
+        240,
+    ),
+    affix(
+        "AFFIX_STEALTH_JEWELRY",
+        "Stealth",
+        MODIFIER_STEALTH,
+        0.05,
+        0.25,
+        "JEWELRY",
+        JEWELRY_EQUIPMENT_SLOTS,
+        true,
+        250,
+    ),
+];
+
 const fn armor(
     item_def_id: &'static str,
     display_name: &'static str,
@@ -526,9 +868,39 @@ const fn starter_equipment(
     }
 }
 
+const fn affix(
+    affix_id: &'static str,
+    display_name: &'static str,
+    modifier_kind: &'static str,
+    value_min: f32,
+    value_max: f32,
+    allowed_item_kinds: &'static str,
+    allowed_equip_slots: &'static str,
+    jewelry_only: bool,
+    sort_order: u32,
+) -> ItemAffixDefinitionSpec {
+    ItemAffixDefinitionSpec {
+        affix_id,
+        display_name,
+        modifier_kind,
+        value_min,
+        value_max,
+        allowed_item_kinds,
+        allowed_equip_slots,
+        jewelry_only,
+        sort_order,
+    }
+}
+
 #[reducer]
 pub fn publish_item_definitions(ctx: &ReducerContext) -> Result<(), String> {
     sync_item_definitions(ctx);
+    Ok(())
+}
+
+#[reducer]
+pub fn publish_item_affix_definitions(ctx: &ReducerContext) -> Result<(), String> {
+    sync_item_affix_definitions(ctx);
     Ok(())
 }
 
@@ -961,6 +1333,51 @@ pub(crate) fn sync_item_definitions(ctx: &ReducerContext) {
             ctx.db.item_definition().insert(row);
         }
     }
+    sync_item_affix_definitions(ctx);
+}
+
+pub(crate) fn sync_item_affix_definitions(ctx: &ReducerContext) {
+    let authored_ids: Vec<String> = ITEM_AFFIX_DEFINITIONS
+        .iter()
+        .map(|spec| normalize_id(spec.affix_id))
+        .collect();
+    for spec in ITEM_AFFIX_DEFINITIONS {
+        let value_min = spec.value_min.min(spec.value_max).max(0.0);
+        let value_max = spec.value_max.max(spec.value_min).max(0.0);
+        let row = ItemAffixDefinition {
+            affix_id: normalize_id(spec.affix_id),
+            display_name: spec.display_name.to_string(),
+            modifier_kind: normalize_id(spec.modifier_kind),
+            value_min,
+            value_max,
+            allowed_item_kinds: normalize_csv(spec.allowed_item_kinds),
+            allowed_equip_slots: normalize_csv(spec.allowed_equip_slots),
+            jewelry_only: spec.jewelry_only,
+            sort_order: spec.sort_order,
+        };
+        if ctx
+            .db
+            .item_affix_definition()
+            .affix_id()
+            .find(row.affix_id.clone())
+            .is_some()
+        {
+            ctx.db.item_affix_definition().affix_id().update(row);
+        } else {
+            ctx.db.item_affix_definition().insert(row);
+        }
+    }
+
+    let stale_ids: Vec<_> = ctx
+        .db
+        .item_affix_definition()
+        .iter()
+        .map(|row| row.affix_id)
+        .filter(|id| !authored_ids.contains(id))
+        .collect();
+    for stale_id in stale_ids {
+        ctx.db.item_affix_definition().affix_id().delete(stale_id);
+    }
 }
 
 pub(crate) fn ensure_player_inventory_for_identity(ctx: &ReducerContext, owner: Identity) {
@@ -973,6 +1390,214 @@ pub(crate) fn ensure_player_inventory_for_identity(ctx: &ReducerContext, owner: 
         }
     }
     sync_active_combat_mode_for_owner(ctx, owner, ctx.timestamp);
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub(crate) struct EquipmentModifierTotals {
+    pub physical_resistance: f32,
+    pub magic_resistance: f32,
+    pub fire_resistance: f32,
+    pub cold_resistance: f32,
+    pub lightning_resistance: f32,
+    pub poison_resistance: f32,
+    pub holy_resistance: f32,
+    pub shadow_resistance: f32,
+    pub arcane_resistance: f32,
+    pub physical_damage_bonus: f32,
+    pub crit_chance_bonus: f32,
+    pub move_speed_bonus: f32,
+    pub mana_regen_per_second: f32,
+    pub health_regen_per_second: f32,
+    pub melee_life_steal: f32,
+    pub melee_mana_steal: f32,
+    pub trap_awareness: f32,
+    pub light: f32,
+    pub stealth_aggro_reduction: f32,
+}
+
+impl EquipmentModifierTotals {
+    pub(crate) fn physical_damage_multiplier(self) -> f32 {
+        1.0 + self
+            .physical_damage_bonus
+            .clamp(0.0, MAX_EQUIPMENT_DAMAGE_BONUS)
+    }
+
+    pub(crate) fn move_speed_multiplier(self) -> f32 {
+        1.0 + self
+            .move_speed_bonus
+            .clamp(0.0, MAX_EQUIPMENT_MOVE_SPEED_BONUS)
+    }
+
+    pub(crate) fn resistance_for_damage_type(self, damage_type: &str) -> f32 {
+        match normalize_id(damage_type).as_str() {
+            "PHYSICAL" => {
+                return self
+                    .physical_resistance
+                    .clamp(0.0, MAX_EQUIPMENT_PHYSICAL_RESISTANCE);
+            }
+            "FIRE" => self.magic_resistance + self.fire_resistance,
+            "COLD" => self.magic_resistance + self.cold_resistance,
+            "LIGHTNING" => self.magic_resistance + self.lightning_resistance,
+            "POISON" => self.magic_resistance + self.poison_resistance,
+            "HOLY" => self.magic_resistance + self.holy_resistance,
+            "SHADOW" => self.magic_resistance + self.shadow_resistance,
+            "ARCANE" => self.magic_resistance + self.arcane_resistance,
+            _ => self.physical_resistance,
+        }
+        .clamp(0.0, MAX_EQUIPMENT_MAGIC_RESISTANCE)
+    }
+}
+
+pub(crate) fn equipment_modifier_totals_for_owner(
+    ctx: &ReducerContext,
+    owner: Identity,
+) -> EquipmentModifierTotals {
+    let Some(equipment) = ctx.db.equipment_loadout().owner().find(owner) else {
+        return EquipmentModifierTotals::default();
+    };
+
+    let mut totals = EquipmentModifierTotals::default();
+    for item_id in equipment_item_ids(&equipment) {
+        let Some(definition) = item_definition_for_instance(ctx, item_id) else {
+            continue;
+        };
+        totals.physical_resistance += definition.physical_resistance.max(0.0);
+
+        let mut affixes: Vec<_> = ctx
+            .db
+            .item_affix_instance()
+            .item_instance_id()
+            .filter(item_id)
+            .collect();
+        affixes.sort_by_key(|affix| affix.sort_order);
+        for affix in affixes {
+            if !affix_is_valid_for_definition(ctx, &affix, &definition) {
+                continue;
+            }
+            apply_modifier_value(&mut totals, affix.modifier_kind.as_str(), affix.value);
+        }
+    }
+
+    totals.physical_resistance = totals
+        .physical_resistance
+        .clamp(0.0, MAX_EQUIPMENT_PHYSICAL_RESISTANCE);
+    totals.magic_resistance = totals
+        .magic_resistance
+        .clamp(0.0, MAX_EQUIPMENT_MAGIC_RESISTANCE);
+    totals.fire_resistance = totals
+        .fire_resistance
+        .clamp(0.0, MAX_EQUIPMENT_SPECIFIC_MAGIC_RESISTANCE);
+    totals.cold_resistance = totals
+        .cold_resistance
+        .clamp(0.0, MAX_EQUIPMENT_SPECIFIC_MAGIC_RESISTANCE);
+    totals.lightning_resistance = totals
+        .lightning_resistance
+        .clamp(0.0, MAX_EQUIPMENT_SPECIFIC_MAGIC_RESISTANCE);
+    totals.poison_resistance = totals
+        .poison_resistance
+        .clamp(0.0, MAX_EQUIPMENT_SPECIFIC_MAGIC_RESISTANCE);
+    totals.holy_resistance = totals
+        .holy_resistance
+        .clamp(0.0, MAX_EQUIPMENT_SPECIFIC_MAGIC_RESISTANCE);
+    totals.shadow_resistance = totals
+        .shadow_resistance
+        .clamp(0.0, MAX_EQUIPMENT_SPECIFIC_MAGIC_RESISTANCE);
+    totals.arcane_resistance = totals
+        .arcane_resistance
+        .clamp(0.0, MAX_EQUIPMENT_SPECIFIC_MAGIC_RESISTANCE);
+    totals.physical_damage_bonus = totals
+        .physical_damage_bonus
+        .clamp(0.0, MAX_EQUIPMENT_DAMAGE_BONUS);
+    totals.crit_chance_bonus = totals
+        .crit_chance_bonus
+        .clamp(0.0, MAX_EQUIPMENT_CRIT_CHANCE_BONUS);
+    totals.move_speed_bonus = totals
+        .move_speed_bonus
+        .clamp(0.0, MAX_EQUIPMENT_MOVE_SPEED_BONUS);
+    totals.mana_regen_per_second = totals
+        .mana_regen_per_second
+        .clamp(0.0, MAX_EQUIPMENT_RESOURCE_REGEN);
+    totals.health_regen_per_second = totals
+        .health_regen_per_second
+        .clamp(0.0, MAX_EQUIPMENT_HEALTH_REGEN);
+    totals.melee_life_steal = totals
+        .melee_life_steal
+        .clamp(0.0, MAX_EQUIPMENT_STEAL_RATIO);
+    totals.melee_mana_steal = totals
+        .melee_mana_steal
+        .clamp(0.0, MAX_EQUIPMENT_STEAL_RATIO);
+    totals.stealth_aggro_reduction = totals.stealth_aggro_reduction.clamp(0.0, 1.0);
+    totals
+}
+
+pub(crate) fn tick_equipment_periodic_effects(
+    ctx: &ReducerContext,
+    now: Timestamp,
+    dt_seconds: f32,
+) -> usize {
+    let owners: Vec<_> = ctx
+        .db
+        .player_state()
+        .iter()
+        .filter(|row| row.alive && !row.is_dummy)
+        .map(|row| row.player_id)
+        .collect();
+    let mut queued = 0;
+    for owner in owners {
+        let health_regen = equipment_modifier_totals_for_owner(ctx, owner).health_regen_per_second;
+        if health_regen <= 0.0 {
+            if ctx
+                .db
+                .equipment_periodic_runtime()
+                .owner()
+                .find(owner)
+                .is_some()
+            {
+                ctx.db.equipment_periodic_runtime().owner().delete(owner);
+            }
+            continue;
+        }
+
+        let mut runtime = ctx
+            .db
+            .equipment_periodic_runtime()
+            .owner()
+            .find(owner)
+            .unwrap_or(EquipmentPeriodicRuntime {
+                owner,
+                health_regen_accumulator: 0.0,
+                updated_at: now,
+            });
+        runtime.health_regen_accumulator += health_regen * dt_seconds.max(0.0);
+        let heal_amount = runtime.health_regen_accumulator.floor() as i32;
+        if heal_amount > 0 {
+            runtime.health_regen_accumulator -= heal_amount as f32;
+            queue_effects(
+                ctx,
+                vec![EffectPacket::Heal {
+                    amount: heal_amount,
+                    source: owner,
+                    target: owner,
+                    spell_id: "EQUIPMENT_HEALTH_REGEN".to_string(),
+                    target_audience: TargetAudience::PartyOrSelf,
+                }],
+            );
+            queued += 1;
+        }
+        runtime.updated_at = now;
+        if ctx
+            .db
+            .equipment_periodic_runtime()
+            .owner()
+            .find(owner)
+            .is_some()
+        {
+            ctx.db.equipment_periodic_runtime().owner().update(runtime);
+        } else {
+            ctx.db.equipment_periodic_runtime().insert(runtime);
+        }
+    }
+    queued
 }
 
 pub(crate) fn ensure_starter_equipment_for_class(
@@ -1068,9 +1693,9 @@ pub(crate) fn create_corpse_loot_for_npc(
             owner: None,
             anchor_key: identity_key(npc_identity),
             anchor_identity: Some(npc_identity),
-            world_kind: npc.world_kind,
+            world_kind: npc.world_kind.clone(),
             instance_id: npc.instance_id,
-            open_world_scene_name: npc.open_world_scene_name,
+            open_world_scene_name: npc.open_world_scene_name.clone(),
             pos_x: physics.pos_x,
             pos_y: physics.pos_y,
             pos_z: physics.pos_z,
@@ -1099,24 +1724,275 @@ pub(crate) fn create_corpse_loot_for_npc(
     } else {
         looter_hint
     };
+    roll_corpse_equipment_loot(ctx, &npc, counter_owner, container_id.as_str());
+}
+
+fn roll_corpse_equipment_loot(
+    ctx: &ReducerContext,
+    npc: &crate::npcs::NpcInstance,
+    counter_owner: Identity,
+    container_id: &str,
+) {
+    let loot_context = npc_loot_roll_context(npc);
+    if loot_unit(&loot_context, "equipment_drop", 0) > loot_context.drop_chance {
+        return;
+    }
+
+    let Some(definition) = choose_loot_item_definition(&loot_context) else {
+        return;
+    };
+    let affixes = roll_item_affixes(&loot_context, &definition);
     let item = ItemInstance {
         item_instance_id: next_item_instance_id(ctx, counter_owner),
-        item_def_id: "CRACKED_KOBOLD_CHARM".to_string(),
+        item_def_id: definition.item_def_id.to_string(),
         current_owner_key: String::new(),
         current_owner: None,
         quantity: 1,
         created_at: ctx.timestamp,
     };
     ctx.db.item_instance().insert(item.clone());
+    for affix in affixes {
+        ctx.db.item_affix_instance().insert(ItemAffixInstance {
+            key: item_affix_instance_key(item.item_instance_id.as_str(), affix.affix.affix_id),
+            item_instance_id: item.item_instance_id.clone(),
+            affix_id: normalize_id(affix.affix.affix_id),
+            modifier_kind: normalize_id(affix.affix.modifier_kind),
+            value: affix.value,
+            sort_order: affix.affix.sort_order,
+        });
+    }
     upsert_inventory_slot(
         ctx,
-        container_id.as_str(),
+        container_id,
         item.item_instance_id.as_str(),
         0,
         0,
-        1,
-        1,
+        definition.width,
+        definition.height,
     );
+}
+
+fn npc_loot_roll_context(npc: &crate::npcs::NpcInstance) -> LootRollContext {
+    let hidden_loot_quality = hidden_loot_quality_for_npc(npc);
+    LootRollContext {
+        source_kind: "NPC",
+        source_id: npc.identity.to_hex().to_string(),
+        template_id: normalize_id(npc.template_id.as_str()),
+        world_kind: normalize_id(npc.world_kind.as_str()),
+        open_world_scene_name: normalize_id(npc.open_world_scene_name.as_str()),
+        hidden_loot_quality,
+        drop_chance: (BASE_NPC_EQUIPMENT_DROP_CHANCE
+            + hidden_loot_quality * HIDDEN_LOOT_QUALITY_DROP_SCALAR)
+            .clamp(0.02, 0.35),
+    }
+}
+
+fn hidden_loot_quality_for_npc(npc: &crate::npcs::NpcInstance) -> f32 {
+    let template_bonus = match normalize_id(npc.template_id.as_str()).as_str() {
+        crate::npcs::NPC_TEMPLATE_KOBOLD_KNIGHT_RD_SWORD_SHIELD => 0.85,
+        crate::npcs::NPC_TEMPLATE_KOBOLD_THIEF_BK_DUAL_SWORD => 0.45,
+        crate::npcs::NPC_TEMPLATE_KOBOLD_WARRIOR_GN_SPEAR => 0.25,
+        crate::npcs::NPC_TEMPLATE_KOBOLD_WARRIOR_RD_SWORD_SHIELD => 0.20,
+        _ => 0.0,
+    };
+    let world_bonus = if npc.world_kind.eq_ignore_ascii_case("INSTANCE") {
+        0.20
+    } else {
+        0.0
+    };
+    let scene_bonus = hidden_loot_quality_for_scene(npc.open_world_scene_name.as_str());
+    template_bonus + world_bonus + scene_bonus
+}
+
+fn hidden_loot_quality_for_scene(scene_name: &str) -> f32 {
+    let scene = normalize_id(scene_name);
+    if scene.contains("DANGER") || scene.contains("HAZARD") || scene.contains("ELITE") {
+        0.60
+    } else {
+        0.0
+    }
+}
+
+fn choose_loot_item_definition(context: &LootRollContext) -> Option<ItemDefinitionSpec> {
+    let preferred = preferred_loot_item_definitions(context);
+    let candidates = if preferred.is_empty() {
+        lootable_equipment_definitions()
+    } else {
+        preferred
+    };
+    if candidates.is_empty() {
+        return None;
+    }
+    let index = loot_index(context, "item_definition", 0, candidates.len());
+    candidates.get(index).copied()
+}
+
+fn preferred_loot_item_definitions(context: &LootRollContext) -> Vec<ItemDefinitionSpec> {
+    let prefer_jewelry = context
+        .template_id
+        .eq(crate::npcs::NPC_TEMPLATE_KOBOLD_THIEF_BK_DUAL_SWORD);
+    let prefer_armor = context
+        .template_id
+        .eq(crate::npcs::NPC_TEMPLATE_KOBOLD_KNIGHT_RD_SWORD_SHIELD)
+        || context
+            .template_id
+            .eq(crate::npcs::NPC_TEMPLATE_KOBOLD_WARRIOR_RD_SWORD_SHIELD)
+        || context
+            .template_id
+            .eq(crate::npcs::NPC_TEMPLATE_KOBOLD_WARRIOR_GN_SPEAR);
+    lootable_equipment_definitions()
+        .into_iter()
+        .filter(|definition| {
+            (prefer_jewelry && definition.item_kind == ITEM_KIND_JEWELRY)
+                || (prefer_armor && definition.item_kind == ITEM_KIND_ARMOR)
+        })
+        .collect()
+}
+
+fn lootable_equipment_definitions() -> Vec<ItemDefinitionSpec> {
+    STARTER_ITEM_DEFINITIONS
+        .iter()
+        .copied()
+        .filter(|definition| {
+            definition.max_stack == 1
+                && (definition.item_kind == ITEM_KIND_ARMOR
+                    || definition.item_kind == ITEM_KIND_JEWELRY
+                    || definition.item_kind == ITEM_KIND_WEAPON)
+        })
+        .collect()
+}
+
+fn roll_item_affixes(
+    context: &LootRollContext,
+    definition: &ItemDefinitionSpec,
+) -> Vec<RolledAffixSpec> {
+    let target_count = roll_affix_count(context);
+    let mut candidates = eligible_affix_specs_for_item_definition(definition)
+        .into_iter()
+        .map(|affix| {
+            let score = loot_hash(
+                context,
+                "affix_select",
+                stable_affix_index(affix.affix_id) as u32,
+            );
+            (score, affix)
+        })
+        .collect::<Vec<_>>();
+    candidates.sort_by_key(|(score, affix)| (*score, affix.sort_order, affix.affix_id));
+
+    let mut rolled = Vec::new();
+    let mut used_modifiers = Vec::new();
+    for (_, affix) in candidates {
+        if rolled.len() >= target_count {
+            break;
+        }
+        let modifier = normalize_id(affix.modifier_kind);
+        if used_modifiers.iter().any(|used| used == &modifier) {
+            continue;
+        }
+        let value = roll_affix_value(
+            context,
+            &affix,
+            loot_unit(
+                context,
+                "affix_value",
+                stable_affix_index(affix.affix_id) as u32,
+            ),
+        );
+        used_modifiers.push(modifier);
+        rolled.push(RolledAffixSpec { affix, value });
+    }
+    rolled
+}
+
+fn eligible_affix_specs_for_item_definition(
+    definition: &ItemDefinitionSpec,
+) -> Vec<ItemAffixDefinitionSpec> {
+    ITEM_AFFIX_DEFINITIONS
+        .iter()
+        .copied()
+        .filter(|affix| affix_spec_applies_to_item(affix, definition))
+        .collect()
+}
+
+fn affix_spec_applies_to_item(
+    affix: &ItemAffixDefinitionSpec,
+    definition: &ItemDefinitionSpec,
+) -> bool {
+    if affix.jewelry_only && definition.item_kind != ITEM_KIND_JEWELRY {
+        return false;
+    }
+    if !csv_contains(affix.allowed_item_kinds, definition.item_kind) {
+        return false;
+    }
+    if definition.equip_slot == EQUIP_SLOT_RING {
+        return csv_contains(affix.allowed_equip_slots, EQUIP_SLOT_RING);
+    }
+    csv_contains(affix.allowed_equip_slots, definition.equip_slot)
+}
+
+fn roll_affix_count(context: &LootRollContext) -> usize {
+    let one_affix_weight = 100.0;
+    let two_affix_weight = 24.0 + context.hidden_loot_quality.max(0.0) * 8.0;
+    let three_affix_weight = 4.0 + context.hidden_loot_quality.max(0.0) * 3.0;
+    let total = one_affix_weight + two_affix_weight + three_affix_weight;
+    let roll = loot_unit(context, "affix_count", 0) * total;
+    if roll < three_affix_weight {
+        MAX_ROLLED_ITEM_AFFIXES
+    } else if roll < three_affix_weight + two_affix_weight {
+        2
+    } else {
+        1
+    }
+}
+
+fn roll_affix_value(context: &LootRollContext, affix: &ItemAffixDefinitionSpec, roll: f32) -> f32 {
+    let quality_shift =
+        (context.hidden_loot_quality.max(0.0) * HIDDEN_LOOT_QUALITY_AFFIX_SCALAR).min(0.35);
+    let normalized = (roll + quality_shift).clamp(0.0, 1.0);
+    affix.value_min + (affix.value_max - affix.value_min).max(0.0) * normalized
+}
+
+fn loot_index(context: &LootRollContext, salt: &str, stream: u32, len: usize) -> usize {
+    if len <= 1 {
+        return 0;
+    }
+    (loot_hash(context, salt, stream) as usize) % len
+}
+
+fn loot_unit(context: &LootRollContext, salt: &str, stream: u32) -> f32 {
+    let upper53 = loot_hash(context, salt, stream) >> 11;
+    (upper53 as f64 / ((1_u64 << 53) as f64)) as f32
+}
+
+fn loot_hash(context: &LootRollContext, salt: &str, stream: u32) -> u64 {
+    let mut hash = 0xcbf2_9ce4_8422_2325_u64;
+    hash = fnv1a_update(hash, context.source_kind.as_bytes());
+    hash = fnv1a_update(hash, context.source_id.as_bytes());
+    hash = fnv1a_update(hash, context.template_id.as_bytes());
+    hash = fnv1a_update(hash, context.world_kind.as_bytes());
+    hash = fnv1a_update(hash, context.open_world_scene_name.as_bytes());
+    hash = fnv1a_update(hash, salt.as_bytes());
+    fnv1a_update(hash, &stream.to_le_bytes())
+}
+
+fn fnv1a_update(mut hash: u64, bytes: &[u8]) -> u64 {
+    for byte in bytes {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    hash
+}
+
+fn stable_affix_index(affix_id: &str) -> usize {
+    ITEM_AFFIX_DEFINITIONS
+        .iter()
+        .position(|affix| affix.affix_id == affix_id)
+        .unwrap_or(0)
+}
+
+fn item_affix_instance_key(item_instance_id: &str, affix_id: &str) -> String {
+    format!("{}:{}", item_instance_id, normalize_id(affix_id))
 }
 
 pub(crate) fn equipment_combat_profile_id_for_owner(
@@ -1148,18 +2024,6 @@ pub(crate) fn equipment_combat_profile_id_for_owner(
     }
 
     None
-}
-
-pub(crate) fn physical_resistance_for_owner(ctx: &ReducerContext, owner: Identity) -> f32 {
-    let Some(equipment) = ctx.db.equipment_loadout().owner().find(owner) else {
-        return 0.0;
-    };
-
-    equipment_item_ids(&equipment)
-        .filter_map(|item_id| item_definition_for_instance(ctx, item_id))
-        .map(|definition| definition.physical_resistance.max(0.0))
-        .sum::<f32>()
-        .clamp(0.0, MAX_EQUIPMENT_PHYSICAL_RESISTANCE)
 }
 
 fn ensure_player_bag(ctx: &ReducerContext, owner: Identity) -> InventoryContainer {
@@ -1524,6 +2388,64 @@ fn item_definition_for_instance(
         .item_definition()
         .item_def_id()
         .find(item.item_def_id)
+}
+
+fn affix_is_valid_for_definition(
+    ctx: &ReducerContext,
+    affix: &ItemAffixInstance,
+    definition: &ItemDefinition,
+) -> bool {
+    let Some(authored) = ctx
+        .db
+        .item_affix_definition()
+        .affix_id()
+        .find(normalize_id(affix.affix_id.as_str()))
+    else {
+        return false;
+    };
+    if normalize_id(authored.modifier_kind.as_str()) != normalize_id(affix.modifier_kind.as_str()) {
+        return false;
+    }
+    if !csv_contains(
+        authored.allowed_item_kinds.as_str(),
+        definition.item_kind.as_str(),
+    ) {
+        return false;
+    }
+    if authored.jewelry_only && definition.item_kind != ITEM_KIND_JEWELRY {
+        return false;
+    }
+    let equip_slot = normalize_equipment_slot(definition.equip_slot.as_str());
+    if definition.equip_slot == EQUIP_SLOT_RING {
+        return csv_contains(authored.allowed_equip_slots.as_str(), EQUIP_SLOT_RING);
+    }
+    csv_contains(authored.allowed_equip_slots.as_str(), equip_slot.as_str())
+}
+
+fn apply_modifier_value(totals: &mut EquipmentModifierTotals, modifier_kind: &str, value: f32) {
+    let value = value.max(0.0);
+    match normalize_id(modifier_kind).as_str() {
+        MODIFIER_PHYSICAL_RESISTANCE => totals.physical_resistance += value,
+        MODIFIER_MAGIC_RESISTANCE => totals.magic_resistance += value,
+        MODIFIER_FIRE_RESISTANCE => totals.fire_resistance += value,
+        MODIFIER_COLD_RESISTANCE => totals.cold_resistance += value,
+        MODIFIER_LIGHTNING_RESISTANCE => totals.lightning_resistance += value,
+        MODIFIER_POISON_RESISTANCE => totals.poison_resistance += value,
+        MODIFIER_HOLY_RESISTANCE => totals.holy_resistance += value,
+        MODIFIER_SHADOW_RESISTANCE => totals.shadow_resistance += value,
+        MODIFIER_ARCANE_RESISTANCE => totals.arcane_resistance += value,
+        MODIFIER_PHYSICAL_DAMAGE => totals.physical_damage_bonus += value,
+        MODIFIER_CRIT_CHANCE => totals.crit_chance_bonus += value,
+        MODIFIER_MOVE_SPEED => totals.move_speed_bonus += value,
+        MODIFIER_MANA_REGEN => totals.mana_regen_per_second += value,
+        MODIFIER_HEALTH_REGEN => totals.health_regen_per_second += value,
+        MODIFIER_TRANSFERENCE => totals.melee_life_steal += value,
+        MODIFIER_REAPING => totals.melee_mana_steal += value,
+        MODIFIER_AWARENESS => totals.trap_awareness += value,
+        MODIFIER_LIGHT => totals.light += value,
+        MODIFIER_STEALTH => totals.stealth_aggro_reduction += value,
+        _ => {}
+    }
 }
 
 fn require_container_slot(
@@ -1906,6 +2828,20 @@ fn normalize_equipment_slot(value: &str) -> String {
     }
 }
 
+fn normalize_csv(value: &str) -> String {
+    value
+        .split(',')
+        .map(normalize_id)
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+fn csv_contains(csv: &str, value: &str) -> bool {
+    let needle = normalize_id(value);
+    csv.split(',').map(normalize_id).any(|part| part == needle)
+}
+
 fn upsert_inventory_slot(
     ctx: &ReducerContext,
     container_id: &str,
@@ -2125,6 +3061,18 @@ mod tests {
         }
     }
 
+    fn loot_context_for_test(source_id: String, hidden_loot_quality: f32) -> LootRollContext {
+        LootRollContext {
+            source_kind: "TEST",
+            source_id,
+            template_id: crate::npcs::NPC_TEMPLATE_KOBOLD_KNIGHT_RD_SWORD_SHIELD.to_string(),
+            world_kind: "INSTANCE".to_string(),
+            open_world_scene_name: "TEST_SCENE".to_string(),
+            hidden_loot_quality,
+            drop_chance: 1.0,
+        }
+    }
+
     #[test]
     fn grid_rectangles_detect_overlap() {
         assert!(rectangles_overlap(0, 0, 2, 2, 1, 1, 1, 1));
@@ -2272,6 +3220,142 @@ mod tests {
         assert!((ranger - 0.110).abs() < 0.0001);
         assert!(ranger < warrior);
         assert!(warrior < paladin);
+    }
+
+    #[test]
+    fn equipment_resistance_totals_stack_global_and_specific_magic_sources() {
+        let totals = EquipmentModifierTotals {
+            physical_resistance: 0.20,
+            magic_resistance: 0.15,
+            fire_resistance: 0.10,
+            cold_resistance: 0.05,
+            ..EquipmentModifierTotals::default()
+        };
+
+        assert!((totals.resistance_for_damage_type("PHYSICAL") - 0.20).abs() < 0.0001);
+        assert!((totals.resistance_for_damage_type("FIRE") - 0.25).abs() < 0.0001);
+        assert!((totals.resistance_for_damage_type("COLD") - 0.20).abs() < 0.0001);
+        assert!((totals.resistance_for_damage_type("ARCANE") - 0.15).abs() < 0.0001);
+    }
+
+    #[test]
+    fn equipment_modifier_totals_clamp_combat_multipliers() {
+        let totals = EquipmentModifierTotals {
+            physical_damage_bonus: MAX_EQUIPMENT_DAMAGE_BONUS + 1.0,
+            move_speed_bonus: MAX_EQUIPMENT_MOVE_SPEED_BONUS + 1.0,
+            ..EquipmentModifierTotals::default()
+        };
+
+        assert!(
+            (totals.physical_damage_multiplier() - (1.0 + MAX_EQUIPMENT_DAMAGE_BONUS)).abs()
+                < 0.0001
+        );
+        assert!(
+            (totals.move_speed_multiplier() - (1.0 + MAX_EQUIPMENT_MOVE_SPEED_BONUS)).abs()
+                < 0.0001
+        );
+    }
+
+    #[test]
+    fn apply_modifier_value_accumulates_jewelry_only_combat_hooks() {
+        let mut totals = EquipmentModifierTotals::default();
+
+        apply_modifier_value(&mut totals, MODIFIER_HEALTH_REGEN, 0.25);
+        apply_modifier_value(&mut totals, MODIFIER_TRANSFERENCE, 0.08);
+        apply_modifier_value(&mut totals, MODIFIER_REAPING, 0.06);
+        apply_modifier_value(&mut totals, MODIFIER_AWARENESS, 3.0);
+        apply_modifier_value(&mut totals, MODIFIER_LIGHT, 2.0);
+        apply_modifier_value(&mut totals, MODIFIER_STEALTH, 0.12);
+
+        assert!((totals.health_regen_per_second - 0.25).abs() < 0.0001);
+        assert!((totals.melee_life_steal - 0.08).abs() < 0.0001);
+        assert!((totals.melee_mana_steal - 0.06).abs() < 0.0001);
+        assert!((totals.trap_awareness - 3.0).abs() < 0.0001);
+        assert!((totals.light - 2.0).abs() < 0.0001);
+        assert!((totals.stealth_aggro_reduction - 0.12).abs() < 0.0001);
+    }
+
+    #[test]
+    fn rolled_affix_count_caps_at_three_and_keeps_three_rarer_than_two() {
+        let mut one = 0;
+        let mut two = 0;
+        let mut three = 0;
+        for index in 0..4096 {
+            let context = loot_context_for_test(format!("loot-source-{index}"), 1.25);
+            match roll_affix_count(&context) {
+                1 => one += 1,
+                2 => two += 1,
+                3 => three += 1,
+                other => panic!("unexpected affix count {other}"),
+            }
+        }
+
+        assert!(one > two, "one-affix rolls should be most common");
+        assert!(
+            two > three,
+            "three-affix rolls should be rarer than two-affix rolls"
+        );
+    }
+
+    #[test]
+    fn rolled_affixes_do_not_duplicate_affix_or_modifier_on_one_item() {
+        let definition = STARTER_ITEM_DEFINITIONS
+            .iter()
+            .find(|definition| definition.item_def_id == "BRONZE_RING")
+            .expect("test ring definition should exist");
+
+        for index in 0..128 {
+            let context = loot_context_for_test(format!("ring-source-{index}"), 2.0);
+            let affixes = roll_item_affixes(&context, definition);
+            assert!(affixes.len() <= MAX_ROLLED_ITEM_AFFIXES);
+            let mut affix_ids = Vec::new();
+            let mut modifiers = Vec::new();
+            for affix in affixes {
+                assert!(
+                    !affix_ids.contains(&affix.affix.affix_id),
+                    "duplicate affix id {}",
+                    affix.affix.affix_id
+                );
+                assert!(
+                    !modifiers.contains(&affix.affix.modifier_kind),
+                    "duplicate modifier {}",
+                    affix.affix.modifier_kind
+                );
+                affix_ids.push(affix.affix.affix_id);
+                modifiers.push(affix.affix.modifier_kind);
+            }
+        }
+    }
+
+    #[test]
+    fn resistance_affixes_are_not_eligible_for_weapons() {
+        let weapon_spec = ItemDefinitionSpec {
+            item_def_id: "TEST_WEAPON",
+            display_name: "Test Weapon",
+            item_kind: ITEM_KIND_WEAPON,
+            rarity: "COMMON",
+            icon_id: "",
+            max_stack: 1,
+            width: 1,
+            height: 1,
+            equip_slot: EQUIP_SLOT_MAIN_HAND,
+            weapon_kind: WEAPON_KIND_ONE_HAND_SWORD,
+            hand_requirement: HAND_REQUIREMENT_ONE_HAND,
+            unique_equipped: false,
+            combat_profile_id: "",
+            physical_resistance: 0.0,
+        };
+        let affixes = eligible_affix_specs_for_item_definition(&weapon_spec);
+
+        assert!(affixes
+            .iter()
+            .all(|affix| !affix.modifier_kind.ends_with("_RESISTANCE")));
+        assert!(affixes
+            .iter()
+            .any(|affix| affix.modifier_kind == MODIFIER_PHYSICAL_DAMAGE));
+        assert!(affixes
+            .iter()
+            .any(|affix| affix.modifier_kind == MODIFIER_CRIT_CHANCE));
     }
 
     #[test]

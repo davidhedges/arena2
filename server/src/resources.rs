@@ -1,6 +1,7 @@
 use spacetimedb::{table, Identity, ReducerContext, Table, Timestamp};
 
 use crate::combat::is_in_combat;
+use crate::inventory::equipment_modifier_totals_for_owner;
 use crate::progression::{
     active_stat_totals_for_owner, effective_resource_kind_for_ability,
     primary_resource_kind_for_owner, AbilityCatalog,
@@ -283,6 +284,38 @@ pub(crate) fn grant_primary_resource_for_damage_dealt(
     ctx.db.player_resource().key().update(resource);
 }
 
+pub(crate) fn grant_primary_resource_amount_for_kind(
+    ctx: &ReducerContext,
+    owner: Identity,
+    resource_kind: &str,
+    amount: f32,
+    now: Timestamp,
+) {
+    let amount = amount.max(0.0);
+    if amount <= 0.0 {
+        return;
+    }
+    let Some(active_kind) = primary_resource_kind_for_owner(ctx, owner) else {
+        prune_stale_primary_resources(ctx, owner, None);
+        return;
+    };
+    if !active_kind.eq_ignore_ascii_case(resource_kind.trim()) {
+        return;
+    }
+    let Some(mut resource) = sync_primary_resource_for_player(ctx, owner, now) else {
+        return;
+    };
+
+    let next = (resource.current + amount).clamp(0.0, resource.max);
+    if (next - resource.current).abs() <= 0.0001 {
+        return;
+    }
+
+    resource.current = next;
+    resource.updated_at = now;
+    ctx.db.player_resource().key().update(resource);
+}
+
 #[allow(dead_code)]
 pub(crate) fn grant_primary_resource_for_melee_hit(
     ctx: &ReducerContext,
@@ -410,11 +443,17 @@ fn resolve_primary_resource_spec_for_owner(
         .find(primary_kind.clone())?;
     let insight = active_stat_totals_for_owner(ctx, owner).insight as f32;
     let gain_multiplier = (1.0 + definition.gain_multiplier_per_insight * insight).max(0.0);
+    let equipment_mana_regen = if primary_kind.eq_ignore_ascii_case("MANA") {
+        equipment_modifier_totals_for_owner(ctx, owner).mana_regen_per_second
+    } else {
+        0.0
+    };
     Some(ResolvedResourceSpec {
         kind: primary_kind,
         max: (definition.base_max + definition.max_per_insight * insight).max(0.0),
         regen_per_second: (definition.base_regen_per_second
-            + definition.regen_per_insight * insight)
+            + definition.regen_per_insight * insight
+            + equipment_mana_regen)
             .max(0.0),
         flat_decay_per_second: definition.flat_decay_per_second.max(0.0),
         out_of_combat_flat_decay_per_second: definition

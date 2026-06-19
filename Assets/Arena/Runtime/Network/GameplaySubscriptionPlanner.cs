@@ -25,6 +25,7 @@ namespace Arena.Network
                 new QueryBuilder().From.FixedActionBindingCatalog().ToSql(),
                 new QueryBuilder().From.LoadoutSlotCatalog().ToSql(),
                 new QueryBuilder().From.ItemDefinition().ToSql(),
+                new QueryBuilder().From.ItemAffixDefinition().ToSql(),
                 new QueryBuilder().From.SpellDefinition().ToSql(),
                 new QueryBuilder().From.MeleeDefinition().ToSql(),
                 new QueryBuilder().From.MeleeAbilityCatalog().ToSql(),
@@ -78,6 +79,7 @@ namespace Arena.Network
                 new QueryBuilder().From.InventoryContainer().ToSql(),
                 new QueryBuilder().From.InventorySlot().ToSql(),
                 new QueryBuilder().From.ItemInstance().ToSql(),
+                new QueryBuilder().From.ItemAffixInstance().ToSql(),
             };
         }
 

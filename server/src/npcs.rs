@@ -7,7 +7,7 @@ use crate::arena::players_share_world_context;
 use crate::combat::{
     movement_modifiers, queue_effects, timestamp_to_micros, CombatEvent, DamageDelivery,
     EffectPacket, COMBAT_EVENT_CAST, COMBAT_EVENT_IMPACT, COMBAT_METADATA_NONE, COMBAT_SCALAR_NONE,
-    COMBAT_SEQUENCE_NONE,
+    COMBAT_SEQUENCE_NONE, DAMAGE_SOURCE_KIND_MELEE,
 };
 use crate::inventory::clear_loot_for_anchor;
 use crate::movement::{FIXED_TICK_SECONDS, MOVE_SPEED};
@@ -658,6 +658,7 @@ fn perform_npc_melee_attack(
             spell_id: action_instance_id,
             delivery: DamageDelivery::Direct,
             direct_action_key: NPC_MELEE_ACTION_KIND.to_string(),
+            source_kind: DAMAGE_SOURCE_KIND_MELEE.to_string(),
         }],
     );
 }

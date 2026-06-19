@@ -31,6 +31,8 @@ namespace SpacetimeDB.Types
         public string TargetAudience;
         [DataMember(Name = "damage_delivery")]
         public string DamageDelivery;
+        [DataMember(Name = "damage_source_kind")]
+        public string DamageSourceKind;
         [DataMember(Name = "direct_action_key")]
         public string DirectActionKey;
         [DataMember(Name = "queued_at")]
@@ -50,6 +52,7 @@ namespace SpacetimeDB.Types
             string DamageType,
             string TargetAudience,
             string DamageDelivery,
+            string DamageSourceKind,
             string DirectActionKey,
             SpacetimeDB.Timestamp QueuedAt,
             long QueuedAtMicros,
@@ -65,6 +68,7 @@ namespace SpacetimeDB.Types
             this.DamageType = DamageType;
             this.TargetAudience = TargetAudience;
             this.DamageDelivery = DamageDelivery;
+            this.DamageSourceKind = DamageSourceKind;
             this.DirectActionKey = DirectActionKey;
             this.QueuedAt = QueuedAt;
             this.QueuedAtMicros = QueuedAtMicros;
@@ -77,6 +81,7 @@ namespace SpacetimeDB.Types
             this.DamageType = "";
             this.TargetAudience = "";
             this.DamageDelivery = "";
+            this.DamageSourceKind = "";
             this.DirectActionKey = "";
         }
     }

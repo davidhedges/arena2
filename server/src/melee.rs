@@ -34,6 +34,7 @@ use crate::combat::{
     COMBAT_EVENT_CAST, COMBAT_EVENT_FIZZLE, COMBAT_EVENT_IMPACT, COMBAT_EVENT_PARRY,
     COMBAT_EVENT_RELEASE, COMBAT_METADATA_CONSUMED_MELEE_MODIFIER, COMBAT_METADATA_NONE,
     COMBAT_SCALAR_MELEE_RELEASE_DELAY_SECONDS, COMBAT_SCALAR_NONE, COMBAT_SEQUENCE_NONE,
+    DAMAGE_SOURCE_KIND_MELEE,
 };
 use crate::defense::{
     clear_interruptible_defense_for_owner, resolve_defensible_combat_hit, CombatHitDeliveryKind,
@@ -4128,6 +4129,7 @@ fn resolve_pending_melee_target_impact(
         target: row.target,
         spell_id: format!("{}:damage:{}", row.spell_id, row.hit_index),
         delivery: DamageDelivery::Direct,
+        source_kind: DAMAGE_SOURCE_KIND_MELEE.to_string(),
         direct_action_key: format!("{}:hit:{}", row.spell_id, row.hit_index),
     }];
     push_stagger_effect_if_applicable(
@@ -4213,6 +4215,7 @@ fn push_melee_impact_area_effects(
             target: player.player_id,
             spell_id: format!("{}:area:{}", row.spell_id, row.hit_index),
             delivery: DamageDelivery::Direct,
+            source_kind: DAMAGE_SOURCE_KIND_MELEE.to_string(),
             direct_action_key: format!(
                 "{}:area:{}:{}",
                 row.spell_id,
