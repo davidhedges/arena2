@@ -421,7 +421,7 @@ namespace Arena.UI
                 return;
 
             _activeDrag = payload;
-            _dragGhost = CreateDragGhost(payload.DisplayName);
+            _dragGhost = CreateDragGhost(payload.DisplayName, payload.IconId);
             MoveDragGhost(screenPosition);
         }
 
@@ -784,7 +784,23 @@ namespace Arena.UI
             label.overflowMode = TextOverflowModes.Ellipsis;
             label.raycastTarget = false;
 
-            return cellGo.AddComponent<EquipmentSlotCell>().Initialize(background, label);
+            GameObject iconGo = new("Icon");
+            iconGo.transform.SetParent(cellGo.transform, false);
+            RectTransform iconRt = iconGo.AddComponent<RectTransform>();
+            iconRt.anchorMin = Vector2.zero;
+            iconRt.anchorMax = Vector2.one;
+            iconRt.offsetMin = Vector2.zero;
+            iconRt.offsetMax = Vector2.zero;
+
+            Image icon = iconGo.AddComponent<Image>();
+            icon.color = Color.white;
+            icon.preserveAspect = true;
+            icon.raycastTarget = false;
+            icon.enabled = false;
+
+            labelGo.transform.SetAsLastSibling();
+
+            return cellGo.AddComponent<EquipmentSlotCell>().Initialize(background, icon, label);
         }
 
         private static RectTransform CreatePanel(
@@ -904,6 +920,20 @@ namespace Arena.UI
             outline.effectColor = new Color(1f, 1f, 1f, 0.12f);
             outline.effectDistance = new Vector2(1f, -1f);
 
+            GameObject iconGo = new("Icon");
+            iconGo.transform.SetParent(cellGo.transform, false);
+            RectTransform iconRt = iconGo.AddComponent<RectTransform>();
+            iconRt.anchorMin = Vector2.zero;
+            iconRt.anchorMax = Vector2.one;
+            iconRt.offsetMin = Vector2.zero;
+            iconRt.offsetMax = Vector2.zero;
+
+            Image icon = iconGo.AddComponent<Image>();
+            icon.color = Color.white;
+            icon.preserveAspect = true;
+            icon.raycastTarget = false;
+            icon.enabled = false;
+
             GameObject labelGo = new("Label");
             labelGo.transform.SetParent(cellGo.transform, false);
             RectTransform labelRt = labelGo.AddComponent<RectTransform>();
@@ -936,10 +966,10 @@ namespace Arena.UI
             quantity.textWrappingMode = TextWrappingModes.NoWrap;
             quantity.raycastTarget = false;
 
-            cellGo.AddComponent<InventoryGridCell>().Initialize(background, label, quantity);
+            cellGo.AddComponent<InventoryGridCell>().Initialize(background, icon, label, quantity);
         }
 
-        private RectTransform CreateDragGhost(string displayName)
+        private RectTransform CreateDragGhost(string displayName, string iconId)
         {
             GameObject go = new("InventoryDragGhost");
             go.transform.SetParent(_canvas!.transform, false);
@@ -956,18 +986,37 @@ namespace Arena.UI
             outline.effectColor = new Color(1f, 1f, 1f, 0.22f);
             outline.effectDistance = new Vector2(1f, -1f);
 
+            Sprite? iconSprite = ItemIconResolver.Resolve(iconId);
+            if (iconSprite != null)
+            {
+                GameObject iconGo = new("Icon");
+                iconGo.transform.SetParent(go.transform, false);
+                RectTransform iconRt = iconGo.AddComponent<RectTransform>();
+                iconRt.anchorMin = new Vector2(0f, 0.5f);
+                iconRt.anchorMax = new Vector2(0f, 0.5f);
+                iconRt.pivot = new Vector2(0f, 0.5f);
+                iconRt.anchoredPosition = new Vector2(3f, 0f);
+                iconRt.sizeDelta = new Vector2(42f, 42f);
+
+                Image icon = iconGo.AddComponent<Image>();
+                icon.sprite = iconSprite;
+                icon.color = Color.white;
+                icon.preserveAspect = true;
+                icon.raycastTarget = false;
+            }
+
             GameObject labelGo = new("Text");
             labelGo.transform.SetParent(go.transform, false);
             RectTransform labelRt = labelGo.AddComponent<RectTransform>();
             labelRt.anchorMin = Vector2.zero;
             labelRt.anchorMax = Vector2.one;
-            labelRt.offsetMin = new Vector2(8f, 4f);
+            labelRt.offsetMin = new Vector2(iconSprite == null ? 8f : 50f, 4f);
             labelRt.offsetMax = new Vector2(-8f, -4f);
 
             TextMeshProUGUI label = labelGo.AddComponent<TextMeshProUGUI>();
             label.font = ResolveFont();
             label.fontSize = 12f;
-            label.alignment = TextAlignmentOptions.Center;
+            label.alignment = iconSprite == null ? TextAlignmentOptions.Center : TextAlignmentOptions.MidlineLeft;
             label.color = Color.white;
             label.textWrappingMode = TextWrappingModes.NoWrap;
             label.overflowMode = TextOverflowModes.Ellipsis;
@@ -1069,6 +1118,7 @@ namespace Arena.UI
             public readonly string ItemInstanceId;
             public readonly uint Quantity;
             public readonly string DisplayName;
+            public readonly string IconId;
 
             public DragPayload(
                 string sourceContext,
@@ -1076,7 +1126,8 @@ namespace Arena.UI
                 string sourceEquipmentSlot,
                 string itemInstanceId,
                 uint quantity,
-                string displayName)
+                string displayName,
+                string iconId)
             {
                 SourceContext = sourceContext;
                 SourceContainerId = sourceContainerId;
@@ -1084,6 +1135,7 @@ namespace Arena.UI
                 ItemInstanceId = itemInstanceId;
                 Quantity = quantity;
                 DisplayName = displayName;
+                IconId = iconId;
             }
 
             public bool HasValue => !string.IsNullOrWhiteSpace(ItemInstanceId)
@@ -1097,14 +1149,15 @@ namespace Arena.UI
                 string sourceContainerId,
                 string itemInstanceId,
                 uint quantity,
-                string displayName)
+                string displayName,
+                string iconId)
             {
-                return new DragPayload(sourceContext, sourceContainerId, string.Empty, itemInstanceId, quantity, displayName);
+                return new DragPayload(sourceContext, sourceContainerId, string.Empty, itemInstanceId, quantity, displayName, iconId);
             }
 
-            public static DragPayload FromEquipment(string sourceSlot, string itemInstanceId, string displayName)
+            public static DragPayload FromEquipment(string sourceSlot, string itemInstanceId, string displayName, string iconId)
             {
-                return new DragPayload("Equipment", string.Empty, sourceSlot, itemInstanceId, 1, displayName);
+                return new DragPayload("Equipment", string.Empty, sourceSlot, itemInstanceId, 1, displayName, iconId);
             }
         }
 
@@ -1112,6 +1165,7 @@ namespace Arena.UI
         {
             private InventoryController? _controller;
             private Image? _background;
+            private Image? _icon;
             private TextMeshProUGUI? _label;
             private TooltipTarget? _tooltip;
             private string _emptyLabel = string.Empty;
@@ -1121,9 +1175,10 @@ namespace Arena.UI
             public ItemDefinition? Definition { get; private set; }
             public bool HasItem => !string.IsNullOrWhiteSpace(ItemInstanceId);
 
-            public EquipmentSlotCell Initialize(Image background, TextMeshProUGUI label)
+            public EquipmentSlotCell Initialize(Image background, Image icon, TextMeshProUGUI label)
             {
                 _background = background;
+                _icon = icon;
                 _label = label;
                 _tooltip = gameObject.GetComponent<TooltipTarget>() ?? gameObject.AddComponent<TooltipTarget>();
                 return this;
@@ -1145,8 +1200,15 @@ namespace Arena.UI
                 if (_background != null)
                     _background.color = item == null ? EmptyCellColor : FilledCellColor;
 
+                Sprite? iconSprite = item == null ? null : ItemIconResolver.Resolve(definition);
+                if (_icon != null)
+                {
+                    _icon.sprite = iconSprite;
+                    _icon.enabled = iconSprite != null;
+                }
+
                 if (_label != null)
-                    _label.text = definition?.DisplayName ?? _emptyLabel;
+                    _label.text = item == null || iconSprite == null ? (definition?.DisplayName ?? _emptyLabel) : string.Empty;
 
                 if (_tooltip != null && controller._canvas != null)
                     _tooltip.Configure(controller._canvas, BuildItemTooltip(item, definition), pollHover: true);
@@ -1166,7 +1228,8 @@ namespace Arena.UI
                     return;
 
                 string displayName = Definition?.DisplayName ?? ItemInstanceId;
-                _controller.BeginDrag(DragPayload.FromEquipment(SlotId, ItemInstanceId, displayName), eventData.position);
+                string iconId = Definition?.IconId ?? string.Empty;
+                _controller.BeginDrag(DragPayload.FromEquipment(SlotId, ItemInstanceId, displayName, iconId), eventData.position);
             }
 
             public void OnDrag(PointerEventData eventData)
@@ -1184,6 +1247,7 @@ namespace Arena.UI
         {
             private InventoryController? _controller;
             private Image? _background;
+            private Image? _icon;
             private TextMeshProUGUI? _label;
             private TextMeshProUGUI? _quantity;
             private TooltipTarget? _tooltip;
@@ -1197,9 +1261,10 @@ namespace Arena.UI
             public ItemDefinition? Definition { get; private set; }
             public bool HasItem => !string.IsNullOrWhiteSpace(ItemInstanceId);
 
-            public void Initialize(Image background, TextMeshProUGUI label, TextMeshProUGUI quantity)
+            public void Initialize(Image background, Image icon, TextMeshProUGUI label, TextMeshProUGUI quantity)
             {
                 _background = background;
+                _icon = icon;
                 _label = label;
                 _quantity = quantity;
                 _tooltip = gameObject.GetComponent<TooltipTarget>() ?? gameObject.AddComponent<TooltipTarget>();
@@ -1226,8 +1291,15 @@ namespace Arena.UI
                 if (_background != null)
                     _background.color = item == null ? EmptyCellColor : FilledCellColor;
 
+                Sprite? iconSprite = item == null ? null : ItemIconResolver.Resolve(definition);
+                if (_icon != null)
+                {
+                    _icon.sprite = iconSprite;
+                    _icon.enabled = iconSprite != null;
+                }
+
                 if (_label != null)
-                    _label.text = definition?.DisplayName ?? string.Empty;
+                    _label.text = item != null && iconSprite == null ? (definition?.DisplayName ?? string.Empty) : string.Empty;
 
                 if (_quantity != null)
                     _quantity.text = item != null && item.Quantity > 1 ? item.Quantity.ToString() : string.Empty;
@@ -1250,7 +1322,8 @@ namespace Arena.UI
                     return;
 
                 string displayName = Definition?.DisplayName ?? ItemInstanceId;
-                _controller.BeginDrag(DragPayload.FromContainer(Context, ContainerId, ItemInstanceId, ItemQuantity, displayName), eventData.position);
+                string iconId = Definition?.IconId ?? string.Empty;
+                _controller.BeginDrag(DragPayload.FromContainer(Context, ContainerId, ItemInstanceId, ItemQuantity, displayName, iconId), eventData.position);
             }
 
             public void OnDrag(PointerEventData eventData)

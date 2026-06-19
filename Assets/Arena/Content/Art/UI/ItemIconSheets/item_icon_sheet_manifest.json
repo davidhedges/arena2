@@ -1,0 +1,49 @@
+{
+  "output_root": "Assets/Arena/Resources/UI/ItemIcons",
+  "sheets": [
+    {
+      "source": "Assets/Arena/Content/Art/UI/ItemIconSheets/starter_equipment_sheet.png",
+      "columns": 6,
+      "rows": 5,
+      "cells": [
+        {"icon_id": "iron_helm", "column": 0, "row": 0},
+        {"icon_id": "iron_shoulders", "column": 1, "row": 0},
+        {"icon_id": "traveler_cape", "column": 2, "row": 0},
+        {"icon_id": "iron_chestplate", "column": 3, "row": 0},
+        {"icon_id": "iron_leggings", "column": 4, "row": 0},
+        {"icon_id": "iron_boots", "column": 5, "row": 0},
+        {"icon_id": "gilded_helm", "column": 0, "row": 1},
+        {"icon_id": "gilded_shoulders", "column": 1, "row": 1},
+        {"icon_id": "gilded_cape", "column": 2, "row": 1},
+        {"icon_id": "gilded_chestplate", "column": 3, "row": 1},
+        {"icon_id": "gilded_leggings", "column": 4, "row": 1},
+        {"icon_id": "gilded_boots", "column": 5, "row": 1},
+        {"icon_id": "leather_helm", "column": 0, "row": 2},
+        {"icon_id": "leather_shoulders", "column": 1, "row": 2},
+        {"icon_id": "leather_cape", "column": 2, "row": 2},
+        {"icon_id": "leather_chestpiece", "column": 3, "row": 2},
+        {"icon_id": "leather_leggings", "column": 4, "row": 2},
+        {"icon_id": "leather_boots", "column": 5, "row": 2},
+        {"icon_id": "leather_gloves", "column": 0, "row": 3},
+        {"icon_id": "bronze_ring", "column": 1, "row": 3},
+        {"icon_id": "iron_ring", "column": 2, "row": 3},
+        {"icon_id": "bronze_amulet", "column": 3, "row": 3},
+        {"icon_id": "training_one_hand_sword", "column": 4, "row": 3},
+        {"icon_id": "training_two_hand_sword", "column": 5, "row": 3},
+        {"icon_id": "training_shield", "column": 0, "row": 4},
+        {"icon_id": "training_dagger_pair", "column": 1, "row": 4},
+        {"icon_id": "training_bow", "column": 2, "row": 4},
+        {"icon_id": "misc_charm_cracked", "column": 4, "row": 4, "colspan": 2}
+      ]
+    },
+    {
+      "source": "Assets/Arena/Content/Art/UI/ItemIconSheets/starter_gloves_sheet.png",
+      "columns": 2,
+      "rows": 1,
+      "cells": [
+        {"icon_id": "iron_gloves", "column": 0, "row": 0},
+        {"icon_id": "gilded_gloves", "column": 1, "row": 0}
+      ]
+    }
+  ]
+}
