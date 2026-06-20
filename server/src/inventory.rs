@@ -49,6 +49,11 @@ const MAX_ROLLED_ITEM_AFFIXES: usize = 3;
 const BASE_NPC_EQUIPMENT_DROP_CHANCE: f32 = 0.12;
 const HIDDEN_LOOT_QUALITY_DROP_SCALAR: f32 = 0.08;
 const HIDDEN_LOOT_QUALITY_AFFIX_SCALAR: f32 = 0.16;
+const GLOBAL_LOOT_QUANTITY_MODIFIER: f32 = 0.0;
+const GLOBAL_LOOT_QUALITY_MODIFIER: f32 = 0.0;
+const LOOT_ITEM_KIND_ARMOR_WEIGHT: f32 = 78.0;
+const LOOT_ITEM_KIND_JEWELRY_WEIGHT: f32 = 12.0;
+const LOOT_ITEM_KIND_WEAPON_WEIGHT: f32 = 10.0;
 const CORPSE_LOOT_CLUSTER_RANGE: f32 = LOOT_INTERACT_RANGE;
 const PLAYER_BAG_WIDTH: u32 = 10;
 const PLAYER_BAG_HEIGHT: u32 = 4;
@@ -1938,7 +1943,9 @@ fn merge_corpse_container_into_primary(
 }
 
 fn npc_loot_roll_context(npc: &crate::npcs::NpcInstance) -> LootRollContext {
-    let hidden_loot_quality = hidden_loot_quality_for_npc(npc);
+    let hidden_loot_quality =
+        (hidden_loot_quality_for_npc(npc) + GLOBAL_LOOT_QUALITY_MODIFIER).max(0.0);
+    let quantity_multiplier = (1.0 + GLOBAL_LOOT_QUANTITY_MODIFIER).max(0.0);
     LootRollContext {
         source_kind: "NPC",
         source_id: npc.identity.to_hex().to_string(),
@@ -1946,8 +1953,9 @@ fn npc_loot_roll_context(npc: &crate::npcs::NpcInstance) -> LootRollContext {
         world_kind: normalize_id(npc.world_kind.as_str()),
         open_world_scene_name: normalize_id(npc.open_world_scene_name.as_str()),
         hidden_loot_quality,
-        drop_chance: (BASE_NPC_EQUIPMENT_DROP_CHANCE
+        drop_chance: ((BASE_NPC_EQUIPMENT_DROP_CHANCE
             + hidden_loot_quality * HIDDEN_LOOT_QUALITY_DROP_SCALAR)
+            * quantity_multiplier)
             .clamp(0.02, 0.35),
     }
 }
@@ -1960,31 +1968,11 @@ fn hidden_loot_quality_for_npc(npc: &crate::npcs::NpcInstance) -> f32 {
         crate::npcs::NPC_TEMPLATE_KOBOLD_WARRIOR_RD_SWORD_SHIELD => 0.20,
         _ => 0.0,
     };
-    let world_bonus = if npc.world_kind.eq_ignore_ascii_case("INSTANCE") {
-        0.20
-    } else {
-        0.0
-    };
-    let scene_bonus = hidden_loot_quality_for_scene(npc.open_world_scene_name.as_str());
-    template_bonus + world_bonus + scene_bonus
-}
-
-fn hidden_loot_quality_for_scene(scene_name: &str) -> f32 {
-    let scene = normalize_id(scene_name);
-    if scene.contains("DANGER") || scene.contains("HAZARD") || scene.contains("ELITE") {
-        0.60
-    } else {
-        0.0
-    }
+    template_bonus
 }
 
 fn choose_loot_item_definition(context: &LootRollContext) -> Option<ItemDefinitionSpec> {
-    let preferred = preferred_loot_item_definitions(context);
-    let candidates = if preferred.is_empty() {
-        lootable_equipment_definitions()
-    } else {
-        preferred
-    };
+    let candidates = choose_loot_item_kind_candidates(context)?;
     if candidates.is_empty() {
         return None;
     }
@@ -1992,25 +1980,44 @@ fn choose_loot_item_definition(context: &LootRollContext) -> Option<ItemDefiniti
     candidates.get(index).copied()
 }
 
-fn preferred_loot_item_definitions(context: &LootRollContext) -> Vec<ItemDefinitionSpec> {
-    let prefer_jewelry = context
-        .template_id
-        .eq(crate::npcs::NPC_TEMPLATE_KOBOLD_THIEF_BK_DUAL_SWORD);
-    let prefer_armor = context
-        .template_id
-        .eq(crate::npcs::NPC_TEMPLATE_KOBOLD_KNIGHT_RD_SWORD_SHIELD)
-        || context
-            .template_id
-            .eq(crate::npcs::NPC_TEMPLATE_KOBOLD_WARRIOR_RD_SWORD_SHIELD)
-        || context
-            .template_id
-            .eq(crate::npcs::NPC_TEMPLATE_KOBOLD_WARRIOR_GN_SPEAR);
+fn choose_loot_item_kind_candidates(context: &LootRollContext) -> Option<Vec<ItemDefinitionSpec>> {
+    let armor = lootable_item_definitions_for_kind(ITEM_KIND_ARMOR);
+    let jewelry = lootable_item_definitions_for_kind(ITEM_KIND_JEWELRY);
+    let weapons = lootable_item_definitions_for_kind(ITEM_KIND_WEAPON);
+    let armor_weight = if armor.is_empty() {
+        0.0
+    } else {
+        LOOT_ITEM_KIND_ARMOR_WEIGHT
+    };
+    let jewelry_weight = if jewelry.is_empty() {
+        0.0
+    } else {
+        LOOT_ITEM_KIND_JEWELRY_WEIGHT
+    };
+    let weapon_weight = if weapons.is_empty() {
+        0.0
+    } else {
+        LOOT_ITEM_KIND_WEAPON_WEIGHT
+    };
+    let total = armor_weight + jewelry_weight + weapon_weight;
+    if total <= 0.0 {
+        return None;
+    }
+
+    let roll = loot_unit(context, "item_kind", 0) * total;
+    if roll < jewelry_weight {
+        Some(jewelry)
+    } else if roll < jewelry_weight + weapon_weight {
+        Some(weapons)
+    } else {
+        Some(armor)
+    }
+}
+
+fn lootable_item_definitions_for_kind(item_kind: &str) -> Vec<ItemDefinitionSpec> {
     lootable_equipment_definitions()
         .into_iter()
-        .filter(|definition| {
-            (prefer_jewelry && definition.item_kind == ITEM_KIND_JEWELRY)
-                || (prefer_armor && definition.item_kind == ITEM_KIND_ARMOR)
-        })
+        .filter(|definition| definition.item_kind == item_kind)
         .collect()
 }
 
@@ -3520,6 +3527,51 @@ mod tests {
                 modifiers.push(affix.affix.modifier_kind);
             }
         }
+    }
+
+    #[test]
+    fn npc_loot_quality_does_not_depend_on_instance_context() {
+        let open_world = npc_for_cluster_test("OPEN", None, "OPEN_WORLD");
+        let instance = npc_for_cluster_test("INSTANCE", Some(42), "OPEN_WORLD");
+
+        assert!(
+            (hidden_loot_quality_for_npc(&open_world) - hidden_loot_quality_for_npc(&instance))
+                .abs()
+                < 0.0001
+        );
+    }
+
+    #[test]
+    fn all_kobold_templates_can_roll_jewelry_without_forcing_it() {
+        fn jewelry_rolls_for_template(template_id: &str) -> usize {
+            (0..2048)
+                .filter(|index| {
+                    let mut context = loot_context_for_test(format!("{template_id}-{index}"), 0.0);
+                    context.template_id = template_id.to_string();
+                    choose_loot_item_definition(&context)
+                        .is_some_and(|definition| definition.item_kind == ITEM_KIND_JEWELRY)
+                })
+                .count()
+        }
+
+        let warrior_jewelry =
+            jewelry_rolls_for_template(crate::npcs::NPC_TEMPLATE_KOBOLD_WARRIOR_RD_SWORD_SHIELD);
+        let thief_jewelry =
+            jewelry_rolls_for_template(crate::npcs::NPC_TEMPLATE_KOBOLD_THIEF_BK_DUAL_SWORD);
+
+        assert!(
+            warrior_jewelry > 0,
+            "warriors should be able to drop jewelry"
+        );
+        assert!(thief_jewelry > 0, "thieves should be able to drop jewelry");
+        assert!(
+            warrior_jewelry < 2048,
+            "warriors should not force jewelry drops"
+        );
+        assert!(
+            thief_jewelry < 2048,
+            "thieves should not force jewelry drops"
+        );
     }
 
     #[test]

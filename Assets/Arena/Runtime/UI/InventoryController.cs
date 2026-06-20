@@ -650,9 +650,7 @@ namespace Arena.UI
 
             if (definition != null)
             {
-                parts.Add($"Size: {definition.Width}x{definition.Height}");
                 AppendLabeledTooltipPart(parts, "Weapon", definition.WeaponKind);
-                AppendLabeledTooltipPart(parts, "Hands", definition.HandRequirement);
                 AppendLabeledTooltipPart(parts, "Profile", definition.CombatProfileId);
                 if (definition.PhysicalResistance > 0.0001f)
                     parts.Add($"Physical Resistance: {FormatAffixValue("PHYSICAL_RESISTANCE", definition.PhysicalResistance)}");
