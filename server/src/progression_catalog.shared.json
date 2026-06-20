@@ -14,6 +14,16 @@
       "combat_profile_id": "ARCHER_BOW",
       "display_name": "Archer Bow",
       "sort_order": 30
+    },
+    {
+      "combat_profile_id": "DAGGERS",
+      "display_name": "Daggers",
+      "sort_order": 40
+    },
+    {
+      "combat_profile_id": "STAFF",
+      "display_name": "Staff",
+      "sort_order": 50
     }
   ],
   "combat_modes": [
@@ -2013,6 +2023,162 @@
       "gameplay": {
         "kind": "COMBAT_MODE_TOGGLE"
       }
+    },
+    {
+      "ability_id": "DAGGER_QUICK_CUT",
+      "combat_profile_id": "DAGGERS",
+      "action_id": "SWORD_AND_SHIELD_UTILITY_2",
+      "display_name": "Quick Cut",
+      "resource_kind": "ENERGY",
+      "resource_cost": 20,
+      "ability_tags": [
+        "ACTION_BAR_ACTION",
+        "CORE_ABILITY"
+      ],
+      "sort_order": 10,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 24,
+        "applies_stagger": false,
+        "range": 2,
+        "cooldown_ms": 650,
+        "uses_global_cooldown": true,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET"
+      }
+    },
+    {
+      "ability_id": "DAGGER_RIPOSTE",
+      "combat_profile_id": "DAGGERS",
+      "action_id": "SWORD_AND_SHIELD_UTILITY_4",
+      "display_name": "Riposte",
+      "resource_kind": "ENERGY",
+      "resource_cost": 30,
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 20,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 36,
+        "applies_stagger": false,
+        "range": 2.25,
+        "cooldown_ms": 1000,
+        "uses_global_cooldown": true,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET"
+      }
+    },
+    {
+      "ability_id": "DAGGER_DASHING_CUT",
+      "combat_profile_id": "DAGGERS",
+      "action_id": "PALADIN_CHARGE",
+      "display_name": "Dashing Cut",
+      "resource_kind": "ENERGY",
+      "resource_cost": 35,
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 30,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 28,
+        "applies_stagger": false,
+        "range": 12,
+        "minimum_range": 4,
+        "cooldown_ms": 1400,
+        "uses_global_cooldown": true,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET",
+        "gap_close": {
+          "kind": "LINEAR",
+          "destination": "NEAREST_CONTACT_POINT",
+          "speed": 24,
+          "arrival_buffer": 1.44,
+          "arrival_epsilon": 0.05,
+          "impact_range": 2,
+          "collision_policy": "STOP_AT_BLOCK",
+          "require_arrival_for_swing": true,
+          "requires_target_facing": false
+        }
+      }
+    },
+    {
+      "ability_id": "STAFF_STRIKE",
+      "combat_profile_id": "STAFF",
+      "action_id": "COMBO_ATTACK_1_1_HIGH_TO_LOW",
+      "display_name": "Staff Strike",
+      "resource_kind": "MANA",
+      "resource_cost": 12,
+      "ability_tags": [
+        "ACTION_BAR_ACTION",
+        "CORE_ABILITY"
+      ],
+      "sort_order": 10,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 26,
+        "applies_stagger": false,
+        "range": 3,
+        "cooldown_ms": 850,
+        "uses_global_cooldown": true,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET"
+      }
+    },
+    {
+      "ability_id": "STAFF_SWEEP",
+      "combat_profile_id": "STAFF",
+      "action_id": "COMBO_ATTACK_2_1_SPIN",
+      "display_name": "Staff Sweep",
+      "resource_kind": "MANA",
+      "resource_cost": 24,
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 20,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 30,
+        "applies_stagger": true,
+        "range": 3.25,
+        "cooldown_ms": 1200,
+        "uses_global_cooldown": true,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET",
+        "melee_targeting": {
+          "kind": "CASTER_RADIUS",
+          "requires_target": false
+        }
+      }
+    },
+    {
+      "ability_id": "STAFF_THRUST",
+      "combat_profile_id": "STAFF",
+      "action_id": "COMBO_ATTACK_4_4_LUNGING_SLASH",
+      "display_name": "Staff Thrust",
+      "resource_kind": "MANA",
+      "resource_cost": 20,
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 30,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 34,
+        "applies_stagger": false,
+        "range": 4,
+        "cooldown_ms": 1100,
+        "uses_global_cooldown": true,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET"
+      }
     }
   ],
   "auto_attacks": [
@@ -2035,6 +2201,32 @@
       "base_damage": 25,
       "range": 2.5,
       "cooldown_ms": 3500,
+      "movement_policy": "ALLOW_MOVING",
+      "uses_global_cooldown": false,
+      "parry_behavior": "PARRYABLE",
+      "block_behavior": "BLOCKABLE",
+      "airborne_targeting_mode": "ANY_TARGET",
+      "applies_stagger": false
+    },
+    {
+      "combat_profile_id": "DAGGERS",
+      "action_id": "AUTO_ATTACK_1",
+      "base_damage": 18,
+      "range": 2,
+      "cooldown_ms": 1200,
+      "movement_policy": "ALLOW_MOVING",
+      "uses_global_cooldown": false,
+      "parry_behavior": "PARRYABLE",
+      "block_behavior": "BLOCKABLE",
+      "airborne_targeting_mode": "ANY_TARGET",
+      "applies_stagger": false
+    },
+    {
+      "combat_profile_id": "STAFF",
+      "action_id": "AUTO_ATTACK_1",
+      "base_damage": 22,
+      "range": 3,
+      "cooldown_ms": 2400,
       "movement_policy": "ALLOW_MOVING",
       "uses_global_cooldown": false,
       "parry_behavior": "PARRYABLE",
@@ -2439,6 +2631,48 @@
       "display_name": "Draw Mode",
       "description": "Toggles between short draw and full draw auto attack modes.",
       "sort_order": 195
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "DAGGER_QUICK_CUT",
+      "display_name": "Quick Cut",
+      "description": "A fast close-range dagger cut.",
+      "sort_order": 200
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "DAGGER_RIPOSTE",
+      "display_name": "Riposte",
+      "description": "A committed dagger counterattack.",
+      "sort_order": 210
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "DAGGER_DASHING_CUT",
+      "display_name": "Dashing Cut",
+      "description": "Dashes to the target for a quick dagger strike.",
+      "sort_order": 220
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "STAFF_STRIKE",
+      "display_name": "Staff Strike",
+      "description": "A controlled staff blow.",
+      "sort_order": 230
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "STAFF_SWEEP",
+      "display_name": "Staff Sweep",
+      "description": "Sweeps the staff through nearby enemies.",
+      "sort_order": 240
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "STAFF_THRUST",
+      "display_name": "Staff Thrust",
+      "description": "Extends into a longer-range staff thrust.",
+      "sort_order": 250
     },
     {
       "presentation_kind": "FIXED",
@@ -3115,6 +3349,70 @@
       "action_kind": "FIXED",
       "action_id": "PARRY",
       "sort_order": 230
+    },
+    {
+      "slot_id": "slot_0_0",
+      "combat_profile_id": "DAGGERS",
+      "ability_id": "DAGGER_QUICK_CUT",
+      "sort_order": 240
+    },
+    {
+      "slot_id": "slot_0_1",
+      "combat_profile_id": "DAGGERS",
+      "ability_id": "DAGGER_RIPOSTE",
+      "sort_order": 250
+    },
+    {
+      "slot_id": "slot_0_2",
+      "combat_profile_id": "DAGGERS",
+      "ability_id": "DAGGER_DASHING_CUT",
+      "sort_order": 260
+    },
+    {
+      "slot_id": "slot_1_0",
+      "combat_profile_id": "DAGGERS",
+      "action_kind": "FIXED",
+      "action_id": "DODGE",
+      "sort_order": 270
+    },
+    {
+      "slot_id": "slot_1_2",
+      "combat_profile_id": "DAGGERS",
+      "action_kind": "FIXED",
+      "action_id": "PARRY",
+      "sort_order": 280
+    },
+    {
+      "slot_id": "slot_0_0",
+      "combat_profile_id": "STAFF",
+      "ability_id": "STAFF_STRIKE",
+      "sort_order": 290
+    },
+    {
+      "slot_id": "slot_0_1",
+      "combat_profile_id": "STAFF",
+      "ability_id": "STAFF_SWEEP",
+      "sort_order": 300
+    },
+    {
+      "slot_id": "slot_0_2",
+      "combat_profile_id": "STAFF",
+      "ability_id": "STAFF_THRUST",
+      "sort_order": 310
+    },
+    {
+      "slot_id": "slot_1_0",
+      "combat_profile_id": "STAFF",
+      "action_kind": "FIXED",
+      "action_id": "DODGE",
+      "sort_order": 320
+    },
+    {
+      "slot_id": "slot_1_2",
+      "combat_profile_id": "STAFF",
+      "action_kind": "FIXED",
+      "action_id": "PARRY",
+      "sort_order": 330
     }
   ],
   "slots": [

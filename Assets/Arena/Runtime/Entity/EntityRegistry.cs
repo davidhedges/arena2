@@ -1062,13 +1062,69 @@ namespace Arena.Entity
             if (definition == null)
                 return;
 
-            switch (WireIdentifier.Normalize(definition.WeaponKind))
+            if (TryAddWeaponVisualIdsForItemDefinition(definition.ItemDefId, visualIds))
+                return;
+
+            AddWeaponVisualIdsForKind(definition.WeaponKind, visualIds);
+        }
+
+        private static bool TryAddWeaponVisualIdsForItemDefinition(string? itemDefId, HashSet<string> visualIds)
+        {
+            switch (WireIdentifier.Normalize(itemDefId))
+            {
+                case "TRAINING_TWO_HAND_SWORD":
+                case "NEWBIE_TWO_HAND_SWORD_01":
+                case "NEWBIE_TWO_HAND_SWORD_02":
+                case "NEWBIE_TWO_HAND_AXE_01":
+                case "NEWBIE_STAFF_01":
+                case "NEWBIE_STAFF_02":
+                case "NEWBIE_STAFF_03":
+                case "NEWBIE_STAFF_04":
+                    visualIds.Add("greatsword");
+                    return true;
+                case "TRAINING_ONE_HAND_SWORD":
+                case "NEWBIE_ONE_HAND_SWORD_01":
+                case "NEWBIE_ONE_HAND_SWORD_02":
+                case "NEWBIE_ONE_HAND_AXE_02":
+                case "NEWBIE_ONE_HAND_AXE_03":
+                case "TRAINING_DAGGER_PAIR":
+                case "NEWBIE_DAGGER_PAIR_01":
+                case "NEWBIE_DAGGER_PAIR_02":
+                case "NEWBIE_DAGGER_PAIR_03":
+                    visualIds.Add("sword");
+                    return true;
+                case "TRAINING_SHIELD":
+                case "NEWBIE_SHIELD_01":
+                case "NEWBIE_SHIELD_02":
+                case "NEWBIE_SHIELD_03":
+                    visualIds.Add("shield");
+                    return true;
+                case "TRAINING_BOW":
+                case "NEWBIE_BOW_01":
+                case "NEWBIE_BOW_02":
+                case "NEWBIE_BOW_03":
+                    visualIds.Add("bow_drawn");
+                    visualIds.Add("bow_stowed");
+                    visualIds.Add("quiver");
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        private static void AddWeaponVisualIdsForKind(string? weaponKind, HashSet<string> visualIds)
+        {
+            switch (WireIdentifier.Normalize(weaponKind))
             {
                 case "TWO_HAND_SWORD":
                 case "TWO_HANDED_SWORD":
+                case "TWO_HAND_AXE":
+                case "STAFF":
                     visualIds.Add("greatsword");
                     break;
                 case "ONE_HAND_SWORD":
+                case "ONE_HAND_AXE":
+                case "DAGGER_PAIR":
                     visualIds.Add("sword");
                     break;
                 case "SHIELD":

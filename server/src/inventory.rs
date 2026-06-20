@@ -82,9 +82,12 @@ const EQUIP_SLOT_OFF_HAND: &str = "OFF_HAND";
 
 const WEAPON_KIND_TWO_HAND_SWORD: &str = "TWO_HAND_SWORD";
 const WEAPON_KIND_ONE_HAND_SWORD: &str = "ONE_HAND_SWORD";
+const WEAPON_KIND_TWO_HAND_AXE: &str = "TWO_HAND_AXE";
+const WEAPON_KIND_ONE_HAND_AXE: &str = "ONE_HAND_AXE";
 const WEAPON_KIND_SHIELD: &str = "SHIELD";
 const WEAPON_KIND_DAGGER_PAIR: &str = "DAGGER_PAIR";
 const WEAPON_KIND_BOW: &str = "BOW";
+const WEAPON_KIND_STAFF: &str = "STAFF";
 
 const HAND_REQUIREMENT_NONE: &str = "NONE";
 const HAND_REQUIREMENT_ONE_HAND: &str = "ONE_HAND";
@@ -93,6 +96,7 @@ const HAND_REQUIREMENT_OFF_HAND: &str = "OFF_HAND";
 
 const COMBAT_PROFILE_TWO_HANDED_SWORD: &str = "TWO_HANDED_SWORD";
 const COMBAT_PROFILE_DAGGERS: &str = "DAGGERS";
+const COMBAT_PROFILE_STAFF: &str = "STAFF";
 
 pub(crate) const MODIFIER_PHYSICAL_RESISTANCE: &str = "PHYSICAL_RESISTANCE";
 pub(crate) const MODIFIER_MAGIC_RESISTANCE: &str = "MAGIC_RESISTANCE";
@@ -604,6 +608,166 @@ const STARTER_ITEM_DEFINITIONS: &[ItemDefinitionSpec] = &[
         WEAPON_KIND_BOW,
         HAND_REQUIREMENT_TWO_HAND,
         COMBAT_PROFILE_ARCHER_BOW,
+    ),
+    weapon(
+        "NEWBIE_TWO_HAND_SWORD_01",
+        "Newbie Two-Handed Sword I",
+        "newbie_two_hand_sword_01",
+        WEAPON_KIND_TWO_HAND_SWORD,
+        HAND_REQUIREMENT_TWO_HAND,
+        COMBAT_PROFILE_TWO_HANDED_SWORD,
+    ),
+    weapon(
+        "NEWBIE_TWO_HAND_SWORD_02",
+        "Newbie Two-Handed Sword II",
+        "newbie_two_hand_sword_02",
+        WEAPON_KIND_TWO_HAND_SWORD,
+        HAND_REQUIREMENT_TWO_HAND,
+        COMBAT_PROFILE_TWO_HANDED_SWORD,
+    ),
+    weapon(
+        "NEWBIE_ONE_HAND_SWORD_01",
+        "Newbie One-Handed Sword I",
+        "newbie_one_hand_sword_01",
+        WEAPON_KIND_ONE_HAND_SWORD,
+        HAND_REQUIREMENT_ONE_HAND,
+        DEFAULT_COMBAT_PROFILE,
+    ),
+    weapon(
+        "NEWBIE_ONE_HAND_SWORD_02",
+        "Newbie One-Handed Sword II",
+        "newbie_one_hand_sword_02",
+        WEAPON_KIND_ONE_HAND_SWORD,
+        HAND_REQUIREMENT_ONE_HAND,
+        DEFAULT_COMBAT_PROFILE,
+    ),
+    weapon(
+        "NEWBIE_TWO_HAND_AXE_01",
+        "Newbie Two-Handed Axe I",
+        "newbie_two_hand_axe_01",
+        WEAPON_KIND_TWO_HAND_AXE,
+        HAND_REQUIREMENT_TWO_HAND,
+        COMBAT_PROFILE_TWO_HANDED_SWORD,
+    ),
+    weapon(
+        "NEWBIE_ONE_HAND_AXE_02",
+        "Newbie One-Handed Axe II",
+        "newbie_one_hand_axe_02",
+        WEAPON_KIND_ONE_HAND_AXE,
+        HAND_REQUIREMENT_ONE_HAND,
+        DEFAULT_COMBAT_PROFILE,
+    ),
+    weapon(
+        "NEWBIE_ONE_HAND_AXE_03",
+        "Newbie One-Handed Axe III",
+        "newbie_one_hand_axe_03",
+        WEAPON_KIND_ONE_HAND_AXE,
+        HAND_REQUIREMENT_ONE_HAND,
+        DEFAULT_COMBAT_PROFILE,
+    ),
+    weapon(
+        "NEWBIE_SHIELD_01",
+        "Newbie Shield I",
+        "newbie_shield_01",
+        WEAPON_KIND_SHIELD,
+        HAND_REQUIREMENT_OFF_HAND,
+        DEFAULT_COMBAT_PROFILE,
+    ),
+    weapon(
+        "NEWBIE_SHIELD_02",
+        "Newbie Shield II",
+        "newbie_shield_02",
+        WEAPON_KIND_SHIELD,
+        HAND_REQUIREMENT_OFF_HAND,
+        DEFAULT_COMBAT_PROFILE,
+    ),
+    weapon(
+        "NEWBIE_SHIELD_03",
+        "Newbie Shield III",
+        "newbie_shield_03",
+        WEAPON_KIND_SHIELD,
+        HAND_REQUIREMENT_OFF_HAND,
+        DEFAULT_COMBAT_PROFILE,
+    ),
+    weapon(
+        "NEWBIE_BOW_01",
+        "Newbie Bow I",
+        "newbie_bow_01",
+        WEAPON_KIND_BOW,
+        HAND_REQUIREMENT_TWO_HAND,
+        COMBAT_PROFILE_ARCHER_BOW,
+    ),
+    weapon(
+        "NEWBIE_BOW_02",
+        "Newbie Bow II",
+        "newbie_bow_02",
+        WEAPON_KIND_BOW,
+        HAND_REQUIREMENT_TWO_HAND,
+        COMBAT_PROFILE_ARCHER_BOW,
+    ),
+    weapon(
+        "NEWBIE_BOW_03",
+        "Newbie Bow III",
+        "newbie_bow_03",
+        WEAPON_KIND_BOW,
+        HAND_REQUIREMENT_TWO_HAND,
+        COMBAT_PROFILE_ARCHER_BOW,
+    ),
+    weapon(
+        "NEWBIE_DAGGER_PAIR_01",
+        "Newbie Daggers I",
+        "newbie_dagger_pair_01",
+        WEAPON_KIND_DAGGER_PAIR,
+        HAND_REQUIREMENT_TWO_HAND,
+        COMBAT_PROFILE_DAGGERS,
+    ),
+    weapon(
+        "NEWBIE_DAGGER_PAIR_02",
+        "Newbie Daggers II",
+        "newbie_dagger_pair_02",
+        WEAPON_KIND_DAGGER_PAIR,
+        HAND_REQUIREMENT_TWO_HAND,
+        COMBAT_PROFILE_DAGGERS,
+    ),
+    weapon(
+        "NEWBIE_DAGGER_PAIR_03",
+        "Newbie Daggers III",
+        "newbie_dagger_pair_03",
+        WEAPON_KIND_DAGGER_PAIR,
+        HAND_REQUIREMENT_TWO_HAND,
+        COMBAT_PROFILE_DAGGERS,
+    ),
+    weapon(
+        "NEWBIE_STAFF_01",
+        "Newbie Staff I",
+        "newbie_staff_01",
+        WEAPON_KIND_STAFF,
+        HAND_REQUIREMENT_TWO_HAND,
+        COMBAT_PROFILE_STAFF,
+    ),
+    weapon(
+        "NEWBIE_STAFF_02",
+        "Newbie Staff II",
+        "newbie_staff_02",
+        WEAPON_KIND_STAFF,
+        HAND_REQUIREMENT_TWO_HAND,
+        COMBAT_PROFILE_STAFF,
+    ),
+    weapon(
+        "NEWBIE_STAFF_03",
+        "Newbie Staff III",
+        "newbie_staff_03",
+        WEAPON_KIND_STAFF,
+        HAND_REQUIREMENT_TWO_HAND,
+        COMBAT_PROFILE_STAFF,
+    ),
+    weapon(
+        "NEWBIE_STAFF_04",
+        "Newbie Staff IV",
+        "newbie_staff_04",
+        WEAPON_KIND_STAFF,
+        HAND_REQUIREMENT_TWO_HAND,
+        COMBAT_PROFILE_STAFF,
     ),
     ItemDefinitionSpec {
         item_def_id: "CRACKED_KOBOLD_CHARM",
@@ -2831,7 +2995,11 @@ fn validate_weapon_equip_request_with_main_hand(
     main_hand: Option<&ItemDefinition>,
 ) -> Result<(), String> {
     match definition.weapon_kind.as_str() {
-        WEAPON_KIND_TWO_HAND_SWORD | WEAPON_KIND_DAGGER_PAIR | WEAPON_KIND_BOW => {
+        WEAPON_KIND_TWO_HAND_SWORD
+        | WEAPON_KIND_TWO_HAND_AXE
+        | WEAPON_KIND_DAGGER_PAIR
+        | WEAPON_KIND_BOW
+        | WEAPON_KIND_STAFF => {
             if target_slot != EQUIP_SLOT_MAIN_HAND {
                 return Err("two-hand weapons must be equipped in main hand".to_string());
             }
@@ -2842,9 +3010,9 @@ fn validate_weapon_equip_request_with_main_hand(
             }
             Ok(())
         }
-        WEAPON_KIND_ONE_HAND_SWORD => {
+        WEAPON_KIND_ONE_HAND_SWORD | WEAPON_KIND_ONE_HAND_AXE => {
             if target_slot != EQUIP_SLOT_MAIN_HAND {
-                return Err("one-hand swords must be equipped in main hand".to_string());
+                return Err("one-hand weapons must be equipped in main hand".to_string());
             }
             Ok(())
         }
@@ -3363,6 +3531,50 @@ mod tests {
             "TRAINING_TWO_HAND_SWORD"
         );
         assert_eq!(BASELINE_STARTER_WEAPONS[0].slot_id, EQUIP_SLOT_MAIN_HAND);
+    }
+
+    #[test]
+    fn newbie_pack_supported_weapon_variants_are_lootable() {
+        let lootable_weapons: std::collections::HashSet<_> =
+            lootable_item_definitions_for_kind(ITEM_KIND_WEAPON)
+                .into_iter()
+                .map(|definition| definition.item_def_id)
+                .collect();
+
+        for item_def_id in [
+            "NEWBIE_TWO_HAND_SWORD_01",
+            "NEWBIE_TWO_HAND_SWORD_02",
+            "NEWBIE_ONE_HAND_SWORD_01",
+            "NEWBIE_ONE_HAND_SWORD_02",
+            "NEWBIE_TWO_HAND_AXE_01",
+            "NEWBIE_ONE_HAND_AXE_02",
+            "NEWBIE_ONE_HAND_AXE_03",
+            "NEWBIE_SHIELD_01",
+            "NEWBIE_SHIELD_02",
+            "NEWBIE_SHIELD_03",
+            "NEWBIE_BOW_01",
+            "NEWBIE_BOW_02",
+            "NEWBIE_BOW_03",
+            "NEWBIE_DAGGER_PAIR_01",
+            "NEWBIE_DAGGER_PAIR_02",
+            "NEWBIE_DAGGER_PAIR_03",
+            "NEWBIE_STAFF_01",
+            "NEWBIE_STAFF_02",
+            "NEWBIE_STAFF_03",
+            "NEWBIE_STAFF_04",
+        ] {
+            assert!(
+                lootable_weapons.contains(item_def_id),
+                "{item_def_id} should be a lootable weapon definition"
+            );
+        }
+
+        assert!(
+            !lootable_weapons
+                .iter()
+                .any(|item_def_id| item_def_id.contains("ONE_HAND_AXE_01")),
+            "Axe_1H_Newbie_01 variants are intentionally blacklisted"
+        );
     }
 
     #[test]

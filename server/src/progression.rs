@@ -63,6 +63,8 @@ const MAX_DEFAULT_GLOBAL_COOLDOWN_MS: u64 = 60_000;
 pub(crate) const COMBAT_PROFILE_ARCHER_BOW: &str = "ARCHER_BOW";
 #[cfg(test)]
 const COMBAT_PROFILE_SWORD_AND_SHIELD: &str = "SWORD_AND_SHIELD";
+pub(crate) const COMBAT_PROFILE_DAGGERS: &str = "DAGGERS";
+pub(crate) const COMBAT_PROFILE_STAFF: &str = "STAFF";
 pub(crate) const COMBAT_PROFILE_TWO_HANDED_SWORD: &str = "TWO_HANDED_SWORD";
 pub(crate) const COMBAT_MODE_SHORT_DRAW: &str = "SHORT_DRAW";
 pub(crate) const COMBAT_MODE_FULL_DRAW: &str = "FULL_DRAW";
@@ -1695,6 +1697,8 @@ pub(crate) fn primary_resource_kind_for_owner(
     let combat_profile_id = derived_combat_profile_id_for_owner(ctx, owner)?;
     let resource_kind = match normalize_identifier(combat_profile_id.as_str()).as_str() {
         COMBAT_PROFILE_ARCHER_BOW => "MANA",
+        COMBAT_PROFILE_DAGGERS => "ENERGY",
+        COMBAT_PROFILE_STAFF => "MANA",
         "TWO_HANDED_SWORD" => "RAGE",
         "SWORD_AND_SHIELD" => "ZEAL",
         _ => return None,

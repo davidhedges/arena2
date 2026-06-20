@@ -867,6 +867,146 @@
                     }
                 }
             ]
+        },
+        {
+            "combat_profile": "DAGGERS",
+            "stagger_duration_f_ms": 1000,
+            "stagger_duration_b_ms": 1000,
+            "stagger_duration_l_ms": 1000,
+            "stagger_duration_r_ms": 1000,
+            "auto_attack_strike_id": "AUTO_ATTACK_1",
+            "strikes": [
+                {
+                    "id": "SWORD_AND_SHIELD_UTILITY_2",
+                    "slot_id": "utility_2",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 220
+                        }
+                    ],
+                    "recovery_ms": 220,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY"
+                },
+                {
+                    "id": "SWORD_AND_SHIELD_UTILITY_4",
+                    "slot_id": "utility_4",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 260
+                        }
+                    ],
+                    "recovery_ms": 300,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY"
+                },
+                {
+                    "id": "PALADIN_CHARGE",
+                    "slot_id": "paladin_charge_melee_slot",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 260
+                        }
+                    ],
+                    "recovery_ms": 250,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY"
+                },
+                {
+                    "id": "AUTO_ATTACK_1",
+                    "slot_id": "auto_attack_1",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 180
+                        }
+                    ],
+                    "recovery_ms": 200,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY"
+                }
+            ]
+        },
+        {
+            "combat_profile": "STAFF",
+            "stagger_duration_f_ms": 1000,
+            "stagger_duration_b_ms": 1000,
+            "stagger_duration_l_ms": 1000,
+            "stagger_duration_r_ms": 1000,
+            "auto_attack_strike_id": "AUTO_ATTACK_1",
+            "strikes": [
+                {
+                    "id": "COMBO_ATTACK_1_1_HIGH_TO_LOW",
+                    "slot_id": "light_combo_1",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 292
+                        }
+                    ],
+                    "recovery_ms": 250,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY"
+                },
+                {
+                    "id": "COMBO_ATTACK_2_1_SPIN",
+                    "slot_id": "alt_light_1",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 260
+                        }
+                    ],
+                    "recovery_ms": 250,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY"
+                },
+                {
+                    "id": "COMBO_ATTACK_4_4_LUNGING_SLASH",
+                    "slot_id": "finisher_4",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 350
+                        }
+                    ],
+                    "recovery_ms": 350,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY"
+                },
+                {
+                    "id": "AUTO_ATTACK_1",
+                    "slot_id": "auto_attack_1",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 320
+                        }
+                    ],
+                    "recovery_ms": 250,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY"
+                }
+            ]
         }
     ]
 }

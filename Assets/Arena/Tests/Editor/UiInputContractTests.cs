@@ -44,6 +44,7 @@ namespace Arena.Tests.Editor
         private const string ServerInventoryPath = "server/src/inventory.rs";
         private const string ServerAppearancePath = "server/src/appearance.rs";
         private const string ServerPlayerPath = "server/src/player.rs";
+        private const string EntityRegistryPath = "Assets/Arena/Runtime/Entity/EntityRegistry.cs";
 
         [Test]
         public void RuntimeUiCode_UsesSharedInputSystemEventBootstrap()
@@ -446,6 +447,15 @@ namespace Arena.Tests.Editor
             string inventory = File.ReadAllText(ServerInventoryPath);
             Assert.That(inventory, Does.Contain("BASELINE_STARTER_WEAPONS"));
             Assert.That(inventory, Does.Contain("starter_equipment(EQUIP_SLOT_MAIN_HAND, \"TRAINING_TWO_HAND_SWORD\")"));
+            Assert.That(inventory, Does.Contain("\"NEWBIE_TWO_HAND_SWORD_01\""));
+            Assert.That(inventory, Does.Contain("\"NEWBIE_ONE_HAND_SWORD_01\""));
+            Assert.That(inventory, Does.Contain("\"NEWBIE_TWO_HAND_AXE_01\""));
+            Assert.That(inventory, Does.Contain("\"NEWBIE_ONE_HAND_AXE_02\""));
+            Assert.That(inventory, Does.Not.Contain("\"NEWBIE_ONE_HAND_AXE_01\""));
+            Assert.That(inventory, Does.Contain("\"NEWBIE_DAGGER_PAIR_01\""));
+            Assert.That(inventory, Does.Contain("\"NEWBIE_STAFF_01\""));
+            Assert.That(inventory, Does.Contain("\"NEWBIE_SHIELD_01\""));
+            Assert.That(inventory, Does.Contain("\"NEWBIE_BOW_01\""));
             Assert.That(inventory, Does.Not.Contain("starter_equipment(EQUIP_SLOT_OFF_HAND"));
             Assert.That(inventory, Does.Not.Contain("starter_weapon_equipment_for_class"));
             Assert.That(inventory, Does.Not.Contain("starter_armor_equipment_for_class"));
@@ -469,6 +479,22 @@ namespace Arena.Tests.Editor
             string tooltip = File.ReadAllText(ActionTooltipResolverPath);
             Assert.That(tooltip, Does.Contain("CombatProfileResolver.ResolveForOwner"));
             Assert.That(tooltip, Does.Not.Contain("ClassCatalog"));
+
+            string entityRegistry = File.ReadAllText(EntityRegistryPath);
+            Assert.That(entityRegistry, Does.Contain("TryAddWeaponVisualIdsForItemDefinition"));
+            Assert.That(entityRegistry, Does.Contain("NEWBIE_TWO_HAND_SWORD_01"));
+            Assert.That(entityRegistry, Does.Contain("NEWBIE_ONE_HAND_SWORD_01"));
+            Assert.That(entityRegistry, Does.Contain("NEWBIE_TWO_HAND_AXE_01"));
+            Assert.That(entityRegistry, Does.Contain("NEWBIE_ONE_HAND_AXE_02"));
+            Assert.That(entityRegistry, Does.Contain("NEWBIE_DAGGER_PAIR_01"));
+            Assert.That(entityRegistry, Does.Contain("NEWBIE_STAFF_01"));
+            Assert.That(entityRegistry, Does.Contain("NEWBIE_SHIELD_01"));
+            Assert.That(entityRegistry, Does.Contain("NEWBIE_BOW_01"));
+
+            string daggersAnimationSet = File.ReadAllText("Assets/Arena/Resources/CombatAnimationSets/Daggers.asset");
+            Assert.That(daggersAnimationSet, Does.Contain("combatProfileId: DAGGERS"));
+            string staffAnimationSet = File.ReadAllText("Assets/Arena/Resources/CombatAnimationSets/Staff.asset");
+            Assert.That(staffAnimationSet, Does.Contain("combatProfileId: STAFF"));
 
             string hub = File.ReadAllText(HubControllerPath);
             Assert.That(hub, Does.Contain("bool showStage = activeHub && HubViewState.Current == HubViewScreen.Play"));
