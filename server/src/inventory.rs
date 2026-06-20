@@ -49,6 +49,7 @@ const MAX_ROLLED_ITEM_AFFIXES: usize = 3;
 const BASE_NPC_EQUIPMENT_DROP_CHANCE: f32 = 0.12;
 const HIDDEN_LOOT_QUALITY_DROP_SCALAR: f32 = 0.08;
 const HIDDEN_LOOT_QUALITY_AFFIX_SCALAR: f32 = 0.16;
+const CORPSE_LOOT_CLUSTER_RANGE: f32 = LOOT_INTERACT_RANGE;
 const PLAYER_BAG_WIDTH: u32 = 10;
 const PLAYER_BAG_HEIGHT: u32 = 4;
 const CORPSE_CONTAINER_WIDTH: u32 = 4;
@@ -920,12 +921,85 @@ pub fn open_loot_npc(ctx: &ReducerContext, npc_identity: Identity) -> Result<(),
 
     validate_npc_loot_access(ctx, ctx.sender(), npc_identity)?;
     create_corpse_loot_for_npc(ctx, npc_identity, ctx.sender());
+    collect_nearby_corpse_loot_into_primary(ctx, ctx.sender(), npc_identity);
     ctx.db
         .inventory_container()
         .container_id()
         .find(corpse_container_id(npc_identity))
         .ok_or_else(|| "corpse loot container was not created".to_string())?;
     Ok(())
+}
+
+fn collect_nearby_corpse_loot_into_primary(
+    ctx: &ReducerContext,
+    owner: Identity,
+    primary_npc_identity: Identity,
+) {
+    let primary_container_id = corpse_container_id(primary_npc_identity);
+    let Some(primary_npc) = ctx.db.npc_instance().identity().find(primary_npc_identity) else {
+        return;
+    };
+    let Some(primary_physics) = ctx.db.npc_physics().identity().find(primary_npc_identity) else {
+        return;
+    };
+
+    let clustered_npc_ids: Vec<_> = ctx
+        .db
+        .npc_state()
+        .alive()
+        .filter(false)
+        .filter_map(|state| {
+            if state.identity == primary_npc_identity {
+                return None;
+            }
+            let npc = ctx.db.npc_instance().identity().find(state.identity)?;
+            let physics = ctx.db.npc_physics().identity().find(state.identity)?;
+            if corpse_is_in_loot_cluster(&primary_npc, &primary_physics, &npc, &physics) {
+                Some(state.identity)
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    for npc_identity in clustered_npc_ids {
+        if validate_npc_loot_access(ctx, owner, npc_identity).is_err() {
+            continue;
+        }
+        create_corpse_loot_for_npc(ctx, npc_identity, owner);
+        merge_corpse_container_into_primary(ctx, primary_container_id.as_str(), npc_identity);
+    }
+}
+
+fn corpse_is_in_loot_cluster(
+    primary_npc: &crate::npcs::NpcInstance,
+    primary_physics: &crate::npcs::NpcPhysics,
+    candidate_npc: &crate::npcs::NpcInstance,
+    candidate_physics: &crate::npcs::NpcPhysics,
+) -> bool {
+    if !primary_npc
+        .world_kind
+        .eq_ignore_ascii_case(candidate_npc.world_kind.as_str())
+    {
+        return false;
+    }
+    if primary_npc.world_kind.eq_ignore_ascii_case("INSTANCE") {
+        if primary_npc.instance_id != candidate_npc.instance_id {
+            return false;
+        }
+    } else if primary_npc.world_kind.eq_ignore_ascii_case("OPEN")
+        && !primary_npc
+            .open_world_scene_name
+            .eq_ignore_ascii_case(candidate_npc.open_world_scene_name.as_str())
+    {
+        return false;
+    }
+
+    let dx = primary_physics.pos_x - candidate_physics.pos_x;
+    let dy = primary_physics.pos_y - candidate_physics.pos_y;
+    let dz = primary_physics.pos_z - candidate_physics.pos_z;
+    let distance_sq = dx * dx + dy * dy + dz * dz;
+    distance_sq <= CORPSE_LOOT_CLUSTER_RANGE * CORPSE_LOOT_CLUSTER_RANGE
 }
 
 fn validate_npc_loot_access(
@@ -1770,6 +1844,97 @@ fn roll_corpse_equipment_loot(
         definition.width,
         definition.height,
     );
+}
+
+fn merge_corpse_container_into_primary(
+    ctx: &ReducerContext,
+    primary_container_id: &str,
+    source_npc_identity: Identity,
+) {
+    let source_container_id = corpse_container_id(source_npc_identity);
+    if source_container_id == primary_container_id {
+        return;
+    }
+    let Some(mut primary_container) = ctx
+        .db
+        .inventory_container()
+        .container_id()
+        .find(primary_container_id.to_string())
+    else {
+        return;
+    };
+    let Some(mut source_container) = ctx
+        .db
+        .inventory_container()
+        .container_id()
+        .find(source_container_id.clone())
+    else {
+        return;
+    };
+
+    let mut moved_any = false;
+    let source_slots: Vec<_> = ctx
+        .db
+        .inventory_slot()
+        .container_id()
+        .filter(source_container_id.as_str())
+        .collect();
+    for slot in source_slots {
+        let Some(item) = ctx
+            .db
+            .item_instance()
+            .item_instance_id()
+            .find(slot.item_instance_id.clone())
+        else {
+            continue;
+        };
+        let Some(definition) = ctx
+            .db
+            .item_definition()
+            .item_def_id()
+            .find(item.item_def_id)
+        else {
+            continue;
+        };
+        let Some((x, y)) = first_free_position(
+            ctx,
+            primary_container.container_id.as_str(),
+            primary_container.width,
+            primary_container.height,
+            definition.width,
+            definition.height,
+            None,
+        ) else {
+            continue;
+        };
+
+        ctx.db.inventory_slot().key().delete(slot.key);
+        upsert_inventory_slot(
+            ctx,
+            primary_container.container_id.as_str(),
+            item.item_instance_id.as_str(),
+            x,
+            y,
+            definition.width,
+            definition.height,
+        );
+        moved_any = true;
+    }
+
+    if moved_any {
+        primary_container.revision = primary_container.revision.saturating_add(1);
+        primary_container.updated_at = ctx.timestamp;
+        ctx.db
+            .inventory_container()
+            .container_id()
+            .update(primary_container);
+        source_container.revision = source_container.revision.saturating_add(1);
+        source_container.updated_at = ctx.timestamp;
+        ctx.db
+            .inventory_container()
+            .container_id()
+            .update(source_container);
+    }
 }
 
 fn npc_loot_roll_context(npc: &crate::npcs::NpcInstance) -> LootRollContext {
@@ -3073,6 +3238,36 @@ mod tests {
         }
     }
 
+    fn npc_for_cluster_test(
+        world_kind: &str,
+        instance_id: Option<u64>,
+        scene: &str,
+    ) -> crate::npcs::NpcInstance {
+        crate::npcs::NpcInstance {
+            identity: Identity::ZERO,
+            spawned_by: Identity::ZERO,
+            template_id: crate::npcs::NPC_TEMPLATE_KOBOLD_WARRIOR_RD_SWORD_SHIELD.to_string(),
+            species_id: "KOBOLD_WARRIOR".to_string(),
+            faction: crate::npcs::NPC_FACTION_HOSTILE.to_string(),
+            display_name: "Kobold".to_string(),
+            world_kind: world_kind.to_string(),
+            instance_id,
+            open_world_scene_name: scene.to_string(),
+            spawned_at: Timestamp::UNIX_EPOCH,
+        }
+    }
+
+    fn npc_physics_for_cluster_test(x: f32, z: f32) -> crate::npcs::NpcPhysics {
+        crate::npcs::NpcPhysics {
+            identity: Identity::ZERO,
+            pos_x: x,
+            pos_y: 0.0,
+            pos_z: z,
+            yaw: 0.0,
+            updated_at: Timestamp::UNIX_EPOCH,
+        }
+    }
+
     #[test]
     fn grid_rectangles_detect_overlap() {
         assert!(rectangles_overlap(0, 0, 2, 2, 1, 1, 1, 1));
@@ -3356,6 +3551,44 @@ mod tests {
         assert!(affixes
             .iter()
             .any(|affix| affix.modifier_kind == MODIFIER_CRIT_CHANCE));
+    }
+
+    #[test]
+    fn corpse_loot_cluster_accepts_same_world_corpses_within_range() {
+        let primary = npc_for_cluster_test("OPEN", None, "OPEN_WORLD");
+        let candidate = npc_for_cluster_test("OPEN", None, "OPEN_WORLD");
+        let primary_physics = npc_physics_for_cluster_test(10.0, 5.0);
+        let candidate_physics = npc_physics_for_cluster_test(11.0, 6.0);
+
+        assert!(corpse_is_in_loot_cluster(
+            &primary,
+            &primary_physics,
+            &candidate,
+            &candidate_physics
+        ));
+    }
+
+    #[test]
+    fn corpse_loot_cluster_rejects_far_or_different_scene_corpses() {
+        let primary = npc_for_cluster_test("OPEN", None, "OPEN_WORLD");
+        let far_candidate = npc_for_cluster_test("OPEN", None, "OPEN_WORLD");
+        let different_scene_candidate = npc_for_cluster_test("OPEN", None, "OTHER_SCENE");
+        let primary_physics = npc_physics_for_cluster_test(0.0, 0.0);
+        let far_physics = npc_physics_for_cluster_test(CORPSE_LOOT_CLUSTER_RANGE + 1.0, 0.0);
+        let near_physics = npc_physics_for_cluster_test(0.5, 0.5);
+
+        assert!(!corpse_is_in_loot_cluster(
+            &primary,
+            &primary_physics,
+            &far_candidate,
+            &far_physics
+        ));
+        assert!(!corpse_is_in_loot_cluster(
+            &primary,
+            &primary_physics,
+            &different_scene_candidate,
+            &near_physics
+        ));
     }
 
     #[test]
