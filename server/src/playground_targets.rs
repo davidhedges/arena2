@@ -144,7 +144,6 @@ pub fn spawn_playground_target(ctx: &ReducerContext, kind: String) -> Result<(),
         ActorSpawnSpec {
             identity,
             username: playground_target_username(kind, slot),
-            class_id: "WARRIOR".to_string(),
             pos_x: spawn_x,
             pos_y: owner_physics.pos_y,
             pos_z: spawn_z,

@@ -478,7 +478,6 @@ fn spawn_training_actor(ctx: &ReducerContext, arena: &ArenaInstance, spec: Train
         LifecycleActorSpawnSpec {
             identity,
             username: spec.username,
-            class_id: "WARRIOR".to_string(),
             pos_x,
             pos_y,
             pos_z,

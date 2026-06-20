@@ -158,12 +158,12 @@ namespace Arena.Debugging
             {
                 var owner = conn.Identity;
                 y += 8;
-                GUI.Label(new Rect(x, y, 640, lineHeight), "Active Loadout", _headerStyle);
+                GUI.Label(new Rect(x, y, 640, lineHeight), "Active Action Bar", _headerStyle);
                 y += lineHeight + 2;
-                foreach (string slotId in SelectableLoadoutSlotIds.GridOrdered)
+                foreach (string slotId in ActionBarSlotIds.GridOrdered)
                 {
-                    ActiveSelectableLoadoutAction resolved =
-                        ActiveLoadoutResolver.ResolveActiveSelectableAction(conn, owner, slotId);
+                    ActiveActionBarAction resolved =
+                        ActiveActionBarResolver.ResolveActiveSelectableAction(conn, owner, slotId);
                     string line = resolved.HasAssignedAction
                         ? $"{slotId}: {resolved.AbilityId} | authored={resolved.AuthoredActionId} | runtime={resolved.ActionId}"
                         : $"{slotId}: <empty>";
@@ -182,11 +182,11 @@ namespace Arena.Debugging
                 }
             }
 
-            var traceLines = LoadoutActionTrace.Snapshot();
+            var traceLines = ActionBarTrace.Snapshot();
             if (traceLines.Count > 0)
             {
                 y += 8;
-                GUI.Label(new Rect(x, y, 640, lineHeight), "Loadout Action Trace", _headerStyle);
+                GUI.Label(new Rect(x, y, 640, lineHeight), "Action Bar Trace", _headerStyle);
                 y += lineHeight + 2;
                 foreach (string line in traceLines)
                 {

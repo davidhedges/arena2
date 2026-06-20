@@ -18,7 +18,7 @@ namespace Arena.Editor
 
         private ProgressionCoreAbilityCatalog? _catalog;
         private Vector2 _scroll;
-        private int _selectedClassIndex;
+        private int _selectedProfileIndex;
         private bool _dirty;
 
         [MenuItem("Arena/Progression/Core Ability Authoring", false, 480)]
@@ -44,28 +44,28 @@ namespace Arena.Editor
             if (_catalog == null)
                 return;
 
-            if (_catalog.Classes.Count == 0)
+            if (_catalog.Profiles.Count == 0)
             {
-                EditorGUILayout.HelpBox("No classes found in progression_catalog.shared.json.", MessageType.Warning);
+                EditorGUILayout.HelpBox("No combat profiles found in progression_catalog.shared.json.", MessageType.Warning);
                 return;
             }
 
-            string[] classLabels = _catalog.Classes
-                .Select(row => $"{row.DisplayName} ({row.ClassId})")
+            string[] profileLabels = _catalog.Profiles
+                .Select(row => $"{row.DisplayName} ({row.CombatProfileId})")
                 .ToArray();
-            _selectedClassIndex = Mathf.Clamp(_selectedClassIndex, 0, classLabels.Length - 1);
-            _selectedClassIndex = EditorGUILayout.Popup("Class", _selectedClassIndex, classLabels);
+            _selectedProfileIndex = Mathf.Clamp(_selectedProfileIndex, 0, profileLabels.Length - 1);
+            _selectedProfileIndex = EditorGUILayout.Popup("Combat Profile", _selectedProfileIndex, profileLabels);
 
-            ProgressionClassSummary selectedClass = _catalog.Classes[_selectedClassIndex];
+            ProgressionProfileSummary selectedProfile = _catalog.Profiles[_selectedProfileIndex];
             List<ProgressionAbilitySummary> abilities = _catalog.Abilities
-                .Where(ability => string.Equals(ability.ClassId, selectedClass.ClassId, StringComparison.Ordinal))
+                .Where(ability => string.Equals(ability.CombatProfileId, selectedProfile.CombatProfileId, StringComparison.Ordinal))
                 .OrderBy(ability => ability.SortOrder)
                 .ThenBy(ability => ability.DisplayName, StringComparer.Ordinal)
                 .ToList();
 
             EditorGUILayout.Space(6f);
             EditorGUILayout.HelpBox(
-                "CORE_ABILITY marks class-defining starter abilities. New loadouts seed default_loadout_assignments onto the bar; Dodge and Parry can be defaults without being core abilities.",
+                "CORE_ABILITY marks profile-defining starter abilities. New characters seed combat-profile action-bar defaults onto the action bar; Dodge and Parry can be defaults without being core abilities.",
                 MessageType.Info);
 
             _scroll = EditorGUILayout.BeginScrollView(_scroll);
@@ -117,24 +117,24 @@ namespace Arena.Editor
                 using (new EditorGUI.DisabledScope(true))
                 {
                     EditorGUILayout.TextField("Action Id", ability.ActionId);
-                    EditorGUILayout.TextField("Default Slots", string.Join(", ", ability.DefaultSlots));
+                    EditorGUILayout.TextField("Action Bar Defaults", string.Join(", ", ability.ActionBarDefaultSlots));
                 }
 
-                if (nextCoreNeedsLoadoutWarning(abilityId))
+                if (nextCoreNeedsActionBarDefaultWarning(abilityId))
                 {
                     EditorGUILayout.HelpBox(
-                        "This ability is marked core but has no default loadout assignment yet.",
+                        "This ability is marked core but has no action-bar default yet.",
                         MessageType.Warning);
                 }
             }
         }
 
-        private bool nextCoreNeedsLoadoutWarning(string abilityId)
+        private bool nextCoreNeedsActionBarDefaultWarning(string abilityId)
         {
             return _coreByAbilityId.TryGetValue(abilityId, out bool isCore)
                 && isCore
                 && _catalog != null
-                && !_catalog.DefaultAssignedAbilityIds.Contains(abilityId);
+                && !_catalog.ActionBarDefaultAbilityIds.Contains(abilityId);
         }
 
         private void Load()
@@ -157,7 +157,7 @@ namespace Arena.Editor
                 _catalog = CoreAbilityCatalogJson.ReadCatalog(json);
                 foreach (ProgressionAbilitySummary ability in _catalog.Abilities)
                     _coreByAbilityId[ability.AbilityId] = ability.IsCore;
-                _selectedClassIndex = Mathf.Clamp(_selectedClassIndex, 0, Math.Max(0, _catalog.Classes.Count - 1));
+                _selectedProfileIndex = Mathf.Clamp(_selectedProfileIndex, 0, Math.Max(0, _catalog.Profiles.Count - 1));
             }
             catch (Exception ex)
             {
@@ -200,15 +200,15 @@ namespace Arena.Editor
         {
             ProgressionCoreAbilityDocument document = JsonUtility.FromJson<ProgressionCoreAbilityDocument>(json)
                 ?? new ProgressionCoreAbilityDocument();
-            var defaultSlotsByAbilityId = BuildDefaultSlotsByAbilityId(document.default_loadout_assignments);
-            var defaultAssignedAbilityIds = new HashSet<string>(defaultSlotsByAbilityId.Keys, StringComparer.Ordinal);
+            var actionBarDefaultSlotsByAbilityId = BuildActionBarDefaultSlotsByAbilityId(document.combat_profile_action_bar_defaults);
+            var actionBarDefaultAbilityIds = new HashSet<string>(actionBarDefaultSlotsByAbilityId.Keys, StringComparer.Ordinal);
 
-            List<ProgressionClassSummary> classes = document.classes
-                .Select(row => new ProgressionClassSummary(
-                    Normalize(row.class_id),
-                    string.IsNullOrWhiteSpace(row.display_name) ? Normalize(row.class_id) : row.display_name,
+            List<ProgressionProfileSummary> profiles = document.combat_profiles
+                .Select(row => new ProgressionProfileSummary(
+                    Normalize(row.combat_profile_id),
+                    string.IsNullOrWhiteSpace(row.display_name) ? Normalize(row.combat_profile_id) : row.display_name,
                     row.sort_order))
-                .Where(row => !string.IsNullOrWhiteSpace(row.ClassId))
+                .Where(row => !string.IsNullOrWhiteSpace(row.CombatProfileId))
                 .OrderBy(row => row.SortOrder)
                 .ThenBy(row => row.DisplayName, StringComparer.Ordinal)
                 .ToList();
@@ -217,21 +217,21 @@ namespace Arena.Editor
                 .Select(row =>
                 {
                     string abilityId = Normalize(row.ability_id);
-                    defaultSlotsByAbilityId.TryGetValue(abilityId, out List<string>? defaultSlots);
+                    actionBarDefaultSlotsByAbilityId.TryGetValue(abilityId, out List<string>? actionBarDefaultSlots);
                     return new ProgressionAbilitySummary(
                         abilityId,
-                        Normalize(row.class_id),
+                        Normalize(row.combat_profile_id),
                         Normalize(row.action_id),
                         string.IsNullOrWhiteSpace(row.display_name) ? abilityId : row.display_name,
                         Normalize(row.gameplay.kind),
                         row.sort_order,
                         row.ability_tags.Select(Normalize).Where(tag => !string.IsNullOrWhiteSpace(tag)).ToList(),
-                        defaultSlots ?? new List<string>());
+                        actionBarDefaultSlots ?? new List<string>());
                 })
                 .Where(row => !string.IsNullOrWhiteSpace(row.AbilityId))
                 .ToList();
 
-            return new ProgressionCoreAbilityCatalog(classes, abilities, defaultAssignedAbilityIds);
+            return new ProgressionCoreAbilityCatalog(profiles, abilities, actionBarDefaultAbilityIds);
         }
 
         public static string ApplyCoreAbilityTags(
@@ -310,13 +310,13 @@ namespace Arena.Editor
             return objectJson.Substring(0, insertAt) + propertyText + objectJson.Substring(insertAt);
         }
 
-        private static Dictionary<string, List<string>> BuildDefaultSlotsByAbilityId(
-            IEnumerable<DefaultLoadoutAssignmentRow> assignments)
+        private static Dictionary<string, List<string>> BuildActionBarDefaultSlotsByAbilityId(
+            IEnumerable<CombatProfileActionBarDefaultRow> assignments)
         {
             var slotsByAbilityId = new Dictionary<string, List<string>>(StringComparer.Ordinal);
-            foreach (DefaultLoadoutAssignmentRow assignment in assignments)
+            foreach (CombatProfileActionBarDefaultRow assignment in assignments)
             {
-                string abilityId = Normalize(DefaultAbilityId(assignment));
+                string abilityId = Normalize(ActionBarDefaultAbilityId(assignment));
                 if (string.IsNullOrWhiteSpace(abilityId))
                     continue;
 
@@ -335,7 +335,7 @@ namespace Arena.Editor
             return slotsByAbilityId;
         }
 
-        private static string DefaultAbilityId(DefaultLoadoutAssignmentRow assignment)
+        private static string ActionBarDefaultAbilityId(CombatProfileActionBarDefaultRow assignment)
         {
             string actionKind = Normalize(assignment.action_kind);
             string actionId = Normalize(assignment.action_id);
@@ -613,30 +613,30 @@ namespace Arena.Editor
 
     public sealed class ProgressionCoreAbilityCatalog
     {
-        public readonly List<ProgressionClassSummary> Classes;
+        public readonly List<ProgressionProfileSummary> Profiles;
         public readonly List<ProgressionAbilitySummary> Abilities;
-        public readonly HashSet<string> DefaultAssignedAbilityIds;
+        public readonly HashSet<string> ActionBarDefaultAbilityIds;
 
         public ProgressionCoreAbilityCatalog(
-            List<ProgressionClassSummary> classes,
+            List<ProgressionProfileSummary> profiles,
             List<ProgressionAbilitySummary> abilities,
-            HashSet<string> defaultAssignedAbilityIds)
+            HashSet<string> actionBarDefaultAbilityIds)
         {
-            Classes = classes;
+            Profiles = profiles;
             Abilities = abilities;
-            DefaultAssignedAbilityIds = defaultAssignedAbilityIds;
+            ActionBarDefaultAbilityIds = actionBarDefaultAbilityIds;
         }
     }
 
-    public sealed class ProgressionClassSummary
+    public sealed class ProgressionProfileSummary
     {
-        public readonly string ClassId;
+        public readonly string CombatProfileId;
         public readonly string DisplayName;
         public readonly int SortOrder;
 
-        public ProgressionClassSummary(string classId, string displayName, int sortOrder)
+        public ProgressionProfileSummary(string combatProfileId, string displayName, int sortOrder)
         {
-            ClassId = classId;
+            CombatProfileId = combatProfileId;
             DisplayName = displayName;
             SortOrder = sortOrder;
         }
@@ -645,49 +645,49 @@ namespace Arena.Editor
     public sealed class ProgressionAbilitySummary
     {
         public readonly string AbilityId;
-        public readonly string ClassId;
+        public readonly string CombatProfileId;
         public readonly string ActionId;
         public readonly string DisplayName;
         public readonly string Kind;
         public readonly int SortOrder;
         public readonly List<string> Tags;
-        public readonly List<string> DefaultSlots;
+        public readonly List<string> ActionBarDefaultSlots;
 
         public bool IsCore => Tags.Any(tag => string.Equals(tag, "CORE_ABILITY", StringComparison.Ordinal));
 
         public ProgressionAbilitySummary(
             string abilityId,
-            string classId,
+            string combatProfileId,
             string actionId,
             string displayName,
             string kind,
             int sortOrder,
             List<string> tags,
-            List<string> defaultSlots)
+            List<string> actionBarDefaultSlots)
         {
             AbilityId = abilityId;
-            ClassId = classId;
+            CombatProfileId = combatProfileId;
             ActionId = actionId;
             DisplayName = displayName;
             Kind = kind;
             SortOrder = sortOrder;
             Tags = tags;
-            DefaultSlots = defaultSlots;
+            ActionBarDefaultSlots = actionBarDefaultSlots;
         }
     }
 
     [Serializable]
     internal sealed class ProgressionCoreAbilityDocument
     {
-        public List<ClassDefinitionRow> classes = new();
+        public List<CombatProfileDefinitionRow> combat_profiles = new();
         public List<AbilityDefinitionRow> abilities = new();
-        public List<DefaultLoadoutAssignmentRow> default_loadout_assignments = new();
+        public List<CombatProfileActionBarDefaultRow> combat_profile_action_bar_defaults = new();
     }
 
     [Serializable]
-    internal sealed class ClassDefinitionRow
+    internal sealed class CombatProfileDefinitionRow
     {
-        public string class_id = string.Empty;
+        public string combat_profile_id = string.Empty;
         public string display_name = string.Empty;
         public int sort_order;
     }
@@ -696,7 +696,7 @@ namespace Arena.Editor
     internal sealed class AbilityDefinitionRow
     {
         public string ability_id = string.Empty;
-        public string class_id = string.Empty;
+        public string combat_profile_id = string.Empty;
         public string action_id = string.Empty;
         public string display_name = string.Empty;
         public int sort_order;
@@ -711,7 +711,7 @@ namespace Arena.Editor
     }
 
     [Serializable]
-    internal sealed class DefaultLoadoutAssignmentRow
+    internal sealed class CombatProfileActionBarDefaultRow
     {
         public string slot_id = string.Empty;
         public string action_kind = string.Empty;

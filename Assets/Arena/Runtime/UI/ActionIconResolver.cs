@@ -12,7 +12,7 @@ namespace Arena.UI
         private const string ResourceRoot = "UI/AbilityIcons";
         private static readonly Dictionary<string, Sprite?> Cache = new(StringComparer.Ordinal);
 
-        public static Sprite? ResolveForAction(ActiveSelectableLoadoutAction action)
+        public static Sprite? ResolveForAction(ActiveActionBarAction action)
         {
             if (!action.HasAssignedAction)
                 return null;

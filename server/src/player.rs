@@ -25,7 +25,7 @@ use crate::combat::new_player_spawn_state;
 use crate::inventory::ensure_player_inventory_for_identity;
 use crate::party::remove_player_from_party_state;
 use crate::playground_targets::despawn_all_playground_targets_for_owner;
-use crate::progression::{default_class_id, ensure_default_progression_for_identity};
+use crate::progression::ensure_default_progression_for_identity;
 use crate::resources::sync_primary_resource_for_player;
 
 pub const DEFAULT_COMBAT_PROFILE: &str = "SWORD_AND_SHIELD";
@@ -46,9 +46,6 @@ pub struct Player {
 
     /// When the player connected
     pub connected_at: Timestamp,
-
-    /// Runtime class identity. Combat profile is derived from this.
-    pub class_id: String,
 }
 
 /// Called when a client connects to the SpacetimeDB module.
@@ -77,14 +74,11 @@ pub fn client_connected(ctx: &ReducerContext) -> Result<(), String> {
 
     // Build combat/lifecycle spawn state once to keep spawn defaults centralized.
     let (spawn_x, spawn_y, spawn_z, player_state) = new_player_spawn_state(identity, now);
-    let class_id = default_class_id();
-
     spawn_actor_bundle(
         ctx,
         ActorSpawnSpec {
             identity,
             username: format!("Player_{}", &identity.to_hex()[..8]),
-            class_id,
             pos_x: spawn_x,
             pos_y: spawn_y,
             pos_z: spawn_z,

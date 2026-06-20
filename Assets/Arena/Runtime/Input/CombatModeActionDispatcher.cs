@@ -10,7 +10,7 @@ namespace Arena.Input
 {
     public static class CombatModeActionDispatcher
     {
-        public static bool TryTrigger(DbConnection? conn, ActiveSelectableLoadoutAction action)
+        public static bool TryTrigger(DbConnection? conn, ActiveActionBarAction action)
         {
             if (conn == null || !conn.Identity.HasValue || !action.IsCombatModeToggleAbility)
                 return false;
@@ -23,7 +23,7 @@ namespace Arena.Input
             CombatModeCatalog[] modes = ResolveModesForProfile(conn, combatProfile);
             if (modes.Length == 0)
             {
-                LoadoutActionTrace.Trace(
+                ActionBarTrace.Trace(
                     $"combat mode toggle rejected ability={action.AbilityId} profile={combatProfile} reason=no_modes");
                 return false;
             }
@@ -34,7 +34,7 @@ namespace Arena.Input
                 return false;
 
             conn.Reducers.SetCombatMode(nextMode);
-            LoadoutActionTrace.Trace(
+            ActionBarTrace.Trace(
                 $"combat mode toggle dispatched ability={action.AbilityId} profile={combatProfile} {currentMode}->{nextMode}");
             return true;
         }

@@ -12,9 +12,9 @@ using SpacetimeDB.Types;
 namespace Arena.Input
 {
     /// <summary>
-    /// Handles client-side melee prediction for slotted loadout actions.
+    /// Handles client-side melee prediction for slotted action-bar actions.
     /// Direct keyboard ownership lives in SpellInputHandler; this component only
-    /// flushes queued followups and exposes TryTriggerAction for loadout-dispatched
+    /// flushes queued followups and exposes TryTriggerAction for action-bar-dispatched
     /// melee inputs.
     /// </summary>
     public class MeleeInputHandler : MonoBehaviour
@@ -116,7 +116,7 @@ namespace Arena.Input
         {
             if (entity.IsDestroyed || !entity.IsAlive)
             {
-                LoadoutActionTrace.Trace($"melee rejected: {slotId} has no live local entity");
+                ActionBarTrace.Trace($"melee rejected: {slotId} has no live local entity");
                 return false;
             }
 
@@ -124,7 +124,7 @@ namespace Arena.Input
 
             if (!IsDirectlyBindableMeleeStrike(conn, combatProfile, slotId))
             {
-                LoadoutActionTrace.Trace($"melee rejected: {slotId} is not a bindable opener for {combatProfile}");
+                ActionBarTrace.Trace($"melee rejected: {slotId} is not a bindable opener for {combatProfile}");
                 return false;
             }
 
@@ -143,7 +143,7 @@ namespace Arena.Input
                 MeleeGameplayResolver.ResolveForAction(conn, entity.Identity, combatProfile, slotId);
             if (gameplay == null)
             {
-                LoadoutActionTrace.Trace($"melee rejected: {slotId} has no melee gameplay row");
+                ActionBarTrace.Trace($"melee rejected: {slotId} has no melee gameplay row");
                 return false;
             }
             MeleeGapCloseCatalog? gapClose = ResolveGapCloseForAction(conn, entity.Identity, combatProfile, slotId);
@@ -158,18 +158,18 @@ namespace Arena.Input
                 target = TargetSelector.Instance?.SelectedTarget;
                 if (target == null || target.IsDestroyed || !target.IsAlive)
                 {
-                    LoadoutActionTrace.Trace($"melee rejected: {slotId} requires a live target");
+                    ActionBarTrace.Trace($"melee rejected: {slotId} requires a live target");
                     return false;
                 }
                 if (!IsTargetWithinFacingArc(entity, target))
                 {
-                    LoadoutActionTrace.Trace($"melee rejected: {slotId} requires target facing");
+                    ActionBarTrace.Trace($"melee rejected: {slotId} requires target facing");
                     return false;
                 }
                 if (!PartyRelationship.TargetAudienceAllowsLocal(target, gameplay.TargetAudience))
                 {
                     var relation = PartyRelationship.RelationToLocal(target);
-                    LoadoutActionTrace.Trace(
+                    ActionBarTrace.Trace(
                         $"melee rejected: {slotId} target audience {TraceAudience(gameplay.TargetAudience)} rejects relation={relation} target={target.DisplayName}");
                     return false;
                 }
@@ -184,7 +184,7 @@ namespace Arena.Input
             {
                 if (usesGlobalCooldown && !isComboFollowup && combat.IsGlobalCooldownActive(nowMs))
                 {
-                    LoadoutActionTrace.Trace($"melee rejected: {slotId} blocked by GCD");
+                    ActionBarTrace.Trace($"melee rejected: {slotId} blocked by GCD");
                     return false;
                 }
             }
@@ -195,7 +195,7 @@ namespace Arena.Input
             {
                 if (nowMs < cd.lastCastMs + cd.durationMs)
                 {
-                    LoadoutActionTrace.Trace($"melee rejected: {slotId} blocked by cooldown");
+                    ActionBarTrace.Trace($"melee rejected: {slotId} blocked by cooldown");
                     return false;
                 }
             }
@@ -217,7 +217,7 @@ namespace Arena.Input
                 float strictAllowedDistance = strikeRange + targetRadius;
                 if (horizDist > strictAllowedDistance)
                 {
-                    LoadoutActionTrace.Trace(
+                    ActionBarTrace.Trace(
                         gapClose != null
                             ? $"melee rejected: {slotId} gap close acquisition out of range dist={horizDist:F2} allowed={strictAllowedDistance:F2} range={strikeRange:F2} target_radius={targetRadius:F2}"
                             : $"melee rejected: {slotId} out of range dist={horizDist:F2} allowed={strictAllowedDistance:F2} range={strikeRange:F2} target_radius={targetRadius:F2}");
@@ -229,7 +229,7 @@ namespace Arena.Input
                     float strictMinimumDistance = minimumRange + targetRadius;
                     if (horizDist < strictMinimumDistance)
                     {
-                        LoadoutActionTrace.Trace(
+                        ActionBarTrace.Trace(
                             $"melee rejected: {slotId} inside minimum range dist={horizDist:F2} min={strictMinimumDistance:F2} minimum_range={minimumRange:F2} target_radius={targetRadius:F2}");
                         return false;
                     }
@@ -237,7 +237,7 @@ namespace Arena.Input
             }
 
             // Send to server for authoritative validation, damage, and remote sync.
-            LoadoutActionTrace.Trace(
+            ActionBarTrace.Trace(
                 strikeChoice.shouldQueue
                     ? $"sending MeleeAttack queue request for {slotId} execute_at={strikeChoice.executeNotBeforeMs}"
                     : $"sending MeleeAttack for {slotId}");
@@ -257,7 +257,7 @@ namespace Arena.Input
 
             if (gapClose != null)
             {
-                LoadoutActionTrace.Trace(
+                ActionBarTrace.Trace(
                     $"melee gap close awaiting authoritative movement+animation: {slotId}");
                 return true;
             }
@@ -280,7 +280,7 @@ namespace Arena.Input
             {
                 _queuedStrikeId = slotId;
                 _queuedStrikeExecuteAtMs = strikeChoice.executeNotBeforeMs;
-                LoadoutActionTrace.Trace($"melee queued locally: {slotId}");
+                ActionBarTrace.Trace($"melee queued locally: {slotId}");
                 return true;
             }
 
@@ -295,8 +295,8 @@ namespace Arena.Input
             string actionId)
         {
             string authoredActionId = CombatActionIds.ResolveAuthoredStrikeId(conn, combatProfile, actionId);
-            ActiveSelectableLoadoutAction direct =
-                ActiveLoadoutResolver.ResolveActiveSelectableActionForAction(conn, owner, authoredActionId);
+            ActiveActionBarAction direct =
+                ActiveActionBarResolver.ResolveActiveSelectableActionForAction(conn, owner, authoredActionId);
             if (direct.HasAssignedAction)
             {
                 MeleeGapCloseCatalog? directGapClose = conn.Db.MeleeGapCloseCatalog.AbilityId.Find(direct.AbilityId);
@@ -308,8 +308,8 @@ namespace Arena.Input
             if (string.Equals(rootAuthoredActionId, authoredActionId, System.StringComparison.OrdinalIgnoreCase))
                 return null;
 
-            ActiveSelectableLoadoutAction root =
-                ActiveLoadoutResolver.ResolveActiveSelectableActionForAction(conn, owner, rootAuthoredActionId);
+            ActiveActionBarAction root =
+                ActiveActionBarResolver.ResolveActiveSelectableActionForAction(conn, owner, rootAuthoredActionId);
             AbilityCatalog? rootAbility = string.IsNullOrWhiteSpace(root.AbilityId)
                 ? null
                 : conn.Db.AbilityCatalog.AbilityId.Find(root.AbilityId);
@@ -320,8 +320,13 @@ namespace Arena.Input
             {
                 if (!string.Equals(ability.AbilityKind, "MELEE", System.StringComparison.OrdinalIgnoreCase))
                     continue;
-                if (!string.Equals(ability.ClassId, rootAbility.ClassId, System.StringComparison.OrdinalIgnoreCase))
+                if (!string.Equals(
+                    CombatProfileResolver.ResolveForAbility(conn, ability),
+                    CombatProfileResolver.ResolveForAbility(conn, rootAbility),
+                    System.StringComparison.OrdinalIgnoreCase))
+                {
                     continue;
+                }
                 if (!string.Equals(ability.ActionId, authoredActionId, System.StringComparison.OrdinalIgnoreCase))
                     continue;
 
@@ -351,7 +356,7 @@ namespace Arena.Input
 
         private bool HasResourceForMeleeAction(DbConnection conn, PlayerEntity entity, string actionId)
         {
-            ActiveSelectableLoadoutAction action = ActiveLoadoutResolver.ResolveActiveSelectableActionForAction(
+            ActiveActionBarAction action = ActiveActionBarResolver.ResolveActiveSelectableActionForAction(
                 conn,
                 entity.Identity,
                 actionId);
@@ -363,7 +368,7 @@ namespace Arena.Input
                 : action.ResourceKind.Trim().ToUpperInvariant();
             if (!string.Equals(requiredKind, entity.PrimaryResourceKind, System.StringComparison.OrdinalIgnoreCase))
             {
-                LoadoutActionTrace.Trace(
+                ActionBarTrace.Trace(
                     $"melee rejected: {actionId} requires {requiredKind}, active resource is {entity.PrimaryResourceKind}");
                 return false;
             }
@@ -371,7 +376,7 @@ namespace Arena.Input
             float available = LocalCombatState.Instance.EffectiveCurrentPrimaryResource(entity, requiredKind);
             if (available + 0.001f < action.ResourceCost)
             {
-                LoadoutActionTrace.Trace(
+                ActionBarTrace.Trace(
                     $"melee rejected: {actionId} requires {action.ResourceCost:F0} {requiredKind} ({available:F0} available)");
                 return false;
             }
@@ -381,7 +386,7 @@ namespace Arena.Input
 
         private void ReservePredictedResourceForMeleeAction(DbConnection conn, PlayerEntity entity, string actionId, long nowMs)
         {
-            ActiveSelectableLoadoutAction action = ActiveLoadoutResolver.ResolveActiveSelectableActionForAction(
+            ActiveActionBarAction action = ActiveActionBarResolver.ResolveActiveSelectableActionForAction(
                 conn,
                 entity.Identity,
                 actionId);
@@ -447,7 +452,7 @@ namespace Arena.Input
                 RememberPredictedMeleeVisual(token, slotId, runtimeActionId, startedAtMs);
             else
                 RememberPredictedStrikeVisual(runtimeActionId, startedAtMs);
-            LoadoutActionTrace.Trace($"local melee prediction triggered: {slotId}");
+            ActionBarTrace.Trace($"local melee prediction triggered: {slotId}");
 
             _queuedStrikeId = string.Empty;
             _queuedStrikeExecuteAtMs = 0L;

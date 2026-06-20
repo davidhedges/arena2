@@ -21,7 +21,6 @@ namespace Arena.UI
     public sealed class HubController : MonoBehaviour, IEscapeCloseable
     {
         private const string HubSceneName = "Hub";
-        private static readonly string[] StatKinds = { "MIGHT", "INSIGHT", "FINESSE", "QUICKNESS", "FORTITUDE" };
         private static readonly Color ActiveRed = new(0.72f, 0.08f, 0.04f, 0.96f);
         private static readonly Color Transparent = new(0f, 0f, 0f, 0f);
 
@@ -34,20 +33,15 @@ namespace Arena.UI
         private RuntimeAvatarBinding? _showcaseAvatarBinding;
         private WeaponAttachmentController? _showcaseWeaponAttachments;
         private Button? _playButton;
-        private Button? _loadoutButton;
+        private Button? _equipmentButton;
         private Button? _ctaButton;
         private TMP_Text? _ctaSubtitle;
-        private TMP_Text? _classNameText;
-        private TMP_Text? _classMetaText;
+        private TMP_Text? _identityNameText;
+        private TMP_Text? _identityMetaText;
         private TMP_Text? _identityBlurbText;
-        private Transform? _loadoutPanel;
         private GameObject? _weaponLabel;
         private GameObject? _weaponName;
         private GameObject? _weaponPreview;
-        private RectTransform? _loadoutStatsRoot;
-        private readonly Dictionary<string, TMP_Text> _loadoutStatValues = new();
-        private TMP_Text? _professionNameText;
-        private TMP_Text? _trinketNameText;
         private GameObject? _greatswordPreview;
         private GameObject? _swordShieldPreview;
         private bool _wired;
@@ -56,15 +50,11 @@ namespace Arena.UI
         private string _lastFailedShowcaseAppearanceSignature = string.Empty;
 
         public int EscapeClosePriority => IsTravelMenuOpen ? 80 : 30;
-        public bool IsEscapeCloseable => IsTravelMenuOpen || IsLoadoutViewOpen;
+        public bool IsEscapeCloseable => IsTravelMenuOpen;
 
         private bool IsTravelMenuOpen => Application.isPlaying
             && _travelMenu != null
             && _travelMenu.activeSelf;
-
-        private bool IsLoadoutViewOpen => Application.isPlaying
-            && string.Equals(SceneManager.GetActiveScene().name, HubSceneName, System.StringComparison.Ordinal)
-            && HubViewState.Current == HubViewScreen.Loadout;
 
         private void OnEnable()
         {
@@ -123,23 +113,17 @@ namespace Arena.UI
             if (Application.isPlaying)
                 StarterAssetsRuntimeStripper.StripFrom(_showcaseAvatar);
             _playButton = _root.Find("HubCanvas/TopBar/NavRow/PlayButton")?.GetComponent<Button>();
-            _loadoutButton = _root.Find("HubCanvas/TopBar/NavRow/LoadoutButton")?.GetComponent<Button>();
+            _equipmentButton = _root.Find("HubCanvas/TopBar/NavRow/EquipmentButton")?.GetComponent<Button>();
             _ctaButton = _root.Find("HubCanvas/HomeRoot/CtaPanel/PlayButton")?.GetComponent<Button>();
             _ctaSubtitle = _root.Find("HubCanvas/HomeRoot/CtaPanel/PlayButton/SubLabel")?.GetComponent<TMP_Text>();
-            _classNameText = _root.Find("HubCanvas/HomeRoot/IdentityPanel/ClassName")?.GetComponent<TMP_Text>();
-            _classMetaText = _root.Find("HubCanvas/HomeRoot/IdentityPanel/ClassMeta")?.GetComponent<TMP_Text>();
+            _identityNameText = _root.Find("HubCanvas/HomeRoot/IdentityPanel/GearName")?.GetComponent<TMP_Text>();
+            _identityMetaText = _root.Find("HubCanvas/HomeRoot/IdentityPanel/GearMeta")?.GetComponent<TMP_Text>();
             _identityBlurbText = _root.Find("HubCanvas/HomeRoot/IdentityPanel/IdentityBlurb")?.GetComponent<TMP_Text>();
-            _loadoutPanel = _root.Find("HubCanvas/HomeRoot/LoadoutPanel");
-            _weaponLabel = _root.Find("HubCanvas/HomeRoot/LoadoutPanel/WeaponLabel")?.gameObject;
-            _weaponName = _root.Find("HubCanvas/HomeRoot/LoadoutPanel/WeaponName")?.gameObject;
-            _weaponPreview = _root.Find("HubCanvas/HomeRoot/LoadoutPanel/WeaponPreview")?.gameObject;
-            _loadoutStatsRoot = _root.Find("HubCanvas/HomeRoot/LoadoutPanel/AllocatedStatsRoot")?.GetComponent<RectTransform>();
-            _professionNameText = _root.Find("HubCanvas/HomeRoot/LoadoutPanel/ProfessionCard/ProfessionName")?.GetComponent<TMP_Text>();
-            _trinketNameText = _root.Find("HubCanvas/HomeRoot/LoadoutPanel/TrinketName")?.GetComponent<TMP_Text>();
-            _greatswordPreview = _root.Find("HubCanvas/HomeRoot/LoadoutPanel/WeaponPreview/GreatswordSilhouette")?.gameObject;
-            _swordShieldPreview = _root.Find("HubCanvas/HomeRoot/LoadoutPanel/WeaponPreview/SwordShieldSilhouette")?.gameObject;
-            CacheLoadoutStatValues();
-            EnsureLoadoutSummaryUi();
+            _weaponLabel = _root.Find("HubCanvas/HomeRoot/EquipmentPanel/WeaponLabel")?.gameObject;
+            _weaponName = _root.Find("HubCanvas/HomeRoot/EquipmentPanel/WeaponName")?.gameObject;
+            _weaponPreview = _root.Find("HubCanvas/HomeRoot/EquipmentPanel/WeaponPreview")?.gameObject;
+            _greatswordPreview = _root.Find("HubCanvas/HomeRoot/EquipmentPanel/WeaponPreview/GreatswordSilhouette")?.gameObject;
+            _swordShieldPreview = _root.Find("HubCanvas/HomeRoot/EquipmentPanel/WeaponPreview/SwordShieldSilhouette")?.gameObject;
             EnsureTravelDestinationButtons();
         }
 
@@ -157,16 +141,11 @@ namespace Arena.UI
                 });
             }
 
-            if (_loadoutButton != null)
+            if (_equipmentButton != null)
             {
-                _loadoutButton.onClick.RemoveAllListeners();
-                _loadoutButton.onClick.AddListener(() =>
-                {
-                    HubViewState.Show(HubViewScreen.Loadout);
-                    if (_travelMenu != null)
-                        _travelMenu.SetActive(false);
-                    ApplyState();
-                });
+                _equipmentButton.onClick.RemoveAllListeners();
+                _equipmentButton.interactable = false;
+                _equipmentButton.gameObject.SetActive(false);
             }
 
             if (_ctaButton != null)
@@ -206,7 +185,7 @@ namespace Arena.UI
                 }
             }
 
-            _wired = _playButton != null && _loadoutButton != null && _ctaButton != null;
+            _wired = _playButton != null && _ctaButton != null;
         }
 
         private void ApplyState()
@@ -223,22 +202,15 @@ namespace Arena.UI
                 _travelMenu.SetActive(false);
 
             ApplyNavVisual(_playButton, HubViewState.Current == HubViewScreen.Play);
-            ApplyNavVisual(_loadoutButton, HubViewState.Current == HubViewScreen.Loadout);
 
             if (_ctaSubtitle != null)
                 _ctaSubtitle.text = OpenWorldTravelCatalog.CurrentDisplayName.ToUpperInvariant();
 
-            string classId = ResolveClassId();
-            ApplyClassIdentity(classId);
-            if (showStage)
-                ApplyShowcaseAppearance(classId);
             string combatProfile = ResolveCombatProfile();
+            ApplyGearIdentity(combatProfile);
+            if (showStage)
+                ApplyShowcaseAppearance();
             ApplyCombatProfile(combatProfile);
-            ApplyLoadoutSummary();
-            if (_professionNameText != null)
-                _professionNameText.text = "ENCHANTING";
-            if (_trinketNameText != null)
-                _trinketNameText.text = "Charm of Resolve";
         }
 
         public bool TryCloseForEscape()
@@ -250,31 +222,7 @@ namespace Arena.UI
                 return true;
             }
 
-            if (IsLoadoutViewOpen)
-            {
-                HubViewState.Show(HubViewScreen.Play);
-                ApplyState();
-                return true;
-            }
-
             return false;
-        }
-
-        private string ResolveClassId()
-        {
-            if (Application.isPlaying)
-            {
-                DbConnection? conn = NetworkManager.Instance?.Conn;
-                Identity? identity = conn?.Identity;
-                if (conn != null && identity.HasValue)
-                {
-                    CharacterProgression? progression = conn.Db.CharacterProgression.Owner.Find(identity.Value);
-                    if (progression != null && !string.IsNullOrWhiteSpace(progression.ClassId))
-                        return progression.ClassId;
-                }
-            }
-
-            return "WARRIOR";
         }
 
         private string ResolveCombatProfile()
@@ -284,33 +232,27 @@ namespace Arena.UI
                 DbConnection? conn = NetworkManager.Instance?.Conn;
                 Identity? identity = conn?.Identity;
                 if (conn != null && identity.HasValue)
-                {
-                    CharacterProgression? progression = conn.Db.CharacterProgression.Owner.Find(identity.Value);
-                    if (progression != null)
-                        return CombatProfileResolver.ResolveForClass(conn, progression.ClassId);
-                }
+                    return CombatProfileResolver.ResolveForOwner(conn, identity.Value);
             }
 
-            return CombatProfileIds.TwoHandedSword;
+            return CombatProfileIds.SwordAndShield;
         }
 
-        private void ApplyClassIdentity(string classId)
+        private void ApplyGearIdentity(string combatProfile)
         {
-            string normalized = string.IsNullOrWhiteSpace(classId)
-                ? "WARRIOR"
-                : classId.Trim().ToUpperInvariant();
+            string normalized = CombatProfileIds.Normalize(combatProfile);
 
-            if (_classNameText != null)
-                _classNameText.text = normalized;
+            if (_identityNameText != null)
+                _identityNameText.text = "GEAR";
 
-            if (_classMetaText != null)
+            if (_identityMetaText != null)
             {
-                _classMetaText.text = normalized switch
+                _identityMetaText.text = normalized switch
                 {
-                    "PALADIN" => "MELEE | SWORD & SHIELD",
-                    "RANGER" => "RANGED | BOW",
-                    "WARRIOR" => "MELEE | GREATSWORD",
-                    _ => "MELEE | COMBAT",
+                    CombatProfileIds.ArcherBow => "RANGED | BOW",
+                    CombatProfileIds.TwoHandedSword => "MELEE | GREATSWORD",
+                    CombatProfileIds.SwordAndShield => "MELEE | SWORD & SHIELD",
+                    _ => "COMBAT PROFILE",
                 };
             }
 
@@ -318,10 +260,10 @@ namespace Arena.UI
             {
                 _identityBlurbText.text = normalized switch
                 {
-                    "PALADIN" => "A shield-bearing frontliner built around protection, counter-pressure, and control.",
-                    "RANGER" => "A mobile ranged fighter built around bow pressure, spacing, and mana-backed shots.",
-                    "WARRIOR" => "A heavy vanguard built around commitment, pressure, and decisive greatsword attacks.",
-                    _ => "A combat specialist with a focused loadout and readable battlefield role.",
+                    CombatProfileIds.ArcherBow => "Equipped for bow pressure, spacing, and mobile ranged control.",
+                    CombatProfileIds.TwoHandedSword => "Equipped for committed melee pressure and decisive greatsword attacks.",
+                    CombatProfileIds.SwordAndShield => "Equipped for shield pressure, counterplay, and controlled melee pacing.",
+                    _ => "Combat role is determined by equipped gear.",
                 };
             }
         }
@@ -371,18 +313,15 @@ namespace Arena.UI
             ApplyShowcaseLoop(_showcaseAvatarBinding.AvatarRoot, animationSet);
         }
 
-        private void ApplyShowcaseAppearance(string classId)
+        private void ApplyShowcaseAppearance()
         {
             if (!Application.isPlaying || _showcaseAvatar == null)
                 return;
 
-            string normalizedClass = string.IsNullOrWhiteSpace(classId)
-                ? "WARRIOR"
-                : classId.Trim().ToUpperInvariant();
             CharacterAppearance? appearance = ResolveLocalAppearance();
             string signature = appearance != null
                 ? RuntimeAvatarController.SignatureFor(appearance)
-                : $"CLASS_DEFAULT|HUMAN|MALE|{normalizedClass}";
+                : "STARTER_DEFAULT|HUMAN|MALE|GEAR";
             if (string.Equals(_lastShowcaseAppearanceSignature, signature, System.StringComparison.Ordinal) &&
                 _showcaseAvatarBinding != null)
             {
@@ -410,7 +349,7 @@ namespace Arena.UI
             string error;
             bool applied = appearance != null
                 ? _showcaseAvatarController.Apply(appearance, out binding, out error)
-                : _showcaseAvatarController.ApplyClassDefault(normalizedClass, out binding, out error);
+                : _showcaseAvatarController.ApplyStarterDefault(out binding, out error);
             if (applied)
             {
                 _showcaseAvatarBinding = binding;
@@ -446,38 +385,6 @@ namespace Arena.UI
                 return null;
 
             return conn.Db.CharacterAppearance.Owner.Filter(identity.Value).FirstOrDefault();
-        }
-
-        private void EnsureLoadoutSummaryUi()
-        {
-            if (_loadoutPanel == null || _loadoutStatsRoot != null)
-                return;
-
-            _loadoutStatsRoot = CreateRect(_loadoutPanel, "AllocatedStatsRoot");
-            SetTopLeft(_loadoutStatsRoot, new Vector2(24f, -78f), new Vector2(300f, 132f));
-
-            TMP_Text title = CreateText(_loadoutStatsRoot, "AllocatedStatsLabel", "ALLOCATED STATS", 12, FontStyles.Bold, TextAlignmentOptions.TopLeft, new Color(0.72f, 0.75f, 0.80f));
-            SetTopLeft(title.rectTransform, Vector2.zero, new Vector2(160f, 18f));
-
-            for (int i = 0; i < StatKinds.Length; i++)
-            {
-                string statKind = StatKinds[i];
-                RectTransform row = CreateRect(_loadoutStatsRoot, $"AllocatedStat_{statKind}");
-                SetTopLeft(row, new Vector2(0f, -24f - i * 21f), new Vector2(284f, 20f));
-
-                TMP_Text name = CreateText(row, "Name", PrettyStatName(statKind).ToUpperInvariant(), 12, FontStyles.Bold, TextAlignmentOptions.Left, StatColor(statKind));
-                SetAnchored(name.rectTransform, new Vector2(0f, 0.5f), new Vector2(0f, 0f), new Vector2(150f, 18f), new Vector2(0f, 0.5f));
-
-                TMP_Text value = CreateText(row, "Value", "0", 13, FontStyles.Bold, TextAlignmentOptions.Right, Color.white);
-                LayoutAllocatedStatValue(value);
-                _loadoutStatValues[statKind] = value;
-            }
-
-            if (_trinketNameText == null && _loadoutPanel.Find("TrinketIcon") != null)
-            {
-                _trinketNameText = CreateText(_loadoutPanel, "TrinketName", "Charm of Resolve", 16, FontStyles.Bold, TextAlignmentOptions.Left, new Color(0.96f, 0.82f, 0.46f));
-                SetAnchored(_trinketNameText.rectTransform, new Vector2(0f, 1f), new Vector2(78f, -372f), new Vector2(210f, 24f), new Vector2(0f, 0.5f));
-            }
         }
 
         private void EnsureTravelDestinationButtons()
@@ -550,102 +457,6 @@ namespace Arena.UI
             }
         }
 
-        private void CacheLoadoutStatValues()
-        {
-            if (_loadoutStatsRoot == null)
-                return;
-
-            foreach (string statKind in StatKinds)
-            {
-                TMP_Text? value = _loadoutStatsRoot.Find($"AllocatedStat_{statKind}/Value")?.GetComponent<TMP_Text>();
-                if (value != null)
-                {
-                    LayoutAllocatedStatValue(value);
-                    _loadoutStatValues[statKind] = value;
-                }
-            }
-        }
-
-        private void ApplyLoadoutSummary()
-        {
-            EnsureLoadoutSummaryUi();
-            if (_loadoutStatValues.Count == 0)
-                return;
-
-            Dictionary<string, uint> allocations = ActiveStatAllocations();
-            foreach (string statKind in StatKinds)
-            {
-                if (_loadoutStatValues.TryGetValue(statKind, out TMP_Text? value))
-                    value.text = allocations.TryGetValue(statKind, out uint allocated) ? allocated.ToString() : "0";
-            }
-        }
-
-        private Dictionary<string, uint> ActiveStatAllocations()
-        {
-            var result = StatKinds.ToDictionary(stat => stat, _ => 0u, System.StringComparer.OrdinalIgnoreCase);
-            if (!Application.isPlaying)
-                return result;
-
-            DbConnection? conn = NetworkManager.Instance?.Conn;
-            Identity? identity = conn?.Identity;
-            if (conn == null || !identity.HasValue)
-                return result;
-
-            CharacterProgression? progression = conn.Db.CharacterProgression.Owner.Find(identity.Value);
-            if (progression == null)
-                return result;
-
-            string specId = ResolveVisibleSpecId(conn, identity.Value, progression);
-            if (string.IsNullOrWhiteSpace(specId))
-                return result;
-
-            foreach (SavedSpecStatAllocation allocation in conn.Db.SavedSpecStatAllocation.SpecId.Filter(specId))
-            {
-                if (result.ContainsKey(allocation.StatKind))
-                    result[allocation.StatKind] = allocation.AllocatedPoints;
-            }
-
-            return result;
-        }
-
-        private static string ResolveVisibleSpecId(DbConnection conn, Identity owner, CharacterProgression progression)
-        {
-            string? selectedSpecId = LoadoutController.Instance?.SelectedSpecId;
-            if (SpecBelongsToCurrentClass(conn, owner, selectedSpecId, progression.ClassId))
-                return selectedSpecId!;
-
-            if (ActiveLoadoutResolver.TryResolveActiveSpec(conn, owner, out string classId, out string activeSpecId)
-                && string.Equals(classId, ClassIds.Canonicalize(progression.ClassId), System.StringComparison.Ordinal)
-                && SpecBelongsToCurrentClass(conn, owner, activeSpecId, progression.ClassId))
-            {
-                return activeSpecId;
-            }
-
-            SavedSpec? fallbackSpec = conn.Db.SavedSpec.Owner
-                .Filter(owner)
-                .Where(spec => string.Equals(ClassIds.Canonicalize(spec.ClassId), ClassIds.Canonicalize(progression.ClassId), System.StringComparison.Ordinal))
-                .OrderBy(spec => spec.CreatedAt.MicrosecondsSinceUnixEpoch)
-                .ThenBy(spec => spec.Name, System.StringComparer.Ordinal)
-                .FirstOrDefault();
-
-            return fallbackSpec?.SpecId ?? string.Empty;
-        }
-
-        private static bool SpecBelongsToCurrentClass(
-            DbConnection conn,
-            Identity owner,
-            string? specId,
-            string classId)
-        {
-            if (string.IsNullOrWhiteSpace(specId))
-                return false;
-
-            SavedSpec? spec = conn.Db.SavedSpec.SpecId.Find(specId);
-            return spec != null
-                && spec.Owner.Equals(owner)
-                && string.Equals(ClassIds.Canonicalize(spec.ClassId), ClassIds.Canonicalize(classId), System.StringComparison.Ordinal);
-        }
-
         private static void ApplyShowcaseLoop(GameObject showcaseAvatar, CombatAnimationSet animationSet)
         {
             AnimationClip? loopClip = GetShowcaseLoopClip(animationSet);
@@ -672,32 +483,6 @@ namespace Arena.UI
             return poseClip.length > 0.001f
                 ? Mathf.Min(poseClip.length * 0.35f, poseClip.length - 0.001f)
                 : 0f;
-        }
-
-        private static string PrettyStatName(string statKind)
-        {
-            return statKind switch
-            {
-                "MIGHT" => "Might",
-                "INSIGHT" => "Insight",
-                "FINESSE" => "Finesse",
-                "QUICKNESS" => "Quickness",
-                "FORTITUDE" => "Fortitude",
-                _ => statKind,
-            };
-        }
-
-        private static Color StatColor(string statKind)
-        {
-            return statKind switch
-            {
-                "MIGHT" => new Color(1f, 0.34f, 0.18f),
-                "INSIGHT" => new Color(0.74f, 0.28f, 1f),
-                "FINESSE" => new Color(0.50f, 1f, 0.36f),
-                "QUICKNESS" => new Color(0.28f, 0.72f, 1f),
-                "FORTITUDE" => new Color(1f, 0.78f, 0.24f),
-                _ => Color.white,
-            };
         }
 
         private static void ApplyNavVisual(Button? button, bool active)
@@ -753,15 +538,5 @@ namespace Arena.UI
             rect.sizeDelta = size;
         }
 
-        private static void LayoutAllocatedStatValue(TMP_Text value)
-        {
-            value.alignment = TextAlignmentOptions.Right;
-            SetAnchored(
-                value.rectTransform,
-                new Vector2(0f, 0.5f),
-                new Vector2(228f, 0f),
-                new Vector2(56f, 18f),
-                new Vector2(0f, 0.5f));
-        }
     }
 }

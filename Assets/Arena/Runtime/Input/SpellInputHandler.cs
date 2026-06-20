@@ -126,7 +126,7 @@ namespace Arena.Input
 
             var conn = NetworkManager.Instance?.Conn;
             if (conn == null) return;
-            LoadoutActionTrace.EnsureSubscribed(conn);
+            ActionBarTrace.EnsureSubscribed(conn);
             PlayerEntity? localPlayer = EntityRegistry.Instance?.LocalPlayerEntity;
             long nowMs = System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             if (localPlayer != null && !localPlayer.IsDestroyed && localPlayer.IsAlive)
@@ -308,7 +308,7 @@ namespace Arena.Input
             var aimPoint = new Vector3(aimX, aimY, aimZ);
             if (!IsAimPointWithinMaxDistance(spellDef, aimPoint))
             {
-                LoadoutActionTrace.Trace($"spell dispatch rejected: aim point out of range for {spellId}");
+                ActionBarTrace.Trace($"spell dispatch rejected: aim point out of range for {spellId}");
                 return;
             }
 
@@ -389,19 +389,19 @@ namespace Arena.Input
 
         public bool TryTriggerMovementFromActionBar(
             SpacetimeDB.Types.DbConnection conn,
-            Arena.Combat.ActiveSelectableLoadoutAction action)
+            Arena.Combat.ActiveActionBarAction action)
         {
             if (_activeAimSpell != null)
                 return false;
 
             if (MatchController.Instance?.CanCast == false)
             {
-                LoadoutActionTrace.Trace($"movement dispatch blocked by MatchController for {action.ActionId}");
+                ActionBarTrace.Trace($"movement dispatch blocked by MatchController for {action.ActionId}");
                 return false;
             }
             if (!CanAttemptCast(usesGlobalCooldown: true))
             {
-                LoadoutActionTrace.Trace($"movement dispatch rejected by local cast gate for {action.ActionId}");
+                ActionBarTrace.Trace($"movement dispatch rejected by local cast gate for {action.ActionId}");
                 return false;
             }
 
@@ -411,7 +411,7 @@ namespace Arena.Input
                 long nowMs = System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
                 if (nowMs < cd.lastCastMs + cd.durationMs)
                 {
-                    LoadoutActionTrace.Trace($"movement dispatch rejected by cooldown for {action.ActionId}");
+                    ActionBarTrace.Trace($"movement dispatch rejected by cooldown for {action.ActionId}");
                     return false;
                 }
             }
@@ -419,7 +419,7 @@ namespace Arena.Input
             PlayerEntity? localPlayer = EntityRegistry.Instance?.LocalPlayerEntity;
             if (localPlayer == null)
             {
-                LoadoutActionTrace.Trace($"movement dispatch rejected: no local player for {action.ActionId}");
+                ActionBarTrace.Trace($"movement dispatch rejected: no local player for {action.ActionId}");
                 return false;
             }
             if (!localPlayer.IsInCombat)
@@ -428,10 +428,10 @@ namespace Arena.Input
             string targetId = TargetSelector.Instance?.SelectedTargetId ?? string.Empty;
             if (string.IsNullOrWhiteSpace(targetId))
             {
-                LoadoutActionTrace.Trace($"movement dispatch rejected: no selected target for {action.ActionId}");
+                ActionBarTrace.Trace($"movement dispatch rejected: no selected target for {action.ActionId}");
                 return false;
             }
-            LoadoutActionTrace.Trace($"movement dispatch sending CastRequest for {action.ActionId} target={targetId}");
+            ActionBarTrace.Trace($"movement dispatch sending CastRequest for {action.ActionId} target={targetId}");
             CastActionToken token = LocalCombatState.Instance.CreateCastActionToken(action.ActionId);
             SendCastRequest(conn, action.ActionId, targetId, 0f, 0f, 0f, token);
             return true;
@@ -441,7 +441,7 @@ namespace Arena.Input
         {
             if (MatchController.Instance?.CanCast == false)
             {
-                LoadoutActionTrace.Trace($"spell dispatch blocked by MatchController for {spellId}");
+                ActionBarTrace.Trace($"spell dispatch blocked by MatchController for {spellId}");
                 return false;
             }
             bool usesGlobalCooldown = UsesGlobalCooldown(conn, spellId);
@@ -449,7 +449,7 @@ namespace Arena.Input
             PlayerEntity? localPlayer = EntityRegistry.Instance?.LocalPlayerEntity;
             if (localPlayer == null)
             {
-                LoadoutActionTrace.Trace($"spell dispatch rejected: no local player for {spellId}");
+                ActionBarTrace.Trace($"spell dispatch rejected: no local player for {spellId}");
                 return false;
             }
             // TS: canAttemptCast() — client-side gates for snappy rejection.
@@ -457,7 +457,7 @@ namespace Arena.Input
                 usesGlobalCooldown,
                 RequiresStationaryLocalCastGate(spellDef)))
             {
-                LoadoutActionTrace.Trace($"spell dispatch rejected by local cast gate for {spellId}");
+                ActionBarTrace.Trace($"spell dispatch rejected by local cast gate for {spellId}");
                 return false;
             }
 
@@ -468,7 +468,7 @@ namespace Arena.Input
                 long nowMs = System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
                 if (nowMs < cd.lastCastMs + cd.durationMs)
                 {
-                    LoadoutActionTrace.Trace($"spell dispatch rejected by cooldown for {spellId}");
+                    ActionBarTrace.Trace($"spell dispatch rejected by cooldown for {spellId}");
                     return false;
                 }
             }
@@ -478,23 +478,23 @@ namespace Arena.Input
 
             if (spellDef == null)
             {
-                LoadoutActionTrace.Trace($"spell dispatch waiting for definition for {spellId}");
+                ActionBarTrace.Trace($"spell dispatch waiting for definition for {spellId}");
                 return false;
             }
             if (SpellDefinitionContracts.UsesPointTargeting(spellDef))
             {
                 if (!TryGetAimRadius(spellDef, out float aimRadius))
                 {
-                    LoadoutActionTrace.Trace($"spell dispatch waiting for aim radius definition for {spellId}");
+                    ActionBarTrace.Trace($"spell dispatch waiting for aim radius definition for {spellId}");
                     return false;
                 }
                 // Enter interactive aim mode instead of instant cast
-                LoadoutActionTrace.Trace($"spell dispatch entered aim mode for {spellId}");
+                ActionBarTrace.Trace($"spell dispatch entered aim mode for {spellId}");
                 StartAimMode(spellId, aimRadius);
                 return true;
             }
 
-            LoadoutActionTrace.Trace($"spell dispatch sending cast request for {spellId}");
+            ActionBarTrace.Trace($"spell dispatch sending cast request for {spellId}");
             TryCastTargeted(conn, spellId);
             return true;
         }
@@ -506,7 +506,7 @@ namespace Arena.Input
             if (string.IsNullOrEmpty(targetId) && spellDef?.RequiresTarget == true)
                 Debug.LogWarning($"[SpellInput] {spellId} — no target selected (use Tab or click a target)");
 
-            LoadoutActionTrace.Trace($"sending CastRequest for {spellId} target={targetId}");
+            ActionBarTrace.Trace($"sending CastRequest for {spellId} target={targetId}");
             CastActionToken token = LocalCombatState.Instance.CreateCastActionToken(spellId);
             SendCastRequest(conn, spellId, targetId, 0f, 0f, 0f, token);
             if (EntityRegistry.Instance?.LocalPlayerEntity is { } localPlayer)
@@ -524,8 +524,8 @@ namespace Arena.Input
             PlayerEntity entity,
             string spellId)
         {
-            ActiveSelectableLoadoutAction action =
-                ActiveLoadoutResolver.ResolveActiveSelectableActionForAction(conn, entity.Identity, spellId);
+            ActiveActionBarAction action =
+                ActiveActionBarResolver.ResolveActiveSelectableActionForAction(conn, entity.Identity, spellId);
             return string.IsNullOrWhiteSpace(action.ResourceKind)
                 ? entity.PrimaryResourceKind
                 : action.ResourceKind.Trim().ToUpperInvariant();
@@ -544,7 +544,7 @@ namespace Arena.Input
             string requiredKind = SpellResourceKind(conn, entity, spellId);
             if (!string.Equals(requiredKind, entity.PrimaryResourceKind, System.StringComparison.OrdinalIgnoreCase))
             {
-                LoadoutActionTrace.Trace(
+                ActionBarTrace.Trace(
                     $"spell rejected: {spellId} requires {requiredKind}, active resource is {entity.PrimaryResourceKind}");
                 return false;
             }
@@ -552,7 +552,7 @@ namespace Arena.Input
             float available = LocalCombatState.Instance.EffectiveCurrentPrimaryResource(entity, requiredKind);
             if (available + 0.001f < cost)
             {
-                LoadoutActionTrace.Trace(
+                ActionBarTrace.Trace(
                     $"spell rejected: {spellId} requires {cost:F0} {requiredKind} ({available:F0} available)");
                 return false;
             }
@@ -619,7 +619,7 @@ namespace Arena.Input
             long nowMs = System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             LocalCombatState.Instance.PredictCastBar(spellId, nowMs, (long)spellDef.CastTimeMs, token);
             localPlayer.PredictSpellCastHold(spellId, nowMs, targetId, aimPoint, token);
-            LoadoutActionTrace.Trace($"predicted local cast hold for {spellId}");
+            ActionBarTrace.Trace($"predicted local cast hold for {spellId}");
         }
 
         private static void PredictImmediateInstantSpellVisual(
@@ -657,7 +657,7 @@ namespace Arena.Input
                 targetId,
                 aimPoint,
                 token);
-            LoadoutActionTrace.Trace($"predicted local instant spell animation for {spellId}");
+            ActionBarTrace.Trace($"predicted local instant spell animation for {spellId}");
         }
 
         public bool HandleAuthoritativeLocalSpellReplay(
@@ -694,7 +694,7 @@ namespace Arena.Input
             if (row.Family != PredictedActionFamily.SpellCast)
                 return;
 
-            LoadoutActionTrace.Trace(
+            ActionBarTrace.Trace(
                 $"spell server result {row.Result} predicted={row.PredictedActionId}:{row.ClientActionSeq} action={row.ActionInstanceId}");
 
             string tokenKey = SpellTokenKey(row.PredictedActionId, row.ClientActionSeq);

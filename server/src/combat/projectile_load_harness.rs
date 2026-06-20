@@ -266,7 +266,6 @@ fn spawn_targets(
             ActorSpawnSpec {
                 identity,
                 username: format!("Projectile Load Target {}", slot + 1),
-                class_id: "WARRIOR".to_string(),
                 pos_x,
                 pos_y: owner_y + TARGET_SPAWN_Y_OFFSET,
                 pos_z,

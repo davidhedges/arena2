@@ -39,6 +39,8 @@ namespace SpacetimeDB.Types
         public bool UniqueEquipped;
         [DataMember(Name = "combat_profile_id")]
         public string CombatProfileId;
+        [DataMember(Name = "armor_kind")]
+        public string ArmorKind;
         [DataMember(Name = "physical_resistance")]
         public float PhysicalResistance;
 
@@ -56,6 +58,7 @@ namespace SpacetimeDB.Types
             string HandRequirement,
             bool UniqueEquipped,
             string CombatProfileId,
+            string ArmorKind,
             float PhysicalResistance
         )
         {
@@ -72,6 +75,7 @@ namespace SpacetimeDB.Types
             this.HandRequirement = HandRequirement;
             this.UniqueEquipped = UniqueEquipped;
             this.CombatProfileId = CombatProfileId;
+            this.ArmorKind = ArmorKind;
             this.PhysicalResistance = PhysicalResistance;
         }
 
@@ -86,6 +90,7 @@ namespace SpacetimeDB.Types
             this.WeaponKind = "";
             this.HandRequirement = "";
             this.CombatProfileId = "";
+            this.ArmorKind = "";
         }
     }
 }

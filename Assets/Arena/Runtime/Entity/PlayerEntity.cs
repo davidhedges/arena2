@@ -33,7 +33,6 @@ namespace Arena.Entity
         public bool IsLocalPlayer { get; }
 
         public string Username { get; private set; } = string.Empty;
-        public string ClassId { get; private set; } = "WARRIOR";
         public string CombatProfile { get; private set; } = CombatProfileIds.Default;
         public bool IsAlive { get; private set; } = true;
         public bool IsEliminated { get; private set; }
@@ -73,7 +72,7 @@ namespace Arena.Entity
         private SharedActionProfile? _sharedActionProfile;
         private SpellCastPresentationController? _spellCastPresentation;
         private string _appliedAppearanceSignature = string.Empty;
-        private string _classDefaultAvatarClassId = string.Empty;
+        private bool _starterDefaultAvatarApplied;
         private bool _hasExplicitAppearance;
         private static readonly Color TargetIndicatorHostile = new(1f, 0.02f, 0.015f, 1f);
         private static readonly Color TargetIndicatorNeutral = new(1f, 0.82f, 0.18f, 1f);
@@ -149,7 +148,7 @@ namespace Arena.Entity
             Transform presentationParent = _presentationRoot ?? GameObject.transform;
             _nameTag    = NameTag.Create(presentationParent, isLocalPlayer);
             _worldHpBar = WorldHealthBar.Create(presentationParent, isLocalPlayer);
-            ApplyClassDefaultAppearanceIfNeeded(force: true);
+            ApplyStarterDefaultAppearanceIfNeeded(force: true);
         }
 
         private static void DestroyComponent<T>(GameObject go) where T : Component
@@ -396,7 +395,7 @@ namespace Arena.Entity
             if (string.Equals(_appliedAppearanceSignature, appearanceSignature, System.StringComparison.Ordinal))
             {
                 _hasExplicitAppearance = true;
-                _classDefaultAvatarClassId = string.Empty;
+                _starterDefaultAvatarApplied = false;
                 return;
             }
 
@@ -419,22 +418,17 @@ namespace Arena.Entity
             }
 
             _hasExplicitAppearance = true;
-            _classDefaultAvatarClassId = string.Empty;
+            _starterDefaultAvatarApplied = false;
             BindRuntimeAvatar(binding);
             _appliedAppearanceSignature = binding.AppearanceSignature;
         }
 
-        private void ApplyClassDefaultAppearanceIfNeeded(bool force = false)
+        private void ApplyStarterDefaultAppearanceIfNeeded(bool force = false)
         {
             if (IsDestroyed || _hasExplicitAppearance)
                 return;
 
-            string normalizedClass = string.IsNullOrWhiteSpace(ClassId)
-                ? "WARRIOR"
-                : ClassId.Trim().ToUpperInvariant();
-            if (!force
-                && _avatarBinding != null
-                && string.Equals(_classDefaultAvatarClassId, normalizedClass, System.StringComparison.Ordinal))
+            if (!force && _avatarBinding != null && _starterDefaultAvatarApplied)
             {
                 return;
             }
@@ -451,13 +445,13 @@ namespace Arena.Entity
                 out _,
                 out _);
 
-            if (!_avatarController.ApplyClassDefault(normalizedClass, out RuntimeAvatarBinding binding, out string error))
+            if (!_avatarController.ApplyStarterDefault(out RuntimeAvatarBinding binding, out string error))
             {
-                Debug.LogWarning($"[{nameof(PlayerEntity)}] Failed to apply class default appearance to '{GameObject.name}': {error}");
+                Debug.LogWarning($"[{nameof(PlayerEntity)}] Failed to apply starter default appearance to '{GameObject.name}': {error}");
                 return;
             }
 
-            _classDefaultAvatarClassId = normalizedClass;
+            _starterDefaultAvatarApplied = true;
             BindRuntimeAvatar(binding);
             _appliedAppearanceSignature = binding.AppearanceSignature;
         }
@@ -487,19 +481,6 @@ namespace Arena.Entity
             CombatProfile = CombatProfileIds.Normalize(combatProfile);
             if (IsDummy)
                 SetInCombat(true);
-        }
-
-        public void SetClassId(string playerClass)
-        {
-            string previousClass = ClassId;
-            ClassId = string.IsNullOrWhiteSpace(playerClass)
-                ? "WARRIOR"
-                : playerClass.Trim().ToUpperInvariant();
-            if (!string.Equals(previousClass, ClassId, System.StringComparison.Ordinal)
-                || _avatarBinding == null)
-            {
-                ApplyClassDefaultAppearanceIfNeeded(force: true);
-            }
         }
 
         public void SetPrimaryResource(string kind, float current, float max)

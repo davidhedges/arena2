@@ -226,8 +226,7 @@ namespace Arena.Editor
             ProgressionCatalogDocument catalog,
             List<string> errors)
         {
-            Dictionary<string, string> combatProfileByClass = BuildCombatProfileByClass(catalog);
-            HashSet<string> defaultLoadoutAbilityIds = BuildDefaultLoadoutAbilityIds(catalog);
+            HashSet<string> actionBarDefaultAbilityIds = BuildCombatProfileActionBarDefaultAbilityIds(catalog);
             Dictionary<string, CombatAnimationSet> animationSetByProfile = LoadAnimationSetsByProfile(errors);
 
             foreach (AbilityDefinition ability in catalog.abilities)
@@ -236,14 +235,13 @@ namespace Arena.Editor
                 string actionId = WireIdentifier.Normalize(ability.action_id);
                 if (!string.Equals(WireIdentifier.Normalize(ability.gameplay.kind), "SPELL", StringComparison.Ordinal))
                     continue;
-                if (!IsSelectableAbility(ability, defaultLoadoutAbilityIds))
+                if (!IsSelectableAbility(ability, actionBarDefaultAbilityIds))
                     continue;
 
-                string classId = WireIdentifier.Normalize(ability.class_id);
-                if (!combatProfileByClass.TryGetValue(classId, out string combatProfileId)
-                    || string.IsNullOrWhiteSpace(combatProfileId))
+                string combatProfileId = WireIdentifier.Normalize(ability.combat_profile_id);
+                if (string.IsNullOrWhiteSpace(combatProfileId))
                 {
-                    errors.Add($"spell ability '{abilityId}' class '{classId}' does not resolve to a default combat profile.");
+                    errors.Add($"spell ability '{abilityId}' must declare combat_profile_id.");
                     continue;
                 }
 
@@ -613,25 +611,10 @@ namespace Arena.Editor
             return string.IsNullOrWhiteSpace(path) ? clip.name : path;
         }
 
-        private static Dictionary<string, string> BuildCombatProfileByClass(ProgressionCatalogDocument catalog)
-        {
-            var result = new Dictionary<string, string>(StringComparer.Ordinal);
-            foreach (ClassDefinition definition in catalog.classes)
-            {
-                string classId = WireIdentifier.Normalize(definition.class_id);
-                if (string.IsNullOrWhiteSpace(classId))
-                    continue;
-
-                result[classId] = WireIdentifier.Normalize(definition.default_combat_profile_id);
-            }
-
-            return result;
-        }
-
-        private static HashSet<string> BuildDefaultLoadoutAbilityIds(ProgressionCatalogDocument catalog)
+        private static HashSet<string> BuildCombatProfileActionBarDefaultAbilityIds(ProgressionCatalogDocument catalog)
         {
             var result = new HashSet<string>(StringComparer.Ordinal);
-            foreach (DefaultLoadoutAssignmentDefinition assignment in catalog.default_loadout_assignments)
+            foreach (CombatProfileActionBarDefaultDefinition assignment in catalog.combat_profile_action_bar_defaults)
             {
                 string abilityId = WireIdentifier.Normalize(assignment.ability_id);
                 if (!string.IsNullOrWhiteSpace(abilityId))
@@ -664,17 +647,15 @@ namespace Arena.Editor
 
         private static bool IsSelectableAbility(
             AbilityDefinition ability,
-            HashSet<string> defaultLoadoutAbilityIds)
+            HashSet<string> actionBarDefaultAbilityIds)
         {
             string abilityId = WireIdentifier.Normalize(ability.ability_id);
-            if (defaultLoadoutAbilityIds.Contains(abilityId))
-                return true;
-            if (!string.IsNullOrWhiteSpace(WireIdentifier.Normalize(ability.fixed_action_id)))
+            if (actionBarDefaultAbilityIds.Contains(abilityId))
                 return true;
 
             foreach (string tag in ability.ability_tags)
             {
-                if (string.Equals(WireIdentifier.Normalize(tag), "LOADOUT_ACTION", StringComparison.Ordinal))
+                if (string.Equals(WireIdentifier.Normalize(tag), "ACTION_BAR_ACTION", StringComparison.Ordinal))
                     return true;
             }
 
@@ -847,26 +828,17 @@ namespace Arena.Editor
         [Serializable]
         private sealed class ProgressionCatalogDocument
         {
-            public List<ClassDefinition> classes = new();
             public List<AbilityDefinition> abilities = new();
             public List<CombatVfxCueDefinition> combat_vfx_cues = new();
-            public List<DefaultLoadoutAssignmentDefinition> default_loadout_assignments = new();
-        }
-
-        [Serializable]
-        private sealed class ClassDefinition
-        {
-            public string class_id = string.Empty;
-            public string default_combat_profile_id = string.Empty;
+            public List<CombatProfileActionBarDefaultDefinition> combat_profile_action_bar_defaults = new();
         }
 
         [Serializable]
         private sealed class AbilityDefinition
         {
             public string ability_id = string.Empty;
-            public string class_id = string.Empty;
+            public string combat_profile_id = string.Empty;
             public string action_id = string.Empty;
-            public string fixed_action_id = string.Empty;
             public List<string> ability_tags = new();
             public GameplayDefinition gameplay = new();
         }
@@ -894,7 +866,7 @@ namespace Arena.Editor
         }
 
         [Serializable]
-        private sealed class DefaultLoadoutAssignmentDefinition
+        private sealed class CombatProfileActionBarDefaultDefinition
         {
             public string ability_id = string.Empty;
         }

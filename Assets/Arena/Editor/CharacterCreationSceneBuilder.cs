@@ -86,14 +86,14 @@ namespace Arena.EditorTools
             CreateText(left, "Title", "CHARACTER CREATION", 26, FontStyles.Bold, TextAlignmentOptions.TopLeft, new Vector2(22f, -24f), new Vector2(330f, 34f), Color.white);
             CreateText(left, "RaceSexLabel", "RACE / SEX", 12, FontStyles.Bold, TextAlignmentOptions.TopLeft, new Vector2(22f, -92f), new Vector2(160f, 18f), new Color(0.72f, 0.75f, 0.80f));
             CreateText(left, "RaceSexValue", "HUMAN / MALE", 18, FontStyles.Bold, TextAlignmentOptions.TopLeft, new Vector2(22f, -116f), new Vector2(250f, 28f), Color.white);
-            CreateText(left, "ClassLabel", "CLASS", 12, FontStyles.Bold, TextAlignmentOptions.TopLeft, new Vector2(22f, -170f), new Vector2(160f, 18f), new Color(0.72f, 0.75f, 0.80f));
-            CreateText(left, "ClassValue", "WARRIOR", 22, FontStyles.Bold, TextAlignmentOptions.TopLeft, new Vector2(22f, -196f), new Vector2(260f, 34f), Color.white);
+            CreateText(left, "GearLabel", "STARTING GEAR", 12, FontStyles.Bold, TextAlignmentOptions.TopLeft, new Vector2(22f, -170f), new Vector2(160f, 18f), new Color(0.72f, 0.75f, 0.80f));
+            CreateText(left, "GearValue", "SWORD & SHIELD", 22, FontStyles.Bold, TextAlignmentOptions.TopLeft, new Vector2(22f, -196f), new Vector2(260f, 34f), Color.white);
 
-            RectTransform buttons = CreateRect(left, "ClassButtons");
+            RectTransform buttons = CreateRect(left, "GearSummary");
             SetTopLeft(buttons, new Vector2(22f, -260f), new Vector2(330f, 180f));
-            CreateButton(buttons, "WarriorButton", "WARRIOR", new Vector2(0f, 1f), new Vector2(0f, 0f), new Vector2(330f, 48f));
-            CreateButton(buttons, "PaladinButton", "PALADIN", new Vector2(0f, 1f), new Vector2(0f, -62f), new Vector2(330f, 48f));
-            CreateButton(buttons, "ArcherButton", "RANGER", new Vector2(0f, 1f), new Vector2(0f, -124f), new Vector2(330f, 48f));
+            CreateButton(buttons, "MainHandSummary", "SWORD & SHIELD", new Vector2(0f, 1f), new Vector2(0f, 0f), new Vector2(330f, 48f));
+            CreateButton(buttons, "OffHandSummary", "ONE-HAND SWORD", new Vector2(0f, 1f), new Vector2(0f, -62f), new Vector2(330f, 48f));
+            CreateButton(buttons, "SpellSlotSummary", "SHIELD", new Vector2(0f, 1f), new Vector2(0f, -124f), new Vector2(330f, 48f));
 
             RectTransform bottom = CreatePanel(canvas, "BottomBar", new Vector2(0.5f, 0f), new Vector2(0f, 32f), new Vector2(620f, 92f), new Vector2(0.5f, 0f));
             CreateText(bottom, "StatusText", string.Empty, 13, FontStyles.Bold, TextAlignmentOptions.Left, new Vector2(22f, 0f), new Vector2(300f, 42f), new Color(0.95f, 0.62f, 0.55f), new Vector2(0f, 0.5f));

@@ -650,15 +650,14 @@ namespace Arena.Tests.Editor
             {
                 Type controllerType = RequireType("Arena.Presentation.Appearance.RuntimeAvatarController");
                 Component controller = host.AddComponent(controllerType);
-                MethodInfo applyClassDefault = RequireMethod(
+                MethodInfo applyStarterDefault = RequireMethod(
                     controllerType,
-                    "ApplyClassDefault",
-                    typeof(string),
+                    "ApplyStarterDefault",
                     RequireType("Arena.Presentation.Appearance.RuntimeAvatarBinding").MakeByRefType(),
                     typeof(string).MakeByRefType());
 
-                object?[] applyArgs = { null, null, string.Empty };
-                bool applied = (bool)applyClassDefault.Invoke(controller, applyArgs)!;
+                object?[] applyArgs = { null, string.Empty };
+                bool applied = (bool)applyStarterDefault.Invoke(controller, applyArgs)!;
                 Assert.That(applied, Is.True, (string?)applyArgs[2]);
 
                 object binding = applyArgs[1]!;
@@ -788,7 +787,7 @@ namespace Arena.Tests.Editor
         {
             Type keymapType = RequireType("Arena.Combat.ActionBarKeymap");
             Type bindingType = RequireType("Arena.Combat.ActionBarSlotBinding");
-            Type slotIdsType = RequireType("Arena.Combat.SelectableLoadoutSlotIds");
+            Type slotIdsType = RequireType("Arena.Combat.ActionBarSlotIds");
 
             object?[] row0Args = { 0, 2, null! };
             object?[] row2Args = { 2, 2, null! };

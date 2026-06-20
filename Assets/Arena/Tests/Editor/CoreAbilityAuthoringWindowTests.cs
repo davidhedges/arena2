@@ -10,21 +10,21 @@ namespace Arena.Tests.Editor
     public sealed class CoreAbilityAuthoringWindowTests
     {
         private const string SampleCatalogJson = @"{
-  ""classes"": [
+  ""combat_profiles"": [
     {
-      ""class_id"": ""WARRIOR"",
-      ""display_name"": ""Warrior"",
+      ""combat_profile_id"": ""TWO_HANDED_SWORD"",
+      ""display_name"": ""Greatsword"",
       ""sort_order"": 10
     }
   ],
   ""abilities"": [
     {
       ""ability_id"": ""WARRIOR_HEW"",
-      ""class_id"": ""WARRIOR"",
+      ""combat_profile_id"": ""TWO_HANDED_SWORD"",
       ""action_id"": ""COMBO_ATTACK_1_1_HIGH_TO_LOW"",
       ""display_name"": ""Hew"",
       ""ability_tags"": [
-        ""LOADOUT_ACTION""
+        ""ACTION_BAR_ACTION""
       ],
       ""sort_order"": 10,
       ""gameplay"": {
@@ -34,11 +34,11 @@ namespace Arena.Tests.Editor
     },
     {
       ""ability_id"": ""WARRIOR_SKYFALL_1"",
-      ""class_id"": ""WARRIOR"",
+      ""combat_profile_id"": ""TWO_HANDED_SWORD"",
       ""action_id"": ""SKYFALL_1"",
       ""display_name"": ""Skyfall I"",
       ""ability_tags"": [
-        ""LOADOUT_ACTION"",
+        ""ACTION_BAR_ACTION"",
         ""CORE_ABILITY""
       ],
       ""sort_order"": 20,
@@ -48,9 +48,9 @@ namespace Arena.Tests.Editor
       }
     }
   ],
-  ""default_loadout_assignments"": [
+  ""combat_profile_action_bar_defaults"": [
     {
-      ""class_id"": ""WARRIOR"",
+      ""combat_profile_id"": ""TWO_HANDED_SWORD"",
       ""slot_id"": ""slot_0_0"",
       ""ability_id"": ""WARRIOR_HEW"",
       ""sort_order"": 10
@@ -69,7 +69,7 @@ namespace Arena.Tests.Editor
                     ["WARRIOR_SKYFALL_1"] = true,
                 });
 
-            Assert.That(updated, Does.Match(@"""ability_id""\s*:\s*""WARRIOR_HEW""[\s\S]*?""ability_tags""\s*:\s*\[[^\]]*""LOADOUT_ACTION""[^\]]*""CORE_ABILITY"""));
+            Assert.That(updated, Does.Match(@"""ability_id""\s*:\s*""WARRIOR_HEW""[\s\S]*?""ability_tags""\s*:\s*\[[^\]]*""ACTION_BAR_ACTION""[^\]]*""CORE_ABILITY"""));
             Assert.That(updated, Does.Contain(@"""base_damage"": 30"));
         }
 
@@ -84,16 +84,16 @@ namespace Arena.Tests.Editor
                     ["WARRIOR_SKYFALL_1"] = false,
                 });
 
-            Assert.That(updated, Does.Match(@"""ability_id""\s*:\s*""WARRIOR_SKYFALL_1""[\s\S]*?""ability_tags""\s*:\s*\[[^\]]*""LOADOUT_ACTION"""));
+            Assert.That(updated, Does.Match(@"""ability_id""\s*:\s*""WARRIOR_SKYFALL_1""[\s\S]*?""ability_tags""\s*:\s*\[[^\]]*""ACTION_BAR_ACTION"""));
             Assert.That(updated, Does.Not.Match(@"""ability_id""\s*:\s*""WARRIOR_SKYFALL_1""[\s\S]*?""ability_tags""\s*:\s*\[[^\]]*""CORE_ABILITY"""));
         }
 
         [Test]
-        public void ReadCatalog_ReportsCoreAndDefaultAssignmentState()
+        public void ReadCatalog_ReportsCoreAndActionBarDefaultState()
         {
             object catalog = ReadCatalog(SampleCatalogJson);
             object abilities = catalog.GetType().GetField("Abilities")!.GetValue(catalog)!;
-            object defaultAssigned = catalog.GetType().GetField("DefaultAssignedAbilityIds")!.GetValue(catalog)!;
+            object actionBarDefaultAssigned = catalog.GetType().GetField("ActionBarDefaultAbilityIds")!.GetValue(catalog)!;
 
             IEnumerable<object> abilityRows = ((System.Collections.IEnumerable)abilities).Cast<object>();
             object hew = abilityRows.First(row =>
@@ -103,8 +103,8 @@ namespace Arena.Tests.Editor
 
             Assert.That((bool)hew.GetType().GetProperty("IsCore")!.GetValue(hew)!, Is.False);
             Assert.That((bool)skyfall.GetType().GetProperty("IsCore")!.GetValue(skyfall)!, Is.True);
-            Assert.That((bool)defaultAssigned.GetType().GetMethod("Contains")!.Invoke(defaultAssigned, new object[] { "WARRIOR_HEW" })!, Is.True);
-            Assert.That((bool)defaultAssigned.GetType().GetMethod("Contains")!.Invoke(defaultAssigned, new object[] { "WARRIOR_SKYFALL_1" })!, Is.False);
+            Assert.That((bool)actionBarDefaultAssigned.GetType().GetMethod("Contains")!.Invoke(actionBarDefaultAssigned, new object[] { "WARRIOR_HEW" })!, Is.True);
+            Assert.That((bool)actionBarDefaultAssigned.GetType().GetMethod("Contains")!.Invoke(actionBarDefaultAssigned, new object[] { "WARRIOR_SKYFALL_1" })!, Is.False);
         }
 
         private static string ApplyCoreTags(string json, Dictionary<string, bool> coreByAbilityId)

@@ -15,16 +15,14 @@ namespace SpacetimeDB.Types
     {
         [DataMember(Name = "ability_id")]
         public string AbilityId;
-        [DataMember(Name = "class_id")]
-        public string ClassId;
+        [DataMember(Name = "combat_profile_id")]
+        public string CombatProfileId;
         [DataMember(Name = "ability_kind")]
         public string AbilityKind;
         [DataMember(Name = "action_id")]
         public string ActionId;
         [DataMember(Name = "display_name")]
         public string DisplayName;
-        [DataMember(Name = "fixed_action_id")]
-        public string FixedActionId;
         [DataMember(Name = "resource_kind")]
         public string ResourceKind;
         [DataMember(Name = "resource_cost")]
@@ -36,11 +34,10 @@ namespace SpacetimeDB.Types
 
         public AbilityCatalog(
             string AbilityId,
-            string ClassId,
+            string CombatProfileId,
             string AbilityKind,
             string ActionId,
             string DisplayName,
-            string FixedActionId,
             string ResourceKind,
             float ResourceCost,
             string AbilityTags,
@@ -48,11 +45,10 @@ namespace SpacetimeDB.Types
         )
         {
             this.AbilityId = AbilityId;
-            this.ClassId = ClassId;
+            this.CombatProfileId = CombatProfileId;
             this.AbilityKind = AbilityKind;
             this.ActionId = ActionId;
             this.DisplayName = DisplayName;
-            this.FixedActionId = FixedActionId;
             this.ResourceKind = ResourceKind;
             this.ResourceCost = ResourceCost;
             this.AbilityTags = AbilityTags;
@@ -62,11 +58,10 @@ namespace SpacetimeDB.Types
         public AbilityCatalog()
         {
             this.AbilityId = "";
-            this.ClassId = "";
+            this.CombatProfileId = "";
             this.AbilityKind = "";
             this.ActionId = "";
             this.DisplayName = "";
-            this.FixedActionId = "";
             this.ResourceKind = "";
             this.AbilityTags = "";
         }

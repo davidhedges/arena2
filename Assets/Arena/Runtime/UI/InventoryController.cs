@@ -662,6 +662,7 @@ namespace Arena.UI
             List<string> parts = new();
             AppendNormalizedTooltipPart(parts, definition.Rarity);
             AppendNormalizedTooltipPart(parts, definition.ItemKind);
+            AppendNormalizedTooltipPart(parts, definition.ArmorKind);
             AppendNormalizedTooltipPart(parts, definition.EquipSlot);
             return string.Join(" - ", parts);
         }
@@ -725,6 +726,7 @@ namespace Arena.UI
             {
                 "MANA_REGEN" or "HEALTH_REGEN" => $"+{value:0.##}/s",
                 "AWARENESS" or "LIGHT" => $"+{value:0.##}",
+                "SPELL_SLOT" => $"+{Mathf.Max(0, Mathf.RoundToInt(value))}",
                 _ => $"+{value * 100f:0.#}%"
             };
         }

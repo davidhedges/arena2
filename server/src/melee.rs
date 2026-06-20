@@ -43,7 +43,7 @@ use crate::defense::{
 use crate::player::DEFAULT_COMBAT_PROFILE;
 use crate::practice::is_training_instance;
 use crate::progression::{
-    active_loadout_assignment_debug_summary, active_selectable_ability_for_authored_action,
+    active_action_bar_assignment_debug_summary, active_selectable_ability_for_authored_action,
     combat_profile_has_modes, derived_combat_profile_id_for_owner,
     melee_impact_effects_for_ability_id, melee_timed_movement_for_ability_id,
     primary_resource_gain_on_action_accept, resolved_auto_attack_mode_for_owner, AbilityCatalog,
@@ -97,7 +97,6 @@ use crate::progression::ability_catalog as _;
 #[allow(unused_imports)]
 use crate::progression::auto_attack_catalog as _;
 #[allow(unused_imports)]
-use crate::progression::class_catalog as _;
 #[allow(unused_imports)]
 use crate::progression::melee_ability_catalog as _;
 #[allow(unused_imports)]
@@ -228,7 +227,7 @@ pub(crate) enum MeleeAttackDispatch {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum MeleeAuthorization {
-    SelectableLoadout,
+    ActionBar,
     IntrinsicAutoAttack,
 }
 
@@ -262,7 +261,7 @@ struct MeleeExecutionPolicy {
 
 impl MeleeExecutionPolicy {
     const PLAYER_INPUT: Self = Self {
-        authorization: MeleeAuthorization::SelectableLoadout,
+        authorization: MeleeAuthorization::ActionBar,
         event_source: MeleeEventSource::PlayerInput,
         schedules_auto_attack_on_started_swing: true,
         uses_shared_cooldowns: true,
@@ -270,7 +269,7 @@ impl MeleeExecutionPolicy {
     };
 
     const QUEUED_FOLLOWUP: Self = Self {
-        authorization: MeleeAuthorization::SelectableLoadout,
+        authorization: MeleeAuthorization::ActionBar,
         event_source: MeleeEventSource::QueuedFollowup,
         schedules_auto_attack_on_started_swing: true,
         uses_shared_cooldowns: true,
@@ -278,7 +277,7 @@ impl MeleeExecutionPolicy {
     };
 
     const PRACTICE: Self = Self {
-        authorization: MeleeAuthorization::SelectableLoadout,
+        authorization: MeleeAuthorization::ActionBar,
         event_source: MeleeEventSource::Practice,
         schedules_auto_attack_on_started_swing: false,
         uses_shared_cooldowns: true,
@@ -1220,11 +1219,13 @@ fn derived_combat_profile_id_for_ability(
     ctx: &ReducerContext,
     ability: &AbilityCatalog,
 ) -> Option<String> {
-    ctx.db
-        .class_catalog()
-        .class_id()
-        .find(ability.class_id.clone())
-        .map(|class| class.default_combat_profile_id)
+    let _ = ctx;
+    let combat_profile_id = ability.combat_profile_id.trim().to_ascii_uppercase();
+    if combat_profile_id.is_empty() {
+        None
+    } else {
+        Some(combat_profile_id)
+    }
 }
 
 fn active_melee_gameplay_for_resolved_action(
@@ -1240,7 +1241,7 @@ fn active_melee_gameplay_for_resolved_action(
             return Ok(gameplay);
         }
         return Err(format!(
-            "melee action '{}' is assigned as ability '{}' on the active spec, but that ability does not resolve to melee gameplay (ability_kind='{}')",
+            "melee action '{}' is assigned as ability '{}' on the action bar, but that ability does not resolve to melee gameplay (ability_kind='{}')",
             resolved.authored_id.as_str(),
             ability.ability_id,
             ability.ability_kind
@@ -1251,9 +1252,9 @@ fn active_melee_gameplay_for_resolved_action(
         find_combo_root_for_authorization(combat_profile, &resolved.runtime_id);
     if root_authored_action_id.as_str() == resolved.authored_id.as_str() {
         return Err(format!(
-            "melee action '{}' is not assigned on the active spec ({})",
+            "melee action '{}' is not assigned on the action bar ({})",
             resolved.authored_id.as_str(),
-            active_loadout_assignment_debug_summary(ctx, owner)
+            active_action_bar_assignment_debug_summary(ctx, owner)
         ));
     }
 
@@ -1261,16 +1262,16 @@ fn active_melee_gameplay_for_resolved_action(
         active_selectable_ability_for_authored_action(ctx, owner, &root_authored_action_id)
     else {
         return Err(format!(
-            "melee combo root '{}' is not assigned on the active spec ({})",
+            "melee combo root '{}' is not assigned on the action bar ({})",
             root_authored_action_id.as_str(),
-            active_loadout_assignment_debug_summary(ctx, owner)
+            active_action_bar_assignment_debug_summary(ctx, owner)
         ));
     };
     if !root_ability.ability_kind.eq_ignore_ascii_case("MELEE")
         || melee_gameplay_for_ability(ctx, &root_ability).is_none()
     {
         return Err(format!(
-            "melee combo root '{}' is assigned as ability '{}' on the active spec, but that ability does not resolve to melee gameplay (ability_kind='{}')",
+            "melee combo root '{}' is assigned as ability '{}' on the action bar, but that ability does not resolve to melee gameplay (ability_kind='{}')",
             root_authored_action_id.as_str(),
             root_ability.ability_id,
             root_ability.ability_kind
@@ -1279,7 +1280,8 @@ fn active_melee_gameplay_for_resolved_action(
 
     let Some(followup_ability) = ctx.db.ability_catalog().iter().find(|ability| {
         ability.ability_kind.eq_ignore_ascii_case("MELEE")
-            && ability.class_id == root_ability.class_id
+            && derived_combat_profile_id_for_ability(ctx, ability)
+                == derived_combat_profile_id_for_ability(ctx, &root_ability)
             && ability.action_id == resolved.authored_id.as_str()
     }) else {
         return Err(format!(
@@ -2226,9 +2228,9 @@ fn resolved_melee_action_resource_cost(
 
     let Some(ability) = ability else {
         return Err(format!(
-            "melee action '{}' is not assigned on the active spec ({})",
+            "melee action '{}' is not assigned on the action bar ({})",
             root_authored_action_id.as_str(),
-            active_loadout_assignment_debug_summary(ctx, owner)
+            active_action_bar_assignment_debug_summary(ctx, owner)
         ));
     };
 
@@ -2509,7 +2511,7 @@ fn perform_melee_attack_for_internal(
     let strike = resolved.strike.clone();
     let action_resource_cost = if let Some(cost) = action_resource_cost_override {
         Some(cost)
-    } else if policy.authorization == MeleeAuthorization::SelectableLoadout {
+    } else if policy.authorization == MeleeAuthorization::ActionBar {
         resolved_melee_action_resource_cost(ctx, caster, combat_profile.as_str(), &resolved)?
     } else {
         None
@@ -2518,7 +2520,7 @@ fn perform_melee_attack_for_internal(
         gameplay
     } else {
         match policy.authorization {
-            MeleeAuthorization::SelectableLoadout => active_melee_gameplay_for_resolved_action(
+            MeleeAuthorization::ActionBar => active_melee_gameplay_for_resolved_action(
                 ctx,
                 caster,
                 combat_profile.as_str(),
@@ -4719,34 +4721,13 @@ mod tests {
     fn combo_successor_strikes_reachable_from_melee_roots_have_gameplay_rows() {
         let catalog: Value =
             serde_json::from_str(PROGRESSION_CATALOG_JSON).expect("catalog json must parse");
-        let classes = catalog
-            .get("classes")
-            .and_then(Value::as_array)
-            .expect("classes must be an array");
         let abilities = catalog
             .get("abilities")
             .and_then(Value::as_array)
             .expect("abilities must be an array");
 
-        let mut class_profiles = HashMap::new();
-        for class in classes {
-            let class_id = class
-                .get("class_id")
-                .and_then(Value::as_str)
-                .map(AuthoredActionId::new)
-                .expect("class must declare class_id")
-                .into_string();
-            let profile_id = class
-                .get("default_combat_profile_id")
-                .and_then(Value::as_str)
-                .map(AuthoredActionId::new)
-                .expect("class must declare default_combat_profile_id")
-                .into_string();
-            class_profiles.insert(class_id, profile_id);
-        }
-
         let mut melee_actions_by_profile: HashMap<String, HashSet<String>> = HashMap::new();
-        let mut loadout_roots_by_profile: HashMap<String, HashSet<String>> = HashMap::new();
+        let mut action_bar_roots_by_profile: HashMap<String, HashSet<String>> = HashMap::new();
         for ability in abilities {
             let ability_kind = ability
                 .get("gameplay")
@@ -4758,15 +4739,12 @@ mod tests {
                 continue;
             }
 
-            let class_id = ability
-                .get("class_id")
+            let profile_id = ability
+                .get("combat_profile_id")
                 .and_then(Value::as_str)
                 .map(AuthoredActionId::new)
-                .expect("melee ability must declare class_id")
+                .expect("melee ability must declare combat_profile_id")
                 .into_string();
-            let profile_id = class_profiles
-                .get(&class_id)
-                .unwrap_or_else(|| panic!("class {class_id} must map to a combat profile"));
             let action_id = ability
                 .get("action_id")
                 .and_then(Value::as_str)
@@ -4779,15 +4757,15 @@ mod tests {
                 .or_default()
                 .insert(action_id.clone());
 
-            let is_loadout_root = ability
+            let is_action_bar_root = ability
                 .get("ability_tags")
                 .and_then(Value::as_array)
                 .into_iter()
                 .flatten()
                 .filter_map(Value::as_str)
-                .any(|tag| tag.eq_ignore_ascii_case("LOADOUT_ACTION"));
-            if is_loadout_root {
-                loadout_roots_by_profile
+                .any(|tag| tag.eq_ignore_ascii_case("ACTION_BAR_ACTION"));
+            if is_action_bar_root {
+                action_bar_roots_by_profile
                     .entry(profile_id.clone())
                     .or_default()
                     .insert(action_id);
@@ -4795,11 +4773,11 @@ mod tests {
         }
 
         for profile in &melee_manifest().profiles {
-            let loadout_roots = loadout_roots_by_profile
+            let action_bar_roots = action_bar_roots_by_profile
                 .get(&profile.combat_profile)
                 .unwrap_or_else(|| {
                     panic!(
-                        "combat profile {} must have at least one loadout melee root",
+                        "combat profile {} must have at least one action-bar melee root",
                         profile.combat_profile
                     )
                 });
@@ -4829,7 +4807,7 @@ mod tests {
                     &resolved.runtime_id,
                 )
                 .into_string();
-                if !loadout_roots.contains(&root) {
+                if !action_bar_roots.contains(&root) {
                     continue;
                 }
 
@@ -5416,7 +5394,7 @@ mod tests {
     #[test]
     fn selectable_projectile_keeps_authored_projectile_distance() {
         assert_eq!(
-            projectile_max_distance_for_policy(35.0, 18.0, MeleeAuthorization::SelectableLoadout),
+            projectile_max_distance_for_policy(35.0, 18.0, MeleeAuthorization::ActionBar),
             35.0
         );
     }

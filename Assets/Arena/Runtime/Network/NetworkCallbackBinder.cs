@@ -29,10 +29,6 @@ namespace Arena.Network
             conn.Db.PlayerState.OnUpdate += registry.OnPlayerStateUpdate;
             conn.Db.PlayerState.OnDelete += registry.OnPlayerStateDelete;
 
-            conn.Db.CharacterProgression.OnInsert += registry.OnCharacterProgressionInsert;
-            conn.Db.CharacterProgression.OnUpdate += registry.OnCharacterProgressionUpdate;
-            conn.Db.CharacterProgression.OnDelete += registry.OnCharacterProgressionDelete;
-
             conn.Db.CombatEngagement.OnInsert += registry.OnCombatEngagementInsert;
             conn.Db.CombatEngagement.OnUpdate += registry.OnCombatEngagementUpdate;
             conn.Db.CombatEngagement.OnDelete += registry.OnCombatEngagementDelete;

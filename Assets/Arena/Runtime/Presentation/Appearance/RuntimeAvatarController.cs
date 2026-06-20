@@ -116,7 +116,7 @@ namespace Arena.Presentation.Appearance
             return Apply(selection, SignatureFor(row), out binding, out error);
         }
 
-        public bool ApplyClassDefault(string? classId, out RuntimeAvatarBinding binding, out string error)
+        public bool ApplyStarterDefault(out RuntimeAvatarBinding binding, out string error)
         {
             if (!CharacterAppearanceCatalogSet.TryLoadDefault(out CharacterAppearanceCatalogSet catalogs, out error))
             {
@@ -124,17 +124,8 @@ namespace Arena.Presentation.Appearance
                 return false;
             }
 
-            string outfitId = CharacterAppearanceIds.DefaultOutfitId;
-            if (!catalogs.ClassOutfitCatalog.TryGetDefaultOutfitId(
-                    classId,
-                    CharacterAppearanceIds.DefaultRaceId,
-                    CharacterAppearanceIds.DefaultSexId,
-                    out outfitId))
-            {
-                outfitId = CharacterAppearanceIds.DefaultOutfitId;
-            }
-
-            CharacterAppearanceSelection selection = CharacterAppearanceSelection.DefaultHumanMale(outfitId);
+            CharacterAppearanceSelection selection =
+                CharacterAppearanceSelection.DefaultHumanMale(CharacterAppearanceIds.DefaultOutfitId);
             return Apply(selection, SignatureFor(selection), out binding, out error, catalogs);
         }
 

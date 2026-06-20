@@ -22,8 +22,7 @@ namespace Arena.Network
 #endif
                 new QueryBuilder().From.CombatProfileCatalog().ToSql(),
                 new QueryBuilder().From.CombatModeCatalog().ToSql(),
-                new QueryBuilder().From.FixedActionBindingCatalog().ToSql(),
-                new QueryBuilder().From.LoadoutSlotCatalog().ToSql(),
+                new QueryBuilder().From.ActionBarSlotCatalog().ToSql(),
                 new QueryBuilder().From.ItemDefinition().ToSql(),
                 new QueryBuilder().From.ItemAffixDefinition().ToSql(),
                 new QueryBuilder().From.SpellDefinition().ToSql(),
@@ -35,7 +34,6 @@ namespace Arena.Network
                 new QueryBuilder().From.ResourceCatalog().ToSql(),
                 new QueryBuilder().From.StatScalingCatalog().ToSql(),
                 new QueryBuilder().From.ArenaInstance().ToSql(),
-                new QueryBuilder().From.ClassCatalog().ToSql(),
                 new QueryBuilder().From.Party().ToSql(),
                 new QueryBuilder().From.PartyMember().ToSql(),
                 new QueryBuilder().From.PlaygroundTarget().ToSql(),
@@ -49,26 +47,9 @@ namespace Arena.Network
             {
                 qb.From.PlayerWorld().Where(c => c.Identity.Eq(localIdentity)).ToSql(),
                 new QueryBuilder().From.PlayerOpenWorldScene().Where(c => c.Identity.Eq(localIdentity)).ToSql(),
-                new QueryBuilder().From.CharacterProgression().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
-                new QueryBuilder().From.CharacterClassLoadoutState().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
+                new QueryBuilder().From.CharacterActionBarAssignment().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
                 new QueryBuilder().From.CharacterAppearance().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
-                new QueryBuilder().From.SavedSpec().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
-                new QueryBuilder()
-                    .From
-                    .SavedSpec()
-                    .Where(c => c.Owner.Eq(localIdentity))
-                    .RightSemijoin(
-                        new QueryBuilder().From.SavedSpecStatAllocation(),
-                        (spec, allocation) => spec.SpecId.Eq(allocation.SpecId))
-                    .ToSql(),
-                new QueryBuilder()
-                    .From
-                    .SavedSpec()
-                    .Where(c => c.Owner.Eq(localIdentity))
-                    .RightSemijoin(
-                        new QueryBuilder().From.SavedSpecSlotAssignment(),
-                        (spec, assignment) => spec.SpecId.Eq(assignment.SpecId))
-                    .ToSql(),
+                new QueryBuilder().From.PlayerKnownSpell().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
                 new QueryBuilder().From.GlobalCooldown().Where(c => c.Caster.Eq(localIdentity)).ToSql(),
                 new QueryBuilder().From.SpellCooldown().Where(c => c.Caster.Eq(localIdentity)).ToSql(),
                 new QueryBuilder().From.PredictedActionResult().Where(c => c.Owner.Eq(localIdentity)).ToSql(),

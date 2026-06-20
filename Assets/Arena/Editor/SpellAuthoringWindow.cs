@@ -25,7 +25,6 @@ namespace Arena.Editor
         private const string LifecycleUntilReleaseEvent = "UNTIL_RELEASE_EVENT";
 
         private readonly List<string> _loadErrors = new();
-        private readonly Dictionary<string, string> _combatProfileByClass = new(StringComparer.Ordinal);
         private readonly Dictionary<string, CombatAnimationSet> _animationSetByProfile = new(StringComparer.Ordinal);
         private readonly List<AbilityDefinition> _spellAbilities = new();
         private readonly List<CombatVfxCueDefinition> _selectedAbilityCues = new();
@@ -36,7 +35,7 @@ namespace Arena.Editor
         private int _selectedSpellIndex;
         private string _draftAbilityId = "WARRIOR_NEW_SPELL";
         private string _draftSpellId = "NEW_SPELL";
-        private string _draftClassId = "WARRIOR";
+        private string _draftCombatProfileId = "TWO_HANDED_SWORD";
         private string _draftDisplayName = "New Spell";
         private string _draftCastVfxId = "VFX_CAST_HAND_01";
         private string _draftProjectileVfxId = "VFX_PROJECTILE_01";
@@ -118,7 +117,7 @@ namespace Arena.Editor
             AbilityDefinition selected = _spellAbilities[_selectedSpellIndex];
             string abilityId = Normalize(selected.ability_id);
             string spellId = Normalize(selected.action_id);
-            string classId = Normalize(selected.class_id);
+            string combatProfileId = Normalize(selected.combat_profile_id);
             string deliveryKind = Normalize(selected.gameplay.delivery.kind);
             _selectedAbilityCues.Clear();
             _selectedAbilityCues.AddRange(_catalog!.combat_vfx_cues.Where(cue =>
@@ -134,16 +133,15 @@ namespace Arena.Editor
             {
                 EditorGUILayout.TextField("Ability Id", abilityId);
                 EditorGUILayout.TextField("Spell Id", spellId);
-                EditorGUILayout.TextField("Class", classId);
+                EditorGUILayout.TextField("Combat Profile", combatProfileId);
                 EditorGUILayout.TextField("Display Name", selected.display_name);
                 EditorGUILayout.IntField("Cast Time Ms", selected.gameplay.cast_time_ms);
                 EditorGUILayout.TextField("Delivery", deliveryKind);
             }
 
-            if (!_combatProfileByClass.TryGetValue(classId, out string combatProfileId)
-                || string.IsNullOrWhiteSpace(combatProfileId))
+            if (string.IsNullOrWhiteSpace(combatProfileId))
             {
-                EditorGUILayout.HelpBox($"Class '{classId}' does not resolve to a default combat profile.", MessageType.Error);
+                EditorGUILayout.HelpBox($"Ability '{abilityId}' must declare combat_profile_id.", MessageType.Error);
             }
             else if (!_animationSetByProfile.TryGetValue(combatProfileId, out CombatAnimationSet animationSet))
             {
@@ -393,7 +391,7 @@ namespace Arena.Editor
 
             _draftAbilityId = NormalizeEditorText(EditorGUILayout.TextField("Ability Id", _draftAbilityId));
             _draftSpellId = NormalizeEditorText(EditorGUILayout.TextField("Spell Id", _draftSpellId));
-            _draftClassId = NormalizeEditorText(EditorGUILayout.TextField("Class Id", _draftClassId));
+            _draftCombatProfileId = NormalizeEditorText(EditorGUILayout.TextField("Combat Profile Id", _draftCombatProfileId));
             _draftDisplayName = EditorGUILayout.TextField("Display Name", _draftDisplayName);
             _draftCastVfxId = DrawVfxTemplateField("Cast VFX Id", _draftCastVfxId);
             _draftProjectileVfxId = DrawVfxTemplateField("Projectile VFX Id", _draftProjectileVfxId);
@@ -508,7 +506,7 @@ namespace Arena.Editor
             AbilityDefinition selected = _spellAbilities[Mathf.Clamp(_selectedSpellIndex, 0, _spellAbilities.Count - 1)];
             _draftAbilityId = Normalize(selected.ability_id);
             _draftSpellId = Normalize(selected.action_id);
-            _draftClassId = Normalize(selected.class_id);
+            _draftCombatProfileId = Normalize(selected.combat_profile_id);
             _draftDisplayName = selected.display_name;
         }
 
@@ -518,7 +516,7 @@ namespace Arena.Editor
             builder.AppendLine("\"abilities\": [");
             builder.AppendLine("  {");
             builder.AppendLine($"    \"ability_id\": \"{Normalize(_draftAbilityId)}\",");
-            builder.AppendLine($"    \"class_id\": \"{Normalize(_draftClassId)}\",");
+            builder.AppendLine($"    \"combat_profile_id\": \"{Normalize(_draftCombatProfileId)}\",");
             builder.AppendLine($"    \"action_id\": \"{Normalize(_draftSpellId)}\",");
             builder.AppendLine($"    \"display_name\": \"{EscapeJson(_draftDisplayName)}\",");
             builder.AppendLine("    \"resource_kind\": \"RAGE\",");
@@ -607,7 +605,6 @@ namespace Arena.Editor
         private void Load()
         {
             _loadErrors.Clear();
-            _combatProfileByClass.Clear();
             _animationSetByProfile.Clear();
             _spellAbilities.Clear();
             _selectedAbilityCues.Clear();
@@ -636,13 +633,6 @@ namespace Arena.Editor
             {
                 _loadErrors.Add($"Failed to parse '{ProgressionCatalogPath}'.");
                 return;
-            }
-
-            foreach (ClassDefinition definition in _catalog.classes)
-            {
-                string classId = Normalize(definition.class_id);
-                if (!string.IsNullOrWhiteSpace(classId))
-                    _combatProfileByClass[classId] = Normalize(definition.default_combat_profile_id);
             }
 
             foreach (CombatAnimationSet animationSet in Resources.LoadAll<CombatAnimationSet>("CombatAnimationSets"))
@@ -697,23 +687,15 @@ namespace Arena.Editor
         [Serializable]
         private sealed class ProgressionCatalogDocument
         {
-            public List<ClassDefinition> classes = new();
             public List<AbilityDefinition> abilities = new();
             public List<CombatVfxCueDefinition> combat_vfx_cues = new();
-        }
-
-        [Serializable]
-        private sealed class ClassDefinition
-        {
-            public string class_id = string.Empty;
-            public string default_combat_profile_id = string.Empty;
         }
 
         [Serializable]
         private sealed class AbilityDefinition
         {
             public string ability_id = string.Empty;
-            public string class_id = string.Empty;
+            public string combat_profile_id = string.Empty;
             public string action_id = string.Empty;
             public string display_name = string.Empty;
             public int sort_order = 0;

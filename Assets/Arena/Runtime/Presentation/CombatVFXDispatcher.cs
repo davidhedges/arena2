@@ -796,8 +796,8 @@ namespace Arena.Presentation
 
         private static string ResolveLocalAbilityId(DbConnection conn, Identity caster, string spellId)
         {
-            ActiveSelectableLoadoutAction action =
-                ActiveLoadoutResolver.ResolveActiveSelectableActionForAction(conn, caster, spellId);
+            ActiveActionBarAction action =
+                ActiveActionBarResolver.ResolveActiveSelectableActionForAction(conn, caster, spellId);
             return WireIdentifier.Normalize(action.AbilityId);
         }
 

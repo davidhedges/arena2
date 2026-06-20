@@ -122,7 +122,189 @@ namespace Arena.Combat
         }
     }
 
-    public static class SelectableLoadoutSlotIds
+    public static class SpellbookResolver
+    {
+        public static bool KnowsSpell(DbConnection? conn, SpacetimeDB.Identity? owner, string? spellId)
+        {
+            if (conn == null || !owner.HasValue)
+                return false;
+
+            string normalizedSpellId = WireIdentifier.Normalize(spellId);
+            if (string.IsNullOrWhiteSpace(normalizedSpellId))
+                return false;
+
+            foreach (PlayerKnownSpell knownSpell in conn.Db.PlayerKnownSpell.Owner.Filter(owner.Value))
+            {
+                if (string.Equals(WireIdentifier.Normalize(knownSpell.SpellId), normalizedSpellId, StringComparison.Ordinal))
+                    return true;
+            }
+
+            return false;
+        }
+
+        public static bool AbilityIsKnownIfSpell(DbConnection? conn, SpacetimeDB.Identity? owner, AbilityCatalog? ability)
+        {
+            if (ability == null)
+                return false;
+
+            if (!string.Equals(WireIdentifier.Normalize(ability.AbilityKind), AbilityKinds.Spell, StringComparison.Ordinal))
+                return true;
+
+            return KnowsSpell(conn, owner, ability.ActionId);
+        }
+    }
+
+    public static class SpellSlotResolver
+    {
+        public const string ModifierSpellSlot = "SPELL_SLOT";
+        public const string ItemKindArmor = "ARMOR";
+        public const string ArmorKindCloth = "CLOTH";
+
+        public static int Capacity(DbConnection? conn, SpacetimeDB.Identity? owner)
+        {
+            if (conn == null || !owner.HasValue)
+                return 0;
+
+            EquipmentLoadout? loadout = conn.Db.EquipmentLoadout.Owner.Find(owner.Value);
+            if (loadout == null)
+                return 0;
+
+            int capacity = 0;
+            foreach (string? itemInstanceId in EquippedItemIds(loadout))
+            {
+                ItemDefinition? definition = FindEquippedDefinition(conn, itemInstanceId);
+                if (!IsClothArmor(definition))
+                    continue;
+
+                foreach (ItemAffixInstance affix in conn.Db.ItemAffixInstance.ItemInstanceId.Filter(itemInstanceId ?? string.Empty))
+                {
+                    if (!string.Equals(WireIdentifier.Normalize(affix.ModifierKind), ModifierSpellSlot, StringComparison.Ordinal))
+                        continue;
+
+                    capacity += Mathf.Max(0, Mathf.RoundToInt(affix.Value));
+                }
+            }
+
+            return capacity;
+        }
+
+        public static int AssignedSpellCount(DbConnection? conn, SpacetimeDB.Identity? owner, string? excludedSlotId = null)
+        {
+            if (conn == null || !owner.HasValue)
+                return 0;
+
+            string normalizedExcludedSlotId = WireIdentifier.Normalize(excludedSlotId);
+            int count = 0;
+            foreach (string spellSlotId in AssignedSpellSlotIds(conn, owner.Value))
+            {
+                if (!string.IsNullOrWhiteSpace(normalizedExcludedSlotId)
+                    && string.Equals(spellSlotId, normalizedExcludedSlotId, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                count++;
+            }
+
+            return count;
+        }
+
+        public static bool CanAssignSpellToSlot(DbConnection? conn, SpacetimeDB.Identity? owner, string? slotId)
+        {
+            if (conn == null || !owner.HasValue || string.IsNullOrWhiteSpace(slotId))
+                return false;
+
+            return AssignedSpellCount(conn, owner, slotId) < Capacity(conn, owner);
+        }
+
+        public static bool IsSpellAssignmentEnabled(DbConnection? conn, SpacetimeDB.Identity? owner, string? slotId)
+        {
+            if (conn == null || !owner.HasValue || string.IsNullOrWhiteSpace(slotId))
+                return false;
+
+            int capacity = Capacity(conn, owner);
+            if (capacity <= 0)
+                return false;
+
+            string normalizedSlotId = WireIdentifier.Normalize(slotId);
+            List<string> spellSlotIds = AssignedSpellSlotIds(conn, owner.Value);
+            spellSlotIds.Sort(StringComparer.Ordinal);
+            int index = spellSlotIds.FindIndex(candidate => string.Equals(candidate, normalizedSlotId, StringComparison.Ordinal));
+            return index >= 0 && index < capacity;
+        }
+
+        private static List<string> AssignedSpellSlotIds(DbConnection conn, SpacetimeDB.Identity owner)
+        {
+            string combatProfile = CombatProfileResolver.ResolveForOwner(conn, owner);
+            List<string> slotIds = new();
+            foreach (CharacterActionBarAssignment assignment in conn.Db.CharacterActionBarAssignment.Owner.Filter(owner))
+            {
+                if (!ActionBarAssignmentScope.MatchesCombatProfile(assignment, combatProfile))
+                    continue;
+
+                AbilityCatalog? ability = ResolveAssignmentAbility(conn, assignment);
+                if (!string.Equals(WireIdentifier.Normalize(ability?.AbilityKind), AbilityKinds.Spell, StringComparison.Ordinal))
+                    continue;
+
+                string slotId = WireIdentifier.Normalize(assignment.SlotId);
+                if (!string.IsNullOrWhiteSpace(slotId))
+                    slotIds.Add(slotId);
+            }
+
+            return slotIds;
+        }
+
+        private static AbilityCatalog? ResolveAssignmentAbility(DbConnection conn, CharacterActionBarAssignment assignment)
+        {
+            string actionKind = WireIdentifier.Normalize(assignment.ActionKind);
+            string actionId = WireIdentifier.Normalize(assignment.ActionId);
+            if (string.IsNullOrWhiteSpace(actionKind) && !string.IsNullOrWhiteSpace(assignment.AbilityId))
+            {
+                actionKind = ActionKinds.Ability;
+                actionId = WireIdentifier.Normalize(assignment.AbilityId);
+            }
+
+            return string.Equals(actionKind, ActionKinds.Ability, StringComparison.Ordinal)
+                ? conn.Db.AbilityCatalog.AbilityId.Find(actionId)
+                : null;
+        }
+
+        private static bool IsClothArmor(ItemDefinition? definition)
+        {
+            return definition != null
+                && string.Equals(WireIdentifier.Normalize(definition.ItemKind), ItemKindArmor, StringComparison.Ordinal)
+                && string.Equals(WireIdentifier.Normalize(definition.ArmorKind), ArmorKindCloth, StringComparison.Ordinal);
+        }
+
+        private static ItemDefinition? FindEquippedDefinition(DbConnection conn, string? itemInstanceId)
+        {
+            if (string.IsNullOrWhiteSpace(itemInstanceId))
+                return null;
+
+            ItemInstance? item = conn.Db.ItemInstance.ItemInstanceId.Find(itemInstanceId.Trim());
+            return item == null
+                ? null
+                : conn.Db.ItemDefinition.ItemDefId.Find(item.ItemDefId);
+        }
+
+        private static IEnumerable<string?> EquippedItemIds(EquipmentLoadout loadout)
+        {
+            yield return loadout.HeadItemId;
+            yield return loadout.ShoulderItemId;
+            yield return loadout.CapeItemId;
+            yield return loadout.ChestItemId;
+            yield return loadout.LegsItemId;
+            yield return loadout.BootsItemId;
+            yield return loadout.GlovesItemId;
+            yield return loadout.Ring1ItemId;
+            yield return loadout.Ring2ItemId;
+            yield return loadout.AmuletItemId;
+            yield return loadout.MainHandItemId;
+            yield return loadout.OffHandItemId;
+        }
+    }
+
+    public static class ActionBarSlotIds
     {
         public const int GridRows = 3;
         public const int GridColumns = 9;
@@ -191,9 +373,9 @@ namespace Arena.Combat
         public static string ForGridCell(int row, int col)
         {
             if (row < 0 || row >= GridRows)
-                throw new ArgumentOutOfRangeException(nameof(row), row, "Loadout grid row is out of range.");
+                throw new ArgumentOutOfRangeException(nameof(row), row, "Action-bar grid row is out of range.");
             if (col < 0 || col >= GridColumns)
-                throw new ArgumentOutOfRangeException(nameof(col), col, "Loadout grid column is out of range.");
+                throw new ArgumentOutOfRangeException(nameof(col), col, "Action-bar grid column is out of range.");
 
             return $"slot_{row}_{col}";
         }
@@ -257,33 +439,33 @@ namespace Arena.Combat
     {
         private static readonly ActionBarSlotBinding[] Bindings =
         {
-            new("1", KeyCode.Alpha1, false, SelectableLoadoutSlotIds.Slot00, 0, 0),
-            new("2", KeyCode.Alpha2, false, SelectableLoadoutSlotIds.Slot01, 0, 1),
-            new("3", KeyCode.Alpha3, false, SelectableLoadoutSlotIds.Slot02, 0, 2),
-            new("4", KeyCode.Alpha4, false, SelectableLoadoutSlotIds.Slot03, 0, 3),
-            new("5", KeyCode.Alpha5, false, SelectableLoadoutSlotIds.Slot04, 0, 4),
-            new("6", KeyCode.Alpha6, false, SelectableLoadoutSlotIds.Slot05, 0, 5),
-            new("7", KeyCode.Alpha7, false, SelectableLoadoutSlotIds.Slot06, 0, 6),
-            new("8", KeyCode.Alpha8, false, SelectableLoadoutSlotIds.Slot07, 0, 7),
-            new("9", KeyCode.Alpha9, false, SelectableLoadoutSlotIds.Slot08, 0, 8),
-            new("Q", KeyCode.Q, false, SelectableLoadoutSlotIds.Slot10, 1, 0),
-            new("E", KeyCode.E, false, SelectableLoadoutSlotIds.Slot11, 1, 1),
-            new("R", KeyCode.R, false, SelectableLoadoutSlotIds.Slot12, 1, 2),
-            new("T", KeyCode.T, false, SelectableLoadoutSlotIds.Slot13, 1, 3),
-            new("F", KeyCode.F, false, SelectableLoadoutSlotIds.Slot14, 1, 4),
-            new("G", KeyCode.G, false, SelectableLoadoutSlotIds.Slot15, 1, 5),
-            new("Z", KeyCode.Z, false, SelectableLoadoutSlotIds.Slot16, 1, 6),
-            new("X", KeyCode.X, false, SelectableLoadoutSlotIds.Slot17, 1, 7),
-            new("C", KeyCode.C, false, SelectableLoadoutSlotIds.Slot18, 1, 8),
-            new("S+1", KeyCode.Alpha1, true, SelectableLoadoutSlotIds.Slot20, 2, 0),
-            new("S+2", KeyCode.Alpha2, true, SelectableLoadoutSlotIds.Slot21, 2, 1),
-            new("S+3", KeyCode.Alpha3, true, SelectableLoadoutSlotIds.Slot22, 2, 2),
-            new("S+4", KeyCode.Alpha4, true, SelectableLoadoutSlotIds.Slot23, 2, 3),
-            new("S+5", KeyCode.Alpha5, true, SelectableLoadoutSlotIds.Slot24, 2, 4),
-            new("S+6", KeyCode.Alpha6, true, SelectableLoadoutSlotIds.Slot25, 2, 5),
-            new("S+7", KeyCode.Alpha7, true, SelectableLoadoutSlotIds.Slot26, 2, 6),
-            new("S+8", KeyCode.Alpha8, true, SelectableLoadoutSlotIds.Slot27, 2, 7),
-            new("S+9", KeyCode.Alpha9, true, SelectableLoadoutSlotIds.Slot28, 2, 8),
+            new("1", KeyCode.Alpha1, false, ActionBarSlotIds.Slot00, 0, 0),
+            new("2", KeyCode.Alpha2, false, ActionBarSlotIds.Slot01, 0, 1),
+            new("3", KeyCode.Alpha3, false, ActionBarSlotIds.Slot02, 0, 2),
+            new("4", KeyCode.Alpha4, false, ActionBarSlotIds.Slot03, 0, 3),
+            new("5", KeyCode.Alpha5, false, ActionBarSlotIds.Slot04, 0, 4),
+            new("6", KeyCode.Alpha6, false, ActionBarSlotIds.Slot05, 0, 5),
+            new("7", KeyCode.Alpha7, false, ActionBarSlotIds.Slot06, 0, 6),
+            new("8", KeyCode.Alpha8, false, ActionBarSlotIds.Slot07, 0, 7),
+            new("9", KeyCode.Alpha9, false, ActionBarSlotIds.Slot08, 0, 8),
+            new("Q", KeyCode.Q, false, ActionBarSlotIds.Slot10, 1, 0),
+            new("E", KeyCode.E, false, ActionBarSlotIds.Slot11, 1, 1),
+            new("R", KeyCode.R, false, ActionBarSlotIds.Slot12, 1, 2),
+            new("T", KeyCode.T, false, ActionBarSlotIds.Slot13, 1, 3),
+            new("F", KeyCode.F, false, ActionBarSlotIds.Slot14, 1, 4),
+            new("G", KeyCode.G, false, ActionBarSlotIds.Slot15, 1, 5),
+            new("Z", KeyCode.Z, false, ActionBarSlotIds.Slot16, 1, 6),
+            new("X", KeyCode.X, false, ActionBarSlotIds.Slot17, 1, 7),
+            new("C", KeyCode.C, false, ActionBarSlotIds.Slot18, 1, 8),
+            new("S+1", KeyCode.Alpha1, true, ActionBarSlotIds.Slot20, 2, 0),
+            new("S+2", KeyCode.Alpha2, true, ActionBarSlotIds.Slot21, 2, 1),
+            new("S+3", KeyCode.Alpha3, true, ActionBarSlotIds.Slot22, 2, 2),
+            new("S+4", KeyCode.Alpha4, true, ActionBarSlotIds.Slot23, 2, 3),
+            new("S+5", KeyCode.Alpha5, true, ActionBarSlotIds.Slot24, 2, 4),
+            new("S+6", KeyCode.Alpha6, true, ActionBarSlotIds.Slot25, 2, 5),
+            new("S+7", KeyCode.Alpha7, true, ActionBarSlotIds.Slot26, 2, 6),
+            new("S+8", KeyCode.Alpha8, true, ActionBarSlotIds.Slot27, 2, 7),
+            new("S+9", KeyCode.Alpha9, true, ActionBarSlotIds.Slot28, 2, 8),
         };
 
         public static IReadOnlyList<ActionBarSlotBinding> SelectableBindings => Bindings;
@@ -325,56 +507,14 @@ namespace Arena.Combat
         }
     }
 
-    public static class ClassIds
-    {
-        public const string Warrior = "WARRIOR";
-        public const string Paladin = "PALADIN";
-        public const string Ranger = "RANGER";
-
-        public static string Canonicalize(string? classId)
-        {
-            string normalized = WireIdentifier.Normalize(classId);
-            return normalized switch
-            {
-                "WARRIOR" => Warrior,
-                "PALADIN" => Paladin,
-                "ARCHER" => Ranger,
-                "HUNTER" => Ranger,
-                _ => normalized,
-            };
-        }
-    }
-
     public static class CombatProfileResolver
     {
-        public static string ResolveForClass(DbConnection? conn, string? classId)
-        {
-            if (conn == null)
-                return CombatProfileIds.Default;
-
-            string canonicalClassId = ClassIds.Canonicalize(classId);
-            if (string.IsNullOrWhiteSpace(canonicalClassId))
-                return CombatProfileIds.Default;
-
-            ClassCatalog? classRow = conn.Db.ClassCatalog.ClassId.Find(canonicalClassId);
-            return classRow == null
-                ? CombatProfileIds.Default
-                : CombatProfileIds.Normalize(classRow.DefaultCombatProfileId);
-        }
-
         public static string ResolveForPlayer(DbConnection? conn, Player? player)
         {
             if (player == null)
                 return CombatProfileIds.Default;
 
-            if (conn != null
-                && string.IsNullOrWhiteSpace(player.ClassId)
-                && conn.Db.PlayerState.PlayerId.Find(player.Identity)?.IsDummy == true)
-            {
-                return CombatProfileIds.Default;
-            }
-
-            return ResolveForClass(conn, player.ClassId);
+            return ResolveForOwner(conn, player.Identity);
         }
 
         public static string ResolveForOwner(DbConnection? conn, SpacetimeDB.Identity? owner)
@@ -386,14 +526,30 @@ namespace Arena.Combat
             if (!string.IsNullOrWhiteSpace(equipmentProfile))
                 return CombatProfileIds.Normalize(equipmentProfile);
 
-            CharacterProgression? progression = conn.Db.CharacterProgression.Owner.Find(owner.Value);
-            if (progression != null)
-                return ResolveForClass(conn, progression.ClassId);
+            return CombatProfileIds.Default;
+        }
 
-            Player? player = conn.Db.Player.Identity.Find(owner.Value);
-            return player == null
-                ? CombatProfileIds.Default
-                : ResolveForPlayer(conn, player);
+        public static string ResolveForAbility(DbConnection? conn, AbilityCatalog? ability)
+        {
+            if (ability == null)
+                return string.Empty;
+
+            string explicitProfile = WireIdentifier.Normalize(ability.CombatProfileId);
+            if (!string.IsNullOrWhiteSpace(explicitProfile))
+                return explicitProfile;
+
+            return string.Empty;
+        }
+
+        public static bool AbilityMatchesOwner(DbConnection? conn, SpacetimeDB.Identity? owner, AbilityCatalog? ability)
+        {
+            if (conn == null || !owner.HasValue || ability == null)
+                return false;
+
+            string ownerProfile = ResolveForOwner(conn, owner);
+            string abilityProfile = ResolveForAbility(conn, ability);
+            return !string.IsNullOrWhiteSpace(abilityProfile)
+                && string.Equals(abilityProfile, ownerProfile, StringComparison.OrdinalIgnoreCase);
         }
 
         private static string? ResolveForEquipment(DbConnection conn, SpacetimeDB.Identity owner)
@@ -438,7 +594,29 @@ namespace Arena.Combat
         }
     }
 
-    public readonly struct ActiveSelectableLoadoutAction
+    public static class ActionBarAssignmentScope
+    {
+        public static bool MatchesActiveProfile(DbConnection? conn, SpacetimeDB.Identity? owner, CharacterActionBarAssignment? assignment)
+        {
+            if (conn == null || !owner.HasValue || assignment == null)
+                return false;
+
+            return MatchesCombatProfile(assignment, CombatProfileResolver.ResolveForOwner(conn, owner.Value));
+        }
+
+        public static bool MatchesCombatProfile(CharacterActionBarAssignment? assignment, string? combatProfile)
+        {
+            if (assignment == null)
+                return false;
+
+            return string.Equals(
+                WireIdentifier.Normalize(assignment.CombatProfileId),
+                WireIdentifier.Normalize(combatProfile),
+                StringComparison.Ordinal);
+        }
+    }
+
+    public readonly struct ActiveActionBarAction
     {
         public readonly string SlotId;
         public readonly string ActionKind;
@@ -451,7 +629,7 @@ namespace Arena.Combat
         public readonly string ResourceKind;
         public readonly float ResourceCost;
 
-        public ActiveSelectableLoadoutAction(
+        public ActiveActionBarAction(
             string slotId,
             string abilityId,
             string authoredActionId,
@@ -474,7 +652,7 @@ namespace Arena.Combat
         {
         }
 
-        public ActiveSelectableLoadoutAction(
+        public ActiveActionBarAction(
             string slotId,
             string actionKind,
             string actionRefId,
@@ -510,58 +688,24 @@ namespace Arena.Combat
             IsAbility && string.Equals(AbilityKind, AbilityKinds.CombatModeToggle, StringComparison.Ordinal);
     }
 
-    public static class ActiveLoadoutResolver
+    public static class ActiveActionBarResolver
     {
-        public static bool TryResolveActiveSpec(
-            DbConnection? conn,
-            SpacetimeDB.Identity? owner,
-            out string classId,
-            out string activeSpecId)
-        {
-            classId = string.Empty;
-            activeSpecId = string.Empty;
-
-            if (conn == null || !owner.HasValue)
-                return false;
-
-            CharacterProgression? progression = conn.Db.CharacterProgression.Owner.Find(owner.Value);
-            if (progression == null || string.IsNullOrWhiteSpace(progression.ClassId))
-                return false;
-
-            classId = ClassIds.Canonicalize(progression.ClassId);
-            if (string.IsNullOrWhiteSpace(classId))
-                return false;
-
-            foreach (CharacterClassLoadoutState state in conn.Db.CharacterClassLoadoutState.Owner.Filter(owner.Value))
-            {
-                if (!string.Equals(ClassIds.Canonicalize(state.ClassId), classId, StringComparison.Ordinal))
-                    continue;
-                if (string.IsNullOrWhiteSpace(state.ActiveSpecId))
-                    return false;
-
-                activeSpecId = state.ActiveSpecId;
-                return true;
-            }
-
-            return false;
-        }
-
-        public static ActiveSelectableLoadoutAction ResolveActiveSelectableAction(
+        public static ActiveActionBarAction ResolveActiveSelectableAction(
             DbConnection? conn,
             SpacetimeDB.Identity? owner,
             string slotId)
         {
             if (conn == null || !owner.HasValue || string.IsNullOrWhiteSpace(slotId))
-                return new ActiveSelectableLoadoutAction(slotId, string.Empty, string.Empty, string.Empty, string.Empty);
+                return new ActiveActionBarAction(slotId, string.Empty, string.Empty, string.Empty, string.Empty);
 
             string normalizedSlotId = WireIdentifier.Normalize(slotId);
-
-            if (!TryResolveActiveSpec(conn, owner, out string classId, out string activeSpecId))
-                return new ActiveSelectableLoadoutAction(slotId, string.Empty, string.Empty, string.Empty, string.Empty);
-
-            SavedSpecSlotAssignment? assignment = null;
-            foreach (SavedSpecSlotAssignment row in conn.Db.SavedSpecSlotAssignment.SpecId.Filter(activeSpecId))
+            string combatProfile = CombatProfileResolver.ResolveForOwner(conn, owner.Value);
+            CharacterActionBarAssignment? assignment = null;
+            foreach (CharacterActionBarAssignment row in conn.Db.CharacterActionBarAssignment.Owner.Filter(owner.Value))
             {
+                if (!ActionBarAssignmentScope.MatchesCombatProfile(row, combatProfile))
+                    continue;
+
                 if (!string.Equals(row.SlotId, normalizedSlotId, StringComparison.OrdinalIgnoreCase))
                     continue;
 
@@ -569,57 +713,58 @@ namespace Arena.Combat
                 break;
             }
 
-            return ResolveSelectableActionFromAssignment(
+            return ResolveSelectableActionFromRefs(
                 conn,
                 owner,
-                classId,
                 slotId,
-                assignment);
+                assignment?.ActionKind,
+                assignment?.ActionId,
+                assignment?.AbilityId);
         }
 
-        public static ActiveSelectableLoadoutAction ResolveSelectableActionFromAssignment(
+        private static ActiveActionBarAction ResolveSelectableActionFromRefs(
             DbConnection? conn,
             SpacetimeDB.Identity? owner,
-            string classId,
             string slotId,
-            SavedSpecSlotAssignment? assignment)
+            string? assignedActionKind,
+            string? assignedActionId,
+            string? assignedAbilityId)
         {
             if (conn == null || string.IsNullOrWhiteSpace(slotId))
-                return new ActiveSelectableLoadoutAction(slotId, string.Empty, string.Empty, string.Empty, string.Empty);
+                return new ActiveActionBarAction(slotId, string.Empty, string.Empty, string.Empty, string.Empty);
 
             string normalizedSlotId = WireIdentifier.Normalize(slotId);
-            LoadoutSlotCatalog? slot = conn.Db.LoadoutSlotCatalog.SlotId.Find(normalizedSlotId);
-            if (slot == null || assignment == null)
-                return new ActiveSelectableLoadoutAction(slotId, string.Empty, string.Empty, string.Empty, string.Empty);
+            ActionBarSlotCatalog? slot = conn.Db.ActionBarSlotCatalog.SlotId.Find(normalizedSlotId);
+            if (slot == null)
+                return new ActiveActionBarAction(slotId, string.Empty, string.Empty, string.Empty, string.Empty);
 
-            string actionKind = WireIdentifier.Normalize(assignment.ActionKind);
-            string actionRefId = WireIdentifier.Normalize(assignment.ActionId);
-            if (string.IsNullOrWhiteSpace(actionKind) && !string.IsNullOrWhiteSpace(assignment.AbilityId))
+            string actionKind = WireIdentifier.Normalize(assignedActionKind);
+            string actionRefId = WireIdentifier.Normalize(assignedActionId);
+            if (string.IsNullOrWhiteSpace(actionKind) && !string.IsNullOrWhiteSpace(assignedAbilityId))
             {
                 actionKind = ActionKinds.Ability;
-                actionRefId = WireIdentifier.Normalize(assignment.AbilityId);
+                actionRefId = WireIdentifier.Normalize(assignedAbilityId);
             }
 
             if (string.Equals(actionKind, ActionKinds.Fixed, StringComparison.Ordinal))
             {
                 string fixedDisplayName = ActionPresentation.ResolveFixedDisplayName(conn, actionRefId);
-                AbilityCatalog? fixedAbility = FixedActionAbilityResolver.ResolveAbility(conn, owner, actionRefId);
-                return new ActiveSelectableLoadoutAction(
+                return new ActiveActionBarAction(
                     slotId,
                     ActionKinds.Fixed,
                     actionRefId,
-                    fixedAbility?.AbilityId ?? string.Empty,
-                    fixedAbility?.AbilityKind ?? string.Empty,
+                    string.Empty,
+                    string.Empty,
                     actionRefId,
                     actionRefId,
                     fixedDisplayName,
-                    fixedAbility?.ResourceKind ?? string.Empty,
-                    fixedAbility?.ResourceCost ?? 0f);
+                    string.Empty,
+                    0f);
             }
 
             if (!string.Equals(actionKind, ActionKinds.Ability, StringComparison.Ordinal))
             {
-                return new ActiveSelectableLoadoutAction(
+                return new ActiveActionBarAction(
                     slotId,
                     actionKind,
                     actionRefId,
@@ -632,7 +777,7 @@ namespace Arena.Combat
 
             AbilityCatalog? ability = conn.Db.AbilityCatalog.AbilityId.Find(actionRefId);
             if (ability == null)
-                return new ActiveSelectableLoadoutAction(
+                return new ActiveActionBarAction(
                     slotId,
                     actionKind,
                     actionRefId,
@@ -641,19 +786,26 @@ namespace Arena.Combat
                     string.Empty,
                     string.Empty,
                     actionRefId);
+            if (!CombatProfileResolver.AbilityMatchesOwner(conn, owner, ability))
+                return new ActiveActionBarAction(slotId, string.Empty, string.Empty, string.Empty, string.Empty);
+            if (string.Equals(WireIdentifier.Normalize(ability.AbilityKind), AbilityKinds.Spell, StringComparison.Ordinal)
+                && !SpellSlotResolver.IsSpellAssignmentEnabled(conn, owner, normalizedSlotId))
+            {
+                return new ActiveActionBarAction(slotId, string.Empty, string.Empty, string.Empty, string.Empty);
+            }
 
             string runtimeActionId = AbilityKinds.UsesRawActionId(ability.AbilityKind)
                 ? WireIdentifier.Normalize(ability.ActionId)
                 : CombatActionIds.ResolveRuntimeActionId(
                     conn,
-                    CombatProfileResolver.ResolveForClass(conn, classId),
+                    CombatProfileResolver.ResolveForOwner(conn, owner),
                     ability.ActionId);
             string displayName = ActionPresentation.ResolveAbilityDisplayName(
                 conn,
                 ability.AbilityId,
                 ability.DisplayName);
 
-            return new ActiveSelectableLoadoutAction(
+            return new ActiveActionBarAction(
                 slotId,
                 ActionKinds.Ability,
                 ability.AbilityId,
@@ -666,17 +818,17 @@ namespace Arena.Combat
                 ability.ResourceCost);
         }
 
-        public static ActiveSelectableLoadoutAction ResolveActiveSelectableActionForAction(
+        public static ActiveActionBarAction ResolveActiveSelectableActionForAction(
             DbConnection? conn,
             SpacetimeDB.Identity? owner,
             string actionId)
         {
             if (conn == null || !owner.HasValue || string.IsNullOrWhiteSpace(actionId))
-                return new ActiveSelectableLoadoutAction(string.Empty, string.Empty, string.Empty, string.Empty, string.Empty);
+                return new ActiveActionBarAction(string.Empty, string.Empty, string.Empty, string.Empty, string.Empty);
 
-            foreach (string slotId in SelectableLoadoutSlotIds.GridOrdered)
+            foreach (string slotId in ActionBarSlotIds.GridOrdered)
             {
-                ActiveSelectableLoadoutAction resolved = ResolveActiveSelectableAction(conn, owner, slotId);
+                ActiveActionBarAction resolved = ResolveActiveSelectableAction(conn, owner, slotId);
                 if (!resolved.HasAssignedAction)
                     continue;
 
@@ -685,7 +837,7 @@ namespace Arena.Combat
                     return resolved;
             }
 
-            return new ActiveSelectableLoadoutAction(string.Empty, string.Empty, string.Empty, string.Empty, string.Empty);
+            return new ActiveActionBarAction(string.Empty, string.Empty, string.Empty, string.Empty, string.Empty);
         }
 
         public static string ResolveDisplayNameForAction(
@@ -697,9 +849,9 @@ namespace Arena.Combat
             if (conn == null || !owner.HasValue || string.IsNullOrWhiteSpace(actionId))
                 return fallbackDisplayName;
 
-            foreach (string slotId in SelectableLoadoutSlotIds.GridOrdered)
+            foreach (string slotId in ActionBarSlotIds.GridOrdered)
             {
-                ActiveSelectableLoadoutAction resolved = ResolveActiveSelectableAction(conn, owner, slotId);
+                ActiveActionBarAction resolved = ResolveActiveSelectableAction(conn, owner, slotId);
                 if (!resolved.HasAssignedAction)
                     continue;
 
@@ -711,28 +863,6 @@ namespace Arena.Combat
             }
 
             return fallbackDisplayName;
-        }
-    }
-
-    public static class FixedActionAbilityResolver
-    {
-        public static AbilityCatalog? ResolveAbility(
-            DbConnection? conn,
-            SpacetimeDB.Identity? owner,
-            string fixedActionId)
-        {
-            if (conn == null || !owner.HasValue || string.IsNullOrWhiteSpace(fixedActionId))
-                return null;
-
-            CharacterProgression? progression = conn.Db.CharacterProgression.Owner.Find(owner.Value);
-            if (progression == null)
-                return null;
-
-            string key = $"{WireIdentifier.Normalize(progression.ClassId)}:{WireIdentifier.Normalize(fixedActionId)}";
-            FixedActionBindingCatalog? binding = conn.Db.FixedActionBindingCatalog.Key.Find(key);
-            return binding == null
-                ? null
-                : conn.Db.AbilityCatalog.AbilityId.Find(binding.AbilityId);
         }
     }
 
@@ -748,8 +878,8 @@ namespace Arena.Combat
                 return null;
 
             string authoredActionId = CombatActionIds.ResolveAuthoredStrikeId(conn, combatProfile, actionId);
-            ActiveSelectableLoadoutAction direct =
-                ActiveLoadoutResolver.ResolveActiveSelectableActionForAction(conn, owner, authoredActionId);
+            ActiveActionBarAction direct =
+                ActiveActionBarResolver.ResolveActiveSelectableActionForAction(conn, owner, authoredActionId);
             MeleeAbilityCatalog? directGameplay = ResolveForAbilityId(conn, direct.AbilityId);
             if (directGameplay != null)
                 return directGameplay;
@@ -761,8 +891,8 @@ namespace Arena.Combat
                 return null;
             }
 
-            ActiveSelectableLoadoutAction root =
-                ActiveLoadoutResolver.ResolveActiveSelectableActionForAction(conn, owner, rootAuthoredActionId);
+            ActiveActionBarAction root =
+                ActiveActionBarResolver.ResolveActiveSelectableActionForAction(conn, owner, rootAuthoredActionId);
             AbilityCatalog? rootAbility = string.IsNullOrWhiteSpace(root.AbilityId)
                 ? null
                 : conn.Db.AbilityCatalog.AbilityId.Find(root.AbilityId);
@@ -773,7 +903,10 @@ namespace Arena.Combat
             {
                 if (!string.Equals(ability.AbilityKind, "MELEE", StringComparison.OrdinalIgnoreCase))
                     continue;
-                if (!string.Equals(ability.ClassId, rootAbility.ClassId, StringComparison.OrdinalIgnoreCase))
+                if (!string.Equals(
+                    CombatProfileResolver.ResolveForAbility(conn, ability),
+                    CombatProfileResolver.ResolveForAbility(conn, rootAbility),
+                    StringComparison.OrdinalIgnoreCase))
                     continue;
                 if (!string.Equals(ability.ActionId, authoredActionId, StringComparison.OrdinalIgnoreCase))
                     continue;
@@ -1036,13 +1169,13 @@ namespace Arena.Combat
 
             if (conn != null && owner.HasValue)
             {
-                string activeLoadoutName = ActiveLoadoutResolver.ResolveDisplayNameForAction(
+                string activeActionBarName = ActiveActionBarResolver.ResolveDisplayNameForAction(
                     conn,
                     owner,
                     normalizedActionId,
                     string.Empty);
-                if (!string.IsNullOrWhiteSpace(activeLoadoutName))
-                    return activeLoadoutName;
+                if (!string.IsNullOrWhiteSpace(activeActionBarName))
+                    return activeActionBarName;
             }
 
             ActionPresentationCatalog? presentation = FindActionPresentation(conn, normalizedActionId);

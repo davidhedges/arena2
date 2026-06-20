@@ -15,22 +15,20 @@ namespace Arena.UI
 {
     public sealed class CharacterCreationController : MonoBehaviour
     {
-        private const string DefaultClassId = "WARRIOR";
         private const string HubSceneName = "Hub";
 
         private CharacterAvatarAssembler? _previewAssembler;
-        private Button? _warriorButton;
-        private Button? _paladinButton;
-        private Button? _archerButton;
+        private Button? _mainHandSummary;
+        private Button? _offHandSummary;
+        private Button? _spellSlotSummary;
         private Button? _createButton;
         private TMP_Text? _raceSexText;
-        private TMP_Text? _classText;
+        private TMP_Text? _gearText;
         private TMP_Text? _statusText;
         private Transform? _previewAnchor;
         private GameObject? _previewDragSurface;
         private DbConnection? _subscribedConnection;
-        private string _selectedClassId = DefaultClassId;
-        private string _lastPreviewClassId = string.Empty;
+        private bool _previewApplied;
         private bool _pendingCreate;
 
         private void OnEnable()
@@ -38,7 +36,7 @@ namespace Arena.UI
             Resolve();
             Wire();
             TrySubscribeToReducerErrors();
-            SelectClass(_selectedClassId);
+            SelectCharacterBaseline();
         }
 
         private void OnDisable()
@@ -58,34 +56,34 @@ namespace Arena.UI
             Transform root = transform;
             _previewAssembler = root.Find("StageRoot/PreviewAnchor")?.GetComponent<CharacterAvatarAssembler>();
             _previewAnchor = root.Find("StageRoot/PreviewAnchor");
-            _warriorButton = root.Find("CharacterCreationCanvas/LeftPanel/ClassButtons/WarriorButton")?.GetComponent<Button>();
-            _paladinButton = root.Find("CharacterCreationCanvas/LeftPanel/ClassButtons/PaladinButton")?.GetComponent<Button>();
-            _archerButton = root.Find("CharacterCreationCanvas/LeftPanel/ClassButtons/ArcherButton")?.GetComponent<Button>();
+            _mainHandSummary = root.Find("CharacterCreationCanvas/LeftPanel/GearSummary/MainHandSummary")?.GetComponent<Button>();
+            _offHandSummary = root.Find("CharacterCreationCanvas/LeftPanel/GearSummary/OffHandSummary")?.GetComponent<Button>();
+            _spellSlotSummary = root.Find("CharacterCreationCanvas/LeftPanel/GearSummary/SpellSlotSummary")?.GetComponent<Button>();
             _createButton = root.Find("CharacterCreationCanvas/BottomBar/CreateButton")?.GetComponent<Button>();
             _raceSexText = root.Find("CharacterCreationCanvas/LeftPanel/RaceSexValue")?.GetComponent<TMP_Text>();
-            _classText = root.Find("CharacterCreationCanvas/LeftPanel/ClassValue")?.GetComponent<TMP_Text>();
+            _gearText = root.Find("CharacterCreationCanvas/LeftPanel/GearValue")?.GetComponent<TMP_Text>();
             _statusText = root.Find("CharacterCreationCanvas/BottomBar/StatusText")?.GetComponent<TMP_Text>();
             EnsurePreviewDragSurface(root);
         }
 
         private void Wire()
         {
-            if (_warriorButton != null)
+            if (_mainHandSummary != null)
             {
-                _warriorButton.onClick.RemoveAllListeners();
-                _warriorButton.onClick.AddListener(() => SelectClass("WARRIOR"));
+                _mainHandSummary.onClick.RemoveAllListeners();
+                _mainHandSummary.interactable = false;
             }
 
-            if (_paladinButton != null)
+            if (_offHandSummary != null)
             {
-                _paladinButton.onClick.RemoveAllListeners();
-                _paladinButton.onClick.AddListener(() => SelectClass("PALADIN"));
+                _offHandSummary.onClick.RemoveAllListeners();
+                _offHandSummary.interactable = false;
             }
 
-            if (_archerButton != null)
+            if (_spellSlotSummary != null)
             {
-                _archerButton.onClick.RemoveAllListeners();
-                _archerButton.onClick.AddListener(() => SelectClass("RANGER"));
+                _spellSlotSummary.onClick.RemoveAllListeners();
+                _spellSlotSummary.interactable = false;
             }
 
             if (_createButton != null)
@@ -95,34 +93,29 @@ namespace Arena.UI
             }
         }
 
-        private void SelectClass(string classId)
+        private void SelectCharacterBaseline()
         {
-            _selectedClassId = string.IsNullOrWhiteSpace(classId)
-                ? DefaultClassId
-                : classId.Trim().ToUpperInvariant();
-
             if (_raceSexText != null)
                 _raceSexText.text = "HUMAN / MALE";
-            if (_classText != null)
-                _classText.text = _selectedClassId;
+            if (_gearText != null)
+                _gearText.text = "SWORD & SHIELD";
 
-            SetButtonSelected(_warriorButton, _selectedClassId == "WARRIOR");
-            SetButtonSelected(_paladinButton, _selectedClassId == "PALADIN");
-            SetButtonSelected(_archerButton, _selectedClassId == "RANGER");
+            SetButtonSelected(_mainHandSummary, false);
+            SetButtonSelected(_offHandSummary, false);
+            SetButtonSelected(_spellSlotSummary, false);
             UpdatePreview();
         }
 
         private void UpdatePreview()
         {
-            if (_previewAssembler == null ||
-                string.Equals(_lastPreviewClassId, _selectedClassId, System.StringComparison.Ordinal))
+            if (_previewAssembler == null || _previewApplied)
             {
                 return;
             }
 
-            if (_previewAssembler.TryApplyClassDefault(_selectedClassId, out _, out string error))
+            if (_previewAssembler.TryApplyStarterDefault(out _, out string error))
             {
-                _lastPreviewClassId = _selectedClassId;
+                _previewApplied = true;
                 SetStatus(string.Empty);
             }
             else
@@ -183,10 +176,9 @@ namespace Arena.UI
             if (_createButton != null)
                 _createButton.interactable = false;
 
-            string outfitId = ResolveDefaultOutfitId(_selectedClassId);
+            string outfitId = ResolveDefaultOutfitId();
             CharacterAppearanceSelection selection = CharacterAppearanceSelection.DefaultHumanMale(outfitId);
             conn.Reducers.CreateOrUpdateCharacter(
-                _selectedClassId,
                 selection.raceId,
                 selection.sexId,
                 selection.bodyId,
@@ -243,18 +235,9 @@ namespace Arena.UI
             Debug.LogWarning($"[{nameof(CharacterCreationController)}] Character creation rejected: {error.Message}");
         }
 
-        private static string ResolveDefaultOutfitId(string classId)
+        private static string ResolveDefaultOutfitId()
         {
-            if (!CharacterAppearanceCatalogSet.TryLoadDefault(out CharacterAppearanceCatalogSet catalogs, out _))
-                return CharacterAppearanceIds.DefaultOutfitId;
-
-            return catalogs.ClassOutfitCatalog.TryGetDefaultOutfitId(
-                classId,
-                CharacterAppearanceIds.DefaultRaceId,
-                CharacterAppearanceIds.DefaultSexId,
-                out string outfitId)
-                ? outfitId
-                : CharacterAppearanceIds.DefaultOutfitId;
+            return CharacterAppearanceIds.DefaultOutfitId;
         }
 
         private static void SetButtonSelected(Button? button, bool selected)

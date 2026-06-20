@@ -1,6 +1,6 @@
 use spacetimedb::{reducer, table, Identity, ReducerContext, Table, Timestamp};
 
-use crate::progression::{ensure_default_progression_for_identity, switch_loadout_class};
+use crate::progression::ensure_default_progression_for_identity;
 
 pub const DEFAULT_RACE_ID: &str = "HUMAN";
 pub const DEFAULT_SEX_ID: &str = "MALE";
@@ -9,17 +9,12 @@ pub const DEFAULT_HEAD_ID: &str = "HUMAN_MALE_HEAD_01_A";
 pub const DEFAULT_FACE_ID: &str = "";
 pub const DEFAULT_HAIR_ID: &str = "";
 pub const DEFAULT_EYES_ID: &str = "HUMAN_EYES_BLUE";
-pub const DEFAULT_CLASS_ID: &str = "WARRIOR";
-pub const WARRIOR_STARTER_OUTFIT_ID: &str = "HUMAN_MALE_WARRIOR_STARTER";
-pub const PALADIN_STARTER_OUTFIT_ID: &str = "HUMAN_MALE_PALADIN_STARTER";
-pub const RANGER_STARTER_OUTFIT_ID: &str = "HUMAN_MALE_ARCHER_STARTER";
+pub const DEFAULT_STARTER_OUTFIT_ID: &str = "HUMAN_MALE_PEASANT_STARTER";
 
 #[allow(unused_imports)]
 use crate::appearance::character_appearance as _;
 #[allow(unused_imports)]
 use crate::player::player as _;
-#[allow(unused_imports)]
-use crate::progression::character_progression as _;
 
 #[table(accessor = character_appearance, public)]
 pub struct CharacterAppearance {
@@ -44,7 +39,6 @@ pub struct CharacterAppearance {
 #[reducer]
 pub fn create_or_update_character(
     ctx: &ReducerContext,
-    class_id: String,
     race_id: String,
     sex_id: String,
     body_id: String,
@@ -56,7 +50,6 @@ pub fn create_or_update_character(
 ) -> Result<(), String> {
     let owner = ctx.sender();
     ensure_default_progression_for_identity(ctx, owner)?;
-    switch_loadout_class(ctx, class_id)?;
 
     let row = validated_appearance_row(
         ctx, owner, race_id, sex_id, body_id, head_id, face_id, hair_id, eyes_id, outfit_id, true,
@@ -122,9 +115,7 @@ pub(crate) fn backfill_character_appearance_rows(ctx: &ReducerContext) -> usize 
             .character_id()
             .find(character_id)
         {
-            let expected_outfit_id =
-                default_outfit_id_for_class(class_id_for_owner(ctx, player.identity).as_str())
-                    .to_string();
+            let expected_outfit_id = default_outfit_id().to_string();
             if row.outfit_id != expected_outfit_id {
                 row.outfit_id = expected_outfit_id;
                 row.appearance_version = row.appearance_version.saturating_add(1).max(1);
@@ -158,7 +149,6 @@ pub(crate) fn ensure_default_character_appearance_for_identity(
     }
 
     ensure_default_progression_for_identity(ctx, owner)?;
-    let class_id = class_id_for_owner(ctx, owner);
 
     ctx.db.character_appearance().insert(CharacterAppearance {
         character_id: default_character_id(owner),
@@ -170,38 +160,13 @@ pub(crate) fn ensure_default_character_appearance_for_identity(
         face_id: DEFAULT_FACE_ID.to_string(),
         hair_id: DEFAULT_HAIR_ID.to_string(),
         eyes_id: DEFAULT_EYES_ID.to_string(),
-        outfit_id: default_outfit_id_for_class(class_id.as_str()).to_string(),
+        outfit_id: default_outfit_id().to_string(),
         creation_complete: true,
         appearance_version: 1,
         created_at: ctx.timestamp,
         updated_at: ctx.timestamp,
     });
     Ok(())
-}
-
-pub(crate) fn sync_character_appearance_outfit_for_class(
-    ctx: &ReducerContext,
-    owner: Identity,
-    class_id: &str,
-) -> Result<(), String> {
-    let outfit_id = default_outfit_id_for_class(class_id).to_string();
-    let character_id = default_character_id(owner);
-    if let Some(mut row) = ctx
-        .db
-        .character_appearance()
-        .character_id()
-        .find(character_id)
-    {
-        if row.outfit_id != outfit_id {
-            row.outfit_id = outfit_id;
-            row.appearance_version = row.appearance_version.saturating_add(1).max(1);
-            row.updated_at = ctx.timestamp;
-            ctx.db.character_appearance().character_id().update(row);
-        }
-        return Ok(());
-    }
-
-    ensure_default_character_appearance_for_identity(ctx, owner)
 }
 
 pub(crate) fn default_character_id(owner: Identity) -> String {
@@ -228,15 +193,7 @@ fn validated_appearance_row(
     let face_id = require_allowed("face", face_id.as_str(), &[DEFAULT_FACE_ID])?;
     let hair_id = require_allowed("hair", hair_id.as_str(), &[DEFAULT_HAIR_ID])?;
     let eyes_id = require_allowed("eyes", eyes_id.as_str(), &[DEFAULT_EYES_ID])?;
-    let outfit_id = require_allowed(
-        "outfit",
-        outfit_id.as_str(),
-        &[
-            WARRIOR_STARTER_OUTFIT_ID,
-            PALADIN_STARTER_OUTFIT_ID,
-            RANGER_STARTER_OUTFIT_ID,
-        ],
-    )?;
+    let outfit_id = require_allowed("outfit", outfit_id.as_str(), &[DEFAULT_STARTER_OUTFIT_ID])?;
 
     Ok(CharacterAppearance {
         character_id: default_character_id(owner),
@@ -270,21 +227,8 @@ fn upsert_character_appearance(ctx: &ReducerContext, row: CharacterAppearance) {
     }
 }
 
-fn default_outfit_id_for_class(class_id: &str) -> &'static str {
-    match normalize_identifier(class_id).as_str() {
-        "PALADIN" => PALADIN_STARTER_OUTFIT_ID,
-        "RANGER" => RANGER_STARTER_OUTFIT_ID,
-        _ => WARRIOR_STARTER_OUTFIT_ID,
-    }
-}
-
-fn class_id_for_owner(ctx: &ReducerContext, owner: Identity) -> String {
-    ctx.db
-        .character_progression()
-        .owner()
-        .find(owner)
-        .map(|progression| normalize_identifier(progression.class_id.as_str()))
-        .unwrap_or_else(|| DEFAULT_CLASS_ID.to_string())
+fn default_outfit_id() -> &'static str {
+    DEFAULT_STARTER_OUTFIT_ID
 }
 
 fn require_allowed(field: &str, value: &str, allowed: &[&str]) -> Result<String, String> {
@@ -305,27 +249,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn default_outfit_tracks_supported_creation_classes() {
-        assert_eq!(
-            default_outfit_id_for_class("warrior"),
-            WARRIOR_STARTER_OUTFIT_ID
-        );
-        assert_eq!(
-            default_outfit_id_for_class(" paladin "),
-            PALADIN_STARTER_OUTFIT_ID
-        );
-        assert_eq!(
-            default_outfit_id_for_class(" ranger "),
-            RANGER_STARTER_OUTFIT_ID
-        );
-    }
-
-    #[test]
-    fn default_outfit_falls_back_to_warrior_for_unknown_classes() {
-        assert_eq!(
-            default_outfit_id_for_class("future-class"),
-            WARRIOR_STARTER_OUTFIT_ID
-        );
+    fn default_outfit_is_classless() {
+        assert_eq!(default_outfit_id(), DEFAULT_STARTER_OUTFIT_ID);
     }
 
     #[test]

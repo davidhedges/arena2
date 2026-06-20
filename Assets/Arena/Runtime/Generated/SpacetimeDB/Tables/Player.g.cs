@@ -42,14 +42,12 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Col<Player, SpacetimeDB.Identity> Identity { get; }
         public global::SpacetimeDB.Col<Player, string> Username { get; }
         public global::SpacetimeDB.Col<Player, SpacetimeDB.Timestamp> ConnectedAt { get; }
-        public global::SpacetimeDB.Col<Player, string> ClassId { get; }
 
         public PlayerCols(string tableName)
         {
             Identity = new global::SpacetimeDB.Col<Player, SpacetimeDB.Identity>(tableName, "identity");
             Username = new global::SpacetimeDB.Col<Player, string>(tableName, "username");
             ConnectedAt = new global::SpacetimeDB.Col<Player, SpacetimeDB.Timestamp>(tableName, "connected_at");
-            ClassId = new global::SpacetimeDB.Col<Player, string>(tableName, "class_id");
         }
     }
 

@@ -40,11 +40,10 @@ namespace SpacetimeDB.Types
     public sealed class AbilityCatalogCols
     {
         public global::SpacetimeDB.Col<AbilityCatalog, string> AbilityId { get; }
-        public global::SpacetimeDB.Col<AbilityCatalog, string> ClassId { get; }
+        public global::SpacetimeDB.Col<AbilityCatalog, string> CombatProfileId { get; }
         public global::SpacetimeDB.Col<AbilityCatalog, string> AbilityKind { get; }
         public global::SpacetimeDB.Col<AbilityCatalog, string> ActionId { get; }
         public global::SpacetimeDB.Col<AbilityCatalog, string> DisplayName { get; }
-        public global::SpacetimeDB.Col<AbilityCatalog, string> FixedActionId { get; }
         public global::SpacetimeDB.Col<AbilityCatalog, string> ResourceKind { get; }
         public global::SpacetimeDB.Col<AbilityCatalog, float> ResourceCost { get; }
         public global::SpacetimeDB.Col<AbilityCatalog, string> AbilityTags { get; }
@@ -53,11 +52,10 @@ namespace SpacetimeDB.Types
         public AbilityCatalogCols(string tableName)
         {
             AbilityId = new global::SpacetimeDB.Col<AbilityCatalog, string>(tableName, "ability_id");
-            ClassId = new global::SpacetimeDB.Col<AbilityCatalog, string>(tableName, "class_id");
+            CombatProfileId = new global::SpacetimeDB.Col<AbilityCatalog, string>(tableName, "combat_profile_id");
             AbilityKind = new global::SpacetimeDB.Col<AbilityCatalog, string>(tableName, "ability_kind");
             ActionId = new global::SpacetimeDB.Col<AbilityCatalog, string>(tableName, "action_id");
             DisplayName = new global::SpacetimeDB.Col<AbilityCatalog, string>(tableName, "display_name");
-            FixedActionId = new global::SpacetimeDB.Col<AbilityCatalog, string>(tableName, "fixed_action_id");
             ResourceKind = new global::SpacetimeDB.Col<AbilityCatalog, string>(tableName, "resource_kind");
             ResourceCost = new global::SpacetimeDB.Col<AbilityCatalog, float>(tableName, "resource_cost");
             AbilityTags = new global::SpacetimeDB.Col<AbilityCatalog, string>(tableName, "ability_tags");

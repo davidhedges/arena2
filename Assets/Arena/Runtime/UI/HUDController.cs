@@ -24,7 +24,7 @@ namespace Arena.UI
     ///   Target frame   — top-left, right of player frame (with buff/debuff rows beneath)
     ///   Self buffs     — top-right
     ///   Cast bar       — above action bars, center
-    ///   Action bars    — bottom-center, matching the shared loadout grid
+    ///   Action bars    — bottom-center, matching the shared action-bar grid
     ///   Respawn timer  — center screen (no overlay)
     ///
     /// INVARIANT: No network writes. Read-only presentation.
@@ -178,8 +178,8 @@ namespace Arena.UI
         private readonly Text[]  _abilityGridChargeText = new Text[ActionBarLayout.CellCount];
         private readonly TooltipTarget[] _abilityGridTooltips = new TooltipTarget[ActionBarLayout.CellCount];
         private readonly ActionBarClickTarget[] _abilityGridClicks = new ActionBarClickTarget[ActionBarLayout.CellCount];
-        private readonly LoadoutActionDropSlot[] _abilityGridDropSlots = new LoadoutActionDropSlot[ActionBarLayout.CellCount];
-        private readonly LoadoutActionDragSource[] _abilityGridDragSources = new LoadoutActionDragSource[ActionBarLayout.CellCount];
+        private readonly ActionBarDropSlot[] _abilityGridDropSlots = new ActionBarDropSlot[ActionBarLayout.CellCount];
+        private readonly ActionBarDragSource[] _abilityGridDragSources = new ActionBarDragSource[ActionBarLayout.CellCount];
         private readonly ActionBarSlotState[] _abilityGridStates = new ActionBarSlotState[ActionBarLayout.CellCount];
 
         // --- Cast Bar ---
@@ -505,7 +505,7 @@ namespace Arena.UI
         }
 
         // ---------------------------------------------------------------
-        // Action Bars (bottom-center, same shared grid as loadout)
+        // Action Bars (bottom-center, same shared action-bar grid)
         // ---------------------------------------------------------------
 
         private void BuildActionBars()
@@ -551,8 +551,8 @@ namespace Arena.UI
             out Text chargeTxt,
             out TooltipTarget tooltip,
             out ActionBarClickTarget clickTarget,
-            out LoadoutActionDropSlot dropSlot,
-            out LoadoutActionDragSource dragSource)
+            out ActionBarDropSlot dropSlot,
+            out ActionBarDragSource dragSource)
         {
             var slot = CreateActionBarSlot(parent, $"Slot_{key}");
             var rt = slot.GetComponent<RectTransform>() ?? slot.AddComponent<RectTransform>();
@@ -581,8 +581,8 @@ namespace Arena.UI
             tooltip = slot.AddComponent<TooltipTarget>();
             tooltip.Configure(_canvas, default);
             clickTarget = slot.AddComponent<ActionBarClickTarget>();
-            dropSlot = slot.AddComponent<LoadoutActionDropSlot>();
-            dragSource = slot.AddComponent<LoadoutActionDragSource>();
+            dropSlot = slot.AddComponent<ActionBarDropSlot>();
+            dragSource = slot.AddComponent<ActionBarDragSource>();
             dragSource.Configure(_canvas, null, null);
 
             var iconGo = Child(slot.transform, "Icon");
@@ -1416,7 +1416,7 @@ namespace Arena.UI
 
             foreach (ActionBarSlotBinding binding in ActionBarKeymap.SelectableBindings)
             {
-                ActiveSelectableLoadoutAction resolved = ActiveLoadoutResolver.ResolveActiveSelectableAction(
+                ActiveActionBarAction resolved = ActiveActionBarResolver.ResolveActiveSelectableAction(
                     conn,
                     owner,
                     binding.SlotId);
@@ -1447,11 +1447,11 @@ namespace Arena.UI
                     isVisible ? () => TriggerActionRef(conn, resolved) : null,
                     isVisible && usesHoldInput ? () => ReleaseActionRef(conn, resolved) : null,
                     usesHoldInput);
-                ActiveSelectableLoadoutAction dragResolved = resolved;
+                ActiveActionBarAction dragResolved = resolved;
                 string dragSlotId = binding.SlotId;
                 _abilityGridDragSources[index].Configure(
                     _canvas,
-                    () => LoadoutActionDragPayload.From(dragResolved, dragSlotId),
+                    () => ActionBarDragPayload.From(dragResolved, dragSlotId),
                     HandleHudActionDrop,
                     onDragStarted: usesHoldInput ? _ => ReleaseActionRef(conn, dragResolved) : null);
                 _abilityGridTooltips[index].Configure(
@@ -1461,17 +1461,14 @@ namespace Arena.UI
             }
         }
 
-        private void HandleHudActionDrop(LoadoutActionDragPayload payload, string? targetSlotId)
+        private void HandleHudActionDrop(ActionBarDragPayload payload, string? targetSlotId)
         {
             var conn = NetworkManager.Instance?.Conn;
             var owner = conn?.Identity;
             if (conn == null || !owner.HasValue)
                 return;
 
-            if (!ActiveLoadoutResolver.TryResolveActiveSpec(conn, owner.Value, out _, out string activeSpecId))
-                return;
-
-            LoadoutActionDropApplier.ApplyDrop(conn, activeSpecId, payload, targetSlotId);
+            ActionBarDropApplier.ApplyDrop(conn, payload, targetSlotId);
             _actionBarStaticDirty = true;
         }
 
@@ -1614,7 +1611,7 @@ namespace Arena.UI
                 remainingSeconds = remainingMs / 1000f;
         }
 
-        private static void TriggerActionRef(DbConnection? conn, ActiveSelectableLoadoutAction resolved)
+        private static void TriggerActionRef(DbConnection? conn, ActiveActionBarAction resolved)
         {
             if (conn == null || !resolved.HasAssignedAction)
                 return;
@@ -1628,7 +1625,7 @@ namespace Arena.UI
             ActionBarInputDispatcher.TryTrigger(resolved, conn);
         }
 
-        private static void ReleaseActionRef(DbConnection? conn, ActiveSelectableLoadoutAction resolved)
+        private static void ReleaseActionRef(DbConnection? conn, ActiveActionBarAction resolved)
         {
             if (conn == null || !resolved.HasAssignedAction || !resolved.IsFixed)
                 return;
@@ -1749,7 +1746,7 @@ namespace Arena.UI
                 if (_holdMode
                     || eventData.button != PointerEventData.InputButton.Left
                     || eventData.dragging
-                    || LoadoutActionDragSource.ShouldSuppressClick(gameObject))
+                    || ActionBarDragSource.ShouldSuppressClick(gameObject))
                     return;
 
                 _onActivate?.Invoke();

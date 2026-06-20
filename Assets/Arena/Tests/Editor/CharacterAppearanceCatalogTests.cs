@@ -15,7 +15,6 @@ namespace Arena.Tests.Editor
         private const string BaseCatalogPath = "Assets/Arena/Resources/CharacterAppearance/AvatarBaseCatalog.asset";
         private const string PartCatalogPath = "Assets/Arena/Resources/CharacterAppearance/AvatarPartCatalog.asset";
         private const string OutfitCatalogPath = "Assets/Arena/Resources/CharacterAppearance/OutfitCatalog.asset";
-        private const string ClassOutfitCatalogPath = "Assets/Arena/Resources/CharacterAppearance/ClassOutfitCatalog.asset";
 
         private static readonly Assembly RuntimeAssembly = AppDomain.CurrentDomain.Load("Assembly-CSharp");
 
@@ -60,12 +59,11 @@ namespace Arena.Tests.Editor
                 }
             }
 
-            object classOutfitCatalog = LoadRequiredAsset(ClassOutfitCatalogPath, "Arena.Presentation.Appearance.ClassOutfitCatalog");
-            Assert.That(Entries(classOutfitCatalog).Cast<object>().Count(), Is.GreaterThan(0));
+            Assert.That(Entries(outfitCatalog).Cast<object>().Count(), Is.GreaterThan(0));
         }
 
         [Test]
-        public void Assembler_BuildsDefaultHumanMaleAndMappedClassOutfits()
+        public void Assembler_BuildsDefaultHumanMaleStarterOutfits()
         {
             Type catalogSetType = RequireType("Arena.Presentation.Appearance.CharacterAppearanceCatalogSet");
             MethodInfo tryLoadDefault = RequireMethod(catalogSetType, "TryLoadDefault");
@@ -77,6 +75,7 @@ namespace Arena.Tests.Editor
             GameObject parent = new("CharacterAppearanceCatalogTests");
             try
             {
+                AssertAssemblesHumanMaleOutfit(catalogs, parent.transform, "HUMAN_MALE_PEASANT_STARTER");
                 AssertAssemblesHumanMaleOutfit(catalogs, parent.transform, "HUMAN_MALE_WARRIOR_STARTER");
                 AssertAssemblesHumanMaleOutfit(catalogs, parent.transform, "HUMAN_MALE_PALADIN_STARTER");
                 AssertAssemblesHumanMaleOutfit(catalogs, parent.transform, "HUMAN_MALE_ARCHER_STARTER");
@@ -102,13 +101,14 @@ namespace Arena.Tests.Editor
         [Test]
         public void RuntimeAvatarController_BuildsBindingsForStarterOutfits()
         {
+            AssertRuntimeBindingForOutfit("HUMAN_MALE_PEASANT_STARTER");
             AssertRuntimeBindingForOutfit("HUMAN_MALE_WARRIOR_STARTER");
             AssertRuntimeBindingForOutfit("HUMAN_MALE_PALADIN_STARTER");
             AssertRuntimeBindingForOutfit("HUMAN_MALE_ARCHER_STARTER");
         }
 
         [Test]
-        public void RuntimeAvatarController_AppliesSavedOutfitInsteadOfClassDefault()
+        public void RuntimeAvatarController_AppliesSavedOutfitInsteadOfStarterDefault()
         {
             object savedPaladinAppearance = CreateAppearanceRow("HUMAN_MALE_PALADIN_STARTER");
             Type controllerType = RequireType("Arena.Presentation.Appearance.RuntimeAvatarController");

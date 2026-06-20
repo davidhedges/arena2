@@ -66,7 +66,7 @@ namespace Arena.Input
         {
             if (conn == null)
             {
-                LoadoutActionTrace.Trace($"fixed action {WireIdentifier.Normalize(actionId)} rejected: no connection");
+                ActionBarTrace.Trace($"fixed action {WireIdentifier.Normalize(actionId)} rejected: no connection");
                 return false;
             }
 
@@ -85,7 +85,7 @@ namespace Arena.Input
             return false;
         }
 
-        public static bool TryTrigger(ActiveSelectableLoadoutAction action, DbConnection? conn)
+        public static bool TryTrigger(ActiveActionBarAction action, DbConnection? conn)
         {
             if (!action.IsFixed)
                 return false;
@@ -108,7 +108,7 @@ namespace Arena.Input
             return false;
         }
 
-        public static bool TryRelease(ActiveSelectableLoadoutAction action, DbConnection? conn)
+        public static bool TryRelease(ActiveActionBarAction action, DbConnection? conn)
         {
             if (!action.IsFixed)
                 return false;
@@ -129,7 +129,7 @@ namespace Arena.Input
                 TryStopParry(conn, "not held");
         }
 
-        public static void ReconcileHeldState(ActiveSelectableLoadoutAction action, DbConnection? conn, bool isHeld)
+        public static void ReconcileHeldState(ActiveActionBarAction action, DbConnection? conn, bool isHeld)
         {
             if (!action.IsFixed)
                 return;
@@ -162,7 +162,7 @@ namespace Arena.Input
                 input.Move.x,
                 token.PredictedActionId,
                 token.ClientActionSeq);
-            LoadoutActionTrace.Trace("fixed action DODGE dispatched");
+            ActionBarTrace.Trace("fixed action DODGE dispatched");
             return true;
         }
 
@@ -188,7 +188,7 @@ namespace Arena.Input
                 yaw,
                 token.PredictedActionId,
                 token.ClientActionSeq);
-            LoadoutActionTrace.Trace(
+            ActionBarTrace.Trace(
                 $"fixed action PARRY dispatched tick={inputTick} pos=({pos.x:F2},{pos.y:F2},{pos.z:F2}) yaw={yaw:F2}");
             return true;
         }
@@ -205,7 +205,7 @@ namespace Arena.Input
 
             LocalDefensePrediction.RequestParryStop(entity);
             conn.Reducers.StopParry();
-            LoadoutActionTrace.Trace($"fixed action PARRY stop dispatched ({reason})");
+            ActionBarTrace.Trace($"fixed action PARRY stop dispatched ({reason})");
             return true;
         }
 
@@ -225,37 +225,37 @@ namespace Arena.Input
             string normalized = WireIdentifier.Normalize(actionId);
             if (!IsVisible(normalized, conn))
             {
-                LoadoutActionTrace.Trace($"fixed action {normalized} rejected: not visible");
+                ActionBarTrace.Trace($"fixed action {normalized} rejected: not visible");
                 return;
             }
 
             PlayerEntity? entity = EntityRegistry.Instance?.LocalPlayerEntity;
             if (entity == null)
             {
-                LoadoutActionTrace.Trace($"fixed action {normalized} rejected: no local player entity");
+                ActionBarTrace.Trace($"fixed action {normalized} rejected: no local player entity");
                 return;
             }
             if (!entity.IsAlive)
             {
-                LoadoutActionTrace.Trace($"fixed action {normalized} rejected: local player dead");
+                ActionBarTrace.Trace($"fixed action {normalized} rejected: local player dead");
                 return;
             }
             if (SpellInputHandler.Instance?.IsAimActive == true)
             {
-                LoadoutActionTrace.Trace($"fixed action {normalized} rejected: aim mode active");
+                ActionBarTrace.Trace($"fixed action {normalized} rejected: aim mode active");
                 return;
             }
 
             long nowMs = System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             if (LocalCombatState.Instance.ActiveCast is { } activeCast && nowMs < activeCast.endMs)
             {
-                LoadoutActionTrace.Trace(
+                ActionBarTrace.Trace(
                     $"fixed action {normalized} rejected: active cast ends in {activeCast.endMs - nowMs}ms");
                 return;
             }
             if (LocalCombatState.Instance.MovementAction is { } movementAction && nowMs < movementAction.recoveryUntilMs)
             {
-                LoadoutActionTrace.Trace(
+                ActionBarTrace.Trace(
                     $"fixed action {normalized} rejected: movement action recovery ends in {movementAction.recoveryUntilMs - nowMs}ms");
                 return;
             }
@@ -264,7 +264,7 @@ namespace Arena.Input
                 && (!LocalCombatState.Instance.FixedActionCharges.TryGetValue(normalized, out var charges)
                     || charges.CurrentCharges <= 0))
             {
-                LoadoutActionTrace.Trace($"fixed action {normalized} rejected: no charges");
+                ActionBarTrace.Trace($"fixed action {normalized} rejected: no charges");
                 return;
             }
 
@@ -272,12 +272,12 @@ namespace Arena.Input
             {
                 if (LocalDefensePrediction.IsBlocking(conn, entity))
                 {
-                    LoadoutActionTrace.Trace($"fixed action {normalized} rejected: block active");
+                    ActionBarTrace.Trace($"fixed action {normalized} rejected: block active");
                     return;
                 }
                 if (LocalDefensePrediction.IsParrying(conn, entity))
                 {
-                    LoadoutActionTrace.Trace($"fixed action {normalized} rejected: parry already armed or cooling down");
+                    ActionBarTrace.Trace($"fixed action {normalized} rejected: parry already armed or cooling down");
                     return;
                 }
             }
@@ -286,12 +286,12 @@ namespace Arena.Input
                 && cooldown.durationMs > 0
                 && nowMs < cooldown.lastCastMs + cooldown.durationMs)
             {
-                LoadoutActionTrace.Trace(
+                ActionBarTrace.Trace(
                     $"fixed action {normalized} rejected: cooldown ends in {cooldown.lastCastMs + cooldown.durationMs - nowMs}ms");
                 return;
             }
 
-            LoadoutActionTrace.Trace($"fixed action {normalized} rejected: local enable gate failed");
+            ActionBarTrace.Trace($"fixed action {normalized} rejected: local enable gate failed");
         }
 
         private static (uint inputTick, Vector3 pos, float yaw) GetSnapshot(PlayerEntity entity)

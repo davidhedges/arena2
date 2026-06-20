@@ -1,5 +1,6 @@
 #nullable enable
 
+using Arena.Presentation;
 using SpacetimeDB.Types;
 using UnityEngine;
 
@@ -15,7 +16,7 @@ namespace Arena.Combat
         public static TooltipData ResolveForSelectableAction(
             DbConnection? conn,
             SpacetimeDB.Identity? owner,
-            ActiveSelectableLoadoutAction action)
+            ActiveActionBarAction action)
         {
             if (!action.HasAssignedAction)
                 return default;
@@ -64,7 +65,7 @@ namespace Arena.Combat
             return ResolveForSelectableAction(
                 conn,
                 owner,
-                new ActiveSelectableLoadoutAction(
+                new ActiveActionBarAction(
                     string.Empty,
                     ability.AbilityId,
                     ability.ActionId,
@@ -78,7 +79,7 @@ namespace Arena.Combat
         public static TooltipData ResolveForActionRef(
             DbConnection? conn,
             SpacetimeDB.Identity? owner,
-            ActiveSelectableLoadoutAction action)
+            ActiveActionBarAction action)
         {
             return action.IsFixed
                 ? ResolveForFixedAction(conn, action.ActionId)
@@ -91,13 +92,6 @@ namespace Arena.Combat
                 return default;
 
             string normalizedActionId = WireIdentifier.Normalize(actionId);
-            AbilityCatalog? fixedAbility = FixedActionAbilityResolver.ResolveAbility(
-                conn,
-                conn.Identity,
-                normalizedActionId);
-            if (fixedAbility != null)
-                return ResolveForAbility(conn, conn.Identity, fixedAbility);
-
             ActionPresentationCatalog? presentation =
                 ActionPresentation.FindPresentation(conn, PresentationKindFixed, normalizedActionId);
             if (presentation == null)
@@ -129,12 +123,13 @@ namespace Arena.Combat
             if (conn == null || !owner.HasValue)
                 return string.Empty;
 
-            CharacterProgression? progression = conn.Db.CharacterProgression.Owner.Find(owner.Value);
-            if (progression == null)
-                return string.Empty;
-
-            ClassCatalog? classRow = conn.Db.ClassCatalog.ClassId.Find(progression.ClassId);
-            return classRow?.PrimaryResourceKind ?? string.Empty;
+            return CombatProfileResolver.ResolveForOwner(conn, owner.Value) switch
+            {
+                CombatProfileIds.ArcherBow => "MANA",
+                CombatProfileIds.TwoHandedSword => "RAGE",
+                CombatProfileIds.SwordAndShield => "ZEAL",
+                _ => string.Empty
+            };
         }
 
         private static string ResolveResourceDisplayName(DbConnection? conn, string resourceKind)

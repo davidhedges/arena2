@@ -72,7 +72,7 @@ use crate::player_intent::PlayerIntent;
 use crate::player_physics::{commit_player_physics, PhysicsWriteMode, PlayerPhysics};
 use crate::playground_targets::is_playground_target;
 use crate::practice::{is_training_instance, tick_practice};
-use crate::progression::{backfill_character_progression_rows, sync_progression_catalogs};
+use crate::progression::{backfill_character_action_bar_rows, sync_progression_catalogs};
 use crate::resources::{
     reset_player_resources_to_full, sync_all_player_resources, sync_primary_resource_for_player,
     tick_primary_resource_for_player,
@@ -389,11 +389,11 @@ fn bootstrap_server_state(ctx: &ReducerContext) {
     sync_melee_definitions(ctx);
     sync_all_player_resources(ctx, ctx.timestamp);
     sync_all_fixed_action_charge_states(ctx, ctx.timestamp);
-    let repaired_progression_rows = backfill_character_progression_rows(ctx);
-    if repaired_progression_rows > 0 {
+    let repaired_action_bar_rows = backfill_character_action_bar_rows(ctx);
+    if repaired_action_bar_rows > 0 {
         log::warn!(
-            "[INIT] Backfilled {} missing character progression rows",
-            repaired_progression_rows
+            "[INIT] Backfilled default action bars for {} character(s)",
+            repaired_action_bar_rows
         );
     }
     let repaired_appearance_rows = backfill_character_appearance_rows(ctx);

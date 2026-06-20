@@ -19,7 +19,9 @@ use crate::inventory::{create_corpse_loot_for_npc, equipment_modifier_totals_for
 use crate::open_world_scene::{OPEN_WORLD_SPAWN_X, OPEN_WORLD_SPAWN_YAW, OPEN_WORLD_SPAWN_Z};
 use crate::player_state::PlayerState;
 use crate::practice::{is_training_instance, resolve_respawn_pose};
-use crate::progression::{combat_rule_value, runtime_class_id_for_owner};
+use crate::progression::{
+    combat_rule_value, derived_combat_profile_id_for_owner, COMBAT_PROFILE_TWO_HANDED_SWORD,
+};
 use crate::relations::{
     can_apply_status_polarity, can_harm, target_audience_allows, TargetAudience,
 };
@@ -122,7 +124,6 @@ const COMBAT_REASON_DAMAGE: &str = "DAMAGE";
 const COMBAT_REASON_DEBUFF: &str = "DEBUFF";
 const COMBAT_REASON_HELPFUL_ASSIST: &str = "HELPFUL_ASSIST";
 const RESTLESS_PASSIVE_ID: &str = "WARRIOR_RESTLESS";
-const WARRIOR_CLASS_ID: &str = "WARRIOR";
 const PASSIVE_STATUS_REFRESH_DURATION: Duration = Duration::from_secs(60 * 60);
 const AURA_STACK_GROUP_PREFIX: &str = "AURA:";
 
@@ -822,7 +823,7 @@ pub fn clear_combat_engagement_for_identity(ctx: &ReducerContext, identity: Iden
 
 struct CombatStackingPassiveSpec {
     passive_id: &'static str,
-    class_id: &'static str,
+    combat_profile_id: &'static str,
     stack_group: &'static str,
     status_kind: StatusEffectKind,
     max_stacks: u32,
@@ -836,7 +837,7 @@ struct CombatStackingPassiveSpec {
 fn restless_passive_spec() -> CombatStackingPassiveSpec {
     CombatStackingPassiveSpec {
         passive_id: RESTLESS_PASSIVE_ID,
-        class_id: WARRIOR_CLASS_ID,
+        combat_profile_id: COMBAT_PROFILE_TWO_HANDED_SWORD,
         stack_group: RESTLESS_PASSIVE_ID,
         status_kind: StatusEffectKind::DirectDamageAmp,
         max_stacks: 50,
@@ -1288,7 +1289,9 @@ fn combat_stacking_passive_eligible(
     owner: Identity,
     spec: &CombatStackingPassiveSpec,
 ) -> bool {
-    runtime_class_id_for_owner(ctx, owner).is_some_and(|class_id| class_id == spec.class_id)
+    derived_combat_profile_id_for_owner(ctx, owner).is_some_and(|combat_profile_id| {
+        combat_profile_id.eq_ignore_ascii_case(spec.combat_profile_id)
+    })
 }
 
 fn combat_stacking_passive_stacks(

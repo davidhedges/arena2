@@ -15,7 +15,6 @@ namespace Arena.Presentation.Appearance
         [SerializeField] private AvatarBaseCatalog? baseCatalog;
         [SerializeField] private AvatarPartCatalog? partCatalog;
         [SerializeField] private OutfitCatalog? outfitCatalog;
-        [SerializeField] private ClassOutfitCatalog? classOutfitCatalog;
         [SerializeField] private EquipmentAppearanceCatalog? equipmentAppearanceCatalog;
 
         private GameObject? _currentAvatar;
@@ -34,7 +33,7 @@ namespace Arena.Presentation.Appearance
             return TryAssemble(selection, catalogs, parent, out avatar, out error, existingAvatar: _currentAvatar, owner: this);
         }
 
-        public bool TryApplyClassDefault(string? classId, out GameObject avatar, out string error)
+        public bool TryApplyStarterDefault(out GameObject avatar, out string error)
         {
             if (!TryResolveCatalogs(out CharacterAppearanceCatalogSet catalogs, out error))
             {
@@ -42,17 +41,8 @@ namespace Arena.Presentation.Appearance
                 return false;
             }
 
-            string outfitId = CharacterAppearanceIds.DefaultOutfitId;
-            if (!catalogs.ClassOutfitCatalog.TryGetDefaultOutfitId(
-                    classId,
-                    CharacterAppearanceIds.DefaultRaceId,
-                    CharacterAppearanceIds.DefaultSexId,
-                    out outfitId))
-            {
-                outfitId = CharacterAppearanceIds.DefaultOutfitId;
-            }
-
-            CharacterAppearanceSelection selection = CharacterAppearanceSelection.DefaultHumanMale(outfitId);
+            CharacterAppearanceSelection selection =
+                CharacterAppearanceSelection.DefaultHumanMale(CharacterAppearanceIds.DefaultOutfitId);
             Transform parent = avatarParent != null ? avatarParent : transform;
             return TryAssemble(selection, catalogs, parent, out avatar, out error, existingAvatar: _currentAvatar, owner: this);
         }
@@ -195,13 +185,12 @@ namespace Arena.Presentation.Appearance
 
         private bool TryResolveCatalogs(out CharacterAppearanceCatalogSet catalogs, out string error)
         {
-            if (baseCatalog != null && partCatalog != null && outfitCatalog != null && classOutfitCatalog != null)
+            if (baseCatalog != null && partCatalog != null && outfitCatalog != null)
             {
                 catalogs = new CharacterAppearanceCatalogSet(
                     baseCatalog,
                     partCatalog,
                     outfitCatalog,
-                    classOutfitCatalog,
                     equipmentAppearanceCatalog);
                 error = string.Empty;
                 return true;

@@ -12,12 +12,12 @@ namespace SpacetimeDB.Types
 {
     public sealed partial class RemoteReducers : RemoteBase
     {
-        public delegate void CreateOrUpdateCharacterHandler(ReducerEventContext ctx, string classId, string raceId, string sexId, string bodyId, string headId, string faceId, string hairId, string eyesId, string outfitId);
+        public delegate void CreateOrUpdateCharacterHandler(ReducerEventContext ctx, string raceId, string sexId, string bodyId, string headId, string faceId, string hairId, string eyesId, string outfitId);
         public event CreateOrUpdateCharacterHandler? OnCreateOrUpdateCharacter;
 
-        public void CreateOrUpdateCharacter(string classId, string raceId, string sexId, string bodyId, string headId, string faceId, string hairId, string eyesId, string outfitId)
+        public void CreateOrUpdateCharacter(string raceId, string sexId, string bodyId, string headId, string faceId, string hairId, string eyesId, string outfitId)
         {
-            conn.InternalCallReducer(new Reducer.CreateOrUpdateCharacter(classId, raceId, sexId, bodyId, headId, faceId, hairId, eyesId, outfitId));
+            conn.InternalCallReducer(new Reducer.CreateOrUpdateCharacter(raceId, sexId, bodyId, headId, faceId, hairId, eyesId, outfitId));
         }
 
         public bool InvokeCreateOrUpdateCharacter(ReducerEventContext ctx, Reducer.CreateOrUpdateCharacter args)
@@ -36,7 +36,6 @@ namespace SpacetimeDB.Types
             }
             OnCreateOrUpdateCharacter(
                 ctx,
-                args.ClassId,
                 args.RaceId,
                 args.SexId,
                 args.BodyId,
@@ -56,8 +55,6 @@ namespace SpacetimeDB.Types
         [DataContract]
         public sealed partial class CreateOrUpdateCharacter : Reducer, IReducerArgs
         {
-            [DataMember(Name = "class_id")]
-            public string ClassId;
             [DataMember(Name = "race_id")]
             public string RaceId;
             [DataMember(Name = "sex_id")]
@@ -76,7 +73,6 @@ namespace SpacetimeDB.Types
             public string OutfitId;
 
             public CreateOrUpdateCharacter(
-                string ClassId,
                 string RaceId,
                 string SexId,
                 string BodyId,
@@ -87,7 +83,6 @@ namespace SpacetimeDB.Types
                 string OutfitId
             )
             {
-                this.ClassId = ClassId;
                 this.RaceId = RaceId;
                 this.SexId = SexId;
                 this.BodyId = BodyId;
@@ -100,7 +95,6 @@ namespace SpacetimeDB.Types
 
             public CreateOrUpdateCharacter()
             {
-                this.ClassId = "";
                 this.RaceId = "";
                 this.SexId = "";
                 this.BodyId = "";

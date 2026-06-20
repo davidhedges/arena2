@@ -52,6 +52,7 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Col<ItemDefinition, string> HandRequirement { get; }
         public global::SpacetimeDB.Col<ItemDefinition, bool> UniqueEquipped { get; }
         public global::SpacetimeDB.Col<ItemDefinition, string> CombatProfileId { get; }
+        public global::SpacetimeDB.Col<ItemDefinition, string> ArmorKind { get; }
         public global::SpacetimeDB.Col<ItemDefinition, float> PhysicalResistance { get; }
 
         public ItemDefinitionCols(string tableName)
@@ -69,6 +70,7 @@ namespace SpacetimeDB.Types
             HandRequirement = new global::SpacetimeDB.Col<ItemDefinition, string>(tableName, "hand_requirement");
             UniqueEquipped = new global::SpacetimeDB.Col<ItemDefinition, bool>(tableName, "unique_equipped");
             CombatProfileId = new global::SpacetimeDB.Col<ItemDefinition, string>(tableName, "combat_profile_id");
+            ArmorKind = new global::SpacetimeDB.Col<ItemDefinition, string>(tableName, "armor_kind");
             PhysicalResistance = new global::SpacetimeDB.Col<ItemDefinition, float>(tableName, "physical_resistance");
         }
     }

@@ -7,16 +7,17 @@ use serde::{Deserialize, Deserializer};
 use spacetimedb::{reducer, table, Identity, ReducerContext, Table, Timestamp};
 
 use crate::action_ids::{normalize_authored_action_id, AuthoredActionId};
-use crate::appearance::sync_character_appearance_outfit_for_class;
 use crate::combat::{
     AuthoredStatusPayload, DamageType, StackPolicy, StatusApplication, StatusDispelType,
     StatusEffectKind, StatusStackGroupDefault,
 };
-use crate::inventory::{ensure_starter_equipment_for_class, equipment_combat_profile_id_for_owner};
+use crate::inventory::{
+    equipment_combat_profile_id_for_owner, equipment_spell_slot_capacity_for_owner,
+};
 use crate::melee::sync_melee_attack_modifier_catalog;
 use crate::player::Player;
 use crate::relations::TARGET_AUDIENCE_HOSTILE;
-use crate::resources::sync_primary_resource_for_player;
+use crate::spells::player_knows_spell;
 
 #[allow(unused_imports)]
 use crate::player::player as _;
@@ -31,11 +32,7 @@ use crate::progression::active_combat_mode as _;
 #[allow(unused_imports)]
 use crate::progression::auto_attack_catalog as _;
 #[allow(unused_imports)]
-use crate::progression::character_class_loadout_state as _;
-#[allow(unused_imports)]
-use crate::progression::character_progression as _;
-#[allow(unused_imports)]
-use crate::progression::class_catalog as _;
+use crate::progression::character_action_bar_assignment as _;
 #[allow(unused_imports)]
 use crate::progression::combat_mode_catalog as _;
 #[allow(unused_imports)]
@@ -45,9 +42,7 @@ use crate::progression::combat_rule_catalog as _;
 #[allow(unused_imports)]
 use crate::progression::combat_vfx_cue_catalog as _;
 #[allow(unused_imports)]
-use crate::progression::fixed_action_binding_catalog as _;
-#[allow(unused_imports)]
-use crate::progression::loadout_slot_catalog as _;
+use crate::progression::action_bar_slot_catalog as _;
 #[allow(unused_imports)]
 use crate::progression::melee_ability_catalog as _;
 #[allow(unused_imports)]
@@ -55,24 +50,9 @@ use crate::progression::melee_gap_close_catalog as _;
 #[allow(unused_imports)]
 use crate::progression::resource_catalog as _;
 #[allow(unused_imports)]
-use crate::progression::saved_spec as _;
-#[allow(unused_imports)]
-use crate::progression::saved_spec_slot_assignment as _;
-#[allow(unused_imports)]
-use crate::progression::saved_spec_stat_allocation as _;
-#[allow(unused_imports)]
 use crate::progression::stat_scaling_catalog as _;
 
 const PROGRESSION_CATALOG_JSON: &str = include_str!("progression_catalog.shared.json");
-const DEFAULT_SPEC_NAME: &str = "Default";
-const DEFAULT_SPEC_VERSION: u32 = 1;
-const MAX_SPEC_NAME_LEN: usize = 32;
-
-const STAT_KIND_MIGHT: &str = "MIGHT";
-const STAT_KIND_INSIGHT: &str = "INSIGHT";
-const STAT_KIND_FINESSE: &str = "FINESSE";
-const STAT_KIND_QUICKNESS: &str = "QUICKNESS";
-const STAT_KIND_FORTITUDE: &str = "FORTITUDE";
 const ACTION_KIND_ABILITY: &str = "ABILITY";
 const ACTION_KIND_FIXED: &str = "FIXED";
 const FIXED_ACTION_DODGE: &str = "DODGE";
@@ -81,6 +61,9 @@ const RULE_DEFAULT_GLOBAL_COOLDOWN_MS: &str = "DEFAULT_GLOBAL_COOLDOWN_MS";
 const FALLBACK_DEFAULT_GLOBAL_COOLDOWN_MS: u64 = 1500;
 const MAX_DEFAULT_GLOBAL_COOLDOWN_MS: u64 = 60_000;
 pub(crate) const COMBAT_PROFILE_ARCHER_BOW: &str = "ARCHER_BOW";
+#[cfg(test)]
+const COMBAT_PROFILE_SWORD_AND_SHIELD: &str = "SWORD_AND_SHIELD";
+pub(crate) const COMBAT_PROFILE_TWO_HANDED_SWORD: &str = "TWO_HANDED_SWORD";
 pub(crate) const COMBAT_MODE_SHORT_DRAW: &str = "SHORT_DRAW";
 pub(crate) const COMBAT_MODE_FULL_DRAW: &str = "FULL_DRAW";
 pub(crate) const AUTO_ATTACK_MOVEMENT_ALLOW_MOVING: &str = "ALLOW_MOVING";
@@ -90,46 +73,6 @@ pub(crate) const AUTO_ATTACK_MOVEMENT_RESET_ON_VOLUNTARY_MOVE: &str =
 const ABILITY_KIND_COMBAT_MODE_TOGGLE: &str = "COMBAT_MODE_TOGGLE";
 #[cfg(test)]
 const ARCHER_DRAW_MODE_TOGGLE_ABILITY_ID: &str = "ARCHER_DRAW_MODE_TOGGLE";
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub(crate) enum StatKind {
-    Might,
-    Insight,
-    Finesse,
-    Quickness,
-    Fortitude,
-}
-
-impl StatKind {
-    pub(crate) const ALL: [Self; 5] = [
-        Self::Might,
-        Self::Insight,
-        Self::Finesse,
-        Self::Quickness,
-        Self::Fortitude,
-    ];
-
-    pub(crate) fn as_str(self) -> &'static str {
-        match self {
-            Self::Might => STAT_KIND_MIGHT,
-            Self::Insight => STAT_KIND_INSIGHT,
-            Self::Finesse => STAT_KIND_FINESSE,
-            Self::Quickness => STAT_KIND_QUICKNESS,
-            Self::Fortitude => STAT_KIND_FORTITUDE,
-        }
-    }
-
-    fn from_wire(value: &str) -> Option<Self> {
-        match normalize_identifier(value).as_str() {
-            STAT_KIND_MIGHT => Some(Self::Might),
-            STAT_KIND_INSIGHT => Some(Self::Insight),
-            STAT_KIND_FINESSE => Some(Self::Finesse),
-            STAT_KIND_QUICKNESS => Some(Self::Quickness),
-            STAT_KIND_FORTITUDE => Some(Self::Fortitude),
-            _ => None,
-        }
-    }
-}
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) struct AllocatedStatTotals {
@@ -147,8 +90,6 @@ struct ProgressionCatalogFile {
     #[serde(default)]
     combat_modes: Vec<CombatModeDefinition>,
     #[serde(default)]
-    classes: Vec<ClassDefinition>,
-    #[serde(default)]
     resources: Vec<ResourceDefinition>,
     #[serde(default)]
     combat_rules: Vec<CombatRuleDefinition>,
@@ -159,16 +100,13 @@ struct ProgressionCatalogFile {
     auto_attacks: Vec<AutoAttackDefinition>,
     #[serde(default)]
     auto_attack_replacements: Vec<AutoAttackReplacementDefinition>,
-    #[serde(default)]
-    fixed_action_bindings: Vec<FixedActionBindingDefinition>,
-    #[serde(default)]
     action_presentations: Vec<ActionPresentationDefinition>,
     #[serde(default)]
     combat_vfx_cues: Vec<CombatVfxCueDefinition>,
     #[serde(default)]
-    default_loadout_assignments: Vec<DefaultLoadoutAssignmentDefinition>,
+    combat_profile_action_bar_defaults: Vec<CombatProfileActionBarDefaultDefinition>,
     #[serde(default)]
-    slots: Vec<LoadoutSlotDefinition>,
+    slots: Vec<ActionBarSlotDefinition>,
 }
 
 #[derive(Clone, Deserialize)]
@@ -185,16 +123,6 @@ struct CombatModeDefinition {
     mode_id: String,
     display_name: String,
     is_default: bool,
-    sort_order: u32,
-}
-
-#[derive(Clone, Deserialize)]
-struct ClassDefinition {
-    class_id: String,
-    display_name: String,
-    default_combat_profile_id: String,
-    primary_resource_kind: String,
-    max_saved_specs: u32,
     sort_order: u32,
 }
 
@@ -242,13 +170,10 @@ struct StatScalingDefinition {
 #[serde(deny_unknown_fields)]
 struct AbilityDefinition {
     ability_id: String,
-    class_id: String,
+    combat_profile_id: String,
     gameplay: AbilityGameplayDefinition,
     action_id: String,
     display_name: String,
-    #[serde(default)]
-    fixed_action_id: String,
-    #[serde(default)]
     resource_kind: String,
     #[serde(default)]
     resource_cost: f32,
@@ -771,14 +696,6 @@ struct AbilityEffectDefinition {
 }
 
 #[derive(Clone, Deserialize)]
-struct FixedActionBindingDefinition {
-    class_id: String,
-    fixed_action_id: String,
-    ability_id: String,
-    sort_order: u32,
-}
-
-#[derive(Clone, Deserialize)]
 struct ActionPresentationDefinition {
     presentation_kind: String,
     presentation_id: String,
@@ -922,8 +839,8 @@ impl CombatVfxPresentationManifest {
 }
 
 #[derive(Clone, Deserialize)]
-struct DefaultLoadoutAssignmentDefinition {
-    class_id: String,
+struct CombatProfileActionBarDefaultDefinition {
+    combat_profile_id: String,
     slot_id: String,
     #[serde(default)]
     action_kind: String,
@@ -935,7 +852,7 @@ struct DefaultLoadoutAssignmentDefinition {
 }
 
 #[derive(Clone, Deserialize)]
-struct LoadoutSlotDefinition {
+struct ActionBarSlotDefinition {
     slot_id: String,
     ui_row: u32,
     ui_col: u32,
@@ -990,10 +907,10 @@ fn validate_progression_catalog_authoring_contract(catalog: &ProgressionCatalogF
     }
 
     let default_ability_assignments: HashSet<String> = catalog
-        .default_loadout_assignments
+        .combat_profile_action_bar_defaults
         .iter()
         .filter_map(|assignment| {
-            let action_ref = action_ref_for_default_assignment(assignment);
+            let action_ref = action_ref_for_action_bar_default(assignment);
             action_ref.is_ability().then_some(action_ref.id)
         })
         .collect();
@@ -1003,9 +920,10 @@ fn validate_progression_catalog_authoring_contract(catalog: &ProgressionCatalogF
             .ability_tags
             .iter()
             .any(|tag| normalize_identifier(tag.as_str()) == "CORE_ABILITY");
+        let is_spell = ability_gameplay_kind(ability) == "SPELL";
         assert!(
-            !is_core || default_ability_assignments.contains(ability_id.as_str()),
-            "core ability '{}' must have a default loadout assignment",
+            !is_core || is_spell || default_ability_assignments.contains(ability_id.as_str()),
+            "core non-spell ability '{}' must have a action-bar default",
             ability.ability_id
         );
     }
@@ -1122,17 +1040,6 @@ pub struct ActiveCombatMode {
     pub changed_at: Timestamp,
 }
 
-#[table(accessor = class_catalog, public)]
-pub struct ClassCatalog {
-    #[primary_key]
-    pub class_id: String,
-    pub display_name: String,
-    pub default_combat_profile_id: String,
-    pub primary_resource_kind: String,
-    pub max_saved_specs: u32,
-    pub sort_order: u32,
-}
-
 #[table(accessor = resource_catalog, public)]
 pub struct ResourceCatalog {
     #[primary_key]
@@ -1177,11 +1084,10 @@ pub struct StatScalingCatalog {
 pub struct AbilityCatalog {
     #[primary_key]
     pub ability_id: String,
-    pub class_id: String,
+    pub combat_profile_id: String,
     pub ability_kind: String,
     pub action_id: String,
     pub display_name: String,
-    pub fixed_action_id: String,
     pub resource_kind: String,
     pub resource_cost: f32,
     pub ability_tags: String,
@@ -1272,16 +1178,6 @@ pub struct AutoAttackReplacementCatalog {
     pub sort_order: u32,
 }
 
-#[table(accessor = fixed_action_binding_catalog, public)]
-pub struct FixedActionBindingCatalog {
-    #[primary_key]
-    pub key: String,
-    pub class_id: String,
-    pub fixed_action_id: String,
-    pub ability_id: String,
-    pub sort_order: u32,
-}
-
 #[table(accessor = action_presentation_catalog, public)]
 pub struct ActionPresentationCatalog {
     #[primary_key]
@@ -1313,8 +1209,8 @@ pub struct CombatVfxCueCatalog {
     pub sort_order: u32,
 }
 
-#[table(accessor = loadout_slot_catalog, public)]
-pub struct LoadoutSlotCatalog {
+#[table(accessor = action_bar_slot_catalog, public)]
+pub struct ActionBarSlotCatalog {
     #[primary_key]
     pub slot_id: String,
     pub ui_row: u32,
@@ -1324,57 +1220,19 @@ pub struct LoadoutSlotCatalog {
     pub sort_order: u32,
 }
 
-#[table(accessor = character_progression, public)]
-pub struct CharacterProgression {
-    #[primary_key]
-    pub owner: Identity,
-    pub class_id: String,
-}
-
-#[table(accessor = character_class_loadout_state, public)]
-pub struct CharacterClassLoadoutState {
+#[table(accessor = character_action_bar_assignment, public)]
+pub struct CharacterActionBarAssignment {
     #[primary_key]
     pub key: String,
     #[index(btree)]
     pub owner: Identity,
-    pub class_id: String,
-    pub active_spec_id: String,
-    pub updated_at: Timestamp,
-}
-
-#[table(accessor = saved_spec, public)]
-pub struct SavedSpec {
-    #[primary_key]
-    pub spec_id: String,
     #[index(btree)]
-    pub owner: Identity,
-    pub name: String,
-    pub class_id: String,
-    pub version: u32,
-    pub created_at: Timestamp,
-    pub updated_at: Timestamp,
-}
-
-#[table(accessor = saved_spec_stat_allocation, public)]
-pub struct SavedSpecStatAllocation {
-    #[primary_key]
-    pub key: String,
-    #[index(btree)]
-    pub spec_id: String,
-    pub stat_kind: String,
-    pub allocated_points: u32,
-}
-
-#[table(accessor = saved_spec_slot_assignment, public)]
-pub struct SavedSpecSlotAssignment {
-    #[primary_key]
-    pub key: String,
-    #[index(btree)]
-    pub spec_id: String,
+    pub combat_profile_id: String,
     pub slot_id: String,
     pub action_kind: String,
     pub action_id: String,
     pub ability_id: String,
+    pub updated_at: Timestamp,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -1467,240 +1325,82 @@ pub fn publish_progression_catalogs(ctx: &ReducerContext) -> Result<(), String> 
 }
 
 #[reducer]
-pub fn create_saved_spec(ctx: &ReducerContext, name: String) -> Result<(), String> {
-    let owner = ctx.sender();
-    let now = ctx.timestamp;
-    let progression = require_character_progression(ctx, owner)?;
-    let class = require_class_catalog_row(ctx, progression.class_id.as_str())?;
-    let existing_specs = saved_specs_for_owner_and_class(ctx, owner, progression.class_id.as_str());
-    if existing_specs.len() as u32 >= class.max_saved_specs {
-        return Err(format!(
-            "saved spec limit reached for class '{}'",
-            class.class_id
-        ));
-    }
-
-    let normalized_name = validate_spec_name(name.as_str())?;
-    let spec_id = next_saved_spec_id(ctx, owner, progression.class_id.as_str(), now);
-    let normalized_class_id = normalize_identifier(progression.class_id.as_str());
-    ctx.db.saved_spec().insert(SavedSpec {
-        spec_id: spec_id.clone(),
-        owner,
-        name: normalized_name,
-        class_id: normalized_class_id.clone(),
-        version: DEFAULT_SPEC_VERSION,
-        created_at: now,
-        updated_at: now,
-    });
-
-    for stat_kind in StatKind::ALL {
-        ctx.db
-            .saved_spec_stat_allocation()
-            .insert(SavedSpecStatAllocation {
-                key: saved_spec_stat_key(spec_id.as_str(), stat_kind),
-                spec_id: spec_id.clone(),
-                stat_kind: stat_kind.as_str().to_string(),
-                allocated_points: 0,
-            });
-    }
-
-    backfill_missing_default_slot_assignments(ctx, normalized_class_id.as_str(), spec_id.as_str());
-
-    Ok(())
-}
-
-#[reducer]
-pub fn rename_saved_spec(
+pub fn assign_character_action_bar_ability_to_slot(
     ctx: &ReducerContext,
-    spec_id: String,
-    name: String,
-) -> Result<(), String> {
-    let owner = ctx.sender();
-    let mut spec = require_owned_spec(ctx, owner, spec_id.as_str())?;
-    spec.name = validate_spec_name(name.as_str())?;
-    spec.updated_at = ctx.timestamp;
-    ctx.db.saved_spec().spec_id().update(spec);
-    Ok(())
-}
-
-#[reducer]
-pub fn delete_saved_spec(ctx: &ReducerContext, spec_id: String) -> Result<(), String> {
-    let owner = ctx.sender();
-    let spec = require_owned_spec(ctx, owner, spec_id.as_str())?;
-    let existing_specs = saved_specs_for_owner_and_class(ctx, owner, spec.class_id.as_str());
-    if existing_specs.len() <= 1 {
-        return Err(format!(
-            "cannot delete the last saved spec for class '{}'",
-            spec.class_id
-        ));
-    }
-    if class_loadout_state_uses_spec(ctx, owner, spec.class_id.as_str(), spec.spec_id.as_str()) {
-        return Err("cannot delete the active spec".to_string());
-    }
-
-    delete_saved_spec_rows(ctx, spec.spec_id.as_str());
-    Ok(())
-}
-
-#[reducer]
-pub fn set_saved_spec_stat_allocation(
-    ctx: &ReducerContext,
-    spec_id: String,
-    stat_kind: String,
-    allocated_points: u32,
-) -> Result<(), String> {
-    let owner = ctx.sender();
-    let mut spec = require_owned_spec(ctx, owner, spec_id.as_str())?;
-    let parsed_stat_kind = StatKind::from_wire(stat_kind.as_str())
-        .ok_or_else(|| format!("unknown stat kind '{}'", stat_kind.trim()))?;
-
-    upsert_stat_allocation(
-        ctx,
-        spec.spec_id.as_str(),
-        parsed_stat_kind,
-        allocated_points,
-    );
-    spec.updated_at = ctx.timestamp;
-    ctx.db.saved_spec().spec_id().update(spec);
-    Ok(())
-}
-
-#[reducer]
-pub fn assign_saved_spec_ability_to_slot(
-    ctx: &ReducerContext,
-    spec_id: String,
     slot_id: String,
     ability_id: String,
 ) -> Result<(), String> {
     let owner = ctx.sender();
-    let mut spec = require_owned_spec(ctx, owner, spec_id.as_str())?;
-    let normalized_slot_id = canonical_loadout_slot_id(slot_id.as_str());
+    let combat_profile_id = active_action_bar_combat_profile_id(ctx, owner)?;
+    let normalized_slot_id = canonical_action_bar_slot_id(slot_id.as_str());
     let normalized_ability_id = normalize_identifier(ability_id.as_str());
     let action_ref = ActionRef::ability(normalized_ability_id.as_str());
-    validate_slot_action_ref(
+    validate_character_action_bar_ref(
         ctx,
-        spec.class_id.as_str(),
+        owner,
+        combat_profile_id.as_str(),
         normalized_slot_id.as_str(),
         &action_ref,
     )?;
-
-    upsert_slot_assignment(
+    upsert_character_action_bar_assignment(
         ctx,
-        spec.spec_id.as_str(),
+        owner,
+        combat_profile_id.as_str(),
         normalized_slot_id.as_str(),
         &action_ref,
+        ctx.timestamp,
     );
-    spec.updated_at = ctx.timestamp;
-    ctx.db.saved_spec().spec_id().update(spec);
     Ok(())
 }
 
 #[reducer]
-pub fn assign_saved_spec_action_to_slot(
+pub fn assign_character_action_bar_slot(
     ctx: &ReducerContext,
-    spec_id: String,
     slot_id: String,
     action_kind: String,
     action_id: String,
 ) -> Result<(), String> {
     let owner = ctx.sender();
-    let mut spec = require_owned_spec(ctx, owner, spec_id.as_str())?;
-    let normalized_slot_id = canonical_loadout_slot_id(slot_id.as_str());
+    let combat_profile_id = active_action_bar_combat_profile_id(ctx, owner)?;
+    let normalized_slot_id = canonical_action_bar_slot_id(slot_id.as_str());
     let action_ref = ActionRef::from_wire(action_kind.as_str(), action_id.as_str());
-    validate_slot_action_ref(
+    validate_character_action_bar_ref(
         ctx,
-        spec.class_id.as_str(),
+        owner,
+        combat_profile_id.as_str(),
         normalized_slot_id.as_str(),
         &action_ref,
     )?;
-
-    upsert_slot_assignment(
+    upsert_character_action_bar_assignment(
         ctx,
-        spec.spec_id.as_str(),
+        owner,
+        combat_profile_id.as_str(),
         normalized_slot_id.as_str(),
         &action_ref,
+        ctx.timestamp,
     );
-    spec.updated_at = ctx.timestamp;
-    ctx.db.saved_spec().spec_id().update(spec);
     Ok(())
 }
 
 #[reducer]
-pub fn clear_saved_spec_slot(
+pub fn clear_character_action_bar_slot(
     ctx: &ReducerContext,
-    spec_id: String,
     slot_id: String,
 ) -> Result<(), String> {
     let owner = ctx.sender();
-    let mut spec = require_owned_spec(ctx, owner, spec_id.as_str())?;
-    let normalized_slot_id = canonical_loadout_slot_id(slot_id.as_str());
+    let combat_profile_id = active_action_bar_combat_profile_id(ctx, owner)?;
+    let normalized_slot_id = canonical_action_bar_slot_id(slot_id.as_str());
     require_slot_catalog_row(ctx, normalized_slot_id.as_str())?;
-    let key = saved_spec_slot_key(spec.spec_id.as_str(), normalized_slot_id.as_str());
+    let key = character_action_bar_key(owner, combat_profile_id.as_str(), normalized_slot_id.as_str());
     if ctx
         .db
-        .saved_spec_slot_assignment()
+        .character_action_bar_assignment()
         .key()
         .find(key.clone())
         .is_some()
     {
-        ctx.db.saved_spec_slot_assignment().key().delete(key);
+        ctx.db.character_action_bar_assignment().key().delete(key);
     }
-    spec.updated_at = ctx.timestamp;
-    ctx.db.saved_spec().spec_id().update(spec);
-    Ok(())
-}
-
-#[reducer]
-pub fn activate_saved_spec(ctx: &ReducerContext, spec_id: String) -> Result<(), String> {
-    let owner = ctx.sender();
-    let spec = require_owned_spec(ctx, owner, spec_id.as_str())?;
-    let progression = require_character_progression(ctx, owner)?;
-    if spec.class_id != progression.class_id {
-        return Err(format!(
-            "saved spec class '{}' does not match character class '{}'",
-            spec.class_id, progression.class_id
-        ));
-    }
-    let class_id = spec.class_id.clone();
-    let active_spec_id = spec.spec_id.clone();
-    upsert_class_loadout_state(
-        ctx,
-        owner,
-        class_id.as_str(),
-        active_spec_id.as_str(),
-        ctx.timestamp,
-    );
-    Ok(())
-}
-
-#[reducer]
-pub fn switch_loadout_class(ctx: &ReducerContext, class_id: String) -> Result<(), String> {
-    let owner = ctx.sender();
-    let normalized_class_id = canonical_class_id(class_id.as_str());
-    let class = class_definition(normalized_class_id.as_str())
-        .ok_or_else(|| format!("unknown class '{}'", normalized_class_id))?;
-    let mut progression = require_character_progression(ctx, owner)?;
-
-    ensure_class_loadout_state(ctx, owner, class, ctx.timestamp);
-    progression.class_id = normalized_class_id.clone();
-    ctx.db.character_progression().owner().update(progression);
-
-    if let Some(mut player) = ctx.db.player().identity().find(owner) {
-        if player.class_id != normalized_class_id {
-            player.class_id = normalized_class_id.clone();
-            ctx.db.player().identity().update(player);
-        }
-    }
-
-    ensure_starter_equipment_for_class(ctx, owner, normalized_class_id.as_str());
-    sync_character_appearance_outfit_for_class(ctx, owner, normalized_class_id.as_str())?;
-    normalize_active_combat_mode_for_profile(
-        ctx,
-        owner,
-        normalize_identifier(class.default_combat_profile_id.as_str()).as_str(),
-        ctx.timestamp,
-    );
-    sync_primary_resource_for_player(ctx, owner, ctx.timestamp);
     Ok(())
 }
 
@@ -1738,7 +1438,6 @@ pub fn set_combat_mode(ctx: &ReducerContext, mode_id: String) -> Result<(), Stri
 pub(crate) fn sync_progression_catalogs(ctx: &ReducerContext) {
     sync_combat_profile_catalog(ctx);
     sync_combat_mode_catalog(ctx);
-    sync_class_catalog(ctx);
     sync_resource_catalog(ctx);
     sync_combat_rule_catalog(ctx);
     sync_stat_scaling_catalog(ctx);
@@ -1748,16 +1447,12 @@ pub(crate) fn sync_progression_catalogs(ctx: &ReducerContext) {
     sync_melee_attack_modifier_catalog(ctx);
     sync_auto_attack_catalog(ctx);
     sync_auto_attack_replacement_catalog(ctx);
-    sync_fixed_action_binding_catalog(ctx);
     sync_action_presentation_catalog(ctx);
     sync_combat_vfx_cue_catalog(ctx);
-    sync_loadout_slot_catalog(ctx);
-    repair_legacy_class_rows(ctx);
-    repair_saved_spec_rows(ctx, ctx.timestamp);
-    repair_class_loadout_state_rows(ctx, ctx.timestamp);
+    sync_action_bar_slot_catalog(ctx);
 }
 
-pub(crate) fn backfill_character_progression_rows(ctx: &ReducerContext) -> usize {
+pub(crate) fn backfill_character_action_bar_rows(ctx: &ReducerContext) -> usize {
     let players: Vec<Player> = ctx.db.player().iter().collect();
     let mut repaired = 0usize;
 
@@ -1772,13 +1467,15 @@ pub(crate) fn backfill_character_progression_rows(ctx: &ReducerContext) -> usize
         if is_dummy {
             continue;
         }
-        let had_progression = ctx
+        let had_action_bar_rows = ctx
             .db
-            .character_progression()
+            .character_action_bar_assignment()
             .owner()
-            .find(player.identity)
+            .filter(player.identity)
+            .next()
             .is_some();
-        if ensure_default_progression_for_identity(ctx, player.identity).is_ok() && !had_progression
+        if ensure_default_progression_for_identity(ctx, player.identity).is_ok()
+            && !had_action_bar_rows
         {
             repaired += 1;
         }
@@ -1791,112 +1488,24 @@ pub(crate) fn ensure_default_progression_for_identity(
     ctx: &ReducerContext,
     owner: Identity,
 ) -> Result<(), String> {
-    let Some(mut player) = ctx.db.player().identity().find(owner) else {
+    let Some(_player) = ctx.db.player().identity().find(owner) else {
         return Err("player row not found".to_string());
     };
-    let raw_fallback_class_id = if player.class_id.trim().is_empty() {
-        default_class_id()
-    } else {
-        player.class_id.clone()
-    };
-    let fallback_class_id = canonical_class_id(raw_fallback_class_id.as_str());
-
-    if let Some(mut progression) = ctx.db.character_progression().owner().find(owner) {
-        let progression_class_id = canonical_class_id(progression.class_id.as_str());
-        let class_id = if class_definition(progression_class_id.as_str()).is_some() {
-            progression_class_id
-        } else {
-            fallback_class_id
-        };
-        let class = class_definition(class_id.as_str())
-            .ok_or_else(|| format!("unknown class '{}'", class_id))?;
-        ensure_class_loadout_state(ctx, owner, class, ctx.timestamp);
-        let mut dirty = false;
-        if progression.class_id != class_id {
-            progression.class_id = class_id.clone();
-            dirty = true;
-        }
-        if dirty {
-            ctx.db.character_progression().owner().update(progression);
-        }
-
-        if player.class_id != class_id {
-            player.class_id = class_id;
-            ctx.db.player().identity().update(player);
-        }
-        normalize_active_combat_mode_for_profile(
-            ctx,
-            owner,
-            normalize_identifier(class.default_combat_profile_id.as_str()).as_str(),
-            ctx.timestamp,
-        );
-    } else {
-        let class = class_definition(fallback_class_id.as_str())
-            .ok_or_else(|| format!("unknown class '{}'", fallback_class_id))?;
-        ensure_class_loadout_state(ctx, owner, class, ctx.timestamp);
-        if player.class_id != fallback_class_id {
-            player.class_id = fallback_class_id.clone();
-            ctx.db.player().identity().update(player);
-        }
-        ctx.db.character_progression().insert(CharacterProgression {
-            owner,
-            class_id: fallback_class_id,
-        });
-        normalize_active_combat_mode_for_profile(
-            ctx,
-            owner,
-            normalize_identifier(class.default_combat_profile_id.as_str()).as_str(),
-            ctx.timestamp,
-        );
-    }
+    sync_active_combat_mode_for_owner(ctx, owner, ctx.timestamp);
+    ensure_default_character_action_bar_assignments(ctx, owner, ctx.timestamp);
 
     Ok(())
 }
 
-pub(crate) fn default_class_id() -> String {
-    "WARRIOR".to_string()
-}
-
-pub(crate) fn derived_combat_profile_id_for_class(class_id: &str) -> Option<String> {
-    let class = class_definition(class_id)?;
-    Some(normalize_identifier(
-        class.default_combat_profile_id.as_str(),
-    ))
-}
-
-pub(crate) fn runtime_class_id_for_owner(ctx: &ReducerContext, owner: Identity) -> Option<String> {
-    if let Some(progression) = ctx.db.character_progression().owner().find(owner) {
-        let class_id = canonical_class_id(progression.class_id.as_str());
-        if class_definition(class_id.as_str()).is_some() {
-            return Some(class_id);
-        }
+fn resolved_combat_profile_id_for_ability_definition(
+    ability: &AbilityDefinition,
+) -> Option<String> {
+    let combat_profile_id = normalize_identifier(ability.combat_profile_id.as_str());
+    if combat_profile_id.is_empty() {
+        None
+    } else {
+        Some(combat_profile_id)
     }
-
-    if let Some(player) = ctx.db.player().identity().find(owner) {
-        let is_dummy = ctx
-            .db
-            .player_state()
-            .player_id()
-            .find(owner)
-            .map(|state| state.is_dummy)
-            .unwrap_or(false);
-        let raw = if player.class_id.trim().is_empty() {
-            if is_dummy {
-                String::new()
-            } else {
-                player.class_id
-            }
-        } else {
-            player.class_id
-        };
-        if !raw.trim().is_empty() {
-            let class_id = canonical_class_id(raw.as_str());
-            if class_definition(class_id.as_str()).is_some() {
-                return Some(class_id);
-            }
-        }
-    }
-    None
 }
 
 pub(crate) fn derived_combat_profile_id_for_owner(
@@ -1908,9 +1517,15 @@ pub(crate) fn derived_combat_profile_id_for_owner(
     {
         return Some(profile_id);
     }
+    None
+}
 
-    let class_id = runtime_class_id_for_owner(ctx, owner)?;
-    derived_combat_profile_id_for_class(class_id.as_str())
+fn active_action_bar_combat_profile_id(
+    ctx: &ReducerContext,
+    owner: Identity,
+) -> Result<String, String> {
+    derived_combat_profile_id_for_owner(ctx, owner)
+        .ok_or_else(|| "owner has no resolved combat profile".to_string())
 }
 
 pub(crate) fn sync_active_combat_mode_for_owner(
@@ -1923,6 +1538,15 @@ pub(crate) fn sync_active_combat_mode_for_owner(
     } else if ctx.db.active_combat_mode().owner().find(owner).is_some() {
         ctx.db.active_combat_mode().owner().delete(owner);
     }
+}
+
+pub(crate) fn sync_progression_for_equipment_change(
+    ctx: &ReducerContext,
+    owner: Identity,
+    now: Timestamp,
+) {
+    sync_active_combat_mode_for_owner(ctx, owner, now);
+    ensure_default_character_action_bar_assignments(ctx, owner, now);
 }
 
 pub(crate) fn resolved_auto_attack_mode_for_owner(
@@ -2055,37 +1679,27 @@ fn upsert_active_combat_mode(ctx: &ReducerContext, row: ActiveCombatMode) {
     }
 }
 
-pub(crate) fn saved_spec_total_for_stat(
-    allocations: &[SavedSpecStatAllocation],
-    stat_kind: StatKind,
-) -> u32 {
-    allocations
-        .iter()
-        .filter(|allocation| allocation.stat_kind == stat_kind.as_str())
-        .map(|allocation| allocation.allocated_points)
-        .sum()
-}
-
 pub(crate) fn active_stat_totals_for_owner(
     ctx: &ReducerContext,
     owner: Identity,
 ) -> AllocatedStatTotals {
-    active_spec_id_for_owner(ctx, owner)
-        .map(|active_spec_id| stat_totals_for_spec(ctx, active_spec_id.as_str()))
-        .unwrap_or_default()
+    let _ = ctx;
+    let _ = owner;
+    AllocatedStatTotals::default()
 }
 
 pub(crate) fn primary_resource_kind_for_owner(
     ctx: &ReducerContext,
     owner: Identity,
 ) -> Option<String> {
-    let progression = ctx.db.character_progression().owner().find(owner)?;
-    let class = ctx
-        .db
-        .class_catalog()
-        .class_id()
-        .find(progression.class_id)?;
-    Some(class.primary_resource_kind)
+    let combat_profile_id = derived_combat_profile_id_for_owner(ctx, owner)?;
+    let resource_kind = match normalize_identifier(combat_profile_id.as_str()).as_str() {
+        COMBAT_PROFILE_ARCHER_BOW => "MANA",
+        "TWO_HANDED_SWORD" => "RAGE",
+        "SWORD_AND_SHIELD" => "ZEAL",
+        _ => return None,
+    };
+    Some(resource_kind.to_string())
 }
 
 #[allow(dead_code)]
@@ -2094,7 +1708,7 @@ pub(crate) fn selectable_slot_ids() -> Vec<String> {
     slots.sort_by_key(|slot| slot_sort_key(slot));
     slots
         .into_iter()
-        .map(|slot| canonical_loadout_slot_id(slot.slot_id.as_str()))
+        .map(|slot| canonical_action_bar_slot_id(slot.slot_id.as_str()))
         .collect()
 }
 
@@ -2102,7 +1716,7 @@ pub(crate) fn ability_is_compatible_with_slot(ability_id: &str, slot_id: &str) -
     let Some(ability) = ability_definition(ability_id) else {
         return false;
     };
-    let canonical_slot_id = canonical_loadout_slot_id(slot_id);
+    let canonical_slot_id = canonical_action_bar_slot_id(slot_id);
     let Some(slot) = slot_definition(canonical_slot_id.as_str()) else {
         return false;
     };
@@ -2120,53 +1734,36 @@ pub(crate) fn ability_is_compatible_with_slot(ability_id: &str, slot_id: &str) -
         .any(|tag| ability_tags.contains(tag.as_str()))
 }
 
-pub(crate) fn action_id_is_selectable_loadout_action(
+pub(crate) fn action_id_is_selectable_action_bar_action(
     ctx: &ReducerContext,
     action_id: &AuthoredActionId,
 ) -> bool {
     ctx.db
         .ability_catalog()
         .iter()
-        .filter(|row| row.fixed_action_id.is_empty())
         .any(|row| row.action_id == action_id.as_str())
 }
 
-pub(crate) fn owner_has_active_selectable_action(
-    ctx: &ReducerContext,
-    owner: Identity,
-    authored_action_id: &AuthoredActionId,
-) -> bool {
-    active_selectable_ability_for_authored_action(ctx, owner, authored_action_id).is_some()
-}
-
-fn current_class_id_for_owner(ctx: &ReducerContext, owner: Identity) -> Option<String> {
-    ctx.db
-        .character_progression()
-        .owner()
-        .find(owner)
-        .map(|progression| canonical_class_id(progression.class_id.as_str()))
-}
-
-fn active_class_loadout_state_for_owner(
-    ctx: &ReducerContext,
-    owner: Identity,
-) -> Option<CharacterClassLoadoutState> {
-    let class_id = current_class_id_for_owner(ctx, owner)?;
-    let key = character_class_loadout_key(owner, class_id.as_str());
-    let state = ctx.db.character_class_loadout_state().key().find(key)?;
-    if !spec_belongs_to_owner_and_class(
-        ctx,
-        owner,
-        state.active_spec_id.as_str(),
-        class_id.as_str(),
-    ) {
-        return None;
+fn resolved_combat_profile_id_for_ability_catalog(
+    _ctx: &ReducerContext,
+    ability: &AbilityCatalog,
+) -> Option<String> {
+    let combat_profile_id = normalize_identifier(ability.combat_profile_id.as_str());
+    if combat_profile_id.is_empty() {
+        None
+    } else {
+        Some(combat_profile_id)
     }
-    Some(state)
 }
 
-fn active_spec_id_for_owner(ctx: &ReducerContext, owner: Identity) -> Option<String> {
-    active_class_loadout_state_for_owner(ctx, owner).map(|state| state.active_spec_id)
+fn ability_catalog_matches_combat_profile(
+    ctx: &ReducerContext,
+    ability: &AbilityCatalog,
+    combat_profile_id: &str,
+) -> bool {
+    let normalized_combat_profile_id = normalize_identifier(combat_profile_id);
+    resolved_combat_profile_id_for_ability_catalog(ctx, ability)
+        .is_some_and(|ability_profile_id| ability_profile_id == normalized_combat_profile_id)
 }
 
 pub(crate) fn active_selectable_ability_for_authored_action(
@@ -2174,20 +1771,36 @@ pub(crate) fn active_selectable_ability_for_authored_action(
     owner: Identity,
     authored_action_id: &AuthoredActionId,
 ) -> Option<AbilityCatalog> {
-    let active_spec_id = active_spec_id_for_owner(ctx, owner)?;
+    let combat_profile_id = derived_combat_profile_id_for_owner(ctx, owner)?;
     let ability = ctx
         .db
-        .saved_spec_slot_assignment()
-        .spec_id()
-        .filter(active_spec_id.as_str())
+        .character_action_bar_assignment()
+        .owner()
+        .filter(owner)
+        .filter(|assignment| assignment.combat_profile_id == combat_profile_id)
         .filter_map(|assignment| {
-            let action_ref = action_ref_for_slot_assignment(&assignment);
+            let action_ref = action_ref_for_character_action_bar_assignment(&assignment);
             if !action_ref.is_ability() {
                 return None;
             }
-            ctx.db.ability_catalog().ability_id().find(action_ref.id)
+            ctx.db
+                .ability_catalog()
+                .ability_id()
+                .find(action_ref.id)
+                .map(|ability| (assignment.slot_id, ability))
         })
-        .find(|ability| ability.action_id == authored_action_id.as_str());
+        .find(|(slot_id, ability)| {
+            ability.action_id == authored_action_id.as_str()
+                && ability_catalog_matches_combat_profile(ctx, ability, combat_profile_id.as_str())
+                && character_action_bar_assignment_is_enabled(
+                    ctx,
+                    owner,
+                    combat_profile_id.as_str(),
+                    slot_id.as_str(),
+                    ability,
+                )
+        })
+        .map(|(_, ability)| ability);
     ability
 }
 
@@ -2197,40 +1810,56 @@ pub(crate) fn active_selectable_ability_for_ability_id(
     ability_id: &str,
 ) -> Option<AbilityCatalog> {
     let normalized_ability_id = normalize_identifier(ability_id);
-    let active_spec_id = active_spec_id_for_owner(ctx, owner)?;
+    let combat_profile_id = derived_combat_profile_id_for_owner(ctx, owner)?;
     let ability = ctx
         .db
-        .saved_spec_slot_assignment()
-        .spec_id()
-        .filter(active_spec_id.as_str())
+        .character_action_bar_assignment()
+        .owner()
+        .filter(owner)
+        .filter(|assignment| assignment.combat_profile_id == combat_profile_id)
         .filter_map(|assignment| {
-            let action_ref = action_ref_for_slot_assignment(&assignment);
+            let action_ref = action_ref_for_character_action_bar_assignment(&assignment);
             if !action_ref.is_ability() || action_ref.id != normalized_ability_id {
                 return None;
             }
-            ctx.db.ability_catalog().ability_id().find(action_ref.id)
+            ctx.db
+                .ability_catalog()
+                .ability_id()
+                .find(action_ref.id)
+                .map(|ability| (assignment.slot_id, ability))
         })
+        .filter(|(slot_id, ability)| {
+            ability_catalog_matches_combat_profile(ctx, ability, combat_profile_id.as_str())
+                && character_action_bar_assignment_is_enabled(
+                    ctx,
+                    owner,
+                    combat_profile_id.as_str(),
+                    slot_id.as_str(),
+                    ability,
+                )
+        })
+        .map(|(_, ability)| ability)
         .next();
     ability
 }
 
-pub(crate) fn active_loadout_assignment_debug_summary(
+pub(crate) fn active_action_bar_assignment_debug_summary(
     ctx: &ReducerContext,
     owner: Identity,
 ) -> String {
-    let Some(active_spec_id) = active_spec_id_for_owner(ctx, owner) else {
-        return "active_specs=[] assignments=[]".to_string();
-    };
-
+    let combat_profile_id = derived_combat_profile_id_for_owner(ctx, owner).unwrap_or_default();
     let assignments: Vec<String> = ctx
         .db
-        .saved_spec_slot_assignment()
-        .spec_id()
-        .filter(active_spec_id.as_str())
+        .character_action_bar_assignment()
+        .owner()
+        .filter(owner)
+        .filter(|assignment| {
+            combat_profile_id.is_empty() || assignment.combat_profile_id == combat_profile_id
+        })
         .map(|assignment| {
             format!(
                 "{}:{}:{}:{}:{}",
-                active_spec_id,
+                assignment.combat_profile_id,
                 assignment.slot_id,
                 assignment.action_kind,
                 assignment.action_id,
@@ -2239,11 +1868,7 @@ pub(crate) fn active_loadout_assignment_debug_summary(
         })
         .collect();
 
-    format!(
-        "active_specs=[{}] assignments=[{}]",
-        active_spec_id,
-        assignments.join(",")
-    )
+    format!("character_action_bar=[{}]", assignments.join(","))
 }
 
 pub(crate) fn primary_resource_gain_on_action_accept(ability_id: &str) -> f32 {
@@ -2551,50 +2176,6 @@ fn sync_combat_mode_catalog(ctx: &ReducerContext) {
     }
 }
 
-fn sync_class_catalog(ctx: &ReducerContext) {
-    let expected: HashSet<_> = progression_catalog()
-        .classes
-        .iter()
-        .map(|definition| normalize_identifier(definition.class_id.as_str()))
-        .collect();
-
-    for definition in &progression_catalog().classes {
-        let class_id = normalize_identifier(definition.class_id.as_str());
-        let row = ClassCatalog {
-            class_id: class_id.clone(),
-            display_name: definition.display_name.clone(),
-            default_combat_profile_id: normalize_identifier(
-                definition.default_combat_profile_id.as_str(),
-            ),
-            primary_resource_kind: normalize_identifier(definition.primary_resource_kind.as_str()),
-            max_saved_specs: definition.max_saved_specs.max(1),
-            sort_order: definition.sort_order,
-        };
-        if ctx
-            .db
-            .class_catalog()
-            .class_id()
-            .find(class_id.clone())
-            .is_some()
-        {
-            ctx.db.class_catalog().class_id().update(row);
-        } else {
-            ctx.db.class_catalog().insert(row);
-        }
-    }
-
-    let stale: Vec<_> = ctx
-        .db
-        .class_catalog()
-        .iter()
-        .map(|row| row.class_id)
-        .filter(|key| !expected.contains(key))
-        .collect();
-    for key in stale {
-        ctx.db.class_catalog().class_id().delete(key);
-    }
-}
-
 fn sync_resource_catalog(ctx: &ReducerContext) {
     let expected: HashSet<_> = progression_catalog()
         .resources
@@ -2745,11 +2326,11 @@ fn sync_ability_catalog(ctx: &ReducerContext) {
         let ability_id = normalize_identifier(definition.ability_id.as_str());
         let row = AbilityCatalog {
             ability_id: ability_id.clone(),
-            class_id: normalize_identifier(definition.class_id.as_str()),
+            combat_profile_id: resolved_combat_profile_id_for_ability_definition(definition)
+                .unwrap_or_default(),
             ability_kind: ability_gameplay_kind(definition),
             action_id: AuthoredActionId::new(definition.action_id.as_str()).into_string(),
             display_name: definition.display_name.clone(),
-            fixed_action_id: normalize_identifier(definition.fixed_action_id.as_str()),
             resource_kind: normalize_identifier(definition.resource_kind.as_str()),
             resource_cost: definition.resource_cost.max(0.0),
             ability_tags: encode_tags(&definition.ability_tags),
@@ -3131,47 +2712,6 @@ fn sync_auto_attack_replacement_catalog(ctx: &ReducerContext) {
     }
 }
 
-fn sync_fixed_action_binding_catalog(ctx: &ReducerContext) {
-    let expected: HashSet<_> = progression_catalog()
-        .fixed_action_bindings
-        .iter()
-        .map(fixed_action_binding_key)
-        .collect();
-
-    for definition in &progression_catalog().fixed_action_bindings {
-        let key = fixed_action_binding_key(definition);
-        let row = FixedActionBindingCatalog {
-            key: key.clone(),
-            class_id: normalize_identifier(definition.class_id.as_str()),
-            fixed_action_id: normalize_identifier(definition.fixed_action_id.as_str()),
-            ability_id: normalize_identifier(definition.ability_id.as_str()),
-            sort_order: definition.sort_order,
-        };
-        if ctx
-            .db
-            .fixed_action_binding_catalog()
-            .key()
-            .find(key.clone())
-            .is_some()
-        {
-            ctx.db.fixed_action_binding_catalog().key().update(row);
-        } else {
-            ctx.db.fixed_action_binding_catalog().insert(row);
-        }
-    }
-
-    let stale: Vec<_> = ctx
-        .db
-        .fixed_action_binding_catalog()
-        .iter()
-        .map(|row| row.key)
-        .filter(|key| !expected.contains(key))
-        .collect();
-    for key in stale {
-        ctx.db.fixed_action_binding_catalog().key().delete(key);
-    }
-}
-
 fn sync_action_presentation_catalog(ctx: &ReducerContext) {
     let explicit_rows: Vec<_> = progression_catalog()
         .action_presentations
@@ -3287,16 +2827,16 @@ fn sync_combat_vfx_cue_catalog(ctx: &ReducerContext) {
     }
 }
 
-fn sync_loadout_slot_catalog(ctx: &ReducerContext) {
+fn sync_action_bar_slot_catalog(ctx: &ReducerContext) {
     let expected: HashSet<_> = progression_catalog()
         .slots
         .iter()
-        .map(|definition| canonical_loadout_slot_id(definition.slot_id.as_str()))
+        .map(|definition| canonical_action_bar_slot_id(definition.slot_id.as_str()))
         .collect();
 
     for definition in &progression_catalog().slots {
-        let slot_id = canonical_loadout_slot_id(definition.slot_id.as_str());
-        let row = LoadoutSlotCatalog {
+        let slot_id = canonical_action_bar_slot_id(definition.slot_id.as_str());
+        let row = ActionBarSlotCatalog {
             slot_id: slot_id.clone(),
             ui_row: definition.ui_row,
             ui_col: definition.ui_col,
@@ -3306,138 +2846,98 @@ fn sync_loadout_slot_catalog(ctx: &ReducerContext) {
         };
         if ctx
             .db
-            .loadout_slot_catalog()
+            .action_bar_slot_catalog()
             .slot_id()
             .find(slot_id.clone())
             .is_some()
         {
-            ctx.db.loadout_slot_catalog().slot_id().update(row);
+            ctx.db.action_bar_slot_catalog().slot_id().update(row);
         } else {
-            ctx.db.loadout_slot_catalog().insert(row);
+            ctx.db.action_bar_slot_catalog().insert(row);
         }
     }
 
     let stale: Vec<_> = ctx
         .db
-        .loadout_slot_catalog()
+        .action_bar_slot_catalog()
         .iter()
         .map(|row| row.slot_id)
         .filter(|key| !expected.contains(key))
         .collect();
     for key in stale {
-        ctx.db.loadout_slot_catalog().slot_id().delete(key);
+        ctx.db.action_bar_slot_catalog().slot_id().delete(key);
     }
 }
 
-fn ensure_saved_spec(
+fn ensure_default_character_action_bar_assignments(
     ctx: &ReducerContext,
     owner: Identity,
-    class: &ClassDefinition,
-    spec_id: &str,
     now: Timestamp,
-) {
-    if ctx
-        .db
-        .saved_spec()
-        .spec_id()
-        .find(spec_id.to_string())
-        .is_none()
-    {
-        ctx.db.saved_spec().insert(SavedSpec {
-            spec_id: spec_id.to_string(),
-            owner,
-            name: DEFAULT_SPEC_NAME.to_string(),
-            class_id: normalize_identifier(class.class_id.as_str()),
-            version: DEFAULT_SPEC_VERSION,
-            created_at: now,
-            updated_at: now,
-        });
-    }
+) -> usize {
+    let mut inserted = 0usize;
+    let Some(combat_profile_id) = derived_combat_profile_id_for_owner(ctx, owner) else {
+        return 0;
+    };
 
-    for stat_kind in StatKind::ALL {
-        let key = saved_spec_stat_key(spec_id, stat_kind);
+    for assignment in action_bar_defaults_for_profile(combat_profile_id.as_str()) {
+        let slot_id = canonical_action_bar_slot_id(assignment.slot_id.as_str());
+        let key = character_action_bar_key(owner, combat_profile_id.as_str(), slot_id.as_str());
         if ctx
             .db
-            .saved_spec_stat_allocation()
+            .character_action_bar_assignment()
             .key()
-            .find(key.clone())
+            .find(key)
             .is_some()
         {
             continue;
         }
-        ctx.db
-            .saved_spec_stat_allocation()
-            .insert(SavedSpecStatAllocation {
-                key,
-                spec_id: spec_id.to_string(),
-                stat_kind: stat_kind.as_str().to_string(),
-                allocated_points: default_allocated_points_for(class, stat_kind),
-            });
-    }
 
-    backfill_missing_default_slot_assignments(ctx, class.class_id.as_str(), spec_id);
-}
-
-fn default_allocated_points_for(_class: &ClassDefinition, _stat_kind: StatKind) -> u32 {
-    0
-}
-
-fn backfill_missing_default_slot_assignments(
-    ctx: &ReducerContext,
-    class_id: &str,
-    spec_id: &str,
-) -> bool {
-    let assigned_slots: HashSet<String> = ctx
-        .db
-        .saved_spec_slot_assignment()
-        .spec_id()
-        .filter(spec_id)
-        .map(|assignment| canonical_loadout_slot_id(assignment.slot_id.as_str()))
-        .collect();
-    let mut inserted_any = false;
-
-    for assignment in default_loadout_assignments_for_class(class_id) {
-        let slot_id = canonical_loadout_slot_id(assignment.slot_id.as_str());
-        if assigned_slots.contains(slot_id.as_str()) {
+        let action_ref = action_ref_for_action_bar_default(assignment);
+        if validate_character_action_bar_ref(
+            ctx,
+            owner,
+            combat_profile_id.as_str(),
+            slot_id.as_str(),
+            &action_ref,
+        )
+        .is_err()
+        {
             continue;
         }
-        let action_ref = action_ref_for_default_assignment(&assignment);
-        upsert_slot_assignment(ctx, spec_id, slot_id.as_str(), &action_ref);
-        inserted_any = true;
+
+        upsert_character_action_bar_assignment(
+            ctx,
+            owner,
+            combat_profile_id.as_str(),
+            slot_id.as_str(),
+            &action_ref,
+            now,
+        );
+        inserted = inserted.saturating_add(1);
     }
 
-    inserted_any
+    inserted
 }
 
-fn default_spec_id(owner: Identity, class_id: &str) -> String {
+fn character_action_bar_key(owner: Identity, combat_profile_id: &str, slot_id: &str) -> String {
     format!(
-        "{}:{}:default",
+        "{}:{}:{}",
         owner.to_hex(),
-        normalize_identifier(class_id)
+        normalize_identifier(combat_profile_id),
+        canonical_action_bar_slot_id(slot_id)
     )
 }
 
-fn character_class_loadout_key(owner: Identity, class_id: &str) -> String {
-    format!("{}:{}", owner.to_hex(), normalize_identifier(class_id))
-}
-
-fn saved_spec_stat_key(spec_id: &str, stat_kind: StatKind) -> String {
-    format!("{}:{}", spec_id, stat_kind.as_str())
-}
-
-fn saved_spec_slot_key(spec_id: &str, slot_id: &str) -> String {
-    format!("{}:{}", spec_id, canonical_loadout_slot_id(slot_id))
-}
-
-fn default_loadout_assignments_for_class(
-    class_id: &str,
-) -> Vec<&'static DefaultLoadoutAssignmentDefinition> {
-    let normalized_class_id = normalize_identifier(class_id);
+fn action_bar_defaults_for_profile(
+    combat_profile_id: &str,
+) -> Vec<&'static CombatProfileActionBarDefaultDefinition> {
+    let normalized_combat_profile_id = normalize_identifier(combat_profile_id);
     let mut assignments: Vec<_> = progression_catalog()
-        .default_loadout_assignments
+        .combat_profile_action_bar_defaults
         .iter()
         .filter(|assignment| {
-            normalize_identifier(assignment.class_id.as_str()) == normalized_class_id
+            normalize_identifier(assignment.combat_profile_id.as_str())
+                == normalized_combat_profile_id
         })
         .collect();
     assignments.sort_by_key(|assignment| {
@@ -3450,7 +2950,9 @@ fn default_loadout_assignments_for_class(
     assignments
 }
 
-fn action_ref_for_default_assignment(assignment: &DefaultLoadoutAssignmentDefinition) -> ActionRef {
+fn action_ref_for_action_bar_default(
+    assignment: &CombatProfileActionBarDefaultDefinition,
+) -> ActionRef {
     let action_kind = normalize_identifier(assignment.action_kind.as_str());
     let action_id = normalize_identifier(assignment.action_id.as_str());
     if !action_kind.is_empty() || !action_id.is_empty() {
@@ -3460,7 +2962,7 @@ fn action_ref_for_default_assignment(assignment: &DefaultLoadoutAssignmentDefini
 }
 
 #[allow(dead_code)]
-fn slot_sort_key(slot: &LoadoutSlotDefinition) -> (u32, u32, u32) {
+fn slot_sort_key(slot: &ActionBarSlotDefinition) -> (u32, u32, u32) {
     (slot.ui_row, slot.ui_col, slot.sort_order)
 }
 
@@ -3469,508 +2971,6 @@ fn slot_sort_key_for_id(slot_id: &str) -> (u32, u32, u32) {
     slot_definition(slot_id)
         .map(slot_sort_key)
         .unwrap_or((u32::MAX, u32::MAX, u32::MAX))
-}
-
-fn ensure_class_loadout_state(
-    ctx: &ReducerContext,
-    owner: Identity,
-    class: &ClassDefinition,
-    now: Timestamp,
-) -> CharacterClassLoadoutState {
-    let class_id = normalize_identifier(class.class_id.as_str());
-    let key = character_class_loadout_key(owner, class_id.as_str());
-    let default_spec_id = default_spec_id(owner, class.class_id.as_str());
-    ensure_saved_spec(ctx, owner, class, default_spec_id.as_str(), now);
-
-    if let Some(mut state) = ctx
-        .db
-        .character_class_loadout_state()
-        .key()
-        .find(key.clone())
-    {
-        state.class_id = canonical_class_id(state.class_id.as_str());
-        if !spec_belongs_to_owner_and_class(
-            ctx,
-            owner,
-            state.active_spec_id.as_str(),
-            class_id.as_str(),
-        ) {
-            state.active_spec_id = default_spec_id;
-            state.updated_at = now;
-        }
-        let resolved_state = CharacterClassLoadoutState {
-            key: state.key.clone(),
-            owner: state.owner,
-            class_id: state.class_id.clone(),
-            active_spec_id: state.active_spec_id.clone(),
-            updated_at: state.updated_at,
-        };
-        ctx.db.character_class_loadout_state().key().update(state);
-        return resolved_state;
-    }
-
-    let candidate_active_spec_id = default_spec_id;
-
-    let state = CharacterClassLoadoutState {
-        key: key.clone(),
-        owner,
-        class_id: class_id.clone(),
-        active_spec_id: candidate_active_spec_id.clone(),
-        updated_at: now,
-    };
-    ctx.db.character_class_loadout_state().insert(state);
-    CharacterClassLoadoutState {
-        key,
-        owner,
-        class_id,
-        active_spec_id: candidate_active_spec_id,
-        updated_at: now,
-    }
-}
-
-fn upsert_class_loadout_state(
-    ctx: &ReducerContext,
-    owner: Identity,
-    class_id: &str,
-    active_spec_id: &str,
-    now: Timestamp,
-) {
-    let class_id = canonical_class_id(class_id);
-    let key = character_class_loadout_key(owner, class_id.as_str());
-    let state = CharacterClassLoadoutState {
-        key: key.clone(),
-        owner,
-        class_id,
-        active_spec_id: active_spec_id.to_string(),
-        updated_at: now,
-    };
-    if ctx
-        .db
-        .character_class_loadout_state()
-        .key()
-        .find(key)
-        .is_some()
-    {
-        ctx.db.character_class_loadout_state().key().update(state);
-    } else {
-        ctx.db.character_class_loadout_state().insert(state);
-    }
-}
-
-fn class_definition(class_id: &str) -> Option<&'static ClassDefinition> {
-    let class_id = canonical_class_id(class_id);
-    progression_catalog()
-        .classes
-        .iter()
-        .find(|definition| normalize_identifier(definition.class_id.as_str()) == class_id)
-}
-
-fn canonical_class_id(value: &str) -> String {
-    let normalized = normalize_identifier(value);
-    match normalized.as_str() {
-        "WARRIOR" => return "WARRIOR".to_string(),
-        "PALADIN" => return "PALADIN".to_string(),
-        "ARCHER" => return "RANGER".to_string(),
-        "HUNTER" => return "RANGER".to_string(),
-        _ => {}
-    }
-    if progression_catalog()
-        .classes
-        .iter()
-        .any(|definition| normalize_identifier(definition.class_id.as_str()) == normalized)
-    {
-        return normalized;
-    }
-    normalized
-}
-
-fn repair_legacy_class_rows(ctx: &ReducerContext) {
-    let player_rows: Vec<_> = ctx.db.player().iter().collect();
-    for mut row in player_rows {
-        let raw_class_id = if row.class_id.trim().is_empty() {
-            default_class_id()
-        } else {
-            row.class_id.clone()
-        };
-        let canonical = canonical_class_id(raw_class_id.as_str());
-        if canonical == row.class_id {
-            continue;
-        }
-        row.class_id = canonical;
-        ctx.db.player().identity().update(row);
-    }
-
-    let progression_rows: Vec<_> = ctx.db.character_progression().iter().collect();
-    for mut row in progression_rows {
-        let canonical = canonical_class_id(row.class_id.as_str());
-        if canonical == row.class_id {
-            continue;
-        }
-        row.class_id = canonical;
-        ctx.db.character_progression().owner().update(row);
-    }
-
-    let saved_specs: Vec<_> = ctx.db.saved_spec().iter().collect();
-    for mut spec in saved_specs {
-        let canonical = canonical_class_id(spec.class_id.as_str());
-        if canonical == spec.class_id {
-            continue;
-        }
-        spec.class_id = canonical;
-        ctx.db.saved_spec().spec_id().update(spec);
-    }
-
-    let states: Vec<_> = ctx.db.character_class_loadout_state().iter().collect();
-    for state in states {
-        let canonical = canonical_class_id(state.class_id.as_str());
-        if canonical == state.class_id {
-            continue;
-        }
-        let owner = state.owner;
-        let active_spec_id = state.active_spec_id;
-        let updated_at = state.updated_at;
-        ctx.db
-            .character_class_loadout_state()
-            .key()
-            .delete(state.key);
-        upsert_class_loadout_state(
-            ctx,
-            owner,
-            canonical.as_str(),
-            active_spec_id.as_str(),
-            updated_at,
-        );
-    }
-}
-
-fn repair_saved_spec_rows(ctx: &ReducerContext, now: Timestamp) {
-    let specs: Vec<_> = ctx.db.saved_spec().iter().collect();
-    for mut spec in specs {
-        let Some(class) = class_definition(spec.class_id.as_str()) else {
-            continue;
-        };
-
-        let mut updated_at = spec.updated_at;
-        if repair_legacy_slot_assignment_rows(ctx, spec.spec_id.as_str()) {
-            updated_at = now;
-        }
-        if repair_malformed_ability_slot_assignment_rows(
-            ctx,
-            class.class_id.as_str(),
-            spec.spec_id.as_str(),
-        ) {
-            updated_at = now;
-        }
-        if repair_bad_giant_swing_q_assignment(ctx, spec.spec_id.as_str()) {
-            updated_at = now;
-        }
-        for stat_kind in StatKind::ALL {
-            let key = saved_spec_stat_key(spec.spec_id.as_str(), stat_kind);
-            if ctx
-                .db
-                .saved_spec_stat_allocation()
-                .key()
-                .find(key.clone())
-                .is_some()
-            {
-                continue;
-            }
-            ctx.db
-                .saved_spec_stat_allocation()
-                .insert(SavedSpecStatAllocation {
-                    key,
-                    spec_id: spec.spec_id.clone(),
-                    stat_kind: stat_kind.as_str().to_string(),
-                    allocated_points: default_allocated_points_for(class, stat_kind),
-                });
-            updated_at = now;
-        }
-
-        if backfill_missing_default_slot_assignments(
-            ctx,
-            class.class_id.as_str(),
-            spec.spec_id.as_str(),
-        ) {
-            updated_at = now;
-        }
-        if updated_at != spec.updated_at {
-            spec.updated_at = updated_at;
-            ctx.db.saved_spec().spec_id().update(spec);
-        }
-    }
-}
-
-fn repair_legacy_slot_assignment_rows(ctx: &ReducerContext, spec_id: &str) -> bool {
-    let assignments: Vec<_> = ctx
-        .db
-        .saved_spec_slot_assignment()
-        .spec_id()
-        .filter(spec_id)
-        .collect();
-    let mut repaired = false;
-
-    for assignment in assignments {
-        let canonical_slot_id = canonical_loadout_slot_id(assignment.slot_id.as_str());
-        let canonical_key =
-            saved_spec_slot_key(assignment.spec_id.as_str(), canonical_slot_id.as_str());
-        let action_ref = action_ref_for_slot_assignment(&assignment);
-        if assignment.slot_id == canonical_slot_id
-            && assignment.key == canonical_key
-            && assignment.action_kind == action_ref.kind_wire()
-            && assignment.action_id == action_ref.id
-            && assignment.ability_id == legacy_ability_id_for_action_ref(&action_ref)
-        {
-            continue;
-        }
-
-        ctx.db
-            .saved_spec_slot_assignment()
-            .key()
-            .delete(assignment.key.clone());
-        if ctx
-            .db
-            .saved_spec_slot_assignment()
-            .key()
-            .find(canonical_key.clone())
-            .is_none()
-        {
-            ctx.db
-                .saved_spec_slot_assignment()
-                .insert(SavedSpecSlotAssignment {
-                    key: canonical_key,
-                    spec_id: assignment.spec_id,
-                    slot_id: canonical_slot_id,
-                    action_kind: action_ref.kind_wire().to_string(),
-                    action_id: action_ref.id.clone(),
-                    ability_id: legacy_ability_id_for_action_ref(&action_ref),
-                });
-        }
-        repaired = true;
-    }
-
-    repaired
-}
-
-fn repair_malformed_ability_slot_assignment_rows(
-    ctx: &ReducerContext,
-    class_id: &str,
-    spec_id: &str,
-) -> bool {
-    let assignments: Vec<_> = ctx
-        .db
-        .saved_spec_slot_assignment()
-        .spec_id()
-        .filter(spec_id)
-        .collect();
-    let normalized_class_id = normalize_identifier(class_id);
-    let mut repaired = false;
-
-    for assignment in assignments {
-        let action_ref = action_ref_for_slot_assignment(&assignment);
-        let ActionKind::Unsupported(kind) = &action_ref.kind else {
-            continue;
-        };
-        if action_ref.id != *kind {
-            continue;
-        }
-
-        let Some(ability) = ability_definition(kind.as_str()) else {
-            continue;
-        };
-        if normalize_identifier(ability.class_id.as_str()) != normalized_class_id {
-            continue;
-        }
-
-        upsert_slot_assignment(
-            ctx,
-            assignment.spec_id.as_str(),
-            assignment.slot_id.as_str(),
-            &ActionRef::ability(kind.as_str()),
-        );
-        repaired = true;
-    }
-
-    repaired
-}
-
-fn repair_bad_giant_swing_q_assignment(ctx: &ReducerContext, spec_id: &str) -> bool {
-    let bad_slot_id = canonical_loadout_slot_id("slot_1_0");
-    let target_slot_id = canonical_loadout_slot_id("slot_1_2");
-    let bad_key = saved_spec_slot_key(spec_id, bad_slot_id.as_str());
-    let Some(assignment) = ctx
-        .db
-        .saved_spec_slot_assignment()
-        .key()
-        .find(bad_key.clone())
-    else {
-        return false;
-    };
-    let action_ref = action_ref_for_slot_assignment(&assignment);
-    if !action_ref.is_ability() || action_ref.id != "WARRIOR_GIANT_SWING" {
-        return false;
-    }
-
-    ctx.db.saved_spec_slot_assignment().key().delete(bad_key);
-    let target_key = saved_spec_slot_key(spec_id, target_slot_id.as_str());
-    if ctx
-        .db
-        .saved_spec_slot_assignment()
-        .key()
-        .find(target_key)
-        .is_none()
-    {
-        upsert_slot_assignment(ctx, spec_id, target_slot_id.as_str(), &action_ref);
-    }
-    true
-}
-
-fn repair_class_loadout_state_rows(ctx: &ReducerContext, now: Timestamp) {
-    let states: Vec<_> = ctx.db.character_class_loadout_state().iter().collect();
-    for state in states {
-        let Some(class) = class_definition(state.class_id.as_str()) else {
-            ctx.db
-                .character_class_loadout_state()
-                .key()
-                .delete(state.key);
-            continue;
-        };
-        ensure_class_loadout_state(ctx, state.owner, class, now);
-    }
-
-    let progressions: Vec<_> = ctx.db.character_progression().iter().collect();
-    for progression in progressions {
-        let Some(class) = class_definition(progression.class_id.as_str()) else {
-            continue;
-        };
-        ensure_class_loadout_state(ctx, progression.owner, class, now);
-    }
-}
-
-fn validate_spec_name(value: &str) -> Result<String, String> {
-    let trimmed = value.trim();
-    if trimmed.is_empty() {
-        return Err("spec name cannot be empty".to_string());
-    }
-    if trimmed.chars().count() > MAX_SPEC_NAME_LEN {
-        return Err(format!(
-            "spec name cannot exceed {} characters",
-            MAX_SPEC_NAME_LEN
-        ));
-    }
-    Ok(trimmed.to_string())
-}
-
-fn next_saved_spec_id(
-    ctx: &ReducerContext,
-    owner: Identity,
-    class_id: &str,
-    now: Timestamp,
-) -> String {
-    let base = format!(
-        "{}:{}:{}",
-        owner.to_hex(),
-        normalize_identifier(class_id),
-        now.to_micros_since_unix_epoch()
-    );
-    if ctx.db.saved_spec().spec_id().find(base.clone()).is_none() {
-        return base;
-    }
-    let mut suffix = 1_u32;
-    loop {
-        let candidate = format!("{base}:{suffix}");
-        if ctx
-            .db
-            .saved_spec()
-            .spec_id()
-            .find(candidate.clone())
-            .is_none()
-        {
-            return candidate;
-        }
-        suffix = suffix.saturating_add(1);
-    }
-}
-
-fn saved_specs_for_owner_and_class(
-    ctx: &ReducerContext,
-    owner: Identity,
-    class_id: &str,
-) -> Vec<SavedSpec> {
-    let class_id = canonical_class_id(class_id);
-    ctx.db
-        .saved_spec()
-        .owner()
-        .filter(owner)
-        .filter(|spec| canonical_class_id(spec.class_id.as_str()) == class_id)
-        .collect()
-}
-
-fn spec_belongs_to_owner_and_class(
-    ctx: &ReducerContext,
-    owner: Identity,
-    spec_id: &str,
-    class_id: &str,
-) -> bool {
-    let class_id = canonical_class_id(class_id);
-    ctx.db
-        .saved_spec()
-        .spec_id()
-        .find(spec_id.trim().to_string())
-        .map(|spec| spec.owner == owner && canonical_class_id(spec.class_id.as_str()) == class_id)
-        .unwrap_or(false)
-}
-
-fn class_loadout_state_uses_spec(
-    ctx: &ReducerContext,
-    owner: Identity,
-    class_id: &str,
-    spec_id: &str,
-) -> bool {
-    let key = character_class_loadout_key(owner, class_id);
-    ctx.db
-        .character_class_loadout_state()
-        .key()
-        .find(key)
-        .map(|state| state.active_spec_id == spec_id)
-        .unwrap_or(false)
-}
-
-fn require_character_progression(
-    ctx: &ReducerContext,
-    owner: Identity,
-) -> Result<CharacterProgression, String> {
-    ctx.db
-        .character_progression()
-        .owner()
-        .find(owner)
-        .ok_or_else(|| "character progression row not found".to_string())
-}
-
-fn require_owned_spec(
-    ctx: &ReducerContext,
-    owner: Identity,
-    spec_id: &str,
-) -> Result<SavedSpec, String> {
-    let normalized_spec_id = spec_id.trim().to_string();
-    let spec = ctx
-        .db
-        .saved_spec()
-        .spec_id()
-        .find(normalized_spec_id.clone())
-        .ok_or_else(|| format!("saved spec '{}' not found", normalized_spec_id))?;
-    if spec.owner != owner {
-        return Err("saved spec does not belong to the current player".to_string());
-    }
-    Ok(spec)
-}
-
-fn require_class_catalog_row(ctx: &ReducerContext, class_id: &str) -> Result<ClassCatalog, String> {
-    let normalized = normalize_identifier(class_id);
-    ctx.db
-        .class_catalog()
-        .class_id()
-        .find(normalized.clone())
-        .ok_or_else(|| format!("class '{}' not found in catalog", normalized))
 }
 
 fn require_ability_catalog_row(
@@ -3988,30 +2988,57 @@ fn require_ability_catalog_row(
 fn require_slot_catalog_row(
     ctx: &ReducerContext,
     slot_id: &str,
-) -> Result<LoadoutSlotCatalog, String> {
-    let normalized = canonical_loadout_slot_id(slot_id);
+) -> Result<ActionBarSlotCatalog, String> {
+    let normalized = canonical_action_bar_slot_id(slot_id);
     ctx.db
-        .loadout_slot_catalog()
+        .action_bar_slot_catalog()
         .slot_id()
         .find(normalized.clone())
         .ok_or_else(|| format!("slot '{}' not found in catalog", normalized))
 }
 
-fn validate_slot_action_ref(
+fn validate_character_action_bar_ref(
     ctx: &ReducerContext,
-    class_id: &str,
+    owner: Identity,
+    combat_profile_id: &str,
     slot_id: &str,
     action_ref: &ActionRef,
 ) -> Result<(), String> {
     let slot = require_slot_catalog_row(ctx, slot_id)?;
+    let combat_profile_id = normalize_identifier(combat_profile_id);
+    if combat_profile_id.is_empty() || !combat_profile_exists(ctx, combat_profile_id.as_str()) {
+        return Err(format!(
+            "combat profile '{}' is not available for action bar assignment",
+            combat_profile_id
+        ));
+    }
     match &action_ref.kind {
         ActionKind::Ability => {
             let ability = require_ability_catalog_row(ctx, action_ref.id.as_str())?;
-            if ability.class_id != normalize_identifier(class_id) {
+            if !ability_catalog_matches_combat_profile(ctx, &ability, combat_profile_id.as_str()) {
+                let ability_profile_id =
+                    resolved_combat_profile_id_for_ability_catalog(ctx, &ability)
+                        .unwrap_or_default();
                 return Err(format!(
-                    "ability '{}' does not belong to class '{}'",
-                    ability.ability_id, class_id
+                    "ability '{}' requires combat profile '{}' but owner has combat profile '{}'",
+                    ability.ability_id, ability_profile_id, combat_profile_id
                 ));
+            }
+            if ability.ability_kind.eq_ignore_ascii_case("SPELL")
+                && !player_knows_spell(ctx, owner, ability.action_id.as_str())
+            {
+                return Err(format!(
+                    "spell ability '{}' requires learned spell '{}'",
+                    ability.ability_id, ability.action_id
+                ));
+            }
+            if ability.ability_kind.eq_ignore_ascii_case("SPELL") {
+                require_available_spell_slot_for_assignment(
+                    ctx,
+                    owner,
+                    combat_profile_id.as_str(),
+                    slot.slot_id.as_str(),
+                )?;
             }
             if !ability_is_compatible_with_slot(action_ref.id.as_str(), slot.slot_id.as_str()) {
                 return Err(format!(
@@ -4034,49 +3061,100 @@ fn validate_slot_action_ref(
     }
 }
 
-fn stat_totals_for_spec(ctx: &ReducerContext, spec_id: &str) -> AllocatedStatTotals {
-    let allocations: Vec<_> = ctx
-        .db
-        .saved_spec_stat_allocation()
-        .spec_id()
-        .filter(spec_id)
-        .collect();
-    AllocatedStatTotals {
-        might: saved_spec_total_for_stat(allocations.as_slice(), StatKind::Might),
-        insight: saved_spec_total_for_stat(allocations.as_slice(), StatKind::Insight),
-        finesse: saved_spec_total_for_stat(allocations.as_slice(), StatKind::Finesse),
-        quickness: saved_spec_total_for_stat(allocations.as_slice(), StatKind::Quickness),
-        fortitude: saved_spec_total_for_stat(allocations.as_slice(), StatKind::Fortitude),
-    }
-}
-
-fn upsert_stat_allocation(
+fn require_available_spell_slot_for_assignment(
     ctx: &ReducerContext,
-    spec_id: &str,
-    stat_kind: StatKind,
-    allocated_points: u32,
-) {
-    let key = saved_spec_stat_key(spec_id, stat_kind);
-    let row = SavedSpecStatAllocation {
-        key: key.clone(),
-        spec_id: spec_id.to_string(),
-        stat_kind: stat_kind.as_str().to_string(),
-        allocated_points,
-    };
-    if ctx
-        .db
-        .saved_spec_stat_allocation()
-        .key()
-        .find(key)
-        .is_some()
-    {
-        ctx.db.saved_spec_stat_allocation().key().update(row);
-    } else {
-        ctx.db.saved_spec_stat_allocation().insert(row);
+    owner: Identity,
+    combat_profile_id: &str,
+    slot_id: &str,
+) -> Result<(), String> {
+    let capacity = equipment_spell_slot_capacity_for_owner(ctx, owner);
+    let used = assigned_spell_count_excluding_slot(ctx, owner, combat_profile_id, slot_id);
+    if used >= capacity {
+        return Err(format!(
+            "spell slot capacity exceeded: {used}/{capacity} spell slots are already assigned"
+        ));
     }
+
+    Ok(())
 }
 
-fn action_ref_for_slot_assignment(assignment: &SavedSpecSlotAssignment) -> ActionRef {
+fn character_action_bar_assignment_is_enabled(
+    ctx: &ReducerContext,
+    owner: Identity,
+    combat_profile_id: &str,
+    slot_id: &str,
+    ability: &AbilityCatalog,
+) -> bool {
+    if !ability.ability_kind.eq_ignore_ascii_case("SPELL") {
+        return true;
+    }
+
+    character_action_bar_spell_assignment_is_within_capacity(ctx, owner, combat_profile_id, slot_id)
+}
+
+fn character_action_bar_spell_assignment_is_within_capacity(
+    ctx: &ReducerContext,
+    owner: Identity,
+    combat_profile_id: &str,
+    slot_id: &str,
+) -> bool {
+    let capacity = equipment_spell_slot_capacity_for_owner(ctx, owner) as usize;
+    if capacity == 0 {
+        return false;
+    }
+
+    let slot_id = canonical_action_bar_slot_id(slot_id);
+    let mut spell_slots = assigned_spell_slot_ids(ctx, owner, combat_profile_id);
+    spell_slots.sort();
+    spell_slots
+        .iter()
+        .position(|candidate| candidate == &slot_id)
+        .map(|index| index < capacity)
+        .unwrap_or(false)
+}
+
+fn assigned_spell_count_excluding_slot(
+    ctx: &ReducerContext,
+    owner: Identity,
+    combat_profile_id: &str,
+    excluded_slot_id: &str,
+) -> u32 {
+    let excluded_slot_id = canonical_action_bar_slot_id(excluded_slot_id);
+    assigned_spell_slot_ids(ctx, owner, combat_profile_id)
+        .into_iter()
+        .filter(|slot_id| slot_id != &excluded_slot_id)
+        .count() as u32
+}
+
+fn assigned_spell_slot_ids(
+    ctx: &ReducerContext,
+    owner: Identity,
+    combat_profile_id: &str,
+) -> Vec<String> {
+    let combat_profile_id = normalize_identifier(combat_profile_id);
+    ctx.db
+        .character_action_bar_assignment()
+        .owner()
+        .filter(owner)
+        .filter(|assignment| assignment.combat_profile_id == combat_profile_id)
+        .filter_map(|assignment| {
+            let action_ref = action_ref_for_character_action_bar_assignment(&assignment);
+            if !action_ref.is_ability() {
+                return None;
+            }
+            let ability = ctx.db.ability_catalog().ability_id().find(action_ref.id)?;
+            if ability.ability_kind.eq_ignore_ascii_case("SPELL") {
+                Some(canonical_action_bar_slot_id(assignment.slot_id.as_str()))
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+fn action_ref_for_character_action_bar_assignment(
+    assignment: &CharacterActionBarAssignment,
+) -> ActionRef {
     let action_kind = normalize_identifier(assignment.action_kind.as_str());
     let action_id = normalize_identifier(assignment.action_id.as_str());
     if !action_kind.is_empty() || !action_id.is_empty() {
@@ -4093,58 +3171,37 @@ fn legacy_ability_id_for_action_ref(action_ref: &ActionRef) -> String {
     }
 }
 
-fn upsert_slot_assignment(
+fn upsert_character_action_bar_assignment(
     ctx: &ReducerContext,
-    spec_id: &str,
+    owner: Identity,
+    combat_profile_id: &str,
     slot_id: &str,
     action_ref: &ActionRef,
+    updated_at: Timestamp,
 ) {
-    let key = saved_spec_slot_key(spec_id, slot_id);
-    let row = SavedSpecSlotAssignment {
+    let combat_profile_id = normalize_identifier(combat_profile_id);
+    let key = character_action_bar_key(owner, combat_profile_id.as_str(), slot_id);
+    let row = CharacterActionBarAssignment {
         key: key.clone(),
-        spec_id: spec_id.to_string(),
-        slot_id: canonical_loadout_slot_id(slot_id),
+        owner,
+        combat_profile_id,
+        slot_id: canonical_action_bar_slot_id(slot_id),
         action_kind: action_ref.kind_wire().to_string(),
         action_id: action_ref.id.clone(),
         ability_id: legacy_ability_id_for_action_ref(action_ref),
+        updated_at,
     };
     if ctx
         .db
-        .saved_spec_slot_assignment()
+        .character_action_bar_assignment()
         .key()
         .find(key)
         .is_some()
     {
-        ctx.db.saved_spec_slot_assignment().key().update(row);
+        ctx.db.character_action_bar_assignment().key().update(row);
     } else {
-        ctx.db.saved_spec_slot_assignment().insert(row);
+        ctx.db.character_action_bar_assignment().insert(row);
     }
-}
-
-fn delete_saved_spec_rows(ctx: &ReducerContext, spec_id: &str) {
-    let stat_keys: Vec<_> = ctx
-        .db
-        .saved_spec_stat_allocation()
-        .spec_id()
-        .filter(spec_id)
-        .map(|row| row.key)
-        .collect();
-    for key in stat_keys {
-        ctx.db.saved_spec_stat_allocation().key().delete(key);
-    }
-
-    let slot_keys: Vec<_> = ctx
-        .db
-        .saved_spec_slot_assignment()
-        .spec_id()
-        .filter(spec_id)
-        .map(|row| row.key)
-        .collect();
-    for key in slot_keys {
-        ctx.db.saved_spec_slot_assignment().key().delete(key);
-    }
-
-    ctx.db.saved_spec().spec_id().delete(spec_id.to_string());
 }
 
 fn ability_definition(ability_id: &str) -> Option<&'static AbilityDefinition> {
@@ -4155,20 +3212,12 @@ fn ability_definition(ability_id: &str) -> Option<&'static AbilityDefinition> {
         .find(|definition| normalize_identifier(definition.ability_id.as_str()) == ability_id)
 }
 
-fn slot_definition(slot_id: &str) -> Option<&'static LoadoutSlotDefinition> {
-    let slot_id = canonical_loadout_slot_id(slot_id);
+fn slot_definition(slot_id: &str) -> Option<&'static ActionBarSlotDefinition> {
+    let slot_id = canonical_action_bar_slot_id(slot_id);
     progression_catalog()
         .slots
         .iter()
-        .find(|definition| canonical_loadout_slot_id(definition.slot_id.as_str()) == slot_id)
-}
-
-fn fixed_action_binding_key(definition: &FixedActionBindingDefinition) -> String {
-    format!(
-        "{}:{}",
-        normalize_identifier(definition.class_id.as_str()),
-        normalize_identifier(definition.fixed_action_id.as_str())
-    )
+        .find(|definition| canonical_action_bar_slot_id(definition.slot_id.as_str()) == slot_id)
 }
 
 fn auto_attack_catalog_key(definition: &AutoAttackDefinition) -> String {
@@ -4310,8 +3359,28 @@ fn validate_auto_attack_catalog() {
 }
 
 fn validate_ability_catalog() {
+    let known_profiles: HashSet<_> = progression_catalog()
+        .combat_profiles
+        .iter()
+        .map(|profile| normalize_identifier(profile.combat_profile_id.as_str()))
+        .collect();
+
     for ability in &progression_catalog().abilities {
         let ability_id = normalize_identifier(ability.ability_id.as_str());
+        let explicit_combat_profile_id = normalize_identifier(ability.combat_profile_id.as_str());
+        if !explicit_combat_profile_id.is_empty() {
+            assert!(
+                known_profiles.contains(explicit_combat_profile_id.as_str()),
+                "ability '{ability_id}' references unknown combat_profile_id '{}'",
+                ability.combat_profile_id
+            );
+        }
+
+        assert!(
+            resolved_combat_profile_id_for_ability_definition(ability).is_some(),
+            "ability '{ability_id}' must resolve to a combat profile"
+        );
+
         let ability_kind = ability_gameplay_kind(ability);
         if ability_kind == "MOVEMENT" {
             assert!(
@@ -4917,7 +3986,7 @@ fn ability_gameplay_kind(ability: &AbilityDefinition) -> String {
     normalize_identifier(ability.gameplay.kind.as_str())
 }
 
-fn canonical_loadout_slot_id(value: &str) -> String {
+fn canonical_action_bar_slot_id(value: &str) -> String {
     match normalize_identifier(value).as_str() {
         "BOTTOM_01" => "SLOT_0_0".to_string(),
         "BOTTOM_02" => "SLOT_0_1".to_string(),
@@ -4957,19 +4026,19 @@ mod tests {
 
     use super::{
         ability_gameplay_kind, ability_is_compatible_with_slot, action_presentation_key,
-        action_ref_for_default_assignment, authored_status_presentation_ids,
-        canonical_loadout_slot_id, combat_vfx_cue_key, derived_combat_profile_id_for_class,
-        derived_spell_action_presentation_rows, melee_impact_effects_for_ability_id,
-        normalize_identifier, normalize_optional_target_audience,
-        primary_resource_gain_on_action_accept, progression_catalog,
-        projectile_body_vfx_id_for_spell, resolved_melee_targeting_for_catalog,
-        saved_spec_total_for_stat, selectable_slot_ids, validate_auto_attack_catalog,
-        validate_combat_mode_catalog, validate_progression_catalog_authoring_contract,
-        AbilityDefinition, ActionKind, CombatVfxPresentationManifest, FixedActionId,
-        MeleeImpactEffectRuntime, SavedSpecStatAllocation, StatKind,
+        action_ref_for_action_bar_default, authored_status_presentation_ids,
+        canonical_action_bar_slot_id, combat_vfx_cue_key, derived_spell_action_presentation_rows,
+        melee_impact_effects_for_ability_id, normalize_identifier,
+        normalize_optional_target_audience, primary_resource_gain_on_action_accept,
+        progression_catalog, projectile_body_vfx_id_for_spell,
+        resolved_combat_profile_id_for_ability_definition, resolved_melee_targeting_for_catalog,
+        selectable_slot_ids, validate_auto_attack_catalog, validate_combat_mode_catalog,
+        validate_progression_catalog_authoring_contract, AbilityDefinition, ActionKind,
+        CombatVfxPresentationManifest, FixedActionId, MeleeImpactEffectRuntime,
         ABILITY_KIND_COMBAT_MODE_TOGGLE, ACTION_KIND_FIXED, ARCHER_DRAW_MODE_TOGGLE_ABILITY_ID,
         AUTO_ATTACK_MOVEMENT_ALLOW_MOVING, AUTO_ATTACK_MOVEMENT_RESET_ON_VOLUNTARY_MOVE,
         COMBAT_MODE_FULL_DRAW, COMBAT_MODE_SHORT_DRAW, COMBAT_PROFILE_ARCHER_BOW,
+        COMBAT_PROFILE_SWORD_AND_SHIELD, COMBAT_PROFILE_TWO_HANDED_SWORD,
     };
     use crate::action_ids::{AuthoredActionId, RuntimeActionId};
 
@@ -5208,12 +4277,10 @@ mod tests {
     struct ResolvedCombatAuthoringAction {
         ability_id: String,
         category: ResolvedAuthoringCategory,
-        class_id: String,
         combat_profile_id: String,
         authored_action_id: String,
-        fixed_action_id: String,
-        default_loadout_slots: Vec<String>,
-        has_loadout_action_tag: bool,
+        action_bar_default_slots: Vec<String>,
+        has_action_bar_action_tag: bool,
         has_core_ability_tag: bool,
         has_ability_presentation: bool,
         melee_matches_authored_strike: bool,
@@ -5228,16 +4295,15 @@ mod tests {
 
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
     enum CombatAuthoringRule {
-        AbilityClassResolves,
+        AbilityProfileResolves,
         MeleeActionIdMatchesAuthoredStrike,
         MeleeActionIdNotRuntimeSlot,
         SpellActionIdResolvesToSpell,
         SelectableSpellHasAnimationEntry,
         AutoAttackReplacementResolves,
         AutoAttackReplacementStrikeMatchesAuthoredStrike,
-        DefaultLoadoutAssignmentResolves,
-        FixedActionBindingResolves,
-        CoreAbilityHasDefaultAssignment,
+        CombatProfileActionBarDefaultResolves,
+        CoreAbilityHasActionBarDefault,
         PlayerFacingActionHasPresentation,
         PresentationTargetResolves,
         SpellPresentationNotAuthored,
@@ -5249,7 +4315,7 @@ mod tests {
     impl CombatAuthoringRule {
         fn code(self) -> &'static str {
             match self {
-                Self::AbilityClassResolves => "ability-class-resolves",
+                Self::AbilityProfileResolves => "ability-profile-resolves",
                 Self::MeleeActionIdMatchesAuthoredStrike => {
                     "melee-action-id-matches-authored-strike"
                 }
@@ -5260,9 +4326,8 @@ mod tests {
                 Self::AutoAttackReplacementStrikeMatchesAuthoredStrike => {
                     "auto-attack-replacement-strike-matches-authored-strike"
                 }
-                Self::DefaultLoadoutAssignmentResolves => "default-loadout-assignment-resolves",
-                Self::FixedActionBindingResolves => "fixed-action-binding-resolves",
-                Self::CoreAbilityHasDefaultAssignment => "core-ability-has-default-assignment",
+                Self::CombatProfileActionBarDefaultResolves => "combat-profile-action-bar-default-resolves",
+                Self::CoreAbilityHasActionBarDefault => "core-ability-has-action-bar-default",
                 Self::PlayerFacingActionHasPresentation => "player-facing-action-has-presentation",
                 Self::PresentationTargetResolves => "presentation-target-resolves",
                 Self::SpellPresentationNotAuthored => "spell-presentation-not-authored",
@@ -5302,15 +4367,13 @@ mod tests {
             .iter()
             .map(|ability| {
                 let ability_id = normalize_identifier(ability.ability_id.as_str());
-                let class_id = normalize_identifier(ability.class_id.as_str());
                 let combat_profile_id =
-                    derived_combat_profile_id_for_class(class_id.as_str()).unwrap_or_default();
+                    resolved_combat_profile_id_for_ability_definition(ability).unwrap_or_default();
                 let authored_action_id = normalize_identifier(ability.action_id.as_str());
-                let fixed_action_id = normalize_identifier(ability.fixed_action_id.as_str());
-                let has_loadout_action_tag = ability
+                let has_action_bar_action_tag = ability
                     .ability_tags
                     .iter()
-                    .any(|tag| normalize_identifier(tag.as_str()) == "LOADOUT_ACTION");
+                    .any(|tag| normalize_identifier(tag.as_str()) == "ACTION_BAR_ACTION");
                 let has_core_ability_tag = ability
                     .ability_tags
                     .iter()
@@ -5324,13 +4387,13 @@ mod tests {
                     other => ResolvedAuthoringCategory::Unknown(other.to_string()),
                 };
 
-                let default_loadout_slots: Vec<String> = catalog
-                    .default_loadout_assignments
+                let action_bar_default_slots: Vec<String> = catalog
+                    .combat_profile_action_bar_defaults
                     .iter()
                     .filter_map(|assignment| {
-                        let action_ref = action_ref_for_default_assignment(assignment);
+                        let action_ref = action_ref_for_action_bar_default(assignment);
                         if action_ref.is_ability() && action_ref.id == ability_id {
-                            Some(canonical_loadout_slot_id(assignment.slot_id.as_str()))
+                            Some(canonical_action_bar_slot_id(assignment.slot_id.as_str()))
                         } else {
                             None
                         }
@@ -5360,9 +4423,7 @@ mod tests {
                 let spell_has_definition = category != ResolvedAuthoringCategory::Spell
                     || spell_definition_by_str(authored_action_id.as_str()).is_some();
                 let spell_requires_animation = category == ResolvedAuthoringCategory::Spell
-                    && (has_loadout_action_tag
-                        || !fixed_action_id.is_empty()
-                        || !default_loadout_slots.is_empty());
+                    && (has_action_bar_action_tag || !action_bar_default_slots.is_empty());
                 let spell_has_animation = !spell_requires_animation
                     || (!combat_profile_id.is_empty()
                         && spell_ids_for_combat_profile(combat_profile_id.as_str())
@@ -5402,12 +4463,10 @@ mod tests {
                 ResolvedCombatAuthoringAction {
                     ability_id,
                     category,
-                    class_id,
                     combat_profile_id,
                     authored_action_id,
-                    fixed_action_id,
-                    default_loadout_slots,
-                    has_loadout_action_tag,
+                    action_bar_default_slots,
+                    has_action_bar_action_tag,
                     has_core_ability_tag,
                     has_ability_presentation,
                     melee_matches_authored_strike,
@@ -5433,28 +4492,28 @@ mod tests {
             .iter()
             .map(action_presentation_key)
             .collect();
-        let known_classes: HashSet<_> = catalog
-            .classes
+        let known_profiles: HashSet<_> = catalog
+            .combat_profiles
             .iter()
-            .map(|class| normalize_identifier(class.class_id.as_str()))
+            .map(|profile| normalize_identifier(profile.combat_profile_id.as_str()))
             .collect();
 
         for action in graph {
-            if !known_classes.contains(action.class_id.as_str()) {
+            if !known_profiles.contains(action.combat_profile_id.as_str()) {
                 errors.push(CombatAuthoringError::new(
-                    CombatAuthoringRule::AbilityClassResolves,
+                    CombatAuthoringRule::AbilityProfileResolves,
                     format!(
-                        "ability '{}' references unknown class '{}'",
-                        action.ability_id, action.class_id
+                        "ability '{}' references unknown combat profile '{}'",
+                        action.ability_id, action.combat_profile_id
                     ),
                 ));
             }
             if action.combat_profile_id.is_empty() {
                 errors.push(CombatAuthoringError::new(
-                    CombatAuthoringRule::AbilityClassResolves,
+                    CombatAuthoringRule::AbilityProfileResolves,
                     format!(
-                        "ability '{}' class '{}' must resolve to a default combat profile",
-                        action.ability_id, action.class_id
+                        "ability '{}' must declare combat_profile_id",
+                        action.ability_id
                     ),
                 ));
             }
@@ -5551,14 +4610,16 @@ mod tests {
                 }
             }
 
-            let is_player_facing = !action.default_loadout_slots.is_empty()
-                || !action.fixed_action_id.is_empty()
-                || action.has_loadout_action_tag;
-            if action.has_core_ability_tag && action.default_loadout_slots.is_empty() {
+            let is_player_facing =
+                !action.action_bar_default_slots.is_empty() || action.has_action_bar_action_tag;
+            if action.has_core_ability_tag
+                && !matches!(action.category, ResolvedAuthoringCategory::Spell)
+                && action.action_bar_default_slots.is_empty()
+            {
                 errors.push(CombatAuthoringError::new(
-                    CombatAuthoringRule::CoreAbilityHasDefaultAssignment,
+                    CombatAuthoringRule::CoreAbilityHasActionBarDefault,
                     format!(
-                        "core ability '{}' must have a default loadout assignment",
+                        "core non-spell ability '{}' must have an action-bar default",
                         action.ability_id
                     ),
                 ));
@@ -5632,113 +4693,49 @@ mod tests {
             }
         }
 
-        let mut fixed_action_binding_slots = HashSet::new();
-        for binding in &catalog.fixed_action_bindings {
-            let normalized_class_id = normalize_identifier(binding.class_id.as_str());
-            let fixed_action_id = normalize_identifier(binding.fixed_action_id.as_str());
-            let ability_id = normalize_identifier(binding.ability_id.as_str());
-
-            if !fixed_action_binding_slots
-                .insert((normalized_class_id.clone(), fixed_action_id.clone()))
-            {
-                errors.push(CombatAuthoringError::new(
-                    CombatAuthoringRule::FixedActionBindingResolves,
-                    format!(
-                        "duplicate fixed action binding for class '{}' action '{}'",
-                        binding.class_id, binding.fixed_action_id
-                    ),
-                ));
-            }
-            if !known_classes.contains(normalized_class_id.as_str()) {
-                errors.push(CombatAuthoringError::new(
-                    CombatAuthoringRule::FixedActionBindingResolves,
-                    format!(
-                        "fixed action binding '{}' references unknown class '{}'",
-                        binding.ability_id, binding.class_id
-                    ),
-                ));
-            }
-            if let FixedActionId::Unsupported(value) =
-                FixedActionId::from_wire(fixed_action_id.as_str())
-            {
-                errors.push(CombatAuthoringError::new(
-                    CombatAuthoringRule::FixedActionBindingResolves,
-                    format!("fixed action binding references unsupported fixed action '{value}'"),
-                ));
-            }
-
-            let Some(action) = graph.iter().find(|action| action.ability_id == ability_id) else {
-                errors.push(CombatAuthoringError::new(
-                    CombatAuthoringRule::FixedActionBindingResolves,
-                    format!(
-                        "fixed action binding references unknown ability '{}'",
-                        binding.ability_id
-                    ),
-                ));
-                continue;
-            };
-
-            if action.class_id != normalized_class_id {
-                errors.push(CombatAuthoringError::new(
-                    CombatAuthoringRule::FixedActionBindingResolves,
-                    format!(
-                        "fixed action ability '{}' belongs to class '{}' but binding is for class '{}'",
-                        binding.ability_id, action.class_id, binding.class_id
-                    ),
-                ));
-            }
-            if action.fixed_action_id != fixed_action_id {
-                errors.push(CombatAuthoringError::new(
-                    CombatAuthoringRule::FixedActionBindingResolves,
-                    format!(
-                        "fixed action ability '{}' must declare fixed_action_id '{}'",
-                        binding.ability_id, binding.fixed_action_id
-                    ),
-                ));
-            }
-        }
-
         let known_slots: HashSet<_> = catalog
             .slots
             .iter()
-            .map(|slot| canonical_loadout_slot_id(slot.slot_id.as_str()))
+            .map(|slot| canonical_action_bar_slot_id(slot.slot_id.as_str()))
             .collect();
-        let mut default_assignment_slots = HashSet::new();
+        let mut action_bar_default_slots = HashSet::new();
 
-        for assignment in &catalog.default_loadout_assignments {
-            let normalized_class_id = normalize_identifier(assignment.class_id.as_str());
-            let normalized_slot_id = canonical_loadout_slot_id(assignment.slot_id.as_str());
-            if !default_assignment_slots
-                .insert((normalized_class_id.clone(), normalized_slot_id.clone()))
-            {
+        for assignment in &catalog.combat_profile_action_bar_defaults {
+            let normalized_combat_profile_id =
+                normalize_identifier(assignment.combat_profile_id.as_str());
+            let normalized_slot_id = canonical_action_bar_slot_id(assignment.slot_id.as_str());
+            if !action_bar_default_slots.insert((
+                normalized_combat_profile_id.clone(),
+                normalized_slot_id.clone(),
+            )) {
                 errors.push(CombatAuthoringError::new(
-                    CombatAuthoringRule::DefaultLoadoutAssignmentResolves,
+                    CombatAuthoringRule::CombatProfileActionBarDefaultResolves,
                     format!(
-                        "duplicate default assignment for class '{}' slot '{}'",
-                        assignment.class_id, assignment.slot_id
+                        "duplicate action-bar default for combat profile '{}' slot '{}'",
+                        assignment.combat_profile_id, assignment.slot_id
                     ),
                 ));
             }
-            if !known_classes.contains(normalized_class_id.as_str()) {
+            if !known_profiles.contains(normalized_combat_profile_id.as_str()) {
                 errors.push(CombatAuthoringError::new(
-                    CombatAuthoringRule::DefaultLoadoutAssignmentResolves,
+                    CombatAuthoringRule::CombatProfileActionBarDefaultResolves,
                     format!(
-                        "default assignment references unknown class '{}'",
-                        assignment.class_id
+                        "action-bar default references unknown combat profile '{}'",
+                        assignment.combat_profile_id
                     ),
                 ));
             }
             if !known_slots.contains(normalized_slot_id.as_str()) {
                 errors.push(CombatAuthoringError::new(
-                    CombatAuthoringRule::DefaultLoadoutAssignmentResolves,
+                    CombatAuthoringRule::CombatProfileActionBarDefaultResolves,
                     format!(
-                        "default assignment references unknown slot '{}'",
+                        "action-bar default references unknown slot '{}'",
                         assignment.slot_id
                     ),
                 ));
             }
 
-            let action_ref = action_ref_for_default_assignment(assignment);
+            let action_ref = action_ref_for_action_bar_default(assignment);
             match &action_ref.kind {
                 ActionKind::Ability => {
                     let Some(action) = graph
@@ -5746,21 +4743,21 @@ mod tests {
                         .find(|action| action.ability_id == action_ref.id)
                     else {
                         errors.push(CombatAuthoringError::new(
-                            CombatAuthoringRule::DefaultLoadoutAssignmentResolves,
+                            CombatAuthoringRule::CombatProfileActionBarDefaultResolves,
                             format!(
-                                "default assignment references unknown ability '{}'",
+                                "action-bar default references unknown ability '{}'",
                                 action_ref.id
                             ),
                         ));
                         continue;
                     };
 
-                    if action.class_id != normalized_class_id {
+                    if action.combat_profile_id != normalized_combat_profile_id {
                         errors.push(CombatAuthoringError::new(
-                            CombatAuthoringRule::DefaultLoadoutAssignmentResolves,
+                            CombatAuthoringRule::CombatProfileActionBarDefaultResolves,
                             format!(
-                                "default assignment ability '{}' belongs to class '{}' but assignment is for class '{}'",
-                                action_ref.id, action.class_id, assignment.class_id
+                                "action-bar default ability '{}' belongs to combat profile '{}' but default is for combat profile '{}'",
+                                action_ref.id, action.combat_profile_id, assignment.combat_profile_id
                             ),
                         ));
                     }
@@ -5769,9 +4766,9 @@ mod tests {
                         normalized_slot_id.as_str(),
                     ) {
                         errors.push(CombatAuthoringError::new(
-                            CombatAuthoringRule::DefaultLoadoutAssignmentResolves,
+                            CombatAuthoringRule::CombatProfileActionBarDefaultResolves,
                             format!(
-                                "default assignment ability '{}' is incompatible with slot '{}'",
+                                "action-bar default ability '{}' is incompatible with slot '{}'",
                                 action_ref.id, assignment.slot_id
                             ),
                         ));
@@ -5783,8 +4780,8 @@ mod tests {
                         FixedActionId::Dodge | FixedActionId::Parry => {}
                         FixedActionId::Unsupported(value) => {
                             errors.push(CombatAuthoringError::new(
-                                CombatAuthoringRule::DefaultLoadoutAssignmentResolves,
-                                format!("default assignment references unsupported fixed action '{value}'"),
+                                CombatAuthoringRule::CombatProfileActionBarDefaultResolves,
+                                format!("action-bar default references unsupported fixed action '{value}'"),
                             ));
                         }
                     }
@@ -5805,8 +4802,8 @@ mod tests {
                 }
                 ActionKind::Unsupported(kind) => {
                     errors.push(CombatAuthoringError::new(
-                        CombatAuthoringRule::DefaultLoadoutAssignmentResolves,
-                        format!("default assignment uses unsupported action kind '{kind}'"),
+                        CombatAuthoringRule::CombatProfileActionBarDefaultResolves,
+                        format!("action-bar default uses unsupported action kind '{kind}'"),
                     ));
                 }
             }
@@ -5885,9 +4882,9 @@ mod tests {
                 .or_insert(cast_time_ms);
         }
         let known_melee_strikes: HashSet<_> = catalog
-            .classes
+            .combat_profiles
             .iter()
-            .filter_map(|class| derived_combat_profile_id_for_class(class.class_id.as_str()))
+            .map(|profile| normalize_identifier(profile.combat_profile_id.as_str()))
             .flat_map(|profile| {
                 authored_strike_ids_for_combat_profile(profile.as_str())
                     .into_iter()
@@ -5895,9 +4892,9 @@ mod tests {
             })
             .collect();
         let known_melee_strike_hit_windows: HashMap<_, _> = catalog
-            .classes
+            .combat_profiles
             .iter()
-            .filter_map(|class| derived_combat_profile_id_for_class(class.class_id.as_str()))
+            .map(|profile| normalize_identifier(profile.combat_profile_id.as_str()))
             .flat_map(|profile| {
                 authored_strike_hit_window_counts_for_combat_profile(profile.as_str())
                     .into_iter()
@@ -5910,8 +4907,7 @@ mod tests {
             .filter(|ability| ability_gameplay_kind(ability) == "MELEE")
             .filter_map(|ability| {
                 let ability_id = normalize_identifier(ability.ability_id.as_str());
-                let class_id = normalize_identifier(ability.class_id.as_str());
-                let combat_profile_id = derived_combat_profile_id_for_class(class_id.as_str())?;
+                let combat_profile_id = resolved_combat_profile_id_for_ability_definition(ability)?;
                 let authored_action_id = normalize_identifier(ability.action_id.as_str());
                 let counts = authored_strike_hit_window_counts_for_combat_profile(
                     combat_profile_id.as_str(),
@@ -6469,6 +5465,7 @@ mod tests {
         let catalog = serde_json::from_str::<super::ProgressionCatalogFile>(
             r#"{
                 "auto_attacks": [],
+                "action_presentations": [],
                 "combat_vfx_cues": [
                     {
                         "owner_kind": "SPELL",
@@ -6514,7 +5511,7 @@ mod tests {
     fn stale_movement_delivery_json_key_is_rejected() {
         let json = r#"{
             "ability_id": "BAD_CHARGE",
-            "class_id": "WARRIOR",
+            "combat_profile_id": "TWO_HANDED_SWORD",
             "action_id": "BAD_CHARGE",
             "display_name": "Bad Charge",
             "sort_order": 1,
@@ -6583,12 +5580,20 @@ mod tests {
         let catalog = serde_json::from_str::<super::ProgressionCatalogFile>(
             r#"{
                 "auto_attacks": [],
+                "combat_profiles": [
+                    {
+                        "combat_profile_id": "TWO_HANDED_SWORD",
+                        "display_name": "Greatsword",
+                        "sort_order": 1
+                    }
+                ],
                 "abilities": [
                     {
                         "ability_id": "TEST_STATUS_ABILITY",
-                        "class_id": "WARRIOR",
+                        "combat_profile_id": "TWO_HANDED_SWORD",
                         "action_id": "TEST_STATUS",
                         "display_name": "Test Status",
+                        "resource_kind": "",
                         "sort_order": 1,
                         "gameplay": {
                             "kind": "SPELL",
@@ -6641,6 +5646,7 @@ mod tests {
         let catalog = serde_json::from_str::<super::ProgressionCatalogFile>(
             r#"{
                 "auto_attacks": [],
+                "action_presentations": [],
                 "combat_vfx_cues": [
                     {
                         "owner_kind": "ABILITY",
@@ -6757,13 +5763,6 @@ mod tests {
         for definition in &catalog.combat_profiles {
             assert!(!definition.combat_profile_id.trim().is_empty());
             assert!(combat_profile_ids.insert(definition.combat_profile_id.clone()));
-        }
-
-        let mut class_ids = HashSet::new();
-        for definition in &catalog.classes {
-            assert!(!definition.class_id.trim().is_empty());
-            assert!(class_ids.insert(definition.class_id.clone()));
-            assert!(definition.max_saved_specs > 0);
         }
 
         let mut resource_kinds = HashSet::new();
@@ -7083,16 +6082,17 @@ mod tests {
             toggle
                 .ability_tags
                 .iter()
-                .any(|tag| normalize_identifier(tag.as_str()) == "LOADOUT_ACTION"),
-            "Archer draw mode toggle should be a loadout action"
+                .any(|tag| normalize_identifier(tag.as_str()) == "ACTION_BAR_ACTION"),
+            "Archer draw mode toggle should be a action-bar action"
         );
         assert!(
             catalog
-                .default_loadout_assignments
+                .combat_profile_action_bar_defaults
                 .iter()
                 .any(|assignment| {
-                    normalize_identifier(assignment.class_id.as_str()) == "RANGER"
-                        && canonical_loadout_slot_id(assignment.slot_id.as_str()) == "SLOT_1_1"
+                    normalize_identifier(assignment.combat_profile_id.as_str())
+                        == COMBAT_PROFILE_ARCHER_BOW
+                        && canonical_action_bar_slot_id(assignment.slot_id.as_str()) == "SLOT_1_1"
                         && normalize_identifier(assignment.ability_id.as_str())
                             == ARCHER_DRAW_MODE_TOGGLE_ABILITY_ID
                 }),
@@ -7131,13 +6131,16 @@ mod tests {
             .find(|ability| ability.ability_id == "WARRIOR_MAIM")
             .expect("WARRIOR_MAIM must exist");
 
-        assert_eq!(ability.class_id, "WARRIOR");
+        assert_eq!(
+            normalize_identifier(ability.combat_profile_id.as_str()),
+            COMBAT_PROFILE_TWO_HANDED_SWORD
+        );
         assert_eq!(ability.action_id, "WARRIOR_MAIM");
         assert_eq!(ability_gameplay_kind(ability), "MELEE");
         assert_eq!(ability.gameplay.base_damage, Some(10));
         assert_eq!(ability.gameplay.applies_stagger, Some(false));
         assert!(!progression_catalog()
-            .default_loadout_assignments
+            .combat_profile_action_bar_defaults
             .iter()
             .any(
                 |assignment| normalize_identifier(assignment.ability_id.as_str()) == "WARRIOR_MAIM"
@@ -7167,11 +6170,6 @@ mod tests {
                 .iter()
                 .find(|ability| normalize_identifier(ability.ability_id.as_str()) == ability_id)
                 .expect("charge ability must exist");
-            assert!(
-                normalize_identifier(ability.fixed_action_id.as_str()).is_empty(),
-                "charge ability '{}' must be selectable directly, not fixed-action backed",
-                ability.ability_id
-            );
             assert_eq!(
                 ability_gameplay_kind(ability),
                 "MELEE",
@@ -7259,7 +6257,10 @@ mod tests {
             .find(|ability| ability.ability_id == "PALADIN_FERVOR")
             .expect("PALADIN_FERVOR must exist");
 
-        assert_eq!(ability.class_id, "PALADIN");
+        assert_eq!(
+            normalize_identifier(ability.combat_profile_id.as_str()),
+            COMBAT_PROFILE_SWORD_AND_SHIELD
+        );
         assert_eq!(ability_gameplay_kind(ability), "SPELL");
         assert_eq!(ability.gameplay.cast_time_ms, Some(0));
         assert_eq!(
@@ -7292,12 +6293,12 @@ mod tests {
         );
         assert_eq!(effect.duration(), std::time::Duration::from_millis(750));
         assert!(effect.dispel_types().is_empty());
-        assert!(catalog
-            .default_loadout_assignments
+        assert!(!catalog
+            .combat_profile_action_bar_defaults
             .iter()
             .any(|assignment| {
-                normalize_identifier(assignment.class_id.as_str()) == "PALADIN"
-                    && canonical_loadout_slot_id(assignment.slot_id.as_str()) == "SLOT_1_7"
+                normalize_identifier(assignment.combat_profile_id.as_str())
+                    == COMBAT_PROFILE_SWORD_AND_SHIELD
                     && normalize_identifier(assignment.ability_id.as_str()) == "PALADIN_FERVOR"
             }));
     }
@@ -7334,7 +6335,10 @@ mod tests {
             .find(|ability| ability.ability_id == "PALADIN_SACRED_FLAME")
             .expect("PALADIN_SACRED_FLAME must exist");
 
-        assert_eq!(ability.class_id, "PALADIN");
+        assert_eq!(
+            normalize_identifier(ability.combat_profile_id.as_str()),
+            COMBAT_PROFILE_SWORD_AND_SHIELD
+        );
         assert_eq!(ability_gameplay_kind(ability), "SPELL");
         assert_eq!(ability.action_id, "SACRED_FLAME");
         assert_eq!(ability.gameplay.resource_cost, Some(1.0));
@@ -7383,12 +6387,12 @@ mod tests {
             normalize_identifier(cue.vfx_id.as_str()),
             "VFX_SACRED_FLAME_HIT_01"
         );
-        assert!(catalog
-            .default_loadout_assignments
+        assert!(!catalog
+            .combat_profile_action_bar_defaults
             .iter()
             .any(|assignment| {
-                normalize_identifier(assignment.class_id.as_str()) == "PALADIN"
-                    && canonical_loadout_slot_id(assignment.slot_id.as_str()) == "SLOT_1_8"
+                normalize_identifier(assignment.combat_profile_id.as_str())
+                    == COMBAT_PROFILE_SWORD_AND_SHIELD
                     && normalize_identifier(assignment.ability_id.as_str())
                         == "PALADIN_SACRED_FLAME"
             }));
@@ -7425,7 +6429,6 @@ mod tests {
             .find(|ability| ability.ability_id == "WARRIOR_CHARGE")
             .expect("expected Warrior Charge ability");
 
-        assert_eq!(normalize_identifier(ability.fixed_action_id.as_str()), "");
         assert_eq!(
             normalize_identifier(ability.action_id.as_str()),
             "WARRIOR_CHARGE"
@@ -7441,49 +6444,6 @@ mod tests {
         assert_eq!(
             primary_resource_gain_on_action_accept("PALADIN_CHARGE"),
             0.0
-        );
-    }
-
-    #[test]
-    fn stat_wire_identifiers_are_stable() {
-        assert_eq!(StatKind::Might.as_str(), "MIGHT");
-        assert_eq!(StatKind::Insight.as_str(), "INSIGHT");
-        assert_eq!(StatKind::Finesse.as_str(), "FINESSE");
-        assert_eq!(StatKind::Quickness.as_str(), "QUICKNESS");
-        assert_eq!(StatKind::Fortitude.as_str(), "FORTITUDE");
-    }
-
-    #[test]
-    fn saved_spec_total_for_stat_sums_matching_allocations_only() {
-        let allocations = vec![
-            SavedSpecStatAllocation {
-                key: "spec:MIGHT".to_string(),
-                spec_id: "spec".to_string(),
-                stat_kind: "MIGHT".to_string(),
-                allocated_points: 7,
-            },
-            SavedSpecStatAllocation {
-                key: "spec:INSIGHT".to_string(),
-                spec_id: "spec".to_string(),
-                stat_kind: "INSIGHT".to_string(),
-                allocated_points: 11,
-            },
-            SavedSpecStatAllocation {
-                key: "spec:INSIGHT_2".to_string(),
-                spec_id: "spec".to_string(),
-                stat_kind: "INSIGHT".to_string(),
-                allocated_points: 4,
-            },
-        ];
-
-        assert_eq!(saved_spec_total_for_stat(&allocations, StatKind::Might), 7);
-        assert_eq!(
-            saved_spec_total_for_stat(&allocations, StatKind::Insight),
-            15
-        );
-        assert_eq!(
-            saved_spec_total_for_stat(&allocations, StatKind::Fortitude),
-            0
         );
     }
 
@@ -7533,14 +6493,14 @@ mod tests {
 
     #[test]
     fn legacy_bottom_slot_ids_canonicalize_to_grid_ids() {
-        assert_eq!(canonical_loadout_slot_id("bottom_01"), "SLOT_0_0");
-        assert_eq!(canonical_loadout_slot_id("BOTTOM_08"), "SLOT_0_7");
-        assert_eq!(canonical_loadout_slot_id("BOTTOM_09"), "SLOT_0_8");
-        assert_eq!(canonical_loadout_slot_id("slot_1_0"), "SLOT_1_0");
+        assert_eq!(canonical_action_bar_slot_id("bottom_01"), "SLOT_0_0");
+        assert_eq!(canonical_action_bar_slot_id("BOTTOM_08"), "SLOT_0_7");
+        assert_eq!(canonical_action_bar_slot_id("BOTTOM_09"), "SLOT_0_8");
+        assert_eq!(canonical_action_bar_slot_id("slot_1_0"), "SLOT_1_0");
     }
 
     #[test]
-    fn warrior_whirlwind_resolves_via_derived_greatsword_profile() {
+    fn warrior_whirlwind_resolves_via_greatsword_profile() {
         let hew = progression_catalog()
             .abilities
             .iter()
@@ -7555,8 +6515,7 @@ mod tests {
             .iter()
             .find(|ability| ability.ability_id == "WARRIOR_WHIRLWIND")
             .expect("expected Warrior Whirlwind ability");
-        let combat_profile_id = derived_combat_profile_id_for_class("WARRIOR")
-            .expect("Warrior default combat profile must resolve");
+        let combat_profile_id = COMBAT_PROFILE_TWO_HANDED_SWORD;
 
         assert_eq!(
             normalize_identifier(ability.action_id.as_str()),
@@ -7568,7 +6527,7 @@ mod tests {
         assert_eq!(targeting.radius, 3.25);
         assert_eq!(targeting.range, 3.25);
         assert!(profile_supports_action_reference(
-            combat_profile_id.as_str(),
+            combat_profile_id,
             &AuthoredActionId::new(ability.action_id.as_str())
         ));
     }
@@ -7676,9 +6635,8 @@ mod tests {
     }
 
     #[test]
-    fn warrior_sunder_and_cleave_resolve_via_derived_greatsword_profile() {
-        let combat_profile_id = derived_combat_profile_id_for_class("WARRIOR")
-            .expect("Warrior default combat profile must resolve");
+    fn warrior_sunder_and_cleave_resolve_via_greatsword_profile() {
+        let combat_profile_id = COMBAT_PROFILE_TWO_HANDED_SWORD;
 
         for (ability_id, action_id) in [
             ("WARRIOR_SUNDER", "COMBO_ATTACK_4_4_LUNGING_SLASH"),
@@ -7692,7 +6650,7 @@ mod tests {
 
             assert_eq!(normalize_identifier(ability.action_id.as_str()), action_id);
             assert!(profile_supports_action_reference(
-                combat_profile_id.as_str(),
+                combat_profile_id,
                 &AuthoredActionId::new(ability.action_id.as_str())
             ));
         }
@@ -7700,8 +6658,7 @@ mod tests {
 
     #[test]
     fn warrior_dread_strike_resolves_as_auto_attack_replacement() {
-        let combat_profile_id = derived_combat_profile_id_for_class("WARRIOR")
-            .expect("Warrior default combat profile must resolve");
+        let combat_profile_id = COMBAT_PROFILE_TWO_HANDED_SWORD;
         let ability = progression_catalog()
             .abilities
             .iter()
@@ -7719,7 +6676,7 @@ mod tests {
             combat_profile_id
         );
         assert!(profile_supports_action_reference(
-            combat_profile_id.as_str(),
+            combat_profile_id,
             &AuthoredActionId::new(replacement.authored_melee_strike_id.as_str())
         ));
         assert!(!replacement.grants_primary_resource_on_hit);
@@ -7749,7 +6706,7 @@ mod tests {
         assert_eq!(normalize_identifier(ability.action_id.as_str()), "FORTIFY");
         assert!(spell_definition_by_str(ability.action_id.as_str()).is_some());
         assert!(!catalog
-            .default_loadout_assignments
+            .combat_profile_action_bar_defaults
             .iter()
             .any(|assignment| {
                 assignment.action_kind == "ABILITY" && assignment.ability_id == "WARRIOR_FORTIFY"
@@ -7776,7 +6733,7 @@ mod tests {
             crate::spells::SpellBehavior::RemoveStatus
         );
         assert!(!catalog
-            .default_loadout_assignments
+            .combat_profile_action_bar_defaults
             .iter()
             .any(|assignment| {
                 assignment.action_kind == "ABILITY" && assignment.ability_id == "WARRIOR_IRON_WILL"
@@ -7801,7 +6758,7 @@ mod tests {
         );
         assert!(!definition.uses_global_cooldown);
         assert!(!catalog
-            .default_loadout_assignments
+            .combat_profile_action_bar_defaults
             .iter()
             .any(|assignment| {
                 assignment.action_kind == "ABILITY" && assignment.ability_id == "WARRIOR_DEFIANCE"
@@ -7826,10 +6783,57 @@ mod tests {
     }
 
     #[test]
+    fn default_action_bar_assignments_do_not_place_spells() {
+        let catalog = progression_catalog();
+
+        for assignment in &catalog.combat_profile_action_bar_defaults {
+            let action_ref = action_ref_for_action_bar_default(assignment);
+            if !action_ref.is_ability() {
+                continue;
+            }
+
+            let ability = catalog
+                .abilities
+                .iter()
+                .find(|ability| normalize_identifier(ability.ability_id.as_str()) == action_ref.id)
+                .expect("action-bar default ability must exist");
+            assert_ne!(
+                ability_gameplay_kind(ability),
+                "SPELL",
+                "default action-bar assignment '{}' for combat profile '{}' should not place learned spells",
+                action_ref.id,
+                assignment.combat_profile_id
+            );
+        }
+    }
+
+    #[test]
+    fn fixed_actions_are_presentations_not_gear_abilities() {
+        let catalog = progression_catalog();
+
+        for fixed_action_id in ["DODGE", "PARRY"] {
+            assert!(
+                catalog.action_presentations.iter().any(|presentation| {
+                    normalize_identifier(presentation.presentation_kind.as_str()) == ACTION_KIND_FIXED
+                        && normalize_identifier(presentation.presentation_id.as_str()) == fixed_action_id
+                }),
+                "fixed action '{}' must have a FIXED presentation row",
+                fixed_action_id
+            );
+            assert!(
+                catalog.abilities.iter().all(|ability| {
+                    normalize_identifier(ability.ability_id.as_str()) != fixed_action_id
+                        && normalize_identifier(ability.action_id.as_str()) != fixed_action_id
+                }),
+                "fixed action '{}' must not be authored as a gear ability",
+                fixed_action_id
+            );
+        }
+    }
+
+    #[test]
     fn warrior_self_buffs_have_greatsword_spell_animation_entries() {
-        let combat_profile_id = derived_combat_profile_id_for_class("WARRIOR")
-            .expect("Warrior default combat profile must resolve");
-        let animation_set_spell_ids = spell_ids_for_combat_profile(combat_profile_id.as_str());
+        let animation_set_spell_ids = spell_ids_for_combat_profile(COMBAT_PROFILE_TWO_HANDED_SWORD);
 
         assert!(
             animation_set_spell_ids.contains("MOMENTUM"),
@@ -7850,26 +6854,6 @@ mod tests {
         assert!(
             animation_set_spell_ids.contains("DEFIANCE"),
             "expected Defiance spell animation entry in the derived greatsword animation set"
-        );
-    }
-
-    #[test]
-    fn class_default_combat_profile_derivation_is_stable() {
-        assert_eq!(
-            derived_combat_profile_id_for_class("WARRIOR").as_deref(),
-            Some("TWO_HANDED_SWORD")
-        );
-        assert_eq!(
-            derived_combat_profile_id_for_class("PALADIN").as_deref(),
-            Some("SWORD_AND_SHIELD")
-        );
-        assert_eq!(
-            derived_combat_profile_id_for_class("WARRIOR").as_deref(),
-            Some("TWO_HANDED_SWORD")
-        );
-        assert_eq!(
-            derived_combat_profile_id_for_class("PALADIN").as_deref(),
-            Some("SWORD_AND_SHIELD")
         );
     }
 

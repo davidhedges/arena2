@@ -154,7 +154,7 @@ namespace Arena.Editor
             SetStretch(navRow, new Vector2(28f, 12f), new Vector2(-28f, -12f));
 
             CreateNavButton(navRow, "PlayButton", "PLAY", new Vector2(0f, 0.5f), new Vector2(0f, 0f), new Vector2(132f, 46f));
-            CreateNavButton(navRow, "LoadoutButton", "LOADOUT", new Vector2(0f, 0.5f), new Vector2(148f, 0f), new Vector2(160f, 46f));
+            CreateNavButton(navRow, "EquipmentButton", "EQUIPMENT", new Vector2(0f, 0.5f), new Vector2(148f, 0f), new Vector2(160f, 46f));
             CreateNavButton(navRow, "StoreButton", "STORE", new Vector2(0f, 0.5f), new Vector2(326f, 0f), new Vector2(126f, 46f), false);
             CreateNavButton(navRow, "SeasonButton", "SEASON", new Vector2(0f, 0.5f), new Vector2(466f, 0f), new Vector2(140f, 46f), false);
             CreateNavButton(navRow, "ProfileButton", "PROFILE", new Vector2(0f, 0.5f), new Vector2(620f, 0f), new Vector2(134f, 46f), false);
@@ -173,9 +173,9 @@ namespace Arena.Editor
             SetStretch(home);
 
             RectTransform left = CreatePanel(home, "IdentityPanel", new Vector2(0f, 1f), new Vector2(28f, -132f), new Vector2(360f, 548f), new Vector2(0f, 1f));
-            CreateTextAt(left, "ClassEyebrow", "CLASS", 13, FontStyles.Bold, TextAlignmentOptions.TopLeft, new Vector2(24f, -26f), new Vector2(120f, 18f), new Color(0.88f, 0.56f, 0.48f));
-            CreateTextAt(left, "ClassName", "WARRIOR", 34, FontStyles.Bold, TextAlignmentOptions.TopLeft, new Vector2(24f, -52f), new Vector2(260f, 40f), Color.white);
-            CreateTextAt(left, "ClassMeta", "MELEE | GREATSWORD", 15, FontStyles.Bold, TextAlignmentOptions.TopLeft, new Vector2(24f, -96f), new Vector2(280f, 24f), new Color(0.72f, 0.75f, 0.80f));
+            CreateTextAt(left, "GearEyebrow", "GEAR", 13, FontStyles.Bold, TextAlignmentOptions.TopLeft, new Vector2(24f, -26f), new Vector2(120f, 18f), new Color(0.88f, 0.56f, 0.48f));
+            CreateTextAt(left, "GearName", "GEAR", 34, FontStyles.Bold, TextAlignmentOptions.TopLeft, new Vector2(24f, -52f), new Vector2(260f, 40f), Color.white);
+            CreateTextAt(left, "GearMeta", "MELEE | GREATSWORD", 15, FontStyles.Bold, TextAlignmentOptions.TopLeft, new Vector2(24f, -96f), new Vector2(280f, 24f), new Color(0.72f, 0.75f, 0.80f));
             TMP_Text blurb = CreateTextAt(left, "IdentityBlurb", "A heavy vanguard built around commitment, pressure, and decisive greatsword attacks.", 15, FontStyles.Normal, TextAlignmentOptions.TopLeft, new Vector2(24f, -136f), new Vector2(308f, 74f), new Color(0.88f, 0.89f, 0.91f, 0.92f));
             blurb.textWrappingMode = TextWrappingModes.Normal;
             CreateTextAt(left, "RankLabel", "RANK", 13, FontStyles.Bold, TextAlignmentOptions.TopLeft, new Vector2(24f, -232f), new Vector2(80f, 18f), new Color(0.72f, 0.75f, 0.80f));
@@ -192,8 +192,8 @@ namespace Arena.Editor
             viewAll.gameObject.AddComponent<Button>();
             CreateTextCentered(viewAll, "Label", "VIEW ALL", 13, FontStyles.Bold, Color.white);
 
-            RectTransform right = CreatePanel(home, "LoadoutPanel", new Vector2(1f, 1f), new Vector2(-28f, -132f), new Vector2(360f, 430f), new Vector2(1f, 1f));
-            CreateTextAt(right, "Title", "LOADOUT", 18, FontStyles.Bold, TextAlignmentOptions.TopLeft, new Vector2(24f, -28f), new Vector2(160f, 24f), Color.white);
+            RectTransform right = CreatePanel(home, "EquipmentPanel", new Vector2(1f, 1f), new Vector2(-28f, -132f), new Vector2(360f, 430f), new Vector2(1f, 1f));
+            CreateTextAt(right, "Title", "EQUIPMENT", 18, FontStyles.Bold, TextAlignmentOptions.TopLeft, new Vector2(24f, -28f), new Vector2(160f, 24f), Color.white);
             BuildAllocatedStats(right);
             CreateTextAt(right, "ProfessionLabel", "PROFESSION", 12, FontStyles.Bold, TextAlignmentOptions.TopLeft, new Vector2(24f, -238f), new Vector2(160f, 18f), new Color(0.72f, 0.75f, 0.80f));
             BuildProfession(right);

@@ -320,21 +320,6 @@ namespace Arena.Entity
 
         public void OnPlayerStateDelete(EventContext ctx, PlayerState row) { }
 
-        public void OnCharacterProgressionInsert(EventContext ctx, CharacterProgression row)
-        {
-            ApplyCharacterProgression(row);
-        }
-
-        public void OnCharacterProgressionUpdate(EventContext ctx, CharacterProgression oldRow, CharacterProgression newRow)
-        {
-            ApplyCharacterProgression(newRow);
-        }
-
-        public void OnCharacterProgressionDelete(EventContext ctx, CharacterProgression row)
-        {
-            ApplyOwnerCombatProfile(row.Owner);
-        }
-
         public void OnEquipmentLoadoutInsert(EventContext ctx, EquipmentLoadout row)
         {
             ApplyEquipmentLoadout(row);
@@ -961,19 +946,9 @@ namespace Arena.Entity
                 return;
 
             entity.SetUsername(row.Username);
-            entity.SetClassId(row.ClassId);
             ApplyOwnerCombatProfile(row.Identity);
             if (_sharedActionProfile != null)
                 entity.SetSharedActionProfile(_sharedActionProfile);
-        }
-
-        private void ApplyCharacterProgression(CharacterProgression row)
-        {
-            if (!TryGetLivePlayer(row.Owner, out var entity))
-                return;
-
-            entity.SetClassId(row.ClassId);
-            ApplyOwnerCombatProfile(row.Owner);
         }
 
         private void ApplyEquipmentLoadout(EquipmentLoadout row)
@@ -1211,7 +1186,7 @@ namespace Arena.Entity
             {
                 if (_hasLocalIdentity && row.Caster == _localIdentity)
                 {
-                    LoadoutActionTrace.Trace(
+                    ActionBarTrace.Trace(
                         $"skipped combat animation for non-start COMBAT_CAST: {row.ActionKind} "
                         + $"source={row.SourceKind} hitIndex={row.HitIndex}");
                 }
@@ -1220,7 +1195,7 @@ namespace Arena.Entity
 
             if (_hasLocalIdentity && row.Caster == _localIdentity)
             {
-                LoadoutActionTrace.Trace(
+                ActionBarTrace.Trace(
                     $"authoritative COMBAT_CAST received for local caster: {row.ActionKind} source={row.SourceKind}");
             }
 
@@ -1228,7 +1203,7 @@ namespace Arena.Entity
             {
                 if (_hasLocalIdentity && row.Caster == _localIdentity)
                 {
-                    LoadoutActionTrace.Trace(
+                    ActionBarTrace.Trace(
                         $"suppressed immediate release animation for cast-time spell COMBAT_CAST: {row.ActionKind}");
                 }
                 return;
@@ -1387,7 +1362,7 @@ namespace Arena.Entity
                     && row.Target == _localIdentity
                     && string.Equals(row.EffectKind, "MOVE_SLOW_IMMUNITY", System.StringComparison.OrdinalIgnoreCase))
                 {
-                    LoadoutActionTrace.Trace("local MOVE_SLOW_IMMUNITY status applied");
+                    ActionBarTrace.Trace("local MOVE_SLOW_IMMUNITY status applied");
                 }
             }
             else if (TryGetLiveNpc(row.Target, out var npc))

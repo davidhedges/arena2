@@ -19,7 +19,7 @@ namespace Arena.Presentation.Appearance
         public const string DefaultEyesId = "HUMAN_EYES_BLUE";
         public const string DefaultHairId = "";
         public const string DefaultFaceId = "";
-        public const string DefaultOutfitId = "HUMAN_MALE_WARRIOR_STARTER";
+        public const string DefaultOutfitId = "HUMAN_MALE_PEASANT_STARTER";
 
         public static string Normalize(string? value)
         {

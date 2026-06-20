@@ -26,13 +26,13 @@ namespace Arena.Input
                 if (consumedPressKeys.Contains(binding.KeyCode)) continue;
                 if (!input.WasKeyPressedThisFrame(binding.KeyCode)) continue;
 
-                ActiveSelectableLoadoutAction resolved = ActiveLoadoutResolver.ResolveActiveSelectableAction(
+                ActiveActionBarAction resolved = ActiveActionBarResolver.ResolveActiveSelectableAction(
                     conn,
                     conn.Identity,
                     binding.SlotId);
                 if (!resolved.HasAssignedAction)
                 {
-                    LoadoutActionTrace.Trace(
+                    ActionBarTrace.Trace(
                         $"{binding.KeyLabel} -> {binding.SlotId} unresolved (assigned={resolved.HasAssignedAction})");
                     continue;
                 }
@@ -47,7 +47,7 @@ namespace Arena.Input
                 if (binding.RequiresShift != shiftHeld) continue;
                 if (consumedReleaseKeys.Contains(binding.KeyCode)) continue;
 
-                ActiveSelectableLoadoutAction resolved = ActiveLoadoutResolver.ResolveActiveSelectableAction(
+                ActiveActionBarAction resolved = ActiveActionBarResolver.ResolveActiveSelectableAction(
                     conn,
                     conn.Identity,
                     binding.SlotId);
@@ -72,7 +72,7 @@ namespace Arena.Input
                     continue;
                 if (!SpellDefinitionContracts.CastsOnRelease(GetSpellDefinition(conn, actionId))) continue;
                 if (!input.WasKeyReleasedThisFrame(binding.KeyCode)) continue;
-                LoadoutActionTrace.Trace($"{binding.KeyLabel} release -> cast release {actionId}");
+                ActionBarTrace.Trace($"{binding.KeyLabel} release -> cast release {actionId}");
                 CastActionToken token = LocalCombatState.Instance.CurrentCastTokenForRelease(actionId);
                 conn.Reducers.ReleaseCastRequest(
                     actionId,
@@ -81,13 +81,13 @@ namespace Arena.Input
             }
         }
 
-        public static bool TryTrigger(ActiveSelectableLoadoutAction action, DbConnection? conn)
+        public static bool TryTrigger(ActiveActionBarAction action, DbConnection? conn)
         {
             return TryTrigger(action, conn, SpellInputHandler.Instance, string.Empty, action.SlotId);
         }
 
         private static bool TryTrigger(
-            ActiveSelectableLoadoutAction action,
+            ActiveActionBarAction action,
             DbConnection? conn,
             SpellInputHandler? spellInput,
             string keyLabel,
@@ -103,7 +103,7 @@ namespace Arena.Input
 
             if (!string.IsNullOrWhiteSpace(keyLabel))
             {
-                LoadoutActionTrace.Trace(
+                ActionBarTrace.Trace(
                     $"{keyLabel} -> {slotId} ability={action.AbilityId} kind={action.AbilityKind} authored={action.AuthoredActionId} runtime={action.ActionId}");
             }
 
@@ -114,7 +114,7 @@ namespace Arena.Input
 
             if (action.IsAutoAttackReplacementAbility)
             {
-                LoadoutActionTrace.Trace($"auto-attack replacement dispatch arming {action.AbilityId}");
+                ActionBarTrace.Trace($"auto-attack replacement dispatch arming {action.AbilityId}");
                 conn.Reducers.ArmAutoAttackReplacement(action.AbilityId);
                 return true;
             }
@@ -131,7 +131,7 @@ namespace Arena.Input
 
             if (!action.IsSpellAbility)
             {
-                LoadoutActionTrace.Trace(
+                ActionBarTrace.Trace(
                     $"action-bar dispatch rejected unsupported ability kind '{action.AbilityKind}' for {action.AbilityId}");
                 return false;
             }
@@ -157,20 +157,20 @@ namespace Arena.Input
             PlayerEntity? entity = EntityRegistry.Instance?.LocalPlayerEntity;
             if (entity == null || entity.IsDestroyed || !entity.IsAlive)
             {
-                LoadoutActionTrace.Trace($"melee dispatch unavailable for {source}:{actionId} (no live local entity)");
+                ActionBarTrace.Trace($"melee dispatch unavailable for {source}:{actionId} (no live local entity)");
                 return false;
             }
 
             string combatProfile = CombatProfileResolver.ResolveForEntity(conn, entity);
             if (CombatActionIds.FindMeleeDefinition(conn, combatProfile, actionId) == null)
             {
-                LoadoutActionTrace.Trace($"melee dispatch unavailable for {source}:{actionId} profile={combatProfile} (missing definition)");
+                ActionBarTrace.Trace($"melee dispatch unavailable for {source}:{actionId} profile={combatProfile} (missing definition)");
                 return false;
             }
 
             bool accepted = MeleeInputHandler.Instance?.TryTriggerAction(conn, entity, actionId) == true;
             if (!accepted)
-                LoadoutActionTrace.Trace($"melee dispatch declined locally for {source}:{actionId}");
+                ActionBarTrace.Trace($"melee dispatch declined locally for {source}:{actionId}");
             return accepted;
         }
     }

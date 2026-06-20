@@ -19,26 +19,21 @@ namespace SpacetimeDB.Types
         public string Username;
         [DataMember(Name = "connected_at")]
         public SpacetimeDB.Timestamp ConnectedAt;
-        [DataMember(Name = "class_id")]
-        public string ClassId;
 
         public Player(
             SpacetimeDB.Identity Identity,
             string Username,
-            SpacetimeDB.Timestamp ConnectedAt,
-            string ClassId
+            SpacetimeDB.Timestamp ConnectedAt
         )
         {
             this.Identity = Identity;
             this.Username = Username;
             this.ConnectedAt = ConnectedAt;
-            this.ClassId = ClassId;
         }
 
         public Player()
         {
             this.Username = "";
-            this.ClassId = "";
         }
     }
 }

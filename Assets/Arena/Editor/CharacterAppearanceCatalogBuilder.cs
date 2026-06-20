@@ -17,7 +17,6 @@ namespace Arena.EditorTools
         private const string BaseCatalogPath = CatalogFolder + "/AvatarBaseCatalog.asset";
         private const string PartCatalogPath = CatalogFolder + "/AvatarPartCatalog.asset";
         private const string OutfitCatalogPath = CatalogFolder + "/OutfitCatalog.asset";
-        private const string ClassOutfitCatalogPath = CatalogFolder + "/ClassOutfitCatalog.asset";
         private const string EquipmentAppearanceCatalogPath = CatalogFolder + "/EquipmentAppearanceCatalog.asset";
 
         [MenuItem("Arena/Appearance/Rebuild Default Catalog Assets")]
@@ -109,14 +108,6 @@ namespace Arena.EditorTools
                     usePlainPants: true),
             });
 
-            ClassOutfitCatalog classOutfitCatalog = LoadOrCreate<ClassOutfitCatalog>(ClassOutfitCatalogPath);
-            classOutfitCatalog.SetEntriesForEditor(new List<ClassOutfitCatalog.Entry>
-            {
-                ClassOutfit("WARRIOR", "HUMAN_MALE_PEASANT_STARTER"),
-                ClassOutfit("PALADIN", "HUMAN_MALE_PEASANT_STARTER"),
-                ClassOutfit("RANGER", "HUMAN_MALE_PEASANT_STARTER"),
-            });
-
             EquipmentAppearanceCatalog equipmentAppearanceCatalog =
                 LoadOrCreate<EquipmentAppearanceCatalog>(EquipmentAppearanceCatalogPath);
             List<EquipmentAppearanceCatalog.Entry> equipmentAppearanceEntries = BuildEquipmentAppearanceEntries();
@@ -126,7 +117,6 @@ namespace Arena.EditorTools
             EditorUtility.SetDirty(baseCatalog);
             EditorUtility.SetDirty(partCatalog);
             EditorUtility.SetDirty(outfitCatalog);
-            EditorUtility.SetDirty(classOutfitCatalog);
             EditorUtility.SetDirty(equipmentAppearanceCatalog);
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
@@ -385,18 +375,6 @@ namespace Arena.EditorTools
             {
                 expectedItemType = expectedItemType,
                 item = LoadRequiredItem(path, expectedItemType),
-            };
-        }
-
-        private static ClassOutfitCatalog.Entry ClassOutfit(string classId, string outfitId)
-        {
-            return new ClassOutfitCatalog.Entry
-            {
-                classId = classId,
-                raceId = CharacterAppearanceIds.RaceHuman,
-                sexId = CharacterAppearanceIds.SexMale,
-                outfitId = outfitId,
-                enabled = true,
             };
         }
 

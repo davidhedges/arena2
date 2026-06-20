@@ -14,11 +14,16 @@ namespace Arena.Tests.Editor
         private const string ActionBarInputDispatcherPath = "Assets/Arena/Runtime/Input/ActionBarInputDispatcher.cs";
         private const string SpellInputHandlerPath = "Assets/Arena/Runtime/Input/SpellInputHandler.cs";
         private const string GameplayContractsPath = "Assets/Arena/Runtime/Combat/GameplayContracts.cs";
+        private const string GameplaySubscriptionPlannerPath = "Assets/Arena/Runtime/Network/GameplaySubscriptionPlanner.cs";
         private const string FixedActionDispatcherPath = "Assets/Arena/Runtime/Input/FixedActionDispatcher.cs";
         private const string HudControllerPath = "Assets/Arena/Runtime/UI/HUDController.cs";
         private const string HubControllerPath = "Assets/Arena/Runtime/UI/HubController.cs";
-        private const string LoadoutControllerPath = "Assets/Arena/Runtime/UI/LoadoutController.cs";
-        private const string LoadoutActionDragDropPath = "Assets/Arena/Runtime/UI/LoadoutActionDragDrop.cs";
+        private const string CharacterCreationControllerPath = "Assets/Arena/Runtime/UI/CharacterCreationController.cs";
+        private const string ActionTooltipResolverPath = "Assets/Arena/Runtime/Combat/ActionTooltipResolver.cs";
+        private const string SpellCatalogPanelPath = "Assets/Arena/Runtime/UI/SpellCatalogPanel.cs";
+        private const string CharacterActionBarPanelPath = "Assets/Arena/Runtime/UI/CharacterActionBarPanel.cs";
+        private const string ActionBarSlotViewFactoryPath = "Assets/Arena/Runtime/UI/ActionBarSlotViewFactory.cs";
+        private const string ActionBarDragDropPath = "Assets/Arena/Runtime/UI/ActionBarDragDrop.cs";
         private const string ActionBarLayoutPath = "Assets/Arena/Runtime/UI/ActionBarLayout.cs";
         private const string TooltipPath = "Assets/Arena/Runtime/UI/Tooltip.cs";
         private const string ActionBarSlotPrefabAssetPath = "Assets/Arena/Resources/UI/ActionBar/ActionBarSlot.prefab";
@@ -34,6 +39,11 @@ namespace Arena.Tests.Editor
         private const string LightningPrefabMetaPath = "Assets/Arena/Resources/CombatVFX/Area/VFX_Lightning01_Arena.prefab.meta";
         private const string MeteorPrefabMetaPath = "Assets/Arena/Resources/CombatVFX/Area/VFX_SingleComet01_Fire_Arena.prefab.meta";
         private const string MeteorHeadPrefabMetaPath = "Assets/Arena/Resources/CombatVFX/Projectiles/VFX_Projectile_Comet_Orange_Arena.prefab.meta";
+        private const string ServerSpellsPath = "server/src/spells/mod.rs";
+        private const string ServerProgressionPath = "server/src/progression.rs";
+        private const string ServerInventoryPath = "server/src/inventory.rs";
+        private const string ServerAppearancePath = "server/src/appearance.rs";
+        private const string ServerPlayerPath = "server/src/player.rs";
 
         [Test]
         public void RuntimeUiCode_UsesSharedInputSystemEventBootstrap()
@@ -181,7 +191,7 @@ namespace Arena.Tests.Editor
             Assert.That(actionBarDispatcher, Does.Contain("action.IsFixed"));
 
             string dispatcher = File.ReadAllText(FixedActionDispatcherPath);
-            Assert.That(dispatcher, Does.Contain("TryTrigger(ActiveSelectableLoadoutAction action, DbConnection? conn)"));
+            Assert.That(dispatcher, Does.Contain("TryTrigger(ActiveActionBarAction action, DbConnection? conn)"));
             Assert.That(dispatcher, Does.Contain("StartDodge("));
             Assert.That(dispatcher, Does.Contain("CreateActionPredictionToken(FixedActionIds.Dodge)"));
             Assert.That(dispatcher, Does.Contain("CreateActionPredictionToken(FixedActionIds.Parry)"));
@@ -196,7 +206,7 @@ namespace Arena.Tests.Editor
         public void ActionBarDispatch_UsesResolvedAbilityKind()
         {
             string actionBarDispatcher = File.ReadAllText(ActionBarInputDispatcherPath);
-            Assert.That(actionBarDispatcher, Does.Contain("ActiveSelectableLoadoutAction action"));
+            Assert.That(actionBarDispatcher, Does.Contain("ActiveActionBarAction action"));
             Assert.That(actionBarDispatcher, Does.Contain("action.IsMeleeAbility"));
             Assert.That(actionBarDispatcher, Does.Contain("action.IsSpellAbility"));
             Assert.That(actionBarDispatcher, Does.Contain("action.IsMovementAbility"));
@@ -207,6 +217,82 @@ namespace Arena.Tests.Editor
 
             string contracts = File.ReadAllText(GameplayContractsPath);
             Assert.That(contracts, Does.Contain("!string.Equals(actionKind, ActionKinds.Ability"));
+        }
+
+        [Test]
+        public void ActiveActionBarResolver_MapsRuntimeActionsThroughEquipmentResolvedProfile()
+        {
+            string contracts = File.ReadAllText(GameplayContractsPath);
+            Assert.That(contracts, Does.Contain("conn.Db.CharacterActionBarAssignment.Owner.Filter(owner.Value)"));
+            Assert.That(contracts, Does.Contain("CombatProfileResolver.ResolveForOwner(conn, owner)"));
+            Assert.That(contracts, Does.Contain("ActionBarAssignmentScope.MatchesCombatProfile"));
+            Assert.That(contracts, Does.Contain("SpellSlotResolver.IsSpellAssignmentEnabled"));
+            Assert.That(contracts, Does.Not.Contain("TryResolveActiveSpec"));
+            Assert.That(contracts, Does.Not.Contain("ResolveSelectableActionFromAssignment"));
+            Assert.That(contracts, Does.Not.Contain("CharacterClassLoadoutState"));
+            Assert.That(contracts, Does.Not.Contain("SavedSpecSlotAssignment"));
+            Assert.That(
+                contracts,
+                Does.Not.Contain("ResolveForClass"),
+                "Action bar runtime action resolution must follow equipped gear, not the old class profile.");
+            Assert.That(contracts, Does.Not.Contain("ClassCatalog"));
+            Assert.That(
+                contracts,
+                Does.Not.Contain("conn.Db.SavedSpecSlotAssignment.SpecId.Filter(activeSpecId)"),
+                "Active runtime action resolution must not depend on saved spec/class spec state.");
+        }
+
+        [Test]
+        public void CharacterActionBarAbilityEligibility_UsesCombatProfileBoundary()
+        {
+            string contracts = File.ReadAllText(GameplayContractsPath);
+            Assert.That(contracts, Does.Contain("AbilityMatchesOwner"));
+            Assert.That(contracts, Does.Contain("ResolveForAbility"));
+
+            string panel = File.ReadAllText(CharacterActionBarPanelPath);
+            Assert.That(panel, Does.Contain("CombatProfileResolver.ResolveForOwner(conn, localIdentity.Value)"));
+            Assert.That(panel, Does.Contain("CombatProfileResolver.ResolveForAbility(conn, ability)"));
+            Assert.That(
+                panel,
+                Does.Not.Contain("ClassIds"),
+                "Available action-bar abilities must be filtered by resolved combat profile rather than class.");
+        }
+
+        [Test]
+        public void LearnedSpellbook_GatesSpellCatalogAndCasting()
+        {
+            string spells = File.ReadAllText(ServerSpellsPath);
+            Assert.That(spells, Does.Contain("pub struct PlayerKnownSpell"));
+            Assert.That(spells, Does.Contain("pub fn learn_spell"));
+            Assert.That(spells, Does.Contain("player_knows_spell(ctx, ctx.sender(), kind.as_str())"));
+
+            string progression = File.ReadAllText(ServerProgressionPath);
+            Assert.That(progression, Does.Not.Contain("backfill_known_spell_rows_from_saved_specs"));
+            Assert.That(progression, Does.Contain("spell ability '{}' requires learned spell '{}'"));
+            Assert.That(progression, Does.Contain("require_available_spell_slot_for_assignment"));
+            Assert.That(progression, Does.Contain("equipment_spell_slot_capacity_for_owner"));
+
+            string inventory = File.ReadAllText(ServerInventoryPath);
+            Assert.That(inventory, Does.Contain("MODIFIER_SPELL_SLOT"));
+            Assert.That(inventory, Does.Contain("ARMOR_KIND_CLOTH"));
+            Assert.That(inventory, Does.Contain("equipment_spell_slot_capacity_for_owner"));
+
+            string contracts = File.ReadAllText(GameplayContractsPath);
+            Assert.That(contracts, Does.Contain("SpellbookResolver"));
+            Assert.That(contracts, Does.Contain("PlayerKnownSpell"));
+            Assert.That(contracts, Does.Contain("SpellSlotResolver"));
+            Assert.That(contracts, Does.Contain("definition.ArmorKind"));
+
+            string spellCatalog = File.ReadAllText(SpellCatalogPanelPath);
+            Assert.That(spellCatalog, Does.Contain("RuntimeInitializeOnLoadMethod"));
+            Assert.That(spellCatalog, Does.Contain("KeyCode.K"));
+            Assert.That(spellCatalog, Does.Contain("conn.Db.SpellDefinition.Iter()"));
+            Assert.That(spellCatalog, Does.Contain("conn.Db.PlayerKnownSpell.Owner"));
+            Assert.That(spellCatalog, Does.Contain("conn.Reducers.LearnSpell"));
+            Assert.That(spellCatalog, Does.Contain("RuntimeUiEscapeRouter.Register"));
+
+            string panel = File.ReadAllText(CharacterActionBarPanelPath);
+            Assert.That(panel, Does.Not.Contain("conn.Reducers.LearnSpell"));
         }
 
         [Test]
@@ -223,24 +309,28 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
-        public void FixedActionBindings_AreSubscribedForClientResolution()
+        public void FixedActions_ResolveFromPresentationCatalog()
         {
-            string planner = File.ReadAllText("Assets/Arena/Runtime/Network/GameplaySubscriptionPlanner.cs");
-            Assert.That(planner, Does.Contain("FixedActionBindingCatalog"));
+            string planner = File.ReadAllText(GameplaySubscriptionPlannerPath);
+            Assert.That(planner, Does.Not.Contain("FixedActionBindingCatalog"));
+
+            string panel = File.ReadAllText(CharacterActionBarPanelPath);
+            Assert.That(panel, Does.Contain("PresentationKindFixed"));
+            Assert.That(panel, Does.Not.Contain("FixedActionBindingCatalog"));
         }
 
         [Test]
         public void ThirdRowSelectableSlots_UseShiftNumberBindings()
         {
             string contracts = File.ReadAllText(GameplayContractsPath);
-            Assert.That(contracts, Does.Contain("new(\"S+3\", KeyCode.Alpha3, true, SelectableLoadoutSlotIds.Slot22"));
-            Assert.That(contracts, Does.Contain("new(\"S+9\", KeyCode.Alpha9, true, SelectableLoadoutSlotIds.Slot28"));
+            Assert.That(contracts, Does.Contain("new(\"S+3\", KeyCode.Alpha3, true, ActionBarSlotIds.Slot22"));
+            Assert.That(contracts, Does.Contain("new(\"S+9\", KeyCode.Alpha9, true, ActionBarSlotIds.Slot28"));
 
             string hud = File.ReadAllText(HudControllerPath);
             Assert.That(hud, Does.Contain("ActionBarKeymap.KeyLabelForCell"));
 
-            string loadout = File.ReadAllText(LoadoutControllerPath);
-            Assert.That(loadout, Does.Contain("ActionBarKeymap.KeyLabelForCell"));
+            string panel = File.ReadAllText(CharacterActionBarPanelPath);
+            Assert.That(panel, Does.Contain("ActionBarKeymap.KeyLabelForCell"));
         }
 
         [Test]
@@ -255,69 +345,156 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
-        public void LoadoutScreen_RendersFixedActionGridSlots()
+        public void CharacterActionBarPanel_RendersFixedActionGridSlots()
         {
-            string loadout = File.ReadAllText(LoadoutControllerPath);
-            Assert.That(loadout, Does.Contain("ActionBarKeymap.TryGetBindingForCell"));
-            Assert.That(loadout, Does.Contain("ActionTooltipResolver.ResolveForActionRef"));
-            Assert.That(loadout, Does.Contain("TooltipTarget"));
-            Assert.That(loadout, Does.Contain("FixedActionColor"));
-            Assert.That(loadout, Does.Contain("resolved.IsFixed"));
+            string panel = File.ReadAllText(CharacterActionBarPanelPath);
+            Assert.That(panel, Does.Contain("ActionBarKeymap.TryGetBindingForCell"));
+            Assert.That(panel, Does.Contain("ActionTooltipResolver.ResolveForActionRef"));
+            Assert.That(panel, Does.Contain("TooltipTarget"));
+            Assert.That(panel, Does.Contain("FixedActionColor"));
+            Assert.That(panel, Does.Contain("resolved.IsFixed"));
         }
 
         [Test]
-        public void LoadoutScreen_RendersCatalogBackedActionLibrary()
+        public void CharacterActionBarPanel_RendersCatalogBackedActionLibrary()
         {
-            string loadout = File.ReadAllText(LoadoutControllerPath);
-            Assert.That(loadout, Does.Contain("\"ActionLibraryPanel\""));
-            Assert.That(loadout, Does.Contain("\"AvailableActionsRoot\""));
-            Assert.That(loadout, Does.Contain("HasAbilityTag(ability, LoadoutActionTag)"));
-            Assert.That(loadout, Does.Contain("ActionTooltipResolver.ResolveForAbility"));
-            Assert.That(loadout, Does.Contain("conn.Reducers.AssignSavedSpecAbilityToSlot"));
-            Assert.That(loadout, Does.Contain("conn.Reducers.AssignSavedSpecActionToSlot"));
+            string panel = File.ReadAllText(CharacterActionBarPanelPath);
+            Assert.That(panel, Does.Contain("\"ActionLibraryPanel\""));
+            Assert.That(panel, Does.Contain("\"AvailableActionsRoot\""));
+            Assert.That(panel, Does.Contain("HasAbilityTag(ability, ActionBarActionTag)"));
+            Assert.That(panel, Does.Contain("ActionTooltipResolver.ResolveForAbility"));
+
+            string dragDrop = File.ReadAllText(ActionBarDragDropPath);
+            Assert.That(dragDrop, Does.Contain("conn.Reducers.AssignCharacterActionBarAbilityToSlot"));
+            Assert.That(dragDrop, Does.Contain("conn.Reducers.AssignCharacterActionBarSlot"));
         }
 
         [Test]
-        public void ActionBars_UseSharedDragDropForLoadoutAndHud()
+        public void ActionBars_UseSharedDragDropForPanelAndHud()
         {
-            string dragDrop = File.ReadAllText(LoadoutActionDragDropPath);
-            Assert.That(dragDrop, Does.Contain("LoadoutActionDragPayload"));
-            Assert.That(dragDrop, Does.Contain("LoadoutActionDropSlot"));
-            Assert.That(dragDrop, Does.Contain("LoadoutActionDropApplier"));
+            string dragDrop = File.ReadAllText(ActionBarDragDropPath);
+            Assert.That(dragDrop, Does.Contain("ActionBarDragPayload"));
+            Assert.That(dragDrop, Does.Contain("ActionBarDropSlot"));
+            Assert.That(dragDrop, Does.Contain("ActionBarDropApplier"));
             Assert.That(dragDrop, Does.Contain("FindNearestSlot"));
-            Assert.That(dragDrop, Does.Contain("From(ActiveSelectableLoadoutAction action, string sourceSlotId)"));
+            Assert.That(dragDrop, Does.Contain("FindCharacterActionBarAssignment"));
+            Assert.That(dragDrop, Does.Contain("ActionBarAssignmentScope.MatchesCombatProfile"));
+            Assert.That(dragDrop, Does.Contain("From(ActiveActionBarAction action, string sourceSlotId)"));
             Assert.That(dragDrop, Does.Contain("CancelActiveDrag"));
-            Assert.That(dragDrop, Does.Contain("ClearSavedSpecSlot"));
-            Assert.That(dragDrop, Does.Contain("AssignSavedSpecAbilityToSlot"));
-            Assert.That(dragDrop, Does.Contain("AssignSavedSpecActionToSlot"));
+            Assert.That(dragDrop, Does.Contain("ClearCharacterActionBarSlot"));
+            Assert.That(dragDrop, Does.Contain("AssignCharacterActionBarAbilityToSlot"));
+            Assert.That(dragDrop, Does.Contain("AssignCharacterActionBarSlot"));
+            Assert.That(dragDrop, Does.Contain("PayloadIsSpell"));
+            Assert.That(dragDrop, Does.Not.Contain("ClearSavedSpecSlot"));
+            Assert.That(dragDrop, Does.Not.Contain("AssignSavedSpecAbilityToSlot"));
+            Assert.That(dragDrop, Does.Not.Contain("AssignSavedSpecActionToSlot"));
 
-            string loadout = File.ReadAllText(LoadoutControllerPath);
-            Assert.That(loadout, Does.Contain("LoadoutActionDragSource"));
-            Assert.That(loadout, Does.Contain("LoadoutActionDropApplier.ApplyDrop"));
+            string panel = File.ReadAllText(CharacterActionBarPanelPath);
+            Assert.That(panel, Does.Contain("ActionBarDragSource"));
+            Assert.That(panel, Does.Contain("ActionBarDropApplier.ApplyDrop"));
 
             string hud = File.ReadAllText(HudControllerPath);
-            Assert.That(hud, Does.Contain("LoadoutActionDragSource"));
-            Assert.That(hud, Does.Contain("LoadoutActionDropSlot"));
-            Assert.That(hud, Does.Contain("LoadoutActionDropApplier.ApplyDrop"));
-            Assert.That(hud, Does.Contain("ActiveLoadoutResolver.TryResolveActiveSpec"));
+            Assert.That(hud, Does.Contain("ActionBarDragSource"));
+            Assert.That(hud, Does.Contain("ActionBarDropSlot"));
+            Assert.That(hud, Does.Contain("ActionBarDropApplier.ApplyDrop"));
+            Assert.That(hud, Does.Not.Contain("if (!ActiveActionBarResolver.TryResolveActiveSpec"));
         }
 
         [Test]
-        public void LoadoutScreen_UsesClassMenuAndRightSideStats()
+        public void CharacterActionBarPanel_UsesSharedSlotPresentationAndClasslessAssignments()
         {
-            string loadout = File.ReadAllText(LoadoutControllerPath);
-            Assert.That(loadout, Does.Contain("\"ClassMenuPanel\""));
-            Assert.That(loadout, Does.Contain("\"ClassMenuRoot\""));
-            Assert.That(loadout, Does.Contain("RebuildClassMenu"));
-            Assert.That(loadout, Does.Contain("conn.Reducers.SwitchLoadoutClass(targetClassId)"));
-            Assert.That(loadout, Does.Contain("CreatePanel(\"StatAllocationPanel\", _root.transform, new Vector2(-28f, 108f)"));
-            Assert.That(loadout, Does.Not.Contain("ProfessionNames"));
-            Assert.That(loadout, Does.Not.Contain("\"ProfessionPanel\""));
-            Assert.That(loadout, Does.Not.Contain("RebuildProfessionRows"));
+            string panel = File.ReadAllText(CharacterActionBarPanelPath);
+            Assert.That(panel, Does.Contain("RuntimeInitializeOnLoadMethod"));
+            Assert.That(panel, Does.Contain("KeyCode.J"));
+            Assert.That(panel, Does.Contain("ActionBarSlotViewFactory.Create"));
+            Assert.That(panel, Does.Contain("ActionBarLayout.GridSize"));
+            Assert.That(panel, Does.Contain("ActiveActionBarResolver.ResolveActiveSelectableAction"));
+            Assert.That(panel, Does.Contain("SpellbookResolver.AbilityIsKnownIfSpell"));
+            Assert.That(panel, Does.Contain("SpellSlotResolver.Capacity"));
+            Assert.That(panel, Does.Contain("SpellSlotResolver.AssignedSpellCount"));
+            Assert.That(panel, Does.Contain("ActionBarAssignmentScope.MatchesCombatProfile"));
+            Assert.That(panel, Does.Contain("CanApplyPayloadToSlot"));
+            Assert.That(panel, Does.Contain("Spell slots"));
+            Assert.That(panel, Does.Contain("ActionBarDropApplier.ApplyDrop(conn,"));
+            Assert.That(panel, Does.Contain("RuntimeUiEscapeRouter.Register"));
+
+            string factory = File.ReadAllText(ActionBarSlotViewFactoryPath);
+            Assert.That(factory, Does.Contain("Resources.Load<GameObject>(ActionBarLayout.SlotPrefabResourcePath)"));
+            Assert.That(factory, Does.Contain("HasPrefabFrame"));
+            Assert.That(factory, Does.Not.Contain("new GameObject(\"Frame\""));
+        }
+
+        [Test]
+        public void CharacterBootstrap_IsClasslessAndGearResolved()
+        {
+            string progression = File.ReadAllText(ServerProgressionPath);
+            Assert.That(progression, Does.Contain("equipment_combat_profile_id_for_owner"));
+            Assert.That(progression, Does.Contain("primary_resource_kind_for_owner"));
+            Assert.That(progression, Does.Contain("ensure_default_character_action_bar_assignments"));
+            Assert.That(progression, Does.Not.Contain("pub struct CharacterProgression"));
+            Assert.That(progression, Does.Not.Contain("switch_loadout_class"));
+            Assert.That(progression, Does.Not.Contain("CLASSLESS_CHARACTER_ID"));
+            Assert.That(progression, Does.Not.Contain("pub struct SavedSpec"));
+            Assert.That(progression, Does.Not.Contain("pub fn create_saved_spec"));
+            Assert.That(progression, Does.Not.Contain("pub struct CharacterClassLoadoutState"));
+
+            string progressionCatalog = File.ReadAllText("server/src/progression_catalog.shared.json");
+            Assert.That(progressionCatalog, Does.Not.Contain("\"class_id\""));
+            Assert.That(progressionCatalog, Does.Not.Contain("\"classes\""));
+            Assert.That(progressionCatalog, Does.Not.Contain("\"max_saved_specs\""));
+
+            string inventory = File.ReadAllText(ServerInventoryPath);
+            Assert.That(inventory, Does.Contain("BASELINE_STARTER_WEAPONS"));
+            Assert.That(inventory, Does.Contain("starter_equipment(EQUIP_SLOT_MAIN_HAND, \"TRAINING_TWO_HAND_SWORD\")"));
+            Assert.That(inventory, Does.Not.Contain("starter_equipment(EQUIP_SLOT_OFF_HAND"));
+            Assert.That(inventory, Does.Not.Contain("starter_weapon_equipment_for_class"));
+            Assert.That(inventory, Does.Not.Contain("starter_armor_equipment_for_class"));
+
+            string appearance = File.ReadAllText(ServerAppearancePath);
+            Assert.That(appearance, Does.Contain("DEFAULT_STARTER_OUTFIT_ID"));
+            Assert.That(appearance, Does.Contain("HUMAN_MALE_PEASANT_STARTER"));
+            Assert.That(appearance, Does.Not.Contain("HUMAN_MALE_WARRIOR_STARTER"));
+            Assert.That(appearance, Does.Not.Contain("switch_loadout_class(ctx"));
+            Assert.That(appearance, Does.Not.Contain("default_outfit_id_for_class"));
+
+            string player = File.ReadAllText(ServerPlayerPath);
+            Assert.That(player, Does.Not.Contain("class_id"));
+
+            string creation = File.ReadAllText(CharacterCreationControllerPath);
+            Assert.That(creation, Does.Contain("TryApplyStarterDefault"));
+            Assert.That(creation, Does.Not.Contain("DefaultPreviewClassId"));
+            Assert.That(creation, Does.Contain("_warriorButton.interactable = false"));
+            Assert.That(creation, Does.Not.Contain("conn.Reducers.CreateOrUpdateCharacter(\n                _selectedClassId"));
+
+            string tooltip = File.ReadAllText(ActionTooltipResolverPath);
+            Assert.That(tooltip, Does.Contain("CombatProfileResolver.ResolveForOwner"));
+            Assert.That(tooltip, Does.Not.Contain("ClassCatalog"));
 
             string hub = File.ReadAllText(HubControllerPath);
             Assert.That(hub, Does.Contain("bool showStage = activeHub && HubViewState.Current == HubViewScreen.Play"));
             Assert.That(hub, Does.Contain("if (showStage)"));
+        }
+
+        [Test]
+        public void LegacyClassAndSpecUi_IsRetiredFromClientSurface()
+        {
+            Assert.That(File.Exists("Assets/Arena/Runtime/UI/LoadoutController.cs"), Is.False);
+            Assert.That(File.Exists("Assets/Arena/Runtime/UI/LoadoutController.cs.meta"), Is.False);
+
+            string project = File.ReadAllText("Assembly-CSharp.csproj");
+            Assert.That(project, Does.Not.Contain("Assets/Arena/Runtime/UI/LoadoutController.cs"));
+
+            string hub = File.ReadAllText(HubControllerPath);
+            Assert.That(hub, Does.Contain("_equipmentButton.gameObject.SetActive(false)"));
+            Assert.That(hub, Does.Not.Contain("SavedSpec"));
+            Assert.That(hub, Does.Not.Contain("LoadoutController.Instance"));
+            Assert.That(hub, Does.Not.Contain("HubViewScreen.Loadout"));
+
+            string planner = File.ReadAllText(GameplaySubscriptionPlannerPath);
+            Assert.That(planner, Does.Not.Contain("CharacterClassLoadoutState"));
+            Assert.That(planner, Does.Not.Contain("SavedSpec"));
+            Assert.That(planner, Does.Not.Contain("SavedSpecSlotAssignment"));
+            Assert.That(planner, Does.Not.Contain("SavedSpecStatAllocation"));
         }
 
         [Test]
@@ -344,10 +521,10 @@ namespace Arena.Tests.Editor
             Assert.That(hud, Does.Contain("ActionBarLayout.GridSize"));
             Assert.That(hud, Does.Contain("Resources.Load<GameObject>(ActionBarLayout.SlotPrefabResourcePath)"));
 
-            string loadout = File.ReadAllText(LoadoutControllerPath);
-            Assert.That(loadout, Does.Contain("ActionBarLayout.CenteredOffset"));
-            Assert.That(loadout, Does.Contain("ActionBarLayout.CellPosition"));
-            Assert.That(loadout, Does.Contain("Resources.Load<GameObject>(ActionBarLayout.SlotPrefabResourcePath)"));
+            string panel = File.ReadAllText(CharacterActionBarPanelPath);
+            Assert.That(panel, Does.Contain("ActionBarLayout.CenteredOffset"));
+            Assert.That(panel, Does.Contain("ActionBarLayout.CellPosition"));
+            Assert.That(panel, Does.Contain("ActionBarSlotViewFactory.Create"));
         }
 
         [Test]

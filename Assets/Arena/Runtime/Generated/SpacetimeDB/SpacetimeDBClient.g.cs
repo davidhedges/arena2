@@ -28,15 +28,14 @@ namespace SpacetimeDB.Types
         public RemoteTables(DbConnection conn)
         {
             AddTable(AbilityCatalog = new(conn));
+            AddTable(ActionBarSlotCatalog = new(conn));
             AddTable(ActionPresentationCatalog = new(conn));
             AddTable(ActiveCast = new(conn));
             AddTable(ActiveCombatMode = new(conn));
             AddTable(ArenaInstance = new(conn));
             AddTable(AutoAttackCatalog = new(conn));
+            AddTable(CharacterActionBarAssignment = new(conn));
             AddTable(CharacterAppearance = new(conn));
-            AddTable(CharacterClassLoadoutState = new(conn));
-            AddTable(CharacterProgression = new(conn));
-            AddTable(ClassCatalog = new(conn));
             AddTable(CombatEffectEvent = new(conn));
             AddTable(CombatEngagement = new(conn));
             AddTable(CombatEvent = new(conn));
@@ -48,7 +47,6 @@ namespace SpacetimeDB.Types
             AddTable(CombatVfxCueCatalog = new(conn));
             AddTable(DefenseState = new(conn));
             AddTable(EquipmentLoadout = new(conn));
-            AddTable(FixedActionBindingCatalog = new(conn));
             AddTable(FixedActionChargeState = new(conn));
             AddTable(GlobalCooldown = new(conn));
             AddTable(InventoryContainer = new(conn));
@@ -57,7 +55,6 @@ namespace SpacetimeDB.Types
             AddTable(ItemAffixInstance = new(conn));
             AddTable(ItemDefinition = new(conn));
             AddTable(ItemInstance = new(conn));
-            AddTable(LoadoutSlotCatalog = new(conn));
             AddTable(MatchParticipantStats = new(conn));
             AddTable(MeleeAbilityCatalog = new(conn));
             AddTable(MeleeAttackModifierCatalog = new(conn));
@@ -73,6 +70,7 @@ namespace SpacetimeDB.Types
             AddTable(Player = new(conn));
             AddTable(PlayerEvent = new(conn));
             AddTable(PlayerIntent = new(conn));
+            AddTable(PlayerKnownSpell = new(conn));
             AddTable(PlayerOpenWorldScene = new(conn));
             AddTable(PlayerPhysics = new(conn));
             AddTable(PlayerResource = new(conn));
@@ -82,9 +80,6 @@ namespace SpacetimeDB.Types
             AddTable(PredictedActionResult = new(conn));
             AddTable(ProjectilePresentationEvent = new(conn));
             AddTable(ResourceCatalog = new(conn));
-            AddTable(SavedSpec = new(conn));
-            AddTable(SavedSpecSlotAssignment = new(conn));
-            AddTable(SavedSpecStatAllocation = new(conn));
             AddTable(SpecialMovementRuntime = new(conn));
             AddTable(SpellCooldown = new(conn));
             AddTable(SpellDefinition = new(conn));
@@ -587,15 +582,14 @@ namespace SpacetimeDB.Types
         internal static string[] AllTablesSqlQueries() => new string[]
         {
             new QueryBuilder().From.AbilityCatalog().ToSql(),
+            new QueryBuilder().From.ActionBarSlotCatalog().ToSql(),
             new QueryBuilder().From.ActionPresentationCatalog().ToSql(),
             new QueryBuilder().From.ActiveCast().ToSql(),
             new QueryBuilder().From.ActiveCombatMode().ToSql(),
             new QueryBuilder().From.ArenaInstance().ToSql(),
             new QueryBuilder().From.AutoAttackCatalog().ToSql(),
+            new QueryBuilder().From.CharacterActionBarAssignment().ToSql(),
             new QueryBuilder().From.CharacterAppearance().ToSql(),
-            new QueryBuilder().From.CharacterClassLoadoutState().ToSql(),
-            new QueryBuilder().From.CharacterProgression().ToSql(),
-            new QueryBuilder().From.ClassCatalog().ToSql(),
             new QueryBuilder().From.CombatEffectEvent().ToSql(),
             new QueryBuilder().From.CombatEngagement().ToSql(),
             new QueryBuilder().From.CombatEvent().ToSql(),
@@ -607,7 +601,6 @@ namespace SpacetimeDB.Types
             new QueryBuilder().From.CombatVfxCueCatalog().ToSql(),
             new QueryBuilder().From.DefenseState().ToSql(),
             new QueryBuilder().From.EquipmentLoadout().ToSql(),
-            new QueryBuilder().From.FixedActionBindingCatalog().ToSql(),
             new QueryBuilder().From.FixedActionChargeState().ToSql(),
             new QueryBuilder().From.GlobalCooldown().ToSql(),
             new QueryBuilder().From.InventoryContainer().ToSql(),
@@ -616,7 +609,6 @@ namespace SpacetimeDB.Types
             new QueryBuilder().From.ItemAffixInstance().ToSql(),
             new QueryBuilder().From.ItemDefinition().ToSql(),
             new QueryBuilder().From.ItemInstance().ToSql(),
-            new QueryBuilder().From.LoadoutSlotCatalog().ToSql(),
             new QueryBuilder().From.MatchParticipantStats().ToSql(),
             new QueryBuilder().From.MeleeAbilityCatalog().ToSql(),
             new QueryBuilder().From.MeleeAttackModifierCatalog().ToSql(),
@@ -632,6 +624,7 @@ namespace SpacetimeDB.Types
             new QueryBuilder().From.Player().ToSql(),
             new QueryBuilder().From.PlayerEvent().ToSql(),
             new QueryBuilder().From.PlayerIntent().ToSql(),
+            new QueryBuilder().From.PlayerKnownSpell().ToSql(),
             new QueryBuilder().From.PlayerOpenWorldScene().ToSql(),
             new QueryBuilder().From.PlayerPhysics().ToSql(),
             new QueryBuilder().From.PlayerResource().ToSql(),
@@ -641,9 +634,6 @@ namespace SpacetimeDB.Types
             new QueryBuilder().From.PredictedActionResult().ToSql(),
             new QueryBuilder().From.ProjectilePresentationEvent().ToSql(),
             new QueryBuilder().From.ResourceCatalog().ToSql(),
-            new QueryBuilder().From.SavedSpec().ToSql(),
-            new QueryBuilder().From.SavedSpecSlotAssignment().ToSql(),
-            new QueryBuilder().From.SavedSpecStatAllocation().ToSql(),
             new QueryBuilder().From.SpecialMovementRuntime().ToSql(),
             new QueryBuilder().From.SpellCooldown().ToSql(),
             new QueryBuilder().From.SpellDefinition().ToSql(),
@@ -656,15 +646,14 @@ namespace SpacetimeDB.Types
     public sealed class From
     {
         public global::SpacetimeDB.Table<AbilityCatalog, AbilityCatalogCols, AbilityCatalogIxCols> AbilityCatalog() => new("ability_catalog", new AbilityCatalogCols("ability_catalog"), new AbilityCatalogIxCols("ability_catalog"));
+        public global::SpacetimeDB.Table<ActionBarSlotCatalog, ActionBarSlotCatalogCols, ActionBarSlotCatalogIxCols> ActionBarSlotCatalog() => new("action_bar_slot_catalog", new ActionBarSlotCatalogCols("action_bar_slot_catalog"), new ActionBarSlotCatalogIxCols("action_bar_slot_catalog"));
         public global::SpacetimeDB.Table<ActionPresentationCatalog, ActionPresentationCatalogCols, ActionPresentationCatalogIxCols> ActionPresentationCatalog() => new("action_presentation_catalog", new ActionPresentationCatalogCols("action_presentation_catalog"), new ActionPresentationCatalogIxCols("action_presentation_catalog"));
         public global::SpacetimeDB.Table<ActiveCast, ActiveCastCols, ActiveCastIxCols> ActiveCast() => new("active_cast", new ActiveCastCols("active_cast"), new ActiveCastIxCols("active_cast"));
         public global::SpacetimeDB.Table<ActiveCombatMode, ActiveCombatModeCols, ActiveCombatModeIxCols> ActiveCombatMode() => new("active_combat_mode", new ActiveCombatModeCols("active_combat_mode"), new ActiveCombatModeIxCols("active_combat_mode"));
         public global::SpacetimeDB.Table<ArenaInstance, ArenaInstanceCols, ArenaInstanceIxCols> ArenaInstance() => new("arena_instance", new ArenaInstanceCols("arena_instance"), new ArenaInstanceIxCols("arena_instance"));
         public global::SpacetimeDB.Table<AutoAttackCatalog, AutoAttackCatalogCols, AutoAttackCatalogIxCols> AutoAttackCatalog() => new("auto_attack_catalog", new AutoAttackCatalogCols("auto_attack_catalog"), new AutoAttackCatalogIxCols("auto_attack_catalog"));
+        public global::SpacetimeDB.Table<CharacterActionBarAssignment, CharacterActionBarAssignmentCols, CharacterActionBarAssignmentIxCols> CharacterActionBarAssignment() => new("character_action_bar_assignment", new CharacterActionBarAssignmentCols("character_action_bar_assignment"), new CharacterActionBarAssignmentIxCols("character_action_bar_assignment"));
         public global::SpacetimeDB.Table<CharacterAppearance, CharacterAppearanceCols, CharacterAppearanceIxCols> CharacterAppearance() => new("character_appearance", new CharacterAppearanceCols("character_appearance"), new CharacterAppearanceIxCols("character_appearance"));
-        public global::SpacetimeDB.Table<CharacterClassLoadoutState, CharacterClassLoadoutStateCols, CharacterClassLoadoutStateIxCols> CharacterClassLoadoutState() => new("character_class_loadout_state", new CharacterClassLoadoutStateCols("character_class_loadout_state"), new CharacterClassLoadoutStateIxCols("character_class_loadout_state"));
-        public global::SpacetimeDB.Table<CharacterProgression, CharacterProgressionCols, CharacterProgressionIxCols> CharacterProgression() => new("character_progression", new CharacterProgressionCols("character_progression"), new CharacterProgressionIxCols("character_progression"));
-        public global::SpacetimeDB.Table<ClassCatalog, ClassCatalogCols, ClassCatalogIxCols> ClassCatalog() => new("class_catalog", new ClassCatalogCols("class_catalog"), new ClassCatalogIxCols("class_catalog"));
         public global::SpacetimeDB.Table<CombatEffectEvent, CombatEffectEventCols, CombatEffectEventIxCols> CombatEffectEvent() => new("combat_effect_event", new CombatEffectEventCols("combat_effect_event"), new CombatEffectEventIxCols("combat_effect_event"));
         public global::SpacetimeDB.Table<CombatEngagement, CombatEngagementCols, CombatEngagementIxCols> CombatEngagement() => new("combat_engagement", new CombatEngagementCols("combat_engagement"), new CombatEngagementIxCols("combat_engagement"));
         public global::SpacetimeDB.Table<CombatEvent, CombatEventCols, CombatEventIxCols> CombatEvent() => new("combat_event", new CombatEventCols("combat_event"), new CombatEventIxCols("combat_event"));
@@ -676,7 +665,6 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Table<CombatVfxCueCatalog, CombatVfxCueCatalogCols, CombatVfxCueCatalogIxCols> CombatVfxCueCatalog() => new("combat_vfx_cue_catalog", new CombatVfxCueCatalogCols("combat_vfx_cue_catalog"), new CombatVfxCueCatalogIxCols("combat_vfx_cue_catalog"));
         public global::SpacetimeDB.Table<DefenseState, DefenseStateCols, DefenseStateIxCols> DefenseState() => new("defense_state", new DefenseStateCols("defense_state"), new DefenseStateIxCols("defense_state"));
         public global::SpacetimeDB.Table<EquipmentLoadout, EquipmentLoadoutCols, EquipmentLoadoutIxCols> EquipmentLoadout() => new("equipment_loadout", new EquipmentLoadoutCols("equipment_loadout"), new EquipmentLoadoutIxCols("equipment_loadout"));
-        public global::SpacetimeDB.Table<FixedActionBindingCatalog, FixedActionBindingCatalogCols, FixedActionBindingCatalogIxCols> FixedActionBindingCatalog() => new("fixed_action_binding_catalog", new FixedActionBindingCatalogCols("fixed_action_binding_catalog"), new FixedActionBindingCatalogIxCols("fixed_action_binding_catalog"));
         public global::SpacetimeDB.Table<FixedActionChargeState, FixedActionChargeStateCols, FixedActionChargeStateIxCols> FixedActionChargeState() => new("fixed_action_charge_state", new FixedActionChargeStateCols("fixed_action_charge_state"), new FixedActionChargeStateIxCols("fixed_action_charge_state"));
         public global::SpacetimeDB.Table<GlobalCooldown, GlobalCooldownCols, GlobalCooldownIxCols> GlobalCooldown() => new("global_cooldown", new GlobalCooldownCols("global_cooldown"), new GlobalCooldownIxCols("global_cooldown"));
         public global::SpacetimeDB.Table<InventoryContainer, InventoryContainerCols, InventoryContainerIxCols> InventoryContainer() => new("inventory_container", new InventoryContainerCols("inventory_container"), new InventoryContainerIxCols("inventory_container"));
@@ -685,7 +673,6 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Table<ItemAffixInstance, ItemAffixInstanceCols, ItemAffixInstanceIxCols> ItemAffixInstance() => new("item_affix_instance", new ItemAffixInstanceCols("item_affix_instance"), new ItemAffixInstanceIxCols("item_affix_instance"));
         public global::SpacetimeDB.Table<ItemDefinition, ItemDefinitionCols, ItemDefinitionIxCols> ItemDefinition() => new("item_definition", new ItemDefinitionCols("item_definition"), new ItemDefinitionIxCols("item_definition"));
         public global::SpacetimeDB.Table<ItemInstance, ItemInstanceCols, ItemInstanceIxCols> ItemInstance() => new("item_instance", new ItemInstanceCols("item_instance"), new ItemInstanceIxCols("item_instance"));
-        public global::SpacetimeDB.Table<LoadoutSlotCatalog, LoadoutSlotCatalogCols, LoadoutSlotCatalogIxCols> LoadoutSlotCatalog() => new("loadout_slot_catalog", new LoadoutSlotCatalogCols("loadout_slot_catalog"), new LoadoutSlotCatalogIxCols("loadout_slot_catalog"));
         public global::SpacetimeDB.Table<MatchParticipantStats, MatchParticipantStatsCols, MatchParticipantStatsIxCols> MatchParticipantStats() => new("match_participant_stats", new MatchParticipantStatsCols("match_participant_stats"), new MatchParticipantStatsIxCols("match_participant_stats"));
         public global::SpacetimeDB.Table<MeleeAbilityCatalog, MeleeAbilityCatalogCols, MeleeAbilityCatalogIxCols> MeleeAbilityCatalog() => new("melee_ability_catalog", new MeleeAbilityCatalogCols("melee_ability_catalog"), new MeleeAbilityCatalogIxCols("melee_ability_catalog"));
         public global::SpacetimeDB.Table<MeleeAttackModifierCatalog, MeleeAttackModifierCatalogCols, MeleeAttackModifierCatalogIxCols> MeleeAttackModifierCatalog() => new("melee_attack_modifier_catalog", new MeleeAttackModifierCatalogCols("melee_attack_modifier_catalog"), new MeleeAttackModifierCatalogIxCols("melee_attack_modifier_catalog"));
@@ -701,6 +688,7 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Table<Player, PlayerCols, PlayerIxCols> Player() => new("player", new PlayerCols("player"), new PlayerIxCols("player"));
         public global::SpacetimeDB.Table<PlayerEvent, PlayerEventCols, PlayerEventIxCols> PlayerEvent() => new("player_event", new PlayerEventCols("player_event"), new PlayerEventIxCols("player_event"));
         public global::SpacetimeDB.Table<PlayerIntent, PlayerIntentCols, PlayerIntentIxCols> PlayerIntent() => new("player_intent", new PlayerIntentCols("player_intent"), new PlayerIntentIxCols("player_intent"));
+        public global::SpacetimeDB.Table<PlayerKnownSpell, PlayerKnownSpellCols, PlayerKnownSpellIxCols> PlayerKnownSpell() => new("player_known_spell", new PlayerKnownSpellCols("player_known_spell"), new PlayerKnownSpellIxCols("player_known_spell"));
         public global::SpacetimeDB.Table<PlayerOpenWorldScene, PlayerOpenWorldSceneCols, PlayerOpenWorldSceneIxCols> PlayerOpenWorldScene() => new("player_open_world_scene", new PlayerOpenWorldSceneCols("player_open_world_scene"), new PlayerOpenWorldSceneIxCols("player_open_world_scene"));
         public global::SpacetimeDB.Table<PlayerPhysics, PlayerPhysicsCols, PlayerPhysicsIxCols> PlayerPhysics() => new("player_physics", new PlayerPhysicsCols("player_physics"), new PlayerPhysicsIxCols("player_physics"));
         public global::SpacetimeDB.Table<PlayerResource, PlayerResourceCols, PlayerResourceIxCols> PlayerResource() => new("player_resource", new PlayerResourceCols("player_resource"), new PlayerResourceIxCols("player_resource"));
@@ -710,9 +698,6 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Table<PredictedActionResult, PredictedActionResultCols, PredictedActionResultIxCols> PredictedActionResult() => new("predicted_action_result", new PredictedActionResultCols("predicted_action_result"), new PredictedActionResultIxCols("predicted_action_result"));
         public global::SpacetimeDB.Table<ProjectilePresentationEvent, ProjectilePresentationEventCols, ProjectilePresentationEventIxCols> ProjectilePresentationEvent() => new("projectile_presentation_event", new ProjectilePresentationEventCols("projectile_presentation_event"), new ProjectilePresentationEventIxCols("projectile_presentation_event"));
         public global::SpacetimeDB.Table<ResourceCatalog, ResourceCatalogCols, ResourceCatalogIxCols> ResourceCatalog() => new("resource_catalog", new ResourceCatalogCols("resource_catalog"), new ResourceCatalogIxCols("resource_catalog"));
-        public global::SpacetimeDB.Table<SavedSpec, SavedSpecCols, SavedSpecIxCols> SavedSpec() => new("saved_spec", new SavedSpecCols("saved_spec"), new SavedSpecIxCols("saved_spec"));
-        public global::SpacetimeDB.Table<SavedSpecSlotAssignment, SavedSpecSlotAssignmentCols, SavedSpecSlotAssignmentIxCols> SavedSpecSlotAssignment() => new("saved_spec_slot_assignment", new SavedSpecSlotAssignmentCols("saved_spec_slot_assignment"), new SavedSpecSlotAssignmentIxCols("saved_spec_slot_assignment"));
-        public global::SpacetimeDB.Table<SavedSpecStatAllocation, SavedSpecStatAllocationCols, SavedSpecStatAllocationIxCols> SavedSpecStatAllocation() => new("saved_spec_stat_allocation", new SavedSpecStatAllocationCols("saved_spec_stat_allocation"), new SavedSpecStatAllocationIxCols("saved_spec_stat_allocation"));
         public global::SpacetimeDB.Table<SpecialMovementRuntime, SpecialMovementRuntimeCols, SpecialMovementRuntimeIxCols> SpecialMovementRuntime() => new("special_movement_runtime", new SpecialMovementRuntimeCols("special_movement_runtime"), new SpecialMovementRuntimeIxCols("special_movement_runtime"));
         public global::SpacetimeDB.Table<SpellCooldown, SpellCooldownCols, SpellCooldownIxCols> SpellCooldown() => new("spell_cooldown", new SpellCooldownCols("spell_cooldown"), new SpellCooldownIxCols("spell_cooldown"));
         public global::SpacetimeDB.Table<SpellDefinition, SpellDefinitionCols, SpellDefinitionIxCols> SpellDefinition() => new("spell_definition", new SpellDefinitionCols("spell_definition"), new SpellDefinitionIxCols("spell_definition"));
@@ -800,20 +785,18 @@ namespace SpacetimeDB.Types
             return reducer switch
             {
                 Reducer.AcceptPartyInvite args => Reducers.InvokeAcceptPartyInvite(eventContext, args),
-                Reducer.ActivateSavedSpec args => Reducers.InvokeActivateSavedSpec(eventContext, args),
                 Reducer.ArmAutoAttackReplacement args => Reducers.InvokeArmAutoAttackReplacement(eventContext, args),
                 Reducer.ArmAutoAttackTarget args => Reducers.InvokeArmAutoAttackTarget(eventContext, args),
-                Reducer.AssignSavedSpecAbilityToSlot args => Reducers.InvokeAssignSavedSpecAbilityToSlot(eventContext, args),
-                Reducer.AssignSavedSpecActionToSlot args => Reducers.InvokeAssignSavedSpecActionToSlot(eventContext, args),
+                Reducer.AssignCharacterActionBarAbilityToSlot args => Reducers.InvokeAssignCharacterActionBarAbilityToSlot(eventContext, args),
+                Reducer.AssignCharacterActionBarSlot args => Reducers.InvokeAssignCharacterActionBarSlot(eventContext, args),
                 Reducer.CancelActiveCastRequest args => Reducers.InvokeCancelActiveCastRequest(eventContext, args),
                 Reducer.CastRequest args => Reducers.InvokeCastRequest(eventContext, args),
+                Reducer.CleanupProjectileLoadHarness args => Reducers.InvokeCleanupProjectileLoadHarness(eventContext, args),
                 Reducer.ClearAutoAttackTarget args => Reducers.InvokeClearAutoAttackTarget(eventContext, args),
-                Reducer.ClearSavedSpecSlot args => Reducers.InvokeClearSavedSpecSlot(eventContext, args),
+                Reducer.ClearCharacterActionBarSlot args => Reducers.InvokeClearCharacterActionBarSlot(eventContext, args),
                 Reducer.CreateInstance args => Reducers.InvokeCreateInstance(eventContext, args),
                 Reducer.CreateOrUpdateCharacter args => Reducers.InvokeCreateOrUpdateCharacter(eventContext, args),
-                Reducer.CreateSavedSpec args => Reducers.InvokeCreateSavedSpec(eventContext, args),
                 Reducer.DeclinePartyInvite args => Reducers.InvokeDeclinePartyInvite(eventContext, args),
-                Reducer.DeleteSavedSpec args => Reducers.InvokeDeleteSavedSpec(eventContext, args),
                 Reducer.DespawnAllNpcs args => Reducers.InvokeDespawnAllNpcs(eventContext, args),
                 Reducer.DespawnAllPlaygroundTargets args => Reducers.InvokeDespawnAllPlaygroundTargets(eventContext, args),
                 Reducer.DespawnNpc args => Reducers.InvokeDespawnNpc(eventContext, args),
@@ -823,6 +806,7 @@ namespace SpacetimeDB.Types
                 Reducer.JoinInstance args => Reducers.InvokeJoinInstance(eventContext, args),
                 Reducer.JoinTrainingInstance args => Reducers.InvokeJoinTrainingInstance(eventContext, args),
                 Reducer.KickPartyMember args => Reducers.InvokeKickPartyMember(eventContext, args),
+                Reducer.LearnSpell args => Reducers.InvokeLearnSpell(eventContext, args),
                 Reducer.LeaveInstance args => Reducers.InvokeLeaveInstance(eventContext, args),
                 Reducer.LeaveParty args => Reducers.InvokeLeaveParty(eventContext, args),
                 Reducer.ListOpenInstances args => Reducers.InvokeListOpenInstances(eventContext, args),
@@ -837,13 +821,12 @@ namespace SpacetimeDB.Types
                 Reducer.PublishSpellDefinitions args => Reducers.InvokePublishSpellDefinitions(eventContext, args),
                 Reducer.QuickLoot args => Reducers.InvokeQuickLoot(eventContext, args),
                 Reducer.ReleaseCastRequest args => Reducers.InvokeReleaseCastRequest(eventContext, args),
-                Reducer.RenameSavedSpec args => Reducers.InvokeRenameSavedSpec(eventContext, args),
+                Reducer.RunProjectileLoadHarness args => Reducers.InvokeRunProjectileLoadHarness(eventContext, args),
                 Reducer.RunStatusRuntimeHarness args => Reducers.InvokeRunStatusRuntimeHarness(eventContext, args),
                 Reducer.SaveCharacterAppearance args => Reducers.InvokeSaveCharacterAppearance(eventContext, args),
                 Reducer.SendMovementIntent args => Reducers.InvokeSendMovementIntent(eventContext, args),
                 Reducer.SetCombatMode args => Reducers.InvokeSetCombatMode(eventContext, args),
                 Reducer.SetOpenWorldScene args => Reducers.InvokeSetOpenWorldScene(eventContext, args),
-                Reducer.SetSavedSpecStatAllocation args => Reducers.InvokeSetSavedSpecStatAllocation(eventContext, args),
                 Reducer.SpawnNpc args => Reducers.InvokeSpawnNpc(eventContext, args),
                 Reducer.SpawnPlaygroundTarget args => Reducers.InvokeSpawnPlaygroundTarget(eventContext, args),
                 Reducer.StartBlock args => Reducers.InvokeStartBlock(eventContext, args),
@@ -851,7 +834,6 @@ namespace SpacetimeDB.Types
                 Reducer.StartMatch args => Reducers.InvokeStartMatch(eventContext, args),
                 Reducer.StopBlock args => Reducers.InvokeStopBlock(eventContext, args),
                 Reducer.StopParry args => Reducers.InvokeStopParry(eventContext, args),
-                Reducer.SwitchLoadoutClass args => Reducers.InvokeSwitchLoadoutClass(eventContext, args),
                 Reducer.TriggerParry args => Reducers.InvokeTriggerParry(eventContext, args),
                 Reducer.UnequipItem args => Reducers.InvokeUnequipItem(eventContext, args),
                 _ => throw new ArgumentOutOfRangeException("Reducer", $"Unknown reducer {reducer}")

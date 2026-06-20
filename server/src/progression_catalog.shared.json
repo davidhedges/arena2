@@ -32,49 +32,23 @@
       "sort_order": 20
     }
   ],
-  "classes": [
-    {
-      "class_id": "WARRIOR",
-      "display_name": "Warrior",
-      "default_combat_profile_id": "TWO_HANDED_SWORD",
-      "primary_resource_kind": "RAGE",
-      "max_saved_specs": 6,
-      "sort_order": 10
-    },
-    {
-      "class_id": "PALADIN",
-      "display_name": "Paladin",
-      "default_combat_profile_id": "SWORD_AND_SHIELD",
-      "primary_resource_kind": "ZEAL",
-      "max_saved_specs": 6,
-      "sort_order": 20
-    },
-    {
-      "class_id": "RANGER",
-      "display_name": "Ranger",
-      "default_combat_profile_id": "ARCHER_BOW",
-      "primary_resource_kind": "MANA",
-      "max_saved_specs": 6,
-      "sort_order": 30
-    }
-  ],
   "resources": [
     {
       "resource_kind": "RAGE",
       "display_name": "Rage",
       "color_hex": "#D64242",
-      "base_max": 100.0,
-      "max_per_insight": 2.0,
-      "base_regen_per_second": 0.0,
-      "regen_per_insight": 0.0,
+      "base_max": 100,
+      "max_per_insight": 2,
+      "base_regen_per_second": 0,
+      "regen_per_insight": 0,
       "gain_multiplier_per_insight": 0.02,
-      "flat_decay_per_second": 0.0,
-      "out_of_combat_flat_decay_per_second": 2.0,
-      "decay_per_current_point_per_second": 0.0,
+      "flat_decay_per_second": 0,
+      "out_of_combat_flat_decay_per_second": 2,
+      "decay_per_current_point_per_second": 0,
       "gain_per_damage_taken": 0.75,
-      "gain_per_damage_dealt": 0.0,
-      "gain_per_melee_hit": 8.0,
-      "gain_per_spell_cast": 0.0,
+      "gain_per_damage_dealt": 0,
+      "gain_per_melee_hit": 8,
+      "gain_per_spell_cast": 0,
       "starts_full": false,
       "sort_order": 10
     },
@@ -82,18 +56,18 @@
       "resource_kind": "MANA",
       "display_name": "Mana",
       "color_hex": "#4A8CFF",
-      "base_max": 100.0,
-      "max_per_insight": 4.0,
-      "base_regen_per_second": 6.0,
+      "base_max": 100,
+      "max_per_insight": 4,
+      "base_regen_per_second": 6,
       "regen_per_insight": 0.35,
       "gain_multiplier_per_insight": 0.02,
-      "flat_decay_per_second": 0.0,
-      "out_of_combat_flat_decay_per_second": 0.0,
-      "decay_per_current_point_per_second": 0.0,
-      "gain_per_damage_taken": 0.0,
-      "gain_per_damage_dealt": 0.0,
-      "gain_per_melee_hit": 0.0,
-      "gain_per_spell_cast": 0.0,
+      "flat_decay_per_second": 0,
+      "out_of_combat_flat_decay_per_second": 0,
+      "decay_per_current_point_per_second": 0,
+      "gain_per_damage_taken": 0,
+      "gain_per_damage_dealt": 0,
+      "gain_per_melee_hit": 0,
+      "gain_per_spell_cast": 0,
       "starts_full": true,
       "sort_order": 20
     },
@@ -101,18 +75,18 @@
       "resource_kind": "ENERGY",
       "display_name": "Energy",
       "color_hex": "#F0D83A",
-      "base_max": 100.0,
-      "max_per_insight": 3.0,
-      "base_regen_per_second": 12.0,
+      "base_max": 100,
+      "max_per_insight": 3,
+      "base_regen_per_second": 12,
       "regen_per_insight": 0.6,
       "gain_multiplier_per_insight": 0.02,
-      "flat_decay_per_second": 0.0,
-      "out_of_combat_flat_decay_per_second": 0.0,
-      "decay_per_current_point_per_second": 0.0,
-      "gain_per_damage_taken": 0.0,
-      "gain_per_damage_dealt": 0.0,
-      "gain_per_melee_hit": 0.0,
-      "gain_per_spell_cast": 0.0,
+      "flat_decay_per_second": 0,
+      "out_of_combat_flat_decay_per_second": 0,
+      "decay_per_current_point_per_second": 0,
+      "gain_per_damage_taken": 0,
+      "gain_per_damage_dealt": 0,
+      "gain_per_melee_hit": 0,
+      "gain_per_spell_cast": 0,
       "starts_full": true,
       "sort_order": 30
     },
@@ -120,18 +94,18 @@
       "resource_kind": "CORRUPTION",
       "display_name": "Corruption",
       "color_hex": "#9253FF",
-      "base_max": 100.0,
+      "base_max": 100,
       "max_per_insight": 3.5,
-      "base_regen_per_second": 0.0,
-      "regen_per_insight": 0.0,
+      "base_regen_per_second": 0,
+      "regen_per_insight": 0,
       "gain_multiplier_per_insight": 0.02,
-      "flat_decay_per_second": 0.0,
-      "out_of_combat_flat_decay_per_second": 0.0,
-      "decay_per_current_point_per_second": 0.0,
-      "gain_per_damage_taken": 0.0,
-      "gain_per_damage_dealt": 0.0,
-      "gain_per_melee_hit": 0.0,
-      "gain_per_spell_cast": 10.0,
+      "flat_decay_per_second": 0,
+      "out_of_combat_flat_decay_per_second": 0,
+      "decay_per_current_point_per_second": 0,
+      "gain_per_damage_taken": 0,
+      "gain_per_damage_dealt": 0,
+      "gain_per_melee_hit": 0,
+      "gain_per_spell_cast": 10,
       "starts_full": false,
       "sort_order": 40
     },
@@ -139,18 +113,18 @@
       "resource_kind": "FERVOR",
       "display_name": "Fervor",
       "color_hex": "#E85C8B",
-      "base_max": 100.0,
+      "base_max": 100,
       "max_per_insight": 2.5,
-      "base_regen_per_second": 0.0,
-      "regen_per_insight": 0.0,
+      "base_regen_per_second": 0,
+      "regen_per_insight": 0,
       "gain_multiplier_per_insight": 0.02,
-      "flat_decay_per_second": 1.0,
-      "out_of_combat_flat_decay_per_second": 0.0,
+      "flat_decay_per_second": 1,
+      "out_of_combat_flat_decay_per_second": 0,
       "decay_per_current_point_per_second": 0.025,
       "gain_per_damage_taken": 0.75,
-      "gain_per_damage_dealt": 0.0,
-      "gain_per_melee_hit": 8.0,
-      "gain_per_spell_cast": 0.0,
+      "gain_per_damage_dealt": 0,
+      "gain_per_melee_hit": 8,
+      "gain_per_spell_cast": 0,
       "starts_full": false,
       "sort_order": 50
     },
@@ -158,18 +132,18 @@
       "resource_kind": "ZEAL",
       "display_name": "Zeal",
       "color_hex": "#F8F8F8",
-      "base_max": 100.0,
+      "base_max": 100,
       "max_per_insight": 3.5,
-      "base_regen_per_second": 0.0,
-      "regen_per_insight": 0.0,
+      "base_regen_per_second": 0,
+      "regen_per_insight": 0,
       "gain_multiplier_per_insight": 0.02,
-      "flat_decay_per_second": 0.0,
-      "out_of_combat_flat_decay_per_second": 0.0,
-      "decay_per_current_point_per_second": 0.0,
+      "flat_decay_per_second": 0,
+      "out_of_combat_flat_decay_per_second": 0,
+      "decay_per_current_point_per_second": 0,
       "gain_per_damage_taken": 1.1,
-      "gain_per_damage_dealt": 0.0,
-      "gain_per_melee_hit": 4.0,
-      "gain_per_spell_cast": 0.0,
+      "gain_per_damage_dealt": 0,
+      "gain_per_melee_hit": 4,
+      "gain_per_spell_cast": 0,
       "starts_full": false,
       "sort_order": 60
     }
@@ -187,12 +161,12 @@
     },
     {
       "combat_rule_id": "MAX_CRIT_CHANCE",
-      "scalar_value": 1.0,
+      "scalar_value": 1,
       "sort_order": 30
     },
     {
       "combat_rule_id": "DEFAULT_GLOBAL_COOLDOWN_MS",
-      "scalar_value": 1500.0,
+      "scalar_value": 1500,
       "sort_order": 36
     },
     {
@@ -202,7 +176,7 @@
     },
     {
       "combat_rule_id": "STAGGER_SHOVE_DURATION_MS",
-      "scalar_value": 100.0,
+      "scalar_value": 100,
       "sort_order": 50
     }
   ],
@@ -239,7 +213,7 @@
       "stat_scaling_id": "FORTITUDE_MAX_HP_PER_POINT",
       "stat_kind": "FORTITUDE",
       "effect_kind": "MAX_HP_PER_POINT",
-      "scalar_value": 12.0,
+      "scalar_value": 12,
       "sort_order": 50
     },
     {
@@ -253,13 +227,13 @@
   "abilities": [
     {
       "ability_id": "WARRIOR_HEW",
-      "class_id": "WARRIOR",
+      "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "COMBO_ATTACK_1_1_HIGH_TO_LOW",
       "display_name": "Hew",
       "resource_kind": "RAGE",
-      "resource_cost": 20.0,
+      "resource_cost": 20,
       "ability_tags": [
-        "LOADOUT_ACTION",
+        "ACTION_BAR_ACTION",
         "CORE_ABILITY"
       ],
       "sort_order": 10,
@@ -277,7 +251,7 @@
     },
     {
       "ability_id": "WARRIOR_HEW_2",
-      "class_id": "WARRIOR",
+      "combat_profile_id": "TWO_HANDED_SWORD",
       "gameplay": {
         "kind": "MELEE",
         "base_damage": 30,
@@ -292,7 +266,7 @@
       "action_id": "COMBO_ATTACK_1_2_LOW_TO_HIGH",
       "display_name": "Hew II",
       "resource_kind": "RAGE",
-      "resource_cost": 20.0,
+      "resource_cost": 20,
       "ability_tags": [
         "COMBO_FOLLOWUP"
       ],
@@ -300,13 +274,13 @@
     },
     {
       "ability_id": "WARRIOR_MAIM",
-      "class_id": "WARRIOR",
+      "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "WARRIOR_MAIM",
       "display_name": "Maim",
       "resource_kind": "RAGE",
-      "resource_cost": 20.0,
+      "resource_cost": 20,
       "ability_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 12,
       "gameplay": {
@@ -333,20 +307,20 @@
     },
     {
       "ability_id": "WARRIOR_GROUND_TO_AIR_PLACEHOLDER",
-      "class_id": "WARRIOR",
+      "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "COMBO_ATTACK_1_3_GROUND_TO_AIR",
       "display_name": "Ground to Air",
       "resource_kind": "RAGE",
-      "resource_cost": 20.0,
+      "resource_cost": 20,
       "ability_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 10,
       "gameplay": {
         "kind": "MELEE",
         "base_damage": 30,
         "applies_stagger": false,
-        "range": 8.0,
+        "range": 8,
         "cooldown_ms": 900,
         "uses_global_cooldown": true,
         "parry_behavior": "PARRYABLE",
@@ -356,7 +330,7 @@
     },
     {
       "ability_id": "WARRIOR_AIR_TO_GROUND_PLACEHOLDER",
-      "class_id": "WARRIOR",
+      "combat_profile_id": "TWO_HANDED_SWORD",
       "gameplay": {
         "kind": "MELEE",
         "base_damage": 30,
@@ -371,7 +345,7 @@
       "action_id": "COMBO_ATTACK_1_4_AIR_TO_GROUND",
       "display_name": "Air to Ground",
       "resource_kind": "RAGE",
-      "resource_cost": 20.0,
+      "resource_cost": 20,
       "ability_tags": [
         "COMBO_FOLLOWUP"
       ],
@@ -379,13 +353,13 @@
     },
     {
       "ability_id": "WARRIOR_SKYFALL_1",
-      "class_id": "WARRIOR",
+      "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "SKYFALL_1",
       "display_name": "Skyfall I",
       "resource_kind": "RAGE",
-      "resource_cost": 25.0,
+      "resource_cost": 25,
       "ability_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 20,
       "gameplay": {
@@ -402,13 +376,13 @@
     },
     {
       "ability_id": "WARRIOR_SKYFALL_2",
-      "class_id": "WARRIOR",
+      "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "SKYFALL_2",
       "display_name": "Skyfall 2",
       "resource_kind": "RAGE",
-      "resource_cost": 30.0,
+      "resource_cost": 30,
       "ability_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 30,
       "gameplay": {
@@ -430,20 +404,20 @@
     },
     {
       "ability_id": "WARRIOR_SKYFALL_3",
-      "class_id": "WARRIOR",
+      "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "SKYFALL_3",
       "display_name": "Skyfall III",
       "resource_kind": "RAGE",
-      "resource_cost": 35.0,
+      "resource_cost": 35,
       "ability_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 40,
       "gameplay": {
         "kind": "MELEE",
         "base_damage": 40,
         "applies_stagger": false,
-        "range": 3.0,
+        "range": 3,
         "cooldown_ms": 900,
         "uses_global_cooldown": true,
         "parry_behavior": "PARRYABLE",
@@ -453,7 +427,7 @@
     },
     {
       "ability_id": "WARRIOR_SKYFALL_4",
-      "class_id": "WARRIOR",
+      "combat_profile_id": "TWO_HANDED_SWORD",
       "gameplay": {
         "kind": "MELEE",
         "base_damage": 35,
@@ -468,7 +442,7 @@
       "action_id": "COMBO_ATTACK_3_4_AIR_TO_GROUND",
       "display_name": "Skyfall IV",
       "resource_kind": "RAGE",
-      "resource_cost": 35.0,
+      "resource_cost": 35,
       "ability_tags": [
         "COMBO_FOLLOWUP"
       ],
@@ -476,13 +450,13 @@
     },
     {
       "ability_id": "WARRIOR_WHIRLWIND",
-      "class_id": "WARRIOR",
+      "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "WHIRLWIND",
       "display_name": "Whirlwind",
       "resource_kind": "RAGE",
-      "resource_cost": 40.0,
+      "resource_cost": 40,
       "ability_tags": [
-        "LOADOUT_ACTION",
+        "ACTION_BAR_ACTION",
         "CORE_ABILITY"
       ],
       "sort_order": 50,
@@ -504,13 +478,13 @@
     },
     {
       "ability_id": "WARRIOR_SUNDER",
-      "class_id": "WARRIOR",
+      "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "COMBO_ATTACK_4_4_LUNGING_SLASH",
       "display_name": "Sunder",
       "resource_kind": "RAGE",
-      "resource_cost": 35.0,
+      "resource_cost": 35,
       "ability_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 60,
       "gameplay": {
@@ -527,13 +501,13 @@
     },
     {
       "ability_id": "WARRIOR_CLEAVE",
-      "class_id": "WARRIOR",
+      "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "COMBO_ATTACK_2_1_SPIN",
       "display_name": "Cleave",
       "resource_kind": "RAGE",
-      "resource_cost": 30.0,
+      "resource_cost": 30,
       "ability_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 70,
       "gameplay": {
@@ -550,13 +524,13 @@
     },
     {
       "ability_id": "WARRIOR_DREAD_STRIKE",
-      "class_id": "WARRIOR",
+      "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "WARRIOR_DREAD_STRIKE",
       "display_name": "Dread Strike",
       "resource_kind": "RAGE",
-      "resource_cost": 20.0,
+      "resource_cost": 20,
       "ability_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 75,
       "gameplay": {
@@ -565,20 +539,20 @@
     },
     {
       "ability_id": "WARRIOR_EARTHSHATTER",
-      "class_id": "WARRIOR",
+      "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "COMBO_ATTACK_3_4_AIR_TO_GROUND",
       "display_name": "Earthshatter",
       "resource_kind": "RAGE",
-      "resource_cost": 20.0,
+      "resource_cost": 20,
       "ability_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 76,
       "gameplay": {
         "kind": "MELEE",
         "base_damage": 30,
         "applies_stagger": true,
-        "range": 8.0,
+        "range": 8,
         "cooldown_ms": 900,
         "uses_global_cooldown": true,
         "parry_behavior": "PARRYABLE",
@@ -587,9 +561,9 @@
         "gap_close": {
           "kind": "LEAP",
           "destination": "NEAREST_CONTACT_POINT",
-          "speed": 18.0,
+          "speed": 18,
           "arrival_buffer": 1.44,
-          "arrival_epsilon": 0.10,
+          "arrival_epsilon": 0.1,
           "impact_range": 2.5,
           "collision_policy": "REQUIRE_CLEAR_PATH",
           "require_arrival_for_swing": true,
@@ -605,12 +579,12 @@
     },
     {
       "ability_id": "WARRIOR_FIREBALL",
-      "class_id": "WARRIOR",
+      "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "FIREBALL",
       "display_name": "Fire",
       "resource_kind": "RAGE",
       "ability_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 1000,
       "gameplay": {
@@ -621,16 +595,16 @@
         "cast_mobility": "MOBILE",
         "targeting": "TARGET",
         "requires_target": true,
-        "resource_cost": 0.0,
+        "resource_cost": 0,
         "arms_auto_attack_on_cast": true,
         "delivery": {
           "kind": "PROJECTILE",
-          "speed": 18.0,
-          "max_distance": 30.0,
+          "speed": 18,
+          "max_distance": 30,
           "damage": 30,
           "spawn_forward": 0,
           "spawn_height": 1.2,
-          "turn_rate": 3.0,
+          "turn_rate": 3,
           "update_interval_seconds": 0.05,
           "radius": 0.8,
           "block_behavior": "BLOCKABLE",
@@ -650,12 +624,12 @@
     },
     {
       "ability_id": "WARRIOR_GROUND_SLASH",
-      "class_id": "WARRIOR",
+      "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "GROUND_SLASH",
       "display_name": "Ground Slash",
       "resource_kind": "RAGE",
       "ability_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 1001,
       "gameplay": {
@@ -666,33 +640,33 @@
         "cast_mobility": "GROUNDED_STATIONARY",
         "targeting": "TARGET",
         "requires_target": true,
-        "resource_cost": 0.0,
+        "resource_cost": 0,
         "arms_auto_attack_on_cast": true,
         "delivery": {
           "kind": "PROJECTILE",
-          "speed": 20.0,
-          "max_distance": 16.0,
+          "speed": 20,
+          "max_distance": 16,
           "damage": 28,
-          "spawn_forward": 1.0,
+          "spawn_forward": 1,
           "spawn_height": 0.05,
-          "turn_rate": 0.0,
+          "turn_rate": 0,
           "update_interval_seconds": 0.05,
           "radius": 0.65,
           "block_behavior": "BLOCKABLE",
           "parry_behavior": "PARRYABLE",
-          "homing_window_seconds": 0.0,
+          "homing_window_seconds": 0,
           "terrain_conforming": true
         }
       }
     },
     {
       "ability_id": "WARRIOR_ICICLE",
-      "class_id": "WARRIOR",
+      "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "ICICLE",
       "display_name": "Icicle",
       "resource_kind": "RAGE",
       "ability_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 1001,
       "gameplay": {
@@ -703,16 +677,16 @@
         "cast_mobility": "GROUNDED_STATIONARY",
         "targeting": "TARGET",
         "requires_target": true,
-        "resource_cost": 0.0,
+        "resource_cost": 0,
         "arms_auto_attack_on_cast": true,
         "delivery": {
           "kind": "PROJECTILE",
-          "speed": 35.0,
-          "max_distance": 30.0,
+          "speed": 35,
+          "max_distance": 30,
           "damage": 30,
           "spawn_forward": 0,
           "spawn_height": 1.2,
-          "turn_rate": 3.0,
+          "turn_rate": 3,
           "update_interval_seconds": 0.05,
           "radius": 0.55,
           "block_behavior": "BLOCKABLE",
@@ -723,12 +697,12 @@
     },
     {
       "ability_id": "WARRIOR_ORBITING_BLADES",
-      "class_id": "WARRIOR",
+      "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "ORBITING_BLADES",
       "display_name": "Orbiting Blades",
       "resource_kind": "RAGE",
       "ability_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 1002,
       "gameplay": {
@@ -739,7 +713,7 @@
         "cast_mobility": "MOBILE",
         "targeting": "SELF",
         "requires_target": false,
-        "resource_cost": 0.0,
+        "resource_cost": 0,
         "arms_auto_attack_on_cast": false,
         "delivery": {
           "kind": "PROJECTILE",
@@ -750,14 +724,14 @@
           "motion": {
             "kind": "ORBIT_CASTER",
             "projectile_count": 3,
-            "orbit_radius": 2.0,
-            "orbit_height": 1.0,
-            "angular_speed_deg_per_sec": 180.0,
-            "lifetime_seconds": 10.0,
+            "orbit_radius": 2,
+            "orbit_height": 1,
+            "angular_speed_deg_per_sec": 180,
+            "lifetime_seconds": 10,
             "hit_radius": 0.45,
             "hit_cooldown_seconds": 0.35,
             "max_hits_per_target": 1,
-            "phase_offset_deg": 0.0
+            "phase_offset_deg": 0
           },
           "impact_effects": []
         }
@@ -765,12 +739,12 @@
     },
     {
       "ability_id": "WARRIOR_METEOR",
-      "class_id": "WARRIOR",
+      "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "METEOR",
       "display_name": "Meteor",
       "resource_kind": "RAGE",
       "ability_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 1003,
       "gameplay": {
@@ -782,7 +756,7 @@
         "targeting": "POINT",
         "requires_target": false,
         "aim_radius": 2.2,
-        "resource_cost": 0.0,
+        "resource_cost": 0,
         "arms_auto_attack_on_cast": false,
         "delivery": {
           "kind": "AREA",
@@ -808,12 +782,12 @@
     },
     {
       "ability_id": "WARRIOR_LIGHTNING",
-      "class_id": "WARRIOR",
+      "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "LIGHTNING",
       "display_name": "Lightning",
       "resource_kind": "RAGE",
       "ability_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 1004,
       "gameplay": {
@@ -825,11 +799,11 @@
         "targeting": "POINT",
         "requires_target": false,
         "aim_radius": 2.6,
-        "resource_cost": 0.0,
+        "resource_cost": 0,
         "arms_auto_attack_on_cast": false,
         "delivery": {
           "kind": "AREA",
-          "max_distance": 12.0,
+          "max_distance": 12,
           "damage": 34,
           "radius": 2.6,
           "block_behavior": "BLOCKABLE",
@@ -839,12 +813,12 @@
     },
     {
       "ability_id": "WARRIOR_ERUPTION",
-      "class_id": "WARRIOR",
+      "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "ERUPTION",
       "display_name": "Eruption",
       "resource_kind": "RAGE",
       "ability_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 1005,
       "gameplay": {
@@ -856,11 +830,11 @@
         "targeting": "POINT",
         "requires_target": false,
         "aim_radius": 2.4,
-        "resource_cost": 0.0,
+        "resource_cost": 0,
         "arms_auto_attack_on_cast": false,
         "delivery": {
           "kind": "AREA",
-          "max_distance": 12.0,
+          "max_distance": 12,
           "damage": 38,
           "impact_delay_ms": 500,
           "radius": 2.4,
@@ -871,12 +845,12 @@
     },
     {
       "ability_id": "WARRIOR_ICE_SPIKES",
-      "class_id": "WARRIOR",
+      "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "ICE_SPIKES",
       "display_name": "Ice Spikes",
       "resource_kind": "RAGE",
       "ability_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 1006,
       "gameplay": {
@@ -887,7 +861,7 @@
         "cast_mobility": "MOBILE",
         "targeting": "SELF",
         "requires_target": false,
-        "resource_cost": 30.0,
+        "resource_cost": 30,
         "arms_auto_attack_on_cast": false,
         "delivery": {
           "kind": "AREA",
@@ -910,12 +884,12 @@
     },
     {
       "ability_id": "WARRIOR_BOOMERANG_ORB",
-      "class_id": "WARRIOR",
+      "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "BOOMERANG_ORB",
       "display_name": "Boomerang Orb",
       "resource_kind": "RAGE",
       "ability_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 1006,
       "gameplay": {
@@ -926,26 +900,26 @@
         "cast_mobility": "MOBILE",
         "targeting": "TARGET",
         "requires_target": true,
-        "resource_cost": 0.0,
+        "resource_cost": 0,
         "arms_auto_attack_on_cast": true,
         "delivery": {
           "kind": "PROJECTILE",
-          "speed": 18.0,
-          "max_distance": 8.0,
+          "speed": 18,
+          "max_distance": 8,
           "damage": 24,
-          "spawn_forward": 1.0,
+          "spawn_forward": 1,
           "spawn_height": 1.2,
-          "turn_rate": 0.0,
+          "turn_rate": 0,
           "update_interval_seconds": 0.05,
           "radius": 0.45,
           "block_behavior": "BLOCKABLE",
           "parry_behavior": "PARRYABLE",
-          "homing_window_seconds": 0.0,
+          "homing_window_seconds": 0,
           "motion": {
             "kind": "BOOMERANG_CASTER",
-            "outbound_distance": 8.0,
-            "return_speed": 22.0,
-            "lifetime_seconds": 3.0,
+            "outbound_distance": 8,
+            "return_speed": 22,
+            "lifetime_seconds": 3,
             "hit_radius": 0.45,
             "hit_cooldown_seconds": 0.25,
             "max_hits_per_target": 1
@@ -956,12 +930,12 @@
     },
     {
       "ability_id": "WARRIOR_WITHERING_ORB",
-      "class_id": "WARRIOR",
+      "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "WITHERING_ORB",
       "display_name": "Withering Orb",
       "resource_kind": "RAGE",
       "ability_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 1007,
       "gameplay": {
@@ -972,16 +946,16 @@
         "cast_mobility": "MOBILE",
         "targeting": "TARGET",
         "requires_target": true,
-        "resource_cost": 0.0,
+        "resource_cost": 0,
         "arms_auto_attack_on_cast": false,
         "delivery": {
           "kind": "PROJECTILE",
-          "speed": 2.0,
-          "max_distance": 18.0,
+          "speed": 2,
+          "max_distance": 18,
           "damage": 12,
-          "spawn_forward": 1.0,
+          "spawn_forward": 1,
           "spawn_height": 1.2,
-          "turn_rate": 2.0,
+          "turn_rate": 2,
           "update_interval_seconds": 0.05,
           "radius": 0.45,
           "block_behavior": "BLOCKABLE",
@@ -1002,7 +976,7 @@
     },
     {
       "ability_id": "WARRIOR_INSTANT_BEAM",
-      "class_id": "WARRIOR",
+      "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "INSTANT_BEAM",
       "display_name": "Beam",
       "resource_kind": "RAGE",
@@ -1015,11 +989,11 @@
         "cast_mobility": "GROUNDED_STATIONARY",
         "targeting": "TARGET",
         "requires_target": true,
-        "resource_cost": 0.0,
+        "resource_cost": 0,
         "arms_auto_attack_on_cast": true,
         "delivery": {
           "kind": "INSTANT_BEAM",
-          "max_distance": 30.0,
+          "max_distance": 30,
           "damage": 20,
           "block_behavior": "BLOCKABLE",
           "charge_scaling": {
@@ -1031,7 +1005,7 @@
     },
     {
       "ability_id": "WARRIOR_ELECTROCUTE",
-      "class_id": "WARRIOR",
+      "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "ELECTROCUTE",
       "display_name": "Elec",
       "resource_kind": "RAGE",
@@ -1044,11 +1018,11 @@
         "cast_mobility": "GROUNDED_STATIONARY",
         "targeting": "TARGET",
         "requires_target": true,
-        "resource_cost": 0.0,
+        "resource_cost": 0,
         "arms_auto_attack_on_cast": true,
         "delivery": {
           "kind": "CHANNEL",
-          "max_distance": 18.0,
+          "max_distance": 18,
           "damage": 6,
           "update_interval_seconds": 0.08,
           "duration_seconds": 2.25,
@@ -1058,12 +1032,12 @@
     },
     {
       "ability_id": "WARRIOR_FROST_NOVA",
-      "class_id": "WARRIOR",
+      "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "FROST_NOVA",
       "display_name": "Nova",
       "resource_kind": "RAGE",
       "ability_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 1007,
       "gameplay": {
@@ -1074,7 +1048,7 @@
         "cast_mobility": "MOBILE",
         "targeting": "SELF",
         "requires_target": false,
-        "resource_cost": 0.0,
+        "resource_cost": 0,
         "arms_auto_attack_on_cast": false,
         "delivery": {
           "kind": "AREA",
@@ -1093,7 +1067,7 @@
     },
     {
       "ability_id": "WARRIOR_NEGATE",
-      "class_id": "WARRIOR",
+      "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "NEGATE",
       "display_name": "Negate",
       "resource_kind": "RAGE",
@@ -1106,26 +1080,26 @@
         "cast_mobility": "MOBILE",
         "targeting": "TARGET",
         "requires_target": false,
-        "resource_cost": 0.0,
+        "resource_cost": 0,
         "arms_auto_attack_on_cast": false,
         "delivery": {
           "kind": "AREA",
-          "speed": 30.0,
-          "max_distance": 6.0,
+          "speed": 30,
+          "max_distance": 6,
           "damage": 0,
-          "radius": 6.0,
+          "radius": 6,
           "block_behavior": "UNBLOCKABLE"
         }
       }
     },
     {
       "ability_id": "WARRIOR_MOMENTUM",
-      "class_id": "WARRIOR",
+      "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "MOMENTUM",
       "display_name": "Momentum",
       "resource_kind": "RAGE",
       "ability_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 80,
       "gameplay": {
@@ -1136,7 +1110,7 @@
         "cast_mobility": "MOBILE",
         "targeting": "SELF",
         "requires_target": false,
-        "resource_cost": 20.0,
+        "resource_cost": 20,
         "arms_auto_attack_on_cast": false,
         "delivery": {
           "kind": "APPLY_STATUS",
@@ -1145,7 +1119,7 @@
           "polarity": "BUFF",
           "status": {
             "kind": "MOVE_SLOW_IMMUNITY",
-            "modifier_scalar": 0.0,
+            "modifier_scalar": 0,
             "max_stacks": 1,
             "stack_policy": "REFRESH"
           }
@@ -1154,12 +1128,12 @@
     },
     {
       "ability_id": "WARRIOR_FORTIFY",
-      "class_id": "WARRIOR",
+      "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "FORTIFY",
       "display_name": "Fortify",
       "resource_kind": "RAGE",
       "ability_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 81,
       "gameplay": {
@@ -1170,7 +1144,7 @@
         "cast_mobility": "MOBILE",
         "targeting": "SELF",
         "requires_target": false,
-        "resource_cost": 20.0,
+        "resource_cost": 20,
         "arms_auto_attack_on_cast": false,
         "delivery": {
           "kind": "APPLY_STATUS",
@@ -1179,7 +1153,7 @@
           "polarity": "BUFF",
           "status": {
             "kind": "TEMPORARY_HITPOINTS",
-            "modifier_scalar": 0.0,
+            "modifier_scalar": 0,
             "absorb_amount": 30,
             "absorb_cap": 60,
             "max_stacks": 2,
@@ -1190,12 +1164,12 @@
     },
     {
       "ability_id": "WARRIOR_IRON_WILL",
-      "class_id": "WARRIOR",
+      "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "IRON_WILL",
       "display_name": "Iron Will",
       "resource_kind": "RAGE",
       "ability_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 82,
       "gameplay": {
@@ -1206,7 +1180,7 @@
         "cast_mobility": "MOBILE",
         "targeting": "SELF",
         "requires_target": false,
-        "resource_cost": 0.0,
+        "resource_cost": 0,
         "arms_auto_attack_on_cast": false,
         "delivery": {
           "kind": "REMOVE_STATUS",
@@ -1223,12 +1197,12 @@
     },
     {
       "ability_id": "WARRIOR_DEFIANCE",
-      "class_id": "WARRIOR",
+      "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "DEFIANCE",
       "display_name": "Defiance",
       "resource_kind": "RAGE",
       "ability_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 83,
       "gameplay": {
@@ -1239,7 +1213,7 @@
         "cast_mobility": "MOBILE",
         "targeting": "SELF",
         "requires_target": false,
-        "resource_cost": 0.0,
+        "resource_cost": 0,
         "arms_auto_attack_on_cast": false,
         "delivery": {
           "kind": "APPLY_STATUS",
@@ -1257,12 +1231,12 @@
     },
     {
       "ability_id": "WARRIOR_BATTLE_CRY",
-      "class_id": "WARRIOR",
+      "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "BATTLE_CRY",
       "display_name": "Battle Cry",
       "resource_kind": "RAGE",
       "ability_tags": [
-        "LOADOUT_ACTION",
+        "ACTION_BAR_ACTION",
         "CORE_ABILITY"
       ],
       "sort_order": 82,
@@ -1275,12 +1249,12 @@
         "targeting": "SELF",
         "target_audience": "PARTY_OR_SELF",
         "requires_target": false,
-        "resource_cost": 0.0,
+        "resource_cost": 0,
         "arms_auto_attack_on_cast": false,
         "delivery": {
           "kind": "APPLY_STATUS",
           "duration_ms": 300000,
-          "radius": 18.0,
+          "radius": 18,
           "status_stack_group": "BATTLE_CRY",
           "polarity": "BUFF",
           "status": {
@@ -1294,12 +1268,12 @@
     },
     {
       "ability_id": "WARRIOR_GIANT_SWING",
-      "class_id": "WARRIOR",
+      "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "GIANT_SWING",
       "display_name": "Giant Swing",
       "resource_kind": "RAGE",
       "ability_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 85,
       "gameplay": {
@@ -1310,7 +1284,7 @@
         "cast_mobility": "MOBILE",
         "targeting": "SELF",
         "requires_target": false,
-        "resource_cost": 0.0,
+        "resource_cost": 0,
         "arms_auto_attack_on_cast": false,
         "delivery": {
           "kind": "APPLY_STATUS",
@@ -1319,7 +1293,7 @@
           "polarity": "BUFF",
           "status": {
             "kind": "MELEE_ATTACK_MODIFIER",
-            "modifier_scalar": 0.0,
+            "modifier_scalar": 0,
             "max_stacks": 1,
             "stack_policy": "REFRESH"
           }
@@ -1328,12 +1302,12 @@
     },
     {
       "ability_id": "WARRIOR_ENRAGE",
-      "class_id": "WARRIOR",
+      "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "ENRAGE",
       "display_name": "Enrage",
       "resource_kind": "RAGE",
       "ability_tags": [
-        "LOADOUT_ACTION",
+        "ACTION_BAR_ACTION",
         "CORE_ABILITY"
       ],
       "sort_order": 90,
@@ -1345,8 +1319,8 @@
         "cast_mobility": "MOBILE",
         "targeting": "SELF",
         "requires_target": false,
-        "resource_cost": 0.0,
-        "primary_resource_gain_on_cast": 50.0,
+        "resource_cost": 0,
+        "primary_resource_gain_on_cast": 50,
         "arms_auto_attack_on_cast": false,
         "delivery": {
           "kind": "SELF_RESOURCE"
@@ -1355,12 +1329,12 @@
     },
     {
       "ability_id": "WARRIOR_SHOCKWAVE",
-      "class_id": "WARRIOR",
+      "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "SHOCKWAVE",
       "display_name": "Shockwave",
       "resource_kind": "RAGE",
       "ability_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 92,
       "gameplay": {
@@ -1371,7 +1345,7 @@
         "cast_mobility": "MOBILE",
         "targeting": "SELF",
         "requires_target": false,
-        "resource_cost": 0.0,
+        "resource_cost": 0,
         "arms_auto_attack_on_cast": false,
         "delivery": {
           "kind": "AREA",
@@ -1389,12 +1363,12 @@
     },
     {
       "ability_id": "WARRIOR_INTIMIDATE",
-      "class_id": "WARRIOR",
+      "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "INTIMIDATE",
       "display_name": "Intimidate",
       "resource_kind": "RAGE",
       "ability_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 95,
       "gameplay": {
@@ -1405,12 +1379,12 @@
         "cast_mobility": "MOBILE",
         "targeting": "SELF",
         "requires_target": false,
-        "resource_cost": 0.0,
+        "resource_cost": 0,
         "arms_auto_attack_on_cast": false,
         "delivery": {
           "kind": "AREA",
           "damage": 0,
-          "radius": 6.0,
+          "radius": 6,
           "block_behavior": "UNBLOCKABLE",
           "impact_effects": [
             {
@@ -1424,19 +1398,19 @@
     },
     {
       "ability_id": "WARRIOR_CHARGE",
-      "class_id": "WARRIOR",
+      "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "WARRIOR_CHARGE",
       "display_name": "Charge",
       "resource_kind": "RAGE",
       "ability_tags": [
-        "LOADOUT_ACTION",
+        "ACTION_BAR_ACTION",
         "CORE_ABILITY"
       ],
       "effects": [
         {
           "trigger": "ON_ACCEPTED",
           "kind": "GRANT_PRIMARY_RESOURCE",
-          "amount": 20.0
+          "amount": 20
         }
       ],
       "sort_order": 100,
@@ -1444,8 +1418,8 @@
         "kind": "MELEE",
         "base_damage": 32,
         "applies_stagger": false,
-        "range": 18.0,
-        "minimum_range": 5.0,
+        "range": 18,
+        "minimum_range": 5,
         "cooldown_ms": 1600,
         "uses_global_cooldown": true,
         "parry_behavior": "PARRYABLE",
@@ -1454,7 +1428,7 @@
         "gap_close": {
           "kind": "LINEAR",
           "destination": "NEAREST_CONTACT_POINT",
-          "speed": 23.0,
+          "speed": 23,
           "arrival_buffer": 1.44,
           "arrival_epsilon": 0.05,
           "impact_range": 2.5,
@@ -1476,18 +1450,18 @@
     },
     {
       "ability_id": "WARRIOR_IMPALE",
-      "class_id": "WARRIOR",
+      "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "WARRIOR_IMPALE",
       "display_name": "Impale",
       "resource_kind": "RAGE",
       "ability_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "effects": [
         {
           "trigger": "ON_ACCEPTED",
           "kind": "GRANT_PRIMARY_RESOURCE",
-          "amount": 20.0
+          "amount": 20
         }
       ],
       "sort_order": 105,
@@ -1495,8 +1469,8 @@
         "kind": "MELEE",
         "base_damage": 32,
         "applies_stagger": false,
-        "range": 18.0,
-        "minimum_range": 5.0,
+        "range": 18,
+        "minimum_range": 5,
         "cooldown_ms": 1600,
         "uses_global_cooldown": true,
         "parry_behavior": "PARRYABLE",
@@ -1505,7 +1479,7 @@
         "gap_close": {
           "kind": "LINEAR",
           "destination": "NEAREST_CONTACT_POINT",
-          "speed": 23.0,
+          "speed": 23,
           "arrival_buffer": 1.44,
           "arrival_epsilon": 0.05,
           "impact_range": 2.5,
@@ -1527,18 +1501,18 @@
     },
     {
       "ability_id": "WARRIOR_DISENGAGE_STRIKE",
-      "class_id": "WARRIOR",
+      "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "WARRIOR_DISENGAGE_STRIKE",
       "display_name": "Disengage Strike",
       "resource_kind": "RAGE",
       "ability_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "effects": [
         {
           "trigger": "ON_ACCEPTED",
           "kind": "GRANT_PRIMARY_RESOURCE",
-          "amount": 20.0
+          "amount": 20
         }
       ],
       "sort_order": 106,
@@ -1549,7 +1523,7 @@
         "range": 2.5,
         "cooldown_ms": 1600,
         "uses_global_cooldown": true,
-        "global_cooldown_ms": 250,
+        "global_cooldown_ms": 650,
         "parry_behavior": "PARRYABLE",
         "block_behavior": "BLOCKABLE",
         "airborne_targeting_mode": "ANY_TARGET",
@@ -1557,8 +1531,8 @@
           "kind": "BACKSTEP",
           "start_delay_ms": 220,
           "direction": "BACKWARD",
-          "distance": 7.0,
-          "speed": 18.0,
+          "distance": 7,
+          "speed": 18,
           "collision_policy": "STOP_AT_BLOCK",
           "facing_policy": "FACE_START"
         }
@@ -1566,13 +1540,13 @@
     },
     {
       "ability_id": "PALADIN_SHIELD_PUMMEL",
-      "class_id": "PALADIN",
+      "combat_profile_id": "SWORD_AND_SHIELD",
       "action_id": "SWORD_AND_SHIELD_UTILITY_1",
       "display_name": "Shield Pummel",
       "resource_kind": "ZEAL",
-      "resource_cost": 1.0,
+      "resource_cost": 1,
       "ability_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 10,
       "gameplay": {
@@ -1589,13 +1563,13 @@
     },
     {
       "ability_id": "PALADIN_VINDICATOR_SLASH",
-      "class_id": "PALADIN",
+      "combat_profile_id": "SWORD_AND_SHIELD",
       "action_id": "SWORD_AND_SHIELD_UTILITY_2",
       "display_name": "Vindicator Slash",
       "resource_kind": "ZEAL",
-      "resource_cost": 1.0,
+      "resource_cost": 1,
       "ability_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 20,
       "gameplay": {
@@ -1612,20 +1586,20 @@
     },
     {
       "ability_id": "PALADIN_GUARDIAN_RUSH",
-      "class_id": "PALADIN",
+      "combat_profile_id": "SWORD_AND_SHIELD",
       "action_id": "SWORD_AND_SHIELD_UTILITY_3",
       "display_name": "Guardian Rush",
       "resource_kind": "ZEAL",
-      "resource_cost": 1.0,
+      "resource_cost": 1,
       "ability_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 30,
       "gameplay": {
         "kind": "MELEE",
         "base_damage": 36,
         "applies_stagger": false,
-        "range": 3.0,
+        "range": 3,
         "cooldown_ms": 900,
         "uses_global_cooldown": true,
         "parry_behavior": "PARRYABLE",
@@ -1635,13 +1609,13 @@
     },
     {
       "ability_id": "PALADIN_RETRIBUTION",
-      "class_id": "PALADIN",
+      "combat_profile_id": "SWORD_AND_SHIELD",
       "action_id": "SWORD_AND_SHIELD_UTILITY_4",
       "display_name": "Retribution",
       "resource_kind": "ZEAL",
-      "resource_cost": 1.0,
+      "resource_cost": 1,
       "ability_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 40,
       "gameplay": {
@@ -1658,21 +1632,21 @@
     },
     {
       "ability_id": "PALADIN_CHARGE",
-      "class_id": "PALADIN",
+      "combat_profile_id": "SWORD_AND_SHIELD",
       "action_id": "PALADIN_CHARGE",
       "display_name": "Charge",
       "resource_kind": "ZEAL",
-      "resource_cost": 1.0,
+      "resource_cost": 1,
       "ability_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 150,
       "gameplay": {
         "kind": "MELEE",
         "base_damage": 32,
         "applies_stagger": false,
-        "range": 18.0,
-        "minimum_range": 5.0,
+        "range": 18,
+        "minimum_range": 5,
         "cooldown_ms": 1600,
         "uses_global_cooldown": true,
         "parry_behavior": "PARRYABLE",
@@ -1681,7 +1655,7 @@
         "gap_close": {
           "kind": "LINEAR",
           "destination": "NEAREST_CONTACT_POINT",
-          "speed": 23.0,
+          "speed": 23,
           "arrival_buffer": 1.44,
           "arrival_epsilon": 0.05,
           "impact_range": 2.5,
@@ -1703,21 +1677,21 @@
     },
     {
       "ability_id": "PALADIN_AVENGE",
-      "class_id": "PALADIN",
+      "combat_profile_id": "SWORD_AND_SHIELD",
       "action_id": "PALADIN_AVENGE",
       "display_name": "Avenge",
       "resource_kind": "ZEAL",
-      "resource_cost": 1.0,
+      "resource_cost": 1,
       "ability_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 155,
       "gameplay": {
         "kind": "MELEE",
         "base_damage": 32,
         "applies_stagger": false,
-        "range": 18.0,
-        "minimum_range": 5.0,
+        "range": 18,
+        "minimum_range": 5,
         "cooldown_ms": 1600,
         "uses_global_cooldown": true,
         "parry_behavior": "PARRYABLE",
@@ -1726,7 +1700,7 @@
         "gap_close": {
           "kind": "LINEAR",
           "destination": "NEAREST_CONTACT_POINT",
-          "speed": 23.0,
+          "speed": 23,
           "arrival_buffer": 1.44,
           "arrival_epsilon": 0.05,
           "impact_range": 2.5,
@@ -1754,12 +1728,12 @@
     },
     {
       "ability_id": "PALADIN_CONSECRATE",
-      "class_id": "PALADIN",
+      "combat_profile_id": "SWORD_AND_SHIELD",
       "action_id": "CONSECRATE",
       "display_name": "Consecrate",
       "resource_kind": "ZEAL",
       "ability_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 156,
       "gameplay": {
@@ -1771,11 +1745,11 @@
         "targeting": "POINT",
         "requires_target": false,
         "aim_radius": 3.4,
-        "resource_cost": 1.0,
+        "resource_cost": 1,
         "arms_auto_attack_on_cast": false,
         "delivery": {
           "kind": "AREA",
-          "max_distance": 12.0,
+          "max_distance": 12,
           "damage": 38,
           "impact_delay_ms": 2000,
           "radius": 3.4,
@@ -1794,12 +1768,12 @@
     },
     {
       "ability_id": "PALADIN_CLEANSING_TOUCH",
-      "class_id": "PALADIN",
+      "combat_profile_id": "SWORD_AND_SHIELD",
       "action_id": "CLEANSING_TOUCH",
       "display_name": "Cleansing Touch",
       "resource_kind": "ZEAL",
       "ability_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 157,
       "gameplay": {
@@ -1811,7 +1785,7 @@
         "targeting": "TARGET",
         "target_audience": "PARTY_OR_SELF",
         "requires_target": false,
-        "resource_cost": 1.0,
+        "resource_cost": 1,
         "arms_auto_attack_on_cast": false,
         "delivery": {
           "kind": "REMOVE_STATUS",
@@ -1826,12 +1800,12 @@
     },
     {
       "ability_id": "PALADIN_ABSOLUTION",
-      "class_id": "PALADIN",
+      "combat_profile_id": "SWORD_AND_SHIELD",
       "action_id": "ABSOLUTION",
       "display_name": "Absolution",
       "resource_kind": "ZEAL",
       "ability_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 158,
       "gameplay": {
@@ -1843,11 +1817,11 @@
         "targeting": "TARGET",
         "target_audience": "PARTY_OR_SELF",
         "requires_target": false,
-        "resource_cost": 1.0,
+        "resource_cost": 1,
         "arms_auto_attack_on_cast": false,
         "delivery": {
           "kind": "REMOVE_STATUS",
-          "max_distance": 30.0,
+          "max_distance": 30,
           "max_count": 0,
           "polarity": "DEBUFF",
           "dispel_types": [
@@ -1858,13 +1832,12 @@
     },
     {
       "ability_id": "PALADIN_FERVOR",
-      "class_id": "PALADIN",
+      "combat_profile_id": "SWORD_AND_SHIELD",
       "action_id": "FERVOR",
       "display_name": "Fervor",
       "resource_kind": "ZEAL",
-      "resource_cost": 1.0,
       "ability_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 159,
       "gameplay": {
@@ -1876,11 +1849,11 @@
         "targeting": "SELF",
         "target_audience": "PARTY_OR_SELF",
         "requires_target": false,
-        "resource_cost": 1.0,
+        "resource_cost": 1,
         "arms_auto_attack_on_cast": false,
         "delivery": {
           "kind": "AURA",
-          "radius": 20.0,
+          "radius": 20,
           "tick_interval_ms": 250,
           "effects": [
             {
@@ -1895,12 +1868,12 @@
     },
     {
       "ability_id": "PALADIN_SACRED_FLAME",
-      "class_id": "PALADIN",
+      "combat_profile_id": "SWORD_AND_SHIELD",
       "action_id": "SACRED_FLAME",
       "display_name": "Sacred Flame",
       "resource_kind": "ZEAL",
       "ability_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 160,
       "gameplay": {
@@ -1912,17 +1885,17 @@
         "targeting": "TARGET",
         "target_audience": "HOSTILE",
         "requires_target": true,
-        "resource_cost": 1.0,
+        "resource_cost": 1,
         "arms_auto_attack_on_cast": false,
         "delivery": {
           "kind": "APPLY_STATUS",
           "duration_ms": 8000,
-          "max_distance": 30.0,
+          "max_distance": 30,
           "polarity": "DEBUFF",
           "status_stack_group": "PALADIN_SACRED_FLAME_DOT",
           "status": {
             "kind": "DOT",
-            "modifier_scalar": 0.0,
+            "modifier_scalar": 0,
             "tick_interval_ms": 1000,
             "tick_damage": 4,
             "max_stacks": 1,
@@ -1936,20 +1909,20 @@
     },
     {
       "ability_id": "ARCHER_POWER_SHOT",
-      "class_id": "RANGER",
+      "combat_profile_id": "ARCHER_BOW",
       "action_id": "ARCHER_POWER_SHOT",
       "display_name": "Power Shot",
       "resource_kind": "MANA",
-      "resource_cost": 20.0,
+      "resource_cost": 20,
       "ability_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 10,
       "gameplay": {
         "kind": "MELEE",
         "base_damage": 34,
         "applies_stagger": false,
-        "range": 18.0,
+        "range": 18,
         "cooldown_ms": 900,
         "uses_global_cooldown": true,
         "parry_behavior": "PARRYABLE",
@@ -1959,20 +1932,20 @@
     },
     {
       "ability_id": "ARCHER_RAIN_SHOT",
-      "class_id": "RANGER",
+      "combat_profile_id": "ARCHER_BOW",
       "action_id": "ARCHER_RAIN_SHOT",
       "display_name": "Rain Shot",
       "resource_kind": "MANA",
-      "resource_cost": 35.0,
+      "resource_cost": 35,
       "ability_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 20,
       "gameplay": {
         "kind": "MELEE",
         "base_damage": 42,
         "applies_stagger": false,
-        "range": 24.0,
+        "range": 24,
         "cooldown_ms": 1600,
         "uses_global_cooldown": true,
         "parry_behavior": "PARRYABLE",
@@ -1982,20 +1955,20 @@
     },
     {
       "ability_id": "ARCHER_EVASIVE_SHOT",
-      "class_id": "RANGER",
+      "combat_profile_id": "ARCHER_BOW",
       "action_id": "ARCHER_EVASIVE_SHOT",
       "display_name": "Evasive Shot",
       "resource_kind": "MANA",
-      "resource_cost": 25.0,
+      "resource_cost": 25,
       "ability_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 30,
       "gameplay": {
         "kind": "MELEE",
         "base_damage": 30,
         "applies_stagger": false,
-        "range": 16.0,
+        "range": 16,
         "cooldown_ms": 1200,
         "uses_global_cooldown": true,
         "parry_behavior": "PARRYABLE",
@@ -2005,20 +1978,20 @@
     },
     {
       "ability_id": "ARCHER_AIR_SHOT",
-      "class_id": "RANGER",
+      "combat_profile_id": "ARCHER_BOW",
       "action_id": "ARCHER_AIR_SHOT",
       "display_name": "Air Shot",
       "resource_kind": "MANA",
-      "resource_cost": 18.0,
+      "resource_cost": 18,
       "ability_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 40,
       "gameplay": {
         "kind": "MELEE",
         "base_damage": 28,
         "applies_stagger": false,
-        "range": 18.0,
+        "range": 18,
         "cooldown_ms": 900,
         "uses_global_cooldown": true,
         "parry_behavior": "PARRYABLE",
@@ -2028,13 +2001,13 @@
     },
     {
       "ability_id": "ARCHER_DRAW_MODE_TOGGLE",
-      "class_id": "RANGER",
+      "combat_profile_id": "ARCHER_BOW",
       "action_id": "TOGGLE_DRAW_MODE",
       "display_name": "Draw Mode",
       "resource_kind": "",
-      "resource_cost": 0.0,
+      "resource_cost": 0,
       "ability_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 45,
       "gameplay": {
@@ -2074,7 +2047,7 @@
       "mode_id": "SHORT_DRAW",
       "action_id": "AUTO_ATTACK_1",
       "base_damage": 14,
-      "range": 11.0,
+      "range": 11,
       "cooldown_ms": 1500,
       "movement_policy": "ALLOW_MOVING",
       "uses_global_cooldown": false,
@@ -2088,7 +2061,7 @@
       "mode_id": "FULL_DRAW",
       "action_id": "AUTO_ATTACK_1",
       "base_damage": 28,
-      "range": 18.0,
+      "range": 18,
       "cooldown_ms": 3000,
       "movement_policy": "RESET_CADENCE_ON_VOLUNTARY_MOVE",
       "uses_global_cooldown": false,
@@ -2962,331 +2935,196 @@
       "sort_order": 190
     }
   ],
-  "default_loadout_assignments": [
+  "combat_profile_action_bar_defaults": [
     {
-      "class_id": "WARRIOR",
       "slot_id": "slot_0_0",
+      "combat_profile_id": "TWO_HANDED_SWORD",
       "ability_id": "WARRIOR_HEW",
       "sort_order": 10
     },
     {
-      "class_id": "WARRIOR",
       "slot_id": "slot_0_1",
+      "combat_profile_id": "TWO_HANDED_SWORD",
       "ability_id": "WARRIOR_SKYFALL_1",
       "sort_order": 20
     },
     {
-      "class_id": "WARRIOR",
       "slot_id": "slot_0_2",
+      "combat_profile_id": "TWO_HANDED_SWORD",
       "ability_id": "WARRIOR_SKYFALL_2",
       "sort_order": 30
     },
     {
-      "class_id": "WARRIOR",
       "slot_id": "slot_0_3",
+      "combat_profile_id": "TWO_HANDED_SWORD",
       "ability_id": "WARRIOR_SKYFALL_3",
       "sort_order": 40
     },
     {
-      "class_id": "WARRIOR",
       "slot_id": "slot_0_4",
+      "combat_profile_id": "TWO_HANDED_SWORD",
       "ability_id": "WARRIOR_WHIRLWIND",
       "sort_order": 50
     },
     {
-      "class_id": "WARRIOR",
       "slot_id": "slot_0_5",
+      "combat_profile_id": "TWO_HANDED_SWORD",
       "ability_id": "WARRIOR_DISENGAGE_STRIKE",
       "sort_order": 60
     },
     {
-      "class_id": "WARRIOR",
       "slot_id": "slot_0_6",
+      "combat_profile_id": "TWO_HANDED_SWORD",
       "ability_id": "WARRIOR_CLEAVE",
       "sort_order": 70
     },
     {
-      "class_id": "WARRIOR",
-      "slot_id": "slot_0_7",
-      "ability_id": "WARRIOR_MOMENTUM",
-      "sort_order": 80
-    },
-    {
-      "class_id": "WARRIOR",
-      "slot_id": "slot_0_8",
-      "ability_id": "WARRIOR_ENRAGE",
-      "sort_order": 90
-    },
-    {
-      "class_id": "WARRIOR",
       "slot_id": "slot_1_0",
+      "combat_profile_id": "TWO_HANDED_SWORD",
       "action_kind": "FIXED",
       "action_id": "DODGE",
       "sort_order": 100
     },
     {
-      "class_id": "WARRIOR",
       "slot_id": "slot_1_1",
+      "combat_profile_id": "TWO_HANDED_SWORD",
       "ability_id": "WARRIOR_CHARGE",
       "sort_order": 110
     },
     {
-      "class_id": "WARRIOR",
-      "slot_id": "slot_1_2",
-      "ability_id": "WARRIOR_GIANT_SWING",
-      "sort_order": 120
-    },
-    {
-      "class_id": "WARRIOR",
       "slot_id": "slot_1_3",
+      "combat_profile_id": "TWO_HANDED_SWORD",
       "action_kind": "ABILITY",
       "action_id": "WARRIOR_DREAD_STRIKE",
       "ability_id": "WARRIOR_DREAD_STRIKE",
       "sort_order": 130
     },
     {
-      "class_id": "WARRIOR",
       "slot_id": "slot_1_4",
+      "combat_profile_id": "TWO_HANDED_SWORD",
       "action_kind": "ABILITY",
       "action_id": "WARRIOR_EARTHSHATTER",
       "ability_id": "WARRIOR_EARTHSHATTER",
       "sort_order": 140
     },
     {
-      "class_id": "WARRIOR",
       "slot_id": "slot_1_5",
+      "combat_profile_id": "TWO_HANDED_SWORD",
       "action_kind": "FIXED",
       "action_id": "PARRY",
       "sort_order": 150
     },
     {
-      "class_id": "WARRIOR",
-      "slot_id": "slot_1_6",
-      "action_kind": "ABILITY",
-      "action_id": "WARRIOR_FIREBALL",
-      "ability_id": "WARRIOR_FIREBALL",
-      "sort_order": 160
-    },
-    {
-      "class_id": "WARRIOR",
-      "slot_id": "slot_1_7",
-      "ability_id": "WARRIOR_INTIMIDATE",
-      "sort_order": 170
-    },
-    {
-      "class_id": "WARRIOR",
-      "slot_id": "slot_1_8",
-      "action_kind": "ABILITY",
-      "action_id": "WARRIOR_ICICLE",
-      "ability_id": "WARRIOR_ICICLE",
-      "sort_order": 180
-    },
-    {
-      "class_id": "WARRIOR",
       "slot_id": "slot_2_0",
+      "combat_profile_id": "TWO_HANDED_SWORD",
       "action_kind": "ABILITY",
       "action_id": "WARRIOR_IMPALE",
       "ability_id": "WARRIOR_IMPALE",
       "sort_order": 185
     },
     {
-      "class_id": "WARRIOR",
-      "slot_id": "slot_2_1",
-      "action_kind": "ABILITY",
-      "action_id": "WARRIOR_BATTLE_CRY",
-      "ability_id": "WARRIOR_BATTLE_CRY",
-      "sort_order": 187
-    },
-    {
-      "class_id": "WARRIOR",
-      "slot_id": "slot_2_2",
-      "action_kind": "ABILITY",
-      "action_id": "WARRIOR_ORBITING_BLADES",
-      "ability_id": "WARRIOR_ORBITING_BLADES",
-      "sort_order": 190
-    },
-    {
-      "class_id": "WARRIOR",
-      "slot_id": "slot_2_3",
-      "action_kind": "ABILITY",
-      "action_id": "WARRIOR_FROST_NOVA",
-      "ability_id": "WARRIOR_FROST_NOVA",
-      "sort_order": 200
-    },
-    {
-      "class_id": "WARRIOR",
-      "slot_id": "slot_2_4",
-      "action_kind": "ABILITY",
-      "action_id": "WARRIOR_METEOR",
-      "ability_id": "WARRIOR_METEOR",
-      "sort_order": 210
-    },
-    {
-      "class_id": "WARRIOR",
-      "slot_id": "slot_2_5",
-      "action_kind": "ABILITY",
-      "action_id": "WARRIOR_LIGHTNING",
-      "ability_id": "WARRIOR_LIGHTNING",
-      "sort_order": 220
-    },
-    {
-      "class_id": "WARRIOR",
-      "slot_id": "slot_2_6",
-      "action_kind": "ABILITY",
-      "action_id": "WARRIOR_BOOMERANG_ORB",
-      "ability_id": "WARRIOR_BOOMERANG_ORB",
-      "sort_order": 230
-    },
-    {
-      "class_id": "WARRIOR",
-      "slot_id": "slot_2_7",
-      "action_kind": "ABILITY",
-      "action_id": "WARRIOR_ERUPTION",
-      "ability_id": "WARRIOR_ERUPTION",
-      "sort_order": 240
-    },
-    {
-      "class_id": "WARRIOR",
-      "slot_id": "slot_2_8",
-      "action_kind": "ABILITY",
-      "action_id": "WARRIOR_WITHERING_ORB",
-      "ability_id": "WARRIOR_WITHERING_ORB",
-      "sort_order": 250
-    },
-    {
-      "class_id": "PALADIN",
       "slot_id": "slot_0_0",
+      "combat_profile_id": "SWORD_AND_SHIELD",
       "ability_id": "PALADIN_SHIELD_PUMMEL",
       "sort_order": 110
     },
     {
-      "class_id": "PALADIN",
       "slot_id": "slot_0_1",
+      "combat_profile_id": "SWORD_AND_SHIELD",
       "ability_id": "PALADIN_VINDICATOR_SLASH",
       "sort_order": 120
     },
     {
-      "class_id": "PALADIN",
       "slot_id": "slot_0_2",
+      "combat_profile_id": "SWORD_AND_SHIELD",
       "ability_id": "PALADIN_GUARDIAN_RUSH",
       "sort_order": 130
     },
     {
-      "class_id": "PALADIN",
       "slot_id": "slot_0_3",
+      "combat_profile_id": "SWORD_AND_SHIELD",
       "ability_id": "PALADIN_RETRIBUTION",
       "sort_order": 140
     },
     {
-      "class_id": "PALADIN",
       "slot_id": "slot_1_0",
+      "combat_profile_id": "SWORD_AND_SHIELD",
       "action_kind": "FIXED",
       "action_id": "DODGE",
       "sort_order": 150
     },
     {
-      "class_id": "PALADIN",
       "slot_id": "slot_1_1",
+      "combat_profile_id": "SWORD_AND_SHIELD",
       "ability_id": "PALADIN_CHARGE",
       "sort_order": 160
     },
     {
-      "class_id": "PALADIN",
       "slot_id": "slot_1_3",
+      "combat_profile_id": "SWORD_AND_SHIELD",
       "ability_id": "PALADIN_AVENGE",
       "sort_order": 165
     },
     {
-      "class_id": "PALADIN",
-      "slot_id": "slot_1_4",
-      "ability_id": "PALADIN_CONSECRATE",
-      "sort_order": 175
-    },
-    {
-      "class_id": "PALADIN",
-      "slot_id": "slot_1_5",
-      "ability_id": "PALADIN_CLEANSING_TOUCH",
-      "sort_order": 180
-    },
-    {
-      "class_id": "PALADIN",
-      "slot_id": "slot_1_6",
-      "ability_id": "PALADIN_ABSOLUTION",
-      "sort_order": 185
-    },
-    {
-      "class_id": "PALADIN",
-      "slot_id": "slot_1_7",
-      "ability_id": "PALADIN_FERVOR",
-      "sort_order": 190
-    },
-    {
-      "class_id": "PALADIN",
-      "slot_id": "slot_1_8",
-      "ability_id": "PALADIN_SACRED_FLAME",
-      "sort_order": 195
-    },
-    {
-      "class_id": "PALADIN",
       "slot_id": "slot_1_2",
+      "combat_profile_id": "SWORD_AND_SHIELD",
       "action_kind": "FIXED",
       "action_id": "PARRY",
       "sort_order": 170
     },
     {
-      "class_id": "RANGER",
       "slot_id": "slot_0_0",
+      "combat_profile_id": "ARCHER_BOW",
       "ability_id": "ARCHER_POWER_SHOT",
       "sort_order": 180
     },
     {
-      "class_id": "RANGER",
       "slot_id": "slot_0_1",
+      "combat_profile_id": "ARCHER_BOW",
       "ability_id": "ARCHER_RAIN_SHOT",
       "sort_order": 190
     },
     {
-      "class_id": "RANGER",
       "slot_id": "slot_0_2",
+      "combat_profile_id": "ARCHER_BOW",
       "ability_id": "ARCHER_EVASIVE_SHOT",
       "sort_order": 200
     },
     {
-      "class_id": "RANGER",
       "slot_id": "slot_0_3",
+      "combat_profile_id": "ARCHER_BOW",
       "ability_id": "ARCHER_AIR_SHOT",
       "sort_order": 210
     },
     {
-      "class_id": "RANGER",
       "slot_id": "slot_1_1",
+      "combat_profile_id": "ARCHER_BOW",
       "ability_id": "ARCHER_DRAW_MODE_TOGGLE",
       "sort_order": 215
     },
     {
-      "class_id": "RANGER",
       "slot_id": "slot_1_0",
+      "combat_profile_id": "ARCHER_BOW",
       "action_kind": "FIXED",
       "action_id": "DODGE",
       "sort_order": 220
     },
     {
-      "class_id": "RANGER",
       "slot_id": "slot_1_2",
+      "combat_profile_id": "ARCHER_BOW",
       "action_kind": "FIXED",
       "action_id": "PARRY",
       "sort_order": 230
     }
   ],
-  "fixed_action_bindings": [],
   "slots": [
     {
       "slot_id": "slot_0_0",
       "ui_row": 0,
       "ui_col": 0,
-      "slot_group": "LOADOUT_ACTION",
+      "slot_group": "ACTION_BAR_ACTION",
       "accepts_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 10
     },
@@ -3294,9 +3132,9 @@
       "slot_id": "slot_0_1",
       "ui_row": 0,
       "ui_col": 1,
-      "slot_group": "LOADOUT_ACTION",
+      "slot_group": "ACTION_BAR_ACTION",
       "accepts_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 20
     },
@@ -3304,9 +3142,9 @@
       "slot_id": "slot_0_2",
       "ui_row": 0,
       "ui_col": 2,
-      "slot_group": "LOADOUT_ACTION",
+      "slot_group": "ACTION_BAR_ACTION",
       "accepts_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 30
     },
@@ -3314,9 +3152,9 @@
       "slot_id": "slot_0_3",
       "ui_row": 0,
       "ui_col": 3,
-      "slot_group": "LOADOUT_ACTION",
+      "slot_group": "ACTION_BAR_ACTION",
       "accepts_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 40
     },
@@ -3324,9 +3162,9 @@
       "slot_id": "slot_0_4",
       "ui_row": 0,
       "ui_col": 4,
-      "slot_group": "LOADOUT_ACTION",
+      "slot_group": "ACTION_BAR_ACTION",
       "accepts_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 50
     },
@@ -3334,9 +3172,9 @@
       "slot_id": "slot_0_5",
       "ui_row": 0,
       "ui_col": 5,
-      "slot_group": "LOADOUT_ACTION",
+      "slot_group": "ACTION_BAR_ACTION",
       "accepts_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 60
     },
@@ -3344,9 +3182,9 @@
       "slot_id": "slot_0_6",
       "ui_row": 0,
       "ui_col": 6,
-      "slot_group": "LOADOUT_ACTION",
+      "slot_group": "ACTION_BAR_ACTION",
       "accepts_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 70
     },
@@ -3354,9 +3192,9 @@
       "slot_id": "slot_0_7",
       "ui_row": 0,
       "ui_col": 7,
-      "slot_group": "LOADOUT_ACTION",
+      "slot_group": "ACTION_BAR_ACTION",
       "accepts_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 80
     },
@@ -3364,9 +3202,9 @@
       "slot_id": "slot_0_8",
       "ui_row": 0,
       "ui_col": 8,
-      "slot_group": "LOADOUT_ACTION",
+      "slot_group": "ACTION_BAR_ACTION",
       "accepts_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 90
     },
@@ -3374,9 +3212,9 @@
       "slot_id": "slot_1_0",
       "ui_row": 1,
       "ui_col": 0,
-      "slot_group": "LOADOUT_ACTION",
+      "slot_group": "ACTION_BAR_ACTION",
       "accepts_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 100
     },
@@ -3384,9 +3222,9 @@
       "slot_id": "slot_1_1",
       "ui_row": 1,
       "ui_col": 1,
-      "slot_group": "LOADOUT_ACTION",
+      "slot_group": "ACTION_BAR_ACTION",
       "accepts_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 110
     },
@@ -3394,9 +3232,9 @@
       "slot_id": "slot_1_2",
       "ui_row": 1,
       "ui_col": 2,
-      "slot_group": "LOADOUT_ACTION",
+      "slot_group": "ACTION_BAR_ACTION",
       "accepts_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 120
     },
@@ -3404,9 +3242,9 @@
       "slot_id": "slot_1_3",
       "ui_row": 1,
       "ui_col": 3,
-      "slot_group": "LOADOUT_ACTION",
+      "slot_group": "ACTION_BAR_ACTION",
       "accepts_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 130
     },
@@ -3414,9 +3252,9 @@
       "slot_id": "slot_1_4",
       "ui_row": 1,
       "ui_col": 4,
-      "slot_group": "LOADOUT_ACTION",
+      "slot_group": "ACTION_BAR_ACTION",
       "accepts_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 140
     },
@@ -3424,9 +3262,9 @@
       "slot_id": "slot_1_5",
       "ui_row": 1,
       "ui_col": 5,
-      "slot_group": "LOADOUT_ACTION",
+      "slot_group": "ACTION_BAR_ACTION",
       "accepts_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 150
     },
@@ -3434,9 +3272,9 @@
       "slot_id": "slot_1_6",
       "ui_row": 1,
       "ui_col": 6,
-      "slot_group": "LOADOUT_ACTION",
+      "slot_group": "ACTION_BAR_ACTION",
       "accepts_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 160
     },
@@ -3444,9 +3282,9 @@
       "slot_id": "slot_1_7",
       "ui_row": 1,
       "ui_col": 7,
-      "slot_group": "LOADOUT_ACTION",
+      "slot_group": "ACTION_BAR_ACTION",
       "accepts_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 170
     },
@@ -3454,9 +3292,9 @@
       "slot_id": "slot_1_8",
       "ui_row": 1,
       "ui_col": 8,
-      "slot_group": "LOADOUT_ACTION",
+      "slot_group": "ACTION_BAR_ACTION",
       "accepts_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 180
     },
@@ -3464,9 +3302,9 @@
       "slot_id": "slot_2_0",
       "ui_row": 2,
       "ui_col": 0,
-      "slot_group": "LOADOUT_ACTION",
+      "slot_group": "ACTION_BAR_ACTION",
       "accepts_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 190
     },
@@ -3474,9 +3312,9 @@
       "slot_id": "slot_2_1",
       "ui_row": 2,
       "ui_col": 1,
-      "slot_group": "LOADOUT_ACTION",
+      "slot_group": "ACTION_BAR_ACTION",
       "accepts_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 200
     },
@@ -3484,9 +3322,9 @@
       "slot_id": "slot_2_2",
       "ui_row": 2,
       "ui_col": 2,
-      "slot_group": "LOADOUT_ACTION",
+      "slot_group": "ACTION_BAR_ACTION",
       "accepts_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 210
     },
@@ -3494,9 +3332,9 @@
       "slot_id": "slot_2_3",
       "ui_row": 2,
       "ui_col": 3,
-      "slot_group": "LOADOUT_ACTION",
+      "slot_group": "ACTION_BAR_ACTION",
       "accepts_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 220
     },
@@ -3504,9 +3342,9 @@
       "slot_id": "slot_2_4",
       "ui_row": 2,
       "ui_col": 4,
-      "slot_group": "LOADOUT_ACTION",
+      "slot_group": "ACTION_BAR_ACTION",
       "accepts_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 230
     },
@@ -3514,9 +3352,9 @@
       "slot_id": "slot_2_5",
       "ui_row": 2,
       "ui_col": 5,
-      "slot_group": "LOADOUT_ACTION",
+      "slot_group": "ACTION_BAR_ACTION",
       "accepts_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 240
     },
@@ -3524,9 +3362,9 @@
       "slot_id": "slot_2_6",
       "ui_row": 2,
       "ui_col": 6,
-      "slot_group": "LOADOUT_ACTION",
+      "slot_group": "ACTION_BAR_ACTION",
       "accepts_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 250
     },
@@ -3534,9 +3372,9 @@
       "slot_id": "slot_2_7",
       "ui_row": 2,
       "ui_col": 7,
-      "slot_group": "LOADOUT_ACTION",
+      "slot_group": "ACTION_BAR_ACTION",
       "accepts_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 260
     },
@@ -3544,9 +3382,9 @@
       "slot_id": "slot_2_8",
       "ui_row": 2,
       "ui_col": 8,
-      "slot_group": "LOADOUT_ACTION",
+      "slot_group": "ACTION_BAR_ACTION",
       "accepts_tags": [
-        "LOADOUT_ACTION"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 270
     }

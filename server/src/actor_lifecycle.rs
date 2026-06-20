@@ -37,7 +37,6 @@ pub(crate) enum ActorWorldAssignment {
 pub(crate) struct ActorSpawnSpec {
     pub identity: Identity,
     pub username: String,
-    pub class_id: String,
     pub pos_x: f32,
     pub pos_y: f32,
     pub pos_z: f32,
@@ -73,7 +72,6 @@ pub(crate) fn spawn_actor_bundle(ctx: &ReducerContext, spec: ActorSpawnSpec) -> 
         identity: spec.identity,
         username: spec.username,
         connected_at: now,
-        class_id: spec.class_id,
     });
     ctx.db.player_intent().insert(PlayerIntent {
         identity: spec.identity,

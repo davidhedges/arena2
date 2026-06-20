@@ -1973,6 +1973,7 @@ mod tests {
                 "CLEANSING_TOUCH",
                 "ABSOLUTION",
                 "FERVOR",
+                "SACRED_FLAME",
             ]
         );
     }
