@@ -3,8 +3,8 @@ guid: 37f969e94feb43a9b8106b83db917bed
 timeCreated: 1636903717
 AssetOrigin:
   serializedVersion: 1
-  productId: 187092
-  packageName: Stylized Fantasy Newbie Outfits Pack
-  packageVersion: 2.5.3
-  assetPath: Assets/StylizedCharacter/Scripts/Enums/ItemTypeEnum.cs
-  uploadId: 866372
+  productId: 178646
+  packageName: Stylized Modular Human Male
+  packageVersion: 2.4.2
+  assetPath: Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Scripts/Enums/ItemTypeEnum.cs
+  uploadId: 866514

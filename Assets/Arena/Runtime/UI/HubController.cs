@@ -18,7 +18,7 @@ using UnityEngine.UI;
 namespace Arena.UI
 {
     [ExecuteAlways]
-    public sealed class HubController : MonoBehaviour
+    public sealed class HubController : MonoBehaviour, IEscapeCloseable
     {
         private const string HubSceneName = "Hub";
         private static readonly string[] StatKinds = { "MIGHT", "INSIGHT", "FINESSE", "QUICKNESS", "FORTITUDE" };
@@ -55,12 +55,31 @@ namespace Arena.UI
         private string _lastShowcaseAppearanceSignature = string.Empty;
         private string _lastFailedShowcaseAppearanceSignature = string.Empty;
 
+        public int EscapeClosePriority => IsTravelMenuOpen ? 80 : 30;
+        public bool IsEscapeCloseable => IsTravelMenuOpen || IsLoadoutViewOpen;
+
+        private bool IsTravelMenuOpen => Application.isPlaying
+            && _travelMenu != null
+            && _travelMenu.activeSelf;
+
+        private bool IsLoadoutViewOpen => Application.isPlaying
+            && string.Equals(SceneManager.GetActiveScene().name, HubSceneName, System.StringComparison.Ordinal)
+            && HubViewState.Current == HubViewScreen.Loadout;
+
         private void OnEnable()
         {
+            if (Application.isPlaying)
+                RuntimeUiEscapeRouter.Register(this);
             RemoveGeneratedCombinedCharacterPreview();
             Resolve();
             WireButtons();
             ApplyState();
+        }
+
+        private void OnDisable()
+        {
+            if (Application.isPlaying)
+                RuntimeUiEscapeRouter.Unregister(this);
         }
 
         private void Update()
@@ -220,6 +239,25 @@ namespace Arena.UI
                 _professionNameText.text = "ENCHANTING";
             if (_trinketNameText != null)
                 _trinketNameText.text = "Charm of Resolve";
+        }
+
+        public bool TryCloseForEscape()
+        {
+            Resolve();
+            if (IsTravelMenuOpen)
+            {
+                _travelMenu!.SetActive(false);
+                return true;
+            }
+
+            if (IsLoadoutViewOpen)
+            {
+                HubViewState.Show(HubViewScreen.Play);
+                ApplyState();
+                return true;
+            }
+
+            return false;
         }
 
         private string ResolveClassId()

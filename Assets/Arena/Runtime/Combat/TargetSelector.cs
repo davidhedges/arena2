@@ -6,6 +6,7 @@ using Arena.Entity;
 using Arena.Input;
 using Arena.Network;
 using Arena.Presentation;
+using Arena.UI;
 
 namespace Arena.Combat
 {
@@ -85,8 +86,14 @@ namespace Arena.Combat
 
             if (input.EscapePressed)
             {
-                SelectedTarget = null;
-                ClearAutoAttackOnServer();
+                if (!RuntimeUiEscapeRouter.TryCloseTopmost()
+                    && !RuntimeUiEscapeRouter.EscapeConsumedThisFrame
+                    && !aimActive)
+                {
+                    SelectedTarget = null;
+                    ClearAutoAttackOnServer();
+                    RuntimeUiEscapeRouter.ConsumeEscapeThisFrame();
+                }
             }
 
             // Hover highlighting

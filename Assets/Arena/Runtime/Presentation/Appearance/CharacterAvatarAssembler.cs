@@ -248,15 +248,17 @@ namespace Arena.Presentation.Appearance
 
                 if (!TryGetEquipmentSlotForItemType(slot.expectedItemType, out string equipSlot))
                 {
-                    if (equippedArmorBySlot == null)
-                        ApplyValidatedOutfitItem(avatar, slot, selection.outfitId);
+                    ApplyValidatedOutfitItem(avatar, slot, selection.outfitId);
                     continue;
                 }
 
                 if (equippedArmorBySlot != null)
                 {
                     if (!equippedArmorBySlot.TryGetValue(equipSlot, out string itemDefId))
+                    {
+                        ApplyValidatedOutfitItem(avatar, slot, selection.outfitId);
                         continue;
+                    }
 
                     if (!explicitlyAppliedSlots.Add(equipSlot))
                         continue;

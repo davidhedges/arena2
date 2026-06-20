@@ -1457,8 +1457,8 @@ ModelImporter:
   assetBundleVariant: 
 AssetOrigin:
   serializedVersion: 1
-  productId: 187092
-  packageName: Stylized Fantasy Newbie Outfits Pack
-  packageVersion: 2.5.3
-  assetPath: Assets/StylizedCharacter/Meshes/Character/Human/Male/SK_Hu_M_FullBody.fbx
-  uploadId: 866372
+  productId: 178646
+  packageName: Stylized Modular Human Male
+  packageVersion: 2.4.2
+  assetPath: Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Meshes/Character/Human/Male/SK_Hu_M_FullBody.fbx
+  uploadId: 866514

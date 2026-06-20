@@ -34,19 +34,8 @@ namespace NHance.Assets.Scripts
         public void Clear()
         {
             foreach (var itemCache in _cache)
-                DestroyCachedItem(itemCache.Item);
+                GameObject.DestroyImmediate(itemCache.Item);
             _cache.Clear();
-        }
-
-        private static void DestroyCachedItem(GameObject item)
-        {
-            if (item == null)
-                return;
-
-            if (Application.isPlaying)
-                GameObject.Destroy(item);
-            else
-                GameObject.DestroyImmediate(item);
         }
     }
 }

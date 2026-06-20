@@ -8,6 +8,7 @@ using Arena.Presentation;
 using Arena.Simulation;
 using Arena.Entity;
 using Arena.Debugging;
+using Arena.UI;
 using SpacetimeDB.Types;
 
 namespace Arena.Input
@@ -209,7 +210,11 @@ namespace Arena.Input
             // Escape → cancel aim
             if (input.EscapePressed)
             {
+                if (RuntimeUiEscapeRouter.TryCloseTopmost())
+                    return;
+
                 CancelAim();
+                RuntimeUiEscapeRouter.ConsumeEscapeThisFrame();
                 return;
             }
 

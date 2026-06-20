@@ -28,7 +28,7 @@ namespace NHance.Assets.Scripts
 
         private Animator _animator;
         private int _animationIndex;
-        private List<AnimationClip> _animationClips = new List<AnimationClip>();
+        private List<AnimationClip> _animationClips;
 
         public string characterPrefix;
         public bool FoldoutBodyPartSetup = false;
@@ -76,13 +76,6 @@ namespace NHance.Assets.Scripts
                 _animator = GetComponent<Animator>();
             if(_animator == null)
                 _animator = GetComponentInChildren<Animator>();
-            if (_animator == null || _animator.runtimeAnimatorController == null)
-            {
-                _animationClips = new List<AnimationClip>();
-                _animationIndex = 0;
-                return;
-            }
-
             _animationClips = _animator.runtimeAnimatorController.animationClips.ToList();
             NormalizeAnimationIndex();
         }
@@ -372,14 +365,7 @@ namespace NHance.Assets.Scripts
 
         public void CleanCache(ItemTypeEnum type)
         {
-            Object cached = Cache[type];
-            if (cached != null)
-            {
-                if (Application.isPlaying)
-                    Destroy(cached);
-                else
-                    DestroyImmediate(cached);
-            }
+            DestroyImmediate(Cache[type]);
             Cache.Remove(type);
         }
 
@@ -424,7 +410,7 @@ namespace NHance.Assets.Scripts
         public void Save()
         {
             //chose file path
-            string filePath = EditorUtility.SaveFilePanel("Select Directory to save prefab", "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs", $"{gameObject.name}_Prefab", "prefab");
+            string filePath = EditorUtility.SaveFilePanel("Select Directory to save prefab", "Assets/StylizedCharacter/Prefabs", $"{gameObject.name}_Prefab", "prefab");
             if (string.IsNullOrEmpty(filePath))
                 return;
             //copy current game object

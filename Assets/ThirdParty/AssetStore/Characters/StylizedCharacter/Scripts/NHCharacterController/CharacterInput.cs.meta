@@ -3,8 +3,8 @@ guid: 8298aa5981b7432c91bda3ab7b099fc3
 timeCreated: 1637537115
 AssetOrigin:
   serializedVersion: 1
-  productId: 187092
-  packageName: Stylized Fantasy Newbie Outfits Pack
-  packageVersion: 2.5.3
-  assetPath: Assets/StylizedCharacter/Scripts/NHCharacterController/CharacterInput.cs
-  uploadId: 866372
+  productId: 178646
+  packageName: Stylized Modular Human Male
+  packageVersion: 2.4.2
+  assetPath: Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Scripts/NHCharacterController/CharacterInput.cs
+  uploadId: 866514

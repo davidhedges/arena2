@@ -1465,7 +1465,7 @@ pub(crate) fn ensure_player_inventory_for_identity(ctx: &ReducerContext, owner: 
     let (equipment, created) = ensure_equipment_loadout(ctx, owner);
     if created {
         if let Some(class_id) = runtime_class_id_for_owner(ctx, owner) {
-            seed_starter_equipment_for_class(ctx, owner, equipment, class_id.as_str(), true, true);
+            seed_starter_equipment_for_class(ctx, owner, equipment, class_id.as_str(), false, true);
         }
     }
     sync_active_combat_mode_for_owner(ctx, owner, ctx.timestamp);
@@ -1687,7 +1687,7 @@ pub(crate) fn ensure_starter_equipment_for_class(
     sync_item_definitions(ctx);
     ensure_player_bag(ctx, owner);
     let (equipment, _) = ensure_equipment_loadout(ctx, owner);
-    seed_starter_equipment_for_class(ctx, owner, equipment, class_id, true, true);
+    seed_starter_equipment_for_class(ctx, owner, equipment, class_id, false, true);
     sync_active_combat_mode_for_owner(ctx, owner, ctx.timestamp);
 }
 
@@ -2267,9 +2267,7 @@ fn seed_starter_equipment_for_class(
     seed_armor: bool,
     reconcile_starter_weapons: bool,
 ) {
-    if seed_armor {
-        clear_equipped_starter_armor(ctx, &mut equipment);
-    }
+    clear_equipped_starter_armor(ctx, &mut equipment);
     if reconcile_starter_weapons && equipment_weapon_slots_are_empty_or_starter(ctx, &equipment) {
         clear_equipped_starter_weapons(ctx, &mut equipment);
     }

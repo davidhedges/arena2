@@ -11,7 +11,7 @@ namespace Arena.UI
     /// Playground-only target spawner for testing targeting rules and party frames.
     /// This is intentionally separate from normal HUD, party, and match UI.
     /// </summary>
-    public sealed class PlaygroundTargetsPanel : MonoBehaviour
+    public sealed class PlaygroundTargetsPanel : MonoBehaviour, IEscapeCloseable
     {
         private const float Pad = 10f;
         private const float ButtonTopOffset = 130f;
@@ -30,6 +30,9 @@ namespace Arena.UI
         private Text _statusText = null!;
         private DbConnection? _subscribedConnection;
         private float _statusUntilTime;
+
+        public int EscapeClosePriority => 40;
+        public bool IsEscapeCloseable => _menuRoot != null && _menuRoot.activeSelf;
 
         private void Awake()
         {
@@ -97,6 +100,7 @@ namespace Arena.UI
 
         private void OnEnable()
         {
+            RuntimeUiEscapeRouter.Register(this);
             TrySubscribeToReducerErrors();
         }
 
@@ -112,12 +116,23 @@ namespace Arena.UI
 
         private void OnDisable()
         {
+            RuntimeUiEscapeRouter.Unregister(this);
             UnsubscribeFromReducerErrors();
         }
 
         private void OnDestroy()
         {
+            RuntimeUiEscapeRouter.Unregister(this);
             UnsubscribeFromReducerErrors();
+        }
+
+        public bool TryCloseForEscape()
+        {
+            if (!IsEscapeCloseable)
+                return false;
+
+            _menuRoot.SetActive(false);
+            return true;
         }
 
         private void SpawnTarget(string kind)

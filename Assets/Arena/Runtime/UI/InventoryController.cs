@@ -18,7 +18,7 @@ using UnityEngine.UI;
 namespace Arena.UI
 {
     [DefaultExecutionOrder(60)]
-    public sealed class InventoryController : MonoBehaviour
+    public sealed class InventoryController : MonoBehaviour, IEscapeCloseable
     {
         private const float CellSize = ActionBarLayout.SlotSize;
         private const float CellSpacing = ActionBarLayout.Gap;
@@ -65,6 +65,9 @@ namespace Arena.UI
         private DragPayload? _activeDrag;
         private RectTransform? _dragGhost;
 
+        public int EscapeClosePriority => 100;
+        public bool IsEscapeCloseable => _inventoryOpen;
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
         {
@@ -80,6 +83,16 @@ namespace Arena.UI
         {
             RuntimeUiEventSystem.Ensure();
             BuildUi();
+        }
+
+        private void OnEnable()
+        {
+            RuntimeUiEscapeRouter.Register(this);
+        }
+
+        private void OnDisable()
+        {
+            RuntimeUiEscapeRouter.Unregister(this);
         }
 
         private void Update()
@@ -111,6 +124,17 @@ namespace Arena.UI
                 CloseLootPanel();
 
             RefreshVisibleGrids();
+        }
+
+        public bool TryCloseForEscape()
+        {
+            if (!_inventoryOpen)
+                return false;
+
+            _activeDrag = null;
+            DestroyDragGhost();
+            SetInventoryOpen(false);
+            return true;
         }
 
         private void CloseLootPanel()
