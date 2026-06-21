@@ -6,6 +6,7 @@ using Arena.Network;
 using Arena.Presentation;
 using Arena.Presentation.Appearance;
 using Arena.World;
+using Michsky.UI.Heat;
 using System.Collections.Generic;
 using System.Linq;
 using SpacetimeDB;
@@ -21,7 +22,13 @@ namespace Arena.UI
     public sealed class HubController : MonoBehaviour, IEscapeCloseable
     {
         private const string HubSceneName = "Hub";
-        private static readonly Color ActiveRed = new(0.72f, 0.08f, 0.04f, 0.96f);
+        private static readonly Color AccentRed = new(0.86f, 0.16f, 0.08f, 0.98f);
+        private static readonly Color AccentAmber = new(1f, 0.63f, 0.22f, 1f);
+        private static readonly Color PanelColor = new(0.035f, 0.039f, 0.047f, 0.92f);
+        private static readonly Color PanelStrongColor = new(0.018f, 0.021f, 0.027f, 0.96f);
+        private static readonly Color ButtonColor = new(0.075f, 0.082f, 0.096f, 0.98f);
+        private static readonly Color ButtonHoverColor = new(0.12f, 0.13f, 0.15f, 1f);
+        private static readonly Color MutedTextColor = new(0.68f, 0.71f, 0.77f, 1f);
         private static readonly Color Transparent = new(0f, 0f, 0f, 0f);
 
         private Transform? _root;
@@ -35,19 +42,43 @@ namespace Arena.UI
         private Button? _playButton;
         private Button? _equipmentButton;
         private Button? _ctaButton;
+        private TMP_Text? _ctaLabel;
         private TMP_Text? _ctaSubtitle;
-        private TMP_Text? _identityNameText;
-        private TMP_Text? _identityMetaText;
-        private TMP_Text? _identityBlurbText;
-        private GameObject? _weaponLabel;
-        private GameObject? _weaponName;
-        private GameObject? _weaponPreview;
-        private GameObject? _greatswordPreview;
-        private GameObject? _swordShieldPreview;
+        private TMP_Text? _destinationValue;
         private bool _wired;
         private string _lastCombatProfile = string.Empty;
         private string _lastShowcaseAppearanceSignature = string.Empty;
         private string _lastFailedShowcaseAppearanceSignature = string.Empty;
+
+        private readonly struct HubLayoutMetrics
+        {
+            public HubLayoutMetrics(float width, float height)
+            {
+                Width = width;
+                Height = height;
+                Margin = Mathf.Clamp(width * 0.028f, 34f, 64f);
+                Gap = Mathf.Clamp(width * 0.010f, 14f, 22f);
+                TopBarHeight = Mathf.Clamp(height * 0.082f, 82f, 104f);
+                RightPanelWidth = Mathf.Clamp(width * 0.30f, 500f, 680f);
+                PanelInset = Mathf.Clamp(width * 0.017f, 28f, 38f);
+                CtaHeight = Mathf.Clamp(height * 0.20f, 196f, 252f);
+                CtaButtonHeight = Mathf.Clamp(height * 0.074f, 74f, 90f);
+                DestinationButtonHeight = Mathf.Clamp(height * 0.043f, 42f, 50f);
+                DestinationButtonGap = Mathf.Clamp(height * 0.009f, 8f, 12f);
+            }
+
+            public float Width { get; }
+            public float Height { get; }
+            public float Margin { get; }
+            public float Gap { get; }
+            public float TopBarHeight { get; }
+            public float RightPanelWidth { get; }
+            public float PanelInset { get; }
+            public float CtaHeight { get; }
+            public float CtaButtonHeight { get; }
+            public float DestinationButtonHeight { get; }
+            public float DestinationButtonGap { get; }
+        }
 
         public int EscapeClosePriority => IsTravelMenuOpen ? 80 : 30;
         public bool IsEscapeCloseable => IsTravelMenuOpen;
@@ -115,15 +146,11 @@ namespace Arena.UI
             _playButton = _root.Find("HubCanvas/TopBar/NavRow/PlayButton")?.GetComponent<Button>();
             _equipmentButton = _root.Find("HubCanvas/TopBar/NavRow/EquipmentButton")?.GetComponent<Button>();
             _ctaButton = _root.Find("HubCanvas/HomeRoot/CtaPanel/PlayButton")?.GetComponent<Button>();
+            _ctaLabel = _root.Find("HubCanvas/HomeRoot/CtaPanel/PlayButton/Label")?.GetComponent<TMP_Text>();
             _ctaSubtitle = _root.Find("HubCanvas/HomeRoot/CtaPanel/PlayButton/SubLabel")?.GetComponent<TMP_Text>();
-            _identityNameText = _root.Find("HubCanvas/HomeRoot/IdentityPanel/GearName")?.GetComponent<TMP_Text>();
-            _identityMetaText = _root.Find("HubCanvas/HomeRoot/IdentityPanel/GearMeta")?.GetComponent<TMP_Text>();
-            _identityBlurbText = _root.Find("HubCanvas/HomeRoot/IdentityPanel/IdentityBlurb")?.GetComponent<TMP_Text>();
-            _weaponLabel = _root.Find("HubCanvas/HomeRoot/EquipmentPanel/WeaponLabel")?.gameObject;
-            _weaponName = _root.Find("HubCanvas/HomeRoot/EquipmentPanel/WeaponName")?.gameObject;
-            _weaponPreview = _root.Find("HubCanvas/HomeRoot/EquipmentPanel/WeaponPreview")?.gameObject;
-            _greatswordPreview = _root.Find("HubCanvas/HomeRoot/EquipmentPanel/WeaponPreview/GreatswordSilhouette")?.gameObject;
-            _swordShieldPreview = _root.Find("HubCanvas/HomeRoot/EquipmentPanel/WeaponPreview/SwordShieldSilhouette")?.gameObject;
+            SuppressDeprecatedHomeSections();
+            RestoreRankAndQuestSections();
+            EnsureHeatHubLayout();
             EnsureTravelDestinationButtons();
         }
 
@@ -205,12 +232,17 @@ namespace Arena.UI
 
             if (_ctaSubtitle != null)
                 _ctaSubtitle.text = OpenWorldTravelCatalog.CurrentDisplayName.ToUpperInvariant();
+            if (_destinationValue != null)
+                _destinationValue.text = OpenWorldTravelCatalog.CurrentDisplayName;
+            if (_ctaLabel != null)
+                _ctaLabel.text = "ENTER WORLD";
 
-            string combatProfile = ResolveCombatProfile();
-            ApplyGearIdentity(combatProfile);
             if (showStage)
+            {
+                string combatProfile = ResolveCombatProfile();
                 ApplyShowcaseAppearance();
-            ApplyCombatProfile(combatProfile);
+                ApplyCombatProfile(combatProfile);
+            }
         }
 
         public bool TryCloseForEscape()
@@ -238,36 +270,6 @@ namespace Arena.UI
             return CombatProfileIds.SwordAndShield;
         }
 
-        private void ApplyGearIdentity(string combatProfile)
-        {
-            string normalized = CombatProfileIds.Normalize(combatProfile);
-
-            if (_identityNameText != null)
-                _identityNameText.text = "GEAR";
-
-            if (_identityMetaText != null)
-            {
-                _identityMetaText.text = normalized switch
-                {
-                    CombatProfileIds.ArcherBow => "RANGED | BOW",
-                    CombatProfileIds.TwoHandedSword => "MELEE | GREATSWORD",
-                    CombatProfileIds.SwordAndShield => "MELEE | SWORD & SHIELD",
-                    _ => "COMBAT PROFILE",
-                };
-            }
-
-            if (_identityBlurbText != null)
-            {
-                _identityBlurbText.text = normalized switch
-                {
-                    CombatProfileIds.ArcherBow => "Equipped for bow pressure, spacing, and mobile ranged control.",
-                    CombatProfileIds.TwoHandedSword => "Equipped for committed melee pressure and decisive greatsword attacks.",
-                    CombatProfileIds.SwordAndShield => "Equipped for shield pressure, counterplay, and controlled melee pacing.",
-                    _ => "Combat role is determined by equipped gear.",
-                };
-            }
-        }
-
         private void ApplyCombatProfile(string combatProfile)
         {
             combatProfile = CombatProfileIds.Normalize(combatProfile);
@@ -275,20 +277,6 @@ namespace Arena.UI
                 return;
 
             _lastCombatProfile = combatProfile;
-
-            if (_weaponLabel != null)
-                _weaponLabel.SetActive(false);
-            if (_weaponName != null)
-                _weaponName.SetActive(false);
-            if (_weaponPreview != null)
-                _weaponPreview.SetActive(false);
-
-            bool swordAndShield = string.Equals(combatProfile, CombatProfileIds.SwordAndShield, System.StringComparison.Ordinal);
-            bool twoHandedSword = string.Equals(combatProfile, CombatProfileIds.TwoHandedSword, System.StringComparison.Ordinal);
-            if (_greatswordPreview != null)
-                _greatswordPreview.SetActive(twoHandedSword);
-            if (_swordShieldPreview != null)
-                _swordShieldPreview.SetActive(swordAndShield);
 
             if (!Application.isPlaying || _showcaseAvatar == null || _showcaseAvatarBinding == null)
                 return;
@@ -396,17 +384,25 @@ namespace Arena.UI
             Transform? existingList = _travelMenu.transform.Find("DestinationButtons");
             RectTransform list = existingList as RectTransform ?? CreateRect(_travelMenu.transform, "DestinationButtons");
 
+            HubLayoutMetrics metrics = GetLayoutMetrics();
             OpenWorldTravelCatalog.Destination[] destinations = OpenWorldTravelCatalog.All;
-            const float buttonHeight = 28f;
-            const float buttonGap = 7f;
-            const float buttonStep = buttonHeight + buttonGap;
+            float buttonHeight = metrics.DestinationButtonHeight;
+            float buttonGap = metrics.DestinationButtonGap;
+            float buttonStep = buttonHeight + buttonGap;
             float listHeight = destinations.Length * buttonStep;
-            float menuHeight = Mathf.Max(244f, 92f + listHeight);
+            float menuHeight = Mathf.Max(320f, metrics.PanelInset * 2f + 46f + listHeight);
+            float listWidth = metrics.RightPanelWidth - metrics.PanelInset * 2f;
 
             if (menuRect != null)
-                menuRect.sizeDelta = new Vector2(menuRect.sizeDelta.x, menuHeight);
+            {
+                menuRect.sizeDelta = new Vector2(metrics.RightPanelWidth, menuHeight);
+                menuRect.anchoredPosition = new Vector2(-metrics.Margin, metrics.Margin + metrics.CtaHeight + metrics.Gap);
+            }
+            RectTransform? menuAccent = _travelMenu.transform.Find("HeatTravelAccent") as RectTransform;
+            if (menuAccent != null)
+                SetTopLeft(menuAccent, Vector2.zero, new Vector2(5f, menuHeight));
 
-            SetTopLeft(list, new Vector2(22f, -64f), new Vector2(316f, listHeight));
+            SetTopLeft(list, new Vector2(metrics.PanelInset, -metrics.PanelInset - 58f), new Vector2(listWidth, listHeight));
 
             var destinationNames = new HashSet<string>(destinations.Select(destination => $"Travel_{destination.SceneName}"), System.StringComparer.Ordinal);
             for (int i = list.childCount - 1; i >= 0; i--)
@@ -428,31 +424,40 @@ namespace Arena.UI
                 Transform? child = list.Find(buttonName);
                 RectTransform buttonRect = child as RectTransform ?? CreateRect(list, buttonName);
                 buttonRect.SetSiblingIndex(i);
-                SetTopLeft(buttonRect, new Vector2(0f, -i * buttonStep), new Vector2(316f, buttonHeight));
+                SetTopLeft(buttonRect, new Vector2(0f, -i * buttonStep), new Vector2(listWidth, buttonHeight));
 
                 Image image = buttonRect.GetComponent<Image>() ?? buttonRect.gameObject.AddComponent<Image>();
-                image.color = new Color(0.05f, 0.055f, 0.065f, 0.96f);
+                image.color = ButtonColor;
 
                 Button button = buttonRect.GetComponent<Button>() ?? buttonRect.gameObject.AddComponent<Button>();
                 button.interactable = true;
                 ColorBlock colors = button.colors;
                 colors.normalColor = image.color;
-                colors.highlightedColor = Color.Lerp(image.color, Color.white, 0.10f);
+                colors.highlightedColor = ButtonHoverColor;
                 colors.selectedColor = colors.highlightedColor;
-                colors.pressedColor = Color.Lerp(image.color, Color.black, 0.20f);
+                colors.pressedColor = Color.Lerp(image.color, Color.black, 0.24f);
+                colors.disabledColor = new Color(0.05f, 0.055f, 0.065f, 0.52f);
                 button.colors = colors;
+                AttachHeatButton(button, destination.DisplayName);
+
+                RectTransform accent = EnsureImage(buttonRect, "Accent", AccentAmber).rectTransform;
+                SetAnchored(accent, new Vector2(0f, 0.5f), Vector2.zero, new Vector2(4f, buttonHeight - 14f), new Vector2(0f, 0.5f));
+                RectTransform chevron = EnsureText(buttonRect, "Chevron", ">", 20, FontStyles.Bold, TextAlignmentOptions.Center, MutedTextColor).rectTransform;
+                SetAnchored(chevron, new Vector2(1f, 0.5f), new Vector2(-22f, 0f), new Vector2(20f, 22f), new Vector2(0.5f, 0.5f));
 
                 TMP_Text? label = buttonRect.Find("Label")?.GetComponent<TMP_Text>();
                 if (label == null)
                 {
-                    label = CreateText(buttonRect, "Label", destination.DisplayName, 12, FontStyles.Bold, TextAlignmentOptions.Left, Color.white);
-                    SetAnchored(label.rectTransform, new Vector2(0f, 0.5f), new Vector2(14f, 0f), new Vector2(280f, 18f), new Vector2(0f, 0.5f));
+                    label = CreateText(buttonRect, "Label", destination.DisplayName, 15, FontStyles.Bold, TextAlignmentOptions.Left, Color.white);
+                    SetAnchored(label.rectTransform, new Vector2(0f, 0.5f), new Vector2(22f, 0f), new Vector2(listWidth - 70f, 22f), new Vector2(0f, 0.5f));
                 }
                 else
                 {
                     label.text = destination.DisplayName;
-                    label.fontSize = 12;
-                    SetAnchored(label.rectTransform, new Vector2(0f, 0.5f), new Vector2(14f, 0f), new Vector2(280f, 18f), new Vector2(0f, 0.5f));
+                    label.fontSize = 15;
+                    label.fontStyle = FontStyles.Bold;
+                    label.color = Color.white;
+                    SetAnchored(label.rectTransform, new Vector2(0f, 0.5f), new Vector2(22f, 0f), new Vector2(listWidth - 70f, 22f), new Vector2(0f, 0.5f));
                 }
             }
         }
@@ -493,7 +498,7 @@ namespace Arena.UI
             Image? image = button.GetComponent<Image>();
             TMP_Text? label = button.GetComponentInChildren<TMP_Text>(true);
             if (image != null)
-                image.color = active ? ActiveRed : Transparent;
+                image.color = active ? AccentRed : Transparent;
             if (label != null)
                 label.color = active ? Color.white : new Color(1f, 1f, 1f, 0.82f);
         }
@@ -520,6 +525,279 @@ namespace Arena.UI
             return label;
         }
 
+        private void EnsureHeatHubLayout()
+        {
+            if (_root == null)
+                return;
+
+            Transform? home = _root.Find("HubCanvas/HomeRoot");
+            if (home == null)
+                return;
+
+            RectTransform backdrop = EnsureImage(home, "HeatBackdrop", new Color(0.006f, 0.007f, 0.010f, 0.38f)).rectTransform;
+            SetStretch(backdrop);
+            backdrop.SetAsFirstSibling();
+            Image backdropImage = backdrop.GetComponent<Image>();
+            backdropImage.raycastTarget = false;
+
+            HubLayoutMetrics metrics = GetLayoutMetrics();
+            SuppressTopBar();
+            StyleCtaPanel(metrics);
+            StyleTravelMenu(metrics);
+        }
+
+        private HubLayoutMetrics GetLayoutMetrics()
+        {
+            RectTransform? home = _root?.Find("HubCanvas/HomeRoot") as RectTransform;
+            RectTransform? canvas = _root?.Find("HubCanvas") as RectTransform;
+            float width = home != null && home.rect.width > 100f ? home.rect.width : canvas != null ? canvas.rect.width : Screen.width;
+            float height = home != null && home.rect.height > 100f ? home.rect.height : canvas != null ? canvas.rect.height : Screen.height;
+
+            if (width < 100f)
+                width = 1920f;
+            if (height < 100f)
+                height = 1080f;
+
+            return new HubLayoutMetrics(width, height);
+        }
+
+        private void SuppressTopBar()
+        {
+            if (_root == null)
+                return;
+
+            GameObject? topBar = _root.Find("HubCanvas/TopBar")?.gameObject;
+            if (topBar == null)
+                return;
+
+            topBar.SetActive(false);
+        }
+
+        private void StyleCtaPanel(HubLayoutMetrics metrics)
+        {
+            if (_root == null)
+                return;
+
+            RectTransform? ctaPanel = _root.Find("HubCanvas/HomeRoot/CtaPanel") as RectTransform;
+            if (ctaPanel == null)
+                return;
+
+            ctaPanel.anchorMin = new Vector2(1f, 0f);
+            ctaPanel.anchorMax = new Vector2(1f, 0f);
+            ctaPanel.pivot = new Vector2(1f, 0f);
+            ctaPanel.anchoredPosition = new Vector2(-metrics.Margin, metrics.Margin);
+            ctaPanel.sizeDelta = new Vector2(metrics.RightPanelWidth, metrics.CtaHeight);
+
+            Image panel = ctaPanel.GetComponent<Image>() ?? ctaPanel.gameObject.AddComponent<Image>();
+            panel.color = PanelColor;
+            panel.raycastTarget = false;
+
+            RectTransform accent = EnsureImage(ctaPanel, "HeatCtaAccent", AccentRed).rectTransform;
+            SetTopLeft(accent, Vector2.zero, new Vector2(5f, metrics.CtaHeight));
+            accent.GetComponent<Image>().raycastTarget = false;
+
+            TMP_Text eyebrow = EnsureText(ctaPanel, "HeatCtaEyebrow", "CURRENT DESTINATION", 12, FontStyles.Bold, TextAlignmentOptions.Left, MutedTextColor);
+            SetTopLeft(eyebrow.rectTransform, new Vector2(metrics.PanelInset, -metrics.PanelInset), new Vector2(280f, 20f));
+
+            _destinationValue = EnsureText(ctaPanel, "HeatDestinationValue", OpenWorldTravelCatalog.CurrentDisplayName, 30, FontStyles.Bold, TextAlignmentOptions.Left, Color.white);
+            SetTopLeft(_destinationValue.rectTransform, new Vector2(metrics.PanelInset, -metrics.PanelInset - 30f), new Vector2(metrics.RightPanelWidth - metrics.PanelInset * 2f, 38f));
+
+            if (_ctaButton != null)
+            {
+                RectTransform buttonRect = _ctaButton.GetComponent<RectTransform>();
+                SetBottomLeft(buttonRect, new Vector2(metrics.PanelInset, metrics.PanelInset), new Vector2(metrics.RightPanelWidth - metrics.PanelInset * 2f, metrics.CtaButtonHeight));
+                StyleActionButton(_ctaButton, AccentRed, Color.white, "ENTER WORLD", metrics);
+            }
+        }
+
+        private void StyleTravelMenu(HubLayoutMetrics metrics)
+        {
+            if (_travelMenu == null)
+                return;
+
+            RectTransform? menuRect = _travelMenu.GetComponent<RectTransform>();
+            if (menuRect == null)
+                return;
+
+            menuRect.anchorMin = new Vector2(1f, 0f);
+            menuRect.anchorMax = new Vector2(1f, 0f);
+            menuRect.pivot = new Vector2(1f, 0f);
+            menuRect.anchoredPosition = new Vector2(-metrics.Margin, metrics.Margin + metrics.CtaHeight + metrics.Gap);
+            menuRect.sizeDelta = new Vector2(metrics.RightPanelWidth, Mathf.Max(menuRect.sizeDelta.y, 320f));
+
+            Image panel = _travelMenu.GetComponent<Image>() ?? _travelMenu.AddComponent<Image>();
+            panel.color = PanelStrongColor;
+            panel.raycastTarget = false;
+
+            RectTransform accent = EnsureImage(_travelMenu.transform, "HeatTravelAccent", AccentAmber).rectTransform;
+            SetTopLeft(accent, new Vector2(0f, 0f), new Vector2(4f, menuRect.sizeDelta.y));
+            accent.GetComponent<Image>().raycastTarget = false;
+
+            TMP_Text title = EnsureText(_travelMenu.transform, "Title", "SELECT DESTINATION", 17, FontStyles.Bold, TextAlignmentOptions.Left, Color.white);
+            SetTopLeft(title.rectTransform, new Vector2(metrics.PanelInset, -metrics.PanelInset), new Vector2(320f, 24f));
+
+            TMP_Text subtitle = EnsureText(_travelMenu.transform, "HeatTravelSubtitle", "OPEN WORLD", 11, FontStyles.Bold, TextAlignmentOptions.Left, MutedTextColor);
+            SetTopLeft(subtitle.rectTransform, new Vector2(metrics.PanelInset, -metrics.PanelInset - 24f), new Vector2(180f, 18f));
+        }
+
+        private static void StyleActionButton(Button button, Color background, Color labelColor, string heatLabel, HubLayoutMetrics metrics)
+        {
+            Image image = button.GetComponent<Image>() ?? button.gameObject.AddComponent<Image>();
+            image.color = background;
+
+            ColorBlock colors = button.colors;
+            colors.normalColor = background;
+            colors.highlightedColor = Color.Lerp(background, Color.white, 0.10f);
+            colors.selectedColor = colors.highlightedColor;
+            colors.pressedColor = Color.Lerp(background, Color.black, 0.18f);
+            colors.disabledColor = new Color(background.r, background.g, background.b, 0.42f);
+            button.colors = colors;
+
+            AttachHeatButton(button, heatLabel);
+
+            TMP_Text? label = button.transform.Find("Label")?.GetComponent<TMP_Text>();
+            if (label != null)
+            {
+                label.text = heatLabel;
+                label.fontSize = 22;
+                label.fontStyle = FontStyles.Bold;
+                label.color = labelColor;
+                SetAnchored(label.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0f, 12f), new Vector2(metrics.RightPanelWidth - metrics.PanelInset * 2f - 24f, 30f), new Vector2(0.5f, 0.5f));
+            }
+
+            TMP_Text? subLabel = button.transform.Find("SubLabel")?.GetComponent<TMP_Text>();
+            if (subLabel != null)
+            {
+                subLabel.fontSize = 12;
+                subLabel.fontStyle = FontStyles.Bold;
+                subLabel.color = new Color(1f, 1f, 1f, 0.74f);
+                SetAnchored(subLabel.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0f, -16f), new Vector2(metrics.RightPanelWidth - metrics.PanelInset * 2f - 24f, 20f), new Vector2(0.5f, 0.5f));
+            }
+        }
+
+        private static void AttachHeatButton(Button button, string text)
+        {
+            ButtonManager heatButton = button.GetComponent<ButtonManager>() ?? button.gameObject.AddComponent<ButtonManager>();
+            heatButton.buttonText = text;
+            heatButton.useCustomContent = true;
+            heatButton.enableText = false;
+            heatButton.enableIcon = false;
+            heatButton.autoFitContent = false;
+            heatButton.useLocalization = false;
+            heatButton.useSounds = false;
+            heatButton.checkForDoubleClick = false;
+            heatButton.bypassUpdateOnEnable = true;
+            heatButton.isInteractable = button.interactable;
+            heatButton.useUINavigation = true;
+            heatButton.navigationMode = Navigation.Mode.Automatic;
+            button.transition = Selectable.Transition.ColorTint;
+        }
+
+        private static Image EnsureImage(Transform parent, string name, Color color)
+        {
+            Transform? existing = parent.Find(name);
+            RectTransform rect = existing as RectTransform ?? CreateRect(parent, name);
+            Image image = rect.GetComponent<Image>() ?? rect.gameObject.AddComponent<Image>();
+            image.color = color;
+            return image;
+        }
+
+        private static TMP_Text EnsureText(Transform parent, string name, string text, float fontSize, FontStyles style, TextAlignmentOptions alignment, Color color)
+        {
+            TMP_Text? label = parent.Find(name)?.GetComponent<TMP_Text>();
+            if (label == null)
+                label = CreateText(parent, name, text, fontSize, style, alignment, color);
+
+            label.text = text;
+            label.fontSize = fontSize;
+            label.fontStyle = style;
+            label.alignment = alignment;
+            label.color = color;
+            label.raycastTarget = false;
+            label.textWrappingMode = TextWrappingModes.NoWrap;
+            return label;
+        }
+
+        private void SuppressDeprecatedHomeSections()
+        {
+            SetActive("HubCanvas/HomeRoot/IdentityPanel");
+            SetInactive("HubCanvas/HomeRoot/IdentityPanel/GearEyebrow");
+            SetInactive("HubCanvas/HomeRoot/IdentityPanel/GearName");
+            SetInactive("HubCanvas/HomeRoot/IdentityPanel/GearMeta");
+            SetInactive("HubCanvas/HomeRoot/IdentityPanel/IdentityBlurb");
+            SetInactive("HubCanvas/HomeRoot/EquipmentPanel");
+            SetInactive("HubCanvas/TopBar/NavRow/EquipmentButton");
+            SetInactive("HubCanvas/HomeRoot/EquipmentPanel/AllocatedStatsRoot");
+            SetInactive("HubCanvas/HomeRoot/EquipmentPanel/ProfessionLabel");
+            SetInactive("HubCanvas/HomeRoot/EquipmentPanel/ProfessionCard");
+            SetInactive("HubCanvas/HomeRoot/EquipmentPanel/TrinketLabel");
+            SetInactive("HubCanvas/HomeRoot/EquipmentPanel/TrinketIcon");
+            SetInactive("HubCanvas/HomeRoot/EquipmentPanel/TrinketName");
+            SetInactiveByName("StoreButton");
+            SetInactiveByName("SeasonButton");
+            SetInactiveByName("AllocatedStatsLabel");
+            SetInactiveByName("MenuText");
+        }
+
+        private void RestoreRankAndQuestSections()
+        {
+            SetActiveByName("ChallengeLabel");
+            SetActiveByName("ChallengeLabel_0");
+            SetActiveByName("ChallengeLabel_1");
+            SetActiveByName("ChallengeLabel_2");
+            SetActiveByName("ChallengeProgress_0");
+            SetActiveByName("ChallengeProgress_1");
+            SetActiveByName("ChallengeProgress_2");
+            SetActiveByName("ChallengeReward_0");
+            SetActiveByName("ChallengeReward_1");
+            SetActiveByName("ChallengeReward_2");
+            SetActiveByName("RankLabel");
+            SetActiveByName("RankValue");
+            SetActiveByName("RankProgress");
+            SetActiveByName("Fill");
+            SetActiveByName("ColdFill");
+            SetActiveByName("RedRim");
+            SetActiveByName("ViewAllButton");
+        }
+
+        private void SetInactive(string path)
+        {
+            GameObject? section = _root?.Find(path)?.gameObject;
+            if (section != null)
+                section.SetActive(false);
+        }
+
+        private void SetActive(string path)
+        {
+            GameObject? section = _root?.Find(path)?.gameObject;
+            if (section != null)
+                section.SetActive(true);
+        }
+
+        private void SetInactiveByName(string name)
+        {
+            if (_root == null)
+                return;
+
+            foreach (Transform child in _root.GetComponentsInChildren<Transform>(true))
+            {
+                if (string.Equals(child.name, name, System.StringComparison.Ordinal))
+                    child.gameObject.SetActive(false);
+            }
+        }
+
+        private void SetActiveByName(string name)
+        {
+            if (_root == null)
+                return;
+
+            foreach (Transform child in _root.GetComponentsInChildren<Transform>(true))
+            {
+                if (string.Equals(child.name, name, System.StringComparison.Ordinal))
+                    child.gameObject.SetActive(true);
+            }
+        }
+
         private static void SetTopLeft(RectTransform rect, Vector2 position, Vector2 size)
         {
             rect.anchorMin = new Vector2(0f, 1f);
@@ -527,6 +805,24 @@ namespace Arena.UI
             rect.pivot = new Vector2(0f, 1f);
             rect.anchoredPosition = position;
             rect.sizeDelta = size;
+        }
+
+        private static void SetBottomLeft(RectTransform rect, Vector2 position, Vector2 size)
+        {
+            rect.anchorMin = new Vector2(0f, 0f);
+            rect.anchorMax = new Vector2(0f, 0f);
+            rect.pivot = new Vector2(0f, 0f);
+            rect.anchoredPosition = position;
+            rect.sizeDelta = size;
+        }
+
+        private static void SetStretch(RectTransform rect)
+        {
+            rect.anchorMin = Vector2.zero;
+            rect.anchorMax = Vector2.one;
+            rect.pivot = new Vector2(0.5f, 0.5f);
+            rect.anchoredPosition = Vector2.zero;
+            rect.sizeDelta = Vector2.zero;
         }
 
         private static void SetAnchored(RectTransform rect, Vector2 anchor, Vector2 position, Vector2 size, Vector2? pivot = null)

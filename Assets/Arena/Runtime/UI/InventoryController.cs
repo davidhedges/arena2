@@ -27,11 +27,11 @@ namespace Arena.UI
         private const float LootPickScreenRadius = 82f;
         private const float RefreshIntervalSeconds = 0.12f;
 
-        private static readonly Color PanelColor = new(0.055f, 0.06f, 0.068f, 0.96f);
-        private static readonly Color HeaderColor = new(0.09f, 0.105f, 0.12f, 0.98f);
-        private static readonly Color EmptyCellColor = new(0.018f, 0.022f, 0.027f, 0.94f);
-        private static readonly Color FilledCellColor = new(0.16f, 0.18f, 0.2f, 0.98f);
-        private static readonly Color ShowcaseColor = new(0.035f, 0.04f, 0.048f, 0.74f);
+        private static readonly Color PanelColor = HeatUiStyle.Panel;
+        private static readonly Color HeaderColor = HeatUiStyle.Header;
+        private static readonly Color EmptyCellColor = HeatUiStyle.CellEmpty;
+        private static readonly Color FilledCellColor = HeatUiStyle.CellFilled;
+        private static readonly Color ShowcaseColor = HeatUiStyle.Showcase;
 
         private static readonly EquipmentSlotSpec[] EquipmentSlots =
         {
@@ -862,7 +862,7 @@ namespace Arena.UI
             showcaseImage.raycastTarget = false;
 
             Outline showcaseOutline = showcaseGo.AddComponent<Outline>();
-            showcaseOutline.effectColor = new Color(1f, 1f, 1f, 0.08f);
+            showcaseOutline.effectColor = new Color(1f, 1f, 1f, 0.12f);
             showcaseOutline.effectDistance = new Vector2(1f, -1f);
 
             _equipmentSlots.Clear();
@@ -893,7 +893,7 @@ namespace Arena.UI
             background.color = EmptyCellColor;
 
             Outline outline = cellGo.AddComponent<Outline>();
-            outline.effectColor = new Color(1f, 1f, 1f, 0.12f);
+            outline.effectColor = new Color(1f, 1f, 1f, 0.16f);
             outline.effectDistance = new Vector2(1f, -1f);
 
             GameObject labelGo = new("Label");
@@ -907,7 +907,7 @@ namespace Arena.UI
             TextMeshProUGUI label = labelGo.AddComponent<TextMeshProUGUI>();
             label.font = ResolveFont();
             label.fontSize = 10f;
-            label.color = Color.white;
+            label.color = HeatUiStyle.MutedText;
             label.alignment = TextAlignmentOptions.Center;
             label.textWrappingMode = TextWrappingModes.Normal;
             label.overflowMode = TextOverflowModes.Ellipsis;
@@ -953,10 +953,14 @@ namespace Arena.UI
 
             Image panelImage = panelGo.AddComponent<Image>();
             panelImage.color = PanelColor;
-
-            Outline outline = panelGo.AddComponent<Outline>();
-            outline.effectColor = new Color(1f, 1f, 1f, 0.18f);
-            outline.effectDistance = new Vector2(1f, -1f);
+            HeatUiStyle.StylePanel(panelGo);
+            HeatUiStyle.AddAccentBar(
+                panel,
+                "Accent",
+                new Vector2(0f, 0f),
+                new Vector2(0f, 1f),
+                Vector2.zero,
+                new Vector2(3f, 0f));
 
             GameObject headerGo = new("Header");
             headerGo.transform.SetParent(panel, false);
@@ -969,6 +973,7 @@ namespace Arena.UI
 
             Image headerImage = headerGo.AddComponent<Image>();
             headerImage.color = HeaderColor;
+            HeatUiStyle.StyleHeader(headerGo);
 
             GameObject titleGo = new("Title");
             titleGo.transform.SetParent(header, false);
@@ -981,7 +986,7 @@ namespace Arena.UI
             titleText.font = ResolveFont();
             titleText.fontSize = 16f;
             titleText.fontStyle = FontStyles.Bold;
-            titleText.color = Color.white;
+            titleText.color = HeatUiStyle.Text;
             titleText.alignment = TextAlignmentOptions.MidlineLeft;
             titleText.textWrappingMode = TextWrappingModes.NoWrap;
             titleText.text = title;
@@ -1046,7 +1051,7 @@ namespace Arena.UI
             background.color = EmptyCellColor;
 
             Outline outline = cellGo.AddComponent<Outline>();
-            outline.effectColor = new Color(1f, 1f, 1f, 0.12f);
+            outline.effectColor = new Color(1f, 1f, 1f, 0.16f);
             outline.effectDistance = new Vector2(1f, -1f);
 
             GameObject iconGo = new("Icon");
@@ -1073,7 +1078,7 @@ namespace Arena.UI
             TextMeshProUGUI label = labelGo.AddComponent<TextMeshProUGUI>();
             label.font = ResolveFont();
             label.fontSize = 10f;
-            label.color = Color.white;
+            label.color = HeatUiStyle.Text;
             label.alignment = TextAlignmentOptions.Center;
             label.textWrappingMode = TextWrappingModes.Normal;
             label.overflowMode = TextOverflowModes.Ellipsis;
@@ -1090,7 +1095,7 @@ namespace Arena.UI
             quantity.font = ResolveFont();
             quantity.fontSize = 10f;
             quantity.fontStyle = FontStyles.Bold;
-            quantity.color = Color.white;
+            quantity.color = HeatUiStyle.Text;
             quantity.alignment = TextAlignmentOptions.BottomRight;
             quantity.textWrappingMode = TextWrappingModes.NoWrap;
             quantity.raycastTarget = false;
@@ -1108,11 +1113,11 @@ namespace Arena.UI
             rt.sizeDelta = new Vector2(132f, 42f);
 
             Image image = go.AddComponent<Image>();
-            image.color = new Color(0.025f, 0.03f, 0.036f, 0.92f);
+            image.color = HeatUiStyle.PanelStrong;
             image.raycastTarget = false;
 
             Outline outline = go.AddComponent<Outline>();
-            outline.effectColor = new Color(1f, 1f, 1f, 0.22f);
+            outline.effectColor = new Color(1f, 1f, 1f, 0.18f);
             outline.effectDistance = new Vector2(1f, -1f);
 
             Sprite? iconSprite = ItemIconResolver.Resolve(iconId);

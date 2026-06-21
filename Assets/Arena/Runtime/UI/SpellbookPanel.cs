@@ -15,10 +15,10 @@ namespace Arena.UI
     public sealed class SpellbookPanel : MonoBehaviour, IEscapeCloseable
     {
         private const float RefreshIntervalSeconds = 0.20f;
-        private static readonly Color PanelColor = new(0.055f, 0.06f, 0.068f, 0.96f);
-        private static readonly Color HeaderColor = new(0.09f, 0.105f, 0.12f, 0.98f);
-        private static readonly Color RowColor = new(0.10f, 0.11f, 0.13f, 0.96f);
-        private static readonly Color Gold = new(0.96f, 0.73f, 0.26f, 1f);
+        private static readonly Color PanelColor = HeatUiStyle.Panel;
+        private static readonly Color HeaderColor = HeatUiStyle.Header;
+        private static readonly Color RowColor = HeatUiStyle.Row;
+        private static readonly Color Gold = HeatUiStyle.Gold;
 
         private static SpellbookPanel? s_instance;
 
@@ -149,8 +149,17 @@ namespace Arena.UI
 
             Image panelImage = _panelRoot.GetComponent<Image>();
             panelImage.color = PanelColor;
+            HeatUiStyle.StylePanel(_panelRoot);
+            HeatUiStyle.AddAccentBar(
+                _panelRoot.transform,
+                "Accent",
+                new Vector2(0f, 0f),
+                new Vector2(0f, 1f),
+                Vector2.zero,
+                new Vector2(3f, 0f));
 
             RectTransform header = AddBlock("Header", _panelRoot.transform, HeaderColor);
+            HeatUiStyle.StyleHeader(header.gameObject);
             header.anchorMin = new Vector2(0f, 1f);
             header.anchorMax = new Vector2(1f, 1f);
             header.pivot = new Vector2(0.5f, 1f);
@@ -194,7 +203,7 @@ namespace Arena.UI
             scrollRect.movementType = ScrollRect.MovementType.Clamped;
             scrollRect.scrollSensitivity = 24f;
 
-            _statusText = MakeLabel("Status", _panelRoot.transform, string.Empty, 13f, TextAlignmentOptions.MidlineLeft, new Color(0.72f, 0.75f, 0.80f));
+            _statusText = MakeLabel("Status", _panelRoot.transform, string.Empty, 13f, TextAlignmentOptions.MidlineLeft, HeatUiStyle.MutedText);
             SetRect(_statusText.rectTransform, new Vector2(22f, 18f), new Vector2(420f, 28f), new Vector2(0f, 0f), new Vector2(0f, 0f));
         }
 
@@ -244,7 +253,7 @@ namespace Arena.UI
             if (spells.Count == 0)
             {
                 _rowRoot.sizeDelta = Vector2.zero;
-                TextMeshProUGUI empty = MakeLabel("Empty", _rowRoot, "No spells", 15f, TextAlignmentOptions.Center, new Color(0.72f, 0.75f, 0.80f));
+                TextMeshProUGUI empty = MakeLabel("Empty", _rowRoot, "No spells", 15f, TextAlignmentOptions.Center, HeatUiStyle.MutedText);
                 SetRect(empty.rectTransform, Vector2.zero, new Vector2(360f, 44f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
                 return;
             }
@@ -260,7 +269,7 @@ namespace Arena.UI
                 SpellDefinition? spell = string.IsNullOrWhiteSpace(spellId)
                     ? null
                     : conn?.Db.SpellDefinition.Kind.Find(spellId);
-                RectTransform row = AddBlock($"Spell_{i}", _rowRoot, RowColor);
+                RectTransform row = AddBlock($"Spell_{i}", _rowRoot, i % 2 == 0 ? RowColor : HeatUiStyle.RowAlt);
                 row.anchorMin = new Vector2(0f, 1f);
                 row.anchorMax = new Vector2(1f, 1f);
                 row.pivot = new Vector2(0.5f, 1f);
@@ -272,14 +281,14 @@ namespace Arena.UI
                 TextMeshProUGUI name = MakeLabel("Name", row, DisplayNameForSpell(conn, spellId), 15f, TextAlignmentOptions.MidlineLeft, Color.white);
                 SetRect(name.rectTransform, new Vector2(86f, -10f), new Vector2(330f, 24f), new Vector2(0f, 1f), new Vector2(0f, 1f));
 
-                TextMeshProUGUI meta = MakeLabel("Meta", row, MetadataForSpell(spell), 12f, TextAlignmentOptions.MidlineLeft, new Color(0.72f, 0.75f, 0.80f));
+                TextMeshProUGUI meta = MakeLabel("Meta", row, MetadataForSpell(spell), 12f, TextAlignmentOptions.MidlineLeft, HeatUiStyle.MutedText);
                 SetRect(meta.rectTransform, new Vector2(86f, -34f), new Vector2(390f, 18f), new Vector2(0f, 1f), new Vector2(0f, 1f));
             }
         }
 
         private static void AddSpellIcon(RectTransform row, DbConnection? conn, string spellId)
         {
-            RectTransform frame = AddBlock("IconFrame", row, new Color(0.04f, 0.045f, 0.055f, 0.96f));
+            RectTransform frame = AddBlock("IconFrame", row, HeatUiStyle.CellEmpty);
             SetRect(frame, new Vector2(16f, -7f), new Vector2(44f, 44f), new Vector2(0f, 1f), new Vector2(0f, 1f));
 
             Sprite? iconSprite = ResolveSpellIcon(conn, spellId);
@@ -449,6 +458,7 @@ namespace Arena.UI
             Image image = go.GetComponent<Image>();
             image.color = fill;
             Button button = go.GetComponent<Button>();
+            HeatUiStyle.StyleButton(button, text, fill, textColor);
 
             TextMeshProUGUI label = MakeLabel("Text", go.transform, text, 13f, TextAlignmentOptions.Center, textColor);
             label.rectTransform.anchorMin = Vector2.zero;

@@ -44,21 +44,26 @@ namespace Arena.UI
             var toggleButton = MakeHudButton(transform, "PlaygroundToggleButton", "PLAYGROUND",
                 new Vector2(1f, 1f), new Vector2(1f, 1f),
                 new Vector2(122f, 24f), new Vector2(-Pad, -ButtonTopOffset),
-                new Color(0.16f, 0.10f, 0.24f, 0.94f));
+                HeatUiStyle.PanelStrong);
             toggleButton.onClick.AddListener(ToggleMenu);
 
             _menuRoot = Panel("PlaygroundTargetsMenu", transform,
                 new Vector2(1f, 1f), new Vector2(1f, 1f),
                 new Vector2(206f, 268f), new Vector2(-Pad, -MenuTopOffset));
-            Img(_menuRoot, new Color(0.025f, 0.025f, 0.035f, 0.92f));
-            var outline = _menuRoot.AddComponent<Outline>();
-            outline.effectColor = new Color(0.38f, 0.22f, 0.52f, 0.95f);
-            outline.effectDistance = new Vector2(1f, 1f);
+            Img(_menuRoot, HeatUiStyle.Panel);
+            HeatUiStyle.StylePanel(_menuRoot, raycastTarget: false);
+            HeatUiStyle.AddAccentBar(
+                _menuRoot.transform,
+                "Accent",
+                new Vector2(0f, 0f),
+                new Vector2(0f, 1f),
+                Vector2.zero,
+                new Vector2(3f, 0f));
 
             var title = Label(_menuRoot.transform, "Title",
                 new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
                 new Vector2(190f, 22f), new Vector2(0f, -8f),
-                11, new Color(0.86f, 0.72f, 1f), TextAnchor.MiddleCenter);
+                11, HeatUiStyle.Text, TextAnchor.MiddleCenter);
             title.text = "PLAYGROUND TARGETS";
             title.fontStyle = FontStyle.Bold;
 
@@ -88,8 +93,8 @@ namespace Arena.UI
                 new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
                 new Vector2(176f, 24f), new Vector2(0f, -36f - row * 28f),
                 destructive
-                    ? new Color(0.28f, 0.08f, 0.10f, 0.94f)
-                    : new Color(0.12f, 0.13f, 0.18f, 0.94f));
+                    ? new Color(0.42f, 0.08f, 0.07f, 0.96f)
+                    : HeatUiStyle.RowAlt);
             button.onClick.AddListener(action);
         }
 
@@ -241,8 +246,8 @@ namespace Arena.UI
                 return;
 
             _statusText.color = error
-                ? new Color(1f, 0.45f, 0.36f)
-                : new Color(0.65f, 0.95f, 0.75f);
+                ? HeatUiStyle.Error
+                : HeatUiStyle.Success;
             _statusText.text = message;
             _statusUntilTime = Time.unscaledTime + 4f;
         }
@@ -339,6 +344,7 @@ namespace Arena.UI
             colors.pressedColor = new Color(0.78f, 0.78f, 0.78f, 1f);
             colors.disabledColor = new Color(0.35f, 0.35f, 0.35f, 0.55f);
             button.colors = colors;
+            HeatUiStyle.StyleButton(button, text, fill, Color.white);
 
             var label = Label(go.transform, "Label",
                 Vector2.zero, Vector2.zero, Vector2.zero, Vector2.zero,
@@ -358,6 +364,6 @@ namespace Arena.UI
         }
 
         private static Font Font() =>
-            Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            HeatUiStyle.ResolveLegacyFont();
     }
 }

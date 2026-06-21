@@ -49,6 +49,10 @@ Assets/**/*.unitypackage.meta
 Assets/NHance/
 Assets/NHance.meta
 
+# Imported local UI package
+Assets/Heat - Complete Modern UI/
+Assets/Heat - Complete Modern UI.meta
+
 # Infrastructure local state and secrets
 .env
 .env.local

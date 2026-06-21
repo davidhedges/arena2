@@ -19,11 +19,11 @@ namespace Arena.UI
     public sealed class SpellCatalogPanel : MonoBehaviour, IEscapeCloseable
     {
         private const float RefreshIntervalSeconds = 0.20f;
-        private static readonly Color PanelColor = new(0.055f, 0.06f, 0.068f, 0.96f);
-        private static readonly Color HeaderColor = new(0.09f, 0.105f, 0.12f, 0.98f);
-        private static readonly Color RowColor = new(0.10f, 0.11f, 0.13f, 0.96f);
-        private static readonly Color LearnedColor = new(0.13f, 0.20f, 0.15f, 0.96f);
-        private static readonly Color Gold = new(0.96f, 0.73f, 0.26f, 1f);
+        private static readonly Color PanelColor = HeatUiStyle.Panel;
+        private static readonly Color HeaderColor = HeatUiStyle.Header;
+        private static readonly Color RowColor = HeatUiStyle.Row;
+        private static readonly Color LearnedColor = HeatUiStyle.Learned;
+        private static readonly Color Gold = HeatUiStyle.Gold;
 
         private Canvas? _canvas;
         private GameObject? _panelRoot;
@@ -142,8 +142,17 @@ namespace Arena.UI
 
             Image panelImage = _panelRoot.GetComponent<Image>();
             panelImage.color = PanelColor;
+            HeatUiStyle.StylePanel(_panelRoot);
+            HeatUiStyle.AddAccentBar(
+                _panelRoot.transform,
+                "Accent",
+                new Vector2(0f, 0f),
+                new Vector2(0f, 1f),
+                Vector2.zero,
+                new Vector2(3f, 0f));
 
             RectTransform header = AddBlock("Header", _panelRoot.transform, HeaderColor);
+            HeatUiStyle.StyleHeader(header.gameObject);
             header.anchorMin = new Vector2(0f, 1f);
             header.anchorMax = new Vector2(1f, 1f);
             header.pivot = new Vector2(0.5f, 1f);
@@ -153,7 +162,7 @@ namespace Arena.UI
             TextMeshProUGUI title = MakeLabel("Title", header, "Spells", 24f, TextAlignmentOptions.MidlineLeft, Color.white);
             SetRect(title.rectTransform, new Vector2(22f, -52f), new Vector2(300f, 42f), new Vector2(0f, 1f), new Vector2(0f, 1f));
 
-            TextMeshProUGUI hint = MakeLabel("Hint", header, "K", 15f, TextAlignmentOptions.MidlineRight, new Color(0.72f, 0.75f, 0.80f));
+            TextMeshProUGUI hint = MakeLabel("Hint", header, "K", 15f, TextAlignmentOptions.MidlineRight, HeatUiStyle.MutedText);
             SetRect(hint.rectTransform, new Vector2(-180f, -48f), new Vector2(120f, 34f), new Vector2(1f, 1f), new Vector2(1f, 1f));
 
             Button close = MakeButton("CloseButton", header, "Close", new Color(0.16f, 0.17f, 0.19f, 0.96f), Color.white);
@@ -167,7 +176,7 @@ namespace Arena.UI
             _rowRoot.offsetMin = new Vector2(22f, 58f);
             _rowRoot.offsetMax = new Vector2(-22f, -84f);
 
-            _statusText = MakeLabel("Status", _panelRoot.transform, string.Empty, 13f, TextAlignmentOptions.MidlineLeft, new Color(1f, 0.52f, 0.45f));
+            _statusText = MakeLabel("Status", _panelRoot.transform, string.Empty, 13f, TextAlignmentOptions.MidlineLeft, HeatUiStyle.Error);
             SetRect(_statusText.rectTransform, new Vector2(22f, 18f), new Vector2(500f, 28f), new Vector2(0f, 0f), new Vector2(0f, 0f));
         }
 
@@ -220,7 +229,7 @@ namespace Arena.UI
 
             if (spells.Count == 0)
             {
-                TextMeshProUGUI empty = MakeLabel("Empty", _rowRoot, "No spell definitions available.", 15f, TextAlignmentOptions.Center, new Color(0.72f, 0.75f, 0.80f));
+                TextMeshProUGUI empty = MakeLabel("Empty", _rowRoot, "No spell definitions available.", 15f, TextAlignmentOptions.Center, HeatUiStyle.MutedText);
                 SetRect(empty.rectTransform, Vector2.zero, new Vector2(600f, 44f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
                 return;
             }
@@ -232,7 +241,7 @@ namespace Arena.UI
                 SpellDefinition spell = spells[i];
                 string spellId = WireIdentifier.Normalize(spell.Kind);
                 bool learned = known.Contains(spellId);
-                RectTransform row = AddBlock($"Spell_{spellId}", _rowRoot, learned ? LearnedColor : RowColor);
+                RectTransform row = AddBlock($"Spell_{spellId}", _rowRoot, learned ? LearnedColor : (i % 2 == 0 ? RowColor : HeatUiStyle.RowAlt));
                 row.anchorMin = new Vector2(0f, 1f);
                 row.anchorMax = new Vector2(1f, 1f);
                 row.pivot = new Vector2(0.5f, 1f);
@@ -242,15 +251,16 @@ namespace Arena.UI
                 TextMeshProUGUI name = MakeLabel("Name", row, DisplayNameForSpell(spell), 15f, TextAlignmentOptions.MidlineLeft, Color.white);
                 SetRect(name.rectTransform, new Vector2(16f, -34f), new Vector2(280f, 24f), new Vector2(0f, 1f), new Vector2(0f, 1f));
 
-                TextMeshProUGUI meta = MakeLabel("Meta", row, MetadataForSpell(spell), 12f, TextAlignmentOptions.MidlineLeft, new Color(0.72f, 0.75f, 0.80f));
+                TextMeshProUGUI meta = MakeLabel("Meta", row, MetadataForSpell(spell), 12f, TextAlignmentOptions.MidlineLeft, HeatUiStyle.MutedText);
                 SetRect(meta.rectTransform, new Vector2(16f, -54f), new Vector2(470f, 18f), new Vector2(0f, 1f), new Vector2(0f, 1f));
 
-                TextMeshProUGUI state = MakeLabel("State", row, learned ? "Learned" : "Available", 13f, TextAlignmentOptions.MidlineRight, learned ? Gold : new Color(0.78f, 0.82f, 0.88f));
+                TextMeshProUGUI state = MakeLabel("State", row, learned ? "Learned" : "Available", 13f, TextAlignmentOptions.MidlineRight, learned ? Gold : HeatUiStyle.Text);
                 SetRect(state.rectTransform, new Vector2(-210f, -41f), new Vector2(92f, 28f), new Vector2(1f, 1f), new Vector2(1f, 1f));
 
-                Button learn = MakeButton("LearnButton", row, learned ? "Known" : "Learn", learned ? new Color(0.12f, 0.16f, 0.12f, 0.96f) : new Color(0.50f, 0.10f, 0.08f, 0.96f), Color.white);
+                Button learn = MakeButton("LearnButton", row, learned ? "Known" : "Learn", learned ? HeatUiStyle.CellFilled : HeatUiStyle.Accent, Color.white);
                 SetRect((RectTransform)learn.transform, new Vector2(-102f, -44f), new Vector2(84f, 34f), new Vector2(1f, 1f), new Vector2(1f, 1f));
                 learn.interactable = !learned;
+                HeatUiStyle.SyncButtonInteractable(learn);
                 string capturedSpellId = spellId;
                 learn.onClick.AddListener(() => Learn(capturedSpellId));
             }
@@ -304,7 +314,7 @@ namespace Arena.UI
                 return;
 
             _lastError = error ? message : string.Empty;
-            _statusText.color = error ? new Color(1f, 0.52f, 0.45f) : new Color(0.74f, 0.82f, 0.72f);
+            _statusText.color = error ? HeatUiStyle.Error : HeatUiStyle.Success;
             _statusText.text = message;
             _errorUntilTime = Time.unscaledTime + 4f;
         }
@@ -373,6 +383,7 @@ namespace Arena.UI
             Image image = go.GetComponent<Image>();
             image.color = fill;
             Button button = go.GetComponent<Button>();
+            HeatUiStyle.StyleButton(button, text, fill, textColor);
 
             TextMeshProUGUI label = MakeLabel("Text", go.transform, text, 13f, TextAlignmentOptions.Center, textColor);
             label.rectTransform.anchorMin = Vector2.zero;

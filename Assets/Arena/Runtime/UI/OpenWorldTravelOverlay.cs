@@ -76,15 +76,23 @@ namespace Arena.UI
             panelRt.anchorMax = new Vector2(1f, 1f);
             panelRt.pivot = new Vector2(1f, 1f);
             panelRt.anchoredPosition = new Vector2(-24f, -24f);
-            panelRt.sizeDelta = new Vector2(220f, 88f);
-            panel.AddComponent<Image>().color = new Color(0.09f, 0.10f, 0.12f, 0.92f);
+            panelRt.sizeDelta = new Vector2(252f, 92f);
+            panel.AddComponent<Image>().color = HeatUiStyle.Panel;
+            HeatUiStyle.StylePanel(panel);
+            HeatUiStyle.AddAccentBar(
+                panel.transform,
+                "Accent",
+                new Vector2(0f, 0f),
+                new Vector2(0f, 1f),
+                Vector2.zero,
+                new Vector2(3f, 0f));
 
             _label = MakeLabel("CurrentWorld", panel.transform, 14, TextAnchor.MiddleLeft);
-            _label.color = new Color(0.76f, 0.79f, 0.83f, 1f);
-            SetRect(_label.rectTransform, new Vector2(16f, 50f), new Vector2(188f, 20f));
+            _label.color = HeatUiStyle.Text;
+            SetRect(_label.rectTransform, new Vector2(18f, 52f), new Vector2(216f, 20f));
 
             var hubButton = MakeButton("HubButton", panel.transform, "Return to Hub");
-            SetRect((RectTransform)hubButton.transform, new Vector2(16f, 12f), new Vector2(188f, 28f));
+            SetRect((RectTransform)hubButton.transform, new Vector2(18f, 12f), new Vector2(216f, 30f));
             hubButton.onClick.AddListener(ReturnToHub);
 
             _root.SetActive(false);
@@ -100,7 +108,7 @@ namespace Arena.UI
             var go = new GameObject(name);
             go.transform.SetParent(parent, false);
             var text = go.AddComponent<Text>();
-            text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            text.font = HeatUiStyle.ResolveLegacyFont();
             text.fontSize = fontSize;
             text.alignment = alignment;
             text.color = Color.white;
@@ -112,13 +120,14 @@ namespace Arena.UI
             var go = new GameObject(name);
             go.transform.SetParent(parent, false);
             var image = go.AddComponent<Image>();
-            image.color = new Color(0.22f, 0.38f, 0.68f, 1f);
+            image.color = HeatUiStyle.Accent;
             var button = go.AddComponent<Button>();
             var colors = button.colors;
             colors.normalColor = image.color;
-            colors.highlightedColor = new Color(0.30f, 0.50f, 0.82f, 1f);
-            colors.pressedColor = new Color(0.15f, 0.28f, 0.50f, 1f);
+            colors.highlightedColor = HeatUiStyle.AccentHot;
+            colors.pressedColor = new Color(0.56f, 0.08f, 0.06f, 1f);
             button.colors = colors;
+            HeatUiStyle.StyleButton(button, text, HeatUiStyle.Accent, Color.white);
 
             Text label = MakeLabel("Text", go.transform, 13, TextAnchor.MiddleCenter);
             label.text = text;

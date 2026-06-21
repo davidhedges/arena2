@@ -54,8 +54,10 @@ namespace Arena.UI
             canvas.renderMode   = RenderMode.ScreenSpaceOverlay;
             canvas.sortingOrder = 20;
 
-            gameObject.AddComponent<CanvasScaler>().uiScaleMode =
-                CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            CanvasScaler scaler = gameObject.AddComponent<CanvasScaler>();
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution = new Vector2(1920f, 1080f);
+            scaler.matchWidthOrHeight = 0.5f;
 
             gameObject.AddComponent<GraphicRaycaster>();
 
@@ -67,7 +69,7 @@ namespace Arena.UI
             rt.sizeDelta = Vector2.zero;
 
             var bg = _root.AddComponent<Image>();
-            bg.color = new Color(0f, 0f, 0f, 0.55f);
+            bg.color = new Color(0f, 0f, 0f, 0.62f);
             bg.raycastTarget = false;
 
             _panel = new GameObject("Panel");
@@ -80,8 +82,16 @@ namespace Arena.UI
             panelRt.anchoredPosition = Vector2.zero;
 
             var panelBg = _panel.AddComponent<Image>();
-            panelBg.color = new Color(0.08f, 0.09f, 0.11f, 0.96f);
+            panelBg.color = HeatUiStyle.Panel;
             panelBg.raycastTarget = true;
+            HeatUiStyle.StylePanel(_panel);
+            HeatUiStyle.AddAccentBar(
+                _panel.transform,
+                "Accent",
+                new Vector2(0f, 0f),
+                new Vector2(0f, 1f),
+                Vector2.zero,
+                new Vector2(4f, 0f));
 
             _line1 = MakeLabel("Line1", 42, new Vector2(0.5f, 0.86f), _panel.transform, new Vector2(620f, 60f));
             _line2 = MakeLabel("Line2", 24, new Vector2(0.5f, 0.76f), _panel.transform, new Vector2(620f, 44f));
@@ -122,11 +132,13 @@ namespace Arena.UI
             var cdCanvas = _countdownRoot.AddComponent<Canvas>();
             cdCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
             cdCanvas.sortingOrder = 19;
-            _countdownRoot.AddComponent<CanvasScaler>().uiScaleMode =
-                CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            CanvasScaler countdownScaler = _countdownRoot.AddComponent<CanvasScaler>();
+            countdownScaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            countdownScaler.referenceResolution = new Vector2(1920f, 1080f);
+            countdownScaler.matchWidthOrHeight = 0.5f;
             _countdownText = MakeLabel("CountdownText", 120, new Vector2(0.5f, 0.5f), _countdownRoot.transform, new Vector2(400f, 200f));
             _countdownText.alignment = TextAnchor.MiddleCenter;
-            _countdownText.color = Color.white;
+            _countdownText.color = HeatUiStyle.Text;
             _countdownRoot.SetActive(false);
 
             _root.SetActive(false);
@@ -165,6 +177,8 @@ namespace Arena.UI
             bool connected = NetworkManager.Instance?.IsConnected == true && cache.LocalInstanceId.HasValue;
             _leaveButton.interactable = connected;
             _playAgainButton.interactable = connected;
+            HeatUiStyle.SyncButtonInteractable(_leaveButton);
+            HeatUiStyle.SyncButtonInteractable(_playAgainButton);
 
             _root.SetActive(true);
         }
@@ -274,8 +288,8 @@ namespace Arena.UI
 
             var bg = go.AddComponent<Image>();
             bg.color = data.IsWinner
-                ? new Color(0.22f, 0.28f, 0.14f, 0.95f)
-                : new Color(0.15f, 0.16f, 0.18f, 0.95f);
+                ? HeatUiStyle.Learned
+                : (index % 2 == 0 ? HeatUiStyle.Row : HeatUiStyle.RowAlt);
             bg.raycastTarget = false;
 
             var txt = MakeLabel(
@@ -286,7 +300,7 @@ namespace Arena.UI
                 new Vector2(590f, 28f));
             txt.alignment = TextAnchor.MiddleLeft;
             txt.text = $"{data.Name,-14}  {data.DamageDone,10}  {data.Kills,6}  {data.HpRemaining,6}  {data.HealingDone,8}";
-            txt.color = data.IsWinner ? new Color(1f, 0.95f, 0.7f) : Color.white;
+            txt.color = data.IsWinner ? HeatUiStyle.Gold : HeatUiStyle.Text;
 
             return go;
         }
@@ -299,6 +313,8 @@ namespace Arena.UI
 
             _leaveButton.interactable = false;
             _playAgainButton.interactable = false;
+            HeatUiStyle.SyncButtonInteractable(_leaveButton);
+            HeatUiStyle.SyncButtonInteractable(_playAgainButton);
             conn.Reducers.LeaveInstance();
         }
 
@@ -310,6 +326,8 @@ namespace Arena.UI
 
             _leaveButton.interactable = false;
             _playAgainButton.interactable = false;
+            HeatUiStyle.SyncButtonInteractable(_leaveButton);
+            HeatUiStyle.SyncButtonInteractable(_playAgainButton);
             conn.Reducers.LeaveInstance();
             // LobbyController will show automatically once LocalInstanceId clears.
         }
@@ -332,15 +350,15 @@ namespace Arena.UI
             rt.anchoredPosition = Vector2.zero;
 
             var txt = go.AddComponent<Text>();
-            txt.font      = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            txt.font      = HeatUiStyle.ResolveLegacyFont();
             txt.fontSize  = fontSize;
             txt.fontStyle = FontStyle.Bold;
             txt.alignment = TextAnchor.MiddleCenter;
             txt.color     = Color.white;
 
             var sh = go.AddComponent<Shadow>();
-            sh.effectColor    = Color.black;
-            sh.effectDistance = new Vector2(2, -2);
+            sh.effectColor    = new Color(0f, 0f, 0f, 0.72f);
+            sh.effectDistance = new Vector2(1, -1);
 
             return txt;
         }
@@ -354,15 +372,16 @@ namespace Arena.UI
             rt.pivot = new Vector2(0.5f, 0.5f);
 
             var image = go.AddComponent<Image>();
-            image.color = new Color(0.76f, 0.22f, 0.18f, 1f);
+            image.color = HeatUiStyle.Accent;
 
             var button = go.AddComponent<Button>();
             var colors = button.colors;
             colors.normalColor = image.color;
-            colors.highlightedColor = new Color(0.88f, 0.3f, 0.24f, 1f);
-            colors.pressedColor = new Color(0.58f, 0.15f, 0.12f, 1f);
+            colors.highlightedColor = HeatUiStyle.AccentHot;
+            colors.pressedColor = new Color(0.56f, 0.08f, 0.06f, 1f);
             colors.selectedColor = colors.highlightedColor;
             button.colors = colors;
+            HeatUiStyle.StyleButton(button, label, HeatUiStyle.Accent, Color.white);
 
             var txt = MakeLabel($"{name}_Label", 18, new Vector2(0.5f, 0.5f), go.transform, new Vector2(180f, 28f));
             txt.text = label;
