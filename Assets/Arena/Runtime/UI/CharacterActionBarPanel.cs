@@ -420,6 +420,8 @@ namespace Arena.UI
                 string fixedActionId = WireIdentifier.Normalize(presentation.PresentationId);
                 if (string.IsNullOrWhiteSpace(fixedActionId))
                     continue;
+                if (!Arena.Input.FixedActionDispatcher.IsActionBarVisible(fixedActionId, conn))
+                    continue;
 
                 fixedActions[fixedActionId] = new AvailableAction(
                     ActionKinds.Fixed,

@@ -185,6 +185,7 @@ namespace Arena.Tests.Editor
         {
             string spellInput = File.ReadAllText(SpellInputHandlerPath);
             Assert.That(spellInput, Does.Not.Contain("ActionBarKeymap.SelectableBindings"));
+            Assert.That(spellInput, Does.Contain("FixedActionDispatcher.ProcessMovementBindings(conn, input)"));
 
             string actionBarDispatcher = File.ReadAllText(ActionBarInputDispatcherPath);
             Assert.That(actionBarDispatcher, Does.Contain("ActionBarKeymap.SelectableBindings"));
@@ -192,6 +193,8 @@ namespace Arena.Tests.Editor
             Assert.That(actionBarDispatcher, Does.Contain("action.IsFixed"));
 
             string dispatcher = File.ReadAllText(FixedActionDispatcherPath);
+            Assert.That(dispatcher, Does.Contain("ProcessMovementBindings(DbConnection conn, LocalPlayerInputSource input)"));
+            Assert.That(dispatcher, Does.Contain("MovementActionKeymap.DodgeKeyCode"));
             Assert.That(dispatcher, Does.Contain("TryTrigger(ActiveActionBarAction action, DbConnection? conn)"));
             Assert.That(dispatcher, Does.Contain("StartDodge("));
             Assert.That(dispatcher, Does.Contain("CreateActionPredictionToken(FixedActionIds.Dodge)"));
@@ -317,6 +320,7 @@ namespace Arena.Tests.Editor
 
             string panel = File.ReadAllText(CharacterActionBarPanelPath);
             Assert.That(panel, Does.Contain("PresentationKindFixed"));
+            Assert.That(panel, Does.Contain("IsActionBarVisible(fixedActionId, conn)"));
             Assert.That(panel, Does.Not.Contain("FixedActionBindingCatalog"));
         }
 
@@ -326,6 +330,9 @@ namespace Arena.Tests.Editor
             string contracts = File.ReadAllText(GameplayContractsPath);
             Assert.That(contracts, Does.Contain("new(\"S+3\", KeyCode.Alpha3, true, ActionBarSlotIds.Slot22"));
             Assert.That(contracts, Does.Contain("new(\"S+9\", KeyCode.Alpha9, true, ActionBarSlotIds.Slot28"));
+            Assert.That(contracts, Does.Contain("DodgeKeyLabel = \"Q\""));
+            Assert.That(contracts, Does.Contain("DodgeKeyCode = KeyCode.Q"));
+            Assert.That(contracts, Does.Not.Contain("new(\"Q\", KeyCode.Q, false"));
 
             string hud = File.ReadAllText(HudControllerPath);
             Assert.That(hud, Does.Contain("ActionBarKeymap.KeyLabelForCell"));

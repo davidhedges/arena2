@@ -152,6 +152,8 @@ namespace Arena.Input
             if (aim != null)
                 aim.Hide();
 
+            FixedActionDispatcher.ProcessMovementBindings(conn, input);
+
             bool shiftHeld = UnityEngine.Input.GetKey(KeyCode.LeftShift) || UnityEngine.Input.GetKey(KeyCode.RightShift);
             ActionBarInputDispatcher.ProcessSelectableBindings(conn, input, shiftHeld, this);
         }

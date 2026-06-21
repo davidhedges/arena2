@@ -426,6 +426,12 @@ namespace Arena.Combat
         public const string Parry = "PARRY";
     }
 
+    public static class MovementActionKeymap
+    {
+        public const string DodgeKeyLabel = "Q";
+        public const KeyCode DodgeKeyCode = KeyCode.Q;
+    }
+
     public static class CombatRuleIds
     {
         public const string DefaultGlobalCooldownMs = "DEFAULT_GLOBAL_COOLDOWN_MS";
@@ -487,7 +493,6 @@ namespace Arena.Combat
             new("7", KeyCode.Alpha7, false, ActionBarSlotIds.Slot06, 0, 6),
             new("8", KeyCode.Alpha8, false, ActionBarSlotIds.Slot07, 0, 7),
             new("9", KeyCode.Alpha9, false, ActionBarSlotIds.Slot08, 0, 8),
-            new("Q", KeyCode.Q, false, ActionBarSlotIds.Slot10, 1, 0),
             new("E", KeyCode.E, false, ActionBarSlotIds.Slot11, 1, 1),
             new("R", KeyCode.R, false, ActionBarSlotIds.Slot12, 1, 2),
             new("T", KeyCode.T, false, ActionBarSlotIds.Slot13, 1, 3),
@@ -787,6 +792,9 @@ namespace Arena.Combat
 
             if (string.Equals(actionKind, ActionKinds.Fixed, StringComparison.Ordinal))
             {
+                if (!FixedActionDispatcher.IsActionBarVisible(actionRefId, conn))
+                    return new ActiveActionBarAction(slotId, string.Empty, string.Empty, string.Empty, string.Empty);
+
                 string fixedDisplayName = ActionPresentation.ResolveFixedDisplayName(conn, actionRefId);
                 return new ActiveActionBarAction(
                     slotId,

@@ -3213,13 +3213,6 @@
       "sort_order": 70
     },
     {
-      "slot_id": "slot_1_0",
-      "combat_profile_id": "TWO_HANDED_SWORD",
-      "action_kind": "FIXED",
-      "action_id": "DODGE",
-      "sort_order": 100
-    },
-    {
       "slot_id": "slot_1_1",
       "combat_profile_id": "TWO_HANDED_SWORD",
       "ability_id": "WARRIOR_CHARGE",
@@ -3281,13 +3274,6 @@
       "sort_order": 140
     },
     {
-      "slot_id": "slot_1_0",
-      "combat_profile_id": "SWORD_AND_SHIELD",
-      "action_kind": "FIXED",
-      "action_id": "DODGE",
-      "sort_order": 150
-    },
-    {
       "slot_id": "slot_1_1",
       "combat_profile_id": "SWORD_AND_SHIELD",
       "ability_id": "PALADIN_CHARGE",
@@ -3337,13 +3323,6 @@
       "sort_order": 215
     },
     {
-      "slot_id": "slot_1_0",
-      "combat_profile_id": "ARCHER_BOW",
-      "action_kind": "FIXED",
-      "action_id": "DODGE",
-      "sort_order": 220
-    },
-    {
       "slot_id": "slot_1_2",
       "combat_profile_id": "ARCHER_BOW",
       "action_kind": "FIXED",
@@ -3369,13 +3348,6 @@
       "sort_order": 260
     },
     {
-      "slot_id": "slot_1_0",
-      "combat_profile_id": "DAGGERS",
-      "action_kind": "FIXED",
-      "action_id": "DODGE",
-      "sort_order": 270
-    },
-    {
       "slot_id": "slot_1_2",
       "combat_profile_id": "DAGGERS",
       "action_kind": "FIXED",
@@ -3399,13 +3371,6 @@
       "combat_profile_id": "STAFF",
       "ability_id": "STAFF_THRUST",
       "sort_order": 310
-    },
-    {
-      "slot_id": "slot_1_0",
-      "combat_profile_id": "STAFF",
-      "action_kind": "FIXED",
-      "action_id": "DODGE",
-      "sort_order": 320
     },
     {
       "slot_id": "slot_1_2",

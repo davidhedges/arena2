@@ -12,6 +12,13 @@ namespace Arena.Input
 {
     public static class FixedActionDispatcher
     {
+        public static bool IsActionBarVisible(string actionId, DbConnection? conn)
+        {
+            _ = conn;
+            string normalized = WireIdentifier.Normalize(actionId);
+            return string.Equals(normalized, FixedActionIds.Parry, System.StringComparison.Ordinal);
+        }
+
         public static bool IsVisible(string actionId, DbConnection? conn)
         {
             string normalized = WireIdentifier.Normalize(actionId);
@@ -21,6 +28,12 @@ namespace Arena.Input
                 return true;
 
             return false;
+        }
+
+        public static void ProcessMovementBindings(DbConnection conn, LocalPlayerInputSource input)
+        {
+            if (input.WasKeyPressedThisFrame(MovementActionKeymap.DodgeKeyCode))
+                TryTrigger(FixedActionIds.Dodge, conn);
         }
 
         public static bool IsEnabled(string actionId, DbConnection? conn)
