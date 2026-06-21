@@ -23,6 +23,7 @@ use crate::arena::player_world as _;
 use crate::arena::{ensure_player_open_world_scene, set_player_open_world};
 use crate::combat::new_player_spawn_state;
 use crate::inventory::ensure_player_inventory_for_identity;
+use crate::npcs::{despawn_all_npcs_for_owner, despawn_dead_npcs_for_owner};
 use crate::party::remove_player_from_party_state;
 use crate::playground_targets::despawn_all_playground_targets_for_owner;
 use crate::progression::ensure_default_progression_for_identity;
@@ -56,6 +57,7 @@ pub fn client_connected(ctx: &ReducerContext) -> Result<(), String> {
     let now = ctx.timestamp;
 
     if ctx.db.player().identity().find(identity).is_some() {
+        despawn_dead_npcs_for_owner(ctx, identity);
         if ctx.db.player_world().identity().find(identity).is_none() {
             set_player_open_world(ctx, identity)?;
         } else {
@@ -74,6 +76,7 @@ pub fn client_connected(ctx: &ReducerContext) -> Result<(), String> {
 
     // Build combat/lifecycle spawn state once to keep spawn defaults centralized.
     let (spawn_x, spawn_y, spawn_z, player_state) = new_player_spawn_state(identity, now);
+    despawn_dead_npcs_for_owner(ctx, identity);
     spawn_actor_bundle(
         ctx,
         ActorSpawnSpec {
@@ -115,6 +118,7 @@ pub fn client_connected(ctx: &ReducerContext) -> Result<(), String> {
 pub fn client_disconnected(ctx: &ReducerContext) -> Result<(), String> {
     let identity = ctx.sender();
     despawn_all_playground_targets_for_owner(ctx, identity)?;
+    despawn_all_npcs_for_owner(ctx, identity);
     remove_player_from_party_state(ctx, identity);
     despawn_actor_bundle(
         ctx,

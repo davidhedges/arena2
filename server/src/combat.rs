@@ -16,6 +16,7 @@ use crate::arena::{
 };
 use crate::derived_stats::derived_combat_stats_for_owner;
 use crate::inventory::{create_corpse_loot_for_npc, equipment_modifier_totals_for_owner};
+use crate::npcs::schedule_npc_corpse_despawn;
 use crate::open_world_scene::{OPEN_WORLD_SPAWN_X, OPEN_WORLD_SPAWN_YAW, OPEN_WORLD_SPAWN_Z};
 use crate::player_state::PlayerState;
 use crate::practice::{is_training_instance, resolve_respawn_pose};
@@ -3283,6 +3284,7 @@ fn apply_damage_to_npc_state(
         clear_combat_engagement_for_identity(ctx, target);
         clear_combat_stacking_passive_runtime_for_identity(ctx, target);
         create_corpse_loot_for_npc(ctx, target, source);
+        schedule_npc_corpse_despawn(ctx, target, ctx.timestamp);
     }
 
     ctx.db.npc_state().identity().update(state);

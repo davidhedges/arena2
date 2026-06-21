@@ -9,7 +9,7 @@ use crate::combat::{
     EffectPacket, COMBAT_EVENT_CAST, COMBAT_EVENT_IMPACT, COMBAT_METADATA_NONE, COMBAT_SCALAR_NONE,
     COMBAT_SEQUENCE_NONE, DAMAGE_SOURCE_KIND_MELEE,
 };
-use crate::inventory::clear_loot_for_anchor;
+use crate::inventory::{clear_loot_for_anchor, corpse_loot_has_items};
 use crate::movement::{FIXED_TICK_SECONDS, MOVE_SPEED};
 use crate::practice::is_training_instance;
 use crate::relations::can_harm;
@@ -58,6 +58,8 @@ const NPC_MELEE_ACTION_KIND: &str = "NPC_MELEE_ATTACK";
 const NPC_CHASE_COLLISION_STEP: f32 = 0.35;
 const NPC_CHASE_STOP_EPSILON: f32 = 0.05;
 const NPC_FACE_EPSILON: f32 = 0.001;
+const NPC_LOOTED_CORPSE_DESPAWN_DELAY: Duration = Duration::from_secs(8);
+const NPC_UNLOOTED_CORPSE_DESPAWN_DELAY: Duration = Duration::from_secs(60);
 
 #[table(accessor = npc_instance, public)]
 #[derive(Clone)]
@@ -119,6 +121,15 @@ pub struct NpcCombatRuntime {
     pub next_attack_at: Timestamp,
     #[index(btree)]
     pub next_attack_at_micros: i64,
+}
+
+#[table(accessor = npc_despawn)]
+pub struct NpcDespawn {
+    #[primary_key]
+    pub identity: Identity,
+    pub despawn_at: Timestamp,
+    #[index(btree)]
+    pub despawn_at_micros: i64,
 }
 
 #[derive(Clone, Copy)]
@@ -322,7 +333,11 @@ pub fn despawn_npc(ctx: &ReducerContext, identity: Identity) -> Result<(), Strin
 
 #[reducer]
 pub fn despawn_all_npcs(ctx: &ReducerContext) -> Result<(), String> {
-    let owner = ctx.sender();
+    despawn_all_npcs_for_owner(ctx, ctx.sender());
+    Ok(())
+}
+
+pub(crate) fn despawn_all_npcs_for_owner(ctx: &ReducerContext, owner: Identity) {
     let identities: Vec<_> = ctx
         .db
         .npc_instance()
@@ -334,8 +349,93 @@ pub fn despawn_all_npcs(ctx: &ReducerContext) -> Result<(), String> {
     for identity in identities {
         despawn_npc_identity(ctx, identity);
     }
+}
 
-    Ok(())
+pub(crate) fn despawn_dead_npcs_for_owner(ctx: &ReducerContext, owner: Identity) {
+    let identities: Vec<_> = ctx
+        .db
+        .npc_instance()
+        .spawned_by()
+        .filter(owner)
+        .filter(|row| {
+            ctx.db
+                .npc_state()
+                .identity()
+                .find(row.identity)
+                .is_none_or(|state| !state.alive)
+        })
+        .map(|row| row.identity)
+        .collect();
+
+    for identity in identities {
+        despawn_npc_identity(ctx, identity);
+    }
+}
+
+pub(crate) fn schedule_npc_corpse_despawn(
+    ctx: &ReducerContext,
+    identity: Identity,
+    now: Timestamp,
+) {
+    let delay = if corpse_loot_has_items(ctx, identity) {
+        NPC_UNLOOTED_CORPSE_DESPAWN_DELAY
+    } else {
+        NPC_LOOTED_CORPSE_DESPAWN_DELAY
+    };
+    schedule_npc_corpse_despawn_after(ctx, identity, now, delay);
+}
+
+pub(crate) fn schedule_npc_looted_corpse_despawn(
+    ctx: &ReducerContext,
+    identity: Identity,
+    now: Timestamp,
+) {
+    if corpse_loot_has_items(ctx, identity) {
+        return;
+    }
+
+    schedule_npc_corpse_despawn_after(ctx, identity, now, NPC_LOOTED_CORPSE_DESPAWN_DELAY);
+}
+
+fn schedule_npc_corpse_despawn_after(
+    ctx: &ReducerContext,
+    identity: Identity,
+    now: Timestamp,
+    delay: Duration,
+) {
+    let despawn_at = now + delay;
+    let row = NpcDespawn {
+        identity,
+        despawn_at,
+        despawn_at_micros: timestamp_to_micros(despawn_at),
+    };
+
+    if ctx.db.npc_despawn().identity().find(identity).is_some() {
+        ctx.db.npc_despawn().identity().update(row);
+    } else {
+        ctx.db.npc_despawn().insert(row);
+    }
+}
+
+pub(crate) fn prune_due_npc_corpse_despawns(ctx: &ReducerContext, now: Timestamp) {
+    let due: Vec<_> = ctx
+        .db
+        .npc_despawn()
+        .despawn_at_micros()
+        .filter(..=timestamp_to_micros(now))
+        .map(|row| row.identity)
+        .collect();
+
+    for identity in due {
+        match ctx.db.npc_state().identity().find(identity) {
+            Some(state) if state.alive => {
+                ctx.db.npc_despawn().identity().delete(identity);
+            }
+            _ => {
+                despawn_npc_identity(ctx, identity);
+            }
+        }
+    }
 }
 
 pub(crate) fn npc_faction(ctx: &ReducerContext, identity: Identity) -> Option<NpcFaction> {
@@ -717,6 +817,9 @@ fn template_attack_range_for_event(template_id: &str) -> f32 {
 fn despawn_npc_identity(ctx: &ReducerContext, identity: Identity) {
     clear_npc_combat_runtime(ctx, identity);
     clear_loot_for_anchor(ctx, identity);
+    if ctx.db.npc_despawn().identity().find(identity).is_some() {
+        ctx.db.npc_despawn().identity().delete(identity);
+    }
     if ctx.db.npc_instance().identity().find(identity).is_some() {
         ctx.db.npc_instance().identity().delete(identity);
     }

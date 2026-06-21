@@ -63,7 +63,7 @@ use crate::movement_actions::{
     reset_dodge_charge_state_to_full, sync_all_fixed_action_charge_states,
     tick_fixed_action_charge_states, tick_movement_actions,
 };
-use crate::npcs::tick_npc_combat;
+use crate::npcs::{prune_due_npc_corpse_despawns, tick_npc_combat};
 use crate::party::expire_party_invites;
 use crate::player_input::{
     clear_pending_player_commands, clear_pending_player_commands_through_tick, pop_command_for_tick,
@@ -571,6 +571,7 @@ fn run_player_simulation_phase(
 }
 
 fn run_post_tick_maintenance_phase(ctx: &ReducerContext, now: Timestamp) {
+    prune_due_npc_corpse_despawns(ctx, now);
     if should_prune_events(now) {
         prune_combat_events(ctx, now);
         prune_predicted_action_results(ctx, now);

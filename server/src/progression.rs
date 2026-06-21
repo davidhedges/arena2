@@ -26,6 +26,8 @@ use crate::player_state::player_state as _;
 #[allow(unused_imports)]
 use crate::progression::ability_catalog as _;
 #[allow(unused_imports)]
+use crate::progression::action_bar_slot_catalog as _;
+#[allow(unused_imports)]
 use crate::progression::action_presentation_catalog as _;
 #[allow(unused_imports)]
 use crate::progression::active_combat_mode as _;
@@ -41,8 +43,6 @@ use crate::progression::combat_profile_catalog as _;
 use crate::progression::combat_rule_catalog as _;
 #[allow(unused_imports)]
 use crate::progression::combat_vfx_cue_catalog as _;
-#[allow(unused_imports)]
-use crate::progression::action_bar_slot_catalog as _;
 #[allow(unused_imports)]
 use crate::progression::melee_ability_catalog as _;
 #[allow(unused_imports)]
@@ -1393,7 +1393,11 @@ pub fn clear_character_action_bar_slot(
     let combat_profile_id = active_action_bar_combat_profile_id(ctx, owner)?;
     let normalized_slot_id = canonical_action_bar_slot_id(slot_id.as_str());
     require_slot_catalog_row(ctx, normalized_slot_id.as_str())?;
-    let key = character_action_bar_key(owner, combat_profile_id.as_str(), normalized_slot_id.as_str());
+    let key = character_action_bar_key(
+        owner,
+        combat_profile_id.as_str(),
+        normalized_slot_id.as_str(),
+    );
     if ctx
         .db
         .character_action_bar_assignment()
@@ -4330,7 +4334,9 @@ mod tests {
                 Self::AutoAttackReplacementStrikeMatchesAuthoredStrike => {
                     "auto-attack-replacement-strike-matches-authored-strike"
                 }
-                Self::CombatProfileActionBarDefaultResolves => "combat-profile-action-bar-default-resolves",
+                Self::CombatProfileActionBarDefaultResolves => {
+                    "combat-profile-action-bar-default-resolves"
+                }
                 Self::CoreAbilityHasActionBarDefault => "core-ability-has-action-bar-default",
                 Self::PlayerFacingActionHasPresentation => "player-facing-action-has-presentation",
                 Self::PresentationTargetResolves => "presentation-target-resolves",
@@ -6818,8 +6824,10 @@ mod tests {
         for fixed_action_id in ["DODGE", "PARRY"] {
             assert!(
                 catalog.action_presentations.iter().any(|presentation| {
-                    normalize_identifier(presentation.presentation_kind.as_str()) == ACTION_KIND_FIXED
-                        && normalize_identifier(presentation.presentation_id.as_str()) == fixed_action_id
+                    normalize_identifier(presentation.presentation_kind.as_str())
+                        == ACTION_KIND_FIXED
+                        && normalize_identifier(presentation.presentation_id.as_str())
+                            == fixed_action_id
                 }),
                 "fixed action '{}' must have a FIXED presentation row",
                 fixed_action_id

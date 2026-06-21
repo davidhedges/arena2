@@ -2,7 +2,9 @@ use spacetimedb::{reducer, table, Identity, ReducerContext, Table, Timestamp};
 
 use crate::arena::{open_world_scene_name_for_identity, player_world as _};
 use crate::combat::{queue_effects, EffectPacket};
-use crate::npcs::{npc_instance as _, npc_physics as _, npc_state as _};
+use crate::npcs::{
+    npc_instance as _, npc_physics as _, npc_state as _, schedule_npc_looted_corpse_despawn,
+};
 use crate::player::DEFAULT_COMBAT_PROFILE;
 use crate::player_physics::player_physics as _;
 use crate::player_state::player_state as _;
@@ -1304,6 +1306,7 @@ pub fn move_item(
 
     let owner = ctx.sender();
     let source_container = require_accessible_container(ctx, owner, source_container_id.as_str())?;
+    let source_corpse_anchor = corpse_anchor_identity(&source_container);
     let mut destination_container =
         require_accessible_container(ctx, owner, destination_container_id.as_str())?;
     let source_slot = require_container_slot(
@@ -1388,6 +1391,9 @@ pub fn move_item(
         .inventory_container()
         .container_id()
         .update(destination_container);
+    if let Some(npc_identity) = source_corpse_anchor {
+        schedule_npc_looted_corpse_despawn(ctx, npc_identity, ctx.timestamp);
+    }
     Ok(())
 }
 
@@ -2165,7 +2171,17 @@ fn merge_corpse_container_into_primary(
             .inventory_container()
             .container_id()
             .update(source_container);
+        schedule_npc_looted_corpse_despawn(ctx, source_npc_identity, ctx.timestamp);
     }
+}
+
+pub(crate) fn corpse_loot_has_items(ctx: &ReducerContext, npc_identity: Identity) -> bool {
+    ctx.db
+        .inventory_slot()
+        .container_id()
+        .filter(corpse_container_id(npc_identity).as_str())
+        .next()
+        .is_some()
 }
 
 fn npc_loot_roll_context(npc: &crate::npcs::NpcInstance) -> LootRollContext {
@@ -3253,6 +3269,14 @@ fn destination_item_owner_key(
     destination_item_owner(owner, destination_container)
         .map(identity_key)
         .unwrap_or_default()
+}
+
+fn corpse_anchor_identity(container: &InventoryContainer) -> Option<Identity> {
+    container
+        .container_kind
+        .eq_ignore_ascii_case(CONTAINER_KIND_CORPSE)
+        .then_some(container.anchor_identity)
+        .flatten()
 }
 
 fn delete_container_and_slots(ctx: &ReducerContext, container_id: &str) {
