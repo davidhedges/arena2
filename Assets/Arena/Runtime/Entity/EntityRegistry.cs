@@ -1208,7 +1208,12 @@ namespace Arena.Entity
             if (row.EventType == CombatEventTypes.Parry)
             {
                 if (TryGetLivePlayer(row.Hit, out var parryingEntity))
-                    parryingEntity.TriggerParryHit();
+                {
+                    if (string.Equals(row.SourceKind, CombatEventSources.NpcMelee, System.StringComparison.Ordinal))
+                        parryingEntity.SetParryArmed(false);
+                    else
+                        parryingEntity.TriggerParryHit();
+                }
                 return;
             }
 
@@ -1581,7 +1586,7 @@ namespace Arena.Entity
             if (LocalPlayerEntity?.Identity == entity.Identity
                 && LocalDefensePrediction.ConsumePredictedParryPresentation())
                 return;
-            entity.TriggerParry();
+            entity.StartParry();
         }
 
         private void ApplyMovementActionState(MovementActionState row, bool allowStartTrigger)

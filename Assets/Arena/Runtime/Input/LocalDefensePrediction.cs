@@ -92,18 +92,21 @@ namespace Arena.Input
         public static bool IsBlocking(DbConnection conn, PlayerEntity entity)
         {
             DefenseState? auth = conn.Db.DefenseState.Owner.Find(entity.Identity);
+            long nowMs = System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             return auth != null
-                && (string.Equals(auth.Kind, BlockKind, System.StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(auth.Kind, BlockCooldownKind, System.StringComparison.OrdinalIgnoreCase));
+                && ((string.Equals(auth.Kind, BlockKind, System.StringComparison.OrdinalIgnoreCase)
+                        && nowMs < auth.ActiveUntil.MicrosecondsSinceUnixEpoch / 1000L)
+                    || (string.Equals(auth.Kind, BlockCooldownKind, System.StringComparison.OrdinalIgnoreCase)
+                        && nowMs < auth.RecoveryUntil.MicrosecondsSinceUnixEpoch / 1000L));
         }
 
         public static bool IsParrying(DbConnection conn, PlayerEntity entity)
         {
             DefenseState? auth = conn.Db.DefenseState.Owner.Find(entity.Identity);
+            long nowMs = System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             return _predictedParryActive
-                || (auth != null
-                    && (string.Equals(auth.Kind, ParryKind, System.StringComparison.OrdinalIgnoreCase)
-                        || string.Equals(auth.Kind, ParryCooldownKind, System.StringComparison.OrdinalIgnoreCase)));
+                || IsArmedParry(auth, nowMs)
+                || IsSuccessfulParryCooldown(auth, nowMs);
         }
 
         public static bool TryGetSuccessfulParryCooldown(
@@ -188,6 +191,15 @@ namespace Arena.Input
             long activeUntilMs = auth.ActiveUntil.MicrosecondsSinceUnixEpoch / 1000L;
             long recoveryUntilMs = auth.RecoveryUntil.MicrosecondsSinceUnixEpoch / 1000L;
             return nowMs < activeUntilMs && recoveryUntilMs <= activeUntilMs;
+        }
+
+        private static bool IsSuccessfulParryCooldown(DefenseState? auth, long nowMs)
+        {
+            if (auth == null || !string.Equals(auth.Kind, ParryCooldownKind, System.StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            long recoveryUntilMs = auth.RecoveryUntil.MicrosecondsSinceUnixEpoch / 1000L;
+            return nowMs < recoveryUntilMs;
         }
     }
 }

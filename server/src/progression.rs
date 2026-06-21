@@ -6855,15 +6855,17 @@ mod tests {
             );
         }
         assert!(
-            catalog.combat_profile_action_bar_defaults.iter().all(|assignment| {
-                action_ref_for_action_bar_default(assignment).id != "DODGE"
-            }),
+            catalog
+                .combat_profile_action_bar_defaults
+                .iter()
+                .all(|assignment| { action_ref_for_action_bar_default(assignment).id != "DODGE" }),
             "DODGE is a movement keybind and must not be assigned to action-bar defaults"
         );
         assert!(
-            catalog.combat_profile_action_bar_defaults.iter().any(|assignment| {
-                action_ref_for_action_bar_default(assignment).id == "PARRY"
-            }),
+            catalog
+                .combat_profile_action_bar_defaults
+                .iter()
+                .any(|assignment| { action_ref_for_action_bar_default(assignment).id == "PARRY" }),
             "PARRY should remain an action-bar fixed action"
         );
     }

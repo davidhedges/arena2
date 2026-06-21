@@ -179,7 +179,7 @@ fn build_defense_action_id(owner: Identity, kind: DefenseKind, now: Timestamp) -
 }
 
 #[reducer]
-pub fn trigger_parry(
+pub fn start_parry(
     ctx: &ReducerContext,
     input_tick: u32,
     pos_x: f32,

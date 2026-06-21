@@ -5,9 +5,13 @@ use spacetimedb::{reducer, table, Identity, ReducerContext, Table, Timestamp};
 use crate::arena::open_world_scene_name_for_identity;
 use crate::arena::players_share_world_context;
 use crate::combat::{
-    movement_modifiers, queue_effects, timestamp_to_micros, CombatEvent, DamageDelivery,
-    EffectPacket, COMBAT_EVENT_CAST, COMBAT_EVENT_IMPACT, COMBAT_METADATA_NONE, COMBAT_SCALAR_NONE,
+    mark_harmful_combat_action, movement_modifiers, queue_effects, timestamp_to_micros,
+    CombatEvent, DamageDelivery, EffectPacket, COMBAT_EVENT_BLOCK, COMBAT_EVENT_CAST,
+    COMBAT_EVENT_IMPACT, COMBAT_EVENT_PARRY, COMBAT_METADATA_NONE, COMBAT_SCALAR_NONE,
     COMBAT_SEQUENCE_NONE, DAMAGE_SOURCE_KIND_MELEE,
+};
+use crate::defense::{
+    resolve_defensible_combat_hit, CombatHitDeliveryKind, DefenseResolution, DefensibleCombatHit,
 };
 use crate::inventory::{clear_loot_for_anchor, corpse_loot_has_items};
 use crate::movement::{FIXED_TICK_SECONDS, MOVE_SPEED};
@@ -55,6 +59,8 @@ const NPC_SPAWN_FORWARD: f32 = 2.5;
 const NPC_ID_MAGIC: u128 = 0x6172_656e_6132_5f6e_7063_0000_0000_0001;
 const NPC_MELEE_SOURCE_KIND: &str = "NPC_MELEE";
 const NPC_MELEE_ACTION_KIND: &str = "NPC_MELEE_ATTACK";
+const NPC_MELEE_PARRY_BEHAVIOR: &str = "PARRYABLE";
+const NPC_MELEE_BLOCK_BEHAVIOR: &str = "BLOCKABLE";
 const NPC_CHASE_COLLISION_STEP: f32 = 0.35;
 const NPC_CHASE_STOP_EPSILON: f32 = 0.05;
 const NPC_FACE_EPSILON: f32 = 0.001;
@@ -539,6 +545,7 @@ struct NpcAttackTarget {
     pos_y: f32,
     pos_z: f32,
     hit_radius: f32,
+    hit_height: f32,
     distance: f32,
     dir_x: f32,
     dir_z: f32,
@@ -590,6 +597,7 @@ fn acquire_npc_attack_target(
             pos_y: physics.pos_y,
             pos_z: physics.pos_z,
             hit_radius: state.hit_radius,
+            hit_height: state.hit_height,
             distance,
             dir_x,
             dir_z,
@@ -738,6 +746,28 @@ fn perform_npc_melee_attack(
         COMBAT_EVENT_CAST,
         0,
     );
+
+    if let Some(defense_event_type) = resolve_npc_melee_defense(ctx, now, physics, target) {
+        mark_harmful_combat_action(
+            ctx,
+            npc.identity,
+            target.identity,
+            now,
+            NPC_MELEE_ACTION_KIND,
+        );
+        emit_npc_combat_event(
+            ctx,
+            now,
+            npc,
+            physics,
+            target,
+            action_instance_id.as_str(),
+            defense_event_type,
+            0,
+        );
+        return;
+    }
+
     emit_npc_combat_event(
         ctx,
         now,
@@ -761,6 +791,43 @@ fn perform_npc_melee_attack(
             source_kind: DAMAGE_SOURCE_KIND_MELEE.to_string(),
         }],
     );
+}
+
+fn resolve_npc_melee_defense(
+    ctx: &ReducerContext,
+    now: Timestamp,
+    physics: &NpcPhysics,
+    target: &NpcAttackTarget,
+) -> Option<&'static str> {
+    npc_melee_defense_event_type(resolve_defensible_combat_hit(
+        ctx,
+        DefensibleCombatHit {
+            delivery_kind: CombatHitDeliveryKind::Melee,
+            defender: target.identity,
+            active_from: now,
+            active_until: now + Duration::from_millis(1),
+            parry_behavior: NPC_MELEE_PARRY_BEHAVIOR,
+            block_behavior: NPC_MELEE_BLOCK_BEHAVIOR,
+            source_x: physics.pos_x,
+            source_y: physics.pos_y,
+            source_z: physics.pos_z,
+            impact_x: target.pos_x,
+            impact_y: target.pos_y + target.hit_height * 0.5,
+            impact_z: target.pos_z,
+            dir_x: target.dir_x,
+            dir_y: 0.0,
+            dir_z: target.dir_z,
+            speed: 0.0,
+        },
+    ))
+}
+
+fn npc_melee_defense_event_type(resolution: DefenseResolution) -> Option<&'static str> {
+    match resolution {
+        DefenseResolution::Parried => Some(COMBAT_EVENT_PARRY),
+        DefenseResolution::Blocked => Some(COMBAT_EVENT_BLOCK),
+        DefenseResolution::None => None,
+    }
 }
 
 fn emit_npc_combat_event(
@@ -912,10 +979,12 @@ fn yaw_delta_abs(a: f32, b: f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::{
-        npc_identity, npc_template, yaw_for_direction, NpcFaction, NPC_FACTION_FRIENDLY,
-        NPC_FACTION_HOSTILE, NPC_FACTION_NEUTRAL, NPC_TEMPLATE_KOBOLD_THIEF_BK_DUAL_SWORD,
-        NPC_TEMPLATE_KOBOLD_WARRIOR_RD_SWORD_SHIELD,
+        npc_identity, npc_melee_defense_event_type, npc_template, yaw_for_direction, NpcFaction,
+        NPC_FACTION_FRIENDLY, NPC_FACTION_HOSTILE, NPC_FACTION_NEUTRAL,
+        NPC_TEMPLATE_KOBOLD_THIEF_BK_DUAL_SWORD, NPC_TEMPLATE_KOBOLD_WARRIOR_RD_SWORD_SHIELD,
     };
+    use crate::combat::{COMBAT_EVENT_BLOCK, COMBAT_EVENT_PARRY};
+    use crate::defense::DefenseResolution;
     use spacetimedb::Identity;
 
     #[test]
@@ -961,5 +1030,18 @@ mod tests {
     fn npc_yaw_matches_player_forward_convention() {
         assert_eq!(yaw_for_direction(0.0, 1.0), 0.0);
         assert!((yaw_for_direction(1.0, 0.0) - std::f32::consts::FRAC_PI_2).abs() < 0.0001);
+    }
+
+    #[test]
+    fn npc_melee_defense_resolution_uses_canonical_combat_events() {
+        assert_eq!(
+            npc_melee_defense_event_type(DefenseResolution::Parried),
+            Some(COMBAT_EVENT_PARRY)
+        );
+        assert_eq!(
+            npc_melee_defense_event_type(DefenseResolution::Blocked),
+            Some(COMBAT_EVENT_BLOCK)
+        );
+        assert_eq!(npc_melee_defense_event_type(DefenseResolution::None), None);
     }
 }

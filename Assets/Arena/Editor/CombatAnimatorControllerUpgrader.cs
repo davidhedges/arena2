@@ -73,7 +73,6 @@ namespace Arena.Editor
             changed |= EnsureParameter(controller, "TriggerBlockStart", AnimatorControllerParameterType.Trigger);
             changed |= EnsureParameter(controller, "IsBlocking", AnimatorControllerParameterType.Bool);
             changed |= EnsureParameter(controller, "TriggerBlockHit", AnimatorControllerParameterType.Trigger);
-            changed |= EnsureParameter(controller, "TriggerParry", AnimatorControllerParameterType.Trigger);
             changed |= EnsureParameter(controller, "TriggerParryHit", AnimatorControllerParameterType.Trigger);
             changed |= EnsureParameter(controller, "TriggerPhasedMeleeStart", AnimatorControllerParameterType.Trigger);
             changed |= EnsureParameter(controller, "IsPhasedMeleeActive", AnimatorControllerParameterType.Bool);
@@ -107,7 +106,6 @@ namespace Arena.Editor
             AnimatorState blockEnd = EnsureState(root, "BlockEnd", blockEndMotion, ref changed);
             AnimatorState blockHit = EnsureState(root, "BlockHit", LoadAnimationClip(BlockHitSlotPath), ref changed);
             _ = EnsureState(root, "BlockHitBreak", LoadAnimationClip(BlockHitBreakSlotPath), ref changed);
-            AnimatorState parryStart = EnsureState(root, "ParryStart", LoadAnimationClip(ParryStartSlotPath), ref changed);
             AnimatorState parryHit = EnsureState(root, "ParryHit", LoadAnimationClip(ParryHitSlotPath), ref changed);
             AnimatorState enterCombatIdle = EnsureState(root, "EnterCombatIdle", LoadAnimationClip(EnterCombatIdleSlotPath), ref changed);
             AnimatorState enterCombatWalk = EnsureState(root, "EnterCombatWalk", LoadAnimationClip(EnterCombatWalkSlotPath), ref changed);
@@ -146,8 +144,6 @@ namespace Arena.Editor
             changed |= EnsureExitTransition(blockEnd, idleCombat, 0.05f, 0.92f);
             changed |= EnsureAnyStateTriggerTransition(root, blockHit, "TriggerBlockHit", 0.02f);
             changed |= EnsureExitTransition(blockHit, blockLoop, 0.03f, 0.92f);
-            changed |= EnsureAnyStateTriggerTransition(root, parryStart, "TriggerParry", 0.02f);
-            changed |= EnsureExitTransition(parryStart, idleCombat, 0.03f, 0.92f);
             changed |= EnsureAnyStateTriggerTransition(root, parryHit, "TriggerParryHit", 0.02f);
             changed |= EnsureExitTransition(parryHit, idleCombat, 0.03f, 0.92f);
             changed |= EnsureExitTransition(enterCombatIdle, idleCombat, 0.05f, 0.95f);

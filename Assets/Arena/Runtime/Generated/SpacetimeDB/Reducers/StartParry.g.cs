@@ -12,17 +12,17 @@ namespace SpacetimeDB.Types
 {
     public sealed partial class RemoteReducers : RemoteBase
     {
-        public delegate void TriggerParryHandler(ReducerEventContext ctx, uint inputTick, float posX, float posY, float posZ, float yaw, string predictedActionId, ulong clientActionSeq);
-        public event TriggerParryHandler? OnTriggerParry;
+        public delegate void StartParryHandler(ReducerEventContext ctx, uint inputTick, float posX, float posY, float posZ, float yaw, string predictedActionId, ulong clientActionSeq);
+        public event StartParryHandler? OnStartParry;
 
-        public void TriggerParry(uint inputTick, float posX, float posY, float posZ, float yaw, string predictedActionId, ulong clientActionSeq)
+        public void StartParry(uint inputTick, float posX, float posY, float posZ, float yaw, string predictedActionId, ulong clientActionSeq)
         {
-            conn.InternalCallReducer(new Reducer.TriggerParry(inputTick, posX, posY, posZ, yaw, predictedActionId, clientActionSeq));
+            conn.InternalCallReducer(new Reducer.StartParry(inputTick, posX, posY, posZ, yaw, predictedActionId, clientActionSeq));
         }
 
-        public bool InvokeTriggerParry(ReducerEventContext ctx, Reducer.TriggerParry args)
+        public bool InvokeStartParry(ReducerEventContext ctx, Reducer.StartParry args)
         {
-            if (OnTriggerParry == null)
+            if (OnStartParry == null)
             {
                 if (InternalOnUnhandledReducerError != null)
                 {
@@ -34,7 +34,7 @@ namespace SpacetimeDB.Types
                 }
                 return false;
             }
-            OnTriggerParry(
+            OnStartParry(
                 ctx,
                 args.InputTick,
                 args.PosX,
@@ -52,7 +52,7 @@ namespace SpacetimeDB.Types
     {
         [SpacetimeDB.Type]
         [DataContract]
-        public sealed partial class TriggerParry : Reducer, IReducerArgs
+        public sealed partial class StartParry : Reducer, IReducerArgs
         {
             [DataMember(Name = "input_tick")]
             public uint InputTick;
@@ -69,7 +69,7 @@ namespace SpacetimeDB.Types
             [DataMember(Name = "client_action_seq")]
             public ulong ClientActionSeq;
 
-            public TriggerParry(
+            public StartParry(
                 uint InputTick,
                 float PosX,
                 float PosY,
@@ -88,12 +88,12 @@ namespace SpacetimeDB.Types
                 this.ClientActionSeq = ClientActionSeq;
             }
 
-            public TriggerParry()
+            public StartParry()
             {
                 this.PredictedActionId = "";
             }
 
-            string IReducerArgs.ReducerName => "trigger_parry";
+            string IReducerArgs.ReducerName => "start_parry";
         }
     }
 }

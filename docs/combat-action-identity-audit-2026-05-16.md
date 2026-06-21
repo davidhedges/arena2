@@ -119,7 +119,7 @@ Recommended target:
 
 Server:
 
-- `trigger_parry`, `stop_parry`, `start_block`, and stop paths have no action token.
+- `start_parry`, `stop_parry`, `start_block`, and stop paths have no action token.
 - `DefenseState` is one row per owner with `kind`, timing, movement restriction ticks, and facing yaw.
 
 Client:
@@ -170,7 +170,7 @@ Server reducers that can be locally predicted should accept the token:
 - `melee_attack`
 - `start_dodge`
 - movement-delivery launch through `cast_request`
-- `trigger_parry`
+- `start_parry`
 - `start_block`
 - stop/cancel reducers when they target a predicted action
 

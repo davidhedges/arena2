@@ -93,7 +93,7 @@ namespace Arena.Input
             if (string.Equals(normalized, FixedActionIds.Dodge, System.StringComparison.Ordinal))
                 return TryStartDodge(conn);
             if (string.Equals(normalized, FixedActionIds.Parry, System.StringComparison.Ordinal))
-                return TryTriggerParry(conn);
+                return TryStartParry(conn);
 
             return false;
         }
@@ -179,7 +179,7 @@ namespace Arena.Input
             return true;
         }
 
-        private static bool TryTriggerParry(DbConnection conn)
+        private static bool TryStartParry(DbConnection conn)
         {
             PlayerEntity? entity = EntityRegistry.Instance?.LocalPlayerEntity;
             if (entity == null)
@@ -191,9 +191,9 @@ namespace Arena.Input
             (uint inputTick, Vector3 pos, float yaw) = GetSnapshot(entity);
             long nowMs = System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             ActionPredictionToken token = LocalCombatState.Instance.CreateActionPredictionToken(FixedActionIds.Parry);
-            entity.TriggerParry();
+            entity.StartParry();
             LocalDefensePrediction.PredictParry(nowMs, token);
-            conn.Reducers.TriggerParry(
+            conn.Reducers.StartParry(
                 inputTick,
                 pos.x,
                 pos.y,

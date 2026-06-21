@@ -310,7 +310,7 @@ namespace Arena.Entity
             releaseOffsetSeconds = entry.ResolveReleaseOffsetSeconds(grounded: true);
             return true;
         }
-        public void TriggerParry() => _animator?.TriggerParry();
+        public void StartParry() => _animator?.StartParry();
         public void TriggerParryHit() => _animator?.TriggerParryHit();
         public void SetParryArmed(bool armed) => _animator?.SetParryArmed(armed);
         public void SetBlocking(bool isBlocking) => _animator?.SetBlocking(isBlocking);

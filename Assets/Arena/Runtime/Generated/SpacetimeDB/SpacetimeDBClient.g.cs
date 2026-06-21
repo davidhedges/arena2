@@ -835,9 +835,9 @@ namespace SpacetimeDB.Types
                 Reducer.StartBlock args => Reducers.InvokeStartBlock(eventContext, args),
                 Reducer.StartDodge args => Reducers.InvokeStartDodge(eventContext, args),
                 Reducer.StartMatch args => Reducers.InvokeStartMatch(eventContext, args),
+                Reducer.StartParry args => Reducers.InvokeStartParry(eventContext, args),
                 Reducer.StopBlock args => Reducers.InvokeStopBlock(eventContext, args),
                 Reducer.StopParry args => Reducers.InvokeStopParry(eventContext, args),
-                Reducer.TriggerParry args => Reducers.InvokeTriggerParry(eventContext, args),
                 Reducer.UnequipItem args => Reducers.InvokeUnequipItem(eventContext, args),
                 _ => throw new ArgumentOutOfRangeException("Reducer", $"Unknown reducer {reducer}")
             };

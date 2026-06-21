@@ -1873,7 +1873,7 @@ namespace Arena.Presentation
             return _actionPlayback.TryBindSpellClip(_overrideController, _animationSet, spellKind, grounded, bankSlot, out spellEntry);
         }
 
-        public void TriggerParry()
+        public void StartParry()
         {
             if (_animator == null || _overrideController == null) return;
             SetParryArmed(true);
