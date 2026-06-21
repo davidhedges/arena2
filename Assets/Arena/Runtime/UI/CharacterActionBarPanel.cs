@@ -40,6 +40,7 @@ namespace Arena.UI
         private DbConnection? _subscribedConnection;
         private readonly List<GameObject> _availableCells = new();
         private readonly List<GameObject> _barCells = new();
+        private readonly List<GameObject> _spellbookCells = new();
         private AvailableAction _selectedAction;
         private string _lastSignature = string.Empty;
         private string _lastError = string.Empty;
@@ -264,6 +265,7 @@ namespace Arena.UI
         {
             Clear(_availableCells);
             Clear(_barCells);
+            Clear(_spellbookCells);
 
             if (_canvas == null || _availableRoot == null || _barRoot == null)
                 return;
@@ -305,11 +307,13 @@ namespace Arena.UI
                 _availableCells.Add(cell);
             }
 
-            for (int row = 0; row < ActionBarLayout.Rows; row++)
+            BuildSpellbookRow(conn, owner);
+
+            for (int row = 0; row < ActionBarLayout.VisibleActionRows; row++)
             {
                 for (int col = 0; col < ActionBarLayout.Columns; col++)
                 {
-                    Vector2 position = ActionBarLayout.CellPosition(row, col);
+                    Vector2 position = ActionBarLayout.ActionCellPosition(row, col);
                     string keyLabel = ActionBarKeymap.KeyLabelForCell(row, col);
                     ActiveActionBarAction resolved = default;
                     string slotId = string.Empty;
@@ -348,6 +352,46 @@ namespace Arena.UI
             }
         }
 
+        private void BuildSpellbookRow(DbConnection? conn, Identity? owner)
+        {
+            if (_canvas == null || _barRoot == null)
+                return;
+
+            List<ItemSpell> spells = ReadEquippedSpellbookSpells(conn, owner);
+            for (int col = 0; col < ActionBarLayout.Columns; col++)
+            {
+                ItemSpell? itemSpell = col < spells.Count ? spells[col] : null;
+                string spellId = WireIdentifier.Normalize(itemSpell?.SpellId);
+                AbilityCatalog? ability = FindAbilityForSpell(conn, spellId);
+                bool hasSpell = !string.IsNullOrWhiteSpace(spellId);
+                string displayName = hasSpell
+                    ? ActionPresentation.ResolveDisplayName(conn, owner, spellId, spellId)
+                    : string.Empty;
+                Sprite? iconSprite = hasSpell
+                    ? ability == null
+                        ? ActionIconResolver.Resolve(ActionKinds.Ability, spellId)
+                        : ActionIconResolver.Resolve(ActionKinds.Ability, ability.AbilityId)
+                    : null;
+                TooltipData tooltip = hasSpell
+                    ? ability == null
+                        ? new TooltipData(displayName, "Spellbook", SpellbookSpellMetadata(conn, spellId))
+                        : ActionTooltipResolver.ResolveForAbility(conn, owner, ability)
+                    : default;
+                GameObject cell = ActionBarSlotViewFactory.Create(
+                    _barRoot,
+                    $"Spellbook_{col}",
+                    iconSprite == null && hasSpell ? displayName : string.Empty,
+                    string.Empty,
+                    hasSpell ? AbilityColor(ability?.AbilityId ?? spellId) : EmptySlotColor,
+                    hasSpell ? Color.white : new Color(1f, 1f, 1f, 0.36f),
+                    iconSprite,
+                    _canvas,
+                    tooltipData: tooltip);
+                SetRect((RectTransform)cell.transform, ActionBarLayout.SpellbookCellPosition(col), ActionBarLayout.SlotVector, new Vector2(0f, 0f), new Vector2(0f, 0f));
+                _spellbookCells.Add(cell);
+            }
+        }
+
         private void AssignSelectedActionToSlot(string slotId)
         {
             if (!_selectedAction.HasValue || string.IsNullOrWhiteSpace(slotId))
@@ -363,6 +407,63 @@ namespace Arena.UI
             ActionBarDropApplier.ApplyDrop(conn, _selectedAction.ToDragPayload(), slotId);
             _lastSignature = string.Empty;
             _nextRefreshTime = 0f;
+        }
+
+        private static List<ItemSpell> ReadEquippedSpellbookSpells(DbConnection? conn, Identity? owner)
+        {
+            List<ItemSpell> spells = new();
+            if (conn == null || !owner.HasValue)
+                return spells;
+
+            EquipmentLoadout? loadout = conn.Db.EquipmentLoadout.Owner.Find(owner.Value);
+            if (loadout == null || string.IsNullOrWhiteSpace(loadout.SpellbookItemId))
+                return spells;
+
+            foreach (ItemSpell spell in conn.Db.ItemSpell.ItemInstanceId.Filter(loadout.SpellbookItemId))
+                spells.Add(spell);
+
+            spells.Sort((left, right) =>
+            {
+                int sort = left.SlotIndex.CompareTo(right.SlotIndex);
+                return sort != 0
+                    ? sort
+                    : string.Compare(left.Key, right.Key, StringComparison.Ordinal);
+            });
+            return spells;
+        }
+
+        private static AbilityCatalog? FindAbilityForSpell(DbConnection? conn, string spellId)
+        {
+            if (conn == null || string.IsNullOrWhiteSpace(spellId))
+                return null;
+
+            string normalizedSpellId = WireIdentifier.Normalize(spellId);
+            foreach (AbilityCatalog ability in conn.Db.AbilityCatalog.Iter())
+            {
+                if (!string.Equals(WireIdentifier.Normalize(ability.AbilityKind), AbilityKinds.Spell, StringComparison.Ordinal))
+                    continue;
+                if (string.Equals(WireIdentifier.Normalize(ability.ActionId), normalizedSpellId, StringComparison.Ordinal))
+                    return ability;
+            }
+
+            return null;
+        }
+
+        private static string SpellbookSpellMetadata(DbConnection? conn, string spellId)
+        {
+            SpellDefinition? spell = conn?.Db.SpellDefinition.Kind.Find(WireIdentifier.Normalize(spellId));
+            if (spell == null)
+                return string.Empty;
+
+            List<string> parts = new();
+            if (spell.PrimaryResourceCost > 0.0001f)
+                parts.Add($"{spell.PrimaryResourceCost:0.#} Mana");
+            if (spell.CooldownMs > 0)
+                parts.Add($"{spell.CooldownMs / 1000f:0.#}s");
+            if (!string.IsNullOrWhiteSpace(spell.Targeting))
+                parts.Add(WireIdentifier.Normalize(spell.Targeting));
+
+            return string.Join(" - ", parts);
         }
 
         private void HandleActionDrop(ActionBarDragPayload payload, string? targetSlotId)

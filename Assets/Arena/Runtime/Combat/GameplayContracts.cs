@@ -167,6 +167,34 @@ namespace Arena.Combat
 
             return KnowsSpell(conn, owner, ability.ActionId);
         }
+
+        public static AbilityCatalog? ResolveKnownSpellAbility(DbConnection? conn, SpacetimeDB.Identity? owner, string? spellId)
+        {
+            if (conn == null || !owner.HasValue)
+                return null;
+
+            string normalizedSpellId = WireIdentifier.Normalize(spellId);
+            if (string.IsNullOrWhiteSpace(normalizedSpellId) || !KnowsSpell(conn, owner, normalizedSpellId))
+                return null;
+
+            string activeProfile = CombatProfileResolver.ResolveForOwner(conn, owner.Value);
+            AbilityCatalog? fallback = null;
+            foreach (AbilityCatalog ability in conn.Db.AbilityCatalog.Iter())
+            {
+                if (!string.Equals(WireIdentifier.Normalize(ability.AbilityKind), AbilityKinds.Spell, StringComparison.Ordinal))
+                    continue;
+                if (!string.Equals(WireIdentifier.Normalize(ability.ActionId), normalizedSpellId, StringComparison.Ordinal))
+                    continue;
+
+                if (string.Equals(CombatProfileResolver.ResolveForAbility(conn, ability), activeProfile, StringComparison.OrdinalIgnoreCase))
+                    return ability;
+
+                if (fallback == null || ability.SortOrder < fallback.SortOrder)
+                    fallback = ability;
+            }
+
+            return fallback;
+        }
     }
 
     public static class SpellSlotResolver
@@ -887,7 +915,38 @@ namespace Arena.Combat
                     return resolved;
             }
 
+            AbilityCatalog? knownSpell = SpellbookResolver.ResolveKnownSpellAbility(conn, owner, actionId);
+            if (knownSpell != null)
+                return ResolveKnownSpellAction(conn, owner.Value, knownSpell);
+
             return new ActiveActionBarAction(string.Empty, string.Empty, string.Empty, string.Empty, string.Empty);
+        }
+
+        private static ActiveActionBarAction ResolveKnownSpellAction(
+            DbConnection conn,
+            SpacetimeDB.Identity owner,
+            AbilityCatalog ability)
+        {
+            string runtimeActionId = AbilityKinds.UsesRawActionId(ability.AbilityKind)
+                ? WireIdentifier.Normalize(ability.ActionId)
+                : CombatActionIds.ResolveRuntimeActionId(
+                    conn,
+                    CombatProfileResolver.ResolveForOwner(conn, owner),
+                    ability.ActionId);
+            string displayName = ActionPresentation.ResolveAbilityDisplayName(
+                conn,
+                ability.AbilityId,
+                ability.DisplayName);
+
+            return new ActiveActionBarAction(
+                string.Empty,
+                ability.AbilityId,
+                ability.ActionId,
+                runtimeActionId,
+                displayName,
+                ability.ResourceKind,
+                ability.ResourceCost,
+                ability.AbilityKind);
         }
 
         public static string ResolveDisplayNameForAction(

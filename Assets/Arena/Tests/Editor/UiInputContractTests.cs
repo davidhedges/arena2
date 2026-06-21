@@ -548,6 +548,8 @@ namespace Arena.Tests.Editor
             Assert.That(layout, Does.Contain("public const float Gap = 4f"));
             Assert.That(layout, Does.Contain("public const string SlotPrefabResourcePath"));
             Assert.That(layout, Does.Contain("public static Vector2 CellPosition"));
+            Assert.That(layout, Does.Contain("public static Vector2 ActionCellPosition"));
+            Assert.That(layout, Does.Contain("public static Vector2 SpellbookCellPosition"));
             Assert.That(layout, Does.Contain("public static Vector2 CenteredOffset"));
 
             string hud = File.ReadAllText(HudControllerPath);
@@ -556,7 +558,8 @@ namespace Arena.Tests.Editor
 
             string panel = File.ReadAllText(CharacterActionBarPanelPath);
             Assert.That(panel, Does.Contain("ActionBarLayout.CenteredOffset"));
-            Assert.That(panel, Does.Contain("ActionBarLayout.CellPosition"));
+            Assert.That(panel, Does.Contain("ActionBarLayout.ActionCellPosition"));
+            Assert.That(panel, Does.Contain("ActionBarLayout.SpellbookCellPosition"));
             Assert.That(panel, Does.Contain("ActionBarSlotViewFactory.Create"));
         }
 

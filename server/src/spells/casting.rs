@@ -48,8 +48,8 @@ use crate::player_intent::PlayerIntent;
 use crate::player_physics::{commit_player_physics, PhysicsWriteMode, PlayerPhysics};
 use crate::practice::is_training_instance;
 use crate::progression::{
-    active_selectable_ability_for_authored_action, movement_delivery_for_action_id,
-    MovementDeliveryRuntime,
+    ability_catalog as _, active_selectable_ability_for_authored_action,
+    derived_combat_profile_id_for_owner, movement_delivery_for_action_id, MovementDeliveryRuntime,
 };
 use crate::relations::{target_audience_allows, TargetAudience};
 use crate::resources::{
@@ -75,10 +75,10 @@ use super::manifest::{
     BespokeRuntimeSpell, ImpactEffect, InstantBeamChargeScaling, MeteorSkyOrigin, SpellDefinition,
 };
 use super::{
-    normalize_vec3, ActiveBespokeSpell, ActiveCast, CastPredictionCorrelation, ChannelCastRuntime,
-    PendingAreaImpact, PendingCastCancel, PendingCastRequest, SpecialMovementRuntime,
-    SpellBehavior, SpellId, EVENT_AREA_IMPACT, EVENT_CAST, EVENT_CONTACT, EVENT_FIZZLE,
-    EVENT_IMPACT, EVENT_RELEASE, EVENT_UPDATE,
+    normalize_vec3, player_knows_spell, ActiveBespokeSpell, ActiveCast, CastPredictionCorrelation,
+    ChannelCastRuntime, PendingAreaImpact, PendingCastCancel, PendingCastRequest,
+    SpecialMovementRuntime, SpellBehavior, SpellId, EVENT_AREA_IMPACT, EVENT_CAST, EVENT_CONTACT,
+    EVENT_FIZZLE, EVENT_IMPACT, EVENT_RELEASE, EVENT_UPDATE,
 };
 use crate::combat::scene_query::aoe_hits_player;
 
@@ -1965,8 +1965,43 @@ enum CastExecutionMode {
 
 fn ability_id_for_spell(ctx: &ReducerContext, caster: Identity, spell_kind: &SpellId) -> String {
     let authored_action_id = AuthoredActionId::new(spell_kind.as_str());
-    active_selectable_ability_for_authored_action(ctx, caster, &authored_action_id)
-        .map(|ability| ability.ability_id)
+    if let Some(ability) =
+        active_selectable_ability_for_authored_action(ctx, caster, &authored_action_id)
+    {
+        return ability.ability_id;
+    }
+
+    if !player_knows_spell(ctx, caster, spell_kind.as_str()) {
+        return String::new();
+    }
+
+    let active_profile = derived_combat_profile_id_for_owner(ctx, caster).unwrap_or_default();
+    let mut fallback: Option<(u32, String)> = None;
+    for ability in ctx.db.ability_catalog().iter() {
+        if !ability.ability_kind.eq_ignore_ascii_case("SPELL")
+            || !ability.action_id.eq_ignore_ascii_case(spell_kind.as_str())
+        {
+            continue;
+        }
+
+        if !active_profile.is_empty()
+            && ability
+                .combat_profile_id
+                .eq_ignore_ascii_case(active_profile.as_str())
+        {
+            return ability.ability_id;
+        }
+
+        if fallback
+            .as_ref()
+            .map_or(true, |(sort_order, _)| ability.sort_order < *sort_order)
+        {
+            fallback = Some((ability.sort_order, ability.ability_id));
+        }
+    }
+
+    fallback
+        .map(|(_, ability_id)| ability_id)
         .unwrap_or_default()
 }
 

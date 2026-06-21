@@ -181,6 +181,13 @@ namespace Arena.UI
         private readonly ActionBarDropSlot[] _abilityGridDropSlots = new ActionBarDropSlot[ActionBarLayout.CellCount];
         private readonly ActionBarDragSource[] _abilityGridDragSources = new ActionBarDragSource[ActionBarLayout.CellCount];
         private readonly ActionBarSlotState[] _abilityGridStates = new ActionBarSlotState[ActionBarLayout.CellCount];
+        private readonly Image[] _spellbookGridIcons = new Image[ActionBarLayout.Columns];
+        private readonly Image[] _spellbookGridCd = new Image[ActionBarLayout.Columns];
+        private readonly Text[] _spellbookGridText = new Text[ActionBarLayout.Columns];
+        private readonly Text[] _spellbookGridChargeText = new Text[ActionBarLayout.Columns];
+        private readonly TooltipTarget[] _spellbookGridTooltips = new TooltipTarget[ActionBarLayout.Columns];
+        private readonly ActionBarClickTarget[] _spellbookGridClicks = new ActionBarClickTarget[ActionBarLayout.Columns];
+        private readonly ActionBarSlotState[] _spellbookGridStates = new ActionBarSlotState[ActionBarLayout.Columns];
 
         // --- Cast Bar ---
         private GameObject _castRoot     = null!;
@@ -519,7 +526,23 @@ namespace Arena.UI
                 new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
                 gridSize, Vector2.zero);
 
-            for (int row = 0; row < ActionBarLayout.Rows; row++)
+            for (int col = 0; col < ActionBarLayout.Columns; col++)
+            {
+                BuildSlot(
+                    grid.transform,
+                    $"Spellbook_{col + 1}",
+                    null,
+                    out _spellbookGridIcons[col],
+                    out _spellbookGridCd[col],
+                    out _spellbookGridText[col],
+                    out _spellbookGridChargeText[col],
+                    out _spellbookGridTooltips[col],
+                    out _spellbookGridClicks[col],
+                    out _,
+                    out _);
+            }
+
+            for (int row = 0; row < ActionBarLayout.VisibleActionRows; row++)
             {
                 for (int col = 0; col < ActionBarLayout.Columns; col++)
                 {
@@ -1396,15 +1419,16 @@ namespace Arena.UI
             var conn = NetworkManager.Instance?.Conn;
             var owner = conn?.Identity;
 
-            for (int row = 0; row < ActionBarLayout.Rows; row++)
+            RefreshSpellbookStaticState(conn, owner);
+
+            for (int row = 0; row < ActionBarLayout.VisibleActionRows; row++)
             {
                 for (int col = 0; col < ActionBarLayout.Columns; col++)
                 {
                     int index = GridIndex(row, col);
                     _abilityGridStates[index] = ActionBarSlotState.Empty(KeyLabelForCell(row, col));
                     SetActionBarSlotPresentation(_abilityGridCd[index], _abilityGridIcons[index], _abilityGridStates[index], SlotBg, null);
-                    if (row > 0)
-                        _abilityGridTooltips[index].Configure(_canvas, default);
+                    _abilityGridTooltips[index].Configure(_canvas, default);
                     _abilityGridClicks[index].Configure(null);
                     _abilityGridDragSources[index].Configure(_canvas, null, null);
                     SetFillIfChanged(_abilityGridCd[index], 0f);
@@ -1416,6 +1440,9 @@ namespace Arena.UI
 
             foreach (ActionBarSlotBinding binding in ActionBarKeymap.SelectableBindings)
             {
+                if (binding.Row >= ActionBarLayout.VisibleActionRows)
+                    continue;
+
                 ActiveActionBarAction resolved = ActiveActionBarResolver.ResolveActiveSelectableAction(
                     conn,
                     owner,
@@ -1461,6 +1488,63 @@ namespace Arena.UI
             }
         }
 
+        private void RefreshSpellbookStaticState(DbConnection? conn, SpacetimeDB.Identity? owner)
+        {
+            List<ItemSpell> spells = ReadEquippedSpellbookSpells(conn, owner);
+
+            for (int col = 0; col < ActionBarLayout.Columns; col++)
+            {
+                _spellbookGridStates[col] = ActionBarSlotState.Empty(string.Empty);
+                SetActionBarSlotPresentation(_spellbookGridCd[col], _spellbookGridIcons[col], _spellbookGridStates[col], SlotBg, null);
+                _spellbookGridTooltips[col].Configure(_canvas, default);
+                _spellbookGridClicks[col].Configure(null);
+                SetFillIfChanged(_spellbookGridCd[col], 0f);
+                SetColorIfChanged(_spellbookGridCd[col], CdOverlay);
+                SetTextIfChanged(_spellbookGridText[col], string.Empty);
+                SetTextIfChanged(_spellbookGridChargeText[col], string.Empty);
+            }
+
+            if (conn == null || !owner.HasValue)
+                return;
+
+            for (int i = 0; i < spells.Count && i < ActionBarLayout.Columns; i++)
+            {
+                ItemSpell itemSpell = spells[i];
+                string spellId = WireIdentifier.Normalize(itemSpell.SpellId);
+                if (string.IsNullOrWhiteSpace(spellId))
+                    continue;
+
+                AbilityCatalog? ability = FindAbilityForSpell(conn, spellId);
+                string displayName = ActionPresentation.ResolveDisplayName(conn, owner.Value, spellId, spellId);
+                Sprite? iconSprite = ability == null
+                    ? ActionIconResolver.Resolve(ActionKinds.Ability, spellId)
+                    : ActionIconResolver.Resolve(ActionKinds.Ability, ability.AbilityId);
+                ActiveActionBarAction resolved = BuildSpellbookAction(conn, owner.Value, ability, spellId, displayName);
+                bool canTrigger = resolved.HasAssignedAction;
+
+                _spellbookGridStates[i] = new ActionBarSlotState(
+                    string.Empty,
+                    iconSprite == null ? displayName : string.Empty,
+                    true,
+                    false,
+                    spellId,
+                    UsesGlobalCooldown(spellId, string.Empty));
+                SetActionBarSlotPresentation(
+                    _spellbookGridCd[i],
+                    _spellbookGridIcons[i],
+                    _spellbookGridStates[i],
+                    ResolveActionBarColor(conn, ability?.AbilityId ?? spellId, true),
+                    iconSprite);
+                _spellbookGridClicks[i].Configure(canTrigger ? () => TriggerActionRef(conn, resolved) : null);
+                _spellbookGridTooltips[i].Configure(
+                    _canvas,
+                    ability == null
+                        ? new TooltipData(displayName, "Spellbook", SpellbookSpellMetadata(conn, spellId))
+                        : ActionTooltipResolver.ResolveForAbility(conn, owner, ability),
+                    pollHover: true);
+            }
+        }
+
         private void HandleHudActionDrop(ActionBarDragPayload payload, string? targetSlotId)
         {
             var conn = NetworkManager.Instance?.Conn;
@@ -1472,14 +1556,123 @@ namespace Arena.UI
             _actionBarStaticDirty = true;
         }
 
+        private static List<ItemSpell> ReadEquippedSpellbookSpells(DbConnection? conn, SpacetimeDB.Identity? owner)
+        {
+            List<ItemSpell> spells = new();
+            if (conn == null || !owner.HasValue)
+                return spells;
+
+            EquipmentLoadout? loadout = conn.Db.EquipmentLoadout.Owner.Find(owner.Value);
+            if (loadout == null || string.IsNullOrWhiteSpace(loadout.SpellbookItemId))
+                return spells;
+
+            foreach (ItemSpell spell in conn.Db.ItemSpell.ItemInstanceId.Filter(loadout.SpellbookItemId))
+                spells.Add(spell);
+
+            spells.Sort((left, right) =>
+            {
+                int sort = left.SlotIndex.CompareTo(right.SlotIndex);
+                return sort != 0
+                    ? sort
+                    : string.Compare(left.Key, right.Key, StringComparison.Ordinal);
+            });
+            return spells;
+        }
+
+        private static AbilityCatalog? FindAbilityForSpell(DbConnection? conn, string spellId)
+        {
+            if (conn == null)
+                return null;
+
+            string normalizedSpellId = WireIdentifier.Normalize(spellId);
+            foreach (AbilityCatalog ability in conn.Db.AbilityCatalog.Iter())
+            {
+                if (!string.Equals(WireIdentifier.Normalize(ability.AbilityKind), AbilityKinds.Spell, StringComparison.Ordinal))
+                    continue;
+                if (string.Equals(WireIdentifier.Normalize(ability.ActionId), normalizedSpellId, StringComparison.Ordinal))
+                    return ability;
+            }
+
+            return null;
+        }
+
+        private static ActiveActionBarAction BuildSpellbookAction(
+            DbConnection conn,
+            SpacetimeDB.Identity owner,
+            AbilityCatalog? ability,
+            string spellId,
+            string displayName)
+        {
+            if (ability == null)
+                return new ActiveActionBarAction(
+                    string.Empty,
+                    ActionKinds.Ability,
+                    spellId,
+                    spellId,
+                    AbilityKinds.Spell,
+                    spellId,
+                    spellId,
+                    displayName,
+                    "MANA",
+                    0f);
+
+            return new ActiveActionBarAction(
+                string.Empty,
+                ability.AbilityId,
+                ability.ActionId,
+                AbilityKinds.UsesRawActionId(ability.AbilityKind)
+                    ? WireIdentifier.Normalize(ability.ActionId)
+                    : CombatActionIds.ResolveRuntimeActionId(
+                        conn,
+                        CombatProfileResolver.ResolveForOwner(conn, owner),
+                        ability.ActionId),
+                displayName,
+                ability.ResourceKind,
+                ability.ResourceCost,
+                ability.AbilityKind);
+        }
+
+        private static string SpellbookSpellMetadata(DbConnection? conn, string spellId)
+        {
+            SpellDefinition? spell = conn?.Db.SpellDefinition.Kind.Find(WireIdentifier.Normalize(spellId));
+            if (spell == null)
+                return string.Empty;
+
+            List<string> parts = new();
+            if (spell.PrimaryResourceCost > 0.0001f)
+                parts.Add($"{spell.PrimaryResourceCost:0.#} Mana");
+            if (spell.CooldownMs > 0)
+                parts.Add($"{spell.CooldownMs / 1000f:0.#}s");
+            if (!string.IsNullOrWhiteSpace(spell.Targeting))
+                parts.Add(WireIdentifier.Normalize(spell.Targeting));
+
+            return string.Join(" - ", parts);
+        }
+
         private void UpdateActionBarCooldownPresentation(long nowMs, float gcdFrac, LocalCombatState combat)
         {
-            for (int index = 0; index < _abilityGridStates.Length; index++)
+            UpdateSlotCooldownPresentation(_spellbookGridStates, _spellbookGridCd, _spellbookGridText, _spellbookGridChargeText, nowMs, gcdFrac, combat);
+            UpdateSlotCooldownPresentation(_abilityGridStates, _abilityGridCd, _abilityGridText, _abilityGridChargeText, nowMs, gcdFrac, combat);
+        }
+
+        private static void UpdateSlotCooldownPresentation(
+            ActionBarSlotState[] states,
+            Image[] overlays,
+            Text[] cooldownTexts,
+            Text[] chargeTexts,
+            long nowMs,
+            float gcdFrac,
+            LocalCombatState combat)
+        {
+            for (int index = 0; index < states.Length; index++)
             {
-                ActionBarSlotState state = _abilityGridStates[index] ?? ActionBarSlotState.Empty(string.Empty);
-                Image overlay = _abilityGridCd[index];
-                Text cooldownText = _abilityGridText[index];
-                Text chargeText = _abilityGridChargeText[index];
+                Image overlay = overlays[index];
+                if (overlay == null)
+                    continue;
+
+                ActionBarSlotState state = states[index] ?? ActionBarSlotState.Empty(string.Empty);
+                Text cooldownText = cooldownTexts[index];
+                Text chargeText = chargeTexts[index];
 
                 if (!state.IsVisible)
                 {
