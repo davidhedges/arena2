@@ -81,6 +81,16 @@ pub(crate) fn resolve_ability_action_resource_cost_amount(
 
     let owner_resource_kind = primary_resource_kind_for_owner(ctx, owner)?;
     let ability_resource_kind = effective_resource_kind_for_ability(ctx, owner, ability)?;
+    if ability.ability_kind.eq_ignore_ascii_case("SPELL") {
+        return if owner_resource_kind.eq_ignore_ascii_case("MANA") {
+            Some(ResolvedActionResourceCost::primary(amount))
+        } else {
+            None
+        };
+    }
+    if !ability_resource_kind.eq_ignore_ascii_case("MANA") {
+        return Some(ResolvedActionResourceCost::primary(0.0));
+    }
     if owner_resource_kind != ability_resource_kind {
         return None;
     }

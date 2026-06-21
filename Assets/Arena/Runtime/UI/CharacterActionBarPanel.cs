@@ -158,6 +158,7 @@ namespace Arena.UI
                 _root.SetActive(open);
             if (open)
             {
+                RuntimeUiLayer.BringToFront(_canvas);
                 _lastSignature = string.Empty;
                 _nextRefreshTime = 0f;
                 Refresh();
@@ -382,7 +383,10 @@ namespace Arena.UI
         {
             string normalizedProfile = WireIdentifier.Normalize(combatProfile);
             List<AvailableAction> actions = conn.Db.AbilityCatalog.Iter()
-                .Where(ability => string.Equals(CombatProfileResolver.ResolveForAbility(conn, ability), normalizedProfile, StringComparison.OrdinalIgnoreCase))
+                .Where(ability =>
+                    string.Equals(CombatProfileResolver.ResolveForAbility(conn, ability), normalizedProfile, StringComparison.OrdinalIgnoreCase)
+                    || (string.Equals(WireIdentifier.Normalize(ability.AbilityKind), AbilityKinds.Spell, StringComparison.Ordinal)
+                        && SpellbookResolver.KnowsSpell(conn, owner, ability.ActionId)))
                 .Where(ability => HasAbilityTag(ability, ActionBarActionTag))
                 .Where(ability => SpellbookResolver.AbilityIsKnownIfSpell(conn, owner, ability))
                 .Select(ability => new AvailableAction(

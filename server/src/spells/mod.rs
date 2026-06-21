@@ -332,6 +332,7 @@ pub(crate) fn player_knows_spell(ctx: &ReducerContext, owner: Identity, spell_id
         .key()
         .find(player_known_spell_key(owner, spell_id.as_str()))
         .is_some()
+        || crate::inventory::equipped_spellbook_contains_spell(ctx, owner, spell_id.as_str())
 }
 
 pub(crate) fn ensure_player_knows_spell(
@@ -366,6 +367,13 @@ pub(crate) fn ensure_player_knows_spell(
 pub fn learn_spell(ctx: &ReducerContext, spell_id: String) -> Result<(), String> {
     ensure_player_knows_spell(ctx, ctx.sender(), spell_id.as_str(), ctx.timestamp)?;
     Ok(())
+}
+
+pub(crate) fn spell_definition_ids() -> Vec<String> {
+    spell_definitions()
+        .iter()
+        .map(|definition| definition.kind.as_str().to_string())
+        .collect()
 }
 
 #[reducer]

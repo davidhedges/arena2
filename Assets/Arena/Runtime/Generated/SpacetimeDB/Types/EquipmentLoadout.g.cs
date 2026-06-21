@@ -39,6 +39,8 @@ namespace SpacetimeDB.Types
         public string? MainHandItemId;
         [DataMember(Name = "off_hand_item_id")]
         public string? OffHandItemId;
+        [DataMember(Name = "spellbook_item_id")]
+        public string? SpellbookItemId;
         [DataMember(Name = "revision")]
         public ulong Revision;
         [DataMember(Name = "updated_at")]
@@ -58,6 +60,7 @@ namespace SpacetimeDB.Types
             string? AmuletItemId,
             string? MainHandItemId,
             string? OffHandItemId,
+            string? SpellbookItemId,
             ulong Revision,
             SpacetimeDB.Timestamp UpdatedAt
         )
@@ -75,6 +78,7 @@ namespace SpacetimeDB.Types
             this.AmuletItemId = AmuletItemId;
             this.MainHandItemId = MainHandItemId;
             this.OffHandItemId = OffHandItemId;
+            this.SpellbookItemId = SpellbookItemId;
             this.Revision = Revision;
             this.UpdatedAt = UpdatedAt;
         }

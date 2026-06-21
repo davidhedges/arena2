@@ -75,4 +75,22 @@ namespace Arena.UI
         private static bool IsDestroyed(IEscapeCloseable closeable)
             => closeable is Object unityObject && unityObject == null;
     }
+
+    public static class RuntimeUiLayer
+    {
+        private const int BaseInterfaceSortingOrder = 40;
+        private const int MaxInterfaceSortingOrder = 30000;
+        private static int s_nextInterfaceSortingOrder = BaseInterfaceSortingOrder;
+
+        public static void BringToFront(Canvas? canvas)
+        {
+            if (canvas == null)
+                return;
+
+            if (s_nextInterfaceSortingOrder >= MaxInterfaceSortingOrder)
+                s_nextInterfaceSortingOrder = BaseInterfaceSortingOrder;
+
+            canvas.sortingOrder = ++s_nextInterfaceSortingOrder;
+        }
+    }
 }

@@ -36,7 +36,14 @@ namespace Arena.Combat
             float resourceCost = action.ResourceCost;
             SpellDefinition? spellDefinition = ResolveSpellDefinition(conn, action.AuthoredActionId, action.ActionId);
             if (resourceCost <= 0.0001f && spellDefinition?.PrimaryResourceCost > 0.0001f)
+            {
                 resourceCost = spellDefinition.PrimaryResourceCost;
+                resourceKind = "MANA";
+            }
+            else if (resourceCost > 0.0001f && !string.IsNullOrWhiteSpace(resourceKind) && !IsMana(resourceKind))
+            {
+                resourceCost = 0f;
+            }
 
             if (string.IsNullOrWhiteSpace(resourceKind) && resourceCost > 0.0001f)
                 resourceKind = ResolvePrimaryResourceKind(conn, owner);
@@ -123,13 +130,12 @@ namespace Arena.Combat
             if (conn == null || !owner.HasValue)
                 return string.Empty;
 
-            return CombatProfileResolver.ResolveForOwner(conn, owner.Value) switch
-            {
-                CombatProfileIds.ArcherBow => "MANA",
-                CombatProfileIds.TwoHandedSword => "RAGE",
-                CombatProfileIds.SwordAndShield => "ZEAL",
-                _ => string.Empty
-            };
+            return "MANA";
+        }
+
+        private static bool IsMana(string resourceKind)
+        {
+            return string.Equals(WireIdentifier.Normalize(resourceKind), "MANA", System.StringComparison.Ordinal);
         }
 
         private static string ResolveResourceDisplayName(DbConnection? conn, string resourceKind)

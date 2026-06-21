@@ -541,7 +541,7 @@ namespace Arena.Input
             if (cost <= 0.001f)
                 return true;
 
-            string requiredKind = SpellResourceKind(conn, entity, spellId);
+            string requiredKind = "MANA";
             if (!string.Equals(requiredKind, entity.PrimaryResourceKind, System.StringComparison.OrdinalIgnoreCase))
             {
                 ActionBarTrace.Trace(
@@ -571,7 +571,7 @@ namespace Arena.Input
             if (cost <= 0.001f)
                 return;
 
-            string resourceKind = SpellResourceKind(conn, entity, spellId);
+            string resourceKind = "MANA";
             if (!string.Equals(resourceKind, entity.PrimaryResourceKind, System.StringComparison.OrdinalIgnoreCase))
                 return;
 

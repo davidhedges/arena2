@@ -47,6 +47,7 @@ namespace Arena.UI
             new("RING_2", "Ring", 4, 5),
             new("MAIN_HAND", "Weapon", 1, 6),
             new("OFF_HAND", "Offhand", 3, 6),
+            new("SPELLBOOK", "Spellbook", 4, 6),
         };
 
         private Canvas? _canvas;
@@ -119,6 +120,9 @@ namespace Arena.UI
                 _equipmentPanel.gameObject.SetActive(open);
             if (_inventoryPanel != null)
                 _inventoryPanel.gameObject.SetActive(open);
+
+            if (open)
+                RuntimeUiLayer.BringToFront(_canvas);
 
             if (!open)
                 CloseLootPanel();
@@ -358,6 +362,14 @@ namespace Arena.UI
                 conn.Reducers.EquipItem(cell.ItemInstanceId, targetSlot);
         }
 
+        private void HandlePrimaryClick(InventoryGridCell cell)
+        {
+            if (!cell.HasItem || !IsSpellbook(cell.Definition))
+                return;
+
+            SpellbookPanel.Open(cell.ItemInstanceId, cell.Definition?.DisplayName ?? "Spellbook");
+        }
+
         private void HandleRightClick(EquipmentSlotCell cell)
         {
             if (!cell.HasItem)
@@ -375,6 +387,14 @@ namespace Arena.UI
             uint itemHeight = cell.Definition?.Height ?? 1;
             if (TryFindFirstFreePosition(conn, bag, itemWidth, itemHeight, out uint x, out uint y))
                 conn.Reducers.UnequipItem(cell.SlotId, bag.ContainerId, x, y);
+        }
+
+        private void HandlePrimaryClick(EquipmentSlotCell cell)
+        {
+            if (!cell.HasItem || !IsSpellbook(cell.Definition))
+                return;
+
+            SpellbookPanel.Open(cell.ItemInstanceId, cell.Definition?.DisplayName ?? "Spellbook");
         }
 
         private void HandleDrop(DragPayload payload, IInventoryDropTarget target)
@@ -540,6 +560,7 @@ namespace Arena.UI
                 "AMULET" => loadout.AmuletItemId,
                 "MAIN_HAND" => loadout.MainHandItemId,
                 "OFF_HAND" => loadout.OffHandItemId,
+                "SPELLBOOK" => loadout.SpellbookItemId,
                 _ => null,
             };
         }
@@ -684,9 +705,47 @@ namespace Arena.UI
             }
 
             AppendAffixTooltipParts(conn, item.ItemInstanceId, parts);
+            AppendSpellbookTooltipParts(conn, item.ItemInstanceId, parts);
 
             return string.Join("\n", parts);
         }
+
+        private static void AppendSpellbookTooltipParts(DbConnection? conn, string itemInstanceId, List<string> parts)
+        {
+            if (conn == null || string.IsNullOrWhiteSpace(itemInstanceId))
+                return;
+
+            List<ItemSpell> spells = new();
+            foreach (ItemSpell spell in conn.Db.ItemSpell.ItemInstanceId.Filter(itemInstanceId))
+                spells.Add(spell);
+            if (spells.Count == 0)
+                return;
+
+            spells.Sort((left, right) =>
+            {
+                int sort = left.SlotIndex.CompareTo(right.SlotIndex);
+                return sort != 0
+                    ? sort
+                    : string.Compare(left.Key, right.Key, StringComparison.Ordinal);
+            });
+
+            parts.Add($"Spells: {spells.Count}");
+            foreach (ItemSpell spell in spells)
+            {
+                string spellId = WireIdentifier.Normalize(spell.SpellId);
+                if (string.IsNullOrWhiteSpace(spellId))
+                    continue;
+
+                string displayName = ActionPresentation.ResolveDisplayName(conn, conn.Identity, spellId, spellId);
+                parts.Add($"- {displayName}");
+            }
+        }
+
+        private static bool IsSpellbook(ItemDefinition? definition)
+            => string.Equals(
+                WireIdentifier.Normalize(definition?.ItemKind),
+                "SPELLBOOK",
+                StringComparison.Ordinal);
 
         private static void AppendAffixTooltipParts(DbConnection? conn, string itemInstanceId, List<string> parts)
         {
@@ -1289,6 +1348,12 @@ namespace Arena.UI
 
             public void OnPointerClick(PointerEventData eventData)
             {
+                if (eventData.button == PointerEventData.InputButton.Left)
+                {
+                    _controller?.HandlePrimaryClick(this);
+                    return;
+                }
+
                 if (eventData.button != PointerEventData.InputButton.Right)
                     return;
 
@@ -1386,6 +1451,12 @@ namespace Arena.UI
 
             public void OnPointerClick(PointerEventData eventData)
             {
+                if (eventData.button == PointerEventData.InputButton.Left)
+                {
+                    _controller?.HandlePrimaryClick(this);
+                    return;
+                }
+
                 if (eventData.button != PointerEventData.InputButton.Right)
                     return;
 

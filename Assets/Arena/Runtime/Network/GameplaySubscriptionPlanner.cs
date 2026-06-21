@@ -60,6 +60,7 @@ namespace Arena.Network
                 new QueryBuilder().From.InventoryContainer().ToSql(),
                 new QueryBuilder().From.InventorySlot().ToSql(),
                 new QueryBuilder().From.ItemInstance().ToSql(),
+                new QueryBuilder().From.ItemSpell().ToSql(),
                 new QueryBuilder().From.ItemAffixInstance().ToSql(),
             };
         }

@@ -29,6 +29,8 @@ use crate::inventory::item_affix_instance as _;
 use crate::inventory::item_definition as _;
 #[allow(unused_imports)]
 use crate::inventory::item_instance as _;
+#[allow(unused_imports)]
+use crate::inventory::item_spell as _;
 
 pub(crate) const CONTAINER_KIND_PLAYER_BAG: &str = "PLAYER_BAG";
 pub(crate) const CONTAINER_KIND_CORPSE: &str = "CORPSE";
@@ -64,6 +66,7 @@ const LOOT_INTERACT_RANGE: f32 = 3.5;
 const ITEM_KIND_ARMOR: &str = "ARMOR";
 const ITEM_KIND_JEWELRY: &str = "JEWELRY";
 const ITEM_KIND_WEAPON: &str = "WEAPON";
+const ITEM_KIND_SPELLBOOK: &str = "SPELLBOOK";
 const ITEM_KIND_MISC: &str = "MISC";
 
 pub(crate) const ARMOR_KIND_CLOTH: &str = "CLOTH";
@@ -81,6 +84,7 @@ const EQUIP_SLOT_RING: &str = "RING";
 const EQUIP_SLOT_AMULET: &str = "AMULET";
 const EQUIP_SLOT_MAIN_HAND: &str = "MAIN_HAND";
 const EQUIP_SLOT_OFF_HAND: &str = "OFF_HAND";
+const EQUIP_SLOT_SPELLBOOK: &str = "SPELLBOOK";
 
 const WEAPON_KIND_TWO_HAND_SWORD: &str = "TWO_HAND_SWORD";
 const WEAPON_KIND_ONE_HAND_SWORD: &str = "ONE_HAND_SWORD";
@@ -99,6 +103,8 @@ const HAND_REQUIREMENT_OFF_HAND: &str = "OFF_HAND";
 const COMBAT_PROFILE_TWO_HANDED_SWORD: &str = "TWO_HANDED_SWORD";
 const COMBAT_PROFILE_DAGGERS: &str = "DAGGERS";
 const COMBAT_PROFILE_STAFF: &str = "STAFF";
+const STARTER_SPELLBOOK_ITEM_DEF_ID: &str = "APPRENTICE_SPELLBOOK";
+const STARTER_SPELLBOOK_SPELL_COUNT: u32 = 10;
 
 pub(crate) const MODIFIER_PHYSICAL_RESISTANCE: &str = "PHYSICAL_RESISTANCE";
 pub(crate) const MODIFIER_MAGIC_RESISTANCE: &str = "MAGIC_RESISTANCE";
@@ -122,7 +128,7 @@ pub(crate) const MODIFIER_STEALTH: &str = "STEALTH";
 pub(crate) const MODIFIER_SPELL_SLOT: &str = "SPELL_SLOT";
 
 const ALL_EQUIPMENT_SLOTS: &str =
-    "HEAD,SHOULDER,CAPE,CHEST,LEGS,BOOTS,GLOVES,RING,AMULET,MAIN_HAND,OFF_HAND";
+    "HEAD,SHOULDER,CAPE,CHEST,LEGS,BOOTS,GLOVES,RING,AMULET,MAIN_HAND,OFF_HAND,SPELLBOOK";
 const ARMOR_EQUIPMENT_SLOTS: &str = "HEAD,SHOULDER,CAPE,CHEST,LEGS,BOOTS,GLOVES";
 const JEWELRY_EQUIPMENT_SLOTS: &str = "RING,AMULET";
 
@@ -189,6 +195,17 @@ pub struct ItemInstance {
     pub created_at: Timestamp,
 }
 
+#[table(accessor = item_spell, public)]
+#[derive(Clone)]
+pub struct ItemSpell {
+    #[primary_key]
+    pub key: String,
+    #[index(btree)]
+    pub item_instance_id: String,
+    pub slot_index: u32,
+    pub spell_id: String,
+}
+
 #[table(accessor = inventory_container, public)]
 #[derive(Clone)]
 pub struct InventoryContainer {
@@ -248,6 +265,7 @@ pub struct EquipmentLoadout {
     pub amulet_item_id: Option<String>,
     pub main_hand_item_id: Option<String>,
     pub off_hand_item_id: Option<String>,
+    pub spellbook_item_id: Option<String>,
     pub revision: u64,
     pub updated_at: Timestamp,
 }
@@ -324,8 +342,22 @@ struct StarterEquipmentSpec {
     item_def_id: &'static str,
 }
 
-const BASELINE_STARTER_WEAPONS: &[StarterEquipmentSpec] = &[
+const BASELINE_STARTER_WEAPONS: &[StarterEquipmentSpec] = &[starter_equipment(
+    EQUIP_SLOT_MAIN_HAND,
+    "TRAINING_TWO_HAND_SWORD",
+)];
+
+const BASELINE_STARTER_EQUIPMENT: &[StarterEquipmentSpec] = &[
     starter_equipment(EQUIP_SLOT_MAIN_HAND, "TRAINING_TWO_HAND_SWORD"),
+    starter_equipment(EQUIP_SLOT_SPELLBOOK, STARTER_SPELLBOOK_ITEM_DEF_ID),
+];
+
+const BASELINE_STARTER_INVENTORY_ITEMS: &[&str] = &[
+    "NEWBIE_STAFF_01",
+    "TRAINING_DAGGER_PAIR",
+    "TRAINING_ONE_HAND_SWORD",
+    "TRAINING_SHIELD",
+    "TRAINING_BOW",
 ];
 
 const LEGACY_STARTER_WEAPON_DEFINITION_IDS: &[&str] =
@@ -771,6 +803,11 @@ const STARTER_ITEM_DEFINITIONS: &[ItemDefinitionSpec] = &[
         HAND_REQUIREMENT_TWO_HAND,
         COMBAT_PROFILE_STAFF,
     ),
+    spellbook(
+        STARTER_SPELLBOOK_ITEM_DEF_ID,
+        "Apprentice Spellbook",
+        "apprentice_spellbook",
+    ),
     ItemDefinitionSpec {
         item_def_id: "CRACKED_KOBOLD_CHARM",
         display_name: "Cracked Kobold Charm",
@@ -1088,6 +1125,30 @@ const fn weapon(
         hand_requirement,
         unique_equipped: false,
         combat_profile_id,
+        armor_kind: "",
+        physical_resistance: 0.0,
+    }
+}
+
+const fn spellbook(
+    item_def_id: &'static str,
+    display_name: &'static str,
+    icon_id: &'static str,
+) -> ItemDefinitionSpec {
+    ItemDefinitionSpec {
+        item_def_id,
+        display_name,
+        item_kind: ITEM_KIND_SPELLBOOK,
+        rarity: "RARE",
+        icon_id,
+        max_stack: 1,
+        width: 2,
+        height: 2,
+        equip_slot: EQUIP_SLOT_SPELLBOOK,
+        weapon_kind: "",
+        hand_requirement: HAND_REQUIREMENT_NONE,
+        unique_equipped: false,
+        combat_profile_id: "",
         armor_kind: "",
         physical_resistance: 0.0,
     }
@@ -1503,6 +1564,7 @@ pub fn equip_item(
     if item.quantity != 1 {
         return Err("only single item instances can be equipped".to_string());
     }
+    ensure_spellbook_spells_for_item(ctx, owner, item.item_instance_id.as_str());
 
     let source_slot = require_slot_for_accessible_item(ctx, owner, item.item_instance_id.as_str())?;
     let source_container =
@@ -1695,10 +1757,15 @@ pub(crate) fn sync_item_affix_definitions(ctx: &ReducerContext) {
 
 pub(crate) fn ensure_player_inventory_for_identity(ctx: &ReducerContext, owner: Identity) {
     sync_item_definitions(ctx);
-    ensure_player_bag(ctx, owner);
+    let (bag, bag_created) = ensure_player_bag(ctx, owner);
     let (equipment, created) = ensure_equipment_loadout(ctx, owner);
     if created {
         seed_baseline_equipment(ctx, owner, equipment, true);
+    } else {
+        reconcile_spellbook_equipment(ctx, owner, equipment);
+    }
+    if bag_created || created {
+        seed_baseline_inventory_items(ctx, owner, &bag);
     }
     sync_progression_for_equipment_change(ctx, owner, ctx.timestamp);
 }
@@ -1850,7 +1917,9 @@ pub(crate) fn equipment_spell_slot_capacity_for_owner(
     ctx: &ReducerContext,
     owner: Identity,
 ) -> u32 {
-    equipment_modifier_totals_for_owner(ctx, owner).spell_slot_capacity()
+    equipment_modifier_totals_for_owner(ctx, owner)
+        .spell_slot_capacity()
+        .saturating_add(equipped_spellbook_spell_ids_for_owner(ctx, owner).len() as u32)
 }
 
 pub(crate) fn tick_equipment_periodic_effects(
@@ -2418,6 +2487,152 @@ fn item_affix_instance_key(item_instance_id: &str, affix_id: &str) -> String {
     format!("{}:{}", item_instance_id, normalize_id(affix_id))
 }
 
+fn item_spell_key(item_instance_id: &str, slot_index: u32) -> String {
+    format!("{item_instance_id}:spell:{slot_index}")
+}
+
+fn ensure_spellbook_spells_for_item(ctx: &ReducerContext, owner: Identity, item_instance_id: &str) {
+    let Some(item) = ctx
+        .db
+        .item_instance()
+        .item_instance_id()
+        .find(item_instance_id.to_string())
+    else {
+        return;
+    };
+    let Some(definition) = ctx
+        .db
+        .item_definition()
+        .item_def_id()
+        .find(item.item_def_id.clone())
+    else {
+        return;
+    };
+    if definition.item_kind != ITEM_KIND_SPELLBOOK {
+        return;
+    }
+    if ctx
+        .db
+        .item_spell()
+        .item_instance_id()
+        .filter(item_instance_id)
+        .next()
+        .is_some()
+    {
+        return;
+    }
+
+    let spell_ids = random_spellbook_spell_ids(
+        owner,
+        item_instance_id,
+        spellbook_spell_count_for_definition(&definition),
+    );
+    if spell_ids.is_empty() {
+        log::warn!(
+            "[INVENTORY] Spellbook '{}' could not seed spells because no spell definitions are available",
+            item_instance_id
+        );
+        return;
+    }
+
+    for (index, spell_id) in spell_ids.into_iter().enumerate() {
+        ctx.db.item_spell().insert(ItemSpell {
+            key: item_spell_key(item_instance_id, index as u32),
+            item_instance_id: item_instance_id.to_string(),
+            slot_index: index as u32,
+            spell_id,
+        });
+    }
+}
+
+fn spellbook_spell_count_for_definition(definition: &ItemDefinition) -> u32 {
+    match normalize_id(definition.item_def_id.as_str()).as_str() {
+        STARTER_SPELLBOOK_ITEM_DEF_ID => STARTER_SPELLBOOK_SPELL_COUNT,
+        _ => STARTER_SPELLBOOK_SPELL_COUNT,
+    }
+}
+
+fn random_spellbook_spell_ids(
+    owner: Identity,
+    item_instance_id: &str,
+    requested_count: u32,
+) -> Vec<String> {
+    let mut available = crate::spells::spell_definition_ids();
+    available.sort();
+    available.dedup();
+    let mut selected = Vec::new();
+    let count = (requested_count as usize).min(available.len());
+    for index in 0..count {
+        let pick =
+            spellbook_spell_roll_index(owner, item_instance_id, index as u32, available.len());
+        selected.push(available.remove(pick));
+    }
+    selected
+}
+
+fn spellbook_spell_roll_index(
+    owner: Identity,
+    item_instance_id: &str,
+    stream: u32,
+    len: usize,
+) -> usize {
+    if len <= 1 {
+        return 0;
+    }
+    (spellbook_spell_hash(owner, item_instance_id, stream) as usize) % len
+}
+
+fn spellbook_spell_hash(owner: Identity, item_instance_id: &str, stream: u32) -> u64 {
+    let mut hash = 0xcbf2_9ce4_8422_2325_u64;
+    hash = fnv1a_update(hash, owner.to_hex().as_bytes());
+    hash = fnv1a_update(hash, item_instance_id.as_bytes());
+    fnv1a_update(hash, &stream.to_le_bytes())
+}
+
+pub(crate) fn equipped_spellbook_contains_spell(
+    ctx: &ReducerContext,
+    owner: Identity,
+    spell_id: &str,
+) -> bool {
+    let spell_id = normalize_id(spell_id);
+    if spell_id.is_empty() {
+        return false;
+    }
+    equipped_spellbook_spell_ids_for_owner(ctx, owner)
+        .into_iter()
+        .any(|candidate| candidate == spell_id)
+}
+
+pub(crate) fn equipped_spellbook_spell_ids_for_owner(
+    ctx: &ReducerContext,
+    owner: Identity,
+) -> Vec<String> {
+    let Some(equipment) = ctx.db.equipment_loadout().owner().find(owner) else {
+        return Vec::new();
+    };
+    let Some(spellbook_item_id) = equipment.spellbook_item_id.as_deref() else {
+        return Vec::new();
+    };
+    let Some(definition) = item_definition_for_instance(ctx, spellbook_item_id) else {
+        return Vec::new();
+    };
+    if definition.item_kind != ITEM_KIND_SPELLBOOK {
+        return Vec::new();
+    }
+
+    let mut rows: Vec<_> = ctx
+        .db
+        .item_spell()
+        .item_instance_id()
+        .filter(spellbook_item_id)
+        .collect();
+    rows.sort_by_key(|row| row.slot_index);
+    rows.into_iter()
+        .map(|row| normalize_id(row.spell_id.as_str()))
+        .filter(|spell_id| !spell_id.is_empty())
+        .collect()
+}
+
 pub(crate) fn equipment_combat_profile_id_for_owner(
     ctx: &ReducerContext,
     owner: Identity,
@@ -2449,7 +2664,7 @@ pub(crate) fn equipment_combat_profile_id_for_owner(
     None
 }
 
-fn ensure_player_bag(ctx: &ReducerContext, owner: Identity) -> InventoryContainer {
+fn ensure_player_bag(ctx: &ReducerContext, owner: Identity) -> (InventoryContainer, bool) {
     let container_id = player_bag_container_id(owner);
     if let Some(container) = ctx
         .db
@@ -2457,7 +2672,7 @@ fn ensure_player_bag(ctx: &ReducerContext, owner: Identity) -> InventoryContaine
         .container_id()
         .find(container_id.clone())
     {
-        return container;
+        return (container, false);
     }
 
     let container = InventoryContainer {
@@ -2481,7 +2696,67 @@ fn ensure_player_bag(ctx: &ReducerContext, owner: Identity) -> InventoryContaine
         updated_at: ctx.timestamp,
     };
     ctx.db.inventory_container().insert(container.clone());
-    container
+    (container, true)
+}
+
+fn seed_baseline_inventory_items(ctx: &ReducerContext, owner: Identity, bag: &InventoryContainer) {
+    let mut inserted_any = false;
+    for item_def_id in BASELINE_STARTER_INVENTORY_ITEMS {
+        let normalized_item_def_id = normalize_id(item_def_id);
+        let Some(definition) = ctx
+            .db
+            .item_definition()
+            .item_def_id()
+            .find(normalized_item_def_id.clone())
+        else {
+            log::warn!(
+                "[INVENTORY] Starter inventory definition '{}' is missing for owner {}",
+                normalized_item_def_id,
+                &owner.to_hex()[..8]
+            );
+            continue;
+        };
+        let Some((x, y)) = first_free_position(
+            ctx,
+            bag.container_id.as_str(),
+            bag.width,
+            bag.height,
+            definition.width,
+            definition.height,
+            None,
+        ) else {
+            log::warn!(
+                "[INVENTORY] No room to seed starter inventory item '{}' for owner {}",
+                normalized_item_def_id,
+                &owner.to_hex()[..8]
+            );
+            continue;
+        };
+
+        let item_instance_id = next_item_instance_id(ctx, owner);
+        ctx.db.item_instance().insert(ItemInstance {
+            item_instance_id: item_instance_id.clone(),
+            item_def_id: normalized_item_def_id,
+            current_owner_key: identity_key(owner),
+            current_owner: Some(owner),
+            quantity: 1,
+            created_at: ctx.timestamp,
+        });
+        upsert_inventory_slot(
+            ctx,
+            bag.container_id.as_str(),
+            item_instance_id.as_str(),
+            x,
+            y,
+            definition.width,
+            definition.height,
+        );
+        inserted_any = true;
+    }
+
+    if inserted_any {
+        touch_container(ctx, bag.clone());
+    }
 }
 
 fn ensure_equipment_loadout(ctx: &ReducerContext, owner: Identity) -> (EquipmentLoadout, bool) {
@@ -2503,6 +2778,7 @@ fn ensure_equipment_loadout(ctx: &ReducerContext, owner: Identity) -> (Equipment
         amulet_item_id: None,
         main_hand_item_id: None,
         off_hand_item_id: None,
+        spellbook_item_id: None,
         revision: 0,
         updated_at: ctx.timestamp,
     };
@@ -2520,7 +2796,7 @@ fn seed_baseline_equipment(
         clear_equipped_starter_weapons(ctx, &mut equipment);
     }
 
-    for spec in BASELINE_STARTER_WEAPONS {
+    for spec in BASELINE_STARTER_EQUIPMENT {
         if equipment_item_at_slot(&equipment, spec.slot_id).is_some() {
             continue;
         }
@@ -2549,6 +2825,7 @@ fn seed_baseline_equipment(
             quantity: 1,
             created_at: ctx.timestamp,
         });
+        ensure_spellbook_spells_for_item(ctx, owner, item_instance_id.as_str());
         if let Err(error) = set_equipment_slot(&mut equipment, spec.slot_id, Some(item_instance_id))
         {
             log::warn!(
@@ -2560,6 +2837,48 @@ fn seed_baseline_equipment(
         }
     }
 
+    equipment.revision = equipment.revision.saturating_add(1);
+    equipment.updated_at = ctx.timestamp;
+    ctx.db.equipment_loadout().owner().update(equipment);
+}
+
+fn reconcile_spellbook_equipment(
+    ctx: &ReducerContext,
+    owner: Identity,
+    mut equipment: EquipmentLoadout,
+) {
+    if let Some(spellbook_item_id) = equipment.spellbook_item_id.clone() {
+        ensure_spellbook_spells_for_item(ctx, owner, spellbook_item_id.as_str());
+        return;
+    }
+
+    let item_def_id = normalize_id(STARTER_SPELLBOOK_ITEM_DEF_ID);
+    if ctx
+        .db
+        .item_definition()
+        .item_def_id()
+        .find(item_def_id.clone())
+        .is_none()
+    {
+        log::warn!(
+            "[INVENTORY] Starter spellbook definition '{}' is missing for owner {}",
+            item_def_id,
+            &owner.to_hex()[..8]
+        );
+        return;
+    }
+
+    let item_instance_id = next_item_instance_id(ctx, owner);
+    ctx.db.item_instance().insert(ItemInstance {
+        item_instance_id: item_instance_id.clone(),
+        item_def_id,
+        current_owner_key: identity_key(owner),
+        current_owner: Some(owner),
+        quantity: 1,
+        created_at: ctx.timestamp,
+    });
+    ensure_spellbook_spells_for_item(ctx, owner, item_instance_id.as_str());
+    equipment.spellbook_item_id = Some(item_instance_id);
     equipment.revision = equipment.revision.saturating_add(1);
     equipment.updated_at = ctx.timestamp;
     ctx.db.equipment_loadout().owner().update(equipment);
@@ -2968,6 +3287,7 @@ fn validate_equip_request(
             }
         }
         ITEM_KIND_WEAPON => validate_weapon_equip_request(ctx, equipment, definition, target_slot),
+        ITEM_KIND_SPELLBOOK => validate_slot_matches(EQUIP_SLOT_SPELLBOOK, target_slot),
         _ => Err(format!(
             "item kind '{}' is not equippable",
             definition.item_kind
@@ -3087,6 +3407,7 @@ fn equipment_item_at_slot<'a>(equipment: &'a EquipmentLoadout, slot: &str) -> Op
         EQUIP_SLOT_AMULET => equipment.amulet_item_id.as_ref(),
         EQUIP_SLOT_MAIN_HAND => equipment.main_hand_item_id.as_ref(),
         EQUIP_SLOT_OFF_HAND => equipment.off_hand_item_id.as_ref(),
+        EQUIP_SLOT_SPELLBOOK => equipment.spellbook_item_id.as_ref(),
         _ => None,
     }
 }
@@ -3109,6 +3430,7 @@ fn set_equipment_slot(
         EQUIP_SLOT_AMULET => equipment.amulet_item_id = item_instance_id,
         EQUIP_SLOT_MAIN_HAND => equipment.main_hand_item_id = item_instance_id,
         EQUIP_SLOT_OFF_HAND => equipment.off_hand_item_id = item_instance_id,
+        EQUIP_SLOT_SPELLBOOK => equipment.spellbook_item_id = item_instance_id,
         _ => return Err(format!("unknown equipment slot '{}'", slot)),
     }
     Ok(())
@@ -3128,6 +3450,7 @@ fn clear_equipment_references_to_item(equipment: &mut EquipmentLoadout, item_ins
         EQUIP_SLOT_AMULET,
         EQUIP_SLOT_MAIN_HAND,
         EQUIP_SLOT_OFF_HAND,
+        EQUIP_SLOT_SPELLBOOK,
     ] {
         if equipment_item_at_slot(equipment, slot)
             .is_some_and(|equipped| equipped == item_instance_id)
@@ -3151,6 +3474,7 @@ fn equipment_item_ids(equipment: &EquipmentLoadout) -> impl Iterator<Item = &str
         equipment.amulet_item_id.as_deref(),
         equipment.main_hand_item_id.as_deref(),
         equipment.off_hand_item_id.as_deref(),
+        equipment.spellbook_item_id.as_deref(),
     ]
     .into_iter()
     .flatten()
@@ -3175,6 +3499,7 @@ fn find_equipped_slot_for_item(
         EQUIP_SLOT_AMULET,
         EQUIP_SLOT_MAIN_HAND,
         EQUIP_SLOT_OFF_HAND,
+        EQUIP_SLOT_SPELLBOOK,
     ] {
         if equipment_item_at_slot(&equipment, slot)
             .is_some_and(|equipped| equipped == item_instance_id)
@@ -3411,6 +3736,7 @@ mod tests {
             amulet_item_id: None,
             main_hand_item_id: None,
             off_hand_item_id: None,
+            spellbook_item_id: None,
             revision: 0,
             updated_at: Timestamp::UNIX_EPOCH,
         }
@@ -3555,6 +3881,31 @@ mod tests {
             "TRAINING_TWO_HAND_SWORD"
         );
         assert_eq!(BASELINE_STARTER_WEAPONS[0].slot_id, EQUIP_SLOT_MAIN_HAND);
+    }
+
+    #[test]
+    fn baseline_starter_inventory_contains_weapon_choices() {
+        let authored_definitions: std::collections::HashSet<_> = STARTER_ITEM_DEFINITIONS
+            .iter()
+            .map(|definition| definition.item_def_id)
+            .collect();
+
+        assert_eq!(
+            BASELINE_STARTER_INVENTORY_ITEMS,
+            &[
+                "NEWBIE_STAFF_01",
+                "TRAINING_DAGGER_PAIR",
+                "TRAINING_ONE_HAND_SWORD",
+                "TRAINING_SHIELD",
+                "TRAINING_BOW",
+            ]
+        );
+        for item_def_id in BASELINE_STARTER_INVENTORY_ITEMS {
+            assert!(
+                authored_definitions.contains(item_def_id),
+                "{item_def_id} should be an authored starter item definition"
+            );
+        }
     }
 
     #[test]

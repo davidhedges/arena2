@@ -122,6 +122,7 @@ namespace Arena.UI
                 _panelRoot.SetActive(open);
             if (open)
             {
+                RuntimeUiLayer.BringToFront(_canvas);
                 _lastSignature = string.Empty;
                 _nextRefreshTime = 0f;
                 Refresh();
@@ -190,6 +191,16 @@ namespace Arena.UI
                 .Filter(conn.Identity.Value)
                 .Select(row => WireIdentifier.Normalize(row.SpellId))
                 .ToHashSet(StringComparer.Ordinal);
+            EquipmentLoadout? loadout = conn.Db.EquipmentLoadout.Owner.Find(conn.Identity.Value);
+            if (loadout != null && !string.IsNullOrWhiteSpace(loadout.SpellbookItemId))
+            {
+                foreach (ItemSpell itemSpell in conn.Db.ItemSpell.ItemInstanceId.Filter(loadout.SpellbookItemId))
+                {
+                    string spellId = WireIdentifier.Normalize(itemSpell.SpellId);
+                    if (!string.IsNullOrWhiteSpace(spellId))
+                        known.Add(spellId);
+                }
+            }
 
             string signature = BuildSignature(spells, known);
             if (signature == _lastSignature)

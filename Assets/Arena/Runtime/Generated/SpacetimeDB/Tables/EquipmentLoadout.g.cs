@@ -52,6 +52,7 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Col<EquipmentLoadout, string> AmuletItemId { get; }
         public global::SpacetimeDB.Col<EquipmentLoadout, string> MainHandItemId { get; }
         public global::SpacetimeDB.Col<EquipmentLoadout, string> OffHandItemId { get; }
+        public global::SpacetimeDB.Col<EquipmentLoadout, string> SpellbookItemId { get; }
         public global::SpacetimeDB.Col<EquipmentLoadout, ulong> Revision { get; }
         public global::SpacetimeDB.Col<EquipmentLoadout, SpacetimeDB.Timestamp> UpdatedAt { get; }
 
@@ -70,6 +71,7 @@ namespace SpacetimeDB.Types
             AmuletItemId = new global::SpacetimeDB.Col<EquipmentLoadout, string>(tableName, "amulet_item_id");
             MainHandItemId = new global::SpacetimeDB.Col<EquipmentLoadout, string>(tableName, "main_hand_item_id");
             OffHandItemId = new global::SpacetimeDB.Col<EquipmentLoadout, string>(tableName, "off_hand_item_id");
+            SpellbookItemId = new global::SpacetimeDB.Col<EquipmentLoadout, string>(tableName, "spellbook_item_id");
             Revision = new global::SpacetimeDB.Col<EquipmentLoadout, ulong>(tableName, "revision");
             UpdatedAt = new global::SpacetimeDB.Col<EquipmentLoadout, SpacetimeDB.Timestamp>(tableName, "updated_at");
         }

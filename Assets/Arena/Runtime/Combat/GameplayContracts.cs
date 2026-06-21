@@ -139,6 +139,21 @@ namespace Arena.Combat
                     return true;
             }
 
+            return EquippedSpellbookContainsSpell(conn, owner.Value, normalizedSpellId);
+        }
+
+        public static bool EquippedSpellbookContainsSpell(DbConnection conn, SpacetimeDB.Identity owner, string normalizedSpellId)
+        {
+            EquipmentLoadout? loadout = conn.Db.EquipmentLoadout.Owner.Find(owner);
+            if (loadout == null || string.IsNullOrWhiteSpace(loadout.SpellbookItemId))
+                return false;
+
+            foreach (ItemSpell itemSpell in conn.Db.ItemSpell.ItemInstanceId.Filter(loadout.SpellbookItemId))
+            {
+                if (string.Equals(WireIdentifier.Normalize(itemSpell.SpellId), normalizedSpellId, StringComparison.Ordinal))
+                    return true;
+            }
+
             return false;
         }
 
@@ -158,6 +173,7 @@ namespace Arena.Combat
     {
         public const string ModifierSpellSlot = "SPELL_SLOT";
         public const string ItemKindArmor = "ARMOR";
+        public const string ItemKindSpellbook = "SPELLBOOK";
         public const string ArmorKindCloth = "CLOTH";
 
         public static int Capacity(DbConnection? conn, SpacetimeDB.Identity? owner)
@@ -173,6 +189,11 @@ namespace Arena.Combat
             foreach (string? itemInstanceId in EquippedItemIds(loadout))
             {
                 ItemDefinition? definition = FindEquippedDefinition(conn, itemInstanceId);
+                if (IsSpellbook(definition))
+                {
+                    capacity += SpellbookSpellCount(conn, itemInstanceId);
+                    continue;
+                }
                 if (!IsClothArmor(definition))
                     continue;
 
@@ -276,6 +297,23 @@ namespace Arena.Combat
                 && string.Equals(WireIdentifier.Normalize(definition.ArmorKind), ArmorKindCloth, StringComparison.Ordinal);
         }
 
+        private static bool IsSpellbook(ItemDefinition? definition)
+        {
+            return definition != null
+                && string.Equals(WireIdentifier.Normalize(definition.ItemKind), ItemKindSpellbook, StringComparison.Ordinal);
+        }
+
+        private static int SpellbookSpellCount(DbConnection conn, string? itemInstanceId)
+        {
+            if (string.IsNullOrWhiteSpace(itemInstanceId))
+                return 0;
+
+            int count = 0;
+            foreach (ItemSpell _ in conn.Db.ItemSpell.ItemInstanceId.Filter(itemInstanceId))
+                count++;
+            return count;
+        }
+
         private static ItemDefinition? FindEquippedDefinition(DbConnection conn, string? itemInstanceId)
         {
             if (string.IsNullOrWhiteSpace(itemInstanceId))
@@ -301,6 +339,7 @@ namespace Arena.Combat
             yield return loadout.AmuletItemId;
             yield return loadout.MainHandItemId;
             yield return loadout.OffHandItemId;
+            yield return loadout.SpellbookItemId;
         }
     }
 
@@ -786,10 +825,13 @@ namespace Arena.Combat
                     string.Empty,
                     string.Empty,
                     actionRefId);
-            if (!CombatProfileResolver.AbilityMatchesOwner(conn, owner, ability))
+            bool isSpell = string.Equals(WireIdentifier.Normalize(ability.AbilityKind), AbilityKinds.Spell, StringComparison.Ordinal);
+            if (!CombatProfileResolver.AbilityMatchesOwner(conn, owner, ability)
+                && !(isSpell && SpellbookResolver.KnowsSpell(conn, owner, ability.ActionId)))
+            {
                 return new ActiveActionBarAction(slotId, string.Empty, string.Empty, string.Empty, string.Empty);
-            if (string.Equals(WireIdentifier.Normalize(ability.AbilityKind), AbilityKinds.Spell, StringComparison.Ordinal)
-                && !SpellSlotResolver.IsSpellAssignmentEnabled(conn, owner, normalizedSlotId))
+            }
+            if (isSpell && !SpellSlotResolver.IsSpellAssignmentEnabled(conn, owner, normalizedSlotId))
             {
                 return new ActiveActionBarAction(slotId, string.Empty, string.Empty, string.Empty, string.Empty);
             }
