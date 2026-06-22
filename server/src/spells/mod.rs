@@ -426,7 +426,7 @@ pub fn cast_request(
     let kind = &definition.kind;
     let authored_action_id = AuthoredActionId::new(kind.as_str());
     if action_id_is_selectable_action_bar_action(ctx, &authored_action_id) {
-        let Some(ability) =
+        let Some(_) =
             active_selectable_ability_for_authored_action(ctx, ctx.sender(), &authored_action_id)
         else {
             return Err(format!(
@@ -434,11 +434,6 @@ pub fn cast_request(
                 kind.as_str()
             ));
         };
-        if ability.ability_kind.eq_ignore_ascii_case("SPELL")
-            && !player_knows_spell(ctx, ctx.sender(), kind.as_str())
-        {
-            return Err(format!("spell '{}' is not learned", kind.as_str()));
-        }
     }
     if cast_request_executes_immediately(definition.behavior, definition.cast_time) {
         return casting::cast_spell(

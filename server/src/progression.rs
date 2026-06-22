@@ -1786,11 +1786,15 @@ fn ability_catalog_is_active_for_owner(
     ability: &AbilityCatalog,
     combat_profile_id: &str,
 ) -> bool {
+    if ability_catalog_matches_combat_profile(ctx, ability, combat_profile_id) {
+        return true;
+    }
+
     if ability.ability_kind.eq_ignore_ascii_case("SPELL") {
         return player_knows_spell(ctx, owner, ability.action_id.as_str());
     }
 
-    ability_catalog_matches_combat_profile(ctx, ability, combat_profile_id)
+    false
 }
 
 pub(crate) fn active_selectable_ability_for_authored_action(
@@ -3048,13 +3052,9 @@ fn validate_character_action_bar_ref(
         ActionKind::Ability => {
             let ability = require_ability_catalog_row(ctx, action_ref.id.as_str())?;
             let is_spell = ability.ability_kind.eq_ignore_ascii_case("SPELL");
-            if !is_spell
-                && !ability_catalog_matches_combat_profile(
-                    ctx,
-                    &ability,
-                    combat_profile_id.as_str(),
-                )
-            {
+            let matches_combat_profile =
+                ability_catalog_matches_combat_profile(ctx, &ability, combat_profile_id.as_str());
+            if !is_spell && !matches_combat_profile {
                 let ability_profile_id =
                     resolved_combat_profile_id_for_ability_catalog(ctx, &ability)
                         .unwrap_or_default();
@@ -3063,13 +3063,16 @@ fn validate_character_action_bar_ref(
                     ability.ability_id, ability_profile_id, combat_profile_id
                 ));
             }
-            if is_spell && !player_knows_spell(ctx, owner, ability.action_id.as_str()) {
+            if is_spell
+                && !matches_combat_profile
+                && !player_knows_spell(ctx, owner, ability.action_id.as_str())
+            {
                 return Err(format!(
                     "spell ability '{}' requires learned spell '{}'",
                     ability.ability_id, ability.action_id
                 ));
             }
-            if is_spell {
+            if is_spell && !matches_combat_profile {
                 require_available_spell_slot_for_assignment(
                     ctx,
                     owner,
@@ -3128,6 +3131,9 @@ fn character_action_bar_assignment_is_enabled(
     if !ability.ability_kind.eq_ignore_ascii_case("SPELL") {
         return true;
     }
+    if ability_catalog_matches_combat_profile(ctx, ability, combat_profile_id) {
+        return true;
+    }
 
     character_action_bar_spell_assignment_is_within_capacity(ctx, owner, combat_profile_id, slot_id)
 }
@@ -3183,7 +3189,13 @@ fn assigned_spell_slot_ids(
                 return None;
             }
             let ability = ctx.db.ability_catalog().ability_id().find(action_ref.id)?;
-            if ability.ability_kind.eq_ignore_ascii_case("SPELL") {
+            if ability.ability_kind.eq_ignore_ascii_case("SPELL")
+                && !ability_catalog_matches_combat_profile(
+                    ctx,
+                    &ability,
+                    combat_profile_id.as_str(),
+                )
+            {
                 Some(canonical_action_bar_slot_id(assignment.slot_id.as_str()))
             } else {
                 None

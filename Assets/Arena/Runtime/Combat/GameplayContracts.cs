@@ -294,6 +294,8 @@ namespace Arena.Combat
                 AbilityCatalog? ability = ResolveAssignmentAbility(conn, assignment);
                 if (!string.Equals(WireIdentifier.Normalize(ability?.AbilityKind), AbilityKinds.Spell, StringComparison.Ordinal))
                     continue;
+                if (CombatProfileResolver.AbilityMatchesOwner(conn, owner, ability))
+                    continue;
 
                 string slotId = WireIdentifier.Normalize(assignment.SlotId);
                 if (!string.IsNullOrWhiteSpace(slotId))
@@ -873,7 +875,9 @@ namespace Arena.Combat
             {
                 return new ActiveActionBarAction(slotId, string.Empty, string.Empty, string.Empty, string.Empty);
             }
-            if (isSpell && !SpellSlotResolver.IsSpellAssignmentEnabled(conn, owner, normalizedSlotId))
+            if (isSpell
+                && !CombatProfileResolver.AbilityMatchesOwner(conn, owner, ability)
+                && !SpellSlotResolver.IsSpellAssignmentEnabled(conn, owner, normalizedSlotId))
             {
                 return new ActiveActionBarAction(slotId, string.Empty, string.Empty, string.Empty, string.Empty);
             }

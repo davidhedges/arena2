@@ -29,6 +29,8 @@ namespace Arena.UI
         private static readonly Color HeaderColor = new(0.09f, 0.105f, 0.12f, 0.98f);
         private static readonly Color Gold = new(0.96f, 0.73f, 0.26f, 1f);
         private static readonly Color EmptySlotColor = new(0.04f, 0.05f, 0.06f, 0.92f);
+        private static readonly Color DisabledActionColor = new(0.12f, 0.13f, 0.145f, 0.92f);
+        private static readonly Color DisabledActionTextColor = new(0.48f, 0.50f, 0.54f, 1f);
 
         private Canvas? _canvas;
         private GameObject? _root;
@@ -59,6 +61,8 @@ namespace Arena.UI
             public readonly string DisplayName;
             public readonly uint SortOrder;
             public readonly bool IsFixed;
+            public readonly bool IsUsable;
+            public readonly string DisabledReason;
 
             public AvailableAction(
                 string actionKind,
@@ -66,7 +70,9 @@ namespace Arena.UI
                 string abilityId,
                 string displayName,
                 uint sortOrder,
-                bool isFixed)
+                bool isFixed,
+                bool isUsable,
+                string disabledReason = "")
             {
                 ActionKind = WireIdentifier.Normalize(actionKind);
                 ActionId = WireIdentifier.Normalize(actionId);
@@ -74,6 +80,8 @@ namespace Arena.UI
                 DisplayName = displayName;
                 SortOrder = sortOrder;
                 IsFixed = isFixed;
+                IsUsable = isUsable;
+                DisabledReason = disabledReason;
             }
 
             public bool HasValue => !string.IsNullOrWhiteSpace(ActionKind)
@@ -282,23 +290,29 @@ namespace Arena.UI
                 TooltipData tooltip = action.IsFixed
                     ? ActionTooltipResolver.ResolveForFixedAction(conn, action.ActionId)
                     : ActionTooltipResolver.ResolveForAbility(conn, owner, conn?.Db.AbilityCatalog.AbilityId.Find(action.AbilityId));
+                if (!action.IsUsable)
+                    tooltip = DisabledTooltip(tooltip, action);
                 GameObject cell = ActionBarSlotViewFactory.Create(
                     _availableRoot,
                     $"Available_{action.ActionKind}_{action.ActionId}",
                     iconSprite == null ? action.DisplayName : string.Empty,
                     string.Empty,
-                    action.IsFixed ? FixedActionColor(action.ActionId) : AbilityColor(action.AbilityId),
-                    Color.white,
+                    action.IsUsable
+                        ? action.IsFixed ? FixedActionColor(action.ActionId) : AbilityColor(action.AbilityId)
+                        : DisabledActionColor,
+                    action.IsUsable ? Color.white : DisabledActionTextColor,
                     iconSprite,
                     _canvas,
-                    payloadProvider: () => action.ToDragPayload(),
-                    onDrop: HandleActionDrop,
-                    onClick: () =>
+                    payloadProvider: action.IsUsable ? () => action.ToDragPayload() : null,
+                    onDrop: action.IsUsable ? HandleActionDrop : null,
+                    onClick: action.IsUsable ? () =>
                     {
                         _selectedAction = action;
                         _lastSignature = string.Empty;
-                    },
+                    } : null,
                     tooltipData: tooltip);
+                if (!action.IsUsable && iconSprite != null)
+                    TintIcon(cell, DisabledActionTextColor);
                 SetRect((RectTransform)cell.transform, position, ActionBarLayout.SlotVector, new Vector2(0f, 1f), new Vector2(0f, 1f));
 
                 Outline outline = cell.AddComponent<Outline>();
@@ -394,7 +408,7 @@ namespace Arena.UI
 
         private void AssignSelectedActionToSlot(string slotId)
         {
-            if (!_selectedAction.HasValue || string.IsNullOrWhiteSpace(slotId))
+            if (!_selectedAction.HasValue || !_selectedAction.IsUsable || string.IsNullOrWhiteSpace(slotId))
                 return;
 
             DbConnection? conn = NetworkManager.Instance?.Conn;
@@ -484,19 +498,16 @@ namespace Arena.UI
         {
             string normalizedProfile = WireIdentifier.Normalize(combatProfile);
             List<AvailableAction> actions = conn.Db.AbilityCatalog.Iter()
-                .Where(ability =>
-                    string.Equals(CombatProfileResolver.ResolveForAbility(conn, ability), normalizedProfile, StringComparison.OrdinalIgnoreCase)
-                    || (string.Equals(WireIdentifier.Normalize(ability.AbilityKind), AbilityKinds.Spell, StringComparison.Ordinal)
-                        && SpellbookResolver.KnowsSpell(conn, owner, ability.ActionId)))
-                .Where(ability => HasAbilityTag(ability, ActionBarActionTag))
-                .Where(ability => SpellbookResolver.AbilityIsKnownIfSpell(conn, owner, ability))
+                .Where(ability => !string.IsNullOrWhiteSpace(WireIdentifier.Normalize(ability.AbilityId)))
                 .Select(ability => new AvailableAction(
                     ActionKinds.Ability,
                     ability.AbilityId,
                     ability.AbilityId,
                     ActionPresentation.ResolveAbilityDisplayName(conn, ability.AbilityId, ability.DisplayName),
                     ability.SortOrder,
-                    isFixed: false))
+                    isFixed: false,
+                    isUsable: AbilityIsUsableForPanel(conn, owner, ability, normalizedProfile),
+                    disabledReason: DisabledReasonForAbility(conn, owner, ability, normalizedProfile)))
                 .ToList();
 
             foreach (AvailableAction fixedAction in BuildFixedActions(conn))
@@ -507,6 +518,48 @@ namespace Arena.UI
                 .ThenBy(action => action.IsFixed ? 1 : 0)
                 .ThenBy(action => action.DisplayName, StringComparer.Ordinal)
                 .ToList();
+        }
+
+        private static bool AbilityIsUsableForPanel(
+            DbConnection conn,
+            Identity owner,
+            AbilityCatalog ability,
+            string normalizedProfile)
+        {
+            if (!HasAbilityTag(ability, ActionBarActionTag))
+                return false;
+
+            string abilityProfile = CombatProfileResolver.ResolveForAbility(conn, ability);
+            if (!string.IsNullOrWhiteSpace(abilityProfile))
+                return string.Equals(abilityProfile, normalizedProfile, StringComparison.OrdinalIgnoreCase);
+
+            return string.Equals(WireIdentifier.Normalize(ability.AbilityKind), AbilityKinds.Spell, StringComparison.Ordinal)
+                && SpellbookResolver.KnowsSpell(conn, owner, ability.ActionId);
+        }
+
+        private static string DisabledReasonForAbility(
+            DbConnection conn,
+            Identity owner,
+            AbilityCatalog ability,
+            string normalizedProfile)
+        {
+            if (AbilityIsUsableForPanel(conn, owner, ability, normalizedProfile))
+                return string.Empty;
+
+            if (!HasAbilityTag(ability, ActionBarActionTag))
+                return "Not assignable";
+
+            string abilityProfile = CombatProfileResolver.ResolveForAbility(conn, ability);
+            if (!string.IsNullOrWhiteSpace(abilityProfile)
+                && !string.Equals(abilityProfile, normalizedProfile, StringComparison.OrdinalIgnoreCase))
+            {
+                return $"Requires {abilityProfile}";
+            }
+
+            if (string.Equals(WireIdentifier.Normalize(ability.AbilityKind), AbilityKinds.Spell, StringComparison.Ordinal))
+                return "Not learned or equipped";
+
+            return "Unavailable";
         }
 
         private static IEnumerable<AvailableAction> BuildFixedActions(DbConnection conn)
@@ -530,7 +583,8 @@ namespace Arena.UI
                     string.Empty,
                     ActionPresentation.ResolveFixedDisplayName(conn, fixedActionId),
                     presentation.SortOrder,
-                    isFixed: true);
+                    isFixed: true,
+                    isUsable: true);
             }
 
             return fixedActions.Values;
@@ -562,7 +616,9 @@ namespace Arena.UI
                     .Append(action.ActionId).Append(':')
                     .Append(action.AbilityId).Append(':')
                     .Append(action.DisplayName).Append(':')
-                    .Append(action.SortOrder).Append(';');
+                    .Append(action.SortOrder).Append(':')
+                    .Append(action.IsUsable).Append(':')
+                    .Append(action.DisabledReason).Append(';');
             sb.Append('|')
                 .Append(selectedAction.ActionKind).Append(':')
                 .Append(selectedAction.ActionId);
@@ -614,7 +670,7 @@ namespace Arena.UI
 
         private bool CanApplyPayloadToSlot(DbConnection conn, ActionBarDragPayload payload, string? targetSlotId)
         {
-            if (!payload.HasValue || !PayloadIsSpell(conn, payload))
+            if (!payload.HasValue || !PayloadRequiresSpellSlot(conn, payload))
                 return true;
 
             if (string.IsNullOrWhiteSpace(WireIdentifier.Normalize(targetSlotId)))
@@ -636,13 +692,31 @@ namespace Arena.UI
             return false;
         }
 
-        private static bool PayloadIsSpell(DbConnection conn, ActionBarDragPayload payload)
+        private static bool PayloadRequiresSpellSlot(DbConnection conn, ActionBarDragPayload payload)
         {
             if (!string.Equals(payload.ActionKind, ActionKinds.Ability, StringComparison.Ordinal))
                 return false;
 
             AbilityCatalog? ability = conn.Db.AbilityCatalog.AbilityId.Find(WireIdentifier.Normalize(payload.ActionId));
-            return string.Equals(WireIdentifier.Normalize(ability?.AbilityKind), AbilityKinds.Spell, StringComparison.Ordinal);
+            if (!string.Equals(WireIdentifier.Normalize(ability?.AbilityKind), AbilityKinds.Spell, StringComparison.Ordinal))
+                return false;
+
+            return !CombatProfileResolver.AbilityMatchesOwner(conn, conn.Identity, ability);
+        }
+
+        private static bool SameAction(AvailableAction left, AvailableAction right)
+            => left.HasValue
+                && right.HasValue
+                && string.Equals(left.ActionKind, right.ActionKind, StringComparison.Ordinal)
+                && string.Equals(left.ActionId, right.ActionId, StringComparison.Ordinal);
+
+        private static TooltipData DisabledTooltip(TooltipData baseTooltip, AvailableAction action)
+        {
+            string name = baseTooltip.IsValid ? baseTooltip.Name : action.DisplayName;
+            string subtitle = string.IsNullOrWhiteSpace(action.DisabledReason)
+                ? baseTooltip.Subtitle
+                : action.DisabledReason;
+            return new TooltipData(name, subtitle, baseTooltip.Description);
         }
 
         private static bool HasAbilityTag(AbilityCatalog ability, string tag)
@@ -653,11 +727,13 @@ namespace Arena.UI
                 .Any(value => string.Equals(WireIdentifier.Normalize(value), normalizedTag, StringComparison.Ordinal));
         }
 
-        private static bool SameAction(AvailableAction left, AvailableAction right)
-            => left.HasValue
-                && right.HasValue
-                && string.Equals(left.ActionKind, right.ActionKind, StringComparison.Ordinal)
-                && string.Equals(left.ActionId, right.ActionId, StringComparison.Ordinal);
+        private static void TintIcon(GameObject cell, Color color)
+        {
+            Transform iconTransform = cell.transform.Find("Icon");
+            Image? icon = iconTransform == null ? null : iconTransform.GetComponent<Image>();
+            if (icon != null)
+                icon.color = color;
+        }
 
         private static Color AbilityColor(string abilityId)
         {

@@ -2447,7 +2447,7 @@
       "presentation_kind": "ABILITY",
       "presentation_id": "WARRIOR_IRON_WILL",
       "display_name": "Iron Will",
-      "description": "Breaks intimidation and fear effects on the warrior.",
+      "description": "Breaks intimidation and fear effects on the wielder.",
       "sort_order": 84
     },
     {
@@ -2461,7 +2461,7 @@
       "presentation_kind": "ABILITY",
       "presentation_id": "WARRIOR_BATTLE_CRY",
       "display_name": "Battle Cry",
-      "description": "Rallies the warrior, increasing all damage dealt.",
+      "description": "Rallies the wielder, increasing all damage dealt.",
       "sort_order": 85
     },
     {
@@ -2489,7 +2489,7 @@
       "presentation_kind": "ABILITY",
       "presentation_id": "WARRIOR_SHOCKWAVE",
       "display_name": "Shockwave",
-      "description": "Releases a shockwave around the warrior.",
+      "description": "Releases a shockwave around the wielder.",
       "sort_order": 92
     },
     {
