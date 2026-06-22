@@ -5134,7 +5134,7 @@ mod tests {
     }
 
     #[test]
-    fn melee_impact_effects_emit_authored_stun_status_packets() {
+    fn melee_impact_effects_emit_cataclysm_stun_status_packets() {
         let source = test_identity_with_byte(1);
         let target = test_identity_with_byte(2);
         let now = Timestamp::UNIX_EPOCH;
@@ -5143,11 +5143,11 @@ mod tests {
             source,
             event_source: "test".to_string(),
             target,
-            spell_id: "test:charge".to_string(),
-            kind: "WARRIOR_CHARGE".to_string(),
-            ability_id: "WARRIOR_CHARGE".to_string(),
+            spell_id: "test:cataclysm".to_string(),
+            kind: "CATACLYSM".to_string(),
+            ability_id: "WARRIOR_CATACLYSM".to_string(),
             hit_index: 0,
-            damage: 32,
+            damage: 35,
             damage_type: crate::combat::DamageType::Physical.as_str().to_string(),
             range: 2.5,
             impact_at: now,
@@ -5182,14 +5182,14 @@ mod tests {
             ..
         } = &effects[0]
         else {
-            panic!("expected charge stun apply-status effect");
+            panic!("expected Cataclysm stun apply-status effect");
         };
         assert_eq!(*effect_source, source);
         assert_eq!(*effect_target, target);
         assert_eq!(*payload, StatusPayload::Stun);
         assert_eq!(*polarity, crate::combat::StatusPolarity::Debuff);
-        assert_eq!(*duration, Duration::from_millis(5000));
-        assert_eq!(stack_group, "WARRIOR_CHARGE_STUN");
+        assert_eq!(*duration, Duration::from_millis(2000));
+        assert_eq!(stack_group, "WARRIOR_CATACLYSM_STUN");
         assert_eq!(*max_stacks, 1);
     }
 

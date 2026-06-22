@@ -362,10 +362,10 @@
       "sort_order": 11
     },
     {
-      "ability_id": "WARRIOR_SKYFALL_1",
+      "ability_id": "WARRIOR_CRUSHING_BLOW",
       "combat_profile_id": "TWO_HANDED_SWORD",
-      "action_id": "SKYFALL_1",
-      "display_name": "Skyfall I",
+      "action_id": "CRUSHING_BLOW",
+      "display_name": "Crushing Blow",
       "resource_kind": "RAGE",
       "resource_cost": 25,
       "ability_tags": [
@@ -385,10 +385,10 @@
       }
     },
     {
-      "ability_id": "WARRIOR_SKYFALL_2",
+      "ability_id": "WARRIOR_CATACLYSM",
       "combat_profile_id": "TWO_HANDED_SWORD",
-      "action_id": "SKYFALL_2",
-      "display_name": "Skyfall 2",
+      "action_id": "CATACLYSM",
+      "display_name": "Cataclysm",
       "resource_kind": "RAGE",
       "resource_cost": 30,
       "ability_tags": [
@@ -409,14 +409,24 @@
           "kind": "CASTER_CONE",
           "requires_target": false,
           "angle_degrees": 65
-        }
+        },
+        "melee_impact_effects": [
+          {
+            "kind": "APPLY_STATUS",
+            "status": {
+              "kind": "STUN",
+              "duration_ms": 2000,
+              "status_stack_group": "WARRIOR_CATACLYSM_STUN"
+            }
+          }
+        ]
       }
     },
     {
-      "ability_id": "WARRIOR_SKYFALL_3",
+      "ability_id": "WARRIOR_BLADESTORM",
       "combat_profile_id": "TWO_HANDED_SWORD",
-      "action_id": "SKYFALL_3",
-      "display_name": "Skyfall III",
+      "action_id": "BLADESTORM",
+      "display_name": "Bladestorm",
       "resource_kind": "RAGE",
       "resource_cost": 35,
       "ability_tags": [
@@ -2305,16 +2315,16 @@
     },
     {
       "presentation_kind": "ABILITY",
-      "presentation_id": "WARRIOR_SKYFALL_1",
-      "display_name": "Skyfall I",
-      "description": "Launches the first step of a rising greatsword sequence.",
+      "presentation_id": "WARRIOR_CRUSHING_BLOW",
+      "display_name": "Crushing Blow",
+      "description": "Crushes the target with the first step of a rising greatsword sequence.",
       "sort_order": 20
     },
     {
       "presentation_kind": "ABILITY",
-      "presentation_id": "WARRIOR_SKYFALL_2",
-      "display_name": "Skyfall II",
-      "description": "Continues the Skyfall chain with a heavier follow-up hit.",
+      "presentation_id": "WARRIOR_CATACLYSM",
+      "display_name": "Cataclysm",
+      "description": "Shatters enemies in front of the warrior, stunning them briefly.",
       "sort_order": 30
     },
     {
@@ -2326,9 +2336,9 @@
     },
     {
       "presentation_kind": "ABILITY",
-      "presentation_id": "WARRIOR_SKYFALL_3",
-      "display_name": "Skyfall III",
-      "description": "Finishes the Skyfall chain with an upward greatsword blow.",
+      "presentation_id": "WARRIOR_BLADESTORM",
+      "display_name": "Bladestorm",
+      "description": "Finishes the chain with a sweeping greatsword storm.",
       "sort_order": 40
     },
     {
@@ -2834,7 +2844,7 @@
     },
     {
       "owner_kind": "ABILITY",
-      "owner_id": "WARRIOR_SKYFALL_2",
+      "owner_id": "WARRIOR_CATACLYSM",
       "trigger": "AREA_IMPACT",
       "anchor": "AREA_ORIGIN",
       "vfx_id": "VFX_EARTHSHATTER_FIRE_AREA_01",
@@ -3179,19 +3189,19 @@
     {
       "slot_id": "slot_0_1",
       "combat_profile_id": "TWO_HANDED_SWORD",
-      "ability_id": "WARRIOR_SKYFALL_1",
+      "ability_id": "WARRIOR_CRUSHING_BLOW",
       "sort_order": 20
     },
     {
       "slot_id": "slot_0_2",
       "combat_profile_id": "TWO_HANDED_SWORD",
-      "ability_id": "WARRIOR_SKYFALL_2",
+      "ability_id": "WARRIOR_CATACLYSM",
       "sort_order": 30
     },
     {
       "slot_id": "slot_0_3",
       "combat_profile_id": "TWO_HANDED_SWORD",
-      "ability_id": "WARRIOR_SKYFALL_3",
+      "ability_id": "WARRIOR_BLADESTORM",
       "sort_order": 40
     },
     {

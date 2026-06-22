@@ -74,7 +74,7 @@ use crate::playground_targets::is_playground_target;
 use crate::practice::{is_training_instance, tick_practice};
 use crate::progression::{
     backfill_character_action_bar_rows, clear_parry_action_bar_assignments,
-    sync_progression_catalogs,
+    migrate_renamed_skyfall_action_bar_assignments, sync_progression_catalogs,
 };
 use crate::resources::{
     reset_player_resources_to_full, sync_all_player_resources, sync_primary_resource_for_player,
@@ -397,6 +397,13 @@ fn bootstrap_server_state(ctx: &ReducerContext) {
         log::warn!(
             "[INIT] Removed {} legacy Parry action-bar assignment row(s)",
             removed_parry_action_bar_rows
+        );
+    }
+    let migrated_skyfall_action_bar_rows = migrate_renamed_skyfall_action_bar_assignments(ctx);
+    if migrated_skyfall_action_bar_rows > 0 {
+        log::warn!(
+            "[INIT] Migrated {} renamed Skyfall action-bar assignment row(s)",
+            migrated_skyfall_action_bar_rows
         );
     }
     let repaired_action_bar_rows = backfill_character_action_bar_rows(ctx);

@@ -1502,6 +1502,59 @@ pub(crate) fn clear_parry_action_bar_assignments(ctx: &ReducerContext) -> usize 
     removed
 }
 
+pub(crate) fn migrate_renamed_skyfall_action_bar_assignments(ctx: &ReducerContext) -> usize {
+    const ID_MIGRATIONS: &[(&str, &str, Option<&str>)] = &[
+        ("WARRIOR_SKYFALL_1", "WARRIOR_CRUSHING_BLOW", None),
+        ("WARRIOR_SKYFALL_2", "WARRIOR_CATACLYSM", None),
+        (
+            "WARRIOR_CRUSHING_BLOW",
+            "WARRIOR_CATACLYSM",
+            Some("slot_0_2"),
+        ),
+        ("WARRIOR_SKYFALL_3", "WARRIOR_BLADESTORM", None),
+    ];
+
+    let id_migrations: Vec<_> = ID_MIGRATIONS
+        .iter()
+        .map(|(legacy, replacement, slot_id)| {
+            (
+                normalize_identifier(legacy),
+                ActionRef::ability(replacement),
+                slot_id.map(canonical_action_bar_slot_id),
+            )
+        })
+        .collect();
+    let mut migrated = 0usize;
+
+    let rows: Vec<_> = ctx.db.character_action_bar_assignment().iter().collect();
+    for mut row in rows {
+        let action_ref = action_ref_for_character_action_bar_assignment(&row);
+        let legacy_ability_field = normalize_identifier(row.ability_id.as_str());
+        let row_slot_id = canonical_action_bar_slot_id(row.slot_id.as_str());
+        let Some((_, new_action_ref, _)) = id_migrations.iter().find(|(legacy_id, _, slot_id)| {
+            if slot_id
+                .as_ref()
+                .is_some_and(|slot_id| *slot_id != row_slot_id)
+            {
+                return false;
+            }
+            (action_ref.kind == ActionKind::Ability && action_ref.id == *legacy_id)
+                || legacy_ability_field == *legacy_id
+        }) else {
+            continue;
+        };
+
+        row.action_kind = new_action_ref.kind_wire().to_string();
+        row.action_id = new_action_ref.id.clone();
+        row.ability_id = legacy_ability_id_for_action_ref(&new_action_ref);
+        row.updated_at = ctx.timestamp;
+        ctx.db.character_action_bar_assignment().key().update(row);
+        migrated = migrated.saturating_add(1);
+    }
+
+    migrated
+}
+
 pub(crate) fn ensure_default_progression_for_identity(
     ctx: &ReducerContext,
     owner: Identity,
@@ -6620,26 +6673,90 @@ mod tests {
     }
 
     #[test]
-    fn warrior_skyfall_2_authors_targetless_cone_area_vfx() {
+    fn renamed_skyfall_sequence_authors_final_ids() {
+        let catalog = progression_catalog();
+        let expected = [
+            (
+                "WARRIOR_CRUSHING_BLOW",
+                "CRUSHING_BLOW",
+                "Crushing Blow",
+                "slot_0_1",
+            ),
+            ("WARRIOR_CATACLYSM", "CATACLYSM", "Cataclysm", "slot_0_2"),
+            ("WARRIOR_BLADESTORM", "BLADESTORM", "Bladestorm", "slot_0_3"),
+        ];
+
+        for (ability_id, action_id, display_name, slot_id) in expected {
+            let ability = catalog
+                .abilities
+                .iter()
+                .find(|ability| ability.ability_id == ability_id)
+                .unwrap_or_else(|| panic!("expected renamed ability {ability_id}"));
+            assert_eq!(ability.action_id, action_id);
+            assert_eq!(ability.display_name, display_name);
+            assert!(profile_supports_action_reference(
+                COMBAT_PROFILE_TWO_HANDED_SWORD,
+                &AuthoredActionId::new(action_id)
+            ));
+
+            let default = catalog
+                .combat_profile_action_bar_defaults
+                .iter()
+                .find(|assignment| assignment.ability_id == ability_id)
+                .unwrap_or_else(|| panic!("expected action-bar default for {ability_id}"));
+            assert_eq!(default.slot_id, slot_id);
+        }
+
+        for old_ability_id in [
+            "WARRIOR_SKYFALL_1",
+            "WARRIOR_SKYFALL_2",
+            "WARRIOR_SKYFALL_3",
+        ] {
+            assert!(
+                catalog
+                    .abilities
+                    .iter()
+                    .all(|ability| ability.ability_id != old_ability_id),
+                "{old_ability_id} should not remain as an authored ability"
+            );
+        }
+    }
+
+    #[test]
+    fn warrior_cataclysm_authors_targetless_cone_area_vfx() {
         let ability = progression_catalog()
             .abilities
             .iter()
-            .find(|ability| ability.ability_id == "WARRIOR_SKYFALL_2")
-            .expect("expected Skyfall 2 ability");
+            .find(|ability| ability.ability_id == "WARRIOR_CATACLYSM")
+            .expect("expected Cataclysm ability");
+        assert_eq!(ability.display_name, "Cataclysm");
         let targeting = resolved_melee_targeting_for_catalog(&ability.gameplay);
         assert_eq!(targeting.kind, "CASTER_CONE");
         assert!(!targeting.requires_target);
         assert_eq!(targeting.range, 11.5);
         assert_eq!(targeting.angle_degrees, 65.0);
+        assert_eq!(
+            melee_impact_effects_for_ability_id("WARRIOR_CATACLYSM"),
+            vec![MeleeImpactEffectRuntime {
+                status: StatusApplication::new(
+                    StatusPayload::Stun,
+                    std::time::Duration::from_millis(2000),
+                    Some("WARRIOR_CATACLYSM_STUN".to_string()),
+                    StatusStackGroupDefault::ActionSuffix("STUN"),
+                    1,
+                    StackPolicy::Refresh,
+                ),
+            }]
+        );
 
         let cue = progression_catalog()
             .combat_vfx_cues
             .iter()
             .find(|cue| {
-                normalize_identifier(cue.owner_id.as_str()) == "WARRIOR_SKYFALL_2"
+                normalize_identifier(cue.owner_id.as_str()) == "WARRIOR_CATACLYSM"
                     && normalize_identifier(cue.trigger.as_str()) == "AREA_IMPACT"
             })
-            .expect("Skyfall 2 should author an area-impact VFX cue");
+            .expect("Cataclysm should author an area-impact VFX cue");
         assert_eq!(normalize_identifier(cue.anchor.as_str()), "AREA_ORIGIN");
         assert_eq!(
             normalize_identifier(cue.vfx_id.as_str()),

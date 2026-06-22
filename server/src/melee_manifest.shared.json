@@ -502,8 +502,8 @@
                     "aerial_execution_mode": "GROUNDED_ONLY"
                 },
                 {
-                    "id": "SKYFALL_1",
-                    "slot_id": "skyfall_1_slot",
+                    "id": "CRUSHING_BLOW",
+                    "slot_id": "crushing_blow_slot",
                     "hit_windows": [
                         {
                             "impact_delay_ms": 602
@@ -517,8 +517,8 @@
                     "aerial_execution_mode": "GROUNDED_OR_AIRBORNE"
                 },
                 {
-                    "id": "SKYFALL_2",
-                    "slot_id": "skyfall_2_slot",
+                    "id": "CATACLYSM",
+                    "slot_id": "cataclysm_slot",
                     "hit_windows": [
                         {
                             "impact_delay_ms": 417
@@ -532,8 +532,8 @@
                     "aerial_execution_mode": "GROUNDED_OR_AIRBORNE"
                 },
                 {
-                    "id": "SKYFALL_3",
-                    "slot_id": "skyfall_3_slot",
+                    "id": "BLADESTORM",
+                    "slot_id": "bladestorm_slot",
                     "hit_windows": [
                         {
                             "impact_delay_ms": 341

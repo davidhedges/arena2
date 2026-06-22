@@ -33,10 +33,10 @@ namespace Arena.Tests.Editor
       }
     },
     {
-      ""ability_id"": ""WARRIOR_SKYFALL_1"",
+      ""ability_id"": ""WARRIOR_CRUSHING_BLOW"",
       ""combat_profile_id"": ""TWO_HANDED_SWORD"",
-      ""action_id"": ""SKYFALL_1"",
-      ""display_name"": ""Skyfall I"",
+      ""action_id"": ""CRUSHING_BLOW"",
+      ""display_name"": ""Crushing Blow"",
       ""ability_tags"": [
         ""ACTION_BAR_ACTION"",
         ""CORE_ABILITY""
@@ -66,7 +66,7 @@ namespace Arena.Tests.Editor
                 new Dictionary<string, bool>
                 {
                     ["WARRIOR_HEW"] = true,
-                    ["WARRIOR_SKYFALL_1"] = true,
+                    ["WARRIOR_CRUSHING_BLOW"] = true,
                 });
 
             Assert.That(updated, Does.Match(@"""ability_id""\s*:\s*""WARRIOR_HEW""[\s\S]*?""ability_tags""\s*:\s*\[[^\]]*""ACTION_BAR_ACTION""[^\]]*""CORE_ABILITY"""));
@@ -81,11 +81,11 @@ namespace Arena.Tests.Editor
                 new Dictionary<string, bool>
                 {
                     ["WARRIOR_HEW"] = false,
-                    ["WARRIOR_SKYFALL_1"] = false,
+                    ["WARRIOR_CRUSHING_BLOW"] = false,
                 });
 
-            Assert.That(updated, Does.Match(@"""ability_id""\s*:\s*""WARRIOR_SKYFALL_1""[\s\S]*?""ability_tags""\s*:\s*\[[^\]]*""ACTION_BAR_ACTION"""));
-            Assert.That(updated, Does.Not.Match(@"""ability_id""\s*:\s*""WARRIOR_SKYFALL_1""[\s\S]*?""ability_tags""\s*:\s*\[[^\]]*""CORE_ABILITY"""));
+            Assert.That(updated, Does.Match(@"""ability_id""\s*:\s*""WARRIOR_CRUSHING_BLOW""[\s\S]*?""ability_tags""\s*:\s*\[[^\]]*""ACTION_BAR_ACTION"""));
+            Assert.That(updated, Does.Not.Match(@"""ability_id""\s*:\s*""WARRIOR_CRUSHING_BLOW""[\s\S]*?""ability_tags""\s*:\s*\[[^\]]*""CORE_ABILITY"""));
         }
 
         [Test]
@@ -98,13 +98,13 @@ namespace Arena.Tests.Editor
             IEnumerable<object> abilityRows = ((System.Collections.IEnumerable)abilities).Cast<object>();
             object hew = abilityRows.First(row =>
                 (string)row.GetType().GetField("AbilityId")!.GetValue(row)! == "WARRIOR_HEW");
-            object skyfall = abilityRows.First(row =>
-                (string)row.GetType().GetField("AbilityId")!.GetValue(row)! == "WARRIOR_SKYFALL_1");
+            object crushingBlow = abilityRows.First(row =>
+                (string)row.GetType().GetField("AbilityId")!.GetValue(row)! == "WARRIOR_CRUSHING_BLOW");
 
             Assert.That((bool)hew.GetType().GetProperty("IsCore")!.GetValue(hew)!, Is.False);
-            Assert.That((bool)skyfall.GetType().GetProperty("IsCore")!.GetValue(skyfall)!, Is.True);
+            Assert.That((bool)crushingBlow.GetType().GetProperty("IsCore")!.GetValue(crushingBlow)!, Is.True);
             Assert.That((bool)actionBarDefaultAssigned.GetType().GetMethod("Contains")!.Invoke(actionBarDefaultAssigned, new object[] { "WARRIOR_HEW" })!, Is.True);
-            Assert.That((bool)actionBarDefaultAssigned.GetType().GetMethod("Contains")!.Invoke(actionBarDefaultAssigned, new object[] { "WARRIOR_SKYFALL_1" })!, Is.False);
+            Assert.That((bool)actionBarDefaultAssigned.GetType().GetMethod("Contains")!.Invoke(actionBarDefaultAssigned, new object[] { "WARRIOR_CRUSHING_BLOW" })!, Is.False);
         }
 
         private static string ApplyCoreTags(string json, Dictionary<string, bool> coreByAbilityId)
