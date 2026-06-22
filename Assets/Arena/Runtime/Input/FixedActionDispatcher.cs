@@ -15,8 +15,8 @@ namespace Arena.Input
         public static bool IsActionBarVisible(string actionId, DbConnection? conn)
         {
             _ = conn;
-            string normalized = WireIdentifier.Normalize(actionId);
-            return string.Equals(normalized, FixedActionIds.Parry, System.StringComparison.Ordinal);
+            _ = actionId;
+            return false;
         }
 
         public static bool IsVisible(string actionId, DbConnection? conn)
@@ -34,6 +34,14 @@ namespace Arena.Input
         {
             if (input.WasKeyPressedThisFrame(MovementActionKeymap.DodgeKeyCode))
                 TryTrigger(FixedActionIds.Dodge, conn);
+
+            if (input.WasKeyPressedThisFrame(DefenseActionKeymap.ParryKeyCode))
+                TryTrigger(FixedActionIds.Parry, conn);
+
+            if (input.WasKeyReleasedThisFrame(DefenseActionKeymap.ParryKeyCode))
+                TryRelease(FixedActionIds.Parry, conn);
+            else
+                ReconcileHeldState(FixedActionIds.Parry, conn, input.IsKeyHeldThisFrame(DefenseActionKeymap.ParryKeyCode));
         }
 
         public static bool IsEnabled(string actionId, DbConnection? conn)

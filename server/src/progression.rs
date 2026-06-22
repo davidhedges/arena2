@@ -1278,7 +1278,6 @@ impl FixedActionId {
         }
     }
 
-    #[cfg(test)]
     fn as_wire(&self) -> &str {
         match self {
             Self::Dodge => FIXED_ACTION_DODGE,
@@ -1488,6 +1487,21 @@ pub(crate) fn backfill_character_action_bar_rows(ctx: &ReducerContext) -> usize 
     repaired
 }
 
+pub(crate) fn clear_parry_action_bar_assignments(ctx: &ReducerContext) -> usize {
+    let keys: Vec<String> = ctx
+        .db
+        .character_action_bar_assignment()
+        .iter()
+        .filter(|assignment| character_action_bar_assignment_is_fixed_parry(assignment))
+        .map(|assignment| assignment.key)
+        .collect();
+    let removed = keys.len();
+    for key in keys {
+        ctx.db.character_action_bar_assignment().key().delete(key);
+    }
+    removed
+}
+
 pub(crate) fn ensure_default_progression_for_identity(
     ctx: &ReducerContext,
     owner: Identity,
@@ -1496,6 +1510,7 @@ pub(crate) fn ensure_default_progression_for_identity(
         return Err("player row not found".to_string());
     };
     sync_active_combat_mode_for_owner(ctx, owner, ctx.timestamp);
+    clear_parry_action_bar_assignments_for_owner(ctx, owner);
     ensure_default_character_action_bar_assignments(ctx, owner, ctx.timestamp);
 
     Ok(())
@@ -1550,6 +1565,7 @@ pub(crate) fn sync_progression_for_equipment_change(
     now: Timestamp,
 ) {
     sync_active_combat_mode_for_owner(ctx, owner, now);
+    clear_parry_action_bar_assignments_for_owner(ctx, owner);
     ensure_default_character_action_bar_assignments(ctx, owner, now);
 }
 
@@ -3072,7 +3088,10 @@ fn validate_character_action_bar_ref(
         ActionKind::Fixed => {
             let fixed_action_id = FixedActionId::from_wire(action_ref.id.as_str());
             match &fixed_action_id {
-                FixedActionId::Dodge | FixedActionId::Parry => Ok(()),
+                FixedActionId::Dodge | FixedActionId::Parry => Err(format!(
+                    "fixed action '{}' is a generic keybind and cannot be assigned to an action-bar slot",
+                    fixed_action_id.as_wire()
+                )),
                 FixedActionId::Unsupported(value) => {
                     Err(format!("unsupported fixed action '{value}'"))
                 }
@@ -3182,6 +3201,31 @@ fn action_ref_for_character_action_bar_assignment(
         return ActionRef::from_wire(action_kind.as_str(), action_id.as_str());
     }
     ActionRef::ability(assignment.ability_id.as_str())
+}
+
+fn character_action_bar_assignment_is_fixed_parry(
+    assignment: &CharacterActionBarAssignment,
+) -> bool {
+    let action_ref = action_ref_for_character_action_bar_assignment(assignment);
+    (action_ref.kind == ActionKind::Fixed && action_ref.id == FIXED_ACTION_PARRY)
+        || normalize_identifier(assignment.action_id.as_str()) == FIXED_ACTION_PARRY
+        || normalize_identifier(assignment.ability_id.as_str()) == FIXED_ACTION_PARRY
+}
+
+fn clear_parry_action_bar_assignments_for_owner(ctx: &ReducerContext, owner: Identity) -> usize {
+    let keys: Vec<String> = ctx
+        .db
+        .character_action_bar_assignment()
+        .owner()
+        .filter(owner)
+        .filter(|assignment| character_action_bar_assignment_is_fixed_parry(assignment))
+        .map(|assignment| assignment.key)
+        .collect();
+    let removed = keys.len();
+    for key in keys {
+        ctx.db.character_action_bar_assignment().key().delete(key);
+    }
+    removed
 }
 
 fn legacy_ability_id_for_action_ref(action_ref: &ActionRef) -> String {
@@ -4800,7 +4844,15 @@ mod tests {
                 ActionKind::Fixed => {
                     let fixed_action_id = FixedActionId::from_wire(action_ref.id.as_str());
                     match &fixed_action_id {
-                        FixedActionId::Dodge | FixedActionId::Parry => {}
+                        FixedActionId::Dodge | FixedActionId::Parry => {
+                            errors.push(CombatAuthoringError::new(
+                                CombatAuthoringRule::CombatProfileActionBarDefaultResolves,
+                                format!(
+                                    "action-bar default references generic fixed keybind '{}'",
+                                    fixed_action_id.as_wire()
+                                ),
+                            ));
+                        }
                         FixedActionId::Unsupported(value) => {
                             errors.push(CombatAuthoringError::new(
                                 CombatAuthoringRule::CombatProfileActionBarDefaultResolves,
@@ -6854,20 +6906,14 @@ mod tests {
                 fixed_action_id
             );
         }
-        assert!(
-            catalog
-                .combat_profile_action_bar_defaults
-                .iter()
-                .all(|assignment| { action_ref_for_action_bar_default(assignment).id != "DODGE" }),
-            "DODGE is a movement keybind and must not be assigned to action-bar defaults"
-        );
-        assert!(
-            catalog
-                .combat_profile_action_bar_defaults
-                .iter()
-                .any(|assignment| { action_ref_for_action_bar_default(assignment).id == "PARRY" }),
-            "PARRY should remain an action-bar fixed action"
-        );
+        for fixed_action_id in ["DODGE", "PARRY"] {
+            assert!(
+                catalog.combat_profile_action_bar_defaults.iter().all(|assignment| {
+                    action_ref_for_action_bar_default(assignment).id != fixed_action_id
+                }),
+                "{fixed_action_id} is a generic keybind and must not be assigned to action-bar defaults"
+            );
+        }
     }
 
     #[test]

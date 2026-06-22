@@ -460,6 +460,12 @@ namespace Arena.Combat
         public const KeyCode DodgeKeyCode = KeyCode.Q;
     }
 
+    public static class DefenseActionKeymap
+    {
+        public const string ParryKeyLabel = "V";
+        public const KeyCode ParryKeyCode = KeyCode.V;
+    }
+
     public static class CombatRuleIds
     {
         public const string DefaultGlobalCooldownMs = "DEFAULT_GLOBAL_COOLDOWN_MS";

@@ -29,9 +29,9 @@ Owns player-facing combat data:
 
 `ability_tags` controls loadout eligibility and starter semantics. `LOADOUT_ACTION`
 means the ability can be assigned to normal action-bar slots. `CORE_ABILITY`
-means the ability is class-defining and should appear on newly seeded loadouts;
-fixed actions such as `DODGE` and `PARRY` can be default loadout assignments,
-but they are not core abilities.
+means the ability is class-defining and should appear on newly seeded loadouts.
+Generic fixed actions such as `DODGE` and `PARRY` are input actions, not core
+abilities or default action-bar assignments.
 
 It does not own melee clip timing, melee phased clips, VFX implementation, or server code for new behavior kinds.
 
@@ -64,10 +64,9 @@ This is a generated/exported bridge from Unity combat animation sets to the serv
 `SavedSpecSlotAssignment` uses ActionRef placement:
 
 - `slot_id`: the action bar slot.
-- `action_kind`: `ABILITY` or `FIXED`.
+- `action_kind`: `ABILITY`.
 - `action_id`: the assigned action ref id.
   - For `ABILITY`, this is an `ability_id`.
-  - For `FIXED`, this is a fixed action id such as `DODGE` or `PARRY`.
 
 `ability_id` still exists as a legacy compatibility mirror. New action-bar work should resolve placement through `action_kind` and `action_id`.
 
@@ -161,7 +160,7 @@ Movement delivery abilities are class-owned gameplay abilities that move the cas
 2. If the action resolves through class ability behavior, add the class-owned ability row.
 3. Add or update `fixed_action_bindings[]` for each class only when the fixed action needs class ability behavior. Pure fixed actions such as `DODGE` and `PARRY` do not need bindings.
 4. Add a `FIXED` presentation row for the fixed action id.
-5. Add default loadout placement using `action_kind: "FIXED"` and `action_id` set to the fixed action id.
+5. Do not add default action-bar placement for generic fixed keybinds.
 6. Keep client/server hardcoded dispatch policy narrow until there are enough fixed actions to justify data-driven behavior.
 7. Run the server tests.
 

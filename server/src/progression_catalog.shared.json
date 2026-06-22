@@ -3235,13 +3235,6 @@
       "sort_order": 140
     },
     {
-      "slot_id": "slot_1_5",
-      "combat_profile_id": "TWO_HANDED_SWORD",
-      "action_kind": "FIXED",
-      "action_id": "PARRY",
-      "sort_order": 150
-    },
-    {
       "slot_id": "slot_2_0",
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_kind": "ABILITY",
@@ -3286,13 +3279,6 @@
       "sort_order": 165
     },
     {
-      "slot_id": "slot_1_2",
-      "combat_profile_id": "SWORD_AND_SHIELD",
-      "action_kind": "FIXED",
-      "action_id": "PARRY",
-      "sort_order": 170
-    },
-    {
       "slot_id": "slot_0_0",
       "combat_profile_id": "ARCHER_BOW",
       "ability_id": "ARCHER_POWER_SHOT",
@@ -3323,13 +3309,6 @@
       "sort_order": 215
     },
     {
-      "slot_id": "slot_1_2",
-      "combat_profile_id": "ARCHER_BOW",
-      "action_kind": "FIXED",
-      "action_id": "PARRY",
-      "sort_order": 230
-    },
-    {
       "slot_id": "slot_0_0",
       "combat_profile_id": "DAGGERS",
       "ability_id": "DAGGER_QUICK_CUT",
@@ -3348,13 +3327,6 @@
       "sort_order": 260
     },
     {
-      "slot_id": "slot_1_2",
-      "combat_profile_id": "DAGGERS",
-      "action_kind": "FIXED",
-      "action_id": "PARRY",
-      "sort_order": 280
-    },
-    {
       "slot_id": "slot_0_0",
       "combat_profile_id": "STAFF",
       "ability_id": "STAFF_STRIKE",
@@ -3371,13 +3343,6 @@
       "combat_profile_id": "STAFF",
       "ability_id": "STAFF_THRUST",
       "sort_order": 310
-    },
-    {
-      "slot_id": "slot_1_2",
-      "combat_profile_id": "STAFF",
-      "action_kind": "FIXED",
-      "action_id": "PARRY",
-      "sort_order": 330
     }
   ],
   "slots": [
