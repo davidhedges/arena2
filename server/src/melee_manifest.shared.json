@@ -319,6 +319,21 @@
                     "aerial_execution_mode": "GROUNDED_ONLY"
                 },
                 {
+                    "id": "WARRIOR_CARVE",
+                    "slot_id": "carve",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 269
+                        }
+                    ],
+                    "recovery_ms": 250,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY"
+                },
+                {
                     "id": "COMBO_ATTACK_1_3_GROUND_TO_AIR",
                     "slot_id": "light_3",
                     "hit_windows": [

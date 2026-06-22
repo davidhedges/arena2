@@ -191,6 +191,8 @@ struct AbilityGameplayDefinition {
     base_damage: Option<i32>,
     #[serde(default)]
     damage_type: Option<String>,
+    #[serde(default)]
+    target_health_damage_scaling: Option<TargetHealthDamageScalingDefinition>,
     applies_stagger: Option<bool>,
     range: Option<f32>,
     #[serde(default)]
@@ -230,6 +232,13 @@ struct AbilityGameplayDefinition {
     arms_auto_attack_on_cast: bool,
     #[serde(default)]
     delivery: Option<serde_json::Value>,
+}
+
+#[derive(Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TargetHealthDamageScalingDefinition {
+    min_multiplier: f32,
+    max_multiplier: f32,
 }
 
 #[derive(Clone, Deserialize)]
@@ -970,6 +979,8 @@ fn known_status_kind_ids() -> HashSet<String> {
         StatusEffectKind::AttackSpeed,
         StatusEffectKind::CastSpeed,
         StatusEffectKind::TemporaryHitpoints,
+        StatusEffectKind::Berserking,
+        StatusEffectKind::BattleTrance,
     ]
     .into_iter()
     .map(|kind| kind.as_str().to_string())
@@ -1101,6 +1112,8 @@ pub struct MeleeAbilityCatalog {
     pub action_id: String,
     pub base_damage: i32,
     pub damage_type: String,
+    pub target_health_damage_scaling_min_multiplier: f32,
+    pub target_health_damage_scaling_max_multiplier: f32,
     pub applies_stagger: bool,
     pub range: f32,
     pub minimum_range: f32,
@@ -2486,6 +2499,18 @@ fn sync_melee_ability_catalog(ctx: &ReducerContext) {
                     .as_deref()
                     .unwrap_or("PHYSICAL"),
             ),
+            target_health_damage_scaling_min_multiplier: definition
+                .gameplay
+                .target_health_damage_scaling
+                .as_ref()
+                .map(|scaling| scaling.min_multiplier)
+                .unwrap_or(1.0),
+            target_health_damage_scaling_max_multiplier: definition
+                .gameplay
+                .target_health_damage_scaling
+                .as_ref()
+                .map(|scaling| scaling.max_multiplier)
+                .unwrap_or(1.0),
             applies_stagger: required_melee_field(
                 definition.gameplay.applies_stagger,
                 &ability_id,
@@ -3533,6 +3558,7 @@ fn validate_ability_catalog() {
                     && ability.gameplay.aim_radius.is_none()
                     && ability.gameplay.melee_targeting.is_none()
                     && ability.gameplay.minimum_range.is_none()
+                    && ability.gameplay.target_health_damage_scaling.is_none()
                     && ability.gameplay.resource_cost.is_none()
                     && ability.gameplay.primary_resource_gain_on_cast == 0.0
                     && !ability.gameplay.arms_auto_attack_on_cast,
@@ -3565,6 +3591,7 @@ fn validate_ability_catalog() {
                     && ability.gameplay.melee_targeting.is_none()
                     && ability.gameplay.melee_impact_effects.is_empty()
                     && ability.gameplay.minimum_range.is_none()
+                    && ability.gameplay.target_health_damage_scaling.is_none()
                     && ability.gameplay.resource_cost.is_none()
                     && ability.gameplay.global_cooldown_ms.is_none()
                     && ability.gameplay.primary_resource_gain_on_cast == 0.0
@@ -3637,6 +3664,10 @@ fn validate_melee_gameplay_fields(ability_id: &str, gameplay: &AbilityGameplayDe
         ability_id,
         gameplay.uses_global_cooldown,
         gameplay.global_cooldown_ms,
+    );
+    validate_target_health_damage_scaling(
+        ability_id,
+        gameplay.target_health_damage_scaling.as_ref(),
     );
 
     let Some(targeting) = gameplay.melee_targeting.as_ref() else {
@@ -3855,6 +3886,27 @@ fn validate_spell_gameplay(ability_id: &str, gameplay: &AbilityGameplayDefinitio
     assert!(
         gameplay.minimum_range.is_none(),
         "spell ability '{ability_id}' must not define gameplay.minimum_range"
+    );
+    assert!(
+        gameplay.target_health_damage_scaling.is_none(),
+        "spell ability '{ability_id}' must not define gameplay.target_health_damage_scaling"
+    );
+}
+
+fn validate_target_health_damage_scaling(
+    ability_id: &str,
+    scaling: Option<&TargetHealthDamageScalingDefinition>,
+) {
+    let Some(scaling) = scaling else {
+        return;
+    };
+    assert!(
+        scaling.min_multiplier.is_finite() && scaling.min_multiplier > 0.0,
+        "melee ability '{ability_id}' target_health_damage_scaling.min_multiplier must be positive"
+    );
+    assert!(
+        scaling.max_multiplier.is_finite() && scaling.max_multiplier >= scaling.min_multiplier,
+        "melee ability '{ability_id}' target_health_damage_scaling.max_multiplier must be at least min_multiplier"
     );
 }
 
@@ -4147,8 +4199,8 @@ mod tests {
         animation_set_assets_by_combat_profile, parse_top_level_animation_set_field,
     };
     use crate::combat::{
-        StackPolicy, StatusApplication, StatusDispelType, StatusPayload, StatusStackGroupDefault,
-        DEFAULT_HIT_RADIUS,
+        StackPolicy, StatusApplication, StatusDispelType, StatusEffectKind, StatusPayload,
+        StatusStackGroupDefault, DEFAULT_HIT_RADIUS,
     };
     use crate::melee::profile_supports_action_reference;
     use crate::progression::melee_timed_movement_for_ability_id;
@@ -6002,6 +6054,7 @@ mod tests {
         ];
         let melee_only_fields = [
             "base_damage",
+            "target_health_damage_scaling",
             "applies_stagger",
             "range",
             "minimum_range",
@@ -6296,6 +6349,100 @@ mod tests {
                     1,
                     StackPolicy::Refresh,
                 ),
+            }]
+        );
+    }
+
+    #[test]
+    fn warrior_butcher_authors_low_to_high_execute_damage() {
+        let catalog = progression_catalog();
+        let ability = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "WARRIOR_BUTCHER")
+            .expect("WARRIOR_BUTCHER must exist");
+
+        assert_eq!(
+            normalize_identifier(ability.combat_profile_id.as_str()),
+            COMBAT_PROFILE_TWO_HANDED_SWORD
+        );
+        assert_eq!(ability.action_id, "COMBO_ATTACK_3_1_LOW_TO_HIGH");
+        assert_eq!(ability_gameplay_kind(ability), "MELEE");
+        assert_eq!(ability.gameplay.base_damage, Some(36));
+        let scaling = ability
+            .gameplay
+            .target_health_damage_scaling
+            .as_ref()
+            .expect("Butcher must author target-health damage scaling");
+        assert_eq!(scaling.min_multiplier, 1.0);
+        assert_eq!(scaling.max_multiplier, 2.0);
+        assert_eq!(ability.gameplay.applies_stagger, Some(false));
+        assert!(catalog
+            .combat_profile_action_bar_defaults
+            .iter()
+            .any(|assignment| {
+                normalize_identifier(assignment.combat_profile_id.as_str())
+                    == COMBAT_PROFILE_TWO_HANDED_SWORD
+                    && canonical_action_bar_slot_id(assignment.slot_id.as_str()) == "SLOT_1_2"
+                    && normalize_identifier(assignment.ability_id.as_str()) == "WARRIOR_BUTCHER"
+            }));
+    }
+
+    #[test]
+    fn warrior_carve_authors_standalone_low_to_high_bleed() {
+        let catalog = progression_catalog();
+        let ability = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "WARRIOR_CARVE")
+            .expect("WARRIOR_CARVE must exist");
+
+        assert_eq!(
+            normalize_identifier(ability.combat_profile_id.as_str()),
+            COMBAT_PROFILE_TWO_HANDED_SWORD
+        );
+        assert_eq!(ability.action_id, "WARRIOR_CARVE");
+        assert_eq!(ability_gameplay_kind(ability), "MELEE");
+        assert_eq!(ability.gameplay.base_damage, Some(20));
+        assert_eq!(ability.gameplay.applies_stagger, Some(false));
+        assert!(profile_supports_action_reference(
+            COMBAT_PROFILE_TWO_HANDED_SWORD,
+            &AuthoredActionId::new("WARRIOR_CARVE")
+        ));
+        let two_handed_sword_asset = animation_set_assets_by_combat_profile()
+            .get(COMBAT_PROFILE_TWO_HANDED_SWORD)
+            .expect("TwoHandedSword animation set asset must be indexed");
+        assert!(
+            two_handed_sword_asset.contains(
+                "- clip: {fileID: 7400000, guid: aa30250532e0e4b18be2027b6050bcaa, type: 2}\n    combat:\n      id: WARRIOR_CARVE\n      slotId: carve"
+            ),
+            "WARRIOR_CARVE must reuse the COMBO_ATTACK_1_2_LOW_TO_HIGH clip as a standalone action"
+        );
+        assert!(catalog
+            .combat_profile_action_bar_defaults
+            .iter()
+            .any(|assignment| {
+                normalize_identifier(assignment.combat_profile_id.as_str())
+                    == COMBAT_PROFILE_TWO_HANDED_SWORD
+                    && canonical_action_bar_slot_id(assignment.slot_id.as_str()) == "SLOT_1_5"
+                    && normalize_identifier(assignment.ability_id.as_str()) == "WARRIOR_CARVE"
+            }));
+        assert_eq!(
+            melee_impact_effects_for_ability_id("WARRIOR_CARVE"),
+            vec![MeleeImpactEffectRuntime {
+                status: StatusApplication::new(
+                    StatusPayload::Dot {
+                        tick_damage: 3,
+                        damage_type: crate::combat::DamageType::Physical,
+                        tick_interval: Duration::from_secs(1),
+                    },
+                    Duration::from_millis(6000),
+                    Some("WARRIOR_CARVE_BLEED".to_string()),
+                    StatusStackGroupDefault::InstanceScopedActionSuffix("DOT"),
+                    1,
+                    StackPolicy::Refresh,
+                )
+                .with_dispel_types(vec![StatusDispelType::Bleed]),
             }]
         );
     }
@@ -6970,6 +7117,239 @@ mod tests {
     }
 
     #[test]
+    fn warrior_frenzy_authors_attack_speed_self_buff() {
+        let catalog = progression_catalog();
+        let ability = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "WARRIOR_FRENZY")
+            .expect("expected Warrior Frenzy ability");
+
+        assert_eq!(normalize_identifier(ability.action_id.as_str()), "FRENZY");
+        assert_eq!(ability_gameplay_kind(ability), "SPELL");
+        let definition = spell_definition_by_str(ability.action_id.as_str())
+            .expect("Frenzy should resolve through the spell catalog");
+        assert_eq!(
+            definition.behavior,
+            crate::spells::SpellBehavior::ApplyStatus
+        );
+        assert!(!definition.requires_target);
+        assert_eq!(definition.cast_time, Duration::from_millis(0));
+        assert!((definition.duration - 8.0).abs() < 0.0001);
+        assert_eq!(definition.status_stack_group.as_deref(), Some("FRENZY"));
+        assert!((definition.primary_resource_cost - 20.0).abs() < 0.0001);
+        let status = definition
+            .apply_status
+            .as_ref()
+            .expect("Frenzy should apply an attack speed status");
+        assert_eq!(status.kind, StatusEffectKind::AttackSpeed);
+        assert_eq!(
+            status.payload(),
+            StatusPayload::AttackSpeed {
+                modifier_scalar: 0.5,
+            }
+        );
+        assert_eq!(status.max_stacks, 1);
+        assert_eq!(status.stack_policy, StackPolicy::Refresh);
+        assert_eq!(
+            definition.apply_status_polarity,
+            Some(crate::combat::StatusPolarity::Buff)
+        );
+        assert!(!catalog
+            .combat_profile_action_bar_defaults
+            .iter()
+            .any(|assignment| {
+                action_ref_for_action_bar_default(assignment).id == "WARRIOR_FRENZY"
+            }));
+    }
+
+    #[test]
+    fn warrior_berserking_authors_critical_defense_tradeoff_buff() {
+        let catalog = progression_catalog();
+        let ability = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "WARRIOR_BERSERKING")
+            .expect("expected Warrior Berserking ability");
+
+        assert_eq!(
+            normalize_identifier(ability.action_id.as_str()),
+            "BERSERKING"
+        );
+        assert_eq!(ability_gameplay_kind(ability), "SPELL");
+        let definition = spell_definition_by_str(ability.action_id.as_str())
+            .expect("Berserking should resolve through the spell catalog");
+        assert_eq!(
+            definition.behavior,
+            crate::spells::SpellBehavior::ApplyStatus
+        );
+        assert!(!definition.requires_target);
+        assert_eq!(definition.cast_time, Duration::from_millis(0));
+        assert!((definition.duration - 10.0).abs() < 0.0001);
+        assert_eq!(definition.status_stack_group.as_deref(), Some("BERSERKING"));
+        assert!((definition.primary_resource_cost - 20.0).abs() < 0.0001);
+        let status = definition
+            .apply_status
+            .as_ref()
+            .expect("Berserking should apply a berserking status");
+        assert_eq!(status.kind, StatusEffectKind::Berserking);
+        assert_eq!(status.payload(), StatusPayload::Berserking);
+        assert_eq!(status.max_stacks, 1);
+        assert_eq!(status.stack_policy, StackPolicy::Refresh);
+        assert_eq!(
+            definition.apply_status_polarity,
+            Some(crate::combat::StatusPolarity::Buff)
+        );
+        assert!(catalog.action_presentations.iter().any(|presentation| {
+            action_presentation_key(presentation) == "ABILITY:WARRIOR_BERSERKING"
+                && presentation.display_name == "Berserking"
+        }));
+        assert!(!catalog
+            .combat_profile_action_bar_defaults
+            .iter()
+            .any(|assignment| {
+                action_ref_for_action_bar_default(assignment).id == "WARRIOR_BERSERKING"
+            }));
+    }
+
+    #[test]
+    fn warrior_battle_trance_authors_death_prevention_buff() {
+        let catalog = progression_catalog();
+        let ability = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "WARRIOR_BATTLE_TRANCE")
+            .expect("expected Warrior Battle Trance ability");
+
+        assert_eq!(
+            normalize_identifier(ability.action_id.as_str()),
+            "BATTLE_TRANCE"
+        );
+        assert_eq!(ability_gameplay_kind(ability), "SPELL");
+        let definition = spell_definition_by_str(ability.action_id.as_str())
+            .expect("Battle Trance should resolve through the spell catalog");
+        assert_eq!(
+            definition.behavior,
+            crate::spells::SpellBehavior::ApplyStatus
+        );
+        assert!(!definition.requires_target);
+        assert_eq!(definition.cast_time, Duration::from_millis(0));
+        assert!((definition.duration - 5.0).abs() < 0.0001);
+        assert_eq!(
+            definition.status_stack_group.as_deref(),
+            Some("BATTLE_TRANCE")
+        );
+        assert!((definition.primary_resource_cost - 20.0).abs() < 0.0001);
+        let status = definition
+            .apply_status
+            .as_ref()
+            .expect("Battle Trance should apply a battle trance status");
+        assert_eq!(status.kind, StatusEffectKind::BattleTrance);
+        assert_eq!(status.payload(), StatusPayload::BattleTrance);
+        assert_eq!(status.max_stacks, 1);
+        assert_eq!(status.stack_policy, StackPolicy::Refresh);
+        assert_eq!(
+            definition.apply_status_polarity,
+            Some(crate::combat::StatusPolarity::Buff)
+        );
+        assert!(catalog.action_presentations.iter().any(|presentation| {
+            action_presentation_key(presentation) == "ABILITY:WARRIOR_BATTLE_TRANCE"
+                && presentation.display_name == "Battle Trance"
+        }));
+        assert!(!catalog
+            .combat_profile_action_bar_defaults
+            .iter()
+            .any(|assignment| {
+                action_ref_for_action_bar_default(assignment).id == "WARRIOR_BATTLE_TRANCE"
+            }));
+    }
+
+    #[test]
+    fn warrior_feast_authors_bleed_consume_heal_spell() {
+        let catalog = progression_catalog();
+        let ability = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "WARRIOR_FEAST")
+            .expect("expected Warrior Feast ability");
+
+        assert_eq!(normalize_identifier(ability.action_id.as_str()), "FEAST");
+        assert_eq!(ability_gameplay_kind(ability), "SPELL");
+        let definition = spell_definition_by_str(ability.action_id.as_str())
+            .expect("Feast should resolve through the spell catalog");
+        assert_eq!(
+            definition.behavior,
+            crate::spells::SpellBehavior::ConsumeStatus
+        );
+        assert!(definition.requires_target);
+        assert!((definition.max_distance - 20.0).abs() < 0.0001);
+        assert!((definition.primary_resource_cost - 20.0).abs() < 0.0001);
+        let consume_status = definition
+            .secondary
+            .consume_status
+            .as_ref()
+            .expect("Feast should consume bleed statuses");
+        assert_eq!(consume_status.max_count, 0);
+        assert_eq!(
+            consume_status.polarity,
+            Some(crate::combat::StatusPolarity::Debuff)
+        );
+        assert_eq!(consume_status.dispel_types, vec![StatusDispelType::Bleed]);
+        assert_eq!(consume_status.heal_per_stack, 20);
+        assert!(catalog.action_presentations.iter().any(|presentation| {
+            action_presentation_key(presentation) == "ABILITY:WARRIOR_FEAST"
+                && presentation.display_name == "Feast"
+        }));
+        assert!(!catalog
+            .combat_profile_action_bar_defaults
+            .iter()
+            .any(|assignment| {
+                action_ref_for_action_bar_default(assignment).id == "WARRIOR_FEAST"
+            }));
+
+        let animation_set_spell_ids = spell_ids_for_combat_profile(COMBAT_PROFILE_TWO_HANDED_SWORD);
+        assert!(
+            animation_set_spell_ids.contains("FEAST"),
+            "expected Feast spell animation entry in the derived greatsword animation set"
+        );
+    }
+
+    #[test]
+    fn warrior_bloodlust_authors_two_handed_passive() {
+        let catalog = progression_catalog();
+        let ability = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "WARRIOR_BLOODLUST")
+            .expect("expected Warrior Bloodlust ability");
+
+        assert_eq!(
+            normalize_identifier(ability.combat_profile_id.as_str()),
+            COMBAT_PROFILE_TWO_HANDED_SWORD
+        );
+        assert_eq!(
+            normalize_identifier(ability.action_id.as_str()),
+            "BLOODLUST"
+        );
+        assert_eq!(ability.display_name, "Bloodlust");
+        assert_eq!(ability_gameplay_kind(ability), "PASSIVE");
+        assert!(ability
+            .ability_tags
+            .iter()
+            .any(|tag| normalize_identifier(tag.as_str()) == "PASSIVE"));
+        assert!(catalog.action_presentations.iter().any(|presentation| {
+            action_presentation_key(presentation) == "ABILITY:WARRIOR_BLOODLUST"
+                && presentation.display_name == "Bloodlust"
+        }));
+        assert!(!catalog
+            .combat_profile_action_bar_defaults
+            .iter()
+            .any(|assignment| {
+                action_ref_for_action_bar_default(assignment).id == "WARRIOR_BLOODLUST"
+            }));
+    }
+
+    #[test]
     fn spell_abilities_do_not_define_positive_resource_costs() {
         let catalog = progression_catalog();
 
@@ -7068,6 +7448,18 @@ mod tests {
         assert!(
             animation_set_spell_ids.contains("DEFIANCE"),
             "expected Defiance spell animation entry in the derived greatsword animation set"
+        );
+        assert!(
+            animation_set_spell_ids.contains("FRENZY"),
+            "expected Frenzy spell animation entry in the derived greatsword animation set"
+        );
+        assert!(
+            animation_set_spell_ids.contains("BERSERKING"),
+            "expected Berserking spell animation entry in the derived greatsword animation set"
+        );
+        assert!(
+            animation_set_spell_ids.contains("BATTLE_TRANCE"),
+            "expected Battle Trance spell animation entry in the derived greatsword animation set"
         );
     }
 

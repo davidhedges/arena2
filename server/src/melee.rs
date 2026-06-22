@@ -87,6 +87,8 @@ use crate::melee::pending_projectile_release as _;
 #[allow(unused_imports)]
 use crate::melee::queued_melee_followup as _;
 #[allow(unused_imports)]
+use crate::npcs::npc_state as _;
+#[allow(unused_imports)]
 use crate::player::player as _;
 #[allow(unused_imports)]
 use crate::player_physics::player_physics as _;
@@ -706,6 +708,8 @@ pub struct PendingMeleeImpact {
     pub hit_index: u32,
     pub damage: i32,
     pub damage_type: String,
+    pub target_health_damage_scaling_min_multiplier: f32,
+    pub target_health_damage_scaling_max_multiplier: f32,
     pub range: f32,
     pub impact_at: Timestamp,
     pub active_until: Timestamp,
@@ -784,6 +788,7 @@ struct ResolvedMeleeGameplay {
     ability_id: Option<String>,
     base_damage: i32,
     damage_type: DamageType,
+    target_health_damage_scaling: TargetHealthDamageScaling,
     range: f32,
     minimum_range: f32,
     cooldown_ms: u64,
@@ -796,6 +801,28 @@ struct ResolvedMeleeGameplay {
     applies_stagger: bool,
     impact_area: Option<ResolvedMeleeImpactArea>,
     timed_movement: Option<MeleeTimedMovementRuntime>,
+}
+
+#[derive(Clone, Copy)]
+struct TargetHealthDamageScaling {
+    min_multiplier: f32,
+    max_multiplier: f32,
+}
+
+impl TargetHealthDamageScaling {
+    fn none() -> Self {
+        Self {
+            min_multiplier: 1.0,
+            max_multiplier: 1.0,
+        }
+    }
+
+    fn from_catalog(melee: &MeleeAbilityCatalog) -> Self {
+        Self {
+            min_multiplier: melee.target_health_damage_scaling_min_multiplier.max(0.0),
+            max_multiplier: melee.target_health_damage_scaling_max_multiplier.max(0.0),
+        }
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -1170,6 +1197,7 @@ fn melee_gameplay_from_catalog_rows(
         ability_id: Some(ability.ability_id.clone()),
         base_damage: melee.base_damage,
         damage_type: DamageType::from_wire(melee.damage_type.as_str()),
+        target_health_damage_scaling: TargetHealthDamageScaling::from_catalog(&melee),
         range: melee.range,
         minimum_range: melee.minimum_range.max(0.0),
         cooldown_ms: melee.cooldown_ms,
@@ -1347,6 +1375,7 @@ fn auto_attack_melee_gameplay_from_catalog(
         ability_id: None,
         base_damage: row.base_damage,
         damage_type: DamageType::from_wire(row.damage_type.as_str()),
+        target_health_damage_scaling: TargetHealthDamageScaling::none(),
         range: row.range,
         minimum_range: 0.0,
         cooldown_ms: row.cooldown_ms,
@@ -1371,6 +1400,7 @@ fn auto_attack_replacement_melee_gameplay_from_catalog(
         ability_id: None,
         base_damage: row.base_damage,
         damage_type: DamageType::from_wire(row.damage_type.as_str()),
+        target_health_damage_scaling: TargetHealthDamageScaling::none(),
         range: row.range,
         minimum_range: 0.0,
         cooldown_ms: row.cooldown_ms,
@@ -3146,6 +3176,12 @@ fn perform_melee_attack_for_internal(
             hit_index: hit_index as u32,
             damage,
             damage_type: gameplay.damage_type.as_str().to_string(),
+            target_health_damage_scaling_min_multiplier: gameplay
+                .target_health_damage_scaling
+                .min_multiplier,
+            target_health_damage_scaling_max_multiplier: gameplay
+                .target_health_damage_scaling
+                .max_multiplier,
             range: impact_range,
             impact_at,
             active_until,
@@ -4080,13 +4116,21 @@ fn resolve_pending_melee_target_impact(
         DefenseResolution::None => {}
     }
 
+    let damage = scaled_melee_damage_for_target(
+        ctx,
+        row.target,
+        row.damage,
+        row.target_health_damage_scaling_min_multiplier,
+        row.target_health_damage_scaling_max_multiplier,
+    );
+
     log::info!(
         "[MELEE_IMPACT] owner={} source={} strike={} target={} result=hit damage={} spell_id={}",
         short_identity(row.source),
         row.event_source,
         row.kind,
         short_identity(row.target),
-        row.damage,
+        damage,
         row.spell_id
     );
 
@@ -4118,14 +4162,14 @@ fn resolve_pending_melee_target_impact(
         point_z: target_snapshot.pos_z,
         created_at: now,
         created_at_micros: timestamp_to_micros(now),
-        damage: row.damage,
+        damage,
         metadata_kind: COMBAT_METADATA_NONE.to_string(),
         metadata_key: String::new(),
         metadata_value: String::new(),
     });
 
     let mut effects = vec![EffectPacket::Damage {
-        amount: row.damage,
+        amount: damage,
         damage_type: DamageType::from_wire(row.damage_type.as_str()),
         source: row.source,
         target: row.target,
@@ -4140,7 +4184,7 @@ fn resolve_pending_melee_target_impact(
         row.source,
         row.target,
         format!("{}:stagger:{}", row.spell_id, row.hit_index),
-        row.damage,
+        damage,
         row.applies_stagger,
     );
     push_melee_impact_status_effects(&mut effects, row);
@@ -4148,6 +4192,7 @@ fn resolve_pending_melee_target_impact(
         ctx,
         &mut effects,
         row,
+        damage,
         player_snapshots,
         target_snapshot.pos_x,
         target_snapshot.pos_y,
@@ -4162,16 +4207,82 @@ fn resolve_pending_melee_target_impact(
     );
 }
 
+fn scaled_melee_damage_for_target(
+    ctx: &ReducerContext,
+    target: Identity,
+    base_damage: i32,
+    min_multiplier: f32,
+    max_multiplier: f32,
+) -> i32 {
+    if base_damage <= 0 {
+        return 0;
+    }
+
+    let min_multiplier = min_multiplier.max(0.0);
+    let max_multiplier = max_multiplier.max(min_multiplier);
+    if (min_multiplier - 1.0).abs() <= f32::EPSILON && (max_multiplier - 1.0).abs() <= f32::EPSILON
+    {
+        return base_damage;
+    }
+
+    let Some((hp, max_hp)) = target_real_health(ctx, target) else {
+        return base_damage;
+    };
+    if max_hp <= 0 {
+        return base_damage;
+    }
+
+    scaled_melee_damage_for_health(base_damage, hp, max_hp, min_multiplier, max_multiplier)
+}
+
+fn scaled_melee_damage_for_health(
+    base_damage: i32,
+    hp: i32,
+    max_hp: i32,
+    min_multiplier: f32,
+    max_multiplier: f32,
+) -> i32 {
+    if base_damage <= 0 || max_hp <= 0 {
+        return base_damage.max(0);
+    }
+    let health_pct = ((hp.max(0) as f32) / (max_hp as f32)).clamp(0.0, 1.0);
+    let multiplier = max_multiplier - ((max_multiplier - min_multiplier) * health_pct);
+    ((base_damage as f32) * multiplier).round().max(0.0) as i32
+}
+
+fn target_real_health(ctx: &ReducerContext, target: Identity) -> Option<(i32, i32)> {
+    if let Some(state) = ctx.db.player_state().player_id().find(target) {
+        return Some((state.hp, state.max_hp));
+    }
+    ctx.db
+        .npc_state()
+        .identity()
+        .find(target)
+        .map(|state| (state.hp, state.max_hp))
+}
+
 fn push_melee_impact_area_effects(
     ctx: &ReducerContext,
     effects: &mut Vec<EffectPacket>,
     row: &PendingMeleeImpact,
+    primary_damage: i32,
     player_snapshots: &PlayerSnapshotSet,
     impact_x: f32,
     impact_y: f32,
     impact_z: f32,
 ) {
-    if row.impact_area_radius <= 0.0 || row.impact_area_damage <= 0 {
+    if row.impact_area_radius <= 0.0 || primary_damage <= 0 {
+        return;
+    }
+    let area_damage = if row.damage > 0 {
+        scaled_impact_area_damage(
+            primary_damage,
+            row.impact_area_damage as f32 / row.damage as f32,
+        )
+    } else {
+        row.impact_area_damage
+    };
+    if area_damage <= 0 {
         return;
     }
 
@@ -4211,7 +4322,7 @@ fn push_melee_impact_area_effects(
         }
 
         effects.push(EffectPacket::Damage {
-            amount: row.impact_area_damage,
+            amount: area_damage,
             damage_type: DamageType::from_wire(row.damage_type.as_str()),
             source: row.source,
             target: player.player_id,
@@ -4563,6 +4674,8 @@ mod tests {
             hit_index: 0,
             damage: 10,
             damage_type: crate::combat::DamageType::Physical.as_str().to_string(),
+            target_health_damage_scaling_min_multiplier: 1.0,
+            target_health_damage_scaling_max_multiplier: 1.0,
             range,
             impact_at: now,
             active_until: now,
@@ -5149,6 +5262,8 @@ mod tests {
             hit_index: 0,
             damage: 35,
             damage_type: crate::combat::DamageType::Physical.as_str().to_string(),
+            target_health_damage_scaling_min_multiplier: 1.0,
+            target_health_damage_scaling_max_multiplier: 1.0,
             range: 2.5,
             impact_at: now,
             active_until: now,
@@ -5219,6 +5334,26 @@ mod tests {
         assert_eq!(resolved.len(), strike.hit_windows.len());
         assert_eq!(resolved.iter().sum::<i32>(), 31);
         assert_eq!(resolved, vec![16, 15]);
+    }
+
+    #[test]
+    fn target_health_damage_scaling_increases_as_target_health_drops() {
+        assert_eq!(
+            super::scaled_melee_damage_for_health(36, 100, 100, 1.0, 2.0),
+            36
+        );
+        assert_eq!(
+            super::scaled_melee_damage_for_health(36, 50, 100, 1.0, 2.0),
+            54
+        );
+        assert_eq!(
+            super::scaled_melee_damage_for_health(36, 0, 100, 1.0, 2.0),
+            72
+        );
+        assert_eq!(
+            super::scaled_melee_damage_for_health(36, -10, 100, 1.0, 2.0),
+            72
+        );
     }
 
     #[test]

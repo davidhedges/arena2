@@ -15,11 +15,11 @@ use crate::relations::{default_spell_target_audience, TargetAudience};
 use super::manifest::{
     ApplyStatusDefinition, ApplyStatusSecondaryTunables, AreaSecondaryTunables,
     AuraSecondaryTunables, BespokeRuntimeSpell, BlockBehavior, BoomerangCasterProjectileTunables,
-    ImpactEffect, InstantBeamChargeScaling, InstantBeamSecondaryTunables, MeteorSkyOrigin,
-    OrbitCasterProjectileTunables, ProjectileMotionTunables, ProjectileSecondaryTunables,
-    RemoveStatusDefinition, RemoveStatusSecondaryTunables, SpellBehavior, SpellCastMobility,
-    SpellDefinition, SpellId, SpellParryBehavior, SpellSecondaryTunables, SpellTargeting,
-    SPELL_METEOR,
+    ConsumeStatusSecondaryTunables, ImpactEffect, InstantBeamChargeScaling,
+    InstantBeamSecondaryTunables, MeteorSkyOrigin, OrbitCasterProjectileTunables,
+    ProjectileMotionTunables, ProjectileSecondaryTunables, RemoveStatusDefinition,
+    RemoveStatusSecondaryTunables, SpellBehavior, SpellCastMobility, SpellDefinition, SpellId,
+    SpellParryBehavior, SpellSecondaryTunables, SpellTargeting, SPELL_METEOR,
 };
 
 const PROGRESSION_CATALOG_JSON: &str = include_str!("../progression_catalog.shared.json");
@@ -153,6 +153,15 @@ enum SpellCatalogDelivery {
         polarity: Option<StatusPolarity>,
         #[serde(default)]
         dispel_types: Vec<StatusDispelType>,
+    },
+    ConsumeStatus {
+        max_distance: f32,
+        #[serde(default)]
+        max_count: u32,
+        polarity: StatusPolarity,
+        #[serde(default)]
+        dispel_types: Vec<StatusDispelType>,
+        heal_per_stack: i32,
     },
     Aura {
         radius: f32,
@@ -873,6 +882,23 @@ impl SpellCatalogRow {
                     dispel_types,
                 });
             }
+            SpellCatalogDelivery::ConsumeStatus {
+                max_distance,
+                max_count,
+                polarity,
+                dispel_types,
+                heal_per_stack,
+            } => {
+                definition.behavior = SpellBehavior::ConsumeStatus;
+                definition.max_distance = max_distance;
+                definition.block_behavior = BlockBehavior::Unblockable;
+                definition.secondary.consume_status = Some(ConsumeStatusSecondaryTunables {
+                    max_count,
+                    polarity: Some(polarity),
+                    dispel_types,
+                    heal_per_stack,
+                });
+            }
             SpellCatalogDelivery::Aura {
                 radius,
                 tick_interval_ms,
@@ -1328,7 +1354,7 @@ fn validate_secondary_tunables(def: &SpellDefinition) -> Result<(), String> {
             for effect in &projectile.impact_effects {
                 validate_impact_effect(def, effect)?;
             }
-            ensure_no_secondary(def, false, true, true, true, true)?;
+            ensure_no_secondary(def, false, true, true, true, true, true)?;
         }
         SpellBehavior::Area => {
             let Some(area) = def.secondary.area.as_ref() else {
@@ -1433,7 +1459,7 @@ fn validate_secondary_tunables(def: &SpellDefinition) -> Result<(), String> {
                     def.kind.as_str()
                 ));
             }
-            ensure_no_secondary(def, true, false, true, true, true)?;
+            ensure_no_secondary(def, true, false, true, true, true, true)?;
         }
         SpellBehavior::InstantBeam => {
             let Some(instant_beam) = def.secondary.instant_beam else {
@@ -1465,7 +1491,7 @@ fn validate_secondary_tunables(def: &SpellDefinition) -> Result<(), String> {
                     def.kind.as_str()
                 ));
             }
-            ensure_no_secondary(def, true, true, false, true, true)?;
+            ensure_no_secondary(def, true, true, false, true, true, true)?;
         }
         SpellBehavior::ApplyStatus => {
             let Some(apply_status) = def.secondary.apply_status else {
@@ -1487,7 +1513,7 @@ fn validate_secondary_tunables(def: &SpellDefinition) -> Result<(), String> {
                 "delivery.duration_ms",
                 Duration::from_secs_f32(def.duration),
             )?;
-            ensure_no_secondary(def, true, true, true, false, true)?;
+            ensure_no_secondary(def, true, true, true, false, true, true)?;
         }
         SpellBehavior::RemoveStatus => {
             let Some(remove_status) = def.secondary.remove_status.as_ref() else {
@@ -1548,7 +1574,35 @@ fn validate_secondary_tunables(def: &SpellDefinition) -> Result<(), String> {
                     ));
                 }
             }
-            ensure_no_secondary(def, true, true, true, true, false)?;
+            ensure_no_secondary(def, true, true, true, true, false, true)?;
+        }
+        SpellBehavior::ConsumeStatus => {
+            let Some(consume_status) = def.secondary.consume_status.as_ref() else {
+                return Err(format!(
+                    "{} CONSUME_STATUS must define secondary consume-status data",
+                    def.kind.as_str()
+                ));
+            };
+            if def.targeting != SpellTargeting::Target || !def.requires_target {
+                return Err(format!(
+                    "{} CONSUME_STATUS must use required TARGET targeting",
+                    def.kind.as_str()
+                ));
+            }
+            ensure_positive_f32(def.kind.as_str(), "delivery.max_distance", def.max_distance)?;
+            if consume_status.polarity.is_none() || consume_status.dispel_types.is_empty() {
+                return Err(format!(
+                    "{} CONSUME_STATUS must define polarity and dispel_types",
+                    def.kind.as_str()
+                ));
+            }
+            if consume_status.heal_per_stack <= 0 {
+                return Err(format!(
+                    "{} CONSUME_STATUS heal_per_stack must be positive",
+                    def.kind.as_str()
+                ));
+            }
+            ensure_no_secondary(def, true, true, true, true, true, false)?;
         }
         SpellBehavior::Aura => {
             let Some(aura) = def.secondary.aura.as_ref() else {
@@ -1590,7 +1644,7 @@ fn validate_secondary_tunables(def: &SpellDefinition) -> Result<(), String> {
                 }
                 validate_impact_effect(def, effect)?;
             }
-            ensure_no_secondary(def, true, true, true, true, true)?;
+            ensure_no_secondary(def, true, true, true, true, true, true)?;
         }
         SpellBehavior::Channel | SpellBehavior::SelfResource => {
             if def.secondary != SpellSecondaryTunables::default() {
@@ -1728,6 +1782,7 @@ fn ensure_no_secondary(
     no_instant_beam: bool,
     no_apply_status: bool,
     no_remove_status: bool,
+    no_consume_status: bool,
 ) -> Result<(), String> {
     if no_projectile && def.secondary.projectile.is_some() {
         return Err(format!(
@@ -1756,6 +1811,12 @@ fn ensure_no_secondary(
     if no_remove_status && def.secondary.remove_status.is_some() {
         return Err(format!(
             "{} must not define remove-status secondary data",
+            def.kind.as_str()
+        ));
+    }
+    if no_consume_status && def.secondary.consume_status.is_some() {
+        return Err(format!(
+            "{} must not define consume-status secondary data",
             def.kind.as_str()
         ));
     }
@@ -1862,7 +1923,9 @@ fn validate_apply_status_kind_for_self(
         | StatusEffectKind::MeleeAttackModifier
         | StatusEffectKind::AttackSpeed
         | StatusEffectKind::CastSpeed
-        | StatusEffectKind::TemporaryHitpoints => Ok(()),
+        | StatusEffectKind::TemporaryHitpoints
+        | StatusEffectKind::Berserking
+        | StatusEffectKind::BattleTrance => Ok(()),
         other => Err(format!(
             "{spell_id} SELF APPLY_STATUS status '{}' is not supported",
             other.as_str()

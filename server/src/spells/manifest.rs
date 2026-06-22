@@ -141,6 +141,7 @@ pub(crate) enum SpellBehavior {
     Channel,
     ApplyStatus,
     RemoveStatus,
+    ConsumeStatus,
     Aura,
     SelfResource,
 }
@@ -154,6 +155,7 @@ impl SpellBehavior {
             Self::Channel => "CHANNEL",
             Self::ApplyStatus => "APPLY_STATUS",
             Self::RemoveStatus => "REMOVE_STATUS",
+            Self::ConsumeStatus => "CONSUME_STATUS",
             Self::Aura => "AURA",
             Self::SelfResource => "SELF_RESOURCE",
         }
@@ -271,6 +273,7 @@ pub(crate) struct SpellSecondaryTunables {
     pub instant_beam: Option<InstantBeamSecondaryTunables>,
     pub apply_status: Option<ApplyStatusSecondaryTunables>,
     pub remove_status: Option<RemoveStatusSecondaryTunables>,
+    pub consume_status: Option<ConsumeStatusSecondaryTunables>,
     pub aura: Option<AuraSecondaryTunables>,
 }
 
@@ -380,6 +383,14 @@ pub(crate) struct RemoveStatusSecondaryTunables {
     pub max_count: u32,
     pub polarity: Option<StatusPolarity>,
     pub dispel_types: Vec<StatusDispelType>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct ConsumeStatusSecondaryTunables {
+    pub max_count: u32,
+    pub polarity: Option<StatusPolarity>,
+    pub dispel_types: Vec<StatusDispelType>,
+    pub heal_per_stack: i32,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -525,6 +536,18 @@ mod tests {
                     assert!(
                         def.secondary.remove_status.is_some(),
                         "REMOVE_STATUS spell '{}' must define remove_status secondary data",
+                        def.kind.as_str()
+                    );
+                }
+                super::SpellBehavior::ConsumeStatus => {
+                    assert!(
+                        def.apply_status.is_none(),
+                        "CONSUME_STATUS spell '{}' should not define apply_status",
+                        def.kind.as_str()
+                    );
+                    assert!(
+                        def.secondary.consume_status.is_some(),
+                        "CONSUME_STATUS spell '{}' must define consume_status secondary data",
                         def.kind.as_str()
                     );
                 }

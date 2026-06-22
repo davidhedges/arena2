@@ -52,6 +52,20 @@
       ]
     },
     {
+      "source": "Assets/Arena/Content/Art/UI/AbilityIconSheets/warrior_blood_frenzy_sheet.png",
+      "columns": 4,
+      "rows": 2,
+      "cells": [
+        {"kind": "ABILITY", "id": "WARRIOR_BUTCHER"},
+        {"kind": "ABILITY", "id": "WARRIOR_CARVE"},
+        {"kind": "ABILITY", "id": "WARRIOR_FRENZY"},
+        {"kind": "ABILITY", "id": "WARRIOR_BLOODLUST"},
+        {"kind": "ABILITY", "id": "WARRIOR_BERSERKING"},
+        {"kind": "ABILITY", "id": "WARRIOR_BATTLE_TRANCE"},
+        {"kind": "ABILITY", "id": "WARRIOR_FEAST"}
+      ]
+    },
+    {
       "source": "Assets/Arena/Content/Art/UI/AbilityIconSheets/paladin_archer_sheet.png",
       "columns": 5,
       "rows": 4,

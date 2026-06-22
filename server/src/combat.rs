@@ -27,8 +27,8 @@ use crate::relations::{
     can_apply_status_polarity, can_harm, target_audience_allows, TargetAudience,
 };
 use crate::resources::{
-    grant_primary_resource_amount_for_kind, grant_primary_resource_for_damage_dealt,
-    grant_primary_resource_for_damage_taken,
+    grant_primary_resource_amount, grant_primary_resource_amount_for_kind,
+    grant_primary_resource_for_damage_dealt, grant_primary_resource_for_damage_taken,
 };
 use crate::spells::{
     bake_linear_special_movement, begin_special_movement_with_facing_policy,
@@ -94,6 +94,8 @@ use crate::melee::queued_melee_followup as _;
 #[allow(unused_imports)]
 use crate::movement_actions::movement_action_state as _;
 #[allow(unused_imports)]
+use crate::npcs::npc_physics as _;
+#[allow(unused_imports)]
 use crate::npcs::npc_state as _;
 #[allow(unused_imports)]
 use crate::player_physics::player_physics as _;
@@ -125,6 +127,7 @@ const COMBAT_REASON_DAMAGE: &str = "DAMAGE";
 const COMBAT_REASON_DEBUFF: &str = "DEBUFF";
 const COMBAT_REASON_HELPFUL_ASSIST: &str = "HELPFUL_ASSIST";
 const RESTLESS_PASSIVE_ID: &str = "WARRIOR_RESTLESS";
+const BLOODLUST_PASSIVE_ID: &str = "WARRIOR_BLOODLUST";
 const PASSIVE_STATUS_REFRESH_DURATION: Duration = Duration::from_secs(60 * 60);
 const AURA_STACK_GROUP_PREFIX: &str = "AURA:";
 
@@ -835,6 +838,17 @@ struct CombatStackingPassiveSpec {
     damage_amp_per_stack: f32,
 }
 
+struct BloodlustPassiveSpec {
+    passive_id: &'static str,
+    combat_profile_id: &'static str,
+    stack_group: &'static str,
+    radius_meters: f32,
+    max_stacks: u32,
+    tick_interval: Duration,
+    health_regen_per_stack: i32,
+    mana_regen_per_stack: f32,
+}
+
 fn restless_passive_spec() -> CombatStackingPassiveSpec {
     CombatStackingPassiveSpec {
         passive_id: RESTLESS_PASSIVE_ID,
@@ -847,6 +861,19 @@ fn restless_passive_spec() -> CombatStackingPassiveSpec {
         out_of_combat_decay_interval: Duration::from_millis(500),
         consume_on_direct_damage: 10,
         damage_amp_per_stack: 0.02,
+    }
+}
+
+fn bloodlust_passive_spec() -> BloodlustPassiveSpec {
+    BloodlustPassiveSpec {
+        passive_id: BLOODLUST_PASSIVE_ID,
+        combat_profile_id: COMBAT_PROFILE_TWO_HANDED_SWORD,
+        stack_group: BLOODLUST_PASSIVE_ID,
+        radius_meters: 10.0,
+        max_stacks: 50,
+        tick_interval: Duration::from_secs(1),
+        health_regen_per_stack: 2,
+        mana_regen_per_stack: 2.0,
     }
 }
 
@@ -876,6 +903,272 @@ pub fn tick_combat_stacking_passives(ctx: &ReducerContext, now: Timestamp) {
     for owner in owners {
         tick_combat_stacking_passive_for_owner(ctx, owner, &spec, now);
     }
+
+    tick_bloodlust_passives(ctx, now);
+}
+
+fn tick_bloodlust_passives(ctx: &ReducerContext, now: Timestamp) {
+    let spec = bloodlust_passive_spec();
+    let mut owners: HashSet<Identity> = ctx
+        .db
+        .player_state()
+        .iter()
+        .map(|state| state.player_id)
+        .collect();
+    owners.extend(
+        ctx.db
+            .combat_stacking_passive_runtime()
+            .iter()
+            .filter(|row| row.passive_id == spec.passive_id)
+            .map(|row| row.owner),
+    );
+    owners.extend(
+        ctx.db
+            .status_effect()
+            .effect_kind()
+            .filter(StatusEffectKind::Hot.as_str())
+            .filter(|effect| effect.stack_group == spec.stack_group)
+            .map(|effect| effect.target),
+    );
+
+    for owner in owners {
+        tick_bloodlust_passive_for_owner(ctx, owner, &spec, now);
+    }
+}
+
+fn tick_bloodlust_passive_for_owner(
+    ctx: &ReducerContext,
+    owner: Identity,
+    spec: &BloodlustPassiveSpec,
+    now: Timestamp,
+) {
+    let alive = ctx
+        .db
+        .player_state()
+        .player_id()
+        .find(owner)
+        .is_some_and(|state| state.alive);
+    if !alive || !bloodlust_passive_eligible(ctx, owner, spec) {
+        clear_bloodlust_passive(ctx, owner, spec);
+        return;
+    }
+
+    let stacks = nearby_bleeding_hostile_target_count(ctx, owner, spec.radius_meters, now)
+        .min(spec.max_stacks);
+    set_bloodlust_passive_stacks(ctx, owner, spec, stacks, now);
+    tick_bloodlust_mana_regen(ctx, owner, spec, stacks, now);
+}
+
+fn tick_bloodlust_mana_regen(
+    ctx: &ReducerContext,
+    owner: Identity,
+    spec: &BloodlustPassiveSpec,
+    stacks: u32,
+    now: Timestamp,
+) {
+    if stacks == 0 {
+        clear_combat_stacking_passive_runtime(ctx, owner, spec.passive_id);
+        return;
+    }
+
+    let key = combat_stacking_passive_runtime_key(owner, spec.passive_id);
+    let mut runtime = if let Some(existing) = ctx
+        .db
+        .combat_stacking_passive_runtime()
+        .key()
+        .find(key.clone())
+    {
+        existing
+    } else {
+        CombatStackingPassiveRuntime {
+            key,
+            owner,
+            passive_id: spec.passive_id.to_string(),
+            next_stack_at: now + spec.tick_interval,
+            last_direct_damage_at: Timestamp::UNIX_EPOCH,
+            last_consumed_action_key: String::new(),
+        }
+    };
+
+    let due = due_interval_count(now, runtime.next_stack_at, spec.tick_interval);
+    if due > 0 {
+        grant_primary_resource_amount(
+            ctx,
+            owner,
+            spec.mana_regen_per_stack * stacks as f32 * due as f32,
+            now,
+        );
+        runtime.next_stack_at =
+            advance_timestamp_by_intervals(runtime.next_stack_at, spec.tick_interval, due);
+    }
+    upsert_combat_stacking_passive_runtime(ctx, runtime);
+}
+
+fn set_bloodlust_passive_stacks(
+    ctx: &ReducerContext,
+    owner: Identity,
+    spec: &BloodlustPassiveSpec,
+    stacks: u32,
+    now: Timestamp,
+) {
+    let stacks = stacks.min(spec.max_stacks);
+    if stacks == 0 {
+        remove_status_group(ctx, owner, StatusEffectKind::Hot, spec.stack_group);
+        return;
+    }
+
+    let payload = StatusPayload::Hot {
+        tick_heal: spec.health_regen_per_stack,
+        tick_interval: spec.tick_interval,
+    };
+    let expires_at = now + PASSIVE_STATUS_REFRESH_DURATION;
+    if let Some(mut existing) = bloodlust_passive_status(ctx, owner, spec) {
+        if existing.stacks == stacks
+            && existing.tick_amount == spec.health_regen_per_stack
+            && existing.tick_interval_ms == spec.tick_interval.as_millis() as u64
+            && existing.expires_at > now + Duration::from_secs(60)
+        {
+            return;
+        }
+        if existing.stacks == stacks
+            && existing.tick_amount == spec.health_regen_per_stack
+            && existing.tick_interval_ms == spec.tick_interval.as_millis() as u64
+        {
+            set_status_expires_at(&mut existing, expires_at);
+        } else {
+            apply_status_update(
+                &mut existing,
+                owner,
+                spec.passive_id,
+                StatusPolarity::Buff,
+                StackPolicy::Refresh,
+                payload,
+                now,
+                expires_at,
+                spec.max_stacks,
+                Some(stacks),
+                String::new(),
+            );
+        }
+        ctx.db.status_effect().status_id().update(existing);
+    } else {
+        let mut effect = new_status_effect(
+            owner,
+            owner,
+            StatusPolarity::Buff,
+            spec.stack_group,
+            spec.max_stacks,
+            StackPolicy::Refresh,
+            spec.passive_id,
+            payload,
+            now,
+            expires_at,
+            String::new(),
+        );
+        effect.stacks = stacks;
+        ctx.db.status_effect().insert(effect);
+    }
+}
+
+fn clear_bloodlust_passive(ctx: &ReducerContext, owner: Identity, spec: &BloodlustPassiveSpec) {
+    remove_status_group(ctx, owner, StatusEffectKind::Hot, spec.stack_group);
+    clear_combat_stacking_passive_runtime(ctx, owner, spec.passive_id);
+}
+
+fn bloodlust_passive_status(
+    ctx: &ReducerContext,
+    owner: Identity,
+    spec: &BloodlustPassiveSpec,
+) -> Option<StatusEffect> {
+    let mut matches: Vec<StatusEffect> = ctx
+        .db
+        .status_effect()
+        .target()
+        .filter(owner)
+        .filter(|effect| {
+            effect.effect_kind == StatusEffectKind::Hot.as_str()
+                && effect.stack_group == spec.stack_group
+        })
+        .collect();
+    matches.sort_by_key(|effect| effect.status_id);
+    matches.into_iter().next()
+}
+
+fn bloodlust_passive_eligible(
+    ctx: &ReducerContext,
+    owner: Identity,
+    spec: &BloodlustPassiveSpec,
+) -> bool {
+    derived_combat_profile_id_for_owner(ctx, owner).is_some_and(|combat_profile_id| {
+        combat_profile_id.eq_ignore_ascii_case(spec.combat_profile_id)
+    })
+}
+
+fn nearby_bleeding_hostile_target_count(
+    ctx: &ReducerContext,
+    owner: Identity,
+    radius_meters: f32,
+    now: Timestamp,
+) -> u32 {
+    let Some(owner_position) = actor_position(ctx, owner) else {
+        return 0;
+    };
+    let radius_sq = radius_meters.max(0.0) * radius_meters.max(0.0);
+    if radius_sq <= 0.0 {
+        return 0;
+    }
+
+    ctx.db
+        .status_effect()
+        .iter()
+        .filter(|effect| effect.expires_at > now)
+        .filter(|effect| status_has_dispel_type(effect, StatusDispelType::Bleed))
+        .filter(|effect| effect.target != owner)
+        .filter(|effect| target_is_alive(ctx, effect.target))
+        .filter(|effect| can_harm(ctx, owner, effect.target))
+        .filter_map(|effect| {
+            let target_position = actor_position(ctx, effect.target)?;
+            actor_distance_sq(owner_position, target_position)
+                .is_some_and(|distance_sq| distance_sq <= radius_sq)
+                .then_some(effect.target)
+        })
+        .collect::<HashSet<_>>()
+        .len()
+        .min(u32::MAX as usize) as u32
+}
+
+fn status_has_dispel_type(effect: &StatusEffect, dispel_type: StatusDispelType) -> bool {
+    decode_status_dispel_types(effect.dispel_types.as_str()).contains(&dispel_type)
+}
+
+fn actor_position(ctx: &ReducerContext, identity: Identity) -> Option<(f32, f32, f32)> {
+    if let Some(physics) = ctx.db.player_physics().identity().find(identity) {
+        return Some((physics.pos_x, physics.pos_y, physics.pos_z));
+    }
+    ctx.db
+        .npc_physics()
+        .identity()
+        .find(identity)
+        .map(|physics| (physics.pos_x, physics.pos_y, physics.pos_z))
+}
+
+fn target_is_alive(ctx: &ReducerContext, identity: Identity) -> bool {
+    if let Some(state) = ctx.db.player_state().player_id().find(identity) {
+        return state.alive;
+    }
+    ctx.db
+        .npc_state()
+        .identity()
+        .find(identity)
+        .is_some_and(|state| state.alive)
+}
+
+fn actor_distance_sq(a: (f32, f32, f32), b: (f32, f32, f32)) -> Option<f32> {
+    let dx = a.0 - b.0;
+    let dy = a.1 - b.1;
+    let dz = a.2 - b.2;
+    let distance_sq = dx.mul_add(dx, dy.mul_add(dy, dz * dz));
+    distance_sq.is_finite().then_some(distance_sq)
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -1639,6 +1932,8 @@ pub enum StatusEffectKind {
     AttackSpeed,
     CastSpeed,
     TemporaryHitpoints,
+    Berserking,
+    BattleTrance,
 }
 
 impl StatusEffectKind {
@@ -1664,6 +1959,8 @@ impl StatusEffectKind {
             Self::AttackSpeed => "ATTACK_SPEED",
             Self::CastSpeed => "CAST_SPEED",
             Self::TemporaryHitpoints => "TEMPORARY_HITPOINTS",
+            Self::Berserking => "BERSERKING",
+            Self::BattleTrance => "BATTLE_TRANCE",
         }
     }
 
@@ -1689,6 +1986,8 @@ impl StatusEffectKind {
             "ATTACK_SPEED" => Some(Self::AttackSpeed),
             "CAST_SPEED" => Some(Self::CastSpeed),
             "TEMPORARY_HITPOINTS" => Some(Self::TemporaryHitpoints),
+            "BERSERKING" => Some(Self::Berserking),
+            "BATTLE_TRANCE" => Some(Self::BattleTrance),
             _ => None,
         }
     }
@@ -1742,6 +2041,8 @@ pub enum StatusPayload {
         absorb_amount: i32,
         absorb_cap: i32,
     },
+    Berserking,
+    BattleTrance,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -1850,6 +2151,8 @@ impl AuthoredStatusPayload {
                 absorb_amount: self.absorb_amount,
                 absorb_cap: self.absorb_cap,
             },
+            StatusEffectKind::Berserking => StatusPayload::Berserking,
+            StatusEffectKind::BattleTrance => StatusPayload::BattleTrance,
         }
     }
 
@@ -1933,6 +2236,30 @@ impl AuthoredStatusPayload {
                     ));
                 }
             }
+            StatusEffectKind::Berserking => {
+                if !slow_is_default
+                    || !dot_is_default
+                    || !hot_is_default
+                    || !scalar_is_default
+                    || !absorb_is_default
+                {
+                    return Err(format!(
+                        "{subject} {path} has fields irrelevant to BERSERKING"
+                    ));
+                }
+            }
+            StatusEffectKind::BattleTrance => {
+                if !slow_is_default
+                    || !dot_is_default
+                    || !hot_is_default
+                    || !scalar_is_default
+                    || !absorb_is_default
+                {
+                    return Err(format!(
+                        "{subject} {path} has fields irrelevant to BATTLE_TRANCE"
+                    ));
+                }
+            }
             StatusEffectKind::TemporaryHitpoints => {
                 if self.absorb_amount <= 0 || self.absorb_cap < self.absorb_amount {
                     return Err(format!(
@@ -1997,6 +2324,8 @@ impl StatusPayload {
             Self::AttackSpeed { .. } => StatusEffectKind::AttackSpeed,
             Self::CastSpeed { .. } => StatusEffectKind::CastSpeed,
             Self::TemporaryHitpoints { .. } => StatusEffectKind::TemporaryHitpoints,
+            Self::Berserking => StatusEffectKind::Berserking,
+            Self::BattleTrance => StatusEffectKind::BattleTrance,
         }
     }
 
@@ -2010,7 +2339,9 @@ impl StatusPayload {
             | Self::Stagger
             | Self::Knockdown
             | Self::MoveSlowImmunity
-            | Self::MeleeAttackModifier => StatusEffectColumns {
+            | Self::MeleeAttackModifier
+            | Self::Berserking
+            | Self::BattleTrance => StatusEffectColumns {
                 slow_pct: 0.0,
                 tick_amount: 0,
                 tick_interval_ms: 0,
@@ -2168,6 +2499,8 @@ impl StatusPayload {
                 absorb_amount: columns.absorb_amount.max(0).min(columns.absorb_cap.max(0)),
                 absorb_cap: columns.absorb_cap.max(0),
             },
+            StatusEffectKind::Berserking => Self::Berserking,
+            StatusEffectKind::BattleTrance => Self::BattleTrance,
         }
     }
 
@@ -2181,7 +2514,9 @@ impl StatusPayload {
             | Self::Stagger
             | Self::Knockdown
             | Self::MoveSlowImmunity
-            | Self::MeleeAttackModifier => false,
+            | Self::MeleeAttackModifier
+            | Self::Berserking
+            | Self::BattleTrance => false,
             Self::Slow { slow_pct } => !(MIN_SLOW_PCT..=0.95).contains(&slow_pct),
             Self::MoveSpeed { modifier_scalar } => {
                 !modifier_scalar.is_finite() || modifier_scalar <= 0.0
@@ -2230,7 +2565,9 @@ impl StatusPayload {
             | Self::Stagger
             | Self::Knockdown
             | Self::MoveSlowImmunity
-            | Self::MeleeAttackModifier => Ok(()),
+            | Self::MeleeAttackModifier
+            | Self::Berserking
+            | Self::BattleTrance => Ok(()),
             Self::Slow { slow_pct } => {
                 if !(MIN_SLOW_PCT..=0.95).contains(&slow_pct) {
                     return Err(format!("{subject} {path}.slow_pct must be > 0 and <= 0.95"));
@@ -2327,7 +2664,9 @@ impl StatusPayload {
             | Self::Stagger
             | Self::Knockdown
             | Self::MoveSlowImmunity
-            | Self::MeleeAttackModifier => true,
+            | Self::MeleeAttackModifier
+            | Self::Berserking
+            | Self::BattleTrance => true,
             Self::Slow { slow_pct } => slow_pct > existing.slow_pct,
             Self::MoveSpeed { modifier_scalar } => {
                 modifier_scalar > existing.modifier_scalar.max(0.0)
@@ -3227,6 +3566,11 @@ fn apply_damage_to_player_state(
     resolved.final_amount = hp_damage;
     state.hp -= hp_damage;
     grant_primary_resource_for_damage_taken(ctx, target, hp_damage, ctx.timestamp);
+    let (battle_trance_hp, _) = battle_trance_hp_after_damage(
+        state.hp,
+        has_active_status(ctx, target, StatusEffectKind::BattleTrance, ctx.timestamp),
+    );
+    state.hp = battle_trance_hp;
     if state.hp <= 0 {
         state.hp = 0;
         defeated_instance_id = handle_death(ctx, &mut state);
@@ -3252,6 +3596,14 @@ fn apply_damage_to_player_state(
     record_match_damage_done(ctx, source, hp_damage.max(0));
     emit_combat_effect_event(ctx, hit, EFFECT_TYPE_DAMAGE, resolved);
     defeated_instance_id.is_some()
+}
+
+fn battle_trance_hp_after_damage(hp_after_damage: i32, battle_trance_active: bool) -> (i32, bool) {
+    if battle_trance_active && hp_after_damage <= 0 {
+        (1, true)
+    } else {
+        (hp_after_damage, false)
+    }
 }
 
 fn apply_damage_to_npc_state(
@@ -3311,7 +3663,8 @@ fn resolve_damage_amount(
     temporary_modifiers: &TemporaryCombatModifiers,
 ) -> ResolvedEffectAmount {
     let delivery = DamageDelivery::from_wire(hit.damage_delivery.as_str());
-    let resistance_multiplier = resistance_multiplier_for_damage_type(ctx, hit);
+    let resistance_multiplier =
+        resistance_multiplier_for_damage_type(ctx, hit, temporary_modifiers);
     let non_crit_multiplier = if hit.source == Identity::ZERO {
         resistance_multiplier * temporary_modifiers.damage_taken_multiplier_for(&hit.target)
     } else {
@@ -3326,10 +3679,18 @@ fn resolve_damage_amount(
         hit,
         non_crit_multiplier,
         equipment_crit_chance_bonus(ctx, hit),
+        temporary_modifiers.crit_chance_override_for(&hit.source),
     )
 }
 
-fn resistance_multiplier_for_damage_type(ctx: &ReducerContext, hit: &PendingHit) -> f32 {
+fn resistance_multiplier_for_damage_type(
+    ctx: &ReducerContext,
+    hit: &PendingHit,
+    temporary_modifiers: &TemporaryCombatModifiers,
+) -> f32 {
+    if temporary_modifiers.disables_equipment_defenses_for(&hit.target) {
+        return 1.0;
+    }
     let resistance = equipment_modifier_totals_for_owner(ctx, hit.target)
         .resistance_for_damage_type(&hit.damage_type);
     (1.0 - resistance).max(0.0)
@@ -3468,7 +3829,7 @@ fn resolve_heal_amount(
     temporary_modifiers: &TemporaryCombatModifiers,
 ) -> ResolvedEffectAmount {
     let non_crit_multiplier = temporary_modifiers.healing_taken_multiplier_for(&hit.target);
-    resolve_effect_amount(ctx, hit, non_crit_multiplier, 0.0)
+    resolve_effect_amount(ctx, hit, non_crit_multiplier, 0.0, None)
 }
 
 fn resolve_effect_amount(
@@ -3476,10 +3837,13 @@ fn resolve_effect_amount(
     hit: &PendingHit,
     non_crit_multiplier: f32,
     additive_crit_chance: f32,
+    crit_chance_override: Option<f32>,
 ) -> ResolvedEffectAmount {
     let base_amount = hit.amount.max(0);
     let crit_chance = if hit.source == Identity::ZERO {
         0.0
+    } else if let Some(override_chance) = crit_chance_override {
+        override_chance.clamp(0.0, 1.0)
     } else {
         (derived_combat_stats_for_owner(ctx, hit.source).crit_chance + additive_crit_chance)
             .clamp(0.0, 1.0)
@@ -4657,6 +5021,9 @@ impl StatusRuntimeView {
                         let entry = modifiers.cast_speed_by_target.entry(*target).or_insert(0.0);
                         *entry = (*entry).max(effect.modifier_scalar.max(0.0));
                     }
+                    StatusEffectKind::Berserking => {
+                        modifiers.berserking.insert(*target);
+                    }
                     StatusEffectKind::Root
                     | StatusEffectKind::Stun
                     | StatusEffectKind::Freeze
@@ -4669,7 +5036,8 @@ impl StatusRuntimeView {
                     | StatusEffectKind::Dot
                     | StatusEffectKind::Hot
                     | StatusEffectKind::MeleeAttackModifier
-                    | StatusEffectKind::TemporaryHitpoints => {}
+                    | StatusEffectKind::TemporaryHitpoints
+                    | StatusEffectKind::BattleTrance => {}
                 }
             }
         }
@@ -4687,6 +5055,7 @@ pub struct TemporaryCombatModifiers {
     healing_taken_reduction_by_target: HashMap<Identity, f32>,
     attack_speed_multiplier_by_target: HashMap<Identity, f32>,
     cast_speed_by_target: HashMap<Identity, f32>,
+    berserking: HashSet<Identity>,
 }
 
 impl TemporaryCombatModifiers {
@@ -4749,6 +5118,14 @@ impl TemporaryCombatModifiers {
             .copied()
             .unwrap_or(0.0)
             .max(0.0)
+    }
+
+    pub fn crit_chance_override_for(&self, identity: &Identity) -> Option<f32> {
+        self.berserking.contains(identity).then_some(1.0)
+    }
+
+    pub fn disables_equipment_defenses_for(&self, identity: &Identity) -> bool {
+        self.berserking.contains(identity)
     }
 }
 
@@ -4876,12 +5253,14 @@ fn attack_speed_scalar_to_multiplier(modifier_scalar: f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::{
-        apply_status_update, attack_speed_scalar_to_multiplier, due_interval_count,
+        actor_distance_sq, apply_status_update, attack_speed_scalar_to_multiplier,
+        battle_trance_hp_after_damage, bloodlust_passive_spec, due_interval_count,
         event_prune_cutoff_micros, new_status_effect, resolve_effect_amount_from_roll,
         resolve_temporary_hitpoint_absorb, stacked_slow_pct, stagger_shove_tunables,
-        AuthoredStatusPayload, DamageDelivery, EffectPacket, MovementModifiers, StackPolicy,
-        StatusEffect, StatusEffectKind, StatusPayload, StatusPolarity, StatusRuntimeView,
-        TemporaryCombatModifiers, COMBAT_PROJECTILE_DEFINITIONS, PLAYER_EVENT_RETENTION,
+        status_has_dispel_type, AuthoredStatusPayload, DamageDelivery, EffectPacket,
+        MovementModifiers, StackPolicy, StatusDispelType, StatusEffect, StatusEffectKind,
+        StatusPayload, StatusPolarity, StatusRuntimeView, TemporaryCombatModifiers,
+        BLOODLUST_PASSIVE_ID, COMBAT_PROJECTILE_DEFINITIONS, PLAYER_EVENT_RETENTION,
     };
     use crate::relations::TargetAudience;
     use spacetimedb::{Identity, Timestamp};
@@ -4930,6 +5309,43 @@ mod tests {
     }
 
     #[test]
+    fn bloodlust_passive_spec_uses_bleed_radius_and_regen_tuning() {
+        let spec = bloodlust_passive_spec();
+
+        assert_eq!(spec.passive_id, BLOODLUST_PASSIVE_ID);
+        assert_eq!(spec.stack_group, BLOODLUST_PASSIVE_ID);
+        assert_eq!(spec.radius_meters, 10.0);
+        assert_eq!(spec.max_stacks, 50);
+        assert_eq!(spec.tick_interval, Duration::from_secs(1));
+        assert_eq!(spec.health_regen_per_stack, 2);
+        assert_eq!(spec.mana_regen_per_stack, 2.0);
+        assert_eq!(
+            actor_distance_sq((0.0, 0.0, 0.0), (6.0, 0.0, 8.0)),
+            Some(100.0)
+        );
+    }
+
+    #[test]
+    fn bloodlust_bleed_detection_uses_existing_status_dispel_type() {
+        let now = Timestamp::UNIX_EPOCH;
+        let mut effect = test_status_effect(
+            test_identity(),
+            StatusPayload::Dot {
+                tick_damage: 3,
+                damage_type: crate::combat::DamageType::Physical,
+                tick_interval: Duration::from_secs(1),
+            },
+            now,
+            now + Duration::from_secs(6),
+        );
+
+        effect.dispel_types = "BLEED|PHYSICAL".to_string();
+
+        assert!(status_has_dispel_type(&effect, StatusDispelType::Bleed));
+        assert!(!status_has_dispel_type(&effect, StatusDispelType::Magic));
+    }
+
+    #[test]
     fn standard_arrow_projectile_definition_is_fast_and_physical() {
         let arrow = COMBAT_PROJECTILE_DEFINITIONS
             .iter()
@@ -4975,6 +5391,14 @@ mod tests {
 
         assert_eq!(resolved.final_amount, 120);
         assert!(!resolved.was_critical);
+    }
+
+    #[test]
+    fn battle_trance_prevents_lethal_player_damage_at_one_hp() {
+        assert_eq!(battle_trance_hp_after_damage(-40, true), (1, true));
+        assert_eq!(battle_trance_hp_after_damage(0, true), (1, true));
+        assert_eq!(battle_trance_hp_after_damage(12, true), (12, false));
+        assert_eq!(battle_trance_hp_after_damage(-40, false), (-40, false));
     }
 
     #[test]
@@ -5392,6 +5816,16 @@ mod tests {
                     absorb_amount: 30,
                     absorb_cap: 60,
                 },
+            ),
+            (
+                StatusPayload::Berserking,
+                StatusEffectKind::Berserking,
+                StatusPayload::Berserking,
+            ),
+            (
+                StatusPayload::BattleTrance,
+                StatusEffectKind::BattleTrance,
+                StatusPayload::BattleTrance,
             ),
         ];
 
@@ -5936,6 +6370,12 @@ mod tests {
                     now,
                     now + Duration::from_secs(5),
                 ),
+                test_status_effect(
+                    target,
+                    StatusPayload::Berserking,
+                    now,
+                    now + Duration::from_secs(5),
+                ),
             ],
             &[target],
             now,
@@ -5954,6 +6394,8 @@ mod tests {
         assert_eq!(modifiers.healing_taken_multiplier_for(&target), 0.0);
         assert!((modifiers.attack_speed_multiplier_for(&target) - 0.9625).abs() < 0.0001);
         assert!((modifiers.cast_speed_multiplier_for(&target) - 1.30).abs() < 0.0001);
+        assert_eq!(modifiers.crit_chance_override_for(&target), Some(1.0));
+        assert!(modifiers.disables_equipment_defenses_for(&target));
     }
 }
 

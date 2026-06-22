@@ -21,6 +21,10 @@ namespace SpacetimeDB.Types
         public int BaseDamage;
         [DataMember(Name = "damage_type")]
         public string DamageType;
+        [DataMember(Name = "target_health_damage_scaling_min_multiplier")]
+        public float TargetHealthDamageScalingMinMultiplier;
+        [DataMember(Name = "target_health_damage_scaling_max_multiplier")]
+        public float TargetHealthDamageScalingMaxMultiplier;
         [DataMember(Name = "applies_stagger")]
         public bool AppliesStagger;
         [DataMember(Name = "range")]
@@ -65,6 +69,8 @@ namespace SpacetimeDB.Types
             string ActionId,
             int BaseDamage,
             string DamageType,
+            float TargetHealthDamageScalingMinMultiplier,
+            float TargetHealthDamageScalingMaxMultiplier,
             bool AppliesStagger,
             float Range,
             float MinimumRange,
@@ -90,6 +96,8 @@ namespace SpacetimeDB.Types
             this.ActionId = ActionId;
             this.BaseDamage = BaseDamage;
             this.DamageType = DamageType;
+            this.TargetHealthDamageScalingMinMultiplier = TargetHealthDamageScalingMinMultiplier;
+            this.TargetHealthDamageScalingMaxMultiplier = TargetHealthDamageScalingMaxMultiplier;
             this.AppliesStagger = AppliesStagger;
             this.Range = Range;
             this.MinimumRange = MinimumRange;

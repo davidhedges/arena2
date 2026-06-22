@@ -543,6 +543,74 @@
       }
     },
     {
+      "ability_id": "WARRIOR_BUTCHER",
+      "combat_profile_id": "TWO_HANDED_SWORD",
+      "action_id": "COMBO_ATTACK_3_1_LOW_TO_HIGH",
+      "display_name": "Butcher",
+      "resource_kind": "RAGE",
+      "resource_cost": 30,
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 72,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 36,
+        "target_health_damage_scaling": {
+          "min_multiplier": 1,
+          "max_multiplier": 2
+        },
+        "applies_stagger": false,
+        "range": 2.5,
+        "cooldown_ms": 1200,
+        "uses_global_cooldown": true,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET"
+      }
+    },
+    {
+      "ability_id": "WARRIOR_CARVE",
+      "combat_profile_id": "TWO_HANDED_SWORD",
+      "action_id": "WARRIOR_CARVE",
+      "display_name": "Carve",
+      "resource_kind": "RAGE",
+      "resource_cost": 25,
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 74,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 20,
+        "applies_stagger": false,
+        "range": 2.5,
+        "cooldown_ms": 1000,
+        "uses_global_cooldown": true,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET",
+        "melee_impact_effects": [
+          {
+            "kind": "APPLY_STATUS",
+            "status": {
+              "kind": "DOT",
+              "duration_ms": 6000,
+              "status_stack_group": "WARRIOR_CARVE_BLEED",
+              "tick_damage": 3,
+              "damage_type": "PHYSICAL",
+              "tick_interval_ms": 1000,
+              "max_stacks": 1,
+              "stack_policy": "REFRESH",
+              "dispel_types": [
+                "BLEED"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
       "ability_id": "WARRIOR_DREAD_STRIKE",
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "WARRIOR_DREAD_STRIKE",
@@ -1321,6 +1389,54 @@
       }
     },
     {
+      "ability_id": "WARRIOR_FRENZY",
+      "combat_profile_id": "TWO_HANDED_SWORD",
+      "action_id": "FRENZY",
+      "display_name": "Frenzy",
+      "resource_kind": "RAGE",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 88,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 12000,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "SELF",
+        "requires_target": false,
+        "resource_cost": 20,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "APPLY_STATUS",
+          "duration_ms": 8000,
+          "status_stack_group": "FRENZY",
+          "polarity": "BUFF",
+          "status": {
+            "kind": "ATTACK_SPEED",
+            "modifier_scalar": 0.5,
+            "max_stacks": 1,
+            "stack_policy": "REFRESH"
+          }
+        }
+      }
+    },
+    {
+      "ability_id": "WARRIOR_BLOODLUST",
+      "combat_profile_id": "TWO_HANDED_SWORD",
+      "action_id": "BLOODLUST",
+      "display_name": "Bloodlust",
+      "resource_kind": "RAGE",
+      "ability_tags": [
+        "PASSIVE"
+      ],
+      "sort_order": 89,
+      "gameplay": {
+        "kind": "PASSIVE"
+      }
+    },
+    {
       "ability_id": "WARRIOR_ENRAGE",
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "ENRAGE",
@@ -1344,6 +1460,107 @@
         "arms_auto_attack_on_cast": false,
         "delivery": {
           "kind": "SELF_RESOURCE"
+        }
+      }
+    },
+    {
+      "ability_id": "WARRIOR_BERSERKING",
+      "combat_profile_id": "TWO_HANDED_SWORD",
+      "action_id": "BERSERKING",
+      "display_name": "Berserking",
+      "resource_kind": "RAGE",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 91,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 12000,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "SELF",
+        "requires_target": false,
+        "resource_cost": 20,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "APPLY_STATUS",
+          "duration_ms": 10000,
+          "status_stack_group": "BERSERKING",
+          "polarity": "BUFF",
+          "status": {
+            "kind": "BERSERKING",
+            "modifier_scalar": 0,
+            "max_stacks": 1,
+            "stack_policy": "REFRESH"
+          }
+        }
+      }
+    },
+    {
+      "ability_id": "WARRIOR_BATTLE_TRANCE",
+      "combat_profile_id": "TWO_HANDED_SWORD",
+      "action_id": "BATTLE_TRANCE",
+      "display_name": "Battle Trance",
+      "resource_kind": "RAGE",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 92,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 12000,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "SELF",
+        "requires_target": false,
+        "resource_cost": 20,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "APPLY_STATUS",
+          "duration_ms": 5000,
+          "status_stack_group": "BATTLE_TRANCE",
+          "polarity": "BUFF",
+          "status": {
+            "kind": "BATTLE_TRANCE",
+            "modifier_scalar": 0,
+            "max_stacks": 1,
+            "stack_policy": "REFRESH"
+          }
+        }
+      }
+    },
+    {
+      "ability_id": "WARRIOR_FEAST",
+      "combat_profile_id": "TWO_HANDED_SWORD",
+      "action_id": "FEAST",
+      "display_name": "Feast",
+      "resource_kind": "RAGE",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 93,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 12000,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "TARGET",
+        "target_audience": "HOSTILE",
+        "requires_target": true,
+        "resource_cost": 20,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "CONSUME_STATUS",
+          "max_distance": 20,
+          "max_count": 0,
+          "polarity": "DEBUFF",
+          "dispel_types": [
+            "BLEED"
+          ],
+          "heal_per_stack": 20
         }
       }
     },
@@ -2364,6 +2581,20 @@
     },
     {
       "presentation_kind": "ABILITY",
+      "presentation_id": "WARRIOR_BUTCHER",
+      "display_name": "Butcher",
+      "description": "A rising greatsword cut that deals more damage as the target's health drops.",
+      "sort_order": 72
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "WARRIOR_CARVE",
+      "display_name": "Carve",
+      "description": "A low-to-high greatsword cut that opens a bleeding wound.",
+      "sort_order": 74
+    },
+    {
+      "presentation_kind": "ABILITY",
       "presentation_id": "WARRIOR_DREAD_STRIKE",
       "display_name": "Dread Strike",
       "description": "A committed lunging strike.",
@@ -2490,10 +2721,45 @@
     },
     {
       "presentation_kind": "ABILITY",
+      "presentation_id": "WARRIOR_FRENZY",
+      "display_name": "Frenzy",
+      "description": "Drives the wielder into a frenzy, increasing auto-attack speed.",
+      "sort_order": 88
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "WARRIOR_BLOODLUST",
+      "display_name": "Bloodlust",
+      "description": "Feeds on nearby bleeding enemies, regenerating health and mana for each within 10m.",
+      "sort_order": 89
+    },
+    {
+      "presentation_kind": "ABILITY",
       "presentation_id": "WARRIOR_ENRAGE",
       "display_name": "Enrage",
       "description": "Instantly generates Rage.",
       "sort_order": 90
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "WARRIOR_BERSERKING",
+      "display_name": "Berserking",
+      "description": "Gives 100% critical strike chance for 10s, but drops armor and resistances to zero.",
+      "sort_order": 91
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "WARRIOR_BATTLE_TRANCE",
+      "display_name": "Battle Trance",
+      "description": "Enter a 5s trance that allows life loss but prevents death, keeping HP at a minimum of 1.",
+      "sort_order": 92
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "WARRIOR_FEAST",
+      "display_name": "Feast",
+      "description": "Consumes all bleed stacks on a hostile target to heal yourself, scaling with stacks consumed.",
+      "sort_order": 93
     },
     {
       "presentation_kind": "ABILITY",
@@ -3229,6 +3495,12 @@
       "sort_order": 110
     },
     {
+      "slot_id": "slot_1_2",
+      "combat_profile_id": "TWO_HANDED_SWORD",
+      "ability_id": "WARRIOR_BUTCHER",
+      "sort_order": 120
+    },
+    {
       "slot_id": "slot_1_3",
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_kind": "ABILITY",
@@ -3243,6 +3515,12 @@
       "action_id": "WARRIOR_EARTHSHATTER",
       "ability_id": "WARRIOR_EARTHSHATTER",
       "sort_order": 140
+    },
+    {
+      "slot_id": "slot_1_5",
+      "combat_profile_id": "TWO_HANDED_SWORD",
+      "ability_id": "WARRIOR_CARVE",
+      "sort_order": 150
     },
     {
       "slot_id": "slot_2_0",
