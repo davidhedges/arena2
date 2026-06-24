@@ -77,6 +77,10 @@ namespace Arena.Network
             conn.Db.EquipmentLoadout.OnUpdate += registry.OnEquipmentLoadoutUpdate;
             conn.Db.EquipmentLoadout.OnDelete += registry.OnEquipmentLoadoutDelete;
 
+            conn.Db.ActiveCombatDiscipline.OnInsert += registry.OnActiveCombatDisciplineInsert;
+            conn.Db.ActiveCombatDiscipline.OnUpdate += registry.OnActiveCombatDisciplineUpdate;
+            conn.Db.ActiveCombatDiscipline.OnDelete += registry.OnActiveCombatDisciplineDelete;
+
             conn.Db.ItemInstance.OnInsert += registry.OnItemInstanceInsert;
             conn.Db.ItemInstance.OnUpdate += registry.OnItemInstanceUpdate;
             conn.Db.ItemInstance.OnDelete += registry.OnItemInstanceDelete;

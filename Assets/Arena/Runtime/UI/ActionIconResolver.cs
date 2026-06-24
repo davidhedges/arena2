@@ -20,6 +20,9 @@ namespace Arena.UI
             if (action.IsFixed)
                 return Resolve(ActionKinds.Fixed, action.ActionId);
 
+            if (action.IsCombatDisciplineSwitch)
+                return Resolve(ActionKinds.CombatDisciplineSwitch, action.ActionId);
+
             return Resolve(ActionKinds.Ability, action.AbilityId);
         }
 

@@ -12,17 +12,17 @@ namespace SpacetimeDB.Types
 {
     public sealed partial class RemoteReducers : RemoteBase
     {
-        public delegate void CleanupProjectileLoadHarnessHandler(ReducerEventContext ctx);
-        public event CleanupProjectileLoadHarnessHandler? OnCleanupProjectileLoadHarness;
+        public delegate void SetCombatDisciplineHandler(ReducerEventContext ctx, string disciplineId);
+        public event SetCombatDisciplineHandler? OnSetCombatDiscipline;
 
-        public void CleanupProjectileLoadHarness()
+        public void SetCombatDiscipline(string disciplineId)
         {
-            conn.InternalCallReducer(new Reducer.CleanupProjectileLoadHarness());
+            conn.InternalCallReducer(new Reducer.SetCombatDiscipline(disciplineId));
         }
 
-        public bool InvokeCleanupProjectileLoadHarness(ReducerEventContext ctx, Reducer.CleanupProjectileLoadHarness args)
+        public bool InvokeSetCombatDiscipline(ReducerEventContext ctx, Reducer.SetCombatDiscipline args)
         {
-            if (OnCleanupProjectileLoadHarness == null)
+            if (OnSetCombatDiscipline == null)
             {
                 if (InternalOnUnhandledReducerError != null)
                 {
@@ -34,8 +34,9 @@ namespace SpacetimeDB.Types
                 }
                 return false;
             }
-            OnCleanupProjectileLoadHarness(
-                ctx
+            OnSetCombatDiscipline(
+                ctx,
+                args.DisciplineId
             );
             return true;
         }
@@ -45,9 +46,22 @@ namespace SpacetimeDB.Types
     {
         [SpacetimeDB.Type]
         [DataContract]
-        public sealed partial class CleanupProjectileLoadHarness : Reducer, IReducerArgs
+        public sealed partial class SetCombatDiscipline : Reducer, IReducerArgs
         {
-            string IReducerArgs.ReducerName => "cleanup_projectile_load_harness";
+            [DataMember(Name = "discipline_id")]
+            public string DisciplineId;
+
+            public SetCombatDiscipline(string DisciplineId)
+            {
+                this.DisciplineId = DisciplineId;
+            }
+
+            public SetCombatDiscipline()
+            {
+                this.DisciplineId = "";
+            }
+
+            string IReducerArgs.ReducerName => "set_combat_discipline";
         }
     }
 }

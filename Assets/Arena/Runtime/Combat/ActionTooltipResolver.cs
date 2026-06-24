@@ -12,6 +12,7 @@ namespace Arena.Combat
         public const string PresentationKindSpell = "SPELL";
         public const string PresentationKindFixed = "FIXED";
         public const string PresentationKindStatus = "STATUS";
+        public const string PresentationKindCombatDisciplineSwitch = "COMBAT_DISCIPLINE_SWITCH";
 
         public static TooltipData ResolveForSelectableAction(
             DbConnection? conn,
@@ -22,6 +23,8 @@ namespace Arena.Combat
                 return default;
             if (action.IsFixed)
                 return ResolveForFixedAction(conn, action.ActionId);
+            if (action.IsCombatDisciplineSwitch)
+                return ResolveForCombatDisciplineSwitch(conn, action);
 
             ActionPresentationCatalog? presentation =
                 ActionPresentation.FindPresentation(conn, PresentationKindAbility, action.AbilityId)
@@ -40,11 +43,6 @@ namespace Arena.Combat
                 resourceCost = spellDefinition.PrimaryResourceCost;
                 resourceKind = "MANA";
             }
-            else if (resourceCost > 0.0001f && !string.IsNullOrWhiteSpace(resourceKind) && !IsMana(resourceKind))
-            {
-                resourceCost = 0f;
-            }
-
             if (string.IsNullOrWhiteSpace(resourceKind) && resourceCost > 0.0001f)
                 resourceKind = ResolvePrimaryResourceKind(conn, owner);
 
@@ -110,6 +108,23 @@ namespace Arena.Combat
                 presentation.Description);
         }
 
+        public static TooltipData ResolveForCombatDisciplineSwitch(
+            DbConnection? conn,
+            ActiveActionBarAction action)
+        {
+            if (conn == null || string.IsNullOrWhiteSpace(action.ActionId))
+                return default;
+
+            string normalizedActionId = WireIdentifier.Normalize(action.ActionId);
+            ActionPresentationCatalog? presentation =
+                ActionPresentation.FindPresentation(conn, PresentationKindCombatDisciplineSwitch, normalizedActionId);
+            string displayName = string.IsNullOrWhiteSpace(presentation?.DisplayName)
+                ? action.DisplayName
+                : presentation.DisplayName;
+            string metadata = action.IsAvailable ? string.Empty : "No saved weapon loadout";
+            return new TooltipData(displayName, action.ResourceKind, metadata);
+        }
+
         private static SpellDefinition? ResolveSpellDefinition(
             DbConnection? conn,
             string authoredActionId,
@@ -130,12 +145,7 @@ namespace Arena.Combat
             if (conn == null || !owner.HasValue)
                 return string.Empty;
 
-            return "MANA";
-        }
-
-        private static bool IsMana(string resourceKind)
-        {
-            return string.Equals(WireIdentifier.Normalize(resourceKind), "MANA", System.StringComparison.Ordinal);
+            return "STAMINA";
         }
 
         private static string ResolveResourceDisplayName(DbConnection? conn, string resourceKind)

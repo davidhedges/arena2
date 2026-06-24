@@ -26,6 +26,53 @@
       "sort_order": 50
     }
   ],
+  "combat_disciplines": [
+    {
+      "discipline_id": "SUBTLETY",
+      "display_name": "Subtlety",
+      "combat_profile_id": "DAGGERS",
+      "primary_resource_kind": "STAMINA",
+      "inactive_resource_tick": true,
+      "inactive_decay_delay_ms": 0,
+      "sort_order": 10
+    },
+    {
+      "discipline_id": "WAR",
+      "display_name": "War",
+      "combat_profile_id": "TWO_HANDED_SWORD",
+      "primary_resource_kind": "STAMINA",
+      "inactive_resource_tick": true,
+      "inactive_decay_delay_ms": 0,
+      "sort_order": 20
+    },
+    {
+      "discipline_id": "ZEAL",
+      "display_name": "Zeal",
+      "combat_profile_id": "SWORD_AND_SHIELD",
+      "primary_resource_kind": "STAMINA",
+      "inactive_resource_tick": true,
+      "inactive_decay_delay_ms": 0,
+      "sort_order": 30
+    },
+    {
+      "discipline_id": "PRECISION",
+      "display_name": "Precision",
+      "combat_profile_id": "ARCHER_BOW",
+      "primary_resource_kind": "STAMINA",
+      "inactive_resource_tick": true,
+      "inactive_decay_delay_ms": 0,
+      "sort_order": 40
+    },
+    {
+      "discipline_id": "ARCANA",
+      "display_name": "Arcana",
+      "combat_profile_id": "STAFF",
+      "primary_resource_kind": "STAMINA",
+      "inactive_resource_tick": true,
+      "inactive_decay_delay_ms": 0,
+      "sort_order": 50
+    }
+  ],
   "combat_modes": [
     {
       "combat_profile_id": "ARCHER_BOW",
@@ -43,6 +90,25 @@
     }
   ],
   "resources": [
+    {
+      "resource_kind": "STAMINA",
+      "display_name": "Stamina",
+      "color_hex": "#8A8F98",
+      "base_max": 100,
+      "max_per_insight": 0,
+      "base_regen_per_second": 10,
+      "regen_per_insight": 0,
+      "gain_multiplier_per_insight": 0.02,
+      "flat_decay_per_second": 0,
+      "out_of_combat_flat_decay_per_second": 0,
+      "decay_per_current_point_per_second": 0,
+      "gain_per_damage_taken": 0,
+      "gain_per_damage_dealt": 0,
+      "gain_per_melee_hit": 0,
+      "gain_per_spell_cast": 0,
+      "starts_full": true,
+      "sort_order": 5
+    },
     {
       "resource_kind": "RAGE",
       "display_name": "Rage",
@@ -99,6 +165,25 @@
       "gain_per_spell_cast": 0,
       "starts_full": true,
       "sort_order": 30
+    },
+    {
+      "resource_kind": "FOCUS",
+      "display_name": "Focus",
+      "color_hex": "#D98A2B",
+      "base_max": 100,
+      "max_per_insight": 2,
+      "base_regen_per_second": 4,
+      "regen_per_insight": 0.25,
+      "gain_multiplier_per_insight": 0.02,
+      "flat_decay_per_second": 0,
+      "out_of_combat_flat_decay_per_second": 0,
+      "decay_per_current_point_per_second": 0,
+      "gain_per_damage_taken": 0,
+      "gain_per_damage_dealt": 0,
+      "gain_per_melee_hit": 0,
+      "gain_per_spell_cast": 0,
+      "starts_full": true,
+      "sort_order": 35
     },
     {
       "resource_kind": "CORRUPTION",
@@ -240,7 +325,7 @@
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "COMBO_ATTACK_1_1_HIGH_TO_LOW",
       "display_name": "Hew",
-      "resource_kind": "RAGE",
+      "resource_kind": "STAMINA",
       "resource_cost": 20,
       "ability_tags": [
         "ACTION_BAR_ACTION",
@@ -275,7 +360,7 @@
       },
       "action_id": "COMBO_ATTACK_1_2_LOW_TO_HIGH",
       "display_name": "Hew II",
-      "resource_kind": "RAGE",
+      "resource_kind": "STAMINA",
       "resource_cost": 20,
       "ability_tags": [
         "COMBO_FOLLOWUP"
@@ -287,7 +372,7 @@
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "WARRIOR_MAIM",
       "display_name": "Maim",
-      "resource_kind": "RAGE",
+      "resource_kind": "STAMINA",
       "resource_cost": 20,
       "ability_tags": [
         "ACTION_BAR_ACTION"
@@ -320,7 +405,7 @@
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "COMBO_ATTACK_1_3_GROUND_TO_AIR",
       "display_name": "Ground to Air",
-      "resource_kind": "RAGE",
+      "resource_kind": "STAMINA",
       "resource_cost": 20,
       "ability_tags": [
         "ACTION_BAR_ACTION"
@@ -354,7 +439,7 @@
       },
       "action_id": "COMBO_ATTACK_1_4_AIR_TO_GROUND",
       "display_name": "Air to Ground",
-      "resource_kind": "RAGE",
+      "resource_kind": "STAMINA",
       "resource_cost": 20,
       "ability_tags": [
         "COMBO_FOLLOWUP"
@@ -366,7 +451,7 @@
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "CRUSHING_BLOW",
       "display_name": "Crushing Blow",
-      "resource_kind": "RAGE",
+      "resource_kind": "STAMINA",
       "resource_cost": 25,
       "ability_tags": [
         "ACTION_BAR_ACTION"
@@ -389,7 +474,7 @@
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "CATACLYSM",
       "display_name": "Cataclysm",
-      "resource_kind": "RAGE",
+      "resource_kind": "STAMINA",
       "resource_cost": 30,
       "ability_tags": [
         "ACTION_BAR_ACTION"
@@ -427,7 +512,7 @@
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "BLADESTORM",
       "display_name": "Bladestorm",
-      "resource_kind": "RAGE",
+      "resource_kind": "STAMINA",
       "resource_cost": 35,
       "ability_tags": [
         "ACTION_BAR_ACTION"
@@ -461,7 +546,7 @@
       },
       "action_id": "COMBO_ATTACK_3_4_AIR_TO_GROUND",
       "display_name": "Skyfall IV",
-      "resource_kind": "RAGE",
+      "resource_kind": "STAMINA",
       "resource_cost": 35,
       "ability_tags": [
         "COMBO_FOLLOWUP"
@@ -473,7 +558,7 @@
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "WHIRLWIND",
       "display_name": "Whirlwind",
-      "resource_kind": "RAGE",
+      "resource_kind": "STAMINA",
       "resource_cost": 40,
       "ability_tags": [
         "ACTION_BAR_ACTION",
@@ -501,7 +586,7 @@
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "COMBO_ATTACK_4_4_LUNGING_SLASH",
       "display_name": "Sunder",
-      "resource_kind": "RAGE",
+      "resource_kind": "STAMINA",
       "resource_cost": 35,
       "ability_tags": [
         "ACTION_BAR_ACTION"
@@ -524,7 +609,7 @@
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "COMBO_ATTACK_2_1_SPIN",
       "display_name": "Cleave",
-      "resource_kind": "RAGE",
+      "resource_kind": "STAMINA",
       "resource_cost": 30,
       "ability_tags": [
         "ACTION_BAR_ACTION"
@@ -547,7 +632,7 @@
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "COMBO_ATTACK_3_1_LOW_TO_HIGH",
       "display_name": "Butcher",
-      "resource_kind": "RAGE",
+      "resource_kind": "STAMINA",
       "resource_cost": 30,
       "ability_tags": [
         "ACTION_BAR_ACTION"
@@ -574,7 +659,7 @@
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "WARRIOR_CARVE",
       "display_name": "Carve",
-      "resource_kind": "RAGE",
+      "resource_kind": "STAMINA",
       "resource_cost": 25,
       "ability_tags": [
         "ACTION_BAR_ACTION"
@@ -615,7 +700,7 @@
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "WARRIOR_DREAD_STRIKE",
       "display_name": "Dread Strike",
-      "resource_kind": "RAGE",
+      "resource_kind": "STAMINA",
       "resource_cost": 20,
       "ability_tags": [
         "ACTION_BAR_ACTION"
@@ -630,7 +715,7 @@
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "COMBO_ATTACK_3_4_AIR_TO_GROUND",
       "display_name": "Earthshatter",
-      "resource_kind": "RAGE",
+      "resource_kind": "STAMINA",
       "resource_cost": 20,
       "ability_tags": [
         "ACTION_BAR_ACTION"
@@ -670,7 +755,7 @@
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "FIREBALL",
       "display_name": "Fire",
-      "resource_kind": "RAGE",
+      "resource_kind": "MANA",
       "ability_tags": [
         "ACTION_BAR_ACTION"
       ],
@@ -715,7 +800,7 @@
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "GROUND_SLASH",
       "display_name": "Ground Slash",
-      "resource_kind": "RAGE",
+      "resource_kind": "MANA",
       "ability_tags": [
         "ACTION_BAR_ACTION"
       ],
@@ -752,7 +837,7 @@
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "ICICLE",
       "display_name": "Icicle",
-      "resource_kind": "RAGE",
+      "resource_kind": "MANA",
       "ability_tags": [
         "ACTION_BAR_ACTION"
       ],
@@ -788,7 +873,7 @@
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "ORBITING_BLADES",
       "display_name": "Orbiting Blades",
-      "resource_kind": "RAGE",
+      "resource_kind": "MANA",
       "ability_tags": [
         "ACTION_BAR_ACTION"
       ],
@@ -830,7 +915,7 @@
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "METEOR",
       "display_name": "Meteor",
-      "resource_kind": "RAGE",
+      "resource_kind": "MANA",
       "ability_tags": [
         "ACTION_BAR_ACTION"
       ],
@@ -873,7 +958,7 @@
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "LIGHTNING",
       "display_name": "Lightning",
-      "resource_kind": "RAGE",
+      "resource_kind": "MANA",
       "ability_tags": [
         "ACTION_BAR_ACTION"
       ],
@@ -904,7 +989,7 @@
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "ERUPTION",
       "display_name": "Eruption",
-      "resource_kind": "RAGE",
+      "resource_kind": "MANA",
       "ability_tags": [
         "ACTION_BAR_ACTION"
       ],
@@ -936,7 +1021,7 @@
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "ICE_SPIKES",
       "display_name": "Ice Spikes",
-      "resource_kind": "RAGE",
+      "resource_kind": "MANA",
       "ability_tags": [
         "ACTION_BAR_ACTION"
       ],
@@ -975,7 +1060,7 @@
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "BOOMERANG_ORB",
       "display_name": "Boomerang Orb",
-      "resource_kind": "RAGE",
+      "resource_kind": "MANA",
       "ability_tags": [
         "ACTION_BAR_ACTION"
       ],
@@ -1021,7 +1106,7 @@
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "WITHERING_ORB",
       "display_name": "Withering Orb",
-      "resource_kind": "RAGE",
+      "resource_kind": "MANA",
       "ability_tags": [
         "ACTION_BAR_ACTION"
       ],
@@ -1067,7 +1152,7 @@
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "INSTANT_BEAM",
       "display_name": "Beam",
-      "resource_kind": "RAGE",
+      "resource_kind": "MANA",
       "sort_order": 1004,
       "gameplay": {
         "kind": "SPELL",
@@ -1096,7 +1181,7 @@
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "ELECTROCUTE",
       "display_name": "Elec",
-      "resource_kind": "RAGE",
+      "resource_kind": "MANA",
       "sort_order": 1004,
       "gameplay": {
         "kind": "SPELL",
@@ -1123,7 +1208,7 @@
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "FROST_NOVA",
       "display_name": "Nova",
-      "resource_kind": "RAGE",
+      "resource_kind": "MANA",
       "ability_tags": [
         "ACTION_BAR_ACTION"
       ],
@@ -1158,7 +1243,7 @@
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "NEGATE",
       "display_name": "Negate",
-      "resource_kind": "RAGE",
+      "resource_kind": "MANA",
       "sort_order": 1008,
       "gameplay": {
         "kind": "SPELL",
@@ -1185,7 +1270,7 @@
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "MOMENTUM",
       "display_name": "Momentum",
-      "resource_kind": "RAGE",
+      "resource_kind": "MANA",
       "ability_tags": [
         "ACTION_BAR_ACTION"
       ],
@@ -1219,7 +1304,7 @@
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "FORTIFY",
       "display_name": "Fortify",
-      "resource_kind": "RAGE",
+      "resource_kind": "MANA",
       "ability_tags": [
         "ACTION_BAR_ACTION"
       ],
@@ -1255,7 +1340,7 @@
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "IRON_WILL",
       "display_name": "Iron Will",
-      "resource_kind": "RAGE",
+      "resource_kind": "MANA",
       "ability_tags": [
         "ACTION_BAR_ACTION"
       ],
@@ -1288,7 +1373,7 @@
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "DEFIANCE",
       "display_name": "Defiance",
-      "resource_kind": "RAGE",
+      "resource_kind": "MANA",
       "ability_tags": [
         "ACTION_BAR_ACTION"
       ],
@@ -1322,7 +1407,7 @@
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "BATTLE_CRY",
       "display_name": "Battle Cry",
-      "resource_kind": "RAGE",
+      "resource_kind": "MANA",
       "ability_tags": [
         "ACTION_BAR_ACTION",
         "CORE_ABILITY"
@@ -1359,7 +1444,7 @@
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "GIANT_SWING",
       "display_name": "Giant Swing",
-      "resource_kind": "RAGE",
+      "resource_kind": "MANA",
       "ability_tags": [
         "ACTION_BAR_ACTION"
       ],
@@ -1393,7 +1478,7 @@
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "FRENZY",
       "display_name": "Frenzy",
-      "resource_kind": "RAGE",
+      "resource_kind": "MANA",
       "ability_tags": [
         "ACTION_BAR_ACTION"
       ],
@@ -1427,7 +1512,7 @@
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "BLOODLUST",
       "display_name": "Bloodlust",
-      "resource_kind": "RAGE",
+      "resource_kind": "STAMINA",
       "ability_tags": [
         "PASSIVE"
       ],
@@ -1441,7 +1526,7 @@
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "ENRAGE",
       "display_name": "Enrage",
-      "resource_kind": "RAGE",
+      "resource_kind": "MANA",
       "ability_tags": [
         "ACTION_BAR_ACTION",
         "CORE_ABILITY"
@@ -1468,7 +1553,7 @@
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "BERSERKING",
       "display_name": "Berserking",
-      "resource_kind": "RAGE",
+      "resource_kind": "MANA",
       "ability_tags": [
         "ACTION_BAR_ACTION"
       ],
@@ -1502,7 +1587,7 @@
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "BATTLE_TRANCE",
       "display_name": "Battle Trance",
-      "resource_kind": "RAGE",
+      "resource_kind": "MANA",
       "ability_tags": [
         "ACTION_BAR_ACTION"
       ],
@@ -1536,7 +1621,7 @@
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "FEAST",
       "display_name": "Feast",
-      "resource_kind": "RAGE",
+      "resource_kind": "MANA",
       "ability_tags": [
         "ACTION_BAR_ACTION"
       ],
@@ -1569,7 +1654,7 @@
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "SHOCKWAVE",
       "display_name": "Shockwave",
-      "resource_kind": "RAGE",
+      "resource_kind": "MANA",
       "ability_tags": [
         "ACTION_BAR_ACTION"
       ],
@@ -1603,7 +1688,7 @@
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "INTIMIDATE",
       "display_name": "Intimidate",
-      "resource_kind": "RAGE",
+      "resource_kind": "MANA",
       "ability_tags": [
         "ACTION_BAR_ACTION"
       ],
@@ -1638,7 +1723,7 @@
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "WARRIOR_CHARGE",
       "display_name": "Charge",
-      "resource_kind": "RAGE",
+      "resource_kind": "STAMINA",
       "ability_tags": [
         "ACTION_BAR_ACTION",
         "CORE_ABILITY"
@@ -1690,7 +1775,7 @@
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "WARRIOR_IMPALE",
       "display_name": "Impale",
-      "resource_kind": "RAGE",
+      "resource_kind": "STAMINA",
       "ability_tags": [
         "ACTION_BAR_ACTION"
       ],
@@ -1741,7 +1826,7 @@
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "WARRIOR_DISENGAGE_STRIKE",
       "display_name": "Disengage Strike",
-      "resource_kind": "RAGE",
+      "resource_kind": "STAMINA",
       "ability_tags": [
         "ACTION_BAR_ACTION"
       ],
@@ -1780,7 +1865,7 @@
       "combat_profile_id": "SWORD_AND_SHIELD",
       "action_id": "SWORD_AND_SHIELD_UTILITY_1",
       "display_name": "Shield Pummel",
-      "resource_kind": "ZEAL",
+      "resource_kind": "STAMINA",
       "resource_cost": 1,
       "ability_tags": [
         "ACTION_BAR_ACTION"
@@ -1803,7 +1888,7 @@
       "combat_profile_id": "SWORD_AND_SHIELD",
       "action_id": "SWORD_AND_SHIELD_UTILITY_2",
       "display_name": "Vindicator Slash",
-      "resource_kind": "ZEAL",
+      "resource_kind": "STAMINA",
       "resource_cost": 1,
       "ability_tags": [
         "ACTION_BAR_ACTION"
@@ -1826,7 +1911,7 @@
       "combat_profile_id": "SWORD_AND_SHIELD",
       "action_id": "SWORD_AND_SHIELD_UTILITY_3",
       "display_name": "Guardian Rush",
-      "resource_kind": "ZEAL",
+      "resource_kind": "STAMINA",
       "resource_cost": 1,
       "ability_tags": [
         "ACTION_BAR_ACTION"
@@ -1849,7 +1934,7 @@
       "combat_profile_id": "SWORD_AND_SHIELD",
       "action_id": "SWORD_AND_SHIELD_UTILITY_4",
       "display_name": "Retribution",
-      "resource_kind": "ZEAL",
+      "resource_kind": "STAMINA",
       "resource_cost": 1,
       "ability_tags": [
         "ACTION_BAR_ACTION"
@@ -1872,7 +1957,7 @@
       "combat_profile_id": "SWORD_AND_SHIELD",
       "action_id": "PALADIN_CHARGE",
       "display_name": "Charge",
-      "resource_kind": "ZEAL",
+      "resource_kind": "STAMINA",
       "resource_cost": 1,
       "ability_tags": [
         "ACTION_BAR_ACTION"
@@ -1917,7 +2002,7 @@
       "combat_profile_id": "SWORD_AND_SHIELD",
       "action_id": "PALADIN_AVENGE",
       "display_name": "Avenge",
-      "resource_kind": "ZEAL",
+      "resource_kind": "STAMINA",
       "resource_cost": 1,
       "ability_tags": [
         "ACTION_BAR_ACTION"
@@ -1968,7 +2053,7 @@
       "combat_profile_id": "SWORD_AND_SHIELD",
       "action_id": "CONSECRATE",
       "display_name": "Consecrate",
-      "resource_kind": "ZEAL",
+      "resource_kind": "MANA",
       "ability_tags": [
         "ACTION_BAR_ACTION"
       ],
@@ -2008,7 +2093,7 @@
       "combat_profile_id": "SWORD_AND_SHIELD",
       "action_id": "CLEANSING_TOUCH",
       "display_name": "Cleansing Touch",
-      "resource_kind": "ZEAL",
+      "resource_kind": "MANA",
       "ability_tags": [
         "ACTION_BAR_ACTION"
       ],
@@ -2040,7 +2125,7 @@
       "combat_profile_id": "SWORD_AND_SHIELD",
       "action_id": "ABSOLUTION",
       "display_name": "Absolution",
-      "resource_kind": "ZEAL",
+      "resource_kind": "MANA",
       "ability_tags": [
         "ACTION_BAR_ACTION"
       ],
@@ -2072,7 +2157,7 @@
       "combat_profile_id": "SWORD_AND_SHIELD",
       "action_id": "FERVOR",
       "display_name": "Fervor",
-      "resource_kind": "ZEAL",
+      "resource_kind": "MANA",
       "ability_tags": [
         "ACTION_BAR_ACTION"
       ],
@@ -2108,7 +2193,7 @@
       "combat_profile_id": "SWORD_AND_SHIELD",
       "action_id": "SACRED_FLAME",
       "display_name": "Sacred Flame",
-      "resource_kind": "ZEAL",
+      "resource_kind": "MANA",
       "ability_tags": [
         "ACTION_BAR_ACTION"
       ],
@@ -2149,7 +2234,7 @@
       "combat_profile_id": "ARCHER_BOW",
       "action_id": "ARCHER_POWER_SHOT",
       "display_name": "Power Shot",
-      "resource_kind": "MANA",
+      "resource_kind": "STAMINA",
       "resource_cost": 20,
       "ability_tags": [
         "ACTION_BAR_ACTION"
@@ -2172,7 +2257,7 @@
       "combat_profile_id": "ARCHER_BOW",
       "action_id": "ARCHER_RAIN_SHOT",
       "display_name": "Rain Shot",
-      "resource_kind": "MANA",
+      "resource_kind": "STAMINA",
       "resource_cost": 35,
       "ability_tags": [
         "ACTION_BAR_ACTION"
@@ -2195,7 +2280,7 @@
       "combat_profile_id": "ARCHER_BOW",
       "action_id": "ARCHER_EVASIVE_SHOT",
       "display_name": "Evasive Shot",
-      "resource_kind": "MANA",
+      "resource_kind": "STAMINA",
       "resource_cost": 25,
       "ability_tags": [
         "ACTION_BAR_ACTION"
@@ -2218,7 +2303,7 @@
       "combat_profile_id": "ARCHER_BOW",
       "action_id": "ARCHER_AIR_SHOT",
       "display_name": "Air Shot",
-      "resource_kind": "MANA",
+      "resource_kind": "STAMINA",
       "resource_cost": 18,
       "ability_tags": [
         "ACTION_BAR_ACTION"
@@ -2256,7 +2341,7 @@
       "combat_profile_id": "DAGGERS",
       "action_id": "SWORD_AND_SHIELD_UTILITY_2",
       "display_name": "Quick Cut",
-      "resource_kind": "ENERGY",
+      "resource_kind": "STAMINA",
       "resource_cost": 20,
       "ability_tags": [
         "ACTION_BAR_ACTION",
@@ -2280,7 +2365,7 @@
       "combat_profile_id": "DAGGERS",
       "action_id": "SWORD_AND_SHIELD_UTILITY_4",
       "display_name": "Riposte",
-      "resource_kind": "ENERGY",
+      "resource_kind": "STAMINA",
       "resource_cost": 30,
       "ability_tags": [
         "ACTION_BAR_ACTION"
@@ -2303,7 +2388,7 @@
       "combat_profile_id": "DAGGERS",
       "action_id": "PALADIN_CHARGE",
       "display_name": "Dashing Cut",
-      "resource_kind": "ENERGY",
+      "resource_kind": "STAMINA",
       "resource_cost": 35,
       "ability_tags": [
         "ACTION_BAR_ACTION"
@@ -2338,7 +2423,7 @@
       "combat_profile_id": "STAFF",
       "action_id": "COMBO_ATTACK_1_1_HIGH_TO_LOW",
       "display_name": "Staff Strike",
-      "resource_kind": "MANA",
+      "resource_kind": "STAMINA",
       "resource_cost": 12,
       "ability_tags": [
         "ACTION_BAR_ACTION",
@@ -2362,7 +2447,7 @@
       "combat_profile_id": "STAFF",
       "action_id": "COMBO_ATTACK_2_1_SPIN",
       "display_name": "Staff Sweep",
-      "resource_kind": "MANA",
+      "resource_kind": "STAMINA",
       "resource_cost": 24,
       "ability_tags": [
         "ACTION_BAR_ACTION"
@@ -2389,7 +2474,7 @@
       "combat_profile_id": "STAFF",
       "action_id": "COMBO_ATTACK_4_4_LUNGING_SLASH",
       "display_name": "Staff Thrust",
-      "resource_kind": "MANA",
+      "resource_kind": "STAMINA",
       "resource_cost": 20,
       "ability_tags": [
         "ACTION_BAR_ACTION"
@@ -2509,6 +2594,41 @@
     }
   ],
   "action_presentations": [
+    {
+      "presentation_kind": "COMBAT_DISCIPLINE_SWITCH",
+      "presentation_id": "SUBTLETY",
+      "display_name": "Subtlety",
+      "description": "Switches to the saved dagger discipline loadout.",
+      "sort_order": 1
+    },
+    {
+      "presentation_kind": "COMBAT_DISCIPLINE_SWITCH",
+      "presentation_id": "WAR",
+      "display_name": "War",
+      "description": "Switches to the saved two-handed weapon discipline loadout.",
+      "sort_order": 2
+    },
+    {
+      "presentation_kind": "COMBAT_DISCIPLINE_SWITCH",
+      "presentation_id": "ZEAL",
+      "display_name": "Zeal",
+      "description": "Switches to the saved sword-and-shield discipline loadout.",
+      "sort_order": 3
+    },
+    {
+      "presentation_kind": "COMBAT_DISCIPLINE_SWITCH",
+      "presentation_id": "PRECISION",
+      "display_name": "Precision",
+      "description": "Switches to the saved bow discipline loadout.",
+      "sort_order": 4
+    },
+    {
+      "presentation_kind": "COMBAT_DISCIPLINE_SWITCH",
+      "presentation_id": "ARCANA",
+      "display_name": "Arcana",
+      "description": "Switches to the saved staff discipline loadout.",
+      "sort_order": 5
+    },
     {
       "presentation_kind": "ABILITY",
       "presentation_id": "WARRIOR_HEW",
@@ -3447,6 +3567,41 @@
   ],
   "combat_profile_action_bar_defaults": [
     {
+      "slot_id": "discipline_0",
+      "combat_profile_id": "GLOBAL",
+      "action_kind": "COMBAT_DISCIPLINE_SWITCH",
+      "action_id": "SUBTLETY",
+      "sort_order": 1
+    },
+    {
+      "slot_id": "discipline_1",
+      "combat_profile_id": "GLOBAL",
+      "action_kind": "COMBAT_DISCIPLINE_SWITCH",
+      "action_id": "WAR",
+      "sort_order": 2
+    },
+    {
+      "slot_id": "discipline_2",
+      "combat_profile_id": "GLOBAL",
+      "action_kind": "COMBAT_DISCIPLINE_SWITCH",
+      "action_id": "ZEAL",
+      "sort_order": 3
+    },
+    {
+      "slot_id": "discipline_3",
+      "combat_profile_id": "GLOBAL",
+      "action_kind": "COMBAT_DISCIPLINE_SWITCH",
+      "action_id": "PRECISION",
+      "sort_order": 4
+    },
+    {
+      "slot_id": "discipline_4",
+      "combat_profile_id": "GLOBAL",
+      "action_kind": "COMBAT_DISCIPLINE_SWITCH",
+      "action_id": "ARCANA",
+      "sort_order": 5
+    },
+    {
       "slot_id": "slot_0_0",
       "combat_profile_id": "TWO_HANDED_SWORD",
       "ability_id": "WARRIOR_HEW",
@@ -3634,6 +3789,56 @@
     }
   ],
   "slots": [
+    {
+      "slot_id": "discipline_0",
+      "ui_row": 0,
+      "ui_col": 0,
+      "slot_group": "DISCIPLINE_BAR",
+      "accepts_tags": [
+        "DISCIPLINE_SWITCH"
+      ],
+      "sort_order": 1
+    },
+    {
+      "slot_id": "discipline_1",
+      "ui_row": 0,
+      "ui_col": 1,
+      "slot_group": "DISCIPLINE_BAR",
+      "accepts_tags": [
+        "DISCIPLINE_SWITCH"
+      ],
+      "sort_order": 2
+    },
+    {
+      "slot_id": "discipline_2",
+      "ui_row": 0,
+      "ui_col": 2,
+      "slot_group": "DISCIPLINE_BAR",
+      "accepts_tags": [
+        "DISCIPLINE_SWITCH"
+      ],
+      "sort_order": 3
+    },
+    {
+      "slot_id": "discipline_3",
+      "ui_row": 0,
+      "ui_col": 3,
+      "slot_group": "DISCIPLINE_BAR",
+      "accepts_tags": [
+        "DISCIPLINE_SWITCH"
+      ],
+      "sort_order": 4
+    },
+    {
+      "slot_id": "discipline_4",
+      "ui_row": 0,
+      "ui_col": 4,
+      "slot_group": "DISCIPLINE_BAR",
+      "accepts_tags": [
+        "DISCIPLINE_SWITCH"
+      ],
+      "sort_order": 5
+    },
     {
       "slot_id": "slot_0_0",
       "ui_row": 0,

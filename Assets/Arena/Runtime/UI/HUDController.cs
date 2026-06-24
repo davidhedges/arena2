@@ -48,6 +48,7 @@ namespace Arena.UI
         private static readonly Color ResourceBlue  = Hex("#3A6EA5");
         private static readonly Color SlotBg        = Hex("#1a1a1a");
         private static readonly Color SlotBorder    = Hex("#444444");
+        private static readonly Color DisabledSlotBg = Hex("#2A2A2A");
         private static readonly Color TransparentSlotInput = new(1f, 1f, 1f, 0f);
         private static readonly Color CdOverlay     = new(0f, 0f, 0f, 0.7f);
         private static readonly Color GcdOverlay    = new(0f, 0f, 0f, 0.4f);
@@ -81,6 +82,9 @@ namespace Arena.UI
         private static readonly Vector2 UnitFrameHealthSize = new(228f, 31f);
         private static readonly Vector2 UnitFrameResourcePos = new(108f, 25f);
         private static readonly Vector2 UnitFrameResourceSize = new(202f, 30f);
+        private static readonly Vector2 UnitFrameStaminaPos = new(108f, 39f);
+        private static readonly Vector2 UnitFrameManaPos = new(108f, 25f);
+        private static readonly Vector2 UnitFrameSplitResourceSize = new(202f, 14f);
 
         // Colored fill polygons. The left edge starts after the portrait overlap; the right
         // points are intentionally shaved back from the frame tip so the color does not cover
@@ -112,6 +116,20 @@ namespace Arena.UI
             new(318f, 53f),
             new(108f, 53f),
         };
+        private static readonly Vector2[] UnitFrameStaminaShape =
+        {
+            new(108f, 40f),
+            new(304f, 40f),
+            new(318f, 53f),
+            new(108f, 53f),
+        };
+        private static readonly Vector2[] UnitFrameManaShape =
+        {
+            new(108f, 26f),
+            new(292f, 26f),
+            new(304f, 38f),
+            new(108f, 38f),
+        };
         private const float Pad    = 10f;
         private const float IconSz = 28f;
         private const float IconGap = 2f;
@@ -135,6 +153,8 @@ namespace Arena.UI
         private Text  _playerHpText = null!;
         private Image _playerPrimaryFill = null!;
         private Text  _playerPrimaryText = null!;
+        private Image _playerManaFill = null!;
+        private Text _playerManaText = null!;
 
         // --- Target Frame ---
         private GameObject _targetRoot  = null!;
@@ -188,6 +208,13 @@ namespace Arena.UI
         private readonly TooltipTarget[] _spellbookGridTooltips = new TooltipTarget[ActionBarLayout.Columns];
         private readonly ActionBarClickTarget[] _spellbookGridClicks = new ActionBarClickTarget[ActionBarLayout.Columns];
         private readonly ActionBarSlotState[] _spellbookGridStates = new ActionBarSlotState[ActionBarLayout.Columns];
+        private readonly Image[] _disciplineBarIcons = new Image[ActionBarSlotIds.DisciplineColumns];
+        private readonly Image[] _disciplineBarCd = new Image[ActionBarSlotIds.DisciplineColumns];
+        private readonly Text[] _disciplineBarText = new Text[ActionBarSlotIds.DisciplineColumns];
+        private readonly Text[] _disciplineBarChargeText = new Text[ActionBarSlotIds.DisciplineColumns];
+        private readonly TooltipTarget[] _disciplineBarTooltips = new TooltipTarget[ActionBarSlotIds.DisciplineColumns];
+        private readonly ActionBarClickTarget[] _disciplineBarClicks = new ActionBarClickTarget[ActionBarSlotIds.DisciplineColumns];
+        private readonly ActionBarSlotState[] _disciplineBarStates = new ActionBarSlotState[ActionBarSlotIds.DisciplineColumns];
 
         // --- Cast Bar ---
         private GameObject _castRoot     = null!;
@@ -300,15 +327,27 @@ namespace Arena.UI
 
             _playerPrimaryFill = BuildUnitFrameBarFill(
                 frame.transform,
-                "Primary",
-                UnitFrameResourceShape,
+                "Stamina",
+                UnitFrameStaminaShape,
                 ResourceBlue);
             SetUnitFrameBarFill(_playerPrimaryFill, 0f);
-            _playerPrimaryText = Label(frame.transform, "PrimaryText",
+            _playerPrimaryText = Label(frame.transform, "StaminaText",
                 new Vector2(0, 0), new Vector2(0, 0),
-                UnitFrameResourceSize, UnitFrameResourcePos,
-                10, Color.white, TextAnchor.MiddleCenter);
+                UnitFrameSplitResourceSize, UnitFrameStaminaPos,
+                9, Color.white, TextAnchor.MiddleCenter);
             _playerPrimaryText.text = "";
+
+            _playerManaFill = BuildUnitFrameBarFill(
+                frame.transform,
+                "Mana",
+                UnitFrameManaShape,
+                ResourceBlue);
+            SetUnitFrameBarFill(_playerManaFill, 0f);
+            _playerManaText = Label(frame.transform, "ManaText",
+                new Vector2(0, 0), new Vector2(0, 0),
+                UnitFrameSplitResourceSize, UnitFrameManaPos,
+                9, Color.white, TextAnchor.MiddleCenter);
+            _playerManaText.text = "";
 
         }
 
@@ -518,9 +557,44 @@ namespace Arena.UI
         private void BuildActionBars()
         {
             Vector2 gridSize = ActionBarLayout.GridSize;
+            Vector2 disciplineSize = new(
+                ActionBarSlotIds.DisciplineColumns * ActionBarLayout.SlotSize
+                + (ActionBarSlotIds.DisciplineColumns - 1) * ActionBarLayout.Gap,
+                ActionBarLayout.SlotSize);
 
             var box = Panel("ActionBars", new Vector2(0.5f, 0), new Vector2(0.5f, 0),
                 gridSize + new Vector2(16f, 16f), new Vector2(0, 10));
+
+            var disciplineBox = Panel("CombatDisciplines", new Vector2(0.5f, 0), new Vector2(0.5f, 0),
+                disciplineSize + new Vector2(16f, 16f), new Vector2(0, 10 + gridSize.y + 12f));
+            var disciplineRow = SlotRow(
+                disciplineBox.transform,
+                "DisciplineRow",
+                new Vector2(0.5f, 0.5f),
+                new Vector2(0.5f, 0.5f),
+                disciplineSize,
+                Vector2.zero);
+
+            int disciplineIndex = 0;
+            foreach (ActionBarSlotBinding binding in DisciplineBarKeymap.SelectableBindings)
+            {
+                if (disciplineIndex >= ActionBarSlotIds.DisciplineColumns)
+                    break;
+
+                BuildSlot(
+                    disciplineRow.transform,
+                    binding.KeyLabel,
+                    null,
+                    out _disciplineBarIcons[disciplineIndex],
+                    out _disciplineBarCd[disciplineIndex],
+                    out _disciplineBarText[disciplineIndex],
+                    out _disciplineBarChargeText[disciplineIndex],
+                    out _disciplineBarTooltips[disciplineIndex],
+                    out _disciplineBarClicks[disciplineIndex],
+                    out _,
+                    out _);
+                disciplineIndex++;
+            }
 
             var grid = SlotGrid(box.transform, "AbilityGrid",
                 new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
@@ -805,24 +879,18 @@ namespace Arena.UI
             SetHealthBarFill(_playerHpFill, _playerTempHpFill, health);
             SetTextIfChanged(_playerHpText, health.Text);
 
-            var primaryPresentation = ResolvePrimaryResourcePresentation(p);
-            if (primaryPresentation.isVisible)
-            {
-                float primaryFrac = p.MaxPrimaryResource > 0.001f
-                    ? Mathf.Clamp01(p.CurrentPrimaryResource / p.MaxPrimaryResource)
-                    : 0f;
-                SetColorIfChanged(_playerPrimaryFill, primaryPresentation.color);
-                SetUnitFrameBarFill(_playerPrimaryFill, primaryFrac);
-                SetTextIfChanged(
-                    _playerPrimaryText,
-                    $"{primaryPresentation.label} {Mathf.RoundToInt(p.CurrentPrimaryResource)} / {Mathf.RoundToInt(p.MaxPrimaryResource)}");
-            }
-            else
-            {
-                SetColorIfChanged(_playerPrimaryFill, ResourceBlue);
-                SetUnitFrameBarFill(_playerPrimaryFill, 0f);
-                SetTextIfChanged(_playerPrimaryText, "");
-            }
+            RenderPlayerResourceBar(
+                _playerPrimaryFill,
+                _playerPrimaryText,
+                p.StaminaResourceKind,
+                p.CurrentStamina,
+                p.MaxStamina);
+            RenderPlayerResourceBar(
+                _playerManaFill,
+                _playerManaText,
+                p.ManaResourceKind,
+                p.CurrentMana,
+                p.MaxMana);
 
         }
 
@@ -1420,6 +1488,7 @@ namespace Arena.UI
             var owner = conn?.Identity;
 
             RefreshSpellbookStaticState(conn, owner);
+            RefreshDisciplineBarStaticState(conn, owner);
 
             for (int row = 0; row < ActionBarLayout.VisibleActionRows; row++)
             {
@@ -1485,6 +1554,68 @@ namespace Arena.UI
                     _canvas,
                     ActionTooltipResolver.ResolveForActionRef(conn, owner, resolved),
                     pollHover: true);
+            }
+        }
+
+        private void RefreshDisciplineBarStaticState(DbConnection? conn, SpacetimeDB.Identity? owner)
+        {
+            for (int i = 0; i < ActionBarSlotIds.DisciplineColumns; i++)
+            {
+                string keyLabel = i < DisciplineBarKeymap.SelectableBindings.Count
+                    ? DisciplineBarKeymap.SelectableBindings[i].KeyLabel
+                    : string.Empty;
+                _disciplineBarStates[i] = ActionBarSlotState.Empty(keyLabel);
+                SetActionBarSlotPresentation(_disciplineBarCd[i], _disciplineBarIcons[i], _disciplineBarStates[i], SlotBg, null);
+                _disciplineBarTooltips[i].Configure(_canvas, default);
+                _disciplineBarClicks[i].Configure(null);
+                SetFillIfChanged(_disciplineBarCd[i], 0f);
+                SetColorIfChanged(_disciplineBarCd[i], CdOverlay);
+                SetTextIfChanged(_disciplineBarText[i], string.Empty);
+                SetTextIfChanged(_disciplineBarChargeText[i], string.Empty);
+            }
+
+            if (conn == null || !owner.HasValue)
+                return;
+
+            int index = 0;
+            foreach (ActionBarSlotBinding binding in DisciplineBarKeymap.SelectableBindings)
+            {
+                if (index >= ActionBarSlotIds.DisciplineColumns)
+                    break;
+
+                ActiveActionBarAction resolved = ActiveActionBarResolver.ResolveGlobalActionBarAction(
+                    conn,
+                    owner,
+                    binding.SlotId);
+                bool isVisible = resolved.HasAssignedAction;
+                string label = isVisible ? resolved.DisplayName : string.Empty;
+                Sprite? iconSprite = isVisible ? ActionIconResolver.ResolveForAction(resolved) : null;
+                Color slotColor = !isVisible
+                    ? SlotBg
+                    : resolved.IsAvailable
+                        ? ResolveResourceActionBarColor(conn, resolved.ResourceKind)
+                        : DisabledSlotBg;
+
+                _disciplineBarStates[index] = new ActionBarSlotState(
+                    binding.KeyLabel,
+                    iconSprite == null ? label : string.Empty,
+                    isVisible,
+                    false,
+                    resolved.ActionId,
+                    false);
+                SetActionBarSlotPresentation(
+                    _disciplineBarCd[index],
+                    _disciplineBarIcons[index],
+                    _disciplineBarStates[index],
+                    slotColor,
+                    iconSprite);
+                _disciplineBarClicks[index].Configure(
+                    resolved.CanTrigger ? () => TriggerActionRef(conn, resolved) : null);
+                _disciplineBarTooltips[index].Configure(
+                    _canvas,
+                    ActionTooltipResolver.ResolveForActionRef(conn, owner, resolved),
+                    pollHover: true);
+                index++;
             }
         }
 
@@ -1651,6 +1782,7 @@ namespace Arena.UI
 
         private void UpdateActionBarCooldownPresentation(long nowMs, float gcdFrac, LocalCombatState combat)
         {
+            UpdateSlotCooldownPresentation(_disciplineBarStates, _disciplineBarCd, _disciplineBarText, _disciplineBarChargeText, nowMs, gcdFrac, combat);
             UpdateSlotCooldownPresentation(_spellbookGridStates, _spellbookGridCd, _spellbookGridText, _spellbookGridChargeText, nowMs, gcdFrac, combat);
             UpdateSlotCooldownPresentation(_abilityGridStates, _abilityGridCd, _abilityGridText, _abilityGridChargeText, nowMs, gcdFrac, combat);
         }
@@ -1878,6 +2010,15 @@ namespace Arena.UI
                 new(0.40f, 0.22f, 0.08f, 0.95f),
             };
             return colors[hash % colors.Length];
+        }
+
+        private static Color ResolveResourceActionBarColor(DbConnection? conn, string resourceKind)
+        {
+            if (conn == null || string.IsNullOrWhiteSpace(resourceKind))
+                return SlotBg;
+
+            ResourceCatalog? resource = conn.Db.ResourceCatalog.ResourceKind.Find(WireIdentifier.Normalize(resourceKind));
+            return resource == null ? SlotBg : Hex(resource.ColorHex);
         }
 
         private static Color FixedActionColor(string actionId)
@@ -2109,6 +2250,46 @@ namespace Arena.UI
 
             ResourceCatalog? resource = conn.Db.ResourceCatalog.ResourceKind.Find(player.PrimaryResourceKind);
             string label = resource?.DisplayName ?? player.PrimaryResourceKind;
+            Color color = resource != null ? Hex(resource.ColorHex) : ResourceBlue;
+            return (true, label.ToUpperInvariant(), color);
+        }
+
+        private static void RenderPlayerResourceBar(
+            Image fill,
+            Text text,
+            string resourceKind,
+            float current,
+            float max)
+        {
+            var presentation = ResolveResourcePresentation(resourceKind, max);
+            if (!presentation.isVisible)
+            {
+                SetColorIfChanged(fill, ResourceBlue);
+                SetUnitFrameBarFill(fill, 0f);
+                SetTextIfChanged(text, string.Empty);
+                return;
+            }
+
+            float fraction = max > 0.001f ? Mathf.Clamp01(current / max) : 0f;
+            SetColorIfChanged(fill, presentation.color);
+            SetUnitFrameBarFill(fill, fraction);
+            SetTextIfChanged(text, $"{presentation.label} {Mathf.RoundToInt(current)} / {Mathf.RoundToInt(max)}");
+        }
+
+        private static (bool isVisible, string label, Color color) ResolveResourcePresentation(
+            string resourceKind,
+            float max)
+        {
+            if (string.IsNullOrWhiteSpace(resourceKind) || max <= 0.001f)
+                return (false, string.Empty, ResourceBlue);
+
+            var conn = NetworkManager.Instance?.Conn;
+            string normalizedKind = WireIdentifier.Normalize(resourceKind);
+            if (conn == null)
+                return (true, normalizedKind, ResourceBlue);
+
+            ResourceCatalog? resource = conn.Db.ResourceCatalog.ResourceKind.Find(normalizedKind);
+            string label = resource?.DisplayName ?? normalizedKind;
             Color color = resource != null ? Hex(resource.ColorHex) : ResourceBlue;
             return (true, label.ToUpperInvariant(), color);
         }

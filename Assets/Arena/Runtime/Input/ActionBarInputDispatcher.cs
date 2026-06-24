@@ -20,6 +20,27 @@ namespace Arena.Input
         {
             var consumedPressKeys = new HashSet<UnityEngine.KeyCode>();
 
+            foreach (ActionBarSlotBinding binding in DisciplineBarKeymap.SelectableBindings)
+            {
+                if (binding.RequiresShift != shiftHeld) continue;
+                if (consumedPressKeys.Contains(binding.KeyCode)) continue;
+                if (!input.WasKeyPressedThisFrame(binding.KeyCode)) continue;
+
+                ActiveActionBarAction resolved = ActiveActionBarResolver.ResolveGlobalActionBarAction(
+                    conn,
+                    conn.Identity,
+                    binding.SlotId);
+                if (!resolved.HasAssignedAction)
+                {
+                    ActionBarTrace.Trace(
+                        $"{binding.KeyLabel} -> {binding.SlotId} unresolved (assigned={resolved.HasAssignedAction})");
+                    continue;
+                }
+
+                consumedPressKeys.Add(binding.KeyCode);
+                TryTrigger(resolved, conn, spellInput, binding.KeyLabel, binding.SlotId);
+            }
+
             foreach (ActionBarSlotBinding binding in ActionBarKeymap.SelectableBindings)
             {
                 if (binding.RequiresShift != shiftHeld) continue;
@@ -93,8 +114,16 @@ namespace Arena.Input
             string keyLabel,
             string slotId)
         {
-            if (conn == null || !action.HasAssignedAction)
+            if (conn == null || !action.CanTrigger)
                 return false;
+
+            if (action.IsCombatDisciplineSwitch)
+            {
+                if (!string.IsNullOrWhiteSpace(keyLabel))
+                    ActionBarTrace.Trace($"{keyLabel} -> {slotId} discipline={action.ActionId}");
+                conn.Reducers.SetCombatDiscipline(action.ActionId);
+                return true;
+            }
 
             if (action.IsFixed)
             {

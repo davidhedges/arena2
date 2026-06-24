@@ -21,6 +21,7 @@ namespace Arena.Network
                 new QueryBuilder().From.CombatProjectileTickMetrics().ToSql(),
 #endif
                 new QueryBuilder().From.CombatProfileCatalog().ToSql(),
+                new QueryBuilder().From.CombatDisciplineCatalog().ToSql(),
                 new QueryBuilder().From.CombatModeCatalog().ToSql(),
                 new QueryBuilder().From.ActionBarSlotCatalog().ToSql(),
                 new QueryBuilder().From.ItemDefinition().ToSql(),
@@ -54,6 +55,8 @@ namespace Arena.Network
                 new QueryBuilder().From.SpellCooldown().Where(c => c.Caster.Eq(localIdentity)).ToSql(),
                 new QueryBuilder().From.PredictedActionResult().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
                 new QueryBuilder().From.FixedActionChargeState().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
+                new QueryBuilder().From.ActiveCombatDiscipline().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
+                new QueryBuilder().From.CharacterCombatDisciplineWeaponLoadout().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
                 new QueryBuilder().From.ActiveCombatMode().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
                 new QueryBuilder().From.PartyInvite().Where(c => c.Invitee.Eq(localIdentity)).ToSql(),
                 new QueryBuilder().From.EquipmentLoadout().Where(c => c.Owner.Eq(localIdentity)).ToSql(),

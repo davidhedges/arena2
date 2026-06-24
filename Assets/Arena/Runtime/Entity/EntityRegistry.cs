@@ -340,6 +340,22 @@ namespace Arena.Entity
             ApplyOwnerCombatProfile(row.Owner);
         }
 
+        public void OnActiveCombatDisciplineInsert(EventContext ctx, ActiveCombatDiscipline row)
+        {
+            ApplyOwnerCombatProfile(row.Owner);
+        }
+
+        public void OnActiveCombatDisciplineUpdate(EventContext ctx, ActiveCombatDiscipline oldRow, ActiveCombatDiscipline newRow)
+        {
+            ApplyOwnerCombatProfile(oldRow.Owner);
+            ApplyOwnerCombatProfile(newRow.Owner);
+        }
+
+        public void OnActiveCombatDisciplineDelete(EventContext ctx, ActiveCombatDiscipline row)
+        {
+            ApplyOwnerCombatProfile(row.Owner);
+        }
+
         public void OnItemInstanceInsert(EventContext ctx, ItemInstance row)
         {
             ApplyEquipmentForNullableOwner(row.CurrentOwner);
@@ -642,13 +658,7 @@ namespace Arena.Entity
             if (!TryGetLivePlayer(row.Owner, out var entity))
                 return;
 
-            if (string.Equals(
-                    row.Kind,
-                    entity.PrimaryResourceKind,
-                    System.StringComparison.OrdinalIgnoreCase))
-            {
-                entity.ClearPrimaryResource();
-            }
+            entity.ClearResource(row.Kind);
         }
 
         // -------------------------------------------------------------------
@@ -1093,6 +1103,10 @@ namespace Arena.Entity
                 case "NEWBIE_DAGGER_PAIR_03":
                     visualIds.Add("sword");
                     return true;
+                case "TRAINING_SWORD_AND_SHIELD":
+                    visualIds.Add("sword");
+                    visualIds.Add("shield");
+                    return true;
                 case "TRAINING_SHIELD":
                 case "NEWBIE_SHIELD_01":
                 case "NEWBIE_SHIELD_02":
@@ -1126,6 +1140,10 @@ namespace Arena.Entity
                 case "ONE_HAND_AXE":
                 case "DAGGER_PAIR":
                     visualIds.Add("sword");
+                    break;
+                case "SWORD_AND_SHIELD":
+                    visualIds.Add("sword");
+                    visualIds.Add("shield");
                     break;
                 case "SHIELD":
                     visualIds.Add("shield");
@@ -1411,7 +1429,7 @@ namespace Arena.Entity
             if (!TryGetLivePlayer(row.Owner, out var entity))
                 return;
 
-            entity.SetPrimaryResource(row.Kind, row.Current, row.Max);
+            entity.SetResource(row.Kind, row.Current, row.Max);
         }
 
         private void ApplyStatusEffect(StatusEffect row)

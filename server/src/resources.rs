@@ -3,8 +3,7 @@ use spacetimedb::{table, Identity, ReducerContext, Table, Timestamp};
 use crate::combat::is_in_combat;
 use crate::inventory::equipment_modifier_totals_for_owner;
 use crate::progression::{
-    active_stat_totals_for_owner, effective_resource_kind_for_ability,
-    primary_resource_kind_for_owner, AbilityCatalog,
+    active_stat_totals_for_owner, effective_resource_kind_for_ability, AbilityCatalog,
 };
 
 #[allow(unused_imports)]
@@ -28,6 +27,10 @@ pub struct PlayerResource {
     pub updated_at: Timestamp,
 }
 
+pub(crate) const RESOURCE_KIND_STAMINA: &str = "STAMINA";
+pub(crate) const RESOURCE_KIND_MANA: &str = "MANA";
+const STANDARD_RESOURCE_KINDS: [&str; 2] = [RESOURCE_KIND_STAMINA, RESOURCE_KIND_MANA];
+
 #[derive(Clone, Debug)]
 struct ResolvedResourceSpec {
     kind: String,
@@ -45,12 +48,26 @@ struct ResolvedResourceSpec {
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct ResolvedActionResourceCost {
+    pub kind: String,
     pub amount: f32,
 }
 
 impl ResolvedActionResourceCost {
     pub(crate) fn primary(amount: f32) -> Self {
+        Self::stamina(amount)
+    }
+
+    pub(crate) fn stamina(amount: f32) -> Self {
+        Self::for_kind(RESOURCE_KIND_STAMINA, amount)
+    }
+
+    pub(crate) fn mana(amount: f32) -> Self {
+        Self::for_kind(RESOURCE_KIND_MANA, amount)
+    }
+
+    pub(crate) fn for_kind(kind: &str, amount: f32) -> Self {
         Self {
+            kind: normalize_resource_kind(kind),
             amount: amount.max(0.0),
         }
     }
@@ -79,23 +96,18 @@ pub(crate) fn resolve_ability_action_resource_cost_amount(
         return Some(ResolvedActionResourceCost::primary(0.0));
     }
 
-    let owner_resource_kind = primary_resource_kind_for_owner(ctx, owner)?;
     let ability_resource_kind = effective_resource_kind_for_ability(ctx, owner, ability)?;
     if ability.ability_kind.eq_ignore_ascii_case("SPELL") {
-        return if owner_resource_kind.eq_ignore_ascii_case("MANA") {
-            Some(ResolvedActionResourceCost::primary(amount))
-        } else {
-            None
-        };
-    }
-    if !ability_resource_kind.eq_ignore_ascii_case("MANA") {
-        return Some(ResolvedActionResourceCost::primary(0.0));
-    }
-    if owner_resource_kind != ability_resource_kind {
-        return None;
+        return Some(ResolvedActionResourceCost::for_kind(
+            RESOURCE_KIND_MANA,
+            amount,
+        ));
     }
 
-    Some(ResolvedActionResourceCost::primary(amount))
+    Some(ResolvedActionResourceCost::for_kind(
+        ability_resource_kind.as_str(),
+        amount,
+    ))
 }
 
 pub(crate) fn can_pay_action_resource_cost(
@@ -104,7 +116,7 @@ pub(crate) fn can_pay_action_resource_cost(
     cost: &ResolvedActionResourceCost,
     now: Timestamp,
 ) -> bool {
-    cost.is_free() || has_primary_resource_at_least(ctx, owner, now, cost.amount)
+    cost.is_free() || has_resource_at_least(ctx, owner, cost.kind.as_str(), now, cost.amount)
 }
 
 pub(crate) fn pay_action_resource_cost(
@@ -113,7 +125,7 @@ pub(crate) fn pay_action_resource_cost(
     cost: &ResolvedActionResourceCost,
     now: Timestamp,
 ) -> bool {
-    cost.is_free() || spend_primary_resource(ctx, owner, cost.amount, now)
+    cost.is_free() || spend_resource(ctx, owner, cost.kind.as_str(), cost.amount, now)
 }
 
 pub(crate) fn sync_all_player_resources(ctx: &ReducerContext, now: Timestamp) {
@@ -124,7 +136,7 @@ pub(crate) fn sync_all_player_resources(ctx: &ReducerContext, now: Timestamp) {
         .map(|row| row.player_id)
         .collect();
     for owner in owners {
-        sync_primary_resource_for_player(ctx, owner, now);
+        sync_resources_for_player(ctx, owner, now);
     }
 }
 
@@ -146,9 +158,14 @@ pub(crate) fn reset_player_resources_to_full(
     owner: Identity,
     now: Timestamp,
 ) {
-    if let Some(spec) = resolve_primary_resource_spec_for_owner(ctx, owner) {
-        let Some(mut primary) = sync_primary_resource_for_player(ctx, owner, now) else {
-            return;
+    sync_resources_for_player(ctx, owner, now);
+    for kind in STANDARD_RESOURCE_KINDS {
+        let Some(spec) = resolve_resource_spec_for_owner_and_kind(ctx, owner, kind) else {
+            continue;
+        };
+        let key = resource_key(owner, spec.kind.as_str());
+        let Some(mut primary) = ctx.db.player_resource().key().find(key) else {
+            continue;
         };
         let target_current = baseline_current_for_spec(&spec);
         if (primary.current - target_current).abs() > 0.0001 {
@@ -164,12 +181,26 @@ pub(crate) fn sync_primary_resource_for_player(
     owner: Identity,
     now: Timestamp,
 ) -> Option<PlayerResource> {
-    let Some(spec) = resolve_primary_resource_spec_for_owner(ctx, owner) else {
-        prune_stale_primary_resources(ctx, owner, None);
-        return None;
-    };
-    prune_stale_primary_resources(ctx, owner, Some(spec.kind.as_str()));
+    sync_resources_for_player(ctx, owner, now);
+    ctx.db
+        .player_resource()
+        .key()
+        .find(resource_key(owner, RESOURCE_KIND_STAMINA))
+}
 
+pub(crate) fn sync_resources_for_player(ctx: &ReducerContext, owner: Identity, now: Timestamp) {
+    for kind in STANDARD_RESOURCE_KINDS {
+        sync_resource_for_player(ctx, owner, kind, now);
+    }
+}
+
+fn sync_resource_for_player(
+    ctx: &ReducerContext,
+    owner: Identity,
+    resource_kind: &str,
+    now: Timestamp,
+) -> Option<PlayerResource> {
+    let spec = resolve_resource_spec_for_owner_and_kind(ctx, owner, resource_kind)?;
     let key = resource_key(owner, spec.kind.as_str());
     let mut resource = if let Some(existing) = ctx.db.player_resource().key().find(key.clone()) {
         existing
@@ -210,26 +241,19 @@ pub(crate) fn tick_primary_resource_for_player(
     now: Timestamp,
     dt_seconds: f32,
 ) {
-    let Some(spec) = resolve_primary_resource_spec_for_owner(ctx, owner) else {
-        prune_stale_primary_resources(ctx, owner, None);
-        return;
-    };
-    let Some(mut resource) = sync_primary_resource_for_player(ctx, owner, now) else {
-        return;
-    };
-
-    let decay_per_second =
-        primary_resource_decay_per_second(&spec, resource.current, !is_in_combat(ctx, owner, now));
-    let next = (resource.current + spec.regen_per_second.max(0.0) * dt_seconds.max(0.0)
-        - decay_per_second.max(0.0) * dt_seconds.max(0.0))
-    .clamp(0.0, resource.max.max(0.0));
-    if (next - resource.current).abs() <= 0.0001 {
-        return;
+    sync_resources_for_player(ctx, owner, now);
+    let resources: Vec<_> = ctx.db.player_resource().owner().filter(owner).collect();
+    for resource in resources {
+        if !standard_resource_kind(resource.kind.as_str()) {
+            continue;
+        }
+        let Some(spec) =
+            resolve_resource_spec_for_owner_and_kind(ctx, owner, resource.kind.as_str())
+        else {
+            continue;
+        };
+        tick_resource_row(ctx, owner, now, dt_seconds, resource, spec);
     }
-
-    resource.current = next;
-    resource.updated_at = now;
-    ctx.db.player_resource().key().update(resource);
 }
 
 pub(crate) fn grant_primary_resource_for_damage_taken(
@@ -242,14 +266,15 @@ pub(crate) fn grant_primary_resource_for_damage_taken(
     if amount <= 0.0 {
         return;
     }
-    let Some(spec) = resolve_primary_resource_spec_for_owner(ctx, owner) else {
-        prune_stale_primary_resources(ctx, owner, None);
+    let Some(spec) = resolve_resource_spec_for_owner_and_kind(ctx, owner, RESOURCE_KIND_STAMINA)
+    else {
         return;
     };
     if spec.gain_per_damage_taken <= 0.0 {
         return;
     }
-    let Some(mut resource) = sync_primary_resource_for_player(ctx, owner, now) else {
+    let Some(mut resource) = sync_resource_for_player(ctx, owner, RESOURCE_KIND_STAMINA, now)
+    else {
         return;
     };
 
@@ -273,14 +298,15 @@ pub(crate) fn grant_primary_resource_for_damage_dealt(
     if amount <= 0.0 {
         return;
     }
-    let Some(spec) = resolve_primary_resource_spec_for_owner(ctx, owner) else {
-        prune_stale_primary_resources(ctx, owner, None);
+    let Some(spec) = resolve_resource_spec_for_owner_and_kind(ctx, owner, RESOURCE_KIND_STAMINA)
+    else {
         return;
     };
     if spec.gain_per_damage_dealt <= 0.0 {
         return;
     }
-    let Some(mut resource) = sync_primary_resource_for_player(ctx, owner, now) else {
+    let Some(mut resource) = sync_resource_for_player(ctx, owner, RESOURCE_KIND_STAMINA, now)
+    else {
         return;
     };
 
@@ -305,14 +331,10 @@ pub(crate) fn grant_primary_resource_amount_for_kind(
     if amount <= 0.0 {
         return;
     }
-    let Some(active_kind) = primary_resource_kind_for_owner(ctx, owner) else {
-        prune_stale_primary_resources(ctx, owner, None);
-        return;
-    };
-    if !active_kind.eq_ignore_ascii_case(resource_kind.trim()) {
+    if !standard_resource_kind(resource_kind) {
         return;
     }
-    let Some(mut resource) = sync_primary_resource_for_player(ctx, owner, now) else {
+    let Some(mut resource) = sync_resource_for_player(ctx, owner, resource_kind, now) else {
         return;
     };
 
@@ -332,13 +354,15 @@ pub(crate) fn grant_primary_resource_for_melee_hit(
     owner: Identity,
     now: Timestamp,
 ) {
-    let Some(spec) = resolve_primary_resource_spec_for_owner(ctx, owner) else {
+    let Some(spec) = resolve_resource_spec_for_owner_and_kind(ctx, owner, RESOURCE_KIND_STAMINA)
+    else {
         return;
     };
     if spec.gain_per_melee_hit <= 0.0 {
         return;
     }
-    let Some(mut resource) = sync_primary_resource_for_player(ctx, owner, now) else {
+    let Some(mut resource) = sync_resource_for_player(ctx, owner, RESOURCE_KIND_STAMINA, now)
+    else {
         return;
     };
     let next = (resource.current + spec.gain_per_melee_hit).clamp(0.0, resource.max);
@@ -356,13 +380,14 @@ pub(crate) fn grant_primary_resource_for_spell_cast(
     owner: Identity,
     now: Timestamp,
 ) {
-    let Some(spec) = resolve_primary_resource_spec_for_owner(ctx, owner) else {
+    let Some(spec) = resolve_resource_spec_for_owner_and_kind(ctx, owner, RESOURCE_KIND_MANA)
+    else {
         return;
     };
     if spec.gain_per_spell_cast <= 0.0 {
         return;
     }
-    let Some(mut resource) = sync_primary_resource_for_player(ctx, owner, now) else {
+    let Some(mut resource) = sync_resource_for_player(ctx, owner, RESOURCE_KIND_MANA, now) else {
         return;
     };
     let next = (resource.current + spec.gain_per_spell_cast).clamp(0.0, resource.max);
@@ -383,7 +408,8 @@ pub(crate) fn grant_primary_resource_amount(
     if amount <= 0.0 {
         return;
     }
-    let Some(mut resource) = sync_primary_resource_for_player(ctx, owner, now) else {
+    let Some(mut resource) = sync_resource_for_player(ctx, owner, RESOURCE_KIND_STAMINA, now)
+    else {
         return;
     };
     let next = (resource.current + amount).clamp(0.0, resource.max);
@@ -395,28 +421,60 @@ pub(crate) fn grant_primary_resource_amount(
     ctx.db.player_resource().key().update(resource);
 }
 
+#[allow(dead_code)]
 pub(crate) fn current_primary_resource(
     ctx: &ReducerContext,
     owner: Identity,
     now: Timestamp,
 ) -> f32 {
-    sync_primary_resource_for_player(ctx, owner, now)
-        .map(|row| row.current.max(0.0))
-        .unwrap_or(0.0)
+    current_resource(ctx, owner, RESOURCE_KIND_STAMINA, now)
 }
 
+#[allow(dead_code)]
 pub(crate) fn has_primary_resource_at_least(
     ctx: &ReducerContext,
     owner: Identity,
     now: Timestamp,
     minimum: f32,
 ) -> bool {
-    current_primary_resource(ctx, owner, now) + 0.0001 >= minimum.max(0.0)
+    has_resource_at_least(ctx, owner, RESOURCE_KIND_STAMINA, now, minimum)
 }
 
+#[allow(dead_code)]
 pub(crate) fn spend_primary_resource(
     ctx: &ReducerContext,
     owner: Identity,
+    amount: f32,
+    now: Timestamp,
+) -> bool {
+    spend_resource(ctx, owner, RESOURCE_KIND_STAMINA, amount, now)
+}
+
+fn current_resource(
+    ctx: &ReducerContext,
+    owner: Identity,
+    resource_kind: &str,
+    now: Timestamp,
+) -> f32 {
+    sync_resource_for_player(ctx, owner, resource_kind, now)
+        .map(|row| row.current.max(0.0))
+        .unwrap_or(0.0)
+}
+
+fn has_resource_at_least(
+    ctx: &ReducerContext,
+    owner: Identity,
+    resource_kind: &str,
+    now: Timestamp,
+    minimum: f32,
+) -> bool {
+    current_resource(ctx, owner, resource_kind, now) + 0.0001 >= minimum.max(0.0)
+}
+
+fn spend_resource(
+    ctx: &ReducerContext,
+    owner: Identity,
+    resource_kind: &str,
     amount: f32,
     now: Timestamp,
 ) -> bool {
@@ -425,7 +483,7 @@ pub(crate) fn spend_primary_resource(
         return true;
     }
 
-    let Some(mut resource) = sync_primary_resource_for_player(ctx, owner, now) else {
+    let Some(mut resource) = sync_resource_for_player(ctx, owner, resource_kind, now) else {
         return false;
     };
     if resource.current + 0.0001 < cost {
@@ -441,11 +499,23 @@ pub(crate) fn spend_primary_resource(
     true
 }
 
+#[allow(dead_code)]
 fn resolve_primary_resource_spec_for_owner(
     ctx: &ReducerContext,
     owner: Identity,
 ) -> Option<ResolvedResourceSpec> {
-    let primary_kind = primary_resource_kind_for_owner(ctx, owner)?;
+    resolve_resource_spec_for_owner_and_kind(ctx, owner, RESOURCE_KIND_STAMINA)
+}
+
+fn resolve_resource_spec_for_owner_and_kind(
+    ctx: &ReducerContext,
+    owner: Identity,
+    resource_kind: &str,
+) -> Option<ResolvedResourceSpec> {
+    let primary_kind = resource_kind.trim().to_ascii_uppercase();
+    if primary_kind.is_empty() {
+        return None;
+    }
     let definition = ctx
         .db
         .resource_catalog()
@@ -478,18 +548,35 @@ fn resolve_primary_resource_spec_for_owner(
     })
 }
 
-fn prune_stale_primary_resources(ctx: &ReducerContext, owner: Identity, active_kind: Option<&str>) {
-    let stale_keys: Vec<_> = ctx
-        .db
-        .player_resource()
-        .owner()
-        .filter(owner)
-        .filter(|row| active_kind != Some(row.kind.as_str()))
-        .map(|row| row.key)
-        .collect();
-    for key in stale_keys {
-        ctx.db.player_resource().key().delete(key);
+fn tick_resource_row(
+    ctx: &ReducerContext,
+    owner: Identity,
+    now: Timestamp,
+    dt_seconds: f32,
+    mut resource: PlayerResource,
+    spec: ResolvedResourceSpec,
+) {
+    let dt = dt_seconds.max(0.0);
+    let max = spec.max.max(0.0);
+    let out_of_combat = !is_in_combat(ctx, owner, now);
+    let regen_per_second = spec.regen_per_second.max(0.0);
+    let decay_per_second =
+        primary_resource_decay_per_second(&spec, resource.current, out_of_combat);
+    let next_current =
+        (resource.current + (regen_per_second - decay_per_second) * dt).clamp(0.0, max);
+
+    let spec_changed = (resource.max - max).abs() > 0.0001
+        || (resource.regen_per_second - spec.regen_per_second.max(0.0)).abs() > 0.0001;
+    let current_changed = (resource.current - next_current).abs() > 0.0001;
+    if !spec_changed && !current_changed {
+        return;
     }
+
+    resource.max = max;
+    resource.regen_per_second = spec.regen_per_second.max(0.0);
+    resource.current = next_current;
+    resource.updated_at = now;
+    ctx.db.player_resource().key().update(resource);
 }
 
 fn baseline_current_for_spec(spec: &ResolvedResourceSpec) -> f32 {
@@ -515,6 +602,17 @@ fn primary_resource_decay_per_second(
 
 fn resource_key(owner: Identity, kind: &str) -> String {
     format!("{}:{}", owner.to_hex(), kind.trim().to_ascii_uppercase())
+}
+
+fn normalize_resource_kind(kind: &str) -> String {
+    kind.trim().to_ascii_uppercase()
+}
+
+fn standard_resource_kind(kind: &str) -> bool {
+    let kind = normalize_resource_kind(kind);
+    STANDARD_RESOURCE_KINDS
+        .iter()
+        .any(|candidate| *candidate == kind)
 }
 
 #[cfg(test)]

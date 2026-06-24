@@ -8,7 +8,10 @@ use crate::npcs::{
 use crate::player::DEFAULT_COMBAT_PROFILE;
 use crate::player_physics::player_physics as _;
 use crate::player_state::player_state as _;
-use crate::progression::{sync_progression_for_equipment_change, COMBAT_PROFILE_ARCHER_BOW};
+use crate::progression::{
+    sync_progression_for_equipment_change, COMBAT_PROFILE_ARCHER_BOW, DISCIPLINE_ARCANA,
+    DISCIPLINE_PRECISION, DISCIPLINE_SUBTLETY, DISCIPLINE_WAR, DISCIPLINE_ZEAL,
+};
 use crate::relations::TargetAudience;
 
 #[allow(unused_imports)]
@@ -91,6 +94,7 @@ const WEAPON_KIND_ONE_HAND_SWORD: &str = "ONE_HAND_SWORD";
 const WEAPON_KIND_TWO_HAND_AXE: &str = "TWO_HAND_AXE";
 const WEAPON_KIND_ONE_HAND_AXE: &str = "ONE_HAND_AXE";
 const WEAPON_KIND_SHIELD: &str = "SHIELD";
+const WEAPON_KIND_SWORD_AND_SHIELD: &str = "SWORD_AND_SHIELD";
 const WEAPON_KIND_DAGGER_PAIR: &str = "DAGGER_PAIR";
 const WEAPON_KIND_BOW: &str = "BOW";
 const WEAPON_KIND_STAFF: &str = "STAFF";
@@ -336,6 +340,15 @@ struct LootRollContext {
     drop_chance: f32,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+struct PlannedInventoryPlacement {
+    item_instance_id: String,
+    x: u32,
+    y: u32,
+    width: u32,
+    height: u32,
+}
+
 #[derive(Clone, Copy)]
 struct StarterEquipmentSpec {
     slot_id: &'static str,
@@ -355,13 +368,15 @@ const BASELINE_STARTER_EQUIPMENT: &[StarterEquipmentSpec] = &[
 const BASELINE_STARTER_INVENTORY_ITEMS: &[&str] = &[
     "NEWBIE_STAFF_01",
     "TRAINING_DAGGER_PAIR",
-    "TRAINING_ONE_HAND_SWORD",
-    "TRAINING_SHIELD",
+    "TRAINING_SWORD_AND_SHIELD",
     "TRAINING_BOW",
 ];
 
-const LEGACY_STARTER_WEAPON_DEFINITION_IDS: &[&str] =
-    &["TRAINING_ONE_HAND_SWORD", "TRAINING_SHIELD"];
+const LEGACY_STARTER_WEAPON_DEFINITION_IDS: &[&str] = &[
+    "TRAINING_ONE_HAND_SWORD",
+    "TRAINING_SHIELD",
+    "TRAINING_SWORD_AND_SHIELD",
+];
 
 const STARTER_ITEM_DEFINITIONS: &[ItemDefinitionSpec] = &[
     armor(
@@ -625,6 +640,14 @@ const STARTER_ITEM_DEFINITIONS: &[ItemDefinitionSpec] = &[
         "training_shield",
         WEAPON_KIND_SHIELD,
         HAND_REQUIREMENT_OFF_HAND,
+        DEFAULT_COMBAT_PROFILE,
+    ),
+    weapon(
+        "TRAINING_SWORD_AND_SHIELD",
+        "Training Sword and Shield",
+        "training_sword_and_shield",
+        WEAPON_KIND_SWORD_AND_SHIELD,
+        HAND_REQUIREMENT_TWO_HAND,
         DEFAULT_COMBAT_PROFILE,
     ),
     weapon(
@@ -1579,21 +1602,47 @@ pub fn equip_item(
     let (mut equipment, _) = ensure_equipment_loadout(ctx, owner);
     let normalized_slot = normalize_equipment_slot(target_slot.as_str());
     validate_equip_request(ctx, &equipment, &definition, normalized_slot.as_str())?;
-    if let Some(existing_item_id) = equipment_item_at_slot(&equipment, normalized_slot.as_str()) {
-        return Err(format!(
-            "equipment slot '{}' is already occupied by '{}'",
-            normalized_slot, existing_item_id
-        ));
-    }
+    let displaced_item_ids = displaced_equipment_item_ids_for_equip(
+        ctx,
+        &equipment,
+        normalized_slot.as_str(),
+        &definition,
+    );
     if definition.unique_equipped
-        && is_item_definition_equipped(ctx, &equipment, definition.item_def_id.as_str())
+        && is_item_definition_equipped_except(
+            ctx,
+            &equipment,
+            definition.item_def_id.as_str(),
+            displaced_item_ids.as_slice(),
+        )
     {
         return Err(format!(
             "item definition '{}' is unique-equipped",
             definition.item_def_id
         ));
     }
+    let displaced_placements = plan_inventory_placements_for_items(
+        ctx,
+        &source_container,
+        Some(item.item_instance_id.as_str()),
+        displaced_item_ids.as_slice(),
+    )?;
 
+    ctx.db.inventory_slot().key().delete(source_slot.key);
+    for item_id in &displaced_item_ids {
+        clear_equipment_references_to_item(&mut equipment, item_id.as_str());
+    }
+    for placement in displaced_placements {
+        upsert_inventory_slot(
+            ctx,
+            source_container.container_id.as_str(),
+            placement.item_instance_id.as_str(),
+            placement.x,
+            placement.y,
+            placement.width,
+            placement.height,
+        );
+    }
     set_equipment_slot(
         &mut equipment,
         normalized_slot.as_str(),
@@ -1603,11 +1652,11 @@ pub fn equip_item(
     equipment.revision = equipment.revision.saturating_add(1);
     equipment.updated_at = ctx.timestamp;
 
-    ctx.db.inventory_slot().key().delete(source_slot.key);
     let mut item = item;
     item.current_owner = Some(owner);
     ctx.db.item_instance().item_instance_id().update(item);
     ctx.db.equipment_loadout().owner().update(equipment);
+    touch_container(ctx, source_container);
     sync_progression_for_equipment_change(ctx, owner, ctx.timestamp);
     Ok(())
 }
@@ -2647,21 +2696,256 @@ pub(crate) fn equipment_combat_profile_id_for_owner(
         .as_deref()
         .and_then(|item_id| item_definition_for_instance(ctx, item_id));
 
-    if let Some(definition) = main_hand {
-        let profile = normalize_id(definition.combat_profile_id.as_str());
-        if !profile.is_empty() {
-            return Some(profile);
-        }
+    let profile = combat_profile_for_weapon_pair(main_hand.as_ref(), off_hand.as_ref());
+    if profile.is_empty() {
+        None
+    } else {
+        Some(profile)
     }
+}
 
-    if off_hand
-        .as_ref()
-        .is_some_and(|definition| definition.weapon_kind == WEAPON_KIND_SHIELD)
+pub(crate) fn equipped_weapon_item_ids_for_owner(
+    ctx: &ReducerContext,
+    owner: Identity,
+) -> Option<(Option<String>, Option<String>)> {
+    let equipment = ctx.db.equipment_loadout().owner().find(owner)?;
+    Some((equipment.main_hand_item_id, equipment.off_hand_item_id))
+}
+
+pub(crate) fn combat_discipline_weapon_loadout_is_available(
+    ctx: &ReducerContext,
+    owner: Identity,
+    discipline_id: &str,
+    main_hand_item_id: Option<&str>,
+    off_hand_item_id: Option<&str>,
+) -> bool {
+    let expected_profile = combat_profile_for_discipline(discipline_id);
+    if expected_profile.is_empty() {
+        return false;
+    }
+    let Some(main_hand_item_id) = main_hand_item_id.filter(|value| !value.trim().is_empty()) else {
+        return false;
+    };
+    if off_hand_item_id
+        .filter(|value| !value.trim().is_empty())
+        .is_some_and(|off_hand_item_id| off_hand_item_id == main_hand_item_id)
     {
-        return Some(DEFAULT_COMBAT_PROFILE.to_string());
+        return false;
+    }
+    let Some(main_hand) = item_definition_for_owned_instance(ctx, owner, main_hand_item_id) else {
+        return false;
+    };
+    let off_hand = off_hand_item_id
+        .filter(|value| !value.trim().is_empty())
+        .and_then(|item_id| item_definition_for_owned_instance(ctx, owner, item_id));
+    combat_profile_for_weapon_pair(Some(&main_hand), off_hand.as_ref()) == expected_profile
+}
+
+pub(crate) fn apply_combat_discipline_weapon_loadout(
+    ctx: &ReducerContext,
+    owner: Identity,
+    discipline_id: &str,
+    main_hand_item_id: Option<&str>,
+    off_hand_item_id: Option<&str>,
+) -> Result<(), String> {
+    sync_item_definitions(ctx);
+    if !combat_discipline_weapon_loadout_is_available(
+        ctx,
+        owner,
+        discipline_id,
+        main_hand_item_id,
+        off_hand_item_id,
+    ) {
+        return Err(format!(
+            "saved weapon loadout is not available for discipline '{}'",
+            normalize_id(discipline_id)
+        ));
     }
 
-    None
+    let main_hand_item_id = main_hand_item_id
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string);
+    let off_hand_item_id = off_hand_item_id
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string);
+    let (mut equipment, _) = ensure_equipment_loadout(ctx, owner);
+    if equipment.main_hand_item_id == main_hand_item_id
+        && equipment.off_hand_item_id == off_hand_item_id
+    {
+        return Ok(());
+    }
+
+    remove_item_from_inventory_slots(ctx, main_hand_item_id.as_deref());
+    remove_item_from_inventory_slots(ctx, off_hand_item_id.as_deref());
+
+    let (bag, _) = ensure_player_bag(ctx, owner);
+    for equipped_item_id in [
+        equipment.main_hand_item_id.clone(),
+        equipment.off_hand_item_id.clone(),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        if Some(equipped_item_id.as_str()) == main_hand_item_id.as_deref()
+            || Some(equipped_item_id.as_str()) == off_hand_item_id.as_deref()
+        {
+            continue;
+        }
+        place_equipped_item_in_bag(ctx, &bag, equipped_item_id.as_str())?;
+    }
+
+    equipment.main_hand_item_id = main_hand_item_id.clone();
+    equipment.off_hand_item_id = off_hand_item_id.clone();
+    equipment.revision = equipment.revision.saturating_add(1);
+    equipment.updated_at = ctx.timestamp;
+    if let Some(item_id) = main_hand_item_id {
+        mark_item_owned(ctx, owner, item_id.as_str());
+    }
+    if let Some(item_id) = off_hand_item_id {
+        mark_item_owned(ctx, owner, item_id.as_str());
+    }
+    ctx.db.equipment_loadout().owner().update(equipment);
+    sync_progression_for_equipment_change(ctx, owner, ctx.timestamp);
+    Ok(())
+}
+
+fn combat_profile_for_discipline(discipline_id: &str) -> &'static str {
+    match normalize_id(discipline_id).as_str() {
+        DISCIPLINE_SUBTLETY => COMBAT_PROFILE_DAGGERS,
+        DISCIPLINE_WAR => COMBAT_PROFILE_TWO_HANDED_SWORD,
+        DISCIPLINE_ZEAL => DEFAULT_COMBAT_PROFILE,
+        DISCIPLINE_PRECISION => COMBAT_PROFILE_ARCHER_BOW,
+        DISCIPLINE_ARCANA => COMBAT_PROFILE_STAFF,
+        _ => "",
+    }
+}
+
+fn combat_profile_for_weapon_pair(
+    main_hand: Option<&ItemDefinition>,
+    off_hand: Option<&ItemDefinition>,
+) -> String {
+    if let Some(definition) = main_hand {
+        if let Some(off_hand_definition) = off_hand {
+            if is_one_hand_weapon_kind(definition.weapon_kind.as_str())
+                && is_shield_weapon_kind(off_hand_definition.weapon_kind.as_str())
+            {
+                return DEFAULT_COMBAT_PROFILE.to_string();
+            }
+
+            return String::new();
+        }
+
+        let weapon_kind = normalize_id(definition.weapon_kind.as_str());
+        let profile = normalize_id(definition.combat_profile_id.as_str());
+        if profile.is_empty() {
+            return String::new();
+        }
+
+        if is_one_hand_weapon_kind(weapon_kind.as_str()) && profile == DEFAULT_COMBAT_PROFILE {
+            return String::new();
+        }
+
+        return profile;
+    }
+
+    String::new()
+}
+
+fn is_one_hand_weapon_kind(weapon_kind: &str) -> bool {
+    matches!(
+        normalize_id(weapon_kind).as_str(),
+        WEAPON_KIND_ONE_HAND_SWORD | WEAPON_KIND_ONE_HAND_AXE
+    )
+}
+
+fn is_shield_weapon_kind(weapon_kind: &str) -> bool {
+    normalize_id(weapon_kind).as_str() == WEAPON_KIND_SHIELD
+}
+
+fn item_definition_for_owned_instance(
+    ctx: &ReducerContext,
+    owner: Identity,
+    item_instance_id: &str,
+) -> Option<ItemDefinition> {
+    let item = ctx
+        .db
+        .item_instance()
+        .item_instance_id()
+        .find(item_instance_id.trim().to_string())?;
+    if item.current_owner != Some(owner) {
+        return None;
+    }
+    item_definition_for_instance(ctx, item.item_instance_id.as_str())
+}
+
+fn place_equipped_item_in_bag(
+    ctx: &ReducerContext,
+    bag: &InventoryContainer,
+    item_instance_id: &str,
+) -> Result<(), String> {
+    if ctx
+        .db
+        .inventory_slot()
+        .item_instance_id()
+        .filter(item_instance_id)
+        .next()
+        .is_some()
+    {
+        return Ok(());
+    }
+    let definition = item_definition_for_instance(ctx, item_instance_id)
+        .ok_or_else(|| format!("item '{}' has no definition", item_instance_id))?;
+    let (x, y) = first_free_position(
+        ctx,
+        bag.container_id.as_str(),
+        bag.width,
+        bag.height,
+        definition.width,
+        definition.height,
+        None,
+    )
+    .ok_or_else(|| "not enough player inventory space to switch discipline".to_string())?;
+    upsert_inventory_slot(
+        ctx,
+        bag.container_id.as_str(),
+        item_instance_id,
+        x,
+        y,
+        definition.width,
+        definition.height,
+    );
+    touch_container(ctx, bag.clone());
+    Ok(())
+}
+
+fn remove_item_from_inventory_slots(ctx: &ReducerContext, item_instance_id: Option<&str>) {
+    let Some(item_instance_id) = item_instance_id else {
+        return;
+    };
+    let keys: Vec<_> = ctx
+        .db
+        .inventory_slot()
+        .item_instance_id()
+        .filter(item_instance_id)
+        .map(|slot| slot.key)
+        .collect();
+    for key in keys {
+        ctx.db.inventory_slot().key().delete(key);
+    }
+}
+
+fn mark_item_owned(ctx: &ReducerContext, owner: Identity, item_instance_id: &str) {
+    if let Some(mut item) = ctx
+        .db
+        .item_instance()
+        .item_instance_id()
+        .find(item_instance_id.to_string())
+    {
+        item.current_owner = Some(owner);
+        ctx.db.item_instance().item_instance_id().update(item);
+    }
 }
 
 fn ensure_player_bag(ctx: &ReducerContext, owner: Identity) -> (InventoryContainer, bool) {
@@ -3244,6 +3528,79 @@ fn first_free_position(
     None
 }
 
+fn plan_inventory_placements_for_items(
+    ctx: &ReducerContext,
+    container: &InventoryContainer,
+    ignored_item_instance_id: Option<&str>,
+    item_instance_ids: &[String],
+) -> Result<Vec<PlannedInventoryPlacement>, String> {
+    let mut occupied: Vec<(u32, u32, u32, u32)> = ctx
+        .db
+        .inventory_slot()
+        .container_id()
+        .filter(container.container_id.as_str())
+        .filter(|slot| {
+            !ignored_item_instance_id
+                .is_some_and(|ignored| ignored == slot.item_instance_id.as_str())
+        })
+        .map(|slot| (slot.x, slot.y, slot.width, slot.height))
+        .collect();
+    let mut placements = Vec::new();
+
+    for item_instance_id in item_instance_ids {
+        let definition = item_definition_for_instance(ctx, item_instance_id.as_str())
+            .ok_or_else(|| format!("item '{}' has no definition", item_instance_id))?;
+        let Some((x, y)) = first_free_position_in_rects(
+            container.width,
+            container.height,
+            definition.width,
+            definition.height,
+            occupied.as_slice(),
+        ) else {
+            return Err("not enough player inventory space to replace equipped item".to_string());
+        };
+
+        occupied.push((x, y, definition.width, definition.height));
+        placements.push(PlannedInventoryPlacement {
+            item_instance_id: item_instance_id.clone(),
+            x,
+            y,
+            width: definition.width,
+            height: definition.height,
+        });
+    }
+
+    Ok(placements)
+}
+
+fn first_free_position_in_rects(
+    container_width: u32,
+    container_height: u32,
+    item_width: u32,
+    item_height: u32,
+    occupied: &[(u32, u32, u32, u32)],
+) -> Option<(u32, u32)> {
+    if item_width == 0
+        || item_height == 0
+        || item_width > container_width
+        || item_height > container_height
+    {
+        return None;
+    }
+
+    for y in 0..=(container_height - item_height) {
+        for x in 0..=(container_width - item_width) {
+            if occupied.iter().all(|(ox, oy, ow, oh)| {
+                !rectangles_overlap(x, y, item_width, item_height, *ox, *oy, *ow, *oh)
+            }) {
+                return Some((x, y));
+            }
+        }
+    }
+
+    None
+}
+
 fn rectangles_overlap(
     ax: u32,
     ay: u32,
@@ -3307,42 +3664,27 @@ fn validate_slot_matches(expected_slot: &str, target_slot: &str) -> Result<(), S
 }
 
 fn validate_weapon_equip_request(
-    ctx: &ReducerContext,
-    equipment: &EquipmentLoadout,
+    _ctx: &ReducerContext,
+    _equipment: &EquipmentLoadout,
     definition: &ItemDefinition,
     target_slot: &str,
 ) -> Result<(), String> {
-    let main_hand = equipment
-        .main_hand_item_id
-        .as_deref()
-        .and_then(|item_id| item_definition_for_instance(ctx, item_id));
-    validate_weapon_equip_request_with_main_hand(
-        equipment,
-        definition,
-        target_slot,
-        main_hand.as_ref(),
-    )
+    validate_weapon_equip_request_with_main_hand(definition, target_slot)
 }
 
 fn validate_weapon_equip_request_with_main_hand(
-    equipment: &EquipmentLoadout,
     definition: &ItemDefinition,
     target_slot: &str,
-    main_hand: Option<&ItemDefinition>,
 ) -> Result<(), String> {
     match definition.weapon_kind.as_str() {
         WEAPON_KIND_TWO_HAND_SWORD
         | WEAPON_KIND_TWO_HAND_AXE
+        | WEAPON_KIND_SWORD_AND_SHIELD
         | WEAPON_KIND_DAGGER_PAIR
         | WEAPON_KIND_BOW
         | WEAPON_KIND_STAFF => {
             if target_slot != EQUIP_SLOT_MAIN_HAND {
                 return Err("two-hand weapons must be equipped in main hand".to_string());
-            }
-            if equipment.off_hand_item_id.is_some() {
-                return Err(
-                    "two-hand weapons cannot be equipped while off hand is occupied".to_string(),
-                );
             }
             Ok(())
         }
@@ -3355,11 +3697,6 @@ fn validate_weapon_equip_request_with_main_hand(
         WEAPON_KIND_SHIELD => {
             if target_slot != EQUIP_SLOT_OFF_HAND {
                 return Err("shields must be equipped in off hand".to_string());
-            }
-            if main_hand
-                .is_some_and(|definition| definition.hand_requirement == HAND_REQUIREMENT_TWO_HAND)
-            {
-                return Err("shields cannot be equipped with a two-hand weapon".to_string());
             }
             Ok(())
         }
@@ -3379,17 +3716,22 @@ fn apply_hand_locks_for_equipped_item(
     }
 }
 
-fn is_item_definition_equipped(
+fn is_item_definition_equipped_except(
     ctx: &ReducerContext,
     equipment: &EquipmentLoadout,
     item_def_id: &str,
+    ignored_item_instance_ids: &[String],
 ) -> bool {
     equipment_item_ids(equipment).any(|item_id| {
-        ctx.db
-            .item_instance()
-            .item_instance_id()
-            .find(item_id.to_string())
-            .is_some_and(|item| item.item_def_id == item_def_id)
+        !ignored_item_instance_ids
+            .iter()
+            .any(|ignored| ignored == item_id)
+            && ctx
+                .db
+                .item_instance()
+                .item_instance_id()
+                .find(item_id.to_string())
+                .is_some_and(|item| item.item_def_id == item_def_id)
     })
 }
 
@@ -3478,6 +3820,48 @@ fn equipment_item_ids(equipment: &EquipmentLoadout) -> impl Iterator<Item = &str
     ]
     .into_iter()
     .flatten()
+}
+
+fn displaced_equipment_item_ids_for_equip(
+    ctx: &ReducerContext,
+    equipment: &EquipmentLoadout,
+    target_slot: &str,
+    definition: &ItemDefinition,
+) -> Vec<String> {
+    let mut displaced = Vec::new();
+    push_displaced_item_id(
+        &mut displaced,
+        equipment_item_at_slot(equipment, target_slot).cloned(),
+    );
+
+    if target_slot == EQUIP_SLOT_MAIN_HAND
+        && definition.hand_requirement == HAND_REQUIREMENT_TWO_HAND
+    {
+        push_displaced_item_id(&mut displaced, equipment.off_hand_item_id.clone());
+    } else if target_slot == EQUIP_SLOT_OFF_HAND
+        && normalize_id(definition.weapon_kind.as_str()) == WEAPON_KIND_SHIELD
+        && equipment
+            .main_hand_item_id
+            .as_ref()
+            .and_then(|item_id| item_definition_for_instance(ctx, item_id))
+            .is_some_and(|definition| definition.hand_requirement == HAND_REQUIREMENT_TWO_HAND)
+    {
+        push_displaced_item_id(&mut displaced, equipment.main_hand_item_id.clone());
+    }
+
+    displaced
+}
+
+fn push_displaced_item_id(displaced: &mut Vec<String>, item_instance_id: Option<String>) {
+    let Some(item_instance_id) = item_instance_id else {
+        return;
+    };
+    if !displaced
+        .iter()
+        .any(|existing| existing == &item_instance_id)
+    {
+        displaced.push(item_instance_id);
+    }
 }
 
 fn find_equipped_slot_for_item(
@@ -3721,27 +4105,6 @@ fn identity_key(identity: Identity) -> String {
 mod tests {
     use super::*;
 
-    fn empty_equipment() -> EquipmentLoadout {
-        EquipmentLoadout {
-            owner: Identity::ZERO,
-            head_item_id: None,
-            shoulder_item_id: None,
-            cape_item_id: None,
-            chest_item_id: None,
-            legs_item_id: None,
-            boots_item_id: None,
-            gloves_item_id: None,
-            ring_1_item_id: None,
-            ring_2_item_id: None,
-            amulet_item_id: None,
-            main_hand_item_id: None,
-            off_hand_item_id: None,
-            spellbook_item_id: None,
-            revision: 0,
-            updated_at: Timestamp::UNIX_EPOCH,
-        }
-    }
-
     fn item_definition(weapon_kind: &str, hand_requirement: &str) -> ItemDefinition {
         ItemDefinition {
             item_def_id: "TEST".to_string(),
@@ -3813,64 +4176,66 @@ mod tests {
 
     #[test]
     fn shield_can_be_equipped_alone() {
-        let equipment = empty_equipment();
         let shield = item_definition(WEAPON_KIND_SHIELD, HAND_REQUIREMENT_OFF_HAND);
-        assert!(validate_weapon_equip_request_with_main_hand(
-            &equipment,
-            &shield,
-            EQUIP_SLOT_OFF_HAND,
-            None
-        )
-        .is_ok());
+        assert!(validate_weapon_equip_request_with_main_hand(&shield, EQUIP_SLOT_OFF_HAND).is_ok());
     }
 
     #[test]
-    fn shield_cannot_pair_with_two_hand_weapon() {
-        let mut equipment = empty_equipment();
-        equipment.main_hand_item_id = Some("greatsword".to_string());
+    fn shield_can_replace_two_hand_weapon() {
         let shield = item_definition(WEAPON_KIND_SHIELD, HAND_REQUIREMENT_OFF_HAND);
-        let greatsword = item_definition(WEAPON_KIND_TWO_HAND_SWORD, HAND_REQUIREMENT_TWO_HAND);
-        assert!(validate_weapon_equip_request_with_main_hand(
-            &equipment,
-            &shield,
-            EQUIP_SLOT_OFF_HAND,
-            Some(&greatsword)
-        )
-        .is_err());
+        assert!(validate_weapon_equip_request_with_main_hand(&shield, EQUIP_SLOT_OFF_HAND).is_ok());
     }
 
     #[test]
-    fn two_hand_weapon_requires_empty_off_hand() {
-        let mut equipment = empty_equipment();
-        equipment.off_hand_item_id = Some("shield".to_string());
+    fn two_hand_weapon_can_replace_occupied_hands() {
         let sword = item_definition(WEAPON_KIND_TWO_HAND_SWORD, HAND_REQUIREMENT_TWO_HAND);
-        assert!(validate_weapon_equip_request_with_main_hand(
-            &equipment,
-            &sword,
-            EQUIP_SLOT_MAIN_HAND,
-            None
-        )
-        .is_err());
+        assert!(validate_weapon_equip_request_with_main_hand(&sword, EQUIP_SLOT_MAIN_HAND).is_ok());
     }
 
     #[test]
     fn dagger_pair_is_two_hand_main_hand_weapon() {
-        let equipment = empty_equipment();
         let daggers = item_definition(WEAPON_KIND_DAGGER_PAIR, HAND_REQUIREMENT_TWO_HAND);
+        assert!(
+            validate_weapon_equip_request_with_main_hand(&daggers, EQUIP_SLOT_MAIN_HAND).is_ok()
+        );
+        assert!(
+            validate_weapon_equip_request_with_main_hand(&daggers, EQUIP_SLOT_OFF_HAND).is_err()
+        );
+    }
+
+    #[test]
+    fn sword_and_shield_pair_is_two_hand_main_hand_weapon() {
+        let sword_and_shield =
+            item_definition(WEAPON_KIND_SWORD_AND_SHIELD, HAND_REQUIREMENT_TWO_HAND);
         assert!(validate_weapon_equip_request_with_main_hand(
-            &equipment,
-            &daggers,
-            EQUIP_SLOT_MAIN_HAND,
-            None
+            &sword_and_shield,
+            EQUIP_SLOT_MAIN_HAND
         )
         .is_ok());
         assert!(validate_weapon_equip_request_with_main_hand(
-            &equipment,
-            &daggers,
-            EQUIP_SLOT_OFF_HAND,
-            None
+            &sword_and_shield,
+            EQUIP_SLOT_OFF_HAND
         )
         .is_err());
+    }
+
+    #[test]
+    fn sword_and_shield_profile_requires_pair_or_paired_item() {
+        let mut sword = item_definition(WEAPON_KIND_ONE_HAND_SWORD, HAND_REQUIREMENT_ONE_HAND);
+        sword.combat_profile_id = DEFAULT_COMBAT_PROFILE.to_string();
+        let shield = item_definition(WEAPON_KIND_SHIELD, HAND_REQUIREMENT_OFF_HAND);
+        let mut paired = item_definition(WEAPON_KIND_SWORD_AND_SHIELD, HAND_REQUIREMENT_TWO_HAND);
+        paired.combat_profile_id = DEFAULT_COMBAT_PROFILE.to_string();
+
+        assert_eq!(combat_profile_for_weapon_pair(Some(&sword), None), "");
+        assert_eq!(
+            combat_profile_for_weapon_pair(Some(&sword), Some(&shield)),
+            DEFAULT_COMBAT_PROFILE
+        );
+        assert_eq!(
+            combat_profile_for_weapon_pair(Some(&paired), None),
+            DEFAULT_COMBAT_PROFILE
+        );
     }
 
     #[test]
@@ -3895,8 +4260,7 @@ mod tests {
             &[
                 "NEWBIE_STAFF_01",
                 "TRAINING_DAGGER_PAIR",
-                "TRAINING_ONE_HAND_SWORD",
-                "TRAINING_SHIELD",
+                "TRAINING_SWORD_AND_SHIELD",
                 "TRAINING_BOW",
             ]
         );
@@ -4212,6 +4576,7 @@ mod tests {
         assert!(is_starter_weapon_definition_id("TRAINING_TWO_HAND_SWORD"));
         assert!(is_starter_weapon_definition_id("TRAINING_SHIELD"));
         assert!(is_starter_weapon_definition_id("training-one-hand-sword"));
+        assert!(is_starter_weapon_definition_id("training-sword-and-shield"));
         assert!(!is_starter_weapon_definition_id("training-bow"));
         assert!(!is_starter_weapon_definition_id("EPIC_PLAYER_SWORD"));
     }

@@ -12,6 +12,7 @@ use crate::combat::{
     StatusEffectKind, StatusStackGroupDefault,
 };
 use crate::inventory::{
+    apply_combat_discipline_weapon_loadout, combat_discipline_weapon_loadout_is_available,
     equipment_combat_profile_id_for_owner, equipment_spell_slot_capacity_for_owner,
 };
 use crate::melee::sync_melee_attack_modifier_catalog;
@@ -30,11 +31,17 @@ use crate::progression::action_bar_slot_catalog as _;
 #[allow(unused_imports)]
 use crate::progression::action_presentation_catalog as _;
 #[allow(unused_imports)]
+use crate::progression::active_combat_discipline as _;
+#[allow(unused_imports)]
 use crate::progression::active_combat_mode as _;
 #[allow(unused_imports)]
 use crate::progression::auto_attack_catalog as _;
 #[allow(unused_imports)]
 use crate::progression::character_action_bar_assignment as _;
+#[allow(unused_imports)]
+use crate::progression::character_combat_discipline_weapon_loadout as _;
+#[allow(unused_imports)]
+use crate::progression::combat_discipline_catalog as _;
 #[allow(unused_imports)]
 use crate::progression::combat_mode_catalog as _;
 #[allow(unused_imports)]
@@ -57,6 +64,8 @@ const ACTION_KIND_ABILITY: &str = "ABILITY";
 const ACTION_KIND_FIXED: &str = "FIXED";
 const FIXED_ACTION_DODGE: &str = "DODGE";
 const FIXED_ACTION_PARRY: &str = "PARRY";
+const ACTION_KIND_COMBAT_DISCIPLINE_SWITCH: &str = "COMBAT_DISCIPLINE_SWITCH";
+pub(crate) const GLOBAL_ACTION_BAR_PROFILE: &str = "GLOBAL";
 const RULE_DEFAULT_GLOBAL_COOLDOWN_MS: &str = "DEFAULT_GLOBAL_COOLDOWN_MS";
 const FALLBACK_DEFAULT_GLOBAL_COOLDOWN_MS: u64 = 1500;
 const MAX_DEFAULT_GLOBAL_COOLDOWN_MS: u64 = 60_000;
@@ -64,6 +73,12 @@ pub(crate) const COMBAT_PROFILE_ARCHER_BOW: &str = "ARCHER_BOW";
 #[cfg(test)]
 const COMBAT_PROFILE_SWORD_AND_SHIELD: &str = "SWORD_AND_SHIELD";
 pub(crate) const COMBAT_PROFILE_TWO_HANDED_SWORD: &str = "TWO_HANDED_SWORD";
+pub(crate) const DISCIPLINE_SUBTLETY: &str = "SUBTLETY";
+pub(crate) const DISCIPLINE_WAR: &str = "WAR";
+pub(crate) const DISCIPLINE_ZEAL: &str = "ZEAL";
+pub(crate) const DISCIPLINE_PRECISION: &str = "PRECISION";
+pub(crate) const DISCIPLINE_ARCANA: &str = "ARCANA";
+pub(crate) const RESOURCE_KIND_STAMINA: &str = "STAMINA";
 pub(crate) const COMBAT_MODE_SHORT_DRAW: &str = "SHORT_DRAW";
 pub(crate) const COMBAT_MODE_FULL_DRAW: &str = "FULL_DRAW";
 pub(crate) const AUTO_ATTACK_MOVEMENT_ALLOW_MOVING: &str = "ALLOW_MOVING";
@@ -87,6 +102,8 @@ pub(crate) struct AllocatedStatTotals {
 struct ProgressionCatalogFile {
     #[serde(default)]
     combat_profiles: Vec<CombatProfileDefinition>,
+    #[serde(default)]
+    combat_disciplines: Vec<CombatDisciplineDefinition>,
     #[serde(default)]
     combat_modes: Vec<CombatModeDefinition>,
     #[serde(default)]
@@ -113,6 +130,20 @@ struct ProgressionCatalogFile {
 struct CombatProfileDefinition {
     combat_profile_id: String,
     display_name: String,
+    sort_order: u32,
+}
+
+#[derive(Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CombatDisciplineDefinition {
+    discipline_id: String,
+    display_name: String,
+    combat_profile_id: String,
+    primary_resource_kind: String,
+    #[serde(default)]
+    inactive_resource_tick: bool,
+    #[serde(default)]
+    inactive_decay_delay_ms: u64,
     sort_order: u32,
 }
 
@@ -1030,6 +1061,19 @@ pub struct CombatProfileCatalog {
     pub sort_order: u32,
 }
 
+#[table(accessor = combat_discipline_catalog, public)]
+pub struct CombatDisciplineCatalog {
+    #[primary_key]
+    pub discipline_id: String,
+    #[index(btree)]
+    pub combat_profile_id: String,
+    pub display_name: String,
+    pub primary_resource_kind: String,
+    pub inactive_resource_tick: bool,
+    pub inactive_decay_delay_ms: u64,
+    pub sort_order: u32,
+}
+
 #[table(accessor = combat_mode_catalog, public)]
 pub struct CombatModeCatalog {
     #[primary_key]
@@ -1049,6 +1093,28 @@ pub struct ActiveCombatMode {
     pub combat_profile_id: String,
     pub mode_id: String,
     pub changed_at: Timestamp,
+}
+
+#[table(accessor = active_combat_discipline, public)]
+pub struct ActiveCombatDiscipline {
+    #[primary_key]
+    pub owner: Identity,
+    pub discipline_id: String,
+    pub combat_profile_id: String,
+    pub primary_resource_kind: String,
+    pub changed_at: Timestamp,
+}
+
+#[table(accessor = character_combat_discipline_weapon_loadout, public)]
+pub struct CharacterCombatDisciplineWeaponLoadout {
+    #[primary_key]
+    pub key: String,
+    #[index(btree)]
+    pub owner: Identity,
+    pub discipline_id: String,
+    pub main_hand_item_id: Option<String>,
+    pub off_hand_item_id: Option<String>,
+    pub updated_at: Timestamp,
 }
 
 #[table(accessor = resource_catalog, public)]
@@ -1252,6 +1318,7 @@ pub struct CharacterActionBarAssignment {
 enum ActionKind {
     Ability,
     Fixed,
+    CombatDisciplineSwitch,
     Unsupported(String),
 }
 
@@ -1261,6 +1328,7 @@ impl ActionKind {
         match normalized.as_str() {
             ACTION_KIND_ABILITY => Self::Ability,
             ACTION_KIND_FIXED => Self::Fixed,
+            ACTION_KIND_COMBAT_DISCIPLINE_SWITCH => Self::CombatDisciplineSwitch,
             _ => Self::Unsupported(normalized),
         }
     }
@@ -1269,6 +1337,7 @@ impl ActionKind {
         match self {
             Self::Ability => ACTION_KIND_ABILITY,
             Self::Fixed => ACTION_KIND_FIXED,
+            Self::CombatDisciplineSwitch => ACTION_KIND_COMBAT_DISCIPLINE_SWITCH,
             Self::Unsupported(value) => value.as_str(),
         }
     }
@@ -1451,8 +1520,88 @@ pub fn set_combat_mode(ctx: &ReducerContext, mode_id: String) -> Result<(), Stri
     Ok(())
 }
 
+#[reducer]
+pub fn assign_combat_discipline_weapon_loadout(
+    ctx: &ReducerContext,
+    discipline_id: String,
+    main_hand_item_id: Option<String>,
+    off_hand_item_id: Option<String>,
+) -> Result<(), String> {
+    let owner = ctx.sender();
+    let discipline = require_combat_discipline(ctx, discipline_id.as_str())?;
+    let main_hand_item_id = normalize_optional_item_instance_id(main_hand_item_id);
+    let off_hand_item_id = normalize_optional_item_instance_id(off_hand_item_id);
+    if !combat_discipline_weapon_loadout_is_available(
+        ctx,
+        owner,
+        discipline.discipline_id.as_str(),
+        main_hand_item_id.as_deref(),
+        off_hand_item_id.as_deref(),
+    ) {
+        return Err(format!(
+            "weapon loadout is not valid for combat discipline '{}'",
+            discipline.discipline_id
+        ));
+    }
+
+    upsert_combat_discipline_weapon_loadout(
+        ctx,
+        CharacterCombatDisciplineWeaponLoadout {
+            key: combat_discipline_weapon_loadout_key(owner, discipline.discipline_id.as_str()),
+            owner,
+            discipline_id: discipline.discipline_id,
+            main_hand_item_id,
+            off_hand_item_id,
+            updated_at: ctx.timestamp,
+        },
+    );
+    Ok(())
+}
+
+#[reducer]
+pub fn set_combat_discipline(ctx: &ReducerContext, discipline_id: String) -> Result<(), String> {
+    let owner = ctx.sender();
+    let discipline = require_combat_discipline(ctx, discipline_id.as_str())?;
+    let loadout = ctx
+        .db
+        .character_combat_discipline_weapon_loadout()
+        .key()
+        .find(combat_discipline_weapon_loadout_key(
+            owner,
+            discipline.discipline_id.as_str(),
+        ))
+        .ok_or_else(|| {
+            format!(
+                "combat discipline '{}' has no saved weapon loadout",
+                discipline.discipline_id
+            )
+        })?;
+    apply_combat_discipline_weapon_loadout(
+        ctx,
+        owner,
+        discipline.discipline_id.as_str(),
+        loadout.main_hand_item_id.as_deref(),
+        loadout.off_hand_item_id.as_deref(),
+    )?;
+
+    upsert_active_combat_discipline(
+        ctx,
+        ActiveCombatDiscipline {
+            owner,
+            discipline_id: discipline.discipline_id,
+            combat_profile_id: discipline.combat_profile_id,
+            primary_resource_kind: discipline.primary_resource_kind,
+            changed_at: ctx.timestamp,
+        },
+    );
+    sync_active_combat_mode_for_owner(ctx, owner, ctx.timestamp);
+    ensure_default_character_action_bar_assignments(ctx, owner, ctx.timestamp);
+    Ok(())
+}
+
 pub(crate) fn sync_progression_catalogs(ctx: &ReducerContext) {
     sync_combat_profile_catalog(ctx);
+    sync_combat_discipline_catalog(ctx);
     sync_combat_mode_catalog(ctx);
     sync_resource_catalog(ctx);
     sync_combat_rule_catalog(ctx);
@@ -1575,6 +1724,7 @@ pub(crate) fn ensure_default_progression_for_identity(
     let Some(_player) = ctx.db.player().identity().find(owner) else {
         return Err("player row not found".to_string());
     };
+    ensure_default_combat_discipline_state(ctx, owner, ctx.timestamp);
     sync_active_combat_mode_for_owner(ctx, owner, ctx.timestamp);
     clear_parry_action_bar_assignments_for_owner(ctx, owner);
     ensure_default_character_action_bar_assignments(ctx, owner, ctx.timestamp);
@@ -1601,6 +1751,13 @@ pub(crate) fn derived_combat_profile_id_for_owner(
         .filter(|profile_id| combat_profile_exists(ctx, profile_id.as_str()))
     {
         return Some(profile_id);
+    }
+    if let Some(active) = ctx.db.active_combat_discipline().owner().find(owner) {
+        if combat_discipline_is_available(ctx, owner, active.discipline_id.as_str())
+            && combat_profile_exists(ctx, active.combat_profile_id.as_str())
+        {
+            return Some(active.combat_profile_id);
+        }
     }
     None
 }
@@ -1630,6 +1787,7 @@ pub(crate) fn sync_progression_for_equipment_change(
     owner: Identity,
     now: Timestamp,
 ) {
+    ensure_default_combat_discipline_state(ctx, owner, now);
     sync_active_combat_mode_for_owner(ctx, owner, now);
     clear_parry_action_bar_assignments_for_owner(ctx, owner);
     ensure_default_character_action_bar_assignments(ctx, owner, now);
@@ -1765,6 +1923,167 @@ fn upsert_active_combat_mode(ctx: &ReducerContext, row: ActiveCombatMode) {
     }
 }
 
+fn upsert_active_combat_discipline(ctx: &ReducerContext, row: ActiveCombatDiscipline) {
+    if ctx
+        .db
+        .active_combat_discipline()
+        .owner()
+        .find(row.owner)
+        .is_some()
+    {
+        ctx.db.active_combat_discipline().owner().update(row);
+    } else {
+        ctx.db.active_combat_discipline().insert(row);
+    }
+}
+
+fn upsert_combat_discipline_weapon_loadout(
+    ctx: &ReducerContext,
+    row: CharacterCombatDisciplineWeaponLoadout,
+) {
+    if ctx
+        .db
+        .character_combat_discipline_weapon_loadout()
+        .key()
+        .find(row.key.clone())
+        .is_some()
+    {
+        ctx.db
+            .character_combat_discipline_weapon_loadout()
+            .key()
+            .update(row);
+    } else {
+        ctx.db
+            .character_combat_discipline_weapon_loadout()
+            .insert(row);
+    }
+}
+
+fn require_combat_discipline(
+    ctx: &ReducerContext,
+    discipline_id: &str,
+) -> Result<CombatDisciplineCatalog, String> {
+    let discipline_id = normalize_identifier(discipline_id);
+    ctx.db
+        .combat_discipline_catalog()
+        .discipline_id()
+        .find(discipline_id.clone())
+        .ok_or_else(|| format!("unknown combat discipline '{}'", discipline_id))
+}
+
+fn combat_discipline_for_profile(
+    ctx: &ReducerContext,
+    combat_profile_id: &str,
+) -> Option<CombatDisciplineCatalog> {
+    let combat_profile_id = normalize_identifier(combat_profile_id);
+    let discipline = ctx
+        .db
+        .combat_discipline_catalog()
+        .combat_profile_id()
+        .filter(&combat_profile_id)
+        .next();
+    discipline
+}
+
+fn combat_discipline_is_available(
+    ctx: &ReducerContext,
+    owner: Identity,
+    discipline_id: &str,
+) -> bool {
+    let discipline_id = normalize_identifier(discipline_id);
+    let key = combat_discipline_weapon_loadout_key(owner, discipline_id.as_str());
+    let Some(loadout) = ctx
+        .db
+        .character_combat_discipline_weapon_loadout()
+        .key()
+        .find(key)
+    else {
+        return false;
+    };
+    combat_discipline_weapon_loadout_is_available(
+        ctx,
+        owner,
+        discipline_id.as_str(),
+        loadout.main_hand_item_id.as_deref(),
+        loadout.off_hand_item_id.as_deref(),
+    )
+}
+
+fn ensure_default_combat_discipline_state(ctx: &ReducerContext, owner: Identity, now: Timestamp) {
+    let Some(equipped_profile) = equipment_combat_profile_id_for_owner(ctx, owner) else {
+        return;
+    };
+    let Some(discipline) = combat_discipline_for_profile(ctx, equipped_profile.as_str()) else {
+        return;
+    };
+    let loadout_key =
+        combat_discipline_weapon_loadout_key(owner, discipline.discipline_id.as_str());
+    let should_write_loadout = match ctx
+        .db
+        .character_combat_discipline_weapon_loadout()
+        .key()
+        .find(loadout_key.clone())
+    {
+        Some(loadout) => !combat_discipline_weapon_loadout_is_available(
+            ctx,
+            owner,
+            discipline.discipline_id.as_str(),
+            loadout.main_hand_item_id.as_deref(),
+            loadout.off_hand_item_id.as_deref(),
+        ),
+        None => true,
+    };
+    if should_write_loadout {
+        if let Some((main_hand_item_id, off_hand_item_id)) =
+            crate::inventory::equipped_weapon_item_ids_for_owner(ctx, owner)
+        {
+            upsert_combat_discipline_weapon_loadout(
+                ctx,
+                CharacterCombatDisciplineWeaponLoadout {
+                    key: loadout_key,
+                    owner,
+                    discipline_id: discipline.discipline_id.clone(),
+                    main_hand_item_id,
+                    off_hand_item_id,
+                    updated_at: now,
+                },
+            );
+        }
+    }
+    if ctx
+        .db
+        .active_combat_discipline()
+        .owner()
+        .find(owner)
+        .is_none_or(|active| {
+            active.discipline_id != discipline.discipline_id
+                || active.combat_profile_id != discipline.combat_profile_id
+        })
+        && combat_discipline_is_available(ctx, owner, discipline.discipline_id.as_str())
+    {
+        upsert_active_combat_discipline(
+            ctx,
+            ActiveCombatDiscipline {
+                owner,
+                discipline_id: discipline.discipline_id,
+                combat_profile_id: discipline.combat_profile_id,
+                primary_resource_kind: discipline.primary_resource_kind,
+                changed_at: now,
+            },
+        );
+    }
+}
+
+fn combat_discipline_weapon_loadout_key(owner: Identity, discipline_id: &str) -> String {
+    format!("{}:{}", owner.to_hex(), normalize_identifier(discipline_id))
+}
+
+fn normalize_optional_item_instance_id(value: Option<String>) -> Option<String> {
+    value
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+}
+
 pub(crate) fn active_stat_totals_for_owner(
     ctx: &ReducerContext,
     owner: Identity,
@@ -1778,8 +2097,9 @@ pub(crate) fn primary_resource_kind_for_owner(
     ctx: &ReducerContext,
     owner: Identity,
 ) -> Option<String> {
-    derived_combat_profile_id_for_owner(ctx, owner)?;
-    Some("MANA".to_string())
+    let _ = ctx;
+    let _ = owner;
+    Some(RESOURCE_KIND_STAMINA.to_string())
 }
 
 #[allow(dead_code)]
@@ -1812,6 +2132,17 @@ pub(crate) fn ability_is_compatible_with_slot(ability_id: &str, slot_id: &str) -
         .iter()
         .map(|tag| normalize_identifier(tag))
         .any(|tag| ability_tags.contains(tag.as_str()))
+}
+
+fn slot_accepts_tag(slot: &ActionBarSlotCatalog, required_tag: &str) -> bool {
+    let required_tag = normalize_identifier(required_tag);
+    if required_tag.is_empty() {
+        return false;
+    }
+    slot.accepts_tags
+        .split(',')
+        .map(normalize_identifier)
+        .any(|tag| tag == required_tag)
 }
 
 pub(crate) fn action_id_is_selectable_action_bar_action(
@@ -2231,6 +2562,56 @@ fn sync_combat_profile_catalog(ctx: &ReducerContext) {
         ctx.db
             .combat_profile_catalog()
             .combat_profile_id()
+            .delete(key);
+    }
+}
+
+fn sync_combat_discipline_catalog(ctx: &ReducerContext) {
+    validate_combat_discipline_catalog();
+    let expected: HashSet<_> = progression_catalog()
+        .combat_disciplines
+        .iter()
+        .map(|definition| normalize_identifier(definition.discipline_id.as_str()))
+        .collect();
+
+    for definition in &progression_catalog().combat_disciplines {
+        let discipline_id = normalize_identifier(definition.discipline_id.as_str());
+        let row = CombatDisciplineCatalog {
+            discipline_id: discipline_id.clone(),
+            combat_profile_id: normalize_identifier(definition.combat_profile_id.as_str()),
+            display_name: definition.display_name.clone(),
+            primary_resource_kind: normalize_identifier(definition.primary_resource_kind.as_str()),
+            inactive_resource_tick: definition.inactive_resource_tick,
+            inactive_decay_delay_ms: definition.inactive_decay_delay_ms,
+            sort_order: definition.sort_order,
+        };
+        if ctx
+            .db
+            .combat_discipline_catalog()
+            .discipline_id()
+            .find(discipline_id.clone())
+            .is_some()
+        {
+            ctx.db
+                .combat_discipline_catalog()
+                .discipline_id()
+                .update(row);
+        } else {
+            ctx.db.combat_discipline_catalog().insert(row);
+        }
+    }
+
+    let stale: Vec<_> = ctx
+        .db
+        .combat_discipline_catalog()
+        .iter()
+        .map(|row| row.discipline_id)
+        .filter(|key| !expected.contains(key))
+        .collect();
+    for key in stale {
+        ctx.db
+            .combat_discipline_catalog()
+            .discipline_id()
             .delete(key);
     }
 }
@@ -2989,10 +3370,31 @@ fn ensure_default_character_action_bar_assignments(
     now: Timestamp,
 ) -> usize {
     let mut inserted = 0usize;
-    let Some(combat_profile_id) = derived_combat_profile_id_for_owner(ctx, owner) else {
-        return 0;
-    };
+    inserted = inserted.saturating_add(ensure_default_action_bar_assignments_for_scope(
+        ctx,
+        owner,
+        GLOBAL_ACTION_BAR_PROFILE,
+        now,
+    ));
+    if let Some(combat_profile_id) = derived_combat_profile_id_for_owner(ctx, owner) {
+        inserted = inserted.saturating_add(ensure_default_action_bar_assignments_for_scope(
+            ctx,
+            owner,
+            combat_profile_id.as_str(),
+            now,
+        ));
+    }
+    inserted
+}
 
+fn ensure_default_action_bar_assignments_for_scope(
+    ctx: &ReducerContext,
+    owner: Identity,
+    combat_profile_id: &str,
+    now: Timestamp,
+) -> usize {
+    let mut inserted = 0usize;
+    let combat_profile_id = normalize_identifier(combat_profile_id);
     for assignment in action_bar_defaults_for_profile(combat_profile_id.as_str()) {
         let slot_id = canonical_action_bar_slot_id(assignment.slot_id.as_str());
         let key = character_action_bar_key(owner, combat_profile_id.as_str(), slot_id.as_str());
@@ -3120,7 +3522,10 @@ fn validate_character_action_bar_ref(
 ) -> Result<(), String> {
     let slot = require_slot_catalog_row(ctx, slot_id)?;
     let combat_profile_id = normalize_identifier(combat_profile_id);
-    if combat_profile_id.is_empty() || !combat_profile_exists(ctx, combat_profile_id.as_str()) {
+    let is_global_scope = combat_profile_id == GLOBAL_ACTION_BAR_PROFILE;
+    if combat_profile_id.is_empty()
+        || (!is_global_scope && !combat_profile_exists(ctx, combat_profile_id.as_str()))
+    {
         return Err(format!(
             "combat profile '{}' is not available for action bar assignment",
             combat_profile_id
@@ -3162,6 +3567,21 @@ fn validate_character_action_bar_ref(
                 return Err(format!(
                     "ability '{}' is not compatible with slot '{}'",
                     ability.ability_id, slot.slot_id
+                ));
+            }
+            Ok(())
+        }
+        ActionKind::CombatDisciplineSwitch => {
+            if !is_global_scope {
+                return Err(
+                    "combat discipline switch actions must use GLOBAL action-bar scope".to_string(),
+                );
+            }
+            let discipline = require_combat_discipline(ctx, action_ref.id.as_str())?;
+            if !slot_accepts_tag(&slot, "DISCIPLINE_SWITCH") {
+                return Err(format!(
+                    "combat discipline '{}' is not compatible with slot '{}'",
+                    discipline.discipline_id, slot.slot_id
                 ));
             }
             Ok(())
@@ -3407,6 +3827,70 @@ fn combat_mode_key(combat_profile_id: &str, mode_id: &str) -> String {
         normalize_identifier(combat_profile_id),
         normalize_identifier(mode_id)
     )
+}
+
+fn validate_combat_discipline_catalog() {
+    let known_profiles: HashSet<_> = progression_catalog()
+        .combat_profiles
+        .iter()
+        .map(|profile| normalize_identifier(profile.combat_profile_id.as_str()))
+        .collect();
+    let known_resources: HashSet<_> = progression_catalog()
+        .resources
+        .iter()
+        .map(|resource| normalize_identifier(resource.resource_kind.as_str()))
+        .collect();
+    let mut discipline_ids = HashSet::new();
+    let mut profile_ids = HashSet::new();
+    let expected_disciplines = HashSet::from([
+        DISCIPLINE_SUBTLETY.to_string(),
+        DISCIPLINE_WAR.to_string(),
+        DISCIPLINE_ZEAL.to_string(),
+        DISCIPLINE_PRECISION.to_string(),
+        DISCIPLINE_ARCANA.to_string(),
+    ]);
+    for discipline in &progression_catalog().combat_disciplines {
+        let discipline_id = normalize_identifier(discipline.discipline_id.as_str());
+        let combat_profile_id = normalize_identifier(discipline.combat_profile_id.as_str());
+        let resource_kind = normalize_identifier(discipline.primary_resource_kind.as_str());
+        assert!(
+            !discipline_id.is_empty(),
+            "combat discipline id must not be empty"
+        );
+        assert!(
+            discipline_ids.insert(discipline_id.clone()),
+            "duplicate combat discipline '{}'",
+            discipline_id
+        );
+        assert!(
+            known_profiles.contains(combat_profile_id.as_str()),
+            "combat discipline '{}' references unknown combat profile '{}'",
+            discipline_id,
+            discipline.combat_profile_id
+        );
+        assert!(
+            profile_ids.insert(combat_profile_id.clone()),
+            "combat profile '{}' is assigned to multiple disciplines",
+            combat_profile_id
+        );
+        assert!(
+            known_resources.contains(resource_kind.as_str()),
+            "combat discipline '{}' references unknown resource '{}'",
+            discipline_id,
+            discipline.primary_resource_kind
+        );
+        assert!(
+            resource_kind == RESOURCE_KIND_STAMINA,
+            "combat discipline '{}' must use the shared standard resource policy '{}', found '{}'",
+            discipline_id,
+            RESOURCE_KIND_STAMINA,
+            discipline.primary_resource_kind
+        );
+    }
+    assert_eq!(
+        discipline_ids, expected_disciplines,
+        "combat discipline ids must stay aligned with authored discipline constants"
+    );
 }
 
 fn validate_combat_mode_catalog() {
@@ -4221,6 +4705,7 @@ mod tests {
         AUTO_ATTACK_MOVEMENT_ALLOW_MOVING, AUTO_ATTACK_MOVEMENT_RESET_ON_VOLUNTARY_MOVE,
         COMBAT_MODE_FULL_DRAW, COMBAT_MODE_SHORT_DRAW, COMBAT_PROFILE_ARCHER_BOW,
         COMBAT_PROFILE_SWORD_AND_SHIELD, COMBAT_PROFILE_TWO_HANDED_SWORD,
+        GLOBAL_ACTION_BAR_PROFILE, RESOURCE_KIND_STAMINA,
     };
     use crate::action_ids::{AuthoredActionId, RuntimeActionId};
 
@@ -4854,6 +5339,19 @@ mod tests {
                         ));
                     }
                 }
+                "COMBAT_DISCIPLINE_SWITCH" => {
+                    if !catalog.combat_disciplines.iter().any(|discipline| {
+                        normalize_identifier(discipline.discipline_id.as_str()) == id
+                    }) {
+                        errors.push(CombatAuthoringError::new(
+                            CombatAuthoringRule::PresentationTargetResolves,
+                            format!(
+                                "COMBAT_DISCIPLINE_SWITCH presentation '{}' must reference a known combat discipline",
+                                presentation.presentation_id
+                            ),
+                        ));
+                    }
+                }
                 "STATUS" => {
                     if !status_presentation_ids.contains(id.as_str()) {
                         errors.push(CombatAuthoringError::new(
@@ -4900,7 +5398,8 @@ mod tests {
                     ),
                 ));
             }
-            if !known_profiles.contains(normalized_combat_profile_id.as_str()) {
+            let is_global_scope = normalized_combat_profile_id == GLOBAL_ACTION_BAR_PROFILE;
+            if !is_global_scope && !known_profiles.contains(normalized_combat_profile_id.as_str()) {
                 errors.push(CombatAuthoringError::new(
                     CombatAuthoringRule::CombatProfileActionBarDefaultResolves,
                     format!(
@@ -4987,6 +5486,43 @@ mod tests {
                                 format!(
                                     "player-facing fixed action '{}' must have a FIXED presentation row",
                                     fixed_action_id.as_wire()
+                                ),
+                            ));
+                        }
+                    }
+                }
+                ActionKind::CombatDisciplineSwitch => {
+                    if !is_global_scope {
+                        errors.push(CombatAuthoringError::new(
+                            CombatAuthoringRule::CombatProfileActionBarDefaultResolves,
+                            "combat discipline switch defaults must use GLOBAL scope".to_string(),
+                        ));
+                    }
+                    if !catalog.combat_disciplines.iter().any(|discipline| {
+                        normalize_identifier(discipline.discipline_id.as_str()) == action_ref.id
+                    }) {
+                        errors.push(CombatAuthoringError::new(
+                            CombatAuthoringRule::CombatProfileActionBarDefaultResolves,
+                            format!(
+                                "combat discipline switch references unknown discipline '{}'",
+                                action_ref.id
+                            ),
+                        ));
+                    }
+                    if let Some(slot) = catalog.slots.iter().find(|slot| {
+                        canonical_action_bar_slot_id(slot.slot_id.as_str()) == normalized_slot_id
+                    }) {
+                        if !slot
+                            .accepts_tags
+                            .iter()
+                            .map(|tag| normalize_identifier(tag.as_str()))
+                            .any(|tag| tag == "DISCIPLINE_SWITCH")
+                        {
+                            errors.push(CombatAuthoringError::new(
+                                CombatAuthoringRule::CombatProfileActionBarDefaultResolves,
+                                format!(
+                                    "combat discipline switch '{}' is incompatible with slot '{}'",
+                                    action_ref.id, assignment.slot_id
                                 ),
                             ));
                         }
@@ -5933,13 +6469,17 @@ mod tests {
         let mut parts = slot_id.split('_');
         let prefix = parts.next();
         assert!(
-            matches!(prefix, Some("slot") | Some("fixed")),
-            "slot id '{slot_id}' must start with slot_ or fixed_"
+            matches!(prefix, Some("slot") | Some("fixed") | Some("discipline")),
+            "slot id '{slot_id}' must start with slot_, fixed_, or discipline_"
         );
         assert!(parts
             .next()
             .and_then(|part| part.parse::<u32>().ok())
             .is_some());
+        if prefix == Some("discipline") {
+            assert_eq!(parts.next(), None);
+            return;
+        }
         assert!(parts
             .next()
             .and_then(|part| part.parse::<u32>().ok())
@@ -5970,6 +6510,32 @@ mod tests {
             assert!(!definition.ability_id.trim().is_empty());
             assert!(ability_ids.insert(definition.ability_id.clone()));
             assert!(!definition.action_id.trim().is_empty());
+            let ability_resource_kind = normalize_identifier(definition.resource_kind.as_str());
+            assert!(
+                ability_resource_kind.is_empty()
+                    || ability_resource_kind == RESOURCE_KIND_STAMINA
+                    || ability_resource_kind == "MANA",
+                "ability '{}' must use STAMINA, MANA, or empty resource_kind, found '{}'",
+                definition.ability_id,
+                definition.resource_kind
+            );
+            let gameplay_kind = normalize_identifier(definition.gameplay.kind.as_str());
+            if gameplay_kind == "SPELL" {
+                assert_eq!(
+                    ability_resource_kind, "MANA",
+                    "spell ability '{}' must use MANA",
+                    definition.ability_id
+                );
+            } else if matches!(
+                gameplay_kind.as_str(),
+                "MELEE" | "MOVEMENT" | "AUTO_ATTACK_REPLACEMENT" | "PASSIVE"
+            ) {
+                assert_eq!(
+                    ability_resource_kind, RESOURCE_KIND_STAMINA,
+                    "martial ability '{}' must use STAMINA",
+                    definition.ability_id
+                );
+            }
         }
 
         let mut action_presentation_keys = HashSet::new();

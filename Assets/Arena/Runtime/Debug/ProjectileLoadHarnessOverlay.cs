@@ -361,8 +361,9 @@ namespace Arena.Debugging
 
         private void OnUnhandledReducerError(ReducerEventContext ctx, Exception error)
         {
-            if (ctx.Event.Reducer is not Reducer.RunProjectileLoadHarness
-                and not Reducer.CleanupProjectileLoadHarness)
+            string reducerName = ctx.Event.Reducer.GetType().Name;
+            if (!string.Equals(reducerName, "RunProjectileLoadHarness", StringComparison.Ordinal)
+                && !string.Equals(reducerName, "CleanupProjectileLoadHarness", StringComparison.Ordinal))
             {
                 return;
             }

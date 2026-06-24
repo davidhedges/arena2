@@ -42,6 +42,12 @@ namespace Arena.Entity
         public string PrimaryResourceKind { get; private set; } = string.Empty;
         public float CurrentPrimaryResource { get; private set; }
         public float MaxPrimaryResource { get; private set; }
+        public string StaminaResourceKind { get; private set; } = "STAMINA";
+        public float CurrentStamina { get; private set; }
+        public float MaxStamina { get; private set; }
+        public string ManaResourceKind { get; private set; } = "MANA";
+        public float CurrentMana { get; private set; }
+        public float MaxMana { get; private set; }
         public Timestamp RespawnAt { get; private set; }
         public bool GameplayInCombat { get; private set; }
         public Timestamp GameplayCombatExpiresAt { get; private set; }
@@ -485,11 +491,37 @@ namespace Arena.Entity
 
         public void SetPrimaryResource(string kind, float current, float max)
         {
+            SetResource(kind, current, max);
+        }
+
+        public void SetResource(string kind, float current, float max)
+        {
+            string normalizedKind = string.IsNullOrWhiteSpace(kind)
+                ? string.Empty
+                : kind.Trim().ToUpperInvariant();
+            float normalizedCurrent = Mathf.Max(0f, current);
+            float normalizedMax = Mathf.Max(0f, max);
+
+            if (normalizedKind == "MANA")
+            {
+                ManaResourceKind = normalizedKind;
+                CurrentMana = normalizedCurrent;
+                MaxMana = normalizedMax;
+                return;
+            }
+
+            if (normalizedKind == "STAMINA")
+            {
+                StaminaResourceKind = normalizedKind;
+                CurrentStamina = normalizedCurrent;
+                MaxStamina = normalizedMax;
+            }
+
             PrimaryResourceKind = string.IsNullOrWhiteSpace(kind)
                 ? string.Empty
                 : kind.Trim().ToUpperInvariant();
-            CurrentPrimaryResource = Mathf.Max(0f, current);
-            MaxPrimaryResource = Mathf.Max(0f, max);
+            CurrentPrimaryResource = normalizedCurrent;
+            MaxPrimaryResource = normalizedMax;
         }
 
         public void ClearPrimaryResource()
@@ -497,6 +529,33 @@ namespace Arena.Entity
             PrimaryResourceKind = string.Empty;
             CurrentPrimaryResource = 0f;
             MaxPrimaryResource = 0f;
+            StaminaResourceKind = "STAMINA";
+            CurrentStamina = 0f;
+            MaxStamina = 0f;
+            ManaResourceKind = "MANA";
+            CurrentMana = 0f;
+            MaxMana = 0f;
+        }
+
+        public void ClearResource(string kind)
+        {
+            string normalizedKind = string.IsNullOrWhiteSpace(kind)
+                ? string.Empty
+                : kind.Trim().ToUpperInvariant();
+            if (normalizedKind == "MANA")
+            {
+                CurrentMana = 0f;
+                MaxMana = 0f;
+                return;
+            }
+            if (normalizedKind == "STAMINA")
+            {
+                CurrentStamina = 0f;
+                MaxStamina = 0f;
+                PrimaryResourceKind = string.Empty;
+                CurrentPrimaryResource = 0f;
+                MaxPrimaryResource = 0f;
+            }
         }
 
         public void SetInCombat(bool inCombat)

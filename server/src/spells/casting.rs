@@ -143,7 +143,7 @@ fn resolved_primary_resource_cost_for_action(
 fn spell_primary_resource_cost_for_action(spell_kind: &SpellId) -> ResolvedActionResourceCost {
     let definition = super::catalog::spell_definition(spell_kind)
         .expect("validated spell id must resolve to a definition");
-    ResolvedActionResourceCost::primary(definition.primary_resource_cost)
+    ResolvedActionResourceCost::mana(definition.primary_resource_cost)
 }
 
 fn instant_beam_charge_scaling() -> InstantBeamChargeScaling {
