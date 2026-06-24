@@ -9,6 +9,7 @@ using Arena.Simulation;
 using Arena.Input;
 using Arena.Combat;
 using Arena.Presentation;
+using Arena.Presentation.Appearance;
 using Arena.Debugging;
 
 namespace Arena.Entity
@@ -40,6 +41,7 @@ namespace Arena.Entity
         private const string FearStatusKind = "FEAR";
         private const string DefenseBlockKind = "BLOCK";
         private const string DefenseParryKind = "PARRY";
+        private const string EquipmentAppearanceCatalogResource = "CharacterAppearance/EquipmentAppearanceCatalog";
 
         public static EntityRegistry Instance { get; private set; } = null!;
 
@@ -335,7 +337,7 @@ namespace Arena.Entity
             if (!TryGetLivePlayer(row.Owner, out var entity))
                 return;
 
-            entity.SetEquippedWeaponVisualItemIds(System.Array.Empty<string>());
+            entity.SetEquippedWeaponVisuals(System.Array.Empty<EquippedWeaponVisual>());
             entity.SetEquippedArmorItemDefIdsBySlot(new Dictionary<string, string>(System.StringComparer.Ordinal));
             ApplyOwnerCombatProfile(row.Owner);
         }
@@ -991,26 +993,28 @@ namespace Arena.Entity
                 return;
 
             var conn = NetworkManager.Instance?.Conn;
-            entity.SetEquippedWeaponVisualItemIds(BuildEquippedWeaponVisualIds(conn, owner, loadout));
+            entity.SetEquippedWeaponVisuals(BuildEquippedWeaponVisuals(conn, owner, loadout));
             entity.SetEquippedArmorItemDefIdsBySlot(BuildEquippedArmorItemDefIdsBySlot(conn, owner, loadout));
         }
 
-        private static HashSet<string> BuildEquippedWeaponVisualIds(
+        private static List<EquippedWeaponVisual> BuildEquippedWeaponVisuals(
             DbConnection? conn,
             Identity owner,
             EquipmentLoadout? loadout)
         {
-            var visualIds = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
+            var visuals = new List<EquippedWeaponVisual>();
             if (conn == null)
-                return visualIds;
+                return visuals;
 
             loadout ??= conn.Db.EquipmentLoadout.Owner.Find(owner);
             if (loadout == null)
-                return visualIds;
+                return visuals;
 
-            AddWeaponVisualIds(conn, loadout.MainHandItemId, visualIds);
-            AddWeaponVisualIds(conn, loadout.OffHandItemId, visualIds);
-            return visualIds;
+            EquipmentAppearanceCatalog? equipmentAppearanceCatalog =
+                Resources.Load<EquipmentAppearanceCatalog>(EquipmentAppearanceCatalogResource);
+            AddWeaponVisuals(conn, equipmentAppearanceCatalog, loadout.MainHandItemId, visuals);
+            AddWeaponVisuals(conn, equipmentAppearanceCatalog, loadout.OffHandItemId, visuals);
+            return visuals;
         }
 
         private static Dictionary<string, string> BuildEquippedArmorItemDefIdsBySlot(
@@ -1059,7 +1063,11 @@ namespace Arena.Entity
             itemDefIdsBySlot[slotId] = definition.ItemDefId;
         }
 
-        private static void AddWeaponVisualIds(DbConnection conn, string? itemInstanceId, HashSet<string> visualIds)
+        private static void AddWeaponVisuals(
+            DbConnection conn,
+            EquipmentAppearanceCatalog? equipmentAppearanceCatalog,
+            string? itemInstanceId,
+            List<EquippedWeaponVisual> visuals)
         {
             if (string.IsNullOrWhiteSpace(itemInstanceId))
                 return;
@@ -1072,91 +1080,53 @@ namespace Arena.Entity
             if (definition == null)
                 return;
 
-            if (TryAddWeaponVisualIdsForItemDefinition(definition.ItemDefId, visualIds))
-                return;
-
-            AddWeaponVisualIdsForKind(definition.WeaponKind, visualIds);
-        }
-
-        private static bool TryAddWeaponVisualIdsForItemDefinition(string? itemDefId, HashSet<string> visualIds)
-        {
-            switch (WireIdentifier.Normalize(itemDefId))
+            foreach (string roleId in WeaponVisualRoleIdsForKind(definition.WeaponKind))
             {
-                case "TRAINING_TWO_HAND_SWORD":
-                case "NEWBIE_TWO_HAND_SWORD_01":
-                case "NEWBIE_TWO_HAND_SWORD_02":
-                case "NEWBIE_TWO_HAND_AXE_01":
-                    visualIds.Add("greatsword");
-                    return true;
-                case "NEWBIE_STAFF_01":
-                case "NEWBIE_STAFF_02":
-                case "NEWBIE_STAFF_03":
-                case "NEWBIE_STAFF_04":
-                    visualIds.Add("staff");
-                    return true;
-                case "TRAINING_ONE_HAND_SWORD":
-                case "NEWBIE_ONE_HAND_SWORD_01":
-                case "NEWBIE_ONE_HAND_SWORD_02":
-                case "NEWBIE_ONE_HAND_AXE_02":
-                case "NEWBIE_ONE_HAND_AXE_03":
-                case "TRAINING_DAGGER_PAIR":
-                case "NEWBIE_DAGGER_PAIR_01":
-                case "NEWBIE_DAGGER_PAIR_02":
-                case "NEWBIE_DAGGER_PAIR_03":
-                    visualIds.Add("sword");
-                    return true;
-                case "TRAINING_SWORD_AND_SHIELD":
-                    visualIds.Add("sword");
-                    visualIds.Add("shield");
-                    return true;
-                case "TRAINING_SHIELD":
-                case "NEWBIE_SHIELD_01":
-                case "NEWBIE_SHIELD_02":
-                case "NEWBIE_SHIELD_03":
-                    visualIds.Add("shield");
-                    return true;
-                case "TRAINING_BOW":
-                case "NEWBIE_BOW_01":
-                case "NEWBIE_BOW_02":
-                case "NEWBIE_BOW_03":
-                    visualIds.Add("bow_drawn");
-                    visualIds.Add("bow_stowed");
-                    visualIds.Add("quiver");
-                    return true;
-                default:
-                    return false;
+                if (equipmentAppearanceCatalog == null
+                    || !equipmentAppearanceCatalog.TryGetWeaponVisual(
+                        definition.ItemDefId,
+                        roleId,
+                        CharacterAppearanceIds.RaceHuman,
+                        CharacterAppearanceIds.SexMale,
+                        out EquipmentAppearanceCatalog.WeaponVisualEntry entry)
+                    || entry.prefab == null)
+                {
+                    continue;
+                }
+
+                visuals.Add(new EquippedWeaponVisual(roleId, definition.ItemDefId, entry.prefab));
             }
         }
 
-        private static void AddWeaponVisualIdsForKind(string? weaponKind, HashSet<string> visualIds)
+        private static IEnumerable<string> WeaponVisualRoleIdsForKind(string? weaponKind)
         {
             switch (WireIdentifier.Normalize(weaponKind))
             {
                 case "TWO_HAND_SWORD":
                 case "TWO_HANDED_SWORD":
                 case "TWO_HAND_AXE":
-                    visualIds.Add("greatsword");
-                    break;
+                    yield return "greatsword";
+                    yield break;
                 case "STAFF":
-                    visualIds.Add("staff");
-                    break;
+                    yield return "staff";
+                    yield break;
                 case "ONE_HAND_SWORD":
                 case "ONE_HAND_AXE":
                 case "DAGGER_PAIR":
-                    visualIds.Add("sword");
-                    break;
+                    yield return "sword";
+                    yield break;
                 case "SWORD_AND_SHIELD":
-                    visualIds.Add("sword");
-                    visualIds.Add("shield");
-                    break;
+                    yield return "sword";
+                    yield return "shield";
+                    yield break;
                 case "SHIELD":
-                    visualIds.Add("shield");
-                    break;
+                    yield return "shield";
+                    yield break;
                 case "BOW":
-                    visualIds.Add("bow_drawn");
-                    visualIds.Add("bow_stowed");
-                    visualIds.Add("quiver");
-                    break;
+                    yield return "bow_drawn";
+                    yield return "bow_stowed";
+                    yield return "quiver";
+                    yield break;
             }
         }
 

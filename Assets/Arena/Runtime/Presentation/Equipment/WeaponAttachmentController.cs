@@ -74,10 +74,12 @@ namespace Arena.Presentation
 
         public void ApplyAnimationSet(CombatAnimationSet set)
         {
-            ApplyAnimationSet(set, allowedVisualItemIds: null);
+            ApplyAnimationSet(set, equippedVisualsByRole: null);
         }
 
-        public void ApplyAnimationSet(CombatAnimationSet set, ISet<string>? allowedVisualItemIds)
+        public void ApplyAnimationSet(
+            CombatAnimationSet set,
+            IReadOnlyDictionary<string, EquippedWeaponVisual>? equippedVisualsByRole)
         {
             _missingMountWarnings.Clear();
             ClearVisuals();
@@ -100,10 +102,16 @@ namespace Arena.Presentation
                 string itemId = string.IsNullOrWhiteSpace(binding.itemId)
                     ? binding.prefab.name
                     : binding.itemId;
-                if (allowedVisualItemIds != null && !allowedVisualItemIds.Contains(itemId))
-                    continue;
+                GameObject prefab = binding.prefab;
+                if (equippedVisualsByRole != null)
+                {
+                    if (!equippedVisualsByRole.TryGetValue(itemId, out EquippedWeaponVisual equippedVisual))
+                        continue;
 
-                var instance = Instantiate(binding.prefab, transform);
+                    prefab = equippedVisual.Prefab;
+                }
+
+                var instance = Instantiate(prefab, transform);
                 instance.name = itemId;
                 if (instance.GetComponent<WeaponAttachmentSpawnedVisual>() == null)
                     instance.AddComponent<WeaponAttachmentSpawnedVisual>();

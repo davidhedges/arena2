@@ -488,15 +488,19 @@ namespace Arena.Tests.Editor
             Assert.That(tooltip, Does.Not.Contain("ClassCatalog"));
 
             string entityRegistry = File.ReadAllText(EntityRegistryPath);
-            Assert.That(entityRegistry, Does.Contain("TryAddWeaponVisualIdsForItemDefinition"));
-            Assert.That(entityRegistry, Does.Contain("NEWBIE_TWO_HAND_SWORD_01"));
-            Assert.That(entityRegistry, Does.Contain("NEWBIE_ONE_HAND_SWORD_01"));
-            Assert.That(entityRegistry, Does.Contain("NEWBIE_TWO_HAND_AXE_01"));
-            Assert.That(entityRegistry, Does.Contain("NEWBIE_ONE_HAND_AXE_02"));
-            Assert.That(entityRegistry, Does.Contain("NEWBIE_DAGGER_PAIR_01"));
-            Assert.That(entityRegistry, Does.Contain("NEWBIE_STAFF_01"));
-            Assert.That(entityRegistry, Does.Contain("NEWBIE_SHIELD_01"));
-            Assert.That(entityRegistry, Does.Contain("NEWBIE_BOW_01"));
+            Assert.That(entityRegistry, Does.Contain("WeaponVisualRoleIdsForKind"));
+            Assert.That(entityRegistry, Does.Not.Contain("TryAddWeaponVisualIdsForItemDefinition"));
+
+            string catalogBuilder = File.ReadAllText("Assets/Arena/Editor/CharacterAppearanceCatalogBuilder.cs");
+            Assert.That(catalogBuilder, Does.Contain("BuildWeaponVisualEntries"));
+            Assert.That(catalogBuilder, Does.Contain("NEWBIE_TWO_HAND_SWORD_01"));
+            Assert.That(catalogBuilder, Does.Contain("NEWBIE_ONE_HAND_SWORD_01"));
+            Assert.That(catalogBuilder, Does.Contain("NEWBIE_TWO_HAND_AXE_01"));
+            Assert.That(catalogBuilder, Does.Contain("NEWBIE_ONE_HAND_AXE_02"));
+            Assert.That(catalogBuilder, Does.Contain("NEWBIE_DAGGER_PAIR_01"));
+            Assert.That(catalogBuilder, Does.Contain("NEWBIE_STAFF_01"));
+            Assert.That(catalogBuilder, Does.Contain("NEWBIE_SHIELD_01"));
+            Assert.That(catalogBuilder, Does.Contain("NEWBIE_BOW_01"));
 
             string daggersAnimationSet = File.ReadAllText("Assets/Arena/Resources/CombatAnimationSets/Daggers.asset");
             Assert.That(daggersAnimationSet, Does.Contain("combatProfileId: DAGGERS"));

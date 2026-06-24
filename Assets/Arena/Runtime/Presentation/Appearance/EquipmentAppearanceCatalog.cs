@@ -28,8 +28,21 @@ namespace Arena.Presentation.Appearance
             public List<EquipmentItem> items = new();
         }
 
+        [Serializable]
+        public sealed class WeaponVisualEntry
+        {
+            public string itemDefId = string.Empty;
+            public string visualRoleId = string.Empty;
+            public string raceId = string.Empty;
+            public string sexId = string.Empty;
+            public bool enabled = true;
+            public GameObject? prefab;
+        }
+
         [SerializeField] private List<Entry> entries = new();
+        [SerializeField] private List<WeaponVisualEntry> weaponVisuals = new();
         public IReadOnlyList<Entry> Entries => entries;
+        public IReadOnlyList<WeaponVisualEntry> WeaponVisuals => weaponVisuals;
 
         public bool TryGetItems(
             string? itemDefId,
@@ -63,9 +76,46 @@ namespace Arena.Presentation.Appearance
             return false;
         }
 
+        public bool TryGetWeaponVisual(
+            string? itemDefId,
+            string? visualRoleId,
+            string? raceId,
+            string? sexId,
+            out WeaponVisualEntry entry)
+        {
+            string normalizedItem = CharacterAppearanceIds.Normalize(itemDefId);
+            string normalizedRole = CharacterAppearanceIds.Normalize(visualRoleId);
+            string normalizedRace = CharacterAppearanceIds.Normalize(raceId);
+            string normalizedSex = CharacterAppearanceIds.Normalize(sexId);
+
+            for (int i = 0; i < weaponVisuals.Count; i++)
+            {
+                WeaponVisualEntry candidate = weaponVisuals[i];
+                if (candidate == null || !candidate.enabled || candidate.prefab == null)
+                    continue;
+
+                if (CharacterAppearanceIds.Normalize(candidate.itemDefId) == normalizedItem
+                    && CharacterAppearanceIds.Normalize(candidate.visualRoleId) == normalizedRole
+                    && CharacterAppearanceIds.Normalize(candidate.raceId) == normalizedRace
+                    && CharacterAppearanceIds.Normalize(candidate.sexId) == normalizedSex)
+                {
+                    entry = candidate;
+                    return true;
+                }
+            }
+
+            entry = null!;
+            return false;
+        }
+
         public void SetEntriesForEditor(List<Entry> replacement)
         {
             entries = replacement ?? new List<Entry>();
+        }
+
+        public void SetWeaponVisualsForEditor(List<WeaponVisualEntry> replacement)
+        {
+            weaponVisuals = replacement ?? new List<WeaponVisualEntry>();
         }
     }
 }

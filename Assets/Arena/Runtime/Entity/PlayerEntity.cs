@@ -73,7 +73,7 @@ namespace Arena.Entity
         private WeaponAttachmentController? _weaponAttachments;
         private LocalPlayerStateProvider? _stateProvider;
         private CombatAnimationSet? _combatAnimationSet;
-        private readonly HashSet<string> _equippedWeaponVisualItemIds = new(System.StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, EquippedWeaponVisual> _equippedWeaponVisualsByRole = new(System.StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, string> _equippedArmorItemDefIdsBySlot = new(System.StringComparer.Ordinal);
         private SharedActionProfile? _sharedActionProfile;
         private SpellCastPresentationController? _spellCastPresentation;
@@ -347,22 +347,22 @@ namespace Arena.Entity
         {
             _combatAnimationSet = set;
             _animator?.ApplyAnimationSet(set);
-            _weaponAttachments?.ApplyAnimationSet(set, _equippedWeaponVisualItemIds);
+            _weaponAttachments?.ApplyAnimationSet(set, _equippedWeaponVisualsByRole);
         }
 
-        public void SetEquippedWeaponVisualItemIds(IEnumerable<string> visualItemIds)
+        public void SetEquippedWeaponVisuals(IEnumerable<EquippedWeaponVisual> visuals)
         {
-            _equippedWeaponVisualItemIds.Clear();
-            foreach (string visualItemId in visualItemIds)
+            _equippedWeaponVisualsByRole.Clear();
+            foreach (EquippedWeaponVisual visual in visuals)
             {
-                if (string.IsNullOrWhiteSpace(visualItemId))
+                if (string.IsNullOrWhiteSpace(visual.RoleId) || string.IsNullOrWhiteSpace(visual.ItemDefId) || visual.Prefab == null)
                     continue;
 
-                _equippedWeaponVisualItemIds.Add(visualItemId.Trim());
+                _equippedWeaponVisualsByRole[visual.RoleId.Trim()] = visual;
             }
 
             if (_combatAnimationSet != null)
-                _weaponAttachments?.ApplyAnimationSet(_combatAnimationSet, _equippedWeaponVisualItemIds);
+                _weaponAttachments?.ApplyAnimationSet(_combatAnimationSet, _equippedWeaponVisualsByRole);
         }
 
         public void SetEquippedArmorItemDefIdsBySlot(Dictionary<string, string> itemDefIdsBySlot)

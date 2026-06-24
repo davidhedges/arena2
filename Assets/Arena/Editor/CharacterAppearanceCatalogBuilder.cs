@@ -113,6 +113,9 @@ namespace Arena.EditorTools
             List<EquipmentAppearanceCatalog.Entry> equipmentAppearanceEntries = BuildEquipmentAppearanceEntries();
             ValidateEquipmentAppearanceEntries(equipmentAppearanceEntries);
             equipmentAppearanceCatalog.SetEntriesForEditor(equipmentAppearanceEntries);
+            List<EquipmentAppearanceCatalog.WeaponVisualEntry> weaponVisualEntries = BuildWeaponVisualEntries();
+            ValidateWeaponVisualEntries(weaponVisualEntries);
+            equipmentAppearanceCatalog.SetWeaponVisualsForEditor(weaponVisualEntries);
 
             EditorUtility.SetDirty(baseCatalog);
             EditorUtility.SetDirty(partCatalog);
@@ -282,6 +285,71 @@ namespace Arena.EditorTools
             return entries;
         }
 
+        private static List<EquipmentAppearanceCatalog.WeaponVisualEntry> BuildWeaponVisualEntries()
+        {
+            var entries = new List<EquipmentAppearanceCatalog.WeaponVisualEntry>
+            {
+                WeaponVisual("TRAINING_TWO_HAND_SWORD", "greatsword", "Assets/Arena/Resources/CombatAnimationSets/GreatSwordPackAuthored.prefab"),
+                WeaponVisual("NEWBIE_TWO_HAND_SWORD_01", "greatsword", WeaponPath("Sword", "Sword_2H_Newbie_01_Cl.prefab")),
+                WeaponVisual("NEWBIE_TWO_HAND_SWORD_02", "greatsword", WeaponPath("Sword", "Sword_2H_Newbie_02_Cl.prefab")),
+                WeaponVisual("NEWBIE_TWO_HAND_AXE_01", "greatsword", WeaponPath("Axe", "Axe_2HL_Newbie_01_Cl.prefab")),
+
+                WeaponVisual("TRAINING_ONE_HAND_SWORD", "sword", "Assets/Arena/Resources/CombatAnimationSets/SwordPackAuthored.prefab"),
+                WeaponVisual("NEWBIE_ONE_HAND_SWORD_01", "sword", WeaponPath("Sword", "Sword_1H_Newbie_01_Cl.prefab")),
+                WeaponVisual("NEWBIE_ONE_HAND_SWORD_02", "sword", WeaponPath("Sword", "Sword_1H_Newbie_02_Cl.prefab")),
+                WeaponVisual("NEWBIE_ONE_HAND_AXE_02", "sword", WeaponPath("Axe", "Axe_1H_Newbie_02_Cl.prefab")),
+                WeaponVisual("NEWBIE_ONE_HAND_AXE_03", "sword", WeaponPath("Axe", "Axe_1H_Newbie_03_Cl.prefab")),
+
+                WeaponVisual("TRAINING_DAGGER_PAIR", "sword", WeaponPath("Dagger", "Dagger_1H_Newbie_01_Cl.prefab")),
+                WeaponVisual("NEWBIE_DAGGER_PAIR_01", "sword", WeaponPath("Dagger", "Dagger_1H_Newbie_01_Cl.prefab")),
+                WeaponVisual("NEWBIE_DAGGER_PAIR_02", "sword", WeaponPath("Dagger", "Dagger_1H_Newbie_02_Cl.prefab")),
+                WeaponVisual("NEWBIE_DAGGER_PAIR_03", "sword", WeaponPath("Dagger", "Dagger_1H_Newbie_03_Cl.prefab")),
+
+                WeaponVisual("TRAINING_SHIELD", "shield", "Assets/Arena/Resources/CombatAnimationSets/ShieldPackAuthored.prefab"),
+                WeaponVisual("NEWBIE_SHIELD_01", "shield", WeaponPath("Shield", "Shield_Newbie_01_Cl.prefab")),
+                WeaponVisual("NEWBIE_SHIELD_02", "shield", WeaponPath("Shield", "Shield_Newbie_02_Cl.prefab")),
+                WeaponVisual("NEWBIE_SHIELD_03", "shield", WeaponPath("Shield", "Shield_Newbie_03_Cl.prefab")),
+                WeaponVisual("TRAINING_SWORD_AND_SHIELD", "sword", "Assets/Arena/Resources/CombatAnimationSets/SwordPackAuthored.prefab"),
+                WeaponVisual("TRAINING_SWORD_AND_SHIELD", "shield", "Assets/Arena/Resources/CombatAnimationSets/ShieldPackAuthored.prefab"),
+
+                WeaponVisual("TRAINING_BOW", "bow_drawn", "Assets/Arena/Resources/CombatAnimationSets/ArcherBowDrawnPackAuthored.prefab"),
+                WeaponVisual("TRAINING_BOW", "bow_stowed", "Assets/Arena/Resources/CombatAnimationSets/ArcherBowStowedPackAuthored.prefab"),
+                WeaponVisual("TRAINING_BOW", "quiver", "Assets/Arena/Resources/CombatAnimationSets/ArcherQuiverPackAuthored.prefab"),
+                WeaponVisual("NEWBIE_BOW_01", "bow_drawn", WeaponPath("Bow", "Bow_Newbie_01_Cl.prefab")),
+                WeaponVisual("NEWBIE_BOW_01", "bow_stowed", WeaponPath("Bow", "Bow_Newbie_01_Cl.prefab")),
+                WeaponVisual("NEWBIE_BOW_01", "quiver", "Assets/Arena/Resources/CombatAnimationSets/ArcherQuiverPackAuthored.prefab"),
+                WeaponVisual("NEWBIE_BOW_02", "bow_drawn", WeaponPath("Bow", "Bow_Newbie_02_Cl.prefab")),
+                WeaponVisual("NEWBIE_BOW_02", "bow_stowed", WeaponPath("Bow", "Bow_Newbie_02_Cl.prefab")),
+                WeaponVisual("NEWBIE_BOW_02", "quiver", "Assets/Arena/Resources/CombatAnimationSets/ArcherQuiverPackAuthored.prefab"),
+                WeaponVisual("NEWBIE_BOW_03", "bow_drawn", WeaponPath("Bow", "Bow_Newbie_03_Cl.prefab")),
+                WeaponVisual("NEWBIE_BOW_03", "bow_stowed", WeaponPath("Bow", "Bow_Newbie_03_Cl.prefab")),
+                WeaponVisual("NEWBIE_BOW_03", "quiver", "Assets/Arena/Resources/CombatAnimationSets/ArcherQuiverPackAuthored.prefab"),
+
+                WeaponVisual("NEWBIE_STAFF_01", "staff", "Assets/Arena/Resources/CombatAnimationSets/StaffPackAuthored.prefab"),
+                WeaponVisual("NEWBIE_STAFF_02", "staff", WeaponPath("Staff", "Staff_Newbie_02_Cl.prefab")),
+                WeaponVisual("NEWBIE_STAFF_03", "staff", WeaponPath("Staff", "Staff_Newbie_03_Cl.prefab")),
+                WeaponVisual("NEWBIE_STAFF_04", "staff", WeaponPath("Staff", "Staff_Newbie_04_Cl.prefab")),
+            };
+
+            return entries;
+        }
+
+        private static EquipmentAppearanceCatalog.WeaponVisualEntry WeaponVisual(
+            string itemDefId,
+            string visualRoleId,
+            string path)
+        {
+            return new EquipmentAppearanceCatalog.WeaponVisualEntry
+            {
+                itemDefId = itemDefId,
+                visualRoleId = visualRoleId,
+                raceId = CharacterAppearanceIds.RaceHuman,
+                sexId = CharacterAppearanceIds.SexMale,
+                enabled = true,
+                prefab = LoadRequired<GameObject>(path),
+            };
+        }
+
         private static void AddHumanMaleEquipmentVisualSet(
             List<EquipmentAppearanceCatalog.Entry> entries,
             EquipmentVisualSetSpec spec)
@@ -327,6 +395,11 @@ namespace Arena.EditorTools
         private static string EquipmentPath(string folder, string fileName)
         {
             return $"{StylizedCharacterRoot}/Prefabs/Item/Equipment/{folder}/{fileName}";
+        }
+
+        private static string WeaponPath(string folder, string fileName)
+        {
+            return $"{StylizedCharacterRoot}/Prefabs/Item/Weapon/{folder}/{fileName}";
         }
 
         private readonly struct EquipmentVisualSetSpec
@@ -440,6 +513,27 @@ namespace Arena.EditorTools
                         throw new InvalidOperationException(
                             $"Equipment appearance entry '{entry.itemDefId}' expected item type {item.expectedItemType} but found {item.item.Type} on '{item.item.name}'.");
                 }
+            }
+        }
+
+        private static void ValidateWeaponVisualEntries(IReadOnlyList<EquipmentAppearanceCatalog.WeaponVisualEntry> entries)
+        {
+            var keys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            for (int i = 0; i < entries.Count; i++)
+            {
+                EquipmentAppearanceCatalog.WeaponVisualEntry entry = entries[i];
+                if (entry == null)
+                    throw new InvalidOperationException($"Weapon visual entry {i} is null.");
+                if (string.IsNullOrWhiteSpace(entry.itemDefId))
+                    throw new InvalidOperationException($"Weapon visual entry {i} has no item definition id.");
+                if (string.IsNullOrWhiteSpace(entry.visualRoleId))
+                    throw new InvalidOperationException($"Weapon visual entry '{entry.itemDefId}' has no visual role id.");
+                if (entry.prefab == null)
+                    throw new InvalidOperationException($"Weapon visual entry '{entry.itemDefId}' role '{entry.visualRoleId}' has no prefab.");
+
+                string key = $"{entry.itemDefId}|{entry.visualRoleId}|{entry.raceId}|{entry.sexId}";
+                if (!keys.Add(key))
+                    throw new InvalidOperationException($"Duplicate weapon visual entry: {key}");
             }
         }
 
