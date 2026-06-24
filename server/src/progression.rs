@@ -7102,6 +7102,25 @@ mod tests {
     }
 
     #[test]
+    fn paladin_shield_pummel_uses_light_combo_3_animation() {
+        let ability = progression_catalog()
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "PALADIN_SHIELD_PUMMEL")
+            .expect("PALADIN_SHIELD_PUMMEL must exist");
+
+        assert_eq!(
+            normalize_identifier(ability.combat_profile_id.as_str()),
+            COMBAT_PROFILE_SWORD_AND_SHIELD
+        );
+        assert_eq!(ability.action_id, "SWORD_AND_SHIELD_LIGHT_COMBO_3");
+        assert!(profile_supports_action_reference(
+            COMBAT_PROFILE_SWORD_AND_SHIELD,
+            &AuthoredActionId::new(ability.action_id.as_str())
+        ));
+    }
+
+    #[test]
     fn paladin_fervor_authors_castable_move_speed_aura() {
         let catalog = progression_catalog();
         let ability = catalog

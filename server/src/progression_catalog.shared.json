@@ -1863,7 +1863,7 @@
     {
       "ability_id": "PALADIN_SHIELD_PUMMEL",
       "combat_profile_id": "SWORD_AND_SHIELD",
-      "action_id": "SWORD_AND_SHIELD_UTILITY_1",
+      "action_id": "SWORD_AND_SHIELD_LIGHT_COMBO_3",
       "display_name": "Shield Pummel",
       "resource_kind": "STAMINA",
       "resource_cost": 1,
