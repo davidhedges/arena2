@@ -754,7 +754,7 @@
       "ability_id": "WARRIOR_FIREBALL",
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "FIREBALL",
-      "display_name": "Fire",
+      "display_name": "Fireball",
       "resource_kind": "MANA",
       "ability_tags": [
         "ACTION_BAR_ACTION"
@@ -2730,7 +2730,7 @@
     {
       "presentation_kind": "ABILITY",
       "presentation_id": "WARRIOR_FIREBALL",
-      "display_name": "Fire",
+      "display_name": "Fireball",
       "description": "Launches a homing fire projectile at the target.",
       "sort_order": 77
     },

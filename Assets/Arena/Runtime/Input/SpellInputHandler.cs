@@ -497,16 +497,19 @@ namespace Arena.Input
             }
 
             ActionBarTrace.Trace($"spell dispatch sending cast request for {spellId}");
-            TryCastTargeted(conn, spellId);
-            return true;
+            return TryCastTargeted(conn, spellId);
         }
 
-        private void TryCastTargeted(SpacetimeDB.Types.DbConnection conn, string spellId)
+        private bool TryCastTargeted(SpacetimeDB.Types.DbConnection conn, string spellId)
         {
             string targetId = TargetSelector.Instance?.SelectedTargetId ?? "";
             var spellDef = GetSpellDefinition(conn, spellId);
             if (string.IsNullOrEmpty(targetId) && spellDef?.RequiresTarget == true)
+            {
                 Debug.LogWarning($"[SpellInput] {spellId} — no target selected (use Tab or click a target)");
+                ActionBarTrace.Trace($"spell dispatch rejected: no target selected for {spellId}");
+                return false;
+            }
 
             ActionBarTrace.Trace($"sending CastRequest for {spellId} target={targetId}");
             CastActionToken token = LocalCombatState.Instance.CreateCastActionToken(spellId);
@@ -516,6 +519,7 @@ namespace Arena.Input
             PredictSpellStartCooldowns(conn, spellId, spellDef);
             PredictCastTimeSpellHold(spellId, spellDef, targetId, null, token);
             PredictImmediateInstantSpellVisual(conn, spellId, spellDef, targetId, null, token);
+            return true;
         }
 
         private static float SpellPrimaryResourceCost(SpacetimeDB.Types.SpellDefinition? spellDef)

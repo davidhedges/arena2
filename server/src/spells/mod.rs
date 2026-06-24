@@ -425,15 +425,18 @@ pub fn cast_request(
     let definition = catalog::require_spell_definition_by_str(spell_id.as_str())?;
     let kind = &definition.kind;
     let authored_action_id = AuthoredActionId::new(kind.as_str());
-    if action_id_is_selectable_action_bar_action(ctx, &authored_action_id) {
-        let Some(_) =
-            active_selectable_ability_for_authored_action(ctx, ctx.sender(), &authored_action_id)
-        else {
-            return Err(format!(
-                "spell '{}' is not assigned on the action bar",
-                kind.as_str()
-            ));
-        };
+    if action_id_is_selectable_action_bar_action(ctx, &authored_action_id)
+        && !spell_cast_is_authorized_by_action_bar_or_spellbook(
+            ctx,
+            ctx.sender(),
+            &authored_action_id,
+            kind.as_str(),
+        )
+    {
+        return Err(format!(
+            "spell '{}' is not assigned on the action bar",
+            kind.as_str()
+        ));
     }
     if cast_request_executes_immediately(definition.behavior, definition.cast_time) {
         return casting::cast_spell(
@@ -475,6 +478,16 @@ fn cast_request_executes_immediately(behavior: SpellBehavior, cast_time: Duratio
         behavior,
         SpellBehavior::InstantBeam | SpellBehavior::Channel
     ) || cast_time == Duration::ZERO
+}
+
+fn spell_cast_is_authorized_by_action_bar_or_spellbook(
+    ctx: &ReducerContext,
+    owner: Identity,
+    authored_action_id: &AuthoredActionId,
+    spell_id: &str,
+) -> bool {
+    active_selectable_ability_for_authored_action(ctx, owner, authored_action_id).is_some()
+        || player_knows_spell(ctx, owner, spell_id)
 }
 
 #[cfg(test)]
