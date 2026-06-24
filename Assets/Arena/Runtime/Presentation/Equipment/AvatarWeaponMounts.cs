@@ -135,6 +135,7 @@ namespace Arena.Presentation
         public const string OffSheathMountId = "off_sheath";
         public const string GreatswordHandMountId = "greatsword_hand";
         public const string GreatswordStowedMountId = "greatsword_stowed";
+        public const string StaffStowedMountId = "staff_stowed";
         public const string ArcherBowHandMountId = "archer_bow_hand";
         public const string ArcherBowStowedMountId = "archer_bow_stowed";
         public const string ArcherQuiverStowedMountId = "archer_quiver_stowed";
@@ -159,6 +160,7 @@ namespace Arena.Presentation
             [LegacyOffStowedMountId] = new[] { OffStowedMountId, LegacyOffStowedMountId, OffSheathMountId },
             [GreatswordHandMountId] = new[] { GreatswordHandMountId, MainHandMountId, LegacyMainHandMountId },
             [GreatswordStowedMountId] = new[] { GreatswordStowedMountId, MainStowedMountId, MainSheathMountId, LegacyMainStowedMountId },
+            [StaffStowedMountId] = new[] { StaffStowedMountId, MainBackMountId, MainStowedMountId, MainSheathMountId, LegacyMainStowedMountId },
             [ArcherBowHandMountId] = new[] { ArcherBowHandMountId },
             [ArcherBowStowedMountId] = new[] { ArcherBowStowedMountId },
             [ArcherQuiverStowedMountId] = new[] { ArcherQuiverStowedMountId, ArcherQuiverBackMountId },

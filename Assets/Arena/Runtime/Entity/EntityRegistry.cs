@@ -1086,11 +1086,13 @@ namespace Arena.Entity
                 case "NEWBIE_TWO_HAND_SWORD_01":
                 case "NEWBIE_TWO_HAND_SWORD_02":
                 case "NEWBIE_TWO_HAND_AXE_01":
+                    visualIds.Add("greatsword");
+                    return true;
                 case "NEWBIE_STAFF_01":
                 case "NEWBIE_STAFF_02":
                 case "NEWBIE_STAFF_03":
                 case "NEWBIE_STAFF_04":
-                    visualIds.Add("greatsword");
+                    visualIds.Add("staff");
                     return true;
                 case "TRAINING_ONE_HAND_SWORD":
                 case "NEWBIE_ONE_HAND_SWORD_01":
@@ -1133,8 +1135,10 @@ namespace Arena.Entity
                 case "TWO_HAND_SWORD":
                 case "TWO_HANDED_SWORD":
                 case "TWO_HAND_AXE":
-                case "STAFF":
                     visualIds.Add("greatsword");
+                    break;
+                case "STAFF":
+                    visualIds.Add("staff");
                     break;
                 case "ONE_HAND_SWORD":
                 case "ONE_HAND_AXE":

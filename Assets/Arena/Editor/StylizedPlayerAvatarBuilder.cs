@@ -310,6 +310,7 @@ namespace Arena.EditorTools
                 AvatarWeaponMounts.MainSheathMountId => HumanBodyBones.Chest,
                 AvatarWeaponMounts.MainStowedMountId => HumanBodyBones.Chest,
                 AvatarWeaponMounts.MainBackMountId => HumanBodyBones.Chest,
+                AvatarWeaponMounts.StaffStowedMountId => HumanBodyBones.Chest,
                 _ => HumanBodyBones.RightHand,
             };
         }
@@ -363,6 +364,10 @@ namespace Arena.EditorTools
                 FindDescendant(chest, "Back_L") ??
                 FindDescendant(chest, "Back_2HL") ??
                 chest;
+            Transform staffStowed =
+                CreateTransferredMount(player.transform, animator, legacyMountPoses, AvatarWeaponMounts.StaffStowedMountId) ??
+                FindDescendant(chest, "Back_2HL") ??
+                mainBack;
             Transform offBack =
                 CreateTransferredMount(player.transform, animator, legacyMountPoses, AvatarWeaponMounts.OffSheathMountId) ??
                 FindDescendant(chest, PropShieldHolder) ??
@@ -377,6 +382,7 @@ namespace Arena.EditorTools
             mounts.SetOrReplaceMount(AvatarWeaponMounts.MainSheathMountId, mainBack);
             mounts.SetOrReplaceMount(AvatarWeaponMounts.MainStowedMountId, mainBack);
             mounts.SetOrReplaceMount(AvatarWeaponMounts.MainBackMountId, mainBack);
+            mounts.SetOrReplaceMount(AvatarWeaponMounts.StaffStowedMountId, staffStowed);
 
             mounts.SetOrReplaceMount(AvatarWeaponMounts.OffSheathMountId, offBack);
             mounts.SetOrReplaceMount(AvatarWeaponMounts.OffStowedMountId, offBack);

@@ -361,6 +361,7 @@ namespace Arena.Presentation.Appearance
             Transform? archerQuiverStowed = ArenaWeaponMountCalibration.CreateOrUpdateMountChild(
                 backParent,
                 ArenaWeaponMountCalibration.ArcherQuiverStowed);
+            Transform? staffStowed = ResolveSocket(nhAvatar, BoneType.Back2HL) ?? mainBack;
             Transform? greatswordAnimatedSocket = ArenaWeaponMountCalibration.CreateOrUpdateMountChild(
                 mainHandParent,
                 ArenaWeaponMountCalibration.GreatswordAnimatedHandSocket);
@@ -386,6 +387,7 @@ namespace Arena.Presentation.Appearance
             SetMount(mounts, AvatarWeaponMounts.ArcherBowHandMountId, archerBowHand);
             SetMount(mounts, AvatarWeaponMounts.ArcherBowStowedMountId, archerBowStowed);
             SetMount(mounts, AvatarWeaponMounts.ArcherQuiverStowedMountId, archerQuiverStowed);
+            SetMount(mounts, AvatarWeaponMounts.StaffStowedMountId, staffStowed);
         }
 
         private static Transform? ResolveSocket(NHAvatar avatar, BoneType boneType)
