@@ -1112,8 +1112,11 @@ namespace Arena.Entity
                     yield break;
                 case "ONE_HAND_SWORD":
                 case "ONE_HAND_AXE":
-                case "DAGGER_PAIR":
                     yield return "sword";
+                    yield break;
+                case "DAGGER_PAIR":
+                    yield return "dagger_main";
+                    yield return "dagger_off";
                     yield break;
                 case "SWORD_AND_SHIELD":
                     yield return "sword";

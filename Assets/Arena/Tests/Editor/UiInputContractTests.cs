@@ -498,6 +498,8 @@ namespace Arena.Tests.Editor
             Assert.That(catalogBuilder, Does.Contain("NEWBIE_TWO_HAND_AXE_01"));
             Assert.That(catalogBuilder, Does.Contain("NEWBIE_ONE_HAND_AXE_02"));
             Assert.That(catalogBuilder, Does.Contain("NEWBIE_DAGGER_PAIR_01"));
+            Assert.That(catalogBuilder, Does.Contain("dagger_main"));
+            Assert.That(catalogBuilder, Does.Contain("dagger_off"));
             Assert.That(catalogBuilder, Does.Contain("NEWBIE_STAFF_01"));
             Assert.That(catalogBuilder, Does.Contain("NEWBIE_SHIELD_01"));
             Assert.That(catalogBuilder, Does.Contain("NEWBIE_BOW_01"));

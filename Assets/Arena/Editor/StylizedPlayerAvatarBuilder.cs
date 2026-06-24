@@ -307,9 +307,11 @@ namespace Arena.EditorTools
                 AvatarWeaponMounts.OffSheathMountId => HumanBodyBones.Chest,
                 AvatarWeaponMounts.OffStowedMountId => HumanBodyBones.Chest,
                 AvatarWeaponMounts.OffBackMountId => HumanBodyBones.Chest,
+                AvatarWeaponMounts.OffHipMountId => HumanBodyBones.LeftUpperLeg,
                 AvatarWeaponMounts.MainSheathMountId => HumanBodyBones.Chest,
                 AvatarWeaponMounts.MainStowedMountId => HumanBodyBones.Chest,
                 AvatarWeaponMounts.MainBackMountId => HumanBodyBones.Chest,
+                AvatarWeaponMounts.MainHipMountId => HumanBodyBones.RightUpperLeg,
                 AvatarWeaponMounts.StaffStowedMountId => HumanBodyBones.Chest,
                 _ => HumanBodyBones.RightHand,
             };
@@ -374,6 +376,16 @@ namespace Arena.EditorTools
                 FindDescendant(chest, "Back_R") ??
                 FindDescendant(chest, "Back_M") ??
                 chest;
+            Transform mainHip =
+                CreateTransferredMount(player.transform, animator, legacyMountPoses, AvatarWeaponMounts.MainHipMountId) ??
+                FindDescendant(player.transform, "Hip_R") ??
+                animator.GetBoneTransform(HumanBodyBones.RightUpperLeg) ??
+                rightHand;
+            Transform offHip =
+                CreateTransferredMount(player.transform, animator, legacyMountPoses, AvatarWeaponMounts.OffHipMountId) ??
+                FindDescendant(player.transform, "Hip_L") ??
+                animator.GetBoneTransform(HumanBodyBones.LeftUpperLeg) ??
+                leftHand;
 
             mounts.SetOrReplaceMount(AvatarWeaponMounts.MainHandMountId, mainHand);
             mounts.SetOrReplaceMount(AvatarWeaponMounts.OffHandMountId, offHand);
@@ -387,6 +399,8 @@ namespace Arena.EditorTools
             mounts.SetOrReplaceMount(AvatarWeaponMounts.OffSheathMountId, offBack);
             mounts.SetOrReplaceMount(AvatarWeaponMounts.OffStowedMountId, offBack);
             mounts.SetOrReplaceMount(AvatarWeaponMounts.OffBackMountId, offBack);
+            mounts.SetOrReplaceMount(AvatarWeaponMounts.MainHipMountId, mainHip);
+            mounts.SetOrReplaceMount(AvatarWeaponMounts.OffHipMountId, offHip);
 
             Debug.Log(
                 $"[{nameof(StylizedPlayerAvatarBuilder)}] Mounts: " +
