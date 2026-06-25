@@ -9,7 +9,7 @@ use spacetimedb::{reducer, table, Identity, ReducerContext, Table, Timestamp};
 use crate::action_ids::{normalize_authored_action_id, AuthoredActionId};
 use crate::combat::{
     AuthoredStatusPayload, DamageType, StackPolicy, StatusApplication, StatusDispelType,
-    StatusEffectKind, StatusStackGroupDefault,
+    StatusEffectKind, StatusPolarity, StatusStackGroupDefault,
 };
 use crate::inventory::{
     apply_combat_discipline_weapon_loadout, combat_discipline_weapon_loadout_is_available,
@@ -355,7 +355,17 @@ struct MovementDeliveryImpactStatusDefinition {
 #[derive(Clone, Deserialize)]
 #[serde(tag = "kind", rename_all = "SCREAMING_SNAKE_CASE", deny_unknown_fields)]
 enum MeleeImpactEffectDefinition {
-    ApplyStatus { status: MeleeImpactStatusDefinition },
+    ApplyStatus {
+        status: MeleeImpactStatusDefinition,
+    },
+    RemoveStatus {
+        #[serde(default)]
+        polarity: Option<StatusPolarity>,
+        #[serde(default)]
+        dispel_types: Vec<StatusDispelType>,
+        #[serde(default = "default_one_status_stack")]
+        max_count: u32,
+    },
 }
 
 #[derive(Clone, Deserialize)]
@@ -611,8 +621,15 @@ pub(crate) struct MovementDeliveryImpactEffectRuntime {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub(crate) struct MeleeImpactEffectRuntime {
-    pub status: StatusApplication,
+pub(crate) enum MeleeImpactEffectRuntime {
+    ApplyStatus {
+        status: StatusApplication,
+    },
+    RemoveStatus {
+        polarity: Option<StatusPolarity>,
+        dispel_types: Vec<StatusDispelType>,
+        max_count: u32,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -983,6 +1000,7 @@ fn authored_status_presentation_ids(catalog: &ProgressionCatalogFile) -> HashSet
                         &mut ids,
                     );
                 }
+                MeleeImpactEffectDefinition::RemoveStatus { .. } => {}
             }
         }
     }
@@ -2332,13 +2350,22 @@ pub(crate) fn melee_impact_effects_for_ability_id(
                 .iter()
                 .map(|effect| match effect {
                     MeleeImpactEffectDefinition::ApplyStatus { status } => {
-                        MeleeImpactEffectRuntime {
+                        MeleeImpactEffectRuntime::ApplyStatus {
                             status: status_application_from_definition(
                                 status,
                                 authored_status_stack_group_default(status.kind.as_str()),
                             ),
                         }
                     }
+                    MeleeImpactEffectDefinition::RemoveStatus {
+                        polarity,
+                        dispel_types,
+                        max_count,
+                    } => MeleeImpactEffectRuntime::RemoveStatus {
+                        polarity: *polarity,
+                        dispel_types: dispel_types.clone(),
+                        max_count: *max_count,
+                    },
                 })
                 .collect()
         })
@@ -4245,6 +4272,20 @@ fn validate_melee_impact_effects(ability_id: &str, effects: &[MeleeImpactEffectD
                         status,
                         authored_status_stack_group_default(status.kind.as_str()),
                     ),
+                );
+            }
+            MeleeImpactEffectDefinition::RemoveStatus {
+                polarity,
+                dispel_types,
+                max_count,
+            } => {
+                assert!(
+                    polarity.is_some() || !dispel_types.is_empty(),
+                    "melee ability '{ability_id}' REMOVE_STATUS impact effect must define polarity or dispel_types"
+                );
+                assert!(
+                    *max_count > 0,
+                    "melee ability '{ability_id}' REMOVE_STATUS impact effect max_count must be at least 1"
                 );
             }
         }
@@ -6906,7 +6947,7 @@ mod tests {
             ));
         assert_eq!(
             melee_impact_effects_for_ability_id("WARRIOR_MAIM"),
-            vec![MeleeImpactEffectRuntime {
+            vec![MeleeImpactEffectRuntime::ApplyStatus {
                 status: StatusApplication::new(
                     StatusPayload::Slow { slow_pct: 0.5 },
                     std::time::Duration::from_millis(10000),
@@ -6995,7 +7036,7 @@ mod tests {
             }));
         assert_eq!(
             melee_impact_effects_for_ability_id("WARRIOR_CARVE"),
-            vec![MeleeImpactEffectRuntime {
+            vec![MeleeImpactEffectRuntime::ApplyStatus {
                 status: StatusApplication::new(
                     StatusPayload::Dot {
                         tick_damage: 3,
@@ -7087,7 +7128,7 @@ mod tests {
             assert!(!gap_close.requires_target_facing);
             assert_eq!(
                 melee_impact_effects_for_ability_id(ability_id),
-                vec![MeleeImpactEffectRuntime {
+                vec![MeleeImpactEffectRuntime::ApplyStatus {
                     status: StatusApplication::new(
                         StatusPayload::Stun,
                         std::time::Duration::from_millis(5000),
@@ -7102,7 +7143,7 @@ mod tests {
     }
 
     #[test]
-    fn paladin_shield_pummel_uses_light_combo_3_animation() {
+    fn paladin_shield_bash_uses_light_combo_3_animation_and_purges_magic_buff() {
         let ability = progression_catalog()
             .abilities
             .iter()
@@ -7113,11 +7154,20 @@ mod tests {
             normalize_identifier(ability.combat_profile_id.as_str()),
             COMBAT_PROFILE_SWORD_AND_SHIELD
         );
+        assert_eq!(ability.display_name, "Shield Bash");
         assert_eq!(ability.action_id, "SWORD_AND_SHIELD_LIGHT_COMBO_3");
         assert!(profile_supports_action_reference(
             COMBAT_PROFILE_SWORD_AND_SHIELD,
             &AuthoredActionId::new(ability.action_id.as_str())
         ));
+        assert_eq!(
+            melee_impact_effects_for_ability_id("PALADIN_SHIELD_PUMMEL"),
+            vec![MeleeImpactEffectRuntime::RemoveStatus {
+                polarity: Some(crate::combat::StatusPolarity::Buff),
+                dispel_types: vec![StatusDispelType::Magic],
+                max_count: 1,
+            }]
+        );
     }
 
     #[test]
@@ -7469,7 +7519,7 @@ mod tests {
         assert_eq!(targeting.angle_degrees, 65.0);
         assert_eq!(
             melee_impact_effects_for_ability_id("WARRIOR_CATACLYSM"),
-            vec![MeleeImpactEffectRuntime {
+            vec![MeleeImpactEffectRuntime::ApplyStatus {
                 status: StatusApplication::new(
                     StatusPayload::Stun,
                     std::time::Duration::from_millis(2000),

@@ -25,14 +25,16 @@ use crate::combat::scene_query::{
     has_line_of_sight, is_direction_within_facing_arc, target_within_area_range_xz,
     terrain_surface_y_for_caster, CombatAreaShape,
 };
+use crate::combat::status_effect as _;
 use crate::combat::{
-    combat_projectile_definition_for_id, has_active_disabling_status, has_active_status_group,
-    has_due_pending_effects, mark_harmful_combat_action, queue_effects, remove_active_status_group,
-    resolve_pending_effects, ActiveCombatProjectile, CombatEvent, CombatProjectileDefinition,
-    DamageDelivery, DamageType, EffectPacket, ProjectilePresentationEvent, StackPolicy,
-    StatusEffectKind, StatusPayload, StatusPolarity, COMBAT_EVENT_AREA_IMPACT, COMBAT_EVENT_BLOCK,
-    COMBAT_EVENT_CAST, COMBAT_EVENT_FIZZLE, COMBAT_EVENT_IMPACT, COMBAT_EVENT_PARRY,
-    COMBAT_EVENT_RELEASE, COMBAT_METADATA_CONSUMED_MELEE_MODIFIER, COMBAT_METADATA_NONE,
+    combat_projectile_definition_for_id, decode_status_dispel_types, has_active_disabling_status,
+    has_active_status_group, has_due_pending_effects, mark_harmful_combat_action, queue_effects,
+    remove_active_status_group, resolve_pending_effects, ActiveCombatProjectile, CombatEvent,
+    CombatProjectileDefinition, DamageDelivery, DamageType, EffectPacket,
+    ProjectilePresentationEvent, StackPolicy, StatusEffectKind, StatusPayload, StatusPolarity,
+    COMBAT_EVENT_AREA_IMPACT, COMBAT_EVENT_BLOCK, COMBAT_EVENT_CAST, COMBAT_EVENT_FIZZLE,
+    COMBAT_EVENT_IMPACT, COMBAT_EVENT_PARRY, COMBAT_EVENT_RELEASE,
+    COMBAT_METADATA_CONSUMED_MELEE_MODIFIER, COMBAT_METADATA_NONE,
     COMBAT_SCALAR_MELEE_RELEASE_DELAY_SECONDS, COMBAT_SCALAR_NONE, COMBAT_SEQUENCE_NONE,
     DAMAGE_SOURCE_KIND_MELEE,
 };
@@ -4187,7 +4189,7 @@ fn resolve_pending_melee_target_impact(
         damage,
         row.applies_stagger,
     );
-    push_melee_impact_status_effects(&mut effects, row);
+    push_melee_impact_effects(ctx, &mut effects, row);
     push_melee_impact_area_effects(
         ctx,
         &mut effects,
@@ -4339,29 +4341,120 @@ fn push_melee_impact_area_effects(
     }
 }
 
+fn push_melee_impact_effects(
+    ctx: &ReducerContext,
+    effects: &mut Vec<EffectPacket>,
+    row: &PendingMeleeImpact,
+) {
+    if row.ability_id.trim().is_empty() {
+        return;
+    }
+
+    for effect in melee_impact_effects_for_ability_id(row.ability_id.as_str()) {
+        match effect {
+            crate::progression::MeleeImpactEffectRuntime::ApplyStatus { status } => {
+                push_melee_impact_status_effect(effects, row, &status);
+            }
+            crate::progression::MeleeImpactEffectRuntime::RemoveStatus {
+                polarity,
+                dispel_types,
+                max_count,
+            } => {
+                push_melee_remove_status_effects(
+                    ctx,
+                    effects,
+                    row.target,
+                    polarity,
+                    dispel_types.as_slice(),
+                    max_count,
+                );
+            }
+        }
+    }
+}
+
 fn push_melee_impact_status_effects(effects: &mut Vec<EffectPacket>, row: &PendingMeleeImpact) {
     if row.ability_id.trim().is_empty() {
         return;
     }
 
     for effect in melee_impact_effects_for_ability_id(row.ability_id.as_str()) {
-        if effect.status.requires_positive_damage() && row.damage <= 0 {
-            continue;
+        if let crate::progression::MeleeImpactEffectRuntime::ApplyStatus { status } = effect {
+            push_melee_impact_status_effect(effects, row, &status);
         }
-        let status_spell_id = format!(
-            "{}:{}:{}",
-            row.spell_id,
-            effect.status.payload().kind().as_str().to_ascii_lowercase(),
-            row.hit_index
-        );
-        effects.push(effect.status.to_effect_packet(
-            row.source,
-            row.target,
-            status_spell_id.as_str(),
-            StatusPolarity::Debuff,
-            row.kind.as_str(),
-        ));
     }
+}
+
+fn push_melee_impact_status_effect(
+    effects: &mut Vec<EffectPacket>,
+    row: &PendingMeleeImpact,
+    status: &crate::combat::StatusApplication,
+) {
+    if status.requires_positive_damage() && row.damage <= 0 {
+        return;
+    }
+    let status_spell_id = format!(
+        "{}:{}:{}",
+        row.spell_id,
+        status.payload().kind().as_str().to_ascii_lowercase(),
+        row.hit_index
+    );
+    effects.push(status.to_effect_packet(
+        row.source,
+        row.target,
+        status_spell_id.as_str(),
+        StatusPolarity::Debuff,
+        row.kind.as_str(),
+    ));
+}
+
+fn push_melee_remove_status_effects(
+    ctx: &ReducerContext,
+    effects: &mut Vec<EffectPacket>,
+    target: Identity,
+    polarity: Option<StatusPolarity>,
+    dispel_types: &[crate::combat::StatusDispelType],
+    max_count: u32,
+) {
+    if max_count == 0 || (polarity.is_none() && dispel_types.is_empty()) {
+        return;
+    }
+
+    let mut matches: Vec<_> = ctx
+        .db
+        .status_effect()
+        .target()
+        .filter(target)
+        .filter(|effect| {
+            polarity.is_none_or(|polarity| effect.polarity == polarity.as_str())
+                && status_matches_any_dispel_type(effect.dispel_types.as_str(), dispel_types)
+        })
+        .collect();
+    matches.sort_by_key(|effect| effect.status_id);
+
+    for effect in matches.into_iter().take(max_count as usize) {
+        let Some(kind) = StatusEffectKind::from_wire(effect.effect_kind.as_str()) else {
+            continue;
+        };
+        effects.push(EffectPacket::RemoveStatus {
+            target,
+            kind,
+            stack_group: effect.stack_group,
+        });
+    }
+}
+
+fn status_matches_any_dispel_type(
+    encoded_status_types: &str,
+    filter_types: &[crate::combat::StatusDispelType],
+) -> bool {
+    if filter_types.is_empty() {
+        return true;
+    }
+    let status_types = decode_status_dispel_types(encoded_status_types);
+    filter_types
+        .iter()
+        .any(|filter_type| status_types.contains(filter_type))
 }
 
 fn scaled_impact_area_damage(primary_damage: i32, damage_multiplier: f32) -> i32 {

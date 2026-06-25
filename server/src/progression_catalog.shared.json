@@ -1864,7 +1864,7 @@
       "ability_id": "PALADIN_SHIELD_PUMMEL",
       "combat_profile_id": "SWORD_AND_SHIELD",
       "action_id": "SWORD_AND_SHIELD_LIGHT_COMBO_3",
-      "display_name": "Shield Pummel",
+      "display_name": "Shield Bash",
       "resource_kind": "STAMINA",
       "resource_cost": 1,
       "ability_tags": [
@@ -1880,7 +1880,17 @@
         "uses_global_cooldown": true,
         "parry_behavior": "PARRYABLE",
         "block_behavior": "BLOCKABLE",
-        "airborne_targeting_mode": "ANY_TARGET"
+        "airborne_targeting_mode": "ANY_TARGET",
+        "melee_impact_effects": [
+          {
+            "kind": "REMOVE_STATUS",
+            "polarity": "BUFF",
+            "dispel_types": [
+              "MAGIC"
+            ],
+            "max_count": 1
+          }
+        ]
       }
     },
     {
@@ -2919,8 +2929,8 @@
     {
       "presentation_kind": "ABILITY",
       "presentation_id": "PALADIN_SHIELD_PUMMEL",
-      "display_name": "Shield Pummel",
-      "description": "Drives the shield into the target for controlled impact.",
+      "display_name": "Shield Bash",
+      "description": "Drives the shield into the target and purges one magic buff.",
       "sort_order": 110
     },
     {
