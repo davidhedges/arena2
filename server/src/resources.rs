@@ -1,6 +1,6 @@
 use spacetimedb::{table, Identity, ReducerContext, Table, Timestamp};
 
-use crate::combat::is_in_combat;
+use crate::combat::{is_in_combat, StatusRuntimeView};
 use crate::inventory::equipment_modifier_totals_for_owner;
 use crate::progression::{
     active_stat_totals_for_owner, effective_resource_kind_for_ability, AbilityCatalog,
@@ -523,8 +523,17 @@ fn resolve_resource_spec_for_owner_and_kind(
         .find(primary_kind.clone())?;
     let insight = active_stat_totals_for_owner(ctx, owner).insight as f32;
     let gain_multiplier = (1.0 + definition.gain_multiplier_per_insight * insight).max(0.0);
+    let status_modifiers =
+        StatusRuntimeView::collect(ctx, ctx.timestamp).temporary_combat_modifiers();
     let equipment_mana_regen = if primary_kind.eq_ignore_ascii_case("MANA") {
         equipment_modifier_totals_for_owner(ctx, owner).mana_regen_per_second
+    } else {
+        0.0
+    };
+    let status_regen = if primary_kind.eq_ignore_ascii_case(RESOURCE_KIND_MANA) {
+        status_modifiers.mana_regen_bonus_for(&owner)
+    } else if primary_kind.eq_ignore_ascii_case(RESOURCE_KIND_STAMINA) {
+        status_modifiers.stamina_regen_bonus_for(&owner)
     } else {
         0.0
     };
@@ -533,7 +542,8 @@ fn resolve_resource_spec_for_owner_and_kind(
         max: (definition.base_max + definition.max_per_insight * insight).max(0.0),
         regen_per_second: (definition.base_regen_per_second
             + definition.regen_per_insight * insight
-            + equipment_mana_regen)
+            + equipment_mana_regen
+            + status_regen)
             .max(0.0),
         flat_decay_per_second: definition.flat_decay_per_second.max(0.0),
         out_of_combat_flat_decay_per_second: definition

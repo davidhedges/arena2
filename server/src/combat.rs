@@ -130,6 +130,11 @@ const RESTLESS_PASSIVE_ID: &str = "WARRIOR_RESTLESS";
 const BLOODLUST_PASSIVE_ID: &str = "WARRIOR_BLOODLUST";
 const PASSIVE_STATUS_REFRESH_DURATION: Duration = Duration::from_secs(60 * 60);
 const AURA_STACK_GROUP_PREFIX: &str = "AURA:";
+const PALADIN_AURA_OF_VENGEANCE_MARK_SPELL_ID: &str = "PALADIN_AURA_OF_VENGEANCE_MARK";
+const PALADIN_AURA_OF_VENGEANCE_MARK_STACK_GROUP_PREFIX: &str = "PALADIN_AURA_OF_VENGEANCE_MARK";
+const PALADIN_AURA_OF_VENGEANCE_MARK_DURATION: Duration = Duration::from_secs(6);
+const PALADIN_AURA_OF_VENGEANCE_MARK_SCALAR: f32 = 0.02;
+const PALADIN_AURA_OF_VENGEANCE_MARK_MAX_STACKS: u32 = 10;
 
 // Current authored open-world spawn target.
 // Scene ownership should live in open_world_scene.rs rather than scattered constants.
@@ -1928,6 +1933,12 @@ pub enum StatusEffectKind {
     DirectDamageAmp,
     DamageTakenReduction,
     HealingTakenReduction,
+    ManaRegen,
+    StaminaRegen,
+    MagicResistance,
+    Thorns,
+    VengeanceAura,
+    DamageTakenFromSourceAmp,
     MeleeAttackModifier,
     AttackSpeed,
     CastSpeed,
@@ -1955,6 +1966,12 @@ impl StatusEffectKind {
             Self::DirectDamageAmp => "DIRECT_DAMAGE_AMP",
             Self::DamageTakenReduction => "DAMAGE_TAKEN_REDUCTION",
             Self::HealingTakenReduction => "HEALING_TAKEN_REDUCTION",
+            Self::ManaRegen => "MANA_REGEN",
+            Self::StaminaRegen => "STAMINA_REGEN",
+            Self::MagicResistance => "MAGIC_RESISTANCE",
+            Self::Thorns => "THORNS",
+            Self::VengeanceAura => "VENGEANCE_AURA",
+            Self::DamageTakenFromSourceAmp => "DAMAGE_TAKEN_FROM_SOURCE_AMP",
             Self::MeleeAttackModifier => "MELEE_ATTACK_MODIFIER",
             Self::AttackSpeed => "ATTACK_SPEED",
             Self::CastSpeed => "CAST_SPEED",
@@ -1982,6 +1999,12 @@ impl StatusEffectKind {
             "DIRECT_DAMAGE_AMP" => Some(Self::DirectDamageAmp),
             "DAMAGE_TAKEN_REDUCTION" => Some(Self::DamageTakenReduction),
             "HEALING_TAKEN_REDUCTION" => Some(Self::HealingTakenReduction),
+            "MANA_REGEN" => Some(Self::ManaRegen),
+            "STAMINA_REGEN" => Some(Self::StaminaRegen),
+            "MAGIC_RESISTANCE" => Some(Self::MagicResistance),
+            "THORNS" => Some(Self::Thorns),
+            "VENGEANCE_AURA" => Some(Self::VengeanceAura),
+            "DAMAGE_TAKEN_FROM_SOURCE_AMP" => Some(Self::DamageTakenFromSourceAmp),
             "MELEE_ATTACK_MODIFIER" => Some(Self::MeleeAttackModifier),
             "ATTACK_SPEED" => Some(Self::AttackSpeed),
             "CAST_SPEED" => Some(Self::CastSpeed),
@@ -2028,6 +2051,22 @@ pub enum StatusPayload {
         modifier_scalar: f32,
     },
     HealingTakenReduction {
+        modifier_scalar: f32,
+    },
+    ManaRegen {
+        modifier_scalar: f32,
+    },
+    StaminaRegen {
+        modifier_scalar: f32,
+    },
+    MagicResistance {
+        modifier_scalar: f32,
+    },
+    Thorns {
+        damage: i32,
+    },
+    VengeanceAura,
+    DamageTakenFromSourceAmp {
         modifier_scalar: f32,
     },
     MeleeAttackModifier,
@@ -2140,6 +2179,22 @@ impl AuthoredStatusPayload {
             StatusEffectKind::HealingTakenReduction => StatusPayload::HealingTakenReduction {
                 modifier_scalar: self.modifier_scalar,
             },
+            StatusEffectKind::ManaRegen => StatusPayload::ManaRegen {
+                modifier_scalar: self.modifier_scalar,
+            },
+            StatusEffectKind::StaminaRegen => StatusPayload::StaminaRegen {
+                modifier_scalar: self.modifier_scalar,
+            },
+            StatusEffectKind::MagicResistance => StatusPayload::MagicResistance {
+                modifier_scalar: self.modifier_scalar,
+            },
+            StatusEffectKind::Thorns => StatusPayload::Thorns {
+                damage: self.tick_damage,
+            },
+            StatusEffectKind::VengeanceAura => StatusPayload::VengeanceAura,
+            StatusEffectKind::DamageTakenFromSourceAmp => StatusPayload::DamageTakenFromSourceAmp {
+                modifier_scalar: self.modifier_scalar,
+            },
             StatusEffectKind::MeleeAttackModifier => StatusPayload::MeleeAttackModifier,
             StatusEffectKind::AttackSpeed => StatusPayload::AttackSpeed {
                 modifier_scalar: self.modifier_scalar,
@@ -2208,6 +2263,10 @@ impl AuthoredStatusPayload {
             | StatusEffectKind::DirectDamageAmp
             | StatusEffectKind::DamageTakenReduction
             | StatusEffectKind::HealingTakenReduction
+            | StatusEffectKind::ManaRegen
+            | StatusEffectKind::StaminaRegen
+            | StatusEffectKind::MagicResistance
+            | StatusEffectKind::DamageTakenFromSourceAmp
             | StatusEffectKind::CastSpeed => {
                 if !self.modifier_scalar.is_finite() || self.modifier_scalar <= 0.0 {
                     return Err(format!("{subject} {path}.modifier_scalar must be positive"));
@@ -2218,6 +2277,19 @@ impl AuthoredStatusPayload {
                         "{subject} {path} has fields irrelevant to {}",
                         self.kind.as_str()
                     ));
+                }
+            }
+            StatusEffectKind::Thorns => {
+                if self.tick_damage <= 0 {
+                    return Err(format!("{subject} {path}.tick_damage must be positive"));
+                }
+                if !slow_is_default
+                    || self.tick_interval_ms != 0
+                    || self.tick_heal != 0
+                    || !scalar_is_default
+                    || !absorb_is_default
+                {
+                    return Err(format!("{subject} {path} has fields irrelevant to THORNS"));
                 }
             }
             StatusEffectKind::AttackSpeed => {
@@ -2236,7 +2308,7 @@ impl AuthoredStatusPayload {
                     ));
                 }
             }
-            StatusEffectKind::Berserking => {
+            StatusEffectKind::VengeanceAura | StatusEffectKind::Berserking => {
                 if !slow_is_default
                     || !dot_is_default
                     || !hot_is_default
@@ -2320,6 +2392,12 @@ impl StatusPayload {
             Self::DirectDamageAmp { .. } => StatusEffectKind::DirectDamageAmp,
             Self::DamageTakenReduction { .. } => StatusEffectKind::DamageTakenReduction,
             Self::HealingTakenReduction { .. } => StatusEffectKind::HealingTakenReduction,
+            Self::ManaRegen { .. } => StatusEffectKind::ManaRegen,
+            Self::StaminaRegen { .. } => StatusEffectKind::StaminaRegen,
+            Self::MagicResistance { .. } => StatusEffectKind::MagicResistance,
+            Self::Thorns { .. } => StatusEffectKind::Thorns,
+            Self::VengeanceAura => StatusEffectKind::VengeanceAura,
+            Self::DamageTakenFromSourceAmp { .. } => StatusEffectKind::DamageTakenFromSourceAmp,
             Self::MeleeAttackModifier => StatusEffectKind::MeleeAttackModifier,
             Self::AttackSpeed { .. } => StatusEffectKind::AttackSpeed,
             Self::CastSpeed { .. } => StatusEffectKind::CastSpeed,
@@ -2339,6 +2417,7 @@ impl StatusPayload {
             | Self::Stagger
             | Self::Knockdown
             | Self::MoveSlowImmunity
+            | Self::VengeanceAura
             | Self::MeleeAttackModifier
             | Self::Berserking
             | Self::BattleTrance => StatusEffectColumns {
@@ -2395,6 +2474,9 @@ impl StatusPayload {
             },
             Self::DamageAmp { modifier_scalar }
             | Self::DirectDamageAmp { modifier_scalar }
+            | Self::ManaRegen { modifier_scalar }
+            | Self::StaminaRegen { modifier_scalar }
+            | Self::DamageTakenFromSourceAmp { modifier_scalar }
             | Self::CastSpeed { modifier_scalar } => StatusEffectColumns {
                 slow_pct: 0.0,
                 tick_amount: 0,
@@ -2419,6 +2501,24 @@ impl StatusPayload {
                 tick_interval_ms: 0,
                 damage_type: DamageType::Physical,
                 modifier_scalar: modifier_scalar.clamp(0.0, MAX_HEALING_TAKEN_REDUCTION),
+                absorb_amount: 0,
+                absorb_cap: 0,
+            },
+            Self::MagicResistance { modifier_scalar } => StatusEffectColumns {
+                slow_pct: 0.0,
+                tick_amount: 0,
+                tick_interval_ms: 0,
+                damage_type: DamageType::Physical,
+                modifier_scalar: modifier_scalar.clamp(0.0, 1.0),
+                absorb_amount: 0,
+                absorb_cap: 0,
+            },
+            Self::Thorns { damage } => StatusEffectColumns {
+                slow_pct: 0.0,
+                tick_amount: damage.max(0),
+                tick_interval_ms: 0,
+                damage_type: DamageType::Physical,
+                modifier_scalar: 0.0,
                 absorb_amount: 0,
                 absorb_cap: 0,
             },
@@ -2488,6 +2588,22 @@ impl StatusPayload {
                     .modifier_scalar
                     .clamp(0.0, MAX_HEALING_TAKEN_REDUCTION),
             },
+            StatusEffectKind::ManaRegen => Self::ManaRegen {
+                modifier_scalar: columns.modifier_scalar.max(0.0),
+            },
+            StatusEffectKind::StaminaRegen => Self::StaminaRegen {
+                modifier_scalar: columns.modifier_scalar.max(0.0),
+            },
+            StatusEffectKind::MagicResistance => Self::MagicResistance {
+                modifier_scalar: columns.modifier_scalar.clamp(0.0, 1.0),
+            },
+            StatusEffectKind::Thorns => Self::Thorns {
+                damage: columns.tick_amount.max(0),
+            },
+            StatusEffectKind::VengeanceAura => Self::VengeanceAura,
+            StatusEffectKind::DamageTakenFromSourceAmp => Self::DamageTakenFromSourceAmp {
+                modifier_scalar: columns.modifier_scalar.max(0.0),
+            },
             StatusEffectKind::MeleeAttackModifier => Self::MeleeAttackModifier,
             StatusEffectKind::AttackSpeed => Self::AttackSpeed {
                 modifier_scalar: columns.modifier_scalar,
@@ -2514,6 +2630,7 @@ impl StatusPayload {
             | Self::Stagger
             | Self::Knockdown
             | Self::MoveSlowImmunity
+            | Self::VengeanceAura
             | Self::MeleeAttackModifier
             | Self::Berserking
             | Self::BattleTrance => false,
@@ -2532,6 +2649,9 @@ impl StatusPayload {
             } => tick_heal <= 0 || tick_interval.is_zero(),
             Self::DamageAmp { modifier_scalar }
             | Self::DirectDamageAmp { modifier_scalar }
+            | Self::ManaRegen { modifier_scalar }
+            | Self::StaminaRegen { modifier_scalar }
+            | Self::DamageTakenFromSourceAmp { modifier_scalar }
             | Self::CastSpeed { modifier_scalar } => {
                 !modifier_scalar.is_finite() || modifier_scalar <= 0.0
             }
@@ -2545,6 +2665,10 @@ impl StatusPayload {
                     || modifier_scalar <= 0.0
                     || modifier_scalar > MAX_HEALING_TAKEN_REDUCTION
             }
+            Self::MagicResistance { modifier_scalar } => {
+                !modifier_scalar.is_finite() || modifier_scalar <= 0.0 || modifier_scalar > 1.0
+            }
+            Self::Thorns { damage } => damage <= 0,
             Self::AttackSpeed { modifier_scalar } => {
                 !modifier_scalar.is_finite() || modifier_scalar == 0.0 || modifier_scalar <= -1.0
             }
@@ -2565,6 +2689,7 @@ impl StatusPayload {
             | Self::Stagger
             | Self::Knockdown
             | Self::MoveSlowImmunity
+            | Self::VengeanceAura
             | Self::MeleeAttackModifier
             | Self::Berserking
             | Self::BattleTrance => Ok(()),
@@ -2605,6 +2730,9 @@ impl StatusPayload {
             }
             Self::DamageAmp { modifier_scalar }
             | Self::DirectDamageAmp { modifier_scalar }
+            | Self::ManaRegen { modifier_scalar }
+            | Self::StaminaRegen { modifier_scalar }
+            | Self::DamageTakenFromSourceAmp { modifier_scalar }
             | Self::CastSpeed { modifier_scalar } => {
                 if !modifier_scalar.is_finite() || modifier_scalar <= 0.0 {
                     return Err(format!("{subject} {path}.modifier_scalar must be positive"));
@@ -2628,6 +2756,20 @@ impl StatusPayload {
                     || modifier_scalar > MAX_HEALING_TAKEN_REDUCTION
                 {
                     return Err(format!("{subject} {path}.modifier_scalar must be positive"));
+                }
+                Ok(())
+            }
+            Self::MagicResistance { modifier_scalar } => {
+                if !modifier_scalar.is_finite() || modifier_scalar <= 0.0 || modifier_scalar > 1.0 {
+                    return Err(format!(
+                        "{subject} {path}.modifier_scalar must be > 0 and <= 1"
+                    ));
+                }
+                Ok(())
+            }
+            Self::Thorns { damage } => {
+                if damage <= 0 {
+                    return Err(format!("{subject} {path}.tick_damage must be positive"));
                 }
                 Ok(())
             }
@@ -2664,6 +2806,7 @@ impl StatusPayload {
             | Self::Stagger
             | Self::Knockdown
             | Self::MoveSlowImmunity
+            | Self::VengeanceAura
             | Self::MeleeAttackModifier
             | Self::Berserking
             | Self::BattleTrance => true,
@@ -2675,6 +2818,9 @@ impl StatusPayload {
             Self::Hot { tick_heal, .. } => tick_heal > existing.tick_amount.max(0),
             Self::DamageAmp { modifier_scalar }
             | Self::DirectDamageAmp { modifier_scalar }
+            | Self::ManaRegen { modifier_scalar }
+            | Self::StaminaRegen { modifier_scalar }
+            | Self::DamageTakenFromSourceAmp { modifier_scalar }
             | Self::CastSpeed { modifier_scalar } => {
                 modifier_scalar > existing.modifier_scalar.max(0.0)
             }
@@ -2690,6 +2836,10 @@ impl StatusPayload {
                         .modifier_scalar
                         .clamp(0.0, MAX_HEALING_TAKEN_REDUCTION)
             }
+            Self::MagicResistance { modifier_scalar } => {
+                modifier_scalar > existing.modifier_scalar.clamp(0.0, 1.0)
+            }
+            Self::Thorns { damage } => damage > existing.tick_amount.max(0),
             Self::AttackSpeed { modifier_scalar } => {
                 modifier_scalar.abs() > existing.modifier_scalar.abs()
             }
@@ -3583,6 +3733,8 @@ fn apply_damage_to_player_state(
     }
     grant_primary_resource_for_damage_dealt(ctx, source, hp_damage, ctx.timestamp);
     apply_equipment_melee_steal(ctx, hit, hp_damage);
+    queue_thorns_damage_if_applicable(ctx, hit, temporary_modifiers, hp_damage);
+    queue_vengeance_mark_if_applicable(ctx, hit, hp_damage);
     if hp_damage > 0
         && DamageDelivery::from_wire(hit.damage_delivery.as_str()) == DamageDelivery::Direct
     {
@@ -3642,6 +3794,8 @@ fn apply_damage_to_npc_state(
     ctx.db.npc_state().identity().update(state);
     grant_primary_resource_for_damage_dealt(ctx, source, hp_damage, ctx.timestamp);
     apply_equipment_melee_steal(ctx, hit, hp_damage);
+    queue_thorns_damage_if_applicable(ctx, hit, temporary_modifiers, hp_damage);
+    queue_vengeance_mark_if_applicable(ctx, hit, hp_damage);
     if hp_damage > 0
         && DamageDelivery::from_wire(hit.damage_delivery.as_str()) == DamageDelivery::Direct
     {
@@ -3672,7 +3826,7 @@ fn resolve_damage_amount(
             * derived_combat_stats_for_owner(ctx, hit.source).damage_multiplier
             * equipment_damage_multiplier_for_hit(ctx, hit)
             * resistance_multiplier
-            * temporary_modifiers.damage_taken_multiplier_for(&hit.target)
+            * temporary_modifiers.damage_taken_multiplier_from_source_for(&hit.target, &hit.source)
     };
     resolve_effect_amount(
         ctx,
@@ -3693,7 +3847,103 @@ fn resistance_multiplier_for_damage_type(
     }
     let resistance = equipment_modifier_totals_for_owner(ctx, hit.target)
         .resistance_for_damage_type(&hit.damage_type);
-    (1.0 - resistance).max(0.0)
+    let status_resistance =
+        if DamageType::from_wire(hit.damage_type.as_str()) == DamageType::Physical {
+            0.0
+        } else {
+            temporary_modifiers.magic_resistance_for(&hit.target)
+        };
+    (1.0 - (resistance + status_resistance).clamp(0.0, 1.0)).max(0.0)
+}
+
+fn queue_thorns_damage_if_applicable(
+    ctx: &ReducerContext,
+    hit: &PendingHit,
+    temporary_modifiers: &TemporaryCombatModifiers,
+    hp_damage: i32,
+) {
+    if hp_damage <= 0
+        || hit.source == Identity::ZERO
+        || DamageDelivery::from_wire(hit.damage_delivery.as_str()) != DamageDelivery::Direct
+    {
+        return;
+    }
+    let amount = temporary_modifiers.thorns_damage_for(&hit.target);
+    if amount <= 0 {
+        return;
+    }
+
+    queue_effects(
+        ctx,
+        vec![EffectPacket::Damage {
+            amount,
+            damage_type: DamageType::Physical,
+            source: hit.target,
+            target: hit.source,
+            spell_id: format!("{}:thorns", hit.spell_id),
+            delivery: DamageDelivery::Periodic,
+            source_kind: DAMAGE_SOURCE_KIND_PERIODIC.to_string(),
+            direct_action_key: String::new(),
+        }],
+    );
+}
+
+fn queue_vengeance_mark_if_applicable(ctx: &ReducerContext, hit: &PendingHit, hp_damage: i32) {
+    if hp_damage <= 0
+        || hit.source == Identity::ZERO
+        || DamageDelivery::from_wire(hit.damage_delivery.as_str()) != DamageDelivery::Direct
+    {
+        return;
+    }
+
+    let aura_sources: HashSet<_> = ctx
+        .db
+        .status_effect()
+        .target()
+        .filter(hit.target)
+        .filter(|effect| {
+            effect.effect_kind == StatusEffectKind::VengeanceAura.as_str()
+                && effect.stack_group.starts_with(AURA_STACK_GROUP_PREFIX)
+                && ctx.timestamp < effect.expires_at
+                && effect.source != hit.source
+                && can_harm(ctx, effect.source, hit.source)
+        })
+        .map(|effect| effect.source)
+        .collect();
+
+    if aura_sources.is_empty() {
+        return;
+    }
+
+    queue_effects(
+        ctx,
+        aura_sources
+            .into_iter()
+            .map(|aura_source| EffectPacket::ApplyStatus {
+                source: aura_source,
+                target: hit.source,
+                spell_id: PALADIN_AURA_OF_VENGEANCE_MARK_SPELL_ID.to_string(),
+                payload: StatusPayload::DamageTakenFromSourceAmp {
+                    modifier_scalar: PALADIN_AURA_OF_VENGEANCE_MARK_SCALAR,
+                },
+                polarity: StatusPolarity::Debuff,
+                target_audience: TargetAudience::Hostile,
+                duration: PALADIN_AURA_OF_VENGEANCE_MARK_DURATION,
+                stack_group: vengeance_mark_stack_group(aura_source),
+                max_stacks: PALADIN_AURA_OF_VENGEANCE_MARK_MAX_STACKS,
+                stack_policy: StackPolicy::AddStackRefresh,
+                dispel_types: Vec::new(),
+            })
+            .collect(),
+    );
+}
+
+fn vengeance_mark_stack_group(aura_source: Identity) -> String {
+    format!(
+        "{}:{}",
+        PALADIN_AURA_OF_VENGEANCE_MARK_STACK_GROUP_PREFIX,
+        aura_source.to_hex()
+    )
 }
 
 fn equipment_damage_multiplier_for_hit(ctx: &ReducerContext, hit: &PendingHit) -> f32 {
@@ -4847,22 +5097,26 @@ impl MovementModifiers {
 
 #[derive(Clone, Debug)]
 struct StatusRuntimeEffect {
+    source: Identity,
     target: Identity,
     kind: StatusEffectKind,
     stack_group: String,
     stacks: u32,
     slow_pct: f32,
+    tick_amount: i32,
     modifier_scalar: f32,
 }
 
 impl StatusRuntimeEffect {
     fn from_status_effect(effect: StatusEffect) -> Option<Self> {
         Some(Self {
+            source: effect.source,
             target: effect.target,
             kind: StatusEffectKind::from_wire(effect.effect_kind.as_str())?,
             stack_group: effect.stack_group,
             stacks: effect.stacks,
             slow_pct: effect.slow_pct,
+            tick_amount: effect.tick_amount,
             modifier_scalar: effect.modifier_scalar,
         })
     }
@@ -5021,6 +5275,41 @@ impl StatusRuntimeView {
                         let entry = modifiers.cast_speed_by_target.entry(*target).or_insert(0.0);
                         *entry = (*entry).max(effect.modifier_scalar.max(0.0));
                     }
+                    StatusEffectKind::ManaRegen => {
+                        let entry = modifiers.mana_regen_by_target.entry(*target).or_insert(0.0);
+                        *entry += effect.modifier_scalar.max(0.0) * effect.stacks.max(1) as f32;
+                    }
+                    StatusEffectKind::StaminaRegen => {
+                        let entry = modifiers
+                            .stamina_regen_by_target
+                            .entry(*target)
+                            .or_insert(0.0);
+                        *entry += effect.modifier_scalar.max(0.0) * effect.stacks.max(1) as f32;
+                    }
+                    StatusEffectKind::MagicResistance => {
+                        let entry = modifiers
+                            .magic_resistance_by_target
+                            .entry(*target)
+                            .or_insert(0.0);
+                        *entry = (*entry).max(effect.modifier_scalar.max(0.0));
+                    }
+                    StatusEffectKind::Thorns => {
+                        let entry = modifiers
+                            .thorns_damage_by_target
+                            .entry(*target)
+                            .or_insert(0);
+                        *entry =
+                            (*entry).max(effect.tick_amount.max(0) * effect.stacks.max(1) as i32);
+                    }
+                    StatusEffectKind::DamageTakenFromSourceAmp => {
+                        let key = (*target, effect.source);
+                        let entry = modifiers
+                            .damage_taken_amp_by_target_and_source
+                            .entry(key)
+                            .or_insert(0.0);
+                        *entry = (*entry)
+                            .max(effect.modifier_scalar.max(0.0) * effect.stacks.max(1) as f32);
+                    }
                     StatusEffectKind::Berserking => {
                         modifiers.berserking.insert(*target);
                     }
@@ -5035,6 +5324,7 @@ impl StatusRuntimeView {
                     | StatusEffectKind::MoveSpeed
                     | StatusEffectKind::Dot
                     | StatusEffectKind::Hot
+                    | StatusEffectKind::VengeanceAura
                     | StatusEffectKind::MeleeAttackModifier
                     | StatusEffectKind::TemporaryHitpoints
                     | StatusEffectKind::BattleTrance => {}
@@ -5052,7 +5342,12 @@ pub struct TemporaryCombatModifiers {
     damage_amp_by_target: HashMap<Identity, f32>,
     direct_damage_amp_by_target: HashMap<Identity, f32>,
     damage_taken_reduction_by_target: HashMap<Identity, f32>,
+    damage_taken_amp_by_target_and_source: HashMap<(Identity, Identity), f32>,
     healing_taken_reduction_by_target: HashMap<Identity, f32>,
+    mana_regen_by_target: HashMap<Identity, f32>,
+    stamina_regen_by_target: HashMap<Identity, f32>,
+    magic_resistance_by_target: HashMap<Identity, f32>,
+    thorns_damage_by_target: HashMap<Identity, i32>,
     attack_speed_multiplier_by_target: HashMap<Identity, f32>,
     cast_speed_by_target: HashMap<Identity, f32>,
     berserking: HashSet<Identity>,
@@ -5092,6 +5387,20 @@ impl TemporaryCombatModifiers {
         1.0 - reduction
     }
 
+    pub fn damage_taken_multiplier_from_source_for(
+        &self,
+        identity: &Identity,
+        source: &Identity,
+    ) -> f32 {
+        let amp = self
+            .damage_taken_amp_by_target_and_source
+            .get(&(*identity, *source))
+            .copied()
+            .unwrap_or(0.0)
+            .max(0.0);
+        self.damage_taken_multiplier_for(identity) * (1.0 + amp)
+    }
+
     pub fn healing_taken_multiplier_for(&self, identity: &Identity) -> f32 {
         let reduction = self
             .healing_taken_reduction_by_target
@@ -5100,6 +5409,38 @@ impl TemporaryCombatModifiers {
             .unwrap_or(0.0)
             .clamp(0.0, MAX_HEALING_TAKEN_REDUCTION);
         1.0 - reduction
+    }
+
+    pub(crate) fn mana_regen_bonus_for(&self, identity: &Identity) -> f32 {
+        self.mana_regen_by_target
+            .get(identity)
+            .copied()
+            .unwrap_or(0.0)
+            .max(0.0)
+    }
+
+    pub(crate) fn stamina_regen_bonus_for(&self, identity: &Identity) -> f32 {
+        self.stamina_regen_by_target
+            .get(identity)
+            .copied()
+            .unwrap_or(0.0)
+            .max(0.0)
+    }
+
+    pub(crate) fn magic_resistance_for(&self, identity: &Identity) -> f32 {
+        self.magic_resistance_by_target
+            .get(identity)
+            .copied()
+            .unwrap_or(0.0)
+            .clamp(0.0, 1.0)
+    }
+
+    fn thorns_damage_for(&self, identity: &Identity) -> i32 {
+        self.thorns_damage_by_target
+            .get(identity)
+            .copied()
+            .unwrap_or(0)
+            .max(0)
     }
 
     #[allow(dead_code)]
@@ -5784,6 +6125,52 @@ mod tests {
                 },
             ),
             (
+                StatusPayload::ManaRegen {
+                    modifier_scalar: 2.0,
+                },
+                StatusEffectKind::ManaRegen,
+                StatusPayload::ManaRegen {
+                    modifier_scalar: 2.0,
+                },
+            ),
+            (
+                StatusPayload::StaminaRegen {
+                    modifier_scalar: 5.0,
+                },
+                StatusEffectKind::StaminaRegen,
+                StatusPayload::StaminaRegen {
+                    modifier_scalar: 5.0,
+                },
+            ),
+            (
+                StatusPayload::MagicResistance {
+                    modifier_scalar: 0.15,
+                },
+                StatusEffectKind::MagicResistance,
+                StatusPayload::MagicResistance {
+                    modifier_scalar: 0.15,
+                },
+            ),
+            (
+                StatusPayload::Thorns { damage: 3 },
+                StatusEffectKind::Thorns,
+                StatusPayload::Thorns { damage: 3 },
+            ),
+            (
+                StatusPayload::VengeanceAura,
+                StatusEffectKind::VengeanceAura,
+                StatusPayload::VengeanceAura,
+            ),
+            (
+                StatusPayload::DamageTakenFromSourceAmp {
+                    modifier_scalar: 0.02,
+                },
+                StatusEffectKind::DamageTakenFromSourceAmp,
+                StatusPayload::DamageTakenFromSourceAmp {
+                    modifier_scalar: 0.02,
+                },
+            ),
+            (
                 StatusPayload::AttackSpeed {
                     modifier_scalar: -0.30,
                 },
@@ -6281,6 +6668,9 @@ mod tests {
     fn status_runtime_view_temporary_combat_modifiers_match_existing_stacking_semantics() {
         let now = Timestamp::UNIX_EPOCH + Duration::from_secs(10);
         let target = test_identity_number(1);
+        let marked_target = test_identity_number(2);
+        let aura_source = test_identity_number(3);
+        let other_source = test_identity_number(4);
         let mut direct_amp = test_status_effect(
             target,
             StatusPayload::DirectDamageAmp {
@@ -6308,6 +6698,34 @@ mod tests {
             now + Duration::from_secs(5),
         );
         damage_taken_reduction.stacks = 2;
+        let mut mana_regen = test_status_effect(
+            target,
+            StatusPayload::ManaRegen {
+                modifier_scalar: 2.0,
+            },
+            now,
+            now + Duration::from_secs(5),
+        );
+        mana_regen.stacks = 2;
+        let mut stamina_regen = test_status_effect(
+            target,
+            StatusPayload::StaminaRegen {
+                modifier_scalar: 5.0,
+            },
+            now,
+            now + Duration::from_secs(5),
+        );
+        stamina_regen.stacks = 2;
+        let mut vengeance_mark = test_status_effect(
+            marked_target,
+            StatusPayload::DamageTakenFromSourceAmp {
+                modifier_scalar: 0.02,
+            },
+            now,
+            now + Duration::from_secs(5),
+        );
+        vengeance_mark.source = aura_source;
+        vengeance_mark.stacks = 5;
 
         let view = status_runtime_view(
             vec![
@@ -6330,6 +6748,36 @@ mod tests {
                 direct_amp,
                 damage_taken_reduction,
                 healing_reduction,
+                mana_regen,
+                stamina_regen,
+                test_status_effect(
+                    target,
+                    StatusPayload::MagicResistance {
+                        modifier_scalar: 0.15,
+                    },
+                    now,
+                    now + Duration::from_secs(5),
+                ),
+                test_status_effect(
+                    target,
+                    StatusPayload::MagicResistance {
+                        modifier_scalar: 0.10,
+                    },
+                    now,
+                    now + Duration::from_secs(5),
+                ),
+                test_status_effect(
+                    target,
+                    StatusPayload::Thorns { damage: 3 },
+                    now,
+                    now + Duration::from_secs(5),
+                ),
+                test_status_effect(
+                    target,
+                    StatusPayload::Thorns { damage: 2 },
+                    now,
+                    now + Duration::from_secs(5),
+                ),
                 test_status_effect(
                     target,
                     StatusPayload::AttackSpeed {
@@ -6376,8 +6824,9 @@ mod tests {
                     now,
                     now + Duration::from_secs(5),
                 ),
+                vengeance_mark,
             ],
-            &[target],
+            &[target, marked_target],
             now,
         );
         let modifiers = view.temporary_combat_modifiers();
@@ -6391,9 +6840,25 @@ mod tests {
                 < 0.0001
         );
         assert_eq!(modifiers.damage_taken_multiplier_for(&target), 0.0);
+        assert!(
+            (modifiers.damage_taken_multiplier_from_source_for(&marked_target, &aura_source)
+                - 1.10)
+                .abs()
+                < 0.0001
+        );
+        assert!(
+            (modifiers.damage_taken_multiplier_from_source_for(&marked_target, &other_source)
+                - 1.0)
+                .abs()
+                < 0.0001
+        );
         assert_eq!(modifiers.healing_taken_multiplier_for(&target), 0.0);
         assert!((modifiers.attack_speed_multiplier_for(&target) - 0.9625).abs() < 0.0001);
         assert!((modifiers.cast_speed_multiplier_for(&target) - 1.30).abs() < 0.0001);
+        assert!((modifiers.mana_regen_bonus_for(&target) - 4.0).abs() < 0.0001);
+        assert!((modifiers.stamina_regen_bonus_for(&target) - 10.0).abs() < 0.0001);
+        assert!((modifiers.magic_resistance_for(&target) - 0.15).abs() < 0.0001);
+        assert_eq!(modifiers.thorns_damage_for(&target), 3);
         assert_eq!(modifiers.crit_chance_override_for(&target), Some(1.0));
         assert!(modifiers.disables_equipment_defenses_for(&target));
     }

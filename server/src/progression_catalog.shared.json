@@ -1963,6 +1963,103 @@
       }
     },
     {
+      "ability_id": "PALADIN_REBUKE",
+      "combat_profile_id": "SWORD_AND_SHIELD",
+      "action_id": "SWORD_AND_SHIELD_FINISHER_1",
+      "display_name": "Rebuke",
+      "resource_kind": "STAMINA",
+      "resource_cost": 20,
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 50,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 30,
+        "applies_stagger": false,
+        "range": 2.5,
+        "cooldown_ms": 900,
+        "uses_global_cooldown": true,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET",
+        "melee_impact_effects": [
+          {
+            "kind": "APPLY_STATUS",
+            "status": {
+              "kind": "DOT",
+              "duration_ms": 6000,
+              "status_stack_group": "PALADIN_BRANDED",
+              "tick_damage": 4,
+              "damage_type": "HOLY",
+              "tick_interval_ms": 1000,
+              "dispel_types": [
+                "MAGIC"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "ability_id": "PALADIN_HALLOWED_THRUST",
+      "combat_profile_id": "SWORD_AND_SHIELD",
+      "action_id": "SWORD_AND_SHIELD_FINISHER_1",
+      "display_name": "Hallowed Thrust",
+      "resource_kind": "STAMINA",
+      "resource_cost": 20,
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 52,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 30,
+        "applies_stagger": false,
+        "range": 2.5,
+        "cooldown_ms": 900,
+        "uses_global_cooldown": true,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET"
+      }
+    },
+    {
+      "ability_id": "PALADIN_SERRATED_BLADES",
+      "combat_profile_id": "SWORD_AND_SHIELD",
+      "action_id": "SERRATED_BLADES",
+      "display_name": "Serrated Blades",
+      "resource_kind": "MANA",
+      "resource_cost": 0,
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 55,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 10000,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "SELF",
+        "requires_target": false,
+        "resource_cost": 0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "APPLY_STATUS",
+          "duration_ms": 10000,
+          "status_stack_group": "SERRATED_BLADES",
+          "polarity": "BUFF",
+          "status": {
+            "kind": "MELEE_ATTACK_MODIFIER",
+            "modifier_scalar": 0,
+            "max_stacks": 1,
+            "stack_policy": "REFRESH"
+          }
+        }
+      }
+    },
+    {
       "ability_id": "PALADIN_CHARGE",
       "combat_profile_id": "SWORD_AND_SHIELD",
       "action_id": "PALADIN_CHARGE",
@@ -2059,6 +2156,86 @@
       }
     },
     {
+      "ability_id": "PALADIN_AIR_TO_GROUND_1",
+      "combat_profile_id": "SWORD_AND_SHIELD",
+      "action_id": "AIR_TO_GROUND_1",
+      "display_name": "Lunging Strike",
+      "resource_kind": "STAMINA",
+      "resource_cost": 20,
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 170,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 30,
+        "applies_stagger": false,
+        "range": 18,
+        "minimum_range": 5,
+        "cooldown_ms": 1600,
+        "uses_global_cooldown": true,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET",
+        "gap_close": {
+          "kind": "LINEAR",
+          "destination": "NEAREST_CONTACT_POINT",
+          "speed": 23,
+          "arrival_buffer": 1.44,
+          "arrival_epsilon": 0.05,
+          "impact_range": 2.5,
+          "collision_policy": "STOP_AT_BLOCK",
+          "require_arrival_for_swing": true,
+          "requires_target_facing": false
+        }
+      }
+    },
+    {
+      "ability_id": "PALADIN_AIR_TO_GROUND_3",
+      "combat_profile_id": "SWORD_AND_SHIELD",
+      "action_id": "AIR_TO_GROUND_3",
+      "display_name": "Shield Slam",
+      "resource_kind": "STAMINA",
+      "resource_cost": 20,
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 172,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 30,
+        "applies_stagger": false,
+        "range": 18,
+        "minimum_range": 0,
+        "cooldown_ms": 1600,
+        "uses_global_cooldown": true,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET",
+        "gap_close": {
+          "kind": "LINEAR",
+          "destination": "NEAREST_CONTACT_POINT",
+          "speed": 23,
+          "arrival_buffer": 1.44,
+          "arrival_epsilon": 0.05,
+          "impact_range": 2.5,
+          "collision_policy": "STOP_AT_BLOCK",
+          "require_arrival_for_swing": true,
+          "requires_target_facing": false
+        },
+        "melee_impact_effects": [
+          {
+            "kind": "APPLY_STATUS",
+            "status": {
+              "kind": "STUN",
+              "duration_ms": 3000,
+              "status_stack_group": "PALADIN_SHIELD_SLAM_STUN"
+            }
+          }
+        ]
+      }
+    },
+    {
       "ability_id": "PALADIN_CONSECRATE",
       "combat_profile_id": "SWORD_AND_SHIELD",
       "action_id": "CONSECRATE",
@@ -2077,7 +2254,7 @@
         "targeting": "POINT",
         "requires_target": false,
         "aim_radius": 3.4,
-        "resource_cost": 1,
+        "resource_cost": 0,
         "arms_auto_attack_on_cast": false,
         "delivery": {
           "kind": "AREA",
@@ -2117,7 +2294,7 @@
         "targeting": "TARGET",
         "target_audience": "PARTY_OR_SELF",
         "requires_target": false,
-        "resource_cost": 1,
+        "resource_cost": 0,
         "arms_auto_attack_on_cast": false,
         "delivery": {
           "kind": "REMOVE_STATUS",
@@ -2149,7 +2326,7 @@
         "targeting": "TARGET",
         "target_audience": "PARTY_OR_SELF",
         "requires_target": false,
-        "resource_cost": 1,
+        "resource_cost": 0,
         "arms_auto_attack_on_cast": false,
         "delivery": {
           "kind": "REMOVE_STATUS",
@@ -2181,7 +2358,7 @@
         "targeting": "SELF",
         "target_audience": "PARTY_OR_SELF",
         "requires_target": false,
-        "resource_cost": 1,
+        "resource_cost": 0,
         "arms_auto_attack_on_cast": false,
         "delivery": {
           "kind": "AURA",
@@ -2193,6 +2370,185 @@
               "duration_ms": 750,
               "modifier_scalar": 0.1,
               "status_stack_group": "PALADIN_FERVOR_MOVE_SPEED"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "ability_id": "PALADIN_MANA_FONT",
+      "combat_profile_id": "SWORD_AND_SHIELD",
+      "action_id": "MANA_FONT",
+      "display_name": "Mana Font",
+      "resource_kind": "MANA",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 160,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 1200,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "SELF",
+        "target_audience": "PARTY_OR_SELF",
+        "requires_target": false,
+        "resource_cost": 0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "AURA",
+          "radius": 20,
+          "tick_interval_ms": 250,
+          "effects": [
+            {
+              "kind": "MANA_REGEN",
+              "duration_ms": 750,
+              "modifier_scalar": 2,
+              "status_stack_group": "PALADIN_MANA_FONT_MANA_REGEN"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "ability_id": "PALADIN_STAMINA_FONT",
+      "combat_profile_id": "SWORD_AND_SHIELD",
+      "action_id": "STAMINA_FONT",
+      "display_name": "Stamina Font",
+      "resource_kind": "MANA",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 161,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 1200,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "SELF",
+        "target_audience": "PARTY_OR_SELF",
+        "requires_target": false,
+        "resource_cost": 0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "AURA",
+          "radius": 20,
+          "tick_interval_ms": 250,
+          "effects": [
+            {
+              "kind": "STAMINA_REGEN",
+              "duration_ms": 750,
+              "modifier_scalar": 5,
+              "status_stack_group": "PALADIN_STAMINA_FONT_STAMINA_REGEN"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "ability_id": "PALADIN_THORNS_AURA",
+      "combat_profile_id": "SWORD_AND_SHIELD",
+      "action_id": "THORNS_AURA",
+      "display_name": "Thorns Aura",
+      "resource_kind": "MANA",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 162,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 1200,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "SELF",
+        "target_audience": "PARTY_OR_SELF",
+        "requires_target": false,
+        "resource_cost": 0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "AURA",
+          "radius": 20,
+          "tick_interval_ms": 250,
+          "effects": [
+            {
+              "kind": "THORNS",
+              "duration_ms": 750,
+              "tick_damage": 3,
+              "status_stack_group": "PALADIN_THORNS_AURA_THORNS"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "ability_id": "PALADIN_WARDING_AURA",
+      "combat_profile_id": "SWORD_AND_SHIELD",
+      "action_id": "WARDING_AURA",
+      "display_name": "Warding Aura",
+      "resource_kind": "MANA",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 163,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 1200,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "SELF",
+        "target_audience": "PARTY_OR_SELF",
+        "requires_target": false,
+        "resource_cost": 0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "AURA",
+          "radius": 20,
+          "tick_interval_ms": 250,
+          "effects": [
+            {
+              "kind": "MAGIC_RESISTANCE",
+              "duration_ms": 750,
+              "modifier_scalar": 0.15,
+              "status_stack_group": "PALADIN_WARDING_AURA_MAGIC_RESISTANCE"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "ability_id": "PALADIN_AURA_OF_VENGEANCE",
+      "combat_profile_id": "SWORD_AND_SHIELD",
+      "action_id": "AURA_OF_VENGEANCE",
+      "display_name": "Aura of Vengeance",
+      "resource_kind": "MANA",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 164,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 1200,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "SELF",
+        "target_audience": "PARTY_OR_SELF",
+        "requires_target": false,
+        "resource_cost": 0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "AURA",
+          "radius": 20,
+          "tick_interval_ms": 250,
+          "effects": [
+            {
+              "kind": "VENGEANCE_AURA",
+              "duration_ms": 750,
+              "status_stack_group": "PALADIN_AURA_OF_VENGEANCE"
             }
           ]
         }
@@ -2509,7 +2865,7 @@
       "action_id": "AUTO_ATTACK_1",
       "base_damage": 25,
       "range": 2.5,
-      "cooldown_ms": 2000,
+      "cooldown_ms": 2500,
       "movement_policy": "ALLOW_MOVING",
       "uses_global_cooldown": false,
       "parry_behavior": "PARRYABLE",
@@ -2956,6 +3312,27 @@
     },
     {
       "presentation_kind": "ABILITY",
+      "presentation_id": "PALADIN_REBUKE",
+      "display_name": "Rebuke",
+      "description": "Strikes the target and brands them with holy damage over time.",
+      "sort_order": 145
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "PALADIN_HALLOWED_THRUST",
+      "display_name": "Hallowed Thrust",
+      "description": "Thrusts with holy purpose, generating mana against branded targets.",
+      "sort_order": 146
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "PALADIN_SERRATED_BLADES",
+      "display_name": "Serrated Blades",
+      "description": "For 10s, melee attacks apply a stacking bleed for 10% of the damage dealt.",
+      "sort_order": 147
+    },
+    {
+      "presentation_kind": "ABILITY",
       "presentation_id": "PALADIN_CHARGE",
       "display_name": "Charge",
       "description": "Rushes to the target.",
@@ -2967,6 +3344,20 @@
       "display_name": "Avenge",
       "description": "Rushes to the target.",
       "sort_order": 155
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "PALADIN_AIR_TO_GROUND_1",
+      "display_name": "Lunging Strike",
+      "description": "Lunges to the target with an authored SwordAndShield strike.",
+      "sort_order": 170
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "PALADIN_AIR_TO_GROUND_3",
+      "display_name": "Shield Slam",
+      "description": "Lunges to the target and slams them with a shield stun.",
+      "sort_order": 172
     },
     {
       "presentation_kind": "ABILITY",
@@ -2995,6 +3386,41 @@
       "display_name": "Fervor",
       "description": "Increases nearby party movement speed by 10%.",
       "sort_order": 159
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "PALADIN_MANA_FONT",
+      "display_name": "Mana Font",
+      "description": "Increases mana regeneration for the wielder and nearby party members.",
+      "sort_order": 160
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "PALADIN_STAMINA_FONT",
+      "display_name": "Stamina Font",
+      "description": "Increases stamina regeneration for the wielder and nearby party members.",
+      "sort_order": 161
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "PALADIN_THORNS_AURA",
+      "display_name": "Thorns Aura",
+      "description": "Reflects damage to direct attackers against the wielder and nearby party members.",
+      "sort_order": 162
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "PALADIN_WARDING_AURA",
+      "display_name": "Warding Aura",
+      "description": "Increases magic resistance for the wielder and nearby party members.",
+      "sort_order": 163
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "PALADIN_AURA_OF_VENGEANCE",
+      "display_name": "Aura of Vengeance",
+      "description": "Marks enemies who attack nearby friendly targets, increasing damage they take from the wielder.",
+      "sort_order": 164
     },
     {
       "presentation_kind": "ABILITY",
@@ -3145,24 +3571,80 @@
     },
     {
       "presentation_kind": "STATUS",
+      "presentation_id": "PALADIN_BRANDED",
+      "display_name": "Branded",
+      "description": "Takes holy damage over time.",
+      "sort_order": 10047
+    },
+    {
+      "presentation_kind": "STATUS",
+      "presentation_id": "SERRATED_BLADES",
+      "display_name": "Serrated Blades",
+      "description": "Melee attacks apply stacking bleeds.",
+      "sort_order": 10048
+    },
+    {
+      "presentation_kind": "STATUS",
+      "presentation_id": "PALADIN_MANA_FONT_MANA_REGEN",
+      "display_name": "Mana Font",
+      "description": "Mana regeneration is increased.",
+      "sort_order": 10049
+    },
+    {
+      "presentation_kind": "STATUS",
+      "presentation_id": "PALADIN_STAMINA_FONT_STAMINA_REGEN",
+      "display_name": "Stamina Font",
+      "description": "Stamina regeneration is increased.",
+      "sort_order": 10050
+    },
+    {
+      "presentation_kind": "STATUS",
+      "presentation_id": "PALADIN_THORNS_AURA_THORNS",
+      "display_name": "Thorns",
+      "description": "Direct attackers take thorns damage.",
+      "sort_order": 10051
+    },
+    {
+      "presentation_kind": "STATUS",
+      "presentation_id": "PALADIN_WARDING_AURA_MAGIC_RESISTANCE",
+      "display_name": "Warding Aura",
+      "description": "Magic resistance is increased.",
+      "sort_order": 10052
+    },
+    {
+      "presentation_kind": "STATUS",
+      "presentation_id": "PALADIN_AURA_OF_VENGEANCE",
+      "display_name": "Aura of Vengeance",
+      "description": "Enemies who attack this target are marked for vengeance.",
+      "sort_order": 10053
+    },
+    {
+      "presentation_kind": "STATUS",
+      "presentation_id": "DAMAGE_TAKEN_FROM_SOURCE_AMP",
+      "display_name": "Vengeance",
+      "description": "Damage taken from the aura source is increased.",
+      "sort_order": 10054
+    },
+    {
+      "presentation_kind": "STATUS",
       "presentation_id": "ROOT",
       "display_name": "Rooted",
       "description": "Unable to move.",
-      "sort_order": 10050
+      "sort_order": 10055
     },
     {
       "presentation_kind": "STATUS",
       "presentation_id": "FREEZE",
       "display_name": "Frozen",
       "description": "Frozen solid and unable to move or act.",
-      "sort_order": 10055
+      "sort_order": 10060
     },
     {
       "presentation_kind": "STATUS",
       "presentation_id": "STUN",
       "display_name": "Stunned",
       "description": "Unable to move or act.",
-      "sort_order": 10060
+      "sort_order": 10065
     },
     {
       "presentation_kind": "STATUS",
@@ -3730,6 +4212,66 @@
       "combat_profile_id": "SWORD_AND_SHIELD",
       "ability_id": "PALADIN_AVENGE",
       "sort_order": 165
+    },
+    {
+      "slot_id": "slot_1_2",
+      "combat_profile_id": "SWORD_AND_SHIELD",
+      "ability_id": "PALADIN_REBUKE",
+      "sort_order": 166
+    },
+    {
+      "slot_id": "slot_0_4",
+      "combat_profile_id": "SWORD_AND_SHIELD",
+      "ability_id": "PALADIN_HALLOWED_THRUST",
+      "sort_order": 167
+    },
+    {
+      "slot_id": "slot_1_5",
+      "combat_profile_id": "SWORD_AND_SHIELD",
+      "ability_id": "PALADIN_AIR_TO_GROUND_1",
+      "sort_order": 170
+    },
+    {
+      "slot_id": "slot_1_4",
+      "combat_profile_id": "SWORD_AND_SHIELD",
+      "ability_id": "PALADIN_AIR_TO_GROUND_3",
+      "sort_order": 172
+    },
+    {
+      "slot_id": "slot_0_5",
+      "combat_profile_id": "SWORD_AND_SHIELD",
+      "ability_id": "PALADIN_FERVOR",
+      "sort_order": 180
+    },
+    {
+      "slot_id": "slot_0_6",
+      "combat_profile_id": "SWORD_AND_SHIELD",
+      "ability_id": "PALADIN_MANA_FONT",
+      "sort_order": 181
+    },
+    {
+      "slot_id": "slot_0_7",
+      "combat_profile_id": "SWORD_AND_SHIELD",
+      "ability_id": "PALADIN_STAMINA_FONT",
+      "sort_order": 182
+    },
+    {
+      "slot_id": "slot_0_8",
+      "combat_profile_id": "SWORD_AND_SHIELD",
+      "ability_id": "PALADIN_THORNS_AURA",
+      "sort_order": 183
+    },
+    {
+      "slot_id": "slot_1_0",
+      "combat_profile_id": "SWORD_AND_SHIELD",
+      "ability_id": "PALADIN_WARDING_AURA",
+      "sort_order": 184
+    },
+    {
+      "slot_id": "slot_1_6",
+      "combat_profile_id": "SWORD_AND_SHIELD",
+      "ability_id": "PALADIN_AURA_OF_VENGEANCE",
+      "sort_order": 185
     },
     {
       "slot_id": "slot_0_0",

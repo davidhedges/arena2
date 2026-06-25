@@ -70,8 +70,7 @@ const RULE_DEFAULT_GLOBAL_COOLDOWN_MS: &str = "DEFAULT_GLOBAL_COOLDOWN_MS";
 const FALLBACK_DEFAULT_GLOBAL_COOLDOWN_MS: u64 = 1500;
 const MAX_DEFAULT_GLOBAL_COOLDOWN_MS: u64 = 60_000;
 pub(crate) const COMBAT_PROFILE_ARCHER_BOW: &str = "ARCHER_BOW";
-#[cfg(test)]
-const COMBAT_PROFILE_SWORD_AND_SHIELD: &str = "SWORD_AND_SHIELD";
+pub(crate) const COMBAT_PROFILE_SWORD_AND_SHIELD: &str = "SWORD_AND_SHIELD";
 pub(crate) const COMBAT_PROFILE_TWO_HANDED_SWORD: &str = "TWO_HANDED_SWORD";
 pub(crate) const DISCIPLINE_SUBTLETY: &str = "SUBTLETY";
 pub(crate) const DISCIPLINE_WAR: &str = "WAR";
@@ -581,6 +580,14 @@ fn authored_status_stack_group_default(kind: &str) -> StatusStackGroupDefault {
         "HEALING_TAKEN_REDUCTION" => {
             StatusStackGroupDefault::ActionSuffix("HEALING_TAKEN_REDUCTION")
         }
+        "MANA_REGEN" => StatusStackGroupDefault::ActionSuffix("MANA_REGEN"),
+        "STAMINA_REGEN" => StatusStackGroupDefault::ActionSuffix("STAMINA_REGEN"),
+        "MAGIC_RESISTANCE" => StatusStackGroupDefault::ActionSuffix("MAGIC_RESISTANCE"),
+        "THORNS" => StatusStackGroupDefault::ActionSuffix("THORNS"),
+        "VENGEANCE_AURA" => StatusStackGroupDefault::ActionSuffix("VENGEANCE_AURA"),
+        "DAMAGE_TAKEN_FROM_SOURCE_AMP" => {
+            StatusStackGroupDefault::ActionSuffix("DAMAGE_TAKEN_FROM_SOURCE_AMP")
+        }
         "MELEE_ATTACK_MODIFIER" => StatusStackGroupDefault::ActionSuffix("MELEE_ATTACK_MODIFIER"),
         "ATTACK_SPEED" => StatusStackGroupDefault::ActionSuffix("ATTACK_SPEED"),
         "CAST_SPEED" => StatusStackGroupDefault::ActionSuffix("CAST_SPEED"),
@@ -1024,6 +1031,12 @@ fn known_status_kind_ids() -> HashSet<String> {
         StatusEffectKind::DirectDamageAmp,
         StatusEffectKind::DamageTakenReduction,
         StatusEffectKind::HealingTakenReduction,
+        StatusEffectKind::ManaRegen,
+        StatusEffectKind::StaminaRegen,
+        StatusEffectKind::MagicResistance,
+        StatusEffectKind::Thorns,
+        StatusEffectKind::VengeanceAura,
+        StatusEffectKind::DamageTakenFromSourceAmp,
         StatusEffectKind::MeleeAttackModifier,
         StatusEffectKind::AttackSpeed,
         StatusEffectKind::CastSpeed,
@@ -3460,6 +3473,123 @@ fn ensure_default_action_bar_assignments_for_scope(
     }
 
     inserted
+}
+
+const SWORD_AND_SHIELD_AURA_DEFAULT_ABILITY_IDS: &[&str] = &[
+    "PALADIN_FERVOR",
+    "PALADIN_MANA_FONT",
+    "PALADIN_STAMINA_FONT",
+    "PALADIN_THORNS_AURA",
+    "PALADIN_WARDING_AURA",
+    "PALADIN_AURA_OF_VENGEANCE",
+];
+
+pub(crate) fn backfill_sword_and_shield_aura_action_bar_rows(ctx: &ReducerContext) -> usize {
+    let players: Vec<Player> = ctx.db.player().iter().collect();
+    let mut inserted = 0usize;
+
+    for player in players {
+        let is_dummy = ctx
+            .db
+            .player_state()
+            .player_id()
+            .find(player.identity)
+            .map(|state| state.is_dummy)
+            .unwrap_or(false);
+        if is_dummy {
+            continue;
+        }
+        if derived_combat_profile_id_for_owner(ctx, player.identity).as_deref()
+            != Some(COMBAT_PROFILE_SWORD_AND_SHIELD)
+        {
+            continue;
+        }
+        inserted = inserted.saturating_add(ensure_sword_and_shield_aura_defaults_for_owner(
+            ctx,
+            player.identity,
+            ctx.timestamp,
+        ));
+    }
+
+    inserted
+}
+
+fn ensure_sword_and_shield_aura_defaults_for_owner(
+    ctx: &ReducerContext,
+    owner: Identity,
+    now: Timestamp,
+) -> usize {
+    let mut inserted = 0usize;
+    for assignment in action_bar_defaults_for_profile(COMBAT_PROFILE_SWORD_AND_SHIELD) {
+        let ability_id = normalize_identifier(assignment.ability_id.as_str());
+        if !SWORD_AND_SHIELD_AURA_DEFAULT_ABILITY_IDS.contains(&ability_id.as_str()) {
+            continue;
+        }
+        if character_action_bar_has_ability(
+            ctx,
+            owner,
+            COMBAT_PROFILE_SWORD_AND_SHIELD,
+            ability_id.as_str(),
+        ) {
+            continue;
+        }
+
+        let slot_id = canonical_action_bar_slot_id(assignment.slot_id.as_str());
+        let key =
+            character_action_bar_key(owner, COMBAT_PROFILE_SWORD_AND_SHIELD, slot_id.as_str());
+        if ctx
+            .db
+            .character_action_bar_assignment()
+            .key()
+            .find(key)
+            .is_some()
+        {
+            continue;
+        }
+
+        let action_ref = action_ref_for_action_bar_default(assignment);
+        if validate_character_action_bar_ref(
+            ctx,
+            owner,
+            COMBAT_PROFILE_SWORD_AND_SHIELD,
+            slot_id.as_str(),
+            &action_ref,
+        )
+        .is_err()
+        {
+            continue;
+        }
+
+        upsert_character_action_bar_assignment(
+            ctx,
+            owner,
+            COMBAT_PROFILE_SWORD_AND_SHIELD,
+            slot_id.as_str(),
+            &action_ref,
+            now,
+        );
+        inserted = inserted.saturating_add(1);
+    }
+
+    inserted
+}
+
+fn character_action_bar_has_ability(
+    ctx: &ReducerContext,
+    owner: Identity,
+    combat_profile_id: &str,
+    ability_id: &str,
+) -> bool {
+    let combat_profile_id = normalize_identifier(combat_profile_id);
+    let ability_id = normalize_identifier(ability_id);
+    ctx.db
+        .character_action_bar_assignment()
+        .owner()
+        .filter(owner)
+        .any(|assignment| {
+            assignment.combat_profile_id == combat_profile_id
+                && action_ref_for_character_action_bar_assignment(&assignment).id == ability_id
+        })
 }
 
 fn character_action_bar_key(owner: Identity, combat_profile_id: &str, slot_id: &str) -> String {
@@ -7171,6 +7301,238 @@ mod tests {
     }
 
     #[test]
+    fn paladin_lunging_strike_and_shield_slam_use_authored_gap_closer_strikes() {
+        let catalog = progression_catalog();
+        let expected = [
+            (
+                "PALADIN_AIR_TO_GROUND_1",
+                "AIR_TO_GROUND_1",
+                "Lunging Strike",
+                "SLOT_1_5",
+                5.0,
+            ),
+            (
+                "PALADIN_AIR_TO_GROUND_3",
+                "AIR_TO_GROUND_3",
+                "Shield Slam",
+                "SLOT_1_4",
+                0.0,
+            ),
+        ];
+
+        for (ability_id, action_id, display_name, slot_id, minimum_range) in expected {
+            let ability = catalog
+                .abilities
+                .iter()
+                .find(|ability| ability.ability_id == ability_id)
+                .unwrap_or_else(|| panic!("{ability_id} must exist"));
+
+            assert_eq!(
+                normalize_identifier(ability.combat_profile_id.as_str()),
+                COMBAT_PROFILE_SWORD_AND_SHIELD
+            );
+            assert_eq!(ability.action_id, action_id);
+            assert_eq!(ability.display_name, display_name);
+            assert_eq!(ability_gameplay_kind(ability), "MELEE");
+            assert_eq!(ability.gameplay.range, Some(18.0));
+            assert_eq!(ability.gameplay.minimum_range, Some(minimum_range));
+            let gap_close = ability
+                .gameplay
+                .gap_close
+                .as_ref()
+                .expect("active air-to-ground attacks must author gap_close");
+            assert_eq!(normalize_identifier(gap_close.kind.as_str()), "LINEAR");
+            assert_eq!(
+                normalize_identifier(gap_close.destination.as_str()),
+                "NEAREST_CONTACT_POINT"
+            );
+            assert_eq!(gap_close.speed, Some(23.0));
+            assert_eq!(gap_close.arrival_buffer, 1.44);
+            assert_eq!(gap_close.arrival_epsilon, 0.05);
+            assert_eq!(gap_close.impact_range, 2.5);
+            assert_eq!(
+                normalize_identifier(gap_close.collision_policy.as_str()),
+                "STOP_AT_BLOCK"
+            );
+            assert!(gap_close.require_arrival_for_swing);
+            assert!(!gap_close.requires_target_facing);
+            assert!(profile_supports_action_reference(
+                COMBAT_PROFILE_SWORD_AND_SHIELD,
+                &AuthoredActionId::new(action_id)
+            ));
+            assert!(catalog
+                .combat_profile_action_bar_defaults
+                .iter()
+                .any(|assignment| {
+                    normalize_identifier(assignment.combat_profile_id.as_str())
+                        == COMBAT_PROFILE_SWORD_AND_SHIELD
+                        && normalize_identifier(assignment.ability_id.as_str()) == ability_id
+                        && canonical_action_bar_slot_id(assignment.slot_id.as_str()) == slot_id
+                }));
+        }
+
+        assert!(catalog
+            .abilities
+            .iter()
+            .all(|ability| ability.ability_id != "PALADIN_AIR_TO_GROUND_2"));
+        assert!(catalog
+            .combat_profile_action_bar_defaults
+            .iter()
+            .all(|assignment| assignment.ability_id != "PALADIN_AIR_TO_GROUND_2"));
+        assert_eq!(
+            melee_impact_effects_for_ability_id("PALADIN_AIR_TO_GROUND_3"),
+            vec![MeleeImpactEffectRuntime::ApplyStatus {
+                status: StatusApplication::new(
+                    StatusPayload::Stun,
+                    std::time::Duration::from_millis(3000),
+                    Some("PALADIN_SHIELD_SLAM_STUN".to_string()),
+                    StatusStackGroupDefault::ActionSuffix("STUN"),
+                    1,
+                    StackPolicy::Refresh,
+                ),
+            }]
+        );
+    }
+
+    #[test]
+    fn paladin_rebuke_uses_finisher_1_and_applies_branded_holy_dot() {
+        let catalog = progression_catalog();
+        let ability = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "PALADIN_REBUKE")
+            .expect("PALADIN_REBUKE must exist");
+
+        assert_eq!(
+            normalize_identifier(ability.combat_profile_id.as_str()),
+            COMBAT_PROFILE_SWORD_AND_SHIELD
+        );
+        assert_eq!(ability.action_id, "SWORD_AND_SHIELD_FINISHER_1");
+        assert_eq!(ability.display_name, "Rebuke");
+        assert_eq!(ability_gameplay_kind(ability), "MELEE");
+        assert!(profile_supports_action_reference(
+            COMBAT_PROFILE_SWORD_AND_SHIELD,
+            &AuthoredActionId::new("SWORD_AND_SHIELD_FINISHER_1")
+        ));
+        assert!(catalog
+            .combat_profile_action_bar_defaults
+            .iter()
+            .any(|assignment| {
+                normalize_identifier(assignment.combat_profile_id.as_str())
+                    == COMBAT_PROFILE_SWORD_AND_SHIELD
+                    && normalize_identifier(assignment.ability_id.as_str()) == "PALADIN_REBUKE"
+                    && canonical_action_bar_slot_id(assignment.slot_id.as_str()) == "SLOT_1_2"
+            }));
+        assert_eq!(
+            melee_impact_effects_for_ability_id("PALADIN_REBUKE"),
+            vec![MeleeImpactEffectRuntime::ApplyStatus {
+                status: StatusApplication::new(
+                    StatusPayload::Dot {
+                        tick_damage: 4,
+                        damage_type: crate::combat::DamageType::Holy,
+                        tick_interval: Duration::from_secs(1),
+                    },
+                    Duration::from_millis(6000),
+                    Some("PALADIN_BRANDED".to_string()),
+                    StatusStackGroupDefault::InstanceScopedActionSuffix("DOT"),
+                    1,
+                    StackPolicy::Refresh,
+                )
+                .with_dispel_types(vec![StatusDispelType::Magic]),
+            }]
+        );
+    }
+
+    #[test]
+    fn paladin_hallowed_thrust_uses_finisher_1_and_default_slot() {
+        let catalog = progression_catalog();
+        let ability = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "PALADIN_HALLOWED_THRUST")
+            .expect("PALADIN_HALLOWED_THRUST must exist");
+
+        assert_eq!(
+            normalize_identifier(ability.combat_profile_id.as_str()),
+            COMBAT_PROFILE_SWORD_AND_SHIELD
+        );
+        assert_eq!(ability.action_id, "SWORD_AND_SHIELD_FINISHER_1");
+        assert_eq!(ability.display_name, "Hallowed Thrust");
+        assert_eq!(ability_gameplay_kind(ability), "MELEE");
+        assert_eq!(ability.resource_cost, 20.0);
+        assert!(profile_supports_action_reference(
+            COMBAT_PROFILE_SWORD_AND_SHIELD,
+            &AuthoredActionId::new("SWORD_AND_SHIELD_FINISHER_1")
+        ));
+        assert!(catalog
+            .combat_profile_action_bar_defaults
+            .iter()
+            .any(|assignment| {
+                normalize_identifier(assignment.combat_profile_id.as_str())
+                    == COMBAT_PROFILE_SWORD_AND_SHIELD
+                    && normalize_identifier(assignment.ability_id.as_str())
+                        == "PALADIN_HALLOWED_THRUST"
+                    && canonical_action_bar_slot_id(assignment.slot_id.as_str()) == "SLOT_0_4"
+            }));
+    }
+
+    #[test]
+    fn paladin_serrated_blades_authors_melee_bleed_modifier_buff() {
+        let catalog = progression_catalog();
+        let ability = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "PALADIN_SERRATED_BLADES")
+            .expect("PALADIN_SERRATED_BLADES must exist");
+
+        assert_eq!(
+            normalize_identifier(ability.combat_profile_id.as_str()),
+            COMBAT_PROFILE_SWORD_AND_SHIELD
+        );
+        assert_eq!(ability.action_id, "SERRATED_BLADES");
+        assert_eq!(ability.display_name, "Serrated Blades");
+        assert_eq!(ability_gameplay_kind(ability), "SPELL");
+        assert_eq!(ability.gameplay.resource_cost, Some(0.0));
+        assert_eq!(
+            normalize_identifier(ability.gameplay.targeting.as_str()),
+            "SELF"
+        );
+        assert!(!catalog
+            .combat_profile_action_bar_defaults
+            .iter()
+            .any(|assignment| {
+                normalize_identifier(assignment.combat_profile_id.as_str())
+                    == COMBAT_PROFILE_SWORD_AND_SHIELD
+                    && normalize_identifier(assignment.ability_id.as_str())
+                        == "PALADIN_SERRATED_BLADES"
+            }));
+
+        let definition =
+            spell_definition_by_str("SERRATED_BLADES").expect("Serrated Blades spell definition");
+        assert_eq!(
+            definition.behavior,
+            crate::spells::SpellBehavior::ApplyStatus
+        );
+        let status = definition
+            .apply_status
+            .as_ref()
+            .expect("Serrated Blades should apply a status");
+        assert_eq!(status.payload(), StatusPayload::MeleeAttackModifier);
+        assert!((definition.duration - 10.0).abs() < 0.0001);
+        assert_eq!(
+            definition.status_stack_group.as_deref(),
+            Some("SERRATED_BLADES")
+        );
+        assert_eq!(
+            definition.apply_status_polarity,
+            Some(crate::combat::StatusPolarity::Buff)
+        );
+        assert_eq!(status.max_stacks, 1);
+        assert_eq!(status.stack_policy, StackPolicy::Refresh);
+        assert!(status.dispel_types.is_empty());
+    }
+
+    #[test]
     fn paladin_fervor_authors_castable_move_speed_aura() {
         let catalog = progression_catalog();
         let ability = catalog
@@ -7193,8 +7555,10 @@ mod tests {
             normalize_optional_target_audience(ability.gameplay.target_audience.as_str()),
             "PARTY_OR_SELF"
         );
+        assert_eq!(ability.gameplay.resource_cost, Some(0.0));
         let definition =
             spell_definition_by_str(ability.action_id.as_str()).expect("Fervor spell definition");
+        assert_eq!(definition.primary_resource_cost, 0.0);
         assert_eq!(definition.behavior, crate::spells::SpellBehavior::Aura);
         assert_eq!(definition.radius, 20.0);
         assert_eq!(definition.target_audience.as_str(), "PARTY_OR_SELF");
@@ -7215,14 +7579,132 @@ mod tests {
         );
         assert_eq!(effect.duration(), std::time::Duration::from_millis(750));
         assert!(effect.dispel_types().is_empty());
-        assert!(!catalog
+        let default_assignment = catalog
             .combat_profile_action_bar_defaults
             .iter()
-            .any(|assignment| {
+            .find(|assignment| {
                 normalize_identifier(assignment.combat_profile_id.as_str())
                     == COMBAT_PROFILE_SWORD_AND_SHIELD
                     && normalize_identifier(assignment.ability_id.as_str()) == "PALADIN_FERVOR"
-            }));
+            })
+            .expect("Fervor should appear on the SwordAndShield default action bar");
+        assert_eq!(
+            normalize_identifier(default_assignment.slot_id.as_str()),
+            "SLOT_0_5"
+        );
+    }
+
+    #[test]
+    fn paladin_resource_thorns_and_warding_auras_author_party_effects() {
+        let catalog = progression_catalog();
+        let expected = [
+            (
+                "PALADIN_MANA_FONT",
+                "MANA_FONT",
+                "Mana Font",
+                StatusPayload::ManaRegen {
+                    modifier_scalar: 2.0,
+                },
+                "PALADIN_MANA_FONT_MANA_REGEN",
+                "SLOT_0_6",
+            ),
+            (
+                "PALADIN_STAMINA_FONT",
+                "STAMINA_FONT",
+                "Stamina Font",
+                StatusPayload::StaminaRegen {
+                    modifier_scalar: 5.0,
+                },
+                "PALADIN_STAMINA_FONT_STAMINA_REGEN",
+                "SLOT_0_7",
+            ),
+            (
+                "PALADIN_THORNS_AURA",
+                "THORNS_AURA",
+                "Thorns Aura",
+                StatusPayload::Thorns { damage: 3 },
+                "PALADIN_THORNS_AURA_THORNS",
+                "SLOT_0_8",
+            ),
+            (
+                "PALADIN_WARDING_AURA",
+                "WARDING_AURA",
+                "Warding Aura",
+                StatusPayload::MagicResistance {
+                    modifier_scalar: 0.15,
+                },
+                "PALADIN_WARDING_AURA_MAGIC_RESISTANCE",
+                "SLOT_1_0",
+            ),
+            (
+                "PALADIN_AURA_OF_VENGEANCE",
+                "AURA_OF_VENGEANCE",
+                "Aura of Vengeance",
+                StatusPayload::VengeanceAura,
+                "PALADIN_AURA_OF_VENGEANCE",
+                "SLOT_1_6",
+            ),
+        ];
+
+        for (ability_id, action_id, display_name, payload, stack_group, slot_id) in expected {
+            let ability = catalog
+                .abilities
+                .iter()
+                .find(|ability| ability.ability_id == ability_id)
+                .unwrap_or_else(|| panic!("{ability_id} must exist"));
+            assert_eq!(
+                normalize_identifier(ability.combat_profile_id.as_str()),
+                COMBAT_PROFILE_SWORD_AND_SHIELD
+            );
+            assert_eq!(ability.action_id, action_id);
+            assert_eq!(ability.display_name, display_name);
+            assert_eq!(ability_gameplay_kind(ability), "SPELL");
+            assert_eq!(
+                normalize_identifier(ability.gameplay.targeting.as_str()),
+                "SELF"
+            );
+            assert_eq!(
+                normalize_optional_target_audience(ability.gameplay.target_audience.as_str()),
+                "PARTY_OR_SELF"
+            );
+            assert_eq!(ability.gameplay.resource_cost, Some(0.0));
+            let default_assignment = catalog
+                .combat_profile_action_bar_defaults
+                .iter()
+                .find(|assignment| {
+                    normalize_identifier(assignment.combat_profile_id.as_str())
+                        == COMBAT_PROFILE_SWORD_AND_SHIELD
+                        && normalize_identifier(assignment.ability_id.as_str()) == ability_id
+                })
+                .unwrap_or_else(|| {
+                    panic!("{ability_id} should appear on the SwordAndShield default action bar")
+                });
+            assert_eq!(
+                normalize_identifier(default_assignment.slot_id.as_str()),
+                slot_id,
+                "{ability_id} should live on the visible SwordAndShield action bars"
+            );
+
+            let definition = spell_definition_by_str(action_id)
+                .unwrap_or_else(|| panic!("{action_id} spell definition"));
+            assert_eq!(definition.primary_resource_cost, 0.0);
+            assert_eq!(definition.behavior, crate::spells::SpellBehavior::Aura);
+            assert_eq!(definition.radius, 20.0);
+            assert_eq!(definition.target_audience.as_str(), "PARTY_OR_SELF");
+            let aura = definition
+                .secondary
+                .aura
+                .as_ref()
+                .expect("aura spell must define aura secondary tunables");
+            assert_eq!(aura.tick_interval, Duration::from_millis(250));
+            let [effect] = aura.effects.as_slice() else {
+                panic!("{action_id} must author exactly one aura status effect");
+            };
+            assert_eq!(effect.payload(), payload);
+            assert_eq!(effect.duration(), Duration::from_millis(750));
+            assert_eq!(effect.explicit_stack_group(), Some(stack_group));
+            assert!(effect.dispel_types().is_empty());
+        }
     }
 
     #[test]
@@ -8004,6 +8486,16 @@ mod tests {
     #[test]
     fn default_action_bar_assignments_do_not_place_spells() {
         let catalog = progression_catalog();
+        let intentional_spell_defaults: HashSet<&str> = [
+            "PALADIN_FERVOR",
+            "PALADIN_MANA_FONT",
+            "PALADIN_STAMINA_FONT",
+            "PALADIN_THORNS_AURA",
+            "PALADIN_WARDING_AURA",
+            "PALADIN_AURA_OF_VENGEANCE",
+        ]
+        .into_iter()
+        .collect();
 
         for assignment in &catalog.combat_profile_action_bar_defaults {
             let action_ref = action_ref_for_action_bar_default(assignment);
@@ -8016,6 +8508,15 @@ mod tests {
                 .iter()
                 .find(|ability| normalize_identifier(ability.ability_id.as_str()) == action_ref.id)
                 .expect("action-bar default ability must exist");
+            if intentional_spell_defaults.contains(action_ref.id.as_str()) {
+                assert_eq!(
+                    normalize_identifier(assignment.combat_profile_id.as_str()),
+                    COMBAT_PROFILE_SWORD_AND_SHIELD,
+                    "intentional spell default '{}' must stay scoped to SwordAndShield",
+                    action_ref.id
+                );
+                continue;
+            }
             assert_ne!(
                 ability_gameplay_kind(ability),
                 "SPELL",

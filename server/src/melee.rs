@@ -31,9 +31,9 @@ use crate::combat::{
     has_active_status_group, has_due_pending_effects, mark_harmful_combat_action, queue_effects,
     remove_active_status_group, resolve_pending_effects, ActiveCombatProjectile, CombatEvent,
     CombatProjectileDefinition, DamageDelivery, DamageType, EffectPacket,
-    ProjectilePresentationEvent, StackPolicy, StatusEffectKind, StatusPayload, StatusPolarity,
-    COMBAT_EVENT_AREA_IMPACT, COMBAT_EVENT_BLOCK, COMBAT_EVENT_CAST, COMBAT_EVENT_FIZZLE,
-    COMBAT_EVENT_IMPACT, COMBAT_EVENT_PARRY, COMBAT_EVENT_RELEASE,
+    ProjectilePresentationEvent, StackPolicy, StatusDispelType, StatusEffectKind, StatusPayload,
+    StatusPolarity, COMBAT_EVENT_AREA_IMPACT, COMBAT_EVENT_BLOCK, COMBAT_EVENT_CAST,
+    COMBAT_EVENT_FIZZLE, COMBAT_EVENT_IMPACT, COMBAT_EVENT_PARRY, COMBAT_EVENT_RELEASE,
     COMBAT_METADATA_CONSUMED_MELEE_MODIFIER, COMBAT_METADATA_NONE,
     COMBAT_SCALAR_MELEE_RELEASE_DELAY_SECONDS, COMBAT_SCALAR_NONE, COMBAT_SEQUENCE_NONE,
     DAMAGE_SOURCE_KIND_MELEE,
@@ -55,8 +55,9 @@ use crate::progression::{
 use crate::relations::{can_harm, combat_relation};
 use crate::resources::{
     can_pay_action_resource_cost, grant_primary_resource_amount,
-    grant_primary_resource_for_melee_hit, pay_action_resource_cost,
-    resolve_ability_action_resource_cost, ResolvedActionResourceCost,
+    grant_primary_resource_amount_for_kind, grant_primary_resource_for_melee_hit,
+    pay_action_resource_cost, resolve_ability_action_resource_cost, ResolvedActionResourceCost,
+    RESOURCE_KIND_MANA,
 };
 use crate::spells::{
     aoe_hits_player, approach_line_contact_point_xz, bake_linear_special_movement,
@@ -117,6 +118,14 @@ const EVENT_PARRY: &str = COMBAT_EVENT_PARRY;
 const MELEE_MANIFEST_JSON: &str = include_str!("melee_manifest.shared.json");
 const GIANT_SWING_STATUS_GROUP: &str = "GIANT_SWING";
 const GIANT_SWING_MIN_RANGE_METERS: f32 = 5.0;
+const SERRATED_BLADES_STATUS_GROUP: &str = "SERRATED_BLADES";
+const SERRATED_BLADES_BLEED_STATUS_GROUP: &str = "SERRATED_BLADES_BLEED";
+const SERRATED_BLADES_BLEED_DAMAGE_RATIO: f32 = 0.10;
+const SERRATED_BLADES_BLEED_DURATION_MS: u64 = 2000;
+const SERRATED_BLADES_BLEED_TICK_INTERVAL_MS: u64 = 1000;
+const PALADIN_BRANDED_STATUS_GROUP: &str = "PALADIN_BRANDED";
+const PALADIN_HALLOWED_THRUST_ABILITY_ID: &str = "PALADIN_HALLOWED_THRUST";
+const PALADIN_HALLOWED_THRUST_MANA_GAIN: f32 = 20.0;
 const GAP_CLOSE_KIND_LINEAR: &str = "LINEAR";
 const GAP_CLOSE_KIND_LEAP: &str = "LEAP";
 const GAP_CLOSE_KIND_TELEPORT: &str = "TELEPORT";
@@ -136,14 +145,28 @@ struct MeleeAttackModifierSpec {
     status_group: &'static str,
     min_range: Option<f32>,
     force_stagger: bool,
+    consume_on_attack: bool,
+    bleed_damage_ratio: f32,
 }
 
-const MELEE_ATTACK_MODIFIER_SPECS: [MeleeAttackModifierSpec; 1] = [MeleeAttackModifierSpec {
-    status_kind: StatusEffectKind::MeleeAttackModifier,
-    status_group: GIANT_SWING_STATUS_GROUP,
-    min_range: Some(GIANT_SWING_MIN_RANGE_METERS),
-    force_stagger: true,
-}];
+const MELEE_ATTACK_MODIFIER_SPECS: [MeleeAttackModifierSpec; 2] = [
+    MeleeAttackModifierSpec {
+        status_kind: StatusEffectKind::MeleeAttackModifier,
+        status_group: GIANT_SWING_STATUS_GROUP,
+        min_range: Some(GIANT_SWING_MIN_RANGE_METERS),
+        force_stagger: true,
+        consume_on_attack: true,
+        bleed_damage_ratio: 0.0,
+    },
+    MeleeAttackModifierSpec {
+        status_kind: StatusEffectKind::MeleeAttackModifier,
+        status_group: SERRATED_BLADES_STATUS_GROUP,
+        min_range: None,
+        force_stagger: false,
+        consume_on_attack: false,
+        bleed_damage_ratio: SERRATED_BLADES_BLEED_DAMAGE_RATIO,
+    },
+];
 
 #[table(accessor = melee_attack_modifier_catalog, public)]
 pub struct MeleeAttackModifierCatalog {
@@ -211,6 +234,7 @@ fn melee_attack_modifier_catalog_key(spec: &MeleeAttackModifierSpec) -> String {
 struct ResolvedMeleeAttackModifiers {
     min_range: Option<f32>,
     force_stagger: bool,
+    bleed_damage_ratio: f32,
     consumed: Vec<ConsumedMeleeAttackModifier>,
 }
 
@@ -2390,10 +2414,13 @@ fn resolve_melee_attack_modifiers(
             resolved.min_range = Some(resolved.min_range.unwrap_or(0.0).max(min_range));
         }
         resolved.force_stagger |= spec.force_stagger;
-        resolved.consumed.push(ConsumedMeleeAttackModifier {
-            status_kind: spec.status_kind,
-            status_group: spec.status_group,
-        });
+        resolved.bleed_damage_ratio += spec.bleed_damage_ratio.max(0.0);
+        if spec.consume_on_attack {
+            resolved.consumed.push(ConsumedMeleeAttackModifier {
+                status_kind: spec.status_kind,
+                status_group: spec.status_group,
+            });
+        }
     }
     resolved
 }
@@ -4190,6 +4217,8 @@ fn resolve_pending_melee_target_impact(
         row.applies_stagger,
     );
     push_melee_impact_effects(ctx, &mut effects, row);
+    let attack_modifiers = resolve_melee_attack_modifiers(ctx, row.source, now);
+    push_melee_attack_modifier_bleed_effects(&mut effects, row, damage, &attack_modifiers);
     push_melee_impact_area_effects(
         ctx,
         &mut effects,
@@ -4207,6 +4236,7 @@ fn resolve_pending_melee_target_impact(
         row.grants_primary_resource_on_hit,
         now,
     );
+    grant_hallowed_thrust_branded_mana(ctx, row, damage, now);
 }
 
 fn scaled_melee_damage_for_target(
@@ -4383,6 +4413,96 @@ fn push_melee_impact_status_effects(effects: &mut Vec<EffectPacket>, row: &Pendi
             push_melee_impact_status_effect(effects, row, &status);
         }
     }
+}
+
+fn push_melee_attack_modifier_bleed_effects(
+    effects: &mut Vec<EffectPacket>,
+    row: &PendingMeleeImpact,
+    damage: i32,
+    modifiers: &ResolvedMeleeAttackModifiers,
+) {
+    let tick_damage = melee_attack_modifier_bleed_damage(damage, modifiers.bleed_damage_ratio);
+    if tick_damage <= 0 {
+        return;
+    }
+
+    effects.push(EffectPacket::ApplyStatus {
+        source: row.source,
+        target: row.target,
+        spell_id: format!("{}:serrated_blades_bleed:{}", row.spell_id, row.hit_index),
+        payload: StatusPayload::Dot {
+            tick_damage,
+            damage_type: DamageType::Physical,
+            tick_interval: Duration::from_millis(SERRATED_BLADES_BLEED_TICK_INTERVAL_MS),
+        },
+        polarity: StatusPolarity::Debuff,
+        target_audience: crate::relations::TargetAudience::Hostile,
+        duration: Duration::from_millis(SERRATED_BLADES_BLEED_DURATION_MS),
+        stack_group: format!(
+            "{}:{}:{}",
+            SERRATED_BLADES_BLEED_STATUS_GROUP, row.spell_id, row.hit_index
+        ),
+        max_stacks: 1,
+        stack_policy: StackPolicy::Refresh,
+        dispel_types: vec![StatusDispelType::Bleed],
+    });
+}
+
+fn melee_attack_modifier_bleed_damage(damage: i32, damage_ratio: f32) -> i32 {
+    if damage <= 0 || !damage_ratio.is_finite() || damage_ratio <= 0.0 {
+        return 0;
+    }
+
+    ((damage as f32) * damage_ratio)
+        .round()
+        .clamp(1.0, i32::MAX as f32) as i32
+}
+
+fn grant_hallowed_thrust_branded_mana(
+    ctx: &ReducerContext,
+    row: &PendingMeleeImpact,
+    damage: i32,
+    now: Timestamp,
+) {
+    if damage <= 0 {
+        return;
+    }
+    let ability_id = row.ability_id.trim().to_ascii_uppercase();
+    if ability_id != PALADIN_HALLOWED_THRUST_ABILITY_ID
+        || !target_has_branded_status(ctx, row.target, now)
+    {
+        return;
+    }
+
+    grant_primary_resource_amount_for_kind(
+        ctx,
+        row.source,
+        RESOURCE_KIND_MANA,
+        PALADIN_HALLOWED_THRUST_MANA_GAIN,
+        now,
+    );
+}
+
+fn target_has_branded_status(ctx: &ReducerContext, target: Identity, now: Timestamp) -> bool {
+    ctx.db
+        .status_effect()
+        .target()
+        .filter(target)
+        .any(|effect| {
+            effect.effect_kind == StatusEffectKind::Dot.as_str()
+                && now < effect.expires_at
+                && status_stack_group_matches_base(
+                    effect.stack_group.as_str(),
+                    PALADIN_BRANDED_STATUS_GROUP,
+                )
+        })
+}
+
+fn status_stack_group_matches_base(stack_group: &str, base: &str) -> bool {
+    stack_group == base
+        || stack_group
+            .strip_prefix(base)
+            .is_some_and(|suffix| suffix.starts_with(':'))
 }
 
 fn push_melee_impact_status_effect(
@@ -4711,7 +4831,10 @@ mod tests {
     use crate::animation_set_test_utils::animation_set_assets_by_combat_profile;
     use crate::combat::player_snapshot::PlayerSnapshot;
     use crate::combat::scene_query::{is_direction_within_facing_arc, target_within_area_range_xz};
-    use crate::combat::{EffectPacket, StatusEffectKind, StatusPayload};
+    use crate::combat::{
+        DamageType, EffectPacket, StackPolicy, StatusDispelType, StatusEffectKind, StatusPayload,
+        StatusPolarity,
+    };
     use crate::player::{DEFAULT_COMBAT_PROFILE, TWO_HANDED_SWORD_COMBAT_PROFILE};
     use crate::player_physics::PlayerPhysics;
     use crate::player_state::PlayerState;
@@ -5399,6 +5522,106 @@ mod tests {
         assert_eq!(*duration, Duration::from_millis(2000));
         assert_eq!(stack_group, "WARRIOR_CATACLYSM_STUN");
         assert_eq!(*max_stacks, 1);
+    }
+
+    #[test]
+    fn melee_attack_modifier_bleed_uses_confirmed_hit_damage_and_stacks_by_hit() {
+        let source = test_identity_with_byte(1);
+        let target = test_identity_with_byte(2);
+        let now = Timestamp::UNIX_EPOCH;
+        let row = PendingMeleeImpact {
+            impact_id: 0,
+            source,
+            event_source: "test".to_string(),
+            target,
+            spell_id: "test:serrated".to_string(),
+            kind: "SWORD_AND_SHIELD_LIGHT_COMBO_1".to_string(),
+            ability_id: "PALADIN_SHIELD_PUMMEL".to_string(),
+            hit_index: 2,
+            damage: 35,
+            damage_type: DamageType::Physical.as_str().to_string(),
+            target_health_damage_scaling_min_multiplier: 1.0,
+            target_health_damage_scaling_max_multiplier: 1.0,
+            range: 2.5,
+            impact_at: now,
+            active_until: now,
+            recovery_until: now,
+            parry_behavior: "PARRYABLE".to_string(),
+            block_behavior: "BLOCKABLE".to_string(),
+            airborne_targeting_mode: "ANY_TARGET".to_string(),
+            targeting_kind: "TARGET".to_string(),
+            targeting_radius: 0.0,
+            targeting_angle_degrees: 0.0,
+            applies_stagger: false,
+            grants_primary_resource_on_hit: false,
+            impact_area_radius: 0.0,
+            impact_area_damage: 0,
+            impact_area_include_primary_target: false,
+            resolve_at_micros: 0,
+        };
+        let modifiers = ResolvedMeleeAttackModifiers {
+            bleed_damage_ratio: 0.10,
+            ..Default::default()
+        };
+
+        let mut effects = Vec::new();
+        super::push_melee_attack_modifier_bleed_effects(&mut effects, &row, 35, &modifiers);
+
+        assert_eq!(super::melee_attack_modifier_bleed_damage(35, 0.10), 4);
+        assert_eq!(effects.len(), 1);
+        let EffectPacket::ApplyStatus {
+            source: effect_source,
+            target: effect_target,
+            spell_id,
+            payload,
+            polarity,
+            duration,
+            stack_group,
+            max_stacks,
+            stack_policy,
+            dispel_types,
+            ..
+        } = &effects[0]
+        else {
+            panic!("expected Serrated Blades bleed apply-status effect");
+        };
+        assert_eq!(*effect_source, source);
+        assert_eq!(*effect_target, target);
+        assert_eq!(spell_id, "test:serrated:serrated_blades_bleed:2");
+        assert_eq!(
+            *payload,
+            StatusPayload::Dot {
+                tick_damage: 4,
+                damage_type: DamageType::Physical,
+                tick_interval: Duration::from_secs(1),
+            }
+        );
+        assert_eq!(*polarity, StatusPolarity::Debuff);
+        assert_eq!(*duration, Duration::from_secs(2));
+        assert_eq!(stack_group, "SERRATED_BLADES_BLEED:test:serrated:2");
+        assert_eq!(*max_stacks, 1);
+        assert_eq!(*stack_policy, StackPolicy::Refresh);
+        assert_eq!(dispel_types, &vec![StatusDispelType::Bleed]);
+    }
+
+    #[test]
+    fn branded_status_group_match_accepts_instance_scoped_dot_rows() {
+        assert!(super::status_stack_group_matches_base(
+            "PALADIN_BRANDED",
+            "PALADIN_BRANDED"
+        ));
+        assert!(super::status_stack_group_matches_base(
+            "PALADIN_BRANDED:test:rebuke:0",
+            "PALADIN_BRANDED"
+        ));
+        assert!(!super::status_stack_group_matches_base(
+            "PALADIN_BRANDED_EXTRA:test",
+            "PALADIN_BRANDED"
+        ));
+        assert!(!super::status_stack_group_matches_base(
+            "OTHER_HOLY_DOT:test",
+            "PALADIN_BRANDED"
+        ));
     }
 
     #[test]

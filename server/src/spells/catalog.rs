@@ -403,6 +403,55 @@ enum ImpactEffectRow {
         #[serde(default = "default_refresh_stack_policy")]
         stack_policy: StackPolicy,
     },
+    ManaRegen {
+        duration_ms: u64,
+        modifier_scalar: f32,
+        #[serde(default)]
+        status_stack_group: Option<String>,
+        #[serde(default = "default_one_stack")]
+        max_stacks: u32,
+        #[serde(default = "default_refresh_stack_policy")]
+        stack_policy: StackPolicy,
+    },
+    StaminaRegen {
+        duration_ms: u64,
+        modifier_scalar: f32,
+        #[serde(default)]
+        status_stack_group: Option<String>,
+        #[serde(default = "default_one_stack")]
+        max_stacks: u32,
+        #[serde(default = "default_refresh_stack_policy")]
+        stack_policy: StackPolicy,
+    },
+    MagicResistance {
+        duration_ms: u64,
+        modifier_scalar: f32,
+        #[serde(default)]
+        status_stack_group: Option<String>,
+        #[serde(default = "default_one_stack")]
+        max_stacks: u32,
+        #[serde(default = "default_refresh_stack_policy")]
+        stack_policy: StackPolicy,
+    },
+    Thorns {
+        duration_ms: u64,
+        tick_damage: i32,
+        #[serde(default)]
+        status_stack_group: Option<String>,
+        #[serde(default = "default_one_stack")]
+        max_stacks: u32,
+        #[serde(default = "default_refresh_stack_policy")]
+        stack_policy: StackPolicy,
+    },
+    VengeanceAura {
+        duration_ms: u64,
+        #[serde(default)]
+        status_stack_group: Option<String>,
+        #[serde(default = "default_one_stack")]
+        max_stacks: u32,
+        #[serde(default = "default_refresh_stack_policy")]
+        stack_policy: StackPolicy,
+    },
 }
 
 pub(super) fn spell_definitions() -> &'static [SpellDefinition] {
@@ -1128,6 +1177,101 @@ impl From<ImpactEffectRow> for ImpactEffect {
                 Duration::from_millis(duration_ms),
                 status_stack_group,
                 StatusStackGroupDefault::ActionSuffix("MOVE_SPEED"),
+                max_stacks,
+                stack_policy,
+            ),
+            ImpactEffectRow::ManaRegen {
+                duration_ms,
+                modifier_scalar,
+                status_stack_group,
+                max_stacks,
+                stack_policy,
+            } => StatusApplication::new(
+                AuthoredStatusPayload::new(
+                    StatusEffectKind::ManaRegen,
+                    0.0,
+                    0,
+                    0,
+                    0,
+                    modifier_scalar,
+                )
+                .payload(),
+                Duration::from_millis(duration_ms),
+                status_stack_group,
+                StatusStackGroupDefault::ActionSuffix("MANA_REGEN"),
+                max_stacks,
+                stack_policy,
+            ),
+            ImpactEffectRow::StaminaRegen {
+                duration_ms,
+                modifier_scalar,
+                status_stack_group,
+                max_stacks,
+                stack_policy,
+            } => StatusApplication::new(
+                AuthoredStatusPayload::new(
+                    StatusEffectKind::StaminaRegen,
+                    0.0,
+                    0,
+                    0,
+                    0,
+                    modifier_scalar,
+                )
+                .payload(),
+                Duration::from_millis(duration_ms),
+                status_stack_group,
+                StatusStackGroupDefault::ActionSuffix("STAMINA_REGEN"),
+                max_stacks,
+                stack_policy,
+            ),
+            ImpactEffectRow::MagicResistance {
+                duration_ms,
+                modifier_scalar,
+                status_stack_group,
+                max_stacks,
+                stack_policy,
+            } => StatusApplication::new(
+                AuthoredStatusPayload::new(
+                    StatusEffectKind::MagicResistance,
+                    0.0,
+                    0,
+                    0,
+                    0,
+                    modifier_scalar,
+                )
+                .payload(),
+                Duration::from_millis(duration_ms),
+                status_stack_group,
+                StatusStackGroupDefault::ActionSuffix("MAGIC_RESISTANCE"),
+                max_stacks,
+                stack_policy,
+            ),
+            ImpactEffectRow::Thorns {
+                duration_ms,
+                tick_damage,
+                status_stack_group,
+                max_stacks,
+                stack_policy,
+            } => StatusApplication::new(
+                AuthoredStatusPayload::new(StatusEffectKind::Thorns, 0.0, tick_damage, 0, 0, 0.0)
+                    .payload(),
+                Duration::from_millis(duration_ms),
+                status_stack_group,
+                StatusStackGroupDefault::ActionSuffix("THORNS"),
+                max_stacks,
+                stack_policy,
+            ),
+            ImpactEffectRow::VengeanceAura {
+                duration_ms,
+                status_stack_group,
+                max_stacks,
+                stack_policy,
+            } => StatusApplication::new(
+                AuthoredStatusPayload::new(StatusEffectKind::VengeanceAura, 0.0, 0, 0, 0, 0.0)
+                    .payload(),
+                Duration::from_millis(duration_ms),
+                status_stack_group,
+                StatusStackGroupDefault::ActionSuffix("VENGEANCE_AURA"),
                 max_stacks,
                 stack_policy,
             ),
@@ -1920,6 +2064,11 @@ fn validate_apply_status_kind_for_self(
         | StatusEffectKind::DamageAmp
         | StatusEffectKind::DirectDamageAmp
         | StatusEffectKind::DamageTakenReduction
+        | StatusEffectKind::ManaRegen
+        | StatusEffectKind::StaminaRegen
+        | StatusEffectKind::MagicResistance
+        | StatusEffectKind::Thorns
+        | StatusEffectKind::VengeanceAura
         | StatusEffectKind::MeleeAttackModifier
         | StatusEffectKind::AttackSpeed
         | StatusEffectKind::CastSpeed
@@ -2029,13 +2178,23 @@ mod tests {
                 "DEFIANCE",
                 "BATTLE_CRY",
                 "GIANT_SWING",
+                "FRENZY",
                 "ENRAGE",
+                "BERSERKING",
+                "BATTLE_TRANCE",
+                "FEAST",
                 "SHOCKWAVE",
                 "INTIMIDATE",
+                "SERRATED_BLADES",
                 "CONSECRATE",
                 "CLEANSING_TOUCH",
                 "ABSOLUTION",
                 "FERVOR",
+                "MANA_FONT",
+                "STAMINA_FONT",
+                "THORNS_AURA",
+                "WARDING_AURA",
+                "AURA_OF_VENGEANCE",
                 "SACRED_FLAME",
             ]
         );
@@ -2078,6 +2237,7 @@ mod tests {
             "CLEANSING_TOUCH",
             "ABSOLUTION",
             "FERVOR",
+            "AURA_OF_VENGEANCE",
         ] {
             assert!(
                 spell_definition_by_str(id).is_some(),
