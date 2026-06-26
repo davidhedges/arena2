@@ -531,7 +531,8 @@ fn resolve_orbit_projectile_contacts(
         });
 
         if state.is_overlapping
-            || state.hit_count >= projectile.orbit_max_hits_per_target
+            || (projectile.orbit_max_hits_per_target > 0
+                && state.hit_count >= projectile.orbit_max_hits_per_target)
             || now < state.next_allowed_at
         {
             state.is_overlapping = true;

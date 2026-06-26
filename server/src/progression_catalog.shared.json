@@ -2555,6 +2555,92 @@
       }
     },
     {
+      "ability_id": "PALADIN_BLESSED_SHIELD",
+      "combat_profile_id": "SWORD_AND_SHIELD",
+      "action_id": "BLESSED_SHIELD",
+      "display_name": "Blessed Shield",
+      "resource_kind": "MANA",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 165,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 1200,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "SELF",
+        "requires_target": false,
+        "resource_cost": 0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "PROJECTILE",
+          "damage": 18,
+          "damage_type": "HOLY",
+          "update_interval_seconds": 0.05,
+          "block_behavior": "BLOCKABLE",
+          "parry_behavior": "PARRYABLE",
+          "motion": {
+            "kind": "ORBIT_CASTER",
+            "projectile_count": 1,
+            "orbit_radius": 2,
+            "orbit_height": 1,
+            "angular_speed_deg_per_sec": 180,
+            "lifetime_seconds": 10,
+            "hit_radius": 0.45,
+            "hit_cooldown_seconds": 0.35,
+            "max_hits_per_target": 0,
+            "phase_offset_deg": 0
+          },
+          "impact_effects": []
+        }
+      }
+    },
+    {
+      "ability_id": "PALADIN_BLADE_BARRIER",
+      "combat_profile_id": "SWORD_AND_SHIELD",
+      "action_id": "BLADE_BARRIER",
+      "display_name": "Blade Barrier",
+      "resource_kind": "MANA",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 166,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 1200,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "SELF",
+        "requires_target": false,
+        "resource_cost": 0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "PROJECTILE",
+          "damage": 18,
+          "damage_type": "HOLY",
+          "update_interval_seconds": 0.05,
+          "block_behavior": "BLOCKABLE",
+          "parry_behavior": "PARRYABLE",
+          "motion": {
+            "kind": "ORBIT_CASTER",
+            "projectile_count": 1,
+            "orbit_radius": 2,
+            "orbit_height": 1,
+            "angular_speed_deg_per_sec": -180,
+            "lifetime_seconds": 10,
+            "hit_radius": 0.45,
+            "hit_cooldown_seconds": 0.35,
+            "max_hits_per_target": 0,
+            "phase_offset_deg": 0
+          },
+          "impact_effects": []
+        }
+      }
+    },
+    {
       "ability_id": "PALADIN_SACRED_FLAME",
       "combat_profile_id": "SWORD_AND_SHIELD",
       "action_id": "SACRED_FLAME",
@@ -3424,6 +3510,20 @@
     },
     {
       "presentation_kind": "ABILITY",
+      "presentation_id": "PALADIN_BLESSED_SHIELD",
+      "display_name": "Blessed Shield",
+      "description": "Summons a holy shield to orbit the wielder.",
+      "sort_order": 165
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "PALADIN_BLADE_BARRIER",
+      "display_name": "Blade Barrier",
+      "description": "Summons a holy blade to orbit the wielder.",
+      "sort_order": 166
+    },
+    {
+      "presentation_kind": "ABILITY",
       "presentation_id": "PALADIN_SACRED_FLAME",
       "display_name": "Sacred Flame",
       "description": "Brands an enemy with holy damage over time.",
@@ -3719,6 +3819,32 @@
       "lifecycle": "PARTICLE_SYSTEM",
       "duration_ms": 0,
       "sort_order": 14
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "PALADIN_BLESSED_SHIELD",
+      "trigger": "SPELL_RELEASE",
+      "anchor": "LEFT_HAND",
+      "vfx_id": "VFX_BLESSED_SHIELD_PROJECTILE_01",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "PROJECTILE_BODY",
+      "lifecycle": "UNTIL_TERMINAL_EVENT",
+      "projectile_sequence_index": 0,
+      "duration_ms": 0,
+      "sort_order": 15
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "PALADIN_BLADE_BARRIER",
+      "trigger": "SPELL_RELEASE",
+      "anchor": "RIGHT_HAND",
+      "vfx_id": "VFX_BLADE_BARRIER_PROJECTILE_01",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "PROJECTILE_BODY",
+      "lifecycle": "UNTIL_TERMINAL_EVENT",
+      "projectile_sequence_index": 0,
+      "duration_ms": 0,
+      "sort_order": 16
     },
     {
       "owner_kind": "ABILITY",
@@ -4272,6 +4398,18 @@
       "combat_profile_id": "SWORD_AND_SHIELD",
       "ability_id": "PALADIN_AURA_OF_VENGEANCE",
       "sort_order": 185
+    },
+    {
+      "slot_id": "slot_1_7",
+      "combat_profile_id": "SWORD_AND_SHIELD",
+      "ability_id": "PALADIN_BLESSED_SHIELD",
+      "sort_order": 186
+    },
+    {
+      "slot_id": "slot_1_8",
+      "combat_profile_id": "SWORD_AND_SHIELD",
+      "ability_id": "PALADIN_BLADE_BARRIER",
+      "sort_order": 187
     },
     {
       "slot_id": "slot_0_0",

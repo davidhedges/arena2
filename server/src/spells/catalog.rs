@@ -1842,7 +1842,7 @@ fn validate_projectile_motion(
                 "delivery.motion.orbit_height",
                 orbit.orbit_height,
             )?;
-            ensure_positive_f32(
+            ensure_finite_non_zero(
                 def.kind.as_str(),
                 "delivery.motion.angular_speed_deg_per_sec",
                 orbit.angular_speed_deg_per_sec,
@@ -1862,12 +1862,6 @@ fn validate_projectile_motion(
                 "delivery.motion.hit_cooldown_seconds",
                 orbit.hit_cooldown_seconds,
             )?;
-            if orbit.max_hits_per_target == 0 {
-                return Err(format!(
-                    "{} delivery.motion.max_hits_per_target must be positive",
-                    def.kind.as_str()
-                ));
-            }
             ensure_finite(
                 def.kind.as_str(),
                 "delivery.motion.phase_offset_deg",
@@ -2116,6 +2110,14 @@ fn ensure_finite_non_negative(spell_id: &str, field: &str, value: f32) -> Result
     Ok(())
 }
 
+fn ensure_finite_non_zero(spell_id: &str, field: &str, value: f32) -> Result<(), String> {
+    ensure_finite(spell_id, field, value)?;
+    if value == 0.0 {
+        return Err(format!("{spell_id} {field} must be non-zero"));
+    }
+    Ok(())
+}
+
 fn ensure_positive_f32(spell_id: &str, field: &str, value: f32) -> Result<(), String> {
     ensure_finite(spell_id, field, value)?;
     if value <= 0.0 {
@@ -2195,6 +2197,8 @@ mod tests {
                 "THORNS_AURA",
                 "WARDING_AURA",
                 "AURA_OF_VENGEANCE",
+                "BLESSED_SHIELD",
+                "BLADE_BARRIER",
                 "SACRED_FLAME",
             ]
         );
@@ -2238,6 +2242,8 @@ mod tests {
             "ABSOLUTION",
             "FERVOR",
             "AURA_OF_VENGEANCE",
+            "BLESSED_SHIELD",
+            "BLADE_BARRIER",
         ] {
             assert!(
                 spell_definition_by_str(id).is_some(),

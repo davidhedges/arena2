@@ -468,6 +468,8 @@ namespace Arena.Presentation
         public float lowerBodyBlendOutSeconds;
         [Tooltip("Obsolete serialized compatibility field. Runtime reads OnVisualInterruptible from the selected clip instead.")]
         public float visualInterruptibleAtSeconds;
+        [Tooltip("Optional temporary weapon/shield visual driven by animation-authored prop sockets until the spell projectile releases.")]
+        public SpellAnimatedPropHandoff animatedProp;
 
         public string SpellIdOrEmpty => string.IsNullOrWhiteSpace(spellId)
             ? string.Empty
@@ -477,6 +479,7 @@ namespace Arena.Presentation
         public bool UsesUpperBodyWhileMoving => playbackLayer == SpellPlaybackLayer.UpperBodyWhileMoving;
         public bool UsesUpperBody => playbackLayer == SpellPlaybackLayer.UpperBody;
         public bool UsesLeftGesture => playbackLayer == SpellPlaybackLayer.LeftGesture;
+        public bool HasAnimatedPropHandoff => animatedProp.enabled;
 
         public bool ResolveUsesOverlayPlayback(float locomotionRawMagnitude, float movementThreshold)
         {
@@ -568,6 +571,43 @@ namespace Arena.Presentation
                 fallback,
                 $"spell '{SpellIdOrEmpty}' visual interrupt");
         }
+    }
+
+    [Serializable]
+    public struct SpellAnimatedPropHandoff
+    {
+        [Tooltip("Enable a temporary duplicate of an equipped visual for this spell animation.")]
+        public bool enabled;
+        [Tooltip("Weapon presentation item id to duplicate, e.g. sword or shield.")]
+        public string itemId;
+        [Tooltip("Avatar-relative transform path animated by the imported clip, e.g. root/.../hand_r/Sword.")]
+        public string animatedSocketPath;
+        [Tooltip("Hide the normal equipped visual while the temporary animated duplicate is active.")]
+        public bool hideEquippedVisual;
+        [Tooltip("Local position applied under the animated socket.")]
+        public Vector3 localPosition;
+        [Tooltip("Local rotation applied under the animated socket. Zero quaternion resolves to identity.")]
+        public Quaternion localRotation;
+        [Tooltip("Local scale multiplier for the temporary duplicate. 0 resolves to 1.")]
+        public float localScale;
+        [Tooltip("Safety timeout after release in seconds if no projectile handoff arrives.")]
+        public float maxLifetimeSeconds;
+
+        public string ItemIdOrEmpty => string.IsNullOrWhiteSpace(itemId)
+            ? string.Empty
+            : itemId.Trim();
+
+        public string AnimatedSocketPathOrEmpty => string.IsNullOrWhiteSpace(animatedSocketPath)
+            ? string.Empty
+            : animatedSocketPath.Trim();
+
+        public Quaternion ResolveLocalRotation()
+            => localRotation.x == 0f && localRotation.y == 0f && localRotation.z == 0f && localRotation.w == 0f
+                ? Quaternion.identity
+                : localRotation;
+
+        public float ResolveLocalScale() => localScale > 0f ? localScale : 1f;
+        public float ResolveMaxLifetimeSeconds() => maxLifetimeSeconds > 0f ? maxLifetimeSeconds : 2f;
     }
 
     [Serializable]

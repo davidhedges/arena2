@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using Arena.Combat;
 using UnityEngine;
 
 namespace Arena.Presentation
@@ -15,6 +16,8 @@ namespace Arena.Presentation
     {
         private AvatarWeaponMounts? _mounts;
         private readonly List<AttachedVisual> _spawnedVisuals = new();
+        private readonly List<TemporaryAnimatedProp> _temporaryAnimatedProps = new();
+        private readonly HashSet<string> _temporarilyHiddenItemIds = new(StringComparer.OrdinalIgnoreCase);
         private readonly HashSet<string> _missingMountWarnings = new(StringComparer.Ordinal);
         private bool _inCombat;
 
@@ -37,9 +40,20 @@ namespace Arena.Presentation
             public WeaponVisualBoneRemap[] BoneRemaps = Array.Empty<WeaponVisualBoneRemap>();
             public bool IsInCombat;
             public GameObject Instance = null!;
+            public GameObject SourcePrefab = null!;
             public Vector3 BaseLocalScale = Vector3.one;
             public float PresentationScale = 1f;
             public ScalePulse? ActiveScalePulse;
+        }
+
+        private sealed class TemporaryAnimatedProp
+        {
+            public string ActionId = string.Empty;
+            public string ItemId = string.Empty;
+            public GameObject Instance = null!;
+            public bool HidesEquippedVisual;
+            public float ReleaseAtSeconds;
+            public float ExpiresAtSeconds;
         }
 
         private sealed class ScalePulse
@@ -67,6 +81,7 @@ namespace Arena.Presentation
         public void ClearVisuals()
         {
             _missingMountWarnings.Clear();
+            DestroyTemporaryAnimatedProps();
             DestroySpawnedVisuals();
             DestroyOrphanedWeaponVisuals(transform);
             VisualVersion++;
@@ -132,6 +147,7 @@ namespace Arena.Presentation
                     BoneRemaps = binding.SkinnedBoneRemapsOrEmpty,
                     IsInCombat = _inCombat,
                     Instance = instance,
+                    SourcePrefab = prefab,
                     BaseLocalScale = instance.transform.localScale,
                 };
                 RebindSkinnedBones(attachedVisual);
@@ -252,6 +268,122 @@ namespace Arena.Presentation
             return false;
         }
 
+        public bool BeginTemporaryAnimatedProp(
+            string actionId,
+            in SpellAnimatedPropHandoff handoff,
+            float releaseOffsetSeconds)
+        {
+            if (_mounts == null || !handoff.enabled)
+                return false;
+
+            string normalizedActionId = WireIdentifier.Normalize(actionId);
+            string itemId = handoff.ItemIdOrEmpty;
+            string socketPath = handoff.AnimatedSocketPathOrEmpty;
+            if (string.IsNullOrWhiteSpace(normalizedActionId)
+                || string.IsNullOrWhiteSpace(itemId)
+                || string.IsNullOrWhiteSpace(socketPath))
+            {
+                return false;
+            }
+
+            AttachedVisual? source = FindVisualByItemId(itemId);
+            if (source == null || source.SourcePrefab == null)
+                return false;
+
+            Transform? socket = _mounts.transform.Find(socketPath);
+            if (socket == null)
+            {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                Debug.LogWarning(
+                    $"[{nameof(WeaponAttachmentController)}] Avatar '{_mounts.name}' is missing animated prop socket '{socketPath}' for '{normalizedActionId}'.",
+                    this);
+#endif
+                return false;
+            }
+
+            ReleaseTemporaryAnimatedProp(normalizedActionId);
+
+            GameObject instance = Instantiate(source.SourcePrefab, socket, false);
+            instance.name = $"{source.ItemId}_{normalizedActionId}_AnimatedProp";
+            if (instance.GetComponent<WeaponAttachmentSpawnedVisual>() == null)
+                instance.AddComponent<WeaponAttachmentSpawnedVisual>();
+            instance.transform.localPosition = handoff.localPosition;
+            instance.transform.localRotation = handoff.ResolveLocalRotation();
+            instance.transform.localScale = Vector3.one * handoff.ResolveLocalScale();
+
+            float now = Time.time;
+            float releaseAt = now + Mathf.Max(0f, releaseOffsetSeconds);
+            _temporaryAnimatedProps.Add(new TemporaryAnimatedProp
+            {
+                ActionId = normalizedActionId,
+                ItemId = itemId,
+                Instance = instance,
+                HidesEquippedVisual = handoff.hideEquippedVisual,
+                ReleaseAtSeconds = releaseAt,
+                ExpiresAtSeconds = releaseAt + handoff.ResolveMaxLifetimeSeconds(),
+            });
+
+            if (handoff.hideEquippedVisual)
+            {
+                _temporarilyHiddenItemIds.Add(itemId);
+                RefreshAttachments();
+            }
+
+            VisualVersion++;
+            return true;
+        }
+
+        public bool TryGetTemporaryAnimatedPropReleaseDelaySeconds(string actionId, out float delaySeconds)
+        {
+            delaySeconds = 0f;
+            string normalizedActionId = WireIdentifier.Normalize(actionId);
+            if (string.IsNullOrWhiteSpace(normalizedActionId))
+                return false;
+
+            float now = Time.time;
+            for (int i = _temporaryAnimatedProps.Count - 1; i >= 0; i--)
+            {
+                TemporaryAnimatedProp prop = _temporaryAnimatedProps[i];
+                if (prop.Instance == null)
+                {
+                    RemoveTemporaryAnimatedPropAt(i);
+                    continue;
+                }
+
+                if (!string.Equals(prop.ActionId, normalizedActionId, StringComparison.Ordinal))
+                    continue;
+
+                delaySeconds = Mathf.Max(0f, prop.ReleaseAtSeconds - now);
+                return true;
+            }
+
+            return false;
+        }
+
+        public void ReleaseTemporaryAnimatedProp(string actionId)
+        {
+            string normalizedActionId = WireIdentifier.Normalize(actionId);
+            if (string.IsNullOrWhiteSpace(normalizedActionId))
+                return;
+
+            bool changed = false;
+            for (int i = _temporaryAnimatedProps.Count - 1; i >= 0; i--)
+            {
+                TemporaryAnimatedProp prop = _temporaryAnimatedProps[i];
+                if (!string.Equals(prop.ActionId, normalizedActionId, StringComparison.Ordinal))
+                    continue;
+
+                RemoveTemporaryAnimatedPropAt(i);
+                changed = true;
+            }
+
+            if (changed)
+            {
+                RefreshAttachments();
+                VisualVersion++;
+            }
+        }
+
         private void Update()
         {
             bool changed = false;
@@ -267,8 +399,21 @@ namespace Arena.Presentation
                 ApplyVisualTransform(visual);
             }
 
+            for (int i = _temporaryAnimatedProps.Count - 1; i >= 0; i--)
+            {
+                TemporaryAnimatedProp prop = _temporaryAnimatedProps[i];
+                if (prop.Instance != null && now < prop.ExpiresAtSeconds)
+                    continue;
+
+                RemoveTemporaryAnimatedPropAt(i);
+                changed = true;
+            }
+
             if (changed)
+            {
+                RefreshAttachments();
                 VisualVersion++;
+            }
         }
 
         private void RefreshAttachments()
@@ -309,6 +454,18 @@ namespace Arena.Presentation
                 WeaponPresentationEffectTarget.MainHand => visualIndex == 0,
                 _ => false,
             };
+        }
+
+        private AttachedVisual? FindVisualByItemId(string itemId)
+        {
+            for (int i = 0; i < _spawnedVisuals.Count; i++)
+            {
+                AttachedVisual visual = _spawnedVisuals[i];
+                if (string.Equals(visual.ItemId, itemId, StringComparison.OrdinalIgnoreCase))
+                    return visual;
+            }
+
+            return null;
         }
 
         private static bool UpdatePresentationScale(AttachedVisual visual, float now)
@@ -359,7 +516,7 @@ namespace Arena.Presentation
             if (_mounts == null)
                 return;
 
-            if (!IsVisibleForState(visual))
+            if (!IsVisibleForState(visual) || _temporarilyHiddenItemIds.Contains(visual.ItemId))
             {
                 if (visual.Instance.activeSelf)
                     visual.Instance.SetActive(false);
@@ -471,6 +628,40 @@ namespace Arena.Presentation
             }
 
             _spawnedVisuals.Clear();
+        }
+
+        private void DestroyTemporaryAnimatedProps()
+        {
+            for (int i = _temporaryAnimatedProps.Count - 1; i >= 0; i--)
+                RemoveTemporaryAnimatedPropAt(i);
+
+            _temporaryAnimatedProps.Clear();
+            _temporarilyHiddenItemIds.Clear();
+        }
+
+        private void RemoveTemporaryAnimatedPropAt(int index)
+        {
+            if (index < 0 || index >= _temporaryAnimatedProps.Count)
+                return;
+
+            TemporaryAnimatedProp prop = _temporaryAnimatedProps[index];
+            if (prop.Instance != null)
+                DestroyVisual(prop.Instance);
+            _temporaryAnimatedProps.RemoveAt(index);
+
+            if (prop.HidesEquippedVisual)
+                RebuildTemporaryHiddenItemIds();
+        }
+
+        private void RebuildTemporaryHiddenItemIds()
+        {
+            _temporarilyHiddenItemIds.Clear();
+            for (int i = 0; i < _temporaryAnimatedProps.Count; i++)
+            {
+                TemporaryAnimatedProp prop = _temporaryAnimatedProps[i];
+                if (prop.HidesEquippedVisual && !string.IsNullOrWhiteSpace(prop.ItemId))
+                    _temporarilyHiddenItemIds.Add(prop.ItemId);
+            }
         }
 
         private static void DestroyOrphanedWeaponVisuals(Transform root)

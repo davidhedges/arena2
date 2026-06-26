@@ -1161,6 +1161,9 @@ namespace Arena.Presentation
                     PlaySpellCastHold(request);
                     return;
                 case CombatSpellAnimationPhase.Cancel:
+                    if (_weaponAttachments == null)
+                        _weaponAttachments = GetComponent<WeaponAttachmentController>();
+                    _weaponAttachments?.ReleaseTemporaryAnimatedProp(request.ActionId);
                     ClearActiveSpellCastHoldPresentation(clearAnimatorState: true);
                     return;
                 case CombatSpellAnimationPhase.Release:
@@ -1335,6 +1338,7 @@ namespace Arena.Presentation
                 return;
 
             float normalizedStart = ResolveSpellReleaseStartNormalizedTime(request, spellEntry, grounded, spellClip);
+            BeginAnimatedSpellPropHandoff(spellKind, spellEntry, grounded);
 
             bool useOverlaySpellPlayback = spellEntry.ResolveUsesOverlayPlayback(
                 _latestLocomotionRawMagnitude,
@@ -1405,6 +1409,25 @@ namespace Arena.Presentation
                 out _)
                     ? normalizedStart
                     : 0f;
+        }
+
+        private void BeginAnimatedSpellPropHandoff(
+            string spellKind,
+            WeaponSpellAnimationEntry spellEntry,
+            bool grounded)
+        {
+            if (!spellEntry.HasAnimatedPropHandoff)
+                return;
+
+            if (_weaponAttachments == null)
+                _weaponAttachments = GetComponent<WeaponAttachmentController>();
+            if (_weaponAttachments == null)
+                return;
+
+            _weaponAttachments.BeginTemporaryAnimatedProp(
+                spellKind,
+                spellEntry.animatedProp,
+                spellEntry.ResolveReleaseOffsetSeconds(grounded));
         }
 
         private static int ResolveSpellActionStateHash(int bankSlot)

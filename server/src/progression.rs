@@ -3475,16 +3475,18 @@ fn ensure_default_action_bar_assignments_for_scope(
     inserted
 }
 
-const SWORD_AND_SHIELD_AURA_DEFAULT_ABILITY_IDS: &[&str] = &[
+const SWORD_AND_SHIELD_VISIBLE_DEFAULT_ABILITY_IDS: &[&str] = &[
     "PALADIN_FERVOR",
     "PALADIN_MANA_FONT",
     "PALADIN_STAMINA_FONT",
     "PALADIN_THORNS_AURA",
     "PALADIN_WARDING_AURA",
     "PALADIN_AURA_OF_VENGEANCE",
+    "PALADIN_BLESSED_SHIELD",
+    "PALADIN_BLADE_BARRIER",
 ];
 
-pub(crate) fn backfill_sword_and_shield_aura_action_bar_rows(ctx: &ReducerContext) -> usize {
+pub(crate) fn backfill_sword_and_shield_visible_action_bar_rows(ctx: &ReducerContext) -> usize {
     let players: Vec<Player> = ctx.db.player().iter().collect();
     let mut inserted = 0usize;
 
@@ -3504,7 +3506,7 @@ pub(crate) fn backfill_sword_and_shield_aura_action_bar_rows(ctx: &ReducerContex
         {
             continue;
         }
-        inserted = inserted.saturating_add(ensure_sword_and_shield_aura_defaults_for_owner(
+        inserted = inserted.saturating_add(ensure_sword_and_shield_visible_defaults_for_owner(
             ctx,
             player.identity,
             ctx.timestamp,
@@ -3514,7 +3516,7 @@ pub(crate) fn backfill_sword_and_shield_aura_action_bar_rows(ctx: &ReducerContex
     inserted
 }
 
-fn ensure_sword_and_shield_aura_defaults_for_owner(
+fn ensure_sword_and_shield_visible_defaults_for_owner(
     ctx: &ReducerContext,
     owner: Identity,
     now: Timestamp,
@@ -3522,7 +3524,7 @@ fn ensure_sword_and_shield_aura_defaults_for_owner(
     let mut inserted = 0usize;
     for assignment in action_bar_defaults_for_profile(COMBAT_PROFILE_SWORD_AND_SHIELD) {
         let ability_id = normalize_identifier(assignment.ability_id.as_str());
-        if !SWORD_AND_SHIELD_AURA_DEFAULT_ABILITY_IDS.contains(&ability_id.as_str()) {
+        if !SWORD_AND_SHIELD_VISIBLE_DEFAULT_ABILITY_IDS.contains(&ability_id.as_str()) {
             continue;
         }
         if character_action_bar_has_ability(
@@ -4854,8 +4856,8 @@ mod tests {
         animation_set_assets_by_combat_profile, parse_top_level_animation_set_field,
     };
     use crate::combat::{
-        StackPolicy, StatusApplication, StatusDispelType, StatusEffectKind, StatusPayload,
-        StatusStackGroupDefault, DEFAULT_HIT_RADIUS,
+        DamageType, StackPolicy, StatusApplication, StatusDispelType, StatusEffectKind,
+        StatusPayload, StatusStackGroupDefault, DEFAULT_HIT_RADIUS,
     };
     use crate::melee::profile_supports_action_reference;
     use crate::progression::melee_timed_movement_for_ability_id;
@@ -6353,6 +6355,16 @@ mod tests {
             Some("VFX_BOOMERANG_ORB_PROJECTILE_01")
         );
         assert_eq!(
+            projectile_body_vfx_id_for_spell("PALADIN_BLESSED_SHIELD", "BLESSED_SHIELD", 0)
+                .as_deref(),
+            Some("VFX_BLESSED_SHIELD_PROJECTILE_01")
+        );
+        assert_eq!(
+            projectile_body_vfx_id_for_spell("PALADIN_BLADE_BARRIER", "BLADE_BARRIER", 0)
+                .as_deref(),
+            Some("VFX_BLADE_BARRIER_PROJECTILE_01")
+        );
+        assert_eq!(
             projectile_body_vfx_id_for_spell("WARRIOR_FIREBALL", "FIREBALL", 1),
             None,
             "runtime should not silently select a visual for an unauthored projectile sequence"
@@ -7708,6 +7720,105 @@ mod tests {
     }
 
     #[test]
+    fn paladin_blessed_shield_and_blade_barrier_author_orbit_spells() {
+        let catalog = progression_catalog();
+        let expected = [
+            (
+                "PALADIN_BLESSED_SHIELD",
+                "BLESSED_SHIELD",
+                "Blessed Shield",
+                "SLOT_1_7",
+                "VFX_BLESSED_SHIELD_PROJECTILE_01",
+            ),
+            (
+                "PALADIN_BLADE_BARRIER",
+                "BLADE_BARRIER",
+                "Blade Barrier",
+                "SLOT_1_8",
+                "VFX_BLADE_BARRIER_PROJECTILE_01",
+            ),
+        ];
+
+        for (ability_id, action_id, display_name, slot_id, vfx_id) in expected {
+            let ability = catalog
+                .abilities
+                .iter()
+                .find(|ability| ability.ability_id == ability_id)
+                .unwrap_or_else(|| panic!("{ability_id} must exist"));
+            assert_eq!(
+                normalize_identifier(ability.combat_profile_id.as_str()),
+                COMBAT_PROFILE_SWORD_AND_SHIELD
+            );
+            assert_eq!(ability.action_id, action_id);
+            assert_eq!(ability.display_name, display_name);
+            assert_eq!(ability_gameplay_kind(ability), "SPELL");
+            assert_eq!(
+                normalize_identifier(ability.gameplay.targeting.as_str()),
+                "SELF"
+            );
+            assert_eq!(ability.gameplay.requires_target, Some(false));
+            assert_eq!(ability.gameplay.resource_cost, Some(0.0));
+
+            let default_assignment = catalog
+                .combat_profile_action_bar_defaults
+                .iter()
+                .find(|assignment| {
+                    normalize_identifier(assignment.combat_profile_id.as_str())
+                        == COMBAT_PROFILE_SWORD_AND_SHIELD
+                        && normalize_identifier(assignment.ability_id.as_str()) == ability_id
+                })
+                .unwrap_or_else(|| {
+                    panic!("{ability_id} should appear on the SwordAndShield default action bar")
+                });
+            assert_eq!(
+                normalize_identifier(default_assignment.slot_id.as_str()),
+                slot_id
+            );
+
+            let definition = spell_definition_by_str(action_id)
+                .unwrap_or_else(|| panic!("{action_id} spell definition"));
+            assert_eq!(definition.primary_resource_cost, 0.0);
+            assert_eq!(
+                definition.behavior,
+                crate::spells::SpellBehavior::Projectile
+            );
+            assert_eq!(definition.damage, 18);
+            assert_eq!(definition.damage_type, DamageType::Holy);
+            assert_eq!(definition.targeting, crate::spells::SpellTargeting::Self_);
+            assert!(!definition.requires_target);
+            let projectile = definition
+                .secondary
+                .projectile
+                .as_ref()
+                .expect("orbit spell should define projectile secondary tunables");
+            assert_eq!(projectile.motion.kind(), "ORBIT_CASTER");
+            let orbit = projectile
+                .motion
+                .orbit()
+                .expect("orbit spell should use orbit-caster projectile motion");
+            assert_eq!(orbit.projectile_count, 1);
+            assert!((orbit.orbit_radius - 2.0).abs() < 0.0001);
+            assert!((orbit.orbit_height - 1.0).abs() < 0.0001);
+            let expected_angular_speed = if action_id == "BLADE_BARRIER" {
+                -180.0
+            } else {
+                180.0
+            };
+            assert!(
+                (orbit.angular_speed_deg_per_sec - expected_angular_speed).abs() < 0.0001
+            );
+            assert!((orbit.lifetime_seconds - 10.0).abs() < 0.0001);
+            assert!((orbit.hit_radius - 0.45).abs() < 0.0001);
+            assert!((orbit.hit_cooldown_seconds - 0.35).abs() < 0.0001);
+            assert_eq!(orbit.max_hits_per_target, 0);
+            assert_eq!(
+                projectile_body_vfx_id_for_spell(ability_id, action_id, 0).as_deref(),
+                Some(vfx_id)
+            );
+        }
+    }
+
+    #[test]
     fn paladin_cleansing_touch_authors_target_impact_vfx() {
         let cue = progression_catalog()
             .combat_vfx_cues
@@ -8493,6 +8604,8 @@ mod tests {
             "PALADIN_THORNS_AURA",
             "PALADIN_WARDING_AURA",
             "PALADIN_AURA_OF_VENGEANCE",
+            "PALADIN_BLESSED_SHIELD",
+            "PALADIN_BLADE_BARRIER",
         ]
         .into_iter()
         .collect();

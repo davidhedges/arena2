@@ -73,7 +73,7 @@ use crate::player_physics::{commit_player_physics, PhysicsWriteMode, PlayerPhysi
 use crate::playground_targets::is_playground_target;
 use crate::practice::{is_training_instance, tick_practice};
 use crate::progression::{
-    backfill_character_action_bar_rows, backfill_sword_and_shield_aura_action_bar_rows,
+    backfill_character_action_bar_rows, backfill_sword_and_shield_visible_action_bar_rows,
     clear_parry_action_bar_assignments, migrate_renamed_skyfall_action_bar_assignments,
     sync_progression_catalogs,
 };
@@ -414,11 +414,12 @@ fn bootstrap_server_state(ctx: &ReducerContext) {
             repaired_action_bar_rows
         );
     }
-    let repaired_sword_and_shield_aura_rows = backfill_sword_and_shield_aura_action_bar_rows(ctx);
-    if repaired_sword_and_shield_aura_rows > 0 {
+    let repaired_sword_and_shield_visible_rows =
+        backfill_sword_and_shield_visible_action_bar_rows(ctx);
+    if repaired_sword_and_shield_visible_rows > 0 {
         log::warn!(
-            "[INIT] Backfilled {} SwordAndShield aura action-bar assignment row(s)",
-            repaired_sword_and_shield_aura_rows
+            "[INIT] Backfilled {} SwordAndShield visible action-bar assignment row(s)",
+            repaired_sword_and_shield_visible_rows
         );
     }
     let repaired_appearance_rows = backfill_character_appearance_rows(ctx);

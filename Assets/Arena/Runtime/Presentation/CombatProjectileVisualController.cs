@@ -29,6 +29,7 @@ namespace Arena.Presentation
         // rows independent when gameplay delivery grows beyond one projectile.
         private readonly Dictionary<string, ISpellVFX> _activeProjectiles = new();
         private readonly Dictionary<string, OrbitProjectileMotion> _orbitProjectiles = new();
+        private readonly Dictionary<string, DelayedProjectileStart> _delayedProjectileStarts = new(StringComparer.Ordinal);
         private readonly HashSet<string> _adoptedPredictedProjectiles = new(StringComparer.Ordinal);
         private readonly List<string> _removeList = new();
         private readonly HashSet<string> _missingProjectilePrefabWarnings = new();
@@ -37,8 +38,22 @@ namespace Arena.Presentation
         private readonly HashSet<string> _terminalProjectileKeys = new(StringComparer.Ordinal);
 #endif
 
+        private readonly struct DelayedProjectileStart
+        {
+            public DelayedProjectileStart(ProjectilePresentationEvent row, float startAtSeconds)
+            {
+                Row = row;
+                StartAtSeconds = startAtSeconds;
+            }
+
+            public ProjectilePresentationEvent Row { get; }
+            public float StartAtSeconds { get; }
+        }
+
         public void Tick(float dt)
         {
+            TickDelayedProjectileStarts();
+
             _removeList.Clear();
             foreach (var (projectileId, vfx) in _activeProjectiles)
             {
@@ -86,7 +101,19 @@ namespace Arena.Presentation
 
         public void Start(ProjectilePresentationEvent row)
         {
+            Start(row, allowAnimatedPropDelay: true);
+        }
+
+        private void Start(ProjectilePresentationEvent row, bool allowAnimatedPropDelay)
+        {
             string projectileKey = ProjectileKey(row);
+            if (allowAnimatedPropDelay
+                && TryDelayAnimatedPropProjectileStart(projectileKey, row))
+            {
+                return;
+            }
+
+            ReleaseAnimatedPropHandoff(row);
             ReplaceProjectile(projectileKey, row.ProjectileId, template =>
             {
                 ProjectileVfxPool.Rental? rental = _projectilePool.TryRent(template, projectileKey);
@@ -133,11 +160,27 @@ namespace Arena.Presentation
             if (string.IsNullOrWhiteSpace(authoritativeKey)
                 || string.Equals(predictedProjectileKey, authoritativeKey, StringComparison.Ordinal))
             {
-                return _activeProjectiles.ContainsKey(authoritativeKey);
+                return _activeProjectiles.ContainsKey(authoritativeKey)
+                    || _delayedProjectileStarts.ContainsKey(authoritativeKey);
             }
 
             if (!_activeProjectiles.TryGetValue(predictedProjectileKey, out ISpellVFX predicted))
-                return false;
+            {
+                if (!_delayedProjectileStarts.TryGetValue(predictedProjectileKey, out DelayedProjectileStart delayed))
+                    return false;
+
+                _delayedProjectileStarts.Remove(predictedProjectileKey);
+                _delayedProjectileStarts[authoritativeKey] = new DelayedProjectileStart(
+                    authoritative,
+                    delayed.StartAtSeconds);
+                _adoptedPredictedProjectiles.Remove(predictedProjectileKey);
+                _adoptedPredictedProjectiles.Add(authoritativeKey);
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                _terminalProjectileKeys.Remove(predictedProjectileKey);
+                RefreshDebugCounts();
+#endif
+                return true;
+            }
 
             if (_activeProjectiles.TryGetValue(authoritativeKey, out ISpellVFX oldAuthoritative))
                 DisposeVfx(oldAuthoritative);
@@ -206,6 +249,15 @@ namespace Arena.Presentation
         public void Impact(ProjectilePresentationEvent row)
         {
             string projectileKey = ProjectileKey(row);
+            if (_delayedProjectileStarts.Remove(projectileKey))
+            {
+                ReleaseAnimatedPropHandoff(row);
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                RefreshDebugCounts();
+#endif
+                return;
+            }
+
             if (_activeProjectiles.TryGetValue(projectileKey, out var vfx))
             {
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
@@ -220,6 +272,17 @@ namespace Arena.Presentation
         public void Fizzle(ProjectilePresentationEvent row)
         {
             string projectileKey = ProjectileKey(row);
+            if (_delayedProjectileStarts.Remove(projectileKey))
+            {
+                ReleaseAnimatedPropHandoff(row);
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                DebugTerminalProjectileVisualCount++;
+                _terminalProjectileKeys.Add(projectileKey);
+                RefreshDebugCounts();
+#endif
+                return;
+            }
+
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
             if (_activeProjectiles.ContainsKey(projectileKey))
             {
@@ -236,6 +299,7 @@ namespace Arena.Presentation
                 DisposeVfx(vfx);
             _activeProjectiles.Clear();
             _orbitProjectiles.Clear();
+            _delayedProjectileStarts.Clear();
             _adoptedPredictedProjectiles.Clear();
             _projectilePool.Dispose();
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
@@ -320,6 +384,79 @@ namespace Arena.Presentation
             vfx.OnUpdate(casterPosition + offset, direction, 0f, snapToAuthoritative: true);
         }
 
+        private void TickDelayedProjectileStarts()
+        {
+            if (_delayedProjectileStarts.Count == 0)
+                return;
+
+            float now = Time.time;
+            _removeList.Clear();
+            foreach (var (projectileKey, delayed) in _delayedProjectileStarts)
+            {
+                if (now >= delayed.StartAtSeconds)
+                    _removeList.Add(projectileKey);
+            }
+
+            for (int i = 0; i < _removeList.Count; i++)
+            {
+                string projectileKey = _removeList[i];
+                if (!_delayedProjectileStarts.TryGetValue(projectileKey, out DelayedProjectileStart delayed))
+                    continue;
+
+                _delayedProjectileStarts.Remove(projectileKey);
+                Start(delayed.Row, allowAnimatedPropDelay: false);
+            }
+        }
+
+        private bool TryDelayAnimatedPropProjectileStart(
+            string projectileKey,
+            ProjectilePresentationEvent row)
+        {
+            if (string.IsNullOrWhiteSpace(projectileKey)
+                || !string.Equals(row.SourceKind, CombatEventSources.Spell, StringComparison.Ordinal)
+                || !string.Equals(row.EventType, CombatEventTypes.Release, StringComparison.Ordinal)
+                || !TryResolveCasterWeaponAttachments(row.Caster, out WeaponAttachmentController attachments)
+                || !attachments.TryGetTemporaryAnimatedPropReleaseDelaySeconds(row.ActionKind, out float delaySeconds))
+            {
+                return false;
+            }
+
+            const float ImmediateHandoffThresholdSeconds = 0.025f;
+            if (delaySeconds <= ImmediateHandoffThresholdSeconds)
+                return false;
+
+            float startAt = Time.time + delaySeconds;
+            if (_delayedProjectileStarts.TryGetValue(projectileKey, out DelayedProjectileStart existing))
+                startAt = Mathf.Min(startAt, existing.StartAtSeconds);
+
+            _delayedProjectileStarts[projectileKey] = new DelayedProjectileStart(row, startAt);
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            RefreshDebugCounts();
+#endif
+            return true;
+        }
+
+        private static void ReleaseAnimatedPropHandoff(ProjectilePresentationEvent row)
+        {
+            if (!string.Equals(row.SourceKind, CombatEventSources.Spell, StringComparison.Ordinal))
+                return;
+            if (TryResolveCasterWeaponAttachments(row.Caster, out WeaponAttachmentController attachments))
+                attachments.ReleaseTemporaryAnimatedProp(row.ActionKind);
+        }
+
+        private static bool TryResolveCasterWeaponAttachments(
+            SpacetimeDB.Identity caster,
+            out WeaponAttachmentController attachments)
+        {
+            attachments = null!;
+            var registry = EntityRegistry.Instance;
+            if (registry == null || !registry.TryGetEntity(caster, out var casterEntity))
+                return false;
+
+            attachments = casterEntity.GameObject.GetComponent<WeaponAttachmentController>();
+            return attachments != null;
+        }
+
         private void ReplaceProjectile(string projectileKey, string projectileId, Func<CombatVFXRegistry.Template, ISpellVFX> create)
         {
             if (_activeProjectiles.TryGetValue(projectileKey, out var old))
@@ -365,6 +502,15 @@ namespace Arena.Presentation
 
         private void RemoveProjectile(string projectileKey)
         {
+            if (_delayedProjectileStarts.Remove(projectileKey))
+            {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                _terminalProjectileKeys.Remove(projectileKey);
+                RefreshDebugCounts();
+#endif
+                return;
+            }
+
             if (!_activeProjectiles.TryGetValue(projectileKey, out var vfx))
                 return;
 
