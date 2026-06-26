@@ -330,6 +330,7 @@ namespace Arena.Tests.Editor
             string contracts = File.ReadAllText(GameplayContractsPath);
             Assert.That(contracts, Does.Contain("new(\"S+3\", KeyCode.Alpha3, true, ActionBarSlotIds.Slot22"));
             Assert.That(contracts, Does.Contain("new(\"S+9\", KeyCode.Alpha9, true, ActionBarSlotIds.Slot28"));
+            Assert.That(contracts, Does.Contain("new(\"0\", KeyCode.Alpha0, false, ActionBarSlotIds.Slot10"));
             Assert.That(contracts, Does.Contain("DodgeKeyLabel = \"Q\""));
             Assert.That(contracts, Does.Contain("DodgeKeyCode = KeyCode.Q"));
             Assert.That(contracts, Does.Not.Contain("new(\"Q\", KeyCode.Q, false"));

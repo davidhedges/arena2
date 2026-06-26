@@ -560,6 +560,7 @@ namespace Arena.Combat
             new("7", KeyCode.Alpha7, false, ActionBarSlotIds.Slot06, 0, 6),
             new("8", KeyCode.Alpha8, false, ActionBarSlotIds.Slot07, 0, 7),
             new("9", KeyCode.Alpha9, false, ActionBarSlotIds.Slot08, 0, 8),
+            new("0", KeyCode.Alpha0, false, ActionBarSlotIds.Slot10, 1, 0),
             new("E", KeyCode.E, false, ActionBarSlotIds.Slot11, 1, 1),
             new("R", KeyCode.R, false, ActionBarSlotIds.Slot12, 1, 2),
             new("T", KeyCode.T, false, ActionBarSlotIds.Slot13, 1, 3),

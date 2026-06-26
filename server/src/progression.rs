@@ -1680,17 +1680,26 @@ pub(crate) fn backfill_character_action_bar_rows(ctx: &ReducerContext) -> usize 
     repaired
 }
 
-pub(crate) fn clear_parry_action_bar_assignments(ctx: &ReducerContext) -> usize {
-    let keys: Vec<String> = ctx
+pub(crate) fn clear_generic_fixed_action_bar_assignments(ctx: &ReducerContext) -> usize {
+    let rows: Vec<CharacterActionBarAssignment> = ctx
         .db
         .character_action_bar_assignment()
         .iter()
-        .filter(|assignment| character_action_bar_assignment_is_fixed_parry(assignment))
-        .map(|assignment| assignment.key)
+        .filter(|assignment| character_action_bar_assignment_is_generic_fixed_action(assignment))
         .collect();
-    let removed = keys.len();
-    for key in keys {
-        ctx.db.character_action_bar_assignment().key().delete(key);
+    let removed = rows.len();
+    for row in rows {
+        ctx.db
+            .character_action_bar_assignment()
+            .key()
+            .delete(row.key.clone());
+        restore_default_action_bar_assignment_for_slot(
+            ctx,
+            row.owner,
+            row.combat_profile_id.as_str(),
+            row.slot_id.as_str(),
+            ctx.timestamp,
+        );
     }
     removed
 }
@@ -1757,7 +1766,7 @@ pub(crate) fn ensure_default_progression_for_identity(
     };
     ensure_default_combat_discipline_state(ctx, owner, ctx.timestamp);
     sync_active_combat_mode_for_owner(ctx, owner, ctx.timestamp);
-    clear_parry_action_bar_assignments_for_owner(ctx, owner);
+    clear_generic_fixed_action_bar_assignments_for_owner(ctx, owner, ctx.timestamp);
     ensure_default_character_action_bar_assignments(ctx, owner, ctx.timestamp);
 
     Ok(())
@@ -1820,7 +1829,7 @@ pub(crate) fn sync_progression_for_equipment_change(
 ) {
     ensure_default_combat_discipline_state(ctx, owner, now);
     sync_active_combat_mode_for_owner(ctx, owner, now);
-    clear_parry_action_bar_assignments_for_owner(ctx, owner);
+    clear_generic_fixed_action_bar_assignments_for_owner(ctx, owner, now);
     ensure_default_character_action_bar_assignments(ctx, owner, now);
 }
 
@@ -3475,6 +3484,60 @@ fn ensure_default_action_bar_assignments_for_scope(
     inserted
 }
 
+fn restore_default_action_bar_assignment_for_slot(
+    ctx: &ReducerContext,
+    owner: Identity,
+    combat_profile_id: &str,
+    slot_id: &str,
+    now: Timestamp,
+) -> bool {
+    let combat_profile_id = normalize_identifier(combat_profile_id);
+    let slot_id = canonical_action_bar_slot_id(slot_id);
+    if ctx
+        .db
+        .character_action_bar_assignment()
+        .key()
+        .find(character_action_bar_key(
+            owner,
+            combat_profile_id.as_str(),
+            slot_id.as_str(),
+        ))
+        .is_some()
+    {
+        return false;
+    }
+
+    let Some(assignment) = action_bar_defaults_for_profile(combat_profile_id.as_str())
+        .into_iter()
+        .find(|assignment| canonical_action_bar_slot_id(assignment.slot_id.as_str()) == slot_id)
+    else {
+        return false;
+    };
+
+    let action_ref = action_ref_for_action_bar_default(assignment);
+    if validate_character_action_bar_ref(
+        ctx,
+        owner,
+        combat_profile_id.as_str(),
+        slot_id.as_str(),
+        &action_ref,
+    )
+    .is_err()
+    {
+        return false;
+    }
+
+    upsert_character_action_bar_assignment(
+        ctx,
+        owner,
+        combat_profile_id.as_str(),
+        slot_id.as_str(),
+        &action_ref,
+        now,
+    );
+    true
+}
+
 const SWORD_AND_SHIELD_VISIBLE_DEFAULT_ABILITY_IDS: &[&str] = &[
     "PALADIN_FERVOR",
     "PALADIN_MANA_FONT",
@@ -3872,27 +3935,46 @@ fn action_ref_for_character_action_bar_assignment(
     ActionRef::ability(assignment.ability_id.as_str())
 }
 
-fn character_action_bar_assignment_is_fixed_parry(
+fn character_action_bar_assignment_is_generic_fixed_action(
     assignment: &CharacterActionBarAssignment,
 ) -> bool {
     let action_ref = action_ref_for_character_action_bar_assignment(assignment);
-    (action_ref.kind == ActionKind::Fixed && action_ref.id == FIXED_ACTION_PARRY)
-        || normalize_identifier(assignment.action_id.as_str()) == FIXED_ACTION_PARRY
-        || normalize_identifier(assignment.ability_id.as_str()) == FIXED_ACTION_PARRY
+    let action_id = normalize_identifier(assignment.action_id.as_str());
+    let ability_id = normalize_identifier(assignment.ability_id.as_str());
+    (action_ref.kind == ActionKind::Fixed
+        && matches!(
+            action_ref.id.as_str(),
+            FIXED_ACTION_DODGE | FIXED_ACTION_PARRY
+        ))
+        || matches!(action_id.as_str(), FIXED_ACTION_DODGE | FIXED_ACTION_PARRY)
+        || matches!(ability_id.as_str(), FIXED_ACTION_DODGE | FIXED_ACTION_PARRY)
 }
 
-fn clear_parry_action_bar_assignments_for_owner(ctx: &ReducerContext, owner: Identity) -> usize {
-    let keys: Vec<String> = ctx
+fn clear_generic_fixed_action_bar_assignments_for_owner(
+    ctx: &ReducerContext,
+    owner: Identity,
+    now: Timestamp,
+) -> usize {
+    let rows: Vec<CharacterActionBarAssignment> = ctx
         .db
         .character_action_bar_assignment()
         .owner()
         .filter(owner)
-        .filter(|assignment| character_action_bar_assignment_is_fixed_parry(assignment))
-        .map(|assignment| assignment.key)
+        .filter(|assignment| character_action_bar_assignment_is_generic_fixed_action(assignment))
         .collect();
-    let removed = keys.len();
-    for key in keys {
-        ctx.db.character_action_bar_assignment().key().delete(key);
+    let removed = rows.len();
+    for row in rows {
+        ctx.db
+            .character_action_bar_assignment()
+            .key()
+            .delete(row.key.clone());
+        restore_default_action_bar_assignment_for_slot(
+            ctx,
+            row.owner,
+            row.combat_profile_id.as_str(),
+            row.slot_id.as_str(),
+            now,
+        );
     }
     removed
 }
@@ -4866,19 +4948,20 @@ mod tests {
     use super::{
         ability_gameplay_kind, ability_is_compatible_with_slot, action_presentation_key,
         action_ref_for_action_bar_default, authored_status_presentation_ids,
-        canonical_action_bar_slot_id, combat_vfx_cue_key, derived_spell_action_presentation_rows,
+        canonical_action_bar_slot_id, character_action_bar_assignment_is_generic_fixed_action,
+        combat_vfx_cue_key, derived_spell_action_presentation_rows,
         melee_impact_effects_for_ability_id, normalize_identifier,
         normalize_optional_target_audience, primary_resource_gain_on_action_accept,
         progression_catalog, projectile_body_vfx_id_for_spell,
         resolved_combat_profile_id_for_ability_definition, resolved_melee_targeting_for_catalog,
         selectable_slot_ids, validate_auto_attack_catalog, validate_combat_mode_catalog,
         validate_progression_catalog_authoring_contract, AbilityDefinition, ActionKind,
-        CombatVfxPresentationManifest, FixedActionId, MeleeImpactEffectRuntime,
-        ABILITY_KIND_COMBAT_MODE_TOGGLE, ACTION_KIND_FIXED, ARCHER_DRAW_MODE_TOGGLE_ABILITY_ID,
-        AUTO_ATTACK_MOVEMENT_ALLOW_MOVING, AUTO_ATTACK_MOVEMENT_RESET_ON_VOLUNTARY_MOVE,
-        COMBAT_MODE_FULL_DRAW, COMBAT_MODE_SHORT_DRAW, COMBAT_PROFILE_ARCHER_BOW,
-        COMBAT_PROFILE_SWORD_AND_SHIELD, COMBAT_PROFILE_TWO_HANDED_SWORD,
-        GLOBAL_ACTION_BAR_PROFILE, RESOURCE_KIND_STAMINA,
+        CharacterActionBarAssignment, CombatVfxPresentationManifest, FixedActionId,
+        MeleeImpactEffectRuntime, ABILITY_KIND_COMBAT_MODE_TOGGLE, ACTION_KIND_FIXED,
+        ARCHER_DRAW_MODE_TOGGLE_ABILITY_ID, AUTO_ATTACK_MOVEMENT_ALLOW_MOVING,
+        AUTO_ATTACK_MOVEMENT_RESET_ON_VOLUNTARY_MOVE, COMBAT_MODE_FULL_DRAW,
+        COMBAT_MODE_SHORT_DRAW, COMBAT_PROFILE_ARCHER_BOW, COMBAT_PROFILE_SWORD_AND_SHIELD,
+        COMBAT_PROFILE_TWO_HANDED_SWORD, GLOBAL_ACTION_BAR_PROFILE, RESOURCE_KIND_STAMINA,
     };
     use crate::action_ids::{AuthoredActionId, RuntimeActionId};
 
@@ -8672,6 +8755,39 @@ mod tests {
                 "{fixed_action_id} is a generic keybind and must not be assigned to action-bar defaults"
             );
         }
+    }
+
+    #[test]
+    fn generic_fixed_action_bar_assignment_cleanup_matches_dodge_and_parry() {
+        fn assignment(
+            action_kind: &str,
+            action_id: &str,
+            ability_id: &str,
+        ) -> CharacterActionBarAssignment {
+            CharacterActionBarAssignment {
+                key: "test-key".to_string(),
+                owner: spacetimedb::Identity::ZERO,
+                combat_profile_id: COMBAT_PROFILE_TWO_HANDED_SWORD.to_string(),
+                slot_id: "SLOT_1_0".to_string(),
+                action_kind: action_kind.to_string(),
+                action_id: action_id.to_string(),
+                ability_id: ability_id.to_string(),
+                updated_at: spacetimedb::Timestamp::UNIX_EPOCH,
+            }
+        }
+
+        assert!(character_action_bar_assignment_is_generic_fixed_action(
+            &assignment(ACTION_KIND_FIXED, "DODGE", "")
+        ));
+        assert!(character_action_bar_assignment_is_generic_fixed_action(
+            &assignment(ACTION_KIND_FIXED, "PARRY", "")
+        ));
+        assert!(character_action_bar_assignment_is_generic_fixed_action(
+            &assignment("", "", "DODGE")
+        ));
+        assert!(!character_action_bar_assignment_is_generic_fixed_action(
+            &assignment("ABILITY", "WARRIOR_HEW", "WARRIOR_HEW")
+        ));
     }
 
     #[test]
