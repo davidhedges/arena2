@@ -23,7 +23,10 @@ namespace Arena.UI
         private const float RefreshIntervalSeconds = 0.20f;
         private const int AvailableColumns = 7;
         private const float AvailableGap = 8f;
+        private const float AvailableSectionHeaderHeight = 28f;
+        private const float AvailableSectionGap = 14f;
         private const string ActionBarActionTag = "ACTION_BAR_ACTION";
+        private const string AllWeaponsFilterKey = "ALL_WEAPONS";
 
         private static readonly Color PanelColor = new(0.055f, 0.06f, 0.068f, 0.96f);
         private static readonly Color HeaderColor = new(0.09f, 0.105f, 0.12f, 0.98f);
@@ -35,20 +38,28 @@ namespace Arena.UI
         private Canvas? _canvas;
         private GameObject? _root;
         private RectTransform? _availableRoot;
+        private RectTransform? _availableContent;
         private RectTransform? _barRoot;
         private TextMeshProUGUI? _title;
         private TextMeshProUGUI? _spellSlots;
         private TextMeshProUGUI? _status;
+        private Button? _weaponFilterButton;
+        private TextMeshProUGUI? _weaponFilterLabel;
+        private RectTransform? _weaponFilterMenu;
         private DbConnection? _subscribedConnection;
         private readonly List<GameObject> _availableCells = new();
         private readonly List<GameObject> _barCells = new();
         private readonly List<GameObject> _spellbookCells = new();
+        private readonly List<GameObject> _weaponFilterMenuCells = new();
+        private readonly List<WeaponFilterOption> _weaponFilterOptions = new();
         private AvailableAction _selectedAction;
         private string _lastSignature = string.Empty;
         private string _lastError = string.Empty;
+        private string _weaponFilterKey = AllWeaponsFilterKey;
         private float _errorUntilTime;
         private float _nextRefreshTime;
         private bool _isOpen;
+        private bool _weaponFilterMenuOpen;
 
         public int EscapeClosePriority => 89;
         public bool IsEscapeCloseable => _isOpen;
@@ -59,6 +70,9 @@ namespace Arena.UI
             public readonly string ActionId;
             public readonly string AbilityId;
             public readonly string DisplayName;
+            public readonly string CategoryKey;
+            public readonly string CategoryTitle;
+            public readonly uint CategorySortOrder;
             public readonly uint SortOrder;
             public readonly bool IsFixed;
             public readonly bool IsUsable;
@@ -69,6 +83,9 @@ namespace Arena.UI
                 string actionId,
                 string abilityId,
                 string displayName,
+                string categoryKey,
+                string categoryTitle,
+                uint categorySortOrder,
                 uint sortOrder,
                 bool isFixed,
                 bool isUsable,
@@ -78,6 +95,9 @@ namespace Arena.UI
                 ActionId = WireIdentifier.Normalize(actionId);
                 AbilityId = WireIdentifier.Normalize(abilityId);
                 DisplayName = displayName;
+                CategoryKey = WireIdentifier.Normalize(categoryKey);
+                CategoryTitle = string.IsNullOrWhiteSpace(categoryTitle) ? "General" : categoryTitle;
+                CategorySortOrder = categorySortOrder;
                 SortOrder = sortOrder;
                 IsFixed = isFixed;
                 IsUsable = isUsable;
@@ -217,13 +237,41 @@ namespace Arena.UI
             SetRect((RectTransform)close.transform, new Vector2(-94f, -49f), new Vector2(72f, 34f), new Vector2(1f, 1f), new Vector2(1f, 1f));
             close.onClick.AddListener(() => SetOpen(false));
 
+            _weaponFilterButton = MakeButton("WeaponFilterButton", _root.transform, "All Weapons", new Color(0.035f, 0.04f, 0.048f, 0.98f), Color.white);
+            _weaponFilterLabel = _weaponFilterButton.GetComponentInChildren<TextMeshProUGUI>();
+            SetRect((RectTransform)_weaponFilterButton.transform, new Vector2(28f, -96f), new Vector2(536f, 34f), new Vector2(0f, 1f), new Vector2(0f, 1f));
+            _weaponFilterButton.onClick.AddListener(ToggleWeaponFilterMenu);
+
             _availableRoot = new GameObject("AvailableActions", typeof(RectTransform)).GetComponent<RectTransform>();
             _availableRoot.SetParent(_root.transform, false);
             _availableRoot.anchorMin = new Vector2(0f, 0f);
             _availableRoot.anchorMax = new Vector2(0f, 1f);
             _availableRoot.pivot = new Vector2(0f, 1f);
-            _availableRoot.anchoredPosition = new Vector2(28f, -92f);
-            _availableRoot.sizeDelta = new Vector2(536f, 570f);
+            _availableRoot.anchoredPosition = new Vector2(28f, -138f);
+            _availableRoot.sizeDelta = new Vector2(536f, 524f);
+            Image availableMaskImage = _availableRoot.gameObject.AddComponent<Image>();
+            availableMaskImage.color = new Color(0f, 0f, 0f, 0.01f);
+            Mask availableMask = _availableRoot.gameObject.AddComponent<Mask>();
+            availableMask.showMaskGraphic = false;
+            ScrollRect availableScroll = _availableRoot.gameObject.AddComponent<ScrollRect>();
+            availableScroll.horizontal = false;
+            availableScroll.vertical = true;
+            availableScroll.movementType = ScrollRect.MovementType.Clamped;
+            availableScroll.scrollSensitivity = 42f;
+
+            _availableContent = new GameObject("AvailableActionsContent", typeof(RectTransform)).GetComponent<RectTransform>();
+            _availableContent.SetParent(_availableRoot, false);
+            _availableContent.anchorMin = new Vector2(0f, 1f);
+            _availableContent.anchorMax = new Vector2(0f, 1f);
+            _availableContent.pivot = new Vector2(0f, 1f);
+            _availableContent.anchoredPosition = Vector2.zero;
+            _availableContent.sizeDelta = _availableRoot.sizeDelta;
+            availableScroll.viewport = _availableRoot;
+            availableScroll.content = _availableContent;
+
+            _weaponFilterMenu = AddBlock("WeaponFilterMenu", _root.transform, new Color(0.045f, 0.052f, 0.062f, 0.99f));
+            SetRect(_weaponFilterMenu, new Vector2(28f, -132f), new Vector2(536f, 0f), new Vector2(0f, 1f), new Vector2(0f, 1f));
+            _weaponFilterMenu.gameObject.SetActive(false);
 
             _barRoot = new GameObject("ActionBarGrid", typeof(RectTransform)).GetComponent<RectTransform>();
             _barRoot.SetParent(_root.transform, false);
@@ -239,7 +287,7 @@ namespace Arena.UI
 
         private void Refresh()
         {
-            if (_canvas == null || _availableRoot == null || _barRoot == null)
+            if (_canvas == null || _availableRoot == null || _availableContent == null || _barRoot == null)
                 return;
 
             DbConnection? conn = NetworkManager.Instance?.Conn;
@@ -254,8 +302,9 @@ namespace Arena.UI
             string combatProfile = CombatProfileResolver.ResolveForOwner(conn, owner.Value);
             int spellSlotCapacity = SpellSlotResolver.Capacity(conn, owner.Value);
             int assignedSpellSlots = SpellSlotResolver.AssignedSpellCount(conn, owner.Value);
-            List<AvailableAction> actions = BuildAvailableActions(conn, owner.Value, combatProfile);
-            string signature = BuildSignature(conn, owner.Value, combatProfile, actions, _selectedAction, assignedSpellSlots, spellSlotCapacity);
+            UpdateWeaponFilterOptions(conn);
+            List<AvailableAction> actions = BuildAvailableActions(conn, owner.Value, combatProfile, _weaponFilterKey);
+            string signature = BuildSignature(conn, owner.Value, combatProfile, actions, _selectedAction, assignedSpellSlots, spellSlotCapacity, _weaponFilterKey);
             if (signature == _lastSignature)
                 return;
 
@@ -275,17 +324,41 @@ namespace Arena.UI
             Clear(_barCells);
             Clear(_spellbookCells);
 
-            if (_canvas == null || _availableRoot == null || _barRoot == null)
+            if (_canvas == null || _availableRoot == null || _availableContent == null || _barRoot == null)
                 return;
 
+            float cursorY = 0f;
+            string categoryKey = string.Empty;
+            int indexInCategory = 0;
             for (int i = 0; i < actions.Count; i++)
             {
                 AvailableAction action = actions[i];
-                int row = i / AvailableColumns;
-                int col = i % AvailableColumns;
+                if (!string.Equals(categoryKey, action.CategoryKey, StringComparison.Ordinal))
+                {
+                    if (!string.IsNullOrWhiteSpace(categoryKey))
+                        cursorY += AvailableSectionGap;
+
+                    categoryKey = action.CategoryKey;
+                    indexInCategory = 0;
+                    float availableWidth = _availableRoot.rect.width > 0f
+                        ? _availableRoot.rect.width
+                        : _availableRoot.sizeDelta.x;
+                    GameObject header = CreateAvailableSectionHeader(_availableContent, action.CategoryTitle);
+                    SetRect(
+                        (RectTransform)header.transform,
+                        new Vector2(0f, -cursorY),
+                        new Vector2(availableWidth, AvailableSectionHeaderHeight),
+                        new Vector2(0f, 1f),
+                        new Vector2(0f, 1f));
+                    _availableCells.Add(header);
+                    cursorY += AvailableSectionHeaderHeight;
+                }
+
+                int row = indexInCategory / AvailableColumns;
+                int col = indexInCategory % AvailableColumns;
                 Vector2 position = new(
                     col * (ActionBarLayout.SlotSize + AvailableGap),
-                    -(row * (ActionBarLayout.SlotSize + AvailableGap)));
+                    -(cursorY + row * (ActionBarLayout.SlotSize + AvailableGap)));
                 Sprite? iconSprite = ActionIconResolver.ResolveForAvailableAction(action.ActionKind, action.ActionId, action.AbilityId);
                 TooltipData tooltip = action.IsFixed
                     ? ActionTooltipResolver.ResolveForFixedAction(conn, action.ActionId)
@@ -293,7 +366,7 @@ namespace Arena.UI
                 if (!action.IsUsable)
                     tooltip = DisabledTooltip(tooltip, action);
                 GameObject cell = ActionBarSlotViewFactory.Create(
-                    _availableRoot,
+                    _availableContent,
                     $"Available_{action.ActionKind}_{action.ActionId}",
                     iconSprite == null ? action.DisplayName : string.Empty,
                     string.Empty,
@@ -319,7 +392,27 @@ namespace Arena.UI
                 outline.effectColor = SameAction(_selectedAction, action) ? Gold : new Color(1f, 1f, 1f, 0.08f);
                 outline.effectDistance = SameAction(_selectedAction, action) ? new Vector2(2f, -2f) : new Vector2(1f, -1f);
                 _availableCells.Add(cell);
+                indexInCategory++;
+
+                bool endsCategory = i + 1 >= actions.Count
+                    || !string.Equals(action.CategoryKey, actions[i + 1].CategoryKey, StringComparison.Ordinal);
+                if (endsCategory)
+                {
+                    int rows = Mathf.CeilToInt(indexInCategory / (float)AvailableColumns);
+                    cursorY += rows * ActionBarLayout.SlotSize
+                        + Mathf.Max(0, rows - 1) * AvailableGap;
+                }
             }
+
+            float contentWidth = _availableRoot.rect.width > 0f
+                ? _availableRoot.rect.width
+                : _availableRoot.sizeDelta.x;
+            float contentHeight = _availableRoot.rect.height > 0f
+                ? _availableRoot.rect.height
+                : _availableRoot.sizeDelta.y;
+            _availableContent.sizeDelta = new Vector2(
+                contentWidth,
+                Mathf.Max(contentHeight, cursorY));
 
             BuildSpellbookRow(conn, owner);
 
@@ -494,27 +587,37 @@ namespace Arena.UI
             _nextRefreshTime = 0f;
         }
 
-        private List<AvailableAction> BuildAvailableActions(DbConnection conn, Identity owner, string combatProfile)
+        private List<AvailableAction> BuildAvailableActions(DbConnection conn, Identity owner, string combatProfile, string weaponFilterKey)
         {
             string normalizedProfile = WireIdentifier.Normalize(combatProfile);
             List<AvailableAction> actions = conn.Db.AbilityCatalog.Iter()
                 .Where(ability => !string.IsNullOrWhiteSpace(WireIdentifier.Normalize(ability.AbilityId)))
-                .Select(ability => new AvailableAction(
-                    ActionKinds.Ability,
-                    ability.AbilityId,
-                    ability.AbilityId,
-                    ActionPresentation.ResolveAbilityDisplayName(conn, ability.AbilityId, ability.DisplayName),
-                    ability.SortOrder,
-                    isFixed: false,
-                    isUsable: AbilityIsUsableForPanel(conn, owner, ability, normalizedProfile),
-                    disabledReason: DisabledReasonForAbility(conn, owner, ability, normalizedProfile)))
+                .Select(ability =>
+                {
+                    AbilityCategory category = CategoryForAbility(conn, ability);
+                    return new AvailableAction(
+                        ActionKinds.Ability,
+                        ability.AbilityId,
+                        ability.AbilityId,
+                        ActionPresentation.ResolveAbilityDisplayName(conn, ability.AbilityId, ability.DisplayName),
+                        category.Key,
+                        category.Title,
+                        category.SortOrder,
+                        ability.SortOrder,
+                        isFixed: false,
+                        isUsable: AbilityIsUsableForPanel(conn, owner, ability, normalizedProfile),
+                        disabledReason: DisabledReasonForAbility(conn, owner, ability, normalizedProfile));
+                })
                 .ToList();
 
             foreach (AvailableAction fixedAction in BuildFixedActions(conn))
                 actions.Add(fixedAction);
 
             return actions
-                .OrderBy(action => action.SortOrder)
+                .Where(action => MatchesWeaponFilter(action, weaponFilterKey))
+                .OrderBy(action => action.CategorySortOrder)
+                .ThenBy(action => action.CategoryTitle, StringComparer.Ordinal)
+                .ThenBy(action => action.SortOrder)
                 .ThenBy(action => action.IsFixed ? 1 : 0)
                 .ThenBy(action => action.DisplayName, StringComparer.Ordinal)
                 .ToList();
@@ -582,6 +685,9 @@ namespace Arena.UI
                     fixedActionId,
                     string.Empty,
                     ActionPresentation.ResolveFixedDisplayName(conn, fixedActionId),
+                    "UTILITY",
+                    "Utility",
+                    uint.MaxValue,
                     presentation.SortOrder,
                     isFixed: true,
                     isUsable: true);
@@ -597,10 +703,12 @@ namespace Arena.UI
             IReadOnlyList<AvailableAction> actions,
             AvailableAction selectedAction,
             int assignedSpellSlots,
-            int spellSlotCapacity)
+            int spellSlotCapacity,
+            string weaponFilterKey)
         {
             StringBuilder sb = new();
             sb.Append(combatProfile).Append('|');
+            sb.Append("weapon_filter:").Append(weaponFilterKey).Append('|');
             sb.Append("spell_slots:").Append(assignedSpellSlots).Append('/').Append(spellSlotCapacity).Append('|');
             foreach (CharacterActionBarAssignment assignment in conn.Db.CharacterActionBarAssignment.Owner.Filter(owner)
                          .Where(row => ActionBarAssignmentScope.MatchesCombatProfile(row, combatProfile))
@@ -615,6 +723,9 @@ namespace Arena.UI
                 sb.Append(action.ActionKind).Append(':')
                     .Append(action.ActionId).Append(':')
                     .Append(action.AbilityId).Append(':')
+                    .Append(action.CategoryKey).Append(':')
+                    .Append(action.CategoryTitle).Append(':')
+                    .Append(action.CategorySortOrder).Append(':')
                     .Append(action.DisplayName).Append(':')
                     .Append(action.SortOrder).Append(':')
                     .Append(action.IsUsable).Append(':')
@@ -719,6 +830,227 @@ namespace Arena.UI
             return new TooltipData(name, subtitle, baseTooltip.Description);
         }
 
+        private static bool MatchesWeaponFilter(AvailableAction action, string weaponFilterKey)
+        {
+            string normalizedFilter = WireIdentifier.Normalize(weaponFilterKey);
+            return string.IsNullOrWhiteSpace(normalizedFilter)
+                || string.Equals(normalizedFilter, AllWeaponsFilterKey, StringComparison.Ordinal)
+                || string.Equals(action.CategoryKey, normalizedFilter, StringComparison.Ordinal);
+        }
+
+        private readonly struct WeaponFilterOption
+        {
+            public readonly string Key;
+            public readonly string Title;
+            public readonly uint SortOrder;
+
+            public WeaponFilterOption(string key, string title, uint sortOrder)
+            {
+                Key = WireIdentifier.Normalize(key);
+                Title = string.IsNullOrWhiteSpace(title) ? "All Weapons" : title;
+                SortOrder = sortOrder;
+            }
+        }
+
+        private readonly struct AbilityCategory
+        {
+            public readonly string Key;
+            public readonly string Title;
+            public readonly uint SortOrder;
+
+            public AbilityCategory(string key, string title, uint sortOrder)
+            {
+                Key = key;
+                Title = title;
+                SortOrder = sortOrder;
+            }
+        }
+
+        private static AbilityCategory CategoryForAbility(DbConnection conn, AbilityCatalog ability)
+        {
+            string profileId = CombatProfileResolver.ResolveForAbility(conn, ability);
+            if (string.IsNullOrWhiteSpace(profileId))
+                return new AbilityCategory("GENERAL", "General", uint.MaxValue - 1);
+
+            return CategoryForProfile(conn, profileId);
+        }
+
+        private static AbilityCategory CategoryForProfile(DbConnection conn, string profileId)
+        {
+            CombatProfileCatalog? profile = conn.Db.CombatProfileCatalog.CombatProfileId.Find(profileId);
+            CombatDisciplineCatalog? discipline = conn.Db.CombatDisciplineCatalog.CombatProfileId
+                .Filter(profileId)
+                .OrderBy(row => row.SortOrder)
+                .ThenBy(row => row.DisplayName, StringComparer.Ordinal)
+                .FirstOrDefault();
+
+            string profileName = string.IsNullOrWhiteSpace(profile?.DisplayName)
+                ? HumanizeIdentifier(profileId)
+                : profile.DisplayName;
+            string title = string.IsNullOrWhiteSpace(discipline?.DisplayName)
+                ? profileName
+                : $"{discipline.DisplayName} / {profileName}";
+            uint sortOrder = discipline?.SortOrder ?? profile?.SortOrder ?? uint.MaxValue - 2;
+            return new AbilityCategory(profileId, title, sortOrder);
+        }
+
+        private void UpdateWeaponFilterOptions(DbConnection conn)
+        {
+            List<WeaponFilterOption> options = BuildWeaponFilterOptions(conn);
+            bool changed = options.Count != _weaponFilterOptions.Count;
+            if (!changed)
+            {
+                for (int i = 0; i < options.Count; i++)
+                {
+                    if (!string.Equals(options[i].Key, _weaponFilterOptions[i].Key, StringComparison.Ordinal)
+                        || !string.Equals(options[i].Title, _weaponFilterOptions[i].Title, StringComparison.Ordinal)
+                        || options[i].SortOrder != _weaponFilterOptions[i].SortOrder)
+                    {
+                        changed = true;
+                        break;
+                    }
+                }
+            }
+
+            if (changed)
+            {
+                _weaponFilterOptions.Clear();
+                _weaponFilterOptions.AddRange(options);
+            }
+
+            if (_weaponFilterOptions.All(option => !string.Equals(option.Key, _weaponFilterKey, StringComparison.Ordinal)))
+                _weaponFilterKey = AllWeaponsFilterKey;
+
+            UpdateWeaponFilterLabel();
+            if (_weaponFilterMenuOpen)
+                RebuildWeaponFilterMenu();
+        }
+
+        private static List<WeaponFilterOption> BuildWeaponFilterOptions(DbConnection conn)
+        {
+            List<WeaponFilterOption> options = new()
+            {
+                new WeaponFilterOption(AllWeaponsFilterKey, "All Weapons", 0),
+            };
+
+            foreach (CombatProfileCatalog profile in conn.Db.CombatProfileCatalog.Iter()
+                         .OrderBy(row => row.SortOrder)
+                         .ThenBy(row => row.DisplayName, StringComparer.Ordinal))
+            {
+                AbilityCategory category = CategoryForProfile(conn, WireIdentifier.Normalize(profile.CombatProfileId));
+                options.Add(new WeaponFilterOption(category.Key, category.Title, category.SortOrder));
+            }
+
+            return options
+                .GroupBy(option => option.Key, StringComparer.Ordinal)
+                .Select(group => group.OrderBy(option => option.SortOrder).First())
+                .OrderBy(option => option.SortOrder)
+                .ThenBy(option => option.Title, StringComparer.Ordinal)
+                .ToList();
+        }
+
+        private void ToggleWeaponFilterMenu()
+        {
+            if (_weaponFilterMenu == null)
+                return;
+
+            _weaponFilterMenuOpen = !_weaponFilterMenuOpen;
+            if (_weaponFilterMenuOpen)
+            {
+                RebuildWeaponFilterMenu();
+                _weaponFilterMenu.SetAsLastSibling();
+            }
+
+            _weaponFilterMenu.gameObject.SetActive(_weaponFilterMenuOpen);
+        }
+
+        private void SelectWeaponFilter(string key)
+        {
+            _weaponFilterKey = WireIdentifier.Normalize(key);
+            _weaponFilterMenuOpen = false;
+            if (_weaponFilterMenu != null)
+                _weaponFilterMenu.gameObject.SetActive(false);
+            if (_availableContent != null)
+                _availableContent.anchoredPosition = Vector2.zero;
+            UpdateWeaponFilterLabel();
+            _lastSignature = string.Empty;
+            _nextRefreshTime = 0f;
+            Refresh();
+        }
+
+        private void UpdateWeaponFilterLabel()
+        {
+            if (_weaponFilterLabel == null)
+                return;
+
+            WeaponFilterOption selected = _weaponFilterOptions.FirstOrDefault(
+                option => string.Equals(option.Key, _weaponFilterKey, StringComparison.Ordinal));
+            _weaponFilterLabel.text = string.IsNullOrWhiteSpace(selected.Title)
+                ? "All Weapons"
+                : selected.Title;
+        }
+
+        private void RebuildWeaponFilterMenu()
+        {
+            Clear(_weaponFilterMenuCells);
+            if (_weaponFilterMenu == null)
+                return;
+
+            const float optionHeight = 34f;
+            float width = _weaponFilterMenu.rect.width > 0f
+                ? _weaponFilterMenu.rect.width
+                : _weaponFilterMenu.sizeDelta.x;
+            _weaponFilterMenu.sizeDelta = new Vector2(width, optionHeight * _weaponFilterOptions.Count);
+
+            for (int i = 0; i < _weaponFilterOptions.Count; i++)
+            {
+                WeaponFilterOption option = _weaponFilterOptions[i];
+                bool selected = string.Equals(option.Key, _weaponFilterKey, StringComparison.Ordinal);
+                Button button = MakeButton(
+                    $"WeaponFilterOption_{option.Key}",
+                    _weaponFilterMenu,
+                    option.Title,
+                    selected ? new Color(0.16f, 0.13f, 0.07f, 0.98f) : new Color(0.07f, 0.08f, 0.09f, 0.98f),
+                    selected ? Gold : Color.white);
+                SetRect(
+                    (RectTransform)button.transform,
+                    new Vector2(0f, -(i * optionHeight)),
+                    new Vector2(width, optionHeight),
+                    new Vector2(0f, 1f),
+                    new Vector2(0f, 1f));
+                string selectedKey = option.Key;
+                button.onClick.AddListener(() => SelectWeaponFilter(selectedKey));
+                _weaponFilterMenuCells.Add(button.gameObject);
+            }
+        }
+
+        private GameObject CreateAvailableSectionHeader(Transform parent, string title)
+        {
+            GameObject header = new("AvailableSectionHeader", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+            header.transform.SetParent(parent, false);
+            header.GetComponent<Image>().color = new Color(0.08f, 0.09f, 0.10f, 0.92f);
+
+            TextMeshProUGUI label = MakeLabel("Text", header.transform, title, 13f, TextAlignmentOptions.MidlineLeft, Gold);
+            SetRect(label.rectTransform, new Vector2(10f, -2f), new Vector2(500f, 24f), new Vector2(0f, 1f), new Vector2(0f, 1f));
+            return header;
+        }
+
+        private static string HumanizeIdentifier(string value)
+        {
+            string normalized = WireIdentifier.Normalize(value);
+            if (string.IsNullOrWhiteSpace(normalized))
+                return "General";
+
+            return string.Join(
+                " ",
+                normalized
+                    .Split('_')
+                    .Where(part => !string.IsNullOrWhiteSpace(part))
+                    .Select(part => part.Length == 1
+                        ? part
+                        : string.Concat(part[..1], part[1..].ToLowerInvariant())));
+        }
+
         private static bool HasAbilityTag(AbilityCatalog ability, string tag)
         {
             string normalizedTag = WireIdentifier.Normalize(tag);
@@ -818,5 +1150,6 @@ namespace Arena.UI
 #endif
             return UnityEngine.Input.GetKeyDown(KeyCode.J);
         }
+
     }
 }

@@ -2089,7 +2089,7 @@ mod tests {
             projectile_id: "VFX_TEST_PROJECTILE".to_string(),
             source_kind: "SPELL".to_string(),
             action_kind: "ORBITING_BLADES".to_string(),
-            ability_id: "WARRIOR_ORBITING_BLADES".to_string(),
+            ability_id: "SPELL_ORBITING_BLADES".to_string(),
             motion_kind: PROJECTILE_MOTION_ORBIT_CASTER.to_string(),
             caster,
             intended_target: Identity::ZERO,

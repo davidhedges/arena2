@@ -513,25 +513,21 @@ fn projectile_spec(
             ..ProjectileSpec::default()
         }),
         ProjectileBucket::LinearSpell => {
-            spell_projectile_spec("ICICLE", "WARRIOR_ICICLE", index, target, Some(0.20))
+            spell_projectile_spec("ICICLE", "SPELL_ICICLE", index, target, Some(0.20))
         }
         ProjectileBucket::HomingSpell => {
-            spell_projectile_spec("FIREBALL", "WARRIOR_FIREBALL", index, target, Some(0.0))
+            spell_projectile_spec("FIREBALL", "SPELL_FIREBALL", index, target, Some(0.0))
         }
         ProjectileBucket::Orbit => spell_projectile_spec(
             "ORBITING_BLADES",
-            "WARRIOR_ORBITING_BLADES",
+            "SPELL_ORBITING_BLADES",
             index,
             target,
             None,
         ),
-        ProjectileBucket::Boomerang => spell_projectile_spec(
-            "BOOMERANG_ORB",
-            "WARRIOR_BOOMERANG_ORB",
-            index,
-            target,
-            None,
-        ),
+        ProjectileBucket::Boomerang => {
+            spell_projectile_spec("BOOMERANG_ORB", "SPELL_BOOMERANG_ORB", index, target, None)
+        }
     }
 }
 

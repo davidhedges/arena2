@@ -596,6 +596,7 @@ mod tests {
             "MOMENTUM",
             "INTIMIDATE",
             "ENRAGE",
+            "SECOND_WIND",
             "SHOCKWAVE",
         ] {
             assert_ne!(
@@ -629,6 +630,7 @@ mod tests {
             "IRON_WILL",
             "DEFIANCE",
             "ENRAGE",
+            "SECOND_WIND",
             "SHOCKWAVE",
         ] {
             assert!(!definition(id).arms_auto_attack_on_cast);
@@ -857,10 +859,37 @@ mod tests {
     }
 
     #[test]
-    fn enrage_catalog_grants_rage_without_status_payload() {
+    fn enrage_catalog_matches_damage_amp_buff_defaults() {
         let definition = definition("ENRAGE");
 
         assert_eq!(definition.kind.as_str(), "ENRAGE");
+        assert_eq!(definition.behavior.as_str(), "APPLY_STATUS");
+        assert_eq!(definition.targeting.as_str(), "SELF");
+        assert!(!definition.requires_target);
+        assert!((definition.duration - 12.0).abs() < 0.0001);
+        assert!((definition.primary_resource_cost - 0.0).abs() < 0.0001);
+        assert_eq!(definition.status_stack_group.as_deref(), Some("ENRAGE"));
+        assert_eq!(
+            definition.apply_status_polarity,
+            Some(crate::combat::StatusPolarity::Buff)
+        );
+        let status = definition
+            .apply_status
+            .as_ref()
+            .expect("Enrage should define an apply-status payload");
+        assert_eq!(status.kind, StatusEffectKind::DamageAmp);
+        assert!((status.modifier_scalar - 0.5).abs() < 0.0001);
+        assert_eq!(status.max_stacks, 1);
+        assert_eq!(status.stack_policy, StackPolicy::Refresh);
+        assert!((definition.primary_resource_gain_on_cast - 0.0).abs() < 0.0001);
+        assert!(!definition.generates_primary_resource_on_cast);
+    }
+
+    #[test]
+    fn second_wind_catalog_grants_stamina_without_status_payload() {
+        let definition = definition("SECOND_WIND");
+
+        assert_eq!(definition.kind.as_str(), "SECOND_WIND");
         assert_eq!(definition.behavior.as_str(), "SELF_RESOURCE");
         assert_eq!(definition.targeting.as_str(), "SELF");
         assert!(!definition.requires_target);

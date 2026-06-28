@@ -975,7 +975,7 @@ namespace Arena.Tests.Editor
             UnityEngine.Object loaded = Resources.Load("CombatAnimationSets/TwoHandedSword", combatAnimationSetType);
             Assert.That(loaded, Is.Not.Null);
 
-            foreach (string spellId in new[] { "MOMENTUM", "GIANT_SWING", "ENRAGE" })
+            foreach (string spellId in new[] { "MOMENTUM", "GIANT_SWING", "ENRAGE", "SECOND_WIND" })
             {
                 object?[] args = { spellId, null! };
                 bool resolved = (bool)tryGetSpellAnimation.Invoke(loaded, args)!;

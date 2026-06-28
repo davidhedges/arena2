@@ -1757,6 +1757,56 @@ pub(crate) fn migrate_renamed_skyfall_action_bar_assignments(ctx: &ReducerContex
     migrated
 }
 
+pub(crate) fn migrate_generic_spell_action_bar_assignments(ctx: &ReducerContext) -> usize {
+    const ID_MIGRATIONS: &[(&str, &str)] = &[
+        ("WARRIOR_FIREBALL", "SPELL_FIREBALL"),
+        ("WARRIOR_ICICLE", "SPELL_ICICLE"),
+        ("WARRIOR_ORBITING_BLADES", "SPELL_ORBITING_BLADES"),
+        ("WARRIOR_METEOR", "SPELL_METEOR"),
+        ("WARRIOR_LIGHTNING", "SPELL_LIGHTNING"),
+        ("WARRIOR_ERUPTION", "SPELL_ERUPTION"),
+        ("WARRIOR_ICE_SPIKES", "SPELL_ICE_SPIKES"),
+        ("WARRIOR_BOOMERANG_ORB", "SPELL_BOOMERANG_ORB"),
+        ("WARRIOR_WITHERING_ORB", "SPELL_WITHERING_ORB"),
+        ("WARRIOR_INSTANT_BEAM", "SPELL_INSTANT_BEAM"),
+        ("WARRIOR_ELECTROCUTE", "SPELL_ELECTROCUTE"),
+        ("WARRIOR_FROST_NOVA", "SPELL_FROST_NOVA"),
+        ("WARRIOR_NEGATE", "SPELL_NEGATE"),
+    ];
+
+    let id_migrations: Vec<_> = ID_MIGRATIONS
+        .iter()
+        .map(|(legacy, replacement)| {
+            (
+                normalize_identifier(legacy),
+                ActionRef::ability(replacement),
+            )
+        })
+        .collect();
+    let mut migrated = 0usize;
+
+    let rows: Vec<_> = ctx.db.character_action_bar_assignment().iter().collect();
+    for mut row in rows {
+        let action_ref = action_ref_for_character_action_bar_assignment(&row);
+        let legacy_ability_field = normalize_identifier(row.ability_id.as_str());
+        let Some((_, new_action_ref)) = id_migrations.iter().find(|(legacy_id, _)| {
+            (action_ref.kind == ActionKind::Ability && action_ref.id == *legacy_id)
+                || legacy_ability_field == *legacy_id
+        }) else {
+            continue;
+        };
+
+        row.action_kind = new_action_ref.kind_wire().to_string();
+        row.action_id = new_action_ref.id.clone();
+        row.ability_id = legacy_ability_id_for_action_ref(new_action_ref);
+        row.updated_at = ctx.timestamp;
+        ctx.db.character_action_bar_assignment().key().update(row);
+        migrated = migrated.saturating_add(1);
+    }
+
+    migrated
+}
+
 pub(crate) fn ensure_default_progression_for_identity(
     ctx: &ReducerContext,
     owner: Identity,
@@ -4256,12 +4306,12 @@ fn validate_ability_catalog() {
             );
         }
 
-        assert!(
-            resolved_combat_profile_id_for_ability_definition(ability).is_some(),
-            "ability '{ability_id}' must resolve to a combat profile"
-        );
-
         let ability_kind = ability_gameplay_kind(ability);
+        assert!(
+            ability_kind == "SPELL"
+                || resolved_combat_profile_id_for_ability_definition(ability).is_some(),
+            "ability '{ability_id}' must resolve to a combat profile unless it is a generic spell"
+        );
         if ability_kind == "MOVEMENT" {
             assert!(
                 ability.gameplay.delivery.is_some(),
@@ -4622,6 +4672,7 @@ fn validate_spell_gameplay(ability_id: &str, gameplay: &AbilityGameplayDefinitio
         gameplay.delivery.is_some(),
         "spell ability '{ability_id}' must define gameplay.delivery"
     );
+    validate_spell_delivery_damage_type(ability_id, gameplay);
     assert!(
         gameplay.minimum_range.is_none(),
         "spell ability '{ability_id}' must not define gameplay.minimum_range"
@@ -4630,6 +4681,50 @@ fn validate_spell_gameplay(ability_id: &str, gameplay: &AbilityGameplayDefinitio
         gameplay.target_health_damage_scaling.is_none(),
         "spell ability '{ability_id}' must not define gameplay.target_health_damage_scaling"
     );
+}
+
+fn validate_spell_delivery_damage_type(ability_id: &str, gameplay: &AbilityGameplayDefinition) {
+    let Some(delivery) = gameplay.delivery.as_ref() else {
+        return;
+    };
+    let Some(kind) = delivery
+        .get("kind")
+        .and_then(|value| value.as_str())
+        .map(normalize_identifier)
+    else {
+        return;
+    };
+    if !matches!(
+        kind.as_str(),
+        "PROJECTILE" | "AREA" | "INSTANT_BEAM" | "CHANNEL"
+    ) {
+        return;
+    }
+
+    let damage_type = delivery
+        .get("damage_type")
+        .and_then(|value| value.as_str())
+        .map(normalize_identifier)
+        .unwrap_or_default();
+    if ability_id.starts_with("SPELL_") {
+        assert!(
+            !damage_type.is_empty(),
+            "generic spell ability '{ability_id}' must explicitly define gameplay.delivery.damage_type"
+        );
+    }
+    if !damage_type.is_empty() {
+        assert!(
+            is_known_damage_type(damage_type.as_str()),
+            "spell ability '{ability_id}' has unsupported gameplay.delivery.damage_type '{damage_type}'"
+        );
+    }
+}
+
+fn is_known_damage_type(value: &str) -> bool {
+    matches!(
+        normalize_identifier(value).as_str(),
+        "PHYSICAL" | "FIRE" | "COLD" | "LIGHTNING" | "POISON" | "HOLY" | "SHADOW" | "ARCANE"
+    )
 }
 
 fn validate_target_health_damage_scaling(
@@ -5424,7 +5519,11 @@ mod tests {
             .collect();
 
         for action in graph {
-            if !known_profiles.contains(action.combat_profile_id.as_str()) {
+            let is_generic_spell = action.category == ResolvedAuthoringCategory::Spell
+                && action.combat_profile_id.is_empty();
+            if !action.combat_profile_id.is_empty()
+                && !known_profiles.contains(action.combat_profile_id.as_str())
+            {
                 errors.push(CombatAuthoringError::new(
                     CombatAuthoringRule::AbilityProfileResolves,
                     format!(
@@ -5433,7 +5532,7 @@ mod tests {
                     ),
                 ));
             }
-            if action.combat_profile_id.is_empty() {
+            if action.combat_profile_id.is_empty() && !is_generic_spell {
                 errors.push(CombatAuthoringError::new(
                     CombatAuthoringRule::AbilityProfileResolves,
                     format!(
@@ -5474,7 +5573,7 @@ mod tests {
                             ),
                         ));
                     }
-                    if !action.spell_has_animation {
+                    if !is_generic_spell && !action.spell_has_animation {
                         errors.push(CombatAuthoringError::new(
                             CombatAuthoringRule::SelectableSpellHasAnimationEntry,
                             format!(
@@ -6401,7 +6500,7 @@ mod tests {
             .combat_vfx_cues
             .iter()
             .filter(|cue| {
-                normalize_identifier(cue.owner_id.as_str()) == "WARRIOR_FIREBALL"
+                normalize_identifier(cue.owner_id.as_str()) == "SPELL_FIREBALL"
                     && normalize_identifier(cue.trigger.as_str()) == "SPELL_CAST"
                     && normalize_identifier(cue.vfx_id.as_str()) == "VFX_FIRE_CAST_HAND_01"
             })
@@ -6421,11 +6520,11 @@ mod tests {
     #[test]
     fn projectile_body_vfx_resolution_is_single_selected_template() {
         assert_eq!(
-            projectile_body_vfx_id_for_spell("WARRIOR_FIREBALL", "FIREBALL", 0).as_deref(),
+            projectile_body_vfx_id_for_spell("SPELL_FIREBALL", "FIREBALL", 0).as_deref(),
             Some("VFX_FIREBALL_PROJECTILE_01")
         );
         assert_eq!(
-            projectile_body_vfx_id_for_spell("WARRIOR_ICICLE", "ICICLE", 0).as_deref(),
+            projectile_body_vfx_id_for_spell("SPELL_ICICLE", "ICICLE", 0).as_deref(),
             Some("VFX_ICICLE_PROJECTILE_01")
         );
         assert_eq!(
@@ -6433,8 +6532,7 @@ mod tests {
             Some("VFX_GROUND_SLASH_PROJECTILE_01")
         );
         assert_eq!(
-            projectile_body_vfx_id_for_spell("WARRIOR_BOOMERANG_ORB", "BOOMERANG_ORB", 0)
-                .as_deref(),
+            projectile_body_vfx_id_for_spell("SPELL_BOOMERANG_ORB", "BOOMERANG_ORB", 0).as_deref(),
             Some("VFX_BOOMERANG_ORB_PROJECTILE_01")
         );
         assert_eq!(
@@ -6448,7 +6546,7 @@ mod tests {
             Some("VFX_BLADE_BARRIER_PROJECTILE_01")
         );
         assert_eq!(
-            projectile_body_vfx_id_for_spell("WARRIOR_FIREBALL", "FIREBALL", 1),
+            projectile_body_vfx_id_for_spell("SPELL_FIREBALL", "FIREBALL", 1),
             None,
             "runtime should not silently select a visual for an unauthored projectile sequence"
         );
@@ -6475,7 +6573,7 @@ mod tests {
                     },
                     {
                         "owner_kind": "ABILITY",
-                        "owner_id": "WARRIOR_FIREBALL",
+                        "owner_id": "SPELL_FIREBALL",
                         "trigger": "SPELL_RELEASE",
                         "anchor": "RIGHT_HAND",
                         "vfx_id": "ABILITY_FIREBALL_PROJECTILE",
@@ -6492,7 +6590,7 @@ mod tests {
         let manifest = CombatVfxPresentationManifest::build(&catalog);
 
         assert_eq!(
-            manifest.projectile_body_vfx_id_for_spell("WARRIOR_FIREBALL", "FIREBALL", 0),
+            manifest.projectile_body_vfx_id_for_spell("SPELL_FIREBALL", "FIREBALL", 0),
             Some("ABILITY_FIREBALL_PROJECTILE")
         );
         assert_eq!(
@@ -6644,7 +6742,7 @@ mod tests {
                 "combat_vfx_cues": [
                     {
                         "owner_kind": "ABILITY",
-                        "owner_id": "WARRIOR_FIREBALL",
+                        "owner_id": "SPELL_FIREBALL",
                         "trigger": "SPELL_IMPACT",
                         "anchor": "IMPACT_POINT",
                         "vfx_id": "VFX_FIREBALL_HIT_01",
@@ -6670,7 +6768,7 @@ mod tests {
             .combat_vfx_cues
             .iter()
             .find(|cue| {
-                normalize_identifier(cue.owner_id.as_str()) == "WARRIOR_FROST_NOVA"
+                normalize_identifier(cue.owner_id.as_str()) == "SPELL_FROST_NOVA"
                     && normalize_identifier(cue.trigger.as_str()) == "SPELL_RELEASE"
                     && normalize_identifier(cue.vfx_id.as_str()) == "VFX_FROST_NOVA_01"
             })
@@ -6692,7 +6790,7 @@ mod tests {
         let meteor_cues: Vec<_> = catalog
             .combat_vfx_cues
             .iter()
-            .filter(|cue| normalize_identifier(cue.owner_id.as_str()) == "WARRIOR_METEOR")
+            .filter(|cue| normalize_identifier(cue.owner_id.as_str()) == "SPELL_METEOR")
             .collect();
 
         assert_eq!(
@@ -7887,9 +7985,7 @@ mod tests {
             } else {
                 180.0
             };
-            assert!(
-                (orbit.angular_speed_deg_per_sec - expected_angular_speed).abs() < 0.0001
-            );
+            assert!((orbit.angular_speed_deg_per_sec - expected_angular_speed).abs() < 0.0001);
             assert!((orbit.lifetime_seconds - 10.0).abs() < 0.0001);
             assert!((orbit.hit_radius - 0.45).abs() < 0.0001);
             assert!((orbit.hit_cooldown_seconds - 0.35).abs() < 0.0001);
@@ -8231,7 +8327,7 @@ mod tests {
         let ability = progression_catalog()
             .abilities
             .iter()
-            .find(|ability| ability.ability_id == "WARRIOR_ICE_SPIKES")
+            .find(|ability| ability.ability_id == "SPELL_ICE_SPIKES")
             .expect("expected Ice Spikes ability");
         assert_eq!(
             normalize_identifier(ability.action_id.as_str()),
@@ -8263,7 +8359,7 @@ mod tests {
             .combat_vfx_cues
             .iter()
             .find(|cue| {
-                normalize_identifier(cue.owner_id.as_str()) == "WARRIOR_ICE_SPIKES"
+                normalize_identifier(cue.owner_id.as_str()) == "SPELL_ICE_SPIKES"
                     && normalize_identifier(cue.trigger.as_str()) == "AREA_IMPACT"
             })
             .expect("Ice Spikes should author an area-impact VFX cue");
@@ -8297,6 +8393,46 @@ mod tests {
     }
 
     #[test]
+    fn generic_spell_abilities_are_profile_neutral_and_author_damage_types() {
+        let expected = [
+            ("SPELL_FIREBALL", "FIREBALL", "FIRE"),
+            ("SPELL_ICICLE", "ICICLE", "COLD"),
+            ("SPELL_ELECTROCUTE", "ELECTROCUTE", "LIGHTNING"),
+            ("SPELL_BOOMERANG_ORB", "BOOMERANG_ORB", "SHADOW"),
+            ("SPELL_LIGHTNING", "LIGHTNING", "LIGHTNING"),
+            ("SPELL_METEOR", "METEOR", "FIRE"),
+            ("SPELL_NEGATE", "NEGATE", "ARCANE"),
+            ("SPELL_WITHERING_ORB", "WITHERING_ORB", "SHADOW"),
+            ("SPELL_FROST_NOVA", "FROST_NOVA", "COLD"),
+            ("SPELL_ICE_SPIKES", "ICE_SPIKES", "COLD"),
+            ("SPELL_ERUPTION", "ERUPTION", "FIRE"),
+            ("SPELL_INSTANT_BEAM", "INSTANT_BEAM", "ARCANE"),
+            ("SPELL_ORBITING_BLADES", "ORBITING_BLADES", "ARCANE"),
+        ];
+
+        for (ability_id, action_id, damage_type) in expected {
+            let ability = progression_catalog()
+                .abilities
+                .iter()
+                .find(|ability| ability.ability_id == ability_id)
+                .unwrap_or_else(|| panic!("expected generic spell ability {ability_id}"));
+            assert_eq!(normalize_identifier(ability.combat_profile_id.as_str()), "");
+            assert_eq!(normalize_identifier(ability.action_id.as_str()), action_id);
+            assert_eq!(
+                ability
+                    .gameplay
+                    .delivery
+                    .as_ref()
+                    .and_then(|delivery| delivery.get("damage_type"))
+                    .and_then(|value| value.as_str())
+                    .map(normalize_identifier)
+                    .as_deref(),
+                Some(damage_type)
+            );
+        }
+    }
+
+    #[test]
     fn warrior_sunder_and_cleave_resolve_via_greatsword_profile() {
         let combat_profile_id = COMBAT_PROFILE_TWO_HANDED_SWORD;
 
@@ -8319,18 +8455,18 @@ mod tests {
     }
 
     #[test]
-    fn warrior_dread_strike_resolves_as_auto_attack_replacement() {
+    fn warrior_heavy_swing_resolves_as_auto_attack_replacement() {
         let combat_profile_id = COMBAT_PROFILE_TWO_HANDED_SWORD;
         let ability = progression_catalog()
             .abilities
             .iter()
             .find(|ability| ability.ability_id == "WARRIOR_DREAD_STRIKE")
-            .expect("expected Warrior Dread Strike ability");
+            .expect("expected Warrior Heavy Swing ability");
         let replacement = progression_catalog()
             .auto_attack_replacements
             .iter()
             .find(|replacement| replacement.replacement_id == ability.action_id)
-            .expect("Dread Strike must resolve to replacement tuning");
+            .expect("Heavy Swing must resolve to replacement tuning");
 
         assert_eq!(ability_gameplay_kind(ability), "AUTO_ATTACK_REPLACEMENT");
         assert_eq!(
@@ -8817,6 +8953,10 @@ mod tests {
         assert!(
             animation_set_spell_ids.contains("FRENZY"),
             "expected Frenzy spell animation entry in the derived greatsword animation set"
+        );
+        assert!(
+            animation_set_spell_ids.contains("SECOND_WIND"),
+            "expected Second Wind spell animation entry in the derived greatsword animation set"
         );
         assert!(
             animation_set_spell_ids.contains("BERSERKING"),

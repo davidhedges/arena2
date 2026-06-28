@@ -240,10 +240,7 @@ namespace Arena.Editor
 
                 string combatProfileId = WireIdentifier.Normalize(ability.combat_profile_id);
                 if (string.IsNullOrWhiteSpace(combatProfileId))
-                {
-                    errors.Add($"spell ability '{abilityId}' must declare combat_profile_id.");
                     continue;
-                }
 
                 if (!animationSetByProfile.TryGetValue(combatProfileId, out CombatAnimationSet animationSet))
                 {
