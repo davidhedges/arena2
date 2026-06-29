@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 9105fb2e393a5751f2d6861013a5518d
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/03_Walk/01_Walk/05_Walk_F_R_90/Walk_Start_F_R_90.anim
+  uploadId: 783191

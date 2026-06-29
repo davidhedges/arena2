@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: eae5ac86f91efc896caacf591b07e3b3
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/04_Run/01_Run/09_Run_B_L_90/Run_Start_B_L_90.anim
+  uploadId: 783191

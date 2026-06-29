@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 80f339c71cc93488f9cd0f98fb4673b7
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/05_Jump/03_Double_Jump/Double_Jump_0.anim
+  uploadId: 783191

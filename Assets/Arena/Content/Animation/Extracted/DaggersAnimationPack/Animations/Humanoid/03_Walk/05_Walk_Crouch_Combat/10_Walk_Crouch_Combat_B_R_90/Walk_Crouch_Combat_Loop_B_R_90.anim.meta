@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: de696e6fd6d4fdf89abf8f7139e48a48
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/03_Walk/05_Walk_Crouch_Combat/10_Walk_Crouch_Combat_B_R_90/Walk_Crouch_Combat_Loop_B_R_90.anim
+  uploadId: 783191

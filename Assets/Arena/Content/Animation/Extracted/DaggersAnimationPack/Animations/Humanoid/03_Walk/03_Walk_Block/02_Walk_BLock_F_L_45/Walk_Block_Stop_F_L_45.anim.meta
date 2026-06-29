@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: d74a7e7f3e514fba8695d1006cd7829e
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/03_Walk/03_Walk_Block/02_Walk_BLock_F_L_45/Walk_Block_Stop_F_L_45.anim
+  uploadId: 783191

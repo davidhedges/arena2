@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: b2143fa535bcda9ebccd144446b0a23a
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/05_Jump/02_Jump_Combat/02_Jump_Combat_F_0/Jump_Combat_End_F_0.anim
+  uploadId: 783191

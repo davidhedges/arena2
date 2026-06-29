@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 250f1b8bd5ed8fbae4b5071071336e79
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/08_Hit/11_Get_Up/Get_Up_F.anim
+  uploadId: 783191

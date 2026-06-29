@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 3d09eda241f1277a23bcc6e758e97d9a
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/05_Jump/01_Jump/04_Jump_L_90/Jump_to_Run_L_90.anim
+  uploadId: 783191

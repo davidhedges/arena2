@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: c29e41cc95121f64bf35049649219863
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/04_Run/01_Run/11_Run_Fast/Run_Fast_Loop_L_45.anim
+  uploadId: 783191

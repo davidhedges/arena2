@@ -53,6 +53,11 @@ Assets/NHance.meta
 Assets/Heat - Complete Modern UI/
 Assets/Heat - Complete Modern UI.meta
 
+# Imported local animation source package
+Assets/ThirdParty/AssetStore/Animation.meta
+Assets/ThirdParty/AssetStore/Animation/DaggersAnimationPack/
+Assets/ThirdParty/AssetStore/Animation/DaggersAnimationPack.meta
+
 # Infrastructure local state and secrets
 .env
 .env.local

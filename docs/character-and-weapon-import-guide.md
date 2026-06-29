@@ -48,7 +48,7 @@ The spawned weapon prefabs already contain prop-node structure such as `weapon_r
 
 ## What Imported Assets Do NOT Need to Provide
 
-- **Weapon mount transforms** (`main_weapon_hand`, `off_weapon_hand`, `main_weapon_stowed`, `off_weapon_stowed`, `greatsword_hand`, `greatsword_stowed`, `archer_bow_hand`, `archer_bow_stowed`, `archer_quiver_stowed`, etc.) — these are authored in Unity on the runtime avatar prefab or generated from avatar assembly/calibration code. Do not wire semantic mounts directly to prop-node names such as `weapon_r`, `Sword`, `Shield`, `Back_Bow`, or `Back_Quiver`; see the weapon integration contract doc above.
+- **Weapon mount transforms** (`main_weapon_hand`, `off_weapon_hand`, `main_weapon_stowed`, `off_weapon_stowed`, `greatsword_hand`, `greatsword_stowed`, `archer_bow_hand`, `archer_bow_stowed`, `archer_quiver_stowed`, `dagger_main_stowed`, `dagger_off_stowed`, etc.) — these are authored in Unity on the runtime avatar prefab or generated from avatar assembly/calibration code. Do not wire semantic mounts directly to prop-node names such as `weapon_r`, `Sword`, `Shield`, `Back_Bow`, or `Back_Quiver`; see the weapon integration contract doc above.
 - **Weapon animations** — `CombatAnimationSet` clip slots are filled from separate animation packs, not baked into the character mesh.
 
 ---
@@ -58,7 +58,7 @@ The spawned weapon prefabs already contain prop-node structure such as `weapon_r
 1. Set rig type to **Humanoid** in Unity's import settings
 2. Click **Configure** and verify all required bones are mapped (fix any that Unity flags red)
 3. Rebuild the runtime avatar with the project builder, or transfer semantic mounts from a known-good legacy/source avatar in root/model space
-4. Confirm `AvatarWeaponMounts` resolves the current weapon-binding ids: `main_weapon_hand`, `off_weapon_hand`, `main_weapon_stowed`, `off_weapon_stowed`, `greatsword_hand`, `greatsword_stowed`, `archer_bow_hand`, `archer_bow_stowed`, and `archer_quiver_stowed`
+4. Confirm `AvatarWeaponMounts` resolves the current weapon-binding ids: `main_weapon_hand`, `off_weapon_hand`, `main_weapon_stowed`, `off_weapon_stowed`, `greatsword_hand`, `greatsword_stowed`, `archer_bow_hand`, `archer_bow_stowed`, `archer_quiver_stowed`, `dagger_main_stowed`, and `dagger_off_stowed`
 5. Confirm `greatsword_hand` resolves to the transferred `main_weapon_hand` when the source avatar has no distinct greatsword mount
 6. Run `Arena > Avatars > Validate Runtime Avatar Weapon Mount Contract`
 7. Wire up or verify `CombatAnimationSet` assets, then test greatsword, sword/shield, stowed state, and draw/sheath transitions in Play Mode

@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: a01d6bb3cc00ce3546c3a4c399fb9096
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/04_Run/01_Run/06_Run_B_180/Run_Stop_B_180.anim
+  uploadId: 783191

@@ -81,6 +81,10 @@ namespace Arena.Network
             conn.Db.ActiveCombatDiscipline.OnUpdate += registry.OnActiveCombatDisciplineUpdate;
             conn.Db.ActiveCombatDiscipline.OnDelete += registry.OnActiveCombatDisciplineDelete;
 
+            conn.Db.ActiveCombatMode.OnInsert += registry.OnActiveCombatModeInsert;
+            conn.Db.ActiveCombatMode.OnUpdate += registry.OnActiveCombatModeUpdate;
+            conn.Db.ActiveCombatMode.OnDelete += registry.OnActiveCombatModeDelete;
+
             conn.Db.ItemInstance.OnInsert += registry.OnItemInstanceInsert;
             conn.Db.ItemInstance.OnUpdate += registry.OnItemInstanceUpdate;
             conn.Db.ItemInstance.OnDelete += registry.OnItemInstanceDelete;

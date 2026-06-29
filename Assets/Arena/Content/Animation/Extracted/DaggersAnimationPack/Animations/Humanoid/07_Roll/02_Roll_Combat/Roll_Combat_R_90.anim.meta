@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: f36f1a4f37134d8f4a61f9643072b787
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/07_Roll/02_Roll_Combat/Roll_Combat_R_90.anim
+  uploadId: 783191

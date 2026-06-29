@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: e2294db594f66a7457e323bd64dba317
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/03_Walk/06_Walk_Equip/02_Walk_Equip_Crouch/Walk_Crouch_Equip_to_Combat.anim
+  uploadId: 783191

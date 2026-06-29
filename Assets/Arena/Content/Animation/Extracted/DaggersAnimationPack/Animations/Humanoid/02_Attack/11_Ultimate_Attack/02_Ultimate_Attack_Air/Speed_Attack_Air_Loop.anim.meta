@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 0fe21b17b2f7a62617142861c3d1208b
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/02_Attack/11_Ultimate_Attack/02_Ultimate_Attack_Air/Speed_Attack_Air_Loop.anim
+  uploadId: 783191

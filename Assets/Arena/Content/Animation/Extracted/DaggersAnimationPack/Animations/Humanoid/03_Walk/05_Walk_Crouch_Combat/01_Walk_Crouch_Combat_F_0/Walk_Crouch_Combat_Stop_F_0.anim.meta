@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 7c930d08053ef236011f15335ace07fb
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/03_Walk/05_Walk_Crouch_Combat/01_Walk_Crouch_Combat_F_0/Walk_Crouch_Combat_Stop_F_0.anim
+  uploadId: 783191

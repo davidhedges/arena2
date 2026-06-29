@@ -358,6 +358,22 @@ namespace Arena.Entity
             ApplyOwnerCombatProfile(row.Owner);
         }
 
+        public void OnActiveCombatModeInsert(EventContext ctx, ActiveCombatMode row)
+        {
+            ApplyOwnerCombatMode(row.Owner);
+        }
+
+        public void OnActiveCombatModeUpdate(EventContext ctx, ActiveCombatMode oldRow, ActiveCombatMode newRow)
+        {
+            ApplyOwnerCombatMode(oldRow.Owner);
+            ApplyOwnerCombatMode(newRow.Owner);
+        }
+
+        public void OnActiveCombatModeDelete(EventContext ctx, ActiveCombatMode row)
+        {
+            ApplyOwnerCombatMode(row.Owner);
+        }
+
         public void OnItemInstanceInsert(EventContext ctx, ItemInstance row)
         {
             ApplyEquipmentForNullableOwner(row.CurrentOwner);
@@ -1147,6 +1163,28 @@ namespace Arena.Entity
             {
                 entity.SetCombatAnimationSet(animationSet);
             }
+
+            ApplyOwnerCombatMode(owner);
+        }
+
+        private void ApplyOwnerCombatMode(Identity owner)
+        {
+            if (!TryGetLivePlayer(owner, out var entity))
+                return;
+
+            var conn = NetworkManager.Instance?.Conn;
+            ActiveCombatMode? active = conn?.Db.ActiveCombatMode.Owner.Find(owner);
+            string modeId = string.Empty;
+            if (active != null
+                && string.Equals(
+                    WireIdentifier.Normalize(active.CombatProfileId),
+                    CombatProfileIds.Normalize(entity.CombatProfile),
+                    System.StringComparison.Ordinal))
+            {
+                modeId = active.ModeId;
+            }
+
+            entity.SetCombatAnimationMode(modeId);
         }
 
         private void ApplyCharacterAppearance(CharacterAppearance row)

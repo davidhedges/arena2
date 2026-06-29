@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: dd79d539b84883a57f32eb8ebde9b3ba
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/01_Idle/04_Idle_Combat_Crouch/Idle_Combat_Crouch.anim
+  uploadId: 783191

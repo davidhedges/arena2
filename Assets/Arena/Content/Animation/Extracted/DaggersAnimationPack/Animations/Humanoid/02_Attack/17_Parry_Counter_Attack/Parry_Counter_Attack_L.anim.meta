@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 82a578d76959598333b52cc2b6dbe891
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/02_Attack/17_Parry_Counter_Attack/Parry_Counter_Attack_L.anim
+  uploadId: 783191

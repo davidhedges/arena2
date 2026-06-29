@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 94c53cc876d5d5d5ce89490574280e0b
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/02_Attack/09_Skill_Attack/Skill_04_Loop.anim
+  uploadId: 783191

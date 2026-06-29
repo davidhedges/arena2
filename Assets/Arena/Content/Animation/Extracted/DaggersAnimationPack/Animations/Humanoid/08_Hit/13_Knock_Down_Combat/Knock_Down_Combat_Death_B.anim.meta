@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 278502927439a3c5d68ec11fe4f7dc43
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/08_Hit/13_Knock_Down_Combat/Knock_Down_Combat_Death_B.anim
+  uploadId: 783191

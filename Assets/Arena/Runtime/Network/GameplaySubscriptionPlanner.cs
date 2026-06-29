@@ -79,6 +79,7 @@ namespace Arena.Network
                 BuildScopedCharacterAppearanceQuery(new QueryBuilder(), scope),
                 BuildScopedPlayerPhysicsQuery(new QueryBuilder(), scope),
                 BuildScopedPlayerStateQuery(new QueryBuilder(), scope),
+                BuildScopedActiveCombatModeQuery(new QueryBuilder(), scope),
                 BuildScopedNpcInstanceQuery(new QueryBuilder(), scope),
                 BuildScopedNpcPhysicsQuery(new QueryBuilder(), scope),
                 BuildScopedNpcStateQuery(new QueryBuilder(), scope),
@@ -210,6 +211,28 @@ namespace Arena.Network
                     .RightSemijoin(qb.From.PlayerState(), (world, state) => world.Identity.Eq(state.PlayerId))
                     .ToSql(),
                 _ => throw new InvalidOperationException("Scoped player-state query requested for GameplayScope.None"),
+            };
+        }
+
+        private static string BuildScopedActiveCombatModeQuery(QueryBuilder qb, NetworkManager.GameplayScope scope)
+        {
+            return scope.Kind switch
+            {
+                NetworkManager.GameplayScopeKind.OpenWorld => qb
+                    .From
+                    .PlayerWorld()
+                    .Where(c => c.WorldKind.Eq("OPEN"))
+                    .Where(c => c.OpenWorldSceneName.Eq(OpenWorldSceneName(scope)))
+                    .RightSemijoin(qb.From.ActiveCombatMode(), (world, mode) => world.Identity.Eq(mode.Owner))
+                    .ToSql(),
+                NetworkManager.GameplayScopeKind.Instance => qb
+                    .From
+                    .PlayerWorld()
+                    .Where(c => c.WorldKind.Eq("INSTANCE"))
+                    .Where(c => c.InstanceId.Eq(scope.InstanceId.GetValueOrDefault()))
+                    .RightSemijoin(qb.From.ActiveCombatMode(), (world, mode) => world.Identity.Eq(mode.Owner))
+                    .ToSql(),
+                _ => throw new InvalidOperationException("Scoped active-combat-mode query requested for GameplayScope.None"),
             };
         }
 

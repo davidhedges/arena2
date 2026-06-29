@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 2b04fd027910430f13e5a4053d6ac1df
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/08_Hit/14_Block/Parry_L.anim
+  uploadId: 783191

@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 78f5e8c088bc1b32f2219c334fdcf2e2
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/01_Idle/06_Offset_Idle_Combat/Idle_Combat_Down_L.anim
+  uploadId: 783191

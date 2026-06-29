@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 65b7bda8c7f2656d4d1b46d9909f076d
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/08_Hit/04_Hit_Combat_Air/Hit_Combat_Air_F.anim
+  uploadId: 783191

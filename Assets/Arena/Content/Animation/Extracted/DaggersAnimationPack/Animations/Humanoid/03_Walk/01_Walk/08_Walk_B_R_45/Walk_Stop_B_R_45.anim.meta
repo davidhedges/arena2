@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 1632af7edec548a4df35499548d8070b
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/03_Walk/01_Walk/08_Walk_B_R_45/Walk_Stop_B_R_45.anim
+  uploadId: 783191

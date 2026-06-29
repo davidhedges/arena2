@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: a7f30554f91b78690753747f3ae21453
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/03_Walk/02_Walk_Combat/06_Walk_Combat_B_180/Walk_Combat_Start_B_180.anim
+  uploadId: 783191

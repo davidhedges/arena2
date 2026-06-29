@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 7e8729b7ffe3b57a7db0b3aa96b4be0a
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/09_Turn/04_Turn_Crouch/Turn_Crouch_90_L.anim
+  uploadId: 783191

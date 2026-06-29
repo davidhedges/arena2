@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 827176682288d185b5227c7a2b72b20d
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/02_Attack/15_Attack_Up/Attack_Up_01.anim
+  uploadId: 783191

@@ -20,6 +20,8 @@ Arena mount ids are semantic API names. The current primary weapon-binding ids u
 - `archer_bow_hand`
 - `archer_bow_stowed`
 - `archer_quiver_stowed`
+- `dagger_main_stowed`
+- `dagger_off_stowed`
 
 Legacy ids such as `main_hand`, `off_hand`, `main_sheath`, `off_sheath`, `main_stowed`, `off_stowed`, and `archer_quiver_back` remain compatibility aliases only. Do not author new assets with them.
 
@@ -53,7 +55,7 @@ They can be desynced during a draw/sheath transition: `PlayerAnimator.SetInComba
 
 Semantic mount ids must point at semantic mount transforms, not at weapon prefab prop-node names.
 
-For the current Stylized Modular Human runtime rebuild, `main_weapon_hand`, `off_weapon_hand`, `main_weapon_stowed`, and `off_weapon_stowed` are transferred from the legacy runtime avatar in root/model space. `greatsword_hand` is a deliberately-authored semantic mount named `Arena_Greatsword_hand`; it is parented under an internal `weapon_r` compatibility socket only so GreatSwordAnimationPack object curves can drive the held prop. `greatsword_stowed` is a deliberately-authored semantic mount calibrated from the GreatSwordAnimationPack's `sword_holder` bone. Archer stowed mounts are calibrated semantic Arena mounts, not direct uses of package `Back_Bow` / `Back_Quiver` sockets.
+For the current Stylized Modular Human runtime rebuild, `main_weapon_hand`, `off_weapon_hand`, `main_weapon_stowed`, and `off_weapon_stowed` are transferred from the legacy runtime avatar in root/model space. `greatsword_hand` is a deliberately-authored semantic mount named `Arena_Greatsword_hand`; it is parented under an internal `weapon_r` compatibility socket only so GreatSwordAnimationPack object curves can drive the held prop. `greatsword_stowed` is a deliberately-authored semantic mount calibrated from the GreatSwordAnimationPack's `sword_holder` bone. Archer stowed mounts are calibrated semantic Arena mounts, not direct uses of package `Back_Bow` / `Back_Quiver` sockets. Dagger stowed mounts are calibrated semantic Arena mounts recovered from DaggersAnimationPack `Dagger_Holder_R1` / `Dagger_Holder_L1` under the pack pelvis.
 
 Do not map:
 

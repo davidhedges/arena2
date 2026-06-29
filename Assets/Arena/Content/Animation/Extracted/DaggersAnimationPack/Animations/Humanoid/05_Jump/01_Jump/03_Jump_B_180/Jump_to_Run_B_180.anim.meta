@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 3e8b8503538a8b7b91a6e9042c22e434
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/05_Jump/01_Jump/03_Jump_B_180/Jump_to_Run_B_180.anim
+  uploadId: 783191

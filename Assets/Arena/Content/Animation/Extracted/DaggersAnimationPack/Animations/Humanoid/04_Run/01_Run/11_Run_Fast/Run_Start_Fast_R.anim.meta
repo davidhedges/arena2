@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 6d254a426b4bb69e60ccbb9a6ffadd91
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/04_Run/01_Run/11_Run_Fast/Run_Start_Fast_R.anim
+  uploadId: 783191

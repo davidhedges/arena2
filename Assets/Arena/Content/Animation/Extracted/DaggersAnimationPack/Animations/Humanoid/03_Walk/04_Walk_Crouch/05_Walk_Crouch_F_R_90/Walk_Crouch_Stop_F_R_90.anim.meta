@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 6c9f93c619ece812ff2a002d2dcb6435
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/03_Walk/04_Walk_Crouch/05_Walk_Crouch_F_R_90/Walk_Crouch_Stop_F_R_90.anim
+  uploadId: 783191

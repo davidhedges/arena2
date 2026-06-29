@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 7d4251c0224efd7f7ad7cdc03da1e86c
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/07_Roll/04_Roll_Combat_to_Run/Roll_Combat_to_Run_L_90.anim
+  uploadId: 783191

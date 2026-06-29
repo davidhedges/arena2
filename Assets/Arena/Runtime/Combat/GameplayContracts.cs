@@ -81,6 +81,8 @@ namespace Arena.Combat
     {
         public const string ShortDraw = "SHORT_DRAW";
         public const string FullDraw = "FULL_DRAW";
+        public const string Ready = "READY";
+        public const string Stealthed = "STEALTHED";
     }
 
     public static class SpellDefinitionContracts

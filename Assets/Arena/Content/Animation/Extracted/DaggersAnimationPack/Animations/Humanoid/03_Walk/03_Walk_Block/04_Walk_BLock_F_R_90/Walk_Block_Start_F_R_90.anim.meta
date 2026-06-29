@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: a69580208369b09fe0ba4b6d85587e26
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/03_Walk/03_Walk_Block/04_Walk_BLock_F_R_90/Walk_Block_Start_F_R_90.anim
+  uploadId: 783191

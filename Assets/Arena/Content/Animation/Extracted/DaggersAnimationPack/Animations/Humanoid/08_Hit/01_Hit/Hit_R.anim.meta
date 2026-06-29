@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 6041f7bc70927b46ee18c60926f0c030
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/08_Hit/01_Hit/Hit_R.anim
+  uploadId: 783191

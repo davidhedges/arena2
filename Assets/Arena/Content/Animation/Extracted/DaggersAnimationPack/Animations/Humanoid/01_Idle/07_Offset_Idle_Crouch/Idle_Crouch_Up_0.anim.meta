@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: e9f280d8c826e2a3f1a97ea0459cf8e9
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/01_Idle/07_Offset_Idle_Crouch/Idle_Crouch_Up_0.anim
+  uploadId: 783191

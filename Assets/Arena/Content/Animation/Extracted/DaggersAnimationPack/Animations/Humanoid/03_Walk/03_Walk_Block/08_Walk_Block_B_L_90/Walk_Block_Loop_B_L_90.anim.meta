@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: bfe8b9d305f714a201e33a4b41dc08ee
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/03_Walk/03_Walk_Block/08_Walk_Block_B_L_90/Walk_Block_Loop_B_L_90.anim
+  uploadId: 783191

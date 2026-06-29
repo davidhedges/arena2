@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: fe3cdcbe1ab9130eddd9356cd874f8a5
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/02_Attack/01_Combo_Attack_01/Combo_Attack_01_03.anim
+  uploadId: 783191

@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 82c85aa030ad7380724440721dccb5d1
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/02_Attack/12_Attack_Air_to_Floor_01/Attack_Air_to_Floor_01_Start.anim
+  uploadId: 783191

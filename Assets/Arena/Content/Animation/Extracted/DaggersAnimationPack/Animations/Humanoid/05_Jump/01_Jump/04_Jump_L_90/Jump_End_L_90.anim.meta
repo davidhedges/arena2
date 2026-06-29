@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 377bef09806749dcc29f82e99c370fb9
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/05_Jump/01_Jump/04_Jump_L_90/Jump_End_L_90.anim
+  uploadId: 783191

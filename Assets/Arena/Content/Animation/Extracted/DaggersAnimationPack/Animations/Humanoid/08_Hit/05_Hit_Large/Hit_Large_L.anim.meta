@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 4dca764d2c03ab11ffbf63b87d943e9b
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/08_Hit/05_Hit_Large/Hit_Large_L.anim
+  uploadId: 783191

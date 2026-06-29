@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 1ec36c49d8033080f84c94e04d42431a
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/02_Attack/15_Attack_Up/Attack_Up_Floor_To_Air_02.anim
+  uploadId: 783191

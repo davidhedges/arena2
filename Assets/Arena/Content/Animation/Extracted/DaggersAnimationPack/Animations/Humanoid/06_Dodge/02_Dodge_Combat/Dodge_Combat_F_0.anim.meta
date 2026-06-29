@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 9be94240f72a151fdd2ebfbb212c4ccc
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/06_Dodge/02_Dodge_Combat/Dodge_Combat_F_0.anim
+  uploadId: 783191

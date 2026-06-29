@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 7b795db4ede096f74f9960421337a4aa
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/02_Attack/06_Combo_Attack_Wave/Combo_Attack_Wave_02.anim
+  uploadId: 783191

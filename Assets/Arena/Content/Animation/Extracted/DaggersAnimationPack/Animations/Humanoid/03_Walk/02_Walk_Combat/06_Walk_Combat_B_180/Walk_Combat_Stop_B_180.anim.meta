@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 3261080ed51ec6a9bbffd4598859dc5d
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/03_Walk/02_Walk_Combat/06_Walk_Combat_B_180/Walk_Combat_Stop_B_180.anim
+  uploadId: 783191

@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 198174c01152ff5acff285aa9cbd5254
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/01_Idle/07_Offset_Idle_Crouch/Idle_Crouch_Down_L.anim
+  uploadId: 783191

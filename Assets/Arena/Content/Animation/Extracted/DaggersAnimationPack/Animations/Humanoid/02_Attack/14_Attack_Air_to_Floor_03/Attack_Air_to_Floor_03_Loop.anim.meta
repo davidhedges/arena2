@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: c2678973f91f4d3bc38e0720b95964e7
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/02_Attack/14_Attack_Air_to_Floor_03/Attack_Air_to_Floor_03_Loop.anim
+  uploadId: 783191

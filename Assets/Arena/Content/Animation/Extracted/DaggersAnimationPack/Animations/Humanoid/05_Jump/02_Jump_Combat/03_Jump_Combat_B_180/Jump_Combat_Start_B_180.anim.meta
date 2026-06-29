@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 85641233fa26af75a787572efc29fe05
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/05_Jump/02_Jump_Combat/03_Jump_Combat_B_180/Jump_Combat_Start_B_180.anim
+  uploadId: 783191

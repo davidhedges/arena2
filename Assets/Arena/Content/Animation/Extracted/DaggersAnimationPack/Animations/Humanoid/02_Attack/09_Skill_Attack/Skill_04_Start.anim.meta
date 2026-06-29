@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 5558708cdc8353176d762db6fa00f89a
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/02_Attack/09_Skill_Attack/Skill_04_Start.anim
+  uploadId: 783191

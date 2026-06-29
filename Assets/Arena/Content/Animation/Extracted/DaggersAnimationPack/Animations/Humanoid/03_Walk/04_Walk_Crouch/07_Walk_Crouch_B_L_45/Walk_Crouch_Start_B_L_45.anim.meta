@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 61c368842f3404639aaff64d9d0333cf
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/03_Walk/04_Walk_Crouch/07_Walk_Crouch_B_L_45/Walk_Crouch_Start_B_L_45.anim
+  uploadId: 783191

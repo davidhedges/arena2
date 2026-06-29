@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 5ed3d154aeb391a89121f2f348df8c05
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/03_Walk/01_Walk/09_Walk_B_L_90/Walk_Start_B_L_90.anim
+  uploadId: 783191

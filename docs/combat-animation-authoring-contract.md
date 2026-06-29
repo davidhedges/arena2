@@ -42,6 +42,7 @@ Files: `Assets/Arena/Resources/CombatAnimationSets/*.asset`
 - combat profile identity
 - weapon visuals and weapon visual handoff timing
 - locomotion and combat locomotion clips
+- combat-mode-specific locomotion overrides
 - draw and stow clips
 - melee authored strike ids
 - melee runtime slot ids
@@ -57,6 +58,20 @@ Files: `Assets/Arena/Resources/CombatAnimationSets/*.asset`
 Future melee and cast phase metadata should be added to `CombatAnimationSet` unless there is a concrete reason to put it somewhere else.
 
 Do not regenerate, flatten, or "simplify" existing combat animation set assets as part of animation system work. They contain real authored timing and binding work.
+
+### Combat Mode Locomotion Overrides
+
+Combat modes are profile-owned stance/mode state from `CombatModeCatalog` and `ActiveCombatMode`. When a mode changes only how a combat profile moves, author it as a `CombatAnimationSet.locomotionModeOverrides[]` entry keyed by the mode's `mode_id`.
+
+Rules:
+
+- the action that changes the mode must still be a normal action-bar ability with `gameplay.kind: "COMBAT_MODE_TOGGLE"`
+- the mode override lives on the existing combat profile animation set, not in a second parallel animation set
+- the override may replace only locomotion slots: idle, combat idle, directional walk/run loops, stops, and turns
+- leaving a mode must restore the base combat-profile locomotion slots before applying another mode
+- if the animation pack has no separate run bank for the mode, explicitly decide whether run slots should stay base-run or reuse the mode's walk clips; do not leave the behavior accidental
+
+Example: Dagger `STEALTHED` uses the `DAGGERS` combat profile and a `STEALTHED` locomotion override on `Assets/Arena/Resources/CombatAnimationSets/Daggers.asset`. It does not create a new Dagger animation set or a hidden input path.
 
 ### Animation Clip Object Curves
 

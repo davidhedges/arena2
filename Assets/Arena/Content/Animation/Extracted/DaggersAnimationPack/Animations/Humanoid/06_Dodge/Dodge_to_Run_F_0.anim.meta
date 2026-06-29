@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 33303990f32609c76fd8d2ca1c101dd1
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/06_Dodge/Dodge_to_Run_F_0.anim
+  uploadId: 783191

@@ -602,6 +602,8 @@ namespace Arena.Tests.Editor
                 "archer_bow_hand",
                 "archer_bow_stowed",
                 "archer_quiver_stowed",
+                "dagger_main_stowed",
+                "dagger_off_stowed",
             };
             string[] bannedDirectTargetNames =
             {
@@ -735,6 +737,105 @@ namespace Arena.Tests.Editor
                     ((Array)RequireProperty(combatAnimationSetType, "VisualBindings").GetValue(loaded)!).Length,
                     Is.EqualTo(expectedVisuals),
                     resourcePath);
+            }
+        }
+
+        [Test]
+        public void DaggersAnimationSet_UsesPackCalibratedDrawnAndStowedMounts()
+        {
+            Type combatAnimationSetType = RequireType("Arena.Presentation.CombatAnimationSet");
+            Type visualBindingType = RequireType("Arena.Presentation.WeaponVisualBinding");
+
+            UnityEngine.Object loaded = Resources.Load("CombatAnimationSets/Daggers", combatAnimationSetType);
+            Assert.That(loaded, Is.Not.Null);
+
+            Array visuals = (Array)RequireProperty(combatAnimationSetType, "VisualBindings").GetValue(loaded)!;
+            object main = FindVisualBinding(visuals, visualBindingType, "dagger_main");
+            object off = FindVisualBinding(visuals, visualBindingType, "dagger_off");
+
+            Assert.That((string)visualBindingType.GetField("drawnMountId")!.GetValue(main)!, Is.EqualTo("main_weapon_hand"));
+            Assert.That((string)visualBindingType.GetField("drawnMountId")!.GetValue(off)!, Is.EqualTo("off_weapon_hand"));
+            Assert.That((string)visualBindingType.GetField("stowedMountId")!.GetValue(main)!, Is.EqualTo("dagger_main_stowed"));
+            Assert.That((string)visualBindingType.GetField("stowedMountId")!.GetValue(off)!, Is.EqualTo("dagger_off_stowed"));
+            AssertVector3(
+                (Vector3)visualBindingType.GetField("drawnLocalPosition")!.GetValue(main)!,
+                new Vector3(-0.05021231f, 0.10228082f, -0.024196113f));
+            AssertQuaternion(
+                (Quaternion)visualBindingType.GetField("drawnLocalRotation")!.GetValue(main)!,
+                new Quaternion(-0.8719281f, 0.30998212f, -0.291152f, 0.24265818f));
+            AssertVector3(
+                (Vector3)visualBindingType.GetField("drawnLocalPosition")!.GetValue(off)!,
+                new Vector3(0.050624337f, -0.10006088f, 0.031601f));
+            AssertQuaternion(
+                (Quaternion)visualBindingType.GetField("drawnLocalRotation")!.GetValue(off)!,
+                new Quaternion(-0.8739462f, 0.28821984f, -0.31814724f, 0.2278809f));
+            AssertVector3((Vector3)visualBindingType.GetField("stowedLocalPosition")!.GetValue(main)!, Vector3.zero);
+            AssertQuaternion((Quaternion)visualBindingType.GetField("stowedLocalRotation")!.GetValue(main)!, Quaternion.identity);
+            AssertVector3((Vector3)visualBindingType.GetField("stowedLocalPosition")!.GetValue(off)!, Vector3.zero);
+            AssertQuaternion((Quaternion)visualBindingType.GetField("stowedLocalRotation")!.GetValue(off)!, Quaternion.identity);
+        }
+
+        [Test]
+        public void DaggersAnimationSet_AuthorsStealthedCrouchLocomotionMode()
+        {
+            Type combatAnimationSetType = RequireType("Arena.Presentation.CombatAnimationSet");
+
+            UnityEngine.Object loaded = Resources.Load("CombatAnimationSets/Daggers", combatAnimationSetType);
+            Assert.That(loaded, Is.Not.Null);
+
+            Array overrides = (Array)RequireProperty(combatAnimationSetType, "LocomotionModeOverridesOrEmpty").GetValue(loaded)!;
+            object stealthed = FindLocomotionModeOverride(overrides, "STEALTHED");
+            Type overrideType = stealthed.GetType();
+
+            Assert.That(overrideType.GetField("locomotionIdle")!.GetValue(stealthed), Is.Not.Null);
+            Assert.That(overrideType.GetField("locomotionIdleCombat")!.GetValue(stealthed), Is.Not.Null);
+            AssertDirectionalClipSetHasAllDirections(overrideType.GetField("walk")!.GetValue(stealthed)!);
+            AssertDirectionalClipSetHasAllDirections(overrideType.GetField("walkCombat")!.GetValue(stealthed)!);
+            AssertDirectionalClipSetHasAllDirections(overrideType.GetField("run")!.GetValue(stealthed)!);
+            AssertDirectionalClipSetHasAllDirections(overrideType.GetField("runCombat")!.GetValue(stealthed)!);
+            AssertDirectionalClipSetHasAllDirections(overrideType.GetField("walkStop")!.GetValue(stealthed)!);
+            AssertDirectionalClipSetHasAllDirections(overrideType.GetField("walkStopCombat")!.GetValue(stealthed)!);
+            AssertDirectionalClipSetHasAllDirections(overrideType.GetField("runStop")!.GetValue(stealthed)!);
+            AssertDirectionalClipSetHasAllDirections(overrideType.GetField("runStopCombat")!.GetValue(stealthed)!);
+            Assert.That(overrideType.GetField("turn90L")!.GetValue(stealthed), Is.Not.Null);
+            Assert.That(overrideType.GetField("turn90R")!.GetValue(stealthed), Is.Not.Null);
+            Assert.That(overrideType.GetField("turn180L")!.GetValue(stealthed), Is.Not.Null);
+            Assert.That(overrideType.GetField("turn180R")!.GetValue(stealthed), Is.Not.Null);
+            Assert.That(overrideType.GetField("turn90CombatL")!.GetValue(stealthed), Is.Not.Null);
+            Assert.That(overrideType.GetField("turn90CombatR")!.GetValue(stealthed), Is.Not.Null);
+            Assert.That(overrideType.GetField("turn180CombatL")!.GetValue(stealthed), Is.Not.Null);
+            Assert.That(overrideType.GetField("turn180CombatR")!.GetValue(stealthed), Is.Not.Null);
+        }
+
+        [Test]
+        public void DaggerCombatPrefabs_UseProjectAuthoredUrpMaterial()
+        {
+            const string materialPath = "Assets/Arena/Resources/CombatAnimationSets/DaggerPackAuthored.mat";
+            Material material = AssetDatabase.LoadAssetAtPath<Material>(materialPath);
+            Assert.That(material, Is.Not.Null);
+            Assert.That(material!.shader, Is.Not.Null);
+            Assert.That(material.shader.name, Is.EqualTo("Universal Render Pipeline/Lit"));
+
+            string[] prefabPaths =
+            {
+                "Assets/Arena/Resources/CombatAnimationSets/DaggerMainPackAuthored.prefab",
+                "Assets/Arena/Resources/CombatAnimationSets/DaggerOffPackAuthored.prefab",
+            };
+
+            foreach (string prefabPath in prefabPaths)
+            {
+                GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
+                Assert.That(prefab, Is.Not.Null, prefabPath);
+
+                Renderer[] renderers = prefab!.GetComponentsInChildren<Renderer>(true);
+                Assert.That(renderers, Is.Not.Empty, prefabPath);
+
+                foreach (Material rendererMaterial in renderers.SelectMany(renderer => renderer.sharedMaterials))
+                {
+                    Assert.That(rendererMaterial, Is.Not.Null, prefabPath);
+                    Assert.That(AssetDatabase.GetAssetPath(rendererMaterial), Is.EqualTo(materialPath), prefabPath);
+                    Assert.That(rendererMaterial!.shader.name, Is.EqualTo("Universal Render Pipeline/Lit"), prefabPath);
+                }
             }
         }
 
@@ -1555,6 +1656,30 @@ namespace Arena.Tests.Editor
             Assert.That(actual.y, Is.EqualTo(expected.y).Within(PositionTolerance));
             Assert.That(actual.z, Is.EqualTo(expected.z).Within(PositionTolerance));
             Assert.That(actual.w, Is.EqualTo(expected.w).Within(PositionTolerance));
+        }
+
+        private static object FindLocomotionModeOverride(Array overrides, string modeId)
+        {
+            foreach (object modeOverride in overrides)
+            {
+                string currentModeId = (string)RequireProperty(modeOverride.GetType(), "ModeIdOrEmpty").GetValue(modeOverride)!;
+                if (string.Equals(currentModeId, modeId, StringComparison.Ordinal))
+                    return modeOverride;
+            }
+
+            throw new AssertionException($"Expected locomotion mode override '{modeId}'.");
+        }
+
+        private static void AssertDirectionalClipSetHasAllDirections(object directionalClipSet)
+        {
+            Type directionalClipSetType = directionalClipSet.GetType();
+            foreach (string fieldName in new[] { "n", "ne", "e", "se", "s", "sw", "w", "nw" })
+            {
+                Assert.That(
+                    directionalClipSetType.GetField(fieldName)!.GetValue(directionalClipSet),
+                    Is.Not.Null,
+                    $"Directional clip '{fieldName}' should be authored.");
+            }
         }
 
         private static ScriptableObject CreateMinimalExportableCombatAnimationSet(Type combatAnimationSetType)

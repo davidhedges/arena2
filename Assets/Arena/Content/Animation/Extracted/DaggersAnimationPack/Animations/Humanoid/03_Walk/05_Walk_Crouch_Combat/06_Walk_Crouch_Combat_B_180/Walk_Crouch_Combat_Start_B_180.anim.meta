@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: e6508012747827f58903ca1f4dabf496
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/03_Walk/05_Walk_Crouch_Combat/06_Walk_Crouch_Combat_B_180/Walk_Crouch_Combat_Start_B_180.anim
+  uploadId: 783191

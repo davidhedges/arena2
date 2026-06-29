@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: a6b0a9c273ce865a98ac3b2ad0ac23ea
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/02_Attack/19_Execution/01_Execution/Execution_04.anim
+  uploadId: 783191

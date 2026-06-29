@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 6bcbad46da9b9709ab1fdd2708dd5712
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/01_Idle/05_Offset_Idle/Idle_Down_R.anim
+  uploadId: 783191

@@ -133,6 +133,50 @@ namespace Arena.Presentation
     }
 
     [Serializable]
+    public sealed class CombatAnimationLocomotionModeOverride
+    {
+        [Tooltip("CombatModeCatalog mode_id this locomotion override applies to.")]
+        public string modeId = "";
+
+        [Header("Idle")]
+        public AnimationClip? locomotionIdle;
+        public AnimationClip? locomotionIdleCombat;
+
+        [Header("Directional")]
+        public DirectionalClipSet walk;
+        public DirectionalClipSet walkCombat;
+        public DirectionalClipSet run;
+        public DirectionalClipSet runCombat;
+
+        [Header("Directional Stops")]
+        public DirectionalClipSet walkStop;
+        public DirectionalClipSet walkStopCombat;
+        public DirectionalClipSet runStop;
+        public DirectionalClipSet runStopCombat;
+
+        [Header("Turns")]
+        public AnimationClip? turn90L;
+        public AnimationClip? turn90R;
+        public AnimationClip? turn180L;
+        public AnimationClip? turn180R;
+        public AnimationClip? turn90CombatL;
+        public AnimationClip? turn90CombatR;
+        public AnimationClip? turn180CombatL;
+        public AnimationClip? turn180CombatR;
+
+        public string ModeIdOrEmpty => string.IsNullOrWhiteSpace(modeId)
+            ? string.Empty
+            : modeId.Trim().ToUpperInvariant();
+
+        public bool HasAny =>
+            locomotionIdle != null || locomotionIdleCombat != null ||
+            walk.HasAny || walkCombat.HasAny || run.HasAny || runCombat.HasAny ||
+            walkStop.HasAny || walkStopCombat.HasAny || runStop.HasAny || runStopCombat.HasAny ||
+            turn90L != null || turn90R != null || turn180L != null || turn180R != null ||
+            turn90CombatL != null || turn90CombatR != null || turn180CombatL != null || turn180CombatR != null;
+    }
+
+    [Serializable]
     public enum WeaponVisualAttachmentMode
     {
         Mount = 0,
@@ -1066,6 +1110,10 @@ namespace Arena.Presentation
         public AnimationClip? turn180CombatL;
         public AnimationClip? turn180CombatR;
 
+        [Header("Combat Mode Locomotion")]
+        [Tooltip("Optional locomotion slot overrides keyed by CombatModeCatalog mode_id. Used for stance modes such as dagger stealth.")]
+        public CombatAnimationLocomotionModeOverride[] locomotionModeOverrides = Array.Empty<CombatAnimationLocomotionModeOverride>();
+
         [Header("Airborne")]
         public CardinalClipSet jumpStart;
         public CardinalClipSet jumpStartCombat;
@@ -1207,6 +1255,32 @@ namespace Arena.Presentation
         public float DrawWeaponHandoffTime => WeaponPresentation.DrawWeaponHandoffTime;
         public float SheathWeaponHandoffTime => WeaponPresentation.SheathWeaponHandoffTime;
         public WeaponVisualBinding[] VisualBindings => WeaponPresentation.VisualsOrEmpty;
+        public CombatAnimationLocomotionModeOverride[] LocomotionModeOverridesOrEmpty =>
+            locomotionModeOverrides ?? Array.Empty<CombatAnimationLocomotionModeOverride>();
+
+        public bool TryGetLocomotionModeOverride(
+            string? modeId,
+            out CombatAnimationLocomotionModeOverride? modeOverride)
+        {
+            modeOverride = null;
+            if (string.IsNullOrWhiteSpace(modeId))
+                return false;
+
+            string normalizedModeId = modeId.Trim().ToUpperInvariant();
+            foreach (CombatAnimationLocomotionModeOverride candidate in LocomotionModeOverridesOrEmpty)
+            {
+                if (candidate == null || !candidate.HasAny)
+                    continue;
+
+                if (string.Equals(candidate.ModeIdOrEmpty, normalizedModeId, StringComparison.Ordinal))
+                {
+                    modeOverride = candidate;
+                    return true;
+                }
+            }
+
+            return false;
+        }
 
         public bool EnsureWeaponPresentationProfileInitialized()
         {

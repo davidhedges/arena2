@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 1e746fe7b183db82d4ec197561bc2dfd
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/03_Walk/06_Walk_Equip/01_Walk_Equip/Walk_Equip_to_Combat.anim
+  uploadId: 783191

@@ -70,6 +70,7 @@ const RULE_DEFAULT_GLOBAL_COOLDOWN_MS: &str = "DEFAULT_GLOBAL_COOLDOWN_MS";
 const FALLBACK_DEFAULT_GLOBAL_COOLDOWN_MS: u64 = 1500;
 const MAX_DEFAULT_GLOBAL_COOLDOWN_MS: u64 = 60_000;
 pub(crate) const COMBAT_PROFILE_ARCHER_BOW: &str = "ARCHER_BOW";
+pub(crate) const COMBAT_PROFILE_DAGGERS: &str = "DAGGERS";
 pub(crate) const COMBAT_PROFILE_SWORD_AND_SHIELD: &str = "SWORD_AND_SHIELD";
 pub(crate) const COMBAT_PROFILE_TWO_HANDED_SWORD: &str = "TWO_HANDED_SWORD";
 pub(crate) const DISCIPLINE_SUBTLETY: &str = "SUBTLETY";
@@ -80,6 +81,8 @@ pub(crate) const DISCIPLINE_ARCANA: &str = "ARCANA";
 pub(crate) const RESOURCE_KIND_STAMINA: &str = "STAMINA";
 pub(crate) const COMBAT_MODE_SHORT_DRAW: &str = "SHORT_DRAW";
 pub(crate) const COMBAT_MODE_FULL_DRAW: &str = "FULL_DRAW";
+pub(crate) const COMBAT_MODE_READY: &str = "READY";
+pub(crate) const COMBAT_MODE_STEALTHED: &str = "STEALTHED";
 pub(crate) const AUTO_ATTACK_MOVEMENT_ALLOW_MOVING: &str = "ALLOW_MOVING";
 pub(crate) const AUTO_ATTACK_MOVEMENT_RESET_ON_VOLUNTARY_MOVE: &str =
     "RESET_CADENCE_ON_VOLUNTARY_MOVE";
@@ -87,6 +90,8 @@ pub(crate) const AUTO_ATTACK_MOVEMENT_RESET_ON_VOLUNTARY_MOVE: &str =
 const ABILITY_KIND_COMBAT_MODE_TOGGLE: &str = "COMBAT_MODE_TOGGLE";
 #[cfg(test)]
 const ARCHER_DRAW_MODE_TOGGLE_ABILITY_ID: &str = "ARCHER_DRAW_MODE_TOGGLE";
+#[cfg(test)]
+const DAGGER_STEALTH_ABILITY_ID: &str = "DAGGER_STEALTH";
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) struct AllocatedStatTotals {
@@ -4225,6 +4230,18 @@ fn validate_combat_mode_catalog() {
         Some(true),
         "ARCHER_BOW must default to FULL_DRAW"
     );
+
+    assert_eq!(
+        progression_catalog()
+            .combat_modes
+            .iter()
+            .find(|mode| normalize_identifier(mode.combat_profile_id.as_str())
+                == COMBAT_PROFILE_DAGGERS
+                && normalize_identifier(mode.mode_id.as_str()) == COMBAT_MODE_READY)
+            .map(|mode| mode.is_default),
+        Some(true),
+        "DAGGERS must default to READY"
+    );
 }
 
 fn validate_auto_attack_catalog() {
@@ -5055,9 +5072,10 @@ mod tests {
         CharacterActionBarAssignment, CombatVfxPresentationManifest, FixedActionId,
         MeleeImpactEffectRuntime, ABILITY_KIND_COMBAT_MODE_TOGGLE, ACTION_KIND_FIXED,
         ARCHER_DRAW_MODE_TOGGLE_ABILITY_ID, AUTO_ATTACK_MOVEMENT_ALLOW_MOVING,
-        AUTO_ATTACK_MOVEMENT_RESET_ON_VOLUNTARY_MOVE, COMBAT_MODE_FULL_DRAW,
-        COMBAT_MODE_SHORT_DRAW, COMBAT_PROFILE_ARCHER_BOW, COMBAT_PROFILE_SWORD_AND_SHIELD,
-        COMBAT_PROFILE_TWO_HANDED_SWORD, GLOBAL_ACTION_BAR_PROFILE, RESOURCE_KIND_STAMINA,
+        AUTO_ATTACK_MOVEMENT_RESET_ON_VOLUNTARY_MOVE, COMBAT_MODE_FULL_DRAW, COMBAT_MODE_READY,
+        COMBAT_MODE_SHORT_DRAW, COMBAT_MODE_STEALTHED, COMBAT_PROFILE_ARCHER_BOW,
+        COMBAT_PROFILE_DAGGERS, COMBAT_PROFILE_SWORD_AND_SHIELD, COMBAT_PROFILE_TWO_HANDED_SWORD,
+        DAGGER_STEALTH_ABILITY_ID, GLOBAL_ACTION_BAR_PROFILE, RESOURCE_KIND_STAMINA,
     };
     use crate::action_ids::{AuthoredActionId, RuntimeActionId};
 
@@ -7221,6 +7239,59 @@ mod tests {
                             == ARCHER_DRAW_MODE_TOGGLE_ABILITY_ID
                 }),
             "Archer draw mode toggle should have an action-bar slot assignment"
+        );
+    }
+
+    #[test]
+    fn dagger_stealth_mode_is_authored_as_profile_toggle() {
+        validate_combat_mode_catalog();
+
+        let catalog = progression_catalog();
+        let dagger_modes: HashSet<_> = catalog
+            .combat_modes
+            .iter()
+            .filter(|mode| {
+                normalize_identifier(mode.combat_profile_id.as_str()) == COMBAT_PROFILE_DAGGERS
+            })
+            .map(|mode| normalize_identifier(mode.mode_id.as_str()))
+            .collect();
+        assert!(dagger_modes.contains(COMBAT_MODE_READY));
+        assert!(dagger_modes.contains(COMBAT_MODE_STEALTHED));
+
+        let stealth = catalog
+            .abilities
+            .iter()
+            .find(|ability| {
+                normalize_identifier(ability.ability_id.as_str()) == DAGGER_STEALTH_ABILITY_ID
+            })
+            .expect("Dagger stealth toggle ability");
+        assert_eq!(
+            normalize_identifier(stealth.combat_profile_id.as_str()),
+            COMBAT_PROFILE_DAGGERS
+        );
+        assert_eq!(
+            ability_gameplay_kind(stealth),
+            ABILITY_KIND_COMBAT_MODE_TOGGLE
+        );
+        assert!(
+            stealth
+                .ability_tags
+                .iter()
+                .any(|tag| normalize_identifier(tag.as_str()) == "ACTION_BAR_ACTION"),
+            "Dagger stealth should be an action-bar action"
+        );
+        assert!(
+            catalog
+                .combat_profile_action_bar_defaults
+                .iter()
+                .any(|assignment| {
+                    normalize_identifier(assignment.combat_profile_id.as_str())
+                        == COMBAT_PROFILE_DAGGERS
+                        && canonical_action_bar_slot_id(assignment.slot_id.as_str()) == "SLOT_1_1"
+                        && normalize_identifier(assignment.ability_id.as_str())
+                            == DAGGER_STEALTH_ABILITY_ID
+                }),
+            "Dagger stealth should have an action-bar slot assignment"
         );
     }
 

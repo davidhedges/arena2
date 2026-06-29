@@ -10,18 +10,7 @@ namespace Arena.Presentation
         {
             var clipMap = new Dictionary<string, AnimationClip>(128);
 
-            if (set.locomotionIdle       != null) clipMap["slot_loco_idle"]        = set.locomotionIdle;
-            if (set.locomotionIdleCombat != null) clipMap["slot_loco_idle_combat"] = set.locomotionIdleCombat;
-
-            MapDirectionalSet(clipMap, "slot_walk",              set.walk);
-            MapDirectionalSet(clipMap, "slot_walk_combat",       set.walkCombat);
-            MapDirectionalSet(clipMap, "slot_run",               set.run);
-            MapDirectionalSet(clipMap, "slot_run_combat",        set.runCombat);
-
-            MapDirectionalSet(clipMap, "slot_walk_stop",         set.walkStop);
-            MapDirectionalSet(clipMap, "slot_walk_stop_combat",  set.walkStopCombat);
-            MapDirectionalSet(clipMap, "slot_run_stop",          set.runStop);
-            MapDirectionalSet(clipMap, "slot_run_stop_combat",   set.runStopCombat);
+            MapBaseLocomotion(clipMap, set);
 
             MapCardinalSet(clipMap, "slot_jump_start",         set.jumpStart);
             MapCardinalSet(clipMap, "slot_jump_start_combat",  set.jumpStartCombat);
@@ -29,15 +18,6 @@ namespace Arena.Presentation
             if (set.freeFallCombat != null) clipMap["slot_freefall_combat"]  = set.freeFallCombat;
             MapCardinalSet(clipMap, "slot_jump_land",          set.jumpLand);
             MapCardinalSet(clipMap, "slot_jump_land_combat",   set.jumpLandCombat);
-
-            if (set.turn90L        != null) clipMap["slot_turn_90_L"]          = set.turn90L;
-            if (set.turn90R        != null) clipMap["slot_turn_90_R"]          = set.turn90R;
-            if (set.turn180L       != null) clipMap["slot_turn_180_L"]         = set.turn180L;
-            if (set.turn180R       != null) clipMap["slot_turn_180_R"]         = set.turn180R;
-            if (set.turn90CombatL  != null) clipMap["slot_turn_combat_90_L"]   = set.turn90CombatL;
-            if (set.turn90CombatR  != null) clipMap["slot_turn_combat_90_R"]   = set.turn90CombatR;
-            if (set.turn180CombatL != null) clipMap["slot_turn_combat_180_L"]  = set.turn180CombatL;
-            if (set.turn180CombatR != null) clipMap["slot_turn_combat_180_R"]  = set.turn180CombatR;
 
             if (set.enterCombatIdle != null) clipMap["slot_enter_combat_idle"] = set.enterCombatIdle;
             if (set.enterCombatWalk != null) clipMap["slot_enter_combat_walk"] = set.enterCombatWalk;
@@ -85,6 +65,24 @@ namespace Arena.Presentation
                 overrideController[slotName] = newClip;
         }
 
+        public void ApplyLocomotionMode(
+            CombatAnimationSet set,
+            string? modeId,
+            AnimatorOverrideController overrideController)
+        {
+            var clipMap = new Dictionary<string, AnimationClip>(64);
+            MapBaseLocomotion(clipMap, set);
+
+            if (set.TryGetLocomotionModeOverride(modeId, out CombatAnimationLocomotionModeOverride? modeOverride)
+                && modeOverride != null)
+            {
+                MapLocomotionModeOverride(clipMap, modeOverride);
+            }
+
+            foreach ((string slotName, AnimationClip newClip) in clipMap)
+                overrideController[slotName] = newClip;
+        }
+
         public void ApplyDirectionalOverrideSet(
             AnimatorOverrideController overrideController,
             string prefix,
@@ -118,6 +116,58 @@ namespace Arena.Presentation
             ApplyPreferredClipOverride(overrideController, "slot_hit_B", useAirVariant ? set.airHitB : null, set.hitB);
             ApplyPreferredClipOverride(overrideController, "slot_hit_L", useAirVariant ? set.airHitL : null, set.hitL);
             ApplyPreferredClipOverride(overrideController, "slot_hit_R", useAirVariant ? set.airHitR : null, set.hitR);
+        }
+
+        private static void MapBaseLocomotion(Dictionary<string, AnimationClip> clipMap, CombatAnimationSet set)
+        {
+            if (set.locomotionIdle       != null) clipMap["slot_loco_idle"]        = set.locomotionIdle;
+            if (set.locomotionIdleCombat != null) clipMap["slot_loco_idle_combat"] = set.locomotionIdleCombat;
+
+            MapDirectionalSet(clipMap, "slot_walk",              set.walk);
+            MapDirectionalSet(clipMap, "slot_walk_combat",       set.walkCombat);
+            MapDirectionalSet(clipMap, "slot_run",               set.run);
+            MapDirectionalSet(clipMap, "slot_run_combat",        set.runCombat);
+
+            MapDirectionalSet(clipMap, "slot_walk_stop",         set.walkStop);
+            MapDirectionalSet(clipMap, "slot_walk_stop_combat",  set.walkStopCombat);
+            MapDirectionalSet(clipMap, "slot_run_stop",          set.runStop);
+            MapDirectionalSet(clipMap, "slot_run_stop_combat",   set.runStopCombat);
+
+            if (set.turn90L        != null) clipMap["slot_turn_90_L"]          = set.turn90L;
+            if (set.turn90R        != null) clipMap["slot_turn_90_R"]          = set.turn90R;
+            if (set.turn180L       != null) clipMap["slot_turn_180_L"]         = set.turn180L;
+            if (set.turn180R       != null) clipMap["slot_turn_180_R"]         = set.turn180R;
+            if (set.turn90CombatL  != null) clipMap["slot_turn_combat_90_L"]   = set.turn90CombatL;
+            if (set.turn90CombatR  != null) clipMap["slot_turn_combat_90_R"]   = set.turn90CombatR;
+            if (set.turn180CombatL != null) clipMap["slot_turn_combat_180_L"]  = set.turn180CombatL;
+            if (set.turn180CombatR != null) clipMap["slot_turn_combat_180_R"]  = set.turn180CombatR;
+        }
+
+        private static void MapLocomotionModeOverride(
+            Dictionary<string, AnimationClip> clipMap,
+            CombatAnimationLocomotionModeOverride modeOverride)
+        {
+            if (modeOverride.locomotionIdle       != null) clipMap["slot_loco_idle"]        = modeOverride.locomotionIdle;
+            if (modeOverride.locomotionIdleCombat != null) clipMap["slot_loco_idle_combat"] = modeOverride.locomotionIdleCombat;
+
+            MapDirectionalSet(clipMap, "slot_walk",              modeOverride.walk);
+            MapDirectionalSet(clipMap, "slot_walk_combat",       modeOverride.walkCombat);
+            MapDirectionalSet(clipMap, "slot_run",               modeOverride.run);
+            MapDirectionalSet(clipMap, "slot_run_combat",        modeOverride.runCombat);
+
+            MapDirectionalSet(clipMap, "slot_walk_stop",         modeOverride.walkStop);
+            MapDirectionalSet(clipMap, "slot_walk_stop_combat",  modeOverride.walkStopCombat);
+            MapDirectionalSet(clipMap, "slot_run_stop",          modeOverride.runStop);
+            MapDirectionalSet(clipMap, "slot_run_stop_combat",   modeOverride.runStopCombat);
+
+            if (modeOverride.turn90L        != null) clipMap["slot_turn_90_L"]          = modeOverride.turn90L;
+            if (modeOverride.turn90R        != null) clipMap["slot_turn_90_R"]          = modeOverride.turn90R;
+            if (modeOverride.turn180L       != null) clipMap["slot_turn_180_L"]         = modeOverride.turn180L;
+            if (modeOverride.turn180R       != null) clipMap["slot_turn_180_R"]         = modeOverride.turn180R;
+            if (modeOverride.turn90CombatL  != null) clipMap["slot_turn_combat_90_L"]   = modeOverride.turn90CombatL;
+            if (modeOverride.turn90CombatR  != null) clipMap["slot_turn_combat_90_R"]   = modeOverride.turn90CombatR;
+            if (modeOverride.turn180CombatL != null) clipMap["slot_turn_combat_180_L"]  = modeOverride.turn180CombatL;
+            if (modeOverride.turn180CombatR != null) clipMap["slot_turn_combat_180_R"]  = modeOverride.turn180CombatR;
         }
 
         private static void MapDirectionalSet(

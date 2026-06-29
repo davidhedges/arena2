@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: fde66e649cc6945adff8651512f1f7fd
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/05_Jump/02_Jump_Combat/05_Jump_Combat_R_90/Jump_Combat_Start_R_90.anim
+  uploadId: 783191

@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 653b3acd2786f7bc69dfa346ed8290ee
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/01_Idle/05_Offset_Idle/Idle_L.anim
+  uploadId: 783191

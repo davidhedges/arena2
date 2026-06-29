@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: b83ebf99a54795dde03f47a1d238339e
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/03_Walk/01_Walk/01_Walk_F_0/Walk_Start_F_0.anim
+  uploadId: 783191

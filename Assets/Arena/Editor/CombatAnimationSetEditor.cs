@@ -35,6 +35,7 @@ namespace Arena.Editor
             "walkStopCombat",
             "runStop",
             "runStopCombat",
+            "locomotionModeOverrides",
         };
         private const float PreviewHeight = 280f;
         private const float PreviewMinDistance = 0.5f;
@@ -432,6 +433,10 @@ namespace Arena.Editor
                 DrawRequiredProperty("walkStopCombat", "Combat Walk Stop");
                 DrawRequiredProperty("runStop", "Run Stop");
                 DrawRequiredProperty("runStopCombat", "Combat Run Stop");
+
+                EditorGUILayout.Space(4);
+                EditorGUILayout.LabelField("Combat Mode Overrides", EditorStyles.boldLabel);
+                DrawRequiredProperty("locomotionModeOverrides", "Mode Overrides");
             }
         }
 

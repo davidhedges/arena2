@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 91a157d0caf0cb2ae0e4d938b3ef9164
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/04_Run/03_Run_Equip/Run_Equip_to_Run_Combat.anim
+  uploadId: 783191

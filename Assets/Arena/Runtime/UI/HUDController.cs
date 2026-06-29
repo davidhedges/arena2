@@ -1450,6 +1450,8 @@ namespace Arena.UI
             {
                 CombatModeIds.ShortDraw => "SD",
                 CombatModeIds.FullDraw => "FD",
+                CombatModeIds.Ready => "RD",
+                CombatModeIds.Stealthed => "ST",
                 _ => modeId.Length >= 2 ? modeId[..2] : modeId,
             };
         }
@@ -1460,6 +1462,8 @@ namespace Arena.UI
             {
                 CombatModeIds.ShortDraw => Hex("#2C5F72"),
                 CombatModeIds.FullDraw => Hex("#72542C"),
+                CombatModeIds.Ready => Hex("#3F4650"),
+                CombatModeIds.Stealthed => Hex("#2F5C46"),
                 _ => BuffBg,
             };
         }

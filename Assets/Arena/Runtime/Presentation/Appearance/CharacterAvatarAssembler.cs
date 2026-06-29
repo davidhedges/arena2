@@ -339,6 +339,9 @@ namespace Arena.Presentation.Appearance
                 ?? ResolveHumanoidBone(instance, HumanBodyBones.Chest)
                 ?? ResolveSocket(nhAvatar, BoneType.BackM)
                 ?? ResolveSocket(nhAvatar, BoneType.BackL);
+            Transform? pelvisParent = ResolveHumanoidBone(instance, HumanBodyBones.Hips)
+                ?? ResolveNamedTransform(instance, "Pelvis")
+                ?? ResolveNamedTransform(instance, "pelvis");
             Transform? mainHip = ResolveSocket(nhAvatar, BoneType.HipR) ?? ResolveHumanoidBone(instance, HumanBodyBones.RightUpperLeg);
             Transform? offHip = ResolveSocket(nhAvatar, BoneType.HipL) ?? ResolveHumanoidBone(instance, HumanBodyBones.LeftUpperLeg);
 
@@ -371,6 +374,12 @@ namespace Arena.Presentation.Appearance
             Transform? greatswordStowed = ArenaWeaponMountCalibration.CreateOrUpdateMountChild(
                 backParent,
                 ArenaWeaponMountCalibration.GreatswordStowed);
+            Transform? daggerMainStowed = ArenaWeaponMountCalibration.CreateOrUpdateMountChild(
+                pelvisParent,
+                ArenaWeaponMountCalibration.DaggerMainStowed);
+            Transform? daggerOffStowed = ArenaWeaponMountCalibration.CreateOrUpdateMountChild(
+                pelvisParent,
+                ArenaWeaponMountCalibration.DaggerOffStowed);
 
             SetMount(mounts, AvatarWeaponMounts.MainHandMountId, mainHand);
             SetMount(mounts, AvatarWeaponMounts.GreatswordHandMountId, greatswordHand ?? mainHand);
@@ -388,6 +397,8 @@ namespace Arena.Presentation.Appearance
             SetMount(mounts, AvatarWeaponMounts.ArcherBowStowedMountId, archerBowStowed);
             SetMount(mounts, AvatarWeaponMounts.ArcherQuiverStowedMountId, archerQuiverStowed);
             SetMount(mounts, AvatarWeaponMounts.StaffStowedMountId, staffStowed);
+            SetMount(mounts, AvatarWeaponMounts.DaggerMainStowedMountId, daggerMainStowed);
+            SetMount(mounts, AvatarWeaponMounts.DaggerOffStowedMountId, daggerOffStowed);
         }
 
         private static Transform? ResolveSocket(NHAvatar avatar, BoneType boneType)

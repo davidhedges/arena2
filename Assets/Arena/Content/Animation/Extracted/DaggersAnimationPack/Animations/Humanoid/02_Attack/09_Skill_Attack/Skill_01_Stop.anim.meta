@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 04c840a961a8ddb81e162e59ca2ca318
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/02_Attack/09_Skill_Attack/Skill_01_Stop.anim
+  uploadId: 783191

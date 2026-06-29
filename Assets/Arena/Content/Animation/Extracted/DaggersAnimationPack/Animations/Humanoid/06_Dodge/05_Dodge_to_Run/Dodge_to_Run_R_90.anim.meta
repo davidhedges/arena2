@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 8de1e004937b6efe6a2d2a3424db5a1c
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/06_Dodge/05_Dodge_to_Run/Dodge_to_Run_R_90.anim
+  uploadId: 783191

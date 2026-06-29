@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: a89249b92318ef01ce93012a6ce00e9e
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/03_Walk/04_Walk_Crouch/09_Walk_Crouch_B_L_90/Walk_Crouch_Loop_B_L_90.anim
+  uploadId: 783191

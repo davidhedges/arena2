@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: a749dc2d54c37b853ccdbbc1190d7bd8
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/08_Hit/12_Knock_Down/Knock_Down_Start.anim
+  uploadId: 783191

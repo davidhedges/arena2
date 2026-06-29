@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: ac6a7a969d8e378c29069638580692a2
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/05_Jump/02_Jump_Combat/02_Jump_Combat_F_0/Jump_Combat_to_Run_Fast_F_0.anim
+  uploadId: 783191

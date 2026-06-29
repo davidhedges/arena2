@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: ea3003a9e8a455c44ac96d42be86e01c
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/03_Walk/02_Walk_Combat/05_Walk_Combat_F_R_90/Walk_Combat_Start_F_R_90.anim
+  uploadId: 783191

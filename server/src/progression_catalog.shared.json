@@ -87,6 +87,20 @@
       "display_name": "Full Draw",
       "is_default": true,
       "sort_order": 20
+    },
+    {
+      "combat_profile_id": "DAGGERS",
+      "mode_id": "READY",
+      "display_name": "Ready",
+      "is_default": true,
+      "sort_order": 10
+    },
+    {
+      "combat_profile_id": "DAGGERS",
+      "mode_id": "STEALTHED",
+      "display_name": "Stealthed",
+      "is_default": false,
+      "sort_order": 20
     }
   ],
   "resources": [
@@ -2961,6 +2975,21 @@
       }
     },
     {
+      "ability_id": "DAGGER_STEALTH",
+      "combat_profile_id": "DAGGERS",
+      "action_id": "TOGGLE_STEALTH",
+      "display_name": "Stealth",
+      "resource_kind": "",
+      "resource_cost": 0,
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 40,
+      "gameplay": {
+        "kind": "COMBAT_MODE_TOGGLE"
+      }
+    },
+    {
       "ability_id": "STAFF_STRIKE",
       "combat_profile_id": "STAFF",
       "action_id": "COMBO_ATTACK_1_1_HIGH_TO_LOW",
@@ -3709,6 +3738,13 @@
       "display_name": "Dashing Cut",
       "description": "Dashes to the target for a quick dagger strike.",
       "sort_order": 220
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "DAGGER_STEALTH",
+      "display_name": "Stealth",
+      "description": "Enter or leave the Dagger stealthed stance.",
+      "sort_order": 225
     },
     {
       "presentation_kind": "ABILITY",
@@ -4590,6 +4626,14 @@
       "combat_profile_id": "DAGGERS",
       "ability_id": "DAGGER_DASHING_CUT",
       "sort_order": 260
+    },
+    {
+      "slot_id": "slot_1_1",
+      "combat_profile_id": "DAGGERS",
+      "action_kind": "ABILITY",
+      "action_id": "DAGGER_STEALTH",
+      "ability_id": "DAGGER_STEALTH",
+      "sort_order": 270
     },
     {
       "slot_id": "slot_0_0",

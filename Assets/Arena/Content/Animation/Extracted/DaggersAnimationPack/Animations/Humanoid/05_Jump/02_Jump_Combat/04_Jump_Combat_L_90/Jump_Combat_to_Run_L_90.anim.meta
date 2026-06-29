@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: c2c64e94868861e0e80dc15d53bc5bc5
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/05_Jump/02_Jump_Combat/04_Jump_Combat_L_90/Jump_Combat_to_Run_L_90.anim
+  uploadId: 783191

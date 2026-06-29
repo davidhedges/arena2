@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 2c78b874ae23dff366565210698215fb
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/05_Jump/02_Jump_Combat/01_Jump_Combat_0/Jump_Combat_Loop_0.anim
+  uploadId: 783191

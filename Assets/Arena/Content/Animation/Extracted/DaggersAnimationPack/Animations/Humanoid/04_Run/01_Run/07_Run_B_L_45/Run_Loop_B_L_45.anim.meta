@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: e3c2c3c96ad240a4f7a989c117a6b5fc
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/04_Run/01_Run/07_Run_B_L_45/Run_Loop_B_L_45.anim
+  uploadId: 783191

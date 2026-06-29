@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: fa87a965cf53eddb6c64d1c4f1237228
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/02_Attack/11_Ultimate_Attack/01_Ultimate_Attack/Speed_Attack_Loop.anim
+  uploadId: 783191

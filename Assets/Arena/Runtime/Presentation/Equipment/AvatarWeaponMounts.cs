@@ -91,6 +91,20 @@ namespace Arena.Presentation
             new Vector3(0.017869543f, 0.17381594f, -0.000010065557f),
             new Quaternion(0.5422092f, -0.45388243f, 0.54220915f, 0.45388243f));
 
+        // Recovered from DaggersAnimationPack/PreFabs/9CG_Dagger.prefab.
+        // The pack stows both daggers against Dagger_Holder_R1/L1 under the pelvis.
+        public static readonly ArenaWeaponMountCalibrationEntry DaggerMainStowed = new(
+            AvatarWeaponMounts.DaggerMainStowedMountId,
+            "Arena_Dagger_main_stowed",
+            new Vector3(-0.13016713f, -0.1271894f, 0.14591376f),
+            new Quaternion(0.095803104f, -0.055815533f, -0.27906847f, 0.9538486f));
+
+        public static readonly ArenaWeaponMountCalibrationEntry DaggerOffStowed = new(
+            AvatarWeaponMounts.DaggerOffStowedMountId,
+            "Arena_Dagger_off_stowed",
+            new Vector3(-0.13016713f, -0.1271894f, -0.14591376f),
+            new Quaternion(0.05581555f, 0.0958031f, 0.9538486f, 0.2790685f));
+
         public static Transform? CreateOrUpdateMountChild(Transform? parent, ArenaWeaponMountCalibrationEntry entry)
         {
             if (parent == null)
@@ -140,6 +154,8 @@ namespace Arena.Presentation
         public const string ArcherBowStowedMountId = "archer_bow_stowed";
         public const string ArcherQuiverStowedMountId = "archer_quiver_stowed";
         public const string ArcherQuiverBackMountId = "archer_quiver_back";
+        public const string DaggerMainStowedMountId = "dagger_main_stowed";
+        public const string DaggerOffStowedMountId = "dagger_off_stowed";
 
         public const string LegacyMainHandMountId = "main_hand";
         public const string LegacyOffHandMountId = "off_hand";
@@ -165,6 +181,8 @@ namespace Arena.Presentation
             [ArcherBowStowedMountId] = new[] { ArcherBowStowedMountId },
             [ArcherQuiverStowedMountId] = new[] { ArcherQuiverStowedMountId, ArcherQuiverBackMountId },
             [ArcherQuiverBackMountId] = new[] { ArcherQuiverStowedMountId, ArcherQuiverBackMountId },
+            [DaggerMainStowedMountId] = new[] { DaggerMainStowedMountId },
+            [DaggerOffStowedMountId] = new[] { DaggerOffStowedMountId },
         };
 
         [SerializeField] private List<AvatarWeaponMountDefinition> _mounts = new();

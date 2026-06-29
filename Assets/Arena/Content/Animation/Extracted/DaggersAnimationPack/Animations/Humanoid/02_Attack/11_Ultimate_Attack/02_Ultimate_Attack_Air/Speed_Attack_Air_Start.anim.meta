@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 257ea7601b8762a2fbf65da9d08e991a
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/02_Attack/11_Ultimate_Attack/02_Ultimate_Attack_Air/Speed_Attack_Air_Start.anim
+  uploadId: 783191

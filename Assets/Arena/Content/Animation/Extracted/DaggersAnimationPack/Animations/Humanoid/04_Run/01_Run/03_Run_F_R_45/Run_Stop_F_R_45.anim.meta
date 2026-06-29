@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 37f35d920ed641678f09cddcfa63566d
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/04_Run/01_Run/03_Run_F_R_45/Run_Stop_F_R_45.anim
+  uploadId: 783191

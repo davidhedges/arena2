@@ -45,6 +45,9 @@ namespace Arena.Tests.Editor
         private const string ServerAppearancePath = "server/src/appearance.rs";
         private const string ServerPlayerPath = "server/src/player.rs";
         private const string EntityRegistryPath = "Assets/Arena/Runtime/Entity/EntityRegistry.cs";
+        private const string NetworkCallbackBinderPath = "Assets/Arena/Runtime/Network/NetworkCallbackBinder.cs";
+        private const string PlayerEntityPath = "Assets/Arena/Runtime/Entity/PlayerEntity.cs";
+        private const string CombatAnimationSetBinderPath = "Assets/Arena/Runtime/Presentation/Animation/CombatAnimationSetBinder.cs";
 
         [Test]
         public void RuntimeUiCode_UsesSharedInputSystemEventBootstrap()
@@ -322,6 +325,32 @@ namespace Arena.Tests.Editor
             Assert.That(panel, Does.Contain("PresentationKindFixed"));
             Assert.That(panel, Does.Contain("IsActionBarVisible(fixedActionId, conn)"));
             Assert.That(panel, Does.Not.Contain("FixedActionBindingCatalog"));
+        }
+
+        [Test]
+        public void CombatModePresentation_UsesActiveModeCallbacksAndAnimationSetOverrides()
+        {
+            string planner = File.ReadAllText(GameplaySubscriptionPlannerPath);
+            Assert.That(planner, Does.Contain("new QueryBuilder().From.ActiveCombatMode().Where(c => c.Owner.Eq(localIdentity)).ToSql()"));
+            Assert.That(planner, Does.Contain("BuildScopedActiveCombatModeQuery"));
+            Assert.That(planner, Does.Contain(".RightSemijoin(qb.From.ActiveCombatMode(), (world, mode) => world.Identity.Eq(mode.Owner))"));
+
+            string callbacks = File.ReadAllText(NetworkCallbackBinderPath);
+            Assert.That(callbacks, Does.Contain("conn.Db.ActiveCombatMode.OnInsert += registry.OnActiveCombatModeInsert"));
+            Assert.That(callbacks, Does.Contain("conn.Db.ActiveCombatMode.OnUpdate += registry.OnActiveCombatModeUpdate"));
+            Assert.That(callbacks, Does.Contain("conn.Db.ActiveCombatMode.OnDelete += registry.OnActiveCombatModeDelete"));
+
+            string registry = File.ReadAllText(EntityRegistryPath);
+            Assert.That(registry, Does.Contain("ApplyOwnerCombatMode"));
+            Assert.That(registry, Does.Contain("entity.SetCombatAnimationMode(modeId)"));
+
+            string entity = File.ReadAllText(PlayerEntityPath);
+            Assert.That(entity, Does.Contain("SetCombatAnimationMode"));
+            Assert.That(entity, Does.Contain("ApplyCombatLocomotionMode"));
+
+            string binder = File.ReadAllText(CombatAnimationSetBinderPath);
+            Assert.That(binder, Does.Contain("ApplyLocomotionMode"));
+            Assert.That(binder, Does.Contain("TryGetLocomotionModeOverride"));
         }
 
         [Test]

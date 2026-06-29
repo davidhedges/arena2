@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 71501cd4c141420b40cf55f659262823
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/02_Attack/08_Combo_Attack_Air_Wave/Combo_Attack_Air_Wave_01.anim
+  uploadId: 783191

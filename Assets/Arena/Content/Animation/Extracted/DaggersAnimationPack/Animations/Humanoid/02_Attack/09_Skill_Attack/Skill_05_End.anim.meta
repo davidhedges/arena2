@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 1b59d6c4772e642763d940ce765d1032
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/02_Attack/09_Skill_Attack/Skill_05_End.anim
+  uploadId: 783191

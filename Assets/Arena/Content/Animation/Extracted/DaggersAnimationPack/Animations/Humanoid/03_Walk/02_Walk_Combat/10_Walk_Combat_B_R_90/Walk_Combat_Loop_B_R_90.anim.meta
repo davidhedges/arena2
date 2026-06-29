@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 5012a74b58fd1cfbe3c9017b881cd6b5
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/03_Walk/02_Walk_Combat/10_Walk_Combat_B_R_90/Walk_Combat_Loop_B_R_90.anim
+  uploadId: 783191

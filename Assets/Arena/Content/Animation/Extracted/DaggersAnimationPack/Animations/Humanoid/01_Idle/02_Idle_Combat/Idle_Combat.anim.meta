@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 8b00922eae88b294282ad449ecb7be04
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/01_Idle/02_Idle_Combat/Idle_Combat.anim
+  uploadId: 783191

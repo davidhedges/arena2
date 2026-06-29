@@ -313,6 +313,8 @@ namespace Arena.EditorTools
                 AvatarWeaponMounts.MainBackMountId => HumanBodyBones.Chest,
                 AvatarWeaponMounts.MainHipMountId => HumanBodyBones.RightUpperLeg,
                 AvatarWeaponMounts.StaffStowedMountId => HumanBodyBones.Chest,
+                AvatarWeaponMounts.DaggerMainStowedMountId => HumanBodyBones.Hips,
+                AvatarWeaponMounts.DaggerOffStowedMountId => HumanBodyBones.Hips,
                 _ => HumanBodyBones.RightHand,
             };
         }
@@ -330,6 +332,7 @@ namespace Arena.EditorTools
             Transform chest = animator.GetBoneTransform(HumanBodyBones.UpperChest) ??
                 animator.GetBoneTransform(HumanBodyBones.Chest) ??
                 RequireBone(animator, HumanBodyBones.Spine);
+            Transform hips = animator.GetBoneTransform(HumanBodyBones.Hips) ?? player.transform;
 
             // Keep the legacy prop-node names present for authored animation clips,
             // but do not use them as semantic attachment mounts. The spawned weapon
@@ -386,6 +389,18 @@ namespace Arena.EditorTools
                 FindDescendant(player.transform, "Hip_L") ??
                 animator.GetBoneTransform(HumanBodyBones.LeftUpperLeg) ??
                 leftHand;
+            Transform daggerMainStowed =
+                CreateTransferredMount(player.transform, animator, legacyMountPoses, AvatarWeaponMounts.DaggerMainStowedMountId) ??
+                ArenaWeaponMountCalibration.CreateOrUpdateMountChild(
+                    hips,
+                    ArenaWeaponMountCalibration.DaggerMainStowed) ??
+                hips;
+            Transform daggerOffStowed =
+                CreateTransferredMount(player.transform, animator, legacyMountPoses, AvatarWeaponMounts.DaggerOffStowedMountId) ??
+                ArenaWeaponMountCalibration.CreateOrUpdateMountChild(
+                    hips,
+                    ArenaWeaponMountCalibration.DaggerOffStowed) ??
+                hips;
 
             mounts.SetOrReplaceMount(AvatarWeaponMounts.MainHandMountId, mainHand);
             mounts.SetOrReplaceMount(AvatarWeaponMounts.OffHandMountId, offHand);
@@ -401,6 +416,8 @@ namespace Arena.EditorTools
             mounts.SetOrReplaceMount(AvatarWeaponMounts.OffBackMountId, offBack);
             mounts.SetOrReplaceMount(AvatarWeaponMounts.MainHipMountId, mainHip);
             mounts.SetOrReplaceMount(AvatarWeaponMounts.OffHipMountId, offHip);
+            mounts.SetOrReplaceMount(AvatarWeaponMounts.DaggerMainStowedMountId, daggerMainStowed);
+            mounts.SetOrReplaceMount(AvatarWeaponMounts.DaggerOffStowedMountId, daggerOffStowed);
 
             Debug.Log(
                 $"[{nameof(StylizedPlayerAvatarBuilder)}] Mounts: " +

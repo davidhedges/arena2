@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 52fd6e53e1cb1a30cacc93932a85b63f
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/06_Dodge/03_Dodge_Air/Dodge_Air_F_L_45.anim
+  uploadId: 783191

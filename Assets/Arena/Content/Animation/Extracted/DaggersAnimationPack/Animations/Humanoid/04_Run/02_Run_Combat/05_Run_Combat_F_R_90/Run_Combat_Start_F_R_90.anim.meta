@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: ab14935efa57abb082fe5557c770d501
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/04_Run/02_Run_Combat/05_Run_Combat_F_R_90/Run_Combat_Start_F_R_90.anim
+  uploadId: 783191

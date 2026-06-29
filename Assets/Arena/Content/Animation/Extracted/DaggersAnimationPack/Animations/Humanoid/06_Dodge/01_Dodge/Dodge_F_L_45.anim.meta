@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 04f887e2610b53c8d6d8d157cce1ef47
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/06_Dodge/01_Dodge/Dodge_F_L_45.anim
+  uploadId: 783191

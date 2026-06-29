@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: b8000f30e207f8d62512c570ef65f935
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/02_Attack/11_Ultimate_Attack/01_Ultimate_Attack/Speed_Attack_Start.anim
+  uploadId: 783191

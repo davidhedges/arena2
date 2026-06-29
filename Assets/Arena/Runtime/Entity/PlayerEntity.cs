@@ -73,6 +73,7 @@ namespace Arena.Entity
         private WeaponAttachmentController? _weaponAttachments;
         private LocalPlayerStateProvider? _stateProvider;
         private CombatAnimationSet? _combatAnimationSet;
+        private string _combatAnimationModeId = string.Empty;
         private readonly Dictionary<string, EquippedWeaponVisual> _equippedWeaponVisualsByRole = new(System.StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, string> _equippedArmorItemDefIdsBySlot = new(System.StringComparer.Ordinal);
         private SharedActionProfile? _sharedActionProfile;
@@ -348,7 +349,16 @@ namespace Arena.Entity
         {
             _combatAnimationSet = set;
             _animator?.ApplyAnimationSet(set);
+            _animator?.ApplyCombatLocomotionMode(_combatAnimationModeId);
             _weaponAttachments?.ApplyAnimationSet(set, _equippedWeaponVisualsByRole);
+        }
+
+        public void SetCombatAnimationMode(string? modeId)
+        {
+            _combatAnimationModeId = string.IsNullOrWhiteSpace(modeId)
+                ? string.Empty
+                : modeId.Trim().ToUpperInvariant();
+            _animator?.ApplyCombatLocomotionMode(_combatAnimationModeId);
         }
 
         public void SetEquippedWeaponVisuals(IEnumerable<EquippedWeaponVisual> visuals)

@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: be9c4682eb7d16eb990f6fcefc1f06e8
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 331055
+  packageName: Daggers Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/04_Run/02_Run_Combat/04_Run_Combat_F_L_90/Run_Combat_Stop_F_L_90.anim
+  uploadId: 783191

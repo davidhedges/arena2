@@ -361,6 +361,18 @@ namespace Arena.Presentation
             _animatedAutoAttackGhostLayer?.InvalidateVisualClone();
         }
 
+        internal void ApplyCombatLocomotionMode(string? modeId)
+        {
+            if (_animationSet == null || _animator == null)
+                return;
+
+            EnsureOverrideController();
+            if (_overrideController == null)
+                return;
+
+            _animationSetBinder.ApplyLocomotionMode(_animationSet, modeId, _overrideController);
+        }
+
         public bool IsInCombat => _inCombat;
 
         public void EnterCombatImmediate()
