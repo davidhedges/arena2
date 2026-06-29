@@ -2895,7 +2895,7 @@
     {
       "ability_id": "DAGGER_QUICK_CUT",
       "combat_profile_id": "DAGGERS",
-      "action_id": "SWORD_AND_SHIELD_UTILITY_2",
+      "action_id": "DAGGER_QUICK_CUT",
       "display_name": "Quick Cut",
       "resource_kind": "STAMINA",
       "resource_cost": 20,
@@ -2919,7 +2919,7 @@
     {
       "ability_id": "DAGGER_RIPOSTE",
       "combat_profile_id": "DAGGERS",
-      "action_id": "SWORD_AND_SHIELD_UTILITY_4",
+      "action_id": "DAGGER_RIPOSTE",
       "display_name": "Riposte",
       "resource_kind": "STAMINA",
       "resource_cost": 30,
@@ -2942,7 +2942,7 @@
     {
       "ability_id": "DAGGER_DASHING_CUT",
       "combat_profile_id": "DAGGERS",
-      "action_id": "PALADIN_CHARGE",
+      "action_id": "DAGGER_DASHING_CUT",
       "display_name": "Dashing Cut",
       "resource_kind": "STAMINA",
       "resource_cost": 35,

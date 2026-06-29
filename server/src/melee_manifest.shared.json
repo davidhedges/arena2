@@ -1248,8 +1248,8 @@
             "auto_attack_strike_id": "AUTO_ATTACK_1",
             "strikes": [
                 {
-                    "id": "SWORD_AND_SHIELD_UTILITY_2",
-                    "slot_id": "utility_2",
+                    "id": "DAGGER_QUICK_CUT",
+                    "slot_id": "dagger_quick_cut_slot",
                     "hit_windows": [
                         {
                             "impact_delay_ms": 220
@@ -1274,8 +1274,8 @@
                     }
                 },
                 {
-                    "id": "SWORD_AND_SHIELD_UTILITY_4",
-                    "slot_id": "utility_4",
+                    "id": "DAGGER_RIPOSTE",
+                    "slot_id": "dagger_riposte_slot",
                     "hit_windows": [
                         {
                             "impact_delay_ms": 260
@@ -1300,8 +1300,8 @@
                     }
                 },
                 {
-                    "id": "PALADIN_CHARGE",
-                    "slot_id": "paladin_charge_melee_slot",
+                    "id": "DAGGER_DASHING_CUT",
+                    "slot_id": "dagger_dashing_cut_slot",
                     "hit_windows": [
                         {
                             "impact_delay_ms": 260

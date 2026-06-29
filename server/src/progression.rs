@@ -7296,6 +7296,47 @@ mod tests {
     }
 
     #[test]
+    fn dagger_melee_abilities_use_dagger_owned_strike_ids() {
+        let catalog = progression_catalog();
+        for (ability_id, action_id) in [
+            ("DAGGER_QUICK_CUT", "DAGGER_QUICK_CUT"),
+            ("DAGGER_RIPOSTE", "DAGGER_RIPOSTE"),
+            ("DAGGER_DASHING_CUT", "DAGGER_DASHING_CUT"),
+        ] {
+            let ability = catalog
+                .abilities
+                .iter()
+                .find(|ability| normalize_identifier(ability.ability_id.as_str()) == ability_id)
+                .unwrap_or_else(|| panic!("{ability_id} must exist"));
+
+            assert_eq!(
+                normalize_identifier(ability.combat_profile_id.as_str()),
+                COMBAT_PROFILE_DAGGERS
+            );
+            assert_eq!(ability_gameplay_kind(ability), "MELEE");
+            assert_eq!(normalize_identifier(ability.action_id.as_str()), action_id);
+            assert!(profile_supports_action_reference(
+                COMBAT_PROFILE_DAGGERS,
+                &AuthoredActionId::new(action_id)
+            ));
+        }
+    }
+
+    #[test]
+    fn dagger_animation_set_does_not_use_foreign_melee_ids() {
+        let asset_contents = animation_set_asset_for_combat_profile(COMBAT_PROFILE_DAGGERS);
+
+        assert!(
+            !asset_contents.contains("SWORD_AND_SHIELD"),
+            "Dagger animation set must not use SwordAndShield melee ids"
+        );
+        assert!(
+            !asset_contents.contains("PALADIN_"),
+            "Dagger animation set must not use Paladin melee ids"
+        );
+    }
+
+    #[test]
     fn melee_stagger_application_is_authored_per_ability_action() {
         let hew = progression_catalog()
             .abilities
