@@ -1288,6 +1288,40 @@
       }
     },
     {
+      "ability_id": "SPELL_BLINDING_LIGHT",
+      "combat_profile_id": "",
+      "action_id": "BLINDING_LIGHT",
+      "display_name": "Blinding Light",
+      "resource_kind": "MANA",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 1009,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 30000,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "SELF",
+        "requires_target": false,
+        "resource_cost": 0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "APPLY_STATUS",
+          "duration_ms": 5000,
+          "status_stack_group": "BLINDING_LIGHT",
+          "polarity": "BUFF",
+          "status": {
+            "kind": "TARGETED_ABILITY_AVOIDANCE",
+            "modifier_scalar": 0,
+            "max_stacks": 1,
+            "stack_policy": "REFRESH"
+          }
+        }
+      }
+    },
+    {
       "ability_id": "WARRIOR_MOMENTUM",
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "MOMENTUM",
@@ -3363,6 +3397,13 @@
     },
     {
       "presentation_kind": "ABILITY",
+      "presentation_id": "SPELL_BLINDING_LIGHT",
+      "display_name": "Blinding Light",
+      "description": "Flares with light, causing hostile targeted abilities to miss briefly.",
+      "sort_order": 88
+    },
+    {
+      "presentation_kind": "ABILITY",
       "presentation_id": "WARRIOR_GIANT_SWING",
       "display_name": "Giant Swing",
       "description": "Empowers the next attack to reach farther and stagger enemies hit.",
@@ -3710,6 +3751,13 @@
       "display_name": "Momentum",
       "description": "Immune to movement slows.",
       "sort_order": 10010
+    },
+    {
+      "presentation_kind": "STATUS",
+      "presentation_id": "BLINDING_LIGHT",
+      "display_name": "Blinding Light",
+      "description": "Hostile targeted abilities miss.",
+      "sort_order": 10015
     },
     {
       "presentation_kind": "STATUS",

@@ -106,6 +106,7 @@ namespace Arena.Combat
                 "DAMAGE_TAKEN_REDUCTION" => $"Reduces incoming damage by {FormatPercent(status.ModifierScalar * stacks)}.",
                 "HEALING_TAKEN_REDUCTION" => $"Reduces healing received by {FormatPercent(status.ModifierScalar * stacks)}.",
                 "MELEE_ATTACK_MODIFIER" => "Modifies the next melee attack.",
+                "TARGETED_ABILITY_AVOIDANCE" => "Causes hostile targeted abilities to miss.",
                 "ATTACK_SPEED" => $"Modifies attack speed by {FormatSignedPercent(status.ModifierScalar)}.",
                 "CAST_SPEED" => $"Increases cast speed by {FormatPercent(status.ModifierScalar)}.",
                 _ => string.Empty,

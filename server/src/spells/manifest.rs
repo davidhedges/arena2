@@ -593,6 +593,7 @@ mod tests {
             "FIREBALL",
             "FROST_NOVA",
             "NEGATE",
+            "BLINDING_LIGHT",
             "MOMENTUM",
             "INTIMIDATE",
             "ENRAGE",
@@ -623,6 +624,7 @@ mod tests {
             "METEOR",
             "FROST_NOVA",
             "NEGATE",
+            "BLINDING_LIGHT",
             "MOMENTUM",
             "BATTLE_CRY",
             "GIANT_SWING",
@@ -897,6 +899,38 @@ mod tests {
         assert!((definition.primary_resource_cost - 0.0).abs() < 0.0001);
         assert!((definition.primary_resource_gain_on_cast - 50.0).abs() < 0.0001);
         assert!(definition.generates_primary_resource_on_cast);
+    }
+
+    #[test]
+    fn blinding_light_catalog_matches_targeted_avoidance_buff_defaults() {
+        let definition = definition("BLINDING_LIGHT");
+
+        assert_eq!(definition.kind.as_str(), "BLINDING_LIGHT");
+        assert_eq!(definition.cooldown, Duration::from_millis(30_000));
+        assert!(definition.uses_global_cooldown);
+        assert_eq!(definition.behavior.as_str(), "APPLY_STATUS");
+        assert_eq!(definition.targeting.as_str(), "SELF");
+        assert!(!definition.requires_target);
+        assert!((definition.duration - 5.0).abs() < 0.0001);
+        assert!((definition.primary_resource_cost - 0.0).abs() < 0.0001);
+        assert_eq!(
+            definition.status_stack_group.as_deref(),
+            Some("BLINDING_LIGHT")
+        );
+        assert_eq!(
+            definition.apply_status_polarity,
+            Some(crate::combat::StatusPolarity::Buff)
+        );
+        let status = definition
+            .apply_status
+            .as_ref()
+            .expect("Blinding Light should define an apply-status payload");
+        assert_eq!(status.kind, StatusEffectKind::TargetedAbilityAvoidance);
+        assert_eq!(status.modifier_scalar, 0.0);
+        assert_eq!(status.max_stacks, 1);
+        assert_eq!(status.stack_policy, StackPolicy::Refresh);
+        assert!((definition.primary_resource_gain_on_cast - 0.0).abs() < 0.0001);
+        assert!(!definition.generates_primary_resource_on_cast);
     }
 
     #[test]

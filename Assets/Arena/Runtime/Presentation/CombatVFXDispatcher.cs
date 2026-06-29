@@ -345,14 +345,17 @@ namespace Arena.Presentation
             _lifecycle ??= new CombatVFXLifecycleRegistry(this);
             if (IsTerminalEvent(row))
             {
-                if (string.Equals(row.EventType, CombatEventTypes.Fizzle, StringComparison.Ordinal))
+                bool fizzled =
+                    string.Equals(row.EventType, CombatEventTypes.Fizzle, StringComparison.Ordinal)
+                    || string.Equals(row.EventType, CombatEventTypes.Miss, StringComparison.Ordinal);
+                if (fizzled)
                     TravelVisuals.Fizzle(fact.Value.ToTemplateContext(string.Empty));
                 else
                     TravelVisuals.Impact(fact.Value.ToTemplateContext(string.Empty));
 
                 _lifecycle.RouteTerminal(
                     fact.Value.ToTemplateContext(string.Empty),
-                    string.Equals(row.EventType, CombatEventTypes.Fizzle, StringComparison.Ordinal));
+                    fizzled);
             }
             else if (row.EventType == CombatEventTypes.Release)
             {
@@ -416,6 +419,7 @@ namespace Arena.Presentation
                     if (row.Terminal)
                         ProjectileVisuals.Impact(row);
                     break;
+                case CombatEventTypes.Miss:
                 case CombatEventTypes.Fizzle:
                     ProjectileVisuals.Fizzle(row);
                     break;
@@ -850,6 +854,7 @@ namespace Arena.Presentation
                     CombatEventTypes.Impact => TriggerSpellImpact,
                     CombatEventTypes.Block => TriggerSpellBlock,
                     CombatEventTypes.Parry => TriggerSpellParry,
+                    CombatEventTypes.Miss => TriggerSpellFizzle,
                     CombatEventTypes.Fizzle => TriggerSpellFizzle,
                     _ => string.Empty,
                 };
@@ -861,6 +866,7 @@ namespace Arena.Presentation
                 CombatEventTypes.Impact => TriggerMeleeImpact,
                 CombatEventTypes.Block => TriggerMeleeBlock,
                 CombatEventTypes.Parry => TriggerMeleeParry,
+                CombatEventTypes.Miss => string.Empty,
                 _ => string.Empty,
             };
         }
@@ -885,6 +891,7 @@ namespace Arena.Presentation
             return row.EventType == CombatEventTypes.Impact
                 || row.EventType == CombatEventTypes.Block
                 || row.EventType == CombatEventTypes.Parry
+                || row.EventType == CombatEventTypes.Miss
                 || row.EventType == CombatEventTypes.Fizzle;
         }
 

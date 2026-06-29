@@ -1043,6 +1043,7 @@ fn known_status_kind_ids() -> HashSet<String> {
         StatusEffectKind::TemporaryHitpoints,
         StatusEffectKind::Berserking,
         StatusEffectKind::BattleTrance,
+        StatusEffectKind::TargetedAbilityAvoidance,
     ]
     .into_iter()
     .map(|kind| kind.as_str().to_string())

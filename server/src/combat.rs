@@ -151,6 +151,7 @@ pub(crate) const COMBAT_EVENT_CONTACT: &str = "COMBAT_CONTACT";
 pub(crate) const COMBAT_EVENT_IMPACT: &str = "COMBAT_IMPACT";
 pub(crate) const COMBAT_EVENT_AREA_IMPACT: &str = "COMBAT_AREA_IMPACT";
 pub(crate) const COMBAT_EVENT_FIZZLE: &str = "COMBAT_FIZZLE";
+pub(crate) const COMBAT_EVENT_MISS: &str = "COMBAT_MISS";
 pub(crate) const COMBAT_EVENT_BLOCK: &str = "COMBAT_BLOCK";
 pub(crate) const COMBAT_EVENT_PARRY: &str = "COMBAT_PARRY";
 pub(crate) const COMBAT_SCALAR_NONE: &str = "";
@@ -1945,6 +1946,7 @@ pub enum StatusEffectKind {
     TemporaryHitpoints,
     Berserking,
     BattleTrance,
+    TargetedAbilityAvoidance,
 }
 
 impl StatusEffectKind {
@@ -1978,6 +1980,7 @@ impl StatusEffectKind {
             Self::TemporaryHitpoints => "TEMPORARY_HITPOINTS",
             Self::Berserking => "BERSERKING",
             Self::BattleTrance => "BATTLE_TRANCE",
+            Self::TargetedAbilityAvoidance => "TARGETED_ABILITY_AVOIDANCE",
         }
     }
 
@@ -2011,6 +2014,7 @@ impl StatusEffectKind {
             "TEMPORARY_HITPOINTS" => Some(Self::TemporaryHitpoints),
             "BERSERKING" => Some(Self::Berserking),
             "BATTLE_TRANCE" => Some(Self::BattleTrance),
+            "TARGETED_ABILITY_AVOIDANCE" => Some(Self::TargetedAbilityAvoidance),
             _ => None,
         }
     }
@@ -2082,6 +2086,7 @@ pub enum StatusPayload {
     },
     Berserking,
     BattleTrance,
+    TargetedAbilityAvoidance,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -2208,6 +2213,7 @@ impl AuthoredStatusPayload {
             },
             StatusEffectKind::Berserking => StatusPayload::Berserking,
             StatusEffectKind::BattleTrance => StatusPayload::BattleTrance,
+            StatusEffectKind::TargetedAbilityAvoidance => StatusPayload::TargetedAbilityAvoidance,
         }
     }
 
@@ -2308,7 +2314,9 @@ impl AuthoredStatusPayload {
                     ));
                 }
             }
-            StatusEffectKind::VengeanceAura | StatusEffectKind::Berserking => {
+            StatusEffectKind::VengeanceAura
+            | StatusEffectKind::Berserking
+            | StatusEffectKind::TargetedAbilityAvoidance => {
                 if !slow_is_default
                     || !dot_is_default
                     || !hot_is_default
@@ -2316,7 +2324,8 @@ impl AuthoredStatusPayload {
                     || !absorb_is_default
                 {
                     return Err(format!(
-                        "{subject} {path} has fields irrelevant to BERSERKING"
+                        "{subject} {path} has fields irrelevant to {}",
+                        self.kind.as_str()
                     ));
                 }
             }
@@ -2404,6 +2413,7 @@ impl StatusPayload {
             Self::TemporaryHitpoints { .. } => StatusEffectKind::TemporaryHitpoints,
             Self::Berserking => StatusEffectKind::Berserking,
             Self::BattleTrance => StatusEffectKind::BattleTrance,
+            Self::TargetedAbilityAvoidance => StatusEffectKind::TargetedAbilityAvoidance,
         }
     }
 
@@ -2420,7 +2430,8 @@ impl StatusPayload {
             | Self::VengeanceAura
             | Self::MeleeAttackModifier
             | Self::Berserking
-            | Self::BattleTrance => StatusEffectColumns {
+            | Self::BattleTrance
+            | Self::TargetedAbilityAvoidance => StatusEffectColumns {
                 slow_pct: 0.0,
                 tick_amount: 0,
                 tick_interval_ms: 0,
@@ -2617,6 +2628,7 @@ impl StatusPayload {
             },
             StatusEffectKind::Berserking => Self::Berserking,
             StatusEffectKind::BattleTrance => Self::BattleTrance,
+            StatusEffectKind::TargetedAbilityAvoidance => Self::TargetedAbilityAvoidance,
         }
     }
 
@@ -2633,7 +2645,8 @@ impl StatusPayload {
             | Self::VengeanceAura
             | Self::MeleeAttackModifier
             | Self::Berserking
-            | Self::BattleTrance => false,
+            | Self::BattleTrance
+            | Self::TargetedAbilityAvoidance => false,
             Self::Slow { slow_pct } => !(MIN_SLOW_PCT..=0.95).contains(&slow_pct),
             Self::MoveSpeed { modifier_scalar } => {
                 !modifier_scalar.is_finite() || modifier_scalar <= 0.0
@@ -2692,7 +2705,8 @@ impl StatusPayload {
             | Self::VengeanceAura
             | Self::MeleeAttackModifier
             | Self::Berserking
-            | Self::BattleTrance => Ok(()),
+            | Self::BattleTrance
+            | Self::TargetedAbilityAvoidance => Ok(()),
             Self::Slow { slow_pct } => {
                 if !(MIN_SLOW_PCT..=0.95).contains(&slow_pct) {
                     return Err(format!("{subject} {path}.slow_pct must be > 0 and <= 0.95"));
@@ -2809,7 +2823,8 @@ impl StatusPayload {
             | Self::VengeanceAura
             | Self::MeleeAttackModifier
             | Self::Berserking
-            | Self::BattleTrance => true,
+            | Self::BattleTrance
+            | Self::TargetedAbilityAvoidance => true,
             Self::Slow { slow_pct } => slow_pct > existing.slow_pct,
             Self::MoveSpeed { modifier_scalar } => {
                 modifier_scalar > existing.modifier_scalar.max(0.0)
@@ -5327,7 +5342,8 @@ impl StatusRuntimeView {
                     | StatusEffectKind::VengeanceAura
                     | StatusEffectKind::MeleeAttackModifier
                     | StatusEffectKind::TemporaryHitpoints
-                    | StatusEffectKind::BattleTrance => {}
+                    | StatusEffectKind::BattleTrance
+                    | StatusEffectKind::TargetedAbilityAvoidance => {}
                 }
             }
         }
@@ -6205,6 +6221,11 @@ mod tests {
                 },
             ),
             (
+                StatusPayload::TargetedAbilityAvoidance,
+                StatusEffectKind::TargetedAbilityAvoidance,
+                StatusPayload::TargetedAbilityAvoidance,
+            ),
+            (
                 StatusPayload::Berserking,
                 StatusEffectKind::Berserking,
                 StatusPayload::Berserking,
@@ -6872,6 +6893,19 @@ pub fn has_active_status(
     now: Timestamp,
 ) -> bool {
     StatusRuntimeView::collect(ctx, now).has_status(target, kind)
+}
+
+pub(crate) fn hostile_targeted_ability_misses(
+    ctx: &ReducerContext,
+    source: Identity,
+    target: Identity,
+    now: Timestamp,
+) -> bool {
+    source != Identity::ZERO
+        && target != Identity::ZERO
+        && source != target
+        && can_harm(ctx, source, target)
+        && has_active_status(ctx, target, StatusEffectKind::TargetedAbilityAvoidance, now)
 }
 
 pub(crate) fn has_active_status_group(

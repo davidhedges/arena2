@@ -470,6 +470,7 @@ namespace Arena.Debugging
                     _observedActiveProjectiles.Remove(projectileKey);
                     break;
                 case CombatEventTypes.Impact:
+                case CombatEventTypes.Miss:
                 case CombatEventTypes.Fizzle:
                     _terminalTotal++;
                     _observedActiveProjectiles.Remove(projectileKey);

@@ -233,6 +233,7 @@ namespace Arena.Entity
             { "KNOCKDOWN", new Color(0.95f, 0.55f, 0.2f) },
             { "DOT", new Color(1.0f, 0.4f, 0.1f) },
             { "DAMAGE_TAKEN_REDUCTION", new Color(1.0f, 0.72f, 0.18f) },
+            { "TARGETED_ABILITY_AVOIDANCE", new Color(0.65f, 0.95f, 1.0f) },
         };
 
         private void CaptureBaseMaterialColors()

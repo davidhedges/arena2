@@ -11,11 +11,12 @@ use crate::combat::scene_query::{
     terrain_surface_y_for_caster, SceneHitKind,
 };
 use crate::combat::{
-    queue_effects, timestamp_to_micros, ActiveCombatProjectile, ActiveCombatProjectileTargetState,
-    CombatEvent, CombatProjectileTickMetrics, DamageDelivery, EffectPacket,
-    ProjectilePresentationEvent, StatusPolarity, COMBAT_EVENT_BLOCK, COMBAT_EVENT_CONTACT,
-    COMBAT_EVENT_FIZZLE, COMBAT_EVENT_IMPACT, COMBAT_EVENT_PARRY, COMBAT_EVENT_UPDATE,
-    COMBAT_METADATA_NONE, COMBAT_SCALAR_NONE, COMBAT_SEQUENCE_NONE, DAMAGE_SOURCE_KIND_PROJECTILE,
+    hostile_targeted_ability_misses, queue_effects, timestamp_to_micros, ActiveCombatProjectile,
+    ActiveCombatProjectileTargetState, CombatEvent, CombatProjectileTickMetrics, DamageDelivery,
+    EffectPacket, ProjectilePresentationEvent, StatusPolarity, COMBAT_EVENT_BLOCK,
+    COMBAT_EVENT_CONTACT, COMBAT_EVENT_FIZZLE, COMBAT_EVENT_IMPACT, COMBAT_EVENT_MISS,
+    COMBAT_EVENT_PARRY, COMBAT_EVENT_UPDATE, COMBAT_METADATA_NONE, COMBAT_SCALAR_NONE,
+    COMBAT_SEQUENCE_NONE, DAMAGE_SOURCE_KIND_PROJECTILE,
 };
 use crate::defense::{
     resolve_defensible_combat_hit, CombatHitDeliveryKind, DefenseResolution, DefensibleCombatHit,
@@ -233,6 +234,22 @@ fn tick_projectile_instance(
                 fizzle_projectile_and_finish(ctx, now, &projectile, metrics);
                 return;
             };
+            if projectile_targeted_hit_misses(ctx, &projectile, target, now) {
+                emit_projectile_event(
+                    ctx,
+                    &projectile,
+                    COMBAT_EVENT_MISS,
+                    Some(target),
+                    advance.end_x,
+                    advance.end_y,
+                    advance.end_z,
+                    0,
+                    now,
+                    metrics,
+                );
+                finish_projectile_without_event(ctx, &projectile);
+                return;
+            }
             if resolve_projectile_defense(
                 ctx,
                 &projectile,
@@ -540,6 +557,26 @@ fn resolve_orbit_projectile_contacts(
             continue;
         }
 
+        if projectile_targeted_hit_misses(ctx, projectile, target.player_id, now) {
+            emit_projectile_event_with_metadata(
+                ctx,
+                projectile,
+                COMBAT_EVENT_MISS,
+                Some(target.player_id),
+                projectile.pos_x,
+                projectile.pos_y,
+                projectile.pos_z,
+                0,
+                now,
+                PROJECTILE_CONTACT_METADATA_KIND,
+                PROJECTILE_CONTACT_TERMINAL_KEY,
+                PROJECTILE_CONTACT_NON_TERMINAL_VALUE,
+                metrics,
+            );
+            finish_projectile_without_event(ctx, projectile);
+            return true;
+        }
+
         if resolve_projectile_defense_with_metadata(
             ctx,
             projectile,
@@ -842,7 +879,7 @@ fn advance_boomerang_segment(
     };
     let target_limit = caster_hit_t.unwrap_or(segment_distance);
 
-    resolve_boomerang_enemy_contacts_on_segment(
+    if resolve_boomerang_enemy_contacts_on_segment(
         ctx,
         now,
         projectile,
@@ -855,7 +892,9 @@ fn advance_boomerang_segment(
         start_z,
         target_limit,
         metrics,
-    );
+    ) {
+        return true;
+    }
 
     if let Some(t) = caster_hit_t {
         let hit_x = start_x + projectile.dir_x * t;
@@ -923,7 +962,7 @@ fn resolve_boomerang_enemy_contacts_on_segment(
     start_z: f32,
     max_distance: f32,
     metrics: &mut ProjectileTickMetricsFrame,
-) {
+) -> bool {
     let end_x = start_x + projectile.dir_x * max_distance;
     let end_z = start_z + projectile.dir_z * max_distance;
     player_snapshots.query_segment_indices(
@@ -995,6 +1034,25 @@ fn resolve_boomerang_enemy_contacts_on_segment(
         let hit_x = start_x + projectile.dir_x * t;
         let hit_y = start_y + projectile.dir_y * t;
         let hit_z = start_z + projectile.dir_z * t;
+        if projectile_targeted_hit_misses(ctx, projectile, target.player_id, now) {
+            emit_projectile_event_with_metadata(
+                ctx,
+                projectile,
+                COMBAT_EVENT_MISS,
+                Some(target.player_id),
+                hit_x,
+                hit_y,
+                hit_z,
+                0,
+                now,
+                PROJECTILE_CONTACT_METADATA_KIND,
+                PROJECTILE_CONTACT_TERMINAL_KEY,
+                PROJECTILE_CONTACT_NON_TERMINAL_VALUE,
+                metrics,
+            );
+            finish_projectile_without_event(ctx, projectile);
+            return true;
+        }
         if resolve_projectile_defense_with_metadata(
             ctx,
             projectile,
@@ -1041,6 +1099,7 @@ fn resolve_boomerang_enemy_contacts_on_segment(
         state.is_overlapping = true;
         upsert_projectile_target_state(ctx, state);
     }
+    false
 }
 
 fn projectile_target_state_key(projectile_instance_id: &str, target: Identity) -> String {
@@ -1325,6 +1384,16 @@ fn resolve_projectile_defense_with_metadata(
         }
         DefenseResolution::None => false,
     }
+}
+
+fn projectile_targeted_hit_misses(
+    ctx: &ReducerContext,
+    projectile: &ActiveCombatProjectile,
+    target: Identity,
+    now: Timestamp,
+) -> bool {
+    projectile.intended_target == target
+        && hostile_targeted_ability_misses(ctx, projectile.caster, target, now)
 }
 
 fn queue_spell_projectile_hit_effects(

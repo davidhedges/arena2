@@ -19,6 +19,7 @@ namespace Arena.Combat
         public const string Electrocute = "ELECTROCUTE";
         public const string FrostNova = "FROST_NOVA";
         public const string Negate = "NEGATE";
+        public const string BlindingLight = "BLINDING_LIGHT";
         public const string Momentum = "MOMENTUM";
         public const string GiantSwing = "GIANT_SWING";
         public const string Intimidate = "INTIMIDATE";
@@ -41,6 +42,7 @@ namespace Arena.Combat
         public const string Impact = "COMBAT_IMPACT";
         public const string AreaImpact = "COMBAT_AREA_IMPACT";
         public const string Fizzle = "COMBAT_FIZZLE";
+        public const string Miss = "COMBAT_MISS";
         public const string Block = "COMBAT_BLOCK";
         public const string Parry = "COMBAT_PARRY";
     }

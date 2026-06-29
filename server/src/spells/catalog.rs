@@ -2068,7 +2068,8 @@ fn validate_apply_status_kind_for_self(
         | StatusEffectKind::CastSpeed
         | StatusEffectKind::TemporaryHitpoints
         | StatusEffectKind::Berserking
-        | StatusEffectKind::BattleTrance => Ok(()),
+        | StatusEffectKind::BattleTrance
+        | StatusEffectKind::TargetedAbilityAvoidance => Ok(()),
         other => Err(format!(
             "{spell_id} SELF APPLY_STATUS status '{}' is not supported",
             other.as_str()
@@ -2174,6 +2175,7 @@ mod tests {
                 "ELECTROCUTE",
                 "FROST_NOVA",
                 "NEGATE",
+                "BLINDING_LIGHT",
                 "MOMENTUM",
                 "FORTIFY",
                 "IRON_WILL",
@@ -2229,6 +2231,7 @@ mod tests {
             "ELECTROCUTE",
             "FROST_NOVA",
             "NEGATE",
+            "BLINDING_LIGHT",
             "MOMENTUM",
             "FORTIFY",
             "IRON_WILL",

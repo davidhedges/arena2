@@ -28,12 +28,12 @@ use crate::combat::scene_query::{
 };
 use crate::combat::status_effect;
 use crate::combat::{
-    decode_status_dispel_types, has_active_disabling_status, mark_harmful_combat_action,
-    queue_effects, set_active_aura, temporary_combat_modifiers, timestamp_to_micros,
-    ActiveCombatProjectile, CombatEvent, DamageDelivery, DamageType, EffectPacket,
-    ProjectilePresentationEvent, StatusApplication, StatusDispelType, StatusEffect,
-    StatusEffectKind, StatusPayload, StatusPolarity, StatusStackGroupDefault, COMBAT_METADATA_NONE,
-    COMBAT_SCALAR_NONE, COMBAT_SEQUENCE_NONE, DAMAGE_SOURCE_KIND_SPELL,
+    decode_status_dispel_types, has_active_disabling_status, hostile_targeted_ability_misses,
+    mark_harmful_combat_action, queue_effects, set_active_aura, temporary_combat_modifiers,
+    timestamp_to_micros, ActiveCombatProjectile, CombatEvent, DamageDelivery, DamageType,
+    EffectPacket, ProjectilePresentationEvent, StatusApplication, StatusDispelType, StatusEffect,
+    StatusEffectKind, StatusPayload, StatusPolarity, StatusStackGroupDefault, COMBAT_EVENT_MISS,
+    COMBAT_METADATA_NONE, COMBAT_SCALAR_NONE, COMBAT_SEQUENCE_NONE, DAMAGE_SOURCE_KIND_SPELL,
 };
 use crate::defense::{
     clear_interruptible_defense_for_owner, resolve_defensible_combat_hit, CombatHitDeliveryKind,
@@ -1321,6 +1321,44 @@ pub(super) fn resolve_spell_combat_hit_defense(
         }
         DefenseResolution::None => false,
     }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn emit_targeted_spell_miss(
+    ctx: &ReducerContext,
+    spell_id: &str,
+    ability_id: &str,
+    kind: &SpellId,
+    caster: Identity,
+    target: Identity,
+    origin: Vec3,
+    direction: Vec3,
+    speed: f32,
+    max_distance: f32,
+    point: Vec3,
+    now: Timestamp,
+) {
+    mark_harmful_combat_action(ctx, caster, target, now, kind.as_str());
+    emit_spell_combat_event(
+        ctx,
+        SpellCombatEventPayload {
+            action_instance_id: spell_id,
+            ability_id,
+            kind,
+            event_type: COMBAT_EVENT_MISS,
+            caster,
+            hit: target,
+            origin,
+            direction,
+            speed,
+            max_distance,
+            scalar: SpellCombatEventScalar::None,
+            sequence_index: 0,
+            sequence_count: 1,
+            point,
+            now,
+        },
+    );
 }
 
 fn resolve_spell_block_impact_point(
@@ -4347,6 +4385,27 @@ fn queue_electrocute_damage(ctx: &ReducerContext, active_cast: &ActiveCast, targ
             )
         }
     };
+    if hostile_targeted_ability_misses(ctx, active_cast.caster, target_id, ctx.timestamp) {
+        emit_targeted_spell_miss(
+            ctx,
+            runtime.spell_instance_id.as_str(),
+            active_cast.ability_id.as_str(),
+            &definition.kind,
+            active_cast.caster,
+            target_id,
+            Vec3::new(
+                caster_state.pos_x,
+                caster_state.pos_y + caster_state.hit_height,
+                caster_state.pos_z,
+            ),
+            Vec3::new(dir_x, dir_y, dir_z),
+            0.0,
+            definition.max_distance,
+            Vec3::new(point_x, point_y, point_z),
+            ctx.timestamp,
+        );
+        return;
+    }
     if resolve_blockable_spell_hit(
         ctx,
         runtime.spell_instance_id.as_str(),
@@ -4615,6 +4674,25 @@ fn spawn_instant_beam(
                     let Some(hit_target) = player_snapshot_for(ctx, target_id) else {
                         continue;
                     };
+                    if target_id == target.player_id
+                        && hostile_targeted_ability_misses(ctx, caster, target_id, now)
+                    {
+                        emit_targeted_spell_miss(
+                            ctx,
+                            action_instance_id,
+                            ability_id,
+                            kind,
+                            caster,
+                            target_id,
+                            Vec3::new(origin_x, origin_y, origin_z),
+                            Vec3::new(dir_x, dir_y, dir_z),
+                            0.0,
+                            definition.max_distance,
+                            Vec3::new(hit.x, hit.y, hit.z),
+                            now,
+                        );
+                        continue;
+                    }
                     if resolve_blockable_spell_hit(
                         ctx,
                         action_instance_id,
@@ -5542,6 +5620,25 @@ fn apply_status_to_target(
         .apply_status
         .expect("validated APPLY_STATUS spell must define secondary apply-status data")
         .parry_behavior;
+    if definition.requires_target
+        && hostile_targeted_ability_misses(ctx, caster, target.player_id, now)
+    {
+        emit_targeted_spell_miss(
+            ctx,
+            spell_id.as_str(),
+            ability_id,
+            kind,
+            caster,
+            target.player_id,
+            origin,
+            direction,
+            0.0,
+            definition.max_distance,
+            point,
+            now,
+        );
+        return Ok(());
+    }
     if resolve_spell_combat_hit_defense(
         ctx,
         spell_id.as_str(),
@@ -6044,6 +6141,26 @@ fn resolve_movement_delivery_hit(
         let forward = default_forward_direction(caster_state);
         (forward.x, forward.z)
     };
+
+    if hostile_targeted_ability_misses(ctx, caster, target.player_id, now) {
+        emit_direct_spell_terminal_event(
+            ctx,
+            action_instance_id,
+            ability_id,
+            kind,
+            COMBAT_EVENT_MISS,
+            caster,
+            target.player_id,
+            Vec3::new(caster_state.pos_x, caster_state.pos_y, caster_state.pos_z),
+            Vec3::new(dir_x, 0.0, dir_z),
+            movement.speed,
+            movement.max_distance,
+            Vec3::new(target.pos_x, target.pos_y, target.pos_z),
+            0,
+            now,
+        );
+        return Ok(());
+    }
 
     match resolve_defensible_combat_hit(
         ctx,

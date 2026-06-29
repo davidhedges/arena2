@@ -28,13 +28,13 @@ use crate::combat::scene_query::{
 use crate::combat::status_effect as _;
 use crate::combat::{
     combat_projectile_definition_for_id, decode_status_dispel_types, has_active_disabling_status,
-    has_active_status_group, has_due_pending_effects, mark_harmful_combat_action, queue_effects,
-    remove_active_status_group, resolve_pending_effects, ActiveCombatProjectile, CombatEvent,
-    CombatProjectileDefinition, DamageDelivery, DamageType, EffectPacket,
-    ProjectilePresentationEvent, StackPolicy, StatusDispelType, StatusEffectKind, StatusPayload,
-    StatusPolarity, COMBAT_EVENT_AREA_IMPACT, COMBAT_EVENT_BLOCK, COMBAT_EVENT_CAST,
-    COMBAT_EVENT_FIZZLE, COMBAT_EVENT_IMPACT, COMBAT_EVENT_PARRY, COMBAT_EVENT_RELEASE,
-    COMBAT_METADATA_CONSUMED_MELEE_MODIFIER, COMBAT_METADATA_NONE,
+    has_active_status_group, has_due_pending_effects, hostile_targeted_ability_misses,
+    mark_harmful_combat_action, queue_effects, remove_active_status_group, resolve_pending_effects,
+    ActiveCombatProjectile, CombatEvent, CombatProjectileDefinition, DamageDelivery, DamageType,
+    EffectPacket, ProjectilePresentationEvent, StackPolicy, StatusDispelType, StatusEffectKind,
+    StatusPayload, StatusPolarity, COMBAT_EVENT_AREA_IMPACT, COMBAT_EVENT_BLOCK, COMBAT_EVENT_CAST,
+    COMBAT_EVENT_FIZZLE, COMBAT_EVENT_IMPACT, COMBAT_EVENT_MISS, COMBAT_EVENT_PARRY,
+    COMBAT_EVENT_RELEASE, COMBAT_METADATA_CONSUMED_MELEE_MODIFIER, COMBAT_METADATA_NONE,
     COMBAT_SCALAR_MELEE_RELEASE_DELAY_SECONDS, COMBAT_SCALAR_NONE, COMBAT_SEQUENCE_NONE,
     DAMAGE_SOURCE_KIND_MELEE,
 };
@@ -115,6 +115,7 @@ const EVENT_AREA_IMPACT: &str = COMBAT_EVENT_AREA_IMPACT;
 const EVENT_FIZZLE: &str = COMBAT_EVENT_FIZZLE;
 const EVENT_BLOCK: &str = COMBAT_EVENT_BLOCK;
 const EVENT_PARRY: &str = COMBAT_EVENT_PARRY;
+const EVENT_MISS: &str = COMBAT_EVENT_MISS;
 const MELEE_MANIFEST_JSON: &str = include_str!("melee_manifest.shared.json");
 const GIANT_SWING_STATUS_GROUP: &str = "GIANT_SWING";
 const GIANT_SWING_MIN_RANGE_METERS: f32 = 5.0;
@@ -4070,6 +4071,35 @@ fn resolve_pending_melee_target_impact(
         return;
     }
 
+    if row.targeting_kind.trim().eq_ignore_ascii_case("TARGET")
+        && hostile_targeted_ability_misses(ctx, row.source, row.target, now)
+    {
+        mark_harmful_combat_action(ctx, row.source, row.target, now, row.kind.as_str());
+        log::info!(
+            "[MELEE_IMPACT] owner={} source={} strike={} target={} result=miss damage={} spell_id={}",
+            short_identity(row.source),
+            row.event_source,
+            row.kind,
+            short_identity(row.target),
+            row.damage,
+            row.spell_id
+        );
+        emit_miss_event(
+            ctx,
+            row,
+            now,
+            &caster_phys,
+            target_snapshot.pos_x,
+            target_snapshot.pos_y,
+            target_snapshot.pos_z,
+            dx,
+            dz,
+            horiz_dist,
+        );
+        cancel_remaining_pending_melee_impacts(ctx, row);
+        return;
+    }
+
     match resolve_defensible_combat_hit(
         ctx,
         DefensibleCombatHit {
@@ -4736,6 +4766,59 @@ fn emit_block_event(
         ability_id: row.ability_id.clone(),
         hit_index: row.hit_index as i32,
         event_type: EVENT_BLOCK.to_string(),
+        source_kind: row.event_source.clone(),
+        caster: row.source,
+        hit: row.target,
+        origin_x: caster_phys.pos_x,
+        origin_y: caster_phys.pos_y,
+        origin_z: caster_phys.pos_z,
+        dir_x,
+        dir_y: 0.0,
+        dir_z,
+        speed: 0.0,
+        max_distance: 0.0,
+        scalar_kind: COMBAT_SCALAR_NONE.to_string(),
+        scalar_value: 0.0,
+        sequence_kind: COMBAT_SEQUENCE_NONE.to_string(),
+        sequence_index: 0,
+        sequence_count: 0,
+        point_x: target_x,
+        point_y: target_y,
+        point_z: target_z,
+        created_at: now,
+        created_at_micros: timestamp_to_micros(now),
+        damage: 0,
+        metadata_kind: COMBAT_METADATA_NONE.to_string(),
+        metadata_key: String::new(),
+        metadata_value: String::new(),
+    });
+}
+
+fn emit_miss_event(
+    ctx: &ReducerContext,
+    row: &PendingMeleeImpact,
+    now: Timestamp,
+    caster_phys: &crate::player_physics::PlayerPhysics,
+    target_x: f32,
+    target_y: f32,
+    target_z: f32,
+    dx: f32,
+    dz: f32,
+    horiz_dist: f32,
+) {
+    let (dir_x, dir_z) = if horiz_dist > 0.001 {
+        (dx / horiz_dist, dz / horiz_dist)
+    } else {
+        (0.0, 0.0)
+    };
+
+    ctx.db.combat_event().insert(CombatEvent {
+        event_id: 0,
+        action_instance_id: row.spell_id.clone(),
+        action_kind: row.kind.clone(),
+        ability_id: row.ability_id.clone(),
+        hit_index: row.hit_index as i32,
+        event_type: EVENT_MISS.to_string(),
         source_kind: row.event_source.clone(),
         caster: row.source,
         hit: row.target,
