@@ -132,6 +132,28 @@ namespace Arena.Presentation
         public AnimationClip? w;
     }
 
+    public readonly struct HitReactionClipSet
+    {
+        public HitReactionClipSet(
+            AnimationClip? forward,
+            AnimationClip? back,
+            AnimationClip? left,
+            AnimationClip? right)
+        {
+            Forward = forward;
+            Back = back;
+            Left = left;
+            Right = right;
+        }
+
+        public AnimationClip? Forward { get; }
+        public AnimationClip? Back { get; }
+        public AnimationClip? Left { get; }
+        public AnimationClip? Right { get; }
+
+        public bool IsComplete => Forward != null && Back != null && Left != null && Right != null;
+    }
+
     [Serializable]
     public sealed class CombatAnimationLocomotionModeOverride
     {
@@ -1175,17 +1197,29 @@ namespace Arena.Presentation
         public AnimationClip? blockHit;
         public AnimationClip? blockHitBreak;
 
-        [Header("Hit Reactions (4 directional flinches)")]
+        [Header("Hit Reactions - Grounded Out Of Combat")]
         public AnimationClip? hitF;
         public AnimationClip? hitB;
         public AnimationClip? hitL;
         public AnimationClip? hitR;
 
-        [Header("Hit Reactions - Airborne (4 directional flinches)")]
+        [Header("Hit Reactions - Grounded Combat")]
+        public AnimationClip? hitCombatF;
+        public AnimationClip? hitCombatB;
+        public AnimationClip? hitCombatL;
+        public AnimationClip? hitCombatR;
+
+        [Header("Hit Reactions - Airborne Out Of Combat")]
         public AnimationClip? airHitF;
         public AnimationClip? airHitB;
         public AnimationClip? airHitL;
         public AnimationClip? airHitR;
+
+        [Header("Hit Reactions - Airborne Combat")]
+        public AnimationClip? airHitCombatF;
+        public AnimationClip? airHitCombatB;
+        public AnimationClip? airHitCombatL;
+        public AnimationClip? airHitCombatR;
 
         [Header("Stagger Reactions (4 directional large hits)")]
         public AnimationClip? staggerF;
@@ -1525,6 +1559,20 @@ namespace Arena.Presentation
 
             entry = default;
             return false;
+        }
+
+        public HitReactionClipSet ResolveHitReactionClips(bool grounded, bool inCombat)
+        {
+            if (grounded)
+            {
+                return inCombat
+                    ? new HitReactionClipSet(hitCombatF, hitCombatB, hitCombatL, hitCombatR)
+                    : new HitReactionClipSet(hitF, hitB, hitL, hitR);
+            }
+
+            return inCombat
+                ? new HitReactionClipSet(airHitCombatF, airHitCombatB, airHitCombatL, airHitCombatR)
+                : new HitReactionClipSet(airHitF, airHitB, airHitL, airHitR);
         }
 
         public IEnumerable<WeaponPresentationEffectEntry> MatchingConsumedMeleeModifierEffects(

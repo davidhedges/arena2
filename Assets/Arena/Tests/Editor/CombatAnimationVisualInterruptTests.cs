@@ -32,6 +32,40 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void AnimatorController_HitReactionLayerIsFullBodyOverride()
+        {
+            AnimatorController controller = AssetDatabase.LoadAssetAtPath<AnimatorController>(
+                "Assets/Arena/Content/Animation/Arena_Character.controller");
+
+            Assert.That(controller, Is.Not.Null);
+            AnimatorControllerLayer hitReaction = controller.layers[2];
+
+            Assert.That(hitReaction.name, Is.EqualTo("HitReaction"));
+            Assert.That(hitReaction.avatarMask, Is.Null);
+            Assert.That(hitReaction.blendingMode, Is.EqualTo(AnimatorLayerBlendingMode.Override));
+            Assert.That(hitReaction.defaultWeight, Is.EqualTo(1f));
+        }
+
+        [Test]
+        public void CombatHitReactions_UseSingleCombatAnimationSetResolver()
+        {
+            string playerAnimatorSource = ReadAssetText("Scripts/Presentation/PlayerAnimator.cs");
+            string binderSource = ReadAssetText("Scripts/Presentation/Animation/CombatAnimationSetBinder.cs");
+            string animationSetSource = ReadAssetText("Scripts/Presentation/Animation/CombatAnimationSet.cs");
+            string roleInfererSource = ReadAssetText("Scripts/Editor/CombatClipRoleInferer.cs");
+
+            Assert.That(playerAnimatorSource, Does.Contain("_animationSetBinder.ApplyHitClipOverrides(_overrideController, animationSet, grounded, _inCombat);"));
+            Assert.That(playerAnimatorSource, Does.Not.Contain("useAirVariant ? set.airHitF"));
+            Assert.That(binderSource, Does.Contain("set.ResolveHitReactionClips(grounded, inCombat)"));
+            Assert.That(binderSource, Does.Not.Contain("useAirVariant ? set.airHitF"));
+            Assert.That(animationSetSource, Does.Contain("public HitReactionClipSet ResolveHitReactionClips(bool grounded, bool inCombat)"));
+            Assert.That(animationSetSource, Does.Contain("hitCombatF"));
+            Assert.That(animationSetSource, Does.Contain("airHitCombatF"));
+            Assert.That(roleInfererSource, Does.Contain(".hitCombatF"));
+            Assert.That(roleInfererSource, Does.Contain(".airHitCombatF"));
+        }
+
+        [Test]
         public void AnimatorController_LeftGestureLayerUsesGestureMaskAndSpellBankStates()
         {
             AnimatorController controller = AssetDatabase.LoadAssetAtPath<AnimatorController>(

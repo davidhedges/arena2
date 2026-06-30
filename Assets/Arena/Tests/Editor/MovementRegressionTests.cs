@@ -741,6 +741,65 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void AnimationSetAssets_AuthorCompleteCombatAndNonCombatHitReactions()
+        {
+            Type combatAnimationSetType = RequireType("Arena.Presentation.CombatAnimationSet");
+
+            foreach (string resourcePath in new[]
+            {
+                "CombatAnimationSets/ArcherBow",
+                "CombatAnimationSets/Daggers",
+                "CombatAnimationSets/Staff",
+                "CombatAnimationSets/SwordAndShield",
+                "CombatAnimationSets/TwoHandedSword",
+            })
+            {
+                UnityEngine.Object loaded = Resources.Load(resourcePath, combatAnimationSetType);
+                Assert.That(loaded, Is.Not.Null, resourcePath);
+
+                foreach (string fieldName in new[]
+                {
+                    "hitF", "hitB", "hitL", "hitR",
+                    "hitCombatF", "hitCombatB", "hitCombatL", "hitCombatR",
+                    "airHitF", "airHitB", "airHitL", "airHitR",
+                    "airHitCombatF", "airHitCombatB", "airHitCombatL", "airHitCombatR",
+                })
+                {
+                    Assert.That(combatAnimationSetType.GetField(fieldName)!.GetValue(loaded), Is.Not.Null, $"{resourcePath}.{fieldName}");
+                }
+
+                AssertHitReactionClipSet(
+                    InvokeInstanceMethod(loaded, "ResolveHitReactionClips", true, false),
+                    "Hit_F",
+                    "Hit_B",
+                    "Hit_L",
+                    "Hit_R",
+                    $"{resourcePath} grounded non-combat");
+                AssertHitReactionClipSet(
+                    InvokeInstanceMethod(loaded, "ResolveHitReactionClips", true, true),
+                    "Hit_Combat_F",
+                    "Hit_Combat_B",
+                    "Hit_Combat_L",
+                    "Hit_Combat_R",
+                    $"{resourcePath} grounded combat");
+                AssertHitReactionClipSet(
+                    InvokeInstanceMethod(loaded, "ResolveHitReactionClips", false, false),
+                    "Hit_Air_F",
+                    "Hit_Air_B",
+                    "Hit_Air_L",
+                    "Hit_Air_R",
+                    $"{resourcePath} air non-combat");
+                AssertHitReactionClipSet(
+                    InvokeInstanceMethod(loaded, "ResolveHitReactionClips", false, true),
+                    "Hit_Combat_Air_F",
+                    "Hit_Combat_Air_B",
+                    "Hit_Combat_Air_L",
+                    "Hit_Combat_Air_R",
+                    $"{resourcePath} air combat");
+            }
+        }
+
+        [Test]
         public void DaggersAnimationSet_UsesPackCalibratedDrawnAndStowedMounts()
         {
             Type combatAnimationSetType = RequireType("Arena.Presentation.CombatAnimationSet");
@@ -1680,6 +1739,21 @@ namespace Arena.Tests.Editor
                     Is.Not.Null,
                     $"Directional clip '{fieldName}' should be authored.");
             }
+        }
+
+        private static void AssertHitReactionClipSet(
+            object clipSet,
+            string expectedForward,
+            string expectedBack,
+            string expectedLeft,
+            string expectedRight,
+            string context)
+        {
+            Assert.That(((AnimationClip)RequireProperty(clipSet.GetType(), "Forward").GetValue(clipSet)!).name, Is.EqualTo(expectedForward), context);
+            Assert.That(((AnimationClip)RequireProperty(clipSet.GetType(), "Back").GetValue(clipSet)!).name, Is.EqualTo(expectedBack), context);
+            Assert.That(((AnimationClip)RequireProperty(clipSet.GetType(), "Left").GetValue(clipSet)!).name, Is.EqualTo(expectedLeft), context);
+            Assert.That(((AnimationClip)RequireProperty(clipSet.GetType(), "Right").GetValue(clipSet)!).name, Is.EqualTo(expectedRight), context);
+            Assert.That((bool)RequireProperty(clipSet.GetType(), "IsComplete").GetValue(clipSet)!, Is.True, context);
         }
 
         private static ScriptableObject CreateMinimalExportableCombatAnimationSet(Type combatAnimationSetType)

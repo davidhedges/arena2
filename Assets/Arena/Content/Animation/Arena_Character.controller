@@ -2777,7 +2777,7 @@ AnimatorController:
   - serializedVersion: 5
     m_Name: HitReaction
     m_StateMachine: {fileID: 1111000000000000010}
-    m_Mask: {fileID: 31900000, guid: b3a5c2d1e4f6789012345678abcdef01, type: 2}
+    m_Mask: {fileID: 0}
     m_Motions: []
     m_Behaviours: []
     m_BlendingMode: 0

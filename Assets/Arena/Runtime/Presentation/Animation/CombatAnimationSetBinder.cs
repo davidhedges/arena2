@@ -110,12 +110,14 @@ namespace Arena.Presentation
         public void ApplyHitClipOverrides(
             AnimatorOverrideController overrideController,
             CombatAnimationSet set,
-            bool useAirVariant)
+            bool grounded,
+            bool inCombat)
         {
-            ApplyPreferredClipOverride(overrideController, "slot_hit_F", useAirVariant ? set.airHitF : null, set.hitF);
-            ApplyPreferredClipOverride(overrideController, "slot_hit_B", useAirVariant ? set.airHitB : null, set.hitB);
-            ApplyPreferredClipOverride(overrideController, "slot_hit_L", useAirVariant ? set.airHitL : null, set.hitL);
-            ApplyPreferredClipOverride(overrideController, "slot_hit_R", useAirVariant ? set.airHitR : null, set.hitR);
+            HitReactionClipSet clips = set.ResolveHitReactionClips(grounded, inCombat);
+            ApplyOptionalOverride(overrideController, "slot_hit_F", clips.Forward);
+            ApplyOptionalOverride(overrideController, "slot_hit_B", clips.Back);
+            ApplyOptionalOverride(overrideController, "slot_hit_L", clips.Left);
+            ApplyOptionalOverride(overrideController, "slot_hit_R", clips.Right);
         }
 
         private static void MapBaseLocomotion(Dictionary<string, AnimationClip> clipMap, CombatAnimationSet set)

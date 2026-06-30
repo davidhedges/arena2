@@ -201,6 +201,7 @@ namespace Arena.Presentation
         private float _stopTriggerCooldown;
         private bool _isDead;
         private bool _hitUsesAirVariant;
+        private bool _hitUsesCombatVariant;
         private bool _blockingPresentationActive;
         private bool _parryArmedPresentationActive;
         private ActiveMovementActionPresentation? _activeMovementPresentation;
@@ -2100,10 +2101,14 @@ namespace Arena.Presentation
 
             bool useAirVariant = !grounded;
             if (!force && _hitUsesAirVariant == useAirVariant)
-                return;
+            {
+                if (_hitUsesCombatVariant == _inCombat)
+                    return;
+            }
 
             _hitUsesAirVariant = useAirVariant;
-            _animationSetBinder.ApplyHitClipOverrides(_overrideController, animationSet, useAirVariant);
+            _hitUsesCombatVariant = _inCombat;
+            _animationSetBinder.ApplyHitClipOverrides(_overrideController, animationSet, grounded, _inCombat);
         }
 
         private bool TryTriggerPhasedMeleeAction(in CombatAnimationRequest request, bool grounded)

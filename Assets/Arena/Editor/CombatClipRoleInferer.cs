@@ -121,10 +121,18 @@ namespace Arena.Editor
             Add(map, set.hitB, CombatClipRole.HitReaction, assetPath, ".hitB");
             Add(map, set.hitL, CombatClipRole.HitReaction, assetPath, ".hitL");
             Add(map, set.hitR, CombatClipRole.HitReaction, assetPath, ".hitR");
+            Add(map, set.hitCombatF, CombatClipRole.HitReaction, assetPath, ".hitCombatF");
+            Add(map, set.hitCombatB, CombatClipRole.HitReaction, assetPath, ".hitCombatB");
+            Add(map, set.hitCombatL, CombatClipRole.HitReaction, assetPath, ".hitCombatL");
+            Add(map, set.hitCombatR, CombatClipRole.HitReaction, assetPath, ".hitCombatR");
             Add(map, set.airHitF, CombatClipRole.HitReaction, assetPath, ".airHitF");
             Add(map, set.airHitB, CombatClipRole.HitReaction, assetPath, ".airHitB");
             Add(map, set.airHitL, CombatClipRole.HitReaction, assetPath, ".airHitL");
             Add(map, set.airHitR, CombatClipRole.HitReaction, assetPath, ".airHitR");
+            Add(map, set.airHitCombatF, CombatClipRole.HitReaction, assetPath, ".airHitCombatF");
+            Add(map, set.airHitCombatB, CombatClipRole.HitReaction, assetPath, ".airHitCombatB");
+            Add(map, set.airHitCombatL, CombatClipRole.HitReaction, assetPath, ".airHitCombatL");
+            Add(map, set.airHitCombatR, CombatClipRole.HitReaction, assetPath, ".airHitCombatR");
 
             Add(map, set.staggerF, CombatClipRole.Stagger, assetPath, ".staggerF");
             Add(map, set.staggerB, CombatClipRole.Stagger, assetPath, ".staggerB");
