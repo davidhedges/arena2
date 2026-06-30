@@ -54,6 +54,8 @@ namespace Arena.Presentation
         {
             if (_instance != null)
                 return;
+            if (!ArenaRuntimeSceneGate.ShouldRunArenaRuntimeInActiveScene())
+                return;
 
             CombatVFXDispatcher? existing = FindAnyObjectByType<CombatVFXDispatcher>();
             if (existing != null)
@@ -142,6 +144,12 @@ namespace Arena.Presentation
 
         private void Update()
         {
+            if (!ArenaRuntimeSceneGate.ShouldRunArenaRuntimeInActiveScene())
+            {
+                UnsubscribeFromConnection();
+                return;
+            }
+
             _lifecycle ??= new CombatVFXLifecycleRegistry(this);
             _lifecycle.Tick(Time.deltaTime);
             TravelVisuals.Tick(Time.deltaTime);
@@ -174,6 +182,9 @@ namespace Arena.Presentation
             Vector3? aimPoint,
             CastActionToken token)
         {
+            if (!ArenaRuntimeSceneGate.ShouldRunArenaRuntimeInActiveScene())
+                return;
+
             _instance?.PredictLocalInstantSpellReleaseInternal(conn, spellId, spellDef, targetId, aimPoint, token);
         }
 

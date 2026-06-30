@@ -41,6 +41,9 @@ namespace Arena.Match
         private static void Bootstrap()
         {
             if (Instance != null) return;
+            if (!ArenaRuntimeSceneGate.ShouldRunArenaRuntimeInActiveScene())
+                return;
+
             var go = new GameObject("MatchController");
             DontDestroyOnLoad(go);
             go.AddComponent<MatchController>();
@@ -63,6 +66,9 @@ namespace Arena.Match
 
         private void Update()
         {
+            if (!ArenaRuntimeSceneGate.ShouldRunArenaRuntimeInActiveScene())
+                return;
+
             var cache = MatchStateCache.Instance;
 
             UpdateClientFallbackState(cache);

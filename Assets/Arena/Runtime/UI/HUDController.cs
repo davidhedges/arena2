@@ -31,12 +31,6 @@ namespace Arena.UI
     /// </summary>
     public class HUDController : MonoBehaviour
     {
-        private static readonly string[] HiddenSceneNames =
-        {
-            "Hub",
-            "CharacterCreation",
-            "CharacterCustomization",
-        };
         private const string UnitFrameSpritePath = "UI/UnitFrame/UnitFrame";
         private const string TemporaryHitpointsStatusKind = "TEMPORARY_HITPOINTS";
 
@@ -256,6 +250,9 @@ namespace Arena.UI
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
         {
+            if (!ArenaRuntimeSceneGate.ShouldRunArenaRuntimeInActiveScene())
+                return;
+
             var go = new GameObject("HUD");
             DontDestroyOnLoad(go);
             go.AddComponent<HUDController>();
@@ -857,13 +854,10 @@ namespace Arena.UI
         private static bool ShouldSuppressInCurrentScene()
         {
             string activeSceneName = SceneManager.GetActiveScene().name;
-            for (int i = 0; i < HiddenSceneNames.Length; i++)
-            {
-                if (string.Equals(activeSceneName, HiddenSceneNames[i], StringComparison.Ordinal))
-                    return true;
-            }
-
-            return false;
+            return !ArenaRuntimeSceneGate.ShouldRunArenaRuntimeInActiveScene()
+                   || string.Equals(activeSceneName, "Hub", StringComparison.Ordinal)
+                   || string.Equals(activeSceneName, "CharacterCreation", StringComparison.Ordinal)
+                   || string.Equals(activeSceneName, "CharacterCustomization", StringComparison.Ordinal);
         }
 
         // --- Player Frame ---

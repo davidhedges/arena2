@@ -19,6 +19,9 @@ namespace Arena.Presentation
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
         {
+            if (!ArenaRuntimeSceneGate.ShouldRunArenaRuntimeInActiveScene())
+                return;
+
             var go = new GameObject("FloatingCombatText");
             DontDestroyOnLoad(go);
             go.AddComponent<FloatingCombatText>();
@@ -26,6 +29,9 @@ namespace Arena.Presentation
 
         private void Update()
         {
+            if (!ArenaRuntimeSceneGate.ShouldRunArenaRuntimeInActiveScene())
+                return;
+
             if (_subscribed) return;
             var conn = NetworkManager.Instance?.Conn;
             if (conn == null) return;
@@ -36,6 +42,9 @@ namespace Arena.Presentation
 
         private void OnCombatEffectEvent(EventContext ctx, CombatEffectEvent row)
         {
+            if (!ArenaRuntimeSceneGate.ShouldRunArenaRuntimeInActiveScene())
+                return;
+
             if (row.FinalAmount <= 0) return;
 
             var registry = EntityRegistry.Instance;
@@ -58,6 +67,9 @@ namespace Arena.Presentation
 
         private void OnPlayerEvent(EventContext ctx, PlayerEvent row)
         {
+            if (!ArenaRuntimeSceneGate.ShouldRunArenaRuntimeInActiveScene())
+                return;
+
             if (EntityRegistry.Instance == null || !EntityRegistry.Instance.IsIdentityVisible(row.PlayerId))
                 return;
 

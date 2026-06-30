@@ -7,6 +7,7 @@ using Arena.Entity;
 using Arena.Match;
 using Arena.Simulation;
 using Arena.World;
+using UnityEngine.SceneManagement;
 
 namespace Arena.Network
 {
@@ -127,9 +128,19 @@ namespace Arena.Network
         private static void Bootstrap()
         {
             if (Instance != null) return;
+
+            Scene activeScene = SceneManager.GetActiveScene();
+            if (!ShouldBootstrapForScene(activeScene.name, activeScene.path))
+                return;
+
             var go = new GameObject("NetworkManager");
             DontDestroyOnLoad(go);
             go.AddComponent<NetworkManager>();
+        }
+
+        internal static bool ShouldBootstrapForScene(string sceneName, string scenePath)
+        {
+            return ArenaRuntimeSceneGate.IsArenaRuntimeScene(sceneName, scenePath);
         }
 
         private void Awake()

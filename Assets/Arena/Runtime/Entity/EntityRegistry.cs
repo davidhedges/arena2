@@ -123,6 +123,9 @@ namespace Arena.Entity
         private static void Bootstrap()
         {
             if (Instance != null) return;
+            if (!ArenaRuntimeSceneGate.ShouldRunArenaRuntimeInActiveScene())
+                return;
+
             var go = new GameObject("EntityRegistry");
             DontDestroyOnLoad(go);
             var reg = go.AddComponent<EntityRegistry>();

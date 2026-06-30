@@ -116,6 +116,8 @@ namespace Arena.UI
         {
             if (FindAnyObjectByType<CharacterActionBarPanel>() != null)
                 return;
+            if (!ArenaRuntimeSceneGate.ShouldRunArenaRuntimeInActiveScene())
+                return;
 
             GameObject go = new("CharacterActionBarPanel");
             DontDestroyOnLoad(go);
@@ -149,6 +151,12 @@ namespace Arena.UI
 
         private void Update()
         {
+            if (!ArenaRuntimeSceneGate.ShouldRunArenaRuntimeInActiveScene())
+            {
+                SetOpen(false);
+                return;
+            }
+
             TrySubscribeToReducerErrors();
 
             if (WasTogglePressed())

@@ -75,6 +75,7 @@ namespace Arena.Tests.Editor
             object? training = method.Invoke(null, new object?[] { "TrainingGround", 99UL, "Arena_VerdantStand_Blockout", "ArenaMatch" });
             object? characterCreation = method.Invoke(null, new object?[] { "CharacterCreation", null, "Arena_VerdantStand_Blockout", "ArenaMatch" });
             object? groundSlashDemo = method.Invoke(null, new object?[] { "VFXGraph_GroundSlash", null, "Arena_VerdantStand_Blockout", "ArenaMatch" });
+            object? pilotoHolyDemo = method.Invoke(null, new object?[] { "Holy & Paladin Spells Bundle", null, "Arena_VerdantStand_Blockout", "ArenaMatch" });
             object? enterInstance = method.Invoke(null, new object?[] { "Arena_VerdantStand_Blockout", 99UL, "Arena_VerdantStand_Blockout", "ArenaMatch" });
             object? enterOpenWorld = method.Invoke(null, new object?[] { "ArenaMatch", null, "Arena_VerdantStand_Blockout", "ArenaMatch" });
             object? preserveLoadedOpenWorld = method.Invoke(null, new object?[] { "Oasis_Day", null, "Golden_Valley_Sunny", "ArenaMatch" });
@@ -82,6 +83,7 @@ namespace Arena.Tests.Editor
             Assert.That(training, Is.Null);
             Assert.That(characterCreation, Is.Null);
             Assert.That(groundSlashDemo, Is.Null);
+            Assert.That(pilotoHolyDemo, Is.Null);
             Assert.That(enterInstance, Is.EqualTo("ArenaMatch"));
             Assert.That(enterOpenWorld, Is.EqualTo("Arena_VerdantStand_Blockout"));
             Assert.That(preserveLoadedOpenWorld, Is.Null);
@@ -141,6 +143,53 @@ namespace Arena.Tests.Editor
             object requestedWorld = Activator.CreateInstance(playerWorldType, identity, "OPEN", null, "Golden_Valley_Sunny")!;
             RequireMethod(coordinatorType, "OnPlayerWorldUpdate", playerWorldType).Invoke(coordinator, new[] { requestedWorld });
             Assert.That(loadedScenes, Is.Empty);
+        }
+
+        [Test]
+        public void NetworkManager_DoesNotBootstrapForImportedVfxDemoScenes()
+        {
+            Type managerType = RequireRuntimeType("Arena.Network.NetworkManager");
+            Type sceneGateType = RequireRuntimeType("Arena.ArenaRuntimeSceneGate");
+            MethodInfo method = RequireMethod(managerType, "ShouldBootstrapForScene", typeof(string), typeof(string));
+            MethodInfo sceneGateMethod = RequireMethod(sceneGateType, "IsArenaRuntimeScene", typeof(string), typeof(string));
+
+            object? pilotoHolyDemo = method.Invoke(null, new object[]
+            {
+                "Holy & Paladin Spells Bundle",
+                "Assets/ThirdParty/AssetStore/VFX/Piloto Studio/Elemental VFX Mega Bundle/Holy/Holy & Paladin Spells Bundle.unity",
+            });
+            object? pilotoFrostDemo = method.Invoke(null, new object[]
+            {
+                "Frost & Ice Spells Bundle",
+                "Assets/ThirdParty/AssetStore/VFX/Piloto Studio/Elemental VFX Mega Bundle/Frost/Frost & Ice Spells Bundle.unity",
+            });
+            object? arenaMatch = method.Invoke(null, new object[]
+            {
+                "ArenaMatch",
+                "Assets/Arena/Content/Scenes/ArenaMatch.unity",
+            });
+            object? openWorldSceneInPlayerBuild = method.Invoke(null, new object[]
+            {
+                "Oasis_Day",
+                string.Empty,
+            });
+            object? sceneGatePilotoHolyDemo = sceneGateMethod.Invoke(null, new object[]
+            {
+                "Holy & Paladin Spells Bundle",
+                "Assets/ThirdParty/AssetStore/VFX/Piloto Studio/Elemental VFX Mega Bundle/Holy/Holy & Paladin Spells Bundle.unity",
+            });
+            object? sceneGateArenaMatch = sceneGateMethod.Invoke(null, new object[]
+            {
+                "ArenaMatch",
+                "Assets/Arena/Content/Scenes/ArenaMatch.unity",
+            });
+
+            Assert.That(pilotoHolyDemo, Is.False);
+            Assert.That(pilotoFrostDemo, Is.False);
+            Assert.That(arenaMatch, Is.True);
+            Assert.That(openWorldSceneInPlayerBuild, Is.True);
+            Assert.That(sceneGatePilotoHolyDemo, Is.False);
+            Assert.That(sceneGateArenaMatch, Is.True);
         }
 
         [Test]

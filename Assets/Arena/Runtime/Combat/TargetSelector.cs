@@ -57,6 +57,9 @@ namespace Arena.Combat
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
         {
+            if (!ArenaRuntimeSceneGate.ShouldRunArenaRuntimeInActiveScene())
+                return;
+
             var go = new GameObject("TargetSelector");
             DontDestroyOnLoad(go);
             go.AddComponent<TargetSelector>();
@@ -70,6 +73,13 @@ namespace Arena.Combat
 
         private void Update()
         {
+            if (!ArenaRuntimeSceneGate.ShouldRunArenaRuntimeInActiveScene())
+            {
+                SelectedTarget = null;
+                HoveredTarget = null;
+                return;
+            }
+
             LocalPlayerInputSource? input = EntityRegistry.Instance?.LocalPlayerEntity?.GetLocalInputSource();
             if (input == null)
                 return;

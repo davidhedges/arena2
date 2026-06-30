@@ -42,6 +42,9 @@ namespace Arena.UI
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
         {
+            if (!ArenaRuntimeSceneGate.ShouldRunArenaRuntimeInActiveScene())
+                return;
+
             GameObject go = new("SpellCatalogPanel");
             DontDestroyOnLoad(go);
             go.AddComponent<SpellCatalogPanel>();
@@ -85,6 +88,12 @@ namespace Arena.UI
 
         private void Update()
         {
+            if (!ArenaRuntimeSceneGate.ShouldRunArenaRuntimeInActiveScene())
+            {
+                SetOpen(false);
+                return;
+            }
+
             TrySubscribeToReducerErrors();
 
             if (WasSpellCatalogTogglePressed())

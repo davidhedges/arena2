@@ -44,6 +44,9 @@ namespace Arena.Presentation
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
         {
+            if (!ArenaRuntimeSceneGate.ShouldRunArenaRuntimeInActiveScene())
+                return;
+
             var go = new GameObject("AimIndicator");
             DontDestroyOnLoad(go);
             go.AddComponent<AimIndicator>();
@@ -58,6 +61,12 @@ namespace Arena.Presentation
         /// <summary>Show a circle indicator with the given radius.</summary>
         public void ShowCircle(float radius, Color color)
         {
+            if (!ArenaRuntimeSceneGate.ShouldRunArenaRuntimeInActiveScene())
+            {
+                Hide();
+                return;
+            }
+
             if (_circle == null)
                 _circle = CreateCircle();
 
@@ -88,6 +97,12 @@ namespace Arena.Presentation
 
         private void Update()
         {
+            if (!ArenaRuntimeSceneGate.ShouldRunArenaRuntimeInActiveScene())
+            {
+                Hide();
+                return;
+            }
+
             if (_circle == null || !_circle.activeSelf) return;
 
             LocalPlayerInputSource? input = EntityRegistry.Instance?.LocalPlayerEntity?.GetLocalInputSource();

@@ -86,6 +86,9 @@ namespace Arena.Debugging
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
         {
+            if (!ArenaRuntimeSceneGate.ShouldRunArenaRuntimeInActiveScene())
+                return;
+
             var go = new GameObject("ProjectileLoadHarnessOverlay");
             DontDestroyOnLoad(go);
             go.AddComponent<ProjectileLoadHarnessOverlay>();
@@ -99,6 +102,12 @@ namespace Arena.Debugging
 
         private void Update()
         {
+            if (!ArenaRuntimeSceneGate.ShouldRunArenaRuntimeInActiveScene())
+            {
+                _visible = false;
+                return;
+            }
+
             if (UnityEngine.Input.GetKeyDown(ToggleKey) || UnityEngine.Input.GetKeyDown(KeyCode.KeypadEquals))
                 _visible = !_visible;
 
@@ -109,7 +118,7 @@ namespace Arena.Debugging
 
         private void OnGUI()
         {
-            if (!_visible)
+            if (!_visible || !ArenaRuntimeSceneGate.ShouldRunArenaRuntimeInActiveScene())
                 return;
 
             NetworkManager? manager = NetworkManager.Instance;

@@ -40,6 +40,9 @@ namespace Arena.UI
         private static void Bootstrap()
         {
             if (Instance != null) return;
+            if (!ArenaRuntimeSceneGate.ShouldRunArenaRuntimeInActiveScene())
+                return;
+
             var go = new GameObject("MatchOverlay");
             DontDestroyOnLoad(go);
             go.AddComponent<MatchOverlay>();
@@ -147,6 +150,13 @@ namespace Arena.UI
 
         public void Refresh(MatchStateCache cache)
         {
+            if (!ArenaRuntimeSceneGate.ShouldRunArenaRuntimeInActiveScene())
+            {
+                _root.SetActive(false);
+                _countdownRoot.SetActive(false);
+                return;
+            }
+
             // Countdown view: shown during pre-match countdown.
             if (cache.IsCountdown && cache.IsArenaMode)
             {
@@ -185,6 +195,13 @@ namespace Arena.UI
 
         private void Update()
         {
+            if (!ArenaRuntimeSceneGate.ShouldRunArenaRuntimeInActiveScene())
+            {
+                _root.SetActive(false);
+                _countdownRoot.SetActive(false);
+                return;
+            }
+
             if (!_countdownRoot.activeSelf) return;
             var cache = MatchStateCache.Instance;
             if (!cache.IsCountdown || !cache.CountdownStartedAt.HasValue)

@@ -19,12 +19,6 @@ namespace Arena.UI
     /// </summary>
     public class LobbyController : MonoBehaviour
     {
-        private static readonly string[] HiddenSceneNames =
-        {
-            "Hub",
-            "CharacterCreation",
-            "CharacterCustomization",
-        };
         public static LobbyController? Instance { get; private set; }
 
         private GameObject _root = null!;
@@ -46,6 +40,9 @@ namespace Arena.UI
         private static void Bootstrap()
         {
             if (Instance != null) return;
+            if (!ArenaRuntimeSceneGate.ShouldRunArenaRuntimeInActiveScene())
+                return;
+
             var go = new GameObject("LobbyController");
             DontDestroyOnLoad(go);
             go.AddComponent<LobbyController>();
@@ -203,13 +200,10 @@ namespace Arena.UI
         private static bool ShouldSuppressInCurrentScene()
         {
             string activeSceneName = SceneManager.GetActiveScene().name;
-            for (int i = 0; i < HiddenSceneNames.Length; i++)
-            {
-                if (string.Equals(activeSceneName, HiddenSceneNames[i], System.StringComparison.Ordinal))
-                    return true;
-            }
-
-            return false;
+            return !ArenaRuntimeSceneGate.ShouldRunArenaRuntimeInActiveScene()
+                   || string.Equals(activeSceneName, "Hub", System.StringComparison.Ordinal)
+                   || string.Equals(activeSceneName, "CharacterCreation", System.StringComparison.Ordinal)
+                   || string.Equals(activeSceneName, "CharacterCustomization", System.StringComparison.Ordinal);
         }
 
         private void OnTogglePressed() => _panelOpen = !_panelOpen;

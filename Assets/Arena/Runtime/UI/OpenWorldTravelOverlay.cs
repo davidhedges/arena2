@@ -19,6 +19,8 @@ namespace Arena.UI
         {
             if (FindAnyObjectByType<OpenWorldTravelOverlay>() != null)
                 return;
+            if (!ArenaRuntimeSceneGate.ShouldRunArenaRuntimeInActiveScene())
+                return;
 
             var go = new GameObject("OpenWorldTravelOverlay");
             DontDestroyOnLoad(go);
@@ -45,7 +47,8 @@ namespace Arena.UI
         private void Update()
         {
             string activeSceneName = SceneManager.GetActiveScene().name;
-            bool show = OpenWorldTravelCatalog.IsRegisteredOpenWorldScene(activeSceneName);
+            bool show = ArenaRuntimeSceneGate.ShouldRunArenaRuntimeInActiveScene()
+                && OpenWorldTravelCatalog.IsRegisteredOpenWorldScene(activeSceneName);
             _root.SetActive(show);
             if (!show)
                 return;

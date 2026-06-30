@@ -17,6 +17,9 @@ namespace Arena.Debugging
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
         {
+            if (!ArenaRuntimeSceneGate.ShouldRunArenaRuntimeInActiveScene())
+                return;
+
             var go = new GameObject("ActionBarTrace");
             UnityEngine.Object.DontDestroyOnLoad(go);
             go.AddComponent<ActionBarTraceMonitor>();
@@ -63,6 +66,9 @@ namespace Arena.Debugging
         {
             private void Update()
             {
+                if (!ArenaRuntimeSceneGate.ShouldRunArenaRuntimeInActiveScene())
+                    return;
+
                 EnsureSubscribed(NetworkManager.Instance?.Conn);
             }
         }

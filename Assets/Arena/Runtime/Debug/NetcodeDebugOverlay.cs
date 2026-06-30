@@ -23,6 +23,9 @@ namespace Arena.Debugging
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
         {
+            if (!ArenaRuntimeSceneGate.ShouldRunArenaRuntimeInActiveScene())
+                return;
+
             var go = new GameObject("NetcodeDebugOverlay");
             DontDestroyOnLoad(go);
             go.AddComponent<NetcodeDebugOverlay>();
@@ -30,13 +33,19 @@ namespace Arena.Debugging
 
         private void Update()
         {
+            if (!ArenaRuntimeSceneGate.ShouldRunArenaRuntimeInActiveScene())
+            {
+                _visible = false;
+                return;
+            }
+
             if (UnityEngine.Input.GetKeyDown(ToggleKey))
                 _visible = !_visible;
         }
 
         private void OnGUI()
         {
-            if (!_visible) return;
+            if (!_visible || !ArenaRuntimeSceneGate.ShouldRunArenaRuntimeInActiveScene()) return;
 
             _style ??= new GUIStyle(GUI.skin.label)
             {

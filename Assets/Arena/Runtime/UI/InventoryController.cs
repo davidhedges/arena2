@@ -74,6 +74,8 @@ namespace Arena.UI
         {
             if (FindAnyObjectByType<InventoryController>() != null)
                 return;
+            if (!ArenaRuntimeSceneGate.ShouldRunArenaRuntimeInActiveScene())
+                return;
 
             GameObject go = new("InventoryController");
             DontDestroyOnLoad(go);
@@ -98,6 +100,14 @@ namespace Arena.UI
 
         private void Update()
         {
+            if (!ArenaRuntimeSceneGate.ShouldRunArenaRuntimeInActiveScene())
+            {
+                SetInventoryOpen(false);
+                if (_lootPanel != null)
+                    _lootPanel.gameObject.SetActive(false);
+                return;
+            }
+
             if (WasInventoryTogglePressed())
                 SetInventoryOpen(!_inventoryOpen);
 

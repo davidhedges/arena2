@@ -38,6 +38,9 @@ namespace Arena.Entity
             string openWorldSceneName,
             string matchSceneName)
         {
+            if (!ArenaRuntimeSceneGate.IsArenaRuntimeScene(activeSceneName, string.Empty))
+                return null;
+
             if (NonGameplayScenes.Contains(activeSceneName))
                 return null;
 
@@ -51,7 +54,8 @@ namespace Arena.Entity
         }
 
         internal static bool SuppressesGameplayPresentation(string sceneName)
-            => NonGameplayScenes.Contains(sceneName);
+            => !ArenaRuntimeSceneGate.IsArenaRuntimeScene(sceneName, string.Empty)
+               || NonGameplayScenes.Contains(sceneName);
     }
 
     internal sealed class LocalWorldRuntimeCoordinator

@@ -39,11 +39,17 @@ namespace Arena.UI
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
         {
+            if (!ArenaRuntimeSceneGate.ShouldRunArenaRuntimeInActiveScene())
+                return;
+
             EnsureInstance();
         }
 
         public static void Open(string itemInstanceId, string fallbackTitle)
         {
+            if (!ArenaRuntimeSceneGate.ShouldRunArenaRuntimeInActiveScene())
+                return;
+
             EnsureInstance().OpenInternal(itemInstanceId, fallbackTitle);
         }
 
@@ -96,6 +102,12 @@ namespace Arena.UI
 
         private void Update()
         {
+            if (!ArenaRuntimeSceneGate.ShouldRunArenaRuntimeInActiveScene())
+            {
+                SetOpen(false);
+                return;
+            }
+
             if (!_isOpen)
                 return;
 

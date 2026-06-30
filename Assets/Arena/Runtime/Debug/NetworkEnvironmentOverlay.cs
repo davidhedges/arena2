@@ -17,6 +17,9 @@ namespace Arena.Debugging
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
         {
+            if (!ArenaRuntimeSceneGate.ShouldRunArenaRuntimeInActiveScene())
+                return;
+
             var go = new GameObject("NetworkEnvironmentOverlay");
             DontDestroyOnLoad(go);
             go.AddComponent<NetworkEnvironmentOverlay>();
@@ -24,13 +27,19 @@ namespace Arena.Debugging
 
         private void Update()
         {
+            if (!ArenaRuntimeSceneGate.ShouldRunArenaRuntimeInActiveScene())
+            {
+                _visible = false;
+                return;
+            }
+
             if (UnityEngine.Input.GetKeyDown(ToggleKey))
                 _visible = !_visible;
         }
 
         private void OnGUI()
         {
-            if (!_visible)
+            if (!_visible || !ArenaRuntimeSceneGate.ShouldRunArenaRuntimeInActiveScene())
                 return;
 
             NetworkEnvironmentEndpoint selected = NetworkEnvironmentConfig.CurrentEndpoint;
