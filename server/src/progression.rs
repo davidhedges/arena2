@@ -6091,6 +6091,7 @@ mod tests {
         ];
         let supported_vfx_anchors = [
             "CASTER",
+            "CASTER_OVERHEAD",
             "TARGET",
             "ORIGIN",
             "AREA_ORIGIN",
@@ -6800,6 +6801,33 @@ mod tests {
         assert_eq!(
             cue.duration_ms, 0,
             "PARTICLE_SYSTEM VFX cues should let the prefab particle systems define visual lifetime"
+        );
+    }
+
+    #[test]
+    fn blinding_light_authors_overhead_release_vfx() {
+        let catalog = progression_catalog();
+        let cue = catalog
+            .combat_vfx_cues
+            .iter()
+            .find(|cue| {
+                normalize_identifier(cue.owner_kind.as_str()) == "ABILITY"
+                    && normalize_identifier(cue.owner_id.as_str()) == "SPELL_BLINDING_LIGHT"
+                    && normalize_identifier(cue.trigger.as_str()) == "SPELL_RELEASE"
+            })
+            .expect("Blinding Light release VFX cue should be authored");
+
+        assert_eq!(
+            normalize_identifier(cue.anchor.as_str()),
+            "CASTER_OVERHEAD"
+        );
+        assert_eq!(
+            normalize_identifier(cue.vfx_id.as_str()),
+            "VFX_BLINDING_LIGHT_HOLY_OVERHEAD_01"
+        );
+        assert_eq!(
+            normalize_identifier(cue.lifecycle.as_str()),
+            "PARTICLE_SYSTEM"
         );
     }
 

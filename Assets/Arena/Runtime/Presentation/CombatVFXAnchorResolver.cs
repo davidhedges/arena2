@@ -11,6 +11,7 @@ namespace Arena.Presentation
     internal static class CombatVFXAnchorResolver
     {
         private const string AnchorCaster = "CASTER";
+        private const string AnchorCasterOverhead = "CASTER_OVERHEAD";
         private const string AnchorTarget = "TARGET";
         private const string AnchorOrigin = "ORIGIN";
         private const string AnchorAreaOrigin = "AREA_ORIGIN";
@@ -26,6 +27,8 @@ namespace Arena.Presentation
         private const string BladeStartMarkerName = "ArenaVFX_BladeStart";
         private const string BladeEndMarkerName = "ArenaVFX_BladeEnd";
         private const float GroundYOffset = 0.03f;
+        private const float DefaultOverheadHeight = 1.8f;
+        private const float OverheadPadding = 0f;
 
         internal static Vector3 ResolvePosition(CombatVfxAnchorFact fact, CombatVfxCueCatalog cue)
         {
@@ -40,6 +43,8 @@ namespace Arena.Presentation
                 return fact.Point + Vector3.up * GroundYOffset;
             if (string.Equals(anchor, AnchorGroundUnderCaster, StringComparison.Ordinal))
                 return fact.Origin + Vector3.up * GroundYOffset;
+            if (string.Equals(anchor, AnchorCasterOverhead, StringComparison.Ordinal))
+                return ResolveOverheadPosition(fact.Caster, fact.Origin);
             if (TryResolveTransform(fact, anchor, out Transform transform))
                 return transform.position;
 
@@ -55,6 +60,7 @@ namespace Arena.Presentation
         private static Vector3 FallbackPosition(CombatVfxAnchorFact fact, string anchor)
         {
             if (string.Equals(anchor, AnchorCaster, StringComparison.Ordinal)
+                || string.Equals(anchor, AnchorCasterOverhead, StringComparison.Ordinal)
                 || string.Equals(anchor, AnchorLeftHand, StringComparison.Ordinal)
                 || string.Equals(anchor, AnchorRightHand, StringComparison.Ordinal)
                 || string.Equals(anchor, AnchorWeaponMainHand, StringComparison.Ordinal)
@@ -76,6 +82,8 @@ namespace Arena.Presentation
             transform = null!;
 
             if (string.Equals(anchor, AnchorCaster, StringComparison.Ordinal))
+                return TryResolveEntityTransform(fact.Caster, out transform);
+            if (string.Equals(anchor, AnchorCasterOverhead, StringComparison.Ordinal))
                 return TryResolveEntityTransform(fact.Caster, out transform);
             if (string.Equals(anchor, AnchorTarget, StringComparison.Ordinal))
                 return TryResolveEntityTransform(fact.Hit, out transform);
@@ -106,6 +114,20 @@ namespace Arena.Presentation
 
             transform = null!;
             return false;
+        }
+
+        private static Vector3 ResolveOverheadPosition(Identity identity, Vector3 fallbackOrigin)
+        {
+            if (EntityRegistry.Instance != null
+                && EntityRegistry.Instance.TryGetCombatTarget(identity, out ICombatTargetEntity entity))
+            {
+                Transform root = entity.GetPresentationRoot();
+                Vector3 rootPosition = root != null ? root.position : fallbackOrigin;
+                float height = entity.HitHeight > 0f ? entity.HitHeight : DefaultOverheadHeight;
+                return rootPosition + Vector3.up * (height + OverheadPadding);
+            }
+
+            return fallbackOrigin + Vector3.up * (DefaultOverheadHeight + OverheadPadding);
         }
 
         private static bool TryResolveHumanoidBone(Identity identity, HumanBodyBones bone, out Transform transform)

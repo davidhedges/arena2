@@ -4349,6 +4349,18 @@
       "lifecycle": "DURATION",
       "duration_ms": 400,
       "sort_order": 190
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "SPELL_BLINDING_LIGHT",
+      "trigger": "SPELL_RELEASE",
+      "anchor": "CASTER_OVERHEAD",
+      "vfx_id": "VFX_BLINDING_LIGHT_HOLY_OVERHEAD_01",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "PARTICLE_SYSTEM",
+      "duration_ms": 0,
+      "sort_order": 191
     }
   ],
   "combat_profile_action_bar_defaults": [
