@@ -367,18 +367,7 @@
                     "combo_from": "",
                     "combo_open_ms": 0,
                     "combo_grace_ms": 0,
-                    "aerial_execution_mode": "GROUNDED_ONLY",
-                    "projectile": {
-                        "projectile_id": "ARROW_STANDARD",
-                        "speed": 0,
-                        "max_distance": 0,
-                        "radius": 0,
-                        "spawn_forward": 0,
-                        "spawn_height": 0,
-                        "aim_height_scale": 0,
-                        "requires_initial_line_of_sight": true,
-                        "update_interval_seconds": 0
-                    }
+                    "aerial_execution_mode": "GROUNDED_ONLY"
                 },
                 {
                     "id": "WARRIOR_MAIM",
@@ -393,18 +382,7 @@
                     "combo_from": "",
                     "combo_open_ms": 0,
                     "combo_grace_ms": 0,
-                    "aerial_execution_mode": "GROUNDED_ONLY",
-                    "projectile": {
-                        "projectile_id": "ARROW_STANDARD",
-                        "speed": 0,
-                        "max_distance": 0,
-                        "radius": 0,
-                        "spawn_forward": 0,
-                        "spawn_height": 0,
-                        "aim_height_scale": 0,
-                        "requires_initial_line_of_sight": true,
-                        "update_interval_seconds": 0
-                    }
+                    "aerial_execution_mode": "GROUNDED_ONLY"
                 },
                 {
                     "id": "COMBO_ATTACK_1_2_LOW_TO_HIGH",
@@ -419,18 +397,7 @@
                     "combo_from": "light_combo_1",
                     "combo_open_ms": 790,
                     "combo_grace_ms": 0,
-                    "aerial_execution_mode": "GROUNDED_ONLY",
-                    "projectile": {
-                        "projectile_id": "ARROW_STANDARD",
-                        "speed": 0,
-                        "max_distance": 0,
-                        "radius": 0,
-                        "spawn_forward": 0,
-                        "spawn_height": 0,
-                        "aim_height_scale": 0,
-                        "requires_initial_line_of_sight": true,
-                        "update_interval_seconds": 0
-                    }
+                    "aerial_execution_mode": "GROUNDED_ONLY"
                 },
                 {
                     "id": "WARRIOR_CARVE",
@@ -445,18 +412,7 @@
                     "combo_from": "",
                     "combo_open_ms": 0,
                     "combo_grace_ms": 0,
-                    "aerial_execution_mode": "GROUNDED_ONLY",
-                    "projectile": {
-                        "projectile_id": "ARROW_STANDARD",
-                        "speed": 0,
-                        "max_distance": 0,
-                        "radius": 0,
-                        "spawn_forward": 0,
-                        "spawn_height": 0,
-                        "aim_height_scale": 0,
-                        "requires_initial_line_of_sight": true,
-                        "update_interval_seconds": 0
-                    }
+                    "aerial_execution_mode": "GROUNDED_ONLY"
                 },
                 {
                     "id": "COMBO_ATTACK_1_3_GROUND_TO_AIR",
@@ -471,18 +427,7 @@
                     "combo_from": "",
                     "combo_open_ms": 0,
                     "combo_grace_ms": 0,
-                    "aerial_execution_mode": "GROUNDED_ONLY",
-                    "projectile": {
-                        "projectile_id": "ARROW_STANDARD",
-                        "speed": 0,
-                        "max_distance": 0,
-                        "radius": 0,
-                        "spawn_forward": 0,
-                        "spawn_height": 0,
-                        "aim_height_scale": 0,
-                        "requires_initial_line_of_sight": true,
-                        "update_interval_seconds": 0
-                    }
+                    "aerial_execution_mode": "GROUNDED_ONLY"
                 },
                 {
                     "id": "COMBO_ATTACK_1_4_AIR_TO_GROUND",
@@ -500,18 +445,7 @@
                     "combo_from": "light_3",
                     "combo_open_ms": 600,
                     "combo_grace_ms": 0,
-                    "aerial_execution_mode": "GROUNDED_ONLY",
-                    "projectile": {
-                        "projectile_id": "ARROW_STANDARD",
-                        "speed": 0,
-                        "max_distance": 0,
-                        "radius": 0,
-                        "spawn_forward": 0,
-                        "spawn_height": 0,
-                        "aim_height_scale": 0,
-                        "requires_initial_line_of_sight": true,
-                        "update_interval_seconds": 0
-                    }
+                    "aerial_execution_mode": "GROUNDED_ONLY"
                 },
                 {
                     "id": "COMBO_ATTACK_2_1_SPIN",
@@ -526,18 +460,7 @@
                     "combo_from": "",
                     "combo_open_ms": 0,
                     "combo_grace_ms": 0,
-                    "aerial_execution_mode": "GROUNDED_ONLY",
-                    "projectile": {
-                        "projectile_id": "ARROW_STANDARD",
-                        "speed": 0,
-                        "max_distance": 0,
-                        "radius": 0,
-                        "spawn_forward": 0,
-                        "spawn_height": 0,
-                        "aim_height_scale": 0,
-                        "requires_initial_line_of_sight": true,
-                        "update_interval_seconds": 0
-                    }
+                    "aerial_execution_mode": "GROUNDED_ONLY"
                 },
                 {
                     "id": "COMBO_ATTACK_2_2_HIGH_TO_LOW",
@@ -552,18 +475,7 @@
                     "combo_from": "",
                     "combo_open_ms": 0,
                     "combo_grace_ms": 0,
-                    "aerial_execution_mode": "GROUNDED_ONLY",
-                    "projectile": {
-                        "projectile_id": "ARROW_STANDARD",
-                        "speed": 0,
-                        "max_distance": 0,
-                        "radius": 0,
-                        "spawn_forward": 0,
-                        "spawn_height": 0,
-                        "aim_height_scale": 0,
-                        "requires_initial_line_of_sight": true,
-                        "update_interval_seconds": 0
-                    }
+                    "aerial_execution_mode": "GROUNDED_ONLY"
                 },
                 {
                     "id": "COMBO_ATTACK_2_3_DISENGAGE",
@@ -578,18 +490,7 @@
                     "combo_from": "",
                     "combo_open_ms": 0,
                     "combo_grace_ms": 0,
-                    "aerial_execution_mode": "GROUNDED_ONLY",
-                    "projectile": {
-                        "projectile_id": "ARROW_STANDARD",
-                        "speed": 0,
-                        "max_distance": 0,
-                        "radius": 0,
-                        "spawn_forward": 0,
-                        "spawn_height": 0,
-                        "aim_height_scale": 0,
-                        "requires_initial_line_of_sight": true,
-                        "update_interval_seconds": 0
-                    }
+                    "aerial_execution_mode": "GROUNDED_ONLY"
                 },
                 {
                     "id": "COMBO_ATTACK_2_4_LUNGE",
@@ -604,18 +505,7 @@
                     "combo_from": "",
                     "combo_open_ms": 0,
                     "combo_grace_ms": 0,
-                    "aerial_execution_mode": "GROUNDED_ONLY",
-                    "projectile": {
-                        "projectile_id": "ARROW_STANDARD",
-                        "speed": 0,
-                        "max_distance": 0,
-                        "radius": 0,
-                        "spawn_forward": 0,
-                        "spawn_height": 0,
-                        "aim_height_scale": 0,
-                        "requires_initial_line_of_sight": true,
-                        "update_interval_seconds": 0
-                    }
+                    "aerial_execution_mode": "GROUNDED_ONLY"
                 },
                 {
                     "id": "COMBO_ATTACK_3_1_LOW_TO_HIGH",
@@ -630,18 +520,7 @@
                     "combo_from": "",
                     "combo_open_ms": 0,
                     "combo_grace_ms": 0,
-                    "aerial_execution_mode": "GROUNDED_ONLY",
-                    "projectile": {
-                        "projectile_id": "ARROW_STANDARD",
-                        "speed": 0,
-                        "max_distance": 0,
-                        "radius": 0,
-                        "spawn_forward": 0,
-                        "spawn_height": 0,
-                        "aim_height_scale": 0,
-                        "requires_initial_line_of_sight": true,
-                        "update_interval_seconds": 0
-                    }
+                    "aerial_execution_mode": "GROUNDED_ONLY"
                 },
                 {
                     "id": "COMBO_ATTACK_3_2_LOW_TO_HIGH",
@@ -656,18 +535,7 @@
                     "combo_from": "",
                     "combo_open_ms": 0,
                     "combo_grace_ms": 0,
-                    "aerial_execution_mode": "GROUNDED_ONLY",
-                    "projectile": {
-                        "projectile_id": "ARROW_STANDARD",
-                        "speed": 0,
-                        "max_distance": 0,
-                        "radius": 0,
-                        "spawn_forward": 0,
-                        "spawn_height": 0,
-                        "aim_height_scale": 0,
-                        "requires_initial_line_of_sight": true,
-                        "update_interval_seconds": 0
-                    }
+                    "aerial_execution_mode": "GROUNDED_ONLY"
                 },
                 {
                     "id": "COMBO_ATTACK_3_3_GROUND_TO_AIR",
@@ -682,18 +550,7 @@
                     "combo_from": "",
                     "combo_open_ms": 0,
                     "combo_grace_ms": 0,
-                    "aerial_execution_mode": "GROUNDED_ONLY",
-                    "projectile": {
-                        "projectile_id": "ARROW_STANDARD",
-                        "speed": 0,
-                        "max_distance": 0,
-                        "radius": 0,
-                        "spawn_forward": 0,
-                        "spawn_height": 0,
-                        "aim_height_scale": 0,
-                        "requires_initial_line_of_sight": true,
-                        "update_interval_seconds": 0
-                    }
+                    "aerial_execution_mode": "GROUNDED_ONLY"
                 },
                 {
                     "id": "COMBO_ATTACK_3_4_AIR_TO_GROUND",
@@ -708,18 +565,7 @@
                     "combo_from": "",
                     "combo_open_ms": 450,
                     "combo_grace_ms": 100,
-                    "aerial_execution_mode": "GROUNDED_ONLY",
-                    "projectile": {
-                        "projectile_id": "ARROW_STANDARD",
-                        "speed": 0,
-                        "max_distance": 0,
-                        "radius": 0,
-                        "spawn_forward": 0,
-                        "spawn_height": 0,
-                        "aim_height_scale": 0,
-                        "requires_initial_line_of_sight": true,
-                        "update_interval_seconds": 0
-                    }
+                    "aerial_execution_mode": "GROUNDED_ONLY"
                 },
                 {
                     "id": "COMBO_ATTACK_4_1_SPIN",
@@ -734,18 +580,7 @@
                     "combo_from": "",
                     "combo_open_ms": 0,
                     "combo_grace_ms": 0,
-                    "aerial_execution_mode": "GROUNDED_ONLY",
-                    "projectile": {
-                        "projectile_id": "ARROW_STANDARD",
-                        "speed": 0,
-                        "max_distance": 0,
-                        "radius": 0,
-                        "spawn_forward": 0,
-                        "spawn_height": 0,
-                        "aim_height_scale": 0,
-                        "requires_initial_line_of_sight": true,
-                        "update_interval_seconds": 0
-                    }
+                    "aerial_execution_mode": "GROUNDED_ONLY"
                 },
                 {
                     "id": "COMBO_ATTACK_4_4_LUNGING_SLASH",
@@ -760,18 +595,7 @@
                     "combo_from": "",
                     "combo_open_ms": 0,
                     "combo_grace_ms": 0,
-                    "aerial_execution_mode": "GROUNDED_ONLY",
-                    "projectile": {
-                        "projectile_id": "ARROW_STANDARD",
-                        "speed": 0,
-                        "max_distance": 0,
-                        "radius": 0,
-                        "spawn_forward": 0,
-                        "spawn_height": 0,
-                        "aim_height_scale": 0,
-                        "requires_initial_line_of_sight": true,
-                        "update_interval_seconds": 0
-                    }
+                    "aerial_execution_mode": "GROUNDED_ONLY"
                 },
                 {
                     "id": "CRUSHING_BLOW",
@@ -786,18 +610,7 @@
                     "combo_from": "",
                     "combo_open_ms": 0,
                     "combo_grace_ms": 0,
-                    "aerial_execution_mode": "GROUNDED_OR_AIRBORNE",
-                    "projectile": {
-                        "projectile_id": "ARROW_STANDARD",
-                        "speed": 0,
-                        "max_distance": 0,
-                        "radius": 0,
-                        "spawn_forward": 0,
-                        "spawn_height": 0,
-                        "aim_height_scale": 0,
-                        "requires_initial_line_of_sight": true,
-                        "update_interval_seconds": 0
-                    }
+                    "aerial_execution_mode": "GROUNDED_OR_AIRBORNE"
                 },
                 {
                     "id": "CATACLYSM",
@@ -812,18 +625,7 @@
                     "combo_from": "",
                     "combo_open_ms": 0,
                     "combo_grace_ms": 0,
-                    "aerial_execution_mode": "GROUNDED_OR_AIRBORNE",
-                    "projectile": {
-                        "projectile_id": "ARROW_STANDARD",
-                        "speed": 0,
-                        "max_distance": 0,
-                        "radius": 0,
-                        "spawn_forward": 0,
-                        "spawn_height": 0,
-                        "aim_height_scale": 0,
-                        "requires_initial_line_of_sight": true,
-                        "update_interval_seconds": 0
-                    }
+                    "aerial_execution_mode": "GROUNDED_OR_AIRBORNE"
                 },
                 {
                     "id": "BLADESTORM",
@@ -841,18 +643,7 @@
                     "combo_from": "",
                     "combo_open_ms": 0,
                     "combo_grace_ms": 0,
-                    "aerial_execution_mode": "GROUNDED_ONLY",
-                    "projectile": {
-                        "projectile_id": "ARROW_STANDARD",
-                        "speed": 0,
-                        "max_distance": 0,
-                        "radius": 0,
-                        "spawn_forward": 0,
-                        "spawn_height": 0,
-                        "aim_height_scale": 0,
-                        "requires_initial_line_of_sight": true,
-                        "update_interval_seconds": 0
-                    }
+                    "aerial_execution_mode": "GROUNDED_ONLY"
                 },
                 {
                     "id": "WHIRLWIND",
@@ -876,18 +667,7 @@
                     "combo_from": "",
                     "combo_open_ms": 0,
                     "combo_grace_ms": 0,
-                    "aerial_execution_mode": "GROUNDED_ONLY",
-                    "projectile": {
-                        "projectile_id": "ARROW_STANDARD",
-                        "speed": 0,
-                        "max_distance": 0,
-                        "radius": 0,
-                        "spawn_forward": 0,
-                        "spawn_height": 0,
-                        "aim_height_scale": 0,
-                        "requires_initial_line_of_sight": true,
-                        "update_interval_seconds": 0
-                    }
+                    "aerial_execution_mode": "GROUNDED_ONLY"
                 },
                 {
                     "id": "WARRIOR_CHARGE",
@@ -902,18 +682,7 @@
                     "combo_from": "",
                     "combo_open_ms": 0,
                     "combo_grace_ms": 0,
-                    "aerial_execution_mode": "GROUNDED_ONLY",
-                    "projectile": {
-                        "projectile_id": "ARROW_STANDARD",
-                        "speed": 0,
-                        "max_distance": 0,
-                        "radius": 0,
-                        "spawn_forward": 0,
-                        "spawn_height": 0,
-                        "aim_height_scale": 0,
-                        "requires_initial_line_of_sight": true,
-                        "update_interval_seconds": 0
-                    }
+                    "aerial_execution_mode": "GROUNDED_ONLY"
                 },
                 {
                     "id": "WARRIOR_IMPALE",
@@ -928,18 +697,7 @@
                     "combo_from": "",
                     "combo_open_ms": 0,
                     "combo_grace_ms": 0,
-                    "aerial_execution_mode": "GROUNDED_ONLY",
-                    "projectile": {
-                        "projectile_id": "ARROW_STANDARD",
-                        "speed": 0,
-                        "max_distance": 0,
-                        "radius": 0,
-                        "spawn_forward": 0,
-                        "spawn_height": 0,
-                        "aim_height_scale": 0,
-                        "requires_initial_line_of_sight": true,
-                        "update_interval_seconds": 0
-                    }
+                    "aerial_execution_mode": "GROUNDED_ONLY"
                 },
                 {
                     "id": "WARRIOR_DISENGAGE_STRIKE",
@@ -954,18 +712,7 @@
                     "combo_from": "",
                     "combo_open_ms": 0,
                     "combo_grace_ms": 0,
-                    "aerial_execution_mode": "GROUNDED_ONLY",
-                    "projectile": {
-                        "projectile_id": "ARROW_STANDARD",
-                        "speed": 0,
-                        "max_distance": 0,
-                        "radius": 0,
-                        "spawn_forward": 0,
-                        "spawn_height": 0,
-                        "aim_height_scale": 0,
-                        "requires_initial_line_of_sight": true,
-                        "update_interval_seconds": 0
-                    }
+                    "aerial_execution_mode": "GROUNDED_ONLY"
                 },
                 {
                     "id": "AUTO_ATTACK_1",
@@ -980,18 +727,7 @@
                     "combo_from": "",
                     "combo_open_ms": 0,
                     "combo_grace_ms": 0,
-                    "aerial_execution_mode": "GROUNDED_ONLY",
-                    "projectile": {
-                        "projectile_id": "ARROW_STANDARD",
-                        "speed": 0,
-                        "max_distance": 0,
-                        "radius": 0,
-                        "spawn_forward": 0,
-                        "spawn_height": 0,
-                        "aim_height_scale": 0,
-                        "requires_initial_line_of_sight": true,
-                        "update_interval_seconds": 0
-                    }
+                    "aerial_execution_mode": "GROUNDED_ONLY"
                 }
             ]
         },
@@ -1146,18 +882,7 @@
                     "combo_from": "",
                     "combo_open_ms": 0,
                     "combo_grace_ms": 0,
-                    "aerial_execution_mode": "GROUNDED_ONLY",
-                    "projectile": {
-                        "projectile_id": "ARROW_STANDARD",
-                        "speed": 0,
-                        "max_distance": 0,
-                        "radius": 0,
-                        "spawn_forward": 0,
-                        "spawn_height": 0,
-                        "aim_height_scale": 0,
-                        "requires_initial_line_of_sight": true,
-                        "update_interval_seconds": 0
-                    }
+                    "aerial_execution_mode": "GROUNDED_ONLY"
                 },
                 {
                     "id": "ARCHER_EVASIVE_SHOT",
@@ -1260,18 +985,7 @@
                     "combo_from": "",
                     "combo_open_ms": 0,
                     "combo_grace_ms": 0,
-                    "aerial_execution_mode": "GROUNDED_ONLY",
-                    "projectile": {
-                        "projectile_id": "ARROW_STANDARD",
-                        "speed": 0,
-                        "max_distance": 0,
-                        "radius": 0,
-                        "spawn_forward": 0,
-                        "spawn_height": 0,
-                        "aim_height_scale": 0,
-                        "requires_initial_line_of_sight": true,
-                        "update_interval_seconds": 0
-                    }
+                    "aerial_execution_mode": "GROUNDED_ONLY"
                 },
                 {
                     "id": "DAGGER_RIPOSTE",
@@ -1286,18 +1000,7 @@
                     "combo_from": "",
                     "combo_open_ms": 0,
                     "combo_grace_ms": 0,
-                    "aerial_execution_mode": "GROUNDED_ONLY",
-                    "projectile": {
-                        "projectile_id": "ARROW_STANDARD",
-                        "speed": 0,
-                        "max_distance": 0,
-                        "radius": 0,
-                        "spawn_forward": 0,
-                        "spawn_height": 0,
-                        "aim_height_scale": 0,
-                        "requires_initial_line_of_sight": true,
-                        "update_interval_seconds": 0
-                    }
+                    "aerial_execution_mode": "GROUNDED_ONLY"
                 },
                 {
                     "id": "DAGGER_DASHING_CUT",
@@ -1312,18 +1015,7 @@
                     "combo_from": "",
                     "combo_open_ms": 0,
                     "combo_grace_ms": 0,
-                    "aerial_execution_mode": "GROUNDED_ONLY",
-                    "projectile": {
-                        "projectile_id": "ARROW_STANDARD",
-                        "speed": 0,
-                        "max_distance": 0,
-                        "radius": 0,
-                        "spawn_forward": 0,
-                        "spawn_height": 0,
-                        "aim_height_scale": 0,
-                        "requires_initial_line_of_sight": true,
-                        "update_interval_seconds": 0
-                    }
+                    "aerial_execution_mode": "GROUNDED_ONLY"
                 },
                 {
                     "id": "AUTO_ATTACK_1",
@@ -1338,18 +1030,7 @@
                     "combo_from": "",
                     "combo_open_ms": 0,
                     "combo_grace_ms": 0,
-                    "aerial_execution_mode": "GROUNDED_ONLY",
-                    "projectile": {
-                        "projectile_id": "ARROW_STANDARD",
-                        "speed": 0,
-                        "max_distance": 0,
-                        "radius": 0,
-                        "spawn_forward": 0,
-                        "spawn_height": 0,
-                        "aim_height_scale": 0,
-                        "requires_initial_line_of_sight": true,
-                        "update_interval_seconds": 0
-                    }
+                    "aerial_execution_mode": "GROUNDED_ONLY"
                 }
             ]
         },
@@ -1374,18 +1055,7 @@
                     "combo_from": "",
                     "combo_open_ms": 0,
                     "combo_grace_ms": 0,
-                    "aerial_execution_mode": "GROUNDED_ONLY",
-                    "projectile": {
-                        "projectile_id": "ARROW_STANDARD",
-                        "speed": 0,
-                        "max_distance": 0,
-                        "radius": 0,
-                        "spawn_forward": 0,
-                        "spawn_height": 0,
-                        "aim_height_scale": 0,
-                        "requires_initial_line_of_sight": true,
-                        "update_interval_seconds": 0
-                    }
+                    "aerial_execution_mode": "GROUNDED_ONLY"
                 },
                 {
                     "id": "COMBO_ATTACK_2_1_SPIN",
@@ -1400,18 +1070,7 @@
                     "combo_from": "",
                     "combo_open_ms": 0,
                     "combo_grace_ms": 0,
-                    "aerial_execution_mode": "GROUNDED_ONLY",
-                    "projectile": {
-                        "projectile_id": "ARROW_STANDARD",
-                        "speed": 0,
-                        "max_distance": 0,
-                        "radius": 0,
-                        "spawn_forward": 0,
-                        "spawn_height": 0,
-                        "aim_height_scale": 0,
-                        "requires_initial_line_of_sight": true,
-                        "update_interval_seconds": 0
-                    }
+                    "aerial_execution_mode": "GROUNDED_ONLY"
                 },
                 {
                     "id": "COMBO_ATTACK_4_4_LUNGING_SLASH",
@@ -1426,18 +1085,7 @@
                     "combo_from": "",
                     "combo_open_ms": 0,
                     "combo_grace_ms": 0,
-                    "aerial_execution_mode": "GROUNDED_ONLY",
-                    "projectile": {
-                        "projectile_id": "ARROW_STANDARD",
-                        "speed": 0,
-                        "max_distance": 0,
-                        "radius": 0,
-                        "spawn_forward": 0,
-                        "spawn_height": 0,
-                        "aim_height_scale": 0,
-                        "requires_initial_line_of_sight": true,
-                        "update_interval_seconds": 0
-                    }
+                    "aerial_execution_mode": "GROUNDED_ONLY"
                 },
                 {
                     "id": "AUTO_ATTACK_1",
@@ -1452,18 +1100,7 @@
                     "combo_from": "",
                     "combo_open_ms": 0,
                     "combo_grace_ms": 0,
-                    "aerial_execution_mode": "GROUNDED_ONLY",
-                    "projectile": {
-                        "projectile_id": "ARROW_STANDARD",
-                        "speed": 0,
-                        "max_distance": 0,
-                        "radius": 0,
-                        "spawn_forward": 0,
-                        "spawn_height": 0,
-                        "aim_height_scale": 0,
-                        "requires_initial_line_of_sight": true,
-                        "update_interval_seconds": 0
-                    }
+                    "aerial_execution_mode": "GROUNDED_ONLY"
                 }
             ]
         }
