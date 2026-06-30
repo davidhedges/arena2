@@ -366,8 +366,6 @@ namespace Arena.Input
             string requiredKind = string.IsNullOrWhiteSpace(action.ResourceKind)
                 ? entity.PrimaryResourceKind
                 : action.ResourceKind.Trim().ToUpperInvariant();
-            if (!string.Equals(requiredKind, "MANA", System.StringComparison.OrdinalIgnoreCase))
-                return true;
             if (!string.Equals(requiredKind, entity.PrimaryResourceKind, System.StringComparison.OrdinalIgnoreCase))
             {
                 ActionBarTrace.Trace(
@@ -398,8 +396,6 @@ namespace Arena.Input
             string resourceKind = string.IsNullOrWhiteSpace(action.ResourceKind)
                 ? entity.PrimaryResourceKind
                 : action.ResourceKind.Trim().ToUpperInvariant();
-            if (!string.Equals(resourceKind, "MANA", System.StringComparison.OrdinalIgnoreCase))
-                return;
             if (!string.Equals(resourceKind, entity.PrimaryResourceKind, System.StringComparison.OrdinalIgnoreCase))
                 return;
 
