@@ -58,6 +58,10 @@ Assets/ThirdParty/AssetStore/Animation.meta
 Assets/ThirdParty/AssetStore/Animation/DaggersAnimationPack/
 Assets/ThirdParty/AssetStore/Animation/DaggersAnimationPack.meta
 
+# Imported local VFX package
+Assets/ThirdParty/AssetStore/VFX/Piloto Studio/
+Assets/ThirdParty/AssetStore/VFX/Piloto Studio.meta
+
 # Infrastructure local state and secrets
 .env
 .env.local
