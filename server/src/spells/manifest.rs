@@ -594,6 +594,9 @@ mod tests {
             "FROST_NOVA",
             "NEGATE",
             "BLINDING_LIGHT",
+            "GLACIAL_SPIKE",
+            "FROZEN_GRASP",
+            "FROST_NEEDLE",
             "MOMENTUM",
             "INTIMIDATE",
             "ENRAGE",
@@ -616,7 +619,13 @@ mod tests {
 
     #[test]
     fn hostile_targeted_auto_attack_arming_spells_remain_explicit() {
-        for id in ["FIREBALL", "ICICLE", "INSTANT_BEAM", "ELECTROCUTE"] {
+        for id in [
+            "FIREBALL",
+            "ICICLE",
+            "INSTANT_BEAM",
+            "ELECTROCUTE",
+            "GLACIAL_SPIKE",
+        ] {
             assert!(definition(id).arms_auto_attack_on_cast);
         }
 
@@ -625,6 +634,8 @@ mod tests {
             "FROST_NOVA",
             "NEGATE",
             "BLINDING_LIGHT",
+            "FROZEN_GRASP",
+            "FROST_NEEDLE",
             "MOMENTUM",
             "BATTLE_CRY",
             "GIANT_SWING",
@@ -929,6 +940,97 @@ mod tests {
         assert_eq!(status.modifier_scalar, 0.0);
         assert_eq!(status.max_stacks, 1);
         assert_eq!(status.stack_policy, StackPolicy::Refresh);
+        assert!((definition.primary_resource_gain_on_cast - 0.0).abs() < 0.0001);
+        assert!(!definition.generates_primary_resource_on_cast);
+    }
+
+    #[test]
+    fn glacial_spike_catalog_matches_targeted_cold_freeze_defaults() {
+        let definition = definition("GLACIAL_SPIKE");
+
+        assert_eq!(definition.kind.as_str(), "GLACIAL_SPIKE");
+        assert_eq!(definition.cooldown, Duration::from_millis(1_200));
+        assert!(definition.uses_global_cooldown);
+        assert_eq!(definition.behavior.as_str(), "PROJECTILE");
+        assert_eq!(definition.targeting.as_str(), "TARGET");
+        assert!(definition.requires_target);
+        assert_eq!(definition.cast_time, Duration::from_millis(2_000));
+        assert_eq!(definition.damage, 35);
+        assert_eq!(definition.damage_type.as_str(), "COLD");
+        assert!((definition.primary_resource_cost - 20.0).abs() < 0.0001);
+        assert!(definition.arms_auto_attack_on_cast);
+        let projectile = definition
+            .secondary
+            .projectile
+            .as_ref()
+            .expect("Glacial Spike should define projectile secondary data");
+        assert_eq!(projectile.impact_effects.len(), 1);
+        let status = &projectile.impact_effects[0];
+        assert_eq!(status.payload().kind(), StatusEffectKind::Freeze);
+        assert_eq!(status.duration(), Duration::from_millis(1_200));
+        assert!((definition.primary_resource_gain_on_cast - 0.0).abs() < 0.0001);
+        assert!(!definition.generates_primary_resource_on_cast);
+    }
+
+    #[test]
+    fn frozen_grasp_catalog_matches_self_area_root_defaults() {
+        let definition = definition("FROZEN_GRASP");
+
+        assert_eq!(definition.kind.as_str(), "FROZEN_GRASP");
+        assert_eq!(definition.cooldown, Duration::from_millis(1_200));
+        assert!(definition.uses_global_cooldown);
+        assert_eq!(definition.behavior.as_str(), "AREA");
+        assert_eq!(definition.targeting.as_str(), "SELF");
+        assert!(!definition.requires_target);
+        assert_eq!(definition.damage, 0);
+        assert_eq!(definition.damage_type.as_str(), "COLD");
+        assert!((definition.radius - 4.6).abs() < 0.0001);
+        assert!((definition.primary_resource_cost - 20.0).abs() < 0.0001);
+        assert!(!definition.arms_auto_attack_on_cast);
+        let area = definition
+            .secondary
+            .area
+            .as_ref()
+            .expect("Frozen Grasp should define area secondary data");
+        assert_eq!(area.impact_effects.len(), 1);
+        let status = &area.impact_effects[0];
+        assert_eq!(status.payload().kind(), StatusEffectKind::Root);
+        assert_eq!(status.duration(), Duration::from_millis(1_200));
+        assert!((definition.primary_resource_gain_on_cast - 0.0).abs() < 0.0001);
+        assert!(!definition.generates_primary_resource_on_cast);
+    }
+
+    #[test]
+    fn frost_needle_catalog_matches_delayed_point_area_defaults() {
+        let definition = definition("FROST_NEEDLE");
+
+        assert_eq!(definition.kind.as_str(), "FROST_NEEDLE");
+        assert_eq!(definition.cooldown, Duration::from_millis(1_400));
+        assert!(definition.uses_global_cooldown);
+        assert_eq!(definition.behavior.as_str(), "AREA");
+        assert_eq!(definition.targeting.as_str(), "POINT");
+        assert!(!definition.requires_target);
+        assert_eq!(definition.damage, 38);
+        assert_eq!(definition.damage_type.as_str(), "COLD");
+        assert!((definition.radius - 2.4).abs() < 0.0001);
+        assert!((definition.max_distance - 12.0).abs() < 0.0001);
+        assert!(
+            (definition
+                .aim_radius
+                .expect("Frost Needle should expose aim radius")
+                - 2.4)
+                .abs()
+                < 0.0001
+        );
+        assert!((definition.primary_resource_cost - 0.0).abs() < 0.0001);
+        assert!(!definition.arms_auto_attack_on_cast);
+        let area = definition
+            .secondary
+            .area
+            .as_ref()
+            .expect("Frost Needle should define area secondary data");
+        assert_eq!(area.impact_delay_ms, 500);
+        assert!(area.impact_effects.is_empty());
         assert!((definition.primary_resource_gain_on_cast - 0.0).abs() < 0.0001);
         assert!(!definition.generates_primary_resource_on_cast);
     }

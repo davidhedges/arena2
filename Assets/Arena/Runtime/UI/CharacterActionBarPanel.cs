@@ -27,6 +27,8 @@ namespace Arena.UI
         private const float AvailableSectionGap = 14f;
         private const string ActionBarActionTag = "ACTION_BAR_ACTION";
         private const string AllWeaponsFilterKey = "ALL_WEAPONS";
+        private const string SpellsFilterKey = "SPELLS";
+        private const uint SpellsCategorySortOrder = uint.MaxValue - 3;
 
         private static readonly Color PanelColor = new(0.055f, 0.06f, 0.068f, 0.96f);
         private static readonly Color HeaderColor = new(0.09f, 0.105f, 0.12f, 0.98f);
@@ -245,7 +247,7 @@ namespace Arena.UI
             SetRect((RectTransform)close.transform, new Vector2(-94f, -49f), new Vector2(72f, 34f), new Vector2(1f, 1f), new Vector2(1f, 1f));
             close.onClick.AddListener(() => SetOpen(false));
 
-            _weaponFilterButton = MakeButton("WeaponFilterButton", _root.transform, "All Weapons", new Color(0.035f, 0.04f, 0.048f, 0.98f), Color.white);
+            _weaponFilterButton = MakeButton("WeaponFilterButton", _root.transform, "All Actions", new Color(0.035f, 0.04f, 0.048f, 0.98f), Color.white);
             _weaponFilterLabel = _weaponFilterButton.GetComponentInChildren<TextMeshProUGUI>();
             SetRect((RectTransform)_weaponFilterButton.transform, new Vector2(28f, -96f), new Vector2(536f, 34f), new Vector2(0f, 1f), new Vector2(0f, 1f));
             _weaponFilterButton.onClick.AddListener(ToggleWeaponFilterMenu);
@@ -645,7 +647,7 @@ namespace Arena.UI
                 return string.Equals(abilityProfile, normalizedProfile, StringComparison.OrdinalIgnoreCase);
 
             return string.Equals(WireIdentifier.Normalize(ability.AbilityKind), AbilityKinds.Spell, StringComparison.Ordinal)
-                && SpellbookResolver.KnowsSpell(conn, owner, ability.ActionId);
+                && SpellbookResolver.AbilityIsKnownIfSpell(conn, owner, ability);
         }
 
         private static string DisabledReasonForAbility(
@@ -667,7 +669,7 @@ namespace Arena.UI
                 return $"Requires {abilityProfile}";
             }
 
-            if (string.Equals(WireIdentifier.Normalize(ability.AbilityKind), AbilityKinds.Spell, StringComparison.Ordinal))
+            if (IsSpellAbility(ability))
                 return "Not learned or equipped";
 
             return "Unavailable";
@@ -843,8 +845,12 @@ namespace Arena.UI
             string normalizedFilter = WireIdentifier.Normalize(weaponFilterKey);
             return string.IsNullOrWhiteSpace(normalizedFilter)
                 || string.Equals(normalizedFilter, AllWeaponsFilterKey, StringComparison.Ordinal)
+                || string.Equals(action.CategoryKey, SpellsFilterKey, StringComparison.Ordinal)
                 || string.Equals(action.CategoryKey, normalizedFilter, StringComparison.Ordinal);
         }
+
+        private static bool IsSpellAbility(AbilityCatalog ability)
+            => string.Equals(WireIdentifier.Normalize(ability.AbilityKind), AbilityKinds.Spell, StringComparison.Ordinal);
 
         private readonly struct WeaponFilterOption
         {
@@ -855,7 +861,7 @@ namespace Arena.UI
             public WeaponFilterOption(string key, string title, uint sortOrder)
             {
                 Key = WireIdentifier.Normalize(key);
-                Title = string.IsNullOrWhiteSpace(title) ? "All Weapons" : title;
+                Title = string.IsNullOrWhiteSpace(title) ? "All Actions" : title;
                 SortOrder = sortOrder;
             }
         }
@@ -877,6 +883,9 @@ namespace Arena.UI
         private static AbilityCategory CategoryForAbility(DbConnection conn, AbilityCatalog ability)
         {
             string profileId = CombatProfileResolver.ResolveForAbility(conn, ability);
+            if (string.IsNullOrWhiteSpace(profileId) && IsSpellAbility(ability))
+                return new AbilityCategory(SpellsFilterKey, "Spells", SpellsCategorySortOrder);
+
             if (string.IsNullOrWhiteSpace(profileId))
                 return new AbilityCategory("GENERAL", "General", uint.MaxValue - 1);
 
@@ -938,8 +947,15 @@ namespace Arena.UI
         {
             List<WeaponFilterOption> options = new()
             {
-                new WeaponFilterOption(AllWeaponsFilterKey, "All Weapons", 0),
+                new WeaponFilterOption(AllWeaponsFilterKey, "All Actions", 0),
             };
+
+            bool hasSpells = conn.Db.AbilityCatalog.Iter().Any(ability =>
+                string.IsNullOrWhiteSpace(CombatProfileResolver.ResolveForAbility(conn, ability))
+                && IsSpellAbility(ability)
+                && HasAbilityTag(ability, ActionBarActionTag));
+            if (hasSpells)
+                options.Add(new WeaponFilterOption(SpellsFilterKey, "Spells", SpellsCategorySortOrder));
 
             foreach (CombatProfileCatalog profile in conn.Db.CombatProfileCatalog.Iter()
                          .OrderBy(row => row.SortOrder)
@@ -994,7 +1010,7 @@ namespace Arena.UI
             WeaponFilterOption selected = _weaponFilterOptions.FirstOrDefault(
                 option => string.Equals(option.Key, _weaponFilterKey, StringComparison.Ordinal));
             _weaponFilterLabel.text = string.IsNullOrWhiteSpace(selected.Title)
-                ? "All Weapons"
+                ? "All Actions"
                 : selected.Title;
         }
 

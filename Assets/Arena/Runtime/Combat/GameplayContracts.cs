@@ -15,11 +15,14 @@ namespace Arena.Combat
         public const string Icicle = "ICICLE";
         public const string IceSpikes = "ICE_SPIKES";
         public const string Meteor = "METEOR";
+        public const string FrostNeedle = "FROST_NEEDLE";
         public const string InstantBeam = "INSTANT_BEAM";
         public const string Electrocute = "ELECTROCUTE";
         public const string FrostNova = "FROST_NOVA";
+        public const string FrozenGrasp = "FROZEN_GRASP";
         public const string Negate = "NEGATE";
         public const string BlindingLight = "BLINDING_LIGHT";
+        public const string GlacialSpike = "GLACIAL_SPIKE";
         public const string Momentum = "MOMENTUM";
         public const string GiantSwing = "GIANT_SWING";
         public const string Intimidate = "INTIMIDATE";

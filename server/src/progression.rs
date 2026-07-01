@@ -5307,6 +5307,7 @@ mod tests {
         Movement,
         AutoAttackReplacement,
         CombatModeToggle,
+        Passive,
         Unknown(String),
     }
 
@@ -5423,6 +5424,7 @@ mod tests {
                     "MOVEMENT" => ResolvedAuthoringCategory::Movement,
                     "AUTO_ATTACK_REPLACEMENT" => ResolvedAuthoringCategory::AutoAttackReplacement,
                     ABILITY_KIND_COMBAT_MODE_TOGGLE => ResolvedAuthoringCategory::CombatModeToggle,
+                    "PASSIVE" => ResolvedAuthoringCategory::Passive,
                     other => ResolvedAuthoringCategory::Unknown(other.to_string()),
                 };
 
@@ -5642,6 +5644,7 @@ mod tests {
                     }
                 }
                 ResolvedAuthoringCategory::CombatModeToggle => {}
+                ResolvedAuthoringCategory::Passive => {}
                 ResolvedAuthoringCategory::Unknown(kind) => {
                     errors.push(CombatAuthoringError::new(
                         CombatAuthoringRule::AbilityKindSupported,
@@ -6817,13 +6820,144 @@ mod tests {
             })
             .expect("Blinding Light release VFX cue should be authored");
 
-        assert_eq!(
-            normalize_identifier(cue.anchor.as_str()),
-            "CASTER_OVERHEAD"
-        );
+        assert_eq!(normalize_identifier(cue.anchor.as_str()), "CASTER_OVERHEAD");
         assert_eq!(
             normalize_identifier(cue.vfx_id.as_str()),
             "VFX_BLINDING_LIGHT_HOLY_OVERHEAD_01"
+        );
+        assert_eq!(
+            normalize_identifier(cue.lifecycle.as_str()),
+            "PARTICLE_SYSTEM"
+        );
+    }
+
+    #[test]
+    fn glacial_spike_authors_target_impact_vfx() {
+        let catalog = progression_catalog();
+        let cue = catalog
+            .combat_vfx_cues
+            .iter()
+            .find(|cue| {
+                normalize_identifier(cue.owner_kind.as_str()) == "ABILITY"
+                    && normalize_identifier(cue.owner_id.as_str()) == "SPELL_GLACIAL_SPIKE"
+                    && normalize_identifier(cue.trigger.as_str()) == "SPELL_IMPACT"
+            })
+            .expect("Glacial Spike impact VFX cue should be authored");
+
+        assert_eq!(normalize_identifier(cue.anchor.as_str()), "TARGET");
+        assert_eq!(
+            normalize_identifier(cue.vfx_id.as_str()),
+            "VFX_GLACIAL_SPIKE_TARGET_01"
+        );
+        assert_eq!(
+            normalize_identifier(cue.lifecycle.as_str()),
+            "PARTICLE_SYSTEM"
+        );
+    }
+
+    #[test]
+    fn frozen_grasp_authors_self_area_root_and_vfx() {
+        let catalog = progression_catalog();
+        let ability = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "SPELL_FROZEN_GRASP")
+            .expect("expected Frozen Grasp ability");
+        assert_eq!(
+            normalize_identifier(ability.action_id.as_str()),
+            "FROZEN_GRASP"
+        );
+        assert_eq!(
+            normalize_identifier(ability.gameplay.targeting.as_str()),
+            "SELF"
+        );
+        assert_eq!(ability.gameplay.requires_target, Some(false));
+        assert_eq!(ability.gameplay.resource_cost, Some(20.0));
+
+        let delivery = ability
+            .gameplay
+            .delivery
+            .as_ref()
+            .expect("Frozen Grasp should author spell delivery");
+        let effects = delivery
+            .get("impact_effects")
+            .and_then(|value| value.as_array())
+            .expect("Frozen Grasp should author impact effects");
+        assert!(
+            effects.iter().any(|effect| {
+                effect.get("kind").and_then(|value| value.as_str()) == Some("ROOT")
+                    && effect.get("duration_ms").and_then(|value| value.as_u64()) == Some(1200)
+            }),
+            "Frozen Grasp should apply ROOT through area impact effects"
+        );
+
+        let cue = catalog
+            .combat_vfx_cues
+            .iter()
+            .find(|cue| {
+                normalize_identifier(cue.owner_kind.as_str()) == "ABILITY"
+                    && normalize_identifier(cue.owner_id.as_str()) == "SPELL_FROZEN_GRASP"
+                    && normalize_identifier(cue.trigger.as_str()) == "AREA_IMPACT"
+            })
+            .expect("Frozen Grasp should author an area-impact VFX cue");
+        assert_eq!(normalize_identifier(cue.anchor.as_str()), "AREA_ORIGIN");
+        assert_eq!(
+            normalize_identifier(cue.vfx_id.as_str()),
+            "VFX_FROZEN_GRASP_AREA_01"
+        );
+        assert_eq!(
+            normalize_identifier(cue.attach_mode.as_str()),
+            "WORLD_ALIGNED_TO_FACING"
+        );
+    }
+
+    #[test]
+    fn frost_needle_authors_delayed_point_area_and_vfx() {
+        let catalog = progression_catalog();
+        let ability = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "SPELL_FROST_NEEDLE")
+            .expect("expected Frost Needle ability");
+        assert_eq!(
+            normalize_identifier(ability.action_id.as_str()),
+            "FROST_NEEDLE"
+        );
+        assert_eq!(
+            normalize_identifier(ability.gameplay.targeting.as_str()),
+            "POINT"
+        );
+        assert_eq!(ability.gameplay.requires_target, Some(false));
+
+        let delivery = ability
+            .gameplay
+            .delivery
+            .as_ref()
+            .expect("Frost Needle should author spell delivery");
+        assert_eq!(
+            delivery
+                .get("impact_delay_ms")
+                .and_then(|value| value.as_u64()),
+            Some(500)
+        );
+        assert_eq!(
+            delivery.get("damage_type").and_then(|value| value.as_str()),
+            Some("COLD")
+        );
+
+        let cue = catalog
+            .combat_vfx_cues
+            .iter()
+            .find(|cue| {
+                normalize_identifier(cue.owner_kind.as_str()) == "ABILITY"
+                    && normalize_identifier(cue.owner_id.as_str()) == "SPELL_FROST_NEEDLE"
+                    && normalize_identifier(cue.trigger.as_str()) == "SPELL_RELEASE"
+            })
+            .expect("Frost Needle should author a release VFX cue");
+        assert_eq!(normalize_identifier(cue.anchor.as_str()), "IMPACT_POINT");
+        assert_eq!(
+            normalize_identifier(cue.vfx_id.as_str()),
+            "VFX_FROST_NEEDLE_01"
         );
         assert_eq!(
             normalize_identifier(cue.lifecycle.as_str()),
@@ -7062,6 +7196,7 @@ mod tests {
                 "SPELL"
                 | "MOVEMENT"
                 | "AUTO_ATTACK_REPLACEMENT"
+                | "PASSIVE"
                 | ABILITY_KIND_COMBAT_MODE_TOGGLE => {
                     for field in melee_only_fields {
                         assert!(
@@ -8546,7 +8681,10 @@ mod tests {
             ("SPELL_WITHERING_ORB", "WITHERING_ORB", "SHADOW"),
             ("SPELL_FROST_NOVA", "FROST_NOVA", "COLD"),
             ("SPELL_ICE_SPIKES", "ICE_SPIKES", "COLD"),
+            ("SPELL_GLACIAL_SPIKE", "GLACIAL_SPIKE", "COLD"),
+            ("SPELL_FROZEN_GRASP", "FROZEN_GRASP", "COLD"),
             ("SPELL_ERUPTION", "ERUPTION", "FIRE"),
+            ("SPELL_FROST_NEEDLE", "FROST_NEEDLE", "COLD"),
             ("SPELL_INSTANT_BEAM", "INSTANT_BEAM", "ARCANE"),
             ("SPELL_ORBITING_BLADES", "ORBITING_BLADES", "ARCANE"),
         ];

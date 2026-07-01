@@ -257,7 +257,7 @@ namespace Arena.Tests.Editor
             Assert.That(contracts, Does.Contain("ResolveForAbility"));
 
             string panel = File.ReadAllText(CharacterActionBarPanelPath);
-            Assert.That(panel, Does.Contain("CombatProfileResolver.ResolveForOwner(conn, localIdentity.Value)"));
+            Assert.That(panel, Does.Contain("CombatProfileResolver.ResolveForOwner(conn, owner.Value)"));
             Assert.That(panel, Does.Contain("CombatProfileResolver.ResolveForAbility(conn, ability)"));
             Assert.That(
                 panel,
@@ -397,10 +397,14 @@ namespace Arena.Tests.Editor
         public void CharacterActionBarPanel_RendersCatalogBackedActionLibrary()
         {
             string panel = File.ReadAllText(CharacterActionBarPanelPath);
-            Assert.That(panel, Does.Contain("\"ActionLibraryPanel\""));
-            Assert.That(panel, Does.Contain("\"AvailableActionsRoot\""));
+            Assert.That(panel, Does.Contain("\"CharacterActionBarRoot\""));
+            Assert.That(panel, Does.Contain("\"AvailableActions\""));
             Assert.That(panel, Does.Contain("HasAbilityTag(ability, ActionBarActionTag)"));
             Assert.That(panel, Does.Contain("ActionTooltipResolver.ResolveForAbility"));
+            Assert.That(panel, Does.Contain("SpellsFilterKey"));
+            Assert.That(panel, Does.Contain("AbilityIsKnownIfSpell"));
+            Assert.That(panel, Does.Contain("new AbilityCategory(SpellsFilterKey, \"Spells\""));
+            Assert.That(panel, Does.Contain("string.Equals(action.CategoryKey, SpellsFilterKey"));
 
             string dragDrop = File.ReadAllText(ActionBarDragDropPath);
             Assert.That(dragDrop, Does.Contain("conn.Reducers.AssignCharacterActionBarAbilityToSlot"));

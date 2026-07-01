@@ -2168,6 +2168,7 @@ mod tests {
                 "METEOR",
                 "LIGHTNING",
                 "ERUPTION",
+                "FROST_NEEDLE",
                 "ICE_SPIKES",
                 "BOOMERANG_ORB",
                 "WITHERING_ORB",
@@ -2176,6 +2177,8 @@ mod tests {
                 "FROST_NOVA",
                 "NEGATE",
                 "BLINDING_LIGHT",
+                "GLACIAL_SPIKE",
+                "FROZEN_GRASP",
                 "MOMENTUM",
                 "FORTIFY",
                 "IRON_WILL",
@@ -2224,6 +2227,7 @@ mod tests {
             "METEOR",
             "LIGHTNING",
             "ERUPTION",
+            "FROST_NEEDLE",
             "ICE_SPIKES",
             "BOOMERANG_ORB",
             "WITHERING_ORB",
@@ -2232,6 +2236,8 @@ mod tests {
             "FROST_NOVA",
             "NEGATE",
             "BLINDING_LIGHT",
+            "GLACIAL_SPIKE",
+            "FROZEN_GRASP",
             "MOMENTUM",
             "FORTIFY",
             "IRON_WILL",
@@ -2937,6 +2943,34 @@ mod tests {
             .expect("Eruption should define area secondary data");
         assert_eq!(eruption_area.impact_delay_ms, 500);
 
+        let frost_needle =
+            spell_definition_by_str("FROST_NEEDLE").expect("FROST_NEEDLE should exist");
+        assert_eq!(frost_needle.behavior, SpellBehavior::Area);
+        assert_eq!(frost_needle.targeting, SpellTargeting::Point);
+        assert!(!frost_needle.requires_target);
+        assert_eq!(frost_needle.damage, 38);
+        assert_eq!(frost_needle.damage_type, DamageType::Cold);
+        assert!((frost_needle.max_distance - 12.0).abs() < 0.0001);
+        assert!((frost_needle.radius - 2.4).abs() < 0.0001);
+        assert!(
+            (frost_needle
+                .aim_radius
+                .expect("Frost Needle should expose aim radius")
+                - 2.4)
+                .abs()
+                < 0.0001
+        );
+        let frost_needle_area = frost_needle
+            .secondary
+            .area
+            .as_ref()
+            .expect("Frost Needle should define area secondary data");
+        assert_eq!(frost_needle_area.impact_delay_ms, 500);
+        assert_eq!(
+            frost_needle_area.impact_effects,
+            Vec::<StatusApplication>::new()
+        );
+
         let withering_orb =
             spell_definition_by_str("WITHERING_ORB").expect("WITHERING_ORB should exist");
         assert_eq!(withering_orb.behavior, SpellBehavior::Projectile);
@@ -2979,6 +3013,32 @@ mod tests {
             "Frost Nova root must be authored through generic AREA impact_effects"
         );
 
+        let frozen_grasp =
+            spell_definition_by_str("FROZEN_GRASP").expect("FROZEN_GRASP should exist");
+        assert_eq!(frozen_grasp.behavior, SpellBehavior::Area);
+        assert_eq!(frozen_grasp.targeting, SpellTargeting::Self_);
+        assert!(!frozen_grasp.requires_target);
+        assert_eq!(frozen_grasp.damage, 0);
+        assert_eq!(frozen_grasp.damage_type, DamageType::Cold);
+        assert!((frozen_grasp.primary_resource_cost - 20.0).abs() < 0.0001);
+        let frozen_grasp_area = frozen_grasp
+            .secondary
+            .area
+            .as_ref()
+            .expect("Frozen Grasp should define area secondary data");
+        assert_eq!(
+            frozen_grasp_area.impact_effects,
+            vec![StatusApplication::new(
+                StatusPayload::Root,
+                Duration::from_millis(1200),
+                Some("ROOT".to_string()),
+                StatusStackGroupDefault::Global("ROOT"),
+                1,
+                StackPolicy::Refresh,
+            )],
+            "Frozen Grasp root must be authored through generic AREA impact_effects"
+        );
+
         let ice_spikes = spell_definition_by_str("ICE_SPIKES").expect("ICE_SPIKES should exist");
         let ice_spikes_area = ice_spikes
             .secondary
@@ -2996,6 +3056,31 @@ mod tests {
                 StackPolicy::Refresh,
             )],
             "Ice Spikes freeze must be authored through generic AREA impact_effects"
+        );
+
+        let glacial_spike =
+            spell_definition_by_str("GLACIAL_SPIKE").expect("GLACIAL_SPIKE should exist");
+        assert_eq!(glacial_spike.behavior, SpellBehavior::Projectile);
+        assert_eq!(glacial_spike.targeting, SpellTargeting::Target);
+        assert!(glacial_spike.requires_target);
+        assert_eq!(glacial_spike.damage, 35);
+        assert_eq!(glacial_spike.damage_type, DamageType::Cold);
+        let glacial_spike_projectile = glacial_spike
+            .secondary
+            .projectile
+            .as_ref()
+            .expect("Glacial Spike should define projectile secondary data");
+        assert_eq!(
+            glacial_spike_projectile.impact_effects,
+            vec![StatusApplication::new(
+                StatusPayload::Freeze,
+                Duration::from_millis(1200),
+                None,
+                StatusStackGroupDefault::ActionSuffix("FREEZE"),
+                1,
+                StackPolicy::Refresh,
+            )],
+            "Glacial Spike freeze must use generic projectile impact_effects"
         );
 
         let instant_beam =

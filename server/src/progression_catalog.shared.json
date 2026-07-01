@@ -1037,6 +1037,39 @@
       }
     },
     {
+      "ability_id": "SPELL_FROST_NEEDLE",
+      "combat_profile_id": "",
+      "action_id": "FROST_NEEDLE",
+      "display_name": "Frost Needle",
+      "resource_kind": "MANA",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 1006,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 1400,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "POINT",
+        "requires_target": false,
+        "aim_radius": 2.4,
+        "resource_cost": 0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "AREA",
+          "max_distance": 12,
+          "damage": 38,
+          "damage_type": "COLD",
+          "impact_delay_ms": 500,
+          "radius": 2.4,
+          "block_behavior": "BLOCKABLE",
+          "impact_effects": []
+        }
+      }
+    },
+    {
       "ability_id": "SPELL_ICE_SPIKES",
       "combat_profile_id": "",
       "action_id": "ICE_SPIKES",
@@ -1332,6 +1365,85 @@
             "max_stacks": 1,
             "stack_policy": "REFRESH"
           }
+        }
+      }
+    },
+    {
+      "ability_id": "SPELL_GLACIAL_SPIKE",
+      "combat_profile_id": "",
+      "action_id": "GLACIAL_SPIKE",
+      "display_name": "Glacial Spike",
+      "resource_kind": "MANA",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 1010,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 1200,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 2000,
+        "cast_mobility": "MOBILE",
+        "targeting": "TARGET",
+        "requires_target": true,
+        "resource_cost": 20,
+        "arms_auto_attack_on_cast": true,
+        "delivery": {
+          "kind": "PROJECTILE",
+          "speed": 35,
+          "max_distance": 30,
+          "damage": 35,
+          "damage_type": "COLD",
+          "spawn_forward": 0,
+          "spawn_height": 1.2,
+          "turn_rate": 3,
+          "update_interval_seconds": 0.05,
+          "radius": 0.55,
+          "block_behavior": "BLOCKABLE",
+          "parry_behavior": "PARRYABLE",
+          "homing_window_seconds": 0.08,
+          "impact_effects": [
+            {
+              "kind": "FREEZE",
+              "duration_ms": 1200
+            }
+          ]
+        }
+      }
+    },
+    {
+      "ability_id": "SPELL_FROZEN_GRASP",
+      "combat_profile_id": "",
+      "action_id": "FROZEN_GRASP",
+      "display_name": "Frozen Grasp",
+      "resource_kind": "MANA",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 1011,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 1200,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "SELF",
+        "requires_target": false,
+        "resource_cost": 20,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "AREA",
+          "damage": 0,
+          "damage_type": "COLD",
+          "radius": 4.6,
+          "block_behavior": "BLOCKABLE",
+          "impact_effects": [
+            {
+              "kind": "ROOT",
+              "duration_ms": 1200,
+              "status_stack_group": "ROOT"
+            }
+          ]
         }
       }
     },
@@ -3349,6 +3461,13 @@
     },
     {
       "presentation_kind": "ABILITY",
+      "presentation_id": "SPELL_FROST_NEEDLE",
+      "display_name": "Frost Needle",
+      "description": "Drives a delayed spike of ice through the targeted ground location.",
+      "sort_order": 83
+    },
+    {
+      "presentation_kind": "ABILITY",
       "presentation_id": "SPELL_BOOMERANG_ORB",
       "display_name": "Boomerang Orb",
       "description": "Throws an orb that pierces enemies before returning to the caster.",
@@ -3430,6 +3549,20 @@
       "display_name": "Blinding Light",
       "description": "Flares with light, causing hostile targeted abilities to miss briefly.",
       "sort_order": 88
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "SPELL_GLACIAL_SPIKE",
+      "display_name": "Glacial Spike",
+      "description": "Impales the target with cold damage and freezes them briefly.",
+      "sort_order": 89
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "SPELL_FROZEN_GRASP",
+      "display_name": "Frozen Grasp",
+      "description": "Roots nearby enemies in ice.",
+      "sort_order": 90
     },
     {
       "presentation_kind": "ABILITY",
@@ -4218,6 +4351,18 @@
     },
     {
       "owner_kind": "ABILITY",
+      "owner_id": "SPELL_FROST_NEEDLE",
+      "trigger": "SPELL_RELEASE",
+      "anchor": "IMPACT_POINT",
+      "vfx_id": "VFX_FROST_NEEDLE_01",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "PARTICLE_SYSTEM",
+      "duration_ms": 0,
+      "sort_order": 179
+    },
+    {
+      "owner_kind": "ABILITY",
       "owner_id": "SPELL_BOOMERANG_ORB",
       "trigger": "SPELL_RELEASE",
       "anchor": "LEFT_HAND",
@@ -4361,6 +4506,41 @@
       "lifecycle": "PARTICLE_SYSTEM",
       "duration_ms": 0,
       "sort_order": 191
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "SPELL_GLACIAL_SPIKE",
+      "trigger": "SPELL_RELEASE",
+      "anchor": "LEFT_HAND",
+      "vfx_id": "VFX_ICICLE_PROJECTILE_01",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "PROJECTILE_BODY",
+      "lifecycle": "UNTIL_TERMINAL_EVENT",
+      "projectile_sequence_index": 0,
+      "duration_ms": 0,
+      "sort_order": 192
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "SPELL_GLACIAL_SPIKE",
+      "trigger": "SPELL_IMPACT",
+      "anchor": "TARGET",
+      "vfx_id": "VFX_GLACIAL_SPIKE_TARGET_01",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "PARTICLE_SYSTEM",
+      "duration_ms": 0,
+      "sort_order": 193
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "SPELL_FROZEN_GRASP",
+      "trigger": "AREA_IMPACT",
+      "anchor": "AREA_ORIGIN",
+      "vfx_id": "VFX_FROZEN_GRASP_AREA_01",
+      "attach_mode": "WORLD_ALIGNED_TO_FACING",
+      "duration_ms": 2500,
+      "sort_order": 194
     }
   ],
   "combat_profile_action_bar_defaults": [
