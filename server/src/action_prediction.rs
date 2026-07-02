@@ -26,6 +26,35 @@ pub enum ActionResultKind {
     StaleToken,
 }
 
+/// Machine-readable denial reason replicated on `PredictedActionResult`
+/// (netcode audit R2). Reducers remain the sole validators; this exists so a
+/// bare `Rejected` is observable and the HUD can explain the denial without
+/// the client mirroring validation. `None` accompanies non-rejected results;
+/// `Unspecified` marks a rejection no site has mapped yet.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, SpacetimeType)]
+pub enum ActionRejectReason {
+    None,
+    Unspecified,
+    InvalidInput,
+    Dead,
+    Disabled,
+    Busy,
+    OnCooldown,
+    OnGlobalCooldown,
+    InsufficientResource,
+    NoCharges,
+    InvalidTarget,
+    OutOfRange,
+    NotFacingTarget,
+    AerialMismatch,
+    LineOfSightBlocked,
+    MovementRestricted,
+    GapCloseBlocked,
+    ComboWindow,
+    StaleSnapshot,
+    NotCancelable,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ActionPredictionToken {
     pub predicted_action_id: String,
@@ -65,6 +94,7 @@ pub struct PredictedActionResult {
     pub predicted_action_id: String,
     pub client_action_seq: u64,
     pub result: ActionResultKind,
+    pub reject_reason: ActionRejectReason,
     pub created_at: Timestamp,
     #[index(btree)]
     pub created_at_micros: i64,
@@ -117,13 +147,23 @@ pub(crate) fn record_predicted_action_result(
     token: &ActionPredictionToken,
     action_instance_id: &str,
     result: ActionResultKind,
+    reject_reason: ActionRejectReason,
     now: Timestamp,
 ) {
     if has_predicted_action_result(ctx, owner, family, token) {
         return;
     }
 
-    insert_predicted_action_result(ctx, owner, family, token, action_instance_id, result, now);
+    insert_predicted_action_result(
+        ctx,
+        owner,
+        family,
+        token,
+        action_instance_id,
+        result,
+        reject_reason,
+        now,
+    );
 }
 
 pub(crate) fn insert_predicted_action_result(
@@ -133,6 +173,7 @@ pub(crate) fn insert_predicted_action_result(
     token: &ActionPredictionToken,
     action_instance_id: &str,
     result: ActionResultKind,
+    reject_reason: ActionRejectReason,
     now: Timestamp,
 ) {
     ctx.db
@@ -145,6 +186,7 @@ pub(crate) fn insert_predicted_action_result(
             predicted_action_id: token.predicted_action_id.clone(),
             client_action_seq: token.client_action_seq,
             result,
+            reject_reason,
             created_at: now,
             created_at_micros: timestamp_to_micros(now),
             expires_at_micros: timestamp_to_micros(

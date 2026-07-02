@@ -100,14 +100,10 @@ pub(crate) fn resolve_ability_action_resource_cost_amount(
         return Some(ResolvedActionResourceCost::primary(0.0));
     }
 
+    // Spells resolve through the authored catalog kind exactly like melee
+    // (netcode audit R2b); the client's SpellResourceKind reads the same
+    // replicated AbilityCatalog rows, so the two sides cannot drift.
     let ability_resource_kind = effective_resource_kind_for_ability(ctx, owner, ability)?;
-    if ability.ability_kind.eq_ignore_ascii_case("SPELL") {
-        return Some(ResolvedActionResourceCost::for_kind(
-            RESOURCE_KIND_MANA,
-            amount,
-        ));
-    }
-
     Some(ResolvedActionResourceCost::for_kind(
         ability_resource_kind.as_str(),
         amount,

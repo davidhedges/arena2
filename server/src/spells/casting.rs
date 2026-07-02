@@ -6,7 +6,8 @@ use spacetimedb::{Identity, ReducerContext, Table, Timestamp};
 
 use crate::action_ids::AuthoredActionId;
 use crate::action_prediction::{
-    insert_predicted_action_result, ActionPredictionToken, ActionResultKind, PredictedActionFamily,
+    insert_predicted_action_result, ActionPredictionToken, ActionRejectReason, ActionResultKind,
+    PredictedActionFamily,
 };
 use crate::action_snapshot::{
     validate_authoritative_action_snapshot, ActionSnapshotFallback, ActionSnapshotRequest,
@@ -143,6 +144,10 @@ fn resolved_primary_resource_cost_for_action(
 fn spell_primary_resource_cost_for_action(spell_kind: &SpellId) -> ResolvedActionResourceCost {
     let definition = super::catalog::spell_definition(spell_kind)
         .expect("validated spell id must resolve to a definition");
+    // Fallback for casts with no action-bar ability row (off-bar/debug paths
+    // the client never predicts). Bar-assigned spells resolve their kind from
+    // the authored AbilityCatalog row like melee, in
+    // resolve_ability_action_resource_cost_amount.
     ResolvedActionResourceCost::mana(definition.primary_resource_cost)
 }
 
@@ -344,6 +349,7 @@ pub(crate) fn queue_pending_cast_request(
             predicted_cast_id.as_str(),
             client_action_seq,
             SPELL_PREDICTION_RESULT_REJECTED,
+            ActionRejectReason::Busy,
             ctx.timestamp,
         );
         log_cast_rejected(caster, spell_kind, "pending_cast_exists", "");
@@ -358,6 +364,7 @@ pub(crate) fn queue_pending_cast_request(
             predicted_cast_id.as_str(),
             client_action_seq,
             SPELL_PREDICTION_RESULT_REJECTED,
+            ActionRejectReason::InvalidInput,
             ctx.timestamp,
         );
         log_cast_rejected(caster, spell_kind, "unknown_spell", "");
@@ -371,6 +378,7 @@ pub(crate) fn queue_pending_cast_request(
             predicted_cast_id.as_str(),
             client_action_seq,
             SPELL_PREDICTION_RESULT_REJECTED,
+            ActionRejectReason::InvalidInput,
             ctx.timestamp,
         );
         log_cast_rejected(caster, spell_kind, "missing_player_snapshot", "");
@@ -384,6 +392,7 @@ pub(crate) fn queue_pending_cast_request(
             predicted_cast_id.as_str(),
             client_action_seq,
             SPELL_PREDICTION_RESULT_REJECTED,
+            ActionRejectReason::Dead,
             ctx.timestamp,
         );
         log_cast_rejected(caster, spell_kind, "caster_dead", "");
@@ -399,6 +408,7 @@ pub(crate) fn queue_pending_cast_request(
             predicted_cast_id.as_str(),
             client_action_seq,
             SPELL_PREDICTION_RESULT_REJECTED,
+            ActionRejectReason::Disabled,
             ctx.timestamp,
         );
         log_cast_rejected(caster, spell_kind, "active_disabling_status", "");
@@ -412,6 +422,7 @@ pub(crate) fn queue_pending_cast_request(
             predicted_cast_id.as_str(),
             client_action_seq,
             SPELL_PREDICTION_RESULT_REJECTED,
+            ActionRejectReason::Busy,
             ctx.timestamp,
         );
         return Ok(());
@@ -424,6 +435,7 @@ pub(crate) fn queue_pending_cast_request(
             predicted_cast_id.as_str(),
             client_action_seq,
             SPELL_PREDICTION_RESULT_REJECTED,
+            ActionRejectReason::OnGlobalCooldown,
             ctx.timestamp,
         );
         return Ok(());
@@ -436,6 +448,7 @@ pub(crate) fn queue_pending_cast_request(
             predicted_cast_id.as_str(),
             client_action_seq,
             SPELL_PREDICTION_RESULT_REJECTED,
+            ActionRejectReason::OnCooldown,
             ctx.timestamp,
         );
         return Ok(());
@@ -484,6 +497,7 @@ pub(crate) fn resolve_pending_casts(ctx: &ReducerContext, now: Timestamp) -> Res
                 request.predicted_cast_id.as_str(),
                 request.client_action_seq,
                 SPELL_PREDICTION_RESULT_REJECTED,
+                ActionRejectReason::InvalidInput,
                 now,
             );
             continue;
@@ -557,6 +571,7 @@ pub(crate) fn cast_spell_for(
             predicted_cast_id.as_str(),
             client_action_seq,
             SPELL_PREDICTION_RESULT_CANCELED,
+            ActionRejectReason::None,
             ctx.timestamp,
         );
         log_cast_rejected(
@@ -576,6 +591,7 @@ pub(crate) fn cast_spell_for(
             predicted_cast_id.as_str(),
             client_action_seq,
             SPELL_PREDICTION_RESULT_REJECTED,
+            ActionRejectReason::InvalidInput,
             ctx.timestamp,
         );
         log_cast_rejected(caster, spell_kind, "missing_player_snapshot", "");
@@ -589,6 +605,7 @@ pub(crate) fn cast_spell_for(
             predicted_cast_id.as_str(),
             client_action_seq,
             SPELL_PREDICTION_RESULT_REJECTED,
+            ActionRejectReason::Dead,
             ctx.timestamp,
         );
         log_cast_rejected(caster, spell_kind, "caster_dead", "");
@@ -612,6 +629,7 @@ pub(crate) fn cast_spell_for(
             predicted_cast_id.as_str(),
             client_action_seq,
             SPELL_PREDICTION_RESULT_REJECTED,
+            ActionRejectReason::StaleSnapshot,
             ctx.timestamp,
         );
         log_cast_rejected(
@@ -654,6 +672,7 @@ pub(crate) fn cast_spell_for(
             predicted_cast_id.as_str(),
             client_action_seq,
             SPELL_PREDICTION_RESULT_REJECTED,
+            ActionRejectReason::InvalidInput,
             now,
         );
         log_cast_rejected(caster, spell_kind, "unknown_spell", "");
@@ -669,6 +688,7 @@ pub(crate) fn cast_spell_for(
             predicted_cast_id.as_str(),
             client_action_seq,
             SPELL_PREDICTION_RESULT_REJECTED,
+            ActionRejectReason::Disabled,
             ctx.timestamp,
         );
         log_cast_rejected(caster, spell_kind, "active_disabling_status", "");
@@ -685,6 +705,7 @@ pub(crate) fn cast_spell_for(
             predicted_cast_id.as_str(),
             client_action_seq,
             SPELL_PREDICTION_RESULT_REJECTED,
+            ActionRejectReason::InsufficientResource,
             now,
         );
         return Ok(());
@@ -697,6 +718,7 @@ pub(crate) fn cast_spell_for(
             predicted_cast_id.as_str(),
             client_action_seq,
             SPELL_PREDICTION_RESULT_REJECTED,
+            ActionRejectReason::Busy,
             now,
         );
         return Ok(());
@@ -709,6 +731,7 @@ pub(crate) fn cast_spell_for(
             predicted_cast_id.as_str(),
             client_action_seq,
             SPELL_PREDICTION_RESULT_REJECTED,
+            ActionRejectReason::OnGlobalCooldown,
             now,
         );
         return Ok(());
@@ -723,6 +746,7 @@ pub(crate) fn cast_spell_for(
             predicted_cast_id.as_str(),
             client_action_seq,
             SPELL_PREDICTION_RESULT_REJECTED,
+            ActionRejectReason::OnCooldown,
             now,
         );
         return Ok(());
@@ -739,6 +763,7 @@ pub(crate) fn cast_spell_for(
             predicted_cast_id.as_str(),
             client_action_seq,
             SPELL_PREDICTION_RESULT_REJECTED,
+            ActionRejectReason::MovementRestricted,
             now,
         );
         return Ok(());
@@ -751,13 +776,14 @@ pub(crate) fn cast_spell_for(
             predicted_cast_id.as_str(),
             client_action_seq,
             SPELL_PREDICTION_RESULT_REJECTED,
+            ActionRejectReason::InsufficientResource,
             now,
         );
         return Ok(());
     }
 
     if BespokeRuntimeSpell::from_spell_id(spell_kind) == Some(BespokeRuntimeSpell::Electrocute) {
-        let can_start = process_spell_cast(
+        let reject_reason = process_spell_cast(
             ctx,
             &cast_state,
             caster,
@@ -772,7 +798,7 @@ pub(crate) fn cast_spell_for(
             "",
             "",
         )?;
-        if !can_start {
+        if let Some(reject_reason) = reject_reason {
             record_spell_prediction_result(
                 ctx,
                 caster,
@@ -780,6 +806,7 @@ pub(crate) fn cast_spell_for(
                 predicted_cast_id.as_str(),
                 client_action_seq,
                 SPELL_PREDICTION_RESULT_REJECTED,
+                reject_reason,
                 now,
             );
             return Ok(());
@@ -815,6 +842,7 @@ pub(crate) fn cast_spell_for(
             predicted_cast_id.as_str(),
             client_action_seq,
             SPELL_PREDICTION_RESULT_ACCEPTED,
+            ActionRejectReason::None,
             now,
         );
         // begin_active_cast already emitted public COMBAT_CAST. If a post-accept
@@ -830,6 +858,7 @@ pub(crate) fn cast_spell_for(
                 predicted_cast_id.as_str(),
                 client_action_seq,
                 SPELL_PREDICTION_RESULT_REJECTED,
+                ActionRejectReason::Unspecified,
                 now,
             );
             return Ok(());
@@ -843,6 +872,7 @@ pub(crate) fn cast_spell_for(
                 predicted_cast_id.as_str(),
                 client_action_seq,
                 SPELL_PREDICTION_RESULT_REJECTED,
+                ActionRejectReason::InsufficientResource,
                 now,
             );
             return Ok(());
@@ -863,7 +893,7 @@ pub(crate) fn cast_spell_for(
             * temporary_modifiers.cast_speed_multiplier_for(&caster),
     );
     if cast_time > Duration::ZERO {
-        let can_start = process_spell_cast(
+        let reject_reason = process_spell_cast(
             ctx,
             &cast_state,
             caster,
@@ -878,7 +908,7 @@ pub(crate) fn cast_spell_for(
             "",
             "",
         )?;
-        if !can_start {
+        if let Some(reject_reason) = reject_reason {
             record_spell_prediction_result(
                 ctx,
                 caster,
@@ -886,6 +916,7 @@ pub(crate) fn cast_spell_for(
                 predicted_cast_id.as_str(),
                 client_action_seq,
                 SPELL_PREDICTION_RESULT_REJECTED,
+                reject_reason,
                 now,
             );
             return Ok(());
@@ -921,6 +952,7 @@ pub(crate) fn cast_spell_for(
             predicted_cast_id.as_str(),
             client_action_seq,
             SPELL_PREDICTION_RESULT_ACCEPTED,
+            ActionRejectReason::None,
             now,
         );
         // begin_active_cast already emitted public COMBAT_CAST. If a post-accept
@@ -935,6 +967,7 @@ pub(crate) fn cast_spell_for(
                 predicted_cast_id.as_str(),
                 client_action_seq,
                 SPELL_PREDICTION_RESULT_REJECTED,
+                ActionRejectReason::InsufficientResource,
                 now,
             );
             return Ok(());
@@ -951,7 +984,7 @@ pub(crate) fn cast_spell_for(
         return Ok(());
     }
 
-    let can_start = process_spell_cast(
+    let reject_reason = process_spell_cast(
         ctx,
         &cast_state,
         caster,
@@ -966,7 +999,7 @@ pub(crate) fn cast_spell_for(
         "",
         "",
     )?;
-    if !can_start {
+    if let Some(reject_reason) = reject_reason {
         record_spell_prediction_result(
             ctx,
             caster,
@@ -974,13 +1007,14 @@ pub(crate) fn cast_spell_for(
             predicted_cast_id.as_str(),
             client_action_seq,
             SPELL_PREDICTION_RESULT_REJECTED,
+            reject_reason,
             now,
         );
         return Ok(());
     }
     let action_instance_id = next_spell_instance_id(ctx, caster);
     let ability_id = ability_id_for_spell(ctx, caster, spell_kind);
-    let final_can_start = process_spell_cast(
+    let final_reject_reason = process_spell_cast(
         ctx,
         &cast_state,
         caster,
@@ -995,7 +1029,7 @@ pub(crate) fn cast_spell_for(
         action_instance_id.as_str(),
         ability_id.as_str(),
     )?;
-    if !final_can_start {
+    if let Some(reject_reason) = final_reject_reason {
         record_spell_prediction_result(
             ctx,
             caster,
@@ -1003,6 +1037,7 @@ pub(crate) fn cast_spell_for(
             predicted_cast_id.as_str(),
             client_action_seq,
             SPELL_PREDICTION_RESULT_REJECTED,
+            reject_reason,
             now,
         );
         return Ok(());
@@ -1015,13 +1050,14 @@ pub(crate) fn cast_spell_for(
             predicted_cast_id.as_str(),
             client_action_seq,
             SPELL_PREDICTION_RESULT_REJECTED,
+            ActionRejectReason::InsufficientResource,
             now,
         );
         return Ok(());
     }
     mark_harmful_targeted_spell_start(ctx, caster, spell_kind, target_id, now);
     clear_interruptible_defense_for_owner(ctx, caster);
-    let cast_succeeded = process_spell_cast(
+    let cast_reject_reason = process_spell_cast(
         ctx,
         &cast_state,
         caster,
@@ -1036,7 +1072,7 @@ pub(crate) fn cast_spell_for(
         action_instance_id.as_str(),
         ability_id.as_str(),
     )?;
-    if !cast_succeeded {
+    if let Some(reject_reason) = cast_reject_reason {
         record_spell_prediction_result(
             ctx,
             caster,
@@ -1044,6 +1080,7 @@ pub(crate) fn cast_spell_for(
             predicted_cast_id.as_str(),
             client_action_seq,
             SPELL_PREDICTION_RESULT_REJECTED,
+            reject_reason,
             now,
         );
         return Ok(());
@@ -1063,6 +1100,7 @@ pub(crate) fn cast_spell_for(
         predicted_cast_id.as_str(),
         client_action_seq,
         SPELL_PREDICTION_RESULT_ACCEPTED,
+        ActionRejectReason::None,
         now,
     );
     try_arm_auto_attack_for_spell_start(ctx, caster, spell_kind, target_id, now);
@@ -1464,6 +1502,7 @@ fn record_spell_prediction_result(
     predicted_cast_id: &str,
     client_action_seq: u64,
     result: &str,
+    reject_reason: ActionRejectReason,
     now: Timestamp,
 ) {
     if predicted_cast_id.is_empty()
@@ -1482,6 +1521,7 @@ fn record_spell_prediction_result(
             &token,
             action_instance_id,
             spell_predicted_action_result_kind(result),
+            reject_reason,
             now,
         );
     }
@@ -1738,6 +1778,7 @@ pub(super) fn cancel_active_cast_from_input(
             predicted_cast_id.as_str(),
             client_action_seq,
             SPELL_PREDICTION_RESULT_STALE_TOKEN,
+            ActionRejectReason::None,
             ctx.timestamp,
         );
         return Ok(());
@@ -1754,6 +1795,7 @@ pub(super) fn cancel_active_cast_from_input(
             predicted_cast_id.as_str(),
             client_action_seq,
             SPELL_PREDICTION_RESULT_CANCEL_TOO_LATE,
+            ActionRejectReason::None,
             ctx.timestamp,
         );
         return Ok(());
@@ -1770,6 +1812,7 @@ pub(super) fn cancel_active_cast_from_input(
             predicted_cast_id.as_str(),
             client_action_seq,
             SPELL_PREDICTION_RESULT_REJECTED,
+            ActionRejectReason::NotCancelable,
             ctx.timestamp,
         );
         return Ok(());
@@ -1805,6 +1848,7 @@ pub(super) fn cancel_active_cast_from_input(
             predicted_cast_id.as_str(),
             client_action_seq,
             SPELL_PREDICTION_RESULT_CANCELED,
+            ActionRejectReason::None,
             now,
         );
         delete_pending_cast_cancel(ctx, caster, predicted_cast_id.as_str());
@@ -1836,6 +1880,7 @@ pub(super) fn cancel_active_cast_from_input(
         predicted_cast_id.as_str(),
         client_action_seq,
         SPELL_PREDICTION_RESULT_CANCELED,
+        ActionRejectReason::None,
         now,
     );
     delete_pending_cast_cancel(ctx, caster, predicted_cast_id.as_str());
@@ -2048,6 +2093,14 @@ fn spell_can_be_cast_while_disabled(definition: &SpellDefinition) -> bool {
         && definition.targeting == super::manifest::SpellTargeting::Self_
 }
 
+fn reject_unless(can_start: bool, reason: ActionRejectReason) -> Option<ActionRejectReason> {
+    if can_start {
+        None
+    } else {
+        Some(reason)
+    }
+}
+
 fn process_spell_cast(
     ctx: &ReducerContext,
     state: &PlayerSnapshot,
@@ -2062,7 +2115,7 @@ fn process_spell_cast(
     charge_pct: f32,
     action_instance_id: &str,
     ability_id: &str,
-) -> Result<bool, String> {
+) -> Result<Option<ActionRejectReason>, String> {
     let definition = super::catalog::spell_definition(spell_kind)
         .expect("validated spell id must resolve to a definition");
 
@@ -2077,40 +2130,49 @@ fn process_spell_cast(
         if mode == CastExecutionMode::Execute {
             match definition.behavior {
                 SpellBehavior::ApplyStatus => {
-                    return cast_apply_status(
-                        ctx,
-                        caster,
-                        state,
-                        spell_kind,
-                        target_id,
-                        mode,
-                        action_instance_id,
-                        ability_id,
-                    );
+                    return Ok(reject_unless(
+                        cast_apply_status(
+                            ctx,
+                            caster,
+                            state,
+                            spell_kind,
+                            target_id,
+                            mode,
+                            action_instance_id,
+                            ability_id,
+                        )?,
+                        ActionRejectReason::InvalidTarget,
+                    ));
                 }
                 SpellBehavior::RemoveStatus => {
-                    return cast_remove_status(
-                        ctx,
-                        caster,
-                        state,
-                        spell_kind,
-                        target_id,
-                        mode,
-                        action_instance_id,
-                        ability_id,
-                    );
+                    return Ok(reject_unless(
+                        cast_remove_status(
+                            ctx,
+                            caster,
+                            state,
+                            spell_kind,
+                            target_id,
+                            mode,
+                            action_instance_id,
+                            ability_id,
+                        )?,
+                        ActionRejectReason::InvalidTarget,
+                    ));
                 }
                 SpellBehavior::ConsumeStatus => {
-                    return cast_consume_status(
-                        ctx,
-                        caster,
-                        state,
-                        spell_kind,
-                        target_id,
-                        mode,
-                        action_instance_id,
-                        ability_id,
-                    );
+                    return Ok(reject_unless(
+                        cast_consume_status(
+                            ctx,
+                            caster,
+                            state,
+                            spell_kind,
+                            target_id,
+                            mode,
+                            action_instance_id,
+                            ability_id,
+                        )?,
+                        ActionRejectReason::InvalidTarget,
+                    ));
                 }
                 SpellBehavior::Aura => {
                     cast_aura(ctx, caster, spell_kind, ability_id);
@@ -2129,18 +2191,27 @@ fn process_spell_cast(
             }
         }
         if definition.behavior == SpellBehavior::ApplyStatus {
-            return cast_apply_status(ctx, caster, state, spell_kind, target_id, mode, "", "");
+            return Ok(reject_unless(
+                cast_apply_status(ctx, caster, state, spell_kind, target_id, mode, "", "")?,
+                ActionRejectReason::InvalidTarget,
+            ));
         }
         if definition.behavior == SpellBehavior::RemoveStatus {
-            return cast_remove_status(ctx, caster, state, spell_kind, target_id, mode, "", "");
+            return Ok(reject_unless(
+                cast_remove_status(ctx, caster, state, spell_kind, target_id, mode, "", "")?,
+                ActionRejectReason::InvalidTarget,
+            ));
         }
         if definition.behavior == SpellBehavior::ConsumeStatus {
-            return cast_consume_status(ctx, caster, state, spell_kind, target_id, mode, "", "");
+            return Ok(reject_unless(
+                cast_consume_status(ctx, caster, state, spell_kind, target_id, mode, "", "")?,
+                ActionRejectReason::InvalidTarget,
+            ));
         }
         if definition.behavior == SpellBehavior::Aura {
-            return Ok(true);
+            return Ok(None);
         }
-        return Ok(true);
+        return Ok(None);
     }
 
     if definition.behavior == SpellBehavior::Projectile {
@@ -2155,7 +2226,7 @@ fn process_spell_cast(
                     ability_id,
                 )?;
             }
-            return Ok(true);
+            return Ok(None);
         }
 
         let Some(target) = resolve_target(ctx, state.player_id, target_id) else {
@@ -2165,7 +2236,7 @@ fn process_spell_cast(
                 "invalid_target",
                 &format!("mode={mode:?} target_id={target_id}"),
             );
-            return Ok(false);
+            return Ok(Some(ActionRejectReason::InvalidTarget));
         };
         if !target_audience_allows(ctx, caster, target.player_id, definition.target_audience) {
             log_cast_rejected(
@@ -2174,7 +2245,7 @@ fn process_spell_cast(
                 "invalid_target_audience",
                 &format!("mode={mode:?} target={}", &target.player_id.to_hex()[..8]),
             );
-            return Ok(false);
+            return Ok(Some(ActionRejectReason::InvalidTarget));
         }
         let target_is_in_facing_arc = if projectile_execute_uses_live_facing(mode, definition) {
             is_target_within_live_facing_arc(ctx, state, caster, &target, TARGET_FACING_ARC_RADIANS)
@@ -2196,7 +2267,7 @@ fn process_spell_cast(
                     state.facing_yaw
                 ),
             );
-            return Ok(false);
+            return Ok(Some(ActionRejectReason::NotFacingTarget));
         }
         if !has_line_of_sight(ctx, state, &target) {
             if let Some(blocker) = line_of_sight_blocker(ctx, state, &target) {
@@ -2239,7 +2310,7 @@ fn process_spell_cast(
                     ),
                 );
             }
-            return Ok(false);
+            return Ok(Some(ActionRejectReason::LineOfSightBlocked));
         }
         if mode == CastExecutionMode::Execute {
             spawn_tracking_projectile(
@@ -2252,12 +2323,12 @@ fn process_spell_cast(
                 ability_id,
             )?;
         }
-        return Ok(true);
+        return Ok(None);
     }
 
     if is_generic_area_spell(spell_kind, definition) {
         if resolve_generic_area_center(definition, state, aim_x, aim_y, aim_z).is_none() {
-            return Ok(false);
+            return Ok(Some(ActionRejectReason::InvalidInput));
         }
         if mode == CastExecutionMode::Execute {
             cast_generic_area(
@@ -2272,7 +2343,7 @@ fn process_spell_cast(
                 ability_id,
             )?;
         }
-        return Ok(true);
+        return Ok(None);
     }
 
     match BespokeRuntimeSpell::from_spell_id(spell_kind) {
@@ -2289,19 +2360,19 @@ fn process_spell_cast(
                     ability_id,
                 )?;
             }
-            Ok(true)
+            Ok(None)
         }
         Some(BespokeRuntimeSpell::InstantBeam) => {
             let Some(target) = resolve_target(ctx, state.player_id, target_id) else {
-                return Ok(false);
+                return Ok(Some(ActionRejectReason::InvalidTarget));
             };
             if !target_audience_allows(ctx, caster, target.player_id, definition.target_audience) {
-                return Ok(false);
+                return Ok(Some(ActionRejectReason::InvalidTarget));
             }
             if mode == CastExecutionMode::ValidateOnly
                 && !is_target_within_facing_arc(state, &target, TARGET_FACING_ARC_RADIANS)
             {
-                return Ok(false);
+                return Ok(Some(ActionRejectReason::NotFacingTarget));
             }
             if mode != CastExecutionMode::ValidateOnly
                 && !is_target_within_live_facing_arc(
@@ -2312,10 +2383,10 @@ fn process_spell_cast(
                     TARGET_FACING_ARC_RADIANS,
                 )
             {
-                return Ok(false);
+                return Ok(Some(ActionRejectReason::NotFacingTarget));
             }
             if mode != CastExecutionMode::Execute && !has_line_of_sight(ctx, state, &target) {
-                return Ok(false);
+                return Ok(Some(ActionRejectReason::LineOfSightBlocked));
             }
             if mode == CastExecutionMode::Execute {
                 spawn_instant_beam(
@@ -2329,14 +2400,14 @@ fn process_spell_cast(
                     ability_id,
                 )?;
             }
-            Ok(true)
+            Ok(None)
         }
         Some(BespokeRuntimeSpell::Electrocute) => {
             let Some(target) = resolve_target(ctx, state.player_id, target_id) else {
-                return Ok(false);
+                return Ok(Some(ActionRejectReason::InvalidTarget));
             };
             if !target_audience_allows(ctx, caster, target.player_id, definition.target_audience) {
-                return Ok(false);
+                return Ok(Some(ActionRejectReason::InvalidTarget));
             }
             if !is_target_within_live_facing_arc(
                 ctx,
@@ -2345,23 +2416,23 @@ fn process_spell_cast(
                 &target,
                 TARGET_FACING_ARC_RADIANS,
             ) {
-                return Ok(false);
+                return Ok(Some(ActionRejectReason::NotFacingTarget));
             }
             if !has_line_of_sight(ctx, state, &target) {
-                return Ok(false);
+                return Ok(Some(ActionRejectReason::LineOfSightBlocked));
             }
             if distance_to_target(state, &target) > definition.max_distance {
-                return Ok(false);
+                return Ok(Some(ActionRejectReason::OutOfRange));
             }
-            Ok(true)
+            Ok(None)
         }
         Some(BespokeRuntimeSpell::Negate) => {
             if mode == CastExecutionMode::Execute {
                 spawn_negate(ctx, caster, state, action_instance_id, ability_id)?;
             }
-            Ok(true)
+            Ok(None)
         }
-        None => Ok(false),
+        None => Ok(Some(ActionRejectReason::InvalidInput)),
     }
 }
 
@@ -3457,7 +3528,7 @@ fn finish_active_cast(
     let definition = super::catalog::spell_definition(kind)
         .expect("active cast kind must resolve to a spell definition");
     let charge_pct = compute_charge_pct(active_cast, now);
-    let cast_succeeded = process_spell_cast(
+    let cast_reject_reason = process_spell_cast(
         ctx,
         state,
         active_cast.caster,
@@ -3472,7 +3543,7 @@ fn finish_active_cast(
         active_cast.cast_id.as_str(),
         active_cast.ability_id.as_str(),
     )?;
-    if cast_succeeded {
+    if cast_reject_reason.is_none() {
         stamp_cooldown(ctx, active_cast.caster, kind, now);
         clear_active_cast(ctx, active_cast.caster);
     } else {

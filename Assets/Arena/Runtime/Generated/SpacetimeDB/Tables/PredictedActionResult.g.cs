@@ -76,6 +76,7 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Col<PredictedActionResult, string> PredictedActionId { get; }
         public global::SpacetimeDB.Col<PredictedActionResult, ulong> ClientActionSeq { get; }
         public global::SpacetimeDB.Col<PredictedActionResult, ActionResultKind> Result { get; }
+        public global::SpacetimeDB.Col<PredictedActionResult, ActionRejectReason> RejectReason { get; }
         public global::SpacetimeDB.Col<PredictedActionResult, SpacetimeDB.Timestamp> CreatedAt { get; }
         public global::SpacetimeDB.Col<PredictedActionResult, long> CreatedAtMicros { get; }
         public global::SpacetimeDB.Col<PredictedActionResult, long> ExpiresAtMicros { get; }
@@ -89,6 +90,7 @@ namespace SpacetimeDB.Types
             PredictedActionId = new global::SpacetimeDB.Col<PredictedActionResult, string>(tableName, "predicted_action_id");
             ClientActionSeq = new global::SpacetimeDB.Col<PredictedActionResult, ulong>(tableName, "client_action_seq");
             Result = new global::SpacetimeDB.Col<PredictedActionResult, ActionResultKind>(tableName, "result");
+            RejectReason = new global::SpacetimeDB.Col<PredictedActionResult, ActionRejectReason>(tableName, "reject_reason");
             CreatedAt = new global::SpacetimeDB.Col<PredictedActionResult, SpacetimeDB.Timestamp>(tableName, "created_at");
             CreatedAtMicros = new global::SpacetimeDB.Col<PredictedActionResult, long>(tableName, "created_at_micros");
             ExpiresAtMicros = new global::SpacetimeDB.Col<PredictedActionResult, long>(tableName, "expires_at_micros");

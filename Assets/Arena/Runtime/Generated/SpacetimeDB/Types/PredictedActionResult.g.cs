@@ -27,6 +27,8 @@ namespace SpacetimeDB.Types
         public ulong ClientActionSeq;
         [DataMember(Name = "result")]
         public ActionResultKind Result;
+        [DataMember(Name = "reject_reason")]
+        public ActionRejectReason RejectReason;
         [DataMember(Name = "created_at")]
         public SpacetimeDB.Timestamp CreatedAt;
         [DataMember(Name = "created_at_micros")]
@@ -42,6 +44,7 @@ namespace SpacetimeDB.Types
             string PredictedActionId,
             ulong ClientActionSeq,
             ActionResultKind Result,
+            ActionRejectReason RejectReason,
             SpacetimeDB.Timestamp CreatedAt,
             long CreatedAtMicros,
             long ExpiresAtMicros
@@ -54,6 +57,7 @@ namespace SpacetimeDB.Types
             this.PredictedActionId = PredictedActionId;
             this.ClientActionSeq = ClientActionSeq;
             this.Result = Result;
+            this.RejectReason = RejectReason;
             this.CreatedAt = CreatedAt;
             this.CreatedAtMicros = CreatedAtMicros;
             this.ExpiresAtMicros = ExpiresAtMicros;

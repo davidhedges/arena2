@@ -13,7 +13,7 @@ use spacetimedb::{reducer, table, Identity, ReducerContext, Table, Timestamp};
 use crate::action_ids::{AuthoredActionId, RuntimeActionId};
 use crate::action_prediction::{
     has_predicted_action_result, record_predicted_action_result, ActionPredictionToken,
-    ActionResultKind, PredictedActionFamily,
+    ActionRejectReason, ActionResultKind, PredictedActionFamily,
 };
 use crate::arena::player_world as _;
 use crate::arena::{
@@ -249,7 +249,7 @@ impl ResolvedMeleeAttackModifiers {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum MeleeAttackDispatch {
-    Rejected,
+    Rejected(ActionRejectReason),
     Queued,
     Started,
 }
@@ -2341,7 +2341,9 @@ pub(crate) fn perform_intrinsic_auto_attack_replacement_for(
             )
         })?;
     if gameplay.uses_global_cooldown && is_on_global_cooldown(ctx, caster, ctx.timestamp) {
-        return Ok(MeleeAttackDispatch::Rejected);
+        return Ok(MeleeAttackDispatch::Rejected(
+            ActionRejectReason::OnGlobalCooldown,
+        ));
     }
     let mut policy = MeleeExecutionPolicy::INTRINSIC_AUTO_ATTACK_REPLACEMENT;
     policy.grants_primary_resource_on_hit = replacement.grants_primary_resource_on_hit;
@@ -2628,7 +2630,9 @@ fn perform_melee_attack_for_internal(
             &caster.to_hex()[..8],
             authored_action_id.as_str()
         );
-        return Ok(MeleeAttackDispatch::Rejected);
+        return Ok(MeleeAttackDispatch::Rejected(
+            ActionRejectReason::InvalidInput,
+        ));
     };
     if !caster_state.alive {
         log::warn!(
@@ -2636,10 +2640,10 @@ fn perform_melee_attack_for_internal(
             &caster.to_hex()[..8],
             authored_action_id.as_str()
         );
-        return Ok(MeleeAttackDispatch::Rejected);
+        return Ok(MeleeAttackDispatch::Rejected(ActionRejectReason::Dead));
     }
     if has_active_disabling_status(ctx, caster, ctx.timestamp) {
-        return Ok(MeleeAttackDispatch::Rejected);
+        return Ok(MeleeAttackDispatch::Rejected(ActionRejectReason::Disabled));
     }
 
     let now = ctx.timestamp;
@@ -2660,7 +2664,9 @@ fn perform_melee_attack_for_internal(
                 runtime_action_id.as_str(),
                 resolved_cost.cost.amount
             );
-            return Ok(MeleeAttackDispatch::Rejected);
+            return Ok(MeleeAttackDispatch::Rejected(
+                ActionRejectReason::InsufficientResource,
+            ));
         }
     }
 
@@ -2678,21 +2684,27 @@ fn perform_melee_attack_for_internal(
         // for the current global cooldown to finish.
         let decision = combo_input_decision(&caster_state, combat_profile.as_str(), &strike, now);
         if matches!(decision, ComboInputDecision::Reject) {
-            return Ok(MeleeAttackDispatch::Rejected);
+            return Ok(MeleeAttackDispatch::Rejected(
+                ActionRejectReason::ComboWindow,
+            ));
         }
         if matches!(decision, ComboInputDecision::ExecuteNow)
             && gameplay.uses_global_cooldown
             && !is_combo_followup(&strike)
             && is_on_global_cooldown(ctx, caster, now)
         {
-            return Ok(MeleeAttackDispatch::Rejected);
+            return Ok(MeleeAttackDispatch::Rejected(
+                ActionRejectReason::OnGlobalCooldown,
+            ));
         }
         decision
     } else {
         // Once a combo follow-up was validly queued, release-time execution should
         // not be rejected for missing the original input window on a later tick.
         if !combo_release_allowed(&caster_state, combat_profile.as_str(), &strike) {
-            return Ok(MeleeAttackDispatch::Rejected);
+            return Ok(MeleeAttackDispatch::Rejected(
+                ActionRejectReason::ComboWindow,
+            ));
         }
         ComboInputDecision::ExecuteNow
     };
@@ -2707,7 +2719,9 @@ fn perform_melee_attack_for_internal(
             now,
         )
     {
-        return Ok(MeleeAttackDispatch::Rejected);
+        return Ok(MeleeAttackDispatch::Rejected(
+            ActionRejectReason::OnCooldown,
+        ));
     }
 
     let Some(caster_phys) = ctx.db.player_physics().identity().find(caster) else {
@@ -2716,7 +2730,9 @@ fn perform_melee_attack_for_internal(
             &caster.to_hex()[..8],
             authored_action_id.as_str()
         );
-        return Ok(MeleeAttackDispatch::Rejected);
+        return Ok(MeleeAttackDispatch::Rejected(
+            ActionRejectReason::InvalidInput,
+        ));
     };
     if !strike
         .aerial_execution_mode
@@ -2730,7 +2746,9 @@ fn perform_melee_attack_for_internal(
             strike.aerial_execution_mode.as_str(),
             caster_phys.grounded
         );
-        return Ok(MeleeAttackDispatch::Rejected);
+        return Ok(MeleeAttackDispatch::Rejected(
+            ActionRejectReason::AerialMismatch,
+        ));
     }
 
     let target_context = if gameplay.targeting.requires_target() {
@@ -2741,10 +2759,14 @@ fn perform_melee_attack_for_internal(
                 authored_action_id.as_str(),
                 target_id
             );
-            return Ok(MeleeAttackDispatch::Rejected);
+            return Ok(MeleeAttackDispatch::Rejected(
+                ActionRejectReason::InvalidTarget,
+            ));
         };
         if target == caster {
-            return Ok(MeleeAttackDispatch::Rejected);
+            return Ok(MeleeAttackDispatch::Rejected(
+                ActionRejectReason::InvalidTarget,
+            ));
         }
         let Some(target_snapshot) = player_snapshot_for(ctx, target) else {
             log::warn!(
@@ -2753,7 +2775,9 @@ fn perform_melee_attack_for_internal(
                 authored_action_id.as_str(),
                 &target.to_hex()[..8]
             );
-            return Ok(MeleeAttackDispatch::Rejected);
+            return Ok(MeleeAttackDispatch::Rejected(
+                ActionRejectReason::InvalidTarget,
+            ));
         };
         if !target_snapshot.alive {
             log::warn!(
@@ -2762,7 +2786,9 @@ fn perform_melee_attack_for_internal(
                 authored_action_id.as_str(),
                 &target.to_hex()[..8]
             );
-            return Ok(MeleeAttackDispatch::Rejected);
+            return Ok(MeleeAttackDispatch::Rejected(
+                ActionRejectReason::InvalidTarget,
+            ));
         }
         if !players_share_world_context(ctx, caster, target) {
             log::warn!(
@@ -2771,7 +2797,9 @@ fn perform_melee_attack_for_internal(
                 authored_action_id.as_str(),
                 &target.to_hex()[..8]
             );
-            return Ok(MeleeAttackDispatch::Rejected);
+            return Ok(MeleeAttackDispatch::Rejected(
+                ActionRejectReason::InvalidTarget,
+            ));
         }
         if !can_harm(ctx, caster, target) {
             log::warn!(
@@ -2781,7 +2809,9 @@ fn perform_melee_attack_for_internal(
                 &target.to_hex()[..8],
                 combat_relation(ctx, caster, target)
             );
-            return Ok(MeleeAttackDispatch::Rejected);
+            return Ok(MeleeAttackDispatch::Rejected(
+                ActionRejectReason::InvalidTarget,
+            ));
         }
         if !gameplay
             .airborne_targeting_mode
@@ -2796,7 +2826,9 @@ fn perform_melee_attack_for_internal(
                 caster_phys.grounded,
                 target_snapshot.grounded
             );
-            return Ok(MeleeAttackDispatch::Rejected);
+            return Ok(MeleeAttackDispatch::Rejected(
+                ActionRejectReason::AerialMismatch,
+            ));
         }
 
         let dx = target_snapshot.pos_x - caster_phys.pos_x;
@@ -2819,7 +2851,9 @@ fn perform_melee_attack_for_internal(
                 target_snapshot.pos_z,
                 caster_phys.yaw
             );
-            return Ok(MeleeAttackDispatch::Rejected);
+            return Ok(MeleeAttackDispatch::Rejected(
+                ActionRejectReason::NotFacingTarget,
+            ));
         }
         let horiz_dist = (dx * dx + dz * dz).sqrt();
         if horiz_dist > effective_range + target_snapshot.hit_radius {
@@ -2833,7 +2867,9 @@ fn perform_melee_attack_for_internal(
                 target_snapshot.hit_radius,
                 gap_close.as_ref().map(|row| row.ability_id.as_str()).unwrap_or("")
             );
-            return Ok(MeleeAttackDispatch::Rejected);
+            return Ok(MeleeAttackDispatch::Rejected(
+                ActionRejectReason::OutOfRange,
+            ));
         }
         if gameplay.minimum_range > 0.0 {
             let minimum_allowed_distance = gameplay.minimum_range + target_snapshot.hit_radius;
@@ -2848,7 +2884,9 @@ fn perform_melee_attack_for_internal(
                     gameplay.minimum_range,
                     target_snapshot.hit_radius
                 );
-                return Ok(MeleeAttackDispatch::Rejected);
+                return Ok(MeleeAttackDispatch::Rejected(
+                    ActionRejectReason::OutOfRange,
+                ));
             }
         }
 
@@ -2865,14 +2903,20 @@ fn perform_melee_attack_for_internal(
                 policy.source_label(),
                 strike.id
             );
-            return Ok(MeleeAttackDispatch::Rejected);
+            return Ok(MeleeAttackDispatch::Rejected(
+                ActionRejectReason::InvalidTarget,
+            ));
         };
         if projectile.requires_initial_line_of_sight {
             let Some(caster_snapshot) = player_snapshot_for(ctx, caster) else {
-                return Ok(MeleeAttackDispatch::Rejected);
+                return Ok(MeleeAttackDispatch::Rejected(
+                    ActionRejectReason::InvalidInput,
+                ));
             };
             let Some(target_snapshot) = player_snapshot_for(ctx, target_context.0) else {
-                return Ok(MeleeAttackDispatch::Rejected);
+                return Ok(MeleeAttackDispatch::Rejected(
+                    ActionRejectReason::InvalidTarget,
+                ));
             };
             if !has_line_of_sight(ctx, &caster_snapshot, &target_snapshot) {
                 log::info!(
@@ -2882,7 +2926,9 @@ fn perform_melee_attack_for_internal(
                     strike.id,
                     short_identity(target_context.0)
                 );
-                return Ok(MeleeAttackDispatch::Rejected);
+                return Ok(MeleeAttackDispatch::Rejected(
+                    ActionRejectReason::LineOfSightBlocked,
+                ));
             }
         }
     }
@@ -2892,7 +2938,9 @@ fn perform_melee_attack_for_internal(
     if allow_queue {
         if let ComboInputDecision::QueueUntil(execute_not_before) = combo_decision {
             let Some(auto_attack_target) = auto_attack_target else {
-                return Ok(MeleeAttackDispatch::Rejected);
+                return Ok(MeleeAttackDispatch::Rejected(
+                    ActionRejectReason::InvalidTarget,
+                ));
             };
             arm_auto_attack_for_melee_input_if_needed(
                 ctx,
@@ -2917,7 +2965,9 @@ fn perform_melee_attack_for_internal(
     let mut gap_close_failure: Option<GapCloseResolveFailure> = None;
     let resolved_gap_close = if let Some(gap_close) = gap_close.as_ref() {
         let Some((_, target_snapshot, _, _, _)) = target_context.as_ref() else {
-            return Ok(MeleeAttackDispatch::Rejected);
+            return Ok(MeleeAttackDispatch::Rejected(
+                ActionRejectReason::InvalidTarget,
+            ));
         };
         match resolve_melee_gap_close(
             ctx,
@@ -2971,7 +3021,9 @@ fn perform_melee_attack_for_internal(
                 failure_detail
             );
         }
-        return Ok(MeleeAttackDispatch::Rejected);
+        return Ok(MeleeAttackDispatch::Rejected(
+            ActionRejectReason::GapCloseBlocked,
+        ));
     }
 
     if let Some(resolved_cost) = action_resource_cost.as_ref() {
@@ -2984,7 +3036,9 @@ fn perform_melee_attack_for_internal(
                 runtime_action_id.as_str(),
                 resolved_cost.cost.amount
             );
-            return Ok(MeleeAttackDispatch::Rejected);
+            return Ok(MeleeAttackDispatch::Rejected(
+                ActionRejectReason::InsufficientResource,
+            ));
         }
         log::info!(
             "[MELEE_RESOURCE] owner={} source={} strike={} slot={} spent cost={:.3}",
@@ -3265,6 +3319,7 @@ fn perform_melee_attack_for_internal(
             token,
             spell_id.as_str(),
             ActionResultKind::Accepted,
+            ActionRejectReason::None,
             now,
         );
     }
@@ -3345,7 +3400,7 @@ pub fn melee_attack(
         cast_yaw,
         token.clone(),
     ) {
-        Ok(MeleeAttackDispatch::Rejected) | Err(_) => {
+        Ok(MeleeAttackDispatch::Rejected(reason)) => {
             record_predicted_action_result(
                 ctx,
                 ctx.sender(),
@@ -3353,6 +3408,20 @@ pub fn melee_attack(
                 &token,
                 "",
                 ActionResultKind::Rejected,
+                reason,
+                ctx.timestamp,
+            );
+            Ok(())
+        }
+        Err(_) => {
+            record_predicted_action_result(
+                ctx,
+                ctx.sender(),
+                PredictedActionFamily::Melee,
+                &token,
+                "",
+                ActionResultKind::Rejected,
+                ActionRejectReason::Unspecified,
                 ctx.timestamp,
             );
             Ok(())

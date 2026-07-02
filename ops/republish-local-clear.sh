@@ -24,7 +24,7 @@ if ! command -v spacetime >/dev/null 2>&1; then
 fi
 
 if [ "$ARENA_PROJECTILE_LOAD_HARNESS" = "1" ]; then
-    echo "Building server WASM with projectile_load_harness to match checked-in generated bindings..."
+    echo "Building server WASM with projectile_load_harness..."
     cargo build \
         --manifest-path "$MODULE_PATH/Cargo.toml" \
         --target wasm32-unknown-unknown \
@@ -33,22 +33,31 @@ if [ "$ARENA_PROJECTILE_LOAD_HARNESS" = "1" ]; then
 
     echo "Publishing '$ARENA_DATABASE' with cleared data..."
     spacetime publish "${publish_args[@]}" --bin-path "$WASM_PATH" "$ARENA_DATABASE"
-
-    if [ "$ARENA_GENERATE_BINDINGS" = "1" ]; then
-        echo "Regenerating Unity bindings from published WASM shape..."
-        spacetime generate --yes --lang csharp --bin-path "$WASM_PATH" --out-dir "$GENERATED_OUT"
-    fi
 else
     echo "Building server WASM..."
     spacetime build -p "$MODULE_PATH"
 
     echo "Publishing '$ARENA_DATABASE' with cleared data..."
     spacetime publish "${publish_args[@]}" -p "$MODULE_PATH" "$ARENA_DATABASE"
+fi
 
-    if [ "$ARENA_GENERATE_BINDINGS" = "1" ]; then
-        echo "Regenerating Unity bindings from module path..."
-        spacetime generate --yes --lang csharp --module-path "$MODULE_PATH" --out-dir "$GENERATED_OUT"
+if [ "$ARENA_GENERATE_BINDINGS" = "1" ]; then
+    # Canonical regen mode (netcode audit R5): bindings are ALWAYS generated
+    # from the harness-featured wasm, regardless of publish mode, so both
+    # publish modes produce the identical checked-in shape. The harness
+    # reducers are unused-but-harmless against a default-features module.
+    # This build must run after `spacetime publish -p`, which rewrites
+    # $WASM_PATH with default features.
+    if [ "$ARENA_PROJECTILE_LOAD_HARNESS" != "1" ]; then
+        echo "Building harness-featured WASM for canonical binding generation..."
+        cargo build \
+            --manifest-path "$MODULE_PATH/Cargo.toml" \
+            --target wasm32-unknown-unknown \
+            --release \
+            --features projectile_load_harness
     fi
+    echo "Regenerating Unity bindings from harness-featured WASM (canonical shape)..."
+    spacetime generate --yes --lang csharp --bin-path "$WASM_PATH" --out-dir "$GENERATED_OUT"
 fi
 
 if [ "$ARENA_VERIFY_DOTNET" = "1" ] && [ -f "$ROOT_DIR/Assembly-CSharp.csproj" ]; then

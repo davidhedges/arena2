@@ -550,9 +550,9 @@ namespace Arena.Input
                 _pendingPredictedMeleeByToken.Remove(tokenKey);
                 if (_predictionLedgersByToken.TryGetValue(tokenKey, out var pendingLedger))
                 {
-                    LocalCombatState.Instance.RollbackPrediction(pendingLedger.ledger);
+                    LocalCombatState.Instance.RollbackPrediction(pendingLedger.ledger, row.RejectReason);
                     ActionBarTrace.Trace(
-                        $"rolled back predicted melee state for {pendingLedger.ledger.ActionKind} after {row.Result}");
+                        $"rolled back predicted melee state for {pendingLedger.ledger.ActionKind} after {row.Result} reason={row.RejectReason}");
                     _predictionLedgersByToken.Remove(tokenKey);
                 }
             }

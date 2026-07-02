@@ -16,6 +16,13 @@ referenced but not repeated.
   Editor tests: `Assets/Arena/Tests/Editor/PredictionRollbackLedgerTests.cs`
   (run via Unity Test Runner). Step 4 (denial cue) is a minimal hook only:
   static `LocalCombatState.PredictionRejected` event — no HUD surface yet.
+  Update (2026-07-02, netcode audit R2): the hook now carries the server's
+  machine-readable denial reason —
+  `PredictionRejected(actionKind, ActionRejectReason)` fed from the new
+  `reject_reason` field on `PredictedActionResult` (cooldown/GCD/resource/
+  target/range/facing/LOS/etc.), rollback traces log it, and
+  `NetcodeDebugOverlay` shows `lastReject=family:reason`. An HUD denial
+  surface can now render honest text without any client-side validation.
 - **F2 sub-slice (a) — implemented.** `NetcodeDebugOverlay` now shows remote
   hard-snap count, interp/extrap sample ratio, last/max remote position error
   (aggregated over remote players), predicted-action results by kind, and

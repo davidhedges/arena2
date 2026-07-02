@@ -268,6 +268,8 @@ namespace Arena.Debugging
             var builder = new System.Text.StringBuilder("Predicted results:");
             foreach (var pair in resultsByKind)
                 builder.Append($" {pair.Key}={pair.Value}");
+            if (NetcodeReceiveCounters.LastRejection.Length > 0)
+                builder.Append($" lastReject={NetcodeReceiveCounters.LastRejection}");
 
             y += 8;
             GUI.Label(new Rect(x, y, 900, lineHeight), builder.ToString(), _style);

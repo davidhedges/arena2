@@ -157,7 +157,8 @@ namespace Arena.EditModeTests
         {
             MethodInfo method = RequireType(CombatStateType).GetMethod("RollbackPrediction")
                 ?? throw new InvalidOperationException("RollbackPrediction missing");
-            method.Invoke(_combat, new[] { ledger });
+            object rejectReason = Enum.Parse(method.GetParameters()[1].ParameterType, "Unspecified");
+            method.Invoke(_combat, new[] { ledger, rejectReason });
         }
 
         private bool IsGcdActive(long nowMs)

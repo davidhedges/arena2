@@ -4,7 +4,8 @@ use spacetimedb::{reducer, table, Identity, ReducerContext, Table, Timestamp};
 
 use crate::action_prediction::{
     has_predicted_action_result, optional_action_prediction_token, record_predicted_action_result,
-    ActionPredictionToken, ActionResultKind, OptionalActionPredictionToken, PredictedActionFamily,
+    ActionPredictionToken, ActionRejectReason, ActionResultKind, OptionalActionPredictionToken,
+    PredictedActionFamily,
 };
 use crate::action_snapshot::{
     validate_authoritative_action_snapshot, ActionSnapshotRequest, MAX_ACTION_INPUT_TICK_DRIFT,
@@ -145,6 +146,7 @@ fn record_optional_movement_prediction_result(
     token: Option<&ActionPredictionToken>,
     action_instance_id: &str,
     result: ActionResultKind,
+    reject_reason: ActionRejectReason,
     now: Timestamp,
 ) {
     let Some(token) = token else {
@@ -158,6 +160,7 @@ fn record_optional_movement_prediction_result(
         token,
         action_instance_id,
         result,
+        reject_reason,
         now,
     );
 }
@@ -209,6 +212,7 @@ pub fn start_dodge(
             prediction_token.token.as_ref(),
             "",
             ActionResultKind::Rejected,
+            ActionRejectReason::StaleSnapshot,
             now,
         );
         return Ok(());
@@ -221,6 +225,7 @@ pub fn start_dodge(
             prediction_token.token.as_ref(),
             "",
             ActionResultKind::Rejected,
+            ActionRejectReason::Disabled,
             now,
         );
         return Ok(());
@@ -233,6 +238,7 @@ pub fn start_dodge(
             prediction_token.token.as_ref(),
             "",
             ActionResultKind::Rejected,
+            ActionRejectReason::Busy,
             now,
         );
         return Ok(());
@@ -246,6 +252,7 @@ pub fn start_dodge(
             prediction_token.token.as_ref(),
             "",
             ActionResultKind::Rejected,
+            ActionRejectReason::InvalidInput,
             now,
         );
         return Ok(());
@@ -257,6 +264,7 @@ pub fn start_dodge(
             prediction_token.token.as_ref(),
             "",
             ActionResultKind::Rejected,
+            ActionRejectReason::InvalidInput,
             now,
         );
         return Ok(());
@@ -311,6 +319,7 @@ pub fn start_dodge(
             prediction_token.token.as_ref(),
             "",
             ActionResultKind::Rejected,
+            ActionRejectReason::NoCharges,
             now,
         );
         return Ok(());
@@ -359,6 +368,7 @@ pub fn start_dodge(
         prediction_token.token.as_ref(),
         action_id.as_str(),
         ActionResultKind::Accepted,
+        ActionRejectReason::None,
         now,
     );
 

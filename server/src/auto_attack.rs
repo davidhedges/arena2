@@ -501,7 +501,7 @@ pub(crate) fn tick_auto_attacks(ctx: &ReducerContext, now: Timestamp) {
                 );
                 schedule_auto_attack_from_swing_start(ctx, row.owner, row.target, now);
             }
-            Ok(MeleeAttackDispatch::Queued | MeleeAttackDispatch::Rejected) => {
+            Ok(MeleeAttackDispatch::Queued | MeleeAttackDispatch::Rejected(_)) => {
                 log::info!(
                     "[AUTO_ATTACK] owner={} target={} result=deferred strike={}",
                     short_identity(row.owner),

@@ -341,11 +341,13 @@ namespace Arena.Simulation
         // ---------------------------------------------------------------
 
         /// <summary>
-        /// Denial cue hook: fired with the action kind whenever a predicted
-        /// action is rolled back after a server rejection. HUD/action-bar
-        /// surfaces subscribe for an icon flash or sound.
+        /// Denial cue hook: fired with the action kind and the server's
+        /// machine-readable rejection reason (netcode audit R2) whenever a
+        /// predicted action is rolled back after a server rejection.
+        /// HUD/action-bar surfaces subscribe for an icon flash, sound, or an
+        /// honest denial toast ("insufficient stamina" vs "on cooldown").
         /// </summary>
-        public static event Action<string>? PredictionRejected;
+        public static event Action<string, ActionRejectReason>? PredictionRejected;
 
         /// <summary>
         /// Applies the standard press-time predictions (GCD, per-action
@@ -409,7 +411,7 @@ namespace Arena.Simulation
         /// legitimate prediction) has overwritten the predicted value since the
         /// press, that state is left untouched. Never mutates authoritative rows.
         /// </summary>
-        public void RollbackPrediction(in PredictedActionLedger ledger)
+        public void RollbackPrediction(in PredictedActionLedger ledger, ActionRejectReason rejectReason)
         {
             if (ledger.CooldownPredicted
                 && _spellCds.TryGetValue(ledger.ActionKind, out var current)
@@ -432,7 +434,7 @@ namespace Arena.Simulation
 
             ReleasePredictedPrimaryResource(ledger.ReservedResourceKind, ledger.ReservedResourceCost);
 
-            PredictionRejected?.Invoke(ledger.ActionKind);
+            PredictionRejected?.Invoke(ledger.ActionKind, rejectReason);
         }
 
         // ---------------------------------------------------------------

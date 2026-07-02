@@ -557,7 +557,7 @@ namespace Arena.Input
             if (cost <= 0.001f)
                 return true;
 
-            string requiredKind = "MANA";
+            string requiredKind = SpellResourceKind(conn, entity, spellId);
             if (!string.Equals(requiredKind, entity.PrimaryResourceKind, System.StringComparison.OrdinalIgnoreCase))
             {
                 ActionBarTrace.Trace(
@@ -592,15 +592,19 @@ namespace Arena.Input
             if (spellDef == null)
                 return;
 
-            // Spell costs are hard-coded to MANA today (matches
-            // HasResourceForSpell); the reservation no-ops for other kinds.
+            // Resource kind comes from the authored AbilityCatalog row like
+            // melee (netcode audit R2b); the server resolves the same catalog
+            // kind in resolve_ability_action_resource_cost_amount.
+            string resourceKind = localPlayer != null
+                ? SpellResourceKind(conn, localPlayer, spellId)
+                : "MANA";
             PredictedActionLedger ledger = LocalCombatState.Instance.PredictActionStart(
                 localPlayer,
                 spellId,
                 (long)spellDef.CooldownMs,
                 spellDef.UsesGlobalCooldown,
                 GameplayTuning.ResolveDefaultGlobalCooldownDurationMs(conn),
-                "MANA",
+                resourceKind,
                 SpellPrimaryResourceCost(spellDef),
                 nowMs);
             if (token.IsPredicted)
@@ -704,7 +708,7 @@ namespace Arena.Input
                 return;
 
             ActionBarTrace.Trace(
-                $"spell server result {row.Result} predicted={row.PredictedActionId}:{row.ClientActionSeq} action={row.ActionInstanceId}");
+                $"spell server result {row.Result} reason={row.RejectReason} predicted={row.PredictedActionId}:{row.ClientActionSeq} action={row.ActionInstanceId}");
 
             string tokenKey = SpellTokenKey(row.PredictedActionId, row.ClientActionSeq);
             if (row.Result == ActionResultKind.Accepted)
@@ -724,9 +728,9 @@ namespace Arena.Input
             if ((row.Result == ActionResultKind.Rejected || row.Result == ActionResultKind.StaleToken)
                 && _predictionLedgersByToken.TryGetValue(tokenKey, out var pendingLedger))
             {
-                LocalCombatState.Instance.RollbackPrediction(pendingLedger.ledger);
+                LocalCombatState.Instance.RollbackPrediction(pendingLedger.ledger, row.RejectReason);
                 ActionBarTrace.Trace(
-                    $"rolled back predicted spell state for {pendingLedger.ledger.ActionKind} after {row.Result}");
+                    $"rolled back predicted spell state for {pendingLedger.ledger.ActionKind} after {row.Result} reason={row.RejectReason}");
             }
 
             _predictionLedgersByToken.Remove(tokenKey);

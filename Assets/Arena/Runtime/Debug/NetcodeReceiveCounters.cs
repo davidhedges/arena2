@@ -25,6 +25,7 @@ namespace Arena.Debugging
         public static long TotalRows => _totalRows;
         public static IReadOnlyDictionary<string, long> TotalRowsByTable => _totalRowsByTable;
         public static IReadOnlyDictionary<ActionResultKind, long> PredictedResultsByKind => _predictedResultsByKind;
+        public static string LastRejection { get; private set; } = string.Empty;
 
         public static void Record(string table)
         {
@@ -39,6 +40,8 @@ namespace Arena.Debugging
         {
             _predictedResultsByKind.TryGetValue(row.Result, out long count);
             _predictedResultsByKind[row.Result] = count + 1;
+            if (row.Result == ActionResultKind.Rejected)
+                LastRejection = $"{row.Family}:{row.RejectReason}";
         }
 
         public static void ResetForNetworkReconnect()
@@ -47,6 +50,7 @@ namespace Arena.Debugging
             _windowRowsByTable.Clear();
             _lastWindowRatesByTable.Clear();
             _predictedResultsByKind.Clear();
+            LastRejection = string.Empty;
             _windowStartedAtRealtime = -1.0f;
             _totalRows = 0;
         }

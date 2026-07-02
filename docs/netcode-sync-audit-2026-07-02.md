@@ -28,22 +28,55 @@ Each recommendation is scoped as a bounded implementation slice.
   counters (`NetcodeReceiveCounters`, bound in `NetworkCallbackBinder`) with
   rows/sec + predicted-result-by-kind lines in `NetcodeDebugOverlay`.
   Not yet done: initial-sync row counts per subscription query.
-- **R2, R4, R5 — not started.**
+- **R2 — implemented (2026-07-02).** Schema: `ActionRejectReason` enum (20
+  variants: cooldown/GCD, resource, target/range/facing/LOS, combo, aerial,
+  snapshot, busy/dead/disabled, charges, gap-close, cancel, unspecified) and a
+  `reject_reason` field on `PredictedActionResult`
+  (`server/src/action_prediction.rs`). Every reject site populates it:
+  `MeleeAttackDispatch::Rejected` now carries the reason (29 sites in
+  `melee.rs`; unmapped `Err` paths record `Unspecified`),
+  `record_spell_prediction_result` takes the reason (38 sites in
+  `spells/casting.rs`; `process_spell_cast` returns
+  `Option<ActionRejectReason>` so target/facing/LOS/range failures survive to
+  the row), and the defense/movement helpers thread it (7 + 6 sites).
+  Client: rollback paths log the reason (`ActionBarTrace`),
+  `LocalCombatState.PredictionRejected` now fires with
+  `(actionKind, ActionRejectReason)` as the HUD toast hook (still no HUD
+  surface), and `NetcodeDebugOverlay` shows `lastReject=family:reason`.
+  (b) Spell resource-kind unified with the melee catalog path on both sides:
+  `resources.rs` dropped the SPELL→MANA carve-out (spells resolve
+  `effective_resource_kind_for_ability` like melee — all 45 authored spell
+  abilities say MANA today, so no behavior change), and
+  `SpellInputHandler.HasResourceForSpell`/`RecordPredictedSpellStart` use the
+  catalog-driven `SpellResourceKind` instead of hard-coded `"MANA"`. The only
+  remaining MANA literal is the server fallback for off-bar casts the client
+  never predicts (commented in `casting.rs`). Pre-checks remain advisory:
+  no new client-side denial capability was added.
+- **R4 — not started. R5 — regen-mode pin done; version stamp not started.**
 - **R5 correction (2026-07-02):** the "no live drift today" finding missed a
   regen-mode split. The projectile-load-harness surface is feature-gated
   (`#[cfg(feature = "projectile_load_harness")]`), and the two regen paths
-  disagree about it: the canonical `--module-path` generate builds default
-  features (harness **excluded**), while `ops/republish-local-clear.sh` —
-  the default local workflow, `ARENA_PROJECTILE_LOAD_HARNESS=1` — builds with
+  disagreed about it: the old canonical `--module-path` generate builds
+  default features (harness **excluded**), while `ops/republish-local-clear.sh`
+  — the default local workflow, `ARENA_PROJECTILE_LOAD_HARNESS=1` — builds with
   the feature and generates from that wasm via `--bin-path` (its comment even
-  assumes the checked-in bindings include the harness; they did not). A
+  assumed the checked-in bindings include the harness; they did not). A
   harness-mode regen on 2026-07-02 added the four missing files
   (`Reducers/Run|CleanupProjectileLoadHarness`,
   `Types/ProjectileLoadHarnessActor|Run`) plus their two dispatch lines in
-  `SpacetimeDBClient.g.cs`, and nothing else; they are now committed as the
+  `SpacetimeDBClient.g.cs`, and nothing else; they are committed as the
   canonical shape (matching the local publish default; the extra reducers are
-  unused-but-harmless against a default-features prod module). R5's guard
-  should pin ONE regen mode so the two paths stop producing different output.
+  unused-but-harmless against a default-features prod module).
+  **Pin (2026-07-02): done.** `ops/republish-local-clear.sh` now always
+  generates from the harness-featured wasm regardless of publish mode (built
+  after `spacetime publish -p`, which rewrites the wasm with default
+  features), and `docs/project-structure.md` documents the canonical two-step
+  command (cargo build `--features projectile_load_harness` +
+  `spacetime generate --bin-path`) with an explicit warning that
+  `--module-path` regen is non-canonical. The R2 regen used this mode; diff
+  contained exactly the expected additions (`Types/ActionRejectReason.g.cs`
+  plus the `RejectReason` field) and zero harness churn. The `ContractVersion`
+  stamp table and shared-JSON sync guard remain open.
 
 ## Executive Summary
 
@@ -333,10 +366,12 @@ For every slice, verify:
 - [ ] `cargo test` passes in `server/` and the module builds
       (`spacetime build` / wasm target).
 - [ ] If any `#[table]` or `#[reducer]` surface changed: bindings regenerated with
-      exactly
-      `spacetime generate --yes --lang csharp --module-path server --out-dir Assets/Arena/Runtime/Generated/SpacetimeDB`
-      from the repo root, committed in the same commit; no hand edits under
-      `Runtime/Generated/`.
+      exactly the canonical harness-featured regen from the repo root
+      (`cargo build --manifest-path server/Cargo.toml --target wasm32-unknown-unknown --release --features projectile_load_harness`
+      then
+      `spacetime generate --yes --lang csharp --bin-path server/target/wasm32-unknown-unknown/release/arena.wasm --out-dir Assets/Arena/Runtime/Generated/SpacetimeDB`
+      — see `docs/project-structure.md`; never `--module-path`), committed in
+      the same commit; no hand edits under `Runtime/Generated/`.
 - [ ] One source of truth preserved: no new client-side check that can *deny* an
       action on its own; client checks are advisory; server reducers remain sole
       validators. No parallel deny/sync tables.

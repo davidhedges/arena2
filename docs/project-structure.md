@@ -67,8 +67,11 @@ If first-party gameplay needs a vendor asset, prefer making a small authored pre
 
 ## Generated Code
 
-`Assets/Arena/Runtime/Generated/SpacetimeDB/` contains generated SpacetimeDB bindings. Do not hand-edit it unless a task explicitly calls out a known generated-code workaround. After server schema changes, regenerate from the repo root:
+`Assets/Arena/Runtime/Generated/SpacetimeDB/` contains generated SpacetimeDB bindings. Do not hand-edit it unless a task explicitly calls out a known generated-code workaround. The canonical shape includes the `projectile_load_harness` feature surface (netcode audit R5): bindings are always generated from a harness-featured wasm so the two regen paths (manual and `ops/republish-local-clear.sh`) produce identical output. The extra harness reducers are unused-but-harmless against a default-features module. After server schema changes, regenerate from the repo root:
 
 ```bash
-spacetime generate --yes --lang csharp --module-path server --out-dir Assets/Arena/Runtime/Generated/SpacetimeDB
+cargo build --manifest-path server/Cargo.toml --target wasm32-unknown-unknown --release --features projectile_load_harness
+spacetime generate --yes --lang csharp --bin-path server/target/wasm32-unknown-unknown/release/arena.wasm --out-dir Assets/Arena/Runtime/Generated/SpacetimeDB
 ```
+
+Do not generate with `--module-path server` — that builds default features and drops the harness surface from the generated output.
