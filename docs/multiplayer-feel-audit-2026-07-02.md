@@ -15,25 +15,40 @@ referenced but not repeated.
   cooldown + resource), and the F5 slice-2 contact-cue check (melee vs
   strafing target under Profile A — count contact-cue-but-no-damage per
   100 swings via the overlay falsePos counter; tune the cue down or flip
-  its flag off on that number). Recipe: `docs/latency-testing.md`. Run
+  its flag off on that number), the F1 step-4 denial-toast check (force a
+  rejection under Profile A — e.g. press at 0 resource or during a
+  server-side stagger — and confirm the toast above the action bar shows
+  the server's reason text, mashing never stacks it, and it dismisses
+  within ~1.5 s), and the F2 item-4 indicator checks (kill the local
+  server → disconnect banner appears and its Reconnect button restores
+  the session; dot reads Good on local dev, Degraded under Profile A,
+  Bad under Profile B). Recipe: `docs/latency-testing.md`. Run
   these before tuning anything that depends on them (e.g. F4 adaptive
   delay).
-- **F1 steps 1–3 — implemented.** `PredictedActionLedger` +
+- **F1 — implemented (all four steps).** `PredictedActionLedger` +
   `LocalCombatState.PredictActionStart` / `RollbackPrediction` /
   `ReleasePredictedPrimaryResource`; melee and spell press paths route their
   GCD/cooldown/resource predictions through the ledger, and
   `Rejected`/`StaleToken` results roll everything back (value-guarded so
   authoritative rows or later legitimate predictions are never clobbered).
   Editor tests: `Assets/Arena/Tests/Editor/PredictionRollbackLedgerTests.cs`
-  (run via Unity Test Runner). Step 4 (denial cue) is a minimal hook only:
-  static `LocalCombatState.PredictionRejected` event — no HUD surface yet.
-  Update (2026-07-02, netcode audit R2): the hook now carries the server's
-  machine-readable denial reason —
+  (run via Unity Test Runner). Step 4 (denial cue) is built on the static
+  `LocalCombatState.PredictionRejected` hook, which (2026-07-02, netcode
+  audit R2) carries the server's machine-readable denial reason —
   `PredictionRejected(actionKind, ActionRejectReason)` fed from the new
   `reject_reason` field on `PredictedActionResult` (cooldown/GCD/resource/
-  target/range/facing/LOS/etc.), rollback traces log it, and
-  `NetcodeDebugOverlay` shows `lastReject=family:reason`. An HUD denial
-  surface can now render honest text without any client-side validation.
+  target/range/facing/LOS/etc.); rollback traces log it, and
+  `NetcodeDebugOverlay` shows `lastReject=family:reason`. The HUD surface
+  (2026-07-02): `Assets/Arena/Runtime/UI/ActionDenialToastHud.cs` — a small
+  uGUI toast just above the action bar that renders `ActionDenialText.For`
+  (every `ActionRejectReason` variant mapped to short honest text, zero
+  client-side validation), single-slot with a 0.25 s rearm so a mashed
+  rejected button never stacks toasts, auto-dismissed at 1.4 s with a fade
+  tail; no sound, no shake. Bookkeeping is the pure, time-injected
+  `ActionDenialToastModel`. Editor tests:
+  `Assets/Arena/Tests/Editor/ConnectionFeedbackHudTests.cs` (full variant
+  coverage of the reason→text map; rate-limit/expiry semantics). Still to
+  do by hand: the Profile A rejection check in the tabled note above.
 - **F2 sub-slice (a) — implemented.** `NetcodeDebugOverlay` now shows remote
   hard-snap count, interp/extrap sample ratio, last/max remote position error
   (aggregated over remote players), predicted-action results by kind, and
@@ -62,9 +77,30 @@ referenced but not repeated.
   and what to expect in the overlay. Plus the optional dev-only
   `Arena.Debugging.NetworkCallbackDelay` (default off,
   `ARENA_CALLBACK_DELAY_MS`): FIFO deferral of binder-routed row callbacks by
-  a configurable ms — presentation-side only; caveats in the doc. Not done
-  from the F2 contract: connection-quality dot / disconnect banner
-  (contract item 4).
+  a configurable ms — presentation-side only; caveats in the doc.
+- **F2 contract item 4 — implemented.**
+  `Assets/Arena/Runtime/UI/ConnectionStatusHud.cs`: an always-on
+  connection-quality dot (bottom-right) plus a disconnect banner whose
+  Reconnect button promotes the environment overlay's existing
+  `NetworkManager.ReconnectToSelectedEnvironment()` to production UI.
+  Driven only by data the client already collects — `ArenaServerClock`
+  precise-RTT p50/p95 (`TryGetRttStats`) and row-receipt staleness derived
+  by watching `NetcodeReceiveCounters.TotalRows` stop changing (the
+  counters expose no per-table timestamps, so the indicator derives its
+  own; no new sampling, no new network traffic, no schema change).
+  Disconnect detection polls `NetworkManager.IsConnected` — the state the
+  existing `OnConnect`/`OnDisconnect` DbConnection callbacks maintain —
+  shown only after a session was actually established, so startup isn't a
+  false banner. Classification is the pure
+  `ConnectionQualityModel.Classify` (Good/Degraded/Bad), thresholds
+  calibrated to `docs/latency-testing.md`: local dev → Good, Profile A
+  (~100 ms) → Degraded, Profile B (~200 ms) → Bad; row silence ≥1.5 s /
+  ≥4 s escalates even without RTT stats. Detailed numbers stay in
+  `NetcodeDebugOverlay`; gameplay reads nothing from the indicator; no new
+  keybinds. Editor tests:
+  `Assets/Arena/Tests/Editor/ConnectionFeedbackHudTests.cs`
+  (classification boundaries incl. Profile A/B and staleness precedence).
+  Still to do by hand: the banner/dot checks in the tabled note above.
 - **F3 — implemented.** The remote-presentation core of
   `ClientSimulationState` (snapshot ring, render-target sampling,
   smoothing/hard-snap, the F2a counters) is extracted into
