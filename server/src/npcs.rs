@@ -5,10 +5,10 @@ use spacetimedb::{reducer, table, Identity, ReducerContext, Table, Timestamp};
 use crate::arena::open_world_scene_name_for_identity;
 use crate::arena::players_share_world_context;
 use crate::combat::{
-    mark_harmful_combat_action, movement_modifiers, queue_effects, timestamp_to_micros,
-    CombatEvent, DamageDelivery, EffectPacket, COMBAT_EVENT_BLOCK, COMBAT_EVENT_CAST,
-    COMBAT_EVENT_IMPACT, COMBAT_EVENT_PARRY, COMBAT_METADATA_NONE, COMBAT_SCALAR_NONE,
-    COMBAT_SEQUENCE_NONE, DAMAGE_SOURCE_KIND_MELEE,
+    mark_harmful_combat_action, queue_effects, timestamp_to_micros, CombatEvent, DamageDelivery,
+    EffectPacket, MovementModifiers, COMBAT_EVENT_BLOCK, COMBAT_EVENT_CAST, COMBAT_EVENT_IMPACT,
+    COMBAT_EVENT_PARRY, COMBAT_METADATA_NONE, COMBAT_SCALAR_NONE, COMBAT_SEQUENCE_NONE,
+    DAMAGE_SOURCE_KIND_MELEE,
 };
 use crate::defense::{
     resolve_defensible_combat_hit, CombatHitDeliveryKind, DefenseResolution, DefensibleCombatHit,
@@ -119,7 +119,7 @@ pub struct NpcSpawnCounter {
 }
 
 #[table(accessor = npc_combat_runtime)]
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct NpcCombatRuntime {
     #[primary_key]
     pub identity: Identity,
@@ -449,8 +449,11 @@ pub(crate) fn npc_faction(ctx: &ReducerContext, identity: Identity) -> Option<Np
     NpcFaction::from_wire(row.faction.as_str())
 }
 
-pub(crate) fn tick_npc_combat(ctx: &ReducerContext, now: Timestamp) {
-    let movement_modifiers = movement_modifiers(ctx, now);
+pub(crate) fn tick_npc_combat(
+    ctx: &ReducerContext,
+    now: Timestamp,
+    movement_modifiers: &MovementModifiers,
+) {
     let npcs: Vec<NpcInstance> = ctx.db.npc_instance().iter().collect();
     for npc in npcs {
         let Some(faction) = NpcFaction::from_wire(npc.faction.as_str()) else {
@@ -523,8 +526,12 @@ pub(crate) fn tick_npc_combat(ctx: &ReducerContext, now: Timestamp) {
             } else {
                 face_npc_target(ctx, now, &physics, &target);
             }
-            runtime.next_attack_at = now;
-            runtime.next_attack_at_micros = timestamp_to_micros(now);
+            // Don't slide next_attack_at to `now` while chasing: the flow is
+            // identical with the stale past timestamp (`now < next_attack_at`
+            // stays false), nothing range-queries the btree, and the slide
+            // forced a genuine row write every chase tick. The upsert below
+            // still persists new/retargeted rows; steady chase skips via the
+            // value gate.
             upsert_npc_combat_runtime(ctx, runtime);
             continue;
         }
@@ -911,16 +918,20 @@ fn clear_npc_combat_runtime(ctx: &ReducerContext, identity: Identity) {
 }
 
 fn upsert_npc_combat_runtime(ctx: &ReducerContext, row: NpcCombatRuntime) {
-    crate::tick_metrics::record_table_write(crate::tick_metrics::TableWriteKind::NpcCombatRuntime);
-    if ctx
-        .db
-        .npc_combat_runtime()
-        .identity()
-        .find(row.identity)
-        .is_some()
-    {
+    if let Some(existing) = ctx.db.npc_combat_runtime().identity().find(row.identity) {
+        if existing == row {
+            // Value-identical ("waiting for next attack" branch): skip the
+            // per-tick rewrite (tick audit T3 slice 3).
+            return;
+        }
+        crate::tick_metrics::record_table_write(
+            crate::tick_metrics::TableWriteKind::NpcCombatRuntime,
+        );
         ctx.db.npc_combat_runtime().identity().update(row);
     } else {
+        crate::tick_metrics::record_table_write(
+            crate::tick_metrics::TableWriteKind::NpcCombatRuntime,
+        );
         ctx.db.npc_combat_runtime().insert(row);
     }
 }

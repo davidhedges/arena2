@@ -1976,6 +1976,7 @@ pub(crate) fn tick_equipment_periodic_effects(
     ctx: &ReducerContext,
     now: Timestamp,
     dt_seconds: f32,
+    contexts: &crate::game_loop::PlayerTickContexts,
 ) -> usize {
     let owners: Vec<_> = ctx
         .db
@@ -1986,7 +1987,7 @@ pub(crate) fn tick_equipment_periodic_effects(
         .collect();
     let mut queued = 0;
     for owner in owners {
-        let health_regen = equipment_modifier_totals_for_owner(ctx, owner).health_regen_per_second;
+        let health_regen = contexts.equipment(ctx, owner).health_regen_per_second;
         if health_regen <= 0.0 {
             if ctx
                 .db

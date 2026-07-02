@@ -1,7 +1,7 @@
 use spacetimedb::{table, Identity, ReducerContext, Table, Timestamp};
 
-use crate::combat::{is_in_combat, StatusRuntimeView};
-use crate::inventory::equipment_modifier_totals_for_owner;
+use crate::combat::{is_in_combat, temporary_combat_modifiers, TemporaryCombatModifiers};
+use crate::inventory::{equipment_modifier_totals_for_owner, EquipmentModifierTotals};
 use crate::progression::{
     active_stat_totals_for_owner, effective_resource_kind_for_ability, AbilityCatalog,
 };
@@ -32,7 +32,7 @@ pub(crate) const RESOURCE_KIND_MANA: &str = "MANA";
 const STANDARD_RESOURCE_KINDS: [&str; 2] = [RESOURCE_KIND_STAMINA, RESOURCE_KIND_MANA];
 
 #[derive(Clone, Debug)]
-struct ResolvedResourceSpec {
+pub(crate) struct ResolvedResourceSpec {
     kind: String,
     max: f32,
     regen_per_second: f32,
@@ -132,6 +132,30 @@ pub(crate) fn pay_action_resource_cost(
     cost.is_free() || spend_resource(ctx, owner, cost.kind.as_str(), cost.amount, now)
 }
 
+/// Tick-shared inputs for resource spec resolution (tick audit T1/T2): the
+/// per-tick status view and per-player equipment totals are computed once by
+/// the tick orchestrator instead of once per resolution. Event-driven callers
+/// use the wrapper functions below, which collect fresh inputs.
+pub(crate) struct ResourceSpecInputs<'a> {
+    pub status_modifiers: &'a TemporaryCombatModifiers,
+    pub equipment: &'a EquipmentModifierTotals,
+}
+
+fn fresh_spec_inputs(
+    ctx: &ReducerContext,
+    owner: Identity,
+    needs_equipment: bool,
+) -> (TemporaryCombatModifiers, EquipmentModifierTotals) {
+    let status_modifiers = temporary_combat_modifiers(ctx, ctx.timestamp);
+    // Only MANA specs read equipment; skip the scan otherwise.
+    let equipment = if needs_equipment {
+        equipment_modifier_totals_for_owner(ctx, owner)
+    } else {
+        EquipmentModifierTotals::default()
+    };
+    (status_modifiers, equipment)
+}
+
 pub(crate) fn sync_all_player_resources(ctx: &ReducerContext, now: Timestamp) {
     let owners: Vec<Identity> = ctx
         .db
@@ -193,10 +217,36 @@ pub(crate) fn sync_primary_resource_for_player(
         .find(resource_key(owner, RESOURCE_KIND_STAMINA))
 }
 
+pub(crate) fn sync_primary_resource_for_player_with(
+    ctx: &ReducerContext,
+    owner: Identity,
+    now: Timestamp,
+    inputs: &ResourceSpecInputs,
+) {
+    sync_resources_for_player_with(ctx, owner, now, inputs);
+}
+
 pub(crate) fn sync_resources_for_player(ctx: &ReducerContext, owner: Identity, now: Timestamp) {
-    for kind in STANDARD_RESOURCE_KINDS {
-        sync_resource_for_player(ctx, owner, kind, now);
-    }
+    let (status_modifiers, equipment) = fresh_spec_inputs(ctx, owner, true);
+    let inputs = ResourceSpecInputs {
+        status_modifiers: &status_modifiers,
+        equipment: &equipment,
+    };
+    sync_resources_for_player_with(ctx, owner, now, &inputs);
+}
+
+/// Returns the synced row and resolved spec per standard resource kind so
+/// per-tick callers can reuse the specs instead of re-resolving them.
+pub(crate) fn sync_resources_for_player_with(
+    ctx: &ReducerContext,
+    owner: Identity,
+    now: Timestamp,
+    inputs: &ResourceSpecInputs,
+) -> Vec<(PlayerResource, ResolvedResourceSpec)> {
+    STANDARD_RESOURCE_KINDS
+        .iter()
+        .filter_map(|kind| sync_resource_for_player_with(ctx, owner, kind, now, inputs))
+        .collect()
 }
 
 fn sync_resource_for_player(
@@ -206,11 +256,32 @@ fn sync_resource_for_player(
     now: Timestamp,
 ) -> Option<PlayerResource> {
     let spec = resolve_resource_spec_for_owner_and_kind(ctx, owner, resource_kind)?;
+    Some(sync_resource_row_for_spec(ctx, owner, &spec, now))
+}
+
+fn sync_resource_for_player_with(
+    ctx: &ReducerContext,
+    owner: Identity,
+    resource_kind: &str,
+    now: Timestamp,
+    inputs: &ResourceSpecInputs,
+) -> Option<(PlayerResource, ResolvedResourceSpec)> {
+    let spec = resolve_resource_spec_with(ctx, owner, resource_kind, inputs)?;
+    let resource = sync_resource_row_for_spec(ctx, owner, &spec, now);
+    Some((resource, spec))
+}
+
+fn sync_resource_row_for_spec(
+    ctx: &ReducerContext,
+    owner: Identity,
+    spec: &ResolvedResourceSpec,
+    now: Timestamp,
+) -> PlayerResource {
     let key = resource_key(owner, spec.kind.as_str());
     let mut resource = if let Some(existing) = ctx.db.player_resource().key().find(key.clone()) {
         existing
     } else {
-        let initial_current = baseline_current_for_spec(&spec);
+        let initial_current = baseline_current_for_spec(spec);
         let row = PlayerResource {
             key,
             owner,
@@ -230,7 +301,7 @@ fn sync_resource_for_player(
         && (resource.regen_per_second - spec.regen_per_second).abs() <= 0.0001
         && (resource.current - next_current).abs() <= 0.0001
     {
-        return Some(resource);
+        return resource;
     }
 
     resource.max = spec.max.max(0.0);
@@ -239,7 +310,7 @@ fn sync_resource_for_player(
     resource.updated_at = now;
     record_resource_write();
     ctx.db.player_resource().key().update(resource.clone());
-    Some(resource)
+    resource
 }
 
 pub(crate) fn tick_primary_resource_for_player(
@@ -247,18 +318,11 @@ pub(crate) fn tick_primary_resource_for_player(
     owner: Identity,
     now: Timestamp,
     dt_seconds: f32,
+    inputs: &ResourceSpecInputs,
 ) {
-    sync_resources_for_player(ctx, owner, now);
-    let resources: Vec<_> = ctx.db.player_resource().owner().filter(owner).collect();
-    for resource in resources {
-        if !standard_resource_kind(resource.kind.as_str()) {
-            continue;
-        }
-        let Some(spec) =
-            resolve_resource_spec_for_owner_and_kind(ctx, owner, resource.kind.as_str())
-        else {
-            continue;
-        };
+    // Sync returns the resolved specs, so the tick loop no longer re-resolves
+    // them per row (tick audit T1 slice 2).
+    for (resource, spec) in sync_resources_for_player_with(ctx, owner, now, inputs) {
         tick_resource_row(ctx, owner, now, dt_seconds, resource, spec);
     }
 }
@@ -526,6 +590,27 @@ fn resolve_resource_spec_for_owner_and_kind(
     owner: Identity,
     resource_kind: &str,
 ) -> Option<ResolvedResourceSpec> {
+    let needs_equipment = resource_kind
+        .trim()
+        .eq_ignore_ascii_case(RESOURCE_KIND_MANA);
+    let (status_modifiers, equipment) = fresh_spec_inputs(ctx, owner, needs_equipment);
+    resolve_resource_spec_with(
+        ctx,
+        owner,
+        resource_kind,
+        &ResourceSpecInputs {
+            status_modifiers: &status_modifiers,
+            equipment: &equipment,
+        },
+    )
+}
+
+fn resolve_resource_spec_with(
+    ctx: &ReducerContext,
+    owner: Identity,
+    resource_kind: &str,
+    inputs: &ResourceSpecInputs,
+) -> Option<ResolvedResourceSpec> {
     let primary_kind = resource_kind.trim().to_ascii_uppercase();
     if primary_kind.is_empty() {
         return None;
@@ -537,10 +622,9 @@ fn resolve_resource_spec_for_owner_and_kind(
         .find(primary_kind.clone())?;
     let insight = active_stat_totals_for_owner(ctx, owner).insight as f32;
     let gain_multiplier = (1.0 + definition.gain_multiplier_per_insight * insight).max(0.0);
-    let status_modifiers =
-        StatusRuntimeView::collect(ctx, ctx.timestamp).temporary_combat_modifiers();
+    let status_modifiers = inputs.status_modifiers;
     let equipment_mana_regen = if primary_kind.eq_ignore_ascii_case("MANA") {
-        equipment_modifier_totals_for_owner(ctx, owner).mana_regen_per_second
+        inputs.equipment.mana_regen_per_second
     } else {
         0.0
     };

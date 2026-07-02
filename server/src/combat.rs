@@ -283,7 +283,11 @@ pub fn reset_player_state_to_spawn(state: &mut PlayerState, now: Timestamp) {
     mark_respawn_ready(state, now);
 }
 
-pub(crate) fn sync_player_state_derived_stats(ctx: &ReducerContext, owner: Identity) -> bool {
+pub(crate) fn sync_player_state_derived_stats(
+    ctx: &ReducerContext,
+    owner: Identity,
+    derived: crate::derived_stats::DerivedCombatStats,
+) -> bool {
     let Some(mut state) = ctx.db.player_state().player_id().find(owner) else {
         return false;
     };
@@ -291,7 +295,6 @@ pub(crate) fn sync_player_state_derived_stats(ctx: &ReducerContext, owner: Ident
         return false;
     }
 
-    let derived = derived_combat_stats_for_owner(ctx, owner);
     let next_max_hp = derived.max_hp.max(1);
     let previous_max_hp = state.max_hp.max(1);
     if previous_max_hp == next_max_hp {
@@ -496,7 +499,7 @@ pub struct CombatEngagement {
 }
 
 #[table(accessor = combat_stacking_passive_runtime)]
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct CombatStackingPassiveRuntime {
     #[primary_key]
     pub key: String,
@@ -885,10 +888,16 @@ fn bloodlust_passive_spec() -> BloodlustPassiveSpec {
 
 pub fn tick_combat_stacking_passives(ctx: &ReducerContext, now: Timestamp) {
     let spec = restless_passive_spec();
+    // Only alive non-dummy players can acquire these passives; per-owner
+    // eligibility resolves the equipment-derived combat profile, so seeding
+    // every player row made this scale with dummy population (tick audit T5).
+    // Owners that somehow still hold rows (death, despawn races) stay covered
+    // by the runtime/status arms below and get cleaned up there.
     let mut owners: HashSet<Identity> = ctx
         .db
         .player_state()
         .iter()
+        .filter(|state| state.alive && !state.is_dummy)
         .map(|state| state.player_id)
         .collect();
     owners.extend(
@@ -915,10 +924,13 @@ pub fn tick_combat_stacking_passives(ctx: &ReducerContext, now: Timestamp) {
 
 fn tick_bloodlust_passives(ctx: &ReducerContext, now: Timestamp) {
     let spec = bloodlust_passive_spec();
+    // Same owner-discovery contract as `tick_combat_stacking_passives`:
+    // alive non-dummy players plus row-holders from the arms below.
     let mut owners: HashSet<Identity> = ctx
         .db
         .player_state()
         .iter()
+        .filter(|state| state.alive && !state.is_dummy)
         .map(|state| state.player_id)
         .collect();
     owners.extend(
@@ -1713,21 +1725,28 @@ fn upsert_combat_stacking_passive_runtime(
     ctx: &ReducerContext,
     runtime: CombatStackingPassiveRuntime,
 ) {
-    crate::tick_metrics::record_table_write(
-        crate::tick_metrics::TableWriteKind::CombatStackingPassiveRuntime,
-    );
-    if ctx
+    if let Some(existing) = ctx
         .db
         .combat_stacking_passive_runtime()
         .key()
         .find(runtime.key.clone())
-        .is_some()
     {
+        if existing == runtime {
+            // Value-identical (nothing due this tick): skip the per-tick
+            // rewrite (tick audit T3 slice 3).
+            return;
+        }
+        crate::tick_metrics::record_table_write(
+            crate::tick_metrics::TableWriteKind::CombatStackingPassiveRuntime,
+        );
         ctx.db
             .combat_stacking_passive_runtime()
             .key()
             .update(runtime);
     } else {
+        crate::tick_metrics::record_table_write(
+            crate::tick_metrics::TableWriteKind::CombatStackingPassiveRuntime,
+        );
         ctx.db.combat_stacking_passive_runtime().insert(runtime);
     }
 }

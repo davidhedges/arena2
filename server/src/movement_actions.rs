@@ -69,7 +69,7 @@ pub struct MovementActionState {
 }
 
 #[table(accessor = fixed_action_charge_state, public)]
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct FixedActionChargeState {
     #[primary_key]
     pub key: String,
@@ -682,7 +682,14 @@ pub(crate) fn tick_fixed_action_charge_states(ctx: &ReducerContext, now: Timesta
         if row.action_id.as_str() != ACTION_KIND_DODGE {
             continue;
         }
-        let synced = sync_fixed_action_charge_state_row(row, now);
+        let synced = sync_fixed_action_charge_state_row(row.clone(), now);
+        if synced == row {
+            // Full charges and not recharging: value-identical — skip the
+            // per-tick upsert (tick audit T3 slice 2). The row carries no
+            // ack/tick counter, so a skipped no-op write is invisible to
+            // clients; consume/recharge/reset paths still write on change.
+            continue;
+        }
         upsert_fixed_action_charge_state(ctx, synced);
     }
 }
@@ -709,8 +716,10 @@ fn ensure_fixed_action_charge_state(
 ) -> FixedActionChargeState {
     let key = fixed_action_charge_key(owner, action_id);
     if let Some(existing) = ctx.db.fixed_action_charge_state().key().find(key) {
-        let synced = sync_fixed_action_charge_state_row(existing, now);
-        upsert_fixed_action_charge_state(ctx, synced.clone());
+        let synced = sync_fixed_action_charge_state_row(existing.clone(), now);
+        if synced != existing {
+            upsert_fixed_action_charge_state(ctx, synced.clone());
+        }
         return synced;
     }
 
@@ -1021,6 +1030,38 @@ mod tests {
 
     fn ts(ms: u64) -> Timestamp {
         Timestamp::from_micros_since_unix_epoch((ms * 1000) as i64)
+    }
+
+    #[test]
+    fn settled_charge_row_is_a_sync_fixed_point() {
+        // The per-tick upsert gate skips the write when sync returns an equal
+        // row. The first sync after a full-reset normalizes the idle
+        // timestamps (constructor stamps `now`, advance normalizes to epoch)
+        // and writes once; every sync after that must be a no-op.
+        let fresh = full_fixed_action_charge_state(Identity::ZERO, ACTION_KIND_DODGE, ts(1_000));
+        let settled = sync_fixed_action_charge_state_row(fresh, ts(2_000));
+        let resynced = sync_fixed_action_charge_state_row(settled.clone(), ts(3_000));
+        assert!(
+            resynced == settled,
+            "settled dodge charge row must be a sync fixed point"
+        );
+    }
+
+    #[test]
+    fn recharging_charge_row_changes_on_sync_once_due() {
+        let mut row = full_fixed_action_charge_state(Identity::ZERO, ACTION_KIND_DODGE, ts(1_000));
+        row.current_charges = row.current_charges.saturating_sub(1);
+        row.is_recharging = true;
+        row.recharge_started_at = ts(1_000);
+        row.next_charge_ready_at = ts(1_000 + row.recharge_duration_ms);
+
+        let synced =
+            sync_fixed_action_charge_state_row(row.clone(), ts(2_000 + row.recharge_duration_ms));
+        assert!(
+            synced != row,
+            "a due recharge must produce a changed row (and a write)"
+        );
+        assert_eq!(synced.current_charges, row.current_charges + 1);
     }
 
     fn charge_state(

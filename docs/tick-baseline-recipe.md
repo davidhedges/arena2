@@ -100,12 +100,16 @@ Sanity expectations, as per-tick ratios (`counter / ticks`):
 
 - `writes_player_physics` ≈ 1 × connected players. Settled dummies add ~0
   (the T3 write gate); before the gate each dummy added 1/tick.
-- `status_collects` ≈ 6 × alive players + ~2 globals (movement modifiers +
-  NPC combat) + per-cast/per-action extras — the T1 gate number. Dummies do
-  not add resource-path collects (skipped by `sync_progression_runtime_rows`).
-- `equipment_scans` ≈ 5 × alive players — the T2 gate number.
-- `writes_fixed_action_charge_state` ≈ 1 × (players + dummies) — currently
-  the dominant write family; the T3 slice-2 gate number.
+- `status_collects` ≈ 2/tick since the T1 view threading (view A + view B,
+  independent of player count) + per-cast/per-action extras while acting.
+  Before T1 it was 6 × alive players + 2 globals.
+- `equipment_scans` ≈ 1 × alive players since the T2 memo (the per-tick
+  `PlayerTickContexts` build) + event-driven extras during combat. Before T2
+  it was 5 × alive players.
+- `writes_fixed_action_charge_state` ≈ 0 at rest since the T3 slice-2 gate
+  (writes only on dodge consume, active recharge ticks, and the first sync
+  after a reset). Before the gate it was 1 × (players + dummies) per tick —
+  the dominant write family in the 2026-07-02 baseline.
 - `move_fallbacks` near 0 on localhost with a responsive client. It rises when
   the client stops delivering command rows on time — including when the editor
   is unfocused/paused or the client frame rate collapses under load, not just

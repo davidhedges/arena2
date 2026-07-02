@@ -61,8 +61,77 @@ counters) is assumed as the write-side counterpart of this audit's instrumentati
   the `last_processed_tick` prediction ack. Manual runtime check pending:
   fresh client join still renders stationary dummies (initial subscription
   snapshot covers them).
-- **T1, T2, T4, T5, T3 slices 2–3 — not started** (gated on baseline numbers
-  from the new counters, per this audit's own rule).
+- **T3 slice 2 — implemented and re-measured (2026-07-02).**
+  `tick_fixed_action_charge_states` and `ensure_fixed_action_charge_state`
+  skip the upsert when the synced row equals the stored row (settled rows are
+  sync fixed points after the first post-reset normalization — unit-tested).
+  Re-measured: `writes_fixed_action_charge_state` **36/tick → 0 at rest**,
+  with a one-time pulse of 32 writes as the harness spawned 32 dummies (the
+  first-sync normalization), then 0 again. Consume/recharge still write.
+- **T5 (first slice) — implemented and re-measured (2026-07-02).**
+  `tick_combat_stacking_passives` / `tick_bloodlust_passives` no longer seed
+  owner discovery with every `player_state` row: only alive non-dummy players
+  are seeded, and row-holders (runtime rows, passive status rows) remain
+  covered by the existing arms, so cleanup semantics are unchanged. This
+  removed the per-dummy equipment-profile resolution. Re-measured at the same
+  35-dummy harness load: `passives_auras` **3.4 ms → 72–152 µs** (~25-45×).
+  Remaining T5 work (aura owner discovery via view A, keyed status arms) is
+  still open but no longer measured-hot.
+- **T3 slice 3 — implemented (2026-07-02).** `upsert_npc_combat_runtime` and
+  `upsert_combat_stacking_passive_runtime` skip value-identical rewrites (the
+  "waiting for next attack" / "nothing due" branches). The stacking-passive
+  upsert was measured at ~1/tick per in-combat eligible player in the second
+  capture; expected ~0 between due intervals after this gate.
+- **Post-optimization hot spot (second capture, 2026-07-02):**
+  `spell_projectile_sim` is now the dominant cost — **20.3 ms sampled at 103
+  active projectiles** vs 36 actors (~0.2 ms/projectile burst; total tick
+  23.6 ms of the 33 ms budget), decaying to 0.3-1.5 ms at 15 projectiles.
+  Next drill-down belongs in the existing `CombatProjectileTickMetrics`
+  (broadphase/narrowphase counts, `=` overlay) before touching the sim.
+  Note: dummies being stagger-shoved by impacts legitimately write physics
+  (`writes_player_physics` can exceed 1/tick during bursts — not churn).
+- **T1 slices 2–3 — implemented (2026-07-02).** The resource path takes a
+  `ResourceSpecInputs` (shared `TemporaryCombatModifiers` + per-player
+  equipment totals) instead of collecting per resolution
+  (`resources.rs`: `resolve_resource_spec_with` → `sync_resources_for_player_with`
+  → `tick_primary_resource_for_player`, which also reuses the resolved specs
+  instead of re-resolving per row). `game_tick` collects exactly the two
+  tick-scoped views the audit specified: **view A** at the top of pre-tick
+  (consumed by `sync_progression_runtime_rows` and `tick_npc_combat`) and
+  **view B** at the existing `movement_modifiers` point (retained and threaded
+  through the whole player-sim phase). Event-driven callers use wrappers that
+  collect fresh inputs, so reducer-path semantics are unchanged; the wrapper
+  for `sync_resources_for_player` also now collects once instead of per kind.
+  Per-cast/per-movement-action/auto-attack `has_active_disabling_status`
+  collects remain (event-driven, not per-tick-per-player).
+  Expected single-player re-measure: `status_collects` **8/tick → 2/tick**
+  (+ per-action extras). Since collects scale as ~6×players, this is the
+  multi-player win measured at one player.
+- **T2 — implemented (2026-07-02).** `PlayerTickContexts` in `game_loop.rs`:
+  equipment totals + derived stats computed once per non-dummy player at the
+  top of `game_tick` and shared by progression sync, the speed calc, the
+  resource path, and `tick_equipment_periodic_effects`. Equipment cannot
+  change mid-tick (equip reducers run outside `game_tick`); derived stats may
+  go one tick stale after a mid-tick progression change (accepted above).
+  Expected single-player re-measure: `equipment_scans` **5/tick → 1/tick**.
+- **T1/T2 re-measured (third capture, 2026-07-02):** `status_collects`
+  **8/tick → 2.0/tick** and `equipment_scans` **5/tick → 1.0/tick** at rest,
+  exactly the predicted targets (both independent of dummy population;
+  collects now independent of player count too). `progression_sync` sampled
+  time dropped from 0.1-1.2 ms to 23-130 µs. Totals: ~1.5-2 ms at rest,
+  ~1.7-5.5 ms under the 35-dummy/15-projectile harness steady state.
+- **NPC chase-slide write removed (2026-07-02).** The third capture surfaced
+  `writes_npc_combat_runtime` = 1/tick per *engaged* NPC: the chase branch
+  slid `next_attack_at = now` every tick — a genuine value change the T3
+  slice-3 gate correctly let through. The slide is behaviorally inert (the
+  `now < next_attack_at` check is false either way and nothing range-queries
+  the btree), so it no longer updates the timestamp; new/retargeted rows still
+  persist via the gated upsert. Expected re-measure:
+  `writes_npc_combat_runtime` ≈ 0 during steady chase/cooldown, writes only on
+  attack/retarget.
+- **T4 — not started** (`npc_combat` stays under ~0.6 ms with 1-2 NPCs × 39
+  actors; its per-tick view collect is now gone via view A. Revisit with real
+  NPC packs).
 
 ## Measurement status (read this first)
 

@@ -19,6 +19,7 @@
 //! You can read this one function to understand the complete state machine.
 
 use spacetimedb::{reducer, table, Identity, ReducerContext, ScheduleAt, Table, Timestamp};
+use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 
@@ -40,15 +41,17 @@ use crate::auto_attack::tick_auto_attacks;
 use crate::combat::player_snapshot::PlayerSnapshotSet;
 use crate::combat::{
     clear_statuses_for_dead_players, expire_combat_engagements, expire_status_effects,
-    has_due_pending_effects, movement_modifiers, normalize_legacy_hot_status_rows,
-    process_periodic_status_ticks, prune_combat_events, resolve_pending_effects, respawn_player,
+    has_due_pending_effects, normalize_legacy_hot_status_rows, process_periodic_status_ticks,
+    prune_combat_events, resolve_pending_effects, respawn_player,
     sync_combat_projectile_definitions, sync_player_state_derived_stats, tick_auras,
     tick_combat_projectiles_with_snapshots, tick_combat_stacking_passives, MovementModifiers,
+    StatusRuntimeView, TemporaryCombatModifiers,
 };
 use crate::defense::prune_defense_states;
-use crate::derived_stats::derived_combat_stats_for_owner;
+use crate::derived_stats::{derived_combat_stats_for_owner, DerivedCombatStats};
 use crate::inventory::{
     equipment_modifier_totals_for_owner, sync_item_definitions, tick_equipment_periodic_effects,
+    EquipmentModifierTotals,
 };
 use crate::melee::{
     has_due_pending_melee_impacts, has_due_pending_projectile_releases,
@@ -78,8 +81,8 @@ use crate::progression::{
     migrate_renamed_skyfall_action_bar_assignments, sync_progression_catalogs,
 };
 use crate::resources::{
-    reset_player_resources_to_full, sync_all_player_resources, sync_primary_resource_for_player,
-    tick_primary_resource_for_player,
+    reset_player_resources_to_full, sync_all_player_resources,
+    sync_primary_resource_for_player_with, tick_primary_resource_for_player, ResourceSpecInputs,
 };
 use crate::spells::{
     has_due_pending_area_impacts, resolve_pending_area_impacts, resolve_pending_casts,
@@ -486,6 +489,57 @@ fn timed_subphase<T>(
     result
 }
 
+/// Per-tick, per-player memo of equipment totals and derived stats (tick
+/// audit T2): within one tick the loadout cannot change (equip reducers run
+/// outside `game_tick`), so every consumer reads the same values. Derived
+/// stats may go one tick stale after a mid-tick progression change, which the
+/// audit accepts. Never reused across ticks.
+pub(crate) struct PlayerTickContext {
+    equipment: EquipmentModifierTotals,
+    derived: DerivedCombatStats,
+}
+
+pub(crate) struct PlayerTickContexts {
+    by_owner: HashMap<Identity, PlayerTickContext>,
+}
+
+impl PlayerTickContexts {
+    fn collect(ctx: &ReducerContext) -> Self {
+        let mut by_owner = HashMap::new();
+        for state in ctx.db.player_state().iter() {
+            if state.is_dummy {
+                continue;
+            }
+            by_owner.insert(
+                state.player_id,
+                PlayerTickContext {
+                    equipment: equipment_modifier_totals_for_owner(ctx, state.player_id),
+                    derived: derived_combat_stats_for_owner(ctx, state.player_id),
+                },
+            );
+        }
+        Self { by_owner }
+    }
+
+    pub(crate) fn equipment(
+        &self,
+        ctx: &ReducerContext,
+        owner: Identity,
+    ) -> EquipmentModifierTotals {
+        self.by_owner
+            .get(&owner)
+            .map(|context| context.equipment)
+            .unwrap_or_else(|| equipment_modifier_totals_for_owner(ctx, owner))
+    }
+
+    pub(crate) fn derived(&self, ctx: &ReducerContext, owner: Identity) -> DerivedCombatStats {
+        self.by_owner
+            .get(&owner)
+            .map(|context| context.derived)
+            .unwrap_or_else(|| derived_combat_stats_for_owner(ctx, owner))
+    }
+}
+
 pub(crate) fn ensure_game_loop_schedule(ctx: &ReducerContext) {
     if ctx.db.game_loop_timer().iter().next().is_some() {
         return;
@@ -585,7 +639,14 @@ fn bootstrap_server_state(ctx: &ReducerContext) {
             repaired_hot_rows
         );
     }
-    sync_progression_runtime_rows(ctx, ctx.timestamp);
+    let bootstrap_contexts = PlayerTickContexts::collect(ctx);
+    let bootstrap_status_modifiers = crate::combat::temporary_combat_modifiers(ctx, ctx.timestamp);
+    sync_progression_runtime_rows(
+        ctx,
+        ctx.timestamp,
+        &bootstrap_status_modifiers,
+        &bootstrap_contexts,
+    );
 }
 
 /// Schedule table for the game loop.
@@ -673,13 +734,21 @@ fn run_pre_tick_housekeeping_phase(
     profiling: bool,
     stopwatch_active: bool,
     subphase_micros: &mut [u32; PRE_TICK_SUBPHASE_COUNT],
-) -> Result<MovementModifiers, String> {
+    contexts: &PlayerTickContexts,
+) -> Result<(MovementModifiers, TemporaryCombatModifiers), String> {
+    // View A (tick audit T1): one start-of-tick status view shared by the
+    // pre-tick consumers that run before the status-mutating phases (Pass A
+    // and later), replacing their per-call collects.
+    let view_a = StatusRuntimeView::collect(ctx, now);
+    let status_modifiers_a = view_a.temporary_combat_modifiers();
+    let npc_movement_modifiers = view_a.movement_modifiers();
+
     timed_subphase(
         profiling,
         stopwatch_active,
         PRE_TICK_SUBPHASE_NAMES[PRE_SUB_PROGRESSION_SYNC],
         &mut subphase_micros[PRE_SUB_PROGRESSION_SYNC],
-        || sync_progression_runtime_rows(ctx, now),
+        || sync_progression_runtime_rows(ctx, now, &status_modifiers_a, contexts),
     );
     timed_subphase(
         profiling,
@@ -757,7 +826,7 @@ fn run_pre_tick_housekeeping_phase(
         stopwatch_active,
         PRE_TICK_SUBPHASE_NAMES[PRE_SUB_NPC_COMBAT],
         &mut subphase_micros[PRE_SUB_NPC_COMBAT],
-        || tick_npc_combat(ctx, now),
+        || tick_npc_combat(ctx, now, &npc_movement_modifiers),
     );
 
     // Pass A: resolve effects already queued (casts/reducers from previous frame boundary).
@@ -799,7 +868,7 @@ fn run_pre_tick_housekeeping_phase(
         || {
             (
                 process_periodic_status_ticks(ctx, now),
-                tick_equipment_periodic_effects(ctx, now, dt),
+                tick_equipment_periodic_effects(ctx, now, dt, contexts),
             )
         },
     );
@@ -845,11 +914,25 @@ fn run_pre_tick_housekeeping_phase(
         stopwatch_active,
         PRE_TICK_SUBPHASE_NAMES[PRE_SUB_MOVEMENT_MODIFIERS],
         &mut subphase_micros[PRE_SUB_MOVEMENT_MODIFIERS],
-        || Ok(movement_modifiers(ctx, now)),
+        || {
+            // View B (tick audit T1): post-status-resolution view shared by
+            // the whole player-simulation phase (movement + resource regen
+            // modifiers). No statuses mutate during player sim.
+            let view_b = StatusRuntimeView::collect(ctx, now);
+            Ok((
+                view_b.movement_modifiers(),
+                view_b.temporary_combat_modifiers(),
+            ))
+        },
     )
 }
 
-fn sync_progression_runtime_rows(ctx: &ReducerContext, now: Timestamp) {
+fn sync_progression_runtime_rows(
+    ctx: &ReducerContext,
+    now: Timestamp,
+    status_modifiers: &TemporaryCombatModifiers,
+    contexts: &PlayerTickContexts,
+) {
     let owners: Vec<_> = ctx
         .db
         .player_state()
@@ -858,8 +941,13 @@ fn sync_progression_runtime_rows(ctx: &ReducerContext, now: Timestamp) {
         .map(|row| row.player_id)
         .collect();
     for owner in owners {
-        sync_player_state_derived_stats(ctx, owner);
-        sync_primary_resource_for_player(ctx, owner, now);
+        sync_player_state_derived_stats(ctx, owner, contexts.derived(ctx, owner));
+        let equipment = contexts.equipment(ctx, owner);
+        let inputs = ResourceSpecInputs {
+            status_modifiers,
+            equipment: &equipment,
+        };
+        sync_primary_resource_for_player_with(ctx, owner, now, &inputs);
     }
 }
 
@@ -868,10 +956,20 @@ fn run_player_simulation_phase(
     now: Timestamp,
     dt: f32,
     movement_modifiers: &MovementModifiers,
+    temporary_modifiers: &TemporaryCombatModifiers,
+    contexts: &PlayerTickContexts,
 ) {
     let player_ids: Vec<_> = ctx.db.player_physics().iter().map(|p| p.identity).collect();
     for identity in player_ids {
-        tick_player(ctx, identity, now, dt, movement_modifiers);
+        tick_player(
+            ctx,
+            identity,
+            now,
+            dt,
+            movement_modifiers,
+            temporary_modifiers,
+            contexts,
+        );
     }
 }
 
@@ -1552,6 +1650,8 @@ fn tick_player(
     now: Timestamp,
     dt: f32,
     movement_modifiers: &MovementModifiers,
+    temporary_modifiers: &TemporaryCombatModifiers,
+    contexts: &PlayerTickContexts,
 ) {
     // Get current physics state
     let Some(mut physics) = ctx.db.player_physics().identity().find(identity) else {
@@ -1667,10 +1767,9 @@ fn tick_player(
         step_intent.updated_at = now;
     }
 
-    let derived_stats = derived_combat_stats_for_owner(ctx, identity);
-    move_speed_multiplier *= derived_stats.run_speed_multiplier;
-    move_speed_multiplier *=
-        equipment_modifier_totals_for_owner(ctx, identity).move_speed_multiplier();
+    let equipment = contexts.equipment(ctx, identity);
+    move_speed_multiplier *= contexts.derived(ctx, identity).run_speed_multiplier;
+    move_speed_multiplier *= equipment.move_speed_multiplier();
 
     let grounded_before_step = physics.grounded;
     simulate_non_dummy_player_kinematics(
@@ -1696,7 +1795,11 @@ fn tick_player(
     intent.updated_at = now;
     record_table_write(TableWriteKind::PlayerIntent);
     ctx.db.player_intent().identity().update(intent);
-    tick_primary_resource_for_player(ctx, identity, now, dt);
+    let resource_inputs = ResourceSpecInputs {
+        status_modifiers: temporary_modifiers,
+        equipment: &equipment,
+    };
+    tick_primary_resource_for_player(ctx, identity, now, dt, &resource_inputs);
     let voluntary_epoch_changed = sync_player_voluntary_move_epoch(
         &mut state,
         movement_blocked,
@@ -1747,23 +1850,35 @@ pub fn game_tick(ctx: &ReducerContext, _timer: GameLoopTimer) -> Result<(), Stri
     let _total_stopwatch = PhaseStopwatch::start(stopwatch_active, "tick_profile/total");
     let total_timer = ScopeTimer::start(profiling_enabled);
 
+    // Per-tick, per-player equipment/derived memo (tick audit T2), shared by
+    // the pre-tick and player-simulation phases.
+    let player_contexts = PlayerTickContexts::collect(ctx);
+
     let pre_tick_stopwatch = PhaseStopwatch::start(stopwatch_active, "tick_profile/pre_tick");
     let pre_tick_timer = ScopeTimer::start(profiling_enabled);
     let mut pre_subphase_micros = [0u32; PRE_TICK_SUBPHASE_COUNT];
-    let movement_modifiers = run_pre_tick_housekeeping_phase(
+    let (movement_modifiers, temporary_modifiers) = run_pre_tick_housekeeping_phase(
         ctx,
         now,
         dt,
         profiling_enabled,
         stopwatch_active,
         &mut pre_subphase_micros,
+        &player_contexts,
     )?;
     let pre_tick_micros = pre_tick_timer.elapsed_micros();
     drop(pre_tick_stopwatch);
 
     let player_sim_stopwatch = PhaseStopwatch::start(stopwatch_active, "tick_profile/player_sim");
     let player_sim_timer = ScopeTimer::start(profiling_enabled);
-    run_player_simulation_phase(ctx, now, dt, &movement_modifiers);
+    run_player_simulation_phase(
+        ctx,
+        now,
+        dt,
+        &movement_modifiers,
+        &temporary_modifiers,
+        &player_contexts,
+    );
     resolve_pending_casts(ctx, now)?;
     let player_sim_micros = player_sim_timer.elapsed_micros();
     drop(player_sim_stopwatch);
