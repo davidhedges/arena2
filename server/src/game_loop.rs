@@ -454,13 +454,14 @@ fn log_tick_scan_profile(ctx: &ReducerContext, window_ticks: usize) {
     }
 
     log::info!(
-        "[TICK_PROFILE_SCAN] ticks={} status_collects={} status_collect_ms={:.2} status_rows_scanned={} equipment_scans={} move_fallbacks={}{} alive_players={} dummies={} alive_npcs={} active_statuses={} active_casts={} active_projectiles={}",
+        "[TICK_PROFILE_SCAN] ticks={} status_collects={} status_collect_ms={:.2} status_rows_scanned={} equipment_scans={} move_fallbacks={} npc_target_pairs={}{} alive_players={} dummies={} alive_npcs={} active_statuses={} active_casts={} active_projectiles={}",
         window_ticks,
         scan.status_collect_count,
         scan.status_collect_micros as f64 / 1_000.0,
         scan.status_collect_rows,
         scan.equipment_scan_count,
         scan.move_fallback_count,
+        scan.npc_target_pairs_scanned,
         writes_line,
         alive_players,
         dummies,

@@ -172,7 +172,7 @@ pub struct PlayerOpenWorldScene {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-enum ResolvedWorldContext {
+pub(crate) enum ResolvedWorldContext {
     Open(String),
     Instance(u64),
 }
@@ -975,7 +975,7 @@ pub fn shared_arena_seed_for_identities(
     Some(arena.seed)
 }
 
-fn resolve_player_world_context(
+pub(crate) fn resolve_player_world_context(
     ctx: &ReducerContext,
     identity: Identity,
 ) -> Option<ResolvedWorldContext> {
@@ -1009,7 +1009,7 @@ fn resolve_player_world_context(
     None
 }
 
-fn world_contexts_share(a: &ResolvedWorldContext, b: &ResolvedWorldContext) -> bool {
+pub(crate) fn world_contexts_share(a: &ResolvedWorldContext, b: &ResolvedWorldContext) -> bool {
     match (a, b) {
         (ResolvedWorldContext::Open(a_scene), ResolvedWorldContext::Open(b_scene)) => {
             a_scene == b_scene

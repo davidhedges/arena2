@@ -3,7 +3,7 @@ use std::time::Duration;
 use spacetimedb::{reducer, table, Identity, ReducerContext, Table, Timestamp};
 
 use crate::arena::open_world_scene_name_for_identity;
-use crate::arena::players_share_world_context;
+use crate::arena::{resolve_player_world_context, world_contexts_share, ResolvedWorldContext};
 use crate::combat::{
     mark_harmful_combat_action, queue_effects, timestamp_to_micros, CombatEvent, DamageDelivery,
     EffectPacket, MovementModifiers, COMBAT_EVENT_BLOCK, COMBAT_EVENT_CAST, COMBAT_EVENT_IMPACT,
@@ -179,8 +179,28 @@ impl NpcFaction {
     }
 }
 
+/// Local measurement aid: `ARENA_NPC_HARMLESS=1` at build time zeroes NPC
+/// attack damage at this single choke point so a solo tester can stand inside
+/// an NPC pack (aggro, chase, cadence, and swing events stay real). Baked at
+/// compile time like `ARENA_PROFILE_TICKS` — absent from normal builds.
+fn npc_attacks_are_harmless() -> bool {
+    static ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ENABLED.get_or_init(|| {
+        let enabled = matches!(
+            option_env!("ARENA_NPC_HARMLESS").map(str::trim),
+            Some("1") | Some("true") | Some("on") | Some("yes")
+        );
+        if enabled {
+            log::warn!(
+                "[INIT] ARENA_NPC_HARMLESS baked in: NPC attack damage is zeroed (local measurement build — do not deploy)"
+            );
+        }
+        enabled
+    })
+}
+
 pub(crate) fn npc_template(template_id: &str) -> Option<NpcTemplate> {
-    match normalize_id(template_id).as_str() {
+    let mut template = match normalize_id(template_id).as_str() {
         NPC_TEMPLATE_KOBOLD_WARRIOR_RD_SWORD_SHIELD => Some(NpcTemplate {
             template_id: NPC_TEMPLATE_KOBOLD_WARRIOR_RD_SWORD_SHIELD,
             species_id: "KOBOLD_WARRIOR",
@@ -234,7 +254,12 @@ pub(crate) fn npc_template(template_id: &str) -> Option<NpcTemplate> {
             attack_cadence_ms: 2100,
         }),
         _ => None,
+    }?;
+
+    if npc_attacks_are_harmless() {
+        template.attack_damage = 0;
     }
+    Some(template)
 }
 
 #[reducer]
@@ -455,6 +480,13 @@ pub(crate) fn tick_npc_combat(
     movement_modifiers: &MovementModifiers,
 ) {
     let npcs: Vec<NpcInstance> = ctx.db.npc_instance().iter().collect();
+    if npcs.is_empty() {
+        return;
+    }
+
+    // Candidates resolved once per tick (tick audit T4): world context and
+    // physics per alive non-dummy player, instead of per NPC x player pair.
+    let candidates = collect_npc_target_candidates(ctx);
     for npc in npcs {
         let Some(faction) = NpcFaction::from_wire(npc.faction.as_str()) else {
             clear_npc_combat_runtime(ctx, npc.identity);
@@ -482,7 +514,9 @@ pub(crate) fn tick_npc_combat(
             continue;
         };
 
-        let Some(target) = acquire_npc_attack_target(ctx, npc.identity, &physics, template) else {
+        let Some(target) =
+            acquire_npc_attack_target(ctx, npc.identity, &physics, template, &candidates)
+        else {
             clear_npc_combat_runtime(ctx, npc.identity);
             continue;
         };
@@ -558,30 +592,75 @@ struct NpcAttackTarget {
     dir_z: f32,
 }
 
+struct NpcTargetCandidate {
+    identity: Identity,
+    pos_x: f32,
+    pos_y: f32,
+    pos_z: f32,
+    hit_radius: f32,
+    hit_height: f32,
+    context: ResolvedWorldContext,
+}
+
+/// One pass over `player_state` per tick, in table order (target tie-breaking
+/// depends on it): alive non-dummy players with their world context and
+/// physics resolved once, shared by every NPC's target acquisition.
+fn collect_npc_target_candidates(ctx: &ReducerContext) -> Vec<NpcTargetCandidate> {
+    let mut candidates = Vec::new();
+    for state in ctx.db.player_state().iter() {
+        if !state.alive || state.is_dummy {
+            continue;
+        }
+        let Some(context) = resolve_player_world_context(ctx, state.player_id) else {
+            log::warn!(
+                "[WORLD] Missing player_world row for NPC target candidate {}",
+                state.player_id.to_hex()
+            );
+            continue;
+        };
+        let Some(physics) = ctx.db.player_physics().identity().find(state.player_id) else {
+            continue;
+        };
+        candidates.push(NpcTargetCandidate {
+            identity: state.player_id,
+            pos_x: physics.pos_x,
+            pos_y: physics.pos_y,
+            pos_z: physics.pos_z,
+            hit_radius: state.hit_radius,
+            hit_height: state.hit_height,
+            context,
+        });
+    }
+    candidates
+}
+
 fn acquire_npc_attack_target(
     ctx: &ReducerContext,
     npc_identity: Identity,
     npc_physics: &NpcPhysics,
     template: NpcTemplate,
+    candidates: &[NpcTargetCandidate],
 ) -> Option<NpcAttackTarget> {
+    let Some(npc_context) = resolve_player_world_context(ctx, npc_identity) else {
+        log::warn!(
+            "[WORLD] Missing world context for NPC {}",
+            npc_identity.to_hex()
+        );
+        return None;
+    };
+    crate::tick_metrics::record_npc_target_pairs_scanned(candidates.len() as u64);
+
     let aggro_radius_sq = template.aggro_radius * template.aggro_radius;
     let mut best: Option<NpcAttackTarget> = None;
-    for state in ctx.db.player_state().iter() {
-        if !state.alive || state.is_dummy {
+    for candidate in candidates {
+        if !world_contexts_share(&npc_context, &candidate.context) {
             continue;
         }
-        if !players_share_world_context(ctx, npc_identity, state.player_id) {
-            continue;
-        }
-        if !can_harm(ctx, npc_identity, state.player_id) {
-            continue;
-        }
-        let Some(physics) = ctx.db.player_physics().identity().find(state.player_id) else {
-            continue;
-        };
-        let dx = physics.pos_x - npc_physics.pos_x;
-        let dz = physics.pos_z - npc_physics.pos_z;
+        let dx = candidate.pos_x - npc_physics.pos_x;
+        let dz = candidate.pos_z - npc_physics.pos_z;
         let dist_sq = dx * dx + dz * dz;
+        // Squared-distance pre-check before the relation lookups (tick audit
+        // T4); the eligible set and nearest-wins tie-breaking are unchanged.
         if dist_sq > aggro_radius_sq {
             continue;
         }
@@ -589,6 +668,9 @@ fn acquire_npc_attack_target(
             .as_ref()
             .is_some_and(|existing| dist_sq >= existing.distance * existing.distance)
         {
+            continue;
+        }
+        if !can_harm(ctx, npc_identity, candidate.identity) {
             continue;
         }
 
@@ -599,12 +681,12 @@ fn acquire_npc_attack_target(
             (0.0, 1.0)
         };
         best = Some(NpcAttackTarget {
-            identity: state.player_id,
-            pos_x: physics.pos_x,
-            pos_y: physics.pos_y,
-            pos_z: physics.pos_z,
-            hit_radius: state.hit_radius,
-            hit_height: state.hit_height,
+            identity: candidate.identity,
+            pos_x: candidate.pos_x,
+            pos_y: candidate.pos_y,
+            pos_z: candidate.pos_z,
+            hit_radius: candidate.hit_radius,
+            hit_height: candidate.hit_height,
             distance,
             dir_x,
             dir_z,

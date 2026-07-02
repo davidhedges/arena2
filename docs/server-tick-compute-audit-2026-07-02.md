@@ -129,9 +129,29 @@ counters) is assumed as the write-side counterpart of this audit's instrumentati
   persist via the gated upsert. Expected re-measure:
   `writes_npc_combat_runtime` ≈ 0 during steady chase/cooldown, writes only on
   attack/retarget.
-- **T4 — not started** (`npc_combat` stays under ~0.6 ms with 1-2 NPCs × 39
-  actors; its per-tick view collect is now gone via view A. Revisit with real
-  NPC packs).
+- **T4 — implemented and verified with a 20-kobold pack (2026-07-02).**
+  Fourth capture, 20 hostile NPCs engaging 1 player (`ARENA_NPC_HARMLESS`
+  build): `npc_target_pairs` = **exactly 20/tick** in every window (N_hostile
+  × 1 candidate); `writes_npc_combat_runtime` ≈ **0.4/tick** (swing writes
+  only — the chase-slide removal verified; the old slide would have written
+  20/tick); `npc_combat` sampled span 0.2-2.4 ms at 20 NPCs — the remaining
+  cost is chase collision sweeps and attack resolution (real gameplay work),
+  not targeting. Totals 0.8-3.9 ms with the whole pack in melee. Note: under
+  NPC load SpacetimeDB runs more pooled wasm instances, so `[TICK_PROFILE_SCAN]`
+  lines appear more often with smaller/uneven `ticks=` counts — the per-tick
+  ratios remain exact (every window read 20 pairs/tick). `collect_npc_target_candidates` resolves
+  each alive non-dummy player's world context and physics **once per tick**
+  (table order preserved for tie-breaking); `acquire_npc_attack_target`
+  resolves the NPC's context once per NPC, iterates the shared candidate list,
+  and runs the squared-distance pre-check before `can_harm`. The eligible
+  target set, nearest-wins selection, and tie-breaking are unchanged by
+  construction. New `npc_target_pairs=` counter in `[TICK_PROFILE_SCAN]`
+  (≈ hostile NPCs × candidates per tick) is the scaling gate. Verify with an
+  NPC pack: kobolds must still aggro/chase/attack only same-scene targets at
+  the same radius, and the `npc_combat` sampled span should stay flat as the
+  pack grows (it was 0.08-0.6 ms at 1-2 NPCs). Note: NPCs never target
+  dummies (`is_dummy` targets are skipped by design), so pack tests need the
+  player in aggro range.
 
 ## Measurement status (read this first)
 

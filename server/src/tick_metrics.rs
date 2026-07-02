@@ -156,6 +156,7 @@ static STATUS_COLLECT_MICROS: AtomicU64 = AtomicU64::new(0);
 static STATUS_COLLECT_ROWS: AtomicU64 = AtomicU64::new(0);
 static EQUIPMENT_SCAN_COUNT: AtomicU64 = AtomicU64::new(0);
 static MOVE_FALLBACK_COUNT: AtomicU64 = AtomicU64::new(0);
+static NPC_TARGET_PAIRS_SCANNED: AtomicU64 = AtomicU64::new(0);
 static TABLE_WRITE_COUNTS: [AtomicU64; TABLE_WRITE_KIND_COUNT] = [
     AtomicU64::new(0),
     AtomicU64::new(0),
@@ -185,6 +186,13 @@ pub(crate) fn record_move_fallback() {
     MOVE_FALLBACK_COUNT.fetch_add(1, Ordering::Relaxed);
 }
 
+pub(crate) fn record_npc_target_pairs_scanned(pairs: u64) {
+    if !profiling_enabled() {
+        return;
+    }
+    NPC_TARGET_PAIRS_SCANNED.fetch_add(pairs, Ordering::Relaxed);
+}
+
 pub(crate) fn record_table_write(kind: TableWriteKind) {
     if !profiling_enabled() {
         return;
@@ -198,6 +206,7 @@ pub(crate) struct TickScanWindowSnapshot {
     pub status_collect_rows: u64,
     pub equipment_scan_count: u64,
     pub move_fallback_count: u64,
+    pub npc_target_pairs_scanned: u64,
     pub table_writes: [u64; TABLE_WRITE_KIND_COUNT],
 }
 
@@ -213,6 +222,7 @@ pub(crate) fn snapshot_and_reset() -> TickScanWindowSnapshot {
         status_collect_rows: STATUS_COLLECT_ROWS.swap(0, Ordering::Relaxed),
         equipment_scan_count: EQUIPMENT_SCAN_COUNT.swap(0, Ordering::Relaxed),
         move_fallback_count: MOVE_FALLBACK_COUNT.swap(0, Ordering::Relaxed),
+        npc_target_pairs_scanned: NPC_TARGET_PAIRS_SCANNED.swap(0, Ordering::Relaxed),
         table_writes,
     }
 }

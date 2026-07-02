@@ -11,6 +11,17 @@ training-ground scene — everything below runs in the normal open world.
 ARENA_PROFILE_TICKS=1 ./ops/republish-local-clear.sh
 ```
 
+For NPC-pack tests where you must stand inside aggro range (NPCs never target
+dummies), also bake `ARENA_NPC_HARMLESS=1` — it zeroes NPC attack damage at
+the template level while keeping aggro, chase, cadence, and swing events real:
+
+```bash
+ARENA_NPC_HARMLESS=1 ARENA_PROFILE_TICKS=1 ./ops/republish-local-clear.sh
+```
+
+The module logs a warning at first NPC-template access when it's active.
+Local measurement builds only — never deploy with it.
+
 The gate must be set at **build** time: the module targets
 `wasm32-unknown-unknown`, where process env vars do not exist at runtime
 (`std::env::var_os` is always `None`), so a runtime env var can never enable
@@ -63,9 +74,11 @@ module in a pool of wasm instances, and each instance carries its own copy of
 the profiler's static state. Ticks are distributed across instances, so each
 scan line covers only the ticks that ran on that instance (its window still
 spans ≥5s of its own samples), and lines from different instances interleave —
-you may see a scan line every ~2-3 s instead of every 5 s. Counters and tick
-samples for any given tick always land on the same instance, so
-`counter / ticks` is exact. Divide everything by the line's `ticks=` value.
+you may see a scan line every ~2-3 s instead of every 5 s, and more often
+(with smaller, uneven `ticks=` counts) as load grows and the host activates
+more instances. Counters and tick samples for any given tick always land on
+the same instance, so `counter / ticks` is exact. Divide everything by the
+line's `ticks=` value.
 `status_collect_ms` is always `0.00` in the module (no `Instant` on wasm);
 use the sampled `tick_profile/*` lines for wall-clock.
 
