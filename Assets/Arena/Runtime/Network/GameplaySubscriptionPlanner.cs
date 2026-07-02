@@ -45,6 +45,7 @@ namespace Arena.Network
         internal static string[] BuildLocalQuerySqls(Identity localIdentity)
         {
             QueryBuilder qb = new();
+            string localIdentityKey = localIdentity.ToString();
             return new[]
             {
                 qb.From.PlayerWorld().Where(c => c.Identity.Eq(localIdentity)).ToSql(),
@@ -61,21 +62,23 @@ namespace Arena.Network
                 new QueryBuilder().From.ActiveCombatMode().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
                 new QueryBuilder().From.PartyInvite().Where(c => c.Invitee.Eq(localIdentity)).ToSql(),
                 new QueryBuilder().From.EquipmentLoadout().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
-                // Inventory rows are owner-filtered (netcode audit R4): the
+                // Inventory rows are owner-key filtered (netcode audit R4): the
                 // client receives its own containers/slots/items plus unowned
                 // world-loot rows (corpse/chest/loot contents carry empty
                 // owner keys; the containers themselves are world-scoped by
                 // the loot queries in the scoped group). Other players'
-                // inventories are never replicated.
-                new QueryBuilder().From.InventoryContainer().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
-                new QueryBuilder().From.InventoryContainer().Where(c => c.Owner.Eq(localIdentity))
+                // inventories are never replicated. The parallel nullable
+                // Identity columns cannot be compared to raw identity literals
+                // in subscription SQL.
+                new QueryBuilder().From.InventoryContainer().Where(c => c.OwnerKey.Eq(localIdentityKey)).ToSql(),
+                new QueryBuilder().From.InventoryContainer().Where(c => c.OwnerKey.Eq(localIdentityKey))
                     .RightSemijoin(new QueryBuilder().From.InventorySlot(), (container, slot) => container.ContainerId.Eq(slot.ContainerId))
                     .ToSql(),
-                new QueryBuilder().From.ItemInstance().Where(c => c.CurrentOwner.Eq(localIdentity)).ToSql(),
-                new QueryBuilder().From.ItemInstance().Where(c => c.CurrentOwner.Eq(localIdentity))
+                new QueryBuilder().From.ItemInstance().Where(c => c.CurrentOwnerKey.Eq(localIdentityKey)).ToSql(),
+                new QueryBuilder().From.ItemInstance().Where(c => c.CurrentOwnerKey.Eq(localIdentityKey))
                     .RightSemijoin(new QueryBuilder().From.ItemSpell(), (item, spell) => item.ItemInstanceId.Eq(spell.ItemInstanceId))
                     .ToSql(),
-                new QueryBuilder().From.ItemInstance().Where(c => c.CurrentOwner.Eq(localIdentity))
+                new QueryBuilder().From.ItemInstance().Where(c => c.CurrentOwnerKey.Eq(localIdentityKey))
                     .RightSemijoin(new QueryBuilder().From.ItemAffixInstance(), (item, affix) => item.ItemInstanceId.Eq(affix.ItemInstanceId))
                     .ToSql(),
                 // World-loot item rows cannot be world-scoped in one

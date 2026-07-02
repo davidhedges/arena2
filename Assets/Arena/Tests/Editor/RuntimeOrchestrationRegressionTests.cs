@@ -237,6 +237,8 @@ namespace Arena.Tests.Editor
             string[] localSql = (string[])RequireMethod(plannerType, "BuildLocalQuerySqls", localIdentity.GetType()).Invoke(null, new[] { localIdentity })!;
 
             string staticSqlText = string.Join("\n", staticSql);
+            string localSqlText = string.Join("\n", localSql);
+            string localIdentityKey = localIdentity.ToString()!;
             Assert.That(staticSqlText, Does.Contain("\"ability_catalog\""));
             Assert.That(staticSqlText, Does.Contain("\"action_presentation_catalog\""));
             Assert.That(staticSqlText, Does.Contain("\"combat_vfx_cue_catalog\""));
@@ -256,25 +258,32 @@ namespace Arena.Tests.Editor
             Assert.That(staticSqlText, Does.Not.Contain("\"fixed_action_binding_catalog\""));
             Assert.That(staticSqlText, Does.Not.Contain("\"class_catalog\""));
 
-            Assert.That(localSql, Has.Length.EqualTo(16));
+            Assert.That(localSql, Has.Length.EqualTo(22));
             Assert.That(localSql[0], Does.Contain("\"player_world\""));
-            Assert.That(localSql[0], Does.Contain(localIdentity.ToString()!));
-            Assert.That(localSql[1], Does.Contain("\"player_open_world_scene\""));
-            Assert.That(localSql[2], Does.Contain("\"character_action_bar_assignment\""));
-            Assert.That(localSql[3], Does.Contain("\"character_appearance\""));
-            Assert.That(localSql[4], Does.Contain("\"player_known_spell\""));
-            Assert.That(localSql[5], Does.Contain("\"global_cooldown\""));
-            Assert.That(localSql[6], Does.Contain("\"spell_cooldown\""));
-            Assert.That(localSql[7], Does.Contain("\"predicted_action_result\""));
-            Assert.That(localSql[8], Does.Contain("\"fixed_action_charge_state\""));
-            Assert.That(localSql[9], Does.Contain("\"active_combat_mode\""));
-            Assert.That(localSql[10], Does.Contain("\"party_invite\""));
-            Assert.That(localSql[11], Does.Contain("\"equipment_loadout\""));
-            Assert.That(localSql[12], Does.Contain("\"inventory_container\""));
-            Assert.That(localSql[13], Does.Contain("\"inventory_slot\""));
-            Assert.That(localSql[14], Does.Contain("\"item_instance\""));
-            Assert.That(localSql[15], Does.Contain("\"item_affix_instance\""));
-            Assert.That(string.Join("\n", localSql), Does.Not.Contain("\"character_progression\""));
+            Assert.That(localSql[0], Does.Contain(localIdentityKey));
+            Assert.That(localSqlText, Does.Contain("\"player_open_world_scene\""));
+            Assert.That(localSqlText, Does.Contain("\"character_action_bar_assignment\""));
+            Assert.That(localSqlText, Does.Contain("\"character_appearance\""));
+            Assert.That(localSqlText, Does.Contain("\"player_known_spell\""));
+            Assert.That(localSqlText, Does.Contain("\"global_cooldown\""));
+            Assert.That(localSqlText, Does.Contain("\"spell_cooldown\""));
+            Assert.That(localSqlText, Does.Contain("\"predicted_action_result\""));
+            Assert.That(localSqlText, Does.Contain("\"fixed_action_charge_state\""));
+            Assert.That(localSqlText, Does.Contain("\"active_combat_discipline\""));
+            Assert.That(localSqlText, Does.Contain("\"character_combat_discipline_weapon_loadout\""));
+            Assert.That(localSqlText, Does.Contain("\"active_combat_mode\""));
+            Assert.That(localSqlText, Does.Contain("\"party_invite\""));
+            Assert.That(localSqlText, Does.Contain("\"equipment_loadout\""));
+            Assert.That(localSqlText, Does.Contain("\"inventory_container\""));
+            Assert.That(localSqlText, Does.Contain("\"inventory_slot\""));
+            Assert.That(localSqlText, Does.Contain("\"item_instance\""));
+            Assert.That(localSqlText, Does.Contain("\"item_spell\""));
+            Assert.That(localSqlText, Does.Contain("\"item_affix_instance\""));
+            Assert.That(localSqlText, Does.Contain($"\"inventory_container\".\"owner_key\" = '{localIdentityKey}'"));
+            Assert.That(localSqlText, Does.Contain($"\"item_instance\".\"current_owner_key\" = '{localIdentityKey}'"));
+            Assert.That(localSqlText, Does.Not.Contain("\"inventory_container\".\"owner\" = 0x"));
+            Assert.That(localSqlText, Does.Not.Contain("\"item_instance\".\"current_owner\" = 0x"));
+            Assert.That(localSqlText, Does.Not.Contain("\"character_progression\""));
         }
 
         [Test]
