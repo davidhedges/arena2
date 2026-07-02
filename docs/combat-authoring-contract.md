@@ -315,8 +315,15 @@ Consequences, accepted deliberately:
   timeline, you dodged. The defender's-eye view is always honest.
 
 Client presentation may predict *startup* (animation, VFX, cast bars, the
-gap-close windup) but never outcomes: damage numbers, health, hit reactions,
-and impact VFX remain 100% authoritative.
+gap-close windup) but never outcomes: damage numbers, health, and hit
+reactions remain 100% authoritative. One deliberate, flag-gated cosmetic
+exception: the predicted melee contact cue (feel audit F5 slice 2,
+`PredictedMeleeContactCueController`) plays the authored impact spark/audio +
+a ≤50 ms hitstop at the authored first hit window when a client-side ADVISORY
+hit test passes against rendered positions — it decides nothing (the server
+may still whiff), the duplicate authoritative impact cue is suppressed, and
+the whole layer is killable via its compile-time constant or the overlay flag
+if the false-positive rate makes it read as a lie.
 
 **Rewind-based lag compensation is speculative redesign — do not implement it**
 (not even partially, not "just for melee"). It requires server-side historical

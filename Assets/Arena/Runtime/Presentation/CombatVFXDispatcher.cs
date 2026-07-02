@@ -284,6 +284,74 @@ namespace Arena.Presentation
             }
         }
 
+        /// <summary>
+        /// Predicted melee contact cue (feel audit F5 slice 2): plays the
+        /// authored MELEE_IMPACT cue set at rendered positions when the
+        /// advisory hit test passes at the authored first hit window. The
+        /// matching authoritative impact cue is suppressed as a duplicate via
+        /// PredictedMeleeContactCueController; block/parry/miss presentation
+        /// and everything gameplay-facing stay authoritative.
+        /// </summary>
+        public static void PlayPredictedLocalMeleeContactCue(
+            DbConnection conn,
+            PlayerEntity caster,
+            ICombatTargetEntity target,
+            string runtimeActionId,
+            int hitIndex)
+        {
+            if (!ArenaRuntimeSceneGate.ShouldRunArenaRuntimeInActiveScene())
+                return;
+
+            _instance?.PlayPredictedLocalMeleeContactCueInternal(conn, caster, target, runtimeActionId, hitIndex);
+        }
+
+        private void PlayPredictedLocalMeleeContactCueInternal(
+            DbConnection conn,
+            PlayerEntity caster,
+            ICombatTargetEntity target,
+            string runtimeActionId,
+            int hitIndex)
+        {
+            if (caster == null || caster.IsDestroyed || target == null || target.IsDestroyed)
+                return;
+
+            string combatProfile = CombatProfileResolver.ResolveForEntity(conn, caster);
+            string strikeId = WireIdentifier.Normalize(
+                CombatActionIds.ResolveAuthoredStrikeId(conn, combatProfile, runtimeActionId));
+            if (string.IsNullOrWhiteSpace(strikeId))
+                return;
+
+            Vector3 origin = caster.GameObject.transform.position;
+            Vector3 point = target.GetPresentationRoot().position;
+            Vector3 direction = point - origin;
+            direction.y = 0f;
+            direction = direction.sqrMagnitude > 0.000001f
+                ? direction.normalized
+                : ResolveLocalCasterForward(caster);
+
+            var fact = new CombatVfxFact(
+                TriggerMeleeImpact,
+                string.Empty,
+                ResolveLocalAbilityId(conn, caster.Identity, runtimeActionId),
+                strikeId,
+                hitIndex,
+                caster.Identity,
+                target.TargetIdentity,
+                $"predicted_melee_contact:{runtimeActionId}",
+                runtimeActionId,
+                origin,
+                direction,
+                point,
+                0f,
+                0f,
+                CombatEventScalarKinds.None,
+                0f,
+                0,
+                1,
+                isSpell: false);
+            DispatchFact(fact);
+        }
+
         private void OnCombatVfxCueCatalogInsert(EventContext ctx, CombatVfxCueCatalog row)
         {
             _ = ctx;
@@ -349,6 +417,13 @@ namespace Arena.Presentation
             if (ShouldSuppressPredictedLocalSpellEvent(row))
                 return;
 
+            // Feel audit F5 slice 2: feed melee contact-family rows to the
+            // predicted-contact correlation before BuildFact can drop them
+            // (melee COMBAT_CONTACT has no cue trigger). Suppression skips
+            // only the duplicate cue dispatch; terminal routing still runs.
+            bool suppressPredictedMeleeContactCue =
+                PredictedMeleeContactCueController.ShouldSuppressAuthoritativeContactCue(row);
+
             CombatVfxFact? fact = BuildFact(row);
             if (fact == null)
                 return;
@@ -373,7 +448,8 @@ namespace Arena.Presentation
                 _lifecycle.RouteRelease(fact.Value.ToTemplateContext(string.Empty));
             }
 
-            DispatchFact(fact.Value);
+            if (!suppressPredictedMeleeContactCue)
+                DispatchFact(fact.Value);
         }
 
         private void OnProjectilePresentationEventInsert(EventContext ctx, ProjectilePresentationEvent row)

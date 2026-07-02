@@ -206,21 +206,23 @@ namespace Arena.Input
                 }
             }
 
-            // Range check — horizontal distance against the server-synced definition.
+            // Range check — horizontal distance against the server-synced
+            // definition, via the geometry the predicted contact cue's
+            // advisory test replays at the first hit window (feel audit F5).
             var localPos = entity.GameObject.transform.position;
+            float strikeRange = 0f;
+            float minimumRange = 0f;
             if (requiresTarget)
             {
-                float strikeRange = MeleeAttackModifierResolver.ResolveEffectiveRange(
+                strikeRange = MeleeAttackModifierResolver.ResolveEffectiveRange(
                     conn,
                     entity.Identity,
                     gameplay.Range,
                     nowMs);
                 var targetPos = target!.GetPresentationRoot().position;
-                float horizDist = Mathf.Sqrt(
-                    (localPos.x - targetPos.x) * (localPos.x - targetPos.x) +
-                    (localPos.z - targetPos.z) * (localPos.z - targetPos.z));
+                float horizDist = MeleeStrikeGeometry.HorizontalDistance(localPos, targetPos);
                 float targetRadius = Mathf.Max(0f, target.HitRadius);
-                float strictAllowedDistance = strikeRange + targetRadius;
+                float strictAllowedDistance = MeleeStrikeGeometry.MaximumContactDistance(strikeRange, targetRadius);
                 if (horizDist > strictAllowedDistance)
                 {
                     ActionBarTrace.Trace(
@@ -229,10 +231,10 @@ namespace Arena.Input
                             : $"melee rejected: {slotId} out of range dist={horizDist:F2} allowed={strictAllowedDistance:F2} range={strikeRange:F2} target_radius={targetRadius:F2}");
                     return false;
                 }
-                float minimumRange = Mathf.Max(0f, gameplay.MinimumRange);
+                minimumRange = Mathf.Max(0f, gameplay.MinimumRange);
                 if (minimumRange > 0f)
                 {
-                    float strictMinimumDistance = minimumRange + targetRadius;
+                    float strictMinimumDistance = MeleeStrikeGeometry.MinimumContactDistance(minimumRange, targetRadius);
                     if (horizDist < strictMinimumDistance)
                     {
                         ActionBarTrace.Trace(
@@ -303,6 +305,23 @@ namespace Arena.Input
             }
 
             TriggerLocalStrike(entity, slotId, nowMs, token, predictedGapCloseWindup: gapClose != null);
+            if (token.IsPredicted && gapClose == null && requiresTarget)
+            {
+                // Predicted contact cue (feel audit F5 slice 2): schedule the
+                // advisory hit test at the authored first hit window.
+                // Gap-close presses are excluded — their contact moment
+                // depends on the server-owned dash.
+                PredictedMeleeContactCueController.OnPredictedLocalStrike(
+                    conn,
+                    entity,
+                    target!,
+                    token,
+                    combatProfile,
+                    slotId,
+                    strikeRange,
+                    minimumRange,
+                    nowMs);
+            }
             return true;
         }
 
@@ -358,18 +377,10 @@ namespace Arena.Input
 
         private static bool IsTargetWithinFacingArc(PlayerEntity entity, ICombatTargetEntity target)
         {
-            Vector3 delta = target.GetPresentationRoot().position - entity.GameObject.transform.position;
-            delta.y = 0.0f;
-            if (delta.sqrMagnitude <= 0.0001f)
-                return true;
-
-            Vector3 forward = entity.GameObject.transform.forward;
-            forward.y = 0.0f;
-            if (forward.sqrMagnitude <= 0.0001f)
-                return true;
-
-            float dot = Vector3.Dot(forward.normalized, delta.normalized);
-            return dot >= 0.0f;
+            return MeleeStrikeGeometry.IsWithinFacingArc(
+                entity.GameObject.transform.forward,
+                entity.GameObject.transform.position,
+                target.GetPresentationRoot().position);
         }
 
         private bool HasResourceForMeleeAction(DbConnection conn, PlayerEntity entity, string actionId)
@@ -548,6 +559,10 @@ namespace Arena.Input
         {
             if (row.Family != PredictedActionFamily.Melee)
                 return;
+
+            // Predicted contact cue correlation shares this subscription
+            // (feel audit F5 slice 2).
+            PredictedMeleeContactCueController.OnPredictedActionResult(row);
 
             string tokenKey = ActionTokenKey(row.PredictedActionId, row.ClientActionSeq);
             if (row.Result == ActionResultKind.Accepted)

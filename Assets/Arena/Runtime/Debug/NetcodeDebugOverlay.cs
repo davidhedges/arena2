@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using Arena.Entity;
 using Arena.Input;
+using Arena.Presentation;
 using Arena.Simulation;
 using Arena.Network;
 using Arena.Combat;
@@ -13,9 +14,10 @@ namespace Arena.Debugging
     /// <summary>
     /// Displays key netcode metrics in an on-screen overlay.
     /// Toggle with backslash. While visible, semicolon A/B-toggles the
-    /// F4 server-time remote timeline (RemotePresentationBuffer).
-    /// (Right/left bracket are taken: NetworkEnvironmentOverlay and
-    /// LineOfSightDebugGuide.)
+    /// F4 server-time remote timeline (RemotePresentationBuffer) and quote
+    /// toggles the F5 predicted melee contact cue
+    /// (PredictedMeleeContactCueController). (Right/left bracket are taken:
+    /// NetworkEnvironmentOverlay and LineOfSightDebugGuide.)
     /// </summary>
     public class NetcodeDebugOverlay : MonoBehaviour
     {
@@ -24,6 +26,7 @@ namespace Arena.Debugging
         private GUIStyle? _headerStyle;
         private const KeyCode ToggleKey = KeyCode.Backslash;
         private const KeyCode ServerTimelineToggleKey = KeyCode.Semicolon;
+        private const KeyCode PredictedContactCueToggleKey = KeyCode.Quote;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
@@ -50,6 +53,10 @@ namespace Arena.Debugging
             if (_visible && UnityEngine.Input.GetKeyDown(ServerTimelineToggleKey))
                 RemotePresentationBuffer.ServerTimeTimelineEnabled =
                     !RemotePresentationBuffer.ServerTimeTimelineEnabled;
+
+            if (_visible && UnityEngine.Input.GetKeyDown(PredictedContactCueToggleKey))
+                PredictedMeleeContactCueController.DebugEnabled =
+                    !PredictedMeleeContactCueController.DebugEnabled;
         }
 
         private void OnGUI()
@@ -175,6 +182,7 @@ namespace Arena.Debugging
 
             y = DrawRemotePresentationSection(x, y, lineHeight);
             y = DrawPredictedActionResultSection(x, y, lineHeight);
+            y = DrawPredictedContactCueSection(x, y, lineHeight);
             y = DrawReceiveRateSection(x, y, lineHeight);
 
             var conn = NetworkManager.Instance?.Conn;
@@ -386,6 +394,29 @@ namespace Arena.Debugging
 
             y += 8;
             GUI.Label(new Rect(x, y, 900, lineHeight), builder.ToString(), _style);
+            y += lineHeight;
+            return y;
+        }
+
+        /// <summary>
+        /// Predicted melee contact cue instrumentation (feel audit F5
+        /// slice 2). falsePos = cue fired but no matching authoritative
+        /// impact within 500 ms — the number that decides whether the cue
+        /// reads as a lie and gets tuned down or killed.
+        /// </summary>
+        private float DrawPredictedContactCueSection(float x, float y, float lineHeight)
+        {
+            if (!PredictedMeleeContactCueController.FeatureCompiledIn)
+                return y;
+
+            string state = PredictedMeleeContactCueController.IsActive ? "ON" : "OFF";
+            GUI.Label(
+                new Rect(x, y, 900, lineHeight),
+                $"Predicted contact cues (' to toggle): {state}  fired={PredictedMeleeContactCueController.CuesFired}"
+                + $" matched={PredictedMeleeContactCueController.MatchedCues}"
+                + $" falsePos={PredictedMeleeContactCueController.FalsePositives}"
+                + $" suppressedAuth={PredictedMeleeContactCueController.SuppressedAuthoritativeCues}",
+                _style);
             y += lineHeight;
             return y;
         }

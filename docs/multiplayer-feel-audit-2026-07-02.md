@@ -10,10 +10,14 @@ referenced but not repeated.
 - **Manual latency verification tabled (2026-07-02).** All by-hand runtime
   checks are deliberately deferred, not forgotten: the F4 live conditioner
   A/B (extrap ratio + hard snaps, old vs new timeline, overlay semicolon
-  toggle) and the F5 Profile A checks (gap-closer press → instant windup,
+  toggle), the F5 Profile A checks (gap-closer press → instant windup,
   dash ~RTT later with no pose pop; rejected press unwinds windup +
-  cooldown + resource). Recipe: `docs/latency-testing.md`. Run these before
-  tuning anything that depends on them (e.g. F4 adaptive delay).
+  cooldown + resource), and the F5 slice-2 contact-cue check (melee vs
+  strafing target under Profile A — count contact-cue-but-no-damage per
+  100 swings via the overlay falsePos counter; tune the cue down or flip
+  its flag off on that number). Recipe: `docs/latency-testing.md`. Run
+  these before tuning anything that depends on them (e.g. F4 adaptive
+  delay).
 - **F1 steps 1–3 — implemented.** `PredictedActionLedger` +
   `LocalCombatState.PredictActionStart` / `RollbackPrediction` /
   `ReleasePredictedPrimaryResource`; melee and spell press paths route their
@@ -118,7 +122,7 @@ referenced but not repeated.
   the win), local-player path, special-movement track sampling, send
   rates.
 - **F5 — slice 1 implemented (predicted gap-closer startup + no-lag-comp
-  stance); contact cues (slice 2) not started.** On a gap-close press the
+  stance); slice 2 below.** On a gap-close press the
   client now plays the authored windup immediately as a predicted
   presentation: `MeleeInputHandler` routes the gap-close branch through the
   same `CombatAnimationRequest.PredictedMeleeSkill` path as ordinary
@@ -158,8 +162,47 @@ referenced but not repeated.
   schema change. Still to do by hand: `docs/latency-testing.md` Profile A —
   gap-closer press shows instant windup, dash starts ~RTT later with no
   pose pop; rejected press (out of range / LOS) unwinds windup + cooldown +
-  resource together. Non-goals held: contact cues (slice 2), predicting
-  dash movement, lag-compensated rewind, projectile flight prediction.
+  resource together. Non-goals held: predicting dash movement,
+  lag-compensated rewind, projectile flight prediction.
+- **F5 — slice 2 implemented (predicted contact cues, cosmetic-only,
+  flag-gated).** At the authored first hit window of a predicted local
+  melee press (`CombatAnimationSet.GetStrikeFirstHitWindowSeconds`, scaled
+  reference→played clip like playback's other authored thresholds),
+  `PredictedMeleeContactCueController` runs an ADVISORY hit test against
+  current rendered positions using the press gate's own range/facing math —
+  extracted into `MeleeStrikeGeometry` and composed by both
+  `MeleeInputHandler.TryTriggerAction` and the advisory test, so the two
+  can never drift. On a pass it plays a light contact layer only: the
+  authored `MELEE_IMPACT` cue set dispatched through `CombatVFXDispatcher`
+  at rendered positions, plus a ≤50 ms animator hitstop in the new
+  `MeleeContactHitstop` component (`PlayerAnimator` untouched, per
+  maintenance mode). Damage numbers, health, and target hit reactions stay
+  100% authoritative — predict startup, never outcomes
+  (`docs/combat-authoring-contract.md`, "Hit Validation Timing").
+  Gap-close presses are excluded (their contact moment depends on the
+  server-owned dash; slice-1 suppression/rollback paths untouched).
+  Gating: compile-time kill switch
+  (`PredictedMeleeContactCueController.CompiledIn`) plus a default-ON
+  debug flag, runtime-toggleable with quote while the netcode overlay is
+  visible (backslash/semicolon/brackets taken; no F-keys per repo
+  standard). Duplicate suppression: the authoritative `COMBAT_IMPACT` for
+  the same action instance + target + hit index is consumed exactly once
+  as a duplicate; `COMBAT_CONTACT`/`COMBAT_BLOCK`/`COMBAT_PARRY` confirm
+  the correlation but always play — correlated through the
+  `PredictedActionResult` accepted-token → action-instance map, the same
+  pattern slice 1 used for the animation start. Instrumentation:
+  `PredictedMeleeContactCueLedger` counts false positives (cue fired, no
+  matching authoritative contact within 500 ms, or the press was rejected
+  after the cue) and the overlay shows
+  fired/matched/falsePos/suppressedAuth. Editor tests:
+  `Assets/Arena/Tests/Editor/PredictedMeleeContactCueTests.cs` — advisory
+  geometry boundaries (range + target radius + minimum range + facing
+  arc), correlation (match within window vs timeout vs rejection;
+  authoritative-first cancels the scheduled cue), and suppression exactly
+  once. Client-only, no schema change. Still to do by hand: the Profile A
+  contact-cue count in the tabled note above. Non-goals held: predicting
+  damage/reactions/numbers, lag-compensated rewind, projectile flight
+  prediction, gap-closer changes.
 
 ## Executive Summary
 
