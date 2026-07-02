@@ -54,7 +54,7 @@ namespace Arena.Simulation
         /// Runtime A/B toggle for the F4 server-time timeline (all buffers at
         /// once). Off, or unusable (no clock estimate / snapshot without
         /// ServerTimeMs), falls back to the pre-F4 arrival timeline.
-        /// Surfaced in NetcodeDebugOverlay (right bracket while visible).
+        /// Surfaced in NetcodeDebugOverlay (semicolon while visible).
         /// </summary>
         public static bool ServerTimeTimelineEnabled { get; set; } = true;
 

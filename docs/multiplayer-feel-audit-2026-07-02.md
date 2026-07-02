@@ -93,12 +93,13 @@ referenced but not repeated.
   the automatic fallback while the clock has no estimate, while any
   buffered snapshot lacks `ServerTimeMs` (e.g. the special-movement end
   seed), or while the runtime A/B toggle
-  (`RemotePresentationBuffer.ServerTimeTimelineEnabled`, right bracket
-  while the overlay is visible — no function keys per repo standard) is
-  off. Overlay additions: which timeline is active per aggregate
-  (players/NPCs), effective delay, and buffer-depth-in-ticks lines; the
-  F2a hard-snap/extrap-ratio/pos-error counters are the before/after
-  evidence. Editor tests (`RemotePresentationBufferTests.cs`): bursty
+  (`RemotePresentationBuffer.ServerTimeTimelineEnabled`, semicolon while
+  the netcode overlay is visible — no function keys per repo standard;
+  right/left bracket were taken by NetworkEnvironmentOverlay and
+  LineOfSightDebugGuide) is off. Overlay additions: which timeline is
+  active per aggregate (players/NPCs), effective delay, and
+  buffer-depth-in-ticks lines; the F2a hard-snap/extrap-ratio/pos-error
+  counters are the before/after evidence. Editor tests (`RemotePresentationBufferTests.cs`): bursty
   arrival times + uniform server times sample uniform motion on the
   server-time path but not on the arrival path; fallback selection for
   no-clock / missing-`ServerTimeMs` / toggle-off; grid quantization.

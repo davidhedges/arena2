@@ -12,8 +12,10 @@ namespace Arena.Debugging
 {
     /// <summary>
     /// Displays key netcode metrics in an on-screen overlay.
-    /// Toggle with backslash. While visible, right bracket A/B-toggles the
+    /// Toggle with backslash. While visible, semicolon A/B-toggles the
     /// F4 server-time remote timeline (RemotePresentationBuffer).
+    /// (Right/left bracket are taken: NetworkEnvironmentOverlay and
+    /// LineOfSightDebugGuide.)
     /// </summary>
     public class NetcodeDebugOverlay : MonoBehaviour
     {
@@ -21,7 +23,7 @@ namespace Arena.Debugging
         private GUIStyle? _style;
         private GUIStyle? _headerStyle;
         private const KeyCode ToggleKey = KeyCode.Backslash;
-        private const KeyCode ServerTimelineToggleKey = KeyCode.RightBracket;
+        private const KeyCode ServerTimelineToggleKey = KeyCode.Semicolon;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
@@ -313,7 +315,7 @@ namespace Arena.Debugging
             string abState = RemotePresentationBuffer.ServerTimeTimelineEnabled ? "ON" : "OFF";
             GUI.Label(
                 new Rect(x, y, 640, lineHeight),
-                $"Server-time timeline (] to A/B): {abState} — active on {playersOnServerTimeline}/{remoteCount} players, {npcsOnServerTimeline}/{npcCount} NPCs",
+                $"Server-time timeline (; to A/B): {abState} — active on {playersOnServerTimeline}/{remoteCount} players, {npcsOnServerTimeline}/{npcCount} NPCs",
                 _style);
             y += lineHeight;
 
