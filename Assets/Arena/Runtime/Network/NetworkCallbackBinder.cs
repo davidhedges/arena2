@@ -1,6 +1,7 @@
 #nullable enable
 
 using SpacetimeDB;
+using SpacetimeDB.BSATN;
 using SpacetimeDB.Types;
 using Arena.Debugging;
 using Arena.Entity;
@@ -12,132 +13,148 @@ namespace Arena.Network
 {
     internal static class NetworkCallbackBinder
     {
+        /// <summary>
+        /// Routes a row callback through the dev-only receive-delay queue
+        /// (feel audit F2c). With NetworkCallbackDelay disabled — the default —
+        /// Dispatch invokes inline and this is a plain pass-through.
+        /// </summary>
+        private static RemoteTableHandleBase<EventContext, TRow>.RowEventHandler Delayed<TRow>(
+            RemoteTableHandleBase<EventContext, TRow>.RowEventHandler handler)
+            where TRow : class, IStructuralReadWrite, new()
+            => (ctx, row) => NetworkCallbackDelay.Dispatch(() => handler(ctx, row));
+
+        private static RemoteTableHandleBase<EventContext, TRow>.UpdateEventHandler Delayed<TRow>(
+            RemoteTableHandleBase<EventContext, TRow>.UpdateEventHandler handler)
+            where TRow : class, IStructuralReadWrite, new()
+            => (ctx, oldRow, newRow) => NetworkCallbackDelay.Dispatch(() => handler(ctx, oldRow, newRow));
+
         internal static void BindRuntimeCallbacks(DbConnection conn, EntityRegistry registry, MatchStateCache match, LocalCombatState combat, Identity localIdentity)
         {
             NetcodeReceiveCounters.ResetForNetworkReconnect();
+            NetworkCallbackDelay.ResetForNetworkReconnect();
             BindReceiveCounters(conn);
 
-            conn.Db.PlayerPhysics.OnInsert += registry.OnPlayerPhysicsInsert;
-            conn.Db.PlayerPhysics.OnUpdate += registry.OnPlayerPhysicsUpdate;
-            conn.Db.PlayerPhysics.OnDelete += registry.OnPlayerPhysicsDelete;
+            conn.Db.PlayerPhysics.OnInsert += Delayed<PlayerPhysics>(registry.OnPlayerPhysicsInsert);
+            conn.Db.PlayerPhysics.OnUpdate += Delayed<PlayerPhysics>(registry.OnPlayerPhysicsUpdate);
+            conn.Db.PlayerPhysics.OnDelete += Delayed<PlayerPhysics>(registry.OnPlayerPhysicsDelete);
 
-            conn.Db.Player.OnInsert += registry.OnPlayerInsert;
-            conn.Db.Player.OnUpdate += registry.OnPlayerUpdate;
-            conn.Db.Player.OnDelete += registry.OnPlayerDelete;
+            conn.Db.Player.OnInsert += Delayed<Player>(registry.OnPlayerInsert);
+            conn.Db.Player.OnUpdate += Delayed<Player>(registry.OnPlayerUpdate);
+            conn.Db.Player.OnDelete += Delayed<Player>(registry.OnPlayerDelete);
 
-            conn.Db.CharacterAppearance.OnInsert += registry.OnCharacterAppearanceInsert;
-            conn.Db.CharacterAppearance.OnUpdate += registry.OnCharacterAppearanceUpdate;
-            conn.Db.CharacterAppearance.OnDelete += registry.OnCharacterAppearanceDelete;
+            conn.Db.CharacterAppearance.OnInsert += Delayed<CharacterAppearance>(registry.OnCharacterAppearanceInsert);
+            conn.Db.CharacterAppearance.OnUpdate += Delayed<CharacterAppearance>(registry.OnCharacterAppearanceUpdate);
+            conn.Db.CharacterAppearance.OnDelete += Delayed<CharacterAppearance>(registry.OnCharacterAppearanceDelete);
 
-            conn.Db.PlayerState.OnInsert += registry.OnPlayerStateInsert;
-            conn.Db.PlayerState.OnUpdate += registry.OnPlayerStateUpdate;
-            conn.Db.PlayerState.OnDelete += registry.OnPlayerStateDelete;
+            conn.Db.PlayerState.OnInsert += Delayed<PlayerState>(registry.OnPlayerStateInsert);
+            conn.Db.PlayerState.OnUpdate += Delayed<PlayerState>(registry.OnPlayerStateUpdate);
+            conn.Db.PlayerState.OnDelete += Delayed<PlayerState>(registry.OnPlayerStateDelete);
 
-            conn.Db.CombatEngagement.OnInsert += registry.OnCombatEngagementInsert;
-            conn.Db.CombatEngagement.OnUpdate += registry.OnCombatEngagementUpdate;
-            conn.Db.CombatEngagement.OnDelete += registry.OnCombatEngagementDelete;
+            conn.Db.CombatEngagement.OnInsert += Delayed<CombatEngagement>(registry.OnCombatEngagementInsert);
+            conn.Db.CombatEngagement.OnUpdate += Delayed<CombatEngagement>(registry.OnCombatEngagementUpdate);
+            conn.Db.CombatEngagement.OnDelete += Delayed<CombatEngagement>(registry.OnCombatEngagementDelete);
 
-            conn.Db.PlayerWorld.OnInsert += registry.OnPlayerWorldInsert;
-            conn.Db.PlayerWorld.OnUpdate += registry.OnPlayerWorldUpdate;
-            conn.Db.PlayerWorld.OnDelete += registry.OnPlayerWorldDelete;
+            conn.Db.PlayerWorld.OnInsert += Delayed<PlayerWorld>(registry.OnPlayerWorldInsert);
+            conn.Db.PlayerWorld.OnUpdate += Delayed<PlayerWorld>(registry.OnPlayerWorldUpdate);
+            conn.Db.PlayerWorld.OnDelete += Delayed<PlayerWorld>(registry.OnPlayerWorldDelete);
 
-            conn.Db.NpcInstance.OnInsert += registry.OnNpcInstanceInsert;
-            conn.Db.NpcInstance.OnUpdate += registry.OnNpcInstanceUpdate;
-            conn.Db.NpcInstance.OnDelete += registry.OnNpcInstanceDelete;
+            conn.Db.NpcInstance.OnInsert += Delayed<NpcInstance>(registry.OnNpcInstanceInsert);
+            conn.Db.NpcInstance.OnUpdate += Delayed<NpcInstance>(registry.OnNpcInstanceUpdate);
+            conn.Db.NpcInstance.OnDelete += Delayed<NpcInstance>(registry.OnNpcInstanceDelete);
 
-            conn.Db.NpcPhysics.OnInsert += registry.OnNpcPhysicsInsert;
-            conn.Db.NpcPhysics.OnUpdate += registry.OnNpcPhysicsUpdate;
-            conn.Db.NpcPhysics.OnDelete += registry.OnNpcPhysicsDelete;
+            conn.Db.NpcPhysics.OnInsert += Delayed<NpcPhysics>(registry.OnNpcPhysicsInsert);
+            conn.Db.NpcPhysics.OnUpdate += Delayed<NpcPhysics>(registry.OnNpcPhysicsUpdate);
+            conn.Db.NpcPhysics.OnDelete += Delayed<NpcPhysics>(registry.OnNpcPhysicsDelete);
 
-            conn.Db.NpcState.OnInsert += registry.OnNpcStateInsert;
-            conn.Db.NpcState.OnUpdate += registry.OnNpcStateUpdate;
-            conn.Db.NpcState.OnDelete += registry.OnNpcStateDelete;
+            conn.Db.NpcState.OnInsert += Delayed<NpcState>(registry.OnNpcStateInsert);
+            conn.Db.NpcState.OnUpdate += Delayed<NpcState>(registry.OnNpcStateUpdate);
+            conn.Db.NpcState.OnDelete += Delayed<NpcState>(registry.OnNpcStateDelete);
 
-            conn.Db.PlayerOpenWorldScene.OnInsert += registry.OnPlayerOpenWorldSceneInsert;
-            conn.Db.PlayerOpenWorldScene.OnUpdate += registry.OnPlayerOpenWorldSceneUpdate;
-            conn.Db.PlayerOpenWorldScene.OnDelete += registry.OnPlayerOpenWorldSceneDelete;
+            conn.Db.PlayerOpenWorldScene.OnInsert += Delayed<PlayerOpenWorldScene>(registry.OnPlayerOpenWorldSceneInsert);
+            conn.Db.PlayerOpenWorldScene.OnUpdate += Delayed<PlayerOpenWorldScene>(registry.OnPlayerOpenWorldSceneUpdate);
+            conn.Db.PlayerOpenWorldScene.OnDelete += Delayed<PlayerOpenWorldScene>(registry.OnPlayerOpenWorldSceneDelete);
 
-            conn.Db.ArenaInstance.OnInsert += registry.OnArenaInstanceInsert;
-            conn.Db.ArenaInstance.OnUpdate += registry.OnArenaInstanceUpdate;
-            conn.Db.ArenaInstance.OnDelete += registry.OnArenaInstanceDelete;
+            conn.Db.ArenaInstance.OnInsert += Delayed<ArenaInstance>(registry.OnArenaInstanceInsert);
+            conn.Db.ArenaInstance.OnUpdate += Delayed<ArenaInstance>(registry.OnArenaInstanceUpdate);
+            conn.Db.ArenaInstance.OnDelete += Delayed<ArenaInstance>(registry.OnArenaInstanceDelete);
 
-            conn.Db.ArenaInstance.OnInsert += match.OnArenaInstanceInsert;
-            conn.Db.ArenaInstance.OnUpdate += match.OnArenaInstanceUpdate;
-            conn.Db.ArenaInstance.OnDelete += match.OnArenaInstanceDelete;
+            conn.Db.ArenaInstance.OnInsert += Delayed<ArenaInstance>(match.OnArenaInstanceInsert);
+            conn.Db.ArenaInstance.OnUpdate += Delayed<ArenaInstance>(match.OnArenaInstanceUpdate);
+            conn.Db.ArenaInstance.OnDelete += Delayed<ArenaInstance>(match.OnArenaInstanceDelete);
 
-            conn.Db.StatusEffect.OnInsert += registry.OnStatusEffectInsert;
-            conn.Db.StatusEffect.OnUpdate += registry.OnStatusEffectUpdate;
-            conn.Db.StatusEffect.OnDelete += registry.OnStatusEffectDelete;
+            conn.Db.StatusEffect.OnInsert += Delayed<StatusEffect>(registry.OnStatusEffectInsert);
+            conn.Db.StatusEffect.OnUpdate += Delayed<StatusEffect>(registry.OnStatusEffectUpdate);
+            conn.Db.StatusEffect.OnDelete += Delayed<StatusEffect>(registry.OnStatusEffectDelete);
 
-            conn.Db.PlayerResource.OnInsert += registry.OnPlayerResourceInsert;
-            conn.Db.PlayerResource.OnUpdate += registry.OnPlayerResourceUpdate;
-            conn.Db.PlayerResource.OnDelete += registry.OnPlayerResourceDelete;
+            conn.Db.PlayerResource.OnInsert += Delayed<PlayerResource>(registry.OnPlayerResourceInsert);
+            conn.Db.PlayerResource.OnUpdate += Delayed<PlayerResource>(registry.OnPlayerResourceUpdate);
+            conn.Db.PlayerResource.OnDelete += Delayed<PlayerResource>(registry.OnPlayerResourceDelete);
 
-            conn.Db.DefenseState.OnInsert += registry.OnDefenseStateInsert;
-            conn.Db.DefenseState.OnUpdate += registry.OnDefenseStateUpdate;
-            conn.Db.DefenseState.OnDelete += registry.OnDefenseStateDelete;
+            conn.Db.DefenseState.OnInsert += Delayed<DefenseState>(registry.OnDefenseStateInsert);
+            conn.Db.DefenseState.OnUpdate += Delayed<DefenseState>(registry.OnDefenseStateUpdate);
+            conn.Db.DefenseState.OnDelete += Delayed<DefenseState>(registry.OnDefenseStateDelete);
 
-            conn.Db.EquipmentLoadout.OnInsert += registry.OnEquipmentLoadoutInsert;
-            conn.Db.EquipmentLoadout.OnUpdate += registry.OnEquipmentLoadoutUpdate;
-            conn.Db.EquipmentLoadout.OnDelete += registry.OnEquipmentLoadoutDelete;
+            conn.Db.EquipmentLoadout.OnInsert += Delayed<EquipmentLoadout>(registry.OnEquipmentLoadoutInsert);
+            conn.Db.EquipmentLoadout.OnUpdate += Delayed<EquipmentLoadout>(registry.OnEquipmentLoadoutUpdate);
+            conn.Db.EquipmentLoadout.OnDelete += Delayed<EquipmentLoadout>(registry.OnEquipmentLoadoutDelete);
 
-            conn.Db.ActiveCombatDiscipline.OnInsert += registry.OnActiveCombatDisciplineInsert;
-            conn.Db.ActiveCombatDiscipline.OnUpdate += registry.OnActiveCombatDisciplineUpdate;
-            conn.Db.ActiveCombatDiscipline.OnDelete += registry.OnActiveCombatDisciplineDelete;
+            conn.Db.ActiveCombatDiscipline.OnInsert += Delayed<ActiveCombatDiscipline>(registry.OnActiveCombatDisciplineInsert);
+            conn.Db.ActiveCombatDiscipline.OnUpdate += Delayed<ActiveCombatDiscipline>(registry.OnActiveCombatDisciplineUpdate);
+            conn.Db.ActiveCombatDiscipline.OnDelete += Delayed<ActiveCombatDiscipline>(registry.OnActiveCombatDisciplineDelete);
 
-            conn.Db.ActiveCombatMode.OnInsert += registry.OnActiveCombatModeInsert;
-            conn.Db.ActiveCombatMode.OnUpdate += registry.OnActiveCombatModeUpdate;
-            conn.Db.ActiveCombatMode.OnDelete += registry.OnActiveCombatModeDelete;
+            conn.Db.ActiveCombatMode.OnInsert += Delayed<ActiveCombatMode>(registry.OnActiveCombatModeInsert);
+            conn.Db.ActiveCombatMode.OnUpdate += Delayed<ActiveCombatMode>(registry.OnActiveCombatModeUpdate);
+            conn.Db.ActiveCombatMode.OnDelete += Delayed<ActiveCombatMode>(registry.OnActiveCombatModeDelete);
 
-            conn.Db.ItemInstance.OnInsert += registry.OnItemInstanceInsert;
-            conn.Db.ItemInstance.OnUpdate += registry.OnItemInstanceUpdate;
-            conn.Db.ItemInstance.OnDelete += registry.OnItemInstanceDelete;
+            conn.Db.ItemInstance.OnInsert += Delayed<ItemInstance>(registry.OnItemInstanceInsert);
+            conn.Db.ItemInstance.OnUpdate += Delayed<ItemInstance>(registry.OnItemInstanceUpdate);
+            conn.Db.ItemInstance.OnDelete += Delayed<ItemInstance>(registry.OnItemInstanceDelete);
 
-            conn.Db.ItemDefinition.OnInsert += registry.OnItemDefinitionInsert;
-            conn.Db.ItemDefinition.OnUpdate += registry.OnItemDefinitionUpdate;
+            conn.Db.ItemDefinition.OnInsert += Delayed<ItemDefinition>(registry.OnItemDefinitionInsert);
+            conn.Db.ItemDefinition.OnUpdate += Delayed<ItemDefinition>(registry.OnItemDefinitionUpdate);
 
             combat.Bind(localIdentity);
-            conn.Db.GlobalCooldown.OnInsert += combat.OnGlobalCooldownInsert;
-            conn.Db.GlobalCooldown.OnUpdate += combat.OnGlobalCooldownUpdate;
-            conn.Db.GlobalCooldown.OnDelete += combat.OnGlobalCooldownDelete;
+            conn.Db.GlobalCooldown.OnInsert += Delayed<GlobalCooldown>(combat.OnGlobalCooldownInsert);
+            conn.Db.GlobalCooldown.OnUpdate += Delayed<GlobalCooldown>(combat.OnGlobalCooldownUpdate);
+            conn.Db.GlobalCooldown.OnDelete += Delayed<GlobalCooldown>(combat.OnGlobalCooldownDelete);
 
-            conn.Db.SpellCooldown.OnInsert += combat.OnSpellCooldownInsert;
-            conn.Db.SpellCooldown.OnUpdate += combat.OnSpellCooldownUpdate;
-            conn.Db.SpellCooldown.OnDelete += combat.OnSpellCooldownDelete;
+            conn.Db.SpellCooldown.OnInsert += Delayed<SpellCooldown>(combat.OnSpellCooldownInsert);
+            conn.Db.SpellCooldown.OnUpdate += Delayed<SpellCooldown>(combat.OnSpellCooldownUpdate);
+            conn.Db.SpellCooldown.OnDelete += Delayed<SpellCooldown>(combat.OnSpellCooldownDelete);
 
-            conn.Db.FixedActionChargeState.OnInsert += combat.OnFixedActionChargeStateInsert;
-            conn.Db.FixedActionChargeState.OnUpdate += combat.OnFixedActionChargeStateUpdate;
-            conn.Db.FixedActionChargeState.OnDelete += combat.OnFixedActionChargeStateDelete;
+            conn.Db.FixedActionChargeState.OnInsert += Delayed<FixedActionChargeState>(combat.OnFixedActionChargeStateInsert);
+            conn.Db.FixedActionChargeState.OnUpdate += Delayed<FixedActionChargeState>(combat.OnFixedActionChargeStateUpdate);
+            conn.Db.FixedActionChargeState.OnDelete += Delayed<FixedActionChargeState>(combat.OnFixedActionChargeStateDelete);
 
             // Predicted action results reconcile local prediction state and presentation.
-            conn.Db.PredictedActionResult.OnInsert += combat.OnPredictedActionResultInsert;
-            conn.Db.PredictedActionResult.OnInsert += registry.OnPredictedActionResultInsert;
-            conn.Db.PredictedActionResult.OnInsert += MeleeInputHandler.OnPredictedActionResultInsert;
-            conn.Db.PredictedActionResult.OnInsert += SpellInputHandler.OnPredictedActionResultInsert;
-            conn.Db.PredictedActionResult.OnInsert += FixedActionDispatcher.OnPredictedActionResultInsert;
+            conn.Db.PredictedActionResult.OnInsert += Delayed<PredictedActionResult>(combat.OnPredictedActionResultInsert);
+            conn.Db.PredictedActionResult.OnInsert += Delayed<PredictedActionResult>(registry.OnPredictedActionResultInsert);
+            conn.Db.PredictedActionResult.OnInsert += Delayed<PredictedActionResult>(MeleeInputHandler.OnPredictedActionResultInsert);
+            conn.Db.PredictedActionResult.OnInsert += Delayed<PredictedActionResult>(SpellInputHandler.OnPredictedActionResultInsert);
+            conn.Db.PredictedActionResult.OnInsert += Delayed<PredictedActionResult>(FixedActionDispatcher.OnPredictedActionResultInsert);
 
-            conn.Db.ActiveCast.OnInsert += combat.OnActiveCastInsert;
-            conn.Db.ActiveCast.OnUpdate += combat.OnActiveCastUpdate;
-            conn.Db.ActiveCast.OnDelete += combat.OnActiveCastDelete;
+            conn.Db.ActiveCast.OnInsert += Delayed<ActiveCast>(combat.OnActiveCastInsert);
+            conn.Db.ActiveCast.OnUpdate += Delayed<ActiveCast>(combat.OnActiveCastUpdate);
+            conn.Db.ActiveCast.OnDelete += Delayed<ActiveCast>(combat.OnActiveCastDelete);
 
-            conn.Db.ActiveCast.OnInsert += registry.OnActiveCastInsert;
-            conn.Db.ActiveCast.OnUpdate += registry.OnActiveCastUpdate;
-            conn.Db.ActiveCast.OnDelete += registry.OnActiveCastDelete;
+            conn.Db.ActiveCast.OnInsert += Delayed<ActiveCast>(registry.OnActiveCastInsert);
+            conn.Db.ActiveCast.OnUpdate += Delayed<ActiveCast>(registry.OnActiveCastUpdate);
+            conn.Db.ActiveCast.OnDelete += Delayed<ActiveCast>(registry.OnActiveCastDelete);
 
-            conn.Db.MovementActionState.OnInsert += combat.OnMovementActionStateInsert;
-            conn.Db.MovementActionState.OnUpdate += combat.OnMovementActionStateUpdate;
-            conn.Db.MovementActionState.OnDelete += combat.OnMovementActionStateDelete;
+            conn.Db.MovementActionState.OnInsert += Delayed<MovementActionState>(combat.OnMovementActionStateInsert);
+            conn.Db.MovementActionState.OnUpdate += Delayed<MovementActionState>(combat.OnMovementActionStateUpdate);
+            conn.Db.MovementActionState.OnDelete += Delayed<MovementActionState>(combat.OnMovementActionStateDelete);
 
-            conn.Db.MovementActionState.OnInsert += registry.OnMovementActionStateInsert;
-            conn.Db.MovementActionState.OnUpdate += registry.OnMovementActionStateUpdate;
-            conn.Db.MovementActionState.OnDelete += registry.OnMovementActionStateDelete;
+            conn.Db.MovementActionState.OnInsert += Delayed<MovementActionState>(registry.OnMovementActionStateInsert);
+            conn.Db.MovementActionState.OnUpdate += Delayed<MovementActionState>(registry.OnMovementActionStateUpdate);
+            conn.Db.MovementActionState.OnDelete += Delayed<MovementActionState>(registry.OnMovementActionStateDelete);
 
-            conn.Db.SpecialMovementRuntime.OnInsert += registry.OnSpecialMovementRuntimeInsert;
-            conn.Db.SpecialMovementRuntime.OnUpdate += registry.OnSpecialMovementRuntimeUpdate;
-            conn.Db.SpecialMovementRuntime.OnDelete += registry.OnSpecialMovementRuntimeDelete;
+            conn.Db.SpecialMovementRuntime.OnInsert += Delayed<SpecialMovementRuntime>(registry.OnSpecialMovementRuntimeInsert);
+            conn.Db.SpecialMovementRuntime.OnUpdate += Delayed<SpecialMovementRuntime>(registry.OnSpecialMovementRuntimeUpdate);
+            conn.Db.SpecialMovementRuntime.OnDelete += Delayed<SpecialMovementRuntime>(registry.OnSpecialMovementRuntimeDelete);
 
-            conn.Db.CombatEvent.OnInsert += registry.OnCombatEventInsert;
-            conn.Db.ProjectilePresentationEvent.OnInsert += registry.OnProjectilePresentationEventInsert;
+            conn.Db.CombatEvent.OnInsert += Delayed<CombatEvent>(registry.OnCombatEventInsert);
+            conn.Db.ProjectilePresentationEvent.OnInsert += Delayed<ProjectilePresentationEvent>(registry.OnProjectilePresentationEventInsert);
         }
 
         /// <summary>

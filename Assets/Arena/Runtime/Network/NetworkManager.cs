@@ -104,9 +104,18 @@ namespace Arena.Network
         [Tooltip("Only used when Use Serialized Endpoint Override is enabled.")]
         [SerializeField] private string moduleName = NetworkEnvironmentConfig.DefaultModuleName;
 
+        /// <summary>
+        /// Cadence of the `ping_clock` RTT probe (feel audit F2b). Deliberately
+        /// slow: each ping is one reducer call and one caller-only transaction
+        /// update, and the clock estimator only needs fresh samples on the
+        /// order of seconds. Gameplay must never key off raw RTT.
+        /// </summary>
+        private const float ClockPingIntervalSeconds = 2f;
+
         private DbConnection? _conn;
         private Identity _localIdentity;
         private bool _hasLocalIdentity;
+        private float _nextClockPingRealtime;
         private NetworkEnvironmentEndpoint _activeEndpoint = NetworkEnvironmentConfig.EndpointFor(NetworkEnvironmentKind.Local);
 
         private SubscriptionHandle? _staticSubscription;
@@ -215,8 +224,37 @@ namespace Arena.Network
             registry.SetLocalIdentity(identity);
             NetworkCallbackBinder.BindRuntimeCallbacks(conn, registry, MatchStateCache.Instance, LocalCombatState.Instance, identity);
 
+            conn.Reducers.OnPingClock += HandlePingClockResult;
+            _nextClockPingRealtime = 0f;
+
             SubscribeStaticTables(conn);
             SubscribeLocalTables(conn, identity);
+        }
+
+        private void SendClockPingIfDue()
+        {
+            var conn = _conn;
+            if (conn == null || !IsConnected)
+                return;
+
+            float now = Time.realtimeSinceStartup;
+            if (now < _nextClockPingRealtime)
+                return;
+
+            _nextClockPingRealtime = now + ClockPingIntervalSeconds;
+            conn.Reducers.PingClock((ulong)DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+        }
+
+        private void HandlePingClockResult(ReducerEventContext ctx, ulong clientSendMs)
+        {
+            // Only our own probe carries a send time from our clock.
+            if (!_hasLocalIdentity || ctx.Event.CallerIdentity != _localIdentity)
+                return;
+
+            ArenaServerClock.RecordReducerSampleMicros(
+                (long)clientSendMs,
+                ctx.Event.Timestamp.MicrosecondsSinceUnixEpoch,
+                DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
         }
 
         /// <summary>
@@ -378,6 +416,7 @@ namespace Arena.Network
                 return;
 
             ArenaServerClock.Reset();
+            Arena.Debugging.NetworkCallbackDelay.ResetForNetworkReconnect();
             ResetConnectionState();
             Debug.Log($"[NetworkManager] Disconnected: {e?.Message ?? "clean"}");
         }
@@ -387,6 +426,11 @@ namespace Arena.Network
             // Dispatches all pending network messages on the main thread.
             // This is what causes OnInsert/OnUpdate/OnDelete callbacks to fire.
             _conn?.FrameTick();
+
+            // Dev-only receive-delay queue (feel audit F2c); no-op when empty.
+            Arena.Debugging.NetworkCallbackDelay.Pump();
+
+            SendClockPingIfDue();
 
             // Instance management is handled by LobbyController UI.
         }

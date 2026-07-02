@@ -32,6 +32,7 @@ mod npcs;
 mod open_world_scene;
 mod open_world_terrain;
 mod party;
+mod ping;
 mod player;
 mod player_input;
 mod player_intent;

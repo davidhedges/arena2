@@ -830,6 +830,7 @@ namespace SpacetimeDB.Types
                 Reducer.MergeStack args => Reducers.InvokeMergeStack(eventContext, args),
                 Reducer.MoveItem args => Reducers.InvokeMoveItem(eventContext, args),
                 Reducer.OpenLootNpc args => Reducers.InvokeOpenLootNpc(eventContext, args),
+                Reducer.PingClock args => Reducers.InvokePingClock(eventContext, args),
                 Reducer.PromotePartyLeader args => Reducers.InvokePromotePartyLeader(eventContext, args),
                 Reducer.PublishItemAffixDefinitions args => Reducers.InvokePublishItemAffixDefinitions(eventContext, args),
                 Reducer.PublishItemDefinitions args => Reducers.InvokePublishItemDefinitions(eventContext, args),

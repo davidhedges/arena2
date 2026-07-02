@@ -6,11 +6,18 @@ namespace Arena.Network
 {
     /// <summary>
     /// Presentation-oriented estimate of server time.
-    /// V1 production samples come from observed replicated server timestamps.
-    /// This uses a monotonic-max offset estimate: the largest observed
-    /// server-minus-client offset is treated as the lowest one-way-latency sample.
-    /// Precise reducer round-trip samples are supported by API for a future SDK
-    /// callback or ping reducer, but are not wired in production yet.
+    /// Two sample sources feed it:
+    ///   1. Observed replicated server timestamps (monotonic-max offset: the
+    ///      largest observed server-minus-client offset approximates the
+    ///      lowest one-way-latency sample and never decreases on its own).
+    ///   2. Precise reducer round-trip samples from the `ping_clock` sampler
+    ///      in <see cref="NetworkManager"/> (feel audit F2b): midpoint offset
+    ///      with RTT rejection and low-RTT banding. Once precise samples
+    ///      exist they own the estimate and can pull it back down.
+    /// Only precise samples are stored in the sample ring: the ring is read
+    /// exclusively for precise-sample statistics (low-RTT banding, snap
+    /// corroboration, RTT percentiles), and high-rate observed rows would
+    /// otherwise evict the ~0.5 Hz ping samples.
     /// </summary>
     public static class ArenaServerClock
     {
@@ -19,6 +26,7 @@ namespace Arena.Network
         private const long LowRttBandMs = 12L;
         private const long MaxAcceptedRttMs = 1000L;
         private static readonly Sample[] Samples = new Sample[MaxSamples];
+        private static readonly long[] RttScratch = new long[MaxSamples];
         private static int _sampleCount;
         private static int _nextSampleIndex;
         private static bool _hasEstimate;
@@ -27,7 +35,9 @@ namespace Arena.Network
         private static long _latestObservedServerMs;
 
         public static bool HasEstimate => _hasEstimate;
+        public static bool HasPreciseSample => _hasPreciseSample;
         public static long ServerNowMs => ClientNowMs + (long)Math.Round(_serverMinusClientMs);
+        public static double EstimatedServerMinusClientMs => _serverMinusClientMs;
         public static long LastRoundTripMs { get; private set; }
 
         private static long ClientNowMs => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
@@ -86,15 +96,43 @@ namespace Arena.Network
             AddSample(serverTimestampMs - clientReceiveMs, rttMs: long.MaxValue, precise: false);
         }
 
+        /// <summary>
+        /// Round-trip statistics over the retained precise samples
+        /// (nearest-rank percentiles). False until the first accepted
+        /// reducer sample.
+        /// </summary>
+        public static bool TryGetRttStats(out long lastMs, out long p50Ms, out long p95Ms)
+        {
+            lastMs = LastRoundTripMs;
+            p50Ms = 0L;
+            p95Ms = 0L;
+            int count = 0;
+            for (int i = 0; i < _sampleCount; i++)
+            {
+                if (Samples[i].Precise)
+                    RttScratch[count++] = Samples[i].RttMs;
+            }
+
+            if (count == 0)
+                return false;
+
+            Array.Sort(RttScratch, 0, count);
+            p50Ms = RttScratch[(int)((count - 1) * 0.5)];
+            p95Ms = RttScratch[(int)((count - 1) * 0.95)];
+            return true;
+        }
+
         private static long MicrosToMillis(long micros) => micros / 1000L;
 
         private static void AddSample(double offsetMs, long rttMs, bool precise)
         {
-            Samples[_nextSampleIndex] = new Sample(offsetMs, rttMs, precise);
-            _nextSampleIndex = (_nextSampleIndex + 1) % MaxSamples;
-            _sampleCount = Mathf.Min(_sampleCount + 1, MaxSamples);
             if (precise)
+            {
+                Samples[_nextSampleIndex] = new Sample(offsetMs, rttMs, precise);
+                _nextSampleIndex = (_nextSampleIndex + 1) % MaxSamples;
+                _sampleCount = Mathf.Min(_sampleCount + 1, MaxSamples);
                 _hasPreciseSample = true;
+            }
 
             double nextEstimate = precise
                 ? LowestRttBiasedEstimate()

@@ -28,9 +28,34 @@ referenced but not repeated.
   (aggregated over remote players), predicted-action results by kind, and
   per-table row-receive rates. Server `MOVE_FALLBACK` count is in the
   `[TICK_PROFILE_SCAN]` window line — `ARENA_PROFILE_TICKS` is compile-time
-  baked; see `docs/tick-baseline-recipe.md`. Sub-slices (b) `ping_clock`
-  (schema change) and (c) latency recipe doc — not started.
-- **F3, F4, F5 — not started** (F4/F5 gated on F2 measurements by design).
+  baked; see `docs/tick-baseline-recipe.md`.
+- **F2 sub-slice (b) — implemented.** No-op `ping_clock` reducer
+  (`server/src/ping.rs`, schema change — bindings regenerated) + a ~2 s
+  sampler in `NetworkManager` that echoes its send time through the reducer
+  arg and feeds `ArenaServerClock.RecordReducerSampleMicros` from the reducer
+  event's server timestamp — activating the dormant precise midpoint
+  estimator (RTT rejection, low-RTT banding, snap corroboration) and
+  populating `LastRoundTripMs`. One estimator fix uncovered by wiring it: the
+  sample ring now stores only precise samples — it is read exclusively for
+  precise-sample statistics, and ~30 Hz observed-row timestamps were evicting
+  the ~0.5 Hz pings, which would have permanently defeated the ≥2-sample snap
+  corroboration. Overlay gains RTT last/p50/p95 + clock offset lines
+  (precise vs observed-only tagged). Editor tests:
+  `Assets/Arena/Tests/Editor/ArenaServerClockTests.cs` — corroborated precise
+  samples override the monotonic-max estimate downward (through an
+  observed-row flood), RTT > 1000 ms rejected, percentile stats. Gameplay
+  reads nothing from RTT.
+- **F2 sub-slice (c) — implemented.** `docs/latency-testing.md`: macOS
+  `dnctl`+`pfctl` profiles (~100 ms/+30 ms jitter/1 % loss and
+  ~200 ms/+60 ms/3 %) scoped to local port 3000, with setup/verify/teardown
+  and what to expect in the overlay. Plus the optional dev-only
+  `Arena.Debugging.NetworkCallbackDelay` (default off,
+  `ARENA_CALLBACK_DELAY_MS`): FIFO deferral of binder-routed row callbacks by
+  a configurable ms — presentation-side only; caveats in the doc. Not done
+  from the F2 contract: connection-quality dot / disconnect banner
+  (contract item 4).
+- **F3, F4, F5 — not started** (F4/F5 gated on F2 measurements by design —
+  the measurements now exist, so F4/F5 are unblocked).
 
 ## Executive Summary
 

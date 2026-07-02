@@ -60,17 +60,19 @@ namespace Arena.Debugging
                 fontStyle = FontStyle.Bold,
             };
 
+            float x = 10, y = 10, lineHeight = 20;
+
+            GUI.Label(new Rect(x, y, 400, lineHeight), @"Netcode Debug (\)", _headerStyle);
+            y += lineHeight + 4;
+
+            y = DrawClockSection(x, y, lineHeight);
+
             var entity = EntityRegistry.Instance?.LocalPlayerEntity;
             if (entity == null) return;
 
             var netDriver = entity.GameObject.GetComponent<MovementNetDriver>();
             var predDriver = entity.GameObject.GetComponent<LocalMovementPredictionDriver>();
             var simState = entity.SimState;
-
-            float x = 10, y = 10, lineHeight = 20;
-
-            GUI.Label(new Rect(x, y, 400, lineHeight), @"Netcode Debug (\)", _headerStyle);
-            y += lineHeight + 4;
 
             if (netDriver != null)
             {
@@ -198,6 +200,35 @@ namespace Arena.Debugging
 
             var traceLines = ActionBarTrace.Snapshot();
             DrawTraceSection(x, ref y, lineHeight, traceLines);
+        }
+
+        /// <summary>
+        /// Server-clock estimate and ping_clock RTT statistics (feel audit
+        /// F2b). "observed-only" means no reducer round-trip sample has been
+        /// accepted yet and the offset is the one-way monotonic-max estimate.
+        /// </summary>
+        private float DrawClockSection(float x, float y, float lineHeight)
+        {
+            if (ArenaServerClock.TryGetRttStats(out long lastRtt, out long p50Rtt, out long p95Rtt))
+            {
+                GUI.Label(
+                    new Rect(x, y, 640, lineHeight),
+                    $"RTT: {lastRtt} ms  (p50: {p50Rtt} ms, p95: {p95Rtt} ms)",
+                    _style);
+                y += lineHeight;
+            }
+
+            if (ArenaServerClock.HasEstimate)
+            {
+                string source = ArenaServerClock.HasPreciseSample ? "precise" : "observed-only";
+                GUI.Label(
+                    new Rect(x, y, 640, lineHeight),
+                    $"Clock offset: {ArenaServerClock.EstimatedServerMinusClientMs:+0;-0} ms  ({source})",
+                    _style);
+                y += lineHeight;
+            }
+
+            return y;
         }
 
         /// <summary>
