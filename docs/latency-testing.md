@@ -63,10 +63,14 @@ Consequences:
   the arrival-anchored estimate means commands miss their tick continuously.
 - For any check that involves moving (denial toasts, gap-closer
   timing/rejection, contact cues, kiting for the F4 A/B), shape **downstream
-  only** (server→client). The input path stays clean — no command
-  starvation, no corrections — while row delivery still carries the
-  delay/jitter the checks measure, and server-side NPC motion is untouched
-  by definition:
+  only** (server→client). The input path stays *near*-clean: the
+  arrival-anchored tick estimate still lags by the downstream one-way delay,
+  eating ~1 of the 2 lead ticks, so expect an occasional small correction at
+  input transitions (a brief glide when stopping — observed live
+  2026-07-03). That residual is bounded and does not contaminate the
+  presentation-side checks; a continuous stream of Large-correction warnings
+  means the setup is wrong. Row delivery still carries the delay/jitter the
+  checks measure, and server-side NPC motion is untouched by definition:
 
   ```bash
   sudo dnctl pipe 2 config delay 40ms          # server -> client only
@@ -76,7 +80,12 @@ Consequences:
   ```
 
   For the F4 A/B, add the downstream jitter branch on top (pipe 4 at 65 ms,
-  `probability 30%` rule before the pipe 2 rule). Under downstream-only
+  `probability 30%` rule before the pipe 2 rule). No manual number-copying
+  is needed for the A/B: in the editor and development builds,
+  `Arena.Debugging.RemotePresentationAbLog` appends the overlay's
+  remote-presentation aggregates (players + NPCs, tagged with the active
+  timeline) to `Logs/remote-presentation-ab.csv` once per second; compare
+  legs as counter deltas within the ON/OFF segments. Under downstream-only
   shaping the overlay RTT reads roughly the downstream delay alone (the
   upstream leg is unshaped), so dot-threshold checks must put the full
   threshold into the one direction — e.g. `pipe 2 config delay 180ms`,
