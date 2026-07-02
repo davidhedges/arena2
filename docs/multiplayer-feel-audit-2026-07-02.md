@@ -127,7 +127,7 @@ The real feel gaps, in priority order:
 - **Reconnect.** `NetworkManager` resets clock, entity cache, match and combat state
   (`NetworkManager.cs:193-220,374-382,404-406`) but there is **no auto-reconnect and
   no player-facing disconnect UI** — the world freezes and buttons gray out. Manual
-  reconnect exists only on the dev-only F8 overlay (`NetworkEnvironmentOverlay.cs:65`).
+  reconnect exists only on the dev-only environment overlay (`]`) (`NetworkEnvironmentOverlay.cs:65`).
 - **Module republish.** Client experiences a disconnect (above). Server-side stale
   transient rows on reconnect are covered by the architecture audit (R1); the client
   side additionally shows nothing to the player about why they dropped.
@@ -279,7 +279,7 @@ movement plan warns about ("tuning more smoothing knobs before fixing the contra
    dev-only client hook: a delay queue wrapper that defers row-callback dispatch by a
    configurable ms (presentation-side latency simulation without touching the SDK).
 4. A small always-on connection-quality dot + disconnect banner with a reconnect
-   button (promote the F8 overlay's reconnect action to production UI).
+   button (promote the environment overlay's reconnect action to production UI).
 
 **Why it improves feel.** Indirectly but decisively: it converts every subsequent
 feel complaint into a measurable, reproducible case, and the ping reducer improves
@@ -536,7 +536,7 @@ risky; the rollback alone is already the correctness win.
 
 Environment: local SpacetimeDB (`ws://localhost:3000`) with macOS Network Link
 Conditioner (or `dnctl`/`pfctl`) shaping the client. Two clients (editor + dev
-build), one NPC-populated scene. Toggle overlays: `\` netcode, F8 environment.
+build), one NPC-populated scene. Toggle overlays: `\` netcode, `]` environment.
 
 Profiles (run every scenario at each):
 

@@ -15,11 +15,11 @@ namespace Arena.Debugging
     /// <summary>
     /// Draws the same line-of-sight probe rays used by the server:
     /// caster 85% capsule height to target upper-torso center/side probe points.
-    /// Toggle with F9.
+    /// Toggle with left bracket ([).
     /// </summary>
     internal sealed class LineOfSightDebugGuide : MonoBehaviour
     {
-        private const KeyCode ToggleKey = KeyCode.F9;
+        private const KeyCode ToggleKey = KeyCode.LeftBracket;
         private const float ProbeRadius = 0.05f;
         private const float CollisionEpsilon = 0.0001f;
         private const float OpenWorldRaycastStep = 0.25f;
@@ -100,7 +100,7 @@ namespace Arena.Debugging
             };
 
             GUILayout.BeginArea(new Rect(10f, 225f, 820f, 230f), GUI.skin.window);
-            GUILayout.Label("LOS Guide (F9)", _headerStyle);
+            GUILayout.Label("LOS Guide ([)", _headerStyle);
             GUILayout.Label("Server probes: caster 85% height -> target upper torso, center/side target offsets.", _style);
             GUILayout.Label("Targeted spells also require the target in the server-facing front 180 degrees.", _style);
             GUILayout.Label("Line color uses bundled server collision data only: heightfield, exported boxes, query meshes.", _style);

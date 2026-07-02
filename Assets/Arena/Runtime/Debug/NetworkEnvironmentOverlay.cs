@@ -7,11 +7,11 @@ using UnityEngine;
 namespace Arena.Debugging
 {
     /// <summary>
-    /// Development-only network endpoint selector. Toggle with F8.
+    /// Development-only network endpoint selector. Toggle with right bracket (]).
     /// </summary>
     internal sealed class NetworkEnvironmentOverlay : MonoBehaviour
     {
-        private const KeyCode ToggleKey = KeyCode.F8;
+        private const KeyCode ToggleKey = KeyCode.RightBracket;
         private bool _visible;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -46,7 +46,7 @@ namespace Arena.Debugging
             NetworkManager? manager = NetworkManager.Instance;
             NetworkEnvironmentEndpoint active = manager?.ActiveEndpoint ?? selected;
 
-            GUILayout.BeginArea(new Rect(10f, 10f, 440f, 210f), "Network Environment (F8)", GUI.skin.window);
+            GUILayout.BeginArea(new Rect(10f, 10f, 440f, 210f), "Network Environment (])", GUI.skin.window);
             GUILayout.Label($"Selected: {selected.DisplayName}");
             GUILayout.Label($"Selected endpoint: {selected.ServerUri} / {selected.ModuleName}");
             GUILayout.Space(6f);
