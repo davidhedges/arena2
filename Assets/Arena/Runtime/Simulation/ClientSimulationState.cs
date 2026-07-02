@@ -1,5 +1,6 @@
 using UnityEngine;
 using Arena.Input;
+using Arena.Network;
 namespace Arena.Simulation
 {
     /// <summary>
@@ -136,6 +137,9 @@ namespace Arena.Simulation
         public float PredictedRestrictionBaselineMoveSpeedMultiplier => _predictedRestrictionBaselineMoveSpeedMultiplier;
         public float RemoteInterpolationDelaySecondsForDebug => _remotePresentation.InterpolationDelaySeconds;
         public float RemoteMaxExtrapolationSecondsForDebug => _remotePresentation.MaxExtrapolationSeconds;
+        public bool RemoteUsedServerTimelineForDebug => _remotePresentation.LastTickUsedServerTimeline;
+        public float RemoteEffectiveDelayMsForDebug => _remotePresentation.LastEffectiveDelayMs;
+        public float RemoteBufferAheadTicksForDebug => _remotePresentation.LastBufferAheadTicks;
 
         public void SetIsLocalPlayer(bool isLocal)
         {
@@ -196,6 +200,9 @@ namespace Arena.Simulation
             _remotePresentation.ForceRenderPose(sampled.Position, sampled.FacingYawRadians);
 
             _remotePresentation.ResetSnapshots();
+            // The synthetic seed has no server timestamp (ServerTimeMs = 0),
+            // which holds the buffer on the arrival timeline until fresh
+            // authoritative rows push it out of the ring.
             _remotePresentation.Push(new PlayerSnapshot(
                 sampled.Position.x,
                 sampled.Position.y,
@@ -379,7 +386,12 @@ namespace Arena.Simulation
                 return;
             }
 
-            _remotePresentation.Tick(dt, Time.realtimeSinceStartup, _serverPos, _serverYaw);
+            _remotePresentation.Tick(
+                dt,
+                Time.realtimeSinceStartup,
+                ArenaServerClock.HasEstimate ? ArenaServerClock.ServerNowMs : (long?)null,
+                _serverPos,
+                _serverYaw);
         }
 
         public Vector3 GetRenderPosition() => _remotePresentation.RenderPosition;
@@ -426,18 +438,21 @@ namespace Arena.Simulation
                 return true;
             }
 
-            float renderTime = now - _remotePresentation.InterpolationDelaySeconds;
-            _remotePresentation.Sample(
-                renderTime,
+            _remotePresentation.SampleActiveTimeline(
+                now,
+                ArenaServerClock.HasEstimate ? ArenaServerClock.ServerNowMs : (long?)null,
                 _serverPos,
                 _serverYaw,
                 out Vector3 position,
                 out float yaw,
-                out RemotePresentationBuffer.SampleMode mode);
+                out RemotePresentationBuffer.SampleMode mode,
+                out bool usedServerTimeline);
             sample = new RemoteObserverSample(
                 position,
                 yaw,
-                _remotePresentation.InterpolationDelaySeconds,
+                usedServerTimeline
+                    ? _remotePresentation.ServerTimeDelayMs / 1000f
+                    : _remotePresentation.InterpolationDelaySeconds,
                 _remotePresentation.LastExtrapolationSeconds,
                 mode == RemotePresentationBuffer.SampleMode.Extrapolation);
             return true;

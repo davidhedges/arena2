@@ -829,7 +829,9 @@ namespace Arena.Entity
                 row.VelZ,
                 row.Yaw,
                 row.Grounded,
-                row.LastProcessedTick);
+                row.LastProcessedTick,
+                Time.realtimeSinceStartup,
+                RemotePresentationBuffer.QuantizeServerTimeMicros(row.UpdatedAt.MicrosecondsSinceUnixEpoch));
 
         private void SpawnOrUpdateNpc(NpcInstance row)
         {

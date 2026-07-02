@@ -76,9 +76,40 @@ referenced but not repeated.
   explicit-receivedTime constructor. Non-goals held: no NPC velocity
   replication, no navigation prediction, no `NpcPhysics` cadence change;
   server-time keying is F4 and lands inside `RemotePresentationBuffer`.
-- **F4, F5 — not started** (gated on F2 measurements by design — the
-  measurements now exist, so F4/F5 are unblocked; with F3 landed, F4's
-  timeline change lives once in `RemotePresentationBuffer`).
+- **F4 — implemented (fixed 100 ms delay; adaptive delay deliberately not
+  started).** `PlayerSnapshot` gains `ServerTimeMs`: the row's `UpdatedAt`
+  quantized to the 33 ms fixed-tick grid
+  (`RemotePresentationBuffer.QuantizeServerTimeMicros`) — chosen over a
+  per-entity tick→`UpdatedAt` anchor because it needs no held state, stays
+  anchored to the server epoch clock (comparable to
+  `ArenaServerClock.ServerNowMs`, no drift), and works identically for
+  players (`PlayerPhysics.UpdatedAt`) and NPCs (`NpcPhysics.UpdatedAt`,
+  which has no tick) while still removing sub-tick write jitter.
+  `EntityRegistry.SnapshotFrom` (players) and `NpcEntity.ApplyPhysics`
+  (NPCs) both stamp it, so the change lives once in
+  `RemotePresentationBuffer`: new `SampleServerTime` keys the ring on
+  `ServerTimeMs` and renders at `ArenaServerClock.ServerNowMs − 100 ms`
+  (fixed). The pre-F4 arrival-time `Sample` is byte-identical and remains
+  the automatic fallback while the clock has no estimate, while any
+  buffered snapshot lacks `ServerTimeMs` (e.g. the special-movement end
+  seed), or while the runtime A/B toggle
+  (`RemotePresentationBuffer.ServerTimeTimelineEnabled`, right bracket
+  while the overlay is visible — no function keys per repo standard) is
+  off. Overlay additions: which timeline is active per aggregate
+  (players/NPCs), effective delay, and buffer-depth-in-ticks lines; the
+  F2a hard-snap/extrap-ratio/pos-error counters are the before/after
+  evidence. Editor tests (`RemotePresentationBufferTests.cs`): bursty
+  arrival times + uniform server times sample uniform motion on the
+  server-time path but not on the arrival path; fallback selection for
+  no-clock / missing-`ServerTimeMs` / toggle-off; grid quantization.
+  Still to do by hand: the live A/B under `docs/latency-testing.md`
+  Profile A (republish the local module first if not done since F2b's
+  `ping_clock` schema change) — compare extrap ratio and hard snaps old
+  vs new while strafing around a remote player and an NPC patrol.
+  Non-goals held: adaptive delay (only after the conditioner A/B proves
+  the win), local-player path, special-movement track sampling, send
+  rates.
+- **F5 — not started.**
 
 ## Executive Summary
 

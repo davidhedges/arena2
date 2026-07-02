@@ -14,6 +14,7 @@ namespace Arena.Simulation
         public readonly bool Grounded;
         public readonly uint LastProcessedTick;
         public readonly float ReceivedTime; // Time.realtimeSinceStartup when stored
+        public readonly long ServerTimeMs;  // server-epoch ms (feel audit F4); 0 = unknown
 
         public PlayerSnapshot(
             float posX,
@@ -42,6 +43,27 @@ namespace Arena.Simulation
             bool grounded,
             uint lastProcessedTick,
             float receivedTime)
+            : this(posX, posY, posZ, velX, velY, velZ, yaw, grounded, lastProcessedTick,
+                   receivedTime, serverTimeMs: 0L)
+        {
+        }
+
+        /// <summary>
+        /// Full form carrying the row's server timestamp
+        /// (see RemotePresentationBuffer.QuantizeServerTimeMicros).
+        /// </summary>
+        public PlayerSnapshot(
+            float posX,
+            float posY,
+            float posZ,
+            float velX,
+            float velY,
+            float velZ,
+            float yaw,
+            bool grounded,
+            uint lastProcessedTick,
+            float receivedTime,
+            long serverTimeMs)
         {
             Position = new Vector3(posX, posY, posZ);
             Velocity = new Vector3(velX, velY, velZ);
@@ -49,6 +71,7 @@ namespace Arena.Simulation
             Grounded = grounded;
             LastProcessedTick = lastProcessedTick;
             ReceivedTime = receivedTime;
+            ServerTimeMs = serverTimeMs;
         }
     }
 }

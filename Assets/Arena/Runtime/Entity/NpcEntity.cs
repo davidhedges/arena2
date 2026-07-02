@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using Arena.Combat;
+using Arena.Network;
 using Arena.Presentation;
 using Arena.Presentation.Targeting;
 using Arena.Simulation;
@@ -50,6 +51,9 @@ namespace Arena.Entity
         public int PresentationExtrapolationSampleCount => _presentation.ExtrapolationSampleCount;
         public float PresentationLastPositionError => _presentation.LastPositionError;
         public float PresentationMaxPositionErrorObserved => _presentation.MaxPositionErrorObserved;
+        public bool PresentationUsedServerTimeline => _presentation.LastTickUsedServerTimeline;
+        public float PresentationEffectiveDelayMs => _presentation.LastEffectiveDelayMs;
+        public float PresentationBufferAheadTicks => _presentation.LastBufferAheadTicks;
         private static readonly Color TargetIndicatorHostile = new(1f, 0.02f, 0.015f, 1f);
         private static readonly Color TargetIndicatorNeutral = new(1f, 0.82f, 0.18f, 1f);
         private static readonly Color TargetIndicatorParty = new(0.2f, 0.75f, 0.3f, 1f);
@@ -145,7 +149,10 @@ namespace Arena.Entity
                 0f,
                 physics.Yaw,
                 grounded: true,
-                lastProcessedTick: 0u));
+                lastProcessedTick: 0u,
+                receivedTime: Time.realtimeSinceStartup,
+                serverTimeMs: RemotePresentationBuffer.QuantizeServerTimeMicros(
+                    physics.UpdatedAt.MicrosecondsSinceUnixEpoch)));
 
             if (!_hasPhysicsSample)
             {
@@ -170,6 +177,7 @@ namespace Arena.Entity
             _presentation.Tick(
                 dt,
                 Time.realtimeSinceStartup,
+                ArenaServerClock.HasEstimate ? ArenaServerClock.ServerNowMs : (long?)null,
                 _lastAuthoritativePosition,
                 _lastAuthoritativeYawRadians);
 

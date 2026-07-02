@@ -7,11 +7,15 @@ using UnityEngine;
 namespace Arena.EditModeTests
 {
     /// <summary>
-    /// Feel-audit F3: pure-math coverage of RemotePresentationBuffer, the
+    /// Feel-audit F3/F4: pure-math coverage of RemotePresentationBuffer, the
     /// snapshot ring + sample/smooth/snap core extracted from
     /// ClientSimulationState and shared by remote players and NPCs. Time is
     /// caller-supplied, so every case runs deterministically off the Unity
-    /// player loop (PlayerSnapshot's explicit-receivedTime constructor).
+    /// player loop (PlayerSnapshot's explicit-receivedTime constructor). F4
+    /// adds the server-time timeline: bursty arrival times with uniform
+    /// server times must sample uniform motion, and the arrival timeline
+    /// stays the automatic fallback when the server clock or a snapshot's
+    /// ServerTimeMs is missing.
     /// </summary>
     public class RemotePresentationBufferTests
     {
@@ -22,6 +26,13 @@ namespace Arena.EditModeTests
             ?? throw new InvalidOperationException($"Missing runtime type {BufferTypeName}");
         private static readonly Type SnapshotType = RuntimeAssembly.GetType(SnapshotTypeName)
             ?? throw new InvalidOperationException($"Missing runtime type {SnapshotTypeName}");
+
+        [SetUp]
+        [TearDown]
+        public void ResetServerTimelineToggle()
+        {
+            SetServerTimelineEnabled(true);
+        }
 
         [Test]
         public void Sample_BetweenTwoSnapshots_InterpolatesLinearly()
@@ -109,12 +120,117 @@ namespace Arena.EditModeTests
             Assert.That(GetProp<float>(buffer, "LastExtrapolationSeconds"), Is.EqualTo(cap).Within(1e-5f));
         }
 
+        [Test]
+        public void SampleServerTime_BurstyArrivalsUniformServerTimes_SamplesUniformMotion()
+        {
+            // Four snapshots one server tick (33 ms) apart, delivered as a
+            // burst of three then a 98 ms gap — the SpacetimeDB
+            // transaction-batch shape that warps the arrival timeline.
+            object buffer = CreateBuffer();
+            Push(buffer, Snapshot(0f, 0f, 0f, velX: 0f, yaw: 0f, receivedTime: 10.000f, serverTimeMs: 1000L));
+            Push(buffer, Snapshot(1f, 0f, 0f, velX: 0f, yaw: 0f, receivedTime: 10.001f, serverTimeMs: 1033L));
+            Push(buffer, Snapshot(2f, 0f, 0f, velX: 0f, yaw: 0f, receivedTime: 10.002f, serverTimeMs: 1066L));
+            Push(buffer, Snapshot(3f, 0f, 0f, velX: 0f, yaw: 0f, receivedTime: 10.100f, serverTimeMs: 1099L));
+
+            // Three render times one tick apart on each timeline.
+            float serverX0 = SampleServerTime(buffer, 1001L).position.x;
+            float serverX1 = SampleServerTime(buffer, 1034L).position.x;
+            float serverX2 = SampleServerTime(buffer, 1067L).position.x;
+            float arrivalX0 = Sample(buffer, renderTime: 10.001f).position.x;
+            float arrivalX1 = Sample(buffer, renderTime: 10.034f).position.x;
+            float arrivalX2 = Sample(buffer, renderTime: 10.067f).position.x;
+
+            float serverStep0 = serverX1 - serverX0;
+            float serverStep1 = serverX2 - serverX1;
+            float arrivalStep0 = arrivalX1 - arrivalX0;
+            float arrivalStep1 = arrivalX2 - arrivalX1;
+
+            // Server-time path: uniform motion (one unit per tick).
+            Assert.That(serverStep0, Is.EqualTo(1f).Within(1e-3f));
+            Assert.That(serverStep1, Is.EqualTo(1f).Within(1e-3f));
+            // Arrival path: the burst compresses and the gap stretches motion.
+            Assert.That(Mathf.Abs(arrivalStep0 - arrivalStep1), Is.GreaterThan(0.5f));
+        }
+
+        [Test]
+        public void Tick_ServerClockAndServerTimes_UsesServerTimeline()
+        {
+            object buffer = CreateBuffer();
+            long delayMs = GetProp<long>(buffer, "ServerTimeDelayMs");
+            Push(buffer, Snapshot(0f, 0f, 0f, velX: 0f, yaw: 0f, receivedTime: 10.0f, serverTimeMs: 1000L));
+            Push(buffer, Snapshot(1f, 0f, 0f, velX: 0f, yaw: 0f, receivedTime: 10.1f, serverTimeMs: 1033L));
+
+            // renderServerTime = 1133 - 100 = 1033: exactly the newest snapshot.
+            Tick(buffer, dt: 1f / 60f, now: 10.1f, serverNowMs: 1033L + delayMs);
+
+            Assert.That(GetProp<bool>(buffer, "LastTickUsedServerTimeline"), Is.True);
+            Assert.That(GetProp<float>(buffer, "LastEffectiveDelayMs"), Is.EqualTo(delayMs).Within(1e-3f));
+            Assert.That(GetProp<float>(buffer, "LastBufferAheadTicks"), Is.EqualTo(0f).Within(1e-3f));
+            Assert.That(GetProp<Vector3>(buffer, "RenderPosition").x, Is.GreaterThan(0f));
+        }
+
+        [Test]
+        public void Tick_NoServerClockEstimate_FallsBackToArrivalTimeline()
+        {
+            object buffer = CreateBuffer();
+            Push(buffer, Snapshot(0f, 0f, 0f, velX: 0f, yaw: 0f, receivedTime: 10.0f, serverTimeMs: 1000L));
+            Push(buffer, Snapshot(1f, 0f, 0f, velX: 0f, yaw: 0f, receivedTime: 10.1f, serverTimeMs: 1033L));
+
+            Tick(buffer, dt: 1f / 60f, now: 10.1f, serverNowMs: null);
+
+            float arrivalDelayMs = GetProp<float>(buffer, "InterpolationDelaySeconds") * 1000f;
+            Assert.That(GetProp<bool>(buffer, "LastTickUsedServerTimeline"), Is.False);
+            Assert.That(GetProp<float>(buffer, "LastEffectiveDelayMs"), Is.EqualTo(arrivalDelayMs).Within(1e-3f));
+        }
+
+        [Test]
+        public void Tick_SnapshotWithoutServerTime_FallsBackToArrivalTimeline()
+        {
+            object buffer = CreateBuffer();
+            Push(buffer, Snapshot(0f, 0f, 0f, velX: 0f, yaw: 0f, receivedTime: 10.0f, serverTimeMs: 1000L));
+            // Pre-F4-shaped snapshot (e.g. the special-movement seed): no ServerTimeMs.
+            Push(buffer, Snapshot(1f, 0f, 0f, velX: 0f, yaw: 0f, receivedTime: 10.1f));
+
+            Tick(buffer, dt: 1f / 60f, now: 10.1f, serverNowMs: 1133L);
+
+            Assert.That(GetProp<bool>(buffer, "LastTickUsedServerTimeline"), Is.False);
+        }
+
+        [Test]
+        public void Tick_ToggleDisabled_FallsBackToArrivalTimeline()
+        {
+            object buffer = CreateBuffer();
+            Push(buffer, Snapshot(0f, 0f, 0f, velX: 0f, yaw: 0f, receivedTime: 10.0f, serverTimeMs: 1000L));
+            Push(buffer, Snapshot(1f, 0f, 0f, velX: 0f, yaw: 0f, receivedTime: 10.1f, serverTimeMs: 1033L));
+
+            SetServerTimelineEnabled(false);
+            Tick(buffer, dt: 1f / 60f, now: 10.1f, serverNowMs: 1133L);
+
+            Assert.That(GetProp<bool>(buffer, "LastTickUsedServerTimeline"), Is.False);
+        }
+
+        [Test]
+        public void QuantizeServerTimeMicros_RoundsToFixedTickGrid()
+        {
+            MethodInfo method = BufferType.GetMethod("QuantizeServerTimeMicros")
+                ?? throw new InvalidOperationException("Missing RemotePresentationBuffer.QuantizeServerTimeMicros");
+
+            Assert.That((long)method.Invoke(null, new object[] { 990_000L })!, Is.EqualTo(990L));
+            Assert.That((long)method.Invoke(null, new object[] { 1_005_000L })!, Is.EqualTo(990L));
+            Assert.That((long)method.Invoke(null, new object[] { 1_010_000L })!, Is.EqualTo(1023L));
+        }
+
         private static object CreateBuffer()
             => Activator.CreateInstance(BufferType)!;
 
         private static object Snapshot(float posX, float posY, float posZ, float velX, float yaw, float receivedTime)
             => Activator.CreateInstance(
                 SnapshotType, posX, posY, posZ, velX, 0f, 0f, yaw, true, 0u, receivedTime)!;
+
+        private static object Snapshot(
+            float posX, float posY, float posZ, float velX, float yaw, float receivedTime, long serverTimeMs)
+            => Activator.CreateInstance(
+                SnapshotType, posX, posY, posZ, velX, 0f, 0f, yaw, true, 0u, receivedTime, serverTimeMs)!;
 
         private static void Push(object buffer, object snapshot)
         {
@@ -130,11 +246,11 @@ namespace Arena.EditModeTests
             method.Invoke(buffer, new object[] { position, yawRadians });
         }
 
-        private static void Tick(object buffer, float dt, float now)
+        private static void Tick(object buffer, float dt, float now, long? serverNowMs = null)
         {
             MethodInfo method = BufferType.GetMethod("Tick")
                 ?? throw new InvalidOperationException("Missing RemotePresentationBuffer.Tick");
-            method.Invoke(buffer, new object[] { dt, now, Vector3.zero, 0f });
+            method.Invoke(buffer, new object?[] { dt, now, serverNowMs, Vector3.zero, 0f });
         }
 
         private static (Vector3 position, float yaw, string mode) Sample(object buffer, float renderTime)
@@ -144,6 +260,23 @@ namespace Arena.EditModeTests
             var args = new object?[] { renderTime, Vector3.zero, 0f, null, null, null };
             method.Invoke(buffer, args);
             return ((Vector3)args[3]!, (float)args[4]!, args[5]!.ToString()!);
+        }
+
+        private static (Vector3 position, float yaw, string mode) SampleServerTime(object buffer, long renderServerTimeMs)
+        {
+            MethodInfo method = BufferType.GetMethod("SampleServerTime")
+                ?? throw new InvalidOperationException("Missing RemotePresentationBuffer.SampleServerTime");
+            var args = new object?[] { renderServerTimeMs, Vector3.zero, 0f, null, null, null };
+            method.Invoke(buffer, args);
+            return ((Vector3)args[3]!, (float)args[4]!, args[5]!.ToString()!);
+        }
+
+        private static void SetServerTimelineEnabled(bool enabled)
+        {
+            PropertyInfo property = BufferType.GetProperty(
+                "ServerTimeTimelineEnabled", BindingFlags.Public | BindingFlags.Static)
+                ?? throw new InvalidOperationException("Missing RemotePresentationBuffer.ServerTimeTimelineEnabled");
+            property.SetValue(null, enabled);
         }
 
         private static T GetProp<T>(object buffer, string name)

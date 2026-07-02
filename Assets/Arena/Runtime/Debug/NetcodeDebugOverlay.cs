@@ -12,7 +12,8 @@ namespace Arena.Debugging
 {
     /// <summary>
     /// Displays key netcode metrics in an on-screen overlay.
-    /// Toggle with backslash.
+    /// Toggle with backslash. While visible, right bracket A/B-toggles the
+    /// F4 server-time remote timeline (RemotePresentationBuffer).
     /// </summary>
     public class NetcodeDebugOverlay : MonoBehaviour
     {
@@ -20,6 +21,7 @@ namespace Arena.Debugging
         private GUIStyle? _style;
         private GUIStyle? _headerStyle;
         private const KeyCode ToggleKey = KeyCode.Backslash;
+        private const KeyCode ServerTimelineToggleKey = KeyCode.RightBracket;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
@@ -42,6 +44,10 @@ namespace Arena.Debugging
 
             if (UnityEngine.Input.GetKeyDown(ToggleKey))
                 _visible = !_visible;
+
+            if (_visible && UnityEngine.Input.GetKeyDown(ServerTimelineToggleKey))
+                RemotePresentationBuffer.ServerTimeTimelineEnabled =
+                    !RemotePresentationBuffer.ServerTimeTimelineEnabled;
         }
 
         private void OnGUI()
@@ -232,10 +238,11 @@ namespace Arena.Debugging
         }
 
         /// <summary>
-        /// Aggregate remote-presentation counters (feel audit F2a/F3): hard
+        /// Aggregate remote-presentation counters (feel audit F2a/F3/F4): hard
         /// snaps, interpolation vs extrapolation sample ratio, last/max
-        /// position error — one aggregate over remote players
-        /// (ClientSimulationState) and one over NPCs (RemotePresentationBuffer).
+        /// position error, active timeline + effective delay + buffer depth —
+        /// one aggregate over remote players (ClientSimulationState) and one
+        /// over NPCs (RemotePresentationBuffer).
         /// </summary>
         private float DrawRemotePresentationSection(float x, float y, float lineHeight)
         {
@@ -249,6 +256,9 @@ namespace Arena.Debugging
             long extrapSamples = 0;
             float lastError = 0f;
             float maxError = 0f;
+            int playersOnServerTimeline = 0;
+            float playerDelayMsSum = 0f;
+            float playerDepthTicksSum = 0f;
             foreach (var player in registry.AllPlayers)
             {
                 if (player == registry.LocalPlayerEntity)
@@ -261,6 +271,10 @@ namespace Arena.Debugging
                 extrapSamples += sim.RemoteExtrapolationSampleCount;
                 lastError = Mathf.Max(lastError, sim.LastRemotePositionError);
                 maxError = Mathf.Max(maxError, sim.MaxRemotePositionErrorObserved);
+                if (sim.RemoteUsedServerTimelineForDebug)
+                    playersOnServerTimeline++;
+                playerDelayMsSum += sim.RemoteEffectiveDelayMsForDebug;
+                playerDepthTicksSum += sim.RemoteBufferAheadTicksForDebug;
             }
 
             int npcCount = 0;
@@ -269,6 +283,9 @@ namespace Arena.Debugging
             long npcExtrapSamples = 0;
             float npcLastError = 0f;
             float npcMaxError = 0f;
+            int npcsOnServerTimeline = 0;
+            float npcDelayMsSum = 0f;
+            float npcDepthTicksSum = 0f;
             foreach (var npc in registry.AllNpcs)
             {
                 npcCount++;
@@ -277,6 +294,10 @@ namespace Arena.Debugging
                 npcExtrapSamples += npc.PresentationExtrapolationSampleCount;
                 npcLastError = Mathf.Max(npcLastError, npc.PresentationLastPositionError);
                 npcMaxError = Mathf.Max(npcMaxError, npc.PresentationMaxPositionErrorObserved);
+                if (npc.PresentationUsedServerTimeline)
+                    npcsOnServerTimeline++;
+                npcDelayMsSum += npc.PresentationEffectiveDelayMs;
+                npcDepthTicksSum += npc.PresentationBufferAheadTicks;
             }
 
             if (remoteCount == 0 && npcCount == 0)
@@ -288,6 +309,13 @@ namespace Arena.Debugging
                 $"Remote Presentation ({remoteCount} players, {npcCount} NPCs)",
                 _headerStyle);
             y += lineHeight + 2;
+
+            string abState = RemotePresentationBuffer.ServerTimeTimelineEnabled ? "ON" : "OFF";
+            GUI.Label(
+                new Rect(x, y, 640, lineHeight),
+                $"Server-time timeline (] to A/B): {abState} — active on {playersOnServerTimeline}/{remoteCount} players, {npcsOnServerTimeline}/{npcCount} NPCs",
+                _style);
+            y += lineHeight;
 
             if (remoteCount > 0)
             {
@@ -303,6 +331,11 @@ namespace Arena.Debugging
                 GUI.Label(
                     new Rect(x, y, 640, lineHeight),
                     $"Remote pos error: {lastError:F3} m  (max: {maxError:F3} m)",
+                    _style);
+                y += lineHeight;
+                GUI.Label(
+                    new Rect(x, y, 640, lineHeight),
+                    $"Buffer depth: {playerDepthTicksSum / remoteCount:F1} ticks avg  (delay: {playerDelayMsSum / remoteCount:F0} ms avg)",
                     _style);
                 y += lineHeight;
             }
@@ -321,6 +354,11 @@ namespace Arena.Debugging
                 GUI.Label(
                     new Rect(x, y, 640, lineHeight),
                     $"NPC pos error: {npcLastError:F3} m  (max: {npcMaxError:F3} m)",
+                    _style);
+                y += lineHeight;
+                GUI.Label(
+                    new Rect(x, y, 640, lineHeight),
+                    $"NPC buffer depth: {npcDepthTicksSum / npcCount:F1} ticks avg  (delay: {npcDelayMsSum / npcCount:F0} ms avg)",
                     _style);
                 y += lineHeight;
             }
