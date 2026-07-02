@@ -7,6 +7,13 @@ referenced but not repeated.
 
 ## Implementation status (updated 2026-07-02)
 
+- **Manual latency verification tabled (2026-07-02).** All by-hand runtime
+  checks are deliberately deferred, not forgotten: the F4 live conditioner
+  A/B (extrap ratio + hard snaps, old vs new timeline, overlay semicolon
+  toggle) and the F5 Profile A checks (gap-closer press → instant windup,
+  dash ~RTT later with no pose pop; rejected press unwinds windup +
+  cooldown + resource). Recipe: `docs/latency-testing.md`. Run these before
+  tuning anything that depends on them (e.g. F4 adaptive delay).
 - **F1 steps 1–3 — implemented.** `PredictedActionLedger` +
   `LocalCombatState.PredictActionStart` / `RollbackPrediction` /
   `ReleasePredictedPrimaryResource`; melee and spell press paths route their
