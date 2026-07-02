@@ -54,24 +54,33 @@ Consequences:
   endpoints get the 8-tick lead). A dev-only lead override for shaped-local
   runs would remove this caveat, but that is movement-netcode work — see the
   feel audit status note.
-- Checks that remain valid on a shaped local endpoint: connection-dot
-  thresholds and RTT/clock overlay lines (stand still), denial toasts under
-  latency, gap-closer press→windup→dash timing and rejection unwind (stand
-  still or move straight; don't rely on jumps), contact-cue correlation, and
-  the F4 remote-timeline A/B **if the mover's upstream path stays steady** —
-  for the A/B, apply the jitter branch to the server→client direction only:
+- Bidirectional shaping on a local endpoint is usable **only for fully
+  stationary checks** (connection-dot thresholds, RTT/clock lines, hands off
+  the keyboard). Verified live 2026-07-03: even Profile L bidirectional
+  produces continuous ~0.5 m reconcile corrections
+  (`[LocalMovementPredictionDriver] Large correction` spam) and unplayable
+  rubberbanding — steady input does not save it, because the 2-tick lead plus
+  the arrival-anchored estimate means commands miss their tick continuously.
+- For any check that involves moving (denial toasts, gap-closer
+  timing/rejection, contact cues, kiting for the F4 A/B), shape **downstream
+  only** (server→client). The input path stays clean — no command
+  starvation, no corrections — while row delivery still carries the
+  delay/jitter the checks measure, and server-side NPC motion is untouched
+  by definition:
 
   ```bash
+  sudo dnctl pipe 2 config delay 40ms          # server -> client only
   cat <<'EOF' | sudo pfctl -a "com.apple/arena-latency" -f -
-  dummynet out quick proto tcp from any to any port 3000 pipe 1
-  dummynet out quick proto tcp from any port 3000 to any probability 30% pipe 4
   dummynet out quick proto tcp from any port 3000 to any pipe 2
   EOF
   ```
 
-  (pipes 1/2 from Profile L, pipe 4 at 65 ms, pipe 3 unused: steady upstream
-  keeps the mover's server-side motion smooth, downstream jitter still
-  exercises the interpolation timelines.)
+  For the F4 A/B, add the downstream jitter branch on top (pipe 4 at 65 ms,
+  `probability 30%` rule before the pipe 2 rule). Under downstream-only
+  shaping the overlay RTT reads roughly the downstream delay alone (the
+  upstream leg is unshaped), so dot-threshold checks must put the full
+  threshold into the one direction — e.g. `pipe 2 config delay 180ms`,
+  stationary, for the Bad (≥180 ms p50) check.
 
 ## Profiles
 
