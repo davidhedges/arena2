@@ -45,7 +45,9 @@ namespace Arena.Network
         internal static string[] BuildLocalQuerySqls(Identity localIdentity)
         {
             QueryBuilder qb = new();
-            string localIdentityKey = localIdentity.ToString();
+            // Owner-key columns hold the server's lowercase identity_key()
+            // hex; raw Identity.ToString() is uppercase and matches nothing.
+            string localIdentityKey = OwnerKeys.For(localIdentity);
             return new[]
             {
                 qb.From.PlayerWorld().Where(c => c.Identity.Eq(localIdentity)).ToSql(),

@@ -15,6 +15,7 @@ namespace Arena.Tests.Editor
         private const string BaseCatalogPath = "Assets/Arena/Resources/CharacterAppearance/AvatarBaseCatalog.asset";
         private const string PartCatalogPath = "Assets/Arena/Resources/CharacterAppearance/AvatarPartCatalog.asset";
         private const string OutfitCatalogPath = "Assets/Arena/Resources/CharacterAppearance/OutfitCatalog.asset";
+        private const string EquipmentAppearanceCatalogPath = "Assets/Arena/Resources/CharacterAppearance/EquipmentAppearanceCatalog.asset";
 
         private static readonly Assembly RuntimeAssembly = AppDomain.CurrentDomain.Load("Assembly-CSharp");
 
@@ -60,6 +61,18 @@ namespace Arena.Tests.Editor
             }
 
             Assert.That(Entries(outfitCatalog).Cast<object>().Count(), Is.GreaterThan(0));
+        }
+
+        [Test]
+        public void EquipmentAppearanceCatalog_ContainsPeasantStarterGearVisuals()
+        {
+            object equipmentCatalog = LoadRequiredAsset(EquipmentAppearanceCatalogPath, "Arena.Presentation.Appearance.EquipmentAppearanceCatalog");
+            object[] entries = Entries(equipmentCatalog).Cast<object>().ToArray();
+
+            AssertEquipmentVisual(entries, "PEASANT_TUNIC", "CHEST");
+            AssertEquipmentVisual(entries, "PEASANT_TROUSERS", "LEGS");
+            AssertEquipmentVisual(entries, "PEASANT_BOOTS", "BOOTS");
+            AssertEquipmentVisual(entries, "PEASANT_GLOVES", "GLOVES");
         }
 
         [Test]
@@ -276,6 +289,18 @@ namespace Arena.Tests.Editor
         private static IEnumerable Entries(object catalog)
         {
             return (IEnumerable)RequireProperty(catalog, "Entries").GetValue(catalog)!;
+        }
+
+        private static void AssertEquipmentVisual(object[] entries, string itemDefId, string equipSlot)
+        {
+            object? entry = entries.FirstOrDefault(candidate =>
+                string.Equals(RequireField<string>(candidate, "itemDefId"), itemDefId, StringComparison.Ordinal)
+                && string.Equals(RequireField<string>(candidate, "equipSlot"), equipSlot, StringComparison.Ordinal)
+                && string.Equals(RequireField<string>(candidate, "raceId"), "HUMAN", StringComparison.Ordinal)
+                && string.Equals(RequireField<string>(candidate, "sexId"), "MALE", StringComparison.Ordinal));
+            Assert.That(entry, Is.Not.Null, $"Missing equipment visual for {itemDefId}/{equipSlot}.");
+            Assert.That(RequireField<bool>(entry!, "enabled"), Is.True);
+            Assert.That(RequireField<IList>(entry!, "items").Count, Is.GreaterThan(0));
         }
 
         private static T RequireField<T>(object instance, string fieldName)

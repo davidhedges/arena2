@@ -288,6 +288,7 @@ namespace Arena.EditorTools
             for (int i = 0; i < visualSets.Length; i++)
                 AddHumanMaleEquipmentVisualSet(entries, visualSets[i]);
 
+            AddHumanMalePeasantEquipmentVisualSet(entries);
             return entries;
         }
 
@@ -400,6 +401,32 @@ namespace Arena.EditorTools
                 "GLOVES",
                 EquipmentItem(ItemTypeEnum.GlovesSkin, EquipmentPath("GlovesSkin", $"GlovesSkin_{spec.Family}_{spec.Color}.prefab")),
                 EquipmentItem(ItemTypeEnum.Gloves, EquipmentPath("Gloves", $"{prefix}_Gloves_{spec.Family}_{spec.Color}.prefab"))));
+        }
+
+        private static void AddHumanMalePeasantEquipmentVisualSet(
+            List<EquipmentAppearanceCatalog.Entry> entries)
+        {
+            const string prefix = "Hu_M";
+            const string family = "Peasant";
+            const string color = "Br";
+            const string chestVariant = "01";
+
+            entries.Add(EquipmentVisual(
+                "PEASANT_TUNIC",
+                "CHEST",
+                EquipmentItem(ItemTypeEnum.Chest, EquipmentPath("Chest", $"{prefix}_Chest_{family}_{chestVariant}_{color}.prefab"))));
+            entries.Add(EquipmentVisual(
+                "PEASANT_TROUSERS",
+                "LEGS",
+                EquipmentItem(ItemTypeEnum.PantsSkin, EquipmentPath("PantsSkin", $"Pants_{family}_U_{color}.prefab"))));
+            entries.Add(EquipmentVisual(
+                "PEASANT_BOOTS",
+                "BOOTS",
+                EquipmentItem(ItemTypeEnum.Boots, EquipmentPath("Boots", $"{prefix}_Boots_{family}_{color}.prefab"))));
+            entries.Add(EquipmentVisual(
+                "PEASANT_GLOVES",
+                "GLOVES",
+                EquipmentItem(ItemTypeEnum.GlovesSkin, EquipmentPath("GlovesSkin", $"GlovesSkin_{family}_{color}.prefab"))));
         }
 
         private static string EquipmentPath(string folder, string fileName)

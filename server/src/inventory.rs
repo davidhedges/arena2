@@ -361,6 +361,10 @@ const BASELINE_STARTER_WEAPONS: &[StarterEquipmentSpec] = &[starter_equipment(
 )];
 
 const BASELINE_STARTER_EQUIPMENT: &[StarterEquipmentSpec] = &[
+    starter_equipment(EQUIP_SLOT_CHEST, "PEASANT_TUNIC"),
+    starter_equipment(EQUIP_SLOT_LEGS, "PEASANT_TROUSERS"),
+    starter_equipment(EQUIP_SLOT_BOOTS, "PEASANT_BOOTS"),
+    starter_equipment(EQUIP_SLOT_GLOVES, "PEASANT_GLOVES"),
     starter_equipment(EQUIP_SLOT_MAIN_HAND, "TRAINING_TWO_HAND_SWORD"),
     starter_equipment(EQUIP_SLOT_SPELLBOOK, STARTER_SPELLBOOK_ITEM_DEF_ID),
 ];
@@ -546,6 +550,38 @@ const STARTER_ITEM_DEFINITIONS: &[ItemDefinitionSpec] = &[
         EQUIP_SLOT_GLOVES,
         ARMOR_KIND_LEATHER,
         0.010,
+    ),
+    armor(
+        "PEASANT_TUNIC",
+        "Peasant Tunic",
+        "peasant_tunic",
+        EQUIP_SLOT_CHEST,
+        ARMOR_KIND_CLOTH,
+        0.002,
+    ),
+    armor(
+        "PEASANT_TROUSERS",
+        "Peasant Trousers",
+        "peasant_trousers",
+        EQUIP_SLOT_LEGS,
+        ARMOR_KIND_CLOTH,
+        0.001,
+    ),
+    armor(
+        "PEASANT_BOOTS",
+        "Peasant Boots",
+        "peasant_boots",
+        EQUIP_SLOT_BOOTS,
+        ARMOR_KIND_CLOTH,
+        0.001,
+    ),
+    armor(
+        "PEASANT_GLOVES",
+        "Peasant Gloves",
+        "peasant_gloves",
+        EQUIP_SLOT_GLOVES,
+        ARMOR_KIND_CLOTH,
+        0.001,
     ),
     armor(
         "APPRENTICE_HOOD",
@@ -1653,6 +1689,7 @@ pub fn equip_item(
     equipment.updated_at = ctx.timestamp;
 
     let mut item = item;
+    item.current_owner_key = identity_key(owner);
     item.current_owner = Some(owner);
     ctx.db.item_instance().item_instance_id().update(item);
     ctx.db.equipment_loadout().owner().update(equipment);
@@ -1806,11 +1843,13 @@ pub(crate) fn sync_item_affix_definitions(ctx: &ReducerContext) {
 
 pub(crate) fn ensure_player_inventory_for_identity(ctx: &ReducerContext, owner: Identity) {
     sync_item_definitions(ctx);
+    repair_owned_item_keys(ctx, owner);
     let (bag, bag_created) = ensure_player_bag(ctx, owner);
     let (equipment, created) = ensure_equipment_loadout(ctx, owner);
     if created {
-        seed_baseline_equipment(ctx, owner, equipment, true);
+        seed_baseline_equipment(ctx, owner, equipment, true, false);
     } else {
+        let equipment = seed_baseline_equipment(ctx, owner, equipment, false, true);
         reconcile_spellbook_equipment(ctx, owner, equipment);
     }
     if bag_created || created {
@@ -2945,7 +2984,22 @@ fn mark_item_owned(ctx: &ReducerContext, owner: Identity, item_instance_id: &str
         .item_instance_id()
         .find(item_instance_id.to_string())
     {
+        item.current_owner_key = identity_key(owner);
         item.current_owner = Some(owner);
+        ctx.db.item_instance().item_instance_id().update(item);
+    }
+}
+
+fn repair_owned_item_keys(ctx: &ReducerContext, owner: Identity) {
+    let owner_key = identity_key(owner);
+    let stale_items: Vec<_> = ctx
+        .db
+        .item_instance()
+        .iter()
+        .filter(|item| item.current_owner == Some(owner) && item.current_owner_key != owner_key)
+        .collect();
+    for mut item in stale_items {
+        item.current_owner_key = owner_key.clone();
         ctx.db.item_instance().item_instance_id().update(item);
     }
 }
@@ -3077,9 +3131,11 @@ fn seed_baseline_equipment(
     owner: Identity,
     mut equipment: EquipmentLoadout,
     reconcile_starter_weapons: bool,
-) {
+    skip_when_owner_already_has_definition: bool,
+) -> EquipmentLoadout {
+    let mut changed = false;
     if reconcile_starter_weapons && equipment_weapon_slots_are_empty_or_starter(ctx, &equipment) {
-        clear_equipped_starter_weapons(ctx, &mut equipment);
+        changed |= clear_equipped_starter_weapons(ctx, &mut equipment);
     }
 
     for spec in BASELINE_STARTER_EQUIPMENT {
@@ -3087,6 +3143,11 @@ fn seed_baseline_equipment(
             continue;
         }
         let item_def_id = normalize_id(spec.item_def_id);
+        if skip_when_owner_already_has_definition
+            && owner_has_item_definition(ctx, owner, item_def_id.as_str())
+        {
+            continue;
+        }
         if ctx
             .db
             .item_definition()
@@ -3121,11 +3182,15 @@ fn seed_baseline_equipment(
                 error
             );
         }
+        changed = true;
     }
 
-    equipment.revision = equipment.revision.saturating_add(1);
-    equipment.updated_at = ctx.timestamp;
-    ctx.db.equipment_loadout().owner().update(equipment);
+    if changed {
+        equipment.revision = equipment.revision.saturating_add(1);
+        equipment.updated_at = ctx.timestamp;
+        ctx.db.equipment_loadout().owner().update(equipment.clone());
+    }
+    equipment
 }
 
 fn reconcile_spellbook_equipment(
@@ -3188,7 +3253,8 @@ fn equipment_weapon_slots_are_empty_or_starter(
     })
 }
 
-fn clear_equipped_starter_weapons(ctx: &ReducerContext, equipment: &mut EquipmentLoadout) {
+fn clear_equipped_starter_weapons(ctx: &ReducerContext, equipment: &mut EquipmentLoadout) -> bool {
+    let mut changed = false;
     for slot_id in [EQUIP_SLOT_MAIN_HAND, EQUIP_SLOT_OFF_HAND] {
         let Some(item_instance_id) = equipment_item_at_slot(equipment, slot_id).cloned() else {
             continue;
@@ -3214,7 +3280,9 @@ fn clear_equipped_starter_weapons(ctx: &ReducerContext, equipment: &mut Equipmen
             .item_instance_id()
             .delete(item_instance_id);
         let _ = set_equipment_slot(equipment, slot_id, None);
+        changed = true;
     }
+    changed
 }
 
 fn is_starter_weapon_definition_id(item_def_id: &str) -> bool {
@@ -3342,6 +3410,15 @@ fn item_definition_for_instance(
         .item_definition()
         .item_def_id()
         .find(item.item_def_id)
+}
+
+fn owner_has_item_definition(ctx: &ReducerContext, owner: Identity, item_def_id: &str) -> bool {
+    let normalized_item_def_id = normalize_id(item_def_id);
+    let owner_key = identity_key(owner);
+    ctx.db.item_instance().iter().any(|item| {
+        item.item_def_id == normalized_item_def_id
+            && (item.current_owner == Some(owner) || item.current_owner_key == owner_key)
+    })
 }
 
 fn affix_is_valid_for_definition(
@@ -4248,6 +4325,20 @@ mod tests {
             "TRAINING_TWO_HAND_SWORD"
         );
         assert_eq!(BASELINE_STARTER_WEAPONS[0].slot_id, EQUIP_SLOT_MAIN_HAND);
+        assert_eq!(
+            BASELINE_STARTER_EQUIPMENT
+                .iter()
+                .map(|spec| (spec.slot_id, spec.item_def_id))
+                .collect::<Vec<_>>(),
+            vec![
+                (EQUIP_SLOT_CHEST, "PEASANT_TUNIC"),
+                (EQUIP_SLOT_LEGS, "PEASANT_TROUSERS"),
+                (EQUIP_SLOT_BOOTS, "PEASANT_BOOTS"),
+                (EQUIP_SLOT_GLOVES, "PEASANT_GLOVES"),
+                (EQUIP_SLOT_MAIN_HAND, "TRAINING_TWO_HAND_SWORD"),
+                (EQUIP_SLOT_SPELLBOOK, STARTER_SPELLBOOK_ITEM_DEF_ID),
+            ]
+        );
     }
 
     #[test]

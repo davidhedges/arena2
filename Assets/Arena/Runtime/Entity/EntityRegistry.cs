@@ -1012,6 +1012,13 @@ namespace Arena.Entity
                 return;
 
             var conn = NetworkManager.Instance?.Conn;
+            if (conn == null)
+                return;
+
+            loadout ??= conn.Db.EquipmentLoadout.Owner.Find(owner);
+            if (loadout == null)
+                return;
+
             entity.SetEquippedWeaponVisuals(BuildEquippedWeaponVisuals(conn, owner, loadout));
             entity.SetEquippedArmorItemDefIdsBySlot(BuildEquippedArmorItemDefIdsBySlot(conn, owner, loadout));
         }

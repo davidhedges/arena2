@@ -244,10 +244,7 @@ namespace Arena.Presentation.Appearance
                 if (equippedArmorBySlot != null)
                 {
                     if (!equippedArmorBySlot.TryGetValue(equipSlot, out string itemDefId))
-                    {
-                        ApplyValidatedOutfitItem(avatar, slot, selection.outfitId);
                         continue;
-                    }
 
                     if (!explicitlyAppliedSlots.Add(equipSlot))
                         continue;

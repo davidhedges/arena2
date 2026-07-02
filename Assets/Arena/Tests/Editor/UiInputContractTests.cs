@@ -487,6 +487,10 @@ namespace Arena.Tests.Editor
 
             string inventory = File.ReadAllText(ServerInventoryPath);
             Assert.That(inventory, Does.Contain("BASELINE_STARTER_WEAPONS"));
+            Assert.That(inventory, Does.Contain("starter_equipment(EQUIP_SLOT_CHEST, \"PEASANT_TUNIC\")"));
+            Assert.That(inventory, Does.Contain("starter_equipment(EQUIP_SLOT_LEGS, \"PEASANT_TROUSERS\")"));
+            Assert.That(inventory, Does.Contain("starter_equipment(EQUIP_SLOT_BOOTS, \"PEASANT_BOOTS\")"));
+            Assert.That(inventory, Does.Contain("starter_equipment(EQUIP_SLOT_GLOVES, \"PEASANT_GLOVES\")"));
             Assert.That(inventory, Does.Contain("starter_equipment(EQUIP_SLOT_MAIN_HAND, \"TRAINING_TWO_HAND_SWORD\")"));
             Assert.That(inventory, Does.Contain("\"NEWBIE_TWO_HAND_SWORD_01\""));
             Assert.That(inventory, Does.Contain("\"NEWBIE_ONE_HAND_SWORD_01\""));
@@ -522,6 +526,8 @@ namespace Arena.Tests.Editor
             Assert.That(tooltip, Does.Not.Contain("ClassCatalog"));
 
             string entityRegistry = File.ReadAllText(EntityRegistryPath);
+            Assert.That(entityRegistry, Does.Contain("loadout ??= conn.Db.EquipmentLoadout.Owner.Find(owner);"));
+            Assert.That(entityRegistry, Does.Contain("if (loadout == null)\n                return;"));
             Assert.That(entityRegistry, Does.Contain("WeaponVisualRoleIdsForKind"));
             Assert.That(entityRegistry, Does.Not.Contain("TryAddWeaponVisualIdsForItemDefinition"));
 
