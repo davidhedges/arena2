@@ -591,6 +591,25 @@ namespace Arena.Presentation
 
         private CombatAnimationDecision DecideCombatAnimationRequest(in CombatAnimationRequest request)
         {
+            // Predicted gap-close windups (feel audit F5) hold the phased slot
+            // until the server's special-movement replay arrives; that replay is
+            // a duplicate of the already-playing predicted start.
+            if (_isLocalPlayer
+                && _actionPlayback.IsPhasedMeleeActive
+                && _actionPlayback.ActiveMeleePresentation.HasValue
+                && CombatActionPlaybackController.IsDuplicateAuthoritativeSpecialMovementMeleeStart(
+                    request.Authority,
+                    request.DrivePhasesFromSpecialMovement,
+                    string.Equals(
+                        _actionPlayback.ActiveMeleePresentation.GetValueOrDefault().ActionId,
+                        request.ActionId,
+                        StringComparison.OrdinalIgnoreCase),
+                    _actionPlayback.IsPhasedMeleeSpecialMovementDriven,
+                    _actionPlayback.IsPhasedMeleeSpecialMovementEndRequested))
+            {
+                return CombatAnimationDecision.IgnoreAsDuplicate;
+            }
+
             bool isHigherPriority = IsHigherPriorityCombatPresentationActive();
             bool isMeleeActive = IsMeleePresentationStateActive();
             bool isSpellActive = IsAnySpellPresentationStateActive();
@@ -2206,36 +2225,27 @@ namespace Arena.Presentation
 
         private void UpdateSpecialMovementDrivenPhasedMeleePlayback(float normalizedTime)
         {
-            if (_actionPlayback.PhasedMeleePhase == PhasedMeleePlaybackPhase.Start)
+            if (!CombatActionPlaybackController.TryResolveSpecialMovementDrivenPhasedTransition(
+                    _actionPlayback.PhasedMeleePhase,
+                    normalizedTime,
+                    _actionPlayback.PhasedMeleeReleaseAfterStart,
+                    _actionPlayback.IsPhasedMeleeSpecialMovementEndRequested,
+                    PhasedMeleeStartOnlyEndTriggerNormalizedTime,
+                    PhasedMeleeSegmentTransitionNormalizedTime,
+                    PhasedMeleeEndCompleteNormalizedTime,
+                    out PhasedMeleePlaybackPhase nextPhase,
+                    out bool shouldCancel))
             {
-                float startExitNormalizedTime = _actionPlayback.PhasedMeleeReleaseAfterStart
-                    ? PhasedMeleeStartOnlyEndTriggerNormalizedTime
-                    : PhasedMeleeSegmentTransitionNormalizedTime;
-                if (normalizedTime < startExitNormalizedTime)
-                    return;
-
-                AdvancePhasedMeleeSegment(
-                    _actionPlayback.PhasedMeleeReleaseAfterStart
-                    || _actionPlayback.IsPhasedMeleeSpecialMovementEndRequested
-                        ? PhasedMeleePlaybackPhase.End
-                        : PhasedMeleePlaybackPhase.Loop);
                 return;
             }
 
-            if (_actionPlayback.PhasedMeleePhase == PhasedMeleePlaybackPhase.Loop)
-            {
-                if (!_actionPlayback.IsPhasedMeleeSpecialMovementEndRequested)
-                    return;
-
-                AdvancePhasedMeleeSegment(PhasedMeleePlaybackPhase.End);
-                return;
-            }
-
-            if (_actionPlayback.PhasedMeleePhase == PhasedMeleePlaybackPhase.End
-                && normalizedTime >= PhasedMeleeEndCompleteNormalizedTime)
+            if (shouldCancel)
             {
                 CancelPhasedMeleePlayback();
+                return;
             }
+
+            AdvancePhasedMeleeSegment(nextPhase);
         }
 
         private bool PlayPhasedMeleeSegment(

@@ -298,6 +298,35 @@ Authoring path:
 
 Key rule: class-specific charge tuning lives on the ability row. Shared behavior lives in movement delivery, not in a fixed action.
 
+## Hit Validation Timing (No Lag Compensation)
+
+Hit validation is **server-present-time by design**. Melee impact resolution
+reads present-time position snapshots (`server/src/melee.rs`, impact/range
+resolution), and projectiles collide against present-time positions
+(`server/src/combat/projectiles.rs`). There is no rewind: the server never
+reconstructs where a target appeared on the attacker's screen.
+
+Consequences, accepted deliberately:
+
+- Higher-latency attackers whiff on moving targets more than their screen
+  suggests. Their client renders targets ~interpolation-delay + one-way-latency
+  in the past; the server judges the swing against where the target is *now*.
+- Targets are never hit "behind the wall": if you dodged on the server's
+  timeline, you dodged. The defender's-eye view is always honest.
+
+Client presentation may predict *startup* (animation, VFX, cast bars, the
+gap-close windup) but never outcomes: damage numbers, health, hit reactions,
+and impact VFX remain 100% authoritative.
+
+**Rewind-based lag compensation is speculative redesign — do not implement it**
+(not even partially, not "just for melee"). It requires server-side historical
+position buffers, an explicit fairness decision about whose timeline wins, and
+it inverts the tradeoff above: attackers get their screen honored, targets
+start dying behind cover. If that tradeoff is ever wanted, it is a project
+decision with its own design doc, not a bug fix. Do not "fix" present-time
+whiffs by adding rewind, widening server-side hit windows, or validating
+against client-reported target positions.
+
 ## Consumer Decisions
 
 No progression JSON schema is currently required. Rust serde validates catalog structure at load time, and the graph validator covers cross-file authoring coherence. Add `server/src/progression_catalog.schema.json` only when an editor or non-Rust tool is ready to consume it.

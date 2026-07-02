@@ -330,6 +330,20 @@ namespace Arena.Entity
             SimState.ClearSpecialMovementRuntime();
             _animator?.RequestSpecialMovementDrivenPhasedMeleeEnd();
         }
+
+        /// <summary>
+        /// Unwinds a predicted gap-close windup after a server rejection or a
+        /// prediction timeout (feel audit F5). Movement was never predicted, so
+        /// only the held phased presentation needs the end request; when an
+        /// authoritative special movement is live its row delete owns that
+        /// request instead.
+        /// </summary>
+        public void RollbackPredictedGapCloseWindup()
+        {
+            if (SimState.TryGetSpecialMovementTrack(out _))
+                return;
+            _animator?.RequestSpecialMovementDrivenPhasedMeleeEnd();
+        }
         public void SetMovementActionState(MovementActionState row) => SimState.SetMovementActionState(row);
         public void ClearMovementActionState() => SimState.ClearMovementActionState();
         public void SetKnockedDown(bool isKnockedDown) => _animator?.SetKnockedDown(isKnockedDown);

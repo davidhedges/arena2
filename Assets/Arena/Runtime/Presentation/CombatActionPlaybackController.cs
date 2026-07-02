@@ -482,6 +482,84 @@ namespace Arena.Presentation
             return true;
         }
 
+        /// <summary>
+        /// Phase policy for special-movement-driven phased melee, shared by the
+        /// authoritative flow and the predicted gap-close windup (feel audit F5).
+        /// The caller's normalizedTime is the elapsed fraction of the current
+        /// segment — for a predicted windup that clock starts at press, so by the
+        /// time track sampling owns movement (~RTT later) playback resumes from
+        /// the same offset instead of restarting. The loop holds until the
+        /// special-movement row delete requests the end segment.
+        /// </summary>
+        public static bool TryResolveSpecialMovementDrivenPhasedTransition(
+            PhasedMeleePlaybackPhase currentPhase,
+            float normalizedTime,
+            bool releaseAfterStart,
+            bool endRequested,
+            float startOnlyEndTriggerNormalizedTime,
+            float segmentTransitionNormalizedTime,
+            float endCompleteNormalizedTime,
+            out PhasedMeleePlaybackPhase nextPhase,
+            out bool shouldCancel)
+        {
+            nextPhase = PhasedMeleePlaybackPhase.None;
+            shouldCancel = false;
+
+            if (currentPhase == PhasedMeleePlaybackPhase.Start)
+            {
+                float startExitNormalizedTime = releaseAfterStart
+                    ? startOnlyEndTriggerNormalizedTime
+                    : segmentTransitionNormalizedTime;
+                if (normalizedTime < startExitNormalizedTime)
+                    return false;
+
+                nextPhase = releaseAfterStart || endRequested
+                    ? PhasedMeleePlaybackPhase.End
+                    : PhasedMeleePlaybackPhase.Loop;
+                return true;
+            }
+
+            if (currentPhase == PhasedMeleePlaybackPhase.Loop)
+            {
+                if (!endRequested)
+                    return false;
+
+                nextPhase = PhasedMeleePlaybackPhase.End;
+                return true;
+            }
+
+            if (currentPhase == PhasedMeleePlaybackPhase.End
+                && normalizedTime >= endCompleteNormalizedTime)
+            {
+                shouldCancel = true;
+                return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// A predicted gap-close windup already occupies the phased melee slot
+        /// when the server's COMBAT_CAST replay arrives, so an authoritative
+        /// special-movement start for the same action must be ignored rather
+        /// than replayed from zero (feel audit F5). Once the end segment has
+        /// been requested the dash is over and a same-action start is a new
+        /// action, not a duplicate.
+        /// </summary>
+        public static bool IsDuplicateAuthoritativeSpecialMovementMeleeStart(
+            CombatAnimationAuthority incomingAuthority,
+            bool incomingDrivesPhasesFromSpecialMovement,
+            bool incomingMatchesActiveMeleeActionId,
+            bool activePhasedMeleeIsSpecialMovementDriven,
+            bool activePhasedMeleeEndRequested)
+        {
+            return incomingAuthority == CombatAnimationAuthority.Authoritative
+                && incomingDrivesPhasesFromSpecialMovement
+                && incomingMatchesActiveMeleeActionId
+                && activePhasedMeleeIsSpecialMovementDriven
+                && !activePhasedMeleeEndRequested;
+        }
+
         public bool TryResolvePhasedMeleeTransition(
             float normalizedTime,
             float startOnlyEndTriggerNormalizedTime,

@@ -34,6 +34,11 @@ namespace Arena.Input
         private readonly Dictionary<string, AcceptedPredictedMeleeAction> _acceptedPredictedMeleeByActionInstance = new();
         private readonly List<PendingAuthoritativeMeleeReplay> _pendingAuthoritativeMeleeReplays = new();
         private readonly Dictionary<string, (PredictedActionLedger ledger, long expiresAtMs)> _predictionLedgersByToken = new();
+        // Predicted gap-close windups (feel audit F5): tokens whose special-
+        // movement-driven windup presentation must be unwound if the server
+        // rejects the press or never answers. Accepted presses leave the row
+        // lifecycle (SpecialMovementRuntime delete) to end the windup.
+        private readonly Dictionary<string, long> _pendingGapCloseWindupExpiryByToken = new();
 
         private readonly struct PendingPredictedMeleeVisual
         {
@@ -242,7 +247,7 @@ namespace Arena.Input
                 strikeChoice.shouldQueue
                     ? $"sending MeleeAttack queue request for {slotId} execute_at={strikeChoice.executeNotBeforeMs}"
                     : $"sending MeleeAttack for {slotId}");
-            bool predictsLocalVisual = gapClose == null && !strikeChoice.shouldQueue;
+            bool predictsLocalVisual = !strikeChoice.shouldQueue;
             ActionPredictionToken token = predictsLocalVisual
                 ? LocalCombatState.Instance.CreateActionPredictionToken(slotId)
                 : ActionPredictionToken.None(slotId);
@@ -256,8 +261,11 @@ namespace Arena.Input
                 token.PredictedActionId,
                 token.ClientActionSeq);
 
-            if (gapClose != null)
+            if (gapClose != null && strikeChoice.shouldQueue)
             {
+                // Queued combo follow-ups keep the authoritative-only flow; the
+                // predicted windup ships for direct presses first (feel audit
+                // F5, slice 1).
                 ActionBarTrace.Trace(
                     $"melee gap close awaiting authoritative movement+animation: {slotId}");
                 return true;
@@ -294,7 +302,7 @@ namespace Arena.Input
                 return true;
             }
 
-            TriggerLocalStrike(entity, slotId, nowMs, token);
+            TriggerLocalStrike(entity, slotId, nowMs, token, predictedGapCloseWindup: gapClose != null);
             return true;
         }
 
@@ -443,9 +451,13 @@ namespace Arena.Input
             PlayerEntity entity,
             string slotId,
             long startedAtMs,
-            ActionPredictionToken token)
+            ActionPredictionToken token,
+            bool predictedGapCloseWindup = false)
         {
-            if (!entity.IsInCombat)
+            // Gap-close windups skip the combat-stance snap: movement-driven
+            // phased playback owns stance flags so the base layer never enters
+            // a combat transition ahead of the phased set (feel audit F5).
+            if (!predictedGapCloseWindup && !entity.IsInCombat)
                 entity.EnterCombatImmediate();
             string runtimeActionId = slotId;
             MeleeAttackModifierResolver.ActiveModifierIdentity activeModifier = default;
@@ -466,12 +478,19 @@ namespace Arena.Input
                     startedAtMs,
                     CombatEventSources.PlayerInput,
                     activeModifier.StatusKind,
-                    activeModifier.StackGroup));
+                    activeModifier.StackGroup,
+                    drivePhasesFromSpecialMovement: predictedGapCloseWindup));
             if (token.IsPredicted)
                 RememberPredictedMeleeVisual(token, slotId, runtimeActionId, startedAtMs);
             else
                 RememberPredictedStrikeVisual(runtimeActionId, startedAtMs);
-            ActionBarTrace.Trace($"local melee prediction triggered: {slotId}");
+            if (predictedGapCloseWindup && token.IsPredicted)
+                _pendingGapCloseWindupExpiryByToken[ActionTokenKey(token)] =
+                    startedAtMs + PendingMeleePredictionTtlMs;
+            ActionBarTrace.Trace(
+                predictedGapCloseWindup
+                    ? $"local melee gap close windup prediction triggered: {slotId}"
+                    : $"local melee prediction triggered: {slotId}");
 
             _queuedStrikeId = string.Empty;
             _queuedStrikeExecuteAtMs = 0L;
@@ -534,6 +553,9 @@ namespace Arena.Input
             if (row.Result == ActionResultKind.Accepted)
             {
                 _predictionLedgersByToken.Remove(tokenKey);
+                // Accepted gap-close: the SpecialMovementRuntime row delete now
+                // owns the windup's end request.
+                _pendingGapCloseWindupExpiryByToken.Remove(tokenKey);
                 if (_pendingPredictedMeleeByToken.Remove(tokenKey)
                     && !string.IsNullOrWhiteSpace(row.ActionInstanceId))
                 {
@@ -554,6 +576,13 @@ namespace Arena.Input
                     ActionBarTrace.Trace(
                         $"rolled back predicted melee state for {pendingLedger.ledger.ActionKind} after {row.Result} reason={row.RejectReason}");
                     _predictionLedgersByToken.Remove(tokenKey);
+                }
+
+                if (_pendingGapCloseWindupExpiryByToken.Remove(tokenKey))
+                {
+                    EntityRegistry.Instance?.LocalPlayerEntity?.RollbackPredictedGapCloseWindup();
+                    ActionBarTrace.Trace(
+                        $"rolled back predicted gap close windup after {row.Result} reason={row.RejectReason}");
                 }
             }
         }
@@ -668,6 +697,22 @@ namespace Arena.Input
             }
             foreach (string token in staleLedgerTokens)
                 _predictionLedgersByToken.Remove(token);
+
+            // A gap-close windup with no server answer at all must not hold the
+            // loop segment forever; the rollback is a no-op when a live special
+            // movement already owns the end request.
+            var staleGapCloseTokens = new List<string>();
+            foreach (var entry in _pendingGapCloseWindupExpiryByToken)
+            {
+                if (nowMs > entry.Value)
+                    staleGapCloseTokens.Add(entry.Key);
+            }
+            foreach (string token in staleGapCloseTokens)
+            {
+                _pendingGapCloseWindupExpiryByToken.Remove(token);
+                EntityRegistry.Instance?.LocalPlayerEntity?.RollbackPredictedGapCloseWindup();
+                ActionBarTrace.Trace("rolled back predicted gap close windup after prediction timeout");
+            }
         }
 
         private static string ActionTokenKey(ActionPredictionToken token)

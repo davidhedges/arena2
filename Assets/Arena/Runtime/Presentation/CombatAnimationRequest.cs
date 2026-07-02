@@ -83,7 +83,8 @@ namespace Arena.Presentation
             long startedAtMs,
             string? source = CombatEventSources.PlayerInput,
             string? consumedModifierStatusKind = null,
-            string? consumedModifierStackGroup = null)
+            string? consumedModifierStackGroup = null,
+            bool drivePhasesFromSpecialMovement = false)
         {
             return new CombatAnimationRequest(
                 actionId,
@@ -94,7 +95,8 @@ namespace Arena.Presentation
                 source,
                 startedAtMs,
                 consumedModifierStatusKind: consumedModifierStatusKind,
-                consumedModifierStackGroup: consumedModifierStackGroup);
+                consumedModifierStackGroup: consumedModifierStackGroup,
+                drivePhasesFromSpecialMovement: drivePhasesFromSpecialMovement);
         }
 
         public static CombatAnimationRequest PredictedSpell(

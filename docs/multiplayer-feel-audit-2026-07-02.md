@@ -110,7 +110,49 @@ referenced but not repeated.
   Non-goals held: adaptive delay (only after the conditioner A/B proves
   the win), local-player path, special-movement track sampling, send
   rates.
-- **F5 — not started.**
+- **F5 — slice 1 implemented (predicted gap-closer startup + no-lag-comp
+  stance); contact cues (slice 2) not started.** On a gap-close press the
+  client now plays the authored windup immediately as a predicted
+  presentation: `MeleeInputHandler` routes the gap-close branch through the
+  same `CombatAnimationRequest.PredictedMeleeSkill` path as ordinary
+  predicted melee (new optional `drivePhasesFromSpecialMovement` flag), so
+  the phased playback starts in special-movement-driven mode at press —
+  Start plays, the Loop holds until the authoritative
+  `SpecialMovementRuntime` row delete requests the end segment. Movement
+  stays fully server-owned: when the row arrives, track sampling takes over
+  position/facing exactly as before (`LocalMovementPredictionDriver`
+  untouched). The press also now carries a real prediction token and routes
+  GCD/cooldown/resource through `LocalCombatState.PredictActionStart`, so a
+  `Rejected`/`StaleToken` result composes with F1's `PredictedActionLedger`
+  rollback and additionally unwinds the held windup via the new
+  `PlayerEntity.RollbackPredictedGapCloseWindup()` (no-op when a live
+  authoritative special movement owns the end request); a prediction
+  timeout (5 s, no result at all) unwinds it the same way so the loop can
+  never hold forever. Duplicate suppression: the authoritative
+  `COMBAT_CAST` replay is consumed by the existing accepted-token
+  bookkeeping (`_acceptedPredictedMeleeByActionInstance` / pending-replay
+  hold), with a pure substrate backstop —
+  `CombatActionPlaybackController.IsDuplicateAuthoritativeSpecialMovementMeleeStart`
+  ignores a same-action authoritative special-movement start while the
+  predicted windup is active and not yet end-requested (local player only;
+  remote flows unchanged). The special-movement phase policy was extracted
+  from `PlayerAnimator` into
+  `CombatActionPlaybackController.TryResolveSpecialMovementDrivenPhasedTransition`
+  (PlayerAnimator now delegates — no new fields/methods/responsibilities on
+  it, per repo standard). No-lag-comp stance (item 3) documented in
+  `docs/combat-authoring-contract.md` ("Hit Validation Timing (No Lag
+  Compensation)"): server-present-time validation is by design; rewind lag
+  compensation is speculative redesign, do not implement. Editor tests:
+  `Assets/Arena/Tests/Editor/GapClosePredictedWindupTests.cs` — handoff
+  math (windup elapsed carries into the loop offset; Start/Loop/End
+  transitions incl. release-after-start and short-dash end-during-Start)
+  and suppression (authoritative start after predicted start does not
+  double-play; post-dash same-action start does play). Client-only, no
+  schema change. Still to do by hand: `docs/latency-testing.md` Profile A —
+  gap-closer press shows instant windup, dash starts ~RTT later with no
+  pose pop; rejected press (out of range / LOS) unwinds windup + cooldown +
+  resource together. Non-goals held: contact cues (slice 2), predicting
+  dash movement, lag-compensated rewind, projectile flight prediction.
 
 ## Executive Summary
 

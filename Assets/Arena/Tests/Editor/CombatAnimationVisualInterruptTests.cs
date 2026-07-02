@@ -483,8 +483,9 @@ namespace Arena.Tests.Editor
                         typeof(AnimationClip),
                         typeof(AnimationClip),
                         typeof(AnimationClip),
+                        typeof(bool),
                         typeof(bool))
-                    .Invoke(controller, new object[] { 3, start, loop, end, false });
+                    .Invoke(controller, new object[] { 3, start, loop, end, false, false });
 
                 Assert.That(RequireProperty(playbackControllerType, "IsPhasedMeleeActive").GetValue(controller), Is.EqualTo(true));
                 Assert.That(RequireProperty(playbackControllerType, "PhasedMeleeBankSlot").GetValue(controller), Is.EqualTo(3));
