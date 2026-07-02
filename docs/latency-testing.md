@@ -34,6 +34,37 @@ the `[TICK_PROFILE_SCAN]` window line (compile-time `ARENA_PROFILE_TICKS`; see
 
 Both directions get the same treatment; `plr` is per direction.
 
+**Profile L — light (~80 ms added RTT, no jitter, no loss):**
+
+```bash
+sudo dnctl pipe 1 config delay 40ms    # client -> server
+sudo dnctl pipe 2 config delay 40ms    # server -> client
+```
+
+Start here (and skip the two `probability` jitter lines in step 3 — pipes 3/4
+are unused). Pure delay is cheap for the host and keeps movement fully
+playable while still making round-trip-shaped feel effects (gap-closer dash
+delay, rejection unwind, connection-dot Degraded) clearly visible. For the F4
+timeline A/B, add a small jitter branch on top — still zero loss:
+
+```bash
+sudo dnctl pipe 3 config delay 65ms    # client -> server, jitter branch
+sudo dnctl pipe 4 config delay 65ms    # server -> client, jitter branch
+```
+
+**Why loss (and big jitter spreads) hurt so much on loopback TCP:** all of
+this rides one TCP stream. A `plr` drop stalls the whole stream for a
+retransmit timeout — hundreds of milliseconds on macOS — during which no rows
+arrive *and* no input/acks depart; a long enough stall blows past the 12-tick
+prediction headroom and trips the emergency resync (> 12 pending commands),
+which reads as severe local rubberbanding, far worse than the nominal added
+RTT suggests. The bimodal jitter branch also reorders packets inside the
+stream, which TCP answers with dup-ACK retransmit churn (CPU heat, bursty
+delivery). That is realistic WAN-adjacent behavior and worth observing — but
+briefly, and only after the delay-only checks pass. Expect Profile A/B
+sessions to be unpleasant to play and hard on the machine; treat them as
+short observation windows, not tuning sessions.
+
 **Profile A — moderate (~100 ms added RTT, ~+30 ms jitter, 1 % loss):**
 
 ```bash
@@ -58,8 +89,16 @@ touching pf.
 ## Step by step
 
 1. Publish and run the local server as usual (`ops/republish-local-clear.sh`),
-   confirm the client connects clean, and note baseline overlay numbers
-   (loopback RTT should be ~0–2 ms).
+   confirm the client connects clean, and note baseline overlay numbers.
+   Expect overlay RTT of roughly **5–15 ms** on loopback, not curl's
+   sub-millisecond: the ping's send and receive timestamps are both taken on
+   the main thread (`SendClockPingIfDue` runs in `Update`, and the reducer
+   result callback fires inside the once-per-frame `FrameTick` pump), so every
+   sample carries up to a frame or so of scheduling alignment on top of wire
+   RTT. `curl -s -o /dev/null -w '%{time_total}s\n'
+   http://localhost:3000/v1/ping` (~1 ms) is the wire baseline; the overlay
+   number is the game-observed baseline and is the one the added profile
+   delays stack onto.
 
 2. Configure the pipes with one of the profiles above.
 
@@ -88,9 +127,11 @@ touching pf.
    curl -s -o /dev/null -w '%{time_total}s\n' http://localhost:3000/v1/ping
    ```
 
-   The curl timing (any HTTP endpoint on port 3000 works) should jump by
-   roughly the configured RTT, and the `dnctl list` packet counters should be
-   climbing while the client runs.
+   The curl timing (any HTTP endpoint on port 3000 works) should jump to at
+   least **twice** the configured RTT — `time_total` spans the TCP handshake
+   plus the HTTP exchange, each a full round trip, so Profile A reads
+   ~0.2–0.35 s (not ~0.1 s) and Profile L ~0.16–0.2 s. The `dnctl list`
+   packet counters should be climbing while the client runs.
 
 5. Play. In the overlay expect: RTT last/p50/p95 up by the profile's RTT and
    spread by the jitter branch; clock offset re-converging via precise samples;
