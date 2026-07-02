@@ -557,6 +557,7 @@ namespace Arena.Editor
                 $"{SceneServerHeightfieldPath(dataKey)} and {SceneBundledHeightfieldPath(dataKey)}");
         }
 
+        [MenuItem("Arena/OpenWorld/Sync Shared Movement Data", false, 500)]
         public static void SyncSharedMovementData()
         {
             SyncArenaLayoutToBundled(logSummary: false);

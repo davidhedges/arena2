@@ -52,7 +52,41 @@ Each recommendation is scoped as a bounded implementation slice.
   remaining MANA literal is the server fallback for off-bar casts the client
   never predicts (commented in `casting.rs`). Pre-checks remain advisory:
   no new client-side denial capability was added.
-- **R4 — not started. R5 — regen-mode pin done; version stamp not started.**
+- **R4 — implemented (2026-07-02).** The five inventory subscriptions in
+  `GameplaySubscriptionPlanner.BuildLocalQuerySqls` are owner-filtered:
+  containers/items filter on their identity columns
+  (`Owner`/`CurrentOwner.Eq(localIdentity)` — identity equality avoids the
+  hex-case mismatch between C# `Identity.ToString()` (uppercase) and the
+  server's lowercase `identity.to_hex()` keys); slots/spells/affixes arrive
+  via one-hop semijoins through their owned parents. World-loot contents
+  (corpse/chest/loot rows all carry empty owner keys and `None` identities —
+  verified in `inventory.rs`) replicate via `CurrentOwnerKey = ''` queries
+  plus a new world-scoped loot-slot semijoin next to the existing scoped
+  loot-container query. Known bound: unowned item/spell/affix rows cannot be
+  world-scoped in one subscription (container→slot→item is a three-table
+  chain), so they replicate globally — small and self-expiring. Verified
+  before shipping: no trade/vendor flows exist, gear inspection reads
+  `CharacterAppearance` (already scoped), `EquipmentLoadout` was already
+  owner-filtered, and unindexed subscription filters are already used by the
+  scoped queries (`PlayerWorld.world_kind` has no index). Manual two-client
+  check still pending: client A holds none of B's item rows; bag UI, corpse
+  pickup, and equip still work.
+- **R5 — implemented (2026-07-02; regen-mode pin + version stamp).**
+  Stamp: `contract_version` table (`server/src/contract_version.rs`) —
+  one row per `*.shared.json` compiled into the module (33 files), keyed by
+  src-relative path with an FNV-1a-64 content hash (CR-insensitive).
+  Written change-gated from `init` and `client_connected` (hot module
+  updates do not re-run `init`). A native test walks `src/**` and fails if
+  any shared JSON is missing from the list. Client:
+  `ContractVersionGuard.Validate` runs when the static subscription applies,
+  hashes every bundled `SharedData` copy with the mirrored FNV
+  implementation, and logs an error naming the drifted file (warning when
+  the module has no stamp for a client file). All 22 client-mirrored files
+  hash-match today. Editor: `SyncSharedMovementData` is now a menu item
+  (Arena → OpenWorld → Sync Shared Movement Data) and runs automatically
+  before every player build (`SharedMovementDataBuildSync`,
+  `IPreprocessBuildWithReport`). Not done: the optional CI step diffing
+  `spacetime generate` output.
 - **R5 correction (2026-07-02):** the "no live drift today" finding missed a
   regen-mode split. The projectile-load-harness surface is feature-gated
   (`#[cfg(feature = "projectile_load_harness")]`), and the two regen paths
@@ -76,7 +110,8 @@ Each recommendation is scoped as a bounded implementation slice.
   `--module-path` regen is non-canonical. The R2 regen used this mode; diff
   contained exactly the expected additions (`Types/ActionRejectReason.g.cs`
   plus the `RejectReason` field) and zero harness churn. The `ContractVersion`
-  stamp table and shared-JSON sync guard remain open.
+  stamp table and shared-JSON sync guard shipped later the same day (see the
+  R5 status bullet above).
 
 ## Executive Summary
 

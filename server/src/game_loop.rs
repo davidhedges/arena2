@@ -664,6 +664,7 @@ pub struct GameLoopTimer {
 #[reducer(init)]
 pub fn init(ctx: &ReducerContext) -> Result<(), String> {
     ensure_game_loop_schedule(ctx);
+    crate::contract_version::sync_contract_versions(ctx);
     bootstrap_server_state(ctx);
     despawn_legacy_default_dummies(ctx);
 

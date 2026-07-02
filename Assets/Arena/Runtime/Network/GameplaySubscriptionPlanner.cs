@@ -35,6 +35,7 @@ namespace Arena.Network
                 new QueryBuilder().From.ResourceCatalog().ToSql(),
                 new QueryBuilder().From.StatScalingCatalog().ToSql(),
                 new QueryBuilder().From.ArenaInstance().ToSql(),
+                new QueryBuilder().From.ContractVersion().ToSql(),
                 new QueryBuilder().From.Party().ToSql(),
                 new QueryBuilder().From.PartyMember().ToSql(),
                 new QueryBuilder().From.PlaygroundTarget().ToSql(),
@@ -60,11 +61,34 @@ namespace Arena.Network
                 new QueryBuilder().From.ActiveCombatMode().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
                 new QueryBuilder().From.PartyInvite().Where(c => c.Invitee.Eq(localIdentity)).ToSql(),
                 new QueryBuilder().From.EquipmentLoadout().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
-                new QueryBuilder().From.InventoryContainer().ToSql(),
-                new QueryBuilder().From.InventorySlot().ToSql(),
-                new QueryBuilder().From.ItemInstance().ToSql(),
-                new QueryBuilder().From.ItemSpell().ToSql(),
-                new QueryBuilder().From.ItemAffixInstance().ToSql(),
+                // Inventory rows are owner-filtered (netcode audit R4): the
+                // client receives its own containers/slots/items plus unowned
+                // world-loot rows (corpse/chest/loot contents carry empty
+                // owner keys; the containers themselves are world-scoped by
+                // the loot queries in the scoped group). Other players'
+                // inventories are never replicated.
+                new QueryBuilder().From.InventoryContainer().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
+                new QueryBuilder().From.InventoryContainer().Where(c => c.Owner.Eq(localIdentity))
+                    .RightSemijoin(new QueryBuilder().From.InventorySlot(), (container, slot) => container.ContainerId.Eq(slot.ContainerId))
+                    .ToSql(),
+                new QueryBuilder().From.ItemInstance().Where(c => c.CurrentOwner.Eq(localIdentity)).ToSql(),
+                new QueryBuilder().From.ItemInstance().Where(c => c.CurrentOwner.Eq(localIdentity))
+                    .RightSemijoin(new QueryBuilder().From.ItemSpell(), (item, spell) => item.ItemInstanceId.Eq(spell.ItemInstanceId))
+                    .ToSql(),
+                new QueryBuilder().From.ItemInstance().Where(c => c.CurrentOwner.Eq(localIdentity))
+                    .RightSemijoin(new QueryBuilder().From.ItemAffixInstance(), (item, affix) => item.ItemInstanceId.Eq(affix.ItemInstanceId))
+                    .ToSql(),
+                // World-loot item rows cannot be world-scoped in one
+                // subscription (container -> slot -> item is a three-table
+                // chain), so unowned items and their spell/affix children are
+                // replicated globally. Loot expires, so this set stays small.
+                new QueryBuilder().From.ItemInstance().Where(c => c.CurrentOwnerKey.Eq(string.Empty)).ToSql(),
+                new QueryBuilder().From.ItemInstance().Where(c => c.CurrentOwnerKey.Eq(string.Empty))
+                    .RightSemijoin(new QueryBuilder().From.ItemSpell(), (item, spell) => item.ItemInstanceId.Eq(spell.ItemInstanceId))
+                    .ToSql(),
+                new QueryBuilder().From.ItemInstance().Where(c => c.CurrentOwnerKey.Eq(string.Empty))
+                    .RightSemijoin(new QueryBuilder().From.ItemAffixInstance(), (item, affix) => item.ItemInstanceId.Eq(affix.ItemInstanceId))
+                    .ToSql(),
             };
         }
 
@@ -96,6 +120,7 @@ namespace Arena.Network
                 BuildScopedProjectilePresentationEventQuery(new QueryBuilder(), scope),
                 BuildScopedPlayerEventQuery(new QueryBuilder(), scope),
                 BuildScopedLootContainerQuery(new QueryBuilder(), scope),
+                BuildScopedLootSlotQuery(new QueryBuilder(), scope),
             };
 
             if (scope.Kind == NetworkManager.GameplayScopeKind.Instance)
@@ -123,6 +148,30 @@ namespace Arena.Network
                     .Where(c => c.InstanceId.Eq(scope.InstanceId.GetValueOrDefault()))
                     .ToSql(),
                 _ => throw new InvalidOperationException("Scoped loot-container query requested for GameplayScope.None"),
+            };
+        }
+
+        private static string BuildScopedLootSlotQuery(QueryBuilder qb, NetworkManager.GameplayScope scope)
+        {
+            return scope.Kind switch
+            {
+                NetworkManager.GameplayScopeKind.OpenWorld => qb
+                    .From
+                    .InventoryContainer()
+                    .Where(c => c.OwnerKey.Eq(string.Empty))
+                    .Where(c => c.WorldKind.Eq("OPEN"))
+                    .Where(c => c.OpenWorldSceneName.Eq(OpenWorldSceneName(scope)))
+                    .RightSemijoin(qb.From.InventorySlot(), (container, slot) => container.ContainerId.Eq(slot.ContainerId))
+                    .ToSql(),
+                NetworkManager.GameplayScopeKind.Instance => qb
+                    .From
+                    .InventoryContainer()
+                    .Where(c => c.OwnerKey.Eq(string.Empty))
+                    .Where(c => c.WorldKind.Eq("INSTANCE"))
+                    .Where(c => c.InstanceId.Eq(scope.InstanceId.GetValueOrDefault()))
+                    .RightSemijoin(qb.From.InventorySlot(), (container, slot) => container.ContainerId.Eq(slot.ContainerId))
+                    .ToSql(),
+                _ => throw new InvalidOperationException("Scoped loot-slot query requested for GameplayScope.None"),
             };
         }
 

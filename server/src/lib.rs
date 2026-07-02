@@ -20,6 +20,7 @@ mod appearance;
 mod arena;
 mod auto_attack;
 mod combat;
+mod contract_version;
 mod defense;
 mod derived_stats;
 pub(crate) mod game_loop;

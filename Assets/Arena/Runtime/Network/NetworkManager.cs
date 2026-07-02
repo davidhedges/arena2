@@ -305,6 +305,7 @@ namespace Arena.Network
         private void OnStaticSubscriptionApplied(SubscriptionEventContext ctx)
         {
             Debug.Log("[NetworkManager] Static subscription applied.");
+            ContractVersionGuard.Validate(ctx.Db);
         }
 
         private void OnLocalSubscriptionApplied(SubscriptionEventContext ctx)

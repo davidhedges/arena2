@@ -48,6 +48,7 @@ namespace SpacetimeDB.Types
             AddTable(CombatProjectileTickMetrics = new(conn));
             AddTable(CombatRuleCatalog = new(conn));
             AddTable(CombatVfxCueCatalog = new(conn));
+            AddTable(ContractVersion = new(conn));
             AddTable(DefenseState = new(conn));
             AddTable(EquipmentLoadout = new(conn));
             AddTable(FixedActionChargeState = new(conn));
@@ -606,6 +607,7 @@ namespace SpacetimeDB.Types
             new QueryBuilder().From.CombatProjectileTickMetrics().ToSql(),
             new QueryBuilder().From.CombatRuleCatalog().ToSql(),
             new QueryBuilder().From.CombatVfxCueCatalog().ToSql(),
+            new QueryBuilder().From.ContractVersion().ToSql(),
             new QueryBuilder().From.DefenseState().ToSql(),
             new QueryBuilder().From.EquipmentLoadout().ToSql(),
             new QueryBuilder().From.FixedActionChargeState().ToSql(),
@@ -674,6 +676,7 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Table<CombatProjectileTickMetrics, CombatProjectileTickMetricsCols, CombatProjectileTickMetricsIxCols> CombatProjectileTickMetrics() => new("combat_projectile_tick_metrics", new CombatProjectileTickMetricsCols("combat_projectile_tick_metrics"), new CombatProjectileTickMetricsIxCols("combat_projectile_tick_metrics"));
         public global::SpacetimeDB.Table<CombatRuleCatalog, CombatRuleCatalogCols, CombatRuleCatalogIxCols> CombatRuleCatalog() => new("combat_rule_catalog", new CombatRuleCatalogCols("combat_rule_catalog"), new CombatRuleCatalogIxCols("combat_rule_catalog"));
         public global::SpacetimeDB.Table<CombatVfxCueCatalog, CombatVfxCueCatalogCols, CombatVfxCueCatalogIxCols> CombatVfxCueCatalog() => new("combat_vfx_cue_catalog", new CombatVfxCueCatalogCols("combat_vfx_cue_catalog"), new CombatVfxCueCatalogIxCols("combat_vfx_cue_catalog"));
+        public global::SpacetimeDB.Table<ContractVersion, ContractVersionCols, ContractVersionIxCols> ContractVersion() => new("contract_version", new ContractVersionCols("contract_version"), new ContractVersionIxCols("contract_version"));
         public global::SpacetimeDB.Table<DefenseState, DefenseStateCols, DefenseStateIxCols> DefenseState() => new("defense_state", new DefenseStateCols("defense_state"), new DefenseStateIxCols("defense_state"));
         public global::SpacetimeDB.Table<EquipmentLoadout, EquipmentLoadoutCols, EquipmentLoadoutIxCols> EquipmentLoadout() => new("equipment_loadout", new EquipmentLoadoutCols("equipment_loadout"), new EquipmentLoadoutIxCols("equipment_loadout"));
         public global::SpacetimeDB.Table<FixedActionChargeState, FixedActionChargeStateCols, FixedActionChargeStateIxCols> FixedActionChargeState() => new("fixed_action_charge_state", new FixedActionChargeStateCols("fixed_action_charge_state"), new FixedActionChargeStateIxCols("fixed_action_charge_state"));
