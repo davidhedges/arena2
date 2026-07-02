@@ -212,8 +212,15 @@ melee on both sides.
 surface.
 
 **Verification.**
-Binding regen diff contains only expected additions; force a rejection (cast at
-0 mana) and observe the reason client-side; `cargo test`.
+Binding regen diff contains only expected additions; force a rejection and
+observe the reason client-side; `cargo test`. Correction (2026-07-02): "cast
+at 0 mana" does not work as the forced rejection — out-of-resource presses
+are gated by the client's advisory pre-check and never reach the server (for
+any resource kind). Force a disagreement instead: cast a targeted spell at a
+target behind a wall (client does not mirror LOS →
+`lastReject=SpellCast:LineOfSightBlocked` in the Backslash overlay), or
+temporarily disable the `HasResourceForSpell` early-return to see
+`InsufficientResource` end-to-end.
 
 **Risks / non-goals.**
 This is a schema change — it deliberately exercises the R5 pipeline; do it after
