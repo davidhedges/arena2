@@ -24,7 +24,36 @@ referenced but not repeated.
   the session; dot reads Good on local dev, Degraded under Profile A,
   Bad under Profile B). Recipe: `docs/latency-testing.md`. Run
   these before tuning anything that depends on them (e.g. F4 adaptive
-  delay).
+  delay). Progress (2026-07-03): F2 item-4 checks verified live (banner +
+  Reconnect after a server kill; dot Good → Degraded → Good across a
+  Profile L apply/teardown) and the F1 toast verified end-to-end via a
+  spell LOS rejection under shaping. Still open: the F4 A/B, the F5
+  gap-closer timing/rejection checks, and the contact-cue falsePos
+  count — read the local-endpoint caveat in `docs/latency-testing.md`
+  first.
+- **Latency-harness findings (2026-07-03, first live conditioner runs).**
+  (a) The movement input lead is keyed to endpoint kind, not RTT:
+  `Remote` gets 8 ticks (~264 ms), while `Local`/`Custom` get 2 ticks
+  (~66 ms) (`MovementNetDriver.ResolveDesiredServerInputLeadTicks`,
+  `MovementNetcodeConfig`), and the tick estimate is arrival-anchored
+  (`ClientSimulationState.EstimateAuthoritativeTick`), lagging the true
+  server tick by the downstream one-way delay. So shaping localhost
+  above ~30–40 ms one-way starves the per-tick command buffer
+  (`MOVE_FALLBACK` every tick, fallback forces `jump = false`) and
+  local movement rubberbands on every input change — a harness blind
+  spot, not general netcode fragility. Local-move fidelity under
+  latency is therefore untestable on a shaped local endpoint until a
+  dev-only lead override (or RTT-adaptive lead) exists; that is
+  movement-netcode work, deliberately not started, and anything
+  adaptive shares the F4-adaptive-delay gate.
+  (b) Gap-closers do not validate line of sight server-side —
+  `resolve_melee_gap_close` checks collision/path only; LOS applies to
+  projectile deliveries with `requires_initial_line_of_sight`
+  (`server/src/melee.rs`). A behind-wall gap-close press is accepted
+  and dashes, so no denial toast is correct behavior. The deterministic
+  gap-close rejection trigger is a blocked dash path →
+  `GapCloseBlocked` ("Path blocked"); the F5 slice-1 "rejected press
+  (out of range / LOS)" wording does not apply to gap-closers.
 - **F1 — implemented (all four steps).** `PredictedActionLedger` +
   `LocalCombatState.PredictActionStart` / `RollbackPrediction` /
   `ReleasePredictedPrimaryResource`; melee and spell press paths route their

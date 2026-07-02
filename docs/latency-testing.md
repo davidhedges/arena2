@@ -30,6 +30,49 @@ the `[TICK_PROFILE_SCAN]` window line (compile-time `ARENA_PROFILE_TICKS`; see
 - dummynet has no native jitter parameter. We approximate it bimodally: a
   `probability` rule sends ~30 % of packets through a second, slower pipe.
 
+## Local-endpoint caveat: movement input lead (read before shaping)
+
+The client keys its movement input lead to endpoint **kind**, not measured RTT
+(`MovementNetDriver.ResolveDesiredServerInputLeadTicks`): only
+`NetworkEnvironmentKind.Remote` gets the 8-tick (~264 ms) lead the feel
+audit's headroom numbers assume; `ws://localhost:3000` is `Local` (and
+`Custom` counts as local too), which gets **2 ticks (~66 ms)**. The client's
+server-tick estimate is also arrival-anchored
+(`ClientSimulationState.EstimateAuthoritativeTick`), so it runs *behind* the
+true server tick by the server→client one-way delay. Once added one-way delay
+approaches ~30–40 ms, the lead budget is spent: shaped commands arrive after
+their tick, the server falls back to stale intent every tick (`MOVE_FALLBACK`
+— note fallback also forces `jump = false`, so jumps get eaten), and the
+client corrects on every input *change* — which reads as severe rubberbanding
+while strafing/turning, near-normal while stationary or moving straight.
+
+Consequences:
+
+- **Local-player movement fidelity cannot be validated against a shaped
+  localhost endpoint today.** Rubberbanding under shaping is the expected
+  harness artifact, not evidence about real remote play (remote-kind
+  endpoints get the 8-tick lead). A dev-only lead override for shaped-local
+  runs would remove this caveat, but that is movement-netcode work — see the
+  feel audit status note.
+- Checks that remain valid on a shaped local endpoint: connection-dot
+  thresholds and RTT/clock overlay lines (stand still), denial toasts under
+  latency, gap-closer press→windup→dash timing and rejection unwind (stand
+  still or move straight; don't rely on jumps), contact-cue correlation, and
+  the F4 remote-timeline A/B **if the mover's upstream path stays steady** —
+  for the A/B, apply the jitter branch to the server→client direction only:
+
+  ```bash
+  cat <<'EOF' | sudo pfctl -a "com.apple/arena-latency" -f -
+  dummynet out quick proto tcp from any to any port 3000 pipe 1
+  dummynet out quick proto tcp from any port 3000 to any probability 30% pipe 4
+  dummynet out quick proto tcp from any port 3000 to any pipe 2
+  EOF
+  ```
+
+  (pipes 1/2 from Profile L, pipe 4 at 65 ms, pipe 3 unused: steady upstream
+  keeps the mover's server-side motion smooth, downstream jitter still
+  exercises the interpolation timelines.)
+
 ## Profiles
 
 Both directions get the same treatment; `plr` is per direction.
