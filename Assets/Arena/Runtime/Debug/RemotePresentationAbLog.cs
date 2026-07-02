@@ -5,6 +5,7 @@ using System.Globalization;
 using System.IO;
 using System.Text;
 using Arena.Entity;
+using Arena.Presentation;
 using Arena.Simulation;
 using UnityEngine;
 
@@ -122,6 +123,10 @@ namespace Arena.Debugging
             row.Append(',').Append(npcCount > 0
                 ? (npcDelayMsSum / npcCount).ToString("F0", CultureInfo.InvariantCulture)
                 : "0");
+            row.Append(',').Append(PredictedMeleeContactCueController.CuesFired);
+            row.Append(',').Append(PredictedMeleeContactCueController.MatchedCues);
+            row.Append(',').Append(PredictedMeleeContactCueController.FalsePositives);
+            row.Append(',').Append(PredictedMeleeContactCueController.SuppressedAuthoritativeCues);
             row.Append('\n');
 
             try
@@ -134,7 +139,8 @@ namespace Arena.Debugging
                         FormattableString.Invariant(
                             $"# session {DateTime.UtcNow:yyyy-MM-dd'T'HH:mm:ss'Z'}\n")
                         + "unix_ms,timeline,players,p_hard_snaps,p_interp,p_extrap,p_last_err_m,p_max_err_m,"
-                        + "npcs,n_hard_snaps,n_interp,n_extrap,n_last_err_m,n_max_err_m,n_depth_ticks_avg,n_delay_ms_avg\n");
+                        + "npcs,n_hard_snaps,n_interp,n_extrap,n_last_err_m,n_max_err_m,n_depth_ticks_avg,n_delay_ms_avg,"
+                        + "cue_fired,cue_matched,cue_false_pos,cue_suppressed_auth\n");
                     _wroteHeader = true;
                 }
 
