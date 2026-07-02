@@ -424,7 +424,7 @@ Before changing combat animation behavior, read:
 
 1. `docs/combat-authoring-contract.md`
 2. `docs/combat-animation-authoring-contract.md`
-3. the current dated migration plan
+3. `docs/animation-system-audit-2026-07-02.md` (the current animation work of record; the former event-timing migration plan is archived under `docs/archive/2026-05-stale-plans/` and must not be resumed)
 
 Rules:
 

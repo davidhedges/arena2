@@ -1,5 +1,13 @@
 # Animation Event Timing Migration Plan - 2026-05-10
 
+> **STALE — SUPERSEDED — DO NOT IMPLEMENT (archived 2026-07-02).**
+>
+> This plan's direction was **rejected**, not merely left unfinished. Do not resume its phases, do not stamp clip events per its templates, and do not treat clip `AnimationEvent`s as the source of truth for presentation timing.
+>
+> What actually happened: Phase 2 landed in a mutated form (runtime reads events with silent constant fallbacks — `0f`/clip-length — instead of the field fallbacks this plan specified), Phases 3-5 never ran, adoption stalled at 56 of 2,264 clips, and 9 of the 13 event names defined here never gained a runtime reader. The melee manifest export silently prefers stamped events over the `hitWindows[]` fields the editor requires, making server timing depend on authoring style.
+>
+> Current source of truth: `docs/animation-system-audit-2026-07-02.md`. Its direction is the opposite of this plan's: presentation-stability work first (single-writer layer arbitration, loop-flag validation, exit-owner dedup), with in-clip timing consolidating to typed fields on `CombatAnimationSet` entries — clip events demoted to an optional authoring input, never a runtime authority.
+
 ## Purpose
 
 This plan migrates clip-internal presentation timing from `CombatAnimationSet` serialized fields to `AnimationClip` events. Events become the source of truth for in-clip moments — release frame, lower-body unlock, visual interruptible window, hold fade start, strike hit cue, weapon handoff. The `CombatAnimationSet` retains clip references and policy fields (which clip, which layer, which combat-stance behavior) but loses every "when does X happen inside this clip" knob.
