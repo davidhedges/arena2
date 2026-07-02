@@ -20,7 +20,7 @@
 
 use spacetimedb::{reducer, table, Identity, ReducerContext, ScheduleAt, Table, Timestamp};
 use std::sync::{Mutex, OnceLock};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 // Import movement constants and helper
 use crate::action_prediction::prune_predicted_action_results;
@@ -86,6 +86,10 @@ use crate::spells::{
     resolve_special_movement_y, sync_spell_definitions, tick_active_casts,
     tick_bespoke_spells_with_snapshots,
 };
+use crate::tick_metrics::{
+    profiling_enabled as tick_profiling_enabled, record_table_write, PhaseStopwatch, ScopeTimer,
+    TableWriteKind,
+};
 use crate::world_collision::{
     preload_world_collision_data, resolve_world_horizontal_sweep_collision_y_with_layout_for_scene,
     surface_height_for_world_at_y_with_layout, surface_height_for_world_at_y_with_layout_for_scene,
@@ -95,9 +99,13 @@ use crate::world_collision::{
 #[allow(unused_imports)]
 use crate::combat::active_combat_projectile as _;
 #[allow(unused_imports)]
+use crate::combat::status_effect as _;
+#[allow(unused_imports)]
 use crate::movement_actions::fixed_action_charge_state as _;
 #[allow(unused_imports)]
 use crate::movement_actions::movement_action_state as _;
+#[allow(unused_imports)]
+use crate::npcs::npc_state as _;
 #[allow(unused_imports)]
 use crate::player::player as _;
 #[allow(unused_imports)]
@@ -121,7 +129,6 @@ const MAX_HORIZONTAL_COLLISION_STEP: f32 = 0.10;
 const MAX_GROUNDED_SNAP_DOWN: f32 = 0.75;
 const GAME_TICK_INTERVAL: Duration = Duration::from_millis(FIXED_TICK_MILLIS);
 const EVENT_PRUNE_INTERVAL: Duration = Duration::from_millis(500);
-const TICK_PROFILE_ENV_VAR: &str = "ARENA_PROFILE_TICKS";
 const TICK_PROFILE_WINDOW_MICROS: i64 = 5_000_000;
 const TICK_BUDGET_MICROS: u32 = FIXED_TICK_MILLIS as u32 * 1_000;
 const SPECIAL_MOVEMENT_PATH_INSTANT: &str = "INSTANT";
@@ -131,6 +138,45 @@ const SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK_KEEP_HEIGHT_LEGACY: &str =
     "STOP_AT_BLOCK_KEEP_HEIGHT";
 const SPECIAL_MOVEMENT_INPUT_DISCARD_LEAD_TICKS: u32 = 4;
 
+/// Pre-tick housekeeping sub-phases timed individually when profiling is
+/// enabled. Indexes must match `PRE_TICK_SUBPHASE_NAMES`.
+const PRE_TICK_SUBPHASE_COUNT: usize = 16;
+const PRE_SUB_PROGRESSION_SYNC: usize = 0;
+const PRE_SUB_CHARGE_STATES: usize = 1;
+const PRE_SUB_PRACTICE: usize = 2;
+const PRE_SUB_MOVEMENT_ACTIONS: usize = 3;
+const PRE_SUB_MELEE_TIMED_MOVEMENTS: usize = 4;
+const PRE_SUB_SPECIAL_MOVEMENT: usize = 5;
+const PRE_SUB_ACTIVE_CASTS: usize = 6;
+const PRE_SUB_MELEE_FOLLOWUPS: usize = 7;
+const PRE_SUB_AUTO_ATTACKS: usize = 8;
+const PRE_SUB_NPC_COMBAT: usize = 9;
+const PRE_SUB_COMBAT_CYCLE: usize = 10;
+const PRE_SUB_SPELL_PROJECTILE_SIM: usize = 11;
+const PRE_SUB_PERIODIC_EFFECTS: usize = 12;
+const PRE_SUB_PASSIVES_AURAS: usize = 13;
+const PRE_SUB_EXPIRIES: usize = 14;
+const PRE_SUB_MOVEMENT_MODIFIERS: usize = 15;
+
+const PRE_TICK_SUBPHASE_NAMES: [&str; PRE_TICK_SUBPHASE_COUNT] = [
+    "progression_sync",
+    "charge_states",
+    "practice",
+    "movement_actions",
+    "melee_timed_movements",
+    "special_movement",
+    "active_casts",
+    "melee_followups",
+    "auto_attacks",
+    "npc_combat",
+    "combat_cycle",
+    "spell_projectile_sim",
+    "periodic_effects",
+    "passives_auras",
+    "expiries",
+    "movement_modifiers",
+];
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 struct TickProfileSample {
     total_micros: u32,
@@ -138,6 +184,7 @@ struct TickProfileSample {
     player_sim_micros: u32,
     post_tick_micros: u32,
     match_maintenance_micros: u32,
+    pre_subphase_micros: [u32; PRE_TICK_SUBPHASE_COUNT],
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -159,6 +206,7 @@ struct TickProfileSummary {
     player_sim: TickPhaseSummary,
     post_tick: TickPhaseSummary,
     match_maintenance: TickPhaseSummary,
+    pre_subphases: [TickPhaseSummary; PRE_TICK_SUBPHASE_COUNT],
 }
 
 #[derive(Default)]
@@ -169,6 +217,7 @@ struct TickProfileWindowState {
     player_sim_micros: Vec<u32>,
     post_tick_micros: Vec<u32>,
     match_maintenance_micros: Vec<u32>,
+    pre_subphase_micros: [Vec<u32>; PRE_TICK_SUBPHASE_COUNT],
     over_budget_count: usize,
     consecutive_over_budget: usize,
     max_consecutive_over_budget: usize,
@@ -186,6 +235,13 @@ impl TickProfileWindowState {
         self.post_tick_micros.push(sample.post_tick_micros);
         self.match_maintenance_micros
             .push(sample.match_maintenance_micros);
+        for (values, micros) in self
+            .pre_subphase_micros
+            .iter_mut()
+            .zip(sample.pre_subphase_micros.iter())
+        {
+            values.push(*micros);
+        }
 
         if sample.total_micros > TICK_BUDGET_MICROS {
             self.over_budget_count += 1;
@@ -212,6 +268,14 @@ impl TickProfileWindowState {
             return None;
         }
 
+        let mut pre_subphases = [TickPhaseSummary::default(); PRE_TICK_SUBPHASE_COUNT];
+        for (summary, values) in pre_subphases
+            .iter_mut()
+            .zip(self.pre_subphase_micros.iter())
+        {
+            *summary = summarize_phase(values);
+        }
+
         let summary = TickProfileSummary {
             count: self.total_micros.len(),
             total_p50_micros: percentile_value(&self.total_micros, 50, 100),
@@ -224,6 +288,7 @@ impl TickProfileWindowState {
             player_sim: summarize_phase(&self.player_sim_micros),
             post_tick: summarize_phase(&self.post_tick_micros),
             match_maintenance: summarize_phase(&self.match_maintenance_micros),
+            pre_subphases,
         };
 
         self.window_started_at_micros = None;
@@ -232,6 +297,9 @@ impl TickProfileWindowState {
         self.player_sim_micros.clear();
         self.post_tick_micros.clear();
         self.match_maintenance_micros.clear();
+        for values in self.pre_subphase_micros.iter_mut() {
+            values.clear();
+        }
         self.over_budget_count = 0;
         self.consecutive_over_budget = 0;
         self.max_consecutive_over_budget = 0;
@@ -286,7 +354,13 @@ fn tick_profile_store() -> &'static Mutex<TickProfileWindowState> {
     TICK_PROFILE_STORE.get_or_init(|| Mutex::new(TickProfileWindowState::default()))
 }
 
-fn record_tick_profile(now: Timestamp, sample: TickProfileSample) {
+/// Returns the number of ticks in the flushed window, or `None` while the
+/// window is still accumulating. The tick count matters for interpretation:
+/// SpacetimeDB may run several pooled wasm instances, each with its own copy
+/// of this static window state, so one log line covers only the ticks that
+/// executed on that instance — always read the counters as per-tick ratios
+/// against `ticks=`, not as absolute per-5s totals.
+fn record_tick_profile(now: Timestamp, sample: TickProfileSample) -> Option<usize> {
     let maybe_summary = {
         let mut state = tick_profile_store()
             .lock()
@@ -294,9 +368,13 @@ fn record_tick_profile(now: Timestamp, sample: TickProfileSample) {
         state.record(now.to_micros_since_unix_epoch(), sample)
     };
 
-    let Some(summary) = maybe_summary else {
-        return;
-    };
+    let summary = maybe_summary?;
+
+    if !crate::tick_metrics::WALL_CLOCK_AVAILABLE {
+        // Percentile micros are all zero in the wasm module (no Instant);
+        // wall-clock comes from the sampled console timers instead.
+        return Some(summary.count);
+    }
 
     log::info!(
         "[TICK_PROFILE] window=5.00s ticks={} total(p50/p95/p99/max)={}/{}/{}/{} over_budget={} max_consecutive_over_budget={} pre(p95/max)={}/{} player(p95/max)={}/{} post(p95/max)={}/{} match(p95/max)={}/{}",
@@ -316,32 +394,96 @@ fn record_tick_profile(now: Timestamp, sample: TickProfileSample) {
         format_micros(summary.match_maintenance.p95_micros),
         format_micros(summary.match_maintenance.max_micros),
     );
+
+    let mut pre_line = String::with_capacity(512);
+    for (name, phase) in PRE_TICK_SUBPHASE_NAMES
+        .iter()
+        .zip(summary.pre_subphases.iter())
+    {
+        pre_line.push_str(&format!(
+            " {}(p95/max)={}/{}",
+            name,
+            format_micros(phase.p95_micros),
+            format_micros(phase.max_micros)
+        ));
+    }
+    log::info!(
+        "[TICK_PROFILE_PRE] window=5.00s ticks={}{}",
+        summary.count,
+        pre_line
+    );
+
+    Some(summary.count)
 }
 
-fn elapsed_micros(started_at: Instant) -> u32 {
-    started_at.elapsed().as_micros().min(u32::MAX as u128) as u32
-}
+/// Log the per-window scan/write counters plus a one-shot population sample.
+/// Called only when profiling is enabled and a profile window just flushed.
+/// `window_ticks` is this instance's tick count for the window — divide every
+/// counter by it (pooled wasm instances each report their own share).
+fn log_tick_scan_profile(ctx: &ReducerContext, window_ticks: usize) {
+    let scan = crate::tick_metrics::snapshot_and_reset();
 
-fn tick_profiling_enabled() -> bool {
-    static ENABLED: OnceLock<bool> = OnceLock::new();
-    *ENABLED.get_or_init(|| {
-        let Some(raw) = std::env::var_os(TICK_PROFILE_ENV_VAR) else {
-            return false;
-        };
-
-        match raw.to_string_lossy().trim().to_ascii_lowercase().as_str() {
-            "0" | "false" | "off" | "no" => false,
-            "1" | "true" | "on" | "yes" => true,
-            _ => {
-                log::warn!(
-                    "[INIT] Invalid {} value {:?}; defaulting to disabled",
-                    TICK_PROFILE_ENV_VAR,
-                    raw
-                );
-                false
-            }
+    let mut alive_players = 0usize;
+    let mut dummies = 0usize;
+    for state in ctx.db.player_state().iter() {
+        if state.is_dummy {
+            dummies += 1;
+        } else if state.alive {
+            alive_players += 1;
         }
-    })
+    }
+    let alive_npcs = ctx
+        .db
+        .npc_state()
+        .iter()
+        .filter(|state| state.alive)
+        .count();
+    let active_statuses = ctx.db.status_effect().iter().count();
+    let active_casts = ctx.db.active_cast().iter().count();
+    let active_projectiles = ctx.db.active_combat_projectile().iter().count();
+
+    let mut writes_line = String::with_capacity(256);
+    for (name, count) in crate::tick_metrics::TABLE_WRITE_KIND_NAMES
+        .iter()
+        .zip(scan.table_writes.iter())
+    {
+        writes_line.push_str(&format!(" writes_{}={}", name, count));
+    }
+
+    log::info!(
+        "[TICK_PROFILE_SCAN] ticks={} status_collects={} status_collect_ms={:.2} status_rows_scanned={} equipment_scans={} move_fallbacks={}{} alive_players={} dummies={} alive_npcs={} active_statuses={} active_casts={} active_projectiles={}",
+        window_ticks,
+        scan.status_collect_count,
+        scan.status_collect_micros as f64 / 1_000.0,
+        scan.status_collect_rows,
+        scan.equipment_scan_count,
+        scan.move_fallback_count,
+        writes_line,
+        alive_players,
+        dummies,
+        alive_npcs,
+        active_statuses,
+        active_casts,
+        active_projectiles,
+    );
+}
+
+fn timed_subphase<T>(
+    profiling: bool,
+    stopwatch_active: bool,
+    name: &'static str,
+    slot: &mut u32,
+    f: impl FnOnce() -> T,
+) -> T {
+    if !profiling {
+        return f();
+    }
+
+    let _stopwatch = PhaseStopwatch::start(stopwatch_active, name);
+    let timer = ScopeTimer::start(true);
+    let result = f();
+    *slot = slot.saturating_add(timer.elapsed_micros());
+    result
 }
 
 pub(crate) fn ensure_game_loop_schedule(ctx: &ReducerContext) {
@@ -480,11 +622,18 @@ pub fn init(ctx: &ReducerContext) -> Result<(), String> {
 
     log::info!("[INIT] Game loop started at 30.3Hz (33ms tick)");
     if tick_profiling_enabled() {
-        log::info!(
-            "[INIT] Tick profiling enabled via {}. Logging 5.00s rolling stats; target p95 < 20ms, p99 < 28ms, no sustained ticks over {}ms.",
-            TICK_PROFILE_ENV_VAR,
-            FIXED_TICK_MILLIS
-        );
+        if crate::tick_metrics::WALL_CLOCK_AVAILABLE {
+            log::info!(
+                "[INIT] Tick profiling enabled via {}. Logging 5.00s rolling stats; target p95 < 20ms, p99 < 28ms, no sustained ticks over {}ms.",
+                crate::tick_metrics::TICK_PROFILE_ENV_VAR,
+                FIXED_TICK_MILLIS
+            );
+        } else {
+            log::info!(
+                "[INIT] Tick profiling enabled via compile-time {} (wasm module). Logging 5.00s [TICK_PROFILE_SCAN] counter windows; wall-clock comes from tick_profile/* console timers sampled once per window.",
+                crate::tick_metrics::TICK_PROFILE_ENV_VAR
+            );
+        }
     }
     Ok(())
 }
@@ -521,44 +670,139 @@ fn run_pre_tick_housekeeping_phase(
     ctx: &ReducerContext,
     now: Timestamp,
     dt: f32,
+    profiling: bool,
+    stopwatch_active: bool,
+    subphase_micros: &mut [u32; PRE_TICK_SUBPHASE_COUNT],
 ) -> Result<MovementModifiers, String> {
-    sync_progression_runtime_rows(ctx, now);
-    tick_fixed_action_charge_states(ctx, now);
-    tick_practice(ctx, now)?;
+    timed_subphase(
+        profiling,
+        stopwatch_active,
+        PRE_TICK_SUBPHASE_NAMES[PRE_SUB_PROGRESSION_SYNC],
+        &mut subphase_micros[PRE_SUB_PROGRESSION_SYNC],
+        || sync_progression_runtime_rows(ctx, now),
+    );
+    timed_subphase(
+        profiling,
+        stopwatch_active,
+        PRE_TICK_SUBPHASE_NAMES[PRE_SUB_CHARGE_STATES],
+        &mut subphase_micros[PRE_SUB_CHARGE_STATES],
+        || tick_fixed_action_charge_states(ctx, now),
+    );
+    timed_subphase(
+        profiling,
+        stopwatch_active,
+        PRE_TICK_SUBPHASE_NAMES[PRE_SUB_PRACTICE],
+        &mut subphase_micros[PRE_SUB_PRACTICE],
+        || tick_practice(ctx, now),
+    )?;
     // Cancel invalid movement actions before authored displacement is sampled.
-    tick_movement_actions(ctx, now);
-    tick_pending_melee_timed_movements(ctx, now);
-    tick_special_movement_runtimes(ctx, now);
+    timed_subphase(
+        profiling,
+        stopwatch_active,
+        PRE_TICK_SUBPHASE_NAMES[PRE_SUB_MOVEMENT_ACTIONS],
+        &mut subphase_micros[PRE_SUB_MOVEMENT_ACTIONS],
+        || tick_movement_actions(ctx, now),
+    );
+    timed_subphase(
+        profiling,
+        stopwatch_active,
+        PRE_TICK_SUBPHASE_NAMES[PRE_SUB_MELEE_TIMED_MOVEMENTS],
+        &mut subphase_micros[PRE_SUB_MELEE_TIMED_MOVEMENTS],
+        || tick_pending_melee_timed_movements(ctx, now),
+    );
+    timed_subphase(
+        profiling,
+        stopwatch_active,
+        PRE_TICK_SUBPHASE_NAMES[PRE_SUB_SPECIAL_MOVEMENT],
+        &mut subphase_micros[PRE_SUB_SPECIAL_MOVEMENT],
+        || tick_special_movement_runtimes(ctx, now),
+    );
 
     // Resolve active cast completion/cancellation before combat resolution.
-    tick_active_casts(ctx, now)?;
+    timed_subphase(
+        profiling,
+        stopwatch_active,
+        PRE_TICK_SUBPHASE_NAMES[PRE_SUB_ACTIVE_CASTS],
+        &mut subphase_micros[PRE_SUB_ACTIVE_CASTS],
+        || tick_active_casts(ctx, now),
+    )?;
     // Movement delivery uses active_cast as a completion/impact latch, so clean
     // the replicated movement-action mirror after completion/cancel.
-    tick_movement_actions(ctx, now);
+    timed_subphase(
+        profiling,
+        stopwatch_active,
+        PRE_TICK_SUBPHASE_NAMES[PRE_SUB_MOVEMENT_ACTIONS],
+        &mut subphase_micros[PRE_SUB_MOVEMENT_ACTIONS],
+        || tick_movement_actions(ctx, now),
+    );
 
     // Buffered melee follow-ups release here once their authored combo
     // transition timing has elapsed.
-    tick_queued_melee_followups(ctx, now);
-    tick_auto_attacks(ctx, now);
-    tick_npc_combat(ctx, now);
+    timed_subphase(
+        profiling,
+        stopwatch_active,
+        PRE_TICK_SUBPHASE_NAMES[PRE_SUB_MELEE_FOLLOWUPS],
+        &mut subphase_micros[PRE_SUB_MELEE_FOLLOWUPS],
+        || tick_queued_melee_followups(ctx, now),
+    );
+    timed_subphase(
+        profiling,
+        stopwatch_active,
+        PRE_TICK_SUBPHASE_NAMES[PRE_SUB_AUTO_ATTACKS],
+        &mut subphase_micros[PRE_SUB_AUTO_ATTACKS],
+        || tick_auto_attacks(ctx, now),
+    );
+    timed_subphase(
+        profiling,
+        stopwatch_active,
+        PRE_TICK_SUBPHASE_NAMES[PRE_SUB_NPC_COMBAT],
+        &mut subphase_micros[PRE_SUB_NPC_COMBAT],
+        || tick_npc_combat(ctx, now),
+    );
 
     // Pass A: resolve effects already queued (casts/reducers from previous frame boundary).
-    resolve_combat_cycle_if_needed(ctx, now);
+    timed_subphase(
+        profiling,
+        stopwatch_active,
+        PRE_TICK_SUBPHASE_NAMES[PRE_SUB_COMBAT_CYCLE],
+        &mut subphase_micros[PRE_SUB_COMBAT_CYCLE],
+        || resolve_combat_cycle_if_needed(ctx, now),
+    );
 
     // Spell/projectile simulation can enqueue effects based on current
     // authoritative state. These phases run before their queued effects are
     // resolved, so they can share one phase-local player snapshot set.
-    let has_active_bespoke_spells = ctx.db.active_bespoke_spell().iter().next().is_some();
-    let has_active_combat_projectiles = ctx.db.active_combat_projectile().iter().next().is_some();
-    if has_active_bespoke_spells || has_active_combat_projectiles {
-        let player_snapshots = PlayerSnapshotSet::collect(ctx);
-        tick_bespoke_spells_with_snapshots(ctx, dt, &player_snapshots)?;
-        tick_combat_projectiles_with_snapshots(ctx, dt, &player_snapshots)?;
-    }
+    timed_subphase(
+        profiling,
+        stopwatch_active,
+        PRE_TICK_SUBPHASE_NAMES[PRE_SUB_SPELL_PROJECTILE_SIM],
+        &mut subphase_micros[PRE_SUB_SPELL_PROJECTILE_SIM],
+        || -> Result<(), String> {
+            let has_active_bespoke_spells = ctx.db.active_bespoke_spell().iter().next().is_some();
+            let has_active_combat_projectiles =
+                ctx.db.active_combat_projectile().iter().next().is_some();
+            if has_active_bespoke_spells || has_active_combat_projectiles {
+                let player_snapshots = PlayerSnapshotSet::collect(ctx);
+                tick_bespoke_spells_with_snapshots(ctx, dt, &player_snapshots)?;
+                tick_combat_projectiles_with_snapshots(ctx, dt, &player_snapshots)?;
+            }
+            Ok(())
+        },
+    )?;
 
     // Periodic DOT/HOT effects can enqueue additional rows in the same frame.
-    let periodic_queued = process_periodic_status_ticks(ctx, now);
-    let equipment_periodic_queued = tick_equipment_periodic_effects(ctx, now, dt);
+    let (periodic_queued, equipment_periodic_queued) = timed_subphase(
+        profiling,
+        stopwatch_active,
+        PRE_TICK_SUBPHASE_NAMES[PRE_SUB_PERIODIC_EFFECTS],
+        &mut subphase_micros[PRE_SUB_PERIODIC_EFFECTS],
+        || {
+            (
+                process_periodic_status_ticks(ctx, now),
+                tick_equipment_periodic_effects(ctx, now, dt),
+            )
+        },
+    );
     if periodic_queued > 0
         || equipment_periodic_queued > 0
         || has_due_pending_melee_impacts(ctx, now)
@@ -567,14 +811,42 @@ fn run_pre_tick_housekeeping_phase(
         || has_due_pending_effects(ctx, now)
     {
         // Single post-simulation pass resolves both spell-sim and periodic queues.
-        resolve_combat_cycle(ctx, now);
+        timed_subphase(
+            profiling,
+            stopwatch_active,
+            PRE_TICK_SUBPHASE_NAMES[PRE_SUB_COMBAT_CYCLE],
+            &mut subphase_micros[PRE_SUB_COMBAT_CYCLE],
+            || resolve_combat_cycle(ctx, now),
+        );
     }
-    tick_combat_stacking_passives(ctx, now);
-    tick_auras(ctx, now);
-    expire_combat_engagements(ctx, now);
-    expire_status_effects(ctx, now);
+    timed_subphase(
+        profiling,
+        stopwatch_active,
+        PRE_TICK_SUBPHASE_NAMES[PRE_SUB_PASSIVES_AURAS],
+        &mut subphase_micros[PRE_SUB_PASSIVES_AURAS],
+        || {
+            tick_combat_stacking_passives(ctx, now);
+            tick_auras(ctx, now);
+        },
+    );
+    timed_subphase(
+        profiling,
+        stopwatch_active,
+        PRE_TICK_SUBPHASE_NAMES[PRE_SUB_EXPIRIES],
+        &mut subphase_micros[PRE_SUB_EXPIRIES],
+        || {
+            expire_combat_engagements(ctx, now);
+            expire_status_effects(ctx, now);
+        },
+    );
 
-    Ok(movement_modifiers(ctx, now))
+    timed_subphase(
+        profiling,
+        stopwatch_active,
+        PRE_TICK_SUBPHASE_NAMES[PRE_SUB_MOVEMENT_MODIFIERS],
+        &mut subphase_micros[PRE_SUB_MOVEMENT_MODIFIERS],
+        || Ok(movement_modifiers(ctx, now)),
+    )
 }
 
 fn sync_progression_runtime_rows(ctx: &ReducerContext, now: Timestamp) {
@@ -648,6 +920,7 @@ fn try_tick_dead_player(
             intent.jump = false;
             intent.input_tick = physics.last_processed_tick;
             intent.updated_at = now;
+            record_table_write(TableWriteKind::PlayerIntent);
             ctx.db.player_intent().identity().update(intent);
         }
         reset_player_resources_to_full(ctx, state.player_id, now);
@@ -658,15 +931,21 @@ fn try_tick_dead_player(
     true
 }
 
+/// Returns `None` when the actor is not a dummy; otherwise `Some(changed)`
+/// where `changed` says whether the physics row needs a commit. Stationary
+/// dummies previously rewrote (and replicated) their `PlayerPhysics` row every
+/// tick just to restamp `updated_at` (tick audit T3). Dummies carry no
+/// prediction-ack semantics (`last_processed_tick` never advances), so
+/// skipping the no-op commit is safe; live-player commits are never gated.
 fn try_tick_dummy_player(
     ctx: &ReducerContext,
     identity: Identity,
     now: Timestamp,
     physics: &mut PlayerPhysics,
     state: &crate::player_state::PlayerState,
-) -> bool {
+) -> Option<bool> {
     if !state.is_dummy {
-        return false;
+        return None;
     }
 
     if ctx
@@ -676,7 +955,7 @@ fn try_tick_dummy_player(
         .find(identity)
         .is_some()
     {
-        return true;
+        return Some(false);
     }
 
     let flat_ground_only = uses_flat_training_collision(ctx, identity);
@@ -687,41 +966,56 @@ fn try_tick_dummy_player(
         physics.pos_z,
         physics.pos_y,
     );
-    settle_stationary_dummy(physics, ground_y, now);
-
-    true
+    Some(settle_stationary_dummy(physics, ground_y, now))
 }
 
+/// Returns `None` when the actor is not a playground target; otherwise
+/// `Some(changed)` (see `try_tick_dummy_player` for the write-gating rationale).
 fn try_tick_playground_target(
     ctx: &ReducerContext,
     identity: Identity,
     now: Timestamp,
     physics: &mut PlayerPhysics,
-) -> bool {
+) -> Option<bool> {
     if !is_playground_target(ctx, identity) {
-        return false;
+        return None;
     }
 
     ctx.db.special_movement_runtime().owner().delete(identity);
-    settle_stationary_playground_target(physics, now);
-    true
+    Some(settle_stationary_playground_target(physics, now))
 }
 
-fn settle_stationary_playground_target(physics: &mut PlayerPhysics, now: Timestamp) {
+fn stationary_pose_is_settled(physics: &PlayerPhysics) -> bool {
+    physics.vel_x == 0.0 && physics.vel_y == 0.0 && physics.vel_z == 0.0 && physics.grounded
+}
+
+fn settle_stationary_playground_target(physics: &mut PlayerPhysics, now: Timestamp) -> bool {
+    if stationary_pose_is_settled(physics) {
+        // Already settled: skip the write — never restamp `updated_at` as the
+        // only change on a per-tick row.
+        return false;
+    }
+
     physics.vel_x = 0.0;
     physics.vel_y = 0.0;
     physics.vel_z = 0.0;
     physics.grounded = true;
     physics.updated_at = now;
+    true
 }
 
-fn settle_stationary_dummy(physics: &mut PlayerPhysics, ground_y: f32, now: Timestamp) {
+fn settle_stationary_dummy(physics: &mut PlayerPhysics, ground_y: f32, now: Timestamp) -> bool {
+    if physics.pos_y == ground_y && stationary_pose_is_settled(physics) {
+        return false;
+    }
+
     physics.pos_y = ground_y;
     physics.vel_x = 0.0;
     physics.vel_y = 0.0;
     physics.vel_z = 0.0;
     physics.grounded = true;
     physics.updated_at = now;
+    true
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1082,6 +1376,7 @@ fn reset_player_intent_after_special_movement(
     intent.jump = false;
     intent.input_tick = input_tick;
     intent.updated_at = now;
+    record_table_write(TableWriteKind::PlayerIntent);
     ctx.db.player_intent().identity().update(intent);
 }
 
@@ -1189,6 +1484,7 @@ fn try_tick_special_movement_player(
     intent.jump = false;
     intent.input_tick = next_input_tick;
     intent.updated_at = now;
+    record_table_write(TableWriteKind::PlayerIntent);
     ctx.db.player_intent().identity().update(PlayerIntent {
         identity: intent.identity,
         forward: intent.forward,
@@ -1286,17 +1582,19 @@ fn tick_player(
         return;
     }
 
-    if try_tick_playground_target(ctx, identity, now, &mut physics) {
-        commit_player_physics(
-            ctx,
-            physics,
-            PhysicsWriteMode::Normal,
-            "try_tick_playground_target",
-        );
+    if let Some(physics_changed) = try_tick_playground_target(ctx, identity, now, &mut physics) {
+        if physics_changed {
+            commit_player_physics(
+                ctx,
+                physics,
+                PhysicsWriteMode::Normal,
+                "try_tick_playground_target",
+            );
+        }
         return;
     }
 
-    if try_tick_dummy_player(ctx, identity, now, &mut physics, &state) {
+    if let Some(physics_changed) = try_tick_dummy_player(ctx, identity, now, &mut physics, &state) {
         let movement_context_tick = physics.last_processed_tick;
         let state_changed = sync_player_movement_context(
             &mut state,
@@ -1304,12 +1602,14 @@ fn tick_player(
             move_speed_multiplier,
             movement_context_tick,
         );
-        commit_player_physics(
-            ctx,
-            physics,
-            PhysicsWriteMode::Normal,
-            "try_tick_dummy_player",
-        );
+        if physics_changed {
+            commit_player_physics(
+                ctx,
+                physics,
+                PhysicsWriteMode::Normal,
+                "try_tick_dummy_player",
+            );
+        }
         if state_changed {
             ctx.db.player_state().player_id().update(state);
         }
@@ -1361,6 +1661,7 @@ fn tick_player(
             next_input_tick,
             intent.input_tick
         );
+        crate::tick_metrics::record_move_fallback();
         step_intent.jump = false;
         step_intent.input_tick = next_input_tick;
         step_intent.updated_at = now;
@@ -1393,6 +1694,7 @@ fn tick_player(
     intent.jump = false;
     intent.input_tick = next_input_tick;
     intent.updated_at = now;
+    record_table_write(TableWriteKind::PlayerIntent);
     ctx.db.player_intent().identity().update(intent);
     tick_primary_resource_for_player(ctx, identity, now, dt);
     let voluntary_epoch_changed = sync_player_voluntary_move_epoch(
@@ -1438,38 +1740,62 @@ pub fn game_tick(ctx: &ReducerContext, _timer: GameLoopTimer) -> Result<(), Stri
     let dt = FIXED_TICK_SECONDS;
     let now = ctx.timestamp;
     let profiling_enabled = tick_profiling_enabled();
-    let total_started_at = profiling_enabled.then(Instant::now);
+    // In the wasm module, one tick per profile window is timed with host-side
+    // console timers (`ScopeTimer` reads zero there — no `Instant` on wasm).
+    let stopwatch_active =
+        profiling_enabled && crate::tick_metrics::take_stopwatch_sample_request();
+    let _total_stopwatch = PhaseStopwatch::start(stopwatch_active, "tick_profile/total");
+    let total_timer = ScopeTimer::start(profiling_enabled);
 
-    let pre_tick_started_at = profiling_enabled.then(Instant::now);
-    let movement_modifiers = run_pre_tick_housekeeping_phase(ctx, now, dt)?;
-    let pre_tick_micros = pre_tick_started_at.map(elapsed_micros).unwrap_or(0);
+    let pre_tick_stopwatch = PhaseStopwatch::start(stopwatch_active, "tick_profile/pre_tick");
+    let pre_tick_timer = ScopeTimer::start(profiling_enabled);
+    let mut pre_subphase_micros = [0u32; PRE_TICK_SUBPHASE_COUNT];
+    let movement_modifiers = run_pre_tick_housekeeping_phase(
+        ctx,
+        now,
+        dt,
+        profiling_enabled,
+        stopwatch_active,
+        &mut pre_subphase_micros,
+    )?;
+    let pre_tick_micros = pre_tick_timer.elapsed_micros();
+    drop(pre_tick_stopwatch);
 
-    let player_sim_started_at = profiling_enabled.then(Instant::now);
+    let player_sim_stopwatch = PhaseStopwatch::start(stopwatch_active, "tick_profile/player_sim");
+    let player_sim_timer = ScopeTimer::start(profiling_enabled);
     run_player_simulation_phase(ctx, now, dt, &movement_modifiers);
     resolve_pending_casts(ctx, now)?;
-    let player_sim_micros = player_sim_started_at.map(elapsed_micros).unwrap_or(0);
+    let player_sim_micros = player_sim_timer.elapsed_micros();
+    drop(player_sim_stopwatch);
 
-    let post_tick_started_at = profiling_enabled.then(Instant::now);
+    let post_tick_stopwatch = PhaseStopwatch::start(stopwatch_active, "tick_profile/post_tick");
+    let post_tick_timer = ScopeTimer::start(profiling_enabled);
     run_post_tick_maintenance_phase(ctx, now);
-    let post_tick_micros = post_tick_started_at.map(elapsed_micros).unwrap_or(0);
+    let post_tick_micros = post_tick_timer.elapsed_micros();
+    drop(post_tick_stopwatch);
 
-    let match_maintenance_started_at = profiling_enabled.then(Instant::now);
+    let match_stopwatch = PhaseStopwatch::start(stopwatch_active, "tick_profile/match");
+    let match_maintenance_timer = ScopeTimer::start(profiling_enabled);
     run_match_world_maintenance_phase(ctx, now);
-    let match_maintenance_micros = match_maintenance_started_at
-        .map(elapsed_micros)
-        .unwrap_or(0);
+    let match_maintenance_micros = match_maintenance_timer.elapsed_micros();
+    drop(match_stopwatch);
 
-    if let Some(total_started_at) = total_started_at {
-        record_tick_profile(
+    if profiling_enabled {
+        let maybe_window_ticks = record_tick_profile(
             now,
             TickProfileSample {
-                total_micros: elapsed_micros(total_started_at),
+                total_micros: total_timer.elapsed_micros(),
                 pre_tick_micros,
                 player_sim_micros,
                 post_tick_micros,
                 match_maintenance_micros,
+                pre_subphase_micros,
             },
         );
+        if let Some(window_ticks) = maybe_window_ticks {
+            log_tick_scan_profile(ctx, window_ticks);
+            crate::tick_metrics::request_stopwatch_sample();
+        }
     }
 
     Ok(())
@@ -1503,9 +1829,10 @@ fn tick_countdowns(ctx: &ReducerContext, now: Timestamp) {
 #[cfg(test)]
 mod tests {
     use super::{
-        percentile_sorted, settle_stationary_playground_target, special_movement_grounded_state,
-        sync_player_voluntary_move_epoch, PlayerIntent, PlayerPhysics, TickProfileSample,
-        TickProfileWindowState, SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK_FIXED_Y,
+        percentile_sorted, settle_stationary_dummy, settle_stationary_playground_target,
+        special_movement_grounded_state, sync_player_voluntary_move_epoch, PlayerIntent,
+        PlayerPhysics, TickProfileSample, TickProfileWindowState,
+        SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK_FIXED_Y,
         SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK_KEEP_HEIGHT_LEGACY,
     };
     use crate::combat::new_player_state;
@@ -1518,6 +1845,7 @@ mod tests {
             player_sim_micros: pre_micros / 2,
             post_tick_micros: pre_micros / 4,
             match_maintenance_micros: pre_micros / 8,
+            pre_subphase_micros: [pre_micros / 16; super::PRE_TICK_SUBPHASE_COUNT],
         }
     }
 
@@ -1650,7 +1978,10 @@ mod tests {
         let mut physics = test_physics_at(12.5, 4.0, -3.25, 1.2);
         let updated_at = Timestamp::from_micros_since_unix_epoch(3);
 
-        settle_stationary_playground_target(&mut physics, updated_at);
+        assert!(settle_stationary_playground_target(
+            &mut physics,
+            updated_at
+        ));
 
         assert_eq!(physics.pos_x, 12.5);
         assert_eq!(physics.pos_y, 4.0);
@@ -1661,6 +1992,38 @@ mod tests {
         assert_eq!(physics.vel_z, 0.0);
         assert!(physics.grounded);
         assert_eq!(physics.updated_at, updated_at);
+    }
+
+    #[test]
+    fn stationary_settles_skip_the_write_when_already_settled() {
+        let settled_at = Timestamp::from_micros_since_unix_epoch(3);
+        let later = Timestamp::from_micros_since_unix_epoch(4);
+
+        let mut target = test_physics_at(12.5, 4.0, -3.25, 1.2);
+        assert!(settle_stationary_playground_target(&mut target, settled_at));
+        assert!(!settle_stationary_playground_target(&mut target, later));
+        assert_eq!(
+            target.updated_at, settled_at,
+            "a no-op settle must not restamp updated_at"
+        );
+
+        let mut dummy = test_physics_at(1.0, 2.0, 3.0, 0.0);
+        assert!(settle_stationary_dummy(&mut dummy, 1.5, settled_at));
+        assert!(!settle_stationary_dummy(&mut dummy, 1.5, later));
+        assert_eq!(dummy.updated_at, settled_at);
+        assert_eq!(dummy.pos_y, 1.5);
+    }
+
+    #[test]
+    fn stationary_dummy_settle_writes_when_ground_height_changes() {
+        let settled_at = Timestamp::from_micros_since_unix_epoch(3);
+        let later = Timestamp::from_micros_since_unix_epoch(4);
+
+        let mut dummy = test_physics_at(1.0, 2.0, 3.0, 0.0);
+        assert!(settle_stationary_dummy(&mut dummy, 1.5, settled_at));
+        assert!(settle_stationary_dummy(&mut dummy, 1.75, later));
+        assert_eq!(dummy.pos_y, 1.75);
+        assert_eq!(dummy.updated_at, later);
     }
 
     #[test]

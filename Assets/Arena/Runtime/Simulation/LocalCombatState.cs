@@ -96,6 +96,61 @@ namespace Arena.Simulation
     }
 
     /// <summary>
+    /// Everything a single predicted action press wrote into prediction-layer
+    /// state, captured so a server Rejected/StaleToken can restore all of it
+    /// (feel audit F1). Never references authoritative rows.
+    /// </summary>
+    public readonly struct PredictedActionLedger
+    {
+        public PredictedActionLedger(
+            string actionKind,
+            bool gcdPredicted,
+            long priorGcdStartMs,
+            long priorGcdDurationMs,
+            long predictedGcdStartMs,
+            long predictedGcdDurationMs,
+            bool cooldownPredicted,
+            bool hadPriorCooldown,
+            long priorCooldownLastCastMs,
+            long priorCooldownDurationMs,
+            long predictedCooldownLastCastMs,
+            long predictedCooldownDurationMs,
+            string reservedResourceKind,
+            float reservedResourceCost)
+        {
+            ActionKind = actionKind ?? string.Empty;
+            GcdPredicted = gcdPredicted;
+            PriorGcdStartMs = priorGcdStartMs;
+            PriorGcdDurationMs = priorGcdDurationMs;
+            PredictedGcdStartMs = predictedGcdStartMs;
+            PredictedGcdDurationMs = predictedGcdDurationMs;
+            CooldownPredicted = cooldownPredicted;
+            HadPriorCooldown = hadPriorCooldown;
+            PriorCooldownLastCastMs = priorCooldownLastCastMs;
+            PriorCooldownDurationMs = priorCooldownDurationMs;
+            PredictedCooldownLastCastMs = predictedCooldownLastCastMs;
+            PredictedCooldownDurationMs = predictedCooldownDurationMs;
+            ReservedResourceKind = reservedResourceKind ?? string.Empty;
+            ReservedResourceCost = reservedResourceCost;
+        }
+
+        public string ActionKind { get; }
+        public bool GcdPredicted { get; }
+        public long PriorGcdStartMs { get; }
+        public long PriorGcdDurationMs { get; }
+        public long PredictedGcdStartMs { get; }
+        public long PredictedGcdDurationMs { get; }
+        public bool CooldownPredicted { get; }
+        public bool HadPriorCooldown { get; }
+        public long PriorCooldownLastCastMs { get; }
+        public long PriorCooldownDurationMs { get; }
+        public long PredictedCooldownLastCastMs { get; }
+        public long PredictedCooldownDurationMs { get; }
+        public string ReservedResourceKind { get; }
+        public float ReservedResourceCost { get; }
+    }
+
+    /// <summary>
     /// Simulation-layer cache of the local player's combat state:
     /// GCD, per-spell cooldowns, authoritative active cast, and cast-bar prediction.
     ///
@@ -282,6 +337,105 @@ namespace Arena.Simulation
         }
 
         // ---------------------------------------------------------------
+        // Predicted-action ledger (feel audit F1)
+        // ---------------------------------------------------------------
+
+        /// <summary>
+        /// Denial cue hook: fired with the action kind whenever a predicted
+        /// action is rolled back after a server rejection. HUD/action-bar
+        /// surfaces subscribe for an icon flash or sound.
+        /// </summary>
+        public static event Action<string>? PredictionRejected;
+
+        /// <summary>
+        /// Applies the standard press-time predictions (GCD, per-action
+        /// cooldown, resource reservation) and records exactly what changed so
+        /// <see cref="RollbackPrediction"/> can restore it on rejection.
+        /// Guards match the individual Predict*/Reserve* methods, so behavior
+        /// on the happy path is unchanged.
+        /// </summary>
+        public PredictedActionLedger PredictActionStart(
+            PlayerEntity? entity,
+            string actionKind,
+            long cooldownDurationMs,
+            bool usesGlobalCooldown,
+            long gcdDurationMs,
+            string resourceKind,
+            float resourceCost,
+            long nowMs)
+        {
+            long priorGcdStartMs = GcdStartMs;
+            long priorGcdDurationMs = GcdDurationMs;
+            bool gcdPredicted = false;
+            if (usesGlobalCooldown)
+            {
+                PredictGlobalCooldown(nowMs, gcdDurationMs);
+                gcdPredicted = GcdStartMs != priorGcdStartMs || GcdDurationMs != priorGcdDurationMs;
+            }
+
+            bool hadPriorCooldown = _spellCds.TryGetValue(actionKind, out var priorCooldown);
+            bool cooldownPredicted = false;
+            if (cooldownDurationMs > 0L)
+            {
+                PredictSpellCooldown(actionKind, nowMs, cooldownDurationMs);
+                cooldownPredicted = _spellCds.TryGetValue(actionKind, out var applied)
+                    && (!hadPriorCooldown || applied != priorCooldown);
+            }
+
+            float reservedCost = entity != null
+                ? ReservePredictedPrimaryResource(entity, resourceKind, resourceCost, nowMs)
+                : 0f;
+
+            return new PredictedActionLedger(
+                actionKind,
+                gcdPredicted,
+                priorGcdStartMs,
+                priorGcdDurationMs,
+                GcdStartMs,
+                GcdDurationMs,
+                cooldownPredicted,
+                hadPriorCooldown,
+                priorCooldown.lastCastMs,
+                priorCooldown.durationMs,
+                nowMs,
+                cooldownDurationMs,
+                resourceKind,
+                reservedCost);
+        }
+
+        /// <summary>
+        /// Restores every prediction-layer side effect recorded on the ledger.
+        /// Each restore is value-guarded: if an authoritative row (or a later
+        /// legitimate prediction) has overwritten the predicted value since the
+        /// press, that state is left untouched. Never mutates authoritative rows.
+        /// </summary>
+        public void RollbackPrediction(in PredictedActionLedger ledger)
+        {
+            if (ledger.CooldownPredicted
+                && _spellCds.TryGetValue(ledger.ActionKind, out var current)
+                && current.lastCastMs == ledger.PredictedCooldownLastCastMs
+                && current.durationMs == ledger.PredictedCooldownDurationMs)
+            {
+                if (ledger.HadPriorCooldown)
+                    _spellCds[ledger.ActionKind] = (ledger.PriorCooldownLastCastMs, ledger.PriorCooldownDurationMs);
+                else
+                    _spellCds.Remove(ledger.ActionKind);
+            }
+
+            if (ledger.GcdPredicted
+                && GcdStartMs == ledger.PredictedGcdStartMs
+                && GcdDurationMs == ledger.PredictedGcdDurationMs)
+            {
+                GcdStartMs = ledger.PriorGcdStartMs;
+                GcdDurationMs = ledger.PriorGcdDurationMs;
+            }
+
+            ReleasePredictedPrimaryResource(ledger.ReservedResourceKind, ledger.ReservedResourceCost);
+
+            PredictionRejected?.Invoke(ledger.ActionKind);
+        }
+
+        // ---------------------------------------------------------------
         // Predicted primary resource reservation
         // ---------------------------------------------------------------
 
@@ -299,14 +453,18 @@ namespace Arena.Simulation
             return UnityEngine.Mathf.Max(0f, entity.CurrentPrimaryResource - _predictedPrimaryResourceSpend);
         }
 
-        public void ReservePredictedPrimaryResource(
+        /// <summary>
+        /// Returns the cost actually reserved (0 when the guards reject the
+        /// reservation) so prediction ledgers can roll back exactly that amount.
+        /// </summary>
+        public float ReservePredictedPrimaryResource(
             PlayerEntity entity,
             string resourceKind,
             float cost,
             long nowMs)
         {
             if (cost <= 0.001f)
-                return;
+                return 0f;
 
             string normalizedKind = NormalizeResourceKind(resourceKind);
             if (string.IsNullOrWhiteSpace(normalizedKind)
@@ -315,7 +473,7 @@ namespace Arena.Simulation
                     NormalizeResourceKind(entity.PrimaryResourceKind),
                     StringComparison.OrdinalIgnoreCase))
             {
-                return;
+                return 0f;
             }
 
             if (!string.Equals(_predictedPrimaryResourceKind, normalizedKind, StringComparison.OrdinalIgnoreCase))
@@ -327,6 +485,30 @@ namespace Arena.Simulation
 
             _predictedPrimaryResourceSpend = UnityEngine.Mathf.Max(0f, _predictedPrimaryResourceSpend + cost);
             _predictedPrimaryResourceSpendExpiresAtMs = nowMs + PredictedResourceSpendTimeoutMs;
+            return cost;
+        }
+
+        /// <summary>
+        /// Releases a previously reserved predicted spend immediately (server
+        /// rejected the action, so no authoritative resource drop will ever
+        /// confirm it). Floored at zero so reconciliation that already released
+        /// part of it cannot double-credit.
+        /// </summary>
+        public void ReleasePredictedPrimaryResource(string resourceKind, float cost)
+        {
+            if (cost <= 0.001f)
+                return;
+
+            string normalizedKind = NormalizeResourceKind(resourceKind);
+            if (!string.Equals(_predictedPrimaryResourceKind, normalizedKind, StringComparison.OrdinalIgnoreCase))
+                return;
+
+            _predictedPrimaryResourceSpend = UnityEngine.Mathf.Max(0f, _predictedPrimaryResourceSpend - cost);
+            if (_predictedPrimaryResourceSpend <= 0.001f)
+            {
+                _predictedPrimaryResourceSpend = 0f;
+                _predictedPrimaryResourceSpendExpiresAtMs = 0L;
+            }
         }
 
         public void ReconcilePredictedPrimaryResource(PlayerEntity entity)

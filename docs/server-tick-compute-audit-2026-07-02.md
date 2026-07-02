@@ -7,6 +7,63 @@ projectile/status loops, and write-driven replication pressure. Companion to
 are referenced, not repeated — in particular netcode-R3 (per-table row-write
 counters) is assumed as the write-side counterpart of this audit's instrumentation.
 
+## Implementation status (updated 2026-07-02)
+
+- **§2 instrumentation — implemented** (items 1–3; log-only, zero behavior
+  change). Gate correction: the module targets `wasm32-unknown-unknown`, where
+  runtime env vars do not exist and `Instant` panics — so the pre-existing
+  `ARENA_PROFILE_TICKS` runtime gate could never fire in the deployed module
+  (the profiler only ever ran in native tests). The gate is now baked at
+  compile time (`option_env!`; `ARENA_PROFILE_TICKS=1` at build/publish), with
+  the runtime env kept as a native/test fallback (`server/src/tick_metrics.rs`).
+  1. Pre-tick sub-phase timings: 16 sub-phases in
+     `run_pre_tick_housekeeping_phase`. Native builds print percentile
+     `[TICK_PROFILE]` / `[TICK_PROFILE_PRE]` lines; in the wasm module one
+     tick per 5s window is timed with host console timers
+     (`tick_profile/total`, `tick_profile/<phase>`, `tick_profile/<subphase>`).
+  2. Scan counters (`server/src/tick_metrics.rs`):
+     `StatusRuntimeView::collect` count + summed micros (native) + status rows
+     scanned; `equipment_modifier_totals_for_owner` count. Reported in a
+     `[TICK_PROFILE_SCAN]` line per window (works in wasm — counters need no
+     clock).
+  3. Population + fallback counters in the same line: alive players, dummies,
+     alive NPCs, active statuses, active casts, active projectiles (sampled at
+     window flush), plus `MOVE_FALLBACK` count and the netcode-R3 per-table
+     write counters. Not yet done: `npc_target_pairs_scanned` (T4 gate).
+  4. Load recipe: `docs/tick-baseline-recipe.md` (PLAYGROUND-panel based — no
+     training-ground scene exists).
+- **First recorded baseline (2026-07-02, local, 1 player).** Counters read as
+  per-tick ratios (see the recipe's pooled-instance caveat; lines predate the
+  `ticks=` field, ratios derived from `writes_player_physics` = 1/tick):
+  - *Idle (3 panel dummies, 3 NPCs):* `status_collects` **8/tick** (matches
+    T1's 6×players + 2 globals exactly); `equipment_scans` **5/tick** (matches
+    T2 exactly); `writes_fixed_action_charge_state` **4/tick** = one per actor;
+    `writes_player_physics` 1/tick — dummies add zero (T3 slice 1 verified
+    live). Sampled tick: total ≈ 1.19 ms (pre 0.80 ms / player 0.36 ms).
+  - *Projectile-load-harness run (35 dummies, 3 NPCs, 15-25 projectiles):*
+    sampled totals **2.1-12.8 ms** (budget 33 ms). Dominant sub-phases:
+    `passives_auras` up to **3.4 ms** (T5 — full player_state scans now cover
+    39 actors), `spell_projectile_sim` 1.4-2.7 ms, `npc_combat` up to
+    **0.57 ms** (T4 — 3 NPCs × 39 actors), `charge_states` up to 0.74 ms and
+    `writes_fixed_action_charge_state` **36/tick** — the single largest write
+    family by an order of magnitude (T3 slice 2). Effective tick rate dropped
+    to ~25/s (from 30.3) during the run; `move_fallbacks` ≈ every tick, i.e.
+    the loaded client stopped delivering command rows on time.
+  - **Priority update from this data:** T3 slice 2 (change-gate
+    `fixed_action_charge_state` upserts) and T5 (aura/passive owner discovery)
+    are the measured hot spots and move ahead of T1/T2 in expected payoff at
+    current population; T1/T2 ratios are confirmed but cheap in absolute terms
+    at 1 player (they scale with player count, not dummies).
+- **T3 slice 1 — implemented.** Stationary dummy / playground-target
+  `PlayerPhysics` commits are change-gated (`settle_stationary_dummy` /
+  `settle_stationary_playground_target` return `changed`; no-op settles no
+  longer restamp `updated_at`). Live-player commits are untouched — they carry
+  the `last_processed_tick` prediction ack. Manual runtime check pending:
+  fresh client join still renders stationary dummies (initial subscription
+  snapshot covers them).
+- **T1, T2, T4, T5, T3 slices 2–3 — not started** (gated on baseline numbers
+  from the new counters, per this audit's own rule).
+
 ## Measurement status (read this first)
 
 **Measured infrastructure exists; measured numbers do not.** The repo has two good
@@ -407,14 +464,19 @@ row-write counters) — implement that alongside.
    projectiles (already in projectile metrics), active statuses, active casts,
    `npc_target_pairs_scanned` (T4 gate), and `MOVE_FALLBACK` count
    (`game_loop.rs:1358-1363` — also wanted by feel-audit F2).
-4. **Repeatable load recipe (no extra tooling needed):** one training instance with
-   ≥ 8 playground targets/dummies (`playground_targets.rs` reducers), 2-4 practice
-   actors as fireball turrets / melee trainers (`practice.rs:95`), plus
-   `run_projectile_load_harness` (`server/src/combat/projectile_load_harness.rs:81`)
-   for projectile pressure, with `ARENA_PROFILE_TICKS=1`. Record the profile lines
-   as the committed baseline (paste into the PR description). Scale one axis at a
-   time (dummies, NPCs, projectiles) to confirm the predicted scaling shapes before
-   optimizing.
+4. **Repeatable load recipe (no extra tooling needed):** see
+   `docs/tick-baseline-recipe.md`. Short version: publish locally with the
+   profiler baked in (`ARENA_PROFILE_TICKS=1 ./ops/republish-local-clear.sh` —
+   the gate is compile-time because the wasm module has no runtime env vars),
+   then spawn load in the open world from the in-game PLAYGROUND panel: the
+   playground targets are the stationary dummies (capped at 1 hostile +
+   1 neutral + 4 party members — there is no training-ground scene and no
+   bulk-dummy spawner), kobold NPC spawns repeat freely for the NPC axis, and
+   the `=` projectile-load-harness overlay supplies projectile pressure.
+   Record the `[TICK_PROFILE_SCAN]` lines and sampled `tick_profile/*` console
+   timers from `spacetime logs` as the committed baseline. Scale one axis at a
+   time (dummies, NPCs, projectiles) to confirm the predicted scaling shapes
+   before optimizing.
 
 Estimated effort: ~a day. Everything in §1 cites these counters as its gate.
 

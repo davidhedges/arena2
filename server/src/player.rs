@@ -13,8 +13,8 @@
 use spacetimedb::{reducer, table, Identity, ReducerContext, Timestamp};
 
 use crate::actor_lifecycle::{
-    despawn_actor_bundle, spawn_actor_bundle, ActorDespawnOptions, ActorSpawnSpec,
-    ActorWorldAssignment, ActorWorldCleanup,
+    clear_transient_actor_state, despawn_actor_bundle, spawn_actor_bundle, ActorDespawnOptions,
+    ActorSpawnSpec, ActorWorldAssignment, ActorWorldCleanup,
 };
 // Import table types
 use crate::appearance::ensure_default_character_appearance_for_identity;
@@ -57,6 +57,11 @@ pub fn client_connected(ctx: &ReducerContext) -> Result<(), String> {
     let now = ctx.timestamp;
 
     if ctx.db.player().identity().find(identity).is_some() {
+        // Stale transient rows (mid-flight casts, scheduled melee impacts,
+        // buffs) survive module republish/host restart because SpacetimeDB
+        // persists tables while connections drop. Clear them before the
+        // session resumes so nothing fires into the fresh session.
+        clear_transient_actor_state(ctx, identity);
         despawn_dead_npcs_for_owner(ctx, identity);
         if ctx.db.player_world().identity().find(identity).is_none() {
             set_player_open_world(ctx, identity)?;
@@ -117,16 +122,31 @@ pub fn client_connected(ctx: &ReducerContext) -> Result<(), String> {
 #[reducer(client_disconnected)]
 pub fn client_disconnected(ctx: &ReducerContext) -> Result<(), String> {
     let identity = ctx.sender();
-    despawn_all_playground_targets_for_owner(ctx, identity)?;
+    // Never abort the disconnect transaction on ancillary cleanup errors: an
+    // early `?` here would roll back the entire teardown and leave every
+    // per-identity row alive for the next session (netcode audit R1).
+    if let Err(error) = despawn_all_playground_targets_for_owner(ctx, identity) {
+        log::error!(
+            "[DISCONNECT] Player {} playground-target cleanup failed; continuing: {}",
+            &identity.to_hex()[..8],
+            error
+        );
+    }
     despawn_all_npcs_for_owner(ctx, identity);
     remove_player_from_party_state(ctx, identity);
-    despawn_actor_bundle(
+    if let Err(error) = despawn_actor_bundle(
         ctx,
         identity,
         ActorDespawnOptions {
             world_cleanup: ActorWorldCleanup::RemoveFromCurrentInstance,
         },
-    )?;
+    ) {
+        log::error!(
+            "[DISCONNECT] Player {} actor despawn failed; continuing: {}",
+            &identity.to_hex()[..8],
+            error
+        );
+    }
 
     log::info!("[DISCONNECT] Player {} removed", &identity.to_hex()[..8]);
     Ok(())

@@ -5,6 +5,26 @@ smoothing, combat feel under latency, and desync-diagnosis tooling. Companion to
 `docs/netcode-sync-audit-2026-07-02.md` (architecture); that audit's findings are
 referenced but not repeated.
 
+## Implementation status (updated 2026-07-02)
+
+- **F1 steps 1–3 — implemented.** `PredictedActionLedger` +
+  `LocalCombatState.PredictActionStart` / `RollbackPrediction` /
+  `ReleasePredictedPrimaryResource`; melee and spell press paths route their
+  GCD/cooldown/resource predictions through the ledger, and
+  `Rejected`/`StaleToken` results roll everything back (value-guarded so
+  authoritative rows or later legitimate predictions are never clobbered).
+  Editor tests: `Assets/Arena/Tests/Editor/PredictionRollbackLedgerTests.cs`
+  (run via Unity Test Runner). Step 4 (denial cue) is a minimal hook only:
+  static `LocalCombatState.PredictionRejected` event — no HUD surface yet.
+- **F2 sub-slice (a) — implemented.** `NetcodeDebugOverlay` now shows remote
+  hard-snap count, interp/extrap sample ratio, last/max remote position error
+  (aggregated over remote players), predicted-action results by kind, and
+  per-table row-receive rates. Server `MOVE_FALLBACK` count is in the
+  `[TICK_PROFILE_SCAN]` window line — `ARENA_PROFILE_TICKS` is compile-time
+  baked; see `docs/tick-baseline-recipe.md`. Sub-slices (b) `ping_clock`
+  (schema change) and (c) latency recipe doc — not started.
+- **F3, F4, F5 — not started** (F4/F5 gated on F2 measurements by design).
+
 ## Executive Summary
 
 The foundation is stronger than the planning docs suggest. Verified as implemented:

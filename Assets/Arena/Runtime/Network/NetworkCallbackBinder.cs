@@ -2,6 +2,7 @@
 
 using SpacetimeDB;
 using SpacetimeDB.Types;
+using Arena.Debugging;
 using Arena.Entity;
 using Arena.Input;
 using Arena.Match;
@@ -13,6 +14,9 @@ namespace Arena.Network
     {
         internal static void BindRuntimeCallbacks(DbConnection conn, EntityRegistry registry, MatchStateCache match, LocalCombatState combat, Identity localIdentity)
         {
+            NetcodeReceiveCounters.ResetForNetworkReconnect();
+            BindReceiveCounters(conn);
+
             conn.Db.PlayerPhysics.OnInsert += registry.OnPlayerPhysicsInsert;
             conn.Db.PlayerPhysics.OnUpdate += registry.OnPlayerPhysicsUpdate;
             conn.Db.PlayerPhysics.OnDelete += registry.OnPlayerPhysicsDelete;
@@ -134,6 +138,79 @@ namespace Arena.Network
 
             conn.Db.CombatEvent.OnInsert += registry.OnCombatEventInsert;
             conn.Db.ProjectilePresentationEvent.OnInsert += registry.OnProjectilePresentationEventInsert;
+        }
+
+        /// <summary>
+        /// Overlay-only receive counters (netcode audit R3, client half).
+        /// One hit per row callback, keyed by table name. Behavior-free.
+        /// </summary>
+        private static void BindReceiveCounters(DbConnection conn)
+        {
+            conn.Db.PlayerPhysics.OnInsert += (_, _) => NetcodeReceiveCounters.Record("player_physics");
+            conn.Db.PlayerPhysics.OnUpdate += (_, _, _) => NetcodeReceiveCounters.Record("player_physics");
+            conn.Db.PlayerPhysics.OnDelete += (_, _) => NetcodeReceiveCounters.Record("player_physics");
+
+            conn.Db.Player.OnInsert += (_, _) => NetcodeReceiveCounters.Record("player");
+            conn.Db.Player.OnUpdate += (_, _, _) => NetcodeReceiveCounters.Record("player");
+            conn.Db.Player.OnDelete += (_, _) => NetcodeReceiveCounters.Record("player");
+
+            conn.Db.PlayerState.OnInsert += (_, _) => NetcodeReceiveCounters.Record("player_state");
+            conn.Db.PlayerState.OnUpdate += (_, _, _) => NetcodeReceiveCounters.Record("player_state");
+            conn.Db.PlayerState.OnDelete += (_, _) => NetcodeReceiveCounters.Record("player_state");
+
+            conn.Db.PlayerResource.OnInsert += (_, _) => NetcodeReceiveCounters.Record("player_resource");
+            conn.Db.PlayerResource.OnUpdate += (_, _, _) => NetcodeReceiveCounters.Record("player_resource");
+            conn.Db.PlayerResource.OnDelete += (_, _) => NetcodeReceiveCounters.Record("player_resource");
+
+            conn.Db.StatusEffect.OnInsert += (_, _) => NetcodeReceiveCounters.Record("status_effect");
+            conn.Db.StatusEffect.OnUpdate += (_, _, _) => NetcodeReceiveCounters.Record("status_effect");
+            conn.Db.StatusEffect.OnDelete += (_, _) => NetcodeReceiveCounters.Record("status_effect");
+
+            conn.Db.NpcPhysics.OnInsert += (_, _) => NetcodeReceiveCounters.Record("npc_physics");
+            conn.Db.NpcPhysics.OnUpdate += (_, _, _) => NetcodeReceiveCounters.Record("npc_physics");
+            conn.Db.NpcPhysics.OnDelete += (_, _) => NetcodeReceiveCounters.Record("npc_physics");
+
+            conn.Db.NpcState.OnInsert += (_, _) => NetcodeReceiveCounters.Record("npc_state");
+            conn.Db.NpcState.OnUpdate += (_, _, _) => NetcodeReceiveCounters.Record("npc_state");
+            conn.Db.NpcState.OnDelete += (_, _) => NetcodeReceiveCounters.Record("npc_state");
+
+            conn.Db.CombatEvent.OnInsert += (_, _) => NetcodeReceiveCounters.Record("combat_event");
+            conn.Db.CombatEffectEvent.OnInsert += (_, _) => NetcodeReceiveCounters.Record("combat_effect_event");
+            conn.Db.ProjectilePresentationEvent.OnInsert += (_, _) => NetcodeReceiveCounters.Record("projectile_presentation_event");
+
+            conn.Db.ActiveCast.OnInsert += (_, _) => NetcodeReceiveCounters.Record("active_cast");
+            conn.Db.ActiveCast.OnUpdate += (_, _, _) => NetcodeReceiveCounters.Record("active_cast");
+            conn.Db.ActiveCast.OnDelete += (_, _) => NetcodeReceiveCounters.Record("active_cast");
+
+            conn.Db.SpellCooldown.OnInsert += (_, _) => NetcodeReceiveCounters.Record("spell_cooldown");
+            conn.Db.SpellCooldown.OnUpdate += (_, _, _) => NetcodeReceiveCounters.Record("spell_cooldown");
+            conn.Db.SpellCooldown.OnDelete += (_, _) => NetcodeReceiveCounters.Record("spell_cooldown");
+
+            conn.Db.GlobalCooldown.OnInsert += (_, _) => NetcodeReceiveCounters.Record("global_cooldown");
+            conn.Db.GlobalCooldown.OnUpdate += (_, _, _) => NetcodeReceiveCounters.Record("global_cooldown");
+            conn.Db.GlobalCooldown.OnDelete += (_, _) => NetcodeReceiveCounters.Record("global_cooldown");
+
+            conn.Db.FixedActionChargeState.OnInsert += (_, _) => NetcodeReceiveCounters.Record("fixed_action_charge_state");
+            conn.Db.FixedActionChargeState.OnUpdate += (_, _, _) => NetcodeReceiveCounters.Record("fixed_action_charge_state");
+            conn.Db.FixedActionChargeState.OnDelete += (_, _) => NetcodeReceiveCounters.Record("fixed_action_charge_state");
+
+            conn.Db.MovementActionState.OnInsert += (_, _) => NetcodeReceiveCounters.Record("movement_action_state");
+            conn.Db.MovementActionState.OnUpdate += (_, _, _) => NetcodeReceiveCounters.Record("movement_action_state");
+            conn.Db.MovementActionState.OnDelete += (_, _) => NetcodeReceiveCounters.Record("movement_action_state");
+
+            conn.Db.SpecialMovementRuntime.OnInsert += (_, _) => NetcodeReceiveCounters.Record("special_movement_runtime");
+            conn.Db.SpecialMovementRuntime.OnUpdate += (_, _, _) => NetcodeReceiveCounters.Record("special_movement_runtime");
+            conn.Db.SpecialMovementRuntime.OnDelete += (_, _) => NetcodeReceiveCounters.Record("special_movement_runtime");
+
+            conn.Db.DefenseState.OnInsert += (_, _) => NetcodeReceiveCounters.Record("defense_state");
+            conn.Db.DefenseState.OnUpdate += (_, _, _) => NetcodeReceiveCounters.Record("defense_state");
+            conn.Db.DefenseState.OnDelete += (_, _) => NetcodeReceiveCounters.Record("defense_state");
+
+            conn.Db.PredictedActionResult.OnInsert += (_, row) =>
+            {
+                NetcodeReceiveCounters.Record("predicted_action_result");
+                NetcodeReceiveCounters.RecordPredictedActionResult(row);
+            };
         }
     }
 }

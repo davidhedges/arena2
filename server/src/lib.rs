@@ -42,4 +42,5 @@ mod progression;
 mod relations;
 mod resources;
 mod spells;
+mod tick_metrics;
 mod world_collision;

@@ -4,6 +4,47 @@ Architecture audit of the sync slice: authority, prediction, replication, persis
 generated bindings, reducer contracts, subscriptions, and performance observability.
 Each recommendation is scoped as a bounded implementation slice.
 
+## Implementation status (updated 2026-07-02)
+
+- **R1 — implemented.** `clear_transient_actor_state` in
+  `server/src/actor_lifecycle.rs` is the canonical teardown owner (statuses,
+  engagement, stacking passives, active/pending casts, cast-prediction
+  correlation, channel/special-movement runtime, defense state, pending melee
+  impacts/timed movements/projectile releases, queued followups, pending area
+  impacts, bespoke spells, auto-attack state, caster-owned projectiles +
+  target-state rows, pending player commands). Called from
+  `despawn_actor_bundle` and the reconnect branch of `client_connected`.
+  `client_disconnected` and `despawn_actor_bundle` now log-and-continue on
+  ancillary cleanup errors instead of aborting the transaction. Cooldown/GCD
+  rows are deliberately kept. Guarded by three tests in
+  `actor_lifecycle.rs::tests` (coverage list, no-cooldown-delete, both call
+  sites) — a source-scan guard, since the crate has no ReducerContext harness.
+- **R3 — implemented (first slice).** Server: per-window `[TICK_PROFILE_SCAN]`
+  log line (see `server/src/tick_metrics.rs`) with write counters for
+  `player_physics`, `player_intent`, `player_resource`,
+  `fixed_action_charge_state`, `npc_combat_runtime`,
+  `combat_stacking_passive_runtime`, plus scan counters and populations —
+  log-only, behind `ARENA_PROFILE_TICKS`. Client: per-table row-callback
+  counters (`NetcodeReceiveCounters`, bound in `NetworkCallbackBinder`) with
+  rows/sec + predicted-result-by-kind lines in `NetcodeDebugOverlay`.
+  Not yet done: initial-sync row counts per subscription query.
+- **R2, R4, R5 — not started.**
+- **R5 correction (2026-07-02):** the "no live drift today" finding missed a
+  regen-mode split. The projectile-load-harness surface is feature-gated
+  (`#[cfg(feature = "projectile_load_harness")]`), and the two regen paths
+  disagree about it: the canonical `--module-path` generate builds default
+  features (harness **excluded**), while `ops/republish-local-clear.sh` —
+  the default local workflow, `ARENA_PROJECTILE_LOAD_HARNESS=1` — builds with
+  the feature and generates from that wasm via `--bin-path` (its comment even
+  assumes the checked-in bindings include the harness; they did not). A
+  harness-mode regen on 2026-07-02 added the four missing files
+  (`Reducers/Run|CleanupProjectileLoadHarness`,
+  `Types/ProjectileLoadHarnessActor|Run`) plus their two dispatch lines in
+  `SpacetimeDBClient.g.cs`, and nothing else; they are now committed as the
+  canonical shape (matching the local publish default; the extra reducers are
+  unused-but-harmless against a default-features prod module). R5's guard
+  should pin ONE regen mode so the two paths stop producing different output.
+
 ## Executive Summary
 
 The overall architecture is in better shape than the planning docs suggest: the

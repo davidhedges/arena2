@@ -52,6 +52,7 @@ namespace Arena.Input
         private readonly Dictionary<string, PendingPredictedInstantSpellVisual> _pendingInstantSpellByToken = new();
         private readonly Dictionary<string, AcceptedPredictedInstantSpell> _acceptedInstantSpellByActionInstance = new();
         private readonly List<PendingAuthoritativeInstantSpellReplay> _pendingAuthoritativeInstantSpellReplays = new();
+        private readonly Dictionary<string, (PredictedActionLedger ledger, long expiresAtMs)> _predictionLedgersByToken = new();
 
         /// <summary>
         /// True when the player is in interactive aim mode (cursor unlocked, indicator visible).
@@ -333,8 +334,13 @@ namespace Arena.Input
             string targetId = TargetSelector.Instance?.SelectedTargetId ?? "";
             CastActionToken token = LocalCombatState.Instance.CreateCastActionToken(spellId);
             SendCastRequest(conn, spellId, targetId, aimX, aimY, aimZ, token);
-            ReservePredictedResourceForSpell(conn, localPlayer, spellId, spellDef, System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
-            PredictSpellStartCooldowns(conn, spellId, spellDef);
+            RecordPredictedSpellStart(
+                conn,
+                localPlayer,
+                spellId,
+                spellDef,
+                token,
+                System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
             PredictCastTimeSpellHold(spellId, spellDef, targetId, aimPoint, token);
             PredictImmediateInstantSpellVisual(conn, spellId, spellDef, targetId, aimPoint, token);
         }
@@ -514,9 +520,13 @@ namespace Arena.Input
             ActionBarTrace.Trace($"sending CastRequest for {spellId} target={targetId}");
             CastActionToken token = LocalCombatState.Instance.CreateCastActionToken(spellId);
             SendCastRequest(conn, spellId, targetId, 0f, 0f, 0f, token);
-            if (EntityRegistry.Instance?.LocalPlayerEntity is { } localPlayer)
-                ReservePredictedResourceForSpell(conn, localPlayer, spellId, spellDef, System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
-            PredictSpellStartCooldowns(conn, spellId, spellDef);
+            RecordPredictedSpellStart(
+                conn,
+                EntityRegistry.Instance?.LocalPlayerEntity,
+                spellId,
+                spellDef,
+                token,
+                System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
             PredictCastTimeSpellHold(spellId, spellDef, targetId, null, token);
             PredictImmediateInstantSpellVisual(conn, spellId, spellDef, targetId, null, token);
             return true;
@@ -566,42 +576,35 @@ namespace Arena.Input
             return true;
         }
 
-        private void ReservePredictedResourceForSpell(
+        /// <summary>
+        /// Applies the press-time predictions (GCD, per-spell cooldown, MANA
+        /// reservation) through the prediction ledger so a server
+        /// Rejected/StaleToken can restore all of them (feel audit F1).
+        /// </summary>
+        private void RecordPredictedSpellStart(
             SpacetimeDB.Types.DbConnection conn,
-            PlayerEntity entity,
+            PlayerEntity? localPlayer,
             string spellId,
             SpacetimeDB.Types.SpellDefinition? spellDef,
+            CastActionToken token,
             long nowMs)
-        {
-            float cost = SpellPrimaryResourceCost(spellDef);
-            if (cost <= 0.001f)
-                return;
-
-            string resourceKind = "MANA";
-            if (!string.Equals(resourceKind, entity.PrimaryResourceKind, System.StringComparison.OrdinalIgnoreCase))
-                return;
-
-            LocalCombatState.Instance.ReservePredictedPrimaryResource(
-                entity,
-                resourceKind,
-                cost,
-                nowMs);
-        }
-
-        private static void PredictSpellStartCooldowns(
-            SpacetimeDB.Types.DbConnection conn,
-            string spellId,
-            SpacetimeDB.Types.SpellDefinition? spellDef)
         {
             if (spellDef == null)
                 return;
 
-            long nowMs = System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-            var combat = LocalCombatState.Instance;
-            if (spellDef.UsesGlobalCooldown)
-                combat.PredictGlobalCooldown(nowMs, GameplayTuning.ResolveDefaultGlobalCooldownDurationMs(conn));
-            if (spellDef.CooldownMs > 0UL)
-                combat.PredictSpellCooldown(spellId, nowMs, (long)spellDef.CooldownMs);
+            // Spell costs are hard-coded to MANA today (matches
+            // HasResourceForSpell); the reservation no-ops for other kinds.
+            PredictedActionLedger ledger = LocalCombatState.Instance.PredictActionStart(
+                localPlayer,
+                spellId,
+                (long)spellDef.CooldownMs,
+                spellDef.UsesGlobalCooldown,
+                GameplayTuning.ResolveDefaultGlobalCooldownDurationMs(conn),
+                "MANA",
+                SpellPrimaryResourceCost(spellDef),
+                nowMs);
+            if (token.IsPredicted)
+                _predictionLedgersByToken[SpellTokenKey(token)] = (ledger, nowMs + PendingInstantSpellPredictionTtlMs);
         }
 
         private static void PredictCastTimeSpellHold(
@@ -706,6 +709,7 @@ namespace Arena.Input
             string tokenKey = SpellTokenKey(row.PredictedActionId, row.ClientActionSeq);
             if (row.Result == ActionResultKind.Accepted)
             {
+                _predictionLedgersByToken.Remove(tokenKey);
                 if (_pendingInstantSpellByToken.Remove(tokenKey)
                     && !string.IsNullOrWhiteSpace(row.ActionInstanceId))
                 {
@@ -717,6 +721,15 @@ namespace Arena.Input
                 return;
             }
 
+            if ((row.Result == ActionResultKind.Rejected || row.Result == ActionResultKind.StaleToken)
+                && _predictionLedgersByToken.TryGetValue(tokenKey, out var pendingLedger))
+            {
+                LocalCombatState.Instance.RollbackPrediction(pendingLedger.ledger);
+                ActionBarTrace.Trace(
+                    $"rolled back predicted spell state for {pendingLedger.ledger.ActionKind} after {row.Result}");
+            }
+
+            _predictionLedgersByToken.Remove(tokenKey);
             _pendingInstantSpellByToken.Remove(tokenKey);
         }
 
@@ -812,6 +825,15 @@ namespace Arena.Input
             }
             foreach (string actionInstanceId in staleActionInstances)
                 _acceptedInstantSpellByActionInstance.Remove(actionInstanceId);
+
+            var staleLedgerTokens = new List<string>();
+            foreach (var entry in _predictionLedgersByToken)
+            {
+                if (nowMs > entry.Value.expiresAtMs)
+                    staleLedgerTokens.Add(entry.Key);
+            }
+            foreach (string token in staleLedgerTokens)
+                _predictionLedgersByToken.Remove(token);
         }
 
         private static string SpellTokenKey(CastActionToken token)

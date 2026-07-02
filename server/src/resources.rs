@@ -52,6 +52,10 @@ pub(crate) struct ResolvedActionResourceCost {
     pub amount: f32,
 }
 
+fn record_resource_write() {
+    crate::tick_metrics::record_table_write(crate::tick_metrics::TableWriteKind::PlayerResource);
+}
+
 impl ResolvedActionResourceCost {
     pub(crate) fn primary(amount: f32) -> Self {
         Self::stamina(amount)
@@ -171,6 +175,7 @@ pub(crate) fn reset_player_resources_to_full(
         if (primary.current - target_current).abs() > 0.0001 {
             primary.current = target_current;
             primary.updated_at = now;
+            record_resource_write();
             ctx.db.player_resource().key().update(primary);
         }
     }
@@ -215,6 +220,7 @@ fn sync_resource_for_player(
             regen_per_second: spec.regen_per_second,
             updated_at: now,
         };
+        record_resource_write();
         ctx.db.player_resource().insert(row.clone());
         row
     };
@@ -231,6 +237,7 @@ fn sync_resource_for_player(
     resource.regen_per_second = spec.regen_per_second.max(0.0);
     resource.current = next_current;
     resource.updated_at = now;
+    record_resource_write();
     ctx.db.player_resource().key().update(resource.clone());
     Some(resource)
 }
@@ -285,6 +292,7 @@ pub(crate) fn grant_primary_resource_for_damage_taken(
 
     resource.current = next;
     resource.updated_at = now;
+    record_resource_write();
     ctx.db.player_resource().key().update(resource);
 }
 
@@ -317,6 +325,7 @@ pub(crate) fn grant_primary_resource_for_damage_dealt(
 
     resource.current = next;
     resource.updated_at = now;
+    record_resource_write();
     ctx.db.player_resource().key().update(resource);
 }
 
@@ -345,6 +354,7 @@ pub(crate) fn grant_primary_resource_amount_for_kind(
 
     resource.current = next;
     resource.updated_at = now;
+    record_resource_write();
     ctx.db.player_resource().key().update(resource);
 }
 
@@ -371,6 +381,7 @@ pub(crate) fn grant_primary_resource_for_melee_hit(
     }
     resource.current = next;
     resource.updated_at = now;
+    record_resource_write();
     ctx.db.player_resource().key().update(resource);
 }
 
@@ -396,6 +407,7 @@ pub(crate) fn grant_primary_resource_for_spell_cast(
     }
     resource.current = next;
     resource.updated_at = now;
+    record_resource_write();
     ctx.db.player_resource().key().update(resource);
 }
 
@@ -418,6 +430,7 @@ pub(crate) fn grant_primary_resource_amount(
     }
     resource.current = next;
     resource.updated_at = now;
+    record_resource_write();
     ctx.db.player_resource().key().update(resource);
 }
 
@@ -494,6 +507,7 @@ fn spend_resource(
     if (next - resource.current).abs() > 0.0001 {
         resource.current = next;
         resource.updated_at = now;
+        record_resource_write();
         ctx.db.player_resource().key().update(resource);
     }
     true
@@ -586,6 +600,7 @@ fn tick_resource_row(
     resource.regen_per_second = spec.regen_per_second.max(0.0);
     resource.current = next_current;
     resource.updated_at = now;
+    record_resource_write();
     ctx.db.player_resource().key().update(resource);
 }
 

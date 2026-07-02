@@ -911,6 +911,7 @@ fn clear_npc_combat_runtime(ctx: &ReducerContext, identity: Identity) {
 }
 
 fn upsert_npc_combat_runtime(ctx: &ReducerContext, row: NpcCombatRuntime) {
+    crate::tick_metrics::record_table_write(crate::tick_metrics::TableWriteKind::NpcCombatRuntime);
     if ctx
         .db
         .npc_combat_runtime()

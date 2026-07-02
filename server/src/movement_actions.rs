@@ -757,6 +757,9 @@ fn apply_charge_progress_state(row: &mut FixedActionChargeState, state: ChargePr
 }
 
 fn upsert_fixed_action_charge_state(ctx: &ReducerContext, row: FixedActionChargeState) {
+    crate::tick_metrics::record_table_write(
+        crate::tick_metrics::TableWriteKind::FixedActionChargeState,
+    );
     if ctx
         .db
         .fixed_action_charge_state()

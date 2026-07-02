@@ -1713,6 +1713,9 @@ fn upsert_combat_stacking_passive_runtime(
     ctx: &ReducerContext,
     runtime: CombatStackingPassiveRuntime,
 ) {
+    crate::tick_metrics::record_table_write(
+        crate::tick_metrics::TableWriteKind::CombatStackingPassiveRuntime,
+    );
     if ctx
         .db
         .combat_stacking_passive_runtime()
@@ -5143,8 +5146,19 @@ pub struct StatusRuntimeView {
 
 impl StatusRuntimeView {
     pub fn collect(ctx: &ReducerContext, now: Timestamp) -> Self {
+        let profiling = crate::tick_metrics::profiling_enabled();
+        let timer = crate::tick_metrics::ScopeTimer::start(profiling);
         let alive_targets = alive_status_target_identities(ctx);
-        Self::from_status_effects(ctx.db.status_effect().iter(), &alive_targets, now)
+        let mut rows_scanned = 0u64;
+        let view = Self::from_status_effects(
+            ctx.db.status_effect().iter().inspect(|_| rows_scanned += 1),
+            &alive_targets,
+            now,
+        );
+        if profiling {
+            crate::tick_metrics::record_status_collect(timer.elapsed_micros() as u64, rows_scanned);
+        }
+        view
     }
 
     fn from_status_effects(

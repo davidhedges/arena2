@@ -1,4 +1,5 @@
 #nullable enable
+using System.Collections.Generic;
 using UnityEngine;
 using Arena.Entity;
 using Arena.Input;
@@ -162,6 +163,10 @@ namespace Arena.Debugging
                 y += lineHeight;
             }
 
+            y = DrawRemotePresentationSection(x, y, lineHeight);
+            y = DrawPredictedActionResultSection(x, y, lineHeight);
+            y = DrawReceiveRateSection(x, y, lineHeight);
+
             var conn = NetworkManager.Instance?.Conn;
             if (conn != null)
             {
@@ -192,6 +197,115 @@ namespace Arena.Debugging
             }
 
             var traceLines = ActionBarTrace.Snapshot();
+            DrawTraceSection(x, ref y, lineHeight, traceLines);
+        }
+
+        /// <summary>
+        /// Aggregate remote-player presentation counters that already exist in
+        /// ClientSimulationState (feel audit F2a): hard snaps, interpolation vs
+        /// extrapolation sample ratio, last/max remote position error.
+        /// </summary>
+        private float DrawRemotePresentationSection(float x, float y, float lineHeight)
+        {
+            var registry = EntityRegistry.Instance;
+            if (registry == null)
+                return y;
+
+            int remoteCount = 0;
+            int hardSnaps = 0;
+            long interpSamples = 0;
+            long extrapSamples = 0;
+            float lastError = 0f;
+            float maxError = 0f;
+            foreach (var player in registry.AllPlayers)
+            {
+                if (player == registry.LocalPlayerEntity)
+                    continue;
+
+                remoteCount++;
+                var sim = player.SimState;
+                hardSnaps += sim.RemoteHardSnapCount;
+                interpSamples += sim.RemoteInterpolationSampleCount;
+                extrapSamples += sim.RemoteExtrapolationSampleCount;
+                lastError = Mathf.Max(lastError, sim.LastRemotePositionError);
+                maxError = Mathf.Max(maxError, sim.MaxRemotePositionErrorObserved);
+            }
+
+            if (remoteCount == 0)
+                return y;
+
+            long totalSamples = interpSamples + extrapSamples;
+            float extrapRatio = totalSamples > 0 ? (float)extrapSamples / totalSamples : 0f;
+
+            y += 8;
+            GUI.Label(new Rect(x, y, 640, lineHeight), $"Remote Presentation ({remoteCount})", _headerStyle);
+            y += lineHeight + 2;
+            GUI.Label(new Rect(x, y, 640, lineHeight), $"Hard snaps: {hardSnaps}", _style);
+            y += lineHeight;
+            GUI.Label(
+                new Rect(x, y, 640, lineHeight),
+                $"Interp/extrap samples: {interpSamples}/{extrapSamples}  (extrap ratio: {extrapRatio:P1})",
+                _style);
+            y += lineHeight;
+            GUI.Label(
+                new Rect(x, y, 640, lineHeight),
+                $"Remote pos error: {lastError:F3} m  (max: {maxError:F3} m)",
+                _style);
+            y += lineHeight;
+            return y;
+        }
+
+        /// <summary>
+        /// PredictedActionResult rows by result kind. A rising rejected count is
+        /// the early-warning signal for client/server validation drift.
+        /// </summary>
+        private float DrawPredictedActionResultSection(float x, float y, float lineHeight)
+        {
+            var resultsByKind = NetcodeReceiveCounters.PredictedResultsByKind;
+            if (resultsByKind.Count == 0)
+                return y;
+
+            var builder = new System.Text.StringBuilder("Predicted results:");
+            foreach (var pair in resultsByKind)
+                builder.Append($" {pair.Key}={pair.Value}");
+
+            y += 8;
+            GUI.Label(new Rect(x, y, 900, lineHeight), builder.ToString(), _style);
+            y += lineHeight;
+            return y;
+        }
+
+        /// <summary>
+        /// Per-table row-callback rates over the counter window (rows/sec).
+        /// </summary>
+        private float DrawReceiveRateSection(float x, float y, float lineHeight)
+        {
+            var rates = NetcodeReceiveCounters.WindowRates(Time.realtimeSinceStartup);
+            if (rates.Count == 0)
+                return y;
+
+            var ordered = new List<KeyValuePair<string, float>>(rates);
+            ordered.Sort((a, b) => b.Value.CompareTo(a.Value));
+
+            y += 8;
+            GUI.Label(
+                new Rect(x, y, 640, lineHeight),
+                $"Row Callbacks (rows/sec, {NetcodeReceiveCounters.WindowSeconds:F0}s window, total {NetcodeReceiveCounters.TotalRows})",
+                _headerStyle);
+            y += lineHeight + 2;
+
+            const int maxTableLines = 8;
+            for (int i = 0; i < ordered.Count && i < maxTableLines; i++)
+            {
+                GUI.Label(new Rect(x, y, 640, lineHeight), $"{ordered[i].Key}: {ordered[i].Value:F1}", _style);
+                y += lineHeight;
+            }
+
+            return y;
+        }
+
+        private void DrawTraceSection(float x, ref float y, float lineHeight, System.Collections.Generic.IReadOnlyList<string> traceLines)
+        {
             if (traceLines.Count > 0)
             {
                 y += 8;

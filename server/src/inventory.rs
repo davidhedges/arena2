@@ -1884,6 +1884,7 @@ pub(crate) fn equipment_modifier_totals_for_owner(
     ctx: &ReducerContext,
     owner: Identity,
 ) -> EquipmentModifierTotals {
+    crate::tick_metrics::record_equipment_modifier_scan();
     let Some(equipment) = ctx.db.equipment_loadout().owner().find(owner) else {
         return EquipmentModifierTotals::default();
     };

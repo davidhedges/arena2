@@ -33,6 +33,7 @@ namespace Arena.Input
         private readonly Dictionary<string, PendingPredictedMeleeVisual> _pendingPredictedMeleeByToken = new();
         private readonly Dictionary<string, AcceptedPredictedMeleeAction> _acceptedPredictedMeleeByActionInstance = new();
         private readonly List<PendingAuthoritativeMeleeReplay> _pendingAuthoritativeMeleeReplays = new();
+        private readonly Dictionary<string, (PredictedActionLedger ledger, long expiresAtMs)> _predictionLedgersByToken = new();
 
         private readonly struct PendingPredictedMeleeVisual
         {
@@ -262,18 +263,27 @@ namespace Arena.Input
                 return true;
             }
 
-            ReservePredictedResourceForMeleeAction(conn, entity, slotId, nowMs);
-
             if (!strikeChoice.shouldQueue)
             {
-                if (usesGlobalCooldown && !isComboFollowup)
-                    combat.PredictGlobalCooldown(
-                        nowMs,
-                        GameplayTuning.ResolveDefaultGlobalCooldownDurationMs(conn));
-
-                long cooldownDurationMillis = (long)gameplay.CooldownMs;
-                if (cooldownDurationMillis > 0L)
-                    combat.PredictSpellCooldown(slotId, nowMs, cooldownDurationMillis);
+                // Same predictions as before, but routed through the ledger so a
+                // server Rejected/StaleToken restores all of them (feel audit F1).
+                (string resourceKind, float resourceCost) =
+                    ResolvePredictedResourceForMeleeAction(conn, entity, slotId);
+                PredictedActionLedger ledger = combat.PredictActionStart(
+                    entity,
+                    slotId,
+                    (long)gameplay.CooldownMs,
+                    usesGlobalCooldown && !isComboFollowup,
+                    GameplayTuning.ResolveDefaultGlobalCooldownDurationMs(conn),
+                    resourceKind,
+                    resourceCost,
+                    nowMs);
+                if (token.IsPredicted)
+                    _predictionLedgersByToken[ActionTokenKey(token)] = (ledger, nowMs + PendingMeleePredictionTtlMs);
+            }
+            else
+            {
+                ReservePredictedResourceForMeleeAction(conn, entity, slotId, nowMs);
             }
 
             if (strikeChoice.shouldQueue)
@@ -384,25 +394,34 @@ namespace Arena.Input
             return true;
         }
 
-        private void ReservePredictedResourceForMeleeAction(DbConnection conn, PlayerEntity entity, string actionId, long nowMs)
+        private static (string kind, float cost) ResolvePredictedResourceForMeleeAction(
+            DbConnection conn,
+            PlayerEntity entity,
+            string actionId)
         {
             ActiveActionBarAction action = ActiveActionBarResolver.ResolveActiveSelectableActionForAction(
                 conn,
                 entity.Identity,
                 actionId);
             if (!action.HasAssignedAction || action.ResourceCost <= 0.001f)
-                return;
+                return (string.Empty, 0f);
 
             string resourceKind = string.IsNullOrWhiteSpace(action.ResourceKind)
                 ? entity.PrimaryResourceKind
                 : action.ResourceKind.Trim().ToUpperInvariant();
-            if (!string.Equals(resourceKind, entity.PrimaryResourceKind, System.StringComparison.OrdinalIgnoreCase))
+            return (resourceKind, action.ResourceCost);
+        }
+
+        private void ReservePredictedResourceForMeleeAction(DbConnection conn, PlayerEntity entity, string actionId, long nowMs)
+        {
+            (string resourceKind, float cost) = ResolvePredictedResourceForMeleeAction(conn, entity, actionId);
+            if (cost <= 0.001f)
                 return;
 
             LocalCombatState.Instance.ReservePredictedPrimaryResource(
                 entity,
                 resourceKind,
-                action.ResourceCost,
+                cost,
                 nowMs);
         }
 
@@ -514,6 +533,7 @@ namespace Arena.Input
             string tokenKey = ActionTokenKey(row.PredictedActionId, row.ClientActionSeq);
             if (row.Result == ActionResultKind.Accepted)
             {
+                _predictionLedgersByToken.Remove(tokenKey);
                 if (_pendingPredictedMeleeByToken.Remove(tokenKey)
                     && !string.IsNullOrWhiteSpace(row.ActionInstanceId))
                 {
@@ -525,9 +545,16 @@ namespace Arena.Input
                 return;
             }
 
-            if (row.Result == ActionResultKind.Rejected)
+            if (row.Result == ActionResultKind.Rejected || row.Result == ActionResultKind.StaleToken)
             {
                 _pendingPredictedMeleeByToken.Remove(tokenKey);
+                if (_predictionLedgersByToken.TryGetValue(tokenKey, out var pendingLedger))
+                {
+                    LocalCombatState.Instance.RollbackPrediction(pendingLedger.ledger);
+                    ActionBarTrace.Trace(
+                        $"rolled back predicted melee state for {pendingLedger.ledger.ActionKind} after {row.Result}");
+                    _predictionLedgersByToken.Remove(tokenKey);
+                }
             }
         }
 
@@ -632,6 +659,15 @@ namespace Arena.Input
             }
             foreach (string actionInstanceId in staleActionInstances)
                 _acceptedPredictedMeleeByActionInstance.Remove(actionInstanceId);
+
+            var staleLedgerTokens = new List<string>();
+            foreach (var entry in _predictionLedgersByToken)
+            {
+                if (nowMs > entry.Value.expiresAtMs)
+                    staleLedgerTokens.Add(entry.Key);
+            }
+            foreach (string token in staleLedgerTokens)
+                _predictionLedgersByToken.Remove(token);
         }
 
         private static string ActionTokenKey(ActionPredictionToken token)

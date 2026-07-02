@@ -126,6 +126,7 @@ pub(crate) fn commit_player_physics(
         );
     }
 
+    crate::tick_metrics::record_table_write(crate::tick_metrics::TableWriteKind::PlayerPhysics);
     ctx.db.player_physics().identity().update(decision.row);
 }
 
