@@ -25,13 +25,30 @@ namespace Arena.Simulation
             float yaw,
             bool grounded,
             uint lastProcessedTick)
+            : this(posX, posY, posZ, velX, velY, velZ, yaw, grounded, lastProcessedTick,
+                   Time.realtimeSinceStartup)
+        {
+        }
+
+        /// <summary>Explicit receive time, for callers outside the Unity player loop (tests).</summary>
+        public PlayerSnapshot(
+            float posX,
+            float posY,
+            float posZ,
+            float velX,
+            float velY,
+            float velZ,
+            float yaw,
+            bool grounded,
+            uint lastProcessedTick,
+            float receivedTime)
         {
             Position = new Vector3(posX, posY, posZ);
             Velocity = new Vector3(velX, velY, velZ);
             Yaw = yaw;
             Grounded = grounded;
             LastProcessedTick = lastProcessedTick;
-            ReceivedTime = Time.realtimeSinceStartup;
+            ReceivedTime = receivedTime;
         }
     }
 }

@@ -232,9 +232,10 @@ namespace Arena.Debugging
         }
 
         /// <summary>
-        /// Aggregate remote-player presentation counters that already exist in
-        /// ClientSimulationState (feel audit F2a): hard snaps, interpolation vs
-        /// extrapolation sample ratio, last/max remote position error.
+        /// Aggregate remote-presentation counters (feel audit F2a/F3): hard
+        /// snaps, interpolation vs extrapolation sample ratio, last/max
+        /// position error — one aggregate over remote players
+        /// (ClientSimulationState) and one over NPCs (RemotePresentationBuffer).
         /// </summary>
         private float DrawRemotePresentationSection(float x, float y, float lineHeight)
         {
@@ -262,27 +263,68 @@ namespace Arena.Debugging
                 maxError = Mathf.Max(maxError, sim.MaxRemotePositionErrorObserved);
             }
 
-            if (remoteCount == 0)
+            int npcCount = 0;
+            int npcHardSnaps = 0;
+            long npcInterpSamples = 0;
+            long npcExtrapSamples = 0;
+            float npcLastError = 0f;
+            float npcMaxError = 0f;
+            foreach (var npc in registry.AllNpcs)
+            {
+                npcCount++;
+                npcHardSnaps += npc.PresentationHardSnapCount;
+                npcInterpSamples += npc.PresentationInterpolationSampleCount;
+                npcExtrapSamples += npc.PresentationExtrapolationSampleCount;
+                npcLastError = Mathf.Max(npcLastError, npc.PresentationLastPositionError);
+                npcMaxError = Mathf.Max(npcMaxError, npc.PresentationMaxPositionErrorObserved);
+            }
+
+            if (remoteCount == 0 && npcCount == 0)
                 return y;
 
-            long totalSamples = interpSamples + extrapSamples;
-            float extrapRatio = totalSamples > 0 ? (float)extrapSamples / totalSamples : 0f;
-
             y += 8;
-            GUI.Label(new Rect(x, y, 640, lineHeight), $"Remote Presentation ({remoteCount})", _headerStyle);
+            GUI.Label(
+                new Rect(x, y, 640, lineHeight),
+                $"Remote Presentation ({remoteCount} players, {npcCount} NPCs)",
+                _headerStyle);
             y += lineHeight + 2;
-            GUI.Label(new Rect(x, y, 640, lineHeight), $"Hard snaps: {hardSnaps}", _style);
-            y += lineHeight;
-            GUI.Label(
-                new Rect(x, y, 640, lineHeight),
-                $"Interp/extrap samples: {interpSamples}/{extrapSamples}  (extrap ratio: {extrapRatio:P1})",
-                _style);
-            y += lineHeight;
-            GUI.Label(
-                new Rect(x, y, 640, lineHeight),
-                $"Remote pos error: {lastError:F3} m  (max: {maxError:F3} m)",
-                _style);
-            y += lineHeight;
+
+            if (remoteCount > 0)
+            {
+                long totalSamples = interpSamples + extrapSamples;
+                float extrapRatio = totalSamples > 0 ? (float)extrapSamples / totalSamples : 0f;
+                GUI.Label(new Rect(x, y, 640, lineHeight), $"Hard snaps: {hardSnaps}", _style);
+                y += lineHeight;
+                GUI.Label(
+                    new Rect(x, y, 640, lineHeight),
+                    $"Interp/extrap samples: {interpSamples}/{extrapSamples}  (extrap ratio: {extrapRatio:P1})",
+                    _style);
+                y += lineHeight;
+                GUI.Label(
+                    new Rect(x, y, 640, lineHeight),
+                    $"Remote pos error: {lastError:F3} m  (max: {maxError:F3} m)",
+                    _style);
+                y += lineHeight;
+            }
+
+            if (npcCount > 0)
+            {
+                long npcTotalSamples = npcInterpSamples + npcExtrapSamples;
+                float npcExtrapRatio = npcTotalSamples > 0 ? (float)npcExtrapSamples / npcTotalSamples : 0f;
+                GUI.Label(new Rect(x, y, 640, lineHeight), $"NPC hard snaps: {npcHardSnaps}", _style);
+                y += lineHeight;
+                GUI.Label(
+                    new Rect(x, y, 640, lineHeight),
+                    $"NPC interp/extrap samples: {npcInterpSamples}/{npcExtrapSamples}  (extrap ratio: {npcExtrapRatio:P1})",
+                    _style);
+                y += lineHeight;
+                GUI.Label(
+                    new Rect(x, y, 640, lineHeight),
+                    $"NPC pos error: {npcLastError:F3} m  (max: {npcMaxError:F3} m)",
+                    _style);
+                y += lineHeight;
+            }
+
             return y;
         }
 

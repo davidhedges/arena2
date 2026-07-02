@@ -165,6 +165,16 @@ namespace Arena.Entity
         private void Update()
         {
             FlushPendingHitReactions();
+            TickNpcPresentation(Time.deltaTime);
+        }
+
+        private void TickNpcPresentation(float dt)
+        {
+            foreach (var entity in _npcs.Values)
+            {
+                if (!entity.IsDestroyed)
+                    entity.TickPresentation(dt);
+            }
         }
 
         private void OnSceneLoaded(Scene scene, LoadSceneMode mode)

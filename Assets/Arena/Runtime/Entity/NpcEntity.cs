@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using Arena.Combat;
 using Arena.Presentation;
 using Arena.Presentation.Targeting;
+using Arena.Simulation;
 using SpacetimeDB;
 using SpacetimeDB.Types;
 using UnityEngine;
@@ -21,12 +22,16 @@ namespace Arena.Entity
         private readonly Dictionary<string, int> _effectCounts = new(StringComparer.OrdinalIgnoreCase);
         private readonly Renderer[] _renderers;
         private readonly Dictionary<Material, Color> _baseMaterialColors = new();
+        private readonly RemotePresentationBuffer _presentation = new();
         private NpcInstance _instance;
         private NpcState? _state;
         private bool _isHighlighted;
         private bool _isSelected;
         private bool _hasPhysicsSample;
-        private float _lastPhysicsSampleTime;
+        private Vector3 _lastAuthoritativePosition;
+        private float _lastAuthoritativeYawRadians;
+        private bool _hasRenderedSample;
+        private Vector3 _lastRenderedPosition;
         private SelectedTargetIndicator? _selectedTargetIndicator;
 
         public bool IsDestroyed => GameObject == null;
@@ -40,6 +45,11 @@ namespace Arena.Entity
         public string DisplayName => _instance.DisplayName;
         public string TemplateId => _instance.TemplateId;
         public string Faction => _instance.Faction;
+        public int PresentationHardSnapCount => _presentation.HardSnapCount;
+        public int PresentationInterpolationSampleCount => _presentation.InterpolationSampleCount;
+        public int PresentationExtrapolationSampleCount => _presentation.ExtrapolationSampleCount;
+        public float PresentationLastPositionError => _presentation.LastPositionError;
+        public float PresentationMaxPositionErrorObserved => _presentation.MaxPositionErrorObserved;
         private static readonly Color TargetIndicatorHostile = new(1f, 0.02f, 0.015f, 1f);
         private static readonly Color TargetIndicatorNeutral = new(1f, 0.82f, 0.18f, 1f);
         private static readonly Color TargetIndicatorParty = new(0.2f, 0.75f, 0.3f, 1f);
@@ -113,30 +123,72 @@ namespace Arena.Entity
             RefreshHardCrowdControlAnimation();
         }
 
+        /// <summary>
+        /// Buffers an authoritative NpcPhysics row for interpolated rendering.
+        /// NPC velocity is not replicated, so snapshots carry zero velocity and
+        /// the buffer's capped extrapolation degrades to position-hold.
+        /// </summary>
         public void ApplyPhysics(NpcPhysics physics)
         {
             if (IsDestroyed)
                 return;
 
-            Vector3 previousPosition = GameObject.transform.position;
             Vector3 nextPosition = new(physics.PosX, physics.PosY, physics.PosZ);
-            GameObject.transform.SetPositionAndRotation(
-                nextPosition,
-                Quaternion.Euler(0f, physics.Yaw * Mathf.Rad2Deg, 0f));
+            _lastAuthoritativePosition = nextPosition;
+            _lastAuthoritativeYawRadians = physics.Yaw;
+            _presentation.Push(new PlayerSnapshot(
+                physics.PosX,
+                physics.PosY,
+                physics.PosZ,
+                0f,
+                0f,
+                0f,
+                physics.Yaw,
+                grounded: true,
+                lastProcessedTick: 0u));
 
-            float now = Time.time;
-            if (_hasPhysicsSample && IsAlive)
+            if (!_hasPhysicsSample)
             {
-                Vector2 previousHorizontal = new(previousPosition.x, previousPosition.z);
-                Vector2 nextHorizontal = new(nextPosition.x, nextPosition.z);
-                float horizontalDistance = Vector2.Distance(previousHorizontal, nextHorizontal);
-                float elapsed = Mathf.Max(now - _lastPhysicsSampleTime, Time.deltaTime, 1f / 30f);
-                float horizontalSpeed = horizontalDistance / elapsed;
+                _presentation.ForceRenderPose(nextPosition, physics.Yaw);
+                GameObject.transform.SetPositionAndRotation(
+                    nextPosition,
+                    Quaternion.Euler(0f, physics.Yaw * Mathf.Rad2Deg, 0f));
+                _hasPhysicsSample = true;
+            }
+        }
+
+        /// <summary>
+        /// Called once per frame by EntityRegistry: applies the interpolated
+        /// render pose and feeds locomotion speed from the rendered delta.
+        /// </summary>
+        public void TickPresentation(float dt)
+        {
+            if (IsDestroyed || !_hasPhysicsSample)
+                return;
+
+            int hardSnapsBefore = _presentation.HardSnapCount;
+            _presentation.Tick(
+                dt,
+                Time.realtimeSinceStartup,
+                _lastAuthoritativePosition,
+                _lastAuthoritativeYawRadians);
+
+            Vector3 renderPosition = _presentation.RenderPosition;
+            GameObject.transform.SetPositionAndRotation(
+                renderPosition,
+                Quaternion.Euler(0f, _presentation.RenderYawRadians * Mathf.Rad2Deg, 0f));
+
+            bool hardSnapped = _presentation.HardSnapCount != hardSnapsBefore;
+            if (_hasRenderedSample && IsAlive && !hardSnapped && dt > 0f)
+            {
+                Vector2 previousHorizontal = new(_lastRenderedPosition.x, _lastRenderedPosition.z);
+                Vector2 nextHorizontal = new(renderPosition.x, renderPosition.z);
+                float horizontalSpeed = Vector2.Distance(previousHorizontal, nextHorizontal) / dt;
                 _animationController.SetLocomotionSpeed(horizontalSpeed, IsCombatFaction());
             }
 
-            _hasPhysicsSample = true;
-            _lastPhysicsSampleTime = now;
+            _hasRenderedSample = true;
+            _lastRenderedPosition = renderPosition;
         }
 
         public void ApplyState(NpcState state)

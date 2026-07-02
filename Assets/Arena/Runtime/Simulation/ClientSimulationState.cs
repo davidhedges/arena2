@@ -3,11 +3,11 @@ using Arena.Input;
 namespace Arena.Simulation
 {
     /// <summary>
-    /// Stores authoritative snapshots and derives a remote-player visual pose
-    /// from a strict interpolation-first policy:
-    ///   - interpolation is the default
-    ///   - extrapolation is temporary, velocity-only, and capped
-    ///   - large discontinuities snap, small errors smooth
+    /// Stores authoritative snapshots and derives a remote-player visual pose.
+    /// The snapshot ring, render-target sampling, and smoothing/hard-snap
+    /// policy live in RemotePresentationBuffer (shared with NPCs); this class
+    /// delegates to one buffer instance and layers player-specific state on
+    /// top (movement context, special movement tracks, prediction inputs).
     ///
     /// For the local player, predicted state drives position/rotation and this
     /// class remains the container for authoritative snapshots.
@@ -83,35 +83,18 @@ namespace Arena.Simulation
             public float MaxMoveSpeedMultiplier { get; }
         }
 
-        private enum RemoteSampleMode
-        {
-            Fallback,
-            Interpolation,
-            Extrapolation,
-        }
-
-        private const int RemoteSnapshotCapacity = 12;
         private const int MovementContextCapacity = 24;
         private const int MovementRestrictionCapacity = 12;
-        private const float RemoteInterpolationDelaySeconds = 2.0f * MovementNetcodeConfig.FixedTickSeconds;
-        private const float RemoteMaxExtrapolationSeconds = 2.0f * MovementNetcodeConfig.FixedTickSeconds;
-        private const float RemoteSmoothingSpeed = 18f;
-        private const float RemoteHardSnapDistance = 2.0f;
-        private const float RemoteHardSnapYawRadians = 60f * Mathf.Deg2Rad;
 
         // Latest server state (authoritative)
         private Vector3 _serverPos;
         private Vector3 _serverVelocity;
         private float _serverYaw; // radians
 
-        // Render state for remote players.
-        private Vector3 _renderPos;
-        private float _renderYaw; // radians
+        // Snapshot ring + render pose for remote players.
+        private readonly RemotePresentationBuffer _remotePresentation = new();
         private uint _movementContextVersion;
 
-        private readonly PlayerSnapshot[] _remoteSnapshots = new PlayerSnapshot[RemoteSnapshotCapacity];
-        private int _remoteSnapshotStart;
-        private int _remoteSnapshotCount;
         private readonly MovementContextSample[] _movementContextSamples = new MovementContextSample[MovementContextCapacity];
         private int _movementContextStart;
         private int _movementContextCount;
@@ -127,13 +110,6 @@ namespace Arena.Simulation
         private uint _lastProcessedTick;
         private uint _authoritativeSnapshotVersion;
         private float _lastSnapshotReceivedTime;
-        private int _remoteHardSnapCount;
-        private int _remoteSmoothUpdateCount;
-        private int _remoteInterpolationSampleCount;
-        private int _remoteExtrapolationSampleCount;
-        private float _lastRemotePositionError;
-        private float _maxRemotePositionErrorObserved;
-        private float _lastRemoteExtrapolationSeconds;
         private SpecialMovementTrack _specialMovementTrack;
         private SpacetimeDB.Types.MovementActionState _movementActionState = new();
         private float _predictedRestrictionBaselineMoveSpeedMultiplier = 1.0f;
@@ -149,17 +125,17 @@ namespace Arena.Simulation
         public float HitRadius => LatestMovementContext.HitRadius;
         public float HitHeight => LatestMovementContext.HitHeight;
         public uint MovementContextTick => LatestMovementContext.Tick;
-        public int RemoteSnapshotCount => _remoteSnapshotCount;
-        public int RemoteHardSnapCount => _remoteHardSnapCount;
-        public int RemoteSmoothUpdateCount => _remoteSmoothUpdateCount;
-        public int RemoteInterpolationSampleCount => _remoteInterpolationSampleCount;
-        public int RemoteExtrapolationSampleCount => _remoteExtrapolationSampleCount;
-        public float LastRemotePositionError => _lastRemotePositionError;
-        public float MaxRemotePositionErrorObserved => _maxRemotePositionErrorObserved;
-        public float LastRemoteExtrapolationSeconds => _lastRemoteExtrapolationSeconds;
+        public int RemoteSnapshotCount => _remotePresentation.SnapshotCount;
+        public int RemoteHardSnapCount => _remotePresentation.HardSnapCount;
+        public int RemoteSmoothUpdateCount => _remotePresentation.SmoothUpdateCount;
+        public int RemoteInterpolationSampleCount => _remotePresentation.InterpolationSampleCount;
+        public int RemoteExtrapolationSampleCount => _remotePresentation.ExtrapolationSampleCount;
+        public float LastRemotePositionError => _remotePresentation.LastPositionError;
+        public float MaxRemotePositionErrorObserved => _remotePresentation.MaxPositionErrorObserved;
+        public float LastRemoteExtrapolationSeconds => _remotePresentation.LastExtrapolationSeconds;
         public float PredictedRestrictionBaselineMoveSpeedMultiplier => _predictedRestrictionBaselineMoveSpeedMultiplier;
-        public float RemoteInterpolationDelaySecondsForDebug => RemoteInterpolationDelaySeconds;
-        public float RemoteMaxExtrapolationSecondsForDebug => RemoteMaxExtrapolationSeconds;
+        public float RemoteInterpolationDelaySecondsForDebug => _remotePresentation.InterpolationDelaySeconds;
+        public float RemoteMaxExtrapolationSecondsForDebug => _remotePresentation.MaxExtrapolationSeconds;
 
         public void SetIsLocalPlayer(bool isLocal)
         {
@@ -206,8 +182,7 @@ namespace Arena.Simulation
             _serverPos = sampled.Position;
             _serverVelocity = Vector3.zero;
             _serverYaw = sampled.FacingYawRadians;
-            _renderPos = sampled.Position;
-            _renderYaw = sampled.FacingYawRadians;
+            _remotePresentation.ForceRenderPose(sampled.Position, sampled.FacingYawRadians);
             _lastSnapshotReceivedTime = Time.realtimeSinceStartup;
             _authoritativeSnapshotVersion++;
             _hasAny = true;
@@ -218,12 +193,10 @@ namespace Arena.Simulation
             long nowMs)
         {
             SampledSpecialMovementPose sampled = SpecialMovementRuntimeSampler.Sample(track, nowMs);
-            _renderPos = sampled.Position;
-            _renderYaw = sampled.FacingYawRadians;
+            _remotePresentation.ForceRenderPose(sampled.Position, sampled.FacingYawRadians);
 
-            _remoteSnapshotStart = 0;
-            _remoteSnapshotCount = 0;
-            AppendRemoteSnapshot(new PlayerSnapshot(
+            _remotePresentation.ResetSnapshots();
+            _remotePresentation.Push(new PlayerSnapshot(
                 sampled.Position.x,
                 sampled.Position.y,
                 sampled.Position.z,
@@ -256,12 +229,11 @@ namespace Arena.Simulation
             _lastProcessedTick = snapshot.LastProcessedTick;
             _lastSnapshotReceivedTime = snapshot.ReceivedTime;
             _authoritativeSnapshotVersion++;
-            AppendRemoteSnapshot(snapshot);
+            _remotePresentation.Push(snapshot);
 
             if (!_hasAny)
             {
-                _renderPos = _serverPos;
-                _renderYaw = _serverYaw;
+                _remotePresentation.ForceRenderPose(_serverPos, _serverYaw);
                 _hasAny = true;
             }
         }
@@ -403,45 +375,14 @@ namespace Arena.Simulation
                 long nowMs = System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
                 SampledSpecialMovementPose sampled =
                     SpecialMovementRuntimeSampler.Sample(_specialMovementTrack, nowMs);
-                _renderPos = sampled.Position;
-                _renderYaw = sampled.FacingYawRadians;
+                _remotePresentation.ForceRenderPose(sampled.Position, sampled.FacingYawRadians);
                 return;
             }
 
-            float renderTime = Time.realtimeSinceStartup - RemoteInterpolationDelaySeconds;
-            SampleRemoteRenderTarget(renderTime, out Vector3 targetPos, out float targetYaw, out RemoteSampleMode sampleMode);
-
-            float positionError = Vector3.Distance(_renderPos, targetPos);
-            float yawError = Mathf.Abs(DeltaAngleRadians(_renderYaw, targetYaw));
-            _lastRemotePositionError = positionError;
-            if (positionError > _maxRemotePositionErrorObserved)
-                _maxRemotePositionErrorObserved = positionError;
-
-            switch (sampleMode)
-            {
-                case RemoteSampleMode.Interpolation:
-                    _remoteInterpolationSampleCount++;
-                    break;
-                case RemoteSampleMode.Extrapolation:
-                    _remoteExtrapolationSampleCount++;
-                    break;
-            }
-
-            if (positionError >= RemoteHardSnapDistance || yawError >= RemoteHardSnapYawRadians)
-            {
-                _renderPos = targetPos;
-                _renderYaw = targetYaw;
-                _remoteHardSnapCount++;
-                return;
-            }
-
-            float t = Mathf.Min(1f, RemoteSmoothingSpeed * dt);
-            _renderPos = Vector3.Lerp(_renderPos, targetPos, t);
-            _renderYaw = LerpAngle(_renderYaw, targetYaw, t);
-            _remoteSmoothUpdateCount++;
+            _remotePresentation.Tick(dt, Time.realtimeSinceStartup, _serverPos, _serverYaw);
         }
 
-        public Vector3 GetRenderPosition() => _renderPos;
+        public Vector3 GetRenderPosition() => _remotePresentation.RenderPosition;
 
         /// <summary>
         /// Returns the raw server-authoritative position (no interpolation).
@@ -459,7 +400,7 @@ namespace Arena.Simulation
             return _lastProcessedTick + elapsed / tickSeconds;
         }
 
-        public float GetRenderYawDegrees() => _renderYaw * Mathf.Rad2Deg;
+        public float GetRenderYawDegrees() => _remotePresentation.RenderYawRadians * Mathf.Rad2Deg;
 
         public bool TryGetRemoteObserverSample(
             float now,
@@ -485,88 +426,21 @@ namespace Arena.Simulation
                 return true;
             }
 
-            float renderTime = now - RemoteInterpolationDelaySeconds;
-            SampleRemoteRenderTarget(
+            float renderTime = now - _remotePresentation.InterpolationDelaySeconds;
+            _remotePresentation.Sample(
                 renderTime,
+                _serverPos,
+                _serverYaw,
                 out Vector3 position,
                 out float yaw,
-                out RemoteSampleMode mode);
+                out RemotePresentationBuffer.SampleMode mode);
             sample = new RemoteObserverSample(
                 position,
                 yaw,
-                RemoteInterpolationDelaySeconds,
-                _lastRemoteExtrapolationSeconds,
-                mode == RemoteSampleMode.Extrapolation);
+                _remotePresentation.InterpolationDelaySeconds,
+                _remotePresentation.LastExtrapolationSeconds,
+                mode == RemotePresentationBuffer.SampleMode.Extrapolation);
             return true;
-        }
-
-        private void AppendRemoteSnapshot(PlayerSnapshot snapshot)
-        {
-            if (_remoteSnapshotCount < RemoteSnapshotCapacity)
-            {
-                int index = (_remoteSnapshotStart + _remoteSnapshotCount) % RemoteSnapshotCapacity;
-                _remoteSnapshots[index] = snapshot;
-                _remoteSnapshotCount++;
-                return;
-            }
-
-            _remoteSnapshots[_remoteSnapshotStart] = snapshot;
-            _remoteSnapshotStart = (_remoteSnapshotStart + 1) % RemoteSnapshotCapacity;
-        }
-
-        private void SampleRemoteRenderTarget(float renderTime, out Vector3 position, out float yaw, out RemoteSampleMode mode)
-        {
-            if (_remoteSnapshotCount <= 0)
-            {
-                position = _serverPos;
-                yaw = _serverYaw;
-                mode = RemoteSampleMode.Fallback;
-                _lastRemoteExtrapolationSeconds = 0.0f;
-                return;
-            }
-
-            PlayerSnapshot oldest = GetRemoteSnapshot(0);
-            if (_remoteSnapshotCount == 1 || renderTime <= oldest.ReceivedTime)
-            {
-                position = oldest.Position;
-                yaw = oldest.Yaw;
-                mode = RemoteSampleMode.Fallback;
-                _lastRemoteExtrapolationSeconds = 0.0f;
-                return;
-            }
-
-            for (int i = 1; i < _remoteSnapshotCount; i++)
-            {
-                PlayerSnapshot newer = GetRemoteSnapshot(i);
-                if (renderTime > newer.ReceivedTime)
-                    continue;
-
-                PlayerSnapshot older = GetRemoteSnapshot(i - 1);
-                float interval = Mathf.Max(0.0001f, newer.ReceivedTime - older.ReceivedTime);
-                float t = Mathf.Clamp01((renderTime - older.ReceivedTime) / interval);
-                position = Vector3.Lerp(older.Position, newer.Position, t);
-                yaw = LerpAngle(older.Yaw, newer.Yaw, t);
-                mode = RemoteSampleMode.Interpolation;
-                _lastRemoteExtrapolationSeconds = 0.0f;
-                return;
-            }
-
-            PlayerSnapshot latest = GetRemoteSnapshot(_remoteSnapshotCount - 1);
-            float extrapolation = Mathf.Clamp(
-                renderTime - latest.ReceivedTime,
-                0f,
-                RemoteMaxExtrapolationSeconds);
-
-            position = latest.Position + latest.Velocity * extrapolation;
-            yaw = latest.Yaw;
-            mode = RemoteSampleMode.Extrapolation;
-            _lastRemoteExtrapolationSeconds = extrapolation;
-        }
-
-        private PlayerSnapshot GetRemoteSnapshot(int index)
-        {
-            int arrayIndex = (_remoteSnapshotStart + index) % RemoteSnapshotCapacity;
-            return _remoteSnapshots[arrayIndex];
         }
 
         private MovementContextSample LatestMovementContext =>
@@ -652,17 +526,6 @@ namespace Arena.Simulation
                    a.MovementBlocked == b.MovementBlocked &&
                    Mathf.Approximately(a.MinMoveSpeedMultiplier, b.MinMoveSpeedMultiplier) &&
                    Mathf.Approximately(a.MaxMoveSpeedMultiplier, b.MaxMoveSpeedMultiplier);
-        }
-
-        private static float LerpAngle(float a, float b, float t)
-        {
-            float delta = DeltaAngleRadians(a, b);
-            return a + delta * t;
-        }
-
-        private static float DeltaAngleRadians(float a, float b)
-        {
-            return Mathf.Repeat(b - a + Mathf.PI, Mathf.PI * 2f) - Mathf.PI;
         }
     }
 }

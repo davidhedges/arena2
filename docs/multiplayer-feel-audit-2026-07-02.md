@@ -54,8 +54,31 @@ referenced but not repeated.
   a configurable ms — presentation-side only; caveats in the doc. Not done
   from the F2 contract: connection-quality dot / disconnect banner
   (contract item 4).
-- **F3, F4, F5 — not started** (F4/F5 gated on F2 measurements by design —
-  the measurements now exist, so F4/F5 are unblocked).
+- **F3 — implemented.** The remote-presentation core of
+  `ClientSimulationState` (snapshot ring, render-target sampling,
+  smoothing/hard-snap, the F2a counters) is extracted into
+  `Assets/Arena/Runtime/Simulation/RemotePresentationBuffer.cs`; remote
+  players delegate to one instance with unchanged constants (66 ms delay,
+  66 ms extrapolation cap, 2.0 m / 60° snap, k=18 smoother) and unchanged
+  counter semantics, so the overlay reads exactly what it read before.
+  `NpcEntity.ApplyPhysics` now pushes zero-velocity snapshots into a per-NPC
+  buffer instead of teleporting the transform (NPC velocity is not
+  replicated, so capped extrapolation degrades to position-hold), and
+  `EntityRegistry.Update` ticks NPC presentation each frame — applying the
+  render pose and feeding locomotion speed from the *rendered* delta (skipped
+  on hard-snap frames; idle NPCs now decay to a stop instead of holding the
+  last row-derived speed). Overlay: the Remote Presentation section gains an
+  NPC aggregate (hard snaps, interp/extrap ratio, last/max position error)
+  beside the player aggregate. Editor tests:
+  `Assets/Arena/Tests/Editor/RemotePresentationBufferTests.cs` (interpolation
+  midpoint, velocity-extrapolation cap, hard-snap threshold, sub-threshold
+  smoothing, NPC position-hold) — pure math via `PlayerSnapshot`'s new
+  explicit-receivedTime constructor. Non-goals held: no NPC velocity
+  replication, no navigation prediction, no `NpcPhysics` cadence change;
+  server-time keying is F4 and lands inside `RemotePresentationBuffer`.
+- **F4, F5 — not started** (gated on F2 measurements by design — the
+  measurements now exist, so F4/F5 are unblocked; with F3 landed, F4's
+  timeline change lives once in `RemotePresentationBuffer`).
 
 ## Executive Summary
 
