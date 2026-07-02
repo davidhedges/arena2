@@ -12,10 +12,13 @@ referenced but not repeated.
   A/B (extrap ratio + hard snaps, old vs new timeline, overlay semicolon
   toggle), the F5 Profile A checks (gap-closer press → instant windup,
   dash ~RTT later with no pose pop; rejected press unwinds windup +
-  cooldown + resource), and the F5 slice-2 contact-cue check (melee vs
-  strafing target under Profile A — count contact-cue-but-no-damage per
-  100 swings via the overlay falsePos counter; tune the cue down or flip
-  its flag off on that number), the F1 step-4 denial-toast check (force a
+  cooldown + resource), and the F5 slice-2 contact-cue check (melee vs a
+  moving target under shaping — there are no NPC patrols; the
+  single-operator moving target is a Playground-spawned hostile kobold,
+  which chases within its ~8 m aggro radius: kite it backward in a
+  straight line so it hovers at the melee range boundary, and count
+  contact-cue-but-no-damage per 100 swings via the overlay falsePos
+  counter; tune the cue down or flip its flag off on that number), the F1 step-4 denial-toast check (force a
   rejection under Profile A — e.g. press at 0 resource or during a
   server-side stagger — and confirm the toast above the action bar shows
   the server's reason text, mashing never stacks it, and it dismisses
@@ -182,7 +185,12 @@ referenced but not repeated.
   Still to do by hand: the live A/B under `docs/latency-testing.md`
   Profile A (republish the local module first if not done since F2b's
   `ping_clock` schema change) — compare extrap ratio and hard snaps old
-  vs new while strafing around a remote player and an NPC patrol.
+  vs new against a moving remote entity. Single-operator: kite a
+  Playground-spawned hostile kobold (NPCs have no patrols; hostiles
+  chase within ~8 m) and read the overlay's NPC aggregate — players and
+  NPCs share `RemotePresentationBuffer`, so NPC evidence exercises the
+  same timeline keying; add a second operator strafing a remote player
+  for the player aggregate when available.
   Non-goals held: adaptive delay (only after the conditioner A/B proves
   the win), local-player path, special-movement track sampling, send
   rates.
