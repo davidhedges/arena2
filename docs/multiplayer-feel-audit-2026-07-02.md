@@ -77,8 +77,9 @@ referenced but not repeated.
   `GapCloseBlocked` ("Path blocked"); the F5 slice-1 "rejected press
   (out of range / LOS)" wording does not apply to gap-closers.
 - **Design-review backlog (2026-07-03, flagged by live testing — owner has
-  ruled these disputed, not endorsed; adversarial review to follow the
-  audit closeout).**
+  ruled these disputed, not endorsed). Review delivered:
+  `docs/netcode-design-review-2026-07-03.md` (adversarial; target contracts
+  + ordered slices S1–S8 covering every item below).**
   (1) LOS validation is asymmetric: projectile deliveries check
   `has_line_of_sight`, gap-closers check only dash path/destination, and
   the model is per-delivery opt-in rather than a coherent policy.
