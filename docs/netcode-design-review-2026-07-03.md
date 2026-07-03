@@ -493,7 +493,12 @@ precede fairness work.
 | S8 | Bounded lag-compensation ring for attack reach/facing + favor-the-defender grace — design doc first, kill-switched | server | end-state hit fairness |
 
 Owner decisions needed before their slices: aerial gating ruling per
-archetype (§5, gates part of S2's test matrix).
+archetype (§5, gates part of S2's test matrix); LOS raycast geometry set —
+movement+query (today: wide props block sight beyond their visuals) vs
+query-only (needs arena query geometry authored first; see the S4
+near-wall entry and the choke-point comment in
+`server/src/world_collision.rs`). Also recorded in CLAUDE.md so it cannot
+be missed.
 Decided 2026-07-03: telegraph durations (S3 — scaled per template
 350/450/500/600 ms, strict impact-time reach re-check, player attacks
 rescoped out of the slice).

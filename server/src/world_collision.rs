@@ -765,6 +765,16 @@ pub fn raycast_world_with_layout_for_scene_with_stats(
         })
     };
 
+    // OPEN DESIGN RULING (S4 LOS unification, 2026-07-04 — owner decision
+    // pending): this query raycast (line of sight + projectile impact) tests
+    // the fat MOVEMENT boxes alongside the tight QUERY set, so wide props
+    // block sight beyond their visual — a tree's 0.8 m movement box blocks a
+    // sight line its authored 0.2 m LOS box would not ("my swing is blocked
+    // by a tree I can see past"). The clean contract is query-geometry-only
+    // here, but the playground arena has ZERO authored query geometry today,
+    // so flipping it would stop arena walls from blocking LOS until arena
+    // query boxes are authored. Do not "fix" one side without the other; see
+    // the S4 near-wall entry in docs/netcode-design-review-2026-07-03.md.
     if arena_seed.is_some() {
         raycast_movement_and_query_collision_boxes(
             &mut best,
