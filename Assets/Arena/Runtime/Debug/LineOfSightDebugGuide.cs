@@ -221,11 +221,14 @@ namespace Arena.Debugging
             }
 
             float distance = Vector3.Distance(origin, targetBase);
+            // This is the CLIENT mirror's verdict over bundled data — the
+            // server computes its own; label accordingly so a mirror bug is
+            // never mistaken for a server ruling again.
             string serverResult = serverCollisionData == null
-                ? "server collision data unavailable"
+                ? "bundled LOS data unavailable"
                 : anyServerClear
-                    ? "SERVER LOS: CLEAR"
-                    : $"SERVER LOS: BLOCKED by {ShortenBlocker(closestBlocker)}";
+                    ? "MIRROR LOS: CLEAR"
+                    : $"MIRROR LOS: BLOCKED by {ShortenBlocker(closestBlocker)}";
             string facingResult = targetInFacingArc ? "facing OK" : "target outside front 180 arc";
             string movementResult = HasCurrentMovementInput(local) ? "movement input active" : "no movement input";
             string targetName = string.IsNullOrWhiteSpace(target.DisplayName)

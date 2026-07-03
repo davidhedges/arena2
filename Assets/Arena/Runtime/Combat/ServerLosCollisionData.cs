@@ -800,7 +800,16 @@ namespace Arena.Combat
             float? best = null;
 
             if (Mathf.Abs(startDistance) <= radius + CollisionEpsilon)
-                ConsiderHit(ref best, 0f, maxDistance);
+            {
+                // Match the server exactly (world_collision.rs face test): a
+                // plane-proximity start only counts when the projected point
+                // lies INSIDE the triangle. Without this check, every large
+                // triangle's infinite plane reads as a t=0 block from anywhere
+                // in the world — the "open sand says no line of sight" bug.
+                Vector3 projectedStart = origin - n * startDistance;
+                if (PointInTriangle(projectedStart, a, b, c))
+                    ConsiderHit(ref best, 0f, maxDistance);
+            }
 
             if (Mathf.Abs(denom) > CollisionEpsilon)
             {
