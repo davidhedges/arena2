@@ -103,7 +103,7 @@ namespace Arena.Debugging
             GUILayout.Label("LOS Guide ([)", _headerStyle);
             GUILayout.Label("Server probes: caster 85% height -> target upper torso, center/side target offsets.", _style);
             GUILayout.Label("Targeted spells also require the target in the server-facing front 180 degrees.", _style);
-            GUILayout.Label("Line color uses bundled server collision data only: heightfield, exported boxes, query meshes.", _style);
+            GUILayout.Label("Line color uses bundled server LOS data only: heightfield, query boxes, query meshes (movement collision never blocks sight).", _style);
             GUILayout.Label(_status, _style);
             GUILayout.Label(_probeStatus, _style);
             GUILayout.EndArea();

@@ -79,8 +79,11 @@ namespace Arena.Combat
                 }
             }
 
+            // Query geometry only (owner ruling, S4): movement collision is
+            // authored oversized to keep capsules out and never blocks sight —
+            // mirror the server's raycast set exactly (terrain + query boxes +
+            // query meshes).
             List<ServerCollisionBox> boxes = new();
-            LoadBoxes($"SharedData/Worlds/{profile.DataKey}.collision.shared", boxes);
             GameplayCollisionLayoutFile? queryLayout =
                 LoadLayout($"SharedData/Worlds/{profile.DataKey}.query_collision.shared");
             if (queryLayout != null)
@@ -139,13 +142,6 @@ namespace Arena.Combat
         {
             TextAsset? asset = Resources.Load<TextAsset>(resourcePath);
             return asset == null ? null : JsonUtility.FromJson<GameplayCollisionLayoutFile>(asset.text);
-        }
-
-        private static void LoadBoxes(string resourcePath, List<ServerCollisionBox> boxes)
-        {
-            GameplayCollisionLayoutFile? layout = LoadLayout(resourcePath);
-            if (layout != null)
-                AddBoxes(layout, boxes);
         }
 
         private static void AddBoxes(GameplayCollisionLayoutFile layout, List<ServerCollisionBox> boxes)

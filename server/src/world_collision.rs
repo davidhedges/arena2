@@ -765,22 +765,19 @@ pub fn raycast_world_with_layout_for_scene_with_stats(
         })
     };
 
-    // OPEN DESIGN RULING (S4 LOS unification, 2026-07-04 — owner decision
-    // pending): this query raycast (line of sight + projectile impact) tests
-    // the fat MOVEMENT boxes alongside the tight QUERY set, so wide props
-    // block sight beyond their visual — a tree's 0.8 m movement box blocks a
-    // sight line its authored 0.2 m LOS box would not ("my swing is blocked
-    // by a tree I can see past"). The clean contract is query-geometry-only
-    // here, but the playground arena has ZERO authored query geometry today,
-    // so flipping it would stop arena walls from blocking LOS until arena
-    // query boxes are authored. Do not "fix" one side without the other; see
-    // the S4 near-wall entry in docs/netcode-design-review-2026-07-03.md.
+    // RULING (S4 LOS unification, decided by owner 2026-07-04): query
+    // raycasts (line of sight + projectile impact) test the AUTHORED query
+    // geometry only — terrain, arena layout, query boxes, query meshes.
+    // Fat MOVEMENT boxes never block sight or projectiles: they are authored
+    // oversized to keep capsules out (a tree's 0.8 m movement box vs its
+    // 0.2 m LOS box), and testing them here made props block sight lines
+    // their visuals do not. Props that should block sight author
+    // ArenaGameplayQueryCollision; seeded arenas block via their layout
+    // raycast plus whatever query geometry gets authored for them.
     if arena_seed.is_some() {
-        raycast_movement_and_query_collision_boxes(
+        raycast_gameplay_collision_boxes(
             &mut best,
             request,
-            gameplay_collision_boxes(),
-            gameplay_collision_broadphase(),
             gameplay_query_collision_boxes(),
             gameplay_query_collision_broadphase(),
             stats.as_deref_mut(),
@@ -794,11 +791,9 @@ pub fn raycast_world_with_layout_for_scene_with_stats(
         );
     } else {
         let profile = open_world_profile_from_name(open_world_scene_name);
-        raycast_movement_and_query_collision_boxes(
+        raycast_gameplay_collision_boxes(
             &mut best,
             request,
-            open_world_gameplay_collision_boxes(profile),
-            open_world_gameplay_collision_broadphase(profile),
             open_world_gameplay_query_collision_boxes(profile),
             open_world_gameplay_query_collision_broadphase(profile),
             stats.as_deref_mut(),
@@ -3416,37 +3411,6 @@ fn raycast_gameplay_collision_boxes(
     for collider in colliders {
         try_world_gameplay_box_hit(best, request, *collider);
     }
-}
-
-fn raycast_movement_and_query_collision_boxes(
-    best: &mut Option<WorldRayHit>,
-    request: WorldRaycastRequest,
-    movement_colliders: &[GameplayCollisionBox],
-    movement_broadphase: &GameplayBoxBroadphase,
-    query_colliders: &[GameplayCollisionBox],
-    query_broadphase: &GameplayBoxBroadphase,
-    stats: Option<&mut WorldRaycastStats>,
-) {
-    let mut stats = stats;
-    raycast_gameplay_collision_boxes(
-        best,
-        request,
-        movement_colliders,
-        movement_broadphase,
-        stats.as_deref_mut(),
-    );
-
-    if query_colliders.is_empty() {
-        return;
-    }
-
-    raycast_gameplay_collision_boxes(
-        best,
-        request,
-        query_colliders,
-        query_broadphase,
-        stats.as_deref_mut(),
-    );
 }
 
 fn raycast_gameplay_query_meshes(

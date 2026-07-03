@@ -493,12 +493,16 @@ precede fairness work.
 | S8 | Bounded lag-compensation ring for attack reach/facing + favor-the-defender grace — design doc first, kill-switched | server | end-state hit fairness |
 
 Owner decisions needed before their slices: aerial gating ruling per
-archetype (§5, gates part of S2's test matrix); LOS raycast geometry set —
-movement+query (today: wide props block sight beyond their visuals) vs
-query-only (needs arena query geometry authored first; see the S4
-near-wall entry and the choke-point comment in
-`server/src/world_collision.rs`). Also recorded in CLAUDE.md so it cannot
-be missed.
+archetype (§5, gates part of S2's test matrix).
+Decided 2026-07-04 (after a live playground session): LOS raycast geometry
+set — **query-only**. Query raycasts (LOS + projectile impact) test
+authored query geometry plus terrain and arena layout; movement boxes
+never block sight (they are authored oversized for capsule keep-out).
+Contract recorded in CLAUDE.md ("Combat Geometry Contract") and at the
+choke point in `server/src/world_collision.rs`; client mirror
+(`ServerLosCollisionData`) matches. Seeded arenas have no authored query
+geometry yet, so only their layout raycast blocks sight there until some
+is authored.
 Decided 2026-07-03: telegraph durations (S3 — scaled per template
 350/450/500/600 ms, strict impact-time reach re-check, player attacks
 rescoped out of the slice).
