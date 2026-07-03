@@ -33,6 +33,7 @@ Thumbs.db
 # Rust server build artifacts
 server/target/
 /arena game.app/
+/arenagame.app/
 *_BurstDebugInformation_DoNotShip/
 
 # Claude

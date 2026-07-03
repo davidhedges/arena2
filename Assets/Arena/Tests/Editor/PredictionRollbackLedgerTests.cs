@@ -1,5 +1,7 @@
 #nullable enable
 using System;
+using System.Linq;
+using System.Linq.Expressions;
 using System.Reflection;
 using NUnit.Framework;
 
@@ -102,10 +104,11 @@ namespace Arena.EditModeTests
             const long nowMs = 10_000L;
             object ledger = PredictActionStart("FIREBALL", 8_000L, true, 1_500L, nowMs);
 
-            string? rejectedKind = null;
-            Action<string> handler = kind => rejectedKind = kind;
+            _lastPredictionRejectedKind = null;
             EventInfo cueEvent = RequireType(CombatStateType).GetEvent("PredictionRejected")
                 ?? throw new InvalidOperationException("PredictionRejected event missing");
+            Delegate handler = CreatePredictionRejectedHandler(
+                cueEvent.EventHandlerType ?? throw new InvalidOperationException("PredictionRejected event handler type missing"));
             cueEvent.AddEventHandler(null, handler);
             try
             {
@@ -116,7 +119,7 @@ namespace Arena.EditModeTests
                 cueEvent.RemoveEventHandler(null, handler);
             }
 
-            Assert.That(rejectedKind, Is.EqualTo("FIREBALL"), "denial cue must report the action kind");
+            Assert.That(_lastPredictionRejectedKind, Is.EqualTo("FIREBALL"), "denial cue must report the action kind");
         }
 
         [Test]
@@ -135,6 +138,25 @@ namespace Arena.EditModeTests
         // ---------------------------------------------------------------
         // Reflection plumbing (test asmdef cannot reference Assembly-CSharp)
         // ---------------------------------------------------------------
+
+        private string? _lastPredictionRejectedKind;
+
+        private Delegate CreatePredictionRejectedHandler(Type eventHandlerType)
+        {
+            MethodInfo invoke = eventHandlerType.GetMethod("Invoke")
+                ?? throw new InvalidOperationException($"{eventHandlerType.FullName}.Invoke missing");
+            ParameterExpression[] parameters = invoke.GetParameters()
+                .Select(parameter => Expression.Parameter(parameter.ParameterType, parameter.Name))
+                .ToArray();
+            if (parameters.Length == 0 || parameters[0].Type != typeof(string))
+                throw new InvalidOperationException("PredictionRejected must pass action kind as the first string argument.");
+
+            Expression assignKind = Expression.Assign(
+                Expression.Field(Expression.Constant(this), nameof(_lastPredictionRejectedKind)),
+                parameters[0]);
+            return Expression.Lambda(eventHandlerType, Expression.Block(assignKind, Expression.Empty()), parameters)
+                .Compile();
+        }
 
         private object PredictActionStart(
             string actionKind,

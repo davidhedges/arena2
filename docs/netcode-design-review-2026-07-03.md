@@ -102,41 +102,76 @@ keep the toast. A denied action must *read* as denied: wind-down or flinch,
 not a follow-through swing. (The gap-close "jump-press shows a full swing
 then a toast" observed live is this defect plus §5's disputed rule stacked.)
 
-## 4. Latency adaptation is binary, and its clock is the wrong one [DEFECT]
+## 4. Local input prediction under latency — why delayed play is unplayable [DEFECT]
 
-**What exists.** Movement input lead is keyed to endpoint **kind** — 8 ticks
-remote, 2 ticks local/custom — with no RTT measurement anywhere in the loop
-(`MovementNetDriver.ResolveDesiredServerInputLeadTicks`). The server-tick
-estimate is anchored to row *arrival* (`EstimateAuthoritativeTick`), lagging
-truth by the downstream one-way delay, while a precise midpoint clock
-(`ArenaServerClock`, F2b) sits unused by movement. The fallback path eats
-jumps (`step_intent.jump = false`). The F4 server-time timeline engages the
-moment any clock estimate exists — observed live starting a session at
-**−26 ticks buffer depth** (extrapolation storm) while the estimate
-converged. Remote combat animations fast-forward at most 200 ms
-(`CombatAnimationRemoteTiming.MaxRemoteCatchupSeconds`) and are permanently
-late beyond that.
+This is the section that answers "why does any added delay feel horrible."
+The short version: the input pipeline has **no feedback loop anywhere** — a
+fixed lead guesses, a lagging clock aims the guess, the server silently
+papers over every miss, and the correction presentation converts the
+resulting steady error stream into continuous elastic yanking.
 
-**Consequences.** Local play tolerates ~0 added RTT before command
-starvation (verified live: unplayable at +40/+40 ms); real players above
-~200–230 ms RTT hit the identical cliff with no degradation curve; every
-remote player pays the full 264 ms server-sim lag regardless of actual RTT.
+**Every knob in the pipeline, with a verdict**
+(`MovementNetcodeConfig.cs`, `MovementNetDriver.cs`,
+`LocalMovementPredictionDriver.cs`, `game_loop.rs`):
 
-**Target contract.**
-- **RTT-adaptive input lead**, bounded [2..10] ticks, driven by measured ack
-  lag percentile (p95 + 1 tick), sticky (adapt on sustained change, not
-  jitter). Everyone gets the smallest lead their connection affords; nobody
-  falls off a cliff. Update the pinned constants test
-  (`MovementRegressionTests` #33) deliberately when this lands.
-- **One clock.** Movement tick estimation re-anchors on the precise
-  `ArenaServerClock` estimate when available (arrival-anchored as fallback).
-- **Warmup gating.** The server-time presentation timeline (and any adaptive
-  delay) engages only after `HasPreciseSample` and a non-negative measured
-  buffer depth — never during clock convergence.
-- **Don't eat jumps:** buffer an unconsumed jump flag one extra tick
-  server-side instead of clearing it on fallback.
-- **Dev lead override** (env var) so shaped-local testing can exercise the
-  remote path — removes the harness blind spot recorded 2026-07-03.
+| Knob / behavior | Today | Verdict |
+|---|---|---|
+| `FixedTickMilliseconds` | 33 (30 Hz) | Sound. Genre-standard; not a contributor. |
+| `DesiredServerInputLeadTicks` (local/custom) | 2 (~66 ms) | Wrong **in kind**, not just in value. No static number is correct — the correct lead is a function of measured delivery that changes mid-session. As a static value it's also too thin: one editor hitch + frame alignment consumes it even on loopback. |
+| `RemoteDesiredServerInputLeadTicks` | 8 (~264 ms) | Doubly wrong: a permanent ~8-tick tax on every good connection (your server-side character lags your intent by ~264 ms even at 20 ms RTT — felt by everyone *else*, and by combat validation) and a hard cliff above ~230 ms RTT. The endpoint-kind switch should not exist. |
+| `MaxPredictionLeadTicks` = 12 + emergency resync | clear history, re-anchor | The bound is fine; the **response** is wrong — discarding history teleports the player. Degrade before discarding. |
+| `MaxTicksToSendPerFrame` / `MaxLocalPredictionTicksPerFrame` = 5 | burst caps | Fine. |
+| `MaxPendingCommands` = 96 | history bound | Irrelevant in practice. |
+| Missing-command fallback | hold last intent, force `jump = false` | Acceptable as a *rare* event; under any added delay it is the **steady state** (observed live: every tick). Eating jumps is a plain bug — buffer an unconsumed jump one extra tick. |
+| Server-tick estimate | arrival-anchored elapsed time (`EstimateAuthoritativeTick`) | Wrong clock: biased low by the downstream one-way delay, wobbled by delivery jitter, while the precise `ArenaServerClock` midpoint estimate (F2b) sits unused by movement. |
+| Correction presentation | warn ≥ 0.25 m, hard snap ≥ 2.0 m, ~60 ms position half-life | Tuned for *rare* mispredicts. Under a steady error stream, a 60 ms half-life turns every 30 Hz reconcile into a visible yank — this is the literal texture of the "horrible" shaped-play feel. |
+
+**The failure chain, end to end** (verified live at +40/+40 ms): added delay
+pushes commands past their tick (thin lead + low-biased estimate) → server
+falls back to stale intent **every tick** → authoritative rows disagree with
+prediction by 0.3–0.5 m at 30 Hz → every reconcile replays and drags the
+presentation through the 60 ms half-life → continuous elastic rubberbanding,
+plus vanished jumps. No single value is "suboptimal" — the *architecture*
+(open-loop guess + silent fallback) is the defect, which is why retuning
+constants cannot fix it.
+
+**Target design: a closed feedback loop, not bigger constants.** The
+best-known contract for tick-buffered input (the Overwatch model, adapted to
+SpacetimeDB):
+
+1. **Server tells the truth per tick.** The server already knows, at consume
+   time, whether it popped a real command or fell back, and how many commands
+   were buffered. Publish both on the existing ack surface (two small fields
+   beside `last_processed_tick` — the one schema change this needs).
+2. **Client holds a setpoint.** A control loop keeps server buffer occupancy
+   at ~1–2 commands: starvation raises the lead immediately; surplus lowers
+   it slowly (asymmetric on purpose). Equivalently implementable as ±few-%
+   input-clock scaling. RTT steps, jitter, and TCP stalls become smooth lead
+   adjustments instead of cliffs.
+3. **No endpoint-kind switch, no magic numbers.** Local and remote run the
+   identical loop: loopback converges to ~2 ticks, a 250 ms connection
+   converges to what it needs, and everyone pays the *minimum* server-sim lag
+   their connection affords — which also shrinks the attacker-lag input to
+   §1's fairness problem. The shaped-local harness becomes representative
+   automatically (this deletes the 2026-07-03 caveat and the dev-override
+   idea — the loop subsumes both).
+4. **Degradation ladder.** Starvation → raise lead (invisible locally);
+   sustained overrun of the 12-tick bound → throttle input production;
+   genuine state divergence → one honest hard resync. Today the pipeline has
+   only the last rung.
+5. **Correction presentation spends a budget.** Reconcile errors below a
+   threshold (~0.3 m) decay at a capped rate (cm/s) instead of half-life
+   pulls; larger errors snap once, honestly. All presentation numbers here
+   are starting points to be tuned against S1's instrumentation, not
+   authored truth.
+
+**Related clock/timeline fixes.** Movement tick estimation re-anchors on the
+precise `ArenaServerClock` estimate (arrival-anchored only as fallback); the
+F4 server-time timeline engages only after `HasPreciseSample` and a
+non-negative measured buffer depth (observed live: it currently engages
+during clock convergence — a session started at −26 ticks depth in an
+extrapolation storm); remote combat animation catch-up stays clamped at
+200 ms (`CombatAnimationRemoteTiming`) but should key off the same clock.
 
 ## 5. Aerial gating — disputed rule, badly served by its own presentation [GAP]
 
@@ -200,9 +235,12 @@ A/B and for any adaptive-delay tuning.
 
 ## Migration slices, in order
 
-Each slice is bounded, independently shippable, and lands with editor tests
-plus the evidence instrumentation to judge it. Order chosen so measurement
-precedes tuning and feel wins precede fairness work.
+Each slice is bounded, independently shippable, and lands with the evidence
+instrumentation to judge it. On tests: the existing suite is churn-era noise,
+not spec — a pinned test is never an argument against a design change, and
+new tests are written only once a slice's contract has stabilized, not
+during churn. Order chosen so measurement precedes tuning and feel wins
+precede fairness work.
 
 | # | Slice | Surface | Unblocks |
 |---|-------|---------|----------|

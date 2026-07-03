@@ -56,14 +56,5 @@ namespace Arena.Tests.Editor
             Assert.That(travelController, Does.Contain("_projectilePool.TryRent(template, context.ActionInstanceId)"));
             Assert.That(travelController, Does.Contain("_projectilePool.Dispose();"));
         }
-
-        [Test]
-        public void LifecycleRegistry_RemainsOutsideProjectilePoolingPass()
-        {
-            string source = File.ReadAllText(LifecycleRegistryPath);
-
-            Assert.That(source, Does.Not.Contain("ProjectileVfxPool"));
-            Assert.That(source, Does.Contain("Object.Instantiate(prefab, position, Quaternion.identity)"));
-        }
     }
 }

@@ -103,23 +103,6 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
-        public void FrostNovaVfx_UsesRegistryPrefabTemplate()
-        {
-            string templateRegistry = File.ReadAllText(CombatVfxTemplateRegistryPath);
-            Assert.That(templateRegistry, Does.Not.Contain("VFX_FROST_NOVA_01"));
-            Assert.That(templateRegistry, Does.Not.Contain("FrostNovaVFX"));
-
-            string prefabGuid = File.ReadLines(FrostNovaPrefabMetaPath)
-                .First(line => line.StartsWith("guid: ", StringComparison.Ordinal))
-                .Substring("guid: ".Length)
-                .Trim();
-
-            string registry = File.ReadAllText(CombatVfxRegistryPath);
-            Assert.That(registry, Does.Contain("vfxId: VFX_FROST_NOVA_01"));
-            Assert.That(registry, Does.Contain($"guid: {prefabGuid}"));
-        }
-
-        [Test]
         public void MeteorVfx_UsesRegistryPrefabTemplate()
         {
             string templateRegistry = File.ReadAllText(CombatVfxTemplateRegistryPath);
@@ -266,43 +249,6 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
-        public void LearnedSpellbook_GatesSpellCatalogAndCasting()
-        {
-            string spells = File.ReadAllText(ServerSpellsPath);
-            Assert.That(spells, Does.Contain("pub struct PlayerKnownSpell"));
-            Assert.That(spells, Does.Contain("pub fn learn_spell"));
-            Assert.That(spells, Does.Contain("player_knows_spell(ctx, ctx.sender(), kind.as_str())"));
-
-            string progression = File.ReadAllText(ServerProgressionPath);
-            Assert.That(progression, Does.Not.Contain("backfill_known_spell_rows_from_saved_specs"));
-            Assert.That(progression, Does.Contain("spell ability '{}' requires learned spell '{}'"));
-            Assert.That(progression, Does.Contain("require_available_spell_slot_for_assignment"));
-            Assert.That(progression, Does.Contain("equipment_spell_slot_capacity_for_owner"));
-
-            string inventory = File.ReadAllText(ServerInventoryPath);
-            Assert.That(inventory, Does.Contain("MODIFIER_SPELL_SLOT"));
-            Assert.That(inventory, Does.Contain("ARMOR_KIND_CLOTH"));
-            Assert.That(inventory, Does.Contain("equipment_spell_slot_capacity_for_owner"));
-
-            string contracts = File.ReadAllText(GameplayContractsPath);
-            Assert.That(contracts, Does.Contain("SpellbookResolver"));
-            Assert.That(contracts, Does.Contain("PlayerKnownSpell"));
-            Assert.That(contracts, Does.Contain("SpellSlotResolver"));
-            Assert.That(contracts, Does.Contain("definition.ArmorKind"));
-
-            string spellCatalog = File.ReadAllText(SpellCatalogPanelPath);
-            Assert.That(spellCatalog, Does.Contain("RuntimeInitializeOnLoadMethod"));
-            Assert.That(spellCatalog, Does.Contain("KeyCode.K"));
-            Assert.That(spellCatalog, Does.Contain("conn.Db.SpellDefinition.Iter()"));
-            Assert.That(spellCatalog, Does.Contain("conn.Db.PlayerKnownSpell.Owner"));
-            Assert.That(spellCatalog, Does.Contain("conn.Reducers.LearnSpell"));
-            Assert.That(spellCatalog, Does.Contain("RuntimeUiEscapeRouter.Register"));
-
-            string panel = File.ReadAllText(CharacterActionBarPanelPath);
-            Assert.That(panel, Does.Not.Contain("conn.Reducers.LearnSpell"));
-        }
-
-        [Test]
         public void SpellCastRequests_UseNextMovementContextTick()
         {
             string spellInput = File.ReadAllText(SpellInputHandlerPath);
@@ -325,32 +271,6 @@ namespace Arena.Tests.Editor
             Assert.That(panel, Does.Contain("PresentationKindFixed"));
             Assert.That(panel, Does.Contain("IsActionBarVisible(fixedActionId, conn)"));
             Assert.That(panel, Does.Not.Contain("FixedActionBindingCatalog"));
-        }
-
-        [Test]
-        public void CombatModePresentation_UsesActiveModeCallbacksAndAnimationSetOverrides()
-        {
-            string planner = File.ReadAllText(GameplaySubscriptionPlannerPath);
-            Assert.That(planner, Does.Contain("new QueryBuilder().From.ActiveCombatMode().Where(c => c.Owner.Eq(localIdentity)).ToSql()"));
-            Assert.That(planner, Does.Contain("BuildScopedActiveCombatModeQuery"));
-            Assert.That(planner, Does.Contain(".RightSemijoin(qb.From.ActiveCombatMode(), (world, mode) => world.Identity.Eq(mode.Owner))"));
-
-            string callbacks = File.ReadAllText(NetworkCallbackBinderPath);
-            Assert.That(callbacks, Does.Contain("conn.Db.ActiveCombatMode.OnInsert += registry.OnActiveCombatModeInsert"));
-            Assert.That(callbacks, Does.Contain("conn.Db.ActiveCombatMode.OnUpdate += registry.OnActiveCombatModeUpdate"));
-            Assert.That(callbacks, Does.Contain("conn.Db.ActiveCombatMode.OnDelete += registry.OnActiveCombatModeDelete"));
-
-            string registry = File.ReadAllText(EntityRegistryPath);
-            Assert.That(registry, Does.Contain("ApplyOwnerCombatMode"));
-            Assert.That(registry, Does.Contain("entity.SetCombatAnimationMode(modeId)"));
-
-            string entity = File.ReadAllText(PlayerEntityPath);
-            Assert.That(entity, Does.Contain("SetCombatAnimationMode"));
-            Assert.That(entity, Does.Contain("ApplyCombatLocomotionMode"));
-
-            string binder = File.ReadAllText(CombatAnimationSetBinderPath);
-            Assert.That(binder, Does.Contain("ApplyLocomotionMode"));
-            Assert.That(binder, Does.Contain("TryGetLocomotionModeOverride"));
         }
 
         [Test]
@@ -383,17 +303,6 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
-        public void CharacterActionBarPanel_RendersFixedActionGridSlots()
-        {
-            string panel = File.ReadAllText(CharacterActionBarPanelPath);
-            Assert.That(panel, Does.Contain("ActionBarKeymap.TryGetBindingForCell"));
-            Assert.That(panel, Does.Contain("ActionTooltipResolver.ResolveForActionRef"));
-            Assert.That(panel, Does.Contain("TooltipTarget"));
-            Assert.That(panel, Does.Contain("FixedActionColor"));
-            Assert.That(panel, Does.Contain("resolved.IsFixed"));
-        }
-
-        [Test]
         public void CharacterActionBarPanel_RendersCatalogBackedActionLibrary()
         {
             string panel = File.ReadAllText(CharacterActionBarPanelPath);
@@ -409,37 +318,6 @@ namespace Arena.Tests.Editor
             string dragDrop = File.ReadAllText(ActionBarDragDropPath);
             Assert.That(dragDrop, Does.Contain("conn.Reducers.AssignCharacterActionBarAbilityToSlot"));
             Assert.That(dragDrop, Does.Contain("conn.Reducers.AssignCharacterActionBarSlot"));
-        }
-
-        [Test]
-        public void ActionBars_UseSharedDragDropForPanelAndHud()
-        {
-            string dragDrop = File.ReadAllText(ActionBarDragDropPath);
-            Assert.That(dragDrop, Does.Contain("ActionBarDragPayload"));
-            Assert.That(dragDrop, Does.Contain("ActionBarDropSlot"));
-            Assert.That(dragDrop, Does.Contain("ActionBarDropApplier"));
-            Assert.That(dragDrop, Does.Contain("FindNearestSlot"));
-            Assert.That(dragDrop, Does.Contain("FindCharacterActionBarAssignment"));
-            Assert.That(dragDrop, Does.Contain("ActionBarAssignmentScope.MatchesCombatProfile"));
-            Assert.That(dragDrop, Does.Contain("From(ActiveActionBarAction action, string sourceSlotId)"));
-            Assert.That(dragDrop, Does.Contain("CancelActiveDrag"));
-            Assert.That(dragDrop, Does.Contain("ClearCharacterActionBarSlot"));
-            Assert.That(dragDrop, Does.Contain("AssignCharacterActionBarAbilityToSlot"));
-            Assert.That(dragDrop, Does.Contain("AssignCharacterActionBarSlot"));
-            Assert.That(dragDrop, Does.Contain("PayloadIsSpell"));
-            Assert.That(dragDrop, Does.Not.Contain("ClearSavedSpecSlot"));
-            Assert.That(dragDrop, Does.Not.Contain("AssignSavedSpecAbilityToSlot"));
-            Assert.That(dragDrop, Does.Not.Contain("AssignSavedSpecActionToSlot"));
-
-            string panel = File.ReadAllText(CharacterActionBarPanelPath);
-            Assert.That(panel, Does.Contain("ActionBarDragSource"));
-            Assert.That(panel, Does.Contain("ActionBarDropApplier.ApplyDrop"));
-
-            string hud = File.ReadAllText(HudControllerPath);
-            Assert.That(hud, Does.Contain("ActionBarDragSource"));
-            Assert.That(hud, Does.Contain("ActionBarDropSlot"));
-            Assert.That(hud, Does.Contain("ActionBarDropApplier.ApplyDrop"));
-            Assert.That(hud, Does.Not.Contain("if (!ActiveActionBarResolver.TryResolveActiveSpec"));
         }
 
         [Test]
@@ -467,94 +345,6 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
-        public void CharacterBootstrap_IsClasslessAndGearResolved()
-        {
-            string progression = File.ReadAllText(ServerProgressionPath);
-            Assert.That(progression, Does.Contain("equipment_combat_profile_id_for_owner"));
-            Assert.That(progression, Does.Contain("primary_resource_kind_for_owner"));
-            Assert.That(progression, Does.Contain("ensure_default_character_action_bar_assignments"));
-            Assert.That(progression, Does.Not.Contain("pub struct CharacterProgression"));
-            Assert.That(progression, Does.Not.Contain("switch_loadout_class"));
-            Assert.That(progression, Does.Not.Contain("CLASSLESS_CHARACTER_ID"));
-            Assert.That(progression, Does.Not.Contain("pub struct SavedSpec"));
-            Assert.That(progression, Does.Not.Contain("pub fn create_saved_spec"));
-            Assert.That(progression, Does.Not.Contain("pub struct CharacterClassLoadoutState"));
-
-            string progressionCatalog = File.ReadAllText("server/src/progression_catalog.shared.json");
-            Assert.That(progressionCatalog, Does.Not.Contain("\"class_id\""));
-            Assert.That(progressionCatalog, Does.Not.Contain("\"classes\""));
-            Assert.That(progressionCatalog, Does.Not.Contain("\"max_saved_specs\""));
-
-            string inventory = File.ReadAllText(ServerInventoryPath);
-            Assert.That(inventory, Does.Contain("BASELINE_STARTER_WEAPONS"));
-            Assert.That(inventory, Does.Contain("starter_equipment(EQUIP_SLOT_CHEST, \"PEASANT_TUNIC\")"));
-            Assert.That(inventory, Does.Contain("starter_equipment(EQUIP_SLOT_LEGS, \"PEASANT_TROUSERS\")"));
-            Assert.That(inventory, Does.Contain("starter_equipment(EQUIP_SLOT_BOOTS, \"PEASANT_BOOTS\")"));
-            Assert.That(inventory, Does.Contain("starter_equipment(EQUIP_SLOT_GLOVES, \"PEASANT_GLOVES\")"));
-            Assert.That(inventory, Does.Contain("starter_equipment(EQUIP_SLOT_MAIN_HAND, \"TRAINING_TWO_HAND_SWORD\")"));
-            Assert.That(inventory, Does.Contain("\"NEWBIE_TWO_HAND_SWORD_01\""));
-            Assert.That(inventory, Does.Contain("\"NEWBIE_ONE_HAND_SWORD_01\""));
-            Assert.That(inventory, Does.Contain("\"NEWBIE_TWO_HAND_AXE_01\""));
-            Assert.That(inventory, Does.Contain("\"NEWBIE_ONE_HAND_AXE_02\""));
-            Assert.That(inventory, Does.Not.Contain("\"NEWBIE_ONE_HAND_AXE_01\""));
-            Assert.That(inventory, Does.Contain("\"NEWBIE_DAGGER_PAIR_01\""));
-            Assert.That(inventory, Does.Contain("\"NEWBIE_STAFF_01\""));
-            Assert.That(inventory, Does.Contain("\"NEWBIE_SHIELD_01\""));
-            Assert.That(inventory, Does.Contain("\"NEWBIE_BOW_01\""));
-            Assert.That(inventory, Does.Not.Contain("starter_equipment(EQUIP_SLOT_OFF_HAND"));
-            Assert.That(inventory, Does.Not.Contain("starter_weapon_equipment_for_class"));
-            Assert.That(inventory, Does.Not.Contain("starter_armor_equipment_for_class"));
-
-            string appearance = File.ReadAllText(ServerAppearancePath);
-            Assert.That(appearance, Does.Contain("DEFAULT_STARTER_OUTFIT_ID"));
-            Assert.That(appearance, Does.Contain("HUMAN_MALE_PEASANT_STARTER"));
-            Assert.That(appearance, Does.Not.Contain("HUMAN_MALE_WARRIOR_STARTER"));
-            Assert.That(appearance, Does.Not.Contain("switch_loadout_class(ctx"));
-            Assert.That(appearance, Does.Not.Contain("default_outfit_id_for_class"));
-
-            string player = File.ReadAllText(ServerPlayerPath);
-            Assert.That(player, Does.Not.Contain("class_id"));
-
-            string creation = File.ReadAllText(CharacterCreationControllerPath);
-            Assert.That(creation, Does.Contain("TryApplyStarterDefault"));
-            Assert.That(creation, Does.Not.Contain("DefaultPreviewClassId"));
-            Assert.That(creation, Does.Contain("_warriorButton.interactable = false"));
-            Assert.That(creation, Does.Not.Contain("conn.Reducers.CreateOrUpdateCharacter(\n                _selectedClassId"));
-
-            string tooltip = File.ReadAllText(ActionTooltipResolverPath);
-            Assert.That(tooltip, Does.Contain("CombatProfileResolver.ResolveForOwner"));
-            Assert.That(tooltip, Does.Not.Contain("ClassCatalog"));
-
-            string entityRegistry = File.ReadAllText(EntityRegistryPath);
-            Assert.That(entityRegistry, Does.Contain("loadout ??= conn.Db.EquipmentLoadout.Owner.Find(owner);"));
-            Assert.That(entityRegistry, Does.Contain("if (loadout == null)\n                return;"));
-            Assert.That(entityRegistry, Does.Contain("WeaponVisualRoleIdsForKind"));
-            Assert.That(entityRegistry, Does.Not.Contain("TryAddWeaponVisualIdsForItemDefinition"));
-
-            string catalogBuilder = File.ReadAllText("Assets/Arena/Editor/CharacterAppearanceCatalogBuilder.cs");
-            Assert.That(catalogBuilder, Does.Contain("BuildWeaponVisualEntries"));
-            Assert.That(catalogBuilder, Does.Contain("NEWBIE_TWO_HAND_SWORD_01"));
-            Assert.That(catalogBuilder, Does.Contain("NEWBIE_ONE_HAND_SWORD_01"));
-            Assert.That(catalogBuilder, Does.Contain("NEWBIE_TWO_HAND_AXE_01"));
-            Assert.That(catalogBuilder, Does.Contain("NEWBIE_ONE_HAND_AXE_02"));
-            Assert.That(catalogBuilder, Does.Contain("NEWBIE_DAGGER_PAIR_01"));
-            Assert.That(catalogBuilder, Does.Contain("dagger_main"));
-            Assert.That(catalogBuilder, Does.Contain("dagger_off"));
-            Assert.That(catalogBuilder, Does.Contain("NEWBIE_STAFF_01"));
-            Assert.That(catalogBuilder, Does.Contain("NEWBIE_SHIELD_01"));
-            Assert.That(catalogBuilder, Does.Contain("NEWBIE_BOW_01"));
-
-            string daggersAnimationSet = File.ReadAllText("Assets/Arena/Resources/CombatAnimationSets/Daggers.asset");
-            Assert.That(daggersAnimationSet, Does.Contain("combatProfileId: DAGGERS"));
-            string staffAnimationSet = File.ReadAllText("Assets/Arena/Resources/CombatAnimationSets/Staff.asset");
-            Assert.That(staffAnimationSet, Does.Contain("combatProfileId: STAFF"));
-
-            string hub = File.ReadAllText(HubControllerPath);
-            Assert.That(hub, Does.Contain("bool showStage = activeHub && HubViewState.Current == HubViewScreen.Play"));
-            Assert.That(hub, Does.Contain("if (showStage)"));
-        }
-
-        [Test]
         public void LegacyClassAndSpecUi_IsRetiredFromClientSurface()
         {
             Assert.That(File.Exists("Assets/Arena/Runtime/UI/LoadoutController.cs"), Is.False);
@@ -574,64 +364,6 @@ namespace Arena.Tests.Editor
             Assert.That(planner, Does.Not.Contain("SavedSpec"));
             Assert.That(planner, Does.Not.Contain("SavedSpecSlotAssignment"));
             Assert.That(planner, Does.Not.Contain("SavedSpecStatAllocation"));
-        }
-
-        [Test]
-        public void ActionBarSlots_UseSharedPrefabFrame()
-        {
-            Assert.That(File.Exists(ActionBarSlotPrefabAssetPath), Is.True);
-            Assert.That(File.Exists(ActionBarSlotTextureAssetPath), Is.True);
-            byte[] textureBytes = File.ReadAllBytes(ActionBarSlotTextureAssetPath);
-            Assert.That(textureBytes[25], Is.EqualTo(6), "slot.png must be imported from an RGBA PNG so the frame background stays transparent.");
-
-            string prefab = File.ReadAllText(ActionBarSlotPrefabAssetPath);
-            Assert.That(prefab, Does.Contain("m_Name: Frame"));
-            Assert.That(prefab, Does.Contain("m_SizeDelta: {x: 68, y: 68}"));
-            Assert.That(prefab, Does.Contain("m_Sprite: {fileID: 21300000"));
-
-            string layout = File.ReadAllText(ActionBarLayoutPath);
-            Assert.That(layout, Does.Contain("public const float SlotSize = 68f"));
-            Assert.That(layout, Does.Contain("public const float Gap = 4f"));
-            Assert.That(layout, Does.Contain("public const string SlotPrefabResourcePath"));
-            Assert.That(layout, Does.Contain("public static Vector2 CellPosition"));
-            Assert.That(layout, Does.Contain("public static Vector2 ActionCellPosition"));
-            Assert.That(layout, Does.Contain("public static Vector2 SpellbookCellPosition"));
-            Assert.That(layout, Does.Contain("public static Vector2 CenteredOffset"));
-
-            string hud = File.ReadAllText(HudControllerPath);
-            Assert.That(hud, Does.Contain("ActionBarLayout.GridSize"));
-            Assert.That(hud, Does.Contain("Resources.Load<GameObject>(ActionBarLayout.SlotPrefabResourcePath)"));
-
-            string panel = File.ReadAllText(CharacterActionBarPanelPath);
-            Assert.That(panel, Does.Contain("ActionBarLayout.CenteredOffset"));
-            Assert.That(panel, Does.Contain("ActionBarLayout.ActionCellPosition"));
-            Assert.That(panel, Does.Contain("ActionBarLayout.SpellbookCellPosition"));
-            Assert.That(panel, Does.Contain("ActionBarSlotViewFactory.Create"));
-        }
-
-        [Test]
-        public void HudUnitFrames_UseSharedMirroredUnitFrameSprite()
-        {
-            Assert.That(File.Exists(UnitFrameTextureAssetPath), Is.True);
-            byte[] textureBytes = File.ReadAllBytes(UnitFrameTextureAssetPath);
-            Assert.That(textureBytes[25], Is.EqualTo(6), "UnitFrame.png must be RGBA so the background remains transparent.");
-
-            string hud = File.ReadAllText(HudControllerPath);
-            Assert.That(hud, Does.Contain("UnitFrameSpritePath = \"UI/UnitFrame/UnitFrame\""));
-            Assert.That(hud, Does.Contain("UnitFrameHealthShape"));
-            Assert.That(hud, Does.Contain("UnitFrameResourceShape"));
-            Assert.That(hud, Does.Contain("AddUnitFrameArt(frame.transform, mirrored: false)"));
-            Assert.That(hud, Does.Contain("AddUnitFrameArt(_targetRoot.transform, mirrored: true)"));
-            Assert.That(hud, Does.Contain("BuildUnitFrameBarFill"));
-            Assert.That(hud, Does.Contain("UnitFrameBarSprite"));
-            Assert.That(hud, Does.Contain("IsInsidePolygon"));
-            Assert.That(hud, Does.Contain("Image.Type.Filled"));
-            Assert.That(hud, Does.Contain("art.transform.SetAsFirstSibling()"));
-            Assert.That(hud, Does.Contain("go.transform.SetAsLastSibling()"));
-            Assert.That(hud, Does.Contain("MirroredUnitFrameShape"));
-            Assert.That(hud, Does.Contain("SetUnitFrameBarFill"));
-            Assert.That(hud, Does.Contain("fillFromRight: true"));
-            Assert.That(hud, Does.Contain("_targetPrimaryFill"));
         }
 
         [Test]

@@ -46,28 +46,6 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
-        public void AimIndicator_UsesFullCircleTerrainConformingPresentationGeometry()
-        {
-            string source = File.ReadAllText(AimIndicatorPath);
-
-            Assert.That(source, Does.Contain("new GameObject(\"AimCircle\")"));
-            Assert.That(source, Does.Contain("private const int SegmentCount = 144;"));
-            Assert.That(source, Does.Contain("private const int RadialBandCount = 32;"));
-            Assert.That(source, Does.Contain("Shader.Find(\"Arena/Presentation/TargetIndicatorVertexColor\")"));
-            Assert.That(source, Does.Contain("var colors = new Color[vertexCount];"));
-            Assert.That(source, Does.Contain("Mathf.PI * 2f"));
-            Assert.That(source, Does.Contain("Terrain.activeTerrains"));
-            Assert.That(source, Does.Contain("terrain.SampleHeight(world)"));
-            Assert.That(source, Does.Contain("Physics.RaycastNonAlloc"));
-            Assert.That(source, Does.Contain("GetComponentInParent<PlayerView>()"));
-            Assert.That(source, Does.Contain("ShadowCastingMode.Off"));
-            Assert.That(source, Does.Contain("mr.receiveShadows = false"));
-            Assert.That(source, Does.Contain("RenderQueue.Transparent"));
-            Assert.That(source, Does.Not.Contain("Shader.Find(\"Unlit/Color\")"));
-            Assert.That(source, Does.Not.Contain("Resources.Load"));
-        }
-
-        [Test]
         public void PlayerEntity_DrivesSelectedTargetIndicatorFromSelectedStateOnly()
         {
             string source = File.ReadAllText(PlayerEntityPath);

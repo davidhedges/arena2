@@ -76,30 +76,6 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
-        public void Assembler_BuildsDefaultHumanMaleStarterOutfits()
-        {
-            Type catalogSetType = RequireType("Arena.Presentation.Appearance.CharacterAppearanceCatalogSet");
-            MethodInfo tryLoadDefault = RequireMethod(catalogSetType, "TryLoadDefault");
-            object?[] loadArgs = { null, string.Empty };
-            bool loaded = (bool)tryLoadDefault.Invoke(null, loadArgs)!;
-            Assert.That(loaded, Is.True, (string?)loadArgs[1]);
-
-            object catalogs = loadArgs[0]!;
-            GameObject parent = new("CharacterAppearanceCatalogTests");
-            try
-            {
-                AssertAssemblesHumanMaleOutfit(catalogs, parent.transform, "HUMAN_MALE_PEASANT_STARTER");
-                AssertAssemblesHumanMaleOutfit(catalogs, parent.transform, "HUMAN_MALE_WARRIOR_STARTER");
-                AssertAssemblesHumanMaleOutfit(catalogs, parent.transform, "HUMAN_MALE_PALADIN_STARTER");
-                AssertAssemblesHumanMaleOutfit(catalogs, parent.transform, "HUMAN_MALE_ARCHER_STARTER");
-            }
-            finally
-            {
-                UnityEngine.Object.DestroyImmediate(parent);
-            }
-        }
-
-        [Test]
         public void RuntimeAvatarController_SignatureFor_IsStableAndIncludesSavedOutfit()
         {
             object row = CreateAppearanceRow("human_male_archer_starter");

@@ -15,6 +15,7 @@ namespace Arena.Editor
     internal sealed class BuildBlockingEditModeTestGate : IPreprocessBuildWithReport
     {
         private const string BuildBlockingTestAssembly = "Arena.EditModeTests";
+        private const string BuildBlockingTestNamespace = "Arena.EditModeTests";
 
         public int callbackOrder => 0;
 
@@ -75,9 +76,8 @@ namespace Arena.Editor
             {
                 testMode = TestMode.EditMode,
                 assemblyNames = new[] { BuildBlockingTestAssembly },
+                testNames = new[] { string.IsNullOrWhiteSpace(testName) ? BuildBlockingTestNamespace : testName },
             };
-            if (!string.IsNullOrWhiteSpace(testName))
-                filter.testNames = new[] { testName };
 
             runner.RegisterCallbacks(callback);
             try

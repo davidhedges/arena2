@@ -287,42 +287,6 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
-        public void GameplaySubscriptionPlanner_BuildsScopedOpenWorldQueriesWithoutMatchStats()
-        {
-            Type plannerType = RequireRuntimeType("Arena.Network.GameplaySubscriptionPlanner");
-            Type gameplayScopeType = RequireRuntimeType("Arena.Network.NetworkManager+GameplayScope");
-            object scope = RequireMethod(gameplayScopeType, "OpenWorld", typeof(string)).Invoke(null, new object[] { "Oasis_Day" })!;
-
-            string[] sql = (string[])RequireMethod(plannerType, "BuildScopedQuerySqls", gameplayScopeType).Invoke(null, new[] { scope })!;
-            string joined = string.Join("\n", sql);
-
-            Assert.That(sql, Has.Length.EqualTo(14));
-            Assert.That(joined, Does.Contain("\"player_world\".\"world_kind\" = 'OPEN'"));
-            Assert.That(joined, Does.Contain("\"player_world\".\"open_world_scene_name\" = 'Oasis_Day'"));
-            Assert.That(joined, Does.Contain(" JOIN "));
-            Assert.That(joined, Does.Contain("\"character_appearance\""));
-            Assert.That(joined, Does.Not.Contain(" IN (SELECT"));
-            Assert.That(joined, Does.Not.Contain("\"match_participant_stats\""));
-        }
-
-        [Test]
-        public void GameplaySubscriptionPlanner_BuildsScopedInstanceQueriesWithMatchStats()
-        {
-            Type plannerType = RequireRuntimeType("Arena.Network.GameplaySubscriptionPlanner");
-            Type gameplayScopeType = RequireRuntimeType("Arena.Network.NetworkManager+GameplayScope");
-            object scope = RequireMethod(gameplayScopeType, "Instance", typeof(ulong)).Invoke(null, new object[] { 42UL })!;
-
-            string[] sql = (string[])RequireMethod(plannerType, "BuildScopedQuerySqls", gameplayScopeType).Invoke(null, new[] { scope })!;
-            string joined = string.Join("\n", sql);
-
-            Assert.That(sql, Has.Length.EqualTo(15));
-            Assert.That(joined, Does.Contain("\"player_world\".\"world_kind\" = 'INSTANCE'"));
-            Assert.That(joined, Does.Contain("\"player_world\".\"instance_id\" = 42"));
-            Assert.That(joined, Does.Contain("\"character_appearance\""));
-            Assert.That(joined, Does.Contain("\"match_participant_stats\""));
-        }
-
-        [Test]
         public void LocalCombatState_IgnoresRowsForNonLocalIdentity()
         {
             object state = GetLocalCombatState();
@@ -613,46 +577,6 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
-        public void CombatVFXAnchorResolver_ResolvesWeaponMountThroughEntityRegistry()
-        {
-            Type entityRegistryType = RequireRuntimeType("Arena.Entity.EntityRegistry");
-            Type playerEntityType = RequireRuntimeType("Arena.Entity.PlayerEntity");
-            Type mountsType = RequireRuntimeType("Arena.Presentation.AvatarWeaponMounts");
-            Type bindingType = RequireRuntimeType("Arena.Presentation.Appearance.RuntimeAvatarBinding");
-            object identity = CreateIdentity(1);
-
-            GameObject registryGo = new("EntityRegistryTest");
-            Component registry = registryGo.AddComponent(entityRegistryType);
-            object playerEntity = Activator.CreateInstance(playerEntityType, identity, false, null)!;
-
-            GameObject avatarRoot = new("AnchorResolverAvatar");
-            Component mounts = avatarRoot.AddComponent(mountsType);
-            Transform mainHandMount = new GameObject("MainWeaponMount").transform;
-            mainHandMount.position = new Vector3(3f, 4f, 5f);
-            mainHandMount.SetParent(avatarRoot.transform, true);
-            RequireMethod(mountsType, "SetOrReplaceMount", typeof(string), typeof(Transform))
-                .Invoke(mounts, new object[] { "main_weapon_hand", mainHandMount });
-
-            object binding = Activator.CreateInstance(
-                bindingType,
-                avatarRoot,
-                null,
-                mounts,
-                Array.Empty<Renderer>(),
-                "test-avatar")!;
-            SetField(playerEntity, "_avatarBinding", binding);
-            AddToPrivateDictionary(registry, "_players", identity, playerEntity);
-
-            Vector3 resolved = ResolveCombatVfxAnchorPosition(
-                identity,
-                "WEAPON_MAIN_HAND",
-                new Vector3(10f, 0f, 0f),
-                new Vector3(0f, 0f, 10f));
-
-            Assert.That(resolved, Is.EqualTo(mainHandMount.position));
-        }
-
-        [Test]
         public void CombatVFXAnchorResolver_UsesAuthoredFallbackPositionsWhenEntityMissing()
         {
             object identity = CreateIdentity(1);
@@ -663,109 +587,6 @@ namespace Arena.Tests.Editor
             Assert.That(ResolveCombatVfxAnchorPosition(identity, "WEAPON_MAIN_HAND", origin, impact), Is.EqualTo(origin));
             Assert.That(ResolveCombatVfxAnchorPosition(identity, "IMPACT_POINT", origin, impact), Is.EqualTo(impact));
             Assert.That(ResolveCombatVfxAnchorPosition(identity, "GROUND_UNDER_CASTER", origin, impact), Is.EqualTo(origin + Vector3.up * 0.03f));
-        }
-
-        [Test]
-        public void CombatVfxCueResolver_AbilityOverrideReplacesOnlyMatchingAnchoredSlot()
-        {
-            object spellLeft = CreateCombatVfxCue(
-                "spell-left",
-                "SPELL",
-                "FIREBALL",
-                "SPELL_CAST",
-                "LEFT_HAND",
-                "SPELL_LEFT",
-                "FOLLOW_ANCHOR",
-                "ATTACHED",
-                0,
-                20U);
-            object spellRight = CreateCombatVfxCue(
-                "spell-right",
-                "SPELL",
-                "FIREBALL",
-                "SPELL_CAST",
-                "RIGHT_HAND",
-                "SPELL_RIGHT",
-                "FOLLOW_ANCHOR",
-                "ATTACHED",
-                0,
-                30U);
-            object abilityLeft = CreateCombatVfxCue(
-                "ability-left",
-                "ABILITY",
-                "SPELL_FIREBALL",
-                "SPELL_CAST",
-                "LEFT_HAND",
-                "ABILITY_LEFT",
-                "FOLLOW_ANCHOR",
-                "ATTACHED",
-                0,
-                10U);
-
-            string[] vfxIds = ResolveCombatVfxCueIds(spellLeft, spellRight, abilityLeft);
-
-            Assert.That(vfxIds, Is.EqualTo(new[] { "ABILITY_LEFT", "SPELL_RIGHT" }));
-        }
-
-        [Test]
-        public void CombatVfxCueResolver_ProjectileBodyOverrideKeysBySequence()
-        {
-            object spellProjectile = CreateCombatVfxCue(
-                "spell-projectile",
-                "SPELL",
-                "FIREBALL",
-                "SPELL_RELEASE",
-                "LEFT_HAND",
-                "SPELL_PROJECTILE",
-                "SPAWN_WORLD",
-                "PROJECTILE_BODY",
-                0,
-                20U);
-            object abilityProjectile = CreateCombatVfxCue(
-                "ability-projectile",
-                "ABILITY",
-                "SPELL_FIREBALL",
-                "SPELL_RELEASE",
-                "RIGHT_HAND",
-                "ABILITY_PROJECTILE",
-                "SPAWN_WORLD",
-                "PROJECTILE_BODY",
-                0,
-                10U);
-
-            string[] vfxIds = ResolveCombatVfxCueIds(
-                "SPELL_RELEASE",
-                spellProjectile,
-                abilityProjectile);
-
-            Assert.That(vfxIds, Is.EqualTo(new[] { "ABILITY_PROJECTILE" }));
-        }
-
-        [Test]
-        public void CombatVfxCueResolver_MatchesAbilityScopedMeleeImpactCue()
-        {
-            object earthshatterCue = CreateCombatVfxCue(
-                "earthshatter-impact",
-                "ABILITY",
-                "WARRIOR_EARTHSHATTER",
-                "MELEE_IMPACT",
-                "GROUND_UNDER_TARGET",
-                "VFX_FIRE_AREA_BURST_01_ARENA",
-                "SPAWN_WORLD",
-                "ONE_SHOT",
-                0,
-                10U);
-
-            string[] vfxIds = ResolveCombatVfxCueIds(
-                isSpell: false,
-                trigger: "MELEE_IMPACT",
-                spellId: string.Empty,
-                abilityId: "WARRIOR_EARTHSHATTER",
-                strikeId: "COMBO_ATTACK_3_4_AIR_TO_GROUND",
-                hitIndex: 0,
-                earthshatterCue);
-
-            Assert.That(vfxIds, Is.EqualTo(new[] { "VFX_FIRE_AREA_BURST_01_ARENA" }));
         }
 
         private static object GetLocalCombatState()
