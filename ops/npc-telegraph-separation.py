@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """S3 evidence: measured CAST -> damage separation for NPC telegraphed swings.
 
-Pairs each NPC_MELEE_ATTACK CAST with its outcome event (IMPACT/PARRY/BLOCK)
-by action_instance_id in the live combat_event table and prints the per-swing
-separation against the authored windup the CAST carries in scalar_value.
+Pairs each NPC_MELEE_ATTACK COMBAT_CAST with its outcome event
+(COMBAT_IMPACT/COMBAT_PARRY/COMBAT_BLOCK) by action_instance_id in the live
+combat_event table and prints the per-swing separation against the authored
+windup the CAST carries in scalar_value.
 
 Combat events prune after 20 seconds server-side, so run this during or
 immediately after the encounter being measured. A CAST older than its authored
@@ -24,7 +25,9 @@ QUERY = (
     "FROM combat_event WHERE action_kind = 'NPC_MELEE_ATTACK'"
 )
 
-OUTCOME_EVENTS = ("IMPACT", "PARRY", "BLOCK")
+# Wire values from server/src/combat.rs (COMBAT_EVENT_* constants).
+CAST_EVENT = "COMBAT_CAST"
+OUTCOME_EVENTS = ("COMBAT_IMPACT", "COMBAT_PARRY", "COMBAT_BLOCK")
 # A CAST this much older than its authored windup with no outcome is settled
 # as a whiff/cancel rather than still-pending (covers tick rounding + clock).
 WHIFF_SETTLE_SLACK_MICROS = 500_000
@@ -72,7 +75,7 @@ def main():
     args = parser.parse_args()
 
     rows = parse_rows(run_sql(args.database, args.server))
-    casts = {r["id"]: r for r in rows if r["event"] == "CAST"}
+    casts = {r["id"]: r for r in rows if r["event"] == CAST_EVENT}
     outcomes = {r["id"]: r for r in rows if r["event"] in OUTCOME_EVENTS}
 
     if not casts:
