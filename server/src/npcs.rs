@@ -199,6 +199,56 @@ fn npc_attacks_are_harmless() -> bool {
     })
 }
 
+/// Local measurement aid: `ARENA_NPC_NO_ATTACK=1` at build time disables NPC
+/// melee entirely — within reach the NPC holds position facing its target,
+/// never swings, and never enters the post-swing cadence freeze, so chase
+/// motion is continuous whenever the target moves (F4 A/B kiting legs).
+/// Unlike `ARENA_NPC_HARMLESS` (real swings, zero damage — for contact-cue
+/// checks inside a pack), this removes the swing events themselves. Baked at
+/// compile time — absent from normal builds.
+fn npc_attacks_are_disabled() -> bool {
+    static DISABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *DISABLED.get_or_init(|| {
+        let disabled = matches!(
+            option_env!("ARENA_NPC_NO_ATTACK").map(str::trim),
+            Some("1") | Some("true") | Some("on") | Some("yes")
+        );
+        if disabled {
+            log::warn!(
+                "[INIT] ARENA_NPC_NO_ATTACK baked in: NPC melee disabled (local measurement build — do not deploy)"
+            );
+        }
+        disabled
+    })
+}
+
+/// Local measurement aid: `ARENA_NPC_AGGRO_RADIUS=<meters>` at build time
+/// overrides every NPC template's aggro radius at this same choke point
+/// (e.g. 100 for F4 A/B kiting legs, where the stock 8 m leash plus the
+/// post-swing cadence freeze makes sustained chase unachievable by hand).
+/// Baked at compile time like `ARENA_NPC_HARMLESS` — absent from normal
+/// builds.
+fn npc_aggro_radius_override() -> Option<f32> {
+    static OVERRIDE: std::sync::OnceLock<Option<f32>> = std::sync::OnceLock::new();
+    *OVERRIDE.get_or_init(|| {
+        let raw = option_env!("ARENA_NPC_AGGRO_RADIUS")?.trim();
+        match raw.parse::<f32>().ok().filter(|r| r.is_finite() && *r > 0.0) {
+            Some(radius) => {
+                log::warn!(
+                    "[INIT] ARENA_NPC_AGGRO_RADIUS baked in: NPC aggro radius overridden to {radius} m (local measurement build — do not deploy)"
+                );
+                Some(radius)
+            }
+            None => {
+                log::warn!(
+                    "[INIT] ARENA_NPC_AGGRO_RADIUS='{raw}' ignored: not a positive finite number"
+                );
+                None
+            }
+        }
+    })
+}
+
 pub(crate) fn npc_template(template_id: &str) -> Option<NpcTemplate> {
     let mut template = match normalize_id(template_id).as_str() {
         NPC_TEMPLATE_KOBOLD_WARRIOR_RD_SWORD_SHIELD => Some(NpcTemplate {
@@ -258,6 +308,9 @@ pub(crate) fn npc_template(template_id: &str) -> Option<NpcTemplate> {
 
     if npc_attacks_are_harmless() {
         template.attack_damage = 0;
+    }
+    if let Some(radius) = npc_aggro_radius_override() {
+        template.aggro_radius = radius;
     }
     Some(template)
 }
@@ -571,6 +624,11 @@ pub(crate) fn tick_npc_combat(
         }
 
         let physics = face_npc_target(ctx, now, &physics, &target);
+
+        if npc_attacks_are_disabled() {
+            upsert_npc_combat_runtime(ctx, runtime);
+            continue;
+        }
 
         perform_npc_melee_attack(ctx, now, &npc, &physics, template, &target);
         runtime.next_attack_at = now + Duration::from_millis(template.attack_cadence_ms);
