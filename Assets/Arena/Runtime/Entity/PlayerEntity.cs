@@ -332,17 +332,34 @@ namespace Arena.Entity
         }
 
         /// <summary>
-        /// Unwinds a predicted gap-close windup after a server rejection or a
-        /// prediction timeout (feel audit F5). Movement was never predicted, so
-        /// only the held phased presentation needs the end request; when an
-        /// authoritative special movement is live its row delete owns that
-        /// request instead.
+        /// Unwinds a predicted gap-close windup after a prediction timeout
+        /// (feel audit F5): the held loop resolves through the end segment.
+        /// Server rejections do NOT come here — reject = interrupt, never
+        /// completion (netcode design review S2); they route through
+        /// <see cref="CutRejectedActionPresentation"/> instead. When an
+        /// authoritative special movement is live its row delete owns the end
+        /// request.
         /// </summary>
         public void RollbackPredictedGapCloseWindup()
         {
             if (SimState.TryGetSpecialMovementTrack(out _))
                 return;
             _animator?.RequestSpecialMovementDrivenPhasedMeleeEnd();
+        }
+
+        /// <summary>
+        /// Cuts the predicted presentation of a server-rejected action
+        /// (netcode design review S2) via the shared preemption primitives —
+        /// no windup playing to completion, no forced end segment. Scoped by
+        /// action identity downstream; skipped entirely while an authoritative
+        /// special movement is live, because that row's delete owns its own
+        /// presentation end (same guard as the gap-close rollback).
+        /// </summary>
+        public void CutRejectedActionPresentation(string rejectedActionId)
+        {
+            if (SimState.TryGetSpecialMovementTrack(out _))
+                return;
+            _animator?.CutRejectedActionPresentation(rejectedActionId);
         }
         public void SetMovementActionState(MovementActionState row) => SimState.SetMovementActionState(row);
         public void ClearMovementActionState() => SimState.ClearMovementActionState();

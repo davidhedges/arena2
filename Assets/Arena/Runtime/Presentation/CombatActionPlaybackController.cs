@@ -123,6 +123,28 @@ namespace Arena.Presentation
         }
     }
 
+    /// <summary>
+    /// Identity of an instant spell playing on the upper-body/left-gesture
+    /// overlay layers (the moving-cast path), which records no
+    /// <see cref="ActiveSpellPresentation"/>. Kept so a server rejection can
+    /// cut the specific overlay state (netcode design review S2); consumers
+    /// must verify the recorded state hash is still what the layer is playing
+    /// — the record is never lifecycle-cleared, only overwritten.
+    /// </summary>
+    internal readonly struct ActiveOverlaySpellPresentation
+    {
+        public readonly string ActionId;
+        public readonly int StateHash;
+        public readonly bool UsesLeftGesture;
+
+        public ActiveOverlaySpellPresentation(string actionId, int stateHash, bool usesLeftGesture)
+        {
+            ActionId = actionId;
+            StateHash = stateHash;
+            UsesLeftGesture = usesLeftGesture;
+        }
+    }
+
     internal sealed class CombatActionPlaybackController
     {
         public const float DefaultLowerBodyBlendOutSeconds = 0.12f;
@@ -169,6 +191,7 @@ namespace Arena.Presentation
         public bool ActiveMeleePresentationEntered { get; private set; }
         public ActiveSpellPresentation? ActiveSpellPresentation { get; private set; }
         public bool ActiveSpellPresentationEntered { get; private set; }
+        public ActiveOverlaySpellPresentation? ActiveOverlaySpellPresentation { get; private set; }
         public ActiveSpellCastHoldPresentation? ActiveSpellCastHoldPresentation { get; private set; }
         public SpellCastHoldPlaybackPhase SpellCastHoldPhase => _spellCastHoldPhase;
 
@@ -856,6 +879,29 @@ namespace Arena.Presentation
         {
             ActiveSpellPresentation = null;
             ActiveSpellPresentationEntered = false;
+        }
+
+        public void SetActiveOverlaySpellPresentation(string actionId, int stateHash, bool usesLeftGesture)
+        {
+            ActiveOverlaySpellPresentation = new ActiveOverlaySpellPresentation(actionId, stateHash, usesLeftGesture);
+        }
+
+        public void ClearActiveOverlaySpellPresentation()
+        {
+            ActiveOverlaySpellPresentation = null;
+        }
+
+        /// <summary>
+        /// Rejection-cut identity policy (netcode design review S2): a
+        /// server-rejected action may only cut a presentation it can still be
+        /// positively attributed to, so playback owned by a later press is
+        /// never eaten by a stale rejection.
+        /// </summary>
+        public static bool ShouldCutRejectedActionPresentation(string? activeActionId, string rejectedActionId)
+        {
+            return !string.IsNullOrWhiteSpace(activeActionId)
+                && !string.IsNullOrWhiteSpace(rejectedActionId)
+                && string.Equals(activeActionId, rejectedActionId, System.StringComparison.OrdinalIgnoreCase);
         }
 
         public void MarkActiveSpellPresentationEntered()

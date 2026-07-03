@@ -55,7 +55,65 @@ referenced but not repeated.
   is **unblocked**: use the existing runbook in `docs/latency-testing.md`
   with the `RemotePresentationAbLog` CSV, and compare legs on
   (extrap + starved) / (all non-settled samples) so target idleness cannot
-  confound them. F4 adaptive delay stays blocked on the clean A/B itself. **F5 falsePos: still open** — swings were
+  confound them. F4 adaptive delay stays blocked on the clean A/B itself.
+  **Rerun 1 (2026-07-03, post-S1, session 07:50:21Z): still inconclusive —
+  this time the run under-delivered, not the metric.** Downstream-only 40 ms
+  + 30 % 65 ms jitter, ON then OFF kiting the hostile kobold: the legs
+  logged only 26 s / 24 s against the 75 s protocol, and the target was
+  settled 82–84 % of samples (~a third of logged seconds had zero
+  non-settled activity — the kobold hovered at rest instead of chasing).
+  On the S1 metric the legs are statistically identical: late ratio ON
+  26.2 % (176/672 non-settled) vs OFF 24.2 % (133/549), a 2.0 pp gap at
+  z ≈ 0.8 even treating frames as independent; hard snaps 0 vs 0 (this
+  shaping never elicited one); the per-second pos-error samples are almost
+  all 0.000 on a settled target, so the nominal OFF edge (mean 0.042 m vs
+  0.073 m) rests on ~6 nonzero readings per leg and carries no weight.
+  Design note for the clean read: ON runs 100 ms presentation delay vs
+  OFF's 66 ms by design, so a *tie* is a loss for ON — it pays +34 ms for
+  nothing. Rerun requirements (revised 2026-07-03 — run 1's leg-killers
+  were the kobold itself: chase speed equals the player's `MOVE_SPEED`
+  7.0, aggro drops beyond the 8 m radius, every landed swing freezes it
+  in place for its full 1800 ms cadence, and its damage was ending the
+  tester early — sustained chase under stock rules is not reliably
+  achievable by hand): (a) republish with both measurement flags baked
+  in — `ARENA_NPC_NO_ATTACK=1 ARENA_NPC_AGGRO_RADIUS=100
+  ./ops/republish-local-clear.sh` — NPC melee disabled outright (no
+  swings, no damage, no cadence freezes) plus a 100 m aggro radius,
+  both compile-time in `server/src/npcs.rs` like `ARENA_PROFILE_TICKS`,
+  so the kobold does nothing but chase, anywhere in the playground
+  (`ARENA_NPC_HARMLESS` still exists separately for checks that need
+  real swings with zero damage); (b) run continuous laps at full
+  speed — nothing else to manage; (c) 60 s warmup with the timeline
+  toggled OFF so warmup rows form a discardable leg 0, then 75 s legs
+  interleaved ON/OFF/ON/OFF (≥75 CSV rows each) so leg order can't
+  confound; (d) per-leg settled share < ~40 %; a 75 s
+  continuously-chasing leg yields ~9 k non-settled samples, enough to
+  resolve a 1–2 pp late-ratio gap.
+  Also on record: session 07:23:12Z logged a 57 s ON window at 100 %
+  starved, depth −1739 ticks (session-start clock-convergence pathology) —
+  start legs only after the overlay shows sane depth.
+  **Rerun 2 (2026-07-03, session 13:25:52Z, measurement flags live):
+  protocol met, verdict conclusive — the server-time timeline as shipped
+  does NOT beat arrival.** Five legs (OFF warmup discarded, then
+  ON/OFF/ON/OFF, 83–108 s each), continuous chase throughout (settled
+  ≤ 1.5 % per leg, ≥ 11 k non-settled samples per leg, depth sane).
+  Late ratio: ON 11.9 % / 11.4 % vs OFF 9.2 % / 8.8 % (warmup 8.3 %) —
+  pooled 11.6 % vs 9.0 %, every ON leg worse than every OFF leg in the
+  ABAB interleave, nominal z ≈ 10; the direction survives any plausible
+  autocorrelation discount. Hard snaps 0 everywhere (this shaping never
+  elicits them). Position error: ON mean slightly worse (0.357/0.359 m
+  vs 0.340/0.342 m) but p95 better (0.420/0.467 m vs 0.499/0.489 m) —
+  the tail-smoothing F4 was built for is real, yet ON extrapolates
+  2.6 pp more while holding a 34 ms larger delay budget (100 vs 66 ms):
+  the fixed server-time mapping is effectively *under*-delayed, because
+  absolute delivery lateness vs the estimated server clock has a wider
+  tail than inter-arrival gaps, so a fixed 100 ms server-time budget
+  buys less headroom than arrival's 66 ms. F4 adaptive delay (S7) does
+  not unblock as specced — its gate ("A/B proves the timeline wins")
+  failed — but the failure signature (under-delay despite bigger
+  nominal budget, better p95) is exactly what an adaptive delay keyed
+  to measured *server-time* lateness would cure. Owner decision
+  recorded in the design review S7 row. **F5 falsePos: still open** — swings were
   auto-attacks, which do not route through the predicted contact-cue system
   at all (cues hook only predicted action-bar melee presses); the one
   ability press in the log fired and matched cleanly (fired 1 / matched 1 /
@@ -130,6 +188,34 @@ referenced but not repeated.
   `Assets/Arena/Tests/Editor/ConnectionFeedbackHudTests.cs` (full variant
   coverage of the reason→text map; rate-limit/expiry semantics). Still to
   do by hand: the Profile A rejection check in the tabled note above.
+  **Update (2026-07-03, S2 — netcode design review §3):** the denial cue
+  grew from toast-only to the full rejection presentation.
+  `PredictionRejected` now carries `(actionKind, pressedActionId, reason)` —
+  `pressedActionId` is the id the bar slot shows (combo follow-ups resolve
+  to the follow-up strike id; the ledger records the pressed opener via
+  `PredictedActionLedger.PressedActionId`) — and `HUDController` flashes
+  every visible matching slot (ability grid, spellbook row, discipline
+  bar; 0.45 s red fade over the icon, presentation-only). A `Rejected`
+  result also cuts the predicted animation itself — melee (plain and
+  phased), gap-close windups (no forced end segment on reject anymore;
+  the end request now serves only the 5 s no-answer timeout), and instant
+  spells (full-body and moving-cast overlay layers) — through the existing
+  preemption/empty-state primitives, routed
+  `CombatStatusReactionController.TriggerPredictionRejected` →
+  `PlayerAnimator` coordination, identity-gated by the pure
+  `CombatActionPlaybackController.ShouldCutRejectedActionPresentation` so
+  a stale rejection never eats a later press's playback; `StaleToken`
+  never cuts (a newer press owns the presentation). Cast-time holds were
+  already cut by the spell presentation state machine (verified,
+  unchanged). Client-only, zero schema change, both csproj builds green;
+  editor tests deferred until the S2 contract stabilizes (churn ruling).
+  Still to do by hand (downstream-only shaping per
+  `docs/latency-testing.md`): mid-air gap-close press → AerialMismatch
+  cuts the windup (no end segment) + slot flash; mid-air plain-strike
+  press → same cut on the non-phased path; spell LOS rejection cuts the
+  cast animation both stationary (full-body layer) and strafing
+  (upper-body overlay); grounded accepted presses still play windup →
+  dash → end segment normally.
 - **F2 sub-slice (a) — implemented.** `NetcodeDebugOverlay` now shows remote
   hard-snap count, interp/extrap sample ratio, last/max remote position error
   (aggregated over remote players), predicted-action results by kind, and
@@ -261,7 +347,12 @@ referenced but not repeated.
   `PlayerEntity.RollbackPredictedGapCloseWindup()` (no-op when a live
   authoritative special movement owns the end request); a prediction
   timeout (5 s, no result at all) unwinds it the same way so the loop can
-  never hold forever. Duplicate suppression: the authoritative
+  never hold forever. **Update (2026-07-03, S2 — netcode design review
+  §3):** on `Rejected` the windup is now *cut* via
+  `PlayerEntity.CutRejectedActionPresentation` (reject = interrupt, never
+  completion — no more completed-looking end segment); the end-segment
+  unwind above now serves only `StaleToken` and the 5 s timeout.
+  Duplicate suppression: the authoritative
   `COMBAT_CAST` replay is consumed by the existing accepted-token
   bookkeeping (`_acceptedPredictedMeleeByActionInstance` / pending-replay
   hold), with a pure substrate backstop —

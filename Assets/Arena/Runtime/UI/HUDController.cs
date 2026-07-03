@@ -44,6 +44,10 @@ namespace Arena.UI
         private static readonly Color SlotBorder    = Hex("#444444");
         private static readonly Color DisabledSlotBg = Hex("#2A2A2A");
         private static readonly Color TransparentSlotInput = new(1f, 1f, 1f, 0f);
+        // Rejection denial flash (netcode design review S2): matches the
+        // denial toast's red, presentation only.
+        private static readonly Color RejectFlashColor = new(1f, 0.32f, 0.25f, 0.55f);
+        private const float SlotRejectionFlashSeconds = 0.45f;
         private static readonly Color CdOverlay     = new(0f, 0f, 0f, 0.7f);
         private static readonly Color GcdOverlay    = new(0f, 0f, 0f, 0.4f);
         private static readonly Color CastGold      = Hex("#FFD100");
@@ -209,6 +213,13 @@ namespace Arena.UI
         private readonly TooltipTarget[] _disciplineBarTooltips = new TooltipTarget[ActionBarSlotIds.DisciplineColumns];
         private readonly ActionBarClickTarget[] _disciplineBarClicks = new ActionBarClickTarget[ActionBarSlotIds.DisciplineColumns];
         private readonly ActionBarSlotState[] _disciplineBarStates = new ActionBarSlotState[ActionBarSlotIds.DisciplineColumns];
+        private readonly Image[] _abilityGridFlash = new Image[ActionBarLayout.CellCount];
+        private readonly double[] _abilityGridFlashUntil = new double[ActionBarLayout.CellCount];
+        private readonly Image[] _spellbookGridFlash = new Image[ActionBarLayout.Columns];
+        private readonly double[] _spellbookGridFlashUntil = new double[ActionBarLayout.Columns];
+        private readonly Image[] _disciplineBarFlash = new Image[ActionBarSlotIds.DisciplineColumns];
+        private readonly double[] _disciplineBarFlashUntil = new double[ActionBarSlotIds.DisciplineColumns];
+        private double _anySlotFlashActiveUntil;
 
         // --- Cast Bar ---
         private GameObject _castRoot     = null!;
@@ -589,7 +600,8 @@ namespace Arena.UI
                     out _disciplineBarTooltips[disciplineIndex],
                     out _disciplineBarClicks[disciplineIndex],
                     out _,
-                    out _);
+                    out _,
+                    out _disciplineBarFlash[disciplineIndex]);
                 disciplineIndex++;
             }
 
@@ -610,7 +622,8 @@ namespace Arena.UI
                     out _spellbookGridTooltips[col],
                     out _spellbookGridClicks[col],
                     out _,
-                    out _);
+                    out _,
+                    out _spellbookGridFlash[col]);
             }
 
             for (int row = 0; row < ActionBarLayout.VisibleActionRows; row++)
@@ -630,7 +643,8 @@ namespace Arena.UI
                         out _abilityGridTooltips[index],
                         out _abilityGridClicks[index],
                         out _abilityGridDropSlots[index],
-                        out _abilityGridDragSources[index]);
+                        out _abilityGridDragSources[index],
+                        out _abilityGridFlash[index]);
 
                     if (ActionBarKeymap.TryGetBindingForCell(row, col, out ActionBarSlotBinding binding))
                         _abilityGridDropSlots[index].Configure(_canvas, binding.SlotId);
@@ -646,7 +660,8 @@ namespace Arena.UI
             out TooltipTarget tooltip,
             out ActionBarClickTarget clickTarget,
             out ActionBarDropSlot dropSlot,
-            out ActionBarDragSource dragSource)
+            out ActionBarDragSource dragSource,
+            out Image flashImg)
         {
             var slot = CreateActionBarSlot(parent, $"Slot_{key}");
             var rt = slot.GetComponent<RectTransform>() ?? slot.AddComponent<RectTransform>();
@@ -716,6 +731,15 @@ namespace Arena.UI
             cdImg.fillOrigin = (int)Image.OriginVertical.Top;
             cdImg.fillAmount = 0f;
             cdImg.raycastTarget = false;
+
+            // Rejection denial flash (netcode design review S2) — above the
+            // icon and CD sweep, below the cooldown/charge texts.
+            var flashGo = Child(slot.transform, "RejectFlash");
+            Stretch(flashGo);
+            flashImg = flashGo.AddComponent<Image>();
+            flashImg.color = new Color(RejectFlashColor.r, RejectFlashColor.g, RejectFlashColor.b, 0f);
+            flashImg.raycastTarget = false;
+            flashImg.enabled = false;
 
             // CD time text
             cdTxt = Label(slot.transform, "CdT", stretch: true,
@@ -1478,6 +1502,96 @@ namespace Arena.UI
             }
 
             UpdateActionBarCooldownPresentation(nowMs, gcdFrac, combat);
+            UpdateSlotRejectionFlashPresentation(Time.unscaledTimeAsDouble);
+        }
+
+        private void OnEnable()
+        {
+            LocalCombatState.PredictionRejected += OnPredictionRejected;
+        }
+
+        private void OnDisable()
+        {
+            LocalCombatState.PredictionRejected -= OnPredictionRejected;
+        }
+
+        // Rejection denial flash (netcode design review S2): flash every slot
+        // whose resolved action is the rejected press. Matched on the pressed
+        // id first (the bar shows the opener even when a combo follow-up was
+        // resolved), falling back to the resolved action kind.
+        private void OnPredictionRejected(string actionKind, string pressedActionId, ActionRejectReason reason)
+        {
+            _ = reason;
+            double until = Time.unscaledTimeAsDouble + SlotRejectionFlashSeconds;
+            if (!StampSlotRejectionFlash(pressedActionId, until))
+                StampSlotRejectionFlash(actionKind, until);
+        }
+
+        private bool StampSlotRejectionFlash(string actionId, double until)
+        {
+            if (string.IsNullOrWhiteSpace(actionId))
+                return false;
+
+            bool any = StampSlotRejectionFlash(_abilityGridStates, _abilityGridFlashUntil, actionId, until);
+            any |= StampSlotRejectionFlash(_spellbookGridStates, _spellbookGridFlashUntil, actionId, until);
+            any |= StampSlotRejectionFlash(_disciplineBarStates, _disciplineBarFlashUntil, actionId, until);
+            if (any)
+                _anySlotFlashActiveUntil = Math.Max(_anySlotFlashActiveUntil, until);
+            return any;
+        }
+
+        private static bool StampSlotRejectionFlash(
+            ActionBarSlotState[] states,
+            double[] flashUntil,
+            string actionId,
+            double until)
+        {
+            bool any = false;
+            for (int index = 0; index < states.Length; index++)
+            {
+                ActionBarSlotState? state = states[index];
+                if (state == null || !state.IsVisible)
+                    continue;
+                if (!string.Equals(state.ActionId, actionId, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                flashUntil[index] = until;
+                any = true;
+            }
+
+            return any;
+        }
+
+        private void UpdateSlotRejectionFlashPresentation(double now)
+        {
+            // Trailing slack so expired flashes get their final alpha-0 write.
+            if (now > _anySlotFlashActiveUntil + 0.1)
+                return;
+
+            RenderSlotRejectionFlash(_abilityGridFlash, _abilityGridFlashUntil, now);
+            RenderSlotRejectionFlash(_spellbookGridFlash, _spellbookGridFlashUntil, now);
+            RenderSlotRejectionFlash(_disciplineBarFlash, _disciplineBarFlashUntil, now);
+        }
+
+        private static void RenderSlotRejectionFlash(Image[] flashes, double[] flashUntil, double now)
+        {
+            for (int index = 0; index < flashes.Length; index++)
+            {
+                Image flash = flashes[index];
+                if (flash == null)
+                    continue;
+
+                float remaining = (float)(flashUntil[index] - now);
+                float alpha = remaining <= 0f
+                    ? 0f
+                    : RejectFlashColor.a * Mathf.Clamp01(remaining / SlotRejectionFlashSeconds);
+                Color color = RejectFlashColor;
+                color.a = alpha;
+                SetColorIfChanged(flash, color);
+                bool visible = alpha > 0f;
+                if (flash.enabled != visible)
+                    flash.enabled = visible;
+            }
         }
 
         private void RefreshActionBarStaticState()

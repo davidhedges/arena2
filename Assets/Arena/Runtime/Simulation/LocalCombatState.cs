@@ -132,7 +132,40 @@ namespace Arena.Simulation
             PredictedCooldownDurationMs = predictedCooldownDurationMs;
             ReservedResourceKind = reservedResourceKind ?? string.Empty;
             ReservedResourceCost = reservedResourceCost;
+            PressedActionId = ActionKind;
         }
+
+        private PredictedActionLedger(in PredictedActionLedger source, string pressedActionId)
+        {
+            ActionKind = source.ActionKind;
+            GcdPredicted = source.GcdPredicted;
+            PriorGcdStartMs = source.PriorGcdStartMs;
+            PriorGcdDurationMs = source.PriorGcdDurationMs;
+            PredictedGcdStartMs = source.PredictedGcdStartMs;
+            PredictedGcdDurationMs = source.PredictedGcdDurationMs;
+            CooldownPredicted = source.CooldownPredicted;
+            HadPriorCooldown = source.HadPriorCooldown;
+            PriorCooldownLastCastMs = source.PriorCooldownLastCastMs;
+            PriorCooldownDurationMs = source.PriorCooldownDurationMs;
+            PredictedCooldownLastCastMs = source.PredictedCooldownLastCastMs;
+            PredictedCooldownDurationMs = source.PredictedCooldownDurationMs;
+            ReservedResourceKind = source.ReservedResourceKind;
+            ReservedResourceCost = source.ReservedResourceCost;
+            PressedActionId = string.IsNullOrWhiteSpace(pressedActionId) ? source.ActionKind : pressedActionId;
+        }
+
+        /// <summary>
+        /// The action id as pressed on the action bar. Differs from
+        /// <see cref="ActionKind"/> only when press-time resolution swapped the
+        /// action (melee combo follow-ups resolve to the follow-up strike id,
+        /// while the bar slot shows the opener). This is the id HUD surfaces
+        /// should match slots against for the denial flash (netcode design
+        /// review S2).
+        /// </summary>
+        public string PressedActionId { get; }
+
+        public PredictedActionLedger WithPressedActionId(string pressedActionId)
+            => new(this, pressedActionId);
 
         public string ActionKind { get; }
         public bool GcdPredicted { get; }
@@ -341,13 +374,14 @@ namespace Arena.Simulation
         // ---------------------------------------------------------------
 
         /// <summary>
-        /// Denial cue hook: fired with the action kind and the server's
-        /// machine-readable rejection reason (netcode audit R2) whenever a
-        /// predicted action is rolled back after a server rejection.
-        /// HUD/action-bar surfaces subscribe for an icon flash, sound, or an
-        /// honest denial toast ("insufficient stamina" vs "on cooldown").
+        /// Denial cue hook: fired with the action kind, the action id as
+        /// pressed on the action bar (slot identity — netcode design review
+        /// S2), and the server's machine-readable rejection reason (netcode
+        /// audit R2) whenever a predicted action is rolled back after a server
+        /// rejection. HUD/action-bar surfaces subscribe for the slot flash and
+        /// the honest denial toast ("insufficient stamina" vs "on cooldown").
         /// </summary>
-        public static event Action<string, ActionRejectReason>? PredictionRejected;
+        public static event Action<string, string, ActionRejectReason>? PredictionRejected;
 
         /// <summary>
         /// Applies the standard press-time predictions (GCD, per-action
@@ -434,7 +468,7 @@ namespace Arena.Simulation
 
             ReleasePredictedPrimaryResource(ledger.ReservedResourceKind, ledger.ReservedResourceCost);
 
-            PredictionRejected?.Invoke(ledger.ActionKind, rejectReason);
+            PredictionRejected?.Invoke(ledger.ActionKind, ledger.PressedActionId, rejectReason);
         }
 
         // ---------------------------------------------------------------

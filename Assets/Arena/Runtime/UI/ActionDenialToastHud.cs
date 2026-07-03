@@ -103,8 +103,10 @@ namespace Arena.UI
             LocalCombatState.PredictionRejected -= OnPredictionRejected;
         }
 
-        private void OnPredictionRejected(string actionKind, ActionRejectReason reason)
+        private void OnPredictionRejected(string actionKind, string pressedActionId, ActionRejectReason reason)
         {
+            _ = actionKind;
+            _ = pressedActionId;
             _model.TryShow(ActionDenialText.For(reason), Time.unscaledTimeAsDouble);
         }
 

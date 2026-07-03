@@ -27,6 +27,7 @@ namespace Arena.Presentation
         private readonly Func<bool> _isCurrentlyGrounded;
         private readonly Action<bool, bool> _applyHitClipOverrides;
         private readonly Action _clearInterruptiblePresentationForStagger;
+        private readonly Action<string> _cutRejectedActionPresentation;
 
         private Animator? _animator;
         private AnimatorOverrideController? _overrideController;
@@ -37,11 +38,13 @@ namespace Arena.Presentation
         public CombatStatusReactionController(
             Func<bool> isCurrentlyGrounded,
             Action<bool, bool> applyHitClipOverrides,
-            Action clearInterruptiblePresentationForStagger)
+            Action clearInterruptiblePresentationForStagger,
+            Action<string> cutRejectedActionPresentation)
         {
             _isCurrentlyGrounded = isCurrentlyGrounded;
             _applyHitClipOverrides = applyHitClipOverrides;
             _clearInterruptiblePresentationForStagger = clearInterruptiblePresentationForStagger;
+            _cutRejectedActionPresentation = cutRejectedActionPresentation;
         }
 
         public void Bind(Animator? animator, AnimatorOverrideController? overrideController)
@@ -154,6 +157,22 @@ namespace Arena.Presentation
                 TriggerStaggerBHash,
                 TriggerStaggerLHash,
                 TriggerStaggerRHash));
+        }
+
+        /// <summary>
+        /// Denial reaction for a server-rejected predicted action (netcode
+        /// design review S2): reject = interrupt, never completion. Cuts the
+        /// rejected action's own predicted playback through the shared
+        /// preemption primitives — no wind-through swing, no forced end
+        /// segment. Today the reaction is the bare cut; an authored denial
+        /// flinch/wind-down clip would be selected here.
+        /// </summary>
+        public void TriggerPredictionRejected(string rejectedActionId)
+        {
+            if (_animator == null || _overrideController == null) return;
+            if (string.IsNullOrWhiteSpace(rejectedActionId)) return;
+
+            _cutRejectedActionPresentation(rejectedActionId);
         }
 
         public void ClearForNonDeath()

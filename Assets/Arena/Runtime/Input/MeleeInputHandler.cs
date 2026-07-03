@@ -144,6 +144,10 @@ namespace Arena.Input
             var strikeChoice = ResolveStrikeChoice(
                 conn, combatProfile, slotId,
                 effectiveLastStrikeState.lastStrikeId, effectiveLastStrikeState.lastStrikeAtMs, nowMs);
+            // The bar slot keeps showing the pressed opener even when the
+            // strike choice resolves a combo follow-up; the denial flash
+            // (netcode design review S2) must target the pressed id.
+            string pressedActionId = slotId;
             slotId = strikeChoice.strikeId;
             MeleeAbilityCatalog? gameplay =
                 MeleeGameplayResolver.ResolveForAction(conn, entity.Identity, combatProfile, slotId);
@@ -287,7 +291,7 @@ namespace Arena.Input
                     GameplayTuning.ResolveDefaultGlobalCooldownDurationMs(conn),
                     resourceKind,
                     resourceCost,
-                    nowMs);
+                    nowMs).WithPressedActionId(pressedActionId);
                 if (token.IsPredicted)
                     _predictionLedgersByToken[ActionTokenKey(token)] = (ledger, nowMs + PendingMeleePredictionTtlMs);
             }
@@ -584,6 +588,7 @@ namespace Arena.Input
 
             if (row.Result == ActionResultKind.Rejected || row.Result == ActionResultKind.StaleToken)
             {
+                bool hadPendingVisual = _pendingPredictedMeleeByToken.TryGetValue(tokenKey, out var pendingVisual);
                 _pendingPredictedMeleeByToken.Remove(tokenKey);
                 if (_predictionLedgersByToken.TryGetValue(tokenKey, out var pendingLedger))
                 {
@@ -593,7 +598,23 @@ namespace Arena.Input
                     _predictionLedgersByToken.Remove(tokenKey);
                 }
 
-                if (_pendingGapCloseWindupExpiryByToken.Remove(tokenKey))
+                bool hadGapCloseWindup = _pendingGapCloseWindupExpiryByToken.Remove(tokenKey);
+
+                // Reject = interrupt, never completion (netcode design review
+                // S2): cut the predicted swing/windup via the shared preemption
+                // primitives instead of letting it play through (or, for a
+                // gap close, forcing the completed-looking end segment).
+                // StaleToken keeps the old resolution paths — a newer press of
+                // the same action owns the presentation, so a scoped cut could
+                // eat it (same exclusion the spell cast state machine uses).
+                if (row.Result == ActionResultKind.Rejected && hadPendingVisual)
+                {
+                    EntityRegistry.Instance?.LocalPlayerEntity?.CutRejectedActionPresentation(
+                        pendingVisual.AuthoredActionId);
+                    ActionBarTrace.Trace(
+                        $"cut rejected predicted melee presentation for {pendingVisual.AuthoredActionId} reason={row.RejectReason}");
+                }
+                else if (hadGapCloseWindup)
                 {
                     EntityRegistry.Instance?.LocalPlayerEntity?.RollbackPredictedGapCloseWindup();
                     ActionBarTrace.Trace(

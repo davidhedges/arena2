@@ -733,6 +733,20 @@ namespace Arena.Input
                     $"rolled back predicted spell state for {pendingLedger.ledger.ActionKind} after {row.Result} reason={row.RejectReason}");
             }
 
+            // Reject = interrupt, never completion (netcode design review S2):
+            // cut the predicted instant-spell animation via the shared
+            // preemption primitives. Cast-time holds already cancel through the
+            // spell presentation state machine; StaleToken stays excluded there
+            // and here — a newer press of the same action owns the presentation.
+            if (row.Result == ActionResultKind.Rejected
+                && _pendingInstantSpellByToken.TryGetValue(tokenKey, out var pendingInstant))
+            {
+                EntityRegistry.Instance?.LocalPlayerEntity?.CutRejectedActionPresentation(
+                    pendingInstant.SpellActionId);
+                ActionBarTrace.Trace(
+                    $"cut rejected predicted instant spell presentation for {pendingInstant.SpellActionId} reason={row.RejectReason}");
+            }
+
             _predictionLedgersByToken.Remove(tokenKey);
             _pendingInstantSpellByToken.Remove(tokenKey);
         }

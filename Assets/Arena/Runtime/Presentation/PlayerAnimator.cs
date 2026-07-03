@@ -218,7 +218,8 @@ namespace Arena.Presentation
             _statusReactionController ??= new CombatStatusReactionController(
                 IsCurrentlyGrounded,
                 ApplyHitClipOverrides,
-                ClearPresentationForStagger);
+                ClearPresentationForStagger,
+                CutRejectedActionPresentationScoped);
 
         private readonly struct ActiveMovementActionPresentation
         {
@@ -1393,11 +1394,19 @@ namespace Arena.Presentation
                 {
                     PlayUpperBodyState(UpperBodyEmptyStateHash, 0f);
                     PlayLeftGestureState(ResolveLeftGestureSpellStateHash(bankSlot), normalizedStart);
+                    _actionPlayback.SetActiveOverlaySpellPresentation(
+                        spellKind,
+                        ResolveLeftGestureSpellStateHash(bankSlot),
+                        usesLeftGesture: true);
                 }
                 else
                 {
                     ClearLeftGestureSpellPresentation();
                     PlayUpperBodyState(ResolveUpperBodySpellStateHash(bankSlot), normalizedStart);
+                    _actionPlayback.SetActiveOverlaySpellPresentation(
+                        spellKind,
+                        ResolveUpperBodySpellStateHash(bankSlot),
+                        usesLeftGesture: false);
                 }
                 if (needsCombatVisualStance && spellEntry.ShouldEnterCombatAfterCastStarts(useOverlaySpellPlayback))
                     SetInCombat(true);
@@ -2465,6 +2474,82 @@ namespace Arena.Presentation
         {
             StatusReactionController.Bind(_animator, _overrideController);
             StatusReactionController.TriggerStagger(hitDirection, characterForward);
+        }
+
+        /// <summary>
+        /// Cross-system cancellation for the denial reaction (netcode design
+        /// review S2): cuts the predicted presentation of a server-rejected
+        /// action. Reaction policy lives in
+        /// <see cref="CombatStatusReactionController.TriggerPredictionRejected"/>;
+        /// the identity gate lives in
+        /// <see cref="CombatActionPlaybackController.ShouldCutRejectedActionPresentation"/>.
+        /// </summary>
+        public void CutRejectedActionPresentation(string rejectedActionId)
+        {
+            StatusReactionController.Bind(_animator, _overrideController);
+            StatusReactionController.TriggerPredictionRejected(rejectedActionId);
+        }
+
+        /// <summary>
+        /// The cut itself, composed exclusively from the existing
+        /// interrupt/empty-state primitives and scoped by action identity so a
+        /// rejection never eats playback owned by a later press. Invoked only
+        /// through <see cref="CombatStatusReactionController"/>.
+        /// </summary>
+        private void CutRejectedActionPresentationScoped(string rejectedActionId)
+        {
+            if (_animator == null)
+                return;
+
+            if (_actionPlayback.ActiveMeleePresentation.HasValue
+                && CombatActionPlaybackController.ShouldCutRejectedActionPresentation(
+                    _actionPlayback.ActiveMeleePresentation.GetValueOrDefault().ActionId,
+                    rejectedActionId))
+            {
+                // PreemptMeleeAnimationIfActive snaps the melee layer, but an
+                // upper-body-mode phased windup plays on the upper-body slot.
+                bool wasUpperBodyPhased = _actionPlayback.IsPhasedMeleeActive
+                    && _actionPlayback.IsPhasedMeleeUpperBodyMode;
+                PreemptMeleeAnimationIfActive(captureGhost: false);
+                if (wasUpperBodyPhased)
+                    PlayUpperBodyState(UpperBodyEmptyStateHash, 0f);
+            }
+
+            if (_actionPlayback.ActiveSpellPresentation.HasValue
+                && CombatActionPlaybackController.ShouldCutRejectedActionPresentation(
+                    _actionPlayback.ActiveSpellPresentation.GetValueOrDefault().ActionId,
+                    rejectedActionId))
+            {
+                if (_weaponAttachments == null)
+                    _weaponAttachments = GetComponent<WeaponAttachmentController>();
+                _weaponAttachments?.ReleaseTemporaryAnimatedProp(rejectedActionId);
+                ClearActiveSpellPresentation(resetLayerWeight: true, clearUpperBodySpell: true);
+                _animator.Play(SpellActionEmptyStateHash, SpellActionLayerIndex, 0f);
+            }
+
+            if (_actionPlayback.ActiveOverlaySpellPresentation is { } overlay
+                && CombatActionPlaybackController.ShouldCutRejectedActionPresentation(
+                    overlay.ActionId,
+                    rejectedActionId))
+            {
+                // The overlay record is never lifecycle-cleared, so only cut
+                // while the recorded state is still what the layer is playing.
+                int layerIndex = overlay.UsesLeftGesture ? LeftGestureLayerIndex : UpperBodyLayerIndex;
+                bool statePlaying = _animator.GetCurrentAnimatorStateInfo(layerIndex).shortNameHash == overlay.StateHash
+                    || (_animator.IsInTransition(layerIndex)
+                        && _animator.GetNextAnimatorStateInfo(layerIndex).shortNameHash == overlay.StateHash);
+                if (statePlaying)
+                {
+                    if (_weaponAttachments == null)
+                        _weaponAttachments = GetComponent<WeaponAttachmentController>();
+                    _weaponAttachments?.ReleaseTemporaryAnimatedProp(rejectedActionId);
+                    _actionPlayback.ClearActiveOverlaySpellPresentation();
+                    if (overlay.UsesLeftGesture)
+                        ClearLeftGestureSpellPresentation();
+                    else
+                        PlayUpperBodyState(UpperBodyEmptyStateHash, 0f);
+                }
+            }
         }
 
         private void ClearPresentationForStagger()

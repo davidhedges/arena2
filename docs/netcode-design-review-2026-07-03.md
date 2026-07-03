@@ -102,6 +102,38 @@ keep the toast. A denied action must *read* as denied: wind-down or flinch,
 not a follow-through swing. (The gap-close "jump-press shows a full swing
 then a toast" observed live is this defect plus §5's disputed rule stacked.)
 
+**Delivered (2026-07-03, S2).** Client-only, zero schema change. A `Rejected`
+result now cuts the predicted presentation on arrival: plain and phased melee
+strikes, gap-close windups (the forced end segment is gone from the reject
+path — `RollbackPredictedGapCloseWindup`'s end request now serves only the
+5 s no-answer timeout), and instant spells on both the full-body layer and
+the moving-cast upper-body/left-gesture overlay (the overlay path previously
+recorded no identity — `ActiveOverlaySpellPresentation` in the playback
+substrate now carries it, self-validated against the layer's current state
+hash at cut time). Cast-time holds were already cut by
+`LocalSpellPresentationStateMachine`'s `RequestCancel`; verified, not
+changed. Composition per repo standard: the identity gate is the pure
+`CombatActionPlaybackController.ShouldCutRejectedActionPresentation`, the
+denial reaction is owned by
+`CombatStatusReactionController.TriggerPredictionRejected` (an authored
+flinch/wind-down clip hooks in there later), and `PlayerAnimator` only
+coordinates via the existing preemption/empty-state primitives
+(`PreemptMeleeAnimationIfActive` / `CancelPhasedMeleePlayback` /
+`ClearActiveSpellPresentation`), mirroring the stagger-clear wiring. Scoping
+rules: a rejection only cuts a presentation still attributable to the
+rejected action id; `StaleToken` never cuts (a newer press of the same
+action owns the presentation — the same exclusion the spell cast state
+machine already used); a live authoritative special movement skips the cut
+entirely (its row delete owns its presentation end). Slot flash:
+`PredictionRejected` now carries `(actionKind, pressedActionId, reason)` —
+`pressedActionId` is what the bar shows (combo follow-ups resolve to the
+follow-up strike id; the ledger records the pressed opener) — and
+`HUDController` flashes every visible slot whose resolved action matches
+(ability grid, spellbook row, discipline bar; 0.45 s red fade over the icon,
+presentation-only). Toast unchanged. Tests deferred until the contract
+stabilizes (churn ruling); note the §5 aerial ruling gates *which presses
+reject* in the eventual test matrix, not this presentation contract.
+
 ## 4. Local input prediction under latency — why delayed play is unplayable [DEFECT]
 
 This is the section that answers "why does any added delay feel horrible."
@@ -183,6 +215,10 @@ per archetype, not a global default: gap-closers plausibly
 `GROUNDED_OR_AIRBORNE` (dash math already server-owned), most strikes
 whichever the movement fantasy demands. Whatever the ruling, §3's contract
 applies: a rejected mid-air press must read as *denied*, not as a swing.
+(S2 delivered that presentation half on 2026-07-03 — an `AerialMismatch`
+reject now cuts the windup and flashes the slot. The ruling itself stays
+open; it decides which presses reject at all, and with it part of S2's
+eventual test matrix.)
 
 ## 6. Auto-attacks are second-class citizens [GAP]
 
@@ -237,6 +273,41 @@ dummy players commit only on change and read as starved while parked (debug
 fixtures — exclude from A/B legs), and a *moving* NPC whose own rows gap past
 the cap while global delivery stays healthy reads settled until the next row.
 
+**F4 A/B rerun 1 (2026-07-03, post-S1, session 07:50:21Z): inconclusive —
+S7 stays blocked.** The taxonomy held up (settled no longer poisons depth;
+legs compare on the (extrap + starved) / non-settled ratio), but the run
+missed protocol: 26 s / 24 s legs against a planned 75 s each, and the
+kobold sat settled 82–84 % of samples (hovering, not chasing). Late ratio
+ON 26.2 % vs OFF 24.2 % (z ≈ 0.8 — noise), hard snaps 0–0, error columns
+nearly all zero on a settled target. No timeline verdict — and note ON pays
+100 ms presentation delay vs OFF's 66 ms by design, so a tie is a loss for
+ON. Rerun spec: measurement build (`ARENA_NPC_NO_ATTACK=1
+ARENA_NPC_AGGRO_RADIUS=100 ./ops/republish-local-clear.sh` — compile-time
+flags in `server/src/npcs.rs`: NPC melee disabled outright, 100 m aggro
+radius) so the kobold does nothing but chase, anywhere in the playground —
+the stock 8 m leash, the post-swing 1800 ms cadence freeze, and tester
+death made sustained chase unachievable by hand; run continuous laps at
+full speed; 60 s warmup as a discardable timeline-OFF leg 0, then 75 s
+legs interleaved ON/OFF/ON/OFF with settled < ~40 % per leg; start legs
+only after depth reads sane (session 07:23:12Z logged 57 s of ON at 100 %
+starved / depth −1739 ticks — session-start clock convergence). Full
+numbers: feel audit F4 A/B entry.
+
+**F4 A/B rerun 2 (2026-07-03, session 13:25:52Z): conclusive — the
+server-time timeline as shipped loses.** The measurement flags
+(`ARENA_NPC_NO_ATTACK=1 ARENA_NPC_AGGRO_RADIUS=100`) held the kobold in
+continuous chase (settled ≤ 1.5 % per leg); five legs (OFF warmup
+discarded, then ON/OFF/ON/OFF, 83–108 s, ≥ 11 k non-settled samples
+each). Late ratio pooled: ON 11.6 % vs OFF 9.0 % — every ON leg worse
+than every OFF leg, nominal z ≈ 10 — while ON holds a 100 ms delay
+budget against OFF's 66 ms. Hard snaps 0–0; error mean ON slightly
+worse, error p95 ON better (0.42–0.47 m vs 0.49–0.50 m). Reading:
+server-time keying does smooth the error tail, but its fixed 100 ms
+budget is effectively under-delayed — absolute lateness vs the estimated
+server clock has a wider tail than inter-arrival gaps — so as shipped it
+pays +34 ms of presentation delay and still extrapolates 2.6 pp more.
+S7's gate failed as specced; see the S7 row for the decision.
+
 ## 8. Deliberate exposures to keep (for now, on the record) [ACCEPTED]
 
 - **Interest management is bandwidth, not security.** Subscriptions filter by
@@ -268,12 +339,12 @@ precede fairness work.
 | # | Slice | Surface | Unblocks |
 |---|-------|---------|----------|
 | S1 | ✅ Delivered 2026-07-03 — idle-aware sample taxonomy (settled vs starved) in `RemotePresentationBuffer`, overlay, CSV logger (see §7) | client | honest F4 A/B rerun |
-| S2 | Rejection presentation: cut-on-reject via existing interrupt primitives + slot flash (extend `PredictionRejected` payload) | client | legible denials (also fixes §5's worst symptom) |
+| S2 | ✅ Delivered 2026-07-03 — cut-on-reject via existing interrupt primitives + slot flash, `PredictionRejected` payload extended with the pressed action id (see §3) | client | legible denials (also fixes §5's worst symptom) |
 | S3 | NPC/auto-attack telegraphs: authored windup between CAST and damage | server + data | victim reaction time; masks present-time validation |
 | S4 | LOS unification: `requires_target_los` targeting flag (default on, per-action opt-out), gap-close = LOS + path, client advisory pre-check from bundled collision | server + data + client | legible targeting rules |
 | S5 | Closed-loop input buffering: per-tick buffer-depth/fallback feedback on the ack surface + client lead control loop + degradation ladder + jump-preserving fallback + clock unification/warmup gating + correction-decay presentation (schema change; deletes the endpoint-kind lead switch) | client + server | playable at any RTT; shaped-local testing representative |
 | S6 | Auto-attack local swing scheduling off `next_swing_at` + contact-cue parity | client | auto-attack feel at RTT |
-| S7 | F4 adaptive delay [66..200 ms] from arrival-lateness p95 | client | needs S1 + clean A/B |
+| S7 | F4 adaptive delay [66..200 ms] from arrival-lateness p95 | client | gate resolved (rerun 2, 2026-07-03: ON loses late ratio 11.6 % vs 9.0 % at +34 ms budget, wins err p95 — see §7). Owner decision: rescope S7 to adapt delay from measured *server-time* lateness p95 (the observed failure is under-delay, which adaptivity cures) or drop the server-time timeline and accept arrival's jitter warp |
 | S8 | Bounded lag-compensation ring for attack reach/facing + favor-the-defender grace — design doc first, kill-switched | server | end-state hit fairness |
 
 Owner decisions needed before their slices: aerial gating ruling per
