@@ -168,7 +168,10 @@ referenced but not repeated.
   remains S8, defense-grace widening remains §1 item 2 — and the owner
   rescoped player attacks (auto-attacks included) out of the slice.
   Evidence tooling: `ops/npc-telegraph-separation.py` (per-swing
-  CAST→damage separation from the live combat-event window).
+  CAST→damage separation from the live combat-event window). Verified live
+  2026-07-04: 462.9–479.2 ms measured over 11 warrior swings (authored
+  450 ms) and the owner confirmed the on-screen checklist at baseline and
+  under downstream-only shaping.
   (4) Auto-attacks bypass the predicted contact-cue system entirely
   (cues hook predicted action-bar melee presses only).
   (5) Remote-presentation instrumentation cannot distinguish

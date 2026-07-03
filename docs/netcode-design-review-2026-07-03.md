@@ -87,6 +87,14 @@ reads as on-screen windup automatically. Measurement flags compose:
 genuinely distinct `created_at_micros` under one `action_instance_id`, and
 `ops/npc-telegraph-separation.py` prints per-swing CAST→damage separation
 (plus whiff/cancel counts) from the live 20 s combat-event window.
+Verified live 2026-07-04: a headless websocket player probe measured
+462.9–479.2 ms separation over 11 warrior swings (authored 450 ms plus tick
+rounding), and the owner confirmed the on-screen checklist — windup visibly
+precedes every hit at baseline and under downstream-only shaping, and
+stepping out during the windup whiffs. (The probe run also caught and fixed
+an evidence-script bug: it had filtered `event_type` on the Rust constant
+names instead of the `COMBAT_*` wire values and reported empty during live
+combat.)
 
 ## 2. Line of sight is a policy accident [DEFECT]
 
