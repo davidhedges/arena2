@@ -5,6 +5,7 @@ using System.Globalization;
 using System.IO;
 using System.Text;
 using Arena.Entity;
+using Arena.Input;
 using Arena.Presentation;
 using Arena.Simulation;
 using UnityEngine;
@@ -21,9 +22,15 @@ namespace Arena.Debugging
     /// deltas. Samples carry the S1 four-way taxonomy; the A/B comparison
     /// metric is (extrap + starved) / (interp + extrap + starved) — settled
     /// samples (entity authoritatively at rest) are excluded so target
-    /// idleness cannot confound the legs. Diagnostic only: editor/development
-    /// builds, gameplay reads nothing from it, and any I/O failure is
-    /// swallowed.
+    /// idleness cannot confound the legs.
+    ///
+    /// S5 extension: every row also carries the local input pipeline's
+    /// closed-loop state (lead, buffer occupancy, send-covered fallback acks,
+    /// inject/skip actuation, resyncs, reconcile error, correction budget,
+    /// jump-delivery ledger, estimate source) — the per-leg evidence for the
+    /// design review §4 acceptance criteria. Diagnostic only:
+    /// editor/development builds, gameplay reads nothing from it, and any I/O
+    /// failure is swallowed.
     /// </summary>
     internal sealed class RemotePresentationAbLog : MonoBehaviour
     {
@@ -111,7 +118,18 @@ namespace Arena.Debugging
                 npcDelayMsSum += npc.PresentationEffectiveDelayMs;
             }
 
-            if (remoteCount == 0 && npcCount == 0)
+            var local = registry.LocalPlayerEntity;
+            MovementNetDriver? netDriver = null;
+            LocalMovementPredictionDriver? predDriver = null;
+            LocalPresentationDriver? presentationDriver = null;
+            if (local != null && !local.IsDestroyed)
+            {
+                netDriver = local.GameObject.GetComponent<MovementNetDriver>();
+                predDriver = local.GameObject.GetComponent<LocalMovementPredictionDriver>();
+                presentationDriver = local.GameObject.GetComponent<LocalPresentationDriver>();
+            }
+
+            if (remoteCount == 0 && npcCount == 0 && netDriver == null)
                 return;
 
             var row = new StringBuilder();
@@ -143,6 +161,30 @@ namespace Arena.Debugging
             row.Append(',').Append(PredictedMeleeContactCueController.MatchedCues);
             row.Append(',').Append(PredictedMeleeContactCueController.FalsePositives);
             row.Append(',').Append(PredictedMeleeContactCueController.SuppressedAuthoritativeCues);
+
+            // S5 local input pipeline columns.
+            var lead = netDriver?.LeadController;
+            var localSim = local != null && !local.IsDestroyed ? local.SimState : null;
+            row.Append(',').Append(lead?.LeadTicks ?? 0);
+            row.Append(',').Append(lead?.LastAckBufferedCommands ?? 0);
+            row.Append(',').Append(lead?.AckTicksObserved ?? 0);
+            row.Append(',').Append(lead?.SendCoveredFallbackAcks ?? 0);
+            row.Append(',').Append(lead?.LeadRaises ?? 0);
+            row.Append(',').Append(lead?.LeadLowers ?? 0);
+            row.Append(',').Append(predDriver?.InjectedCommands ?? 0);
+            row.Append(',').Append(predDriver?.SkippedAuthoringSlots ?? 0);
+            row.Append(',').Append(netDriver?.ResyncCount ?? 0);
+            row.Append(',').Append((predDriver?.LastCorrectionPositionError ?? 0f)
+                .ToString("F4", CultureInfo.InvariantCulture));
+            row.Append(',').Append((predDriver?.MaxCorrectionPositionErrorObserved ?? 0f)
+                .ToString("F4", CultureInfo.InvariantCulture));
+            row.Append(',').Append(presentationDriver?.CorrectionSnapCount ?? 0);
+            row.Append(',').Append((presentationDriver?.CorrectionAbsorbedMeters ?? 0f)
+                .ToString("F3", CultureInfo.InvariantCulture));
+            row.Append(',').Append(predDriver?.JumpsPredicted ?? 0);
+            row.Append(',').Append(predDriver?.JumpsConfirmed ?? 0);
+            row.Append(',').Append(predDriver?.JumpsLost ?? 0);
+            row.Append(',').Append(localSim != null && localSim.LastTickEstimateUsedPreciseClock ? 1 : 0);
             row.Append('\n');
 
             try
@@ -156,7 +198,10 @@ namespace Arena.Debugging
                             $"# session {DateTime.UtcNow:yyyy-MM-dd'T'HH:mm:ss'Z'}\n")
                         + "unix_ms,timeline,players,p_hard_snaps,p_interp,p_extrap,p_starved,p_settled,p_last_err_m,p_max_err_m,"
                         + "npcs,n_hard_snaps,n_interp,n_extrap,n_starved,n_settled,n_last_err_m,n_max_err_m,n_depth_ticks_avg,n_delay_ms_avg,"
-                        + "cue_fired,cue_matched,cue_false_pos,cue_suppressed_auth\n");
+                        + "cue_fired,cue_matched,cue_false_pos,cue_suppressed_auth,"
+                        + "s5_lead,s5_occ,s5_acks,s5_fb_acks,s5_raises,s5_lowers,s5_injected,s5_skipped,s5_resyncs,"
+                        + "s5_rec_err_last,s5_rec_err_max,s5_corr_snaps,s5_corr_absorbed_m,"
+                        + "s5_jump_pred,s5_jump_conf,s5_jump_lost,s5_est_precise\n");
                     _wroteHeader = true;
                 }
 

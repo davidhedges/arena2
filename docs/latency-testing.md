@@ -30,66 +30,47 @@ the `[TICK_PROFILE_SCAN]` window line (compile-time `ARENA_PROFILE_TICKS`; see
 - dummynet has no native jitter parameter. We approximate it bimodally: a
   `probability` rule sends ~30 % of packets through a second, slower pipe.
 
-## Local-endpoint caveat: movement input lead (read before shaping)
+## Shaped-local movement is representative (S5, 2026-07-04)
 
-The client keys its movement input lead to endpoint **kind**, not measured RTT
-(`MovementNetDriver.ResolveDesiredServerInputLeadTicks`): only
-`NetworkEnvironmentKind.Remote` gets the 8-tick (~264 ms) lead the feel
-audit's headroom numbers assume; `ws://localhost:3000` is `Local` (and
-`Custom` counts as local too), which gets **2 ticks (~66 ms)**. The client's
-server-tick estimate is also arrival-anchored
-(`ClientSimulationState.EstimateAuthoritativeTick`), so it runs *behind* the
-true server tick by the server→client one-way delay. Once added one-way delay
-approaches ~30–40 ms, the lead budget is spent: shaped commands arrive after
-their tick, the server falls back to stale intent every tick (`MOVE_FALLBACK`
-— note fallback also forces `jump = false`, so jumps get eaten), and the
-client corrects on every input *change* — which reads as severe rubberbanding
-while strafing/turning, near-normal while stationary or moving straight.
+The 2026-07-03 caveat that lived here — "local-player movement fidelity
+cannot be validated against a shaped localhost endpoint" — is dead. It
+described the open-loop pipeline: an endpoint-kind lead switch (2 ticks on
+`Local`/`Custom`, 8 on `Remote`) plus an arrival-anchored tick estimate,
+which spent its whole budget at ~30–40 ms added one-way delay and
+rubberbanded continuously. S5 replaced that with a closed loop
+(`InputLeadController`: the server publishes per-tick consume truth on the
+ack surface, the client steers buffer occupancy to a 1–2 command setpoint)
+and a precise-clock tick estimate, identical on every endpoint kind. Shaping
+localhost now exercises exactly the machinery real remote play uses — full
+up+down shaping is the intended acceptance harness, not an artifact.
 
-Consequences:
+What to expect while shaped (watch the overlay's `Input lead (S5)` lines and
+`Logs/remote-presentation-ab.csv` `s5_*` columns, summarized by
+`ops/analyze-s5-input-loop.py`):
 
-- **Local-player movement fidelity cannot be validated against a shaped
-  localhost endpoint today.** Rubberbanding under shaping is the expected
-  harness artifact, not evidence about real remote play (remote-kind
-  endpoints get the 8-tick lead). A dev-only lead override for shaped-local
-  runs would remove this caveat, but that is movement-netcode work — see the
-  feel audit status note.
-- Bidirectional shaping on a local endpoint is usable **only for fully
-  stationary checks** (connection-dot thresholds, RTT/clock lines, hands off
-  the keyboard). Verified live 2026-07-03: even Profile L bidirectional
-  produces continuous ~0.5 m reconcile corrections
-  (`[LocalMovementPredictionDriver] Large correction` spam) and unplayable
-  rubberbanding — steady input does not save it, because the 2-tick lead plus
-  the arrival-anchored estimate means commands miss their tick continuously.
-- For any check that involves moving (denial toasts, gap-closer
-  timing/rejection, contact cues, kiting for the F4 A/B), shape **downstream
-  only** (server→client). The input path stays *near*-clean: the
-  arrival-anchored tick estimate still lags by the downstream one-way delay,
-  eating ~1 of the 2 lead ticks, so expect an occasional small correction at
-  input transitions (a brief glide when stopping — observed live
-  2026-07-03). That residual is bounded and does not contaminate the
-  presentation-side checks; a continuous stream of Large-correction warnings
-  means the setup is wrong. Row delivery still carries the delay/jitter the
-  checks measure, and server-side NPC motion is untouched by definition:
+- After a lead step (session start, RTT change), a brief burst of fallback
+  acks while the loop raises the lead — then fallback returns to rare-event.
+  Steady-state fallback (`s5_fb_acks` climbing every second) is a bug again,
+  not a harness artifact.
+- Lead converges to ~2 ticks on unshaped loopback and to roughly
+  upstream-delay-in-ticks + 1–2 under shaping, and comes back down (slowly,
+  by design — one tick per 5 s of sustained surplus) after shaping is torn
+  down.
+- Jumps never vanish: `s5_jump_lost` stays 0 (a near-miss jump slides one
+  tick server-side — `[MOVE_JUMP_SLIDE]` in module logs).
+- Reconcile corrections read as a capped 0.5 m/s drift or one honest snap
+  (`s5_corr_snaps`), never continuous elastic yanking.
 
-  ```bash
-  sudo dnctl pipe 2 config delay 40ms          # server -> client only
-  cat <<'EOF' | sudo pfctl -a "com.apple/arena-latency" -f -
-  dummynet out quick proto tcp from any port 3000 to any pipe 2
-  EOF
-  ```
-
-  For the F4 A/B, add the downstream jitter branch on top (pipe 4 at 65 ms,
-  `probability 30%` rule before the pipe 2 rule). No manual number-copying
-  is needed for the A/B: in the editor and development builds,
-  `Arena.Debugging.RemotePresentationAbLog` appends the overlay's
-  remote-presentation aggregates (players + NPCs, tagged with the active
-  timeline) to `Logs/remote-presentation-ab.csv` once per second; compare
-  legs as counter deltas within the ON/OFF segments. Under downstream-only
-  shaping the overlay RTT reads roughly the downstream delay alone (the
-  upstream leg is unshaped), so dot-threshold checks must put the full
-  threshold into the one direction — e.g. `pipe 2 config delay 180ms`,
-  stationary, for the Bad (≥180 ms p50) check.
+Downstream-only shaping (`sudo dnctl pipe 2 config delay 40ms` with only the
+`from any port 3000` pf rule) remains useful when a check wants row-delivery
+delay while leaving the input path clean — e.g. the F4 A/B protocol, whose
+jitter branch and CSV leg-comparison notes are unchanged: add pipe 4 at
+65 ms with the `probability 30%` rule before the pipe 2 rule, and compare
+legs as counter deltas in `Logs/remote-presentation-ab.csv`. Under
+downstream-only shaping the overlay RTT reads roughly the downstream delay
+alone (the upstream leg is unshaped), so dot-threshold checks must put the
+full threshold into the one direction — e.g. `pipe 2 config delay 180ms`,
+stationary, for the Bad (≥180 ms p50) check.
 
 ## Profiles
 
@@ -196,9 +177,11 @@ touching pf.
 
 5. Play. In the overlay expect: RTT last/p50/p95 up by the profile's RTT and
    spread by the jitter branch; clock offset re-converging via precise samples;
-   extrapolation ratio and hard snaps rising with loss; pending-command tick
-   lag growing; under Profile B, visible catch-up on remote actions. On the
-   server, `MOVE_FALLBACK` per profile window should rise with loss.
+   extrapolation ratio and hard snaps rising with loss; the S5 input lead
+   stepping up to cover the added delay and then holding, with fallback acks
+   settling back to rare-event; under Profile B, visible catch-up on remote
+   actions. On the server, `MOVE_FALLBACK` per profile window should rise
+   with loss stalls but not sit at one-per-tick.
 
 6. Tear down (order matters — flush the anchor before disabling pf so no
    unshaped window routes through stale pipes):

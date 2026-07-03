@@ -183,10 +183,12 @@ namespace Arena.Entity
                 return;
 
             int hardSnapsBefore = _presentation.HardSnapCount;
+            // F4 warmup gate (S5): server-time timeline only once the clock
+            // has a precise sample — see ClientSimulationState.Tick.
             _presentation.Tick(
                 dt,
                 Time.realtimeSinceStartup,
-                ArenaServerClock.HasEstimate ? ArenaServerClock.ServerNowMs : (long?)null,
+                ArenaServerClock.HasPreciseSample ? ArenaServerClock.ServerNowMs : (long?)null,
                 _lastAuthoritativePosition,
                 _lastAuthoritativeYawRadians,
                 NetcodeReceiveCounters.RowDeliveryFresh(Time.realtimeSinceStartup));

@@ -49,6 +49,8 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Col<PlayerPhysics, float> Yaw { get; }
         public global::SpacetimeDB.Col<PlayerPhysics, bool> Grounded { get; }
         public global::SpacetimeDB.Col<PlayerPhysics, uint> LastProcessedTick { get; }
+        public global::SpacetimeDB.Col<PlayerPhysics, bool> LastTickConsumedCommand { get; }
+        public global::SpacetimeDB.Col<PlayerPhysics, uint> BufferedCommandCount { get; }
         public global::SpacetimeDB.Col<PlayerPhysics, SpacetimeDB.Timestamp> UpdatedAt { get; }
 
         public PlayerPhysicsCols(string tableName)
@@ -63,6 +65,8 @@ namespace SpacetimeDB.Types
             Yaw = new global::SpacetimeDB.Col<PlayerPhysics, float>(tableName, "yaw");
             Grounded = new global::SpacetimeDB.Col<PlayerPhysics, bool>(tableName, "grounded");
             LastProcessedTick = new global::SpacetimeDB.Col<PlayerPhysics, uint>(tableName, "last_processed_tick");
+            LastTickConsumedCommand = new global::SpacetimeDB.Col<PlayerPhysics, bool>(tableName, "last_tick_consumed_command");
+            BufferedCommandCount = new global::SpacetimeDB.Col<PlayerPhysics, uint>(tableName, "buffered_command_count");
             UpdatedAt = new global::SpacetimeDB.Col<PlayerPhysics, SpacetimeDB.Timestamp>(tableName, "updated_at");
         }
     }

@@ -79,3 +79,22 @@ pub fn pop_command_for_tick(
         .delete(command.command_id);
     Some(command)
 }
+
+pub fn find_buffered_command_for_tick(
+    ctx: &ReducerContext,
+    identity: Identity,
+    input_tick: u32,
+) -> Option<PlayerCommand> {
+    ctx.db
+        .player_command()
+        .identity()
+        .filter(identity)
+        .find(|command| command.input_tick == input_tick)
+}
+
+/// Buffered-command occupancy after a tick's consume (S5): every remaining
+/// row targets a future tick, so a plain per-identity count is the number of
+/// ticks of input the server is holding for this player.
+pub fn count_buffered_commands(ctx: &ReducerContext, identity: Identity) -> u32 {
+    ctx.db.player_command().identity().filter(identity).count() as u32
+}

@@ -78,6 +78,50 @@ pub fn send_movement_intent(
 
     if let Some(physics) = ctx.db.player_physics().identity().find(identity) {
         if input_tick <= physics.last_processed_tick {
+            // S5 jump preservation: the late command's motion is stale, but a
+            // jump edge is a discrete press the player made — give it one
+            // extra tick of life instead of eating it. Only a command that
+            // missed its tick by less than one consume (input_tick equals the
+            // tick just processed via fallback) slides; anything staler is
+            // honestly dropped. The cursor gate stays authoritative: a tick
+            // the cursor already passed (e.g. the post-special-movement
+            // discard window) must not resurrect a jump through the slide.
+            if jump
+                && input_tick == physics.last_processed_tick
+                && input_tick > cursor.latest_received_tick
+            {
+                let slide_tick = physics.last_processed_tick.saturating_add(1);
+                if let Some(mut buffered) =
+                    crate::player_input::find_buffered_command_for_tick(ctx, identity, slide_tick)
+                {
+                    if !buffered.jump {
+                        buffered.jump = true;
+                        ctx.db.player_command().command_id().update(buffered);
+                    }
+                } else {
+                    ctx.db.player_command().insert(PlayerCommand {
+                        command_id: 0,
+                        identity,
+                        input_tick: slide_tick,
+                        forward: forward.clamp(-1.0, 1.0),
+                        strafe: strafe.clamp(-1.0, 1.0),
+                        yaw,
+                        jump: true,
+                        received_at: ctx.timestamp,
+                    });
+                }
+                // info-level on purpose: slides are rare events (a jump that
+                // missed its tick by less than one consume) and the log line
+                // is the live evidence signal for them.
+                log::info!(
+                    "[MOVE_JUMP_SLIDE] Player {} | late jump at tick={} rebuffered for tick={}",
+                    &identity.to_hex()[..8],
+                    input_tick,
+                    slide_tick
+                );
+                return Ok(());
+            }
+
             log::debug!(
                 "[MOVE_LATE_DROP] Player {} | input_tick={} <= last_processed_tick={}",
                 &identity.to_hex()[..8],
@@ -97,16 +141,30 @@ pub fn send_movement_intent(
     let forward = forward.clamp(-1.0, 1.0);
     let strafe = strafe.clamp(-1.0, 1.0);
 
-    ctx.db.player_command().insert(PlayerCommand {
-        command_id: 0,
-        identity,
-        input_tick,
-        forward,
-        strafe,
-        yaw,
-        jump,
-        received_at: ctx.timestamp,
-    });
+    // A slid late jump (above) may already occupy this tick's slot; merge the
+    // real command into it — the axes are fresher and the jump edge must not
+    // be lost — instead of inserting a duplicate-tick row.
+    if let Some(mut buffered) =
+        crate::player_input::find_buffered_command_for_tick(ctx, identity, input_tick)
+    {
+        buffered.forward = forward;
+        buffered.strafe = strafe;
+        buffered.yaw = yaw;
+        buffered.jump = buffered.jump || jump;
+        buffered.received_at = ctx.timestamp;
+        ctx.db.player_command().command_id().update(buffered);
+    } else {
+        ctx.db.player_command().insert(PlayerCommand {
+            command_id: 0,
+            identity,
+            input_tick,
+            forward,
+            strafe,
+            yaw,
+            jump,
+            received_at: ctx.timestamp,
+        });
+    }
 
     cursor.latest_received_tick = input_tick;
     ctx.db.player_input_cursor().identity().update(cursor);

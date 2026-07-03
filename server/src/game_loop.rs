@@ -69,7 +69,8 @@ use crate::movement_actions::{
 use crate::npcs::{prune_due_npc_corpse_despawns, tick_npc_combat};
 use crate::party::expire_party_invites;
 use crate::player_input::{
-    clear_pending_player_commands, clear_pending_player_commands_through_tick, pop_command_for_tick,
+    clear_pending_player_commands, clear_pending_player_commands_through_tick,
+    count_buffered_commands, pop_command_for_tick,
 };
 use crate::player_intent::PlayerIntent;
 use crate::player_physics::{commit_player_physics, PhysicsWriteMode, PlayerPhysics};
@@ -1012,6 +1013,11 @@ fn try_tick_dead_player(
         physics.vel_z = 0.0;
         physics.yaw = spawn_yaw;
         physics.grounded = true;
+        // Respawn clears the queued command stream below; report a clean
+        // consume state so the client's lead loop doesn't read the wipe as
+        // starvation.
+        physics.last_tick_consumed_command = true;
+        physics.buffered_command_count = 0;
         physics.updated_at = now;
         if let Some(mut intent) = ctx.db.player_intent().identity().find(state.player_id) {
             intent.forward = 0.0;
@@ -1570,13 +1576,17 @@ fn try_tick_special_movement_player(
         input_tick: next_input_tick,
         updated_at: now,
     };
+    let mut consumed_real_command = false;
     if let Some(command) = pop_command_for_tick(ctx, identity, next_input_tick) {
         step_intent.forward = command.forward;
         step_intent.strafe = command.strafe;
         step_intent.yaw = command.yaw;
+        consumed_real_command = true;
     }
 
     physics.last_processed_tick = next_input_tick;
+    physics.last_tick_consumed_command = consumed_real_command;
+    physics.buffered_command_count = count_buffered_commands(ctx, identity);
     physics.updated_at = now;
     intent.forward = step_intent.forward;
     intent.strafe = step_intent.strafe;
@@ -1614,6 +1624,8 @@ fn try_tick_special_movement_player(
             yaw: physics.yaw,
             grounded: physics.grounded,
             last_processed_tick: physics.last_processed_tick,
+            last_tick_consumed_command: physics.last_tick_consumed_command,
+            buffered_command_count: physics.buffered_command_count,
             updated_at: physics.updated_at,
         },
         PhysicsWriteMode::Normal,
@@ -1768,6 +1780,11 @@ fn tick_player(
         step_intent.input_tick = next_input_tick;
         step_intent.updated_at = now;
     }
+
+    // S5: publish this tick's consume truth beside the ack so the client's
+    // lead control loop sees starvation/surplus instead of guessing.
+    physics.last_tick_consumed_command = applied_command_input_tick.is_some();
+    physics.buffered_command_count = count_buffered_commands(ctx, identity);
 
     let equipment = contexts.equipment(ctx, identity);
     move_speed_multiplier *= contexts.derived(ctx, identity).run_speed_multiplier;
@@ -2086,6 +2103,8 @@ mod tests {
             yaw,
             grounded: false,
             last_processed_tick: 7,
+            last_tick_consumed_command: true,
+            buffered_command_count: 0,
             updated_at: Timestamp::from_micros_since_unix_epoch(1),
         }
     }

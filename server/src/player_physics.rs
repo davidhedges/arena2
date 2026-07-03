@@ -59,6 +59,17 @@ pub struct PlayerPhysics {
     /// This is the ack boundary the local client uses for rewind/replay.
     pub last_processed_tick: u32,
 
+    /// Per-tick consume truth (design review S5): true when this tick popped
+    /// a real buffered command for `last_processed_tick`, false when it fell
+    /// back to held intent. Published beside the ack so the client's input
+    /// lead control loop can see starvation instead of guessing.
+    pub last_tick_consumed_command: bool,
+
+    /// Commands still buffered for future ticks after this tick's consume
+    /// (S5). The client control loop steers this occupancy toward its
+    /// setpoint (~1–2) — starvation raises the lead, surplus lowers it.
+    pub buffered_command_count: u32,
+
     /// Last update timestamp (for client interpolation timing)
     pub updated_at: Timestamp,
 }
@@ -199,6 +210,8 @@ mod tests {
             yaw: 0.0,
             grounded: true,
             last_processed_tick: 0,
+            last_tick_consumed_command: true,
+            buffered_command_count: 0,
             updated_at: test_timestamp(1),
         }
     }

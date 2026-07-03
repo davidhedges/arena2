@@ -410,7 +410,8 @@ namespace Arena.Simulation
         {
             usedServerTimeline = ServerTimeTimelineEnabled
                 && serverNowMs.HasValue
-                && AllSnapshotsCarryServerTime();
+                && AllSnapshotsCarryServerTime()
+                && ServerTimelineDepthSane(serverNowMs.Value);
             if (usedServerTimeline)
             {
                 SampleServerTime(serverNowMs!.Value - ServerTimeDelayMs,
@@ -484,6 +485,26 @@ namespace Arena.Simulation
             const long tickMs = MovementNetcodeConfig.FixedTickMilliseconds;
             long ms = serverTimestampMicros / 1000L;
             return (ms + tickMs / 2L) / tickMs * tickMs;
+        }
+
+        // Sanity window for engaging the server-time timeline (design review
+        // S5 / F4 warmup gating): while the clock estimate is converging, the
+        // implied buffer depth can be wildly wrong (observed live: a session
+        // that started at −1739 ticks in an extrapolation storm). A healthy
+        // render point trails the newest snapshot by roughly ServerTimeDelayMs;
+        // outside ±1 s of that the clock, not delivery, is the problem — use
+        // the arrival timeline this frame instead.
+        private const long ServerTimelineDepthSanityWindowMs = 1000L;
+
+        private bool ServerTimelineDepthSane(long serverNowMs)
+        {
+            if (_snapshotCount <= 0)
+                return false;
+
+            long renderPointMs = serverNowMs - ServerTimeDelayMs;
+            long newestLagMs = GetSnapshot(_snapshotCount - 1).ServerTimeMs - renderPointMs;
+            return newestLagMs > -ServerTimelineDepthSanityWindowMs
+                && newestLagMs < ServerTimelineDepthSanityWindowMs;
         }
 
         private bool AllSnapshotsCarryServerTime()

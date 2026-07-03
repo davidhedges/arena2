@@ -119,20 +119,16 @@ referenced but not repeated.
   ability press in the log fired and matched cleanly (fired 1 / matched 1 /
   falsePos 0). Redo with an action-bar melee strike.
 - **Latency-harness findings (2026-07-03, first live conditioner runs).**
-  (a) The movement input lead is keyed to endpoint kind, not RTT:
-  `Remote` gets 8 ticks (~264 ms), while `Local`/`Custom` get 2 ticks
-  (~66 ms) (`MovementNetDriver.ResolveDesiredServerInputLeadTicks`,
-  `MovementNetcodeConfig`), and the tick estimate is arrival-anchored
-  (`ClientSimulationState.EstimateAuthoritativeTick`), lagging the true
-  server tick by the downstream one-way delay. So shaping localhost
-  above ~30–40 ms one-way starves the per-tick command buffer
-  (`MOVE_FALLBACK` every tick, fallback forces `jump = false`) and
-  local movement rubberbands on every input change — a harness blind
-  spot, not general netcode fragility. Local-move fidelity under
-  latency is therefore untestable on a shaped local endpoint until a
-  dev-only lead override (or RTT-adaptive lead) exists; that is
-  movement-netcode work, deliberately not started, and anything
-  adaptive shares the F4-adaptive-delay gate.
+  (a) ~~The movement input lead is keyed to endpoint kind, not RTT~~ —
+  **closed by S5 (2026-07-04, closed-loop input buffering)**: the
+  endpoint-kind switch is deleted; `InputLeadController` steers the lead
+  from the server's per-tick consume truth (published beside the ack on
+  `PlayerPhysics`), the tick estimate anchors on the precise
+  `ArenaServerClock` sample instead of arrival time, a near-miss jump
+  slides one tick server-side instead of being eaten, and reconcile
+  corrections spend a capped presentation budget. Shaped-local movement
+  is representative now — the latency-testing doc's caveat section was
+  replaced by the S5 acceptance expectations.
   (b) ~~Gap-closers do not validate line of sight server-side~~ —
   **closed by S4 (2026-07-04, LOS unification)**: LOS is now a targeting
   rule (`requires_target_los`, default true) checked for every
@@ -181,8 +177,8 @@ referenced but not repeated.
   (5) Remote-presentation instrumentation cannot distinguish
   idle-target row silence from late delivery (confounds the F4 A/B; see
   above).
-  (6) Fixed, endpoint-kind-keyed input lead (no RTT adaptation) — already
-  recorded above.
+  (6) ~~Fixed, endpoint-kind-keyed input lead (no RTT adaptation)~~ —
+  closed by S5 (see the harness finding (a) update above).
 - **F1 — implemented (all four steps).** `PredictedActionLedger` +
   `LocalCombatState.PredictActionStart` / `RollbackPrediction` /
   `ReleasePredictedPrimaryResource`; melee and spell press paths route their
@@ -452,11 +448,15 @@ The foundation is stronger than the planning docs suggest. Verified as implement
   `MovementContextSample` carries `MovementBlocked` / `MoveSpeedMultiplier` into
   replay (`Assets/Arena/Runtime/Input/MovementPrediction.cs:129-160`,
   `LocalMovementPredictionDriver.cs:617-653`).
-- **Sim/visual separation** (plan Phase 3 done): `LocalPresentationDriver`
-  smooths a presentation root with 60 ms position half-life and 2.0 m hard-snap
-  (`Assets/Arena/Runtime/Presentation/LocalPlayerCamera.cs:95-160`), and the camera
-  follows the smoothed root. Small corrections do not visibly snap; corrections
-  ≥ 0.25 m log a warning (`LocalMovementPredictionDriver.cs:21,374-389`).
+- **Sim/visual separation** (plan Phase 3 done; reshaped by S5 2026-07-04):
+  `LocalPresentationDriver` originally smoothed the presentation root with a
+  60 ms position half-life and 2.0 m hard-snap — S5 replaced that with a
+  correction budget (reconcile displacements < 0.3 m absorbed into an offset
+  decaying at a capped 0.5 m/s, larger ones snap once; rotation smoothing
+  kept), so normal motion passes through 1:1 and the camera no longer trails
+  a sprint (`Assets/Arena/Runtime/Presentation/LocalPlayerCamera.cs`).
+  Corrections ≥ 0.25 m still log a warning
+  (`LocalMovementPredictionDriver.cs`).
 - **Remote players are properly interpolated**: 12-snapshot buffer, 66 ms render
   delay, 66 ms max velocity extrapolation, 2.0 m / 60° hard-snap, k=18 smoothing
   (`Assets/Arena/Runtime/Simulation/ClientSimulationState.cs:93-100,397-442,517-564`).
@@ -487,8 +487,9 @@ The real feel gaps, in priority order:
 
 - **Latency (steady).** Local movement and combat startup stay responsive
   (prediction lead up to 12 ticks ≈ 396 ms of headroom,
-  `MovementNetcodeConfig.cs:20-28`; remote sends target an 8-tick input lead,
-  `MovementNetcodeConfig.cs:15-16`). What degrades: hit confirmation, interrupts,
+  `MovementNetcodeConfig.cs`; since S5 the input lead is closed-loop —
+  `InputLeadController` converges it to what the measured delivery needs,
+  bounded [1..10] ticks). What degrades: hit confirmation, interrupts,
   gap-closers, and projectile spawns — all full-RTT. A staggered local player keeps
   "casting" until the server's `ActiveCast` delete arrives
   (`LocalCombatState.cs:637-656` region), then the bar vanishes without explanation.

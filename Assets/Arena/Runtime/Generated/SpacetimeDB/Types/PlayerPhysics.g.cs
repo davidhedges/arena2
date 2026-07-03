@@ -33,6 +33,10 @@ namespace SpacetimeDB.Types
         public bool Grounded;
         [DataMember(Name = "last_processed_tick")]
         public uint LastProcessedTick;
+        [DataMember(Name = "last_tick_consumed_command")]
+        public bool LastTickConsumedCommand;
+        [DataMember(Name = "buffered_command_count")]
+        public uint BufferedCommandCount;
         [DataMember(Name = "updated_at")]
         public SpacetimeDB.Timestamp UpdatedAt;
 
@@ -47,6 +51,8 @@ namespace SpacetimeDB.Types
             float Yaw,
             bool Grounded,
             uint LastProcessedTick,
+            bool LastTickConsumedCommand,
+            uint BufferedCommandCount,
             SpacetimeDB.Timestamp UpdatedAt
         )
         {
@@ -60,6 +66,8 @@ namespace SpacetimeDB.Types
             this.Yaw = Yaw;
             this.Grounded = Grounded;
             this.LastProcessedTick = LastProcessedTick;
+            this.LastTickConsumedCommand = LastTickConsumedCommand;
+            this.BufferedCommandCount = BufferedCommandCount;
             this.UpdatedAt = UpdatedAt;
         }
 

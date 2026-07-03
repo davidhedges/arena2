@@ -251,17 +251,25 @@ namespace Arena.Entity
 
             var motor = go.AddComponent<LocalPlayerMotor>();
             var commandHistory = new MovementCommandBuffer(MovementNetcodeConfig.MaxPendingCommands);
+            var leadController = new InputLeadController();
             motor.Initialize(inputSource, GameplayTuning.DefaultHitRadius, GameplayTuning.DefaultHitHeight);
 
             var netDriver = go.AddComponent<MovementNetDriver>();
-            netDriver.Initialize(entity.SimState, commandHistory);
-
-            motor.EnablePredictedAuthority(stateProvider);
-            var predictionDriver = go.AddComponent<LocalMovementPredictionDriver>();
-            predictionDriver.Initialize(entity.SimState, motor, _localWorldCoordinator.WorldContext, stateProvider, commandHistory);
+            netDriver.Initialize(entity.SimState, commandHistory, leadController);
 
             var presentationDriver = go.AddComponent<LocalPresentationDriver>();
             presentationDriver.Initialize(entity.SimState, entity.GetPresentationRoot());
+
+            motor.EnablePredictedAuthority(stateProvider);
+            var predictionDriver = go.AddComponent<LocalMovementPredictionDriver>();
+            predictionDriver.Initialize(
+                entity.SimState,
+                motor,
+                _localWorldCoordinator.WorldContext,
+                stateProvider,
+                commandHistory,
+                leadController,
+                presentationDriver);
 
             // Add SpellInputHandler for spell keybinds.
             go.AddComponent<SpellInputHandler>();
@@ -831,7 +839,9 @@ namespace Arena.Entity
                 row.Grounded,
                 row.LastProcessedTick,
                 Time.realtimeSinceStartup,
-                RemotePresentationBuffer.QuantizeServerTimeMicros(row.UpdatedAt.MicrosecondsSinceUnixEpoch));
+                RemotePresentationBuffer.QuantizeServerTimeMicros(row.UpdatedAt.MicrosecondsSinceUnixEpoch),
+                row.LastTickConsumedCommand,
+                (int)row.BufferedCommandCount);
 
         private void SpawnOrUpdateNpc(NpcInstance row)
         {

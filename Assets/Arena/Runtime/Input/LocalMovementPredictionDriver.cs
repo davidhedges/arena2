@@ -2,13 +2,17 @@
 using System;
 using UnityEngine;
 using Arena.Simulation;
-using Arena.Network;
+using Arena.Presentation;
 
 namespace Arena.Input
 {
     /// <summary>
     /// Owns the local fixed-tick prediction clock, rebuilds from authoritative
     /// snapshots, and applies predicted local state to the player transform.
+    /// S5: also the input-lead actuator — the authoring clock injects extra
+    /// ticks (raise lead / re-anchor drift) and skips slots (drain surplus)
+    /// to keep command numbering at the InputLeadController's target ahead of
+    /// the estimated server tick.
     /// </summary>
     [DefaultExecutionOrder(-250)]
     public sealed class LocalMovementPredictionDriver : MonoBehaviour
@@ -26,6 +30,8 @@ namespace Arena.Input
         private LocalPlayerStateProvider? _stateProvider;
         private LocalMovementPredictor? _predictor;
         private MovementCommandBuffer? _commandHistory;
+        private InputLeadController? _leadController;
+        private LocalPresentationDriver? _presentationDriver;
         private IMovementEnvironment? _environment;
         private bool _warnedUnsupportedWorld;
         private PredictedMovementState _currentPredictedState;
@@ -61,10 +67,28 @@ namespace Arena.Input
         private const float SpecialMovementSettleWarningDelaySeconds = 0.2f;
         private const float SpecialMovementSettleWarningDistance = 0.25f;
 
+        // --- S5 lead actuation + jump-delivery ledger state ---
+        private int _pendingAuthoringSkips;
+        private int _injectedCommands;
+        private int _skippedAuthoringSlots;
+        private const int PendingPredictedJumpCapacity = 8;
+        private readonly uint[] _pendingPredictedJumpTicks = new uint[PendingPredictedJumpCapacity];
+        private int _pendingPredictedJumpCount;
+        private long _authoritativeJumpCursor;
+        // A jump predicted at tick P lands authoritatively at P, or P+1 when
+        // the server slid a late jump one tick; past P + timeout it was eaten.
+        private const uint JumpConfirmWindowTicks = 3;
+        private const uint JumpLossTimeoutTicks = 6;
+
         public int LastReplayDepth => _lastReplayDepth;
         public int MaxReplayDepthObserved => _maxReplayDepthObserved;
         public float LastCorrectionPositionError => _lastCorrectionPositionError;
         public float MaxCorrectionPositionErrorObserved => _maxCorrectionPositionErrorObserved;
+        public int InjectedCommands => _injectedCommands;
+        public int SkippedAuthoringSlots => _skippedAuthoringSlots;
+        public int JumpsPredicted { get; private set; }
+        public int JumpsConfirmed { get; private set; }
+        public int JumpsLost { get; private set; }
         public int LastReplayFallbackContextUses => _lastReplayFallbackContextUses;
         public int TotalReplayFallbackContextUses => _totalReplayFallbackContextUses;
         public float FixedTickAlpha => Mathf.Clamp01(_localTickAccumulator / MovementNetcodeConfig.FixedTickSeconds);
@@ -105,7 +129,9 @@ namespace Arena.Input
             LocalPlayerMotor motor,
             LocalMovementWorldContext worldContext,
             LocalPlayerStateProvider stateProvider,
-            MovementCommandBuffer commandHistory)
+            MovementCommandBuffer commandHistory,
+            InputLeadController leadController,
+            LocalPresentationDriver? presentationDriver)
         {
             MovementSharedDataLoader.ValidateBundledDataAvailable();
             _simState = simState;
@@ -113,6 +139,8 @@ namespace Arena.Input
             _worldContext = worldContext;
             _stateProvider = stateProvider;
             _commandHistory = commandHistory;
+            _leadController = leadController;
+            _presentationDriver = presentationDriver;
             _lastObservedCommandHistoryGeneration = commandHistory.Generation;
 
             PrimeInitialPredictionLead();
@@ -172,6 +200,7 @@ namespace Arena.Input
                 _lastProcessedMovementContextVersion = 0;
                 ClearRenderHistory();
                 ClearPredictedStateHistory();
+                ClearPendingPredictedJumps();
             }
 
             if (_simState.HasState)
@@ -186,6 +215,7 @@ namespace Arena.Input
                 }
             }
 
+            UpdateJumpLedger();
             AdvanceLocalPrediction();
 
             if (_renderHistoryCount == 0 && _hasCurrentPredictedState)
@@ -199,7 +229,8 @@ namespace Arena.Input
             if (_commandHistory == null || _motor == null || _commandHistory.Count > 0)
                 return;
 
-            for (int i = 0; i < ResolveDesiredServerInputLeadTicks(); i++)
+            int initialLead = _leadController?.LeadTicks ?? MovementNetcodeConfig.InitialInputLeadTicks;
+            for (int i = 0; i < initialLead; i++)
                 _commandHistory.AppendNext(_motor.SampleIntentForPredictionTick());
         }
 
@@ -207,6 +238,8 @@ namespace Arena.Input
         {
             if (_motor == null || _commandHistory == null || _environment == null)
                 return;
+
+            PlanAuthoringSkip();
 
             _localTickAccumulator = Mathf.Min(
                 _localTickAccumulator + Time.deltaTime,
@@ -216,12 +249,7 @@ namespace Arena.Input
             while (_localTickAccumulator >= MovementNetcodeConfig.FixedTickSeconds &&
                    simulatedTicksThisFrame < MovementNetcodeConfig.MaxLocalPredictionTicksPerFrame)
             {
-                uint authoritativeTick = _simState != null && _simState.HasState
-                    ? _simState.LastProcessedTick
-                    : 0u;
-                uint maxPredictedTick = authoritativeTick + (uint)MovementNetcodeConfig.MaxPredictionLeadTicks;
-                uint nextInputTick = _commandHistory.NextInputTick;
-                if (nextInputTick > maxPredictedTick)
+                if (NextInputTickExceedsPredictionBound())
                 {
                     _localTickAccumulator = Mathf.Min(_localTickAccumulator, MovementNetcodeConfig.FixedTickSeconds);
                     break;
@@ -229,26 +257,109 @@ namespace Arena.Input
 
                 _localTickAccumulator -= MovementNetcodeConfig.FixedTickSeconds;
 
-                MovementCommand command = _commandHistory.AppendNext(_motor.SampleIntentForPredictionTick());
-                if (!_hasCurrentPredictedState)
+                if (_pendingAuthoringSkips > 0)
                 {
-                    simulatedTicksThisFrame++;
+                    // Lead drain (S5): consume the slot without authoring, so
+                    // command numbering pauses one tick against the server's
+                    // consume clock and buffered surplus shrinks by one.
+                    _pendingAuthoringSkips--;
+                    _skippedAuthoringSlots++;
                     continue;
                 }
 
-                MovementStepContext context = ResolveMovementStepContext(command.InputTick);
-
-                _currentPredictedState = MovementPrediction.Step(
-                    _currentPredictedState,
-                    command,
-                    context,
-                    _environment,
-                    MovementNetcodeConfig.FixedTickSeconds);
-                _stateProvider?.SetPredictedState(_currentPredictedState);
-                RecordPredictedState(_currentPredictedState);
-                PushRenderSample(_currentPredictedState);
+                AuthorAndStepOneTick();
                 simulatedTicksThisFrame++;
             }
+
+            // Lead raise / anchor drift catch-up (S5): author extra ticks
+            // beyond the paced clock, a bounded burst per frame.
+            int injectBudget = ComputeInjectBudget();
+            for (int i = 0; i < injectBudget; i++)
+            {
+                if (NextInputTickExceedsPredictionBound())
+                    break;
+
+                AuthorAndStepOneTick();
+                _injectedCommands++;
+            }
+        }
+
+        /// <summary>
+        /// Authors one input tick and advances prediction through it — the
+        /// shared body of the paced authoring clock and lead injection.
+        /// </summary>
+        private void AuthorAndStepOneTick()
+        {
+            if (_motor == null || _commandHistory == null || _environment == null)
+                return;
+
+            bool wasGrounded = _hasCurrentPredictedState && _currentPredictedState.Grounded;
+            MovementCommand command = _commandHistory.AppendNext(_motor.SampleIntentForPredictionTick());
+            if (!_hasCurrentPredictedState)
+                return;
+
+            MovementStepContext context = ResolveMovementStepContext(command.InputTick);
+
+            if (wasGrounded && command.JumpPressed && !context.MovementBlocked)
+                RecordPredictedJump(command.InputTick);
+
+            _currentPredictedState = MovementPrediction.Step(
+                _currentPredictedState,
+                command,
+                context,
+                _environment,
+                MovementNetcodeConfig.FixedTickSeconds);
+            _stateProvider?.SetPredictedState(_currentPredictedState);
+            RecordPredictedState(_currentPredictedState);
+            PushRenderSample(_currentPredictedState);
+        }
+
+        private bool NextInputTickExceedsPredictionBound()
+        {
+            if (_commandHistory == null)
+                return true;
+
+            uint authoritativeTick = _simState != null && _simState.HasState
+                ? _simState.LastProcessedTick
+                : 0u;
+            uint maxPredictedTick = authoritativeTick + (uint)MovementNetcodeConfig.MaxPredictionLeadTicks;
+            return _commandHistory.NextInputTick > maxPredictedTick;
+        }
+
+        private float AuthoringTargetDiffTicks()
+        {
+            if (_simState == null || !_simState.HasState || _commandHistory == null || _leadController == null)
+                return 0.0f;
+
+            float estimate = _simState.EstimateAuthoritativeTick(
+                Time.realtimeSinceStartup,
+                MovementNetcodeConfig.FixedTickSeconds);
+            float targetNextTick = estimate + _leadController.LeadTicks + 1.0f;
+            return targetNextTick - _commandHistory.NextInputTick;
+        }
+
+        private void PlanAuthoringSkip()
+        {
+            if (_leadController == null || _pendingAuthoringSkips > 0)
+                return;
+
+            float diff = AuthoringTargetDiffTicks();
+            if (diff < -MovementNetcodeConfig.AuthoringTargetHysteresisTicks &&
+                _leadController.TryConsumeSkipAllowance(Time.realtimeSinceStartup))
+            {
+                _pendingAuthoringSkips = 1;
+            }
+        }
+
+        private int ComputeInjectBudget()
+        {
+            float diff = AuthoringTargetDiffTicks();
+            if (diff <= MovementNetcodeConfig.AuthoringTargetHysteresisTicks)
+                return 0;
+
+            return Mathf.Min(
+                MovementNetcodeConfig.MaxInjectedCommandsPerFrame,
+                Mathf.CeilToInt(diff - MovementNetcodeConfig.AuthoringTargetHysteresisTicks));
         }
 
         private void DriveLocalSpecialMovement(in SpecialMovementTrack track)
@@ -304,11 +415,63 @@ namespace Arena.Input
             ApplyTransform(sampledPosition, sampled.FacingYawRadians);
         }
 
-        private static int ResolveDesiredServerInputLeadTicks()
+        // --- S5 jump-delivery ledger (evidence): a predicted jump must land
+        // authoritatively within its confirm window or it was eaten. ---
+
+        private void RecordPredictedJump(uint tick)
         {
-            return NetworkManager.Instance?.ActiveEndpoint.Kind == NetworkEnvironmentKind.Remote
-                ? MovementNetcodeConfig.RemoteDesiredServerInputLeadTicks
-                : MovementNetcodeConfig.DesiredServerInputLeadTicks;
+            JumpsPredicted++;
+            if (_pendingPredictedJumpCount == PendingPredictedJumpCapacity)
+                RemovePendingPredictedJumpAt(0);
+            _pendingPredictedJumpTicks[_pendingPredictedJumpCount++] = tick;
+        }
+
+        private void UpdateJumpLedger()
+        {
+            if (_simState == null || !_simState.HasState)
+                return;
+
+            long total = _simState.AuthoritativeJumpTotal;
+            long start = Math.Max(_authoritativeJumpCursor, _simState.OldestRetainedAuthoritativeJump);
+            for (long seq = start; seq < total; seq++)
+            {
+                uint authoritativeJumpTick = _simState.GetAuthoritativeJumpTick(seq);
+                for (int i = 0; i < _pendingPredictedJumpCount; i++)
+                {
+                    uint predictedTick = _pendingPredictedJumpTicks[i];
+                    if (authoritativeJumpTick >= predictedTick &&
+                        authoritativeJumpTick - predictedTick <= JumpConfirmWindowTicks)
+                    {
+                        JumpsConfirmed++;
+                        RemovePendingPredictedJumpAt(i);
+                        break;
+                    }
+                }
+            }
+            _authoritativeJumpCursor = total;
+
+            uint ackTick = _simState.LastProcessedTick;
+            while (_pendingPredictedJumpCount > 0 &&
+                   ackTick > _pendingPredictedJumpTicks[0] + JumpLossTimeoutTicks)
+            {
+                JumpsLost++;
+                Debug.LogWarning(
+                    $"[LocalMovementPredictionDriver] Predicted jump at tick {_pendingPredictedJumpTicks[0]} never landed authoritatively (ack {ackTick}) — eaten jump.");
+                RemovePendingPredictedJumpAt(0);
+            }
+        }
+
+        private void RemovePendingPredictedJumpAt(int index)
+        {
+            for (int i = index; i < _pendingPredictedJumpCount - 1; i++)
+                _pendingPredictedJumpTicks[i] = _pendingPredictedJumpTicks[i + 1];
+            _pendingPredictedJumpCount--;
+        }
+
+        private void ClearPendingPredictedJumps()
+        {
+            _pendingPredictedJumpCount = 0;
+            _authoritativeJumpCursor = _simState?.AuthoritativeJumpTotal ?? 0L;
         }
 
         private static bool UsesFixedYCollisionPolicy(string collisionPolicy)
@@ -393,6 +556,9 @@ namespace Arena.Input
                 _lastCorrectionPositionError = 0.0f;
             }
 
+            bool hadCurrentPredictedState = _hasCurrentPredictedState;
+            Vector3 previousHeadPosition = _currentPredictedState.Position;
+
             PredictedMovementState reconciled = _predictor.Rebuild(
                 _simState.GetServerPosition(),
                 _simState.GetServerVelocity(),
@@ -419,6 +585,13 @@ namespace Arena.Input
             SetEffectiveMovementContext(effectiveContext);
             RecordPredictedState(_currentPredictedState);
             PushRenderSample(_currentPredictedState);
+
+            // S5 correction presentation: hand the render-stream discontinuity
+            // to the presentation budget — sub-threshold errors decay at a
+            // capped rate, larger ones snap once honestly.
+            if (hadCurrentPredictedState)
+                _presentationDriver?.NotifyReconcileDisplacement(
+                    reconciled.Position - previousHeadPosition);
         }
 
         private void PushRenderSample(in PredictedMovementState predicted)
@@ -480,6 +653,7 @@ namespace Arena.Input
             ClearPendingSpecialMovementSettleWarning();
             ClearRenderHistory();
             ClearPredictedStateHistory();
+            ClearPendingPredictedJumps();
         }
 
         private void EnterSpecialMovement()
@@ -491,6 +665,7 @@ namespace Arena.Input
             _lastProcessedMovementContextVersion = 0;
             ClearRenderHistory();
             ClearPredictedStateHistory();
+            ClearPendingPredictedJumps();
         }
 
         private void ResetAfterSpecialMovement()
@@ -520,15 +695,35 @@ namespace Arena.Input
             _effectiveMoveSpeedMultiplier = 1.0f;
             ClearRenderHistory();
             ClearPredictedStateHistory();
+            ClearPendingPredictedJumps();
             _hasLastSpecialMovementTrack = false;
             _lastSpecialMovementTrack = default;
         }
 
         private void ResetSpecialMovementInputBoundary()
         {
-            if (_commandHistory != null && _simState != null && _simState.HasState)
+            if (_commandHistory != null && _simState != null && _simState.HasState &&
+                _leadController != null)
             {
-                _commandHistory.Reset(_simState.LastProcessedTick + 1);
+                // S5: re-anchor FORWARD onto the estimated server timeline.
+                // The old ackTick+1 anchor re-entered a permanently-late
+                // regime at any real RTT (every re-authored command was
+                // already consumed-by-fallback on arrival). The anchor also
+                // clears the server's post-special-movement input discard
+                // window and never reuses a tick number the receive cursor
+                // has seen.
+                float estimate = _simState.EstimateAuthoritativeTick(
+                    Time.realtimeSinceStartup,
+                    MovementNetcodeConfig.FixedTickSeconds);
+                uint anchor = _leadController.ComputeForwardAnchorTick(
+                    estimate,
+                    _commandHistory.HighestAuthoredTick);
+                uint discardFloor = _simState.LastProcessedTick
+                    + (uint)MovementNetcodeConfig.SpecialMovementInputDiscardLeadTicks + 1u;
+                if (anchor < discardFloor)
+                    anchor = discardFloor;
+                _commandHistory.Reset(anchor);
+                _leadController.SuppressFeedbackBelowTick(anchor);
                 _lastObservedCommandHistoryGeneration = _commandHistory.Generation;
             }
 

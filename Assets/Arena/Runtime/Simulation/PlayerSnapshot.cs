@@ -15,6 +15,11 @@ namespace Arena.Simulation
         public readonly uint LastProcessedTick;
         public readonly float ReceivedTime; // Time.realtimeSinceStartup when stored
         public readonly long ServerTimeMs;  // server-epoch ms (feel audit F4); 0 = unknown
+        // Per-tick consume truth from the ack surface (design review S5).
+        // Defaults (true, 0) on snapshot sources without the fields (NPC
+        // seeds, synthetic special-movement seeds) — never a starvation signal.
+        public readonly bool ConsumedCommand;
+        public readonly int BufferedCommands;
 
         public PlayerSnapshot(
             float posX,
@@ -50,7 +55,8 @@ namespace Arena.Simulation
 
         /// <summary>
         /// Full form carrying the row's server timestamp
-        /// (see RemotePresentationBuffer.QuantizeServerTimeMicros).
+        /// (see RemotePresentationBuffer.QuantizeServerTimeMicros) and the
+        /// S5 per-tick consume truth.
         /// </summary>
         public PlayerSnapshot(
             float posX,
@@ -63,7 +69,9 @@ namespace Arena.Simulation
             bool grounded,
             uint lastProcessedTick,
             float receivedTime,
-            long serverTimeMs)
+            long serverTimeMs,
+            bool consumedCommand = true,
+            int bufferedCommands = 0)
         {
             Position = new Vector3(posX, posY, posZ);
             Velocity = new Vector3(velX, velY, velZ);
@@ -72,6 +80,8 @@ namespace Arena.Simulation
             LastProcessedTick = lastProcessedTick;
             ReceivedTime = receivedTime;
             ServerTimeMs = serverTimeMs;
+            ConsumedCommand = consumedCommand;
+            BufferedCommands = bufferedCommands;
         }
     }
 }

@@ -31,6 +31,12 @@ namespace Arena.Input
         public int UnsentCount => _count - _sentCount;
         public uint NextInputTick => _nextInputTick;
         public uint Generation => _generation;
+        /// <summary>
+        /// Highest input tick ever authored this session. Monotonic and NOT
+        /// cleared by Reset: the server's receive cursor never accepts a
+        /// reused tick number, so every re-anchor must land above this.
+        /// </summary>
+        public uint HighestAuthoredTick { get; private set; }
         public uint? OldestPendingTick => _count > 0 ? _commands[_head].InputTick : null;
         public uint? NewestPendingTick => _count > 0 ? _commands[(_head + _count - 1) % _commands.Length].InputTick : null;
         public uint? OldestUnsentTick => _sentCount < _count ? _commands[(_head + _sentCount) % _commands.Length].InputTick : null;
@@ -58,6 +64,9 @@ namespace Arena.Input
 
         public void Add(in MovementCommand command)
         {
+            if (command.InputTick > HighestAuthoredTick)
+                HighestAuthoredTick = command.InputTick;
+
             if (_count == _commands.Length)
             {
                 _commands[_head] = command;

@@ -85,8 +85,32 @@ namespace Arena.Simulation
             public float MaxMoveSpeedMultiplier { get; }
         }
 
+        /// <summary>
+        /// One authoritative ack tick's consume truth (design review S5),
+        /// recorded per snapshot so the input lead control loop sees every
+        /// tick even when several rows arrive in one frame.
+        /// </summary>
+        public readonly struct InputAckSample
+        {
+            public InputAckSample(uint tick, bool consumedCommand, int bufferedCommands)
+            {
+                Tick = tick;
+                ConsumedCommand = consumedCommand;
+                BufferedCommands = bufferedCommands;
+            }
+
+            public uint Tick { get; }
+            public bool ConsumedCommand { get; }
+            public int BufferedCommands { get; }
+        }
+
         private const int MovementContextCapacity = 24;
         private const int MovementRestrictionCapacity = 12;
+        private const int InputAckCapacity = 64;
+        private const int AuthoritativeJumpCapacity = 8;
+        // A precise-clock estimate this far behind the newest snapshot's own
+        // stamp is not believable — fall back to the arrival anchor.
+        private const double PreciseEstimateInsaneBehindMs = 250.0;
 
         // Latest server state (authoritative)
         private Vector3 _serverPos;
@@ -118,6 +142,11 @@ namespace Arena.Simulation
         private uint _lastProcessedTick;
         private uint _authoritativeSnapshotVersion;
         private float _lastSnapshotReceivedTime;
+        private long _lastSnapshotServerTimeMs;
+        private readonly InputAckSample[] _inputAcks = new InputAckSample[InputAckCapacity];
+        private long _inputAckTotal;
+        private readonly uint[] _authoritativeJumpTicks = new uint[AuthoritativeJumpCapacity];
+        private long _authoritativeJumpTotal;
         private SpecialMovementTrack _specialMovementTrack;
         private SpacetimeDB.Types.MovementActionState _movementActionState = new();
         private float _predictedRestrictionBaselineMoveSpeedMultiplier = 1.0f;
@@ -238,12 +267,33 @@ namespace Arena.Simulation
 
         public void PushSnapshot(PlayerSnapshot snapshot)
         {
+            bool tickAdvanced = _hasAny && snapshot.LastProcessedTick > _lastProcessedTick;
+            if (tickAdvanced)
+            {
+                _inputAcks[_inputAckTotal % InputAckCapacity] = new InputAckSample(
+                    snapshot.LastProcessedTick,
+                    snapshot.ConsumedCommand,
+                    snapshot.BufferedCommands);
+                _inputAckTotal++;
+
+                // Authoritative jump edge: grounded -> airborne with upward
+                // velocity. Feeds the S5 jump-delivery ledger.
+                if (_grounded && !snapshot.Grounded && snapshot.Velocity.y > 0.5f)
+                {
+                    _authoritativeJumpTicks[_authoritativeJumpTotal % AuthoritativeJumpCapacity] =
+                        snapshot.LastProcessedTick;
+                    _authoritativeJumpTotal++;
+                }
+            }
+
             _serverPos = snapshot.Position;
             _serverVelocity = snapshot.Velocity;
             _serverYaw = snapshot.Yaw;
             _grounded  = snapshot.Grounded;
             _lastProcessedTick = snapshot.LastProcessedTick;
             _lastSnapshotReceivedTime = snapshot.ReceivedTime;
+            if (snapshot.ServerTimeMs > 0L)
+                _lastSnapshotServerTimeMs = snapshot.ServerTimeMs;
             _authoritativeSnapshotVersion++;
             _remotePresentation.Push(snapshot);
 
@@ -253,6 +303,26 @@ namespace Arena.Simulation
                 _hasAny = true;
             }
         }
+
+        /// <summary>Total ack samples recorded; readers keep their own cursor.</summary>
+        public long InputAckTotal => _inputAckTotal;
+
+        /// <summary>Oldest ack sequence still retained in the ring.</summary>
+        public long OldestRetainedInputAck =>
+            _inputAckTotal > InputAckCapacity ? _inputAckTotal - InputAckCapacity : 0L;
+
+        public InputAckSample GetInputAck(long sequence) =>
+            _inputAcks[sequence % InputAckCapacity];
+
+        public long AuthoritativeJumpTotal => _authoritativeJumpTotal;
+
+        public long OldestRetainedAuthoritativeJump =>
+            _authoritativeJumpTotal > AuthoritativeJumpCapacity
+                ? _authoritativeJumpTotal - AuthoritativeJumpCapacity
+                : 0L;
+
+        public uint GetAuthoritativeJumpTick(long sequence) =>
+            _authoritativeJumpTicks[sequence % AuthoritativeJumpCapacity];
 
         public void SetMovementContext(
             bool movementBlocked,
@@ -395,10 +465,14 @@ namespace Arena.Simulation
                 return;
             }
 
+            // F4 warmup gate (S5): the server-time timeline engages only once
+            // a precise clock sample exists — the observed-only monotonic-max
+            // estimate is biased and mid-convergence, which is how sessions
+            // used to start in an extrapolation storm.
             _remotePresentation.Tick(
                 dt,
                 Time.realtimeSinceStartup,
-                ArenaServerClock.HasEstimate ? ArenaServerClock.ServerNowMs : (long?)null,
+                ArenaServerClock.HasPreciseSample ? ArenaServerClock.ServerNowMs : (long?)null,
                 _serverPos,
                 _serverYaw,
                 NetcodeReceiveCounters.RowDeliveryFresh(Time.realtimeSinceStartup));
@@ -413,11 +487,38 @@ namespace Arena.Simulation
         public Vector3 GetServerPosition() => _serverPos;
         public Vector3 GetServerVelocity() => _serverVelocity;
         public float GetServerYawRadians() => _serverYaw;
+
+        /// <summary>Whether the last EstimateAuthoritativeTick call used the
+        /// precise server clock (vs the arrival-anchored fallback).</summary>
+        public bool LastTickEstimateUsedPreciseClock { get; private set; }
+
+        /// <summary>
+        /// Estimated current server tick (design review S5, clock
+        /// unification): anchored on the newest snapshot's own server
+        /// timestamp against the precise ArenaServerClock estimate — neither
+        /// biased low by the downstream one-way delay nor wobbled by delivery
+        /// jitter. Falls back to the pre-S5 arrival-anchored elapsed-time
+        /// estimate while no precise clock sample exists (session warmup) or
+        /// when the precise estimate is not believable against the snapshot's
+        /// stamp (mid-convergence snap).
+        /// </summary>
         public float EstimateAuthoritativeTick(float now, float tickSeconds)
         {
             if (!_hasAny || tickSeconds <= 0.0f)
                 return _lastProcessedTick;
 
+            if (ArenaServerClock.HasPreciseSample && _lastSnapshotServerTimeMs > 0L)
+            {
+                double elapsedMs = ArenaServerClock.ServerNowMs - _lastSnapshotServerTimeMs;
+                if (elapsedMs > -PreciseEstimateInsaneBehindMs)
+                {
+                    LastTickEstimateUsedPreciseClock = true;
+                    return _lastProcessedTick
+                        + Mathf.Max(0.0f, (float)(elapsedMs / (tickSeconds * 1000.0)));
+                }
+            }
+
+            LastTickEstimateUsedPreciseClock = false;
             float elapsed = Mathf.Max(0.0f, now - _lastSnapshotReceivedTime);
             return _lastProcessedTick + elapsed / tickSeconds;
         }
@@ -450,7 +551,7 @@ namespace Arena.Simulation
 
             _remotePresentation.SampleActiveTimeline(
                 now,
-                ArenaServerClock.HasEstimate ? ArenaServerClock.ServerNowMs : (long?)null,
+                ArenaServerClock.HasPreciseSample ? ArenaServerClock.ServerNowMs : (long?)null,
                 _serverPos,
                 _serverYaw,
                 out Vector3 position,

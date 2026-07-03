@@ -1103,7 +1103,11 @@ namespace Arena.Tests.Editor
             Type configType = RequireType("Arena.Input.MovementNetcodeConfig");
 
             Assert.That(GetStaticField<int>(configType, "FixedTickMilliseconds"), Is.EqualTo(33));
-            Assert.That(GetStaticField<int>(configType, "DesiredServerInputLeadTicks"), Is.EqualTo(2));
+            // S5: the static input lead is gone — InputLeadController closes
+            // the loop between these bounds.
+            Assert.That(GetStaticField<int>(configType, "InitialInputLeadTicks"), Is.EqualTo(2));
+            Assert.That(GetStaticField<int>(configType, "MaxInputLeadTicks"), Is.LessThan(
+                GetStaticField<int>(configType, "MaxPredictionLeadTicks")));
             Assert.That(GetStaticField<int>(configType, "MaxPredictionLeadTicks"), Is.EqualTo(12));
             Assert.That(GetStaticField<int>(configType, "MaxLocalPredictionTicksPerFrame"), Is.EqualTo(5));
             Assert.That(GetStaticField<int>(configType, "MaxTicksToSendPerFrame"), Is.EqualTo(5));

@@ -3,28 +3,64 @@
 namespace Arena.Input
 {
     /// <summary>
-    /// Shared client-side movement/netcode constants for the migration away from
-    /// ad-hoc timing and unbounded pending input state.
+    /// Shared client-side movement/netcode constants.
+    /// S5 (design review §4): the input lead is no longer a static constant —
+    /// <see cref="InputLeadController"/> runs a closed loop against the
+    /// server's per-tick consume feedback. The values here bound and pace
+    /// that loop; none of them is "the lead".
     /// </summary>
     public static class MovementNetcodeConfig
     {
         public const int FixedTickMilliseconds = 33;
         public const float FixedTickSeconds = FixedTickMilliseconds / 1000.0f;
-        // Lead ticks are tuned for local combat feel, while the remaining
-        // tick-count budgets preserve wall-clock safety envelopes.
-        public const int DesiredServerInputLeadTicks = 2;
-        public const int RemoteDesiredServerInputLeadTicks = 8;
         public const int MaxLocalPredictionTicksPerFrame = 5;
         public const int MaxTicksToSendPerFrame = 5;
 
         // Bounded pending-input history until full rewind/replay replaces this scaffold.
         public const int MaxPendingCommands = 96;
 
-        // Maximum number of unacknowledged commands before triggering an emergency re-sync.
-        // At 33ms/tick this gives 396ms of headroom — enough for ~200ms RTT with margin.
-        // If pending exceeds this, the replay buffer is cleared and the client re-anchors
-        // to the server's current tick. The predicted position will briefly snap to the
-        // server position on the next reconcile, then prediction resumes normally.
+        // Hard bound on prediction ahead of the last authoritative ack. The
+        // S5 degradation ladder responds to overrun by throttling input
+        // production (authoring already stops at this bound); a hard resync
+        // is the LAST rung, reached only when the overrun is sustained
+        // (acks stopped entirely) — not the first response.
         public const int MaxPredictionLeadTicks = 12;
+
+        // --- S5 closed-loop input lead ---
+        // Where the loop starts before feedback arrives (loopback converges
+        // near here), and the bounds it may steer within. Max stays under
+        // MaxPredictionLeadTicks so the loop never rides the resync bound.
+        public const int InitialInputLeadTicks = 2;
+        public const int MinInputLeadTicks = 1;
+        public const int MaxInputLeadTicks = 10;
+
+        // Server buffer occupancy setpoint (buffered commands remaining after
+        // each consume). Below Low → raise lead; above High sustained → lower.
+        public const int BufferOccupancySetpointLow = 1;
+        public const int BufferOccupancySetpointHigh = 2;
+
+        // Asymmetric pacing: starvation raises immediately (rate-limited so a
+        // burst of stale acks after a stall counts once), surplus lowers only
+        // after it has persisted.
+        public const float LeadRaiseHoldoffSeconds = 0.25f;
+        public const float LeadLowerAfterSurplusSeconds = 5.0f;
+
+        // Actuation pacing: extra ticks authored per frame when raising the
+        // lead / re-anchoring, and the minimum spacing between skipped ticks
+        // when draining surplus (a skip is a 1-tick authoring pause).
+        public const int MaxInjectedCommandsPerFrame = 2;
+        public const float SkipHoldoffSeconds = 0.5f;
+        // Dead band (ticks) around the authoring target before inject/skip
+        // acts, so estimate jitter does not churn the actuator.
+        public const float AuthoringTargetHysteresisTicks = 1.5f;
+
+        // Ladder rung 3: hard resync fires only when pending commands exceed
+        // MaxPredictionLeadTicks continuously for this long (acks stalled).
+        public const float HardResyncSustainedOverrunSeconds = 3.0f;
+
+        // Mirror of the server's post-special-movement input discard window
+        // (SPECIAL_MOVEMENT_INPUT_DISCARD_LEAD_TICKS in game_loop.rs): the
+        // re-anchor after special movement must clear it.
+        public const int SpecialMovementInputDiscardLeadTicks = 4;
     }
 }

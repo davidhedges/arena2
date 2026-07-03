@@ -346,6 +346,92 @@ during clock convergence — a session started at −26 ticks depth in an
 extrapolation storm); remote combat animation catch-up stays clamped at
 200 ms (`CombatAnimationRemoteTiming`) but should key off the same clock.
 
+**Delivered (2026-07-04, S5 — all five parts plus the clock fixes; remote
+combat animation catch-up deliberately untouched).**
+
+*Server truth (part 1, the one schema change).* `PlayerPhysics` gains
+`last_tick_consumed_command` and `buffered_command_count` beside
+`last_processed_tick` — set at both consume sites (`tick_player` and the
+special-movement tick) from the actual pop result and the post-consume
+per-identity `player_command` count; respawn reports a clean state so its
+queue wipe never reads as starvation. Bindings regenerated in canonical
+bin-path mode; only the `PlayerPhysics` stubs changed.
+
+*Client setpoint loop (part 2).* New `Arena.Input.InputLeadController`:
+every ack tick's consume truth is drained per-tick (a 64-deep ack ring in
+`ClientSimulationState` survives multi-row frames) and steered against a
+buffer-occupancy setpoint of 1–2. A send-covered ack below the setpoint
+floor raises the lead one tick immediately (rate-limited to one raise per
+250 ms so a stale burst after a stall counts once); occupancy above the
+ceiling must persist 5 s before lowering one tick — asymmetric on purpose.
+Lead is bounded [1..10], under the 12-tick resync bound. Actuation lives in
+the authoring clock (`LocalMovementPredictionDriver`): inject up to 2 extra
+ticks per frame / skip one slot per 0.5 s toward
+target = precise-estimate + lead, with a 1.5-tick dead band. The send gate
+is deleted — authoring pace is the actuator, and every authored command is
+sent immediately (burst caps unchanged).
+
+*No endpoint switch (part 3).* `DesiredServerInputLeadTicks` /
+`RemoteDesiredServerInputLeadTicks` and both
+`ResolveDesiredServerInputLeadTicks` copies are gone; everyone starts at 2
+ticks and converges to what their delivery needs. A load-bearing find while
+deleting it: every command-numbering reset re-anchored at `ackTick + 1` —
+*behind* the server's consume point by the full downstream delay — so any
+special-movement end (dash, knockback) or resync at real RTT re-entered a
+permanently-late regime (100 % fallback, wedged until the next reset; at
+loopback it self-healed in 2 ticks, which is why nobody saw it unshaped).
+All re-anchors now land *forward*: estimate + lead, above the
+session-monotonic `HighestAuthoredTick` (the receive cursor never accepts a
+reused tick number) and past the server's post-special-movement discard
+window, with controller feedback suppressed below the anchor.
+
+*Degradation ladder (part 4).* Rung 1: starvation raises lead (above).
+Rung 2: overrunning the 12-tick bound throttles input production (the
+existing authoring bound, now the *response* instead of a trigger).
+Rung 3: hard resync fires only when the overrun is sustained ≥ 3 s (acks
+stopped) — not instantly — and re-anchors forward. Jump preservation: a
+late command whose jump missed its tick by less than one consume
+(`input_tick == last_processed_tick`) is re-buffered for the next tick in
+`send_movement_intent` (`[MOVE_JUMP_SLIDE]`, info-level), merged if the slot
+is already buffered (upsert rule — no duplicate-tick rows) and gated by the
+receive cursor so the post-special-movement discard window stays
+authoritative; staler jumps still drop honestly.
+
+*Correction budget (part 5).* `LocalPresentationDriver`'s 60 ms position
+half-life is gone (it also dragged the sprint camera ~0.6 m behind the sim
+root). Reconcile displacements are reported by the prediction driver:
+< 0.3 m is absorbed into a presentation offset that decays at a capped
+0.5 m/s; ≥ 0.3 m snaps once, honestly. Rotation smoothing unchanged. Both
+numbers are starting points to tune against the CSV columns.
+
+*Clock fixes.* `EstimateAuthoritativeTick` anchors the newest snapshot's own
+server stamp against `ArenaServerClock.ServerNowMs` once a precise sample
+exists (immune to downstream bias and delivery jitter); arrival-anchored
+only before that or when the precise estimate is insane against the stamp.
+The F4 server-time timeline (players and NPCs) now requires
+`HasPreciseSample` *and* a ±1 s buffer-depth sanity window — the
+session-start extrapolation storm can no longer engage it.
+
+*Evidence.* Overlay: lead/occupancy/fallback-ratio/actuation/jump-ledger
+lines under the pending-commands block. CSV: 17 `s5_*` columns on the S1
+logger (now also logging solo sessions), summarized by
+`ops/analyze-s5-input-loop.py` — fallback rate per ack tick, lead
+trajectory/convergence, occupancy distribution, correction-budget spend,
+eaten-jump count, estimate-source mix. A client-side jump-delivery ledger
+pairs predicted jumps with authoritative grounded-drop edges (slide window
+included) and logs each loss. Server half verified live 2026-07-04
+(`ops/s5-input-loop-probe.py` on a throwaway DB, all green): idle ticks
+report fallback truthfully; an estimate-gated stream consumes 16/16 sampled
+acks with occupancy in band; a 6-ahead burst reads back as exactly 6; 30
+boundary jumps at the estimated consume tick produced 25 `MOVE_JUMP_SLIDE`
+lines with every slide landing an authoritative jump, while all 10
+3-ticks-stale controls stayed dropped; no duplicate queue rows under
+concurrent stream + late jumps. The client half (lead convergence at
+loopback ≈ 2, fallback rare-event at +40/+40 up+down, zero eaten jumps, no
+elastic rubberbanding) is the owner acceptance run in
+`docs/latency-testing.md` — S5 makes full bidirectional shaping the
+intended harness rather than a known artifact.
+
 ## 5. Aerial gating — disputed rule, badly served by its own presentation [GAP]
 
 `GROUNDED_ONLY` is authored on **every** strike since the initial import;
@@ -487,7 +573,7 @@ precede fairness work.
 | S2 | ✅ Delivered 2026-07-03 — cut-on-reject via existing interrupt primitives + slot flash, `PredictionRejected` payload extended with the pressed action id (see §3) | client | legible denials (also fixes §5's worst symptom) |
 | S3 | ✅ Delivered 2026-07-03 — NPC telegraphs: authored per-template windup between CAST and damage via `npc_pending_swing`, present-time re-validation at impact (see §1; player attacks rescoped out of S3 by owner) | server + data | victim reaction time; masks present-time validation |
 | S4 | ✅ Delivered 2026-07-04 — LOS unification: `requires_target_los` targeting flag (default on, opt-out list signed empty), gap-close = LOS + path with distinct reasons, auto-attack holds behind cover, client advisory pre-check + slot dim from bundled collision (see §2) | server + data + client | legible targeting rules |
-| S5 | Closed-loop input buffering: per-tick buffer-depth/fallback feedback on the ack surface + client lead control loop + degradation ladder + jump-preserving fallback + clock unification/warmup gating + correction-decay presentation (schema change; deletes the endpoint-kind lead switch) | client + server | playable at any RTT; shaped-local testing representative |
+| S5 | ✅ Delivered 2026-07-04 — closed-loop input buffering: per-tick consume truth on the ack surface (`last_tick_consumed_command`/`buffered_command_count`), client lead control loop (setpoint 1–2, asymmetric raise/lower, no endpoint-kind switch), degradation ladder (throttle before resync, forward re-anchors), one-tick jump slide, precise-clock tick estimate + F4 warmup gating, correction-decay presentation budget (see §4; server half verified live via `ops/s5-input-loop-probe.py`, client half = owner shaped acceptance run) | client + server | playable at any RTT; shaped-local testing representative |
 | S6 | Auto-attack local swing scheduling off `next_swing_at` + contact-cue parity | client | auto-attack feel at RTT |
 | S7 | F4 adaptive delay [66..200 ms] from arrival-lateness p95 | client | gate resolved (rerun 2, 2026-07-03: ON loses late ratio 11.6 % vs 9.0 % at +34 ms budget, wins err p95 — see §7). Owner decision: rescope S7 to adapt delay from measured *server-time* lateness p95 (the observed failure is under-delay, which adaptivity cures) or drop the server-time timeline and accept arrival's jitter warp |
 | S8 | Bounded lag-compensation ring for attack reach/facing + favor-the-defender grace — design doc first, kill-switched | server | end-state hit fairness |

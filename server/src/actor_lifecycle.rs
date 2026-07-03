@@ -124,6 +124,8 @@ pub(crate) fn spawn_actor_bundle(ctx: &ReducerContext, spec: ActorSpawnSpec) -> 
         yaw: spec.yaw,
         grounded: spec.grounded,
         last_processed_tick: spec.last_processed_tick,
+        last_tick_consumed_command: true,
+        buffered_command_count: 0,
         updated_at: now,
     });
     ctx.db.player_state().insert(spec.state);

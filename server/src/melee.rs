@@ -5010,6 +5010,8 @@ mod tests {
             yaw,
             grounded: true,
             last_processed_tick: 0,
+            last_tick_consumed_command: true,
+            buffered_command_count: 0,
             updated_at: Timestamp::UNIX_EPOCH,
         }
     }

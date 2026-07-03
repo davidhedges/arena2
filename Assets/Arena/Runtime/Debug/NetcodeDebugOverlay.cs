@@ -115,6 +115,36 @@ namespace Arena.Debugging
                     GUI.Label(new Rect(x, y, 400, lineHeight), $"Pending range: [{oldestPending}..{newestPending}]", _style);
                     y += lineHeight;
                 }
+
+                var lead = netDriver.LeadController;
+                if (lead != null)
+                {
+                    float fallbackRatio = lead.AckTicksObserved > 0
+                        ? (float)lead.SendCoveredFallbackAcks / lead.AckTicksObserved
+                        : 0f;
+                    string estimateSource = simState.LastTickEstimateUsedPreciseClock
+                        ? "precise"
+                        : "arrival";
+                    GUI.Label(
+                        new Rect(x, y, 640, lineHeight),
+                        $"Input lead (S5): {lead.LeadTicks} ticks  occ: {lead.LastAckBufferedCommands}  (+{lead.LeadRaises}/-{lead.LeadLowers})  est: {estimateSource}",
+                        _style);
+                    y += lineHeight;
+                    GUI.Label(
+                        new Rect(x, y, 640, lineHeight),
+                        $"Fallback acks: {lead.SendCoveredFallbackAcks}/{lead.AckTicksObserved}  ({fallbackRatio:P1})",
+                        _style);
+                    y += lineHeight;
+                }
+
+                if (predDriver != null)
+                {
+                    GUI.Label(
+                        new Rect(x, y, 640, lineHeight),
+                        $"Authoring: injected {predDriver.InjectedCommands}  skipped {predDriver.SkippedAuthoringSlots}  jumps {predDriver.JumpsConfirmed}/{predDriver.JumpsPredicted} (lost: {predDriver.JumpsLost})",
+                        _style);
+                    y += lineHeight;
+                }
             }
 
             y += 4;

@@ -88,30 +88,75 @@ namespace Arena.Presentation
     }
 
     /// <summary>
-    /// Keeps the local visual hierarchy and camera anchor slightly smoothed
-    /// behind the simulation root so tiny corrections do not read as jitter.
+    /// Correction presentation for the local player (design review §4, S5).
+    ///
+    /// Pre-S5 this smoothed the whole presentation root behind the sim root
+    /// with a 60 ms position half-life — tuned for rare mispredicts, it
+    /// turned a steady reconcile-error stream into continuous elastic
+    /// yanking (and dragged the sprinting camera ~0.5 m behind the sim).
+    ///
+    /// Now the position path spends an explicit budget: normal motion passes
+    /// through 1:1, and only reconcile discontinuities (reported by
+    /// LocalMovementPredictionDriver) enter a correction offset that decays
+    /// at a capped rate; a displacement at/above the snap threshold is shown
+    /// once, honestly. The numbers are starting points to be tuned against
+    /// the S1/S5 CSV instrumentation, not authored truth.
     /// </summary>
     [DefaultExecutionOrder(-100)]
     public sealed class LocalPresentationDriver : MonoBehaviour
     {
-        private const float PositionHalfLifeSeconds = 0.06f;
+        // Reconcile displacements below this are absorbed and decayed;
+        // at/above it the presentation snaps once with the sim root.
+        private const float CorrectionSnapThresholdMeters = 0.30f;
+        // Capped decay rate for the absorbed offset (the review's "cm/s").
+        private const float CorrectionDecayMetersPerSecond = 0.5f;
         private const float RotationHalfLifeSeconds = 0.05f;
-        private const float HardSnapDistance = 2.0f;
         private const float HardSnapAngleDegrees = 60.0f;
 
         private ClientSimulationState? _simState;
         private Transform? _presentationRoot;
-        private Vector3 _smoothedPosition;
+        private Vector3 _correctionOffset;
         private Quaternion _smoothedRotation;
         private bool _initialized;
+
+        // S5 evidence counters.
+        public int CorrectionSnapCount { get; private set; }
+        public float CorrectionAbsorbedMeters { get; private set; }
+        public float CurrentCorrectionOffsetMeters => _correctionOffset.magnitude;
 
         public void Initialize(ClientSimulationState simState, Transform presentationRoot)
         {
             _simState = simState;
             _presentationRoot = presentationRoot;
-            _smoothedPosition = presentationRoot.position;
+            _correctionOffset = Vector3.zero;
             _smoothedRotation = presentationRoot.rotation;
             _initialized = true;
+        }
+
+        /// <summary>
+        /// Called by LocalMovementPredictionDriver when a reconcile moves the
+        /// predicted head state by <paramref name="displacement"/> (new minus
+        /// old). Small: absorbed into the decaying offset so the on-screen
+        /// pose stays continuous. Large: shown once (offset cleared).
+        /// </summary>
+        public void NotifyReconcileDisplacement(Vector3 displacement)
+        {
+            float magnitude = displacement.magnitude;
+            if (magnitude <= 0.0f)
+                return;
+
+            if (magnitude >= CorrectionSnapThresholdMeters)
+            {
+                _correctionOffset = Vector3.zero;
+                CorrectionSnapCount++;
+                return;
+            }
+
+            _correctionOffset -= displacement;
+            CorrectionAbsorbedMeters += magnitude;
+            _correctionOffset = Vector3.ClampMagnitude(
+                _correctionOffset,
+                CorrectionSnapThresholdMeters);
         }
 
         private void LateUpdate()
@@ -124,42 +169,44 @@ namespace Arena.Presentation
 
             if (!_initialized)
             {
-                _smoothedPosition = targetPosition;
+                _correctionOffset = Vector3.zero;
                 _smoothedRotation = targetRotation;
                 _initialized = true;
             }
 
             if (_simState != null && _simState.TryGetSpecialMovementTrack(out _))
             {
-                // Special movement is already sampled deterministically on the simulation root.
-                // Additional local presentation smoothing introduces a large steady-state lag,
-                // which then trips the hard-snap threshold and reads as rubberbanding.
-                _smoothedPosition = targetPosition;
+                // Special movement is already sampled deterministically on the
+                // simulation root; present it verbatim.
+                _correctionOffset = Vector3.zero;
                 _smoothedRotation = targetRotation;
-                _presentationRoot.SetPositionAndRotation(_smoothedPosition, _smoothedRotation);
+                _presentationRoot.SetPositionAndRotation(targetPosition, targetRotation);
                 return;
             }
 
-            float positionError = Vector3.Distance(_smoothedPosition, targetPosition);
-            float rotationError = Quaternion.Angle(_smoothedRotation, targetRotation);
-            if (positionError >= HardSnapDistance || rotationError >= HardSnapAngleDegrees)
+            // Decay the correction offset at a capped rate.
+            float offsetMagnitude = _correctionOffset.magnitude;
+            if (offsetMagnitude > 0.0f)
             {
-                _smoothedPosition = targetPosition;
-                _smoothedRotation = targetRotation;
+                float decayed = Mathf.Max(
+                    0.0f,
+                    offsetMagnitude - CorrectionDecayMetersPerSecond * Time.deltaTime);
+                _correctionOffset = decayed <= 0.0001f
+                    ? Vector3.zero
+                    : _correctionOffset * (decayed / offsetMagnitude);
             }
-            else
-            {
-                _smoothedPosition = Vector3.Lerp(
-                    _smoothedPosition,
-                    targetPosition,
-                    SmoothingAlpha(PositionHalfLifeSeconds, Time.deltaTime));
-                _smoothedRotation = Quaternion.Slerp(
+
+            float rotationError = Quaternion.Angle(_smoothedRotation, targetRotation);
+            _smoothedRotation = rotationError >= HardSnapAngleDegrees
+                ? targetRotation
+                : Quaternion.Slerp(
                     _smoothedRotation,
                     targetRotation,
                     SmoothingAlpha(RotationHalfLifeSeconds, Time.deltaTime));
-            }
 
-            _presentationRoot.SetPositionAndRotation(_smoothedPosition, _smoothedRotation);
+            _presentationRoot.SetPositionAndRotation(
+                targetPosition + _correctionOffset,
+                _smoothedRotation);
         }
 
         private static float SmoothingAlpha(float halfLifeSeconds, float dt)
