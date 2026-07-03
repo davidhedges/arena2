@@ -30,10 +30,29 @@ referenced but not repeated.
   delay). Progress (2026-07-03): F2 item-4 checks verified live (banner +
   Reconnect after a server kill; dot Good → Degraded → Good across a
   Profile L apply/teardown) and the F1 toast verified end-to-end via a
-  spell LOS rejection under shaping. Still open: the F4 A/B, the F5
-  gap-closer timing/rejection checks, and the contact-cue falsePos
-  count — read the local-endpoint caveat in `docs/latency-testing.md`
-  first.
+  spell LOS rejection under shaping. Second round (2026-07-03, downstream-only
+  shaping): gap-closer timing verified (instant windup, dash follows, no pose
+  pop, no double windup — all pass); gap-close rejection feedback verified
+  live (mid-air press → AerialMismatch toast + full rollback; trigger is
+  timing-dependent on the grounded flag at server validation); dot Bad
+  verified (downstream 180 ms, stationary); Unity Test Runner all green
+  (closes the pending note for the F1/F2 HUD tests). **F4 A/B: attempted,
+  inconclusive.** Logged legs (`Logs/remote-presentation-ab.csv`, see
+  `RemotePresentationAbLog`): arrival timeline 74 s kiting — 4 hard snaps,
+  72.3 % extrap ratio, maxErr 0.87 m; server timeline only a 32 s window with
+  a mostly-idle target — 0 hard snaps, 88.9 % extrap, maxErr 0.70 m, buffer
+  depth −26 → −241 ticks. Two blockers for a conclusive rerun: the legs were
+  not like-for-like (motion profiles differed, ON window contaminated by
+  session-start clock convergence), and the extrap-ratio/buffer-depth metrics
+  are **confounded by target idleness** — a stationary NPC gets no
+  `NpcPhysics` rows, so idle time counts as extrapolation and depth dives
+  negative by design. Before rerunning: classify idle-vs-late samples in the
+  counters (or guarantee continuous target motion for both legs). F4
+  adaptive delay stays blocked. **F5 falsePos: still open** — swings were
+  auto-attacks, which do not route through the predicted contact-cue system
+  at all (cues hook only predicted action-bar melee presses); the one
+  ability press in the log fired and matched cleanly (fired 1 / matched 1 /
+  falsePos 0). Redo with an action-bar melee strike.
 - **Latency-harness findings (2026-07-03, first live conditioner runs).**
   (a) The movement input lead is keyed to endpoint kind, not RTT:
   `Remote` gets 8 ticks (~264 ms), while `Local`/`Custom` get 2 ticks
@@ -57,6 +76,28 @@ referenced but not repeated.
   gap-close rejection trigger is a blocked dash path →
   `GapCloseBlocked` ("Path blocked"); the F5 slice-1 "rejected press
   (out of range / LOS)" wording does not apply to gap-closers.
+- **Design-review backlog (2026-07-03, flagged by live testing — owner has
+  ruled these disputed, not endorsed; adversarial review to follow the
+  audit closeout).**
+  (1) LOS validation is asymmetric: projectile deliveries check
+  `has_line_of_sight`, gap-closers check only dash path/destination, and
+  the model is per-delivery opt-in rather than a coherent policy.
+  (2) Aerial execution gating (`GROUNDED_ONLY` authored on every strike
+  since the initial import) rejects mid-air presses on a timing-dependent
+  grounded flag, and the rejection presentation still plays windup + forced
+  end segment — reads as "swing happened, then denied". The restriction
+  itself is disputed by the owner.
+  (3) Victim-side fairness: with 66–100 ms render delay plus
+  present-time hit validation and no lag compensation, an approaching
+  enemy visibly "hits from beyond rendered reach" (observed live with a
+  chasing NPC; amplified under shaping but present at real latencies).
+  (4) Auto-attacks bypass the predicted contact-cue system entirely
+  (cues hook predicted action-bar melee presses only).
+  (5) Remote-presentation instrumentation cannot distinguish
+  idle-target row silence from late delivery (confounds the F4 A/B; see
+  above).
+  (6) Fixed, endpoint-kind-keyed input lead (no RTT adaptation) — already
+  recorded above.
 - **F1 — implemented (all four steps).** `PredictedActionLedger` +
   `LocalCombatState.PredictActionStart` / `RollbackPrediction` /
   `ReleasePredictedPrimaryResource`; melee and spell press paths route their
