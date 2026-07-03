@@ -53,6 +53,41 @@ Defense timing windows below the render-delay floor are noise, not skill.
    never rewind through dashes/teleports/invulns. Design doc + kill-switch
    before any tuning work that depends on "present-time forever."
 
+**Delivered (2026-07-03, S3 — target contract item 1, NPC scope).** Owner
+scope ruling first: item 1 as written covered player auto-attacks too; the
+owner rescoped S3 to **NPC attacks only** — player attacks (auto-attacks
+included) are untouched, and their same-tick CAST→damage stays open (natural
+home: alongside S6's auto-attack scheduling work). Every NPC attack — the
+cadence swing in `npcs.rs` is the only NPC attack path; `auto_attack.rs` has
+zero NPC references — now telegraphs: CAST is emitted at swing start, and
+damage resolves through a private `npc_pending_swing` row `attack_windup_ms`
+later. Durations are authored per template and owner-signed (scaled-with-
+threat table): Thief 350 ms, Warrior 450 ms, Spearman 500 ms (2.40 m reach —
+biggest threat bubble), Knight 600 ms. The cadence anchor stays at swing
+start, so swing rhythm and DPS are unchanged. Resolution re-validates
+against present-time state (validation semantics untouched, as scoped): the
+swing **cancels** when the NPC is despawned, dead, or disabled at impact
+time (hard CC mid-windup interrupts the hit) and **whiffs silently** —
+player-melee parity — when the target is dead, unharmable, in another world
+context, or outside authored reach (owner-signed strict re-check: stepping
+out during the windup is the dodge counterplay; a retarget mid-windup
+replaces, i.e. cancels, the in-flight swing). Defense is now judged at
+impact time instead of cast time, so the 50 ms parry/block grace is timed
+against a hit the victim watched wind up — widening that grace stays
+item 2. The CAST carries the authored windup in the existing
+`MELEE_RELEASE_DELAY_SECONDS` scalar (the same contract player-melee CASTs
+use); the only schema change is the private table (bindings regenerated —
+one new type stub, `NpcPendingSwing.g.cs`). Client: zero changes, path
+verified — `EntityRegistry.OnCombatEventInsert` plays the NPC swing on CAST
+arrival and the victim flinch/damage keys off IMPACT, so the server-side gap
+reads as on-screen windup automatically. Measurement flags compose:
+`ARENA_NPC_NO_ATTACK` still means zero swings (gates before CAST),
+`ARENA_NPC_HARMLESS` still means real swings with damage-0 IMPACTs,
+`ARENA_NPC_AGGRO_RADIUS` untouched. Evidence: CAST and IMPACT now carry
+genuinely distinct `created_at_micros` under one `action_instance_id`, and
+`ops/npc-telegraph-separation.py` prints per-swing CAST→damage separation
+(plus whiff/cancel counts) from the live 20 s combat-event window.
+
 ## 2. Line of sight is a policy accident [DEFECT]
 
 **What exists.** A competent multi-probe 2D LOS query exists
@@ -340,7 +375,7 @@ precede fairness work.
 |---|-------|---------|----------|
 | S1 | ✅ Delivered 2026-07-03 — idle-aware sample taxonomy (settled vs starved) in `RemotePresentationBuffer`, overlay, CSV logger (see §7) | client | honest F4 A/B rerun |
 | S2 | ✅ Delivered 2026-07-03 — cut-on-reject via existing interrupt primitives + slot flash, `PredictionRejected` payload extended with the pressed action id (see §3) | client | legible denials (also fixes §5's worst symptom) |
-| S3 | NPC/auto-attack telegraphs: authored windup between CAST and damage | server + data | victim reaction time; masks present-time validation |
+| S3 | ✅ Delivered 2026-07-03 — NPC telegraphs: authored per-template windup between CAST and damage via `npc_pending_swing`, present-time re-validation at impact (see §1; player attacks rescoped out of S3 by owner) | server + data | victim reaction time; masks present-time validation |
 | S4 | LOS unification: `requires_target_los` targeting flag (default on, per-action opt-out), gap-close = LOS + path, client advisory pre-check from bundled collision | server + data + client | legible targeting rules |
 | S5 | Closed-loop input buffering: per-tick buffer-depth/fallback feedback on the ack surface + client lead control loop + degradation ladder + jump-preserving fallback + clock unification/warmup gating + correction-decay presentation (schema change; deletes the endpoint-kind lead switch) | client + server | playable at any RTT; shaped-local testing representative |
 | S6 | Auto-attack local swing scheduling off `next_swing_at` + contact-cue parity | client | auto-attack feel at RTT |
@@ -348,8 +383,10 @@ precede fairness work.
 | S8 | Bounded lag-compensation ring for attack reach/facing + favor-the-defender grace — design doc first, kill-switched | server | end-state hit fairness |
 
 Owner decisions needed before their slices: aerial gating ruling per
-archetype (§5, gates part of S2's test matrix), telegraph durations (S3,
-authored data), LOS opt-out list (S4).
+archetype (§5, gates part of S2's test matrix), LOS opt-out list (S4).
+Decided 2026-07-03: telegraph durations (S3 — scaled per template
+350/450/500/600 ms, strict impact-time reach re-check, player attacks
+rescoped out of the slice).
 
 ## Stances this review reverses or reframes
 

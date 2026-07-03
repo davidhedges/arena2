@@ -157,6 +157,18 @@ referenced but not repeated.
   present-time hit validation and no lag compensation, an approaching
   enemy visibly "hits from beyond rendered reach" (observed live with a
   chasing NPC; amplified under shaping but present at real latencies).
+  **Update (2026-07-03, S3 delivered — design review §1):** every NPC
+  attack now telegraphs: an authored windup (350–600 ms per kobold
+  template, owner-signed) separates the CAST the victim's screen renders
+  from damage resolution, with present-time re-validation at impact —
+  out of authored reach at impact whiffs silently, hard CC or death
+  mid-windup cancels the swing, and parry/block are now judged at impact
+  time (after a visible windup) rather than at cast. This masks the
+  render-delay artifact rather than rewinding it — lag compensation
+  remains S8, defense-grace widening remains §1 item 2 — and the owner
+  rescoped player attacks (auto-attacks included) out of the slice.
+  Evidence tooling: `ops/npc-telegraph-separation.py` (per-swing
+  CAST→damage separation from the live combat-event window).
   (4) Auto-attacks bypass the predicted contact-cue system entirely
   (cues hook predicted action-bar melee presses only).
   (5) Remote-presentation instrumentation cannot distinguish

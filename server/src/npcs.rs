@@ -7,8 +7,8 @@ use crate::arena::{resolve_player_world_context, world_contexts_share, ResolvedW
 use crate::combat::{
     mark_harmful_combat_action, queue_effects, timestamp_to_micros, CombatEvent, DamageDelivery,
     EffectPacket, MovementModifiers, COMBAT_EVENT_BLOCK, COMBAT_EVENT_CAST, COMBAT_EVENT_IMPACT,
-    COMBAT_EVENT_PARRY, COMBAT_METADATA_NONE, COMBAT_SCALAR_NONE, COMBAT_SEQUENCE_NONE,
-    DAMAGE_SOURCE_KIND_MELEE,
+    COMBAT_EVENT_PARRY, COMBAT_METADATA_NONE, COMBAT_SCALAR_MELEE_RELEASE_DELAY_SECONDS,
+    COMBAT_SCALAR_NONE, COMBAT_SEQUENCE_NONE, DAMAGE_SOURCE_KIND_MELEE,
 };
 use crate::defense::{
     resolve_defensible_combat_hit, CombatHitDeliveryKind, DefenseResolution, DefensibleCombatHit,
@@ -32,6 +32,8 @@ use crate::combat::combat_event as _;
 use crate::npcs::npc_combat_runtime as _;
 #[allow(unused_imports)]
 use crate::npcs::npc_instance as _;
+#[allow(unused_imports)]
+use crate::npcs::npc_pending_swing as _;
 #[allow(unused_imports)]
 use crate::npcs::npc_physics as _;
 #[allow(unused_imports)]
@@ -129,6 +131,25 @@ pub struct NpcCombatRuntime {
     pub next_attack_at_micros: i64,
 }
 
+/// One in-flight telegraphed swing per NPC (S3): the CAST event is emitted at
+/// swing start, this row schedules damage resolution `attack_windup_ms` later.
+/// At most one exists per NPC (cadence >> windup); a retarget mid-windup
+/// replaces — i.e. cancels — the in-flight swing. Resolution re-validates
+/// everything against present-time state, so rows never need proactive
+/// cleanup beyond NPC despawn.
+#[table(accessor = npc_pending_swing)]
+#[derive(Clone)]
+pub struct NpcPendingSwing {
+    #[primary_key]
+    pub identity: Identity,
+    pub target: Identity,
+    pub action_instance_id: String,
+    pub cast_at: Timestamp,
+    pub resolve_at: Timestamp,
+    #[index(btree)]
+    pub resolve_at_micros: i64,
+}
+
 #[table(accessor = npc_despawn)]
 pub struct NpcDespawn {
     #[primary_key]
@@ -151,6 +172,11 @@ pub(crate) struct NpcTemplate {
     pub move_speed: f32,
     pub attack_damage: i32,
     pub attack_cadence_ms: u64,
+    /// Authored telegraph (S3): delay between the CAST event (swing start,
+    /// what the victim's screen shows) and damage resolution. Must stay well
+    /// above the victim's render delay (~100-166 ms) or the telegraph reads
+    /// as nothing; design floor is 300 ms.
+    pub attack_windup_ms: u64,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -263,6 +289,7 @@ pub(crate) fn npc_template(template_id: &str) -> Option<NpcTemplate> {
             move_speed: MOVE_SPEED,
             attack_damage: 8,
             attack_cadence_ms: 1800,
+            attack_windup_ms: 450,
         }),
         NPC_TEMPLATE_KOBOLD_WARRIOR_GN_SPEAR => Some(NpcTemplate {
             template_id: NPC_TEMPLATE_KOBOLD_WARRIOR_GN_SPEAR,
@@ -276,6 +303,9 @@ pub(crate) fn npc_template(template_id: &str) -> Option<NpcTemplate> {
             move_speed: MOVE_SPEED,
             attack_damage: 7,
             attack_cadence_ms: 1900,
+            // Longest kobold windup after the knight: the spear's 2.40 m
+            // reach is the biggest threat bubble, so it gets the most warning.
+            attack_windup_ms: 500,
         }),
         NPC_TEMPLATE_KOBOLD_THIEF_BK_DUAL_SWORD => Some(NpcTemplate {
             template_id: NPC_TEMPLATE_KOBOLD_THIEF_BK_DUAL_SWORD,
@@ -289,6 +319,7 @@ pub(crate) fn npc_template(template_id: &str) -> Option<NpcTemplate> {
             move_speed: MOVE_SPEED + 0.5,
             attack_damage: 6,
             attack_cadence_ms: 1400,
+            attack_windup_ms: 350,
         }),
         NPC_TEMPLATE_KOBOLD_KNIGHT_RD_SWORD_SHIELD => Some(NpcTemplate {
             template_id: NPC_TEMPLATE_KOBOLD_KNIGHT_RD_SWORD_SHIELD,
@@ -302,6 +333,7 @@ pub(crate) fn npc_template(template_id: &str) -> Option<NpcTemplate> {
             move_speed: MOVE_SPEED,
             attack_damage: 10,
             attack_cadence_ms: 2100,
+            attack_windup_ms: 600,
         }),
         _ => None,
     }?;
@@ -532,6 +564,10 @@ pub(crate) fn tick_npc_combat(
     now: Timestamp,
     movement_modifiers: &MovementModifiers,
 ) {
+    // Due windups resolve before new swings begin, so a swing scheduled for
+    // this tick lands before the same NPC's next cadence fire is considered.
+    resolve_due_npc_pending_swings(ctx, now, movement_modifiers);
+
     let npcs: Vec<NpcInstance> = ctx.db.npc_instance().iter().collect();
     if npcs.is_empty() {
         return;
@@ -630,7 +666,7 @@ pub(crate) fn tick_npc_combat(
             continue;
         }
 
-        perform_npc_melee_attack(ctx, now, &npc, &physics, template, &target);
+        begin_npc_melee_swing(ctx, now, &npc, &physics, template, &target);
         runtime.next_attack_at = now + Duration::from_millis(template.attack_cadence_ms);
         runtime.next_attack_at_micros = timestamp_to_micros(runtime.next_attack_at);
         upsert_npc_combat_runtime(ctx, runtime);
@@ -874,7 +910,10 @@ fn npc_movement_world(ctx: &ReducerContext, npc: &NpcInstance) -> (Option<u64>, 
     (arena_seed, flat_ground_only)
 }
 
-fn perform_npc_melee_attack(
+/// Swing start (S3): emit the CAST telegraph and schedule damage resolution
+/// `attack_windup_ms` later. The CAST carries the authored windup in the same
+/// scalar contract player melee uses for its impact delay.
+fn begin_npc_melee_swing(
     ctx: &ReducerContext,
     now: Timestamp,
     npc: &NpcInstance,
@@ -892,9 +931,88 @@ fn perform_npc_melee_attack(
         action_instance_id.as_str(),
         COMBAT_EVENT_CAST,
         0,
+        COMBAT_SCALAR_MELEE_RELEASE_DELAY_SECONDS,
+        template.attack_windup_ms as f32 / 1000.0,
     );
 
-    if let Some(defense_event_type) = resolve_npc_melee_defense(ctx, now, physics, target) {
+    let resolve_at = now + Duration::from_millis(template.attack_windup_ms);
+    let row = NpcPendingSwing {
+        identity: npc.identity,
+        target: target.identity,
+        action_instance_id,
+        cast_at: now,
+        resolve_at,
+        resolve_at_micros: timestamp_to_micros(resolve_at),
+    };
+    if ctx
+        .db
+        .npc_pending_swing()
+        .identity()
+        .find(row.identity)
+        .is_some()
+    {
+        ctx.db.npc_pending_swing().identity().update(row);
+    } else {
+        ctx.db.npc_pending_swing().insert(row);
+    }
+}
+
+fn resolve_due_npc_pending_swings(
+    ctx: &ReducerContext,
+    now: Timestamp,
+    movement_modifiers: &MovementModifiers,
+) {
+    let due: Vec<NpcPendingSwing> = ctx
+        .db
+        .npc_pending_swing()
+        .resolve_at_micros()
+        .filter(..=timestamp_to_micros(now))
+        .collect();
+
+    for swing in due {
+        ctx.db.npc_pending_swing().identity().delete(swing.identity);
+        resolve_npc_pending_swing(ctx, now, &swing, movement_modifiers);
+    }
+}
+
+/// Swing resolution (S3), re-validated against present-time state: the swing
+/// cancels when the NPC is gone, dead, or disabled at impact time (crowd
+/// control mid-windup interrupts the hit), and whiffs silently — mirroring
+/// player melee — when the target is gone, unharmable, or outside authored
+/// reach (stepping out during the windup is the dodge counterplay).
+fn resolve_npc_pending_swing(
+    ctx: &ReducerContext,
+    now: Timestamp,
+    swing: &NpcPendingSwing,
+    movement_modifiers: &MovementModifiers,
+) {
+    let Some(npc) = ctx.db.npc_instance().identity().find(swing.identity) else {
+        return;
+    };
+    let Some(template) = npc_template(npc.template_id.as_str()) else {
+        return;
+    };
+    let Some(state) = ctx.db.npc_state().identity().find(swing.identity) else {
+        return;
+    };
+    if !state.alive {
+        return;
+    }
+    if movement_modifiers.is_disabled(&swing.identity) {
+        return;
+    }
+    let Some(physics) = ctx.db.npc_physics().identity().find(swing.identity) else {
+        return;
+    };
+
+    let Some(target) = resolve_npc_swing_target(ctx, swing.identity, &physics, swing.target) else {
+        return;
+    };
+    if target.distance > npc_attack_reach(template, &target) {
+        return;
+    }
+
+    if let Some(defense_event_type) = resolve_npc_melee_defense(ctx, now, &physics, &target) {
         mark_harmful_combat_action(
             ctx,
             npc.identity,
@@ -905,12 +1023,14 @@ fn perform_npc_melee_attack(
         emit_npc_combat_event(
             ctx,
             now,
-            npc,
-            physics,
-            target,
-            action_instance_id.as_str(),
+            &npc,
+            &physics,
+            &target,
+            swing.action_instance_id.as_str(),
             defense_event_type,
             0,
+            COMBAT_SCALAR_NONE,
+            0.0,
         );
         return;
     }
@@ -918,12 +1038,14 @@ fn perform_npc_melee_attack(
     emit_npc_combat_event(
         ctx,
         now,
-        npc,
-        physics,
-        target,
-        action_instance_id.as_str(),
+        &npc,
+        &physics,
+        &target,
+        swing.action_instance_id.as_str(),
         COMBAT_EVENT_IMPACT,
         template.attack_damage,
+        COMBAT_SCALAR_NONE,
+        0.0,
     );
     queue_effects(
         ctx,
@@ -932,12 +1054,56 @@ fn perform_npc_melee_attack(
             damage_type: crate::combat::DamageType::Physical,
             source: npc.identity,
             target: target.identity,
-            spell_id: action_instance_id,
+            spell_id: swing.action_instance_id.clone(),
             delivery: DamageDelivery::Direct,
             direct_action_key: NPC_MELEE_ACTION_KIND.to_string(),
             source_kind: DAMAGE_SOURCE_KIND_MELEE.to_string(),
         }],
     );
+}
+
+/// Present-time target state for a resolving swing: same eligibility rules as
+/// acquisition (alive, non-dummy, shared world, harmable), but looked up
+/// directly for the single stored target instead of scanning candidates.
+fn resolve_npc_swing_target(
+    ctx: &ReducerContext,
+    npc_identity: Identity,
+    npc_physics: &NpcPhysics,
+    target_identity: Identity,
+) -> Option<NpcAttackTarget> {
+    let state = ctx.db.player_state().player_id().find(target_identity)?;
+    if !state.alive || state.is_dummy {
+        return None;
+    }
+    let npc_context = resolve_player_world_context(ctx, npc_identity)?;
+    let target_context = resolve_player_world_context(ctx, target_identity)?;
+    if !world_contexts_share(&npc_context, &target_context) {
+        return None;
+    }
+    if !can_harm(ctx, npc_identity, target_identity) {
+        return None;
+    }
+    let physics = ctx.db.player_physics().identity().find(target_identity)?;
+
+    let dx = physics.pos_x - npc_physics.pos_x;
+    let dz = physics.pos_z - npc_physics.pos_z;
+    let distance = (dx * dx + dz * dz).sqrt();
+    let (dir_x, dir_z) = if distance > 0.001 {
+        (dx / distance, dz / distance)
+    } else {
+        (0.0, 1.0)
+    };
+    Some(NpcAttackTarget {
+        identity: target_identity,
+        pos_x: physics.pos_x,
+        pos_y: physics.pos_y,
+        pos_z: physics.pos_z,
+        hit_radius: state.hit_radius,
+        hit_height: state.hit_height,
+        distance,
+        dir_x,
+        dir_z,
+    })
 }
 
 fn resolve_npc_melee_defense(
@@ -977,6 +1143,7 @@ fn npc_melee_defense_event_type(resolution: DefenseResolution) -> Option<&'stati
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn emit_npc_combat_event(
     ctx: &ReducerContext,
     now: Timestamp,
@@ -986,6 +1153,8 @@ fn emit_npc_combat_event(
     action_instance_id: &str,
     event_type: &str,
     damage: i32,
+    scalar_kind: &str,
+    scalar_value: f32,
 ) {
     ctx.db.combat_event().insert(CombatEvent {
         event_id: 0,
@@ -1005,8 +1174,8 @@ fn emit_npc_combat_event(
         dir_z: target.dir_z,
         speed: 0.0,
         max_distance: template_attack_range_for_event(npc.template_id.as_str()),
-        scalar_kind: COMBAT_SCALAR_NONE.to_string(),
-        scalar_value: 0.0,
+        scalar_kind: scalar_kind.to_string(),
+        scalar_value,
         sequence_kind: COMBAT_SEQUENCE_NONE.to_string(),
         sequence_index: 0,
         sequence_count: 0,
@@ -1030,6 +1199,15 @@ fn template_attack_range_for_event(template_id: &str) -> f32 {
 
 fn despawn_npc_identity(ctx: &ReducerContext, identity: Identity) {
     clear_npc_combat_runtime(ctx, identity);
+    if ctx
+        .db
+        .npc_pending_swing()
+        .identity()
+        .find(identity)
+        .is_some()
+    {
+        ctx.db.npc_pending_swing().identity().delete(identity);
+    }
     clear_loot_for_anchor(ctx, identity);
     if ctx.db.npc_despawn().identity().find(identity).is_some() {
         ctx.db.npc_despawn().identity().delete(identity);
