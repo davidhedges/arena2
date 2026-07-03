@@ -2,9 +2,10 @@
 
 using System;
 using Arena.Entity;
+using Arena.Network;
 using Arena.World;
+using SpacetimeDB.Types;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 
 namespace Arena.Combat
 {
@@ -123,7 +124,15 @@ namespace Arena.Combat
 
         private static ServerLosCollisionData? ResolveCollisionData()
         {
-            string sceneName = SceneManager.GetActiveScene().name;
+            string? sceneName = LocalAuthoredOpenWorldSceneName();
+            if (sceneName == null)
+            {
+                _collisionScene = string.Empty;
+                _collisionLoadAttempted = false;
+                _collision = null;
+                return null;
+            }
+
             if (_collisionLoadAttempted && string.Equals(_collisionScene, sceneName, StringComparison.Ordinal))
                 return _collision;
 
@@ -131,6 +140,33 @@ namespace Arena.Combat
             _collisionLoadAttempted = true;
             _collision = ServerLosCollisionData.Load(OpenWorldSceneProfile.ForSceneName(sceneName));
             return _collision;
+        }
+
+        // The advisory only understands authored open-world geometry, keyed by
+        // the server's own world row for the local player. Anywhere else —
+        // arena, practice/training instances (flat-ground server-side), or a
+        // scene with no bundled data — it stays silent rather than raycasting
+        // the wrong world's geometry: the advisory may false-allow, never
+        // false-block. OpenWorldSceneProfile.ForSceneName falls back to the
+        // default profile for unknown names, so an exact scene-name match is
+        // required before its result may be used here.
+        private static string? LocalAuthoredOpenWorldSceneName()
+        {
+            DbConnection? conn = NetworkManager.Instance?.Conn;
+            SpacetimeDB.Identity? identity = conn?.Identity;
+            if (conn == null || !identity.HasValue)
+                return null;
+
+            PlayerWorld? world = conn.Db.PlayerWorld.Identity.Find(identity.Value);
+            if (world == null || !string.Equals(world.WorldKind, "OPEN", StringComparison.OrdinalIgnoreCase))
+                return null;
+
+            string sceneName = world.OpenWorldSceneName;
+            if (string.IsNullOrWhiteSpace(sceneName))
+                return null;
+
+            OpenWorldSceneProfile profile = OpenWorldSceneProfile.ForSceneName(sceneName);
+            return string.Equals(profile.SceneName, sceneName, StringComparison.Ordinal) ? sceneName : null;
         }
     }
 }

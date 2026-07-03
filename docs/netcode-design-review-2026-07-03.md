@@ -170,6 +170,25 @@ zero CASTs for 5 s behind cover (vs CAST+IMPACT flowing in the open); 17.8 m
 WARRIOR_CHARGE press → `rejected/lineOfSightBlocked`, no dash. Tests
 deferred until the contract stabilizes (churn ruling).
 
+**S4 post-delivery fix + ruling (2026-07-04, owner-reported).** Standing
+adjacent to a target with no barrier read "No line of sight". Root cause:
+the client advisory raycast the wrong world — `ForSceneName` silently falls
+back to the default profile for unknown scene names, so in arena/practice
+scenes the advisory tested oasis terrain at local coordinates and denied
+every targeted press instantly. The advisory (and the LOS debug guide) now
+key off the local player's server-side `PlayerWorld` row and run only in
+authored open-world scenes with an exact profile match; everywhere else
+they stay silent and the server is the only LOS authority (arena walls
+still reject server-side with the S2 presentation, just without the
+pre-press gray-out). Ruling recorded in the authoring contract: **bodies
+never block target LOS** — LOS is caster→target versus world geometry only
+(already true server-side; the S4 check inherited it). Player/NPC bodies
+still intercept projectile *travel* by delivery design, and never
+intercept gap-close dashes (the path bake is world-collision only).
+Point-blank swings against a faced target are always in policy: with
+correct world data there is no geometry between touching capsules at torso
+height.
+
 ## 3. Rejection presentation lies to the player [DEFECT]
 
 **What exists.** On a server rejection: the predicted melee swing **plays to

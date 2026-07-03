@@ -284,8 +284,13 @@ namespace Arena.Debugging
                 return _serverCollisionData;
 
             _serverCollisionScene = sceneName;
+            // ForSceneName falls back to the default profile for unknown scene
+            // names; drawing another world's geometry here is worse than
+            // drawing nothing (S4 shipped the same guard in the advisory).
             OpenWorldSceneProfile profile = OpenWorldSceneProfile.ForSceneName(sceneName);
-            _serverCollisionData = ServerLosCollisionData.Load(profile);
+            _serverCollisionData = string.Equals(profile.SceneName, sceneName, StringComparison.Ordinal)
+                ? ServerLosCollisionData.Load(profile)
+                : null;
             return _serverCollisionData;
         }
 
