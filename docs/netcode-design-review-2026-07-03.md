@@ -214,6 +214,29 @@ logger. Optionally add a low-rate (~1 Hz) NPC heartbeat so "settled" has a
 bounded staleness proof. This is the hard prerequisite for rerunning the F4
 A/B and for any adaptive-delay tuning.
 
+**Delivered (2026-07-03, S1).** Every non-seeding sample now classifies
+interpolated / extrapolating (within cap) / starved (past cap, delivery late)
+/ settled (past cap, entity at rest) — `RemotePresentationBuffer.ClassifySample`,
+pure and reflection-tested. Discriminator, with the cadence facts verified in
+code: `PlayerPhysics` commits every tick for every live connected player
+(`game_loop.rs` `tick_player` → unconditional `commit_player_physics`), so a
+remote player past the cap is always starved; `NpcPhysics` legitimately stops
+when idle (`npcs.rs` — chase writes per chase tick, facing only on yaw
+change), so an NPC past the cap is settled while global row delivery is fresh
+(`NetcodeReceiveCounters.RowDeliveryFresh`: `TotalRows` changed within 250 ms,
+the same signal ConnectionStatusHud classifies staleness from) and starved
+once it stalls. A settled entity's reported buffer depth pins at the cap
+boundary (−2 ticks, `ReportableBufferAheadTicks`) instead of diving. Four-way
+counts surfaced in the ClientSimulationState/NpcEntity passthroughs, the
+overlay's Remote Presentation section, and new CSV columns
+(`p_starved`/`p_settled`/`n_starved`/`n_settled`); the A/B metric going
+forward is (extrapolating + starved) / (all non-settled samples). Rendered
+pose is unchanged — classification and reporting only. Heartbeat stays
+deferred; known limits of the global-flow discriminator: playground/practice
+dummy players commit only on change and read as starved while parked (debug
+fixtures — exclude from A/B legs), and a *moving* NPC whose own rows gap past
+the cap while global delivery stays healthy reads settled until the next row.
+
 ## 8. Deliberate exposures to keep (for now, on the record) [ACCEPTED]
 
 - **Interest management is bandwidth, not security.** Subscriptions filter by
@@ -244,7 +267,7 @@ precede fairness work.
 
 | # | Slice | Surface | Unblocks |
 |---|-------|---------|----------|
-| S1 | Idle-aware sample taxonomy (settled vs starved) in `RemotePresentationBuffer`, overlay, CSV logger | client | honest F4 A/B rerun |
+| S1 | ✅ Delivered 2026-07-03 — idle-aware sample taxonomy (settled vs starved) in `RemotePresentationBuffer`, overlay, CSV logger (see §7) | client | honest F4 A/B rerun |
 | S2 | Rejection presentation: cut-on-reject via existing interrupt primitives + slot flash (extend `PredictionRejected` payload) | client | legible denials (also fixes §5's worst symptom) |
 | S3 | NPC/auto-attack telegraphs: authored windup between CAST and damage | server + data | victim reaction time; masks present-time validation |
 | S4 | LOS unification: `requires_target_los` targeting flag (default on, per-action opt-out), gap-close = LOS + path, client advisory pre-check from bundled collision | server + data + client | legible targeting rules |

@@ -1,4 +1,5 @@
 using UnityEngine;
+using Arena.Debugging;
 using Arena.Input;
 using Arena.Network;
 namespace Arena.Simulation
@@ -92,8 +93,14 @@ namespace Arena.Simulation
         private Vector3 _serverVelocity;
         private float _serverYaw; // radians
 
-        // Snapshot ring + render pose for remote players.
-        private readonly RemotePresentationBuffer _remotePresentation = new();
+        // Snapshot ring + render pose for remote players. EveryTick: the
+        // server commits PlayerPhysics (updated_at included) each tick for
+        // every live connected player, so no rows past the extrapolation cap
+        // always means delivery is late. Known exception: playground/practice
+        // dummy targets only commit on change and read as starved while
+        // parked — they are debug fixtures, excluded from A/B legs.
+        private readonly RemotePresentationBuffer _remotePresentation =
+            new(RemotePresentationBuffer.SourceRowCadence.EveryTick);
         private uint _movementContextVersion;
 
         private readonly MovementContextSample[] _movementContextSamples = new MovementContextSample[MovementContextCapacity];
@@ -131,6 +138,8 @@ namespace Arena.Simulation
         public int RemoteSmoothUpdateCount => _remotePresentation.SmoothUpdateCount;
         public int RemoteInterpolationSampleCount => _remotePresentation.InterpolationSampleCount;
         public int RemoteExtrapolationSampleCount => _remotePresentation.ExtrapolationSampleCount;
+        public int RemoteStarvedSampleCount => _remotePresentation.StarvedSampleCount;
+        public int RemoteSettledSampleCount => _remotePresentation.SettledSampleCount;
         public float LastRemotePositionError => _remotePresentation.LastPositionError;
         public float MaxRemotePositionErrorObserved => _remotePresentation.MaxPositionErrorObserved;
         public float LastRemoteExtrapolationSeconds => _remotePresentation.LastExtrapolationSeconds;
@@ -391,7 +400,8 @@ namespace Arena.Simulation
                 Time.realtimeSinceStartup,
                 ArenaServerClock.HasEstimate ? ArenaServerClock.ServerNowMs : (long?)null,
                 _serverPos,
-                _serverYaw);
+                _serverYaw,
+                NetcodeReceiveCounters.RowDeliveryFresh(Time.realtimeSinceStartup));
         }
 
         public Vector3 GetRenderPosition() => _remotePresentation.RenderPosition;

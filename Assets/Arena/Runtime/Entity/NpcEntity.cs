@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using Arena.Combat;
+using Arena.Debugging;
 using Arena.Network;
 using Arena.Presentation;
 using Arena.Presentation.Targeting;
@@ -23,7 +24,12 @@ namespace Arena.Entity
         private readonly Dictionary<string, int> _effectCounts = new(StringComparer.OrdinalIgnoreCase);
         private readonly Renderer[] _renderers;
         private readonly Dictionary<Material, Color> _baseMaterialColors = new();
-        private readonly RemotePresentationBuffer _presentation = new();
+        // StopsWhenIdle: NpcPhysics has no heartbeat — chase writes per chase
+        // tick, facing writes only on yaw change, nothing writes while the
+        // NPC is stationary — so no rows past the extrapolation cap means
+        // settled while global row delivery is healthy.
+        private readonly RemotePresentationBuffer _presentation =
+            new(RemotePresentationBuffer.SourceRowCadence.StopsWhenIdle);
         private NpcInstance _instance;
         private NpcState? _state;
         private bool _isHighlighted;
@@ -49,6 +55,9 @@ namespace Arena.Entity
         public int PresentationHardSnapCount => _presentation.HardSnapCount;
         public int PresentationInterpolationSampleCount => _presentation.InterpolationSampleCount;
         public int PresentationExtrapolationSampleCount => _presentation.ExtrapolationSampleCount;
+        public int PresentationStarvedSampleCount => _presentation.StarvedSampleCount;
+        public int PresentationSettledSampleCount => _presentation.SettledSampleCount;
+        public RemotePresentationBuffer.SampleClass? PresentationLastSampleClass => _presentation.LastTickSampleClass;
         public float PresentationLastPositionError => _presentation.LastPositionError;
         public float PresentationMaxPositionErrorObserved => _presentation.MaxPositionErrorObserved;
         public bool PresentationUsedServerTimeline => _presentation.LastTickUsedServerTimeline;
@@ -179,7 +188,8 @@ namespace Arena.Entity
                 Time.realtimeSinceStartup,
                 ArenaServerClock.HasEstimate ? ArenaServerClock.ServerNowMs : (long?)null,
                 _lastAuthoritativePosition,
-                _lastAuthoritativeYawRadians);
+                _lastAuthoritativeYawRadians,
+                NetcodeReceiveCounters.RowDeliveryFresh(Time.realtimeSinceStartup));
 
             Vector3 renderPosition = _presentation.RenderPosition;
             GameObject.transform.SetPositionAndRotation(

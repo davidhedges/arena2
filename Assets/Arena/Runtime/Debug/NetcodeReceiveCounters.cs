@@ -9,11 +9,21 @@ namespace Arena.Debugging
     /// client half). NetworkCallbackBinder records one hit per table row
     /// callback; NetcodeDebugOverlay renders rows/sec over a rolling window.
     ///
-    /// No gameplay system may read these — measurement only.
+    /// No gameplay system may read these — measurement only. Sanctioned
+    /// readers: ConnectionStatusHud (staleness dot) and RowDeliveryFresh
+    /// below (RemotePresentationBuffer's settled-vs-starved sample
+    /// classification, design review S1); neither feeds back into
+    /// presentation or simulation behavior.
     /// </summary>
     public static class NetcodeReceiveCounters
     {
         public const float WindowSeconds = 5.0f;
+
+        /// <summary>
+        /// Freshness window for RowDeliveryFresh — the same ~250 ms scale
+        /// ConnectionStatusHud derives its staleness classification from.
+        /// </summary>
+        public const float RowFlowFreshWindowSeconds = 0.25f;
 
         private static readonly Dictionary<string, long> _totalRowsByTable = new(System.StringComparer.Ordinal);
         private static readonly Dictionary<string, long> _windowRowsByTable = new(System.StringComparer.Ordinal);
@@ -21,6 +31,8 @@ namespace Arena.Debugging
         private static readonly Dictionary<ActionResultKind, long> _predictedResultsByKind = new();
         private static float _windowStartedAtRealtime = -1.0f;
         private static long _totalRows;
+        private static long _flowObservedTotalRows = -1L;
+        private static float _flowLastChangeRealtime = float.NegativeInfinity;
 
         public static long TotalRows => _totalRows;
         public static IReadOnlyDictionary<string, long> TotalRowsByTable => _totalRowsByTable;
@@ -53,6 +65,28 @@ namespace Arena.Debugging
             LastRejection = string.Empty;
             _windowStartedAtRealtime = -1.0f;
             _totalRows = 0;
+            _flowObservedTotalRows = -1L;
+            _flowLastChangeRealtime = float.NegativeInfinity;
+        }
+
+        /// <summary>
+        /// True while any replicated row arrived within the last
+        /// RowFlowFreshWindowSeconds — the global-delivery-health input to
+        /// RemotePresentationBuffer.ClassifySample (an idle NPC past the
+        /// extrapolation cap is settled while this holds, starved once it
+        /// stalls). Observer state advances on read; call from the main
+        /// thread with Time.realtimeSinceStartup.
+        /// </summary>
+        public static bool RowDeliveryFresh(float nowRealtime)
+        {
+            if (_totalRows != _flowObservedTotalRows)
+            {
+                _flowObservedTotalRows = _totalRows;
+                _flowLastChangeRealtime = nowRealtime;
+            }
+
+            return _totalRows > 0
+                && nowRealtime - _flowLastChangeRealtime <= RowFlowFreshWindowSeconds;
         }
 
         /// <summary>

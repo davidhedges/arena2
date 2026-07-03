@@ -47,8 +47,15 @@ referenced but not repeated.
   are **confounded by target idleness** — a stationary NPC gets no
   `NpcPhysics` rows, so idle time counts as extrapolation and depth dives
   negative by design. Before rerunning: classify idle-vs-late samples in the
-  counters (or guarantee continuous target motion for both legs). F4
-  adaptive delay stays blocked. **F5 falsePos: still open** — swings were
+  counters (or guarantee continuous target motion for both legs).
+  **Update (2026-07-03): S1 delivered** (netcode design review §7) — samples
+  now classify interpolated / extrapolating / starved / settled, settled
+  entities no longer dive the depth metric, and the CSV gained
+  `p_starved`/`p_settled`/`n_starved`/`n_settled` columns. The F4 A/B rerun
+  is **unblocked**: use the existing runbook in `docs/latency-testing.md`
+  with the `RemotePresentationAbLog` CSV, and compare legs on
+  (extrap + starved) / (all non-settled samples) so target idleness cannot
+  confound them. F4 adaptive delay stays blocked on the clean A/B itself. **F5 falsePos: still open** — swings were
   auto-attacks, which do not route through the predicted contact-cue system
   at all (cues hook only predicted action-bar melee presses); the one
   ability press in the log fired and matched cleanly (fired 1 / matched 1 /

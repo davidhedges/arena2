@@ -18,8 +18,12 @@ namespace Arena.Debugging
     /// (ON = server-time, OFF = arrival), and appends them to
     /// Logs/remote-presentation-ab.csv — so an A/B run needs no manual
     /// number-copying and legs can be compared as within-session counter
-    /// deltas. Diagnostic only: editor/development builds, gameplay reads
-    /// nothing from it, and any I/O failure is swallowed.
+    /// deltas. Samples carry the S1 four-way taxonomy; the A/B comparison
+    /// metric is (extrap + starved) / (interp + extrap + starved) — settled
+    /// samples (entity authoritatively at rest) are excluded so target
+    /// idleness cannot confound the legs. Diagnostic only: editor/development
+    /// builds, gameplay reads nothing from it, and any I/O failure is
+    /// swallowed.
     /// </summary>
     internal sealed class RemotePresentationAbLog : MonoBehaviour
     {
@@ -63,6 +67,8 @@ namespace Arena.Debugging
             int hardSnaps = 0;
             long interpSamples = 0;
             long extrapSamples = 0;
+            long starvedSamples = 0;
+            long settledSamples = 0;
             float lastError = 0f;
             float maxError = 0f;
             foreach (var player in registry.AllPlayers)
@@ -75,6 +81,8 @@ namespace Arena.Debugging
                 hardSnaps += sim.RemoteHardSnapCount;
                 interpSamples += sim.RemoteInterpolationSampleCount;
                 extrapSamples += sim.RemoteExtrapolationSampleCount;
+                starvedSamples += sim.RemoteStarvedSampleCount;
+                settledSamples += sim.RemoteSettledSampleCount;
                 lastError = Mathf.Max(lastError, sim.LastRemotePositionError);
                 maxError = Mathf.Max(maxError, sim.MaxRemotePositionErrorObserved);
             }
@@ -83,6 +91,8 @@ namespace Arena.Debugging
             int npcHardSnaps = 0;
             long npcInterpSamples = 0;
             long npcExtrapSamples = 0;
+            long npcStarvedSamples = 0;
+            long npcSettledSamples = 0;
             float npcLastError = 0f;
             float npcMaxError = 0f;
             float npcDepthTicksSum = 0f;
@@ -93,6 +103,8 @@ namespace Arena.Debugging
                 npcHardSnaps += npc.PresentationHardSnapCount;
                 npcInterpSamples += npc.PresentationInterpolationSampleCount;
                 npcExtrapSamples += npc.PresentationExtrapolationSampleCount;
+                npcStarvedSamples += npc.PresentationStarvedSampleCount;
+                npcSettledSamples += npc.PresentationSettledSampleCount;
                 npcLastError = Mathf.Max(npcLastError, npc.PresentationLastPositionError);
                 npcMaxError = Mathf.Max(npcMaxError, npc.PresentationMaxPositionErrorObserved);
                 npcDepthTicksSum += npc.PresentationBufferAheadTicks;
@@ -109,12 +121,16 @@ namespace Arena.Debugging
             row.Append(',').Append(hardSnaps);
             row.Append(',').Append(interpSamples);
             row.Append(',').Append(extrapSamples);
+            row.Append(',').Append(starvedSamples);
+            row.Append(',').Append(settledSamples);
             row.Append(',').Append(lastError.ToString("F3", CultureInfo.InvariantCulture));
             row.Append(',').Append(maxError.ToString("F3", CultureInfo.InvariantCulture));
             row.Append(',').Append(npcCount);
             row.Append(',').Append(npcHardSnaps);
             row.Append(',').Append(npcInterpSamples);
             row.Append(',').Append(npcExtrapSamples);
+            row.Append(',').Append(npcStarvedSamples);
+            row.Append(',').Append(npcSettledSamples);
             row.Append(',').Append(npcLastError.ToString("F3", CultureInfo.InvariantCulture));
             row.Append(',').Append(npcMaxError.ToString("F3", CultureInfo.InvariantCulture));
             row.Append(',').Append(npcCount > 0
@@ -138,8 +154,8 @@ namespace Arena.Debugging
                         _path,
                         FormattableString.Invariant(
                             $"# session {DateTime.UtcNow:yyyy-MM-dd'T'HH:mm:ss'Z'}\n")
-                        + "unix_ms,timeline,players,p_hard_snaps,p_interp,p_extrap,p_last_err_m,p_max_err_m,"
-                        + "npcs,n_hard_snaps,n_interp,n_extrap,n_last_err_m,n_max_err_m,n_depth_ticks_avg,n_delay_ms_avg,"
+                        + "unix_ms,timeline,players,p_hard_snaps,p_interp,p_extrap,p_starved,p_settled,p_last_err_m,p_max_err_m,"
+                        + "npcs,n_hard_snaps,n_interp,n_extrap,n_starved,n_settled,n_last_err_m,n_max_err_m,n_depth_ticks_avg,n_delay_ms_avg,"
                         + "cue_fired,cue_matched,cue_false_pos,cue_suppressed_auth\n");
                     _wroteHeader = true;
                 }

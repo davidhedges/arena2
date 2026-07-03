@@ -248,8 +248,10 @@ namespace Arena.Debugging
         }
 
         /// <summary>
-        /// Aggregate remote-presentation counters (feel audit F2a/F3/F4): hard
-        /// snaps, interpolation vs extrapolation sample ratio, last/max
+        /// Aggregate remote-presentation counters (feel audit F2a/F3/F4,
+        /// design review S1): hard snaps, four-way sample taxonomy
+        /// (interpolated / extrapolating / starved / settled) with the late
+        /// ratio = (extrap + starved) / non-settled samples, last/max
         /// position error, active timeline + effective delay + buffer depth —
         /// one aggregate over remote players (ClientSimulationState) and one
         /// over NPCs (RemotePresentationBuffer).
@@ -264,6 +266,8 @@ namespace Arena.Debugging
             int hardSnaps = 0;
             long interpSamples = 0;
             long extrapSamples = 0;
+            long starvedSamples = 0;
+            long settledSamples = 0;
             float lastError = 0f;
             float maxError = 0f;
             int playersOnServerTimeline = 0;
@@ -279,6 +283,8 @@ namespace Arena.Debugging
                 hardSnaps += sim.RemoteHardSnapCount;
                 interpSamples += sim.RemoteInterpolationSampleCount;
                 extrapSamples += sim.RemoteExtrapolationSampleCount;
+                starvedSamples += sim.RemoteStarvedSampleCount;
+                settledSamples += sim.RemoteSettledSampleCount;
                 lastError = Mathf.Max(lastError, sim.LastRemotePositionError);
                 maxError = Mathf.Max(maxError, sim.MaxRemotePositionErrorObserved);
                 if (sim.RemoteUsedServerTimelineForDebug)
@@ -291,9 +297,12 @@ namespace Arena.Debugging
             int npcHardSnaps = 0;
             long npcInterpSamples = 0;
             long npcExtrapSamples = 0;
+            long npcStarvedSamples = 0;
+            long npcSettledSamples = 0;
             float npcLastError = 0f;
             float npcMaxError = 0f;
             int npcsOnServerTimeline = 0;
+            int npcsSettledNow = 0;
             float npcDelayMsSum = 0f;
             float npcDepthTicksSum = 0f;
             foreach (var npc in registry.AllNpcs)
@@ -302,10 +311,14 @@ namespace Arena.Debugging
                 npcHardSnaps += npc.PresentationHardSnapCount;
                 npcInterpSamples += npc.PresentationInterpolationSampleCount;
                 npcExtrapSamples += npc.PresentationExtrapolationSampleCount;
+                npcStarvedSamples += npc.PresentationStarvedSampleCount;
+                npcSettledSamples += npc.PresentationSettledSampleCount;
                 npcLastError = Mathf.Max(npcLastError, npc.PresentationLastPositionError);
                 npcMaxError = Mathf.Max(npcMaxError, npc.PresentationMaxPositionErrorObserved);
                 if (npc.PresentationUsedServerTimeline)
                     npcsOnServerTimeline++;
+                if (npc.PresentationLastSampleClass == RemotePresentationBuffer.SampleClass.Settled)
+                    npcsSettledNow++;
                 npcDelayMsSum += npc.PresentationEffectiveDelayMs;
                 npcDepthTicksSum += npc.PresentationBufferAheadTicks;
             }
@@ -329,13 +342,13 @@ namespace Arena.Debugging
 
             if (remoteCount > 0)
             {
-                long totalSamples = interpSamples + extrapSamples;
-                float extrapRatio = totalSamples > 0 ? (float)extrapSamples / totalSamples : 0f;
+                long nonSettled = interpSamples + extrapSamples + starvedSamples;
+                float lateRatio = nonSettled > 0 ? (float)(extrapSamples + starvedSamples) / nonSettled : 0f;
                 GUI.Label(new Rect(x, y, 640, lineHeight), $"Hard snaps: {hardSnaps}", _style);
                 y += lineHeight;
                 GUI.Label(
-                    new Rect(x, y, 640, lineHeight),
-                    $"Interp/extrap samples: {interpSamples}/{extrapSamples}  (extrap ratio: {extrapRatio:P1})",
+                    new Rect(x, y, 900, lineHeight),
+                    $"Samples: interp {interpSamples} / extrap {extrapSamples} / starved {starvedSamples} / settled {settledSamples}  (late ratio: {lateRatio:P1})",
                     _style);
                 y += lineHeight;
                 GUI.Label(
@@ -352,13 +365,13 @@ namespace Arena.Debugging
 
             if (npcCount > 0)
             {
-                long npcTotalSamples = npcInterpSamples + npcExtrapSamples;
-                float npcExtrapRatio = npcTotalSamples > 0 ? (float)npcExtrapSamples / npcTotalSamples : 0f;
+                long npcNonSettled = npcInterpSamples + npcExtrapSamples + npcStarvedSamples;
+                float npcLateRatio = npcNonSettled > 0 ? (float)(npcExtrapSamples + npcStarvedSamples) / npcNonSettled : 0f;
                 GUI.Label(new Rect(x, y, 640, lineHeight), $"NPC hard snaps: {npcHardSnaps}", _style);
                 y += lineHeight;
                 GUI.Label(
-                    new Rect(x, y, 640, lineHeight),
-                    $"NPC interp/extrap samples: {npcInterpSamples}/{npcExtrapSamples}  (extrap ratio: {npcExtrapRatio:P1})",
+                    new Rect(x, y, 900, lineHeight),
+                    $"NPC samples: interp {npcInterpSamples} / extrap {npcExtrapSamples} / starved {npcStarvedSamples} / settled {npcSettledSamples}  (late ratio: {npcLateRatio:P1})",
                     _style);
                 y += lineHeight;
                 GUI.Label(
@@ -368,7 +381,7 @@ namespace Arena.Debugging
                 y += lineHeight;
                 GUI.Label(
                     new Rect(x, y, 640, lineHeight),
-                    $"NPC buffer depth: {npcDepthTicksSum / npcCount:F1} ticks avg  (delay: {npcDelayMsSum / npcCount:F0} ms avg)",
+                    $"NPC buffer depth: {npcDepthTicksSum / npcCount:F1} ticks avg  (delay: {npcDelayMsSum / npcCount:F0} ms avg, settled now: {npcsSettledNow}/{npcCount})",
                     _style);
                 y += lineHeight;
             }
