@@ -248,7 +248,7 @@ precede fairness work.
 | S2 | Rejection presentation: cut-on-reject via existing interrupt primitives + slot flash (extend `PredictionRejected` payload) | client | legible denials (also fixes §5's worst symptom) |
 | S3 | NPC/auto-attack telegraphs: authored windup between CAST and damage | server + data | victim reaction time; masks present-time validation |
 | S4 | LOS unification: `requires_target_los` targeting flag (default on, per-action opt-out), gap-close = LOS + path, client advisory pre-check from bundled collision | server + data + client | legible targeting rules |
-| S5 | Clock unification + warmup gating + RTT-adaptive input lead + jump-preserving fallback + dev lead override | client + server touch | high-RTT playability; shaped-local testability |
+| S5 | Closed-loop input buffering: per-tick buffer-depth/fallback feedback on the ack surface + client lead control loop + degradation ladder + jump-preserving fallback + clock unification/warmup gating + correction-decay presentation (schema change; deletes the endpoint-kind lead switch) | client + server | playable at any RTT; shaped-local testing representative |
 | S6 | Auto-attack local swing scheduling off `next_swing_at` + contact-cue parity | client | auto-attack feel at RTT |
 | S7 | F4 adaptive delay [66..200 ms] from arrival-lateness p95 | client | needs S1 + clean A/B |
 | S8 | Bounded lag-compensation ring for attack reach/facing + favor-the-defender grace — design doc first, kill-switched | server | end-state hit fairness |
@@ -268,3 +268,8 @@ authored data), LOS opt-out list (S4).
 3. The netcode audits treated per-delivery LOS and `GROUNDED_ONLY` defaults
    as design intent; the owner has ruled them unexamined defaults —
    recorded here as defects/gaps, not spec.
+4. Prior work treated the pinned regression tests (netcode constants,
+   animation timings) as constraints to update carefully. Owner ruling: the
+   current suite is churn-era noise with little signal — contracts in this
+   review override tests, and tests are rewritten after a contract
+   stabilizes, never cited against a redesign.
