@@ -95,6 +95,12 @@ pub(crate) fn line_of_sight_blocker(
     let origin_y = caster.pos_y + caster.hit_height * 0.85;
     let origin_z = caster.pos_z;
 
+    // A probe that reaches the target's personal space sees the target
+    // (owner ruling, S4 follow-up): geometry the target legally stands
+    // against — padded movement boxes especially — cannot conceal them.
+    // Cover only blocks when it interposes deeper than the target's radius.
+    let clear_tolerance = target.hit_radius.max(0.0) + LOS_BLOCK_EPSILON;
+
     let target_points = line_of_sight_target_points(caster, target);
     let mut best_blocker: Option<LineOfSightBlocker> = None;
     for (target_x, target_y, target_z) in target_points {
@@ -111,7 +117,7 @@ pub(crate) fn line_of_sight_blocker(
             LOS_PROBE_RADIUS,
         ) {
             None => return None,
-            Some((hit, distance)) if hit.t >= distance - LOS_BLOCK_EPSILON => return None,
+            Some((hit, distance)) if hit.t >= distance - clear_tolerance => return None,
             Some((hit, _)) => SceneHit {
                 kind: SceneHitKind::World,
                 t: hit.t,

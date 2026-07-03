@@ -73,16 +73,21 @@ namespace Arena.Combat
                 side = new Vector3(-dir.z, 0f, dir.x) * sideOffset;
             }
 
+            // Mirrors the server's personal-space clear rule: a probe that
+            // reaches within the target's radius of its endpoint sees the
+            // target. The extra advisory margin keeps this side permissive.
+            float clearMargin = targetRadius + AdvisoryClearMarginMeters;
+
             for (int heightIndex = 0; heightIndex < TargetHeightFractions.Length; heightIndex++)
             {
                 Vector3 baseEnd = targetBase + Vector3.up * (targetHeight * TargetHeightFractions[heightIndex]);
-                if (ProbeIsClear(collision, origin, baseEnd))
+                if (ProbeIsClear(collision, origin, baseEnd, clearMargin))
                     return false;
                 if (side != Vector3.zero)
                 {
-                    if (ProbeIsClear(collision, origin, baseEnd + side))
+                    if (ProbeIsClear(collision, origin, baseEnd + side, clearMargin))
                         return false;
-                    if (ProbeIsClear(collision, origin, baseEnd - side))
+                    if (ProbeIsClear(collision, origin, baseEnd - side, clearMargin))
                         return false;
                 }
             }
@@ -112,14 +117,18 @@ namespace Arena.Combat
             return _cachedVerdict;
         }
 
-        private static bool ProbeIsClear(ServerLosCollisionData collision, Vector3 origin, Vector3 end)
+        private static bool ProbeIsClear(
+            ServerLosCollisionData collision,
+            Vector3 origin,
+            Vector3 end,
+            float clearMargin)
         {
             ServerLosProbeHit? hit = collision.FindFirstHit(origin, end, ProbeRadius);
             if (!hit.HasValue)
                 return true;
 
             float probeDistance = Vector3.Distance(origin, end);
-            return hit.Value.Distance >= probeDistance - AdvisoryClearMarginMeters;
+            return hit.Value.Distance >= probeDistance - clearMargin;
         }
 
         private static ServerLosCollisionData? ResolveCollisionData()

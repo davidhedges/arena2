@@ -5,8 +5,11 @@ use crate::actor_lifecycle::{
     ActorWorldAssignment, ActorWorldCleanup,
 };
 use crate::arena::{
-    open_world_scene_name_for_identity, upsert_player_open_world_scene, upsert_player_world,
+    arena_seed_for_identity, open_world_scene_name_for_identity, upsert_player_open_world_scene,
+    upsert_player_world,
 };
+use crate::practice::is_training_instance;
+use crate::world_collision::resolve_world_spawn_position_with_layout_for_scene;
 use crate::combat::{
     new_dummy_player_state, DEFAULT_HIT_HEIGHT, DEFAULT_HIT_RADIUS, DEFAULT_MAX_HP,
 };
@@ -120,8 +123,8 @@ pub fn spawn_playground_target(ctx: &ReducerContext, kind: String) -> Result<(),
 
     let (identity, slot) = next_playground_target_identity(ctx, owner, kind)?;
     let target_yaw = wrap_yaw(owner_physics.yaw + std::f32::consts::PI);
-    let spawn_x = owner_physics.pos_x + owner_physics.yaw.sin() * PLAYGROUND_TARGET_SPAWN_FORWARD;
-    let spawn_z = owner_physics.pos_z + owner_physics.yaw.cos() * PLAYGROUND_TARGET_SPAWN_FORWARD;
+    let desired_x = owner_physics.pos_x + owner_physics.yaw.sin() * PLAYGROUND_TARGET_SPAWN_FORWARD;
+    let desired_z = owner_physics.pos_z + owner_physics.yaw.cos() * PLAYGROUND_TARGET_SPAWN_FORWARD;
 
     let is_instance = owner_world
         .world_kind
@@ -139,13 +142,30 @@ pub fn spawn_playground_target(ctx: &ReducerContext, kind: String) -> Result<(),
         open_world_scene_name_for_identity(ctx, owner)
     };
 
+    // Dummies stand in for players: resolve the spawn against movement
+    // collision like any live actor. An unresolved spawn near a wall buries
+    // the dummy inside padded movement boxes, which reads as a false
+    // line-of-sight block from every direction (S4 follow-up).
+    let flat_ground_only = owner_instance_id
+        .map(|instance_id| is_training_instance(ctx, instance_id))
+        .unwrap_or(false);
+    let (spawn_x, spawn_y, spawn_z) = resolve_world_spawn_position_with_layout_for_scene(
+        arena_seed_for_identity(ctx, owner),
+        flat_ground_only,
+        (!open_world_scene_name.is_empty()).then_some(open_world_scene_name.as_str()),
+        desired_x,
+        desired_z,
+        DEFAULT_HIT_RADIUS,
+        DEFAULT_HIT_HEIGHT,
+    );
+
     spawn_actor_bundle(
         ctx,
         ActorSpawnSpec {
             identity,
             username: playground_target_username(kind, slot),
             pos_x: spawn_x,
-            pos_y: owner_physics.pos_y,
+            pos_y: spawn_y,
             pos_z: spawn_z,
             yaw: target_yaw,
             vel_x: 0.0,

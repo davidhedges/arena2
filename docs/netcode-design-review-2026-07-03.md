@@ -189,6 +189,37 @@ Point-blank swings against a faced target are always in policy: with
 correct world data there is no geometry between touching capsules at torso
 height.
 
+**S4 near-wall fix (2026-07-04, owner-reported).** A dummy merely near a
+wall read "No line of sight" from every direction. Two causes, two fixes:
+(1) playground dummies spawned with zero collision resolution — always
+exactly 2.5 m ahead — so a dummy near an obstacle could sit inside its
+padded movement box (movement boxes are authored fatter than visuals;
+trees: 0.8×1.4 m movement vs 0.2×0.2 m LOS box), burying every probe
+endpoint in geometry; dummy spawns now resolve through
+`resolve_world_spawn_position_with_layout_for_scene` like NPC/practice
+spawns, standing them beside walls (or on top of walkable bones) the way a
+real player would end up. (2) The LOS clear rule now tolerates hits within
+the **target's personal space**: a probe that reaches within
+`target.hit_radius` of its endpoint sees the target — geometry the target
+legally stands against cannot conceal them; cover blocks only when it
+interposes deeper than the target's radius (client advisory mirrors this
+plus its permissive margin). Design consequences, deliberate: melee-range
+(≤3 m) LOS rejects between legally-placed actors are now effectively
+impossible — a wall deep enough to defeat the tolerance can't fit inside
+melee reach — so LOS bites on long strikes, gap-closers, spells, and bow
+range, which is the genre-standard shape; thin props (tree trunks) never
+block LOS because the ±side probes clear around them. Verified live
+2026-07-04 (probe rerun): dummy beside the skull wall at 2.50 m →
+melee **Accepted** (previously LineOfSightBlocked); control and wire
+checks green; the through-wall charge reject stays covered by the earlier
+live run (blocking mechanism unchanged). **Open ruling for the owner:**
+the LOS raycast still includes fat movement boxes alongside the tight
+query set, so wide props can block sight beyond their visual (a tree's
+movement box blocks a sight line its authored LOS box would not). The
+clean contract is query-geometry-only LOS — but the playground arena has
+zero authored query geometry today, so that switch would stop arena walls
+from blocking LOS until arena query boxes are authored.
+
 ## 3. Rejection presentation lies to the player [DEFECT]
 
 **What exists.** On a server rejection: the predicted melee swing **plays to

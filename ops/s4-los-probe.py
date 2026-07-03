@@ -5,14 +5,18 @@ Drives a headless websocket player (client_connected spawns a live player;
 reducers ride the same socket; state read via `spacetime sql`) through the
 Giant_Skeleton scene, using the skull chunk near spawn as the LOS wall:
 
-  control — open ground: a targeted melee press is Accepted and the armed
-            auto-attack emits CAST combat events (also prints the live wire
-            values for combat_event rows).
-  blocked — a hostile playground dummy is spawned into/behind the skull face:
-            the same melee press rejects LineOfSightBlocked, the armed
-            auto-attack holds (zero CASTs while armed), and a 10 m
-            PALADIN_CHARGE press rejects LineOfSightBlocked instead of
-            dashing.
+  control   — open ground: a targeted melee press is Accepted and the armed
+              auto-attack emits CAST combat events (also prints the live
+              wire values for combat_event rows).
+  near-wall — the owner-reported regression: a dummy spawned BESIDE a wall
+              (spawns are collision-resolved) stays attackable — the melee
+              press is Accepted, not LineOfSightBlocked.
+  blocked   — a dummy spawned through the wall resolves to a legal spot on
+              the far side; the gap-close press through the wall rejects
+              LineOfSightBlocked instead of dashing. (Melee-range LOS blocks
+              between legally-placed actors are near-impossible by design —
+              the clear rule tolerates hits within the target's personal
+              space — so there is no melee-range blocked fixture.)
 
 Run against a throwaway DB — one-shot `spacetime call` cannot leave
 per-identity state, and disconnect cleanup wipes the player:
@@ -51,7 +55,27 @@ CONTROL_FACE = (33.0, -105.0)
 # South face of the skull, reachable from spawn without crossing the spine
 # (the ridge of skeleton pieces running NW->SE blocks the east approach).
 BLOCKED_SPOT = (26.5, -87.5)
-CHARGE_SPOT = (30.0, -96.0)      # same sight line, inside the 5..18 m band
+# Wide loop west of the neck piece to the north side of the skull/jaw
+# complex, and back (the direct neck/skull corridor is closed by movement
+# hulls wider than the LOS query extents).
+NORTH_ROUTE = [
+    (24.5, -88.5),
+    (18.5, -88.0),
+    (12.0, -86.0),
+    (11.0, -79.5),
+    (18.0, -77.0),
+    (24.0, -76.3),
+    (27.5, -76.0),
+]
+SOUTH_ROUTE = [
+    (24.0, -76.3),
+    (18.0, -77.0),
+    (11.0, -79.5),
+    (12.0, -86.0),
+    (18.5, -88.0),
+    (24.5, -88.5),
+    (26.5, -89.5),
+]
 
 MELEE_ABILITY = "WARRIOR_MAIM"  # plain targeted strike, range 2.5
 MELEE_STRIKE = "WARRIOR_MAIM"
@@ -315,51 +339,60 @@ def main():
     if not ok:
         failures.append("control auto-attack CASTs")
 
-    print("\n== blocked: dummy spawned through the nearest wall")
+    print("\n== near-wall regression: dummy beside the wall, sight line grazing it")
+    # The owner-reported false block: a dummy merely NEAR an obstacle read
+    # "No line of sight" from everywhere, because unresolved spawns buried
+    # its torso in padded movement boxes. Spawn now collision-resolves, and
+    # the clear rule tolerates hits inside the target's personal space.
     probe.move_to(*BLOCKED_SPOT)
-    probe.move_until_blocked(*SKULL)  # walk flush against the wall face
-    probe.face(*SKULL)
+    probe.move_until_blocked(*SKULL)  # flush against the wall face
+    x0, _, z0, _, _ = probe.physics()
+    probe.face(x0 + 10.0, z0)  # face east, parallel to the wall face
     dummy = probe.spawn_hostile_dummy()
     dpos = probe.dummy_position(dummy)
-    print(f"  dummy {dummy[:8]} at ({dpos[0]:.1f}, {dpos[1]:.1f})")
-
-    result, reason = probe.press_melee(MELEE_STRIKE, dummy, "s4-melee-blocked")
-    expect("blocked melee press result", result, "Rejected", failures)
-    expect("blocked melee press reason", reason, "LineOfSightBlocked", failures)
-
-    baseline = len(probe.combat_event_summary())
-    probe.call("arm_auto_attack_target", [dummy])
-    time.sleep(AUTO_ATTACK_OBSERVE_SECONDS)
-    probe.call("clear_auto_attack_target", [])
-    # Only count rows newer than the arm (the 20 s window may still hold
-    # control-phase rows).
-    blocked_events = probe.combat_event_summary()
-    new_rows = blocked_events[baseline:] if len(blocked_events) >= baseline else blocked_events
-    new_casts = [r for r in new_rows if r[1] == "COMBAT_CAST"]
-    ok = len(new_casts) == 0
-    print(f"  [{'PASS' if ok else 'FAIL'}] blocked auto-attack held: {len(new_casts)} new CAST rows while armed")
-    if not ok:
-        failures.append("blocked auto-attack held")
-
-    px, _, pz, _, _ = probe.physics()
-    ddx, ddz = dpos[0] - px, dpos[1] - pz
-    print(f"  melee/auto distance to dummy: {math.hypot(ddx, ddz):.2f} m")
-
-    probe.move_to(*CHARGE_SPOT)
     probe.face(*dpos)
     px, _, pz, _, _ = probe.physics()
-    charge_dist = math.hypot(dpos[0] - px, dpos[1] - pz)
-    print(f"  charge distance to dummy: {charge_dist:.2f} m (need 5.5..18)")
-    result, reason = probe.press_melee(CHARGE_STRIKE, dummy, "s4-charge-blocked")
-    expect("blocked gap-close press result", result, "Rejected", failures)
-    expect("blocked gap-close press reason", reason, "LineOfSightBlocked", failures)
+    near_dist = math.hypot(dpos[0] - px, dpos[1] - pz)
+    print(f"  dummy {dummy[:8]} at ({dpos[0]:.1f}, {dpos[1]:.1f}), {near_dist:.2f} m away beside the wall")
+    result, reason = probe.press_melee(MELEE_STRIKE, dummy, "s4-melee-nearwall")
+    expect("near-wall melee press", result, "Accepted", failures)
+
+    print("\n== blocked (best-effort): dummy legally placed on the far side of the wall")
+    # Walk around the skeleton to the north side, leave a dummy in the open,
+    # walk back south — a legal target with the skull interposed. The route
+    # crosses unlisted movement hulls, so a blocked walk SKIPS this fixture
+    # rather than failing: the through-wall LineOfSightBlocked reject was
+    # live-verified on 2026-07-04 and the blocking mechanism is unchanged by
+    # the near-wall fixes (only hits within the target's personal space are
+    # newly forgiven).
+    try:
+        probe.move_along(NORTH_ROUTE)
+        nx, _, nz, _, _ = probe.physics()
+        probe.face(nx, nz + 10.0)  # face north, open ground
+        dummy = probe.spawn_hostile_dummy()
+        dpos = probe.dummy_position(dummy)
+        print(f"  dummy {dummy[:8]} at ({dpos[0]:.1f}, {dpos[1]:.1f})")
+        probe.move_along(SOUTH_ROUTE)
+        probe.face(*dpos)
+        px, _, pz, _, _ = probe.physics()
+        charge_dist = math.hypot(dpos[0] - px, dpos[1] - pz)
+        print(f"  charge distance to dummy: {charge_dist:.2f} m (need 5.5..18)")
+        result, reason = probe.press_melee(CHARGE_STRIKE, dummy, "s4-charge-blocked")
+        expect("blocked gap-close press result", result, "Rejected", failures)
+        expect("blocked gap-close press reason", reason, "LineOfSightBlocked", failures)
+    except RuntimeError as error:
+        print(f"  [SKIP] far-side walk blocked en route ({error}); "
+              "through-wall reject stays covered by the 2026-07-04 live run + manual checklist")
+    # Melee-range LOS blocks between LEGALLY-placed actors are now nearly
+    # impossible by design (reach 3.0 m cannot span a wall deep enough to
+    # defeat the personal-space tolerance), so there is no melee/auto-attack
+    # blocked fixture here; bow-range auto-attack holds remain a manual check.
 
     print("\n== summary")
     if failures:
         print(f"FAILED: {len(failures)} check(s): {failures}")
         sys.exit(1)
-    print("ALL CHECKS PASSED — LineOfSightBlocked fires for melee, gap-close, "
-          "and the armed auto-attack holds behind cover.")
+    print("ALL CHECKS PASSED (see per-check lines above for any [SKIP]).")
 
 
 if __name__ == "__main__":
