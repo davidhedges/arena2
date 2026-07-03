@@ -38,6 +38,8 @@ struct SpellCatalogRow {
     target_audience: Option<TargetAudience>,
     requires_target: bool,
     #[serde(default)]
+    requires_target_los: Option<bool>,
+    #[serde(default)]
     aim_radius: Option<f32>,
     #[serde(default)]
     resource_cost: f32,
@@ -517,6 +519,8 @@ struct SpellGameplayCatalogRow {
     target_audience: Option<TargetAudience>,
     requires_target: bool,
     #[serde(default)]
+    requires_target_los: Option<bool>,
+    #[serde(default)]
     aim_radius: Option<f32>,
     #[serde(default)]
     resource_cost: f32,
@@ -546,6 +550,8 @@ struct AbilityGameplayCatalogRow {
     target_audience: Option<TargetAudience>,
     #[serde(default)]
     requires_target: Option<bool>,
+    #[serde(default)]
+    requires_target_los: Option<bool>,
     #[serde(default)]
     aim_radius: Option<f32>,
     #[serde(default)]
@@ -628,6 +634,7 @@ impl AbilityGameplayCatalogRow {
                 ability_id,
                 "requires_target",
             )?,
+            requires_target_los: self.requires_target_los,
             aim_radius: self.aim_radius,
             resource_cost: self.resource_cost,
             primary_resource_gain_on_cast: self.primary_resource_gain_on_cast,
@@ -692,6 +699,7 @@ impl SpellGameplayCatalogRow {
             targeting: self.targeting,
             target_audience: self.target_audience,
             requires_target: self.requires_target,
+            requires_target_los: self.requires_target_los,
             aim_radius: self.aim_radius,
             resource_cost,
             primary_resource_gain_on_cast: self.primary_resource_gain_on_cast,
@@ -735,6 +743,7 @@ impl SpellCatalogRow {
             targeting: self.targeting,
             target_audience: TargetAudience::Hostile,
             requires_target: self.requires_target,
+            requires_target_los: self.requires_target_los.unwrap_or(true),
             aim_radius: self.aim_radius,
             speed: 0.0,
             max_distance: 0.0,

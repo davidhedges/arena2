@@ -517,6 +517,27 @@ namespace Arena.Input
                 return false;
             }
 
+            // Advisory LOS pre-check (netcode design review S4): same rule and
+            // reason text as the server's targeting check, denied before the
+            // round trip. Permissive by construction; the server stays
+            // authoritative for any press that goes through.
+            if (spellDef is { RequiresTarget: true, RequiresTargetLos: true })
+            {
+                PlayerEntity? losLocal = EntityRegistry.Instance?.LocalPlayerEntity;
+                ICombatTargetEntity? losTarget = TargetSelector.Instance?.SelectedTarget;
+                if (losLocal != null
+                    && losTarget != null
+                    && AdvisoryTargetLineOfSight.IsPressBlocked(losLocal, losTarget))
+                {
+                    ActionBarTrace.Trace($"spell denied locally: {spellId} advisory line of sight blocked");
+                    LocalCombatState.NotifyLocalAdvisoryDenial(
+                        spellId,
+                        spellId,
+                        SpacetimeDB.Types.ActionRejectReason.LineOfSightBlocked);
+                    return false;
+                }
+            }
+
             ActionBarTrace.Trace($"sending CastRequest for {spellId} target={targetId}");
             CastActionToken token = LocalCombatState.Instance.CreateCastActionToken(spellId);
             SendCastRequest(conn, spellId, targetId, 0f, 0f, 0f, token);

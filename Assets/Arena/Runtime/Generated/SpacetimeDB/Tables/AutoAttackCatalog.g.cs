@@ -54,6 +54,7 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Col<AutoAttackCatalog, string> BlockBehavior { get; }
         public global::SpacetimeDB.Col<AutoAttackCatalog, string> AirborneTargetingMode { get; }
         public global::SpacetimeDB.Col<AutoAttackCatalog, bool> AppliesStagger { get; }
+        public global::SpacetimeDB.Col<AutoAttackCatalog, bool> RequiresTargetLos { get; }
 
         public AutoAttackCatalogCols(string tableName)
         {
@@ -72,6 +73,7 @@ namespace SpacetimeDB.Types
             BlockBehavior = new global::SpacetimeDB.Col<AutoAttackCatalog, string>(tableName, "block_behavior");
             AirborneTargetingMode = new global::SpacetimeDB.Col<AutoAttackCatalog, string>(tableName, "airborne_targeting_mode");
             AppliesStagger = new global::SpacetimeDB.Col<AutoAttackCatalog, bool>(tableName, "applies_stagger");
+            RequiresTargetLos = new global::SpacetimeDB.Col<AutoAttackCatalog, bool>(tableName, "requires_target_los");
         }
     }
 

@@ -48,6 +48,9 @@ namespace Arena.UI
         // denial toast's red, presentation only.
         private static readonly Color RejectFlashColor = new(1f, 0.32f, 0.25f, 0.55f);
         private const float SlotRejectionFlashSeconds = 0.45f;
+        // Advisory LOS gray-out (netcode design review S4): full-slot dim while
+        // the selected target has no line of sight, presentation only.
+        private static readonly Color LosBlockedOverlay = new(0.02f, 0.02f, 0.02f, 0.62f);
         private static readonly Color CdOverlay     = new(0f, 0f, 0f, 0.7f);
         private static readonly Color GcdOverlay    = new(0f, 0f, 0f, 0.4f);
         private static readonly Color CastGold      = Hex("#FFD100");
@@ -1649,7 +1652,8 @@ namespace Arena.UI
                     isVisible,
                     resolved.IsFixed,
                     resolved.ActionId,
-                    !resolved.IsCombatModeToggleAbility && UsesGlobalCooldown(resolved.ActionId, string.Empty));
+                    !resolved.IsCombatModeToggleAbility && UsesGlobalCooldown(resolved.ActionId, string.Empty),
+                    ResolveRequiresTargetLos(conn, resolved));
                 SetActionBarSlotPresentation(_abilityGridCd[index], _abilityGridIcons[index], _abilityGridStates[index], slotColor, iconSprite);
                 _abilityGridClicks[index].Configure(
                     isVisible ? () => TriggerActionRef(conn, resolved) : null,
@@ -1714,7 +1718,8 @@ namespace Arena.UI
                     isVisible,
                     false,
                     resolved.ActionId,
-                    false);
+                    false,
+                    ResolveRequiresTargetLos(conn, resolved));
                 SetActionBarSlotPresentation(
                     _disciplineBarCd[index],
                     _disciplineBarIcons[index],
@@ -1771,7 +1776,8 @@ namespace Arena.UI
                     true,
                     false,
                     spellId,
-                    UsesGlobalCooldown(spellId, string.Empty));
+                    UsesGlobalCooldown(spellId, string.Empty),
+                    ResolveSpellRequiresTargetLos(conn, spellId));
                 SetActionBarSlotPresentation(
                     _spellbookGridCd[i],
                     _spellbookGridIcons[i],
@@ -1786,6 +1792,32 @@ namespace Arena.UI
                         : ActionTooltipResolver.ResolveForAbility(conn, owner, ability),
                     pollHover: true);
             }
+        }
+
+        // Advisory LOS gray-out participation (netcode design review S4): a
+        // slot dims when its action is a target-requiring action whose
+        // authored requires_target_los is set — melee abilities via the melee
+        // catalog row, spells via the spell definition. Fixed actions and
+        // non-targeted sweeps never dim.
+        private static bool ResolveRequiresTargetLos(DbConnection? conn, ActiveActionBarAction resolved)
+        {
+            if (conn == null || !resolved.HasAssignedAction || resolved.IsFixed)
+                return false;
+
+            if (!string.IsNullOrWhiteSpace(resolved.AbilityId))
+            {
+                MeleeAbilityCatalog? melee = conn.Db.MeleeAbilityCatalog.AbilityId.Find(resolved.AbilityId);
+                if (melee != null)
+                    return melee.RequiresTarget && melee.RequiresTargetLos;
+            }
+
+            return ResolveSpellRequiresTargetLos(conn, resolved.ActionId);
+        }
+
+        private static bool ResolveSpellRequiresTargetLos(DbConnection? conn, string spellId)
+        {
+            SpellDefinition? spell = conn?.Db.SpellDefinition.Kind.Find(spellId);
+            return spell is { RequiresTarget: true, RequiresTargetLos: true };
         }
 
         private void HandleHudActionDrop(ActionBarDragPayload payload, string? targetSlotId)
@@ -1894,9 +1926,10 @@ namespace Arena.UI
 
         private void UpdateActionBarCooldownPresentation(long nowMs, float gcdFrac, LocalCombatState combat)
         {
-            UpdateSlotCooldownPresentation(_disciplineBarStates, _disciplineBarCd, _disciplineBarText, _disciplineBarChargeText, nowMs, gcdFrac, combat);
-            UpdateSlotCooldownPresentation(_spellbookGridStates, _spellbookGridCd, _spellbookGridText, _spellbookGridChargeText, nowMs, gcdFrac, combat);
-            UpdateSlotCooldownPresentation(_abilityGridStates, _abilityGridCd, _abilityGridText, _abilityGridChargeText, nowMs, gcdFrac, combat);
+            bool targetLosBlocked = AdvisoryTargetLineOfSight.IsSelectedTargetBlockedCached();
+            UpdateSlotCooldownPresentation(_disciplineBarStates, _disciplineBarCd, _disciplineBarText, _disciplineBarChargeText, nowMs, gcdFrac, combat, targetLosBlocked);
+            UpdateSlotCooldownPresentation(_spellbookGridStates, _spellbookGridCd, _spellbookGridText, _spellbookGridChargeText, nowMs, gcdFrac, combat, targetLosBlocked);
+            UpdateSlotCooldownPresentation(_abilityGridStates, _abilityGridCd, _abilityGridText, _abilityGridChargeText, nowMs, gcdFrac, combat, targetLosBlocked);
         }
 
         private static void UpdateSlotCooldownPresentation(
@@ -1906,7 +1939,8 @@ namespace Arena.UI
             Text[] chargeTexts,
             long nowMs,
             float gcdFrac,
-            LocalCombatState combat)
+            LocalCombatState combat,
+            bool targetLosBlocked)
         {
             for (int index = 0; index < states.Length; index++)
             {
@@ -1957,6 +1991,15 @@ namespace Arena.UI
                         col = CdOverlay;
                         remSec = rem / 1000f;
                     }
+                }
+
+                // Advisory LOS gray-out (S4): only when no cooldown or GCD is
+                // drawing on the overlay, so timing presentation keeps
+                // precedence over the advisory dim.
+                if (frac <= 0f && targetLosBlocked && state.RequiresTargetLos)
+                {
+                    frac = 1f;
+                    col = LosBlockedOverlay;
                 }
 
                 SetFillIfChanged(overlay, frac);
@@ -2330,6 +2373,7 @@ namespace Arena.UI
             public readonly bool IsFixed;
             public readonly string ActionId;
             public readonly bool UsesGlobalCooldown;
+            public readonly bool RequiresTargetLos;
 
             public ActionBarSlotState(
                 string keyLabel,
@@ -2337,7 +2381,8 @@ namespace Arena.UI
                 bool isVisible,
                 bool isFixed,
                 string actionId,
-                bool usesGlobalCooldown)
+                bool usesGlobalCooldown,
+                bool requiresTargetLos)
             {
                 KeyLabel = keyLabel;
                 Label = label;
@@ -2345,10 +2390,11 @@ namespace Arena.UI
                 IsFixed = isFixed;
                 ActionId = actionId;
                 UsesGlobalCooldown = usesGlobalCooldown;
+                RequiresTargetLos = requiresTargetLos;
             }
 
             public static ActionBarSlotState Empty(string keyLabel) =>
-                new(keyLabel, string.Empty, false, false, string.Empty, false);
+                new(keyLabel, string.Empty, false, false, string.Empty, false, false);
         }
 
         private static (bool isVisible, string label, Color color) ResolvePrimaryResourcePresentation(PlayerEntity player)

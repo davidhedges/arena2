@@ -418,6 +418,7 @@ pub(crate) struct SpellDefinition {
     pub targeting: SpellTargeting,
     pub target_audience: TargetAudience,
     pub requires_target: bool,
+    pub requires_target_los: bool,
     pub aim_radius: Option<f32>,
     pub speed: f32,
     pub max_distance: f32,

@@ -122,6 +122,54 @@ client ships `gameplay_query_collision.shared.json` — the same geometry the
 server raycasts), so illegal presses gray out or deny instantly with the same
 reason text; server stays authoritative.
 
+**Delivered (2026-07-04, S4).** Owner decision first: the opt-out list is
+**empty** — every hostile targeted action requires target LOS. The flag is
+authored at gameplay level in the progression catalog (absent = true; no
+`false` is authored anywhere, so the shared JSONs and their contract hashes
+are unchanged) and lands as one new column on `MeleeAbilityCatalog`,
+`AutoAttackCatalog`, `AutoAttackReplacementCatalog`, and `SpellDefinition`
+(bindings regenerated, canonical bin-path mode). Server: the check lives in
+the melee targeted-validation chain (`melee.rs`, after range/minimum-range,
+before gap-close resolution) so it covers all target-requiring strikes,
+combo follow-ups, gap-closers, and intrinsic/replacement auto-attacks with
+one gate — a behind-wall gap-close press now reads `LineOfSightBlocked`
+while a clear-sight blocked dash stays `GapCloseBlocked` (both reasons
+already existed on the wire; zero reject-enum changes). The auto-attack tick
+holds a due swing against a no-LOS target exactly like out-of-range (silent,
+retries, resumes when LOS returns). The projectile-delivery
+`requires_initial_line_of_sight` flag is superseded — still parsed so
+manifests stay valid, never consulted. Spells already checked LOS
+unconditionally at validation; those sites (tracking projectiles,
+InstantBeam, Electrocute press + channel sustain, targeted
+apply/remove/consume-status, movement deliveries) now gate on the authored
+flag, default true — behavior identical until a spell opts out by design.
+Caster cone/radius sweeps require no target and are untouched, as are NPC
+swings (S3 scope). Client: the debug guide's server-collision mirror was
+extracted to `Arena.Combat.ServerLosCollisionData` (production, all builds)
+and `AdvisoryTargetLineOfSight` replays the exact server probe layout
+(caster 85 % height → target 75 %/60 % center + ±side points) against the
+bundled geometry. Strictness direction is enforced by construction: missing
+collision data reads as clear, and a probe only counts blocked when its hit
+stops ≥ 0.25 m short of the target point — the advisory may false-allow,
+never false-block, and every press it allows still gets the authoritative
+check. Denied presses ride the S2 presentation untouched
+(`LocalCombatState.NotifyLocalAdvisoryDenial` → same toast + slot flash;
+nothing was predicted, so nothing to cut), and action-bar slots whose action
+requires target LOS dim from a 0.15 s-cached verdict while the selected
+target is out of sight (cooldown/GCD overlays keep precedence). Evidence:
+`ops/action-reject-reasons.py` groups live `predicted_action_result` rows by
+(family, result, reject_reason) — enum cells matched on the live
+`(camelCaseTag = ())` sql rendering, not constant names — and
+`ops/s4-los-probe.py` is a headless websocket player that walks flush
+against the nearest wall (Giant_Skeleton skull; the only scene with authored
+query-collision geometry today), spawns a hostile playground dummy through
+it, and presses. Verified live 2026-07-04 on a throwaway DB, all checks
+green: control melee press Accepted in the open; behind-wall WARRIOR_MAIM
+press → `rejected/lineOfSightBlocked`; armed auto-attack at 2.50 m emitted
+zero CASTs for 5 s behind cover (vs CAST+IMPACT flowing in the open); 17.8 m
+WARRIOR_CHARGE press → `rejected/lineOfSightBlocked`, no dash. Tests
+deferred until the contract stabilizes (churn ruling).
+
 ## 3. Rejection presentation lies to the player [DEFECT]
 
 **What exists.** On a server rejection: the predicted melee swing **plays to
@@ -365,8 +413,12 @@ S7's gate failed as specced; see the S7 row for the decision.
   offers alternatives.
 - **Instant cast fizzle on stagger** (no interrupt grace): fine *once*
   telegraphs exist and rejection presentation (§3) makes the fizzle legible.
-- **No impact-time LOS re-check**: legitimate counterplay; document it in
-  the combat authoring contract.
+- **No impact-time LOS re-check**: legitimate counterplay; recorded as the
+  combat authoring contract with S4 — `requires_target_los` is validated at
+  press/targeting time only, so dodging behind cover after a projectile or
+  swing is launched is the dodge working as designed. (Electrocute's
+  channel-sustain LOS check is a channel rule, not an impact re-check, and
+  follows the same authored flag.)
 
 ---
 
@@ -384,17 +436,20 @@ precede fairness work.
 | S1 | ✅ Delivered 2026-07-03 — idle-aware sample taxonomy (settled vs starved) in `RemotePresentationBuffer`, overlay, CSV logger (see §7) | client | honest F4 A/B rerun |
 | S2 | ✅ Delivered 2026-07-03 — cut-on-reject via existing interrupt primitives + slot flash, `PredictionRejected` payload extended with the pressed action id (see §3) | client | legible denials (also fixes §5's worst symptom) |
 | S3 | ✅ Delivered 2026-07-03 — NPC telegraphs: authored per-template windup between CAST and damage via `npc_pending_swing`, present-time re-validation at impact (see §1; player attacks rescoped out of S3 by owner) | server + data | victim reaction time; masks present-time validation |
-| S4 | LOS unification: `requires_target_los` targeting flag (default on, per-action opt-out), gap-close = LOS + path, client advisory pre-check from bundled collision | server + data + client | legible targeting rules |
+| S4 | ✅ Delivered 2026-07-04 — LOS unification: `requires_target_los` targeting flag (default on, opt-out list signed empty), gap-close = LOS + path with distinct reasons, auto-attack holds behind cover, client advisory pre-check + slot dim from bundled collision (see §2) | server + data + client | legible targeting rules |
 | S5 | Closed-loop input buffering: per-tick buffer-depth/fallback feedback on the ack surface + client lead control loop + degradation ladder + jump-preserving fallback + clock unification/warmup gating + correction-decay presentation (schema change; deletes the endpoint-kind lead switch) | client + server | playable at any RTT; shaped-local testing representative |
 | S6 | Auto-attack local swing scheduling off `next_swing_at` + contact-cue parity | client | auto-attack feel at RTT |
 | S7 | F4 adaptive delay [66..200 ms] from arrival-lateness p95 | client | gate resolved (rerun 2, 2026-07-03: ON loses late ratio 11.6 % vs 9.0 % at +34 ms budget, wins err p95 — see §7). Owner decision: rescope S7 to adapt delay from measured *server-time* lateness p95 (the observed failure is under-delay, which adaptivity cures) or drop the server-time timeline and accept arrival's jitter warp |
 | S8 | Bounded lag-compensation ring for attack reach/facing + favor-the-defender grace — design doc first, kill-switched | server | end-state hit fairness |
 
 Owner decisions needed before their slices: aerial gating ruling per
-archetype (§5, gates part of S2's test matrix), LOS opt-out list (S4).
+archetype (§5, gates part of S2's test matrix).
 Decided 2026-07-03: telegraph durations (S3 — scaled per template
 350/450/500/600 ms, strict impact-time reach re-check, player attacks
 rescoped out of the slice).
+Decided 2026-07-04: LOS opt-out list (S4) — **empty**; every hostile
+targeted action requires target LOS, including ARCHER_RAIN_SHOT, all eight
+gap-closers, and melee auto-attacks.
 
 ## Stances this review reverses or reframes
 

@@ -43,6 +43,8 @@ namespace SpacetimeDB.Types
         public string AirborneTargetingMode;
         [DataMember(Name = "applies_stagger")]
         public bool AppliesStagger;
+        [DataMember(Name = "requires_target_los")]
+        public bool RequiresTargetLos;
 
         public AutoAttackCatalog(
             string Key,
@@ -59,7 +61,8 @@ namespace SpacetimeDB.Types
             string ParryBehavior,
             string BlockBehavior,
             string AirborneTargetingMode,
-            bool AppliesStagger
+            bool AppliesStagger,
+            bool RequiresTargetLos
         )
         {
             this.Key = Key;
@@ -77,6 +80,7 @@ namespace SpacetimeDB.Types
             this.BlockBehavior = BlockBehavior;
             this.AirborneTargetingMode = AirborneTargetingMode;
             this.AppliesStagger = AppliesStagger;
+            this.RequiresTargetLos = RequiresTargetLos;
         }
 
         public AutoAttackCatalog()

@@ -133,21 +133,25 @@ referenced but not repeated.
   dev-only lead override (or RTT-adaptive lead) exists; that is
   movement-netcode work, deliberately not started, and anything
   adaptive shares the F4-adaptive-delay gate.
-  (b) Gap-closers do not validate line of sight server-side —
-  `resolve_melee_gap_close` checks collision/path only; LOS applies to
-  projectile deliveries with `requires_initial_line_of_sight`
-  (`server/src/melee.rs`). A behind-wall gap-close press is accepted
-  and dashes, so no denial toast is correct behavior. The deterministic
-  gap-close rejection trigger is a blocked dash path →
-  `GapCloseBlocked` ("Path blocked"); the F5 slice-1 "rejected press
-  (out of range / LOS)" wording does not apply to gap-closers.
+  (b) ~~Gap-closers do not validate line of sight server-side~~ —
+  **closed by S4 (2026-07-04, LOS unification)**: LOS is now a targeting
+  rule (`requires_target_los`, default true) checked for every
+  target-requiring melee action before gap-close path resolution, so a
+  behind-wall gap-close press rejects `LineOfSightBlocked` ("No line of
+  sight") and never dashes, while a clear-sight blocked dash path stays
+  `GapCloseBlocked` ("Path blocked") — distinct reasons, verified live
+  via `ops/s4-los-probe.py`. The F5 slice-1 "rejected press (out of
+  range / LOS)" wording now applies to gap-closers too.
 - **Design-review backlog (2026-07-03, flagged by live testing — owner has
   ruled these disputed, not endorsed). Review delivered:
   `docs/netcode-design-review-2026-07-03.md` (adversarial; target contracts
   + ordered slices S1–S8 covering every item below).**
-  (1) LOS validation is asymmetric: projectile deliveries check
-  `has_line_of_sight`, gap-closers check only dash path/destination, and
-  the model is per-delivery opt-in rather than a coherent policy.
+  (1) ~~LOS validation is asymmetric~~ — **closed by S4 (2026-07-04)**:
+  one authored `requires_target_los` targeting flag per action, default
+  true for every hostile targeted action (melee strikes, gap-closers,
+  targeted spells, auto-attacks; owner signed off zero opt-outs), checked
+  at validation time; the per-delivery `requires_initial_line_of_sight`
+  opt-in is superseded. See the review's §2 delivered entry.
   (2) Aerial execution gating (`GROUNDED_ONLY` authored on every strike
   since the initial import) rejects mid-air presses on a timing-dependent
   grounded flag, and the rejection presentation still plays windup + forced

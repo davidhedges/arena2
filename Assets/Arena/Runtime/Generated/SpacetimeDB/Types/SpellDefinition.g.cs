@@ -31,6 +31,8 @@ namespace SpacetimeDB.Types
         public string TargetAudience;
         [DataMember(Name = "requires_target")]
         public bool RequiresTarget;
+        [DataMember(Name = "requires_target_los")]
+        public bool RequiresTargetLos;
         [DataMember(Name = "aim_radius")]
         public float AimRadius;
         [DataMember(Name = "has_aim_radius")]
@@ -82,6 +84,7 @@ namespace SpacetimeDB.Types
             string Targeting,
             string TargetAudience,
             bool RequiresTarget,
+            bool RequiresTargetLos,
             float AimRadius,
             bool HasAimRadius,
             float Speed,
@@ -113,6 +116,7 @@ namespace SpacetimeDB.Types
             this.Targeting = Targeting;
             this.TargetAudience = TargetAudience;
             this.RequiresTarget = RequiresTarget;
+            this.RequiresTargetLos = RequiresTargetLos;
             this.AimRadius = AimRadius;
             this.HasAimRadius = HasAimRadius;
             this.Speed = Speed;

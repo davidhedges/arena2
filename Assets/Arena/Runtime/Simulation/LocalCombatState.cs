@@ -384,6 +384,22 @@ namespace Arena.Simulation
         public static event Action<string, string, ActionRejectReason>? PredictionRejected;
 
         /// <summary>
+        /// Advisory local denial (netcode design review S4): the client denied
+        /// a press before sending it — e.g. the bundled-collision LOS
+        /// pre-check. Rides the same event surface as server rejections so the
+        /// toast and slot flash read identically; nothing was predicted, so
+        /// there is nothing to roll back. The server stays authoritative for
+        /// every press that is actually sent.
+        /// </summary>
+        public static void NotifyLocalAdvisoryDenial(
+            string actionKind,
+            string pressedActionId,
+            ActionRejectReason reason)
+        {
+            PredictionRejected?.Invoke(actionKind, pressedActionId, reason);
+        }
+
+        /// <summary>
         /// Applies the standard press-time predictions (GCD, per-action
         /// cooldown, resource reservation) and records exactly what changed so
         /// <see cref="RollbackPrediction"/> can restore it on rejection.

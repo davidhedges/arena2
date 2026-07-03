@@ -48,6 +48,7 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Col<SpellDefinition, string> Targeting { get; }
         public global::SpacetimeDB.Col<SpellDefinition, string> TargetAudience { get; }
         public global::SpacetimeDB.Col<SpellDefinition, bool> RequiresTarget { get; }
+        public global::SpacetimeDB.Col<SpellDefinition, bool> RequiresTargetLos { get; }
         public global::SpacetimeDB.Col<SpellDefinition, float> AimRadius { get; }
         public global::SpacetimeDB.Col<SpellDefinition, bool> HasAimRadius { get; }
         public global::SpacetimeDB.Col<SpellDefinition, float> Speed { get; }
@@ -80,6 +81,7 @@ namespace SpacetimeDB.Types
             Targeting = new global::SpacetimeDB.Col<SpellDefinition, string>(tableName, "targeting");
             TargetAudience = new global::SpacetimeDB.Col<SpellDefinition, string>(tableName, "target_audience");
             RequiresTarget = new global::SpacetimeDB.Col<SpellDefinition, bool>(tableName, "requires_target");
+            RequiresTargetLos = new global::SpacetimeDB.Col<SpellDefinition, bool>(tableName, "requires_target_los");
             AimRadius = new global::SpacetimeDB.Col<SpellDefinition, float>(tableName, "aim_radius");
             HasAimRadius = new global::SpacetimeDB.Col<SpellDefinition, bool>(tableName, "has_aim_radius");
             Speed = new global::SpacetimeDB.Col<SpellDefinition, float>(tableName, "speed");

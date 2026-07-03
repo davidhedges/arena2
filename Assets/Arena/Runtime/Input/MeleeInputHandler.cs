@@ -246,6 +246,21 @@ namespace Arena.Input
                         return false;
                     }
                 }
+
+                // Advisory LOS pre-check (netcode design review S4): deny the
+                // press instantly with the server's reason text instead of a
+                // round trip. Permissive by construction — a press this check
+                // lets through still gets the authoritative server check.
+                if (gameplay.RequiresTargetLos
+                    && AdvisoryTargetLineOfSight.IsPressBlocked(entity, target!))
+                {
+                    ActionBarTrace.Trace($"melee denied locally: {slotId} advisory line of sight blocked");
+                    LocalCombatState.NotifyLocalAdvisoryDenial(
+                        slotId,
+                        pressedActionId,
+                        ActionRejectReason.LineOfSightBlocked);
+                    return false;
+                }
             }
 
             // Send to server for authoritative validation, damage, and remote sync.

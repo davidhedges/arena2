@@ -57,6 +57,7 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Col<MeleeAbilityCatalog, string> TargetingKind { get; }
         public global::SpacetimeDB.Col<MeleeAbilityCatalog, string> TargetAudience { get; }
         public global::SpacetimeDB.Col<MeleeAbilityCatalog, bool> RequiresTarget { get; }
+        public global::SpacetimeDB.Col<MeleeAbilityCatalog, bool> RequiresTargetLos { get; }
         public global::SpacetimeDB.Col<MeleeAbilityCatalog, float> TargetingRadius { get; }
         public global::SpacetimeDB.Col<MeleeAbilityCatalog, float> TargetingRange { get; }
         public global::SpacetimeDB.Col<MeleeAbilityCatalog, float> TargetingAngleDegrees { get; }
@@ -85,6 +86,7 @@ namespace SpacetimeDB.Types
             TargetingKind = new global::SpacetimeDB.Col<MeleeAbilityCatalog, string>(tableName, "targeting_kind");
             TargetAudience = new global::SpacetimeDB.Col<MeleeAbilityCatalog, string>(tableName, "target_audience");
             RequiresTarget = new global::SpacetimeDB.Col<MeleeAbilityCatalog, bool>(tableName, "requires_target");
+            RequiresTargetLos = new global::SpacetimeDB.Col<MeleeAbilityCatalog, bool>(tableName, "requires_target_los");
             TargetingRadius = new global::SpacetimeDB.Col<MeleeAbilityCatalog, float>(tableName, "targeting_radius");
             TargetingRange = new global::SpacetimeDB.Col<MeleeAbilityCatalog, float>(tableName, "targeting_range");
             TargetingAngleDegrees = new global::SpacetimeDB.Col<MeleeAbilityCatalog, float>(tableName, "targeting_angle_degrees");

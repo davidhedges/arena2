@@ -39,6 +39,8 @@ namespace SpacetimeDB.Types
         public string AirborneTargetingMode;
         [DataMember(Name = "applies_stagger")]
         public bool AppliesStagger;
+        [DataMember(Name = "requires_target_los")]
+        public bool RequiresTargetLos;
         [DataMember(Name = "grants_primary_resource_on_hit")]
         public bool GrantsPrimaryResourceOnHit;
         [DataMember(Name = "expires_ms")]
@@ -60,6 +62,7 @@ namespace SpacetimeDB.Types
             string BlockBehavior,
             string AirborneTargetingMode,
             bool AppliesStagger,
+            bool RequiresTargetLos,
             bool GrantsPrimaryResourceOnHit,
             ulong ExpiresMs,
             uint SortOrder
@@ -78,6 +81,7 @@ namespace SpacetimeDB.Types
             this.BlockBehavior = BlockBehavior;
             this.AirborneTargetingMode = AirborneTargetingMode;
             this.AppliesStagger = AppliesStagger;
+            this.RequiresTargetLos = RequiresTargetLos;
             this.GrantsPrimaryResourceOnHit = GrantsPrimaryResourceOnHit;
             this.ExpiresMs = ExpiresMs;
             this.SortOrder = SortOrder;

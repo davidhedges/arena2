@@ -6,6 +6,7 @@ use crate::action_ids::AuthoredActionId;
 use crate::arena::players_share_world_context;
 use crate::combat::has_active_disabling_status;
 use crate::combat::player_snapshot::player_snapshot_for;
+use crate::combat::scene_query::has_line_of_sight;
 use crate::combat::temporary_combat_modifiers;
 use crate::defense::is_defense_active;
 use crate::melee::{
@@ -454,6 +455,25 @@ pub(crate) fn tick_auto_attacks(ctx: &ReducerContext, now: Timestamp) {
             );
             mark_pending_due(ctx, &row);
             continue;
+        }
+
+        // LOS is a targeting rule (S4): a due swing against a target behind
+        // cover holds like an out-of-range swing and resumes when LOS returns.
+        if gameplay.requires_target_los {
+            let caster_snapshot = player_snapshot_for(ctx, row.owner);
+            let blocked = caster_snapshot
+                .map(|snapshot| !has_line_of_sight(ctx, &snapshot, &target_snapshot))
+                .unwrap_or(false);
+            if blocked {
+                log::debug!(
+                    "[AUTO_ATTACK] owner={} target={} due_los_blocked strike={}",
+                    short_identity(row.owner),
+                    short_identity(row.target),
+                    row.strike_id
+                );
+                mark_pending_due(ctx, &row);
+                continue;
+            }
         }
 
         let target_id = row.target.to_hex();

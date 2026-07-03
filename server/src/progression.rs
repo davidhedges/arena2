@@ -239,6 +239,10 @@ struct AbilityGameplayDefinition {
     parry_behavior: Option<String>,
     block_behavior: Option<String>,
     airborne_targeting_mode: Option<String>,
+    // LOS is a targeting rule: absent means true for every hostile targeted
+    // action; opt-out is authored explicitly per owner sign-off (S4).
+    #[serde(default)]
+    requires_target_los: Option<bool>,
     #[serde(default)]
     gap_close: Option<GapCloseDefinition>,
     #[serde(default)]
@@ -613,6 +617,7 @@ pub(crate) struct MovementDeliveryRuntime {
     pub targeting: String,
     pub target_audience: String,
     pub requires_target: bool,
+    pub requires_target_los: bool,
     pub resource_cost: f32,
     pub arms_auto_attack_on_cast: bool,
     pub speed: f32,
@@ -725,6 +730,8 @@ struct AutoAttackDefinition {
     block_behavior: String,
     airborne_targeting_mode: String,
     applies_stagger: bool,
+    #[serde(default)]
+    requires_target_los: Option<bool>,
 }
 
 fn default_auto_attack_movement_policy() -> String {
@@ -749,6 +756,8 @@ struct AutoAttackReplacementDefinition {
     block_behavior: String,
     airborne_targeting_mode: String,
     applies_stagger: bool,
+    #[serde(default)]
+    requires_target_los: Option<bool>,
     #[serde(default)]
     grants_primary_resource_on_hit: bool,
     #[serde(default)]
@@ -1229,6 +1238,7 @@ pub struct MeleeAbilityCatalog {
     pub targeting_kind: String,
     pub target_audience: String,
     pub requires_target: bool,
+    pub requires_target_los: bool,
     pub targeting_radius: f32,
     pub targeting_range: f32,
     pub targeting_angle_degrees: f32,
@@ -1271,6 +1281,7 @@ pub struct AutoAttackCatalog {
     pub block_behavior: String,
     pub airborne_targeting_mode: String,
     pub applies_stagger: bool,
+    pub requires_target_los: bool,
 }
 
 #[table(accessor = auto_attack_replacement_catalog)]
@@ -1289,6 +1300,7 @@ pub struct AutoAttackReplacementCatalog {
     pub block_behavior: String,
     pub airborne_targeting_mode: String,
     pub applies_stagger: bool,
+    pub requires_target_los: bool,
     pub grants_primary_resource_on_hit: bool,
     pub expires_ms: u64,
     pub sort_order: u32,
@@ -2489,6 +2501,9 @@ fn movement_delivery_runtime_from_definition(
         targeting: normalize_identifier(movement.targeting.as_str()),
         target_audience: normalize_optional_target_audience(movement.target_audience.as_str()),
         requires_target: movement.requires_target,
+        // Authored at gameplay level (LOS is a targeting rule, not a delivery
+        // tunable), same spot as melee and spell abilities.
+        requires_target_los: definition.gameplay.requires_target_los.unwrap_or(true),
         resource_cost: movement.resource_cost.max(0.0),
         arms_auto_attack_on_cast: movement.arms_auto_attack_on_cast,
         speed: movement.speed,
@@ -3034,6 +3049,7 @@ fn sync_melee_ability_catalog(ctx: &ReducerContext) {
                 definition.gameplay.target_audience.as_str(),
             ),
             requires_target: targeting.requires_target,
+            requires_target_los: definition.gameplay.requires_target_los.unwrap_or(true),
             targeting_radius: targeting.radius,
             targeting_range: targeting.range,
             targeting_angle_degrees: targeting.angle_degrees,
@@ -3220,6 +3236,7 @@ fn sync_auto_attack_catalog(ctx: &ReducerContext) {
                 definition.airborne_targeting_mode.as_str(),
             ),
             applies_stagger: definition.applies_stagger,
+            requires_target_los: definition.requires_target_los.unwrap_or(true),
         };
         if ctx
             .db
@@ -3277,6 +3294,7 @@ fn sync_auto_attack_replacement_catalog(ctx: &ReducerContext) {
                 definition.airborne_targeting_mode.as_str(),
             ),
             applies_stagger: definition.applies_stagger,
+            requires_target_los: definition.requires_target_los.unwrap_or(true),
             grants_primary_resource_on_hit: definition.grants_primary_resource_on_hit,
             expires_ms: definition.expires_ms,
             sort_order: definition.sort_order,

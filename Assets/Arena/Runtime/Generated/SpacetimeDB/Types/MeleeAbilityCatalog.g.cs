@@ -49,6 +49,8 @@ namespace SpacetimeDB.Types
         public string TargetAudience;
         [DataMember(Name = "requires_target")]
         public bool RequiresTarget;
+        [DataMember(Name = "requires_target_los")]
+        public bool RequiresTargetLos;
         [DataMember(Name = "targeting_radius")]
         public float TargetingRadius;
         [DataMember(Name = "targeting_range")]
@@ -83,6 +85,7 @@ namespace SpacetimeDB.Types
             string TargetingKind,
             string TargetAudience,
             bool RequiresTarget,
+            bool RequiresTargetLos,
             float TargetingRadius,
             float TargetingRange,
             float TargetingAngleDegrees,
@@ -110,6 +113,7 @@ namespace SpacetimeDB.Types
             this.TargetingKind = TargetingKind;
             this.TargetAudience = TargetAudience;
             this.RequiresTarget = RequiresTarget;
+            this.RequiresTargetLos = RequiresTargetLos;
             this.TargetingRadius = TargetingRadius;
             this.TargetingRange = TargetingRange;
             this.TargetingAngleDegrees = TargetingAngleDegrees;

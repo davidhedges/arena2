@@ -2269,7 +2269,7 @@ fn process_spell_cast(
             );
             return Ok(Some(ActionRejectReason::NotFacingTarget));
         }
-        if !has_line_of_sight(ctx, state, &target) {
+        if definition.requires_target_los && !has_line_of_sight(ctx, state, &target) {
             if let Some(blocker) = line_of_sight_blocker(ctx, state, &target) {
                 log_cast_rejected(
                     caster,
@@ -2385,7 +2385,10 @@ fn process_spell_cast(
             {
                 return Ok(Some(ActionRejectReason::NotFacingTarget));
             }
-            if mode != CastExecutionMode::Execute && !has_line_of_sight(ctx, state, &target) {
+            if mode != CastExecutionMode::Execute
+                && definition.requires_target_los
+                && !has_line_of_sight(ctx, state, &target)
+            {
                 return Ok(Some(ActionRejectReason::LineOfSightBlocked));
             }
             if mode == CastExecutionMode::Execute {
@@ -2418,7 +2421,7 @@ fn process_spell_cast(
             ) {
                 return Ok(Some(ActionRejectReason::NotFacingTarget));
             }
-            if !has_line_of_sight(ctx, state, &target) {
+            if definition.requires_target_los && !has_line_of_sight(ctx, state, &target) {
                 return Ok(Some(ActionRejectReason::LineOfSightBlocked));
             }
             if distance_to_target(state, &target) > definition.max_distance {
@@ -3003,7 +3006,11 @@ pub(crate) fn validate_movement_delivery_target(
         );
         return None;
     }
-    if !has_line_of_sight(ctx, state, &target) {
+    let requires_target_los =
+        crate::progression::movement_delivery_for_action_id(spell_kind.as_str())
+            .map(|runtime| runtime.requires_target_los)
+            .unwrap_or(true);
+    if requires_target_los && !has_line_of_sight(ctx, state, &target) {
         if let Some(blocker) = line_of_sight_blocker(ctx, state, &target) {
             log::info!(
                 "[CHARGE] caster={} spell={} target={} rejected reason=line_of_sight_blocked caster=({:.2},{:.2},{:.2}) target=({:.2},{:.2},{:.2}) hit=({:.2},{:.2},{:.2}) hit_t={:.2} target_probe=({:.2},{:.2},{:.2})",
@@ -4387,11 +4394,11 @@ fn resolve_electrocute_channel_state(
     ) {
         return ElectrocuteChannelResolution::Invalid;
     }
-    if !has_line_of_sight(ctx, caster_state, &target) {
-        return ElectrocuteChannelResolution::Invalid;
-    }
     let definition = bespoke_spell_definition(BespokeRuntimeSpell::Electrocute)
         .expect("validated spell catalog must define ELECTROCUTE");
+    if definition.requires_target_los && !has_line_of_sight(ctx, caster_state, &target) {
+        return ElectrocuteChannelResolution::Invalid;
+    }
     if distance_to_target(caster_state, &target) > definition.max_distance {
         return ElectrocuteChannelResolution::Invalid;
     }
@@ -5428,7 +5435,7 @@ fn cast_apply_status(
             if !is_target_within_facing_arc(state, &target, TARGET_FACING_ARC_RADIANS) {
                 return Ok(false);
             }
-            if !has_line_of_sight(ctx, state, &target) {
+            if definition.requires_target_los && !has_line_of_sight(ctx, state, &target) {
                 return Ok(false);
             }
             if distance_to_target(state, &target) > definition.max_distance {
@@ -5851,6 +5858,7 @@ fn cast_remove_status(
                 target_id,
                 definition.target_audience,
                 definition.requires_target,
+                definition.requires_target_los,
                 definition.max_distance,
             ) else {
                 return Ok(false);
@@ -5934,6 +5942,7 @@ fn cast_consume_status(
         target_id,
         definition.target_audience,
         definition.requires_target,
+        definition.requires_target_los,
         definition.max_distance,
     ) else {
         return Ok(false);
@@ -6058,6 +6067,7 @@ fn resolve_remove_status_target(
     target_id: &str,
     target_audience: TargetAudience,
     requires_target: bool,
+    requires_target_los: bool,
     max_distance: f32,
 ) -> Option<Identity> {
     let fallback_self =
@@ -6074,7 +6084,7 @@ fn resolve_remove_status_target(
     if !is_target_within_facing_arc(state, &target, TARGET_FACING_ARC_RADIANS) {
         return None;
     }
-    if !has_line_of_sight(ctx, state, &target) {
+    if requires_target_los && !has_line_of_sight(ctx, state, &target) {
         return None;
     }
     if distance_to_target(state, &target) > max_distance {

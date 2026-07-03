@@ -474,7 +474,10 @@ struct StrikeProjectileData {
     spawn_height: Option<f32>,
     #[serde(default)]
     aim_height_scale: Option<f32>,
+    // Superseded by the ability-level requires_target_los targeting rule (S4);
+    // still parsed so existing manifests stay valid, never consulted.
     #[serde(default)]
+    #[allow(dead_code)]
     requires_initial_line_of_sight: Option<bool>,
     #[serde(default)]
     update_interval_seconds: Option<f32>,
@@ -489,7 +492,6 @@ struct ResolvedStrikeProjectileData {
     spawn_forward: f32,
     spawn_height: f32,
     aim_height_scale: f32,
-    requires_initial_line_of_sight: bool,
     update_interval_seconds: f32,
 }
 
@@ -825,6 +827,7 @@ struct ResolvedMeleeGameplay {
     block_behavior: BlockBehavior,
     airborne_targeting_mode: AirborneTargetingMode,
     targeting: ResolvedMeleeTargeting,
+    requires_target_los: bool,
     applies_stagger: bool,
     impact_area: Option<ResolvedMeleeImpactArea>,
     timed_movement: Option<MeleeTimedMovementRuntime>,
@@ -1236,6 +1239,7 @@ fn melee_gameplay_from_catalog_rows(
             melee.airborne_targeting_mode.as_str(),
         )?,
         targeting: ResolvedMeleeTargeting::from_catalog(&melee)?,
+        requires_target_los: melee.requires_target_los,
         applies_stagger: melee.applies_stagger,
         impact_area: resolved_melee_impact_area_from_catalog(&melee),
         timed_movement: melee_timed_movement_for_ability_id(ability.ability_id.as_str()),
@@ -1414,6 +1418,7 @@ fn auto_attack_melee_gameplay_from_catalog(
             row.airborne_targeting_mode.as_str(),
         )?,
         targeting: ResolvedMeleeTargeting::Target,
+        requires_target_los: row.requires_target_los,
         applies_stagger: row.applies_stagger,
         impact_area: None,
         timed_movement: None,
@@ -1439,6 +1444,7 @@ fn auto_attack_replacement_melee_gameplay_from_catalog(
             row.airborne_targeting_mode.as_str(),
         )?,
         targeting: ResolvedMeleeTargeting::Target,
+        requires_target_los: row.requires_target_los,
         applies_stagger: row.applies_stagger,
         impact_area: None,
         timed_movement: None,
@@ -2494,9 +2500,6 @@ fn resolve_strike_projectile_data(
             projectile.aim_height_scale,
             definition.aim_height_scale,
         ),
-        requires_initial_line_of_sight: projectile
-            .requires_initial_line_of_sight
-            .unwrap_or(definition.requires_initial_line_of_sight),
         update_interval_seconds: positive_projectile_override(
             projectile.update_interval_seconds,
             definition.update_interval_seconds,
@@ -2890,47 +2893,48 @@ fn perform_melee_attack_for_internal(
             }
         }
 
-        Some((target, target_snapshot, dx, dz, horiz_dist))
-    } else {
-        None
-    };
-
-    if let Some(projectile) = projectile_delivery.as_ref() {
-        let Some(target_context) = target_context.as_ref() else {
-            log::info!(
-                "[MELEE_PROJECTILE] owner={} source={} strike={} rejected_targetless_projectile",
-                short_identity(caster),
-                policy.source_label(),
-                strike.id
-            );
-            return Ok(MeleeAttackDispatch::Rejected(
-                ActionRejectReason::InvalidTarget,
-            ));
-        };
-        if projectile.requires_initial_line_of_sight {
+        // LOS is a targeting rule (S4): every target-requiring action checks it
+        // here, before delivery- or gap-close-specific validation, so a blocked
+        // gap-close press reads LineOfSightBlocked, not GapCloseBlocked.
+        if gameplay.requires_target_los {
             let Some(caster_snapshot) = player_snapshot_for(ctx, caster) else {
                 return Ok(MeleeAttackDispatch::Rejected(
                     ActionRejectReason::InvalidInput,
                 ));
             };
-            let Some(target_snapshot) = player_snapshot_for(ctx, target_context.0) else {
-                return Ok(MeleeAttackDispatch::Rejected(
-                    ActionRejectReason::InvalidTarget,
-                ));
-            };
             if !has_line_of_sight(ctx, &caster_snapshot, &target_snapshot) {
                 log::info!(
-                    "[MELEE_PROJECTILE] owner={} source={} strike={} rejected_los target={}",
+                    "[MELEE] owner={} source={} strike={} rejected_target_los target={}",
                     short_identity(caster),
                     policy.source_label(),
                     strike.id,
-                    short_identity(target_context.0)
+                    short_identity(target)
                 );
                 return Ok(MeleeAttackDispatch::Rejected(
                     ActionRejectReason::LineOfSightBlocked,
                 ));
             }
         }
+
+        Some((target, target_snapshot, dx, dz, horiz_dist))
+    } else {
+        None
+    };
+
+    // Projectile deliveries no longer carry their own LOS gate: the
+    // requires_target_los targeting check above covers every targeted strike
+    // (S4). The manifest/definition requires_initial_line_of_sight flags are
+    // superseded and no longer consulted here.
+    if projectile_delivery.is_some() && target_context.is_none() {
+        log::info!(
+            "[MELEE_PROJECTILE] owner={} source={} strike={} rejected_targetless_projectile",
+            short_identity(caster),
+            policy.source_label(),
+            strike.id
+        );
+        return Ok(MeleeAttackDispatch::Rejected(
+            ActionRejectReason::InvalidTarget,
+        ));
     }
 
     let auto_attack_target = target_context.as_ref().map(|context| context.0);
