@@ -662,6 +662,54 @@ server clock has a wider tail than inter-arrival gaps — so as shipped it
 pays +34 ms of presentation delay and still extrapolates 2.6 pp more.
 S7's gate failed as specced; see the S7 row for the decision.
 
+**S7 rescope delivered (2026-07-04): adaptive delay budget + fully
+automated rerun protocol; shaped session decides the gate.** Owner ruling:
+rescope S7 to adapt the server-time delay budget from measured server-time
+arrival-lateness p95 (rerun 2's failure signature is under-delay, which is
+exactly what adaptivity cures), built gate-first with the drop path
+pre-wired. Client-only, zero schema change: `ServerTimeDelayBudget` records
+lateness (precise serverNow − quantized row stamp) at
+`RemotePresentationBuffer.Push` for every stamped row on the connection,
+and budgets p95 + one tick, clamped [66..200] ms, slow-slewed (raise
+≤60 ms/s, lower ≤8 ms/s, targets recomputed at 1 Hz), one shared budget per
+connection; precise-clock gated, holding the pre-S7 fixed 100 ms until
+samples exist, so no-precise-clock behavior is byte-for-byte the shipped
+F4. Rendered-pose machinery untouched — only when samples present changed.
+Instrumentation: overlay S7 budget line, `s7_*` CSV columns (budget,
+target, lateness p95, window n, NPCs-on-timeline), scripted A/B leg driver
+in the overlay (period: 60 s OFF warmup + ON/OFF/ON/OFF 80 s legs;
+`ARENA_S7_AB_AUTORUN=1` self-starts for batchmode), `ops/s7-lap-probe.py`
+(headless chase target — 42 laps/0 skips live, kobold moving 100 % of
+samples at 0.1–2.4 m; kobold spawned AT the circuit because nearest-wins
+aggro otherwise latches the spawn-point observer), and the analyzer's gate
+verdict (regression-validated: reproduces rerun 2's recorded FAIL and
+numbers exactly). Baseline A/B (2026-07-04, session 09:24:51Z, unshaped,
+autonomous headless observer): protocol OK, late ratio ON 0.04 % vs OFF
+0.05 % at an identical 66 ms paid average — the budget floors at 66 (p95
+5–7 ms + 33 margin), erasing fixed-100's +34 ms baseline tax; the
+session-start convergence window (budget 163 ms, paid 83 ms) proves the
+adaptive path engages. Gate decision comes from the owner's shaped session
+(+40/+40 + jitter branch), scored by
+`ops/analyze-remote-presentation-ab.py`: PASS → S7 delivered; FAIL → park
+`ServerTimeTimelineEnabled` default-OFF and record S7 resolved-dropped
+(the decision is already made — the shaped run just picks the branch).
+
+**S7 shaped acceptance (2026-07-04, session 10:28:08Z): gate PASS — slice
+closed.** Owner shaped session per rerun-2 spec (+40/+40 dnctl with the
+30 % / 65 ms jitter branch), full automated protocol: 60 s OFF warmup
+discarded, ON/OFF/ON/OFF 80 s legs, protocol OK, settled 0 % in every
+scored leg. Pooled late ratio ON 1.1 % (190/17,936) vs OFF 8.0 %
+(1,441/18,058) — every ON leg (1.0/1.1 %) beat every OFF leg (7.7–8.2 %),
+nominal z ≈ 32 — and ON kept the err-p95 win (0.432 m vs 0.580 m). Hard
+snaps tied 2–2. The adaptive budget did what rerun 2 proved a fixed one
+could not: it read the shaped lateness tail (in-leg p95 ~110 ms) and paid
+144 ms average against OFF's 66 ms arrival delay, inverting fixed-100's
+under-delayed loss (11.6 % vs 9.0 %) into a 6.9 pp win. Players on the
+same connection budget mirrored it (late ratio ON 0.1 % vs OFF 5.1–6.1 %).
+`ServerTimeTimelineEnabled` ships default-ON; the parked drop path is
+dead. The slice's promise is now measured fact: jitter costs a stable,
+budgeted delay instead of motion warp.
+
 ## 8. Deliberate exposures to keep (for now, on the record) [ACCEPTED]
 
 - **Interest management is bandwidth, not security.** Subscriptions filter by
@@ -702,7 +750,7 @@ precede fairness work.
 | S4 | ✅ Delivered 2026-07-04 — LOS unification: `requires_target_los` targeting flag (default on, opt-out list signed empty), gap-close = LOS + path with distinct reasons, auto-attack holds behind cover, client advisory pre-check + slot dim from bundled collision (see §2) | server + data + client | legible targeting rules |
 | S5 | ✅ Delivered 2026-07-04 — closed-loop input buffering: per-tick consume truth on the ack surface (`last_tick_consumed_command`/`buffered_command_count`), client lead control loop (setpoint 1–2, asymmetric raise/lower, no endpoint-kind switch), degradation ladder (throttle before resync, forward re-anchors), one-tick jump slide, precise-clock tick estimate + F4 warmup gating, correction-decay presentation budget. Same-day follow-up from acceptance run 1: server tick cadence was fixed-delay-scheduled at a real 36.6 ms — replaced by a fixed-rate Time chain (33.0 ms measured) with watchdog, and client authoring is target-chasing (paces to measured cadence; inject/skip rate caps deleted). See §4; server half verified live via `ops/s5-input-loop-probe.py` + cadence measurements; owner acceptance recorded 2026-07-04 (baseline + shaped +40/+40 legs, all criteria met — slice closed) | client + server | playable at any RTT; shaped-local testing representative |
 | S6 | ✅ Delivered 2026-07-04 — local swing scheduling off the (newly replicated, owner-only) `auto_attack_state` row via `AutoAttackSwingScheduler`: precise-clock-gated fire at `next_swing_at`, full server-hold mirror (never swings a lie), authoritative CAST consumed as duplicate, contact-cue parity with an auto counter split. Server-half verified live (`ops/s6-auto-swing-probe.py`: replication, CAST 19–32 ms after `next_swing_at`, hold ⇒ pending_due + zero CASTs); §6 records the corrected premise (the row was private until S6 — visibility-only server diff). Owner acceptance recorded 2026-07-04 (baseline + shaped +40/+40 legs via `ops/analyze-s6-auto-swing.py`, all verdicts PASS: 33/33 CASTs suppressed, fire within one tick of the CAST, cue falsePos 0, zero double-swings, holds fire nothing — slice closed) | client (+ table visibility) | auto-attack feel at RTT |
-| S7 | F4 adaptive delay [66..200 ms] from arrival-lateness p95 | client | gate resolved (rerun 2, 2026-07-03: ON loses late ratio 11.6 % vs 9.0 % at +34 ms budget, wins err p95 — see §7). Owner decision: rescope S7 to adapt delay from measured *server-time* lateness p95 (the observed failure is under-delay, which adaptivity cures) or drop the server-time timeline and accept arrival's jitter warp |
+| S7 | ✅ Delivered 2026-07-04 — adaptive server-time delay budget (owner ruling after rerun 2's fixed-100 FAIL: rescope to adapt from measured server-time lateness, gate-first): `ServerTimeDelayBudget` (lateness p95 + 1 tick, clamp [66..200] ms, slow slew, precise-clock gated, connection-shared), S7 overlay/CSV instrumentation, fully automated A/B protocol (scripted leg driver / `ARENA_S7_AB_AUTORUN`, `S7HeadlessAbRunner` batchmode observer, `ops/s7-lap-probe.py` chase target, analyzer gate verdict). Baseline A/B: budget floors at 66 ms — fixed-100's +34 ms baseline tax gone at an equal late ratio. Shaped acceptance recorded 2026-07-04 (+40/+40 + jitter, session 10:28:08Z, all-automated protocol OK): gate PASS — pooled late ratio ON 1.1 % vs OFF 8.0 % (z ≈ 32), err p95 0.432 vs 0.580 m, paid 144 vs 66 ms; `ServerTimeTimelineEnabled` ships default-ON — slice closed (see §7) | client | jitter costs fixed delay, not motion warp |
 | S8 | Bounded lag-compensation ring for attack reach/facing + favor-the-defender grace — design doc first, kill-switched | server | end-state hit fairness |
 
 Owner decisions needed before their slices: aerial gating ruling per

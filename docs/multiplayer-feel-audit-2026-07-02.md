@@ -113,7 +113,61 @@ referenced but not repeated.
   failed — but the failure signature (under-delay despite bigger
   nominal budget, better p95) is exactly what an adaptive delay keyed
   to measured *server-time* lateness would cure. Owner decision
-  recorded in the design review S7 row. **F5 falsePos: redo unblocked by S6
+  recorded in the design review S7 row.
+  **S7 rescope delivered (2026-07-04) — adaptive delay implemented,
+  baseline validated autonomously; shaped session is the acceptance
+  gate.** Owner ruled: rescope S7 to adapt the budget from measured
+  server-time lateness p95, gate-first, drop path pre-wired.
+  `ServerTimeDelayBudget` (client-only, zero schema change): every
+  arriving row with a server stamp records lateness = precise-clock
+  serverNow − quantized `ServerTimeMs` at `RemotePresentationBuffer.Push`;
+  a 10 s window's p95 + one tick of margin, clamped [66..200] ms, slewed
+  slowly (raise ≤60 ms/s, lower ≤8 ms/s, 1 Hz target recompute, no
+  per-frame pumping), one budget per connection shared by all buffers.
+  Precise-clock gated — without a precise sample the window stays empty
+  and the budget holds the pre-S7 fixed 100 ms. Instrumented: overlay S7
+  budget line + `s7_budget_ms`/`s7_target_ms`/`s7_late_p95_ms`/
+  `s7_late_n`/`s7_npcs_on_tl` CSV columns. The whole rerun protocol is
+  now automated: `ops/s7-lap-probe.py` (headless lap-runner the kobold
+  chases — spawned AT the lap circuit, not the scene spawn, because
+  nearest-wins aggro otherwise latches onto the observer standing at
+  spawn; circuit verified against authored collision data in Desert_Day),
+  the overlay's scripted leg driver (period key: 60 s OFF warmup +
+  ON/OFF/ON/OFF 80 s legs; `ARENA_S7_AB_AUTORUN=1` self-starts it), the
+  batchmode observer (`Arena.EditorTools.S7HeadlessAbRunner`), and the
+  analyzer's S7 gate section (validated by reproducing rerun 2's recorded
+  verdict — 11.6 % vs 9.0 %, FAIL — from its own CSV). Baseline evidence
+  (session 2026-07-04T09:24:51Z, unshaped loopback, fully autonomous:
+  probe ran 42 laps / 0 skips, kobold moving 100 % of samples at
+  0.1–2.4 m gap; settled ≤1.1 % per leg): protocol OK on 4×80 s
+  interleaved legs; late ratio ON 0.04 % vs OFF 0.05 % (z −1.6) at an
+  IDENTICAL 66 ms average paid delay — the budget floors at 66 ms
+  (lateness p95 5–7 ms + 33 ms margin, clamped), so the +34 ms baseline
+  tax the fixed budget paid is gone; the session-start convergence window
+  showed the loop responding (budget 163 ms avg while lateness p95 read
+  619 ms, paid 83 ms — engagement proof) before flooring; err p95 at
+  baseline is leg-noise (within-arm spread 0.408→0.478 exceeds the arm
+  gap — the tails only separate under shaping). The DECIDING run is the
+  owner's shaped session (+40/+40 dnctl with the 30 % / 65 ms jitter
+  branch — what adaptivity is for): gate per rerun-2 spec — adaptive-ON
+  must win late ratio and keep the err-p95 win at a reported paid budget;
+  tie on late ratio = loss. If it fails, the recorded decision executes:
+  park `ServerTimeTimelineEnabled` default-OFF and close S7 as
+  resolved-dropped.
+  **Shaped acceptance run: gate PASS — S7 closed (2026-07-04, session
+  10:28:08Z).** +40/+40 with the 30 % / 65 ms jitter branch, automated
+  protocol end to end (lap probe chasing, scripted ON/OFF/ON/OFF 80 s
+  legs, warmup discarded, settled 0 % in-leg, protocol OK). Pooled late
+  ratio ON 1.1 % vs OFF 8.0 % — every ON leg beat every OFF leg, nominal
+  z ≈ 32 — with the err-p95 win kept (0.432 m vs 0.580 m) and hard snaps
+  tied 2–2. The budget tracked the shaped lateness tail (in-leg p95
+  ~110 ms) and paid 144 ms average against OFF's 66 ms: rerun 2's
+  under-delay signature is cured, its 2.6 pp ON loss inverted into a
+  6.9 pp ON win, and players on the shared budget improved the same way
+  (ON 0.1 % vs OFF 5.1–6.1 % late). `ServerTimeTimelineEnabled` ships
+  default-ON; the drop path is dead. F4's original intent is now the
+  measured behavior: under jitter, remotes hold a stable budgeted delay
+  instead of warping. **F5 falsePos: redo unblocked by S6
   (2026-07-04)** — the original run silently measured nothing because swings
   were auto-attacks, which did not route through the predicted contact-cue
   system at all (cues hooked only predicted action-bar melee presses); the
@@ -322,7 +376,11 @@ referenced but not repeated.
   replication, no navigation prediction, no `NpcPhysics` cadence change;
   server-time keying is F4 and lands inside `RemotePresentationBuffer`.
 - **F4 — implemented (fixed 100 ms delay; adaptive delay deliberately not
-  started).** `PlayerSnapshot` gains `ServerTimeMs`: the row's `UpdatedAt`
+  started → superseded by S7, 2026-07-04: the delay budget is adaptive —
+  `ServerTimeDelayBudget`, lateness-p95-sized, clamped [66..200] ms; see
+  the F4 A/B history above for the S7 rescope, baseline evidence, and the
+  shaped acceptance PASS that closed the slice).**
+  `PlayerSnapshot` gains `ServerTimeMs`: the row's `UpdatedAt`
   quantized to the 33 ms fixed-tick grid
   (`RemotePresentationBuffer.QuantizeServerTimeMicros`) — chosen over a
   per-entity tick→`UpdatedAt` anchor because it needs no held state, stays
