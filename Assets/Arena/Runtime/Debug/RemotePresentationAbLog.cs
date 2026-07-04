@@ -185,6 +185,23 @@ namespace Arena.Debugging
             row.Append(',').Append(predDriver?.JumpsConfirmed ?? 0);
             row.Append(',').Append(predDriver?.JumpsLost ?? 0);
             row.Append(',').Append(localSim != null && localSim.LastTickEstimateUsedPreciseClock ? 1 : 0);
+
+            // S6 local auto-attack swing scheduling columns.
+            row.Append(',').Append(AutoAttackSwingScheduler.SwingsFired);
+            row.Append(',').Append(AutoAttackSwingScheduler.SuppressedCasts);
+            row.Append(',').Append(AutoAttackSwingScheduler.UnpredictedCasts);
+            row.Append(',').Append(AutoAttackSwingScheduler.SwingsHeldByMirror);
+            row.Append(',').Append(AutoAttackSwingScheduler.SwingsMissedLate);
+            row.Append(',').Append(AutoAttackSwingScheduler.ExpiredWithoutCast);
+            row.Append(',').Append(AutoAttackSwingScheduler.MismatchedCasts);
+            row.Append(',').Append(AutoAttackSwingScheduler.StartErrorLastMs);
+            row.Append(',').Append(AutoAttackSwingScheduler.StartErrorMaxMs);
+            row.Append(',').Append(AutoAttackSwingScheduler.CastAlignLastMs);
+            row.Append(',').Append(AutoAttackSwingScheduler.CastAlignMaxAbsMs);
+            row.Append(',').Append(PredictedMeleeContactCueController.AutoCuesFired);
+            row.Append(',').Append(PredictedMeleeContactCueController.AutoMatchedCues);
+            row.Append(',').Append(PredictedMeleeContactCueController.AutoFalsePositives);
+            row.Append(',').Append(PredictedMeleeContactCueController.AutoSuppressedAuthoritativeCues);
             row.Append('\n');
 
             try
@@ -201,7 +218,10 @@ namespace Arena.Debugging
                         + "cue_fired,cue_matched,cue_false_pos,cue_suppressed_auth,"
                         + "s5_lead,s5_occ,s5_acks,s5_fb_acks,s5_raises,s5_lowers,s5_injected,s5_skipped,s5_resyncs,"
                         + "s5_rec_err_last,s5_rec_err_max,s5_corr_snaps,s5_corr_absorbed_m,"
-                        + "s5_jump_pred,s5_jump_conf,s5_jump_lost,s5_est_precise\n");
+                        + "s5_jump_pred,s5_jump_conf,s5_jump_lost,s5_est_precise,"
+                        + "aa_fired,aa_supp_cast,aa_unpred_cast,aa_held,aa_late,aa_expired,aa_mismatch,"
+                        + "aa_start_err_last_ms,aa_start_err_max_ms,aa_cast_align_last_ms,aa_cast_align_max_abs_ms,"
+                        + "aa_cue_fired,aa_cue_matched,aa_cue_false_pos,aa_cue_supp_auth\n");
                     _wroteHeader = true;
                 }
 

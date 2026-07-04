@@ -516,6 +516,62 @@ is a replicated row, and `ArenaServerClock` can convert it to client time.
 the same advisory contact-cue path as predicted melee. Auto-attacks then feel
 identical to skills at any RTT, for near-zero new machinery.
 
+**Delivered (2026-07-04, S6 — implementation + server-half live evidence;
+owner acceptance run pending).** Scope ruling first: S6 stays client-only
+presentation as the slice table says — the player-attack same-tick
+CAST→damage left open by S3 (§1) is victim-side telegraph work and does not
+join this slice. One premise correction: this section claimed
+`AutoAttackState.next_swing_at` "is a replicated row" — it was not. The
+table was private (no `public` attribute, no client subscription, type stub
+only). The minimal enabler shipped with the slice: `auto_attack_state` is
+now `public` with an owner-filtered subscription (the exact `GlobalCooldown`
+shape in `GameplaySubscriptionPlanner`), so only the local player's own
+schedule row replicates. No rows, columns, reducers, or gameplay changed;
+bindings regenerated canonically (one new table-handle stub,
+`Tables/AutoAttackState.g.cs`).
+
+Client: `AutoAttackSwingScheduler` (self-bootstrapped, presentation-only)
+polls the local row each frame and starts the swing at `next_swing_at`
+converted through `ArenaServerClock`, gated on `HasPreciseSample` — without
+a precise clock (or with the runtime kill switch off: `[` while the netcode
+overlay is up) playback stays CAST-driven exactly as before. A swing fires
+locally only when a client mirror of every server hold passes: live harmable
+target, range vs the replicated `AutoAttackCatalog` row, advisory LOS (S4
+mirror), hard-CC status, active defense (`DefenseState`), blocking cast,
+dodge, voluntary-move cadence reset epoch, and `pending_due == false`. A
+held or `pending_due` schedule is never predicted — the probe measured a
+held release firing 17.3 s off-schedule, which is exactly why. The fired
+swing plays as a Predicted AutoAttack-category request through the standard
+playback gate (autos still yield to higher-priority presentations), and the
+authoritative CAST is consumed as a duplicate via a
+`CombatAnimationReplayPolicy` route (400 ms window, post-CAST lockout
+against clock-error double-presents, 150 ms late-fire cutoff). An armed
+auto-attack replacement (private pending row) suppresses prediction until
+that swing's CAST arrives; a strike-identity mismatch lets the authoritative
+animation play and is counted. Contact-cue parity: the scheduled swing takes
+the same advisory contact path as predicted melee with auto-tagged ledger
+entries; the consumed CAST supplies the `action_instance_id` mapping that
+presses get from `PredictedActionResult`, so matched/falsePos are finally
+meaningful for autos (feel audit F5 falsePos redo). Evidence surface:
+overlay "S6 auto swing sched" line (fired/suppCast/unpred/held/late/expired/
+mismatch + startErr and castAlign last/max) plus an auto share line under
+the contact-cue section, `aa_*` columns in `remote-presentation-ab.csv`,
+`[AA_SCHED]` action-bar traces, and `ops/analyze-s6-auto-swing.py` printing
+per-session acceptance verdicts.
+
+Server-half verified live 2026-07-04 (`ops/s6-auto-swing-probe.py`, all
+pass, headless websocket player): the owner row replicates over a real
+subscription (including tick-driven `TransactionUpdateLight` updates —
+identity/timestamp cells arrive as single-element arrays in v1.json); every
+on-time CAST landed 19–32 ms after the advertised `next_swing_at` (pure
+33 ms tick rounding, so a client firing at `next_swing_at` presents the
+truth within one tick); out-of-range hold flipped `pending_due=true` with
+zero CASTs; walking back released the held swing 17.3 s off-schedule.
+Client-half acceptance (0 ms + shaped +40/+40 per `docs/latency-testing.md`:
+start error ≲ 1 tick, every CAST suppressed, falsePos ≈ 0, zero
+double-swings, zero local swings under hold) is the owner checklist handed
+off with the slice.
+
 ## 7. Replication has no idle semantics, so the instrumentation lies [DEFECT]
 
 `NpcPhysics` rows stop when an NPC is stationary (`npcs.rs:766, 790-797`);
@@ -629,7 +685,7 @@ precede fairness work.
 | S3 | ✅ Delivered 2026-07-03 — NPC telegraphs: authored per-template windup between CAST and damage via `npc_pending_swing`, present-time re-validation at impact (see §1; player attacks rescoped out of S3 by owner) | server + data | victim reaction time; masks present-time validation |
 | S4 | ✅ Delivered 2026-07-04 — LOS unification: `requires_target_los` targeting flag (default on, opt-out list signed empty), gap-close = LOS + path with distinct reasons, auto-attack holds behind cover, client advisory pre-check + slot dim from bundled collision (see §2) | server + data + client | legible targeting rules |
 | S5 | ✅ Delivered 2026-07-04 — closed-loop input buffering: per-tick consume truth on the ack surface (`last_tick_consumed_command`/`buffered_command_count`), client lead control loop (setpoint 1–2, asymmetric raise/lower, no endpoint-kind switch), degradation ladder (throttle before resync, forward re-anchors), one-tick jump slide, precise-clock tick estimate + F4 warmup gating, correction-decay presentation budget. Same-day follow-up from acceptance run 1: server tick cadence was fixed-delay-scheduled at a real 36.6 ms — replaced by a fixed-rate Time chain (33.0 ms measured) with watchdog, and client authoring is target-chasing (paces to measured cadence; inject/skip rate caps deleted). See §4; server half verified live via `ops/s5-input-loop-probe.py` + cadence measurements; owner acceptance recorded 2026-07-04 (baseline + shaped +40/+40 legs, all criteria met — slice closed) | client + server | playable at any RTT; shaped-local testing representative |
-| S6 | Auto-attack local swing scheduling off `next_swing_at` + contact-cue parity | client | auto-attack feel at RTT |
+| S6 | ✅ Implemented 2026-07-04 — local swing scheduling off the (newly replicated, owner-only) `auto_attack_state` row via `AutoAttackSwingScheduler`: precise-clock-gated fire at `next_swing_at`, full server-hold mirror (never swings a lie), authoritative CAST consumed as duplicate, contact-cue parity with an auto counter split. Server-half verified live (`ops/s6-auto-swing-probe.py`: replication, CAST 19–32 ms after `next_swing_at`, hold ⇒ pending_due + zero CASTs); §6 records the corrected premise (the row was private until S6 — visibility-only server diff). Owner acceptance run pending (0 ms + +40/+40 checklist + `ops/analyze-s6-auto-swing.py`) | client (+ table visibility) | auto-attack feel at RTT |
 | S7 | F4 adaptive delay [66..200 ms] from arrival-lateness p95 | client | gate resolved (rerun 2, 2026-07-03: ON loses late ratio 11.6 % vs 9.0 % at +34 ms budget, wins err p95 — see §7). Owner decision: rescope S7 to adapt delay from measured *server-time* lateness p95 (the observed failure is under-delay, which adaptivity cures) or drop the server-time timeline and accept arrival's jitter warp |
 | S8 | Bounded lag-compensation ring for attack reach/facing + favor-the-defender grace — design doc first, kill-switched | server | end-state hit fairness |
 

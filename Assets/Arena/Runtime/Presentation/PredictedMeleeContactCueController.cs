@@ -52,6 +52,15 @@ namespace Arena.Presentation
         public static int FalsePositives => _instance?._ledger.FalsePositives ?? 0;
         public static int SuppressedAuthoritativeCues => _instance?._ledger.SuppressedAuthoritativeCues ?? 0;
 
+        // Auto-attack split of the same counters (netcode design review S6):
+        // scheduled local auto swings ride this controller, and their share of
+        // fired/matched/falsePos must be separable from ability melee for the
+        // feel-audit F5 falsePos redo.
+        public static int AutoCuesFired => _instance?._ledger.AutoCuesFired ?? 0;
+        public static int AutoMatchedCues => _instance?._ledger.AutoMatchedCues ?? 0;
+        public static int AutoFalsePositives => _instance?._ledger.AutoFalsePositives ?? 0;
+        public static int AutoSuppressedAuthoritativeCues => _instance?._ledger.AutoSuppressedAuthoritativeCues ?? 0;
+
         private readonly struct PendingAdvisoryContact
         {
             public PendingAdvisoryContact(
@@ -127,7 +136,8 @@ namespace Arena.Presentation
             string actionId,
             float strikeRange,
             float minimumRange,
-            long pressedAtMs)
+            long pressedAtMs,
+            bool isAutoAttack = false)
         {
             if (!IsActive || _instance == null || !token.IsPredicted)
                 return;
@@ -164,7 +174,20 @@ namespace Arena.Presentation
                 tokenKey,
                 target.TargetIdentity.ToString(),
                 fireAtMs,
-                PredictedFirstHitIndex);
+                PredictedFirstHitIndex,
+                isAutoAttack);
+        }
+
+        /// <summary>
+        /// Called by AutoAttackSwingScheduler when the authoritative CAST for
+        /// a locally scheduled auto swing arrives: autos have no
+        /// PredictedActionResult row, so the action-instance mapping the
+        /// impact correlation needs comes from the consumed CAST instead
+        /// (netcode design review S6).
+        /// </summary>
+        public static void MapLocalAutoSwingActionInstance(string actionInstanceId, string tokenKey)
+        {
+            _instance?._ledger.MapAcceptedActionInstance(actionInstanceId, tokenKey);
         }
 
         /// <summary>

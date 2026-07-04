@@ -62,6 +62,10 @@ namespace Arena.Network
                 new QueryBuilder().From.ActiveCombatDiscipline().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
                 new QueryBuilder().From.CharacterCombatDisciplineWeaponLoadout().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
                 new QueryBuilder().From.ActiveCombatMode().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
+                // Local swing scheduling (netcode design review S6): the
+                // client schedules its own auto-attack presentation at
+                // next_swing_at; only the owner's row replicates.
+                new QueryBuilder().From.AutoAttackState().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
                 new QueryBuilder().From.PartyInvite().Where(c => c.Invitee.Eq(localIdentity)).ToSql(),
                 new QueryBuilder().From.EquipmentLoadout().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
                 // Inventory rows are owner-key filtered (netcode audit R4): the

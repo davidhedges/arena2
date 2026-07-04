@@ -41,6 +41,7 @@ namespace Arena.Presentation
             public long FireAtMs;
             public long MatchWindowEndsAtMs;
             public bool AuthoritativeContactSeenWhileScheduled;
+            public bool IsAutoAttack;
         }
 
         private readonly Dictionary<string, Entry> _entriesByToken = new(StringComparer.Ordinal);
@@ -50,9 +51,20 @@ namespace Arena.Presentation
         public int MatchedCues { get; private set; }
         public int FalsePositives { get; private set; }
         public int SuppressedAuthoritativeCues { get; private set; }
+        // Auto-attack share of the counters above (netcode design review S6);
+        // ability-melee values are the difference.
+        public int AutoCuesFired { get; private set; }
+        public int AutoMatchedCues { get; private set; }
+        public int AutoFalsePositives { get; private set; }
+        public int AutoSuppressedAuthoritativeCues { get; private set; }
         public int PendingCount => _entriesByToken.Count;
 
-        public void Schedule(string tokenKey, string targetKey, long fireAtMs, int predictedHitIndex)
+        public void Schedule(
+            string tokenKey,
+            string targetKey,
+            long fireAtMs,
+            int predictedHitIndex,
+            bool isAutoAttack = false)
         {
             if (string.IsNullOrWhiteSpace(tokenKey))
                 return;
@@ -63,6 +75,7 @@ namespace Arena.Presentation
                 State = EntryState.Scheduled,
                 PredictedHitIndex = predictedHitIndex,
                 FireAtMs = fireAtMs,
+                IsAutoAttack = isAutoAttack,
             };
         }
 
@@ -87,7 +100,7 @@ namespace Arena.Presentation
                 return;
 
             if (entry.State == EntryState.Fired)
-                FalsePositives++;
+                RecordFalsePositive(entry);
             _entriesByToken.Remove(tokenKey);
         }
 
@@ -122,6 +135,8 @@ namespace Arena.Presentation
             entry.State = EntryState.Fired;
             entry.MatchWindowEndsAtMs = nowMs + AuthoritativeMatchWindowMs;
             CuesFired++;
+            if (entry.IsAutoAttack)
+                AutoCuesFired++;
         }
 
         /// <summary>Advisory hit test failed — no cue, nothing to correlate.</summary>
@@ -167,20 +182,31 @@ namespace Arena.Presentation
 
             if (nowMs > entry.MatchWindowEndsAtMs)
             {
-                FalsePositives++;
+                RecordFalsePositive(entry);
                 _entriesByToken.Remove(tokenKey);
                 return AuthoritativeContactCueDecision.PlayCue;
             }
 
             MatchedCues++;
+            if (entry.IsAutoAttack)
+                AutoMatchedCues++;
             _entriesByToken.Remove(tokenKey);
             if (isImpactCueTrigger && hitIndex == entry.PredictedHitIndex)
             {
                 SuppressedAuthoritativeCues++;
+                if (entry.IsAutoAttack)
+                    AutoSuppressedAuthoritativeCues++;
                 return AuthoritativeContactCueDecision.SuppressCue;
             }
 
             return AuthoritativeContactCueDecision.PlayCue;
+        }
+
+        private void RecordFalsePositive(Entry entry)
+        {
+            FalsePositives++;
+            if (entry.IsAutoAttack)
+                AutoFalsePositives++;
         }
 
         /// <summary>
@@ -202,7 +228,7 @@ namespace Arena.Presentation
                     continue;
 
                 if (firedWindowLapsed)
-                    FalsePositives++;
+                    RecordFalsePositive(entry);
                 (staleTokens ??= new List<string>()).Add(pair.Key);
             }
 

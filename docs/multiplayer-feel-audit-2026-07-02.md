@@ -113,11 +113,21 @@ referenced but not repeated.
   failed — but the failure signature (under-delay despite bigger
   nominal budget, better p95) is exactly what an adaptive delay keyed
   to measured *server-time* lateness would cure. Owner decision
-  recorded in the design review S7 row. **F5 falsePos: still open** — swings were
-  auto-attacks, which do not route through the predicted contact-cue system
-  at all (cues hook only predicted action-bar melee presses); the one
-  ability press in the log fired and matched cleanly (fired 1 / matched 1 /
-  falsePos 0). Redo with an action-bar melee strike.
+  recorded in the design review S7 row. **F5 falsePos: redo unblocked by S6
+  (2026-07-04)** — the original run silently measured nothing because swings
+  were auto-attacks, which did not route through the predicted contact-cue
+  system at all (cues hooked only predicted action-bar melee presses); the
+  one ability press in the log fired and matched cleanly (fired 1 /
+  matched 1 / falsePos 0). S6's `AutoAttackSwingScheduler` now routes every
+  locally scheduled auto swing through the same advisory contact-cue path,
+  with the consumed authoritative CAST supplying the action-instance mapping
+  (autos have no `PredictedActionResult` row) and an auto-tagged counter
+  split (overlay "auto share" line; `aa_cue_*` CSV columns) so autos and
+  ability melee read separately. The falsePos redo is now the S6 owner
+  acceptance run: armed autos on a playground dummy at 0 ms and +40/+40,
+  verdicts printed by `ops/analyze-s6-auto-swing.py` (expect auto falsePos
+  ≈ 0 with clear range+LOS, and the fired/matched pair moving with every
+  swing).
 - **Latency-harness findings (2026-07-03, first live conditioner runs).**
   (a) ~~The movement input lead is keyed to endpoint kind, not RTT~~ —
   **closed by S5 (2026-07-04, closed-loop input buffering)**: the

@@ -27,6 +27,7 @@ namespace Arena.Debugging
         private const KeyCode ToggleKey = KeyCode.Backslash;
         private const KeyCode ServerTimelineToggleKey = KeyCode.Semicolon;
         private const KeyCode PredictedContactCueToggleKey = KeyCode.Quote;
+        private const KeyCode AutoAttackSchedulerToggleKey = KeyCode.LeftBracket;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
@@ -57,6 +58,10 @@ namespace Arena.Debugging
             if (_visible && UnityEngine.Input.GetKeyDown(PredictedContactCueToggleKey))
                 PredictedMeleeContactCueController.DebugEnabled =
                     !PredictedMeleeContactCueController.DebugEnabled;
+
+            if (_visible && UnityEngine.Input.GetKeyDown(AutoAttackSchedulerToggleKey))
+                AutoAttackSwingScheduler.DebugEnabled =
+                    !AutoAttackSwingScheduler.DebugEnabled;
         }
 
         private void OnGUI()
@@ -213,6 +218,7 @@ namespace Arena.Debugging
             y = DrawRemotePresentationSection(x, y, lineHeight);
             y = DrawPredictedActionResultSection(x, y, lineHeight);
             y = DrawPredictedContactCueSection(x, y, lineHeight);
+            y = DrawAutoAttackScheduleSection(x, y, lineHeight);
             y = DrawReceiveRateSection(x, y, lineHeight);
 
             var conn = NetworkManager.Instance?.Conn;
@@ -459,6 +465,41 @@ namespace Arena.Debugging
                 + $" matched={PredictedMeleeContactCueController.MatchedCues}"
                 + $" falsePos={PredictedMeleeContactCueController.FalsePositives}"
                 + $" suppressedAuth={PredictedMeleeContactCueController.SuppressedAuthoritativeCues}",
+                _style);
+            y += lineHeight;
+            GUI.Label(
+                new Rect(x, y, 900, lineHeight),
+                $"  auto share: fired={PredictedMeleeContactCueController.AutoCuesFired}"
+                + $" matched={PredictedMeleeContactCueController.AutoMatchedCues}"
+                + $" falsePos={PredictedMeleeContactCueController.AutoFalsePositives}"
+                + $" suppressedAuth={PredictedMeleeContactCueController.AutoSuppressedAuthoritativeCues}",
+                _style);
+            y += lineHeight;
+            return y;
+        }
+
+        /// <summary>
+        /// Local auto-attack swing scheduling (netcode design review S6).
+        /// startErr = local fire time vs the converted next_swing_at schedule;
+        /// castAlign = estimated server-time of the local fire vs the
+        /// authoritative CAST timestamp (expected within one tick).
+        /// suppCast/fired is the duplicate-suppression rate; expired = local
+        /// swing with no CAST inside the window (the swing-was-a-lie count).
+        /// </summary>
+        private float DrawAutoAttackScheduleSection(float x, float y, float lineHeight)
+        {
+            string state = AutoAttackSwingScheduler.DebugEnabled ? "ON" : "OFF";
+            GUI.Label(
+                new Rect(x, y, 1100, lineHeight),
+                $"S6 auto swing sched ([ to toggle): {state}  fired={AutoAttackSwingScheduler.SwingsFired}"
+                + $" suppCast={AutoAttackSwingScheduler.SuppressedCasts}"
+                + $" unpred={AutoAttackSwingScheduler.UnpredictedCasts}"
+                + $" held={AutoAttackSwingScheduler.SwingsHeldByMirror}"
+                + $" late={AutoAttackSwingScheduler.SwingsMissedLate}"
+                + $" expired={AutoAttackSwingScheduler.ExpiredWithoutCast}"
+                + $" mismatch={AutoAttackSwingScheduler.MismatchedCasts}"
+                + $" startErr={AutoAttackSwingScheduler.StartErrorLastMs}/{AutoAttackSwingScheduler.StartErrorMaxMs}ms"
+                + $" castAlign={AutoAttackSwingScheduler.CastAlignLastMs}/{AutoAttackSwingScheduler.CastAlignMaxAbsMs}ms",
                 _style);
             y += lineHeight;
             return y;

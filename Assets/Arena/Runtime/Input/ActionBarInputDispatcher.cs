@@ -145,6 +145,11 @@ namespace Arena.Input
             {
                 ActionBarTrace.Trace($"auto-attack replacement dispatch arming {action.AbilityId}");
                 conn.Reducers.ArmAutoAttackReplacement(action.AbilityId);
+                // The armed replacement swaps the next swing's strike
+                // server-side; local swing scheduling can't know the outcome,
+                // so it degrades to CAST-driven playback until that swing
+                // arrives (netcode design review S6).
+                Arena.Presentation.AutoAttackSwingScheduler.NotifyAutoAttackReplacementArmed();
                 return true;
             }
 

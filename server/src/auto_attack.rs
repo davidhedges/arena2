@@ -43,7 +43,10 @@ use crate::progression::auto_attack_replacement_catalog as _;
 #[allow(unused_imports)]
 use crate::spells::active_cast as _;
 
-#[table(accessor = auto_attack_state)]
+// Public so the owner's client can schedule the local swing presentation at
+// `next_swing_at` (netcode design review S6). Presentation-only read: the
+// client subscribes to its own row (owner-filtered) and never writes.
+#[table(accessor = auto_attack_state, public)]
 #[derive(Clone)]
 pub struct AutoAttackState {
     #[primary_key]

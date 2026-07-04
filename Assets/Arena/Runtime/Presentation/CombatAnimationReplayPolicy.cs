@@ -40,6 +40,19 @@ namespace Arena.Presentation
             if (conn == null)
                 return false;
 
+            // Locally scheduled auto-attack swings (netcode design review S6)
+            // consume their authoritative CAST here; press-predicted melee
+            // keeps the MeleeInputHandler path below.
+            if (string.Equals(request.Source, CombatEventSources.AutoAttack, System.StringComparison.Ordinal))
+            {
+                return AutoAttackSwingScheduler.HandleAuthoritativeLocalAutoAttackCast(
+                    conn,
+                    entity,
+                    actionInstanceId,
+                    request,
+                    nowMs);
+            }
+
             if (!CombatEventSources.IsPredictedLocalMeleeSource(request.Source))
                 return false;
 
