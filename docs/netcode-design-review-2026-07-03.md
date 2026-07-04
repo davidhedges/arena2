@@ -471,8 +471,21 @@ DB and **32.99 ms/tick** on the republished dev DB (30.3 ticks/s, exact);
 `ops/s5-input-loop-probe.py` all green against the fixed-rate module (22
 slides, all landing); chain + watchdog rows confirmed live, and the
 catch-up guard observed re-anchoring through module-startup stalls instead
-of fast-forwarding. Owner acceptance rerun (occupancy 1–2 at loopback, ack
-rate ≈ 30/s) is the remaining check.
+of fast-forwarding.
+
+**Owner acceptance recorded (2026-07-04, run 2, one session per leg — S5
+CLOSED).** Baseline loopback (183 s moving + jumping): ack rate 30.7/s,
+occupancy median 2 (min 0 / max 4), lead converged 3 (range 2–5 — editor
+hitches bite the thin-margin regime occasionally and the loop absorbs
+them), fallback 0.82 %/tick, 105/105 jumps confirmed 0 lost, 0 resyncs,
+3 honest correction snaps (max reconcile sample 0.48 m), no continuous
+yanking. Shaped +40/+40 ms up+down (186 s): ack rate 30.31/s exact,
+fallback **0.39 %/tick** (pre-S5: every tick), lead converged 5 and held
+(range 5–7), occupancy median 3, reconcile error flat zero with **zero**
+snaps, 173/173 jumps confirmed 0 lost, 0 resyncs, precise estimate
+184/186 samples. Every §4 acceptance criterion met; the shaped leg is
+cleaner than baseline because the converged lead buys real margin. The
+2026-07-03 "shaped-local is not representative" caveat is formally dead.
 
 ## 5. Aerial gating — disputed rule, badly served by its own presentation [GAP]
 
@@ -615,7 +628,7 @@ precede fairness work.
 | S2 | ✅ Delivered 2026-07-03 — cut-on-reject via existing interrupt primitives + slot flash, `PredictionRejected` payload extended with the pressed action id (see §3) | client | legible denials (also fixes §5's worst symptom) |
 | S3 | ✅ Delivered 2026-07-03 — NPC telegraphs: authored per-template windup between CAST and damage via `npc_pending_swing`, present-time re-validation at impact (see §1; player attacks rescoped out of S3 by owner) | server + data | victim reaction time; masks present-time validation |
 | S4 | ✅ Delivered 2026-07-04 — LOS unification: `requires_target_los` targeting flag (default on, opt-out list signed empty), gap-close = LOS + path with distinct reasons, auto-attack holds behind cover, client advisory pre-check + slot dim from bundled collision (see §2) | server + data + client | legible targeting rules |
-| S5 | ✅ Delivered 2026-07-04 — closed-loop input buffering: per-tick consume truth on the ack surface (`last_tick_consumed_command`/`buffered_command_count`), client lead control loop (setpoint 1–2, asymmetric raise/lower, no endpoint-kind switch), degradation ladder (throttle before resync, forward re-anchors), one-tick jump slide, precise-clock tick estimate + F4 warmup gating, correction-decay presentation budget. Same-day follow-up from acceptance run 1: server tick cadence was fixed-delay-scheduled at a real 36.6 ms — replaced by a fixed-rate Time chain (33.0 ms measured) with watchdog, and client authoring is target-chasing (paces to measured cadence; inject/skip rate caps deleted). See §4; server half verified live via `ops/s5-input-loop-probe.py` + cadence measurements | client + server | playable at any RTT; shaped-local testing representative |
+| S5 | ✅ Delivered 2026-07-04 — closed-loop input buffering: per-tick consume truth on the ack surface (`last_tick_consumed_command`/`buffered_command_count`), client lead control loop (setpoint 1–2, asymmetric raise/lower, no endpoint-kind switch), degradation ladder (throttle before resync, forward re-anchors), one-tick jump slide, precise-clock tick estimate + F4 warmup gating, correction-decay presentation budget. Same-day follow-up from acceptance run 1: server tick cadence was fixed-delay-scheduled at a real 36.6 ms — replaced by a fixed-rate Time chain (33.0 ms measured) with watchdog, and client authoring is target-chasing (paces to measured cadence; inject/skip rate caps deleted). See §4; server half verified live via `ops/s5-input-loop-probe.py` + cadence measurements; owner acceptance recorded 2026-07-04 (baseline + shaped +40/+40 legs, all criteria met — slice closed) | client + server | playable at any RTT; shaped-local testing representative |
 | S6 | Auto-attack local swing scheduling off `next_swing_at` + contact-cue parity | client | auto-attack feel at RTT |
 | S7 | F4 adaptive delay [66..200 ms] from arrival-lateness p95 | client | gate resolved (rerun 2, 2026-07-03: ON loses late ratio 11.6 % vs 9.0 % at +34 ms budget, wins err p95 — see §7). Owner decision: rescope S7 to adapt delay from measured *server-time* lateness p95 (the observed failure is under-delay, which adaptivity cures) or drop the server-time timeline and accept arrival's jitter warp |
 | S8 | Bounded lag-compensation ring for attack reach/facing + favor-the-defender grace — design doc first, kill-switched | server | end-state hit fairness |
