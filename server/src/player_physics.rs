@@ -138,6 +138,23 @@ pub(crate) fn commit_player_physics(
     }
 
     crate::tick_metrics::record_table_write(crate::tick_metrics::TableWriteKind::PlayerPhysics);
+
+    // S8: shadow every authoritative pose into the rewind history ring; a
+    // non-Normal commit is a positional discontinuity, so it also stamps the
+    // entity's rewind barrier (rewinds never cross it).
+    crate::combat::position_history::record_position_sample(
+        ctx,
+        identity,
+        decision.row.pos_x,
+        decision.row.pos_y,
+        decision.row.pos_z,
+        decision.row.yaw,
+        decision.row.updated_at,
+    );
+    if mode != PhysicsWriteMode::Normal {
+        crate::combat::position_history::stamp_rewind_barrier(ctx, identity, decision.row.updated_at);
+    }
+
     ctx.db.player_physics().identity().update(decision.row);
 }
 

@@ -280,7 +280,8 @@ namespace Arena.Input
                 localPos.z,
                 entity.GameObject.transform.eulerAngles.y * Mathf.Deg2Rad,
                 token.PredictedActionId,
-                token.ClientActionSeq);
+                token.ClientActionSeq,
+                AttackerViewTime.ViewServerTimeMsFor(requiresTarget ? target : null));
 
             if (gapClose != null && strikeChoice.shouldQueue)
             {

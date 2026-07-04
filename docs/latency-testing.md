@@ -97,6 +97,25 @@ gate verdict. Requires the measurement republish
 (`ARENA_NPC_NO_ATTACK=1 ARENA_NPC_AGGRO_RADIUS=100
 ./ops/republish-local-clear.sh`).
 
+## S8 lag compensation (attacker-view rewind) evidence
+
+Server truth is fully automated: `ops/s8-lag-comp-probe.py` (recipe in its
+docstring — two throwaway publishes: `ARENA_NPC_NO_ATTACK=1` for the rewind
+legs, `ARENA_NPC_HARMLESS=1` for the defense-grace leg, both with
+`ARENA_NPC_AGGRO_RADIUS=100`). It prints PASS/FAIL per check: config
+defaults, honest-report no-op, the 16-slot history ring, the verdict flip
+(present-pose reject vs attacker-view accept on a kobold crossing the
+charge minimum ring), the rewind-barrier stamp, and the widened 150 ms
+defense success grace.
+
+For any live session (probe or shaped owner leg), score the audit trail
+with `ops/analyze-s8-lag-comp.py --database arena` — it parses the
+`[LAG_COMP]` dual-verdict lines: flip rate by check and switch state,
+rewind-ms distribution, pose-source mix. The runtime switch is
+`spacetime call arena set_lag_comp_config true 250` (and `false` to
+disable); presses log both verdicts in either state, so an on-screen A/B
+needs no republish.
+
 ## Profiles
 
 Both directions get the same treatment; `plr` is per direction.

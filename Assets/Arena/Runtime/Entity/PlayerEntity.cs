@@ -57,6 +57,8 @@ namespace Arena.Entity
         public float HitRadius => SimState.HitRadius;
         public float HitHeight => SimState.HitHeight;
         public string DisplayName => string.IsNullOrWhiteSpace(Username) ? Identity.ToString() : Username;
+        public float PresentationEffectiveDelayMs =>
+            IsLocalPlayer ? 0f : SimState.RemoteEffectiveDelayMsForDebug;
 
         private readonly Dictionary<string, int> _effectCounts = new();
         private readonly Transform? _presentationRoot;

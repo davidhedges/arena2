@@ -858,6 +858,9 @@ fn chase_npc_toward_target(
     next.yaw = desired_yaw;
     next.updated_at = now;
     ctx.db.npc_physics().identity().update(next.clone());
+    crate::combat::position_history::record_position_sample(
+        ctx, next.identity, next.pos_x, next.pos_y, next.pos_z, next.yaw, now,
+    );
     next
 }
 
@@ -889,6 +892,9 @@ fn update_npc_facing(
     next.yaw = desired_yaw;
     next.updated_at = now;
     ctx.db.npc_physics().identity().update(next.clone());
+    crate::combat::position_history::record_position_sample(
+        ctx, next.identity, next.pos_x, next.pos_y, next.pos_z, next.yaw, now,
+    );
     next
 }
 
@@ -1221,6 +1227,7 @@ fn despawn_npc_identity(ctx: &ReducerContext, identity: Identity) {
     if ctx.db.npc_physics().identity().find(identity).is_some() {
         ctx.db.npc_physics().identity().delete(identity);
     }
+    crate::combat::position_history::clear_position_history(ctx, identity);
 }
 
 fn clear_npc_combat_runtime(ctx: &ReducerContext, identity: Identity) {

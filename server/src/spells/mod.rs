@@ -392,7 +392,16 @@ pub fn cast_request(
     cast_yaw: f32,
     predicted_cast_id: String,
     client_action_seq: u64,
+    view_server_time_ms: u64,
 ) -> Result<(), String> {
+    // S8: stamp the press's attacker-view claim for this transaction. Press
+    // validation may rewind hostile target poses; scheduled completions and
+    // sustains run in later transactions and stay present-time.
+    crate::combat::position_history::record_press_view_delay(
+        ctx,
+        ctx.sender(),
+        view_server_time_ms,
+    );
     let authored_action_id = AuthoredActionId::new(spell_id.as_str());
     if movement_delivery_for_action_id(spell_id.as_str()).is_some() {
         let Some(ability) =

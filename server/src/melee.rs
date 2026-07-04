@@ -20,7 +20,10 @@ use crate::arena::{
     arena_seed_for_identity, open_world_scene_name_for_identity, players_share_world_context,
 };
 use crate::auto_attack::arm_auto_attack_if_unarmed_with_cadence;
-use crate::combat::player_snapshot::{player_snapshot_for, PlayerSnapshotSet};
+use crate::combat::player_snapshot::{player_snapshot_for, PlayerSnapshot, PlayerSnapshotSet};
+use crate::combat::position_history::{
+    lag_comp_config, press_view_delay_micros, record_press_view_delay, rewound_pose_for,
+};
 use crate::combat::scene_query::{
     has_line_of_sight, is_direction_within_facing_arc, target_within_area_range_xz,
     terrain_surface_y_for_caster, CombatAreaShape,
@@ -754,6 +757,10 @@ pub struct PendingMeleeImpact {
     pub impact_area_radius: f32,
     pub impact_area_damage: i32,
     pub impact_area_include_primary_target: bool,
+    /// S8: the press's clamped attacker-view delay, frozen at press time. The
+    /// impact-time reach re-check rewinds the target by this much (D2);
+    /// 0 = present-time (no report, sweeps, autos, queued releases).
+    pub view_delay_micros: i64,
     #[index(btree)]
     pub resolve_at_micros: i64,
 }
@@ -2116,6 +2123,127 @@ fn resolve_melee_authored_action_for_caster(
     Ok((combat_profile, resolved))
 }
 
+/// Inputs for one evaluation of the targeted positional gate (S8): every
+/// positional accept/reject check — facing arc, range, minimum range, LOS —
+/// judged against a single coherent target pose (`check_*`). Vitality,
+/// status, aerial, and world-context gates live outside; they never rewind.
+struct TargetedPositionalGate<'a> {
+    caster: Identity,
+    source_label: &'a str,
+    strike_id: &'a str,
+    caster_phys: &'a crate::player_physics::PlayerPhysics,
+    target_snapshot: &'a PlayerSnapshot,
+    check_x: f32,
+    check_y: f32,
+    check_z: f32,
+    effective_range: f32,
+    minimum_range: f32,
+    requires_target_los: bool,
+    log_detail: bool,
+}
+
+fn evaluate_targeted_positional_gate(
+    ctx: &ReducerContext,
+    gate: TargetedPositionalGate<'_>,
+) -> Option<ActionRejectReason> {
+    let dx = gate.check_x - gate.caster_phys.pos_x;
+    let dz = gate.check_z - gate.caster_phys.pos_z;
+    if !is_direction_within_facing_arc(
+        gate.caster_phys.yaw,
+        dx,
+        dz,
+        MELEE_TARGET_FACING_ARC_RADIANS,
+        0.0,
+    ) {
+        if gate.log_detail {
+            log::info!(
+                "[MELEE] owner={} source={} strike={} rejected_target_facing caster=({:.2},{:.2}) target=({:.2},{:.2}) yaw={:.2}",
+                short_identity(gate.caster),
+                gate.source_label,
+                gate.strike_id,
+                gate.caster_phys.pos_x,
+                gate.caster_phys.pos_z,
+                gate.check_x,
+                gate.check_z,
+                gate.caster_phys.yaw
+            );
+        }
+        return Some(ActionRejectReason::NotFacingTarget);
+    }
+
+    let horiz_dist = (dx * dx + dz * dz).sqrt();
+    if horiz_dist > gate.effective_range + gate.target_snapshot.hit_radius {
+        if gate.log_detail {
+            log::warn!(
+                "[MELEE] {} {} — range check failed: dist={:.2} max={:.2} (range={:.2} radius={:.2})",
+                &gate.caster.to_hex()[..8],
+                gate.strike_id,
+                horiz_dist,
+                gate.effective_range + gate.target_snapshot.hit_radius,
+                gate.effective_range,
+                gate.target_snapshot.hit_radius
+            );
+        }
+        return Some(ActionRejectReason::OutOfRange);
+    }
+    if gate.minimum_range > 0.0 {
+        let minimum_allowed_distance = gate.minimum_range + gate.target_snapshot.hit_radius;
+        if horiz_dist < minimum_allowed_distance {
+            if gate.log_detail {
+                log::info!(
+                    "[MELEE] owner={} source={} strike={} rejected_minimum_range dist={:.2} min={:.2} minimum_range={:.2} target_radius={:.2}",
+                    short_identity(gate.caster),
+                    gate.source_label,
+                    gate.strike_id,
+                    horiz_dist,
+                    minimum_allowed_distance,
+                    gate.minimum_range,
+                    gate.target_snapshot.hit_radius
+                );
+            }
+            return Some(ActionRejectReason::OutOfRange);
+        }
+    }
+
+    // LOS is a targeting rule (S4): every target-requiring action checks it
+    // here, before delivery- or gap-close-specific validation, so a blocked
+    // gap-close press reads LineOfSightBlocked, not GapCloseBlocked. Geometry
+    // is static; only the target endpoint moves with the checked pose.
+    if gate.requires_target_los {
+        let Some(caster_snapshot) = player_snapshot_for(ctx, gate.caster) else {
+            return Some(ActionRejectReason::InvalidInput);
+        };
+        let mut los_target = *gate.target_snapshot;
+        los_target.pos_x = gate.check_x;
+        los_target.pos_y = gate.check_y;
+        los_target.pos_z = gate.check_z;
+        if !has_line_of_sight(ctx, &caster_snapshot, &los_target) {
+            if gate.log_detail {
+                log::info!(
+                    "[MELEE] owner={} source={} strike={} rejected_target_los target={}",
+                    short_identity(gate.caster),
+                    gate.source_label,
+                    gate.strike_id,
+                    short_identity(gate.target_snapshot.player_id)
+                );
+            }
+            return Some(ActionRejectReason::LineOfSightBlocked);
+        }
+    }
+
+    None
+}
+
+fn reject_reason_audit_label(reject: Option<ActionRejectReason>) -> &'static str {
+    match reject {
+        None => "accept",
+        Some(ActionRejectReason::NotFacingTarget) => "not_facing",
+        Some(ActionRejectReason::OutOfRange) => "out_of_range",
+        Some(ActionRejectReason::LineOfSightBlocked) => "los_blocked",
+        Some(_) => "other",
+    }
+}
+
 fn perform_predicted_melee_attack_for(
     ctx: &ReducerContext,
     caster: Identity,
@@ -2834,88 +2962,81 @@ fn perform_melee_attack_for_internal(
             ));
         }
 
+        // S8: the whole positional gate judges one coherent target pose. When
+        // the press carried a view time, the attacker-view pose decides
+        // accept/reject (kill-switched) and the present-time verdict is
+        // logged beside it — the flip rate is the audit's money metric.
+        let view_delay_micros = press_view_delay_micros(ctx, caster);
+        let (lag_comp_on, _) = lag_comp_config(ctx);
+        let rewound_pose = if view_delay_micros > 0 {
+            let pose = rewound_pose_for(ctx, target, view_delay_micros, now, &target_snapshot);
+            (pose.rewound_by_micros > 0).then_some(pose)
+        } else {
+            None
+        };
+        let use_rewound = lag_comp_on && rewound_pose.is_some();
+        let present_reject = evaluate_targeted_positional_gate(
+            ctx,
+            TargetedPositionalGate {
+                caster,
+                source_label: policy.source_label(),
+                strike_id: strike.id.as_str(),
+                caster_phys: &caster_phys,
+                target_snapshot: &target_snapshot,
+                check_x: target_snapshot.pos_x,
+                check_y: target_snapshot.pos_y,
+                check_z: target_snapshot.pos_z,
+                effective_range,
+                minimum_range: gameplay.minimum_range,
+                requires_target_los: gameplay.requires_target_los,
+                log_detail: !use_rewound,
+            },
+        );
+        let active_reject = if let Some(pose) = rewound_pose.as_ref() {
+            let rewound_reject = evaluate_targeted_positional_gate(
+                ctx,
+                TargetedPositionalGate {
+                    caster,
+                    source_label: policy.source_label(),
+                    strike_id: strike.id.as_str(),
+                    caster_phys: &caster_phys,
+                    target_snapshot: &target_snapshot,
+                    check_x: pose.pos_x,
+                    check_y: pose.pos_y,
+                    check_z: pose.pos_z,
+                    effective_range,
+                    minimum_range: gameplay.minimum_range,
+                    requires_target_los: gameplay.requires_target_los,
+                    log_detail: use_rewound,
+                },
+            );
+            log::info!(
+                "[LAG_COMP] melee_gate caster={} target={} strike={} rewound_ms={} source={} enabled={} present={} rewound={} flip={}",
+                short_identity(caster),
+                short_identity(target),
+                strike.id,
+                pose.rewound_by_micros / 1_000,
+                pose.source.as_str(),
+                lag_comp_on,
+                reject_reason_audit_label(present_reject),
+                reject_reason_audit_label(rewound_reject),
+                present_reject != rewound_reject
+            );
+            if use_rewound {
+                rewound_reject
+            } else {
+                present_reject
+            }
+        } else {
+            present_reject
+        };
+        if let Some(reason) = active_reject {
+            return Ok(MeleeAttackDispatch::Rejected(reason));
+        }
+
         let dx = target_snapshot.pos_x - caster_phys.pos_x;
         let dz = target_snapshot.pos_z - caster_phys.pos_z;
-        if !is_direction_within_facing_arc(
-            caster_phys.yaw,
-            dx,
-            dz,
-            MELEE_TARGET_FACING_ARC_RADIANS,
-            0.0,
-        ) {
-            log::info!(
-                "[MELEE] owner={} source={} strike={} rejected_target_facing caster=({:.2},{:.2}) target=({:.2},{:.2}) yaw={:.2}",
-                short_identity(caster),
-                policy.source_label(),
-                strike.id,
-                caster_phys.pos_x,
-                caster_phys.pos_z,
-                target_snapshot.pos_x,
-                target_snapshot.pos_z,
-                caster_phys.yaw
-            );
-            return Ok(MeleeAttackDispatch::Rejected(
-                ActionRejectReason::NotFacingTarget,
-            ));
-        }
         let horiz_dist = (dx * dx + dz * dz).sqrt();
-        if horiz_dist > effective_range + target_snapshot.hit_radius {
-            log::warn!(
-                "[MELEE] {} {} — range check failed: dist={:.2} max={:.2} (range={:.2} radius={:.2}) gap_close={}",
-                &caster.to_hex()[..8],
-                authored_action_id.as_str(),
-                horiz_dist,
-                effective_range + target_snapshot.hit_radius,
-                effective_range,
-                target_snapshot.hit_radius,
-                gap_close.as_ref().map(|row| row.ability_id.as_str()).unwrap_or("")
-            );
-            return Ok(MeleeAttackDispatch::Rejected(
-                ActionRejectReason::OutOfRange,
-            ));
-        }
-        if gameplay.minimum_range > 0.0 {
-            let minimum_allowed_distance = gameplay.minimum_range + target_snapshot.hit_radius;
-            if horiz_dist < minimum_allowed_distance {
-                log::info!(
-                    "[MELEE] owner={} source={} strike={} rejected_minimum_range dist={:.2} min={:.2} minimum_range={:.2} target_radius={:.2}",
-                    short_identity(caster),
-                    policy.source_label(),
-                    strike.id,
-                    horiz_dist,
-                    minimum_allowed_distance,
-                    gameplay.minimum_range,
-                    target_snapshot.hit_radius
-                );
-                return Ok(MeleeAttackDispatch::Rejected(
-                    ActionRejectReason::OutOfRange,
-                ));
-            }
-        }
-
-        // LOS is a targeting rule (S4): every target-requiring action checks it
-        // here, before delivery- or gap-close-specific validation, so a blocked
-        // gap-close press reads LineOfSightBlocked, not GapCloseBlocked.
-        if gameplay.requires_target_los {
-            let Some(caster_snapshot) = player_snapshot_for(ctx, caster) else {
-                return Ok(MeleeAttackDispatch::Rejected(
-                    ActionRejectReason::InvalidInput,
-                ));
-            };
-            if !has_line_of_sight(ctx, &caster_snapshot, &target_snapshot) {
-                log::info!(
-                    "[MELEE] owner={} source={} strike={} rejected_target_los target={}",
-                    short_identity(caster),
-                    policy.source_label(),
-                    strike.id,
-                    short_identity(target)
-                );
-                return Ok(MeleeAttackDispatch::Rejected(
-                    ActionRejectReason::LineOfSightBlocked,
-                ));
-            }
-        }
-
         Some((target, target_snapshot, dx, dz, horiz_dist))
     } else {
         None
@@ -3289,6 +3410,7 @@ fn perform_melee_attack_for_internal(
             impact_area_include_primary_target: impact_area
                 .map(|area| area.include_primary_target)
                 .unwrap_or(false),
+            view_delay_micros: press_view_delay_micros(ctx, caster),
             resolve_at_micros: timestamp_to_micros(impact_at),
         });
         log::info!(
@@ -3375,7 +3497,11 @@ pub fn melee_attack(
     cast_yaw: f32,
     predicted_action_id: String,
     client_action_seq: u64,
+    view_server_time_ms: u64,
 ) -> Result<(), String> {
+    // S8: stamp the press's attacker-view claim for this transaction; 0 means
+    // no report and the whole validation stays present-time.
+    record_press_view_delay(ctx, ctx.sender(), view_server_time_ms);
     let Some(token) = ActionPredictionToken::new(predicted_action_id, client_action_seq) else {
         return perform_unpredicted_melee_attack_for(
             ctx,
@@ -4133,14 +4259,49 @@ fn resolve_pending_melee_target_impact(
     } else {
         (0.0, 0.0)
     };
-    if !target_within_area_range_xz(
+    // S8 (D2, owner-signed): the impact-time reach re-check judges the target
+    // pose the attacker is rendering *at impact* — the press's frozen view
+    // delay applied to this moment. Sweeps and unreported presses stay
+    // present-time; the whiff itself stays silent (player-melee parity).
+    let present_in_reach = target_within_area_range_xz(
         caster_phys.pos_x,
         caster_phys.pos_z,
         target_snapshot.pos_x,
         target_snapshot.pos_z,
         target_snapshot.hit_radius,
         row.range,
-    ) {
+    );
+    let mut in_reach = present_in_reach;
+    if row.view_delay_micros > 0 && row.targeting_kind.trim().eq_ignore_ascii_case("TARGET") {
+        let (lag_comp_on, _) = lag_comp_config(ctx);
+        let pose = rewound_pose_for(ctx, row.target, row.view_delay_micros, now, &target_snapshot);
+        if pose.rewound_by_micros > 0 {
+            let rewound_in_reach = target_within_area_range_xz(
+                caster_phys.pos_x,
+                caster_phys.pos_z,
+                pose.pos_x,
+                pose.pos_z,
+                target_snapshot.hit_radius,
+                row.range,
+            );
+            log::info!(
+                "[LAG_COMP] impact_recheck caster={} target={} strike={} rewound_ms={} source={} enabled={} present={} rewound={} flip={}",
+                short_identity(row.source),
+                short_identity(row.target),
+                row.kind,
+                pose.rewound_by_micros / 1_000,
+                pose.source.as_str(),
+                lag_comp_on,
+                if present_in_reach { "in_reach" } else { "whiff" },
+                if rewound_in_reach { "in_reach" } else { "whiff" },
+                rewound_in_reach != present_in_reach
+            );
+            if lag_comp_on {
+                in_reach = rewound_in_reach;
+            }
+        }
+    }
+    if !in_reach {
         return;
     }
 
@@ -5065,6 +5226,7 @@ mod tests {
             impact_area_radius: 0.0,
             impact_area_damage: 0,
             impact_area_include_primary_target: false,
+            view_delay_micros: 0,
             resolve_at_micros: 0,
         }
     }
@@ -5653,6 +5815,7 @@ mod tests {
             impact_area_radius: 0.0,
             impact_area_damage: 0,
             impact_area_include_primary_target: false,
+            view_delay_micros: 0,
             resolve_at_micros: 0,
         };
 
@@ -5715,6 +5878,7 @@ mod tests {
             impact_area_radius: 0.0,
             impact_area_damage: 0,
             impact_area_include_primary_target: false,
+            view_delay_micros: 0,
             resolve_at_micros: 0,
         };
         let modifiers = ResolvedMeleeAttackModifiers {

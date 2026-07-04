@@ -279,6 +279,7 @@ pub(crate) fn despawn_actor_bundle(
     if ctx.db.player_physics().identity().find(identity).is_some() {
         ctx.db.player_physics().identity().delete(identity);
     }
+    crate::combat::position_history::clear_position_history(ctx, identity);
     if ctx
         .db
         .player_input_cursor()

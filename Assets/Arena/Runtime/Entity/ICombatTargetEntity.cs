@@ -16,6 +16,13 @@ namespace Arena.Entity
         float HitHeight { get; }
         string DisplayName { get; }
 
+        /// <summary>
+        /// The presentation delay this entity's rendered pose is currently
+        /// paying, in ms (S7 budget or interpolation delay). 0 for the local
+        /// player. Feeds the S8 attacker-view report on combat presses.
+        /// </summary>
+        float PresentationEffectiveDelayMs { get; }
+
         Transform GetPresentationRoot();
         Vector3 GetRenderPosition();
         void SetHighlight(bool highlighted);

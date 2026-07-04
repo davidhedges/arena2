@@ -20,6 +20,7 @@ use crate::arena::{
 use crate::auto_attack::arm_auto_attack_if_unarmed_with_cadence;
 #[cfg(feature = "spellcasting_terminal_harness")]
 use crate::combat::new_player_state;
+use crate::combat::position_history::overlay_press_rewound_target_pose;
 use crate::combat::player_snapshot::{
     collect_player_snapshots, player_snapshot_for, PlayerSnapshot, PlayerSnapshotSet,
 };
@@ -2247,10 +2248,19 @@ fn process_spell_cast(
             );
             return Ok(Some(ActionRejectReason::InvalidTarget));
         }
+        // S8: positional press checks judge the attacker-view pose (inert
+        // outside the press transaction); execution keeps the present target.
+        let check_target = overlay_press_rewound_target_pose(ctx, caster, target);
         let target_is_in_facing_arc = if projectile_execute_uses_live_facing(mode, definition) {
-            is_target_within_live_facing_arc(ctx, state, caster, &target, TARGET_FACING_ARC_RADIANS)
+            is_target_within_live_facing_arc(
+                ctx,
+                state,
+                caster,
+                &check_target,
+                TARGET_FACING_ARC_RADIANS,
+            )
         } else {
-            is_target_within_facing_arc(state, &target, TARGET_FACING_ARC_RADIANS)
+            is_target_within_facing_arc(state, &check_target, TARGET_FACING_ARC_RADIANS)
         };
         if !target_is_in_facing_arc {
             log_cast_rejected(
@@ -2269,8 +2279,8 @@ fn process_spell_cast(
             );
             return Ok(Some(ActionRejectReason::NotFacingTarget));
         }
-        if definition.requires_target_los && !has_line_of_sight(ctx, state, &target) {
-            if let Some(blocker) = line_of_sight_blocker(ctx, state, &target) {
+        if definition.requires_target_los && !has_line_of_sight(ctx, state, &check_target) {
+            if let Some(blocker) = line_of_sight_blocker(ctx, state, &check_target) {
                 log_cast_rejected(
                     caster,
                     spell_kind,
@@ -2369,8 +2379,9 @@ fn process_spell_cast(
             if !target_audience_allows(ctx, caster, target.player_id, definition.target_audience) {
                 return Ok(Some(ActionRejectReason::InvalidTarget));
             }
+            let check_target = overlay_press_rewound_target_pose(ctx, caster, target);
             if mode == CastExecutionMode::ValidateOnly
-                && !is_target_within_facing_arc(state, &target, TARGET_FACING_ARC_RADIANS)
+                && !is_target_within_facing_arc(state, &check_target, TARGET_FACING_ARC_RADIANS)
             {
                 return Ok(Some(ActionRejectReason::NotFacingTarget));
             }
@@ -2379,7 +2390,7 @@ fn process_spell_cast(
                     ctx,
                     state,
                     caster,
-                    &target,
+                    &check_target,
                     TARGET_FACING_ARC_RADIANS,
                 )
             {
@@ -2387,7 +2398,7 @@ fn process_spell_cast(
             }
             if mode != CastExecutionMode::Execute
                 && definition.requires_target_los
-                && !has_line_of_sight(ctx, state, &target)
+                && !has_line_of_sight(ctx, state, &check_target)
             {
                 return Ok(Some(ActionRejectReason::LineOfSightBlocked));
             }
@@ -2412,19 +2423,20 @@ fn process_spell_cast(
             if !target_audience_allows(ctx, caster, target.player_id, definition.target_audience) {
                 return Ok(Some(ActionRejectReason::InvalidTarget));
             }
+            let check_target = overlay_press_rewound_target_pose(ctx, caster, target);
             if !is_target_within_live_facing_arc(
                 ctx,
                 state,
                 caster,
-                &target,
+                &check_target,
                 TARGET_FACING_ARC_RADIANS,
             ) {
                 return Ok(Some(ActionRejectReason::NotFacingTarget));
             }
-            if definition.requires_target_los && !has_line_of_sight(ctx, state, &target) {
+            if definition.requires_target_los && !has_line_of_sight(ctx, state, &check_target) {
                 return Ok(Some(ActionRejectReason::LineOfSightBlocked));
             }
-            if distance_to_target(state, &target) > definition.max_distance {
+            if distance_to_target(state, &check_target) > definition.max_distance {
                 return Ok(Some(ActionRejectReason::OutOfRange));
             }
             Ok(None)
@@ -2992,7 +3004,10 @@ pub(crate) fn validate_movement_delivery_target(
             return None;
         }
     };
-    if !is_target_within_facing_arc(state, &target, TARGET_FACING_ARC_RADIANS) {
+    // S8: press checks judge the attacker-view pose; the returned snapshot
+    // stays present-time — the dash bakes against the world as it is.
+    let check_target = overlay_press_rewound_target_pose(ctx, caster, target);
+    if !is_target_within_facing_arc(state, &check_target, TARGET_FACING_ARC_RADIANS) {
         log::info!(
             "[CHARGE] caster={} spell={} target={} rejected reason=target_facing_required caster=({:.2},{:.2}) target=({:.2},{:.2}) yaw={:.2}",
             &caster.to_hex()[..8],
@@ -3000,8 +3015,8 @@ pub(crate) fn validate_movement_delivery_target(
             &target.player_id.to_hex()[..8],
             state.pos_x,
             state.pos_z,
-            target.pos_x,
-            target.pos_z,
+            check_target.pos_x,
+            check_target.pos_z,
             state.facing_yaw
         );
         return None;
@@ -3010,8 +3025,8 @@ pub(crate) fn validate_movement_delivery_target(
         crate::progression::movement_delivery_for_action_id(spell_kind.as_str())
             .map(|runtime| runtime.requires_target_los)
             .unwrap_or(true);
-    if requires_target_los && !has_line_of_sight(ctx, state, &target) {
-        if let Some(blocker) = line_of_sight_blocker(ctx, state, &target) {
+    if requires_target_los && !has_line_of_sight(ctx, state, &check_target) {
+        if let Some(blocker) = line_of_sight_blocker(ctx, state, &check_target) {
             log::info!(
                 "[CHARGE] caster={} spell={} target={} rejected reason=line_of_sight_blocked caster=({:.2},{:.2},{:.2}) target=({:.2},{:.2},{:.2}) hit=({:.2},{:.2},{:.2}) hit_t={:.2} target_probe=({:.2},{:.2},{:.2})",
                 &caster.to_hex()[..8],
@@ -3047,7 +3062,7 @@ pub(crate) fn validate_movement_delivery_target(
         }
         return None;
     }
-    let distance = horizontal_distance_to_target(state, &target);
+    let distance = horizontal_distance_to_target(state, &check_target);
     let movement = movement_delivery_for_action_id(spell_kind.as_str())
         .expect("validated movement action must resolve to movement delivery");
     let movement_audience = TargetAudience::from_wire(movement.target_audience.as_str())
@@ -4081,6 +4096,7 @@ fn cleanup_spellcasting_terminal_harness(ctx: &ReducerContext, caster: Identity,
         ctx.db.player_physics().identity().delete(identity);
         ctx.db.player_state().player_id().delete(identity);
         ctx.db.player_world().identity().delete(identity);
+        crate::combat::position_history::clear_position_history(ctx, identity);
     }
 }
 
@@ -5432,13 +5448,14 @@ fn cast_apply_status(
             if !target_audience_allows(ctx, caster, target.player_id, definition.target_audience) {
                 return Ok(false);
             }
-            if !is_target_within_facing_arc(state, &target, TARGET_FACING_ARC_RADIANS) {
+            let check_target = overlay_press_rewound_target_pose(ctx, caster, target);
+            if !is_target_within_facing_arc(state, &check_target, TARGET_FACING_ARC_RADIANS) {
                 return Ok(false);
             }
-            if definition.requires_target_los && !has_line_of_sight(ctx, state, &target) {
+            if definition.requires_target_los && !has_line_of_sight(ctx, state, &check_target) {
                 return Ok(false);
             }
-            if distance_to_target(state, &target) > definition.max_distance {
+            if distance_to_target(state, &check_target) > definition.max_distance {
                 return Ok(false);
             }
             if mode == CastExecutionMode::Execute {
@@ -6081,13 +6098,14 @@ fn resolve_remove_status_target(
     if target.player_id == caster {
         return Some(caster);
     }
-    if !is_target_within_facing_arc(state, &target, TARGET_FACING_ARC_RADIANS) {
+    let check_target = overlay_press_rewound_target_pose(ctx, caster, target);
+    if !is_target_within_facing_arc(state, &check_target, TARGET_FACING_ARC_RADIANS) {
         return None;
     }
-    if requires_target_los && !has_line_of_sight(ctx, state, &target) {
+    if requires_target_los && !has_line_of_sight(ctx, state, &check_target) {
         return None;
     }
-    if distance_to_target(state, &target) > max_distance {
+    if distance_to_target(state, &check_target) > max_distance {
         return None;
     }
     Some(target.player_id)

@@ -4944,8 +4944,8 @@ mod tests {
         movement_broadphase_indices, movement_sweep_bounds, parse_gameplay_collision_boxes,
         parse_gameplay_movement_mesh_hulls, parse_gameplay_query_meshes, polygon_area_signed,
         push_out_convex_footprint_2d, quaternion_to_axes, raycast_gameplay_collision_boxes,
-        raycast_gameplay_query_meshes, raycast_movement_and_query_collision_boxes,
-        raycast_query_mesh_geometry_bvh, raycast_query_mesh_geometry_linear,
+        raycast_gameplay_query_meshes, raycast_query_mesh_geometry_bvh,
+        raycast_query_mesh_geometry_linear,
         resolve_swept_convex_footprint_2d, resolve_swept_gameplay_box_2d,
         resolve_world_spawn_position_with_layout_for_scene, transform_point, transform_vector,
         triangle_normal_y_abs, try_world_gameplay_box_hit, Aabb3, GameplayBoxBroadphase,
@@ -6392,38 +6392,10 @@ mod tests {
         );
     }
 
-    #[test]
-    fn query_collision_augments_movement_collision_during_migration() {
-        let mut movement_colliders = vec![test_aabb(6.0, 0.0, 0.0)];
-        let mut query_colliders = vec![test_aabb(20.0, 0.0, 0.0)];
-        for offset in 0..8 {
-            movement_colliders.push(test_aabb(100.0 + offset as f32 * 4.0, 0.0, 0.0));
-            query_colliders.push(test_aabb(200.0 + offset as f32 * 4.0, 0.0, 0.0));
-        }
-        let movement_broadphase = GameplayBoxBroadphase::build(&movement_colliders);
-        let query_broadphase = GameplayBoxBroadphase::build(&query_colliders);
-        let mut hit = None;
-        let mut stats = super::WorldRaycastStats::default();
-
-        raycast_movement_and_query_collision_boxes(
-            &mut hit,
-            request(0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 30.0),
-            &movement_colliders,
-            &movement_broadphase,
-            &query_colliders,
-            &query_broadphase,
-            Some(&mut stats),
-        );
-
-        let hit =
-            hit.expect("movement boxes must still block when query boxes are partially authored");
-        assert!(
-            hit.t < 10.0,
-            "nearest movement hit should remain visible despite non-empty query set"
-        );
-        assert_eq!(stats.world_gameplay_full_scan_fallbacks, 0);
-        assert_eq!(stats.world_gameplay_narrowphase_tests, 2);
-    }
+    // The former query_collision_augments_movement_collision_during_migration
+    // test pinned the pre-ruling contract (movement boxes blocking query
+    // raycasts) and was deleted with the 2026-07-04 ruling: query raycasts
+    // test authored query geometry only.
 
     #[test]
     fn gameplay_box_broadphase_falls_back_when_any_collider_is_unindexed() {

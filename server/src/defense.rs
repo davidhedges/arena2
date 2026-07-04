@@ -19,7 +19,11 @@ use crate::player_state::player_state as _;
 
 const BLOCK_HOLD_WINDOW_MS: u64 = 3_600_000;
 const PARRY_ARMED_WINDOW_MS: u64 = BLOCK_HOLD_WINDOW_MS;
-const PARRY_SUCCESS_GRACE_MS: u64 = 50;
+// S8 favor-the-defender (D4, owner-signed): hits that looked simultaneous on
+// a defender's screen (rendering attackers ≤ ~150 ms in the past) must all
+// resolve under the defense they reacted with, not land clean during the
+// success cooldown. Constant on purpose — the server keeps no per-client RTT.
+const PARRY_SUCCESS_GRACE_MS: u64 = 150;
 const PARRY_SUCCESS_COOLDOWN_MS: u64 = 10_000;
 const BLOCK_SUCCESS_GRACE_MS: u64 = PARRY_SUCCESS_GRACE_MS;
 const BLOCK_SUCCESS_COOLDOWN_MS: u64 = PARRY_SUCCESS_COOLDOWN_MS;

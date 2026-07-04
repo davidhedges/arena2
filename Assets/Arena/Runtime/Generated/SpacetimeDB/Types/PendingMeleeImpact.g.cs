@@ -67,6 +67,8 @@ namespace SpacetimeDB.Types
         public int ImpactAreaDamage;
         [DataMember(Name = "impact_area_include_primary_target")]
         public bool ImpactAreaIncludePrimaryTarget;
+        [DataMember(Name = "view_delay_micros")]
+        public long ViewDelayMicros;
         [DataMember(Name = "resolve_at_micros")]
         public long ResolveAtMicros;
 
@@ -98,6 +100,7 @@ namespace SpacetimeDB.Types
             float ImpactAreaRadius,
             int ImpactAreaDamage,
             bool ImpactAreaIncludePrimaryTarget,
+            long ViewDelayMicros,
             long ResolveAtMicros
         )
         {
@@ -128,6 +131,7 @@ namespace SpacetimeDB.Types
             this.ImpactAreaRadius = ImpactAreaRadius;
             this.ImpactAreaDamage = ImpactAreaDamage;
             this.ImpactAreaIncludePrimaryTarget = ImpactAreaIncludePrimaryTarget;
+            this.ViewDelayMicros = ViewDelayMicros;
             this.ResolveAtMicros = ResolveAtMicros;
         }
 

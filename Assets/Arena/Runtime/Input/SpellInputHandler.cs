@@ -912,6 +912,17 @@ namespace Arena.Input
             if (movementDriver != null)
                 castInputTick = movementDriver.NextMovementContextProposalTick;
 
+            // S8 attacker-view report: only meaningful for a targeted press,
+            // and only when the pressed target is the selected entity whose
+            // rendered (delayed) pose the player was judging.
+            var selectedTarget = TargetSelector.Instance?.SelectedTarget;
+            ulong viewServerTimeMs =
+                !string.IsNullOrEmpty(targetId)
+                && selectedTarget != null
+                && selectedTarget.TargetIdentity.ToString() == targetId
+                    ? AttackerViewTime.ViewServerTimeMsFor(selectedTarget)
+                    : 0UL;
+
             conn.Reducers.CastRequest(
                 spellId,
                 targetId,
@@ -924,7 +935,8 @@ namespace Arena.Input
                 castPosZ,
                 castYaw,
                 token.PredictedCastId,
-                token.ClientActionSeq);
+                token.ClientActionSeq,
+                viewServerTimeMs);
         }
 
         /// <summary>

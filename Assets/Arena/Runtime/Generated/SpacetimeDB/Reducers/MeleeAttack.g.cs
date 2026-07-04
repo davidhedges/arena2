@@ -12,12 +12,12 @@ namespace SpacetimeDB.Types
 {
     public sealed partial class RemoteReducers : RemoteBase
     {
-        public delegate void MeleeAttackHandler(ReducerEventContext ctx, string strikeId, string targetId, float castPosX, float castPosY, float castPosZ, float castYaw, string predictedActionId, ulong clientActionSeq);
+        public delegate void MeleeAttackHandler(ReducerEventContext ctx, string strikeId, string targetId, float castPosX, float castPosY, float castPosZ, float castYaw, string predictedActionId, ulong clientActionSeq, ulong viewServerTimeMs);
         public event MeleeAttackHandler? OnMeleeAttack;
 
-        public void MeleeAttack(string strikeId, string targetId, float castPosX, float castPosY, float castPosZ, float castYaw, string predictedActionId, ulong clientActionSeq)
+        public void MeleeAttack(string strikeId, string targetId, float castPosX, float castPosY, float castPosZ, float castYaw, string predictedActionId, ulong clientActionSeq, ulong viewServerTimeMs)
         {
-            conn.InternalCallReducer(new Reducer.MeleeAttack(strikeId, targetId, castPosX, castPosY, castPosZ, castYaw, predictedActionId, clientActionSeq));
+            conn.InternalCallReducer(new Reducer.MeleeAttack(strikeId, targetId, castPosX, castPosY, castPosZ, castYaw, predictedActionId, clientActionSeq, viewServerTimeMs));
         }
 
         public bool InvokeMeleeAttack(ReducerEventContext ctx, Reducer.MeleeAttack args)
@@ -43,7 +43,8 @@ namespace SpacetimeDB.Types
                 args.CastPosZ,
                 args.CastYaw,
                 args.PredictedActionId,
-                args.ClientActionSeq
+                args.ClientActionSeq,
+                args.ViewServerTimeMs
             );
             return true;
         }
@@ -71,6 +72,8 @@ namespace SpacetimeDB.Types
             public string PredictedActionId;
             [DataMember(Name = "client_action_seq")]
             public ulong ClientActionSeq;
+            [DataMember(Name = "view_server_time_ms")]
+            public ulong ViewServerTimeMs;
 
             public MeleeAttack(
                 string StrikeId,
@@ -80,7 +83,8 @@ namespace SpacetimeDB.Types
                 float CastPosZ,
                 float CastYaw,
                 string PredictedActionId,
-                ulong ClientActionSeq
+                ulong ClientActionSeq,
+                ulong ViewServerTimeMs
             )
             {
                 this.StrikeId = StrikeId;
@@ -91,6 +95,7 @@ namespace SpacetimeDB.Types
                 this.CastYaw = CastYaw;
                 this.PredictedActionId = PredictedActionId;
                 this.ClientActionSeq = ClientActionSeq;
+                this.ViewServerTimeMs = ViewServerTimeMs;
             }
 
             public MeleeAttack()

@@ -40,6 +40,7 @@ use crate::world_collision::{
 };
 
 pub(crate) mod player_snapshot;
+pub(crate) mod position_history;
 #[cfg(feature = "projectile_load_harness")]
 mod projectile_load_harness;
 mod projectiles;

@@ -96,6 +96,45 @@ an evidence-script bug: it had filtered `event_type` on the Rust constant
 names instead of the `COMBAT_*` wire values and reported empty during live
 combat.)
 
+**Delivered (2026-07-04, S8 — target contract items 2 + 3; owner acceptance
+recorded same day, slice closed, default ON).** Design doc first per the
+slice contract:
+`docs/lag-compensation-design-2026-07-04.md`, rulings D1–D5 owner-signed
+same day (all-targeted press scope; impact re-check rewinds by the frozen
+press view delay; 250 ms cap; grace widening only — deferred resolution
+declined and recorded as accepted exposure; v1 exclusions confirmed).
+Principle as shipped: *the rewind decides whether an attack connects; the
+present decides everything about how it resolves* — health, status, defense
+state, damage, and event positions never rewind. Server: a 16-slot private
+`combat_position_history` ring per entity (written from the
+`commit_player_physics` choke point and the `NpcPhysics` commit sites;
+unchanged poses skip, so idle entities cost nothing), rewind barriers
+stamped by non-Normal physics commits (dash/teleport/respawn — rewinds
+clamp to them, and an *active* special movement forces present-time), and a
+runtime kill switch (`combat_lag_comp_config` + `set_lag_comp_config`,
+default OFF, history and audit always on). The press's claimed
+`view_server_time_ms` (new arg on `melee_attack`/`cast_request`, 0 = no
+report) is clamped to ≤ 250 ms and stamped in a per-caster row keyed by the
+press transaction's timestamp — so exactly the checks in the press
+transaction rewind, and completions, sustains, queued combo releases, and
+server-initiated auto swings stay present-time by construction. The whole
+melee positional gate (facing, range, minimum range, LOS endpoints) was
+extracted to one pose-parameterized evaluation; with a report present it
+runs twice (present + rewound) and logs a `[LAG_COMP]` dual-verdict line —
+the flip rate is the audit's money metric and works with the switch OFF.
+Spell/charge press sites overlay the rewound pose on their resolved target
+(`overlay_press_rewound_target_pose`, hostile-only). The melee impact
+re-check rewinds by the press-frozen delay stored on the pending impact row
+(D2); sweeps and projectiles stay present-time (D5). Client: presses report
+`ServerNowMs − target.PresentationEffectiveDelayMs` (new
+`ICombatTargetEntity` member; the S7 budget on the server-time timeline,
+interp delay otherwise) via `AttackerViewTime`, 0 without a precise clock.
+Defense: `PARRY_SUCCESS_GRACE_MS`/`BLOCK_SUCCESS_GRACE_MS` 50 → 150 ms
+(§1 item 2, D4). Evidence: `ops/s8-lag-comp-probe.py` (self-verifying,
+two measurement builds) + `ops/analyze-s8-lag-comp.py` ([LAG_COMP] audit
+summary); server half verified live 2026-07-04 on a throwaway DB — see the
+slice table row for numbers.
+
 ## 2. Line of sight is a policy accident [DEFECT]
 
 **What exists.** A competent multi-probe 2D LOS query exists
@@ -751,7 +790,7 @@ precede fairness work.
 | S5 | ✅ Delivered 2026-07-04 — closed-loop input buffering: per-tick consume truth on the ack surface (`last_tick_consumed_command`/`buffered_command_count`), client lead control loop (setpoint 1–2, asymmetric raise/lower, no endpoint-kind switch), degradation ladder (throttle before resync, forward re-anchors), one-tick jump slide, precise-clock tick estimate + F4 warmup gating, correction-decay presentation budget. Same-day follow-up from acceptance run 1: server tick cadence was fixed-delay-scheduled at a real 36.6 ms — replaced by a fixed-rate Time chain (33.0 ms measured) with watchdog, and client authoring is target-chasing (paces to measured cadence; inject/skip rate caps deleted). See §4; server half verified live via `ops/s5-input-loop-probe.py` + cadence measurements; owner acceptance recorded 2026-07-04 (baseline + shaped +40/+40 legs, all criteria met — slice closed) | client + server | playable at any RTT; shaped-local testing representative |
 | S6 | ✅ Delivered 2026-07-04 — local swing scheduling off the (newly replicated, owner-only) `auto_attack_state` row via `AutoAttackSwingScheduler`: precise-clock-gated fire at `next_swing_at`, full server-hold mirror (never swings a lie), authoritative CAST consumed as duplicate, contact-cue parity with an auto counter split. Server-half verified live (`ops/s6-auto-swing-probe.py`: replication, CAST 19–32 ms after `next_swing_at`, hold ⇒ pending_due + zero CASTs); §6 records the corrected premise (the row was private until S6 — visibility-only server diff). Owner acceptance recorded 2026-07-04 (baseline + shaped +40/+40 legs via `ops/analyze-s6-auto-swing.py`, all verdicts PASS: 33/33 CASTs suppressed, fire within one tick of the CAST, cue falsePos 0, zero double-swings, holds fire nothing — slice closed) | client (+ table visibility) | auto-attack feel at RTT |
 | S7 | ✅ Delivered 2026-07-04 — adaptive server-time delay budget (owner ruling after rerun 2's fixed-100 FAIL: rescope to adapt from measured server-time lateness, gate-first): `ServerTimeDelayBudget` (lateness p95 + 1 tick, clamp [66..200] ms, slow slew, precise-clock gated, connection-shared), S7 overlay/CSV instrumentation, fully automated A/B protocol (scripted leg driver / `ARENA_S7_AB_AUTORUN`, `S7HeadlessAbRunner` batchmode observer, `ops/s7-lap-probe.py` chase target, analyzer gate verdict). Baseline A/B: budget floors at 66 ms — fixed-100's +34 ms baseline tax gone at an equal late ratio. Shaped acceptance recorded 2026-07-04 (+40/+40 + jitter, session 10:28:08Z, all-automated protocol OK): gate PASS — pooled late ratio ON 1.1 % vs OFF 8.0 % (z ≈ 32), err p95 0.432 vs 0.580 m, paid 144 vs 66 ms; `ServerTimeTimelineEnabled` ships default-ON — slice closed (see §7) | client | jitter costs fixed delay, not motion warp |
-| S8 | Bounded lag-compensation ring for attack reach/facing + favor-the-defender grace — design doc first, kill-switched | server | end-state hit fairness |
+| S8 | ✅ Delivered 2026-07-04, owner acceptance recorded same day — slice closed, switch ships **default ON** (shaped +40/+40 OFF/ON legs: no feel regression; analyzer verified the real client's reports end-to-end — 51 gate + 35 impact evaluations, history-sourced poses, zero flips at the owner's play pattern) — bounded attacker-view rewind + favor-the-defender grace, design doc first as contracted (`docs/lag-compensation-design-2026-07-04.md`, rulings D1–D5 owner-signed): 16-slot private position-history ring + rewind barriers at the physics choke points, press-transaction `view_server_time_ms` reports (≤ 250 ms arrival-anchored clamp), one pose-parameterized melee positional gate + spell/charge press overlays, frozen-delay impact re-check (D2), dual-verdict `[LAG_COMP]` audit in both switch states, runtime kill switch, parry/block success grace 50→150 ms (D4). Server half verified live 2026-07-04 (`ops/s8-lag-comp-probe.py`, all-green record runs on fresh throwaway publishes): flip-geometry charge presses (kobold inside the 5.45 m minimum ring now, outside it 250 ms ago) rejected present-time 4/4 with the switch OFF and accepted at identical geometry with it ON — cumulative across the day's honest-probe runs 16/16 OFF rejects vs 6/6 ON accepts, every audit line `present=out_of_range → rewound=accept, source=history` at rewound_ms ≈ 250–280; history ring 16 slots spanning ~494 ms on a chasing kobold; accepted dash stamped the attacker's rewind barrier; defense leg: live cooldown row reads exactly `recovery − active = 9 850 ms` (the 150 ms grace baked in), 21 parries / 240 s under three harmless warriors. Owner leg: shaped +40/+40 melee/charge pressure on a chasing kobold, scored by `ops/analyze-s8-lag-comp.py`; PASS flips the config default ON in the acceptance commit (S7 precedent) | server + data + client | end-state hit fairness |
 
 Owner decisions needed before their slices: aerial gating ruling per
 archetype (§5, gates part of S2's test matrix).

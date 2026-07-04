@@ -12,12 +12,12 @@ namespace SpacetimeDB.Types
 {
     public sealed partial class RemoteReducers : RemoteBase
     {
-        public delegate void CastRequestHandler(ReducerEventContext ctx, string spellId, string targetId, float aimX, float aimY, float aimZ, uint castInputTick, float castPosX, float castPosY, float castPosZ, float castYaw, string predictedCastId, ulong clientActionSeq);
+        public delegate void CastRequestHandler(ReducerEventContext ctx, string spellId, string targetId, float aimX, float aimY, float aimZ, uint castInputTick, float castPosX, float castPosY, float castPosZ, float castYaw, string predictedCastId, ulong clientActionSeq, ulong viewServerTimeMs);
         public event CastRequestHandler? OnCastRequest;
 
-        public void CastRequest(string spellId, string targetId, float aimX, float aimY, float aimZ, uint castInputTick, float castPosX, float castPosY, float castPosZ, float castYaw, string predictedCastId, ulong clientActionSeq)
+        public void CastRequest(string spellId, string targetId, float aimX, float aimY, float aimZ, uint castInputTick, float castPosX, float castPosY, float castPosZ, float castYaw, string predictedCastId, ulong clientActionSeq, ulong viewServerTimeMs)
         {
-            conn.InternalCallReducer(new Reducer.CastRequest(spellId, targetId, aimX, aimY, aimZ, castInputTick, castPosX, castPosY, castPosZ, castYaw, predictedCastId, clientActionSeq));
+            conn.InternalCallReducer(new Reducer.CastRequest(spellId, targetId, aimX, aimY, aimZ, castInputTick, castPosX, castPosY, castPosZ, castYaw, predictedCastId, clientActionSeq, viewServerTimeMs));
         }
 
         public bool InvokeCastRequest(ReducerEventContext ctx, Reducer.CastRequest args)
@@ -47,7 +47,8 @@ namespace SpacetimeDB.Types
                 args.CastPosZ,
                 args.CastYaw,
                 args.PredictedCastId,
-                args.ClientActionSeq
+                args.ClientActionSeq,
+                args.ViewServerTimeMs
             );
             return true;
         }
@@ -83,6 +84,8 @@ namespace SpacetimeDB.Types
             public string PredictedCastId;
             [DataMember(Name = "client_action_seq")]
             public ulong ClientActionSeq;
+            [DataMember(Name = "view_server_time_ms")]
+            public ulong ViewServerTimeMs;
 
             public CastRequest(
                 string SpellId,
@@ -96,7 +99,8 @@ namespace SpacetimeDB.Types
                 float CastPosZ,
                 float CastYaw,
                 string PredictedCastId,
-                ulong ClientActionSeq
+                ulong ClientActionSeq,
+                ulong ViewServerTimeMs
             )
             {
                 this.SpellId = SpellId;
@@ -111,6 +115,7 @@ namespace SpacetimeDB.Types
                 this.CastYaw = CastYaw;
                 this.PredictedCastId = PredictedCastId;
                 this.ClientActionSeq = ClientActionSeq;
+                this.ViewServerTimeMs = ViewServerTimeMs;
             }
 
             public CastRequest()

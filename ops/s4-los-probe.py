@@ -254,9 +254,10 @@ class Probe:
     def press_melee(self, strike_id, target_hex, token):
         x, y, z, yaw, _ = self.physics()
         self.action_seq += 1
+        # Trailing 0 = no S8 attacker-view report (present-time validation).
         self.call(
             "melee_attack",
-            [strike_id, target_hex, x, y, z, yaw, token, self.action_seq],
+            [strike_id, target_hex, x, y, z, yaw, token, self.action_seq, 0],
         )
         time.sleep(0.8)
         return self.prediction_result(token)
