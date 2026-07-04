@@ -562,7 +562,7 @@ namespace Arena.Simulation
                 position,
                 yaw,
                 usedServerTimeline
-                    ? _remotePresentation.ServerTimeDelayMs / 1000f
+                    ? _remotePresentation.LastServerTimeBudgetMs / 1000f
                     : _remotePresentation.InterpolationDelaySeconds,
                 _remotePresentation.LastExtrapolationSeconds,
                 mode == RemotePresentationBuffer.SampleMode.Extrapolation);

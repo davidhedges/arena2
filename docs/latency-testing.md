@@ -81,6 +81,22 @@ alone (the upstream leg is unshaped), so dot-threshold checks must put the
 full threshold into the one direction — e.g. `pipe 2 config delay 180ms`,
 stationary, for the Bad (≥180 ms p50) check.
 
+The F4 A/B run itself is automated end to end (S7): `ops/s7-lap-probe.py`
+joins the live `arena` database as a headless player, spawns a hostile
+kobold, and runs full-speed laps on a collision-data-verified circuit in
+Desert_Day so the kobold chases IT continuously (settled% stays ~0 with no
+hand-kiting); the observing Unity client runs the scripted leg driver in
+`NetcodeDebugOverlay` — period key while the overlay is visible starts a
+60 s OFF warmup followed by ON/OFF/ON/OFF 80 s legs (or set
+`ARENA_S7_AB_AUTORUN=1` to have it self-start once a precise clock sample
+and an NPC have been present ~10 s, which is what the batchmode runner
+`Arena.EditorTools.S7HeadlessAbRunner` uses). Score with
+`ops/analyze-remote-presentation-ab.py` — it prints per-leg late ratio,
+err p95, settled%, paid delay, the S7 adaptive-budget columns, and the S7
+gate verdict. Requires the measurement republish
+(`ARENA_NPC_NO_ATTACK=1 ARENA_NPC_AGGRO_RADIUS=100
+./ops/republish-local-clear.sh`).
+
 ## Profiles
 
 Both directions get the same treatment; `plr` is per direction.

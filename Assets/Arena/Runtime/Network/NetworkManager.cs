@@ -205,6 +205,7 @@ namespace Arena.Network
                 return;
 
             ArenaServerClock.Reset();
+            Arena.Simulation.ServerTimeDelayBudget.Reset();
             IsConnected = true;
             _localIdentity = identity;
             _hasLocalIdentity = true;
@@ -416,6 +417,7 @@ namespace Arena.Network
                 return;
 
             ArenaServerClock.Reset();
+            Arena.Simulation.ServerTimeDelayBudget.Reset();
             Arena.Debugging.NetworkCallbackDelay.ResetForNetworkReconnect();
             ResetConnectionState();
             Debug.Log($"[NetworkManager] Disconnected: {e?.Message ?? "clean"}");

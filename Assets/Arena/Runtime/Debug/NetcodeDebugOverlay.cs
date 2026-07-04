@@ -14,9 +14,10 @@ namespace Arena.Debugging
     /// <summary>
     /// Displays key netcode metrics in an on-screen overlay.
     /// Toggle with backslash. While visible, semicolon A/B-toggles the
-    /// F4 server-time remote timeline (RemotePresentationBuffer) and quote
+    /// F4 server-time remote timeline (RemotePresentationBuffer), quote
     /// toggles the F5 predicted melee contact cue
-    /// (PredictedMeleeContactCueController). (Right/left bracket are taken:
+    /// (PredictedMeleeContactCueController), and period starts/aborts the
+    /// scripted F4 A/B leg run (S7). (Right/left bracket are taken:
     /// NetworkEnvironmentOverlay and LineOfSightDebugGuide.)
     /// </summary>
     public class NetcodeDebugOverlay : MonoBehaviour
@@ -28,6 +29,36 @@ namespace Arena.Debugging
         private const KeyCode ServerTimelineToggleKey = KeyCode.Semicolon;
         private const KeyCode PredictedContactCueToggleKey = KeyCode.Quote;
         private const KeyCode AutoAttackSchedulerToggleKey = KeyCode.LeftBracket;
+        private const KeyCode AbScriptedRunKey = KeyCode.Period;
+
+        // Scripted F4 A/B run (S7): the rerun-2 protocol as one keypress —
+        // 60 s arrival-timeline warmup (discardable leg 0), then
+        // ON/OFF/ON/OFF 80 s legs, flipping ServerTimeTimelineEnabled at
+        // each boundary so the AB CSV legs need no stopwatch. Legs keep
+        // ticking while the overlay is hidden; only the start/abort key
+        // needs it visible. ARENA_S7_AB_AUTORUN=1 starts the run on its own
+        // once a precise clock sample and an NPC exist for ~10 s (headless
+        // acceptance runs).
+        private static readonly (bool TimelineOn, float Seconds)[] AbRunLegs =
+        {
+            (false, 60f), (true, 80f), (false, 80f), (true, 80f), (false, 80f),
+        };
+        private int _abRunLegIndex = -1;
+        private float _abRunLegEndsAt;
+        private bool _abRunCompleted;
+        /// <summary>
+        /// Scripted-run leg the session is currently inside (-1 outside a
+        /// run). Logged as the AB CSV's s7_run_leg column so the analyzer
+        /// identifies legs by marker instead of inferring them from timeline
+        /// flips — pre-run idle time and post-run tails stop looking like
+        /// legs (the 2026-07-04 shaped session lost its warmup discard to a
+        /// 189 s pre-run idle stretch).
+        /// </summary>
+        internal static int CurrentScriptedLegIndex { get; private set; } = -1;
+        private readonly bool _abAutorunArmed =
+            System.Environment.GetEnvironmentVariable("ARENA_S7_AB_AUTORUN") == "1";
+        private bool _abAutorunConsumed;
+        private float _abAutorunEligibleSince = -1f;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
@@ -62,6 +93,88 @@ namespace Arena.Debugging
             if (_visible && UnityEngine.Input.GetKeyDown(AutoAttackSchedulerToggleKey))
                 AutoAttackSwingScheduler.DebugEnabled =
                     !AutoAttackSwingScheduler.DebugEnabled;
+
+            if (_visible && UnityEngine.Input.GetKeyDown(AbScriptedRunKey))
+            {
+                if (_abRunLegIndex >= 0)
+                    AbortAbRun();
+                else
+                    StartAbRun();
+            }
+
+            TickAbRun();
+        }
+
+        private void StartAbRun()
+        {
+            _abRunCompleted = false;
+            _abRunLegIndex = 0;
+            ApplyAbRunLeg();
+        }
+
+        private void AbortAbRun()
+        {
+            _abRunLegIndex = -1;
+            CurrentScriptedLegIndex = -1;
+            RemotePresentationBuffer.ServerTimeTimelineEnabled = true;
+        }
+
+        private void ApplyAbRunLeg()
+        {
+            (bool timelineOn, float seconds) = AbRunLegs[_abRunLegIndex];
+            RemotePresentationBuffer.ServerTimeTimelineEnabled = timelineOn;
+            CurrentScriptedLegIndex = _abRunLegIndex;
+            _abRunLegEndsAt = Time.realtimeSinceStartup + seconds;
+        }
+
+        private void TickAbRun()
+        {
+            if (_abAutorunArmed && !_abAutorunConsumed && _abRunLegIndex < 0)
+            {
+                bool eligible = ArenaServerClock.HasPreciseSample && AnyNpcPresent();
+                if (!eligible)
+                {
+                    _abAutorunEligibleSince = -1f;
+                }
+                else if (_abAutorunEligibleSince < 0f)
+                {
+                    _abAutorunEligibleSince = Time.realtimeSinceStartup;
+                }
+                else if (Time.realtimeSinceStartup - _abAutorunEligibleSince >= 10f)
+                {
+                    _abAutorunConsumed = true;
+                    Debug.Log("[NetcodeDebugOverlay] ARENA_S7_AB_AUTORUN: starting scripted F4 A/B run");
+                    StartAbRun();
+                }
+            }
+
+            if (_abRunLegIndex < 0 || Time.realtimeSinceStartup < _abRunLegEndsAt)
+                return;
+
+            _abRunLegIndex++;
+            if (_abRunLegIndex >= AbRunLegs.Length)
+            {
+                _abRunLegIndex = -1;
+                CurrentScriptedLegIndex = -1;
+                _abRunCompleted = true;
+                RemotePresentationBuffer.ServerTimeTimelineEnabled = true;
+                Debug.Log(
+                    "[NetcodeDebugOverlay] Scripted F4 A/B run COMPLETE — score with ops/analyze-remote-presentation-ab.py");
+                return;
+            }
+
+            ApplyAbRunLeg();
+        }
+
+        private static bool AnyNpcPresent()
+        {
+            var registry = EntityRegistry.Instance;
+            if (registry == null)
+                return false;
+
+            foreach (var _ in registry.AllNpcs)
+                return true;
+            return false;
         }
 
         private void OnGUI()
@@ -374,6 +487,29 @@ namespace Arena.Debugging
                 new Rect(x, y, 640, lineHeight),
                 $"Server-time timeline (; to A/B): {abState} — active on {playersOnServerTimeline}/{remoteCount} players, {npcsOnServerTimeline}/{npcCount} NPCs",
                 _style);
+            y += lineHeight;
+
+            string budgetLine = ServerTimeDelayBudget.AdaptationActive
+                ? $"S7 delay budget: {ServerTimeDelayBudget.LastAppliedBudgetMs:F0} ms  (target {ServerTimeDelayBudget.LastTargetBudgetMs:F0} = lateness p95 {ServerTimeDelayBudget.LastLatenessP95Ms:F0} ms + 1 tick, clamp 66..200; n={ServerTimeDelayBudget.WindowSampleCount})"
+                : $"S7 delay budget: holding {ServerTimeDelayBudget.LastAppliedBudgetMs:F0} ms  (warming — {ServerTimeDelayBudget.WindowSampleCount} lateness samples)";
+            GUI.Label(new Rect(x, y, 900, lineHeight), budgetLine, _style);
+            y += lineHeight;
+
+            string runLine;
+            if (_abRunLegIndex >= 0)
+            {
+                (bool legOn, float _) = AbRunLegs[_abRunLegIndex];
+                float left = Mathf.Max(0f, _abRunLegEndsAt - Time.realtimeSinceStartup);
+                runLine = $"Scripted A/B (. to abort): leg {_abRunLegIndex}/{AbRunLegs.Length - 1} "
+                    + $"{(legOn ? "ON" : "OFF")}{(_abRunLegIndex == 0 ? " (warmup)" : "")} — {left:F0}s left";
+            }
+            else
+            {
+                runLine = _abRunCompleted
+                    ? "Scripted A/B: COMPLETE — score with ops/analyze-remote-presentation-ab.py"
+                    : "Scripted A/B (. to start): 60s OFF warmup, then ON/OFF/ON/OFF 80s legs";
+            }
+            GUI.Label(new Rect(x, y, 900, lineHeight), runLine, _style);
             y += lineHeight;
 
             if (remoteCount > 0)

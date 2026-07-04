@@ -104,9 +104,12 @@ namespace Arena.Debugging
             float npcMaxError = 0f;
             float npcDepthTicksSum = 0f;
             float npcDelayMsSum = 0f;
+            int npcsOnServerTimeline = 0;
             foreach (var npc in registry.AllNpcs)
             {
                 npcCount++;
+                if (npc.PresentationUsedServerTimeline)
+                    npcsOnServerTimeline++;
                 npcHardSnaps += npc.PresentationHardSnapCount;
                 npcInterpSamples += npc.PresentationInterpolationSampleCount;
                 npcExtrapSamples += npc.PresentationExtrapolationSampleCount;
@@ -202,6 +205,24 @@ namespace Arena.Debugging
             row.Append(',').Append(PredictedMeleeContactCueController.AutoMatchedCues);
             row.Append(',').Append(PredictedMeleeContactCueController.AutoFalsePositives);
             row.Append(',').Append(PredictedMeleeContactCueController.AutoSuppressedAuthoritativeCues);
+
+            // S7 adaptive server-time delay budget columns (connection-wide
+            // shared state; n_delay_ms_avg above stays the actually-paid
+            // per-NPC delay, which is the per-leg "average paid budget").
+            row.Append(',').Append(ServerTimeDelayBudget.LastAppliedBudgetMs
+                .ToString("F0", CultureInfo.InvariantCulture));
+            row.Append(',').Append(ServerTimeDelayBudget.LastTargetBudgetMs
+                .ToString("F0", CultureInfo.InvariantCulture));
+            row.Append(',').Append(ServerTimeDelayBudget.LastLatenessP95Ms
+                .ToString("F1", CultureInfo.InvariantCulture));
+            row.Append(',').Append(ServerTimeDelayBudget.WindowSampleCount);
+            // NPCs actually rendering on the server-time timeline this
+            // sample — distinguishes "budget at the 66 ms floor" from
+            // "arrival fallback" (both pay 66, only one is the F4 path).
+            row.Append(',').Append(npcsOnServerTimeline);
+            // Scripted-run leg marker (-1 outside a run): the analyzer's
+            // authoritative leg identification.
+            row.Append(',').Append(NetcodeDebugOverlay.CurrentScriptedLegIndex);
             row.Append('\n');
 
             try
@@ -221,7 +242,8 @@ namespace Arena.Debugging
                         + "s5_jump_pred,s5_jump_conf,s5_jump_lost,s5_est_precise,"
                         + "aa_fired,aa_supp_cast,aa_unpred_cast,aa_held,aa_late,aa_expired,aa_mismatch,"
                         + "aa_start_err_last_ms,aa_start_err_max_ms,aa_cast_align_last_ms,aa_cast_align_max_abs_ms,"
-                        + "aa_cue_fired,aa_cue_matched,aa_cue_false_pos,aa_cue_supp_auth\n");
+                        + "aa_cue_fired,aa_cue_matched,aa_cue_false_pos,aa_cue_supp_auth,"
+                        + "s7_budget_ms,s7_target_ms,s7_late_p95_ms,s7_late_n,s7_npcs_on_tl,s7_run_leg\n");
                     _wroteHeader = true;
                 }
 

@@ -18,9 +18,12 @@ namespace Arena.Simulation
     ///
     /// Two timelines (feel audit F4). The server-time timeline keys the ring
     /// on PlayerSnapshot.ServerTimeMs and renders at
-    /// serverNowMs − ServerTimeDelayMs (fixed 100 ms), so delivery jitter
-    /// costs buffered delay instead of warping sampled motion. ServerTimeMs
-    /// is the row's UpdatedAt quantized to the fixed-tick grid
+    /// serverNowMs − budget, so delivery jitter costs buffered delay instead
+    /// of warping sampled motion. The budget is adaptive (design review S7,
+    /// ServerTimeDelayBudget): lateness-p95-sized, clamped [66..200] ms,
+    /// slow-slewed, shared across all buffers on the connection; it holds the
+    /// pre-S7 fixed 100 ms until enough precise-clock lateness samples exist.
+    /// ServerTimeMs is the row's UpdatedAt quantized to the fixed-tick grid
     /// (QuantizeServerTimeMicros): quantization was chosen over a per-entity
     /// tick→UpdatedAt anchor because it needs no held state, stays anchored
     /// to the server epoch clock (comparable to ArenaServerClock.ServerNowMs,
@@ -149,8 +152,14 @@ namespace Arena.Simulation
         public float LastExtrapolationSeconds => _lastExtrapolationSeconds;
         /// <summary>Whether the last Tick sampled the server-time timeline (vs arrival fallback).</summary>
         public bool LastTickUsedServerTimeline { get; private set; }
-        /// <summary>Render delay the last Tick actually applied, in ms (100 server-time / 66 arrival).</summary>
+        /// <summary>Render delay the last Tick actually applied, in ms (adaptive budget server-time / 66 arrival).</summary>
         public float LastEffectiveDelayMs { get; private set; } = DefaultInterpolationDelaySeconds * 1000f;
+        /// <summary>
+        /// Server-time delay budget the last SampleActiveTimeline used, in ms
+        /// (the shared ServerTimeDelayBudget value at that sample, whether or
+        /// not the server-time timeline ended up engaged).
+        /// </summary>
+        public long LastServerTimeBudgetMs { get; private set; } = DefaultServerTimeDelayMs;
         /// <summary>
         /// Buffered headroom ahead of the last Tick's render point, in fixed
         /// ticks (negative = extrapolating), after the settled reporting rule
@@ -163,6 +172,17 @@ namespace Arena.Simulation
 
         public void Push(PlayerSnapshot snapshot)
         {
+            // S7: every arriving row with a server stamp feeds the shared
+            // adaptive delay budget. Precise-clock-gated, which doubles as
+            // purity for synthetic pushes (tests, seeding) — without a
+            // precise sample nothing records and nothing here reads clocks.
+            if (snapshot.ServerTimeMs > 0L && Arena.Network.ArenaServerClock.HasPreciseSample)
+            {
+                ServerTimeDelayBudget.RecordArrivalLatenessMs(
+                    Arena.Network.ArenaServerClock.ServerNowMs - snapshot.ServerTimeMs,
+                    Time.realtimeSinceStartup);
+            }
+
             if (_snapshotCount < SnapshotCapacity)
             {
                 int index = (_snapshotStart + _snapshotCount) % SnapshotCapacity;
@@ -190,7 +210,7 @@ namespace Arena.Simulation
 
         /// <summary>
         /// Advances the render pose one frame toward the target sampled on
-        /// the active timeline: server time at serverNowMs − ServerTimeDelayMs
+        /// the active timeline: server time at serverNowMs − adaptive budget
         /// when usable, otherwise arrival time at now − InterpolationDelaySeconds.
         /// serverNowMs is the caller's ArenaServerClock.ServerNowMs, or null
         /// while it has no estimate. The fallback pose is used while the ring
@@ -233,14 +253,14 @@ namespace Arena.Simulation
 
             LastTickUsedServerTimeline = usedServerTimeline;
             LastEffectiveDelayMs = usedServerTimeline
-                ? ServerTimeDelayMs
+                ? LastServerTimeBudgetMs
                 : InterpolationDelaySeconds * 1000f;
             float bufferAheadTicks = 0f;
             if (_snapshotCount > 0)
             {
                 PlayerSnapshot newest = GetSnapshot(_snapshotCount - 1);
                 bufferAheadTicks = usedServerTimeline
-                    ? (newest.ServerTimeMs - (serverNowMs!.Value - ServerTimeDelayMs))
+                    ? (newest.ServerTimeMs - (serverNowMs!.Value - LastServerTimeBudgetMs))
                       / (float)MovementNetcodeConfig.FixedTickMilliseconds
                     : (newest.ReceivedTime - (now - InterpolationDelaySeconds))
                       / MovementNetcodeConfig.FixedTickSeconds;
@@ -332,7 +352,7 @@ namespace Arena.Simulation
         /// Samples the server-time timeline: same interpolation-first policy
         /// as Sample, keyed on PlayerSnapshot.ServerTimeMs instead of
         /// arrival time. renderServerTimeMs is typically
-        /// serverNowMs − ServerTimeDelayMs.
+        /// serverNowMs − the adaptive delay budget.
         /// </summary>
         public void SampleServerTime(
             long renderServerTimeMs,
@@ -408,13 +428,21 @@ namespace Arena.Simulation
             out SampleMode mode,
             out bool usedServerTimeline)
         {
+            // S7: one shared adaptive budget per connection. Sampled here
+            // (not per frame elsewhere) so the slew advances exactly once per
+            // distinct `now` — repeated same-frame calls are free — and an
+            // A/B OFF leg that never engages the timeline still lands the
+            // budget on its target by the time ON resumes.
+            long budgetMs = (long)Mathf.Round(ServerTimeDelayBudget.BudgetMs(now));
+            LastServerTimeBudgetMs = budgetMs;
+
             usedServerTimeline = ServerTimeTimelineEnabled
                 && serverNowMs.HasValue
                 && AllSnapshotsCarryServerTime()
-                && ServerTimelineDepthSane(serverNowMs.Value);
+                && ServerTimelineDepthSane(serverNowMs.Value, budgetMs);
             if (usedServerTimeline)
             {
-                SampleServerTime(serverNowMs!.Value - ServerTimeDelayMs,
+                SampleServerTime(serverNowMs!.Value - budgetMs,
                     fallbackPosition, fallbackYawRadians, out position, out yaw, out mode);
                 return;
             }
@@ -491,17 +519,17 @@ namespace Arena.Simulation
         // S5 / F4 warmup gating): while the clock estimate is converging, the
         // implied buffer depth can be wildly wrong (observed live: a session
         // that started at −1739 ticks in an extrapolation storm). A healthy
-        // render point trails the newest snapshot by roughly ServerTimeDelayMs;
-        // outside ±1 s of that the clock, not delivery, is the problem — use
-        // the arrival timeline this frame instead.
+        // render point trails the newest snapshot by roughly the delay
+        // budget; outside ±1 s of that the clock, not delivery, is the
+        // problem — use the arrival timeline this frame instead.
         private const long ServerTimelineDepthSanityWindowMs = 1000L;
 
-        private bool ServerTimelineDepthSane(long serverNowMs)
+        private bool ServerTimelineDepthSane(long serverNowMs, long budgetMs)
         {
             if (_snapshotCount <= 0)
                 return false;
 
-            long renderPointMs = serverNowMs - ServerTimeDelayMs;
+            long renderPointMs = serverNowMs - budgetMs;
             long newestLagMs = GetSnapshot(_snapshotCount - 1).ServerTimeMs - renderPointMs;
             return newestLagMs > -ServerTimelineDepthSanityWindowMs
                 && newestLagMs < ServerTimelineDepthSanityWindowMs;

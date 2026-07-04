@@ -77,3 +77,6 @@ crash.*.log
 
 # Local recovery backups
 Backups/
+
+# Python
+__pycache__/
