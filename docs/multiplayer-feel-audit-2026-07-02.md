@@ -123,11 +123,13 @@ referenced but not repeated.
   with the consumed authoritative CAST supplying the action-instance mapping
   (autos have no `PredictedActionResult` row) and an auto-tagged counter
   split (overlay "auto share" line; `aa_cue_*` CSV columns) so autos and
-  ability melee read separately. The falsePos redo is now the S6 owner
-  acceptance run: armed autos on a playground dummy at 0 ms and +40/+40,
-  verdicts printed by `ops/analyze-s6-auto-swing.py` (expect auto falsePos
-  ≈ 0 with clear range+LOS, and the fired/matched pair moving with every
-  swing).
+  ability melee read separately. **Redo complete — F5 falsePos closed
+  (2026-07-04, S6 acceptance runs):** armed autos on a playground dummy,
+  baseline 0 ms and shaped +40/+40 legs, verdicts by
+  `ops/analyze-s6-auto-swing.py` — auto cues fired 33 / matched 33 /
+  falsePos 0 / suppressedAuth 33 across both legs, with the fired/matched
+  pair moving on every swing. The cue system now measurably predicts auto
+  contact with zero lies at both RTTs.
 - **Latency-harness findings (2026-07-03, first live conditioner runs).**
   (a) ~~The movement input lead is keyed to endpoint kind, not RTT~~ —
   **closed by S5 (2026-07-04, closed-loop input buffering)**: the
