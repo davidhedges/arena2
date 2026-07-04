@@ -59,20 +59,27 @@ pub struct CombatRewindBarrier {
 
 /// Runtime kill switch + tunable (S7 lesson: A/B legs must flip without a
 /// republish). History writing and audit logging stay on regardless — the
-/// switch gates only whether rewound verdicts are *used*.
+/// switch gates only whether rewound verdicts are *used*. `auto_swing_enabled`
+/// (S9) additionally gates the auto-attack tick rewind under the master
+/// switch, so the S8 kill switch stays one command and the A/B can flip S9
+/// alone.
 #[table(accessor = combat_lag_comp_config)]
 pub struct CombatLagCompConfig {
     #[primary_key]
     pub config_id: u8,
     pub enabled: bool,
     pub max_rewind_ms: u64,
+    pub auto_swing_enabled: bool,
 }
 
 /// The press's clamped view delay, stamped with the press transaction's
 /// timestamp. Validation sites apply the rewind only when the stamp matches
-/// `ctx.timestamp`, so scheduled completions, queued combo releases, channel
-/// sustains, and server-initiated auto swings (different transaction) stay
-/// present-time without threading a parameter through every signature.
+/// `ctx.timestamp`, so scheduled completions, queued combo releases, and
+/// channel sustains stay present-time without threading a parameter through
+/// every signature. S9: the auto-attack tick stamps this row itself (from the
+/// standing signal, `signal = "standing"`), which makes a server-initiated
+/// due swing indistinguishable from a pressed one to every downstream
+/// consumer — one stamp, one pose, one timeline.
 #[table(accessor = combat_press_view_delay)]
 pub struct CombatPressViewDelay {
     #[primary_key]
@@ -81,18 +88,44 @@ pub struct CombatPressViewDelay {
     pub view_delay_micros: i64,
     pub reported_view_ms: u64,
     pub clamped_to_max: bool,
+    pub signal: String,
 }
+
+/// S9 standing view-delay signal: refreshed by `ping_clock` (~2 s cadence)
+/// while the client has an auto-attack target armed, using that target's
+/// presentation-buffer delay (E1). Substrate for server-initiated swings,
+/// which have no press to carry a view time. Private: one small row per
+/// reporting player, no replication fan-out.
+#[table(accessor = combat_standing_view_delay)]
+pub struct CombatStandingViewDelay {
+    #[primary_key]
+    pub identity: Identity,
+    pub updated_at_micros: i64,
+    pub view_delay_micros: i64,
+    pub reported_view_ms: u64,
+    pub clamped_to_max: bool,
+}
+
+/// E2: a standing report older than three missed pings is ignored — the
+/// client stopped reporting, degraded, or disconnected. Stale → present-time,
+/// never a reject.
+const STANDING_VIEW_DELAY_TTL_MICROS: i64 = 6_000_000;
+
+pub(crate) const VIEW_DELAY_SIGNAL_PRESS: &str = "press";
+pub(crate) const VIEW_DELAY_SIGNAL_STANDING: &str = "standing";
 
 #[reducer]
 pub fn set_lag_comp_config(
     ctx: &ReducerContext,
     enabled: bool,
     max_rewind_ms: u64,
+    auto_swing_enabled: bool,
 ) -> Result<(), String> {
     let row = CombatLagCompConfig {
         config_id: 0,
         enabled,
         max_rewind_ms: max_rewind_ms.min(1_000),
+        auto_swing_enabled,
     };
     if ctx.db.combat_lag_comp_config().config_id().find(0).is_some() {
         ctx.db.combat_lag_comp_config().config_id().update(row);
@@ -100,9 +133,10 @@ pub fn set_lag_comp_config(
         ctx.db.combat_lag_comp_config().insert(row);
     }
     log::info!(
-        "[LAG_COMP] config enabled={} max_rewind_ms={}",
+        "[LAG_COMP] config enabled={} max_rewind_ms={} auto_swing_enabled={}",
         enabled,
-        max_rewind_ms.min(1_000)
+        max_rewind_ms.min(1_000),
+        auto_swing_enabled
     );
     Ok(())
 }
@@ -112,9 +146,23 @@ pub(crate) fn lag_comp_config(ctx: &ReducerContext) -> (bool, u64) {
         Some(row) => (row.enabled, row.max_rewind_ms),
         // Default ON since the 2026-07-04 acceptance (S7-precedent gate:
         // owner shaped leg PASS — no feel regression, wiring verified live).
-        // set_lag_comp_config(false, 250) is the kill switch.
+        // set_lag_comp_config(false, 250, false) is the kill switch.
         None => (true, DEFAULT_MAX_REWIND_MS),
     }
+}
+
+/// S9 gate (E4): the auto-attack tick rewind activates only when this AND the
+/// master `enabled` flag are on. Default ON since the 2026-07-05 acceptance
+/// (owner shaped A/B PASS — S9 controlled 78.5% of edge-swing reach verdicts
+/// with no feel regression). `set_lag_comp_config(true, 250, false)` disables
+/// S9 alone; `set_lag_comp_config(false, 250, false)` is the S8 master kill.
+pub(crate) fn lag_comp_auto_swing_enabled(ctx: &ReducerContext) -> bool {
+    ctx.db
+        .combat_lag_comp_config()
+        .config_id()
+        .find(0)
+        .map(|row| row.auto_swing_enabled)
+        .unwrap_or(true)
 }
 
 /// Record an authoritative pose sample. Skips unchanged poses, so idle
@@ -205,6 +253,7 @@ pub(crate) fn clear_position_history(ctx: &ReducerContext, identity: Identity) {
     ctx.db.combat_position_history().identity().delete(identity);
     ctx.db.combat_rewind_barrier().identity().delete(identity);
     ctx.db.combat_press_view_delay().identity().delete(identity);
+    ctx.db.combat_standing_view_delay().identity().delete(identity);
 }
 
 /// Record the press's view-time report for this transaction. Called at the
@@ -233,12 +282,103 @@ pub(crate) fn record_press_view_delay(
         view_delay_micros: delay_ms * 1_000,
         reported_view_ms: view_server_time_ms,
         clamped_to_max,
+        signal: VIEW_DELAY_SIGNAL_PRESS.to_string(),
     };
     if ctx.db.combat_press_view_delay().identity().find(caster).is_some() {
         ctx.db.combat_press_view_delay().identity().update(row);
     } else {
         ctx.db.combat_press_view_delay().insert(row);
     }
+}
+
+/// Record the standing view-delay report carried on `ping_clock` (S9 §2.1).
+/// 0 means "no report" and deletes any standing row — byte-for-byte the
+/// pre-S9 behavior for non-reporting callers. Nonzero claims are sanity- and
+/// max-rewind-clamped exactly like press claims.
+pub(crate) fn record_standing_view_delay(
+    ctx: &ReducerContext,
+    identity: Identity,
+    view_server_time_ms: u64,
+) {
+    if view_server_time_ms == 0 {
+        ctx.db.combat_standing_view_delay().identity().delete(identity);
+        return;
+    }
+
+    let now_micros = timestamp_to_micros(ctx.timestamp);
+    let now_ms = now_micros / 1_000;
+    let (_, max_rewind_ms) = lag_comp_config(ctx);
+    let raw_delay_ms = now_ms - view_server_time_ms.min(i64::MAX as u64) as i64;
+    let clamped_to_max = raw_delay_ms > max_rewind_ms as i64;
+    let delay_ms = raw_delay_ms.clamp(0, max_rewind_ms as i64);
+
+    let row = CombatStandingViewDelay {
+        identity,
+        updated_at_micros: now_micros,
+        view_delay_micros: delay_ms * 1_000,
+        reported_view_ms: view_server_time_ms,
+        clamped_to_max,
+    };
+    if ctx.db.combat_standing_view_delay().identity().find(identity).is_some() {
+        ctx.db.combat_standing_view_delay().identity().update(row);
+    } else {
+        ctx.db.combat_standing_view_delay().insert(row);
+    }
+}
+
+/// The owner's standing view-delay row, if fresh (E2). Stale or absent →
+/// `None`, and the caller degrades to present-time — never a reject.
+pub(crate) fn fresh_standing_view_delay(
+    ctx: &ReducerContext,
+    identity: Identity,
+) -> Option<CombatStandingViewDelay> {
+    let row = ctx.db.combat_standing_view_delay().identity().find(identity)?;
+    let now_micros = timestamp_to_micros(ctx.timestamp);
+    if now_micros - row.updated_at_micros > STANDING_VIEW_DELAY_TTL_MICROS {
+        return None;
+    }
+    if row.view_delay_micros <= 0 {
+        return None;
+    }
+    Some(row)
+}
+
+/// S9 §2.2 step 1: stamp the press context from the standing signal, in the
+/// tick's transaction. Downstream (chain gate, impact freeze, D2 re-check)
+/// cannot distinguish this from a pressed claim — the one-timeline rule (E3)
+/// holds by construction.
+pub(crate) fn stamp_standing_press_context(
+    ctx: &ReducerContext,
+    identity: Identity,
+    standing: &CombatStandingViewDelay,
+) {
+    let row = CombatPressViewDelay {
+        identity,
+        stamped_at_micros: timestamp_to_micros(ctx.timestamp),
+        view_delay_micros: standing.view_delay_micros,
+        reported_view_ms: standing.reported_view_ms,
+        clamped_to_max: standing.clamped_to_max,
+        signal: VIEW_DELAY_SIGNAL_STANDING.to_string(),
+    };
+    if ctx.db.combat_press_view_delay().identity().find(identity).is_some() {
+        ctx.db.combat_press_view_delay().identity().update(row);
+    } else {
+        ctx.db.combat_press_view_delay().insert(row);
+    }
+}
+
+/// Audit label for [LAG_COMP] lines: the signal kind of the caster's last
+/// stamped view-delay context ("press" when none exists). Exact inside the
+/// stamping transaction; at the impact re-check it is the last stamp, which
+/// can only mislabel if a different-signal claim landed between dispatch and
+/// impact — acceptable for an audit-only field.
+pub(crate) fn view_delay_signal_label(ctx: &ReducerContext, caster: Identity) -> String {
+    ctx.db
+        .combat_press_view_delay()
+        .identity()
+        .find(caster)
+        .map(|row| row.signal)
+        .unwrap_or_else(|| VIEW_DELAY_SIGNAL_PRESS.to_string())
 }
 
 /// The view delay this press claimed, if the claim was made in the current

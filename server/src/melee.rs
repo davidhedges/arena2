@@ -23,6 +23,7 @@ use crate::auto_attack::arm_auto_attack_if_unarmed_with_cadence;
 use crate::combat::player_snapshot::{player_snapshot_for, PlayerSnapshot, PlayerSnapshotSet};
 use crate::combat::position_history::{
     lag_comp_config, press_view_delay_micros, record_press_view_delay, rewound_pose_for,
+    view_delay_signal_label,
 };
 use crate::combat::scene_query::{
     has_line_of_sight, is_direction_within_facing_arc, target_within_area_range_xz,
@@ -1145,6 +1146,27 @@ pub(crate) fn sync_melee_definitions(ctx: &ReducerContext) {
     }
 }
 
+/// Local measurement aid: `ARENA_MELEE_RANGE_BONUS=<meters>` at build time
+/// adds a flat reach bonus to every resolved melee/auto-attack range at the
+/// single resolution choke points, so the reach gate, the swing dispatch, and
+/// the impact re-check all agree. Baked at compile time like
+/// `ARENA_NPC_HARMLESS` — absent from normal builds (default 0.0).
+pub(crate) fn melee_range_bonus() -> f32 {
+    static BONUS: std::sync::OnceLock<f32> = std::sync::OnceLock::new();
+    *BONUS.get_or_init(|| {
+        let bonus = option_env!("ARENA_MELEE_RANGE_BONUS")
+            .and_then(|raw| raw.trim().parse::<f32>().ok())
+            .filter(|v| v.is_finite() && *v > 0.0)
+            .unwrap_or(0.0);
+        if bonus > 0.0 {
+            log::warn!(
+                "[INIT] ARENA_MELEE_RANGE_BONUS baked in: +{bonus:.2} m melee/auto reach (local measurement build — do not deploy)"
+            );
+        }
+        bonus
+    })
+}
+
 pub(crate) fn get_melee_definition_for_authored(
     ctx: &ReducerContext,
     combat_profile: &str,
@@ -1235,7 +1257,7 @@ fn melee_gameplay_from_catalog_rows(
         base_damage: melee.base_damage,
         damage_type: DamageType::from_wire(melee.damage_type.as_str()),
         target_health_damage_scaling: TargetHealthDamageScaling::from_catalog(&melee),
-        range: melee.range,
+        range: melee.range + melee_range_bonus(),
         minimum_range: melee.minimum_range.max(0.0),
         cooldown_ms: melee.cooldown_ms,
         uses_global_cooldown: melee.uses_global_cooldown,
@@ -1414,7 +1436,7 @@ fn auto_attack_melee_gameplay_from_catalog(
         base_damage: row.base_damage,
         damage_type: DamageType::from_wire(row.damage_type.as_str()),
         target_health_damage_scaling: TargetHealthDamageScaling::none(),
-        range: row.range,
+        range: row.range + melee_range_bonus(),
         minimum_range: 0.0,
         cooldown_ms: row.cooldown_ms,
         uses_global_cooldown: row.uses_global_cooldown,
@@ -1440,7 +1462,7 @@ fn auto_attack_replacement_melee_gameplay_from_catalog(
         base_damage: row.base_damage,
         damage_type: DamageType::from_wire(row.damage_type.as_str()),
         target_health_damage_scaling: TargetHealthDamageScaling::none(),
-        range: row.range,
+        range: row.range + melee_range_bonus(),
         minimum_range: 0.0,
         cooldown_ms: row.cooldown_ms,
         uses_global_cooldown: row.uses_global_cooldown,
@@ -3011,7 +3033,7 @@ fn perform_melee_attack_for_internal(
                 },
             );
             log::info!(
-                "[LAG_COMP] melee_gate caster={} target={} strike={} rewound_ms={} source={} enabled={} present={} rewound={} flip={}",
+                "[LAG_COMP] melee_gate caster={} target={} strike={} rewound_ms={} source={} enabled={} present={} rewound={} flip={} signal={}",
                 short_identity(caster),
                 short_identity(target),
                 strike.id,
@@ -3020,7 +3042,8 @@ fn perform_melee_attack_for_internal(
                 lag_comp_on,
                 reject_reason_audit_label(present_reject),
                 reject_reason_audit_label(rewound_reject),
-                present_reject != rewound_reject
+                present_reject != rewound_reject,
+                view_delay_signal_label(ctx, caster)
             );
             if use_rewound {
                 rewound_reject
@@ -4285,7 +4308,7 @@ fn resolve_pending_melee_target_impact(
                 row.range,
             );
             log::info!(
-                "[LAG_COMP] impact_recheck caster={} target={} strike={} rewound_ms={} source={} enabled={} present={} rewound={} flip={}",
+                "[LAG_COMP] impact_recheck caster={} target={} strike={} rewound_ms={} source={} enabled={} present={} rewound={} flip={} signal={}",
                 short_identity(row.source),
                 short_identity(row.target),
                 row.kind,
@@ -4294,7 +4317,8 @@ fn resolve_pending_melee_target_impact(
                 lag_comp_on,
                 if present_in_reach { "in_reach" } else { "whiff" },
                 if rewound_in_reach { "in_reach" } else { "whiff" },
-                rewound_in_reach != present_in_reach
+                rewound_in_reach != present_in_reach,
+                view_delay_signal_label(ctx, row.source)
             );
             if lag_comp_on {
                 in_reach = rewound_in_reach;

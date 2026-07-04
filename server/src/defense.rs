@@ -77,6 +77,34 @@ pub(crate) enum CombatHitDeliveryKind {
     MovementDelivery,
 }
 
+impl CombatHitDeliveryKind {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::Melee => "melee",
+            Self::Projectile => "projectile",
+            Self::Spell => "spell",
+            Self::MovementDelivery => "movement",
+        }
+    }
+}
+
+/// S9 telemetry rider ([DEFENSE_LATE], logging only, active in all builds):
+/// the last time a payload-valid, parryable-or-blockable hit resolved
+/// undefended for this defender. `start_parry`/`start_block` measure their
+/// own lateness against it — the D4b re-evaluation dataset. Player defenders
+/// only (NPCs never press a defense); private, one row per player.
+#[table(accessor = combat_last_undefended_hit)]
+pub struct CombatLastUndefendedHit {
+    #[primary_key]
+    pub identity: Identity,
+    pub resolved_at_micros: i64,
+    pub delivery_kind: String,
+}
+
+/// E5: the 250 ms rewind cap plus reaction jitter — wide enough to see the
+/// distribution's tail, not so wide it counts unrelated presses.
+const DEFENSE_LATE_WINDOW_MS: i64 = 400;
+
 pub(crate) struct DefensibleCombatHit<'a> {
     pub delivery_kind: CombatHitDeliveryKind,
     pub defender: Identity,
@@ -258,6 +286,7 @@ pub fn start_parry(
         }
     }
 
+    log_defense_late_press(ctx, owner, DefenseKind::Parry, now);
     let active_from = now;
     let active_until = now + Duration::from_millis(PARRY_ARMED_WINDOW_MS);
     let action_id = build_defense_action_id(owner, DefenseKind::Parry, now);
@@ -402,6 +431,7 @@ pub fn start_block(
         }
     }
 
+    log_defense_late_press(ctx, owner, DefenseKind::Block, now);
     let active_from = now;
     let active_until = now + Duration::from_millis(BLOCK_HOLD_WINDOW_MS);
     let action_id = build_defense_action_id(owner, DefenseKind::Block, now);
@@ -491,6 +521,22 @@ pub(crate) fn resolve_defensible_combat_hit(
         return DefenseResolution::None;
     }
 
+    let resolution = resolve_valid_defensible_combat_hit(ctx, &hit);
+    // S9 rider: a payload-valid, parryable-or-blockable hit that resolves
+    // undefended stamps the defender's row — including the late-press case
+    // where no defense_state row existed yet.
+    if resolution == DefenseResolution::None
+        && (hit.parry_behavior == "PARRYABLE" || hit.block_behavior == "BLOCKABLE")
+    {
+        record_undefended_hit(ctx, &hit);
+    }
+    resolution
+}
+
+fn resolve_valid_defensible_combat_hit(
+    ctx: &ReducerContext,
+    hit: &DefensibleCombatHit<'_>,
+) -> DefenseResolution {
     let Some(state) = ctx.db.defense_state().owner().find(hit.defender) else {
         return DefenseResolution::None;
     };
@@ -511,7 +557,7 @@ pub(crate) fn resolve_defensible_combat_hit(
         return DefenseResolution::None;
     };
     let (to_attack_x, to_attack_z) =
-        defense_arc_vector(&hit, defender_phys.pos_x, defender_phys.pos_z);
+        defense_arc_vector(hit, defender_phys.pos_x, defender_phys.pos_z);
 
     if !is_attack_within_defense_arc(state.facing_yaw, to_attack_x, to_attack_z) {
         return DefenseResolution::None;
@@ -528,6 +574,60 @@ pub(crate) fn resolve_defensible_combat_hit(
         }
         _ => DefenseResolution::None,
     }
+}
+
+fn record_undefended_hit(ctx: &ReducerContext, hit: &DefensibleCombatHit<'_>) {
+    // Bounded on purpose: only entities that can press a defense get a row,
+    // so NPC-heavy scenes don't grow the commitlog one upsert per hit.
+    if ctx.db.player_state().player_id().find(hit.defender).is_none() {
+        return;
+    }
+
+    let row = CombatLastUndefendedHit {
+        identity: hit.defender,
+        resolved_at_micros: timestamp_to_micros(ctx.timestamp),
+        delivery_kind: hit.delivery_kind.as_str().to_string(),
+    };
+    if ctx
+        .db
+        .combat_last_undefended_hit()
+        .identity()
+        .find(hit.defender)
+        .is_some()
+    {
+        ctx.db.combat_last_undefended_hit().identity().update(row);
+    } else {
+        ctx.db.combat_last_undefended_hit().insert(row);
+    }
+}
+
+/// [DEFENSE_LATE] press check (S9 rider): an accepted parry/block press that
+/// lands within the window after an undefended defensible hit is exactly the
+/// loss D4b (deferred defense resolution) was parked on. Logging only.
+fn log_defense_late_press(ctx: &ReducerContext, owner: Identity, kind: DefenseKind, now: Timestamp) {
+    let Some(row) = ctx.db.combat_last_undefended_hit().identity().find(owner) else {
+        return;
+    };
+    let late_by_ms = (timestamp_to_micros(now) - row.resolved_at_micros) / 1_000;
+    if !(0..=DEFENSE_LATE_WINDOW_MS).contains(&late_by_ms) {
+        return;
+    }
+    log::info!(
+        "[DEFENSE_LATE] defender={} kind={} late_by_ms={} delivery={}",
+        &owner.to_hex()[..8],
+        match kind {
+            DefenseKind::Parry => "parry",
+            DefenseKind::Block => "block",
+            _ => "other",
+        },
+        late_by_ms,
+        row.delivery_kind
+    );
+}
+
+/// Drop the rider row with the entity's other combat rows.
+pub(crate) fn clear_defense_telemetry(ctx: &ReducerContext, identity: Identity) {
+    ctx.db.combat_last_undefended_hit().identity().delete(identity);
 }
 
 fn defensible_hit_payload_is_valid(hit: &DefensibleCombatHit<'_>) -> bool {

@@ -341,10 +341,33 @@ pub(crate) fn npc_template(template_id: &str) -> Option<NpcTemplate> {
     if npc_attacks_are_harmless() {
         template.attack_damage = 0;
     }
+    if npc_is_tanky() {
+        template.max_hp = 1_000_000;
+    }
     if let Some(radius) = npc_aggro_radius_override() {
         template.aggro_radius = radius;
     }
     Some(template)
+}
+
+/// Local measurement aid: `ARENA_NPC_TANKY=1` at build time gives every NPC a
+/// huge health pool so a solo tester's auto-attacks can't kill the fixture
+/// mid-test (S9 owner leg: a moving target must survive the whole leg). Baked
+/// at compile time like `ARENA_NPC_HARMLESS` — absent from normal builds.
+fn npc_is_tanky() -> bool {
+    static ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ENABLED.get_or_init(|| {
+        let enabled = matches!(
+            option_env!("ARENA_NPC_TANKY").map(str::trim),
+            Some("1") | Some("true") | Some("on") | Some("yes")
+        );
+        if enabled {
+            log::warn!(
+                "[INIT] ARENA_NPC_TANKY baked in: NPC max_hp forced to 1,000,000 (local measurement build — do not deploy)"
+            );
+        }
+        enabled
+    })
 }
 
 #[reducer]

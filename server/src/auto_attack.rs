@@ -6,12 +6,16 @@ use crate::action_ids::AuthoredActionId;
 use crate::arena::players_share_world_context;
 use crate::combat::has_active_disabling_status;
 use crate::combat::player_snapshot::player_snapshot_for;
+use crate::combat::position_history::{
+    fresh_standing_view_delay, lag_comp_auto_swing_enabled, lag_comp_config, rewound_pose_for,
+    stamp_standing_press_context,
+};
 use crate::combat::scene_query::has_line_of_sight;
 use crate::combat::temporary_combat_modifiers;
 use crate::defense::is_defense_active;
 use crate::melee::{
     auto_attack_gameplay_for_profile_mode_action, auto_attack_reference_for_profile,
-    get_melee_definition_for_authored, perform_intrinsic_auto_attack_for,
+    get_melee_definition_for_authored, melee_range_bonus, perform_intrinsic_auto_attack_for,
     perform_intrinsic_auto_attack_replacement_for, scaled_auto_attack_cadence_ms,
     MeleeAttackDispatch,
 };
@@ -444,16 +448,71 @@ pub(crate) fn tick_auto_attacks(ctx: &ReducerContext, now: Timestamp) {
             clear_auto_attack_for_owner(ctx, row.owner);
             continue;
         };
+
+        // S9: a due swing's hold gates judge the target pose the owner is
+        // rendering, resolved through the standing view-delay signal — the
+        // one attack path with no press to carry a view time. Dual verdicts
+        // are logged whenever a fresh signal exists (OFF legs still audit);
+        // the rewound verdict is *used* only when both the S8 master switch
+        // and the S9 auto_swing flag are on. The caster's own pose stays
+        // present — server-authoritative, no claim to honor.
+        let (lag_comp_on, _) = lag_comp_config(ctx);
+        let auto_swing_on = lag_comp_on && lag_comp_auto_swing_enabled(ctx);
+        let standing = fresh_standing_view_delay(ctx, row.owner);
+        let rewound_pose = standing.as_ref().and_then(|signal| {
+            let pose =
+                rewound_pose_for(ctx, row.target, signal.view_delay_micros, now, &target_snapshot);
+            (pose.rewound_by_micros > 0).then_some(pose)
+        });
+        let use_rewound = auto_swing_on && rewound_pose.is_some();
+
+        let max_reach = gameplay.range + melee_range_bonus() + target_snapshot.hit_radius;
         let dx = target_snapshot.pos_x - caster_phys.pos_x;
         let dz = target_snapshot.pos_z - caster_phys.pos_z;
         let horiz_dist = (dx * dx + dz * dz).sqrt();
-        if horiz_dist > gameplay.range + target_snapshot.hit_radius {
+        let present_in_reach = horiz_dist <= max_reach;
+        let active_in_reach = if let Some(pose) = rewound_pose.as_ref() {
+            let rdx = pose.pos_x - caster_phys.pos_x;
+            let rdz = pose.pos_z - caster_phys.pos_z;
+            let rewound_in_reach = (rdx * rdx + rdz * rdz).sqrt() <= max_reach;
+            let active = if use_rewound {
+                rewound_in_reach
+            } else {
+                present_in_reach
+            };
+            // A held due swing re-evaluates every tick; unanimous holds at
+            // info would spam ~30 lines/s per held attacker. Flips and
+            // evaluations that proceed carry the audit signal — those stay
+            // info; unanimous holds drop to debug.
+            let flip = rewound_in_reach != present_in_reach;
+            let line = format!(
+                "[LAG_COMP] auto_reach caster={} target={} strike={} rewound_ms={} source={} enabled={} present={} rewound={} flip={} signal=standing",
+                short_identity(row.owner),
+                short_identity(row.target),
+                row.strike_id,
+                pose.rewound_by_micros / 1_000,
+                pose.source.as_str(),
+                auto_swing_on,
+                if present_in_reach { "in_reach" } else { "hold" },
+                if rewound_in_reach { "in_reach" } else { "hold" },
+                flip
+            );
+            if flip || active {
+                log::info!("{}", line);
+            } else {
+                log::debug!("{}", line);
+            }
+            active
+        } else {
+            present_in_reach
+        };
+        if !active_in_reach {
             log::debug!(
                 "[AUTO_ATTACK] owner={} target={} due_out_of_range dist={:.2} max={:.2} strike={}",
                 short_identity(row.owner),
                 short_identity(row.target),
                 horiz_dist,
-                gameplay.range + target_snapshot.hit_radius,
+                max_reach,
                 row.strike_id
             );
             mark_pending_due(ctx, &row);
@@ -462,12 +521,53 @@ pub(crate) fn tick_auto_attacks(ctx: &ReducerContext, now: Timestamp) {
 
         // LOS is a targeting rule (S4): a due swing against a target behind
         // cover holds like an out-of-range swing and resumes when LOS returns.
+        // S9: the target endpoint rewinds with the same pose as the reach
+        // gate; the caster endpoint stays present (§2.4 rule 4 in spirit).
         if gameplay.requires_target_los {
             let caster_snapshot = player_snapshot_for(ctx, row.owner);
-            let blocked = caster_snapshot
-                .map(|snapshot| !has_line_of_sight(ctx, &snapshot, &target_snapshot))
+            let present_blocked = caster_snapshot
+                .as_ref()
+                .map(|snapshot| !has_line_of_sight(ctx, snapshot, &target_snapshot))
                 .unwrap_or(false);
-            if blocked {
+            let active_blocked = if let (Some(caster_snapshot), Some(pose)) =
+                (caster_snapshot.as_ref(), rewound_pose.as_ref())
+            {
+                let mut rewound_target = target_snapshot;
+                rewound_target.pos_x = pose.pos_x;
+                rewound_target.pos_y = pose.pos_y;
+                rewound_target.pos_z = pose.pos_z;
+                rewound_target.facing_yaw = pose.yaw;
+                let rewound_blocked = !has_line_of_sight(ctx, caster_snapshot, &rewound_target);
+                let active = if use_rewound {
+                    rewound_blocked
+                } else {
+                    present_blocked
+                };
+                let flip = rewound_blocked != present_blocked;
+                let line = format!(
+                    "[LAG_COMP] auto_los caster={} target={} strike={} rewound_ms={} source={} enabled={} present={} rewound={} flip={} signal=standing",
+                    short_identity(row.owner),
+                    short_identity(row.target),
+                    row.strike_id,
+                    pose.rewound_by_micros / 1_000,
+                    pose.source.as_str(),
+                    auto_swing_on,
+                    if present_blocked { "blocked" } else { "clear" },
+                    if rewound_blocked { "blocked" } else { "clear" },
+                    flip
+                );
+                // Same info/debug split as auto_reach: unanimous blocked
+                // holds re-log every tick and carry no audit signal.
+                if flip || !active {
+                    log::info!("{}", line);
+                } else {
+                    log::debug!("{}", line);
+                }
+                active
+            } else {
+                present_blocked
+            };
+            if active_blocked {
                 log::debug!(
                     "[AUTO_ATTACK] owner={} target={} due_los_blocked strike={}",
                     short_identity(row.owner),
@@ -476,6 +576,17 @@ pub(crate) fn tick_auto_attacks(ctx: &ReducerContext, now: Timestamp) {
                 );
                 mark_pending_due(ctx, &row);
                 continue;
+            }
+        }
+
+        // S9 §2.2 step 1 (E3, one-timeline rule): the swing that fired
+        // because of the rewound pose must also connect or whiff on that
+        // frozen timeline. Stamping the press context in the tick's
+        // transaction makes the melee chain gate and the impact freeze use
+        // the same standing delay; a held swing leaves no stamp.
+        if use_rewound {
+            if let Some(signal) = standing.as_ref() {
+                stamp_standing_press_context(ctx, row.owner, signal);
             }
         }
 

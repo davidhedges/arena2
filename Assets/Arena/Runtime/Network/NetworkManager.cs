@@ -243,10 +243,39 @@ namespace Arena.Network
                 return;
 
             _nextClockPingRealtime = now + ClockPingIntervalSeconds;
-            conn.Reducers.PingClock((ulong)DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+            conn.Reducers.PingClock(
+                (ulong)DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                StandingViewReportMs(conn));
         }
 
-        private void HandlePingClockResult(ReducerEventContext ctx, ulong clientSendMs)
+        /// <summary>
+        /// S9 standing view-delay report (E1): while an auto-attack target is
+        /// armed, the server-time this client is rendering that target at —
+        /// the same value a press on it would claim. 0 = no report, and the
+        /// server drops any standing row. Server-initiated swings are the only
+        /// consumer, and they exist only while a target is armed.
+        /// </summary>
+        private ulong StandingViewReportMs(DbConnection conn)
+        {
+            if (!_hasLocalIdentity)
+                return 0UL;
+
+            AutoAttackState? armed = conn.Db.AutoAttackState.Owner.Find(_localIdentity);
+            if (armed == null)
+                return 0UL;
+
+            var registry = EntityRegistry.Instance;
+            if (registry == null
+                || !registry.TryGetCombatTarget(armed.Target, out ICombatTargetEntity target)
+                || target.IsDestroyed)
+            {
+                return 0UL;
+            }
+
+            return Arena.Combat.AttackerViewTime.ViewServerTimeMsFor(target);
+        }
+
+        private void HandlePingClockResult(ReducerEventContext ctx, ulong clientSendMs, ulong viewServerTimeMs)
         {
             // Only our own probe carries a send time from our clock.
             if (!_hasLocalIdentity || ctx.Event.CallerIdentity != _localIdentity)

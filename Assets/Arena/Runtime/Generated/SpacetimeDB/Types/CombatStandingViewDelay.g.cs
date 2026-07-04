@@ -11,41 +11,36 @@ namespace SpacetimeDB.Types
 {
     [SpacetimeDB.Type]
     [DataContract]
-    public sealed partial class CombatPressViewDelay
+    public sealed partial class CombatStandingViewDelay
     {
         [DataMember(Name = "identity")]
         public SpacetimeDB.Identity Identity;
-        [DataMember(Name = "stamped_at_micros")]
-        public long StampedAtMicros;
+        [DataMember(Name = "updated_at_micros")]
+        public long UpdatedAtMicros;
         [DataMember(Name = "view_delay_micros")]
         public long ViewDelayMicros;
         [DataMember(Name = "reported_view_ms")]
         public ulong ReportedViewMs;
         [DataMember(Name = "clamped_to_max")]
         public bool ClampedToMax;
-        [DataMember(Name = "signal")]
-        public string Signal;
 
-        public CombatPressViewDelay(
+        public CombatStandingViewDelay(
             SpacetimeDB.Identity Identity,
-            long StampedAtMicros,
+            long UpdatedAtMicros,
             long ViewDelayMicros,
             ulong ReportedViewMs,
-            bool ClampedToMax,
-            string Signal
+            bool ClampedToMax
         )
         {
             this.Identity = Identity;
-            this.StampedAtMicros = StampedAtMicros;
+            this.UpdatedAtMicros = UpdatedAtMicros;
             this.ViewDelayMicros = ViewDelayMicros;
             this.ReportedViewMs = ReportedViewMs;
             this.ClampedToMax = ClampedToMax;
-            this.Signal = Signal;
         }
 
-        public CombatPressViewDelay()
+        public CombatStandingViewDelay()
         {
-            this.Signal = "";
         }
     }
 }

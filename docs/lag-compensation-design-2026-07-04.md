@@ -360,9 +360,15 @@ whether rewound verdicts are *used*.
 - **Auto-attack tick rewind**: needs a standing view-delay signal (slow-
   cadence client report, ~2 s, piggybacked on `ping_clock` or the ack
   surface) — revisit if shaped autos feel unfair after S8.
+  **→ Taken up as S9** (`docs/auto-attack-rewind-design-2026-07-04.md`),
+  which also ships the `[DEFENSE_LATE]` telemetry D4b is parked on.
 - **Per-victim rewind for sweeps/projectile impacts**: the full model;
-  only if targeted-action fairness proves insufficient.
+  only if targeted-action fairness proves insufficient. (S10 candidate,
+  sequenced after S9 — reuses S8 machinery only.)
 - **Deferred defense resolution** (D4b) — revisit with parry telemetry.
+  (S11 candidate: decide on S9's `[DEFENSE_LATE]` numbers; if taken,
+  design the hold around the defender's standing delay, not a flat
+  150 ms.)
 - **Server-side RTT/view-delay estimation** as a cross-check on client
   reports (anti-cheat hardening, post-launch concern per §8 of the review).
 

@@ -12,12 +12,12 @@ namespace SpacetimeDB.Types
 {
     public sealed partial class RemoteReducers : RemoteBase
     {
-        public delegate void PingClockHandler(ReducerEventContext ctx, ulong clientSendMs);
+        public delegate void PingClockHandler(ReducerEventContext ctx, ulong clientSendMs, ulong viewServerTimeMs);
         public event PingClockHandler? OnPingClock;
 
-        public void PingClock(ulong clientSendMs)
+        public void PingClock(ulong clientSendMs, ulong viewServerTimeMs)
         {
-            conn.InternalCallReducer(new Reducer.PingClock(clientSendMs));
+            conn.InternalCallReducer(new Reducer.PingClock(clientSendMs, viewServerTimeMs));
         }
 
         public bool InvokePingClock(ReducerEventContext ctx, Reducer.PingClock args)
@@ -36,7 +36,8 @@ namespace SpacetimeDB.Types
             }
             OnPingClock(
                 ctx,
-                args.ClientSendMs
+                args.ClientSendMs,
+                args.ViewServerTimeMs
             );
             return true;
         }
@@ -50,10 +51,16 @@ namespace SpacetimeDB.Types
         {
             [DataMember(Name = "client_send_ms")]
             public ulong ClientSendMs;
+            [DataMember(Name = "view_server_time_ms")]
+            public ulong ViewServerTimeMs;
 
-            public PingClock(ulong ClientSendMs)
+            public PingClock(
+                ulong ClientSendMs,
+                ulong ViewServerTimeMs
+            )
             {
                 this.ClientSendMs = ClientSendMs;
+                this.ViewServerTimeMs = ViewServerTimeMs;
             }
 
             public PingClock()

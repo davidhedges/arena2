@@ -110,11 +110,24 @@ defense success grace.
 
 For any live session (probe or shaped owner leg), score the audit trail
 with `ops/analyze-s8-lag-comp.py --database arena` — it parses the
-`[LAG_COMP]` dual-verdict lines: flip rate by check and switch state,
-rewind-ms distribution, pose-source mix. The runtime switch is
-`spacetime call arena set_lag_comp_config true 250` (and `false` to
-disable); presses log both verdicts in either state, so an on-screen A/B
-needs no republish.
+`[LAG_COMP]` dual-verdict lines: flip rate by check and switch state and
+by signal (press vs standing, S9), rewind-ms distribution, pose-source
+mix, and the S9 `[DEFENSE_LATE]` rider. The runtime switch is
+`spacetime call arena set_lag_comp_config true 250 false` (first arg
+false = S8 master kill switch); the third argument is the S9
+`auto_swing_enabled` flag (`true 250 true` = auto-attack tick rewind ON).
+Presses and due auto swings log both verdicts in either state, so an
+on-screen A/B needs no republish.
+
+## S9 auto-attack tick rewind (standing signal) evidence
+
+Server truth is fully automated: `ops/s9-auto-rewind-probe.py` (recipe in
+its docstring — one throwaway publish, `ARENA_NPC_HARMLESS=1
+ARENA_NPC_AGGRO_RADIUS=100`). It prints PASS/FAIL per check: the shipped
+default (auto_swing OFF), standing-row write/clamp/zero-delete, the OFF/ON
+yank-cycle flip legs (a due swing holding present-time vs firing on the
+standing rewound pose, with the E3 one-timeline `signal=standing` chain +
+impact lines), the 6 s staleness degrade, and the `[DEFENSE_LATE]` rider.
 
 ## Profiles
 

@@ -280,6 +280,7 @@ pub(crate) fn despawn_actor_bundle(
         ctx.db.player_physics().identity().delete(identity);
     }
     crate::combat::position_history::clear_position_history(ctx, identity);
+    crate::defense::clear_defense_telemetry(ctx, identity);
     if ctx
         .db
         .player_input_cursor()

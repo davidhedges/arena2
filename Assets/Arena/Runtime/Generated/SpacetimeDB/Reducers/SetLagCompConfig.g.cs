@@ -12,12 +12,12 @@ namespace SpacetimeDB.Types
 {
     public sealed partial class RemoteReducers : RemoteBase
     {
-        public delegate void SetLagCompConfigHandler(ReducerEventContext ctx, bool enabled, ulong maxRewindMs);
+        public delegate void SetLagCompConfigHandler(ReducerEventContext ctx, bool enabled, ulong maxRewindMs, bool autoSwingEnabled);
         public event SetLagCompConfigHandler? OnSetLagCompConfig;
 
-        public void SetLagCompConfig(bool enabled, ulong maxRewindMs)
+        public void SetLagCompConfig(bool enabled, ulong maxRewindMs, bool autoSwingEnabled)
         {
-            conn.InternalCallReducer(new Reducer.SetLagCompConfig(enabled, maxRewindMs));
+            conn.InternalCallReducer(new Reducer.SetLagCompConfig(enabled, maxRewindMs, autoSwingEnabled));
         }
 
         public bool InvokeSetLagCompConfig(ReducerEventContext ctx, Reducer.SetLagCompConfig args)
@@ -37,7 +37,8 @@ namespace SpacetimeDB.Types
             OnSetLagCompConfig(
                 ctx,
                 args.Enabled,
-                args.MaxRewindMs
+                args.MaxRewindMs,
+                args.AutoSwingEnabled
             );
             return true;
         }
@@ -53,14 +54,18 @@ namespace SpacetimeDB.Types
             public bool Enabled;
             [DataMember(Name = "max_rewind_ms")]
             public ulong MaxRewindMs;
+            [DataMember(Name = "auto_swing_enabled")]
+            public bool AutoSwingEnabled;
 
             public SetLagCompConfig(
                 bool Enabled,
-                ulong MaxRewindMs
+                ulong MaxRewindMs,
+                bool AutoSwingEnabled
             )
             {
                 this.Enabled = Enabled;
                 this.MaxRewindMs = MaxRewindMs;
+                this.AutoSwingEnabled = AutoSwingEnabled;
             }
 
             public SetLagCompConfig()

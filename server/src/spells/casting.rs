@@ -4097,6 +4097,7 @@ fn cleanup_spellcasting_terminal_harness(ctx: &ReducerContext, caster: Identity,
         ctx.db.player_state().player_id().delete(identity);
         ctx.db.player_world().identity().delete(identity);
         crate::combat::position_history::clear_position_history(ctx, identity);
+        crate::defense::clear_defense_telemetry(ctx, identity);
     }
 }
 
