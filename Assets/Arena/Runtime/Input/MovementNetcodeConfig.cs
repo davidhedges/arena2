@@ -45,14 +45,13 @@ namespace Arena.Input
         public const float LeadRaiseHoldoffSeconds = 0.25f;
         public const float LeadLowerAfterSurplusSeconds = 5.0f;
 
-        // Actuation pacing: extra ticks authored per frame when raising the
-        // lead / re-anchoring, and the minimum spacing between skipped ticks
-        // when draining surplus (a skip is a 1-tick authoring pause).
-        public const int MaxInjectedCommandsPerFrame = 2;
-        public const float SkipHoldoffSeconds = 0.5f;
-        // Dead band (ticks) around the authoring target before inject/skip
-        // acts, so estimate jitter does not churn the actuator.
-        public const float AuthoringTargetHysteresisTicks = 1.5f;
+        // Actuation is the target-chasing authoring clock itself (author tick
+        // N when estimate + lead crosses N; pause automatically while ahead),
+        // bounded by MaxLocalPredictionTicksPerFrame — no separate inject or
+        // skip rate constants. The first S5 cut rate-capped skips at 2/s,
+        // which could not drain the ~3-tick/s surplus a 36.6 ms real server
+        // cadence produced against 33 ms wall-clock authoring (occupancy
+        // pinned at the prediction bound; acceptance session 2026-07-04).
 
         // Ladder rung 3: hard resync fires only when pending commands exceed
         // MaxPredictionLeadTicks continuously for this long (acks stalled).

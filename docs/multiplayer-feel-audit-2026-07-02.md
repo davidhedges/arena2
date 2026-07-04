@@ -128,7 +128,11 @@ referenced but not repeated.
   slides one tick server-side instead of being eaten, and reconcile
   corrections spend a capped presentation budget. Shaped-local movement
   is representative now — the latency-testing doc's caveat section was
-  replaced by the S5 acceptance expectations.
+  replaced by the S5 acceptance expectations. The S5 acceptance run then
+  exposed one more open-loop knob: game_tick's Interval scheduling ran
+  fixed-delay at a real 36.6 ms/tick (10 % slow vs the authored 33 ms) —
+  replaced same-day by a fixed-rate Time chain (33.0 ms measured live),
+  with client authoring paced to the measured cadence (target-chasing).
   (b) ~~Gap-closers do not validate line of sight server-side~~ —
   **closed by S4 (2026-07-04, LOS unification)**: LOS is now a targeting
   rule (`requires_target_los`, default true) checked for every

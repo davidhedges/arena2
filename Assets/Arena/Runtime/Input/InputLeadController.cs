@@ -19,9 +19,11 @@ namespace Arena.Input
     /// the identical loop and converge to what their delivery needs.
     ///
     /// The lead is a *number*; actuation lives in
-    /// LocalMovementPredictionDriver (inject/skip authoring slots) and
-    /// MovementNetDriver (re-anchor targets). Feedback observed while the
-    /// command numbering is being re-anchored is suppressed via
+    /// LocalMovementPredictionDriver's target-chasing authoring clock (author
+    /// input tick N when estimate + lead crosses N — which also paces
+    /// production at the server's real tick cadence) and in MovementNetDriver
+    /// (re-anchor targets). Feedback observed while the command numbering is
+    /// being re-anchored is suppressed via
     /// <see cref="SuppressFeedbackBelowTick"/> so a deliberate wipe never
     /// reads as starvation.
     /// </summary>
@@ -29,7 +31,6 @@ namespace Arena.Input
     {
         private float _leadTicks = MovementNetcodeConfig.InitialInputLeadTicks;
         private float _nextRaiseAllowedTime;
-        private float _nextSkipAllowedTime;
         private float _surplusSinceTime = -1.0f;
         private uint _suppressFeedbackBelowTick;
 
@@ -113,20 +114,6 @@ namespace Arena.Input
 
             // In band: healthy.
             _surplusSinceTime = -1.0f;
-        }
-
-        /// <summary>
-        /// Whether draining one authoring slot (a 1-tick pause) is allowed
-        /// now; call only after deciding a skip is needed. Rate-limited so
-        /// surplus drains as a slow trickle, never a stall.
-        /// </summary>
-        public bool TryConsumeSkipAllowance(float now)
-        {
-            if (now < _nextSkipAllowedTime)
-                return false;
-
-            _nextSkipAllowedTime = now + MovementNetcodeConfig.SkipHoldoffSeconds;
-            return true;
         }
 
         /// <summary>

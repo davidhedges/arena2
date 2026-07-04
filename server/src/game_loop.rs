@@ -132,6 +132,12 @@ use crate::spells::special_movement_runtime as _;
 const MAX_HORIZONTAL_COLLISION_STEP: f32 = 0.10;
 const MAX_GROUNDED_SNAP_DOWN: f32 = 0.75;
 const GAME_TICK_INTERVAL: Duration = Duration::from_millis(FIXED_TICK_MILLIS);
+/// Fixed-rate chain catch-up bound: a stall deeper than this many ticks
+/// re-anchors to now instead of fast-forwarding through the backlog.
+const GAME_TICK_MAX_CATCHUP_TICKS: i64 = 3;
+/// The watchdog only re-seeds a dead chain; 1 s of lost ticks after a
+/// catastrophic (rolled-back/panicked) tick is the accepted worst case.
+const GAME_LOOP_WATCHDOG_INTERVAL: Duration = Duration::from_secs(1);
 const EVENT_PRUNE_INTERVAL: Duration = Duration::from_millis(500);
 const TICK_PROFILE_WINDOW_MICROS: i64 = 5_000_000;
 const TICK_BUDGET_MICROS: u32 = FIXED_TICK_MILLIS as u32 * 1_000;
@@ -547,11 +553,76 @@ pub(crate) fn ensure_game_loop_schedule(ctx: &ReducerContext) {
         return;
     }
 
+    // Fixed-RATE chain (S5 cadence fix): each game_tick re-inserts a one-shot
+    // Time row anchored on its own scheduled time, so execution and
+    // scheduling overhead do not leak into the period. The previous
+    // ScheduleAt::Interval row was host-managed fixed-DELAY — measured live
+    // at 36.6 ms/tick against the authored 33 ms (10% slow), which both
+    // dilated the whole simulation against wall clock (dt stays 33 ms) and
+    // fed the client input loop a permanent surplus.
     ctx.db.game_loop_timer().insert(GameLoopTimer {
         scheduled_id: 0,
-        scheduled_at: ScheduleAt::Interval(GAME_TICK_INTERVAL.into()),
+        scheduled_at: ScheduleAt::Time(ctx.timestamp),
     });
-    log::info!("[GAME_LOOP] Scheduled game_tick at 30.3Hz (33ms tick)");
+    log::info!("[GAME_LOOP] Scheduled game_tick fixed-rate chain (33ms tick)");
+}
+
+pub(crate) fn ensure_game_loop_watchdog_schedule(ctx: &ReducerContext) {
+    if ctx.db.game_loop_watchdog().iter().next().is_some() {
+        return;
+    }
+
+    ctx.db.game_loop_watchdog().insert(GameLoopWatchdog {
+        scheduled_id: 0,
+        scheduled_at: ScheduleAt::Interval(GAME_LOOP_WATCHDOG_INTERVAL.into()),
+    });
+}
+
+/// Re-arms the fixed-rate chain. Called FIRST inside game_tick so the next
+/// link exists in the same transaction as the tick's writes.
+///
+/// Anchor policy: next = this row's scheduled time + one tick — never
+/// "now + one tick" — so per-tick overhead cannot accumulate into the
+/// period. Brief stalls are caught up (the host fires overdue rows
+/// immediately); a stall deeper than the catch-up cap re-anchors to now and
+/// drops the backlog instead of spiraling (those wall-milliseconds dilate,
+/// once, honestly).
+fn reschedule_game_tick(ctx: &ReducerContext, fired: &GameLoopTimer) {
+    // Defensive sweep: clears the fired row regardless of host one-shot
+    // delete semantics, and migrates the legacy Interval row on first fire
+    // after republish (two live rows would double-tick).
+    let stale_ids: Vec<u64> = ctx
+        .db
+        .game_loop_timer()
+        .iter()
+        .map(|row| row.scheduled_id)
+        .collect();
+    for scheduled_id in stale_ids {
+        ctx.db.game_loop_timer().scheduled_id().delete(scheduled_id);
+    }
+
+    let now_micros = ctx.timestamp.to_micros_since_unix_epoch();
+    let tick_micros = GAME_TICK_INTERVAL.as_micros() as i64;
+    let anchor_micros = match &fired.scheduled_at {
+        ScheduleAt::Time(scheduled) => scheduled.to_micros_since_unix_epoch(),
+        // Legacy Interval row (pre-fix DB) has no scheduled-time anchor.
+        ScheduleAt::Interval(_) => now_micros,
+    };
+
+    let mut next_micros = anchor_micros.saturating_add(tick_micros);
+    let max_backlog_micros = tick_micros * GAME_TICK_MAX_CATCHUP_TICKS;
+    if next_micros < now_micros.saturating_sub(max_backlog_micros) {
+        log::warn!(
+            "[GAME_LOOP] tick chain fell {}ms behind; re-anchoring to now (backlog dropped)",
+            (now_micros - next_micros) / 1000
+        );
+        next_micros = now_micros;
+    }
+
+    ctx.db.game_loop_timer().insert(GameLoopTimer {
+        scheduled_id: 0,
+        scheduled_at: ScheduleAt::Time(Timestamp::from_micros_since_unix_epoch(next_micros)),
+    });
 }
 
 fn bootstrap_server_state(ctx: &ReducerContext) {
@@ -652,7 +723,9 @@ fn bootstrap_server_state(ctx: &ReducerContext) {
 }
 
 /// Schedule table for the game loop.
-/// Inserting a row schedules game_tick to run.
+/// Inserting a row schedules game_tick to run. Rows are one-shot Time links
+/// in a fixed-rate chain (see reschedule_game_tick); the watchdog re-seeds
+/// the chain if it ever dies.
 #[table(accessor = game_loop_timer, scheduled(game_tick))]
 pub struct GameLoopTimer {
     #[primary_key]
@@ -661,10 +734,38 @@ pub struct GameLoopTimer {
     pub scheduled_at: ScheduleAt,
 }
 
+/// Immortal (host-managed Interval) backstop for the fixed-rate chain: a
+/// panicked or rolled-back game_tick would take its re-inserted next link
+/// down with it, and a chain with no live row never fires again. This runs
+/// at 1 Hz, reads one tiny table, and re-seeds only when the chain is gone.
+#[table(accessor = game_loop_watchdog, scheduled(game_loop_watchdog_tick))]
+pub struct GameLoopWatchdog {
+    #[primary_key]
+    #[auto_inc]
+    pub scheduled_id: u64,
+    pub scheduled_at: ScheduleAt,
+}
+
+#[reducer]
+pub fn game_loop_watchdog_tick(
+    ctx: &ReducerContext,
+    _timer: GameLoopWatchdog,
+) -> Result<(), String> {
+    if ctx.db.game_loop_timer().iter().next().is_none() {
+        log::warn!("[GAME_LOOP] watchdog re-seeding a dead game_tick chain");
+        ctx.db.game_loop_timer().insert(GameLoopTimer {
+            scheduled_id: 0,
+            scheduled_at: ScheduleAt::Time(ctx.timestamp),
+        });
+    }
+    Ok(())
+}
+
 /// Module initialization - starts the game loop.
 #[reducer(init)]
 pub fn init(ctx: &ReducerContext) -> Result<(), String> {
     ensure_game_loop_schedule(ctx);
+    ensure_game_loop_watchdog_schedule(ctx);
     crate::contract_version::sync_contract_versions(ctx);
     bootstrap_server_state(ctx);
     despawn_legacy_default_dummies(ctx);
@@ -1858,7 +1959,14 @@ fn tick_player(
 /// - `game_tick` is the only reducer that writes `PlayerPhysics`
 /// - helpers may structure the logic, but they execute only inside this reducer
 #[reducer]
-pub fn game_tick(ctx: &ReducerContext, _timer: GameLoopTimer) -> Result<(), String> {
+pub fn game_tick(ctx: &ReducerContext, timer: GameLoopTimer) -> Result<(), String> {
+    // Fixed-rate chain first: the next link commits with this tick's writes.
+    // (A returned Err would roll the link back too — the watchdog re-seeds
+    // that case within a second.)
+    reschedule_game_tick(ctx, &timer);
+    // Existing DBs republish without re-running init; seed the watchdog here.
+    ensure_game_loop_watchdog_schedule(ctx);
+
     let dt = FIXED_TICK_SECONDS;
     let now = ctx.timestamp;
     let profiling_enabled = tick_profiling_enabled();

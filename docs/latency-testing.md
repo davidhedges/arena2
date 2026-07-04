@@ -60,6 +60,15 @@ What to expect while shaped (watch the overlay's `Input lead (S5)` lines and
   tick server-side — `[MOVE_JUMP_SLIDE]` in module logs).
 - Reconcile corrections read as a capped 0.5 m/s drift or one honest snap
   (`s5_corr_snaps`), never continuous elastic yanking.
+- Buffer occupancy (`s5_occ`) holds near the 1–2 setpoint, and `s5_acks`
+  accumulates at ≈ 30/s. The server runs a fixed-RATE tick chain (measured
+  33.0 ms; the pre-fix Interval scheduling ran fixed-delay at a real
+  36.6 ms/tick, which pinned occupancy at the prediction bound no matter
+  what the lead did — acceptance run 1, 2026-07-04). A session-wide ack
+  rate near 27/s or occupancy stuck ≥ 5 means cadence drift is back; check
+  `[GAME_LOOP]` re-anchor warnings in module logs.
+- Run one play-mode session per leg (baseline, shaped, post-teardown): the
+  analyzer summarizes per session, and a blended session hides the legs.
 
 Downstream-only shaping (`sudo dnctl pipe 2 config delay 40ms` with only the
 `from any port 3000` pf rule) remains useful when a check wants row-delivery

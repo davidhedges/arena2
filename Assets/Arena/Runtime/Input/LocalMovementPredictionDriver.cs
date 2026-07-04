@@ -68,9 +68,16 @@ namespace Arena.Input
         private const float SpecialMovementSettleWarningDistance = 0.25f;
 
         // --- S5 lead actuation + jump-delivery ledger state ---
-        private int _pendingAuthoringSkips;
+        // Depth-delta telemetry: per frame, authored-vs-estimate-advance;
+        // advances beyond this are re-anchor events, not pacing, and are
+        // excluded from the counters.
+        private const int TelemetryMaxPlausibleEstimateAdvance = 30;
         private int _injectedCommands;
         private int _skippedAuthoringSlots;
+        private float _authoringTargetAlpha;
+        private bool _hasAuthoringTargetAlpha;
+        private uint _lastEstimateWholeTick;
+        private bool _hasLastEstimateWholeTick;
         private const int PendingPredictedJumpCapacity = 8;
         private readonly uint[] _pendingPredictedJumpTicks = new uint[PendingPredictedJumpCapacity];
         private int _pendingPredictedJumpCount;
@@ -91,7 +98,13 @@ namespace Arena.Input
         public int JumpsLost { get; private set; }
         public int LastReplayFallbackContextUses => _lastReplayFallbackContextUses;
         public int TotalReplayFallbackContextUses => _totalReplayFallbackContextUses;
-        public float FixedTickAlpha => Mathf.Clamp01(_localTickAccumulator / MovementNetcodeConfig.FixedTickSeconds);
+        // Render-interpolation fraction toward the next authored tick. On the
+        // target-chasing clock this is the fractional distance of
+        // estimate+lead past the last authored tick; the wall-clock
+        // accumulator fraction survives only for the pre-state fallback.
+        public float FixedTickAlpha => _hasAuthoringTargetAlpha
+            ? _authoringTargetAlpha
+            : Mathf.Clamp01(_localTickAccumulator / MovementNetcodeConfig.FixedTickSeconds);
         public uint CurrentPredictedTick => _hasCurrentPredictedState ? _currentPredictedState.LastProcessedTick : 0u;
         public uint NextMovementContextProposalTick
         {
@@ -239,15 +252,96 @@ namespace Arena.Input
             if (_motor == null || _commandHistory == null || _environment == null)
                 return;
 
-            PlanAuthoringSkip();
+            if (TryGetAuthoringTarget(out float estimate, out float target))
+            {
+                AdvanceAuthoringTowardTarget(estimate, target, authorOnly: false);
+                return;
+            }
+
+            _hasAuthoringTargetAlpha = false;
+            AdvanceAuthoringByWallClock(authorOnly: false);
+        }
+
+        private bool TryGetAuthoringTarget(out float estimate, out float target)
+        {
+            estimate = 0.0f;
+            target = 0.0f;
+            if (_simState == null || !_simState.HasState || _leadController == null ||
+                _commandHistory == null)
+            {
+                return false;
+            }
+
+            estimate = _simState.EstimateAuthoritativeTick(
+                Time.realtimeSinceStartup,
+                MovementNetcodeConfig.FixedTickSeconds);
+            target = estimate + _leadController.LeadTicks;
+            return true;
+        }
+
+        /// <summary>
+        /// Target-chasing authoring (S5 cadence fix): author input tick N when
+        /// estimate + lead crosses N. The estimate re-anchors on every ack, so
+        /// this paces command production at the server's REAL consume cadence
+        /// — measured live at ~36.6 ms/tick against the authored 33 ms, a
+        /// permanent ~3-tick/s surplus no rate-capped skip could drain. Rate
+        /// scaling, lead raises (burst a tick), and lead lowers (pause until
+        /// the target catches up) all fall out of the same comparison; the
+        /// old wall-clock accumulator survives only as the pre-state fallback.
+        /// </summary>
+        private void AdvanceAuthoringTowardTarget(float estimate, float target, bool authorOnly)
+        {
+            if (_motor == null || _commandHistory == null)
+                return;
+
+            int authored = 0;
+            while (authored < MovementNetcodeConfig.MaxLocalPredictionTicksPerFrame &&
+                   !NextInputTickExceedsPredictionBound() &&
+                   _commandHistory.NextInputTick <= target)
+            {
+                if (authorOnly)
+                    _commandHistory.AppendNext(_motor.SampleIntentForPredictionTick());
+                else
+                    AuthorAndStepOneTick();
+                authored++;
+            }
+
+            _authoringTargetAlpha = Mathf.Clamp01(target - ((float)_commandHistory.NextInputTick - 1.0f));
+            _hasAuthoringTargetAlpha = true;
+
+            // Depth-delta telemetry: ticks authored beyond the estimate's
+            // advance raise server-side depth (injected); estimate advance we
+            // deliberately sat out while ahead of target drains it (skipped).
+            uint estimateWholeTick = (uint)Mathf.Max(0.0f, estimate);
+            if (_hasLastEstimateWholeTick && estimateWholeTick >= _lastEstimateWholeTick)
+            {
+                int estimateAdvance = (int)(estimateWholeTick - _lastEstimateWholeTick);
+                if (estimateAdvance <= TelemetryMaxPlausibleEstimateAdvance)
+                {
+                    if (authored > estimateAdvance)
+                        _injectedCommands += authored - estimateAdvance;
+                    else if (estimateAdvance > authored && _commandHistory.NextInputTick > target)
+                        _skippedAuthoringSlots += estimateAdvance - authored;
+                }
+            }
+            _lastEstimateWholeTick = estimateWholeTick;
+            _hasLastEstimateWholeTick = true;
+        }
+
+        /// <summary>Pre-state fallback: 33 ms wall-clock pacing until the
+        /// first authoritative snapshot gives the target clock an anchor.</summary>
+        private void AdvanceAuthoringByWallClock(bool authorOnly)
+        {
+            if (_motor == null || _commandHistory == null)
+                return;
 
             _localTickAccumulator = Mathf.Min(
                 _localTickAccumulator + Time.deltaTime,
                 MovementNetcodeConfig.FixedTickSeconds * MovementNetcodeConfig.MaxPredictionLeadTicks);
 
-            int simulatedTicksThisFrame = 0;
+            int authoredTicksThisFrame = 0;
             while (_localTickAccumulator >= MovementNetcodeConfig.FixedTickSeconds &&
-                   simulatedTicksThisFrame < MovementNetcodeConfig.MaxLocalPredictionTicksPerFrame)
+                   authoredTicksThisFrame < MovementNetcodeConfig.MaxLocalPredictionTicksPerFrame)
             {
                 if (NextInputTickExceedsPredictionBound())
                 {
@@ -257,30 +351,11 @@ namespace Arena.Input
 
                 _localTickAccumulator -= MovementNetcodeConfig.FixedTickSeconds;
 
-                if (_pendingAuthoringSkips > 0)
-                {
-                    // Lead drain (S5): consume the slot without authoring, so
-                    // command numbering pauses one tick against the server's
-                    // consume clock and buffered surplus shrinks by one.
-                    _pendingAuthoringSkips--;
-                    _skippedAuthoringSlots++;
-                    continue;
-                }
-
-                AuthorAndStepOneTick();
-                simulatedTicksThisFrame++;
-            }
-
-            // Lead raise / anchor drift catch-up (S5): author extra ticks
-            // beyond the paced clock, a bounded burst per frame.
-            int injectBudget = ComputeInjectBudget();
-            for (int i = 0; i < injectBudget; i++)
-            {
-                if (NextInputTickExceedsPredictionBound())
-                    break;
-
-                AuthorAndStepOneTick();
-                _injectedCommands++;
+                if (authorOnly)
+                    _commandHistory.AppendNext(_motor.SampleIntentForPredictionTick());
+                else
+                    AuthorAndStepOneTick();
+                authoredTicksThisFrame++;
             }
         }
 
@@ -326,41 +401,6 @@ namespace Arena.Input
             return _commandHistory.NextInputTick > maxPredictedTick;
         }
 
-        private float AuthoringTargetDiffTicks()
-        {
-            if (_simState == null || !_simState.HasState || _commandHistory == null || _leadController == null)
-                return 0.0f;
-
-            float estimate = _simState.EstimateAuthoritativeTick(
-                Time.realtimeSinceStartup,
-                MovementNetcodeConfig.FixedTickSeconds);
-            float targetNextTick = estimate + _leadController.LeadTicks + 1.0f;
-            return targetNextTick - _commandHistory.NextInputTick;
-        }
-
-        private void PlanAuthoringSkip()
-        {
-            if (_leadController == null || _pendingAuthoringSkips > 0)
-                return;
-
-            float diff = AuthoringTargetDiffTicks();
-            if (diff < -MovementNetcodeConfig.AuthoringTargetHysteresisTicks &&
-                _leadController.TryConsumeSkipAllowance(Time.realtimeSinceStartup))
-            {
-                _pendingAuthoringSkips = 1;
-            }
-        }
-
-        private int ComputeInjectBudget()
-        {
-            float diff = AuthoringTargetDiffTicks();
-            if (diff <= MovementNetcodeConfig.AuthoringTargetHysteresisTicks)
-                return 0;
-
-            return Mathf.Min(
-                MovementNetcodeConfig.MaxInjectedCommandsPerFrame,
-                Mathf.CeilToInt(diff - MovementNetcodeConfig.AuthoringTargetHysteresisTicks));
-        }
 
         private void DriveLocalSpecialMovement(in SpecialMovementTrack track)
         {
@@ -491,29 +531,14 @@ namespace Arena.Input
             if (_motor == null || _commandHistory == null)
                 return;
 
-            _localTickAccumulator = Mathf.Min(
-                _localTickAccumulator + Time.deltaTime,
-                MovementNetcodeConfig.FixedTickSeconds * MovementNetcodeConfig.MaxPredictionLeadTicks);
-
-            int authoredTicksThisFrame = 0;
-            while (_localTickAccumulator >= MovementNetcodeConfig.FixedTickSeconds &&
-                   authoredTicksThisFrame < MovementNetcodeConfig.MaxLocalPredictionTicksPerFrame)
+            if (TryGetAuthoringTarget(out float estimate, out float target))
             {
-                uint authoritativeTick = _simState != null && _simState.HasState
-                    ? _simState.LastProcessedTick
-                    : 0u;
-                uint maxPredictedTick = authoritativeTick + (uint)MovementNetcodeConfig.MaxPredictionLeadTicks;
-                uint nextInputTick = _commandHistory.NextInputTick;
-                if (nextInputTick > maxPredictedTick)
-                {
-                    _localTickAccumulator = Mathf.Min(_localTickAccumulator, MovementNetcodeConfig.FixedTickSeconds);
-                    break;
-                }
-
-                _localTickAccumulator -= MovementNetcodeConfig.FixedTickSeconds;
-                _commandHistory.AppendNext(_motor.SampleIntentForPredictionTick());
-                authoredTicksThisFrame++;
+                AdvanceAuthoringTowardTarget(estimate, target, authorOnly: true);
+                return;
             }
+
+            _hasAuthoringTargetAlpha = false;
+            AdvanceAuthoringByWallClock(authorOnly: true);
         }
 
         private void ReconcileFromAuthoritative(uint snapshotVersion)
@@ -650,6 +675,8 @@ namespace Arena.Input
             _effectiveMovementBlocked = false;
             _effectiveMoveSpeedMultiplier = 1.0f;
             _localTickAccumulator = 0.0f;
+            _hasAuthoringTargetAlpha = false;
+            _hasLastEstimateWholeTick = false;
             ClearPendingSpecialMovementSettleWarning();
             ClearRenderHistory();
             ClearPredictedStateHistory();
