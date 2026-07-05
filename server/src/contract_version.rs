@@ -4,7 +4,7 @@ use spacetimedb::{table, ReducerContext, Table, Timestamp};
 use crate::contract_version::contract_version as _;
 
 /// Netcode audit R5: content stamps for the shared-JSON contract surface.
-/// One static row per `*.shared.json` compiled into the module. The client
+/// One static row per `*.shared.json` known to the server package. The client
 /// hashes its bundled copies on connect and warns on mismatch — the shared
 /// collision/heightfield data must match exactly for movement parity, and
 /// the sync step (`GameplayCollisionExporter.SyncSharedMovementData`) is
@@ -18,151 +18,20 @@ pub struct ContractVersion {
     pub stamped_at: Timestamp,
 }
 
-/// `(key, contents)` for every shared JSON compiled into the module. Keys
-/// are server-relative paths; the client maps `world_data/` to its bundled
-/// `SharedData/Worlds/` copies and ignores keys it has no copy of.
-/// Completeness is enforced by `shared_files_list_is_complete`.
-const SHARED_FILES: &[(&str, &str)] = &[
-    (
-        "arena_layout.shared.json",
-        include_str!("arena_layout.shared.json"),
-    ),
-    (
-        "gameplay_collision.shared.json",
-        include_str!("gameplay_collision.shared.json"),
-    ),
-    (
-        "gameplay_query_collision.shared.json",
-        include_str!("gameplay_query_collision.shared.json"),
-    ),
-    (
-        "melee_manifest.shared.json",
-        include_str!("melee_manifest.shared.json"),
-    ),
-    (
-        "open_world_heightfield.shared.json",
-        include_str!("open_world_heightfield.shared.json"),
-    ),
-    (
-        "progression_catalog.shared.json",
-        include_str!("progression_catalog.shared.json"),
-    ),
-    (
-        "world_data/adventure_island.collision.shared.json",
-        include_str!("world_data/adventure_island.collision.shared.json"),
-    ),
-    (
-        "world_data/adventure_island.heightfield.shared.json",
-        include_str!("world_data/adventure_island.heightfield.shared.json"),
-    ),
-    (
-        "world_data/adventure_island.query_collision.shared.json",
-        include_str!("world_data/adventure_island.query_collision.shared.json"),
-    ),
-    (
-        "world_data/desert_day.collision.shared.json",
-        include_str!("world_data/desert_day.collision.shared.json"),
-    ),
-    (
-        "world_data/desert_day.heightfield.shared.json",
-        include_str!("world_data/desert_day.heightfield.shared.json"),
-    ),
-    (
-        "world_data/desert_day.query_collision.shared.json",
-        include_str!("world_data/desert_day.query_collision.shared.json"),
-    ),
-    (
-        "world_data/docks_day.collision.shared.json",
-        include_str!("world_data/docks_day.collision.shared.json"),
-    ),
-    (
-        "world_data/docks_day.heightfield.shared.json",
-        include_str!("world_data/docks_day.heightfield.shared.json"),
-    ),
-    (
-        "world_data/docks_day.query_collision.shared.json",
-        include_str!("world_data/docks_day.query_collision.shared.json"),
-    ),
-    (
-        "world_data/giant_skeleton.collision.shared.json",
-        include_str!("world_data/giant_skeleton.collision.shared.json"),
-    ),
-    (
-        "world_data/giant_skeleton.heightfield.shared.json",
-        include_str!("world_data/giant_skeleton.heightfield.shared.json"),
-    ),
-    (
-        "world_data/giant_skeleton.query_collision.shared.json",
-        include_str!("world_data/giant_skeleton.query_collision.shared.json"),
-    ),
-    (
-        "world_data/golden_valley_sunny.collision.shared.json",
-        include_str!("world_data/golden_valley_sunny.collision.shared.json"),
-    ),
-    (
-        "world_data/golden_valley_sunny.heightfield.shared.json",
-        include_str!("world_data/golden_valley_sunny.heightfield.shared.json"),
-    ),
-    (
-        "world_data/golden_valley_sunny.query_collision.shared.json",
-        include_str!("world_data/golden_valley_sunny.query_collision.shared.json"),
-    ),
-    (
-        "world_data/grasslands.collision.shared.json",
-        include_str!("world_data/grasslands.collision.shared.json"),
-    ),
-    (
-        "world_data/grasslands.heightfield.shared.json",
-        include_str!("world_data/grasslands.heightfield.shared.json"),
-    ),
-    (
-        "world_data/great_hall_day.collision.shared.json",
-        include_str!("world_data/great_hall_day.collision.shared.json"),
-    ),
-    (
-        "world_data/great_hall_day.query_collision.shared.json",
-        include_str!("world_data/great_hall_day.query_collision.shared.json"),
-    ),
-    (
-        "world_data/idol_day.collision.shared.json",
-        include_str!("world_data/idol_day.collision.shared.json"),
-    ),
-    (
-        "world_data/idol_day.heightfield.shared.json",
-        include_str!("world_data/idol_day.heightfield.shared.json"),
-    ),
-    (
-        "world_data/idol_day.query_collision.shared.json",
-        include_str!("world_data/idol_day.query_collision.shared.json"),
-    ),
-    (
-        "world_data/oasis_day.collision.shared.json",
-        include_str!("world_data/oasis_day.collision.shared.json"),
-    ),
-    (
-        "world_data/oasis_day.heightfield.shared.json",
-        include_str!("world_data/oasis_day.heightfield.shared.json"),
-    ),
-    (
-        "world_data/oasis_day.query_collision.shared.json",
-        include_str!("world_data/oasis_day.query_collision.shared.json"),
-    ),
-    (
-        "world_data/temple_gardens.collision.shared.json",
-        include_str!("world_data/temple_gardens.collision.shared.json"),
-    ),
-    (
-        "world_data/temple_gardens.query_collision.shared.json",
-        include_str!("world_data/temple_gardens.query_collision.shared.json"),
-    ),
-];
+// `(key, hash)` for every shared JSON under `src/`, generated by build.rs.
+// Keys are server-relative paths; the client maps `world_data/` to its
+// bundled `SharedData/Worlds/` copies and ignores keys it has no copy of.
+include!(concat!(env!("OUT_DIR"), "/shared_file_hashes.rs"));
 
+#[cfg(test)]
 const FNV_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
+#[cfg(test)]
 const FNV_PRIME: u64 = 0x0000_0100_0000_01b3;
 
 /// FNV-1a over the file bytes, skipping CR so checkouts with different line
 /// endings hash identically. Mirrored by `ContractVersionGuard` on the
 /// client — keep the two implementations in sync.
+#[cfg(test)]
 pub(crate) fn shared_content_hash(contents: &str) -> u64 {
     let mut hash = FNV_OFFSET;
     for byte in contents.bytes() {
@@ -179,13 +48,12 @@ pub(crate) fn shared_content_hash(contents: &str) -> u64 {
 /// covers clean publishes; the `client_connected` call covers hot module
 /// updates, which do not re-run `init`.
 pub(crate) fn sync_contract_versions(ctx: &ReducerContext) {
-    for (key, contents) in SHARED_FILES {
-        let content_hash = shared_content_hash(contents);
+    for (key, content_hash) in SHARED_FILE_HASHES {
         match ctx.db.contract_version().key().find((*key).to_string()) {
-            Some(existing) if existing.content_hash == content_hash => {}
+            Some(existing) if existing.content_hash == *content_hash => {}
             Some(existing) => {
                 ctx.db.contract_version().key().update(ContractVersion {
-                    content_hash,
+                    content_hash: *content_hash,
                     stamped_at: ctx.timestamp,
                     ..existing
                 });
@@ -193,7 +61,7 @@ pub(crate) fn sync_contract_versions(ctx: &ReducerContext) {
             None => {
                 ctx.db.contract_version().insert(ContractVersion {
                     key: (*key).to_string(),
-                    content_hash,
+                    content_hash: *content_hash,
                     stamped_at: ctx.timestamp,
                 });
             }
@@ -214,7 +82,7 @@ mod tests {
         collect_shared_json(&src_root, &src_root, &mut on_disk);
         on_disk.sort();
 
-        let mut listed: Vec<String> = SHARED_FILES
+        let mut listed: Vec<String> = SHARED_FILE_HASHES
             .iter()
             .map(|(key, _)| (*key).to_string())
             .collect();
@@ -222,7 +90,7 @@ mod tests {
 
         assert_eq!(
             listed, on_disk,
-            "SHARED_FILES is out of sync with src/**/*.shared.json — update contract_version.rs"
+            "generated SHARED_FILE_HASHES is out of sync with src/**/*.shared.json"
         );
     }
 
