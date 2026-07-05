@@ -134,15 +134,61 @@ fn resolved_primary_resource_cost_for_action(
     spell_kind: &SpellId,
 ) -> Option<ResolvedActionResourceCost> {
     let spell_cost = spell_primary_resource_cost_for_action(spell_kind);
+    resolved_primary_resource_cost_for_amount(ctx, caster, spell_kind, spell_cost.amount)
+}
+
+fn resolved_initial_primary_resource_cost_for_action(
+    ctx: &ReducerContext,
+    caster: Identity,
+    spell_kind: &SpellId,
+) -> Option<ResolvedActionResourceCost> {
+    let definition = super::catalog::spell_definition(spell_kind)
+        .expect("validated spell id must resolve to a definition");
+    let amount = if definition.behavior == SpellBehavior::Channel {
+        channel_tick_resource_cost_amount(definition)
+    } else {
+        definition.primary_resource_cost
+    };
+    resolved_primary_resource_cost_for_amount(ctx, caster, spell_kind, amount)
+}
+
+fn resolved_channel_tick_resource_cost_for_action(
+    ctx: &ReducerContext,
+    caster: Identity,
+    spell_kind: &SpellId,
+) -> Option<ResolvedActionResourceCost> {
+    let definition = super::catalog::spell_definition(spell_kind)
+        .expect("validated spell id must resolve to a definition");
+    resolved_primary_resource_cost_for_amount(
+        ctx,
+        caster,
+        spell_kind,
+        channel_tick_resource_cost_amount(definition),
+    )
+}
+
+fn resolved_primary_resource_cost_for_amount(
+    ctx: &ReducerContext,
+    caster: Identity,
+    spell_kind: &SpellId,
+    amount: f32,
+) -> Option<ResolvedActionResourceCost> {
     let Some(ability) = active_selectable_ability_for_authored_action(
         ctx,
         caster,
         &AuthoredActionId::new(spell_kind.as_str()),
     ) else {
-        return Some(spell_cost);
+        return Some(ResolvedActionResourceCost::mana(amount));
     };
 
-    resolve_ability_action_resource_cost_amount(ctx, caster, &ability, spell_cost.amount)
+    resolve_ability_action_resource_cost_amount(ctx, caster, &ability, amount)
+}
+
+fn channel_tick_resource_cost_amount(definition: &SpellDefinition) -> f32 {
+    if definition.primary_resource_cost <= 0.0 {
+        return 0.0;
+    }
+    definition.primary_resource_cost * definition.update_interval.max(0.0)
 }
 
 fn spell_primary_resource_cost_for_action(spell_kind: &SpellId) -> ResolvedActionResourceCost {
@@ -700,7 +746,7 @@ pub(crate) fn cast_spell_for(
     }
     let uses_global_cooldown = definition.uses_global_cooldown;
     let Some(primary_resource_cost) =
-        resolved_primary_resource_cost_for_action(ctx, caster, spell_kind)
+        resolved_initial_primary_resource_cost_for_action(ctx, caster, spell_kind)
     else {
         record_spell_prediction_result(
             ctx,
@@ -786,7 +832,7 @@ pub(crate) fn cast_spell_for(
         return Ok(());
     }
 
-    if BespokeRuntimeSpell::from_spell_id(spell_kind) == Some(BespokeRuntimeSpell::Electrocute) {
+    if definition.behavior == SpellBehavior::Channel {
         let reject_reason = process_spell_cast(
             ctx,
             &cast_state,
@@ -849,7 +895,21 @@ pub(crate) fn cast_spell_for(
             ActionRejectReason::None,
             now,
         );
-        let started = start_electrocute_channel(ctx, &active_cast, &caster_state, now)?;
+        if !commit_channel_tick_resource_for_spell(ctx, caster, spell_kind, now) {
+            fizzle_active_cast_row_for_interrupt(ctx, &active_cast, &caster_state, spell_kind, now);
+            record_spell_prediction_result(
+                ctx,
+                caster,
+                active_cast.cast_id.as_str(),
+                predicted_cast_id.as_str(),
+                client_action_seq,
+                SPELL_PREDICTION_RESULT_REJECTED,
+                ActionRejectReason::InsufficientResource,
+                now,
+            );
+            return Ok(());
+        }
+        let started = start_channel(ctx, &active_cast, &caster_state, now)?;
         if !started {
             fizzle_active_cast_row_for_interrupt(ctx, &active_cast, &caster_state, spell_kind, now);
             record_spell_prediction_result(
@@ -860,20 +920,6 @@ pub(crate) fn cast_spell_for(
                 client_action_seq,
                 SPELL_PREDICTION_RESULT_REJECTED,
                 ActionRejectReason::Unspecified,
-                now,
-            );
-            return Ok(());
-        }
-        if !commit_primary_resource_for_spell(ctx, caster, spell_kind, now) {
-            fizzle_active_cast_row_for_interrupt(ctx, &active_cast, &caster_state, spell_kind, now);
-            record_spell_prediction_result(
-                ctx,
-                caster,
-                active_cast.cast_id.as_str(),
-                predicted_cast_id.as_str(),
-                client_action_seq,
-                SPELL_PREDICTION_RESULT_REJECTED,
-                ActionRejectReason::InsufficientResource,
                 now,
             );
             return Ok(());
@@ -1117,6 +1163,18 @@ fn commit_primary_resource_for_spell(
         now,
     );
     true
+}
+
+fn commit_channel_tick_resource_for_spell(
+    ctx: &ReducerContext,
+    caster: Identity,
+    spell_kind: &SpellId,
+    now: Timestamp,
+) -> bool {
+    let Some(cost) = resolved_channel_tick_resource_cost_for_action(ctx, caster, spell_kind) else {
+        return false;
+    };
+    pay_action_resource_cost(ctx, caster, &cost, now)
 }
 
 fn try_arm_auto_attack_for_spell_start(
@@ -1665,10 +1723,12 @@ pub(super) fn release_cast(
     if !valid_cast_action_token(predicted_cast_id.as_str(), client_action_seq) {
         return Ok(());
     }
-    if !matches!(
-        BespokeRuntimeSpell::from_spell_id(spell_kind),
-        Some(BespokeRuntimeSpell::InstantBeam | BespokeRuntimeSpell::Electrocute)
-    ) {
+    let Some(definition) = super::catalog::spell_definition(spell_kind) else {
+        return Ok(());
+    };
+    if BespokeRuntimeSpell::from_spell_id(spell_kind) != Some(BespokeRuntimeSpell::InstantBeam)
+        && definition.behavior != SpellBehavior::Channel
+    {
         return Ok(());
     }
 
@@ -1710,7 +1770,7 @@ pub(super) fn release_cast(
         return Ok(());
     }
 
-    if BespokeRuntimeSpell::from_spell_id(kind) == Some(BespokeRuntimeSpell::Electrocute) {
+    if active_definition.behavior == SpellBehavior::Channel {
         apply_active_cast_terminal_outcome(
             ctx,
             &active_cast,
@@ -1824,7 +1884,7 @@ pub(super) fn cancel_active_cast_from_input(
     }
 
     let now = ctx.timestamp;
-    if BespokeRuntimeSpell::from_spell_id(&active_kind) == Some(BespokeRuntimeSpell::Electrocute) {
+    if definition.behavior == SpellBehavior::Channel {
         record_spell_prediction_result(
             ctx,
             caster,
@@ -1938,7 +1998,7 @@ pub(crate) fn tick_active_casts(ctx: &ReducerContext, now: Timestamp) -> Result<
 
         let definition = definition.expect("non-movement active cast must resolve to a definition");
 
-        if BespokeRuntimeSpell::from_spell_id(kind) == Some(BespokeRuntimeSpell::Electrocute) {
+        if definition.behavior == SpellBehavior::Channel {
             if should_cancel_cast_from_movement(ctx, caster) {
                 apply_active_cast_terminal_outcome(
                     ctx,
@@ -1950,7 +2010,7 @@ pub(crate) fn tick_active_casts(ctx: &ReducerContext, now: Timestamp) -> Result<
                 continue;
             }
 
-            if !tick_electrocute_channel(ctx, &active_cast, &caster_state, now)? {
+            if !tick_channel(ctx, &active_cast, &caster_state, now)? {
                 continue;
             }
 
@@ -2359,6 +2419,12 @@ fn process_spell_cast(
             )?;
         }
         return Ok(None);
+    }
+
+    if definition.behavior == SpellBehavior::Channel {
+        return Ok(validate_targeted_channel_cast(
+            ctx, state, caster, spell_kind, target_id, definition,
+        ));
     }
 
     match BespokeRuntimeSpell::from_spell_id(spell_kind) {
@@ -3105,15 +3171,42 @@ fn spawn_tracking_projectile(
     action_instance_id: &str,
     ability_id: &str,
 ) -> Result<(), String> {
+    let projectile_instance_id = format!("{action_instance_id}:p{PROJECTILE_SEQUENCE_INDEX_V1}");
+    spawn_tracking_projectile_instance(
+        ctx,
+        caster,
+        state,
+        target,
+        kind,
+        action_instance_id,
+        ability_id,
+        projectile_instance_id.as_str(),
+        PROJECTILE_SEQUENCE_INDEX_V1,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn spawn_tracking_projectile_instance(
+    ctx: &ReducerContext,
+    caster: Identity,
+    state: &PlayerSnapshot,
+    target: &PlayerSnapshot,
+    kind: &SpellId,
+    action_instance_id: &str,
+    ability_id: &str,
+    projectile_instance_id: &str,
+    projectile_sequence_index: u32,
+) -> Result<(), String> {
     // Spells emit effects; they do not touch HP directly.
     let now = ctx.timestamp;
     let definition = super::catalog::spell_definition(kind)
-        .expect("validated PROJECTILE spell must resolve to a definition");
+        .expect("validated projectile-producing spell must resolve to a definition");
     let projectile_tunables = definition
         .secondary
         .projectile
         .as_ref()
-        .expect("validated PROJECTILE spell must define secondary projectile data");
+        .or(definition.secondary.channel_projectile.as_ref())
+        .expect("validated projectile-producing spell must define secondary projectile data");
     let boomerang = projectile_tunables.motion.boomerang().copied();
     let lifetime = boomerang
         .map(|motion| motion.lifetime_seconds)
@@ -3171,13 +3264,18 @@ fn spawn_tracking_projectile(
         dir_z
     );
 
-    let projectile_sequence_index = PROJECTILE_SEQUENCE_INDEX_V1;
-    let projectile_instance_id = format!("{action_instance_id}:p{projectile_sequence_index}");
     let projectile_id = crate::progression::projectile_body_vfx_id_for_spell(
         ability_id,
         kind.as_str(),
         projectile_sequence_index,
     )
+    .or_else(|| {
+        crate::progression::projectile_body_vfx_id_for_spell(
+            ability_id,
+            kind.as_str(),
+            PROJECTILE_SEQUENCE_INDEX_V1,
+        )
+    })
     .unwrap_or_default();
 
     let parry_behavior = projectile_tunables.parry_behavior.as_str();
@@ -3199,7 +3297,7 @@ fn spawn_tracking_projectile(
     emit_spell_projectile_release_event(
         ctx,
         action_instance_id,
-        projectile_instance_id.as_str(),
+        projectile_instance_id,
         projectile_sequence_index,
         projectile_id.as_str(),
         ability_id,
@@ -3228,7 +3326,7 @@ fn spawn_tracking_projectile(
     ctx.db
         .active_combat_projectile()
         .insert(ActiveCombatProjectile {
-            projectile_instance_id: projectile_instance_id.clone(),
+            projectile_instance_id: projectile_instance_id.to_string(),
             action_instance_id: action_instance_id.to_string(),
             projectile_sequence_index,
             projectile_id,
@@ -3777,9 +3875,7 @@ fn active_cast_interrupt_terminal_policy(active_kind: &SpellId) -> ActiveCastTer
         return ActiveCastTerminalOutcome::SilentClear;
     };
 
-    if BespokeRuntimeSpell::from_spell_id(&definition.kind)
-        == Some(BespokeRuntimeSpell::Electrocute)
-    {
+    if definition.behavior == SpellBehavior::Channel {
         ActiveCastTerminalOutcome::ChannelStop
     } else {
         ActiveCastTerminalOutcome::SpellFizzle(definition)
@@ -3817,7 +3913,7 @@ fn apply_active_cast_terminal_outcome(
             clear_active_cast(ctx, active_cast.caster);
         }
         ActiveCastTerminalOutcome::ChannelStop => {
-            stop_electrocute_channel(ctx, active_cast, caster_state, now, None);
+            stop_channel(ctx, active_cast, caster_state, now, None);
         }
     }
 }
@@ -4297,9 +4393,220 @@ struct ElectrocuteChannelState {
     target_id: Identity,
 }
 
+fn validate_targeted_channel_cast(
+    ctx: &ReducerContext,
+    state: &PlayerSnapshot,
+    caster: Identity,
+    spell_kind: &SpellId,
+    target_id: &str,
+    definition: &SpellDefinition,
+) -> Option<ActionRejectReason> {
+    let Some(target) = resolve_target(ctx, state.player_id, target_id) else {
+        return Some(ActionRejectReason::InvalidTarget);
+    };
+    if !target_audience_allows(ctx, caster, target.player_id, definition.target_audience) {
+        return Some(ActionRejectReason::InvalidTarget);
+    }
+    let check_target = overlay_press_rewound_target_pose(ctx, caster, target);
+    if !is_target_within_live_facing_arc(
+        ctx,
+        state,
+        caster,
+        &check_target,
+        TARGET_FACING_ARC_RADIANS,
+    ) {
+        return Some(ActionRejectReason::NotFacingTarget);
+    }
+    if definition.requires_target_los && !has_line_of_sight(ctx, state, &check_target) {
+        return Some(ActionRejectReason::LineOfSightBlocked);
+    }
+    if distance_to_target(state, &check_target) > definition.max_distance {
+        return Some(ActionRejectReason::OutOfRange);
+    }
+    if definition.secondary.channel_projectile.is_some()
+        && definition.speed <= 0.0
+        && BespokeRuntimeSpell::from_spell_id(spell_kind) != Some(BespokeRuntimeSpell::Electrocute)
+    {
+        return Some(ActionRejectReason::InvalidInput);
+    }
+    None
+}
+
 enum ElectrocuteChannelResolution {
     Ready(ElectrocuteChannelState),
     Invalid,
+}
+
+fn start_channel(
+    ctx: &ReducerContext,
+    active_cast: &ActiveCast,
+    caster_state: &PlayerSnapshot,
+    now: Timestamp,
+) -> Result<bool, String> {
+    let definition = super::catalog::spell_definition(
+        &SpellId::new(active_cast.kind.as_str())
+            .expect("active channel cast kind must be a valid spell id"),
+    )
+    .expect("active channel cast kind must resolve to a spell definition");
+
+    if BespokeRuntimeSpell::from_spell_id(&definition.kind)
+        == Some(BespokeRuntimeSpell::Electrocute)
+    {
+        return start_electrocute_channel(ctx, active_cast, caster_state, now);
+    }
+
+    if definition.secondary.channel_projectile.is_some() {
+        return start_projectile_channel(ctx, active_cast, caster_state, now);
+    }
+
+    ctx.db.channel_cast_runtime().insert(ChannelCastRuntime {
+        caster: active_cast.caster,
+        spell_instance_id: active_cast.cast_id.clone(),
+        last_update_at: now,
+    });
+    Ok(true)
+}
+
+fn tick_channel(
+    ctx: &ReducerContext,
+    active_cast: &ActiveCast,
+    caster_state: &PlayerSnapshot,
+    now: Timestamp,
+) -> Result<bool, String> {
+    let definition = super::catalog::spell_definition(
+        &SpellId::new(active_cast.kind.as_str())
+            .expect("active channel cast kind must be a valid spell id"),
+    )
+    .expect("active channel cast kind must resolve to a spell definition");
+
+    if BespokeRuntimeSpell::from_spell_id(&definition.kind)
+        == Some(BespokeRuntimeSpell::Electrocute)
+    {
+        return tick_electrocute_channel(ctx, active_cast, caster_state, now);
+    }
+
+    let Some(runtime) = ctx
+        .db
+        .channel_cast_runtime()
+        .caster()
+        .find(active_cast.caster)
+    else {
+        stop_channel(ctx, active_cast, caster_state, now, None);
+        return Ok(false);
+    };
+
+    let update_interval = seconds_to_duration(definition.update_interval);
+    if now < runtime.last_update_at + update_interval {
+        return Ok(true);
+    }
+
+    if !commit_channel_tick_resource_for_spell(ctx, active_cast.caster, &definition.kind, now) {
+        stop_channel(ctx, active_cast, caster_state, now, None);
+        return Ok(false);
+    }
+
+    if definition.secondary.channel_projectile.is_some()
+        && !spawn_channel_projectile(ctx, active_cast, caster_state, now)?
+    {
+        stop_channel(ctx, active_cast, caster_state, now, None);
+        return Ok(false);
+    }
+
+    let mut next_runtime = runtime.clone();
+    next_runtime.last_update_at = now;
+    ctx.db.channel_cast_runtime().caster().update(next_runtime);
+    Ok(true)
+}
+
+fn stop_channel(
+    ctx: &ReducerContext,
+    active_cast: &ActiveCast,
+    caster_state: &PlayerSnapshot,
+    now: Timestamp,
+    override_end: Option<Vec3>,
+) {
+    if let Ok(kind) = SpellId::new(active_cast.kind.as_str()) {
+        if BespokeRuntimeSpell::from_spell_id(&kind) == Some(BespokeRuntimeSpell::Electrocute) {
+            stop_electrocute_channel(ctx, active_cast, caster_state, now, override_end);
+            return;
+        }
+    }
+
+    ctx.db
+        .channel_cast_runtime()
+        .caster()
+        .delete(active_cast.caster);
+    clear_active_cast(ctx, active_cast.caster);
+}
+
+fn start_projectile_channel(
+    ctx: &ReducerContext,
+    active_cast: &ActiveCast,
+    caster_state: &PlayerSnapshot,
+    now: Timestamp,
+) -> Result<bool, String> {
+    let runtime = ChannelCastRuntime {
+        caster: active_cast.caster,
+        spell_instance_id: active_cast.cast_id.clone(),
+        last_update_at: now,
+    };
+    ctx.db.channel_cast_runtime().insert(runtime);
+    let spawned = spawn_channel_projectile(ctx, active_cast, caster_state, now)?;
+    if !spawned {
+        ctx.db
+            .channel_cast_runtime()
+            .caster()
+            .delete(active_cast.caster);
+    }
+    Ok(spawned)
+}
+
+fn spawn_channel_projectile(
+    ctx: &ReducerContext,
+    active_cast: &ActiveCast,
+    caster_state: &PlayerSnapshot,
+    now: Timestamp,
+) -> Result<bool, String> {
+    let Ok(kind) = SpellId::new(active_cast.kind.as_str()) else {
+        return Ok(false);
+    };
+    let Some(definition) = super::catalog::spell_definition(&kind) else {
+        return Ok(false);
+    };
+    let Some(target) = resolve_target(ctx, caster_state.player_id, active_cast.target_id.as_str())
+    else {
+        return Ok(false);
+    };
+    if validate_targeted_channel_cast(
+        ctx,
+        caster_state,
+        active_cast.caster,
+        &kind,
+        active_cast.target_id.as_str(),
+        definition,
+    )
+    .is_some()
+    {
+        return Ok(false);
+    }
+
+    let projectile_instance_id = format!(
+        "{}:c{}",
+        active_cast.cast_id,
+        timestamp_to_micros(now).max(0)
+    );
+    spawn_tracking_projectile_instance(
+        ctx,
+        active_cast.caster,
+        caster_state,
+        &target,
+        &kind,
+        active_cast.cast_id.as_str(),
+        active_cast.ability_id.as_str(),
+        projectile_instance_id.as_str(),
+        PROJECTILE_SEQUENCE_INDEX_V1,
+    )?;
+    Ok(true)
 }
 
 fn start_electrocute_channel(

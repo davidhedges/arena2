@@ -354,7 +354,10 @@ namespace Arena.UI
             string targeting = WireIdentifier.Normalize(spell.Targeting);
             string behavior = WireIdentifier.Normalize(spell.Behavior);
             float cost = Math.Max(0f, spell.PrimaryResourceCost);
-            return $"{targeting} | {behavior} | Cost {cost:0.#}";
+            string costLabel = string.Equals(behavior, SpellDefinitionContracts.BehaviorChannel, StringComparison.Ordinal)
+                ? $"{cost:0.#}/s"
+                : $"{cost:0.#}";
+            return $"{targeting} | {behavior} | Cost {costLabel}";
         }
 
         private static string Capitalize(string value)

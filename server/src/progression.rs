@@ -5129,7 +5129,22 @@ mod tests {
     }
 
     fn projectile_delivery_projectile_count(ability: &AbilityDefinition) -> u32 {
-        if ability_delivery_kind(ability) != "PROJECTILE" {
+        let delivery_kind = ability_delivery_kind(ability);
+        if delivery_kind == "CHANNEL" {
+            return if ability
+                .gameplay
+                .delivery
+                .as_ref()
+                .and_then(serde_json::Value::as_object)
+                .and_then(|delivery| delivery.get("projectile"))
+                .is_some()
+            {
+                1
+            } else {
+                0
+            };
+        }
+        if delivery_kind != "PROJECTILE" {
             return 0;
         }
         ability
@@ -5155,6 +5170,10 @@ mod tests {
                 }
             })
             .unwrap_or(1)
+    }
+
+    fn ability_uses_projectile_body(ability: &AbilityDefinition) -> bool {
+        projectile_delivery_projectile_count(ability) > 0
     }
 
     fn animation_set_asset_for_combat_profile(combat_profile_id: &str) -> &'static str {
@@ -5946,7 +5965,7 @@ mod tests {
             .abilities
             .iter()
             .filter(|ability| ability_gameplay_kind(ability) == "SPELL")
-            .filter(|ability| ability_delivery_kind(ability) == "PROJECTILE")
+            .filter(|ability| ability_uses_projectile_body(ability))
             .map(|ability| {
                 (
                     normalize_identifier(ability.ability_id.as_str()),
@@ -5960,7 +5979,7 @@ mod tests {
             .abilities
             .iter()
             .filter(|ability| ability_gameplay_kind(ability) == "SPELL")
-            .filter(|ability| ability_delivery_kind(ability) == "PROJECTILE")
+            .filter(|ability| ability_uses_projectile_body(ability))
             .map(|ability| {
                 (
                     normalize_identifier(ability.ability_id.as_str()),
@@ -5973,7 +5992,7 @@ mod tests {
             .abilities
             .iter()
             .filter(|ability| ability_gameplay_kind(ability) == "SPELL")
-            .filter(|ability| ability_delivery_kind(ability) == "PROJECTILE")
+            .filter(|ability| ability_uses_projectile_body(ability))
         {
             let spell_kind = normalize_identifier(ability.action_id.as_str());
             let count = projectile_delivery_projectile_count(ability);
@@ -6328,7 +6347,7 @@ mod tests {
                         errors.push(CombatAuthoringError::new(
                             CombatAuthoringRule::CombatVfxCueResolves,
                             format!(
-                                "combat VFX cue '{}' PROJECTILE_BODY owner '{}:{}' must resolve to a spell ability with PROJECTILE delivery",
+                                "combat VFX cue '{}' PROJECTILE_BODY owner '{}:{}' must resolve to a projectile-producing spell ability",
                                 cue.vfx_id, cue.owner_kind, cue.owner_id
                             ),
                         ));
@@ -6352,7 +6371,7 @@ mod tests {
                         errors.push(CombatAuthoringError::new(
                             CombatAuthoringRule::CombatVfxCueResolves,
                             format!(
-                                "combat VFX cue '{}' PROJECTILE_BODY owner '{}:{}' must resolve to a spell kind used by PROJECTILE delivery",
+                                "combat VFX cue '{}' PROJECTILE_BODY owner '{}:{}' must resolve to a projectile-producing spell kind",
                                 cue.vfx_id, cue.owner_kind, cue.owner_id
                             ),
                         ));
@@ -6870,6 +6889,39 @@ mod tests {
         assert_eq!(
             normalize_identifier(cue.lifecycle.as_str()),
             "PARTICLE_SYSTEM"
+        );
+    }
+
+    #[test]
+    fn frozen_splinters_authors_projectile_body_vfx() {
+        let ability = progression_catalog()
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "SPELL_FROZEN_SPLINTERS")
+            .expect("Frozen Splinters ability should be authored");
+        assert_eq!(ability.action_id, "FROZEN_SPLINTERS");
+        assert_eq!(ability_delivery_kind(ability), "CHANNEL");
+        assert_eq!(projectile_delivery_projectile_count(ability), 1);
+        assert_eq!(
+            projectile_body_vfx_id_for_spell("SPELL_FROZEN_SPLINTERS", "FROZEN_SPLINTERS", 0)
+                .as_deref(),
+            Some("VFX_FROZEN_SPLINTER_PROJECTILE_01")
+        );
+    }
+
+    #[test]
+    fn magic_missile_authors_projectile_body_vfx() {
+        let ability = progression_catalog()
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "SPELL_MAGIC_MISSILE")
+            .expect("Magic Missile ability should be authored");
+        assert_eq!(ability.action_id, "MAGIC_MISSILE");
+        assert_eq!(ability_delivery_kind(ability), "CHANNEL");
+        assert_eq!(projectile_delivery_projectile_count(ability), 1);
+        assert_eq!(
+            projectile_body_vfx_id_for_spell("SPELL_MAGIC_MISSILE", "MAGIC_MISSILE", 0).as_deref(),
+            Some("VFX_MAGIC_MISSILE_PROJECTILE_01")
         );
     }
 
@@ -8692,6 +8744,8 @@ mod tests {
             ("SPELL_FIREBALL", "FIREBALL", "FIRE"),
             ("SPELL_ICICLE", "ICICLE", "COLD"),
             ("SPELL_ELECTROCUTE", "ELECTROCUTE", "LIGHTNING"),
+            ("SPELL_FROZEN_SPLINTERS", "FROZEN_SPLINTERS", "COLD"),
+            ("SPELL_MAGIC_MISSILE", "MAGIC_MISSILE", "ARCANE"),
             ("SPELL_BOOMERANG_ORB", "BOOMERANG_ORB", "SHADOW"),
             ("SPELL_LIGHTNING", "LIGHTNING", "LIGHTNING"),
             ("SPELL_METEOR", "METEOR", "FIRE"),

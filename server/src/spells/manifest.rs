@@ -272,6 +272,7 @@ impl ApplyStatusDefinition {
 pub(crate) struct SpellSecondaryTunables {
     pub direct_target: Option<DirectTargetSecondaryTunables>,
     pub projectile: Option<ProjectileSecondaryTunables>,
+    pub channel_projectile: Option<ProjectileSecondaryTunables>,
     pub area: Option<AreaSecondaryTunables>,
     pub instant_beam: Option<InstantBeamSecondaryTunables>,
     pub apply_status: Option<ApplyStatusSecondaryTunables>,
@@ -619,7 +620,14 @@ mod tests {
             );
         }
 
-        for id in ["ICICLE", "METEOR", "INSTANT_BEAM", "ELECTROCUTE"] {
+        for id in [
+            "ICICLE",
+            "METEOR",
+            "INSTANT_BEAM",
+            "ELECTROCUTE",
+            "FROZEN_SPLINTERS",
+            "MAGIC_MISSILE",
+        ] {
             assert_eq!(
                 definition(id).cast_mobility,
                 SpellCastMobility::GroundedStationary
@@ -634,6 +642,8 @@ mod tests {
             "ICICLE",
             "INSTANT_BEAM",
             "ELECTROCUTE",
+            "FROZEN_SPLINTERS",
+            "MAGIC_MISSILE",
             "GLACIAL_SPIKE",
         ] {
             assert!(definition(id).arms_auto_attack_on_cast);
@@ -980,6 +990,58 @@ mod tests {
         assert_eq!(status.duration(), Duration::from_millis(1_200));
         assert!((definition.primary_resource_gain_on_cast - 0.0).abs() < 0.0001);
         assert!(!definition.generates_primary_resource_on_cast);
+    }
+
+    #[test]
+    fn frozen_splinters_catalog_matches_channel_projectile_defaults() {
+        let definition = definition("FROZEN_SPLINTERS");
+
+        assert_eq!(definition.kind.as_str(), "FROZEN_SPLINTERS");
+        assert_eq!(definition.cooldown, Duration::from_millis(1_100));
+        assert!(definition.uses_global_cooldown);
+        assert_eq!(definition.behavior.as_str(), "CHANNEL");
+        assert_eq!(definition.targeting.as_str(), "TARGET");
+        assert!(definition.requires_target);
+        assert_eq!(definition.cast_time, Duration::ZERO);
+        assert_eq!(definition.damage, 2);
+        assert_eq!(definition.damage_type.as_str(), "COLD");
+        assert!((definition.primary_resource_cost - 20.0).abs() < 0.0001);
+        assert!((definition.update_interval - 0.1).abs() < 0.0001);
+        assert!((definition.duration - 2.25).abs() < 0.0001);
+        assert!(definition.arms_auto_attack_on_cast);
+        let projectile = definition
+            .secondary
+            .channel_projectile
+            .as_ref()
+            .expect("Frozen Splinters should define channel projectile data");
+        assert_eq!(projectile.motion.kind(), "LINEAR");
+        assert_eq!(projectile.parry_behavior.as_str(), "PARRYABLE");
+    }
+
+    #[test]
+    fn magic_missile_catalog_matches_channel_projectile_defaults() {
+        let definition = definition("MAGIC_MISSILE");
+
+        assert_eq!(definition.kind.as_str(), "MAGIC_MISSILE");
+        assert_eq!(definition.cooldown, Duration::from_millis(1_100));
+        assert!(definition.uses_global_cooldown);
+        assert_eq!(definition.behavior.as_str(), "CHANNEL");
+        assert_eq!(definition.targeting.as_str(), "TARGET");
+        assert!(definition.requires_target);
+        assert_eq!(definition.cast_time, Duration::ZERO);
+        assert_eq!(definition.damage, 2);
+        assert_eq!(definition.damage_type.as_str(), "ARCANE");
+        assert!((definition.primary_resource_cost - 20.0).abs() < 0.0001);
+        assert!((definition.update_interval - 0.1).abs() < 0.0001);
+        assert!((definition.duration - 2.25).abs() < 0.0001);
+        assert!(definition.arms_auto_attack_on_cast);
+        let projectile = definition
+            .secondary
+            .channel_projectile
+            .as_ref()
+            .expect("Magic Missile should define channel projectile data");
+        assert_eq!(projectile.motion.kind(), "LINEAR");
+        assert_eq!(projectile.parry_behavior.as_str(), "PARRYABLE");
     }
 
     #[test]

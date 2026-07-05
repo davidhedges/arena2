@@ -138,6 +138,11 @@ const PROJECTILE_CONTACT_METADATA_KIND: &str = "PROJECTILE_CONTACT";
 const PROJECTILE_CONTACT_TERMINAL_KEY: &str = "TERMINAL";
 const PROJECTILE_CONTACT_NON_TERMINAL_VALUE: &str = "FALSE";
 
+fn spell_definition_drives_active_projectile(definition: &SpellRuntimeDefinition) -> bool {
+    definition.behavior == SpellBehavior::Projectile
+        || definition.secondary.channel_projectile.is_some()
+}
+
 fn tick_projectile_instance(
     ctx: &ReducerContext,
     now: Timestamp,
@@ -158,7 +163,7 @@ fn tick_projectile_instance(
             fizzle_projectile_and_finish(ctx, now, &projectile, metrics);
             return;
         };
-        if definition.behavior != SpellBehavior::Projectile {
+        if !spell_definition_drives_active_projectile(definition) {
             fizzle_projectile_and_finish(ctx, now, &projectile, metrics);
             return;
         }
@@ -2199,6 +2204,23 @@ mod tests {
             hit_index: 0,
             created_at: Timestamp::UNIX_EPOCH,
         }
+    }
+
+    #[test]
+    fn projectile_backed_channel_spells_drive_active_projectiles() {
+        let frozen_splinters =
+            spell_definition_by_str("FROZEN_SPLINTERS").expect("Frozen Splinters should exist");
+        assert_eq!(frozen_splinters.behavior, SpellBehavior::Channel);
+        assert!(spell_definition_drives_active_projectile(frozen_splinters));
+
+        let magic_missile =
+            spell_definition_by_str("MAGIC_MISSILE").expect("Magic Missile should exist");
+        assert_eq!(magic_missile.behavior, SpellBehavior::Channel);
+        assert!(spell_definition_drives_active_projectile(magic_missile));
+
+        let electrocute = spell_definition_by_str("ELECTROCUTE").expect("Electrocute should exist");
+        assert_eq!(electrocute.behavior, SpellBehavior::Channel);
+        assert!(!spell_definition_drives_active_projectile(electrocute));
     }
 
     #[test]

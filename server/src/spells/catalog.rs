@@ -66,33 +66,14 @@ enum SpellCatalogDelivery {
         impact_effects: Vec<ImpactEffectRow>,
     },
     Projectile {
-        #[serde(default)]
-        speed: f32,
+        #[serde(flatten)]
+        projectile: ProjectileTuningRow,
         #[serde(default)]
         max_distance: f32,
         damage: i32,
         #[serde(default)]
         damage_type: String,
-        #[serde(default)]
-        spawn_forward: f32,
-        #[serde(default)]
-        spawn_height: f32,
-        #[serde(default)]
-        turn_rate: f32,
-        update_interval_seconds: f32,
-        #[serde(default)]
-        radius: f32,
         block_behavior: BlockBehavior,
-        #[serde(default)]
-        parry_behavior: Option<SpellParryBehavior>,
-        #[serde(default)]
-        homing_window_seconds: f32,
-        #[serde(default)]
-        motion: ProjectileMotionRow,
-        #[serde(default)]
-        impact_effects: Vec<ImpactEffectRow>,
-        #[serde(default)]
-        terrain_conforming: bool,
     },
     Area {
         #[serde(default)]
@@ -137,9 +118,13 @@ enum SpellCatalogDelivery {
         damage: i32,
         #[serde(default)]
         damage_type: String,
+        #[serde(default)]
+        resource_cost_per_second: f32,
         update_interval_seconds: f32,
         duration_seconds: f32,
         block_behavior: BlockBehavior,
+        #[serde(default)]
+        projectile: Option<ProjectileTuningRow>,
     },
     ApplyStatus {
         duration_ms: u64,
@@ -192,6 +177,33 @@ struct RemoveStatusRow {
     kind: StatusEffectKind,
     #[serde(default)]
     stack_group: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct ProjectileTuningRow {
+    #[serde(default)]
+    speed: f32,
+    #[serde(default)]
+    spawn_forward: f32,
+    #[serde(default)]
+    spawn_height: f32,
+    #[serde(default)]
+    turn_rate: f32,
+    #[serde(default)]
+    update_interval_seconds: f32,
+    #[serde(default)]
+    radius: f32,
+    #[serde(default)]
+    parry_behavior: Option<SpellParryBehavior>,
+    #[serde(default)]
+    homing_window_seconds: f32,
+    #[serde(default)]
+    motion: ProjectileMotionRow,
+    #[serde(default)]
+    impact_effects: Vec<ImpactEffectRow>,
+    #[serde(default)]
+    terrain_conforming: bool,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
@@ -691,10 +703,25 @@ fn spell_gameplay_spell_rows_from_value(
 
 impl SpellGameplayCatalogRow {
     fn into_spell_row(self, ability: SpellAbilityCatalogRow) -> Result<SpellCatalogRow, String> {
-        let resource_cost = if self.resource_cost > 0.0 {
+        let authored_spell_resource_cost = if self.resource_cost > 0.0 {
             self.resource_cost
         } else {
             ability.resource_cost
+        };
+        let resource_cost = match &self.delivery {
+            SpellCatalogDelivery::Channel {
+                resource_cost_per_second,
+                ..
+            } => {
+                if authored_spell_resource_cost > 0.0 {
+                    return Err(format!(
+                        "spell ability '{}' CHANNEL delivery must author resource_cost_per_second instead of gameplay.resource_cost",
+                        ability.ability_id
+                    ));
+                }
+                *resource_cost_per_second
+            }
+            _ => authored_spell_resource_cost,
         };
         Ok(SpellCatalogRow {
             kind: SpellId::new(ability.action_id.as_str()).map_err(|err| {
@@ -799,36 +826,26 @@ impl SpellCatalogRow {
                 });
             }
             SpellCatalogDelivery::Projectile {
-                speed,
+                projectile,
                 max_distance,
                 damage,
                 damage_type,
-                spawn_forward,
-                spawn_height,
-                turn_rate,
-                update_interval_seconds,
-                radius,
                 block_behavior,
-                parry_behavior,
-                homing_window_seconds,
-                motion,
-                impact_effects,
-                terrain_conforming,
             } => {
                 definition.behavior = SpellBehavior::Projectile;
                 definition.damage = damage;
                 definition.damage_type = DamageType::from_wire(damage_type.as_str());
-                definition.spawn_forward = spawn_forward;
-                definition.spawn_height = spawn_height;
-                definition.turn_rate = turn_rate;
-                definition.update_interval = update_interval_seconds;
+                definition.spawn_forward = projectile.spawn_forward;
+                definition.spawn_height = projectile.spawn_height;
+                definition.turn_rate = projectile.turn_rate;
+                definition.update_interval = projectile.update_interval_seconds;
                 definition.block_behavior = block_behavior;
-                let motion = ProjectileMotionTunables::from(motion);
+                let motion = ProjectileMotionTunables::from(projectile.motion);
                 match &motion {
                     ProjectileMotionTunables::Linear => {
-                        definition.speed = speed;
+                        definition.speed = projectile.speed;
                         definition.max_distance = max_distance;
-                        definition.radius = radius;
+                        definition.radius = projectile.radius;
                     }
                     ProjectileMotionTunables::OrbitCaster(orbit) => {
                         definition.speed = 0.0;
@@ -837,7 +854,7 @@ impl SpellCatalogRow {
                         definition.radius = orbit.hit_radius;
                     }
                     ProjectileMotionTunables::BoomerangCaster(boomerang) => {
-                        definition.speed = speed;
+                        definition.speed = projectile.speed;
                         definition.max_distance = boomerang.outbound_distance;
                         definition.duration = boomerang.lifetime_seconds;
                         definition.radius = boomerang.hit_radius;
@@ -845,10 +862,16 @@ impl SpellCatalogRow {
                 }
                 definition.secondary.projectile = Some(ProjectileSecondaryTunables {
                     motion,
-                    parry_behavior: parry_behavior.unwrap_or(SpellParryBehavior::Unparryable),
-                    homing_window_seconds,
-                    impact_effects: impact_effects.into_iter().map(Into::into).collect(),
-                    terrain_conforming,
+                    parry_behavior: projectile
+                        .parry_behavior
+                        .unwrap_or(SpellParryBehavior::Unparryable),
+                    homing_window_seconds: projectile.homing_window_seconds,
+                    impact_effects: projectile
+                        .impact_effects
+                        .into_iter()
+                        .map(Into::into)
+                        .collect(),
+                    terrain_conforming: projectile.terrain_conforming,
                 });
             }
             SpellCatalogDelivery::Area {
@@ -913,9 +936,11 @@ impl SpellCatalogRow {
                 max_distance,
                 damage,
                 damage_type,
+                resource_cost_per_second: _,
                 update_interval_seconds,
                 duration_seconds,
                 block_behavior,
+                projectile,
             } => {
                 definition.behavior = SpellBehavior::Channel;
                 definition.max_distance = max_distance;
@@ -924,6 +949,26 @@ impl SpellCatalogRow {
                 definition.update_interval = update_interval_seconds;
                 definition.duration = duration_seconds;
                 definition.block_behavior = block_behavior;
+                if let Some(projectile) = projectile {
+                    definition.speed = projectile.speed;
+                    definition.spawn_forward = projectile.spawn_forward;
+                    definition.spawn_height = projectile.spawn_height;
+                    definition.turn_rate = projectile.turn_rate;
+                    definition.radius = projectile.radius;
+                    definition.secondary.channel_projectile = Some(ProjectileSecondaryTunables {
+                        motion: ProjectileMotionTunables::from(projectile.motion),
+                        parry_behavior: projectile
+                            .parry_behavior
+                            .unwrap_or(SpellParryBehavior::Unparryable),
+                        homing_window_seconds: projectile.homing_window_seconds,
+                        impact_effects: projectile
+                            .impact_effects
+                            .into_iter()
+                            .map(Into::into)
+                            .collect(),
+                        terrain_conforming: projectile.terrain_conforming,
+                    });
+                }
             }
             SpellCatalogDelivery::ApplyStatus {
                 duration_ms,
@@ -1848,7 +1893,22 @@ fn validate_secondary_tunables(def: &SpellDefinition) -> Result<(), String> {
             }
             ensure_no_secondary(def, true, true, true, true, true, true)?;
         }
-        SpellBehavior::Channel | SpellBehavior::SelfResource => {
+        SpellBehavior::Channel => {
+            let expected = SpellSecondaryTunables {
+                channel_projectile: def.secondary.channel_projectile.clone(),
+                ..SpellSecondaryTunables::default()
+            };
+            if def.secondary != expected {
+                return Err(format!(
+                    "{} CHANNEL must only define channel projectile secondary spell tunables",
+                    def.kind.as_str()
+                ));
+            }
+            if let Some(projectile) = &def.secondary.channel_projectile {
+                validate_projectile_motion(def, projectile)?;
+            }
+        }
+        SpellBehavior::SelfResource => {
             if def.secondary != SpellSecondaryTunables::default() {
                 return Err(format!(
                     "{} {:?} must not define secondary spell tunables",
@@ -2238,6 +2298,8 @@ mod tests {
                 "WITHERING_ORB",
                 "INSTANT_BEAM",
                 "ELECTROCUTE",
+                "FROZEN_SPLINTERS",
+                "MAGIC_MISSILE",
                 "FROST_NOVA",
                 "NEGATE",
                 "BLINDING_LIGHT",
@@ -2297,6 +2359,8 @@ mod tests {
             "WITHERING_ORB",
             "INSTANT_BEAM",
             "ELECTROCUTE",
+            "FROZEN_SPLINTERS",
+            "MAGIC_MISSILE",
             "FROST_NOVA",
             "NEGATE",
             "BLINDING_LIGHT",
@@ -2366,6 +2430,79 @@ mod tests {
         assert_eq!(definitions.len(), 1);
         assert_eq!(definitions[0].kind.as_str(), "TEST_PROJECTILE");
         assert_eq!(definitions[0].behavior, SpellBehavior::Projectile);
+    }
+
+    #[test]
+    fn channel_spells_author_per_second_resource_cost_on_delivery() {
+        let json = r#"{
+            "abilities": [{
+                "ability_id": "TEST_CHANNEL_ABILITY",
+                "action_id": "TEST_CHANNEL",
+                "gameplay": {
+                    "kind": "SPELL",
+                    "cooldown_ms": 1000,
+                    "uses_global_cooldown": true,
+                    "cast_time_ms": 0,
+                    "cast_mobility": "GROUNDED_STATIONARY",
+                    "targeting": "TARGET",
+                    "requires_target": true,
+                    "arms_auto_attack_on_cast": false,
+                    "delivery": {
+                        "kind": "CHANNEL",
+                        "max_distance": 18.0,
+                        "damage": 2,
+                        "resource_cost_per_second": 20.0,
+                        "update_interval_seconds": 0.1,
+                        "duration_seconds": 2.0,
+                        "block_behavior": "BLOCKABLE"
+                    }
+                }
+            }]
+        }"#;
+
+        let definitions =
+            definitions_from_rows(spell_rows_from_json(json).expect("test row should parse"))
+                .expect("channel spell should load");
+
+        assert_eq!(definitions[0].kind.as_str(), "TEST_CHANNEL");
+        assert_eq!(definitions[0].behavior, SpellBehavior::Channel);
+        assert!((definitions[0].primary_resource_cost - 20.0).abs() < 0.0001);
+    }
+
+    #[test]
+    fn channel_spells_reject_generic_resource_cost_authoring() {
+        let json = r#"{
+            "abilities": [{
+                "ability_id": "TEST_CHANNEL_ABILITY",
+                "action_id": "TEST_CHANNEL",
+                "gameplay": {
+                    "kind": "SPELL",
+                    "cooldown_ms": 1000,
+                    "uses_global_cooldown": true,
+                    "cast_time_ms": 0,
+                    "cast_mobility": "GROUNDED_STATIONARY",
+                    "targeting": "TARGET",
+                    "requires_target": true,
+                    "resource_cost": 20.0,
+                    "arms_auto_attack_on_cast": false,
+                    "delivery": {
+                        "kind": "CHANNEL",
+                        "max_distance": 18.0,
+                        "damage": 2,
+                        "update_interval_seconds": 0.1,
+                        "duration_seconds": 2.0,
+                        "block_behavior": "BLOCKABLE"
+                    }
+                }
+            }]
+        }"#;
+
+        let err =
+            spell_rows_from_json(json).expect_err("generic channel resource_cost should reject");
+        assert!(
+            err.contains("resource_cost_per_second"),
+            "unexpected error: {err}"
+        );
     }
 
     #[test]

@@ -293,7 +293,7 @@ namespace Arena.UI
                 TextMeshProUGUI name = MakeLabel("Name", row, DisplayNameForSpell(conn, spellId), 15f, TextAlignmentOptions.MidlineLeft, Color.white);
                 SetRect(name.rectTransform, new Vector2(86f, -10f), new Vector2(330f, 24f), new Vector2(0f, 1f), new Vector2(0f, 1f));
 
-                TextMeshProUGUI meta = MakeLabel("Meta", row, MetadataForSpell(spell), 12f, TextAlignmentOptions.MidlineLeft, HeatUiStyle.MutedText);
+                TextMeshProUGUI meta = MakeLabel("Meta", row, MetadataForSpell(conn, spellId, spell), 12f, TextAlignmentOptions.MidlineLeft, HeatUiStyle.MutedText);
                 SetRect(meta.rectTransform, new Vector2(86f, -34f), new Vector2(390f, 18f), new Vector2(0f, 1f), new Vector2(0f, 1f));
             }
         }
@@ -395,7 +395,7 @@ namespace Arena.UI
                 SpellDefinition? definition = string.IsNullOrWhiteSpace(spellId)
                     ? null
                     : conn.Db.SpellDefinition.Kind.Find(spellId);
-                parts.Add($"{spell.SlotIndex}:{spellId}:{MetadataForSpell(definition)}");
+                parts.Add($"{spell.SlotIndex}:{spellId}:{MetadataForSpell(conn, spellId, definition)}");
             }
             return string.Join("|", parts);
         }
@@ -408,14 +408,15 @@ namespace Arena.UI
             return ActionPresentation.ResolveDisplayName(conn, conn?.Identity, spellId, spellId);
         }
 
-        private static string MetadataForSpell(SpellDefinition? spell)
+        private static string MetadataForSpell(DbConnection? conn, string spellId, SpellDefinition? spell)
         {
             if (spell == null)
                 return "Unknown";
 
+            AbilityCatalog? ability = FindAbilityForSpell(conn, spellId);
             List<string> parts = new();
             float cost = Math.Max(0f, spell.PrimaryResourceCost);
-            parts.Add(cost > 0.0001f ? $"{cost:0.#} Mana" : "Free");
+            parts.Add(cost > 0.0001f ? FormatSpellResourceCost(conn, ability, spell, cost) : "Free");
             if (spell.CooldownMs > 0)
                 parts.Add($"{spell.CooldownMs / 1000f:0.#}s");
 
@@ -424,6 +425,44 @@ namespace Arena.UI
                 parts.Add(targeting);
 
             return string.Join(" - ", parts);
+        }
+
+        private static AbilityCatalog? FindAbilityForSpell(DbConnection? conn, string spellId)
+        {
+            string normalizedSpellId = WireIdentifier.Normalize(spellId);
+            if (conn == null || string.IsNullOrWhiteSpace(normalizedSpellId))
+                return null;
+
+            foreach (AbilityCatalog ability in conn.Db.AbilityCatalog.Iter())
+            {
+                if (!string.Equals(WireIdentifier.Normalize(ability.ActionId), normalizedSpellId, StringComparison.Ordinal))
+                    continue;
+                if (string.Equals(WireIdentifier.Normalize(ability.AbilityKind), AbilityKinds.Spell, StringComparison.Ordinal))
+                    return ability;
+            }
+
+            return null;
+        }
+
+        private static string FormatSpellResourceCost(DbConnection? conn, AbilityCatalog? ability, SpellDefinition spell, float cost)
+        {
+            string resource = ResolveResourceDisplayName(conn, ability?.ResourceKind);
+            string suffix = string.Equals(spell.Behavior, SpellDefinitionContracts.BehaviorChannel, StringComparison.Ordinal)
+                ? "/s"
+                : string.Empty;
+            return $"{cost:0.#} {resource}{suffix}";
+        }
+
+        private static string ResolveResourceDisplayName(DbConnection? conn, string? resourceKind)
+        {
+            string normalized = WireIdentifier.Normalize(resourceKind);
+            if (string.IsNullOrWhiteSpace(normalized))
+                normalized = "MANA";
+
+            ResourceCatalog? resource = conn?.Db.ResourceCatalog.ResourceKind.Find(normalized);
+            return string.IsNullOrWhiteSpace(resource?.DisplayName)
+                ? normalized
+                : resource.DisplayName;
         }
 
         private void SetTitle(string title)

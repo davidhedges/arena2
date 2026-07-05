@@ -1913,15 +1913,37 @@ namespace Arena.UI
             if (spell == null)
                 return string.Empty;
 
+            AbilityCatalog? ability = FindAbilityForSpell(conn, spellId);
             List<string> parts = new();
             if (spell.PrimaryResourceCost > 0.0001f)
-                parts.Add($"{spell.PrimaryResourceCost:0.#} Mana");
+                parts.Add(FormatSpellResourceCost(conn, ability, spell));
             if (spell.CooldownMs > 0)
                 parts.Add($"{spell.CooldownMs / 1000f:0.#}s");
             if (!string.IsNullOrWhiteSpace(spell.Targeting))
                 parts.Add(WireIdentifier.Normalize(spell.Targeting));
 
             return string.Join(" - ", parts);
+        }
+
+        private static string FormatSpellResourceCost(DbConnection? conn, AbilityCatalog? ability, SpellDefinition spell)
+        {
+            string resource = ResolveResourceDisplayName(conn, ability?.ResourceKind);
+            string suffix = string.Equals(spell.Behavior, SpellDefinitionContracts.BehaviorChannel, StringComparison.Ordinal)
+                ? "/s"
+                : string.Empty;
+            return $"{spell.PrimaryResourceCost:0.#} {resource}{suffix}";
+        }
+
+        private static string ResolveResourceDisplayName(DbConnection? conn, string? resourceKind)
+        {
+            string normalized = WireIdentifier.Normalize(resourceKind);
+            if (string.IsNullOrWhiteSpace(normalized))
+                normalized = "MANA";
+
+            ResourceCatalog? resource = conn?.Db.ResourceCatalog.ResourceKind.Find(normalized);
+            return string.IsNullOrWhiteSpace(resource?.DisplayName)
+                ? normalized
+                : resource.DisplayName;
         }
 
         private void UpdateActionBarCooldownPresentation(long nowMs, float gcdFrac, LocalCombatState combat)

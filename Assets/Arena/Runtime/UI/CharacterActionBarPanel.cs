@@ -374,29 +374,32 @@ namespace Arena.UI
                 TooltipData tooltip = action.IsFixed
                     ? ActionTooltipResolver.ResolveForFixedAction(conn, action.ActionId)
                     : ActionTooltipResolver.ResolveForAbility(conn, owner, conn?.Db.AbilityCatalog.AbilityId.Find(action.AbilityId));
-                if (!action.IsUsable)
+                bool canAssignToSpellbook = AvailableActionCanAssignToSpellbook(action);
+                bool canInteract = action.IsUsable || canAssignToSpellbook;
+                if (!action.IsUsable && canAssignToSpellbook)
+                    tooltip = SpellbookAssignableTooltip(tooltip, action);
+                else if (!action.IsUsable)
                     tooltip = DisabledTooltip(tooltip, action);
-                bool canDrag = action.IsUsable || AvailableActionCanAssignToSpellbook(action);
                 GameObject cell = ActionBarSlotViewFactory.Create(
                     _availableContent,
                     $"Available_{action.ActionKind}_{action.ActionId}",
                     iconSprite == null ? action.DisplayName : string.Empty,
                     string.Empty,
-                    action.IsUsable
+                    canInteract
                         ? action.IsFixed ? FixedActionColor(action.ActionId) : AbilityColor(action.AbilityId)
                         : DisabledActionColor,
-                    action.IsUsable ? Color.white : DisabledActionTextColor,
+                    canInteract ? Color.white : DisabledActionTextColor,
                     iconSprite,
                     _canvas,
-                    payloadProvider: canDrag ? () => action.ToDragPayload() : null,
-                    onDrop: canDrag ? HandleActionDrop : null,
+                    payloadProvider: canInteract ? () => action.ToDragPayload() : null,
+                    onDrop: canInteract ? HandleActionDrop : null,
                     onClick: action.IsUsable ? () =>
                     {
                         _selectedAction = action;
                         _lastSignature = string.Empty;
                     } : null,
                     tooltipData: tooltip);
-                if (!action.IsUsable && iconSprite != null)
+                if (!canInteract && iconSprite != null)
                     TintIcon(cell, DisabledActionTextColor);
                 SetRect((RectTransform)cell.transform, position, ActionBarLayout.SlotVector, new Vector2(0f, 1f), new Vector2(0f, 1f));
 
@@ -575,15 +578,37 @@ namespace Arena.UI
             if (spell == null)
                 return string.Empty;
 
+            AbilityCatalog? ability = FindAbilityForSpell(conn, spellId);
             List<string> parts = new();
             if (spell.PrimaryResourceCost > 0.0001f)
-                parts.Add($"{spell.PrimaryResourceCost:0.#} Mana");
+                parts.Add(FormatSpellResourceCost(conn, ability, spell));
             if (spell.CooldownMs > 0)
                 parts.Add($"{spell.CooldownMs / 1000f:0.#}s");
             if (!string.IsNullOrWhiteSpace(spell.Targeting))
                 parts.Add(WireIdentifier.Normalize(spell.Targeting));
 
             return string.Join(" - ", parts);
+        }
+
+        private static string FormatSpellResourceCost(DbConnection? conn, AbilityCatalog? ability, SpellDefinition spell)
+        {
+            string resource = ResolveResourceDisplayName(conn, ability?.ResourceKind);
+            string suffix = string.Equals(spell.Behavior, SpellDefinitionContracts.BehaviorChannel, StringComparison.Ordinal)
+                ? "/s"
+                : string.Empty;
+            return $"{spell.PrimaryResourceCost:0.#} {resource}{suffix}";
+        }
+
+        private static string ResolveResourceDisplayName(DbConnection? conn, string? resourceKind)
+        {
+            string normalized = WireIdentifier.Normalize(resourceKind);
+            if (string.IsNullOrWhiteSpace(normalized))
+                normalized = "MANA";
+
+            ResourceCatalog? resource = conn?.Db.ResourceCatalog.ResourceKind.Find(normalized);
+            return string.IsNullOrWhiteSpace(resource?.DisplayName)
+                ? normalized
+                : resource.DisplayName;
         }
 
         private void HandleActionDrop(ActionBarDragPayload payload, string? targetSlotId)
@@ -901,6 +926,15 @@ namespace Arena.UI
                 ? baseTooltip.Subtitle
                 : action.DisabledReason;
             return new TooltipData(name, subtitle, baseTooltip.Description);
+        }
+
+        private static TooltipData SpellbookAssignableTooltip(TooltipData baseTooltip, AvailableAction action)
+        {
+            string name = baseTooltip.IsValid ? baseTooltip.Name : action.DisplayName;
+            string description = baseTooltip.Description;
+            if (string.IsNullOrWhiteSpace(description))
+                description = action.DisabledReason;
+            return new TooltipData(name, "Drop into spellbook", description);
         }
 
         private static bool MatchesWeaponFilter(AvailableAction action, string weaponFilterKey)

@@ -1268,6 +1268,82 @@
       }
     },
     {
+      "ability_id": "SPELL_FROZEN_SPLINTERS",
+      "combat_profile_id": "",
+      "action_id": "FROZEN_SPLINTERS",
+      "display_name": "Frozen Splinters",
+      "resource_kind": "MANA",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 1005,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 1100,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "GROUNDED_STATIONARY",
+        "targeting": "TARGET",
+        "requires_target": true,
+        "arms_auto_attack_on_cast": true,
+        "delivery": {
+          "kind": "CHANNEL",
+          "max_distance": 18,
+          "damage": 2,
+          "damage_type": "COLD",
+          "resource_cost_per_second": 20,
+          "update_interval_seconds": 0.1,
+          "duration_seconds": 2.25,
+          "block_behavior": "BLOCKABLE",
+          "projectile": {
+            "speed": 26,
+            "spawn_forward": 0.9,
+            "spawn_height": 1.2,
+            "radius": 0.28,
+            "parry_behavior": "PARRYABLE"
+          }
+        }
+      }
+    },
+    {
+      "ability_id": "SPELL_MAGIC_MISSILE",
+      "combat_profile_id": "",
+      "action_id": "MAGIC_MISSILE",
+      "display_name": "Magic Missile",
+      "resource_kind": "MANA",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 1006,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 1100,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "GROUNDED_STATIONARY",
+        "targeting": "TARGET",
+        "requires_target": true,
+        "arms_auto_attack_on_cast": true,
+        "delivery": {
+          "kind": "CHANNEL",
+          "max_distance": 18,
+          "damage": 2,
+          "damage_type": "ARCANE",
+          "resource_cost_per_second": 20,
+          "update_interval_seconds": 0.1,
+          "duration_seconds": 2.25,
+          "block_behavior": "BLOCKABLE",
+          "projectile": {
+            "speed": 26,
+            "spawn_forward": 0.9,
+            "spawn_height": 1.2,
+            "radius": 0.28,
+            "parry_behavior": "PARRYABLE"
+          }
+        }
+      }
+    },
+    {
       "ability_id": "SPELL_FROST_NOVA",
       "combat_profile_id": "",
       "action_id": "FROST_NOVA",
@@ -3531,6 +3607,20 @@
     },
     {
       "presentation_kind": "ABILITY",
+      "presentation_id": "SPELL_FROZEN_SPLINTERS",
+      "display_name": "Frozen Splinters",
+      "description": "Channels a rapid stream of cold splinters into the target.",
+      "sort_order": 86
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "SPELL_MAGIC_MISSILE",
+      "display_name": "Magic Missile",
+      "description": "Channels a rapid stream of arcane missiles into the target.",
+      "sort_order": 86
+    },
+    {
+      "presentation_kind": "ABILITY",
       "presentation_id": "SPELL_NEGATE",
       "display_name": "Negate",
       "description": "Releases an arcane pulse that disrupts hostile magic.",
@@ -4478,6 +4568,44 @@
     },
     {
       "owner_kind": "ABILITY",
+      "owner_id": "SPELL_FROZEN_SPLINTERS",
+      "trigger": "SPELL_RELEASE",
+      "anchor": "LEFT_HAND",
+      "vfx_id": "VFX_FROZEN_SPLINTER_PROJECTILE_01",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "PROJECTILE_BODY",
+      "lifecycle": "UNTIL_TERMINAL_EVENT",
+      "projectile_sequence_index": 0,
+      "duration_ms": 0,
+      "sort_order": 188
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "SPELL_FROZEN_SPLINTERS",
+      "trigger": "SPELL_IMPACT",
+      "anchor": "IMPACT_POINT",
+      "vfx_id": "VFX_ICE_HIT_01",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "DURATION",
+      "duration_ms": 700,
+      "sort_order": 189
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "SPELL_MAGIC_MISSILE",
+      "trigger": "SPELL_RELEASE",
+      "anchor": "LEFT_HAND",
+      "vfx_id": "VFX_MAGIC_MISSILE_PROJECTILE_01",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "PROJECTILE_BODY",
+      "lifecycle": "UNTIL_TERMINAL_EVENT",
+      "projectile_sequence_index": 0,
+      "duration_ms": 0,
+      "sort_order": 190
+    },
+    {
+      "owner_kind": "ABILITY",
       "owner_id": "SPELL_NEGATE",
       "trigger": "SPELL_RELEASE",
       "anchor": "CASTER",
@@ -4486,7 +4614,7 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "DURATION",
       "duration_ms": 400,
-      "sort_order": 190
+      "sort_order": 191
     },
     {
       "owner_kind": "ABILITY",
@@ -4498,7 +4626,7 @@
       "vfx_role": "ONE_SHOT",
       "lifecycle": "PARTICLE_SYSTEM",
       "duration_ms": 0,
-      "sort_order": 191
+      "sort_order": 192
     },
     {
       "owner_kind": "ABILITY",

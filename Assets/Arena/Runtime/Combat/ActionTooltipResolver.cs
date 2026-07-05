@@ -38,17 +38,23 @@ namespace Arena.Combat
             string resourceKind = action.ResourceKind;
             float resourceCost = action.ResourceCost;
             SpellDefinition? spellDefinition = ResolveSpellDefinition(conn, action.AuthoredActionId, action.ActionId);
+            bool costIsPerSecond = false;
             if (resourceCost <= 0.0001f && spellDefinition?.PrimaryResourceCost > 0.0001f)
             {
                 resourceCost = spellDefinition.PrimaryResourceCost;
-                resourceKind = "MANA";
+                costIsPerSecond = string.Equals(
+                    spellDefinition.Behavior,
+                    SpellDefinitionContracts.BehaviorChannel,
+                    System.StringComparison.Ordinal);
+                if (string.IsNullOrWhiteSpace(resourceKind))
+                    resourceKind = "MANA";
             }
             if (string.IsNullOrWhiteSpace(resourceKind) && resourceCost > 0.0001f)
                 resourceKind = ResolvePrimaryResourceKind(conn, owner);
 
             return new TooltipData(
                 displayName,
-                FormatCost(ResolveResourceDisplayName(conn, resourceKind), resourceCost),
+                FormatCost(ResolveResourceDisplayName(conn, resourceKind), resourceCost, costIsPerSecond),
                 presentation?.Description ?? string.Empty);
         }
 
@@ -159,7 +165,7 @@ namespace Arena.Combat
                 : resource.DisplayName;
         }
 
-        private static string FormatCost(string resourceLabel, float resourceCost)
+        private static string FormatCost(string resourceLabel, float resourceCost, bool perSecond = false)
         {
             if (resourceCost <= 0.0001f)
                 return "Cost: Free";
@@ -168,7 +174,7 @@ namespace Arena.Combat
                 ? Mathf.RoundToInt(resourceCost).ToString()
                 : resourceCost.ToString("0.#");
             string resource = string.IsNullOrWhiteSpace(resourceLabel) ? "Resource" : resourceLabel;
-            return $"Cost: {amount} {resource}";
+            return perSecond ? $"Cost: {amount} {resource}/s" : $"Cost: {amount} {resource}";
         }
     }
 }
