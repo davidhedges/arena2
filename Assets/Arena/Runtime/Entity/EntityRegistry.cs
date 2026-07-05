@@ -345,22 +345,36 @@ namespace Arena.Entity
 
         public void OnEquipmentLoadoutInsert(EventContext ctx, EquipmentLoadout row)
         {
-            ApplyEquipmentLoadout(row);
+            ApplyOwnerCombatProfile(row.Owner);
         }
 
         public void OnEquipmentLoadoutUpdate(EventContext ctx, EquipmentLoadout oldRow, EquipmentLoadout newRow)
         {
-            ApplyEquipmentLoadout(newRow);
+            ApplyOwnerCombatProfile(newRow.Owner);
         }
 
         public void OnEquipmentLoadoutDelete(EventContext ctx, EquipmentLoadout row)
+        {
+            ApplyOwnerCombatProfile(row.Owner);
+        }
+
+        public void OnPlayerEquipmentPresentationInsert(EventContext ctx, PlayerEquipmentPresentation row)
+        {
+            ApplyPlayerEquipmentPresentation(row);
+        }
+
+        public void OnPlayerEquipmentPresentationUpdate(EventContext ctx, PlayerEquipmentPresentation oldRow, PlayerEquipmentPresentation newRow)
+        {
+            ApplyPlayerEquipmentPresentation(newRow);
+        }
+
+        public void OnPlayerEquipmentPresentationDelete(EventContext ctx, PlayerEquipmentPresentation row)
         {
             if (!TryGetLivePlayer(row.Owner, out var entity))
                 return;
 
             entity.SetEquippedWeaponVisuals(System.Array.Empty<EquippedWeaponVisual>());
             entity.SetEquippedArmorItemDefIdsBySlot(new Dictionary<string, string>(System.StringComparer.Ordinal));
-            ApplyOwnerCombatProfile(row.Owner);
         }
 
         public void OnActiveCombatDisciplineInsert(EventContext ctx, ActiveCombatDiscipline row)
@@ -397,28 +411,28 @@ namespace Arena.Entity
 
         public void OnItemInstanceInsert(EventContext ctx, ItemInstance row)
         {
-            ApplyEquipmentForNullableOwner(row.CurrentOwner);
+            ApplyCombatProfileForNullableOwner(row.CurrentOwner);
         }
 
         public void OnItemInstanceUpdate(EventContext ctx, ItemInstance oldRow, ItemInstance newRow)
         {
-            ApplyEquipmentForNullableOwner(oldRow.CurrentOwner);
-            ApplyEquipmentForNullableOwner(newRow.CurrentOwner);
+            ApplyCombatProfileForNullableOwner(oldRow.CurrentOwner);
+            ApplyCombatProfileForNullableOwner(newRow.CurrentOwner);
         }
 
         public void OnItemInstanceDelete(EventContext ctx, ItemInstance row)
         {
-            ApplyEquipmentForNullableOwner(row.CurrentOwner);
+            ApplyCombatProfileForNullableOwner(row.CurrentOwner);
         }
 
         public void OnItemDefinitionInsert(EventContext ctx, ItemDefinition row)
         {
-            ApplyAllEquipmentLoadouts();
+            ApplyAllEquipmentPresentations();
         }
 
         public void OnItemDefinitionUpdate(EventContext ctx, ItemDefinition oldRow, ItemDefinition newRow)
         {
-            ApplyAllEquipmentLoadouts();
+            ApplyAllEquipmentPresentations();
         }
 
         public void OnCombatEngagementInsert(EventContext ctx, CombatEngagement row)
@@ -1006,20 +1020,23 @@ namespace Arena.Entity
 
         private void ApplyEquipmentLoadout(EquipmentLoadout row)
         {
-            ApplyOwnerEquipmentPresentation(row.Owner, row);
             ApplyOwnerCombatProfile(row.Owner);
         }
 
-        private void ApplyEquipmentForNullableOwner(Identity? owner)
+        private void ApplyPlayerEquipmentPresentation(PlayerEquipmentPresentation row)
+        {
+            ApplyOwnerEquipmentPresentation(row.Owner, row);
+        }
+
+        private void ApplyCombatProfileForNullableOwner(Identity? owner)
         {
             if (!owner.HasValue)
                 return;
 
-            ApplyOwnerEquipmentPresentation(owner.Value);
             ApplyOwnerCombatProfile(owner.Value);
         }
 
-        private void ApplyAllEquipmentLoadouts()
+        private void ApplyAllEquipmentPresentations()
         {
             foreach (var entity in AllPlayers)
             {
@@ -1028,7 +1045,7 @@ namespace Arena.Entity
             }
         }
 
-        private void ApplyOwnerEquipmentPresentation(Identity owner, EquipmentLoadout? loadout = null)
+        private void ApplyOwnerEquipmentPresentation(Identity owner, PlayerEquipmentPresentation? presentation = null)
         {
             if (!TryGetLivePlayer(owner, out var entity))
                 return;
@@ -1037,71 +1054,57 @@ namespace Arena.Entity
             if (conn == null)
                 return;
 
-            loadout ??= conn.Db.EquipmentLoadout.Owner.Find(owner);
-            if (loadout == null)
+            presentation ??= conn.Db.PlayerEquipmentPresentation.Owner.Find(owner);
+            if (presentation == null)
                 return;
 
-            entity.SetEquippedWeaponVisuals(BuildEquippedWeaponVisuals(conn, owner, loadout));
-            entity.SetEquippedArmorItemDefIdsBySlot(BuildEquippedArmorItemDefIdsBySlot(conn, owner, loadout));
+            entity.SetEquippedWeaponVisuals(BuildEquippedWeaponVisuals(conn, presentation));
+            entity.SetEquippedArmorItemDefIdsBySlot(BuildEquippedArmorItemDefIdsBySlot(conn, presentation));
         }
 
         private static List<EquippedWeaponVisual> BuildEquippedWeaponVisuals(
             DbConnection? conn,
-            Identity owner,
-            EquipmentLoadout? loadout)
+            PlayerEquipmentPresentation presentation)
         {
             var visuals = new List<EquippedWeaponVisual>();
             if (conn == null)
                 return visuals;
 
-            loadout ??= conn.Db.EquipmentLoadout.Owner.Find(owner);
-            if (loadout == null)
-                return visuals;
-
             EquipmentAppearanceCatalog? equipmentAppearanceCatalog =
                 Resources.Load<EquipmentAppearanceCatalog>(EquipmentAppearanceCatalogResource);
-            AddWeaponVisuals(conn, equipmentAppearanceCatalog, loadout.MainHandItemId, visuals);
-            AddWeaponVisuals(conn, equipmentAppearanceCatalog, loadout.OffHandItemId, visuals);
+            AddWeaponVisuals(conn, equipmentAppearanceCatalog, presentation.MainHandItemDefId, visuals);
+            AddWeaponVisuals(conn, equipmentAppearanceCatalog, presentation.OffHandItemDefId, visuals);
             return visuals;
         }
 
         private static Dictionary<string, string> BuildEquippedArmorItemDefIdsBySlot(
             DbConnection? conn,
-            Identity owner,
-            EquipmentLoadout? loadout)
+            PlayerEquipmentPresentation presentation)
         {
             var itemDefIdsBySlot = new Dictionary<string, string>(System.StringComparer.Ordinal);
             if (conn == null)
                 return itemDefIdsBySlot;
 
-            loadout ??= conn.Db.EquipmentLoadout.Owner.Find(owner);
-            if (loadout == null)
-                return itemDefIdsBySlot;
-
-            AddArmorItemDefId(conn, "HEAD", loadout.HeadItemId, itemDefIdsBySlot);
-            AddArmorItemDefId(conn, "SHOULDER", loadout.ShoulderItemId, itemDefIdsBySlot);
-            AddArmorItemDefId(conn, "CAPE", loadout.CapeItemId, itemDefIdsBySlot);
-            AddArmorItemDefId(conn, "CHEST", loadout.ChestItemId, itemDefIdsBySlot);
-            AddArmorItemDefId(conn, "LEGS", loadout.LegsItemId, itemDefIdsBySlot);
-            AddArmorItemDefId(conn, "BOOTS", loadout.BootsItemId, itemDefIdsBySlot);
-            AddArmorItemDefId(conn, "GLOVES", loadout.GlovesItemId, itemDefIdsBySlot);
+            AddArmorItemDefId(conn, "HEAD", presentation.HeadItemDefId, itemDefIdsBySlot);
+            AddArmorItemDefId(conn, "SHOULDER", presentation.ShoulderItemDefId, itemDefIdsBySlot);
+            AddArmorItemDefId(conn, "CAPE", presentation.CapeItemDefId, itemDefIdsBySlot);
+            AddArmorItemDefId(conn, "CHEST", presentation.ChestItemDefId, itemDefIdsBySlot);
+            AddArmorItemDefId(conn, "LEGS", presentation.LegsItemDefId, itemDefIdsBySlot);
+            AddArmorItemDefId(conn, "BOOTS", presentation.BootsItemDefId, itemDefIdsBySlot);
+            AddArmorItemDefId(conn, "GLOVES", presentation.GlovesItemDefId, itemDefIdsBySlot);
             return itemDefIdsBySlot;
         }
 
         private static void AddArmorItemDefId(
             DbConnection conn,
             string slotId,
-            string? itemInstanceId,
+            string? itemDefId,
             Dictionary<string, string> itemDefIdsBySlot)
         {
-            if (string.IsNullOrWhiteSpace(itemInstanceId))
+            if (string.IsNullOrWhiteSpace(itemDefId))
                 return;
 
-            ItemInstance? item = conn.Db.ItemInstance.ItemInstanceId.Find(itemInstanceId.Trim());
-            if (item == null)
-                return;
-
-            ItemDefinition? definition = conn.Db.ItemDefinition.ItemDefId.Find(item.ItemDefId);
+            ItemDefinition? definition = conn.Db.ItemDefinition.ItemDefId.Find(itemDefId.Trim());
             if (definition == null
                 || !string.Equals(WireIdentifier.Normalize(definition.ItemKind), "ARMOR", System.StringComparison.Ordinal))
             {
@@ -1114,18 +1117,15 @@ namespace Arena.Entity
         private static void AddWeaponVisuals(
             DbConnection conn,
             EquipmentAppearanceCatalog? equipmentAppearanceCatalog,
-            string? itemInstanceId,
+            string? itemDefId,
             List<EquippedWeaponVisual> visuals)
         {
-            if (string.IsNullOrWhiteSpace(itemInstanceId))
+            if (string.IsNullOrWhiteSpace(itemDefId))
                 return;
 
-            ItemInstance? item = conn.Db.ItemInstance.ItemInstanceId.Find(itemInstanceId.Trim());
-            if (item == null)
-                return;
-
-            ItemDefinition? definition = conn.Db.ItemDefinition.ItemDefId.Find(item.ItemDefId);
-            if (definition == null)
+            ItemDefinition? definition = conn.Db.ItemDefinition.ItemDefId.Find(itemDefId.Trim());
+            if (definition == null
+                || !string.Equals(WireIdentifier.Normalize(definition.ItemKind), "WEAPON", System.StringComparison.Ordinal))
                 return;
 
             foreach (string roleId in WeaponVisualRoleIdsForKind(definition.WeaponKind))
@@ -1752,6 +1752,7 @@ namespace Arena.Entity
         void IScopedPlayerCacheSink.ApplyUsername(Player row) => ApplyUsername(row);
         void IScopedPlayerCacheSink.ApplyCharacterAppearance(CharacterAppearance row) => ApplyCharacterAppearance(row);
         void IScopedPlayerCacheSink.ApplyEquipmentLoadout(EquipmentLoadout row) => ApplyEquipmentLoadout(row);
+        void IScopedPlayerCacheSink.ApplyPlayerEquipmentPresentation(PlayerEquipmentPresentation row) => ApplyPlayerEquipmentPresentation(row);
         void IScopedPlayerCacheSink.ApplyState(PlayerState row) => ApplyState(row);
         void IScopedPlayerCacheSink.ApplyCombatEngagement(CombatEngagement row) => ApplyCombatEngagement(row);
         void IScopedPlayerCacheSink.ApplyPlayerResource(PlayerResource row) => ApplyPlayerResource(row);

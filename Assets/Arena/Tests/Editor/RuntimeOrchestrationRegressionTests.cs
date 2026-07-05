@@ -258,7 +258,7 @@ namespace Arena.Tests.Editor
             Assert.That(staticSqlText, Does.Not.Contain("\"fixed_action_binding_catalog\""));
             Assert.That(staticSqlText, Does.Not.Contain("\"class_catalog\""));
 
-            Assert.That(localSql, Has.Length.EqualTo(22));
+            Assert.That(localSql, Has.Length.EqualTo(23));
             Assert.That(localSql[0], Does.Contain("\"player_world\""));
             Assert.That(localSql[0], Does.Contain(localIdentityKey));
             Assert.That(localSqlText, Does.Contain("\"player_open_world_scene\""));
@@ -274,6 +274,7 @@ namespace Arena.Tests.Editor
             Assert.That(localSqlText, Does.Contain("\"active_combat_mode\""));
             Assert.That(localSqlText, Does.Contain("\"party_invite\""));
             Assert.That(localSqlText, Does.Contain("\"equipment_loadout\""));
+            Assert.That(localSqlText, Does.Contain("\"player_equipment_presentation\""));
             Assert.That(localSqlText, Does.Contain("\"inventory_container\""));
             Assert.That(localSqlText, Does.Contain("\"inventory_slot\""));
             Assert.That(localSqlText, Does.Contain("\"item_instance\""));

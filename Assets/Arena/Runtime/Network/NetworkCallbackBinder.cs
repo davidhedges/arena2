@@ -98,6 +98,10 @@ namespace Arena.Network
             conn.Db.EquipmentLoadout.OnUpdate += Delayed<EquipmentLoadout>(registry.OnEquipmentLoadoutUpdate);
             conn.Db.EquipmentLoadout.OnDelete += Delayed<EquipmentLoadout>(registry.OnEquipmentLoadoutDelete);
 
+            conn.Db.PlayerEquipmentPresentation.OnInsert += Delayed<PlayerEquipmentPresentation>(registry.OnPlayerEquipmentPresentationInsert);
+            conn.Db.PlayerEquipmentPresentation.OnUpdate += Delayed<PlayerEquipmentPresentation>(registry.OnPlayerEquipmentPresentationUpdate);
+            conn.Db.PlayerEquipmentPresentation.OnDelete += Delayed<PlayerEquipmentPresentation>(registry.OnPlayerEquipmentPresentationDelete);
+
             conn.Db.ActiveCombatDiscipline.OnInsert += Delayed<ActiveCombatDiscipline>(registry.OnActiveCombatDisciplineInsert);
             conn.Db.ActiveCombatDiscipline.OnUpdate += Delayed<ActiveCombatDiscipline>(registry.OnActiveCombatDisciplineUpdate);
             conn.Db.ActiveCombatDiscipline.OnDelete += Delayed<ActiveCombatDiscipline>(registry.OnActiveCombatDisciplineDelete);

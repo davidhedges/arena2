@@ -74,6 +74,7 @@ namespace SpacetimeDB.Types
             AddTable(PartyInvite = new(conn));
             AddTable(PartyMember = new(conn));
             AddTable(Player = new(conn));
+            AddTable(PlayerEquipmentPresentation = new(conn));
             AddTable(PlayerEvent = new(conn));
             AddTable(PlayerIntent = new(conn));
             AddTable(PlayerKnownSpell = new(conn));
@@ -634,6 +635,7 @@ namespace SpacetimeDB.Types
             new QueryBuilder().From.PartyInvite().ToSql(),
             new QueryBuilder().From.PartyMember().ToSql(),
             new QueryBuilder().From.Player().ToSql(),
+            new QueryBuilder().From.PlayerEquipmentPresentation().ToSql(),
             new QueryBuilder().From.PlayerEvent().ToSql(),
             new QueryBuilder().From.PlayerIntent().ToSql(),
             new QueryBuilder().From.PlayerKnownSpell().ToSql(),
@@ -704,6 +706,7 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Table<PartyInvite, PartyInviteCols, PartyInviteIxCols> PartyInvite() => new("party_invite", new PartyInviteCols("party_invite"), new PartyInviteIxCols("party_invite"));
         public global::SpacetimeDB.Table<PartyMember, PartyMemberCols, PartyMemberIxCols> PartyMember() => new("party_member", new PartyMemberCols("party_member"), new PartyMemberIxCols("party_member"));
         public global::SpacetimeDB.Table<Player, PlayerCols, PlayerIxCols> Player() => new("player", new PlayerCols("player"), new PlayerIxCols("player"));
+        public global::SpacetimeDB.Table<PlayerEquipmentPresentation, PlayerEquipmentPresentationCols, PlayerEquipmentPresentationIxCols> PlayerEquipmentPresentation() => new("player_equipment_presentation", new PlayerEquipmentPresentationCols("player_equipment_presentation"), new PlayerEquipmentPresentationIxCols("player_equipment_presentation"));
         public global::SpacetimeDB.Table<PlayerEvent, PlayerEventCols, PlayerEventIxCols> PlayerEvent() => new("player_event", new PlayerEventCols("player_event"), new PlayerEventIxCols("player_event"));
         public global::SpacetimeDB.Table<PlayerIntent, PlayerIntentCols, PlayerIntentIxCols> PlayerIntent() => new("player_intent", new PlayerIntentCols("player_intent"), new PlayerIntentIxCols("player_intent"));
         public global::SpacetimeDB.Table<PlayerKnownSpell, PlayerKnownSpellCols, PlayerKnownSpellIxCols> PlayerKnownSpell() => new("player_known_spell", new PlayerKnownSpellCols("player_known_spell"), new PlayerKnownSpellIxCols("player_known_spell"));

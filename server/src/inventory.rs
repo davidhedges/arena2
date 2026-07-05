@@ -34,6 +34,8 @@ use crate::inventory::item_definition as _;
 use crate::inventory::item_instance as _;
 #[allow(unused_imports)]
 use crate::inventory::item_spell as _;
+#[allow(unused_imports)]
+use crate::inventory::player_equipment_presentation as _;
 
 pub(crate) const CONTAINER_KIND_PLAYER_BAG: &str = "PLAYER_BAG";
 pub(crate) const CONTAINER_KIND_CORPSE: &str = "CORPSE";
@@ -270,6 +272,24 @@ pub struct EquipmentLoadout {
     pub main_hand_item_id: Option<String>,
     pub off_hand_item_id: Option<String>,
     pub spellbook_item_id: Option<String>,
+    pub revision: u64,
+    pub updated_at: Timestamp,
+}
+
+#[table(accessor = player_equipment_presentation, public)]
+#[derive(Clone)]
+pub struct PlayerEquipmentPresentation {
+    #[primary_key]
+    pub owner: Identity,
+    pub head_item_def_id: Option<String>,
+    pub shoulder_item_def_id: Option<String>,
+    pub cape_item_def_id: Option<String>,
+    pub chest_item_def_id: Option<String>,
+    pub legs_item_def_id: Option<String>,
+    pub boots_item_def_id: Option<String>,
+    pub gloves_item_def_id: Option<String>,
+    pub main_hand_item_def_id: Option<String>,
+    pub off_hand_item_def_id: Option<String>,
     pub revision: u64,
     pub updated_at: Timestamp,
 }
@@ -1692,7 +1712,8 @@ pub fn equip_item(
     item.current_owner_key = identity_key(owner);
     item.current_owner = Some(owner);
     ctx.db.item_instance().item_instance_id().update(item);
-    ctx.db.equipment_loadout().owner().update(equipment);
+    ctx.db.equipment_loadout().owner().update(equipment.clone());
+    sync_equipment_presentation_for_owner(ctx, owner);
     touch_container(ctx, source_container);
     sync_progression_for_equipment_change(ctx, owner, ctx.timestamp);
     Ok(())
@@ -1755,7 +1776,8 @@ pub fn unequip_item(
         definition.width,
         definition.height,
     );
-    ctx.db.equipment_loadout().owner().update(equipment);
+    ctx.db.equipment_loadout().owner().update(equipment.clone());
+    sync_equipment_presentation_for_owner(ctx, owner);
     touch_container(ctx, destination_container);
     sync_progression_for_equipment_change(ctx, owner, ctx.timestamp);
     Ok(())
@@ -1855,6 +1877,7 @@ pub(crate) fn ensure_player_inventory_for_identity(ctx: &ReducerContext, owner: 
     if bag_created || created {
         seed_baseline_inventory_items(ctx, owner, &bag);
     }
+    sync_equipment_presentation_for_owner(ctx, owner);
     sync_progression_for_equipment_change(ctx, owner, ctx.timestamp);
 }
 
@@ -2116,6 +2139,15 @@ pub(crate) fn clear_inventory_for_owner(ctx: &ReducerContext, owner: Identity) {
 
     if ctx.db.equipment_loadout().owner().find(owner).is_some() {
         ctx.db.equipment_loadout().owner().delete(owner);
+    }
+    if ctx
+        .db
+        .player_equipment_presentation()
+        .owner()
+        .find(owner)
+        .is_some()
+    {
+        ctx.db.player_equipment_presentation().owner().delete(owner);
     }
     if ctx.db.inventory_counter().owner().find(owner).is_some() {
         ctx.db.inventory_counter().owner().delete(owner);
@@ -2847,7 +2879,8 @@ pub(crate) fn apply_combat_discipline_weapon_loadout(
     if let Some(item_id) = off_hand_item_id {
         mark_item_owned(ctx, owner, item_id.as_str());
     }
-    ctx.db.equipment_loadout().owner().update(equipment);
+    ctx.db.equipment_loadout().owner().update(equipment.clone());
+    sync_equipment_presentation_for_owner(ctx, owner);
     sync_progression_for_equipment_change(ctx, owner, ctx.timestamp);
     Ok(())
 }
@@ -3189,6 +3222,7 @@ fn seed_baseline_equipment(
         equipment.revision = equipment.revision.saturating_add(1);
         equipment.updated_at = ctx.timestamp;
         ctx.db.equipment_loadout().owner().update(equipment.clone());
+        sync_equipment_presentation_for_owner(ctx, owner);
     }
     equipment
 }
@@ -3232,7 +3266,8 @@ fn reconcile_spellbook_equipment(
     equipment.spellbook_item_id = Some(item_instance_id);
     equipment.revision = equipment.revision.saturating_add(1);
     equipment.updated_at = ctx.timestamp;
-    ctx.db.equipment_loadout().owner().update(equipment);
+    ctx.db.equipment_loadout().owner().update(equipment.clone());
+    sync_equipment_presentation_for_owner(ctx, owner);
 }
 
 fn equipment_weapon_slots_are_empty_or_starter(
@@ -3879,6 +3914,89 @@ fn clear_equipment_references_to_item(equipment: &mut EquipmentLoadout, item_ins
             let _ = set_equipment_slot(equipment, slot, None);
         }
     }
+}
+
+fn sync_equipment_presentation_for_owner(ctx: &ReducerContext, owner: Identity) {
+    let Some(equipment) = ctx.db.equipment_loadout().owner().find(owner) else {
+        if ctx
+            .db
+            .player_equipment_presentation()
+            .owner()
+            .find(owner)
+            .is_some()
+        {
+            ctx.db.player_equipment_presentation().owner().delete(owner);
+        }
+        return;
+    };
+
+    let revision = ctx
+        .db
+        .player_equipment_presentation()
+        .owner()
+        .find(owner)
+        .map(|row| row.revision.saturating_add(1))
+        .unwrap_or(0);
+    let row = PlayerEquipmentPresentation {
+        owner,
+        head_item_def_id: item_def_id_for_equipped_instance(ctx, equipment.head_item_id.as_deref()),
+        shoulder_item_def_id: item_def_id_for_equipped_instance(
+            ctx,
+            equipment.shoulder_item_id.as_deref(),
+        ),
+        cape_item_def_id: item_def_id_for_equipped_instance(ctx, equipment.cape_item_id.as_deref()),
+        chest_item_def_id: item_def_id_for_equipped_instance(
+            ctx,
+            equipment.chest_item_id.as_deref(),
+        ),
+        legs_item_def_id: item_def_id_for_equipped_instance(ctx, equipment.legs_item_id.as_deref()),
+        boots_item_def_id: item_def_id_for_equipped_instance(
+            ctx,
+            equipment.boots_item_id.as_deref(),
+        ),
+        gloves_item_def_id: item_def_id_for_equipped_instance(
+            ctx,
+            equipment.gloves_item_id.as_deref(),
+        ),
+        main_hand_item_def_id: item_def_id_for_equipped_instance(
+            ctx,
+            equipment.main_hand_item_id.as_deref(),
+        ),
+        off_hand_item_def_id: item_def_id_for_equipped_instance(
+            ctx,
+            equipment.off_hand_item_id.as_deref(),
+        ),
+        revision,
+        updated_at: ctx.timestamp,
+    };
+
+    if ctx
+        .db
+        .player_equipment_presentation()
+        .owner()
+        .find(owner)
+        .is_some()
+    {
+        ctx.db.player_equipment_presentation().owner().update(row);
+    } else {
+        ctx.db.player_equipment_presentation().insert(row);
+    }
+}
+
+fn item_def_id_for_equipped_instance(
+    ctx: &ReducerContext,
+    item_instance_id: Option<&str>,
+) -> Option<String> {
+    item_instance_id
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .and_then(|item_instance_id| {
+            ctx.db
+                .item_instance()
+                .item_instance_id()
+                .find(item_instance_id.to_string())
+        })
+        .map(|item| item.item_def_id)
 }
 
 fn equipment_item_ids(equipment: &EquipmentLoadout) -> impl Iterator<Item = &str> {

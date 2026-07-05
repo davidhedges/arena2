@@ -68,6 +68,7 @@ namespace Arena.Network
                 new QueryBuilder().From.AutoAttackState().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
                 new QueryBuilder().From.PartyInvite().Where(c => c.Invitee.Eq(localIdentity)).ToSql(),
                 new QueryBuilder().From.EquipmentLoadout().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
+                new QueryBuilder().From.PlayerEquipmentPresentation().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
                 // Inventory rows are owner-key filtered (netcode audit R4): the
                 // client receives its own containers/slots/items plus unowned
                 // world-loot rows (corpse/chest/loot contents carry empty
@@ -110,6 +111,7 @@ namespace Arena.Network
             {
                 BuildScopedPlayerQuery(new QueryBuilder(), scope),
                 BuildScopedCharacterAppearanceQuery(new QueryBuilder(), scope),
+                BuildScopedPlayerEquipmentPresentationQuery(new QueryBuilder(), scope),
                 BuildScopedPlayerPhysicsQuery(new QueryBuilder(), scope),
                 BuildScopedPlayerStateQuery(new QueryBuilder(), scope),
                 BuildScopedActiveCombatModeQuery(new QueryBuilder(), scope),
@@ -225,6 +227,28 @@ namespace Arena.Network
                     .RightSemijoin(qb.From.CharacterAppearance(), (world, appearance) => world.Identity.Eq(appearance.Owner))
                     .ToSql(),
                 _ => throw new InvalidOperationException("Scoped character-appearance query requested for GameplayScope.None"),
+            };
+        }
+
+        private static string BuildScopedPlayerEquipmentPresentationQuery(QueryBuilder qb, NetworkManager.GameplayScope scope)
+        {
+            return scope.Kind switch
+            {
+                NetworkManager.GameplayScopeKind.OpenWorld => qb
+                    .From
+                    .PlayerWorld()
+                    .Where(c => c.WorldKind.Eq("OPEN"))
+                    .Where(c => c.OpenWorldSceneName.Eq(OpenWorldSceneName(scope)))
+                    .RightSemijoin(qb.From.PlayerEquipmentPresentation(), (world, equipment) => world.Identity.Eq(equipment.Owner))
+                    .ToSql(),
+                NetworkManager.GameplayScopeKind.Instance => qb
+                    .From
+                    .PlayerWorld()
+                    .Where(c => c.WorldKind.Eq("INSTANCE"))
+                    .Where(c => c.InstanceId.Eq(scope.InstanceId.GetValueOrDefault()))
+                    .RightSemijoin(qb.From.PlayerEquipmentPresentation(), (world, equipment) => world.Identity.Eq(equipment.Owner))
+                    .ToSql(),
+                _ => throw new InvalidOperationException("Scoped player-equipment-presentation query requested for GameplayScope.None"),
             };
         }
 

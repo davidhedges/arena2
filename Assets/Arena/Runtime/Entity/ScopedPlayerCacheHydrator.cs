@@ -13,6 +13,7 @@ namespace Arena.Entity
         public Player[] PlayerRows = Array.Empty<Player>();
         public CharacterAppearance[] CharacterAppearanceRows = Array.Empty<CharacterAppearance>();
         public EquipmentLoadout[] EquipmentLoadoutRows = Array.Empty<EquipmentLoadout>();
+        public PlayerEquipmentPresentation[] PlayerEquipmentPresentationRows = Array.Empty<PlayerEquipmentPresentation>();
         public PlayerState[] PlayerStateRows = Array.Empty<PlayerState>();
         public CombatEngagement[] CombatEngagementRows = Array.Empty<CombatEngagement>();
         public PlayerResource[] PlayerResourceRows = Array.Empty<PlayerResource>();
@@ -28,6 +29,7 @@ namespace Arena.Entity
         void ApplyUsername(Player row);
         void ApplyCharacterAppearance(CharacterAppearance row);
         void ApplyEquipmentLoadout(EquipmentLoadout row);
+        void ApplyPlayerEquipmentPresentation(PlayerEquipmentPresentation row);
         void ApplyState(PlayerState row);
         void ApplyCombatEngagement(CombatEngagement row);
         void ApplyPlayerResource(PlayerResource row);
@@ -49,6 +51,7 @@ namespace Arena.Entity
                 PlayerRows = conn.Db.Player.Iter().ToArray(),
                 CharacterAppearanceRows = conn.Db.CharacterAppearance.Iter().ToArray(),
                 EquipmentLoadoutRows = conn.Db.EquipmentLoadout.Iter().ToArray(),
+                PlayerEquipmentPresentationRows = conn.Db.PlayerEquipmentPresentation.Iter().ToArray(),
                 PlayerStateRows = conn.Db.PlayerState.Iter().ToArray(),
                 CombatEngagementRows = conn.Db.CombatEngagement.Iter().ToArray(),
                 PlayerResourceRows = conn.Db.PlayerResource.Iter().ToArray(),
@@ -65,6 +68,7 @@ namespace Arena.Entity
             return snapshot.PlayerPhysicsRows.Any(row => row.Identity == identity)
                 || snapshot.PlayerRows.Any(row => row.Identity == identity)
                 || snapshot.CharacterAppearanceRows.Any(row => row.Owner == identity)
+                || snapshot.PlayerEquipmentPresentationRows.Any(row => row.Owner == identity)
                 || snapshot.PlayerStateRows.Any(row => row.PlayerId == identity);
         }
 
@@ -95,6 +99,10 @@ namespace Arena.Entity
             var equipment = snapshot.EquipmentLoadoutRows.FirstOrDefault(row => row.Owner == identity);
             if (equipment != null)
                 sink.ApplyEquipmentLoadout(equipment);
+
+            var equipmentPresentation = snapshot.PlayerEquipmentPresentationRows.FirstOrDefault(row => row.Owner == identity);
+            if (equipmentPresentation != null)
+                sink.ApplyPlayerEquipmentPresentation(equipmentPresentation);
 
             var state = snapshot.PlayerStateRows.FirstOrDefault(row => row.PlayerId == identity);
             if (state != null)
