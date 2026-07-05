@@ -174,17 +174,19 @@ pub(crate) fn lag_comp_auto_swing_enabled(ctx: &ReducerContext) -> bool {
 }
 
 /// S10 gate (G5): per-victim sweep-membership rewind activates only when this
-/// AND the master `enabled` flag are on. Default OFF until the shaped A/B
-/// closes the slice (S7/S8/S9 gate precedent — flipped to `unwrap_or(true)` in
-/// the acceptance commit on PASS). `set_lag_comp_config(true, 250, true, false)`
-/// disables S10 alone; the S8 master kill switch is unchanged.
+/// AND the master `enabled` flag are on. **Default ON since 2026-07-05** — owner
+/// call to ship it live now on the strength of the server-half live probe PASS
+/// (`ops/s10-sweep-rewind-probe.py`); the shaped +40/+40 A/B is deferred as an
+/// optional spot-check rather than a gate (see `docs/netcode-open-items.md`).
+/// `set_lag_comp_config(true, 250, true, false)` disables S10 alone; the S8
+/// master kill switch (`false, …`) is unchanged.
 pub(crate) fn lag_comp_sweep_rewind_enabled(ctx: &ReducerContext) -> bool {
     ctx.db
         .combat_lag_comp_config()
         .config_id()
         .find(0)
         .map(|row| row.sweep_rewind_enabled)
-        .unwrap_or(false)
+        .unwrap_or(true)
 }
 
 /// Record an authoritative pose sample. Skips unchanged poses, so idle

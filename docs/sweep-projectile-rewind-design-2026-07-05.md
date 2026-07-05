@@ -15,8 +15,14 @@ which today resolves present-time. S11 (deferred defense resolution) still
 gates on the `[DEFENSE_LATE]` numbers S9 is collecting. Aerial items stay
 deferred, unchanged.
 
-**Status: IMPLEMENTED + server-half LIVE-VERIFIED (2026-07-05); shaped owner
-A/B pending.** G1/G2 owner-signed 2026-07-05 (G1 = sweeps only, keep projectile
+**Status: IMPLEMENTED + server-half LIVE-VERIFIED + default ON (2026-07-05,
+owner call); shaped owner A/B deferred as an optional spot-check.** The owner
+elected to ship `sweep_rewind_enabled` default ON now on the strength of the
+probe PASS below rather than gate on the shaped A/B ("flip the default to ON for
+now"); the A/B is recorded as a deferred confirmation in
+`docs/netcode-open-items.md`, and the S8 master kill switch / `set_lag_comp_config
+true 250 true false` reverts S10 alone if it ever regresses. G1/G2 owner-signed
+2026-07-05 (G1 = sweeps only, keep projectile
 impacts present-time; G2 = no-target casts report the shared S7 connection
 budget); G3–G5 proceeding as recommended. Server + Unity C# compile; bindings
 regenerated; the 4-arg `set_lag_comp_config` + `sweep_rewind_enabled` column
@@ -382,10 +388,11 @@ numbers.
 master `enabled` still gates everything — S10 activates only when both flags
 are on, so the S8 kill switch stays one command and the A/B flips S10 alone.
 History writing, standing-row writing, and all audit logging stay on
-regardless. The absent-row default reads `false` pre-acceptance (S7/S8/S9 gate
-convention), flipped to `true` in the acceptance commit on PASS. (If G1
-reopens projectiles, a fifth arg `projectile_rewind_enabled` A/Bs that half
-separately.)
+regardless. The absent-row default was `false` at implementation, **flipped to
+`true` 2026-07-05 by owner call** (`lag_comp_sweep_rewind_enabled` →
+`unwrap_or(true)`) — shipped on the probe PASS rather than the shaped A/B gate.
+(If G1 reopens projectiles, a fifth arg `projectile_rewind_enabled` A/Bs that
+half separately.)
 
 ---
 
