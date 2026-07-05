@@ -134,6 +134,11 @@ pub struct PendingAreaImpact {
     pub area_z: f32,
     pub facing_yaw: f32,
     pub impact_at: Timestamp,
+    /// S10: the press's clamped attacker-view delay, frozen at cast time. The
+    /// delayed-sweep resolve rewinds each candidate victim's membership by this
+    /// much (mirrors PendingMeleeImpact.view_delay_micros / melee D2);
+    /// 0 = present-time (no report, switch OFF, or a targeted-cast control).
+    pub view_delay_micros: i64,
     #[index(btree)]
     pub resolve_at_micros: i64,
 }

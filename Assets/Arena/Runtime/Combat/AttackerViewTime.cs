@@ -32,5 +32,31 @@ namespace Arena.Combat
             long viewMs = ArenaServerClock.ServerNowMs - (long)Mathf.Round(delayMs);
             return viewMs > 0 ? (ulong)viewMs : 0UL;
         }
+
+        /// <summary>
+        /// S10 (docs/sweep-projectile-rewind-design-2026-07-05.md, G2): the
+        /// view report for a no-target (area) cast — a cone/radius sweep has
+        /// no single entity to derive a per-target delay from. Uses the shared
+        /// S7 per-connection delay budget (the honest render delay every remote
+        /// entity on the connection is seen at), so all sweep victims rewind by
+        /// one caster-level delay. 0 without a precise clock, exactly like the
+        /// per-target report.
+        /// </summary>
+        public static ulong ViewServerTimeMsForConnection()
+        {
+            if (!ArenaServerClock.HasPreciseSample)
+            {
+                return 0UL;
+            }
+
+            float delayMs = Arena.Simulation.ServerTimeDelayBudget.LastAppliedBudgetMs;
+            if (delayMs <= 0f || float.IsNaN(delayMs) || float.IsInfinity(delayMs))
+            {
+                return 0UL;
+            }
+
+            long viewMs = ArenaServerClock.ServerNowMs - (long)Mathf.Round(delayMs);
+            return viewMs > 0 ? (ulong)viewMs : 0UL;
+        }
     }
 }

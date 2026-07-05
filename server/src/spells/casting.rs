@@ -20,7 +20,10 @@ use crate::arena::{
 use crate::auto_attack::arm_auto_attack_if_unarmed_with_cadence;
 #[cfg(feature = "spellcasting_terminal_harness")]
 use crate::combat::new_player_state;
-use crate::combat::position_history::overlay_press_rewound_target_pose;
+use crate::combat::position_history::{
+    lag_comp_config, lag_comp_sweep_rewind_enabled, overlay_press_rewound_target_pose,
+    press_view_delay_micros, sweep_rewind_membership, SWEEP_REWIND_MARGIN_SPEED_MPS,
+};
 use crate::combat::player_snapshot::{
     collect_player_snapshots, player_snapshot_for, PlayerSnapshot, PlayerSnapshotSet,
 };
@@ -4970,6 +4973,7 @@ fn cast_generic_area(
             area_z: area_center.z,
             facing_yaw,
             impact_at,
+            view_delay_micros: press_view_delay_micros(ctx, caster),
             resolve_at_micros: timestamp_to_micros(impact_at),
         });
         return Ok(());
@@ -4986,6 +4990,9 @@ fn cast_generic_area(
             origin: Vec3::new(origin_x, origin_y, origin_z),
             area_center,
             facing_yaw,
+            // Instant sweep: resolve is the press transaction, so the press's
+            // frozen view delay is readable directly — no pending-row freeze.
+            view_delay_micros: press_view_delay_micros(ctx, caster),
             now,
         },
     );
@@ -5002,6 +5009,10 @@ struct AreaImpactResolution<'a> {
     origin: Vec3,
     area_center: Vec3,
     facing_yaw: f32,
+    /// S10: the press's clamped attacker-view delay (0 = present-time). Each
+    /// candidate victim's area membership is tested against its pose at
+    /// `now − view_delay_micros` when the sweep-rewind switch is on.
+    view_delay_micros: i64,
     now: Timestamp,
 }
 
@@ -5073,6 +5084,9 @@ fn resolve_pending_area_impact(ctx: &ReducerContext, row: &PendingAreaImpact, no
             origin: Vec3::new(row.origin_x, row.origin_y, row.origin_z),
             area_center: Vec3::new(row.area_x, row.area_y, row.area_z),
             facing_yaw: row.facing_yaw,
+            // Delayed sweep: resolve is a later tick, so use the delay frozen
+            // onto the pending row at cast time (G3).
+            view_delay_micros: row.view_delay_micros,
             now,
         },
     );
@@ -5129,13 +5143,34 @@ fn resolve_area_impact(ctx: &ReducerContext, impact: AreaImpactResolution<'_>) {
         impact.definition.damage,
     );
 
+    // S10 (docs/sweep-projectile-rewind-design-2026-07-05.md §2.1-2.3):
+    // resolve the sweep-rewind context once. A nonzero press view delay means
+    // each candidate victim's area membership is tested against its pose at
+    // `now − view_delay`; the caster/area frame stays present (attacker pose
+    // never comes from history). The rewound verdict is *used* only when the
+    // switch is on, but is computed and logged whenever a report is present, so
+    // OFF/ON A/B legs share a candidate set and OFF logs would-be flips.
+    let (lag_comp_on, max_rewind_ms) = lag_comp_config(ctx);
+    let sweep_rewind_on = lag_comp_on && lag_comp_sweep_rewind_enabled(ctx);
+    let view_delay_micros = impact.view_delay_micros;
+    let query_radius = area_shape.query_radius();
+    // Widen the candidate disc so a victim who strafed out of the shape during
+    // the view delay is still rewound-tested (§2.3). Only adds candidates; the
+    // rewound membership test excludes any genuinely out, so switch-OFF /
+    // no-report behavior is byte-for-byte unchanged.
+    let candidate_radius = if view_delay_micros > 0 {
+        query_radius + (max_rewind_ms as f32 / 1000.0) * SWEEP_REWIND_MARGIN_SPEED_MPS
+    } else {
+        query_radius
+    };
+
     let player_snapshots = PlayerSnapshotSet::collect(ctx);
     let players = player_snapshots.as_slice();
     let mut candidate_indices = Vec::new();
     player_snapshots.query_disc_indices(
         impact.area_center.x,
         impact.area_center.z,
-        area_shape.query_radius(),
+        candidate_radius,
         &mut candidate_indices,
     );
 
@@ -5158,7 +5193,16 @@ fn resolve_area_impact(ctx: &ReducerContext, impact: AreaImpactResolution<'_>) {
         ) {
             continue;
         }
-        if !area_shape_contains_player(area_shape, &impact, player) {
+        if !sweep_rewind_membership(
+            ctx,
+            impact.caster,
+            player,
+            view_delay_micros,
+            impact.now,
+            sweep_rewind_on,
+            impact.kind.as_str(),
+            |p| area_shape_contains_player(area_shape, &impact, p),
+        ) {
             continue;
         }
         if resolve_blockable_spell_hit(

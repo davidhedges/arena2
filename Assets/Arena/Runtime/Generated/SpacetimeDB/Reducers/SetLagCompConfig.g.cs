@@ -12,12 +12,12 @@ namespace SpacetimeDB.Types
 {
     public sealed partial class RemoteReducers : RemoteBase
     {
-        public delegate void SetLagCompConfigHandler(ReducerEventContext ctx, bool enabled, ulong maxRewindMs, bool autoSwingEnabled);
+        public delegate void SetLagCompConfigHandler(ReducerEventContext ctx, bool enabled, ulong maxRewindMs, bool autoSwingEnabled, bool sweepRewindEnabled);
         public event SetLagCompConfigHandler? OnSetLagCompConfig;
 
-        public void SetLagCompConfig(bool enabled, ulong maxRewindMs, bool autoSwingEnabled)
+        public void SetLagCompConfig(bool enabled, ulong maxRewindMs, bool autoSwingEnabled, bool sweepRewindEnabled)
         {
-            conn.InternalCallReducer(new Reducer.SetLagCompConfig(enabled, maxRewindMs, autoSwingEnabled));
+            conn.InternalCallReducer(new Reducer.SetLagCompConfig(enabled, maxRewindMs, autoSwingEnabled, sweepRewindEnabled));
         }
 
         public bool InvokeSetLagCompConfig(ReducerEventContext ctx, Reducer.SetLagCompConfig args)
@@ -38,7 +38,8 @@ namespace SpacetimeDB.Types
                 ctx,
                 args.Enabled,
                 args.MaxRewindMs,
-                args.AutoSwingEnabled
+                args.AutoSwingEnabled,
+                args.SweepRewindEnabled
             );
             return true;
         }
@@ -56,16 +57,20 @@ namespace SpacetimeDB.Types
             public ulong MaxRewindMs;
             [DataMember(Name = "auto_swing_enabled")]
             public bool AutoSwingEnabled;
+            [DataMember(Name = "sweep_rewind_enabled")]
+            public bool SweepRewindEnabled;
 
             public SetLagCompConfig(
                 bool Enabled,
                 ulong MaxRewindMs,
-                bool AutoSwingEnabled
+                bool AutoSwingEnabled,
+                bool SweepRewindEnabled
             )
             {
                 this.Enabled = Enabled;
                 this.MaxRewindMs = MaxRewindMs;
                 this.AutoSwingEnabled = AutoSwingEnabled;
+                this.SweepRewindEnabled = SweepRewindEnabled;
             }
 
             public SetLagCompConfig()

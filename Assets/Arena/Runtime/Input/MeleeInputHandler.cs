@@ -281,7 +281,12 @@ namespace Arena.Input
                 entity.GameObject.transform.eulerAngles.y * Mathf.Deg2Rad,
                 token.PredictedActionId,
                 token.ClientActionSeq,
-                AttackerViewTime.ViewServerTimeMsFor(requiresTarget ? target : null));
+                // S8 targeted report; S10 (G2): a no-target caster-cone/radius
+                // sweep (e.g. WARRIOR_CATACLYSM) reports the shared per-connection
+                // delay so its area membership rewinds like a spell sweep.
+                requiresTarget
+                    ? AttackerViewTime.ViewServerTimeMsFor(target)
+                    : AttackerViewTime.ViewServerTimeMsForConnection());
 
             if (gapClose != null && strikeChoice.shouldQueue)
             {

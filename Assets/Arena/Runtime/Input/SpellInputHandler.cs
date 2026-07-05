@@ -912,16 +912,28 @@ namespace Arena.Input
             if (movementDriver != null)
                 castInputTick = movementDriver.NextMovementContextProposalTick;
 
-            // S8 attacker-view report: only meaningful for a targeted press,
-            // and only when the pressed target is the selected entity whose
-            // rendered (delayed) pose the player was judging.
+            // S8 attacker-view report: for a targeted press, only when the
+            // pressed target is the selected entity whose rendered (delayed)
+            // pose the player was judging. S10 (G2): a no-target (area) cast
+            // reports the shared per-connection delay instead, so cone/radius
+            // sweep membership rewinds too. A non-selected targeted cast still
+            // reports 0 (S8 contract untouched).
             var selectedTarget = TargetSelector.Instance?.SelectedTarget;
-            ulong viewServerTimeMs =
-                !string.IsNullOrEmpty(targetId)
+            ulong viewServerTimeMs;
+            if (!string.IsNullOrEmpty(targetId)
                 && selectedTarget != null
-                && selectedTarget.TargetIdentity.ToString() == targetId
-                    ? AttackerViewTime.ViewServerTimeMsFor(selectedTarget)
-                    : 0UL;
+                && selectedTarget.TargetIdentity.ToString() == targetId)
+            {
+                viewServerTimeMs = AttackerViewTime.ViewServerTimeMsFor(selectedTarget);
+            }
+            else if (string.IsNullOrEmpty(targetId))
+            {
+                viewServerTimeMs = AttackerViewTime.ViewServerTimeMsForConnection();
+            }
+            else
+            {
+                viewServerTimeMs = 0UL;
+            }
 
             conn.Reducers.CastRequest(
                 spellId,

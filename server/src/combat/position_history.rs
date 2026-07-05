@@ -70,6 +70,11 @@ pub struct CombatLagCompConfig {
     pub enabled: bool,
     pub max_rewind_ms: u64,
     pub auto_swing_enabled: bool,
+    /// S10 (docs/sweep-projectile-rewind-design-2026-07-05.md): additionally
+    /// gates per-victim rewind of cone/radius sweep membership, under the
+    /// master `enabled` flag — so the S8 kill switch stays one command and the
+    /// A/B can flip S10 alone. Projectile impacts stay present-time (G1).
+    pub sweep_rewind_enabled: bool,
 }
 
 /// The press's clamped view delay, stamped with the press transaction's
@@ -120,12 +125,14 @@ pub fn set_lag_comp_config(
     enabled: bool,
     max_rewind_ms: u64,
     auto_swing_enabled: bool,
+    sweep_rewind_enabled: bool,
 ) -> Result<(), String> {
     let row = CombatLagCompConfig {
         config_id: 0,
         enabled,
         max_rewind_ms: max_rewind_ms.min(1_000),
         auto_swing_enabled,
+        sweep_rewind_enabled,
     };
     if ctx.db.combat_lag_comp_config().config_id().find(0).is_some() {
         ctx.db.combat_lag_comp_config().config_id().update(row);
@@ -133,10 +140,11 @@ pub fn set_lag_comp_config(
         ctx.db.combat_lag_comp_config().insert(row);
     }
     log::info!(
-        "[LAG_COMP] config enabled={} max_rewind_ms={} auto_swing_enabled={}",
+        "[LAG_COMP] config enabled={} max_rewind_ms={} auto_swing_enabled={} sweep_rewind_enabled={}",
         enabled,
         max_rewind_ms.min(1_000),
-        auto_swing_enabled
+        auto_swing_enabled,
+        sweep_rewind_enabled
     );
     Ok(())
 }
@@ -163,6 +171,20 @@ pub(crate) fn lag_comp_auto_swing_enabled(ctx: &ReducerContext) -> bool {
         .find(0)
         .map(|row| row.auto_swing_enabled)
         .unwrap_or(true)
+}
+
+/// S10 gate (G5): per-victim sweep-membership rewind activates only when this
+/// AND the master `enabled` flag are on. Default OFF until the shaped A/B
+/// closes the slice (S7/S8/S9 gate precedent — flipped to `unwrap_or(true)` in
+/// the acceptance commit on PASS). `set_lag_comp_config(true, 250, true, false)`
+/// disables S10 alone; the S8 master kill switch is unchanged.
+pub(crate) fn lag_comp_sweep_rewind_enabled(ctx: &ReducerContext) -> bool {
+    ctx.db
+        .combat_lag_comp_config()
+        .config_id()
+        .find(0)
+        .map(|row| row.sweep_rewind_enabled)
+        .unwrap_or(false)
 }
 
 /// Record an authoritative pose sample. Skips unchanged poses, so idle
@@ -506,6 +528,74 @@ pub(crate) fn rewound_pose_for(
         rewound_by_micros: now_micros - sample.stamped_at_micros,
         source,
     }
+}
+
+/// S10 §2.3 candidate-disc widening: sized on a generous strafe speed so a
+/// victim who left the sweep shape during the (≤ max_rewind_ms) view delay is
+/// still rewound-tested. MOVE_SPEED is 7 m/s; 12 leaves haste headroom. Dodges
+/// move faster but stamp a rewind barrier and validate present-time anyway.
+/// Shared by the spell-area and melee caster-cone/radius sweep loops.
+pub(crate) const SWEEP_REWIND_MARGIN_SPEED_MPS: f32 = 12.0;
+
+/// S10 per-victim sweep rewind (docs/sweep-projectile-rewind-design-2026-07-05.md).
+/// Given a candidate victim's present snapshot, the press's frozen view delay,
+/// and an area-membership predicate, returns whether the victim is a member —
+/// the rewound verdict when `sweep_rewind_on`, the present verdict otherwise —
+/// and logs the `[LAG_COMP] sweep_hit` dual-verdict line whenever a report is
+/// present (both switch states, so the A/B flip rate works with the switch
+/// OFF). Only the membership *position* is rewound; vitality, audience,
+/// defense, damage, and emitted event positions all stay present. Shared by the
+/// spell-area (`resolve_area_impact`) and melee caster-cone/radius
+/// (`resolve_pending_melee_hit_volume`) loops so both cone kinds rewind
+/// identically. `strike` labels the ability in the audit line.
+pub(crate) fn sweep_rewind_membership(
+    ctx: &ReducerContext,
+    caster: Identity,
+    player: &PlayerSnapshot,
+    view_delay_micros: i64,
+    now: Timestamp,
+    sweep_rewind_on: bool,
+    strike: &str,
+    mut is_member: impl FnMut(&PlayerSnapshot) -> bool,
+) -> bool {
+    let present_in = is_member(player);
+    if view_delay_micros <= 0 {
+        return present_in;
+    }
+    let pose = rewound_pose_for(ctx, player.player_id, view_delay_micros, now, player);
+    let rewound_in = if pose.rewound_by_micros > 0 {
+        let mut overlaid = *player;
+        overlaid.pos_x = pose.pos_x;
+        overlaid.pos_y = pose.pos_y;
+        overlaid.pos_z = pose.pos_z;
+        overlaid.facing_yaw = pose.yaw;
+        is_member(&overlaid)
+    } else {
+        present_in
+    };
+    let flip = rewound_in != present_in;
+    let used = if sweep_rewind_on { rewound_in } else { present_in };
+    let line = format!(
+        "[LAG_COMP] sweep_hit caster={} target={} strike={} rewound_ms={} source={} enabled={} present={} rewound={} flip={} signal={}",
+        &caster.to_hex()[..8],
+        &player.player_id.to_hex()[..8],
+        strike,
+        pose.rewound_by_micros / 1_000,
+        pose.source.as_str(),
+        sweep_rewind_on,
+        if present_in { "in" } else { "out" },
+        if rewound_in { "in" } else { "out" },
+        flip,
+        VIEW_DELAY_SIGNAL_PRESS,
+    );
+    // S9 log-volume rule: info when the line carries audit signal (a flip or a
+    // used inclusion); debug when present and rewound agree and nothing is hit.
+    if flip || used {
+        log::info!("{}", line);
+    } else {
+        log::debug!("{}", line);
+    }
+    used
 }
 
 /// Press-transaction overlay for targeted spell validation: returns the

@@ -39,6 +39,8 @@ namespace SpacetimeDB.Types
         public float FacingYaw;
         [DataMember(Name = "impact_at")]
         public SpacetimeDB.Timestamp ImpactAt;
+        [DataMember(Name = "view_delay_micros")]
+        public long ViewDelayMicros;
         [DataMember(Name = "resolve_at_micros")]
         public long ResolveAtMicros;
 
@@ -56,6 +58,7 @@ namespace SpacetimeDB.Types
             float AreaZ,
             float FacingYaw,
             SpacetimeDB.Timestamp ImpactAt,
+            long ViewDelayMicros,
             long ResolveAtMicros
         )
         {
@@ -72,6 +75,7 @@ namespace SpacetimeDB.Types
             this.AreaZ = AreaZ;
             this.FacingYaw = FacingYaw;
             this.ImpactAt = ImpactAt;
+            this.ViewDelayMicros = ViewDelayMicros;
             this.ResolveAtMicros = ResolveAtMicros;
         }
 

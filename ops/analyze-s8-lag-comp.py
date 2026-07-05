@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
-"""S8/S9 lag-comp audit summary from server logs.
+"""S8/S9/S10 lag-comp audit summary from server logs.
 
 Parses the [LAG_COMP] dual-verdict audit lines
 (docs/lag-compensation-design-2026-07-04.md §4,
-docs/auto-attack-rewind-design-2026-07-04.md §4) out of `spacetime logs` and
-prints per-check evaluation counts, rewind-magnitude distribution, pose
+docs/auto-attack-rewind-design-2026-07-04.md §4,
+docs/sweep-projectile-rewind-design-2026-07-05.md §3) out of `spacetime logs`
+and prints per-check evaluation counts, rewind-magnitude distribution, pose
 sources, and the money metric: verdict flips (hits that connect only because
-of lag comp), split by switch state and by signal (press vs standing).
+of lag comp), split by switch state and by signal (press vs standing). S10
+adds the `sweep_hit` check — per-victim cone/radius sweep membership rewound
+against the attacker-view pose.
 
 Also summarizes the S9 [DEFENSE_LATE] telemetry rider: defensible hits that
 resolved undefended with a parry/block press arriving within 400 ms — the
@@ -24,7 +27,7 @@ import subprocess
 import sys
 
 GATE_RE = re.compile(
-    r"\[LAG_COMP\] (?P<check>melee_gate|impact_recheck|auto_reach|auto_los) "
+    r"\[LAG_COMP\] (?P<check>melee_gate|impact_recheck|auto_reach|auto_los|sweep_hit) "
     r"caster=(?P<caster>\S+) "
     r"target=(?P<target>\S+) strike=(?P<strike>\S+) rewound_ms=(?P<rewound_ms>-?\d+) "
     r"source=(?P<source>\S+) enabled=(?P<enabled>\S+) present=(?P<present>\S+) "
@@ -42,7 +45,7 @@ DEFENSE_LATE_RE = re.compile(
 # combat-minute rate in the [DEFENSE_LATE] section.
 TIMESTAMP_RE = re.compile(r"(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})")
 
-CHECKS = ("melee_gate", "impact_recheck", "auto_reach", "auto_los")
+CHECKS = ("melee_gate", "impact_recheck", "auto_reach", "auto_los", "sweep_hit")
 
 
 def percentile(values, p):

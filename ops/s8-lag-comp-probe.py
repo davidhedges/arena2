@@ -305,7 +305,8 @@ def newest_history_sample(probe, npc_hex):
 
 
 def set_lag_comp(probe, enabled):
-    probe.call("set_lag_comp_config", [enabled, 250, False])
+    # 4th arg (S10 sweep_rewind_enabled) off — S8 probe exercises melee only.
+    probe.call("set_lag_comp_config", [enabled, 250, False, False])
     time.sleep(0.6)
     rows = probe.sql("SELECT config_id, enabled, max_rewind_ms FROM combat_lag_comp_config")
     if not rows or rows[0][1].lower() != str(enabled).lower():

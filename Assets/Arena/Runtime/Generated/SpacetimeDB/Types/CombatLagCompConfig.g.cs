@@ -21,18 +21,22 @@ namespace SpacetimeDB.Types
         public ulong MaxRewindMs;
         [DataMember(Name = "auto_swing_enabled")]
         public bool AutoSwingEnabled;
+        [DataMember(Name = "sweep_rewind_enabled")]
+        public bool SweepRewindEnabled;
 
         public CombatLagCompConfig(
             byte ConfigId,
             bool Enabled,
             ulong MaxRewindMs,
-            bool AutoSwingEnabled
+            bool AutoSwingEnabled,
+            bool SweepRewindEnabled
         )
         {
             this.ConfigId = ConfigId;
             this.Enabled = Enabled;
             this.MaxRewindMs = MaxRewindMs;
             this.AutoSwingEnabled = AutoSwingEnabled;
+            this.SweepRewindEnabled = SweepRewindEnabled;
         }
 
         public CombatLagCompConfig()

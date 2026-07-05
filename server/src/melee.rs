@@ -22,8 +22,9 @@ use crate::arena::{
 use crate::auto_attack::arm_auto_attack_if_unarmed_with_cadence;
 use crate::combat::player_snapshot::{player_snapshot_for, PlayerSnapshot, PlayerSnapshotSet};
 use crate::combat::position_history::{
-    lag_comp_config, press_view_delay_micros, record_press_view_delay, rewound_pose_for,
-    view_delay_signal_label,
+    lag_comp_config, lag_comp_sweep_rewind_enabled, press_view_delay_micros,
+    record_press_view_delay, rewound_pose_for, sweep_rewind_membership, view_delay_signal_label,
+    SWEEP_REWIND_MARGIN_SPEED_MPS,
 };
 use crate::combat::scene_query::{
     has_line_of_sight, is_direction_within_facing_arc, target_within_area_range_xz,
@@ -4124,12 +4125,29 @@ fn resolve_pending_melee_hit_volume(
         return;
     };
 
+    // S10: rewind the melee caster-cone/radius sweep membership by the press's
+    // frozen view delay, identically to the spell-area sweep (docs/sweep-
+    // projectile-rewind-design-2026-07-05.md §1.0). The D2 impact re-check in
+    // resolve_pending_melee_target_impact only rewinds TARGET presses, so this
+    // is the sole rewind for the no-target cone/radius path. The caster frame
+    // stays present (attacker pose never comes from history).
+    let (lag_comp_on, max_rewind_ms) = lag_comp_config(ctx);
+    let sweep_rewind_on = lag_comp_on && lag_comp_sweep_rewind_enabled(ctx);
+    let view_delay_micros = row.view_delay_micros;
+    // Widen the candidate disc so a victim who strafed out of the shape during
+    // the view delay is still rewound-tested (§2.3); only adds candidates.
+    let candidate_radius = if view_delay_micros > 0 {
+        row.range + (max_rewind_ms as f32 / 1000.0) * SWEEP_REWIND_MARGIN_SPEED_MPS
+    } else {
+        row.range
+    };
+
     let players = player_snapshots.as_slice();
     let mut candidate_indices = Vec::new();
     player_snapshots.query_disc_indices(
         caster_phys.pos_x,
         caster_phys.pos_z,
-        row.range,
+        candidate_radius,
         &mut candidate_indices,
     );
 
@@ -4153,7 +4171,16 @@ fn resolve_pending_melee_hit_volume(
         if !airborne_targeting_mode.allows_target(caster_phys.grounded, player.grounded) {
             continue;
         }
-        if !melee_hit_volume_contains_player(row, &caster_phys, &player) {
+        if !sweep_rewind_membership(
+            ctx,
+            row.source,
+            player,
+            view_delay_micros,
+            now,
+            sweep_rewind_on,
+            row.kind.as_str(),
+            |p| melee_hit_volume_contains_player(row, &caster_phys, p),
+        ) {
             continue;
         }
 
