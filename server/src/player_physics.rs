@@ -152,7 +152,11 @@ pub(crate) fn commit_player_physics(
         decision.row.updated_at,
     );
     if mode != PhysicsWriteMode::Normal {
-        crate::combat::position_history::stamp_rewind_barrier(ctx, identity, decision.row.updated_at);
+        crate::combat::position_history::stamp_rewind_barrier(
+            ctx,
+            identity,
+            decision.row.updated_at,
+        );
     }
 
     ctx.db.player_physics().identity().update(decision.row);

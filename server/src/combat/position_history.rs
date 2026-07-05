@@ -134,7 +134,13 @@ pub fn set_lag_comp_config(
         auto_swing_enabled,
         sweep_rewind_enabled,
     };
-    if ctx.db.combat_lag_comp_config().config_id().find(0).is_some() {
+    if ctx
+        .db
+        .combat_lag_comp_config()
+        .config_id()
+        .find(0)
+        .is_some()
+    {
         ctx.db.combat_lag_comp_config().config_id().update(row);
     } else {
         ctx.db.combat_lag_comp_config().insert(row);
@@ -236,15 +242,17 @@ pub(crate) fn record_position_sample(
     );
     let now_micros = timestamp_to_micros(now);
     if count < HISTORY_SLOTS_PER_ENTITY {
-        ctx.db.combat_position_history().insert(CombatPositionHistory {
-            sample_id: 0,
-            identity,
-            stamped_at_micros: now_micros,
-            pos_x,
-            pos_y,
-            pos_z,
-            yaw,
-        });
+        ctx.db
+            .combat_position_history()
+            .insert(CombatPositionHistory {
+                sample_id: 0,
+                identity,
+                stamped_at_micros: now_micros,
+                pos_x,
+                pos_y,
+                pos_z,
+                yaw,
+            });
         return;
     }
 
@@ -265,7 +273,13 @@ pub(crate) fn stamp_rewind_barrier(ctx: &ReducerContext, identity: Identity, now
         identity,
         barrier_micros: timestamp_to_micros(now),
     };
-    if ctx.db.combat_rewind_barrier().identity().find(identity).is_some() {
+    if ctx
+        .db
+        .combat_rewind_barrier()
+        .identity()
+        .find(identity)
+        .is_some()
+    {
         ctx.db.combat_rewind_barrier().identity().update(row);
     } else {
         ctx.db.combat_rewind_barrier().insert(row);
@@ -277,7 +291,10 @@ pub(crate) fn clear_position_history(ctx: &ReducerContext, identity: Identity) {
     ctx.db.combat_position_history().identity().delete(identity);
     ctx.db.combat_rewind_barrier().identity().delete(identity);
     ctx.db.combat_press_view_delay().identity().delete(identity);
-    ctx.db.combat_standing_view_delay().identity().delete(identity);
+    ctx.db
+        .combat_standing_view_delay()
+        .identity()
+        .delete(identity);
 }
 
 /// Record the press's view-time report for this transaction. Called at the
@@ -308,7 +325,13 @@ pub(crate) fn record_press_view_delay(
         clamped_to_max,
         signal: VIEW_DELAY_SIGNAL_PRESS.to_string(),
     };
-    if ctx.db.combat_press_view_delay().identity().find(caster).is_some() {
+    if ctx
+        .db
+        .combat_press_view_delay()
+        .identity()
+        .find(caster)
+        .is_some()
+    {
         ctx.db.combat_press_view_delay().identity().update(row);
     } else {
         ctx.db.combat_press_view_delay().insert(row);
@@ -325,7 +348,10 @@ pub(crate) fn record_standing_view_delay(
     view_server_time_ms: u64,
 ) {
     if view_server_time_ms == 0 {
-        ctx.db.combat_standing_view_delay().identity().delete(identity);
+        ctx.db
+            .combat_standing_view_delay()
+            .identity()
+            .delete(identity);
         return;
     }
 
@@ -343,7 +369,13 @@ pub(crate) fn record_standing_view_delay(
         reported_view_ms: view_server_time_ms,
         clamped_to_max,
     };
-    if ctx.db.combat_standing_view_delay().identity().find(identity).is_some() {
+    if ctx
+        .db
+        .combat_standing_view_delay()
+        .identity()
+        .find(identity)
+        .is_some()
+    {
         ctx.db.combat_standing_view_delay().identity().update(row);
     } else {
         ctx.db.combat_standing_view_delay().insert(row);
@@ -356,7 +388,11 @@ pub(crate) fn fresh_standing_view_delay(
     ctx: &ReducerContext,
     identity: Identity,
 ) -> Option<CombatStandingViewDelay> {
-    let row = ctx.db.combat_standing_view_delay().identity().find(identity)?;
+    let row = ctx
+        .db
+        .combat_standing_view_delay()
+        .identity()
+        .find(identity)?;
     let now_micros = timestamp_to_micros(ctx.timestamp);
     if now_micros - row.updated_at_micros > STANDING_VIEW_DELAY_TTL_MICROS {
         return None;
@@ -384,7 +420,13 @@ pub(crate) fn stamp_standing_press_context(
         clamped_to_max: standing.clamped_to_max,
         signal: VIEW_DELAY_SIGNAL_STANDING.to_string(),
     };
-    if ctx.db.combat_press_view_delay().identity().find(identity).is_some() {
+    if ctx
+        .db
+        .combat_press_view_delay()
+        .identity()
+        .find(identity)
+        .is_some()
+    {
         ctx.db.combat_press_view_delay().identity().update(row);
     } else {
         ctx.db.combat_press_view_delay().insert(row);
@@ -576,7 +618,11 @@ pub(crate) fn sweep_rewind_membership(
         present_in
     };
     let flip = rewound_in != present_in;
-    let used = if sweep_rewind_on { rewound_in } else { present_in };
+    let used = if sweep_rewind_on {
+        rewound_in
+    } else {
+        present_in
+    };
     let line = format!(
         "[LAG_COMP] sweep_hit caster={} target={} strike={} rewound_ms={} source={} enabled={} present={} rewound={} flip={} signal={}",
         &caster.to_hex()[..8],
@@ -621,7 +667,13 @@ pub(crate) fn overlay_press_rewound_target_pose(
         return target;
     }
 
-    let pose = rewound_pose_for(ctx, target.player_id, view_delay_micros, ctx.timestamp, &target);
+    let pose = rewound_pose_for(
+        ctx,
+        target.player_id,
+        view_delay_micros,
+        ctx.timestamp,
+        &target,
+    );
     if pose.rewound_by_micros > 0 {
         log::info!(
             "[LAG_COMP] overlay caster={} target={} rewound_ms={} source={} delta={:.3}",

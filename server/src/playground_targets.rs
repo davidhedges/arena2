@@ -8,8 +8,6 @@ use crate::arena::{
     arena_seed_for_identity, open_world_scene_name_for_identity, upsert_player_open_world_scene,
     upsert_player_world,
 };
-use crate::practice::is_training_instance;
-use crate::world_collision::resolve_world_spawn_position_with_layout_for_scene;
 use crate::combat::{
     new_dummy_player_state, DEFAULT_HIT_HEIGHT, DEFAULT_HIT_RADIUS, DEFAULT_MAX_HP,
 };
@@ -17,6 +15,8 @@ use crate::party::{
     ensure_playground_party_member, remove_playground_party_member,
     remove_playground_party_member_and_created_party, MAX_PARTY_MEMBERS,
 };
+use crate::practice::is_training_instance;
+use crate::world_collision::resolve_world_spawn_position_with_layout_for_scene;
 
 #[allow(unused_imports)]
 use crate::arena::player_world as _;

@@ -133,7 +133,7 @@ namespace Arena.Input
             if (localPlayer != null && !localPlayer.IsDestroyed && localPlayer.IsAlive)
             {
                 FlushPendingAuthoritativeInstantSpellReplays(localPlayer, nowMs);
-                LocalCombatState.Instance.ReconcilePredictedPrimaryResource(localPlayer);
+                LocalCombatState.Instance.ReconcilePredictedResources(localPlayer);
             }
             PruneInstantSpellPredictionState(nowMs);
 
@@ -579,18 +579,15 @@ namespace Arena.Input
                 return true;
 
             string requiredKind = SpellResourceKind(conn, entity, spellId);
-            if (!string.Equals(requiredKind, entity.PrimaryResourceKind, System.StringComparison.OrdinalIgnoreCase))
-            {
-                ActionBarTrace.Trace(
-                    $"spell rejected: {spellId} requires {requiredKind}, active resource is {entity.PrimaryResourceKind}");
-                return false;
-            }
-
-            float available = LocalCombatState.Instance.EffectiveCurrentPrimaryResource(entity, requiredKind);
+            float available = LocalCombatState.Instance.EffectiveCurrentResource(entity, requiredKind);
             if (available + 0.001f < cost)
             {
                 ActionBarTrace.Trace(
                     $"spell rejected: {spellId} requires {cost:F0} {requiredKind} ({available:F0} available)");
+                LocalCombatState.NotifyLocalAdvisoryDenial(
+                    spellId,
+                    spellId,
+                    SpacetimeDB.Types.ActionRejectReason.InsufficientResource);
                 return false;
             }
 
@@ -598,9 +595,10 @@ namespace Arena.Input
         }
 
         /// <summary>
-        /// Applies the press-time predictions (GCD, per-spell cooldown, MANA
-        /// reservation) through the prediction ledger so a server
-        /// Rejected/StaleToken can restore all of them (feel audit F1).
+        /// Applies press-time predictions through the prediction ledger so a
+        /// server Rejected/StaleToken can restore them. Normal cast-time spells
+        /// intentionally do not reserve resource here; the server commits cost
+        /// only when the active cast reaches release.
         /// </summary>
         private void RecordPredictedSpellStart(
             SpacetimeDB.Types.DbConnection conn,
@@ -626,11 +624,14 @@ namespace Arena.Input
                 spellDef.UsesGlobalCooldown,
                 GameplayTuning.ResolveDefaultGlobalCooldownDurationMs(conn),
                 resourceKind,
-                SpellPrimaryResourceCost(spellDef),
+                ShouldReserveResourceAtCastStart(spellDef) ? SpellPrimaryResourceCost(spellDef) : 0f,
                 nowMs);
             if (token.IsPredicted)
                 _predictionLedgersByToken[SpellTokenKey(token)] = (ledger, nowMs + PendingInstantSpellPredictionTtlMs);
         }
+
+        private static bool ShouldReserveResourceAtCastStart(SpacetimeDB.Types.SpellDefinition spellDef)
+            => spellDef.CastTimeMs == 0UL;
 
         private static void PredictCastTimeSpellHold(
             string spellId,

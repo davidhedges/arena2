@@ -49,6 +49,13 @@ namespace Arena.Simulation
         public string Kind { get; }
     }
 
+    public struct PredictedResourceSpend
+    {
+        public float Spend;
+        public long ExpiresAtMs;
+        public float LastObserved;
+    }
+
     public readonly struct CastActionToken
     {
         public CastActionToken(string predictedCastId, ulong clientActionSeq, string kind)
@@ -216,10 +223,7 @@ namespace Arena.Simulation
         private string _activeCastPredictedCastId = string.Empty;
         private ulong _activeCastClientActionSeq;
         private string _locallySuppressedCastBarKind = string.Empty;
-        private string _predictedPrimaryResourceKind = string.Empty;
-        private float _predictedPrimaryResourceSpend;
-        private long _predictedPrimaryResourceSpendExpiresAtMs;
-        private float _lastObservedPrimaryResource = -1f;
+        private readonly Dictionary<string, PredictedResourceSpend> _predictedResourceSpends = new();
 
         public void Bind(Identity localId)
         {
@@ -251,10 +255,7 @@ namespace Arena.Simulation
             _activeCastPredictedCastId = string.Empty;
             _activeCastClientActionSeq = 0UL;
             _locallySuppressedCastBarKind = string.Empty;
-            _predictedPrimaryResourceKind = string.Empty;
-            _predictedPrimaryResourceSpend = 0f;
-            _predictedPrimaryResourceSpendExpiresAtMs = 0L;
-            _lastObservedPrimaryResource = -1f;
+            _predictedResourceSpends.Clear();
             _localId = default;
             _bound = false;
         }
@@ -435,7 +436,7 @@ namespace Arena.Simulation
             }
 
             float reservedCost = entity != null
-                ? ReservePredictedPrimaryResource(entity, resourceKind, resourceCost, nowMs)
+                ? ReservePredictedResource(entity, resourceKind, resourceCost, nowMs)
                 : 0f;
 
             return new PredictedActionLedger(
@@ -482,34 +483,33 @@ namespace Arena.Simulation
                 GcdDurationMs = ledger.PriorGcdDurationMs;
             }
 
-            ReleasePredictedPrimaryResource(ledger.ReservedResourceKind, ledger.ReservedResourceCost);
+            ReleasePredictedResource(ledger.ReservedResourceKind, ledger.ReservedResourceCost);
 
             PredictionRejected?.Invoke(ledger.ActionKind, ledger.PressedActionId, rejectReason);
         }
 
         // ---------------------------------------------------------------
-        // Predicted primary resource reservation
+        // Predicted resource reservation
         // ---------------------------------------------------------------
 
-        public float EffectiveCurrentPrimaryResource(PlayerEntity entity, string resourceKind)
+        public float EffectiveCurrentResource(PlayerEntity entity, string resourceKind)
         {
-            ReconcilePredictedPrimaryResource(entity);
-            if (!string.Equals(
-                    _predictedPrimaryResourceKind,
-                    NormalizeResourceKind(resourceKind),
-                    StringComparison.OrdinalIgnoreCase))
-            {
-                return entity.CurrentPrimaryResource;
-            }
+            ReconcilePredictedResources(entity);
+            string normalizedKind = NormalizeResourceKind(resourceKind);
+            if (string.IsNullOrWhiteSpace(normalizedKind))
+                return 0f;
 
-            return UnityEngine.Mathf.Max(0f, entity.CurrentPrimaryResource - _predictedPrimaryResourceSpend);
+            float current = CurrentResourceForKind(entity, normalizedKind);
+            return _predictedResourceSpends.TryGetValue(normalizedKind, out PredictedResourceSpend predicted)
+                ? UnityEngine.Mathf.Max(0f, current - predicted.Spend)
+                : current;
         }
 
         /// <summary>
         /// Returns the cost actually reserved (0 when the guards reject the
         /// reservation) so prediction ledgers can roll back exactly that amount.
         /// </summary>
-        public float ReservePredictedPrimaryResource(
+        public float ReservePredictedResource(
             PlayerEntity entity,
             string resourceKind,
             float cost,
@@ -519,24 +519,17 @@ namespace Arena.Simulation
                 return 0f;
 
             string normalizedKind = NormalizeResourceKind(resourceKind);
-            if (string.IsNullOrWhiteSpace(normalizedKind)
-                || !string.Equals(
-                    normalizedKind,
-                    NormalizeResourceKind(entity.PrimaryResourceKind),
-                    StringComparison.OrdinalIgnoreCase))
-            {
+            if (string.IsNullOrWhiteSpace(normalizedKind))
                 return 0f;
-            }
 
-            if (!string.Equals(_predictedPrimaryResourceKind, normalizedKind, StringComparison.OrdinalIgnoreCase))
-            {
-                _predictedPrimaryResourceKind = normalizedKind;
-                _predictedPrimaryResourceSpend = 0f;
-                _lastObservedPrimaryResource = entity.CurrentPrimaryResource;
-            }
+            float current = CurrentResourceForKind(entity, normalizedKind);
+            bool hadPrediction = _predictedResourceSpends.TryGetValue(normalizedKind, out PredictedResourceSpend predicted);
+            if (!hadPrediction)
+                predicted.LastObserved = current;
 
-            _predictedPrimaryResourceSpend = UnityEngine.Mathf.Max(0f, _predictedPrimaryResourceSpend + cost);
-            _predictedPrimaryResourceSpendExpiresAtMs = nowMs + PredictedResourceSpendTimeoutMs;
+            predicted.Spend = UnityEngine.Mathf.Max(0f, predicted.Spend + cost);
+            predicted.ExpiresAtMs = nowMs + PredictedResourceSpendTimeoutMs;
+            _predictedResourceSpends[normalizedKind] = predicted;
             return cost;
         }
 
@@ -546,71 +539,79 @@ namespace Arena.Simulation
         /// confirm it). Floored at zero so reconciliation that already released
         /// part of it cannot double-credit.
         /// </summary>
-        public void ReleasePredictedPrimaryResource(string resourceKind, float cost)
+        public void ReleasePredictedResource(string resourceKind, float cost)
         {
             if (cost <= 0.001f)
                 return;
 
             string normalizedKind = NormalizeResourceKind(resourceKind);
-            if (!string.Equals(_predictedPrimaryResourceKind, normalizedKind, StringComparison.OrdinalIgnoreCase))
+            if (!_predictedResourceSpends.TryGetValue(normalizedKind, out PredictedResourceSpend predicted))
                 return;
 
-            _predictedPrimaryResourceSpend = UnityEngine.Mathf.Max(0f, _predictedPrimaryResourceSpend - cost);
-            if (_predictedPrimaryResourceSpend <= 0.001f)
+            predicted.Spend = UnityEngine.Mathf.Max(0f, predicted.Spend - cost);
+            if (predicted.Spend <= 0.001f)
             {
-                _predictedPrimaryResourceSpend = 0f;
-                _predictedPrimaryResourceSpendExpiresAtMs = 0L;
+                _predictedResourceSpends.Remove(normalizedKind);
+                return;
             }
+
+            _predictedResourceSpends[normalizedKind] = predicted;
         }
 
-        public void ReconcilePredictedPrimaryResource(PlayerEntity entity)
+        public void ReconcilePredictedResources(PlayerEntity entity)
         {
             long nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-            if (_predictedPrimaryResourceSpend > 0f
-                && _predictedPrimaryResourceSpendExpiresAtMs > 0L
-                && nowMs > _predictedPrimaryResourceSpendExpiresAtMs)
+            foreach (string resourceKind in new List<string>(_predictedResourceSpends.Keys))
             {
-                _predictedPrimaryResourceSpend = 0f;
-                _predictedPrimaryResourceSpendExpiresAtMs = 0L;
+                PredictedResourceSpend predicted = _predictedResourceSpends[resourceKind];
+                if (predicted.ExpiresAtMs > 0L && nowMs > predicted.ExpiresAtMs)
+                {
+                    _predictedResourceSpends.Remove(resourceKind);
+                    continue;
+                }
+
+                float current = CurrentResourceForKind(entity, resourceKind);
+                if (predicted.LastObserved >= 0f && current < predicted.LastObserved)
+                {
+                    float confirmedSpend = predicted.LastObserved - current;
+                    predicted.Spend = UnityEngine.Mathf.Max(0f, predicted.Spend - confirmedSpend);
+                    if (predicted.Spend <= 0.001f)
+                    {
+                        _predictedResourceSpends.Remove(resourceKind);
+                        continue;
+                    }
+                }
+
+                if (predicted.LastObserved >= 0f && current > predicted.LastObserved + 0.001f)
+                    predicted.Spend = UnityEngine.Mathf.Min(predicted.Spend, current);
+
+                predicted.LastObserved = current;
+                _predictedResourceSpends[resourceKind] = predicted;
             }
-
-            string currentKind = NormalizeResourceKind(entity.PrimaryResourceKind);
-            if (string.IsNullOrWhiteSpace(currentKind))
-            {
-                _predictedPrimaryResourceKind = string.Empty;
-                _predictedPrimaryResourceSpend = 0f;
-                _predictedPrimaryResourceSpendExpiresAtMs = 0L;
-                _lastObservedPrimaryResource = -1f;
-                return;
-            }
-
-            if (!string.Equals(_predictedPrimaryResourceKind, currentKind, StringComparison.OrdinalIgnoreCase))
-            {
-                _predictedPrimaryResourceKind = currentKind;
-                _predictedPrimaryResourceSpend = 0f;
-                _predictedPrimaryResourceSpendExpiresAtMs = 0L;
-                _lastObservedPrimaryResource = entity.CurrentPrimaryResource;
-                return;
-            }
-
-            if (_lastObservedPrimaryResource >= 0f && entity.CurrentPrimaryResource < _lastObservedPrimaryResource)
-            {
-                float confirmedSpend = _lastObservedPrimaryResource - entity.CurrentPrimaryResource;
-                _predictedPrimaryResourceSpend = UnityEngine.Mathf.Max(0f, _predictedPrimaryResourceSpend - confirmedSpend);
-                if (_predictedPrimaryResourceSpend <= 0.001f)
-                    _predictedPrimaryResourceSpendExpiresAtMs = 0L;
-            }
-
-            if (entity.CurrentPrimaryResource > _lastObservedPrimaryResource + 0.001f)
-                _predictedPrimaryResourceSpend = UnityEngine.Mathf.Min(_predictedPrimaryResourceSpend, entity.CurrentPrimaryResource);
-
-            _lastObservedPrimaryResource = entity.CurrentPrimaryResource;
         }
 
         private static string NormalizeResourceKind(string resourceKind)
             => string.IsNullOrWhiteSpace(resourceKind)
                 ? string.Empty
                 : resourceKind.Trim().ToUpperInvariant();
+
+        private static float CurrentResourceForKind(PlayerEntity entity, string resourceKind)
+        {
+            string normalizedKind = NormalizeResourceKind(resourceKind);
+            if (string.Equals(normalizedKind, "MANA", StringComparison.OrdinalIgnoreCase))
+                return entity.CurrentMana;
+            if (string.Equals(normalizedKind, "STAMINA", StringComparison.OrdinalIgnoreCase))
+                return entity.CurrentStamina;
+            if (string.Equals(
+                    normalizedKind,
+                    NormalizeResourceKind(entity.PrimaryResourceKind),
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return entity.CurrentPrimaryResource;
+            }
+
+            return 0f;
+        }
 
         // ---------------------------------------------------------------
         // FixedActionChargeState callbacks

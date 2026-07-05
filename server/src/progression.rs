@@ -4732,7 +4732,7 @@ fn validate_spell_delivery_damage_type(ability_id: &str, gameplay: &AbilityGamep
     };
     if !matches!(
         kind.as_str(),
-        "PROJECTILE" | "AREA" | "INSTANT_BEAM" | "CHANNEL"
+        "DIRECT_TARGET" | "PROJECTILE" | "AREA" | "INSTANT_BEAM" | "CHANNEL"
     ) {
         return;
     }

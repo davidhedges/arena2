@@ -13,6 +13,7 @@ namespace Arena.Tests.Editor
         private const string RuntimeUiEventSystemPath = "Assets/Arena/Runtime/UI/RuntimeUiEventSystem.cs";
         private const string ActionBarInputDispatcherPath = "Assets/Arena/Runtime/Input/ActionBarInputDispatcher.cs";
         private const string SpellInputHandlerPath = "Assets/Arena/Runtime/Input/SpellInputHandler.cs";
+        private const string MeleeInputHandlerPath = "Assets/Arena/Runtime/Input/MeleeInputHandler.cs";
         private const string GameplayContractsPath = "Assets/Arena/Runtime/Combat/GameplayContracts.cs";
         private const string GameplaySubscriptionPlannerPath = "Assets/Arena/Runtime/Network/GameplaySubscriptionPlanner.cs";
         private const string FixedActionDispatcherPath = "Assets/Arena/Runtime/Input/FixedActionDispatcher.cs";
@@ -82,6 +83,24 @@ namespace Arena.Tests.Editor
             Assert.That(source, Does.Contain("AimRadius"));
             Assert.That(source, Does.Contain("MaxDistance"));
             Assert.That(source, Does.Contain("IsAimPointWithinMaxDistance"));
+        }
+
+        [Test]
+        public void SpellInputCode_AllowsAuthoredSpellResources()
+        {
+            string source = File.ReadAllText(SpellInputHandlerPath);
+
+            Assert.That(source, Does.Contain("EffectiveCurrentResource(entity, requiredKind)"));
+            Assert.That(source, Does.Not.Contain("spell rejected: {spellId} requires {requiredKind}, active resource is {entity.PrimaryResourceKind}"));
+        }
+
+        [Test]
+        public void MeleeInputCode_AllowsAuthoredActionResources()
+        {
+            string source = File.ReadAllText(MeleeInputHandlerPath);
+
+            Assert.That(source, Does.Contain("EffectiveCurrentResource(entity, requiredKind)"));
+            Assert.That(source, Does.Not.Contain("melee rejected: {actionId} requires {requiredKind}, active resource is {entity.PrimaryResourceKind}"));
         }
 
         [Test]
@@ -336,6 +355,9 @@ namespace Arena.Tests.Editor
             Assert.That(panel, Does.Contain("CanApplyPayloadToSlot"));
             Assert.That(panel, Does.Contain("Spell slots"));
             Assert.That(panel, Does.Contain("ActionBarDropApplier.ApplyDrop(conn,"));
+            Assert.That(panel, Does.Contain("SpellbookDropSlotPrefix"));
+            Assert.That(panel, Does.Contain("TryHandleSpellbookDrop"));
+            Assert.That(panel, Does.Contain("conn.Reducers.AssignEquippedSpellbookSpell"));
             Assert.That(panel, Does.Contain("RuntimeUiEscapeRouter.Register"));
 
             string factory = File.ReadAllText(ActionBarSlotViewFactoryPath);

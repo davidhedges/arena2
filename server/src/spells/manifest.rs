@@ -135,6 +135,7 @@ impl Serialize for SpellId {
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub(crate) enum SpellBehavior {
+    DirectTarget,
     Projectile,
     Area,
     InstantBeam,
@@ -149,6 +150,7 @@ pub(crate) enum SpellBehavior {
 impl SpellBehavior {
     pub(super) fn as_str(self) -> &'static str {
         match self {
+            Self::DirectTarget => "DIRECT_TARGET",
             Self::Projectile => "PROJECTILE",
             Self::Area => "AREA",
             Self::InstantBeam => "INSTANT_BEAM",
@@ -268,6 +270,7 @@ impl ApplyStatusDefinition {
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(crate) struct SpellSecondaryTunables {
+    pub direct_target: Option<DirectTargetSecondaryTunables>,
     pub projectile: Option<ProjectileSecondaryTunables>,
     pub area: Option<AreaSecondaryTunables>,
     pub instant_beam: Option<InstantBeamSecondaryTunables>,
@@ -275,6 +278,12 @@ pub(crate) struct SpellSecondaryTunables {
     pub remove_status: Option<RemoveStatusSecondaryTunables>,
     pub consume_status: Option<ConsumeStatusSecondaryTunables>,
     pub aura: Option<AuraSecondaryTunables>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct DirectTargetSecondaryTunables {
+    pub parry_behavior: SpellParryBehavior,
+    pub impact_effects: Vec<ImpactEffect>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -952,7 +961,7 @@ mod tests {
         assert_eq!(definition.kind.as_str(), "GLACIAL_SPIKE");
         assert_eq!(definition.cooldown, Duration::from_millis(1_200));
         assert!(definition.uses_global_cooldown);
-        assert_eq!(definition.behavior.as_str(), "PROJECTILE");
+        assert_eq!(definition.behavior.as_str(), "DIRECT_TARGET");
         assert_eq!(definition.targeting.as_str(), "TARGET");
         assert!(definition.requires_target);
         assert_eq!(definition.cast_time, Duration::from_millis(2_000));
@@ -960,13 +969,13 @@ mod tests {
         assert_eq!(definition.damage_type.as_str(), "COLD");
         assert!((definition.primary_resource_cost - 20.0).abs() < 0.0001);
         assert!(definition.arms_auto_attack_on_cast);
-        let projectile = definition
+        let direct_target = definition
             .secondary
-            .projectile
+            .direct_target
             .as_ref()
-            .expect("Glacial Spike should define projectile secondary data");
-        assert_eq!(projectile.impact_effects.len(), 1);
-        let status = &projectile.impact_effects[0];
+            .expect("Glacial Spike should define direct-target secondary data");
+        assert_eq!(direct_target.impact_effects.len(), 1);
+        let status = &direct_target.impact_effects[0];
         assert_eq!(status.payload().kind(), StatusEffectKind::Freeze);
         assert_eq!(status.duration(), Duration::from_millis(1_200));
         assert!((definition.primary_resource_gain_on_cast - 0.0).abs() < 0.0001);

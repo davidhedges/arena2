@@ -2613,6 +2613,50 @@ fn item_spell_key(item_instance_id: &str, slot_index: u32) -> String {
     format!("{item_instance_id}:spell:{slot_index}")
 }
 
+#[reducer]
+pub fn assign_equipped_spellbook_spell(
+    ctx: &ReducerContext,
+    slot_index: u32,
+    spell_id: String,
+) -> Result<(), String> {
+    let owner = ctx.sender();
+    let spell_id = normalize_id(spell_id.as_str());
+    if spell_id.is_empty() {
+        return Err("spell id is required".to_string());
+    }
+    if crate::spells::spell_definition_by_str(spell_id.as_str()).is_none() {
+        return Err(format!("unknown spell '{spell_id}'"));
+    }
+
+    let Some(equipment) = ctx.db.equipment_loadout().owner().find(owner) else {
+        return Err("no equipment loadout found".to_string());
+    };
+    let Some(spellbook_item_id) = equipment.spellbook_item_id.as_deref() else {
+        return Err("no spellbook equipped".to_string());
+    };
+    let Some(definition) = item_definition_for_instance(ctx, spellbook_item_id) else {
+        return Err("equipped spellbook definition not found".to_string());
+    };
+    if definition.item_kind != ITEM_KIND_SPELLBOOK {
+        return Err("equipped item is not a spellbook".to_string());
+    }
+
+    let key = item_spell_key(spellbook_item_id, slot_index);
+    if let Some(mut row) = ctx.db.item_spell().key().find(key.clone()) {
+        row.spell_id = spell_id;
+        ctx.db.item_spell().key().update(row);
+        return Ok(());
+    }
+
+    ctx.db.item_spell().insert(ItemSpell {
+        key,
+        item_instance_id: spellbook_item_id.to_string(),
+        slot_index,
+        spell_id,
+    });
+    Ok(())
+}
+
 fn ensure_spellbook_spells_for_item(ctx: &ReducerContext, owner: Identity, item_instance_id: &str) {
     let Some(item) = ctx
         .db

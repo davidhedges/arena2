@@ -28,6 +28,7 @@ namespace Arena.UI
         private const string ActionBarActionTag = "ACTION_BAR_ACTION";
         private const string AllWeaponsFilterKey = "ALL_WEAPONS";
         private const string SpellsFilterKey = "SPELLS";
+        private const string SpellbookDropSlotPrefix = "SPELLBOOK_";
         private const uint SpellsCategorySortOrder = uint.MaxValue - 3;
 
         private static readonly Color PanelColor = new(0.055f, 0.06f, 0.068f, 0.96f);
@@ -375,6 +376,7 @@ namespace Arena.UI
                     : ActionTooltipResolver.ResolveForAbility(conn, owner, conn?.Db.AbilityCatalog.AbilityId.Find(action.AbilityId));
                 if (!action.IsUsable)
                     tooltip = DisabledTooltip(tooltip, action);
+                bool canDrag = action.IsUsable || AvailableActionCanAssignToSpellbook(action);
                 GameObject cell = ActionBarSlotViewFactory.Create(
                     _availableContent,
                     $"Available_{action.ActionKind}_{action.ActionId}",
@@ -386,8 +388,8 @@ namespace Arena.UI
                     action.IsUsable ? Color.white : DisabledActionTextColor,
                     iconSprite,
                     _canvas,
-                    payloadProvider: action.IsUsable ? () => action.ToDragPayload() : null,
-                    onDrop: action.IsUsable ? HandleActionDrop : null,
+                    payloadProvider: canDrag ? () => action.ToDragPayload() : null,
+                    onDrop: canDrag ? HandleActionDrop : null,
                     onClick: action.IsUsable ? () =>
                     {
                         _selectedAction = action;
@@ -503,6 +505,7 @@ namespace Arena.UI
                     hasSpell ? Color.white : new Color(1f, 1f, 1f, 0.36f),
                     iconSprite,
                     _canvas,
+                    SpellbookDropSlotId(col),
                     tooltipData: tooltip);
                 SetRect((RectTransform)cell.transform, ActionBarLayout.SpellbookCellPosition(col), ActionBarLayout.SlotVector, new Vector2(0f, 0f), new Vector2(0f, 0f));
                 _spellbookCells.Add(cell);
@@ -589,12 +592,33 @@ namespace Arena.UI
             if (conn == null)
                 return;
 
+            if (TryHandleSpellbookDrop(conn, payload, targetSlotId))
+                return;
+
             if (!CanApplyPayloadToSlot(conn, payload, targetSlotId))
                 return;
 
             ActionBarDropApplier.ApplyDrop(conn, payload, targetSlotId);
             _lastSignature = string.Empty;
             _nextRefreshTime = 0f;
+        }
+
+        private bool TryHandleSpellbookDrop(DbConnection conn, ActionBarDragPayload payload, string? targetSlotId)
+        {
+            if (!TryParseSpellbookDropSlot(targetSlotId, out uint slotIndex))
+                return false;
+
+            if (!TryResolveSpellIdForPayload(conn, payload, out string spellId))
+            {
+                SetStatus("Drop an authored spell here", true);
+                return true;
+            }
+
+            conn.Reducers.AssignEquippedSpellbookSpell(slotIndex, spellId);
+            _lastSignature = string.Empty;
+            _nextRefreshTime = 0f;
+            SetStatus($"Spellbook slot {slotIndex + 1}: {payload.DisplayName}", false);
+            return true;
         }
 
         private List<AvailableAction> BuildAvailableActions(DbConnection conn, Identity owner, string combatProfile, string weaponFilterKey)
@@ -728,6 +752,10 @@ namespace Arena.UI
                     .Append(assignment.ActionKind).Append(':')
                     .Append(assignment.ActionId).Append(':')
                     .Append(assignment.AbilityId).Append(';');
+            sb.Append("|spellbook:");
+            foreach (ItemSpell spell in ReadEquippedSpellbookSpells(conn, owner))
+                sb.Append(spell.SlotIndex).Append(':')
+                    .Append(WireIdentifier.Normalize(spell.SpellId)).Append(';');
             sb.Append('|');
             foreach (AvailableAction action in actions)
                 sb.Append(action.ActionKind).Append(':')
@@ -770,6 +798,7 @@ namespace Arena.UI
         {
             if (ctx.Event.Reducer is not Reducer.AssignCharacterActionBarAbilityToSlot
                 && ctx.Event.Reducer is not Reducer.AssignCharacterActionBarSlot
+                && ctx.Event.Reducer is not Reducer.AssignEquippedSpellbookSpell
                 && ctx.Event.Reducer is not Reducer.ClearCharacterActionBarSlot)
             {
                 return;
@@ -823,6 +852,40 @@ namespace Arena.UI
                 return false;
 
             return !CombatProfileResolver.AbilityMatchesOwner(conn, conn.Identity, ability);
+        }
+
+        private static bool AvailableActionCanAssignToSpellbook(AvailableAction action)
+            => string.Equals(action.ActionKind, ActionKinds.Ability, StringComparison.Ordinal)
+                && string.Equals(action.CategoryKey, SpellsFilterKey, StringComparison.Ordinal);
+
+        private static string SpellbookDropSlotId(int col) => $"{SpellbookDropSlotPrefix}{col}";
+
+        private static bool TryParseSpellbookDropSlot(string? slotId, out uint slotIndex)
+        {
+            slotIndex = 0;
+            string normalized = WireIdentifier.Normalize(slotId);
+            if (!normalized.StartsWith(SpellbookDropSlotPrefix, StringComparison.Ordinal))
+                return false;
+
+            return uint.TryParse(normalized[SpellbookDropSlotPrefix.Length..], out slotIndex);
+        }
+
+        private static bool TryResolveSpellIdForPayload(
+            DbConnection conn,
+            ActionBarDragPayload payload,
+            out string spellId)
+        {
+            spellId = string.Empty;
+            if (!payload.HasValue || !string.Equals(payload.ActionKind, ActionKinds.Ability, StringComparison.Ordinal))
+                return false;
+
+            AbilityCatalog? ability = conn.Db.AbilityCatalog.AbilityId.Find(WireIdentifier.Normalize(payload.ActionId))
+                ?? conn.Db.AbilityCatalog.AbilityId.Find(WireIdentifier.Normalize(payload.AbilityId));
+            if (!string.Equals(WireIdentifier.Normalize(ability?.AbilityKind), AbilityKinds.Spell, StringComparison.Ordinal))
+                return false;
+
+            spellId = WireIdentifier.Normalize(ability?.ActionId);
+            return !string.IsNullOrWhiteSpace(spellId);
         }
 
         private static bool SameAction(AvailableAction left, AvailableAction right)

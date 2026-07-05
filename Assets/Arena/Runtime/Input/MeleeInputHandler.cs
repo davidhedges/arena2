@@ -106,7 +106,7 @@ namespace Arena.Input
             if (entity == null || entity.IsDestroyed || !entity.IsAlive) return;
 
             long nowMs = System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-            LocalCombatState.Instance.ReconcilePredictedPrimaryResource(entity);
+            LocalCombatState.Instance.ReconcilePredictedResources(entity);
             FlushQueuedLocalStrike(entity, nowMs);
             FlushPendingAuthoritativeMeleeReplays(entity, nowMs);
             PrunePendingMeleePredictionState(nowMs);
@@ -420,18 +420,16 @@ namespace Arena.Input
             string requiredKind = string.IsNullOrWhiteSpace(action.ResourceKind)
                 ? entity.PrimaryResourceKind
                 : action.ResourceKind.Trim().ToUpperInvariant();
-            if (!string.Equals(requiredKind, entity.PrimaryResourceKind, System.StringComparison.OrdinalIgnoreCase))
-            {
-                ActionBarTrace.Trace(
-                    $"melee rejected: {actionId} requires {requiredKind}, active resource is {entity.PrimaryResourceKind}");
-                return false;
-            }
 
-            float available = LocalCombatState.Instance.EffectiveCurrentPrimaryResource(entity, requiredKind);
+            float available = LocalCombatState.Instance.EffectiveCurrentResource(entity, requiredKind);
             if (available + 0.001f < action.ResourceCost)
             {
                 ActionBarTrace.Trace(
                     $"melee rejected: {actionId} requires {action.ResourceCost:F0} {requiredKind} ({available:F0} available)");
+                LocalCombatState.NotifyLocalAdvisoryDenial(
+                    actionId,
+                    actionId,
+                    ActionRejectReason.InsufficientResource);
                 return false;
             }
 
@@ -462,7 +460,7 @@ namespace Arena.Input
             if (cost <= 0.001f)
                 return;
 
-            LocalCombatState.Instance.ReservePredictedPrimaryResource(
+            LocalCombatState.Instance.ReservePredictedResource(
                 entity,
                 resourceKind,
                 cost,

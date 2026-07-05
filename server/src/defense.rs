@@ -579,7 +579,13 @@ fn resolve_valid_defensible_combat_hit(
 fn record_undefended_hit(ctx: &ReducerContext, hit: &DefensibleCombatHit<'_>) {
     // Bounded on purpose: only entities that can press a defense get a row,
     // so NPC-heavy scenes don't grow the commitlog one upsert per hit.
-    if ctx.db.player_state().player_id().find(hit.defender).is_none() {
+    if ctx
+        .db
+        .player_state()
+        .player_id()
+        .find(hit.defender)
+        .is_none()
+    {
         return;
     }
 
@@ -604,7 +610,12 @@ fn record_undefended_hit(ctx: &ReducerContext, hit: &DefensibleCombatHit<'_>) {
 /// [DEFENSE_LATE] press check (S9 rider): an accepted parry/block press that
 /// lands within the window after an undefended defensible hit is exactly the
 /// loss D4b (deferred defense resolution) was parked on. Logging only.
-fn log_defense_late_press(ctx: &ReducerContext, owner: Identity, kind: DefenseKind, now: Timestamp) {
+fn log_defense_late_press(
+    ctx: &ReducerContext,
+    owner: Identity,
+    kind: DefenseKind,
+    now: Timestamp,
+) {
     let Some(row) = ctx.db.combat_last_undefended_hit().identity().find(owner) else {
         return;
     };
@@ -627,7 +638,10 @@ fn log_defense_late_press(ctx: &ReducerContext, owner: Identity, kind: DefenseKi
 
 /// Drop the rider row with the entity's other combat rows.
 pub(crate) fn clear_defense_telemetry(ctx: &ReducerContext, identity: Identity) {
-    ctx.db.combat_last_undefended_hit().identity().delete(identity);
+    ctx.db
+        .combat_last_undefended_hit()
+        .identity()
+        .delete(identity);
 }
 
 fn defensible_hit_payload_is_valid(hit: &DefensibleCombatHit<'_>) -> bool {

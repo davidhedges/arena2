@@ -811,6 +811,7 @@ namespace SpacetimeDB.Types
                 Reducer.AssignCharacterActionBarAbilityToSlot args => Reducers.InvokeAssignCharacterActionBarAbilityToSlot(eventContext, args),
                 Reducer.AssignCharacterActionBarSlot args => Reducers.InvokeAssignCharacterActionBarSlot(eventContext, args),
                 Reducer.AssignCombatDisciplineWeaponLoadout args => Reducers.InvokeAssignCombatDisciplineWeaponLoadout(eventContext, args),
+                Reducer.AssignEquippedSpellbookSpell args => Reducers.InvokeAssignEquippedSpellbookSpell(eventContext, args),
                 Reducer.CancelActiveCastRequest args => Reducers.InvokeCancelActiveCastRequest(eventContext, args),
                 Reducer.CastRequest args => Reducers.InvokeCastRequest(eventContext, args),
                 Reducer.CleanupProjectileLoadHarness args => Reducers.InvokeCleanupProjectileLoadHarness(eventContext, args),

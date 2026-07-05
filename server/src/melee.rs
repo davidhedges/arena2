@@ -4324,7 +4324,13 @@ fn resolve_pending_melee_target_impact(
     let mut in_reach = present_in_reach;
     if row.view_delay_micros > 0 && row.targeting_kind.trim().eq_ignore_ascii_case("TARGET") {
         let (lag_comp_on, _) = lag_comp_config(ctx);
-        let pose = rewound_pose_for(ctx, row.target, row.view_delay_micros, now, &target_snapshot);
+        let pose = rewound_pose_for(
+            ctx,
+            row.target,
+            row.view_delay_micros,
+            now,
+            &target_snapshot,
+        );
         if pose.rewound_by_micros > 0 {
             let rewound_in_reach = target_within_area_range_xz(
                 caster_phys.pos_x,

@@ -460,8 +460,13 @@ pub(crate) fn tick_auto_attacks(ctx: &ReducerContext, now: Timestamp) {
         let auto_swing_on = lag_comp_on && lag_comp_auto_swing_enabled(ctx);
         let standing = fresh_standing_view_delay(ctx, row.owner);
         let rewound_pose = standing.as_ref().and_then(|signal| {
-            let pose =
-                rewound_pose_for(ctx, row.target, signal.view_delay_micros, now, &target_snapshot);
+            let pose = rewound_pose_for(
+                ctx,
+                row.target,
+                signal.view_delay_micros,
+                now,
+                &target_snapshot,
+            );
             (pose.rewound_by_micros > 0).then_some(pose)
         });
         let use_rewound = auto_swing_on && rewound_pose.is_some();

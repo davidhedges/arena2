@@ -882,7 +882,13 @@ fn chase_npc_toward_target(
     next.updated_at = now;
     ctx.db.npc_physics().identity().update(next.clone());
     crate::combat::position_history::record_position_sample(
-        ctx, next.identity, next.pos_x, next.pos_y, next.pos_z, next.yaw, now,
+        ctx,
+        next.identity,
+        next.pos_x,
+        next.pos_y,
+        next.pos_z,
+        next.yaw,
+        now,
     );
     next
 }
@@ -916,7 +922,13 @@ fn update_npc_facing(
     next.updated_at = now;
     ctx.db.npc_physics().identity().update(next.clone());
     crate::combat::position_history::record_position_sample(
-        ctx, next.identity, next.pos_x, next.pos_y, next.pos_z, next.yaw, now,
+        ctx,
+        next.identity,
+        next.pos_x,
+        next.pos_y,
+        next.pos_z,
+        next.yaw,
+        now,
     );
     next
 }

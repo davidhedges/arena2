@@ -20,12 +20,12 @@ use crate::arena::{
 use crate::auto_attack::arm_auto_attack_if_unarmed_with_cadence;
 #[cfg(feature = "spellcasting_terminal_harness")]
 use crate::combat::new_player_state;
+use crate::combat::player_snapshot::{
+    collect_player_snapshots, player_snapshot_for, PlayerSnapshot, PlayerSnapshotSet,
+};
 use crate::combat::position_history::{
     lag_comp_config, lag_comp_sweep_rewind_enabled, overlay_press_rewound_target_pose,
     press_view_delay_micros, sweep_rewind_membership, SWEEP_REWIND_MARGIN_SPEED_MPS,
-};
-use crate::combat::player_snapshot::{
-    collect_player_snapshots, player_snapshot_for, PlayerSnapshot, PlayerSnapshotSet,
 };
 use crate::combat::scene_query::{
     first_hit_on_segment, has_line_of_sight, is_direction_within_facing_arc, line_of_sight_blocker,
@@ -281,7 +281,7 @@ fn log_cast_rejected(caster: Identity, spell_kind: &SpellId, reason: &str, detai
 // 3. Cast-time spells validate via process_spell_cast(...ValidateOnly), then begin_active_cast().
 // 4. tick_active_casts() either completes on ends_at or interrupts on movement / airborne state.
 // 5. release_cast() early-completes release-cast spells (InstantBeam), using charge_pct.
-// 6. finish_active_cast() executes and then consumes the active_cast row exactly once.
+// 6. finish_active_cast() final-validates, commits resource cost, executes, and consumes the active_cast row exactly once.
 pub(super) fn cast_spell(
     ctx: &ReducerContext,
     spell_kind: &SpellId,
@@ -849,9 +849,6 @@ pub(crate) fn cast_spell_for(
             ActionRejectReason::None,
             now,
         );
-        // begin_active_cast already emitted public COMBAT_CAST. If a post-accept
-        // server finalization step fails, emit public fizzle for presentation/VFX
-        // cleanup and owner-only rejected result for local reconciliation.
         let started = start_electrocute_channel(ctx, &active_cast, &caster_state, now)?;
         if !started {
             fizzle_active_cast_row_for_interrupt(ctx, &active_cast, &caster_state, spell_kind, now);
@@ -867,7 +864,7 @@ pub(crate) fn cast_spell_for(
             );
             return Ok(());
         }
-        if !finalize_primary_resource_on_cast_start(ctx, caster, spell_kind, now) {
+        if !commit_primary_resource_for_spell(ctx, caster, spell_kind, now) {
             fizzle_active_cast_row_for_interrupt(ctx, &active_cast, &caster_state, spell_kind, now);
             record_spell_prediction_result(
                 ctx,
@@ -959,23 +956,6 @@ pub(crate) fn cast_spell_for(
             ActionRejectReason::None,
             now,
         );
-        // begin_active_cast already emitted public COMBAT_CAST. If a post-accept
-        // server finalization step fails, emit public fizzle for presentation/VFX
-        // cleanup and owner-only rejected result for local reconciliation.
-        if !finalize_primary_resource_on_cast_start(ctx, caster, spell_kind, now) {
-            fizzle_active_cast_row_for_interrupt(ctx, &active_cast, &caster_state, spell_kind, now);
-            record_spell_prediction_result(
-                ctx,
-                caster,
-                active_cast.cast_id.as_str(),
-                predicted_cast_id.as_str(),
-                client_action_seq,
-                SPELL_PREDICTION_RESULT_REJECTED,
-                ActionRejectReason::InsufficientResource,
-                now,
-            );
-            return Ok(());
-        }
         try_arm_auto_attack_for_spell_start(ctx, caster, spell_kind, target_id, now);
         if uses_global_cooldown {
             stamp_global_cooldown_for_duration(
@@ -1046,7 +1026,7 @@ pub(crate) fn cast_spell_for(
         );
         return Ok(());
     }
-    if !finalize_primary_resource_on_cast_start(ctx, caster, spell_kind, now) {
+    if !commit_primary_resource_for_spell(ctx, caster, spell_kind, now) {
         record_spell_prediction_result(
             ctx,
             caster,
@@ -1116,7 +1096,7 @@ pub(crate) fn cast_spell_for(
     Ok(())
 }
 
-fn finalize_primary_resource_on_cast_start(
+fn commit_primary_resource_for_spell(
     ctx: &ReducerContext,
     caster: Identity,
     spell_kind: &SpellId,
@@ -2125,7 +2105,8 @@ fn process_spell_cast(
 
     if matches!(
         definition.behavior,
-        SpellBehavior::ApplyStatus
+        SpellBehavior::DirectTarget
+            | SpellBehavior::ApplyStatus
             | SpellBehavior::RemoveStatus
             | SpellBehavior::ConsumeStatus
             | SpellBehavior::Aura
@@ -2133,6 +2114,21 @@ fn process_spell_cast(
     ) {
         if mode == CastExecutionMode::Execute {
             match definition.behavior {
+                SpellBehavior::DirectTarget => {
+                    return Ok(reject_unless(
+                        cast_direct_target(
+                            ctx,
+                            caster,
+                            state,
+                            spell_kind,
+                            target_id,
+                            mode,
+                            action_instance_id,
+                            ability_id,
+                        )?,
+                        ActionRejectReason::InvalidTarget,
+                    ));
+                }
                 SpellBehavior::ApplyStatus => {
                     return Ok(reject_unless(
                         cast_apply_status(
@@ -2194,6 +2190,12 @@ fn process_spell_cast(
                 _ => unreachable!(),
             }
         }
+        if definition.behavior == SpellBehavior::DirectTarget {
+            return Ok(reject_unless(
+                cast_direct_target(ctx, caster, state, spell_kind, target_id, mode, "", "")?,
+                ActionRejectReason::InvalidTarget,
+            ));
+        }
         if definition.behavior == SpellBehavior::ApplyStatus {
             return Ok(reject_unless(
                 cast_apply_status(ctx, caster, state, spell_kind, target_id, mode, "", "")?,
@@ -2254,7 +2256,7 @@ fn process_spell_cast(
         // S8: positional press checks judge the attacker-view pose (inert
         // outside the press transaction); execution keeps the present target.
         let check_target = overlay_press_rewound_target_pose(ctx, caster, target);
-        let target_is_in_facing_arc = if projectile_execute_uses_live_facing(mode, definition) {
+        let target_is_in_facing_arc = if projectile_release_uses_live_facing(mode, definition) {
             is_target_within_live_facing_arc(
                 ctx,
                 state,
@@ -2462,11 +2464,11 @@ fn projectile_motion(definition: &SpellDefinition) -> Option<&'static str> {
         .map(|projectile| projectile.motion.kind())
 }
 
-fn projectile_execute_uses_live_facing(
+fn projectile_release_uses_live_facing(
     mode: CastExecutionMode,
     definition: &SpellDefinition,
 ) -> bool {
-    mode == CastExecutionMode::Execute
+    mode != CastExecutionMode::ValidateOnly
         && definition.behavior == SpellBehavior::Projectile
         && definition.cast_time > Duration::ZERO
         && projectile_motion(definition) != Some("ORBIT_CASTER")
@@ -3553,6 +3555,63 @@ fn finish_active_cast(
     let definition = super::catalog::spell_definition(kind)
         .expect("active cast kind must resolve to a spell definition");
     let charge_pct = compute_charge_pct(active_cast, now);
+    let final_reject_reason = process_spell_cast(
+        ctx,
+        state,
+        active_cast.caster,
+        kind,
+        active_cast.target_id.as_str(),
+        active_cast.aim_x,
+        active_cast.aim_y,
+        active_cast.aim_z,
+        CastExecutionMode::FinalValidate,
+        active_cast.charge_count,
+        charge_pct,
+        active_cast.cast_id.as_str(),
+        active_cast.ability_id.as_str(),
+    )?;
+    if let Some(reject_reason) = final_reject_reason {
+        apply_active_cast_terminal_outcome(
+            ctx,
+            active_cast,
+            state,
+            now,
+            ActiveCastTerminalOutcome::SpellFizzle(definition),
+        );
+        record_spell_prediction_result(
+            ctx,
+            active_cast.caster,
+            active_cast.cast_id.as_str(),
+            active_cast.predicted_cast_id.as_str(),
+            active_cast.client_action_seq,
+            SPELL_PREDICTION_RESULT_REJECTED,
+            reject_reason,
+            now,
+        );
+        return Ok(());
+    }
+
+    if !commit_primary_resource_for_spell(ctx, active_cast.caster, kind, now) {
+        apply_active_cast_terminal_outcome(
+            ctx,
+            active_cast,
+            state,
+            now,
+            ActiveCastTerminalOutcome::SpellFizzle(definition),
+        );
+        record_spell_prediction_result(
+            ctx,
+            active_cast.caster,
+            active_cast.cast_id.as_str(),
+            active_cast.predicted_cast_id.as_str(),
+            active_cast.client_action_seq,
+            SPELL_PREDICTION_RESULT_REJECTED,
+            ActionRejectReason::InsufficientResource,
+            now,
+        );
+        return Ok(());
+    }
+
     let cast_reject_reason = process_spell_cast(
         ctx,
         state,
@@ -5096,30 +5155,28 @@ fn resolve_area_impact(ctx: &ReducerContext, impact: AreaImpactResolution<'_>) {
     let area_shape = area_shape_for(impact.definition);
     let area_direction = area_impact_direction(impact.facing_yaw);
 
-    if matches!(area_shape, CombatAreaShape::Cone { .. }) {
-        // AREA_IMPACT is the area action/VFX signal and intentionally fires even when no targets pass
-        // the later per-target filters; CONTACT/damage events remain the "hit landed" signal.
-        emit_spell_combat_event(
-            ctx,
-            SpellCombatEventPayload {
-                action_instance_id: impact.spell_id,
-                ability_id: impact.ability_id,
-                kind: impact.kind,
-                event_type: EVENT_AREA_IMPACT,
-                caster: impact.caster,
-                hit: Identity::ZERO,
-                origin: impact.area_center,
-                direction: area_direction,
-                speed: 0.0,
-                max_distance: area_shape.query_radius(),
-                scalar: SpellCombatEventScalar::None,
-                sequence_index: 0,
-                sequence_count: 1,
-                point: impact.area_center,
-                now: impact.now,
-            },
-        );
-    }
+    // AREA_IMPACT is the area action/VFX signal and intentionally fires even when no targets pass
+    // the later per-target filters; CONTACT/damage events remain the "hit landed" signal.
+    emit_spell_combat_event(
+        ctx,
+        SpellCombatEventPayload {
+            action_instance_id: impact.spell_id,
+            ability_id: impact.ability_id,
+            kind: impact.kind,
+            event_type: EVENT_AREA_IMPACT,
+            caster: impact.caster,
+            hit: Identity::ZERO,
+            origin: impact.area_center,
+            direction: area_direction,
+            speed: 0.0,
+            max_distance: area_shape.query_radius(),
+            scalar: SpellCombatEventScalar::None,
+            sequence_index: 0,
+            sequence_count: 1,
+            point: impact.area_center,
+            now: impact.now,
+        },
+    );
 
     emit_spell_combat_event_with_damage(
         ctx,
@@ -5454,6 +5511,235 @@ fn spawn_negate(
         update_accum: 0.0,
         created_at: now,
     });
+
+    Ok(())
+}
+
+fn cast_direct_target(
+    ctx: &ReducerContext,
+    caster: Identity,
+    state: &PlayerSnapshot,
+    kind: &SpellId,
+    target_id: &str,
+    mode: CastExecutionMode,
+    action_instance_id: &str,
+    ability_id: &str,
+) -> Result<bool, String> {
+    let definition = super::catalog::spell_definition(kind)
+        .expect("validated DIRECT_TARGET spell must resolve to a definition");
+
+    if definition.targeting != super::manifest::SpellTargeting::Target
+        || !definition.requires_target
+    {
+        return Ok(false);
+    }
+
+    let Some(target) = resolve_target(ctx, caster, target_id) else {
+        return Ok(false);
+    };
+    if !target_audience_allows(ctx, caster, target.player_id, definition.target_audience) {
+        return Ok(false);
+    }
+    let check_target = overlay_press_rewound_target_pose(ctx, caster, target);
+    if !is_target_within_facing_arc(state, &check_target, TARGET_FACING_ARC_RADIANS) {
+        return Ok(false);
+    }
+    if definition.requires_target_los && !has_line_of_sight(ctx, state, &check_target) {
+        return Ok(false);
+    }
+    if distance_to_target(state, &check_target) > definition.max_distance {
+        return Ok(false);
+    }
+
+    if mode == CastExecutionMode::Execute {
+        apply_direct_target_spell(
+            ctx,
+            caster,
+            state,
+            &target,
+            kind,
+            action_instance_id,
+            ability_id,
+            definition,
+        )?;
+    }
+
+    Ok(true)
+}
+
+fn apply_direct_target_spell(
+    ctx: &ReducerContext,
+    caster: Identity,
+    state: &PlayerSnapshot,
+    target: &PlayerSnapshot,
+    kind: &SpellId,
+    action_instance_id: &str,
+    ability_id: &str,
+    definition: &SpellDefinition,
+) -> Result<(), String> {
+    let now = ctx.timestamp;
+    let direct_target = definition
+        .secondary
+        .direct_target
+        .as_ref()
+        .expect("validated DIRECT_TARGET spell must define secondary direct-target data");
+    let spell_id = action_instance_id.to_string();
+
+    let dx = target.pos_x - state.pos_x;
+    let dy = (target.pos_y + target.hit_height * 0.5) - (state.pos_y + state.hit_height * 0.5);
+    let dz = target.pos_z - state.pos_z;
+    let distance_sq = dx * dx + dy * dy + dz * dz;
+    let direction = if distance_sq > 0.0001 {
+        let inv_len = 1.0 / distance_sq.sqrt();
+        Vec3::new(dx * inv_len, dy * inv_len, dz * inv_len)
+    } else {
+        default_forward_direction(state)
+    };
+    let origin = Vec3::new(
+        state.pos_x,
+        state.pos_y + state.hit_height * 0.5,
+        state.pos_z,
+    );
+    let point = Vec3::new(
+        target.pos_x,
+        target.pos_y + target.hit_height * 0.5,
+        target.pos_z,
+    );
+
+    emit_spell_combat_event(
+        ctx,
+        SpellCombatEventPayload {
+            action_instance_id: spell_id.as_str(),
+            ability_id,
+            kind,
+            event_type: EVENT_RELEASE,
+            caster,
+            hit: target.player_id,
+            origin,
+            direction,
+            speed: 0.0,
+            max_distance: definition.max_distance,
+            scalar: SpellCombatEventScalar::None,
+            sequence_index: 0,
+            sequence_count: 1,
+            point,
+            now,
+        },
+    );
+
+    if hostile_targeted_ability_misses(ctx, caster, target.player_id, now) {
+        emit_targeted_spell_miss(
+            ctx,
+            spell_id.as_str(),
+            ability_id,
+            kind,
+            caster,
+            target.player_id,
+            origin,
+            direction,
+            0.0,
+            definition.max_distance,
+            point,
+            now,
+        );
+        return Ok(());
+    }
+
+    if resolve_spell_combat_hit_defense(
+        ctx,
+        spell_id.as_str(),
+        ability_id,
+        kind,
+        caster,
+        target,
+        origin.x,
+        origin.y,
+        origin.z,
+        direction.x,
+        direction.y,
+        direction.z,
+        0.0,
+        definition.max_distance,
+        point.x,
+        point.y,
+        point.z,
+        definition.damage,
+        direct_target.parry_behavior.as_str(),
+        definition.block_behavior.as_str(),
+        now,
+    ) {
+        return Ok(());
+    }
+
+    let mut effects = Vec::new();
+    if definition.damage > 0 {
+        emit_spell_combat_event_with_damage(
+            ctx,
+            SpellCombatEventPayload {
+                action_instance_id: spell_id.as_str(),
+                ability_id,
+                kind,
+                event_type: EVENT_IMPACT,
+                caster,
+                hit: target.player_id,
+                origin,
+                direction,
+                speed: 0.0,
+                max_distance: definition.max_distance,
+                scalar: SpellCombatEventScalar::None,
+                sequence_index: 0,
+                sequence_count: 1,
+                point,
+                now,
+            },
+            definition.damage,
+        );
+        effects.push(EffectPacket::Damage {
+            amount: definition.damage,
+            damage_type: definition.damage_type,
+            source: caster,
+            target: target.player_id,
+            spell_id: spell_id.clone(),
+            delivery: DamageDelivery::Direct,
+            source_kind: DAMAGE_SOURCE_KIND_SPELL.to_string(),
+            direct_action_key: spell_id.clone(),
+        });
+    } else {
+        emit_spell_combat_event(
+            ctx,
+            SpellCombatEventPayload {
+                action_instance_id: spell_id.as_str(),
+                ability_id,
+                kind,
+                event_type: EVENT_IMPACT,
+                caster,
+                hit: target.player_id,
+                origin,
+                direction,
+                speed: 0.0,
+                max_distance: definition.max_distance,
+                scalar: SpellCombatEventScalar::None,
+                sequence_index: 0,
+                sequence_count: 1,
+                point,
+                now,
+            },
+        );
+    }
+
+    push_impact_effect_packets(
+        &mut effects,
+        direct_target.impact_effects.as_slice(),
+        caster,
+        target.player_id,
+        spell_id.as_str(),
+        definition.kind.as_str(),
+        definition.damage > 0,
+    );
+
+    if !effects.is_empty() {
+        queue_effects(ctx, effects);
+    }
 
     Ok(())
 }
@@ -6513,17 +6799,17 @@ mod tests {
 
     use super::{
         active_cast_cancel_receive_window_allows, active_cast_interrupt_terminal_policy,
-        approach_line_contact_point_xz, area_contact_direction,
+        approach_line_contact_point_xz, area_contact_direction, area_shape_for,
         consume_status_heal_amount_from_stacks, contact_distance_from_radii,
         defiance_damage_taken_reduction_for_health, fixed_y_terrain_blocks_special_movement,
         has_arrived_at_contact_distance, has_movement_intent, has_voluntary_movement_after_cast,
         horizontal_movement_duration_ms, is_generic_area_spell, is_target_within_facing_arc,
-        normal_cast_time_spell_refunds_gcd_on_self_cancel, projectile_execute_uses_live_facing,
+        normal_cast_time_spell_refunds_gcd_on_self_cancel, projectile_release_uses_live_facing,
         resolve_generic_area_center, resolve_special_movement_y,
         spell_primary_resource_cost_for_action, valid_cast_action_token,
         violates_active_cast_lifetime_mobility_requirement_for_tick,
         violates_cast_mobility_requirement, ActiveCastTerminalOutcome, CastExecutionMode,
-        PlayerSnapshot, SpellBehavior, SpellId, FACING_DOT_EPSILON,
+        CombatAreaShape, PlayerSnapshot, SpellBehavior, SpellId, FACING_DOT_EPSILON,
         SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK, SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK_FIXED_Y,
         TARGET_FACING_ARC_RADIANS,
     };
@@ -6661,6 +6947,29 @@ mod tests {
     }
 
     #[test]
+    fn frozen_grasp_uses_self_centered_generic_area_path() {
+        let frozen_grasp = spell_id("FROZEN_GRASP");
+        let frozen_grasp_definition =
+            crate::spells::spell_definition_by_str(frozen_grasp.as_str()).unwrap();
+        let state = test_snapshot(10.0, 20.0, 0.0);
+
+        assert!(is_generic_area_spell(
+            &frozen_grasp,
+            frozen_grasp_definition
+        ));
+        assert!(matches!(
+            area_shape_for(frozen_grasp_definition),
+            CombatAreaShape::Disc { radius } if (radius - 4.6).abs() < 0.001
+        ));
+
+        let center = resolve_generic_area_center(frozen_grasp_definition, &state, 0.0, 0.0, 0.0)
+            .expect("self-targeted Frozen Grasp should resolve to caster origin");
+        assert!((center.x - state.pos_x).abs() < 0.001);
+        assert!((center.y - state.pos_y).abs() < 0.001);
+        assert!((center.z - state.pos_z).abs() < 0.001);
+    }
+
+    #[test]
     fn generic_area_center_uses_aim_point_for_point_targeted_area_spells() {
         let state = test_snapshot(10.0, 20.0, 0.0);
         let mut definition = crate::spells::spell_definition_by_str("FROST_NOVA")
@@ -6741,34 +7050,34 @@ mod tests {
     }
 
     #[test]
-    fn cast_time_projectile_execute_uses_live_facing_policy() {
+    fn cast_time_projectile_release_uses_live_facing_policy() {
         let mut definition = crate::spells::spell_definition_by_str("ICICLE")
             .expect("Icicle should exist")
             .clone();
         assert!(definition.cast_time > Duration::ZERO);
 
-        assert!(projectile_execute_uses_live_facing(
+        assert!(projectile_release_uses_live_facing(
             CastExecutionMode::Execute,
             &definition
         ));
-        assert!(!projectile_execute_uses_live_facing(
+        assert!(!projectile_release_uses_live_facing(
             CastExecutionMode::ValidateOnly,
             &definition
         ));
-        assert!(!projectile_execute_uses_live_facing(
+        assert!(projectile_release_uses_live_facing(
             CastExecutionMode::FinalValidate,
             &definition
         ));
 
         definition.cast_time = Duration::ZERO;
-        assert!(!projectile_execute_uses_live_facing(
+        assert!(!projectile_release_uses_live_facing(
             CastExecutionMode::Execute,
             &definition
         ));
 
         definition.behavior = SpellBehavior::Area;
         definition.cast_time = Duration::from_secs(1);
-        assert!(!projectile_execute_uses_live_facing(
+        assert!(!projectile_release_uses_live_facing(
             CastExecutionMode::Execute,
             &definition
         ));

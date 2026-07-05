@@ -15,11 +15,12 @@ use crate::relations::{default_spell_target_audience, TargetAudience};
 use super::manifest::{
     ApplyStatusDefinition, ApplyStatusSecondaryTunables, AreaSecondaryTunables,
     AuraSecondaryTunables, BespokeRuntimeSpell, BlockBehavior, BoomerangCasterProjectileTunables,
-    ConsumeStatusSecondaryTunables, ImpactEffect, InstantBeamChargeScaling,
-    InstantBeamSecondaryTunables, MeteorSkyOrigin, OrbitCasterProjectileTunables,
-    ProjectileMotionTunables, ProjectileSecondaryTunables, RemoveStatusDefinition,
-    RemoveStatusSecondaryTunables, SpellBehavior, SpellCastMobility, SpellDefinition, SpellId,
-    SpellParryBehavior, SpellSecondaryTunables, SpellTargeting, SPELL_METEOR,
+    ConsumeStatusSecondaryTunables, DirectTargetSecondaryTunables, ImpactEffect,
+    InstantBeamChargeScaling, InstantBeamSecondaryTunables, MeteorSkyOrigin,
+    OrbitCasterProjectileTunables, ProjectileMotionTunables, ProjectileSecondaryTunables,
+    RemoveStatusDefinition, RemoveStatusSecondaryTunables, SpellBehavior, SpellCastMobility,
+    SpellDefinition, SpellId, SpellParryBehavior, SpellSecondaryTunables, SpellTargeting,
+    SPELL_METEOR,
 };
 
 const PROGRESSION_CATALOG_JSON: &str = include_str!("../progression_catalog.shared.json");
@@ -53,6 +54,17 @@ struct SpellCatalogRow {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(tag = "kind", rename_all = "SCREAMING_SNAKE_CASE", deny_unknown_fields)]
 enum SpellCatalogDelivery {
+    DirectTarget {
+        max_distance: f32,
+        damage: i32,
+        #[serde(default)]
+        damage_type: String,
+        block_behavior: BlockBehavior,
+        #[serde(default)]
+        parry_behavior: Option<SpellParryBehavior>,
+        #[serde(default)]
+        impact_effects: Vec<ImpactEffectRow>,
+    },
     Projectile {
         #[serde(default)]
         speed: f32,
@@ -768,6 +780,24 @@ impl SpellCatalogRow {
         };
 
         match self.delivery {
+            SpellCatalogDelivery::DirectTarget {
+                max_distance,
+                damage,
+                damage_type,
+                block_behavior,
+                parry_behavior,
+                impact_effects,
+            } => {
+                definition.behavior = SpellBehavior::DirectTarget;
+                definition.max_distance = max_distance;
+                definition.damage = damage;
+                definition.damage_type = DamageType::from_wire(damage_type.as_str());
+                definition.block_behavior = block_behavior;
+                definition.secondary.direct_target = Some(DirectTargetSecondaryTunables {
+                    parry_behavior: parry_behavior.unwrap_or(SpellParryBehavior::Unparryable),
+                    impact_effects: impact_effects.into_iter().map(Into::into).collect(),
+                });
+            }
             SpellCatalogDelivery::Projectile {
                 speed,
                 max_distance,
@@ -1496,6 +1526,25 @@ fn validate_secondary_tunables(def: &SpellDefinition) -> Result<(), String> {
     }
 
     match def.behavior {
+        SpellBehavior::DirectTarget => {
+            if def.targeting != SpellTargeting::Target || !def.requires_target {
+                return Err(format!(
+                    "{} DIRECT_TARGET must use required TARGET targeting",
+                    def.kind.as_str()
+                ));
+            }
+            ensure_positive_f32(def.kind.as_str(), "delivery.max_distance", def.max_distance)?;
+            let Some(direct_target) = def.secondary.direct_target.as_ref() else {
+                return Err(format!(
+                    "{} DIRECT_TARGET must define secondary direct-target data",
+                    def.kind.as_str()
+                ));
+            };
+            for effect in &direct_target.impact_effects {
+                validate_impact_effect(def, effect)?;
+            }
+            ensure_no_secondary(def, true, true, true, true, true, true)?;
+        }
         SpellBehavior::Projectile => {
             let Some(projectile) = def.secondary.projectile.as_ref() else {
                 return Err(format!(
@@ -1931,6 +1980,12 @@ fn ensure_no_secondary(
     no_remove_status: bool,
     no_consume_status: bool,
 ) -> Result<(), String> {
+    if def.behavior != SpellBehavior::DirectTarget && def.secondary.direct_target.is_some() {
+        return Err(format!(
+            "{} must not define direct-target secondary data",
+            def.kind.as_str()
+        ));
+    }
     if no_projectile && def.secondary.projectile.is_some() {
         return Err(format!(
             "{} must not define projectile secondary data",
@@ -3069,18 +3124,18 @@ mod tests {
 
         let glacial_spike =
             spell_definition_by_str("GLACIAL_SPIKE").expect("GLACIAL_SPIKE should exist");
-        assert_eq!(glacial_spike.behavior, SpellBehavior::Projectile);
+        assert_eq!(glacial_spike.behavior, SpellBehavior::DirectTarget);
         assert_eq!(glacial_spike.targeting, SpellTargeting::Target);
         assert!(glacial_spike.requires_target);
         assert_eq!(glacial_spike.damage, 35);
         assert_eq!(glacial_spike.damage_type, DamageType::Cold);
-        let glacial_spike_projectile = glacial_spike
+        let glacial_spike_direct_target = glacial_spike
             .secondary
-            .projectile
+            .direct_target
             .as_ref()
-            .expect("Glacial Spike should define projectile secondary data");
+            .expect("Glacial Spike should define direct-target secondary data");
         assert_eq!(
-            glacial_spike_projectile.impact_effects,
+            glacial_spike_direct_target.impact_effects,
             vec![StatusApplication::new(
                 StatusPayload::Freeze,
                 Duration::from_millis(1200),
@@ -3089,7 +3144,7 @@ mod tests {
                 1,
                 StackPolicy::Refresh,
             )],
-            "Glacial Spike freeze must use generic projectile impact_effects"
+            "Glacial Spike freeze must use generic direct-target impact_effects"
         );
 
         let instant_beam =
