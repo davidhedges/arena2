@@ -734,16 +734,20 @@ namespace Arena.Presentation
             string predictedActionInstanceId,
             out CombatVfxFact fact)
         {
+            bool isSelfArea = SpellDefinitionContracts.UsesSelfTargeting(spellDef);
+            bool isPointArea = SpellDefinitionContracts.UsesPointTargeting(spellDef);
             if (!string.Equals(WireIdentifier.Normalize(spellDef.Behavior), SpellBehaviorArea, StringComparison.Ordinal)
-                || !SpellDefinitionContracts.UsesSelfTargeting(spellDef))
+                || (!isSelfArea && !(isPointArea && aimPoint.HasValue)))
             {
                 fact = default;
                 return false;
             }
 
-            Vector3 origin = ResolveLocalCasterGroundPosition(caster);
+            Vector3 point = isPointArea && aimPoint.HasValue
+                ? aimPoint.Value
+                : ResolveLocalCasterGroundPosition(caster);
+            Vector3 origin = isPointArea ? point : ResolveLocalCasterGroundPosition(caster);
             Vector3 direction = ResolveLocalCasterForward(caster);
-            Vector3 point = aimPoint ?? origin;
 
             fact = new CombatVfxFact(
                 TriggerAreaImpact,

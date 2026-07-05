@@ -225,6 +225,7 @@ namespace Arena.Presentation
             string lifecycle = WireIdentifier.Normalize(cue.Lifecycle);
             if (string.Equals(lifecycle, LifecycleParticleSystem, System.StringComparison.Ordinal))
             {
+                PlayParticleSystems(instance);
                 _coroutineOwner.StartCoroutine(DestroyWhenParticleSystemsFinish(instance, cue.VfxId));
                 return;
             }
@@ -296,6 +297,13 @@ namespace Arena.Presentation
             }
 
             DestroyInstance(instance);
+        }
+
+        private static void PlayParticleSystems(GameObject instance)
+        {
+            ParticleSystem[] systems = instance.GetComponentsInChildren<ParticleSystem>(true);
+            foreach (ParticleSystem system in systems)
+                system.Play(true);
         }
 
         private static void ConfigureReleaseBoundParticleSystems(GameObject instance)
