@@ -9,8 +9,8 @@ use crate::player::DEFAULT_COMBAT_PROFILE;
 use crate::player_physics::player_physics as _;
 use crate::player_state::player_state as _;
 use crate::progression::{
-    sync_progression_for_equipment_change, COMBAT_PROFILE_ARCHER_BOW, DISCIPLINE_ARCANA,
-    DISCIPLINE_PRECISION, DISCIPLINE_SUBTLETY, DISCIPLINE_WAR, DISCIPLINE_ZEAL,
+    sync_progression_for_equipment_change, AllocatedStatTotals, COMBAT_PROFILE_ARCHER_BOW,
+    DISCIPLINE_ARCANA, DISCIPLINE_PRECISION, DISCIPLINE_SUBTLETY, DISCIPLINE_WAR, DISCIPLINE_ZEAL,
 };
 use crate::relations::TargetAudience;
 
@@ -111,6 +111,9 @@ const COMBAT_PROFILE_DAGGERS: &str = "DAGGERS";
 const COMBAT_PROFILE_STAFF: &str = "STAFF";
 const STARTER_SPELLBOOK_ITEM_DEF_ID: &str = "APPRENTICE_SPELLBOOK";
 const STARTER_SPELLBOOK_SPELL_COUNT: u32 = 10;
+const STARTER_INSIGHT_RING_ITEM_DEF_ID: &str = "BRONZE_RING";
+const STARTER_INSIGHT_RING_AFFIX_ID: &str = "AFFIX_INSIGHT_STARTER";
+const STARTER_INSIGHT_RING_VALUE: f32 = 10.0;
 
 pub(crate) const MODIFIER_PHYSICAL_RESISTANCE: &str = "PHYSICAL_RESISTANCE";
 pub(crate) const MODIFIER_MAGIC_RESISTANCE: &str = "MAGIC_RESISTANCE";
@@ -126,6 +129,10 @@ pub(crate) const MODIFIER_CRIT_CHANCE: &str = "CRIT_CHANCE";
 pub(crate) const MODIFIER_MOVE_SPEED: &str = "MOVE_SPEED";
 pub(crate) const MODIFIER_MANA_REGEN: &str = "MANA_REGEN";
 pub(crate) const MODIFIER_HEALTH_REGEN: &str = "HEALTH_REGEN";
+pub(crate) const MODIFIER_MIGHT: &str = "MIGHT";
+pub(crate) const MODIFIER_INSIGHT: &str = "INSIGHT";
+pub(crate) const MODIFIER_FINESSE: &str = "FINESSE";
+pub(crate) const MODIFIER_FORTITUDE: &str = "FORTITUDE";
 pub(crate) const MODIFIER_TRANSFERENCE: &str = "TRANSFERENCE";
 pub(crate) const MODIFIER_REAPING: &str = "REAPING";
 pub(crate) const MODIFIER_AWARENESS: &str = "AWARENESS";
@@ -375,6 +382,14 @@ struct StarterEquipmentSpec {
     item_def_id: &'static str,
 }
 
+#[derive(Clone, Copy)]
+struct StarterEquipmentAffixSpec {
+    item_def_id: &'static str,
+    affix_id: &'static str,
+    modifier_kind: &'static str,
+    value: f32,
+}
+
 const BASELINE_STARTER_WEAPONS: &[StarterEquipmentSpec] = &[starter_equipment(
     EQUIP_SLOT_MAIN_HAND,
     "TRAINING_TWO_HAND_SWORD",
@@ -385,9 +400,18 @@ const BASELINE_STARTER_EQUIPMENT: &[StarterEquipmentSpec] = &[
     starter_equipment(EQUIP_SLOT_LEGS, "PEASANT_TROUSERS"),
     starter_equipment(EQUIP_SLOT_BOOTS, "PEASANT_BOOTS"),
     starter_equipment(EQUIP_SLOT_GLOVES, "PEASANT_GLOVES"),
+    starter_equipment("RING_1", STARTER_INSIGHT_RING_ITEM_DEF_ID),
     starter_equipment(EQUIP_SLOT_MAIN_HAND, "TRAINING_TWO_HAND_SWORD"),
     starter_equipment(EQUIP_SLOT_SPELLBOOK, STARTER_SPELLBOOK_ITEM_DEF_ID),
 ];
+
+const BASELINE_STARTER_EQUIPMENT_AFFIXES: &[StarterEquipmentAffixSpec] =
+    &[starter_equipment_affix(
+        STARTER_INSIGHT_RING_ITEM_DEF_ID,
+        STARTER_INSIGHT_RING_AFFIX_ID,
+        MODIFIER_INSIGHT,
+        STARTER_INSIGHT_RING_VALUE,
+    )];
 
 const BASELINE_STARTER_INVENTORY_ITEMS: &[&str] = &[
     "NEWBIE_STAFF_01",
@@ -1062,6 +1086,61 @@ const ITEM_AFFIX_DEFINITIONS: &[ItemAffixDefinitionSpec] = &[
         140,
     ),
     affix(
+        "AFFIX_MIGHT_MINOR",
+        "Might",
+        MODIFIER_MIGHT,
+        1.0,
+        5.0,
+        "WEAPON,ARMOR,JEWELRY",
+        ALL_EQUIPMENT_SLOTS,
+        false,
+        150,
+    ),
+    affix(
+        "AFFIX_FINESSE_MINOR",
+        "Finesse",
+        MODIFIER_FINESSE,
+        1.0,
+        5.0,
+        "WEAPON,ARMOR,JEWELRY",
+        ALL_EQUIPMENT_SLOTS,
+        false,
+        160,
+    ),
+    affix(
+        "AFFIX_FORTITUDE_MINOR",
+        "Fortitude",
+        MODIFIER_FORTITUDE,
+        1.0,
+        5.0,
+        "ARMOR,JEWELRY",
+        ALL_EQUIPMENT_SLOTS,
+        false,
+        170,
+    ),
+    affix(
+        "AFFIX_INSIGHT_MINOR",
+        "Insight",
+        MODIFIER_INSIGHT,
+        1.0,
+        5.0,
+        "WEAPON,ARMOR,JEWELRY",
+        ALL_EQUIPMENT_SLOTS,
+        false,
+        180,
+    ),
+    affix(
+        "AFFIX_INSIGHT_STARTER",
+        "Insight",
+        MODIFIER_INSIGHT,
+        STARTER_INSIGHT_RING_VALUE,
+        STARTER_INSIGHT_RING_VALUE,
+        "JEWELRY",
+        JEWELRY_EQUIPMENT_SLOTS,
+        true,
+        181,
+    ),
+    affix(
         "AFFIX_HEALTH_REGEN_JEWELRY",
         "Health Regeneration",
         MODIFIER_HEALTH_REGEN,
@@ -1240,6 +1319,20 @@ const fn starter_equipment(
     StarterEquipmentSpec {
         slot_id,
         item_def_id,
+    }
+}
+
+const fn starter_equipment_affix(
+    item_def_id: &'static str,
+    affix_id: &'static str,
+    modifier_kind: &'static str,
+    value: f32,
+) -> StarterEquipmentAffixSpec {
+    StarterEquipmentAffixSpec {
+        item_def_id,
+        affix_id,
+        modifier_kind,
+        value,
     }
 }
 
@@ -1897,6 +1990,10 @@ pub(crate) struct EquipmentModifierTotals {
     pub move_speed_bonus: f32,
     pub mana_regen_per_second: f32,
     pub health_regen_per_second: f32,
+    pub might: f32,
+    pub insight: f32,
+    pub finesse: f32,
+    pub fortitude: f32,
     pub melee_life_steal: f32,
     pub melee_mana_steal: f32,
     pub trap_awareness: f32,
@@ -1939,6 +2036,16 @@ impl EquipmentModifierTotals {
 
     pub(crate) fn spell_slot_capacity(self) -> u32 {
         self.spell_slots
+    }
+
+    pub(crate) fn allocated_stat_totals(self) -> AllocatedStatTotals {
+        AllocatedStatTotals {
+            might: equipment_stat_points(self.might),
+            insight: equipment_stat_points(self.insight),
+            finesse: equipment_stat_points(self.finesse),
+            quickness: 0,
+            fortitude: equipment_stat_points(self.fortitude),
+        }
     }
 }
 
@@ -2015,6 +2122,10 @@ pub(crate) fn equipment_modifier_totals_for_owner(
     totals.health_regen_per_second = totals
         .health_regen_per_second
         .clamp(0.0, MAX_EQUIPMENT_HEALTH_REGEN);
+    totals.might = totals.might.max(0.0);
+    totals.insight = totals.insight.max(0.0);
+    totals.finesse = totals.finesse.max(0.0);
+    totals.fortitude = totals.fortitude.max(0.0);
     totals.melee_life_steal = totals
         .melee_life_steal
         .clamp(0.0, MAX_EQUIPMENT_STEAL_RATIO);
@@ -2564,7 +2675,12 @@ fn roll_affix_value(context: &LootRollContext, affix: &ItemAffixDefinitionSpec, 
     let quality_shift =
         (context.hidden_loot_quality.max(0.0) * HIDDEN_LOOT_QUALITY_AFFIX_SCALAR).min(0.35);
     let normalized = (roll + quality_shift).clamp(0.0, 1.0);
-    affix.value_min + (affix.value_max - affix.value_min).max(0.0) * normalized
+    let value = affix.value_min + (affix.value_max - affix.value_min).max(0.0) * normalized;
+    if modifier_kind_is_allocated_stat(affix.modifier_kind) {
+        value.round().max(1.0)
+    } else {
+        value
+    }
 }
 
 fn loot_index(context: &LootRollContext, salt: &str, stream: u32, len: usize) -> usize {
@@ -3243,12 +3359,13 @@ fn seed_baseline_equipment(
         let item_instance_id = next_item_instance_id(ctx, owner);
         ctx.db.item_instance().insert(ItemInstance {
             item_instance_id: item_instance_id.clone(),
-            item_def_id,
+            item_def_id: item_def_id.clone(),
             current_owner_key: identity_key(owner),
             current_owner: Some(owner),
             quantity: 1,
             created_at: ctx.timestamp,
         });
+        seed_starter_equipment_affixes(ctx, item_instance_id.as_str(), item_def_id.as_str());
         ensure_spellbook_spells_for_item(ctx, owner, item_instance_id.as_str());
         if let Err(error) = set_equipment_slot(&mut equipment, spec.slot_id, Some(item_instance_id))
         {
@@ -3269,6 +3386,66 @@ fn seed_baseline_equipment(
         sync_equipment_presentation_for_owner(ctx, owner);
     }
     equipment
+}
+
+fn seed_starter_equipment_affixes(ctx: &ReducerContext, item_instance_id: &str, item_def_id: &str) {
+    let Some(definition) = ctx
+        .db
+        .item_definition()
+        .item_def_id()
+        .find(normalize_id(item_def_id))
+    else {
+        return;
+    };
+
+    for spec in BASELINE_STARTER_EQUIPMENT_AFFIXES
+        .iter()
+        .filter(|spec| normalize_id(spec.item_def_id) == definition.item_def_id)
+    {
+        let affix_id = normalize_id(spec.affix_id);
+        let Some(authored) = ctx
+            .db
+            .item_affix_definition()
+            .affix_id()
+            .find(affix_id.clone())
+        else {
+            log::warn!(
+                "[INVENTORY] Starter equipment affix '{}' is missing for item '{}'",
+                affix_id,
+                definition.item_def_id
+            );
+            continue;
+        };
+
+        let affix = ItemAffixInstance {
+            key: item_affix_instance_key(item_instance_id, affix_id.as_str()),
+            item_instance_id: item_instance_id.to_string(),
+            affix_id,
+            modifier_kind: normalize_id(spec.modifier_kind),
+            value: spec.value.max(0.0),
+            sort_order: authored.sort_order,
+        };
+        if !affix_is_valid_for_definition(ctx, &affix, &definition) {
+            log::warn!(
+                "[INVENTORY] Starter equipment affix '{}' is not valid for item '{}'",
+                affix.affix_id,
+                definition.item_def_id
+            );
+            continue;
+        }
+
+        if ctx
+            .db
+            .item_affix_instance()
+            .key()
+            .find(affix.key.clone())
+            .is_some()
+        {
+            ctx.db.item_affix_instance().key().update(affix);
+        } else {
+            ctx.db.item_affix_instance().insert(affix);
+        }
+    }
 }
 
 fn reconcile_spellbook_equipment(
@@ -3559,6 +3736,10 @@ fn apply_modifier_value(totals: &mut EquipmentModifierTotals, modifier_kind: &st
         MODIFIER_MOVE_SPEED => totals.move_speed_bonus += value,
         MODIFIER_MANA_REGEN => totals.mana_regen_per_second += value,
         MODIFIER_HEALTH_REGEN => totals.health_regen_per_second += value,
+        MODIFIER_MIGHT => totals.might += value,
+        MODIFIER_INSIGHT => totals.insight += value,
+        MODIFIER_FINESSE => totals.finesse += value,
+        MODIFIER_FORTITUDE => totals.fortitude += value,
         MODIFIER_TRANSFERENCE => totals.melee_life_steal += value,
         MODIFIER_REAPING => totals.melee_mana_steal += value,
         MODIFIER_AWARENESS => totals.trap_awareness += value,
@@ -3569,6 +3750,20 @@ fn apply_modifier_value(totals: &mut EquipmentModifierTotals, modifier_kind: &st
         }
         _ => {}
     }
+}
+
+fn modifier_kind_is_allocated_stat(modifier_kind: &str) -> bool {
+    matches!(
+        normalize_id(modifier_kind).as_str(),
+        MODIFIER_MIGHT | MODIFIER_INSIGHT | MODIFIER_FINESSE | MODIFIER_FORTITUDE
+    )
+}
+
+fn equipment_stat_points(value: f32) -> u32 {
+    if !value.is_finite() {
+        return 0;
+    }
+    value.max(0.0).round().min(u32::MAX as f32) as u32
 }
 
 fn require_container_slot(
@@ -4497,9 +4692,27 @@ mod tests {
                 (EQUIP_SLOT_LEGS, "PEASANT_TROUSERS"),
                 (EQUIP_SLOT_BOOTS, "PEASANT_BOOTS"),
                 (EQUIP_SLOT_GLOVES, "PEASANT_GLOVES"),
+                ("RING_1", STARTER_INSIGHT_RING_ITEM_DEF_ID),
                 (EQUIP_SLOT_MAIN_HAND, "TRAINING_TWO_HAND_SWORD"),
                 (EQUIP_SLOT_SPELLBOOK, STARTER_SPELLBOOK_ITEM_DEF_ID),
             ]
+        );
+        assert_eq!(
+            BASELINE_STARTER_EQUIPMENT_AFFIXES
+                .iter()
+                .map(|spec| (
+                    spec.item_def_id,
+                    spec.affix_id,
+                    spec.modifier_kind,
+                    spec.value
+                ))
+                .collect::<Vec<_>>(),
+            vec![(
+                STARTER_INSIGHT_RING_ITEM_DEF_ID,
+                STARTER_INSIGHT_RING_AFFIX_ID,
+                MODIFIER_INSIGHT,
+                STARTER_INSIGHT_RING_VALUE
+            )]
         );
     }
 
@@ -4622,6 +4835,37 @@ mod tests {
         assert!((totals.trap_awareness - 3.0).abs() < 0.0001);
         assert!((totals.light - 2.0).abs() < 0.0001);
         assert!((totals.stealth_aggro_reduction - 0.12).abs() < 0.0001);
+    }
+
+    #[test]
+    fn apply_modifier_value_accumulates_allocated_stat_modifiers() {
+        let mut totals = EquipmentModifierTotals::default();
+
+        apply_modifier_value(&mut totals, MODIFIER_MIGHT, 3.0);
+        apply_modifier_value(&mut totals, MODIFIER_FINESSE, 2.0);
+        apply_modifier_value(&mut totals, MODIFIER_FORTITUDE, 4.0);
+        apply_modifier_value(&mut totals, MODIFIER_INSIGHT, 5.0);
+        apply_modifier_value(&mut totals, MODIFIER_MOVE_SPEED, 99.0);
+
+        let allocated = totals.allocated_stat_totals();
+        assert_eq!(allocated.might, 3);
+        assert_eq!(allocated.finesse, 2);
+        assert_eq!(allocated.fortitude, 4);
+        assert_eq!(allocated.insight, 5);
+        assert_eq!(allocated.quickness, 0);
+    }
+
+    #[test]
+    fn stat_affix_rolls_are_whole_stat_points() {
+        let affix = ITEM_AFFIX_DEFINITIONS
+            .iter()
+            .find(|affix| affix.modifier_kind == MODIFIER_MIGHT)
+            .expect("might affix should be authored");
+        let context = loot_context_for_test("stat-roll".to_string(), 0.0);
+
+        assert_eq!(roll_affix_value(&context, affix, 0.0), 1.0);
+        assert_eq!(roll_affix_value(&context, affix, 0.49), 3.0);
+        assert_eq!(roll_affix_value(&context, affix, 1.0), 5.0);
     }
 
     #[test]
@@ -4751,6 +4995,18 @@ mod tests {
         assert!(affixes
             .iter()
             .any(|affix| affix.modifier_kind == MODIFIER_CRIT_CHANCE));
+        assert!(affixes
+            .iter()
+            .any(|affix| affix.modifier_kind == MODIFIER_MIGHT));
+        assert!(affixes
+            .iter()
+            .any(|affix| affix.modifier_kind == MODIFIER_FINESSE));
+        assert!(affixes
+            .iter()
+            .any(|affix| affix.modifier_kind == MODIFIER_INSIGHT));
+        assert!(affixes
+            .iter()
+            .all(|affix| affix.modifier_kind != MODIFIER_FORTITUDE));
     }
 
     #[test]

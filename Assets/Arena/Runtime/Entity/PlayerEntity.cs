@@ -308,11 +308,27 @@ namespace Arena.Entity
         public void OnActiveCastDelete(ActiveCast row) => _spellCastPresentation?.OnActiveCastDelete(row);
         public void OnPredictedActionResultInsert(PredictedActionResult row) => _spellCastPresentation?.OnPredictedActionResultInsert(row);
         public void OnSpellCombatRelease(CombatEvent row) => _spellCastPresentation?.OnCombatRelease(row);
+        public bool UsesSpellCastHoldPresentation(string spellActionId)
+        {
+            return _combatAnimationSet != null
+                && _combatAnimationSet.TryGetSpellAnimation(spellActionId, out WeaponSpellAnimationEntry entry)
+                && entry.UsesHoldPresentation;
+        }
+
+        public bool PlaysSpellReleasePresentation(string spellActionId)
+        {
+            return _combatAnimationSet == null
+                || !_combatAnimationSet.TryGetSpellAnimation(spellActionId, out WeaponSpellAnimationEntry entry)
+                || entry.PlaysReleasePresentation;
+        }
+
         public bool TryResolveSpellReleaseOffsetSeconds(string spellActionId, out float releaseOffsetSeconds)
         {
             releaseOffsetSeconds = 0f;
             if (_combatAnimationSet == null
-                || !_combatAnimationSet.TryGetSpellAnimation(spellActionId, out WeaponSpellAnimationEntry entry))
+                || !_combatAnimationSet.TryGetSpellAnimation(spellActionId, out WeaponSpellAnimationEntry entry)
+                || !entry.PlaysReleasePresentation
+                || entry.ResolveClip(grounded: true) == null)
             {
                 return false;
             }

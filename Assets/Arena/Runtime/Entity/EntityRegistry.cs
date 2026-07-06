@@ -612,14 +612,14 @@ namespace Arena.Entity
         // -------------------------------------------------------------------
         //
         // Instant spell presentation is routed from authoritative COMBAT_CAST
-        // CombatEvents. Cast-time spell hold/release scheduling is routed from
-        // ActiveCast so the authored release frame can line up with ends_at.
+        // CombatEvents. Cast-time and authored-hold spell scheduling is routed
+        // from ActiveCast so release/cancel timing stays tied to the server row.
 
         public void OnActiveCastInsert(EventContext ctx, ActiveCast row)
         {
             if (TryGetCastTimeMs(row.Kind, out ulong castTimeMs)
-                && castTimeMs > 0UL
-                && TryGetLivePlayer(row.Caster, out var entity))
+                && TryGetLivePlayer(row.Caster, out var entity)
+                && ShouldForwardSpellActiveCast(entity, row.Kind, castTimeMs))
             {
                 entity.OnActiveCastInsert(row, castTimeMs);
             }
@@ -628,8 +628,8 @@ namespace Arena.Entity
         public void OnActiveCastUpdate(EventContext ctx, ActiveCast oldRow, ActiveCast newRow)
         {
             if (TryGetCastTimeMs(newRow.Kind, out ulong castTimeMs)
-                && castTimeMs > 0UL
-                && TryGetLivePlayer(newRow.Caster, out var entity))
+                && TryGetLivePlayer(newRow.Caster, out var entity)
+                && ShouldForwardSpellActiveCast(entity, newRow.Kind, castTimeMs))
             {
                 entity.OnActiveCastUpdate(newRow, castTimeMs);
             }
@@ -639,6 +639,11 @@ namespace Arena.Entity
         {
             if (TryGetLivePlayer(row.Caster, out var entity))
                 entity.OnActiveCastDelete(row);
+        }
+
+        private static bool ShouldForwardSpellActiveCast(PlayerEntity entity, string spellActionId, ulong castTimeMs)
+        {
+            return castTimeMs > 0UL || entity.UsesSpellCastHoldPresentation(spellActionId);
         }
 
         public void OnPredictedActionResultInsert(EventContext ctx, PredictedActionResult row)
@@ -1340,6 +1345,22 @@ namespace Arena.Entity
             var conn = NetworkManager.Instance?.Conn;
             if (TryGetLivePlayer(row.Caster, out var casterEntity))
             {
+                // HoldOnly channel spells own their entire presentation through the
+                // ActiveCast row (enter/idle loop until the ActiveCast ends) and never play
+                // a release. Dispatching the COMBAT_CAST as a Spell animation request reaches
+                // PlayerAnimator.RequestCombatAnimation while the cast hold is active, which
+                // preempts (InterruptWithoutGhost) and clears it — cutting the channel's hold
+                // loop. Cast-time spells are already excluded above via IsCastTimeSpellEvent;
+                // this covers zero-cast-time HoldOnly channels. HoldThenRelease spells keep
+                // the COMBAT_CAST — it drives their authored hold->release handoff — so gate
+                // on "no release presentation" (HoldOnly) rather than "uses hold".
+                if (!casterEntity.PlaysSpellReleasePresentation(row.ActionKind))
+                {
+                    if (PlayerAnimator.SpellHoldDebug)
+                        Debug.Log($"[HOLDDBG] EntityRegistry.OnCombatCast SUPPRESSED release for HoldOnly spell f={Time.frameCount} spell={row.ActionKind} (was preempting the hold)");
+                    return;
+                }
+
                 var request = CombatAnimationRequestTranslator.BuildAuthoritativeFromCombatEvent(
                     conn,
                     casterEntity,

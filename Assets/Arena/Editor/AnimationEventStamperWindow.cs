@@ -249,16 +249,20 @@ namespace Arena.Editor
             if (clip == null)
                 return CombatClipRole.Unknown;
 
+            string assetPath = AssetDatabase.GetAssetPath(clip);
+            CombatClipRole nameRole = CombatClipRoleNameInference.TryInferFromPath(assetPath);
+
             if (_roleMap != null
                 && _roleMap.TryGetValue(clip, out List<CombatClipRoleObservation>? obs)
                 && obs.Count > 0)
             {
                 source = CombatClipRoleSource.Reference;
+                if (nameRole != CombatClipRole.Unknown && obs.Any(o => o.Role == nameRole))
+                    return nameRole;
+
                 return obs.GroupBy(o => o.Role).OrderByDescending(g => g.Count()).First().Key;
             }
 
-            string assetPath = AssetDatabase.GetAssetPath(clip);
-            CombatClipRole nameRole = CombatClipRoleNameInference.TryInferFromPath(assetPath);
             if (nameRole != CombatClipRole.Unknown)
             {
                 source = CombatClipRoleSource.Name;

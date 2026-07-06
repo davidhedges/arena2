@@ -72,6 +72,7 @@ namespace Arena.Editor
             changed |= SetLocalPosition(root.Find("StageRoot/ShowcaseAnchor"), new Vector3(0f, ShowcaseLift, 0f));
             changed |= SetLocalPosition(root.Find("StageRoot/HeroPlatform"), new Vector3(0f, ShowcaseLift - 0.08f, 0f));
             changed |= SetLocalPosition(root.Find("StageRoot/PlatformRedRing"), new Vector3(0f, ShowcaseLift - 0.14f, 0f));
+            changed |= RemoveAuthoredRuntimeAvatarModel(root);
 
             if (changed)
                 EditorSceneManager.MarkSceneDirty(root.gameObject.scene);
@@ -482,36 +483,16 @@ namespace Arena.Editor
             showcase.localPosition = Vector3.zero;
             showcase.localRotation = Quaternion.Euler(0f, 182f, 0f);
             showcase.localScale = Vector3.one;
+        }
 
-            GameObject? prefab = LoadShowcaseAvatarPrefab();
-            GameObject model;
-            if (prefab != null)
-            {
-                Object instantiated = PrefabUtility.InstantiatePrefab(prefab, showcase);
-                model = instantiated as GameObject ?? Object.Instantiate(prefab, showcase);
-                model.name = "RuntimeAvatarModel";
-            }
-            else
-            {
-                model = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-                model.name = "FallbackAvatarModel";
-                model.transform.SetParent(showcase, false);
-                Renderer? renderer = model.GetComponent<Renderer>();
-                if (renderer != null)
-                    renderer.sharedMaterial = MaterialFor("HubScene_FallbackAvatar", new Color(0.36f, 0.40f, 0.46f));
-            }
+        private static bool RemoveAuthoredRuntimeAvatarModel(Transform root)
+        {
+            Transform? staleModel = root.Find("StageRoot/ShowcaseAnchor/HubShowcaseAvatar/RuntimeAvatarModel");
+            if (staleModel == null)
+                return false;
 
-            model.transform.localPosition = Vector3.zero;
-            model.transform.localRotation = Quaternion.identity;
-            model.transform.localScale = Vector3.one;
-
-            CombatAnimationSet? animationSet = LoadAnimationSet(CombatProfileIds.TwoHandedSword);
-            PrepareShowcaseModel(model);
-            ApplyShowcaseLoopPose(model, animationSet);
-            SyncShowcaseWeaponMountsFromRuntimeAvatar(model);
-            NormalizeModelToShowcase(model.transform, showcase);
-            EquipAvatar(model, animationSet);
-            ConfigureShowcaseLoop(model, animationSet);
+            Object.DestroyImmediate(staleModel.gameObject);
+            return true;
         }
 
         private static GameObject? LoadShowcaseAvatarPrefab()

@@ -129,6 +129,15 @@ namespace Arena.Presentation
         private static readonly int SpellCastHoldAction2StateHash = Animator.StringToHash("SpellCastHoldAction2");
         private static readonly int SpellCastHoldAction3StateHash = Animator.StringToHash("SpellCastHoldAction3");
         private static readonly int SpellCastHoldAction4StateHash = Animator.StringToHash("SpellCastHoldAction4");
+        // Dedicated non-looping-exit upper-body hold states. The shared
+        // UpperBodySpellAction* states auto-exit to Empty at 0.9 (they double as
+        // one-shot overlay spell releases), so a masked hold routed through them
+        // stops after ~0.9 of the idle clip. These states carry no exit
+        // transition, letting a looping idle clip loop for the channel duration.
+        private static readonly int UpperBodySpellCastHoldAction1StateHash = Animator.StringToHash("UpperBodySpellCastHoldAction1");
+        private static readonly int UpperBodySpellCastHoldAction2StateHash = Animator.StringToHash("UpperBodySpellCastHoldAction2");
+        private static readonly int UpperBodySpellCastHoldAction3StateHash = Animator.StringToHash("UpperBodySpellCastHoldAction3");
+        private static readonly int UpperBodySpellCastHoldAction4StateHash = Animator.StringToHash("UpperBodySpellCastHoldAction4");
         private static readonly int SpellCastHoldAction1FullPathHash = Animator.StringToHash("SpellAction.SpellCastHoldAction1");
         private static readonly int SpellCastHoldAction2FullPathHash = Animator.StringToHash("SpellAction.SpellCastHoldAction2");
         private static readonly int SpellCastHoldAction3FullPathHash = Animator.StringToHash("SpellAction.SpellCastHoldAction3");
@@ -174,6 +183,9 @@ namespace Arena.Presentation
         private const string UpperBodyRecoverySlotName = "slot_upper_body_recovery_1";
         private static readonly int MeleeAttackEmptyStateHash = Animator.StringToHash("Empty");
         private static readonly int SpellActionEmptyStateHash = Animator.StringToHash("Empty");
+
+        // TEMP instrumentation for the channeled-hold loop investigation. Toggle off to silence.
+        internal static bool SpellHoldDebug = true;
 
         private Animator? _animator;
         private AnimatorOverrideController? _overrideController;
@@ -557,6 +569,9 @@ namespace Arena.Presentation
             CombatPreemptionMode preemptionMode = CombatActionPlaybackController.ResolvePreemptionMode(
                 decision,
                 request.Category);
+
+            if (SpellHoldDebug && request.Category == CombatAnimationCategory.Spell)
+                Debug.Log($"[HOLDDBG] RequestCombatAnimation f={Time.frameCount} action={request.ActionId} phase={request.SpellPhase} auth={request.Authority} decision={decision} preempt={preemptionMode}");
 
             switch (preemptionMode)
             {
@@ -1067,31 +1082,39 @@ namespace Arena.Presentation
             bool clearAnimatorState,
             bool softFullBodyClear = false)
         {
+            if (SpellHoldDebug && _actionPlayback.ActiveSpellCastHoldPresentation.HasValue)
+            {
+                string caller = new System.Diagnostics.StackTrace(1, false).GetFrame(0)?.GetMethod()?.Name ?? "?";
+                Debug.Log($"[HOLDDBG] ClearActiveSpellCastHoldPresentation f={Time.frameCount} clearAnim={clearAnimatorState} soft={softFullBodyClear} caller={caller} phase={_actionPlayback.SpellCastHoldPhase}");
+            }
+            // Capture the layer/exit settings before nulling so the fade-out targets the
+            // layer the hold actually rendered on (masked holds live on UpperBody, not
+            // SpellAction) using the spell's authored exit timing.
+            ActiveSpellCastHoldPresentation? clearedPresentation = _actionPlayback.ActiveSpellCastHoldPresentation;
             bool hadActivePresentation = _actionPlayback.ClearActiveSpellCastHoldPresentation();
             if (_animator == null || !clearAnimatorState)
                 return;
 
-            if (softFullBodyClear && hadActivePresentation)
+            if (softFullBodyClear && hadActivePresentation && clearedPresentation.HasValue)
             {
-                // Fade the SpellAction layer's weight from 1 to 0 over the exit duration so
-                // legs/torso blend back to the base IdleCombat pose instead of snapping to
-                // animator default values (which is what CrossFading state-to-Empty produces
-                // when the destination state has no motion clip).
-                float blendOut = SpellCastHoldExitCrossFadeDurationSeconds;
-                float delay = SpellCastHoldExitDelaySeconds;
-                if (_animationSet != null
-                    && _animationSet.TryGetDefaultSpellCastHoldProfile(out SpellCastHoldProfile holdProfile))
-                {
-                    blendOut = holdProfile.ResolveExitBlendOutSeconds(SpellCastHoldExitCrossFadeDurationSeconds);
-                    delay = holdProfile.ResolveExitDelaySeconds(SpellCastHoldExitDelaySeconds);
-                }
-                _actionPlayback.StartSpellCastHoldFadeOut(Time.time, blendOut, delay);
+                // Fade the hold layer's weight from 1 to 0 over the exit duration so the
+                // held pose blends back to the base pose instead of snapping to animator
+                // default values (which is what CrossFading state-to-Empty produces when
+                // the destination state has no motion clip).
+                ActiveSpellCastHoldPresentation cleared = clearedPresentation.Value;
+                int fadeLayerIndex = ResolveSpellCastHoldLayerIndex(cleared.PlaybackLayer);
+                _actionPlayback.StartSpellCastHoldFadeOut(
+                    Time.time,
+                    cleared.ExitBlendOutSeconds,
+                    cleared.ExitDelaySeconds,
+                    fadeLayerIndex);
                 ClearLeftGestureSpellPresentation();
                 return;
             }
 
             _actionPlayback.ResetSpellCastHoldFadeOut();
             _animator.SetLayerWeight(SpellActionLayerIndex, 1f);
+            _animator.SetLayerWeight(UpperBodyLayerIndex, 1f);
             _animator.Play(SpellActionEmptyStateHash, SpellActionLayerIndex, 0f);
             PlayUpperBodyState(UpperBodyEmptyStateHash, 0f);
             ClearLeftGestureSpellPresentation();
@@ -1102,13 +1125,16 @@ namespace Arena.Presentation
             if (_animator == null || !_actionPlayback.IsSpellCastHoldFadeOutActive)
                 return;
 
+            int layerIndex = _actionPlayback.SpellCastHoldFadeOutLayerIndex;
             float weight = _actionPlayback.ResolveSpellCastHoldFadeOutLayerWeight(Time.time);
-            _animator.SetLayerWeight(SpellActionLayerIndex, weight);
+            _animator.SetLayerWeight(layerIndex, weight);
             if (weight > 0f)
                 return;
 
-            _animator.Play(SpellActionEmptyStateHash, SpellActionLayerIndex, 0f);
-            _animator.SetLayerWeight(SpellActionLayerIndex, 1f);
+            // Fade complete: park the layer on Empty and restore full weight for reuse.
+            // Every hold-capable layer uses a state literally named "Empty".
+            _animator.Play(UpperBodyEmptyStateHash, layerIndex, 0f);
+            _animator.SetLayerWeight(layerIndex, 1f);
             _actionPlayback.ResetSpellCastHoldFadeOut();
         }
 
@@ -1188,6 +1214,8 @@ namespace Arena.Presentation
 
         private void PlaySpellAnimation(in CombatAnimationRequest request)
         {
+            if (SpellHoldDebug)
+                Debug.Log($"[HOLDDBG] PlaySpellAnimation f={Time.frameCount} action={request.ActionId} phase={request.SpellPhase} auth={request.Authority} src={request.Source}");
             switch (request.SpellPhase)
             {
                 case CombatSpellAnimationPhase.HoldStart:
@@ -1197,6 +1225,12 @@ namespace Arena.Presentation
                     if (_weaponAttachments == null)
                         _weaponAttachments = GetComponent<WeaponAttachmentController>();
                     _weaponAttachments?.ReleaseTemporaryAnimatedProp(request.ActionId);
+                    // The preempt path (RequestCombatAnimation -> InterruptWithoutGhost)
+                    // already started the smooth hold-exit fade before this ran. Don't
+                    // hard-clear over it — that would snap the layer to Empty instantly.
+                    if (_actionPlayback.IsSpellCastHoldFadeOutActive
+                        && !_actionPlayback.ActiveSpellCastHoldPresentation.HasValue)
+                        return;
                     ClearActiveSpellCastHoldPresentation(clearAnimatorState: true);
                     return;
                 case CombatSpellAnimationPhase.Release:
@@ -1224,10 +1258,10 @@ namespace Arena.Presentation
             if (_animator == null || _overrideController == null || _animationSet == null)
                 return;
 
-            if (!_animationSet.TryGetDefaultSpellCastHoldProfile(out SpellCastHoldProfile holdProfile))
+            if (!_animationSet.TryGetSpellCastHoldProfile(request.ActionId, out SpellCastHoldProfile holdProfile))
             {
                 Debug.LogWarning(
-                    $"[PlayerAnimator] Cast-time spell '{request.ActionId}' requested a hold, but animation set '{_animationSet.name}' has no playable default spell cast hold profile.");
+                    $"[PlayerAnimator] Spell '{request.ActionId}' requested a hold, but animation set '{_animationSet.name}' has no playable spell cast hold profile.");
                 return;
             }
 
@@ -1254,11 +1288,22 @@ namespace Arena.Presentation
             ClearActiveSpellCastHoldPresentation(clearAnimatorState: true);
             ClearMeleePresentationForUpperBodySpell();
 
+            float enterCompleteNt = holdProfile.ResolveEnterCompleteNormalizedTime(SpellCastHoldEnterToIdleNormalizedTime);
+            float exitBlendOut = holdProfile.ResolveExitBlendOutSeconds(SpellCastHoldExitCrossFadeDurationSeconds);
+            float exitDelay = holdProfile.ResolveExitDelaySeconds(SpellCastHoldExitDelaySeconds);
+            if (SpellHoldDebug)
+                Debug.Log($"[HOLDDBG] PlaySpellCastHold f={Time.frameCount} action={request.ActionId} auth={request.Authority} layer={holdProfile.playbackLayer} enterSlot={enterBankSlot} idleSlot={idleBankSlot} enter={enterClip.name}({enterClip.length:F3}) idle={idleClip.name}({idleClip.length:F3}) enterCompleteNt={enterCompleteNt:F3} exitDelay={exitDelay:F2} exitBlend={exitBlendOut:F2} needsStance={needsCombatVisualStance}");
+
+            // Starting a fresh hold cancels any exit fade left running from a prior one.
+            _actionPlayback.ResetSpellCastHoldFadeOut();
             _actionPlayback.SetActiveSpellCastHoldPresentation(
                 request.ActionId,
                 enterBankSlot,
                 idleBankSlot,
-                holdProfile.playbackLayer);
+                holdProfile.playbackLayer,
+                enterCompleteNt,
+                exitBlendOut,
+                exitDelay);
 
             PlaySpellCastHoldState(
                 holdProfile.playbackLayer,
@@ -1273,12 +1318,16 @@ namespace Arena.Presentation
             float normalizedTime,
             float transitionDurationSeconds)
         {
-            int stateHash = playbackLayer == SpellPlaybackLayer.LeftGesture
-                ? ResolveLeftGestureSpellStateHash(bankSlot)
-                : playbackLayer == SpellPlaybackLayer.UpperBody
-                    || playbackLayer == SpellPlaybackLayer.UpperBodyWhileMoving
-                        ? ResolveUpperBodySpellStateHash(bankSlot)
-                        : ResolveSpellCastHoldActionStateHash(bankSlot);
+            // Detection (UpdateSpellCastHoldPlayback / IsActiveSpellCastHoldStateActive)
+            // resolves the same way, so keep playback aligned by sharing the resolver.
+            int stateHash = ResolveSpellCastHoldStateHash(playbackLayer, bankSlot);
+
+            if (SpellHoldDebug)
+            {
+                int dbgLayer = ResolveSpellCastHoldLayerIndex(playbackLayer);
+                bool hasState = _animator != null && _animator.HasState(dbgLayer, stateHash);
+                Debug.Log($"[HOLDDBG] PlaySpellCastHoldState f={Time.frameCount} layer={playbackLayer} slot={bankSlot} stateHash={stateHash} layerIndex={dbgLayer} controllerHasState={hasState} nt={normalizedTime:F3}");
+            }
 
             switch (playbackLayer)
             {
@@ -1289,6 +1338,9 @@ namespace Arena.Presentation
                 case SpellPlaybackLayer.UpperBody:
                 case SpellPlaybackLayer.UpperBodyWhileMoving:
                     ClearLeftGestureSpellPresentation();
+                    // Restore full weight in case a prior hold's exit fade left the
+                    // UpperBody layer partway blended out.
+                    _animator!.SetLayerWeight(UpperBodyLayerIndex, 1f);
                     PlayUpperBodyState(stateHash, normalizedTime);
                     break;
                 case SpellPlaybackLayer.FullBody:
@@ -1321,8 +1373,8 @@ namespace Arena.Presentation
             return playbackLayer switch
             {
                 SpellPlaybackLayer.LeftGesture => ResolveLeftGestureSpellStateHash(bankSlot),
-                SpellPlaybackLayer.UpperBody => ResolveUpperBodySpellStateHash(bankSlot),
-                SpellPlaybackLayer.UpperBodyWhileMoving => ResolveUpperBodySpellStateHash(bankSlot),
+                SpellPlaybackLayer.UpperBody => ResolveUpperBodySpellCastHoldStateHash(bankSlot),
+                SpellPlaybackLayer.UpperBodyWhileMoving => ResolveUpperBodySpellCastHoldStateHash(bankSlot),
                 _ => ResolveSpellCastHoldActionStateHash(bankSlot),
             };
         }
@@ -1334,7 +1386,11 @@ namespace Arena.Presentation
 
             ActiveSpellCastHoldPresentation active = _actionPlayback.ActiveSpellCastHoldPresentation.Value;
             if (_actionPlayback.SpellCastHoldPhase != SpellCastHoldPlaybackPhase.Enter)
+            {
+                if (SpellHoldDebug && Time.frameCount % 5 == 0)
+                    Debug.Log($"[HOLDDBG] UpdSCHP f={Time.frameCount} phase={_actionPlayback.SpellCastHoldPhase} (not Enter; idle should be looping)");
                 return;
+            }
 
             int layerIndex = ResolveSpellCastHoldLayerIndex(active.PlaybackLayer);
             int enterStateHash = ResolveSpellCastHoldStateHash(active.PlaybackLayer, active.EnterBankSlot);
@@ -1347,9 +1403,18 @@ namespace Arena.Presentation
                 current = next;
             }
 
-            if (!inEnter || current.normalizedTime < SpellCastHoldEnterToIdleNormalizedTime)
+            if (SpellHoldDebug && Time.frameCount % 5 == 0)
+            {
+                var ci = _animator.GetCurrentAnimatorClipInfo(layerIndex);
+                string clip = ci.Length > 0 && ci[0].clip != null ? ci[0].clip.name : "(none)";
+                Debug.Log($"[HOLDDBG] UpdSCHP f={Time.frameCount} layer={layerIndex} curHash={current.shortNameHash} enterHash={enterStateHash} inEnter={inEnter} nt={current.normalizedTime:F3} needNT={active.EnterCompleteNormalizedTime:F3} inTrans={_animator.IsInTransition(layerIndex)} wt={_animator.GetLayerWeight(layerIndex):F2} clip={clip}");
+            }
+
+            if (!inEnter || current.normalizedTime < active.EnterCompleteNormalizedTime)
                 return;
 
+            if (SpellHoldDebug)
+                Debug.Log($"[HOLDDBG] UpdSCHP f={Time.frameCount} ==> TRANSITION Enter->Idle (idleSlot={active.IdleBankSlot})");
             _actionPlayback.SetSpellCastHoldPhase(SpellCastHoldPlaybackPhase.Idle);
             PlaySpellCastHoldState(
                 active.PlaybackLayer,
@@ -1509,6 +1574,16 @@ namespace Arena.Presentation
                 UpperBodySpellAction2StateHash,
                 UpperBodySpellAction3StateHash,
                 UpperBodySpellAction4StateHash);
+        }
+
+        private static int ResolveUpperBodySpellCastHoldStateHash(int bankSlot)
+        {
+            return CombatActionPlaybackController.ResolveBankedAnimatorHash(
+                bankSlot,
+                UpperBodySpellCastHoldAction1StateHash,
+                UpperBodySpellCastHoldAction2StateHash,
+                UpperBodySpellCastHoldAction3StateHash,
+                UpperBodySpellCastHoldAction4StateHash);
         }
 
         private static int ResolveLeftGestureSpellStateHash(int bankSlot)

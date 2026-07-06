@@ -13,7 +13,8 @@ use crate::combat::{
 };
 use crate::inventory::{
     apply_combat_discipline_weapon_loadout, combat_discipline_weapon_loadout_is_available,
-    equipment_combat_profile_id_for_owner, equipment_spell_slot_capacity_for_owner,
+    equipment_combat_profile_id_for_owner, equipment_modifier_totals_for_owner,
+    equipment_spell_slot_capacity_for_owner,
 };
 use crate::melee::sync_melee_attack_modifier_catalog;
 use crate::player::Player;
@@ -2196,9 +2197,7 @@ pub(crate) fn active_stat_totals_for_owner(
     ctx: &ReducerContext,
     owner: Identity,
 ) -> AllocatedStatTotals {
-    let _ = ctx;
-    let _ = owner;
-    AllocatedStatTotals::default()
+    equipment_modifier_totals_for_owner(ctx, owner).allocated_stat_totals()
 }
 
 pub(crate) fn primary_resource_kind_for_owner(
@@ -5074,6 +5073,7 @@ mod tests {
     };
     use crate::melee::profile_supports_action_reference;
     use crate::progression::melee_timed_movement_for_ability_id;
+    use crate::resources::RESOURCE_KIND_MANA;
     use crate::spells::spell_definition_by_str;
 
     use super::{
@@ -6158,6 +6158,9 @@ mod tests {
             "PARTICLE_SYSTEM",
             "UNTIL_RELEASE_EVENT",
             "UNTIL_TERMINAL_EVENT",
+            // Persists until the owning cast/channel's ActiveCast row is deleted (channel
+            // end / cancel). Used for hand-attached channel cues like Magic Missile's glow.
+            "UNTIL_CAST_END",
         ];
         for cue in &catalog.combat_vfx_cues {
             let owner_kind = normalize_identifier(cue.owner_kind.as_str());
@@ -7213,6 +7216,31 @@ mod tests {
     #[test]
     fn progression_catalog_runtime_validation_accepts_current_authoring() {
         super::validate_ability_catalog();
+    }
+
+    #[test]
+    fn mana_regen_scales_with_insight_for_starter_ring_target() {
+        let value: serde_json::Value =
+            serde_json::from_str(super::PROGRESSION_CATALOG_JSON).expect("catalog json must parse");
+        let resources = value
+            .get("resources")
+            .and_then(serde_json::Value::as_array)
+            .expect("resources must be an array");
+        let mana = resources
+            .iter()
+            .find(|resource| {
+                resource
+                    .get("resource_kind")
+                    .and_then(serde_json::Value::as_str)
+                    == Some(RESOURCE_KIND_MANA)
+            })
+            .expect("mana resource must be authored");
+
+        assert_eq!(
+            mana.get("regen_per_insight")
+                .and_then(serde_json::Value::as_f64),
+            Some(0.2)
+        );
     }
 
     #[test]

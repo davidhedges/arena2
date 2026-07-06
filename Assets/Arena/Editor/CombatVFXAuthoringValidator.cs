@@ -265,8 +265,11 @@ namespace Arena.Editor
                     errors.Add($"spell ability '{abilityId}' action '{actionId}' has cast_time_ms {castTimeMs}, but CombatAnimationSet '{animationSet.name}' has no playable default spell cast hold profile.");
                 }
 
-                ValidateReleaseTiming(errors, abilityId, actionId, animationSet, entry, castTimeMs, grounded: true);
-                ValidateReleaseTiming(errors, abilityId, actionId, animationSet, entry, castTimeMs, grounded: false);
+                if (entry.PlaysReleasePresentation)
+                {
+                    ValidateReleaseTiming(errors, abilityId, actionId, animationSet, entry, castTimeMs, grounded: true);
+                    ValidateReleaseTiming(errors, abilityId, actionId, animationSet, entry, castTimeMs, grounded: false);
+                }
             }
         }
 
@@ -437,6 +440,10 @@ namespace Arena.Editor
 
             foreach (WeaponSpellAnimationEntry entry in animationSet.spells)
             {
+                ValidateSpellHoldEvents(animationSet, errors, entry);
+                if (!entry.PlaysReleasePresentation)
+                    continue;
+
                 var clips = new List<(AnimationClip Clip, string Label)>();
                 AddUniqueClip(clips, entry.ground, "ground");
                 AddUniqueClip(clips, entry.air, "air");
@@ -458,6 +465,24 @@ namespace Arena.Editor
                     RejectDeprecatedLowerBodyBlendEnd(errors, clip, context);
                 }
             }
+        }
+
+        private static void ValidateSpellHoldEvents(
+            CombatAnimationSet animationSet,
+            List<string> errors,
+            WeaponSpellAnimationEntry entry)
+        {
+            if (!entry.UsesHoldPresentation || !entry.holdOverride.HasAny)
+                return;
+
+            string context = $"CombatAnimationSet '{animationSet.name}' spell '{entry.SpellIdOrEmpty}' hold override";
+            if (!entry.holdOverride.IsPlayable)
+            {
+                errors.Add($"{context} must author both enter and idleLoop clips, or leave the override empty to use Default Spell Cast Hold.");
+                return;
+            }
+
+            RequireClipEvent(errors, entry.holdOverride.EnterOrIdle!, CombatAnimationEvents.OnEnterComplete, $"{context} enter clip");
         }
 
         private static void ValidateGreatswordMeleeEvents(

@@ -123,14 +123,25 @@ namespace Arena.UI
 
             foreach (GameObject rootObject in activeScene.GetRootGameObjects())
             {
-                if (!string.Equals(rootObject.name, "Combined Character", System.StringComparison.Ordinal))
+                if (string.Equals(rootObject.name, "Combined Character", System.StringComparison.Ordinal))
+                    DestroySceneObject(rootObject);
+
+                if (!string.Equals(rootObject.name, "HubSceneRoot", System.StringComparison.Ordinal))
                     continue;
 
-                if (Application.isPlaying)
-                    Destroy(rootObject);
-                else
-                    DestroyImmediate(rootObject);
+                Transform? staleShowcaseModel =
+                    rootObject.transform.Find("StageRoot/ShowcaseAnchor/HubShowcaseAvatar/RuntimeAvatarModel");
+                if (staleShowcaseModel != null)
+                    DestroySceneObject(staleShowcaseModel.gameObject);
             }
+        }
+
+        private static void DestroySceneObject(GameObject gameObject)
+        {
+            if (Application.isPlaying)
+                Destroy(gameObject);
+            else
+                DestroyImmediate(gameObject);
         }
 
         private void Resolve()
@@ -139,8 +150,7 @@ namespace Arena.UI
             _homeRoot = _root.Find("HubCanvas/HomeRoot")?.gameObject;
             _stageRoot = _root.Find("StageRoot")?.gameObject;
             _travelMenu = _root.Find("HubCanvas/HomeRoot/TravelMenu")?.gameObject;
-            _showcaseAvatar = _root.Find("StageRoot/ShowcaseAnchor/HubShowcaseAvatar/RuntimeAvatarModel")?.gameObject ??
-                _root.Find("StageRoot/ShowcaseAnchor/HubShowcaseAvatar")?.gameObject;
+            _showcaseAvatar = _root.Find("StageRoot/ShowcaseAnchor/HubShowcaseAvatar")?.gameObject;
             if (Application.isPlaying)
                 StarterAssetsRuntimeStripper.StripFrom(_showcaseAvatar);
             _playButton = _root.Find("HubCanvas/TopBar/NavRow/PlayButton")?.GetComponent<Button>();

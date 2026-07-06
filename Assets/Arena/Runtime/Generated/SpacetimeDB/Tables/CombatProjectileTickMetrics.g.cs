@@ -63,6 +63,7 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Col<CombatProjectileTickMetrics, uint> HomingProjectileCount { get; }
         public global::SpacetimeDB.Col<CombatProjectileTickMetrics, uint> OrbitProjectileCount { get; }
         public global::SpacetimeDB.Col<CombatProjectileTickMetrics, uint> BoomerangProjectileCount { get; }
+        public global::SpacetimeDB.Col<CombatProjectileTickMetrics, uint> CurvedProjectileCount { get; }
         public global::SpacetimeDB.Col<CombatProjectileTickMetrics, uint> TickMicros { get; }
         public global::SpacetimeDB.Col<CombatProjectileTickMetrics, uint> WorstTickMicros { get; }
         public global::SpacetimeDB.Col<CombatProjectileTickMetrics, uint> PeakActiveProjectileCount { get; }
@@ -121,6 +122,7 @@ namespace SpacetimeDB.Types
             HomingProjectileCount = new global::SpacetimeDB.Col<CombatProjectileTickMetrics, uint>(tableName, "homing_projectile_count");
             OrbitProjectileCount = new global::SpacetimeDB.Col<CombatProjectileTickMetrics, uint>(tableName, "orbit_projectile_count");
             BoomerangProjectileCount = new global::SpacetimeDB.Col<CombatProjectileTickMetrics, uint>(tableName, "boomerang_projectile_count");
+            CurvedProjectileCount = new global::SpacetimeDB.Col<CombatProjectileTickMetrics, uint>(tableName, "curved_projectile_count");
             TickMicros = new global::SpacetimeDB.Col<CombatProjectileTickMetrics, uint>(tableName, "tick_micros");
             WorstTickMicros = new global::SpacetimeDB.Col<CombatProjectileTickMetrics, uint>(tableName, "worst_tick_micros");
             PeakActiveProjectileCount = new global::SpacetimeDB.Col<CombatProjectileTickMetrics, uint>(tableName, "peak_active_projectile_count");

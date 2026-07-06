@@ -16,6 +16,7 @@ namespace Arena.Presentation
         private const string LifecycleParticleSystem = "PARTICLE_SYSTEM";
         private const string LifecycleUntilReleaseEvent = "UNTIL_RELEASE_EVENT";
         private const string LifecycleUntilTerminalEvent = "UNTIL_TERMINAL_EVENT";
+        private const string LifecycleUntilCastEnd = "UNTIL_CAST_END";
 
         private readonly MonoBehaviour _coroutineOwner;
         private readonly Dictionary<string, ScriptedEntry> _scripted = new();
@@ -149,6 +150,16 @@ namespace Arena.Presentation
             DestroyMatchingPrefabs(context.ActionInstanceId, LifecycleUntilReleaseEvent);
         }
 
+        // Ends UNTIL_CAST_END cues when the owning cast/channel's ActiveCast row is deleted.
+        public void DestroyForCastEnd(string actionInstanceId)
+        {
+            if (string.IsNullOrWhiteSpace(actionInstanceId))
+                return;
+
+            DestroyMatchingScripted(actionInstanceId, LifecycleUntilCastEnd);
+            DestroyMatchingPrefabs(actionInstanceId, LifecycleUntilCastEnd);
+        }
+
         public void Dispose()
         {
             foreach (var entry in _scripted.Values)
@@ -238,6 +249,22 @@ namespace Arena.Presentation
                     return;
                 }
 
+                ConfigureReleaseBoundParticleSystems(instance);
+                string key = PrefabKey(context);
+                if (_prefabs.TryGetValue(key, out PrefabEntry old))
+                {
+                    DestroyInstance(old.Instance);
+                    _prefabs.Remove(key);
+                }
+
+                _prefabs[key] = new PrefabEntry(context.ActionInstanceId, lifecycle, instance);
+                return;
+            }
+
+            if (string.Equals(lifecycle, LifecycleUntilCastEnd, System.StringComparison.Ordinal))
+            {
+                // Loop and hold until the owning cast/channel's ActiveCast row is deleted
+                // (DestroyForCastEnd), so a channel glow lasts exactly as long as the channel.
                 ConfigureReleaseBoundParticleSystems(instance);
                 string key = PrefabKey(context);
                 if (_prefabs.TryGetValue(key, out PrefabEntry old))

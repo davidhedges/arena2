@@ -14,6 +14,7 @@ namespace Arena.Presentation
     {
         private const string ProjectileMotionOrbitCaster = "ORBIT_CASTER";
         private const string ProjectileMotionBoomerangCaster = "BOOMERANG_CASTER";
+        private const string ProjectileMotionCurvedTarget = "CURVED_TARGET";
 
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         internal static int DebugActiveProjectileVisualCount { get; private set; }
@@ -29,8 +30,15 @@ namespace Arena.Presentation
         // rows independent when gameplay delivery grows beyond one projectile.
         private readonly Dictionary<string, ISpellVFX> _activeProjectiles = new();
         private readonly Dictionary<string, OrbitProjectileMotion> _orbitProjectiles = new();
+        private readonly Dictionary<string, CurvedTargetProjectileMotion> _curvedTargetProjectiles = new();
         private readonly Dictionary<string, DelayedProjectileStart> _delayedProjectileStarts = new(StringComparer.Ordinal);
         private readonly HashSet<string> _adoptedPredictedProjectiles = new(StringComparer.Ordinal);
+        // Visual-only launch offset: spawn the projectile body at a caster socket (e.g. the
+        // left hand, per its PROJECTILE_BODY cue anchor) and decay the offset to zero over
+        // LaunchBlendSeconds so it converges onto the authoritative curve. Gameplay/collision
+        // stay authoritative — this only nudges the rendered position for the first frames.
+        private readonly Dictionary<string, LaunchOffset> _launchOffsets = new(StringComparer.Ordinal);
+        private const float LaunchBlendSeconds = 0.15f;
         private readonly List<string> _removeList = new();
         private readonly HashSet<string> _missingProjectilePrefabWarnings = new();
         private readonly ProjectileVfxPool _projectilePool = new("CombatProjectileVfxPool");
@@ -50,6 +58,37 @@ namespace Arena.Presentation
             public float StartAtSeconds { get; }
         }
 
+        private readonly struct LaunchOffset
+        {
+            public LaunchOffset(Vector3 offset, float spawnTimeSeconds)
+            {
+                Offset = offset;
+                SpawnTimeSeconds = spawnTimeSeconds;
+            }
+
+            public Vector3 Offset { get; }
+            public float SpawnTimeSeconds { get; }
+        }
+
+        // Adds the decaying launch offset (if any) to an authoritative position, and clears
+        // the entry once the blend completes. Returns basePosition unchanged when none.
+        private Vector3 ApplyLaunchOffset(string projectileKey, Vector3 basePosition)
+        {
+            if (!_launchOffsets.TryGetValue(projectileKey, out LaunchOffset launch))
+                return basePosition;
+
+            float t = LaunchBlendSeconds > 0f
+                ? Mathf.Clamp01((Time.time - launch.SpawnTimeSeconds) / LaunchBlendSeconds)
+                : 1f;
+            if (t >= 1f)
+            {
+                _launchOffsets.Remove(projectileKey);
+                return basePosition;
+            }
+
+            return basePosition + launch.Offset * (1f - t);
+        }
+
         public void Tick(float dt)
         {
             TickDelayedProjectileStarts();
@@ -64,7 +103,13 @@ namespace Arena.Presentation
                         && vfx is WeaponProjectileVFX weaponProjectile)
                     {
                         orbit.Advance(dt);
-                        ApplyOrbitMotion(weaponProjectile, orbit);
+                        ApplyOrbitMotion(projectileId, weaponProjectile, orbit);
+                    }
+                    else if (_curvedTargetProjectiles.TryGetValue(projectileId, out var curve)
+                        && vfx is WeaponProjectileVFX curvedProjectile)
+                    {
+                        curve.Advance(dt);
+                        ApplyCurvedTargetMotion(projectileId, curvedProjectile, curve);
                     }
 
                     keepAlive = vfx.Tick(dt);
@@ -89,7 +134,9 @@ namespace Arena.Presentation
             {
                 _activeProjectiles.Remove(id);
                 _orbitProjectiles.Remove(id);
+                _curvedTargetProjectiles.Remove(id);
                 _adoptedPredictedProjectiles.Remove(id);
+                _launchOffsets.Remove(id);
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
                 _terminalProjectileKeys.Remove(id);
 #endif
@@ -101,10 +148,15 @@ namespace Arena.Presentation
 
         public void Start(ProjectilePresentationEvent row)
         {
-            Start(row, allowAnimatedPropDelay: true);
+            Start(row, handLaunchOrigin: null, allowAnimatedPropDelay: true);
         }
 
-        private void Start(ProjectilePresentationEvent row, bool allowAnimatedPropDelay)
+        public void Start(ProjectilePresentationEvent row, Vector3? handLaunchOrigin)
+        {
+            Start(row, handLaunchOrigin, allowAnimatedPropDelay: true);
+        }
+
+        private void Start(ProjectilePresentationEvent row, Vector3? handLaunchOrigin, bool allowAnimatedPropDelay)
         {
             string projectileKey = ProjectileKey(row);
             if (allowAnimatedPropDelay
@@ -114,13 +166,19 @@ namespace Arena.Presentation
             }
 
             ReleaseAnimatedPropHandoff(row);
+            if (handLaunchOrigin.HasValue)
+                _launchOffsets[projectileKey] = new LaunchOffset(
+                    handLaunchOrigin.Value - ResolvePresentationPosition(row),
+                    Time.time);
+            else
+                _launchOffsets.Remove(projectileKey);
             ReplaceProjectile(projectileKey, row.ProjectileId, template =>
             {
                 ProjectileVfxPool.Rental? rental = _projectilePool.TryRent(template, projectileKey);
                 return rental != null
                     ? new WeaponProjectileVFX(
                         projectileKey,
-                        ResolvePresentationPosition(row),
+                        ApplyLaunchOffset(projectileKey, ResolvePresentationPosition(row)),
                         new Vector3(row.DirX, row.DirY, row.DirZ),
                         PresentationSpeed(row),
                         row.MaxDistance,
@@ -128,7 +186,7 @@ namespace Arena.Presentation
                         authoritativeLifetime: true)
                     : new WeaponProjectileVFX(
                         projectileKey,
-                        ResolvePresentationPosition(row),
+                        ApplyLaunchOffset(projectileKey, ResolvePresentationPosition(row)),
                         new Vector3(row.DirX, row.DirY, row.DirZ),
                         PresentationSpeed(row),
                         row.MaxDistance,
@@ -142,9 +200,20 @@ namespace Arena.Presentation
             RefreshDebugCounts();
 #endif
             if (IsOrbitCasterProjectile(row))
+            {
                 _orbitProjectiles[projectileKey] = OrbitProjectileMotion.From(row);
-            else
+                _curvedTargetProjectiles.Remove(projectileKey);
+            }
+            else if (IsCurvedTargetProjectile(row))
+            {
+                _curvedTargetProjectiles[projectileKey] = CurvedTargetProjectileMotion.From(row);
                 _orbitProjectiles.Remove(projectileKey);
+            }
+            else
+            {
+                _orbitProjectiles.Remove(projectileKey);
+                _curvedTargetProjectiles.Remove(projectileKey);
+            }
             _adoptedPredictedProjectiles.Remove(projectileKey);
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
             _terminalProjectileKeys.Remove(projectileKey);
@@ -195,6 +264,11 @@ namespace Arena.Presentation
                 _orbitProjectiles.Remove(predictedProjectileKey);
                 _orbitProjectiles[authoritativeKey] = orbit;
             }
+            if (_curvedTargetProjectiles.TryGetValue(predictedProjectileKey, out CurvedTargetProjectileMotion curve))
+            {
+                _curvedTargetProjectiles.Remove(predictedProjectileKey);
+                _curvedTargetProjectiles[authoritativeKey] = curve;
+            }
 
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
             _terminalProjectileKeys.Remove(predictedProjectileKey);
@@ -223,7 +297,7 @@ namespace Arena.Presentation
 
             RouteToVfx(projectileKey, vfx, () =>
             {
-                var position = ResolvePresentationPosition(row);
+                var position = ApplyLaunchOffset(projectileKey, ResolvePresentationPosition(row));
                 var direction = new Vector3(row.DirX, row.DirY, row.DirZ);
                 if (vfx is WeaponProjectileVFX weaponProjectile
                     && ShouldSnapAuthoritativeVisualUpdate(
@@ -238,7 +312,20 @@ namespace Arena.Presentation
                 }
 
                 if (IsOrbitCasterProjectile(row))
+                {
                     _orbitProjectiles[projectileKey] = OrbitProjectileMotion.From(row);
+                    _curvedTargetProjectiles.Remove(projectileKey);
+                }
+                else if (IsCurvedTargetProjectile(row))
+                {
+                    _curvedTargetProjectiles[projectileKey] = CurvedTargetProjectileMotion.From(row);
+                    _orbitProjectiles.Remove(projectileKey);
+                }
+                else
+                {
+                    _orbitProjectiles.Remove(projectileKey);
+                    _curvedTargetProjectiles.Remove(projectileKey);
+                }
             });
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
             DebugUpdatedProjectileVisualCount++;
@@ -299,8 +386,10 @@ namespace Arena.Presentation
                 DisposeVfx(vfx);
             _activeProjectiles.Clear();
             _orbitProjectiles.Clear();
+            _curvedTargetProjectiles.Clear();
             _delayedProjectileStarts.Clear();
             _adoptedPredictedProjectiles.Clear();
+            _launchOffsets.Clear();
             _projectilePool.Dispose();
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
             _terminalProjectileKeys.Clear();
@@ -338,6 +427,14 @@ namespace Arena.Presentation
                 StringComparison.Ordinal);
         }
 
+        private static bool IsCurvedTargetProjectile(ProjectilePresentationEvent row)
+        {
+            return string.Equals(
+                WireIdentifier.Normalize(row.MotionKind),
+                ProjectileMotionCurvedTarget,
+                StringComparison.Ordinal);
+        }
+
         internal static bool ShouldSnapAuthoritativeVisualUpdate(string motionKind, bool adoptedPredictedProjectile)
         {
             return !adoptedPredictedProjectile && UsesAuthoritativeVisualPosition(motionKind);
@@ -347,7 +444,8 @@ namespace Arena.Presentation
         {
             string motion = WireIdentifier.Normalize(motionKind);
             return string.Equals(motion, ProjectileMotionOrbitCaster, StringComparison.Ordinal)
-                || string.Equals(motion, ProjectileMotionBoomerangCaster, StringComparison.Ordinal);
+                || string.Equals(motion, ProjectileMotionBoomerangCaster, StringComparison.Ordinal)
+                || string.Equals(motion, ProjectileMotionCurvedTarget, StringComparison.Ordinal);
         }
 
         private static float PresentationSpeed(ProjectilePresentationEvent row)
@@ -365,7 +463,7 @@ namespace Arena.Presentation
             return row.Speed;
         }
 
-        private static void ApplyOrbitMotion(WeaponProjectileVFX vfx, OrbitProjectileMotion orbit)
+        private void ApplyOrbitMotion(string projectileKey, WeaponProjectileVFX vfx, OrbitProjectileMotion orbit)
         {
             var registry = EntityRegistry.Instance;
             if (registry == null || !registry.TryGetEntity(orbit.Caster, out var casterEntity))
@@ -381,7 +479,12 @@ namespace Arena.Presentation
                 Mathf.Cos(orbit.AngleRadians),
                 0f,
                 -Mathf.Sin(orbit.AngleRadians));
-            vfx.OnUpdate(casterPosition + offset, direction, 0f, snapToAuthoritative: true);
+            vfx.OnUpdate(ApplyLaunchOffset(projectileKey, casterPosition + offset), direction, 0f, snapToAuthoritative: true);
+        }
+
+        private void ApplyCurvedTargetMotion(string projectileKey, WeaponProjectileVFX vfx, CurvedTargetProjectileMotion curve)
+        {
+            vfx.OnUpdate(ApplyLaunchOffset(projectileKey, curve.Position), curve.Direction, 0f, snapToAuthoritative: true);
         }
 
         private void TickDelayedProjectileStarts()
@@ -404,7 +507,7 @@ namespace Arena.Presentation
                     continue;
 
                 _delayedProjectileStarts.Remove(projectileKey);
-                Start(delayed.Row, allowAnimatedPropDelay: false);
+                Start(delayed.Row, handLaunchOrigin: null, allowAnimatedPropDelay: false);
             }
         }
 
@@ -464,6 +567,7 @@ namespace Arena.Presentation
                 DisposeVfx(old);
                 _activeProjectiles.Remove(projectileKey);
                 _orbitProjectiles.Remove(projectileKey);
+                _curvedTargetProjectiles.Remove(projectileKey);
                 _adoptedPredictedProjectiles.Remove(projectileKey);
             }
 
@@ -517,7 +621,9 @@ namespace Arena.Presentation
             DisposeVfx(vfx);
             _activeProjectiles.Remove(projectileKey);
             _orbitProjectiles.Remove(projectileKey);
+            _curvedTargetProjectiles.Remove(projectileKey);
             _adoptedPredictedProjectiles.Remove(projectileKey);
+            _launchOffsets.Remove(projectileKey);
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
             _terminalProjectileKeys.Remove(projectileKey);
             RefreshDebugCounts();
@@ -600,6 +706,74 @@ namespace Arena.Presentation
                 }
 
                 return row.OrbitInitialYaw + row.OrbitPhaseOffsetDeg * Mathf.Deg2Rad;
+            }
+        }
+
+        private sealed class CurvedTargetProjectileMotion
+        {
+            private Vector3 Origin { get; }
+            private Vector3 Control { get; }
+            private Vector3 End { get; }
+            private float Speed { get; }
+            private float MaxDistance { get; }
+            private float Progress { get; set; }
+
+            public Vector3 Position => Evaluate(Progress);
+            public Vector3 Direction
+            {
+                get
+                {
+                    Vector3 tangent = EvaluateDerivative(Progress);
+                    return tangent.sqrMagnitude > 0.0001f ? tangent.normalized : Vector3.forward;
+                }
+            }
+
+            private CurvedTargetProjectileMotion(
+                Vector3 origin,
+                Vector3 control,
+                Vector3 end,
+                float speed,
+                float maxDistance,
+                float progress)
+            {
+                Origin = origin;
+                Control = control;
+                End = end;
+                Speed = Mathf.Max(0f, speed);
+                MaxDistance = Mathf.Max(0.001f, maxDistance);
+                Progress = Mathf.Clamp01(progress);
+            }
+
+            public static CurvedTargetProjectileMotion From(ProjectilePresentationEvent row)
+            {
+                return new CurvedTargetProjectileMotion(
+                    new Vector3(row.OriginX, row.OriginY, row.OriginZ),
+                    new Vector3(row.CurveControlX, row.CurveControlY, row.CurveControlZ),
+                    new Vector3(row.CurveEndX, row.CurveEndY, row.CurveEndZ),
+                    row.Speed,
+                    row.MaxDistance,
+                    row.CurveProgress);
+            }
+
+            public void Advance(float dt)
+            {
+                Progress = Mathf.Clamp01(Progress + Speed / MaxDistance * Mathf.Max(0f, dt));
+            }
+
+            private Vector3 Evaluate(float progress)
+            {
+                float t = Mathf.Clamp01(progress);
+                float oneMinus = 1f - t;
+                return oneMinus * oneMinus * Origin
+                    + 2f * oneMinus * t * Control
+                    + t * t * End;
+            }
+
+            private Vector3 EvaluateDerivative(float progress)
+            {
+                float t = Mathf.Clamp01(progress);
+                return 2f * (1f - t) * (Control - Origin)
+                    + 2f * t * (End - Control);
             }
         }
     }

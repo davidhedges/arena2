@@ -17,6 +17,7 @@ namespace Arena.Tests.Editor
         private const string GameplayContractsPath = "Assets/Arena/Runtime/Combat/GameplayContracts.cs";
         private const string GameplaySubscriptionPlannerPath = "Assets/Arena/Runtime/Network/GameplaySubscriptionPlanner.cs";
         private const string FixedActionDispatcherPath = "Assets/Arena/Runtime/Input/FixedActionDispatcher.cs";
+        private const string LocalPlayerInputSourcePath = "Assets/Arena/Runtime/Input/LocalPlayerInputSource.cs";
         private const string HudControllerPath = "Assets/Arena/Runtime/UI/HUDController.cs";
         private const string HubControllerPath = "Assets/Arena/Runtime/UI/HubController.cs";
         private const string CharacterCreationControllerPath = "Assets/Arena/Runtime/UI/CharacterCreationController.cs";
@@ -308,6 +309,51 @@ namespace Arena.Tests.Editor
 
             string panel = File.ReadAllText(CharacterActionBarPanelPath);
             Assert.That(panel, Does.Contain("ActionBarKeymap.KeyLabelForCell"));
+        }
+
+        [Test]
+        public void SpellbookSlots_HaveRealSharedKeybinds()
+        {
+            string contracts = File.ReadAllText(GameplayContractsPath);
+            Assert.That(contracts, Does.Contain("public static class SpellbookKeymap"));
+            Assert.That(contracts, Does.Contain("new(\"S+0\", KeyCode.Alpha0, true, 0)"));
+            Assert.That(contracts, Does.Contain("new(\"S+G\", KeyCode.G, true, 5)"));
+            Assert.That(contracts, Does.Contain("new(\"S+C\", KeyCode.C, true, 8)"));
+            Assert.That(contracts, Does.Contain("ResolveEquippedSpellbookAction"));
+            Assert.That(contracts, Does.Contain("ItemSpell.ItemInstanceId.Filter(loadout.SpellbookItemId)"));
+            Assert.That(contracts, Does.Contain("itemSpell.SlotIndex != slotIndex"));
+
+            string actionBarDispatcher = File.ReadAllText(ActionBarInputDispatcherPath);
+            Assert.That(actionBarDispatcher, Does.Contain("SpellbookKeymap.SelectableBindings"));
+            Assert.That(actionBarDispatcher, Does.Contain("ActiveActionBarResolver.ResolveEquippedSpellbookAction"));
+            Assert.That(actionBarDispatcher, Does.Contain("ReleaseCastRequest("));
+
+            string hud = File.ReadAllText(HudControllerPath);
+            Assert.That(hud, Does.Contain("SpellbookKeymap.KeyLabelForIndex"));
+            Assert.That(hud, Does.Contain("FindSpellbookSlot(spells, col)"));
+            Assert.That(hud, Does.Not.Contain("$\"Spellbook_{col + 1}\""));
+
+            string panel = File.ReadAllText(CharacterActionBarPanelPath);
+            Assert.That(panel, Does.Contain("SpellbookKeymap.KeyLabelForIndex"));
+            Assert.That(panel, Does.Contain("FindSpellbookSlot(spells, col)"));
+
+            string inputSource = File.ReadAllText(LocalPlayerInputSourcePath);
+            Assert.That(inputSource, Does.Contain("case KeyCode.G:"));
+            Assert.That(inputSource, Does.Contain("button = keyboard.gKey;"));
+        }
+
+        [Test]
+        public void AuthoredHoldChannels_ForwardZeroCastTimeActiveCasts()
+        {
+            string registry = File.ReadAllText(EntityRegistryPath);
+            Assert.That(registry, Does.Contain("ShouldForwardSpellActiveCast"));
+            Assert.That(registry, Does.Contain("castTimeMs > 0UL || entity.UsesSpellCastHoldPresentation(spellActionId)"));
+            Assert.That(registry, Does.Contain("entity.OnActiveCastInsert(row, castTimeMs)"));
+            Assert.That(registry, Does.Contain("entity.OnActiveCastUpdate(newRow, castTimeMs)"));
+            Assert.That(
+                registry,
+                Does.Not.Contain("castTimeMs > 0UL\n                && TryGetLivePlayer"),
+                "Zero-cast-time channel spells with authored hold presentation must reach SpellCastPresentationController.");
         }
 
         [Test]

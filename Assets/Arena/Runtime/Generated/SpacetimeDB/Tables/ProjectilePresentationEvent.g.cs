@@ -93,6 +93,13 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Col<ProjectilePresentationEvent, bool> BoomerangReturning { get; }
         public global::SpacetimeDB.Col<ProjectilePresentationEvent, float> BoomerangOutboundDistance { get; }
         public global::SpacetimeDB.Col<ProjectilePresentationEvent, float> BoomerangReturnSpeed { get; }
+        public global::SpacetimeDB.Col<ProjectilePresentationEvent, float> CurveControlX { get; }
+        public global::SpacetimeDB.Col<ProjectilePresentationEvent, float> CurveControlY { get; }
+        public global::SpacetimeDB.Col<ProjectilePresentationEvent, float> CurveControlZ { get; }
+        public global::SpacetimeDB.Col<ProjectilePresentationEvent, float> CurveEndX { get; }
+        public global::SpacetimeDB.Col<ProjectilePresentationEvent, float> CurveEndY { get; }
+        public global::SpacetimeDB.Col<ProjectilePresentationEvent, float> CurveEndZ { get; }
+        public global::SpacetimeDB.Col<ProjectilePresentationEvent, float> CurveProgress { get; }
         public global::SpacetimeDB.Col<ProjectilePresentationEvent, uint> SequenceIndex { get; }
         public global::SpacetimeDB.Col<ProjectilePresentationEvent, uint> SequenceCount { get; }
         public global::SpacetimeDB.Col<ProjectilePresentationEvent, bool> Terminal { get; }
@@ -135,6 +142,13 @@ namespace SpacetimeDB.Types
             BoomerangReturning = new global::SpacetimeDB.Col<ProjectilePresentationEvent, bool>(tableName, "boomerang_returning");
             BoomerangOutboundDistance = new global::SpacetimeDB.Col<ProjectilePresentationEvent, float>(tableName, "boomerang_outbound_distance");
             BoomerangReturnSpeed = new global::SpacetimeDB.Col<ProjectilePresentationEvent, float>(tableName, "boomerang_return_speed");
+            CurveControlX = new global::SpacetimeDB.Col<ProjectilePresentationEvent, float>(tableName, "curve_control_x");
+            CurveControlY = new global::SpacetimeDB.Col<ProjectilePresentationEvent, float>(tableName, "curve_control_y");
+            CurveControlZ = new global::SpacetimeDB.Col<ProjectilePresentationEvent, float>(tableName, "curve_control_z");
+            CurveEndX = new global::SpacetimeDB.Col<ProjectilePresentationEvent, float>(tableName, "curve_end_x");
+            CurveEndY = new global::SpacetimeDB.Col<ProjectilePresentationEvent, float>(tableName, "curve_end_y");
+            CurveEndZ = new global::SpacetimeDB.Col<ProjectilePresentationEvent, float>(tableName, "curve_end_z");
+            CurveProgress = new global::SpacetimeDB.Col<ProjectilePresentationEvent, float>(tableName, "curve_progress");
             SequenceIndex = new global::SpacetimeDB.Col<ProjectilePresentationEvent, uint>(tableName, "sequence_index");
             SequenceCount = new global::SpacetimeDB.Col<ProjectilePresentationEvent, uint>(tableName, "sequence_count");
             Terminal = new global::SpacetimeDB.Col<ProjectilePresentationEvent, bool>(tableName, "terminal");

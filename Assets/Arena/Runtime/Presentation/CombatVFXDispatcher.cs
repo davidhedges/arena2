@@ -33,6 +33,17 @@ namespace Arena.Presentation
         private const string AttachModeWorldAlignedToFacing = "WORLD_ALIGNED_TO_FACING";
         private const string VfxRoleProjectileBody = "PROJECTILE_BODY";
         private const string VfxRoleTravelBody = "TRAVEL_BODY";
+        private const string OwnerKindAbility = "ABILITY";
+        private const string AnchorLeftHand = "LEFT_HAND";
+        private const string AnchorRightHand = "RIGHT_HAND";
+        private const string AnchorWeaponMainHand = "WEAPON_MAIN_HAND";
+        private const string AnchorWeaponOffHand = "WEAPON_OFF_HAND";
+        // Forward nudge for a socket-anchored projectile launch so it reads as leaving the
+        // fingertips instead of the hand bone. Tunable — raise for a longer reach in front.
+        private const float HandMuzzleForwardMeters = 0.6f;
+        // Upward lift so the launch sits at the palm rather than the (lower) wrist bone.
+        // Tunable — raise if the origin still reads too low.
+        private const float HandMuzzleUpMeters = 0.2f;
         private const string SpellBehaviorProjectile = "PROJECTILE";
         private const string SpellBehaviorArea = "AREA";
         private const string ProjectileMotionBoomerangCaster = "BOOMERANG_CASTER";
@@ -169,9 +180,19 @@ namespace Arena.Presentation
             conn.Db.CombatEvent.OnInsert += OnCombatEventInsert;
             conn.Db.ProjectilePresentationEvent.OnInsert += OnProjectilePresentationEventInsert;
             conn.Db.PredictedActionResult.OnInsert += OnPredictedActionResultInsert;
+            conn.Db.ActiveCast.OnDelete += OnActiveCastDeleteForVfx;
             conn.Db.CombatVfxCueCatalog.OnInsert += OnCombatVfxCueCatalogInsert;
             conn.Db.CombatVfxCueCatalog.OnUpdate += OnCombatVfxCueCatalogUpdate;
             conn.Db.CombatVfxCueCatalog.OnDelete += OnCombatVfxCueCatalogDelete;
+        }
+
+        // Channel/cast end: tear down any UNTIL_CAST_END cues bound to this cast. The cue's
+        // action_instance_id equals ActiveCast.cast_id (server uses cast_id as the CAST
+        // event's action_instance_id), so this matches the glow to its channel.
+        private void OnActiveCastDeleteForVfx(EventContext ctx, ActiveCast row)
+        {
+            _ = ctx;
+            _lifecycle?.DestroyForCastEnd(row.CastId);
         }
 
         public static void PredictLocalInstantSpellRelease(
@@ -492,7 +513,7 @@ namespace Arena.Presentation
             {
                 case CombatEventTypes.Cast:
                 case CombatEventTypes.Release:
-                    ProjectileVisuals.Start(row);
+                    ProjectileVisuals.Start(row, TryResolveProjectileHandLaunchOrigin(row));
                     break;
                 case CombatEventTypes.Update:
                     ProjectileVisuals.Update(row);
@@ -511,6 +532,70 @@ namespace Arena.Presentation
                     ProjectileVisuals.Fizzle(row);
                     break;
             }
+        }
+
+        // A projectile-body cue can anchor to a caster socket (e.g. LEFT_HAND). The
+        // authoritative projectile spawns from the server origin (a caster-relative forward
+        // point), so resolve that socket here and hand it to the visual controller, which
+        // launches the body from the socket and decays onto the authoritative curve. Returns
+        // null when the spell has no hand/weapon-anchored projectile body (keep server origin).
+        private Vector3? TryResolveProjectileHandLaunchOrigin(ProjectilePresentationEvent row)
+        {
+            if (!string.Equals(row.SourceKind, CombatEventSources.Spell, StringComparison.Ordinal))
+                return null;
+
+            var conn = NetworkManager.Instance?.Conn;
+            if (conn == null)
+                return null;
+
+            string abilityId = WireIdentifier.Normalize(row.AbilityId);
+            if (string.IsNullOrWhiteSpace(abilityId))
+                return null;
+
+            foreach (CombatVfxCueCatalog cue in conn.Db.CombatVfxCueCatalog.Iter())
+            {
+                if (!string.Equals(WireIdentifier.Normalize(cue.VfxRole), VfxRoleProjectileBody, StringComparison.Ordinal))
+                    continue;
+                if (!string.Equals(WireIdentifier.Normalize(cue.OwnerKind), OwnerKindAbility, StringComparison.Ordinal))
+                    continue;
+                if (!string.Equals(WireIdentifier.Normalize(cue.OwnerId), abilityId, StringComparison.Ordinal))
+                    continue;
+                if (cue.ProjectileSequenceIndex != (int)row.SequenceIndex)
+                    continue;
+
+                string anchor = WireIdentifier.Normalize(cue.Anchor);
+                if (!IsCasterSocketAnchor(anchor))
+                    return null;
+
+                var fact = new CombatVfxAnchorFact(
+                    row.Caster,
+                    row.Hit,
+                    new Vector3(row.OriginX, row.OriginY, row.OriginZ),
+                    new Vector3(row.PointX, row.PointY, row.PointZ));
+                Transform? socket = CombatVFXAnchorResolver.ResolveFollowAnchor(fact, cue);
+                if (socket == null)
+                    return null;
+
+                // Nudge the launch point slightly in front of and above the hand so missiles
+                // read as leaving the fingertips rather than the wrist bone. Use only the
+                // horizontal aim for the forward reach so aiming at low targets doesn't drag
+                // the muzzle toward the ground, then lift to palm height.
+                Vector3 dir = new Vector3(row.DirX, 0f, row.DirZ);
+                Vector3 forward = dir.sqrMagnitude > 0.0001f ? dir.normalized : Vector3.zero;
+                return socket.position
+                    + forward * HandMuzzleForwardMeters
+                    + Vector3.up * HandMuzzleUpMeters;
+            }
+
+            return null;
+        }
+
+        private static bool IsCasterSocketAnchor(string anchor)
+        {
+            return string.Equals(anchor, AnchorLeftHand, StringComparison.Ordinal)
+                || string.Equals(anchor, AnchorRightHand, StringComparison.Ordinal)
+                || string.Equals(anchor, AnchorWeaponMainHand, StringComparison.Ordinal)
+                || string.Equals(anchor, AnchorWeaponOffHand, StringComparison.Ordinal);
         }
 
         private void DispatchProjectileContactCue(ProjectilePresentationEvent row)
@@ -1053,6 +1138,7 @@ namespace Arena.Presentation
             conn.Db.CombatEvent.OnInsert -= OnCombatEventInsert;
             conn.Db.ProjectilePresentationEvent.OnInsert -= OnProjectilePresentationEventInsert;
             conn.Db.PredictedActionResult.OnInsert -= OnPredictedActionResultInsert;
+            conn.Db.ActiveCast.OnDelete -= OnActiveCastDeleteForVfx;
             conn.Db.CombatVfxCueCatalog.OnInsert -= OnCombatVfxCueCatalogInsert;
             conn.Db.CombatVfxCueCatalog.OnUpdate -= OnCombatVfxCueCatalogUpdate;
             conn.Db.CombatVfxCueCatalog.OnDelete -= OnCombatVfxCueCatalogDelete;

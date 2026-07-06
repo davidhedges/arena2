@@ -2,9 +2,7 @@ use spacetimedb::{table, Identity, ReducerContext, Table, Timestamp};
 
 use crate::combat::{is_in_combat, temporary_combat_modifiers, TemporaryCombatModifiers};
 use crate::inventory::{equipment_modifier_totals_for_owner, EquipmentModifierTotals};
-use crate::progression::{
-    active_stat_totals_for_owner, effective_resource_kind_for_ability, AbilityCatalog,
-};
+use crate::progression::{effective_resource_kind_for_ability, AbilityCatalog};
 
 #[allow(unused_imports)]
 use crate::player_state::player_state as _;
@@ -616,7 +614,7 @@ fn resolve_resource_spec_with(
         .resource_catalog()
         .resource_kind()
         .find(primary_kind.clone())?;
-    let insight = active_stat_totals_for_owner(ctx, owner).insight as f32;
+    let insight = inputs.equipment.allocated_stat_totals().insight as f32;
     let gain_multiplier = (1.0 + definition.gain_multiplier_per_insight * insight).max(0.0);
     let status_modifiers = inputs.status_modifiers;
     let equipment_mana_regen = if primary_kind.eq_ignore_ascii_case("MANA") {

@@ -616,7 +616,7 @@ namespace Arena.UI
             {
                 BuildSlot(
                     grid.transform,
-                    $"Spellbook_{col + 1}",
+                    SpellbookKeymap.KeyLabelForIndex(col),
                     null,
                     out _spellbookGridIcons[col],
                     out _spellbookGridCd[col],
@@ -1742,7 +1742,8 @@ namespace Arena.UI
 
             for (int col = 0; col < ActionBarLayout.Columns; col++)
             {
-                _spellbookGridStates[col] = ActionBarSlotState.Empty(string.Empty);
+                string keyLabel = SpellbookKeymap.KeyLabelForIndex(col);
+                _spellbookGridStates[col] = ActionBarSlotState.Empty(keyLabel);
                 SetActionBarSlotPresentation(_spellbookGridCd[col], _spellbookGridIcons[col], _spellbookGridStates[col], SlotBg, null);
                 _spellbookGridTooltips[col].Configure(_canvas, default);
                 _spellbookGridClicks[col].Configure(null);
@@ -1755,9 +1756,12 @@ namespace Arena.UI
             if (conn == null || !owner.HasValue)
                 return;
 
-            for (int i = 0; i < spells.Count && i < ActionBarLayout.Columns; i++)
+            for (int col = 0; col < ActionBarLayout.Columns; col++)
             {
-                ItemSpell itemSpell = spells[i];
+                ItemSpell? itemSpell = FindSpellbookSlot(spells, col);
+                if (itemSpell == null)
+                    continue;
+
                 string spellId = WireIdentifier.Normalize(itemSpell.SpellId);
                 if (string.IsNullOrWhiteSpace(spellId))
                     continue;
@@ -1767,11 +1771,12 @@ namespace Arena.UI
                 Sprite? iconSprite = ability == null
                     ? ActionIconResolver.Resolve(ActionKinds.Ability, spellId)
                     : ActionIconResolver.Resolve(ActionKinds.Ability, ability.AbilityId);
-                ActiveActionBarAction resolved = BuildSpellbookAction(conn, owner.Value, ability, spellId, displayName);
+                ActiveActionBarAction resolved = ActiveActionBarResolver.ResolveEquippedSpellbookAction(conn, owner.Value, (uint)col);
                 bool canTrigger = resolved.HasAssignedAction;
+                string keyLabel = SpellbookKeymap.KeyLabelForIndex(col);
 
-                _spellbookGridStates[i] = new ActionBarSlotState(
-                    string.Empty,
+                _spellbookGridStates[col] = new ActionBarSlotState(
+                    keyLabel,
                     iconSprite == null ? displayName : string.Empty,
                     true,
                     false,
@@ -1779,13 +1784,13 @@ namespace Arena.UI
                     UsesGlobalCooldown(spellId, string.Empty),
                     ResolveSpellRequiresTargetLos(conn, spellId));
                 SetActionBarSlotPresentation(
-                    _spellbookGridCd[i],
-                    _spellbookGridIcons[i],
-                    _spellbookGridStates[i],
+                    _spellbookGridCd[col],
+                    _spellbookGridIcons[col],
+                    _spellbookGridStates[col],
                     ResolveActionBarColor(conn, ability?.AbilityId ?? spellId, true),
                     iconSprite);
-                _spellbookGridClicks[i].Configure(canTrigger ? () => TriggerActionRef(conn, resolved) : null);
-                _spellbookGridTooltips[i].Configure(
+                _spellbookGridClicks[col].Configure(canTrigger ? () => TriggerActionRef(conn, resolved) : null);
+                _spellbookGridTooltips[col].Configure(
                     _canvas,
                     ability == null
                         ? new TooltipData(displayName, "Spellbook", SpellbookSpellMetadata(conn, spellId))
@@ -1854,6 +1859,17 @@ namespace Arena.UI
             return spells;
         }
 
+        private static ItemSpell? FindSpellbookSlot(List<ItemSpell> spells, int slotIndex)
+        {
+            foreach (ItemSpell spell in spells)
+            {
+                if (spell.SlotIndex == (uint)slotIndex)
+                    return spell;
+            }
+
+            return null;
+        }
+
         private static AbilityCatalog? FindAbilityForSpell(DbConnection? conn, string spellId)
         {
             if (conn == null)
@@ -1869,42 +1885,6 @@ namespace Arena.UI
             }
 
             return null;
-        }
-
-        private static ActiveActionBarAction BuildSpellbookAction(
-            DbConnection conn,
-            SpacetimeDB.Identity owner,
-            AbilityCatalog? ability,
-            string spellId,
-            string displayName)
-        {
-            if (ability == null)
-                return new ActiveActionBarAction(
-                    string.Empty,
-                    ActionKinds.Ability,
-                    spellId,
-                    spellId,
-                    AbilityKinds.Spell,
-                    spellId,
-                    spellId,
-                    displayName,
-                    "MANA",
-                    0f);
-
-            return new ActiveActionBarAction(
-                string.Empty,
-                ability.AbilityId,
-                ability.ActionId,
-                AbilityKinds.UsesRawActionId(ability.AbilityKind)
-                    ? WireIdentifier.Normalize(ability.ActionId)
-                    : CombatActionIds.ResolveRuntimeActionId(
-                        conn,
-                        CombatProfileResolver.ResolveForOwner(conn, owner),
-                        ability.ActionId),
-                displayName,
-                ability.ResourceKind,
-                ability.ResourceCost,
-                ability.AbilityKind);
         }
 
         private static string SpellbookSpellMetadata(DbConnection? conn, string spellId)

@@ -48,7 +48,9 @@ use crate::combat::{
     StatusRuntimeView, TemporaryCombatModifiers,
 };
 use crate::defense::prune_defense_states;
-use crate::derived_stats::{derived_combat_stats_for_owner, DerivedCombatStats};
+use crate::derived_stats::{
+    derived_combat_stats_for_owner, derived_combat_stats_from_allocations, DerivedCombatStats,
+};
 use crate::inventory::{
     equipment_modifier_totals_for_owner, sync_item_definitions, tick_equipment_periodic_effects,
     EquipmentModifierTotals,
@@ -518,11 +520,14 @@ impl PlayerTickContexts {
             if state.is_dummy {
                 continue;
             }
+            let equipment = equipment_modifier_totals_for_owner(ctx, state.player_id);
             by_owner.insert(
                 state.player_id,
                 PlayerTickContext {
-                    equipment: equipment_modifier_totals_for_owner(ctx, state.player_id),
-                    derived: derived_combat_stats_for_owner(ctx, state.player_id),
+                    equipment,
+                    derived: derived_combat_stats_from_allocations(
+                        equipment.allocated_stat_totals(),
+                    ),
                 },
             );
         }

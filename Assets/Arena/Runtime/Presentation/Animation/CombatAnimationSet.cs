@@ -487,6 +487,14 @@ namespace Arena.Presentation
     }
 
     [Serializable]
+    public enum SpellAnimationPresentationMode
+    {
+        ReleaseOnly = 0,
+        HoldThenRelease = 1,
+        HoldOnly = 2,
+    }
+
+    [Serializable]
     public struct SpellCastHoldProfile
     {
         [Tooltip("Non-looping clip played when an accepted cast-time spell begins.")]
@@ -506,6 +514,19 @@ namespace Arena.Presentation
         public AnimationClip? IdleOrEnter => idleLoop ?? enter;
         public float ResolveExitDelaySeconds(float fallback) => exitDelaySeconds > 0f ? exitDelaySeconds : fallback;
         public float ResolveExitBlendOutSeconds(float fallback) => exitBlendOutSeconds > 0f ? exitBlendOutSeconds : fallback;
+        public float ResolveEnterCompleteNormalizedTime(float fallback)
+        {
+            AnimationClip? clip = EnterOrIdle;
+            if (clip == null || clip.length <= 0.001f)
+                return Mathf.Clamp01(fallback);
+
+            float fallbackSeconds = Mathf.Clamp01(fallback) * clip.length;
+            float eventSeconds = CombatAnimationEvents.GetEventTimeOrFallback(
+                clip,
+                CombatAnimationEvents.OnEnterComplete,
+                fallbackSeconds);
+            return Mathf.Clamp01(eventSeconds / clip.length);
+        }
     }
 
     [Serializable]
@@ -521,6 +542,10 @@ namespace Arena.Presentation
         public bool requiresCombatStance;
         [Tooltip("How combat stance is entered when this spell requires it.")]
         public CombatEntryMode combatEntryMode;
+        [Tooltip("ReleaseOnly plays this entry's cast/release clip. HoldThenRelease enters the hold profile first, then plays the release clip. HoldOnly enters/loops the hold profile and does not play a release clip.")]
+        public SpellAnimationPresentationMode presentationMode;
+        [Tooltip("Optional per-spell cast/channel hold presentation. Leave empty to use the animation set's Default Spell Cast Hold.")]
+        public SpellCastHoldProfile holdOverride;
         [Tooltip("How this spell should present relative to locomotion. UpperBodyWhileMoving preserves locomotion only while moving; FullBody always uses the spell-action layer; UpperBody always uses the upper-body layer; LeftGesture uses a single masked pelvis/spine/left-arm overlay.")]
         [FormerlySerializedAs("movingPlaybackMode")]
         public SpellPlaybackLayer playbackLayer;
@@ -546,6 +571,24 @@ namespace Arena.Presentation
         public bool UsesUpperBody => playbackLayer == SpellPlaybackLayer.UpperBody;
         public bool UsesLeftGesture => playbackLayer == SpellPlaybackLayer.LeftGesture;
         public bool HasAnimatedPropHandoff => animatedProp.enabled;
+        public bool UsesHoldPresentation => presentationMode == SpellAnimationPresentationMode.HoldThenRelease
+            || presentationMode == SpellAnimationPresentationMode.HoldOnly;
+        public bool PlaysReleasePresentation => presentationMode != SpellAnimationPresentationMode.HoldOnly;
+        public bool HasAnyPresentation => HasAny || UsesHoldPresentation || holdOverride.HasAny;
+
+        public bool TryResolveHoldProfile(
+            SpellCastHoldProfile defaultProfile,
+            out SpellCastHoldProfile profile)
+        {
+            if (holdOverride.IsPlayable)
+            {
+                profile = holdOverride;
+                return true;
+            }
+
+            profile = defaultProfile;
+            return profile.IsPlayable;
+        }
 
         public bool ResolveUsesOverlayPlayback(float locomotionRawMagnitude, float movementThreshold)
         {
@@ -1524,7 +1567,7 @@ namespace Arena.Presentation
                         continue;
 
                     entry = candidate;
-                    return candidate.HasAny;
+                    return candidate.HasAnyPresentation;
                 }
             }
 
@@ -1535,6 +1578,19 @@ namespace Arena.Presentation
         public bool TryGetDefaultSpellCastHoldProfile(out SpellCastHoldProfile profile)
         {
             profile = defaultSpellCastHold;
+            return profile.IsPlayable;
+        }
+
+        public bool TryGetSpellCastHoldProfile(string spellId, out SpellCastHoldProfile profile)
+        {
+            SpellCastHoldProfile defaultProfile = defaultSpellCastHold;
+            if (TryGetSpellAnimation(spellId, out WeaponSpellAnimationEntry entry)
+                && entry.TryResolveHoldProfile(defaultProfile, out profile))
+            {
+                return true;
+            }
+
+            profile = defaultProfile;
             return profile.IsPlayable;
         }
 

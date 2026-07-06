@@ -77,8 +77,13 @@ namespace Arena.Editor
             for (int i = 0; i < (set.spells?.Length ?? 0); i++)
             {
                 WeaponSpellAnimationEntry entry = set.spells![i];
-                Add(map, entry.ground, CombatClipRole.SpellRelease, assetPath, $".spells[{i}].ground ({entry.SpellIdOrEmpty})");
-                Add(map, entry.air, CombatClipRole.SpellRelease, assetPath, $".spells[{i}].air ({entry.SpellIdOrEmpty})");
+                if (entry.PlaysReleasePresentation)
+                {
+                    Add(map, entry.ground, CombatClipRole.SpellRelease, assetPath, $".spells[{i}].ground ({entry.SpellIdOrEmpty})");
+                    Add(map, entry.air, CombatClipRole.SpellRelease, assetPath, $".spells[{i}].air ({entry.SpellIdOrEmpty})");
+                }
+                Add(map, entry.holdOverride.enter, CombatClipRole.SpellCastHoldEnter, assetPath, $".spells[{i}].holdOverride.enter ({entry.SpellIdOrEmpty})");
+                Add(map, entry.holdOverride.idleLoop, CombatClipRole.SpellCastHoldIdle, assetPath, $".spells[{i}].holdOverride.idleLoop ({entry.SpellIdOrEmpty})");
             }
 
             // Melee attacks

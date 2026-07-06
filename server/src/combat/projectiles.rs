@@ -66,6 +66,7 @@ struct ProjectileTickMetricsFrame {
     homing_projectile_count: u32,
     orbit_projectile_count: u32,
     boomerang_projectile_count: u32,
+    curved_projectile_count: u32,
     tick_micros: u32,
     world_gameplay_broadphase_candidates: u32,
     world_gameplay_narrowphase_tests: u32,
@@ -134,6 +135,7 @@ pub(crate) fn tick_combat_projectiles_with_snapshots(
 
 const PROJECTILE_MOTION_ORBIT_CASTER: &str = "ORBIT_CASTER";
 const PROJECTILE_MOTION_BOOMERANG_CASTER: &str = "BOOMERANG_CASTER";
+const PROJECTILE_MOTION_CURVED_TARGET: &str = "CURVED_TARGET";
 const PROJECTILE_CONTACT_METADATA_KIND: &str = "PROJECTILE_CONTACT";
 const PROJECTILE_CONTACT_TERMINAL_KEY: &str = "TERMINAL";
 const PROJECTILE_CONTACT_NON_TERMINAL_VALUE: &str = "FALSE";
@@ -205,8 +207,9 @@ fn tick_projectile_instance(
         return;
     }
 
+    let uses_curved_target = projectile.motion_kind == PROJECTILE_MOTION_CURVED_TARGET;
     if let Some(definition) = spell_definition {
-        if projectile.age <= projectile_homing_window_seconds(definition) {
+        if !uses_curved_target && projectile.age <= projectile_homing_window_seconds(definition) {
             retarget_projectile_towards_live_target(
                 ctx,
                 &mut projectile,
@@ -219,16 +222,29 @@ fn tick_projectile_instance(
         }
     }
 
-    let advance = advance_projectile_with_collision(
-        ctx,
-        &mut projectile,
-        spell_definition,
-        player_snapshots,
-        players,
-        candidate_indices,
-        dt,
-        metrics,
-    );
+    let advance = if uses_curved_target {
+        advance_curved_target_projectile_with_collision(
+            ctx,
+            &mut projectile,
+            spell_definition,
+            player_snapshots,
+            players,
+            candidate_indices,
+            dt,
+            metrics,
+        )
+    } else {
+        advance_projectile_with_collision(
+            ctx,
+            &mut projectile,
+            spell_definition,
+            player_snapshots,
+            players,
+            candidate_indices,
+            dt,
+            metrics,
+        )
+    };
     if advance.impacted {
         if let Some(target) = advance.impact_target {
             let Some(target_state) = players
@@ -1204,6 +1220,84 @@ fn advance_projectile_with_collision(
             + spawn_height;
     }
 
+    advance_projectile_segment_with_collision(
+        ctx,
+        projectile,
+        spell_definition,
+        player_snapshots,
+        players,
+        candidate_indices,
+        start_x,
+        start_y,
+        start_z,
+        end_x,
+        end_y,
+        end_z,
+        metrics,
+    )
+}
+
+fn advance_curved_target_projectile_with_collision(
+    ctx: &ReducerContext,
+    projectile: &mut ActiveCombatProjectile,
+    spell_definition: Option<&SpellRuntimeDefinition>,
+    player_snapshots: &PlayerSnapshotSet,
+    players: &[PlayerSnapshot],
+    candidate_indices: &mut Vec<usize>,
+    dt: f32,
+    metrics: &mut ProjectileTickMetricsFrame,
+) -> ProjectileAdvance {
+    let max_distance = projectile.max_distance.max(0.001);
+    let step = projectile.speed.max(0.0) * dt;
+    let next_traveled = (projectile.traveled + step).min(max_distance);
+    let progress = (next_traveled / max_distance).clamp(0.0, 1.0);
+    let start_x = projectile.pos_x;
+    let start_y = projectile.pos_y;
+    let start_z = projectile.pos_z;
+    let (end_x, end_y, end_z) = curved_target_position(projectile, progress);
+    if let Some((dir_x, dir_y, dir_z)) =
+        normalize_vec3(end_x - start_x, end_y - start_y, end_z - start_z)
+    {
+        projectile.dir_x = dir_x;
+        projectile.dir_y = dir_y;
+        projectile.dir_z = dir_z;
+    }
+    projectile.traveled = next_traveled;
+
+    advance_projectile_segment_with_collision(
+        ctx,
+        projectile,
+        spell_definition,
+        player_snapshots,
+        players,
+        candidate_indices,
+        start_x,
+        start_y,
+        start_z,
+        end_x,
+        end_y,
+        end_z,
+        metrics,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn advance_projectile_segment_with_collision(
+    ctx: &ReducerContext,
+    projectile: &mut ActiveCombatProjectile,
+    spell_definition: Option<&SpellRuntimeDefinition>,
+    player_snapshots: &PlayerSnapshotSet,
+    players: &[PlayerSnapshot],
+    candidate_indices: &mut Vec<usize>,
+    start_x: f32,
+    start_y: f32,
+    start_z: f32,
+    end_x: f32,
+    end_y: f32,
+    end_z: f32,
+    metrics: &mut ProjectileTickMetricsFrame,
+) -> ProjectileAdvance {
+    let terrain_conforming = projectile_uses_terrain_conforming_collision(spell_definition);
     player_snapshots.query_segment_indices(
         start_x,
         start_z,
@@ -1275,6 +1369,22 @@ fn advance_projectile_with_collision(
         end_z,
         impact_target: None,
     }
+}
+
+fn curved_target_position(projectile: &ActiveCombatProjectile, progress: f32) -> (f32, f32, f32) {
+    let t = progress.clamp(0.0, 1.0);
+    let one_minus = 1.0 - t;
+    (
+        one_minus * one_minus * projectile.origin_x
+            + 2.0 * one_minus * t * projectile.curve_control_x
+            + t * t * projectile.curve_end_x,
+        one_minus * one_minus * projectile.origin_y
+            + 2.0 * one_minus * t * projectile.curve_control_y
+            + t * t * projectile.curve_end_y,
+        one_minus * one_minus * projectile.origin_z
+            + 2.0 * one_minus * t * projectile.curve_control_z
+            + t * t * projectile.curve_end_z,
+    )
 }
 
 fn projectile_uses_terrain_conforming_collision(
@@ -1581,6 +1691,13 @@ fn emit_projectile_event_with_metadata(
             boomerang_returning: projectile.boomerang_returning,
             boomerang_outbound_distance: projectile.boomerang_outbound_distance,
             boomerang_return_speed: projectile.boomerang_return_speed,
+            curve_control_x: projectile.curve_control_x,
+            curve_control_y: projectile.curve_control_y,
+            curve_control_z: projectile.curve_control_z,
+            curve_end_x: projectile.curve_end_x,
+            curve_end_y: projectile.curve_end_y,
+            curve_end_z: projectile.curve_end_z,
+            curve_progress: projectile_curve_progress(projectile),
             sequence_index: projectile.projectile_sequence_index,
             sequence_count: 1,
             terminal,
@@ -1648,6 +1765,13 @@ fn is_projectile_presentation_terminal(
 
 fn should_emit_projectile_combat_event(event_type: &str, terminal: bool) -> bool {
     terminal || event_type == COMBAT_EVENT_IMPACT || event_type == COMBAT_EVENT_FIZZLE
+}
+
+fn projectile_curve_progress(projectile: &ActiveCombatProjectile) -> f32 {
+    if projectile.motion_kind != PROJECTILE_MOTION_CURVED_TARGET {
+        return 0.0;
+    }
+    (projectile.traveled / projectile.max_distance.max(0.001)).clamp(0.0, 1.0)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1757,6 +1881,10 @@ fn record_motion_kind(
     }
     if projectile.motion_kind == PROJECTILE_MOTION_BOOMERANG_CASTER {
         metrics.boomerang_projectile_count = metrics.boomerang_projectile_count.saturating_add(1);
+        return;
+    }
+    if projectile.motion_kind == PROJECTILE_MOTION_CURVED_TARGET {
+        metrics.curved_projectile_count = metrics.curved_projectile_count.saturating_add(1);
         return;
     }
     if spell_definition
@@ -1896,6 +2024,7 @@ fn record_projectile_tick_metrics(
         homing_projectile_count: metrics.homing_projectile_count,
         orbit_projectile_count: metrics.orbit_projectile_count,
         boomerang_projectile_count: metrics.boomerang_projectile_count,
+        curved_projectile_count: metrics.curved_projectile_count,
         tick_micros: metrics.tick_micros,
         worst_tick_micros,
         peak_active_projectile_count: previous
@@ -2191,6 +2320,12 @@ mod tests {
             boomerang_return_speed: 0.0,
             boomerang_hit_cooldown_seconds: 0.0,
             boomerang_max_hits_per_target: 0,
+            curve_control_x: 0.0,
+            curve_control_y: 0.0,
+            curve_control_z: 0.0,
+            curve_end_x: 0.0,
+            curve_end_y: 0.0,
+            curve_end_z: 0.0,
             traveled: 0.0,
             age: 0.0,
             lifetime: 1.0,
@@ -2283,6 +2418,28 @@ mod tests {
         assert_eq!(projectile.dir_y, 0.0);
         assert!((projectile.dir_z - -1.0).abs() < 0.0001);
         assert!((projectile.traveled - std::f32::consts::FRAC_PI_2 * 1.5).abs() < 0.0001);
+    }
+
+    #[test]
+    fn curved_target_projectile_position_uses_authored_control_point() {
+        let caster_id = test_identity(1);
+        let mut projectile = test_projectile(caster_id);
+        projectile.motion_kind = PROJECTILE_MOTION_CURVED_TARGET.to_string();
+        projectile.origin_x = 0.0;
+        projectile.origin_y = 0.0;
+        projectile.origin_z = 0.0;
+        projectile.curve_control_x = 5.0;
+        projectile.curve_control_y = 5.0;
+        projectile.curve_control_z = 0.0;
+        projectile.curve_end_x = 10.0;
+        projectile.curve_end_y = 0.0;
+        projectile.curve_end_z = 0.0;
+
+        let (x, y, z) = curved_target_position(&projectile, 0.5);
+
+        assert!((x - 5.0).abs() < 0.0001);
+        assert!((y - 2.5).abs() < 0.0001);
+        assert!(z.abs() < 0.0001);
     }
 
     #[test]

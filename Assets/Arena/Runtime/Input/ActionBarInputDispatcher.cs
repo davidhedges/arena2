@@ -41,6 +41,28 @@ namespace Arena.Input
                 TryTrigger(resolved, conn, spellInput, binding.KeyLabel, binding.SlotId);
             }
 
+            foreach (SpellbookSlotBinding binding in SpellbookKeymap.SelectableBindings)
+            {
+                if (binding.RequiresShift != shiftHeld) continue;
+                if (consumedPressKeys.Contains(binding.KeyCode)) continue;
+                if (!input.WasKeyPressedThisFrame(binding.KeyCode)) continue;
+
+                string slotId = SpellbookKeymap.SlotIdForIndex(binding.SlotIndex);
+                ActiveActionBarAction resolved = ActiveActionBarResolver.ResolveEquippedSpellbookAction(
+                    conn,
+                    conn.Identity,
+                    binding.SlotIndex);
+                if (!resolved.HasAssignedAction)
+                {
+                    ActionBarTrace.Trace(
+                        $"{binding.KeyLabel} -> {slotId} unresolved (assigned={resolved.HasAssignedAction})");
+                    continue;
+                }
+                consumedPressKeys.Add(binding.KeyCode);
+
+                TryTrigger(resolved, conn, spellInput, binding.KeyLabel, slotId);
+            }
+
             foreach (ActionBarSlotBinding binding in ActionBarKeymap.SelectableBindings)
             {
                 if (binding.RequiresShift != shiftHeld) continue;
@@ -63,6 +85,30 @@ namespace Arena.Input
             }
 
             var consumedReleaseKeys = new HashSet<UnityEngine.KeyCode>();
+            foreach (SpellbookSlotBinding binding in SpellbookKeymap.SelectableBindings)
+            {
+                if (binding.RequiresShift != shiftHeld) continue;
+                if (consumedReleaseKeys.Contains(binding.KeyCode)) continue;
+                if (!input.WasKeyReleasedThisFrame(binding.KeyCode)) continue;
+
+                ActiveActionBarAction resolved = ActiveActionBarResolver.ResolveEquippedSpellbookAction(
+                    conn,
+                    conn.Identity,
+                    binding.SlotIndex);
+                string? actionId = resolved.ActionId;
+                if (string.IsNullOrWhiteSpace(actionId)) continue;
+                consumedReleaseKeys.Add(binding.KeyCode);
+                if (!resolved.IsSpellAbility)
+                    continue;
+                if (!SpellDefinitionContracts.CastsOnRelease(GetSpellDefinition(conn, actionId))) continue;
+                ActionBarTrace.Trace($"{binding.KeyLabel} release -> cast release {actionId}");
+                CastActionToken token = LocalCombatState.Instance.CurrentCastTokenForRelease(actionId);
+                conn.Reducers.ReleaseCastRequest(
+                    actionId,
+                    token.PredictedCastId,
+                    token.ClientActionSeq);
+            }
+
             foreach (ActionBarSlotBinding binding in ActionBarKeymap.SelectableBindings)
             {
                 if (binding.RequiresShift != shiftHeld) continue;

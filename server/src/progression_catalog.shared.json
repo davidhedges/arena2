@@ -109,7 +109,7 @@
       "display_name": "Stamina",
       "color_hex": "#8A8F98",
       "base_max": 100,
-      "max_per_insight": 0,
+      "max_per_insight": 2,
       "base_regen_per_second": 10,
       "regen_per_insight": 0,
       "gain_multiplier_per_insight": 0.02,
@@ -149,7 +149,7 @@
       "base_max": 100,
       "max_per_insight": 0,
       "base_regen_per_second": 1,
-      "regen_per_insight": 0,
+      "regen_per_insight": 0.2,
       "gain_multiplier_per_insight": 0.02,
       "flat_decay_per_second": 0,
       "out_of_combat_flat_decay_per_second": 0,
@@ -1338,7 +1338,15 @@
             "spawn_forward": 0.9,
             "spawn_height": 1.2,
             "radius": 0.28,
-            "parry_behavior": "PARRYABLE"
+            "parry_behavior": "PARRYABLE",
+            "motion": {
+              "kind": "CURVED_TARGET",
+              "arc_direction_degrees_min": 20,
+              "arc_direction_degrees_max": 160,
+              "arc_amplitude_min": 1.25,
+              "arc_amplitude_max": 4.25,
+              "control_point_fraction": 0.5
+            }
           }
         }
       }
@@ -4590,6 +4598,18 @@
       "lifecycle": "DURATION",
       "duration_ms": 700,
       "sort_order": 189
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "SPELL_MAGIC_MISSILE",
+      "trigger": "SPELL_CAST",
+      "anchor": "LEFT_HAND",
+      "vfx_id": "VFX_ICE_CAST_HAND_01",
+      "attach_mode": "FOLLOW_ANCHOR",
+      "vfx_role": "ATTACHED",
+      "lifecycle": "UNTIL_CAST_END",
+      "duration_ms": 0,
+      "sort_order": 185
     },
     {
       "owner_kind": "ABILITY",

@@ -302,6 +302,7 @@ pub(crate) struct ProjectileSecondaryTunables {
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum ProjectileMotionTunables {
     Linear,
+    CurvedTarget(CurvedTargetProjectileTunables),
     OrbitCaster(OrbitCasterProjectileTunables),
     BoomerangCaster(BoomerangCasterProjectileTunables),
 }
@@ -310,14 +311,22 @@ impl ProjectileMotionTunables {
     pub(crate) fn kind(&self) -> &'static str {
         match self {
             Self::Linear => "LINEAR",
+            Self::CurvedTarget(_) => "CURVED_TARGET",
             Self::OrbitCaster(_) => "ORBIT_CASTER",
             Self::BoomerangCaster(_) => "BOOMERANG_CASTER",
         }
     }
 
+    pub(crate) fn curved_target(&self) -> Option<&CurvedTargetProjectileTunables> {
+        match self {
+            Self::CurvedTarget(curve) => Some(curve),
+            Self::Linear | Self::OrbitCaster(_) | Self::BoomerangCaster(_) => None,
+        }
+    }
+
     pub(crate) fn orbit(&self) -> Option<&OrbitCasterProjectileTunables> {
         match self {
-            Self::Linear => None,
+            Self::Linear | Self::CurvedTarget(_) => None,
             Self::OrbitCaster(orbit) => Some(orbit),
             Self::BoomerangCaster(_) => None,
         }
@@ -326,9 +335,18 @@ impl ProjectileMotionTunables {
     pub(crate) fn boomerang(&self) -> Option<&BoomerangCasterProjectileTunables> {
         match self {
             Self::BoomerangCaster(boomerang) => Some(boomerang),
-            Self::Linear | Self::OrbitCaster(_) => None,
+            Self::Linear | Self::CurvedTarget(_) | Self::OrbitCaster(_) => None,
         }
     }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct CurvedTargetProjectileTunables {
+    pub arc_direction_degrees_min: f32,
+    pub arc_direction_degrees_max: f32,
+    pub arc_amplitude_min: f32,
+    pub arc_amplitude_max: f32,
+    pub control_point_fraction: f32,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -1040,7 +1058,16 @@ mod tests {
             .channel_projectile
             .as_ref()
             .expect("Magic Missile should define channel projectile data");
-        assert_eq!(projectile.motion.kind(), "LINEAR");
+        assert_eq!(projectile.motion.kind(), "CURVED_TARGET");
+        let curve = projectile
+            .motion
+            .curved_target()
+            .expect("Magic Missile should author curved target motion");
+        assert!((curve.arc_direction_degrees_min - 20.0).abs() < 0.0001);
+        assert!((curve.arc_direction_degrees_max - 160.0).abs() < 0.0001);
+        assert!((curve.arc_amplitude_min - 1.25).abs() < 0.0001);
+        assert!((curve.arc_amplitude_max - 4.25).abs() < 0.0001);
+        assert!((curve.control_point_fraction - 0.5).abs() < 0.0001);
         assert_eq!(projectile.parry_behavior.as_str(), "PARRYABLE");
     }
 

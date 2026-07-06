@@ -482,7 +482,7 @@ namespace Arena.UI
             List<ItemSpell> spells = ReadEquippedSpellbookSpells(conn, owner);
             for (int col = 0; col < ActionBarLayout.Columns; col++)
             {
-                ItemSpell? itemSpell = col < spells.Count ? spells[col] : null;
+                ItemSpell? itemSpell = FindSpellbookSlot(spells, col);
                 string spellId = WireIdentifier.Normalize(itemSpell?.SpellId);
                 AbilityCatalog? ability = FindAbilityForSpell(conn, spellId);
                 bool hasSpell = !string.IsNullOrWhiteSpace(spellId);
@@ -503,7 +503,7 @@ namespace Arena.UI
                     _barRoot,
                     $"Spellbook_{col}",
                     iconSprite == null && hasSpell ? displayName : string.Empty,
-                    string.Empty,
+                    SpellbookKeymap.KeyLabelForIndex(col),
                     hasSpell ? AbilityColor(ability?.AbilityId ?? spellId) : EmptySlotColor,
                     hasSpell ? Color.white : new Color(1f, 1f, 1f, 0.36f),
                     iconSprite,
@@ -553,6 +553,17 @@ namespace Arena.UI
                     : string.Compare(left.Key, right.Key, StringComparison.Ordinal);
             });
             return spells;
+        }
+
+        private static ItemSpell? FindSpellbookSlot(List<ItemSpell> spells, int slotIndex)
+        {
+            foreach (ItemSpell spell in spells)
+            {
+                if (spell.SlotIndex == (uint)slotIndex)
+                    return spell;
+            }
+
+            return null;
         }
 
         private static AbilityCatalog? FindAbilityForSpell(DbConnection? conn, string spellId)

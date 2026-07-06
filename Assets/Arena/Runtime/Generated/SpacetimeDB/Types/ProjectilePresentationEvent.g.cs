@@ -81,6 +81,20 @@ namespace SpacetimeDB.Types
         public float BoomerangOutboundDistance;
         [DataMember(Name = "boomerang_return_speed")]
         public float BoomerangReturnSpeed;
+        [DataMember(Name = "curve_control_x")]
+        public float CurveControlX;
+        [DataMember(Name = "curve_control_y")]
+        public float CurveControlY;
+        [DataMember(Name = "curve_control_z")]
+        public float CurveControlZ;
+        [DataMember(Name = "curve_end_x")]
+        public float CurveEndX;
+        [DataMember(Name = "curve_end_y")]
+        public float CurveEndY;
+        [DataMember(Name = "curve_end_z")]
+        public float CurveEndZ;
+        [DataMember(Name = "curve_progress")]
+        public float CurveProgress;
         [DataMember(Name = "sequence_index")]
         public uint SequenceIndex;
         [DataMember(Name = "sequence_count")]
@@ -127,6 +141,13 @@ namespace SpacetimeDB.Types
             bool BoomerangReturning,
             float BoomerangOutboundDistance,
             float BoomerangReturnSpeed,
+            float CurveControlX,
+            float CurveControlY,
+            float CurveControlZ,
+            float CurveEndX,
+            float CurveEndY,
+            float CurveEndZ,
+            float CurveProgress,
             uint SequenceIndex,
             uint SequenceCount,
             bool Terminal,
@@ -168,6 +189,13 @@ namespace SpacetimeDB.Types
             this.BoomerangReturning = BoomerangReturning;
             this.BoomerangOutboundDistance = BoomerangOutboundDistance;
             this.BoomerangReturnSpeed = BoomerangReturnSpeed;
+            this.CurveControlX = CurveControlX;
+            this.CurveControlY = CurveControlY;
+            this.CurveControlZ = CurveControlZ;
+            this.CurveEndX = CurveEndX;
+            this.CurveEndY = CurveEndY;
+            this.CurveEndZ = CurveEndZ;
+            this.CurveProgress = CurveProgress;
             this.SequenceIndex = SequenceIndex;
             this.SequenceCount = SequenceCount;
             this.Terminal = Terminal;

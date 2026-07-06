@@ -61,6 +61,8 @@ namespace SpacetimeDB.Types
         public uint OrbitProjectileCount;
         [DataMember(Name = "boomerang_projectile_count")]
         public uint BoomerangProjectileCount;
+        [DataMember(Name = "curved_projectile_count")]
+        public uint CurvedProjectileCount;
         [DataMember(Name = "tick_micros")]
         public uint TickMicros;
         [DataMember(Name = "worst_tick_micros")]
@@ -149,6 +151,7 @@ namespace SpacetimeDB.Types
             uint HomingProjectileCount,
             uint OrbitProjectileCount,
             uint BoomerangProjectileCount,
+            uint CurvedProjectileCount,
             uint TickMicros,
             uint WorstTickMicros,
             uint PeakActiveProjectileCount,
@@ -206,6 +209,7 @@ namespace SpacetimeDB.Types
             this.HomingProjectileCount = HomingProjectileCount;
             this.OrbitProjectileCount = OrbitProjectileCount;
             this.BoomerangProjectileCount = BoomerangProjectileCount;
+            this.CurvedProjectileCount = CurvedProjectileCount;
             this.TickMicros = TickMicros;
             this.WorstTickMicros = WorstTickMicros;
             this.PeakActiveProjectileCount = PeakActiveProjectileCount;

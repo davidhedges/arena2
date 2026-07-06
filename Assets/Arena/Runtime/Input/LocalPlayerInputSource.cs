@@ -296,6 +296,9 @@ namespace Arena.Input
                     case KeyCode.F:
                         button = keyboard.fKey;
                         return true;
+                    case KeyCode.G:
+                        button = keyboard.gKey;
+                        return true;
                     case KeyCode.C:
                         button = keyboard.cKey;
                         return true;

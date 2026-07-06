@@ -81,6 +81,18 @@ namespace SpacetimeDB.Types
         public float BoomerangHitCooldownSeconds;
         [DataMember(Name = "boomerang_max_hits_per_target")]
         public uint BoomerangMaxHitsPerTarget;
+        [DataMember(Name = "curve_control_x")]
+        public float CurveControlX;
+        [DataMember(Name = "curve_control_y")]
+        public float CurveControlY;
+        [DataMember(Name = "curve_control_z")]
+        public float CurveControlZ;
+        [DataMember(Name = "curve_end_x")]
+        public float CurveEndX;
+        [DataMember(Name = "curve_end_y")]
+        public float CurveEndY;
+        [DataMember(Name = "curve_end_z")]
+        public float CurveEndZ;
         [DataMember(Name = "traveled")]
         public float Traveled;
         [DataMember(Name = "age")]
@@ -141,6 +153,12 @@ namespace SpacetimeDB.Types
             float BoomerangReturnSpeed,
             float BoomerangHitCooldownSeconds,
             uint BoomerangMaxHitsPerTarget,
+            float CurveControlX,
+            float CurveControlY,
+            float CurveControlZ,
+            float CurveEndX,
+            float CurveEndY,
+            float CurveEndZ,
             float Traveled,
             float Age,
             float Lifetime,
@@ -189,6 +207,12 @@ namespace SpacetimeDB.Types
             this.BoomerangReturnSpeed = BoomerangReturnSpeed;
             this.BoomerangHitCooldownSeconds = BoomerangHitCooldownSeconds;
             this.BoomerangMaxHitsPerTarget = BoomerangMaxHitsPerTarget;
+            this.CurveControlX = CurveControlX;
+            this.CurveControlY = CurveControlY;
+            this.CurveControlZ = CurveControlZ;
+            this.CurveEndX = CurveEndX;
+            this.CurveEndY = CurveEndY;
+            this.CurveEndZ = CurveEndZ;
             this.Traveled = Traveled;
             this.Age = Age;
             this.Lifetime = Lifetime;

@@ -652,9 +652,7 @@ namespace Arena.Input
             Vector3? aimPoint,
             CastActionToken token)
         {
-            if (spellDef == null
-                || spellDef.CastTimeMs == 0
-                || SpellDefinitionContracts.CastsOnRelease(spellDef))
+            if (spellDef == null)
             {
                 return;
             }
@@ -663,8 +661,16 @@ namespace Arena.Input
             if (localPlayer == null)
                 return;
 
+            bool useCastTimeHold = spellDef.CastTimeMs > 0UL
+                && !SpellDefinitionContracts.CastsOnRelease(spellDef);
+            bool useAuthoredHold = localPlayer.UsesSpellCastHoldPresentation(spellId);
+            if (!useCastTimeHold && !useAuthoredHold)
+                return;
+
             long nowMs = System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-            LocalCombatState.Instance.PredictCastBar(spellId, nowMs, (long)spellDef.CastTimeMs, token);
+            if (spellDef.CastTimeMs > 0UL)
+                LocalCombatState.Instance.PredictCastBar(spellId, nowMs, (long)spellDef.CastTimeMs, token);
+
             localPlayer.PredictSpellCastHold(spellId, nowMs, targetId, aimPoint, token);
             ActionBarTrace.Trace($"predicted local cast hold for {spellId}");
         }
@@ -688,6 +694,15 @@ namespace Arena.Input
 
             PlayerEntity? localPlayer = EntityRegistry.Instance?.LocalPlayerEntity;
             if (localPlayer == null)
+                return;
+
+            // HoldOnly channel spells are not instant spells: their presentation is owned
+            // by the cast-hold state machine (enter/idle loop until the ActiveCast ends) and
+            // they never play a release. Do not remember a pending instant visual or fire a
+            // predicted release for them — that machinery schedules an authoritative replay
+            // that preempts the hold. HoldThenRelease spells keep the instant-replay path
+            // (their COMBAT_CAST drives the release), so gate on HoldOnly specifically.
+            if (!localPlayer.PlaysSpellReleasePresentation(spellId))
                 return;
 
             long nowMs = System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
@@ -726,6 +741,8 @@ namespace Arena.Input
             if (!string.IsNullOrWhiteSpace(normalizedActionId)
                 && HasPendingInstantSpellForAction(normalizedActionId, nowMs))
             {
+                if (Arena.Presentation.PlayerAnimator.SpellHoldDebug)
+                    Debug.Log($"[HOLDDBG] HandleAuthoritativeLocalSpellReplay SCHEDULES REPLAY f={Time.frameCount} spell={request.ActionId} phase={request.SpellPhase} fireInMs={PendingLocalSpellEventHoldMs} (will preempt an active hold)");
                 _pendingAuthoritativeInstantSpellReplays.Add(new PendingAuthoritativeInstantSpellReplay(
                     actionInstanceId,
                     request,
@@ -837,6 +854,8 @@ namespace Arena.Input
                     continue;
 
                 _pendingAuthoritativeInstantSpellReplays.RemoveAt(i);
+                if (Arena.Presentation.PlayerAnimator.SpellHoldDebug)
+                    Debug.Log($"[HOLDDBG] FlushPendingAuthoritativeInstantSpellReplays FIRES f={Time.frameCount} spell={pending.Request.ActionId} phase={pending.Request.SpellPhase} auth={pending.Request.Authority} (this RequestCombatAnimation preempts the hold)");
                 entity.RequestCombatAnimation(pending.Request);
             }
         }

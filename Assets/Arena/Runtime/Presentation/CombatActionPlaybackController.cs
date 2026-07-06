@@ -109,17 +109,26 @@ namespace Arena.Presentation
         public readonly int EnterBankSlot;
         public readonly int IdleBankSlot;
         public readonly SpellPlaybackLayer PlaybackLayer;
+        public readonly float EnterCompleteNormalizedTime;
+        public readonly float ExitBlendOutSeconds;
+        public readonly float ExitDelaySeconds;
 
         public ActiveSpellCastHoldPresentation(
             string actionId,
             int enterBankSlot,
             int idleBankSlot,
-            SpellPlaybackLayer playbackLayer)
+            SpellPlaybackLayer playbackLayer,
+            float enterCompleteNormalizedTime,
+            float exitBlendOutSeconds,
+            float exitDelaySeconds)
         {
             ActionId = actionId;
             EnterBankSlot = enterBankSlot;
             IdleBankSlot = idleBankSlot;
             PlaybackLayer = playbackLayer;
+            EnterCompleteNormalizedTime = Mathf.Clamp01(enterCompleteNormalizedTime);
+            ExitBlendOutSeconds = Mathf.Max(0f, exitBlendOutSeconds);
+            ExitDelaySeconds = Mathf.Max(0f, exitDelaySeconds);
         }
     }
 
@@ -387,12 +396,22 @@ namespace Arena.Presentation
 
         public bool IsSpellCastHoldFadeOutActive => _spellCastHoldFadeOut.Unlocked;
 
-        public void StartSpellCastHoldFadeOut(float nowSeconds, float blendOutSeconds, float delaySeconds = 0f)
+        // The animator layer the in-progress hold fade-out is blending. Masked holds
+        // (UpperBody / LeftGesture) render on their own layer, not SpellAction, so the
+        // fade must target whichever layer the hold actually played on.
+        public int SpellCastHoldFadeOutLayerIndex { get; private set; }
+
+        public void StartSpellCastHoldFadeOut(
+            float nowSeconds,
+            float blendOutSeconds,
+            float delaySeconds,
+            int layerIndex)
         {
             // Push the start point into the future by `delaySeconds`. ResolveLayerWeight
             // returns LayerWeightAtUnlock (1f) while elapsed < 0 because Mathf.Clamp01
             // clamps the negative blendT to 0, so the layer holds at full weight during
             // the delay and then blends to 0 over BlendOutSeconds.
+            SpellCastHoldFadeOutLayerIndex = layerIndex;
             _spellCastHoldFadeOut.MarkUnlocked(nowSeconds + Mathf.Max(0f, delaySeconds), blendOutSeconds, 1f);
         }
 
@@ -851,13 +870,19 @@ namespace Arena.Presentation
             string actionId,
             int enterBankSlot,
             int idleBankSlot,
-            SpellPlaybackLayer playbackLayer)
+            SpellPlaybackLayer playbackLayer,
+            float enterCompleteNormalizedTime,
+            float exitBlendOutSeconds,
+            float exitDelaySeconds)
         {
             ActiveSpellCastHoldPresentation = new ActiveSpellCastHoldPresentation(
                 actionId,
                 enterBankSlot,
                 idleBankSlot,
-                playbackLayer);
+                playbackLayer,
+                enterCompleteNormalizedTime,
+                exitBlendOutSeconds,
+                exitDelaySeconds);
             _spellCastHoldPhase = SpellCastHoldPlaybackPhase.Enter;
         }
 

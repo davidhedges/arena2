@@ -14,8 +14,10 @@ use crate::arena::{
     arena_seed_for_identity, open_world_scene_profile_for_identity, players_share_world_context,
     MATCH_PHASE_ENDED, MATCH_PHASE_IN_PROGRESS,
 };
-use crate::derived_stats::derived_combat_stats_for_owner;
-use crate::inventory::{create_corpse_loot_for_npc, equipment_modifier_totals_for_owner};
+use crate::derived_stats::{derived_combat_stats_for_owner, derived_combat_stats_from_allocations};
+use crate::inventory::{
+    create_corpse_loot_for_npc, equipment_modifier_totals_for_owner, EquipmentModifierTotals,
+};
 use crate::npcs::schedule_npc_corpse_despawn;
 use crate::open_world_scene::{OPEN_WORLD_SPAWN_X, OPEN_WORLD_SPAWN_YAW, OPEN_WORLD_SPAWN_Z};
 use crate::player_state::PlayerState;
@@ -474,6 +476,13 @@ pub struct ProjectilePresentationEvent {
     pub boomerang_returning: bool,
     pub boomerang_outbound_distance: f32,
     pub boomerang_return_speed: f32,
+    pub curve_control_x: f32,
+    pub curve_control_y: f32,
+    pub curve_control_z: f32,
+    pub curve_end_x: f32,
+    pub curve_end_y: f32,
+    pub curve_end_z: f32,
+    pub curve_progress: f32,
     pub sequence_index: u32,
     pub sequence_count: u32,
     pub terminal: bool,
@@ -565,6 +574,7 @@ pub struct CombatProjectileTickMetrics {
     pub homing_projectile_count: u32,
     pub orbit_projectile_count: u32,
     pub boomerang_projectile_count: u32,
+    pub curved_projectile_count: u32,
     pub tick_micros: u32,
     pub worst_tick_micros: u32,
     pub peak_active_projectile_count: u32,
@@ -637,6 +647,12 @@ pub struct ActiveCombatProjectile {
     pub boomerang_return_speed: f32,
     pub boomerang_hit_cooldown_seconds: f32,
     pub boomerang_max_hits_per_target: u32,
+    pub curve_control_x: f32,
+    pub curve_control_y: f32,
+    pub curve_control_z: f32,
+    pub curve_end_x: f32,
+    pub curve_end_y: f32,
+    pub curve_end_z: f32,
     pub traveled: f32,
     pub age: f32,
     pub lifetime: f32,
@@ -3857,21 +3873,35 @@ fn resolve_damage_amount(
     let delivery = DamageDelivery::from_wire(hit.damage_delivery.as_str());
     let resistance_multiplier =
         resistance_multiplier_for_damage_type(ctx, hit, temporary_modifiers);
+    let source_equipment_and_stats = if hit.source == Identity::ZERO {
+        None
+    } else {
+        let equipment = equipment_modifier_totals_for_owner(ctx, hit.source);
+        let derived = derived_combat_stats_from_allocations(equipment.allocated_stat_totals());
+        Some((equipment, derived))
+    };
     let non_crit_multiplier = if hit.source == Identity::ZERO {
         resistance_multiplier * temporary_modifiers.damage_taken_multiplier_for(&hit.target)
     } else {
+        let (source_equipment, source_stats) =
+            source_equipment_and_stats.expect("non-system hit must have source stats");
         temporary_modifiers.damage_multiplier_for(&hit.source, delivery)
-            * derived_combat_stats_for_owner(ctx, hit.source).damage_multiplier
-            * equipment_damage_multiplier_for_hit(ctx, hit)
+            * source_stats.damage_multiplier
+            * equipment_damage_multiplier_for_hit(hit, source_equipment)
             * resistance_multiplier
             * temporary_modifiers.damage_taken_multiplier_from_source_for(&hit.target, &hit.source)
     };
+    let source_crit_chance = source_equipment_and_stats.map(|(_, stats)| stats.crit_chance);
+    let additive_crit_chance = source_equipment_and_stats
+        .map(|(equipment, _)| equipment_crit_chance_bonus(hit, equipment))
+        .unwrap_or(0.0);
     resolve_effect_amount(
         ctx,
         hit,
         non_crit_multiplier,
-        equipment_crit_chance_bonus(ctx, hit),
+        additive_crit_chance,
         temporary_modifiers.crit_chance_override_for(&hit.source),
+        source_crit_chance,
     )
 }
 
@@ -3984,21 +4014,21 @@ fn vengeance_mark_stack_group(aura_source: Identity) -> String {
     )
 }
 
-fn equipment_damage_multiplier_for_hit(ctx: &ReducerContext, hit: &PendingHit) -> f32 {
-    if hit.source == Identity::ZERO {
-        return 1.0;
-    }
+fn equipment_damage_multiplier_for_hit(
+    hit: &PendingHit,
+    equipment: EquipmentModifierTotals,
+) -> f32 {
     if DamageType::from_wire(hit.damage_type.as_str()) != DamageType::Physical {
         return 1.0;
     }
-    equipment_modifier_totals_for_owner(ctx, hit.source).physical_damage_multiplier()
+    equipment.physical_damage_multiplier()
 }
 
-fn equipment_crit_chance_bonus(ctx: &ReducerContext, hit: &PendingHit) -> f32 {
+fn equipment_crit_chance_bonus(hit: &PendingHit, equipment: EquipmentModifierTotals) -> f32 {
     if hit.source == Identity::ZERO || hit.amount <= 0 {
         return 0.0;
     }
-    equipment_modifier_totals_for_owner(ctx, hit.source).crit_chance_bonus
+    equipment.crit_chance_bonus
 }
 
 fn apply_equipment_melee_steal(ctx: &ReducerContext, hit: &PendingHit, hp_damage: i32) {
@@ -4117,7 +4147,7 @@ fn resolve_heal_amount(
     temporary_modifiers: &TemporaryCombatModifiers,
 ) -> ResolvedEffectAmount {
     let non_crit_multiplier = temporary_modifiers.healing_taken_multiplier_for(&hit.target);
-    resolve_effect_amount(ctx, hit, non_crit_multiplier, 0.0, None)
+    resolve_effect_amount(ctx, hit, non_crit_multiplier, 0.0, None, None)
 }
 
 fn resolve_effect_amount(
@@ -4126,6 +4156,7 @@ fn resolve_effect_amount(
     non_crit_multiplier: f32,
     additive_crit_chance: f32,
     crit_chance_override: Option<f32>,
+    source_crit_chance: Option<f32>,
 ) -> ResolvedEffectAmount {
     let base_amount = hit.amount.max(0);
     let crit_chance = if hit.source == Identity::ZERO {
@@ -4133,7 +4164,9 @@ fn resolve_effect_amount(
     } else if let Some(override_chance) = crit_chance_override {
         override_chance.clamp(0.0, 1.0)
     } else {
-        (derived_combat_stats_for_owner(ctx, hit.source).crit_chance + additive_crit_chance)
+        (source_crit_chance
+            .unwrap_or_else(|| derived_combat_stats_for_owner(ctx, hit.source).crit_chance)
+            + additive_crit_chance)
             .clamp(0.0, 1.0)
     };
     resolve_effect_amount_from_roll(

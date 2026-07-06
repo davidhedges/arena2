@@ -554,6 +554,22 @@ namespace Arena.Combat
         }
     }
 
+    public readonly struct SpellbookSlotBinding
+    {
+        public readonly string KeyLabel;
+        public readonly KeyCode KeyCode;
+        public readonly bool RequiresShift;
+        public readonly uint SlotIndex;
+
+        public SpellbookSlotBinding(string keyLabel, KeyCode keyCode, bool requiresShift, uint slotIndex)
+        {
+            KeyLabel = keyLabel;
+            KeyCode = keyCode;
+            RequiresShift = requiresShift;
+            SlotIndex = slotIndex;
+        }
+    }
+
     public static class ActionBarKeymap
     {
         private static readonly ActionBarSlotBinding[] Bindings =
@@ -614,6 +630,52 @@ namespace Arena.Combat
             binding = default;
             return false;
         }
+    }
+
+    public static class SpellbookKeymap
+    {
+        private static readonly SpellbookSlotBinding[] Bindings =
+        {
+            new("S+0", KeyCode.Alpha0, true, 0),
+            new("S+E", KeyCode.E, true, 1),
+            new("S+R", KeyCode.R, true, 2),
+            new("S+T", KeyCode.T, true, 3),
+            new("S+F", KeyCode.F, true, 4),
+            new("S+G", KeyCode.G, true, 5),
+            new("S+Z", KeyCode.Z, true, 6),
+            new("S+X", KeyCode.X, true, 7),
+            new("S+C", KeyCode.C, true, 8),
+        };
+
+        public static IReadOnlyList<SpellbookSlotBinding> SelectableBindings => Bindings;
+
+        public static string KeyLabelForIndex(int slotIndex)
+        {
+            foreach (SpellbookSlotBinding binding in Bindings)
+            {
+                if (binding.SlotIndex == (uint)slotIndex)
+                    return binding.KeyLabel;
+            }
+
+            return string.Empty;
+        }
+
+        public static bool TryGetBindingForIndex(int slotIndex, out SpellbookSlotBinding binding)
+        {
+            foreach (SpellbookSlotBinding candidate in Bindings)
+            {
+                if (candidate.SlotIndex != (uint)slotIndex)
+                    continue;
+
+                binding = candidate;
+                return true;
+            }
+
+            binding = default;
+            return false;
+        }
+
+        public static string SlotIdForIndex(uint slotIndex) => $"spellbook_{slotIndex}";
     }
 
     public static class DisciplineBarKeymap
@@ -996,6 +1058,50 @@ namespace Arena.Combat
                 assignment?.AbilityId);
         }
 
+        public static ActiveActionBarAction ResolveEquippedSpellbookAction(
+            DbConnection? conn,
+            SpacetimeDB.Identity? owner,
+            uint slotIndex)
+        {
+            string slotId = SpellbookKeymap.SlotIdForIndex(slotIndex);
+            if (conn == null || !owner.HasValue)
+                return new ActiveActionBarAction(slotId, string.Empty, string.Empty, string.Empty, string.Empty);
+
+            EquipmentLoadout? loadout = conn.Db.EquipmentLoadout.Owner.Find(owner.Value);
+            if (loadout == null || string.IsNullOrWhiteSpace(loadout.SpellbookItemId))
+                return new ActiveActionBarAction(slotId, string.Empty, string.Empty, string.Empty, string.Empty);
+
+            string spellId = string.Empty;
+            foreach (ItemSpell itemSpell in conn.Db.ItemSpell.ItemInstanceId.Filter(loadout.SpellbookItemId))
+            {
+                if (itemSpell.SlotIndex != slotIndex)
+                    continue;
+
+                spellId = WireIdentifier.Normalize(itemSpell.SpellId);
+                break;
+            }
+
+            if (string.IsNullOrWhiteSpace(spellId))
+                return new ActiveActionBarAction(slotId, string.Empty, string.Empty, string.Empty, string.Empty);
+
+            AbilityCatalog? knownSpell = SpellbookResolver.ResolveKnownSpellAbility(conn, owner, spellId);
+            if (knownSpell != null)
+                return ResolveKnownSpellAction(conn, owner.Value, knownSpell, slotId);
+
+            string displayName = ActionPresentation.ResolveDisplayName(conn, owner.Value, spellId, spellId);
+            return new ActiveActionBarAction(
+                slotId,
+                ActionKinds.Ability,
+                spellId,
+                spellId,
+                AbilityKinds.Spell,
+                spellId,
+                spellId,
+                displayName,
+                "MANA",
+                0f);
+        }
+
         private static ActiveActionBarAction ResolveSelectableActionFromRefs(
             DbConnection? conn,
             SpacetimeDB.Identity? owner,
@@ -1161,7 +1267,7 @@ namespace Arena.Combat
 
             AbilityCatalog? knownSpell = SpellbookResolver.ResolveKnownSpellAbility(conn, owner, actionId);
             if (knownSpell != null)
-                return ResolveKnownSpellAction(conn, owner.Value, knownSpell);
+                return ResolveKnownSpellAction(conn, owner.Value, knownSpell, string.Empty);
 
             return new ActiveActionBarAction(string.Empty, string.Empty, string.Empty, string.Empty, string.Empty);
         }
@@ -1169,7 +1275,8 @@ namespace Arena.Combat
         private static ActiveActionBarAction ResolveKnownSpellAction(
             DbConnection conn,
             SpacetimeDB.Identity owner,
-            AbilityCatalog ability)
+            AbilityCatalog ability,
+            string slotId)
         {
             string runtimeActionId = AbilityKinds.UsesRawActionId(ability.AbilityKind)
                 ? WireIdentifier.Normalize(ability.ActionId)
@@ -1183,7 +1290,7 @@ namespace Arena.Combat
                 ability.DisplayName);
 
             return new ActiveActionBarAction(
-                string.Empty,
+                slotId,
                 ability.AbilityId,
                 ability.ActionId,
                 runtimeActionId,

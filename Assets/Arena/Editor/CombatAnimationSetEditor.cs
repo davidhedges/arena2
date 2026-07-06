@@ -879,6 +879,8 @@ namespace Arena.Editor
             var options = new List<AttackPreviewClipOption>();
             AddAttackPreviewClipOption(options, "Ground", spell.ground);
             AddAttackPreviewClipOption(options, "Air", spell.air);
+            AddAttackPreviewClipOption(options, "Hold Enter", spell.holdOverride.enter);
+            AddAttackPreviewClipOption(options, "Hold Loop", spell.holdOverride.idleLoop);
             return options;
         }
 
@@ -892,6 +894,10 @@ namespace Arena.Editor
                 return spell.ground!.name;
             if (hasAir)
                 return $"air: {spell.air!.name}";
+            if (spell.holdOverride.IsPlayable)
+                return $"{spell.holdOverride.EnterOrIdle!.name} / {spell.holdOverride.IdleOrEnter!.name}";
+            if (spell.UsesHoldPresentation)
+                return "default hold";
             return "no clip";
         }
 

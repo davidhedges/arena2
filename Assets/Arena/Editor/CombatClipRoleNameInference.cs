@@ -55,15 +55,17 @@ namespace Arena.Editor
                 if (lowerName.Contains("castingexit"))  return CombatClipRole.SpellCastHoldExit;
             }
 
-            // 3. Spell release (Kevin Iglesias MagicAttacks).
+            // 3. Spell cast lifecycle (Kevin Iglesias MagicAttacks).
             if (lowerPath.Contains("magicattacks") || lowerName.Contains("magicattack"))
             {
-                // Newer Kevin Iglesias variants split the cast into "... - Load" (hold) and
-                // "... - Cast" (release). Older ones are a single clip.
+                // Kevin Iglesias MagicAttacks split into unsuffixed enter clips,
+                // "... - Load" hold loops, and "... - Cast" release clips.
+                // Reference inference still wins when a set deliberately uses an
+                // unsuffixed clip as a release, but unwired clips need the correct
+                // stamper template so OnEnterComplete is available.
                 if (EndsWithSuffix(lowerName, "load")) return CombatClipRole.SpellCastHoldIdle;
                 if (EndsWithSuffix(lowerName, "cast")) return CombatClipRole.SpellRelease;
-                // Single-clip variant — the whole filename is the release.
-                if (lowerName.Contains("magicattack")) return CombatClipRole.SpellRelease;
+                if (lowerName.Contains("magicattack")) return CombatClipRole.SpellCastHoldEnter;
             }
 
             // 4. Block — check Block_Hit_Break before Block_Hit before generic suffixes.

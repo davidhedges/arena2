@@ -15,8 +15,8 @@ use crate::relations::{default_spell_target_audience, TargetAudience};
 use super::manifest::{
     ApplyStatusDefinition, ApplyStatusSecondaryTunables, AreaSecondaryTunables,
     AuraSecondaryTunables, BespokeRuntimeSpell, BlockBehavior, BoomerangCasterProjectileTunables,
-    ConsumeStatusSecondaryTunables, DirectTargetSecondaryTunables, ImpactEffect,
-    InstantBeamChargeScaling, InstantBeamSecondaryTunables, MeteorSkyOrigin,
+    ConsumeStatusSecondaryTunables, CurvedTargetProjectileTunables, DirectTargetSecondaryTunables,
+    ImpactEffect, InstantBeamChargeScaling, InstantBeamSecondaryTunables, MeteorSkyOrigin,
     OrbitCasterProjectileTunables, ProjectileMotionTunables, ProjectileSecondaryTunables,
     RemoveStatusDefinition, RemoveStatusSecondaryTunables, SpellBehavior, SpellCastMobility,
     SpellDefinition, SpellId, SpellParryBehavior, SpellSecondaryTunables, SpellTargeting,
@@ -219,6 +219,13 @@ enum AreaShapeRow {
 #[serde(tag = "kind", rename_all = "SCREAMING_SNAKE_CASE", deny_unknown_fields)]
 enum ProjectileMotionRow {
     Linear {},
+    CurvedTarget {
+        arc_direction_degrees_min: f32,
+        arc_direction_degrees_max: f32,
+        arc_amplitude_min: f32,
+        arc_amplitude_max: f32,
+        control_point_fraction: f32,
+    },
     OrbitCaster {
         projectile_count: u32,
         orbit_radius: f32,
@@ -256,6 +263,17 @@ impl<'de> Deserialize<'de> for ProjectileMotionRow {
                 let _: LinearProjectileMotionRow =
                     serde_json::from_value(value).map_err(de::Error::custom)?;
                 Ok(Self::Linear {})
+            }
+            "CURVED_TARGET" => {
+                let row: CurvedTargetProjectileMotionRow =
+                    serde_json::from_value(value).map_err(de::Error::custom)?;
+                Ok(Self::CurvedTarget {
+                    arc_direction_degrees_min: row.arc_direction_degrees_min,
+                    arc_direction_degrees_max: row.arc_direction_degrees_max,
+                    arc_amplitude_min: row.arc_amplitude_min,
+                    arc_amplitude_max: row.arc_amplitude_max,
+                    control_point_fraction: row.control_point_fraction,
+                })
             }
             "ORBIT_CASTER" => {
                 let row: OrbitCasterProjectileMotionRow =
@@ -296,6 +314,18 @@ impl<'de> Deserialize<'de> for ProjectileMotionRow {
 struct LinearProjectileMotionRow {
     #[serde(rename = "kind")]
     _kind: String,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CurvedTargetProjectileMotionRow {
+    #[serde(rename = "kind")]
+    _kind: String,
+    arc_direction_degrees_min: f32,
+    arc_direction_degrees_max: f32,
+    arc_amplitude_min: f32,
+    arc_amplitude_max: f32,
+    control_point_fraction: f32,
 }
 
 #[derive(Deserialize)]
@@ -847,6 +877,11 @@ impl SpellCatalogRow {
                         definition.max_distance = max_distance;
                         definition.radius = projectile.radius;
                     }
+                    ProjectileMotionTunables::CurvedTarget(_) => {
+                        definition.speed = projectile.speed;
+                        definition.max_distance = max_distance;
+                        definition.radius = projectile.radius;
+                    }
                     ProjectileMotionTunables::OrbitCaster(orbit) => {
                         definition.speed = 0.0;
                         definition.max_distance = 0.0;
@@ -1367,6 +1402,19 @@ impl From<ProjectileMotionRow> for ProjectileMotionTunables {
     fn from(row: ProjectileMotionRow) -> Self {
         match row {
             ProjectileMotionRow::Linear {} => Self::Linear,
+            ProjectileMotionRow::CurvedTarget {
+                arc_direction_degrees_min,
+                arc_direction_degrees_max,
+                arc_amplitude_min,
+                arc_amplitude_max,
+                control_point_fraction,
+            } => Self::CurvedTarget(CurvedTargetProjectileTunables {
+                arc_direction_degrees_min,
+                arc_direction_degrees_max,
+                arc_amplitude_min,
+                arc_amplitude_max,
+                control_point_fraction,
+            }),
             ProjectileMotionRow::OrbitCaster {
                 projectile_count,
                 orbit_radius,
@@ -1936,6 +1984,60 @@ fn validate_projectile_motion(
             ensure_positive_f32(def.kind.as_str(), "delivery.speed", def.speed)?;
             ensure_positive_f32(def.kind.as_str(), "delivery.max_distance", def.max_distance)?;
             ensure_positive_f32(def.kind.as_str(), "delivery.radius", def.radius)?;
+        }
+        ProjectileMotionTunables::CurvedTarget(curve) => {
+            if def.targeting != SpellTargeting::Target || !def.requires_target {
+                return Err(format!(
+                    "{} CURVED_TARGET projectile motion must use TARGET targeting with a target requirement",
+                    def.kind.as_str()
+                ));
+            }
+            ensure_positive_f32(def.kind.as_str(), "delivery.speed", def.speed)?;
+            ensure_positive_f32(def.kind.as_str(), "delivery.max_distance", def.max_distance)?;
+            ensure_positive_f32(def.kind.as_str(), "delivery.radius", def.radius)?;
+            ensure_finite(
+                def.kind.as_str(),
+                "delivery.motion.arc_direction_degrees_min",
+                curve.arc_direction_degrees_min,
+            )?;
+            ensure_finite(
+                def.kind.as_str(),
+                "delivery.motion.arc_direction_degrees_max",
+                curve.arc_direction_degrees_max,
+            )?;
+            if curve.arc_direction_degrees_max < curve.arc_direction_degrees_min {
+                return Err(format!(
+                    "{} delivery.motion.arc_direction_degrees_max must be >= arc_direction_degrees_min",
+                    def.kind.as_str()
+                ));
+            }
+            ensure_finite_non_negative(
+                def.kind.as_str(),
+                "delivery.motion.arc_amplitude_min",
+                curve.arc_amplitude_min,
+            )?;
+            ensure_finite_non_negative(
+                def.kind.as_str(),
+                "delivery.motion.arc_amplitude_max",
+                curve.arc_amplitude_max,
+            )?;
+            if curve.arc_amplitude_max < curve.arc_amplitude_min {
+                return Err(format!(
+                    "{} delivery.motion.arc_amplitude_max must be >= arc_amplitude_min",
+                    def.kind.as_str()
+                ));
+            }
+            ensure_positive_f32(
+                def.kind.as_str(),
+                "delivery.motion.control_point_fraction",
+                curve.control_point_fraction,
+            )?;
+            if curve.control_point_fraction >= 1.0 {
+                return Err(format!(
+                    "{} delivery.motion.control_point_fraction must be less than 1",
+                    def.kind.as_str()
+                ));
+            }
         }
         ProjectileMotionTunables::OrbitCaster(orbit) => {
             if def.targeting != SpellTargeting::Self_ || def.requires_target {

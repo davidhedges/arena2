@@ -781,7 +781,8 @@ namespace Arena.UI
                     : FormatTooltipValue(affix.ModifierKind);
                 if (string.IsNullOrWhiteSpace(label))
                     continue;
-                parts.Add($"{label}: {FormatAffixValue(affix.ModifierKind, affix.Value)}");
+                string value = FormatAffixValue(affix.ModifierKind, affix.Value);
+                parts.Add(IsAllocatedStatModifier(affix.ModifierKind) ? value : $"{label}: {value}");
             }
         }
 
@@ -796,8 +797,18 @@ namespace Arena.UI
                 "MANA_REGEN" or "HEALTH_REGEN" => $"+{value:0.##}/s",
                 "AWARENESS" or "LIGHT" => $"+{value:0.##}",
                 "SPELL_SLOT" => $"+{Mathf.Max(0, Mathf.RoundToInt(value))}",
+                "MIGHT" or "INSIGHT" or "FINESSE" or "FORTITUDE" =>
+                    $"+{Mathf.Max(0, Mathf.RoundToInt(value))} {FormatTooltipTitle(normalized)}",
                 _ => $"+{value * 100f:0.#}%"
             };
+        }
+
+        private static bool IsAllocatedStatModifier(string modifierKind)
+        {
+            string normalized = string.IsNullOrWhiteSpace(modifierKind)
+                ? string.Empty
+                : modifierKind.Trim().Replace('-', '_').ToUpperInvariant();
+            return normalized is "MIGHT" or "INSIGHT" or "FINESSE" or "FORTITUDE";
         }
 
         private static void AppendNormalizedTooltipPart(List<string> parts, string value)
@@ -819,6 +830,15 @@ namespace Arena.UI
             return string.IsNullOrWhiteSpace(value)
                 ? string.Empty
                 : value.Trim().Replace('_', ' ').ToLowerInvariant();
+        }
+
+        private static string FormatTooltipTitle(string value)
+        {
+            string formatted = FormatTooltipValue(value);
+            if (string.IsNullOrWhiteSpace(formatted))
+                return string.Empty;
+
+            return char.ToUpperInvariant(formatted[0]) + formatted[1..];
         }
 
         private void BuildUi()

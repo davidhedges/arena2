@@ -42,6 +42,8 @@ namespace Arena.Presentation
             if (!_isLocalPlayer || _owner == null)
                 return;
 
+            if (PlayerAnimator.SpellHoldDebug)
+                Debug.Log($"[HOLDDBG] SCPC.PredictLocalCastHold f={Time.frameCount} spell={spellActionId} target={targetId} smState={_stateMachine.State}");
             _locallySuppressedSpellActionId = string.Empty;
             Dispatch(_stateMachine.Predict(
                 new LocalSpellPresentationPredictInput(
@@ -55,7 +57,9 @@ namespace Arena.Presentation
 
         public void OnActiveCastInsert(ActiveCast row, ulong castTimeMs)
         {
-            if (_owner == null || castTimeMs == 0UL)
+            if (PlayerAnimator.SpellHoldDebug)
+                Debug.Log($"[HOLDDBG] SCPC.OnActiveCastInsert f={Time.frameCount} kind={row.Kind} castTimeMs={castTimeMs} track={ShouldTrackActiveCast(row, castTimeMs)} isLocal={_isLocalPlayer} smState={_stateMachine.State} pendingPred={_stateMachine.HasPendingPrediction}");
+            if (_owner == null || !ShouldTrackActiveCast(row, castTimeMs))
                 return;
 
             LocalSpellPresentationActiveCast activeCast = FromActiveCast(row);
@@ -79,7 +83,7 @@ namespace Arena.Presentation
 
         public void OnActiveCastUpdate(ActiveCast row, ulong castTimeMs)
         {
-            if (_owner == null || castTimeMs == 0UL)
+            if (_owner == null || !ShouldTrackActiveCast(row, castTimeMs))
                 return;
 
             LocalSpellPresentationActiveCast activeCast = FromActiveCast(row);
@@ -143,6 +147,9 @@ namespace Arena.Presentation
 
         public void OnCombatRelease(CombatEvent row)
         {
+            if (_owner != null && !_owner.PlaysSpellReleasePresentation(row.ActionKind))
+                return;
+
             Dispatch(_stateMachine.CombatRelease(
                 WireIdentifier.Normalize(row.ActionKind),
                 row.CreatedAt.MicrosecondsSinceUnixEpoch / 1000L));
@@ -165,7 +172,10 @@ namespace Arena.Presentation
                 return;
 
             PruneSuppressedActionIds();
-            Dispatch(_stateMachine.Timeout(NowMs()));
+            LocalSpellPresentationCommand timeoutCommand = _stateMachine.Timeout(NowMs());
+            if (PlayerAnimator.SpellHoldDebug && timeoutCommand.Kind != LocalSpellPresentationCommandKind.None)
+                Debug.Log($"[HOLDDBG] SCPC.Timeout FIRED f={Time.frameCount} -> {timeoutCommand.Kind} spell={timeoutCommand.SpellActionId} (prediction never confirmed within timeout)");
+            Dispatch(timeoutCommand);
             UpdateScheduledRelease();
         }
 
@@ -174,6 +184,8 @@ namespace Arena.Presentation
             if (_owner == null || _stateMachine.ActiveCast is not { } active)
                 return;
             if (!ArenaServerClock.HasEstimate)
+                return;
+            if (!_owner.PlaysSpellReleasePresentation(active.SpellActionId))
                 return;
 
             if (!_owner.TryResolveSpellReleaseOffsetSeconds(active.SpellActionId, out float releaseOffsetSeconds))
@@ -209,10 +221,21 @@ namespace Arena.Presentation
             return System.Math.Max(0L, Mathf.RoundToInt(offsetSeconds * 1000f));
         }
 
+        private bool ShouldTrackActiveCast(ActiveCast row, ulong castTimeMs)
+        {
+            if (castTimeMs > 0UL)
+                return true;
+
+            return _owner != null && _owner.UsesSpellCastHoldPresentation(row.Kind);
+        }
+
         private void Dispatch(LocalSpellPresentationCommand command)
         {
             if (_owner == null)
                 return;
+
+            if (PlayerAnimator.SpellHoldDebug && command.Kind != LocalSpellPresentationCommandKind.None)
+                Debug.Log($"[HOLDDBG] SCPC.Dispatch f={Time.frameCount} kind={command.Kind} spell={command.SpellActionId} auth={command.Authority} smState={_stateMachine.State} isLocal={_isLocalPlayer}");
 
             switch (command.Kind)
             {

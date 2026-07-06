@@ -77,7 +77,8 @@ use super::events::{
     SpellCombatEventPayload, SpellCombatEventScalar, Vec3,
 };
 use super::manifest::{
-    BespokeRuntimeSpell, ImpactEffect, InstantBeamChargeScaling, MeteorSkyOrigin, SpellDefinition,
+    BespokeRuntimeSpell, CurvedTargetProjectileTunables, ImpactEffect, InstantBeamChargeScaling,
+    MeteorSkyOrigin, SpellDefinition,
 };
 use super::{
     normalize_vec3, player_knows_spell, ActiveBespokeSpell, ActiveCast, CastPredictionCorrelation,
@@ -271,6 +272,11 @@ const SPELL_BLOCK_IMPACT_HEIGHT_SCALE: f32 = 0.62;
 const SPELL_BLOCK_IMPACT_FORWARD_PADDING: f32 = 0.2;
 const CAST_PREDICTION_ROW_RETENTION: Duration = Duration::from_secs(5);
 const PRE_END_CANCEL_ACCEPTANCE_GRACE: Duration = Duration::from_millis(100);
+// Delay a projectile channel's first spawn so missiles begin once the caster's cast
+// animation has raised the hand (matches the client enter clip's OnEnterComplete). The
+// channel still ends at its authored duration, so this shortens the firing window rather
+// than extending the cast.
+const CHANNEL_PROJECTILE_SPAWN_WINDUP_SECONDS: f32 = 0.58;
 const MAX_PREDICTED_CAST_ID_LEN: usize = 64;
 const SPELL_PREDICTION_RESULT_ACCEPTED: &str = "accepted";
 const SPELL_PREDICTION_RESULT_REJECTED: &str = "rejected";
@@ -3185,6 +3191,116 @@ fn spawn_tracking_projectile(
     )
 }
 
+fn curved_target_control_point(
+    origin: Vec3,
+    end: Vec3,
+    projectile_instance_id: &str,
+    curve: CurvedTargetProjectileTunables,
+) -> Vec3 {
+    let fraction = curve.control_point_fraction.clamp(0.001, 0.999);
+    let center = quadratic_lerp(origin, end, fraction);
+    let forward = normalized_vec3(
+        end.x - origin.x,
+        end.y - origin.y,
+        end.z - origin.z,
+        Vec3::new(0.0, 0.0, 1.0),
+    );
+    let side = normalized_vec3(forward.z, 0.0, -forward.x, Vec3::new(1.0, 0.0, 0.0));
+    let lift = normalized_vec3(
+        forward.y * side.z - forward.z * side.y,
+        forward.z * side.x - forward.x * side.z,
+        forward.x * side.y - forward.y * side.x,
+        Vec3::new(0.0, 1.0, 0.0),
+    );
+    let direction_min = curve.arc_direction_degrees_min;
+    let direction_max = curve.arc_direction_degrees_max.max(direction_min);
+    let direction_degrees = direction_min
+        + (direction_max - direction_min) * deterministic_unit(projectile_instance_id, 0);
+    let direction_radians = direction_degrees.to_radians();
+    let min_amplitude = curve.arc_amplitude_min.max(0.0);
+    let max_amplitude = curve.arc_amplitude_max.max(min_amplitude);
+    let amplitude = min_amplitude
+        + (max_amplitude - min_amplitude) * deterministic_unit(projectile_instance_id, 1);
+    let offset_x =
+        (side.x * direction_radians.cos() + lift.x * direction_radians.sin()) * amplitude;
+    let offset_y =
+        (side.y * direction_radians.cos() + lift.y * direction_radians.sin()) * amplitude;
+    let offset_z =
+        (side.z * direction_radians.cos() + lift.z * direction_radians.sin()) * amplitude;
+    Vec3::new(
+        center.x + offset_x,
+        center.y + offset_y,
+        center.z + offset_z,
+    )
+}
+
+fn normalized_vec3(x: f32, y: f32, z: f32, fallback: Vec3) -> Vec3 {
+    let len = (x * x + y * y + z * z).sqrt();
+    if len > 0.0001 {
+        Vec3::new(x / len, y / len, z / len)
+    } else {
+        fallback
+    }
+}
+
+fn approximate_quadratic_curve_length(origin: Vec3, control: Vec3, end: Vec3) -> f32 {
+    const SAMPLES: u32 = 8;
+    let mut length = 0.0;
+    let mut previous = origin;
+    for sample in 1..=SAMPLES {
+        let t = sample as f32 / SAMPLES as f32;
+        let current = quadratic_bezier(origin, control, end, t);
+        length += distance(previous, current);
+        previous = current;
+    }
+    length
+}
+
+fn quadratic_bezier(origin: Vec3, control: Vec3, end: Vec3, t: f32) -> Vec3 {
+    let clamped = t.clamp(0.0, 1.0);
+    let one_minus = 1.0 - clamped;
+    Vec3::new(
+        one_minus * one_minus * origin.x
+            + 2.0 * one_minus * clamped * control.x
+            + clamped * clamped * end.x,
+        one_minus * one_minus * origin.y
+            + 2.0 * one_minus * clamped * control.y
+            + clamped * clamped * end.y,
+        one_minus * one_minus * origin.z
+            + 2.0 * one_minus * clamped * control.z
+            + clamped * clamped * end.z,
+    )
+}
+
+fn quadratic_lerp(origin: Vec3, end: Vec3, t: f32) -> Vec3 {
+    Vec3::new(
+        origin.x + (end.x - origin.x) * t,
+        origin.y + (end.y - origin.y) * t,
+        origin.z + (end.z - origin.z) * t,
+    )
+}
+
+fn distance(a: Vec3, b: Vec3) -> f32 {
+    let dx = b.x - a.x;
+    let dy = b.y - a.y;
+    let dz = b.z - a.z;
+    (dx * dx + dy * dy + dz * dz).sqrt()
+}
+
+fn deterministic_unit(value: &str, salt: u64) -> f32 {
+    let mut hash = 0xcbf29ce484222325u64 ^ salt;
+    for byte in value.as_bytes() {
+        hash ^= *byte as u64;
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    hash ^= hash >> 33;
+    hash = hash.wrapping_mul(0xff51afd7ed558ccd);
+    hash ^= hash >> 33;
+    hash = hash.wrapping_mul(0xc4ceb9fe1a85ec53);
+    hash ^= hash >> 33;
+    ((hash >> 40) as f32) / ((1u64 << 24) as f32)
+}
+
 #[allow(clippy::too_many_arguments)]
 fn spawn_tracking_projectile_instance(
     ctx: &ReducerContext,
@@ -3207,8 +3323,9 @@ fn spawn_tracking_projectile_instance(
         .as_ref()
         .or(definition.secondary.channel_projectile.as_ref())
         .expect("validated projectile-producing spell must define secondary projectile data");
+    let curve = projectile_tunables.motion.curved_target().copied();
     let boomerang = projectile_tunables.motion.boomerang().copied();
-    let lifetime = boomerang
+    let mut lifetime = boomerang
         .map(|motion| motion.lifetime_seconds)
         .unwrap_or_else(|| definition.max_distance / definition.speed);
 
@@ -3250,6 +3367,30 @@ fn spawn_tracking_projectile_instance(
     let origin_x = base_x + dir_x * definition.spawn_forward;
     let origin_y = base_y + dir_y * definition.spawn_forward;
     let origin_z = base_z + dir_z * definition.spawn_forward;
+    let curve_end = Vec3::new(target.pos_x, target_y, target.pos_z);
+    let curve_control = curve
+        .map(|curve| {
+            curved_target_control_point(
+                Vec3::new(origin_x, origin_y, origin_z),
+                curve_end,
+                projectile_instance_id,
+                curve,
+            )
+        })
+        .unwrap_or_else(|| Vec3::new(0.0, 0.0, 0.0));
+    let curve_distance = curve
+        .map(|_| {
+            approximate_quadratic_curve_length(
+                Vec3::new(origin_x, origin_y, origin_z),
+                curve_control,
+                curve_end,
+            )
+            .max(0.001)
+        })
+        .unwrap_or(0.0);
+    if curve.is_some() {
+        lifetime = curve_distance / definition.speed.max(0.001);
+    }
 
     log::debug!(
         "[SPELL] {} cast: caster={} target={} origin=({:.2},{:.2},{:.2}) dir=({:.3},{:.3},{:.3})",
@@ -3282,6 +3423,7 @@ fn spawn_tracking_projectile_instance(
     let motion_kind = projectile_tunables.motion.kind();
     let projectile_max_distance = boomerang
         .map(|motion| definition.speed.max(motion.return_speed) * motion.lifetime_seconds)
+        .or(curve.map(|_| curve_distance))
         .unwrap_or(definition.max_distance);
     let boomerang_outbound_distance = boomerang
         .map(|motion| motion.outbound_distance)
@@ -3319,6 +3461,9 @@ fn spawn_tracking_projectile_instance(
         false,
         boomerang_outbound_distance,
         boomerang_return_speed,
+        curve_control,
+        curve_end,
+        0.0,
         Vec3::new(origin_x, origin_y, origin_z),
         now,
     );
@@ -3360,6 +3505,12 @@ fn spawn_tracking_projectile_instance(
             boomerang_return_speed,
             boomerang_hit_cooldown_seconds,
             boomerang_max_hits_per_target,
+            curve_control_x: curve_control.x,
+            curve_control_y: curve_control.y,
+            curve_control_z: curve_control.z,
+            curve_end_x: curve_end.x,
+            curve_end_y: curve_end.y,
+            curve_end_z: curve_end.z,
             traveled: 0.0,
             age: 0.0,
             lifetime,
@@ -3439,6 +3590,9 @@ fn spawn_orbit_projectiles(
             false,
             0.0,
             0.0,
+            Vec3::new(0.0, 0.0, 0.0),
+            Vec3::new(0.0, 0.0, 0.0),
+            0.0,
             Vec3::new(origin_x, origin_y, origin_z),
             now,
         );
@@ -3480,6 +3634,12 @@ fn spawn_orbit_projectiles(
                 boomerang_return_speed: 0.0,
                 boomerang_hit_cooldown_seconds: 0.0,
                 boomerang_max_hits_per_target: 0,
+                curve_control_x: 0.0,
+                curve_control_y: 0.0,
+                curve_control_z: 0.0,
+                curve_end_x: 0.0,
+                curve_end_y: 0.0,
+                curve_end_z: 0.0,
                 traveled: 0.0,
                 age: 0.0,
                 lifetime: orbit.lifetime_seconds,
@@ -3535,6 +3695,9 @@ fn emit_spell_projectile_release_event(
     boomerang_returning: bool,
     boomerang_outbound_distance: f32,
     boomerang_return_speed: f32,
+    curve_control: Vec3,
+    curve_end: Vec3,
+    curve_progress: f32,
     point: Vec3,
     now: Timestamp,
 ) {
@@ -3609,6 +3772,13 @@ fn emit_spell_projectile_release_event(
             boomerang_returning,
             boomerang_outbound_distance,
             boomerang_return_speed,
+            curve_control_x: curve_control.x,
+            curve_control_y: curve_control.y,
+            curve_control_z: curve_control.z,
+            curve_end_x: curve_end.x,
+            curve_end_y: curve_end.y,
+            curve_end_z: curve_end.z,
+            curve_progress,
             sequence_index: projectile_sequence_index,
             sequence_count: 1,
             terminal: false,
@@ -4542,23 +4712,31 @@ fn stop_channel(
 fn start_projectile_channel(
     ctx: &ReducerContext,
     active_cast: &ActiveCast,
-    caster_state: &PlayerSnapshot,
+    _caster_state: &PlayerSnapshot,
     now: Timestamp,
 ) -> Result<bool, String> {
-    let runtime = ChannelCastRuntime {
+    // Hold the first projectile until the cast animation raises the hand (windup). The
+    // cast was already validated at accept time; each spawn re-validates target/LOS, so
+    // deferring the first spawn to the first tick is safe. ends_at is unchanged, so the
+    // channel still stops at its authored duration and the windup just trims the front of
+    // the firing window.
+    let definition = super::catalog::spell_definition(
+        &SpellId::new(active_cast.kind.as_str())
+            .expect("active channel cast kind must be a valid spell id"),
+    )
+    .expect("active channel cast kind must resolve to a spell definition");
+
+    let update_interval = seconds_to_duration(definition.update_interval);
+    let windup = seconds_to_duration(CHANNEL_PROJECTILE_SPAWN_WINDUP_SECONDS);
+    // tick_channel spawns when now >= last_update_at + update_interval, so back-date the
+    // first eligible tick so the first projectile lands at start + windup.
+    let first_tick_offset = windup.saturating_sub(update_interval);
+    ctx.db.channel_cast_runtime().insert(ChannelCastRuntime {
         caster: active_cast.caster,
         spell_instance_id: active_cast.cast_id.clone(),
-        last_update_at: now,
-    };
-    ctx.db.channel_cast_runtime().insert(runtime);
-    let spawned = spawn_channel_projectile(ctx, active_cast, caster_state, now)?;
-    if !spawned {
-        ctx.db
-            .channel_cast_runtime()
-            .caster()
-            .delete(active_cast.caster);
-    }
-    Ok(spawned)
+        last_update_at: now + first_tick_offset,
+    });
+    Ok(true)
 }
 
 fn spawn_channel_projectile(
@@ -7108,17 +7286,18 @@ mod tests {
         active_cast_cancel_receive_window_allows, active_cast_interrupt_terminal_policy,
         approach_line_contact_point_xz, area_contact_direction, area_shape_for,
         consume_status_heal_amount_from_stacks, contact_distance_from_radii,
-        defiance_damage_taken_reduction_for_health, fixed_y_terrain_blocks_special_movement,
-        has_arrived_at_contact_distance, has_movement_intent, has_voluntary_movement_after_cast,
-        horizontal_movement_duration_ms, is_generic_area_spell, is_target_within_facing_arc,
+        curved_target_control_point, defiance_damage_taken_reduction_for_health,
+        fixed_y_terrain_blocks_special_movement, has_arrived_at_contact_distance,
+        has_movement_intent, has_voluntary_movement_after_cast, horizontal_movement_duration_ms,
+        is_generic_area_spell, is_target_within_facing_arc,
         normal_cast_time_spell_refunds_gcd_on_self_cancel, projectile_release_uses_live_facing,
         resolve_generic_area_center, resolve_special_movement_y,
         spell_primary_resource_cost_for_action, valid_cast_action_token,
         violates_active_cast_lifetime_mobility_requirement_for_tick,
         violates_cast_mobility_requirement, ActiveCastTerminalOutcome, CastExecutionMode,
-        CombatAreaShape, PlayerSnapshot, SpellBehavior, SpellId, FACING_DOT_EPSILON,
-        SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK, SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK_FIXED_Y,
-        TARGET_FACING_ARC_RADIANS,
+        CombatAreaShape, CurvedTargetProjectileTunables, PlayerSnapshot, SpellBehavior, SpellId,
+        Vec3, FACING_DOT_EPSILON, SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK,
+        SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK_FIXED_Y, TARGET_FACING_ARC_RADIANS,
     };
     use crate::combat::scene_query::is_direction_within_facing_arc;
     use crate::spells::ActiveCast;
@@ -7154,6 +7333,46 @@ mod tests {
 
     fn spell_id(id: &str) -> SpellId {
         SpellId::new(id).expect("test spell id should be valid")
+    }
+
+    #[test]
+    fn curved_target_control_point_samples_direction_and_amplitude_ranges() {
+        use std::collections::BTreeSet;
+
+        let curve = CurvedTargetProjectileTunables {
+            arc_direction_degrees_min: 20.0,
+            arc_direction_degrees_max: 160.0,
+            arc_amplitude_min: 1.25,
+            arc_amplitude_max: 4.25,
+            control_point_fraction: 0.5,
+        };
+        let origin = Vec3::new(0.0, 1.0, 0.0);
+        let end = Vec3::new(0.0, 1.0, 10.0);
+        let mut lateral_buckets = BTreeSet::new();
+        let mut height_buckets = BTreeSet::new();
+        let mut saw_left = false;
+        let mut saw_right = false;
+
+        for sample in 0..64 {
+            let projectile_instance_id = format!("magic-missile-curve-sample-{sample}");
+            let control =
+                curved_target_control_point(origin, end, projectile_instance_id.as_str(), curve);
+            lateral_buckets.insert((control.x * 10.0).round() as i32);
+            height_buckets.insert(((control.y - origin.y) * 10.0).round() as i32);
+            saw_left |= control.x < -0.1;
+            saw_right |= control.x > 0.1;
+        }
+
+        assert!(saw_left, "expected some sampled arcs to bend left");
+        assert!(saw_right, "expected some sampled arcs to bend right");
+        assert!(
+            lateral_buckets.len() > 8,
+            "expected more than binary left/right lateral control points"
+        );
+        assert!(
+            height_buckets.len() > 8,
+            "expected authored amplitude and arc direction to vary control height"
+        );
     }
 
     #[test]
