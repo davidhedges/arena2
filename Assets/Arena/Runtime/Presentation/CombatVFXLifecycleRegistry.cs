@@ -17,6 +17,7 @@ namespace Arena.Presentation
         private const string LifecycleUntilReleaseEvent = "UNTIL_RELEASE_EVENT";
         private const string LifecycleUntilTerminalEvent = "UNTIL_TERMINAL_EVENT";
         private const string LifecycleUntilCastEnd = "UNTIL_CAST_END";
+        private const string LifecycleUntilStatusEnd = "UNTIL_STATUS_END";
 
         private readonly MonoBehaviour _coroutineOwner;
         private readonly Dictionary<string, ScriptedEntry> _scripted = new();
@@ -158,6 +159,20 @@ namespace Arena.Presentation
 
             DestroyMatchingScripted(actionInstanceId, LifecycleUntilCastEnd);
             DestroyMatchingPrefabs(actionInstanceId, LifecycleUntilCastEnd);
+        }
+
+        // Ends UNTIL_STATUS_END cues (auras — design doc decision 11) when the owning buff's
+        // StatusEffect row is deleted. Mirrors DestroyForCastEnd, keyed on the aura's status key.
+        // TODO(aura): the caller side is not wired yet. CombatVFXDispatcher must subscribe to
+        // StatusEffect row-delete and resolve the aura cue's key from (caster identity +
+        // status_stack_group) before calling this — that linkage needs Unity playtest verification.
+        public void DestroyForStatusEnd(string auraStatusKey)
+        {
+            if (string.IsNullOrWhiteSpace(auraStatusKey))
+                return;
+
+            DestroyMatchingScripted(auraStatusKey, LifecycleUntilStatusEnd);
+            DestroyMatchingPrefabs(auraStatusKey, LifecycleUntilStatusEnd);
         }
 
         public void Dispose()
