@@ -30,6 +30,7 @@ namespace SpacetimeDB.Types
             AddTable(AbilityCatalog = new(conn));
             AddTable(ActionBarSlotCatalog = new(conn));
             AddTable(ActionPresentationCatalog = new(conn));
+            AddTable(ActiveAura = new(conn));
             AddTable(ActiveCast = new(conn));
             AddTable(ActiveCombatDiscipline = new(conn));
             AddTable(ActiveCombatMode = new(conn));
@@ -591,6 +592,7 @@ namespace SpacetimeDB.Types
             new QueryBuilder().From.AbilityCatalog().ToSql(),
             new QueryBuilder().From.ActionBarSlotCatalog().ToSql(),
             new QueryBuilder().From.ActionPresentationCatalog().ToSql(),
+            new QueryBuilder().From.ActiveAura().ToSql(),
             new QueryBuilder().From.ActiveCast().ToSql(),
             new QueryBuilder().From.ActiveCombatDiscipline().ToSql(),
             new QueryBuilder().From.ActiveCombatMode().ToSql(),
@@ -662,6 +664,7 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Table<AbilityCatalog, AbilityCatalogCols, AbilityCatalogIxCols> AbilityCatalog() => new("ability_catalog", new AbilityCatalogCols("ability_catalog"), new AbilityCatalogIxCols("ability_catalog"));
         public global::SpacetimeDB.Table<ActionBarSlotCatalog, ActionBarSlotCatalogCols, ActionBarSlotCatalogIxCols> ActionBarSlotCatalog() => new("action_bar_slot_catalog", new ActionBarSlotCatalogCols("action_bar_slot_catalog"), new ActionBarSlotCatalogIxCols("action_bar_slot_catalog"));
         public global::SpacetimeDB.Table<ActionPresentationCatalog, ActionPresentationCatalogCols, ActionPresentationCatalogIxCols> ActionPresentationCatalog() => new("action_presentation_catalog", new ActionPresentationCatalogCols("action_presentation_catalog"), new ActionPresentationCatalogIxCols("action_presentation_catalog"));
+        public global::SpacetimeDB.Table<ActiveAura, ActiveAuraCols, ActiveAuraIxCols> ActiveAura() => new("active_aura", new ActiveAuraCols("active_aura"), new ActiveAuraIxCols("active_aura"));
         public global::SpacetimeDB.Table<ActiveCast, ActiveCastCols, ActiveCastIxCols> ActiveCast() => new("active_cast", new ActiveCastCols("active_cast"), new ActiveCastIxCols("active_cast"));
         public global::SpacetimeDB.Table<ActiveCombatDiscipline, ActiveCombatDisciplineCols, ActiveCombatDisciplineIxCols> ActiveCombatDiscipline() => new("active_combat_discipline", new ActiveCombatDisciplineCols("active_combat_discipline"), new ActiveCombatDisciplineIxCols("active_combat_discipline"));
         public global::SpacetimeDB.Table<ActiveCombatMode, ActiveCombatModeCols, ActiveCombatModeIxCols> ActiveCombatMode() => new("active_combat_mode", new ActiveCombatModeCols("active_combat_mode"), new ActiveCombatModeIxCols("active_combat_mode"));

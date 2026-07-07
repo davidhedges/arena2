@@ -284,14 +284,14 @@ pub fn wire(
             duration: one_shot_duration,
             projectile_sequence_index: None,
         },
-        // B.8 — sustained caster aura; lives until the buff's StatusEffect row is deleted
-        // (decision 11), mirroring UNTIL_CAST_END but keyed on the status rather than the cast.
+        // B.8 — sustained caster aura; lives until the aura's ActiveAura row is deleted
+        // (decision 11), mirroring UNTIL_CAST_END but keyed on the aura rather than the cast.
         VfxSlot::Aura => CueWiring {
             trigger: "SPELL_RELEASE",
             anchor: Anchor::Caster,
             attach_mode: "FOLLOW_ANCHOR",
             vfx_role: "ATTACHED",
-            lifecycle: "UNTIL_STATUS_END",
+            lifecycle: "UNTIL_AURA_END",
             duration: DurationPolicy::Zero,
             projectile_sequence_index: None,
         },
@@ -424,14 +424,14 @@ mod tests {
     }
 
     #[test]
-    fn aura_uses_until_status_end_lifecycle() {
-        // Decision 11: an aura's visual lives until the buff's StatusEffect row is deleted.
+    fn aura_uses_until_aura_end_lifecycle() {
+        // Decision 11: an aura's visual lives until the aura's ActiveAura row is deleted.
         let w = wire(VfxArchetype::Aura, VfxSlot::Aura, AnimMode::Instant, false, false);
         assert_eq!(w.trigger, "SPELL_RELEASE");
         assert_eq!(w.anchor, Anchor::Caster);
         assert_eq!(w.attach_mode, "FOLLOW_ANCHOR");
         assert_eq!(w.vfx_role, "ATTACHED");
-        assert_eq!(w.lifecycle, "UNTIL_STATUS_END");
+        assert_eq!(w.lifecycle, "UNTIL_AURA_END");
         assert_eq!(w.duration, DurationPolicy::Zero);
     }
 

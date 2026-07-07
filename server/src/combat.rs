@@ -521,7 +521,9 @@ pub struct CombatStackingPassiveRuntime {
     pub last_consumed_action_key: String,
 }
 
-#[table(accessor = active_aura)]
+// Public so the client can drive UNTIL_AURA_END aura VFX teardown off this row's delete
+// (one row per owner, deleted once when the aura ends). See design doc decision 11.
+#[table(accessor = active_aura, public)]
 #[derive(Clone)]
 pub struct ActiveAura {
     #[primary_key]
