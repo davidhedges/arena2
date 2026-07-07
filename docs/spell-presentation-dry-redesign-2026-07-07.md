@@ -1,7 +1,7 @@
 # Spell Presentation Pipeline — DRY Redesign (Design Doc)
 
 **Status:** Agreed 2026-07-07 (§7 decisions locked). Ready to implement, starting at build-order step 0 + resolver.
-**Date:** 2026-07-07 · **Rev 2026-07-07b:** incorporated external review — fixed `vfx_school` precedence (§2.3), specified slot identity + legacy inference (§3.4, decision 6), gave the rule table a concrete Class A/B shape (§4.3, decision 5), fenced step 0 to cue-row cleanup only (decision 7).
+**Date:** 2026-07-07 · **Rev 2026-07-07b:** incorporated external review — fixed `vfx_school` precedence (§2.3), specified slot identity + legacy inference (§3.4, decision 6), gave the rule table a concrete Class A/B shape (§4.3, decision 5), fenced step 0 to cue-row cleanup only (decision 7). · **Rev 2026-07-07c:** added generator wiring table (Appendix B); fixed `scale`-in-palette bug (§3.1); resolved CHANNEL beam lifecycle → `UNTIL_CAST_END` (§B.7, decision 8). · **Rev 2026-07-07d:** parked ELECTROCUTE as legacy relic (decision 9, downgrades decision 8 to deferred); added animation template table (Appendix C). · **Rev 2026-07-07e (implementation begins):** step 0 verified NO-OP (ICE_SPIKES SPELL cue is a tested spell-kind fallback, not an orphan — decision 7 corrected); logged `CombatVfxCueResolver` prior art (VFX resolver + override model already exist; step-1 work is the animation face). · **Rev 2026-07-07f (end-state alignment):** registry+palette merge into per-school VFX sets + generator=Unity editor tool (decision 10); **all spell types supported**, AURA un-deferred via new `UNTIL_STATUS_END` lifecycle (decision 11); full `delivery.kind`→archetype coverage table + projectile-body no-drop guarantee (Rule 18) in B.9.
 **Scope:** Author-time surface for spell *presentation* — animation (Unity `CombatAnimationSet`) and VFX cues (`combat_vfx_cues[]` in `progression_catalog.shared.json`). Gameplay authoring is out of scope except as the *input* we derive from.
 
 This doc is deliberately adversarial about the requested direction. Where the direction is right I say so; where the data contradicts it I push back and propose the corrected version. Everything below was verified against the code and the live catalog, not the prompt summary.
@@ -16,7 +16,7 @@ This doc is deliberately adversarial about the requested direction. Where the di
 | Default + override for animation templates | **Right** | Keep. Generalize `holdOverride` into a whole-entry override with **per-field** fallthrough, not whole-entry replace. |
 | VFX by school, `damage_type` ≈ free school, `vfx_school` only for exceptions | **Inverted** | **27/47 spells have no `damage_type`.** Whole class identities (Paladin HOLY, Warrior VOID/DARK) live in spells with no `damage_type`. Resolve school as `vfx_school ?? damage_type ?? profile_default_school` — `vfx_school` **wins** so an off-element spell (FIRE damage, shadow look) can retint; `damage_type` is the free default when `vfx_school` is unset. `vfx_school` is first-class, not an exception. |
 | Unify the resolution model, not storage | **Right** | Keep. Two stores stay; one resolver contract spans both. |
-| Resolver first, then templates, then palettes, then validator+inspector, then migrate | **Right** | Keep the ordering. Add one thing before templates: a **cue-owner normalization pass** (dup/`owner_kind` cleanup) or the resolver keys on dirty data. |
+| Resolver first, then templates, then palettes, then validator+inspector, then migrate | **Right** | Keep the ordering. (A pre-templates "cue-owner cleanup" was proposed but **verified unnecessary** — the catalog already passes owner resolution; §5 step 0.) |
 
 **The single biggest DRY win** is not archetypes or palettes — it is that the **profile-agnostic elemental spell set (`SPELL_*`, `combat_profile_id: ""`) is authored twice** (once in `Staff.asset`, once in `TwoHandedSword.asset`) and three spells (`BLINDING_LIGHT`, `GLACIAL_SPIKE`, `FROZEN_GRASP`) are authored **four times** identically. Resolver + archetype templates kill that duplication directly.
 
@@ -86,7 +86,7 @@ Presentation is two orthogonal factors that must be resolved separately, then a 
 PRESENTATION(spell, weapon) =
     ANIMATION_ARCHETYPE(cast_time, behavior)        # body motion + timing protocol
   × VFX_ARCHETYPE(delivery.kind, targeting, sub)    # which cue slots fire + how they're wired
-  × SCHOOL(damage_type ?? vfx_school ?? default)    # which vfx_id fills each slot
+  × SCHOOL(vfx_school ?? damage_type ?? default)    # which vfx_id fills each slot
 ```
 
 ### 2.1 Animation archetypes (3 — this is genre-standard, don't add more)
@@ -138,7 +138,7 @@ Cross-checks that matter:
 
 ### 3.1 Palette definition (one per school)
 
-A palette is a map `slot → vfx_id` (+ optional per-slot `scale`/`duration_ms` hint, subject to validators). Slots, unified across archetypes:
+A palette is a map `slot → PaletteEntry`, where `PaletteEntry = { vfx_id, self_terminating?: bool, duration_ms?: int }`. **No `scale`** — Rule 1/E1 forbid authoring `scale` in the JSON (it lives in `CombatVFXRegistry`). The two optional fields are the *only* palette influence on lifecycle, and they don't author a raw lifecycle string: `self_terminating=true` means the prefab is a self-ending particle system → generator emits `PARTICLE_SYSTEM`; otherwise a `ONE_SHOT` slot emits `DURATION` with `duration_ms` (Rule 14 needs `>0`). Every other lifecycle is computed purely from the archetype (Appendix B). Slots, unified across archetypes:
 
 | Slot | Used by archetypes | Fills |
 |---|---|---|
@@ -160,18 +160,19 @@ Example (ARCANE): `{cast_glow: VFX_ARCANE_CAST_HAND_01, projectile_body: VFX_ARC
 `generate_cues(spell) = archetype.slots.map(slot -> Cue{ ... })` where the archetype owns the **wiring** and the palette owns the **look**:
 
 ```
+MODE = animation_archetype(spell)                  # INSTANT | CHARGED | CHANNEL
 for slot in ARCHETYPE(spell).requested_slots:
-    vfx_id = SCHOOL(spell).palette[slot]           # look — from palette
-    if vfx_id is None: continue                    # school opts out of this slot
-    emit Cue{
+    entry = SCHOOL(spell).palette[slot]            # look — PaletteEntry {vfx_id, self_terminating?, duration_ms?}
+    if entry is None: continue                     # school opts out of this slot
+    emit Cue{                                       # every field below defined in Appendix B
         owner_kind = "ABILITY", owner_id = spell.ability_id,
-        trigger    = ARCHETYPE.trigger_for(slot),          # wiring — from archetype
-        anchor     = ARCHETYPE.anchor_for(slot),
+        trigger    = ARCHETYPE.trigger_for(slot, spell),   # wiring — from archetype (+ DEFERRED/MODE)
+        anchor     = ARCHETYPE.anchor_for(slot, spell),
         attach_mode= ARCHETYPE.attach_for(slot),
         vfx_role   = ARCHETYPE.role_for(slot),
-        lifecycle  = ARCHETYPE.lifecycle_for(slot, cast_time, behavior),  # computed, never authored
-        duration_ms= ARCHETYPE.duration_for(slot),
-        vfx_id     = vfx_id,
+        lifecycle  = ARCHETYPE.lifecycle_for(slot, MODE, entry.self_terminating),  # computed, never authored raw
+        duration_ms= ARCHETYPE.duration_for(slot, MODE, entry),
+        vfx_id     = entry.vfx_id,
         projectile_sequence_index = slot==projectile_body ? 0 : -1,
         slot       = slot,                                 # explicit author-time slot key (see §3.4)
     }
@@ -230,6 +231,8 @@ Output: resolved `ground`/`air`/hold clips, `playbackLayer`, `combatEntryMode`, 
 
 Coexistence is the whole point: with zero templates/palettes authored, the resolver returns exactly today's behavior (every field resolves at layer 1 / legacy). Templates and palettes then peel authoring away incrementally with no behavior change until a per-spell entry is deleted.
 
+> **Prior art (verified 2026-07-07d):** the VFX resolution above *already exists at runtime* — `CombatVfxCueResolver` (`Assets/Arena/Runtime/Presentation/CombatVfxCueResolver.cs`) matches cues by `(owner_kind, owner_id, trigger)` and implements an **ABILITY-cue-overrides-SPELL-kind-cue** layer via a `CueOverrideKey = (trigger, role, anchor, attach_mode, hit_index, projectile_sequence_index)`. That `CueOverrideKey` is a de-facto slot identity and strong validation of §3.4's inference table — the explicit `slot` key can align with (or replace) it. Consequence: the VFX *resolver* is largely built; the missing VFX piece is the **generator** (step 3, Rust), not the resolver. The genuinely-new resolver work in step 1 is the **animation** face, which today is a flat explicit lookup (`CombatAnimationSet.TryGetSpellAnimation`).
+
 ### 4.2 Validator
 
 Runs in the editor (author-time) and ideally as a `spacetime`-side check on export. Rules:
@@ -237,7 +240,7 @@ Runs in the editor (author-time) and ideally as a `spacetime`-side check on expo
 - **Redundancy (the delete-list):** flag any explicit per-spell animation entry or cue whose every field equals the resolved template/generated default. This is the migration burndown list. Must compare *resolved* values (clip refs, lifecycle, anchor), not raw serialized bytes, because obsolete fields differ harmlessly.
 - **Archetype/gameplay desync:** flag any explicit `presentationMode` that disagrees with `derive(cast_time, behavior)` — these are latent bugs today.
 - **School coverage:** flag a spell whose resolved archetype requests a slot the resolved school doesn't provide (e.g. ARCANE with no `impact`).
-- **School drift lint:** flag an explicit cue whose `vfx_id` isn't in the resolved school's palette (catches the ORBITING_BLADES-in-ice-clothes case). Warning, not error.
+- **School drift lint:** flag an explicit cue whose `vfx_id` isn't in the resolved school's palette (catches the ORBITING_BLADES-in-ice-clothes case). Warning, not error. **Suppressed for spells marked `presentation_legacy: true`** — parked relics (e.g. ELECTROCUTE, decision 9) are deliberately off-palette and should not nag.
 - **Contract passthrough:** run the generated + overridden output through the existing server contract (Appendix A) and the editor `CombatVFXAuthoringValidator`. See §4.3 for how the shared rule table is actually structured — this is where "generate correct-by-construction" meets "don't spawn a third rule path."
 
 ### 4.3 Rule-table shape (decision #5, made concrete)
@@ -263,7 +266,7 @@ This is the tool that makes migration safe and observable; it is not optional po
 
 ## 5. Build order (unchanged from request, one insertion)
 
-0. **Normalize cue-owner *rows only*** (new, cheap, blocking): repoint the orphan `ICE_SPIKES` cue (its `owner_id` resolves to no ability) to `SPELL_ICE_SPIKES` or drop it as a duplicate, and collapse the lone `owner_kind: SPELL` row into `ABILITY`. This touches `combat_vfx_cues` rows exclusively so every cue `owner_id` resolves to an existing `ability_id`. **Non-goals — explicitly out of scope for step 0:** renaming any `ability_id`; the `SPELL_*`-vs-profile-scoped id convention; and anything touching `combat_profile_action_bar_defaults`, saved player action bars/loadouts, spellbook authorization, animation-set `spellId` keys, or VFX ability identity. Changing an `ability_id` is a live-player-state data migration with its own plan and gate — if we ever pursue the id convention, it is a **separate, later** work item, never smuggled into cue cleanup. The resolver keys on `ability_id` *as it exists today*; step 0 only makes the cue rows' foreign keys valid.
+0. **Cue-owner cleanup — VERIFIED NO-OP (2026-07-07d, corrected).** The premise was wrong: the `SPELL`/`ICE_SPIKES` cue is **not** an orphan. `owner_id: ICE_SPIKES` resolves as a valid **spell-kind** owner (server Rule 3 checks `known_spells`, not just `ability_id`s), and it is a *deliberate* "spell-owned area-impact fallback" — asserted by the test `warrior_ice_spikes_authors_self_area_cone_vfx` (`progression.rs`). The lone `owner_kind: SPELL` row is that fallback, not an outlier to collapse. The whole catalog already passes owner-resolution validation (server contract + 72 passing tests). **There is nothing to clean; skip to step 1.** Prior mistake logged so we don't repeat it: never diagnose a cue "orphan" by checking `owner_id` against `ability_id`s alone — SPELL and MELEE_STRIKE owners resolve against different tables. (The `ability_id` rename / `SPELL_*` convention question remains deferred to its own gated migration, but it was never a step-0 item.)
 1. **Resolver** reading legacy + (empty) defaults → proves byte-identical behavior with no templates.
 2. **Animation archetype templates** (per weapon × 3 archetypes + weapon-agnostic) → migrate `SPELL_*` first (biggest duplication), delete redundant entries via the inspector.
 3. **School palettes + cue generator** → migrate elemental projectiles first (clearest slot set), validate against Appendix A.
@@ -293,13 +296,19 @@ This is the tool that makes migration safe and observable; it is not optional po
 
 ## 7. Decisions (agreed 2026-07-07)
 
-1. **AURA — out of v1.** The 6 aura spells get no generated cues this cycle (0/6 have an exemplar and there's no natural lifecycle). Build-order step 5 defers them; revisit only after one aura is hand-authored to define the slot + lifecycle.
+1. **AURA — supported (un-deferred 2026-07-07f, superseded by decision 11).** Originally out of v1 for lack of an exemplar + lifecycle. Both now exist: the owner supplied an aura prefab (`Human_SpellAura_Ice`), and the lifecycle is solved — see decision 11. All spell types are in scope; nothing is deferred.
 2. **`muzzle` slot — optional per-school, off by default.** Not emitted unless a school's palette explicitly provides `muzzle`. Faithful to today (launch blends off the hand anchor); a school opting in adds a *new* effect on the normal spawn path.
 3. **`presentationMode` — validate-agreement-first this cycle; derive next cycle.** This cycle the validator's desync check (§4.2) runs and its list is resolved, but the field stays hand-authored and the runtime keeps reading it. A later cycle flips the runtime to `derive(cast_time, behavior)` once the desync list is empty — so behavior never flips on an unreviewed spell.
 4. **Generated cues — materialized at export into the JSON.** The generator writes `combat_vfx_cues[]` into `progression_catalog.shared.json` at export time (checked in, diffable), and the existing server + editor validators run over the materialized output unchanged. No in-memory-at-load generation.
 5. **Rule table — unified, with a concrete shape (§4.3).** Split Appendix-A rules into **Class A** (cue-field relational rules → one declarative table, codegen'd Rust→C#, consumed by generator + server validator + editor validator) and **Class B** (engine-asset rules E3/E7/E8/E9 → editor-only, *not* divergence). Author Class A once; the generator is correct-by-construction from it. The table's exact form (JSON vs codegen'd const) is an implementation-shaping item for the first coding session, resolved **before** the generator (step 3) is written.
 6. **Slot identity — explicit `slot` key + legacy inference (§3.4).** Generated/overridden cues carry an author-time-only `slot` string (not synced to the runtime table, so no schema/wire change). Overrides key on it exactly. Legacy rows get a slot from the strict, collision-free `(trigger, role, anchor-class)` inference table; ambiguous inference is a hard validator error. Inference is a migration-window concern only.
-7. **Step 0 is cue-row cleanup only — never an ID migration.** Repoint the orphan `ICE_SPIKES` cue and the `owner_kind: SPELL` outlier so every cue's `owner_id` resolves to an existing `ability_id`. No `ability_id` renames, no action-bar/loadout/spellbook/animation-`spellId` changes. The `SPELL_*` id-convention question is deferred to its own gated migration if ever pursued.
+7. **Step 0 turned out to be a no-op (corrected 2026-07-07d).** The `ICE_SPIKES`/`owner_kind: SPELL` cue is a legitimate, tested spell-kind *fallback*, not an orphan — the catalog already passes owner-resolution validation, so there is nothing to clean. See §5 step 0. (The `ability_id` rename / `SPELL_*` convention remains deferred to its own gated migration, but it was never a step-0 item.)
+8. **CHANNEL beam lifecycle = `UNTIL_CAST_END` when generated (§B.7).** The correct target for a channel sustained visual (persists to cast-stop, not first impact); unifies all CHANNEL sustained visuals (`cast_glow` + `beam`) on ActiveCast-delete. **Deferred, not blocking:** the sole channel-beam spell (ELECTROCUTE) is parked (decision 9), so nothing generates a channel beam yet. The `UNTIL_CAST_END`→`ActiveCast` binding check on `SPELL_RELEASE` cues reactivates only when a real channel beam is authored.
+9. **ELECTROCUTE parked as a legacy relic.** It's an old-project relic that doesn't behave as wanted, not on any default action bar (already effectively library-only), and not being re-authored now. It stays in the legacy layer: the resolver serves its existing cues verbatim (legacy wins per-slot, §4.1), it is never migrated, and it is marked `presentation_legacy: true` so the school-drift lint ignores it (§4.2). Consequence: the CHANNEL-beam VFX cell (B.7) has **no live exemplar** — it joins `muzzle` on the "author a first exemplar before relying on it" list (B.9). The CHANNEL *animation* archetype is unaffected (MAGIC_MISSILE/FROZEN_SPLINTERS remain exemplars). Retiring/deleting ELECTROCUTE is a separate gated task (touches `ability_id` refs) for whenever a proper channel beam replaces it.
+
+10. **Registry + palette merge into one per-school VFX set; generator = Unity editor tool (2026-07-07f).** The `CombatVFXRegistry` (`vfx_id → prefab + scale`) can't be deleted — it's the client half of a client↔server boundary (the server catalog holds `vfx_id` *strings*; only Unity holds prefabs), so *something* in Unity must map string→prefab. But it merges with the school palette into one asset: **a per-school VFX set** = `slot → { vfx_id, prefab, scale }`, serving as both the registry (id→prefab) and the palette (school×slot→id). The cue **generator becomes a Unity editor tool** that reads gameplay from the catalog + the school sets and writes generated cues back into `progression_catalog.shared.json` (decision 4 unchanged — still materialized into JSON; only the tool's *location* moves from Rust to Unity C#). Bonus: the archetype/mode derivation collapses to **one C# function** (`SpellAnimationArchetypes.Derive`) instead of duplicated Rust + C#; the Rust `vfx_generation` module retires to being the server-side validator's Class-A rule source (decision 5). **End-state authoring goal:** a typical new spell touches **one place** — its gameplay row. VFX generate, animation inherits an archetype template, the prefab already lives in its school set. The other surfaces are per-*category* (per school / weapon×archetype / new asset), authored once and inherited.
+
+11. **AURA lifecycle = `UNTIL_STATUS_END` (new), keyed on the public `StatusEffect` row (2026-07-07f).** An aura's visual must live as long as the *buff*, not the cast (auras are `cast_time 0` — there's no sustained `ActiveCast`). Auras apply a public `StatusEffect` row (`server/src/combat.rs`) that persists while the aura is active and that the client already subscribes to. So add a lifecycle `UNTIL_STATUS_END`, driven by `StatusEffect` **row-delete**, **mirroring the existing `UNTIL_CAST_END`** (`CombatVFXLifecycleRegistry.cs:153`, which tears down on `ActiveCast` delete). Linkage: cue owner (`ability_id`) + caster → the matching `StatusEffect` (by `status_stack_group`). This is a small, precedented client feature (new allow-listed lifecycle + a delete subscription), not a redesign. The `aura` slot (B.8) uses it; the `Human_SpellAura_Ice` prefab is its first exemplar. This is what makes **all spell types** supported end-to-end.
 
 ---
 
@@ -330,3 +339,157 @@ Editor (`CombatVFXAuthoringValidator.cs`), additionally:
 - **Class A (relational, unify):** the enum allow-lists, owner resolution, projectile-count, and every `trigger×role×anchor×lifecycle` legality rule above. These are pure data; today they are server-only (the editor doesn't enforce them) — *that* is the divergence Class A closes by becoming one shared declarative table read by the generator + both validators.
 - **Class B (engine-asset, leave editor-only):** E3/E4/E7/E8/E9 need Unity asset introspection (prefabs, clip events, avatar rig) and cannot run server-side. Their absence server-side is correct separation, not divergence — do not try to "unify" them.
 - Only `UNTIL_RELEASE_EVENT→SPELL_CAST` and the hand-attached-cast-time rule are enforced on both sides today; after Class A unifies, all Class-A rules are.
+
+---
+
+## Appendix B — Generator wiring table (`ARCHETYPE.*_for(slot)`)
+
+This is the concrete definition of the `trigger_for` / `anchor_for` / `attach_for` / `role_for` / `lifecycle_for` / `duration_for` functions the §3.2 generator calls. It is the Class-A rule table's *authoring-facing* face — every row is correct-by-construction against Appendix A, and every populated cell is grounded in a real catalog row. Migrating a spell should reproduce its current cues from this table (modulo the school retint); where it wouldn't, that's a bug in the current data, listed in the "grounding / drift" column.
+
+**Shared modifiers** (computed once per spell, feed multiple cells):
+- `MODE ∈ {INSTANT, CHARGED, CHANNEL}` = the animation archetype (§2.1), from `cast_time_ms` + `behavior`.
+- `HAND` = the resolved cast hand (E7 inference from animation/playback layer; default `LEFT_HAND` — 14 of 15 hand cues use LEFT today).
+- `DEFERRED` = delivery resolves its area on a delay (`impact_delay_ms`/deferred-area) rather than at release. Selects `AREA_IMPACT@AREA_ORIGIN` over `SPELL_RELEASE@IMPACT_POINT` for ground/nova impacts.
+- `PS?` = the slot's `PaletteEntry.self_terminating` (→ `PARTICLE_SYSTEM`, else `DURATION`+`duration_ms`).
+
+### B.1 `cast_glow` (PROJECTILE, BEAM, SKY_DROP-charged, all CHARGED/CHANNEL)
+
+| field | value | rule / grounding |
+|---|---|---|
+| trigger | `SPELL_CAST` | — |
+| anchor | `HAND` | E7 must match inferred cast hand |
+| attach_mode | `FOLLOW_ANCHOR` | follows the hand through the cast |
+| vfx_role | `ATTACHED` | — |
+| lifecycle | `INSTANT→DURATION` · `CHARGED→UNTIL_RELEASE_EVENT` · `CHANNEL→UNTIL_CAST_END` | **exactly** FIREBALL(350)/ICICLE/MAGIC_MISSILE. Rule 11 *forces* UNTIL_RELEASE_EVENT for CHARGED (cast_time>0); Rule 11 antecedent is false for INSTANT/CHANNEL (cast_time 0) so DURATION / UNTIL_CAST_END are legal. Rule 9: UNTIL_RELEASE_EVENT only on SPELL_CAST ✓ |
+| duration_ms | `INSTANT → PaletteEntry.duration_ms (>0)` · else `0` | CHARGED/CHANNEL ignore duration |
+
+### B.2 `muzzle` (PROJECTILE, BEAM — opt-in, off by default, decision #2)
+
+| field | value | rule / grounding |
+|---|---|---|
+| trigger | `SPELL_RELEASE` | not emitted unless palette provides `muzzle` |
+| anchor | `HAND` | same resolved hand |
+| attach_mode | `SPAWN_WORLD` | flash at hand, not attached |
+| vfx_role | `ONE_SHOT` | — |
+| lifecycle | `PS? → PARTICLE_SYSTEM` else `DURATION` | Rule 10 (PARTICLE_SYSTEM ⇒ ONE_SHOT ✓) |
+| duration_ms | `PS? → 0` else `PaletteEntry.duration_ms (>0)` | Rule 10b / Rule 14 |
+
+### B.3 `projectile_body` (PROJECTILE)
+
+| field | value | rule / grounding |
+|---|---|---|
+| trigger | `SPELL_RELEASE` | Rule 12a |
+| anchor | `HAND` (default) · `CASTER` for body-origin | client reads it for hand-launch blend; GROUND_SLASH uses CASTER — expose as a per-spell slot override |
+| attach_mode | `SPAWN_WORLD` | Rule 12b (never FOLLOW_ANCHOR) |
+| vfx_role | `PROJECTILE_BODY` | early-returns in DispatchCue; drawn by projectile controller |
+| lifecycle | `UNTIL_TERMINAL_EVENT` | — |
+| duration_ms / start_delay | `0` / *unset* | Rule 12c (no start_delay) |
+| projectile_sequence_index | `0` | Rules 12d/18: exactly one selected at index 0. **Multi-projectile channels (MAGIC_MISSILE/FROZEN_SPLINTERS) fire N bodies from one row at runtime — index stays 0; do not emit index 1..N** (current data confirms only index 0 exists). |
+
+### B.4 `travel_body` (SKY_DROP)
+
+| field | value | rule / grounding |
+|---|---|---|
+| trigger | `SPELL_RELEASE` | Rule 13a |
+| anchor | `ORIGIN` | METEOR sky origin |
+| attach_mode | `SPAWN_WORLD` | Rule 13b |
+| vfx_role | `TRAVEL_BODY` | routes to TravelVisuals |
+| lifecycle | `UNTIL_TERMINAL_EVENT` | Rule 13c (forced) |
+| duration_ms | `0` | Rule 13d |
+
+### B.5 `impact` (PROJECTILE, SKY_DROP, GROUND_AOE, TARGET_HIT)
+
+| field | value | rule / grounding |
+|---|---|---|
+| trigger | PROJECTILE/SKY_DROP → `SPELL_IMPACT` · GROUND_AOE → `DEFERRED ? AREA_IMPACT : SPELL_RELEASE` · TARGET_HIT → `SPELL_IMPACT` | FIREBALL(SPELL_IMPACT) / LIGHTNING(SPELL_RELEASE) / ICE_SPIKES(AREA_IMPACT) / GLACIAL_SPIKE(SPELL_IMPACT) |
+| anchor | PROJECTILE/SKY_DROP → `IMPACT_POINT` · GROUND_AOE → `DEFERRED ? AREA_ORIGIN : IMPACT_POINT` · TARGET_HIT → `TARGET` | Rule 15: `TARGET` legal only on SPELL_IMPACT (never CAST/RELEASE) — TARGET_HIT is SPELL_IMPACT ✓ |
+| attach_mode | `SPAWN_WORLD` | — |
+| vfx_role | `ONE_SHOT` | — |
+| lifecycle | `PS? → PARTICLE_SYSTEM` else `DURATION` | Rule 10 / Rule 14 |
+| duration_ms | `PS? → 0` else `PaletteEntry.duration_ms (>0)` | Rule 10b / Rule 14 |
+
+### B.6 `burst` (SELF_NOVA)
+
+| field | value | rule / grounding |
+|---|---|---|
+| trigger | `DEFERRED ? AREA_IMPACT : SPELL_RELEASE` | FROST_NOVA(SPELL_RELEASE) / ICE_SPIKES(AREA_IMPACT) |
+| anchor | `DEFERRED ? AREA_ORIGIN : CASTER` | — |
+| attach_mode | `SPAWN_WORLD` | — |
+| vfx_role | `ONE_SHOT` | — |
+| lifecycle / duration | as `impact` (B.5) | FROST_NOVA/SHOCKWAVE/INTIMIDATE all PARTICLE_SYSTEM |
+
+### B.7 `beam` (BEAM)
+
+| field | value | rule / grounding |
+|---|---|---|
+| trigger | `SPELL_RELEASE` | — |
+| anchor | `HAND` | ELECTROCUTE/INSTANT_BEAM use LEFT_HAND |
+| attach_mode | `FOLLOW_ANCHOR` | tracks the hand |
+| vfx_role | `ATTACHED` | — |
+| lifecycle | `CHANNEL → UNTIL_CAST_END` · `CHARGED → DURATION` | INSTANT_BEAM(CHARGED, DURATION 500). CHANNEL beam ends on ActiveCast-delete (decision, 2026-07-07 — see below), superseding the shipped `UNTIL_TERMINAL_EVENT`. Beam visuals remain *scripted* templates (BeamVFX, procedural geometry) — but that is now geometry-driven, **not** lifecycle-driven (E4 only fires on `UNTIL_TERMINAL_EVENT`, which we no longer emit). |
+| duration_ms | `CHARGED → PaletteEntry.duration_ms (>0)` · `CHANNEL → 0` | CHANNEL ignores duration (ActiveCast-driven) |
+
+> **Decided (2026-07-07): CHANNEL beam lifecycle = `UNTIL_CAST_END`, superseding the shipped `UNTIL_TERMINAL_EVENT`.** `UNTIL_TERMINAL_EVENT` dies on the first terminal (impact/miss/fizzle); a channel should persist until the channel *stops* (ActiveCast deleted). This unifies the channel family: **all CHANNEL sustained visuals — `cast_glow` (B.1) and `beam` (B.7) — end on ActiveCast-delete**, one rule. Validation is clean: `UNTIL_CAST_END` is allow-listed with no trigger restriction (only `UNTIL_RELEASE_EVENT` is pinned to `SPELL_CAST`, Rule 9), so it is legal on a `SPELL_RELEASE`/`ATTACHED` beam.
+>
+> **Verify when a channel beam is first generated (deferred — ELECTROCUTE is parked, decision 9, so no channel beam generates today):** the client `UNTIL_CAST_END` teardown binds a cue to its `ActiveCast` via `action_instance_id` (`CombatVFXDispatcher`/`CombatVFXLifecycleRegistry`); the only *proven* binding today is a `SPELL_CAST` `cast_glow` (MAGIC_MISSILE). Confirm the identical binding fires for a `SPELL_RELEASE`-triggered beam cue — otherwise the beam never receives the delete and leaks past cast-stop. If binding is `SPELL_CAST`-only, either extend it to release cues or move the channel beam to a `SPELL_CAST` trigger.
+
+### B.8 `self_flash` (SELF_FX — opt-in) / `aura` (AURA — supported, decision 11)
+
+| field | value | rule / grounding |
+|---|---|---|
+| `self_flash` trigger/anchor | `SPELL_RELEASE` / `CASTER` or `CASTER_OVERHEAD` | BLINDING_LIGHT(CASTER_OVERHEAD, PARTICLE_SYSTEM); most buffs emit **nothing** |
+| `self_flash` role/lifecycle | `ONE_SHOT` / as B.5 | — |
+| `aura` trigger | `SPELL_RELEASE` | the aura attaches at cast |
+| `aura` anchor / attach / role | `CASTER` / `FOLLOW_ANCHOR` / `ATTACHED` | sustained caster-attached effect |
+| `aura` lifecycle / duration | `UNTIL_STATUS_END` / `0` | decision 11 — driven by the public `StatusEffect` row-delete (mirrors `UNTIL_CAST_END`). First exemplar: `Human_SpellAura_Ice`. |
+
+### B.9 Coverage check
+
+**Every `delivery.kind` maps to an archetype — all spell types are covered (no deferrals):**
+
+| `delivery.kind` (+ discriminator) | archetype | slots |
+|---|---|---|
+| `PROJECTILE` | Projectile | cast_glow, projectile_body, impact |
+| `CHANNEL` + fires projectiles | Projectile | cast_glow, projectile_body, impact |
+| `CHANNEL` + beam | Beam | cast_glow, beam |
+| `INSTANT_BEAM` | Beam (charged) | cast_glow, beam |
+| `DIRECT_TARGET` | TargetHit | impact @ TARGET |
+| `AREA` + sky_origin | SkyDrop | (cast_glow), travel_body, impact |
+| `AREA` + targeting SELF | SelfNova | burst |
+| `AREA` + targeting POINT/TARGET | GroundAoe | impact |
+| `APPLY_STATUS` / `SELF_RESOURCE` (SELF) | SelfFx | self_flash (or none) |
+| `APPLY_STATUS` (TARGET) / `CONSUME_STATUS` | TargetHit | impact @ TARGET |
+| `REMOVE_STATUS` | TargetHit / SelfFx | cleanse flash |
+| `AURA` | Aura | aura (`UNTIL_STATUS_END`, decision 11) |
+
+**The projectile body is never dropped.** For a projectile spell the `projectile_body` slot is filled by the school VFX set's generic body **or** a per-spell signature override — either way a registered `vfx_id`. And it cannot be silently forgotten: **server Rule 18 hard-fails any projectile spell that resolves to zero `PROJECTILE_BODY` cues** (exactly one required at index 0). A missing projectile prefab is a build-time contract error, not a broken spell at runtime.
+
+**Cells still needing a first exemplar** (author one before relying on them): `muzzle` (none today — opt-in), `beam × CHANNEL` (only ELECTROCUTE, parked — decision 9), `projectile_body` index >0 (never used, and per B.3 never should be), `cast_glow` on SKY_DROP/BEAM (optional, none today). `aura` now has its first exemplar (`Human_SpellAura_Ice`); `beam × CHARGED` has INSTANT_BEAM. Out of scope regardless: the pure-melee cue owners (`PALADIN_AVENGE`/`WARRIOR_EARTHSHATTER`/`WARRIOR_CATACLYSM`, §6.11).
+
+---
+
+## Appendix C — Animation template table (per-`(weapon × animation-archetype)` defaults)
+
+The animation-side twin of Appendix B: what a `(weaponProfile × animation_archetype)` template supplies, so the step-2 templates encode against a fixed contract. The animation archetype is just the 3 buckets from §2.1 (`INSTANT`/`CHARGED`/`CHANNEL`); the VFX archetype (Appendix B) does **not** enter here — a Fireball and a Frost-Needle share one INSTANT animation template and differ only in VFX.
+
+**What lives where (the DRY split):**
+- **Template (weapon-agnostic archetype default):** `requiresCombatStance`, `combatEntryMode`, derived `presentationMode`, default `playbackLayer`, and hold-state routing. These are archetype constants, authored once.
+- **Per-weapon override:** the hold *clips* (`defaultSpellCastHold` is already per-set — a staff channel pose ≠ a sword one) and rare layer/stance tweaks (e.g. a shield-bearer can't two-hand a staff channel).
+- **Per-spell:** the gesture/release *clip* (each spell's motion), a signature `holdOverride`, `animatedProp`, and any `playbackLayer` override. The clip is the one thing the template can't supply — but for the profile-less `SPELL_*` set it's currently authored **identically in two weapon sets**; a weapon-agnostic archetype template + one shared clip per spell is exactly what collapses that duplication.
+
+**Shared modifiers:** `MODE` (INSTANT/CHARGED/CHANNEL), `MOBILITY` = `cast_mobility` (MOBILE / GROUNDED_STATIONARY), `HAND` (same resolved cast hand as Appendix B / E7).
+
+| field | INSTANT | CHARGED | CHANNEL | grounding / rule |
+|---|---|---|---|---|
+| `presentationMode` (derived) | `ReleaseOnly` | `HoldThenRelease` | `HoldOnly` | derived from `cast_time`+`behavior`; **this cycle validated-not-flipped** (decision 3) — template computes it, validator checks agreement, field stays authored |
+| `requiresCombatStance` | `true` | `true` | `true` | constant — 87/87 entries today |
+| `combatEntryMode` (default) | `ImmediateForFullBodyAnimatedAfterUpperBody` (3) | `AnimatedAfterCast` (2) | `AnimatedAfterCast` (2) | 3 keeps moving instant casts mobile; 2 lets the charge/channel animate into stance. Tunable per weapon. |
+| active `playbackLayer` (default) | `UpperBodyWhileMoving` (0) | *hold layer, below* | *hold layer, below* | 0 is the dominant instant default (preserve locomotion while moving); overrides → `FullBody` for committed casts, `LeftGesture` for subtle gestures |
+| **hold `playbackLayer`** | n/a | `GROUNDED_STATIONARY → FullBody (1)` · `MOBILE → UpperBody (2)` | `UpperBody (2)` default · `FullBody (1)` for full-commit | CHARGED grounded = brief full commit → FullBody (METEOR/ICICLE/INSTANT_BEAM); GLACIAL_SPIKE (MOBILE) → UpperBody. CHANNEL defaults UpperBody even when grounded so facing/aim stay responsive while sustaining (MAGIC_MISSILE) |
+| **hold-state routing** | n/a | `FullBody→SpellCastHoldAction{1-4}` · `UpperBody→UpperBodySpellCastHoldAction{1-4}` | same | **must** resolve to a loop-capable state; `LeftGesture`/`UpperBodyWhileMoving` auto-exit at 0.9 and silently freeze the hold (§6.8) — enforce as a validator rule, not a convention |
+| hold clips (`enter`/`idleLoop`) | n/a | `holdOverride` (per-spell) ?? `defaultSpellCastHold` (per-weapon) | same | fallback already exists (`TryResolveHoldProfile`, `CombatAnimationSet.cs:579`) |
+| release clip | per-spell gesture (`ground`/`air`); `OnReleaseFrame` drives timing | per-spell release gesture, played after the hold | **none** (HoldOnly) | clip stays per-spell; obsolete float fields ignored (§6.14) |
+| exit timing | n/a | `exitDelaySeconds`/`exitBlendOutSeconds` (hold profile, with defaults) | same, or immediate on cast-stop | — |
+| COMBAT_CAST / timing driver | client **prediction** path (excludes holds) | `ActiveCast` **scheduled release** (`ComputeReleaseStartMs`) | `ActiveCast` enter→loop; **release COMBAT_CAST suppressed** (`OnCombatCast`, gated `!PlaysSpellReleasePresentation`, §6.9) | changing how `PlaysSpellReleasePresentation` is computed must keep all three paths in lockstep (§6.9, `reference_spell_hold_loop_states.md`) |
+
+**Coverage / exemplars:** INSTANT = ~40 spells (well-exercised). CHARGED = METEOR/ICICLE/INSTANT_BEAM (grounded, FullBody hold) + GLACIAL_SPIKE (mobile, UpperBody hold) — both hold-layer branches have an exemplar. CHANNEL = MAGIC_MISSILE/FROZEN_SPLINTERS (UpperBody hold, channel-projectile) — exercised; the channel-*beam* animation would reuse the same CHANNEL template (only its VFX differs), so ELECTROCUTE being parked (decision 9) costs the animation side nothing.
