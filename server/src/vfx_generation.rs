@@ -291,11 +291,14 @@ pub fn wire(
             duration: one_shot_duration,
             projectile_sequence_index: None,
         },
-        // B.8 — the common aura visual: a brief one-shot burst at the caster's feet.
+        // B.8 — the common aura visual: a one-shot flourish at the caster's feet that follows
+        // them while it plays (an aura is attached to the caster, not planted in the world).
+        // FOLLOW_ANCHOR requires a real transform, so anchor on CASTER (the presentation root),
+        // not GROUND_UNDER_CASTER (a computed point). The prefab must be ground-pivoted.
         VfxSlot::AuraGround => CueWiring {
             trigger: "SPELL_RELEASE",
-            anchor: Anchor::GroundUnderCaster,
-            attach_mode: "SPAWN_WORLD",
+            anchor: Anchor::Caster,
+            attach_mode: "FOLLOW_ANCHOR",
             vfx_role: "ONE_SHOT",
             lifecycle: one_shot_lifecycle,
             duration: one_shot_duration,
@@ -449,7 +452,8 @@ mod tests {
 
         let w = wire(VfxArchetype::Aura, VfxSlot::AuraGround, AnimMode::Instant, false, false);
         assert_eq!(w.trigger, "SPELL_RELEASE");
-        assert_eq!(w.anchor, Anchor::GroundUnderCaster);
+        assert_eq!(w.anchor, Anchor::Caster); // follows the caster (FOLLOW_ANCHOR needs a transform)
+        assert_eq!(w.attach_mode, "FOLLOW_ANCHOR");
         assert_eq!(w.vfx_role, "ONE_SHOT");
     }
 

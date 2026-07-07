@@ -439,8 +439,8 @@ This is the concrete definition of the `trigger_for` / `anchor_for` / `attach_fo
 |---|---|---|
 | `self_flash` trigger/anchor | `SPELL_RELEASE` / `CASTER` or `CASTER_OVERHEAD` | BLINDING_LIGHT(CASTER_OVERHEAD, PARTICLE_SYSTEM); most buffs emit **nothing** |
 | `self_flash` role/lifecycle | `ONE_SHOT` / as B.5 | — |
-| `aura_ground` (**default**) trigger/anchor | `SPELL_RELEASE` / `GROUND_UNDER_CASTER` | the common aura visual — a brief flourish at the caster's feet |
-| `aura_ground` role/lifecycle | `ONE_SHOT` / `PARTICLE_SYSTEM` or `DURATION` (by `self_terminating`) | first exemplar: `WARDING_AURA` → `VFX_HOLY_AURA_GROUND_01` (`aura_1`, DURATION 2000 — it has 2 looping child systems so PARTICLE_SYSTEM would linger) |
+| `aura_ground` (**default**) trigger/anchor | `SPELL_RELEASE` / `CASTER` | the common aura visual — a flourish at the caster's feet that **follows** them while it plays (an aura is attached to the caster). `CASTER`, not `GROUND_UNDER_CASTER`, because `FOLLOW_ANCHOR` needs a real transform (the computed ground point isn't followable). |
+| `aura_ground` attach / role / lifecycle | `FOLLOW_ANCHOR` / `ONE_SHOT` / `PARTICLE_SYSTEM` or `DURATION` (by `self_terminating`) | first exemplar: `WARDING_AURA` → `VFX_HOLY_AURA_GROUND_01` (`aura_1`, DURATION 2000 — 2 looping child systems, so PARTICLE_SYSTEM would linger). **Prefab must be ground-pivoted** (base at the pivot) or it sinks below the feet. |
 | `aura` (**opt-in**) trigger/anchor | `SPELL_RELEASE` / `CASTER` | sustained caster-attached glow, only for schools that provide it |
 | `aura` attach / role / lifecycle | `FOLLOW_ANCHOR` / `ATTACHED` / `UNTIL_AURA_END` | decision 11 — driven by the public `ActiveAura` row-delete (a straight mirror of `UNTIL_CAST_END`). Exemplar-in-waiting: `Human_SpellAura_Ice`. |
 
