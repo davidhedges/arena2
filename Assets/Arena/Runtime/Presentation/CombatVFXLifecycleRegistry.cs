@@ -17,7 +17,7 @@ namespace Arena.Presentation
         private const string LifecycleUntilReleaseEvent = "UNTIL_RELEASE_EVENT";
         private const string LifecycleUntilTerminalEvent = "UNTIL_TERMINAL_EVENT";
         private const string LifecycleUntilCastEnd = "UNTIL_CAST_END";
-        private const string LifecycleUntilStatusEnd = "UNTIL_STATUS_END";
+        private const string LifecycleUntilAuraEnd = "UNTIL_AURA_END";
 
         private readonly MonoBehaviour _coroutineOwner;
         private readonly Dictionary<string, ScriptedEntry> _scripted = new();
@@ -161,18 +161,16 @@ namespace Arena.Presentation
             DestroyMatchingPrefabs(actionInstanceId, LifecycleUntilCastEnd);
         }
 
-        // Ends UNTIL_STATUS_END cues (auras — design doc decision 11) when the owning buff's
-        // StatusEffect row is deleted. Mirrors DestroyForCastEnd, keyed on the aura's status key.
-        // TODO(aura): the caller side is not wired yet. CombatVFXDispatcher must subscribe to
-        // StatusEffect row-delete and resolve the aura cue's key from (caster identity +
-        // status_stack_group) before calling this — that linkage needs Unity playtest verification.
-        public void DestroyForStatusEnd(string auraStatusKey)
+        // Ends UNTIL_AURA_END cues (auras — design doc decision 11) when the owning aura's
+        // ActiveAura row is deleted. A straight mirror of DestroyForCastEnd, keyed on the aura
+        // key (owner identity) instead of the cast id.
+        public void DestroyForAuraEnd(string auraKey)
         {
-            if (string.IsNullOrWhiteSpace(auraStatusKey))
+            if (string.IsNullOrWhiteSpace(auraKey))
                 return;
 
-            DestroyMatchingScripted(auraStatusKey, LifecycleUntilStatusEnd);
-            DestroyMatchingPrefabs(auraStatusKey, LifecycleUntilStatusEnd);
+            DestroyMatchingScripted(auraKey, LifecycleUntilAuraEnd);
+            DestroyMatchingPrefabs(auraKey, LifecycleUntilAuraEnd);
         }
 
         public void Dispose()

@@ -33,6 +33,7 @@ namespace Arena.Presentation
         private const string AttachModeWorldAlignedToFacing = "WORLD_ALIGNED_TO_FACING";
         private const string VfxRoleProjectileBody = "PROJECTILE_BODY";
         private const string VfxRoleTravelBody = "TRAVEL_BODY";
+        private const string LifecycleUntilAuraEnd = "UNTIL_AURA_END";
         private const string OwnerKindAbility = "ABILITY";
         private const string AnchorLeftHand = "LEFT_HAND";
         private const string AnchorRightHand = "RIGHT_HAND";
@@ -181,6 +182,7 @@ namespace Arena.Presentation
             conn.Db.ProjectilePresentationEvent.OnInsert += OnProjectilePresentationEventInsert;
             conn.Db.PredictedActionResult.OnInsert += OnPredictedActionResultInsert;
             conn.Db.ActiveCast.OnDelete += OnActiveCastDeleteForVfx;
+            conn.Db.ActiveAura.OnDelete += OnActiveAuraDeleteForVfx;
             conn.Db.CombatVfxCueCatalog.OnInsert += OnCombatVfxCueCatalogInsert;
             conn.Db.CombatVfxCueCatalog.OnUpdate += OnCombatVfxCueCatalogUpdate;
             conn.Db.CombatVfxCueCatalog.OnDelete += OnCombatVfxCueCatalogDelete;
@@ -194,6 +196,18 @@ namespace Arena.Presentation
             _ = ctx;
             _lifecycle?.DestroyForCastEnd(row.CastId);
         }
+
+        // Aura end: tear down any UNTIL_AURA_END cues bound to this aura. ActiveAura is one row
+        // per owner, so aura cues are keyed on the caster identity (see DispatchCue), mirroring
+        // the cast-end path above.
+        private void OnActiveAuraDeleteForVfx(EventContext ctx, ActiveAura row)
+        {
+            _ = ctx;
+            _lifecycle?.DestroyForAuraEnd(AuraVfxKey(row.Owner));
+        }
+
+        // Teardown key shared by the aura cue (spawn side, DispatchCue) and the ActiveAura delete.
+        private static string AuraVfxKey(Identity caster) => caster.ToString();
 
         public static void PredictLocalInstantSpellRelease(
             DbConnection conn,
@@ -1103,7 +1117,13 @@ namespace Arena.Presentation
                 : Quaternion.identity;
 
             _lifecycle ??= new CombatVFXLifecycleRegistry(this);
-            _lifecycle.Spawn(cue, fact.ToTemplateContext(cue.Key, followAnchor), position, rotation, followAnchor);
+            // Aura cues tear down when the caster's ActiveAura row is deleted, so key them on the
+            // caster identity rather than the (release) action_instance_id they were dispatched with.
+            string? auraKeyOverride =
+                string.Equals(WireIdentifier.Normalize(cue.Lifecycle), LifecycleUntilAuraEnd, StringComparison.Ordinal)
+                    ? AuraVfxKey(fact.Caster)
+                    : null;
+            _lifecycle.Spawn(cue, fact.ToTemplateContext(cue.Key, followAnchor, auraKeyOverride), position, rotation, followAnchor);
         }
 
         private static Quaternion ResolveWorldAlignedFacingRotation(Vector3 direction)
@@ -1139,6 +1159,7 @@ namespace Arena.Presentation
             conn.Db.ProjectilePresentationEvent.OnInsert -= OnProjectilePresentationEventInsert;
             conn.Db.PredictedActionResult.OnInsert -= OnPredictedActionResultInsert;
             conn.Db.ActiveCast.OnDelete -= OnActiveCastDeleteForVfx;
+            conn.Db.ActiveAura.OnDelete -= OnActiveAuraDeleteForVfx;
             conn.Db.CombatVfxCueCatalog.OnInsert -= OnCombatVfxCueCatalogInsert;
             conn.Db.CombatVfxCueCatalog.OnUpdate -= OnCombatVfxCueCatalogUpdate;
             conn.Db.CombatVfxCueCatalog.OnDelete -= OnCombatVfxCueCatalogDelete;
@@ -1278,11 +1299,14 @@ namespace Arena.Presentation
                 return new CombatVfxAnchorFact(Caster, Hit, Origin, Point);
             }
 
-            public CombatVFXTemplateContext ToTemplateContext(string cueKey, Transform? followAnchor = null)
+            public CombatVFXTemplateContext ToTemplateContext(
+                string cueKey,
+                Transform? followAnchor = null,
+                string? actionInstanceIdOverride = null)
             {
                 return new CombatVFXTemplateContext(
                     cueKey,
-                    ActionInstanceId,
+                    actionInstanceIdOverride ?? ActionInstanceId,
                     ActionKind,
                     AbilityId,
                     Trigger,
