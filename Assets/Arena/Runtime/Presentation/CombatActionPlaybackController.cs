@@ -997,8 +997,9 @@ namespace Arena.Presentation
 
             if (!animationSet.TryGetSpellAnimation(spellKind, out spellEntry))
             {
-                Debug.LogWarning(
-                    $"[CombatActionPlaybackController] Spell '{spellKind}' has no spell animation entry in animation set '{animationSet.name}'.");
+                // No entry is a valid, intentional state: silent spells (auras, most self-buffs)
+                // cast with no body animation. Authoring gaps for spells that SHOULD animate are
+                // caught by the author-time animation/VFX validator, not warned about per-cast.
                 return false;
             }
 
