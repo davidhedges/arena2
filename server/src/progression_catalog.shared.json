@@ -4669,6 +4669,18 @@
       "attach_mode": "WORLD_ALIGNED_TO_FACING",
       "duration_ms": 2500,
       "sort_order": 194
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "PALADIN_WARDING_AURA",
+      "trigger": "SPELL_RELEASE",
+      "anchor": "GROUND_UNDER_CASTER",
+      "vfx_id": "VFX_HOLY_AURA_GROUND_01",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "DURATION",
+      "duration_ms": 2000,
+      "sort_order": 200
     }
   ],
   "combat_profile_action_bar_defaults": [

@@ -98,6 +98,9 @@ pub enum VfxSlot {
     Burst,
     Beam,
     SelfFlash,
+    /// Brief one-shot burst at the caster's feet — the common aura visual.
+    AuraGround,
+    /// Sustained caster-attached aura glow (opt-in) — lives until the aura ends.
     Aura,
 }
 
@@ -121,7 +124,10 @@ pub fn requested_slots(archetype: VfxArchetype, mode: AnimMode) -> Vec<VfxSlot> 
         VfxArchetype::Beam => vec![CastGlow, Beam],
         VfxArchetype::TargetHit => vec![Impact],
         VfxArchetype::SelfFx => vec![SelfFlash],
-        VfxArchetype::Aura => vec![Aura],
+        // Most auras are a brief ground flourish and nothing else (no cast glow / muzzle /
+        // projectile / animation). The sustained `Aura` glow is opt-in — the palette fills it
+        // only for schools that provide a persistent aura prefab.
+        VfxArchetype::Aura => vec![AuraGround, Aura],
     }
 }
 
@@ -132,6 +138,7 @@ pub enum Anchor {
     Hand,
     Caster,
     CasterOverhead,
+    GroundUnderCaster,
     ImpactPoint,
     AreaOrigin,
     Target,
@@ -284,7 +291,17 @@ pub fn wire(
             duration: one_shot_duration,
             projectile_sequence_index: None,
         },
-        // B.8 — sustained caster aura; lives until the aura's ActiveAura row is deleted
+        // B.8 — the common aura visual: a brief one-shot burst at the caster's feet.
+        VfxSlot::AuraGround => CueWiring {
+            trigger: "SPELL_RELEASE",
+            anchor: Anchor::GroundUnderCaster,
+            attach_mode: "SPAWN_WORLD",
+            vfx_role: "ONE_SHOT",
+            lifecycle: one_shot_lifecycle,
+            duration: one_shot_duration,
+            projectile_sequence_index: None,
+        },
+        // B.8 — sustained caster aura (opt-in); lives until the aura's ActiveAura row is deleted
         // (decision 11), mirroring UNTIL_CAST_END but keyed on the aura rather than the cast.
         VfxSlot::Aura => CueWiring {
             trigger: "SPELL_RELEASE",
@@ -421,6 +438,19 @@ mod tests {
 
         // AURA is supported (decision 11): all spell types generate.
         assert_eq!(derive_vfx_archetype(&facts("AURA", "SELF")), Some(VfxArchetype::Aura)); // PALADIN_FERVOR
+    }
+
+    #[test]
+    fn aura_defaults_to_a_brief_ground_burst() {
+        // Most auras (e.g. WARDING_AURA) are just a brief effect at the caster's feet — no cast
+        // glow, muzzle, projectile, or animation. AuraGround is requested first; Aura is opt-in.
+        let slots = requested_slots(VfxArchetype::Aura, AnimMode::Instant);
+        assert_eq!(slots.first(), Some(&VfxSlot::AuraGround));
+
+        let w = wire(VfxArchetype::Aura, VfxSlot::AuraGround, AnimMode::Instant, false, false);
+        assert_eq!(w.trigger, "SPELL_RELEASE");
+        assert_eq!(w.anchor, Anchor::GroundUnderCaster);
+        assert_eq!(w.vfx_role, "ONE_SHOT");
     }
 
     #[test]

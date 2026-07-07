@@ -439,9 +439,12 @@ This is the concrete definition of the `trigger_for` / `anchor_for` / `attach_fo
 |---|---|---|
 | `self_flash` trigger/anchor | `SPELL_RELEASE` / `CASTER` or `CASTER_OVERHEAD` | BLINDING_LIGHT(CASTER_OVERHEAD, PARTICLE_SYSTEM); most buffs emit **nothing** |
 | `self_flash` role/lifecycle | `ONE_SHOT` / as B.5 | — |
-| `aura` trigger | `SPELL_RELEASE` | the aura attaches at cast |
-| `aura` anchor / attach / role | `CASTER` / `FOLLOW_ANCHOR` / `ATTACHED` | sustained caster-attached effect |
-| `aura` lifecycle / duration | `UNTIL_AURA_END` / `0` | decision 11 — driven by the public `ActiveAura` row-delete (a straight mirror of `UNTIL_CAST_END`). First exemplar: `Human_SpellAura_Ice`. |
+| `aura_ground` (**default**) trigger/anchor | `SPELL_RELEASE` / `GROUND_UNDER_CASTER` | the common aura visual — a brief flourish at the caster's feet |
+| `aura_ground` role/lifecycle | `ONE_SHOT` / `PARTICLE_SYSTEM` or `DURATION` (by `self_terminating`) | first exemplar: `WARDING_AURA` → `VFX_HOLY_AURA_GROUND_01` (`aura_1`, DURATION 2000 — it has 2 looping child systems so PARTICLE_SYSTEM would linger) |
+| `aura` (**opt-in**) trigger/anchor | `SPELL_RELEASE` / `CASTER` | sustained caster-attached glow, only for schools that provide it |
+| `aura` attach / role / lifecycle | `FOLLOW_ANCHOR` / `ATTACHED` / `UNTIL_AURA_END` | decision 11 — driven by the public `ActiveAura` row-delete (a straight mirror of `UNTIL_CAST_END`). Exemplar-in-waiting: `Human_SpellAura_Ice`. |
+
+> **Auras are the DRYest archetype (learned 2026-07-07g):** most aura spells are *just* a brief ground flourish — **no animation, no cast glow, no muzzle, no projectile**. The AURA archetype requests only `aura_ground` (+ optional `aura`), and the animation resolver returns *no animation* for them (no explicit entry, no template clip → nothing plays). So an aura's whole authored footprint is its gameplay row; the sustained-glow machinery (decision 11) is the exception, not the rule. This does **not** throw a wrench — it's the "one place" ideal at its purest.
 
 ### B.9 Coverage check
 
@@ -460,7 +463,7 @@ This is the concrete definition of the `trigger_for` / `anchor_for` / `attach_fo
 | `APPLY_STATUS` / `SELF_RESOURCE` (SELF) | SelfFx | self_flash (or none) |
 | `APPLY_STATUS` (TARGET) / `CONSUME_STATUS` | TargetHit | impact @ TARGET |
 | `REMOVE_STATUS` | TargetHit / SelfFx | cleanse flash |
-| `AURA` | Aura | aura (`UNTIL_STATUS_END`, decision 11) |
+| `AURA` | Aura | `aura_ground` (brief feet flourish, default) + `aura` sustained (opt-in, `UNTIL_AURA_END`) |
 
 **The projectile body is never dropped.** For a projectile spell the `projectile_body` slot is filled by the school VFX set's generic body **or** a per-spell signature override — either way a registered `vfx_id`. And it cannot be silently forgotten: **server Rule 18 hard-fails any projectile spell that resolves to zero `PROJECTILE_BODY` cues** (exactly one required at index 0). A missing projectile prefab is a build-time contract error, not a broken spell at runtime.
 
