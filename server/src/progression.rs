@@ -6161,6 +6161,9 @@ mod tests {
             // Persists until the owning cast/channel's ActiveCast row is deleted (channel
             // end / cancel). Used for hand-attached channel cues like Magic Missile's glow.
             "UNTIL_CAST_END",
+            // Persists until the owning buff's StatusEffect row is deleted. Used for aura
+            // spells, whose visual must live as long as the buff, not the (instant) cast.
+            "UNTIL_STATUS_END",
         ];
         for cue in &catalog.combat_vfx_cues {
             let owner_kind = normalize_identifier(cue.owner_kind.as_str());

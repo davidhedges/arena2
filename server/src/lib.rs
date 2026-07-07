@@ -45,4 +45,5 @@ mod relations;
 mod resources;
 mod spells;
 mod tick_metrics;
+mod vfx_generation;
 mod world_collision;
