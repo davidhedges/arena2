@@ -58,6 +58,12 @@ else
     spacetime publish "${publish_args[@]}" -p "$MODULE_PATH" "$ARENA_DATABASE"
 fi
 
+# Re-sync the progression catalog tables (cues/abilities/VFX) from the freshly-published JSON.
+# A fresh init (delete-data=always) already syncs, but a data-preserving publish does not, so
+# call it unconditionally (it is idempotent) — this is what keeps cue edits from going stale.
+echo "Re-syncing progression catalogs..."
+spacetime call "$ARENA_DATABASE" publish_progression_catalogs
+
 if [ "$ARENA_GENERATE_BINDINGS" = "1" ]; then
     # Canonical regen mode (netcode audit R5): bindings are ALWAYS generated
     # from the harness-featured wasm, regardless of publish mode, so both
