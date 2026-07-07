@@ -318,74 +318,193 @@ pub fn wire(
     }
 }
 
-fn anchor_is_target(anchor: Anchor) -> bool {
-    matches!(anchor, Anchor::Target)
+impl Anchor {
+    /// The catalog anchor identifier this resolves to for validation. `Hand` is abstract (the
+    /// concrete cast hand is inferred later, E7); it maps to a hand anchor so the hand-relative
+    /// field rules (Rule 11 / 15) evaluate identically to an already-resolved LEFT/RIGHT_HAND cue.
+    fn as_catalog_str(self) -> &'static str {
+        match self {
+            Anchor::Hand => "LEFT_HAND",
+            Anchor::Caster => "CASTER",
+            Anchor::CasterOverhead => "CASTER_OVERHEAD",
+            Anchor::GroundUnderCaster => "GROUND_UNDER_CASTER",
+            Anchor::ImpactPoint => "IMPACT_POINT",
+            Anchor::AreaOrigin => "AREA_ORIGIN",
+            Anchor::Target => "TARGET",
+            Anchor::Origin => "ORIGIN",
+        }
+    }
 }
 
-/// Encodes the single-cue Class-A authoring rules (Appendix A) that the generator must satisfy.
-/// Every wiring [`wire`] emits must pass this — it is how "correct by construction" is proven,
-/// and the intended shared source of truth with the server/editor validators (decision 5).
-pub fn validate_wiring(w: &CueWiring, mode: AnimMode) -> Result<(), String> {
-    let zero_duration = w.duration == DurationPolicy::Zero;
+/// The normalised single-cue fields the Class-A field-relation rules read. Both consumers build
+/// one: the generator from a [`CueWiring`], the server catalog validator from a catalog row.
+/// `role`/`lifecycle` must already be the *effective* values (`""` normalised to `ONE_SHOT` /
+/// `DURATION`) so both callers apply byte-identical predicates.
+pub struct CueFields<'a> {
+    pub trigger: &'a str,
+    pub anchor: &'a str,
+    pub attach_mode: &'a str,
+    /// Effective `vfx_role` (never `""`).
+    pub role: &'a str,
+    /// Effective `lifecycle` (never `""`).
+    pub lifecycle: &'a str,
+    pub duration_is_zero: bool,
+    /// The owning spell is charged (`cast_time_ms > 0`) — arms the hand-glow rule (Rule 11).
+    pub charged_cast: bool,
+}
+
+/// A single-cue Class-A field-relation violation. Rendered to a message by each consumer, so the
+/// server keeps its existing catalog-error text and the generator keeps a terse diagnostic.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CueFieldViolation {
+    /// Rule 9 — `UNTIL_RELEASE_EVENT` only on `SPELL_CAST`.
+    UntilReleaseEventOffCast,
+    /// Rule 10a — `PARTICLE_SYSTEM` only for `ONE_SHOT`.
+    ParticleSystemBadRole,
+    /// Rule 10b — `PARTICLE_SYSTEM` requires `duration_ms == 0`.
+    ParticleSystemNonZeroDuration,
+    /// Rule 11 — hand-attached cast-time `SPELL_CAST` cue must be `UNTIL_RELEASE_EVENT`.
+    CastTimeHandGlowNotUntilRelease,
+    /// Rule 12a — `PROJECTILE_BODY` only on `SPELL_RELEASE`.
+    ProjectileBodyOffRelease,
+    /// Rule 12b — `PROJECTILE_BODY` must not `FOLLOW_ANCHOR`.
+    ProjectileBodyFollowAnchor,
+    /// Rule 13a — `TRAVEL_BODY` only on `SPELL_RELEASE`.
+    TravelBodyOffRelease,
+    /// Rule 13b — `TRAVEL_BODY` must not `FOLLOW_ANCHOR`.
+    TravelBodyFollowAnchor,
+    /// Rule 13c — `TRAVEL_BODY` must use `UNTIL_TERMINAL_EVENT`.
+    TravelBodyBadLifecycle,
+    /// Rule 13d — `TRAVEL_BODY` must set `duration_ms == 0`.
+    TravelBodyNonZeroDuration,
+    /// Rule 14 — `ONE_SHOT` + `DURATION` needs a positive `duration_ms`.
+    OneShotDurationZero,
+    /// Rule 15 — `TARGET` anchor invalid on `SPELL_CAST` / `SPELL_RELEASE`.
+    TargetAnchorPreImpact,
+}
+
+impl CueFieldViolation {
+    /// A terse, context-free description — used by the generator's self-check diagnostics. The
+    /// server renders its own richer catalog-error text from the same variants.
+    pub fn describe(self) -> &'static str {
+        match self {
+            CueFieldViolation::UntilReleaseEventOffCast => {
+                "UNTIL_RELEASE_EVENT on non-SPELL_CAST trigger"
+            }
+            CueFieldViolation::ParticleSystemBadRole => "PARTICLE_SYSTEM requires ONE_SHOT role",
+            CueFieldViolation::ParticleSystemNonZeroDuration => {
+                "PARTICLE_SYSTEM requires duration 0"
+            }
+            CueFieldViolation::CastTimeHandGlowNotUntilRelease => {
+                "cast-time hand SPELL_CAST cue must be UNTIL_RELEASE_EVENT"
+            }
+            CueFieldViolation::ProjectileBodyOffRelease => "PROJECTILE_BODY outside SPELL_RELEASE",
+            CueFieldViolation::ProjectileBodyFollowAnchor => "PROJECTILE_BODY must not FOLLOW_ANCHOR",
+            CueFieldViolation::TravelBodyOffRelease => "TRAVEL_BODY outside SPELL_RELEASE",
+            CueFieldViolation::TravelBodyFollowAnchor => "TRAVEL_BODY must not FOLLOW_ANCHOR",
+            CueFieldViolation::TravelBodyBadLifecycle => "TRAVEL_BODY must use UNTIL_TERMINAL_EVENT",
+            CueFieldViolation::TravelBodyNonZeroDuration => "TRAVEL_BODY must set duration 0",
+            CueFieldViolation::OneShotDurationZero => {
+                "ONE_SHOT DURATION must define positive duration_ms"
+            }
+            CueFieldViolation::TargetAnchorPreImpact => "TARGET anchor invalid on cast/release trigger",
+        }
+    }
+}
+
+const HAND_ANCHORS: [&str; 2] = ["LEFT_HAND", "RIGHT_HAND"];
+
+/// The single source of truth for the Class-A single-cue field-relation rules (Appendix A). Both
+/// the generator's [`validate_wiring`] and the server's catalog-load validator call this, so the
+/// rules can never silently diverge between the two paths (design doc decisions 5 / 10). Rules
+/// that need catalog context (enum allow-lists, owner resolution, projectile ownership/count,
+/// `start_delay_ms`, `hit_index`) stay with the server validator — they are not shareable here.
+pub fn check_cue_field_rules(f: &CueFields) -> Vec<CueFieldViolation> {
+    use CueFieldViolation::*;
+    let mut violations = Vec::new();
 
     // Rule 9 — UNTIL_RELEASE_EVENT only on SPELL_CAST.
-    if w.lifecycle == "UNTIL_RELEASE_EVENT" && w.trigger != "SPELL_CAST" {
-        return Err(format!("UNTIL_RELEASE_EVENT on non-SPELL_CAST trigger '{}'", w.trigger));
+    if f.lifecycle == "UNTIL_RELEASE_EVENT" && f.trigger != "SPELL_CAST" {
+        violations.push(UntilReleaseEventOffCast);
     }
-    // Rule 10 — PARTICLE_SYSTEM only for ONE_SHOT, duration 0.
-    if w.lifecycle == "PARTICLE_SYSTEM" && (w.vfx_role != "ONE_SHOT" || !zero_duration) {
-        return Err(format!(
-            "PARTICLE_SYSTEM requires ONE_SHOT + duration 0 (role '{}', zero_duration {})",
-            w.vfx_role, zero_duration
-        ));
+    // Rule 10 — PARTICLE_SYSTEM only for ONE_SHOT prefab cues, duration 0.
+    if f.lifecycle == "PARTICLE_SYSTEM" {
+        if f.role != "ONE_SHOT" {
+            violations.push(ParticleSystemBadRole);
+        }
+        if !f.duration_is_zero {
+            violations.push(ParticleSystemNonZeroDuration);
+        }
     }
     // Rule 11 — hand-attached cast-time SPELL_CAST cue must use UNTIL_RELEASE_EVENT.
-    if w.trigger == "SPELL_CAST"
-        && w.attach_mode == "FOLLOW_ANCHOR"
-        && w.vfx_role == "ATTACHED"
-        && matches!(w.anchor, Anchor::Hand)
-        && mode == AnimMode::Charged
-        && w.lifecycle != "UNTIL_RELEASE_EVENT"
+    if f.charged_cast
+        && f.trigger == "SPELL_CAST"
+        && f.attach_mode == "FOLLOW_ANCHOR"
+        && f.role == "ATTACHED"
+        && HAND_ANCHORS.contains(&f.anchor)
+        && f.lifecycle != "UNTIL_RELEASE_EVENT"
     {
-        return Err(format!(
-            "cast-time hand SPELL_CAST cue must be UNTIL_RELEASE_EVENT, got '{}'",
-            w.lifecycle
-        ));
+        violations.push(CastTimeHandGlowNotUntilRelease);
     }
-    // Rule 12 — PROJECTILE_BODY.
-    if w.vfx_role == "PROJECTILE_BODY" {
-        if w.trigger != "SPELL_RELEASE" {
-            return Err("PROJECTILE_BODY outside SPELL_RELEASE".into());
+    // Rule 12 — PROJECTILE_BODY field legality (owner/index/start_delay are context, server-side).
+    if f.role == "PROJECTILE_BODY" {
+        if f.trigger != "SPELL_RELEASE" {
+            violations.push(ProjectileBodyOffRelease);
         }
-        if w.attach_mode == "FOLLOW_ANCHOR" {
-            return Err("PROJECTILE_BODY must not FOLLOW_ANCHOR".into());
-        }
-        if w.projectile_sequence_index.is_none() {
-            return Err("PROJECTILE_BODY needs a projectile_sequence_index".into());
+        if f.attach_mode == "FOLLOW_ANCHOR" {
+            violations.push(ProjectileBodyFollowAnchor);
         }
     }
     // Rule 13 — TRAVEL_BODY.
-    if w.vfx_role == "TRAVEL_BODY" {
-        if w.trigger != "SPELL_RELEASE" {
-            return Err("TRAVEL_BODY outside SPELL_RELEASE".into());
+    if f.role == "TRAVEL_BODY" {
+        if f.trigger != "SPELL_RELEASE" {
+            violations.push(TravelBodyOffRelease);
         }
-        if w.attach_mode == "FOLLOW_ANCHOR" {
-            return Err("TRAVEL_BODY must not FOLLOW_ANCHOR".into());
+        if f.attach_mode == "FOLLOW_ANCHOR" {
+            violations.push(TravelBodyFollowAnchor);
         }
-        if w.lifecycle != "UNTIL_TERMINAL_EVENT" {
-            return Err("TRAVEL_BODY must use UNTIL_TERMINAL_EVENT".into());
+        if f.lifecycle != "UNTIL_TERMINAL_EVENT" {
+            violations.push(TravelBodyBadLifecycle);
         }
-        if !zero_duration {
-            return Err("TRAVEL_BODY must set duration 0".into());
+        if !f.duration_is_zero {
+            violations.push(TravelBodyNonZeroDuration);
         }
     }
     // Rule 14 — ONE_SHOT + DURATION needs a positive duration.
-    if w.vfx_role == "ONE_SHOT" && w.lifecycle == "DURATION" && zero_duration {
-        return Err("ONE_SHOT DURATION must define positive duration_ms".into());
+    if f.role == "ONE_SHOT" && f.lifecycle == "DURATION" && f.duration_is_zero {
+        violations.push(OneShotDurationZero);
     }
     // Rule 15 — TARGET anchor only valid post-impact.
-    if anchor_is_target(w.anchor) && (w.trigger == "SPELL_CAST" || w.trigger == "SPELL_RELEASE") {
-        return Err(format!("TARGET anchor invalid on '{}'", w.trigger));
+    if f.anchor == "TARGET" && matches!(f.trigger, "SPELL_CAST" | "SPELL_RELEASE") {
+        violations.push(TargetAnchorPreImpact);
+    }
+
+    violations
+}
+
+/// Proves every wiring [`wire`] emits is correct-by-construction against the Class-A rules — it
+/// delegates to the shared [`check_cue_field_rules`] (the same checker the server validator runs),
+/// so "the generator can only emit legal cues" is enforced by the one source of truth.
+pub fn validate_wiring(w: &CueWiring, mode: AnimMode) -> Result<(), String> {
+    // A generated CueWiring always carries explicit, non-empty role/lifecycle, so its effective
+    // values equal the raw ones. Rule 11 arms on the charged mode (== cast_time > 0 server-side).
+    let violations = check_cue_field_rules(&CueFields {
+        trigger: w.trigger,
+        anchor: w.anchor.as_catalog_str(),
+        attach_mode: w.attach_mode,
+        role: w.vfx_role,
+        lifecycle: w.lifecycle,
+        duration_is_zero: w.duration == DurationPolicy::Zero,
+        charged_cast: mode == AnimMode::Charged,
+    });
+    if let Some(violation) = violations.first() {
+        return Err(violation.describe().to_string());
+    }
+    // Generator-local completeness invariant: a PROJECTILE_BODY wiring must carry a sequence index.
+    // (The server instead derives/defaults the index from the catalog row, so this is not a shared
+    // rule.)
+    if w.vfx_role == "PROJECTILE_BODY" && w.projectile_sequence_index.is_none() {
+        return Err("PROJECTILE_BODY needs a projectile_sequence_index".into());
     }
 
     Ok(())
@@ -578,5 +697,112 @@ mod tests {
             projectile_sequence_index: Some(0),
         };
         assert!(validate_wiring(&bad, AnimMode::Instant).is_err());
+    }
+
+    // ----- the shared Class-A checker, exercised directly (this is the one source of truth the
+    // server catalog contract also consumes, so per-rule coverage lives here) -----
+
+    fn legal_one_shot() -> CueFields<'static> {
+        // A stock impact burst: ONE_SHOT / DURATION with a positive duration — violates nothing.
+        CueFields {
+            trigger: "SPELL_IMPACT",
+            anchor: "IMPACT_POINT",
+            attach_mode: "SPAWN_WORLD",
+            role: "ONE_SHOT",
+            lifecycle: "DURATION",
+            duration_is_zero: false,
+            charged_cast: false,
+        }
+    }
+
+    #[test]
+    fn shared_checker_passes_a_legal_cue() {
+        assert!(check_cue_field_rules(&legal_one_shot()).is_empty());
+    }
+
+    #[test]
+    fn rule9_until_release_event_only_on_spell_cast() {
+        let mut f = legal_one_shot();
+        f.lifecycle = "UNTIL_RELEASE_EVENT";
+        f.trigger = "SPELL_RELEASE";
+        assert!(check_cue_field_rules(&f).contains(&CueFieldViolation::UntilReleaseEventOffCast));
+        f.trigger = "SPELL_CAST"; // legal here
+        assert!(!check_cue_field_rules(&f).contains(&CueFieldViolation::UntilReleaseEventOffCast));
+    }
+
+    #[test]
+    fn rule10_particle_system_requires_one_shot_zero_duration() {
+        let mut f = legal_one_shot();
+        f.lifecycle = "PARTICLE_SYSTEM";
+        f.role = "ATTACHED";
+        f.duration_is_zero = false;
+        let v = check_cue_field_rules(&f);
+        assert!(v.contains(&CueFieldViolation::ParticleSystemBadRole));
+        assert!(v.contains(&CueFieldViolation::ParticleSystemNonZeroDuration));
+    }
+
+    #[test]
+    fn rule11_fires_only_for_charged_hand_glow() {
+        // A hand-attached SPELL_CAST ATTACHED glow that is not UNTIL_RELEASE_EVENT...
+        let charged = CueFields {
+            trigger: "SPELL_CAST",
+            anchor: "LEFT_HAND",
+            attach_mode: "FOLLOW_ANCHOR",
+            role: "ATTACHED",
+            lifecycle: "DURATION",
+            duration_is_zero: false,
+            charged_cast: true,
+        };
+        // ...is illegal for a charged spell (must be UNTIL_RELEASE_EVENT).
+        assert!(check_cue_field_rules(&charged)
+            .contains(&CueFieldViolation::CastTimeHandGlowNotUntilRelease));
+        // ...but perfectly legal for an instant spell — FIREBALL's DURATION 350 hand glow.
+        let instant = CueFields { charged_cast: false, ..charged };
+        assert!(!check_cue_field_rules(&instant)
+            .contains(&CueFieldViolation::CastTimeHandGlowNotUntilRelease));
+    }
+
+    #[test]
+    fn rule12_projectile_body_field_legality() {
+        let mut f = legal_one_shot();
+        f.role = "PROJECTILE_BODY";
+        f.trigger = "SPELL_CAST"; // wrong: must be SPELL_RELEASE
+        f.attach_mode = "FOLLOW_ANCHOR"; // wrong: never follows
+        f.lifecycle = "UNTIL_TERMINAL_EVENT";
+        let v = check_cue_field_rules(&f);
+        assert!(v.contains(&CueFieldViolation::ProjectileBodyOffRelease));
+        assert!(v.contains(&CueFieldViolation::ProjectileBodyFollowAnchor));
+    }
+
+    #[test]
+    fn rule13_travel_body_field_legality() {
+        let mut f = legal_one_shot();
+        f.role = "TRAVEL_BODY";
+        f.trigger = "SPELL_IMPACT"; // wrong: must be SPELL_RELEASE
+        f.attach_mode = "FOLLOW_ANCHOR"; // wrong: never follows
+        f.lifecycle = "DURATION"; // wrong: must be UNTIL_TERMINAL_EVENT
+        f.duration_is_zero = false; // wrong: must be 0
+        let v = check_cue_field_rules(&f);
+        assert!(v.contains(&CueFieldViolation::TravelBodyOffRelease));
+        assert!(v.contains(&CueFieldViolation::TravelBodyFollowAnchor));
+        assert!(v.contains(&CueFieldViolation::TravelBodyBadLifecycle));
+        assert!(v.contains(&CueFieldViolation::TravelBodyNonZeroDuration));
+    }
+
+    #[test]
+    fn rule14_one_shot_duration_needs_positive_duration() {
+        let mut f = legal_one_shot();
+        f.duration_is_zero = true;
+        assert!(check_cue_field_rules(&f).contains(&CueFieldViolation::OneShotDurationZero));
+    }
+
+    #[test]
+    fn rule15_target_anchor_only_post_impact() {
+        let mut f = legal_one_shot();
+        f.anchor = "TARGET";
+        f.trigger = "SPELL_RELEASE"; // pre-impact: illegal
+        assert!(check_cue_field_rules(&f).contains(&CueFieldViolation::TargetAnchorPreImpact));
+        f.trigger = "SPELL_IMPACT"; // post-impact: legal
+        assert!(!check_cue_field_rules(&f).contains(&CueFieldViolation::TargetAnchorPreImpact));
     }
 }

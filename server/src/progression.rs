@@ -6265,79 +6265,88 @@ mod tests {
                     ),
                 ));
             }
-            if effective_lifecycle == "UNTIL_RELEASE_EVENT" && trigger != "SPELL_CAST" {
-                errors.push(CombatAuthoringError::new(
-                    CombatAuthoringRule::CombatVfxCueResolves,
-                    format!(
-                        "combat VFX cue '{}' uses UNTIL_RELEASE_EVENT outside SPELL_CAST",
-                        cue.vfx_id
-                    ),
-                ));
-            }
-            if effective_lifecycle == "PARTICLE_SYSTEM" {
-                if effective_vfx_role != "ONE_SHOT" {
-                    errors.push(CombatAuthoringError::new(
-                        CombatAuthoringRule::CombatVfxCueResolves,
-                        format!(
-                            "combat VFX cue '{}' uses PARTICLE_SYSTEM lifecycle with role '{}'; PARTICLE_SYSTEM is only valid for ONE_SHOT prefab cues",
-                            cue.vfx_id, effective_vfx_role
-                        ),
-                    ));
-                }
-                if cue.duration_ms != 0 {
-                    errors.push(CombatAuthoringError::new(
-                        CombatAuthoringRule::CombatVfxCueResolves,
-                        format!(
-                            "combat VFX cue '{}' uses PARTICLE_SYSTEM lifecycle and must set duration_ms to 0",
-                            cue.vfx_id
-                        ),
-                    ));
-                }
-            }
             let cast_time_ms = match owner_kind.as_str() {
                 "ABILITY" => cast_time_spell_abilities.get(owner_id.as_str()).copied(),
                 "SPELL" => cast_time_spell_kinds.get(owner_id.as_str()).copied(),
                 _ => None,
             };
-            if let Some(cast_time_ms) = cast_time_ms {
-                if trigger == "SPELL_CAST"
-                    && attach_mode == "FOLLOW_ANCHOR"
-                    && effective_vfx_role == "ATTACHED"
-                    && matches!(anchor.as_str(), "LEFT_HAND" | "RIGHT_HAND")
-                    && effective_lifecycle != "UNTIL_RELEASE_EVENT"
-                {
-                    errors.push(CombatAuthoringError::new(
-                        CombatAuthoringRule::CombatVfxCueResolves,
-                        format!(
-                            "combat VFX cue '{}' is a hand-attached SPELL_CAST cue for cast-time spell owner '{}:{}' (cast_time_ms {}) but uses lifecycle '{}'; use UNTIL_RELEASE_EVENT with duration_ms 0",
-                            cue.vfx_id,
-                            cue.owner_kind,
-                            cue.owner_id,
-                            cast_time_ms,
-                            effective_lifecycle
-                        ),
-                    ));
-                }
+            // Class-A single-cue field-relation rules (Appendix A). Shared with the VFX generator
+            // through the one checker in `vfx_generation`, so the generator and this contract can
+            // never silently diverge (design doc decisions 5 / 10). The `cast_time_*` maps only
+            // hold spells with `cast_time_ms > 0`, so `is_some()` == charged. Rules that need
+            // catalog context (owner resolution, projectile ownership/count, `start_delay_ms`,
+            // `hit_index`) stay below — the checker cannot see that data.
+            for violation in crate::vfx_generation::check_cue_field_rules(&crate::vfx_generation::CueFields {
+                trigger: trigger.as_str(),
+                anchor: anchor.as_str(),
+                attach_mode: attach_mode.as_str(),
+                role: effective_vfx_role,
+                lifecycle: effective_lifecycle,
+                duration_is_zero: cue.duration_ms == 0,
+                charged_cast: cast_time_ms.is_some(),
+            }) {
+                use crate::vfx_generation::CueFieldViolation as V;
+                let message = match violation {
+                    V::UntilReleaseEventOffCast => format!(
+                        "combat VFX cue '{}' uses UNTIL_RELEASE_EVENT outside SPELL_CAST",
+                        cue.vfx_id
+                    ),
+                    V::ParticleSystemBadRole => format!(
+                        "combat VFX cue '{}' uses PARTICLE_SYSTEM lifecycle with role '{}'; PARTICLE_SYSTEM is only valid for ONE_SHOT prefab cues",
+                        cue.vfx_id, effective_vfx_role
+                    ),
+                    V::ParticleSystemNonZeroDuration => format!(
+                        "combat VFX cue '{}' uses PARTICLE_SYSTEM lifecycle and must set duration_ms to 0",
+                        cue.vfx_id
+                    ),
+                    V::CastTimeHandGlowNotUntilRelease => format!(
+                        "combat VFX cue '{}' is a hand-attached SPELL_CAST cue for cast-time spell owner '{}:{}' (cast_time_ms {}) but uses lifecycle '{}'; use UNTIL_RELEASE_EVENT with duration_ms 0",
+                        cue.vfx_id,
+                        cue.owner_kind,
+                        cue.owner_id,
+                        cast_time_ms.unwrap_or(0),
+                        effective_lifecycle
+                    ),
+                    V::ProjectileBodyOffRelease => format!(
+                        "combat VFX cue '{}' uses PROJECTILE_BODY outside SPELL_RELEASE",
+                        cue.vfx_id
+                    ),
+                    V::ProjectileBodyFollowAnchor => format!(
+                        "combat VFX cue '{}' PROJECTILE_BODY must not use FOLLOW_ANCHOR",
+                        cue.vfx_id
+                    ),
+                    V::TravelBodyOffRelease => format!(
+                        "combat VFX cue '{}' uses TRAVEL_BODY outside SPELL_RELEASE",
+                        cue.vfx_id
+                    ),
+                    V::TravelBodyFollowAnchor => format!(
+                        "combat VFX cue '{}' TRAVEL_BODY must not use FOLLOW_ANCHOR",
+                        cue.vfx_id
+                    ),
+                    V::TravelBodyBadLifecycle => format!(
+                        "combat VFX cue '{}' TRAVEL_BODY must use UNTIL_TERMINAL_EVENT",
+                        cue.vfx_id
+                    ),
+                    V::TravelBodyNonZeroDuration => format!(
+                        "combat VFX cue '{}' TRAVEL_BODY must set duration_ms to 0",
+                        cue.vfx_id
+                    ),
+                    V::OneShotDurationZero => format!(
+                        "combat VFX cue '{}' ONE_SHOT DURATION must define positive duration_ms",
+                        cue.vfx_id
+                    ),
+                    V::TargetAnchorPreImpact => format!(
+                        "combat VFX cue '{}' uses TARGET anchor on {}; TARGET is only valid once an impact/block/parry/fizzle target is known",
+                        cue.vfx_id, trigger
+                    ),
+                };
+                errors.push(CombatAuthoringError::new(
+                    CombatAuthoringRule::CombatVfxCueResolves,
+                    message,
+                ));
             }
+            // Context-dependent PROJECTILE_BODY rules (field legality is in the shared checker above).
             if vfx_role == "PROJECTILE_BODY" {
-                if trigger != "SPELL_RELEASE" {
-                    errors.push(CombatAuthoringError::new(
-                        CombatAuthoringRule::CombatVfxCueResolves,
-                        format!(
-                            "combat VFX cue '{}' uses PROJECTILE_BODY outside SPELL_RELEASE",
-                            cue.vfx_id
-                        ),
-                    ));
-                }
-                if attach_mode == "FOLLOW_ANCHOR" {
-                    errors.push(CombatAuthoringError::new(
-                        CombatAuthoringRule::CombatVfxCueResolves,
-                        format!(
-                            "combat VFX cue '{}' PROJECTILE_BODY must not use FOLLOW_ANCHOR",
-                            cue.vfx_id
-                        ),
-                    ));
-                }
                 if cue.start_delay_ms > 0 {
                     errors.push(CombatAuthoringError::new(
                         CombatAuthoringRule::CombatVfxCueResolves,
@@ -6399,65 +6408,6 @@ mod tests {
                     }
                     _ => {}
                 }
-            }
-            if vfx_role == "TRAVEL_BODY" {
-                if trigger != "SPELL_RELEASE" {
-                    errors.push(CombatAuthoringError::new(
-                        CombatAuthoringRule::CombatVfxCueResolves,
-                        format!(
-                            "combat VFX cue '{}' uses TRAVEL_BODY outside SPELL_RELEASE",
-                            cue.vfx_id
-                        ),
-                    ));
-                }
-                if attach_mode == "FOLLOW_ANCHOR" {
-                    errors.push(CombatAuthoringError::new(
-                        CombatAuthoringRule::CombatVfxCueResolves,
-                        format!(
-                            "combat VFX cue '{}' TRAVEL_BODY must not use FOLLOW_ANCHOR",
-                            cue.vfx_id
-                        ),
-                    ));
-                }
-                if effective_lifecycle != "UNTIL_TERMINAL_EVENT" {
-                    errors.push(CombatAuthoringError::new(
-                        CombatAuthoringRule::CombatVfxCueResolves,
-                        format!(
-                            "combat VFX cue '{}' TRAVEL_BODY must use UNTIL_TERMINAL_EVENT",
-                            cue.vfx_id
-                        ),
-                    ));
-                }
-                if cue.duration_ms != 0 {
-                    errors.push(CombatAuthoringError::new(
-                        CombatAuthoringRule::CombatVfxCueResolves,
-                        format!(
-                            "combat VFX cue '{}' TRAVEL_BODY must set duration_ms to 0",
-                            cue.vfx_id
-                        ),
-                    ));
-                }
-            }
-            if effective_vfx_role == "ONE_SHOT"
-                && effective_lifecycle == "DURATION"
-                && cue.duration_ms == 0
-            {
-                errors.push(CombatAuthoringError::new(
-                    CombatAuthoringRule::CombatVfxCueResolves,
-                    format!(
-                        "combat VFX cue '{}' ONE_SHOT DURATION must define positive duration_ms",
-                        cue.vfx_id
-                    ),
-                ));
-            }
-            if anchor == "TARGET" && matches!(trigger.as_str(), "SPELL_CAST" | "SPELL_RELEASE") {
-                errors.push(CombatAuthoringError::new(
-                    CombatAuthoringRule::CombatVfxCueResolves,
-                    format!(
-                        "combat VFX cue '{}' uses TARGET anchor on {}; TARGET is only valid once an impact/block/parry/fizzle target is known",
-                        cue.vfx_id, trigger
-                    ),
-                ));
             }
             if vfx_id.is_empty() {
                 errors.push(CombatAuthoringError::new(
