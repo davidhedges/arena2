@@ -85,8 +85,10 @@ archetype — most want only a brief `aura_ground` flourish.
 
 ## Recommended sequencing
 
-1. **Writer insertion path** (autonomous, no content decisions) — unblocks the 8 "generator adds" + the 18
-   "no cues" spells. Now justified by real demand (26 spells), not speculative.
+1. **Writer insertion path** — ✅ **done** (`SpellCueCatalogWriter` now inserts generator-only slots and
+   brand-new owners in sort order, keeps unmatched authored rows, and stays byte-identical on update-only
+   owners; verified live + EditMode tests). Remaining: relax the authoring window's write gate (currently
+   1:1-only) to *use* insertion, which needs a sort_order-assignment policy for the added slots.
 2. **Resolve the deferred-area findings** (CONSECRATE/ERUPTION/FROST_NEEDLE + the Burst/Impact slot nuance)
    — a small generator/inference reconciliation that also clears 4 of the "catalog-only"/"wiring-diff" rows.
 3. **Palette content pass** (owner) — decide school-generic vs signature for the clean-8's `vfx_id`s;

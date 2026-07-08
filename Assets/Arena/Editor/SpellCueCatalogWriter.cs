@@ -130,11 +130,20 @@ namespace Arena.Editor
 
         /// <summary>
         /// Returns <paramref name="catalogJson"/> with <paramref name="ownerId"/>'s
-        /// <c>combat_vfx_cues</c> rows replaced by the materialised <paramref name="rows"/>. Pure and
-        /// deterministic — every byte outside the owner's row spans is preserved exactly. Throws when
-        /// the owner's rows and <paramref name="rows"/> do not correspond 1:1 by <c>sort_order</c>
-        /// (this slice only updates rows that already exist; adding a generator-only slot or removing
-        /// an authored row is surfaced, never guessed).
+        /// <c>combat_vfx_cues</c> materialised from <paramref name="rows"/>. Pure and deterministic —
+        /// every byte outside the owner's rows is preserved exactly. Correspondence is by
+        /// <c>sort_order</c>:
+        /// <list type="bullet">
+        /// <item>a provided row whose <c>sort_order</c> matches an existing owner row <b>updates</b> it
+        /// in place (generator-owned fields overwritten, <c>slot</c> inserted, everything else — incl.
+        /// legacy override keys — preserved), so an unchanged spell (e.g. FIREBALL) diffs to only the
+        /// inserted <c>slot</c> lines;</item>
+        /// <item>a provided row with no matching existing row is <b>inserted</b> — grouped after the
+        /// owner's last existing row, or (for a brand-new owner) after the last row in the array;</item>
+        /// <item>an existing owner row with no matching provided row is <b>kept</b> as-is — the writer
+        /// never silently deletes authored data (the window surfaces it as a catalog-only slot to remove
+        /// by hand).</item>
+        /// </list>
         /// </summary>
         public static string SpliceOwnerCues(string catalogJson, string ownerId, IReadOnlyList<SpellCueRow> rows)
         {
@@ -162,6 +171,7 @@ namespace Arena.Editor
             // Which spans belong to this owner, in file order, with the sort_order each carries.
             var targets = new List<(int Start, int End, int SortOrder)>();
             var targetSortOrders = new HashSet<int>();
+            string ownerKind = "ABILITY"; // borrowed from an existing row; the default for a brand-new owner.
             foreach ((int start, int end) in objectSpans)
             {
                 string objText = body.Substring(start, end - start);
@@ -178,42 +188,97 @@ namespace Arena.Editor
                 if (!targetSortOrders.Add(sortOrder))
                     throw new InvalidOperationException(
                         $"Owner '{ownerId}' has duplicate sort_order {sortOrder}; cannot match generated rows unambiguously.");
+                if (targets.Count == 0 && TryGetString(fields, "owner_kind", out string kind) && kind.Length > 0)
+                    ownerKind = kind;
                 targets.Add((start, end, sortOrder));
             }
 
-            if (targets.Count == 0)
-                throw new InvalidOperationException($"No combat_vfx_cues rows found for owner '{ownerId}'.");
-
-            // Require an exact 1:1 correspondence by sort_order. A generated row with no existing row,
-            // or an existing row with no generated row, would mean inserting/orphaning — out of scope
-            // for this zero-diff-first slice, so surface it rather than write a surprising diff.
-            foreach ((_, _, int sortOrder) in targets)
-            {
-                if (!rowsBySortOrder.ContainsKey(sortOrder))
-                    throw new InvalidOperationException(
-                        $"Authored row sort_order {sortOrder} for owner '{ownerId}' has no matching generated row "
-                        + "(the writer only updates existing rows this slice).");
-            }
+            // Partition provided rows: those matching an existing owner row (update) vs new (insert).
+            var newRows = new List<SpellCueRow>();
             foreach (SpellCueRow row in rows)
             {
                 if (!targetSortOrders.Contains(row.SortOrder))
-                    throw new InvalidOperationException(
-                        $"Generated slot '{row.Slot}' targets sort_order {row.SortOrder} for owner '{ownerId}', "
-                        + "but no authored row has that sort_order (the writer does not insert new rows this slice).");
+                    newRows.Add(row);
             }
+            newRows.Sort((a, b) => a.SortOrder.CompareTo(b.SortOrder));
 
-            // Rebuild the array body, replacing only the target spans and keeping every other byte.
-            var rebuilt = new StringBuilder(body.Length + 64 * targets.Count);
-            int cursor = 0;
-            // targets came from objectSpans, which are already in ascending file order.
-            foreach ((int start, int end, int sortOrder) in targets)
+            if (targets.Count == 0 && newRows.Count == 0)
+                throw new InvalidOperationException(
+                    $"No combat_vfx_cues rows found for owner '{ownerId}' and no rows to insert.");
+
+            string rowIndent = DetectRowIndent(body, objectSpans);
+            string newFieldIndent = rowIndent + "  ";
+
+            var rebuilt = new StringBuilder(body.Length + 128 + 96 * (targets.Count + newRows.Count));
+            if (targets.Count > 0)
             {
-                rebuilt.Append(body, cursor, start - cursor);
-                string objText = body.Substring(start, end - start);
-                rebuilt.Append(MergeRow(objText, rowsBySortOrder[sortOrder]));
-                cursor = end;
+                // Owner's rows are (virtually always) a contiguous run in the file. Rebuild that run from
+                // the merged existing rows + any inserted rows, laid out in sort_order — so an update-only
+                // owner (FIREBALL) is byte-identical apart from the slot lines, and inserted rows land in
+                // their correct sort position rather than tacked on the end. A non-contiguous owner (a
+                // foreign row interleaved) falls back to keeping existing rows in place and appending the
+                // new ones — still correct at runtime (sort_order governs), just not re-sorted in the file.
+                int runStart = targets[0].Start;
+                int runEnd = targets[targets.Count - 1].End;
+                bool contiguous = true;
+                for (int i = 1; i < targets.Count && contiguous; i++)
+                    contiguous = !body.Substring(targets[i - 1].End, targets[i].Start - targets[i - 1].End).Contains('{');
+
+                if (contiguous)
+                {
+                    // Inter-row separator, taken from the file so the rebuilt run matches byte-for-byte.
+                    string sep = targets.Count >= 2
+                        ? body.Substring(targets[0].End, targets[1].Start - targets[0].End)
+                        : ",\n" + rowIndent;
+
+                    var block = new List<(int SortOrder, string Text)>(targets.Count + newRows.Count);
+                    foreach ((int start, int end, int sortOrder) in targets)
+                        block.Add((sortOrder, rowsBySortOrder.TryGetValue(sortOrder, out SpellCueRow m)
+                            ? MergeRow(body.Substring(start, end - start), m)
+                            : body.Substring(start, end - start)));
+                    foreach (SpellCueRow nr in newRows)
+                        block.Add((nr.SortOrder, SerializeNewRow(nr, ownerKind, ownerId, newFieldIndent, rowIndent)));
+                    block.Sort((a, b) => a.SortOrder.CompareTo(b.SortOrder));
+
+                    rebuilt.Append(body, 0, runStart);
+                    for (int i = 0; i < block.Count; i++)
+                    {
+                        if (i > 0) rebuilt.Append(sep);
+                        rebuilt.Append(block[i].Text);
+                    }
+                    rebuilt.Append(body, runEnd, body.Length - runEnd);
+                }
+                else
+                {
+                    int cursor = 0;
+                    for (int t = 0; t < targets.Count; t++)
+                    {
+                        (int start, int end, int sortOrder) = targets[t];
+                        rebuilt.Append(body, cursor, start - cursor);
+                        rebuilt.Append(rowsBySortOrder.TryGetValue(sortOrder, out SpellCueRow m)
+                            ? MergeRow(body.Substring(start, end - start), m)
+                            : body.Substring(start, end - start));
+                        cursor = end; // ends at runEnd after the last target
+                    }
+                    foreach (SpellCueRow nr in newRows)
+                        rebuilt.Append(",\n").Append(rowIndent)
+                            .Append(SerializeNewRow(nr, ownerKind, ownerId, newFieldIndent, rowIndent));
+                    rebuilt.Append(body, runEnd, body.Length - runEnd);
+                }
             }
-            rebuilt.Append(body, cursor, body.Length - cursor);
+            else
+            {
+                // Brand-new owner: append its rows after the last row already in the array.
+                if (objectSpans.Count == 0)
+                    throw new InvalidOperationException(
+                        "combat_vfx_cues array has no rows to anchor a new owner's insertion.");
+                int lastEnd = objectSpans[objectSpans.Count - 1].End;
+                rebuilt.Append(body, 0, lastEnd);
+                foreach (SpellCueRow nr in newRows)
+                    rebuilt.Append(",\n").Append(rowIndent)
+                        .Append(SerializeNewRow(nr, "ABILITY", ownerId, newFieldIndent, rowIndent));
+                rebuilt.Append(body, lastEnd, body.Length - lastEnd);
+            }
 
             return catalogJson.Substring(0, openBracket + 1)
                 + rebuilt
@@ -222,6 +287,31 @@ namespace Arena.Editor
 
         // ---- row merge + serialization ---------------------------------------------------------
 
+        // A row's fields as an insertion-ordered key set with an index for stable tiebreaking of
+        // unknown (legacy) keys under the canonical order.
+        private sealed class OrderedFields
+        {
+            public readonly List<string> Keys = new();
+            public readonly Dictionary<string, object> Values = new(StringComparer.Ordinal);
+            public readonly Dictionary<string, int> OriginalIndex = new(StringComparer.Ordinal);
+
+            public void Set(string key, object value)
+            {
+                if (!Values.ContainsKey(key))
+                {
+                    OriginalIndex[key] = Keys.Count;
+                    Keys.Add(key);
+                }
+                Values[key] = value;
+            }
+
+            public void Remove(string key)
+            {
+                if (Values.Remove(key))
+                    Keys.Remove(key);
+            }
+        }
+
         // Overwrites the generator-owned fields of an existing row with the generated values, inserts
         // the author-time `slot` key, and preserves everything else (owner_kind/owner_id, sort_order,
         // hit_index, and any unmodelled legacy override keys). Re-serialises in canonical key order,
@@ -229,69 +319,74 @@ namespace Arena.Editor
         private static string MergeRow(string objText, SpellCueRow row)
         {
             List<KeyValuePair<string, object>> fields = ParseFlatObject(objText, out string fieldIndent, out string braceIndent);
-
-            var keys = new List<string>();
-            var values = new Dictionary<string, object>(StringComparer.Ordinal);
-            var originalIndex = new Dictionary<string, int>(StringComparer.Ordinal);
+            var f = new OrderedFields();
             foreach (KeyValuePair<string, object> field in fields)
-            {
-                if (!values.ContainsKey(field.Key))
-                {
-                    originalIndex[field.Key] = keys.Count;
-                    keys.Add(field.Key);
-                }
-                values[field.Key] = field.Value;
-            }
-
-            void Set(string key, object value)
-            {
-                if (!values.ContainsKey(key))
-                {
-                    originalIndex[key] = keys.Count;
-                    keys.Add(key);
-                }
-                values[key] = value;
-            }
-
-            void Remove(string key)
-            {
-                if (values.Remove(key))
-                    keys.Remove(key);
-            }
-
-            // Author-time key + generator-owned fields (design doc §3.2 / Appendix B).
-            Set("slot", row.Slot);
-            Set("trigger", row.Trigger);
-            Set("anchor", row.Anchor);
-            Set("vfx_id", row.VfxId);
-            Set("attach_mode", row.AttachMode);
-            Set("vfx_role", row.VfxRole);
-            Set("lifecycle", row.Lifecycle);
-            if (row.ProjectileSequenceIndex.HasValue)
-                Set("projectile_sequence_index", row.ProjectileSequenceIndex.Value);
-            else
-                Remove("projectile_sequence_index");
-            Set("duration_ms", row.DurationMs);
+                f.Set(field.Key, field.Value);
+            ApplyGeneratorFields(f, row);
             // owner_kind, owner_id, sort_order and any legacy override keys are left as parsed.
+            return SerializeCanonical(f, fieldIndent, braceIndent);
+        }
 
-            keys.Sort((a, b) =>
-            {
-                int oa = OrderKey(a, originalIndex[a]);
-                int ob = OrderKey(b, originalIndex[b]);
-                return oa.CompareTo(ob);
-            });
+        // Serialises a brand-new row (no existing object to merge) — used for inserted cues. Supplies
+        // owner_kind/owner_id/sort_order the merge path would otherwise preserve from the source row.
+        private static string SerializeNewRow(
+            SpellCueRow row, string ownerKind, string ownerId, string fieldIndent, string braceIndent)
+        {
+            var f = new OrderedFields();
+            f.Set("owner_kind", ownerKind);
+            f.Set("owner_id", ownerId);
+            ApplyGeneratorFields(f, row);
+            f.Set("sort_order", row.SortOrder);
+            return SerializeCanonical(f, fieldIndent, braceIndent);
+        }
+
+        // The author-time `slot` key + generator-owned fields (design doc §3.2 / Appendix B). Shared by
+        // the update (merge) and insert (new) paths so both emit identical field shapes.
+        private static void ApplyGeneratorFields(OrderedFields f, SpellCueRow row)
+        {
+            f.Set("slot", row.Slot);
+            f.Set("trigger", row.Trigger);
+            f.Set("anchor", row.Anchor);
+            f.Set("vfx_id", row.VfxId);
+            f.Set("attach_mode", row.AttachMode);
+            f.Set("vfx_role", row.VfxRole);
+            f.Set("lifecycle", row.Lifecycle);
+            if (row.ProjectileSequenceIndex.HasValue)
+                f.Set("projectile_sequence_index", row.ProjectileSequenceIndex.Value);
+            else
+                f.Remove("projectile_sequence_index");
+            f.Set("duration_ms", row.DurationMs);
+        }
+
+        private static string SerializeCanonical(OrderedFields f, string fieldIndent, string braceIndent)
+        {
+            var keys = new List<string>(f.Keys);
+            keys.Sort((a, b) => OrderKey(a, f.OriginalIndex[a]).CompareTo(OrderKey(b, f.OriginalIndex[b])));
 
             var sb = new StringBuilder();
             sb.Append('{');
             for (int i = 0; i < keys.Count; i++)
             {
                 sb.Append('\n').Append(fieldIndent).Append('"').Append(keys[i]).Append("\": ");
-                AppendValue(sb, values[keys[i]]);
+                AppendValue(sb, f.Values[keys[i]]);
                 if (i < keys.Count - 1)
                     sb.Append(',');
             }
             sb.Append('\n').Append(braceIndent).Append('}');
             return sb.ToString();
+        }
+
+        // The indentation before a row's opening brace (e.g. 4 spaces), detected from the first row so
+        // inserted rows match the file's layout.
+        private static string DetectRowIndent(string body, List<(int Start, int End)> spans)
+        {
+            if (spans.Count == 0)
+                return "    ";
+            int start = spans[0].Start;
+            int j = start;
+            while (j > 0 && (body[j - 1] == ' ' || body[j - 1] == '\t'))
+                j--;
+            return body.Substring(j, start - j);
         }
 
         private static int OrderKey(string key, int originalIndex)
