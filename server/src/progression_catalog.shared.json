@@ -4271,6 +4271,7 @@
     {
       "owner_kind": "ABILITY",
       "owner_id": "SPELL_FIREBALL",
+      "slot": "cast_glow",
       "trigger": "SPELL_CAST",
       "anchor": "LEFT_HAND",
       "vfx_id": "VFX_FIRE_CAST_HAND_01",
@@ -4283,6 +4284,7 @@
     {
       "owner_kind": "ABILITY",
       "owner_id": "SPELL_FIREBALL",
+      "slot": "projectile_body",
       "trigger": "SPELL_RELEASE",
       "anchor": "LEFT_HAND",
       "vfx_id": "VFX_FIREBALL_PROJECTILE_01",
@@ -4296,6 +4298,7 @@
     {
       "owner_kind": "ABILITY",
       "owner_id": "SPELL_FIREBALL",
+      "slot": "impact",
       "trigger": "SPELL_IMPACT",
       "anchor": "IMPACT_POINT",
       "vfx_id": "VFX_FIREBALL_HIT_01",

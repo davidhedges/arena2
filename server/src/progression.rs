@@ -789,6 +789,14 @@ struct ActionPresentationDefinition {
 struct CombatVfxCueDefinition {
     owner_kind: String,
     owner_id: String,
+    // Author-time slot key (design doc §3.4), written to the JSON by the Unity generator/writer
+    // (SpellCueCatalogWriter) so per-slot overrides and legacy-cue replacement can key on a stable
+    // slot identity. It is deliberately NOT synced to the runtime CombatVfxCueCatalog table
+    // (sync_combat_vfx_cue_catalog ignores it) and is unread at runtime — but this struct is
+    // `deny_unknown_fields`, so the field MUST be declared here or the whole catalog fails to parse.
+    #[serde(default)]
+    #[allow(dead_code)]
+    slot: String,
     trigger: String,
     #[serde(default)]
     hit_index: Option<u32>,
