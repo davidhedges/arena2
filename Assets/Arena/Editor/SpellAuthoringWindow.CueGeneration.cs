@@ -1,5 +1,7 @@
 #nullable enable
+using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using Arena.Combat;
 using Arena.Presentation;
@@ -163,7 +165,14 @@ namespace Arena.Editor
             foreach (string note in slotNotes)
                 EditorGUILayout.HelpBox(note, MessageType.Warning);
 
-            DrawCueDiff(abilityId, generated);
+            BuildCatalogBySlot(
+                out Dictionary<SpellVfxSlot, CombatVfxCueDefinition> catalogBySlot,
+                out List<SpellVfxSlot> ambiguousSlots,
+                out List<CombatVfxCueDefinition> uninferrableCues);
+            DrawCueDiff(generated, catalogBySlot, ambiguousSlots, uninferrableCues);
+            DrawWriteToCatalogButton(
+                abilityId, generated, catalogBySlot,
+                inferenceClean: ambiguousSlots.Count == 0 && uninferrableCues.Count == 0);
         }
 
         private SpellDeliveryFacts BuildDeliveryFacts(AbilityDefinition selected)
@@ -276,13 +285,17 @@ namespace Arena.Editor
             return false;
         }
 
-        private void DrawCueDiff(string abilityId, List<GeneratedCue> generated)
+        // Assign every authored cue a slot via the design-doc §3.4 legacy inference table. The slot is
+        // the stable identity across the two stores (the diff and the writer both key on it): matching
+        // is exact by slot, ambiguous/uninferrable rows are surfaced rather than silently dropped.
+        private void BuildCatalogBySlot(
+            out Dictionary<SpellVfxSlot, CombatVfxCueDefinition> catalogBySlot,
+            out List<SpellVfxSlot> ambiguous,
+            out List<CombatVfxCueDefinition> uninferrable)
         {
-            // Assign every authored cue a slot via the design-doc §3.4 legacy inference table, then diff by
-            // slot: the generator's whole point is that a slot is the stable identity across the two stores.
-            var catalogBySlot = new Dictionary<SpellVfxSlot, CombatVfxCueDefinition>();
-            var ambiguous = new List<SpellVfxSlot>();
-            var uninferrable = new List<CombatVfxCueDefinition>();
+            catalogBySlot = new Dictionary<SpellVfxSlot, CombatVfxCueDefinition>();
+            ambiguous = new List<SpellVfxSlot>();
+            uninferrable = new List<CombatVfxCueDefinition>();
             foreach (CombatVfxCueDefinition cue in _selectedAbilityCues)
             {
                 if (!TryInferLegacySlot(cue, out SpellVfxSlot slot))
@@ -300,7 +313,14 @@ namespace Arena.Editor
 
                 catalogBySlot.Add(slot, cue);
             }
+        }
 
+        private void DrawCueDiff(
+            List<GeneratedCue> generated,
+            Dictionary<SpellVfxSlot, CombatVfxCueDefinition> catalogBySlot,
+            List<SpellVfxSlot> ambiguous,
+            List<CombatVfxCueDefinition> uninferrable)
+        {
             var generatedBySlot = generated.ToDictionary(row => row.Slot);
             IEnumerable<SpellVfxSlot> allSlots = generatedBySlot.Keys
                 .Union(catalogBySlot.Keys)
@@ -373,6 +393,128 @@ namespace Arena.Editor
                 && ambiguous.Count == 0 && uninferrable.Count == 0;
             EditorGUILayout.HelpBox(summary, clean ? MessageType.Info : MessageType.Warning);
         }
+
+        // Materialise the generated cues into progression_catalog.shared.json via the tested surgical
+        // writer (SpellCueCatalogWriter). Enabled only in the zero-diff-safe regime: every generated
+        // slot must map 1:1 to an authored cue (so each generated row updates an existing row in place,
+        // matched by that row's sort_order) and slot inference must be unambiguous. That keeps the first
+        // FIREBALL write a slot-key-only diff and refuses to guess where a generator-only slot belongs.
+        private void DrawWriteToCatalogButton(
+            string abilityId,
+            List<GeneratedCue> generated,
+            Dictionary<SpellVfxSlot, CombatVfxCueDefinition> catalogBySlot,
+            bool inferenceClean)
+        {
+            var rows = new List<SpellCueRow>(generated.Count);
+            bool writable = inferenceClean
+                && generated.Count > 0
+                && generated.Count == catalogBySlot.Count;
+            if (writable)
+            {
+                foreach (GeneratedCue gen in generated)
+                {
+                    if (!catalogBySlot.TryGetValue(gen.Slot, out CombatVfxCueDefinition authored))
+                    {
+                        writable = false;
+                        break;
+                    }
+
+                    rows.Add(new SpellCueRow(
+                        slot: SlotKey(gen.Slot),
+                        trigger: gen.Trigger,
+                        anchor: gen.Anchor,
+                        vfxId: gen.VfxId,
+                        attachMode: gen.AttachMode,
+                        vfxRole: gen.Role,
+                        lifecycle: gen.Lifecycle,
+                        projectileSequenceIndex: gen.ProjectileSequenceIndex,
+                        durationMs: gen.DurationMs,
+                        sortOrder: authored.sort_order));
+                }
+            }
+
+            EditorGUILayout.Space(4f);
+            using (new EditorGUI.DisabledScope(!writable || rows.Count == 0))
+            {
+                if (GUILayout.Button($"Write {abilityId} Cues to Catalog", GUILayout.Width(300f)))
+                    ConfirmAndWriteOwnerCues(abilityId, rows);
+            }
+
+            if (!writable)
+            {
+                EditorGUILayout.HelpBox(
+                    "Writing is available only when every generated slot maps 1:1 to an authored cue "
+                    + "(the zero-diff-safe regime — each generated row updates an existing row in place). "
+                    + "Resolve any changed / generator-only / catalog-only / ambiguous rows above first.",
+                    MessageType.None);
+            }
+            else
+            {
+                EditorGUILayout.HelpBox(
+                    "Writes the generated cues into progression_catalog.shared.json, inserting the "
+                    + "author-time slot keys and leaving every other byte identical. Republish the module "
+                    + "(spacetime publish -p server) to apply — the catalog JSON is include_str!'d.",
+                    MessageType.None);
+            }
+        }
+
+        private void ConfirmAndWriteOwnerCues(string abilityId, List<SpellCueRow> rows)
+        {
+            if (!EditorUtility.DisplayDialog(
+                    "Write generated cues",
+                    $"Materialise {rows.Count} generated cue(s) for {abilityId} into "
+                    + $"{ProgressionCatalogPath}?\n\nThis inserts the author-time slot keys; every other "
+                    + "byte is preserved. Republish the module afterwards to apply.",
+                    "Write",
+                    "Cancel"))
+            {
+                return;
+            }
+
+            string absolutePath = Path.Combine(Directory.GetCurrentDirectory(), ProgressionCatalogPath);
+            try
+            {
+                bool changed = SpellCueCatalogWriter.WriteOwnerCues(absolutePath, abilityId, rows);
+                if (changed)
+                {
+                    EditorUtility.DisplayDialog(
+                        "Cues written",
+                        $"Wrote {rows.Count} generated cue(s) for {abilityId} into {ProgressionCatalogPath}.\n\n"
+                        + "Republish the module (spacetime publish -p server) to apply.",
+                        "OK");
+                    Load();
+                }
+                else
+                {
+                    EditorUtility.DisplayDialog(
+                        "No change",
+                        $"The catalog already matches the generated cues for {abilityId}.",
+                        "OK");
+                }
+            }
+            catch (Exception ex)
+            {
+                EditorUtility.DisplayDialog("Write failed", ex.Message, "OK");
+            }
+        }
+
+        // Runtime SpellVfxSlot -> the author-time snake_case slot key written to the JSON (design doc
+        // §3.1/§3.4). The inverse of TryInferLegacySlot's (trigger, role, anchor-class) inference.
+        private static string SlotKey(SpellVfxSlot slot)
+            => slot switch
+            {
+                SpellVfxSlot.CastGlow => "cast_glow",
+                SpellVfxSlot.Muzzle => "muzzle",
+                SpellVfxSlot.ProjectileBody => "projectile_body",
+                SpellVfxSlot.TravelBody => "travel_body",
+                SpellVfxSlot.Impact => "impact",
+                SpellVfxSlot.Burst => "burst",
+                SpellVfxSlot.Beam => "beam",
+                SpellVfxSlot.SelfFlash => "self_flash",
+                SpellVfxSlot.AuraGround => "aura_ground",
+                SpellVfxSlot.Aura => "aura",
+                _ => slot.ToString().ToLowerInvariant(),
+            };
 
         private static List<string> DiffFields(GeneratedCue gen, CombatVfxCueDefinition cat)
         {
