@@ -147,9 +147,8 @@ namespace Arena.Editor
                 },
                 // Holy-damage projectiles: bespoke flying body (signature); the impact comes from the HOLY
                 // school (generic holy hit). cast_glow has no holy prefab yet, so it is omitted. BLESSED_SHIELD
-                // launches LEFT (matches the generator default) → writable now (body matches, impact inserts).
-                // BLADE_BARRIER launches RIGHT_HAND (vs the generator's LEFT default); until E7 resolves its
-                // hand its projectile_body anchor diffs and the write stays blocked — a per-spell hand override.
+                // launches LEFT (matches the generator default); BLADE_BARRIER launches RIGHT (via the
+                // CastHandOverrides below) — both bodies now match, and each inserts the HOLY impact.
                 ["PALADIN_BLESSED_SHIELD"] = new Dictionary<SpellVfxSlot, PaletteEntry>
                 {
                     [SpellVfxSlot.ProjectileBody] = new PaletteEntry("VFX_BLESSED_SHIELD_PROJECTILE_01"),
@@ -158,6 +157,20 @@ namespace Arena.Editor
                 {
                     [SpellVfxSlot.ProjectileBody] = new PaletteEntry("VFX_BLADE_BARRIER_PROJECTILE_01"),
                 },
+            };
+
+        // Per-spell cast-hand override (design doc Appendix B "shared modifiers" — the resolved E7 cast
+        // hand). The generator normally infers the cast hand from the animation entry and falls back to
+        // LEFT_HAND when it can't; this asserts a spell's hand explicitly and WINS over inference, for
+        // spells whose authored hand disagrees with what the animation resolves. Applies to every
+        // Hand-anchored slot the spell requests (cast_glow, projectile_body, muzzle, beam), so a
+        // right-handed spell stays internally consistent. BLADE_BARRIER launches from the RIGHT hand,
+        // but its SwordAndShield animation resolves LEFT (as BLESSED_SHIELD does) — without this its
+        // projectile_body anchor would diff and block the write.
+        private static readonly IReadOnlyDictionary<string, string> CastHandOverrides =
+            new Dictionary<string, string>(System.StringComparer.Ordinal)
+            {
+                ["PALADIN_BLADE_BARRIER"] = SpellVfxGenerator.AnchorRightHand,
             };
 
         private enum CueMatchState
@@ -226,7 +239,7 @@ namespace Arena.Editor
             SpellAnimationArchetype mode = SpellAnimationArchetypes.Derive(
                 (ulong)Mathf.Max(0, selected.gameplay.cast_time_ms), deliveryKind);
             string school = ResolveSchool(selected.gameplay.delivery);
-            string castHandAnchor = ResolveCastHandAnchor(hasAnimationEntry, animationEntry);
+            string castHandAnchor = ResolveCastHandAnchor(abilityId, hasAnimationEntry, animationEntry);
 
             EditorGUILayout.LabelField(
                 "Derivation",
@@ -299,11 +312,17 @@ namespace Arena.Editor
             return Normalize(delivery.damage_type);
         }
 
-        private static string ResolveCastHandAnchor(bool hasAnimationEntry, WeaponSpellAnimationEntry animationEntry)
+        private static string ResolveCastHandAnchor(
+            string abilityId, bool hasAnimationEntry, WeaponSpellAnimationEntry animationEntry)
         {
-            // E7: the concrete cast hand is inferred from the animation/playback layer; profile-less SPELL_*
-            // spells have no animation set, so fall back to the generator's LEFT_HAND default (14/15 hand cues
-            // use LEFT today — design doc Appendix B "shared modifiers").
+            // An explicit per-spell override wins — the authored E7 hand for spells the animation resolves
+            // wrongly (or can't resolve), e.g. BLADE_BARRIER's RIGHT launch.
+            if (CastHandOverrides.TryGetValue(abilityId, out string overrideHand))
+                return overrideHand;
+
+            // E7: otherwise the concrete cast hand is inferred from the animation/playback layer; profile-less
+            // SPELL_* spells have no animation set, so fall back to the generator's LEFT_HAND default (14/15
+            // hand cues use LEFT today — design doc Appendix B "shared modifiers").
             if (hasAnimationEntry
                 && TryInferSpellPresentationHand(animationEntry, out string handAnchor, out _))
             {

@@ -54,7 +54,7 @@ materializes slots that resolve. The **one** required slot is `projectile_body` 
 | `SPELL_BOOMERANG_ORB` | CastGlow | SHADOW projectile |
 | `SPELL_WITHERING_ORB` | CastGlow | SHADOW projectile |
 | `PALADIN_BLESSED_SHIELD` | Impact | **✅ writable (2026-07-08, commit `6ca4f329`):** HOLY palette (`impact=VFX_HOLY_HIT_01`) + body signature encoded; LEFT-hand matches the generator default → body matches, impact inserts via the relaxed gate. cast_glow deferred (no holy hand-glow prefab). Needs `VFX_HOLY_HIT_01` registered → the Orb08 holy hit + republish. |
-| `PALADIN_BLADE_BARRIER` | Impact | HOLY palette + body signature encoded, but authored `RIGHT_HAND` vs generator's LEFT default (E7) → `projectile_body` anchor diffs → **still blocked** pending a per-spell cast-hand resolution/override. cast_glow deferred. |
+| `PALADIN_BLADE_BARRIER` | Impact | **✅ writable (2026-07-08):** a per-spell cast-hand override (`CastHandOverrides[BLADE_BARRIER]=RIGHT_HAND`, wins over the LEFT animation inference) makes its `projectile_body` match at RIGHT_HAND; the HOLY impact inserts like BLESSED_SHIELD. Same registered `VFX_HOLY_HIT_01`. cast_glow deferred. |
 
 These are the concrete justification for the **writer insertion path**: the 1:1 update writer can't add a
 row that has no authored counterpart. **HOLY school encoded (commit `6ca4f329`):** generic `impact` +
