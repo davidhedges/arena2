@@ -12,7 +12,7 @@ using UnityEngine;
 
 namespace Arena.Editor
 {
-    internal sealed class SpellAuthoringWindow : EditorWindow
+    internal sealed partial class SpellAuthoringWindow : EditorWindow
     {
         private const string ProgressionCatalogPath = "server/src/progression_catalog.shared.json";
         private const string AnchorLeftHand = "LEFT_HAND";
@@ -141,7 +141,15 @@ namespace Arena.Editor
 
             if (string.IsNullOrWhiteSpace(combatProfileId))
             {
-                EditorGUILayout.HelpBox($"Ability '{abilityId}' must declare combat_profile_id.", MessageType.Error);
+                // Profile-less shared SPELL_* abilities (combat_profile_id: "") are expected, not an error:
+                // they have no per-weapon CombatAnimationSet and resolve via the weapon-agnostic archetype
+                // template; their VFX cues resolve by ability id (design doc §6.10). No animation-set lookup
+                // to do, so fall through to the cue audit / generator preview below.
+                EditorGUILayout.HelpBox(
+                    $"Ability '{abilityId}' is a profile-less shared spell (no combat_profile_id). It has no "
+                    + "per-weapon animation set — animation resolves via the weapon-agnostic archetype template, "
+                    + "and cues resolve by ability id. Expected for shared SPELL_* elementals (design doc §6.10).",
+                    MessageType.Info);
             }
             else if (!_animationSetByProfile.TryGetValue(combatProfileId, out CombatAnimationSet animationSet))
             {
@@ -178,6 +186,8 @@ namespace Arena.Editor
             }
 
             DrawCueAudit(abilityId, deliveryKind, selected.gameplay.cast_time_ms, hasAnimationEntry, animationEntry);
+            EditorGUILayout.Space(12f);
+            DrawGeneratedCuePreview(selected, abilityId, hasAnimationEntry, animationEntry);
         }
 
         private void DrawCueAudit(
@@ -707,6 +717,7 @@ namespace Arena.Editor
         {
             public string kind = string.Empty;
             public int cast_time_ms = 0;
+            public string targeting = string.Empty;
             public DeliveryDefinition delivery = new();
         }
 
@@ -714,6 +725,36 @@ namespace Arena.Editor
         private sealed class DeliveryDefinition
         {
             public string kind = string.Empty;
+            // School tint inputs (design doc §2.3: SCHOOL = vfx_school ?? damage_type ?? profile_default).
+            // vfx_school is the planned override field — not authored anywhere in the catalog yet, so it
+            // stays empty and damage_type wins today.
+            public string vfx_school = string.Empty;
+            public string damage_type = string.Empty;
+            // Archetype-derivation signals (design doc B.9). Nested objects are left un-initialised so an
+            // absent JSON key stays null; presence is also double-guarded by a positive/non-empty proxy
+            // field so it is robust whether or not JsonUtility instantiates an absent object.
+            public int impact_delay_ms = 0;
+            public SkyOriginDefinition? sky_origin;
+            public ShapeDefinition? shape;
+            public ProjectileDefinition? projectile;
+        }
+
+        [Serializable]
+        private sealed class SkyOriginDefinition
+        {
+            public float height = 0f;
+        }
+
+        [Serializable]
+        private sealed class ShapeDefinition
+        {
+            public string kind = string.Empty;
+        }
+
+        [Serializable]
+        private sealed class ProjectileDefinition
+        {
+            public float speed = 0f;
         }
 
         [Serializable]
