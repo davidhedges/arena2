@@ -42,17 +42,27 @@ namespace Arena.Editor
             public int DurationMs { get; }
         }
 
-        // Per-school defaults (school × slot → look). Seeded with FIRE only — the first exemplar. cast_glow is
-        // the genuinely school-generic fire look shared across fire spells; a fire school also needs a generic
-        // projectile_body/impact for fire projectiles with no signature, but FIREBALL supplies those itself
-        // (below), so they are intentionally absent here — a fire projectile without a signature would surface
-        // a coverage warning, the correct signal to author a generic fire body prefab.
+        // Per-school defaults (school × slot → look), derived from the catalog by the NAMING convention
+        // (VFX_<SCHOOL>_* belongs to that school) rather than raw frequency — frequency would codify drift
+        // (e.g. two ARCANE spells wear VFX_ICE_* today; that is the drift to correct, not an arcane generic).
+        // Only genuinely school-generic looks live here (a hand cast-glow, a stock impact); bespoke bodies /
+        // explosions are per-spell signatures below. A requested slot a school does not provide surfaces a
+        // coverage warning and is omitted — never a block (design §4.2).
         private static readonly IReadOnlyDictionary<string, IReadOnlyDictionary<SpellVfxSlot, PaletteEntry>> SchoolPalettes =
             new Dictionary<string, IReadOnlyDictionary<SpellVfxSlot, PaletteEntry>>(System.StringComparer.Ordinal)
             {
                 ["FIRE"] = new Dictionary<SpellVfxSlot, PaletteEntry>
                 {
                     [SpellVfxSlot.CastGlow] = new PaletteEntry("VFX_FIRE_CAST_HAND_01", selfTerminating: false, durationMs: 350),
+                },
+                ["COLD"] = new Dictionary<SpellVfxSlot, PaletteEntry>
+                {
+                    [SpellVfxSlot.CastGlow] = new PaletteEntry("VFX_ICE_CAST_HAND_01", selfTerminating: false, durationMs: 350),
+                    [SpellVfxSlot.Impact] = new PaletteEntry("VFX_ICE_HIT_01", selfTerminating: false, durationMs: 1000),
+                },
+                ["LIGHTNING"] = new Dictionary<SpellVfxSlot, PaletteEntry>
+                {
+                    [SpellVfxSlot.Impact] = new PaletteEntry("VFX_LIGHTNING_01", selfTerminating: false, durationMs: 1200),
                 },
             };
 
@@ -67,6 +77,28 @@ namespace Arena.Editor
                 {
                     [SpellVfxSlot.ProjectileBody] = new PaletteEntry("VFX_FIREBALL_PROJECTILE_01"),
                     [SpellVfxSlot.Impact] = new PaletteEntry("VFX_FIREBALL_HIT_01", selfTerminating: false, durationMs: 1000),
+                },
+                // ICICLE inherits the COLD cast_glow + impact; only its flying body is bespoke.
+                ["SPELL_ICICLE"] = new Dictionary<SpellVfxSlot, PaletteEntry>
+                {
+                    [SpellVfxSlot.ProjectileBody] = new PaletteEntry("VFX_ICICLE_PROJECTILE_01"),
+                },
+                ["SPELL_GLACIAL_SPIKE"] = new Dictionary<SpellVfxSlot, PaletteEntry>
+                {
+                    [SpellVfxSlot.Impact] = new PaletteEntry("VFX_GLACIAL_SPIKE_TARGET_01", selfTerminating: true),
+                },
+                ["SPELL_FROST_NOVA"] = new Dictionary<SpellVfxSlot, PaletteEntry>
+                {
+                    [SpellVfxSlot.Burst] = new PaletteEntry("VFX_FROST_NOVA_01", selfTerminating: true),
+                },
+                // No damage_type/vfx_school (school resolves to none) → their bursts are pure signatures.
+                ["WARRIOR_INTIMIDATE"] = new Dictionary<SpellVfxSlot, PaletteEntry>
+                {
+                    [SpellVfxSlot.Burst] = new PaletteEntry("VFX_VOID_AREA_01", selfTerminating: true),
+                },
+                ["WARRIOR_SHOCKWAVE"] = new Dictionary<SpellVfxSlot, PaletteEntry>
+                {
+                    [SpellVfxSlot.Burst] = new PaletteEntry("VFX_AIR_BURST_01_ARENA", selfTerminating: true),
                 },
             };
 

@@ -4324,6 +4324,7 @@
     {
       "owner_kind": "ABILITY",
       "owner_id": "SPELL_ICICLE",
+      "slot": "cast_glow",
       "trigger": "SPELL_CAST",
       "anchor": "LEFT_HAND",
       "vfx_id": "VFX_ICE_CAST_HAND_01",
@@ -4336,6 +4337,7 @@
     {
       "owner_kind": "ABILITY",
       "owner_id": "SPELL_ICICLE",
+      "slot": "projectile_body",
       "trigger": "SPELL_RELEASE",
       "anchor": "LEFT_HAND",
       "vfx_id": "VFX_ICICLE_PROJECTILE_01",
@@ -4349,6 +4351,7 @@
     {
       "owner_kind": "ABILITY",
       "owner_id": "SPELL_ICICLE",
+      "slot": "impact",
       "trigger": "SPELL_IMPACT",
       "anchor": "IMPACT_POINT",
       "vfx_id": "VFX_ICE_HIT_01",
@@ -4422,6 +4425,7 @@
     {
       "owner_kind": "ABILITY",
       "owner_id": "SPELL_LIGHTNING",
+      "slot": "impact",
       "trigger": "SPELL_RELEASE",
       "anchor": "IMPACT_POINT",
       "vfx_id": "VFX_LIGHTNING_01",
@@ -4508,6 +4512,7 @@
     {
       "owner_kind": "ABILITY",
       "owner_id": "SPELL_FROST_NOVA",
+      "slot": "burst",
       "trigger": "SPELL_RELEASE",
       "anchor": "CASTER",
       "vfx_id": "VFX_FROST_NOVA_01",
@@ -4532,6 +4537,7 @@
     {
       "owner_kind": "ABILITY",
       "owner_id": "WARRIOR_SHOCKWAVE",
+      "slot": "burst",
       "trigger": "SPELL_RELEASE",
       "anchor": "CASTER",
       "vfx_id": "VFX_AIR_BURST_01_ARENA",
@@ -4544,6 +4550,7 @@
     {
       "owner_kind": "ABILITY",
       "owner_id": "WARRIOR_INTIMIDATE",
+      "slot": "burst",
       "trigger": "SPELL_RELEASE",
       "anchor": "CASTER",
       "vfx_id": "VFX_VOID_AREA_01",
@@ -4654,6 +4661,7 @@
     {
       "owner_kind": "ABILITY",
       "owner_id": "SPELL_GLACIAL_SPIKE",
+      "slot": "impact",
       "trigger": "SPELL_IMPACT",
       "anchor": "TARGET",
       "vfx_id": "VFX_GLACIAL_SPIKE_TARGET_01",

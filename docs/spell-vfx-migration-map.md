@@ -103,8 +103,14 @@ archetype — most want only a brief `aura_ground` flourish.
    are authoring drift the migration corrects (two are latent bug fixes). No generator change. The
    Burst/Impact slot-inference nuance (§3.4 keys Burst on a caster anchor; a deferred burst lands on
    AREA_ORIGIN) is still open but cosmetic — resolve when SelfNova spells migrate.
-3. **Palette content pass** — build per-school palettes from the catalog (generic = shared vfx_id, signature
-   = unique), then materialize the clean-8 via the writer (the deferred-area + SACRED_FLAME fixes ride along
-   as intended corrections). `ORBITING_BLADES` → ARCANE is blocked on authoring arcane VFX assets.
+3. **Palette content pass** — ✅ **mostly done** (2026-07-08): derived per-school palettes by the naming
+   convention (FIRE/COLD/LIGHTNING generics + per-spell signatures, encoded in `SpellAuthoringWindow`), and
+   **slot-stamped 7 of the clean-8** into the catalog (FIREBALL + ICICLE, GLACIAL_SPIKE, FROST_NOVA,
+   LIGHTNING, INTIMIDATE, SHOCKWAVE) — each a byte-clean slot-keys-only diff, verified the encoded palette
+   reproduces all 7 zero-diff via the real generator. **No republish needed** — the `slot` key is
+   author-time-only (ignored at sync), so these are pure source changes with zero runtime impact. Remaining:
+   `ORBITING_BLADES` → ARCANE (author arcane VFX assets first); the deferred-area (ERUPTION/FROST_NEEDLE/
+   CONSECRATE) + SACRED_FLAME corrections (need each spell's palette + are intended behavior changes, so
+   they DO need republish); and the 8 "generator adds" spells (writer insertion, done — plus palettes).
 4. **Externalize palettes into the per-school VFX-set asset** (decision 10) once the content above exists to
    justify the asset shape.
