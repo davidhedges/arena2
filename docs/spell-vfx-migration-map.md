@@ -35,9 +35,14 @@ does **not** mean the *visuals* are right (a drifted spell can be wiring-clean).
   ICICLE-only → signature. The owner reviews the concrete result, not the abstract split.
 - **`SPELL_ORBITING_BLADES` → correct to ARCANE (owner, 2026-07-08).** It's wiring-clean but visually
   drifted — ARCANE wearing `VFX_ICE_CAST_HAND_01` / `VFX_ICE_HIT_01` (design §2.2). Migrating it uses the
-  ARCANE palette (a deliberate visual change, **not** zero-diff). **Blocked on ARCANE VFX assets** — the
-  catalog has no `VFX_ARCANE_*` cast/impact ids registered yet, so the arcane look must be authored (prefab
-  + registry entry) before this correction can land.
+  ARCANE palette (a deliberate visual change, **not** zero-diff). Where the ARCANE palette has no id yet
+  (there are no `VFX_ARCANE_*` cast/impact prefabs registered), that slot simply **warns and is omitted** —
+  not a block. Author the arcane prefabs when ready to light those slots back up.
+
+**Missing VFX never blocks:** a slot with no palette/signature `vfx_id` surfaces a coverage warning and is
+omitted — the generator already does this (`GenerateCues` → slot note + `continue`), and the writer only
+materializes slots that resolve. The **one** required slot is `projectile_body` on a projectile spell
+(design Rule 18) — a genuine "a projectile needs a body" gap, still surfaced as a warning, not a crash.
 
 ## Generator adds a slot — needs writer insertion + palette (8)
 
