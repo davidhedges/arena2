@@ -157,6 +157,39 @@ namespace Arena.Editor
                 {
                     [SpellVfxSlot.ProjectileBody] = new PaletteEntry("VFX_BLADE_BARRIER_PROJECTILE_01"),
                 },
+                // Charged fire sky-drop: bespoke meteor head (travel body, lifecycle forced UNTIL_TERMINAL) +
+                // a PARTICLE_SYSTEM impact; the FIRE school adds a charging hand cast-glow (inserted).
+                ["SPELL_METEOR"] = new Dictionary<SpellVfxSlot, PaletteEntry>
+                {
+                    [SpellVfxSlot.TravelBody] = new PaletteEntry("VFX_METEOR_HEAD_01"),
+                    [SpellVfxSlot.Impact] = new PaletteEntry("VFX_METEOR_01", selfTerminating: true),
+                },
+                // Channel ice projectile: bespoke splinter body + a per-spell impact DURATION 700 (vs the
+                // COLD generic 1000 that ICICLE uses) reusing the COLD hit look; the COLD school adds a
+                // channel hand cast-glow (inserted, UNTIL_CAST_END).
+                ["SPELL_FROZEN_SPLINTERS"] = new Dictionary<SpellVfxSlot, PaletteEntry>
+                {
+                    [SpellVfxSlot.ProjectileBody] = new PaletteEntry("VFX_FROZEN_SPLINTER_PROJECTILE_01"),
+                    [SpellVfxSlot.Impact] = new PaletteEntry("VFX_ICE_HIT_01", selfTerminating: false, durationMs: 700),
+                },
+                // Charged arcane beam: bespoke beam body (DURATION 500); the ARCANE school adds a charging
+                // hand cast-glow (inserted).
+                ["SPELL_INSTANT_BEAM"] = new Dictionary<SpellVfxSlot, PaletteEntry>
+                {
+                    [SpellVfxSlot.Beam] = new PaletteEntry("VFX_INSTANT_BEAM_01", selfTerminating: false, durationMs: 500),
+                },
+                // SHADOW projectiles: bespoke body + hit (both signatures). No SHADOW cast-glow prefab yet,
+                // so cast_glow is omitted → these migrate as a pure slot-stamp (no new effect, no republish).
+                ["SPELL_BOOMERANG_ORB"] = new Dictionary<SpellVfxSlot, PaletteEntry>
+                {
+                    [SpellVfxSlot.ProjectileBody] = new PaletteEntry("VFX_BOOMERANG_ORB_PROJECTILE_01"),
+                    [SpellVfxSlot.Impact] = new PaletteEntry("VFX_BOOMERANG_ORB_HIT_01", selfTerminating: false, durationMs: 700),
+                },
+                ["SPELL_WITHERING_ORB"] = new Dictionary<SpellVfxSlot, PaletteEntry>
+                {
+                    [SpellVfxSlot.ProjectileBody] = new PaletteEntry("VFX_WITHERING_ORB_PROJECTILE_01"),
+                    [SpellVfxSlot.Impact] = new PaletteEntry("VFX_WITHERING_ORB_HIT_01", selfTerminating: false, durationMs: 700),
+                },
             };
 
         // Per-spell cast-hand override (design doc Appendix B "shared modifiers" — the resolved E7 cast
