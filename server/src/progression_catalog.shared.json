@@ -4364,9 +4364,10 @@
     {
       "owner_kind": "ABILITY",
       "owner_id": "SPELL_ORBITING_BLADES",
+      "slot": "cast_glow",
       "trigger": "SPELL_CAST",
       "anchor": "LEFT_HAND",
-      "vfx_id": "VFX_ICE_CAST_HAND_01",
+      "vfx_id": "VFX_ARCANE_CAST_HAND_01",
       "attach_mode": "FOLLOW_ANCHOR",
       "vfx_role": "ATTACHED",
       "lifecycle": "DURATION",
@@ -4376,6 +4377,7 @@
     {
       "owner_kind": "ABILITY",
       "owner_id": "SPELL_ORBITING_BLADES",
+      "slot": "projectile_body",
       "trigger": "SPELL_RELEASE",
       "anchor": "LEFT_HAND",
       "vfx_id": "VFX_ORBITING_BLADES_PROJECTILE_01",
@@ -4389,9 +4391,10 @@
     {
       "owner_kind": "ABILITY",
       "owner_id": "SPELL_ORBITING_BLADES",
+      "slot": "impact",
       "trigger": "SPELL_IMPACT",
       "anchor": "IMPACT_POINT",
-      "vfx_id": "VFX_ICE_HIT_01",
+      "vfx_id": "VFX_ARCANE_HIT_01",
       "attach_mode": "SPAWN_WORLD",
       "vfx_role": "ONE_SHOT",
       "lifecycle": "DURATION",
@@ -4612,9 +4615,10 @@
     {
       "owner_kind": "ABILITY",
       "owner_id": "SPELL_MAGIC_MISSILE",
+      "slot": "cast_glow",
       "trigger": "SPELL_CAST",
       "anchor": "LEFT_HAND",
-      "vfx_id": "VFX_ICE_CAST_HAND_01",
+      "vfx_id": "VFX_ARCANE_CAST_HAND_01",
       "attach_mode": "FOLLOW_ANCHOR",
       "vfx_role": "ATTACHED",
       "lifecycle": "UNTIL_CAST_END",
@@ -4624,6 +4628,7 @@
     {
       "owner_kind": "ABILITY",
       "owner_id": "SPELL_MAGIC_MISSILE",
+      "slot": "projectile_body",
       "trigger": "SPELL_RELEASE",
       "anchor": "LEFT_HAND",
       "vfx_id": "VFX_MAGIC_MISSILE_PROJECTILE_01",

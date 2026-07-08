@@ -64,6 +64,13 @@ namespace Arena.Editor
                 {
                     [SpellVfxSlot.Impact] = new PaletteEntry("VFX_LIGHTNING_01", selfTerminating: false, durationMs: 1200),
                 },
+                // ARCANE corrects the ice-drift (owner-supplied prefabs): ORBITING_BLADES + MAGIC_MISSILE
+                // wore VFX_ICE_* for their hand glow / impact; these are the real arcane generics.
+                ["ARCANE"] = new Dictionary<SpellVfxSlot, PaletteEntry>
+                {
+                    [SpellVfxSlot.CastGlow] = new PaletteEntry("VFX_ARCANE_CAST_HAND_01", selfTerminating: false, durationMs: 350),
+                    [SpellVfxSlot.Impact] = new PaletteEntry("VFX_ARCANE_HIT_01", selfTerminating: false, durationMs: 700),
+                },
             };
 
         // Per-spell signature overrides (ability_id × slot → look). Override wins over the school default for
@@ -99,6 +106,16 @@ namespace Arena.Editor
                 ["WARRIOR_SHOCKWAVE"] = new Dictionary<SpellVfxSlot, PaletteEntry>
                 {
                     [SpellVfxSlot.Burst] = new PaletteEntry("VFX_AIR_BURST_01_ARENA", selfTerminating: true),
+                },
+                // Arcane projectiles: only the flying body is bespoke; cast_glow + impact come from the
+                // ARCANE school (the retint). MAGIC_MISSILE's impact is unauthored today (generator-adds).
+                ["SPELL_ORBITING_BLADES"] = new Dictionary<SpellVfxSlot, PaletteEntry>
+                {
+                    [SpellVfxSlot.ProjectileBody] = new PaletteEntry("VFX_ORBITING_BLADES_PROJECTILE_01"),
+                },
+                ["SPELL_MAGIC_MISSILE"] = new Dictionary<SpellVfxSlot, PaletteEntry>
+                {
+                    [SpellVfxSlot.ProjectileBody] = new PaletteEntry("VFX_MAGIC_MISSILE_PROJECTILE_01"),
                 },
             };
 
