@@ -48,7 +48,7 @@ materializes slots that resolve. The **one** required slot is `projectile_body` 
 | spell | adds | note |
 |---|---|---|
 | `SPELL_METEOR` | CastGlow | **✅ writable (commit `6cd6bbcd`):** travel_body+impact signatures; FIRE inserts a charging cast-glow (UNTIL_RELEASE_EVENT). |
-| `SPELL_MAGIC_MISSILE` | — | cast_glow+body already migrated; impact reverted (multi-projectile fires once). Nothing to add. |
+| `SPELL_MAGIC_MISSILE` | Impact | **✅ re-added (`4e4bec90`):** ARCANE impact `VFX_ARCANE_HIT_01` now fires **per missile** thanks to the per-projectile hit-cue fix (`e6a1c785`) — projectile spells dispatch SPELL_IMPACT from the per-missile presentation terminal, not the identity-less combat_event path. |
 | `SPELL_FROZEN_SPLINTERS` | CastGlow | **✅ writable (`6cd6bbcd`):** body sig + per-spell impact DURATION 700 (COLD generic is 1000/ICICLE); COLD inserts a channel cast-glow (UNTIL_CAST_END). |
 | `SPELL_INSTANT_BEAM` | CastGlow | **✅ writable (`6cd6bbcd`):** beam sig (DURATION 500); ARCANE inserts a charging cast-glow. |
 | `SPELL_BOOMERANG_ORB` | — | **✅ writable (`6cd6bbcd`):** body+hit signatures; no SHADOW cast-glow prefab → pure slot-stamp (no new effect, no republish). |
