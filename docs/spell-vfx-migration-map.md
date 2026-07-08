@@ -53,11 +53,14 @@ materializes slots that resolve. The **one** required slot is `projectile_body` 
 | `SPELL_INSTANT_BEAM` | CastGlow | charged beam |
 | `SPELL_BOOMERANG_ORB` | CastGlow | SHADOW projectile |
 | `SPELL_WITHERING_ORB` | CastGlow | SHADOW projectile |
-| `PALADIN_BLESSED_SHIELD` | CastGlow, Impact | only `projectile_body` authored |
-| `PALADIN_BLADE_BARRIER` | CastGlow, Impact | only `projectile_body` authored; also authored `RIGHT_HAND` (generator defaults LEFT — E7) |
+| `PALADIN_BLESSED_SHIELD` | Impact | **✅ writable (2026-07-08, commit `6ca4f329`):** HOLY palette (`impact=VFX_HOLY_HIT_01`) + body signature encoded; LEFT-hand matches the generator default → body matches, impact inserts via the relaxed gate. cast_glow deferred (no holy hand-glow prefab). Needs `VFX_HOLY_HIT_01` registered → the Orb08 holy hit + republish. |
+| `PALADIN_BLADE_BARRIER` | Impact | HOLY palette + body signature encoded, but authored `RIGHT_HAND` vs generator's LEFT default (E7) → `projectile_body` anchor diffs → **still blocked** pending a per-spell cast-hand resolution/override. cast_glow deferred. |
 
 These are the concrete justification for the **writer insertion path**: the 1:1 update writer can't add a
-row that has no authored counterpart.
+row that has no authored counterpart. **HOLY school encoded (commit `6ca4f329`):** generic `impact` +
+BLESSED_SHIELD/BLADE_BARRIER body signatures; `cast_glow` omitted until a holy hand-glow prefab exists (so
+these "add Impact" now, not CastGlow). The remaining CastGlow-adders (METEOR/FROZEN_SPLINTERS/INSTANT_BEAM/
+BOOMERANG_ORB/WITHERING_ORB) need their school's `cast_glow` (FIRE/COLD have one; SHADOW does not yet).
 
 ## Catalog-only slot — inference/archetype nuance (6)
 
