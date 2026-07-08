@@ -4217,6 +4217,7 @@
     {
       "owner_kind": "ABILITY",
       "owner_id": "PALADIN_BLESSED_SHIELD",
+      "slot": "projectile_body",
       "trigger": "SPELL_RELEASE",
       "anchor": "LEFT_HAND",
       "vfx_id": "VFX_BLESSED_SHIELD_PROJECTILE_01",
@@ -4229,7 +4230,21 @@
     },
     {
       "owner_kind": "ABILITY",
+      "owner_id": "PALADIN_BLESSED_SHIELD",
+      "slot": "impact",
+      "trigger": "SPELL_IMPACT",
+      "anchor": "IMPACT_POINT",
+      "vfx_id": "VFX_HOLY_HIT_01",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "DURATION",
+      "duration_ms": 1000,
+      "sort_order": 20
+    },
+    {
+      "owner_kind": "ABILITY",
       "owner_id": "PALADIN_BLADE_BARRIER",
+      "slot": "projectile_body",
       "trigger": "SPELL_RELEASE",
       "anchor": "RIGHT_HAND",
       "vfx_id": "VFX_BLADE_BARRIER_PROJECTILE_01",
@@ -4239,6 +4254,19 @@
       "projectile_sequence_index": 0,
       "duration_ms": 0,
       "sort_order": 16
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "PALADIN_BLADE_BARRIER",
+      "slot": "impact",
+      "trigger": "SPELL_IMPACT",
+      "anchor": "IMPACT_POINT",
+      "vfx_id": "VFX_HOLY_HIT_01",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "DURATION",
+      "duration_ms": 1000,
+      "sort_order": 20
     },
     {
       "owner_kind": "ABILITY",
@@ -4406,6 +4434,7 @@
     {
       "owner_kind": "ABILITY",
       "owner_id": "SPELL_METEOR",
+      "slot": "travel_body",
       "trigger": "SPELL_RELEASE",
       "anchor": "ORIGIN",
       "vfx_id": "VFX_METEOR_HEAD_01",
@@ -4418,6 +4447,7 @@
     {
       "owner_kind": "ABILITY",
       "owner_id": "SPELL_METEOR",
+      "slot": "impact",
       "trigger": "SPELL_IMPACT",
       "anchor": "IMPACT_POINT",
       "vfx_id": "VFX_METEOR_01",
@@ -4426,6 +4456,19 @@
       "lifecycle": "PARTICLE_SYSTEM",
       "duration_ms": 0,
       "sort_order": 170
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "SPELL_METEOR",
+      "slot": "cast_glow",
+      "trigger": "SPELL_CAST",
+      "anchor": "LEFT_HAND",
+      "vfx_id": "VFX_FIRE_CAST_HAND_01",
+      "attach_mode": "FOLLOW_ANCHOR",
+      "vfx_role": "ATTACHED",
+      "lifecycle": "UNTIL_RELEASE_EVENT",
+      "duration_ms": 0,
+      "sort_order": 180
     },
     {
       "owner_kind": "ABILITY",
@@ -4469,6 +4512,20 @@
     {
       "owner_kind": "ABILITY",
       "owner_id": "SPELL_BOOMERANG_ORB",
+      "slot": "impact",
+      "trigger": "SPELL_IMPACT",
+      "anchor": "IMPACT_POINT",
+      "vfx_id": "VFX_BOOMERANG_ORB_HIT_01",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "DURATION",
+      "duration_ms": 700,
+      "sort_order": 153
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "SPELL_BOOMERANG_ORB",
+      "slot": "projectile_body",
       "trigger": "SPELL_RELEASE",
       "anchor": "LEFT_HAND",
       "vfx_id": "VFX_BOOMERANG_ORB_PROJECTILE_01",
@@ -4481,10 +4538,11 @@
     },
     {
       "owner_kind": "ABILITY",
-      "owner_id": "SPELL_BOOMERANG_ORB",
+      "owner_id": "SPELL_WITHERING_ORB",
+      "slot": "impact",
       "trigger": "SPELL_IMPACT",
       "anchor": "IMPACT_POINT",
-      "vfx_id": "VFX_BOOMERANG_ORB_HIT_01",
+      "vfx_id": "VFX_WITHERING_ORB_HIT_01",
       "attach_mode": "SPAWN_WORLD",
       "vfx_role": "ONE_SHOT",
       "lifecycle": "DURATION",
@@ -4494,6 +4552,7 @@
     {
       "owner_kind": "ABILITY",
       "owner_id": "SPELL_WITHERING_ORB",
+      "slot": "projectile_body",
       "trigger": "SPELL_RELEASE",
       "anchor": "LEFT_HAND",
       "vfx_id": "VFX_WITHERING_ORB_PROJECTILE_01",
@@ -4503,18 +4562,6 @@
       "projectile_sequence_index": 0,
       "duration_ms": 0,
       "sort_order": 178
-    },
-    {
-      "owner_kind": "ABILITY",
-      "owner_id": "SPELL_WITHERING_ORB",
-      "trigger": "SPELL_IMPACT",
-      "anchor": "IMPACT_POINT",
-      "vfx_id": "VFX_WITHERING_ORB_HIT_01",
-      "attach_mode": "SPAWN_WORLD",
-      "vfx_role": "ONE_SHOT",
-      "lifecycle": "DURATION",
-      "duration_ms": 700,
-      "sort_order": 153
     },
     {
       "owner_kind": "ABILITY",
@@ -4570,6 +4617,7 @@
     {
       "owner_kind": "ABILITY",
       "owner_id": "SPELL_INSTANT_BEAM",
+      "slot": "beam",
       "trigger": "SPELL_RELEASE",
       "anchor": "LEFT_HAND",
       "vfx_id": "VFX_INSTANT_BEAM_01",
@@ -4578,6 +4626,19 @@
       "lifecycle": "DURATION",
       "duration_ms": 500,
       "sort_order": 185
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "SPELL_INSTANT_BEAM",
+      "slot": "cast_glow",
+      "trigger": "SPELL_CAST",
+      "anchor": "LEFT_HAND",
+      "vfx_id": "VFX_ARCANE_CAST_HAND_01",
+      "attach_mode": "FOLLOW_ANCHOR",
+      "vfx_role": "ATTACHED",
+      "lifecycle": "UNTIL_RELEASE_EVENT",
+      "duration_ms": 0,
+      "sort_order": 190
     },
     {
       "owner_kind": "ABILITY",
@@ -4594,6 +4655,7 @@
     {
       "owner_kind": "ABILITY",
       "owner_id": "SPELL_FROZEN_SPLINTERS",
+      "slot": "projectile_body",
       "trigger": "SPELL_RELEASE",
       "anchor": "LEFT_HAND",
       "vfx_id": "VFX_FROZEN_SPLINTER_PROJECTILE_01",
@@ -4607,6 +4669,7 @@
     {
       "owner_kind": "ABILITY",
       "owner_id": "SPELL_FROZEN_SPLINTERS",
+      "slot": "impact",
       "trigger": "SPELL_IMPACT",
       "anchor": "IMPACT_POINT",
       "vfx_id": "VFX_ICE_HIT_01",
@@ -4615,6 +4678,19 @@
       "lifecycle": "DURATION",
       "duration_ms": 700,
       "sort_order": 189
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "SPELL_FROZEN_SPLINTERS",
+      "slot": "cast_glow",
+      "trigger": "SPELL_CAST",
+      "anchor": "LEFT_HAND",
+      "vfx_id": "VFX_ICE_CAST_HAND_01",
+      "attach_mode": "FOLLOW_ANCHOR",
+      "vfx_role": "ATTACHED",
+      "lifecycle": "UNTIL_CAST_END",
+      "duration_ms": 0,
+      "sort_order": 190
     },
     {
       "owner_kind": "ABILITY",
@@ -4642,6 +4718,19 @@
       "projectile_sequence_index": 0,
       "duration_ms": 0,
       "sort_order": 190
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "SPELL_MAGIC_MISSILE",
+      "slot": "impact",
+      "trigger": "SPELL_IMPACT",
+      "anchor": "IMPACT_POINT",
+      "vfx_id": "VFX_ARCANE_HIT_01",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "DURATION",
+      "duration_ms": 700,
+      "sort_order": 200
     },
     {
       "owner_kind": "ABILITY",
