@@ -16,7 +16,7 @@ does **not** mean the *visuals* are right (a drifted spell can be wiring-clean).
 | bucket | count | what it needs |
 |---|---|---|
 | **Clean — zero-diff-ready** | 8 | palette-structure decision (which `vfx_id`s are school-generic vs per-spell signature); then the 1:1 writer (done) materializes them |
-| **Generator adds a slot** | 8 | writer **insertion** (not yet built — the 1:1 writer refuses these) + a palette entry for the added slot |
+| **Generator adds a slot** | 8 | **✅ all writable (2026-07-08):** write gate relaxed to insert generator-only slots + signatures/palette encoded for all 8 (BLESSED_SHIELD/BLADE_BARRIER/METEOR/FROZEN_SPLINTERS/INSTANT_BEAM + BOOMERANG/WITHERING slot-stamp; MAGIC_MISSILE needs nothing). Owner Writes + republishes the ones with a real new cue. |
 | **Catalog-only slot** | 6 | a slot-inference / archetype nuance (deferred SelfNova burst vs impact) to resolve |
 | **Wiring diff** | 7 | a real finding to adjudicate (generator rule vs authoring) — some are known/expected |
 | **No cues authored** | 18 | palette + prefab + writer insertion (mostly auras/buffs) |
@@ -47,12 +47,12 @@ materializes slots that resolve. The **one** required slot is `projectile_body` 
 
 | spell | adds | note |
 |---|---|---|
-| `SPELL_METEOR` | CastGlow | charged sky-drop shows a hand glow while charging |
-| `SPELL_MAGIC_MISSILE` | Impact | channel-projectile; impact not authored |
-| `SPELL_FROZEN_SPLINTERS` | CastGlow | channel-projectile |
-| `SPELL_INSTANT_BEAM` | CastGlow | charged beam |
-| `SPELL_BOOMERANG_ORB` | CastGlow | SHADOW projectile |
-| `SPELL_WITHERING_ORB` | CastGlow | SHADOW projectile |
+| `SPELL_METEOR` | CastGlow | **✅ writable (commit `6cd6bbcd`):** travel_body+impact signatures; FIRE inserts a charging cast-glow (UNTIL_RELEASE_EVENT). |
+| `SPELL_MAGIC_MISSILE` | — | cast_glow+body already migrated; impact reverted (multi-projectile fires once). Nothing to add. |
+| `SPELL_FROZEN_SPLINTERS` | CastGlow | **✅ writable (`6cd6bbcd`):** body sig + per-spell impact DURATION 700 (COLD generic is 1000/ICICLE); COLD inserts a channel cast-glow (UNTIL_CAST_END). |
+| `SPELL_INSTANT_BEAM` | CastGlow | **✅ writable (`6cd6bbcd`):** beam sig (DURATION 500); ARCANE inserts a charging cast-glow. |
+| `SPELL_BOOMERANG_ORB` | — | **✅ writable (`6cd6bbcd`):** body+hit signatures; no SHADOW cast-glow prefab → pure slot-stamp (no new effect, no republish). |
+| `SPELL_WITHERING_ORB` | — | **✅ writable (`6cd6bbcd`):** as BOOMERANG — slot-stamp only. |
 | `PALADIN_BLESSED_SHIELD` | Impact | **✅ writable (2026-07-08, commit `6ca4f329`):** HOLY palette (`impact=VFX_HOLY_HIT_01`) + body signature encoded; LEFT-hand matches the generator default → body matches, impact inserts via the relaxed gate. cast_glow deferred (no holy hand-glow prefab). Needs `VFX_HOLY_HIT_01` registered → the Orb08 holy hit + republish. |
 | `PALADIN_BLADE_BARRIER` | Impact | **✅ writable (2026-07-08):** a per-spell cast-hand override (`CastHandOverrides[BLADE_BARRIER]=RIGHT_HAND`, wins over the LEFT animation inference) makes its `projectile_body` match at RIGHT_HAND; the HOLY impact inserts like BLESSED_SHIELD. Same registered `VFX_HOLY_HIT_01`. cast_glow deferred. |
 
