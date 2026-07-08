@@ -33,11 +33,10 @@ does **not** mean the *visuals* are right (a drifted spell can be wiring-clean).
   school-generic (→ school palette); a `vfx_id` unique to one spell is that spell's signature (→ override).
   e.g. `VFX_ICE_CAST_HAND_01` is used by several COLD spells → COLD-generic; `VFX_ICICLE_PROJECTILE_01` is
   ICICLE-only → signature. The owner reviews the concrete result, not the abstract split.
-- **`SPELL_ORBITING_BLADES` → correct to ARCANE (owner, 2026-07-08).** It's wiring-clean but visually
-  drifted — ARCANE wearing `VFX_ICE_CAST_HAND_01` / `VFX_ICE_HIT_01` (design §2.2). Migrating it uses the
-  ARCANE palette (a deliberate visual change, **not** zero-diff). Where the ARCANE palette has no id yet
-  (there are no `VFX_ARCANE_*` cast/impact prefabs registered), that slot simply **warns and is omitted** —
-  not a block. Author the arcane prefabs when ready to light those slots back up.
+- **`SPELL_ORBITING_BLADES` → ARCANE: ✅ done (2026-07-08, commit `b1fb5499`).** Owner supplied
+  `VFX_ARCANE_CAST_HAND_01` (Human_SpellAura_Arcane) + `VFX_ARCANE_HIT_01`; registered both, added the
+  ARCANE palette, retinted OB's cast_glow + impact (and MAGIC_MISSILE's cast_glow) off ice. **Needs a
+  republish** (visual change) and a scale/pivot eyeball in playtest (aura prefab on a hand anchor).
 
 **Missing VFX never blocks:** a slot with no palette/signature `vfx_id` surfaces a coverage warning and is
 omitted — the generator already does this (`GenerateCues` → slot note + `continue`), and the writer only
