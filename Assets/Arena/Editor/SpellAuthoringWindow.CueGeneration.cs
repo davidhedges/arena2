@@ -131,6 +131,11 @@ namespace Arena.Editor
                 {
                     [SpellVfxSlot.Impact] = new PaletteEntry("VFX_LIGHT_AREA_01_ARENA", selfTerminating: true),
                 },
+                // No-projectile immediate impact on the target → TargetHit anchors on TARGET (owner-verified in-game).
+                ["PALADIN_SACRED_FLAME"] = new Dictionary<SpellVfxSlot, PaletteEntry>
+                {
+                    [SpellVfxSlot.Impact] = new PaletteEntry("VFX_SACRED_FLAME_HIT_01", selfTerminating: true),
+                },
             };
 
         private enum CueMatchState
