@@ -572,7 +572,13 @@ namespace Arena.Presentation
                         // now hit per missile instead of collapsing to one; single-projectile spells fire
                         // exactly once. The duplicate combat_event SPELL_IMPACT dispatch is suppressed for
                         // projectile-delivered spells in OnCombatEventInsert (IsProjectileDeliveredSpellImpact).
-                        DispatchProjectileContactCue(row);
+                        //
+                        // Skip a self-return terminal: a boomerang emits its terminal IMPACT at its own
+                        // caster when it comes home (hit == caster, damage 0) — that's the projectile
+                        // ending, not an enemy hit, so it must not spawn a hit burst on the caster. The
+                        // boomerang's enemy hits are non-terminal CONTACTs, already dispatched above.
+                        if (!row.Hit.Equals(row.Caster))
+                            DispatchProjectileContactCue(row);
                     }
                     break;
                 case CombatEventTypes.Block:
