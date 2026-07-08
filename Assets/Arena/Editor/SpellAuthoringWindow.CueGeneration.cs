@@ -71,6 +71,15 @@ namespace Arena.Editor
                     [SpellVfxSlot.CastGlow] = new PaletteEntry("VFX_ARCANE_CAST_HAND_01", selfTerminating: false, durationMs: 350),
                     [SpellVfxSlot.Impact] = new PaletteEntry("VFX_ARCANE_HIT_01", selfTerminating: false, durationMs: 700),
                 },
+                // HOLY applies to exactly the two holy-damage projectiles (BLESSED_SHIELD, BLADE_BARRIER —
+                // the only spells with damage_type HOLY); they share a generic holy hit. No holy hand
+                // cast-glow prefab is authored yet (there is Human_SpellAura_{Arcane,Fire,Ice} but no Holy),
+                // so cast_glow is intentionally absent — the generator omits it with a coverage note rather
+                // than emit a dangling vfx_id. Add a CastGlow entry here once a holy hand-glow is registered.
+                ["HOLY"] = new Dictionary<SpellVfxSlot, PaletteEntry>
+                {
+                    [SpellVfxSlot.Impact] = new PaletteEntry("VFX_HOLY_HIT_01", selfTerminating: false, durationMs: 1000),
+                },
             };
 
         // Per-spell signature overrides (ability_id × slot → look). Override wins over the school default for
@@ -135,6 +144,19 @@ namespace Arena.Editor
                 ["PALADIN_SACRED_FLAME"] = new Dictionary<SpellVfxSlot, PaletteEntry>
                 {
                     [SpellVfxSlot.Impact] = new PaletteEntry("VFX_SACRED_FLAME_HIT_01", selfTerminating: true),
+                },
+                // Holy-damage projectiles: bespoke flying body (signature); the impact comes from the HOLY
+                // school (generic holy hit). cast_glow has no holy prefab yet, so it is omitted. BLESSED_SHIELD
+                // launches LEFT (matches the generator default) → writable now (body matches, impact inserts).
+                // BLADE_BARRIER launches RIGHT_HAND (vs the generator's LEFT default); until E7 resolves its
+                // hand its projectile_body anchor diffs and the write stays blocked — a per-spell hand override.
+                ["PALADIN_BLESSED_SHIELD"] = new Dictionary<SpellVfxSlot, PaletteEntry>
+                {
+                    [SpellVfxSlot.ProjectileBody] = new PaletteEntry("VFX_BLESSED_SHIELD_PROJECTILE_01"),
+                },
+                ["PALADIN_BLADE_BARRIER"] = new Dictionary<SpellVfxSlot, PaletteEntry>
+                {
+                    [SpellVfxSlot.ProjectileBody] = new PaletteEntry("VFX_BLADE_BARRIER_PROJECTILE_01"),
                 },
             };
 
