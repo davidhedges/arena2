@@ -4645,19 +4645,6 @@
     },
     {
       "owner_kind": "ABILITY",
-      "owner_id": "SPELL_MAGIC_MISSILE",
-      "slot": "impact",
-      "trigger": "SPELL_IMPACT",
-      "anchor": "IMPACT_POINT",
-      "vfx_id": "VFX_ARCANE_HIT_01",
-      "attach_mode": "SPAWN_WORLD",
-      "vfx_role": "ONE_SHOT",
-      "lifecycle": "DURATION",
-      "duration_ms": 700,
-      "sort_order": 195
-    },
-    {
-      "owner_kind": "ABILITY",
       "owner_id": "SPELL_NEGATE",
       "trigger": "SPELL_RELEASE",
       "anchor": "CASTER",
