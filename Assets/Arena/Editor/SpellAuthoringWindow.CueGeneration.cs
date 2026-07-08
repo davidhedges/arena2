@@ -463,76 +463,128 @@ namespace Arena.Editor
         }
 
         // Materialise the generated cues into progression_catalog.shared.json via the tested surgical
-        // writer (SpellCueCatalogWriter). Enabled only in the zero-diff-safe regime: every generated
-        // slot must map 1:1 to an authored cue (so each generated row updates an existing row in place,
-        // matched by that row's sort_order) and slot inference must be unambiguous. That keeps the first
-        // FIREBALL write a slot-key-only diff and refuses to guess where a generator-only slot belongs.
+        // writer (SpellCueCatalogWriter). Two row dispositions:
+        //   • a generated slot that matches an authored cue 1:1 UPDATES that row in place, keeping its
+        //     sort_order (so an unchanged spell like FIREBALL diffs to only the inserted slot keys);
+        //   • a generator-only slot (the "generator adds a slot" migration bucket) is INSERTED with a
+        //     fresh sort_order from NextInsertSortOrder — past the owner's current max, so it collides
+        //     with neither an authored row nor another inserted row.
+        // The write is gated to the cases where it is provably non-destructive and unsurprising: slot
+        // inference must be unambiguous (inferenceClean), no matched slot may differ (`changed` — a
+        // wiring diff to adjudicate by hand, never auto-applied), and the generator must be a superset
+        // of the authored slots (no `catalogOnly` — an authored slot the generator does not emit would
+        // survive alongside an inserted one, e.g. the SelfNova Burst/Impact slot-name nuance, doubling
+        // the effect). Those three still block; a pure superset (updates + inserts) is writable.
         private void DrawWriteToCatalogButton(
             string abilityId,
             List<GeneratedCue> generated,
             Dictionary<SpellVfxSlot, CombatVfxCueDefinition> catalogBySlot,
             bool inferenceClean)
         {
+            int maxExistingSortOrder = 0;
+            foreach (CombatVfxCueDefinition cue in catalogBySlot.Values)
+                maxExistingSortOrder = Mathf.Max(maxExistingSortOrder, cue.sort_order);
+
             var rows = new List<SpellCueRow>(generated.Count);
+            int changed = 0;
+            int inserted = 0;
+            // Slot-enum order so a multi-insert (e.g. BLESSED_SHIELD: cast_glow + impact) assigns the
+            // inserted sort_orders deterministically.
+            foreach (GeneratedCue gen in generated.OrderBy(g => (int)g.Slot))
+            {
+                int sortOrder;
+                if (catalogBySlot.TryGetValue(gen.Slot, out CombatVfxCueDefinition authored))
+                {
+                    if (DiffFields(gen, authored).Count > 0)
+                        changed++;
+                    sortOrder = authored.sort_order; // update in place
+                }
+                else
+                {
+                    sortOrder = NextInsertSortOrder(maxExistingSortOrder, inserted);
+                    inserted++;
+                }
+
+                rows.Add(new SpellCueRow(
+                    slot: SlotKey(gen.Slot),
+                    trigger: gen.Trigger,
+                    anchor: gen.Anchor,
+                    vfxId: gen.VfxId,
+                    attachMode: gen.AttachMode,
+                    vfxRole: gen.Role,
+                    lifecycle: gen.Lifecycle,
+                    projectileSequenceIndex: gen.ProjectileSequenceIndex,
+                    durationMs: gen.DurationMs,
+                    sortOrder: sortOrder));
+            }
+
+            int catalogOnly = 0;
+            var generatedSlots = new HashSet<SpellVfxSlot>(generated.Select(g => g.Slot));
+            foreach (SpellVfxSlot slot in catalogBySlot.Keys)
+                if (!generatedSlots.Contains(slot))
+                    catalogOnly++;
+
             bool writable = inferenceClean
                 && generated.Count > 0
-                && generated.Count == catalogBySlot.Count;
-            if (writable)
-            {
-                foreach (GeneratedCue gen in generated)
-                {
-                    if (!catalogBySlot.TryGetValue(gen.Slot, out CombatVfxCueDefinition authored))
-                    {
-                        writable = false;
-                        break;
-                    }
-
-                    rows.Add(new SpellCueRow(
-                        slot: SlotKey(gen.Slot),
-                        trigger: gen.Trigger,
-                        anchor: gen.Anchor,
-                        vfxId: gen.VfxId,
-                        attachMode: gen.AttachMode,
-                        vfxRole: gen.Role,
-                        lifecycle: gen.Lifecycle,
-                        projectileSequenceIndex: gen.ProjectileSequenceIndex,
-                        durationMs: gen.DurationMs,
-                        sortOrder: authored.sort_order));
-                }
-            }
+                && changed == 0
+                && catalogOnly == 0;
 
             EditorGUILayout.Space(4f);
             using (new EditorGUI.DisabledScope(!writable || rows.Count == 0))
             {
                 if (GUILayout.Button($"Write {abilityId} Cues to Catalog", GUILayout.Width(300f)))
-                    ConfirmAndWriteOwnerCues(abilityId, rows);
+                    ConfirmAndWriteOwnerCues(abilityId, rows, inserted);
             }
 
             if (!writable)
             {
                 EditorGUILayout.HelpBox(
-                    "Writing is available only when every generated slot maps 1:1 to an authored cue "
-                    + "(the zero-diff-safe regime — each generated row updates an existing row in place). "
-                    + "Resolve any changed / generator-only / catalog-only / ambiguous rows above first.",
+                    "Writing is enabled when every generated slot either matches an authored cue 1:1 "
+                    + "(updated in place) or is a new slot the generator adds (inserted in sort order). "
+                    + "It is blocked while any matched row is changed (a wiring diff to adjudicate), any "
+                    + "authored slot is catalog-only (the generator emits nothing for it — resolve or "
+                    + "remove it by hand), or slot inference is ambiguous.",
                     MessageType.None);
             }
             else
             {
+                string disposition = inserted > 0
+                    ? $"updates {rows.Count - inserted} authored cue(s) in place and inserts {inserted} new slot(s)"
+                    : "updates the authored cues in place";
                 EditorGUILayout.HelpBox(
-                    "Writes the generated cues into progression_catalog.shared.json, inserting the "
-                    + "author-time slot keys and leaving every other byte identical. Republish the module "
-                    + "(spacetime publish -p server) to apply — the catalog JSON is include_str!'d.",
+                    $"Writes the generated cues into progression_catalog.shared.json — {disposition}, "
+                    + "assigning inserted rows a fresh sort_order and leaving every other byte identical. "
+                    + "Republish the module (spacetime publish -p server) to apply — the catalog JSON is "
+                    + "include_str!'d.",
                     MessageType.None);
             }
         }
 
-        private void ConfirmAndWriteOwnerCues(string abilityId, List<SpellCueRow> rows)
+        // Fresh sort_order for the i-th inserted (generator-only) slot: the next multiple of 10 strictly
+        // above the owner's current max authored sort_order, then +10 per subsequent inserted slot. This
+        // is collision-free by construction — every authored row is ≤ the max, so an inserted row (past
+        // it) matches neither an authored row nor another inserted row. Inserted slots therefore append
+        // after the owner's existing rows; that placement is cosmetic, because sort_order is only a
+        // within-trigger render tiebreaker and an added slot (cast_glow @ SPELL_CAST, impact @
+        // SPELL_IMPACT) never shares a trigger frame with the projectile_body it joins. Multiples of 10
+        // match the FIREBALL authoring convention (100/110/120) and leave gaps for a later hand-insert.
+        internal static int NextInsertSortOrder(int maxExistingSortOrder, int insertIndex)
         {
+            int baseSort = maxExistingSortOrder < 0 ? 0 : maxExistingSortOrder;
+            return (((baseSort / 10) + 1) * 10) + (insertIndex * 10);
+        }
+
+        private void ConfirmAndWriteOwnerCues(string abilityId, List<SpellCueRow> rows, int insertedCount)
+        {
+            int updatedCount = rows.Count - insertedCount;
+            string detail = insertedCount > 0
+                ? $"Update {updatedCount} authored cue(s) in place and insert {insertedCount} generator-only slot(s)"
+                : $"Update {rows.Count} authored cue(s) in place";
             if (!EditorUtility.DisplayDialog(
                     "Write generated cues",
-                    $"Materialise {rows.Count} generated cue(s) for {abilityId} into "
-                    + $"{ProgressionCatalogPath}?\n\nThis inserts the author-time slot keys; every other "
-                    + "byte is preserved. Republish the module afterwards to apply.",
+                    $"{detail} for {abilityId} in {ProgressionCatalogPath}?\n\n"
+                    + "Author-time slot keys are inserted and inserted rows get a fresh sort_order; every "
+                    + "other byte is preserved. Republish the module afterwards to apply.",
                     "Write",
                     "Cancel"))
             {

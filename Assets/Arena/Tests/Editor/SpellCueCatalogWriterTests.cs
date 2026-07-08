@@ -210,6 +210,43 @@ namespace Arena.Tests.Editor
             AssertValidJson(output);
         }
 
+        // The authoring window's sort_order-assignment policy for inserted (generator-only) slots. The
+        // load-bearing property (the writer joins rows by sort_order) is that an inserted row never
+        // collides with an authored row or another inserted row — so it is strictly past the owner's
+        // current max and strictly increasing per insert.
+        [Test]
+        public void NextInsertSortOrder_IsPastTheMax_AndCollisionFree()
+        {
+            // Real target owners from the migration map: METEOR (max 170), FROZEN_SPLINTERS (189),
+            // BLESSED_SHIELD (15), plus the brand-new-owner case (0).
+            foreach (int max in new[] { 0, 15, 170, 178, 189, 200 })
+            {
+                int first = NextInsertSortOrder(max, 0);
+                int second = NextInsertSortOrder(max, 1);
+                Assert.That(first, Is.GreaterThan(max), $"insert 0 must be past max {max}");
+                Assert.That(second, Is.GreaterThan(first), $"insert 1 must be past insert 0 (max {max})");
+                Assert.That(first % 10, Is.EqualTo(0), "inserted sort_orders follow the multiple-of-10 convention");
+                Assert.That(second - first, Is.EqualTo(10), "inserts are spaced by 10");
+            }
+
+            // Concrete: BLESSED_SHIELD (projectile_body @ 15) adds cast_glow + impact → 20, 30.
+            Assert.That(NextInsertSortOrder(15, 0), Is.EqualTo(20));
+            Assert.That(NextInsertSortOrder(15, 1), Is.EqualTo(30));
+            // METEOR (travel_body 168 / impact 170) adds cast_glow → 180 (clears 170).
+            Assert.That(NextInsertSortOrder(170, 0), Is.EqualTo(180));
+            // FROZEN_SPLINTERS (188/189) adds cast_glow → 190 (clears 189, not a multiple of 10).
+            Assert.That(NextInsertSortOrder(189, 0), Is.EqualTo(190));
+        }
+
+        private static int NextInsertSortOrder(int maxExistingSortOrder, int insertIndex)
+        {
+            Type windowType = EditorAssembly.GetType("Arena.Editor.SpellAuthoringWindow", throwOnError: true)!;
+            MethodInfo method = windowType.GetMethod(
+                "NextInsertSortOrder",
+                BindingFlags.NonPublic | BindingFlags.Static)!;
+            return (int)method.Invoke(null, new object[] { maxExistingSortOrder, insertIndex })!;
+        }
+
         // Lightweight structural sanity (Unity's runtime has no System.Text.Json): delimiters balance
         // outside of strings. The net10 write-check harness additionally parses the output with a real
         // JSON parser.

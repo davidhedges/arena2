@@ -96,8 +96,16 @@ archetype — most want only a brief `aura_ground` flourish.
 
 1. **Writer insertion path** — ✅ **done** (`SpellCueCatalogWriter` now inserts generator-only slots and
    brand-new owners in sort order, keeps unmatched authored rows, and stays byte-identical on update-only
-   owners; verified live + EditMode tests). Remaining: relax the authoring window's write gate (currently
-   1:1-only) to *use* insertion, which needs a sort_order-assignment policy for the added slots.
+   owners; verified live + EditMode tests). **Write gate relaxed — ✅ done (2026-07-08):** the authoring
+   window's Write button no longer requires a 1:1 match — it now updates matched slots in place and
+   **inserts** generator-only slots, gated on `inferenceClean && changed==0 && catalogOnly==0` (the
+   generator must be a clean superset; a `changed` row is a wiring diff to adjudicate by hand and a
+   `catalogOnly` slot would double an authored effect — e.g. the SelfNova Burst/Impact slot-name nuance).
+   The **sort_order-assignment policy** for inserted slots (`SpellAuthoringWindow.NextInsertSortOrder`):
+   the next multiple of 10 strictly above the owner's max authored `sort_order`, +10 per added slot —
+   collision-free by construction (proven against all 8 targets' live sort_orders), slot-enum order for
+   multi-insert. This unblocks writing the whole **"generator adds a slot" bucket** (once each spell's
+   added slot has a palette/signature `vfx_id`).
 2. **Findings adjudicated** — ✅ (owner, 2026-07-08): the generator was correct on all of them; the diffs
    are authoring drift the migration corrects (two are latent bug fixes). No generator change. The
    Burst/Impact slot-inference nuance (§3.4 keys Burst on a caster anchor; a deferred burst lands on
