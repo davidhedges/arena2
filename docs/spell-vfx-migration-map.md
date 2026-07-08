@@ -29,13 +29,15 @@ does **not** mean the *visuals* are right (a drifted spell can be wiring-clean).
 (ARCANE Projectile), `WARRIOR_INTIMIDATE` (SelfNova, no school), `WARRIOR_SHOCKWAVE` (SelfNova, no school).
 
 - These migrate with **no wiring change** once the palette supplies their authored `vfx_id`s.
-- **Content decision per spell:** is each `vfx_id` school-generic (→ school palette) or per-spell
-  signature (→ signature override)? e.g. `VFX_ICE_CAST_HAND_01` looks COLD-generic; `VFX_ICICLE_PROJECTILE_01`
-  is ICICLE-signature.
-- **`SPELL_ORBITING_BLADES` is wiring-clean but visually drifted** — it's ARCANE yet wears
-  `VFX_ICE_CAST_HAND_01` / `VFX_ICE_HIT_01` (design §2.2). Adopting its authored ids verbatim keeps the
-  drift; a school palette would *correct* it to arcane visuals (a deliberate behavior change, not zero-diff).
-  Decide keep-as-signature vs correct.
+- **Generic vs signature is derived from data, not asked:** a `vfx_id` used by 2+ spells of one school is
+  school-generic (→ school palette); a `vfx_id` unique to one spell is that spell's signature (→ override).
+  e.g. `VFX_ICE_CAST_HAND_01` is used by several COLD spells → COLD-generic; `VFX_ICICLE_PROJECTILE_01` is
+  ICICLE-only → signature. The owner reviews the concrete result, not the abstract split.
+- **`SPELL_ORBITING_BLADES` → correct to ARCANE (owner, 2026-07-08).** It's wiring-clean but visually
+  drifted — ARCANE wearing `VFX_ICE_CAST_HAND_01` / `VFX_ICE_HIT_01` (design §2.2). Migrating it uses the
+  ARCANE palette (a deliberate visual change, **not** zero-diff). **Blocked on ARCANE VFX assets** — the
+  catalog has no `VFX_ARCANE_*` cast/impact ids registered yet, so the arcane look must be authored (prefab
+  + registry entry) before this correction can land.
 
 ## Generator adds a slot — needs writer insertion + palette (8)
 
@@ -65,15 +67,18 @@ authored Burst. **Action:** extend the §3.4 inference so a deferred-area one-sh
 the archetype's own slot (Burst for SelfNova, Impact for GroundAoe), or have those archetypes agree on one
 slot name.
 
-## Wiring diff — findings to adjudicate (7)
+## Wiring diff — findings ADJUDICATED (owner, 2026-07-08)
 
-| spell | diff | likely verdict |
+| spell | diff | verdict |
 |---|---|---|
-| `SPELL_CONSECRATE`, `SPELL_ERUPTION`, `SPELL_FROST_NEEDLE` | generator `AREA_IMPACT`@`AREA_ORIGIN` vs authored `SPELL_RELEASE`@`IMPACT_POINT` | generator thinks these are **deferred** (impact_delay / cone) but they were authored as immediate. Reconcile: is the deferral real (fix authoring) or spurious (tighten `deferred` detection)? `SPELL_LIGHTNING`, same archetype but non-deferred, is clean. |
-| `PALADIN_SACRED_FLAME` | generator `TARGET` anchor vs authored `IMPACT_POINT` | TargetHit anchors on TARGET (Rule 15 legal on SPELL_IMPACT); authoring used IMPACT_POINT. Decide the archetype default. |
-| `PALADIN_CLEANSING_TOUCH` | generator `SPAWN_WORLD` vs authored `FOLLOW_ANCHOR` | a target-attached cleanse; should TargetHit impact follow the target? |
+| `SPELL_ERUPTION`, `SPELL_FROST_NEEDLE`, `PALADIN_CONSECRATE` | generator `AREA_IMPACT`@`AREA_ORIGIN` vs authored `SPELL_RELEASE`@`IMPACT_POINT` | **Generator is right; authoring is a latent timing bug.** Owner: *deferred = detonates after a delay*. These carry real `impact_delay_ms` (500 / 500 / 2000), so they detonate late but the authored cue shows the burst at **cast** — 0.5–2s early. Runtime **does** emit `AREA_IMPACT` for delayed *point* areas (`casting.rs:5651`, `resolve_area_impact` fires it after the `PendingAreaImpact` delay), so migrating to `AREA_IMPACT@AREA_ORIGIN` fires the burst at detonation. **Fix on migration.** (`SPELL_LIGHTNING` has no delay → immediate → generator agrees; clean.) |
+| `SPELL_ICE_SPIKES` (cone, no delay) | matches authoring | The generator's `deferred` flag also covers `CASTER_CONE` geometry (not a *timing* delay). Same correct output; the flag just conflates two reasons for `AREA_IMPACT@AREA_ORIGIN` (delay vs cone-at-origin). No change needed; keep the note that "deferred" here = "resolves at area origin," not strictly a delay. |
+| `PALADIN_SACRED_FLAME` | generator `TARGET` anchor vs authored `IMPACT_POINT` | **Generator is right.** Owner: it's a no-projectile spell with an immediate impact *on the target*. `TARGET` (tracks the target entity) is the correct anchor; `IMPACT_POINT` (a projectile-hit location) was legacy for a projectile-less spell. Fix on migration. |
+| `PALADIN_CLEANSING_TOUCH` | generator `SPAWN_WORLD` vs authored `FOLLOW_ANCHOR` | Per-spell **signature override** (a cleanse effect that sticks to the target). Keep the generator default `SPAWN_WORLD` and author `FOLLOW_ANCHOR` as this spell's override; not a generator-default change. |
 | `SPELL_ELECTROCUTE` | generator `UNTIL_CAST_END` vs authored `UNTIL_TERMINAL_EVENT` | **expected** — parked legacy relic (decision 9), off-palette by design. |
 | `WARRIOR_GROUND_SLASH` | generator `projectile_body` `LEFT_HAND` vs authored `CASTER` | **expected** — known per-spell body-origin override (design B.3). |
+
+**Net: the generator was correct on every finding.** The "diffs" are authoring drift the DRY migration corrects (two of them — the deferred-area burst timing and the projectile-less `TARGET` anchor — fix latent presentation bugs). No generator code change.
 
 ## No cues authored — palette + prefab + insertion (18)
 
@@ -89,9 +94,12 @@ archetype — most want only a brief `aura_ground` flourish.
    brand-new owners in sort order, keeps unmatched authored rows, and stays byte-identical on update-only
    owners; verified live + EditMode tests). Remaining: relax the authoring window's write gate (currently
    1:1-only) to *use* insertion, which needs a sort_order-assignment policy for the added slots.
-2. **Resolve the deferred-area findings** (CONSECRATE/ERUPTION/FROST_NEEDLE + the Burst/Impact slot nuance)
-   — a small generator/inference reconciliation that also clears 4 of the "catalog-only"/"wiring-diff" rows.
-3. **Palette content pass** (owner) — decide school-generic vs signature for the clean-8's `vfx_id`s;
-   correct the `ORBITING_BLADES` drift; then the 1:1 writer materializes the clean-8.
+2. **Findings adjudicated** — ✅ (owner, 2026-07-08): the generator was correct on all of them; the diffs
+   are authoring drift the migration corrects (two are latent bug fixes). No generator change. The
+   Burst/Impact slot-inference nuance (§3.4 keys Burst on a caster anchor; a deferred burst lands on
+   AREA_ORIGIN) is still open but cosmetic — resolve when SelfNova spells migrate.
+3. **Palette content pass** — build per-school palettes from the catalog (generic = shared vfx_id, signature
+   = unique), then materialize the clean-8 via the writer (the deferred-area + SACRED_FLAME fixes ride along
+   as intended corrections). `ORBITING_BLADES` → ARCANE is blocked on authoring arcane VFX assets.
 4. **Externalize palettes into the per-school VFX-set asset** (decision 10) once the content above exists to
    justify the asset shape.
