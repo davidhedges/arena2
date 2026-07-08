@@ -483,8 +483,35 @@ namespace Arena.Presentation
                 _lifecycle.RouteRelease(fact.Value.ToTemplateContext(string.Empty));
             }
 
-            if (!suppressPredictedMeleeContactCue)
+            // Projectile-delivered spells fire their SPELL_IMPACT hit cue per projectile from the
+            // projectile-presentation IMPACT terminal (DispatchProjectileEvent), so the identity-less
+            // combat_event impact must not also dispatch it — that would double single-projectile spells
+            // and can't key per-missile for channels. Non-projectile spell impacts keep this path.
+            if (!suppressPredictedMeleeContactCue && !IsProjectileDeliveredSpellImpact(row))
                 DispatchFact(fact.Value);
+        }
+
+        // True for a spell's terminal IMPACT combat_event whose spell delivers projectiles — those now
+        // present per-projectile from the projectile-presentation IMPACT terminal, so this combat_event
+        // must not re-dispatch SPELL_IMPACT. Projectile-delivered = PROJECTILE behavior, or a CHANNEL that
+        // fires projectiles (Speed > 0, which excludes beam channels like ELECTROCUTE). Direct-target,
+        // area, and beam spell impacts return false and keep dispatching from the combat_event path.
+        private static bool IsProjectileDeliveredSpellImpact(CombatEvent row)
+        {
+            if (!string.Equals(row.SourceKind, CombatEventSources.Spell, StringComparison.Ordinal))
+                return false;
+            if (!string.Equals(row.EventType, CombatEventTypes.Impact, StringComparison.Ordinal))
+                return false;
+
+            SpellDefinition? def = NetworkManager.Instance?.Conn?.Db.SpellDefinition
+                .Kind.Find(WireIdentifier.Normalize(row.ActionKind));
+            if (def == null)
+                return false;
+
+            string behavior = WireIdentifier.Normalize(def.Behavior);
+            return string.Equals(behavior, SpellBehaviorProjectile, StringComparison.Ordinal)
+                || (string.Equals(behavior, SpellDefinitionContracts.BehaviorChannel, StringComparison.Ordinal)
+                    && def.Speed > 0f);
         }
 
         private void OnProjectilePresentationEventInsert(EventContext ctx, ProjectilePresentationEvent row)
@@ -536,6 +563,18 @@ namespace Arena.Presentation
                     DispatchProjectileContactCue(row);
                     break;
                 case CombatEventTypes.Impact:
+                    if (row.Terminal)
+                    {
+                        ProjectileVisuals.Impact(row);
+                        // Fire the authored SPELL_IMPACT hit cue per projectile, at this projectile's own
+                        // impact point — the same per-projectile presentation path CONTACT already uses
+                        // (e.g. ORBITING_BLADES). Multi-projectile channels (MAGIC_MISSILE/FROZEN_SPLINTERS)
+                        // now hit per missile instead of collapsing to one; single-projectile spells fire
+                        // exactly once. The duplicate combat_event SPELL_IMPACT dispatch is suppressed for
+                        // projectile-delivered spells in OnCombatEventInsert (IsProjectileDeliveredSpellImpact).
+                        DispatchProjectileContactCue(row);
+                    }
+                    break;
                 case CombatEventTypes.Block:
                 case CombatEventTypes.Parry:
                     if (row.Terminal)
