@@ -117,6 +117,20 @@ namespace Arena.Editor
                 {
                     [SpellVfxSlot.ProjectileBody] = new PaletteEntry("VFX_MAGIC_MISSILE_PROJECTILE_01"),
                 },
+                // Deferred point-areas (impact_delay > 0): the impact resolves at detonation, so the
+                // generator wires it to AREA_IMPACT@AREA_ORIGIN — the burst is each spell's signature.
+                ["SPELL_ERUPTION"] = new Dictionary<SpellVfxSlot, PaletteEntry>
+                {
+                    [SpellVfxSlot.Impact] = new PaletteEntry("VFX_ERUPTION_01", selfTerminating: true),
+                },
+                ["SPELL_FROST_NEEDLE"] = new Dictionary<SpellVfxSlot, PaletteEntry>
+                {
+                    [SpellVfxSlot.Impact] = new PaletteEntry("VFX_FROST_NEEDLE_01", selfTerminating: true),
+                },
+                ["PALADIN_CONSECRATE"] = new Dictionary<SpellVfxSlot, PaletteEntry>
+                {
+                    [SpellVfxSlot.Impact] = new PaletteEntry("VFX_LIGHT_AREA_01_ARENA", selfTerminating: true),
+                },
             };
 
         private enum CueMatchState
