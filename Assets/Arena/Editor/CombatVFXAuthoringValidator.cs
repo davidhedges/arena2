@@ -104,7 +104,7 @@ namespace Arena.Editor
 
             ValidateCastTimeHandCueLifecycles(catalog, errors);
             ValidateSpellAnimationTiming(catalog, errors);
-            ValidateSpellCastAnimationMap(errors);
+            ValidateSpellCastAnimationMap(catalog, errors);
             ValidateCueAnchorContract(catalog, errors);
             ValidateGreatswordCombatAnimationEvents(errors);
 
@@ -249,7 +249,8 @@ namespace Arena.Editor
                     continue;
                 }
 
-                if (!SpellCastAnimationResolver.TryResolve(animationSet, actionId, out WeaponSpellAnimationEntry entry))
+                SpellAnimationArchetype archetype = DeriveSpellAnimationArchetype(ability);
+                if (!SpellCastAnimationResolver.TryResolve(animationSet, actionId, archetype, out WeaponSpellAnimationEntry entry))
                 {
                     errors.Add($"spell ability '{abilityId}' action '{actionId}' is selectable but CombatAnimationSet '{animationSet.name}' has no explicit or map-composed spell animation entry.");
                     continue;
@@ -668,7 +669,9 @@ namespace Arena.Editor
             return result;
         }
 
-        private static void ValidateSpellCastAnimationMap(List<string> errors)
+        private static void ValidateSpellCastAnimationMap(
+            ProgressionCatalogDocument catalog,
+            List<string> errors)
         {
             SpellCastAnimationMap? map = LoadFirstAsset<SpellCastAnimationMap>();
             if (map == null)
@@ -681,12 +684,18 @@ namespace Arena.Editor
                 return;
             }
 
-            var rightHandOneHandSets = new List<string>();
-            foreach (CombatAnimationSet animationSet in Resources.LoadAll<CombatAnimationSet>("CombatAnimationSets"))
+            var spellByActionId = new Dictionary<string, AbilityDefinition>(StringComparer.Ordinal);
+            foreach (AbilityDefinition ability in catalog.abilities)
             {
-                if (animationSet.OneHandedCastHand == SpellCastHand.Right)
-                    rightHandOneHandSets.Add(animationSet.name);
+                if (!string.Equals(WireIdentifier.Normalize(ability.gameplay.kind), "SPELL", StringComparison.Ordinal))
+                    continue;
+
+                string actionId = WireIdentifier.Normalize(ability.action_id);
+                if (!string.IsNullOrWhiteSpace(actionId))
+                    spellByActionId[actionId] = ability;
             }
+
+            CombatAnimationSet[] animationSets = Resources.LoadAll<CombatAnimationSet>("CombatAnimationSets");
 
             foreach (SpellCastAnimationMap.Entry entry in map.Entries)
             {
@@ -704,12 +713,44 @@ namespace Arena.Editor
                     continue;
                 }
 
-                if (family.handStyle == SpellCastHandStyle.OneHand && rightHandOneHandSets.Count > 0)
+                if (!spellByActionId.TryGetValue(spellId, out AbilityDefinition ability))
                 {
+                    errors.Add($"SpellCastAnimationMap entry for spell '{spellId}' has no matching SPELL ability in progression_catalog.shared.json.");
+                    continue;
+                }
+
+                SpellAnimationArchetype archetype = DeriveSpellAnimationArchetype(ability);
+                var setsByHand = new Dictionary<SpellCastHand, List<string>>();
+                foreach (CombatAnimationSet animationSet in animationSets)
+                {
+                    if (animationSet.TryGetSpellAnimation(spellId, out _))
+                        continue;
+
+                    SpellCastHand hand = animationSet.OneHandedCastHand;
+                    if (!setsByHand.TryGetValue(hand, out List<string> setNames))
+                        setsByHand[hand] = setNames = new List<string>();
+                    setNames.Add(animationSet.name);
+                }
+
+                if (setsByHand.Count == 0)
+                    setsByHand[SpellCastHand.Left] = new List<string> { "default composed path" };
+
+                foreach ((SpellCastHand hand, List<string> setNames) in setsByHand)
+                {
+                    if (SpellCastAnimationComposer.TryCompose(spellId, family, hand, archetype, out _))
+                        continue;
+
                     errors.Add(
-                        $"SpellCastAnimationMap entry for spell '{spellId}' uses one-hand family '{entry.baseName}', but CombatAnimationSet(s) {string.Join(", ", rightHandOneHandSets)} author oneHandedCastHand=Right. Right-hand one-hand spell composition is disabled until a RightGesture layer/mask exists.");
+                        $"SpellCastAnimationMap entry for spell '{spellId}' resolves authored gameplay as {archetype}, but family '{entry.baseName}' has no playable clips for hand '{hand}' used by: {string.Join(", ", setNames)}.");
                 }
             }
+        }
+
+        private static SpellAnimationArchetype DeriveSpellAnimationArchetype(AbilityDefinition ability)
+        {
+            ulong castTimeMs = (ulong)Math.Max(0, ability.gameplay.cast_time_ms);
+            string deliveryKind = WireIdentifier.Normalize(ability.gameplay.delivery.kind);
+            return SpellAnimationArchetypes.Derive(castTimeMs, deliveryKind);
         }
 
         private static T? LoadFirstAsset<T>() where T : UnityEngine.Object
@@ -929,6 +970,13 @@ namespace Arena.Editor
         {
             public string kind = string.Empty;
             public int cast_time_ms = 0;
+            public DeliveryDefinition delivery = new();
+        }
+
+        [Serializable]
+        private sealed class DeliveryDefinition
+        {
+            public string kind = string.Empty;
         }
 
         [Serializable]

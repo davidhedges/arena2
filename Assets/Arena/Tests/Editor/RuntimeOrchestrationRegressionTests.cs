@@ -258,7 +258,7 @@ namespace Arena.Tests.Editor
             Assert.That(staticSqlText, Does.Not.Contain("\"fixed_action_binding_catalog\""));
             Assert.That(staticSqlText, Does.Not.Contain("\"class_catalog\""));
 
-            Assert.That(localSql, Has.Length.EqualTo(23));
+            Assert.That(localSql, Has.Length.EqualTo(24));
             Assert.That(localSql[0], Does.Contain("\"player_world\""));
             Assert.That(localSql[0], Does.Contain(localIdentityKey));
             Assert.That(localSqlText, Does.Contain("\"player_open_world_scene\""));
@@ -272,6 +272,7 @@ namespace Arena.Tests.Editor
             Assert.That(localSqlText, Does.Contain("\"active_combat_discipline\""));
             Assert.That(localSqlText, Does.Contain("\"character_combat_discipline_weapon_loadout\""));
             Assert.That(localSqlText, Does.Contain("\"active_combat_mode\""));
+            Assert.That(localSqlText, Does.Contain("\"auto_attack_state\""));
             Assert.That(localSqlText, Does.Contain("\"party_invite\""));
             Assert.That(localSqlText, Does.Contain("\"equipment_loadout\""));
             Assert.That(localSqlText, Does.Contain("\"player_equipment_presentation\""));
@@ -285,24 +286,6 @@ namespace Arena.Tests.Editor
             Assert.That(localSqlText, Does.Not.Contain("\"inventory_container\".\"owner\" = 0x"));
             Assert.That(localSqlText, Does.Not.Contain("\"item_instance\".\"current_owner\" = 0x"));
             Assert.That(localSqlText, Does.Not.Contain("\"character_progression\""));
-        }
-
-        [Test]
-        public void GameplaySubscriptionPlanner_ScopesActiveAuraRowsWithVisiblePlayers()
-        {
-            Type plannerType = RequireRuntimeType("Arena.Network.GameplaySubscriptionPlanner");
-            Type gameplayScopeType = RequireRuntimeType("Arena.Network.NetworkManager+GameplayScope");
-            Type playerWorldType = RequireRuntimeType("SpacetimeDB.Types.PlayerWorld");
-            object row = Activator.CreateInstance(playerWorldType, CreateIdentity(1), "OPEN", null, "Oasis_Day")!;
-            object scope = RequireMethod(gameplayScopeType, "FromPlayerWorld", playerWorldType, typeof(string))
-                .Invoke(null, new[] { row, null })!;
-
-            string[] scopedSql = (string[])RequireMethod(plannerType, "BuildScopedQuerySqls", gameplayScopeType)
-                .Invoke(null, new[] { scope })!;
-            string scopedSqlText = string.Join("\n", scopedSql);
-
-            Assert.That(scopedSqlText, Does.Contain("\"active_aura\""));
-            Assert.That(scopedSqlText, Does.Contain("\"player_world\".\"identity\" = \"active_aura\".\"owner\""));
         }
 
         [Test]
@@ -672,6 +655,8 @@ namespace Arena.Tests.Editor
                        0f,
                        0f,
                        true,
+                       0U,
+                       false,
                        0U,
                        CreateTimestamp(0L))
                    ?? throw new InvalidOperationException("Failed to create PlayerPhysics.");

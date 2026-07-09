@@ -184,8 +184,9 @@ namespace Arena.Presentation
             conn.Db.ProjectilePresentationEvent.OnInsert += OnProjectilePresentationEventInsert;
             conn.Db.PredictedActionResult.OnInsert += OnPredictedActionResultInsert;
             conn.Db.ActiveCast.OnDelete += OnActiveCastDeleteForVfx;
-            conn.Db.ActiveAura.OnUpdate += OnActiveAuraUpdateForVfx;
-            conn.Db.ActiveAura.OnDelete += OnActiveAuraDeleteForVfx;
+            conn.Db.SpellDefinition.OnInsert += OnSpellDefinitionInsertForVfx;
+            conn.Db.SpellDefinition.OnUpdate += OnSpellDefinitionUpdateForVfx;
+            conn.Db.SpellDefinition.OnDelete += OnSpellDefinitionDeleteForVfx;
             conn.Db.CombatVfxCueCatalog.OnInsert += OnCombatVfxCueCatalogInsert;
             conn.Db.CombatVfxCueCatalog.OnUpdate += OnCombatVfxCueCatalogUpdate;
             conn.Db.CombatVfxCueCatalog.OnDelete += OnCombatVfxCueCatalogDelete;
@@ -200,31 +201,33 @@ namespace Arena.Presentation
             _lifecycle?.DestroyForCastEnd(row.CastId);
         }
 
-        // Aura end: tear down any UNTIL_AURA_END cues bound to this aura. ActiveAura is one row
-        // per owner, so aura cues are keyed on the caster identity (see DispatchCue), mirroring
-        // the cast-end path above.
-        private void OnActiveAuraDeleteForVfx(EventContext ctx, ActiveAura row)
+        private void OnSpellDefinitionInsertForVfx(EventContext ctx, SpellDefinition row)
         {
             _ = ctx;
-            _lifecycle?.DestroyForAuraEnd(AuraVfxKey(row.Owner, row.SpellId, row.AbilityId));
+            InvalidateProjectileSpellImpactClassification(row.Kind);
         }
 
-        private void OnActiveAuraUpdateForVfx(EventContext ctx, ActiveAura oldRow, ActiveAura newRow)
+        private void OnSpellDefinitionUpdateForVfx(
+            EventContext ctx,
+            SpellDefinition oldRow,
+            SpellDefinition newRow)
         {
             _ = ctx;
-            string oldKey = AuraVfxKey(oldRow.Owner, oldRow.SpellId, oldRow.AbilityId);
-            string newKey = AuraVfxKey(newRow.Owner, newRow.SpellId, newRow.AbilityId);
-            if (!string.Equals(oldKey, newKey, StringComparison.Ordinal))
-                _lifecycle?.DestroyForAuraEnd(oldKey);
+            InvalidateProjectileSpellImpactClassification(oldRow.Kind);
+            InvalidateProjectileSpellImpactClassification(newRow.Kind);
         }
 
-        // Teardown key shared by the aura cue (spawn side, DispatchCue) and ActiveAura changes.
-        private static string AuraVfxKey(Identity caster, string spellId, string abilityId)
+        private void OnSpellDefinitionDeleteForVfx(EventContext ctx, SpellDefinition row)
         {
-            string auraId = WireIdentifier.Normalize(abilityId);
-            if (string.IsNullOrWhiteSpace(auraId))
-                auraId = WireIdentifier.Normalize(spellId);
-            return $"{caster}:{auraId}";
+            _ = ctx;
+            InvalidateProjectileSpellImpactClassification(row.Kind);
+        }
+
+        private void InvalidateProjectileSpellImpactClassification(string actionKind)
+        {
+            string key = WireIdentifier.Normalize(actionKind);
+            if (!string.IsNullOrWhiteSpace(key))
+                _projectileDeliveredSpellImpactByActionKind.Remove(key);
         }
 
         public static void PredictLocalInstantSpellRelease(
@@ -408,7 +411,6 @@ namespace Arena.Presentation
         private void OnCombatVfxCueCatalogInsert(EventContext ctx, CombatVfxCueCatalog row)
         {
             _ = ctx;
-            _ = row;
             CueResolver.MarkDirty();
             _projectileDeliveredSpellImpactByActionKind.Clear();
         }
@@ -416,8 +418,6 @@ namespace Arena.Presentation
         private void OnCombatVfxCueCatalogUpdate(EventContext ctx, CombatVfxCueCatalog oldRow, CombatVfxCueCatalog newRow)
         {
             _ = ctx;
-            _ = oldRow;
-            _ = newRow;
             CueResolver.MarkDirty();
             _projectileDeliveredSpellImpactByActionKind.Clear();
         }
@@ -425,7 +425,6 @@ namespace Arena.Presentation
         private void OnCombatVfxCueCatalogDelete(EventContext ctx, CombatVfxCueCatalog row)
         {
             _ = ctx;
-            _ = row;
             CueResolver.MarkDirty();
             _projectileDeliveredSpellImpactByActionKind.Clear();
         }
@@ -1188,13 +1187,7 @@ namespace Arena.Presentation
                 : Quaternion.identity;
 
             _lifecycle ??= new CombatVFXLifecycleRegistry(this);
-            // Aura cues tear down when the caster's ActiveAura row is deleted, so key them on the
-            // active aura identity rather than the (release) action_instance_id they were dispatched with.
-            string? auraKeyOverride =
-                string.Equals(WireIdentifier.Normalize(cue.Lifecycle), SpellVfxGenerator.LifecycleUntilAuraEnd, StringComparison.Ordinal)
-                    ? AuraVfxKey(fact.Caster, fact.SpellId, fact.AbilityId)
-                    : null;
-            _lifecycle.Spawn(cue, fact.ToTemplateContext(cue.Key, followAnchor, auraKeyOverride), position, rotation, followAnchor);
+            _lifecycle.Spawn(cue, fact.ToTemplateContext(cue.Key, followAnchor), position, rotation, followAnchor);
         }
 
         private static Quaternion ResolveWorldAlignedFacingRotation(Vector3 direction)
@@ -1230,8 +1223,9 @@ namespace Arena.Presentation
             conn.Db.ProjectilePresentationEvent.OnInsert -= OnProjectilePresentationEventInsert;
             conn.Db.PredictedActionResult.OnInsert -= OnPredictedActionResultInsert;
             conn.Db.ActiveCast.OnDelete -= OnActiveCastDeleteForVfx;
-            conn.Db.ActiveAura.OnUpdate -= OnActiveAuraUpdateForVfx;
-            conn.Db.ActiveAura.OnDelete -= OnActiveAuraDeleteForVfx;
+            conn.Db.SpellDefinition.OnInsert -= OnSpellDefinitionInsertForVfx;
+            conn.Db.SpellDefinition.OnUpdate -= OnSpellDefinitionUpdateForVfx;
+            conn.Db.SpellDefinition.OnDelete -= OnSpellDefinitionDeleteForVfx;
             conn.Db.CombatVfxCueCatalog.OnInsert -= OnCombatVfxCueCatalogInsert;
             conn.Db.CombatVfxCueCatalog.OnUpdate -= OnCombatVfxCueCatalogUpdate;
             conn.Db.CombatVfxCueCatalog.OnDelete -= OnCombatVfxCueCatalogDelete;

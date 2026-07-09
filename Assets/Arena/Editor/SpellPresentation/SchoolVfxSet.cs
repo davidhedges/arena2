@@ -29,10 +29,10 @@ namespace Arena.Presentation
     }
 
     /// <summary>
-    /// The per-school VFX set (decision 10): a school's <c>slot → look</c> palette, externalized from
-    /// the hardcoded dictionaries in the spell authoring window so schools are edited as assets. The
-    /// authoring window's cue generator reads these when present, falling back to its seed dictionary
-    /// otherwise — so an absent/empty set changes nothing.
+    /// The editor-only per-school VFX set (decision 10): a school's <c>slot → look</c> palette,
+    /// externalized from the hardcoded dictionaries in the spell authoring window so schools are
+    /// edited as assets. The cue generator reads these as its sole school-palette source and surfaces
+    /// requested slots that have no school entry or per-spell signature override.
     /// </summary>
     [CreateAssetMenu(menuName = "Arena/School VFX Set", fileName = "SchoolVfxSet")]
     public sealed class SchoolVfxSet : ScriptableObject
@@ -62,8 +62,5 @@ namespace Arena.Presentation
             return false;
         }
 
-#if UNITY_EDITOR
-        public void EditorSetSlots(List<SchoolVfxSlotEntry> newSlots) => slots = newSlots ?? new List<SchoolVfxSlotEntry>();
-#endif
     }
 }

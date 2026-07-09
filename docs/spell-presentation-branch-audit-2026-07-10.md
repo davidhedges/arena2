@@ -6,26 +6,21 @@ Multi-agent code review of `git diff main...HEAD` (~50 commits, 36 substantive c
 
 ---
 
-## P0 — Aura VFX lifecycle (decision 11) is broken end-to-end
+## P0 — Aura VFX lifecycle — RETRACTED after owner clarification
 
-Three independent defects; the feature cannot work until all three are fixed. Latent today only because no `UNTIL_AURA_END` cue exists in the catalog and no SchoolVfxSet authors the Aura slot yet. **Fix as one work item.**
-
-- [x] **A. Client never subscribes to `active_aura`** — CONFIRMED
-  `Assets/Arena/Runtime/Presentation/CombatVFXDispatcher.cs:185` hooks `ActiveAura.OnDelete`, but `GameplaySubscriptionPlanner` has no `active_aura` query and all three `NetworkManager` Subscribe calls go through the planner. The branch made the table public (`server/src/combat.rs:526`) but never subscribed, so no rows enter the client cache and `OnActiveAuraDeleteForVfx` is dead code. Aura VFX would persist until scene teardown.
-
-- [x] **B. Aura switch/re-cast never fires teardown** — CONFIRMED
-  `server/src/combat.rs:1421-1422`: `set_active_aura` UPDATEs the one-row-per-owner in place when an aura already exists; the client registers no `ActiveAura.OnUpdate`. Switching THORNS_AURA → WARDING_AURA stacks the old looping VFX with the new (per-cue keys differ, so they only die together on full toggle-off). Fix: handle OnUpdate client-side, or delete+insert server-side — decide deliberately.
-
-- [x] **C. Prefab path never registers `UNTIL_AURA_END`** — CONFIRMED
-  `Assets/Arena/Runtime/Presentation/CombatVFXLifecycleRegistry.cs:293`: `SpawnPrefab` branches on PARTICLE_SYSTEM / UNTIL_RELEASE_EVENT / UNTIL_CAST_END only; an UNTIL_AURA_END prefab cue (generator authors duration_ms 0) falls to the fallback — destroyed after `FallbackDurationSeconds` (3s), never registered in `_prefabs`, so `DestroyForAuraEnd` can't match it. Generated Aura-slot cues use school-palette prefabs, i.e. exactly this path.
+The audit correctly identified that the proposed persistent-visual implementation was incomplete, but
+the premise was wrong: only the aura **buff** is persistent. Its visual is intentionally a finite cast
+flourish. The speculative `UNTIL_AURA_END` lifecycle, sustained `aura` slot, client `active_aura`
+subscription/hydration, and public replication surface have therefore been removed. The server-only
+`ActiveAura` gameplay row and its range-based recipient-buff refresh remain authoritative.
 
 ## P1 — Reachable today
 
 - [x] **1. Hold exit fade stomps follow-up UpperBody actions** — CONFIRMED
   `Assets/Arena/Runtime/Presentation/PlayerAnimator.cs:1130-1140` (`UpdateSpellCastHoldFadeOut`). The fade owns the layer for ExitDelay+ExitBlendOut and is only cancelled by a new hold (:1303) or a same-layer spell release (:1469-1476). Block raise (:2064/2083/2098), weapon draw/sheath (:498/537), and upper-body phased melee (:901/2367) all enter via guard-free `PlayUpperBodyState` (:2818) on the UpperBody layer — the composer's default hold layer for non-left-hand-1H casts — and get dragged to weight 0 then stomped to Empty mid-motion.
 
-- [x] **2. Write gate wedges on SelfFlash/AuraGround/Aura slots** — CONFIRMED
-  `Assets/Arena/Editor/SpellAuthoringWindow.CueGeneration.cs:530` (`BuildCatalogBySlot`). Round-trip is inference-only: the editor `CombatVfxCueDefinition` model (SpellAuthoringWindow.cs:761) never reads the `slot` key the writer itself inserts, and `TryInferLegacySlot` (:830-881) can't represent SelfFlash/AuraGround/Aura. After writing such a slot (RequestedSlots emits them for real APPLY_STATUS/AURA spells), reopening the spell shows false CATALOG-ONLY/uninferrable diffs and `writable` stays false forever. Fix at the right altitude: read back the authored `slot` key instead of extending the inference table.
+- [x] **2. Write gate wedges on SelfFlash/AuraGround slots** — CONFIRMED
+  `Assets/Arena/Editor/SpellAuthoringWindow.CueGeneration.cs:530` (`BuildCatalogBySlot`). Round-trip was inference-only: the editor `CombatVfxCueDefinition` model (SpellAuthoringWindow.cs:761) never read the `slot` key the writer itself inserted, and `TryInferLegacySlot` couldn't represent SelfFlash/AuraGround. After writing such a slot (RequestedSlots emits them for real APPLY_STATUS/AURA spells), reopening the spell showed false CATALOG-ONLY/uninferrable diffs and `writable` stayed false forever. The reader now honors the authored `slot` key.
 
 - [x] **3. Illegal zero-duration cue survives publish** — CONFIRMED
   `Assets/Arena/Editor/SpellAuthoringWindow.CueGeneration.cs:398`: `PalettePositive` materializes `entry.DurationMs` with no positive guard; `ValidateWiring` checks only the policy enum and has no non-test call sites; `sync_combat_vfx_cue_catalog` (progression.rs:3383) does no rule validation and the shared Rule-14 checker is invoked only inside `#[cfg(test)]`. A SchoolVfxSet slot with `selfTerminating=false, durationMs=0` (fresh-entry default) writes an illegal ONE_SHOT/DURATION/0 row; only a later `cargo test` catches it; runtime plays the 3s fallback. Fix: guard at generation time (and/or surface in ValidateWiring wired into the preview).
@@ -65,14 +60,22 @@ Three independent defects; the feature cannot work until all three are fixed. La
 - [x] **C3. Kill the seed `SchoolPalettes` fallback**
   `Assets/Arena/Editor/SpellAuthoringWindow.CueGeneration.cs:51` (seed), :497-510 (`TryResolvePaletteEntry` asset-then-seed with no warning on fallback), :441-487 (`ExternalizeSchoolPalettes` unconditionally overwrites hand-edited assets via the `updated++` path). Two live sources of truth; a typo'd/renamed asset silently reverts generation to stale seed values. Delete seed + fallback + menu item; make a missing school a loud error.
 
-- [ ] **C4. CLAUDE.md: PlayerAnimator maintenance-mode violation**
-  Branch adds 4 private static fields (`LeftGestureSpellCastHoldAction1-4StateHash`, PlayerAnimator.cs:127-130), private `ResolveLeftGestureSpellCastHoldStateHash` (:1601), and hold fade-out policy (:1156-1165, :1463-1477, :2840-2846) with nothing extracted out. Extract the hold/fade policy into its own controller when fixing P1 #1 — that pays both debts at once.
+- [x] **C4. CLAUDE.md: PlayerAnimator maintenance-mode violation — RECLASSIFIED**
+  The original rule used private-field count and a mandatory unrelated extraction as proxies for
+  ownership. That would push Animator hashes and layer application into pass-through classes without
+  improving cohesion. The branch keeps durable spell-hold timing/state in `CombatActionPlaybackController`
+  and composition in focused classes; `PlayerAnimator` remains the central adapter for shared combat
+  layers and override banks. The repository rule now permits hashes/thin application glue there, allows
+  explicitly exclusive orthogonal properties in focused components, and forbids new selection, timing,
+  lifecycle, preemption, gameplay policy, or parallel playback state machines.
 
-- [ ] **C5. CLAUDE.md: SchoolVfxSet assets in Resources/ with no Resources.Load consumer**
-  `Assets/Arena/Resources/SchoolVfxSets/*.asset` — only consumer is editor `AssetDatabase.FindAssets` (CueGeneration.cs:423). They ship in every player build. Move out of Resources/ (or wire the planned runtime registry merge that would justify the location).
+- [x] **C5. SchoolVfxSet assets in Resources/ with no Resources.Load consumer — FIXED**
+  `SchoolVfxSet` and its assets now live under `Assets/Arena/Editor/SpellPresentation/`; their Unity GUIDs
+  are preserved. `AssetDatabase.FindAssets` remains the only consumer, and the type/assets no longer enter
+  player builds. Wiring an unnecessary runtime consumer merely to justify `Resources/` was rejected.
 
-- [x] **C6. `"UNTIL_AURA_END"` literal defined 3× in one assembly**
-  `SpellVfxGenerator.cs:276` (public const), `CombatVFXDispatcher.cs:36`, `CombatVFXLifecycleRegistry.cs:20` — spawn-side tag and teardown filter compare independent copies. Reference the public const. (Fold into the P0 aura work.)
+- [x] **C6. `"UNTIL_AURA_END"` literal defined 3× in one assembly — RETRACTED**
+  The lifecycle itself was based on the incorrect persistent-visual premise and has been removed.
 
 - [ ] **C7. Editor tool duplication**
   `SpellCastAnimationResolvedWindow.cs`: third copy of the catalog-path constant (vs SpellAuthoringWindow.cs:17, CoreAbilityAuthoringWindow.cs:14), private JsonUtility models, hardcoded `SPELL_/PALADIN_/WARRIOR_` prefix list (:147-153) — an unmatched future prefix (MAGE_) silently derives those spells as Instant in the migration-critical view. Byte-identical `FindFirst<T>` in SpellCastAnimationMapEditor.cs:117 and ResolvedWindow:155; the scan-all-CombatAnimationSets loop rewritten divergently in both. Hoist into one shared editor helper.
@@ -102,8 +105,48 @@ Three independent defects; the feature cannot work until all three are fixed. La
 
 ## Suggested fix order
 
-1. **P0 aura trio** (one work item; include C6) — decision 11 is inert until then.
+1. **P0 aura lifecycle — retracted and removed** after the owner clarified that only the buff persists.
 2. **P1 #4** (restore resolution-failure visibility) — before any further spell migrations.
-3. **P1 #1 + P2 #6** (hold-fade policy; extract per C4 while in there).
+3. **P1 #1 + P2 #6** (hold-fade policy) — fixed within the existing shared playback substrate; C4 was reclassified.
 4. **P1 #2 + #3** (write-gate round-trip + duration guard) — unblocks Aura/SelfFlash authoring, which P0 makes meaningful.
 5. Cleanup C1-C3, C7-C9, then efficiency E1-E5 opportunistically (E1 with #5 in mind).
+
+---
+
+## Re-audit follow-up — current HEAD after the first repair pass
+
+A second current-HEAD audit found five gaps not closed by the checklist above. They are fixed in the
+working tree:
+
+- [x] **Data-preserving catalog publish also syncs `SpellDefinition`.** Both republish scripts now
+  call `publish_spell_definitions` before `publish_progression_catalogs`, matching the two independent
+  init-time sync families consumed by the client. The spell-definition sync now also removes rows for
+  spells deleted from the shared catalog, matching the full-sync behavior of progression tables.
+- [x] **Projectile-impact classification invalidates from its real dependency.**
+  `CombatVFXDispatcher` now listens to `SpellDefinition` insert/update/delete rather than relying on
+  unrelated cue-catalog churn to evict cached classifications.
+- [x] **The three branch-owned stale Rust assertions match the migrated VFX contract.** Frost Needle
+  expects delayed `AREA_IMPACT`, Meteor expects its charged cast glow, and Sacred Flame expects the
+  owner-verified `TARGET` anchor. Full `cargo test` improves from 440/448 to 443/448; the five
+  remaining failures read branch-unchanged melee/slot inputs and predate this spell-presentation work.
+- [x] **Map validation derives the real catalog archetype offline.** The authoring validator supplies
+  `cast_time_ms × delivery.kind` explicitly and composes every unshadowed animation-set hand, including
+  profile-neutral mapped spells such as charged ICICLE.
+- [x] **The speculative persistent aura visual path is removed.** Owner clarification established that
+  only the gameplay buff persists. Aura presentation remains the finite `aura_ground` cue; `ActiveAura`
+  remains server-only and is not a client VFX lifecycle signal.
+- [x] **Repository standards now express ownership rather than syntactic proxies.** `PlayerAnimator`
+  remains the central adapter for shared combat layers while controllers/data own durable policy and
+  focused components may own explicitly exclusive orthogonal properties; editor-only VFX palette assets
+  and their ScriptableObject type moved out of `Resources/` into the editor surface.
+- [ ] **Explicit aura toggle-off remains a gameplay follow-up, not a presentation issue.** The server
+  replaces the one-row-per-caster `ActiveAura` when another aura is cast and removes it for dead/invalid
+  casters, but no caster-request reducer currently deletes it. Out-of-range recipient buffs are already
+  removed by `tick_auras`.
+- [x] **Branch diff hygiene is clean.** Removed 204 trailing-whitespace errors from 68 newly-added Unity
+  metadata files.
+
+Verification: `Assembly-CSharp.csproj`, `Assembly-CSharp-Editor.csproj`, and
+`Arena.EditModeTests.csproj` compile; the three focused Rust regressions pass; shell scripts pass
+`bash -n`; `git diff --check` passes. Unity EditMode execution remains unavailable while another Unity
+instance owns the project.

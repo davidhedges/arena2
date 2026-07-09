@@ -6169,9 +6169,6 @@ mod tests {
             // Persists until the owning cast/channel's ActiveCast row is deleted (channel
             // end / cancel). Used for hand-attached channel cues like Magic Missile's glow.
             "UNTIL_CAST_END",
-            // Persists until the owning aura's ActiveAura row is deleted. Used for aura spells,
-            // whose visual must live as long as the aura, not the (instant) cast.
-            "UNTIL_AURA_END",
         ];
         for cue in &catalog.combat_vfx_cues {
             let owner_kind = normalize_identifier(cue.owner_kind.as_str());
@@ -6987,10 +6984,10 @@ mod tests {
             .find(|cue| {
                 normalize_identifier(cue.owner_kind.as_str()) == "ABILITY"
                     && normalize_identifier(cue.owner_id.as_str()) == "SPELL_FROST_NEEDLE"
-                    && normalize_identifier(cue.trigger.as_str()) == "SPELL_RELEASE"
+                    && normalize_identifier(cue.trigger.as_str()) == "AREA_IMPACT"
             })
-            .expect("Frost Needle should author a release VFX cue");
-        assert_eq!(normalize_identifier(cue.anchor.as_str()), "IMPACT_POINT");
+            .expect("Frost Needle should author a delayed area-impact VFX cue");
+        assert_eq!(normalize_identifier(cue.anchor.as_str()), "AREA_ORIGIN");
         assert_eq!(
             normalize_identifier(cue.vfx_id.as_str()),
             "VFX_FROST_NEEDLE_01"
@@ -7002,7 +6999,7 @@ mod tests {
     }
 
     #[test]
-    fn meteor_vfx_uses_travel_body_and_impact_prefab() {
+    fn meteor_vfx_uses_cast_glow_travel_body_and_impact_prefab() {
         let catalog = progression_catalog();
         let meteor_cues: Vec<_> = catalog
             .combat_vfx_cues
@@ -7012,8 +7009,18 @@ mod tests {
 
         assert_eq!(
             meteor_cues.len(),
-            2,
-            "Meteor should author one travel body and one impact cue"
+            3,
+            "Meteor should author one cast glow, one travel body, and one impact cue"
+        );
+
+        let cast_glow = meteor_cues
+            .iter()
+            .find(|cue| normalize_identifier(cue.trigger.as_str()) == "SPELL_CAST")
+            .expect("Meteor should author a charged cast-glow VFX cue");
+        assert_eq!(normalize_identifier(cast_glow.anchor.as_str()), "LEFT_HAND");
+        assert_eq!(
+            normalize_identifier(cast_glow.lifecycle.as_str()),
+            "UNTIL_RELEASE_EVENT"
         );
 
         let travel = meteor_cues
@@ -8413,7 +8420,7 @@ mod tests {
             })
             .expect("Sacred Flame should author an initial landing VFX cue");
 
-        assert_eq!(normalize_identifier(cue.anchor.as_str()), "IMPACT_POINT");
+        assert_eq!(normalize_identifier(cue.anchor.as_str()), "TARGET");
         assert_eq!(
             normalize_identifier(cue.vfx_id.as_str()),
             "VFX_SACRED_FLAME_HIT_01"

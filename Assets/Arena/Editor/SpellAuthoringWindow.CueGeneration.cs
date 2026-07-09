@@ -698,7 +698,6 @@ namespace Arena.Editor
                 SpellVfxSlot.Beam => "beam",
                 SpellVfxSlot.SelfFlash => "self_flash",
                 SpellVfxSlot.AuraGround => "aura_ground",
-                SpellVfxSlot.Aura => "aura",
                 _ => slot.ToString().ToLowerInvariant(),
             };
 
@@ -753,7 +752,6 @@ namespace Arena.Editor
                 case "beam": slot = SpellVfxSlot.Beam; return true;
                 case "self_flash": slot = SpellVfxSlot.SelfFlash; return true;
                 case "aura_ground": slot = SpellVfxSlot.AuraGround; return true;
-                case "aura": slot = SpellVfxSlot.Aura; return true;
                 default:
                     slot = default;
                     return false;

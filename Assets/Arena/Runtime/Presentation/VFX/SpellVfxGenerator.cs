@@ -81,8 +81,6 @@ namespace Arena.Presentation
         SelfFlash = 7,
         /// <summary>Brief one-shot burst at the caster's feet — the common aura visual.</summary>
         AuraGround = 8,
-        /// <summary>Sustained caster-attached aura glow (opt-in) — lives until the aura ends.</summary>
-        Aura = 9,
     }
 
     /// <summary>
@@ -273,7 +271,6 @@ namespace Arena.Presentation
         public const string LifecycleUntilReleaseEvent = "UNTIL_RELEASE_EVENT";
         public const string LifecycleUntilTerminalEvent = "UNTIL_TERMINAL_EVENT";
         public const string LifecycleUntilCastEnd = "UNTIL_CAST_END";
-        public const string LifecycleUntilAuraEnd = "UNTIL_AURA_END";
 
         public const string AnchorLeftHand = "LEFT_HAND";
         public const string AnchorRightHand = "RIGHT_HAND";
@@ -362,11 +359,9 @@ namespace Arena.Presentation
                     return new[] { SpellVfxSlot.Impact };
                 case SpellVfxArchetype.SelfFx:
                     return new[] { SpellVfxSlot.SelfFlash };
-                // Most auras are a brief ground flourish and nothing else (no cast glow / muzzle /
-                // projectile / animation). The sustained Aura glow is opt-in — the palette fills it
-                // only for schools that provide a persistent aura prefab.
+                // Aura buffs persist, but their cast visual is only a brief ground flourish.
                 case SpellVfxArchetype.Aura:
-                    return new[] { SpellVfxSlot.AuraGround, SpellVfxSlot.Aura };
+                    return new[] { SpellVfxSlot.AuraGround };
                 default:
                     return System.Array.Empty<SpellVfxSlot>();
             }
@@ -527,18 +522,6 @@ namespace Arena.Presentation
                         vfxRole: RoleOneShot,
                         lifecycle: oneShotLifecycle,
                         duration: oneShotDuration,
-                        projectileSequenceIndex: null);
-
-                // B.8 — sustained caster aura (opt-in); lives until the aura's ActiveAura row is
-                // deleted (decision 11), mirroring UNTIL_CAST_END but keyed on the aura.
-                case SpellVfxSlot.Aura:
-                    return new CueWiring(
-                        trigger: TriggerSpellRelease,
-                        anchor: CueAnchor.Caster,
-                        attachMode: AttachFollowAnchor,
-                        vfxRole: RoleAttached,
-                        lifecycle: LifecycleUntilAuraEnd,
-                        duration: CueDurationPolicy.Zero,
                         projectileSequenceIndex: null);
 
                 default:

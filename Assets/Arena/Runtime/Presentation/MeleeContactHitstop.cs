@@ -7,9 +7,8 @@ namespace Arena.Presentation
     /// Tiny animator pause for the predicted melee contact cue (feel audit F5
     /// slice 2). Freezes the host's Animator for at most
     /// <see cref="MaxHitstopSeconds"/> of unscaled time, then restores the
-    /// speed it captured. Owns all pause/restore state itself so
-    /// PlayerAnimator (maintenance mode) stays untouched; nothing else in the
-    /// runtime writes Animator.speed.
+    /// speed it captured. Owns this orthogonal Animator property exclusively;
+    /// nothing else in the runtime writes Animator.speed.
     /// </summary>
     public sealed class MeleeContactHitstop : MonoBehaviour
     {

@@ -122,7 +122,6 @@ namespace Arena.Network
                 BuildScopedPlayerResourceQuery(new QueryBuilder(), scope),
                 BuildScopedDefenseStateQuery(new QueryBuilder(), scope),
                 BuildScopedActiveCastQuery(new QueryBuilder(), scope),
-                BuildScopedActiveAuraQuery(new QueryBuilder(), scope),
                 BuildScopedMovementActionStateQuery(new QueryBuilder(), scope),
                 BuildScopedSpecialMovementRuntimeQuery(new QueryBuilder(), scope),
                 BuildScopedStatusEffectQuery(new QueryBuilder(), scope),
@@ -447,28 +446,6 @@ namespace Arena.Network
                     .RightSemijoin(qb.From.ActiveCast(), (world, cast) => world.Identity.Eq(cast.Caster))
                     .ToSql(),
                 _ => throw new InvalidOperationException("Scoped active-cast query requested for GameplayScope.None"),
-            };
-        }
-
-        private static string BuildScopedActiveAuraQuery(QueryBuilder qb, NetworkManager.GameplayScope scope)
-        {
-            return scope.Kind switch
-            {
-                NetworkManager.GameplayScopeKind.OpenWorld => qb
-                    .From
-                    .PlayerWorld()
-                    .Where(c => c.WorldKind.Eq("OPEN"))
-                    .Where(c => c.OpenWorldSceneName.Eq(OpenWorldSceneName(scope)))
-                    .RightSemijoin(qb.From.ActiveAura(), (world, aura) => world.Identity.Eq(aura.Owner))
-                    .ToSql(),
-                NetworkManager.GameplayScopeKind.Instance => qb
-                    .From
-                    .PlayerWorld()
-                    .Where(c => c.WorldKind.Eq("INSTANCE"))
-                    .Where(c => c.InstanceId.Eq(scope.InstanceId.GetValueOrDefault()))
-                    .RightSemijoin(qb.From.ActiveAura(), (world, aura) => world.Identity.Eq(aura.Owner))
-                    .ToSql(),
-                _ => throw new InvalidOperationException("Scoped active-aura query requested for GameplayScope.None"),
             };
         }
 

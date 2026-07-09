@@ -160,18 +160,6 @@ namespace Arena.Presentation
             DestroyMatchingPrefabs(actionInstanceId, LifecycleUntilCastEnd);
         }
 
-        // Ends UNTIL_AURA_END cues (auras — design doc decision 11) when the owning aura's
-        // ActiveAura row is deleted. A straight mirror of DestroyForCastEnd, keyed on the aura
-        // key (owner identity) instead of the cast id.
-        public void DestroyForAuraEnd(string auraKey)
-        {
-            if (string.IsNullOrWhiteSpace(auraKey))
-                return;
-
-            DestroyMatchingScripted(auraKey, SpellVfxGenerator.LifecycleUntilAuraEnd);
-            DestroyMatchingPrefabs(auraKey, SpellVfxGenerator.LifecycleUntilAuraEnd);
-        }
-
         public void Dispose()
         {
             foreach (var entry in _scripted.Values)
@@ -273,11 +261,10 @@ namespace Arena.Presentation
                 return;
             }
 
-            if (string.Equals(lifecycle, LifecycleUntilCastEnd, System.StringComparison.Ordinal)
-                || string.Equals(lifecycle, SpellVfxGenerator.LifecycleUntilAuraEnd, System.StringComparison.Ordinal))
+            if (string.Equals(lifecycle, LifecycleUntilCastEnd, System.StringComparison.Ordinal))
             {
-                // Loop and hold until the owning ActiveCast/ActiveAura row is deleted, so
-                // held prefabs last exactly as long as their authoritative server row.
+                // Loop and hold until the owning ActiveCast row is deleted, so held prefabs last
+                // exactly as long as their authoritative cast/channel.
                 ConfigureReleaseBoundParticleSystems(instance);
                 string key = PrefabKey(context);
                 if (_prefabs.TryGetValue(key, out PrefabEntry old))

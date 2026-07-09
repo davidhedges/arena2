@@ -8,7 +8,7 @@ This Unity project keeps first-party game work separate from imported vendor con
 Assets/
   Arena/
     Runtime/        First-party runtime C# code.
-    Editor/         First-party Unity editor tools, builders, drawers, and validators.
+    Editor/         First-party Unity editor tools and editor-only authoring inputs.
     Tests/          Unity edit-mode tests.
     Content/        First-party authored Unity content.
     Resources/      Runtime-loaded first-party assets used by Resources.Load.

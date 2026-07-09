@@ -298,7 +298,7 @@ This is the tool that makes migration safe and observable; it is not optional po
 
 ## 7. Decisions (agreed 2026-07-07)
 
-1. **AURA — supported (un-deferred 2026-07-07f, superseded by decision 11).** Originally out of v1 for lack of an exemplar + lifecycle. Both now exist: the owner supplied an aura prefab (`Human_SpellAura_Ice`), and the lifecycle is solved — see decision 11. All spell types are in scope; nothing is deferred.
+1. **AURA — supported (un-deferred 2026-07-07f, corrected by decision 11).** Aura gameplay is persistent, but its visual is a finite one-shot cast flourish. `WARDING_AURA` is the live exemplar. All spell types are in scope; nothing is deferred.
 2. **`muzzle` slot — optional per-school, off by default.** Not emitted unless a school's palette explicitly provides `muzzle`. Faithful to today (launch blends off the hand anchor); a school opting in adds a *new* effect on the normal spawn path.
 3. **`presentationMode` — validate-agreement-first this cycle; derive next cycle.** This cycle the validator's desync check (§4.2) runs and its list is resolved, but the field stays hand-authored and the runtime keeps reading it. A later cycle flips the runtime to `derive(cast_time, behavior)` once the desync list is empty — so behavior never flips on an unreviewed spell.
 4. **Generated cues — materialized at export into the JSON.** The generator writes `combat_vfx_cues[]` into `progression_catalog.shared.json` at export time (checked in, diffable), and the existing server + editor validators run over the materialized output unchanged. No in-memory-at-load generation.
@@ -310,7 +310,7 @@ This is the tool that makes migration safe and observable; it is not optional po
 
 10. **Registry + palette merge into one per-school VFX set; generator = Unity editor tool (2026-07-07f).** The `CombatVFXRegistry` (`vfx_id → prefab + scale`) can't be deleted — it's the client half of a client↔server boundary (the server catalog holds `vfx_id` *strings*; only Unity holds prefabs), so *something* in Unity must map string→prefab. But it merges with the school palette into one asset: **a per-school VFX set** = `slot → { vfx_id, prefab, scale }`, serving as both the registry (id→prefab) and the palette (school×slot→id). The cue **generator becomes a Unity editor tool** that reads gameplay from the catalog + the school sets and writes generated cues back into `progression_catalog.shared.json` (decision 4 unchanged — still materialized into JSON; only the tool's *location* moves from Rust to Unity C#). Bonus: the archetype/mode derivation collapses to **one C# function** (`SpellAnimationArchetypes.Derive`) instead of duplicated Rust + C#; the Rust `vfx_generation` module retires to being the server-side validator's Class-A rule source (decision 5). **End-state authoring goal:** a typical new spell touches **one place** — its gameplay row. VFX generate, animation inherits an archetype template, the prefab already lives in its school set. The other surfaces are per-*category* (per school / weapon×archetype / new asset), authored once and inherited.
 
-11. **AURA lifecycle = `UNTIL_AURA_END` (new), keyed on the `ActiveAura` row — now made public (2026-07-07f, refined 2026-07-07g).** An aura's visual must live as long as the *aura*, not the cast (auras are `cast_time 0` — there's no sustained `ActiveCast`). **Chose the clean signal over the messy one (Option B):** `StatusEffect` is public but an aura produces *multiple* status rows (one per effect kind, each its own `stack_group`, `combat.rs:1291`), so no single delete means "aura ended." `ActiveAura` (`combat.rs:524`) is instead **one row per owner** (PK = `owner`, carries `ability_id`), deleted exactly once when the aura ends — so we **made `ActiveAura` public** and key on it. This makes the client a *straight mirror* of `UNTIL_CAST_END` (`CombatVFXLifecycleRegistry.cs`): `ActiveAura.OnDelete → DestroyForAuraEnd(owner)`, exactly like `ActiveCast.OnDelete → DestroyForCastEnd(cast_id)`. The one cost is a tiny new public table (one row per active-aura player). The `aura` slot (B.8) uses `UNTIL_AURA_END`; `Human_SpellAura_Ice` is its first exemplar. This is what makes **all spell types** supported end-to-end.
+11. **AURA gameplay persists; AURA visuals do not (owner correction 2026-07-10).** The authoritative `ActiveAura` row remains server-only and has no expiry. While it exists, the server refreshes short recipient status leases for targets in range; those buffs are removed when recipients leave range. Casting another aura replaces the row, and invalid/dead casters lose it. Presentation is independent: an aura cast emits only the finite `aura_ground` one-shot and never mirrors `ActiveAura`. There is no `UNTIL_AURA_END` lifecycle, sustained `aura` slot, client `active_aura` subscription, or reconnect hydration. An explicit caster-controlled toggle-off action is a separate gameplay contract and is not currently implemented.
 
 ---
 
@@ -435,7 +435,7 @@ This is the concrete definition of the `trigger_for` / `anchor_for` / `attach_fo
 >
 > **Verify when a channel beam is first generated (deferred — ELECTROCUTE is parked, decision 9, so no channel beam generates today):** the client `UNTIL_CAST_END` teardown binds a cue to its `ActiveCast` via `action_instance_id` (`CombatVFXDispatcher`/`CombatVFXLifecycleRegistry`); the only *proven* binding today is a `SPELL_CAST` `cast_glow` (MAGIC_MISSILE). Confirm the identical binding fires for a `SPELL_RELEASE`-triggered beam cue — otherwise the beam never receives the delete and leaks past cast-stop. If binding is `SPELL_CAST`-only, either extend it to release cues or move the channel beam to a `SPELL_CAST` trigger.
 
-### B.8 `self_flash` (SELF_FX — opt-in) / `aura` (AURA — supported, decision 11)
+### B.8 `self_flash` (SELF_FX — opt-in) / `aura_ground` (AURA — supported, decision 11)
 
 | field | value | rule / grounding |
 |---|---|---|
@@ -443,10 +443,7 @@ This is the concrete definition of the `trigger_for` / `anchor_for` / `attach_fo
 | `self_flash` role/lifecycle | `ONE_SHOT` / as B.5 | — |
 | `aura_ground` (**default**) trigger/anchor | `SPELL_RELEASE` / `CASTER` | the common aura visual — a flourish at the caster's feet that **follows** them while it plays (an aura is attached to the caster). `CASTER`, not `GROUND_UNDER_CASTER`, because `FOLLOW_ANCHOR` needs a real transform (the computed ground point isn't followable). |
 | `aura_ground` attach / role / lifecycle | `FOLLOW_ANCHOR` / `ONE_SHOT` / `PARTICLE_SYSTEM` or `DURATION` (by `self_terminating`) | first exemplar: `WARDING_AURA` → `VFX_HOLY_AURA_GROUND_01` (`aura_1`, DURATION 2000 — 2 looping child systems, so PARTICLE_SYSTEM would linger). **Prefab must be ground-pivoted** (base at the pivot) or it sinks below the feet. |
-| `aura` (**opt-in**) trigger/anchor | `SPELL_RELEASE` / `CASTER` | sustained caster-attached glow, only for schools that provide it |
-| `aura` attach / role / lifecycle | `FOLLOW_ANCHOR` / `ATTACHED` / `UNTIL_AURA_END` | decision 11 — driven by the public `ActiveAura` row-delete (a straight mirror of `UNTIL_CAST_END`). Exemplar-in-waiting: `Human_SpellAura_Ice`. |
-
-> **Auras are the DRYest archetype (learned 2026-07-07g):** most aura spells are *just* a brief ground flourish — **no animation, no cast glow, no muzzle, no projectile**. The AURA archetype requests only `aura_ground` (+ optional `aura`), and the animation resolver returns *no animation* for them (no explicit entry, no template clip → nothing plays). So an aura's whole authored footprint is its gameplay row; the sustained-glow machinery (decision 11) is the exception, not the rule. This does **not** throw a wrench — it's the "one place" ideal at its purest.
+> **Auras are the DRYest archetype:** an aura spell is just a brief ground flourish — **no animation, no cast glow, no muzzle, no projectile, and no persistent visual**. The AURA archetype requests only `aura_ground`, and the animation resolver returns no animation for it (no explicit entry, no template clip → nothing plays). The persistent buff is exclusively authoritative gameplay state.
 
 ### B.9 Coverage check
 
@@ -465,11 +462,11 @@ This is the concrete definition of the `trigger_for` / `anchor_for` / `attach_fo
 | `APPLY_STATUS` / `SELF_RESOURCE` (SELF) | SelfFx | self_flash (or none) |
 | `APPLY_STATUS` (TARGET) / `CONSUME_STATUS` | TargetHit | impact @ TARGET |
 | `REMOVE_STATUS` | TargetHit / SelfFx | cleanse flash |
-| `AURA` | Aura | `aura_ground` (brief feet flourish, default) + `aura` sustained (opt-in, `UNTIL_AURA_END`) |
+| `AURA` | Aura | `aura_ground` (brief feet flourish) |
 
 **The projectile body is never dropped.** For a projectile spell the `projectile_body` slot is filled by the school VFX set's generic body **or** a per-spell signature override — either way a registered `vfx_id`. And it cannot be silently forgotten: **server Rule 18 hard-fails any projectile spell that resolves to zero `PROJECTILE_BODY` cues** (exactly one required at index 0). A missing projectile prefab is a build-time contract error, not a broken spell at runtime.
 
-**Cells still needing a first exemplar** (author one before relying on them): `muzzle` (none today — opt-in), `beam × CHANNEL` (only ELECTROCUTE, parked — decision 9), `projectile_body` index >0 (never used, and per B.3 never should be), `cast_glow` on SKY_DROP/BEAM (optional, none today). `aura` now has its first exemplar (`Human_SpellAura_Ice`); `beam × CHARGED` has INSTANT_BEAM. Out of scope regardless: the pure-melee cue owners (`PALADIN_AVENGE`/`WARRIOR_EARTHSHATTER`/`WARRIOR_CATACLYSM`, §6.11).
+**Cells still needing a first exemplar** (author one before relying on them): `muzzle` (none today — opt-in), `beam × CHANNEL` (only ELECTROCUTE, parked — decision 9), `projectile_body` index >0 (never used, and per B.3 never should be), `cast_glow` on SKY_DROP/BEAM (optional, none today). `beam × CHARGED` has INSTANT_BEAM. Out of scope regardless: the pure-melee cue owners (`PALADIN_AVENGE`/`WARRIOR_EARTHSHATTER`/`WARRIOR_CATACLYSM`, §6.11).
 
 ---
 

@@ -58,9 +58,13 @@ else
     spacetime publish "${publish_args[@]}" -p "$MODULE_PATH" "$ARENA_DATABASE"
 fi
 
-# Re-sync the progression catalog tables (cues/abilities/VFX) from the freshly-published JSON.
-# A fresh init (delete-data=always) already syncs, but a data-preserving publish does not, so
-# call it unconditionally (it is idempotent) — this is what keeps cue edits from going stale.
+# Re-sync every table derived from progression_catalog.shared.json. A fresh init
+# (delete-data=always) already syncs both families, but a data-preserving publish does not, so call
+# both reducers unconditionally (they are idempotent). SpellDefinition is a separate public table
+# consumed by client cast/animation/VFX logic; progression catalogs cover cues and ability rows.
+echo "Re-syncing spell definitions..."
+spacetime call "$ARENA_DATABASE" publish_spell_definitions
+
 echo "Re-syncing progression catalogs..."
 spacetime call "$ARENA_DATABASE" publish_progression_catalogs
 

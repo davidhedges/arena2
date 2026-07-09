@@ -1,5 +1,6 @@
 //! Spells - Minimal server-authoritative spell logic
 
+use std::collections::HashSet;
 use std::time::Duration;
 
 use spacetimedb::{reducer, table, Identity, ReducerContext, Table, Timestamp};
@@ -585,6 +586,11 @@ pub fn publish_spell_definitions(ctx: &ReducerContext) -> Result<(), String> {
 }
 
 pub(crate) fn sync_spell_definitions(ctx: &ReducerContext) {
+    let expected: HashSet<String> = spell_definitions()
+        .iter()
+        .map(|definition| definition.kind.as_str().to_string())
+        .collect();
+
     for definition in spell_definitions() {
         let key = definition.kind.as_str().to_string();
         let mut row = SpellDefinition {
@@ -634,5 +640,16 @@ pub(crate) fn sync_spell_definitions(ctx: &ReducerContext) {
         } else {
             ctx.db.spell_definition().insert(row);
         }
+    }
+
+    let stale: Vec<String> = ctx
+        .db
+        .spell_definition()
+        .iter()
+        .map(|row| row.kind)
+        .filter(|kind| !expected.contains(kind))
+        .collect();
+    for kind in stale {
+        ctx.db.spell_definition().kind().delete(kind);
     }
 }

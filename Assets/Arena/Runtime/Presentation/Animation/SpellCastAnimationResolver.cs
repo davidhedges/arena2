@@ -33,6 +33,22 @@ namespace Arena.Presentation
         }
 
         /// <summary>
+        /// Authoring/offline overload. The caller supplies the archetype derived from the authored
+        /// catalog so validation never guesses Instant merely because no runtime connection exists.
+        /// </summary>
+        public static bool TryResolve(
+            CombatAnimationSet? set,
+            string spellId,
+            SpellAnimationArchetype archetype,
+            out WeaponSpellAnimationEntry entry)
+        {
+            if (set != null && set.TryGetSpellAnimation(spellId, out entry))
+                return true;
+
+            return TryResolveComposed(set, spellId, archetype, out entry);
+        }
+
+        /// <summary>
         /// The composed (family-derived) entry only — skips the explicit layer. Returns false when no
         /// map/library is present, the spell is unmapped, its family is missing, or the family lacks
         /// the clips the archetype needs.
@@ -41,6 +57,25 @@ namespace Arena.Presentation
         {
             entry = default;
             if (!TryResolveComposedInput(set, spellId, out SpellCastAnimationMap.Entry mapEntry, out SpellCastAnimationFamily family, out SpellAnimationArchetype archetype, out _))
+                return false;
+
+            SpellCastHand hand = set != null ? set.OneHandedCastHand : SpellCastHand.Left;
+            if (!SpellCastAnimationComposer.TryCompose(spellId, family, hand, archetype, out entry))
+                return false;
+
+            ApplyOverrides(mapEntry, ref entry);
+            return true;
+        }
+
+        /// <summary>Composed-only authoring/offline overload with an explicit catalog archetype.</summary>
+        public static bool TryResolveComposed(
+            CombatAnimationSet? set,
+            string spellId,
+            SpellAnimationArchetype archetype,
+            out WeaponSpellAnimationEntry entry)
+        {
+            entry = default;
+            if (!TryResolveComposedAssets(spellId, out SpellCastAnimationMap.Entry mapEntry, out SpellCastAnimationFamily family, out _))
                 return false;
 
             SpellCastHand hand = set != null ? set.OneHandedCastHand : SpellCastHand.Left;
@@ -78,9 +113,24 @@ namespace Arena.Presentation
             out SpellAnimationArchetype archetype,
             out string failureReason)
         {
+            archetype = default;
+            if (!TryResolveComposedAssets(spellId, out mapEntry, out family, out failureReason))
+                return false;
+
+            if (!TryDeriveArchetype(spellId, out archetype, out failureReason))
+                return false;
+
+            return true;
+        }
+
+        private static bool TryResolveComposedAssets(
+            string spellId,
+            out SpellCastAnimationMap.Entry mapEntry,
+            out SpellCastAnimationFamily family,
+            out string failureReason)
+        {
             mapEntry = default;
             family = default;
-            archetype = default;
             failureReason = string.Empty;
 
             EnsureLoaded();
@@ -98,9 +148,6 @@ namespace Arena.Presentation
                 failureReason = $"map entry baseName '{mapEntry.baseName}' does not resolve in SpellCastAnimationLibrary";
                 return false;
             }
-
-            if (!TryDeriveArchetype(spellId, out archetype, out failureReason))
-                return false;
 
             return true;
         }

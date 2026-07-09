@@ -5,6 +5,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
 using NUnit.Framework;
+using UnityEditor;
 
 namespace Arena.Tests.Editor
 {
@@ -79,6 +80,26 @@ namespace Arena.Tests.Editor
         // A stock impact burst: ONE_SHOT / DURATION with a positive duration — violates nothing.
         private static object LegalOneShot()
             => Fields("SPELL_IMPACT", "IMPACT_POINT", "SPAWN_WORLD", "ONE_SHOT", "DURATION", false, false);
+
+        [Test]
+        public void SchoolVfxSets_AreEditorOnlyAuthoringAssets()
+        {
+            Assert.That(RuntimeAssembly.GetType("Arena.Presentation.SchoolVfxSet"), Is.Null);
+            Assert.That(
+                AppDomain.CurrentDomain.Load("Assembly-CSharp-Editor")
+                    .GetType("Arena.Presentation.SchoolVfxSet", throwOnError: false),
+                Is.Not.Null);
+
+            string[] guids = AssetDatabase.FindAssets("t:SchoolVfxSet");
+            Assert.That(guids, Is.Not.Empty);
+            foreach (string guid in guids)
+            {
+                string path = AssetDatabase.GUIDToAssetPath(guid);
+                Assert.That(path, Does.StartWith("Assets/Arena/Editor/"));
+                Assert.That(path, Does.Not.Contain("/Resources/"));
+                Assert.That(AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(path), Is.Not.Null);
+            }
+        }
 
         // ----- archetype derivation, grounded in the real spell list -----
 
@@ -179,32 +200,18 @@ namespace Arena.Tests.Editor
         [Test]
         public void AuraDefaults_ToABriefGroundBurst()
         {
-            // Most auras (e.g. WARDING_AURA) are just a brief effect at the caster's feet — no cast
-            // glow, muzzle, projectile, or animation. AuraGround is requested first; Aura is opt-in.
+            // Aura buffs persist, but their cast visual is just a brief effect at the caster's feet.
             var slots = (IEnumerable)GeneratorType.GetMethod("RequestedSlots")!
                 .Invoke(null, new object[] { VfxArch("Aura"), AnimMode("Instant") })!;
-            string? first = null;
-            foreach (object? s in slots) { first = s!.ToString(); break; }
-            Assert.That(first, Is.EqualTo("AuraGround"));
+            var slotNames = new List<string>();
+            foreach (object? s in slots) slotNames.Add(s!.ToString());
+            Assert.That(slotNames, Is.EqualTo(new[] { "AuraGround" }));
 
             object w = Wire("Aura", "AuraGround", "Instant", false, false);
             Assert.That(WireStr(w, "Trigger"), Is.EqualTo("SPELL_RELEASE"));
             Assert.That(WireStr(w, "Anchor"), Is.EqualTo("Caster")); // follows the caster (FOLLOW_ANCHOR needs a transform)
             Assert.That(WireStr(w, "AttachMode"), Is.EqualTo("FOLLOW_ANCHOR"));
             Assert.That(WireStr(w, "VfxRole"), Is.EqualTo("ONE_SHOT"));
-        }
-
-        [Test]
-        public void Aura_UsesUntilAuraEndLifecycle()
-        {
-            // Decision 11: an aura's visual lives until the aura's ActiveAura row is deleted.
-            object w = Wire("Aura", "Aura", "Instant", false, false);
-            Assert.That(WireStr(w, "Trigger"), Is.EqualTo("SPELL_RELEASE"));
-            Assert.That(WireStr(w, "Anchor"), Is.EqualTo("Caster"));
-            Assert.That(WireStr(w, "AttachMode"), Is.EqualTo("FOLLOW_ANCHOR"));
-            Assert.That(WireStr(w, "VfxRole"), Is.EqualTo("ATTACHED"));
-            Assert.That(WireStr(w, "Lifecycle"), Is.EqualTo("UNTIL_AURA_END"));
-            Assert.That(WireStr(w, "Duration"), Is.EqualTo("Zero"));
         }
 
         // ----- the whole generator is correct-by-construction against Class-A rules -----

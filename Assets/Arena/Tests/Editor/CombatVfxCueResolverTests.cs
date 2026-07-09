@@ -57,6 +57,10 @@ namespace Arena.Tests.Editor
             Assert.That(source, Does.Contain("_projectileDeliveredSpellImpactByActionKind.TryGetValue(actionKind, out bool cached)"));
             Assert.That(source, Does.Contain("_projectileDeliveredSpellImpactByActionKind[actionKind] = result;"));
             Assert.That(source, Does.Contain("_projectileDeliveredSpellImpactByActionKind.Clear();"));
+            Assert.That(source, Does.Contain("conn.Db.SpellDefinition.OnInsert += OnSpellDefinitionInsertForVfx;"));
+            Assert.That(source, Does.Contain("conn.Db.SpellDefinition.OnUpdate += OnSpellDefinitionUpdateForVfx;"));
+            Assert.That(source, Does.Contain("conn.Db.SpellDefinition.OnDelete += OnSpellDefinitionDeleteForVfx;"));
+            Assert.That(source, Does.Contain("InvalidateProjectileSpellImpactClassification(row.Kind);"));
             Assert.That(source, Does.Not.Contain("_projectileDeliveredSpellImpactByActionKind[actionKind] = false;\n                return false;"));
         }
 
@@ -71,5 +75,6 @@ namespace Arena.Tests.Editor
             Assert.That(source, Does.Contain("TriggerSpellImpact"));
             Assert.That(source, Does.Contain("ProjectilePresentationEvent row,"));
         }
+
     }
 }
