@@ -311,14 +311,14 @@ namespace Arena.Entity
         public bool UsesSpellCastHoldPresentation(string spellActionId)
         {
             return _combatAnimationSet != null
-                && _combatAnimationSet.TryGetSpellAnimation(spellActionId, out WeaponSpellAnimationEntry entry)
+                && SpellCastAnimationResolver.TryResolve(_combatAnimationSet, spellActionId, out WeaponSpellAnimationEntry entry)
                 && entry.UsesHoldPresentation;
         }
 
         public bool PlaysSpellReleasePresentation(string spellActionId)
         {
             return _combatAnimationSet == null
-                || !_combatAnimationSet.TryGetSpellAnimation(spellActionId, out WeaponSpellAnimationEntry entry)
+                || !SpellCastAnimationResolver.TryResolve(_combatAnimationSet, spellActionId, out WeaponSpellAnimationEntry entry)
                 || entry.PlaysReleasePresentation;
         }
 
@@ -326,7 +326,7 @@ namespace Arena.Entity
         {
             releaseOffsetSeconds = 0f;
             if (_combatAnimationSet == null
-                || !_combatAnimationSet.TryGetSpellAnimation(spellActionId, out WeaponSpellAnimationEntry entry)
+                || !SpellCastAnimationResolver.TryResolve(_combatAnimationSet, spellActionId, out WeaponSpellAnimationEntry entry)
                 || !entry.PlaysReleasePresentation
                 || entry.ResolveClip(grounded: true) == null)
             {

@@ -995,7 +995,7 @@ namespace Arena.Presentation
                 return false;
             }
 
-            if (!animationSet.TryGetSpellAnimation(spellKind, out spellEntry))
+            if (!SpellCastAnimationResolver.TryResolve(animationSet, spellKind, out spellEntry))
             {
                 // No entry is a valid, intentional state: silent spells (auras, most self-buffs)
                 // cast with no body animation. Authoring gaps for spells that SHOULD animate are

@@ -1202,6 +1202,12 @@ namespace Arena.Presentation
         [Tooltip("Default enter/idle presentation for cast-time spells. Release clips remain authored per spell in Spell Actions.")]
         public SpellCastHoldProfile defaultSpellCastHold;
 
+        [Tooltip("Which hand this weapon set casts ONE-HANDED spell flavors with (Call/Ground/Directional-1H). Two-handed flavors (Omni/Special) always use both hands regardless of this. Only used by the cast-animation family resolver. See docs/spell-cast-animation-stitching-2026-07-09.md.")]
+        public SpellCastHand oneHandedCastHand = SpellCastHand.Left;
+
+        /// <summary>The one-handed cast hand for family resolution (Left/Right only; TwoHand collapses to Left).</summary>
+        public SpellCastHand OneHandedCastHand => oneHandedCastHand == SpellCastHand.Right ? SpellCastHand.Right : SpellCastHand.Left;
+
         [Header("Status Reactions")]
         [Tooltip("Looping status reaction animations keyed by runtime status kind.")]
         public StatusReactionAnimationEntry[] statusReactions = Array.Empty<StatusReactionAnimationEntry>();
@@ -1584,7 +1590,7 @@ namespace Arena.Presentation
         public bool TryGetSpellCastHoldProfile(string spellId, out SpellCastHoldProfile profile)
         {
             SpellCastHoldProfile defaultProfile = defaultSpellCastHold;
-            if (TryGetSpellAnimation(spellId, out WeaponSpellAnimationEntry entry)
+            if (SpellCastAnimationResolver.TryResolve(this, spellId, out WeaponSpellAnimationEntry entry)
                 && entry.TryResolveHoldProfile(defaultProfile, out profile))
             {
                 return true;

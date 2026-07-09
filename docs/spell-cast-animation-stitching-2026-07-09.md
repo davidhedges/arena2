@@ -183,14 +183,18 @@ the base-animation family. Channel/charged must resolve to a loop-capable layer
    yields **9 families** (4 one-handed w/ full L+R triples, 5 two-handed), every triple complete,
    the stray unprefixed clip deduped. Non-destructive; nothing consumes the library yet. Owner
    verifies by running the menu item and eyeballing the resulting asset + console summary.
-2. **Resolver compose step** — `oneHandedCastHand` (Left/Right) on `CombatAnimationSet` +
-   weapon-agnostic `SpellCastAnimationMap` (spellId→baseName); resolver returns family-derived clips
-   (1H flavor → weapon hand, 2H flavor → both hands) + derived presentationMode when no explicit
-   entry. Golden test: every currently-authored held/charged/instant spell resolves to the *same*
-   clips it plays today (or the corrected stitch, reviewed).
-3. **Wire the 4 runtime consumers** through the resolver (PlayerEntity ×3, CombatActionPlayback
-   controller ×1). Behind the explicit-wins layer this is byte-identical until a spell is moved to a
-   family.
+2. **Resolver compose step — ✅ DONE (2026-07-09, compile- + unit-verified; pending Unity import +
+   commit).** `oneHandedCastHand` (Left/Right) on `CombatAnimationSet`; `SpellCastAnimationMap.cs`
+   (weapon-agnostic spellId→baseName SO, Resources); `SpellCastAnimationComposer.cs` (pure:
+   family×hand×archetype → `WeaponSpellAnimationEntry`); `SpellCastAnimationResolver.cs` (runtime
+   glue: explicit-wins → composed; loads Resources; derives archetype via
+   `conn.Db.SpellDefinition`). Unit test `SpellCastAnimationComposerTests.cs` covers all 3 archetypes
+   + 2H-ignores-hand + missing-clip. All assemblies build 0 errors.
+3. **Wire the runtime consumers — ✅ DONE (same commit).** 5 seams routed through
+   `SpellCastAnimationResolver.TryResolve`: PlayerEntity ×3 (:314/:321/:329),
+   CombatActionPlaybackController.TryBindSpellClip (:998), CombatAnimationSet.TryGetSpellCastHoldProfile
+   (:1587). **Safe by construction:** with no `SpellCastAnimationMap.asset` in Resources, `TryResolve`
+   ≡ `TryGetSpellAnimation` (byte-identical) — nothing changes until a spell is mapped.
 4. **Migrate spells to families** — point each elemental spell at its base; delete the redundant
    explicit entries; verify in-editor preview + playtest. Warrior shouts stay explicit (baked
    override).
