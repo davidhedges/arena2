@@ -5609,9 +5609,10 @@ mod tests {
         let execute_not_before_ms = strike_2.combo_open_ms;
         let queue_close_offset_ms = execute_not_before_ms + strike_2.combo_grace_ms;
 
-        assert_eq!(predecessor_total_ms, 267);
-        assert_eq!(execute_not_before_ms, strike_2.combo_open_ms);
-        assert!(execute_not_before_ms >= predecessor_total_ms);
+        assert_eq!(
+            execute_not_before_ms, predecessor_total_ms,
+            "the successor should execute when its predecessor's final hit and recovery complete"
+        );
         assert_eq!(
             queue_close_offset_ms - execute_not_before_ms,
             strike_2.combo_grace_ms

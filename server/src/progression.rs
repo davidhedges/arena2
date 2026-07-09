@@ -2219,7 +2219,15 @@ pub(crate) fn primary_resource_kind_for_owner(
 
 #[allow(dead_code)]
 pub(crate) fn selectable_slot_ids() -> Vec<String> {
-    let mut slots: Vec<_> = progression_catalog().slots.iter().collect();
+    let mut slots: Vec<_> = progression_catalog()
+        .slots
+        .iter()
+        .filter(|slot| {
+            slot.accepts_tags
+                .iter()
+                .any(|tag| normalize_identifier(tag) == "ACTION_BAR_ACTION")
+        })
+        .collect();
     slots.sort_by_key(|slot| slot_sort_key(slot));
     slots
         .into_iter()

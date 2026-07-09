@@ -140,8 +140,9 @@ working tree:
   unrelated cue-catalog churn to evict cached classifications.
 - [x] **The three branch-owned stale Rust assertions match the migrated VFX contract.** Frost Needle
   expects delayed `AREA_IMPACT`, Meteor expects its charged cast glow, and Sacred Flame expects the
-  owner-verified `TARGET` anchor. Full `cargo test` improves from 440/448 to 443/448; the five
-  remaining failures read branch-unchanged melee/slot inputs and predate this spell-presentation work.
+  owner-verified `TARGET` anchor. At this stage `cargo test` improved from 440/448 to 443/448. The
+  initial attribution of the five inherited failures as unrelated stale inputs was incomplete; the
+  later investigation and correction are recorded below.
 - [x] **Map validation derives the real catalog archetype offline.** The authoring validator supplies
   `cast_time_ms × delivery.kind` explicitly and composes every unshadowed animation-set hand, including
   profile-neutral mapped spells such as charged ICICLE.
@@ -158,8 +159,14 @@ working tree:
   removed by `tick_auras`.
 - [x] **Branch diff hygiene is clean.** Removed 204 trailing-whitespace errors from 68 newly-added Unity
   metadata files.
+- [x] **The five inherited Rust failures exposed real catalog drift.** An earlier broad spell-VFX
+  commit had injected `ARROW_STANDARD` projectile delivery into every non-archer melee strike and
+  Rain Shot, and had removed two of Whirlwind's four hit windows; the melee manifest is restored to
+  its pre-corruption shape. Sword-and-Shield combo timing now keeps the successor opening aligned
+  with the predecessor's final hit plus recovery, and selectable action-bar slots exclude the
+  separately tagged discipline bar. The full server suite is now 448/448.
 
 Verification: `Assembly-CSharp.csproj`, `Assembly-CSharp-Editor.csproj`, and
-`Arena.EditModeTests.csproj` compile; the three focused Rust regressions pass; shell scripts pass
-`bash -n`; `git diff --check` passes. Unity EditMode execution remains unavailable while another Unity
-instance owns the project.
+`Arena.EditModeTests.csproj` compile; all 448 Rust tests pass; shell scripts pass `bash -n`;
+`git diff --check` passes. Unity EditMode execution remains unavailable while another Unity instance
+owns the project.
