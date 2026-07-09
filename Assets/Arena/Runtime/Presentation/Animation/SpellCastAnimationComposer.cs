@@ -23,8 +23,14 @@ namespace Arena.Presentation
         // §1.5 / §6.8): UpperBody → UpperBodySpellCastHoldAction*, FullBody → SpellCastHoldAction*.
         // UpperBody is the safe default (loop-capable, keeps facing/aim responsive); tunable later.
         private const SpellPlaybackLayer HoldLayer = SpellPlaybackLayer.UpperBody;
-        // Instant casts preserve locomotion while moving (dominant instant default, Appendix C).
-        private const SpellPlaybackLayer InstantLayer = SpellPlaybackLayer.UpperBodyWhileMoving;
+        // Instant casts must NOT disrupt the lower body / combat stance. UpperBody is an always-on
+        // upper-body overlay (the throw plays on the torso/arms, legs keep their pose); by contrast
+        // UpperBodyWhileMoving plays FULL body when the caster is standing still, which reads as
+        // "standing straight up" mid-cast. UpperBodySpellAction* release states auto-exit at 0.9.
+        private const SpellPlaybackLayer InstantLayer = SpellPlaybackLayer.UpperBody;
+        // The charged release stays UpperBodyWhileMoving — grounded charges read fine full-body when
+        // stationary (kept from the ICICLE tuning the owner signed off on).
+        private const SpellPlaybackLayer ChargedReleaseLayer = SpellPlaybackLayer.UpperBodyWhileMoving;
 
         /// <summary>
         /// Returns <c>false</c> (with a default entry) when the family has no clips for the requested
@@ -71,7 +77,7 @@ namespace Arena.Presentation
                     entry.ground = triple.cast;
                     entry.air = triple.cast;
                     entry.presentationMode = SpellAnimationPresentationMode.HoldThenRelease;
-                    entry.playbackLayer = InstantLayer;
+                    entry.playbackLayer = ChargedReleaseLayer;
                     entry.combatEntryMode = CombatEntryMode.AnimatedAfterCast;
                     entry.holdOverride = MakeHold(triple);
                     return true;
