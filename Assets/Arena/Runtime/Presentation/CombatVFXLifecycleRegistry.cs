@@ -17,7 +17,6 @@ namespace Arena.Presentation
         private const string LifecycleUntilReleaseEvent = "UNTIL_RELEASE_EVENT";
         private const string LifecycleUntilTerminalEvent = "UNTIL_TERMINAL_EVENT";
         private const string LifecycleUntilCastEnd = "UNTIL_CAST_END";
-        private const string LifecycleUntilAuraEnd = "UNTIL_AURA_END";
 
         private readonly MonoBehaviour _coroutineOwner;
         private readonly Dictionary<string, ScriptedEntry> _scripted = new();
@@ -169,8 +168,8 @@ namespace Arena.Presentation
             if (string.IsNullOrWhiteSpace(auraKey))
                 return;
 
-            DestroyMatchingScripted(auraKey, LifecycleUntilAuraEnd);
-            DestroyMatchingPrefabs(auraKey, LifecycleUntilAuraEnd);
+            DestroyMatchingScripted(auraKey, SpellVfxGenerator.LifecycleUntilAuraEnd);
+            DestroyMatchingPrefabs(auraKey, SpellVfxGenerator.LifecycleUntilAuraEnd);
         }
 
         public void Dispose()
@@ -274,10 +273,11 @@ namespace Arena.Presentation
                 return;
             }
 
-            if (string.Equals(lifecycle, LifecycleUntilCastEnd, System.StringComparison.Ordinal))
+            if (string.Equals(lifecycle, LifecycleUntilCastEnd, System.StringComparison.Ordinal)
+                || string.Equals(lifecycle, SpellVfxGenerator.LifecycleUntilAuraEnd, System.StringComparison.Ordinal))
             {
-                // Loop and hold until the owning cast/channel's ActiveCast row is deleted
-                // (DestroyForCastEnd), so a channel glow lasts exactly as long as the channel.
+                // Loop and hold until the owning ActiveCast/ActiveAura row is deleted, so
+                // held prefabs last exactly as long as their authoritative server row.
                 ConfigureReleaseBoundParticleSystems(instance);
                 string key = PrefabKey(context);
                 if (_prefabs.TryGetValue(key, out PrefabEntry old))
