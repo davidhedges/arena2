@@ -83,8 +83,11 @@ subscription/hydration, and public replication surface have therefore been remov
   by the catalog's real `action_id`; class-prefix stripping is gone, so future `MAGE_*` ability ids do not
   silently fall back to Instant. The map editor and resolved view share the same asset/set discovery.
 
-- [ ] **C8. Per-spell authoring data compiled into editor source**
-  `SpellAuthoringWindow.CueGeneration.cs:89` (`SignatureOverrides`, 19 spells) and :203 (`CastHandOverrides`, "WINS over inference"). The school half of the same data just became assets (decision 10); signatures/hand overrides should follow (reuse the SchoolVfxSlotEntry shape as a per-spell VFX-set) — every new bespoke spell currently requires editing generator source + domain reload, and a stale hand override silently outranks later-corrected inference.
+- [x] **C8. Per-spell authoring data compiled into editor source — FIXED**
+  The 19 signature override rows and Blade Barrier's cast-hand exception now live in the editor-only
+  `SpellVfxOverrideCatalog` asset. Each ability entry reuses `SchoolVfxSlotEntry` for slot look data and
+  may author an explicit hand. The generator contains no per-spell dictionaries; new bespoke looks are
+  asset edits and do not require code changes or a domain reload.
 
 - [x] **C9. `_assetSchoolPalettes` static-as-hidden-parameter**
   `SpellAuthoringWindow.CueGeneration.cs:418` — assigned at top of `GenerateCues`, read in `TryResolvePaletteEntry` same call. Make it a local passed as a parameter. (Dies naturally with C3.)

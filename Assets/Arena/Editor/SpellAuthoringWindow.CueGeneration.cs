@@ -34,130 +34,6 @@ namespace Arena.Editor
             public int DurationMs { get; }
         }
 
-        // Per-spell signature overrides (ability_id × slot → look). Override wins over the school default for
-        // its slot (design doc §3.3). FIREBALL's flying body + explosion are bespoke (signature); its hand
-        // glow inherits the FIRE school. This is a full-entry replacement for the slot — a partial per-field
-        // merge is a later refinement.
-        private static readonly IReadOnlyDictionary<string, IReadOnlyDictionary<SpellVfxSlot, PaletteEntry>> SignatureOverrides =
-            new Dictionary<string, IReadOnlyDictionary<SpellVfxSlot, PaletteEntry>>(System.StringComparer.Ordinal)
-            {
-                ["SPELL_FIREBALL"] = new Dictionary<SpellVfxSlot, PaletteEntry>
-                {
-                    [SpellVfxSlot.ProjectileBody] = new PaletteEntry("VFX_FIREBALL_PROJECTILE_01"),
-                    [SpellVfxSlot.Impact] = new PaletteEntry("VFX_FIREBALL_HIT_01", selfTerminating: false, durationMs: 1000),
-                },
-                // ICICLE inherits the COLD cast_glow + impact; only its flying body is bespoke.
-                ["SPELL_ICICLE"] = new Dictionary<SpellVfxSlot, PaletteEntry>
-                {
-                    [SpellVfxSlot.ProjectileBody] = new PaletteEntry("VFX_ICICLE_PROJECTILE_01"),
-                },
-                ["SPELL_GLACIAL_SPIKE"] = new Dictionary<SpellVfxSlot, PaletteEntry>
-                {
-                    [SpellVfxSlot.Impact] = new PaletteEntry("VFX_GLACIAL_SPIKE_TARGET_01", selfTerminating: true),
-                },
-                ["SPELL_FROST_NOVA"] = new Dictionary<SpellVfxSlot, PaletteEntry>
-                {
-                    [SpellVfxSlot.Burst] = new PaletteEntry("VFX_FROST_NOVA_01", selfTerminating: true),
-                },
-                // No damage_type/vfx_school (school resolves to none) → their bursts are pure signatures.
-                ["WARRIOR_INTIMIDATE"] = new Dictionary<SpellVfxSlot, PaletteEntry>
-                {
-                    [SpellVfxSlot.Burst] = new PaletteEntry("VFX_VOID_AREA_01", selfTerminating: true),
-                },
-                ["WARRIOR_SHOCKWAVE"] = new Dictionary<SpellVfxSlot, PaletteEntry>
-                {
-                    [SpellVfxSlot.Burst] = new PaletteEntry("VFX_AIR_BURST_01_ARENA", selfTerminating: true),
-                },
-                // Arcane projectiles: only the flying body is bespoke; cast_glow + impact come from the
-                // ARCANE school (the retint). MAGIC_MISSILE's impact is unauthored today (generator-adds).
-                ["SPELL_ORBITING_BLADES"] = new Dictionary<SpellVfxSlot, PaletteEntry>
-                {
-                    [SpellVfxSlot.ProjectileBody] = new PaletteEntry("VFX_ORBITING_BLADES_PROJECTILE_01"),
-                },
-                ["SPELL_MAGIC_MISSILE"] = new Dictionary<SpellVfxSlot, PaletteEntry>
-                {
-                    [SpellVfxSlot.ProjectileBody] = new PaletteEntry("VFX_MAGIC_MISSILE_PROJECTILE_01"),
-                },
-                // Deferred point-areas (impact_delay > 0): the impact resolves at detonation, so the
-                // generator wires it to AREA_IMPACT@AREA_ORIGIN — the burst is each spell's signature.
-                ["SPELL_ERUPTION"] = new Dictionary<SpellVfxSlot, PaletteEntry>
-                {
-                    [SpellVfxSlot.Impact] = new PaletteEntry("VFX_ERUPTION_01", selfTerminating: true),
-                },
-                ["SPELL_FROST_NEEDLE"] = new Dictionary<SpellVfxSlot, PaletteEntry>
-                {
-                    [SpellVfxSlot.Impact] = new PaletteEntry("VFX_FROST_NEEDLE_01", selfTerminating: true),
-                },
-                ["PALADIN_CONSECRATE"] = new Dictionary<SpellVfxSlot, PaletteEntry>
-                {
-                    [SpellVfxSlot.Impact] = new PaletteEntry("VFX_LIGHT_AREA_01_ARENA", selfTerminating: true),
-                },
-                // No-projectile immediate impact on the target → TargetHit anchors on TARGET (owner-verified in-game).
-                ["PALADIN_SACRED_FLAME"] = new Dictionary<SpellVfxSlot, PaletteEntry>
-                {
-                    [SpellVfxSlot.Impact] = new PaletteEntry("VFX_SACRED_FLAME_HIT_01", selfTerminating: true),
-                },
-                // Holy-damage projectiles: bespoke flying body (signature); the impact comes from the HOLY
-                // school (generic holy hit). cast_glow has no holy prefab yet, so it is omitted. BLESSED_SHIELD
-                // launches LEFT (matches the generator default); BLADE_BARRIER launches RIGHT (via the
-                // CastHandOverrides below) — both bodies now match, and each inserts the HOLY impact.
-                ["PALADIN_BLESSED_SHIELD"] = new Dictionary<SpellVfxSlot, PaletteEntry>
-                {
-                    [SpellVfxSlot.ProjectileBody] = new PaletteEntry("VFX_BLESSED_SHIELD_PROJECTILE_01"),
-                },
-                ["PALADIN_BLADE_BARRIER"] = new Dictionary<SpellVfxSlot, PaletteEntry>
-                {
-                    [SpellVfxSlot.ProjectileBody] = new PaletteEntry("VFX_BLADE_BARRIER_PROJECTILE_01"),
-                },
-                // Charged fire sky-drop: bespoke meteor head (travel body, lifecycle forced UNTIL_TERMINAL) +
-                // a PARTICLE_SYSTEM impact; the FIRE school adds a charging hand cast-glow (inserted).
-                ["SPELL_METEOR"] = new Dictionary<SpellVfxSlot, PaletteEntry>
-                {
-                    [SpellVfxSlot.TravelBody] = new PaletteEntry("VFX_METEOR_HEAD_01"),
-                    [SpellVfxSlot.Impact] = new PaletteEntry("VFX_METEOR_01", selfTerminating: true),
-                },
-                // Channel ice projectile: bespoke splinter body + a per-spell impact DURATION 700 (vs the
-                // COLD generic 1000 that ICICLE uses) reusing the COLD hit look; the COLD school adds a
-                // channel hand cast-glow (inserted, UNTIL_CAST_END).
-                ["SPELL_FROZEN_SPLINTERS"] = new Dictionary<SpellVfxSlot, PaletteEntry>
-                {
-                    [SpellVfxSlot.ProjectileBody] = new PaletteEntry("VFX_FROZEN_SPLINTER_PROJECTILE_01"),
-                    [SpellVfxSlot.Impact] = new PaletteEntry("VFX_ICE_HIT_01", selfTerminating: false, durationMs: 700),
-                },
-                // Charged arcane beam: bespoke beam body (DURATION 500); the ARCANE school adds a charging
-                // hand cast-glow (inserted).
-                ["SPELL_INSTANT_BEAM"] = new Dictionary<SpellVfxSlot, PaletteEntry>
-                {
-                    [SpellVfxSlot.Beam] = new PaletteEntry("VFX_INSTANT_BEAM_01", selfTerminating: false, durationMs: 500),
-                },
-                // SHADOW projectiles: bespoke body + hit (both signatures). No SHADOW cast-glow prefab yet,
-                // so cast_glow is omitted → these migrate as a pure slot-stamp (no new effect, no republish).
-                ["SPELL_BOOMERANG_ORB"] = new Dictionary<SpellVfxSlot, PaletteEntry>
-                {
-                    [SpellVfxSlot.ProjectileBody] = new PaletteEntry("VFX_BOOMERANG_ORB_PROJECTILE_01"),
-                    [SpellVfxSlot.Impact] = new PaletteEntry("VFX_BOOMERANG_ORB_HIT_01", selfTerminating: false, durationMs: 700),
-                },
-                ["SPELL_WITHERING_ORB"] = new Dictionary<SpellVfxSlot, PaletteEntry>
-                {
-                    [SpellVfxSlot.ProjectileBody] = new PaletteEntry("VFX_WITHERING_ORB_PROJECTILE_01"),
-                    [SpellVfxSlot.Impact] = new PaletteEntry("VFX_WITHERING_ORB_HIT_01", selfTerminating: false, durationMs: 700),
-                },
-            };
-
-        // Per-spell cast-hand override (design doc Appendix B "shared modifiers" — the resolved E7 cast
-        // hand). The generator normally infers the cast hand from the animation entry and falls back to
-        // LEFT_HAND when it can't; this asserts a spell's hand explicitly and WINS over inference, for
-        // spells whose authored hand disagrees with what the animation resolves. Applies to every
-        // Hand-anchored slot the spell requests (cast_glow, projectile_body, muzzle, beam), so a
-        // right-handed spell stays internally consistent. BLADE_BARRIER launches from the RIGHT hand,
-        // but its SwordAndShield animation resolves LEFT (as BLESSED_SHIELD does) — without this its
-        // projectile_body anchor would diff and block the write.
-        private static readonly IReadOnlyDictionary<string, string> CastHandOverrides =
-            new Dictionary<string, string>(System.StringComparer.Ordinal)
-            {
-                ["PALADIN_BLADE_BARRIER"] = SpellVfxGenerator.AnchorRightHand,
-            };
-
         private enum CueMatchState
         {
             Match,
@@ -224,7 +100,10 @@ namespace Arena.Editor
             SpellAnimationArchetype mode = SpellAnimationArchetypes.Derive(
                 (ulong)Mathf.Max(0, selected.gameplay.cast_time_ms), deliveryKind);
             string school = ResolveSchool(selected.gameplay.delivery);
-            string castHandAnchor = ResolveCastHandAnchor(abilityId, hasResolvedAnimation, resolvedAnimation);
+            SpellVfxOverrideCatalog? spellOverrides =
+                SpellPresentationEditorData.FindFirstAsset<SpellVfxOverrideCatalog>();
+            string castHandAnchor = ResolveCastHandAnchor(
+                spellOverrides, abilityId, hasResolvedAnimation, resolvedAnimation);
 
             EditorGUILayout.LabelField(
                 "Derivation",
@@ -239,6 +118,13 @@ namespace Arena.Editor
                 return;
             }
 
+            if (spellOverrides == null)
+            {
+                EditorGUILayout.HelpBox(
+                    "No SpellVfxOverrideCatalog asset found. School-derived slots can still preview, but bespoke spell slots and cast-hand exceptions are unavailable.",
+                    MessageType.Error);
+            }
+
             if (string.IsNullOrEmpty(school))
             {
                 EditorGUILayout.HelpBox(
@@ -248,7 +134,8 @@ namespace Arena.Editor
             }
 
             List<GeneratedCue> generated = GenerateCues(
-                archetype.Value, mode, facts, abilityId, school, castHandAnchor, out List<string> slotNotes);
+                archetype.Value, mode, facts, spellOverrides, abilityId, school, castHandAnchor,
+                out List<string> slotNotes);
 
             foreach (string note in slotNotes)
                 EditorGUILayout.HelpBox(note, MessageType.Warning);
@@ -298,12 +185,20 @@ namespace Arena.Editor
         }
 
         private static string ResolveCastHandAnchor(
-            string abilityId, bool hasResolvedAnimation, WeaponSpellAnimationEntry resolvedAnimation)
+            SpellVfxOverrideCatalog? spellOverrides,
+            string abilityId,
+            bool hasResolvedAnimation,
+            WeaponSpellAnimationEntry resolvedAnimation)
         {
             // An explicit per-spell override wins — the authored E7 hand for spells the animation resolves
             // wrongly (or can't resolve), e.g. BLADE_BARRIER's RIGHT launch.
-            if (CastHandOverrides.TryGetValue(abilityId, out string overrideHand))
-                return overrideHand;
+            if (spellOverrides != null && spellOverrides.TryGet(abilityId, out SpellVfxAbilityOverride spellOverride))
+            {
+                if (spellOverride.castHand == SpellVfxCastHandOverride.Left)
+                    return SpellVfxGenerator.AnchorLeftHand;
+                if (spellOverride.castHand == SpellVfxCastHandOverride.Right)
+                    return SpellVfxGenerator.AnchorRightHand;
+            }
 
             // E7: otherwise the concrete cast hand is inferred from the resolved animation/playback layer
             // (explicit entry or SpellCastAnimationMap composition). Profile-less SPELL_* spells have no
@@ -322,6 +217,7 @@ namespace Arena.Editor
             SpellVfxArchetype archetype,
             SpellAnimationArchetype mode,
             SpellDeliveryFacts facts,
+            SpellVfxOverrideCatalog? spellOverrides,
             string abilityId,
             string school,
             string castHandAnchor,
@@ -335,7 +231,8 @@ namespace Arena.Editor
 
             foreach (SpellVfxSlot slot in SpellVfxGenerator.RequestedSlots(archetype, mode))
             {
-                if (!TryResolvePaletteEntry(schoolPalettes, school, abilityId, slot, out PaletteEntry entry))
+                if (!TryResolvePaletteEntry(
+                        schoolPalettes, spellOverrides, school, abilityId, slot, out PaletteEntry entry))
                 {
                     slotNotes.Add(
                         $"Slot '{slot}' is requested by the {archetype} archetype but neither the {NoneIfEmpty(school)} "
@@ -395,14 +292,20 @@ namespace Arena.Editor
 
         private static bool TryResolvePaletteEntry(
             Dictionary<string, Dictionary<SpellVfxSlot, PaletteEntry>> schoolPalettes,
+            SpellVfxOverrideCatalog? spellOverrides,
             string school,
             string abilityId,
             SpellVfxSlot slot,
             out PaletteEntry entry)
         {
-            if (SignatureOverrides.TryGetValue(abilityId, out IReadOnlyDictionary<SpellVfxSlot, PaletteEntry> overrides)
-                && overrides.TryGetValue(slot, out entry))
+            if (spellOverrides != null
+                && spellOverrides.TryGet(abilityId, out SpellVfxAbilityOverride spellOverride)
+                && spellOverride.TryGet(slot, out SchoolVfxSlotEntry overrideEntry))
             {
+                entry = new PaletteEntry(
+                    overrideEntry.vfxId,
+                    overrideEntry.selfTerminating,
+                    overrideEntry.durationMs);
                 return true;
             }
 

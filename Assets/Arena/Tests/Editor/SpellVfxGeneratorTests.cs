@@ -3,6 +3,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.IO;
 using System.Reflection;
 using NUnit.Framework;
 using UnityEditor;
@@ -118,6 +119,57 @@ namespace Arena.Tests.Editor
             Assert.That(gameplay.Contains("WARDING_AURA"), Is.True);
             Assert.That(gameplay.Contains("SPELL_FIREBALL"), Is.False);
             Assert.That(gameplay.Contains("PALADIN_WARDING_AURA"), Is.False);
+        }
+
+        [Test]
+        public void SpellVfxOverrides_AreAssetAuthoredUniqueAndOutsideSource()
+        {
+            string[] guids = AssetDatabase.FindAssets("t:SpellVfxOverrideCatalog");
+            Assert.That(guids, Has.Length.EqualTo(1));
+            UnityEngine.Object asset = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(
+                AssetDatabase.GUIDToAssetPath(guids[0]));
+            Assert.That(asset, Is.Not.Null);
+
+            var serialized = new SerializedObject(asset);
+            SerializedProperty entries = serialized.FindProperty("entries");
+            Assert.That(entries, Is.Not.Null);
+            Assert.That(entries.arraySize, Is.GreaterThanOrEqualTo(19));
+
+            var abilityIds = new HashSet<string>(StringComparer.Ordinal);
+            bool foundBladeBarrierRightHand = false;
+            for (int i = 0; i < entries.arraySize; i++)
+            {
+                SerializedProperty row = entries.GetArrayElementAtIndex(i);
+                string abilityId = row.FindPropertyRelative("abilityId").stringValue.Trim().ToUpperInvariant();
+                int castHand = row.FindPropertyRelative("castHand").enumValueIndex;
+                SerializedProperty slots = row.FindPropertyRelative("slots");
+
+                Assert.That(abilityId, Is.Not.Empty);
+                Assert.That(abilityIds.Add(abilityId), Is.True, $"duplicate override for {abilityId}");
+                Assert.That(castHand, Is.InRange(0, 2));
+                Assert.That(slots.arraySize > 0 || castHand != 0, Is.True);
+
+                var slotIds = new HashSet<int>();
+                for (int slotIndex = 0; slotIndex < slots.arraySize; slotIndex++)
+                {
+                    SerializedProperty slot = slots.GetArrayElementAtIndex(slotIndex);
+                    int slotId = slot.FindPropertyRelative("slot").enumValueIndex;
+                    Assert.That(slotIds.Add(slotId), Is.True, $"duplicate {abilityId} slot {slotId}");
+                    Assert.That(slot.FindPropertyRelative("vfxId").stringValue, Is.Not.Empty);
+                    Assert.That(slot.FindPropertyRelative("durationMs").intValue, Is.GreaterThanOrEqualTo(0));
+                }
+
+                if (abilityId == "PALADIN_BLADE_BARRIER")
+                    foundBladeBarrierRightHand = castHand == 2;
+            }
+
+            Assert.That(foundBladeBarrierRightHand, Is.True);
+
+            string generatorSource = File.ReadAllText(Path.Combine(
+                Directory.GetCurrentDirectory(),
+                "Assets/Arena/Editor/SpellAuthoringWindow.CueGeneration.cs"));
+            Assert.That(generatorSource, Does.Not.Contain("SignatureOverrides"));
+            Assert.That(generatorSource, Does.Not.Contain("CastHandOverrides"));
         }
 
         // ----- archetype derivation, grounded in the real spell list -----
