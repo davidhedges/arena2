@@ -59,7 +59,7 @@ Three independent defects; the feature cannot work until all three are fixed. La
 - [x] **C1. Delete dead `SpellAnimationResolver.cs` + its grep-test**
   `Assets/Arena/Runtime/Presentation/Animation/SpellAnimationResolver.cs` — all five types have zero production callers (runtime uses `SpellCastAnimationResolver`); abandoned template-layering design. Its test `Resolver_TriesExplicitEntryFirst…` (SpellAnimationResolverTests.cs:72-88) literally `File.ReadAllText`s the source and asserts substrings. Keep `SpellAnimationArchetype.cs` (used).
 
-- [ ] **C2. Retire the generator half of `server/src/vfx_generation.rs` (~600 lines)**
+- [x] **C2. Retire the generator half of `server/src/vfx_generation.rs` (~600 lines)**
   Design-of-record (docs/spell-presentation-dry-redesign-2026-07-07.md, decision 10, line 311) says the Rust module "retires to being the server-side validator's Class-A rule source", but `derive_anim_mode`/`derive_vfx_archetype`/`requested_slots`/`wire`/`validate_wiring` + their types survive with only their own `#[cfg(test)]` callers; progression.rs uses only `check_cue_field_rules`/`CueFields`/`CueFieldViolation`. Cut to the checker (~200 lines).
 
 - [ ] **C3. Kill the seed `SchoolPalettes` fallback**

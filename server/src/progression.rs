@@ -6284,15 +6284,17 @@ mod tests {
             // hold spells with `cast_time_ms > 0`, so `is_some()` == charged. Rules that need
             // catalog context (owner resolution, projectile ownership/count, `start_delay_ms`,
             // `hit_index`) stay below — the checker cannot see that data.
-            for violation in crate::vfx_generation::check_cue_field_rules(&crate::vfx_generation::CueFields {
-                trigger: trigger.as_str(),
-                anchor: anchor.as_str(),
-                attach_mode: attach_mode.as_str(),
-                role: effective_vfx_role,
-                lifecycle: effective_lifecycle,
-                duration_is_zero: cue.duration_ms == 0,
-                charged_cast: cast_time_ms.is_some(),
-            }) {
+            for violation in
+                crate::vfx_generation::check_cue_field_rules(&crate::vfx_generation::CueFields {
+                    trigger: trigger.as_str(),
+                    anchor: anchor.as_str(),
+                    attach_mode: attach_mode.as_str(),
+                    role: effective_vfx_role,
+                    lifecycle: effective_lifecycle,
+                    duration_is_zero: cue.duration_ms == 0,
+                    charged_cast: cast_time_ms.is_some(),
+                })
+            {
                 use crate::vfx_generation::CueFieldViolation as V;
                 let message = match violation {
                     V::UntilReleaseEventOffCast => format!(
