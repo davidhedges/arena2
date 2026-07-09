@@ -35,6 +35,17 @@ explicit entry in S&S/Daggers** and only delete the caster (Staff/2H) entries.
 | SwordAndShield | SWORD_AND_SHIELD | (your call — sword hand vs shield hand) |
 | Daggers | DAGGERS | (your call) |
 
+### Left-hand 1H mask now covers the whole cast (2026-07-09)
+
+A **left-hand one-handed** cast (1H flavor + `oneHandedCastHand=Left`, e.g. the greatsword) plays on
+the masked `LeftGesture` layer, keeping the weapon-bearing **right arm on its base pose** (gripping
+the sword) for **all three archetypes** — instant, charged, and channel. Previously only the instant
+one-shot was masked; the charged/channel hold-loop and the charged release now stay masked too (new
+loop-capable `LeftGestureSpellCastHoldAction1..4` animator states). No authoring change: it's derived
+from the family's hand-style + the weapon's cast hand. 2H flavors and right-hand 1H are unaffected
+(no right-arm mask exists). To opt a spell's charged release back to a full-body finish, that's a
+one-line composer revert — ask.
+
 ## Checklist — CHARGED (proven; do these first)
 
 - [ ] `GLACIAL_SPIKE` — delete: Staff, 2H, S&S, Dag *(four-set: consider keeping S&S/Dag explicit)*

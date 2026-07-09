@@ -120,6 +120,16 @@ namespace Arena.Presentation
         private static readonly int LeftGestureSpellAction2StateHash = Animator.StringToHash("LeftGestureSpellAction2");
         private static readonly int LeftGestureSpellAction3StateHash = Animator.StringToHash("LeftGestureSpellAction3");
         private static readonly int LeftGestureSpellAction4StateHash = Animator.StringToHash("LeftGestureSpellAction4");
+        // Loop-capable left-gesture hold states (no exit transition). The shared
+        // LeftGestureSpellAction* states auto-exit to Empty at 0.9 (they double as
+        // one-shot masked spell releases), so a charged/channel hold routed through
+        // them stops after ~0.9 of the loop. These dedicated states carry no exit
+        // transition, letting a looping Load clip loop for the charge/channel while
+        // the LeftGesture mask keeps the weapon-bearing right arm on its base pose.
+        private static readonly int LeftGestureSpellCastHoldAction1StateHash = Animator.StringToHash("LeftGestureSpellCastHoldAction1");
+        private static readonly int LeftGestureSpellCastHoldAction2StateHash = Animator.StringToHash("LeftGestureSpellCastHoldAction2");
+        private static readonly int LeftGestureSpellCastHoldAction3StateHash = Animator.StringToHash("LeftGestureSpellCastHoldAction3");
+        private static readonly int LeftGestureSpellCastHoldAction4StateHash = Animator.StringToHash("LeftGestureSpellCastHoldAction4");
         private static readonly int UpperBodyRecoveryAction1StateHash = Animator.StringToHash("UpperBodyRecoveryAction1");
         private static readonly int SpellAction1StateHash = Animator.StringToHash("SpellAction1");
         private static readonly int SpellAction2StateHash = Animator.StringToHash("SpellAction2");
@@ -1097,6 +1107,9 @@ namespace Arena.Presentation
                     cleared.ExitBlendOutSeconds,
                     cleared.ExitDelaySeconds,
                     fadeLayerIndex);
+                // Clears the unused overlay layer. ClearLeftGestureSpellPresentation itself refuses
+                // to stomp the layer the fade now owns, so a masked LeftGesture hold blends out
+                // instead of snapping.
                 ClearLeftGestureSpellPresentation();
                 return;
             }
@@ -1143,9 +1156,13 @@ namespace Arena.Presentation
         private void PreemptLowerPriorityPresentationFor(bool captureGhost)
         {
             PreemptMeleeAnimationIfActive(captureGhost);
-            ClearActiveSpellPresentation(resetLayerWeight: true, clearUpperBodySpell: true);
             bool hadCastHold = _actionPlayback.ActiveSpellCastHoldPresentation.HasValue;
+            // Start the masked hold's smooth blend-out FIRST. The overlay cleanup below
+            // (ClearActiveSpellPresentation + the trailing LeftGesture clear) would otherwise
+            // hard-snap the hold layer to Empty; with the fade already live, those clears see it
+            // and leave the fade layer alone (guard in ClearLeftGestureSpellPresentation).
             ClearActiveSpellCastHoldPresentation(clearAnimatorState: true, softFullBodyClear: hadCastHold);
+            ClearActiveSpellPresentation(resetLayerWeight: true, clearUpperBodySpell: true);
             if (!hadCastHold)
                 _animator?.Play(SpellActionEmptyStateHash, SpellActionLayerIndex, 0f);
             ClearLeftGestureSpellPresentation();
@@ -1218,7 +1235,10 @@ namespace Arena.Presentation
                     if (_actionPlayback.IsSpellCastHoldFadeOutActive
                         && !_actionPlayback.ActiveSpellCastHoldPresentation.HasValue)
                         return;
-                    ClearActiveSpellCastHoldPresentation(clearAnimatorState: true);
+                    // A natural channel/hold end (button release, no preempt) reaches here with the
+                    // hold still active. Exit through the same smooth blend-out the preempt path uses
+                    // (softFullBodyClear -> StartSpellCastHoldFadeOut) instead of snapping to Empty.
+                    ClearActiveSpellCastHoldPresentation(clearAnimatorState: true, softFullBodyClear: true);
                     return;
                 case CombatSpellAnimationPhase.Release:
                 default:
@@ -1350,7 +1370,7 @@ namespace Arena.Presentation
         {
             return playbackLayer switch
             {
-                SpellPlaybackLayer.LeftGesture => ResolveLeftGestureSpellStateHash(bankSlot),
+                SpellPlaybackLayer.LeftGesture => ResolveLeftGestureSpellCastHoldStateHash(bankSlot),
                 SpellPlaybackLayer.UpperBody => ResolveUpperBodySpellCastHoldStateHash(bankSlot),
                 SpellPlaybackLayer.UpperBodyWhileMoving => ResolveUpperBodySpellCastHoldStateHash(bankSlot),
                 _ => ResolveSpellCastHoldActionStateHash(bankSlot),
@@ -1439,6 +1459,21 @@ namespace Arena.Presentation
                         spellKind,
                         ResolveUpperBodySpellStateHash(bankSlot),
                         usesLeftGesture: false);
+                }
+                // A charged hold's exit fade blends its hold layer 1->0. When the release
+                // renders on that same overlay layer (masked LeftGesture, or UpperBody while
+                // moving), the fade would drag the release out from under itself. The release
+                // now drives that layer at full weight and auto-exits on its own, so cancel
+                // the fade. Full-body/off-layer releases keep the fade (it blends the leftover
+                // hold overlay away while the release plays elsewhere).
+                if (_actionPlayback.IsSpellCastHoldFadeOutActive)
+                {
+                    int releaseLayerIndex = spellEntry.UsesLeftGesture ? LeftGestureLayerIndex : UpperBodyLayerIndex;
+                    if (_actionPlayback.SpellCastHoldFadeOutLayerIndex == releaseLayerIndex)
+                    {
+                        _actionPlayback.ResetSpellCastHoldFadeOut();
+                        _animator!.SetLayerWeight(releaseLayerIndex, 1f);
+                    }
                 }
                 if (needsCombatVisualStance && spellEntry.ShouldEnterCombatAfterCastStarts(useOverlaySpellPlayback))
                     SetInCombat(true);
@@ -1561,6 +1596,16 @@ namespace Arena.Presentation
                 LeftGestureSpellAction2StateHash,
                 LeftGestureSpellAction3StateHash,
                 LeftGestureSpellAction4StateHash);
+        }
+
+        private static int ResolveLeftGestureSpellCastHoldStateHash(int bankSlot)
+        {
+            return CombatActionPlaybackController.ResolveBankedAnimatorHash(
+                bankSlot,
+                LeftGestureSpellCastHoldAction1StateHash,
+                LeftGestureSpellCastHoldAction2StateHash,
+                LeftGestureSpellCastHoldAction3StateHash,
+                LeftGestureSpellCastHoldAction4StateHash);
         }
 
         private static int ResolveSpellActionTriggerHash(int bankSlot)
@@ -2790,6 +2835,14 @@ namespace Arena.Presentation
         private void ClearLeftGestureSpellPresentation()
         {
             if (!CanDriveAnimatorState())
+                return;
+
+            // Never hard-play Empty on the LeftGesture layer while a masked cast hold is blending
+            // it out — the hold fade owns the layer weight and parks it on Empty when the blend
+            // completes. Stomping here (e.g. from the preempt/clear cleanup) would snap the pose
+            // the fade is meant to smooth. This is the single guard for that; callers don't repeat it.
+            if (_actionPlayback.IsSpellCastHoldFadeOutActive
+                && _actionPlayback.SpellCastHoldFadeOutLayerIndex == LeftGestureLayerIndex)
                 return;
 
             _animator!.Play(UpperBodyEmptyStateHash, LeftGestureLayerIndex, 0f);
