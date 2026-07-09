@@ -35,7 +35,7 @@ Three independent defects; the feature cannot work until all three are fixed. La
 
 ## P2 — Confirmed/plausible, latent (gated on content or timing that doesn't exist yet)
 
-- [ ] **5. `DeriveArchetype` defaults to Instant on missing SpellDefinition** — PLAUSIBLE
+- [x] **5. `DeriveArchetype` defaults to Instant on missing SpellDefinition** — PLAUSIBLE
   `Assets/Arena/Runtime/Presentation/Animation/SpellCastAnimationResolver.cs:98-100`. Conn null / rows not yet synced → channel spell composes as ReleaseOnly → `PlaysSpellReleasePresentation` flips true → `EntityRegistry.OnCombatCast` stops suppressing the release — the exact hold-preemption desync this branch fixed, reintroduced timing-dependently. No channel spell is map-migrated yet; becomes real as migration proceeds. Consider: fail resolution (fall back to explicit entry path) instead of guessing Instant.
 
 - [x] **6. Hold-fade preserve guard only exists for LeftGesture** — PLAUSIBLE

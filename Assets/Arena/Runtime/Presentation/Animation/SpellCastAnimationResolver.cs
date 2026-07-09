@@ -99,7 +99,9 @@ namespace Arena.Presentation
                 return false;
             }
 
-            archetype = DeriveArchetype(spellId);
+            if (!TryDeriveArchetype(spellId, out archetype, out failureReason))
+                return false;
+
             return true;
         }
 
@@ -138,11 +140,40 @@ namespace Arena.Presentation
             return _map != null && _map.TryGetEntry(spellId, out _);
         }
 
-        private static SpellAnimationArchetype DeriveArchetype(string spellId)
+        private static bool TryDeriveArchetype(
+            string spellId,
+            out SpellAnimationArchetype archetype,
+            out string failureReason)
         {
-            DbConnection? conn = NetworkManager.Instance?.Conn;
-            SpellDefinition? def = conn?.Db.SpellDefinition.Kind.Find(WireIdentifier.Normalize(spellId));
-            return SpellAnimationArchetypes.Derive(def);
+            archetype = default;
+            failureReason = string.Empty;
+
+            NetworkManager? network = NetworkManager.Instance;
+            if (network == null)
+            {
+                // Editor/offline tools do not have a NetworkManager. Keep their preview path usable;
+                // runtime resolution with a NetworkManager present must wait for authoritative rows.
+                archetype = SpellAnimationArchetypes.Derive((SpellDefinition?)null);
+                return true;
+            }
+
+            DbConnection? conn = network.Conn;
+            if (conn == null)
+            {
+                failureReason = "SpellDefinition table is not synced yet";
+                return false;
+            }
+
+            string normalizedSpellId = WireIdentifier.Normalize(spellId);
+            SpellDefinition? def = conn.Db.SpellDefinition.Kind.Find(normalizedSpellId);
+            if (def == null)
+            {
+                failureReason = $"SpellDefinition row '{normalizedSpellId}' is not synced yet";
+                return false;
+            }
+
+            archetype = SpellAnimationArchetypes.Derive(def);
+            return true;
         }
 
         private static void EnsureLoaded()
