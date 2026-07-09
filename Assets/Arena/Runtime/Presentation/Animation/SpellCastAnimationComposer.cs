@@ -1,4 +1,6 @@
 #nullable enable
+using UnityEngine;
+
 namespace Arena.Presentation
 {
     /// <summary>
@@ -47,14 +49,20 @@ namespace Arena.Presentation
             switch (archetype)
             {
                 case SpellAnimationArchetype.Instant:
-                    if (triple.oneShot == null)
+                {
+                    // Instant casts fire on press (no release-frame gate) — play the snappy final
+                    // "- Cast" gesture, not the slow full one-shot (which is the held-cast wind-up).
+                    // Fall back to the one-shot only when a family has no Cast clip.
+                    AnimationClip? snap = triple.cast ?? triple.oneShot;
+                    if (snap == null)
                         return false;
-                    entry.ground = triple.oneShot;
-                    entry.air = triple.oneShot;
+                    entry.ground = snap;
+                    entry.air = snap;
                     entry.presentationMode = SpellAnimationPresentationMode.ReleaseOnly;
                     entry.playbackLayer = InstantLayer;
                     entry.combatEntryMode = CombatEntryMode.ImmediateForFullBodyAnimatedAfterUpperBody;
                     return true;
+                }
 
                 case SpellAnimationArchetype.Charged:
                     // one-shot (enter) → Load (hold) → Cast (release).

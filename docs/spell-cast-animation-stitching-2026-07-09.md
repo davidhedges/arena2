@@ -51,13 +51,15 @@ already built). Each maps to one stitch pattern and one presentation mode:
 
 | archetype | derivation | clips played | presentationMode |
 |---|---|---|---|
-| **Instant** | `cast_time==0 && !channel` | `{Base}` one-shot, full | `ReleaseOnly` |
+| **Instant** | `cast_time==0 && !channel` | `{Base} - Cast` (the snappy final cast; fall back to one-shot if absent) | `ReleaseOnly` |
 | **Channel** | `behavior==CHANNEL` | `{Base}` (enter, to `OnEnterComplete`) → `{Base} - Load` (loop until released) | `HoldOnly` |
 | **Charged** | `cast_time>0` | `{Base}` (enter) → `{Base} - Load` (loop while charging) → `{Base} - Cast` (release) | `HoldThenRelease` |
 
-The one-shot's *beginning* is the wind-up (enter); for held casts its middle/end are skipped in favor
-of the loop, and the finish comes from the `- Cast` clip. Exactly the owner's "stitch the beginning
-of the one-shot to the loop, and the final cast to the end of the loop."
+For held casts the one-shot's *beginning* is the wind-up (enter); its middle/end are skipped in favor
+of the loop, and the finish comes from the `- Cast` clip. **Instant casts skip the wind-up entirely**
+and play just the `- Cast` gesture (revised 2026-07-09) — the full one-shot's wind-up made instant
+spells feel laggy against their fire-on-press gameplay (nothing gates instant on a release frame; the
+projectile + VFX dispatch synchronously on press).
 
 ---
 
@@ -69,7 +71,7 @@ from `ground`/`air` (`CombatActionPlaybackController`, `SpellCastPresentationCon
 
 | archetype | `ground`/`air` (release) | `holdOverride.enter` | `holdOverride.idleLoop` |
 |---|---|---|---|
-| Instant | `{Base}{Hand}` | — | — |
+| Instant | `{Base}{Hand} - Cast` | — | — |
 | Channel | — (release suppressed, HoldOnly) | `{Base}{Hand}` | `{Base}{Hand} - Load` |
 | Charged | `{Base}{Hand} - Cast` | `{Base}{Hand}` | `{Base}{Hand} - Load` |
 
@@ -210,8 +212,10 @@ the base-animation family. Channel/charged must resolve to a loop-capable layer
    hand-agnostic (both hands, any weapon), so there is no cross-style/incompleteness gap (§4).
 2. **Where the spell→base map lives — RESOLVED:** one weapon-agnostic `SpellCastAnimationMap`
    (`spellId → baseName`). Weapon sets add only a `oneHandedCastHand` (Left/Right). Full author-once.
-3. **Instant = full one-shot — RESOLVED:** instant plays the full `{Base}` one-shot; revisit only if
-   instants feel too long in playtest.
+3. **Instant clip — RESOLVED (revised 2026-07-09):** instant plays the snappy `{Base} - Cast` gesture
+   (falling back to the one-shot only if a family lacks a Cast clip). The full one-shot's wind-up felt
+   laggy against fire-on-press; nothing gates instant on a release frame, so the quick Cast gesture is
+   the right match.
 
 **Honest acceptance answer (owner's question, 2026-07-09):** with clips stamped, assigning a spell
 its **one** flavor family makes the system play the correct one-shot / one-shot→loop /
