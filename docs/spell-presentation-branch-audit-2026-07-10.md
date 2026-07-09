@@ -86,7 +86,7 @@ Three independent defects; the feature cannot work until all three are fixed. La
 ## Efficiency (all verified CONFIRMED)
 
 - [ ] **E1. Memoize `TryResolveComposed`** — `SpellCastAnimationResolver.cs:40`: full pipeline (map scan, library scan, Db.Find, compose, overrides) re-runs per query; a single cast queries 3-5× (SpellInputHandler:666/705, EntityRegistry:646/1357, SpellCastPresentationController:146/182/223, CombatActionPlaybackController:998, PlayerAnimator:1268) plus per ActiveCast update. Memoize per (spellId, set, hand) next to `_library/_map`, cleared by `InvalidateCache`. **Caution: interacts with finding #5 — don't make a pre-sync Instant answer sticky.**
-- [ ] **E2. Pre-normalized dictionary in `SpellCastAnimationMap`** — :67 re-normalizes every entry per linear-scan lookup (O(n) string allocs per query).
+- [x] **E2. Pre-normalized dictionary in `SpellCastAnimationMap`** — :67 re-normalizes every entry per linear-scan lookup (O(n) string allocs per query).
 - [ ] **E3. Cache `IsProjectileDeliveredSpellImpact`** — `CombatVFXDispatcher.cs:499-515`: 2× Normalize + Db.Find per terminal spell-impact event; memoize by ActionKind, invalidate on catalog update.
 - [ ] **E4. Stop regenerating cues per repaint** — `SpellAuthoringWindow.cs:60 → CueGeneration.cs:298/382`: every OnGUI repaint re-runs GenerateCues incl. `AssetDatabase.FindAssets` + per-asset loads. Cache keyed by selected ability; invalidate on selection change/focus/reload.
 - [ ] **E5. Precompute resolved rows in `SpellCastAnimationResolvedWindow.Reload()`** — :88: per-repaint LINQ scans with fresh closures + TryCompose per hand.

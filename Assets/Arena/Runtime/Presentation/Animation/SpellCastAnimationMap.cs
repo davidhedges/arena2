@@ -54,28 +54,46 @@ namespace Arena.Presentation
         }
 
         [SerializeField] private List<Entry> entries = new();
+        [NonSerialized] private Dictionary<string, Entry>? _entryBySpellId;
 
         public IReadOnlyList<Entry> Entries => entries;
 
         public bool TryGetEntry(string spellId, out Entry entry)
         {
             string key = Normalize(spellId);
-            if (key.Length != 0)
-            {
-                for (int i = 0; i < entries.Count; i++)
-                {
-                    if (string.Equals(Normalize(entries[i].spellId), key, StringComparison.Ordinal)
-                        && !string.IsNullOrWhiteSpace(entries[i].baseName))
-                    {
-                        entry = entries[i];
-                        return true;
-                    }
-                }
-            }
+            if (key.Length != 0 && EntryBySpellId.TryGetValue(key, out entry))
+                return true;
 
             entry = default;
             return false;
         }
+
+        private Dictionary<string, Entry> EntryBySpellId
+        {
+            get
+            {
+                if (_entryBySpellId != null)
+                    return _entryBySpellId;
+
+                _entryBySpellId = new Dictionary<string, Entry>(StringComparer.Ordinal);
+                for (int i = 0; i < entries.Count; i++)
+                {
+                    Entry candidate = entries[i];
+                    string candidateKey = Normalize(candidate.spellId);
+                    if (candidateKey.Length == 0
+                        || string.IsNullOrWhiteSpace(candidate.baseName)
+                        || _entryBySpellId.ContainsKey(candidateKey))
+                        continue;
+
+                    _entryBySpellId.Add(candidateKey, candidate);
+                }
+
+                return _entryBySpellId;
+            }
+        }
+
+        private void OnEnable() => _entryBySpellId = null;
+        private void OnValidate() => _entryBySpellId = null;
 
         private static string Normalize(string? spellId)
             => string.IsNullOrWhiteSpace(spellId) ? string.Empty : spellId.Trim().ToUpperInvariant();
