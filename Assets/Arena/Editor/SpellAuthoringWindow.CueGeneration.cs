@@ -80,6 +80,45 @@ namespace Arena.Editor
             public int? ProjectileSequenceIndex { get; }
         }
 
+        private sealed class GeneratedCuePreview
+        {
+            public GeneratedCuePreview(
+                string deliveryKind,
+                SpellVfxArchetype? archetype,
+                SpellAnimationArchetype mode,
+                string school,
+                string castHandAnchor,
+                bool missingOverrideCatalog,
+                List<GeneratedCue> cues,
+                List<string> slotNotes)
+            {
+                DeliveryKind = deliveryKind;
+                Archetype = archetype;
+                Mode = mode;
+                School = school;
+                CastHandAnchor = castHandAnchor;
+                MissingOverrideCatalog = missingOverrideCatalog;
+                Cues = cues;
+                SlotNotes = slotNotes;
+            }
+
+            public string DeliveryKind { get; }
+            public SpellVfxArchetype? Archetype { get; }
+            public SpellAnimationArchetype Mode { get; }
+            public string School { get; }
+            public string CastHandAnchor { get; }
+            public bool MissingOverrideCatalog { get; }
+            public List<GeneratedCue> Cues { get; }
+            public List<string> SlotNotes { get; }
+        }
+
+        private readonly Dictionary<string, GeneratedCuePreview> _generatedCuePreviewByAbilityId =
+            new(System.StringComparer.Ordinal);
+        private Dictionary<string, Dictionary<SpellVfxSlot, PaletteEntry>> _cachedSchoolPalettes =
+            new(System.StringComparer.Ordinal);
+        private SpellVfxOverrideCatalog? _cachedSpellOverrides;
+        private bool _vfxAuthoringAssetsLoaded;
+
         private void DrawGeneratedCuePreview(
             AbilityDefinition selected,
             string abilityId,
@@ -94,38 +133,30 @@ namespace Arena.Editor
                 + "does not write progression_catalog.shared.json.",
                 MessageType.Info);
 
-            string deliveryKind = Normalize(selected.gameplay.delivery.kind);
-            SpellDeliveryFacts facts = BuildDeliveryFacts(selected);
-            SpellVfxArchetype? archetype = SpellVfxGenerator.DeriveArchetype(facts);
-            SpellAnimationArchetype mode = SpellAnimationArchetypes.Derive(
-                (ulong)Mathf.Max(0, selected.gameplay.cast_time_ms), deliveryKind);
-            string school = ResolveSchool(selected.gameplay.delivery);
-            SpellVfxOverrideCatalog? spellOverrides =
-                SpellPresentationEditorData.FindFirstAsset<SpellVfxOverrideCatalog>();
-            string castHandAnchor = ResolveCastHandAnchor(
-                spellOverrides, abilityId, hasResolvedAnimation, resolvedAnimation);
+            GeneratedCuePreview preview = GetOrBuildGeneratedCuePreview(
+                selected, abilityId, hasResolvedAnimation, resolvedAnimation);
 
             EditorGUILayout.LabelField(
                 "Derivation",
-                $"delivery={NoneIfEmpty(deliveryKind)} | archetype={(archetype?.ToString() ?? "<none>")} "
-                + $"| mode={mode} | school={NoneIfEmpty(school)} | hand={castHandAnchor}");
+                $"delivery={NoneIfEmpty(preview.DeliveryKind)} | archetype={(preview.Archetype?.ToString() ?? "<none>")} "
+                + $"| mode={preview.Mode} | school={NoneIfEmpty(preview.School)} | hand={preview.CastHandAnchor}");
 
-            if (archetype == null)
+            if (preview.Archetype == null)
             {
                 EditorGUILayout.HelpBox(
-                    $"delivery.kind '{NoneIfEmpty(deliveryKind)}' has no VFX archetype, so the generator emits nothing for this spell.",
+                    $"delivery.kind '{NoneIfEmpty(preview.DeliveryKind)}' has no VFX archetype, so the generator emits nothing for this spell.",
                     MessageType.Warning);
                 return;
             }
 
-            if (spellOverrides == null)
+            if (preview.MissingOverrideCatalog)
             {
                 EditorGUILayout.HelpBox(
                     "No SpellVfxOverrideCatalog asset found. School-derived slots can still preview, but bespoke spell slots and cast-hand exceptions are unavailable.",
                     MessageType.Error);
             }
 
-            if (string.IsNullOrEmpty(school))
+            if (string.IsNullOrEmpty(preview.School))
             {
                 EditorGUILayout.HelpBox(
                     "No school resolved (vfx_school and damage_type are both unset). The generator can still wire "
@@ -133,21 +164,88 @@ namespace Arena.Editor
                     MessageType.Warning);
             }
 
-            List<GeneratedCue> generated = GenerateCues(
-                archetype.Value, mode, facts, spellOverrides, abilityId, school, castHandAnchor,
-                out List<string> slotNotes);
-
-            foreach (string note in slotNotes)
+            foreach (string note in preview.SlotNotes)
                 EditorGUILayout.HelpBox(note, MessageType.Warning);
 
             BuildCatalogBySlot(
                 out Dictionary<SpellVfxSlot, CombatVfxCueDefinition> catalogBySlot,
                 out List<SpellVfxSlot> ambiguousSlots,
                 out List<CombatVfxCueDefinition> uninferrableCues);
-            DrawCueDiff(generated, catalogBySlot, ambiguousSlots, uninferrableCues);
+            DrawCueDiff(preview.Cues, catalogBySlot, ambiguousSlots, uninferrableCues);
             DrawWriteToCatalogButton(
-                abilityId, generated, catalogBySlot,
+                abilityId, preview.Cues, catalogBySlot,
                 inferenceClean: ambiguousSlots.Count == 0 && uninferrableCues.Count == 0);
+        }
+
+        private GeneratedCuePreview GetOrBuildGeneratedCuePreview(
+            AbilityDefinition selected,
+            string abilityId,
+            bool hasResolvedAnimation,
+            WeaponSpellAnimationEntry resolvedAnimation)
+        {
+            if (_generatedCuePreviewByAbilityId.TryGetValue(abilityId, out GeneratedCuePreview cached))
+                return cached;
+
+            EnsureVfxAuthoringAssetsLoaded();
+            string deliveryKind = Normalize(selected.gameplay.delivery.kind);
+            SpellDeliveryFacts facts = BuildDeliveryFacts(selected);
+            SpellVfxArchetype? archetype = SpellVfxGenerator.DeriveArchetype(facts);
+            SpellAnimationArchetype mode = SpellAnimationArchetypes.Derive(
+                (ulong)Mathf.Max(0, selected.gameplay.cast_time_ms), deliveryKind);
+            string school = ResolveSchool(selected.gameplay.delivery);
+            string castHandAnchor = ResolveCastHandAnchor(
+                _cachedSpellOverrides, abilityId, hasResolvedAnimation, resolvedAnimation);
+
+            List<GeneratedCue> cues;
+            List<string> notes;
+            if (archetype.HasValue)
+            {
+                cues = GenerateCues(
+                    archetype.Value,
+                    mode,
+                    facts,
+                    _cachedSchoolPalettes,
+                    _cachedSpellOverrides,
+                    abilityId,
+                    school,
+                    castHandAnchor,
+                    out notes);
+            }
+            else
+            {
+                cues = new List<GeneratedCue>();
+                notes = new List<string>();
+            }
+
+            var preview = new GeneratedCuePreview(
+                deliveryKind,
+                archetype,
+                mode,
+                school,
+                castHandAnchor,
+                _cachedSpellOverrides == null,
+                cues,
+                notes);
+            _generatedCuePreviewByAbilityId.Add(abilityId, preview);
+            return preview;
+        }
+
+        private void EnsureVfxAuthoringAssetsLoaded()
+        {
+            if (_vfxAuthoringAssetsLoaded)
+                return;
+
+            _cachedSchoolPalettes = LoadSchoolPalettesFromAssets();
+            _cachedSpellOverrides = SpellPresentationEditorData.FindFirstAsset<SpellVfxOverrideCatalog>();
+            _vfxAuthoringAssetsLoaded = true;
+        }
+
+        private void InvalidateGeneratedCueCache()
+        {
+            _generatedCuePreviewByAbilityId.Clear();
+            _cachedSchoolPalettes.Clear();
+            _cachedSpellOverrides = null;
+            _vfxAuthoringAssetsLoaded = false;
         }
 
         private SpellDeliveryFacts BuildDeliveryFacts(AbilityDefinition selected)
@@ -217,6 +315,7 @@ namespace Arena.Editor
             SpellVfxArchetype archetype,
             SpellAnimationArchetype mode,
             SpellDeliveryFacts facts,
+            Dictionary<string, Dictionary<SpellVfxSlot, PaletteEntry>> schoolPalettes,
             SpellVfxOverrideCatalog? spellOverrides,
             string abilityId,
             string school,
@@ -225,9 +324,6 @@ namespace Arena.Editor
         {
             slotNotes = new List<string>();
             var rows = new List<GeneratedCue>();
-
-            // Reloaded per generation so authoring edits to the assets are picked up immediately.
-            Dictionary<string, Dictionary<SpellVfxSlot, PaletteEntry>> schoolPalettes = LoadSchoolPalettesFromAssets();
 
             foreach (SpellVfxSlot slot in SpellVfxGenerator.RequestedSlots(archetype, mode))
             {

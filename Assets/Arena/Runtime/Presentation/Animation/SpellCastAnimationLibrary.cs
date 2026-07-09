@@ -113,6 +113,8 @@ namespace Arena.Presentation
             return false;
         }
 
+        private void OnValidate() => SpellCastAnimationResolver.InvalidateCache();
+
 #if UNITY_EDITOR
         /// <summary>Editor-only: replace the whole family list from an auto-scan pass.</summary>
         public void EditorReplaceFamilies(List<SpellCastAnimationFamily> scanned)

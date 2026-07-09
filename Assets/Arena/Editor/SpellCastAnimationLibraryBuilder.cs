@@ -246,6 +246,7 @@ namespace Arena.Editor
             EditorUtility.SetDirty(library);
             AssetDatabase.SaveAssets();
             AssetDatabase.ImportAsset(LibraryPath);
+            SpellCastAnimationResolver.InvalidateCache();
         }
 
         private static bool EndsWith(string s, string suffix)

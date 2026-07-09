@@ -93,7 +93,11 @@ namespace Arena.Presentation
         }
 
         private void OnEnable() => _entryBySpellId = null;
-        private void OnValidate() => _entryBySpellId = null;
+        private void OnValidate()
+        {
+            _entryBySpellId = null;
+            SpellCastAnimationResolver.InvalidateCache();
+        }
 
         private static string Normalize(string? spellId)
             => string.IsNullOrWhiteSpace(spellId) ? string.Empty : spellId.Trim().ToUpperInvariant();

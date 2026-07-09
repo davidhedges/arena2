@@ -21,7 +21,51 @@ namespace Arena.Editor
         private SpellCastAnimationMap? _map;
         private SpellCastAnimationLibrary? _library;
         private Dictionary<string, SpellGameplayAuthoringFacts> _gameplay = new(StringComparer.Ordinal);
-        private readonly List<(string spellId, string[] sets)> _explicitBySpell = new();
+        private readonly Dictionary<string, string[]> _explicitSetsBySpell = new(StringComparer.Ordinal);
+        private readonly List<ResolvedSpellRow> _rows = new();
+
+        private sealed class ResolvedSpellRow
+        {
+            public string SpellId = string.Empty;
+            public string BaseName = string.Empty;
+            public SpellAnimationArchetype Archetype;
+            public bool HasGameplay;
+            public bool HasFamily;
+            public string[] ShadowSets = Array.Empty<string>();
+            public ResolvedHandRow[] Hands = Array.Empty<ResolvedHandRow>();
+        }
+
+        private readonly struct ResolvedHandRow
+        {
+            public ResolvedHandRow(
+                string label,
+                bool composed,
+                SpellAnimationArchetype archetype,
+                SpellAnimationPresentationMode mode,
+                SpellPlaybackLayer layer,
+                string release,
+                string enter,
+                string loop)
+            {
+                Label = label;
+                Composed = composed;
+                Archetype = archetype;
+                Mode = mode;
+                Layer = layer;
+                Release = release;
+                Enter = enter;
+                Loop = loop;
+            }
+
+            public string Label { get; }
+            public bool Composed { get; }
+            public SpellAnimationArchetype Archetype { get; }
+            public SpellAnimationPresentationMode Mode { get; }
+            public SpellPlaybackLayer Layer { get; }
+            public string Release { get; }
+            public string Enter { get; }
+            public string Loop { get; }
+        }
 
         [MenuItem("Arena/Spell Animation/Resolved View")]
         public static void Open() => GetWindow<SpellCastAnimationResolvedWindow>("Cast Anim Resolved").Reload();
@@ -34,6 +78,7 @@ namespace Arena.Editor
             _library = SpellPresentationEditorData.FindFirstAsset<SpellCastAnimationLibrary>();
             LoadGameplay();
             LoadExplicitEntries();
+            BuildResolvedRows();
         }
 
         private void OnGUI()
@@ -48,60 +93,44 @@ namespace Arena.Editor
             if (_library == null) { EditorGUILayout.HelpBox("No SpellCastAnimationLibrary — run the rescan.", MessageType.Warning); return; }
 
             _scroll = EditorGUILayout.BeginScrollView(_scroll);
-            foreach (SpellCastAnimationMap.Entry e in _map.Entries)
-                DrawSpell(e);
+            foreach (ResolvedSpellRow row in _rows)
+                DrawSpell(row);
             EditorGUILayout.EndScrollView();
         }
 
-        private void DrawSpell(in SpellCastAnimationMap.Entry e)
+        private static void DrawSpell(ResolvedSpellRow row)
         {
-            string spellId = (e.spellId ?? string.Empty).Trim().ToUpperInvariant();
-            if (spellId.Length == 0) return;
-
             using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
             {
-                bool hasFamily = _library!.TryGetFamily(e.baseName ?? string.Empty, out SpellCastAnimationFamily family);
-                SpellAnimationArchetype archetype = _gameplay.TryGetValue(spellId, out SpellGameplayAuthoringFacts gp)
-                    ? SpellAnimationArchetypes.Derive(gp.CastTimeMs, gp.DeliveryKind)
-                    : SpellAnimationArchetype.Instant;
+                EditorGUILayout.LabelField(row.SpellId, EditorStyles.boldLabel);
+                string gameplayWarning = row.HasGameplay ? string.Empty : "  ‹NO GAMEPLAY ROW; SHOWING INSTANT›";
+                string familyWarning = row.HasFamily ? string.Empty : "  ‹NOT IN LIBRARY›";
+                EditorGUILayout.LabelField(
+                    $"archetype: {row.Archetype}{gameplayWarning}    family: {row.BaseName}{familyWarning}",
+                    EditorStyles.miniLabel);
 
-                EditorGUILayout.LabelField($"{spellId}", EditorStyles.boldLabel);
-                EditorGUILayout.LabelField($"archetype: {archetype}    family: {e.baseName}{(hasFamily ? string.Empty : "  ‹NOT IN LIBRARY›")}", EditorStyles.miniLabel);
-
-                if (hasFamily)
-                {
-                    if (family.handStyle == SpellCastHandStyle.OneHand)
-                    {
-                        DrawResolved(spellId, family, SpellCastHand.Left, archetype, "left");
-                        DrawResolved(spellId, family, SpellCastHand.Right, archetype, "right");
-                    }
-                    else
-                    {
-                        DrawResolved(spellId, family, SpellCastHand.TwoHand, archetype, "two-hand");
-                    }
-                }
+                foreach (ResolvedHandRow hand in row.Hands)
+                    DrawResolved(hand);
 
                 // Migration-critical: an explicit entry still shadows the map (map has no effect there).
-                string[] shadow = _explicitBySpell.FirstOrDefault(x => x.spellId == spellId).sets ?? Array.Empty<string>();
-                if (shadow.Length > 0)
-                    EditorGUILayout.HelpBox($"Still shadowed by explicit entries in: {string.Join(", ", shadow)} — delete those to use the family.", MessageType.Warning);
+                if (row.ShadowSets.Length > 0)
+                    EditorGUILayout.HelpBox($"Still shadowed by explicit entries in: {string.Join(", ", row.ShadowSets)} — delete those to use the family.", MessageType.Warning);
                 else
                     EditorGUILayout.LabelField("✓ no explicit entries shadow this (family is live everywhere)", EditorStyles.miniLabel);
             }
         }
 
-        private void DrawResolved(string spellId, in SpellCastAnimationFamily family, SpellCastHand hand, SpellAnimationArchetype archetype, string handLabel)
+        private static void DrawResolved(in ResolvedHandRow hand)
         {
-            if (!SpellCastAnimationComposer.TryCompose(spellId, family, hand, archetype, out WeaponSpellAnimationEntry entry))
+            if (!hand.Composed)
             {
-                EditorGUILayout.LabelField($"   [{handLabel}] — no clips (family missing what {archetype} needs)");
+                EditorGUILayout.LabelField($"   [{hand.Label}] — no clips (family missing what {hand.Archetype} needs)");
                 return;
             }
-            string ground = entry.ground != null ? entry.ground.name : "—";
-            string en = entry.holdOverride.enter != null ? entry.holdOverride.enter.name : "—";
-            string loop = entry.holdOverride.idleLoop != null ? entry.holdOverride.idleLoop.name : "—";
-            EditorGUILayout.LabelField($"   [{handLabel}] mode={entry.presentationMode} layer={entry.playbackLayer}");
-            EditorGUILayout.LabelField($"      release={ground}  enter={en}  loop={loop}", EditorStyles.miniLabel);
+            EditorGUILayout.LabelField($"   [{hand.Label}] mode={hand.Mode} layer={hand.Layer}");
+            EditorGUILayout.LabelField(
+                $"      release={hand.Release}  enter={hand.Enter}  loop={hand.Loop}",
+                EditorStyles.miniLabel);
         }
 
         private void LoadGameplay()
@@ -126,8 +155,87 @@ namespace Arena.Editor
                     if (!list.Contains(setName)) list.Add(setName);
                 }
             }
-            _explicitBySpell.Clear();
-            foreach (var kvp in bySpell) _explicitBySpell.Add((kvp.Key, kvp.Value.ToArray()));
+            _explicitSetsBySpell.Clear();
+            foreach (var kvp in bySpell)
+                _explicitSetsBySpell[kvp.Key] = kvp.Value.OrderBy(name => name, StringComparer.Ordinal).ToArray();
+        }
+
+        private void BuildResolvedRows()
+        {
+            _rows.Clear();
+            if (_map == null || _library == null)
+                return;
+
+            foreach (SpellCastAnimationMap.Entry entry in _map.Entries)
+            {
+                string spellId = (entry.spellId ?? string.Empty).Trim().ToUpperInvariant();
+                if (spellId.Length == 0)
+                    continue;
+
+                bool hasGameplay = _gameplay.TryGetValue(spellId, out SpellGameplayAuthoringFacts gameplay);
+                SpellAnimationArchetype archetype = hasGameplay
+                    ? SpellAnimationArchetypes.Derive(gameplay.CastTimeMs, gameplay.DeliveryKind)
+                    : SpellAnimationArchetype.Instant;
+                bool hasFamily = _library.TryGetFamily(
+                    entry.baseName ?? string.Empty,
+                    out SpellCastAnimationFamily family);
+                ResolvedHandRow[] hands = Array.Empty<ResolvedHandRow>();
+                if (hasFamily)
+                {
+                    hands = family.handStyle == SpellCastHandStyle.OneHand
+                        ? new[]
+                        {
+                            BuildResolvedHand(spellId, family, SpellCastHand.Left, archetype, "left"),
+                            BuildResolvedHand(spellId, family, SpellCastHand.Right, archetype, "right"),
+                        }
+                        : new[]
+                        {
+                            BuildResolvedHand(spellId, family, SpellCastHand.TwoHand, archetype, "two-hand"),
+                        };
+                }
+
+                _rows.Add(new ResolvedSpellRow
+                {
+                    SpellId = spellId,
+                    BaseName = entry.baseName ?? string.Empty,
+                    Archetype = archetype,
+                    HasGameplay = hasGameplay,
+                    HasFamily = hasFamily,
+                    ShadowSets = _explicitSetsBySpell.TryGetValue(spellId, out string[] shadowSets)
+                        ? shadowSets
+                        : Array.Empty<string>(),
+                    Hands = hands,
+                });
+            }
+        }
+
+        private static ResolvedHandRow BuildResolvedHand(
+            string spellId,
+            in SpellCastAnimationFamily family,
+            SpellCastHand hand,
+            SpellAnimationArchetype archetype,
+            string label)
+        {
+            if (!SpellCastAnimationComposer.TryCompose(
+                    spellId,
+                    family,
+                    hand,
+                    archetype,
+                    out WeaponSpellAnimationEntry entry))
+            {
+                return new ResolvedHandRow(
+                    label, false, archetype, default, default, "—", "—", "—");
+            }
+
+            return new ResolvedHandRow(
+                label,
+                true,
+                archetype,
+                entry.presentationMode,
+                entry.playbackLayer,
+                entry.ground != null ? entry.ground.name : "—",
+                entry.holdOverride.enter != null ? entry.holdOverride.enter.name : "—",
+                entry.holdOverride.idleLoop != null ? entry.holdOverride.idleLoop.name : "—");
         }
 
     }

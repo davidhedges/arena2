@@ -1,4 +1,7 @@
 #nullable enable
+using System;
+using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using Arena.Combat;
 using Arena.Network;
 using SpacetimeDB.Types;
@@ -22,6 +25,46 @@ namespace Arena.Presentation
         private static SpellCastAnimationLibrary? _library;
         private static SpellCastAnimationMap? _map;
         private static bool _loaded;
+        private static readonly Dictionary<ComposedCacheKey, WeaponSpellAnimationEntry> ComposedEntries = new();
+
+        private readonly struct ComposedCacheKey : IEquatable<ComposedCacheKey>
+        {
+            public ComposedCacheKey(
+                string spellId,
+                CombatAnimationSet? animationSet,
+                SpellCastHand hand,
+                SpellAnimationArchetype archetype)
+            {
+                SpellId = spellId;
+                AnimationSet = animationSet;
+                Hand = hand;
+                Archetype = archetype;
+            }
+
+            private string SpellId { get; }
+            private CombatAnimationSet? AnimationSet { get; }
+            private SpellCastHand Hand { get; }
+            private SpellAnimationArchetype Archetype { get; }
+
+            public bool Equals(ComposedCacheKey other) =>
+                ReferenceEquals(AnimationSet, other.AnimationSet)
+                && Hand == other.Hand
+                && Archetype == other.Archetype
+                && string.Equals(SpellId, other.SpellId, StringComparison.Ordinal);
+
+            public override bool Equals(object? obj) => obj is ComposedCacheKey other && Equals(other);
+
+            public override int GetHashCode()
+            {
+                unchecked
+                {
+                    int hash = StringComparer.Ordinal.GetHashCode(SpellId);
+                    hash = (hash * 397) ^ (AnimationSet != null ? RuntimeHelpers.GetHashCode(AnimationSet) : 0);
+                    hash = (hash * 397) ^ (int)Hand;
+                    return (hash * 397) ^ (int)Archetype;
+                }
+            }
+        }
 
         /// <summary>Explicit authored entry wins; else the family-composed entry; else not found.</summary>
         public static bool TryResolve(CombatAnimationSet? set, string spellId, out WeaponSpellAnimationEntry entry)
@@ -56,15 +99,9 @@ namespace Arena.Presentation
         public static bool TryResolveComposed(CombatAnimationSet? set, string spellId, out WeaponSpellAnimationEntry entry)
         {
             entry = default;
-            if (!TryResolveComposedInput(set, spellId, out SpellCastAnimationMap.Entry mapEntry, out SpellCastAnimationFamily family, out SpellAnimationArchetype archetype, out _))
+            if (!TryDeriveArchetype(spellId, out SpellAnimationArchetype archetype, out _))
                 return false;
-
-            SpellCastHand hand = set != null ? set.OneHandedCastHand : SpellCastHand.Left;
-            if (!SpellCastAnimationComposer.TryCompose(spellId, family, hand, archetype, out entry))
-                return false;
-
-            ApplyOverrides(mapEntry, ref entry);
-            return true;
+            return TryResolveComposed(set, spellId, archetype, out entry);
         }
 
         /// <summary>Composed-only authoring/offline overload with an explicit catalog archetype.</summary>
@@ -75,14 +112,24 @@ namespace Arena.Presentation
             out WeaponSpellAnimationEntry entry)
         {
             entry = default;
-            if (!TryResolveComposedAssets(spellId, out SpellCastAnimationMap.Entry mapEntry, out SpellCastAnimationFamily family, out _))
+            string normalizedSpellId = WireIdentifier.Normalize(spellId);
+            SpellCastHand hand = set != null ? set.OneHandedCastHand : SpellCastHand.Left;
+            var cacheKey = new ComposedCacheKey(
+                normalizedSpellId,
+                set,
+                hand,
+                archetype);
+            if (normalizedSpellId.Length != 0 && ComposedEntries.TryGetValue(cacheKey, out entry))
+                return true;
+
+            if (!TryResolveComposedAssets(normalizedSpellId, out SpellCastAnimationMap.Entry mapEntry, out SpellCastAnimationFamily family, out _))
                 return false;
 
-            SpellCastHand hand = set != null ? set.OneHandedCastHand : SpellCastHand.Left;
-            if (!SpellCastAnimationComposer.TryCompose(spellId, family, hand, archetype, out entry))
+            if (!SpellCastAnimationComposer.TryCompose(normalizedSpellId, family, hand, archetype, out entry))
                 return false;
 
             ApplyOverrides(mapEntry, ref entry);
+            ComposedEntries[cacheKey] = entry;
             return true;
         }
 
@@ -239,6 +286,7 @@ namespace Arena.Presentation
             _library = null;
             _map = null;
             _loaded = false;
+            ComposedEntries.Clear();
         }
     }
 }

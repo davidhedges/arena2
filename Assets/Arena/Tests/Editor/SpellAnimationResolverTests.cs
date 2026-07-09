@@ -1,8 +1,10 @@
 #nullable enable
 
 using System;
+using System.Collections;
 using System.Reflection;
 using NUnit.Framework;
+using UnityEngine;
 
 namespace Arena.Tests.Editor
 {
@@ -66,6 +68,48 @@ namespace Arena.Tests.Editor
             Assert.That(ToPresentationMode("Instant"), Is.EqualTo("ReleaseOnly"));
             Assert.That(ToPresentationMode("Charged"), Is.EqualTo("HoldThenRelease"));
             Assert.That(ToPresentationMode("Channel"), Is.EqualTo("HoldOnly"));
+        }
+
+        [Test]
+        public void ComposedResolver_CachesOnlySuccessesAndInvalidatesExplicitly()
+        {
+            Type resolverType = RuntimeAssembly.GetType(
+                "Arena.Presentation.SpellCastAnimationResolver", throwOnError: true)!;
+            Type setType = RuntimeAssembly.GetType(
+                "Arena.Presentation.CombatAnimationSet", throwOnError: true)!;
+            Type archetypeType = RuntimeAssembly.GetType(
+                "Arena.Presentation.SpellAnimationArchetype", throwOnError: true)!;
+            Type entryType = RuntimeAssembly.GetType(
+                "Arena.Presentation.WeaponSpellAnimationEntry", throwOnError: true)!;
+            MethodInfo invalidate = resolverType.GetMethod("InvalidateCache")!;
+            MethodInfo resolve = resolverType.GetMethod(
+                "TryResolveComposed",
+                new[] { setType, typeof(string), archetypeType, entryType.MakeByRefType() })!;
+            FieldInfo cacheField = resolverType.GetField(
+                "ComposedEntries",
+                BindingFlags.NonPublic | BindingFlags.Static)!;
+            var cache = (IDictionary)cacheField.GetValue(null)!;
+            UnityEngine.Object set = Resources.Load("CombatAnimationSets/TwoHandedSword", setType);
+            Assert.That(set, Is.Not.Null);
+
+            invalidate.Invoke(null, null);
+            Assert.That(cache.Count, Is.Zero);
+
+            object charged = Enum.Parse(archetypeType, "Charged");
+            object?[] missingArgs = { set, "NOT_MAPPED", charged, Activator.CreateInstance(entryType) };
+            Assert.That(resolve.Invoke(null, missingArgs), Is.False);
+            Assert.That(cache.Count, Is.Zero, "failed resolutions must never become sticky");
+
+            object?[] firstArgs = { set, "ICICLE", charged, Activator.CreateInstance(entryType) };
+            Assert.That(resolve.Invoke(null, firstArgs), Is.True);
+            Assert.That(cache.Count, Is.EqualTo(1));
+
+            object?[] secondArgs = { set, "icicle", charged, Activator.CreateInstance(entryType) };
+            Assert.That(resolve.Invoke(null, secondArgs), Is.True);
+            Assert.That(cache.Count, Is.EqualTo(1), "normalized repeat should reuse the composed result");
+
+            invalidate.Invoke(null, null);
+            Assert.That(cache.Count, Is.Zero);
         }
     }
 }

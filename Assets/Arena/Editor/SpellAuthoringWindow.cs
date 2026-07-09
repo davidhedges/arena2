@@ -56,6 +56,10 @@ namespace Arena.Editor
             Load();
         }
 
+        private void OnFocus() => InvalidateGeneratedCueCache();
+
+        private void OnProjectChange() => InvalidateGeneratedCueCache();
+
         private void OnGUI()
         {
             DrawToolbar();
@@ -461,7 +465,7 @@ namespace Arena.Editor
             return SpellCastAnimationResolver.TryResolve(animationSet, spellId, out entry);
         }
 
-        private static void AddMissingSpellAnimationEntry(CombatAnimationSet animationSet, string spellId)
+        private void AddMissingSpellAnimationEntry(CombatAnimationSet animationSet, string spellId)
         {
             string normalizedSpellId = Normalize(spellId);
             if (string.IsNullOrWhiteSpace(normalizedSpellId))
@@ -489,6 +493,8 @@ namespace Arena.Editor
                 .ToArray();
             EditorUtility.SetDirty(animationSet);
             AssetDatabase.SaveAssetIfDirty(animationSet);
+            SpellCastAnimationResolver.InvalidateCache();
+            InvalidateGeneratedCueCache();
             Selection.activeObject = animationSet;
         }
 
@@ -598,6 +604,7 @@ namespace Arena.Editor
 
         private void Load()
         {
+            InvalidateGeneratedCueCache();
             _loadErrors.Clear();
             _animationSetByProfile.Clear();
             _spellAbilities.Clear();
