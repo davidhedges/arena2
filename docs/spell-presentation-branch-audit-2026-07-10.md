@@ -24,10 +24,10 @@ Three independent defects; the feature cannot work until all three are fixed. La
 - [x] **1. Hold exit fade stomps follow-up UpperBody actions** — CONFIRMED
   `Assets/Arena/Runtime/Presentation/PlayerAnimator.cs:1130-1140` (`UpdateSpellCastHoldFadeOut`). The fade owns the layer for ExitDelay+ExitBlendOut and is only cancelled by a new hold (:1303) or a same-layer spell release (:1469-1476). Block raise (:2064/2083/2098), weapon draw/sheath (:498/537), and upper-body phased melee (:901/2367) all enter via guard-free `PlayUpperBodyState` (:2818) on the UpperBody layer — the composer's default hold layer for non-left-hand-1H casts — and get dragged to weight 0 then stomped to Empty mid-motion.
 
-- [ ] **2. Write gate wedges on SelfFlash/AuraGround/Aura slots** — CONFIRMED
+- [x] **2. Write gate wedges on SelfFlash/AuraGround/Aura slots** — CONFIRMED
   `Assets/Arena/Editor/SpellAuthoringWindow.CueGeneration.cs:530` (`BuildCatalogBySlot`). Round-trip is inference-only: the editor `CombatVfxCueDefinition` model (SpellAuthoringWindow.cs:761) never reads the `slot` key the writer itself inserts, and `TryInferLegacySlot` (:830-881) can't represent SelfFlash/AuraGround/Aura. After writing such a slot (RequestedSlots emits them for real APPLY_STATUS/AURA spells), reopening the spell shows false CATALOG-ONLY/uninferrable diffs and `writable` stays false forever. Fix at the right altitude: read back the authored `slot` key instead of extending the inference table.
 
-- [ ] **3. Illegal zero-duration cue survives publish** — CONFIRMED
+- [x] **3. Illegal zero-duration cue survives publish** — CONFIRMED
   `Assets/Arena/Editor/SpellAuthoringWindow.CueGeneration.cs:398`: `PalettePositive` materializes `entry.DurationMs` with no positive guard; `ValidateWiring` checks only the policy enum and has no non-test call sites; `sync_combat_vfx_cue_catalog` (progression.rs:3383) does no rule validation and the shared Rule-14 checker is invoked only inside `#[cfg(test)]`. A SchoolVfxSet slot with `selfTerminating=false, durationMs=0` (fresh-entry default) writes an illegal ONE_SHOT/DURATION/0 row; only a later `cargo test` catches it; runtime plays the 3s fallback. Fix: guard at generation time (and/or surface in ValidateWiring wired into the preview).
 
 - [x] **4. Runtime animation-resolution failures are now silent** — CONFIRMED

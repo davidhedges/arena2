@@ -238,6 +238,18 @@ namespace Arena.Tests.Editor
             Assert.That(NextInsertSortOrder(189, 0), Is.EqualTo(190));
         }
 
+        [Test]
+        public void SpellAuthoringWindow_ParsesExplicitSlotKeysForRoundTrip()
+        {
+            Assert.That(TryParseSlotKey("self_flash", out string selfFlash), Is.True);
+            Assert.That(selfFlash, Is.EqualTo("SelfFlash"));
+            Assert.That(TryParseSlotKey("aura_ground", out string auraGround), Is.True);
+            Assert.That(auraGround, Is.EqualTo("AuraGround"));
+            Assert.That(TryParseSlotKey("aura", out string aura), Is.True);
+            Assert.That(aura, Is.EqualTo("Aura"));
+            Assert.That(TryParseSlotKey("not_a_slot", out _), Is.False);
+        }
+
         private static int NextInsertSortOrder(int maxExistingSortOrder, int insertIndex)
         {
             Type windowType = EditorAssembly.GetType("Arena.Editor.SpellAuthoringWindow", throwOnError: true)!;
@@ -245,6 +257,18 @@ namespace Arena.Tests.Editor
                 "NextInsertSortOrder",
                 BindingFlags.NonPublic | BindingFlags.Static)!;
             return (int)method.Invoke(null, new object[] { maxExistingSortOrder, insertIndex })!;
+        }
+
+        private static bool TryParseSlotKey(string slotKey, out string parsedSlot)
+        {
+            Type windowType = EditorAssembly.GetType("Arena.Editor.SpellAuthoringWindow", throwOnError: true)!;
+            MethodInfo method = windowType.GetMethod(
+                "TryParseSlotKey",
+                BindingFlags.NonPublic | BindingFlags.Static)!;
+            object?[] args = { slotKey, null };
+            bool result = (bool)method.Invoke(null, args)!;
+            parsedSlot = args[1]?.ToString() ?? string.Empty;
+            return result;
         }
 
         // Lightweight structural sanity (Unity's runtime has no System.Text.Json): delimiters balance

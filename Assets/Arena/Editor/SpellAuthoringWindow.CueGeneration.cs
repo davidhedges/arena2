@@ -395,7 +395,18 @@ namespace Arena.Editor
                 string anchor = wiring.Anchor == CueAnchor.Hand
                     ? castHandAnchor
                     : SpellVfxGenerator.AnchorToCatalog(wiring.Anchor);
-                int durationMs = wiring.Duration == CueDurationPolicy.PalettePositive ? entry.DurationMs : 0;
+                int durationMs = 0;
+                if (wiring.Duration == CueDurationPolicy.PalettePositive)
+                {
+                    if (entry.DurationMs <= 0)
+                    {
+                        slotNotes.Add(
+                            $"Slot '{slot}' resolves vfx_id '{entry.VfxId}' but requires a positive duration_ms because it is not self-terminating; set the slot duration above 0 or mark it self-terminating.");
+                        continue;
+                    }
+
+                    durationMs = entry.DurationMs;
+                }
 
                 rows.Add(new GeneratedCue(
                     slot: slot,
@@ -527,7 +538,7 @@ namespace Arena.Editor
             uninferrable = new List<CombatVfxCueDefinition>();
             foreach (CombatVfxCueDefinition cue in _selectedAbilityCues)
             {
-                if (!TryInferLegacySlot(cue, out SpellVfxSlot slot))
+                if (!TryResolveCatalogSlot(cue, out SpellVfxSlot slot))
                 {
                     uninferrable.Add(cue);
                     continue;
@@ -827,6 +838,34 @@ namespace Arena.Editor
 
         // Design doc §3.4: assign an un-migrated cue a slot from (trigger, role, anchor-class). Total and
         // collision-free over the current catalog; anything it can't key is surfaced, never silently dropped.
+        private static bool TryResolveCatalogSlot(CombatVfxCueDefinition cue, out SpellVfxSlot slot)
+        {
+            if (!string.IsNullOrWhiteSpace(cue.slot))
+                return TryParseSlotKey(cue.slot, out slot);
+
+            return TryInferLegacySlot(cue, out slot);
+        }
+
+        private static bool TryParseSlotKey(string slotKey, out SpellVfxSlot slot)
+        {
+            switch (slotKey.Trim().ToLowerInvariant())
+            {
+                case "cast_glow": slot = SpellVfxSlot.CastGlow; return true;
+                case "muzzle": slot = SpellVfxSlot.Muzzle; return true;
+                case "projectile_body": slot = SpellVfxSlot.ProjectileBody; return true;
+                case "travel_body": slot = SpellVfxSlot.TravelBody; return true;
+                case "impact": slot = SpellVfxSlot.Impact; return true;
+                case "burst": slot = SpellVfxSlot.Burst; return true;
+                case "beam": slot = SpellVfxSlot.Beam; return true;
+                case "self_flash": slot = SpellVfxSlot.SelfFlash; return true;
+                case "aura_ground": slot = SpellVfxSlot.AuraGround; return true;
+                case "aura": slot = SpellVfxSlot.Aura; return true;
+                default:
+                    slot = default;
+                    return false;
+            }
+        }
+
         private static bool TryInferLegacySlot(CombatVfxCueDefinition cue, out SpellVfxSlot slot)
         {
             string role = EffectiveRole(cue.vfx_role);

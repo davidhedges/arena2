@@ -762,6 +762,7 @@ namespace Arena.Editor
         {
             public string owner_kind = string.Empty;
             public string owner_id = string.Empty;
+            public string slot = string.Empty;
             public string trigger = string.Empty;
             public string anchor = string.Empty;
             public string vfx_id = string.Empty;
