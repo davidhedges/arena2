@@ -56,7 +56,7 @@ Three independent defects; the feature cannot work until all three are fixed. La
 
 ## Cleanup (all verified CONFIRMED)
 
-- [ ] **C1. Delete dead `SpellAnimationResolver.cs` + its grep-test**
+- [x] **C1. Delete dead `SpellAnimationResolver.cs` + its grep-test**
   `Assets/Arena/Runtime/Presentation/Animation/SpellAnimationResolver.cs` — all five types have zero production callers (runtime uses `SpellCastAnimationResolver`); abandoned template-layering design. Its test `Resolver_TriesExplicitEntryFirst…` (SpellAnimationResolverTests.cs:72-88) literally `File.ReadAllText`s the source and asserts substrings. Keep `SpellAnimationArchetype.cs` (used).
 
 - [ ] **C2. Retire the generator half of `server/src/vfx_generation.rs` (~600 lines)**

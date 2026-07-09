@@ -1,7 +1,6 @@
 #nullable enable
 
 using System;
-using System.IO;
 using System.Reflection;
 using NUnit.Framework;
 
@@ -67,20 +66,6 @@ namespace Arena.Tests.Editor
             Assert.That(ToPresentationMode("Instant"), Is.EqualTo("ReleaseOnly"));
             Assert.That(ToPresentationMode("Charged"), Is.EqualTo("HoldThenRelease"));
             Assert.That(ToPresentationMode("Channel"), Is.EqualTo("HoldOnly"));
-        }
-
-        [Test]
-        public void Resolver_TriesExplicitEntryFirst_ForByteIdenticalLegacyBehavior()
-        {
-            string source = File.ReadAllText(
-                "Assets/Arena/Runtime/Presentation/Animation/SpellAnimationResolver.cs");
-
-            // Layer 1 is the explicit entry via the existing lookup — the byte-identical guarantee.
-            Assert.That(source, Does.Contain("set.TryGetSpellAnimation(spellId, out"));
-            Assert.That(source, Does.Contain("SpellAnimationSource.Explicit"));
-            // Layers 2 and 3 fall through to templates (empty in Step 1).
-            Assert.That(source, Does.Contain("TryGetWeaponArchetypeTemplate"));
-            Assert.That(source, Does.Contain("TryGetArchetypeTemplate"));
         }
     }
 }
