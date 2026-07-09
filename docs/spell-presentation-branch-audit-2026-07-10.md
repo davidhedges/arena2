@@ -41,7 +41,7 @@ Three independent defects; the feature cannot work until all three are fixed. La
 - [x] **6. Hold-fade preserve guard only exists for LeftGesture** — PLAUSIBLE
   `Assets/Arena/Runtime/Presentation/PlayerAnimator.cs:1153` / guard at :2844. `ClearActiveSpellPresentation → ResetSpellLowerBodyUnlockState` can hard-play Empty on a fading UpperBody layer via a contingent chain (full-body charged release keeps fade alive → movement marks unlock → second clear in window). Snap-to-default-pose artifact the reorder was meant to remove. Fixing #1 properly (fade cancellation policy) likely subsumes this.
 
-- [ ] **7. JSON escape corruption in the catalog writer** — CONFIRMED (mechanism)
+- [x] **7. JSON escape corruption in the catalog writer** — CONFIRMED (mechanism)
   `Assets/Arena/Editor/SpellCueCatalogWriter.cs:585-596`: `ReadJsonString` decodes `\uXXXX` to literal `u`+hex (backslash dropped); `EscapeJsonString` (:415) escapes only backslash+quote, so decoded `\n`/`\t` re-serialize as raw control chars (invalid JSON). Current catalog has zero backslash escapes, but the writer's byte-preservation promise is false the day one appears. Fix: handle `\u`/`\n`/`\t`/`\r` in both directions.
 
 - [ ] **8. Editor cast-hand inference ignores the composed path** — CONFIRMED

@@ -413,7 +413,44 @@ namespace Arena.Editor
         }
 
         private static string EscapeJsonString(string value)
-            => value.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("\"", "\\\"", StringComparison.Ordinal);
+        {
+            var sb = new StringBuilder(value.Length);
+            foreach (char c in value)
+            {
+                switch (c)
+                {
+                    case '"':
+                        sb.Append("\\\"");
+                        break;
+                    case '\\':
+                        sb.Append("\\\\");
+                        break;
+                    case '\b':
+                        sb.Append("\\b");
+                        break;
+                    case '\f':
+                        sb.Append("\\f");
+                        break;
+                    case '\n':
+                        sb.Append("\\n");
+                        break;
+                    case '\r':
+                        sb.Append("\\r");
+                        break;
+                    case '\t':
+                        sb.Append("\\t");
+                        break;
+                    default:
+                        if (c < ' ' || c > '~')
+                            sb.Append("\\u").Append(((int)c).ToString("X4", CultureInfo.InvariantCulture));
+                        else
+                            sb.Append(c);
+                        break;
+                }
+            }
+
+            return sb.ToString();
+        }
 
         // ---- catalog scanning (string-aware) ---------------------------------------------------
 
@@ -592,7 +629,8 @@ namespace Arena.Editor
                         'r' => '\r',
                         'b' => '\b',
                         'f' => '\f',
-                        _ => esc,
+                        'u' => ReadJsonUnicodeEscape(s, ref i),
+                        _ => throw new InvalidOperationException($"Invalid escape sequence '\\{esc}' in cue row string."),
                     });
                     continue;
                 }
@@ -602,6 +640,19 @@ namespace Arena.Editor
             }
 
             throw new InvalidOperationException("Unterminated string in cue row.");
+        }
+
+        private static char ReadJsonUnicodeEscape(string s, ref int i)
+        {
+            if (i + 4 > s.Length)
+                throw new InvalidOperationException("Incomplete unicode escape in cue row string.");
+
+            string hex = s.Substring(i, 4);
+            if (!ushort.TryParse(hex, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out ushort value))
+                throw new InvalidOperationException($"Invalid unicode escape '\\u{hex}' in cue row string.");
+
+            i += 4;
+            return (char)value;
         }
 
         private static object ReadJsonInteger(string s, ref int i, string key)

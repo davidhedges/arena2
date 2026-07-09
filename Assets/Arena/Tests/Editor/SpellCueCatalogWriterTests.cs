@@ -144,6 +144,26 @@ namespace Arena.Tests.Editor
             Assert.That(output, Does.Contain(expectedRow));
         }
 
+        [Test]
+        public void UpdatePath_PreservesEscapedStrings_AsValidJsonEscapes()
+        {
+            const string catalog =
+                "{\n  \"combat_vfx_cues\": [\n" +
+                "    {\n      \"owner_kind\": \"ABILITY\",\n      \"owner_id\": \"SPELL_ESCAPES\",\n      \"trigger\": \"SPELL_CAST\",\n      \"anchor\": \"LEFT_HAND\",\n      \"vfx_id\": \"VFX_OLD_CAST\",\n      \"attach_mode\": \"FOLLOW_ANCHOR\",\n      \"vfx_role\": \"ATTACHED\",\n      \"lifecycle\": \"DURATION\",\n      \"legacy_note\": \"Line\\nTab\\tFace \\u263A Slash \\/ Quote \\\" Done\",\n      \"duration_ms\": 350,\n      \"sort_order\": 100\n    }\n  ]\n}\n";
+
+            var rows = new List<object>
+            {
+                Row("cast_glow", "SPELL_CAST", "LEFT_HAND", "VFX_NEW_CAST", "FOLLOW_ANCHOR",
+                    "ATTACHED", "DURATION", null, 350, 100),
+            };
+            string output = Splice(catalog, "SPELL_ESCAPES", rows);
+
+            Assert.That(output, Does.Contain("\"legacy_note\": \"Line\\nTab\\tFace \\u263A Slash / Quote \\\" Done\""));
+            Assert.That(output, Does.Contain("\"vfx_id\": \"VFX_NEW_CAST\""));
+            Assert.That(output, Does.Not.Contain("Line\nTab\tFace"), "control characters must be re-escaped");
+            AssertValidJson(output);
+        }
+
         // ----- insertion path: generator-only slots + brand-new owners -----
 
         [Test]
