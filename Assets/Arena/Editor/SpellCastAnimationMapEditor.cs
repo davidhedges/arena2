@@ -25,7 +25,7 @@ namespace Arena.Editor
         private void RefreshChoices()
         {
             // Flavor families from the scanned library.
-            SpellCastAnimationLibrary? library = FindFirst<SpellCastAnimationLibrary>();
+            SpellCastAnimationLibrary? library = SpellPresentationEditorData.FindFirstAsset<SpellCastAnimationLibrary>();
             _baseNames = library == null
                 ? Array.Empty<string>()
                 : library.Families.Select(f => f.BaseNameOrEmpty).Where(n => n.Length > 0)
@@ -34,9 +34,8 @@ namespace Arena.Editor
             // Candidate spell ids from every CombatAnimationSet's authored spell entries, plus any
             // ids already in the map (so migrated-and-deleted spells stay pickable).
             var ids = new SortedSet<string>(StringComparer.Ordinal);
-            foreach (string guid in AssetDatabase.FindAssets("t:CombatAnimationSet"))
+            foreach (CombatAnimationSet set in SpellPresentationEditorData.LoadCombatAnimationSets())
             {
-                var set = AssetDatabase.LoadAssetAtPath<CombatAnimationSet>(AssetDatabase.GUIDToAssetPath(guid));
                 if (set?.spells == null) continue;
                 foreach (WeaponSpellAnimationEntry e in set.spells)
                     if (e.SpellIdOrEmpty.Length > 0) ids.Add(e.SpellIdOrEmpty);
@@ -114,10 +113,5 @@ namespace Arena.Editor
             }
         }
 
-        private static T? FindFirst<T>() where T : UnityEngine.Object
-        {
-            string[] guids = AssetDatabase.FindAssets($"t:{typeof(T).Name}");
-            return guids.Length == 0 ? null : AssetDatabase.LoadAssetAtPath<T>(AssetDatabase.GUIDToAssetPath(guids[0]));
-        }
     }
 }

@@ -1,7 +1,6 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using Arena.Presentation;
 using UnityEditor;
@@ -18,12 +17,10 @@ namespace Arena.Editor
     /// </summary>
     public sealed class SpellCastAnimationResolvedWindow : EditorWindow
     {
-        private const string CatalogPath = "server/src/progression_catalog.shared.json";
-
         private Vector2 _scroll;
         private SpellCastAnimationMap? _map;
         private SpellCastAnimationLibrary? _library;
-        private readonly Dictionary<string, (ulong castTimeMs, string kind)> _gameplay = new(StringComparer.Ordinal);
+        private Dictionary<string, SpellGameplayAuthoringFacts> _gameplay = new(StringComparer.Ordinal);
         private readonly List<(string spellId, string[] sets)> _explicitBySpell = new();
 
         [MenuItem("Arena/Spell Animation/Resolved View")]
@@ -33,8 +30,8 @@ namespace Arena.Editor
 
         private void Reload()
         {
-            _map = FindFirst<SpellCastAnimationMap>();
-            _library = FindFirst<SpellCastAnimationLibrary>();
+            _map = SpellPresentationEditorData.FindFirstAsset<SpellCastAnimationMap>();
+            _library = SpellPresentationEditorData.FindFirstAsset<SpellCastAnimationLibrary>();
             LoadGameplay();
             LoadExplicitEntries();
         }
@@ -64,8 +61,8 @@ namespace Arena.Editor
             using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
             {
                 bool hasFamily = _library!.TryGetFamily(e.baseName ?? string.Empty, out SpellCastAnimationFamily family);
-                SpellAnimationArchetype archetype = _gameplay.TryGetValue(spellId, out var gp)
-                    ? SpellAnimationArchetypes.Derive(gp.castTimeMs, gp.kind)
+                SpellAnimationArchetype archetype = _gameplay.TryGetValue(spellId, out SpellGameplayAuthoringFacts gp)
+                    ? SpellAnimationArchetypes.Derive(gp.CastTimeMs, gp.DeliveryKind)
                     : SpellAnimationArchetype.Instant;
 
                 EditorGUILayout.LabelField($"{spellId}", EditorStyles.boldLabel);
@@ -109,27 +106,16 @@ namespace Arena.Editor
 
         private void LoadGameplay()
         {
-            _gameplay.Clear();
-            if (!File.Exists(CatalogPath)) return;
-            try
-            {
-                var cat = JsonUtility.FromJson<Catalog>(File.ReadAllText(CatalogPath));
-                if (cat?.abilities == null) return;
-                foreach (Ability a in cat.abilities)
-                {
-                    if (a.gameplay?.delivery == null || string.IsNullOrEmpty(a.gameplay.delivery.kind)) continue;
-                    _gameplay[Strip(a.ability_id)] = ((ulong)Math.Max(0, a.gameplay.cast_time_ms), a.gameplay.delivery.kind);
-                }
-            }
-            catch (Exception ex) { Debug.LogWarning($"[ResolvedView] catalog parse failed: {ex.Message}"); }
+            _gameplay = SpellPresentationEditorData.LoadSpellGameplayByActionId(out string warning);
+            if (warning.Length > 0)
+                Debug.LogWarning($"[ResolvedView] {warning}");
         }
 
         private void LoadExplicitEntries()
         {
             var bySpell = new Dictionary<string, List<string>>(StringComparer.Ordinal);
-            foreach (string guid in AssetDatabase.FindAssets("t:CombatAnimationSet"))
+            foreach (CombatAnimationSet set in SpellPresentationEditorData.LoadCombatAnimationSets())
             {
-                var set = AssetDatabase.LoadAssetAtPath<CombatAnimationSet>(AssetDatabase.GUIDToAssetPath(guid));
                 if (set?.spells == null) continue;
                 string setName = set.name;
                 foreach (WeaponSpellAnimationEntry entry in set.spells)
@@ -144,23 +130,5 @@ namespace Arena.Editor
             foreach (var kvp in bySpell) _explicitBySpell.Add((kvp.Key, kvp.Value.ToArray()));
         }
 
-        private static string Strip(string? id)
-        {
-            string s = (id ?? string.Empty).Trim().ToUpperInvariant();
-            foreach (string p in new[] { "SPELL_", "PALADIN_", "WARRIOR_" })
-                if (s.StartsWith(p, StringComparison.Ordinal)) return s.Substring(p.Length);
-            return s;
-        }
-
-        private static T? FindFirst<T>() where T : UnityEngine.Object
-        {
-            string[] guids = AssetDatabase.FindAssets($"t:{typeof(T).Name}");
-            return guids.Length == 0 ? null : AssetDatabase.LoadAssetAtPath<T>(AssetDatabase.GUIDToAssetPath(guids[0]));
-        }
-
-        [Serializable] private sealed class Catalog { public List<Ability>? abilities; }
-        [Serializable] private sealed class Ability { public string ability_id = string.Empty; public Gameplay? gameplay; }
-        [Serializable] private sealed class Gameplay { public long cast_time_ms; public Delivery? delivery; }
-        [Serializable] private sealed class Delivery { public string kind = string.Empty; }
     }
 }

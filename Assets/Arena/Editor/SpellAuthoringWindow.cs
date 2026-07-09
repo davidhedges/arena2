@@ -14,7 +14,6 @@ namespace Arena.Editor
 {
     internal sealed partial class SpellAuthoringWindow : EditorWindow
     {
-        private const string ProgressionCatalogPath = "server/src/progression_catalog.shared.json";
         private const string AnchorLeftHand = "LEFT_HAND";
         private const string AnchorRightHand = "RIGHT_HAND";
         private const string TriggerSpellCast = "SPELL_CAST";
@@ -605,10 +604,10 @@ namespace Arena.Editor
             _selectedAbilityCues.Clear();
             _knownTemplateIds.Clear();
 
-            string absolutePath = Path.Combine(Directory.GetCurrentDirectory(), ProgressionCatalogPath);
+            string absolutePath = SpellPresentationEditorData.AbsoluteProgressionCatalogPath;
             if (!File.Exists(absolutePath))
             {
-                _loadErrors.Add($"Progression catalog not found at '{ProgressionCatalogPath}'.");
+                _loadErrors.Add($"Progression catalog not found at '{SpellPresentationEditorData.ProgressionCatalogPath}'.");
                 _catalog = null;
                 return;
             }
@@ -619,18 +618,18 @@ namespace Arena.Editor
             }
             catch (Exception ex)
             {
-                _loadErrors.Add($"Failed to parse '{ProgressionCatalogPath}': {ex.Message}");
+                _loadErrors.Add($"Failed to parse '{SpellPresentationEditorData.ProgressionCatalogPath}': {ex.Message}");
                 _catalog = null;
                 return;
             }
 
             if (_catalog == null)
             {
-                _loadErrors.Add($"Failed to parse '{ProgressionCatalogPath}'.");
+                _loadErrors.Add($"Failed to parse '{SpellPresentationEditorData.ProgressionCatalogPath}'.");
                 return;
             }
 
-            foreach (CombatAnimationSet animationSet in Resources.LoadAll<CombatAnimationSet>("CombatAnimationSets"))
+            foreach (CombatAnimationSet animationSet in SpellPresentationEditorData.LoadCombatAnimationSets())
             {
                 string profileId = Normalize(animationSet.CombatProfileIdOrDefault);
                 if (!string.IsNullOrWhiteSpace(profileId) && !_animationSetByProfile.ContainsKey(profileId))

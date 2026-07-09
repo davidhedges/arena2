@@ -77,8 +77,11 @@ subscription/hydration, and public replication surface have therefore been remov
 - [x] **C6. `"UNTIL_AURA_END"` literal defined 3× in one assembly — RETRACTED**
   The lifecycle itself was based on the incorrect persistent-visual premise and has been removed.
 
-- [ ] **C7. Editor tool duplication**
-  `SpellCastAnimationResolvedWindow.cs`: third copy of the catalog-path constant (vs SpellAuthoringWindow.cs:17, CoreAbilityAuthoringWindow.cs:14), private JsonUtility models, hardcoded `SPELL_/PALADIN_/WARRIOR_` prefix list (:147-153) — an unmatched future prefix (MAGE_) silently derives those spells as Instant in the migration-critical view. Byte-identical `FindFirst<T>` in SpellCastAnimationMapEditor.cs:117 and ResolvedWindow:155; the scan-all-CombatAnimationSets loop rewritten divergently in both. Hoist into one shared editor helper.
+- [x] **C7. Editor tool duplication — FIXED**
+  `SpellPresentationEditorData` now owns the catalog path, deterministic asset lookup, runtime
+  `CombatAnimationSet` enumeration, and the minimal gameplay read model. The resolved view keys gameplay
+  by the catalog's real `action_id`; class-prefix stripping is gone, so future `MAGE_*` ability ids do not
+  silently fall back to Instant. The map editor and resolved view share the same asset/set discovery.
 
 - [ ] **C8. Per-spell authoring data compiled into editor source**
   `SpellAuthoringWindow.CueGeneration.cs:89` (`SignatureOverrides`, 19 spells) and :203 (`CastHandOverrides`, "WINS over inference"). The school half of the same data just became assets (decision 10); signatures/hand overrides should follow (reuse the SchoolVfxSlotEntry shape as a per-spell VFX-set) — every new bespoke spell currently requires editing generator source + domain reload, and a stale hand override silently outranks later-corrected inference.
@@ -139,7 +142,7 @@ working tree:
   remains the central adapter for shared combat layers while controllers/data own durable policy and
   focused components may own explicitly exclusive orthogonal properties; editor-only VFX palette assets
   and their ScriptableObject type moved out of `Resources/` into the editor surface.
-- [ ] **Explicit aura toggle-off remains a gameplay follow-up, not a presentation issue.** The server
+- [ ] **Explicit aura toggle-off — DEFERRED BY OWNER, not a presentation issue.** The server
   replaces the one-row-per-caster `ActiveAura` when another aura is cast and removes it for dead/invalid
   casters, but no caster-request reducer currently deletes it. Out-of-range recipient buffs are already
   removed by `tick_auras`.

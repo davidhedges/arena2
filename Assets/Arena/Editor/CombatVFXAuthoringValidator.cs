@@ -12,7 +12,6 @@ namespace Arena.Editor
 {
     internal static class CombatVFXAuthoringValidator
     {
-        private const string ProgressionCatalogPath = "server/src/progression_catalog.shared.json";
         private const float ReleaseTimingToleranceSeconds = 0.05f;
         private const string AnchorLeftHand = "LEFT_HAND";
         private const string AnchorRightHand = "RIGHT_HAND";
@@ -928,10 +927,10 @@ namespace Arena.Editor
 
         private static ProgressionCatalogDocument? LoadProgressionCatalog(List<string> errors)
         {
-            string absolutePath = Path.Combine(Directory.GetCurrentDirectory(), ProgressionCatalogPath);
+            string absolutePath = SpellPresentationEditorData.AbsoluteProgressionCatalogPath;
             if (!File.Exists(absolutePath))
             {
-                errors.Add($"Progression catalog not found at '{ProgressionCatalogPath}'.");
+                errors.Add($"Progression catalog not found at '{SpellPresentationEditorData.ProgressionCatalogPath}'.");
                 return null;
             }
 
@@ -942,7 +941,7 @@ namespace Arena.Editor
             }
             catch (Exception ex)
             {
-                errors.Add($"Failed to parse '{ProgressionCatalogPath}': {ex.Message}");
+                errors.Add($"Failed to parse '{SpellPresentationEditorData.ProgressionCatalogPath}': {ex.Message}");
                 return null;
             }
         }

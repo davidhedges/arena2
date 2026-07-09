@@ -11,8 +11,6 @@ namespace Arena.Editor
 {
     internal sealed class CoreAbilityAuthoringWindow : EditorWindow
     {
-        private const string ProgressionCatalogPath = "server/src/progression_catalog.shared.json";
-
         private readonly Dictionary<string, bool> _coreByAbilityId = new(StringComparer.Ordinal);
         private readonly List<string> _loadErrors = new();
 
@@ -146,7 +144,7 @@ namespace Arena.Editor
             string absolutePath = AbsoluteCatalogPath();
             if (!File.Exists(absolutePath))
             {
-                _loadErrors.Add($"Progression catalog not found at '{ProgressionCatalogPath}'.");
+                _loadErrors.Add($"Progression catalog not found at '{SpellPresentationEditorData.ProgressionCatalogPath}'.");
                 _catalog = null;
                 return;
             }
@@ -162,7 +160,7 @@ namespace Arena.Editor
             catch (Exception ex)
             {
                 _catalog = null;
-                _loadErrors.Add($"Failed to parse '{ProgressionCatalogPath}': {ex.Message}");
+                _loadErrors.Add($"Failed to parse '{SpellPresentationEditorData.ProgressionCatalogPath}': {ex.Message}");
             }
         }
 
@@ -182,13 +180,13 @@ namespace Arena.Editor
             }
             catch (Exception ex)
             {
-                _loadErrors.Add($"Failed to save '{ProgressionCatalogPath}': {ex.Message}");
+                _loadErrors.Add($"Failed to save '{SpellPresentationEditorData.ProgressionCatalogPath}': {ex.Message}");
             }
         }
 
         private static string AbsoluteCatalogPath()
         {
-            return Path.Combine(Directory.GetCurrentDirectory(), ProgressionCatalogPath);
+            return SpellPresentationEditorData.AbsoluteProgressionCatalogPath;
         }
     }
 

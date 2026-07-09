@@ -101,6 +101,25 @@ namespace Arena.Tests.Editor
             }
         }
 
+        [Test]
+        public void SpellEditorGameplayLookup_UsesCatalogActionIdsWithoutPrefixGuessing()
+        {
+            Type dataType = AppDomain.CurrentDomain.Load("Assembly-CSharp-Editor")
+                .GetType("Arena.Editor.SpellPresentationEditorData", throwOnError: true)!;
+            MethodInfo load = dataType.GetMethod(
+                "LoadSpellGameplayByActionId",
+                BindingFlags.Public | BindingFlags.Static)!;
+            object?[] args = { null };
+            var gameplay = (IDictionary)load.Invoke(null, args)!;
+
+            Assert.That(args[0], Is.EqualTo(string.Empty));
+            Assert.That(gameplay.Contains("FIREBALL"), Is.True);
+            Assert.That(gameplay.Contains("ICICLE"), Is.True);
+            Assert.That(gameplay.Contains("WARDING_AURA"), Is.True);
+            Assert.That(gameplay.Contains("SPELL_FIREBALL"), Is.False);
+            Assert.That(gameplay.Contains("PALADIN_WARDING_AURA"), Is.False);
+        }
+
         // ----- archetype derivation, grounded in the real spell list -----
 
         [Test]

@@ -648,7 +648,7 @@ namespace Arena.Editor
                 : $"Update {rows.Count} authored cue(s) in place";
             if (!EditorUtility.DisplayDialog(
                     "Write generated cues",
-                    $"{detail} for {abilityId} in {ProgressionCatalogPath}?\n\n"
+                    $"{detail} for {abilityId} in {SpellPresentationEditorData.ProgressionCatalogPath}?\n\n"
                     + "Author-time slot keys are inserted and inserted rows get a fresh sort_order; every "
                     + "other byte is preserved. Republish the module afterwards to apply.",
                     "Write",
@@ -657,7 +657,7 @@ namespace Arena.Editor
                 return;
             }
 
-            string absolutePath = Path.Combine(Directory.GetCurrentDirectory(), ProgressionCatalogPath);
+            string absolutePath = SpellPresentationEditorData.AbsoluteProgressionCatalogPath;
             try
             {
                 bool changed = SpellCueCatalogWriter.WriteOwnerCues(absolutePath, abilityId, rows);
@@ -665,7 +665,7 @@ namespace Arena.Editor
                 {
                     EditorUtility.DisplayDialog(
                         "Cues written",
-                        $"Wrote {rows.Count} generated cue(s) for {abilityId} into {ProgressionCatalogPath}.\n\n"
+                        $"Wrote {rows.Count} generated cue(s) for {abilityId} into {SpellPresentationEditorData.ProgressionCatalogPath}.\n\n"
                         + "Republish the module (spacetime publish -p server) to apply.",
                         "OK");
                     Load();
