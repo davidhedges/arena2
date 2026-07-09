@@ -130,6 +130,7 @@ namespace Arena.Network
                 BuildScopedCombatEventQuery(new QueryBuilder(), scope),
                 BuildScopedNpcCombatEventQuery(new QueryBuilder(), scope),
                 BuildScopedProjectilePresentationEventQuery(new QueryBuilder(), scope),
+                BuildScopedNpcProjectilePresentationEventQuery(new QueryBuilder(), scope),
                 BuildScopedPlayerEventQuery(new QueryBuilder(), scope),
                 BuildScopedLootContainerQuery(new QueryBuilder(), scope),
                 BuildScopedLootSlotQuery(new QueryBuilder(), scope),
@@ -644,6 +645,28 @@ namespace Arena.Network
                     .RightSemijoin(qb.From.ProjectilePresentationEvent(), (world, projectileEvent) => world.Identity.Eq(projectileEvent.Caster))
                     .ToSql(),
                 _ => throw new InvalidOperationException("Scoped projectile-presentation-event query requested for GameplayScope.None"),
+            };
+        }
+
+        private static string BuildScopedNpcProjectilePresentationEventQuery(QueryBuilder qb, NetworkManager.GameplayScope scope)
+        {
+            return scope.Kind switch
+            {
+                NetworkManager.GameplayScopeKind.OpenWorld => qb
+                    .From
+                    .NpcInstance()
+                    .Where(c => c.WorldKind.Eq("OPEN"))
+                    .Where(c => c.OpenWorldSceneName.Eq(OpenWorldSceneName(scope)))
+                    .RightSemijoin(qb.From.ProjectilePresentationEvent(), (npc, projectileEvent) => npc.Identity.Eq(projectileEvent.Caster))
+                    .ToSql(),
+                NetworkManager.GameplayScopeKind.Instance => qb
+                    .From
+                    .NpcInstance()
+                    .Where(c => c.WorldKind.Eq("INSTANCE"))
+                    .Where(c => c.InstanceId.Eq(scope.InstanceId.GetValueOrDefault()))
+                    .RightSemijoin(qb.From.ProjectilePresentationEvent(), (npc, projectileEvent) => npc.Identity.Eq(projectileEvent.Caster))
+                    .ToSql(),
+                _ => throw new InvalidOperationException("Scoped NPC projectile-presentation-event query requested for GameplayScope.None"),
             };
         }
 

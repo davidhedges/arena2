@@ -306,6 +306,25 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void GameplaySubscriptionPlanner_ScopesProjectilePresentationEventsWithVisiblePlayersAndNpcs()
+        {
+            Type plannerType = RequireRuntimeType("Arena.Network.GameplaySubscriptionPlanner");
+            Type gameplayScopeType = RequireRuntimeType("Arena.Network.NetworkManager+GameplayScope");
+            Type playerWorldType = RequireRuntimeType("SpacetimeDB.Types.PlayerWorld");
+            object row = Activator.CreateInstance(playerWorldType, CreateIdentity(1), "OPEN", null, "Oasis_Day")!;
+            object scope = RequireMethod(gameplayScopeType, "FromPlayerWorld", playerWorldType, typeof(string))
+                .Invoke(null, new[] { row, null })!;
+
+            string[] scopedSql = (string[])RequireMethod(plannerType, "BuildScopedQuerySqls", gameplayScopeType)
+                .Invoke(null, new[] { scope })!;
+            string scopedSqlText = string.Join("\n", scopedSql);
+
+            Assert.That(scopedSqlText, Does.Contain("\"projectile_presentation_event\""));
+            Assert.That(scopedSqlText, Does.Contain("\"player_world\".\"identity\" = \"projectile_presentation_event\".\"caster\""));
+            Assert.That(scopedSqlText, Does.Contain("\"npc_instance\".\"identity\" = \"projectile_presentation_event\".\"caster\""));
+        }
+
+        [Test]
         public void LocalCombatState_IgnoresRowsForNonLocalIdentity()
         {
             object state = GetLocalCombatState();

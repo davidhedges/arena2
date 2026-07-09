@@ -50,7 +50,7 @@ Three independent defects; the feature cannot work until all three are fixed. La
 - [x] **9. `oneHandedCastHand=Right` silently composes unmasked** — CONFIRMED
   `Assets/Arena/Runtime/Presentation/Animation/SpellCastAnimationComposer.cs:36-37`: all three layer resolvers key on `OneHand && Left`; only LeftGesture layer/states exist; `CombatAnimationSet.cs:1209` collapses TwoHand→Left. Authoring Right compiles and resolves but drops all weapon-arm masking with no validator/warning (limitation acknowledged only in a comment). Either validate-and-reject Right at authoring time or don't expose it until a RightGesture substrate exists. (Fix together with #8.)
 
-- [ ] **10. NPC-cast projectile spells would lose impact VFX** — PLAUSIBLE
+- [x] **10. NPC-cast projectile spells would lose impact VFX** — PLAUSIBLE
   `Assets/Arena/Runtime/Presentation/CombatVFXDispatcher.cs:490`: SPELL_IMPACT suppression for projectile-delivered spells relies on `projectile_presentation_event`, which is subscribed only via the PlayerWorld semijoin (GameplaySubscriptionPlanner.cs:605), while combat_event has a dedicated NPC-caster query (:583). No NPC casts spells today (the FIREBALL_TURRET practice actor is registered in player_world, so it's covered). Add the NPC semijoin when NPC spellcasting arrives — or now, cheaply.
   Related altitude note (CONFIRMED): `IsProjectileDeliveredSpellImpact` (:499-515) re-derives "fires projectiles" as `PROJECTILE || (CHANNEL && Speed>0)`, a divergent copy of the generator's `firesProjectiles`; they agree today only because catalog.rs copies projectile speed into definition.speed. Prefer carrying the fact on the wire (flag on SpellDefinition or cue row).
 
