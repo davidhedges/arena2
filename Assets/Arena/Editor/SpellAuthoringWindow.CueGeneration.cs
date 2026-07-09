@@ -377,6 +377,10 @@ namespace Arena.Editor
             slotNotes = new List<string>();
             var rows = new List<GeneratedCue>();
 
+            // Decision 10: prefer the externalized per-school VFX-set assets over the seed dictionary.
+            // Reloaded per generation so authoring edits to the assets are picked up immediately.
+            _assetSchoolPalettes = LoadSchoolPalettesFromAssets();
+
             foreach (SpellVfxSlot slot in SpellVfxGenerator.RequestedSlots(archetype, mode))
             {
                 if (!TryResolvePaletteEntry(school, abilityId, slot, out PaletteEntry entry))
@@ -408,6 +412,80 @@ namespace Arena.Editor
             return rows;
         }
 
+        // Decision 10: per-school palettes loaded from SchoolVfxSet assets (school → slot → look).
+        // A school present here wins over the seed SchoolPalettes below, so schools are edited as
+        // assets; a school absent here falls back to the seed — so nothing changes until an asset exists.
+        private static Dictionary<string, Dictionary<SpellVfxSlot, PaletteEntry>> _assetSchoolPalettes = new();
+
+        private static Dictionary<string, Dictionary<SpellVfxSlot, PaletteEntry>> LoadSchoolPalettesFromAssets()
+        {
+            var map = new Dictionary<string, Dictionary<SpellVfxSlot, PaletteEntry>>(System.StringComparer.Ordinal);
+            foreach (string guid in AssetDatabase.FindAssets("t:SchoolVfxSet"))
+            {
+                var set = AssetDatabase.LoadAssetAtPath<SchoolVfxSet>(AssetDatabase.GUIDToAssetPath(guid));
+                if (set == null || set.SchoolIdOrEmpty.Length == 0) continue;
+
+                if (!map.TryGetValue(set.SchoolIdOrEmpty, out Dictionary<SpellVfxSlot, PaletteEntry> slotMap))
+                    map[set.SchoolIdOrEmpty] = slotMap = new Dictionary<SpellVfxSlot, PaletteEntry>();
+                foreach (SchoolVfxSlotEntry e in set.Slots)
+                    if (!string.IsNullOrWhiteSpace(e.vfxId))
+                        slotMap[e.slot] = new PaletteEntry(e.vfxId, e.selfTerminating, e.durationMs);
+            }
+
+            return map;
+        }
+
+        // One-time migration (decision 10): materialize the seed SchoolPalettes into editable
+        // SchoolVfxSet assets. Byte-faithful (same vfx_id/duration/self_terminating), so the generator
+        // produces the identical output afterward — it just reads the assets instead of the dictionary.
+        [MenuItem("Arena/Combat VFX/Externalize School Palettes to Assets")]
+        private static void ExternalizeSchoolPalettes()
+        {
+            const string parent = "Assets/Arena/Resources";
+            const string folder = "SchoolVfxSets";
+            string dir = $"{parent}/{folder}";
+            if (!AssetDatabase.IsValidFolder(dir))
+                AssetDatabase.CreateFolder(parent, folder);
+
+            int created = 0, updated = 0;
+            foreach (KeyValuePair<string, IReadOnlyDictionary<SpellVfxSlot, PaletteEntry>> kvp in SchoolPalettes)
+            {
+                string path = $"{dir}/{kvp.Key}.asset";
+                var set = AssetDatabase.LoadAssetAtPath<SchoolVfxSet>(path);
+                bool isNew = set == null;
+                if (isNew)
+                {
+                    set = ScriptableObject.CreateInstance<SchoolVfxSet>();
+                    AssetDatabase.CreateAsset(set, path);
+                    created++;
+                }
+                else
+                {
+                    updated++;
+                }
+
+                set!.schoolId = kvp.Key;
+                var slots = new List<SchoolVfxSlotEntry>();
+                foreach (KeyValuePair<SpellVfxSlot, PaletteEntry> s in kvp.Value)
+                    slots.Add(new SchoolVfxSlotEntry
+                    {
+                        slot = s.Key,
+                        vfxId = s.Value.VfxId,
+                        selfTerminating = s.Value.SelfTerminating,
+                        durationMs = s.Value.DurationMs,
+                        scale = 1f,
+                    });
+                set.EditorSetSlots(slots);
+                EditorUtility.SetDirty(set);
+            }
+
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+            string msg = $"{created} created, {updated} updated in {dir}.\nThe generator now reads these assets (seed dictionary is the fallback).";
+            Debug.Log($"[SchoolVfxSet] Externalized {SchoolPalettes.Count} school palettes — {msg}");
+            EditorUtility.DisplayDialog("Externalize School Palettes", msg, "OK");
+        }
+
         private static bool TryResolvePaletteEntry(string school, string abilityId, SpellVfxSlot slot, out PaletteEntry entry)
         {
             if (SignatureOverrides.TryGetValue(abilityId, out IReadOnlyDictionary<SpellVfxSlot, PaletteEntry> overrides)
@@ -416,11 +494,20 @@ namespace Arena.Editor
                 return true;
             }
 
-            if (!string.IsNullOrEmpty(school)
-                && SchoolPalettes.TryGetValue(school, out IReadOnlyDictionary<SpellVfxSlot, PaletteEntry> palette)
-                && palette.TryGetValue(slot, out entry))
+            if (!string.IsNullOrEmpty(school))
             {
-                return true;
+                // Asset set wins when the school has one; else the seed dictionary.
+                if (_assetSchoolPalettes.TryGetValue(school, out Dictionary<SpellVfxSlot, PaletteEntry> assetPalette)
+                    && assetPalette.TryGetValue(slot, out entry))
+                {
+                    return true;
+                }
+
+                if (SchoolPalettes.TryGetValue(school, out IReadOnlyDictionary<SpellVfxSlot, PaletteEntry> palette)
+                    && palette.TryGetValue(slot, out entry))
+                {
+                    return true;
+                }
             }
 
             entry = default;
