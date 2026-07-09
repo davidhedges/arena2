@@ -30,7 +30,7 @@ Three independent defects; the feature cannot work until all three are fixed. La
 - [ ] **3. Illegal zero-duration cue survives publish** — CONFIRMED
   `Assets/Arena/Editor/SpellAuthoringWindow.CueGeneration.cs:398`: `PalettePositive` materializes `entry.DurationMs` with no positive guard; `ValidateWiring` checks only the policy enum and has no non-test call sites; `sync_combat_vfx_cue_catalog` (progression.rs:3383) does no rule validation and the shared Rule-14 checker is invoked only inside `#[cfg(test)]`. A SchoolVfxSet slot with `selfTerminating=false, durationMs=0` (fresh-entry default) writes an illegal ONE_SHOT/DURATION/0 row; only a later `cargo test` catches it; runtime plays the 3s fallback. Fix: guard at generation time (and/or surface in ValidateWiring wired into the preview).
 
-- [ ] **4. Runtime animation-resolution failures are now silent** — CONFIRMED
+- [x] **4. Runtime animation-resolution failures are now silent** — CONFIRMED
   `Assets/Arena/Runtime/Presentation/CombatActionPlaybackController.cs:998`: the per-cast "no spell animation entry" warning was deleted deferring to the author-time validator, but `CombatVFXAuthoringValidator.cs:251` still resolves via explicit-entry-only `TryGetSpellAnimation`, skips non-selectable (:238) and profile-less (:242) abilities, and never validates map baseNames against the library. Zero LogWarning/LogError anywhere in the new resolver/composer/library. This is the safety net for the ~90-spell migration — restore a runtime warning or teach the validator the map/library path **before migrating more spells**.
 
 ## P2 — Confirmed/plausible, latent (gated on content or timing that doesn't exist yet)

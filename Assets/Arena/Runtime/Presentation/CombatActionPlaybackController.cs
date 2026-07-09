@@ -1,4 +1,5 @@
 #nullable enable
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace Arena.Presentation
@@ -160,6 +161,7 @@ namespace Arena.Presentation
 
         private readonly AnimationClip?[] _strikeBankClips = new AnimationClip?[CombatAnimationSet.AnimatorStrikeBankCount];
         private readonly AnimationClip?[] _spellBankClips = new AnimationClip?[CombatAnimationSet.AnimatorSpellBankCount];
+        private readonly HashSet<string> _spellAnimationResolutionWarnings = new(System.StringComparer.Ordinal);
         private LowerBodyUnlockPlaybackState _meleeLowerBodyUnlock;
         private LowerBodyUnlockPlaybackState _spellLowerBodyUnlock;
         private LowerBodyUnlockPlaybackState _spellCastHoldFadeOut;
@@ -997,9 +999,8 @@ namespace Arena.Presentation
 
             if (!SpellCastAnimationResolver.TryResolve(animationSet, spellKind, out spellEntry))
             {
-                // No entry is a valid, intentional state: silent spells (auras, most self-buffs)
-                // cast with no body animation. Authoring gaps for spells that SHOULD animate are
-                // caught by the author-time animation/VFX validator, not warned about per-cast.
+                if (SpellCastAnimationResolver.TryDescribeMappedResolutionFailure(animationSet, spellKind, out string reason))
+                    WarnSpellAnimationResolutionFailure(animationSet, spellKind, reason);
                 return false;
             }
 
@@ -1018,6 +1019,22 @@ namespace Arena.Presentation
             overrideController[$"slot_spell_{bankSlot}"] = desiredClip;
             _spellBankClips[bankIndex] = desiredClip;
             return true;
+        }
+
+        private void WarnSpellAnimationResolutionFailure(
+            CombatAnimationSet animationSet,
+            string spellKind,
+            string reason)
+        {
+            string normalizedSpellKind = string.IsNullOrWhiteSpace(spellKind)
+                ? "<missing>"
+                : spellKind.Trim().ToUpperInvariant();
+            string warningKey = $"{animationSet.name}:{normalizedSpellKind}:{reason}";
+            if (!_spellAnimationResolutionWarnings.Add(warningKey))
+                return;
+
+            Debug.LogWarning(
+                $"[CombatActionPlaybackController] Spell '{normalizedSpellKind}' has a SpellCastAnimationMap entry but could not resolve a runtime animation in set '{animationSet.name}': {reason}.");
         }
 
         public bool TryBindSpellBankClip(

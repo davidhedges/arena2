@@ -104,6 +104,7 @@ namespace Arena.Editor
 
             ValidateCastTimeHandCueLifecycles(catalog, errors);
             ValidateSpellAnimationTiming(catalog, errors);
+            ValidateSpellCastAnimationMap(errors);
             ValidateCueAnchorContract(catalog, errors);
             ValidateGreatswordCombatAnimationEvents(errors);
 
@@ -665,6 +666,48 @@ namespace Arena.Editor
             }
 
             return result;
+        }
+
+        private static void ValidateSpellCastAnimationMap(List<string> errors)
+        {
+            SpellCastAnimationMap? map = LoadFirstAsset<SpellCastAnimationMap>();
+            if (map == null)
+                return;
+
+            SpellCastAnimationLibrary? library = LoadFirstAsset<SpellCastAnimationLibrary>();
+            if (library == null)
+            {
+                errors.Add("SpellCastAnimationMap exists, but no SpellCastAnimationLibrary asset resolves.");
+                return;
+            }
+
+            foreach (SpellCastAnimationMap.Entry entry in map.Entries)
+            {
+                string spellId = WireIdentifier.Normalize(entry.spellId);
+                if (string.IsNullOrWhiteSpace(spellId))
+                    continue;
+                if (string.IsNullOrWhiteSpace(entry.baseName))
+                {
+                    errors.Add($"SpellCastAnimationMap entry for spell '{spellId}' has no baseName.");
+                    continue;
+                }
+                if (!library.TryGetFamily(entry.baseName, out _))
+                    errors.Add($"SpellCastAnimationMap entry for spell '{spellId}' references baseName '{entry.baseName}', but SpellCastAnimationLibrary has no matching family.");
+            }
+        }
+
+        private static T? LoadFirstAsset<T>() where T : UnityEngine.Object
+        {
+            string[] guids = AssetDatabase.FindAssets($"t:{typeof(T).Name}");
+            foreach (string guid in guids)
+            {
+                string path = AssetDatabase.GUIDToAssetPath(guid);
+                T? asset = AssetDatabase.LoadAssetAtPath<T>(path);
+                if (asset != null)
+                    return asset;
+            }
+
+            return null;
         }
 
         private static bool IsSelectableAbility(

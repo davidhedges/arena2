@@ -40,21 +40,66 @@ namespace Arena.Presentation
         public static bool TryResolveComposed(CombatAnimationSet? set, string spellId, out WeaponSpellAnimationEntry entry)
         {
             entry = default;
-            EnsureLoaded();
-            if (_map == null || _library == null)
+            if (!TryResolveComposedInput(set, spellId, out SpellCastAnimationMap.Entry mapEntry, out SpellCastAnimationFamily family, out SpellAnimationArchetype archetype, out _))
                 return false;
 
-            if (!_map.TryGetEntry(spellId, out SpellCastAnimationMap.Entry mapEntry))
-                return false;
-            if (!_library.TryGetFamily(mapEntry.baseName, out SpellCastAnimationFamily family))
-                return false;
-
-            SpellAnimationArchetype archetype = DeriveArchetype(spellId);
             SpellCastHand hand = set != null ? set.OneHandedCastHand : SpellCastHand.Left;
             if (!SpellCastAnimationComposer.TryCompose(spellId, family, hand, archetype, out entry))
                 return false;
 
             ApplyOverrides(mapEntry, ref entry);
+            return true;
+        }
+
+        public static bool TryDescribeMappedResolutionFailure(
+            CombatAnimationSet? set,
+            string spellId,
+            out string reason)
+        {
+            if (!TryResolveComposedInput(set, spellId, out SpellCastAnimationMap.Entry mapEntry, out SpellCastAnimationFamily family, out SpellAnimationArchetype archetype, out reason))
+                return !string.IsNullOrWhiteSpace(reason);
+
+            SpellCastHand hand = set != null ? set.OneHandedCastHand : SpellCastHand.Left;
+            if (!SpellCastAnimationComposer.TryCompose(spellId, family, hand, archetype, out _))
+            {
+                reason = $"map entry baseName '{mapEntry.baseName}' has no playable {archetype} clips for hand '{hand}'";
+                return true;
+            }
+
+            reason = string.Empty;
+            return false;
+        }
+
+        private static bool TryResolveComposedInput(
+            CombatAnimationSet? set,
+            string spellId,
+            out SpellCastAnimationMap.Entry mapEntry,
+            out SpellCastAnimationFamily family,
+            out SpellAnimationArchetype archetype,
+            out string failureReason)
+        {
+            mapEntry = default;
+            family = default;
+            archetype = default;
+            failureReason = string.Empty;
+
+            EnsureLoaded();
+            if (_map == null)
+                return false;
+            if (!_map.TryGetEntry(spellId, out mapEntry))
+                return false;
+            if (_library == null)
+            {
+                failureReason = "SpellCastAnimationLibrary resource is missing";
+                return false;
+            }
+            if (!_library.TryGetFamily(mapEntry.baseName, out family))
+            {
+                failureReason = $"map entry baseName '{mapEntry.baseName}' does not resolve in SpellCastAnimationLibrary";
+                return false;
+            }
+
+            archetype = DeriveArchetype(spellId);
             return true;
         }
 
