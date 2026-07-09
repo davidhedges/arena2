@@ -2820,6 +2820,9 @@ namespace Arena.Presentation
             if (!CanDriveAnimatorState())
                 return;
 
+            if (TryHandleSpellCastHoldFadeOutBeforeLayerPlay(UpperBodyLayerIndex, stateHash, UpperBodyEmptyStateHash))
+                return;
+
             _animator!.Play(stateHash, UpperBodyLayerIndex, normalizedTime);
         }
 
@@ -2828,8 +2831,41 @@ namespace Arena.Presentation
             if (!CanDriveAnimatorState())
                 return;
 
+            CancelSpellCastHoldFadeOutForLayer(LeftGestureLayerIndex);
             _animator!.SetLayerWeight(LeftGestureLayerIndex, 1f);
             _animator!.Play(stateHash, LeftGestureLayerIndex, normalizedTime);
+        }
+
+        private bool TryHandleSpellCastHoldFadeOutBeforeLayerPlay(
+            int layerIndex,
+            int stateHash,
+            int emptyStateHash)
+        {
+            if (!_actionPlayback.IsSpellCastHoldFadeOutActive
+                || _actionPlayback.SpellCastHoldFadeOutLayerIndex != layerIndex)
+            {
+                return false;
+            }
+
+            // Empty-state cleanup should not stomp a hold fade that is smoothing this layer back
+            // to neutral. The fade parks the layer on Empty when it completes.
+            if (stateHash == emptyStateHash)
+                return true;
+
+            CancelSpellCastHoldFadeOutForLayer(layerIndex);
+            return false;
+        }
+
+        private void CancelSpellCastHoldFadeOutForLayer(int layerIndex)
+        {
+            if (!_actionPlayback.IsSpellCastHoldFadeOutActive
+                || _actionPlayback.SpellCastHoldFadeOutLayerIndex != layerIndex)
+            {
+                return;
+            }
+
+            _actionPlayback.ResetSpellCastHoldFadeOut();
+            _animator!.SetLayerWeight(layerIndex, 1f);
         }
 
         private void ClearLeftGestureSpellPresentation()

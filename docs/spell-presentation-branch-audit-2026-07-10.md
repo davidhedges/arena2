@@ -21,7 +21,7 @@ Three independent defects; the feature cannot work until all three are fixed. La
 
 ## P1 — Reachable today
 
-- [ ] **1. Hold exit fade stomps follow-up UpperBody actions** — CONFIRMED
+- [x] **1. Hold exit fade stomps follow-up UpperBody actions** — CONFIRMED
   `Assets/Arena/Runtime/Presentation/PlayerAnimator.cs:1130-1140` (`UpdateSpellCastHoldFadeOut`). The fade owns the layer for ExitDelay+ExitBlendOut and is only cancelled by a new hold (:1303) or a same-layer spell release (:1469-1476). Block raise (:2064/2083/2098), weapon draw/sheath (:498/537), and upper-body phased melee (:901/2367) all enter via guard-free `PlayUpperBodyState` (:2818) on the UpperBody layer — the composer's default hold layer for non-left-hand-1H casts — and get dragged to weight 0 then stomped to Empty mid-motion.
 
 - [ ] **2. Write gate wedges on SelfFlash/AuraGround/Aura slots** — CONFIRMED
@@ -38,7 +38,7 @@ Three independent defects; the feature cannot work until all three are fixed. La
 - [ ] **5. `DeriveArchetype` defaults to Instant on missing SpellDefinition** — PLAUSIBLE
   `Assets/Arena/Runtime/Presentation/Animation/SpellCastAnimationResolver.cs:98-100`. Conn null / rows not yet synced → channel spell composes as ReleaseOnly → `PlaysSpellReleasePresentation` flips true → `EntityRegistry.OnCombatCast` stops suppressing the release — the exact hold-preemption desync this branch fixed, reintroduced timing-dependently. No channel spell is map-migrated yet; becomes real as migration proceeds. Consider: fail resolution (fall back to explicit entry path) instead of guessing Instant.
 
-- [ ] **6. Hold-fade preserve guard only exists for LeftGesture** — PLAUSIBLE
+- [x] **6. Hold-fade preserve guard only exists for LeftGesture** — PLAUSIBLE
   `Assets/Arena/Runtime/Presentation/PlayerAnimator.cs:1153` / guard at :2844. `ClearActiveSpellPresentation → ResetSpellLowerBodyUnlockState` can hard-play Empty on a fading UpperBody layer via a contingent chain (full-body charged release keeps fade alive → movement marks unlock → second clear in window). Snap-to-default-pose artifact the reorder was meant to remove. Fixing #1 properly (fade cancellation policy) likely subsumes this.
 
 - [ ] **7. JSON escape corruption in the catalog writer** — CONFIRMED (mechanism)
