@@ -13,16 +13,8 @@ namespace Arena.Editor
     // Wires the pure SpellVfxGenerator core (Assets/Arena/Runtime/Presentation/VFX/SpellVfxGenerator.cs,
     // design doc Appendix B / decision 10) into the authoring window: read the selected spell's gameplay
     // into SpellDeliveryFacts, derive the archetype + animation mode, fill each requested slot's look
-    // (vfx_id + duration) from a seeded per-school VFX palette (+ per-spell signature overrides), and diff
+    // (vfx_id + duration) from SchoolVfxSet assets (+ per-spell signature overrides), and diff
     // the generated cues against the authored combat_vfx_cues rows.
-    //
-    // This is the generator's *editor face* — the first slice toward the "one place" authoring ideal. It is
-    // a READ-ONLY preview: it does not write progression_catalog.shared.json (that needs a tested JSON
-    // writer, a later slice). A zero diff proves the generator faithfully reproduces the authored cues
-    // (FIRE / FIREBALL is the seeded first exemplar), so we can trust it before it starts materialising rows.
-    //
-    // The seeded palette below stands in for the per-school VFX-set asset (decision 10) until that asset
-    // exists; it is pre-filled from the catalog's real vfx_ids so the FIRE exemplar diffs to zero.
     internal sealed partial class SpellAuthoringWindow
     {
         /// <summary>The look a palette supplies for one slot: <c>vfx_id</c> and (for ONE_SHOT/DURATION slots)
@@ -41,46 +33,6 @@ namespace Arena.Editor
             public bool SelfTerminating { get; }
             public int DurationMs { get; }
         }
-
-        // Per-school defaults (school × slot → look), derived from the catalog by the NAMING convention
-        // (VFX_<SCHOOL>_* belongs to that school) rather than raw frequency — frequency would codify drift
-        // (e.g. two ARCANE spells wear VFX_ICE_* today; that is the drift to correct, not an arcane generic).
-        // Only genuinely school-generic looks live here (a hand cast-glow, a stock impact); bespoke bodies /
-        // explosions are per-spell signatures below. A requested slot a school does not provide surfaces a
-        // coverage warning and is omitted — never a block (design §4.2).
-        private static readonly IReadOnlyDictionary<string, IReadOnlyDictionary<SpellVfxSlot, PaletteEntry>> SchoolPalettes =
-            new Dictionary<string, IReadOnlyDictionary<SpellVfxSlot, PaletteEntry>>(System.StringComparer.Ordinal)
-            {
-                ["FIRE"] = new Dictionary<SpellVfxSlot, PaletteEntry>
-                {
-                    [SpellVfxSlot.CastGlow] = new PaletteEntry("VFX_FIRE_CAST_HAND_01", selfTerminating: false, durationMs: 350),
-                },
-                ["COLD"] = new Dictionary<SpellVfxSlot, PaletteEntry>
-                {
-                    [SpellVfxSlot.CastGlow] = new PaletteEntry("VFX_ICE_CAST_HAND_01", selfTerminating: false, durationMs: 350),
-                    [SpellVfxSlot.Impact] = new PaletteEntry("VFX_ICE_HIT_01", selfTerminating: false, durationMs: 1000),
-                },
-                ["LIGHTNING"] = new Dictionary<SpellVfxSlot, PaletteEntry>
-                {
-                    [SpellVfxSlot.Impact] = new PaletteEntry("VFX_LIGHTNING_01", selfTerminating: false, durationMs: 1200),
-                },
-                // ARCANE corrects the ice-drift (owner-supplied prefabs): ORBITING_BLADES + MAGIC_MISSILE
-                // wore VFX_ICE_* for their hand glow / impact; these are the real arcane generics.
-                ["ARCANE"] = new Dictionary<SpellVfxSlot, PaletteEntry>
-                {
-                    [SpellVfxSlot.CastGlow] = new PaletteEntry("VFX_ARCANE_CAST_HAND_01", selfTerminating: false, durationMs: 350),
-                    [SpellVfxSlot.Impact] = new PaletteEntry("VFX_ARCANE_HIT_01", selfTerminating: false, durationMs: 700),
-                },
-                // HOLY applies to exactly the two holy-damage projectiles (BLESSED_SHIELD, BLADE_BARRIER —
-                // the only spells with damage_type HOLY); they share a generic holy hit. No holy hand
-                // cast-glow prefab is authored yet (there is Human_SpellAura_{Arcane,Fire,Ice} but no Holy),
-                // so cast_glow is intentionally absent — the generator omits it with a coverage note rather
-                // than emit a dangling vfx_id. Add a CastGlow entry here once a holy hand-glow is registered.
-                ["HOLY"] = new Dictionary<SpellVfxSlot, PaletteEntry>
-                {
-                    [SpellVfxSlot.Impact] = new PaletteEntry("VFX_HOLY_HIT_01", selfTerminating: false, durationMs: 1000),
-                },
-            };
 
         // Per-spell signature overrides (ability_id × slot → look). Override wins over the school default for
         // its slot (design doc §3.3). FIREBALL's flying body + explosion are bespoke (signature); its hand
@@ -260,7 +212,7 @@ namespace Arena.Editor
         {
             EditorGUILayout.LabelField("Generated Cues (SpellVfxGenerator)", EditorStyles.boldLabel);
             EditorGUILayout.HelpBox(
-                "Archetype-derived cues from SpellVfxGenerator + the seeded school VFX palette, diffed against "
+                "Archetype-derived cues from SpellVfxGenerator + SchoolVfxSet assets, diffed against "
                 + "the authored combat_vfx_cues rows above. A zero diff means the generator reproduces the "
                 + "authored cues exactly (only vfx_id/duration come from the palette). Read-only preview — it "
                 + "does not write progression_catalog.shared.json.",
@@ -377,13 +329,12 @@ namespace Arena.Editor
             slotNotes = new List<string>();
             var rows = new List<GeneratedCue>();
 
-            // Decision 10: prefer the externalized per-school VFX-set assets over the seed dictionary.
             // Reloaded per generation so authoring edits to the assets are picked up immediately.
-            _assetSchoolPalettes = LoadSchoolPalettesFromAssets();
+            Dictionary<string, Dictionary<SpellVfxSlot, PaletteEntry>> schoolPalettes = LoadSchoolPalettesFromAssets();
 
             foreach (SpellVfxSlot slot in SpellVfxGenerator.RequestedSlots(archetype, mode))
             {
-                if (!TryResolvePaletteEntry(school, abilityId, slot, out PaletteEntry entry))
+                if (!TryResolvePaletteEntry(schoolPalettes, school, abilityId, slot, out PaletteEntry entry))
                 {
                     slotNotes.Add(
                         $"Slot '{slot}' is requested by the {archetype} archetype but neither the {NoneIfEmpty(school)} "
@@ -423,11 +374,6 @@ namespace Arena.Editor
             return rows;
         }
 
-        // Decision 10: per-school palettes loaded from SchoolVfxSet assets (school → slot → look).
-        // A school present here wins over the seed SchoolPalettes below, so schools are edited as
-        // assets; a school absent here falls back to the seed — so nothing changes until an asset exists.
-        private static Dictionary<string, Dictionary<SpellVfxSlot, PaletteEntry>> _assetSchoolPalettes = new();
-
         private static Dictionary<string, Dictionary<SpellVfxSlot, PaletteEntry>> LoadSchoolPalettesFromAssets()
         {
             var map = new Dictionary<string, Dictionary<SpellVfxSlot, PaletteEntry>>(System.StringComparer.Ordinal);
@@ -446,58 +392,12 @@ namespace Arena.Editor
             return map;
         }
 
-        // One-time migration (decision 10): materialize the seed SchoolPalettes into editable
-        // SchoolVfxSet assets. Byte-faithful (same vfx_id/duration/self_terminating), so the generator
-        // produces the identical output afterward — it just reads the assets instead of the dictionary.
-        [MenuItem("Arena/Combat VFX/Externalize School Palettes to Assets")]
-        private static void ExternalizeSchoolPalettes()
-        {
-            const string parent = "Assets/Arena/Resources";
-            const string folder = "SchoolVfxSets";
-            string dir = $"{parent}/{folder}";
-            if (!AssetDatabase.IsValidFolder(dir))
-                AssetDatabase.CreateFolder(parent, folder);
-
-            int created = 0, updated = 0;
-            foreach (KeyValuePair<string, IReadOnlyDictionary<SpellVfxSlot, PaletteEntry>> kvp in SchoolPalettes)
-            {
-                string path = $"{dir}/{kvp.Key}.asset";
-                var set = AssetDatabase.LoadAssetAtPath<SchoolVfxSet>(path);
-                bool isNew = set == null;
-                if (isNew)
-                {
-                    set = ScriptableObject.CreateInstance<SchoolVfxSet>();
-                    AssetDatabase.CreateAsset(set, path);
-                    created++;
-                }
-                else
-                {
-                    updated++;
-                }
-
-                set!.schoolId = kvp.Key;
-                var slots = new List<SchoolVfxSlotEntry>();
-                foreach (KeyValuePair<SpellVfxSlot, PaletteEntry> s in kvp.Value)
-                    slots.Add(new SchoolVfxSlotEntry
-                    {
-                        slot = s.Key,
-                        vfxId = s.Value.VfxId,
-                        selfTerminating = s.Value.SelfTerminating,
-                        durationMs = s.Value.DurationMs,
-                        scale = 1f,
-                    });
-                set.EditorSetSlots(slots);
-                EditorUtility.SetDirty(set);
-            }
-
-            AssetDatabase.SaveAssets();
-            AssetDatabase.Refresh();
-            string msg = $"{created} created, {updated} updated in {dir}.\nThe generator now reads these assets (seed dictionary is the fallback).";
-            Debug.Log($"[SchoolVfxSet] Externalized {SchoolPalettes.Count} school palettes — {msg}");
-            EditorUtility.DisplayDialog("Externalize School Palettes", msg, "OK");
-        }
-
-        private static bool TryResolvePaletteEntry(string school, string abilityId, SpellVfxSlot slot, out PaletteEntry entry)
+        private static bool TryResolvePaletteEntry(
+            Dictionary<string, Dictionary<SpellVfxSlot, PaletteEntry>> schoolPalettes,
+            string school,
+            string abilityId,
+            SpellVfxSlot slot,
+            out PaletteEntry entry)
         {
             if (SignatureOverrides.TryGetValue(abilityId, out IReadOnlyDictionary<SpellVfxSlot, PaletteEntry> overrides)
                 && overrides.TryGetValue(slot, out entry))
@@ -507,14 +407,7 @@ namespace Arena.Editor
 
             if (!string.IsNullOrEmpty(school))
             {
-                // Asset set wins when the school has one; else the seed dictionary.
-                if (_assetSchoolPalettes.TryGetValue(school, out Dictionary<SpellVfxSlot, PaletteEntry> assetPalette)
-                    && assetPalette.TryGetValue(slot, out entry))
-                {
-                    return true;
-                }
-
-                if (SchoolPalettes.TryGetValue(school, out IReadOnlyDictionary<SpellVfxSlot, PaletteEntry> palette)
+                if (schoolPalettes.TryGetValue(school, out Dictionary<SpellVfxSlot, PaletteEntry> palette)
                     && palette.TryGetValue(slot, out entry))
                 {
                     return true;

@@ -62,7 +62,7 @@ Three independent defects; the feature cannot work until all three are fixed. La
 - [x] **C2. Retire the generator half of `server/src/vfx_generation.rs` (~600 lines)**
   Design-of-record (docs/spell-presentation-dry-redesign-2026-07-07.md, decision 10, line 311) says the Rust module "retires to being the server-side validator's Class-A rule source", but `derive_anim_mode`/`derive_vfx_archetype`/`requested_slots`/`wire`/`validate_wiring` + their types survive with only their own `#[cfg(test)]` callers; progression.rs uses only `check_cue_field_rules`/`CueFields`/`CueFieldViolation`. Cut to the checker (~200 lines).
 
-- [ ] **C3. Kill the seed `SchoolPalettes` fallback**
+- [x] **C3. Kill the seed `SchoolPalettes` fallback**
   `Assets/Arena/Editor/SpellAuthoringWindow.CueGeneration.cs:51` (seed), :497-510 (`TryResolvePaletteEntry` asset-then-seed with no warning on fallback), :441-487 (`ExternalizeSchoolPalettes` unconditionally overwrites hand-edited assets via the `updated++` path). Two live sources of truth; a typo'd/renamed asset silently reverts generation to stale seed values. Delete seed + fallback + menu item; make a missing school a loud error.
 
 - [ ] **C4. CLAUDE.md: PlayerAnimator maintenance-mode violation**
@@ -80,7 +80,7 @@ Three independent defects; the feature cannot work until all three are fixed. La
 - [ ] **C8. Per-spell authoring data compiled into editor source**
   `SpellAuthoringWindow.CueGeneration.cs:89` (`SignatureOverrides`, 19 spells) and :203 (`CastHandOverrides`, "WINS over inference"). The school half of the same data just became assets (decision 10); signatures/hand overrides should follow (reuse the SchoolVfxSlotEntry shape as a per-spell VFX-set) — every new bespoke spell currently requires editing generator source + domain reload, and a stale hand override silently outranks later-corrected inference.
 
-- [ ] **C9. `_assetSchoolPalettes` static-as-hidden-parameter**
+- [x] **C9. `_assetSchoolPalettes` static-as-hidden-parameter**
   `SpellAuthoringWindow.CueGeneration.cs:418` — assigned at top of `GenerateCues`, read in `TryResolvePaletteEntry` same call. Make it a local passed as a parameter. (Dies naturally with C3.)
 
 ## Efficiency (all verified CONFIRMED)
