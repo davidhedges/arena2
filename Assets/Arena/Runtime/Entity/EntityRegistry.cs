@@ -1356,8 +1356,6 @@ namespace Arena.Entity
                 // on "no release presentation" (HoldOnly) rather than "uses hold".
                 if (!casterEntity.PlaysSpellReleasePresentation(row.ActionKind))
                 {
-                    if (PlayerAnimator.SpellHoldDebug)
-                        Debug.Log($"[HOLDDBG] EntityRegistry.OnCombatCast SUPPRESSED release for HoldOnly spell f={Time.frameCount} spell={row.ActionKind} (was preempting the hold)");
                     return;
                 }
 

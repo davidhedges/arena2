@@ -42,8 +42,6 @@ namespace Arena.Presentation
             if (!_isLocalPlayer || _owner == null)
                 return;
 
-            if (PlayerAnimator.SpellHoldDebug)
-                Debug.Log($"[HOLDDBG] SCPC.PredictLocalCastHold f={Time.frameCount} spell={spellActionId} target={targetId} smState={_stateMachine.State}");
             _locallySuppressedSpellActionId = string.Empty;
             Dispatch(_stateMachine.Predict(
                 new LocalSpellPresentationPredictInput(
@@ -57,8 +55,6 @@ namespace Arena.Presentation
 
         public void OnActiveCastInsert(ActiveCast row, ulong castTimeMs)
         {
-            if (PlayerAnimator.SpellHoldDebug)
-                Debug.Log($"[HOLDDBG] SCPC.OnActiveCastInsert f={Time.frameCount} kind={row.Kind} castTimeMs={castTimeMs} track={ShouldTrackActiveCast(row, castTimeMs)} isLocal={_isLocalPlayer} smState={_stateMachine.State} pendingPred={_stateMachine.HasPendingPrediction}");
             if (_owner == null || !ShouldTrackActiveCast(row, castTimeMs))
                 return;
 
@@ -173,8 +169,6 @@ namespace Arena.Presentation
 
             PruneSuppressedActionIds();
             LocalSpellPresentationCommand timeoutCommand = _stateMachine.Timeout(NowMs());
-            if (PlayerAnimator.SpellHoldDebug && timeoutCommand.Kind != LocalSpellPresentationCommandKind.None)
-                Debug.Log($"[HOLDDBG] SCPC.Timeout FIRED f={Time.frameCount} -> {timeoutCommand.Kind} spell={timeoutCommand.SpellActionId} (prediction never confirmed within timeout)");
             Dispatch(timeoutCommand);
             UpdateScheduledRelease();
         }
@@ -233,9 +227,6 @@ namespace Arena.Presentation
         {
             if (_owner == null)
                 return;
-
-            if (PlayerAnimator.SpellHoldDebug && command.Kind != LocalSpellPresentationCommandKind.None)
-                Debug.Log($"[HOLDDBG] SCPC.Dispatch f={Time.frameCount} kind={command.Kind} spell={command.SpellActionId} auth={command.Authority} smState={_stateMachine.State} isLocal={_isLocalPlayer}");
 
             switch (command.Kind)
             {

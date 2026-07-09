@@ -741,8 +741,6 @@ namespace Arena.Input
             if (!string.IsNullOrWhiteSpace(normalizedActionId)
                 && HasPendingInstantSpellForAction(normalizedActionId, nowMs))
             {
-                if (Arena.Presentation.PlayerAnimator.SpellHoldDebug)
-                    Debug.Log($"[HOLDDBG] HandleAuthoritativeLocalSpellReplay SCHEDULES REPLAY f={Time.frameCount} spell={request.ActionId} phase={request.SpellPhase} fireInMs={PendingLocalSpellEventHoldMs} (will preempt an active hold)");
                 _pendingAuthoritativeInstantSpellReplays.Add(new PendingAuthoritativeInstantSpellReplay(
                     actionInstanceId,
                     request,
@@ -854,8 +852,6 @@ namespace Arena.Input
                     continue;
 
                 _pendingAuthoritativeInstantSpellReplays.RemoveAt(i);
-                if (Arena.Presentation.PlayerAnimator.SpellHoldDebug)
-                    Debug.Log($"[HOLDDBG] FlushPendingAuthoritativeInstantSpellReplays FIRES f={Time.frameCount} spell={pending.Request.ActionId} phase={pending.Request.SpellPhase} auth={pending.Request.Authority} (this RequestCombatAnimation preempts the hold)");
                 entity.RequestCombatAnimation(pending.Request);
             }
         }

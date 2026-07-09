@@ -184,11 +184,6 @@ namespace Arena.Presentation
         private static readonly int MeleeAttackEmptyStateHash = Animator.StringToHash("Empty");
         private static readonly int SpellActionEmptyStateHash = Animator.StringToHash("Empty");
 
-        // TEMP instrumentation for the channeled-hold loop investigation. Off by default; flip to
-        // true to trace enter→loop→release timing (useful when validating the channel path). Full
-        // removal once channel casts are confirmed in-game.
-        internal static bool SpellHoldDebug = false;
-
         private Animator? _animator;
         private AnimatorOverrideController? _overrideController;
         private ClientSimulationState? _simState;
@@ -571,9 +566,6 @@ namespace Arena.Presentation
             CombatPreemptionMode preemptionMode = CombatActionPlaybackController.ResolvePreemptionMode(
                 decision,
                 request.Category);
-
-            if (SpellHoldDebug && request.Category == CombatAnimationCategory.Spell)
-                Debug.Log($"[HOLDDBG] RequestCombatAnimation f={Time.frameCount} action={request.ActionId} phase={request.SpellPhase} auth={request.Authority} decision={decision} preempt={preemptionMode}");
 
             switch (preemptionMode)
             {
@@ -1084,11 +1076,6 @@ namespace Arena.Presentation
             bool clearAnimatorState,
             bool softFullBodyClear = false)
         {
-            if (SpellHoldDebug && _actionPlayback.ActiveSpellCastHoldPresentation.HasValue)
-            {
-                string caller = new System.Diagnostics.StackTrace(1, false).GetFrame(0)?.GetMethod()?.Name ?? "?";
-                Debug.Log($"[HOLDDBG] ClearActiveSpellCastHoldPresentation f={Time.frameCount} clearAnim={clearAnimatorState} soft={softFullBodyClear} caller={caller} phase={_actionPlayback.SpellCastHoldPhase}");
-            }
             // Capture the layer/exit settings before nulling so the fade-out targets the
             // layer the hold actually rendered on (masked holds live on UpperBody, not
             // SpellAction) using the spell's authored exit timing.
@@ -1216,8 +1203,6 @@ namespace Arena.Presentation
 
         private void PlaySpellAnimation(in CombatAnimationRequest request)
         {
-            if (SpellHoldDebug)
-                Debug.Log($"[HOLDDBG] PlaySpellAnimation f={Time.frameCount} action={request.ActionId} phase={request.SpellPhase} auth={request.Authority} src={request.Source}");
             switch (request.SpellPhase)
             {
                 case CombatSpellAnimationPhase.HoldStart:
@@ -1293,8 +1278,6 @@ namespace Arena.Presentation
             float enterCompleteNt = holdProfile.ResolveEnterCompleteNormalizedTime(SpellCastHoldEnterToIdleNormalizedTime);
             float exitBlendOut = holdProfile.ResolveExitBlendOutSeconds(SpellCastHoldExitCrossFadeDurationSeconds);
             float exitDelay = holdProfile.ResolveExitDelaySeconds(SpellCastHoldExitDelaySeconds);
-            if (SpellHoldDebug)
-                Debug.Log($"[HOLDDBG] PlaySpellCastHold f={Time.frameCount} action={request.ActionId} auth={request.Authority} layer={holdProfile.playbackLayer} enterSlot={enterBankSlot} idleSlot={idleBankSlot} enter={enterClip.name}({enterClip.length:F3}) idle={idleClip.name}({idleClip.length:F3}) enterCompleteNt={enterCompleteNt:F3} exitDelay={exitDelay:F2} exitBlend={exitBlendOut:F2} needsStance={needsCombatVisualStance}");
 
             // Starting a fresh hold cancels any exit fade left running from a prior one.
             _actionPlayback.ResetSpellCastHoldFadeOut();
@@ -1323,13 +1306,6 @@ namespace Arena.Presentation
             // Detection (UpdateSpellCastHoldPlayback / IsActiveSpellCastHoldStateActive)
             // resolves the same way, so keep playback aligned by sharing the resolver.
             int stateHash = ResolveSpellCastHoldStateHash(playbackLayer, bankSlot);
-
-            if (SpellHoldDebug)
-            {
-                int dbgLayer = ResolveSpellCastHoldLayerIndex(playbackLayer);
-                bool hasState = _animator != null && _animator.HasState(dbgLayer, stateHash);
-                Debug.Log($"[HOLDDBG] PlaySpellCastHoldState f={Time.frameCount} layer={playbackLayer} slot={bankSlot} stateHash={stateHash} layerIndex={dbgLayer} controllerHasState={hasState} nt={normalizedTime:F3}");
-            }
 
             switch (playbackLayer)
             {
@@ -1389,8 +1365,6 @@ namespace Arena.Presentation
             ActiveSpellCastHoldPresentation active = _actionPlayback.ActiveSpellCastHoldPresentation.Value;
             if (_actionPlayback.SpellCastHoldPhase != SpellCastHoldPlaybackPhase.Enter)
             {
-                if (SpellHoldDebug && Time.frameCount % 5 == 0)
-                    Debug.Log($"[HOLDDBG] UpdSCHP f={Time.frameCount} phase={_actionPlayback.SpellCastHoldPhase} (not Enter; idle should be looping)");
                 return;
             }
 
@@ -1405,18 +1379,9 @@ namespace Arena.Presentation
                 current = next;
             }
 
-            if (SpellHoldDebug && Time.frameCount % 5 == 0)
-            {
-                var ci = _animator.GetCurrentAnimatorClipInfo(layerIndex);
-                string clip = ci.Length > 0 && ci[0].clip != null ? ci[0].clip.name : "(none)";
-                Debug.Log($"[HOLDDBG] UpdSCHP f={Time.frameCount} layer={layerIndex} curHash={current.shortNameHash} enterHash={enterStateHash} inEnter={inEnter} nt={current.normalizedTime:F3} needNT={active.EnterCompleteNormalizedTime:F3} inTrans={_animator.IsInTransition(layerIndex)} wt={_animator.GetLayerWeight(layerIndex):F2} clip={clip}");
-            }
-
             if (!inEnter || current.normalizedTime < active.EnterCompleteNormalizedTime)
                 return;
 
-            if (SpellHoldDebug)
-                Debug.Log($"[HOLDDBG] UpdSCHP f={Time.frameCount} ==> TRANSITION Enter->Idle (idleSlot={active.IdleBankSlot})");
             _actionPlayback.SetSpellCastHoldPhase(SpellCastHoldPlaybackPhase.Idle);
             PlaySpellCastHoldState(
                 active.PlaybackLayer,
@@ -2716,7 +2681,6 @@ namespace Arena.Presentation
         }
 
         private static bool ResolvePresentationGrounded(bool gameplayGrounded) => gameplayGrounded;
-
 
         private void BeginWeaponHandoff(
             bool targetInCombat,
