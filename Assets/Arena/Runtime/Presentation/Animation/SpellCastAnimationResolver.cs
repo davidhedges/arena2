@@ -44,21 +44,53 @@ namespace Arena.Presentation
             if (_map == null || _library == null)
                 return false;
 
-            if (!_map.TryGetBaseName(spellId, out string baseName))
+            if (!_map.TryGetEntry(spellId, out SpellCastAnimationMap.Entry mapEntry))
                 return false;
-            if (!_library.TryGetFamily(baseName, out SpellCastAnimationFamily family))
+            if (!_library.TryGetFamily(mapEntry.baseName, out SpellCastAnimationFamily family))
                 return false;
 
             SpellAnimationArchetype archetype = DeriveArchetype(spellId);
             SpellCastHand hand = set != null ? set.OneHandedCastHand : SpellCastHand.Left;
-            return SpellCastAnimationComposer.TryCompose(spellId, family, hand, archetype, out entry);
+            if (!SpellCastAnimationComposer.TryCompose(spellId, family, hand, archetype, out entry))
+                return false;
+
+            ApplyOverrides(mapEntry, ref entry);
+            return true;
+        }
+
+        /// <summary>Applies the map entry's optional per-spell overrides onto the composed entry.</summary>
+        private static void ApplyOverrides(in SpellCastAnimationMap.Entry mapEntry, ref WeaponSpellAnimationEntry entry)
+        {
+            switch (mapEntry.playbackLayer)
+            {
+                case SpellCastLayerOverride.UpperBody: entry.playbackLayer = SpellPlaybackLayer.UpperBody; break;
+                case SpellCastLayerOverride.LeftGesture: entry.playbackLayer = SpellPlaybackLayer.LeftGesture; break;
+                case SpellCastLayerOverride.FullBody: entry.playbackLayer = SpellPlaybackLayer.FullBody; break;
+                case SpellCastLayerOverride.UpperBodyWhileMoving: entry.playbackLayer = SpellPlaybackLayer.UpperBodyWhileMoving; break;
+                case SpellCastLayerOverride.Auto:
+                default: break;
+            }
+
+            switch (mapEntry.combatEntryMode)
+            {
+                case SpellCastEntryModeOverride.Immediate: entry.combatEntryMode = CombatEntryMode.Immediate; break;
+                case SpellCastEntryModeOverride.AnimatedAfterCast: entry.combatEntryMode = CombatEntryMode.AnimatedAfterCast; break;
+                case SpellCastEntryModeOverride.ImmediateForFullBody: entry.combatEntryMode = CombatEntryMode.ImmediateForFullBodyAnimatedAfterUpperBody; break;
+                case SpellCastEntryModeOverride.Auto:
+                default: break;
+            }
+
+            // A prop the composer never sets — the one field an explicit entry carried that a
+            // family can't (the temporary shield/weapon visual). Only overrides when enabled.
+            if (mapEntry.animatedProp.enabled)
+                entry.animatedProp = mapEntry.animatedProp;
         }
 
         /// <summary>True when a family mapping exists for the spell (used to gate the composed path).</summary>
         public static bool HasMapping(string spellId)
         {
             EnsureLoaded();
-            return _map != null && _map.TryGetBaseName(spellId, out _);
+            return _map != null && _map.TryGetEntry(spellId, out _);
         }
 
         private static SpellAnimationArchetype DeriveArchetype(string spellId)

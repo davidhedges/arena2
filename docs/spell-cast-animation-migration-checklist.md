@@ -51,7 +51,7 @@ explicit entry in S&S/Daggers** and only delete the caster (Staff/2H) entries.
 ## Checklist — INSTANT (the bulk; elemental projectiles/AoE first, self-buffs last or never)
 
 Projectiles / AoE (want a real cast gesture):
-- [ ] `FIREBALL` — Staff, 2H
+- [x] `FIREBALL` — Staff, 2H
 - [ ] `BOOMERANG_ORB` — Staff, 2H
 - [ ] `WITHERING_ORB` — Staff, 2H
 - [ ] `ORBITING_BLADES` — Staff, 2H
@@ -64,8 +64,8 @@ Projectiles / AoE (want a real cast gesture):
 - [ ] `GROUND_SLASH` — Staff, 2H
 - [ ] `NEGATE` — Staff, 2H
 - [ ] `BLINDING_LIGHT` — Staff, 2H, S&S, Dag *(four-set)*
-- [ ] `BLESSED_SHIELD` — S&S
-- [ ] `BLADE_BARRIER` — S&S
+- [ ] `BLESSED_SHIELD` — S&S *(set the map entry's `animatedProp` override — copy it from the explicit entry — so the shield visual survives)*
+- [ ] `BLADE_BARRIER` — S&S *(same — set the `animatedProp` override in the map entry)*
 - [ ] `SACRED_FLAME` — S&S, Dag
 - [ ] `CONSECRATE` — S&S, Dag
 - [ ] `CLEANSING_TOUCH` — S&S, Dag
