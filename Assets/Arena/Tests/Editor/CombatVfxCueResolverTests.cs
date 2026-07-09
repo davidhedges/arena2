@@ -49,6 +49,18 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void CombatVfxDispatcher_CachesProjectileDeliveredSpellImpactClassification()
+        {
+            string source = File.ReadAllText(DispatcherPath);
+
+            Assert.That(source, Does.Contain("Dictionary<string, bool> _projectileDeliveredSpellImpactByActionKind"));
+            Assert.That(source, Does.Contain("_projectileDeliveredSpellImpactByActionKind.TryGetValue(actionKind, out bool cached)"));
+            Assert.That(source, Does.Contain("_projectileDeliveredSpellImpactByActionKind[actionKind] = result;"));
+            Assert.That(source, Does.Contain("_projectileDeliveredSpellImpactByActionKind.Clear();"));
+            Assert.That(source, Does.Not.Contain("_projectileDeliveredSpellImpactByActionKind[actionKind] = false;\n                return false;"));
+        }
+
+        [Test]
         public void CombatVfxDispatcher_ProjectileContactsRouteExistingSpellImpactCues()
         {
             string source = File.ReadAllText(DispatcherPath);

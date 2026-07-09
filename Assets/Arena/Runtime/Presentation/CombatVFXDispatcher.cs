@@ -60,6 +60,7 @@ namespace Arena.Presentation
         private DbConnection? _subscribedConnection;
         private readonly Dictionary<string, PendingPredictedSpellVfx> _pendingSpellVfxByToken = new(StringComparer.Ordinal);
         private readonly Dictionary<string, string> _spellVfxTokenByActionInstance = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, bool> _projectileDeliveredSpellImpactByActionKind = new(StringComparer.Ordinal);
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
@@ -178,6 +179,7 @@ namespace Arena.Presentation
 
             _subscribedConnection = conn;
             CueResolver.MarkDirty();
+            _projectileDeliveredSpellImpactByActionKind.Clear();
             conn.Db.CombatEvent.OnInsert += OnCombatEventInsert;
             conn.Db.ProjectilePresentationEvent.OnInsert += OnProjectilePresentationEventInsert;
             conn.Db.PredictedActionResult.OnInsert += OnPredictedActionResultInsert;
@@ -408,6 +410,7 @@ namespace Arena.Presentation
             _ = ctx;
             _ = row;
             CueResolver.MarkDirty();
+            _projectileDeliveredSpellImpactByActionKind.Clear();
         }
 
         private void OnCombatVfxCueCatalogUpdate(EventContext ctx, CombatVfxCueCatalog oldRow, CombatVfxCueCatalog newRow)
@@ -416,6 +419,7 @@ namespace Arena.Presentation
             _ = oldRow;
             _ = newRow;
             CueResolver.MarkDirty();
+            _projectileDeliveredSpellImpactByActionKind.Clear();
         }
 
         private void OnCombatVfxCueCatalogDelete(EventContext ctx, CombatVfxCueCatalog row)
@@ -423,6 +427,7 @@ namespace Arena.Presentation
             _ = ctx;
             _ = row;
             CueResolver.MarkDirty();
+            _projectileDeliveredSpellImpactByActionKind.Clear();
         }
 
         private void OnPredictedActionResultInsert(EventContext ctx, PredictedActionResult row)
@@ -512,22 +517,27 @@ namespace Arena.Presentation
         // must not re-dispatch SPELL_IMPACT. Projectile-delivered = PROJECTILE behavior, or a CHANNEL that
         // fires projectiles (Speed > 0, which excludes beam channels like ELECTROCUTE). Direct-target,
         // area, and beam spell impacts return false and keep dispatching from the combat_event path.
-        private static bool IsProjectileDeliveredSpellImpact(CombatEvent row)
+        private bool IsProjectileDeliveredSpellImpact(CombatEvent row)
         {
             if (!string.Equals(row.SourceKind, CombatEventSources.Spell, StringComparison.Ordinal))
                 return false;
             if (!string.Equals(row.EventType, CombatEventTypes.Impact, StringComparison.Ordinal))
                 return false;
 
-            SpellDefinition? def = NetworkManager.Instance?.Conn?.Db.SpellDefinition
-                .Kind.Find(WireIdentifier.Normalize(row.ActionKind));
+            string actionKind = WireIdentifier.Normalize(row.ActionKind);
+            if (_projectileDeliveredSpellImpactByActionKind.TryGetValue(actionKind, out bool cached))
+                return cached;
+
+            SpellDefinition? def = NetworkManager.Instance?.Conn?.Db.SpellDefinition.Kind.Find(actionKind);
             if (def == null)
                 return false;
 
             string behavior = WireIdentifier.Normalize(def.Behavior);
-            return string.Equals(behavior, SpellBehaviorProjectile, StringComparison.Ordinal)
+            bool result = string.Equals(behavior, SpellBehaviorProjectile, StringComparison.Ordinal)
                 || (string.Equals(behavior, SpellDefinitionContracts.BehaviorChannel, StringComparison.Ordinal)
                     && def.Speed > 0f);
+            _projectileDeliveredSpellImpactByActionKind[actionKind] = result;
+            return result;
         }
 
         private void OnProjectilePresentationEventInsert(EventContext ctx, ProjectilePresentationEvent row)
@@ -1227,6 +1237,7 @@ namespace Arena.Presentation
             conn.Db.CombatVfxCueCatalog.OnDelete -= OnCombatVfxCueCatalogDelete;
             _subscribedConnection = null;
             _cueResolver?.MarkDirty();
+            _projectileDeliveredSpellImpactByActionKind.Clear();
         }
 
         private readonly struct CombatVfxFact
