@@ -249,9 +249,9 @@ namespace Arena.Editor
                     continue;
                 }
 
-                if (!animationSet.TryGetSpellAnimation(actionId, out WeaponSpellAnimationEntry entry))
+                if (!SpellCastAnimationResolver.TryResolve(animationSet, actionId, out WeaponSpellAnimationEntry entry))
                 {
-                    errors.Add($"spell ability '{abilityId}' action '{actionId}' is selectable but CombatAnimationSet '{animationSet.name}' has no matching spell animation entry.");
+                    errors.Add($"spell ability '{abilityId}' action '{actionId}' is selectable but CombatAnimationSet '{animationSet.name}' has no explicit or map-composed spell animation entry.");
                     continue;
                 }
 
@@ -681,6 +681,13 @@ namespace Arena.Editor
                 return;
             }
 
+            var rightHandOneHandSets = new List<string>();
+            foreach (CombatAnimationSet animationSet in Resources.LoadAll<CombatAnimationSet>("CombatAnimationSets"))
+            {
+                if (animationSet.OneHandedCastHand == SpellCastHand.Right)
+                    rightHandOneHandSets.Add(animationSet.name);
+            }
+
             foreach (SpellCastAnimationMap.Entry entry in map.Entries)
             {
                 string spellId = WireIdentifier.Normalize(entry.spellId);
@@ -691,8 +698,17 @@ namespace Arena.Editor
                     errors.Add($"SpellCastAnimationMap entry for spell '{spellId}' has no baseName.");
                     continue;
                 }
-                if (!library.TryGetFamily(entry.baseName, out _))
+                if (!library.TryGetFamily(entry.baseName, out SpellCastAnimationFamily family))
+                {
                     errors.Add($"SpellCastAnimationMap entry for spell '{spellId}' references baseName '{entry.baseName}', but SpellCastAnimationLibrary has no matching family.");
+                    continue;
+                }
+
+                if (family.handStyle == SpellCastHandStyle.OneHand && rightHandOneHandSets.Count > 0)
+                {
+                    errors.Add(
+                        $"SpellCastAnimationMap entry for spell '{spellId}' uses one-hand family '{entry.baseName}', but CombatAnimationSet(s) {string.Join(", ", rightHandOneHandSets)} author oneHandedCastHand=Right. Right-hand one-hand spell composition is disabled until a RightGesture layer/mask exists.");
+                }
             }
         }
 

@@ -207,8 +207,8 @@ namespace Arena.Editor
         private void DrawGeneratedCuePreview(
             AbilityDefinition selected,
             string abilityId,
-            bool hasAnimationEntry,
-            WeaponSpellAnimationEntry animationEntry)
+            bool hasResolvedAnimation,
+            WeaponSpellAnimationEntry resolvedAnimation)
         {
             EditorGUILayout.LabelField("Generated Cues (SpellVfxGenerator)", EditorStyles.boldLabel);
             EditorGUILayout.HelpBox(
@@ -224,7 +224,7 @@ namespace Arena.Editor
             SpellAnimationArchetype mode = SpellAnimationArchetypes.Derive(
                 (ulong)Mathf.Max(0, selected.gameplay.cast_time_ms), deliveryKind);
             string school = ResolveSchool(selected.gameplay.delivery);
-            string castHandAnchor = ResolveCastHandAnchor(abilityId, hasAnimationEntry, animationEntry);
+            string castHandAnchor = ResolveCastHandAnchor(abilityId, hasResolvedAnimation, resolvedAnimation);
 
             EditorGUILayout.LabelField(
                 "Derivation",
@@ -298,18 +298,19 @@ namespace Arena.Editor
         }
 
         private static string ResolveCastHandAnchor(
-            string abilityId, bool hasAnimationEntry, WeaponSpellAnimationEntry animationEntry)
+            string abilityId, bool hasResolvedAnimation, WeaponSpellAnimationEntry resolvedAnimation)
         {
             // An explicit per-spell override wins — the authored E7 hand for spells the animation resolves
             // wrongly (or can't resolve), e.g. BLADE_BARRIER's RIGHT launch.
             if (CastHandOverrides.TryGetValue(abilityId, out string overrideHand))
                 return overrideHand;
 
-            // E7: otherwise the concrete cast hand is inferred from the animation/playback layer; profile-less
-            // SPELL_* spells have no animation set, so fall back to the generator's LEFT_HAND default (14/15
-            // hand cues use LEFT today — design doc Appendix B "shared modifiers").
-            if (hasAnimationEntry
-                && TryInferSpellPresentationHand(animationEntry, out string handAnchor, out _))
+            // E7: otherwise the concrete cast hand is inferred from the resolved animation/playback layer
+            // (explicit entry or SpellCastAnimationMap composition). Profile-less SPELL_* spells have no
+            // animation set, so fall back to the generator's LEFT_HAND default (14/15 hand cues use LEFT
+            // today — design doc Appendix B "shared modifiers").
+            if (hasResolvedAnimation
+                && TryInferSpellPresentationHand(resolvedAnimation, out string handAnchor, out _))
             {
                 return handAnchor;
             }

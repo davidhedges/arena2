@@ -29,12 +29,18 @@ namespace Arena.Presentation
         private const SpellPlaybackLayer ChargedReleaseLayer = SpellPlaybackLayer.UpperBodyWhileMoving;
 
         /// <summary>
-        /// Whether a resolved cast is a left-handed one-handed cast — the only case that gets the
-        /// weapon-bearing-right-arm mask. Two-handed flavors use both hands and ignore the cast hand;
-        /// no right-arm equivalent mask exists yet, so a right-handed one-handed cast is not masked.
+        /// Whether a resolved cast is a left-handed one-handed cast — the only supported one-hand
+        /// masking mode. Two-handed flavors use both hands and ignore the cast hand.
         /// </summary>
         private static bool IsLeftHandedOneHand(SpellCastHandStyle handStyle, SpellCastHand hand)
             => handStyle == SpellCastHandStyle.OneHand && hand == SpellCastHand.Left;
+
+        /// <summary>
+        /// Right-handed one-hand composition is deliberately disabled until a RightGesture layer/mask
+        /// exists. Falling through to UpperBody would silently move the weapon-bearing arm.
+        /// </summary>
+        private static bool IsUnsupportedRightHandedOneHand(SpellCastHandStyle handStyle, SpellCastHand hand)
+            => handStyle == SpellCastHandStyle.OneHand && hand == SpellCastHand.Right;
 
         /// <summary>
         /// The overlay layer for an instant cast. A left-handed one-handed cast keeps the
@@ -83,6 +89,9 @@ namespace Arena.Presentation
             out WeaponSpellAnimationEntry entry)
         {
             entry = default;
+            if (IsUnsupportedRightHandedOneHand(family.handStyle, hand))
+                return false;
+
             if (!family.TryGetTriple(hand, out SpellCastClipTriple triple))
                 return false;
 

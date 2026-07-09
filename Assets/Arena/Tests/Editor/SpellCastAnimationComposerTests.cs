@@ -29,14 +29,14 @@ namespace Arena.Tests.Editor
             return boxed;
         }
 
-        private static object OneHandFamily(object leftTriple)
+        private static object OneHandFamily(object leftTriple, object? rightTriple = null)
         {
             Type f = T("SpellCastAnimationFamily");
             object boxed = Activator.CreateInstance(f)!;
             f.GetField("baseName")!.SetValue(boxed, "TESTBASE");
             f.GetField("handStyle")!.SetValue(boxed, Enum.Parse(T("SpellCastHandStyle"), "OneHand"));
             f.GetField("left")!.SetValue(boxed, leftTriple);
-            f.GetField("right")!.SetValue(boxed, Triple(null, null, null));
+            f.GetField("right")!.SetValue(boxed, rightTriple ?? Triple(null, null, null));
             f.GetField("twoHand")!.SetValue(boxed, Triple(null, null, null));
             return boxed;
         }
@@ -134,6 +134,18 @@ namespace Arena.Tests.Editor
 
             Assert.That(ok, Is.True);
             Assert.That(Field(entry!, "ground"), Is.SameAs(cast), "instant plays the Cast clip from the two-hand triple");
+        }
+
+        [Test]
+        public void OneHandRight_IsUnsupportedUntilRightGestureLayerExists()
+        {
+            AnimationClip one = Clip("right-one"), load = Clip("right-load"), cast = Clip("right-cast");
+            (bool ok, _) = Compose(
+                OneHandFamily(Triple(null, null, null), Triple(one, load, cast)),
+                "Right",
+                "Instant");
+
+            Assert.That(ok, Is.False, "Right-hand one-hand casts must not silently fall back to unmasked UpperBody");
         }
 
         [Test]

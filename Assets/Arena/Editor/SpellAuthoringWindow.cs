@@ -126,8 +126,8 @@ namespace Arena.Editor
                 || (string.Equals(Normalize(cue.owner_kind), "SPELL", StringComparison.Ordinal)
                     && string.Equals(Normalize(cue.owner_id), spellId, StringComparison.Ordinal))));
 
-            bool hasAnimationEntry = false;
-            WeaponSpellAnimationEntry animationEntry = default;
+            bool hasResolvedAnimation = false;
+            WeaponSpellAnimationEntry resolvedAnimation = default;
 
             using (new EditorGUI.DisabledScope(true))
             {
@@ -164,45 +164,45 @@ namespace Arena.Editor
                         Selection.activeObject = animationSet;
                 }
 
-                if (TryFindSpellAnimationEntry(animationSet, spellId, out WeaponSpellAnimationEntry entry))
+                if (TryResolveSpellAnimationEntry(animationSet, spellId, out WeaponSpellAnimationEntry entry))
                 {
-                    hasAnimationEntry = true;
-                    animationEntry = entry;
+                    hasResolvedAnimation = true;
+                    resolvedAnimation = entry;
                     if (entry.ResolveClip(grounded: true) != null)
                     {
-                        EditorGUILayout.HelpBox($"Animation entry found for '{spellId}'. Ground clip assigned.", MessageType.Info);
+                        EditorGUILayout.HelpBox($"Animation resolves for '{spellId}'. Ground clip assigned.", MessageType.Info);
                     }
                     else
                     {
-                        EditorGUILayout.HelpBox($"Animation entry found for '{spellId}', but no ground or fallback clip is assigned yet.", MessageType.Warning);
+                        EditorGUILayout.HelpBox($"Animation resolves for '{spellId}', but no ground or fallback clip is assigned yet.", MessageType.Warning);
                     }
                 }
                 else
                 {
-                    EditorGUILayout.HelpBox($"Missing CombatAnimationSet spell entry for '{spellId}'. Add it under Spell Actions > Spells.", MessageType.Warning);
+                    EditorGUILayout.HelpBox($"No explicit or map-composed spell animation resolves for '{spellId}'. Add it under Spell Actions > Spells or SpellCastAnimationMap.", MessageType.Warning);
                     if (GUILayout.Button("Add Missing Animation Entry", GUILayout.Width(210f)))
                         AddMissingSpellAnimationEntry(animationSet, spellId);
                 }
             }
 
-            DrawCueAudit(abilityId, deliveryKind, selected.gameplay.cast_time_ms, hasAnimationEntry, animationEntry);
+            DrawCueAudit(abilityId, deliveryKind, selected.gameplay.cast_time_ms, hasResolvedAnimation, resolvedAnimation);
             EditorGUILayout.Space(12f);
-            DrawGeneratedCuePreview(selected, abilityId, hasAnimationEntry, animationEntry);
+            DrawGeneratedCuePreview(selected, abilityId, hasResolvedAnimation, resolvedAnimation);
         }
 
         private void DrawCueAudit(
             string abilityId,
             string deliveryKind,
             int castTimeMs,
-            bool hasAnimationEntry,
-            WeaponSpellAnimationEntry animationEntry)
+            bool hasResolvedAnimation,
+            WeaponSpellAnimationEntry resolvedAnimation)
         {
             EditorGUILayout.Space(6f);
             EditorGUILayout.LabelField("Authored VFX Cues", EditorStyles.boldLabel);
             string expectedHandAnchor = string.Empty;
             string expectedHandReason = string.Empty;
-            bool hasExpectedHand = hasAnimationEntry
-                && TryInferSpellPresentationHand(animationEntry, out expectedHandAnchor, out expectedHandReason);
+            bool hasExpectedHand = hasResolvedAnimation
+                && TryInferSpellPresentationHand(resolvedAnimation, out expectedHandAnchor, out expectedHandReason);
             if (hasExpectedHand)
                 EditorGUILayout.LabelField("Animation Hand", $"{expectedHandAnchor} ({expectedHandReason})");
 
@@ -454,27 +454,12 @@ namespace Arena.Editor
             return normalized;
         }
 
-        private static bool TryFindSpellAnimationEntry(
+        private static bool TryResolveSpellAnimationEntry(
             CombatAnimationSet animationSet,
             string spellId,
             out WeaponSpellAnimationEntry entry)
         {
-            string normalizedSpellId = Normalize(spellId);
-            if (!string.IsNullOrEmpty(normalizedSpellId) && animationSet.spells != null)
-            {
-                for (int index = 0; index < animationSet.spells.Length; index++)
-                {
-                    WeaponSpellAnimationEntry candidate = animationSet.spells[index];
-                    if (!string.Equals(candidate.SpellIdOrEmpty, normalizedSpellId, StringComparison.Ordinal))
-                        continue;
-
-                    entry = candidate;
-                    return true;
-                }
-            }
-
-            entry = default;
-            return false;
+            return SpellCastAnimationResolver.TryResolve(animationSet, spellId, out entry);
         }
 
         private static void AddMissingSpellAnimationEntry(CombatAnimationSet animationSet, string spellId)

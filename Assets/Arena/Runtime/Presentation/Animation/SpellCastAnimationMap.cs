@@ -45,7 +45,7 @@ namespace Arena.Presentation
             public string baseName;
 
             [Header("Optional overrides (Auto/disabled = the composed default)")]
-            [Tooltip("Override the release/instant playback layer. Auto uses the composer default (LeftGesture for left-hand 1H, else UpperBody).")]
+            [Tooltip("Override the release/instant playback layer. Auto uses the composer default (LeftGesture for left-hand 1H, else UpperBody/two-hand). Right-hand 1H is unsupported until a RightGesture layer exists.")]
             public SpellCastLayerOverride playbackLayer;
             [Tooltip("Override the combat entry mode. Auto uses the composer default.")]
             public SpellCastEntryModeOverride combatEntryMode;

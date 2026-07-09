@@ -1202,7 +1202,7 @@ namespace Arena.Presentation
         [Tooltip("Default enter/idle presentation for cast-time spells. Release clips remain authored per spell in Spell Actions.")]
         public SpellCastHoldProfile defaultSpellCastHold;
 
-        [Tooltip("Which hand this weapon set casts ONE-HANDED spell flavors with (Call/Ground/Directional-1H). Two-handed flavors (Omni/Special) always use both hands regardless of this. Only used by the cast-animation family resolver. See docs/spell-cast-animation-stitching-2026-07-09.md.")]
+        [Tooltip("Which hand this weapon set casts ONE-HANDED spell flavors with (Call/Ground/Directional-1H). Left is the only supported one-hand value until a RightGesture layer/mask exists; two-handed flavors (Omni/Special) always use both hands regardless. Only used by the cast-animation family resolver. See docs/spell-cast-animation-stitching-2026-07-09.md.")]
         public SpellCastHand oneHandedCastHand = SpellCastHand.Left;
 
         /// <summary>The one-handed cast hand for family resolution (Left/Right only; TwoHand collapses to Left).</summary>

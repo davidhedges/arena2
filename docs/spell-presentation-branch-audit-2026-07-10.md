@@ -44,10 +44,10 @@ Three independent defects; the feature cannot work until all three are fixed. La
 - [x] **7. JSON escape corruption in the catalog writer** — CONFIRMED (mechanism)
   `Assets/Arena/Editor/SpellCueCatalogWriter.cs:585-596`: `ReadJsonString` decodes `\uXXXX` to literal `u`+hex (backslash dropped); `EscapeJsonString` (:415) escapes only backslash+quote, so decoded `\n`/`\t` re-serialize as raw control chars (invalid JSON). Current catalog has zero backslash escapes, but the writer's byte-preservation promise is false the day one appears. Fix: handle `\u`/`\n`/`\t`/`\r` in both directions.
 
-- [ ] **8. Editor cast-hand inference ignores the composed path** — CONFIRMED
+- [x] **8. Editor cast-hand inference ignores the composed path** — CONFIRMED
   `Assets/Arena/Editor/SpellAuthoringWindow.CueGeneration.cs:348-366` + SpellAuthoringWindow.cs:457: hand inference reads only explicit `animationSet.spells` entries; a map-migrated spell (Fireball today) has `hasAnimationEntry=false` and falls back to LEFT_HAND, never consulting `set.OneHandedCastHand` (which runtime honors, possibly Right). Latent: only Left is serialized anywhere today.
 
-- [ ] **9. `oneHandedCastHand=Right` silently composes unmasked** — CONFIRMED
+- [x] **9. `oneHandedCastHand=Right` silently composes unmasked** — CONFIRMED
   `Assets/Arena/Runtime/Presentation/Animation/SpellCastAnimationComposer.cs:36-37`: all three layer resolvers key on `OneHand && Left`; only LeftGesture layer/states exist; `CombatAnimationSet.cs:1209` collapses TwoHand→Left. Authoring Right compiles and resolves but drops all weapon-arm masking with no validator/warning (limitation acknowledged only in a comment). Either validate-and-reject Right at authoring time or don't expose it until a RightGesture substrate exists. (Fix together with #8.)
 
 - [ ] **10. NPC-cast projectile spells would lose impact VFX** — PLAUSIBLE
