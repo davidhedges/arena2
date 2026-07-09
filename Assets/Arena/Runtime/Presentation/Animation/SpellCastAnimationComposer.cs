@@ -23,14 +23,23 @@ namespace Arena.Presentation
         // §1.5 / §6.8): UpperBody → UpperBodySpellCastHoldAction*, FullBody → SpellCastHoldAction*.
         // UpperBody is the safe default (loop-capable, keeps facing/aim responsive); tunable later.
         private const SpellPlaybackLayer HoldLayer = SpellPlaybackLayer.UpperBody;
-        // Instant casts must NOT disrupt the lower body / combat stance. UpperBody is an always-on
-        // upper-body overlay (the throw plays on the torso/arms, legs keep their pose); by contrast
-        // UpperBodyWhileMoving plays FULL body when the caster is standing still, which reads as
-        // "standing straight up" mid-cast. UpperBodySpellAction* release states auto-exit at 0.9.
-        private const SpellPlaybackLayer InstantLayer = SpellPlaybackLayer.UpperBody;
         // The charged release stays UpperBodyWhileMoving — grounded charges read fine full-body when
         // stationary (kept from the ICICLE tuning the owner signed off on).
         private const SpellPlaybackLayer ChargedReleaseLayer = SpellPlaybackLayer.UpperBodyWhileMoving;
+
+        /// <summary>
+        /// The overlay layer for an instant cast. A left-handed one-handed cast keeps the
+        /// weapon-bearing right arm out of the motion (<see cref="SpellPlaybackLayer.LeftGesture"/>
+        /// masks to pelvis/spine/left-arm, so the right arm holds its base pose — e.g. gripping the
+        /// greatsword). Everything else uses the full upper-body overlay (torso + both arms), which
+        /// still keeps the lower body/stance. Neither stands the caster straight up (that was the
+        /// full-body-when-stationary behavior of UpperBodyWhileMoving). No right-arm equivalent mask
+        /// exists yet, so a right-handed one-handed cast falls back to UpperBody.
+        /// </summary>
+        private static SpellPlaybackLayer ResolveInstantLayer(SpellCastHandStyle handStyle, SpellCastHand hand)
+            => handStyle == SpellCastHandStyle.OneHand && hand == SpellCastHand.Left
+                ? SpellPlaybackLayer.LeftGesture
+                : SpellPlaybackLayer.UpperBody;
 
         /// <summary>
         /// Returns <c>false</c> (with a default entry) when the family has no clips for the requested
@@ -65,7 +74,7 @@ namespace Arena.Presentation
                     entry.ground = snap;
                     entry.air = snap;
                     entry.presentationMode = SpellAnimationPresentationMode.ReleaseOnly;
-                    entry.playbackLayer = InstantLayer;
+                    entry.playbackLayer = ResolveInstantLayer(family.handStyle, hand);
                     entry.combatEntryMode = CombatEntryMode.ImmediateForFullBodyAnimatedAfterUpperBody;
                     return true;
                 }
