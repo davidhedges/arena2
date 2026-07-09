@@ -184,8 +184,10 @@ namespace Arena.Presentation
         private static readonly int MeleeAttackEmptyStateHash = Animator.StringToHash("Empty");
         private static readonly int SpellActionEmptyStateHash = Animator.StringToHash("Empty");
 
-        // TEMP instrumentation for the channeled-hold loop investigation. Toggle off to silence.
-        internal static bool SpellHoldDebug = true;
+        // TEMP instrumentation for the channeled-hold loop investigation. Off by default; flip to
+        // true to trace enter→loop→release timing (useful when validating the channel path). Full
+        // removal once channel casts are confirmed in-game.
+        internal static bool SpellHoldDebug = false;
 
         private Animator? _animator;
         private AnimatorOverrideController? _overrideController;
