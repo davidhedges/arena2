@@ -159,6 +159,7 @@ namespace Arena.Input
             }
 
             Vector2 move = Vector2.ClampMagnitude(_input.Move, 1.0f);
+            Vector2 keyboardTurnAxes = ResolveKeyboardTurnAxes(_input.RawMove);
             _keyboardTurningActive = false;
             _cameraAlignActive = false;
 
@@ -187,22 +188,33 @@ namespace Arena.Input
                 return;
             }
 
-            _intentForward = move.y;
+            // In keyboard-facing mode A/D turns rather than strafes. Preserve the raw W/S
+            // axis so W+A/W+D remains full-speed forward movement; using the normalized
+            // directional vector here would reduce W from 1 to sqrt(0.5) before discarding
+            // the lateral component.
+            _intentForward = keyboardTurnAxes.y;
             _intentStrafe = 0.0f;
 
-            if (Mathf.Abs(move.x) > TurnInputThreshold)
+            if (Mathf.Abs(keyboardTurnAxes.x) > TurnInputThreshold)
             {
                 _keyboardTurningActive = true;
-                float turnSpeedDegreesPerSecond = Mathf.Abs(move.y) > TurnInputThreshold
+                float turnSpeedDegreesPerSecond = Mathf.Abs(keyboardTurnAxes.y) > TurnInputThreshold
                     ? MovingKeyboardTurnSpeedDegreesPerSecond
                     : KeyboardTurnSpeedDegreesPerSecond;
-                float yawDelta = move.x * turnSpeedDegreesPerSecond * Mathf.Deg2Rad * Time.deltaTime;
+                float yawDelta = keyboardTurnAxes.x * turnSpeedDegreesPerSecond * Mathf.Deg2Rad * Time.deltaTime;
                 _intentYaw = NormalizeRadians(_intentYaw + yawDelta);
             }
             else
             {
                 _intentYaw = CurrentFacingYaw;
             }
+        }
+
+        private static Vector2 ResolveKeyboardTurnAxes(Vector2 rawMove)
+        {
+            return new Vector2(
+                Mathf.Clamp(rawMove.x, -1f, 1f),
+                Mathf.Clamp(rawMove.y, -1f, 1f));
         }
 
         private void SuppressPredictedCastBarOnMovementIntent()

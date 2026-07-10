@@ -26,6 +26,7 @@ namespace Arena.Presentation
 
         private readonly Func<bool> _isCurrentlyGrounded;
         private readonly Action<bool, bool> _applyHitClipOverrides;
+        private readonly Action _clearActionPresentationForForcedStatus;
         private readonly Action _clearInterruptiblePresentationForStagger;
         private readonly Action<string> _cutRejectedActionPresentation;
 
@@ -38,11 +39,13 @@ namespace Arena.Presentation
         public CombatStatusReactionController(
             Func<bool> isCurrentlyGrounded,
             Action<bool, bool> applyHitClipOverrides,
+            Action clearActionPresentationForForcedStatus,
             Action clearInterruptiblePresentationForStagger,
             Action<string> cutRejectedActionPresentation)
         {
             _isCurrentlyGrounded = isCurrentlyGrounded;
             _applyHitClipOverrides = applyHitClipOverrides;
+            _clearActionPresentationForForcedStatus = clearActionPresentationForForcedStatus;
             _clearInterruptiblePresentationForStagger = clearInterruptiblePresentationForStagger;
             _cutRejectedActionPresentation = cutRejectedActionPresentation;
         }
@@ -70,6 +73,7 @@ namespace Arena.Presentation
             {
                 if (!alreadyKnockedDown)
                 {
+                    _clearActionPresentationForForcedStatus();
                     ClearHitReactionPresentation();
                     ClearHardCrowdControlPresentation();
                     _animator.ResetTrigger(TriggerGetUpHash);
@@ -116,6 +120,7 @@ namespace Arena.Presentation
 
                 if (!alreadyHardCrowdControlled || statusKindChanged)
                 {
+                    _clearActionPresentationForForcedStatus();
                     ClearHitReactionPresentation();
                     _animator.ResetTrigger(TriggerHardCrowdControlHash);
                     _animator.SetTrigger(TriggerHardCrowdControlHash);

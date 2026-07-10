@@ -237,6 +237,7 @@ namespace Arena.Presentation
             _statusReactionController ??= new CombatStatusReactionController(
                 IsCurrentlyGrounded,
                 ApplyHitClipOverrides,
+                ClearPresentationForForcedStatus,
                 ClearPresentationForStagger,
                 CutRejectedActionPresentationScoped);
 
@@ -1076,6 +1077,7 @@ namespace Arena.Presentation
 
         private void ClearActiveSpellPresentation(bool resetLayerWeight, bool clearUpperBodySpell)
         {
+            ResetPendingSpellActionTriggers();
             _actionPlayback.ClearActiveSpellPresentation();
             ResetSpellLowerBodyUnlockState(resetLayerWeight, clearUpperBodySpell);
             if (clearUpperBodySpell)
@@ -1155,17 +1157,7 @@ namespace Arena.Presentation
 
         private void PreemptLowerPriorityPresentationFor(bool captureGhost)
         {
-            PreemptMeleeAnimationIfActive(captureGhost);
-            bool hadCastHold = _actionPlayback.ActiveSpellCastHoldPresentation.HasValue;
-            // Start the masked hold's smooth blend-out FIRST. The overlay cleanup below
-            // (ClearActiveSpellPresentation + the trailing LeftGesture clear) would otherwise
-            // hard-snap the hold layer to Empty; with the fade already live, those clears see it
-            // and leave the fade layer alone (guard in ClearLeftGestureSpellPresentation).
-            ClearActiveSpellCastHoldPresentation(clearAnimatorState: true, softFullBodyClear: hadCastHold);
-            ClearActiveSpellPresentation(resetLayerWeight: true, clearUpperBodySpell: true);
-            if (!hadCastHold)
-                _animator?.Play(SpellActionEmptyStateHash, SpellActionLayerIndex, 0f);
-            ClearLeftGestureSpellPresentation();
+            ClearCombatActionPresentation(captureGhost, softSpellHoldClear: true);
         }
 
         private void CaptureSuppressedAutoAttackGhost(in CombatAnimationRequest request)
@@ -1776,6 +1768,7 @@ namespace Arena.Presentation
 
         private void ClearActiveMeleePresentation()
         {
+            ResetPendingMeleeActionTriggers();
             bool wasPhased = _actionPlayback.ClearActiveMeleePresentation();
             if (wasPhased)
                 CancelPhasedMeleePlayback(clearActivePresentation: false);
@@ -2541,20 +2534,8 @@ namespace Arena.Presentation
 
             StatusReactionController.Bind(_animator, _overrideController);
             StatusReactionController.ClearForNonDeath();
-            PreemptMeleeAnimationIfActive(captureGhost: false);
-            CancelPhasedMeleePlayback();
-            ClearActiveSpellPresentation(resetLayerWeight: true, clearUpperBodySpell: true);
-            ClearActiveSpellCastHoldPresentation(clearAnimatorState: true);
-
-            _blockingPresentationActive = false;
-            _parryArmedPresentationActive = false;
-            _animator.SetBool(IsBlockingHash, false);
-            _animator.ResetTrigger(TriggerBlockStartHash);
-            _animator.ResetTrigger(TriggerBlockHitHash);
-            _animator.ResetTrigger(TriggerParryHitHash);
-
-            PlayUpperBodyState(UpperBodyEmptyStateHash, 0f);
-            _animator.Play(SpellActionEmptyStateHash, SpellActionLayerIndex, 0f);
+            ClearCombatActionPresentation(captureMeleeGhost: false, softSpellHoldClear: false);
+            ClearDefensivePresentation();
         }
 
         public void TriggerStagger(Vector3 hitDirection, Vector3 characterForward)
@@ -2644,17 +2625,76 @@ namespace Arena.Presentation
             if (_animator == null)
                 return;
 
-            PreemptMeleeAnimationIfActive();
+            ClearCombatActionPresentation(captureMeleeGhost: true, softSpellHoldClear: false);
+            ClearDefensivePresentation();
+        }
+
+        private void ClearPresentationForForcedStatus()
+        {
+            if (_animator == null)
+                return;
+
+            ClearCombatActionPresentation(captureMeleeGhost: false, softSpellHoldClear: false);
+            ClearDefensivePresentation();
+        }
+
+        private void ClearCombatActionPresentation(bool captureMeleeGhost, bool softSpellHoldClear)
+        {
+            if (_animator == null)
+                return;
+
+            PreemptMeleeAnimationIfActive(captureMeleeGhost);
             CancelPhasedMeleePlayback();
+
+            bool hadCastHold = _actionPlayback.ActiveSpellCastHoldPresentation.HasValue;
+            // Start a requested smooth hold exit before clearing overlay state. The existing
+            // layer guards then leave the fading layer alone until it reaches Empty.
+            ClearActiveSpellCastHoldPresentation(
+                clearAnimatorState: true,
+                softFullBodyClear: softSpellHoldClear && hadCastHold);
             ClearActiveSpellPresentation(resetLayerWeight: true, clearUpperBodySpell: true);
-            ClearActiveSpellCastHoldPresentation(clearAnimatorState: true);
-            _animator.Play(SpellActionEmptyStateHash, SpellActionLayerIndex, 0f);
+            _actionPlayback.ClearActiveOverlaySpellPresentation();
+
+            _animator.Play(MeleeAttackEmptyStateHash, MeleeAttackLayerIndex, 0f);
+            if (!softSpellHoldClear || !hadCastHold)
+                _animator.Play(SpellActionEmptyStateHash, SpellActionLayerIndex, 0f);
+            PlayUpperBodyState(UpperBodyEmptyStateHash, 0f);
+            ClearLeftGestureSpellPresentation();
+        }
+
+        private void ClearDefensivePresentation()
+        {
+            if (_animator == null)
+                return;
+
             _blockingPresentationActive = false;
             _parryArmedPresentationActive = false;
             _animator.SetBool(IsBlockingHash, false);
             _animator.ResetTrigger(TriggerBlockStartHash);
             _animator.ResetTrigger(TriggerBlockHitHash);
-            PlayUpperBodyState(UpperBodyEmptyStateHash, 0f);
+            _animator.ResetTrigger(TriggerParryHitHash);
+        }
+
+        private void ResetPendingMeleeActionTriggers()
+        {
+            if (_animator == null)
+                return;
+
+            _animator.ResetTrigger(TriggerStrike1Hash);
+            _animator.ResetTrigger(TriggerStrike2Hash);
+            _animator.ResetTrigger(TriggerStrike3Hash);
+            _animator.ResetTrigger(TriggerStrike4Hash);
+        }
+
+        private void ResetPendingSpellActionTriggers()
+        {
+            if (_animator == null)
+                return;
+
+            _animator.ResetTrigger(TriggerSpellAction1Hash);
+            _animator.ResetTrigger(TriggerSpellAction2Hash);
+            _animator.ResetTrigger(TriggerSpellAction3Hash);
+            _animator.ResetTrigger(TriggerSpellAction4Hash);
         }
 
         private void Update()

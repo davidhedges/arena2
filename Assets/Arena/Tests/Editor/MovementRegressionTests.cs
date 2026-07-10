@@ -1114,6 +1114,36 @@ namespace Arena.Tests.Editor
             Assert.That(GetStaticField<int>(configType, "MaxPendingCommands"), Is.EqualTo(96));
         }
 
+        [TestCase(-1f)]
+        [TestCase(1f)]
+        public void KeyboardTurningWhileMoving_PreservesFullForwardSpeed(float turnAxis)
+        {
+            Type motorType = RequireType("Arena.Input.LocalPlayerMotor");
+            MethodInfo resolveAxes = RequireMethod(
+                motorType,
+                "ResolveKeyboardTurnAxes",
+                typeof(Vector2));
+            Vector2 axes = (Vector2)resolveAxes.Invoke(null, new object[] { new Vector2(turnAxis, 1f) })!;
+
+            Assert.That(axes.x, Is.EqualTo(turnAxis).Within(PositionTolerance));
+            Assert.That(axes.y, Is.EqualTo(1f).Within(PositionTolerance));
+
+            Type predictionType = RequireType("Arena.Input.MovementPrediction");
+            MethodInfo velocityFromIntent = RequireMethod(
+                predictionType,
+                "VelocityFromIntent",
+                typeof(float),
+                typeof(float),
+                typeof(float),
+                typeof(float));
+            float moveSpeed = GetStaticField<float>(predictionType, "MoveSpeed");
+            Vector2 velocity = (Vector2)velocityFromIntent.Invoke(
+                null,
+                new object[] { axes.y, 0f, 0f, moveSpeed })!;
+
+            Assert.That(velocity.magnitude, Is.EqualTo(moveSpeed).Within(PositionTolerance));
+        }
+
         [Test]
         public void ClientPredictionConstants_MatchAuthoritativeServerMovementConstants()
         {

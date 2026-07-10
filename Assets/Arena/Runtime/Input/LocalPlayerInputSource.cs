@@ -20,6 +20,7 @@ namespace Arena.Input
         private readonly HashSet<KeyCode> _pressedKeys = new();
         private readonly HashSet<KeyCode> _releasedKeys = new();
 
+        public Vector2 RawMove { get; private set; }
         public Vector2 Move { get; private set; }
         public Vector2 Look { get; private set; }
         public Vector2 ScrollDelta { get; private set; }
@@ -35,7 +36,8 @@ namespace Arena.Input
         private void Update()
         {
             RightMouseHeld = IsMouseButtonHeld(1);
-            Move = ReadMove();
+            RawMove = ReadMove();
+            Move = Vector2.ClampMagnitude(RawMove, 1f);
             Look = ReadLook();
             JumpPressed = WasKeyPressedThisFrame(KeyCode.Space);
 
@@ -80,7 +82,7 @@ namespace Arena.Input
             if (UnityEngine.Input.GetKey(KeyCode.A) || UnityEngine.Input.GetKey(KeyCode.LeftArrow))
                 move.x -= 1f;
 #endif
-            return Vector2.ClampMagnitude(move, 1f);
+            return move;
         }
 
         private static Vector2 ReadLook()

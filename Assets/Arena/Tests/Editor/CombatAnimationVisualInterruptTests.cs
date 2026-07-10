@@ -126,6 +126,59 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void PlayerAnimator_ForcedActionClearCancelsPendingActionTriggersBeforeAnimatorEvaluation()
+        {
+            (GameObject root, Animator animator, Component playerAnimator) = CreatePlayerAnimatorHarness();
+            try
+            {
+                animator.SetTrigger("TriggerStrike1");
+                animator.SetTrigger("TriggerSpellAction1");
+
+                RequireMethod(
+                        playerAnimator.GetType(),
+                        "ClearCombatActionPresentation",
+                        typeof(bool),
+                        typeof(bool))
+                    .Invoke(playerAnimator, new object[] { false, false });
+                animator.Update(0f);
+
+                AssertActionLayersEmpty(animator);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
+        public void PlayerAnimator_HardCrowdControlAndKnockdownClearHigherActionLayers()
+        {
+            (GameObject root, Animator animator, Component playerAnimator) = CreatePlayerAnimatorHarness();
+            try
+            {
+                PlayAllActionLayers(animator);
+                RequireMethod(playerAnimator.GetType(), "SetHardCrowdControl", typeof(string))
+                    .Invoke(playerAnimator, new object?[] { "STUN" });
+                animator.Update(0f);
+                AssertActionLayersEmpty(animator);
+
+                RequireMethod(playerAnimator.GetType(), "SetHardCrowdControl", typeof(string))
+                    .Invoke(playerAnimator, new object?[] { null });
+                animator.Update(0f);
+
+                PlayAllActionLayers(animator);
+                RequireMethod(playerAnimator.GetType(), "SetKnockedDown", typeof(bool))
+                    .Invoke(playerAnimator, new object[] { true });
+                animator.Update(0f);
+                AssertActionLayersEmpty(animator);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
         public void CombatActionPlaybackController_ActiveBaseCategoryClearsByOwner()
         {
             Type playbackControllerType = RequireRuntimeType("Arena.Presentation.CombatActionPlaybackController");
@@ -956,6 +1009,42 @@ namespace Arena.Tests.Editor
                         time = item.Time,
                     })
                     .ToArray());
+        }
+
+        private static (GameObject Root, Animator Animator, Component PlayerAnimator) CreatePlayerAnimatorHarness()
+        {
+            AnimatorController controller = AssetDatabase.LoadAssetAtPath<AnimatorController>(
+                "Assets/Arena/Content/Animation/Arena_Character.controller");
+            Assert.That(controller, Is.Not.Null);
+
+            GameObject root = new("PlayerAnimator regression harness");
+            Animator animator = root.AddComponent<Animator>();
+            animator.runtimeAnimatorController = controller;
+
+            Type playerAnimatorType = RequireRuntimeType("Arena.Presentation.PlayerAnimator");
+            Component playerAnimator = root.AddComponent(playerAnimatorType);
+            RequireMethod(playerAnimatorType, "BindAnimator", typeof(Animator))
+                .Invoke(playerAnimator, new object[] { animator });
+            animator.Update(0f);
+            return (root, animator, playerAnimator);
+        }
+
+        private static void PlayAllActionLayers(Animator animator)
+        {
+            animator.Play("UpperBody.UpperBodySpellAction1", 1, 0f);
+            animator.Play("MeleeAttack.Strike1", 3, 0f);
+            animator.Play("SpellAction.SpellAction1", 4, 0f);
+            animator.Play("LeftGesture.LeftGestureSpellAction1", 5, 0f);
+            animator.Update(0f);
+        }
+
+        private static void AssertActionLayersEmpty(Animator animator)
+        {
+            int emptyStateHash = Animator.StringToHash("Empty");
+            Assert.That(animator.GetCurrentAnimatorStateInfo(1).shortNameHash, Is.EqualTo(emptyStateHash), "UpperBody must be empty.");
+            Assert.That(animator.GetCurrentAnimatorStateInfo(3).shortNameHash, Is.EqualTo(emptyStateHash), "MeleeAttack must be empty.");
+            Assert.That(animator.GetCurrentAnimatorStateInfo(4).shortNameHash, Is.EqualTo(emptyStateHash), "SpellAction must be empty.");
+            Assert.That(animator.GetCurrentAnimatorStateInfo(5).shortNameHash, Is.EqualTo(emptyStateHash), "LeftGesture must be empty.");
         }
 
         private static string ReadAssetText(string relativeAssetPath)
