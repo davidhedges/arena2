@@ -252,6 +252,7 @@ namespace Arena.Tests.Editor
             Assert.That(staticSqlText, Does.Contain("\"melee_gap_close_catalog\""));
             Assert.That(staticSqlText, Does.Contain("\"melee_attack_modifier_catalog\""));
             Assert.That(staticSqlText, Does.Contain("\"auto_attack_catalog\""));
+            Assert.That(staticSqlText, Does.Contain("\"combat_rule_catalog\""));
             Assert.That(staticSqlText, Does.Contain("\"resource_catalog\""));
             Assert.That(staticSqlText, Does.Contain("\"stat_scaling_catalog\""));
             Assert.That(staticSqlText, Does.Contain("\"arena_instance\""));
@@ -305,6 +306,64 @@ namespace Arena.Tests.Editor
             Assert.That(scopedSqlText, Does.Contain("\"projectile_presentation_event\""));
             Assert.That(scopedSqlText, Does.Contain("\"player_world\".\"identity\" = \"projectile_presentation_event\".\"caster\""));
             Assert.That(scopedSqlText, Does.Contain("\"npc_instance\".\"identity\" = \"projectile_presentation_event\".\"caster\""));
+        }
+
+        [Test]
+        public void GameplaySubscriptionPlanner_ScopesCombatEffectsByVisibleSourceAndTarget()
+        {
+            Type plannerType = RequireRuntimeType("Arena.Network.GameplaySubscriptionPlanner");
+            Type gameplayScopeType = RequireRuntimeType("Arena.Network.NetworkManager+GameplayScope");
+            Type playerWorldType = RequireRuntimeType("SpacetimeDB.Types.PlayerWorld");
+            object row = Activator.CreateInstance(playerWorldType, CreateIdentity(1), "OPEN", null, "Oasis_Day")!;
+            object scope = RequireMethod(gameplayScopeType, "FromPlayerWorld", playerWorldType, typeof(string))
+                .Invoke(null, new[] { row, null })!;
+
+            string[] scopedSql = (string[])RequireMethod(plannerType, "BuildScopedQuerySqls", gameplayScopeType)
+                .Invoke(null, new[] { scope })!;
+            string scopedSqlText = string.Join("\n", scopedSql);
+
+            Assert.That(scopedSqlText, Does.Contain("\"combat_effect_event\""));
+            Assert.That(scopedSqlText, Does.Contain("\"player_world\".\"identity\" = \"combat_effect_event\".\"source\""));
+            Assert.That(scopedSqlText, Does.Contain("\"player_world\".\"identity\" = \"combat_effect_event\".\"target\""));
+            Assert.That(scopedSqlText, Does.Contain("\"npc_instance\".\"identity\" = \"combat_effect_event\".\"source\""));
+            Assert.That(scopedSqlText, Does.Contain("\"npc_instance\".\"identity\" = \"combat_effect_event\".\"target\""));
+            Assert.That(scopedSqlText, Does.Contain("\"inventory_container\".\"container_kind\" = 'CORPSE'"));
+        }
+
+        [Test]
+        public void ContractVersionValidation_FailsClosedForMissingOrMismatchedStamps()
+        {
+            Type resultType = RequireRuntimeType("Arena.Network.ContractVersionGuard+ValidationResult");
+
+            object compatible = Activator.CreateInstance(
+                resultType,
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+                binder: null,
+                args: new object[] { 3, 0, 0 },
+                culture: null)!;
+            object missing = Activator.CreateInstance(
+                resultType,
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+                binder: null,
+                args: new object[] { 2, 1, 0 },
+                culture: null)!;
+            object mismatched = Activator.CreateInstance(
+                resultType,
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+                binder: null,
+                args: new object[] { 2, 0, 1 },
+                culture: null)!;
+            object empty = Activator.CreateInstance(
+                resultType,
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+                binder: null,
+                args: new object[] { 0, 0, 0 },
+                culture: null)!;
+
+            Assert.That(RequireProperty(resultType, "IsCompatible").GetValue(compatible), Is.True);
+            Assert.That(RequireProperty(resultType, "IsCompatible").GetValue(missing), Is.False);
+            Assert.That(RequireProperty(resultType, "IsCompatible").GetValue(mismatched), Is.False);
+            Assert.That(RequireProperty(resultType, "IsCompatible").GetValue(empty), Is.False);
         }
 
         [Test]

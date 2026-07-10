@@ -1,5 +1,8 @@
 #nullable enable
 
+using System;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
 using System.Text;
 using UnityEngine;
 
@@ -39,7 +42,10 @@ namespace Arena.Network
         internal const string RemoteServerUri = "wss://arena.meandmyson.org";
 
         private const string EnvironmentPrefsKey = "arena.network.environment";
-        private const string AuthTokenPrefsPrefix = "arena.network.auth_token.";
+        private const string LegacyAuthTokenPrefsPrefix = "arena.network.auth_token.";
+        private const string CredentialService = "Arena.SpacetimeDB.Identity";
+        private static readonly Dictionary<string, string> SessionAuthTokens = new();
+        private static bool _warnedAboutSessionOnlyTokenStorage;
 
         internal static NetworkEnvironmentKind CurrentEnvironment
         {
@@ -120,8 +126,34 @@ namespace Arena.Network
 
         internal static string? LoadAuthToken(NetworkEnvironmentEndpoint endpoint)
         {
-            string token = PlayerPrefs.GetString(TokenPrefsKey(endpoint), string.Empty);
-            return string.IsNullOrWhiteSpace(token) ? null : token;
+            string account = CredentialAccount(endpoint);
+            if (SessionAuthTokens.TryGetValue(account, out string sessionToken)
+                && !string.IsNullOrWhiteSpace(sessionToken))
+            {
+                return sessionToken;
+            }
+
+            if (PlatformCredentialStore.TryLoad(CredentialService, account, out string secureToken)
+                && !string.IsNullOrWhiteSpace(secureToken))
+            {
+                SessionAuthTokens[account] = secureToken;
+                DeleteLegacyPlaintextTokens(endpoint);
+                return secureToken;
+            }
+
+            // One-time migration from both plaintext locations used by older
+            // Arena builds and by the SDK helper. The old keys are deleted
+            // immediately even if this platform only supports session storage.
+            string legacyToken = PlayerPrefs.GetString(LegacyTokenPrefsKey(endpoint), string.Empty);
+            if (string.IsNullOrWhiteSpace(legacyToken))
+                legacyToken = PlayerPrefs.GetString(LegacySdkTokenPrefsKey(), string.Empty);
+
+            DeleteLegacyPlaintextTokens(endpoint);
+            if (string.IsNullOrWhiteSpace(legacyToken))
+                return null;
+
+            SaveAuthToken(endpoint, legacyToken);
+            return legacyToken;
         }
 
         internal static void SaveAuthToken(NetworkEnvironmentEndpoint endpoint, string token)
@@ -129,18 +161,63 @@ namespace Arena.Network
             if (string.IsNullOrWhiteSpace(token))
                 return;
 
-            PlayerPrefs.SetString(TokenPrefsKey(endpoint), token);
-            PlayerPrefs.Save();
+            string account = CredentialAccount(endpoint);
+            SessionAuthTokens[account] = token;
+            DeleteLegacyPlaintextTokens(endpoint);
+
+            if (!PlatformCredentialStore.TrySave(CredentialService, account, token)
+                && !_warnedAboutSessionOnlyTokenStorage)
+            {
+                _warnedAboutSessionOnlyTokenStorage = true;
+                Debug.LogWarning(
+                    "[NetworkEnvironment] Secure credential storage is unavailable on this platform. "
+                    + "The identity token will be retained for this process only.");
+            }
         }
 
         internal static void ClearAuthToken(NetworkEnvironmentEndpoint endpoint)
         {
-            PlayerPrefs.DeleteKey(TokenPrefsKey(endpoint));
-            PlayerPrefs.Save();
+            string account = CredentialAccount(endpoint);
+            SessionAuthTokens.Remove(account);
+            PlatformCredentialStore.TryDelete(CredentialService, account);
+            DeleteLegacyPlaintextTokens(endpoint);
         }
 
-        private static string TokenPrefsKey(NetworkEnvironmentEndpoint endpoint)
-            => AuthTokenPrefsPrefix + SanitizeKeyPart($"{endpoint.ModuleName}|{endpoint.ServerUri}");
+        private static string CredentialAccount(NetworkEnvironmentEndpoint endpoint)
+            => $"{endpoint.ModuleName}|{endpoint.ServerUri}";
+
+        private static string LegacyTokenPrefsKey(NetworkEnvironmentEndpoint endpoint)
+            => LegacyAuthTokenPrefsPrefix + SanitizeKeyPart(CredentialAccount(endpoint));
+
+        private static string LegacySdkTokenPrefsKey()
+        {
+            string key = "spacetimedb.identity_token";
+#if UNITY_EDITOR
+            key += $" - {Application.dataPath}";
+#endif
+            return key;
+        }
+
+        private static void DeleteLegacyPlaintextTokens(NetworkEnvironmentEndpoint endpoint)
+        {
+            bool changed = false;
+            string endpointKey = LegacyTokenPrefsKey(endpoint);
+            if (PlayerPrefs.HasKey(endpointKey))
+            {
+                PlayerPrefs.DeleteKey(endpointKey);
+                changed = true;
+            }
+
+            string sdkKey = LegacySdkTokenPrefsKey();
+            if (PlayerPrefs.HasKey(sdkKey))
+            {
+                PlayerPrefs.DeleteKey(sdkKey);
+                changed = true;
+            }
+
+            if (changed)
+                PlayerPrefs.Save();
+        }
 
         private static string SanitizeKeyPart(string value)
         {
@@ -151,6 +228,204 @@ namespace Arena.Network
             }
 
             return sb.ToString();
+        }
+
+        private static class PlatformCredentialStore
+        {
+#if UNITY_EDITOR_OSX || UNITY_STANDALONE_OSX
+            private const string SecurityFramework =
+                "/System/Library/Frameworks/Security.framework/Versions/A/Security";
+            private const string CoreFoundationFramework =
+                "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation";
+            private const int Success = 0;
+
+            [DllImport(SecurityFramework)]
+            private static extern int SecKeychainFindGenericPassword(
+                IntPtr keychainOrArray,
+                uint serviceNameLength,
+                byte[] serviceName,
+                uint accountNameLength,
+                byte[] accountName,
+                out uint passwordLength,
+                out IntPtr passwordData,
+                out IntPtr itemRef);
+
+            [DllImport(SecurityFramework)]
+            private static extern int SecKeychainAddGenericPassword(
+                IntPtr defaultKeychain,
+                uint serviceNameLength,
+                byte[] serviceName,
+                uint accountNameLength,
+                byte[] accountName,
+                uint passwordLength,
+                byte[] passwordData,
+                out IntPtr itemRef);
+
+            [DllImport(SecurityFramework)]
+            private static extern int SecKeychainItemModifyAttributesAndData(
+                IntPtr itemRef,
+                IntPtr attrList,
+                uint length,
+                byte[] data);
+
+            [DllImport(SecurityFramework)]
+            private static extern int SecKeychainItemDelete(IntPtr itemRef);
+
+            [DllImport(SecurityFramework)]
+            private static extern int SecKeychainItemFreeContent(IntPtr attrList, IntPtr data);
+
+            [DllImport(CoreFoundationFramework)]
+            private static extern void CFRelease(IntPtr value);
+
+            internal static bool TryLoad(string service, string account, out string token)
+            {
+                token = string.Empty;
+                byte[] serviceBytes = Encoding.UTF8.GetBytes(service);
+                byte[] accountBytes = Encoding.UTF8.GetBytes(account);
+                IntPtr passwordData = IntPtr.Zero;
+                IntPtr itemRef = IntPtr.Zero;
+
+                try
+                {
+                    int status = SecKeychainFindGenericPassword(
+                        IntPtr.Zero,
+                        (uint)serviceBytes.Length,
+                        serviceBytes,
+                        (uint)accountBytes.Length,
+                        accountBytes,
+                        out uint passwordLength,
+                        out passwordData,
+                        out itemRef);
+                    if (status != Success || passwordData == IntPtr.Zero)
+                        return false;
+
+                    byte[] tokenBytes = new byte[checked((int)passwordLength)];
+                    Marshal.Copy(passwordData, tokenBytes, 0, tokenBytes.Length);
+                    token = Encoding.UTF8.GetString(tokenBytes);
+                    return true;
+                }
+                catch (Exception e)
+                {
+                    Debug.LogWarning($"[NetworkEnvironment] Keychain read failed: {e.Message}");
+                    token = string.Empty;
+                    return false;
+                }
+                finally
+                {
+                    if (passwordData != IntPtr.Zero)
+                        SecKeychainItemFreeContent(IntPtr.Zero, passwordData);
+                    if (itemRef != IntPtr.Zero)
+                        CFRelease(itemRef);
+                }
+            }
+
+            internal static bool TrySave(string service, string account, string token)
+            {
+                byte[] serviceBytes = Encoding.UTF8.GetBytes(service);
+                byte[] accountBytes = Encoding.UTF8.GetBytes(account);
+                byte[] tokenBytes = Encoding.UTF8.GetBytes(token);
+                IntPtr passwordData = IntPtr.Zero;
+                IntPtr itemRef = IntPtr.Zero;
+
+                try
+                {
+                    int findStatus = SecKeychainFindGenericPassword(
+                        IntPtr.Zero,
+                        (uint)serviceBytes.Length,
+                        serviceBytes,
+                        (uint)accountBytes.Length,
+                        accountBytes,
+                        out _,
+                        out passwordData,
+                        out itemRef);
+                    if (passwordData != IntPtr.Zero)
+                    {
+                        SecKeychainItemFreeContent(IntPtr.Zero, passwordData);
+                        passwordData = IntPtr.Zero;
+                    }
+
+                    if (findStatus == Success && itemRef != IntPtr.Zero)
+                    {
+                        return SecKeychainItemModifyAttributesAndData(
+                            itemRef,
+                            IntPtr.Zero,
+                            (uint)tokenBytes.Length,
+                            tokenBytes) == Success;
+                    }
+
+                    int addStatus = SecKeychainAddGenericPassword(
+                        IntPtr.Zero,
+                        (uint)serviceBytes.Length,
+                        serviceBytes,
+                        (uint)accountBytes.Length,
+                        accountBytes,
+                        (uint)tokenBytes.Length,
+                        tokenBytes,
+                        out IntPtr addedItemRef);
+                    if (addedItemRef != IntPtr.Zero)
+                        CFRelease(addedItemRef);
+                    return addStatus == Success;
+                }
+                catch (Exception e)
+                {
+                    Debug.LogWarning($"[NetworkEnvironment] Keychain write failed: {e.Message}");
+                    return false;
+                }
+                finally
+                {
+                    if (passwordData != IntPtr.Zero)
+                        SecKeychainItemFreeContent(IntPtr.Zero, passwordData);
+                    if (itemRef != IntPtr.Zero)
+                        CFRelease(itemRef);
+                }
+            }
+
+            internal static bool TryDelete(string service, string account)
+            {
+                byte[] serviceBytes = Encoding.UTF8.GetBytes(service);
+                byte[] accountBytes = Encoding.UTF8.GetBytes(account);
+                IntPtr passwordData = IntPtr.Zero;
+                IntPtr itemRef = IntPtr.Zero;
+
+                try
+                {
+                    int status = SecKeychainFindGenericPassword(
+                        IntPtr.Zero,
+                        (uint)serviceBytes.Length,
+                        serviceBytes,
+                        (uint)accountBytes.Length,
+                        accountBytes,
+                        out _,
+                        out passwordData,
+                        out itemRef);
+                    if (status != Success || itemRef == IntPtr.Zero)
+                        return false;
+                    return SecKeychainItemDelete(itemRef) == Success;
+                }
+                catch (Exception e)
+                {
+                    Debug.LogWarning($"[NetworkEnvironment] Keychain delete failed: {e.Message}");
+                    return false;
+                }
+                finally
+                {
+                    if (passwordData != IntPtr.Zero)
+                        SecKeychainItemFreeContent(IntPtr.Zero, passwordData);
+                    if (itemRef != IntPtr.Zero)
+                        CFRelease(itemRef);
+                }
+            }
+#else
+            internal static bool TryLoad(string service, string account, out string token)
+            {
+                token = string.Empty;
+                return false;
+            }
+
+            internal static bool TrySave(string service, string account, string token) => false;
+
+            internal static bool TryDelete(string service, string account) => false;
+#endif
         }
     }
 }

@@ -128,9 +128,12 @@ namespace Arena.Network
         private int _scopeTransitionGeneration;
 
         public bool IsConnected { get; private set; }
+        public string? ContractCompatibilityError { get; private set; }
 
-        // Exposed so future systems can call reducers or inspect the scoped cache.
-        public DbConnection? Conn => _conn;
+        // The transport is deliberately hidden until shared movement/collision
+        // contracts verify. Reducer callers therefore fail closed during the
+        // compatibility handshake as well as after a mismatch.
+        public DbConnection? Conn => IsConnected ? _conn : null;
         internal NetworkEnvironmentEndpoint ActiveEndpoint => _activeEndpoint;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -181,6 +184,7 @@ namespace Arena.Network
         private void Connect(NetworkEnvironmentEndpoint endpoint)
         {
             DisconnectCurrentConnection();
+            ContractCompatibilityError = null;
 
             _activeEndpoint = endpoint;
             Debug.LogWarning(
@@ -206,14 +210,11 @@ namespace Arena.Network
 
             ArenaServerClock.Reset();
             Arena.Simulation.ServerTimeDelayBudget.Reset();
-            IsConnected = true;
+            IsConnected = false;
             _localIdentity = identity;
             _hasLocalIdentity = true;
             if (!string.IsNullOrWhiteSpace(token))
-            {
                 NetworkEnvironmentConfig.SaveAuthToken(_activeEndpoint, token);
-                SpacetimeDB.AuthToken.SaveToken(token);
-            }
             _requestedGameplayScope = GameplayScope.None;
             _appliedGameplayScope = GameplayScope.None;
             _scopeTransitionInFlight = false;
@@ -229,7 +230,6 @@ namespace Arena.Network
             _nextClockPingRealtime = 0f;
 
             SubscribeStaticTables(conn);
-            SubscribeLocalTables(conn, identity);
         }
 
         private void SendClockPingIfDue()
@@ -372,8 +372,24 @@ namespace Arena.Network
 
         private void OnStaticSubscriptionApplied(SubscriptionEventContext ctx)
         {
+            var conn = _conn;
+            if (conn == null || !ReferenceEquals(ctx.Db, conn.Db))
+                return;
+
             Debug.Log("[NetworkManager] Static subscription applied.");
-            ContractVersionGuard.Validate(ctx.Db);
+            ContractVersionGuard.ValidationResult result = ContractVersionGuard.Validate(ctx.Db);
+            if (!result.IsCompatible)
+            {
+                FailContractCompatibility(result.FailureMessage);
+                return;
+            }
+
+            if (!_hasLocalIdentity)
+                return;
+
+            ContractCompatibilityError = null;
+            IsConnected = true;
+            SubscribeLocalTables(conn, _localIdentity);
         }
 
         private void OnLocalSubscriptionApplied(SubscriptionEventContext ctx)
@@ -412,7 +428,26 @@ namespace Arena.Network
 
         private void OnStaticSubscriptionError(ErrorContext ctx, Exception e)
         {
-            Debug.LogError($"[NetworkManager] Static subscription error: {e.Message}");
+            if (_conn == null || !ReferenceEquals(ctx.Db, _conn.Db))
+                return;
+
+            FailContractCompatibility($"Unable to verify shared-data contracts: {e.Message}");
+        }
+
+        private void FailContractCompatibility(string message)
+        {
+            IsConnected = false;
+            ContractCompatibilityError = message;
+            Debug.LogError($"[NetworkManager] Incompatible client/server contract. {message}");
+
+            try
+            {
+                _conn?.Disconnect();
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[NetworkManager] Disconnect after contract failure failed: {e.Message}");
+            }
         }
 
         private void OnLocalSubscriptionError(ErrorContext ctx, Exception e)
@@ -468,7 +503,7 @@ namespace Arena.Network
 
         private void OnDestroy()
         {
-            if (_conn != null && IsConnected)
+            if (_conn != null)
                 _conn.Disconnect();
         }
 

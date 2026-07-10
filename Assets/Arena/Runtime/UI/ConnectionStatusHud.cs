@@ -30,6 +30,7 @@ namespace Arena.UI
 
         private Image _dot = null!;
         private GameObject _banner = null!;
+        private Text _bannerLabel = null!;
         private bool _hasEverConnected;
         private bool _wasConnected;
         private long _lastTotalRows = -1L;
@@ -112,14 +113,14 @@ namespace Arena.UI
             labelRt.sizeDelta = new Vector2(-150f, 0f);
             labelRt.anchoredPosition = new Vector2(-65f, 0f);
 
-            var label = labelGo.AddComponent<Text>();
-            label.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            label.fontSize = 18;
-            label.fontStyle = FontStyle.Bold;
-            label.alignment = TextAnchor.MiddleCenter;
-            label.color = new Color(1f, 0.85f, 0.8f);
-            label.text = "Disconnected from server";
-            label.raycastTarget = false;
+            _bannerLabel = labelGo.AddComponent<Text>();
+            _bannerLabel.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            _bannerLabel.fontSize = 18;
+            _bannerLabel.fontStyle = FontStyle.Bold;
+            _bannerLabel.alignment = TextAnchor.MiddleCenter;
+            _bannerLabel.color = new Color(1f, 0.85f, 0.8f);
+            _bannerLabel.text = "Disconnected from server";
+            _bannerLabel.raycastTarget = false;
 
             var shadow = labelGo.AddComponent<Shadow>();
             shadow.effectColor = new Color(0f, 0f, 0f, 0.8f);
@@ -191,6 +192,8 @@ namespace Arena.UI
 
             NetworkManager manager = NetworkManager.Instance;
             bool connected = manager != null && manager.IsConnected;
+            bool incompatible = manager != null
+                                && !string.IsNullOrWhiteSpace(manager.ContractCompatibilityError);
             if (connected && !_wasConnected)
             {
                 _hasEverConnected = true;
@@ -199,13 +202,17 @@ namespace Arena.UI
             }
             _wasConnected = connected;
 
-            bool bannerVisible = _hasEverConnected && !connected;
+            bool bannerVisible = incompatible || (_hasEverConnected && !connected);
             if (_banner.activeSelf != bannerVisible)
                 _banner.SetActive(bannerVisible);
 
+            _bannerLabel.text = incompatible
+                ? "Incompatible client/server data — update client or server"
+                : "Disconnected from server";
+
             if (!connected)
             {
-                _dot.color = DisconnectedColor;
+                _dot.color = incompatible ? BadColor : DisconnectedColor;
                 return;
             }
 

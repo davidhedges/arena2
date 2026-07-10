@@ -32,6 +32,7 @@ pub struct PlayerCommand {
 /// Tracks the latest movement input tick received from the client so stale or
 /// duplicate commands can be ignored without consulting the queue.
 #[table(accessor = player_input_cursor)]
+#[derive(Clone)]
 pub struct PlayerInputCursor {
     #[primary_key]
     pub identity: Identity,
@@ -90,6 +91,60 @@ pub fn find_buffered_command_for_tick(
         .identity()
         .filter(identity)
         .find(|command| command.input_tick == input_tick)
+}
+
+/// Deletes buffered commands that cannot legally be consumed from the
+/// current authoritative tick and returns the latest tick that remains.
+///
+/// This is intentionally run on receive as well as on normal actor teardown:
+/// a module upgrade may inherit an unbounded queue authored against an older
+/// reducer, and merely rejecting new far-future commands would leave that
+/// poisoned cursor/queue resident indefinitely.
+pub fn prune_player_commands_outside_window(
+    ctx: &ReducerContext,
+    identity: Identity,
+    last_processed_tick: u32,
+    max_accepted_tick: u32,
+) -> Option<u32> {
+    let mut latest_remaining = None;
+    let mut retained_command_by_tick = std::collections::BTreeMap::<u32, u64>::new();
+    let stale_command_ids: Vec<_> = ctx
+        .db
+        .player_command()
+        .identity()
+        .filter(identity)
+        .filter_map(|command| {
+            if command.input_tick <= last_processed_tick || command.input_tick > max_accepted_tick {
+                Some(command.command_id)
+            } else if let Some(retained_command_id) =
+                retained_command_by_tick.get_mut(&command.input_tick)
+            {
+                // Reducers are serialized and the current receive path merges
+                // by tick, so duplicates cannot be created now. Keep the most
+                // recently inserted row if an older module left duplicates.
+                if command.command_id > *retained_command_id {
+                    let stale_command_id = *retained_command_id;
+                    *retained_command_id = command.command_id;
+                    Some(stale_command_id)
+                } else {
+                    Some(command.command_id)
+                }
+            } else {
+                retained_command_by_tick.insert(command.input_tick, command.command_id);
+                latest_remaining =
+                    Some(latest_remaining.map_or(command.input_tick, |latest: u32| {
+                        latest.max(command.input_tick)
+                    }));
+                None
+            }
+        })
+        .collect();
+
+    for command_id in stale_command_ids {
+        ctx.db.player_command().command_id().delete(command_id);
+    }
+
+    latest_remaining
 }
 
 /// Buffered-command occupancy after a tick's consume (S5): every remaining

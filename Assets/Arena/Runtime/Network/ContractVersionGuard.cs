@@ -18,17 +18,47 @@ namespace Arena.Network
         private const ulong FnvOffset = 0xcbf29ce484222325UL;
         private const ulong FnvPrime = 0x100000001b3UL;
 
-        internal static void Validate(RemoteTables db)
+        internal readonly struct ValidationResult
+        {
+            internal ValidationResult(int verified, int missing, int mismatches)
+            {
+                Verified = verified;
+                Missing = missing;
+                Mismatches = mismatches;
+            }
+
+            internal int Verified { get; }
+            internal int Missing { get; }
+            internal int Mismatches { get; }
+            internal bool IsCompatible => Verified > 0 && Missing == 0 && Mismatches == 0;
+
+            internal string FailureMessage
+            {
+                get
+                {
+                    if (Verified == 0 && Missing == 0 && Mismatches == 0)
+                        return "No bundled shared-data contracts were available to verify.";
+
+                    return $"Shared-data contract validation failed: {Mismatches} mismatched, "
+                           + $"{Missing} missing, {Verified} verified.";
+                }
+            }
+        }
+
+        internal static ValidationResult Validate(RemoteTables db)
         {
             int verified = 0;
+            int missing = 0;
             int mismatches = 0;
             foreach ((string serverKey, TextAsset asset) in ClientSharedFiles())
             {
                 ContractVersion? row = db.ContractVersion.Key.Find(serverKey);
                 if (row == null)
                 {
-                    Debug.LogWarning(
-                        $"[ContractVersion] server has no stamp for '{serverKey}' — the module predates this client's shared data.");
+                    missing++;
+                    Debug.LogError(
+                        $"[ContractVersion] server has no stamp for '{serverKey}'. "
+                        + "The client cannot safely predict against this module.");
                     continue;
                 }
 
@@ -46,8 +76,11 @@ namespace Arena.Network
                 }
             }
 
-            if (mismatches == 0)
+            var result = new ValidationResult(verified, missing, mismatches);
+            if (result.IsCompatible)
                 Debug.Log($"[ContractVersion] {verified} shared data stamps verified.");
+
+            return result;
         }
 
         /// <summary>

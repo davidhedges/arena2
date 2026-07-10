@@ -45,6 +45,15 @@ pub const GRAVITY: f32 = -25.0;
 pub const GROUND_Y: f32 = 0.0;
 pub const ZERO_INPUT_EPSILON: f32 = 0.0001;
 
+/// Server mirror of the client's hard prediction bound. A command farther
+/// ahead than this cannot be consumed legitimately and must not occupy the
+/// persistent input queue.
+pub const MAX_INPUT_LEAD_TICKS: u32 = 12;
+
+/// With one command per future tick this is also the maximum legitimate queue
+/// occupancy for a player.
+pub const MAX_BUFFERED_COMMANDS_PER_PLAYER: u32 = MAX_INPUT_LEAD_TICKS;
+
 // === Intent Reducer ===
 
 /// Receives movement intent from client.
@@ -72,74 +81,114 @@ pub fn send_movement_intent(
 ) -> Result<(), String> {
     let identity = ctx.sender();
 
+    if !movement_payload_is_finite(forward, strafe, yaw) {
+        return Err("movement input must contain only finite values".to_string());
+    }
+
     let Some(mut cursor) = ctx.db.player_input_cursor().identity().find(identity) else {
         return Err("Player not found".to_string());
     };
 
-    if let Some(physics) = ctx.db.player_physics().identity().find(identity) {
-        if input_tick <= physics.last_processed_tick {
-            // S5 jump preservation: the late command's motion is stale, but a
-            // jump edge is a discrete press the player made — give it one
-            // extra tick of life instead of eating it. Only a command that
-            // missed its tick by less than one consume (input_tick equals the
-            // tick just processed via fallback) slides; anything staler is
-            // honestly dropped. The cursor gate stays authoritative: a tick
-            // the cursor already passed (e.g. the post-special-movement
-            // discard window) must not resurrect a jump through the slide.
-            if jump
-                && input_tick == physics.last_processed_tick
-                && input_tick > cursor.latest_received_tick
-            {
-                let slide_tick = physics.last_processed_tick.saturating_add(1);
-                if let Some(mut buffered) =
-                    crate::player_input::find_buffered_command_for_tick(ctx, identity, slide_tick)
-                {
-                    if !buffered.jump {
-                        buffered.jump = true;
-                        ctx.db.player_command().command_id().update(buffered);
-                    }
-                } else {
-                    ctx.db.player_command().insert(PlayerCommand {
-                        command_id: 0,
-                        identity,
-                        input_tick: slide_tick,
-                        forward: forward.clamp(-1.0, 1.0),
-                        strafe: strafe.clamp(-1.0, 1.0),
-                        yaw,
-                        jump: true,
-                        received_at: ctx.timestamp,
-                    });
-                }
-                // info-level on purpose: slides are rare events (a jump that
-                // missed its tick by less than one consume) and the log line
-                // is the live evidence signal for them.
-                log::info!(
-                    "[MOVE_JUMP_SLIDE] Player {} | late jump at tick={} rebuffered for tick={}",
-                    &identity.to_hex()[..8],
-                    input_tick,
-                    slide_tick
-                );
-                return Ok(());
-            }
+    let physics = ctx
+        .db
+        .player_physics()
+        .identity()
+        .find(identity)
+        .ok_or_else(|| "Player physics not found".to_string())?;
+    let max_accepted_tick = physics
+        .last_processed_tick
+        .saturating_add(MAX_INPUT_LEAD_TICKS);
 
-            log::debug!(
-                "[MOVE_LATE_DROP] Player {} | input_tick={} <= last_processed_tick={}",
+    if input_tick > max_accepted_tick {
+        return Err(format!(
+            "movement input tick {input_tick} exceeds maximum accepted tick {max_accepted_tick}"
+        ));
+    }
+
+    let latest_buffered_tick = crate::player_input::prune_player_commands_outside_window(
+        ctx,
+        identity,
+        physics.last_processed_tick,
+        max_accepted_tick,
+    );
+
+    // Repair a cursor poisoned by an older unbounded reducer. The queue was
+    // pruned above, so the repaired cursor reflects only consumable input.
+    if cursor.latest_received_tick > max_accepted_tick {
+        cursor.latest_received_tick = latest_buffered_tick.unwrap_or(physics.last_processed_tick);
+        ctx.db
+            .player_input_cursor()
+            .identity()
+            .update(cursor.clone());
+    }
+
+    let forward = forward.clamp(-1.0, 1.0);
+    let strafe = strafe.clamp(-1.0, 1.0);
+    let yaw = normalize_yaw(yaw);
+
+    if input_tick <= physics.last_processed_tick {
+        // S5 jump preservation: the late command's motion is stale, but a
+        // jump edge is a discrete press the player made — give it one
+        // extra tick of life instead of eating it. Only a command that
+        // missed its tick by less than one consume (input_tick equals the
+        // tick just processed via fallback) slides; anything staler is
+        // honestly dropped. The cursor gate stays authoritative: a tick
+        // the cursor already passed (e.g. the post-special-movement
+        // discard window) must not resurrect a jump through the slide.
+        if jump
+            && input_tick == physics.last_processed_tick
+            && input_tick > cursor.latest_received_tick
+        {
+            let slide_tick = physics.last_processed_tick.saturating_add(1);
+            if let Some(mut buffered) =
+                crate::player_input::find_buffered_command_for_tick(ctx, identity, slide_tick)
+            {
+                if !buffered.jump {
+                    buffered.jump = true;
+                    ctx.db.player_command().command_id().update(buffered);
+                }
+            } else {
+                if crate::player_input::count_buffered_commands(ctx, identity)
+                    >= MAX_BUFFERED_COMMANDS_PER_PLAYER
+                {
+                    return Err("movement input queue is full".to_string());
+                }
+                ctx.db.player_command().insert(PlayerCommand {
+                    command_id: 0,
+                    identity,
+                    input_tick: slide_tick,
+                    forward,
+                    strafe,
+                    yaw,
+                    jump: true,
+                    received_at: ctx.timestamp,
+                });
+            }
+            // info-level on purpose: slides are rare events (a jump that
+            // missed its tick by less than one consume) and the log line
+            // is the live evidence signal for them.
+            log::info!(
+                "[MOVE_JUMP_SLIDE] Player {} | late jump at tick={} rebuffered for tick={}",
                 &identity.to_hex()[..8],
                 input_tick,
-                physics.last_processed_tick
+                slide_tick
             );
             return Ok(());
         }
+
+        log::debug!(
+            "[MOVE_LATE_DROP] Player {} | input_tick={} <= last_processed_tick={}",
+            &identity.to_hex()[..8],
+            input_tick,
+            physics.last_processed_tick
+        );
+        return Ok(());
     }
 
     // Ignore stale inputs (out of order)
     if input_tick <= cursor.latest_received_tick {
         return Ok(());
     }
-
-    // Clamp inputs to valid range
-    let forward = forward.clamp(-1.0, 1.0);
-    let strafe = strafe.clamp(-1.0, 1.0);
 
     // A slid late jump (above) may already occupy this tick's slot; merge the
     // real command into it — the axes are fresher and the jump edge must not
@@ -154,6 +203,11 @@ pub fn send_movement_intent(
         buffered.received_at = ctx.timestamp;
         ctx.db.player_command().command_id().update(buffered);
     } else {
+        if crate::player_input::count_buffered_commands(ctx, identity)
+            >= MAX_BUFFERED_COMMANDS_PER_PLAYER
+        {
+            return Err("movement input queue is full".to_string());
+        }
         ctx.db.player_command().insert(PlayerCommand {
             command_id: 0,
             identity,
@@ -174,11 +228,23 @@ pub fn send_movement_intent(
 
 // === Helper Functions (pure, used by game_tick) ===
 
+fn movement_payload_is_finite(forward: f32, strafe: f32, yaw: f32) -> bool {
+    forward.is_finite() && strafe.is_finite() && yaw.is_finite()
+}
+
+fn normalize_yaw(yaw: f32) -> f32 {
+    (yaw + std::f32::consts::PI).rem_euclid(std::f32::consts::TAU) - std::f32::consts::PI
+}
+
 /// Calculate world-space velocity from intent and yaw.
 /// Returns (vel_x, vel_z) in world coordinates.
 ///
 /// This is a pure function - no side effects, no table access.
 pub fn velocity_from_intent(forward: f32, strafe: f32, yaw: f32, speed: f32) -> (f32, f32) {
+    if !movement_payload_is_finite(forward, strafe, yaw) || !speed.is_finite() {
+        return (0.0, 0.0);
+    }
+
     // If no input, no velocity
     if forward.abs() <= ZERO_INPUT_EPSILON && strafe.abs() <= ZERO_INPUT_EPSILON {
         return (0.0, 0.0);
@@ -204,4 +270,36 @@ pub fn velocity_from_intent(forward: f32, strafe: f32, yaw: f32, speed: f32) -> 
     }
 
     (dir_x * speed, dir_z * speed)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn movement_payload_rejects_non_finite_components() {
+        assert!(movement_payload_is_finite(1.0, -1.0, 0.5));
+        assert!(!movement_payload_is_finite(f32::NAN, 0.0, 0.0));
+        assert!(!movement_payload_is_finite(0.0, f32::INFINITY, 0.0));
+        assert!(!movement_payload_is_finite(0.0, 0.0, f32::NEG_INFINITY));
+    }
+
+    #[test]
+    fn movement_yaw_is_normalized_to_signed_radians() {
+        assert!((normalize_yaw(0.0) - 0.0).abs() < 0.0001);
+        assert!((normalize_yaw(std::f32::consts::TAU + 0.25) - 0.25).abs() < 0.0001);
+        assert!((normalize_yaw(-std::f32::consts::TAU - 0.25) + 0.25).abs() < 0.0001);
+    }
+
+    #[test]
+    fn velocity_helper_fails_closed_for_non_finite_input() {
+        assert_eq!(
+            velocity_from_intent(f32::NAN, 0.0, 0.0, MOVE_SPEED),
+            (0.0, 0.0)
+        );
+        assert_eq!(
+            velocity_from_intent(1.0, 0.0, f32::NAN, MOVE_SPEED),
+            (0.0, 0.0)
+        );
+    }
 }

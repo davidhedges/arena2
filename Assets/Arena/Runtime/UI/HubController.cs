@@ -48,6 +48,8 @@ namespace Arena.UI
         private TMP_Text? _ctaLabel;
         private TMP_Text? _ctaSubtitle;
         private TMP_Text? _destinationValue;
+        private DbConnection? _travelConnection;
+        private string? _pendingTravelScene;
         private bool _wired;
         private string _lastCombatProfile = string.Empty;
         private string _lastShowcaseAppearanceSignature = string.Empty;
@@ -97,6 +99,7 @@ namespace Arena.UI
             RemoveGeneratedCombinedCharacterPreview();
             Resolve();
             WireButtons();
+            EnsureTravelConnection();
             ApplyState();
         }
 
@@ -104,6 +107,7 @@ namespace Arena.UI
         {
             if (Application.isPlaying)
                 RuntimeUiEscapeRouter.Unregister(this);
+            SubscribeToTravelConnection(null);
         }
 
         private void Update()
@@ -112,6 +116,7 @@ namespace Arena.UI
             Resolve();
             if (!_wired)
                 WireButtons();
+            EnsureTravelConnection();
             ApplyState();
         }
 
@@ -218,14 +223,101 @@ namespace Arena.UI
                         if (string.IsNullOrWhiteSpace(sceneName))
                             return;
 
-                        OpenWorldTravelCatalog.SetCurrentScene(sceneName);
-                        NetworkManager.Instance?.Conn?.Reducers.SetOpenWorldScene(sceneName);
-                        SceneManager.LoadScene(sceneName);
+                        RequestTravel(sceneName);
                     });
                 }
             }
 
             _wired = _playButton != null && _ctaButton != null;
+        }
+
+        private void EnsureTravelConnection()
+        {
+            SubscribeToTravelConnection(NetworkManager.Instance?.Conn);
+        }
+
+        private void SubscribeToTravelConnection(DbConnection? conn)
+        {
+            if (ReferenceEquals(conn, _travelConnection))
+                return;
+
+            if (_travelConnection != null)
+                _travelConnection.Reducers.OnSetOpenWorldScene -= OnSetOpenWorldScene;
+
+            _travelConnection = conn;
+            if (_pendingTravelScene != null)
+            {
+                _pendingTravelScene = null;
+                SetTravelButtonsInteractable(true);
+            }
+
+            if (conn != null)
+                conn.Reducers.OnSetOpenWorldScene += OnSetOpenWorldScene;
+        }
+
+        private void RequestTravel(string sceneName)
+        {
+            if (_pendingTravelScene != null)
+                return;
+            if (!OpenWorldTravelCatalog.IsRegisteredOpenWorldScene(sceneName))
+            {
+                Debug.LogError($"[{nameof(HubController)}] Refusing unknown open-world destination '{sceneName}'.");
+                return;
+            }
+
+            EnsureTravelConnection();
+            if (_travelConnection == null)
+            {
+                Debug.LogWarning($"[{nameof(HubController)}] Cannot travel while disconnected.");
+                return;
+            }
+
+            _pendingTravelScene = sceneName;
+            SetTravelButtonsInteractable(false);
+            _travelConnection.Reducers.SetOpenWorldScene(sceneName);
+        }
+
+        private void OnSetOpenWorldScene(ReducerEventContext ctx, string sceneName)
+        {
+            if (_travelConnection == null
+                || !_travelConnection.Identity.HasValue
+                || ctx.Event.CallerIdentity != _travelConnection.Identity.Value
+                || !string.Equals(_pendingTravelScene, sceneName, System.StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            if (ctx.Event.Status is Status.Committed)
+            {
+                _pendingTravelScene = null;
+                OpenWorldTravelCatalog.SetCurrentScene(sceneName);
+                SceneManager.LoadScene(sceneName);
+                return;
+            }
+
+            string reason = ctx.Event.Status switch
+            {
+                Status.Failed(var failure) => failure,
+                Status.OutOfEnergy(var _) => "server was out of reducer energy",
+                _ => "server did not commit the travel request",
+            };
+            Debug.LogError($"[{nameof(HubController)}] Travel to '{sceneName}' failed: {reason}");
+            _pendingTravelScene = null;
+            SetTravelButtonsInteractable(true);
+        }
+
+        private void SetTravelButtonsInteractable(bool interactable)
+        {
+            Transform? destinations = _root?.Find("HubCanvas/HomeRoot/TravelMenu/DestinationButtons");
+            if (destinations == null)
+                return;
+
+            foreach (Transform child in destinations)
+            {
+                Button? destinationButton = child.GetComponent<Button>();
+                if (destinationButton != null)
+                    destinationButton.interactable = interactable;
+            }
         }
 
         private void ApplyState()

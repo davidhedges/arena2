@@ -32,6 +32,7 @@ namespace Arena.Network
                 new QueryBuilder().From.MeleeGapCloseCatalog().ToSql(),
                 new QueryBuilder().From.MeleeAttackModifierCatalog().ToSql(),
                 new QueryBuilder().From.AutoAttackCatalog().ToSql(),
+                new QueryBuilder().From.CombatRuleCatalog().ToSql(),
                 new QueryBuilder().From.ResourceCatalog().ToSql(),
                 new QueryBuilder().From.StatScalingCatalog().ToSql(),
                 new QueryBuilder().From.ArenaInstance().ToSql(),
@@ -71,9 +72,9 @@ namespace Arena.Network
                 new QueryBuilder().From.PlayerEquipmentPresentation().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
                 // Inventory rows are owner-key filtered (netcode audit R4): the
                 // client receives its own containers/slots/items plus unowned
-                // world-loot rows (corpse/chest/loot contents carry empty
-                // owner keys; the containers themselves are world-scoped by
-                // the loot queries in the scoped group). Other players'
+                // world-loot rows. Corpse containers carry their killer/party
+                // reservation owner and are replicated by dedicated scoped
+                // corpse queries below. Other players'
                 // inventories are never replicated. The parallel nullable
                 // Identity columns cannot be compared to raw identity literals
                 // in subscription SQL.
@@ -126,6 +127,10 @@ namespace Arena.Network
                 BuildScopedSpecialMovementRuntimeQuery(new QueryBuilder(), scope),
                 BuildScopedStatusEffectQuery(new QueryBuilder(), scope),
                 BuildScopedNpcStatusEffectQuery(new QueryBuilder(), scope),
+                BuildScopedPlayerSourceCombatEffectEventQuery(new QueryBuilder(), scope),
+                BuildScopedPlayerTargetCombatEffectEventQuery(new QueryBuilder(), scope),
+                BuildScopedNpcSourceCombatEffectEventQuery(new QueryBuilder(), scope),
+                BuildScopedNpcTargetCombatEffectEventQuery(new QueryBuilder(), scope),
                 BuildScopedCombatEventQuery(new QueryBuilder(), scope),
                 BuildScopedNpcCombatEventQuery(new QueryBuilder(), scope),
                 BuildScopedProjectilePresentationEventQuery(new QueryBuilder(), scope),
@@ -133,6 +138,8 @@ namespace Arena.Network
                 BuildScopedPlayerEventQuery(new QueryBuilder(), scope),
                 BuildScopedLootContainerQuery(new QueryBuilder(), scope),
                 BuildScopedLootSlotQuery(new QueryBuilder(), scope),
+                BuildScopedCorpseLootContainerQuery(new QueryBuilder(), scope),
+                BuildScopedCorpseLootSlotQuery(new QueryBuilder(), scope),
             };
 
             if (scope.Kind == NetworkManager.GameplayScopeKind.Instance)
@@ -184,6 +191,52 @@ namespace Arena.Network
                     .RightSemijoin(qb.From.InventorySlot(), (container, slot) => container.ContainerId.Eq(slot.ContainerId))
                     .ToSql(),
                 _ => throw new InvalidOperationException("Scoped loot-slot query requested for GameplayScope.None"),
+            };
+        }
+
+        private static string BuildScopedCorpseLootContainerQuery(QueryBuilder qb, NetworkManager.GameplayScope scope)
+        {
+            return scope.Kind switch
+            {
+                NetworkManager.GameplayScopeKind.OpenWorld => qb
+                    .From
+                    .InventoryContainer()
+                    .Where(c => c.ContainerKind.Eq("CORPSE"))
+                    .Where(c => c.WorldKind.Eq("OPEN"))
+                    .Where(c => c.OpenWorldSceneName.Eq(OpenWorldSceneName(scope)))
+                    .ToSql(),
+                NetworkManager.GameplayScopeKind.Instance => qb
+                    .From
+                    .InventoryContainer()
+                    .Where(c => c.ContainerKind.Eq("CORPSE"))
+                    .Where(c => c.WorldKind.Eq("INSTANCE"))
+                    .Where(c => c.InstanceId.Eq(scope.InstanceId.GetValueOrDefault()))
+                    .ToSql(),
+                _ => throw new InvalidOperationException("Scoped corpse-container query requested for GameplayScope.None"),
+            };
+        }
+
+        private static string BuildScopedCorpseLootSlotQuery(QueryBuilder qb, NetworkManager.GameplayScope scope)
+        {
+            return scope.Kind switch
+            {
+                NetworkManager.GameplayScopeKind.OpenWorld => qb
+                    .From
+                    .InventoryContainer()
+                    .Where(c => c.ContainerKind.Eq("CORPSE"))
+                    .Where(c => c.WorldKind.Eq("OPEN"))
+                    .Where(c => c.OpenWorldSceneName.Eq(OpenWorldSceneName(scope)))
+                    .RightSemijoin(qb.From.InventorySlot(), (container, slot) => container.ContainerId.Eq(slot.ContainerId))
+                    .ToSql(),
+                NetworkManager.GameplayScopeKind.Instance => qb
+                    .From
+                    .InventoryContainer()
+                    .Where(c => c.ContainerKind.Eq("CORPSE"))
+                    .Where(c => c.WorldKind.Eq("INSTANCE"))
+                    .Where(c => c.InstanceId.Eq(scope.InstanceId.GetValueOrDefault()))
+                    .RightSemijoin(qb.From.InventorySlot(), (container, slot) => container.ContainerId.Eq(slot.ContainerId))
+                    .ToSql(),
+                _ => throw new InvalidOperationException("Scoped corpse-slot query requested for GameplayScope.None"),
             };
         }
 
@@ -578,6 +631,94 @@ namespace Arena.Network
                     .RightSemijoin(qb.From.CombatEvent(), (world, spellEvent) => world.Identity.Eq(spellEvent.Caster))
                     .ToSql(),
                 _ => throw new InvalidOperationException("Scoped spell-event query requested for GameplayScope.None"),
+            };
+        }
+
+        private static string BuildScopedPlayerSourceCombatEffectEventQuery(QueryBuilder qb, NetworkManager.GameplayScope scope)
+        {
+            return scope.Kind switch
+            {
+                NetworkManager.GameplayScopeKind.OpenWorld => qb
+                    .From
+                    .PlayerWorld()
+                    .Where(c => c.WorldKind.Eq("OPEN"))
+                    .Where(c => c.OpenWorldSceneName.Eq(OpenWorldSceneName(scope)))
+                    .RightSemijoin(qb.From.CombatEffectEvent(), (world, effect) => world.Identity.Eq(effect.Source))
+                    .ToSql(),
+                NetworkManager.GameplayScopeKind.Instance => qb
+                    .From
+                    .PlayerWorld()
+                    .Where(c => c.WorldKind.Eq("INSTANCE"))
+                    .Where(c => c.InstanceId.Eq(scope.InstanceId.GetValueOrDefault()))
+                    .RightSemijoin(qb.From.CombatEffectEvent(), (world, effect) => world.Identity.Eq(effect.Source))
+                    .ToSql(),
+                _ => throw new InvalidOperationException("Scoped player-source combat-effect query requested for GameplayScope.None"),
+            };
+        }
+
+        private static string BuildScopedPlayerTargetCombatEffectEventQuery(QueryBuilder qb, NetworkManager.GameplayScope scope)
+        {
+            return scope.Kind switch
+            {
+                NetworkManager.GameplayScopeKind.OpenWorld => qb
+                    .From
+                    .PlayerWorld()
+                    .Where(c => c.WorldKind.Eq("OPEN"))
+                    .Where(c => c.OpenWorldSceneName.Eq(OpenWorldSceneName(scope)))
+                    .RightSemijoin(qb.From.CombatEffectEvent(), (world, effect) => world.Identity.Eq(effect.Target))
+                    .ToSql(),
+                NetworkManager.GameplayScopeKind.Instance => qb
+                    .From
+                    .PlayerWorld()
+                    .Where(c => c.WorldKind.Eq("INSTANCE"))
+                    .Where(c => c.InstanceId.Eq(scope.InstanceId.GetValueOrDefault()))
+                    .RightSemijoin(qb.From.CombatEffectEvent(), (world, effect) => world.Identity.Eq(effect.Target))
+                    .ToSql(),
+                _ => throw new InvalidOperationException("Scoped player-target combat-effect query requested for GameplayScope.None"),
+            };
+        }
+
+        private static string BuildScopedNpcSourceCombatEffectEventQuery(QueryBuilder qb, NetworkManager.GameplayScope scope)
+        {
+            return scope.Kind switch
+            {
+                NetworkManager.GameplayScopeKind.OpenWorld => qb
+                    .From
+                    .NpcInstance()
+                    .Where(c => c.WorldKind.Eq("OPEN"))
+                    .Where(c => c.OpenWorldSceneName.Eq(OpenWorldSceneName(scope)))
+                    .RightSemijoin(qb.From.CombatEffectEvent(), (npc, effect) => npc.Identity.Eq(effect.Source))
+                    .ToSql(),
+                NetworkManager.GameplayScopeKind.Instance => qb
+                    .From
+                    .NpcInstance()
+                    .Where(c => c.WorldKind.Eq("INSTANCE"))
+                    .Where(c => c.InstanceId.Eq(scope.InstanceId.GetValueOrDefault()))
+                    .RightSemijoin(qb.From.CombatEffectEvent(), (npc, effect) => npc.Identity.Eq(effect.Source))
+                    .ToSql(),
+                _ => throw new InvalidOperationException("Scoped NPC-source combat-effect query requested for GameplayScope.None"),
+            };
+        }
+
+        private static string BuildScopedNpcTargetCombatEffectEventQuery(QueryBuilder qb, NetworkManager.GameplayScope scope)
+        {
+            return scope.Kind switch
+            {
+                NetworkManager.GameplayScopeKind.OpenWorld => qb
+                    .From
+                    .NpcInstance()
+                    .Where(c => c.WorldKind.Eq("OPEN"))
+                    .Where(c => c.OpenWorldSceneName.Eq(OpenWorldSceneName(scope)))
+                    .RightSemijoin(qb.From.CombatEffectEvent(), (npc, effect) => npc.Identity.Eq(effect.Target))
+                    .ToSql(),
+                NetworkManager.GameplayScopeKind.Instance => qb
+                    .From
+                    .NpcInstance()
+                    .Where(c => c.WorldKind.Eq("INSTANCE"))
+                    .Where(c => c.InstanceId.Eq(scope.InstanceId.GetValueOrDefault()))
+                    .RightSemijoin(qb.From.CombatEffectEvent(), (npc, effect) => npc.Identity.Eq(effect.Target))
+                    .ToSql(),
+                _ => throw new InvalidOperationException("Scoped NPC-target combat-effect query requested for GameplayScope.None"),
             };
         }
 

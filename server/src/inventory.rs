@@ -5,6 +5,7 @@ use crate::combat::{queue_effects, EffectPacket};
 use crate::npcs::{
     npc_instance as _, npc_physics as _, npc_state as _, schedule_npc_looted_corpse_despawn,
 };
+use crate::party::same_party;
 use crate::player::DEFAULT_COMBAT_PROFILE;
 use crate::player_physics::player_physics as _;
 use crate::player_state::player_state as _;
@@ -1386,8 +1387,11 @@ pub fn open_loot_npc(ctx: &ReducerContext, npc_identity: Identity) -> Result<(),
         return Err("NPC is still alive".to_string());
     }
 
+    // Current deaths create the reserved container immediately. This call also
+    // upgrades a legacy corpse that predates reservations, using its original
+    // player spawner as the only recoverable entitlement signal.
+    create_corpse_loot_for_npc(ctx, npc_identity, Identity::ZERO);
     validate_npc_loot_access(ctx, ctx.sender(), npc_identity)?;
-    create_corpse_loot_for_npc(ctx, npc_identity, ctx.sender());
     collect_nearby_corpse_loot_into_primary(ctx, ctx.sender(), npc_identity);
     ctx.db
         .inventory_container()
@@ -1480,6 +1484,7 @@ fn validate_npc_loot_access(
         .identity()
         .find(npc_identity)
         .ok_or_else(|| "NPC row not found".to_string())?;
+    validate_corpse_loot_entitlement(ctx, owner, npc_identity)?;
     let npc_physics = ctx
         .db
         .npc_physics()
@@ -1519,10 +1524,44 @@ fn validate_npc_loot_access(
     let dy = player_physics.pos_y - npc_physics.pos_y;
     let dz = player_physics.pos_z - npc_physics.pos_z;
     let distance_sq = dx * dx + dy * dy + dz * dz;
-    if distance_sq > LOOT_INTERACT_RANGE * LOOT_INTERACT_RANGE {
+    if !distance_sq.is_finite() || distance_sq > LOOT_INTERACT_RANGE * LOOT_INTERACT_RANGE {
         return Err("player is too far from the NPC corpse".to_string());
     }
     Ok(())
+}
+
+fn validate_corpse_loot_entitlement(
+    ctx: &ReducerContext,
+    looter: Identity,
+    npc_identity: Identity,
+) -> Result<(), String> {
+    let container = ctx
+        .db
+        .inventory_container()
+        .container_id()
+        .find(corpse_container_id(npc_identity))
+        .ok_or_else(|| "NPC corpse has no loot reservation".to_string())?;
+    let entitled_owner = container
+        .owner
+        .ok_or_else(|| "NPC corpse has no player loot entitlement".to_string())?;
+
+    if corpse_loot_access_allowed(
+        looter,
+        entitled_owner,
+        same_party(ctx, looter, entitled_owner),
+    ) {
+        Ok(())
+    } else {
+        Err("NPC corpse is reserved for another player or party".to_string())
+    }
+}
+
+fn corpse_loot_access_allowed(
+    looter: Identity,
+    entitled_owner: Identity,
+    shares_party: bool,
+) -> bool {
+    looter == entitled_owner || shares_party
 }
 
 #[reducer]
@@ -2290,20 +2329,28 @@ pub(crate) fn create_corpse_loot_for_npc(
     let Some(physics) = ctx.db.npc_physics().identity().find(npc_identity) else {
         return;
     };
+    let entitlement_owner = corpse_loot_entitlement_owner(ctx, &npc, looter_hint);
 
     let container_id = corpse_container_id(npc_identity);
-    if ctx
+    if let Some(mut existing) = ctx
         .db
         .inventory_container()
         .container_id()
         .find(container_id.clone())
-        .is_none()
     {
+        if existing.owner.is_none() && entitlement_owner.is_some() {
+            existing.owner = entitlement_owner;
+            existing.owner_key = entitlement_owner.map(identity_key).unwrap_or_default();
+            existing.updated_at = ctx.timestamp;
+            existing.revision = existing.revision.saturating_add(1);
+            ctx.db.inventory_container().container_id().update(existing);
+        }
+    } else {
         ctx.db.inventory_container().insert(InventoryContainer {
             container_id: container_id.clone(),
             container_kind: CONTAINER_KIND_CORPSE.to_string(),
-            owner_key: String::new(),
-            owner: None,
+            owner_key: entitlement_owner.map(identity_key).unwrap_or_default(),
+            owner: entitlement_owner,
             anchor_key: identity_key(npc_identity),
             anchor_identity: Some(npc_identity),
             world_kind: npc.world_kind.clone(),
@@ -2332,12 +2379,29 @@ pub(crate) fn create_corpse_loot_for_npc(
         return;
     }
 
-    let counter_owner = if looter_hint == Identity::ZERO {
+    let Some(counter_owner) = entitlement_owner else {
+        log::warn!(
+            "[LOOT_ENTITLEMENT] NPC {} died without an eligible player owner; no loot was rolled",
+            &npc_identity.to_hex()[..8]
+        );
+        return;
+    };
+    roll_corpse_equipment_loot(ctx, &npc, counter_owner, container_id.as_str());
+}
+
+fn corpse_loot_entitlement_owner(
+    ctx: &ReducerContext,
+    npc: &crate::npcs::NpcInstance,
+    looter_hint: Identity,
+) -> Option<Identity> {
+    let candidate = if looter_hint == Identity::ZERO {
         npc.spawned_by
     } else {
         looter_hint
     };
-    roll_corpse_equipment_loot(ctx, &npc, counter_owner, container_id.as_str());
+
+    (candidate != Identity::ZERO && ctx.db.player_world().identity().find(candidate).is_some())
+        .then_some(candidate)
 }
 
 fn roll_corpse_equipment_loot(
@@ -3577,6 +3641,23 @@ fn require_accessible_container(
         ));
     }
     if let Some(container_owner) = container.owner {
+        if container
+            .container_kind
+            .eq_ignore_ascii_case(CONTAINER_KIND_CORPSE)
+        {
+            if !corpse_loot_access_allowed(
+                owner,
+                container_owner,
+                same_party(ctx, owner, container_owner),
+            ) {
+                return Err(
+                    "inventory container is reserved for another player or party".to_string(),
+                );
+            }
+            validate_world_container_access(ctx, owner, &container)?;
+            return Ok(container);
+        }
+
         if container_owner != owner {
             return Err("inventory container belongs to another identity".to_string());
         }
@@ -3625,7 +3706,7 @@ fn validate_world_container_access(
     let dy = physics.pos_y - container.pos_y;
     let dz = physics.pos_z - container.pos_z;
     let distance_sq = dx * dx + dy * dy + dz * dz;
-    if distance_sq > LOOT_INTERACT_RANGE * LOOT_INTERACT_RANGE {
+    if !distance_sq.is_finite() || distance_sq > LOOT_INTERACT_RANGE * LOOT_INTERACT_RANGE {
         return Err("player is too far from the inventory container".to_string());
     }
     Ok(())
@@ -4540,6 +4621,21 @@ fn identity_key(identity: Identity) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn test_identity(number: u8) -> Identity {
+        Identity::from_hex(format!("{number:064x}").as_str()).expect("valid test identity")
+    }
+
+    #[test]
+    fn corpse_loot_entitlement_allows_owner_and_party_only() {
+        let owner = test_identity(1);
+        let party_member = test_identity(2);
+        let outsider = test_identity(3);
+
+        assert!(corpse_loot_access_allowed(owner, owner, false));
+        assert!(corpse_loot_access_allowed(party_member, owner, true));
+        assert!(!corpse_loot_access_allowed(outsider, owner, false));
+    }
 
     fn item_definition(weapon_kind: &str, hand_requirement: &str) -> ItemDefinition {
         ItemDefinition {

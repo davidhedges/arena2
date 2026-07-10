@@ -14,12 +14,14 @@ namespace Arena.Presentation
     /// </summary>
     public class FloatingCombatText : MonoBehaviour
     {
-        private bool _subscribed;
+        private DbConnection? _subscribedConnection;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
         {
             if (!ArenaRuntimeSceneGate.ShouldRunArenaRuntimeInActiveScene())
+                return;
+            if (FindAnyObjectByType<FloatingCombatText>() != null)
                 return;
 
             var go = new GameObject("FloatingCombatText");
@@ -32,10 +34,30 @@ namespace Arena.Presentation
             if (!ArenaRuntimeSceneGate.ShouldRunArenaRuntimeInActiveScene())
                 return;
 
-            if (_subscribed) return;
             var conn = NetworkManager.Instance?.Conn;
-            if (conn == null) return;
-            _subscribed = true;
+            SubscribeToConnection(conn);
+        }
+
+        private void OnDestroy()
+        {
+            SubscribeToConnection(null);
+        }
+
+        private void SubscribeToConnection(DbConnection? conn)
+        {
+            if (ReferenceEquals(conn, _subscribedConnection))
+                return;
+
+            if (_subscribedConnection != null)
+            {
+                _subscribedConnection.Db.PlayerEvent.OnInsert -= OnPlayerEvent;
+                _subscribedConnection.Db.CombatEffectEvent.OnInsert -= OnCombatEffectEvent;
+            }
+
+            _subscribedConnection = conn;
+            if (conn == null)
+                return;
+
             conn.Db.PlayerEvent.OnInsert += OnPlayerEvent;
             conn.Db.CombatEffectEvent.OnInsert += OnCombatEffectEvent;
         }
