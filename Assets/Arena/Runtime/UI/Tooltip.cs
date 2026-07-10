@@ -1,6 +1,7 @@
 #nullable enable
 
 using Arena.Combat;
+using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
 #if ENABLE_INPUT_SYSTEM
@@ -115,10 +116,7 @@ namespace Arena.UI
 
     public static class TooltipPresenter
     {
-        internal const float Width = 260f;
-        internal const float BaseHeight = 76f;
-        internal const float DescriptionHeight = 52f;
-        internal const float BorderThickness = 2f;
+        internal const float Width = 284f;
         private static readonly Vector2 CursorOffset = new(18f, 18f);
 
         private static TooltipView? _view;
@@ -193,10 +191,14 @@ namespace Arena.UI
     internal sealed class TooltipView : MonoBehaviour
     {
         private RectTransform _rect = null!;
-        private RectTransform _content = null!;
-        private Text _name = null!;
-        private Text _subtitle = null!;
-        private Text _description = null!;
+        private Image _border = null!;
+        private TextMeshProUGUI _name = null!;
+        private TextMeshProUGUI _subtitle = null!;
+        private RectTransform _statsBlock = null!;
+        private TextMeshProUGUI _description = null!;
+        private TextMeshProUGUI _footnote = null!;
+
+        private const float RowHeight = 19f;
 
         public Canvas Canvas { get; private set; } = null!;
 
@@ -204,27 +206,54 @@ namespace Arena.UI
         {
             Canvas = canvas;
             _rect = gameObject.AddComponent<RectTransform>();
-            _rect.anchorMin = new Vector2(0.5f, 0.5f);
-            _rect.anchorMax = new Vector2(0.5f, 0.5f);
             _rect.pivot = new Vector2(0f, 1f);
-            _rect.sizeDelta = OuterSize(TooltipPresenter.BaseHeight);
 
-            Image border = gameObject.AddComponent<Image>();
-            border.color = new Color(1f, 0.82f, 0.38f, 0.58f);
-            border.raycastTarget = false;
+            // Shadow + rounded backdrop live outside the layout flow.
+            Image shadow = ArenaUiKit.AddShadow(_rect, spread: 20f, alpha: 0.6f);
+            shadow.gameObject.AddComponent<LayoutElement>().ignoreLayout = true;
 
-            _content = AddContentPanel(new Color(0.035f, 0.035f, 0.04f, 0.96f));
+            RectTransform backdrop = ArenaUiKit.MakeRect(_rect, "Backdrop");
+            backdrop.gameObject.AddComponent<LayoutElement>().ignoreLayout = true;
+            ArenaUiKit.Fill(backdrop);
+            backdrop.SetSiblingIndex(1);
+            Image backdropImage = backdrop.gameObject.AddComponent<Image>();
+            backdropImage.raycastTarget = false;
+            ArenaUiSprites.SurfaceSprite fill = ArenaUiSprites.WindowFill;
+            ArenaUiKit.ApplySurface(backdropImage, fill, ArenaUiTheme.PanelStrong);
+            if (!fill.Authored)
+                ArenaUiKit.AddSheen(backdrop, 0.04f);
+            _border = ArenaUiKit.AddBorder(backdrop, ArenaUiTheme.HairlineStrong, ArenaUiSprites.PanelRadius);
 
-            _name = MakeText("Name", _content, 16, FontStyle.Bold, new Color(1f, 0.86f, 0.45f));
-            SetRect(_name.rectTransform, new Vector2(12f, -10f), new Vector2(TooltipPresenter.Width - 24f, 24f));
+            VerticalLayoutGroup layout = gameObject.AddComponent<VerticalLayoutGroup>();
+            layout.padding = new RectOffset(12, 12, 10, 10);
+            layout.spacing = 4f;
+            layout.childControlWidth = true;
+            layout.childControlHeight = true;
+            layout.childForceExpandWidth = true;
+            layout.childForceExpandHeight = false;
 
-            _subtitle = MakeText("Subtitle", _content, 13, FontStyle.Normal, new Color(0.82f, 0.88f, 1f));
-            SetRect(_subtitle.rectTransform, new Vector2(12f, -38f), new Vector2(TooltipPresenter.Width - 24f, 20f));
+            ContentSizeFitter fitter = gameObject.AddComponent<ContentSizeFitter>();
+            fitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
+            fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+            _rect.sizeDelta = new Vector2(TooltipPresenter.Width, 0f);
 
-            _description = MakeText("Description", _content, 12, FontStyle.Normal, new Color(0.82f, 0.82f, 0.82f));
-            _description.horizontalOverflow = HorizontalWrapMode.Wrap;
-            _description.verticalOverflow = VerticalWrapMode.Truncate;
-            SetRect(_description.rectTransform, new Vector2(12f, -66f), new Vector2(TooltipPresenter.Width - 24f, 48f));
+            _name = MakeLine("Name", 15f, ArenaUiTheme.Gold, ArenaUiTheme.TitleFont);
+            _subtitle = MakeLine("Subtitle", ArenaUiTheme.SmallSize + 0.5f, ArenaUiTheme.MutedText, ArenaUiTheme.BodyFont);
+
+            _statsBlock = ArenaUiKit.MakeRect(transform, "Stats");
+            VerticalLayoutGroup statsLayout = _statsBlock.gameObject.AddComponent<VerticalLayoutGroup>();
+            statsLayout.spacing = 1f;
+            statsLayout.childControlWidth = true;
+            statsLayout.childControlHeight = false;
+            statsLayout.childForceExpandWidth = true;
+            statsLayout.childForceExpandHeight = false;
+
+            _description = MakeLine("Description", ArenaUiTheme.SmallSize + 0.5f, ArenaUiTheme.Text, ArenaUiTheme.BodyFont);
+            _description.textWrappingMode = TextWrappingModes.Normal;
+            _description.overflowMode = TextOverflowModes.Overflow;
+
+            _footnote = MakeLine("Footnote", ArenaUiTheme.SmallSize - 0.5f, ArenaUiTheme.MutedText, ArenaUiTheme.BodyFont);
+            _footnote.fontStyle = FontStyles.Italic;
 
             SetVisible(false);
         }
@@ -232,15 +261,62 @@ namespace Arena.UI
         public void Set(TooltipData data)
         {
             _name.text = data.Name;
-            _subtitle.text = data.Subtitle;
-            bool hasDescription = !string.IsNullOrWhiteSpace(data.Description);
-            _description.gameObject.SetActive(hasDescription);
-            _description.text = hasDescription ? data.Description : string.Empty;
-            float contentHeight = hasDescription
-                ? TooltipPresenter.BaseHeight + TooltipPresenter.DescriptionHeight
-                : TooltipPresenter.BaseHeight;
-            _rect.sizeDelta = OuterSize(contentHeight);
+            _name.color = data.NameColor ?? ArenaUiTheme.Gold;
+
+            // Diablo-style rarity framing: the border ring takes the name color.
+            Color borderColor = data.NameColor ?? ArenaUiTheme.HairlineStrong;
+            borderColor.a = data.NameColor.HasValue ? 0.8f : ArenaUiTheme.HairlineStrong.a;
+            _border.color = borderColor;
+
+            SetLine(_subtitle, data.Subtitle);
+            SetLine(_description, data.Description);
+            SetLine(_footnote, data.Footnote);
+            RebuildStats(data);
+
             transform.SetAsLastSibling();
+            LayoutRebuilder.ForceRebuildLayoutImmediate(_rect);
+        }
+
+        private void RebuildStats(TooltipData data)
+        {
+            foreach (Transform child in _statsBlock)
+            {
+                // Deactivate before the deferred Destroy so the immediate layout
+                // rebuild below doesn't measure stale rows.
+                child.gameObject.SetActive(false);
+                Destroy(child.gameObject);
+            }
+
+            bool hasStats = data.Stats is { Count: > 0 };
+            _statsBlock.gameObject.SetActive(hasStats);
+            if (!hasStats)
+                return;
+
+            foreach (TooltipStat stat in data.Stats!)
+            {
+                RectTransform row = ArenaUiKit.MakeRect(_statsBlock, "StatRow");
+                LayoutElement element = row.gameObject.AddComponent<LayoutElement>();
+                element.preferredHeight = RowHeight;
+                element.minHeight = RowHeight;
+
+                TextMeshProUGUI label = ArenaUiKit.MakeText(
+                    row,
+                    "Label",
+                    stat.Label,
+                    ArenaUiTheme.SmallSize,
+                    ArenaUiTheme.MutedText);
+                ArenaUiKit.Fill(label.rectTransform);
+
+                TextMeshProUGUI value = ArenaUiKit.MakeText(
+                    row,
+                    "Value",
+                    stat.Value,
+                    ArenaUiTheme.SmallSize,
+                    stat.Positive ? ArenaUiTheme.Success : ArenaUiTheme.Danger,
+                    ArenaUiTheme.StrongFont,
+                    TextAlignmentOptions.MidlineRight);
+                ArenaUiKit.Fill(value.rectTransform);
+            }
         }
 
         public void Place(Canvas canvas, Vector2 screenPosition)
@@ -253,7 +329,7 @@ namespace Arena.UI
                 camera,
                 out Vector2 local);
 
-            Vector2 size = _rect.sizeDelta;
+            Vector2 size = _rect.rect.size;
             Rect bounds = canvasRect.rect;
             local.x = Mathf.Clamp(local.x, bounds.xMin + 8f, bounds.xMax - size.x - 8f);
             local.y = Mathf.Clamp(local.y, bounds.yMin + size.y + 8f, bounds.yMax - 8f);
@@ -265,50 +341,18 @@ namespace Arena.UI
             gameObject.SetActive(visible);
         }
 
-        private Text MakeText(string name, Transform parent, int fontSize, FontStyle style, Color color)
+        private TextMeshProUGUI MakeLine(string name, float size, Color color, TMP_FontAsset? font)
         {
-            GameObject go = new(name);
-            go.transform.SetParent(parent, false);
-            Text text = go.AddComponent<Text>();
-            text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            text.fontSize = fontSize;
-            text.fontStyle = style;
-            text.color = color;
-            text.alignment = TextAnchor.UpperLeft;
-            text.raycastTarget = false;
+            TextMeshProUGUI text = ArenaUiKit.MakeText(transform, name, string.Empty, size, color, font);
+            text.overflowMode = TextOverflowModes.Ellipsis;
             return text;
         }
 
-        private RectTransform AddContentPanel(Color color)
+        private static void SetLine(TextMeshProUGUI line, string value)
         {
-            GameObject go = new("Content");
-            go.transform.SetParent(transform, false);
-            RectTransform rect = go.AddComponent<RectTransform>();
-            rect.anchorMin = Vector2.zero;
-            rect.anchorMax = Vector2.one;
-            rect.offsetMin = new Vector2(TooltipPresenter.BorderThickness, TooltipPresenter.BorderThickness);
-            rect.offsetMax = new Vector2(-TooltipPresenter.BorderThickness, -TooltipPresenter.BorderThickness);
-
-            Image image = go.AddComponent<Image>();
-            image.color = color;
-            image.raycastTarget = false;
-            return rect;
+            bool has = !string.IsNullOrWhiteSpace(value);
+            line.gameObject.SetActive(has);
+            line.text = has ? value : string.Empty;
         }
-
-        private static Vector2 OuterSize(float contentHeight)
-        {
-            float border = TooltipPresenter.BorderThickness * 2f;
-            return new Vector2(TooltipPresenter.Width + border, contentHeight + border);
-        }
-
-        private static void SetRect(RectTransform rect, Vector2 topLeft, Vector2 size)
-        {
-            rect.anchorMin = new Vector2(0f, 1f);
-            rect.anchorMax = new Vector2(0f, 1f);
-            rect.pivot = new Vector2(0f, 1f);
-            rect.anchoredPosition = topLeft;
-            rect.sizeDelta = size;
-        }
-
     }
 }

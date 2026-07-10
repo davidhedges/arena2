@@ -667,7 +667,7 @@ namespace Arena.UI
             out Image flashImg)
         {
             var slot = CreateActionBarSlot(parent, $"Slot_{key}");
-            var rt = slot.GetComponent<RectTransform>() ?? slot.AddComponent<RectTransform>();
+            var rt = ArenaUiKit.EnsureComponent<RectTransform>(slot);
             rt.sizeDelta = ActionBarLayout.SlotVector;
 
             var slotImage = slot.GetComponent<Image>();
@@ -2564,7 +2564,7 @@ namespace Arena.UI
 
         private static void Stretch(GameObject go)
         {
-            var rt = go.GetComponent<RectTransform>() ?? go.AddComponent<RectTransform>();
+            var rt = ArenaUiKit.EnsureComponent<RectTransform>(go);
             rt.anchorMin        = Vector2.zero;
             rt.anchorMax        = Vector2.one;
             rt.sizeDelta        = Vector2.zero;

@@ -15,18 +15,14 @@ namespace Arena.UI
     public sealed class SpellbookPanel : MonoBehaviour, IEscapeCloseable
     {
         private const float RefreshIntervalSeconds = 0.20f;
-        private static readonly Color PanelColor = HeatUiStyle.Panel;
-        private static readonly Color HeaderColor = HeatUiStyle.Header;
-        private static readonly Color RowColor = HeatUiStyle.Row;
-        private static readonly Color Gold = HeatUiStyle.Gold;
+        private const float RowHeight = 58f;
+        private const float RowGap = 8f;
 
         private static SpellbookPanel? s_instance;
 
         private Canvas? _canvas;
-        private GameObject? _panelRoot;
+        private ArenaWindow? _window;
         private RectTransform? _rowRoot;
-        private TextMeshProUGUI? _titleText;
-        private TextMeshProUGUI? _statusText;
         private string _itemInstanceId = string.Empty;
         private string _fallbackTitle = "Spellbook";
         private string _lastSignature = string.Empty;
@@ -67,20 +63,9 @@ namespace Arena.UI
         private void Awake()
         {
             s_instance = this;
-            RuntimeUiEventSystem.Ensure();
-
-            _canvas = gameObject.AddComponent<Canvas>();
-            _canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            _canvas.sortingOrder = 36;
-
-            CanvasScaler scaler = gameObject.AddComponent<CanvasScaler>();
-            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = new Vector2(1920f, 1080f);
-            scaler.matchWidthOrHeight = 0.5f;
-
-            gameObject.AddComponent<GraphicRaycaster>();
+            _canvas = ArenaUiKit.MakeOverlayCanvas(gameObject, 36);
             BuildPanel();
-            SetOpen(false);
+            SetOpen(false, instant: true);
         }
 
         private void OnEnable()
@@ -104,7 +89,8 @@ namespace Arena.UI
         {
             if (!ArenaRuntimeSceneGate.ShouldRunArenaRuntimeInActiveScene())
             {
-                SetOpen(false);
+                if (_isOpen)
+                    SetOpen(false, instant: true);
                 return;
             }
 
@@ -136,11 +122,10 @@ namespace Arena.UI
             SetOpen(true);
         }
 
-        private void SetOpen(bool open)
+        private void SetOpen(bool open, bool instant = false)
         {
             _isOpen = open;
-            if (_panelRoot != null)
-                _panelRoot.SetActive(open);
+            _window?.SetVisible(open, instant);
             if (open)
             {
                 RuntimeUiLayer.BringToFront(_canvas);
@@ -150,73 +135,12 @@ namespace Arena.UI
 
         private void BuildPanel()
         {
-            _panelRoot = new GameObject("SpellbookRoot", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
-            _panelRoot.transform.SetParent(transform, false);
-            RectTransform rootRt = (RectTransform)_panelRoot.transform;
-            rootRt.anchorMin = new Vector2(0.5f, 0.5f);
-            rootRt.anchorMax = new Vector2(0.5f, 0.5f);
-            rootRt.pivot = new Vector2(0.5f, 0.5f);
-            rootRt.sizeDelta = new Vector2(560f, 620f);
-            rootRt.anchoredPosition = new Vector2(360f, 0f);
+            _window = ArenaWindow.Create(transform, "SpellbookWindow", "Spellbook", new Vector2(560f, 620f));
+            _window.Rect.anchoredPosition = new Vector2(360f, 0f);
+            _window.CloseRequested += () => SetOpen(false);
 
-            Image panelImage = _panelRoot.GetComponent<Image>();
-            panelImage.color = PanelColor;
-            HeatUiStyle.StylePanel(_panelRoot);
-            HeatUiStyle.AddAccentBar(
-                _panelRoot.transform,
-                "Accent",
-                new Vector2(0f, 0f),
-                new Vector2(0f, 1f),
-                Vector2.zero,
-                new Vector2(3f, 0f));
-
-            RectTransform header = AddBlock("Header", _panelRoot.transform, HeaderColor);
-            HeatUiStyle.StyleHeader(header.gameObject);
-            header.anchorMin = new Vector2(0f, 1f);
-            header.anchorMax = new Vector2(1f, 1f);
-            header.pivot = new Vector2(0.5f, 1f);
-            header.offsetMin = new Vector2(0f, -64f);
-            header.offsetMax = Vector2.zero;
-
-            _titleText = MakeLabel("Title", header, "Spellbook", 24f, TextAlignmentOptions.MidlineLeft, Color.white);
-            SetRect(_titleText.rectTransform, new Vector2(22f, -52f), new Vector2(360f, 42f), new Vector2(0f, 1f), new Vector2(0f, 1f));
-
-            Button close = MakeButton("CloseButton", header, "Close", new Color(0.16f, 0.17f, 0.19f, 0.96f), Color.white);
-            SetRect((RectTransform)close.transform, new Vector2(-94f, -49f), new Vector2(72f, 34f), new Vector2(1f, 1f), new Vector2(1f, 1f));
-            close.onClick.AddListener(() => SetOpen(false));
-
-            RectTransform scrollRoot = new GameObject("SpellScroll", typeof(RectTransform), typeof(ScrollRect)).GetComponent<RectTransform>();
-            scrollRoot.SetParent(_panelRoot.transform, false);
-            scrollRoot.anchorMin = new Vector2(0f, 0f);
-            scrollRoot.anchorMax = new Vector2(1f, 1f);
-            scrollRoot.offsetMin = new Vector2(22f, 58f);
-            scrollRoot.offsetMax = new Vector2(-22f, -84f);
-
-            RectTransform viewport = new GameObject("Viewport", typeof(RectTransform), typeof(RectMask2D)).GetComponent<RectTransform>();
-            viewport.SetParent(scrollRoot, false);
-            viewport.anchorMin = Vector2.zero;
-            viewport.anchorMax = Vector2.one;
-            viewport.offsetMin = Vector2.zero;
-            viewport.offsetMax = Vector2.zero;
-
-            _rowRoot = new GameObject("Rows", typeof(RectTransform)).GetComponent<RectTransform>();
-            _rowRoot.SetParent(viewport, false);
-            _rowRoot.anchorMin = new Vector2(0f, 1f);
-            _rowRoot.anchorMax = new Vector2(1f, 1f);
-            _rowRoot.pivot = new Vector2(0.5f, 1f);
-            _rowRoot.anchoredPosition = Vector2.zero;
-            _rowRoot.sizeDelta = Vector2.zero;
-
-            ScrollRect scrollRect = scrollRoot.GetComponent<ScrollRect>();
-            scrollRect.viewport = viewport;
-            scrollRect.content = _rowRoot;
-            scrollRect.horizontal = false;
-            scrollRect.vertical = true;
-            scrollRect.movementType = ScrollRect.MovementType.Clamped;
-            scrollRect.scrollSensitivity = 24f;
-
-            _statusText = MakeLabel("Status", _panelRoot.transform, string.Empty, 13f, TextAlignmentOptions.MidlineLeft, HeatUiStyle.MutedText);
-            SetRect(_statusText.rectTransform, new Vector2(22f, 18f), new Vector2(420f, 28f), new Vector2(0f, 0f), new Vector2(0f, 0f));
+            _rowRoot = ArenaUiKit.MakeScrollView(_window.Content, "SpellScroll", out ScrollRect scrollRect);
+            ArenaUiKit.Fill((RectTransform)scrollRect.transform);
         }
 
         private void Refresh()
@@ -264,15 +188,19 @@ namespace Arena.UI
 
             if (spells.Count == 0)
             {
-                _rowRoot.sizeDelta = Vector2.zero;
-                TextMeshProUGUI empty = MakeLabel("Empty", _rowRoot, "No spells", 15f, TextAlignmentOptions.Center, HeatUiStyle.MutedText);
-                SetRect(empty.rectTransform, Vector2.zero, new Vector2(360f, 44f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+                _rowRoot.sizeDelta = new Vector2(0f, 44f);
+                TextMeshProUGUI empty = ArenaUiKit.MakeText(
+                    _rowRoot,
+                    "Empty",
+                    "No spells",
+                    15f,
+                    ArenaUiTheme.MutedText,
+                    alignment: TextAlignmentOptions.Center);
+                ArenaUiKit.Fill(empty.rectTransform);
                 return;
             }
 
-            const float rowHeight = 58f;
-            const float rowGap = 8f;
-            float contentHeight = spells.Count * rowHeight + Math.Max(0, spells.Count - 1) * rowGap;
+            float contentHeight = spells.Count * RowHeight + Math.Max(0, spells.Count - 1) * RowGap;
             _rowRoot.sizeDelta = new Vector2(0f, contentHeight);
             for (int i = 0; i < spells.Count; i++)
             {
@@ -281,39 +209,54 @@ namespace Arena.UI
                 SpellDefinition? spell = string.IsNullOrWhiteSpace(spellId)
                     ? null
                     : conn?.Db.SpellDefinition.Kind.Find(spellId);
-                RectTransform row = AddBlock($"Spell_{i}", _rowRoot, i % 2 == 0 ? RowColor : HeatUiStyle.RowAlt);
-                row.anchorMin = new Vector2(0f, 1f);
-                row.anchorMax = new Vector2(1f, 1f);
-                row.pivot = new Vector2(0.5f, 1f);
-                row.offsetMin = new Vector2(0f, -((i + 1) * rowHeight + i * rowGap));
-                row.offsetMax = new Vector2(0f, -(i * (rowHeight + rowGap)));
+                RectTransform row = ArenaUiKit.MakePanel(
+                    _rowRoot,
+                    $"Spell_{i}",
+                    i % 2 == 0 ? ArenaUiTheme.Row : ArenaUiTheme.RowAlt);
+                ArenaUiKit.SetAnchors(
+                    row,
+                    new Vector2(0f, 1f),
+                    new Vector2(1f, 1f),
+                    new Vector2(0f, -((i + 1) * RowHeight + i * RowGap)),
+                    new Vector2(0f, -(i * (RowHeight + RowGap))));
 
                 AddSpellIcon(row, conn, spellId);
 
-                TextMeshProUGUI name = MakeLabel("Name", row, DisplayNameForSpell(conn, spellId), 15f, TextAlignmentOptions.MidlineLeft, Color.white);
-                SetRect(name.rectTransform, new Vector2(86f, -10f), new Vector2(330f, 24f), new Vector2(0f, 1f), new Vector2(0f, 1f));
+                TextMeshProUGUI name = ArenaUiKit.MakeText(
+                    row,
+                    "Name",
+                    DisplayNameForSpell(conn, spellId),
+                    15f,
+                    ArenaUiTheme.Text,
+                    ArenaUiTheme.StrongFont);
+                ArenaUiKit.PlaceTopLeft(name.rectTransform, new Vector2(64f, 10f), new Vector2(330f, 24f));
 
-                TextMeshProUGUI meta = MakeLabel("Meta", row, MetadataForSpell(conn, spellId, spell), 12f, TextAlignmentOptions.MidlineLeft, HeatUiStyle.MutedText);
-                SetRect(meta.rectTransform, new Vector2(86f, -34f), new Vector2(390f, 18f), new Vector2(0f, 1f), new Vector2(0f, 1f));
+                TextMeshProUGUI meta = ArenaUiKit.MakeText(
+                    row,
+                    "Meta",
+                    MetadataForSpell(conn, spellId, spell),
+                    ArenaUiTheme.SmallSize,
+                    ArenaUiTheme.MutedText);
+                ArenaUiKit.PlaceTopLeft(meta.rectTransform, new Vector2(64f, 34f), new Vector2(390f, 18f));
             }
         }
 
         private static void AddSpellIcon(RectTransform row, DbConnection? conn, string spellId)
         {
-            RectTransform frame = AddBlock("IconFrame", row, HeatUiStyle.CellEmpty);
-            SetRect(frame, new Vector2(16f, -7f), new Vector2(44f, 44f), new Vector2(0f, 1f), new Vector2(0f, 1f));
+            RectTransform frame = ArenaUiKit.MakePanel(
+                row,
+                "IconFrame",
+                ArenaUiTheme.CellEmpty,
+                raycastTarget: false,
+                hairline: true);
+            ArenaUiKit.PlaceTopLeft(frame, new Vector2(10f, 7f), new Vector2(44f, 44f));
 
             Sprite? iconSprite = ResolveSpellIcon(conn, spellId);
             if (iconSprite != null)
             {
-                GameObject iconGo = new("Icon", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
-                iconGo.transform.SetParent(frame, false);
-                RectTransform iconRt = (RectTransform)iconGo.transform;
-                iconRt.anchorMin = Vector2.zero;
-                iconRt.anchorMax = Vector2.one;
-                iconRt.offsetMin = new Vector2(3f, 3f);
-                iconRt.offsetMax = new Vector2(-3f, -3f);
-                Image icon = iconGo.GetComponent<Image>();
+                RectTransform iconRt = ArenaUiKit.MakeRect(frame, "Icon");
+                ArenaUiKit.Fill(iconRt, new Vector2(3f, 3f));
+                Image icon = iconRt.gameObject.AddComponent<Image>();
                 icon.sprite = iconSprite;
                 icon.color = Color.white;
                 icon.preserveAspect = true;
@@ -321,12 +264,16 @@ namespace Arena.UI
                 return;
             }
 
-            TextMeshProUGUI fallback = MakeLabel("IconFallback", frame, IconFallbackText(spellId), 11f, TextAlignmentOptions.Center, Gold);
+            TextMeshProUGUI fallback = ArenaUiKit.MakeText(
+                frame,
+                "IconFallback",
+                IconFallbackText(spellId),
+                11f,
+                ArenaUiTheme.Gold,
+                ArenaUiTheme.StrongFont,
+                TextAlignmentOptions.Center);
             fallback.fontStyle = FontStyles.Bold;
-            fallback.rectTransform.anchorMin = Vector2.zero;
-            fallback.rectTransform.anchorMax = Vector2.one;
-            fallback.rectTransform.offsetMin = Vector2.zero;
-            fallback.rectTransform.offsetMax = Vector2.zero;
+            ArenaUiKit.Fill(fallback.rectTransform);
         }
 
         private static Sprite? ResolveSpellIcon(DbConnection? conn, string spellId)
@@ -467,71 +414,12 @@ namespace Arena.UI
 
         private void SetTitle(string title)
         {
-            if (_titleText != null)
-                _titleText.text = string.IsNullOrWhiteSpace(title) ? "Spellbook" : title;
+            _window?.SetTitle(string.IsNullOrWhiteSpace(title) ? "Spellbook" : title);
         }
 
         private void SetStatus(string status)
         {
-            if (_statusText != null)
-                _statusText.text = status;
-        }
-
-        private static RectTransform AddBlock(string name, Transform parent, Color color)
-        {
-            GameObject go = new(name, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
-            go.transform.SetParent(parent, false);
-            Image image = go.GetComponent<Image>();
-            image.color = color;
-            return (RectTransform)go.transform;
-        }
-
-        private static TextMeshProUGUI MakeLabel(string name, Transform parent, string text, float fontSize, TextAlignmentOptions alignment, Color color)
-        {
-            GameObject go = new(name, typeof(RectTransform));
-            go.transform.SetParent(parent, false);
-            TextMeshProUGUI label = go.AddComponent<TextMeshProUGUI>();
-            label.font = ResolveFont();
-            label.fontSize = fontSize;
-            label.alignment = alignment;
-            label.color = color;
-            label.text = text;
-            label.textWrappingMode = TextWrappingModes.NoWrap;
-            label.overflowMode = TextOverflowModes.Ellipsis;
-            label.raycastTarget = false;
-            return label;
-        }
-
-        private static Button MakeButton(string name, Transform parent, string text, Color fill, Color textColor)
-        {
-            GameObject go = new(name, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Button));
-            go.transform.SetParent(parent, false);
-            Image image = go.GetComponent<Image>();
-            image.color = fill;
-            Button button = go.GetComponent<Button>();
-            HeatUiStyle.StyleButton(button, text, fill, textColor);
-
-            TextMeshProUGUI label = MakeLabel("Text", go.transform, text, 13f, TextAlignmentOptions.Center, textColor);
-            label.rectTransform.anchorMin = Vector2.zero;
-            label.rectTransform.anchorMax = Vector2.one;
-            label.rectTransform.offsetMin = Vector2.zero;
-            label.rectTransform.offsetMax = Vector2.zero;
-            return button;
-        }
-
-        private static void SetRect(RectTransform rt, Vector2 anchoredPosition, Vector2 size, Vector2 anchorMin, Vector2 anchorMax)
-        {
-            rt.anchorMin = anchorMin;
-            rt.anchorMax = anchorMax;
-            rt.pivot = anchorMin;
-            rt.anchoredPosition = anchoredPosition;
-            rt.sizeDelta = size;
-        }
-
-        private static TMP_FontAsset? ResolveFont()
-        {
-            return TMP_Settings.defaultFontAsset
-                ?? Resources.Load<TMP_FontAsset>("Fonts & Materials/LiberationSans SDF");
+            _window?.SetSubtitle(status);
         }
     }
 }

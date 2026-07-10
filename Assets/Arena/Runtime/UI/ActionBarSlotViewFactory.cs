@@ -30,20 +30,18 @@ namespace Arena.UI
             GameObject go = InstantiateSlot(parent, name);
             ConfigureBaseVisual(go, label, keyLabel, fill, textColor, iconSprite);
 
-            TooltipTarget tooltip = go.GetComponent<TooltipTarget>() ?? go.AddComponent<TooltipTarget>();
+            TooltipTarget tooltip = ArenaUiKit.EnsureComponent<TooltipTarget>(go);
             tooltip.Configure(canvas, tooltipData);
 
             if (!string.IsNullOrWhiteSpace(slotId))
             {
-                ActionBarDropSlot dropSlot = go.GetComponent<ActionBarDropSlot>()
-                    ?? go.AddComponent<ActionBarDropSlot>();
+                ActionBarDropSlot dropSlot = ArenaUiKit.EnsureComponent<ActionBarDropSlot>(go);
                 dropSlot.Configure(canvas, slotId);
             }
 
             if (payloadProvider != null || onClick != null)
             {
-                ActionBarDragSource dragSource = go.GetComponent<ActionBarDragSource>()
-                    ?? go.AddComponent<ActionBarDragSource>();
+                ActionBarDragSource dragSource = ArenaUiKit.EnsureComponent<ActionBarDragSource>(go);
                 dragSource.Configure(canvas, payloadProvider, onDrop, onClick);
                 ConfigureButtonFeedback(go);
             }
@@ -72,7 +70,7 @@ namespace Arena.UI
             Color textColor,
             Sprite? iconSprite)
         {
-            Image image = go.GetComponent<Image>() ?? go.AddComponent<Image>();
+            Image image = ArenaUiKit.EnsureComponent<Image>(go);
             image.color = HasPrefabFrame(go) ? TransparentSlotInput : fill;
             image.raycastTarget = true;
 
@@ -153,7 +151,7 @@ namespace Arena.UI
 
         private static void ConfigureButtonFeedback(GameObject cell)
         {
-            Button button = cell.GetComponent<Button>() ?? cell.AddComponent<Button>();
+            Button button = ArenaUiKit.EnsureComponent<Button>(cell);
             button.onClick.RemoveAllListeners();
             ColorBlock colors = button.colors;
             colors.normalColor = Color.white;

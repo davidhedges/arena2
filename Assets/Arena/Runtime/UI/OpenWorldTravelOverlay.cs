@@ -128,12 +128,13 @@ namespace Arena.UI
             var colors = button.colors;
             colors.normalColor = image.color;
             colors.highlightedColor = HeatUiStyle.AccentHot;
-            colors.pressedColor = new Color(0.56f, 0.08f, 0.06f, 1f);
+            colors.pressedColor = Color.Lerp(HeatUiStyle.Accent, Color.black, 0.28f);
             button.colors = colors;
-            HeatUiStyle.StyleButton(button, text, HeatUiStyle.Accent, Color.white);
+            HeatUiStyle.StyleButton(button, text, HeatUiStyle.Accent, ArenaUiTheme.OnAccent);
 
             Text label = MakeLabel("Text", go.transform, 13, TextAnchor.MiddleCenter);
             label.text = text;
+            label.color = ArenaUiTheme.OnAccent;
             SetStretch(label.rectTransform);
             return button;
         }

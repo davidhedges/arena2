@@ -31,20 +31,19 @@ namespace Arena.UI
         private const string SpellbookDropSlotPrefix = "SPELLBOOK_";
         private const uint SpellsCategorySortOrder = uint.MaxValue - 3;
 
-        private static readonly Color PanelColor = new(0.055f, 0.06f, 0.068f, 0.96f);
-        private static readonly Color HeaderColor = new(0.09f, 0.105f, 0.12f, 0.98f);
-        private static readonly Color Gold = new(0.96f, 0.73f, 0.26f, 1f);
-        private static readonly Color EmptySlotColor = new(0.04f, 0.05f, 0.06f, 0.92f);
-        private static readonly Color DisabledActionColor = new(0.12f, 0.13f, 0.145f, 0.92f);
-        private static readonly Color DisabledActionTextColor = new(0.48f, 0.50f, 0.54f, 1f);
+        private const float AvailableWidth = 536f;
+        private const float AvailableHeight = 524f;
+        private static readonly Vector2 WindowSize = new(1240f, 720f);
+
+        // Disabled action cells sit between the empty and enabled surfaces.
+        private static Color DisabledActionColor => ArenaUiTheme.CellFilled;
+        private static Color DisabledActionTextColor => ArenaUiTheme.MutedText;
 
         private Canvas? _canvas;
-        private GameObject? _root;
+        private ArenaWindow? _window;
         private RectTransform? _availableRoot;
         private RectTransform? _availableContent;
         private RectTransform? _barRoot;
-        private TextMeshProUGUI? _title;
-        private TextMeshProUGUI? _spellSlots;
         private TextMeshProUGUI? _status;
         private Button? _weaponFilterButton;
         private TextMeshProUGUI? _weaponFilterLabel;
@@ -131,7 +130,7 @@ namespace Arena.UI
         {
             RuntimeUiEventSystem.Ensure();
             BuildUi();
-            SetOpen(false);
+            SetOpen(false, instant: true);
         }
 
         private void OnEnable()
@@ -156,7 +155,8 @@ namespace Arena.UI
         {
             if (!ArenaRuntimeSceneGate.ShouldRunArenaRuntimeInActiveScene())
             {
-                SetOpen(false);
+                if (_isOpen)
+                    SetOpen(false, instant: true);
                 return;
             }
 
@@ -191,11 +191,10 @@ namespace Arena.UI
             return true;
         }
 
-        private void SetOpen(bool open)
+        private void SetOpen(bool open, bool instant = false)
         {
             _isOpen = open;
-            if (_root != null)
-                _root.SetActive(open);
+            _window?.SetVisible(open, instant);
             if (open)
             {
                 RuntimeUiLayer.BringToFront(_canvas);
@@ -207,71 +206,51 @@ namespace Arena.UI
 
         private void BuildUi()
         {
-            _canvas = gameObject.AddComponent<Canvas>();
-            _canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            _canvas.sortingOrder = 34;
+            GameObject canvasGo = new("CharacterActionBarCanvas");
+            canvasGo.transform.SetParent(transform, false);
+            _canvas = ArenaUiKit.MakeOverlayCanvas(canvasGo, 34);
 
-            CanvasScaler scaler = gameObject.AddComponent<CanvasScaler>();
-            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = new Vector2(1920f, 1080f);
-            scaler.matchWidthOrHeight = 0.5f;
+            _window = ArenaWindow.Create(
+                canvasGo.transform,
+                "CharacterActionBarRoot",
+                "Action Bar",
+                WindowSize);
+            _window.CloseRequested += () => SetOpen(false);
 
-            gameObject.AddComponent<GraphicRaycaster>();
+            RectTransform content = _window.Content;
 
-            _root = new GameObject("CharacterActionBarRoot", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
-            _root.transform.SetParent(transform, false);
-            RectTransform rootRt = (RectTransform)_root.transform;
-            rootRt.anchorMin = new Vector2(0.5f, 0.5f);
-            rootRt.anchorMax = new Vector2(0.5f, 0.5f);
-            rootRt.pivot = new Vector2(0.5f, 0.5f);
-            rootRt.sizeDelta = new Vector2(1240f, 720f);
-            rootRt.anchoredPosition = Vector2.zero;
-            _root.GetComponent<Image>().color = PanelColor;
+            ArenaButtonHandle filterButton = ArenaUiKit.MakeButton(
+                content,
+                "WeaponFilterButton",
+                "All Actions",
+                ArenaButtonStyle.Secondary,
+                ToggleWeaponFilterMenu);
+            SetRect(
+                filterButton.Rect,
+                Vector2.zero,
+                new Vector2(AvailableWidth, ArenaUiTheme.ButtonHeight),
+                new Vector2(0f, 1f),
+                new Vector2(0f, 1f));
+            _weaponFilterButton = filterButton.Button;
+            _weaponFilterLabel = filterButton.Label;
 
-            RectTransform header = AddBlock("Header", _root.transform, HeaderColor);
-            header.anchorMin = new Vector2(0f, 1f);
-            header.anchorMax = new Vector2(1f, 1f);
-            header.pivot = new Vector2(0.5f, 1f);
-            header.offsetMin = new Vector2(0f, -64f);
-            header.offsetMax = Vector2.zero;
-
-            _title = MakeLabel("Title", header, "Action Bar", 24f, TextAlignmentOptions.MidlineLeft, Color.white);
-            SetRect(_title.rectTransform, new Vector2(22f, -52f), new Vector2(460f, 42f), new Vector2(0f, 1f), new Vector2(0f, 1f));
-
-            _spellSlots = MakeLabel("SpellSlots", header, string.Empty, 15f, TextAlignmentOptions.MidlineLeft, new Color(0.74f, 0.82f, 0.88f));
-            SetRect(_spellSlots.rectTransform, new Vector2(492f, -48f), new Vector2(260f, 34f), new Vector2(0f, 1f), new Vector2(0f, 1f));
-
-            TextMeshProUGUI hint = MakeLabel("Hint", header, "J", 15f, TextAlignmentOptions.MidlineRight, new Color(0.72f, 0.75f, 0.80f));
-            SetRect(hint.rectTransform, new Vector2(-180f, -48f), new Vector2(120f, 34f), new Vector2(1f, 1f), new Vector2(1f, 1f));
-
-            Button close = MakeButton("CloseButton", header, "Close", new Color(0.16f, 0.17f, 0.19f, 0.96f), Color.white);
-            SetRect((RectTransform)close.transform, new Vector2(-94f, -49f), new Vector2(72f, 34f), new Vector2(1f, 1f), new Vector2(1f, 1f));
-            close.onClick.AddListener(() => SetOpen(false));
-
-            _weaponFilterButton = MakeButton("WeaponFilterButton", _root.transform, "All Actions", new Color(0.035f, 0.04f, 0.048f, 0.98f), Color.white);
-            _weaponFilterLabel = _weaponFilterButton.GetComponentInChildren<TextMeshProUGUI>();
-            SetRect((RectTransform)_weaponFilterButton.transform, new Vector2(28f, -96f), new Vector2(536f, 34f), new Vector2(0f, 1f), new Vector2(0f, 1f));
-            _weaponFilterButton.onClick.AddListener(ToggleWeaponFilterMenu);
-
-            _availableRoot = new GameObject("AvailableActions", typeof(RectTransform)).GetComponent<RectTransform>();
-            _availableRoot.SetParent(_root.transform, false);
-            _availableRoot.anchorMin = new Vector2(0f, 0f);
-            _availableRoot.anchorMax = new Vector2(0f, 1f);
-            _availableRoot.pivot = new Vector2(0f, 1f);
-            _availableRoot.anchoredPosition = new Vector2(28f, -138f);
-            _availableRoot.sizeDelta = new Vector2(536f, 524f);
+            _availableRoot = ArenaUiKit.MakeRect(content, "AvailableActions");
+            SetRect(
+                _availableRoot,
+                new Vector2(0f, -(ArenaUiTheme.ButtonHeight + 8f)),
+                new Vector2(AvailableWidth, AvailableHeight),
+                new Vector2(0f, 1f),
+                new Vector2(0f, 1f));
             Image availableMaskImage = _availableRoot.gameObject.AddComponent<Image>();
-            availableMaskImage.color = new Color(0f, 0f, 0f, 0.01f);
-            Mask availableMask = _availableRoot.gameObject.AddComponent<Mask>();
-            availableMask.showMaskGraphic = false;
+            availableMaskImage.color = Color.clear;
+            _availableRoot.gameObject.AddComponent<RectMask2D>();
             ScrollRect availableScroll = _availableRoot.gameObject.AddComponent<ScrollRect>();
             availableScroll.horizontal = false;
             availableScroll.vertical = true;
             availableScroll.movementType = ScrollRect.MovementType.Clamped;
             availableScroll.scrollSensitivity = 42f;
 
-            _availableContent = new GameObject("AvailableActionsContent", typeof(RectTransform)).GetComponent<RectTransform>();
-            _availableContent.SetParent(_availableRoot, false);
+            _availableContent = ArenaUiKit.MakeRect(_availableRoot, "AvailableActionsContent");
             _availableContent.anchorMin = new Vector2(0f, 1f);
             _availableContent.anchorMax = new Vector2(0f, 1f);
             _availableContent.pivot = new Vector2(0f, 1f);
@@ -280,20 +259,52 @@ namespace Arena.UI
             availableScroll.viewport = _availableRoot;
             availableScroll.content = _availableContent;
 
-            _weaponFilterMenu = AddBlock("WeaponFilterMenu", _root.transform, new Color(0.045f, 0.052f, 0.062f, 0.99f));
-            SetRect(_weaponFilterMenu, new Vector2(28f, -132f), new Vector2(536f, 0f), new Vector2(0f, 1f), new Vector2(0f, 1f));
+            _weaponFilterMenu = ArenaUiKit.MakePanel(
+                content,
+                "WeaponFilterMenu",
+                ArenaUiTheme.PanelStrong,
+                hairline: true);
+            SetRect(
+                _weaponFilterMenu,
+                new Vector2(0f, -(ArenaUiTheme.ButtonHeight + 2f)),
+                new Vector2(AvailableWidth, 0f),
+                new Vector2(0f, 1f),
+                new Vector2(0f, 1f));
             _weaponFilterMenu.gameObject.SetActive(false);
 
-            _barRoot = new GameObject("ActionBarGrid", typeof(RectTransform)).GetComponent<RectTransform>();
-            _barRoot.SetParent(_root.transform, false);
+            _barRoot = ArenaUiKit.MakeRect(content, "ActionBarGrid");
             _barRoot.anchorMin = new Vector2(1f, 0f);
             _barRoot.anchorMax = new Vector2(1f, 0f);
             _barRoot.pivot = new Vector2(1f, 0f);
-            _barRoot.anchoredPosition = new Vector2(-28f, 86f);
+            _barRoot.anchoredPosition = new Vector2(0f, 72f);
             _barRoot.sizeDelta = ActionBarLayout.GridSize;
 
-            _status = MakeLabel("Status", _root.transform, string.Empty, 13f, TextAlignmentOptions.MidlineLeft, new Color(1f, 0.52f, 0.45f));
-            SetRect(_status.rectTransform, new Vector2(28f, 22f), new Vector2(720f, 28f), new Vector2(0f, 0f), new Vector2(0f, 0f));
+            _status = ArenaUiKit.MakeText(
+                content,
+                "Status",
+                string.Empty,
+                ArenaUiTheme.BodySize,
+                ArenaUiTheme.Danger);
+            SetRect(
+                _status.rectTransform,
+                Vector2.zero,
+                new Vector2(720f, 28f),
+                Vector2.zero,
+                Vector2.zero);
+
+            TextMeshProUGUI hint = ArenaUiKit.MakeText(
+                content,
+                "Hint",
+                "J",
+                ArenaUiTheme.BodySize,
+                ArenaUiTheme.MutedText,
+                alignment: TextAlignmentOptions.MidlineRight);
+            SetRect(
+                hint.rectTransform,
+                Vector2.zero,
+                new Vector2(120f, 28f),
+                new Vector2(1f, 0f),
+                new Vector2(1f, 0f));
         }
 
         private void Refresh()
@@ -321,12 +332,10 @@ namespace Arena.UI
 
             _lastSignature = signature;
             Rebuild(actions, conn, owner);
-            if (_title != null)
-                _title.text = string.IsNullOrWhiteSpace(combatProfile)
-                    ? "Action Bar"
-                    : $"Action Bar | {combatProfile}";
-            if (_spellSlots != null)
-                _spellSlots.text = $"Spell slots {assignedSpellSlots}/{spellSlotCapacity}";
+            _window?.SetTitle(string.IsNullOrWhiteSpace(combatProfile)
+                ? "Action Bar"
+                : $"Action Bar | {combatProfile}");
+            _window?.SetSubtitle($"Spell slots {assignedSpellSlots}/{spellSlotCapacity}");
         }
 
         private void Rebuild(IReadOnlyList<AvailableAction> actions, DbConnection? conn, Identity? owner)
@@ -404,7 +413,7 @@ namespace Arena.UI
                 SetRect((RectTransform)cell.transform, position, ActionBarLayout.SlotVector, new Vector2(0f, 1f), new Vector2(0f, 1f));
 
                 Outline outline = cell.AddComponent<Outline>();
-                outline.effectColor = SameAction(_selectedAction, action) ? Gold : new Color(1f, 1f, 1f, 0.08f);
+                outline.effectColor = SameAction(_selectedAction, action) ? ArenaUiTheme.Gold : ArenaUiTheme.Hairline;
                 outline.effectDistance = SameAction(_selectedAction, action) ? new Vector2(2f, -2f) : new Vector2(1f, -1f);
                 _availableCells.Add(cell);
                 indexInCategory++;
@@ -459,8 +468,8 @@ namespace Arena.UI
                         $"ActionBar_{row}_{col}",
                         iconSprite == null && hasAction ? displayName : string.Empty,
                         keyLabel,
-                        hasAction ? (resolved.IsFixed ? FixedActionColor(actionId) : AbilityColor(abilityId)) : EmptySlotColor,
-                        hasAction ? Color.white : new Color(1f, 1f, 1f, 0.36f),
+                        hasAction ? (resolved.IsFixed ? FixedActionColor(actionId) : AbilityColor(abilityId)) : ArenaUiTheme.CellEmpty,
+                        hasAction ? Color.white : ArenaUiTheme.MutedText,
                         iconSprite,
                         _canvas,
                         slotId,
@@ -504,8 +513,8 @@ namespace Arena.UI
                     $"Spellbook_{col}",
                     iconSprite == null && hasSpell ? displayName : string.Empty,
                     SpellbookKeymap.KeyLabelForIndex(col),
-                    hasSpell ? AbilityColor(ability?.AbilityId ?? spellId) : EmptySlotColor,
-                    hasSpell ? Color.white : new Color(1f, 1f, 1f, 0.36f),
+                    hasSpell ? AbilityColor(ability?.AbilityId ?? spellId) : ArenaUiTheme.CellEmpty,
+                    hasSpell ? Color.white : ArenaUiTheme.MutedText,
                     iconSprite,
                     _canvas,
                     SpellbookDropSlotId(col),
@@ -849,7 +858,7 @@ namespace Arena.UI
                 return;
 
             _lastError = error ? message : string.Empty;
-            _status.color = error ? new Color(1f, 0.52f, 0.45f) : new Color(0.74f, 0.82f, 0.72f);
+            _status.color = error ? ArenaUiTheme.Danger : ArenaUiTheme.Success;
             _status.text = message;
             _errorUntilTime = Time.unscaledTime + 4f;
         }
@@ -1128,7 +1137,7 @@ namespace Arena.UI
             if (_weaponFilterMenu == null)
                 return;
 
-            const float optionHeight = 34f;
+            const float optionHeight = ArenaUiTheme.ButtonHeight;
             float width = _weaponFilterMenu.rect.width > 0f
                 ? _weaponFilterMenu.rect.width
                 : _weaponFilterMenu.sizeDelta.x;
@@ -1138,33 +1147,48 @@ namespace Arena.UI
             {
                 WeaponFilterOption option = _weaponFilterOptions[i];
                 bool selected = string.Equals(option.Key, _weaponFilterKey, StringComparison.Ordinal);
-                Button button = MakeButton(
-                    $"WeaponFilterOption_{option.Key}",
+                string selectedKey = option.Key;
+                ArenaButtonHandle button = ArenaUiKit.MakeButton(
                     _weaponFilterMenu,
+                    $"WeaponFilterOption_{option.Key}",
                     option.Title,
-                    selected ? new Color(0.16f, 0.13f, 0.07f, 0.98f) : new Color(0.07f, 0.08f, 0.09f, 0.98f),
-                    selected ? Gold : Color.white);
+                    ArenaButtonStyle.Secondary,
+                    () => SelectWeaponFilter(selectedKey));
+                button.Background.color = selected
+                    ? Color.Lerp(ArenaUiTheme.RowAlt, ArenaUiTheme.Accent, 0.2f)
+                    : ArenaUiTheme.Row;
+                button.Label.color = selected ? ArenaUiTheme.Gold : ArenaUiTheme.Text;
                 SetRect(
-                    (RectTransform)button.transform,
+                    button.Rect,
                     new Vector2(0f, -(i * optionHeight)),
                     new Vector2(width, optionHeight),
                     new Vector2(0f, 1f),
                     new Vector2(0f, 1f));
-                string selectedKey = option.Key;
-                button.onClick.AddListener(() => SelectWeaponFilter(selectedKey));
-                _weaponFilterMenuCells.Add(button.gameObject);
+                _weaponFilterMenuCells.Add(button.GameObject);
             }
         }
 
         private GameObject CreateAvailableSectionHeader(Transform parent, string title)
         {
-            GameObject header = new("AvailableSectionHeader", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
-            header.transform.SetParent(parent, false);
-            header.GetComponent<Image>().color = new Color(0.08f, 0.09f, 0.10f, 0.92f);
+            RectTransform header = ArenaUiKit.MakeRect(parent, "AvailableSectionHeader");
 
-            TextMeshProUGUI label = MakeLabel("Text", header.transform, title, 13f, TextAlignmentOptions.MidlineLeft, Gold);
-            SetRect(label.rectTransform, new Vector2(10f, -2f), new Vector2(500f, 24f), new Vector2(0f, 1f), new Vector2(0f, 1f));
-            return header;
+            TextMeshProUGUI label = ArenaUiKit.MakeSectionLabel(header, "Text", title);
+            ArenaUiKit.SetAnchors(
+                label.rectTransform,
+                Vector2.zero,
+                Vector2.one,
+                new Vector2(2f, 5f),
+                Vector2.zero);
+
+            RectTransform divider = ArenaUiKit.MakeDivider(header);
+            ArenaUiKit.SetAnchors(
+                divider,
+                Vector2.zero,
+                new Vector2(1f, 0f),
+                new Vector2(0f, 2f),
+                new Vector2(0f, 3f));
+
+            return header.gameObject;
         }
 
         private static string HumanizeIdentifier(string value)
@@ -1221,48 +1245,6 @@ namespace Arena.UI
             foreach (GameObject obj in objects)
                 Destroy(obj);
             objects.Clear();
-        }
-
-        private static RectTransform AddBlock(string name, Transform parent, Color color)
-        {
-            GameObject go = new(name, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
-            go.transform.SetParent(parent, false);
-            Image image = go.GetComponent<Image>();
-            image.color = color;
-            return (RectTransform)go.transform;
-        }
-
-        private static TextMeshProUGUI MakeLabel(string name, Transform parent, string text, float fontSize, TextAlignmentOptions alignment, Color color)
-        {
-            GameObject go = new(name, typeof(RectTransform));
-            go.transform.SetParent(parent, false);
-            TextMeshProUGUI label = go.AddComponent<TextMeshProUGUI>();
-            label.font = TMP_Settings.defaultFontAsset
-                ?? Resources.Load<TMP_FontAsset>("Fonts & Materials/LiberationSans SDF");
-            label.fontSize = fontSize;
-            label.alignment = alignment;
-            label.color = color;
-            label.text = text;
-            label.textWrappingMode = TextWrappingModes.NoWrap;
-            label.overflowMode = TextOverflowModes.Ellipsis;
-            label.raycastTarget = false;
-            return label;
-        }
-
-        private static Button MakeButton(string name, Transform parent, string text, Color fill, Color textColor)
-        {
-            GameObject go = new(name, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Button));
-            go.transform.SetParent(parent, false);
-            Image image = go.GetComponent<Image>();
-            image.color = fill;
-            Button button = go.GetComponent<Button>();
-
-            TextMeshProUGUI label = MakeLabel("Text", go.transform, text, 13f, TextAlignmentOptions.Center, textColor);
-            label.rectTransform.anchorMin = Vector2.zero;
-            label.rectTransform.anchorMax = Vector2.one;
-            label.rectTransform.offsetMin = Vector2.zero;
-            label.rectTransform.offsetMax = Vector2.zero;
-            return button;
         }
 
         private static void SetRect(RectTransform rt, Vector2 anchoredPosition, Vector2 size, Vector2 anchorMin, Vector2 anchorMax)

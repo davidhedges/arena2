@@ -1,5 +1,6 @@
 #nullable enable
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
@@ -12,22 +13,24 @@ namespace Arena.UI
 {
     /// <summary>
     /// Simple lobby screen: lists open arena instances, provides Create / Join / Start buttons.
-    /// A small "Lobby" toggle button is shown in the top-left when eligible (connected, not in
+    /// A small "Lobby" toggle button is shown in the bottom-left when eligible (connected, not in
     /// an active match). Clicking it opens/closes the panel. Panel starts closed.
     ///
     /// INVARIANT: No server writes except via button callbacks. Polls in Update().
     /// </summary>
     public class LobbyController : MonoBehaviour
     {
+        private const float RowHeight = 36f;
+        private const float RowPitch = 40f;
+
         public static LobbyController? Instance { get; private set; }
 
         private GameObject _root = null!;
-        private GameObject _panel = null!;
-        private Button _toggleButton = null!;
-        private RectTransform _listRoot = null!;
-        private Button _createButton = null!;
-        private Button _startButton = null!;
-        private Text _statusText = null!;
+        private ArenaWindow _window = null!;
+        private RectTransform _listContent = null!;
+        private ArenaButtonHandle _createButton;
+        private ArenaButtonHandle _startButton;
+        private TextMeshProUGUI _statusText = null!;
         private readonly List<GameObject> _instanceRows = new();
         private bool _panelOpen;
 
@@ -60,104 +63,94 @@ namespace Arena.UI
             // Root canvas — full-screen, no background image.
             _root = new GameObject("LobbyRoot");
             _root.transform.SetParent(transform, false);
-            var canvas = _root.AddComponent<Canvas>();
-            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            canvas.sortingOrder = 10;
-            _root.AddComponent<CanvasScaler>().uiScaleMode =
-                CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            _root.AddComponent<GraphicRaycaster>();
-            var rootRt = _root.GetComponent<RectTransform>();
-            rootRt.anchorMin = Vector2.zero;
-            rootRt.anchorMax = Vector2.one;
-            rootRt.sizeDelta = Vector2.zero;
+            ArenaUiKit.MakeOverlayCanvas(_root, 10);
 
             // Toggle button — bottom-left corner, always visible when root is active.
-            {
-                var go = new GameObject("ToggleBtn");
-                go.transform.SetParent(_root.transform, false);
-                var rt = go.AddComponent<RectTransform>();
-                rt.anchorMin = new Vector2(0f, 0f);
-                rt.anchorMax = new Vector2(0f, 0f);
-                rt.pivot = new Vector2(0f, 0f);
-                rt.sizeDelta = new Vector2(90f, 32f);
-                rt.anchoredPosition = new Vector2(10f, 10f);
-                var img = go.AddComponent<Image>();
-                img.color = new Color(0.22f, 0.38f, 0.68f, 1f);
-                _toggleButton = go.AddComponent<Button>();
-                var colors = _toggleButton.colors;
-                colors.normalColor = img.color;
-                colors.highlightedColor = new Color(0.3f, 0.5f, 0.82f, 1f);
-                colors.pressedColor = new Color(0.15f, 0.28f, 0.5f, 1f);
-                _toggleButton.colors = colors;
-                _toggleButton.onClick.AddListener(OnTogglePressed);
-                var txtGo = new GameObject("Label");
-                txtGo.transform.SetParent(go.transform, false);
-                var txtRt = txtGo.AddComponent<RectTransform>();
-                txtRt.anchorMin = Vector2.zero;
-                txtRt.anchorMax = Vector2.one;
-                txtRt.sizeDelta = Vector2.zero;
-                var txt = txtGo.AddComponent<Text>();
-                txt.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-                txt.fontSize = 14;
-                txt.fontStyle = FontStyle.Bold;
-                txt.alignment = TextAnchor.MiddleCenter;
-                txt.color = Color.white;
-                txt.text = "Lobby";
-            }
+            ArenaButtonHandle toggle = ArenaUiKit.MakeButton(
+                _root.transform,
+                "ToggleBtn",
+                "Lobby",
+                ArenaButtonStyle.Ghost,
+                OnTogglePressed);
+            RectTransform toggleRect = toggle.Rect;
+            toggleRect.anchorMin = Vector2.zero;
+            toggleRect.anchorMax = Vector2.zero;
+            toggleRect.pivot = Vector2.zero;
+            toggleRect.sizeDelta = new Vector2(90f, 32f);
+            toggleRect.anchoredPosition = new Vector2(10f, 10f);
 
-            // Panel — anchored to top-center so it never overlaps the bottom HUD.
-            _panel = new GameObject("Panel");
-            _panel.transform.SetParent(_root.transform, false);
-            var panelRt = _panel.AddComponent<RectTransform>();
-            panelRt.anchorMin = new Vector2(0f, 0f);
-            panelRt.anchorMax = new Vector2(0f, 0f);
-            panelRt.pivot = new Vector2(0f, 0f);
-            panelRt.sizeDelta = new Vector2(520f, 340f);
-            panelRt.anchoredPosition = new Vector2(10f, 50f);
-            _panel.AddComponent<Image>().color = new Color(0.08f, 0.09f, 0.11f, 0.97f);
+            // Instance browser window — anchored bottom-left, above the toggle button,
+            // so it never overlaps the bottom HUD.
+            _window = ArenaWindow.Create(_root.transform, "LobbyWindow", "Lobby", new Vector2(520f, 340f));
+            RectTransform windowRect = _window.Rect;
+            windowRect.anchorMin = Vector2.zero;
+            windowRect.anchorMax = Vector2.zero;
+            windowRect.pivot = Vector2.zero;
+            windowRect.anchoredPosition = new Vector2(10f, 50f);
+            _window.CloseRequested += () => _panelOpen = false;
 
-            // Header
-            var header = MakeLabel("Header", _panel.transform, "ARENA", 32,
-                new Vector2(0.5f, 0.92f), new Vector2(460f, 46f));
-            header.alignment = TextAnchor.MiddleCenter;
+            RectTransform footer = _window.AddFooter();
 
-            // Sub-header
-            _statusText = MakeLabel("Status", _panel.transform, "Connecting…", 14,
-                new Vector2(0.5f, 0.82f), new Vector2(460f, 26f));
-            _statusText.alignment = TextAnchor.MiddleCenter;
-            _statusText.color = new Color(0.7f, 0.7f, 0.7f, 1f);
+            // Status line above the instance list.
+            _statusText = ArenaUiKit.MakeText(
+                _window.Content,
+                "Status",
+                "Connecting…",
+                ArenaUiTheme.BodySize,
+                ArenaUiTheme.MutedText);
+            ArenaUiKit.SetAnchors(
+                _statusText.rectTransform,
+                new Vector2(0f, 1f),
+                new Vector2(1f, 1f),
+                new Vector2(0f, -22f),
+                Vector2.zero);
 
-            // Instance list area
-            var listBg = new GameObject("ListBg");
-            listBg.transform.SetParent(_panel.transform, false);
-            var listBgRt = listBg.AddComponent<RectTransform>();
-            listBgRt.anchorMin = new Vector2(0.5f, 0.5f);
-            listBgRt.anchorMax = new Vector2(0.5f, 0.5f);
-            listBgRt.pivot = new Vector2(0.5f, 0.5f);
-            listBgRt.sizeDelta = new Vector2(480f, 180f);
-            listBgRt.anchoredPosition = Vector2.zero;
-            listBg.AddComponent<Image>().color = new Color(0.06f, 0.07f, 0.09f, 0.9f);
+            RectTransform divider = ArenaUiKit.MakeDivider(_window.Content);
+            ArenaUiKit.SetAnchors(
+                divider,
+                new Vector2(0f, 1f),
+                new Vector2(1f, 1f),
+                new Vector2(0f, -30f),
+                new Vector2(0f, -29f));
 
-            var listArea = new GameObject("ListArea");
-            listArea.transform.SetParent(listBg.transform, false);
-            _listRoot = listArea.AddComponent<RectTransform>();
-            _listRoot.anchorMin = new Vector2(0f, 1f);
-            _listRoot.anchorMax = new Vector2(1f, 1f);
-            _listRoot.pivot = new Vector2(0.5f, 1f);
-            _listRoot.sizeDelta = new Vector2(0f, 0f);
-            _listRoot.anchoredPosition = new Vector2(0f, -4f);
+            // Instance list — scrolls when it outgrows the window.
+            _listContent = ArenaUiKit.MakeScrollView(_window.Content, "InstanceList", out ScrollRect scrollRect);
+            ArenaUiKit.SetAnchors(
+                (RectTransform)scrollRect.transform,
+                Vector2.zero,
+                Vector2.one,
+                Vector2.zero,
+                new Vector2(0f, -38f));
 
-            // Action buttons
-            _createButton = MakeButton("CreateBtn", _panel.transform, "Create Match",
-                new Vector2(0.3f, 0.1f), new Vector2(160f, 38f));
-            _createButton.onClick.AddListener(OnCreatePressed);
+            // Action buttons in the window footer.
+            _createButton = ArenaUiKit.MakeButton(
+                footer,
+                "CreateBtn",
+                "Create Match",
+                ArenaButtonStyle.Primary,
+                OnCreatePressed);
+            RectTransform createRect = _createButton.Rect;
+            createRect.anchorMin = new Vector2(0f, 0.5f);
+            createRect.anchorMax = new Vector2(0f, 0.5f);
+            createRect.pivot = new Vector2(0f, 0.5f);
+            createRect.sizeDelta = new Vector2(160f, ArenaUiTheme.ButtonHeight);
+            createRect.anchoredPosition = new Vector2(ArenaUiTheme.ContentPadding, 0f);
 
-            _startButton = MakeButton("StartBtn", _panel.transform, "Start Match",
-                new Vector2(0.7f, 0.1f), new Vector2(160f, 38f));
-            _startButton.onClick.AddListener(OnStartPressed);
-            _startButton.gameObject.SetActive(false);
+            _startButton = ArenaUiKit.MakeButton(
+                footer,
+                "StartBtn",
+                "Start Match",
+                ArenaButtonStyle.Primary,
+                OnStartPressed);
+            RectTransform startRect = _startButton.Rect;
+            startRect.anchorMin = new Vector2(1f, 0.5f);
+            startRect.anchorMax = new Vector2(1f, 0.5f);
+            startRect.pivot = new Vector2(1f, 0.5f);
+            startRect.sizeDelta = new Vector2(160f, ArenaUiTheme.ButtonHeight);
+            startRect.anchoredPosition = new Vector2(-ArenaUiTheme.ContentPadding, 0f);
+            _startButton.GameObject.SetActive(false);
 
-            _panel.SetActive(false);
+            _window.SetVisible(false, instant: true);
             _root.SetActive(false);
         }
 
@@ -174,20 +167,20 @@ namespace Arena.UI
             if (!eligible)
             {
                 _panelOpen = false;
-                _panel.SetActive(false);
+                _window.SetVisible(false, instant: true);
                 return;
             }
 
-            _panel.SetActive(_panelOpen);
+            _window.SetVisible(_panelOpen);
             if (!_panelOpen) return;
 
             bool connected = conn != null;
-            _createButton.interactable = connected && !cache.LocalInstanceId.HasValue;
+            _createButton.SetInteractable(connected && !cache.LocalInstanceId.HasValue);
 
             bool inWaitingInstance = cache.LocalInstanceId.HasValue && cache.Phase == MatchPhase.Waiting;
-            _startButton.gameObject.SetActive(inWaitingInstance);
+            _startButton.GameObject.SetActive(inWaitingInstance);
             if (inWaitingInstance)
-                _startButton.interactable = connected;
+                _startButton.SetInteractable(connected);
 
             _statusText.text = cache.LocalInstanceId.HasValue
                 ? $"In instance #{cache.LocalInstanceId.Value} — waiting for players…"
@@ -234,14 +227,30 @@ namespace Arena.UI
             _lastPhaseHash = hash;
             _lastLocalInstanceId = cache.LocalInstanceId;
 
+            _window.SetSubtitle(instances.Count == 1 ? "1 instance" : $"{instances.Count} instances");
+
             foreach (var row in _instanceRows)
                 Destroy(row);
             _instanceRows.Clear();
 
+            _listContent.sizeDelta = new Vector2(0f, Mathf.Max(1, instances.Count) * RowPitch);
+
             if (instances.Count == 0)
             {
-                var empty = MakeRowLabel("No open instances. Press Create Match to start one.", 0);
-                _instanceRows.Add(empty);
+                TextMeshProUGUI empty = ArenaUiKit.MakeText(
+                    _listContent,
+                    "EmptyRow",
+                    "No open instances. Press Create Match to start one.",
+                    ArenaUiTheme.SmallSize,
+                    ArenaUiTheme.MutedText,
+                    alignment: TextAlignmentOptions.Center);
+                ArenaUiKit.SetAnchors(
+                    empty.rectTransform,
+                    new Vector2(0f, 1f),
+                    new Vector2(1f, 1f),
+                    new Vector2(0f, -RowHeight),
+                    Vector2.zero);
+                _instanceRows.Add(empty.gameObject);
                 return;
             }
 
@@ -255,44 +264,50 @@ namespace Arena.UI
 
         private GameObject BuildInstanceRow(ArenaInstance inst, int index, bool isLocal)
         {
-            var go = new GameObject($"InstRow_{inst.Id}");
-            go.transform.SetParent(_listRoot, false);
-            var rt = go.AddComponent<RectTransform>();
-            rt.anchorMin = new Vector2(0f, 1f);
-            rt.anchorMax = new Vector2(1f, 1f);
-            rt.pivot = new Vector2(0.5f, 1f);
-            rt.sizeDelta = new Vector2(0f, 36f);
-            rt.anchoredPosition = new Vector2(0f, -index * 40f);
+            Color rowColor = isLocal
+                ? ArenaUiTheme.PositiveRow
+                : (index % 2 == 0 ? ArenaUiTheme.Row : ArenaUiTheme.RowAlt);
+            RectTransform row = ArenaUiKit.MakePanel(_listContent, $"InstRow_{inst.Id}", rowColor);
+            row.anchorMin = new Vector2(0f, 1f);
+            row.anchorMax = new Vector2(1f, 1f);
+            row.pivot = new Vector2(0.5f, 1f);
+            row.sizeDelta = new Vector2(0f, RowHeight);
+            row.anchoredPosition = new Vector2(0f, -index * RowPitch);
 
-            go.AddComponent<Image>().color = isLocal
-                ? new Color(0.15f, 0.22f, 0.15f, 0.9f)
-                : new Color(0.13f, 0.14f, 0.16f, 0.9f);
-
-            var label = new GameObject("Label");
-            label.transform.SetParent(go.transform, false);
-            var labelRt = label.AddComponent<RectTransform>();
-            labelRt.anchorMin = new Vector2(0f, 0f);
-            labelRt.anchorMax = new Vector2(0.72f, 1f);
-            labelRt.sizeDelta = Vector2.zero;
-            labelRt.anchoredPosition = new Vector2(8f, 0f);
-            var labelTxt = label.AddComponent<Text>();
-            labelTxt.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            labelTxt.fontSize = 15;
-            labelTxt.alignment = TextAnchor.MiddleLeft;
-            labelTxt.color = Color.white;
-            labelTxt.text = $"#{inst.Id}  [{inst.PlayerCount}/{inst.MaxPlayers}]  {inst.Phase}";
+            TextMeshProUGUI label = ArenaUiKit.MakeText(
+                row,
+                "Label",
+                $"#{inst.Id}  [{inst.PlayerCount}/{inst.MaxPlayers}]  {inst.Phase}",
+                ArenaUiTheme.BodySize);
+            ArenaUiKit.SetAnchors(
+                label.rectTransform,
+                Vector2.zero,
+                new Vector2(0.72f, 1f),
+                new Vector2(10f, 0f),
+                Vector2.zero);
 
             if (!isLocal)
             {
                 bool canJoin = string.Equals(inst.Phase, "WAITING", System.StringComparison.OrdinalIgnoreCase)
                                && inst.PlayerCount < inst.MaxPlayers;
-                var joinBtn = MakeSmallButton(go.transform, "Join", new Vector2(0.86f, 0.5f), new Vector2(72f, 28f));
-                joinBtn.interactable = canJoin && NetworkManager.Instance?.IsConnected == true;
                 var capturedId = inst.Id;
-                joinBtn.onClick.AddListener(() => OnJoinPressed(capturedId));
+                ArenaButtonHandle joinButton = ArenaUiKit.MakeButton(
+                    row,
+                    "JoinBtn",
+                    "Join",
+                    ArenaButtonStyle.Secondary,
+                    () => OnJoinPressed(capturedId),
+                    textSize: ArenaUiTheme.SmallSize);
+                RectTransform joinRect = joinButton.Rect;
+                joinRect.anchorMin = new Vector2(1f, 0.5f);
+                joinRect.anchorMax = new Vector2(1f, 0.5f);
+                joinRect.pivot = new Vector2(1f, 0.5f);
+                joinRect.sizeDelta = new Vector2(72f, 28f);
+                joinRect.anchoredPosition = new Vector2(-6f, 0f);
+                joinButton.SetInteractable(canJoin && NetworkManager.Instance?.IsConnected == true);
             }
 
-            return go;
+            return row.gameObject;
         }
 
         private void OnCreatePressed()
@@ -315,112 +330,6 @@ namespace Arena.UI
             var instanceId = MatchStateCache.Instance.LocalInstanceId;
             if (conn == null || !instanceId.HasValue) return;
             conn.Reducers.StartMatch(instanceId.Value);
-        }
-
-        // ── UI helpers ──────────────────────────────────────────────────────────
-
-        private static Text MakeLabel(string name, Transform parent, string text, int fontSize,
-            Vector2 anchor, Vector2 size)
-        {
-            var go = new GameObject(name);
-            go.transform.SetParent(parent, false);
-            var rt = go.AddComponent<RectTransform>();
-            rt.anchorMin = anchor;
-            rt.anchorMax = anchor;
-            rt.pivot = new Vector2(0.5f, 0.5f);
-            rt.sizeDelta = size;
-            rt.anchoredPosition = Vector2.zero;
-            var txt = go.AddComponent<Text>();
-            txt.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            txt.fontSize = fontSize;
-            txt.fontStyle = FontStyle.Bold;
-            txt.color = Color.white;
-            txt.text = text;
-            var sh = go.AddComponent<Shadow>();
-            sh.effectColor = Color.black;
-            sh.effectDistance = new Vector2(1, -1);
-            return txt;
-        }
-
-        private static GameObject MakeRowLabel(string text, int index)
-        {
-            var go = new GameObject("EmptyRow");
-            var txt = go.AddComponent<Text>();
-            txt.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            txt.fontSize = 14;
-            txt.color = new Color(0.6f, 0.6f, 0.6f, 1f);
-            txt.alignment = TextAnchor.MiddleCenter;
-            txt.text = text;
-            return go;
-        }
-
-        private static Button MakeButton(string name, Transform parent, string label,
-            Vector2 anchor, Vector2 size)
-        {
-            var go = new GameObject(name);
-            go.transform.SetParent(parent, false);
-            var rt = go.AddComponent<RectTransform>();
-            rt.anchorMin = anchor;
-            rt.anchorMax = anchor;
-            rt.pivot = new Vector2(0.5f, 0.5f);
-            rt.sizeDelta = size;
-            rt.anchoredPosition = Vector2.zero;
-            var img = go.AddComponent<Image>();
-            img.color = new Color(0.22f, 0.48f, 0.22f, 1f);
-            var btn = go.AddComponent<Button>();
-            var colors = btn.colors;
-            colors.normalColor = img.color;
-            colors.highlightedColor = new Color(0.3f, 0.6f, 0.3f, 1f);
-            colors.pressedColor = new Color(0.15f, 0.35f, 0.15f, 1f);
-            btn.colors = colors;
-            var txtGo = new GameObject("Label");
-            txtGo.transform.SetParent(go.transform, false);
-            var txtRt = txtGo.AddComponent<RectTransform>();
-            txtRt.anchorMin = Vector2.zero;
-            txtRt.anchorMax = Vector2.one;
-            txtRt.sizeDelta = Vector2.zero;
-            var txt = txtGo.AddComponent<Text>();
-            txt.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            txt.fontSize = 16;
-            txt.fontStyle = FontStyle.Bold;
-            txt.alignment = TextAnchor.MiddleCenter;
-            txt.color = Color.white;
-            txt.text = label;
-            return btn;
-        }
-
-        private static Button MakeSmallButton(Transform parent, string label, Vector2 anchor, Vector2 size)
-        {
-            var go = new GameObject($"Btn_{label}");
-            go.transform.SetParent(parent, false);
-            var rt = go.AddComponent<RectTransform>();
-            rt.anchorMin = anchor;
-            rt.anchorMax = anchor;
-            rt.pivot = new Vector2(0.5f, 0.5f);
-            rt.sizeDelta = size;
-            rt.anchoredPosition = Vector2.zero;
-            var img = go.AddComponent<Image>();
-            img.color = new Color(0.22f, 0.38f, 0.68f, 1f);
-            var btn = go.AddComponent<Button>();
-            var colors = btn.colors;
-            colors.normalColor = img.color;
-            colors.highlightedColor = new Color(0.3f, 0.5f, 0.82f, 1f);
-            colors.pressedColor = new Color(0.15f, 0.28f, 0.5f, 1f);
-            btn.colors = colors;
-            var txtGo = new GameObject("Label");
-            txtGo.transform.SetParent(go.transform, false);
-            var txtRt = txtGo.AddComponent<RectTransform>();
-            txtRt.anchorMin = Vector2.zero;
-            txtRt.anchorMax = Vector2.one;
-            txtRt.sizeDelta = Vector2.zero;
-            var txt = txtGo.AddComponent<Text>();
-            txt.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            txt.fontSize = 13;
-            txt.fontStyle = FontStyle.Bold;
-            txt.alignment = TextAnchor.MiddleCenter;
-            txt.color = Color.white;
-            txt.text = label;
-            return btn;
         }
     }
 }

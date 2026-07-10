@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Text;
 using Arena.Combat;
 using Arena.Entity;
 using Arena.Network;
@@ -22,16 +23,12 @@ namespace Arena.UI
     {
         private const float CellSize = ActionBarLayout.SlotSize;
         private const float CellSpacing = ActionBarLayout.Gap;
-        private const float PanelHorizontalPadding = 28f;
-        private const float PanelVerticalPadding = 66f;
         private const float LootPickScreenRadius = 82f;
         private const float RefreshIntervalSeconds = 0.12f;
-
-        private static readonly Color PanelColor = HeatUiStyle.Panel;
-        private static readonly Color HeaderColor = HeatUiStyle.Header;
-        private static readonly Color EmptyCellColor = HeatUiStyle.CellEmpty;
-        private static readonly Color FilledCellColor = HeatUiStyle.CellFilled;
-        private static readonly Color ShowcaseColor = HeatUiStyle.Showcase;
+        private const float StatsColumnWidth = 200f;
+        private const float WindowGap = 12f;
+        private const int DollColumns = 5;
+        private const int DollRows = 7;
 
         private static readonly EquipmentSlotSpec[] EquipmentSlots =
         {
@@ -51,12 +48,14 @@ namespace Arena.UI
         };
 
         private Canvas? _canvas;
-        private RectTransform? _equipmentPanel;
-        private RectTransform? _inventoryPanel;
+        private ArenaWindow? _characterWindow;
+        private ArenaWindow? _inventoryWindow;
+        private ArenaWindow? _lootWindow;
         private RectTransform? _inventoryGrid;
-        private RectTransform? _lootPanel;
         private RectTransform? _lootGrid;
-        private TextMeshProUGUI? _lootTitle;
+        private RectTransform? _statsList;
+        // Sentinel forces the first refresh to build the (possibly empty) list.
+        private string _statsSignature = "\0unset";
         private readonly Dictionary<string, EquipmentSlotCell> _equipmentSlots = new(StringComparer.Ordinal);
         private bool _inventoryOpen;
         private string? _openLootContainerId;
@@ -102,9 +101,9 @@ namespace Arena.UI
         {
             if (!ArenaRuntimeSceneGate.ShouldRunArenaRuntimeInActiveScene())
             {
-                SetInventoryOpen(false);
-                if (_lootPanel != null)
-                    _lootPanel.gameObject.SetActive(false);
+                if (_inventoryOpen)
+                    SetInventoryOpen(false, instant: true);
+                _lootWindow?.SetVisible(false, instant: true);
                 return;
             }
 
@@ -123,19 +122,17 @@ namespace Arena.UI
             }
         }
 
-        private void SetInventoryOpen(bool open)
+        private void SetInventoryOpen(bool open, bool instant = false)
         {
             _inventoryOpen = open;
-            if (_equipmentPanel != null)
-                _equipmentPanel.gameObject.SetActive(open);
-            if (_inventoryPanel != null)
-                _inventoryPanel.gameObject.SetActive(open);
+            _characterWindow?.SetVisible(open, instant);
+            _inventoryWindow?.SetVisible(open, instant);
 
             if (open)
                 RuntimeUiLayer.BringToFront(_canvas);
 
             if (!open)
-                CloseLootPanel();
+                CloseLootPanel(instant);
 
             RefreshVisibleGrids();
         }
@@ -151,12 +148,11 @@ namespace Arena.UI
             return true;
         }
 
-        private void CloseLootPanel()
+        private void CloseLootPanel(bool instant = false)
         {
             _openLootContainerId = null;
             _pendingLootNpc = null;
-            if (_lootPanel != null)
-                _lootPanel.gameObject.SetActive(false);
+            _lootWindow?.SetVisible(false, instant);
         }
 
         private void TryOpenLootUnderCursor()
@@ -170,12 +166,10 @@ namespace Arena.UI
                 return;
 
             _inventoryOpen = true;
-            if (_equipmentPanel != null)
-                _equipmentPanel.gameObject.SetActive(true);
-            if (_inventoryPanel != null)
-                _inventoryPanel.gameObject.SetActive(true);
-            if (_lootPanel != null)
-                _lootPanel.gameObject.SetActive(true);
+            _characterWindow?.SetVisible(true);
+            _inventoryWindow?.SetVisible(true);
+            _lootWindow?.SetVisible(true);
+            RuntimeUiLayer.BringToFront(_canvas);
 
             _pendingLootNpc = npc.Identity;
             _pendingLootUntil = Time.unscaledTime + 1.5f;
@@ -230,8 +224,7 @@ namespace Arena.UI
             {
                 _openLootContainerId = container.ContainerId;
                 _pendingLootNpc = null;
-                if (_lootPanel != null)
-                    _lootPanel.gameObject.SetActive(true);
+                _lootWindow?.SetVisible(true);
                 return;
             }
 
@@ -246,8 +239,7 @@ namespace Arena.UI
             {
                 if (_inventoryOpen && _inventoryGrid != null)
                     PopulateEmptyGrid(_inventoryGrid, "Inventory", 10, 4);
-                if (_lootPanel != null)
-                    _lootPanel.gameObject.SetActive(false);
+                _lootWindow?.SetVisible(false, instant: true);
                 return;
             }
 
@@ -259,25 +251,23 @@ namespace Arena.UI
             else if (_inventoryOpen && _inventoryGrid != null)
                 PopulateEmptyGrid(_inventoryGrid, "Inventory", 10, 4);
 
-            if (_lootGrid == null || _lootPanel == null)
+            if (_lootGrid == null || _lootWindow == null)
                 return;
 
             InventoryContainer? loot = FindContainer(conn, _openLootContainerId);
             bool showLoot = _inventoryOpen && (loot != null || _pendingLootNpc != null);
-            _lootPanel.gameObject.SetActive(showLoot);
+            _lootWindow.SetVisible(showLoot);
             if (!showLoot)
                 return;
 
             if (loot != null)
             {
-                if (_lootTitle != null)
-                    _lootTitle.text = string.Equals(loot.ContainerKind, "CORPSE", StringComparison.OrdinalIgnoreCase) ? "Corpse" : "Loot";
+                _lootWindow.SetTitle(string.Equals(loot.ContainerKind, "CORPSE", StringComparison.OrdinalIgnoreCase) ? "Corpse" : "Loot");
                 PopulateGrid(conn, _lootGrid, loot, "Loot");
             }
             else
             {
-                if (_lootTitle != null)
-                    _lootTitle.text = "Loot";
+                _lootWindow.SetTitle("Loot");
                 PopulateEmptyGrid(_lootGrid, "Loot", 4, 4);
             }
         }
@@ -290,7 +280,7 @@ namespace Arena.UI
 
             EnsureGridLayout(grid, width);
             EnsureCellCount(grid, total);
-            ResizePanelForGrid(grid, width, height);
+            ResizeWindowForGrid(grid, width, height);
 
             Dictionary<(uint X, uint Y), InventorySlot> slots = new();
             foreach (InventorySlot slot in conn.Db.InventorySlot.Iter())
@@ -299,6 +289,7 @@ namespace Arena.UI
                     slots[(slot.X, slot.Y)] = slot;
             }
 
+            int occupied = 0;
             for (int y = 0; y < height; y++)
             {
                 for (int x = 0; x < width; x++)
@@ -308,9 +299,14 @@ namespace Arena.UI
                     slots.TryGetValue(((uint)x, (uint)y), out InventorySlot? slot);
                     ItemInstance? item = slot == null ? null : conn.Db.ItemInstance.ItemInstanceId.Find(slot.ItemInstanceId);
                     ItemDefinition? definition = item == null ? null : conn.Db.ItemDefinition.ItemDefId.Find(item.ItemDefId);
+                    if (item != null)
+                        occupied++;
                     cell.Configure(this, context, container.ContainerId, (uint)x, (uint)y, item, definition);
                 }
             }
+
+            ArenaWindow? window = grid.GetComponentInParent<ArenaWindow>();
+            window?.SetSubtitle($"{occupied}/{total} slots");
         }
 
         private void PopulateEmptyGrid(RectTransform grid, string context, int width, int height)
@@ -321,7 +317,7 @@ namespace Arena.UI
 
             EnsureGridLayout(grid, safeWidth);
             EnsureCellCount(grid, total);
-            ResizePanelForGrid(grid, safeWidth, safeHeight);
+            ResizeWindowForGrid(grid, safeWidth, safeHeight);
 
             for (int y = 0; y < safeHeight; y++)
             {
@@ -332,11 +328,16 @@ namespace Arena.UI
                     cell.Configure(this, context, string.Empty, (uint)x, (uint)y, null, null);
                 }
             }
+
+            ArenaWindow? window = grid.GetComponentInParent<ArenaWindow>();
+            window?.SetSubtitle(string.Empty);
         }
 
         private void RefreshEquipmentPanel(DbConnection conn)
         {
             EquipmentLoadout? loadout = FindEquipmentLoadout(conn);
+            int equipped = 0;
+            List<(ItemInstance Item, ItemDefinition? Definition)> equippedItems = new();
             foreach (EquipmentSlotSpec spec in EquipmentSlots)
             {
                 if (!_equipmentSlots.TryGetValue(spec.SlotId, out EquipmentSlotCell? cell))
@@ -349,8 +350,147 @@ namespace Arena.UI
                 ItemDefinition? definition = item == null
                     ? null
                     : conn.Db.ItemDefinition.ItemDefId.Find(item.ItemDefId);
+                if (item != null)
+                {
+                    equipped++;
+                    equippedItems.Add((item, definition));
+                }
+
                 cell.Configure(this, spec.SlotId, spec.Label, item, definition);
             }
+
+            _characterWindow?.SetSubtitle(equipped == 0 ? string.Empty : $"{equipped} equipped");
+            RefreshCharacterStats(conn, equippedItems);
+        }
+
+        /// <summary>
+        /// Aggregates affix bonuses (plus armor resistance) across equipped items
+        /// into the character window's attributes column.
+        /// </summary>
+        private void RefreshCharacterStats(DbConnection conn, List<(ItemInstance Item, ItemDefinition? Definition)> equippedItems)
+        {
+            if (_statsList == null)
+                return;
+
+            Dictionary<string, float> totals = new(StringComparer.Ordinal);
+            Dictionary<string, string> labels = new(StringComparer.Ordinal);
+
+            foreach ((ItemInstance item, ItemDefinition? definition) in equippedItems)
+            {
+                if (definition != null && definition.PhysicalResistance > 0.0001f)
+                {
+                    Accumulate(totals, labels, "PHYSICAL_RESISTANCE", "Physical Resistance", definition.PhysicalResistance);
+                }
+
+                foreach (ItemAffixInstance affix in conn.Db.ItemAffixInstance.ItemInstanceId.Filter(item.ItemInstanceId))
+                {
+                    string kind = string.IsNullOrWhiteSpace(affix.ModifierKind)
+                        ? string.Empty
+                        : affix.ModifierKind.Trim().Replace('-', '_').ToUpperInvariant();
+                    if (string.IsNullOrEmpty(kind))
+                        continue;
+
+                    string label = IsAllocatedStatModifier(kind)
+                        ? FormatTooltipTitle(kind)
+                        : ResolveAffixLabel(conn, affix, kind);
+                    Accumulate(totals, labels, kind, label, affix.Value);
+                }
+            }
+
+            List<string> kinds = new(totals.Keys);
+            kinds.Sort(StringComparer.Ordinal);
+
+            StringBuilder signature = new();
+            foreach (string kind in kinds)
+                signature.Append(kind).Append('=').Append(totals[kind].ToString("0.###")).Append(';');
+
+            string next = signature.ToString();
+            if (string.Equals(next, _statsSignature, StringComparison.Ordinal))
+                return;
+
+            _statsSignature = next;
+            foreach (Transform child in _statsList)
+            {
+                child.gameObject.SetActive(false);
+                Destroy(child.gameObject);
+            }
+
+            if (kinds.Count == 0)
+            {
+                TextMeshProUGUI empty = ArenaUiKit.MakeText(
+                    _statsList,
+                    "Empty",
+                    "No bonuses from equipment.",
+                    ArenaUiTheme.SmallSize,
+                    ArenaUiTheme.MutedText);
+                AddStatRowLayout(empty.rectTransform, 20f);
+                return;
+            }
+
+            foreach (string kind in kinds)
+            {
+                RectTransform row = ArenaUiKit.MakeRect(_statsList, "StatRow");
+                AddStatRowLayout(row, 21f);
+
+                TextMeshProUGUI label = ArenaUiKit.MakeText(
+                    row,
+                    "Label",
+                    labels[kind],
+                    ArenaUiTheme.SmallSize,
+                    ArenaUiTheme.MutedText);
+                ArenaUiKit.Fill(label.rectTransform);
+
+                TextMeshProUGUI value = ArenaUiKit.MakeText(
+                    row,
+                    "Value",
+                    FormatAggregateValue(kind, totals[kind]),
+                    ArenaUiTheme.SmallSize,
+                    ArenaUiTheme.Success,
+                    ArenaUiTheme.StrongFont,
+                    TextAlignmentOptions.MidlineRight);
+                ArenaUiKit.Fill(value.rectTransform);
+            }
+        }
+
+        private static void AddStatRowLayout(RectTransform rect, float height)
+        {
+            LayoutElement element = rect.gameObject.AddComponent<LayoutElement>();
+            element.preferredHeight = height;
+            element.minHeight = height;
+        }
+
+        private static void Accumulate(
+            Dictionary<string, float> totals,
+            Dictionary<string, string> labels,
+            string kind,
+            string label,
+            float value)
+        {
+            totals.TryGetValue(kind, out float current);
+            totals[kind] = current + value;
+            if (!labels.ContainsKey(kind) && !string.IsNullOrWhiteSpace(label))
+                labels[kind] = label;
+        }
+
+        private static string ResolveAffixLabel(DbConnection conn, ItemAffixInstance affix, string normalizedKind)
+        {
+            ItemAffixDefinition? definition = conn.Db.ItemAffixDefinition.AffixId.Find(affix.AffixId);
+            return !string.IsNullOrWhiteSpace(definition?.DisplayName)
+                ? definition.DisplayName
+                : FormatTooltipTitle(normalizedKind);
+        }
+
+        /// <summary>Formats a summed bonus without repeating the stat name inside the value.</summary>
+        private static string FormatAggregateValue(string normalizedKind, float value)
+        {
+            return normalizedKind switch
+            {
+                "MANA_REGEN" or "HEALTH_REGEN" => $"+{value:0.##}/s",
+                "AWARENESS" or "LIGHT" => $"+{value:0.##}",
+                "SPELL_SLOT" or "MIGHT" or "INSIGHT" or "FINESSE" or "FORTITUDE" =>
+                    $"+{Mathf.Max(0, Mathf.RoundToInt(value))}",
+                _ => $"+{value * 100f:0.#}%",
+            };
         }
 
         private void HandleRightClick(InventoryGridCell cell)
@@ -672,7 +812,11 @@ namespace Arena.UI
             return conn.Db.InventoryContainer.ContainerId.Find(containerId);
         }
 
-        private static TooltipData BuildItemTooltip(DbConnection? conn, ItemInstance? item, ItemDefinition? definition)
+        private static TooltipData BuildItemTooltip(
+            DbConnection? conn,
+            ItemInstance? item,
+            ItemDefinition? definition,
+            string footnote)
         {
             if (item == null)
                 return default;
@@ -682,7 +826,14 @@ namespace Arena.UI
                 : item.ItemInstanceId;
             string subtitle = BuildItemSubtitle(definition);
             string description = BuildItemDescription(conn, item, definition);
-            return new TooltipData(name, subtitle, description);
+            List<TooltipStat> stats = BuildItemTooltipStats(conn, item, definition);
+            return new TooltipData(
+                name,
+                subtitle,
+                description,
+                ArenaUiTheme.RarityColor(definition?.Rarity),
+                stats.Count > 0 ? stats : null,
+                footnote);
         }
 
         private static string BuildItemSubtitle(ItemDefinition? definition)
@@ -708,16 +859,53 @@ namespace Arena.UI
             {
                 AppendLabeledTooltipPart(parts, "Weapon", definition.WeaponKind);
                 AppendLabeledTooltipPart(parts, "Profile", definition.CombatProfileId);
-                if (definition.PhysicalResistance > 0.0001f)
-                    parts.Add($"Physical Resistance: {FormatAffixValue("PHYSICAL_RESISTANCE", definition.PhysicalResistance)}");
                 if (definition.UniqueEquipped)
                     parts.Add("Unique-equipped");
             }
 
-            AppendAffixTooltipParts(conn, item.ItemInstanceId, parts);
             AppendSpellbookTooltipParts(conn, item.ItemInstanceId, parts);
 
             return string.Join("\n", parts);
+        }
+
+        private static List<TooltipStat> BuildItemTooltipStats(
+            DbConnection? conn,
+            ItemInstance item,
+            ItemDefinition? definition)
+        {
+            List<TooltipStat> stats = new();
+            if (definition != null && definition.PhysicalResistance > 0.0001f)
+                stats.Add(new TooltipStat("Physical Resistance", FormatAggregateValue("PHYSICAL_RESISTANCE", definition.PhysicalResistance)));
+
+            if (conn == null || string.IsNullOrWhiteSpace(item.ItemInstanceId))
+                return stats;
+
+            List<ItemAffixInstance> affixes = new();
+            foreach (ItemAffixInstance affix in conn.Db.ItemAffixInstance.ItemInstanceId.Filter(item.ItemInstanceId))
+                affixes.Add(affix);
+            affixes.Sort((left, right) =>
+            {
+                int sort = left.SortOrder.CompareTo(right.SortOrder);
+                return sort != 0
+                    ? sort
+                    : string.Compare(left.Key, right.Key, StringComparison.Ordinal);
+            });
+
+            foreach (ItemAffixInstance affix in affixes)
+            {
+                string kind = string.IsNullOrWhiteSpace(affix.ModifierKind)
+                    ? string.Empty
+                    : affix.ModifierKind.Trim().Replace('-', '_').ToUpperInvariant();
+                string label = IsAllocatedStatModifier(kind)
+                    ? FormatTooltipTitle(kind)
+                    : ResolveAffixLabel(conn, affix, kind);
+                if (string.IsNullOrWhiteSpace(label))
+                    continue;
+
+                stats.Add(new TooltipStat(label, FormatAggregateValue(kind, affix.Value)));
+            }
+
+            return stats;
         }
 
         private static void AppendSpellbookTooltipParts(DbConnection? conn, string itemInstanceId, List<string> parts)
@@ -757,50 +945,16 @@ namespace Arena.UI
                 "SPELLBOOK",
                 StringComparison.Ordinal);
 
-        private static void AppendAffixTooltipParts(DbConnection? conn, string itemInstanceId, List<string> parts)
+        private static string BuildCellFootnote(string context, ItemDefinition? definition)
         {
-            if (conn == null || string.IsNullOrWhiteSpace(itemInstanceId))
-                return;
+            if (string.Equals(context, "Loot", StringComparison.Ordinal))
+                return "Right-click to take";
 
-            List<ItemAffixInstance> affixes = new();
-            foreach (ItemAffixInstance affix in conn.Db.ItemAffixInstance.ItemInstanceId.Filter(itemInstanceId))
-                affixes.Add(affix);
-            affixes.Sort((left, right) =>
-            {
-                int sort = left.SortOrder.CompareTo(right.SortOrder);
-                return sort != 0
-                    ? sort
-                    : string.Compare(left.Key, right.Key, StringComparison.Ordinal);
-            });
+            if (IsSpellbook(definition))
+                return "Left-click to open - Right-click to equip";
 
-            foreach (ItemAffixInstance affix in affixes)
-            {
-                ItemAffixDefinition? definition = conn.Db.ItemAffixDefinition.AffixId.Find(affix.AffixId);
-                string label = !string.IsNullOrWhiteSpace(definition?.DisplayName)
-                    ? definition.DisplayName
-                    : FormatTooltipValue(affix.ModifierKind);
-                if (string.IsNullOrWhiteSpace(label))
-                    continue;
-                string value = FormatAffixValue(affix.ModifierKind, affix.Value);
-                parts.Add(IsAllocatedStatModifier(affix.ModifierKind) ? value : $"{label}: {value}");
-            }
-        }
-
-        private static string FormatAffixValue(string modifierKind, float value)
-        {
-            string normalized = string.IsNullOrWhiteSpace(modifierKind)
-                ? string.Empty
-                : modifierKind.Trim().Replace('-', '_').ToUpperInvariant();
-
-            return normalized switch
-            {
-                "MANA_REGEN" or "HEALTH_REGEN" => $"+{value:0.##}/s",
-                "AWARENESS" or "LIGHT" => $"+{value:0.##}",
-                "SPELL_SLOT" => $"+{Mathf.Max(0, Mathf.RoundToInt(value))}",
-                "MIGHT" or "INSIGHT" or "FINESSE" or "FORTITUDE" =>
-                    $"+{Mathf.Max(0, Mathf.RoundToInt(value))} {FormatTooltipTitle(normalized)}",
-                _ => $"+{value * 100f:0.#}%"
-            };
+            bool equipable = !string.IsNullOrWhiteSpace(definition?.EquipSlot);
+            return equipable ? "Right-click to equip - Drag to move" : "Drag to move";
         }
 
         private static bool IsAllocatedStatModifier(string modifierKind)
@@ -845,40 +999,69 @@ namespace Arena.UI
         {
             GameObject canvasGo = new("InventoryCanvas");
             canvasGo.transform.SetParent(transform, false);
-            _canvas = canvasGo.AddComponent<Canvas>();
-            _canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            _canvas.sortingOrder = 42;
-            canvasGo.AddComponent<GraphicRaycaster>();
+            _canvas = ArenaUiKit.MakeOverlayCanvas(canvasGo, 42);
 
-            CanvasScaler scaler = canvasGo.AddComponent<CanvasScaler>();
-            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = new Vector2(1920f, 1080f);
-            scaler.matchWidthOrHeight = 0.5f;
+            Vector2 inventorySize = WindowSizeForGrid(10, 4);
+            Vector2 characterSize = WindowSizeForGrid(DollColumns, DollRows) + new Vector2(StatsColumnWidth + WindowGap, 0f);
+            Vector2 lootSize = WindowSizeForGrid(4, 4);
 
-            _inventoryPanel = CreatePanel(canvasGo.transform, "InventoryPanel", "Inventory", PanelSizeForGrid(10, 4), new Vector2(1f, 0.5f), new Vector2(-28f, 0f), out _inventoryGrid, out _);
-            _equipmentPanel = CreateEquipmentPanel(canvasGo.transform, new Vector2(1f, 0.5f), new Vector2(-780f, 0f));
-            _lootPanel = CreatePanel(canvasGo.transform, "LootPanel", "Loot", PanelSizeForGrid(4, 4), new Vector2(1f, 0.5f), new Vector2(-1188f, 48f), out _lootGrid, out _lootTitle);
-            _equipmentPanel.gameObject.SetActive(false);
-            _inventoryPanel.gameObject.SetActive(false);
-            _lootPanel.gameObject.SetActive(false);
+            _inventoryWindow = CreateGridWindow(
+                canvasGo.transform,
+                "InventoryWindow",
+                "Inventory",
+                inventorySize,
+                new Vector2(-28f, 0f),
+                out _inventoryGrid);
+
+            _characterWindow = CreateCharacterWindow(
+                canvasGo.transform,
+                characterSize,
+                new Vector2(-28f - inventorySize.x - WindowGap, 0f));
+
+            _lootWindow = CreateGridWindow(
+                canvasGo.transform,
+                "LootWindow",
+                "Loot",
+                lootSize,
+                new Vector2(-28f - inventorySize.x - WindowGap - characterSize.x - WindowGap, 48f),
+                out _lootGrid);
+            _lootWindow.SetSubtitle(string.Empty);
+
+            _inventoryWindow.CloseRequested += () => SetInventoryOpen(false);
+            _characterWindow.CloseRequested += () => SetInventoryOpen(false);
+            _lootWindow.CloseRequested += () => CloseLootPanel();
+
+            _inventoryWindow.SetVisible(false, instant: true);
+            _characterWindow.SetVisible(false, instant: true);
+            _lootWindow.SetVisible(false, instant: true);
         }
 
-        private RectTransform CreateEquipmentPanel(Transform parent, Vector2 anchor, Vector2 anchoredPosition)
+        private static ArenaWindow CreateGridWindow(
+            Transform parent,
+            string name,
+            string title,
+            Vector2 size,
+            Vector2 anchoredPosition,
+            out RectTransform grid)
         {
-            RectTransform panel = CreatePanel(
-                parent,
-                "EquipmentPanel",
-                "Character",
-                PanelSizeForGrid(5, 7),
-                anchor,
-                anchoredPosition,
-                out RectTransform body,
-                out _);
-            UnityEngine.Object.Destroy(body.GetComponent<GridLayoutGroup>());
+            ArenaWindow window = ArenaWindow.Create(parent, name, title, size);
+            AnchorRightMiddle(window.Rect, anchoredPosition);
 
-            GameObject showcaseGo = new("Showcase");
-            showcaseGo.transform.SetParent(body, false);
-            RectTransform showcase = showcaseGo.AddComponent<RectTransform>();
+            grid = ArenaUiKit.MakeRect(window.Content, "Grid");
+            ArenaUiKit.Fill(grid);
+            EnsureGridLayout(grid, 1);
+            return window;
+        }
+
+        private ArenaWindow CreateCharacterWindow(Transform parent, Vector2 size, Vector2 anchoredPosition)
+        {
+            ArenaWindow window = ArenaWindow.Create(parent, "CharacterWindow", "Character", size);
+            AnchorRightMiddle(window.Rect, anchoredPosition);
+
+            RectTransform body = window.Content;
+
+            // Showcase backdrop behind the central doll column.
+            RectTransform showcase = ArenaUiKit.MakePanel(body, "Showcase", ArenaUiTheme.Showcase, raycastTarget: false, hairline: true, cornerRadius: ArenaUiSprites.SmallRadius);
             showcase.anchorMin = new Vector2(0f, 1f);
             showcase.anchorMax = new Vector2(0f, 1f);
             showcase.pivot = new Vector2(0f, 1f);
@@ -887,14 +1070,6 @@ namespace Arena.UI
                 ActionBarLayout.SlotSize * 3f + ActionBarLayout.Gap * 2f,
                 ActionBarLayout.SlotSize * 3f + ActionBarLayout.Gap * 2f);
 
-            Image showcaseImage = showcaseGo.AddComponent<Image>();
-            showcaseImage.color = ShowcaseColor;
-            showcaseImage.raycastTarget = false;
-
-            Outline showcaseOutline = showcaseGo.AddComponent<Outline>();
-            showcaseOutline.effectColor = new Color(1f, 1f, 1f, 0.12f);
-            showcaseOutline.effectDistance = new Vector2(1f, -1f);
-
             _equipmentSlots.Clear();
             foreach (EquipmentSlotSpec spec in EquipmentSlots)
             {
@@ -902,7 +1077,56 @@ namespace Arena.UI
                 _equipmentSlots[spec.SlotId] = slot;
             }
 
-            return panel;
+            // Attributes column to the right of the doll.
+            float dollWidth = DollColumns * CellSize + (DollColumns - 1) * CellSpacing;
+            RectTransform statsColumn = ArenaUiKit.MakeRect(body, "Attributes");
+            ArenaUiKit.SetAnchors(
+                statsColumn,
+                new Vector2(0f, 0f),
+                new Vector2(0f, 1f),
+                new Vector2(dollWidth + WindowGap, 0f),
+                new Vector2(dollWidth + WindowGap + StatsColumnWidth, 0f));
+
+            TextMeshProUGUI heading = ArenaUiKit.MakeSectionLabel(statsColumn, "Heading", "Attributes");
+            ArenaUiKit.SetAnchors(
+                heading.rectTransform,
+                new Vector2(0f, 1f),
+                new Vector2(1f, 1f),
+                new Vector2(0f, -22f),
+                Vector2.zero);
+
+            RectTransform divider = ArenaUiKit.MakeDivider(statsColumn);
+            ArenaUiKit.SetAnchors(
+                divider,
+                new Vector2(0f, 1f),
+                new Vector2(1f, 1f),
+                new Vector2(0f, -28f),
+                new Vector2(0f, -27f));
+
+            _statsList = ArenaUiKit.MakeRect(statsColumn, "List");
+            ArenaUiKit.SetAnchors(
+                _statsList,
+                Vector2.zero,
+                Vector2.one,
+                Vector2.zero,
+                new Vector2(0f, -34f));
+            VerticalLayoutGroup layout = _statsList.gameObject.AddComponent<VerticalLayoutGroup>();
+            layout.spacing = 2f;
+            layout.childControlWidth = true;
+            layout.childControlHeight = false;
+            layout.childForceExpandWidth = true;
+            layout.childForceExpandHeight = false;
+            layout.childAlignment = TextAnchor.UpperLeft;
+
+            return window;
+        }
+
+        private static void AnchorRightMiddle(RectTransform rect, Vector2 anchoredPosition)
+        {
+            rect.anchorMin = new Vector2(1f, 0.5f);
+            rect.anchorMax = new Vector2(1f, 0.5f);
+            rect.pivot = new Vector2(1f, 0.5f);
+            rect.anchoredPosition = anchoredPosition;
         }
 
         private EquipmentSlotCell CreateEquipmentSlot(RectTransform parent, EquipmentSlotSpec spec)
@@ -920,11 +1144,8 @@ namespace Arena.UI
             rt.sizeDelta = ActionBarLayout.SlotVector;
 
             Image background = cellGo.AddComponent<Image>();
-            background.color = EmptyCellColor;
-
-            Outline outline = cellGo.AddComponent<Outline>();
-            outline.effectColor = new Color(1f, 1f, 1f, 0.16f);
-            outline.effectDistance = new Vector2(1f, -1f);
+            background.color = ArenaUiTheme.CellEmpty;
+            ArenaUiKit.ApplyRounding(background, ArenaUiSprites.SmallRadius);
 
             GameObject labelGo = new("Label");
             labelGo.transform.SetParent(cellGo.transform, false);
@@ -935,9 +1156,11 @@ namespace Arena.UI
             labelRt.offsetMax = new Vector2(-4f, -4f);
 
             TextMeshProUGUI label = labelGo.AddComponent<TextMeshProUGUI>();
-            label.font = ResolveFont();
+            TMP_FontAsset? font = ArenaUiTheme.BodyFont;
+            if (font != null)
+                label.font = font;
             label.fontSize = 10f;
-            label.color = HeatUiStyle.MutedText;
+            label.color = ArenaUiTheme.MutedText;
             label.alignment = TextAlignmentOptions.Center;
             label.textWrappingMode = TextWrappingModes.Normal;
             label.overflowMode = TextOverflowModes.Ellipsis;
@@ -958,84 +1181,15 @@ namespace Arena.UI
             icon.enabled = false;
 
             labelGo.transform.SetAsLastSibling();
+            Image border = ArenaUiKit.AddBorder(rt, ArenaUiTheme.Hairline, ArenaUiSprites.SmallRadius);
+            ArenaUiKit.ApplySurface(border, ArenaUiSprites.SlotFrame, ArenaUiTheme.Hairline);
 
-            return cellGo.AddComponent<EquipmentSlotCell>().Initialize(background, icon, label);
-        }
-
-        private static RectTransform CreatePanel(
-            Transform parent,
-            string name,
-            string title,
-            Vector2 size,
-            Vector2 anchor,
-            Vector2 anchoredPosition,
-            out RectTransform grid,
-            out TextMeshProUGUI titleText)
-        {
-            GameObject panelGo = new(name);
-            panelGo.transform.SetParent(parent, false);
-            RectTransform panel = panelGo.AddComponent<RectTransform>();
-            panel.anchorMin = anchor;
-            panel.anchorMax = anchor;
-            panel.pivot = new Vector2(1f, 0.5f);
-            panel.anchoredPosition = anchoredPosition;
-            panel.sizeDelta = size;
-
-            Image panelImage = panelGo.AddComponent<Image>();
-            panelImage.color = PanelColor;
-            HeatUiStyle.StylePanel(panelGo);
-            HeatUiStyle.AddAccentBar(
-                panel,
-                "Accent",
-                new Vector2(0f, 0f),
-                new Vector2(0f, 1f),
-                Vector2.zero,
-                new Vector2(3f, 0f));
-
-            GameObject headerGo = new("Header");
-            headerGo.transform.SetParent(panel, false);
-            RectTransform header = headerGo.AddComponent<RectTransform>();
-            header.anchorMin = new Vector2(0f, 1f);
-            header.anchorMax = new Vector2(1f, 1f);
-            header.pivot = new Vector2(0.5f, 1f);
-            header.sizeDelta = new Vector2(0f, 38f);
-            header.anchoredPosition = Vector2.zero;
-
-            Image headerImage = headerGo.AddComponent<Image>();
-            headerImage.color = HeaderColor;
-            HeatUiStyle.StyleHeader(headerGo);
-
-            GameObject titleGo = new("Title");
-            titleGo.transform.SetParent(header, false);
-            RectTransform titleRt = titleGo.AddComponent<RectTransform>();
-            titleRt.anchorMin = Vector2.zero;
-            titleRt.anchorMax = Vector2.one;
-            titleRt.offsetMin = new Vector2(12f, 0f);
-            titleRt.offsetMax = new Vector2(-12f, 0f);
-            titleText = titleGo.AddComponent<TextMeshProUGUI>();
-            titleText.font = ResolveFont();
-            titleText.fontSize = 16f;
-            titleText.fontStyle = FontStyles.Bold;
-            titleText.color = HeatUiStyle.Text;
-            titleText.alignment = TextAlignmentOptions.MidlineLeft;
-            titleText.textWrappingMode = TextWrappingModes.NoWrap;
-            titleText.text = title;
-
-            GameObject gridGo = new("Grid");
-            gridGo.transform.SetParent(panel, false);
-            grid = gridGo.AddComponent<RectTransform>();
-            grid.anchorMin = new Vector2(0f, 0f);
-            grid.anchorMax = new Vector2(1f, 1f);
-            grid.offsetMin = new Vector2(14f, 14f);
-            grid.offsetMax = new Vector2(-14f, -52f);
-            EnsureGridLayout(grid, 1);
-
-            return panel;
+            return cellGo.AddComponent<EquipmentSlotCell>().Initialize(background, icon, label, border);
         }
 
         private static void EnsureGridLayout(RectTransform grid, int columns)
         {
-            GridLayoutGroup layout = grid.GetComponent<GridLayoutGroup>() ?? grid.gameObject.AddComponent<GridLayoutGroup>();
+            GridLayoutGroup layout = ArenaUiKit.EnsureComponent<GridLayoutGroup>(grid.gameObject);
             layout.cellSize = ActionBarLayout.SlotVector;
             layout.spacing = ActionBarLayout.GapVector;
             layout.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
@@ -1043,21 +1197,25 @@ namespace Arena.UI
             layout.childAlignment = TextAnchor.UpperLeft;
         }
 
-        private static void ResizePanelForGrid(RectTransform grid, int columns, int rows)
+        private static void ResizeWindowForGrid(RectTransform grid, int columns, int rows)
         {
-            if (grid.parent is not RectTransform panel)
+            ArenaWindow? window = grid.GetComponentInParent<ArenaWindow>(true);
+            if (window == null)
                 return;
 
-            panel.sizeDelta = PanelSizeForGrid(columns, rows);
+            window.Rect.sizeDelta = WindowSizeForGrid(columns, rows);
         }
 
-        private static Vector2 PanelSizeForGrid(int columns, int rows)
+        private static Vector2 WindowSizeForGrid(int columns, int rows)
         {
             int safeColumns = Mathf.Max(1, columns);
             int safeRows = Mathf.Max(1, rows);
             return new Vector2(
-                safeColumns * CellSize + (safeColumns - 1) * CellSpacing + PanelHorizontalPadding,
-                safeRows * CellSize + (safeRows - 1) * CellSpacing + PanelVerticalPadding);
+                safeColumns * CellSize + (safeColumns - 1) * CellSpacing + ArenaUiTheme.ContentPadding * 2f,
+                safeRows * CellSize + (safeRows - 1) * CellSpacing
+                + ArenaUiTheme.ContentPadding * 2f
+                + ArenaUiTheme.HeaderHeight
+                + ArenaUiTheme.AccentBarThickness);
         }
 
         private static void EnsureCellCount(RectTransform grid, int total)
@@ -1078,11 +1236,8 @@ namespace Arena.UI
             rt.sizeDelta = ActionBarLayout.SlotVector;
 
             Image background = cellGo.AddComponent<Image>();
-            background.color = EmptyCellColor;
-
-            Outline outline = cellGo.AddComponent<Outline>();
-            outline.effectColor = new Color(1f, 1f, 1f, 0.16f);
-            outline.effectDistance = new Vector2(1f, -1f);
+            background.color = ArenaUiTheme.CellEmpty;
+            ArenaUiKit.ApplyRounding(background, ArenaUiSprites.SmallRadius);
 
             GameObject iconGo = new("Icon");
             iconGo.transform.SetParent(cellGo.transform, false);
@@ -1106,9 +1261,11 @@ namespace Arena.UI
             labelRt.offsetMin = new Vector2(4f, 4f);
             labelRt.offsetMax = new Vector2(-4f, -4f);
             TextMeshProUGUI label = labelGo.AddComponent<TextMeshProUGUI>();
-            label.font = ResolveFont();
+            TMP_FontAsset? cellFont = ArenaUiTheme.BodyFont;
+            if (cellFont != null)
+                label.font = cellFont;
             label.fontSize = 10f;
-            label.color = HeatUiStyle.Text;
+            label.color = ArenaUiTheme.Text;
             label.alignment = TextAlignmentOptions.Center;
             label.textWrappingMode = TextWrappingModes.Normal;
             label.overflowMode = TextOverflowModes.Ellipsis;
@@ -1122,15 +1279,19 @@ namespace Arena.UI
             quantityRt.offsetMin = new Vector2(3f, 2f);
             quantityRt.offsetMax = new Vector2(-4f, -2f);
             TextMeshProUGUI quantity = quantityGo.AddComponent<TextMeshProUGUI>();
-            quantity.font = ResolveFont();
+            TMP_FontAsset? quantityFont = ArenaUiTheme.StrongFont;
+            if (quantityFont != null)
+                quantity.font = quantityFont;
             quantity.fontSize = 10f;
             quantity.fontStyle = FontStyles.Bold;
-            quantity.color = HeatUiStyle.Text;
+            quantity.color = ArenaUiTheme.Text;
             quantity.alignment = TextAlignmentOptions.BottomRight;
             quantity.textWrappingMode = TextWrappingModes.NoWrap;
             quantity.raycastTarget = false;
 
-            cellGo.AddComponent<InventoryGridCell>().Initialize(background, icon, label, quantity);
+            Image border = ArenaUiKit.AddBorder(rt, ArenaUiTheme.Hairline, ArenaUiSprites.SmallRadius);
+            ArenaUiKit.ApplySurface(border, ArenaUiSprites.SlotFrame, ArenaUiTheme.Hairline);
+            cellGo.AddComponent<InventoryGridCell>().Initialize(background, icon, label, quantity, border);
         }
 
         private RectTransform CreateDragGhost(string displayName, string iconId)
@@ -1143,12 +1304,10 @@ namespace Arena.UI
             rt.sizeDelta = new Vector2(132f, 42f);
 
             Image image = go.AddComponent<Image>();
-            image.color = HeatUiStyle.PanelStrong;
+            image.color = ArenaUiTheme.PanelStrong;
             image.raycastTarget = false;
-
-            Outline outline = go.AddComponent<Outline>();
-            outline.effectColor = new Color(1f, 1f, 1f, 0.18f);
-            outline.effectDistance = new Vector2(1f, -1f);
+            ArenaUiKit.ApplyRounding(image, ArenaUiSprites.SmallRadius);
+            ArenaUiKit.AddBorder(rt, ArenaUiTheme.HairlineStrong, ArenaUiSprites.SmallRadius);
 
             Sprite? iconSprite = ItemIconResolver.Resolve(iconId);
             if (iconSprite != null)
@@ -1169,23 +1328,18 @@ namespace Arena.UI
                 icon.raycastTarget = false;
             }
 
-            GameObject labelGo = new("Text");
-            labelGo.transform.SetParent(go.transform, false);
-            RectTransform labelRt = labelGo.AddComponent<RectTransform>();
+            TextMeshProUGUI label = ArenaUiKit.MakeText(
+                go.transform,
+                "Text",
+                displayName,
+                12f,
+                ArenaUiTheme.Text,
+                alignment: iconSprite == null ? TextAlignmentOptions.Center : TextAlignmentOptions.MidlineLeft);
+            RectTransform labelRt = label.rectTransform;
             labelRt.anchorMin = Vector2.zero;
             labelRt.anchorMax = Vector2.one;
             labelRt.offsetMin = new Vector2(iconSprite == null ? 8f : 50f, 4f);
             labelRt.offsetMax = new Vector2(-8f, -4f);
-
-            TextMeshProUGUI label = labelGo.AddComponent<TextMeshProUGUI>();
-            label.font = ResolveFont();
-            label.fontSize = 12f;
-            label.alignment = iconSprite == null ? TextAlignmentOptions.Center : TextAlignmentOptions.MidlineLeft;
-            label.color = Color.white;
-            label.textWrappingMode = TextWrappingModes.NoWrap;
-            label.overflowMode = TextOverflowModes.Ellipsis;
-            label.raycastTarget = false;
-            label.text = displayName;
 
             return rt;
         }
@@ -1243,12 +1397,6 @@ namespace Arena.UI
         private static bool IsPointerOverUi()
         {
             return EventSystem.current != null && EventSystem.current.IsPointerOverGameObject();
-        }
-
-        private static TMP_FontAsset? ResolveFont()
-        {
-            return TMP_Settings.defaultFontAsset
-                ?? Resources.Load<TMP_FontAsset>("Fonts & Materials/LiberationSans SDF");
         }
 
         private static string Normalize(string value)
@@ -1331,6 +1479,7 @@ namespace Arena.UI
             private Image? _background;
             private Image? _icon;
             private TextMeshProUGUI? _label;
+            private Image? _border;
             private TooltipTarget? _tooltip;
             private string _emptyLabel = string.Empty;
 
@@ -1339,12 +1488,13 @@ namespace Arena.UI
             public ItemDefinition? Definition { get; private set; }
             public bool HasItem => !string.IsNullOrWhiteSpace(ItemInstanceId);
 
-            public EquipmentSlotCell Initialize(Image background, Image icon, TextMeshProUGUI label)
+            public EquipmentSlotCell Initialize(Image background, Image icon, TextMeshProUGUI label, Image border)
             {
                 _background = background;
                 _icon = icon;
                 _label = label;
-                _tooltip = gameObject.GetComponent<TooltipTarget>() ?? gameObject.AddComponent<TooltipTarget>();
+                _border = border;
+                _tooltip = ArenaUiKit.EnsureComponent<TooltipTarget>(gameObject);
                 return this;
             }
 
@@ -1362,7 +1512,10 @@ namespace Arena.UI
                 Definition = definition;
 
                 if (_background != null)
-                    _background.color = item == null ? EmptyCellColor : FilledCellColor;
+                    _background.color = item == null ? ArenaUiTheme.CellEmpty : ArenaUiTheme.CellFilled;
+
+                if (_border != null)
+                    _border.color = RarityOutline(item, definition);
 
                 Sprite? iconSprite = item == null ? null : ItemIconResolver.Resolve(definition);
                 if (_icon != null)
@@ -1377,7 +1530,11 @@ namespace Arena.UI
                 if (_tooltip != null && controller._canvas != null)
                     _tooltip.Configure(
                         controller._canvas,
-                        BuildItemTooltip(NetworkManager.Instance?.Conn, item, definition),
+                        BuildItemTooltip(
+                            NetworkManager.Instance?.Conn,
+                            item,
+                            definition,
+                            item == null ? string.Empty : "Right-click to unequip - Drag to bag"),
                         pollHover: true);
             }
 
@@ -1416,6 +1573,22 @@ namespace Arena.UI
             }
         }
 
+        private static Color RarityOutline(ItemInstance? item, ItemDefinition? definition)
+        {
+            bool authoredFrame = ArenaUiSprites.SlotFrame.Authored;
+            if (item == null || definition == null || string.IsNullOrWhiteSpace(definition.Rarity))
+                return authoredFrame ? Color.white : ArenaUiTheme.Hairline;
+
+            string normalized = definition.Rarity.Trim().ToUpperInvariant();
+            if (normalized is "COMMON" or "")
+                return authoredFrame ? Color.white : ArenaUiTheme.HairlineStrong;
+
+            // Authored frames are painted art: tint them with the rarity color.
+            Color color = ArenaUiTheme.RarityColor(definition.Rarity);
+            color.a = authoredFrame ? 1f : 0.85f;
+            return color;
+        }
+
         private sealed class InventoryGridCell : MonoBehaviour, IInventoryDropTarget, IPointerClickHandler, IBeginDragHandler, IDragHandler, IEndDragHandler
         {
             private InventoryController? _controller;
@@ -1423,6 +1596,7 @@ namespace Arena.UI
             private Image? _icon;
             private TextMeshProUGUI? _label;
             private TextMeshProUGUI? _quantity;
+            private Image? _border;
             private TooltipTarget? _tooltip;
 
             public string Context { get; private set; } = string.Empty;
@@ -1434,13 +1608,14 @@ namespace Arena.UI
             public ItemDefinition? Definition { get; private set; }
             public bool HasItem => !string.IsNullOrWhiteSpace(ItemInstanceId);
 
-            public void Initialize(Image background, Image icon, TextMeshProUGUI label, TextMeshProUGUI quantity)
+            public void Initialize(Image background, Image icon, TextMeshProUGUI label, TextMeshProUGUI quantity, Image border)
             {
                 _background = background;
                 _icon = icon;
                 _label = label;
                 _quantity = quantity;
-                _tooltip = gameObject.GetComponent<TooltipTarget>() ?? gameObject.AddComponent<TooltipTarget>();
+                _border = border;
+                _tooltip = ArenaUiKit.EnsureComponent<TooltipTarget>(gameObject);
             }
 
             public void Configure(
@@ -1462,7 +1637,10 @@ namespace Arena.UI
                 Definition = definition;
 
                 if (_background != null)
-                    _background.color = item == null ? EmptyCellColor : FilledCellColor;
+                    _background.color = item == null ? ArenaUiTheme.CellEmpty : ArenaUiTheme.CellFilled;
+
+                if (_border != null)
+                    _border.color = RarityOutline(item, definition);
 
                 Sprite? iconSprite = item == null ? null : ItemIconResolver.Resolve(definition);
                 if (_icon != null)
@@ -1480,7 +1658,11 @@ namespace Arena.UI
                 if (_tooltip != null && controller._canvas != null)
                     _tooltip.Configure(
                         controller._canvas,
-                        BuildItemTooltip(NetworkManager.Instance?.Conn, item, definition),
+                        BuildItemTooltip(
+                            NetworkManager.Instance?.Conn,
+                            item,
+                            definition,
+                            item == null ? string.Empty : BuildCellFootnote(context, definition)),
                         pollHover: true);
             }
 

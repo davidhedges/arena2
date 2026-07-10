@@ -100,9 +100,15 @@ namespace Arena.Combat
                     && !RuntimeUiEscapeRouter.EscapeConsumedThisFrame
                     && !aimActive)
                 {
+                    bool hadTarget = SelectedTarget != null;
                     SelectedTarget = null;
                     ClearAutoAttackOnServer();
                     RuntimeUiEscapeRouter.ConsumeEscapeThisFrame();
+
+                    // Nothing to close and nothing targeted: fall through to the
+                    // system menu.
+                    if (!hadTarget)
+                        SystemMenuPanel.OpenFromEscape();
                 }
             }
 

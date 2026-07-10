@@ -1,5 +1,6 @@
 #nullable enable
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 using Arena.Match;
@@ -22,19 +23,32 @@ namespace Arena.UI
     {
         public static MatchOverlay? Instance { get; private set; }
 
+        private const float StatsRowHeight = 32f;
+        private const float StatsRowPitch = 36f;
+        private const float ColHealingWidth = 92f;
+        private const float ColHpWidth = 60f;
+        private const float ColKillsWidth = 60f;
+        private const float ColDamageWidth = 96f;
+        private const float ColGap = 10f;
+
+        // Right-edge offsets for the right-aligned numeric columns.
+        private const float HealingFromRight = 8f;
+        private const float HpFromRight = HealingFromRight + ColHealingWidth + ColGap;
+        private const float KillsFromRight = HpFromRight + ColHpWidth + ColGap;
+        private const float DamageFromRight = KillsFromRight + ColKillsWidth + ColGap;
+        private const float NameRightInset = DamageFromRight + ColDamageWidth + ColGap;
+
         private GameObject _root = null!;
-        private GameObject _panel = null!;
-        private Text _line1 = null!;
-        private Text _line2 = null!;
-        private Text _header = null!;
+        private ArenaWindow _window = null!;
+        private TextMeshProUGUI _winnerLine = null!;
         private RectTransform _statsRoot = null!;
-        private Button _leaveButton = null!;
-        private Button _playAgainButton = null!;
+        private ArenaButtonHandle _leaveButton;
+        private ArenaButtonHandle _playAgainButton;
         private readonly List<GameObject> _statRows = new();
 
         // Countdown view
         private GameObject _countdownRoot = null!;
-        private Text _countdownText = null!;
+        private TextMeshProUGUI _countdownText = null!;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
@@ -53,81 +67,71 @@ namespace Arena.UI
             if (Instance != null && Instance != this) { Destroy(gameObject); return; }
             Instance = this;
 
-            var canvas = gameObject.AddComponent<Canvas>();
-            canvas.renderMode   = RenderMode.ScreenSpaceOverlay;
-            canvas.sortingOrder = 20;
+            ArenaUiKit.MakeOverlayCanvas(gameObject, 20);
 
-            CanvasScaler scaler = gameObject.AddComponent<CanvasScaler>();
-            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = new Vector2(1920f, 1080f);
-            scaler.matchWidthOrHeight = 0.5f;
+            // Full-screen dim veil behind the match-over window.
+            RectTransform veil = ArenaUiKit.MakePanel(transform, "Root", ArenaUiTheme.Veil, raycastTarget: false);
+            ArenaUiKit.Fill(veil);
+            _root = veil.gameObject;
 
-            gameObject.AddComponent<GraphicRaycaster>();
+            _window = ArenaWindow.Create(
+                _root.transform,
+                "MatchOverWindow",
+                "Match Over",
+                new Vector2(720f, 460f),
+                showCloseButton: false);
+            RectTransform footer = _window.AddFooter();
 
-            _root = new GameObject("Root");
-            _root.transform.SetParent(transform, false);
-            var rt = _root.AddComponent<RectTransform>();
-            rt.anchorMin = Vector2.zero;
-            rt.anchorMax = Vector2.one;
-            rt.sizeDelta = Vector2.zero;
-
-            var bg = _root.AddComponent<Image>();
-            bg.color = new Color(0f, 0f, 0f, 0.62f);
-            bg.raycastTarget = false;
-
-            _panel = new GameObject("Panel");
-            _panel.transform.SetParent(_root.transform, false);
-            var panelRt = _panel.AddComponent<RectTransform>();
-            panelRt.anchorMin = new Vector2(0.5f, 0.5f);
-            panelRt.anchorMax = new Vector2(0.5f, 0.5f);
-            panelRt.pivot = new Vector2(0.5f, 0.5f);
-            panelRt.sizeDelta = new Vector2(720f, 460f);
-            panelRt.anchoredPosition = Vector2.zero;
-
-            var panelBg = _panel.AddComponent<Image>();
-            panelBg.color = HeatUiStyle.Panel;
-            panelBg.raycastTarget = true;
-            HeatUiStyle.StylePanel(_panel);
-            HeatUiStyle.AddAccentBar(
-                _panel.transform,
-                "Accent",
-                new Vector2(0f, 0f),
+            _winnerLine = ArenaUiKit.MakeText(
+                _window.Content,
+                "Winner",
+                string.Empty,
+                20f,
+                ArenaUiTheme.Text,
+                ArenaUiTheme.TitleFont,
+                TextAlignmentOptions.Center);
+            ArenaUiKit.SetAnchors(
+                _winnerLine.rectTransform,
                 new Vector2(0f, 1f),
+                new Vector2(1f, 1f),
+                new Vector2(0f, -36f),
+                Vector2.zero);
+
+            BuildStatsHeader();
+
+            _statsRoot = ArenaUiKit.MakeRect(_window.Content, "Stats");
+            ArenaUiKit.SetAnchors(
+                _statsRoot,
                 Vector2.zero,
-                new Vector2(4f, 0f));
+                Vector2.one,
+                Vector2.zero,
+                new Vector2(0f, -78f));
 
-            _line1 = MakeLabel("Line1", 42, new Vector2(0.5f, 0.86f), _panel.transform, new Vector2(620f, 60f));
-            _line2 = MakeLabel("Line2", 24, new Vector2(0.5f, 0.76f), _panel.transform, new Vector2(620f, 44f));
-            _header = MakeLabel("Header", 18, new Vector2(0.5f, 0.64f), _panel.transform, new Vector2(620f, 30f));
+            _leaveButton = ArenaUiKit.MakeButton(
+                footer,
+                "LeaveButton",
+                "Leave Match",
+                ArenaButtonStyle.Danger,
+                OnLeaveMatchPressed);
+            RectTransform leaveRect = _leaveButton.Rect;
+            leaveRect.anchorMin = new Vector2(0.5f, 0.5f);
+            leaveRect.anchorMax = new Vector2(0.5f, 0.5f);
+            leaveRect.pivot = new Vector2(1f, 0.5f);
+            leaveRect.sizeDelta = new Vector2(200f, ArenaUiTheme.ButtonHeight);
+            leaveRect.anchoredPosition = new Vector2(-8f, 0f);
 
-            var stats = new GameObject("Stats");
-            stats.transform.SetParent(_panel.transform, false);
-            _statsRoot = stats.AddComponent<RectTransform>();
-            _statsRoot.anchorMin = new Vector2(0.5f, 0.5f);
-            _statsRoot.anchorMax = new Vector2(0.5f, 0.5f);
-            _statsRoot.pivot = new Vector2(0.5f, 0.5f);
-            _statsRoot.sizeDelta = new Vector2(620f, 180f);
-            _statsRoot.anchoredPosition = new Vector2(0f, -10f);
-
-            _leaveButton = MakeButton("LeaveButton", "Leave Match", new Vector2(0.5f, 0.12f));
-            _leaveButton.transform.SetParent(_panel.transform, false);
-            var buttonRt = (RectTransform)_leaveButton.transform;
-            buttonRt.anchorMin = new Vector2(0.35f, 0.12f);
-            buttonRt.anchorMax = new Vector2(0.35f, 0.12f);
-            buttonRt.pivot = new Vector2(0.5f, 0.5f);
-            buttonRt.sizeDelta = new Vector2(200f, 42f);
-            buttonRt.anchoredPosition = Vector2.zero;
-            _leaveButton.onClick.AddListener(OnLeaveMatchPressed);
-
-            _playAgainButton = MakeButton("PlayAgainButton", "Play Again", new Vector2(0.65f, 0.12f));
-            _playAgainButton.transform.SetParent(_panel.transform, false);
-            var playAgainRt = (RectTransform)_playAgainButton.transform;
-            playAgainRt.anchorMin = new Vector2(0.65f, 0.12f);
-            playAgainRt.anchorMax = new Vector2(0.65f, 0.12f);
-            playAgainRt.pivot = new Vector2(0.5f, 0.5f);
-            playAgainRt.sizeDelta = new Vector2(200f, 42f);
-            playAgainRt.anchoredPosition = Vector2.zero;
-            _playAgainButton.onClick.AddListener(OnPlayAgainPressed);
+            _playAgainButton = ArenaUiKit.MakeButton(
+                footer,
+                "PlayAgainButton",
+                "Play Again",
+                ArenaButtonStyle.Primary,
+                OnPlayAgainPressed);
+            RectTransform playAgainRect = _playAgainButton.Rect;
+            playAgainRect.anchorMin = new Vector2(0.5f, 0.5f);
+            playAgainRect.anchorMax = new Vector2(0.5f, 0.5f);
+            playAgainRect.pivot = new Vector2(0f, 0.5f);
+            playAgainRect.sizeDelta = new Vector2(200f, ArenaUiTheme.ButtonHeight);
+            playAgainRect.anchoredPosition = new Vector2(8f, 0f);
 
             // Countdown overlay — shown during pre-match countdown, hidden otherwise.
             _countdownRoot = new GameObject("CountdownRoot");
@@ -139,14 +143,75 @@ namespace Arena.UI
             countdownScaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             countdownScaler.referenceResolution = new Vector2(1920f, 1080f);
             countdownScaler.matchWidthOrHeight = 0.5f;
-            _countdownText = MakeLabel("CountdownText", 120, new Vector2(0.5f, 0.5f), _countdownRoot.transform, new Vector2(400f, 200f));
-            _countdownText.alignment = TextAnchor.MiddleCenter;
-            _countdownText.color = HeatUiStyle.Text;
+            _countdownText = ArenaUiKit.MakeText(
+                _countdownRoot.transform,
+                "CountdownText",
+                string.Empty,
+                120f,
+                ArenaUiTheme.Text,
+                ArenaUiTheme.TitleFont,
+                TextAlignmentOptions.Center);
+            _countdownText.rectTransform.sizeDelta = new Vector2(800f, 220f);
+            _countdownText.overflowMode = TextOverflowModes.Overflow;
             _countdownRoot.SetActive(false);
 
             _root.SetActive(false);
             Refresh(MatchStateCache.Instance);
         }
+
+        private void BuildStatsHeader()
+        {
+            RectTransform header = ArenaUiKit.MakeRect(_window.Content, "StatsHeader");
+            ArenaUiKit.SetAnchors(
+                header,
+                new Vector2(0f, 1f),
+                new Vector2(1f, 1f),
+                new Vector2(0f, -68f),
+                new Vector2(0f, -46f));
+
+            TextMeshProUGUI player = MakeHeaderCell(header, "Player", rightAligned: false);
+            ArenaUiKit.SetAnchors(
+                player.rectTransform,
+                Vector2.zero,
+                Vector2.one,
+                new Vector2(10f, 0f),
+                new Vector2(-NameRightInset, 0f));
+
+            PlaceRightColumn(MakeHeaderCell(header, "Damage", rightAligned: true).rectTransform, DamageFromRight, ColDamageWidth);
+            PlaceRightColumn(MakeHeaderCell(header, "Kills", rightAligned: true).rectTransform, KillsFromRight, ColKillsWidth);
+            PlaceRightColumn(MakeHeaderCell(header, "HP", rightAligned: true).rectTransform, HpFromRight, ColHpWidth);
+            PlaceRightColumn(MakeHeaderCell(header, "Healing", rightAligned: true).rectTransform, HealingFromRight, ColHealingWidth);
+
+            RectTransform divider = ArenaUiKit.MakeDivider(_window.Content);
+            ArenaUiKit.SetAnchors(
+                divider,
+                new Vector2(0f, 1f),
+                new Vector2(1f, 1f),
+                new Vector2(0f, -71f),
+                new Vector2(0f, -70f));
+        }
+
+        private static TextMeshProUGUI MakeHeaderCell(RectTransform parent, string text, bool rightAligned)
+        {
+            TextMeshProUGUI label = ArenaUiKit.MakeText(
+                parent,
+                $"Header_{text}",
+                text.ToUpperInvariant(),
+                ArenaUiTheme.SmallSize,
+                ArenaUiTheme.MutedText,
+                ArenaUiTheme.StrongFont,
+                rightAligned ? TextAlignmentOptions.MidlineRight : TextAlignmentOptions.MidlineLeft);
+            label.characterSpacing = 6f;
+            return label;
+        }
+
+        private static void PlaceRightColumn(RectTransform rect, float fromRight, float width)
+            => ArenaUiKit.SetAnchors(
+                rect,
+                new Vector2(1f, 0f),
+                new Vector2(1f, 1f),
+                new Vector2(-(fromRight + width), 0f),
+                new Vector2(-fromRight, 0f));
 
         public void Refresh(MatchStateCache cache)
         {
@@ -172,8 +237,6 @@ namespace Arena.UI
                 return;
             }
 
-            _line1.text = "MATCH OVER";
-
             string winnerName = "Unknown";
             if (cache.WinnerId.HasValue &&
                 EntityRegistry.Instance != null &&
@@ -181,14 +244,11 @@ namespace Arena.UI
             {
                 winnerName = string.IsNullOrEmpty(winner.Username) ? "???" : winner.Username;
             }
-            _line2.text = $"{winnerName} wins!";
-            _header.text = $"{"Damage",10}  {"Kills",6}  {"HP",6}  {"Healing",8}";
+            _winnerLine.text = $"{winnerName} wins!";
             RebuildStats(cache);
             bool connected = NetworkManager.Instance?.IsConnected == true && cache.LocalInstanceId.HasValue;
-            _leaveButton.interactable = connected;
-            _playAgainButton.interactable = connected;
-            HeatUiStyle.SyncButtonInteractable(_leaveButton);
-            HeatUiStyle.SyncButtonInteractable(_playAgainButton);
+            _leaveButton.SetInteractable(connected);
+            _playAgainButton.SetInteractable(connected);
 
             _root.SetActive(true);
         }
@@ -214,10 +274,12 @@ namespace Arena.UI
             if (remaining <= 0f)
             {
                 _countdownText.text = "FIGHT!";
+                _countdownText.color = ArenaUiTheme.Accent;
             }
             else
             {
                 _countdownText.text = Mathf.CeilToInt(remaining).ToString();
+                _countdownText.color = ArenaUiTheme.Text;
             }
         }
 
@@ -262,7 +324,8 @@ namespace Arena.UI
                         stats?.Kills ?? 0,
                         stats?.HpRemaining ?? 0,
                         stats?.HealingDone ?? 0,
-                        winnerId.HasValue && entity.Identity == winnerId.Value));
+                        winnerId.HasValue && entity.Identity == winnerId.Value,
+                        conn != null && entity.Identity == conn.Identity));
                 }
             }
 
@@ -277,7 +340,8 @@ namespace Arena.UI
                     stats.Kills,
                     stats.HpRemaining,
                     stats.HealingDone,
-                    winnerId.HasValue && stats.PlayerId == winnerId.Value));
+                    winnerId.HasValue && stats.PlayerId == winnerId.Value,
+                    conn != null && stats.PlayerId == conn.Identity));
             }
 
             result.Sort((a, b) =>
@@ -294,32 +358,55 @@ namespace Arena.UI
 
         private GameObject MakeStatsRow(StatsRowData data, int index)
         {
-            var go = new GameObject($"Row_{index}");
-            go.transform.SetParent(_statsRoot, false);
-            var rt = go.AddComponent<RectTransform>();
-            rt.anchorMin = new Vector2(0.5f, 1f);
-            rt.anchorMax = new Vector2(0.5f, 1f);
-            rt.pivot = new Vector2(0.5f, 1f);
-            rt.sizeDelta = new Vector2(620f, 32f);
-            rt.anchoredPosition = new Vector2(0f, -index * 36f);
+            Color rowColor = data.IsLocal
+                ? ArenaUiTheme.PositiveRow
+                : (index % 2 == 0 ? ArenaUiTheme.Row : ArenaUiTheme.RowAlt);
+            RectTransform row = ArenaUiKit.MakePanel(_statsRoot, $"Row_{index}", rowColor, raycastTarget: false);
+            row.anchorMin = new Vector2(0f, 1f);
+            row.anchorMax = new Vector2(1f, 1f);
+            row.pivot = new Vector2(0.5f, 1f);
+            row.sizeDelta = new Vector2(0f, StatsRowHeight);
+            row.anchoredPosition = new Vector2(0f, -index * StatsRowPitch);
 
-            var bg = go.AddComponent<Image>();
-            bg.color = data.IsWinner
-                ? HeatUiStyle.Learned
-                : (index % 2 == 0 ? HeatUiStyle.Row : HeatUiStyle.RowAlt);
-            bg.raycastTarget = false;
+            Color textColor = data.IsWinner ? ArenaUiTheme.Gold : ArenaUiTheme.Text;
+            TextMeshProUGUI name = ArenaUiKit.MakeText(
+                row,
+                "Name",
+                data.Name,
+                ArenaUiTheme.BodySize,
+                textColor,
+                data.IsWinner ? ArenaUiTheme.StrongFont : ArenaUiTheme.BodyFont);
+            ArenaUiKit.SetAnchors(
+                name.rectTransform,
+                Vector2.zero,
+                Vector2.one,
+                new Vector2(10f, 0f),
+                new Vector2(-NameRightInset, 0f));
 
-            var txt = MakeLabel(
-                $"RowText_{index}",
-                18,
-                new Vector2(0.5f, 0.5f),
-                go.transform,
-                new Vector2(590f, 28f));
-            txt.alignment = TextAnchor.MiddleLeft;
-            txt.text = $"{data.Name,-14}  {data.DamageDone,10}  {data.Kills,6}  {data.HpRemaining,6}  {data.HealingDone,8}";
-            txt.color = data.IsWinner ? HeatUiStyle.Gold : HeatUiStyle.Text;
+            MakeNumberCell(row, "Damage", data.DamageDone, DamageFromRight, ColDamageWidth, textColor);
+            MakeNumberCell(row, "Kills", data.Kills, KillsFromRight, ColKillsWidth, textColor);
+            MakeNumberCell(row, "Hp", data.HpRemaining, HpFromRight, ColHpWidth, textColor);
+            MakeNumberCell(row, "Healing", data.HealingDone, HealingFromRight, ColHealingWidth, textColor);
 
-            return go;
+            return row.gameObject;
+        }
+
+        private static void MakeNumberCell(
+            RectTransform row,
+            string name,
+            int value,
+            float fromRight,
+            float width,
+            Color color)
+        {
+            TextMeshProUGUI label = ArenaUiKit.MakeText(
+                row,
+                name,
+                value.ToString(),
+                ArenaUiTheme.BodySize,
+                color,
+                alignment: TextAlignmentOptions.MidlineRight);
+            PlaceRightColumn(label.rectTransform, fromRight, width);
         }
 
         private void OnLeaveMatchPressed()
@@ -328,10 +415,8 @@ namespace Arena.UI
             if (conn == null)
                 return;
 
-            _leaveButton.interactable = false;
-            _playAgainButton.interactable = false;
-            HeatUiStyle.SyncButtonInteractable(_leaveButton);
-            HeatUiStyle.SyncButtonInteractable(_playAgainButton);
+            _leaveButton.SetInteractable(false);
+            _playAgainButton.SetInteractable(false);
             conn.Reducers.LeaveInstance();
         }
 
@@ -341,10 +426,8 @@ namespace Arena.UI
             if (conn == null)
                 return;
 
-            _leaveButton.interactable = false;
-            _playAgainButton.interactable = false;
-            HeatUiStyle.SyncButtonInteractable(_leaveButton);
-            HeatUiStyle.SyncButtonInteractable(_playAgainButton);
+            _leaveButton.SetInteractable(false);
+            _playAgainButton.SetInteractable(false);
             conn.Reducers.LeaveInstance();
             // LobbyController will show automatically once LocalInstanceId clears.
         }
@@ -355,62 +438,16 @@ namespace Arena.UI
             return text.Length > 8 ? $"Player_{text[..8]}" : $"Player_{text}";
         }
 
-        private Text MakeLabel(string name, int fontSize, Vector2 anchorPos, Transform? parentOverride = null, Vector2? size = null)
-        {
-            var go = new GameObject(name);
-            go.transform.SetParent(parentOverride ?? _root.transform, false);
-            var rt = go.AddComponent<RectTransform>();
-            rt.anchorMin        = anchorPos;
-            rt.anchorMax        = anchorPos;
-            rt.pivot            = new Vector2(0.5f, 0.5f);
-            rt.sizeDelta        = size ?? new Vector2(600, 60);
-            rt.anchoredPosition = Vector2.zero;
-
-            var txt = go.AddComponent<Text>();
-            txt.font      = HeatUiStyle.ResolveLegacyFont();
-            txt.fontSize  = fontSize;
-            txt.fontStyle = FontStyle.Bold;
-            txt.alignment = TextAnchor.MiddleCenter;
-            txt.color     = Color.white;
-
-            var sh = go.AddComponent<Shadow>();
-            sh.effectColor    = new Color(0f, 0f, 0f, 0.72f);
-            sh.effectDistance = new Vector2(1, -1);
-
-            return txt;
-        }
-
-        private Button MakeButton(string name, string label, Vector2 anchorPos)
-        {
-            var go = new GameObject(name);
-            var rt = go.AddComponent<RectTransform>();
-            rt.anchorMin = anchorPos;
-            rt.anchorMax = anchorPos;
-            rt.pivot = new Vector2(0.5f, 0.5f);
-
-            var image = go.AddComponent<Image>();
-            image.color = HeatUiStyle.Accent;
-
-            var button = go.AddComponent<Button>();
-            var colors = button.colors;
-            colors.normalColor = image.color;
-            colors.highlightedColor = HeatUiStyle.AccentHot;
-            colors.pressedColor = new Color(0.56f, 0.08f, 0.06f, 1f);
-            colors.selectedColor = colors.highlightedColor;
-            button.colors = colors;
-            HeatUiStyle.StyleButton(button, label, HeatUiStyle.Accent, Color.white);
-
-            var txt = MakeLabel($"{name}_Label", 18, new Vector2(0.5f, 0.5f), go.transform, new Vector2(180f, 28f));
-            txt.text = label;
-            txt.alignment = TextAnchor.MiddleCenter;
-            txt.color = Color.white;
-
-            return button;
-        }
-
         private readonly struct StatsRowData
         {
-            public StatsRowData(string name, int damageDone, int kills, int hpRemaining, int healingDone, bool isWinner)
+            public StatsRowData(
+                string name,
+                int damageDone,
+                int kills,
+                int hpRemaining,
+                int healingDone,
+                bool isWinner,
+                bool isLocal)
             {
                 Name = name;
                 DamageDone = damageDone;
@@ -418,6 +455,7 @@ namespace Arena.UI
                 HpRemaining = hpRemaining;
                 HealingDone = healingDone;
                 IsWinner = isWinner;
+                IsLocal = isLocal;
             }
 
             public string Name { get; }
@@ -426,6 +464,7 @@ namespace Arena.UI
             public int HpRemaining { get; }
             public int HealingDone { get; }
             public bool IsWinner { get; }
+            public bool IsLocal { get; }
         }
     }
 }

@@ -90,7 +90,27 @@ namespace Arena.UI
             {
                 _createButton.onClick.RemoveAllListeners();
                 _createButton.onClick.AddListener(CreateCharacter);
+                StyleCreateButton(_createButton);
             }
+        }
+
+        private static void StyleCreateButton(Button button)
+        {
+            Image? image = button.GetComponent<Image>();
+            if (image != null)
+                image.color = ArenaUiTheme.Accent;
+
+            // Fill lives on the Image; the ColorBlock only applies white-based
+            // multipliers so the accent isn't tinted twice.
+            ColorBlock colors = button.colors;
+            colors.normalColor = Color.white;
+            colors.selectedColor = colors.normalColor;
+            colors.highlightedColor = new Color(1.14f, 1.14f, 1.14f, 1f);
+            colors.pressedColor = new Color(0.78f, 0.78f, 0.78f, 1f);
+            button.colors = colors;
+
+            foreach (TMP_Text label in button.GetComponentsInChildren<TMP_Text>(true))
+                label.color = ArenaUiTheme.OnAccent;
         }
 
         private void SelectCharacterBaseline()
@@ -246,9 +266,9 @@ namespace Arena.UI
                 return;
 
             ColorBlock colors = button.colors;
-            colors.normalColor = selected ? new Color(0.72f, 0.08f, 0.04f, 0.96f) : new Color(0.16f, 0.17f, 0.20f, 0.96f);
+            colors.normalColor = selected ? ArenaUiTheme.Accent : ArenaUiTheme.RowAlt;
             colors.selectedColor = colors.normalColor;
-            colors.highlightedColor = selected ? new Color(0.82f, 0.12f, 0.06f, 1f) : new Color(0.22f, 0.23f, 0.27f, 1f);
+            colors.highlightedColor = selected ? ArenaUiTheme.AccentHot : ArenaUiTheme.CellFilled;
             button.colors = colors;
         }
 

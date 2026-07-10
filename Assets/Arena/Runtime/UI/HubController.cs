@@ -22,13 +22,16 @@ namespace Arena.UI
     public sealed class HubController : MonoBehaviour, IEscapeCloseable
     {
         private const string HubSceneName = "Hub";
-        private static readonly Color AccentRed = new(0.86f, 0.16f, 0.08f, 0.98f);
-        private static readonly Color AccentAmber = new(1f, 0.63f, 0.22f, 1f);
-        private static readonly Color PanelColor = new(0.035f, 0.039f, 0.047f, 0.92f);
-        private static readonly Color PanelStrongColor = new(0.018f, 0.021f, 0.027f, 0.96f);
-        private static readonly Color ButtonColor = new(0.075f, 0.082f, 0.096f, 0.98f);
-        private static readonly Color ButtonHoverColor = new(0.12f, 0.13f, 0.15f, 1f);
-        private static readonly Color MutedTextColor = new(0.68f, 0.71f, 0.77f, 1f);
+
+        // All hub styling flows through the shared theme so the baked scene and
+        // the procedural windows read as one system.
+        private static Color Accent => ArenaUiTheme.Accent;
+        private static Color OnAccent => ArenaUiTheme.OnAccent;
+        private static Color PanelColor => ArenaUiTheme.Panel;
+        private static Color PanelStrongColor => ArenaUiTheme.PanelStrong;
+        private static Color ButtonColor => ArenaUiTheme.RowAlt;
+        private static Color ButtonHoverColor => ArenaUiTheme.CellFilled;
+        private static Color MutedTextColor => ArenaUiTheme.MutedText;
         private static readonly Color Transparent = new(0f, 0f, 0f, 0f);
 
         private Transform? _root;
@@ -436,10 +439,10 @@ namespace Arena.UI
                 buttonRect.SetSiblingIndex(i);
                 SetTopLeft(buttonRect, new Vector2(0f, -i * buttonStep), new Vector2(listWidth, buttonHeight));
 
-                Image image = buttonRect.GetComponent<Image>() ?? buttonRect.gameObject.AddComponent<Image>();
+                Image image = ArenaUiKit.EnsureComponent<Image>(buttonRect.gameObject);
                 image.color = ButtonColor;
 
-                Button button = buttonRect.GetComponent<Button>() ?? buttonRect.gameObject.AddComponent<Button>();
+                Button button = ArenaUiKit.EnsureComponent<Button>(buttonRect.gameObject);
                 button.interactable = true;
                 ColorBlock colors = button.colors;
                 colors.normalColor = image.color;
@@ -450,7 +453,7 @@ namespace Arena.UI
                 button.colors = colors;
                 AttachHeatButton(button, destination.DisplayName);
 
-                RectTransform accent = EnsureImage(buttonRect, "Accent", AccentAmber).rectTransform;
+                RectTransform accent = EnsureImage(buttonRect, "Accent", Accent).rectTransform;
                 SetAnchored(accent, new Vector2(0f, 0.5f), Vector2.zero, new Vector2(4f, buttonHeight - 14f), new Vector2(0f, 0.5f));
                 RectTransform chevron = EnsureText(buttonRect, "Chevron", ">", 20, FontStyles.Bold, TextAlignmentOptions.Center, MutedTextColor).rectTransform;
                 SetAnchored(chevron, new Vector2(1f, 0.5f), new Vector2(-22f, 0f), new Vector2(20f, 22f), new Vector2(0.5f, 0.5f));
@@ -458,7 +461,7 @@ namespace Arena.UI
                 TMP_Text? label = buttonRect.Find("Label")?.GetComponent<TMP_Text>();
                 if (label == null)
                 {
-                    label = CreateText(buttonRect, "Label", destination.DisplayName, 15, FontStyles.Bold, TextAlignmentOptions.Left, Color.white);
+                    label = CreateText(buttonRect, "Label", destination.DisplayName, 15, FontStyles.Bold, TextAlignmentOptions.Left, ArenaUiTheme.Text);
                     SetAnchored(label.rectTransform, new Vector2(0f, 0.5f), new Vector2(22f, 0f), new Vector2(listWidth - 70f, 22f), new Vector2(0f, 0.5f));
                 }
                 else
@@ -466,7 +469,7 @@ namespace Arena.UI
                     label.text = destination.DisplayName;
                     label.fontSize = 15;
                     label.fontStyle = FontStyles.Bold;
-                    label.color = Color.white;
+                    label.color = ArenaUiTheme.Text;
                     SetAnchored(label.rectTransform, new Vector2(0f, 0.5f), new Vector2(22f, 0f), new Vector2(listWidth - 70f, 22f), new Vector2(0f, 0.5f));
                 }
             }
@@ -480,8 +483,7 @@ namespace Arena.UI
                 return;
 
             HubShowcaseAnimationPlayer player =
-                showcaseAvatar.GetComponent<HubShowcaseAnimationPlayer>() ??
-                showcaseAvatar.AddComponent<HubShowcaseAnimationPlayer>();
+                ArenaUiKit.EnsureComponent<HubShowcaseAnimationPlayer>(showcaseAvatar);
             player.Configure(animator, loopClip, startTime: GetShowcasePoseSampleTime(loopClip));
         }
 
@@ -508,9 +510,9 @@ namespace Arena.UI
             Image? image = button.GetComponent<Image>();
             TMP_Text? label = button.GetComponentInChildren<TMP_Text>(true);
             if (image != null)
-                image.color = active ? AccentRed : Transparent;
+                image.color = active ? Accent : Transparent;
             if (label != null)
-                label.color = active ? Color.white : new Color(1f, 1f, 1f, 0.82f);
+                label.color = active ? OnAccent : new Color(1f, 1f, 1f, 0.82f);
         }
 
         private static RectTransform CreateRect(Transform parent, string name)
@@ -524,7 +526,7 @@ namespace Arena.UI
         {
             RectTransform rect = CreateRect(parent, name);
             TextMeshProUGUI label = rect.gameObject.AddComponent<TextMeshProUGUI>();
-            label.font = TMP_Settings.defaultFontAsset ?? Resources.Load<TMP_FontAsset>("Fonts & Materials/LiberationSans SDF");
+            label.font = ArenaUiTheme.StrongFont ?? TMP_Settings.defaultFontAsset;
             label.text = text;
             label.fontSize = fontSize;
             label.fontStyle = style;
@@ -598,25 +600,25 @@ namespace Arena.UI
             ctaPanel.anchoredPosition = new Vector2(-metrics.Margin, metrics.Margin);
             ctaPanel.sizeDelta = new Vector2(metrics.RightPanelWidth, metrics.CtaHeight);
 
-            Image panel = ctaPanel.GetComponent<Image>() ?? ctaPanel.gameObject.AddComponent<Image>();
+            Image panel = ArenaUiKit.EnsureComponent<Image>(ctaPanel.gameObject);
             panel.color = PanelColor;
             panel.raycastTarget = false;
 
-            RectTransform accent = EnsureImage(ctaPanel, "HeatCtaAccent", AccentRed).rectTransform;
+            RectTransform accent = EnsureImage(ctaPanel, "HeatCtaAccent", Accent).rectTransform;
             SetTopLeft(accent, Vector2.zero, new Vector2(5f, metrics.CtaHeight));
             accent.GetComponent<Image>().raycastTarget = false;
 
             TMP_Text eyebrow = EnsureText(ctaPanel, "HeatCtaEyebrow", "CURRENT DESTINATION", 12, FontStyles.Bold, TextAlignmentOptions.Left, MutedTextColor);
             SetTopLeft(eyebrow.rectTransform, new Vector2(metrics.PanelInset, -metrics.PanelInset), new Vector2(280f, 20f));
 
-            _destinationValue = EnsureText(ctaPanel, "HeatDestinationValue", OpenWorldTravelCatalog.CurrentDisplayName, 30, FontStyles.Bold, TextAlignmentOptions.Left, Color.white);
+            _destinationValue = EnsureText(ctaPanel, "HeatDestinationValue", OpenWorldTravelCatalog.CurrentDisplayName, 30, FontStyles.Bold, TextAlignmentOptions.Left, ArenaUiTheme.Text);
             SetTopLeft(_destinationValue.rectTransform, new Vector2(metrics.PanelInset, -metrics.PanelInset - 30f), new Vector2(metrics.RightPanelWidth - metrics.PanelInset * 2f, 38f));
 
             if (_ctaButton != null)
             {
                 RectTransform buttonRect = _ctaButton.GetComponent<RectTransform>();
                 SetBottomLeft(buttonRect, new Vector2(metrics.PanelInset, metrics.PanelInset), new Vector2(metrics.RightPanelWidth - metrics.PanelInset * 2f, metrics.CtaButtonHeight));
-                StyleActionButton(_ctaButton, AccentRed, Color.white, "ENTER WORLD", metrics);
+                StyleActionButton(_ctaButton, Accent, OnAccent, "ENTER WORLD", metrics);
             }
         }
 
@@ -635,15 +637,15 @@ namespace Arena.UI
             menuRect.anchoredPosition = new Vector2(-metrics.Margin, metrics.Margin + metrics.CtaHeight + metrics.Gap);
             menuRect.sizeDelta = new Vector2(metrics.RightPanelWidth, Mathf.Max(menuRect.sizeDelta.y, 320f));
 
-            Image panel = _travelMenu.GetComponent<Image>() ?? _travelMenu.AddComponent<Image>();
+            Image panel = ArenaUiKit.EnsureComponent<Image>(_travelMenu);
             panel.color = PanelStrongColor;
             panel.raycastTarget = false;
 
-            RectTransform accent = EnsureImage(_travelMenu.transform, "HeatTravelAccent", AccentAmber).rectTransform;
+            RectTransform accent = EnsureImage(_travelMenu.transform, "HeatTravelAccent", Accent).rectTransform;
             SetTopLeft(accent, new Vector2(0f, 0f), new Vector2(4f, menuRect.sizeDelta.y));
             accent.GetComponent<Image>().raycastTarget = false;
 
-            TMP_Text title = EnsureText(_travelMenu.transform, "Title", "SELECT DESTINATION", 17, FontStyles.Bold, TextAlignmentOptions.Left, Color.white);
+            TMP_Text title = EnsureText(_travelMenu.transform, "Title", "SELECT DESTINATION", 17, FontStyles.Bold, TextAlignmentOptions.Left, ArenaUiTheme.Text);
             SetTopLeft(title.rectTransform, new Vector2(metrics.PanelInset, -metrics.PanelInset), new Vector2(320f, 24f));
 
             TMP_Text subtitle = EnsureText(_travelMenu.transform, "HeatTravelSubtitle", "OPEN WORLD", 11, FontStyles.Bold, TextAlignmentOptions.Left, MutedTextColor);
@@ -652,7 +654,7 @@ namespace Arena.UI
 
         private static void StyleActionButton(Button button, Color background, Color labelColor, string heatLabel, HubLayoutMetrics metrics)
         {
-            Image image = button.GetComponent<Image>() ?? button.gameObject.AddComponent<Image>();
+            Image image = ArenaUiKit.EnsureComponent<Image>(button.gameObject);
             image.color = background;
 
             ColorBlock colors = button.colors;
@@ -687,7 +689,7 @@ namespace Arena.UI
 
         private static void AttachHeatButton(Button button, string text)
         {
-            ButtonManager heatButton = button.GetComponent<ButtonManager>() ?? button.gameObject.AddComponent<ButtonManager>();
+            ButtonManager heatButton = ArenaUiKit.EnsureComponent<ButtonManager>(button.gameObject);
             heatButton.buttonText = text;
             heatButton.useCustomContent = true;
             heatButton.enableText = false;
@@ -707,7 +709,7 @@ namespace Arena.UI
         {
             Transform? existing = parent.Find(name);
             RectTransform rect = existing as RectTransform ?? CreateRect(parent, name);
-            Image image = rect.GetComponent<Image>() ?? rect.gameObject.AddComponent<Image>();
+            Image image = ArenaUiKit.EnsureComponent<Image>(rect.gameObject);
             image.color = color;
             return image;
         }
