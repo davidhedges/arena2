@@ -63,6 +63,9 @@ Assets/ThirdParty/AssetStore/Animation/DaggersAnimationPack.meta
 Assets/ThirdParty/AssetStore/VFX/Piloto Studio/
 Assets/ThirdParty/AssetStore/VFX/Piloto Studio.meta
 
+# Local VFX playground experiments
+Assets/Arena/Resources/CombatVFX/playground/
+
 # Infrastructure local state and secrets
 .env
 .env.local
