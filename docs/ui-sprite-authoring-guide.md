@@ -1,79 +1,123 @@
-# UI Sprite Authoring Guide (2026-07-10)
+# UI Sprite Authoring Guide
 
-The menu/interface kit (`Assets/Arena/Runtime/UI/Kit/`) renders every window,
-button, tooltip, and slot from a small set of surface sprites. Each surface has
-a **procedural fallback** (generated at runtime) and an **authored override**:
-drop a PNG into `Assets/Arena/Resources/UI/Kit/` with the exact filename below
-and the kit swaps it in everywhere on next play. Files are independent — ship
-them one at a time.
+Practical pipeline for the art direction in `ui-art-direction.md` ("one
+blacksmith": dark fantasy, forged, restrained). The menu/interface kit
+(`Assets/Arena/Runtime/UI/Kit/`) renders every window, button, tooltip, and
+slot from a small library of surface sprites. Each surface has a **procedural
+fallback** (generated at runtime) and an **authored override**: drop a PNG
+into `Assets/Arena/Resources/UI/Kit/` with the exact filename and the kit
+swaps it in everywhere on next play. Files are independent — ship them one at
+a time.
 
-**Import:** just drop the PNG in that folder. Texture Type "Sprite (2D and UI)"
-(Unity's default for UI-sized PNGs is fine either way — the kit loads the
-texture directly). Do **not** configure 9-slice borders in the importer; the
-kit defines them in code (`ArenaUiSprites.AuthoredBorders`).
+**Import:** drop the PNG in that folder; no importer fiddling needed (the kit
+loads textures directly and defines 9-slice borders in code —
+`ArenaUiSprites.AuthoredBorders`). **Transparent background is mandatory**
+where noted — no presentation backdrops, no baked drop shadows or outer glows
+(the kit casts its own shadows; baked ones double up).
 
-**Global art direction for prompts:** dark fantasy; charcoal `#0E0F11`
-surfaces; ember-gold `#EBB840` accents; red reserved for danger. PNG with
-transparent background where noted. No baked drop shadows (the kit adds its
-own). Keep edge rails straight/axis-aligned — edge regions stretch.
+**Prompt guidance (applies to everything):** charcoal `#0E0F11` surfaces,
+forged steel/gunmetal, brass/ember-gold `#EBB840` trim; subtle hammer marks,
+scratches, worn corners; maintained, not pristine; ornament only in corners /
+end caps / medallions; stretch/tile regions stay calm and axis-aligned.
+Gameplay colors (red/green/blue/purple/orange) are reserved for runtime
+mechanics — keep them out of the authored chrome. Avoid strong directional
+lighting on pieces that get mirrored (corners) or rotated (rails, lattice
+strips).
 
-| File | Canvas | Slicing (code-defined) | What to ask for |
-|---|---|---|---|
-| `window_fill.png` | 512×512, opaque | 48px border | Dark panel backdrop texture (aged parchment-over-steel / dark leather). Subtle vignette allowed in the outer 48px only; the center stretches, so keep it flat and even. Used by every window + tooltip. |
-| `window_frame.png` | 512×512, transparent center | 64px border | Ornate frame ring (forged metal / gilded trim). All ornament inside the outer 64px. Corners can be elaborate (they never stretch); edge rails must be straight repeating trim. |
-| `header_plate.png` | 512×96, opaque or alpha edges | 24px border | Title band plate for window headers/footers — darker inset metal or embossed leather. End-cap detail within 24px of each edge; center stretches. |
-| `button.png` | 256×80, opaque | 16px border | **Neutral desaturated** button plate (gray steel bevel) — the theme tints it per style (gold primary, red danger), so author it near-grayscale, mid-brightness. Bevel within the outer 16px. |
-| `button_glow.png` | 256×80, transparent center | 16px border | Soft luminous border ring matching the button silhouette, white/near-white (tinted at runtime). Fades in on hover. |
-| `divider.png` | 512×24, transparent | none (stretched whole) | Horizontal flourish under section headings — center ornament with rails fading to transparent at the ends. |
+## Frame hierarchy → kit mapping
 
-## Slot grids (connected slots — shared thin borders)
+| Family | Used by | Construction |
+|---|---|---|
+| **Hero Frame** | Major windows (Inventory, Character, Spellbook, Lobby, Match Over, System Menu) | **Composed**: authored bottom-left corner mirrored at runtime to all four corners + repeating rails between them + calm fill behind |
+| **Standard Frame** | Panels inside windows (attributes column, list sections, showcase) | Single 9-sliced thin frame |
+| **Tooltip Frame** | Item/spell tooltips, floating info | Single 9-sliced hair-thin frame |
 
-Design rule (owner, 2026-07-10): adjacent slots share ONE thin border; only the
-grid's outer perimeter gets the thick rim. That means **no per-slot frame
-sprite**. Borders are drawn once by the grid renderer, which composes three
-pieces per container (any shape — a cell with neighbors on all four sides gets
-four thin edges; an isolated slot, e.g. an equipment-doll piece, gets rim on
-all four sides):
+## Shopping list
 
-| File | Canvas | Slicing | What to ask for |
-|---|---|---|---|
-| `slot_well.png` | 256×256, opaque | none (stretched whole) | The recessed cell interior ONLY — dark textured well with a soft inner shadow. **Absolutely no border/frame**; edges must run clean to the canvas edge (rim/lattice overlay the seams). |
-| `grid_rim.png` | 512×512, transparent center | 32px border | The thick outer plate frame around a whole grid block (the mock's outer edge). Also frames isolated single slots, so it must read well when shrunk to one 68px cell. Straight edge rails; corners never stretch. |
-| `grid_line.png` | 128×16, opaque or alpha ends | none (stretched along length) | The thin internal lattice strip — one shared border between two adjacent slots. Drawn horizontally and rotated 90° for verticals, so it must be symmetric along its length. |
-| `slot_rarity_glow.png` *(optional)* | 256×256, transparent | none | Soft radial glow, white/near-white — tinted per item rarity and drawn inside the well behind the icon. Replaces border-tinting for rarity, since shared borders can't belong to one item. |
+### Hero Frame set (composed by the kit)
 
-**Consistency trick:** don't generate the three pieces separately — ChatGPT
-won't keep them consistent. Generate ONE full plate mock (like the reference
-grid already produced: outer rim + thin lattice + wells, ideally 3×3 cells or
-larger at 256px per cell) and the pieces get cropped out of it with a script.
-Hand the plate PNG over and the crop + import can be automated.
+| File | Canvas | Handling | Status | What to ask for |
+|---|---|---|---|---|
+| `hero_corner.png` | 1024×1024, transparent outside the piece | Drawn at 88px, **never stretched**; kit mirrors it to the other three corners | **Delivered + wired** (bottom-left master; alpha extracted by script from the checkerboard render — fake-checkerboard exports are fine, the crop is automated) | Forged steel triangular corner plate, riveted, knotwork engraving, brass/gold outer edge along the two window-facing sides. Bottom-left orientation. |
+| `hero_rail_h.png` | any wide strip (delivered 1536×1024 render) | Stretched along X; top-native (brass lip up), kit mirrors for the bottom edge | **Delivered + wired** (alpha-extracted, central slice taken so generation ends don't tile in) | The horizontal rail the corners connect to: straight forged-steel bar with brass outer lip; calm mid-section. |
+| `hero_rail_v.png` | derived | Stretched along Y; left-native, kit mirrors for the right edge | **Wired** — generated by rotating the extracted horizontal rail 90°, guaranteeing an identical cross-section (no separate generation needed) | — |
+| `window_fill.png` | 512×512, opaque | 9-sliced, 48px border | Pending | Dark worn leather over subtle steel; gentle wear near edges, **calm, low-noise center** (it stretches). Sits behind every window's content. |
+| `header_plate.png` | 512×96 | 9-sliced, 24px border | Pending | The signature title band: embossed leather + forged steel + brass trim, symmetrical; end-cap detail within 24px of each end, calm middle. |
 
-**Status:** the connected-grid renderer in the kit is designed but not yet
-built (waiting on the art + a go). Until then, cells render standalone frames
-borrowed from `UI/ActionBar/slot.png`. The same connected treatment applies to
-the action bar rows later, during the HUD pass. Rarity feedback moves from
-border tint to the well glow when the switch happens.
+**Matching rule:** corner and rails must share one cross-section — generate the
+rail in the same session as (or from a crop of) an image that includes the
+corner, so the profile lines up where they meet.
+
+### Standard Frame set
+
+| File | Canvas | Handling | Status | What to ask for |
+|---|---|---|---|---|
+| `standard_frame.png` | 256×256, transparent center | 9-sliced, 24px border | Pending | Thin forged-steel frame, lighter construction than the Hero corner, minimal ornament (small corner caps at most). Same material family. |
+
+### Tooltip Frame
+
+| File | Canvas | Handling | Status | What to ask for |
+|---|---|---|---|---|
+| `tooltip_frame.png` | 256×256, transparent center | 9-sliced, 16px border | Pending | Hair-thin, restrained, almost invisible steel edging — frames information without drawing attention. |
+
+### Buttons & shared elements
+
+| File | Canvas | Handling | Status | What to ask for |
+|---|---|---|---|---|
+| `button.png` | 256×80, opaque | 9-sliced, 16px border | Pending | **Near-grayscale** forged-steel plate with tactile bevel, restrained wear. The theme tints it per state (gold primary, red danger) — do not bake color. |
+| `button_glow.png` | 256×80, transparent center | 9-sliced, 16px border | Pending | Soft luminous edge ring matching the button silhouette, white/near-white (tinted at runtime, fades in on hover). |
+| `divider.png` | 512×24, transparent | Stretched whole | Pending | Horizontal flourish under section headings — small central motif (rivet/medallion), rails fading out toward the ends. |
+
+### Inventory grid set (connected slots — shared thin borders)
+
+Adjacent slots share ONE thin border; only the perimeter gets the heavy rim
+(design ruling 2026-07-10; the old standalone `slot.png` will be discarded).
+Rarity is an interior glow, never a colored border.
+
+| File | Canvas | Handling | Status | What to ask for |
+|---|---|---|---|---|
+| `slot_well.png` | 256×256, opaque | Stretched whole, one per cell | Pending | Recessed cell interior ONLY — dark textured well, soft inner shadow, **no border**; edges run clean to the canvas edge. |
+| `grid_rim.png` | 512×512, transparent center | 9-sliced, 32px border | Pending | Heavy outer plate rim around a grid block. Must also read well shrunk to a single 68px cell (isolated equipment-doll slots). |
+| `grid_line.png` | 128×16 | Stretched along length; rotated for verticals | Pending | The thin internal lattice strip — one shared border between two adjacent slots; symmetric along its length. |
+| `slot_rarity_glow.png` | 256×256, transparent | Stretched whole, behind icon | Optional (procedural fallback possible) | Soft radial glow, white/near-white, tinted per rarity at runtime. |
+
+**Consistency trick:** generate ONE full plate mock (rim + lattice + wells,
+3×3+ cells at ~256px per cell) and the component sprites get cropped out of it
+by script — separate generations won't stay consistent.
+
+### Discipline variants (later — do not generate yet)
+
+Small craftsmanship accents per discipline (greatsword / daggers / staff /
+sword-and-shield / bow): action-bar end caps, brackets, engraved medallions,
+corner motifs. Naming will follow `medallion_<discipline>.png` /
+`endcap_<discipline>.png`. Layout never changes; these are garnish, defined
+when the base library is in.
 
 ## Tinting rules (matters for prompting)
 
-- `window_fill`, `window_frame`, `header_plate`, `divider`: drawn **as authored**
-  (no tint) — paint them in final colors.
-- `button`: **always tinted** by the theme per state — author neutral/desaturated.
-- `button_glow`: tinted (white for filled styles, gold for neutral styles).
-- `slot_frame`: tinted by item rarity (white = as authored for common/empty).
+- Hero/Standard/Tooltip frames, `window_fill`, `header_plate`, `divider`,
+  grid rim/line/well: drawn **as authored** — paint final materials.
+- `button`: **always runtime-tinted** per state — author neutral/desaturated.
+- `button_glow`, `slot_rarity_glow`: authored white/near-white, runtime-tinted.
+- Gameplay colors come exclusively from runtime state, never baked into chrome.
 
-## How the existing good-looking pieces work (for reference)
+## Kit status
+
+- Wired today: single-sprite overrides (`window_fill`, `window_frame`*,
+  `header_plate`, `button`, `button_glow`, `divider`) + slot frames borrowed
+  from `UI/ActionBar/slot.png` (interim).
+- *`window_frame.png` (single 9-slice ring) is **superseded** by the composed
+  Hero Frame, which is now **built and live**: `hero_corner.png` mirrored to
+  all four corners + rails (procedural brass-lip/steel-bar fallback until
+  `hero_rail_h.png` / `hero_rail_v.png` land). Standard/Tooltip frame slots
+  are the next kit work.
+- Connected-grid renderer: designed, built when the plate art lands.
+
+## Reference: existing authored pieces
 
 - Action bar: `ActionBarSlot.prefab` draws `Resources/UI/ActionBar/slot.png`
-  whole (no slicing) over each 68px cell; painted ability/item icons render in
-  `Resources/UI/AbilityIcons/...` / `ItemIcons/...` via the icon resolvers.
-- Unit frame: single pre-composed painting (`UI/UnitFrame/UnitFrame.png`,
-  720×224 shown at 360×112) with bar fills placed at hand-measured pixel rects
-  in `HUDController`. Fixed-size compositions like this don't need slicing —
-  that technique stays right for the upcoming unit-frame work.
-
-## Later candidates (not wired yet)
-
-Scrollbar handle, toggle/checkbox faces, dropdown chevron (when the settings
-menu grows), cast-bar frame (HUD pass), decorative corner ornaments for the
-character window showcase.
+  whole over each 68px cell; painted icons via `Resources/UI/AbilityIcons` /
+  `ItemIcons` resolvers. (Slot art to be replaced by the grid set above.)
+- Unit frame: pre-composed painting `UI/UnitFrame/UnitFrame.png` (720×224 at
+  360×112) with bar fills at hand-measured rects in `HUDController` —
+  fixed-size composition, stays right for the separate unit-frame work.

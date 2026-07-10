@@ -22,6 +22,7 @@ namespace Arena.UI
         private TextMeshProUGUI _subtitle = null!;
         private RectTransform _content = null!;
         private RectTransform? _footer;
+        private RectTransform? _heroFrame;
         private Coroutine? _transition;
         private bool _visible;
 
@@ -69,9 +70,14 @@ namespace Arena.UI
             ArenaUiKit.ApplySurface(backdropImage, fill, ArenaUiTheme.PanelStrong);
             if (!fill.Authored)
                 ArenaUiKit.AddSheen(backdrop, 0.035f);
-            Image frame = ArenaUiKit.AddBorder(backdrop, ArenaUiTheme.HairlineStrong, ArenaUiSprites.PanelRadius);
-            ArenaUiSprites.SurfaceSprite frameSurface = ArenaUiSprites.WindowFrame;
-            ArenaUiKit.ApplySurface(frame, frameSurface, ArenaUiTheme.HairlineStrong);
+            ArenaUiSprites.SurfaceSprite heroCorner = ArenaUiSprites.HeroCorner;
+            if (!heroCorner.Authored)
+            {
+                // No composed hero frame available: fall back to the flat ring
+                // (or a single 9-sliced window_frame override if present).
+                Image frame = ArenaUiKit.AddBorder(backdrop, ArenaUiTheme.HairlineStrong, ArenaUiSprites.PanelRadius);
+                ArenaUiKit.ApplySurface(frame, ArenaUiSprites.WindowFrame, ArenaUiTheme.HairlineStrong);
+            }
 
             RectTransform header = ArenaUiKit.MakeRect(_rect, "Header");
             Image headerImage = header.gameObject.AddComponent<Image>();
@@ -140,7 +146,142 @@ namespace Arena.UI
                     -ArenaUiTheme.ContentPadding,
                     -(ArenaUiTheme.AccentBarThickness + ArenaUiTheme.HeaderHeight + ArenaUiTheme.ContentPadding)));
 
+            if (heroCorner.Authored)
+                BuildHeroFrame(heroCorner);
+
             _visible = gameObject.activeSelf;
+        }
+
+        private const float HeroCornerSize = 88f;
+        private const float HeroRailThickness = 9f;
+        private const float HeroRailThicknessAuthored = 18f;
+        private const float HeroRailInset = HeroCornerSize - 8f;
+        private static readonly Color HeroSteel = new(0.30f, 0.30f, 0.33f, 1f);
+
+        /// <summary>
+        /// Composed Hero Frame: the authored bottom-left corner mirrored to all
+        /// four corners, with rails between them (authored when available,
+        /// procedural steel + brass otherwise). Decorative only — no raycasts.
+        /// </summary>
+        private void BuildHeroFrame(ArenaUiSprites.SurfaceSprite corner)
+        {
+            _heroFrame = ArenaUiKit.MakeRect(_rect, "HeroFrame");
+            ArenaUiKit.Fill(_heroFrame);
+
+            BuildHeroRail(horizontal: true, nearEdge: true);
+            BuildHeroRail(horizontal: true, nearEdge: false);
+            BuildHeroRail(horizontal: false, nearEdge: true);
+            BuildHeroRail(horizontal: false, nearEdge: false);
+
+            MakeHeroCorner(corner, new Vector2(0f, 0f), new Vector3(1f, 1f, 1f));
+            MakeHeroCorner(corner, new Vector2(0f, 1f), new Vector3(1f, -1f, 1f));
+            MakeHeroCorner(corner, new Vector2(1f, 1f), new Vector3(-1f, -1f, 1f));
+            MakeHeroCorner(corner, new Vector2(1f, 0f), new Vector3(-1f, 1f, 1f));
+        }
+
+        private void MakeHeroCorner(ArenaUiSprites.SurfaceSprite corner, Vector2 anchor, Vector3 scale)
+        {
+            RectTransform rect = ArenaUiKit.MakeRect(_heroFrame!, "Corner");
+            rect.anchorMin = anchor;
+            rect.anchorMax = anchor;
+            rect.pivot = new Vector2(0.5f, 0.5f);
+            rect.sizeDelta = new Vector2(HeroCornerSize, HeroCornerSize);
+            rect.anchoredPosition = new Vector2(
+                (anchor.x < 0.5f ? 1f : -1f) * HeroCornerSize * 0.5f,
+                (anchor.y < 0.5f ? 1f : -1f) * HeroCornerSize * 0.5f);
+            rect.localScale = scale;
+
+            Image image = rect.gameObject.AddComponent<Image>();
+            image.sprite = corner.Sprite;
+            image.type = Image.Type.Simple;
+            image.preserveAspect = true;
+            image.color = Color.white;
+            image.raycastTarget = false;
+        }
+
+        /// <summary>
+        /// One frame edge between two corners. horizontal+nearEdge = top.
+        /// Authored rails are top-native (h, brass lip up) / left-native (v,
+        /// brass lip left); the far edges mirror them.
+        /// </summary>
+        private void BuildHeroRail(bool horizontal, bool nearEdge)
+        {
+            ArenaUiSprites.SurfaceSprite authored = horizontal ? ArenaUiSprites.HeroRailH : ArenaUiSprites.HeroRailV;
+            float thickness = authored.Authored ? HeroRailThicknessAuthored : HeroRailThickness;
+
+            RectTransform rail = ArenaUiKit.MakeRect(_heroFrame!, horizontal ? (nearEdge ? "RailTop" : "RailBottom") : (nearEdge ? "RailLeft" : "RailRight"));
+            if (horizontal)
+            {
+                float y = nearEdge ? 1f : 0f;
+                ArenaUiKit.SetAnchors(
+                    rail,
+                    new Vector2(0f, y),
+                    new Vector2(1f, y),
+                    new Vector2(HeroRailInset, nearEdge ? -thickness : 0f),
+                    new Vector2(-HeroRailInset, nearEdge ? 0f : thickness));
+            }
+            else
+            {
+                float x = nearEdge ? 0f : 1f;
+                ArenaUiKit.SetAnchors(
+                    rail,
+                    new Vector2(x, 0f),
+                    new Vector2(x, 1f),
+                    new Vector2(nearEdge ? 0f : -thickness, HeroRailInset),
+                    new Vector2(nearEdge ? thickness : 0f, -HeroRailInset));
+            }
+
+            if (authored.Authored)
+            {
+                Image image = rail.gameObject.AddComponent<Image>();
+                image.sprite = authored.Sprite;
+                image.type = Image.Type.Simple;
+                image.color = Color.white;
+                image.raycastTarget = false;
+                if (!nearEdge)
+                    rail.localScale = horizontal ? new Vector3(1f, -1f, 1f) : new Vector3(-1f, 1f, 1f);
+                return;
+            }
+
+            // Procedural fallback echoing the corner: brass lip on the outer
+            // edge, dark steel bar inside.
+            RectTransform brass = ArenaUiKit.MakeRect(rail, "Brass");
+            Image brassImage = brass.gameObject.AddComponent<Image>();
+            brassImage.color = ArenaUiTheme.Accent;
+            brassImage.raycastTarget = false;
+
+            RectTransform steel = ArenaUiKit.MakeRect(rail, "Steel");
+            Image steelImage = steel.gameObject.AddComponent<Image>();
+            steelImage.color = HeroSteel;
+            steelImage.raycastTarget = false;
+
+            const float lip = 3f;
+            if (horizontal)
+            {
+                if (nearEdge)
+                {
+                    ArenaUiKit.SetAnchors(brass, new Vector2(0f, 1f), Vector2.one, new Vector2(0f, -lip), Vector2.zero);
+                    ArenaUiKit.SetAnchors(steel, Vector2.zero, Vector2.one, Vector2.zero, new Vector2(0f, -lip));
+                }
+                else
+                {
+                    ArenaUiKit.SetAnchors(brass, Vector2.zero, new Vector2(1f, 0f), Vector2.zero, new Vector2(0f, lip));
+                    ArenaUiKit.SetAnchors(steel, Vector2.zero, Vector2.one, new Vector2(0f, lip), Vector2.zero);
+                }
+            }
+            else
+            {
+                if (nearEdge)
+                {
+                    ArenaUiKit.SetAnchors(brass, Vector2.zero, new Vector2(0f, 1f), Vector2.zero, new Vector2(lip, 0f));
+                    ArenaUiKit.SetAnchors(steel, Vector2.zero, Vector2.one, new Vector2(lip, 0f), Vector2.zero);
+                }
+                else
+                {
+                    ArenaUiKit.SetAnchors(brass, new Vector2(1f, 0f), Vector2.one, new Vector2(-lip, 0f), Vector2.zero);
+                    ArenaUiKit.SetAnchors(steel, Vector2.zero, Vector2.one, Vector2.zero, new Vector2(-lip, 0f));
+                }
+            }
         }
 
         private void BuildCloseButton(RectTransform header)
@@ -193,6 +334,8 @@ namespace Arena.UI
             _content.offsetMin = new Vector2(
                 ArenaUiTheme.ContentPadding,
                 ArenaUiTheme.FooterHeight + ArenaUiTheme.ContentPadding);
+            // Keep the composed frame above the footer plate.
+            _heroFrame?.SetAsLastSibling();
             return _footer;
         }
 

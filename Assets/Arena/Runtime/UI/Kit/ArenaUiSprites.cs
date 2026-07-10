@@ -126,7 +126,23 @@ namespace Arena.UI
             ["button_glow"] = 16f,
             ["slot_frame"] = 0f,
             ["divider"] = 0f,
+            ["hero_corner"] = 0f,
+            ["hero_rail_h"] = 0f,
+            ["hero_rail_v"] = 0f,
         };
+
+        /// <summary>
+        /// Hero Frame corner master (bottom-left orientation; the window mirrors
+        /// it to the other three corners). No procedural fallback — the composed
+        /// hero frame only activates when this exists.
+        /// </summary>
+        public static SurfaceSprite HeroCorner => Resolve("hero_corner", null);
+
+        /// <summary>Hero Frame horizontal rail (top/bottom edges).</summary>
+        public static SurfaceSprite HeroRailH => Resolve("hero_rail_h", null);
+
+        /// <summary>Hero Frame vertical rail (left/right edges).</summary>
+        public static SurfaceSprite HeroRailV => Resolve("hero_rail_v", null);
 
         /// <summary>Window backdrop fill (dark texture). Fallback: rounded panel.</summary>
         public static SurfaceSprite WindowFill => Resolve("window_fill", Panel);
