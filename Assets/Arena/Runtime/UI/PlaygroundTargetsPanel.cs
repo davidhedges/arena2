@@ -1,6 +1,10 @@
 #nullable enable
 using System;
+using System.Collections.Generic;
+using System.Reflection;
+using Arena.Entity;
 using Arena.Network;
+using Arena.Presentation;
 using SpacetimeDB.Types;
 using UnityEngine;
 using UnityEngine.UI;
@@ -27,12 +31,22 @@ namespace Arena.UI
         private const string KoboldThiefBlack = "KOBOLD_THIEF_BK_DUAL_SWORD";
 
         private GameObject _menuRoot = null!;
+        private GameObject _meshEffectMenuRoot = null!;
         private Text _statusText = null!;
         private DbConnection? _subscribedConnection;
+        private GameObject? _selectedMeshEffectPrefab;
+        private GameObject? _meshEffectInstance;
+        private Transform? _boundWeaponVisual;
+        private Renderer? _meshEffectTargetRenderer;
+        private Material[] _originalWeaponMaterials = Array.Empty<Material>();
+        private WeaponAttachmentController? _boundWeaponAttachments;
+        private int _boundWeaponVisualVersion = -1;
         private float _statusUntilTime;
 
         public int EscapeClosePriority => 40;
-        public bool IsEscapeCloseable => _menuRoot != null && _menuRoot.activeSelf;
+        public bool IsEscapeCloseable =>
+            (_meshEffectMenuRoot != null && _meshEffectMenuRoot.activeSelf)
+            || (_menuRoot != null && _menuRoot.activeSelf);
 
         private void Awake()
         {
@@ -49,7 +63,7 @@ namespace Arena.UI
 
             _menuRoot = Panel("PlaygroundTargetsMenu", transform,
                 new Vector2(1f, 1f), new Vector2(1f, 1f),
-                new Vector2(206f, 268f), new Vector2(-Pad, -MenuTopOffset));
+                new Vector2(206f, 296f), new Vector2(-Pad, -MenuTopOffset));
             Img(_menuRoot, HeatUiStyle.Panel);
             HeatUiStyle.StylePanel(_menuRoot, raycastTarget: false);
             HeatUiStyle.AddAccentBar(
@@ -64,7 +78,7 @@ namespace Arena.UI
                 new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
                 new Vector2(190f, 22f), new Vector2(0f, -8f),
                 11, HeatUiStyle.Text, TextAnchor.MiddleCenter);
-            title.text = "PLAYGROUND TARGETS";
+            title.text = "PLAYGROUND";
             title.fontStyle = FontStyle.Bold;
 
             BuildTargetButton("HostileButton", "PLAYER HOSTILE", 0, false, () => SpawnTarget(KindHostile));
@@ -73,18 +87,99 @@ namespace Arena.UI
             BuildTargetButton("NpcHostileButton", "KOBOLD HOSTILE", 3, false, () => SpawnNpc(KoboldWarriorRed, FactionHostile, "KOBOLD HOSTILE"));
             BuildTargetButton("NpcNeutralButton", "KOBOLD NEUTRAL", 4, false, () => SpawnNpc(KoboldWarriorGreen, FactionNeutral, "KOBOLD NEUTRAL"));
             BuildTargetButton("NpcFriendlyButton", "KOBOLD FRIENDLY", 5, false, () => SpawnNpc(KoboldThiefBlack, FactionFriendly, "KOBOLD FRIENDLY"));
-            BuildTargetButton("ClearButton", "CLEAR", 6, true, ClearTargets);
+            BuildTargetButton("WeaponMeshEffectsButton", "WEAPON MESH FX", 6, false, ToggleMeshEffectMenu);
+            BuildTargetButton("ClearButton", "CLEAR TARGETS", 7, true, ClearTargets);
 
             _statusText = Label(_menuRoot.transform, "Status",
                 new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
-                new Vector2(190f, 18f), new Vector2(0f, -238f),
+                new Vector2(190f, 18f), new Vector2(0f, -266f),
                 9, new Color(0.75f, 0.80f, 0.90f), TextAnchor.MiddleCenter);
             _statusText.text = string.Empty;
             _statusText.resizeTextForBestFit = true;
             _statusText.resizeTextMinSize = 6;
             _statusText.resizeTextMaxSize = 9;
 
+            BuildMeshEffectMenu();
             _menuRoot.SetActive(false);
+        }
+
+        private void BuildMeshEffectMenu()
+        {
+            _meshEffectMenuRoot = Panel("PlaygroundWeaponMeshEffectsMenu", transform,
+                new Vector2(1f, 1f), new Vector2(1f, 1f),
+                new Vector2(226f, 360f), new Vector2(-226f, -MenuTopOffset));
+            Img(_meshEffectMenuRoot, HeatUiStyle.Panel);
+            HeatUiStyle.StylePanel(_meshEffectMenuRoot, raycastTarget: false);
+            HeatUiStyle.AddAccentBar(
+                _meshEffectMenuRoot.transform,
+                "Accent",
+                new Vector2(1f, 0f),
+                new Vector2(1f, 1f),
+                Vector2.zero,
+                new Vector2(3f, 0f));
+
+            Text title = Label(_meshEffectMenuRoot.transform, "Title",
+                new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
+                new Vector2(210f, 22f), new Vector2(0f, -8f),
+                11, HeatUiStyle.Text, TextAnchor.MiddleCenter);
+            title.text = "WEAPON MESH FX";
+            title.fontStyle = FontStyle.Bold;
+
+            PlaygroundWeaponMeshEffectCatalog? catalog =
+                Resources.Load<PlaygroundWeaponMeshEffectCatalog>(PlaygroundWeaponMeshEffectCatalog.DefaultResourcePath);
+
+            RectTransform menuRect = (RectTransform)_meshEffectMenuRoot.transform;
+            RectTransform content = ArenaUiKit.MakeScrollView(menuRect, "EffectScroll", out ScrollRect scrollRect);
+            RectTransform scrollRoot = (RectTransform)scrollRect.transform;
+            scrollRoot.anchorMin = new Vector2(0f, 0f);
+            scrollRoot.anchorMax = new Vector2(1f, 1f);
+            scrollRoot.offsetMin = new Vector2(10f, 10f);
+            scrollRoot.offsetMax = new Vector2(-10f, -36f);
+
+            int row = 0;
+            BuildMeshEffectButton(content, "ClearEffectButton", "NONE", row++, true, ClearSelectedWeaponMeshEffect);
+
+            if (catalog != null)
+            {
+                for (int i = 0; i < catalog.Entries.Count; i++)
+                {
+                    PlaygroundWeaponMeshEffectCatalog.Entry entry = catalog.Entries[i];
+                    if (entry == null || entry.prefab == null)
+                        continue;
+
+                    GameObject prefab = entry.prefab;
+                    string label = string.IsNullOrWhiteSpace(entry.label)
+                        ? prefab.name.Replace("MeshFX_", string.Empty).ToUpperInvariant()
+                        : entry.label.Trim().ToUpperInvariant();
+                    BuildMeshEffectButton(
+                        content,
+                        $"Effect_{prefab.name}",
+                        label,
+                        row++,
+                        false,
+                        () => SelectWeaponMeshEffect(prefab, label));
+                }
+            }
+
+            content.sizeDelta = new Vector2(0f, row * 28f);
+            _meshEffectMenuRoot.SetActive(false);
+        }
+
+        private static void BuildMeshEffectButton(
+            Transform parent,
+            string name,
+            string label,
+            int row,
+            bool destructive,
+            UnityEngine.Events.UnityAction action)
+        {
+            Button button = MakeHudButton(parent, name, label,
+                new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
+                new Vector2(190f, 24f), new Vector2(0f, -row * 28f),
+                destructive
+                    ? new Color(0.42f, 0.08f, 0.07f, 0.96f)
+                    : HeatUiStyle.RowAlt);
+            button.onClick.AddListener(action);
         }
 
         private void BuildTargetButton(string name, string label, int row, bool destructive, UnityEngine.Events.UnityAction action)
@@ -100,7 +195,15 @@ namespace Arena.UI
 
         private void ToggleMenu()
         {
-            _menuRoot.SetActive(!_menuRoot.activeSelf);
+            bool show = !_menuRoot.activeSelf;
+            _menuRoot.SetActive(show);
+            if (!show)
+                _meshEffectMenuRoot.SetActive(false);
+        }
+
+        private void ToggleMeshEffectMenu()
+        {
+            _meshEffectMenuRoot.SetActive(!_meshEffectMenuRoot.activeSelf);
         }
 
         private void OnEnable()
@@ -112,6 +215,7 @@ namespace Arena.UI
         private void Update()
         {
             TrySubscribeToReducerErrors();
+            RefreshSelectedWeaponMeshEffectBinding();
             if (_statusText != null && _statusUntilTime > 0f && Time.unscaledTime >= _statusUntilTime)
             {
                 _statusText.text = string.Empty;
@@ -129,6 +233,7 @@ namespace Arena.UI
         {
             RuntimeUiEscapeRouter.Unregister(this);
             UnsubscribeFromReducerErrors();
+            ClearWeaponMeshEffect(clearSelection: true);
         }
 
         public bool TryCloseForEscape()
@@ -136,8 +241,189 @@ namespace Arena.UI
             if (!IsEscapeCloseable)
                 return false;
 
+            if (_meshEffectMenuRoot.activeSelf)
+            {
+                _meshEffectMenuRoot.SetActive(false);
+                return true;
+            }
+
             _menuRoot.SetActive(false);
             return true;
+        }
+
+        private void SelectWeaponMeshEffect(GameObject prefab, string label)
+        {
+            _selectedMeshEffectPrefab = prefab;
+            if (TryAttachSelectedWeaponMeshEffect())
+                SetStatus($"{label} APPLIED", false);
+            else
+                SetStatus("NO EQUIPPED WEAPON", true);
+        }
+
+        private void ClearSelectedWeaponMeshEffect()
+        {
+            ClearWeaponMeshEffect(clearSelection: true);
+            SetStatus("WEAPON FX CLEARED", false);
+        }
+
+        private void RefreshSelectedWeaponMeshEffectBinding()
+        {
+            if (_selectedMeshEffectPrefab == null)
+                return;
+
+            WeaponAttachmentController? attachments = ResolveLocalWeaponAttachments();
+            if (attachments == null)
+                return;
+
+            bool versionChanged = !ReferenceEquals(attachments, _boundWeaponAttachments)
+                || attachments.VisualVersion != _boundWeaponVisualVersion;
+            if (!versionChanged && _meshEffectInstance != null)
+                return;
+
+            if (attachments.TryGetPrimaryVisibleVisual(out Transform visual)
+                && ReferenceEquals(visual, _boundWeaponVisual)
+                && _meshEffectInstance != null)
+            {
+                _boundWeaponAttachments = attachments;
+                _boundWeaponVisualVersion = attachments.VisualVersion;
+                return;
+            }
+
+            TryAttachSelectedWeaponMeshEffect();
+        }
+
+        private bool TryAttachSelectedWeaponMeshEffect()
+        {
+            GameObject? prefab = _selectedMeshEffectPrefab;
+            WeaponAttachmentController? attachments = ResolveLocalWeaponAttachments();
+            if (prefab == null
+                || attachments == null
+                || !attachments.TryGetPrimaryVisibleVisual(out Transform weaponVisual)
+                || !TryFindWeaponRenderer(weaponVisual, out Renderer targetRenderer))
+            {
+                ClearWeaponMeshEffect(clearSelection: false);
+                return false;
+            }
+
+            ClearWeaponMeshEffect(clearSelection: false);
+
+            _originalWeaponMaterials = targetRenderer.sharedMaterials;
+            GameObject instance = Instantiate(prefab, weaponVisual, worldPositionStays: false);
+            instance.name = $"Playground_{prefab.name}";
+            instance.SetActive(false);
+            instance.transform.localPosition = Vector3.zero;
+            instance.transform.localRotation = Quaternion.identity;
+            instance.transform.localScale = Vector3.one;
+
+            if (!TryAssignOverlayTarget(instance, targetRenderer))
+            {
+                DestroyUnityObject(instance);
+                _originalWeaponMaterials = Array.Empty<Material>();
+                return false;
+            }
+
+            _meshEffectInstance = instance;
+            _meshEffectTargetRenderer = targetRenderer;
+            _boundWeaponVisual = weaponVisual;
+            _boundWeaponAttachments = attachments;
+            _boundWeaponVisualVersion = attachments.VisualVersion;
+            instance.SetActive(true);
+            return true;
+        }
+
+        private static WeaponAttachmentController? ResolveLocalWeaponAttachments()
+        {
+            PlayerEntity? local = EntityRegistry.Instance?.LocalPlayerEntity;
+            return local?.GameObject.GetComponent<WeaponAttachmentController>();
+        }
+
+        private static bool TryFindWeaponRenderer(Transform weaponVisual, out Renderer renderer)
+        {
+            Renderer[] candidates = weaponVisual.GetComponentsInChildren<Renderer>(includeInactive: true);
+            for (int i = 0; i < candidates.Length; i++)
+            {
+                Renderer candidate = candidates[i];
+                if (candidate is MeshRenderer or SkinnedMeshRenderer)
+                {
+                    renderer = candidate;
+                    return true;
+                }
+            }
+
+            renderer = null!;
+            return false;
+        }
+
+        private static bool TryAssignOverlayTarget(GameObject effectRoot, Renderer targetRenderer)
+        {
+            MonoBehaviour[] behaviours = effectRoot.GetComponentsInChildren<MonoBehaviour>(includeInactive: true);
+            for (int i = 0; i < behaviours.Length; i++)
+            {
+                MonoBehaviour behaviour = behaviours[i];
+                if (behaviour == null)
+                    continue;
+
+                FieldInfo? field = behaviour.GetType().GetField(
+                    "targetRenderer",
+                    BindingFlags.Instance | BindingFlags.Public);
+                if (field == null || !typeof(Renderer).IsAssignableFrom(field.FieldType))
+                    continue;
+
+                field.SetValue(behaviour, targetRenderer);
+                return true;
+            }
+
+            return false;
+        }
+
+        private void ClearWeaponMeshEffect(bool clearSelection)
+        {
+            if (_meshEffectInstance != null)
+                _meshEffectInstance.SetActive(false);
+
+            RestoreOriginalWeaponMaterials();
+
+            if (_meshEffectInstance != null)
+                DestroyUnityObject(_meshEffectInstance);
+
+            _meshEffectInstance = null;
+            _meshEffectTargetRenderer = null;
+            _boundWeaponVisual = null;
+            _boundWeaponAttachments = null;
+            _boundWeaponVisualVersion = -1;
+            _originalWeaponMaterials = Array.Empty<Material>();
+            if (clearSelection)
+                _selectedMeshEffectPrefab = null;
+        }
+
+        private void RestoreOriginalWeaponMaterials()
+        {
+            Renderer? target = _meshEffectTargetRenderer;
+            if (target == null)
+                return;
+
+            Material[] current = target.sharedMaterials;
+            var originals = new HashSet<Material>(_originalWeaponMaterials);
+            target.sharedMaterials = _originalWeaponMaterials;
+
+            for (int i = 0; i < current.Length; i++)
+            {
+                Material material = current[i];
+                if (material != null
+                    && !originals.Contains(material)
+                    && material.name.EndsWith("(Runtime)", StringComparison.Ordinal))
+                {
+                    DestroyUnityObject(material);
+                }
+            }
+        }
+
+        private static void DestroyUnityObject(UnityEngine.Object value)
+        {
+            if (Application.isPlaying)
+                Destroy(value);
+            else
+                DestroyImmediate(value);
         }
 
         private void SpawnTarget(string kind)

@@ -268,6 +268,27 @@ namespace Arena.Presentation
             return false;
         }
 
+        /// <summary>
+        /// Returns the first currently visible equipped weapon visual. Visual bindings
+        /// are authored primary-hand first, so playground presentation tools can use
+        /// this without duplicating combat-profile or mount-resolution rules.
+        /// </summary>
+        public bool TryGetPrimaryVisibleVisual(out Transform visual)
+        {
+            for (int i = 0; i < _spawnedVisuals.Count; i++)
+            {
+                GameObject instance = _spawnedVisuals[i].Instance;
+                if (instance == null || !instance.activeInHierarchy)
+                    continue;
+
+                visual = instance.transform;
+                return true;
+            }
+
+            visual = null!;
+            return false;
+        }
+
         public bool BeginTemporaryAnimatedProp(
             string actionId,
             in SpellAnimatedPropHandoff handoff,
