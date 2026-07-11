@@ -1,7 +1,7 @@
 # NPC System Design
 
 Date: 2026-07-11
-Status: implementation in progress; actor-generic targeting/world queries, shared melee/spell/projectile/heal execution, caster/support/archer exemplars, searchable catalog spawning, deterministic inventory/sweep tooling, explicit Generic-rig crowd-control fallback, and the first post-exemplar family batch are landed through `f97697e8`, while full visual authoring remains
+Status: implementation in progress; actor-generic targeting/world queries, shared melee/spell/projectile/heal/status execution, caster/support/archer exemplars, searchable catalog spawning, deterministic inventory/sweep tooling, explicit Generic-rig crowd-control fallback, the first post-exemplar family batch, and debuff/interrupt utility actions are landed through `7c303884`, while full visual authoring remains
 
 ## Outcome
 
@@ -18,7 +18,7 @@ This is a substantial engineering project. The existing kobold implementation is
 
 ## Implementation progress (2026-07-11 handoff)
 
-The implementation has started and has been committed in coherent slices. The implementation baseline summarized here is `f97697e8` (`Author Abomination NPC family`). Player combat semantics are an explicit guardrail: actor-generic seams were extended where required, but player damage, healing arithmetic, authorization, animation fallback, input, prediction, rewind, and action-bar behavior must not be redesigned as part of the NPC rollout.
+The implementation has started and has been committed in coherent slices. The implementation baseline summarized here is `7c303884` (`Route NPC interrupts through shared spells`). Player combat semantics are an explicit guardrail: actor-generic seams were extended where required, but player damage, healing arithmetic, authorization, animation fallback, input, prediction, rewind, and action-bar behavior must not be redesigned as part of the NPC rollout.
 
 ### Landed foundations
 
@@ -38,7 +38,7 @@ The implementation has started and has been committed in coherent slices. The im
 - Utility selection applies authored health, cooldown, tactical-distance, target-status, and indexed nearby ally/enemy count gates with deterministic score/sort-order tie-breaking.
 - The selected ability is stored in private NPC runtime state so utility is not rescored every fixed tick.
 - Once a melee CAST telegraph is emitted, its pending action/target cannot be silently replaced. Replanning pauses until impact or an explicit interrupt.
-- A server-private decision inspector is available when `ARENA_NPC_AI_DEBUG=1`. It records decision sequence, chosen action/target, score and threat summaries, plus deterministic rejection counts for role, selector, health, nearby-count, status, missing-ability, cooldown, and distance gates.
+- A server-private decision inspector is available when `ARENA_NPC_AI_DEBUG=1`. It records decision sequence, chosen action/target, score and threat summaries, plus deterministic rejection counts for role, selector, self/target health, target cast state, nearby-count, status, missing-ability, cooldown, and distance gates.
 - Perception now exposes relation-filtered enemy and ally candidate views. `CURRENT_ENEMY`, `NEAREST_ENEMY`, `SELF`, and `LOWEST_HEALTH_ALLY` resolve independently of execution with deterministic health/distance/identity tie-breaking, and the winning selector is included in inspector output.
 - NPC melee commitments validate current actor-generic pose, audience/relation, range, facing, and the shared scene-query LOS path both when committing and at impact.
 - Scene-query world resolution now uses the actor-generic world context for NPC arena seeds, training-instance flat-ground policy, and open-world scene identity. Debug NPC spawns also resolve ground height at their actual forward X/Z point, preventing valid NPC support casts from querying unrelated or origin-overlapping world geometry.
@@ -56,10 +56,12 @@ The implementation has started and has been committed in coherent slices. The im
 - The read-only NPC appearance inventory scans all 146 relocated vendor prefabs across 35 families and exports deterministic review JSON without writing runtime mappings. It records candidate IDs, Animator/controller choices, native states, clip lengths, renderer bounds, ground offsets, root-motion flags, and review warnings. The current inventory exposes 33 appearances with multiple Animators, 16 with root motion enabled, and 34 whose death mapping remains unresolved until a primary Animator is reviewed.
 - Generic-rig profiles can explicitly select `FreezeCurrentPose` when no native hard-crowd-control clip exists. The NPC animation adapter freezes and restores the authored Animator speed without changing player animation fallback behavior.
 - Abomination is the first post-exemplar family batch: one gameplay template, three exact appearances, a shared authored melee ability/brain contract, explicit Generic visual profiles, native locomotion/attack/hit/death states, reviewed sockets, and frozen-pose hard-CC policy all use the existing shared pipelines.
+- Skeleton Wizard Frostbite proves hostile debuff utility through the existing targeted shared spell/status executor. It applies the authored `SLOW` payload, status stack/refresh rules, LOS/audience gates, cast lifecycle, cooldown, events, and VFX cues without an NPC-only status path.
+- Skeleton Wizard Ice Lock proves interrupt utility independently of execution. The planner selects it only while the chosen hostile target has an authoritative shared `ActiveCast`; the action then applies an authored short `STUN` through the existing targeted spell/status path, whose actor-generic crowd-control lifecycle owns cast cancellation.
 
 ### Still incomplete
 
-- Utility execution currently supports melee offense, hostile projectile spells, allied targeted buffs, and direct allied healing. Debuff, interrupt, summon, and mobility execution are not implemented.
+- Utility execution currently supports melee offense, hostile projectile spells, allied targeted buffs, direct allied healing, hostile debuffs, and hostile cast interrupts. Summon and mobility action execution are not implemented.
 - Basic ranged approach/hold/retreat bands are implemented. Richer kiting, unreachable-target recovery, navigation, and local avoidance remain.
 - Healing/buff support threat, taunts, assist/call-for-help, richer threat decay, and other threat-model expansion are explicitly deferred to a later date. Do not pull them into current appearance/family authoring slices.
 - The searchable browser and automated sequential sweep are implemented, but only 10 of the imported 146 appearances are currently synchronized. The remaining 136 appearance mappings, family profiles, action/brain/loot contracts, reaction policies, sockets, and bounds remain. Archer melee fallback is explicitly deferred: the imported family has only bow/load/shot presentation, no melee weapon, draw/stow animation, or verified melee attack clip.
@@ -73,6 +75,7 @@ The implementation has started and has been committed in coherent slices. The im
 - `dotnet build Assembly-CSharp-Editor.csproj --no-restore`: succeeded with 0 errors and 17 existing obsolete/dead-field warnings.
 - Focused Unity edit-mode profile validation: 5 passed, 0 failed. The tests load all three real vendor prefabs, validate explicit Animator/state/socket mappings and fallback policies, and resolve their catalog entries.
 - `ops/npc-support-decision-probe.py`: passed after the shared melee migration against isolated database `npcmixedprobe`. At full health the Lich applied Bone Ward to a 125/125 Kobold; after one real player auto-attack reduced it to 91/125, Lich Mend raised it to 109/125.
+- Static catalog and planner coverage now pins Frostbite's `SLOW` payload, Ice Lock's `STUN` payload, deterministic Wizard action order, and the inspector's `TARGET_CASTING` rejection. A refreshed live support/debuff/interrupt probe remains pending because the local SpacetimeDB endpoint was unavailable during this slice.
 - Shared Kobold telegraph parity: three live `NPC_KOBOLD_WARRIOR_SWORD_SLASH` CAST-to-IMPACT pairs resolved at 461.4–462.1 ms for the authored 450 ms windup, matching fixed-tick rounding.
 - Two-client mixed-exemplar acceptance: passed after the shared melee migration against isolated database `npcmixedprobe`. The observer materialized four NPCs owned by the separate websocket client; Kobold entered `Combat_1H_Attack`, Archer entered `attack`, Wizard entered `SpellCast`, and Lich entered `SpellA`. All four emitted CAST/IMPACT, Archer and Wizard emitted RELEASE plus projectile RELEASE/IMPACT, three shared projectile visuals started, four shared VFX instances spawned, and no projectile/VFX template was missing.
 - Catalog-driven appearance sweep: the original 7-visual run passed against isolated database `npcmixedprobe`. All 7 resolved their exact prefab, Animator/controller, locomotion, ready, distinct hit response, visible death state, authoritative row removal, and client entity cleanup. A 10-visual rerun including Abomination is the current verification target.
