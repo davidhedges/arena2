@@ -864,6 +864,7 @@ namespace SpacetimeDB.Types
                 Reducer.SetCombatDiscipline args => Reducers.InvokeSetCombatDiscipline(eventContext, args),
                 Reducer.SetCombatMode args => Reducers.InvokeSetCombatMode(eventContext, args),
                 Reducer.SetLagCompConfig args => Reducers.InvokeSetLagCompConfig(eventContext, args),
+                Reducer.SetNpcTargetOverride args => Reducers.InvokeSetNpcTargetOverride(eventContext, args),
                 Reducer.SetOpenWorldScene args => Reducers.InvokeSetOpenWorldScene(eventContext, args),
                 Reducer.SpawnNpc args => Reducers.InvokeSpawnNpc(eventContext, args),
                 Reducer.SpawnPlaygroundTarget args => Reducers.InvokeSpawnPlaygroundTarget(eventContext, args),

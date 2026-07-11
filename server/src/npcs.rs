@@ -49,6 +49,8 @@ use crate::npcs::npc_spawn_counter as _;
 #[allow(unused_imports)]
 use crate::npcs::npc_state as _;
 #[allow(unused_imports)]
+use crate::npcs::npc_target_override as _;
+#[allow(unused_imports)]
 use crate::player_physics::player_physics as _;
 #[allow(unused_imports)]
 use crate::player_state::player_state as _;
@@ -207,6 +209,15 @@ pub struct NpcCombatRuntime {
     #[primary_key]
     pub identity: Identity,
     pub target: Identity,
+}
+
+#[table(accessor = npc_target_override)]
+pub struct NpcTargetOverride {
+    #[primary_key]
+    pub identity: Identity,
+    pub target: Identity,
+    pub set_by: Identity,
+    pub updated_at: Timestamp,
 }
 
 /// One in-flight telegraphed swing per NPC (S3): the CAST event is emitted at
@@ -1016,6 +1027,46 @@ pub fn despawn_all_npcs(ctx: &ReducerContext) -> Result<(), String> {
     Ok(())
 }
 
+#[reducer]
+pub fn set_npc_target_override(
+    ctx: &ReducerContext,
+    identity: Identity,
+    target: Option<Identity>,
+) -> Result<(), String> {
+    let owner = ctx.sender();
+    let Some(npc) = ctx.db.npc_instance().identity().find(identity) else {
+        return Err("Cannot pin a missing NPC".to_string());
+    };
+    if npc.spawned_by != owner {
+        return Err("Cannot pin an NPC spawned by another identity".to_string());
+    }
+    let Some(target) = target else {
+        ctx.db.npc_target_override().identity().delete(identity);
+        return Ok(());
+    };
+    if ctx.db.player_state().player_id().find(target).is_none() {
+        return Err("NPC target override requires a player actor target".to_string());
+    }
+    let row = NpcTargetOverride {
+        identity,
+        target,
+        set_by: owner,
+        updated_at: ctx.timestamp,
+    };
+    if ctx
+        .db
+        .npc_target_override()
+        .identity()
+        .find(identity)
+        .is_some()
+    {
+        ctx.db.npc_target_override().identity().update(row);
+    } else {
+        ctx.db.npc_target_override().insert(row);
+    }
+    Ok(())
+}
+
 pub(crate) fn despawn_all_npcs_for_owner(ctx: &ReducerContext, owner: Identity) {
     let identities: Vec<_> = ctx
         .db
@@ -1314,6 +1365,16 @@ fn acquire_npc_attack_target(
         );
         return None;
     };
+    if let Some(pinned) = ctx.db.npc_target_override().identity().find(npc_identity) {
+        if let Some(candidate) = candidates
+            .iter()
+            .find(|candidate| candidate.identity == pinned.target)
+            .filter(|candidate| world_contexts_share(&npc_context, &candidate.context))
+            .filter(|candidate| can_harm(ctx, npc_identity, candidate.identity))
+        {
+            return Some(npc_attack_target_from_candidate(npc_physics, candidate));
+        }
+    }
     crate::tick_metrics::record_npc_target_pairs_scanned(candidates.len() as u64);
 
     let aggro_radius_sq = template.aggro_radius * template.aggro_radius;
@@ -1340,25 +1401,34 @@ fn acquire_npc_attack_target(
             continue;
         }
 
-        let distance = dist_sq.sqrt();
-        let (dir_x, dir_z) = if distance > 0.001 {
-            (dx / distance, dz / distance)
-        } else {
-            (0.0, 1.0)
-        };
-        best = Some(NpcAttackTarget {
-            identity: candidate.identity,
-            pos_x: candidate.pos_x,
-            pos_y: candidate.pos_y,
-            pos_z: candidate.pos_z,
-            hit_radius: candidate.hit_radius,
-            hit_height: candidate.hit_height,
-            distance,
-            dir_x,
-            dir_z,
-        });
+        best = Some(npc_attack_target_from_candidate(npc_physics, candidate));
     }
     best
+}
+
+fn npc_attack_target_from_candidate(
+    npc_physics: &NpcPhysics,
+    candidate: &NpcTargetCandidate,
+) -> NpcAttackTarget {
+    let dx = candidate.pos_x - npc_physics.pos_x;
+    let dz = candidate.pos_z - npc_physics.pos_z;
+    let distance = (dx * dx + dz * dz).sqrt();
+    let (dir_x, dir_z) = if distance > 0.001 {
+        (dx / distance, dz / distance)
+    } else {
+        (0.0, 1.0)
+    };
+    NpcAttackTarget {
+        identity: candidate.identity,
+        pos_x: candidate.pos_x,
+        pos_y: candidate.pos_y,
+        pos_z: candidate.pos_z,
+        hit_radius: candidate.hit_radius,
+        hit_height: candidate.hit_height,
+        distance,
+        dir_x,
+        dir_z,
+    }
 }
 
 fn npc_attack_reach(range: f32, target: &NpcAttackTarget) -> f32 {
@@ -1852,6 +1922,7 @@ fn emit_npc_combat_event(
 fn despawn_npc_identity(ctx: &ReducerContext, identity: Identity) {
     clear_npc_combat_runtime(ctx, identity);
     clear_actor_cooldowns(ctx, identity);
+    ctx.db.npc_target_override().identity().delete(identity);
     if ctx
         .db
         .npc_pending_swing()
