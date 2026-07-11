@@ -39,6 +39,8 @@ use crate::combat::combat_event as _;
 #[allow(unused_imports)]
 use crate::npcs::npc_combat_runtime as _;
 #[allow(unused_imports)]
+use crate::npcs::npc_decision_debug as _;
+#[allow(unused_imports)]
 use crate::npcs::npc_instance as _;
 #[allow(unused_imports)]
 use crate::npcs::npc_pending_swing as _;
@@ -232,6 +234,21 @@ pub struct NpcReturnHome {
     pub started_at: Timestamp,
 }
 
+#[table(accessor = npc_decision_debug)]
+pub struct NpcDecisionDebug {
+    #[primary_key]
+    pub identity: Identity,
+    pub decision_sequence: u64,
+    pub considered_action_count: u32,
+    pub chosen_ability_id: String,
+    pub chosen_target: Identity,
+    pub target_was_pinned: bool,
+    pub score_summary: String,
+    pub hard_reject_summary: String,
+    pub threat_summary: String,
+    pub updated_at: Timestamp,
+}
+
 /// One in-flight telegraphed swing per NPC (S3): the CAST event is emitted at
 /// swing start, this row schedules damage resolution `attack_windup_ms` later.
 /// At most one exists per NPC (cadence >> windup); a retarget mid-windup
@@ -387,6 +404,16 @@ fn npc_attacks_are_harmless() -> bool {
             );
         }
         enabled
+    })
+}
+
+fn npc_ai_debug_enabled() -> bool {
+    static ENABLED: OnceLock<bool> = OnceLock::new();
+    *ENABLED.get_or_init(|| {
+        matches!(
+            option_env!("ARENA_NPC_AI_DEBUG").map(str::trim),
+            Some("1") | Some("true") | Some("on") | Some("yes")
+        )
     })
 }
 
@@ -1301,6 +1328,15 @@ pub(crate) fn tick_npc_combat(
             clear_npc_combat_runtime(ctx, npc.identity);
             continue;
         };
+        record_npc_decision_debug(
+            ctx,
+            now,
+            &npc,
+            &template,
+            &action,
+            &target,
+            target_is_pinned,
+        );
 
         let runtime = ctx
             .db
@@ -1568,6 +1604,50 @@ fn npc_primary_melee_action(
             .ability_id()
             .find(entry.ability_id.clone())
     })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn record_npc_decision_debug(
+    ctx: &ReducerContext,
+    now: Timestamp,
+    npc: &NpcInstance,
+    template: &NpcTemplate,
+    action: &MeleeAbilityCatalog,
+    target: &NpcAttackTarget,
+    target_was_pinned: bool,
+) {
+    if !npc_ai_debug_enabled() {
+        return;
+    }
+    let base_utility = template
+        .action_kit
+        .iter()
+        .find(|entry| entry.ability_id == action.ability_id)
+        .map_or(0.0, |entry| entry.base_utility);
+    let previous = ctx.db.npc_decision_debug().identity().find(npc.identity);
+    let row = NpcDecisionDebug {
+        identity: npc.identity,
+        decision_sequence: previous
+            .as_ref()
+            .map_or(1, |row| row.decision_sequence.saturating_add(1)),
+        considered_action_count: template.action_kit.len() as u32,
+        chosen_ability_id: action.ability_id.clone(),
+        chosen_target: target.identity,
+        target_was_pinned,
+        score_summary: format!("base={base_utility:.3} distance={:.3}", target.distance),
+        hard_reject_summary: String::new(),
+        threat_summary: if target_was_pinned {
+            "PINNED_TARGET".to_string()
+        } else {
+            "PROXIMITY_NEAREST".to_string()
+        },
+        updated_at: now,
+    };
+    if previous.is_some() {
+        ctx.db.npc_decision_debug().identity().update(row);
+    } else {
+        ctx.db.npc_decision_debug().insert(row);
+    }
 }
 
 fn chase_npc_toward_target(
@@ -2072,6 +2152,7 @@ fn despawn_npc_identity(ctx: &ReducerContext, identity: Identity) {
     clear_actor_cooldowns(ctx, identity);
     ctx.db.npc_target_override().identity().delete(identity);
     ctx.db.npc_return_home().identity().delete(identity);
+    ctx.db.npc_decision_debug().identity().delete(identity);
     if ctx
         .db
         .npc_pending_swing()
