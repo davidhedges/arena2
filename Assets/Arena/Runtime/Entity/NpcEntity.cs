@@ -361,10 +361,14 @@ namespace Arena.Entity
             if (NpcVisualCatalog.TryLoadDefault(out NpcVisualCatalog catalog, out _)
                 && catalog.TryGetEntry(templateId, out NpcVisualCatalogEntry entry))
             {
-                _animationController.SetStatusReactions(entry.statusReactions);
+                _animationController.SetVisualProfile(entry.profile);
+                _animationController.SetStatusReactions(entry.profile != null
+                    ? entry.profile.StatusReactions
+                    : entry.statusReactions);
                 return;
             }
 
+            _animationController.SetVisualProfile(null);
             _animationController.SetStatusReactions(null);
         }
 

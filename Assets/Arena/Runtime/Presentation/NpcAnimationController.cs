@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using Arena.Entity;
 using UnityEngine;
 
 namespace Arena.Presentation
@@ -29,6 +30,7 @@ namespace Arena.Presentation
         };
 
         private Animator? _animator;
+        private NpcVisualProfile? _visualProfile;
         private string _templateId = string.Empty;
         private float _hideAt = -1f;
         private float _returnToIdleAt = -1f;
@@ -57,6 +59,16 @@ namespace Arena.Presentation
             _templateId = string.IsNullOrWhiteSpace(templateId)
                 ? string.Empty
                 : templateId.Trim().ToUpperInvariant();
+        }
+
+        public void SetVisualProfile(NpcVisualProfile? profile)
+        {
+            if (_visualProfile == profile)
+                return;
+
+            _visualProfile = profile;
+            _animator = null;
+            EnsureAnimator();
         }
 
         public void SetStatusReactions(IEnumerable<NpcStatusReactionEntry>? reactions)
@@ -129,8 +141,8 @@ namespace Arena.Presentation
             _locomotionActive = true;
             _locomotionTimeoutAt = Time.time + LocomotionTimeoutSeconds;
             _locomotionStateName = forceRun || horizontalSpeed >= RunSpeedThreshold
-                ? RunForwardStateName
-                : WalkForwardStateName;
+                ? FirstOrDefault(_visualProfile?.Animations.run, RunForwardStateName)
+                : FirstOrDefault(_visualProfile?.Animations.walk, WalkForwardStateName);
 
             if (_returnToIdleAt <= 0f)
                 PlayLocomotion();
@@ -158,7 +170,7 @@ namespace Arena.Presentation
                 return;
 
             _nextHitAllowedAt = Time.time + HitCooldownSeconds;
-            if (TryCrossFade(HitStateCandidates, out string? stateName) && stateName != null)
+            if (TryCrossFade(ProfileCandidates(_visualProfile?.Animations.hit, HitStateCandidates), out string? stateName) && stateName != null)
                 _returnToIdleAt = Time.time + ResolveClipLength(stateName, DefaultHitReturnDelay) + 0.05f;
         }
 
@@ -183,7 +195,7 @@ namespace Arena.Presentation
             if (!gameObject.activeSelf)
                 gameObject.SetActive(true);
 
-            TryCrossFade(new[] { "Death" }, out _);
+            TryCrossFade(ProfileCandidates(_visualProfile?.Animations.death, new[] { "Death" }), out _);
             _hideAt = -1f;
         }
 
@@ -244,10 +256,12 @@ namespace Arena.Presentation
             if (_activeStateName == _locomotionStateName)
                 return;
 
-            string fallback = _locomotionStateName == RunForwardStateName
-                ? WalkForwardStateName
-                : RunForwardStateName;
-            TryCrossFade(new[] { _locomotionStateName, fallback, IdleStateName }, out _);
+            string configuredRun = FirstOrDefault(_visualProfile?.Animations.run, RunForwardStateName);
+            string fallback = string.Equals(_locomotionStateName, configuredRun, StringComparison.Ordinal)
+                ? FirstOrDefault(_visualProfile?.Animations.walk, WalkForwardStateName)
+                : configuredRun;
+            string idle = FirstOrDefault(_visualProfile?.Animations.idle, IdleStateName);
+            TryCrossFade(new[] { _locomotionStateName, fallback, idle }, out _);
         }
 
         private bool TryPlayStatusReaction(string statusKind)
@@ -263,7 +277,8 @@ namespace Arena.Presentation
                 return false;
 
             RestoreStatusReactionController();
-            AnimationClip? slotClip = ResolveControllerClip(IdleStateName);
+            string idle = FirstOrDefault(_visualProfile?.Animations.idle, IdleStateName);
+            AnimationClip? slotClip = ResolveControllerClip(idle);
             RuntimeAnimatorController? baseController = _animator!.runtimeAnimatorController;
             if (slotClip == null || baseController == null)
                 return false;
@@ -273,7 +288,7 @@ namespace Arena.Presentation
             _statusReactionOverrideController[slotClip.name] = reaction.loop;
             _animator.runtimeAnimatorController = _statusReactionOverrideController;
             _activeStateName = string.Empty;
-            return TryCrossFade(new[] { IdleStateName }, out _);
+            return TryCrossFade(new[] { idle }, out _);
         }
 
         private void ClearHardCrowdControl()
@@ -311,6 +326,11 @@ namespace Arena.Presentation
 
         private string[] ReadyStateCandidatesForTemplate()
         {
+            if (_visualProfile != null)
+                return _visualProfile.Animations.ready.Count > 0
+                    ? _visualProfile.Animations.ready.ToArray()
+                    : ProfileCandidates(_visualProfile.Animations.idle, new[] { IdleStateName });
+
             return _templateId switch
             {
                 KoboldWarriorSwordShield => new[] { "Combat_Defend_Ready", "Combat_1H_Ready", "Combat_Unarmed_Ready", IdleStateName },
@@ -323,6 +343,9 @@ namespace Arena.Presentation
 
         private string[] AttackStateCandidatesForTemplate()
         {
+            if (_visualProfile != null && _visualProfile.Animations.basicAttack.Count > 0)
+                return _visualProfile.Animations.basicAttack.ToArray();
+
             return _templateId switch
             {
                 KoboldWarriorSwordShield => new[] { "Combat_1H_Attack", "Combat_Defend_Attack", "Combat_Unarmed_Attack" },
@@ -406,8 +429,22 @@ namespace Arena.Presentation
             if (_animator != null)
                 return true;
 
-            _animator = GetComponentInChildren<Animator>(includeInactive: true);
+            if (_visualProfile != null)
+            {
+                if (_visualProfile.TryResolvePrimaryAnimator(gameObject, out Animator profileAnimator))
+                    _animator = profileAnimator;
+            }
+            else
+                _animator = GetComponentInChildren<Animator>(includeInactive: true);
             return _animator != null;
         }
+
+        private static string FirstOrDefault(List<string>? values, string fallback)
+            => values != null && values.Count > 0 && !string.IsNullOrWhiteSpace(values[0])
+                ? values[0].Trim()
+                : fallback;
+
+        private static string[] ProfileCandidates(List<string>? values, string[] fallback)
+            => values != null && values.Count > 0 ? values.ToArray() : fallback;
     }
 }
