@@ -260,7 +260,9 @@ def spawn_kobold(probe, template):
     if not kobolds:
         probe.dump_recent()
         raise RuntimeError(f"NPC did not spawn (npc_instance rows: {rows})")
-    return kobolds[-1]
+    kobold = kobolds[-1]
+    probe.call("set_npc_target_override", [kobold, probe.identity])
+    return kobold
 
 
 def npc_position(probe, npc_hex):

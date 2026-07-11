@@ -270,7 +270,9 @@ def spawn_kobold(probe, template):
     if not fresh:
         probe.dump_recent()
         raise RuntimeError(f"NPC did not spawn (npc_instance rows: {rows})")
-    return fresh[-1]
+    kobold = fresh[-1]
+    probe.call("set_npc_target_override", [kobold, probe.identity])
+    return kobold
 
 
 def alive_kobolds(probe, template):

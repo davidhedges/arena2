@@ -167,7 +167,9 @@ def spawn_kobold(probe, template):
     if not kobolds:
         probe.dump_recent()
         raise RuntimeError(f"kobold did not spawn (npc_instance rows: {rows})")
-    return kobolds[-1]
+    kobold = kobolds[-1]
+    probe.call("set_npc_target_override", [kobold, probe.identity])
+    return kobold
 
 
 def main():
@@ -227,13 +229,9 @@ def main():
     est.anchor(tick, before, time.time())
     target_tick = int(est.current()) + args.lead
 
-    # Walk to the circuit BEFORE spawning the kobold. spawn_npc places the
-    # NPC in front of its owner, and NPC targeting is nearest-wins — a kobold
-    # spawned back at the scene spawn point latches onto the observing client
-    # standing there (2 m) instead of the probe (30 m) and settles for the
-    # whole session. Spawning at the circuit keeps the probe strictly nearest
-    # from the first aggro tick.
-    print("   walking to the circuit before spawning the kobold (nearest-wins aggro)")
+    # Walk to the circuit before spawning so the fixture starts beside the
+    # measured route. spawn_kobold pins its target explicitly to this probe.
+    print("   walking to the circuit before spawning the pinned kobold")
     walk_deadline = time.time() + math.hypot(ring[0][0] - px, ring[0][1] - pz) / MOVE_SPEED + 15.0
     while time.time() < walk_deadline:
         before = time.time()
