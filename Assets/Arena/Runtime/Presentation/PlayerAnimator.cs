@@ -2186,17 +2186,22 @@ namespace Arena.Presentation
         private bool IsCurrentlyGrounded()
         {
             bool grounded = _simState?.HasState == true ? _simState.IsGrounded : true;
-            if (_isLocalPlayer)
+            LocalPlayerMotor? motor = ResolveLocalPlayerMotor();
+            if (motor != null)
             {
-                var motor = _localPlayerMotor != null ? _localPlayerMotor : GetComponent<LocalPlayerMotor>();
-                if (motor != null)
-                {
-                    _localPlayerMotor = motor;
-                    grounded = motor.IsGrounded;
-                }
+                grounded = motor.IsGrounded;
             }
 
             return grounded;
+        }
+
+        private LocalPlayerMotor? ResolveLocalPlayerMotor()
+        {
+            if (!_isLocalPlayer)
+                return null;
+
+            _localPlayerMotor ??= GetComponent<LocalPlayerMotor>();
+            return _localPlayerMotor;
         }
 
         private void ApplyHitClipOverrides(bool grounded, bool force = false)
@@ -2703,11 +2708,9 @@ namespace Arena.Presentation
             Animator animator = _animator;
 
             bool grounded = _simState.IsGrounded;
-            if (_isLocalPlayer)
-            {
-                var motor = GetComponent<LocalPlayerMotor>();
-                if (motor != null) grounded = motor.IsGrounded;
-            }
+            LocalPlayerMotor? motor = ResolveLocalPlayerMotor();
+            if (motor != null)
+                grounded = motor.IsGrounded;
 
             bool presentationGrounded = ResolvePresentationGrounded(grounded);
             LocomotionSample locomotion = UpdateLocomotion();

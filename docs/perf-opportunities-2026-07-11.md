@@ -34,9 +34,11 @@ Damage, healing, and lifecycle labels now reuse a bounded pool instead of creati
 - Direction: index normalized template IDs and cache effective immutable templates, including compile-time measurement overrides.
 - Verification: compare `npc_combat` CPU and allocation behavior on the NPC-pack fixture before and after. Treat this as a small cleanup unless the capture shows material cost.
 
-### 4. Cache `LocalPlayerMotor` in `PlayerAnimator`
+### 4. Cache `LocalPlayerMotor` in `PlayerAnimator` — complete
 
-`PlayerAnimator.Update` still calls `GetComponent<LocalPlayerMotor>()` every frame. Cache it with the animator's other component references. This is safe incidental cleanup, not a standalone performance project.
+Completed 2026-07-11 in `Assets/Arena/Runtime/Presentation/PlayerAnimator.cs`.
+
+`PlayerAnimator` now resolves `LocalPlayerMotor` lazily through its existing cache. The lazy fallback is required because local-player setup adds the motor after `PlayerAnimator.Initialize()`; once resolved, both grounded-state paths reuse the cached component instead of calling `GetComponent<LocalPlayerMotor>()` every frame.
 
 ## Worth doing only if profiling confirms the bottleneck
 
