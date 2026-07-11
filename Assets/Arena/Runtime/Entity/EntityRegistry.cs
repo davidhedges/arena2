@@ -1306,7 +1306,8 @@ namespace Arena.Entity
                 && string.Equals(row.SourceKind, CombatEventSources.NpcMelee, System.StringComparison.Ordinal)
                 && TryGetLiveNpc(row.Caster, out var npcCaster))
             {
-                npcCaster.PlayAttack();
+                npcCaster.RequestCombatAnimation(
+                    CombatAnimationRequestTranslator.BuildActorNeutralAuthoritativeFromCombatEvent(row));
                 return;
             }
 

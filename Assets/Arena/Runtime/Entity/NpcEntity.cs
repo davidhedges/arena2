@@ -261,10 +261,10 @@ namespace Arena.Entity
             RefreshSelectedTargetIndicator();
         }
 
-        public void PlayAttack()
+        public void RequestCombatAnimation(in CombatAnimationRequest request)
         {
             if (!IsDestroyed && IsAlive)
-                _animationController.PlayAttack();
+                _animationController.RequestCombatAnimation(request);
         }
 
         public void Destroy()

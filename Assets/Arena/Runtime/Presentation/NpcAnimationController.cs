@@ -183,6 +183,17 @@ namespace Arena.Presentation
                 _returnToIdleAt = Time.time + ResolveClipLength(stateName, DefaultHitReturnDelay) + 0.05f;
         }
 
+        public void RequestCombatAnimation(in CombatAnimationRequest request)
+        {
+            switch (request.Category)
+            {
+                case CombatAnimationCategory.AutoAttack:
+                case CombatAnimationCategory.MeleeSkill:
+                    PlayAttack();
+                    break;
+            }
+        }
+
         public void PlayDeath()
         {
             if (_dead)

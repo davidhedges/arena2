@@ -9,6 +9,23 @@ namespace Arena.Presentation
 {
     internal static class CombatAnimationRequestTranslator
     {
+        public static CombatAnimationRequest BuildActorNeutralAuthoritativeFromCombatEvent(
+            CombatEvent row)
+        {
+            bool isSpell = string.Equals(
+                row.SourceKind,
+                CombatEventSources.Spell,
+                System.StringComparison.Ordinal);
+            return CombatAnimationRequest.Authoritative(
+                row.ActionKind,
+                isSpell
+                    ? CombatAnimationCategory.Spell
+                    : CombatAnimationRequest.ResolveMeleeCategory(row.SourceKind),
+                row.CreatedAt.MicrosecondsSinceUnixEpoch / 1000L,
+                row.SourceKind,
+                new Vector3(row.PointX, row.PointY, row.PointZ));
+        }
+
         public static bool IsAnimationStartEvent(CombatEvent row)
         {
             return string.Equals(row.EventType, CombatEventTypes.Cast, System.StringComparison.Ordinal)
@@ -41,11 +58,7 @@ namespace Arena.Presentation
                     ShouldDriveMeleePhasesFromSpecialMovement(conn, combatProfile, row));
             }
 
-            return CombatAnimationRequest.Authoritative(
-                row.ActionKind,
-                CombatAnimationCategory.Spell,
-                row.CreatedAt.MicrosecondsSinceUnixEpoch / 1000L,
-                row.SourceKind);
+            return BuildActorNeutralAuthoritativeFromCombatEvent(row);
         }
 
         private static bool ShouldDriveMeleePhasesFromSpecialMovement(
