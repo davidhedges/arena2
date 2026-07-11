@@ -3487,8 +3487,8 @@ mod tests {
     #[test]
     fn authored_npc_catalog_is_valid_and_complete_for_current_templates() {
         let parsed = parse_npc_catalog(NPC_CATALOG_JSON).unwrap();
-        assert_eq!(parsed.templates.len(), 6);
-        assert_eq!(npc_catalog().templates.len(), 6);
+        assert_eq!(parsed.templates.len(), 7);
+        assert_eq!(npc_catalog().templates.len(), 7);
         assert!(parsed
             .templates
             .iter()

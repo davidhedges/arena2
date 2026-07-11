@@ -2436,6 +2436,7 @@ mod tests {
                 "SACRED_FLAME",
                 "SKELETON_WIZARD_FROST_BOLT",
                 "LICH_BONE_WARD",
+                "SKELETON_ARCHER_SHOT",
             ]
         );
     }

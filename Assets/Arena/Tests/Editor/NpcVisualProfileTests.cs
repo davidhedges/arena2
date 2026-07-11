@@ -14,6 +14,7 @@ namespace Arena.Tests.Editor
     {
         [TestCase("Assets/Arena/Content/NPC/VisualProfiles/SkeletonWizard_Gn_VisualProfile.asset")]
         [TestCase("Assets/Arena/Content/NPC/VisualProfiles/Lich_Gn_VisualProfile.asset")]
+        [TestCase("Assets/Arena/Content/NPC/VisualProfiles/SkeletonArcher_Gn_VisualProfile.asset")]
         public void ExemplarProfile_ResolvesAuthoredAnimatorAndStates(string path)
         {
             Type profileType = RequireType("Arena.Entity.NpcVisualProfile");
@@ -43,6 +44,7 @@ namespace Arena.Tests.Editor
             MethodInfo tryGetEntry = catalogType.GetMethod("TryGetEntry")!;
             AssertProfile(tryGetEntry, catalog, "SKELETON_WIZARD_GN");
             AssertProfile(tryGetEntry, catalog, "LICH_GN");
+            AssertProfile(tryGetEntry, catalog, "SKELETON_ARCHER_GN");
         }
 
         private static void AssertProfile(MethodInfo tryGetEntry, UnityEngine.Object catalog, string visualId)

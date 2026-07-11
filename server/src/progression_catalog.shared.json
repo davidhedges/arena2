@@ -3504,6 +3504,45 @@
           }
         }
       }
+    },
+    {
+      "ability_id": "NPC_SKELETON_ARCHER_SHOT",
+      "actor_scope": "NPC",
+      "combat_profile_id": "",
+      "action_id": "SKELETON_ARCHER_SHOT",
+      "display_name": "Skeleton Archer Shot",
+      "resource_kind": "",
+      "resource_cost": 0,
+      "ability_tags": [],
+      "sort_order": 70,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 1500,
+        "uses_global_cooldown": false,
+        "cast_time_ms": 350,
+        "cast_mobility": "GROUNDED_STATIONARY",
+        "targeting": "TARGET",
+        "target_audience": "HOSTILE",
+        "requires_target": true,
+        "requires_target_los": true,
+        "resource_cost": 0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "PROJECTILE",
+          "speed": 24,
+          "max_distance": 22,
+          "damage": 10,
+          "damage_type": "PHYSICAL",
+          "spawn_forward": 0.4,
+          "spawn_height": 1.25,
+          "turn_rate": 0,
+          "update_interval_seconds": 0.05,
+          "radius": 0.18,
+          "block_behavior": "BLOCKABLE",
+          "parry_behavior": "PARRYABLE",
+          "homing_window_seconds": 0
+        }
+      }
     }
   ],
   "auto_attacks": [
@@ -5109,6 +5148,20 @@
       "lifecycle": "DURATION",
       "duration_ms": 1000,
       "sort_order": 250
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "NPC_SKELETON_ARCHER_SHOT",
+      "slot": "projectile_body",
+      "trigger": "SPELL_RELEASE",
+      "anchor": "LEFT_HAND",
+      "vfx_id": "ARROW_STANDARD",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "PROJECTILE_BODY",
+      "lifecycle": "UNTIL_TERMINAL_EVENT",
+      "projectile_sequence_index": 0,
+      "duration_ms": 0,
+      "sort_order": 260
     }
   ],
   "combat_profile_action_bar_defaults": [
