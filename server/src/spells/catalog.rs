@@ -58,6 +58,8 @@ enum SpellCatalogDelivery {
         max_distance: f32,
         damage: i32,
         #[serde(default)]
+        heal: i32,
+        #[serde(default)]
         damage_type: String,
         block_behavior: BlockBehavior,
         #[serde(default)]
@@ -840,6 +842,7 @@ impl SpellCatalogRow {
             SpellCatalogDelivery::DirectTarget {
                 max_distance,
                 damage,
+                heal,
                 damage_type,
                 block_behavior,
                 parry_behavior,
@@ -851,6 +854,7 @@ impl SpellCatalogRow {
                 definition.damage_type = DamageType::from_wire(damage_type.as_str());
                 definition.block_behavior = block_behavior;
                 definition.secondary.direct_target = Some(DirectTargetSecondaryTunables {
+                    heal_amount: heal,
                     parry_behavior: parry_behavior.unwrap_or(SpellParryBehavior::Unparryable),
                     impact_effects: impact_effects.into_iter().map(Into::into).collect(),
                 });
@@ -1633,6 +1637,18 @@ fn validate_secondary_tunables(def: &SpellDefinition) -> Result<(), String> {
                     def.kind.as_str()
                 ));
             };
+            if def.damage < 0 || direct_target.heal_amount < 0 {
+                return Err(format!(
+                    "{} DIRECT_TARGET damage/heal must be non-negative",
+                    def.kind.as_str()
+                ));
+            }
+            if def.damage > 0 && direct_target.heal_amount > 0 {
+                return Err(format!(
+                    "{} DIRECT_TARGET cannot both damage and heal",
+                    def.kind.as_str()
+                ));
+            }
             for effect in &direct_target.impact_effects {
                 validate_impact_effect(def, effect)?;
             }
@@ -2437,8 +2453,26 @@ mod tests {
                 "SKELETON_WIZARD_FROST_BOLT",
                 "LICH_BONE_WARD",
                 "SKELETON_ARCHER_SHOT",
+                "LICH_MEND",
             ]
         );
+    }
+
+    #[test]
+    fn npc_lich_mend_uses_shared_direct_target_healing() {
+        let definition = spell_definition_by_str("LICH_MEND").expect("LICH_MEND should exist");
+        assert_eq!(definition.behavior, SpellBehavior::DirectTarget);
+        assert_eq!(definition.damage, 0);
+        assert_eq!(
+            definition
+                .secondary
+                .direct_target
+                .as_ref()
+                .expect("direct target tunables")
+                .heal_amount,
+            18
+        );
+        assert_eq!(definition.target_audience, TargetAudience::PartyOrSelf);
     }
 
     #[test]

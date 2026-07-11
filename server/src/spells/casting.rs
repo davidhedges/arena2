@@ -6184,7 +6184,8 @@ fn apply_direct_target_spell(
         },
     );
 
-    if hostile_targeted_ability_misses(ctx, caster, target.player_id, now) {
+    let is_heal = direct_target.heal_amount > 0;
+    if !is_heal && hostile_targeted_ability_misses(ctx, caster, target.player_id, now) {
         emit_targeted_spell_miss(
             ctx,
             spell_id.as_str(),
@@ -6202,34 +6203,64 @@ fn apply_direct_target_spell(
         return Ok(());
     }
 
-    if resolve_spell_combat_hit_defense(
-        ctx,
-        spell_id.as_str(),
-        ability_id,
-        kind,
-        caster,
-        target,
-        origin.x,
-        origin.y,
-        origin.z,
-        direction.x,
-        direction.y,
-        direction.z,
-        0.0,
-        definition.max_distance,
-        point.x,
-        point.y,
-        point.z,
-        definition.damage,
-        direct_target.parry_behavior.as_str(),
-        definition.block_behavior.as_str(),
-        now,
-    ) {
+    if !is_heal
+        && resolve_spell_combat_hit_defense(
+            ctx,
+            spell_id.as_str(),
+            ability_id,
+            kind,
+            caster,
+            target,
+            origin.x,
+            origin.y,
+            origin.z,
+            direction.x,
+            direction.y,
+            direction.z,
+            0.0,
+            definition.max_distance,
+            point.x,
+            point.y,
+            point.z,
+            definition.damage,
+            direct_target.parry_behavior.as_str(),
+            definition.block_behavior.as_str(),
+            now,
+        )
+    {
         return Ok(());
     }
 
     let mut effects = Vec::new();
-    if definition.damage > 0 {
+    if is_heal {
+        emit_spell_combat_event(
+            ctx,
+            SpellCombatEventPayload {
+                action_instance_id: spell_id.as_str(),
+                ability_id,
+                kind,
+                event_type: EVENT_IMPACT,
+                caster,
+                hit: target.player_id,
+                origin,
+                direction,
+                speed: 0.0,
+                max_distance: definition.max_distance,
+                scalar: SpellCombatEventScalar::None,
+                sequence_index: 0,
+                sequence_count: 1,
+                point,
+                now,
+            },
+        );
+        effects.push(EffectPacket::Heal {
+            amount: direct_target.heal_amount,
+            source: caster,
+            target: target.player_id,
+            spell_id: spell_id.clone(),
+            target_audience: definition.target_audience,
+        });
+    } else if definition.damage > 0 {
         emit_spell_combat_event_with_damage(
             ctx,
             SpellCombatEventPayload {

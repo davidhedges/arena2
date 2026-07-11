@@ -129,7 +129,8 @@
       "brain_profile_id": "BASIC_HOSTILE_CASTER",
       "resource_policy": "FREE_ACTIONS_ONLY",
       "action_kit": [
-        { "ability_id": "NPC_LICH_BONE_WARD", "role": "BUFF", "target_selector": "LOWEST_HEALTH_ALLY", "base_utility": 1.1, "min_self_health_pct": 0.0, "max_self_health_pct": 1.0, "preferred_min_distance": 0.0, "preferred_max_distance": 14.0, "min_nearby_allies": 1, "min_nearby_enemies": 1, "required_target_status": "", "forbidden_target_status": "LICH_BONE_WARD", "movement_may_enable": true, "sort_order": 10 }
+        { "ability_id": "NPC_LICH_MEND", "role": "HEAL", "target_selector": "LOWEST_HEALTH_ALLY", "base_utility": 1.4, "min_self_health_pct": 0.0, "max_self_health_pct": 1.0, "preferred_min_distance": 0.0, "preferred_max_distance": 14.0, "min_nearby_allies": 1, "min_nearby_enemies": 1, "required_target_status": "", "forbidden_target_status": "", "movement_may_enable": true, "sort_order": 10 },
+        { "ability_id": "NPC_LICH_BONE_WARD", "role": "BUFF", "target_selector": "LOWEST_HEALTH_ALLY", "base_utility": 1.1, "min_self_health_pct": 0.0, "max_self_health_pct": 1.0, "preferred_min_distance": 0.0, "preferred_max_distance": 14.0, "min_nearby_allies": 1, "min_nearby_enemies": 1, "required_target_status": "", "forbidden_target_status": "LICH_BONE_WARD", "movement_may_enable": true, "sort_order": 20 }
       ],
       "max_hp": 110,
       "hit_radius": 0.5,

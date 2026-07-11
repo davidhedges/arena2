@@ -2169,6 +2169,7 @@ struct NpcActionRejectCounts {
     role: u32,
     selector: u32,
     health: u32,
+    target_health: u32,
     nearby_count: u32,
     required_status: u32,
     forbidden_status: u32,
@@ -2183,6 +2184,7 @@ impl NpcActionRejectCounts {
             ("ROLE", self.role),
             ("SELECTOR", self.selector),
             ("SELF_HEALTH", self.health),
+            ("TARGET_HEALTH", self.target_health),
             ("NEARBY_COUNT", self.nearby_count),
             ("REQUIRED_STATUS", self.required_status),
             ("FORBIDDEN_STATUS", self.forbidden_status),
@@ -2227,7 +2229,7 @@ fn select_npc_melee_action(
     for entry in &template.action_kit {
         if !matches!(
             entry.role.as_str(),
-            "MELEE_OFFENSE" | "RANGED_OFFENSE" | "BUFF"
+            "MELEE_OFFENSE" | "RANGED_OFFENSE" | "BUFF" | "HEAL"
         ) {
             rejects.role = rejects.role.saturating_add(1);
             continue;
@@ -2261,6 +2263,10 @@ fn select_npc_melee_action(
         } else {
             HashSet::new()
         };
+        if entry.role == "HEAL" && npc_target_is_full_health(ctx, target.identity) {
+            rejects.target_health = rejects.target_health.saturating_add(1);
+            continue;
+        }
         if health_pct < entry.min_self_health_pct || health_pct > entry.max_self_health_pct {
             rejects.health = rejects.health.saturating_add(1);
             continue;
@@ -2306,7 +2312,7 @@ fn select_npc_melee_action(
             };
             NpcExecutableAction::Melee(melee)
         } else if ability.ability_kind == "SPELL"
-            && matches!(entry.role.as_str(), "RANGED_OFFENSE" | "BUFF")
+            && matches!(entry.role.as_str(), "RANGED_OFFENSE" | "BUFF" | "HEAL")
         {
             let Some(spell) = spell_definition_by_str(ability.action_id.as_str()) else {
                 rejects.missing_ability = rejects.missing_ability.saturating_add(1);
@@ -2384,6 +2390,17 @@ fn select_npc_melee_action(
         ),
         hard_reject_summary,
     }
+}
+
+fn npc_target_is_full_health(ctx: &ReducerContext, target: Identity) -> bool {
+    if let Some(state) = ctx.db.npc_state().identity().find(target) {
+        return state.max_hp > 0 && state.hp >= state.max_hp;
+    }
+    ctx.db
+        .player_state()
+        .player_id()
+        .find(target)
+        .is_some_and(|state| state.max_hp > 0 && state.hp >= state.max_hp)
 }
 
 fn select_npc_action_target(
@@ -3492,12 +3509,12 @@ mod tests {
         assert!(parsed
             .templates
             .iter()
-            .all(|template| !template.visual_ids.is_empty() && template.action_kit.len() == 1));
+            .all(|template| !template.visual_ids.is_empty() && !template.action_kit.is_empty()));
         let wizard = npc_template("SKELETON_WIZARD").expect("wizard exemplar should be authored");
         assert_eq!(wizard.action_kit[0].role, "RANGED_OFFENSE");
         assert_eq!(wizard.action_kit[0].target_selector, "CURRENT_ENEMY");
         let lich = npc_template("LICH_SUPPORT").expect("support exemplar should be authored");
-        assert_eq!(lich.action_kit[0].role, "BUFF");
+        assert_eq!(lich.action_kit[0].role, "HEAL");
         assert_eq!(lich.action_kit[0].target_selector, "LOWEST_HEALTH_ALLY");
     }
 

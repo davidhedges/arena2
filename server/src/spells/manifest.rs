@@ -283,6 +283,7 @@ pub(crate) struct SpellSecondaryTunables {
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct DirectTargetSecondaryTunables {
+    pub heal_amount: i32,
     pub parry_behavior: SpellParryBehavior,
     pub impact_effects: Vec<ImpactEffect>,
 }
