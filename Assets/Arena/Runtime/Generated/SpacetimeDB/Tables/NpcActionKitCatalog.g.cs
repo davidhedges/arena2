@@ -65,6 +65,15 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Col<NpcActionKitCatalog, string> Role { get; }
         public global::SpacetimeDB.Col<NpcActionKitCatalog, string> TargetSelector { get; }
         public global::SpacetimeDB.Col<NpcActionKitCatalog, float> BaseUtility { get; }
+        public global::SpacetimeDB.Col<NpcActionKitCatalog, float> MinSelfHealthPct { get; }
+        public global::SpacetimeDB.Col<NpcActionKitCatalog, float> MaxSelfHealthPct { get; }
+        public global::SpacetimeDB.Col<NpcActionKitCatalog, float> PreferredMinDistance { get; }
+        public global::SpacetimeDB.Col<NpcActionKitCatalog, float> PreferredMaxDistance { get; }
+        public global::SpacetimeDB.Col<NpcActionKitCatalog, uint> MinNearbyAllies { get; }
+        public global::SpacetimeDB.Col<NpcActionKitCatalog, uint> MinNearbyEnemies { get; }
+        public global::SpacetimeDB.Col<NpcActionKitCatalog, string> RequiredTargetStatus { get; }
+        public global::SpacetimeDB.Col<NpcActionKitCatalog, string> ForbiddenTargetStatus { get; }
+        public global::SpacetimeDB.Col<NpcActionKitCatalog, bool> MovementMayEnable { get; }
         public global::SpacetimeDB.Col<NpcActionKitCatalog, uint> SortOrder { get; }
 
         public NpcActionKitCatalogCols(string tableName)
@@ -75,6 +84,15 @@ namespace SpacetimeDB.Types
             Role = new global::SpacetimeDB.Col<NpcActionKitCatalog, string>(tableName, "role");
             TargetSelector = new global::SpacetimeDB.Col<NpcActionKitCatalog, string>(tableName, "target_selector");
             BaseUtility = new global::SpacetimeDB.Col<NpcActionKitCatalog, float>(tableName, "base_utility");
+            MinSelfHealthPct = new global::SpacetimeDB.Col<NpcActionKitCatalog, float>(tableName, "min_self_health_pct");
+            MaxSelfHealthPct = new global::SpacetimeDB.Col<NpcActionKitCatalog, float>(tableName, "max_self_health_pct");
+            PreferredMinDistance = new global::SpacetimeDB.Col<NpcActionKitCatalog, float>(tableName, "preferred_min_distance");
+            PreferredMaxDistance = new global::SpacetimeDB.Col<NpcActionKitCatalog, float>(tableName, "preferred_max_distance");
+            MinNearbyAllies = new global::SpacetimeDB.Col<NpcActionKitCatalog, uint>(tableName, "min_nearby_allies");
+            MinNearbyEnemies = new global::SpacetimeDB.Col<NpcActionKitCatalog, uint>(tableName, "min_nearby_enemies");
+            RequiredTargetStatus = new global::SpacetimeDB.Col<NpcActionKitCatalog, string>(tableName, "required_target_status");
+            ForbiddenTargetStatus = new global::SpacetimeDB.Col<NpcActionKitCatalog, string>(tableName, "forbidden_target_status");
+            MovementMayEnable = new global::SpacetimeDB.Col<NpcActionKitCatalog, bool>(tableName, "movement_may_enable");
             SortOrder = new global::SpacetimeDB.Col<NpcActionKitCatalog, uint>(tableName, "sort_order");
         }
     }

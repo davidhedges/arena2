@@ -113,6 +113,15 @@ pub struct NpcActionKitCatalog {
     pub role: String,
     pub target_selector: String,
     pub base_utility: f32,
+    pub min_self_health_pct: f32,
+    pub max_self_health_pct: f32,
+    pub preferred_min_distance: f32,
+    pub preferred_max_distance: f32,
+    pub min_nearby_allies: u32,
+    pub min_nearby_enemies: u32,
+    pub required_target_status: String,
+    pub forbidden_target_status: String,
+    pub movement_may_enable: bool,
     pub sort_order: u32,
 }
 
@@ -236,6 +245,15 @@ pub(crate) struct NpcActionKitEntry {
     pub role: String,
     pub target_selector: String,
     pub base_utility: f32,
+    pub min_self_health_pct: f32,
+    pub max_self_health_pct: f32,
+    pub preferred_min_distance: f32,
+    pub preferred_max_distance: f32,
+    pub min_nearby_allies: u32,
+    pub min_nearby_enemies: u32,
+    pub required_target_status: String,
+    pub forbidden_target_status: String,
+    pub movement_may_enable: bool,
     pub sort_order: u32,
 }
 
@@ -425,6 +443,8 @@ fn parse_npc_catalog(json: &str) -> Result<NpcCatalogDocument, String> {
             entry.ability_id = normalize_id(entry.ability_id.as_str());
             entry.role = normalize_id(entry.role.as_str());
             entry.target_selector = normalize_id(entry.target_selector.as_str());
+            entry.required_target_status = normalize_id(entry.required_target_status.as_str());
+            entry.forbidden_target_status = normalize_id(entry.forbidden_target_status.as_str());
         }
 
         if template.template_id.is_empty() || !template_ids.insert(template.template_id.clone()) {
@@ -493,6 +513,27 @@ fn parse_npc_catalog(json: &str) -> Result<NpcCatalogDocument, String> {
             if !entry.base_utility.is_finite() || entry.base_utility < 0.0 {
                 return Err(format!(
                     "template '{}' action '{}' has invalid base_utility",
+                    template.template_id, entry.ability_id
+                ));
+            }
+            if !entry.min_self_health_pct.is_finite()
+                || !entry.max_self_health_pct.is_finite()
+                || !(0.0..=1.0).contains(&entry.min_self_health_pct)
+                || !(0.0..=1.0).contains(&entry.max_self_health_pct)
+                || entry.min_self_health_pct > entry.max_self_health_pct
+            {
+                return Err(format!(
+                    "template '{}' action '{}' has invalid self-health thresholds",
+                    template.template_id, entry.ability_id
+                ));
+            }
+            if !entry.preferred_min_distance.is_finite()
+                || !entry.preferred_max_distance.is_finite()
+                || entry.preferred_min_distance < 0.0
+                || entry.preferred_min_distance > entry.preferred_max_distance
+            {
+                return Err(format!(
+                    "template '{}' action '{}' has invalid preferred distance band",
                     template.template_id, entry.ability_id
                 ));
             }
@@ -631,6 +672,15 @@ pub(crate) fn sync_npc_catalog(ctx: &ReducerContext) {
                 role: entry.role.clone(),
                 target_selector: entry.target_selector.clone(),
                 base_utility: entry.base_utility,
+                min_self_health_pct: entry.min_self_health_pct,
+                max_self_health_pct: entry.max_self_health_pct,
+                preferred_min_distance: entry.preferred_min_distance,
+                preferred_max_distance: entry.preferred_max_distance,
+                min_nearby_allies: entry.min_nearby_allies,
+                min_nearby_enemies: entry.min_nearby_enemies,
+                required_target_status: entry.required_target_status.clone(),
+                forbidden_target_status: entry.forbidden_target_status.clone(),
+                movement_may_enable: entry.movement_may_enable,
                 sort_order: entry.sort_order,
             };
             if ctx
@@ -1820,6 +1870,17 @@ mod tests {
             .err()
             .expect("player-only grant should fail");
         assert!(error.contains("PLAYER-scoped ability"), "{error}");
+    }
+
+    #[test]
+    fn npc_action_kits_reject_invalid_utility_thresholds() {
+        let mut catalog: serde_json::Value = serde_json::from_str(NPC_CATALOG_JSON).unwrap();
+        catalog["templates"][0]["action_kit"][0]["min_self_health_pct"] = serde_json::json!(0.8);
+        catalog["templates"][0]["action_kit"][0]["max_self_health_pct"] = serde_json::json!(0.2);
+        let error = parse_npc_catalog(&serde_json::to_string(&catalog).unwrap())
+            .err()
+            .expect("inverted health thresholds should fail");
+        assert!(error.contains("invalid self-health thresholds"), "{error}");
     }
 
     #[test]

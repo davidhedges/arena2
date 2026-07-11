@@ -7,7 +7,7 @@
       "visual_ids": ["KOBOLD_WARRIOR_RD_SWORD_SHIELD"],
       "resource_policy": "FREE_ACTIONS_ONLY",
       "action_kit": [
-        { "ability_id": "NPC_KOBOLD_WARRIOR_SWORD_SLASH", "role": "MELEE_OFFENSE", "target_selector": "CURRENT_ENEMY", "base_utility": 1.0, "sort_order": 10 }
+        { "ability_id": "NPC_KOBOLD_WARRIOR_SWORD_SLASH", "role": "MELEE_OFFENSE", "target_selector": "CURRENT_ENEMY", "base_utility": 1.0, "min_self_health_pct": 0.0, "max_self_health_pct": 1.0, "preferred_min_distance": 0.0, "preferred_max_distance": 1.9, "min_nearby_allies": 0, "min_nearby_enemies": 1, "required_target_status": "", "forbidden_target_status": "", "movement_may_enable": true, "sort_order": 10 }
       ],
       "max_hp": 125,
       "hit_radius": 0.45,
@@ -23,7 +23,7 @@
       "visual_ids": ["KOBOLD_WARRIOR_GN_SPEAR"],
       "resource_policy": "FREE_ACTIONS_ONLY",
       "action_kit": [
-        { "ability_id": "NPC_KOBOLD_SPEAR_THRUST", "role": "MELEE_OFFENSE", "target_selector": "CURRENT_ENEMY", "base_utility": 1.0, "sort_order": 10 }
+        { "ability_id": "NPC_KOBOLD_SPEAR_THRUST", "role": "MELEE_OFFENSE", "target_selector": "CURRENT_ENEMY", "base_utility": 1.0, "min_self_health_pct": 0.0, "max_self_health_pct": 1.0, "preferred_min_distance": 0.8, "preferred_max_distance": 2.4, "min_nearby_allies": 0, "min_nearby_enemies": 1, "required_target_status": "", "forbidden_target_status": "", "movement_may_enable": true, "sort_order": 10 }
       ],
       "max_hp": 113,
       "hit_radius": 0.45,
@@ -39,7 +39,7 @@
       "visual_ids": ["KOBOLD_THIEF_BK_DUAL_SWORD"],
       "resource_policy": "FREE_ACTIONS_ONLY",
       "action_kit": [
-        { "ability_id": "NPC_KOBOLD_THIEF_DUAL_SLASH", "role": "MELEE_OFFENSE", "target_selector": "CURRENT_ENEMY", "base_utility": 1.0, "sort_order": 10 }
+        { "ability_id": "NPC_KOBOLD_THIEF_DUAL_SLASH", "role": "MELEE_OFFENSE", "target_selector": "CURRENT_ENEMY", "base_utility": 1.0, "min_self_health_pct": 0.0, "max_self_health_pct": 1.0, "preferred_min_distance": 0.0, "preferred_max_distance": 1.8, "min_nearby_allies": 0, "min_nearby_enemies": 1, "required_target_status": "", "forbidden_target_status": "", "movement_may_enable": true, "sort_order": 10 }
       ],
       "max_hp": 90,
       "hit_radius": 0.4,
@@ -55,7 +55,7 @@
       "visual_ids": ["KOBOLD_KNIGHT_RD_SWORD_SHIELD"],
       "resource_policy": "FREE_ACTIONS_ONLY",
       "action_kit": [
-        { "ability_id": "NPC_KOBOLD_KNIGHT_SWORD_SLASH", "role": "MELEE_OFFENSE", "target_selector": "CURRENT_ENEMY", "base_utility": 1.0, "sort_order": 10 }
+        { "ability_id": "NPC_KOBOLD_KNIGHT_SWORD_SLASH", "role": "MELEE_OFFENSE", "target_selector": "CURRENT_ENEMY", "base_utility": 1.0, "min_self_health_pct": 0.0, "max_self_health_pct": 1.0, "preferred_min_distance": 0.0, "preferred_max_distance": 1.95, "min_nearby_allies": 0, "min_nearby_enemies": 1, "required_target_status": "", "forbidden_target_status": "", "movement_may_enable": true, "sort_order": 10 }
       ],
       "max_hp": 163,
       "hit_radius": 0.5,

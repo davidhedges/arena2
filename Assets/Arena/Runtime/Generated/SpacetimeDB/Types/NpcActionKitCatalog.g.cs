@@ -25,6 +25,24 @@ namespace SpacetimeDB.Types
         public string TargetSelector;
         [DataMember(Name = "base_utility")]
         public float BaseUtility;
+        [DataMember(Name = "min_self_health_pct")]
+        public float MinSelfHealthPct;
+        [DataMember(Name = "max_self_health_pct")]
+        public float MaxSelfHealthPct;
+        [DataMember(Name = "preferred_min_distance")]
+        public float PreferredMinDistance;
+        [DataMember(Name = "preferred_max_distance")]
+        public float PreferredMaxDistance;
+        [DataMember(Name = "min_nearby_allies")]
+        public uint MinNearbyAllies;
+        [DataMember(Name = "min_nearby_enemies")]
+        public uint MinNearbyEnemies;
+        [DataMember(Name = "required_target_status")]
+        public string RequiredTargetStatus;
+        [DataMember(Name = "forbidden_target_status")]
+        public string ForbiddenTargetStatus;
+        [DataMember(Name = "movement_may_enable")]
+        public bool MovementMayEnable;
         [DataMember(Name = "sort_order")]
         public uint SortOrder;
 
@@ -35,6 +53,15 @@ namespace SpacetimeDB.Types
             string Role,
             string TargetSelector,
             float BaseUtility,
+            float MinSelfHealthPct,
+            float MaxSelfHealthPct,
+            float PreferredMinDistance,
+            float PreferredMaxDistance,
+            uint MinNearbyAllies,
+            uint MinNearbyEnemies,
+            string RequiredTargetStatus,
+            string ForbiddenTargetStatus,
+            bool MovementMayEnable,
             uint SortOrder
         )
         {
@@ -44,6 +71,15 @@ namespace SpacetimeDB.Types
             this.Role = Role;
             this.TargetSelector = TargetSelector;
             this.BaseUtility = BaseUtility;
+            this.MinSelfHealthPct = MinSelfHealthPct;
+            this.MaxSelfHealthPct = MaxSelfHealthPct;
+            this.PreferredMinDistance = PreferredMinDistance;
+            this.PreferredMaxDistance = PreferredMaxDistance;
+            this.MinNearbyAllies = MinNearbyAllies;
+            this.MinNearbyEnemies = MinNearbyEnemies;
+            this.RequiredTargetStatus = RequiredTargetStatus;
+            this.ForbiddenTargetStatus = ForbiddenTargetStatus;
+            this.MovementMayEnable = MovementMayEnable;
             this.SortOrder = SortOrder;
         }
 
@@ -54,6 +90,8 @@ namespace SpacetimeDB.Types
             this.AbilityId = "";
             this.Role = "";
             this.TargetSelector = "";
+            this.RequiredTargetStatus = "";
+            this.ForbiddenTargetStatus = "";
         }
     }
 }
