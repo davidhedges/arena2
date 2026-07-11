@@ -13,7 +13,7 @@
 
 use spacetimedb::{reducer, table, Identity, ReducerContext, Table, Timestamp};
 
-use crate::combat::player_snapshot::PlayerSnapshot;
+use crate::combat::actor_snapshot::CombatActorSnapshot;
 use crate::combat::timestamp_to_micros;
 use crate::relations::can_harm;
 
@@ -498,7 +498,7 @@ pub(crate) fn rewound_pose_for(
     target: Identity,
     view_delay_micros: i64,
     now: Timestamp,
-    present: &PlayerSnapshot,
+    present: &CombatActorSnapshot,
 ) -> RewoundPose {
     let present_pose = |source: RewoundPoseSource| RewoundPose {
         pos_x: present.pos_x,
@@ -595,12 +595,12 @@ pub(crate) const SWEEP_REWIND_MARGIN_SPEED_MPS: f32 = 12.0;
 pub(crate) fn sweep_rewind_membership(
     ctx: &ReducerContext,
     caster: Identity,
-    player: &PlayerSnapshot,
+    player: &CombatActorSnapshot,
     view_delay_micros: i64,
     now: Timestamp,
     sweep_rewind_on: bool,
     strike: &str,
-    mut is_member: impl FnMut(&PlayerSnapshot) -> bool,
+    mut is_member: impl FnMut(&CombatActorSnapshot) -> bool,
 ) -> bool {
     let present_in = is_member(player);
     if view_delay_micros <= 0 {
@@ -653,8 +653,8 @@ pub(crate) fn sweep_rewind_membership(
 pub(crate) fn overlay_press_rewound_target_pose(
     ctx: &ReducerContext,
     caster: Identity,
-    target: PlayerSnapshot,
-) -> PlayerSnapshot {
+    target: CombatActorSnapshot,
+) -> CombatActorSnapshot {
     let (enabled, _) = lag_comp_config(ctx);
     if !enabled {
         return target;

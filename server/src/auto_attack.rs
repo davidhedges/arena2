@@ -4,8 +4,8 @@ use spacetimedb::{reducer, table, Identity, ReducerContext, Table, Timestamp};
 
 use crate::action_ids::AuthoredActionId;
 use crate::arena::players_share_world_context;
+use crate::combat::actor_snapshot::actor_snapshot_for;
 use crate::combat::has_active_disabling_status;
-use crate::combat::player_snapshot::player_snapshot_for;
 use crate::combat::position_history::{
     fresh_standing_view_delay, lag_comp_auto_swing_enabled, lag_comp_config, rewound_pose_for,
     stamp_standing_press_context,
@@ -346,7 +346,7 @@ pub(crate) fn tick_auto_attacks(ctx: &ReducerContext, now: Timestamp) {
             continue;
         }
 
-        let Some(target_snapshot) = player_snapshot_for(ctx, row.target) else {
+        let Some(target_snapshot) = actor_snapshot_for(ctx, row.target) else {
             log::info!(
                 "[AUTO_ATTACK] owner={} clear reason=missing_target_snapshot target={}",
                 short_identity(row.owner),
@@ -529,7 +529,7 @@ pub(crate) fn tick_auto_attacks(ctx: &ReducerContext, now: Timestamp) {
         // S9: the target endpoint rewinds with the same pose as the reach
         // gate; the caster endpoint stays present (§2.4 rule 4 in spirit).
         if gameplay.requires_target_los {
-            let caster_snapshot = player_snapshot_for(ctx, row.owner);
+            let caster_snapshot = actor_snapshot_for(ctx, row.owner);
             let present_blocked = caster_snapshot
                 .as_ref()
                 .map(|snapshot| !has_line_of_sight(ctx, snapshot, &target_snapshot))
@@ -843,7 +843,7 @@ fn resolve_live_target(ctx: &ReducerContext, owner: Identity, target_id: &str) -
         );
         return None;
     }
-    let Some(target_snapshot) = player_snapshot_for(ctx, target) else {
+    let Some(target_snapshot) = actor_snapshot_for(ctx, target) else {
         log::info!(
             "[AUTO_ATTACK] owner={} target_rejected reason=missing_target_snapshot target={}",
             short_identity(owner),

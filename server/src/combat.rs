@@ -41,7 +41,7 @@ use crate::world_collision::{
     resolve_world_spawn_position, resolve_world_spawn_position_with_layout_for_scene,
 };
 
-pub(crate) mod player_snapshot;
+pub(crate) mod actor_snapshot;
 pub(crate) mod position_history;
 #[cfg(feature = "projectile_load_harness")]
 mod projectile_load_harness;

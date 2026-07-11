@@ -15,11 +15,11 @@ use crate::player_physics::player_physics as _;
 #[allow(unused_imports)]
 use crate::player_state::player_state as _;
 
-const PLAYER_SPATIAL_CELL_SIZE: f32 = 8.0;
+const ACTOR_SPATIAL_CELL_SIZE: f32 = 8.0;
 const MAX_QUERY_CELLS_PER_AXIS: i32 = 64;
 
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct PlayerSnapshot {
+pub(crate) struct CombatActorSnapshot {
     pub player_id: Identity,
     pub alive: bool,
     pub pos_x: f32,
@@ -32,7 +32,7 @@ pub(crate) struct PlayerSnapshot {
     pub last_processed_tick: u32,
 }
 
-impl PlayerSnapshot {
+impl CombatActorSnapshot {
     fn from_rows(state: &PlayerState, physics: &PlayerPhysics) -> Self {
         Self {
             player_id: state.player_id,
@@ -65,13 +65,13 @@ impl PlayerSnapshot {
 }
 
 #[derive(Clone, Debug, Default)]
-pub(crate) struct PlayerSnapshotSet {
-    players: Vec<PlayerSnapshot>,
+pub(crate) struct CombatActorSnapshotSet {
+    actors: Vec<CombatActorSnapshot>,
     index_by_id: HashMap<Identity, usize>,
-    spatial_index: PlayerSpatialIndex,
+    spatial_index: CombatActorSpatialIndex,
 }
 
-impl PlayerSnapshotSet {
+impl CombatActorSnapshotSet {
     pub(crate) fn collect(ctx: &ReducerContext) -> Self {
         let physics_by_id: HashMap<Identity, PlayerPhysics> = ctx
             .db
@@ -80,14 +80,14 @@ impl PlayerSnapshotSet {
             .map(|physics| (physics.identity, physics))
             .collect();
 
-        let mut players = Vec::new();
+        let mut actors = Vec::new();
         let mut index_by_id = HashMap::new();
         for state in ctx.db.player_state().iter() {
             let Some(physics) = physics_by_id.get(&state.player_id) else {
                 continue;
             };
-            let index = players.len();
-            players.push(PlayerSnapshot::from_rows(&state, physics));
+            let index = actors.len();
+            actors.push(CombatActorSnapshot::from_rows(&state, physics));
             index_by_id.insert(state.player_id, index);
         }
 
@@ -102,22 +102,22 @@ impl PlayerSnapshotSet {
             let Some(physics) = npc_physics_by_id.get(&state.identity) else {
                 continue;
             };
-            let index = players.len();
-            players.push(PlayerSnapshot::from_npc_rows(&state, physics));
+            let index = actors.len();
+            actors.push(CombatActorSnapshot::from_npc_rows(&state, physics));
             index_by_id.insert(state.identity, index);
         }
 
-        let spatial_index = PlayerSpatialIndex::build(&players);
+        let spatial_index = CombatActorSpatialIndex::build(&actors);
 
         Self {
-            players,
+            actors,
             index_by_id,
             spatial_index,
         }
     }
 
-    pub(crate) fn as_slice(&self) -> &[PlayerSnapshot] {
-        &self.players
+    pub(crate) fn as_slice(&self) -> &[CombatActorSnapshot] {
+        &self.actors
     }
 
     pub(crate) fn index_by_id(&self) -> &HashMap<Identity, usize> {
@@ -134,7 +134,7 @@ impl PlayerSnapshotSet {
         out: &mut Vec<usize>,
     ) {
         self.spatial_index.query_segment(
-            &self.players,
+            &self.actors,
             start_x,
             start_z,
             end_x,
@@ -152,32 +152,32 @@ impl PlayerSnapshotSet {
         out: &mut Vec<usize>,
     ) {
         self.spatial_index
-            .query_disc(&self.players, center_x, center_z, radius_padding, out);
+            .query_disc(&self.actors, center_x, center_z, radius_padding, out);
     }
 
-    fn into_players(self) -> Vec<PlayerSnapshot> {
-        self.players
+    fn into_actors(self) -> Vec<CombatActorSnapshot> {
+        self.actors
     }
 }
 
 #[derive(Clone, Debug, Default)]
-struct PlayerSpatialIndex {
+struct CombatActorSpatialIndex {
     buckets: HashMap<(i32, i32), Vec<usize>>,
     max_hit_radius: f32,
 }
 
-impl PlayerSpatialIndex {
-    fn build(players: &[PlayerSnapshot]) -> Self {
+impl CombatActorSpatialIndex {
+    fn build(actors: &[CombatActorSnapshot]) -> Self {
         let mut buckets: HashMap<(i32, i32), Vec<usize>> = HashMap::new();
         let mut max_hit_radius = 0.0f32;
 
-        for (index, player) in players.iter().enumerate() {
-            if !player.pos_x.is_finite() || !player.pos_z.is_finite() {
+        for (index, actor) in actors.iter().enumerate() {
+            if !actor.pos_x.is_finite() || !actor.pos_z.is_finite() {
                 continue;
             }
-            max_hit_radius = max_hit_radius.max(player.hit_radius.max(0.0));
+            max_hit_radius = max_hit_radius.max(actor.hit_radius.max(0.0));
             buckets
-                .entry(spatial_cell(player.pos_x, player.pos_z))
+                .entry(spatial_cell(actor.pos_x, actor.pos_z))
                 .or_default()
                 .push(index);
         }
@@ -190,7 +190,7 @@ impl PlayerSpatialIndex {
 
     fn query_segment(
         &self,
-        players: &[PlayerSnapshot],
+        actors: &[CombatActorSnapshot],
         start_x: f32,
         start_z: f32,
         end_x: f32,
@@ -201,13 +201,13 @@ impl PlayerSpatialIndex {
         if !start_x.is_finite() || !start_z.is_finite() || !end_x.is_finite() || !end_z.is_finite()
         {
             out.clear();
-            out.extend(0..players.len());
+            out.extend(0..actors.len());
             return;
         }
 
         let inflate = radius_padding.max(0.0) + self.max_hit_radius;
         self.query_bounds(
-            players,
+            actors,
             start_x.min(end_x) - inflate,
             start_z.min(end_z) - inflate,
             start_x.max(end_x) + inflate,
@@ -218,7 +218,7 @@ impl PlayerSpatialIndex {
 
     fn query_disc(
         &self,
-        players: &[PlayerSnapshot],
+        actors: &[CombatActorSnapshot],
         center_x: f32,
         center_z: f32,
         radius_padding: f32,
@@ -226,13 +226,13 @@ impl PlayerSpatialIndex {
     ) {
         if !center_x.is_finite() || !center_z.is_finite() {
             out.clear();
-            out.extend(0..players.len());
+            out.extend(0..actors.len());
             return;
         }
 
         let inflate = radius_padding.max(0.0) + self.max_hit_radius;
         self.query_bounds(
-            players,
+            actors,
             center_x - inflate,
             center_z - inflate,
             center_x + inflate,
@@ -243,7 +243,7 @@ impl PlayerSpatialIndex {
 
     fn query_bounds(
         &self,
-        players: &[PlayerSnapshot],
+        actors: &[CombatActorSnapshot],
         min_x: f32,
         min_z: f32,
         max_x: f32,
@@ -251,11 +251,11 @@ impl PlayerSpatialIndex {
         out: &mut Vec<usize>,
     ) {
         out.clear();
-        if players.is_empty() {
+        if actors.is_empty() {
             return;
         }
         if !min_x.is_finite() || !min_z.is_finite() || !max_x.is_finite() || !max_z.is_finite() {
-            out.extend(0..players.len());
+            out.extend(0..actors.len());
             return;
         }
 
@@ -268,7 +268,7 @@ impl PlayerSpatialIndex {
             || cells_x > MAX_QUERY_CELLS_PER_AXIS
             || cells_z > MAX_QUERY_CELLS_PER_AXIS
         {
-            out.extend(0..players.len());
+            out.extend(0..actors.len());
             return;
         }
 
@@ -284,32 +284,34 @@ impl PlayerSpatialIndex {
 
 fn spatial_cell(x: f32, z: f32) -> (i32, i32) {
     (
-        (x / PLAYER_SPATIAL_CELL_SIZE).floor() as i32,
-        (z / PLAYER_SPATIAL_CELL_SIZE).floor() as i32,
+        (x / ACTOR_SPATIAL_CELL_SIZE).floor() as i32,
+        (z / ACTOR_SPATIAL_CELL_SIZE).floor() as i32,
     )
 }
 
-pub(crate) fn player_snapshot_for(
+pub(crate) fn actor_snapshot_for(
     ctx: &ReducerContext,
     player_id: Identity,
-) -> Option<PlayerSnapshot> {
+) -> Option<CombatActorSnapshot> {
     if let Some(state) = ctx.db.player_state().player_id().find(player_id) {
         let physics = ctx.db.player_physics().identity().find(player_id)?;
-        return Some(PlayerSnapshot::from_rows(&state, &physics));
+        return Some(CombatActorSnapshot::from_rows(&state, &physics));
     }
 
     let state = ctx.db.npc_state().identity().find(player_id)?;
     let physics = ctx.db.npc_physics().identity().find(player_id)?;
-    Some(PlayerSnapshot::from_npc_rows(&state, &physics))
+    Some(CombatActorSnapshot::from_npc_rows(&state, &physics))
 }
 
-pub(crate) fn collect_player_snapshots(ctx: &ReducerContext) -> Vec<PlayerSnapshot> {
-    PlayerSnapshotSet::collect(ctx).into_players()
+pub(crate) fn collect_actor_snapshots(ctx: &ReducerContext) -> Vec<CombatActorSnapshot> {
+    CombatActorSnapshotSet::collect(ctx).into_actors()
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{NpcPhysics, NpcState, PlayerSnapshot, PlayerSnapshotSet, PlayerSpatialIndex};
+    use super::{
+        CombatActorSnapshot, CombatActorSnapshotSet, CombatActorSpatialIndex, NpcPhysics, NpcState,
+    };
     use std::collections::HashMap;
 
     use spacetimedb::Identity;
@@ -319,8 +321,8 @@ mod tests {
             .expect("test identity hex should be valid")
     }
 
-    fn snapshot(id: u8, pos_x: f32, pos_z: f32) -> PlayerSnapshot {
-        PlayerSnapshot {
+    fn snapshot(id: u8, pos_x: f32, pos_z: f32) -> CombatActorSnapshot {
+        CombatActorSnapshot {
             player_id: identity(id),
             alive: true,
             pos_x,
@@ -334,22 +336,22 @@ mod tests {
         }
     }
 
-    fn snapshot_set(players: Vec<PlayerSnapshot>) -> PlayerSnapshotSet {
-        let index_by_id = players
+    fn snapshot_set(actors: Vec<CombatActorSnapshot>) -> CombatActorSnapshotSet {
+        let index_by_id = actors
             .iter()
             .enumerate()
-            .map(|(index, player)| (player.player_id, index))
+            .map(|(index, actor)| (actor.player_id, index))
             .collect::<HashMap<_, _>>();
-        let spatial_index = PlayerSpatialIndex::build(&players);
-        PlayerSnapshotSet {
-            players,
+        let spatial_index = CombatActorSpatialIndex::build(&actors);
+        CombatActorSnapshotSet {
+            actors,
             index_by_id,
             spatial_index,
         }
     }
 
     #[test]
-    fn segment_query_returns_only_nearby_players() {
+    fn segment_query_returns_only_nearby_actors() {
         let set = snapshot_set(vec![
             snapshot(1, 1.0, 0.5),
             snapshot(2, 4.0, -0.5),
@@ -362,7 +364,7 @@ mod tests {
         let ids = indices
             .iter()
             .filter_map(|index| set.as_slice().get(*index))
-            .map(|player| player.player_id)
+            .map(|actor| actor.player_id)
             .collect::<Vec<_>>();
         assert!(ids.contains(&identity(1)));
         assert!(ids.contains(&identity(2)));
@@ -370,7 +372,7 @@ mod tests {
     }
 
     #[test]
-    fn huge_or_invalid_query_falls_back_to_all_players() {
+    fn huge_or_invalid_query_falls_back_to_all_actors() {
         let set = snapshot_set(vec![snapshot(1, 1.0, 0.0), snapshot(2, 40.0, 40.0)]);
         let mut indices = Vec::new();
 
@@ -380,7 +382,7 @@ mod tests {
     }
 
     #[test]
-    fn disc_query_returns_only_nearby_players() {
+    fn disc_query_returns_only_nearby_actors() {
         let set = snapshot_set(vec![
             snapshot(1, 10.0, 10.0),
             snapshot(2, 12.0, 10.0),
@@ -393,7 +395,7 @@ mod tests {
         let ids = indices
             .iter()
             .filter_map(|index| set.as_slice().get(*index))
-            .map(|player| player.player_id)
+            .map(|actor| actor.player_id)
             .collect::<Vec<_>>();
         assert!(ids.contains(&identity(1)));
         assert!(ids.contains(&identity(2)));
@@ -419,7 +421,7 @@ mod tests {
             updated_at: spacetimedb::Timestamp::UNIX_EPOCH,
         };
 
-        let snapshot = PlayerSnapshot::from_npc_rows(&state, &physics);
+        let snapshot = CombatActorSnapshot::from_npc_rows(&state, &physics);
 
         assert_eq!(snapshot.player_id, state.identity);
         assert!(snapshot.alive);

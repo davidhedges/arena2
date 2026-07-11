@@ -38,7 +38,7 @@ use crate::arena::{
     MATCH_PHASE_IN_PROGRESS,
 };
 use crate::auto_attack::tick_auto_attacks;
-use crate::combat::player_snapshot::PlayerSnapshotSet;
+use crate::combat::actor_snapshot::CombatActorSnapshotSet;
 use crate::combat::{
     clear_statuses_for_dead_players, expire_combat_engagements, expire_status_effects,
     has_due_pending_effects, normalize_legacy_hot_status_rows, process_periodic_status_ticks,
@@ -962,9 +962,9 @@ fn run_pre_tick_housekeeping_phase(
             let has_active_combat_projectiles =
                 ctx.db.active_combat_projectile().iter().next().is_some();
             if has_active_bespoke_spells || has_active_combat_projectiles {
-                let player_snapshots = PlayerSnapshotSet::collect(ctx);
-                tick_bespoke_spells_with_snapshots(ctx, dt, &player_snapshots)?;
-                tick_combat_projectiles_with_snapshots(ctx, dt, &player_snapshots)?;
+                let actor_snapshots = CombatActorSnapshotSet::collect(ctx);
+                tick_bespoke_spells_with_snapshots(ctx, dt, &actor_snapshots)?;
+                tick_combat_projectiles_with_snapshots(ctx, dt, &actor_snapshots)?;
             }
             Ok(())
         },

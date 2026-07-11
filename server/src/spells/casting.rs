@@ -18,11 +18,11 @@ use crate::arena::{
     arena_seed_for_identity, open_world_scene_name_for_identity, players_share_world_context,
 };
 use crate::auto_attack::arm_auto_attack_if_unarmed_with_cadence;
+use crate::combat::actor_snapshot::{
+    actor_snapshot_for, collect_actor_snapshots, CombatActorSnapshot, CombatActorSnapshotSet,
+};
 #[cfg(feature = "spellcasting_terminal_harness")]
 use crate::combat::new_player_state;
-use crate::combat::player_snapshot::{
-    collect_player_snapshots, player_snapshot_for, PlayerSnapshot, PlayerSnapshotSet,
-};
 use crate::combat::position_history::{
     lag_comp_config, lag_comp_sweep_rewind_enabled, overlay_press_rewound_target_pose,
     press_view_delay_micros, sweep_rewind_membership, SWEEP_REWIND_MARGIN_SPEED_MPS,
@@ -426,7 +426,7 @@ pub(crate) fn queue_pending_cast_request(
         log_cast_rejected(caster, spell_kind, "unknown_spell", "");
         return Ok(());
     };
-    let Some(caster_state) = player_snapshot_for(ctx, caster) else {
+    let Some(caster_state) = actor_snapshot_for(ctx, caster) else {
         record_spell_prediction_result(
             ctx,
             caster,
@@ -437,7 +437,7 @@ pub(crate) fn queue_pending_cast_request(
             ActionRejectReason::InvalidInput,
             ctx.timestamp,
         );
-        log_cast_rejected(caster, spell_kind, "missing_player_snapshot", "");
+        log_cast_rejected(caster, spell_kind, "missing_actor_snapshot", "");
         return Ok(());
     };
     if !caster_state.alive {
@@ -590,7 +590,7 @@ fn pending_cast_request_is_ready(ctx: &ReducerContext, request: &PendingCastRequ
     // the client-authored cast tick. At that point player_intent reflects all
     // movement commands the client authored before the cast, including key-up
     // releases that may have arrived before the cast reducer.
-    match player_snapshot_for(ctx, request.caster) {
+    match actor_snapshot_for(ctx, request.caster) {
         Some(snapshot) => snapshot.last_processed_tick >= request.cast_input_tick,
         None => true,
     }
@@ -639,7 +639,7 @@ pub(crate) fn cast_spell_for(
         return Ok(());
     }
 
-    let Some(caster_state) = player_snapshot_for(ctx, caster) else {
+    let Some(caster_state) = actor_snapshot_for(ctx, caster) else {
         record_spell_prediction_result(
             ctx,
             caster,
@@ -650,7 +650,7 @@ pub(crate) fn cast_spell_for(
             ActionRejectReason::InvalidInput,
             ctx.timestamp,
         );
-        log_cast_rejected(caster, spell_kind, "missing_player_snapshot", "");
+        log_cast_rejected(caster, spell_kind, "missing_actor_snapshot", "");
         return Ok(());
     };
     if !caster_state.alive {
@@ -711,7 +711,7 @@ pub(crate) fn cast_spell_for(
             allowed_delta
         );
     }
-    let cast_state = PlayerSnapshot {
+    let cast_state = CombatActorSnapshot {
         pos_x: validated_snapshot.pos_x,
         pos_y: validated_snapshot.pos_y,
         pos_z: validated_snapshot.pos_z,
@@ -1228,8 +1228,8 @@ fn mark_harmful_targeted_spell_start(
 pub(crate) fn special_movement_uses_air_path(
     ctx: &ReducerContext,
     owner: Identity,
-    authoritative: &PlayerSnapshot,
-    cast_state: &PlayerSnapshot,
+    authoritative: &CombatActorSnapshot,
+    cast_state: &CombatActorSnapshot,
 ) -> bool {
     let arena_seed = arena_seed_for_identity(ctx, owner);
     let flat_ground_only = uses_flat_training_collision(ctx, owner);
@@ -1247,8 +1247,8 @@ pub(crate) fn special_movement_uses_air_path(
 }
 
 pub(crate) fn special_movement_uses_air_path_with_ground(
-    authoritative: &PlayerSnapshot,
-    cast_state: &PlayerSnapshot,
+    authoritative: &CombatActorSnapshot,
+    cast_state: &CombatActorSnapshot,
     cast_state_ground_y: f32,
 ) -> bool {
     if !authoritative.grounded {
@@ -1268,7 +1268,7 @@ pub(super) fn resolve_blockable_spell_hit(
     ability_id: &str,
     kind: &SpellId,
     caster: Identity,
-    target: &PlayerSnapshot,
+    target: &CombatActorSnapshot,
     source_x: f32,
     source_y: f32,
     source_z: f32,
@@ -1316,7 +1316,7 @@ pub(super) fn resolve_spell_combat_hit_defense(
     ability_id: &str,
     kind: &SpellId,
     caster: Identity,
-    target: &PlayerSnapshot,
+    target: &CombatActorSnapshot,
     source_x: f32,
     source_y: f32,
     source_z: f32,
@@ -1449,7 +1449,7 @@ fn emit_targeted_spell_miss(
 
 fn resolve_spell_block_impact_point(
     ctx: &ReducerContext,
-    target: &PlayerSnapshot,
+    target: &CombatActorSnapshot,
     source_x: f32,
     source_z: f32,
     fallback_x: f32,
@@ -1761,7 +1761,7 @@ pub(super) fn release_cast(
     if kind != spell_kind {
         return Ok(());
     }
-    let Some(caster_state) = player_snapshot_for(ctx, ctx.sender()) else {
+    let Some(caster_state) = actor_snapshot_for(ctx, ctx.sender()) else {
         clear_active_cast(ctx, ctx.sender());
         return Ok(());
     };
@@ -1874,7 +1874,7 @@ pub(super) fn cancel_active_cast_from_input(
     if definition.cast_mobility != super::manifest::SpellCastMobility::GroundedStationary {
         return Ok(());
     }
-    let Some(caster_state) = player_snapshot_for(ctx, caster) else {
+    let Some(caster_state) = actor_snapshot_for(ctx, caster) else {
         clear_active_cast(ctx, caster);
         return Ok(());
     };
@@ -1962,7 +1962,7 @@ pub(crate) fn tick_active_casts(ctx: &ReducerContext, now: Timestamp) -> Result<
             continue;
         };
 
-        let Some(caster_state) = player_snapshot_for(ctx, caster) else {
+        let Some(caster_state) = actor_snapshot_for(ctx, caster) else {
             clear_active_cast(ctx, caster);
             continue;
         };
@@ -2153,7 +2153,7 @@ fn reject_unless(can_start: bool, reason: ActionRejectReason) -> Option<ActionRe
 
 fn process_spell_cast(
     ctx: &ReducerContext,
-    state: &PlayerSnapshot,
+    state: &CombatActorSnapshot,
     caster: Identity,
     spell_kind: &SpellId,
     target_id: &str,
@@ -2555,7 +2555,7 @@ fn resolve_movement_delivery_impact(
     ctx: &ReducerContext,
     action_instance_id: &str,
     ability_id: &str,
-    state: &PlayerSnapshot,
+    state: &CombatActorSnapshot,
     caster: Identity,
     spell_kind: &SpellId,
     target_id: &str,
@@ -2693,7 +2693,7 @@ fn emit_spell_cast_accepted_event(
     ability_id: &str,
     now: Timestamp,
 ) {
-    let origin = player_snapshot_for(ctx, caster)
+    let origin = actor_snapshot_for(ctx, caster)
         .map(|state| Vec3::new(state.pos_x, state.pos_y + state.hit_height, state.pos_z))
         .unwrap_or_else(|| Vec3::new(0.0, 0.0, 0.0));
     ctx.db.combat_event().insert(CombatEvent {
@@ -2801,8 +2801,8 @@ fn has_voluntary_movement_after_cast(
 
 pub(crate) fn movement_delivery_arrival_distance(
     spell_kind: &SpellId,
-    caster: &PlayerSnapshot,
-    target: &PlayerSnapshot,
+    caster: &CombatActorSnapshot,
+    target: &CombatActorSnapshot,
 ) -> f32 {
     let movement = movement_delivery_for_action_id(spell_kind.as_str())
         .expect("validated movement action must resolve to movement delivery");
@@ -2815,8 +2815,8 @@ pub(crate) fn movement_delivery_arrival_distance(
 
 pub(crate) fn movement_delivery_destination(
     spell_kind: &SpellId,
-    caster: &PlayerSnapshot,
-    target: &PlayerSnapshot,
+    caster: &CombatActorSnapshot,
+    target: &CombatActorSnapshot,
 ) -> (f32, f32, f32) {
     let dx = target.pos_x - caster.pos_x;
     let dz = target.pos_z - caster.pos_z;
@@ -3042,7 +3042,7 @@ pub(crate) fn resolve_target(
     ctx: &ReducerContext,
     caster: Identity,
     target_id: &str,
-) -> Option<PlayerSnapshot> {
+) -> Option<CombatActorSnapshot> {
     if target_id.is_empty() {
         return None;
     }
@@ -3052,7 +3052,7 @@ pub(crate) fn resolve_target(
     if identity == caster {
         return None;
     }
-    let target = player_snapshot_for(ctx, identity)?;
+    let target = actor_snapshot_for(ctx, identity)?;
     if !target.alive {
         return None;
     }
@@ -3066,9 +3066,9 @@ pub(crate) fn validate_movement_delivery_target(
     ctx: &ReducerContext,
     spell_kind: &SpellId,
     caster: Identity,
-    state: &PlayerSnapshot,
+    state: &CombatActorSnapshot,
     target_id: &str,
-) -> Option<PlayerSnapshot> {
+) -> Option<CombatActorSnapshot> {
     let target = match resolve_target(ctx, caster, target_id) {
         Some(target) => target,
         None => {
@@ -3171,8 +3171,8 @@ pub(crate) fn validate_movement_delivery_target(
 fn spawn_tracking_projectile(
     ctx: &ReducerContext,
     caster: Identity,
-    state: &PlayerSnapshot,
-    target: &PlayerSnapshot,
+    state: &CombatActorSnapshot,
+    target: &CombatActorSnapshot,
     kind: &SpellId,
     action_instance_id: &str,
     ability_id: &str,
@@ -3305,8 +3305,8 @@ fn deterministic_unit(value: &str, salt: u64) -> f32 {
 fn spawn_tracking_projectile_instance(
     ctx: &ReducerContext,
     caster: Identity,
-    state: &PlayerSnapshot,
-    target: &PlayerSnapshot,
+    state: &CombatActorSnapshot,
+    target: &CombatActorSnapshot,
     kind: &SpellId,
     action_instance_id: &str,
     ability_id: &str,
@@ -3531,7 +3531,7 @@ fn spawn_tracking_projectile_instance(
 fn spawn_orbit_projectiles(
     ctx: &ReducerContext,
     caster: Identity,
-    state: &PlayerSnapshot,
+    state: &CombatActorSnapshot,
     kind: &SpellId,
     action_instance_id: &str,
     ability_id: &str,
@@ -3790,7 +3790,7 @@ fn emit_spell_projectile_release_event(
 fn finish_active_cast(
     ctx: &ReducerContext,
     active_cast: &ActiveCast,
-    state: &PlayerSnapshot,
+    state: &CombatActorSnapshot,
     kind: &SpellId,
     now: Timestamp,
 ) -> Result<(), String> {
@@ -3913,7 +3913,7 @@ fn finish_active_cast(
 fn emit_active_cast_fizzle(
     ctx: &ReducerContext,
     active_cast: &ActiveCast,
-    caster_state: &PlayerSnapshot,
+    caster_state: &CombatActorSnapshot,
     kind: &SpellId,
     definition: &SpellDefinition,
     now: Timestamp,
@@ -3998,7 +3998,7 @@ pub(crate) fn fizzle_active_cast_for_interrupt(
     let Some(active_cast) = ctx.db.active_cast().caster().find(caster) else {
         return;
     };
-    let Some(caster_state) = player_snapshot_for(ctx, caster) else {
+    let Some(caster_state) = actor_snapshot_for(ctx, caster) else {
         clear_active_cast(ctx, caster);
         return;
     };
@@ -4013,7 +4013,7 @@ pub(crate) fn fizzle_active_cast_for_interrupt(
 fn fizzle_active_cast_row_for_interrupt(
     ctx: &ReducerContext,
     active_cast: &ActiveCast,
-    caster_state: &PlayerSnapshot,
+    caster_state: &CombatActorSnapshot,
     active_kind: &SpellId,
     now: Timestamp,
 ) {
@@ -4063,7 +4063,7 @@ fn normal_cast_time_spell_refunds_gcd_on_self_cancel(definition: &SpellDefinitio
 fn apply_active_cast_terminal_outcome(
     ctx: &ReducerContext,
     active_cast: &ActiveCast,
-    caster_state: &PlayerSnapshot,
+    caster_state: &CombatActorSnapshot,
     now: Timestamp,
     outcome: ActiveCastTerminalOutcome,
 ) {
@@ -4115,7 +4115,7 @@ pub fn run_spellcasting_terminal_harness(ctx: &ReducerContext) -> Result<(), Str
     let live_facing_cast_id = format!("{SPELLCASTING_TERMINAL_HARNESS_PREFIX}live-facing-{suffix}");
     let live_facing_cast =
         insert_harness_active_cast(ctx, caster, target, "ICICLE", &live_facing_cast_id, now);
-    let caster_state = player_snapshot_for(ctx, caster)
+    let caster_state = actor_snapshot_for(ctx, caster)
         .ok_or_else(|| "harness caster snapshot missing".to_string())?;
     finish_active_cast(
         ctx,
@@ -4501,8 +4501,8 @@ fn emit_movement_delivery_fizzle(
     ability_id: &str,
     kind: &SpellId,
     caster: Identity,
-    caster_state: &PlayerSnapshot,
-    target: Option<&PlayerSnapshot>,
+    caster_state: &CombatActorSnapshot,
+    target: Option<&CombatActorSnapshot>,
     fallback_point: Vec3,
 ) {
     let movement = movement_delivery_for_action_id(kind.as_str())
@@ -4565,7 +4565,7 @@ struct ElectrocuteChannelState {
 
 fn validate_targeted_channel_cast(
     ctx: &ReducerContext,
-    state: &PlayerSnapshot,
+    state: &CombatActorSnapshot,
     caster: Identity,
     spell_kind: &SpellId,
     target_id: &str,
@@ -4610,7 +4610,7 @@ enum ElectrocuteChannelResolution {
 fn start_channel(
     ctx: &ReducerContext,
     active_cast: &ActiveCast,
-    caster_state: &PlayerSnapshot,
+    caster_state: &CombatActorSnapshot,
     now: Timestamp,
 ) -> Result<bool, String> {
     let definition = super::catalog::spell_definition(
@@ -4640,7 +4640,7 @@ fn start_channel(
 fn tick_channel(
     ctx: &ReducerContext,
     active_cast: &ActiveCast,
-    caster_state: &PlayerSnapshot,
+    caster_state: &CombatActorSnapshot,
     now: Timestamp,
 ) -> Result<bool, String> {
     let definition = super::catalog::spell_definition(
@@ -4691,7 +4691,7 @@ fn tick_channel(
 fn stop_channel(
     ctx: &ReducerContext,
     active_cast: &ActiveCast,
-    caster_state: &PlayerSnapshot,
+    caster_state: &CombatActorSnapshot,
     now: Timestamp,
     override_end: Option<Vec3>,
 ) {
@@ -4712,7 +4712,7 @@ fn stop_channel(
 fn start_projectile_channel(
     ctx: &ReducerContext,
     active_cast: &ActiveCast,
-    _caster_state: &PlayerSnapshot,
+    _caster_state: &CombatActorSnapshot,
     now: Timestamp,
 ) -> Result<bool, String> {
     // Hold the first projectile until the cast animation raises the hand (windup). The
@@ -4742,7 +4742,7 @@ fn start_projectile_channel(
 fn spawn_channel_projectile(
     ctx: &ReducerContext,
     active_cast: &ActiveCast,
-    caster_state: &PlayerSnapshot,
+    caster_state: &CombatActorSnapshot,
     now: Timestamp,
 ) -> Result<bool, String> {
     let Ok(kind) = SpellId::new(active_cast.kind.as_str()) else {
@@ -4790,7 +4790,7 @@ fn spawn_channel_projectile(
 fn start_electrocute_channel(
     ctx: &ReducerContext,
     active_cast: &ActiveCast,
-    caster_state: &PlayerSnapshot,
+    caster_state: &CombatActorSnapshot,
     now: Timestamp,
 ) -> Result<bool, String> {
     let definition = bespoke_spell_definition(BespokeRuntimeSpell::Electrocute)
@@ -4833,7 +4833,7 @@ fn start_electrocute_channel(
 fn tick_electrocute_channel(
     ctx: &ReducerContext,
     active_cast: &ActiveCast,
-    caster_state: &PlayerSnapshot,
+    caster_state: &CombatActorSnapshot,
     now: Timestamp,
 ) -> Result<bool, String> {
     let definition = bespoke_spell_definition(BespokeRuntimeSpell::Electrocute)
@@ -4891,7 +4891,7 @@ fn tick_electrocute_channel(
 fn stop_electrocute_channel(
     ctx: &ReducerContext,
     active_cast: &ActiveCast,
-    caster_state: &PlayerSnapshot,
+    caster_state: &CombatActorSnapshot,
     now: Timestamp,
     override_end: Option<Vec3>,
 ) {
@@ -4943,7 +4943,7 @@ fn stop_electrocute_channel(
 fn resolve_electrocute_channel_state(
     ctx: &ReducerContext,
     active_cast: &ActiveCast,
-    caster_state: &PlayerSnapshot,
+    caster_state: &CombatActorSnapshot,
 ) -> ElectrocuteChannelResolution {
     let Some(target) = resolve_target(ctx, active_cast.caster, active_cast.target_id.as_str())
     else {
@@ -4996,10 +4996,10 @@ fn queue_electrocute_damage(ctx: &ReducerContext, active_cast: &ActiveCast, targ
     else {
         return;
     };
-    let Some(caster_state) = player_snapshot_for(ctx, active_cast.caster) else {
+    let Some(caster_state) = actor_snapshot_for(ctx, active_cast.caster) else {
         return;
     };
-    let Some(target_state) = player_snapshot_for(ctx, target_id) else {
+    let Some(target_state) = actor_snapshot_for(ctx, target_id) else {
         return;
     };
     let definition = bespoke_spell_definition(BespokeRuntimeSpell::Electrocute)
@@ -5087,7 +5087,7 @@ fn queue_electrocute_damage(ctx: &ReducerContext, active_cast: &ActiveCast, targ
     );
 }
 
-fn default_electrocute_end_point(caster_state: &PlayerSnapshot) -> Vec3 {
+fn default_electrocute_end_point(caster_state: &CombatActorSnapshot) -> Vec3 {
     let origin = Vec3::new(
         caster_state.pos_x,
         caster_state.pos_y + caster_state.hit_height,
@@ -5104,7 +5104,7 @@ fn default_electrocute_end_point(caster_state: &PlayerSnapshot) -> Vec3 {
     )
 }
 
-fn default_forward_direction(caster_state: &PlayerSnapshot) -> Vec3 {
+fn default_forward_direction(caster_state: &CombatActorSnapshot) -> Vec3 {
     Vec3::new(
         caster_state.facing_yaw.sin(),
         0.0,
@@ -5112,7 +5112,7 @@ fn default_forward_direction(caster_state: &PlayerSnapshot) -> Vec3 {
     )
 }
 
-fn distance_to_target(caster_state: &PlayerSnapshot, target: &PlayerSnapshot) -> f32 {
+fn distance_to_target(caster_state: &CombatActorSnapshot, target: &CombatActorSnapshot) -> f32 {
     let dx = target.pos_x - caster_state.pos_x;
     let dy =
         (target.pos_y + target.hit_height * 0.8) - (caster_state.pos_y + caster_state.hit_height);
@@ -5120,7 +5120,10 @@ fn distance_to_target(caster_state: &PlayerSnapshot, target: &PlayerSnapshot) ->
     (dx * dx + dy * dy + dz * dz).sqrt()
 }
 
-fn horizontal_distance_to_target(caster_state: &PlayerSnapshot, target: &PlayerSnapshot) -> f32 {
+fn horizontal_distance_to_target(
+    caster_state: &CombatActorSnapshot,
+    target: &CombatActorSnapshot,
+) -> f32 {
     let dx = target.pos_x - caster_state.pos_x;
     let dz = target.pos_z - caster_state.pos_z;
     (dx * dx + dz * dz).sqrt()
@@ -5143,7 +5146,7 @@ fn seconds_to_duration(seconds: f32) -> Duration {
 fn spawn_meteor(
     ctx: &ReducerContext,
     caster: Identity,
-    _state: &PlayerSnapshot,
+    _state: &CombatActorSnapshot,
     target_x: f32,
     target_y: f32,
     target_z: f32,
@@ -5236,8 +5239,8 @@ fn spawn_meteor(
 fn spawn_instant_beam(
     ctx: &ReducerContext,
     caster: Identity,
-    state: &PlayerSnapshot,
-    target: &PlayerSnapshot,
+    state: &CombatActorSnapshot,
+    target: &CombatActorSnapshot,
     charge_count: u32,
     charge_pct: f32,
     action_instance_id: &str,
@@ -5269,7 +5272,7 @@ fn spawn_instant_beam(
     dir_y = ny;
     dir_z = nz;
 
-    let players: Vec<_> = collect_player_snapshots(ctx)
+    let players: Vec<_> = collect_actor_snapshots(ctx)
         .into_iter()
         .filter(|player| {
             target_audience_allows(ctx, caster, player.player_id, definition.target_audience)
@@ -5313,7 +5316,7 @@ fn spawn_instant_beam(
         ) {
             match hit.kind {
                 SceneHitKind::Player(target_id) => {
-                    let Some(hit_target) = player_snapshot_for(ctx, target_id) else {
+                    let Some(hit_target) = actor_snapshot_for(ctx, target_id) else {
                         continue;
                     };
                     if target_id == target.player_id
@@ -5448,7 +5451,7 @@ fn spawn_instant_beam(
 fn cast_generic_area(
     ctx: &ReducerContext,
     caster: Identity,
-    state: &PlayerSnapshot,
+    state: &CombatActorSnapshot,
     kind: &SpellId,
     aim_x: f32,
     aim_y: f32,
@@ -5706,10 +5709,10 @@ fn resolve_area_impact(ctx: &ReducerContext, impact: AreaImpactResolution<'_>) {
         query_radius
     };
 
-    let player_snapshots = PlayerSnapshotSet::collect(ctx);
-    let players = player_snapshots.as_slice();
+    let actor_snapshots = CombatActorSnapshotSet::collect(ctx);
+    let players = actor_snapshots.as_slice();
     let mut candidate_indices = Vec::new();
-    player_snapshots.query_disc_indices(
+    actor_snapshots.query_disc_indices(
         impact.area_center.x,
         impact.area_center.z,
         candidate_radius,
@@ -5843,7 +5846,7 @@ fn area_shape_for(definition: &SpellDefinition) -> CombatAreaShape {
 fn area_shape_contains_player(
     shape: CombatAreaShape,
     impact: &AreaImpactResolution<'_>,
-    player: &PlayerSnapshot,
+    player: &CombatActorSnapshot,
 ) -> bool {
     shape.contains_player(
         impact.area_center.x,
@@ -5864,7 +5867,7 @@ fn area_contact_direction(
     center_z: f32,
     origin_x: f32,
     origin_z: f32,
-    target: &PlayerSnapshot,
+    target: &CombatActorSnapshot,
 ) -> Vec3 {
     if let Some((dir_x, _, dir_z)) =
         normalize_vec3(target.pos_x - center_x, 0.0, target.pos_z - center_z)
@@ -5883,7 +5886,7 @@ fn area_contact_direction(
 
 fn resolve_generic_area_center(
     definition: &SpellDefinition,
-    state: &PlayerSnapshot,
+    state: &CombatActorSnapshot,
     aim_x: f32,
     aim_y: f32,
     aim_z: f32,
@@ -5914,7 +5917,7 @@ fn resolve_generic_area_center_for_cast(
     ctx: &ReducerContext,
     caster: Identity,
     definition: &SpellDefinition,
-    state: &PlayerSnapshot,
+    state: &CombatActorSnapshot,
     aim_x: f32,
     aim_y: f32,
     aim_z: f32,
@@ -5937,7 +5940,7 @@ fn self_origin_area_projects_to_ground(definition: &SpellDefinition) -> bool {
 fn spawn_negate(
     ctx: &ReducerContext,
     caster: Identity,
-    state: &PlayerSnapshot,
+    state: &CombatActorSnapshot,
     action_instance_id: &str,
     ability_id: &str,
 ) -> Result<(), String> {
@@ -6003,7 +6006,7 @@ fn spawn_negate(
 fn cast_direct_target(
     ctx: &ReducerContext,
     caster: Identity,
-    state: &PlayerSnapshot,
+    state: &CombatActorSnapshot,
     kind: &SpellId,
     target_id: &str,
     mode: CastExecutionMode,
@@ -6055,8 +6058,8 @@ fn cast_direct_target(
 fn apply_direct_target_spell(
     ctx: &ReducerContext,
     caster: Identity,
-    state: &PlayerSnapshot,
-    target: &PlayerSnapshot,
+    state: &CombatActorSnapshot,
+    target: &CombatActorSnapshot,
     kind: &SpellId,
     action_instance_id: &str,
     ability_id: &str,
@@ -6232,7 +6235,7 @@ fn apply_direct_target_spell(
 fn cast_apply_status(
     ctx: &ReducerContext,
     caster: Identity,
-    state: &PlayerSnapshot,
+    state: &CombatActorSnapshot,
     kind: &SpellId,
     target_id: &str,
     mode: CastExecutionMode,
@@ -6295,7 +6298,7 @@ fn cast_apply_status(
 fn apply_status_to_self(
     ctx: &ReducerContext,
     caster: Identity,
-    state: &PlayerSnapshot,
+    state: &CombatActorSnapshot,
     kind: &SpellId,
     action_instance_id: &str,
     ability_id: &str,
@@ -6351,7 +6354,7 @@ fn apply_status_to_self(
     )];
 
     if definition.radius > 0.0 && definition.target_audience == TargetAudience::PartyOrSelf {
-        for player in collect_player_snapshots(ctx) {
+        for player in collect_actor_snapshots(ctx) {
             if !player.alive || player.player_id == caster {
                 continue;
             }
@@ -6461,8 +6464,8 @@ fn defiance_damage_taken_reduction_for_health(current_hp: i32, max_hp: i32) -> f
 fn apply_status_to_target(
     ctx: &ReducerContext,
     caster: Identity,
-    state: &PlayerSnapshot,
-    target: &PlayerSnapshot,
+    state: &CombatActorSnapshot,
+    target: &CombatActorSnapshot,
     kind: &SpellId,
     action_instance_id: &str,
     ability_id: &str,
@@ -6618,7 +6621,7 @@ fn apply_status_to_target(
 fn cast_self_resource(
     ctx: &ReducerContext,
     caster: Identity,
-    state: &PlayerSnapshot,
+    state: &CombatActorSnapshot,
     kind: &SpellId,
     action_instance_id: &str,
     ability_id: &str,
@@ -6666,7 +6669,7 @@ fn cast_aura(ctx: &ReducerContext, caster: Identity, kind: &SpellId, ability_id:
 fn cast_remove_status(
     ctx: &ReducerContext,
     caster: Identity,
-    state: &PlayerSnapshot,
+    state: &CombatActorSnapshot,
     kind: &SpellId,
     target_id: &str,
     mode: CastExecutionMode,
@@ -6753,7 +6756,7 @@ fn cast_remove_status(
 fn cast_consume_status(
     ctx: &ReducerContext,
     caster: Identity,
-    state: &PlayerSnapshot,
+    state: &CombatActorSnapshot,
     kind: &SpellId,
     target_id: &str,
     mode: CastExecutionMode,
@@ -6855,7 +6858,7 @@ fn cast_consume_status(
 fn emit_remove_status_impact_event(
     ctx: &ReducerContext,
     caster: Identity,
-    state: &PlayerSnapshot,
+    state: &CombatActorSnapshot,
     kind: &SpellId,
     target: Identity,
     action_instance_id: &str,
@@ -6863,7 +6866,7 @@ fn emit_remove_status_impact_event(
     now: Timestamp,
 ) {
     let origin = Vec3::new(state.pos_x, state.pos_y, state.pos_z);
-    let target_snapshot = player_snapshot_for(ctx, target);
+    let target_snapshot = actor_snapshot_for(ctx, target);
     let point = target_snapshot
         .map(|target| Vec3::new(target.pos_x, target.pos_y, target.pos_z))
         .unwrap_or(origin);
@@ -6896,7 +6899,7 @@ fn emit_remove_status_impact_event(
 fn resolve_remove_status_target(
     ctx: &ReducerContext,
     caster: Identity,
-    state: &PlayerSnapshot,
+    state: &CombatActorSnapshot,
     target_id: &str,
     target_audience: TargetAudience,
     requires_target: bool,
@@ -7040,8 +7043,8 @@ fn resolve_movement_delivery_hit(
     ability_id: &str,
     caster: Identity,
     kind: &SpellId,
-    caster_state: &PlayerSnapshot,
-    target: &PlayerSnapshot,
+    caster_state: &CombatActorSnapshot,
+    target: &CombatActorSnapshot,
 ) -> Result<(), String> {
     let now = ctx.timestamp;
     let movement = movement_delivery_for_action_id(kind.as_str())
@@ -7236,8 +7239,8 @@ fn emit_direct_spell_terminal_event(
 }
 
 fn is_target_within_facing_arc(
-    caster: &PlayerSnapshot,
-    target: &PlayerSnapshot,
+    caster: &CombatActorSnapshot,
+    target: &CombatActorSnapshot,
     facing_arc_radians: f32,
 ) -> bool {
     let to_target_x = target.pos_x - caster.pos_x;
@@ -7253,9 +7256,9 @@ fn is_target_within_facing_arc(
 
 fn is_target_within_live_facing_arc(
     ctx: &ReducerContext,
-    caster_state: &PlayerSnapshot,
+    caster_state: &CombatActorSnapshot,
     caster_id: Identity,
-    target: &PlayerSnapshot,
+    target: &CombatActorSnapshot,
     facing_arc_radians: f32,
 ) -> bool {
     let facing_yaw = ctx
@@ -7295,8 +7298,8 @@ mod tests {
         spell_primary_resource_cost_for_action, valid_cast_action_token,
         violates_active_cast_lifetime_mobility_requirement_for_tick,
         violates_cast_mobility_requirement, ActiveCastTerminalOutcome, CastExecutionMode,
-        CombatAreaShape, CurvedTargetProjectileTunables, PlayerSnapshot, SpellBehavior, SpellId,
-        Vec3, FACING_DOT_EPSILON, SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK,
+        CombatActorSnapshot, CombatAreaShape, CurvedTargetProjectileTunables, SpellBehavior,
+        SpellId, Vec3, FACING_DOT_EPSILON, SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK,
         SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK_FIXED_Y, TARGET_FACING_ARC_RADIANS,
     };
     use crate::combat::scene_query::is_direction_within_facing_arc;
@@ -7316,8 +7319,8 @@ mod tests {
         }
     }
 
-    fn test_snapshot(pos_x: f32, pos_z: f32, facing_yaw: f32) -> PlayerSnapshot {
-        PlayerSnapshot {
+    fn test_snapshot(pos_x: f32, pos_z: f32, facing_yaw: f32) -> CombatActorSnapshot {
+        CombatActorSnapshot {
             player_id: Identity::ZERO,
             alive: true,
             pos_x,

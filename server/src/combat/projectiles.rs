@@ -4,7 +4,7 @@ use std::time::Duration;
 use spacetimedb::{Identity, ReducerContext, Table, Timestamp};
 
 use crate::arena::players_share_world_context;
-use crate::combat::player_snapshot::{PlayerSnapshot, PlayerSnapshotSet};
+use crate::combat::actor_snapshot::{CombatActorSnapshot, CombatActorSnapshotSet};
 use crate::combat::scene_query::{
     first_hit_on_segment_candidates_with_world_stats, first_player_hit_on_segment_candidates,
     first_world_hit_on_segment_with_stats, raycast_capsule_with_padding,
@@ -80,14 +80,14 @@ struct ProjectileTickMetricsFrame {
 
 #[allow(dead_code)]
 pub(crate) fn tick_combat_projectiles(ctx: &ReducerContext, dt: f32) -> Result<(), String> {
-    let player_snapshots = PlayerSnapshotSet::collect(ctx);
-    tick_combat_projectiles_with_snapshots(ctx, dt, &player_snapshots)
+    let actor_snapshots = CombatActorSnapshotSet::collect(ctx);
+    tick_combat_projectiles_with_snapshots(ctx, dt, &actor_snapshots)
 }
 
 pub(crate) fn tick_combat_projectiles_with_snapshots(
     ctx: &ReducerContext,
     dt: f32,
-    player_snapshots: &PlayerSnapshotSet,
+    actor_snapshots: &CombatActorSnapshotSet,
 ) -> Result<(), String> {
     let now = ctx.timestamp;
     let projectiles: Vec<ActiveCombatProjectile> =
@@ -97,8 +97,8 @@ pub(crate) fn tick_combat_projectiles_with_snapshots(
         return Ok(());
     }
 
-    let players = player_snapshots.as_slice();
-    let player_index_by_id = player_snapshots.index_by_id();
+    let players = actor_snapshots.as_slice();
+    let player_index_by_id = actor_snapshots.index_by_id();
     let mut candidate_indices = Vec::new();
     let mut metrics = ProjectileTickMetricsFrame {
         active_projectile_count: projectiles.len().min(u32::MAX as usize) as u32,
@@ -121,7 +121,7 @@ pub(crate) fn tick_combat_projectiles_with_snapshots(
             now,
             dt,
             projectile,
-            player_snapshots,
+            actor_snapshots,
             players,
             player_index_by_id,
             &mut candidate_indices,
@@ -150,8 +150,8 @@ fn tick_projectile_instance(
     now: Timestamp,
     dt: f32,
     mut projectile: ActiveCombatProjectile,
-    player_snapshots: &PlayerSnapshotSet,
-    players: &[PlayerSnapshot],
+    actor_snapshots: &CombatActorSnapshotSet,
+    players: &[CombatActorSnapshot],
     player_index_by_id: &HashMap<Identity, usize>,
     candidate_indices: &mut Vec<usize>,
     metrics: &mut ProjectileTickMetricsFrame,
@@ -184,7 +184,7 @@ fn tick_projectile_instance(
             dt,
             projectile,
             spell_definition,
-            player_snapshots,
+            actor_snapshots,
             players,
             player_index_by_id,
             candidate_indices,
@@ -199,7 +199,7 @@ fn tick_projectile_instance(
             dt,
             projectile,
             spell_definition,
-            player_snapshots,
+            actor_snapshots,
             players,
             candidate_indices,
             metrics,
@@ -227,7 +227,7 @@ fn tick_projectile_instance(
             ctx,
             &mut projectile,
             spell_definition,
-            player_snapshots,
+            actor_snapshots,
             players,
             candidate_indices,
             dt,
@@ -238,7 +238,7 @@ fn tick_projectile_instance(
             ctx,
             &mut projectile,
             spell_definition,
-            player_snapshots,
+            actor_snapshots,
             players,
             candidate_indices,
             dt,
@@ -382,8 +382,8 @@ fn tick_orbit_projectile_instance(
     dt: f32,
     mut projectile: ActiveCombatProjectile,
     spell_definition: Option<&SpellRuntimeDefinition>,
-    player_snapshots: &PlayerSnapshotSet,
-    players: &[PlayerSnapshot],
+    actor_snapshots: &CombatActorSnapshotSet,
+    players: &[CombatActorSnapshot],
     player_index_by_id: &HashMap<Identity, usize>,
     candidate_indices: &mut Vec<usize>,
     metrics: &mut ProjectileTickMetricsFrame,
@@ -437,7 +437,7 @@ fn tick_orbit_projectile_instance(
         now,
         &projectile,
         definition,
-        player_snapshots,
+        actor_snapshots,
         players,
         player_index_by_id,
         candidate_indices,
@@ -459,7 +459,7 @@ fn tick_orbit_projectile_instance(
 
 fn update_orbit_projectile_position(
     projectile: &mut ActiveCombatProjectile,
-    caster: &PlayerSnapshot,
+    caster: &CombatActorSnapshot,
 ) {
     let angle = projectile.orbit_initial_yaw
         + projectile.orbit_phase_offset_deg.to_radians()
@@ -480,13 +480,13 @@ fn resolve_orbit_projectile_contacts(
     now: Timestamp,
     projectile: &ActiveCombatProjectile,
     definition: &SpellRuntimeDefinition,
-    player_snapshots: &PlayerSnapshotSet,
-    players: &[PlayerSnapshot],
+    actor_snapshots: &CombatActorSnapshotSet,
+    players: &[CombatActorSnapshot],
     player_index_by_id: &HashMap<Identity, usize>,
     candidate_indices: &mut Vec<usize>,
     metrics: &mut ProjectileTickMetricsFrame,
 ) -> bool {
-    player_snapshots.query_disc_indices(
+    actor_snapshots.query_disc_indices(
         projectile.pos_x,
         projectile.pos_z,
         projectile.radius,
@@ -645,7 +645,7 @@ fn resolve_orbit_projectile_contacts(
 
 fn orbit_projectile_hits_target(
     projectile: &ActiveCombatProjectile,
-    target: &PlayerSnapshot,
+    target: &CombatActorSnapshot,
 ) -> bool {
     let combined_radius = projectile.radius.max(0.0) + target.hit_radius.max(0.0);
     let dx = projectile.pos_x - target.pos_x;
@@ -665,8 +665,8 @@ fn tick_boomerang_projectile_instance(
     dt: f32,
     mut projectile: ActiveCombatProjectile,
     spell_definition: Option<&SpellRuntimeDefinition>,
-    player_snapshots: &PlayerSnapshotSet,
-    players: &[PlayerSnapshot],
+    actor_snapshots: &CombatActorSnapshotSet,
+    players: &[CombatActorSnapshot],
     candidate_indices: &mut Vec<usize>,
     metrics: &mut ProjectileTickMetricsFrame,
 ) {
@@ -731,7 +731,7 @@ fn tick_boomerang_projectile_instance(
                 now,
                 &mut projectile,
                 definition,
-                player_snapshots,
+                actor_snapshots,
                 players,
                 candidate_indices,
                 outbound_speed * outbound_dt,
@@ -777,7 +777,7 @@ fn tick_boomerang_projectile_instance(
             now,
             &mut projectile,
             definition,
-            player_snapshots,
+            actor_snapshots,
             players,
             candidate_indices,
             return_speed * remaining_dt,
@@ -818,7 +818,7 @@ fn tick_boomerang_projectile_instance(
 
 fn update_boomerang_return_direction(
     projectile: &mut ActiveCombatProjectile,
-    caster: &PlayerSnapshot,
+    caster: &CombatActorSnapshot,
 ) -> bool {
     let target_y = caster.pos_y + caster.hit_height.max(0.0) * 0.5;
     let Some((dir_x, dir_y, dir_z)) = normalize_vec3(
@@ -839,8 +839,8 @@ fn advance_boomerang_segment(
     now: Timestamp,
     projectile: &mut ActiveCombatProjectile,
     definition: &SpellRuntimeDefinition,
-    player_snapshots: &PlayerSnapshotSet,
-    players: &[PlayerSnapshot],
+    actor_snapshots: &CombatActorSnapshotSet,
+    players: &[CombatActorSnapshot],
     candidate_indices: &mut Vec<usize>,
     distance: f32,
     can_hit_caster: bool,
@@ -905,7 +905,7 @@ fn advance_boomerang_segment(
         now,
         projectile,
         definition,
-        player_snapshots,
+        actor_snapshots,
         players,
         candidate_indices,
         start_x,
@@ -975,8 +975,8 @@ fn resolve_boomerang_enemy_contacts_on_segment(
     now: Timestamp,
     projectile: &ActiveCombatProjectile,
     definition: &SpellRuntimeDefinition,
-    player_snapshots: &PlayerSnapshotSet,
-    players: &[PlayerSnapshot],
+    actor_snapshots: &CombatActorSnapshotSet,
+    players: &[CombatActorSnapshot],
     candidate_indices: &mut Vec<usize>,
     start_x: f32,
     start_y: f32,
@@ -986,7 +986,7 @@ fn resolve_boomerang_enemy_contacts_on_segment(
 ) -> bool {
     let end_x = start_x + projectile.dir_x * max_distance;
     let end_z = start_z + projectile.dir_z * max_distance;
-    player_snapshots.query_segment_indices(
+    actor_snapshots.query_segment_indices(
         start_x,
         start_z,
         end_x,
@@ -1156,7 +1156,7 @@ fn upsert_projectile_target_state(ctx: &ReducerContext, state: ActiveCombatProje
 fn retarget_projectile_towards_live_target(
     ctx: &ReducerContext,
     projectile: &mut ActiveCombatProjectile,
-    players: &[PlayerSnapshot],
+    players: &[CombatActorSnapshot],
     player_index_by_id: &HashMap<Identity, usize>,
     spawn_height: f32,
     turn_rate: f32,
@@ -1198,8 +1198,8 @@ fn advance_projectile_with_collision(
     ctx: &ReducerContext,
     projectile: &mut ActiveCombatProjectile,
     spell_definition: Option<&SpellRuntimeDefinition>,
-    player_snapshots: &PlayerSnapshotSet,
-    players: &[PlayerSnapshot],
+    actor_snapshots: &CombatActorSnapshotSet,
+    players: &[CombatActorSnapshot],
     candidate_indices: &mut Vec<usize>,
     dt: f32,
     metrics: &mut ProjectileTickMetricsFrame,
@@ -1224,7 +1224,7 @@ fn advance_projectile_with_collision(
         ctx,
         projectile,
         spell_definition,
-        player_snapshots,
+        actor_snapshots,
         players,
         candidate_indices,
         start_x,
@@ -1241,8 +1241,8 @@ fn advance_curved_target_projectile_with_collision(
     ctx: &ReducerContext,
     projectile: &mut ActiveCombatProjectile,
     spell_definition: Option<&SpellRuntimeDefinition>,
-    player_snapshots: &PlayerSnapshotSet,
-    players: &[PlayerSnapshot],
+    actor_snapshots: &CombatActorSnapshotSet,
+    players: &[CombatActorSnapshot],
     candidate_indices: &mut Vec<usize>,
     dt: f32,
     metrics: &mut ProjectileTickMetricsFrame,
@@ -1268,7 +1268,7 @@ fn advance_curved_target_projectile_with_collision(
         ctx,
         projectile,
         spell_definition,
-        player_snapshots,
+        actor_snapshots,
         players,
         candidate_indices,
         start_x,
@@ -1286,8 +1286,8 @@ fn advance_projectile_segment_with_collision(
     ctx: &ReducerContext,
     projectile: &mut ActiveCombatProjectile,
     spell_definition: Option<&SpellRuntimeDefinition>,
-    player_snapshots: &PlayerSnapshotSet,
-    players: &[PlayerSnapshot],
+    actor_snapshots: &CombatActorSnapshotSet,
+    players: &[CombatActorSnapshot],
     candidate_indices: &mut Vec<usize>,
     start_x: f32,
     start_y: f32,
@@ -1298,7 +1298,7 @@ fn advance_projectile_segment_with_collision(
     metrics: &mut ProjectileTickMetricsFrame,
 ) -> ProjectileAdvance {
     let terrain_conforming = projectile_uses_terrain_conforming_collision(spell_definition);
-    player_snapshots.query_segment_indices(
+    actor_snapshots.query_segment_indices(
         start_x,
         start_z,
         end_x,
@@ -1404,7 +1404,7 @@ fn projectile_spell_spawn_height(spell_definition: Option<&SpellRuntimeDefinitio
 fn resolve_projectile_defense(
     ctx: &ReducerContext,
     projectile: &ActiveCombatProjectile,
-    target: &PlayerSnapshot,
+    target: &CombatActorSnapshot,
     point_x: f32,
     point_y: f32,
     point_z: f32,
@@ -1430,7 +1430,7 @@ fn resolve_projectile_defense(
 fn resolve_projectile_defense_with_metadata(
     ctx: &ReducerContext,
     projectile: &ActiveCombatProjectile,
-    target: &PlayerSnapshot,
+    target: &CombatActorSnapshot,
     point_x: f32,
     point_y: f32,
     point_z: f32,
@@ -2269,8 +2269,8 @@ mod tests {
         Identity::from_hex(format!("{byte:064x}").as_str()).expect("test identity should parse")
     }
 
-    fn test_snapshot(player_id: Identity) -> PlayerSnapshot {
-        PlayerSnapshot {
+    fn test_snapshot(player_id: Identity) -> CombatActorSnapshot {
+        CombatActorSnapshot {
             player_id,
             alive: true,
             pos_x: 0.0,

@@ -244,8 +244,7 @@ pub fn start_dodge(
         return Ok(());
     }
 
-    let Some(authoritative) = crate::combat::player_snapshot::player_snapshot_for(ctx, owner)
-    else {
+    let Some(authoritative) = crate::combat::actor_snapshot::actor_snapshot_for(ctx, owner) else {
         record_optional_movement_prediction_result(
             ctx,
             owner,
@@ -271,7 +270,7 @@ pub fn start_dodge(
     };
     let effective_input_tick =
         sanitize_effective_input_tick(physics.last_processed_tick, effective_input_tick);
-    let dodge_state = crate::combat::player_snapshot::PlayerSnapshot {
+    let dodge_state = crate::combat::actor_snapshot::CombatActorSnapshot {
         pos_x: snapshot.pos_x,
         pos_y: snapshot.pos_y,
         pos_z: snapshot.pos_z,
@@ -431,11 +430,10 @@ pub(crate) fn start_movement_delivery_request(
         return Ok(());
     };
 
-    let Some(authoritative) = crate::combat::player_snapshot::player_snapshot_for(ctx, owner)
-    else {
+    let Some(authoritative) = crate::combat::actor_snapshot::actor_snapshot_for(ctx, owner) else {
         return Ok(());
     };
-    let cast_state = crate::combat::player_snapshot::PlayerSnapshot {
+    let cast_state = crate::combat::actor_snapshot::CombatActorSnapshot {
         pos_x: snapshot.pos_x,
         pos_y: snapshot.pos_y,
         pos_z: snapshot.pos_z,
@@ -488,11 +486,10 @@ pub(crate) fn launch_movement_delivery(
     movement_kind: &str,
     action_id: &SpellId,
     target_id: &str,
-    cast_state: crate::combat::player_snapshot::PlayerSnapshot,
+    cast_state: crate::combat::actor_snapshot::CombatActorSnapshot,
     now: Timestamp,
 ) -> Result<bool, String> {
-    let Some(authoritative) = crate::combat::player_snapshot::player_snapshot_for(ctx, owner)
-    else {
+    let Some(authoritative) = crate::combat::actor_snapshot::actor_snapshot_for(ctx, owner) else {
         log::info!(
             "[MOVEMENT_DELIVERY] caster={} action={} rejected reason=missing_authoritative_snapshot entry=launch",
             &owner.to_hex()[..8],
@@ -985,8 +982,8 @@ fn sanitize_effective_input_tick(last_processed_tick: u32, requested_tick: u32) 
 fn dodge_uses_air_path(
     ctx: &ReducerContext,
     owner: Identity,
-    authoritative: &crate::combat::player_snapshot::PlayerSnapshot,
-    dodge_state: &crate::combat::player_snapshot::PlayerSnapshot,
+    authoritative: &crate::combat::actor_snapshot::CombatActorSnapshot,
+    dodge_state: &crate::combat::actor_snapshot::CombatActorSnapshot,
 ) -> bool {
     crate::spells::special_movement_uses_air_path(ctx, owner, authoritative, dodge_state)
 }
@@ -1094,8 +1091,8 @@ mod tests {
     fn movement_snapshot(
         pos_y: f32,
         grounded: bool,
-    ) -> crate::combat::player_snapshot::PlayerSnapshot {
-        crate::combat::player_snapshot::PlayerSnapshot {
+    ) -> crate::combat::actor_snapshot::CombatActorSnapshot {
+        crate::combat::actor_snapshot::CombatActorSnapshot {
             player_id: Identity::ZERO,
             alive: true,
             pos_x: 0.0,

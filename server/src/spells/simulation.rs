@@ -1,7 +1,7 @@
 use spacetimedb::{Identity, ReducerContext, Table};
 
 use crate::arena::players_share_world_context;
-use crate::combat::player_snapshot::{PlayerSnapshot, PlayerSnapshotSet};
+use crate::combat::actor_snapshot::{CombatActorSnapshot, CombatActorSnapshotSet};
 use crate::combat::scene_query::{aoe_hits_player, first_hit_on_segment, SceneHitKind};
 use crate::combat::{
     finish_combat_projectile_with_event, queue_effects, ActiveCombatProjectile, DamageDelivery,
@@ -31,14 +31,14 @@ struct NegateSpellCollision {
 
 #[allow(dead_code)]
 pub(crate) fn tick_bespoke_spells(ctx: &ReducerContext, dt: f32) -> Result<(), String> {
-    let player_snapshots = PlayerSnapshotSet::collect(ctx);
-    tick_bespoke_spells_with_snapshots(ctx, dt, &player_snapshots)
+    let actor_snapshots = CombatActorSnapshotSet::collect(ctx);
+    tick_bespoke_spells_with_snapshots(ctx, dt, &actor_snapshots)
 }
 
 pub(crate) fn tick_bespoke_spells_with_snapshots(
     ctx: &ReducerContext,
     dt: f32,
-    player_snapshots: &PlayerSnapshotSet,
+    actor_snapshots: &CombatActorSnapshotSet,
 ) -> Result<(), String> {
     let now = ctx.timestamp;
     let spells: Vec<ActiveBespokeSpell> = ctx.db.active_bespoke_spell().iter().collect();
@@ -46,7 +46,7 @@ pub(crate) fn tick_bespoke_spells_with_snapshots(
         return Ok(());
     }
 
-    let players = player_snapshots.as_slice();
+    let players = actor_snapshots.as_slice();
     for mut spell in spells {
         if ctx
             .db
@@ -87,7 +87,7 @@ fn tick_bespoke_spell_instance(
     dt: f32,
     spell: ActiveBespokeSpell,
     kind: &SpellId,
-    players: &[PlayerSnapshot],
+    players: &[CombatActorSnapshot],
 ) {
     match BespokeRuntimeSpell::from_spell_id(kind) {
         Some(BespokeRuntimeSpell::Meteor) => tick_meteor_spell(ctx, now, dt, spell, players),
@@ -244,7 +244,7 @@ fn tick_meteor_spell(
     now: spacetimedb::Timestamp,
     dt: f32,
     mut spell: ActiveBespokeSpell,
-    players: &[PlayerSnapshot],
+    players: &[CombatActorSnapshot],
 ) {
     let block_source = players
         .iter()

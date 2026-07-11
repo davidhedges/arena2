@@ -20,7 +20,9 @@ use crate::arena::{
     arena_seed_for_identity, open_world_scene_name_for_identity, players_share_world_context,
 };
 use crate::auto_attack::arm_auto_attack_if_unarmed_with_cadence;
-use crate::combat::player_snapshot::{player_snapshot_for, PlayerSnapshot, PlayerSnapshotSet};
+use crate::combat::actor_snapshot::{
+    actor_snapshot_for, CombatActorSnapshot, CombatActorSnapshotSet,
+};
 use crate::combat::position_history::{
     lag_comp_config, lag_comp_sweep_rewind_enabled, press_view_delay_micros,
     record_press_view_delay, rewound_pose_for, sweep_rewind_membership, view_delay_signal_label,
@@ -2155,7 +2157,7 @@ struct TargetedPositionalGate<'a> {
     source_label: &'a str,
     strike_id: &'a str,
     caster_phys: &'a crate::player_physics::PlayerPhysics,
-    target_snapshot: &'a PlayerSnapshot,
+    target_snapshot: &'a CombatActorSnapshot,
     check_x: f32,
     check_y: f32,
     check_z: f32,
@@ -2233,7 +2235,7 @@ fn evaluate_targeted_positional_gate(
     // gap-close press reads LineOfSightBlocked, not GapCloseBlocked. Geometry
     // is static; only the target endpoint moves with the checked pose.
     if gate.requires_target_los {
-        let Some(caster_snapshot) = player_snapshot_for(ctx, gate.caster) else {
+        let Some(caster_snapshot) = actor_snapshot_for(ctx, gate.caster) else {
             return Some(ActionRejectReason::InvalidInput);
         };
         let mut los_target = *gate.target_snapshot;
@@ -2922,7 +2924,7 @@ fn perform_melee_attack_for_internal(
                 ActionRejectReason::InvalidTarget,
             ));
         }
-        let Some(target_snapshot) = player_snapshot_for(ctx, target) else {
+        let Some(target_snapshot) = actor_snapshot_for(ctx, target) else {
             log::warn!(
                 "[MELEE] {} {} — target {} has no combat snapshot",
                 &caster.to_hex()[..8],
@@ -3830,7 +3832,7 @@ fn resolve_pending_projectile_release(
         return;
     }
 
-    let Some(caster) = player_snapshot_for(ctx, row.source) else {
+    let Some(caster) = actor_snapshot_for(ctx, row.source) else {
         return;
     };
     if !caster.alive || has_active_disabling_status(ctx, row.source, now) {
@@ -3838,7 +3840,7 @@ fn resolve_pending_projectile_release(
         return;
     }
 
-    let Some(target) = player_snapshot_for(ctx, row.target) else {
+    let Some(target) = actor_snapshot_for(ctx, row.target) else {
         emit_projectile_release_fizzle(ctx, row, &caster, now);
         return;
     };
@@ -4009,7 +4011,7 @@ fn resolve_pending_projectile_release(
 fn emit_projectile_release_fizzle(
     ctx: &ReducerContext,
     row: &PendingProjectileRelease,
-    caster: &crate::combat::player_snapshot::PlayerSnapshot,
+    caster: &crate::combat::actor_snapshot::CombatActorSnapshot,
     now: Timestamp,
 ) {
     let projectile_instance_id = format!("{}:projectile:{}", row.action_instance_id, row.hit_index);
@@ -4115,20 +4117,20 @@ fn normalize_vec3(x: f32, y: f32, z: f32) -> Option<(f32, f32, f32)> {
 }
 
 fn resolve_pending_melee_impact(ctx: &ReducerContext, row: &PendingMeleeImpact, now: Timestamp) {
-    let player_snapshots = PlayerSnapshotSet::collect(ctx);
+    let actor_snapshots = CombatActorSnapshotSet::collect(ctx);
     if row.target == Identity::ZERO {
-        resolve_pending_melee_hit_volume(ctx, row, now, &player_snapshots);
+        resolve_pending_melee_hit_volume(ctx, row, now, &actor_snapshots);
         return;
     }
 
-    resolve_pending_melee_target_impact(ctx, row, now, &player_snapshots);
+    resolve_pending_melee_target_impact(ctx, row, now, &actor_snapshots);
 }
 
 fn resolve_pending_melee_hit_volume(
     ctx: &ReducerContext,
     row: &PendingMeleeImpact,
     now: Timestamp,
-    player_snapshots: &PlayerSnapshotSet,
+    actor_snapshots: &CombatActorSnapshotSet,
 ) {
     let Some(source_state) = ctx.db.player_state().player_id().find(row.source) else {
         return;
@@ -4162,9 +4164,9 @@ fn resolve_pending_melee_hit_volume(
         row.range
     };
 
-    let players = player_snapshots.as_slice();
+    let players = actor_snapshots.as_slice();
     let mut candidate_indices = Vec::new();
-    player_snapshots.query_disc_indices(
+    actor_snapshots.query_disc_indices(
         caster_phys.pos_x,
         caster_phys.pos_z,
         candidate_radius,
@@ -4206,7 +4208,7 @@ fn resolve_pending_melee_hit_volume(
 
         let mut target_row = row.clone();
         target_row.target = player.player_id;
-        resolve_pending_melee_target_impact(ctx, &target_row, now, player_snapshots);
+        resolve_pending_melee_target_impact(ctx, &target_row, now, actor_snapshots);
     }
 }
 
@@ -4264,7 +4266,7 @@ fn emit_melee_area_impact_event(
 fn melee_hit_volume_contains_player(
     row: &PendingMeleeImpact,
     caster_phys: &crate::player_physics::PlayerPhysics,
-    player: &crate::combat::player_snapshot::PlayerSnapshot,
+    player: &crate::combat::actor_snapshot::CombatActorSnapshot,
 ) -> bool {
     match row.targeting_kind.trim().to_ascii_uppercase().as_str() {
         "CASTER_RADIUS" => CombatAreaShape::Disc { radius: row.range }.contains_player_xz(
@@ -4295,7 +4297,7 @@ fn resolve_pending_melee_target_impact(
     ctx: &ReducerContext,
     row: &PendingMeleeImpact,
     now: Timestamp,
-    player_snapshots: &PlayerSnapshotSet,
+    actor_snapshots: &CombatActorSnapshotSet,
 ) {
     let Some(source_state) = ctx.db.player_state().player_id().find(row.source) else {
         return;
@@ -4304,7 +4306,7 @@ fn resolve_pending_melee_target_impact(
         return;
     }
 
-    let Some(target_snapshot) = player_snapshot_for(ctx, row.target) else {
+    let Some(target_snapshot) = actor_snapshot_for(ctx, row.target) else {
         return;
     };
     if !target_snapshot.alive {
@@ -4565,7 +4567,7 @@ fn resolve_pending_melee_target_impact(
         &mut effects,
         row,
         damage,
-        player_snapshots,
+        actor_snapshots,
         target_snapshot.pos_x,
         target_snapshot.pos_y,
         target_snapshot.pos_z,
@@ -4639,7 +4641,7 @@ fn push_melee_impact_area_effects(
     effects: &mut Vec<EffectPacket>,
     row: &PendingMeleeImpact,
     primary_damage: i32,
-    player_snapshots: &PlayerSnapshotSet,
+    actor_snapshots: &CombatActorSnapshotSet,
     impact_x: f32,
     impact_y: f32,
     impact_z: f32,
@@ -4659,9 +4661,9 @@ fn push_melee_impact_area_effects(
         return;
     }
 
-    let players = player_snapshots.as_slice();
+    let players = actor_snapshots.as_slice();
     let mut candidate_indices = Vec::new();
-    player_snapshots.query_disc_indices(
+    actor_snapshots.query_disc_indices(
         impact_x,
         impact_z,
         row.impact_area_radius,
@@ -5223,7 +5225,7 @@ mod tests {
     };
     use crate::action_ids::{AuthoredActionId, RuntimeActionId};
     use crate::animation_set_test_utils::animation_set_assets_by_combat_profile;
-    use crate::combat::player_snapshot::PlayerSnapshot;
+    use crate::combat::actor_snapshot::CombatActorSnapshot;
     use crate::combat::scene_query::{is_direction_within_facing_arc, target_within_area_range_xz};
     use crate::combat::{
         DamageType, EffectPacket, StackPolicy, StatusDispelType, StatusEffectKind, StatusPayload,
@@ -5254,8 +5256,8 @@ mod tests {
         }
     }
 
-    fn test_player_snapshot(identity: Identity, pos_x: f32, pos_z: f32) -> PlayerSnapshot {
-        PlayerSnapshot {
+    fn test_actor_snapshot(identity: Identity, pos_x: f32, pos_z: f32) -> CombatActorSnapshot {
+        CombatActorSnapshot {
             player_id: identity,
             alive: true,
             pos_x,
@@ -6542,8 +6544,8 @@ mod tests {
     fn targetless_radius_melee_hit_volume_uses_caster_center() {
         let caster = test_player_physics(test_identity_with_byte(1), 0.0, 0.0, 0.0);
         let row = test_targetless_impact_row("CASTER_RADIUS", 3.25, 0.0);
-        let inside = test_player_snapshot(test_identity_with_byte(2), 0.0, 3.0);
-        let outside = test_player_snapshot(test_identity_with_byte(3), 0.0, 4.0);
+        let inside = test_actor_snapshot(test_identity_with_byte(2), 0.0, 3.0);
+        let outside = test_actor_snapshot(test_identity_with_byte(3), 0.0, 4.0);
 
         assert!(melee_hit_volume_contains_player(&row, &caster, &inside));
         assert!(!melee_hit_volume_contains_player(&row, &caster, &outside));
@@ -6553,8 +6555,8 @@ mod tests {
     fn targetless_cone_melee_hit_volume_uses_caster_facing() {
         let caster = test_player_physics(test_identity_with_byte(1), 0.0, 0.0, 0.0);
         let row = test_targetless_impact_row("CASTER_CONE", 4.0, 60.0);
-        let front = test_player_snapshot(test_identity_with_byte(2), 0.0, 3.0);
-        let side = test_player_snapshot(test_identity_with_byte(3), 3.0, 0.0);
+        let front = test_actor_snapshot(test_identity_with_byte(2), 0.0, 3.0);
+        let side = test_actor_snapshot(test_identity_with_byte(3), 3.0, 0.0);
 
         assert!(melee_hit_volume_contains_player(&row, &caster, &front));
         assert!(!melee_hit_volume_contains_player(&row, &caster, &side));

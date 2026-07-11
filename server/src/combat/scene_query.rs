@@ -4,7 +4,7 @@ use crate::arena::{
     arena_seed_for_identity, open_world_scene_name_for_identity, players_share_world_context,
     shared_arena_seed_for_identities, WorldRayHit, WorldRaycastRequest,
 };
-use crate::combat::player_snapshot::PlayerSnapshot;
+use crate::combat::actor_snapshot::CombatActorSnapshot;
 use crate::practice::is_training_instance;
 use crate::world_collision::{
     raycast_world_with_layout_for_scene, raycast_world_with_layout_for_scene_with_stats,
@@ -67,8 +67,8 @@ pub(crate) fn is_direction_within_facing_arc(
 
 pub(crate) fn has_line_of_sight(
     ctx: &ReducerContext,
-    caster: &PlayerSnapshot,
-    target: &PlayerSnapshot,
+    caster: &CombatActorSnapshot,
+    target: &CombatActorSnapshot,
 ) -> bool {
     if !players_share_world_context(ctx, caster.player_id, target.player_id) {
         return false;
@@ -79,8 +79,8 @@ pub(crate) fn has_line_of_sight(
 
 pub(crate) fn line_of_sight_blocker(
     ctx: &ReducerContext,
-    caster: &PlayerSnapshot,
-    target: &PlayerSnapshot,
+    caster: &CombatActorSnapshot,
+    target: &CombatActorSnapshot,
 ) -> Option<LineOfSightBlocker> {
     let seed = shared_arena_seed_for_identities(ctx, caster.player_id, target.player_id);
     let flat_ground_only =
@@ -141,8 +141,8 @@ pub(crate) fn line_of_sight_blocker(
 }
 
 fn line_of_sight_target_points(
-    caster: &PlayerSnapshot,
-    target: &PlayerSnapshot,
+    caster: &CombatActorSnapshot,
+    target: &CombatActorSnapshot,
 ) -> Vec<(f32, f32, f32)> {
     let heights = [
         target.pos_y + target.hit_height * 0.75,
@@ -185,7 +185,7 @@ pub(crate) fn first_hit_on_segment(
     end_y: f32,
     end_z: f32,
     radius: f32,
-    players: &[PlayerSnapshot],
+    players: &[CombatActorSnapshot],
 ) -> Option<SceneHit> {
     first_hit_on_segment_with_players(
         ctx,
@@ -215,7 +215,7 @@ pub(crate) fn first_player_hit_on_segment_candidates(
     end_y: f32,
     end_z: f32,
     radius: f32,
-    players: &[PlayerSnapshot],
+    players: &[CombatActorSnapshot],
     candidate_indices: &[usize],
 ) -> Option<SceneHit> {
     let dx = end_x - start_x;
@@ -255,7 +255,7 @@ pub(crate) fn first_hit_on_segment_candidates_with_world_stats(
     end_y: f32,
     end_z: f32,
     radius: f32,
-    players: &[PlayerSnapshot],
+    players: &[CombatActorSnapshot],
     candidate_indices: &[usize],
     world_stats: &mut WorldRaycastStats,
 ) -> Option<SceneHit> {
@@ -286,7 +286,7 @@ fn first_hit_on_segment_candidates_with_stats(
     end_y: f32,
     end_z: f32,
     radius: f32,
-    players: &[PlayerSnapshot],
+    players: &[CombatActorSnapshot],
     candidate_indices: &[usize],
     world_stats: Option<&mut WorldRaycastStats>,
 ) -> Option<SceneHit> {
@@ -322,7 +322,7 @@ fn first_hit_on_segment_with_players<'a, I>(
     mut world_stats: Option<&mut WorldRaycastStats>,
 ) -> Option<SceneHit>
 where
-    I: IntoIterator<Item = &'a PlayerSnapshot>,
+    I: IntoIterator<Item = &'a CombatActorSnapshot>,
 {
     let dx = end_x - start_x;
     let dy = end_y - start_y;
@@ -492,7 +492,7 @@ fn first_player_hit_on_segment<'a, I>(
     shares_world: impl Fn(Identity) -> bool,
 ) -> Option<SceneHit>
 where
-    I: IntoIterator<Item = &'a PlayerSnapshot>,
+    I: IntoIterator<Item = &'a CombatActorSnapshot>,
 {
     let mut best: Option<SceneHit> = None;
 
@@ -534,7 +534,7 @@ pub(crate) fn raycast_capsule_with_padding(
     dir_y: f32,
     dir_z: f32,
     max_distance: f32,
-    player: &PlayerSnapshot,
+    player: &CombatActorSnapshot,
     radius_padding: f32,
 ) -> Option<f32> {
     let radius = player.hit_radius + radius_padding;
@@ -634,7 +634,7 @@ pub(crate) fn aoe_hits_player(
     impact_y: f32,
     impact_z: f32,
     aoe_radius: f32,
-    player: &PlayerSnapshot,
+    player: &CombatActorSnapshot,
 ) -> bool {
     let dx = player.pos_x - impact_x;
     let dz = player.pos_z - impact_z;
@@ -674,7 +674,7 @@ impl CombatAreaShape {
         origin_x: f32,
         origin_z: f32,
         facing_yaw: f32,
-        player: &PlayerSnapshot,
+        player: &CombatActorSnapshot,
         dot_epsilon: f32,
     ) -> bool {
         match self {
@@ -719,7 +719,7 @@ impl CombatAreaShape {
         origin_y: f32,
         origin_z: f32,
         facing_yaw: f32,
-        player: &PlayerSnapshot,
+        player: &CombatActorSnapshot,
         dot_epsilon: f32,
     ) -> bool {
         match self {
@@ -741,7 +741,7 @@ impl CombatAreaShape {
 pub(crate) fn y_within_player_capsule(
     y: f32,
     vertical_tolerance: f32,
-    player: &PlayerSnapshot,
+    player: &CombatActorSnapshot,
 ) -> bool {
     let capsule_bottom = player.pos_y - vertical_tolerance;
     let capsule_top = player.pos_y + player.hit_height + vertical_tolerance;
@@ -766,7 +766,7 @@ fn point_inside_capsule(
     x: f32,
     y: f32,
     z: f32,
-    player: &PlayerSnapshot,
+    player: &CombatActorSnapshot,
     radius_padding: f32,
 ) -> bool {
     let capsule_bottom = player.pos_y;
@@ -917,7 +917,7 @@ fn shared_flat_ground_only_for_identities(ctx: &ReducerContext, a: Identity, b: 
 mod tests {
     use super::{
         aoe_hits_player, first_player_hit_on_segment, line_of_sight_target_points,
-        raycast_capsule_with_padding, CombatAreaShape, PlayerSnapshot, SceneHitKind,
+        raycast_capsule_with_padding, CombatActorSnapshot, CombatAreaShape, SceneHitKind,
     };
     use spacetimedb::Identity;
 
@@ -925,8 +925,8 @@ mod tests {
         Identity::from_hex(format!("{byte:064x}").as_str()).expect("test identity should parse")
     }
 
-    fn snapshot(id: Identity, pos_x: f32, pos_y: f32, pos_z: f32) -> PlayerSnapshot {
-        PlayerSnapshot {
+    fn snapshot(id: Identity, pos_x: f32, pos_y: f32, pos_z: f32) -> CombatActorSnapshot {
+        CombatActorSnapshot {
             player_id: id,
             alive: true,
             pos_x,
