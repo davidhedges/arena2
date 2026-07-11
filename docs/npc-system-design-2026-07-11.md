@@ -1,7 +1,7 @@
 # NPC System Design
 
 Date: 2026-07-11
-Status: implementation in progress; actor-generic targeting/world queries, shared spell/projectile/heal execution, caster/support/archer exemplars, validated native visual profiles with shared VFX sockets, and repeatable two-client mixed-group presentation acceptance are landed through `e6ce09a6`, while full visual authoring remains
+Status: implementation in progress; actor-generic targeting/world queries, shared melee/spell/projectile/heal execution, caster/support/archer exemplars, validated native visual profiles with shared VFX sockets, and repeatable two-client mixed-group presentation acceptance are landed through `20b13663`, while full visual authoring remains
 
 ## Outcome
 
@@ -18,7 +18,7 @@ This is a substantial engineering project. The existing kobold implementation is
 
 ## Implementation progress (2026-07-11 handoff)
 
-The implementation has started and has been committed in coherent slices. The implementation baseline summarized here is `e6ce09a6` (`Add mixed NPC presentation acceptance`). Player combat semantics are an explicit guardrail: actor-generic seams were extended where required, but player damage, healing arithmetic, authorization, animation fallback, input, prediction, rewind, and action-bar behavior must not be redesigned as part of the NPC rollout.
+The implementation has started and has been committed in coherent slices. The implementation baseline summarized here is `20b13663` (`Route NPC melee through shared impacts`). Player combat semantics are an explicit guardrail: actor-generic seams were extended where required, but player damage, healing arithmetic, authorization, animation fallback, input, prediction, rewind, and action-bar behavior must not be redesigned as part of the NPC rollout.
 
 ### Landed foundations
 
@@ -50,10 +50,10 @@ The implementation has started and has been committed in coherent slices. The im
 - Those exemplar profiles adapt the shared `LEFT_HAND` and `TARGET` VFX anchors onto real Generic-rig cast/projectile and hit transforms. Missing cast sockets explicitly skip their attached cue, while missing hit sockets explicitly fall back to the presentation root; player anchor resolution is unchanged.
 - Shared `DIRECT_TARGET` spell delivery now supports an explicitly authored heal amount without changing its existing damage branch. Lich Mend selects the lowest-health ally, rejects full-health targets, and resolves through shared audience, facing, LOS, cast, combat-event, and `EffectPacket::Heal` handling.
 - `NpcHeadlessAcceptanceRunner` and `ops/npc-mixed-group-probe.py` now provide a repeatable two-client mixed-exemplar presentation gate. The websocket owner spawns and pins the encounter in an isolated local database; the Unity observer proves external ownership, scoped materialization, real Animator state resolution, shared combat/projectile events, projectile visuals, and VFX dispatch. The endpoint override is batch-only and requires an explicit `ARENA_HEADLESS_MODULE`, so normal editor/player endpoint selection is unchanged.
+- Kobold melee now commits into the shared `PendingMeleeImpact` schedule and resolves through the same actor-generic defense, combat-event, effect, damage, death, and cleanup machinery as player/practice melee. `NpcPendingSwing` and its generated binding are removed. Server-actor audience, current-facing, and current-LOS impact gates are opt-in pending-impact fields; every player row explicitly leaves them disabled, preserving existing player prediction and rewind semantics.
 
 ### Still incomplete
 
-- `NpcPendingSwing` remains the kobold melee executor. The common validated action executor beneath player/practice/NPC adapters has not yet replaced that special path.
 - Utility execution currently supports melee offense, hostile projectile spells, allied targeted buffs, and direct allied healing. Debuff, interrupt, summon, and mobility execution are not implemented.
 - Basic ranged approach/hold/retreat bands are implemented. Richer kiting, unreachable-target recovery, navigation, and local avoidance remain.
 - Healing/buff support threat, taunts, assist/call-for-help, and richer threat decay remain later work.
@@ -62,23 +62,24 @@ The implementation has started and has been committed in coherent slices. The im
 
 ### Current verification
 
-- `cargo test --quiet`: 473 passed, 0 failed.
+- `cargo test --quiet`: 478 passed, 0 failed.
 - `spacetime build -p server`: succeeded; the local optional `wasm-opt` binary is absent, so SpacetimeDB emitted an unoptimized module after a successful release build.
 - `dotnet build Assembly-CSharp.csproj --no-restore`: succeeded with 0 errors and 11 existing obsolete-API warnings in third-party/current Unity code.
 - `dotnet build Assembly-CSharp-Editor.csproj --no-restore`: succeeded with 0 errors and 17 existing obsolete/dead-field warnings.
 - Focused Unity edit-mode profile validation: 5 passed, 0 failed. The tests load all three real vendor prefabs, validate explicit Animator/state/socket mappings and fallback policies, and resolve their catalog entries.
-- `ops/npc-support-decision-probe.py`: passed against an isolated local database. At full health the Lich applied Bone Ward to a 125/125 Kobold; after one real player auto-attack reduced it to 103/125, Lich Mend raised it to 121/125.
-- Two-client mixed-exemplar acceptance: passed against isolated database `npcmixedprobe`. The observer materialized four NPCs owned by the separate websocket client; Kobold entered `Combat_1H_Attack`, Archer entered `attack`, Wizard entered `SpellCast`, and Lich entered `SpellA`. All four emitted CAST/IMPACT, Archer and Wizard emitted RELEASE plus projectile RELEASE/IMPACT, two shared projectile visuals started, four shared VFX instances spawned, and no projectile/VFX template was missing.
+- `ops/npc-support-decision-probe.py`: passed after the shared melee migration against isolated database `npcmixedprobe`. At full health the Lich applied Bone Ward to a 125/125 Kobold; after one real player auto-attack reduced it to 91/125, Lich Mend raised it to 109/125.
+- Shared Kobold telegraph parity: three live `NPC_KOBOLD_WARRIOR_SWORD_SLASH` CAST-to-IMPACT pairs resolved at 461.4–462.1 ms for the authored 450 ms windup, matching fixed-tick rounding.
+- Two-client mixed-exemplar acceptance: passed after the shared melee migration against isolated database `npcmixedprobe`. The observer materialized four NPCs owned by the separate websocket client; Kobold entered `Combat_1H_Attack`, Archer entered `attack`, Wizard entered `SpellCast`, and Lich entered `SpellA`. All four emitted CAST/IMPACT, Archer and Wizard emitted RELEASE plus projectile RELEASE/IMPACT, three shared projectile visuals started, four shared VFX instances spawned, and no projectile/VFX template was missing.
 - Generated C# bindings are current for the landed runtime schema.
 - The working tree still contains the user-owned `.gitignore` change; preserve it unless its owner explicitly brings it into scope. `Assets/Arena/Resources/NpcVisualCatalog.asset` is also user-owned if it changes again.
 
 ### Recommended next slice
 
-The next coherent slice should remove the remaining Kobold-specific execution seam without changing player combat semantics:
+The next coherent slice should begin the full-package authoring surface without inventing new combat paths:
 
-1. Extract the common validated melee commitment/impact executor beneath the existing player/practice/NPC adapters.
-2. Prove Kobold parity for authored damage, cooldown, telegraph timing, defense, facing/range/LOS commitment gates, interruption, combat events, loot/death, and S7-S9 fixture behavior before deleting `NpcPendingSwing`.
-3. Keep player authorization, prediction, rewind, animation fallback, input, action-bar, and keybind behavior in their existing adapters.
+1. Add searchable catalog spawning over the existing template/visual catalogs and `spawn_npc` reducer rather than adding family-specific spawn commands.
+2. Extend `NpcHeadlessAcceptanceRunner` with a sequential appearance-sweep mode that validates prefab, primary Animator, idle/locomotion, hit-or-impact response, death visibility, and authoritative cleanup.
+3. Draft the remaining appearance-to-family mappings from the imported inventory, then explicitly review family profile, action-kit, brain, reaction, socket, bounds, and loot contracts before landing them.
 4. Keep the Skeleton Archer purely ranged with retreat/hold behavior until suitable melee weapon and animation assets are deliberately authored.
 
 ## Asset relocation completed
