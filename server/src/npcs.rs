@@ -1318,6 +1318,7 @@ pub(crate) fn tick_npc_combat(
                 .is_none()
             {
                 interrupt_npc_actions_for_crowd_control(ctx, npc.identity, now);
+                clear_npc_threat(ctx, npc.identity);
                 ctx.db.npc_return_home().insert(NpcReturnHome {
                     identity: npc.identity,
                     started_at: now,
@@ -1361,6 +1362,7 @@ pub(crate) fn tick_npc_combat(
                 npc.identity,
                 &physics,
                 &template,
+                brain,
                 &perception,
                 existing_runtime.as_ref().map(|runtime| runtime.target),
                 brain.target_stickiness,
@@ -1496,6 +1498,24 @@ struct NpcTargetCandidate {
     context: ResolvedWorldContext,
 }
 
+#[derive(Clone, Copy)]
+struct NpcThreatComponents {
+    damage: f32,
+    proximity: f32,
+}
+
+impl NpcThreatComponents {
+    fn total(self) -> f32 {
+        self.damage + self.proximity
+    }
+}
+
+#[derive(Clone, Copy)]
+struct NpcScoredTarget {
+    target: NpcAttackTarget,
+    threat: NpcThreatComponents,
+}
+
 struct NpcPerceptionIndex {
     actors: CombatActorSnapshotSet,
     player_contexts: HashMap<Identity, ResolvedWorldContext>,
@@ -1565,6 +1585,7 @@ fn acquire_npc_attack_target(
     npc_identity: Identity,
     npc_physics: &NpcPhysics,
     template: &NpcTemplate,
+    brain: &NpcBrainProfile,
     perception: &NpcPerceptionIndex,
     current_target: Option<Identity>,
     target_stickiness: f32,
@@ -1590,8 +1611,8 @@ fn acquire_npc_attack_target(
     crate::tick_metrics::record_npc_target_pairs_scanned(candidates.len() as u64);
 
     let aggro_radius_sq = template.aggro_radius * template.aggro_radius;
-    let mut best: Option<NpcAttackTarget> = None;
-    let mut current: Option<NpcAttackTarget> = None;
+    let mut best: Option<NpcScoredTarget> = None;
+    let mut current: Option<NpcScoredTarget> = None;
     for candidate in &candidates {
         if !world_contexts_share(&npc_context, &candidate.context) {
             continue;
@@ -1609,28 +1630,79 @@ fn acquire_npc_attack_target(
         }
 
         let resolved = npc_attack_target_from_candidate(npc_physics, candidate);
+        let scored = NpcScoredTarget {
+            target: resolved,
+            threat: npc_target_threat_components(
+                ctx,
+                npc_identity,
+                candidate.identity,
+                resolved.distance,
+                template.aggro_radius,
+                brain,
+            ),
+        };
         if current_target == Some(candidate.identity) {
-            current = Some(resolved);
+            current = Some(scored);
         }
         if best
             .as_ref()
-            .is_none_or(|existing| dist_sq < existing.distance * existing.distance)
+            .is_none_or(|existing| npc_scored_target_is_better(&scored, existing))
         {
-            best = Some(resolved);
+            best = Some(scored);
         }
     }
     match (current, best) {
         (Some(current), Some(best))
-            if npc_target_stickiness_keeps_current(
-                current.distance,
-                best.distance,
-                target_stickiness,
-            ) =>
+            if npc_target_stickiness_keeps_scored_current(current, best, target_stickiness) =>
         {
-            Some(current)
+            Some(current.target)
         }
-        (_, best) => best,
+        (_, best) => best.map(|scored| scored.target),
     }
+}
+
+fn npc_target_threat_components(
+    ctx: &ReducerContext,
+    npc_identity: Identity,
+    source_identity: Identity,
+    distance: f32,
+    perception_radius: f32,
+    brain: &NpcBrainProfile,
+) -> NpcThreatComponents {
+    let damage = ctx
+        .db
+        .npc_threat()
+        .threat_key()
+        .find(npc_threat_key(npc_identity, source_identity))
+        .map_or(0.0, |row| row.damage_threat)
+        * brain.damage_threat_weight;
+    let proximity = (1.0 - distance / perception_radius.max(0.001)).clamp(0.0, 1.0)
+        * brain.proximity_threat_weight;
+    NpcThreatComponents { damage, proximity }
+}
+
+fn npc_scored_target_is_better(challenger: &NpcScoredTarget, current: &NpcScoredTarget) -> bool {
+    challenger.threat.total() > current.threat.total()
+        || (challenger.threat.total() == current.threat.total()
+            && challenger.target.distance < current.target.distance)
+}
+
+fn npc_target_stickiness_keeps_scored_current(
+    current: NpcScoredTarget,
+    challenger: NpcScoredTarget,
+    target_stickiness: f32,
+) -> bool {
+    if current.target.identity == challenger.target.identity {
+        return true;
+    }
+    if current.threat.damage <= 0.0 && challenger.threat.damage <= 0.0 {
+        return npc_target_stickiness_keeps_current(
+            current.target.distance,
+            challenger.target.distance,
+            target_stickiness,
+        );
+    }
+    challenger.threat.total() <= current.threat.total() * (1.0 + target_stickiness.clamp(0.0, 1.0))
 }
 
 fn resolve_committed_npc_target(
@@ -1866,6 +1938,26 @@ fn record_npc_decision_debug(
         .iter()
         .find(|entry| entry.ability_id == action.ability_id)
         .map_or(0.0, |entry| entry.base_utility);
+    let threat_summary = if target_was_pinned {
+        "PINNED_TARGET".to_string()
+    } else if let Some(brain) = npc_brain_profile(template.brain_profile_id.as_str()) {
+        let threat = npc_target_threat_components(
+            ctx,
+            npc.identity,
+            target.identity,
+            target.distance,
+            template.aggro_radius,
+            brain,
+        );
+        format!(
+            "damage={:.3} proximity={:.3} total={:.3}",
+            threat.damage,
+            threat.proximity,
+            threat.total()
+        )
+    } else {
+        "BRAIN_PROFILE_MISSING".to_string()
+    };
     let previous = ctx.db.npc_decision_debug().identity().find(npc.identity);
     let row = NpcDecisionDebug {
         identity: npc.identity,
@@ -1878,11 +1970,7 @@ fn record_npc_decision_debug(
         target_was_pinned,
         score_summary: format!("base={base_utility:.3} distance={:.3}", target.distance),
         hard_reject_summary: String::new(),
-        threat_summary: if target_was_pinned {
-            "PINNED_TARGET".to_string()
-        } else {
-            "PROXIMITY_NEAREST".to_string()
-        },
+        threat_summary,
         updated_at: now,
     };
     if previous.is_some() {
@@ -2560,8 +2648,9 @@ mod tests {
     use super::{
         npc_action_distance_score, npc_catalog, npc_decision_interval_ms, npc_identity,
         npc_is_outside_leash_from_positions, npc_melee_defense_event_type,
-        npc_target_stickiness_keeps_current, npc_template, npc_threat_key, parse_npc_catalog,
-        visual_id_for_template, yaw_for_direction, NpcFaction, NPC_CATALOG_JSON,
+        npc_target_stickiness_keeps_current, npc_target_stickiness_keeps_scored_current,
+        npc_template, npc_threat_key, parse_npc_catalog, visual_id_for_template, yaw_for_direction,
+        NpcAttackTarget, NpcFaction, NpcScoredTarget, NpcThreatComponents, NPC_CATALOG_JSON,
         NPC_FACTION_FRIENDLY, NPC_FACTION_HOSTILE, NPC_FACTION_NEUTRAL,
         NPC_TEMPLATE_KOBOLD_THIEF_BK_DUAL_SWORD, NPC_TEMPLATE_KOBOLD_WARRIOR_GN_SPEAR,
         NPC_TEMPLATE_KOBOLD_WARRIOR_RD_SWORD_SHIELD,
@@ -2604,6 +2693,38 @@ mod tests {
         assert!(npc_target_stickiness_keeps_current(8.0, 6.0, 0.35));
         assert!(!npc_target_stickiness_keeps_current(8.0, 5.0, 0.35));
         assert!(!npc_target_stickiness_keeps_current(8.0, 7.9, 0.0));
+    }
+
+    #[test]
+    fn npc_target_stickiness_requires_meaningfully_more_threat() {
+        let target = |id: u8, distance: f32, damage: f32| NpcScoredTarget {
+            target: NpcAttackTarget {
+                identity: Identity::from_hex(format!("{id:064x}").as_str()).unwrap(),
+                pos_x: distance,
+                pos_y: 0.0,
+                pos_z: 0.0,
+                hit_radius: 0.5,
+                hit_height: 2.0,
+                distance,
+                dir_x: 1.0,
+                dir_z: 0.0,
+            },
+            threat: NpcThreatComponents {
+                damage,
+                proximity: 0.1,
+            },
+        };
+
+        assert!(npc_target_stickiness_keeps_scored_current(
+            target(1, 5.0, 10.0),
+            target(2, 3.0, 12.0),
+            0.35,
+        ));
+        assert!(!npc_target_stickiness_keeps_scored_current(
+            target(1, 5.0, 10.0),
+            target(2, 3.0, 14.0),
+            0.35,
+        ));
     }
 
     #[test]
