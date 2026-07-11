@@ -21,6 +21,8 @@ namespace SpacetimeDB.Types
         public string DisplayName;
         [DataMember(Name = "default_visual_id")]
         public string DefaultVisualId;
+        [DataMember(Name = "brain_profile_id")]
+        public string BrainProfileId;
         [DataMember(Name = "resource_policy")]
         public string ResourcePolicy;
         [DataMember(Name = "max_hp")]
@@ -35,6 +37,7 @@ namespace SpacetimeDB.Types
             string SpeciesId,
             string DisplayName,
             string DefaultVisualId,
+            string BrainProfileId,
             string ResourcePolicy,
             int MaxHp,
             float HitRadius,
@@ -45,6 +48,7 @@ namespace SpacetimeDB.Types
             this.SpeciesId = SpeciesId;
             this.DisplayName = DisplayName;
             this.DefaultVisualId = DefaultVisualId;
+            this.BrainProfileId = BrainProfileId;
             this.ResourcePolicy = ResourcePolicy;
             this.MaxHp = MaxHp;
             this.HitRadius = HitRadius;
@@ -57,6 +61,7 @@ namespace SpacetimeDB.Types
             this.SpeciesId = "";
             this.DisplayName = "";
             this.DefaultVisualId = "";
+            this.BrainProfileId = "";
             this.ResourcePolicy = "";
         }
     }

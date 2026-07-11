@@ -88,6 +88,7 @@ pub struct NpcTemplateCatalog {
     pub species_id: String,
     pub display_name: String,
     pub default_visual_id: String,
+    pub brain_profile_id: String,
     pub resource_policy: String,
     pub max_hp: i32,
     pub hit_radius: f32,
@@ -123,6 +124,26 @@ pub struct NpcActionKitCatalog {
     pub forbidden_target_status: String,
     pub movement_may_enable: bool,
     pub sort_order: u32,
+}
+
+#[table(accessor = npc_brain_catalog, public)]
+pub struct NpcBrainCatalog {
+    #[primary_key]
+    pub brain_profile_id: String,
+    pub decision_interval_ms: u64,
+    pub perception_radius: f32,
+    pub leash_radius: f32,
+    pub target_stickiness: f32,
+    pub preferred_min_distance: f32,
+    pub preferred_max_distance: f32,
+    pub retreat_tolerance: f32,
+    pub support_urgency: f32,
+    pub deterministic_variation: f32,
+    pub damage_threat_weight: f32,
+    pub healing_threat_weight: f32,
+    pub proximity_threat_weight: f32,
+    pub idle_policy: String,
+    pub assist_policy: String,
 }
 
 #[table(accessor = npc_instance, public)]
@@ -224,6 +245,7 @@ pub(crate) struct NpcTemplate {
     pub species_id: String,
     pub display_name: String,
     pub visual_ids: Vec<String>,
+    pub brain_profile_id: String,
     pub resource_policy: String,
     pub action_kit: Vec<NpcActionKitEntry>,
     pub max_hp: i32,
@@ -257,9 +279,30 @@ pub(crate) struct NpcActionKitEntry {
     pub sort_order: u32,
 }
 
+#[derive(Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct NpcBrainProfile {
+    brain_profile_id: String,
+    decision_interval_ms: u64,
+    perception_radius: f32,
+    leash_radius: f32,
+    target_stickiness: f32,
+    preferred_min_distance: f32,
+    preferred_max_distance: f32,
+    retreat_tolerance: f32,
+    support_urgency: f32,
+    deterministic_variation: f32,
+    damage_threat_weight: f32,
+    healing_threat_weight: f32,
+    proximity_threat_weight: f32,
+    idle_policy: String,
+    assist_policy: String,
+}
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct NpcCatalogDocument {
+    brain_profiles: Vec<NpcBrainProfile>,
     templates: Vec<NpcTemplate>,
 }
 
@@ -425,14 +468,63 @@ fn parse_npc_catalog(json: &str) -> Result<NpcCatalogDocument, String> {
         serde_json::from_str(json).map_err(|error| error.to_string())?;
     let mut template_ids = HashSet::new();
     let mut visual_ids = HashSet::new();
+    let mut brain_ids = HashSet::new();
+    if document.brain_profiles.is_empty() {
+        return Err("brain_profiles must not be empty".to_string());
+    }
     if document.templates.is_empty() {
         return Err("templates must not be empty".to_string());
+    }
+
+    for brain in &mut document.brain_profiles {
+        brain.brain_profile_id = normalize_id(brain.brain_profile_id.as_str());
+        brain.idle_policy = normalize_id(brain.idle_policy.as_str());
+        brain.assist_policy = normalize_id(brain.assist_policy.as_str());
+        if brain.brain_profile_id.is_empty() || !brain_ids.insert(brain.brain_profile_id.clone()) {
+            return Err(format!(
+                "brain_profile_id '{}' is empty or duplicated",
+                brain.brain_profile_id
+            ));
+        }
+        let bounded_scalars = [
+            brain.target_stickiness,
+            brain.retreat_tolerance,
+            brain.support_urgency,
+            brain.deterministic_variation,
+        ];
+        let nonnegative_scalars = [
+            brain.perception_radius,
+            brain.leash_radius,
+            brain.preferred_min_distance,
+            brain.preferred_max_distance,
+            brain.damage_threat_weight,
+            brain.healing_threat_weight,
+            brain.proximity_threat_weight,
+        ];
+        if brain.decision_interval_ms == 0
+            || bounded_scalars
+                .iter()
+                .any(|value| !value.is_finite() || !(0.0..=1.0).contains(value))
+            || nonnegative_scalars
+                .iter()
+                .any(|value| !value.is_finite() || *value < 0.0)
+            || brain.preferred_min_distance > brain.preferred_max_distance
+            || brain.leash_radius < brain.perception_radius
+            || !matches!(brain.idle_policy.as_str(), "HOLD_POSITION" | "PATROL")
+            || !matches!(brain.assist_policy.as_str(), "NONE" | "SAME_TEAM")
+        {
+            return Err(format!(
+                "brain profile '{}' has invalid decision tuning",
+                brain.brain_profile_id
+            ));
+        }
     }
 
     for template in &mut document.templates {
         template.template_id = normalize_id(template.template_id.as_str());
         template.species_id = normalize_id(template.species_id.as_str());
         template.display_name = template.display_name.trim().to_string();
+        template.brain_profile_id = normalize_id(template.brain_profile_id.as_str());
         template.resource_policy = normalize_id(template.resource_policy.as_str());
         template.visual_ids = template
             .visual_ids
@@ -457,6 +549,12 @@ fn parse_npc_catalog(json: &str) -> Result<NpcCatalogDocument, String> {
             return Err(format!(
                 "template '{}' requires species_id and display_name",
                 template.template_id
+            ));
+        }
+        if !brain_ids.contains(template.brain_profile_id.as_str()) {
+            return Err(format!(
+                "template '{}' references unknown brain_profile_id '{}'",
+                template.template_id, template.brain_profile_id
             ));
         }
         if template.resource_policy != "FREE_ACTIONS_ONLY" {
@@ -594,6 +692,11 @@ pub(crate) fn sync_npc_catalog(ctx: &ReducerContext) {
         .iter()
         .map(|template| template.template_id.clone())
         .collect();
+    let expected_brains: HashSet<_> = catalog
+        .brain_profiles
+        .iter()
+        .map(|brain| brain.brain_profile_id.clone())
+        .collect();
     let expected_visuals: HashSet<_> = catalog
         .templates
         .iter()
@@ -610,12 +713,44 @@ pub(crate) fn sync_npc_catalog(ctx: &ReducerContext) {
         })
         .collect();
 
+    for brain in &catalog.brain_profiles {
+        let row = NpcBrainCatalog {
+            brain_profile_id: brain.brain_profile_id.clone(),
+            decision_interval_ms: brain.decision_interval_ms,
+            perception_radius: brain.perception_radius,
+            leash_radius: brain.leash_radius,
+            target_stickiness: brain.target_stickiness,
+            preferred_min_distance: brain.preferred_min_distance,
+            preferred_max_distance: brain.preferred_max_distance,
+            retreat_tolerance: brain.retreat_tolerance,
+            support_urgency: brain.support_urgency,
+            deterministic_variation: brain.deterministic_variation,
+            damage_threat_weight: brain.damage_threat_weight,
+            healing_threat_weight: brain.healing_threat_weight,
+            proximity_threat_weight: brain.proximity_threat_weight,
+            idle_policy: brain.idle_policy.clone(),
+            assist_policy: brain.assist_policy.clone(),
+        };
+        if ctx
+            .db
+            .npc_brain_catalog()
+            .brain_profile_id()
+            .find(brain.brain_profile_id.clone())
+            .is_some()
+        {
+            ctx.db.npc_brain_catalog().brain_profile_id().update(row);
+        } else {
+            ctx.db.npc_brain_catalog().insert(row);
+        }
+    }
+
     for template in &catalog.templates {
         let row = NpcTemplateCatalog {
             template_id: template.template_id.clone(),
             species_id: template.species_id.clone(),
             display_name: template.display_name.clone(),
             default_visual_id: template.visual_ids[0].clone(),
+            brain_profile_id: template.brain_profile_id.clone(),
             resource_policy: template.resource_policy.clone(),
             max_hp: template.max_hp,
             hit_radius: template.hit_radius,
@@ -631,6 +766,7 @@ pub(crate) fn sync_npc_catalog(ctx: &ReducerContext) {
                 if existing.species_id == row.species_id
                     && existing.display_name == row.display_name
                     && existing.default_visual_id == row.default_visual_id
+                    && existing.brain_profile_id == row.brain_profile_id
                     && existing.resource_policy == row.resource_policy
                     && existing.max_hp == row.max_hp
                     && existing.hit_radius == row.hit_radius
@@ -709,6 +845,19 @@ pub(crate) fn sync_npc_catalog(ctx: &ReducerContext) {
             .npc_template_catalog()
             .template_id()
             .delete(template_id);
+    }
+    let stale_brains: Vec<_> = ctx
+        .db
+        .npc_brain_catalog()
+        .iter()
+        .map(|row| row.brain_profile_id)
+        .filter(|brain_id| !expected_brains.contains(brain_id))
+        .collect();
+    for brain_id in stale_brains {
+        ctx.db
+            .npc_brain_catalog()
+            .brain_profile_id()
+            .delete(brain_id);
     }
     let stale_visuals: Vec<_> = ctx
         .db
@@ -1885,25 +2034,24 @@ mod tests {
 
     #[test]
     fn authored_npc_catalog_rejects_duplicate_visual_ids() {
-        let invalid = r#"{
-            "templates": [
-                {
-                    "template_id": "ONE", "species_id": "TEST", "display_name": "One",
-                    "visual_ids": ["SHARED"], "resource_policy": "FREE_ACTIONS_ONLY",
-                    "action_kit": [], "max_hp": 1, "hit_radius": 1.0,
-                    "hit_height": 1.0, "aggro_radius": 1.0, "move_speed": 1.0,
-                    "attack_windup_ms": 1
-                },
-                {
-                    "template_id": "TWO", "species_id": "TEST", "display_name": "Two",
-                    "visual_ids": ["SHARED"], "resource_policy": "FREE_ACTIONS_ONLY",
-                    "action_kit": [], "max_hp": 1, "hit_radius": 1.0,
-                    "hit_height": 1.0, "aggro_radius": 1.0, "move_speed": 1.0,
-                    "attack_windup_ms": 1
-                }
-            ]
-        }"#;
-        assert!(parse_npc_catalog(invalid).is_err());
+        let mut catalog: serde_json::Value = serde_json::from_str(NPC_CATALOG_JSON).unwrap();
+        let shared_visual = catalog["templates"][0]["visual_ids"][0].clone();
+        catalog["templates"][1]["visual_ids"][0] = shared_visual;
+        let error = parse_npc_catalog(&serde_json::to_string(&catalog).unwrap())
+            .err()
+            .expect("duplicate visuals should fail");
+        assert!(error.contains("visual_id"), "{error}");
+    }
+
+    #[test]
+    fn npc_templates_reject_unknown_brain_profiles() {
+        let mut catalog: serde_json::Value = serde_json::from_str(NPC_CATALOG_JSON).unwrap();
+        catalog["templates"][0]["brain_profile_id"] =
+            serde_json::Value::String("UNKNOWN_BRAIN".to_string());
+        let error = parse_npc_catalog(&serde_json::to_string(&catalog).unwrap())
+            .err()
+            .expect("unknown brain reference should fail");
+        assert!(error.contains("unknown brain_profile_id"), "{error}");
     }
 
     #[test]

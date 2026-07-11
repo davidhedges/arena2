@@ -68,6 +68,7 @@ namespace SpacetimeDB.Types
             AddTable(MeleeGapCloseCatalog = new(conn));
             AddTable(MovementActionState = new(conn));
             AddTable(NpcActionKitCatalog = new(conn));
+            AddTable(NpcBrainCatalog = new(conn));
             AddTable(NpcInstance = new(conn));
             AddTable(NpcPhysics = new(conn));
             AddTable(NpcState = new(conn));
@@ -632,6 +633,7 @@ namespace SpacetimeDB.Types
             new QueryBuilder().From.MeleeGapCloseCatalog().ToSql(),
             new QueryBuilder().From.MovementActionState().ToSql(),
             new QueryBuilder().From.NpcActionKitCatalog().ToSql(),
+            new QueryBuilder().From.NpcBrainCatalog().ToSql(),
             new QueryBuilder().From.NpcInstance().ToSql(),
             new QueryBuilder().From.NpcPhysics().ToSql(),
             new QueryBuilder().From.NpcState().ToSql(),
@@ -706,6 +708,7 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Table<MeleeGapCloseCatalog, MeleeGapCloseCatalogCols, MeleeGapCloseCatalogIxCols> MeleeGapCloseCatalog() => new("melee_gap_close_catalog", new MeleeGapCloseCatalogCols("melee_gap_close_catalog"), new MeleeGapCloseCatalogIxCols("melee_gap_close_catalog"));
         public global::SpacetimeDB.Table<MovementActionState, MovementActionStateCols, MovementActionStateIxCols> MovementActionState() => new("movement_action_state", new MovementActionStateCols("movement_action_state"), new MovementActionStateIxCols("movement_action_state"));
         public global::SpacetimeDB.Table<NpcActionKitCatalog, NpcActionKitCatalogCols, NpcActionKitCatalogIxCols> NpcActionKitCatalog() => new("npc_action_kit_catalog", new NpcActionKitCatalogCols("npc_action_kit_catalog"), new NpcActionKitCatalogIxCols("npc_action_kit_catalog"));
+        public global::SpacetimeDB.Table<NpcBrainCatalog, NpcBrainCatalogCols, NpcBrainCatalogIxCols> NpcBrainCatalog() => new("npc_brain_catalog", new NpcBrainCatalogCols("npc_brain_catalog"), new NpcBrainCatalogIxCols("npc_brain_catalog"));
         public global::SpacetimeDB.Table<NpcInstance, NpcInstanceCols, NpcInstanceIxCols> NpcInstance() => new("npc_instance", new NpcInstanceCols("npc_instance"), new NpcInstanceIxCols("npc_instance"));
         public global::SpacetimeDB.Table<NpcPhysics, NpcPhysicsCols, NpcPhysicsIxCols> NpcPhysics() => new("npc_physics", new NpcPhysicsCols("npc_physics"), new NpcPhysicsIxCols("npc_physics"));
         public global::SpacetimeDB.Table<NpcState, NpcStateCols, NpcStateIxCols> NpcState() => new("npc_state", new NpcStateCols("npc_state"), new NpcStateIxCols("npc_state"));
