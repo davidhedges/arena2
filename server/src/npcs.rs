@@ -2394,13 +2394,17 @@ fn select_npc_melee_action(
 
 fn npc_target_is_full_health(ctx: &ReducerContext, target: Identity) -> bool {
     if let Some(state) = ctx.db.npc_state().identity().find(target) {
-        return state.max_hp > 0 && state.hp >= state.max_hp;
+        return !npc_health_needs_healing(state.hp, state.max_hp);
     }
     ctx.db
         .player_state()
         .player_id()
         .find(target)
-        .is_some_and(|state| state.max_hp > 0 && state.hp >= state.max_hp)
+        .is_some_and(|state| !npc_health_needs_healing(state.hp, state.max_hp))
+}
+
+fn npc_health_needs_healing(hp: i32, max_hp: i32) -> bool {
+    max_hp > 0 && hp < max_hp
 }
 
 fn select_npc_action_target(
@@ -3335,10 +3339,11 @@ fn yaw_delta_abs(a: f32, b: f32) -> f32 {
 mod tests {
     use super::{
         npc_action_count_requirements_met, npc_action_distance_score, npc_catalog,
-        npc_decision_interval_ms, npc_health_fraction, npc_identity, npc_identity_cmp,
-        npc_is_outside_leash_from_positions, npc_melee_defense_event_type, npc_tactical_band,
-        npc_target_stickiness_keeps_current, npc_target_stickiness_keeps_scored_current,
-        npc_template, npc_threat_key, parse_npc_catalog, visual_id_for_template, yaw_for_direction,
+        npc_decision_interval_ms, npc_health_fraction, npc_health_needs_healing, npc_identity,
+        npc_identity_cmp, npc_is_outside_leash_from_positions, npc_melee_defense_event_type,
+        npc_tactical_band, npc_target_stickiness_keeps_current,
+        npc_target_stickiness_keeps_scored_current, npc_template, npc_threat_key,
+        parse_npc_catalog, visual_id_for_template, yaw_for_direction, NpcActionRejectCounts,
         NpcAttackTarget, NpcFaction, NpcNearbyCounts, NpcScoredTarget, NpcTacticalBand,
         NpcThreatComponents, NPC_CATALOG_JSON, NPC_FACTION_FRIENDLY, NPC_FACTION_HOSTILE,
         NPC_FACTION_NEUTRAL, NPC_TEMPLATE_KOBOLD_THIEF_BK_DUAL_SWORD,
@@ -3417,6 +3422,19 @@ mod tests {
         let first = Identity::from_hex(format!("{:064x}", 1).as_str()).unwrap();
         let second = Identity::from_hex(format!("{:064x}", 2).as_str()).unwrap();
         assert_eq!(npc_identity_cmp(first, second), std::cmp::Ordering::Less);
+    }
+
+    #[test]
+    fn npc_heal_gate_and_inspector_reason_are_deterministic() {
+        assert!(npc_health_needs_healing(99, 100));
+        assert!(!npc_health_needs_healing(100, 100));
+        assert!(!npc_health_needs_healing(1, 0));
+
+        let rejects = NpcActionRejectCounts {
+            target_health: 1,
+            ..NpcActionRejectCounts::default()
+        };
+        assert_eq!(rejects.summary(), "TARGET_HEALTH=1");
     }
 
     #[test]
@@ -3516,6 +3534,8 @@ mod tests {
         let lich = npc_template("LICH_SUPPORT").expect("support exemplar should be authored");
         assert_eq!(lich.action_kit[0].role, "HEAL");
         assert_eq!(lich.action_kit[0].target_selector, "LOWEST_HEALTH_ALLY");
+        assert!(lich.action_kit[0].base_utility > lich.action_kit[1].base_utility);
+        assert_eq!(lich.action_kit[1].role, "BUFF");
     }
 
     #[test]
