@@ -8,26 +8,19 @@ use spacetimedb::{reducer, table, Identity, ReducerContext, Table, Timestamp};
 use crate::arena::open_world_scene_name_for_identity;
 use crate::arena::{resolve_player_world_context, world_contexts_share, ResolvedWorldContext};
 use crate::combat::actor_snapshot::CombatActorSnapshotSet;
-use crate::combat::scene_query::{has_line_of_sight, is_direction_within_facing_arc};
 #[allow(unused_imports)]
 use crate::combat::status_effect as _;
-use crate::combat::{
-    is_in_combat, mark_harmful_combat_action, queue_effects, timestamp_to_micros, CombatEvent,
-    DamageDelivery, EffectPacket, MovementModifiers, COMBAT_EVENT_BLOCK, COMBAT_EVENT_CAST,
-    COMBAT_EVENT_FIZZLE, COMBAT_EVENT_IMPACT, COMBAT_EVENT_PARRY, COMBAT_METADATA_NONE,
-    COMBAT_SCALAR_MELEE_RELEASE_DELAY_SECONDS, COMBAT_SCALAR_NONE, COMBAT_SEQUENCE_NONE,
-    DAMAGE_SOURCE_KIND_MELEE,
-};
-use crate::defense::{
-    resolve_defensible_combat_hit, CombatHitDeliveryKind, DefenseResolution, DefensibleCombatHit,
-};
+use crate::combat::{is_in_combat, timestamp_to_micros, MovementModifiers};
 use crate::inventory::{clear_loot_for_anchor, corpse_loot_has_items};
+use crate::melee::{
+    clear_pending_melee_impacts_for_source, commit_server_actor_targeted_melee,
+    interrupt_server_actor_melee_commitments, pending_melee_commitment_target_for_source,
+    resolve_due_pending_melee_impacts_for_event_source, ServerActorMeleeCommitment,
+};
 use crate::movement::FIXED_TICK_SECONDS;
 use crate::practice::is_training_instance;
 use crate::progression::{ability_catalog as _, MeleeAbilityCatalog};
-use crate::relations::{
-    can_harm, combat_relation, target_audience_allows, CombatRelation, TargetAudience,
-};
+use crate::relations::{can_harm, combat_relation, CombatRelation, TargetAudience};
 #[allow(unused_imports)]
 use crate::spells::active_cast as _;
 use crate::spells::{
@@ -51,8 +44,6 @@ use crate::npcs::npc_combat_runtime as _;
 use crate::npcs::npc_decision_debug as _;
 #[allow(unused_imports)]
 use crate::npcs::npc_instance as _;
-#[allow(unused_imports)]
-use crate::npcs::npc_pending_swing as _;
 #[allow(unused_imports)]
 use crate::npcs::npc_physics as _;
 #[allow(unused_imports)]
@@ -274,25 +265,6 @@ pub struct NpcThreat {
     pub source_identity: Identity,
     pub damage_threat: f32,
     pub updated_at: Timestamp,
-}
-
-/// One immutable in-flight telegraphed swing per NPC (S3): the CAST event is
-/// emitted at swing start, this row schedules damage resolution
-/// `attack_windup_ms` later. Replanning pauses until resolution or an explicit
-/// interrupt deletes the row, so a later utility result cannot replace a
-/// telegraph the player has already seen.
-#[table(accessor = npc_pending_swing)]
-#[derive(Clone)]
-pub struct NpcPendingSwing {
-    #[primary_key]
-    pub identity: Identity,
-    pub target: Identity,
-    pub ability_id: String,
-    pub action_instance_id: String,
-    pub cast_at: Timestamp,
-    pub resolve_at: Timestamp,
-    #[index(btree)]
-    pub resolve_at_micros: i64,
 }
 
 #[table(accessor = npc_despawn)]
@@ -1274,7 +1246,7 @@ pub(crate) fn tick_npc_combat(
 ) {
     // Due windups resolve before new swings begin, so a swing scheduled for
     // this tick lands before the same NPC's next cadence fire is considered.
-    resolve_due_npc_pending_swings(ctx, now, movement_modifiers);
+    resolve_due_pending_melee_impacts_for_event_source(ctx, now, NPC_MELEE_SOURCE_KIND);
 
     let npcs: Vec<NpcInstance> = ctx.db.npc_instance().iter().collect();
     if npcs.is_empty() {
@@ -1353,9 +1325,11 @@ pub(crate) fn tick_npc_combat(
             continue;
         }
 
-        if let Some(swing) = ctx.db.npc_pending_swing().identity().find(npc.identity) {
+        if let Some(target_identity) =
+            pending_melee_commitment_target_for_source(ctx, npc.identity, NPC_MELEE_SOURCE_KIND)
+        {
             if let Some(target) =
-                resolve_npc_swing_target(ctx, npc.identity, &physics, swing.target)
+                resolve_npc_swing_target(ctx, npc.identity, &physics, target_identity)
             {
                 face_npc_target(ctx, now, &physics, &target);
             }
@@ -1634,7 +1608,6 @@ struct NpcAttackTarget {
     pos_y: f32,
     pos_z: f32,
     hit_radius: f32,
-    hit_height: f32,
     distance: f32,
     dir_x: f32,
     dir_z: f32,
@@ -1646,7 +1619,6 @@ struct NpcTargetCandidate {
     pos_y: f32,
     pos_z: f32,
     hit_radius: f32,
-    hit_height: f32,
     hp: i32,
     max_hp: i32,
     context: ResolvedWorldContext,
@@ -1786,7 +1758,6 @@ impl NpcPerceptionIndex {
             pos_y: actor.pos_y,
             pos_z: actor.pos_z,
             hit_radius: actor.hit_radius,
-            hit_height: actor.hit_height,
             hp,
             max_hp,
             context,
@@ -2017,7 +1988,6 @@ fn npc_attack_target_from_candidate(
         pos_y: candidate.pos_y,
         pos_z: candidate.pos_z,
         hit_radius: candidate.hit_radius,
-        hit_height: candidate.hit_height,
         distance,
         dir_x,
         dir_z,
@@ -2771,16 +2741,12 @@ fn begin_npc_melee_swing(
     ctx: &ReducerContext,
     now: Timestamp,
     npc: &NpcInstance,
-    physics: &NpcPhysics,
+    _physics: &NpcPhysics,
     template: &NpcTemplate,
     action: &MeleeAbilityCatalog,
     target: &NpcAttackTarget,
 ) -> bool {
-    if ctx
-        .db
-        .npc_pending_swing()
-        .identity()
-        .find(npc.identity)
+    if pending_melee_commitment_target_for_source(ctx, npc.identity, NPC_MELEE_SOURCE_KIND)
         .is_some()
     {
         return false;
@@ -2788,84 +2754,33 @@ fn begin_npc_melee_swing(
     let Some(audience) = TargetAudience::from_wire(action.target_audience.as_str()) else {
         return false;
     };
-    if !target_audience_allows(ctx, npc.identity, target.identity, audience)
-        || target.distance > npc_attack_reach(action.range, target)
-        || !is_direction_within_facing_arc(
-            physics.yaw,
-            target.dir_x,
-            target.dir_z,
-            std::f32::consts::PI,
-            0.0,
-        )
-    {
-        return false;
-    }
-    if action.requires_target_los {
-        let actors = CombatActorSnapshotSet::collect(ctx);
-        let Some(caster) = actors
-            .index_by_id()
-            .get(&npc.identity)
-            .and_then(|index| actors.as_slice().get(*index))
-        else {
-            return false;
-        };
-        let Some(target_snapshot) = actors
-            .index_by_id()
-            .get(&target.identity)
-            .and_then(|index| actors.as_slice().get(*index))
-        else {
-            return false;
-        };
-        if !has_line_of_sight(ctx, caster, target_snapshot) {
-            return false;
-        }
-    }
     let action_instance_id = format!("npc:{}:{}", npc.identity.to_hex(), timestamp_to_micros(now));
-    emit_npc_combat_event(
+    let damage = if npc_attacks_are_harmless() {
+        0
+    } else {
+        action.base_damage
+    };
+    commit_server_actor_targeted_melee(
         ctx,
         now,
-        npc,
-        physics,
-        target,
-        action_instance_id.as_str(),
-        action.ability_id.as_str(),
-        action.range,
-        COMBAT_EVENT_CAST,
-        0,
-        COMBAT_SCALAR_MELEE_RELEASE_DELAY_SECONDS,
-        template.attack_windup_ms as f32 / 1000.0,
-    );
-
-    let resolve_at = now + Duration::from_millis(template.attack_windup_ms);
-    let row = NpcPendingSwing {
-        identity: npc.identity,
-        target: target.identity,
-        ability_id: action.ability_id.clone(),
-        action_instance_id,
-        cast_at: now,
-        resolve_at,
-        resolve_at_micros: timestamp_to_micros(resolve_at),
-    };
-    ctx.db.npc_pending_swing().insert(row);
-    true
-}
-
-fn resolve_due_npc_pending_swings(
-    ctx: &ReducerContext,
-    now: Timestamp,
-    movement_modifiers: &MovementModifiers,
-) {
-    let due: Vec<NpcPendingSwing> = ctx
-        .db
-        .npc_pending_swing()
-        .resolve_at_micros()
-        .filter(..=timestamp_to_micros(now))
-        .collect();
-
-    for swing in due {
-        ctx.db.npc_pending_swing().identity().delete(swing.identity);
-        resolve_npc_pending_swing(ctx, now, &swing, movement_modifiers);
-    }
+        ServerActorMeleeCommitment {
+            source: npc.identity,
+            target: target.identity,
+            action_instance_id: action_instance_id.as_str(),
+            action_kind: NPC_MELEE_ACTION_KIND,
+            ability_id: action.ability_id.as_str(),
+            event_source: NPC_MELEE_SOURCE_KIND,
+            target_audience: audience,
+            damage,
+            range: action.range,
+            windup_ms: template.attack_windup_ms,
+            parry_behavior: NPC_MELEE_PARRY_BEHAVIOR,
+            block_behavior: NPC_MELEE_BLOCK_BEHAVIOR,
+            requires_target_los: action.requires_target_los,
+            facing_arc_radians: std::f32::consts::PI,
+            direct_action_key: action.ability_id.as_str(),
+        },
+    )
 }
 
 pub(crate) fn interrupt_npc_actions_for_crowd_control(
@@ -2873,170 +2788,7 @@ pub(crate) fn interrupt_npc_actions_for_crowd_control(
     identity: Identity,
     now: Timestamp,
 ) {
-    let Some(swing) = ctx.db.npc_pending_swing().identity().find(identity) else {
-        return;
-    };
-    ctx.db.npc_pending_swing().identity().delete(identity);
-
-    let Some(npc) = ctx.db.npc_instance().identity().find(identity) else {
-        return;
-    };
-    let Some(physics) = ctx.db.npc_physics().identity().find(identity) else {
-        return;
-    };
-    let Some(target) = resolve_npc_swing_target(ctx, identity, &physics, swing.target) else {
-        return;
-    };
-    emit_npc_combat_event(
-        ctx,
-        now,
-        &npc,
-        &physics,
-        &target,
-        swing.action_instance_id.as_str(),
-        swing.ability_id.as_str(),
-        0.0,
-        COMBAT_EVENT_FIZZLE,
-        0,
-        COMBAT_SCALAR_NONE,
-        0.0,
-    );
-}
-
-/// Swing resolution (S3), re-validated against present-time state: the swing
-/// cancels when the NPC is gone, dead, or disabled at impact time (crowd
-/// control mid-windup interrupts the hit), and whiffs silently — mirroring
-/// player melee — when the target is gone, unharmable, or outside authored
-/// reach (stepping out during the windup is the dodge counterplay).
-fn resolve_npc_pending_swing(
-    ctx: &ReducerContext,
-    now: Timestamp,
-    swing: &NpcPendingSwing,
-    movement_modifiers: &MovementModifiers,
-) {
-    let Some(npc) = ctx.db.npc_instance().identity().find(swing.identity) else {
-        return;
-    };
-    let Some(action) = ctx
-        .db
-        .melee_ability_catalog()
-        .ability_id()
-        .find(swing.ability_id.clone())
-    else {
-        return;
-    };
-    let Some(state) = ctx.db.npc_state().identity().find(swing.identity) else {
-        return;
-    };
-    if !state.alive {
-        return;
-    }
-    if movement_modifiers.is_disabled(&swing.identity) {
-        return;
-    }
-    let Some(physics) = ctx.db.npc_physics().identity().find(swing.identity) else {
-        return;
-    };
-
-    let Some(target) = resolve_npc_swing_target(ctx, swing.identity, &physics, swing.target) else {
-        return;
-    };
-    let Some(audience) = TargetAudience::from_wire(action.target_audience.as_str()) else {
-        return;
-    };
-    if !target_audience_allows(ctx, swing.identity, target.identity, audience) {
-        return;
-    }
-    if target.distance > npc_attack_reach(action.range, &target) {
-        return;
-    }
-    if !is_direction_within_facing_arc(
-        physics.yaw,
-        target.dir_x,
-        target.dir_z,
-        std::f32::consts::PI,
-        0.0,
-    ) {
-        return;
-    }
-    if action.requires_target_los {
-        let actors = CombatActorSnapshotSet::collect(ctx);
-        let Some(caster) = actors
-            .index_by_id()
-            .get(&swing.identity)
-            .and_then(|index| actors.as_slice().get(*index))
-        else {
-            return;
-        };
-        let Some(target_snapshot) = actors
-            .index_by_id()
-            .get(&target.identity)
-            .and_then(|index| actors.as_slice().get(*index))
-        else {
-            return;
-        };
-        if !has_line_of_sight(ctx, caster, target_snapshot) {
-            return;
-        }
-    }
-
-    if let Some(defense_event_type) = resolve_npc_melee_defense(ctx, now, &physics, &target) {
-        mark_harmful_combat_action(
-            ctx,
-            npc.identity,
-            target.identity,
-            now,
-            NPC_MELEE_ACTION_KIND,
-        );
-        emit_npc_combat_event(
-            ctx,
-            now,
-            &npc,
-            &physics,
-            &target,
-            swing.action_instance_id.as_str(),
-            action.ability_id.as_str(),
-            action.range,
-            defense_event_type,
-            0,
-            COMBAT_SCALAR_NONE,
-            0.0,
-        );
-        return;
-    }
-
-    let damage = if npc_attacks_are_harmless() {
-        0
-    } else {
-        action.base_damage
-    };
-    emit_npc_combat_event(
-        ctx,
-        now,
-        &npc,
-        &physics,
-        &target,
-        swing.action_instance_id.as_str(),
-        action.ability_id.as_str(),
-        action.range,
-        COMBAT_EVENT_IMPACT,
-        damage,
-        COMBAT_SCALAR_NONE,
-        0.0,
-    );
-    queue_effects(
-        ctx,
-        vec![EffectPacket::Damage {
-            amount: damage,
-            damage_type: crate::combat::DamageType::Physical,
-            source: npc.identity,
-            target: target.identity,
-            spell_id: swing.action_instance_id.clone(),
-            delivery: DamageDelivery::Direct,
-            direct_action_key: action.ability_id.clone(),
-            source_kind: DAMAGE_SOURCE_KIND_MELEE.to_string(),
-        }],
-    );
+    interrupt_server_actor_melee_commitments(ctx, identity, NPC_MELEE_SOURCE_KIND, now);
 }
 
 /// Present-time target state for a resolving swing: actor-generic current pose,
@@ -3086,98 +2838,10 @@ fn resolve_npc_swing_target(
         pos_y: target_snapshot.pos_y,
         pos_z: target_snapshot.pos_z,
         hit_radius: target_snapshot.hit_radius,
-        hit_height: target_snapshot.hit_height,
         distance,
         dir_x,
         dir_z,
     })
-}
-
-fn resolve_npc_melee_defense(
-    ctx: &ReducerContext,
-    now: Timestamp,
-    physics: &NpcPhysics,
-    target: &NpcAttackTarget,
-) -> Option<&'static str> {
-    npc_melee_defense_event_type(resolve_defensible_combat_hit(
-        ctx,
-        DefensibleCombatHit {
-            delivery_kind: CombatHitDeliveryKind::Melee,
-            defender: target.identity,
-            active_from: now,
-            active_until: now + Duration::from_millis(1),
-            parry_behavior: NPC_MELEE_PARRY_BEHAVIOR,
-            block_behavior: NPC_MELEE_BLOCK_BEHAVIOR,
-            source_x: physics.pos_x,
-            source_y: physics.pos_y,
-            source_z: physics.pos_z,
-            impact_x: target.pos_x,
-            impact_y: target.pos_y + target.hit_height * 0.5,
-            impact_z: target.pos_z,
-            dir_x: target.dir_x,
-            dir_y: 0.0,
-            dir_z: target.dir_z,
-            speed: 0.0,
-        },
-    ))
-}
-
-fn npc_melee_defense_event_type(resolution: DefenseResolution) -> Option<&'static str> {
-    match resolution {
-        DefenseResolution::Parried => Some(COMBAT_EVENT_PARRY),
-        DefenseResolution::Blocked => Some(COMBAT_EVENT_BLOCK),
-        DefenseResolution::None => None,
-    }
-}
-
-#[allow(clippy::too_many_arguments)]
-fn emit_npc_combat_event(
-    ctx: &ReducerContext,
-    now: Timestamp,
-    npc: &NpcInstance,
-    physics: &NpcPhysics,
-    target: &NpcAttackTarget,
-    action_instance_id: &str,
-    ability_id: &str,
-    max_distance: f32,
-    event_type: &str,
-    damage: i32,
-    scalar_kind: &str,
-    scalar_value: f32,
-) {
-    ctx.db.combat_event().insert(CombatEvent {
-        event_id: 0,
-        action_instance_id: action_instance_id.to_string(),
-        action_kind: NPC_MELEE_ACTION_KIND.to_string(),
-        ability_id: ability_id.to_string(),
-        hit_index: 0,
-        event_type: event_type.to_string(),
-        source_kind: NPC_MELEE_SOURCE_KIND.to_string(),
-        caster: npc.identity,
-        hit: target.identity,
-        origin_x: physics.pos_x,
-        origin_y: physics.pos_y,
-        origin_z: physics.pos_z,
-        dir_x: target.dir_x,
-        dir_y: 0.0,
-        dir_z: target.dir_z,
-        speed: 0.0,
-        max_distance,
-        scalar_kind: scalar_kind.to_string(),
-        scalar_value,
-        sequence_kind: COMBAT_SEQUENCE_NONE.to_string(),
-        sequence_index: 0,
-        sequence_count: 0,
-        point_x: target.pos_x,
-        point_y: target.pos_y,
-        point_z: target.pos_z,
-        created_at: now,
-        created_at_micros: timestamp_to_micros(now),
-        damage,
-        metadata_kind: COMBAT_METADATA_NONE.to_string(),
-        metadata_key: String::new(),
-        metadata_value: String::new(),
-    });
 }
 
 fn despawn_npc_identity(ctx: &ReducerContext, identity: Identity) {
@@ -3187,15 +2851,7 @@ fn despawn_npc_identity(ctx: &ReducerContext, identity: Identity) {
     ctx.db.npc_target_override().identity().delete(identity);
     ctx.db.npc_return_home().identity().delete(identity);
     ctx.db.npc_decision_debug().identity().delete(identity);
-    if ctx
-        .db
-        .npc_pending_swing()
-        .identity()
-        .find(identity)
-        .is_some()
-    {
-        ctx.db.npc_pending_swing().identity().delete(identity);
-    }
+    clear_pending_melee_impacts_for_source(ctx, identity);
     clear_loot_for_anchor(ctx, identity);
     if ctx.db.npc_despawn().identity().find(identity).is_some() {
         ctx.db.npc_despawn().identity().delete(identity);
@@ -3348,20 +3004,20 @@ fn yaw_delta_abs(a: f32, b: f32) -> f32 {
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
+    use std::path::Path;
+
     use super::{
         npc_action_count_requirements_met, npc_action_distance_score, npc_catalog,
         npc_decision_interval_ms, npc_health_fraction, npc_health_needs_healing, npc_identity,
-        npc_identity_cmp, npc_is_outside_leash_from_positions, npc_melee_defense_event_type,
-        npc_tactical_band, npc_target_stickiness_keeps_current,
-        npc_target_stickiness_keeps_scored_current, npc_template, npc_threat_key,
-        parse_npc_catalog, visual_id_for_template, yaw_for_direction, NpcActionRejectCounts,
-        NpcAttackTarget, NpcFaction, NpcNearbyCounts, NpcScoredTarget, NpcTacticalBand,
-        NpcThreatComponents, NPC_CATALOG_JSON, NPC_FACTION_FRIENDLY, NPC_FACTION_HOSTILE,
-        NPC_FACTION_NEUTRAL, NPC_TEMPLATE_KOBOLD_THIEF_BK_DUAL_SWORD,
+        npc_identity_cmp, npc_is_outside_leash_from_positions, npc_tactical_band,
+        npc_target_stickiness_keeps_current, npc_target_stickiness_keeps_scored_current,
+        npc_template, npc_threat_key, parse_npc_catalog, visual_id_for_template, yaw_for_direction,
+        NpcActionRejectCounts, NpcAttackTarget, NpcFaction, NpcNearbyCounts, NpcScoredTarget,
+        NpcTacticalBand, NpcThreatComponents, NPC_CATALOG_JSON, NPC_FACTION_FRIENDLY,
+        NPC_FACTION_HOSTILE, NPC_FACTION_NEUTRAL, NPC_TEMPLATE_KOBOLD_THIEF_BK_DUAL_SWORD,
         NPC_TEMPLATE_KOBOLD_WARRIOR_GN_SPEAR, NPC_TEMPLATE_KOBOLD_WARRIOR_RD_SWORD_SHIELD,
     };
-    use crate::combat::{COMBAT_EVENT_BLOCK, COMBAT_EVENT_PARRY};
-    use crate::defense::DefenseResolution;
     use spacetimedb::Identity;
 
     #[test]
@@ -3464,7 +3120,6 @@ mod tests {
                 pos_y: 0.0,
                 pos_z: 0.0,
                 hit_radius: 0.5,
-                hit_height: 2.0,
                 distance,
                 dir_x: 1.0,
                 dir_z: 0.0,
@@ -3624,15 +3279,17 @@ mod tests {
     }
 
     #[test]
-    fn npc_melee_defense_resolution_uses_canonical_combat_events() {
-        assert_eq!(
-            npc_melee_defense_event_type(DefenseResolution::Parried),
-            Some(COMBAT_EVENT_PARRY)
-        );
-        assert_eq!(
-            npc_melee_defense_event_type(DefenseResolution::Blocked),
-            Some(COMBAT_EVENT_BLOCK)
-        );
-        assert_eq!(npc_melee_defense_event_type(DefenseResolution::None), None);
+    fn npc_melee_uses_shared_pending_impact_executor() {
+        let source = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("src/npcs.rs"))
+            .expect("npcs.rs should be readable");
+        let runtime_source = source
+            .split("#[cfg(test)]")
+            .next()
+            .expect("runtime source should precede tests");
+
+        assert!(runtime_source.contains("commit_server_actor_targeted_melee"));
+        assert!(runtime_source.contains("resolve_due_pending_melee_impacts_for_event_source"));
+        assert!(!runtime_source.contains("struct NpcPendingSwing"));
+        assert!(!runtime_source.contains("npc_pending_swing()"));
     }
 }

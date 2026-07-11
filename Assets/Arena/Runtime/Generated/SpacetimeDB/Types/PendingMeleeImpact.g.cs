@@ -67,6 +67,18 @@ namespace SpacetimeDB.Types
         public int ImpactAreaDamage;
         [DataMember(Name = "impact_area_include_primary_target")]
         public bool ImpactAreaIncludePrimaryTarget;
+        [DataMember(Name = "target_audience")]
+        public string TargetAudience;
+        [DataMember(Name = "requires_present_time_facing")]
+        public bool RequiresPresentTimeFacing;
+        [DataMember(Name = "present_time_facing_arc_radians")]
+        public float PresentTimeFacingArcRadians;
+        [DataMember(Name = "requires_present_time_los")]
+        public bool RequiresPresentTimeLos;
+        [DataMember(Name = "impact_event_max_distance")]
+        public float ImpactEventMaxDistance;
+        [DataMember(Name = "direct_action_key")]
+        public string DirectActionKey;
         [DataMember(Name = "view_delay_micros")]
         public long ViewDelayMicros;
         [DataMember(Name = "resolve_at_micros")]
@@ -100,6 +112,12 @@ namespace SpacetimeDB.Types
             float ImpactAreaRadius,
             int ImpactAreaDamage,
             bool ImpactAreaIncludePrimaryTarget,
+            string TargetAudience,
+            bool RequiresPresentTimeFacing,
+            float PresentTimeFacingArcRadians,
+            bool RequiresPresentTimeLos,
+            float ImpactEventMaxDistance,
+            string DirectActionKey,
             long ViewDelayMicros,
             long ResolveAtMicros
         )
@@ -131,6 +149,12 @@ namespace SpacetimeDB.Types
             this.ImpactAreaRadius = ImpactAreaRadius;
             this.ImpactAreaDamage = ImpactAreaDamage;
             this.ImpactAreaIncludePrimaryTarget = ImpactAreaIncludePrimaryTarget;
+            this.TargetAudience = TargetAudience;
+            this.RequiresPresentTimeFacing = RequiresPresentTimeFacing;
+            this.PresentTimeFacingArcRadians = PresentTimeFacingArcRadians;
+            this.RequiresPresentTimeLos = RequiresPresentTimeLos;
+            this.ImpactEventMaxDistance = ImpactEventMaxDistance;
+            this.DirectActionKey = DirectActionKey;
             this.ViewDelayMicros = ViewDelayMicros;
             this.ResolveAtMicros = ResolveAtMicros;
         }
@@ -146,6 +170,8 @@ namespace SpacetimeDB.Types
             this.BlockBehavior = "";
             this.AirborneTargetingMode = "";
             this.TargetingKind = "";
+            this.TargetAudience = "";
+            this.DirectActionKey = "";
         }
     }
 }

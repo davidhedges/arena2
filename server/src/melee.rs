@@ -59,7 +59,7 @@ use crate::progression::{
     AutoAttackCatalog, AutoAttackReplacementCatalog, MeleeAbilityCatalog, MeleeGapCloseCatalog,
     MeleeTimedMovementRuntime,
 };
-use crate::relations::{can_harm, combat_relation};
+use crate::relations::{can_harm, combat_relation, target_audience_allows, TargetAudience};
 use crate::resources::{
     can_pay_action_resource_cost, grant_primary_resource_amount,
     grant_primary_resource_amount_for_kind, grant_primary_resource_for_melee_hit,
@@ -735,6 +735,7 @@ pub struct PendingMeleeImpact {
     #[primary_key]
     #[auto_inc]
     pub impact_id: u64,
+    #[index(btree)]
     pub source: Identity,
     pub event_source: String,
     pub target: Identity,
@@ -761,12 +762,316 @@ pub struct PendingMeleeImpact {
     pub impact_area_radius: f32,
     pub impact_area_damage: i32,
     pub impact_area_include_primary_target: bool,
+    /// Empty for legacy player/practice rows. Server-actor commitments persist
+    /// their authored audience so impact-time relation validation cannot drift
+    /// from the CAST-time gate.
+    pub target_audience: String,
+    /// Server-actor commitments use current authoritative facing and LOS at
+    /// impact. Player rows leave these disabled and retain their existing
+    /// prediction/rewind contract.
+    pub requires_present_time_facing: bool,
+    pub present_time_facing_arc_radians: f32,
+    pub requires_present_time_los: bool,
+    /// Player impacts historically publish max_distance=0 and derive their
+    /// direct-action key from the action instance. Server actors can preserve
+    /// their authored combat-event/effect identities explicitly.
+    pub impact_event_max_distance: f32,
+    pub direct_action_key: String,
     /// S8: the press's clamped attacker-view delay, frozen at press time. The
     /// impact-time reach re-check rewinds the target by this much (D2);
     /// 0 = present-time (no report, sweeps, autos, queued releases).
     pub view_delay_micros: i64,
     #[index(btree)]
     pub resolve_at_micros: i64,
+}
+
+/// Actor-generic server-side melee commitment used below player input and NPC
+/// utility adapters. It owns authoritative present-time target validation,
+/// the shared CAST event, and scheduling into `PendingMeleeImpact`; it does
+/// not perform player authorization, action-bar, prediction, or rewind work.
+pub(crate) struct ServerActorMeleeCommitment<'a> {
+    pub source: Identity,
+    pub target: Identity,
+    pub action_instance_id: &'a str,
+    pub action_kind: &'a str,
+    pub ability_id: &'a str,
+    pub event_source: &'a str,
+    pub target_audience: TargetAudience,
+    pub damage: i32,
+    pub range: f32,
+    pub windup_ms: u64,
+    pub parry_behavior: &'a str,
+    pub block_behavior: &'a str,
+    pub requires_target_los: bool,
+    pub facing_arc_radians: f32,
+    pub direct_action_key: &'a str,
+}
+
+pub(crate) fn commit_server_actor_targeted_melee(
+    ctx: &ReducerContext,
+    now: Timestamp,
+    commitment: ServerActorMeleeCommitment<'_>,
+) -> bool {
+    let Some(source) = actor_snapshot_for(ctx, commitment.source) else {
+        return false;
+    };
+    let Some(target) = actor_snapshot_for(ctx, commitment.target) else {
+        return false;
+    };
+    if !source.alive
+        || !target.alive
+        || source.player_id == target.player_id
+        || has_active_disabling_status(ctx, commitment.source, now)
+        || !players_share_world_context(ctx, commitment.source, commitment.target)
+        || !target_audience_allows(
+            ctx,
+            commitment.source,
+            commitment.target,
+            commitment.target_audience,
+        )
+        || !can_harm(ctx, commitment.source, commitment.target)
+    {
+        return false;
+    }
+
+    let dx = target.pos_x - source.pos_x;
+    let dz = target.pos_z - source.pos_z;
+    let distance = (dx * dx + dz * dz).sqrt();
+    if distance > commitment.range + target.hit_radius
+        || !is_direction_within_facing_arc(
+            source.facing_yaw,
+            dx,
+            dz,
+            commitment.facing_arc_radians,
+            0.0,
+        )
+        || (commitment.requires_target_los && !has_line_of_sight(ctx, &source, &target))
+    {
+        return false;
+    }
+
+    let (dir_x, dir_z) = if distance > 0.001 {
+        (dx / distance, dz / distance)
+    } else {
+        (0.0, 1.0)
+    };
+    ctx.db.combat_event().insert(CombatEvent {
+        event_id: 0,
+        action_instance_id: commitment.action_instance_id.to_string(),
+        action_kind: commitment.action_kind.to_string(),
+        ability_id: commitment.ability_id.to_string(),
+        hit_index: 0,
+        event_type: EVENT_CAST.to_string(),
+        source_kind: commitment.event_source.to_string(),
+        caster: commitment.source,
+        hit: commitment.target,
+        origin_x: source.pos_x,
+        origin_y: source.pos_y,
+        origin_z: source.pos_z,
+        dir_x,
+        dir_y: 0.0,
+        dir_z,
+        speed: 0.0,
+        max_distance: commitment.range,
+        scalar_kind: COMBAT_SCALAR_MELEE_RELEASE_DELAY_SECONDS.to_string(),
+        scalar_value: commitment.windup_ms as f32 / 1000.0,
+        sequence_kind: COMBAT_SEQUENCE_NONE.to_string(),
+        sequence_index: 0,
+        sequence_count: 0,
+        point_x: target.pos_x,
+        point_y: target.pos_y,
+        point_z: target.pos_z,
+        created_at: now,
+        created_at_micros: timestamp_to_micros(now),
+        damage: 0,
+        metadata_kind: COMBAT_METADATA_NONE.to_string(),
+        metadata_key: String::new(),
+        metadata_value: String::new(),
+    });
+
+    let impact_at = now + Duration::from_millis(commitment.windup_ms);
+    ctx.db.pending_melee_impact().insert(PendingMeleeImpact {
+        impact_id: 0,
+        source: commitment.source,
+        event_source: commitment.event_source.to_string(),
+        target: commitment.target,
+        spell_id: commitment.action_instance_id.to_string(),
+        kind: commitment.action_kind.to_string(),
+        ability_id: commitment.ability_id.to_string(),
+        hit_index: 0,
+        damage: commitment.damage,
+        damage_type: DamageType::Physical.as_str().to_string(),
+        target_health_damage_scaling_min_multiplier: 1.0,
+        target_health_damage_scaling_max_multiplier: 1.0,
+        range: commitment.range,
+        impact_at,
+        active_until: impact_at,
+        recovery_until: impact_at,
+        parry_behavior: commitment.parry_behavior.to_string(),
+        block_behavior: commitment.block_behavior.to_string(),
+        airborne_targeting_mode: "ANY_TARGET".to_string(),
+        targeting_kind: "TARGET".to_string(),
+        targeting_radius: 0.0,
+        targeting_angle_degrees: 0.0,
+        applies_stagger: false,
+        grants_primary_resource_on_hit: false,
+        impact_area_radius: 0.0,
+        impact_area_damage: 0,
+        impact_area_include_primary_target: false,
+        target_audience: commitment.target_audience.as_str().to_string(),
+        requires_present_time_facing: true,
+        present_time_facing_arc_radians: commitment.facing_arc_radians,
+        requires_present_time_los: commitment.requires_target_los,
+        impact_event_max_distance: commitment.range,
+        direct_action_key: commitment.direct_action_key.to_string(),
+        view_delay_micros: 0,
+        resolve_at_micros: timestamp_to_micros(impact_at),
+    });
+    true
+}
+
+pub(crate) fn pending_melee_commitment_target_for_source(
+    ctx: &ReducerContext,
+    source: Identity,
+    event_source: &str,
+) -> Option<Identity> {
+    ctx.db
+        .pending_melee_impact()
+        .source()
+        .filter(source)
+        .find(|row| row.event_source == event_source)
+        .map(|row| row.target)
+}
+
+pub(crate) fn clear_pending_melee_impacts_for_source(ctx: &ReducerContext, source: Identity) {
+    let impact_ids: Vec<u64> = ctx
+        .db
+        .pending_melee_impact()
+        .source()
+        .filter(source)
+        .map(|row| row.impact_id)
+        .collect();
+    for impact_id in impact_ids {
+        ctx.db.pending_melee_impact().impact_id().delete(impact_id);
+    }
+}
+
+pub(crate) fn interrupt_server_actor_melee_commitments(
+    ctx: &ReducerContext,
+    source: Identity,
+    event_source: &str,
+    now: Timestamp,
+) {
+    let rows: Vec<PendingMeleeImpact> = ctx
+        .db
+        .pending_melee_impact()
+        .source()
+        .filter(source)
+        .filter(|row| row.event_source == event_source)
+        .collect();
+    let mut fizzled_actions = HashSet::new();
+    for row in rows {
+        ctx.db
+            .pending_melee_impact()
+            .impact_id()
+            .delete(row.impact_id);
+        if !fizzled_actions.insert(row.spell_id.clone()) {
+            continue;
+        }
+        let Some(source_pose) = actor_snapshot_for(ctx, row.source) else {
+            continue;
+        };
+        let Some(target_pose) = actor_snapshot_for(ctx, row.target) else {
+            continue;
+        };
+        if !target_pose.alive
+            || !players_share_world_context(ctx, row.source, row.target)
+            || !can_harm(ctx, row.source, row.target)
+        {
+            continue;
+        }
+        let dx = target_pose.pos_x - source_pose.pos_x;
+        let dz = target_pose.pos_z - source_pose.pos_z;
+        let distance = (dx * dx + dz * dz).sqrt();
+        let (dir_x, dir_z) = if distance > 0.001 {
+            (dx / distance, dz / distance)
+        } else {
+            (0.0, 1.0)
+        };
+        ctx.db.combat_event().insert(CombatEvent {
+            event_id: 0,
+            action_instance_id: row.spell_id,
+            action_kind: row.kind,
+            ability_id: row.ability_id,
+            hit_index: row.hit_index as i32,
+            event_type: EVENT_FIZZLE.to_string(),
+            source_kind: row.event_source,
+            caster: row.source,
+            hit: row.target,
+            origin_x: source_pose.pos_x,
+            origin_y: source_pose.pos_y,
+            origin_z: source_pose.pos_z,
+            dir_x,
+            dir_y: 0.0,
+            dir_z,
+            speed: 0.0,
+            max_distance: 0.0,
+            scalar_kind: COMBAT_SCALAR_NONE.to_string(),
+            scalar_value: 0.0,
+            sequence_kind: COMBAT_SEQUENCE_NONE.to_string(),
+            sequence_index: 0,
+            sequence_count: 0,
+            point_x: target_pose.pos_x,
+            point_y: target_pose.pos_y,
+            point_z: target_pose.pos_z,
+            created_at: now,
+            created_at_micros: timestamp_to_micros(now),
+            damage: 0,
+            metadata_kind: COMBAT_METADATA_NONE.to_string(),
+            metadata_key: String::new(),
+            metadata_value: String::new(),
+        });
+    }
+}
+
+pub(crate) fn resolve_due_pending_melee_impacts_for_event_source(
+    ctx: &ReducerContext,
+    now: Timestamp,
+    event_source: &str,
+) {
+    let mut due: Vec<PendingMeleeImpact> = ctx
+        .db
+        .pending_melee_impact()
+        .iter()
+        .filter(|row| {
+            row.event_source == event_source && row.resolve_at_micros <= timestamp_to_micros(now)
+        })
+        .collect();
+    due.sort_by_key(|row| (row.resolve_at_micros, row.impact_id));
+    for row in due {
+        if ctx
+            .db
+            .pending_melee_impact()
+            .impact_id()
+            .find(row.impact_id)
+            .is_none()
+        {
+            continue;
+        }
+        resolve_pending_melee_impact(ctx, &row, now);
+        if ctx
+            .db
+            .pending_melee_impact()
+            .impact_id()
+            .find(row.impact_id)
+            .is_some()
+        {
+            ctx.db
+                .pending_melee_impact()
+                .impact_id()
+                .delete(row.impact_id);
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -3436,6 +3741,12 @@ fn perform_melee_attack_for_internal(
             impact_area_include_primary_target: impact_area
                 .map(|area| area.include_primary_target)
                 .unwrap_or(false),
+            target_audience: String::new(),
+            requires_present_time_facing: false,
+            present_time_facing_arc_radians: 0.0,
+            requires_present_time_los: false,
+            impact_event_max_distance: 0.0,
+            direct_action_key: String::new(),
             view_delay_micros: press_view_delay_micros(ctx, caster),
             resolve_at_micros: timestamp_to_micros(impact_at),
         });
@@ -4316,6 +4627,12 @@ fn resolve_pending_melee_target_impact(
     if !can_harm(ctx, row.source, row.target) {
         return;
     }
+    if !row.target_audience.is_empty()
+        && !TargetAudience::from_wire(row.target_audience.as_str())
+            .is_some_and(|audience| target_audience_allows(ctx, row.source, row.target, audience))
+    {
+        return;
+    }
 
     let dx = target_snapshot.pos_x - caster_pose.pos_x;
     let dz = target_snapshot.pos_z - caster_pose.pos_z;
@@ -4325,6 +4642,20 @@ fn resolve_pending_melee_target_impact(
     } else {
         (0.0, 0.0)
     };
+    if row.requires_present_time_facing
+        && !is_direction_within_facing_arc(
+            caster_pose.facing_yaw,
+            dx,
+            dz,
+            row.present_time_facing_arc_radians,
+            0.0,
+        )
+    {
+        return;
+    }
+    if row.requires_present_time_los && !has_line_of_sight(ctx, &caster_pose, &target_snapshot) {
+        return;
+    }
     // S8 (D2, owner-signed): the impact-time reach re-check judges the target
     // pose the attacker is rendering *at impact* — the press's frozen view
     // delay applied to this moment. Sweeps and unreported presses stay
@@ -4517,7 +4848,7 @@ fn resolve_pending_melee_target_impact(
         dir_y: 0.0,
         dir_z,
         speed: 0.0,
-        max_distance: 0.0,
+        max_distance: row.impact_event_max_distance,
         scalar_kind: COMBAT_SCALAR_NONE.to_string(),
         scalar_value: 0.0,
         sequence_kind: COMBAT_SEQUENCE_NONE.to_string(),
@@ -4534,15 +4865,24 @@ fn resolve_pending_melee_target_impact(
         metadata_value: String::new(),
     });
 
+    let effect_spell_id = if row.direct_action_key.is_empty() {
+        format!("{}:damage:{}", row.spell_id, row.hit_index)
+    } else {
+        row.spell_id.clone()
+    };
     let mut effects = vec![EffectPacket::Damage {
         amount: damage,
         damage_type: DamageType::from_wire(row.damage_type.as_str()),
         source: row.source,
         target: row.target,
-        spell_id: format!("{}:damage:{}", row.spell_id, row.hit_index),
+        spell_id: effect_spell_id,
         delivery: DamageDelivery::Direct,
         source_kind: DAMAGE_SOURCE_KIND_MELEE.to_string(),
-        direct_action_key: format!("{}:hit:{}", row.spell_id, row.hit_index),
+        direct_action_key: if row.direct_action_key.is_empty() {
+            format!("{}:hit:{}", row.spell_id, row.hit_index)
+        } else {
+            row.direct_action_key.clone()
+        },
     }];
     push_stagger_effect_if_applicable(
         ctx,
@@ -5280,9 +5620,27 @@ mod tests {
             impact_area_radius: 0.0,
             impact_area_damage: 0,
             impact_area_include_primary_target: false,
+            target_audience: String::new(),
+            requires_present_time_facing: false,
+            present_time_facing_arc_radians: 0.0,
+            requires_present_time_los: false,
+            impact_event_max_distance: 0.0,
+            direct_action_key: String::new(),
             view_delay_micros: 0,
             resolve_at_micros: 0,
         }
+    }
+
+    #[test]
+    fn player_pending_melee_fixture_keeps_server_actor_gates_disabled() {
+        let row = test_targetless_impact_row("TARGET", 2.5, 0.0);
+
+        assert!(row.target_audience.is_empty());
+        assert!(!row.requires_present_time_facing);
+        assert_eq!(row.present_time_facing_arc_radians, 0.0);
+        assert!(!row.requires_present_time_los);
+        assert_eq!(row.impact_event_max_distance, 0.0);
+        assert!(row.direct_action_key.is_empty());
     }
 
     #[test]
@@ -5870,6 +6228,12 @@ mod tests {
             impact_area_radius: 0.0,
             impact_area_damage: 0,
             impact_area_include_primary_target: false,
+            target_audience: String::new(),
+            requires_present_time_facing: false,
+            present_time_facing_arc_radians: 0.0,
+            requires_present_time_los: false,
+            impact_event_max_distance: 0.0,
+            direct_action_key: String::new(),
             view_delay_micros: 0,
             resolve_at_micros: 0,
         };
@@ -5933,6 +6297,12 @@ mod tests {
             impact_area_radius: 0.0,
             impact_area_damage: 0,
             impact_area_include_primary_target: false,
+            target_audience: String::new(),
+            requires_present_time_facing: false,
+            present_time_facing_arc_radians: 0.0,
+            requires_present_time_los: false,
+            impact_event_max_distance: 0.0,
+            direct_action_key: String::new(),
             view_delay_micros: 0,
             resolve_at_micros: 0,
         };
