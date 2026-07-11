@@ -2454,6 +2454,7 @@ mod tests {
                 "IMP_FIRE_BOLT",
                 "DEEP_SEA_LIZARD_TIDAL_BOLT",
                 "SKELETON_REAPER_SOUL_BOLT",
+                "DEMON_SUMMONER_SHADOW_BOLT",
                 "SKELETON_WIZARD_FROST_BOLT",
                 "SKELETON_WIZARD_FROSTBITE",
                 "SKELETON_WIZARD_ICE_LOCK",

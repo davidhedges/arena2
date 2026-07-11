@@ -3230,8 +3230,8 @@ mod tests {
     #[test]
     fn authored_npc_catalog_is_valid_and_complete_for_current_templates() {
         let parsed = parse_npc_catalog(NPC_CATALOG_JSON).unwrap();
-        assert_eq!(parsed.templates.len(), 25);
-        assert_eq!(npc_catalog().templates.len(), 25);
+        assert_eq!(parsed.templates.len(), 33);
+        assert_eq!(npc_catalog().templates.len(), 33);
         assert!(parsed
             .templates
             .iter()
@@ -3378,6 +3378,14 @@ mod tests {
         assert_eq!(npc_template("UNDEAD_BEAR").unwrap().action_kit.len(), 3);
         assert_eq!(npc_template("UNDEAD_BOAR").unwrap().action_kit.len(), 2);
         assert_eq!(npc_template("UNDEAD_RAT").unwrap().action_kit.len(), 3);
+        assert_eq!(npc_template("BONE_GOLEM").unwrap().action_kit.len(), 3);
+        assert_eq!(npc_template("DEMON_SUMMONER").unwrap().action_kit.len(), 3);
+        assert_eq!(npc_template("FOREST_DEMON").unwrap().action_kit.len(), 2);
+        assert_eq!(npc_template("GRAVEDIGGER").unwrap().action_kit.len(), 2);
+        assert_eq!(npc_template("MECHABOT").unwrap().action_kit.len(), 2);
+        assert_eq!(npc_template("MUSHROOM").unwrap().action_kit.len(), 2);
+        assert_eq!(npc_template("VAMPIRE").unwrap().action_kit.len(), 2);
+        assert_eq!(npc_template("ZOMBIE_HOUND").unwrap().action_kit.len(), 2);
     }
 
     #[test]

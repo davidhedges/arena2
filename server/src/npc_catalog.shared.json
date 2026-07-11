@@ -439,6 +439,64 @@
         { "ability_id": "NPC_UNDEAD_RAT_BITE", "role": "MELEE_OFFENSE", "target_selector": "CURRENT_ENEMY", "base_utility": 1.0, "min_self_health_pct": 0.0, "max_self_health_pct": 1.0, "preferred_min_distance": 0.0, "preferred_max_distance": 4.2, "min_nearby_allies": 0, "min_nearby_enemies": 1, "required_target_status": "", "forbidden_target_status": "", "movement_may_enable": true, "windup_ms": 650, "sort_order": 30 }
       ],
       "max_hp": 220, "hit_radius": 2.0, "hit_height": 7.9, "aggro_radius": 11.0, "move_speed": 5.8, "attack_windup_ms": 650
+    },
+    {
+      "template_id": "BONE_GOLEM", "species_id": "BONE_GOLEM", "display_name": "Bone Golem", "visual_ids": ["BONE_GOLEM_BL", "BONE_GOLEM_GN", "BONE_GOLEM_RD"], "brain_profile_id": "BASIC_HOSTILE_MELEE", "resource_policy": "FREE_ACTIONS_ONLY",
+      "action_kit": [
+        { "ability_id": "NPC_BONE_GOLEM_SMASH", "role": "MELEE_OFFENSE", "target_selector": "CURRENT_ENEMY", "base_utility": 1.3, "min_self_health_pct": 0.0, "max_self_health_pct": 1.0, "preferred_min_distance": 0.0, "preferred_max_distance": 3.0, "min_nearby_allies": 0, "min_nearby_enemies": 1, "required_target_status": "", "forbidden_target_status": "", "movement_may_enable": true, "windup_ms": 950, "sort_order": 10 },
+        { "ability_id": "NPC_BONE_GOLEM_HEAVY_STRIKE", "role": "MELEE_OFFENSE", "target_selector": "CURRENT_ENEMY", "base_utility": 1.15, "min_self_health_pct": 0.0, "max_self_health_pct": 1.0, "preferred_min_distance": 0.0, "preferred_max_distance": 3.0, "min_nearby_allies": 0, "min_nearby_enemies": 1, "required_target_status": "", "forbidden_target_status": "", "movement_may_enable": true, "windup_ms": 800, "sort_order": 20 },
+        { "ability_id": "NPC_BONE_GOLEM_STRIKE", "role": "MELEE_OFFENSE", "target_selector": "CURRENT_ENEMY", "base_utility": 1.0, "min_self_health_pct": 0.0, "max_self_health_pct": 1.0, "preferred_min_distance": 0.0, "preferred_max_distance": 3.0, "min_nearby_allies": 0, "min_nearby_enemies": 1, "required_target_status": "", "forbidden_target_status": "", "movement_may_enable": true, "windup_ms": 650, "sort_order": 30 }
+      ], "max_hp": 260, "hit_radius": 1.2, "hit_height": 3.2, "aggro_radius": 10.0, "move_speed": 4.5, "attack_windup_ms": 650
+    },
+    {
+      "template_id": "DEMON_SUMMONER", "species_id": "DEMON_SUMMONER", "display_name": "Demon Summoner", "visual_ids": ["DEMON_SUMMONER_BL", "DEMON_SUMMONER_GN", "DEMON_SUMMONER_RD"], "brain_profile_id": "BASIC_HOSTILE_CASTER", "resource_policy": "FREE_ACTIONS_ONLY",
+      "action_kit": [
+        { "ability_id": "NPC_DEMON_SUMMONER_SHADOW_BOLT", "role": "RANGED_OFFENSE", "target_selector": "CURRENT_ENEMY", "base_utility": 1.1, "min_self_health_pct": 0.0, "max_self_health_pct": 1.0, "preferred_min_distance": 5.0, "preferred_max_distance": 16.0, "min_nearby_allies": 0, "min_nearby_enemies": 1, "required_target_status": "", "forbidden_target_status": "", "movement_may_enable": true, "sort_order": 10 },
+        { "ability_id": "NPC_DEMON_SUMMONER_HEAVY_STRIKE", "role": "MELEE_OFFENSE", "target_selector": "CURRENT_ENEMY", "base_utility": 1.15, "min_self_health_pct": 0.0, "max_self_health_pct": 1.0, "preferred_min_distance": 0.0, "preferred_max_distance": 2.3, "min_nearby_allies": 0, "min_nearby_enemies": 1, "required_target_status": "", "forbidden_target_status": "", "movement_may_enable": true, "windup_ms": 750, "sort_order": 20 },
+        { "ability_id": "NPC_DEMON_SUMMONER_STRIKE", "role": "MELEE_OFFENSE", "target_selector": "CURRENT_ENEMY", "base_utility": 1.0, "min_self_health_pct": 0.0, "max_self_health_pct": 1.0, "preferred_min_distance": 0.0, "preferred_max_distance": 2.3, "min_nearby_allies": 0, "min_nearby_enemies": 1, "required_target_status": "", "forbidden_target_status": "", "movement_may_enable": true, "windup_ms": 550, "sort_order": 30 }
+      ], "max_hp": 125, "hit_radius": 0.7, "hit_height": 2.3, "aggro_radius": 18.0, "move_speed": 5.3, "attack_windup_ms": 550
+    },
+    {
+      "template_id": "FOREST_DEMON", "species_id": "FOREST_DEMON", "display_name": "Forest Demon", "visual_ids": ["FOREST_DEMON_BL", "FOREST_DEMON_BR", "FOREST_DEMON_GN", "FOREST_DEMON_RD"], "brain_profile_id": "BASIC_HOSTILE_MELEE", "resource_policy": "FREE_ACTIONS_ONLY",
+      "action_kit": [
+        { "ability_id": "NPC_FOREST_DEMON_HEAVY_STRIKE", "role": "MELEE_OFFENSE", "target_selector": "CURRENT_ENEMY", "base_utility": 1.2, "min_self_health_pct": 0.0, "max_self_health_pct": 1.0, "preferred_min_distance": 0.0, "preferred_max_distance": 3.8, "min_nearby_allies": 0, "min_nearby_enemies": 1, "required_target_status": "", "forbidden_target_status": "", "movement_may_enable": true, "windup_ms": 900, "sort_order": 10 },
+        { "ability_id": "NPC_FOREST_DEMON_STRIKE", "role": "MELEE_OFFENSE", "target_selector": "CURRENT_ENEMY", "base_utility": 1.0, "min_self_health_pct": 0.0, "max_self_health_pct": 1.0, "preferred_min_distance": 0.0, "preferred_max_distance": 3.8, "min_nearby_allies": 0, "min_nearby_enemies": 1, "required_target_status": "", "forbidden_target_status": "", "movement_may_enable": true, "windup_ms": 700, "sort_order": 20 }
+      ], "max_hp": 260, "hit_radius": 1.8, "hit_height": 5.6, "aggro_radius": 10.0, "move_speed": 4.8, "attack_windup_ms": 700
+    },
+    {
+      "template_id": "GRAVEDIGGER", "species_id": "GRAVEDIGGER", "display_name": "Gravedigger", "visual_ids": ["GRAVE_DIGGER_BL", "GRAVE_DIGGER_GN", "GRAVE_DIGGER_RD"], "brain_profile_id": "BASIC_HOSTILE_MELEE", "resource_policy": "FREE_ACTIONS_ONLY",
+      "action_kit": [
+        { "ability_id": "NPC_GRAVEDIGGER_HEAVY_STRIKE", "role": "MELEE_OFFENSE", "target_selector": "CURRENT_ENEMY", "base_utility": 1.2, "min_self_health_pct": 0.0, "max_self_health_pct": 1.0, "preferred_min_distance": 0.0, "preferred_max_distance": 2.6, "min_nearby_allies": 0, "min_nearby_enemies": 1, "required_target_status": "", "forbidden_target_status": "", "movement_may_enable": true, "windup_ms": 850, "sort_order": 10 },
+        { "ability_id": "NPC_GRAVEDIGGER_STRIKE", "role": "MELEE_OFFENSE", "target_selector": "CURRENT_ENEMY", "base_utility": 1.0, "min_self_health_pct": 0.0, "max_self_health_pct": 1.0, "preferred_min_distance": 0.0, "preferred_max_distance": 2.6, "min_nearby_allies": 0, "min_nearby_enemies": 1, "required_target_status": "", "forbidden_target_status": "", "movement_may_enable": true, "windup_ms": 650, "sort_order": 20 }
+      ], "max_hp": 150, "hit_radius": 0.7, "hit_height": 2.9, "aggro_radius": 9.0, "move_speed": 5.2, "attack_windup_ms": 650
+    },
+    {
+      "template_id": "MECHABOT", "species_id": "MECHABOT", "display_name": "Mechabot", "visual_ids": ["MECHA_BOT_BL", "MECHA_BOT_GN", "MECHA_BOT_GO"], "brain_profile_id": "BASIC_HOSTILE_MELEE", "resource_policy": "FREE_ACTIONS_ONLY",
+      "action_kit": [
+        { "ability_id": "NPC_MECHABOT_HEAVY_STRIKE", "role": "MELEE_OFFENSE", "target_selector": "CURRENT_ENEMY", "base_utility": 1.2, "min_self_health_pct": 0.0, "max_self_health_pct": 1.0, "preferred_min_distance": 0.0, "preferred_max_distance": 2.4, "min_nearby_allies": 0, "min_nearby_enemies": 1, "required_target_status": "", "forbidden_target_status": "", "movement_may_enable": true, "windup_ms": 800, "sort_order": 10 },
+        { "ability_id": "NPC_MECHABOT_STRIKE", "role": "MELEE_OFFENSE", "target_selector": "CURRENT_ENEMY", "base_utility": 1.0, "min_self_health_pct": 0.0, "max_self_health_pct": 1.0, "preferred_min_distance": 0.0, "preferred_max_distance": 2.4, "min_nearby_allies": 0, "min_nearby_enemies": 1, "required_target_status": "", "forbidden_target_status": "", "movement_may_enable": true, "windup_ms": 600, "sort_order": 20 }
+      ], "max_hp": 170, "hit_radius": 0.7, "hit_height": 2.2, "aggro_radius": 9.0, "move_speed": 5.0, "attack_windup_ms": 600
+    },
+    {
+      "template_id": "MUSHROOM", "species_id": "MUSHROOM", "display_name": "Mushroom", "visual_ids": ["MUSHROOM_GN", "MUSHROOM_GR", "MUSHROOM_PE", "MUSHROOM_RD", "MUSHROOM_YE"], "brain_profile_id": "BASIC_HOSTILE_MELEE", "resource_policy": "FREE_ACTIONS_ONLY",
+      "action_kit": [
+        { "ability_id": "NPC_MUSHROOM_HEAVY_STRIKE", "role": "MELEE_OFFENSE", "target_selector": "CURRENT_ENEMY", "base_utility": 1.2, "min_self_health_pct": 0.0, "max_self_health_pct": 1.0, "preferred_min_distance": 0.0, "preferred_max_distance": 2.8, "min_nearby_allies": 0, "min_nearby_enemies": 1, "required_target_status": "", "forbidden_target_status": "", "movement_may_enable": true, "windup_ms": 850, "sort_order": 10 },
+        { "ability_id": "NPC_MUSHROOM_STRIKE", "role": "MELEE_OFFENSE", "target_selector": "CURRENT_ENEMY", "base_utility": 1.0, "min_self_health_pct": 0.0, "max_self_health_pct": 1.0, "preferred_min_distance": 0.0, "preferred_max_distance": 2.8, "min_nearby_allies": 0, "min_nearby_enemies": 1, "required_target_status": "", "forbidden_target_status": "", "movement_may_enable": true, "windup_ms": 650, "sort_order": 20 }
+      ], "max_hp": 140, "hit_radius": 1.2, "hit_height": 4.7, "aggro_radius": 9.0, "move_speed": 4.8, "attack_windup_ms": 650
+    },
+    {
+      "template_id": "VAMPIRE", "species_id": "VAMPIRE", "display_name": "Vampire", "visual_ids": ["VAMPIRE_BL", "VAMPIRE_GN", "VAMPIRE_RD"], "brain_profile_id": "BASIC_HOSTILE_MELEE", "resource_policy": "FREE_ACTIONS_ONLY",
+      "action_kit": [
+        { "ability_id": "NPC_VAMPIRE_HEAVY_STRIKE", "role": "MELEE_OFFENSE", "target_selector": "CURRENT_ENEMY", "base_utility": 1.2, "min_self_health_pct": 0.0, "max_self_health_pct": 1.0, "preferred_min_distance": 0.0, "preferred_max_distance": 2.8, "min_nearby_allies": 0, "min_nearby_enemies": 1, "required_target_status": "", "forbidden_target_status": "", "movement_may_enable": true, "windup_ms": 750, "sort_order": 10 },
+        { "ability_id": "NPC_VAMPIRE_STRIKE", "role": "MELEE_OFFENSE", "target_selector": "CURRENT_ENEMY", "base_utility": 1.0, "min_self_health_pct": 0.0, "max_self_health_pct": 1.0, "preferred_min_distance": 0.0, "preferred_max_distance": 2.8, "min_nearby_allies": 0, "min_nearby_enemies": 1, "required_target_status": "", "forbidden_target_status": "", "movement_may_enable": true, "windup_ms": 550, "sort_order": 20 }
+      ], "max_hp": 155, "hit_radius": 0.8, "hit_height": 4.9, "aggro_radius": 10.0, "move_speed": 6.0, "attack_windup_ms": 550
+    },
+    {
+      "template_id": "ZOMBIE_HOUND", "species_id": "ZOMBIE_HOUND", "display_name": "Zombie Hound", "visual_ids": ["ZOMBIE_HOUND_BK", "ZOMBIE_HOUND_GN", "ZOMBIE_HOUND_GR", "ZOMBIE_HOUND_PE", "ZOMBIE_HOUND_RD", "ZOMBIE_HOUND_WH"], "brain_profile_id": "BASIC_HOSTILE_MELEE", "resource_policy": "FREE_ACTIONS_ONLY",
+      "action_kit": [
+        { "ability_id": "NPC_ZOMBIE_HOUND_HEAVY_STRIKE", "role": "MELEE_OFFENSE", "target_selector": "CURRENT_ENEMY", "base_utility": 1.2, "min_self_health_pct": 0.0, "max_self_health_pct": 1.0, "preferred_min_distance": 0.0, "preferred_max_distance": 4.0, "min_nearby_allies": 0, "min_nearby_enemies": 1, "required_target_status": "", "forbidden_target_status": "", "movement_may_enable": true, "windup_ms": 900, "sort_order": 10 },
+        { "ability_id": "NPC_ZOMBIE_HOUND_STRIKE", "role": "MELEE_OFFENSE", "target_selector": "CURRENT_ENEMY", "base_utility": 1.0, "min_self_health_pct": 0.0, "max_self_health_pct": 1.0, "preferred_min_distance": 0.0, "preferred_max_distance": 4.0, "min_nearby_allies": 0, "min_nearby_enemies": 1, "required_target_status": "", "forbidden_target_status": "", "movement_may_enable": true, "windup_ms": 700, "sort_order": 20 }
+      ], "max_hp": 230, "hit_radius": 2.2, "hit_height": 7.0, "aggro_radius": 11.0, "move_speed": 5.2, "attack_windup_ms": 700
     }
   ]
 }

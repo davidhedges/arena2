@@ -88,9 +88,9 @@ def profile_guid(visual_id)
 end
 
 def controller_states(path)
-  states = path.read.scan(/^--- !u!1102 &\d+\n(.*?)(?=^--- |\z)/m).filter_map do |(block)|
+  states = path.read.scan(/^--- !u!1102 &-?\d+\n(.*?)(?=^--- |\z)/m).map do |(block)|
     block[/^  m_Name: ([^\n]+)/, 1]
-  end
+  end.compact
   abort("#{path}: controller has no Animator states") if states.empty?
   states.to_set
 end

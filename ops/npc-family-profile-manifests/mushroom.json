@@ -1,0 +1,9 @@
+{
+  "source_family_name": "Mushroom", "expected_appearance_count": 5, "expected_animator_count": 2, "acknowledge_inventory_warnings": true,
+  "primary_animator_path": ".", "animator_controller_path": "Assets/ThirdParty/AssetStore/Characters/StylizedFantasyEnemyNPCBundle/Meshes/Mushroom/Mushroom_Controller.controller", "presentation_vertical_offset": 0.350064,
+  "animations": { "idle": ["idle"], "ready": ["Ready"], "walk": ["walk"], "run": ["run"], "basicAttack": ["attack"], "spellCastStart": [], "spellRelease": [], "spellCancel": [], "hit": ["hit"], "death": ["Death"] },
+  "action_animations": [{ "ability_id": "NPC_MUSHROOM_HEAVY_STRIKE", "states": ["Attack01"] }, { "ability_id": "NPC_MUSHROOM_STRIKE", "states": ["attack"] }],
+  "hard_crowd_control_fallback_policy": 0,
+  "vfx_sockets": [{ "anchor": "LEFT_HAND", "transform_path": "Root/Pelvis/Spine01/Spine02/Spine03/Clavicle_L/Shoulder_L/Forearm_L/Hand_L", "fallback_policy": 0 }, { "anchor": "RIGHT_HAND", "transform_path": "Root/Pelvis/Spine01/Spine02/Spine03/Clavicle_R/Shoulder_R/Forearm_R/Hand_R", "fallback_policy": 0 }, { "anchor": "TARGET", "transform_path": "Root/Pelvis/Spine01/Spine02/Spine03", "fallback_policy": 1 }],
+  "status_reactions": [{ "status_kind": "STUN", "clip_file_id": 7400024, "clip_guid": "dd04ddecfec7feb4aa3f325959346de2", "require_humanoid_avatar": false }]
+}

@@ -1,0 +1,9 @@
+{
+  "source_family_name": "Mechabot", "expected_appearance_count": 3, "expected_animator_count": 2, "acknowledge_inventory_warnings": true,
+  "primary_animator_path": ".", "animator_controller_path": "Assets/ThirdParty/AssetStore/Characters/StylizedFantasyEnemyNPCBundle2/Meshes/MechaBot/MechaBot_Controller.controller", "presentation_vertical_offset": 0.210602,
+  "animations": { "idle": ["idle"], "ready": ["Ready"], "walk": ["walk"], "run": ["walk"], "basicAttack": ["attack"], "spellCastStart": [], "spellRelease": [], "spellCancel": [], "hit": ["hit"], "death": ["Death"] },
+  "action_animations": [{ "ability_id": "NPC_MECHABOT_HEAVY_STRIKE", "states": ["Attack01"] }, { "ability_id": "NPC_MECHABOT_STRIKE", "states": ["attack"] }],
+  "hard_crowd_control_fallback_policy": 0,
+  "vfx_sockets": [{ "anchor": "LEFT_HAND", "transform_path": "Root/Chest/Shoulder_L/UpperArm_L/Ankle_L_01/LowerArm_L/Hand_L", "fallback_policy": 0 }, { "anchor": "RIGHT_HAND", "transform_path": "Root/Chest/Shoulder_R/UpperArm_R/Ankle_R_01/LowerArm_R/Hand_R", "fallback_policy": 0 }, { "anchor": "TARGET", "transform_path": "Root/Chest", "fallback_policy": 1 }],
+  "status_reactions": [{ "status_kind": "STUN", "clip_file_id": 7666019288946695810, "clip_guid": "0d4bebd3540279b44a6526e15d087406", "require_humanoid_avatar": false }]
+}

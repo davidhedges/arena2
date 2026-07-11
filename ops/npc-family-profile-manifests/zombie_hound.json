@@ -1,0 +1,9 @@
+{
+  "source_family_name": "ZombieHound", "expected_appearance_count": 6, "expected_animator_count": 2, "acknowledge_inventory_warnings": true,
+  "primary_animator_path": ".", "animator_controller_path": "Assets/ThirdParty/AssetStore/Characters/StylizedFantasyEnemyNPCBundle/Meshes/ZombieHound/ZombieHound_Controller.controller", "presentation_vertical_offset": 2.0382628,
+  "animations": { "idle": ["idle"], "ready": ["Ready"], "walk": ["walk"], "run": ["run"], "basicAttack": ["attack"], "spellCastStart": [], "spellRelease": [], "spellCancel": [], "hit": ["hit"], "death": ["Death"] },
+  "action_animations": [{ "ability_id": "NPC_ZOMBIE_HOUND_HEAVY_STRIKE", "states": ["Attack01"] }, { "ability_id": "NPC_ZOMBIE_HOUND_STRIKE", "states": ["attack"] }],
+  "hard_crowd_control_fallback_policy": 0,
+  "vfx_sockets": [{ "anchor": "LEFT_HAND", "transform_path": "Root/Pelvis/Spine_01/Spine_02/Spine_03/Spine_04/Spine_05/Spine_06/Clavicle_L/Shoulder_L/Forearm_L/Hand_L", "fallback_policy": 0 }, { "anchor": "RIGHT_HAND", "transform_path": "Root/Pelvis/Spine_01/Spine_02/Spine_03/Spine_04/Spine_05/Spine_06/Clavicle_R/Shoulder_R/Forearm_R/Hand_R", "fallback_policy": 0 }, { "anchor": "TARGET", "transform_path": "Root/Pelvis/Spine_01/Spine_02/Spine_03/Spine_04/Spine_05/Spine_06", "fallback_policy": 1 }],
+  "status_reactions": [{ "status_kind": "STUN", "clip_file_id": 7400010, "clip_guid": "f10fd93e255a0c54abb3aa6b5ff1cb28", "require_humanoid_avatar": false }]
+}
