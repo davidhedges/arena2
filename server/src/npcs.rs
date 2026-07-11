@@ -22,6 +22,7 @@ use crate::movement::FIXED_TICK_SECONDS;
 use crate::practice::is_training_instance;
 use crate::progression::MeleeAbilityCatalog;
 use crate::relations::can_harm;
+use crate::spells::{is_on_named_cooldown, stamp_named_cooldown_for_duration};
 use crate::world_collision::{
     resolve_world_horizontal_sweep_collision_y_with_layout_for_scene,
     surface_height_for_world_at_y_with_layout_for_scene,
@@ -173,9 +174,6 @@ pub struct NpcCombatRuntime {
     #[primary_key]
     pub identity: Identity,
     pub target: Identity,
-    pub next_attack_at: Timestamp,
-    #[index(btree)]
-    pub next_attack_at_micros: i64,
 }
 
 /// One in-flight telegraphed swing per NPC (S3): the CAST event is emitted at
@@ -960,7 +958,7 @@ pub(crate) fn tick_npc_combat(
             continue;
         };
 
-        let mut runtime = ctx
+        let runtime = ctx
             .db
             .npc_combat_runtime()
             .identity()
@@ -969,8 +967,6 @@ pub(crate) fn tick_npc_combat(
             .unwrap_or_else(|| NpcCombatRuntime {
                 identity: npc.identity,
                 target: target.identity,
-                next_attack_at: now,
-                next_attack_at_micros: timestamp_to_micros(now),
             });
 
         if movement_modifiers.is_disabled(&npc.identity) {
@@ -978,7 +974,7 @@ pub(crate) fn tick_npc_combat(
             continue;
         }
 
-        if now < runtime.next_attack_at {
+        if is_on_named_cooldown(ctx, npc.identity, action.ability_id.as_str(), now) {
             face_npc_target(ctx, now, &physics, &target);
             upsert_npc_combat_runtime(ctx, runtime);
             continue;
@@ -1000,12 +996,6 @@ pub(crate) fn tick_npc_combat(
             } else {
                 face_npc_target(ctx, now, &physics, &target);
             }
-            // Don't slide next_attack_at to `now` while chasing: the flow is
-            // identical with the stale past timestamp (`now < next_attack_at`
-            // stays false), nothing range-queries the btree, and the slide
-            // forced a genuine row write every chase tick. The upsert below
-            // still persists new/retargeted rows; steady chase skips via the
-            // value gate.
             upsert_npc_combat_runtime(ctx, runtime);
             continue;
         }
@@ -1018,8 +1008,13 @@ pub(crate) fn tick_npc_combat(
         }
 
         begin_npc_melee_swing(ctx, now, &npc, &physics, &template, &action, &target);
-        runtime.next_attack_at = now + Duration::from_millis(action.cooldown_ms);
-        runtime.next_attack_at_micros = timestamp_to_micros(runtime.next_attack_at);
+        stamp_named_cooldown_for_duration(
+            ctx,
+            npc.identity,
+            action.ability_id.as_str(),
+            Duration::from_millis(action.cooldown_ms),
+            now,
+        );
         upsert_npc_combat_runtime(ctx, runtime);
     }
 }
