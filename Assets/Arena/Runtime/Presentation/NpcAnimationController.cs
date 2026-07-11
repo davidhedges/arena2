@@ -181,12 +181,12 @@ namespace Arena.Presentation
                 _returnToIdleAt = Time.time + ResolveClipLength(stateName, DefaultHitReturnDelay) + 0.05f;
         }
 
-        public void PlayAttack()
+        public void PlayAttack(string? abilityId = null)
         {
             if (_dead || HasHardCrowdControl)
                 return;
 
-            if (TryCrossFade(AttackStateCandidatesForTemplate(), out string? stateName) && stateName != null)
+            if (TryCrossFade(AttackStateCandidatesForTemplate(abilityId), out string? stateName) && stateName != null)
                 _returnToIdleAt = Time.time + ResolveClipLength(stateName, DefaultHitReturnDelay) + 0.05f;
         }
 
@@ -196,7 +196,7 @@ namespace Arena.Presentation
             {
                 case CombatAnimationCategory.AutoAttack:
                 case CombatAnimationCategory.MeleeSkill:
-                    PlayAttack();
+                    PlayAttack(request.ActionId);
                     break;
                 case CombatAnimationCategory.Spell:
                     PlaySpell(request.SpellPhase);
@@ -417,8 +417,17 @@ namespace Arena.Presentation
             };
         }
 
-        private string[] AttackStateCandidatesForTemplate()
+        private string[] AttackStateCandidatesForTemplate(string? abilityId)
         {
+            if (_visualProfile != null
+                && _visualProfile.TryGetActionAnimationStates(abilityId, out IReadOnlyList<string> states))
+            {
+                var candidates = new string[states.Count];
+                for (int i = 0; i < states.Count; i++)
+                    candidates[i] = states[i];
+                return candidates;
+            }
+
             if (_visualProfile != null && _visualProfile.Animations.basicAttack.Count > 0)
                 return _visualProfile.Animations.basicAttack.ToArray();
 

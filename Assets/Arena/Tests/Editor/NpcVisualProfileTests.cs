@@ -161,12 +161,40 @@ namespace Arena.Tests.Editor
             }
         }
 
+        [Test]
+        public void SlimeManProfile_MapsBothAuthoritativeAttackAbilities()
+        {
+            Type profileType = RequireType("Arena.Entity.NpcVisualProfile");
+            UnityEngine.Object profile = AssetDatabase.LoadAssetAtPath(
+                "Assets/Arena/Content/NPC/VisualProfiles/SlimeMan_Bl_VisualProfile.asset",
+                profileType);
+            Assert.That(profile, Is.Not.Null);
+
+            MethodInfo resolve = profileType.GetMethod("TryGetActionAnimationStates")
+                ?? throw new MissingMethodException(profileType.FullName, "TryGetActionAnimationStates");
+            AssertActionState(resolve, profile, "NPC_SLIME_MAN_HEAVY_SLAM", "Attack01");
+            AssertActionState(resolve, profile, "NPC_SLIME_MAN_SLAM", "attack");
+        }
+
         private static void AssertProfile(MethodInfo tryGetEntry, UnityEngine.Object catalog, string visualId)
         {
             object?[] args = { visualId, null };
             Assert.That(tryGetEntry.Invoke(catalog, args), Is.EqualTo(true));
             object entry = args[1] ?? throw new AssertionException($"No entry returned for {visualId}");
             Assert.That(entry.GetType().GetField("profile")!.GetValue(entry), Is.Not.Null);
+        }
+
+        private static void AssertActionState(
+            MethodInfo resolve,
+            UnityEngine.Object profile,
+            string abilityId,
+            string expectedState)
+        {
+            object?[] args = { abilityId, null };
+            Assert.That(resolve.Invoke(profile, args), Is.EqualTo(true), abilityId);
+            var states = (IReadOnlyList<string>)(args[1]
+                ?? throw new AssertionException($"No states returned for {abilityId}"));
+            Assert.That(states, Is.EqualTo(new[] { expectedState }));
         }
 
         private static void AssertSocketResolves(

@@ -74,6 +74,7 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Col<NpcActionKitCatalog, string> RequiredTargetStatus { get; }
         public global::SpacetimeDB.Col<NpcActionKitCatalog, string> ForbiddenTargetStatus { get; }
         public global::SpacetimeDB.Col<NpcActionKitCatalog, bool> MovementMayEnable { get; }
+        public global::SpacetimeDB.Col<NpcActionKitCatalog, ulong> WindupMs { get; }
         public global::SpacetimeDB.Col<NpcActionKitCatalog, uint> SortOrder { get; }
 
         public NpcActionKitCatalogCols(string tableName)
@@ -93,6 +94,7 @@ namespace SpacetimeDB.Types
             RequiredTargetStatus = new global::SpacetimeDB.Col<NpcActionKitCatalog, string>(tableName, "required_target_status");
             ForbiddenTargetStatus = new global::SpacetimeDB.Col<NpcActionKitCatalog, string>(tableName, "forbidden_target_status");
             MovementMayEnable = new global::SpacetimeDB.Col<NpcActionKitCatalog, bool>(tableName, "movement_may_enable");
+            WindupMs = new global::SpacetimeDB.Col<NpcActionKitCatalog, ulong>(tableName, "windup_ms");
             SortOrder = new global::SpacetimeDB.Col<NpcActionKitCatalog, uint>(tableName, "sort_order");
         }
     }

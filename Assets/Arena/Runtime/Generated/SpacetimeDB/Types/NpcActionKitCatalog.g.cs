@@ -43,6 +43,8 @@ namespace SpacetimeDB.Types
         public string ForbiddenTargetStatus;
         [DataMember(Name = "movement_may_enable")]
         public bool MovementMayEnable;
+        [DataMember(Name = "windup_ms")]
+        public ulong WindupMs;
         [DataMember(Name = "sort_order")]
         public uint SortOrder;
 
@@ -62,6 +64,7 @@ namespace SpacetimeDB.Types
             string RequiredTargetStatus,
             string ForbiddenTargetStatus,
             bool MovementMayEnable,
+            ulong WindupMs,
             uint SortOrder
         )
         {
@@ -80,6 +83,7 @@ namespace SpacetimeDB.Types
             this.RequiredTargetStatus = RequiredTargetStatus;
             this.ForbiddenTargetStatus = ForbiddenTargetStatus;
             this.MovementMayEnable = MovementMayEnable;
+            this.WindupMs = WindupMs;
             this.SortOrder = SortOrder;
         }
 

@@ -131,6 +131,7 @@ pub struct NpcActionKitCatalog {
     pub required_target_status: String,
     pub forbidden_target_status: String,
     pub movement_may_enable: bool,
+    pub windup_ms: u64,
     pub sort_order: u32,
 }
 
@@ -314,6 +315,8 @@ pub(crate) struct NpcActionKitEntry {
     pub required_target_status: String,
     pub forbidden_target_status: String,
     pub movement_may_enable: bool,
+    #[serde(default)]
+    pub windup_ms: u64,
     pub sort_order: u32,
 }
 
@@ -691,6 +694,12 @@ fn parse_npc_catalog(json: &str) -> Result<NpcCatalogDocument, String> {
                     template.template_id, entry.ability_id
                 ));
             }
+            if entry.windup_ms != 0 && !(300..=10_000).contains(&entry.windup_ms) {
+                return Err(format!(
+                    "template '{}' action '{}' has invalid windup_ms",
+                    template.template_id, entry.ability_id
+                ));
+            }
             match crate::progression::authored_ability_actor_scope(entry.ability_id.as_str()) {
                 Some(scope) if matches!(normalize_id(scope).as_str(), "NPC" | "BOTH") => {}
                 Some(scope) => {
@@ -873,6 +882,7 @@ pub(crate) fn sync_npc_catalog(ctx: &ReducerContext) {
                 required_target_status: entry.required_target_status.clone(),
                 forbidden_target_status: entry.forbidden_target_status.clone(),
                 movement_may_enable: entry.movement_may_enable,
+                windup_ms: npc_action_windup_ms(template, entry.ability_id.as_str()),
                 sort_order: entry.sort_order,
             };
             if ctx
@@ -2776,6 +2786,7 @@ fn begin_npc_melee_swing(
     } else {
         action.base_damage
     };
+    let windup_ms = npc_action_windup_ms(template, action.ability_id.as_str());
     commit_server_actor_targeted_melee(
         ctx,
         now,
@@ -2789,7 +2800,7 @@ fn begin_npc_melee_swing(
             target_audience: audience,
             damage,
             range: action.range,
-            windup_ms: template.attack_windup_ms,
+            windup_ms,
             parry_behavior: NPC_MELEE_PARRY_BEHAVIOR,
             block_behavior: NPC_MELEE_BLOCK_BEHAVIOR,
             requires_target_los: action.requires_target_los,
@@ -2797,6 +2808,20 @@ fn begin_npc_melee_swing(
             direct_action_key: action.ability_id.as_str(),
         },
     )
+}
+
+fn npc_action_windup_ms(template: &NpcTemplate, ability_id: &str) -> u64 {
+    template
+        .action_kit
+        .iter()
+        .find(|entry| entry.ability_id == ability_id)
+        .map_or(template.attack_windup_ms, |entry| {
+            if entry.windup_ms == 0 {
+                template.attack_windup_ms
+            } else {
+                entry.windup_ms
+            }
+        })
 }
 
 pub(crate) fn interrupt_npc_actions_for_crowd_control(
@@ -3247,8 +3272,23 @@ mod tests {
         assert_eq!(humanoid_scarab.action_kit[0].role, "MELEE_OFFENSE");
         let slime_man = npc_template("SLIME_MAN").expect("slime man family should be authored");
         assert_eq!(slime_man.visual_ids.len(), 4);
-        assert_eq!(slime_man.action_kit[0].ability_id, "NPC_SLIME_MAN_SLAM");
+        assert_eq!(slime_man.action_kit.len(), 2);
+        assert_eq!(
+            slime_man.action_kit[0].ability_id,
+            "NPC_SLIME_MAN_HEAVY_SLAM"
+        );
         assert_eq!(slime_man.action_kit[0].role, "MELEE_OFFENSE");
+        assert_eq!(slime_man.action_kit[0].windup_ms, 950);
+        assert_eq!(slime_man.action_kit[1].ability_id, "NPC_SLIME_MAN_SLAM");
+        assert_eq!(slime_man.action_kit[1].windup_ms, 800);
+        assert_eq!(
+            super::npc_action_windup_ms(&slime_man, "NPC_SLIME_MAN_HEAVY_SLAM"),
+            950
+        );
+        assert_eq!(
+            super::npc_action_windup_ms(&slime_man, "NPC_SLIME_MAN_SLAM"),
+            800
+        );
         let air_warlord =
             npc_template("AIR_WARLORD").expect("air warlord family should be authored");
         assert_eq!(air_warlord.visual_ids.len(), 4);

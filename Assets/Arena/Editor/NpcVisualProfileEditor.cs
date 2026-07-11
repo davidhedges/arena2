@@ -117,10 +117,39 @@ namespace Arena.Editor
                 ValidateRoleStates(errors, "spell cancel", profile.Animations.spellCancel, states, required: false);
                 ValidateRoleStates(errors, "hit", profile.Animations.hit, states, required: false);
                 ValidateRoleStates(errors, "death", profile.Animations.death, states);
+                ValidateActionStates(errors, profile, states);
             }
 
             ValidateVfxSockets(errors, profile, prefab);
             return errors;
+        }
+
+        private static void ValidateActionStates(
+            List<string> errors,
+            NpcVisualProfile profile,
+            HashSet<string> controllerStates)
+        {
+            var abilityIds = new HashSet<string>(StringComparer.Ordinal);
+            for (int i = 0; i < profile.ActionAnimations.Count; i++)
+            {
+                NpcNativeActionAnimationEntry? entry = profile.ActionAnimations[i];
+                if (entry == null)
+                {
+                    errors.Add($"Action animation entry {i} is null.");
+                    continue;
+                }
+
+                string abilityId = entry.AbilityIdOrEmpty;
+                if (string.IsNullOrEmpty(abilityId))
+                    errors.Add($"Action animation entry {i} has no ability ID.");
+                else if (!abilityIds.Add(abilityId))
+                    errors.Add($"Action animation ability '{abilityId}' is duplicated.");
+
+                if (entry.States.Count == 0)
+                    errors.Add($"Action animation ability '{abilityId}' has no states.");
+                else
+                    ValidateRoleStates(errors, $"action {abilityId}", entry.States, controllerStates);
+            }
         }
 
         private static void ValidateVfxSockets(
@@ -176,18 +205,30 @@ namespace Arena.Editor
         private static void ValidateRoleStates(
             List<string> errors,
             string label,
-            List<string> authored,
+            IReadOnlyList<string> authored,
             HashSet<string> controllerStates,
             bool required = true)
         {
-            if (authored.Count == 0 || authored.TrueForAll(string.IsNullOrWhiteSpace))
+            bool hasAuthoredState = false;
+            bool hasResolvedState = false;
+            for (int i = 0; i < authored.Count; i++)
+            {
+                string state = authored[i];
+                if (string.IsNullOrWhiteSpace(state))
+                    continue;
+                hasAuthoredState = true;
+                if (controllerStates.Contains(state.Trim()))
+                    hasResolvedState = true;
+            }
+
+            if (!hasAuthoredState)
             {
                 if (required)
                     errors.Add($"At least one {label} state is required.");
                 return;
             }
 
-            if (authored.TrueForAll(state => !controllerStates.Contains(state.Trim())))
+            if (!hasResolvedState)
                 errors.Add($"No authored {label} state exists in the primary Animator controller.");
         }
 

@@ -16,8 +16,11 @@ namespace Arena.Presentation
                 row.SourceKind,
                 CombatEventSources.Spell,
                 System.StringComparison.Ordinal);
+            string actionId = string.IsNullOrWhiteSpace(row.AbilityId)
+                ? row.ActionKind
+                : row.AbilityId;
             return CombatAnimationRequest.Authoritative(
-                row.ActionKind,
+                actionId,
                 isSpell
                     ? CombatAnimationCategory.Spell
                     : CombatAnimationRequest.ResolveMeleeCategory(row.SourceKind),

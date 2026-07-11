@@ -48,6 +48,7 @@ end
 base_animations = normalized_animations(family_name, manifest.fetch("animations"))
 base_sockets = manifest.fetch("vfx_sockets")
 base_reactions = manifest.fetch("status_reactions", [])
+base_action_animations = manifest.fetch("action_animations", [])
 appearance_overrides = manifest.fetch("appearance_overrides", {})
 appearance_ids = appearances.map { |entry| entry.fetch("appearance_id_candidate") }.to_set
 unknown_override_ids = appearance_overrides.keys.reject { |visual_id| appearance_ids.include?(visual_id) }
@@ -95,7 +96,7 @@ def yaml_string_list(key, values, indent: 4)
   output
 end
 
-def profile_yaml(profile_name:, prefab_id:, prefab_guid:, primary_animator_path:, presentation_vertical_offset:, animations:, fallback_policy:, sockets:, reactions:)
+def profile_yaml(profile_name:, prefab_id:, prefab_guid:, primary_animator_path:, presentation_vertical_offset:, animations:, action_animations:, fallback_policy:, sockets:, reactions:)
   output = +<<~YAML
     %YAML 1.1
     %TAG !u! tag:unity3d.com,2011:
@@ -119,6 +120,14 @@ def profile_yaml(profile_name:, prefab_id:, prefab_guid:, primary_animator_path:
   end
   output << "  animations:\n"
   ANIMATION_KEYS.each { |key| output << yaml_string_list(key, animations.fetch(key), indent: 4) }
+  unless action_animations.empty?
+    output << "  actionAnimations:\n"
+    action_animations.each do |action_animation|
+      output << "  - abilityId: #{action_animation.fetch("ability_id")}\n"
+      output << "    states:\n"
+      action_animation.fetch("states").each { |state| output << "    - #{state}\n" }
+    end
+  end
   output << "  hardCrowdControlFallbackPolicy: #{fallback_policy}\n"
   output << "  vfxSockets:\n"
   sockets.each do |socket|
@@ -164,6 +173,7 @@ appearances.each do |entry|
   )
   sockets = override.fetch("vfx_sockets", base_sockets)
   reactions = override.fetch("status_reactions", base_reactions)
+  action_animations = override.fetch("action_animations", base_action_animations)
   fallback_policy = Integer(
     override.fetch(
       "hard_crowd_control_fallback_policy",
@@ -194,6 +204,18 @@ appearances.each do |entry|
   animations.values.flatten.each do |state|
     abort("#{visual_id}: controller state '#{state}' is missing") unless available_states.include?(state)
   end
+  action_ids = Set.new
+  action_animations.each do |action_animation|
+    ability_id = action_animation.fetch("ability_id").strip.upcase
+    if ability_id.empty? || !action_ids.add?(ability_id)
+      abort("#{visual_id}: action animation ability ID is empty or duplicated")
+    end
+    states = action_animation.fetch("states")
+    abort("#{visual_id}: action animation '#{ability_id}' has no states") if states.empty?
+    states.each do |state|
+      abort("#{visual_id}: action animation state '#{state}' is missing") unless available_states.include?(state)
+    end
+  end
 
   prefab = parse_prefab(prefab_path)
   sockets.each do |socket|
@@ -215,6 +237,7 @@ appearances.each do |entry|
     primary_animator_path: primary_animator_path,
     presentation_vertical_offset: presentation_vertical_offset,
     animations: animations,
+    action_animations: action_animations,
     fallback_policy: fallback_policy,
     sockets: sockets,
     reactions: reactions

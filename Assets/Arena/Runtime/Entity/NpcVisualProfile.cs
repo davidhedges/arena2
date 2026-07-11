@@ -13,6 +13,7 @@ namespace Arena.Entity
         [SerializeField] private string primaryAnimatorPath = string.Empty;
         [SerializeField] private float presentationVerticalOffset;
         [SerializeField] private NpcNativeAnimationRoleMap animations = new();
+        [SerializeField] private List<NpcNativeActionAnimationEntry> actionAnimations = new();
         [SerializeField] private NpcHardCrowdControlFallbackPolicy hardCrowdControlFallbackPolicy =
             NpcHardCrowdControlFallbackPolicy.ReadyPose;
         [SerializeField] private List<NpcVisualSocketEntry> vfxSockets = new();
@@ -22,6 +23,7 @@ namespace Arena.Entity
         public string PrimaryAnimatorPath => primaryAnimatorPath?.Trim() ?? string.Empty;
         public float PresentationVerticalOffset => presentationVerticalOffset;
         public NpcNativeAnimationRoleMap Animations => animations;
+        public IReadOnlyList<NpcNativeActionAnimationEntry> ActionAnimations => actionAnimations;
         public NpcHardCrowdControlFallbackPolicy HardCrowdControlFallbackPolicy => hardCrowdControlFallbackPolicy;
         public IReadOnlyList<NpcVisualSocketEntry> VfxSockets => vfxSockets;
         public IReadOnlyList<NpcStatusReactionEntry> StatusReactions => statusReactions;
@@ -78,7 +80,29 @@ namespace Arena.Entity
             return false;
         }
 
+        public bool TryGetActionAnimationStates(string? abilityId, out IReadOnlyList<string> states)
+        {
+            string normalized = NormalizeActionId(abilityId);
+            for (int i = 0; i < actionAnimations.Count; i++)
+            {
+                NpcNativeActionAnimationEntry? entry = actionAnimations[i];
+                if (entry != null
+                    && string.Equals(entry.AbilityIdOrEmpty, normalized, StringComparison.Ordinal)
+                    && entry.States.Count > 0)
+                {
+                    states = entry.States;
+                    return true;
+                }
+            }
+
+            states = Array.Empty<string>();
+            return false;
+        }
+
         internal static string NormalizeAnchor(string? value)
+            => string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim().ToUpperInvariant();
+
+        internal static string NormalizeActionId(string? value)
             => string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim().ToUpperInvariant();
 
         public static bool SupportsVfxAnchor(string anchor)
@@ -88,6 +112,16 @@ namespace Arena.Entity
                 || string.Equals(normalized, "RIGHT_HAND", StringComparison.Ordinal)
                 || string.Equals(normalized, "TARGET", StringComparison.Ordinal);
         }
+    }
+
+    [Serializable]
+    public sealed class NpcNativeActionAnimationEntry
+    {
+        [SerializeField] private string abilityId = string.Empty;
+        [SerializeField] private List<string> states = new();
+
+        public string AbilityIdOrEmpty => NpcVisualProfile.NormalizeActionId(abilityId);
+        public IReadOnlyList<string> States => states;
     }
 
     public enum NpcVisualSocketFallbackPolicy
