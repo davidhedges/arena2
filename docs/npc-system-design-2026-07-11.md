@@ -1,7 +1,7 @@
 # NPC System Design
 
 Date: 2026-07-11
-Status: implementation in progress; actor-generic targeting/world queries, shared spell/projectile/heal execution, caster/support/archer exemplars, and validated native visual profiles with shared VFX sockets are landed through `981ecefb`, while full visual authoring remains
+Status: implementation in progress; actor-generic targeting/world queries, shared spell/projectile/heal execution, caster/support/archer exemplars, validated native visual profiles with shared VFX sockets, and repeatable two-client mixed-group presentation acceptance are landed through `e6ce09a6`, while full visual authoring remains
 
 ## Outcome
 
@@ -18,7 +18,7 @@ This is a substantial engineering project. The existing kobold implementation is
 
 ## Implementation progress (2026-07-11 handoff)
 
-The implementation has started and has been committed in coherent slices. The implementation baseline summarized here is `981ecefb` (`Fix NPC LOS world context`). Player combat semantics are an explicit guardrail: actor-generic seams were extended where required, but player damage, healing arithmetic, authorization, animation fallback, input, prediction, rewind, and action-bar behavior must not be redesigned as part of the NPC rollout.
+The implementation has started and has been committed in coherent slices. The implementation baseline summarized here is `e6ce09a6` (`Add mixed NPC presentation acceptance`). Player combat semantics are an explicit guardrail: actor-generic seams were extended where required, but player damage, healing arithmetic, authorization, animation fallback, input, prediction, rewind, and action-bar behavior must not be redesigned as part of the NPC rollout.
 
 ### Landed foundations
 
@@ -49,6 +49,7 @@ The implementation has started and has been committed in coherent slices. The im
 - Skeleton Wizard, Lich, and Skeleton Archer have explicit first-party visual profiles and catalog entries with validated prefab GUIDs, root Animator selection, and native locomotion/action/reaction state maps. The Archer uses the shared projectile executor and `ARROW_STANDARD` projectile cue.
 - Those exemplar profiles adapt the shared `LEFT_HAND` and `TARGET` VFX anchors onto real Generic-rig cast/projectile and hit transforms. Missing cast sockets explicitly skip their attached cue, while missing hit sockets explicitly fall back to the presentation root; player anchor resolution is unchanged.
 - Shared `DIRECT_TARGET` spell delivery now supports an explicitly authored heal amount without changing its existing damage branch. Lich Mend selects the lowest-health ally, rejects full-health targets, and resolves through shared audience, facing, LOS, cast, combat-event, and `EffectPacket::Heal` handling.
+- `NpcHeadlessAcceptanceRunner` and `ops/npc-mixed-group-probe.py` now provide a repeatable two-client mixed-exemplar presentation gate. The websocket owner spawns and pins the encounter in an isolated local database; the Unity observer proves external ownership, scoped materialization, real Animator state resolution, shared combat/projectile events, projectile visuals, and VFX dispatch. The endpoint override is batch-only and requires an explicit `ARENA_HEADLESS_MODULE`, so normal editor/player endpoint selection is unchanged.
 
 ### Still incomplete
 
@@ -57,7 +58,7 @@ The implementation has started and has been committed in coherent slices. The im
 - Basic ranged approach/hold/retreat bands are implemented. Richer kiting, unreachable-target recovery, navigation, and local avoidance remain.
 - Healing/buff support threat, taunts, assist/call-for-help, and richer threat decay remain later work.
 - Searchable catalog spawning, all 146 appearance mappings, and automated presentation sweeps remain. Archer melee fallback is explicitly deferred: the imported family has only bow/load/shot presentation, no melee weapon, draw/stow animation, or verified melee attack clip.
-- All four acceptance archetypes now have initial gameplay paths, and Wizard/Lich/Archer have native visual profiles. Full acceptance still needs mixed-group runtime evidence.
+- All four acceptance archetypes now have initial gameplay paths, native presentation where authored, and passing mixed-group runtime evidence. Full acceptance still needs the 146-appearance authoring/sweep and the remaining family contracts.
 
 ### Current verification
 
@@ -67,16 +68,17 @@ The implementation has started and has been committed in coherent slices. The im
 - `dotnet build Assembly-CSharp-Editor.csproj --no-restore`: succeeded with 0 errors and 17 existing obsolete/dead-field warnings.
 - Focused Unity edit-mode profile validation: 5 passed, 0 failed. The tests load all three real vendor prefabs, validate explicit Animator/state/socket mappings and fallback policies, and resolve their catalog entries.
 - `ops/npc-support-decision-probe.py`: passed against an isolated local database. At full health the Lich applied Bone Ward to a 125/125 Kobold; after one real player auto-attack reduced it to 103/125, Lich Mend raised it to 121/125.
+- Two-client mixed-exemplar acceptance: passed against isolated database `npcmixedprobe`. The observer materialized four NPCs owned by the separate websocket client; Kobold entered `Combat_1H_Attack`, Archer entered `attack`, Wizard entered `SpellCast`, and Lich entered `SpellA`. All four emitted CAST/IMPACT, Archer and Wizard emitted RELEASE plus projectile RELEASE/IMPACT, two shared projectile visuals started, four shared VFX instances spawned, and no projectile/VFX template was missing.
 - Generated C# bindings are current for the landed runtime schema.
-- The working tree still contains the user-owned `.gitignore` change and an unrelated untracked `docs/perf-opportunities-2026-07-11.md`; preserve those unless their owner explicitly brings them into scope.
+- The working tree still contains the user-owned `.gitignore` change; preserve it unless its owner explicitly brings it into scope. `Assets/Arena/Resources/NpcVisualCatalog.asset` is also user-owned if it changes again.
 
 ### Recommended next slice
 
-The next coherent slice should finish presentation for the landed gameplay exemplars without creating a creature-only event language:
+The next coherent slice should remove the remaining Kobold-specific execution seam without changing player combat semantics:
 
-1. Capture mixed-group presentation evidence for Kobold, Skeleton Archer, Skeleton Wizard, and Lich together.
-2. Add a batch-mode mixed-group presentation runner only if the manual evidence pass cannot cover repeatable animation/VFX lifecycle assertions.
-3. Extend profile authoring to nameplate, ground-effect, selection, and bounds anchors only as concrete exemplar presentation evidence requires.
+1. Extract the common validated melee commitment/impact executor beneath the existing player/practice/NPC adapters.
+2. Prove Kobold parity for authored damage, cooldown, telegraph timing, defense, facing/range/LOS commitment gates, interruption, combat events, loot/death, and S7-S9 fixture behavior before deleting `NpcPendingSwing`.
+3. Keep player authorization, prediction, rewind, animation fallback, input, action-bar, and keybind behavior in their existing adapters.
 4. Keep the Skeleton Archer purely ranged with retreat/hold behavior until suitable melee weapon and animation assets are deliberately authored.
 
 ## Asset relocation completed
