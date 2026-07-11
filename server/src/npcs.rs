@@ -2225,7 +2225,10 @@ fn select_npc_melee_action(
     let mut rejects = NpcActionRejectCounts::default();
     let mut best: Option<(f32, u32, f32, String, NpcExecutableAction, NpcAttackTarget)> = None;
     for entry in &template.action_kit {
-        if !matches!(entry.role.as_str(), "MELEE_OFFENSE" | "RANGED_OFFENSE") {
+        if !matches!(
+            entry.role.as_str(),
+            "MELEE_OFFENSE" | "RANGED_OFFENSE" | "BUFF"
+        ) {
             rejects.role = rejects.role.saturating_add(1);
             continue;
         }
@@ -2302,7 +2305,9 @@ fn select_npc_melee_action(
                 continue;
             };
             NpcExecutableAction::Melee(melee)
-        } else if ability.ability_kind == "SPELL" && entry.role == "RANGED_OFFENSE" {
+        } else if ability.ability_kind == "SPELL"
+            && matches!(entry.role.as_str(), "RANGED_OFFENSE" | "BUFF")
+        {
             let Some(spell) = spell_definition_by_str(ability.action_id.as_str()) else {
                 rejects.missing_ability = rejects.missing_ability.saturating_add(1);
                 continue;
@@ -3482,8 +3487,8 @@ mod tests {
     #[test]
     fn authored_npc_catalog_is_valid_and_complete_for_current_templates() {
         let parsed = parse_npc_catalog(NPC_CATALOG_JSON).unwrap();
-        assert_eq!(parsed.templates.len(), 5);
-        assert_eq!(npc_catalog().templates.len(), 5);
+        assert_eq!(parsed.templates.len(), 6);
+        assert_eq!(npc_catalog().templates.len(), 6);
         assert!(parsed
             .templates
             .iter()
@@ -3491,6 +3496,9 @@ mod tests {
         let wizard = npc_template("SKELETON_WIZARD").expect("wizard exemplar should be authored");
         assert_eq!(wizard.action_kit[0].role, "RANGED_OFFENSE");
         assert_eq!(wizard.action_kit[0].target_selector, "CURRENT_ENEMY");
+        let lich = npc_template("LICH_SUPPORT").expect("support exemplar should be authored");
+        assert_eq!(lich.action_kit[0].role, "BUFF");
+        assert_eq!(lich.action_kit[0].target_selector, "LOWEST_HEALTH_ALLY");
     }
 
     #[test]

@@ -2435,6 +2435,7 @@ mod tests {
                 "BLADE_BARRIER",
                 "SACRED_FLAME",
                 "SKELETON_WIZARD_FROST_BOLT",
+                "LICH_BONE_WARD",
             ]
         );
     }

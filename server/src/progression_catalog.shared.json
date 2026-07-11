@@ -3467,6 +3467,43 @@
           "homing_window_seconds": 0.15
         }
       }
+    },
+    {
+      "ability_id": "NPC_LICH_BONE_WARD",
+      "actor_scope": "NPC",
+      "combat_profile_id": "",
+      "action_id": "LICH_BONE_WARD",
+      "display_name": "Lich Bone Ward",
+      "resource_kind": "",
+      "resource_cost": 0,
+      "ability_tags": [],
+      "sort_order": 60,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 6000,
+        "uses_global_cooldown": false,
+        "cast_time_ms": 600,
+        "cast_mobility": "GROUNDED_STATIONARY",
+        "targeting": "TARGET",
+        "target_audience": "PARTY_OR_SELF",
+        "requires_target": true,
+        "requires_target_los": true,
+        "resource_cost": 0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "APPLY_STATUS",
+          "duration_ms": 5000,
+          "max_distance": 14,
+          "status_stack_group": "LICH_BONE_WARD",
+          "polarity": "BUFF",
+          "status": {
+            "kind": "DAMAGE_TAKEN_REDUCTION",
+            "modifier_scalar": 0.12,
+            "max_stacks": 1,
+            "stack_policy": "REFRESH"
+          }
+        }
+      }
     }
   ],
   "auto_attacks": [
@@ -5046,6 +5083,32 @@
       "lifecycle": "DURATION",
       "duration_ms": 1000,
       "sort_order": 230
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "NPC_LICH_BONE_WARD",
+      "slot": "cast_glow",
+      "trigger": "SPELL_CAST",
+      "anchor": "LEFT_HAND",
+      "vfx_id": "VFX_ARCANE_CAST_HAND_01",
+      "attach_mode": "FOLLOW_ANCHOR",
+      "vfx_role": "ATTACHED",
+      "lifecycle": "UNTIL_RELEASE_EVENT",
+      "duration_ms": 0,
+      "sort_order": 240
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "NPC_LICH_BONE_WARD",
+      "slot": "impact",
+      "trigger": "SPELL_IMPACT",
+      "anchor": "TARGET",
+      "vfx_id": "VFX_NEGATE_01",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "DURATION",
+      "duration_ms": 1000,
+      "sort_order": 250
     }
   ],
   "combat_profile_action_bar_defaults": [
