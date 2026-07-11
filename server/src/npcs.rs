@@ -7,6 +7,8 @@ use spacetimedb::{reducer, table, Identity, ReducerContext, Table, Timestamp};
 
 use crate::arena::open_world_scene_name_for_identity;
 use crate::arena::{resolve_player_world_context, world_contexts_share, ResolvedWorldContext};
+#[allow(unused_imports)]
+use crate::combat::status_effect as _;
 use crate::combat::{
     mark_harmful_combat_action, queue_effects, timestamp_to_micros, CombatEvent, DamageDelivery,
     EffectPacket, MovementModifiers, COMBAT_EVENT_BLOCK, COMBAT_EVENT_CAST, COMBAT_EVENT_FIZZLE,
@@ -1265,10 +1267,6 @@ pub(crate) fn tick_npc_combat(
             clear_npc_combat_runtime(ctx, npc.identity);
             continue;
         };
-        let Some(action) = npc_primary_melee_action(ctx, &template) else {
-            clear_npc_combat_runtime(ctx, npc.identity);
-            continue;
-        };
         let Some(state) = ctx.db.npc_state().identity().find(npc.identity) else {
             clear_npc_combat_runtime(ctx, npc.identity);
             continue;
@@ -1328,16 +1326,6 @@ pub(crate) fn tick_npc_combat(
             clear_npc_combat_runtime(ctx, npc.identity);
             continue;
         };
-        record_npc_decision_debug(
-            ctx,
-            now,
-            &npc,
-            &template,
-            &action,
-            &target,
-            target_is_pinned,
-        );
-
         let runtime = ctx
             .db
             .npc_combat_runtime()
@@ -1348,17 +1336,24 @@ pub(crate) fn tick_npc_combat(
                 identity: npc.identity,
                 target: target.identity,
             });
-
         if movement_modifiers.is_disabled(&npc.identity) {
             upsert_npc_combat_runtime(ctx, runtime);
             continue;
         }
-
-        if is_on_named_cooldown(ctx, npc.identity, action.ability_id.as_str(), now) {
+        let Some(action) = select_npc_melee_action(ctx, now, &template, &state, &target) else {
             face_npc_target(ctx, now, &physics, &target);
             upsert_npc_combat_runtime(ctx, runtime);
             continue;
-        }
+        };
+        record_npc_decision_debug(
+            ctx,
+            now,
+            &npc,
+            &template,
+            &action,
+            &target,
+            target_is_pinned,
+        );
 
         if target.distance > npc_attack_reach(action.range, &target) {
             let move_speed_multiplier = movement_modifiers.move_speed_multiplier(&npc.identity, 0);
@@ -1594,16 +1589,103 @@ fn return_npc_home(
     );
 }
 
-fn npc_primary_melee_action(
+fn select_npc_melee_action(
     ctx: &ReducerContext,
+    now: Timestamp,
     template: &NpcTemplate,
+    state: &NpcState,
+    target: &NpcAttackTarget,
 ) -> Option<MeleeAbilityCatalog> {
-    template.action_kit.iter().find_map(|entry| {
+    let health_pct = if state.max_hp > 0 {
+        state.hp.max(0) as f32 / state.max_hp as f32
+    } else {
+        0.0
+    };
+    let needs_target_statuses = template.action_kit.iter().any(|entry| {
+        !entry.required_target_status.is_empty() || !entry.forbidden_target_status.is_empty()
+    });
+    let target_statuses: HashSet<String> = if needs_target_statuses {
         ctx.db
-            .melee_ability_catalog()
-            .ability_id()
-            .find(entry.ability_id.clone())
-    })
+            .status_effect()
+            .target()
+            .filter(target.identity)
+            .filter(|status| now < status.expires_at)
+            .flat_map(|status| {
+                [
+                    normalize_id(status.effect_kind.as_str()),
+                    normalize_id(status.stack_group.as_str()),
+                ]
+            })
+            .filter(|status| !status.is_empty())
+            .collect()
+    } else {
+        HashSet::new()
+    };
+
+    template
+        .action_kit
+        .iter()
+        .filter(|entry| entry.role == "MELEE_OFFENSE")
+        .filter(|entry| {
+            matches!(
+                entry.target_selector.as_str(),
+                "CURRENT_ENEMY" | "NEAREST_ENEMY"
+            )
+        })
+        .filter(|entry| {
+            health_pct >= entry.min_self_health_pct
+                && health_pct <= entry.max_self_health_pct
+                && entry.min_nearby_allies == 0
+                && entry.min_nearby_enemies <= 1
+                && (entry.required_target_status.is_empty()
+                    || target_statuses.contains(entry.required_target_status.as_str()))
+                && (entry.forbidden_target_status.is_empty()
+                    || !target_statuses.contains(entry.forbidden_target_status.as_str()))
+        })
+        .filter_map(|entry| {
+            let action = ctx
+                .db
+                .melee_ability_catalog()
+                .ability_id()
+                .find(entry.ability_id.clone())?;
+            if is_on_named_cooldown(ctx, state.identity, action.ability_id.as_str(), now) {
+                return None;
+            }
+            let score = npc_action_distance_score(
+                entry.base_utility,
+                entry.preferred_min_distance,
+                entry.preferred_max_distance,
+                target.distance,
+                entry.movement_may_enable,
+            )?;
+            Some((score, entry.sort_order, action))
+        })
+        .max_by(|left, right| {
+            left.0
+                .total_cmp(&right.0)
+                .then_with(|| right.1.cmp(&left.1))
+        })
+        .map(|(_, _, action)| action)
+}
+
+fn npc_action_distance_score(
+    base_utility: f32,
+    preferred_min_distance: f32,
+    preferred_max_distance: f32,
+    distance: f32,
+    movement_may_enable: bool,
+) -> Option<f32> {
+    let distance_error = if distance < preferred_min_distance {
+        preferred_min_distance - distance
+    } else if distance > preferred_max_distance {
+        if !movement_may_enable {
+            return None;
+        }
+        distance - preferred_max_distance
+    } else {
+        0.0
+    };
+    Some(base_utility - distance_error / preferred_max_distance.max(1.0))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -2264,7 +2346,7 @@ fn yaw_delta_abs(a: f32, b: f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::{
-        npc_catalog, npc_identity, npc_is_outside_leash_from_positions,
+        npc_action_distance_score, npc_catalog, npc_identity, npc_is_outside_leash_from_positions,
         npc_melee_defense_event_type, npc_template, parse_npc_catalog, visual_id_for_template,
         yaw_for_direction, NpcFaction, NPC_CATALOG_JSON, NPC_FACTION_FRIENDLY, NPC_FACTION_HOSTILE,
         NPC_FACTION_NEUTRAL, NPC_TEMPLATE_KOBOLD_THIEF_BK_DUAL_SWORD,
@@ -2291,6 +2373,16 @@ mod tests {
         assert!(npc_is_outside_leash_from_positions(
             10.0, 20.0, 13.1, 24.0, 5.0
         ));
+    }
+
+    #[test]
+    fn npc_action_distance_scoring_requires_movement_permission() {
+        assert_eq!(
+            npc_action_distance_score(1.0, 1.0, 3.0, 2.0, false),
+            Some(1.0)
+        );
+        assert!(npc_action_distance_score(1.0, 1.0, 3.0, 5.0, false).is_none());
+        assert!(npc_action_distance_score(1.0, 1.0, 3.0, 5.0, true).unwrap() < 1.0);
     }
 
     #[test]
