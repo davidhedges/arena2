@@ -3188,8 +3188,8 @@ mod tests {
     #[test]
     fn authored_npc_catalog_is_valid_and_complete_for_current_templates() {
         let parsed = parse_npc_catalog(NPC_CATALOG_JSON).unwrap();
-        assert_eq!(parsed.templates.len(), 7);
-        assert_eq!(npc_catalog().templates.len(), 7);
+        assert_eq!(parsed.templates.len(), 8);
+        assert_eq!(npc_catalog().templates.len(), 8);
         assert!(parsed
             .templates
             .iter()
@@ -3202,6 +3202,10 @@ mod tests {
         assert_eq!(lich.action_kit[0].target_selector, "LOWEST_HEALTH_ALLY");
         assert!(lich.action_kit[0].base_utility > lich.action_kit[1].base_utility);
         assert_eq!(lich.action_kit[1].role, "BUFF");
+        let abomination = npc_template("ABOMINATION").expect("abomination family should be authored");
+        assert_eq!(abomination.visual_ids.len(), 3);
+        assert_eq!(abomination.action_kit[0].ability_id, "NPC_ABOMINATION_CLAW");
+        assert_eq!(abomination.action_kit[0].role, "MELEE_OFFENSE");
     }
 
     #[test]

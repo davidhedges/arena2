@@ -3430,6 +3430,28 @@
       }
     },
     {
+      "ability_id": "NPC_ABOMINATION_CLAW",
+      "actor_scope": "NPC",
+      "combat_profile_id": "",
+      "action_id": "NPC_MELEE_ATTACK",
+      "display_name": "Abomination Claw",
+      "resource_kind": "",
+      "resource_cost": 0,
+      "ability_tags": [],
+      "sort_order": 45,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 14,
+        "applies_stagger": false,
+        "range": 2.8,
+        "cooldown_ms": 2400,
+        "uses_global_cooldown": false,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET"
+      }
+    },
+    {
       "ability_id": "NPC_SKELETON_WIZARD_FROST_BOLT",
       "actor_scope": "NPC",
       "combat_profile_id": "",

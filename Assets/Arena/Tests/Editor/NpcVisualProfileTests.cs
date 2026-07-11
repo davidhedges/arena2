@@ -15,6 +15,9 @@ namespace Arena.Tests.Editor
         [TestCase("Assets/Arena/Content/NPC/VisualProfiles/SkeletonWizard_Gn_VisualProfile.asset")]
         [TestCase("Assets/Arena/Content/NPC/VisualProfiles/Lich_Gn_VisualProfile.asset")]
         [TestCase("Assets/Arena/Content/NPC/VisualProfiles/SkeletonArcher_Gn_VisualProfile.asset")]
+        [TestCase("Assets/Arena/Content/NPC/VisualProfiles/Abomination_Gn_VisualProfile.asset")]
+        [TestCase("Assets/Arena/Content/NPC/VisualProfiles/Abomination_Gr_VisualProfile.asset")]
+        [TestCase("Assets/Arena/Content/NPC/VisualProfiles/Abomination_Pe_VisualProfile.asset")]
         public void ExemplarProfile_ResolvesAuthoredAnimatorAndStates(string path)
         {
             Type profileType = RequireType("Arena.Entity.NpcVisualProfile");

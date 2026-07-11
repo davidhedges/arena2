@@ -155,6 +155,23 @@
       "aggro_radius": 20.0,
       "move_speed": 6.0,
       "attack_windup_ms": 350
+    },
+    {
+      "template_id": "ABOMINATION",
+      "species_id": "ABOMINATION",
+      "display_name": "Abomination",
+      "visual_ids": ["ABOMINATION_GN", "ABOMINATION_GR", "ABOMINATION_PE"],
+      "brain_profile_id": "BASIC_HOSTILE_MELEE",
+      "resource_policy": "FREE_ACTIONS_ONLY",
+      "action_kit": [
+        { "ability_id": "NPC_ABOMINATION_CLAW", "role": "MELEE_OFFENSE", "target_selector": "CURRENT_ENEMY", "base_utility": 1.0, "min_self_health_pct": 0.0, "max_self_health_pct": 1.0, "preferred_min_distance": 0.0, "preferred_max_distance": 2.8, "min_nearby_allies": 0, "min_nearby_enemies": 1, "required_target_status": "", "forbidden_target_status": "", "movement_may_enable": true, "sort_order": 10 }
+      ],
+      "max_hp": 220,
+      "hit_radius": 0.75,
+      "hit_height": 2.6,
+      "aggro_radius": 9.0,
+      "move_speed": 4.5,
+      "attack_windup_ms": 700
     }
   ]
 }
