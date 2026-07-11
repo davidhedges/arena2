@@ -19,6 +19,8 @@ namespace SpacetimeDB.Types
         public SpacetimeDB.Identity SpawnedBy;
         [DataMember(Name = "template_id")]
         public string TemplateId;
+        [DataMember(Name = "visual_id")]
+        public string VisualId;
         [DataMember(Name = "species_id")]
         public string SpeciesId;
         [DataMember(Name = "faction")]
@@ -38,6 +40,7 @@ namespace SpacetimeDB.Types
             SpacetimeDB.Identity Identity,
             SpacetimeDB.Identity SpawnedBy,
             string TemplateId,
+            string VisualId,
             string SpeciesId,
             string Faction,
             string DisplayName,
@@ -50,6 +53,7 @@ namespace SpacetimeDB.Types
             this.Identity = Identity;
             this.SpawnedBy = SpawnedBy;
             this.TemplateId = TemplateId;
+            this.VisualId = VisualId;
             this.SpeciesId = SpeciesId;
             this.Faction = Faction;
             this.DisplayName = DisplayName;
@@ -62,6 +66,7 @@ namespace SpacetimeDB.Types
         public NpcInstance()
         {
             this.TemplateId = "";
+            this.VisualId = "";
             this.SpeciesId = "";
             this.Faction = "";
             this.DisplayName = "";

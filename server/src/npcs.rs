@@ -78,6 +78,8 @@ pub struct NpcInstance {
     pub spawned_by: Identity,
     #[index(btree)]
     pub template_id: String,
+    #[index(btree)]
+    pub visual_id: String,
     pub species_id: String,
     #[index(btree)]
     pub faction: String,
@@ -350,6 +352,23 @@ pub(crate) fn npc_template(template_id: &str) -> Option<NpcTemplate> {
     Some(template)
 }
 
+fn visual_id_for_template(template: NpcTemplate, visual_id: &str) -> Result<String, String> {
+    let visual_id = normalize_id(visual_id);
+    if visual_id.is_empty() {
+        return Err("NPC visual_id is required".to_string());
+    }
+
+    // The current kobold templates each expose one appearance. This explicit
+    // gate becomes visual-set membership validation when the authored catalog lands.
+    if visual_id != template.template_id {
+        return Err(format!(
+            "NPC visual '{visual_id}' is not valid for template '{}'",
+            template.template_id
+        ));
+    }
+    Ok(visual_id)
+}
+
 /// Local measurement aid: `ARENA_NPC_TANKY=1` at build time gives every NPC a
 /// huge health pool so a solo tester's auto-attacks can't kill the fixture
 /// mid-test (S9 owner leg: a moving target must survive the whole leg). Baked
@@ -371,10 +390,16 @@ fn npc_is_tanky() -> bool {
 }
 
 #[reducer]
-pub fn spawn_npc(ctx: &ReducerContext, template_id: String, faction: String) -> Result<(), String> {
+pub fn spawn_npc(
+    ctx: &ReducerContext,
+    template_id: String,
+    visual_id: String,
+    faction: String,
+) -> Result<(), String> {
     let owner = ctx.sender();
     let template = npc_template(template_id.as_str())
         .ok_or_else(|| format!("Unknown NPC template '{template_id}'"))?;
+    let visual_id = visual_id_for_template(template, visual_id.as_str())?;
     let faction = NpcFaction::from_wire(faction.as_str())
         .ok_or_else(|| format!("Unknown NPC faction '{faction}'"))?;
 
@@ -421,6 +446,7 @@ pub fn spawn_npc(ctx: &ReducerContext, template_id: String, faction: String) -> 
         identity,
         spawned_by: owner,
         template_id: template.template_id.to_string(),
+        visual_id,
         species_id: template.species_id.to_string(),
         faction: faction.as_str().to_string(),
         display_name: template.display_name.to_string(),
@@ -1351,9 +1377,10 @@ fn yaw_delta_abs(a: f32, b: f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::{
-        npc_identity, npc_melee_defense_event_type, npc_template, yaw_for_direction, NpcFaction,
-        NPC_FACTION_FRIENDLY, NPC_FACTION_HOSTILE, NPC_FACTION_NEUTRAL,
-        NPC_TEMPLATE_KOBOLD_THIEF_BK_DUAL_SWORD, NPC_TEMPLATE_KOBOLD_WARRIOR_RD_SWORD_SHIELD,
+        npc_identity, npc_melee_defense_event_type, npc_template, visual_id_for_template,
+        yaw_for_direction, NpcFaction, NPC_FACTION_FRIENDLY, NPC_FACTION_HOSTILE,
+        NPC_FACTION_NEUTRAL, NPC_TEMPLATE_KOBOLD_THIEF_BK_DUAL_SWORD,
+        NPC_TEMPLATE_KOBOLD_WARRIOR_GN_SPEAR, NPC_TEMPLATE_KOBOLD_WARRIOR_RD_SWORD_SHIELD,
     };
     use crate::combat::{COMBAT_EVENT_BLOCK, COMBAT_EVENT_PARRY};
     use crate::defense::DefenseResolution;
@@ -1383,6 +1410,17 @@ mod tests {
                 .move_speed
                 > template.move_speed
         );
+    }
+
+    #[test]
+    fn visual_identity_is_normalized_and_scoped_to_its_template() {
+        let template = npc_template(NPC_TEMPLATE_KOBOLD_WARRIOR_RD_SWORD_SHIELD).unwrap();
+        assert_eq!(
+            visual_id_for_template(template, " kobold_warrior_rd_sword_shield ").unwrap(),
+            NPC_TEMPLATE_KOBOLD_WARRIOR_RD_SWORD_SHIELD
+        );
+        assert!(visual_id_for_template(template, "").is_err());
+        assert!(visual_id_for_template(template, NPC_TEMPLATE_KOBOLD_WARRIOR_GN_SPEAR).is_err());
     }
 
     #[test]

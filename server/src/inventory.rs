@@ -4678,6 +4678,7 @@ mod tests {
             identity: Identity::ZERO,
             spawned_by: Identity::ZERO,
             template_id: crate::npcs::NPC_TEMPLATE_KOBOLD_WARRIOR_RD_SWORD_SHIELD.to_string(),
+            visual_id: crate::npcs::NPC_TEMPLATE_KOBOLD_WARRIOR_RD_SWORD_SHIELD.to_string(),
             species_id: "KOBOLD_WARRIOR".to_string(),
             faction: crate::npcs::NPC_FACTION_HOSTILE.to_string(),
             display_name: "Kobold".to_string(),

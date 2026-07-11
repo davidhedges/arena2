@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using Arena.Presentation;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 namespace Arena.Entity
 {
@@ -48,8 +49,8 @@ namespace Arena.Entity
 
         [SerializeField] private List<NpcVisualCatalogEntry> entries = new();
 
-        private Dictionary<string, UnityEngine.Object>? _prefabsByTemplateId;
-        private Dictionary<string, NpcVisualCatalogEntry>? _entriesByTemplateId;
+        private Dictionary<string, UnityEngine.Object>? _prefabsByVisualId;
+        private Dictionary<string, NpcVisualCatalogEntry>? _entriesByVisualId;
         private static NpcVisualCatalog? _cachedDefault;
 
         public static bool TryLoadDefault(out NpcVisualCatalog catalog, out string error)
@@ -69,18 +70,18 @@ namespace Arena.Entity
             return true;
         }
 
-        public bool TryGetPrefab(string templateId, out UnityEngine.Object prefab)
+        public bool TryGetPrefab(string visualId, out UnityEngine.Object prefab)
         {
             EnsureIndex();
-            string key = Normalize(templateId);
-            return _prefabsByTemplateId!.TryGetValue(key, out prefab!) && prefab != null;
+            string key = Normalize(visualId);
+            return _prefabsByVisualId!.TryGetValue(key, out prefab!) && prefab != null;
         }
 
-        public bool TryGetEntry(string templateId, out NpcVisualCatalogEntry entry)
+        public bool TryGetEntry(string visualId, out NpcVisualCatalogEntry entry)
         {
             EnsureIndex();
-            string key = Normalize(templateId);
-            return _entriesByTemplateId!.TryGetValue(key, out entry!) && entry != null;
+            string key = Normalize(visualId);
+            return _entriesByVisualId!.TryGetValue(key, out entry!) && entry != null;
         }
 
         public IReadOnlyList<string> ValidateEntries()
@@ -96,14 +97,14 @@ namespace Arena.Entity
                     continue;
                 }
 
-                string key = Normalize(entry.templateId);
+                string key = Normalize(entry.visualId);
                 if (string.IsNullOrEmpty(key))
-                    errors.Add($"Entry {i} has no template ID.");
+                    errors.Add($"Entry {i} has no visual ID.");
                 else if (!seen.Add(key))
-                    errors.Add($"Template ID '{key}' is duplicated.");
+                    errors.Add($"Visual ID '{key}' is duplicated.");
 
                 if (entry.ResolvePrefab() == null)
-                    errors.Add($"Template '{key}' has no resolvable prefab.");
+                    errors.Add($"Visual '{key}' has no resolvable prefab.");
             }
 
             return errors;
@@ -111,23 +112,23 @@ namespace Arena.Entity
 
         private void EnsureIndex()
         {
-            if (_prefabsByTemplateId != null)
+            if (_prefabsByVisualId != null)
                 return;
 
-            _prefabsByTemplateId = new Dictionary<string, UnityEngine.Object>(StringComparer.Ordinal);
-            _entriesByTemplateId = new Dictionary<string, NpcVisualCatalogEntry>(StringComparer.Ordinal);
+            _prefabsByVisualId = new Dictionary<string, UnityEngine.Object>(StringComparer.Ordinal);
+            _entriesByVisualId = new Dictionary<string, NpcVisualCatalogEntry>(StringComparer.Ordinal);
             foreach (var entry in entries)
             {
                 if (entry == null)
                     continue;
 
-                string key = Normalize(entry.templateId);
+                string key = Normalize(entry.visualId);
                 if (!string.IsNullOrEmpty(key))
                 {
-                    _entriesByTemplateId[key] = entry;
+                    _entriesByVisualId[key] = entry;
                     UnityEngine.Object? prefab = entry.ResolvePrefab();
                     if (prefab != null)
-                        _prefabsByTemplateId[key] = prefab;
+                        _prefabsByVisualId[key] = prefab;
                 }
             }
         }
@@ -139,7 +140,8 @@ namespace Arena.Entity
     [Serializable]
     public sealed class NpcVisualCatalogEntry
     {
-        public string templateId = string.Empty;
+        [FormerlySerializedAs("templateId")]
+        public string visualId = string.Empty;
         public NpcVisualProfile? profile;
         public string assetPath = string.Empty;
         public UnityEngine.Object? prefab;

@@ -887,9 +887,9 @@ namespace Arena.Entity
                 return;
             }
 
-            if (!catalog.TryGetPrefab(row.TemplateId, out var prefab))
+            if (!catalog.TryGetPrefab(row.VisualId, out var prefab))
             {
-                Debug.LogWarning($"[EntityRegistry] Cannot spawn NPC '{row.TemplateId}': template has no visual prefab.");
+                Debug.LogWarning($"[EntityRegistry] Cannot spawn NPC '{row.TemplateId}': visual '{row.VisualId}' has no prefab.");
                 return;
             }
 
@@ -898,7 +898,7 @@ namespace Arena.Entity
                 var entity = new NpcEntity(row, physics, state, prefab);
                 entity.GameObject.SetActive(!ShouldSuppressPresentationInCurrentScene());
                 _npcs[row.Identity] = entity;
-                Debug.Log($"[EntityRegistry] Spawned NPC {row.DisplayName} {row.Identity} template={row.TemplateId}");
+                Debug.Log($"[EntityRegistry] Spawned NPC {row.DisplayName} {row.Identity} template={row.TemplateId} visual={row.VisualId}");
             }
             catch (System.Exception error)
             {

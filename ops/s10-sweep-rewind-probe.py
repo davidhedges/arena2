@@ -305,7 +305,7 @@ def spawn_kobold(probe, template):
         r[0].removeprefix("0x").lower()
         for r in probe.sql("SELECT identity, template_id FROM npc_instance")
     }
-    probe.call("spawn_npc", [template, "HOSTILE"])
+    probe.call("spawn_npc", [template, template, "HOSTILE"])
     time.sleep(1.2)
     rows = probe.sql("SELECT identity, template_id FROM npc_instance")
     fresh = [

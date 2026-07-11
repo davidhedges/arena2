@@ -51,6 +51,7 @@ namespace Arena.Entity
         public GameObject TargetGameObject => GameObject;
         public string DisplayName => _instance.DisplayName;
         public string TemplateId => _instance.TemplateId;
+        public string VisualId => _instance.VisualId;
         public string Faction => _instance.Faction;
         public int PresentationHardSnapCount => _presentation.HardSnapCount;
         public int PresentationInterpolationSampleCount => _presentation.InterpolationSampleCount;
@@ -90,7 +91,7 @@ namespace Arena.Entity
             _worldHealthBar = WorldHealthBar.Create(GameObject.transform, isLocalPlayer: false);
             _animationController = NpcAnimationController.Attach(GameObject);
             _animationController.SetTemplate(instance.TemplateId);
-            ConfigureAnimationProfile(instance.TemplateId);
+            ConfigureAnimationProfile(instance.VisualId);
             if (state != null)
                 _worldHealthBar.SetHealth(state.Hp, state.MaxHp);
 
@@ -107,7 +108,7 @@ namespace Arena.Entity
             GameObject.name = $"NPC_{SafeName(instance.DisplayName)}_{instance.Identity}";
             _nameTag.SetName(instance.DisplayName);
             _animationController.SetTemplate(instance.TemplateId);
-            ConfigureAnimationProfile(instance.TemplateId);
+            ConfigureAnimationProfile(instance.VisualId);
             RefreshHardCrowdControlAnimation();
         }
 
@@ -356,10 +357,10 @@ namespace Arena.Entity
             }
         }
 
-        private void ConfigureAnimationProfile(string templateId)
+        private void ConfigureAnimationProfile(string visualId)
         {
             if (NpcVisualCatalog.TryLoadDefault(out NpcVisualCatalog catalog, out _)
-                && catalog.TryGetEntry(templateId, out NpcVisualCatalogEntry entry))
+                && catalog.TryGetEntry(visualId, out NpcVisualCatalogEntry entry))
             {
                 _animationController.SetVisualProfile(entry.profile);
                 _animationController.SetStatusReactions(entry.profile != null

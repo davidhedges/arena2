@@ -12,12 +12,12 @@ namespace SpacetimeDB.Types
 {
     public sealed partial class RemoteReducers : RemoteBase
     {
-        public delegate void SpawnNpcHandler(ReducerEventContext ctx, string templateId, string faction);
+        public delegate void SpawnNpcHandler(ReducerEventContext ctx, string templateId, string visualId, string faction);
         public event SpawnNpcHandler? OnSpawnNpc;
 
-        public void SpawnNpc(string templateId, string faction)
+        public void SpawnNpc(string templateId, string visualId, string faction)
         {
-            conn.InternalCallReducer(new Reducer.SpawnNpc(templateId, faction));
+            conn.InternalCallReducer(new Reducer.SpawnNpc(templateId, visualId, faction));
         }
 
         public bool InvokeSpawnNpc(ReducerEventContext ctx, Reducer.SpawnNpc args)
@@ -37,6 +37,7 @@ namespace SpacetimeDB.Types
             OnSpawnNpc(
                 ctx,
                 args.TemplateId,
+                args.VisualId,
                 args.Faction
             );
             return true;
@@ -51,21 +52,26 @@ namespace SpacetimeDB.Types
         {
             [DataMember(Name = "template_id")]
             public string TemplateId;
+            [DataMember(Name = "visual_id")]
+            public string VisualId;
             [DataMember(Name = "faction")]
             public string Faction;
 
             public SpawnNpc(
                 string TemplateId,
+                string VisualId,
                 string Faction
             )
             {
                 this.TemplateId = TemplateId;
+                this.VisualId = VisualId;
                 this.Faction = Faction;
             }
 
             public SpawnNpc()
             {
                 this.TemplateId = "";
+                this.VisualId = "";
                 this.Faction = "";
             }
 

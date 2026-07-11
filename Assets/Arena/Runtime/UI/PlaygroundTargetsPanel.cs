@@ -458,7 +458,7 @@ namespace Arena.UI
 
             try
             {
-                conn.Reducers.SpawnNpc(templateId, faction);
+                conn.Reducers.SpawnNpc(templateId, templateId, faction);
                 SetStatus($"{label} SENT", false);
             }
             catch (Exception error)
