@@ -1,7 +1,7 @@
 {
   "source_family_name": "KoboldThief",
-  "appearance_ids": ["KOBOLD_THIEF_GN", "KOBOLD_THIEF_RD"],
-  "expected_appearance_count": 2,
+  "appearance_ids": ["KOBOLD_THIEF_BK", "KOBOLD_THIEF_GN", "KOBOLD_THIEF_RD"],
+  "expected_appearance_count": 3,
   "primary_animator_path": ".",
   "allow_root_motion": true,
   "acknowledge_inventory_warnings": true,
@@ -20,6 +20,15 @@
     { "status_kind": "STUN", "clip_file_id": -8767420384561272259, "clip_guid": "7b9eaff9f68c8774d9744189c159cb4d", "require_humanoid_avatar": true }
   ],
   "appearance_overrides": {
+    "KOBOLD_THIEF_BK": {
+      "animations": { "ready": ["Combat_1H_Ready"], "basicAttack": ["Combat_1H_AttackDual"], "hit": ["Combat_1H_Hit"] },
+      "action_animations": [
+        { "ability_id": "NPC_KOBOLD_DUAL_SPECIAL_2", "states": ["Combat_1H_AttackSpecialDual01"] },
+        { "ability_id": "NPC_KOBOLD_DUAL_SPECIAL", "states": ["Combat_1H_AttackSpecialDual"] },
+        { "ability_id": "NPC_KOBOLD_DUAL_STRIKE_2", "states": ["Combat_1H_AttackDual01"] },
+        { "ability_id": "NPC_KOBOLD_DUAL_STRIKE", "states": ["Combat_1H_AttackDual"] }
+      ]
+    },
     "KOBOLD_THIEF_GN": {
       "animations": { "ready": ["Combat_2HL_Ready"], "basicAttack": ["Combat_2HL_Attack"], "hit": ["Combat_2HL_Hit"] },
       "action_animations": [

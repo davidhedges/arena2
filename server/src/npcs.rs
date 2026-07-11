@@ -3230,14 +3230,15 @@ mod tests {
     #[test]
     fn authored_npc_catalog_is_valid_and_complete_for_current_templates() {
         let parsed = parse_npc_catalog(NPC_CATALOG_JSON).unwrap();
-        assert_eq!(parsed.templates.len(), 45);
-        assert_eq!(npc_catalog().templates.len(), 45);
+        assert_eq!(parsed.templates.len(), 53);
+        assert_eq!(npc_catalog().templates.len(), 53);
         assert!(parsed
             .templates
             .iter()
             .all(|template| !template.visual_ids.is_empty() && !template.action_kit.is_empty()));
         let wizard = npc_template("SKELETON_WIZARD").expect("wizard exemplar should be authored");
         assert_eq!(wizard.visual_ids.len(), 3);
+        assert_eq!(wizard.action_kit.len(), 5);
         assert_eq!(wizard.action_kit[0].role, "RANGED_OFFENSE");
         assert_eq!(wizard.action_kit[0].target_selector, "CURRENT_ENEMY");
         assert_eq!(wizard.action_kit[1].role, "DEBUFF");
@@ -3250,6 +3251,7 @@ mod tests {
         assert_eq!(wizard.action_kit[2].target_selector, "CURRENT_ENEMY");
         let lich = npc_template("LICH_SUPPORT").expect("support exemplar should be authored");
         assert_eq!(lich.visual_ids.len(), 6);
+        assert_eq!(lich.action_kit.len(), 4);
         assert_eq!(lich.action_kit[0].role, "HEAL");
         assert_eq!(lich.action_kit[0].target_selector, "LOWEST_HEALTH_ALLY");
         assert!(lich.action_kit[0].base_utility > lich.action_kit[1].base_utility);
@@ -3260,15 +3262,12 @@ mod tests {
         let abomination =
             npc_template("ABOMINATION").expect("abomination family should be authored");
         assert_eq!(abomination.visual_ids.len(), 3);
-        assert_eq!(abomination.action_kit[0].ability_id, "NPC_ABOMINATION_CLAW");
+        assert_eq!(abomination.action_kit.len(), 2);
         assert_eq!(abomination.action_kit[0].role, "MELEE_OFFENSE");
         let humanoid_scarab =
             npc_template("HUMANOID_SCARAB").expect("humanoid scarab family should be authored");
         assert_eq!(humanoid_scarab.visual_ids.len(), 4);
-        assert_eq!(
-            humanoid_scarab.action_kit[0].ability_id,
-            "NPC_HUMANOID_SCARAB_STRIKE"
-        );
+        assert_eq!(humanoid_scarab.action_kit.len(), 2);
         assert_eq!(humanoid_scarab.action_kit[0].role, "MELEE_OFFENSE");
         let slime_man = npc_template("SLIME_MAN").expect("slime man family should be authored");
         assert_eq!(slime_man.visual_ids.len(), 4);
@@ -3292,70 +3291,112 @@ mod tests {
         let air_warlord =
             npc_template("AIR_WARLORD").expect("air warlord family should be authored");
         assert_eq!(air_warlord.visual_ids.len(), 4);
-        assert_eq!(
-            air_warlord.action_kit[0].ability_id,
-            "NPC_AIR_WARLORD_STRIKE"
-        );
+        assert_eq!(air_warlord.action_kit.len(), 2);
         assert_eq!(air_warlord.action_kit[0].role, "MELEE_OFFENSE");
         let spider = npc_template("SPIDER").expect("spider family should be authored");
         assert_eq!(spider.visual_ids.len(), 4);
-        assert_eq!(spider.action_kit[0].ability_id, "NPC_SPIDER_BITE");
+        assert_eq!(spider.action_kit.len(), 2);
         assert_eq!(spider.action_kit[0].role, "MELEE_OFFENSE");
         let slime = npc_template("SLIME").expect("slime family should be authored");
         assert_eq!(slime.visual_ids.len(), 4);
-        assert_eq!(slime.action_kit[0].ability_id, "NPC_SLIME_STRIKE");
+        assert_eq!(slime.action_kit.len(), 2);
         assert_eq!(slime.action_kit[0].role, "MELEE_OFFENSE");
         let imp = npc_template("IMP").expect("imp family should be authored");
         assert_eq!(imp.visual_ids.len(), 8);
+        assert_eq!(imp.action_kit.len(), 5);
         assert_eq!(imp.action_kit[0].ability_id, "NPC_IMP_FIRE_BOLT");
         assert_eq!(imp.action_kit[0].role, "RANGED_OFFENSE");
-        assert_eq!(imp.action_kit[1].ability_id, "NPC_IMP_CLAW");
         assert_eq!(imp.action_kit[1].role, "MELEE_OFFENSE");
         let deep_sea_lizard =
             npc_template("DEEP_SEA_LIZARD").expect("deep sea lizard family should be authored");
         assert_eq!(deep_sea_lizard.visual_ids.len(), 10);
+        assert_eq!(deep_sea_lizard.action_kit.len(), 5);
         assert_eq!(
             deep_sea_lizard.action_kit[0].ability_id,
             "NPC_DEEP_SEA_LIZARD_TIDAL_BOLT"
         );
         assert_eq!(deep_sea_lizard.action_kit[0].role, "RANGED_OFFENSE");
-        assert_eq!(
-            deep_sea_lizard.action_kit[1].ability_id,
-            "NPC_DEEP_SEA_LIZARD_CLAW"
-        );
         assert_eq!(deep_sea_lizard.action_kit[1].role, "MELEE_OFFENSE");
-        let demon_warrior =
-            npc_template("DEMON_WARRIOR").expect("demon warrior family should be authored");
-        assert_eq!(demon_warrior.visual_ids.len(), 5);
         assert_eq!(
-            demon_warrior.action_kit[0].ability_id,
-            "NPC_DEMON_WARRIOR_STRIKE"
+            npc_template("DEMON_WARRIOR_2H").unwrap().action_kit.len(),
+            2
         );
-        assert_eq!(demon_warrior.action_kit[0].role, "MELEE_OFFENSE");
-        let skeleton_warrior =
-            npc_template("SKELETON_WARRIOR").expect("skeleton warrior family should be authored");
-        assert_eq!(skeleton_warrior.visual_ids.len(), 5);
         assert_eq!(
-            skeleton_warrior.action_kit[0].ability_id,
-            "NPC_SKELETON_WARRIOR_STRIKE"
+            npc_template("DEMON_WARRIOR_DUAL_WIELD")
+                .unwrap()
+                .action_kit
+                .len(),
+            4
         );
-        assert_eq!(skeleton_warrior.action_kit[0].role, "MELEE_OFFENSE");
+        assert_eq!(
+            npc_template("DEMON_WARRIOR_UNARMED")
+                .unwrap()
+                .action_kit
+                .len(),
+            2
+        );
+        assert_eq!(
+            npc_template("DEMON_WARRIOR_WEP_L")
+                .unwrap()
+                .action_kit
+                .len(),
+            2
+        );
+        assert_eq!(
+            npc_template("DEMON_WARRIOR_WEP_R")
+                .unwrap()
+                .action_kit
+                .len(),
+            2
+        );
+        assert_eq!(
+            npc_template("SKELETON_WARRIOR_2H")
+                .unwrap()
+                .action_kit
+                .len(),
+            3
+        );
+        assert_eq!(
+            npc_template("SKELETON_WARRIOR_AXES")
+                .unwrap()
+                .action_kit
+                .len(),
+            4
+        );
+        assert_eq!(
+            npc_template("SKELETON_WARRIOR_SHIELD")
+                .unwrap()
+                .action_kit
+                .len(),
+            2
+        );
+        assert_eq!(
+            npc_template("SKELETON_WARRIOR_SWORDS")
+                .unwrap()
+                .action_kit
+                .len(),
+            4
+        );
+        assert_eq!(
+            npc_template("SKELETON_WARRIOR_UNARMED")
+                .unwrap()
+                .action_kit
+                .len(),
+            4
+        );
         let skeleton_reaper =
             npc_template("SKELETON_REAPER").expect("skeleton reaper family should be authored");
         assert_eq!(skeleton_reaper.visual_ids.len(), 3);
+        assert_eq!(skeleton_reaper.action_kit.len(), 4);
         assert_eq!(
             skeleton_reaper.action_kit[0].ability_id,
             "NPC_SKELETON_REAPER_SOUL_BOLT"
         );
         assert_eq!(skeleton_reaper.action_kit[0].role, "RANGED_OFFENSE");
-        assert_eq!(
-            skeleton_reaper.action_kit[1].ability_id,
-            "NPC_SKELETON_REAPER_SLASH"
-        );
         assert_eq!(skeleton_reaper.action_kit[1].role, "MELEE_OFFENSE");
         let tomb_shade = npc_template("TOMB_SHADE").expect("tomb shade family should be authored");
         assert_eq!(tomb_shade.visual_ids.len(), 3);
-        assert_eq!(tomb_shade.action_kit[0].ability_id, "NPC_TOMB_SHADE_STRIKE");
+        assert_eq!(tomb_shade.action_kit.len(), 2);
         assert_eq!(tomb_shade.action_kit[0].role, "MELEE_OFFENSE");
         let undead_eagle =
             npc_template("UNDEAD_EAGLE").expect("undead eagle family should be authored");
@@ -3485,8 +3526,8 @@ mod tests {
     fn visual_identity_is_normalized_and_scoped_to_its_template() {
         let template = npc_template(NPC_TEMPLATE_KOBOLD_WARRIOR_RD_SWORD_SHIELD).unwrap();
         assert_eq!(
-            visual_id_for_template(&template, " kobold_warrior_rd_sword_shield ").unwrap(),
-            NPC_TEMPLATE_KOBOLD_WARRIOR_RD_SWORD_SHIELD
+            visual_id_for_template(&template, " kobold_warrior_rd ").unwrap(),
+            "KOBOLD_WARRIOR_RD"
         );
         assert!(visual_id_for_template(&template, "").is_err());
         assert!(visual_id_for_template(&template, NPC_TEMPLATE_KOBOLD_WARRIOR_GN_SPEAR).is_err());

@@ -1,7 +1,7 @@
 {
   "source_family_name": "KoboldKnight",
-  "appearance_ids": ["KOBOLD_KNIGHT_BK", "KOBOLD_KNIGHT_GN"],
-  "expected_appearance_count": 2,
+  "appearance_ids": ["KOBOLD_KNIGHT_BK", "KOBOLD_KNIGHT_GN", "KOBOLD_KNIGHT_RD"],
+  "expected_appearance_count": 3,
   "primary_animator_path": ".",
   "allow_root_motion": true,
   "acknowledge_inventory_warnings": true,
@@ -37,6 +37,16 @@
         { "ability_id": "NPC_KOBOLD_SPEAR_STRIKE_3", "states": ["Combat_2HL_Attack02"] },
         { "ability_id": "NPC_KOBOLD_SPEAR_STRIKE_2", "states": ["Combat_2HL_Attack01"] },
         { "ability_id": "NPC_KOBOLD_SPEAR_STRIKE", "states": ["Combat_2HL_Attack"] }
+      ]
+    },
+    "KOBOLD_KNIGHT_RD": {
+      "animations": { "ready": ["Combat_Defend_Ready"], "basicAttack": ["Combat_Defend_Attack"], "hit": ["Combat_Defend_Hit"] },
+      "action_animations": [
+        { "ability_id": "NPC_KOBOLD_SHIELD_BASH", "states": ["Combat_Defend_ShieldBash"] },
+        { "ability_id": "NPC_KOBOLD_SHIELD_SPECIAL", "states": ["Combat_Defend_AttackSpecial"] },
+        { "ability_id": "NPC_KOBOLD_SHIELD_STRIKE_3", "states": ["Combat_Defend_Attack02"] },
+        { "ability_id": "NPC_KOBOLD_SHIELD_STRIKE_2", "states": ["Combat_Defend_Attack01"] },
+        { "ability_id": "NPC_KOBOLD_SHIELD_STRIKE", "states": ["Combat_Defend_Attack"] }
       ]
     }
   }

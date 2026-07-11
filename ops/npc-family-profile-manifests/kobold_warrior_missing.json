@@ -1,7 +1,7 @@
 {
   "source_family_name": "KoboldWarrior",
-  "appearance_ids": ["KOBOLD_WARRIOR_BK"],
-  "expected_appearance_count": 1,
+  "appearance_ids": ["KOBOLD_WARRIOR_BK", "KOBOLD_WARRIOR_GN", "KOBOLD_WARRIOR_RD"],
+  "expected_appearance_count": 3,
   "primary_animator_path": ".",
   "allow_root_motion": true,
   "acknowledge_inventory_warnings": true,
@@ -25,5 +25,27 @@
   ],
   "status_reactions": [
     { "status_kind": "STUN", "clip_file_id": -8767420384561272259, "clip_guid": "6bacdad010f1d9d4d87b2717a0d5d087", "require_humanoid_avatar": true }
-  ]
+  ],
+  "appearance_overrides": {
+    "KOBOLD_WARRIOR_GN": {
+      "animations": { "ready": ["Combat_2HL_Ready"], "basicAttack": ["Combat_2HL_Attack"], "hit": ["Combat_2HL_Hit"] },
+      "action_animations": [
+        { "ability_id": "NPC_KOBOLD_SPEAR_SPECIAL_2", "states": ["Combat_2HL_AttackSpecial01"] },
+        { "ability_id": "NPC_KOBOLD_SPEAR_SPECIAL", "states": ["Combat_2HL_AttackSpecial"] },
+        { "ability_id": "NPC_KOBOLD_SPEAR_STRIKE_3", "states": ["Combat_2HL_Attack02"] },
+        { "ability_id": "NPC_KOBOLD_SPEAR_STRIKE_2", "states": ["Combat_2HL_Attack01"] },
+        { "ability_id": "NPC_KOBOLD_SPEAR_STRIKE", "states": ["Combat_2HL_Attack"] }
+      ]
+    },
+    "KOBOLD_WARRIOR_RD": {
+      "animations": { "ready": ["Combat_Defend_Ready"], "basicAttack": ["Combat_Defend_Attack"], "hit": ["Combat_Defend_Hit"] },
+      "action_animations": [
+        { "ability_id": "NPC_KOBOLD_SHIELD_BASH", "states": ["Combat_Defend_ShieldBash"] },
+        { "ability_id": "NPC_KOBOLD_SHIELD_SPECIAL", "states": ["Combat_Defend_AttackSpecial"] },
+        { "ability_id": "NPC_KOBOLD_SHIELD_STRIKE_3", "states": ["Combat_Defend_Attack02"] },
+        { "ability_id": "NPC_KOBOLD_SHIELD_STRIKE_2", "states": ["Combat_Defend_Attack01"] },
+        { "ability_id": "NPC_KOBOLD_SHIELD_STRIKE", "states": ["Combat_Defend_Attack"] }
+      ]
+    }
+  }
 }

@@ -14,6 +14,12 @@
     "hit": ["hit"],
     "death": ["Death"]
   },
+  "action_animations": [
+    { "ability_id": "NPC_DEEP_SEA_LIZARD_CLAW_4", "states": ["Attack03"] },
+    { "ability_id": "NPC_DEEP_SEA_LIZARD_CLAW_3", "states": ["Attack02"] },
+    { "ability_id": "NPC_DEEP_SEA_LIZARD_CLAW_2", "states": ["Attack01"] },
+    { "ability_id": "NPC_DEEP_SEA_LIZARD_CLAW", "states": ["attack"] }
+  ],
   "hard_crowd_control_fallback_policy": 0,
   "vfx_sockets": [
     {

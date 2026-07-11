@@ -28,6 +28,11 @@
         "idle": ["Idle_2H"], "ready": ["Ready_2H"], "walk": ["Walk_2H"], "run": ["Run_2H"],
         "basicAttack": ["Attack_2H"], "hit": ["Hit_2H"], "death": ["Death_2H"]
       },
+      "action_animations": [
+        { "ability_id": "NPC_SKELETON_WARRIOR_2H_STRIKE_3", "states": ["Attack_2H02"] },
+        { "ability_id": "NPC_SKELETON_WARRIOR_2H_STRIKE_2", "states": ["Attack_2H01"] },
+        { "ability_id": "NPC_SKELETON_WARRIOR_2H_STRIKE", "states": ["Attack_2H"] }
+      ],
       "status_reactions": [
         { "status_kind": "STUN", "clip_file_id": -5572742682052347208, "clip_guid": "4c313c1a5b453304d94edc5c5a0e9d69", "require_humanoid_avatar": false }
       ]
@@ -37,6 +42,12 @@
         "idle": ["Idle_DualWield"], "ready": ["Ready_DualWield"], "walk": ["Walk_DualWield"], "run": ["Run_DualWield"],
         "basicAttack": ["Attack_1H_Right_DualWield"], "hit": ["Hit_1H_DualWield"], "death": ["Death_DualWield"]
       },
+      "action_animations": [
+        { "ability_id": "NPC_SKELETON_WARRIOR_DUAL_LEFT_STRIKE_2", "states": ["Attack_1H_Left_DualWield01"] },
+        { "ability_id": "NPC_SKELETON_WARRIOR_DUAL_LEFT_STRIKE", "states": ["Attack_1H_Left_DualWield"] },
+        { "ability_id": "NPC_SKELETON_WARRIOR_DUAL_RIGHT_STRIKE_2", "states": ["Attack_1H_Right_DualWield01"] },
+        { "ability_id": "NPC_SKELETON_WARRIOR_DUAL_RIGHT_STRIKE", "states": ["Attack_1H_Right_DualWield"] }
+      ],
       "status_reactions": [
         { "status_kind": "STUN", "clip_file_id": -7802518808344939147, "clip_guid": "4c313c1a5b453304d94edc5c5a0e9d69", "require_humanoid_avatar": false }
       ]
@@ -46,6 +57,10 @@
         "idle": ["Idle_Defend"], "ready": ["Ready_Defend"], "walk": ["Walk_Defend"], "run": ["Run_Defend"],
         "basicAttack": ["Attack_Defend"], "hit": ["Hit_Defend"], "death": ["Death_Defend"]
       },
+      "action_animations": [
+        { "ability_id": "NPC_SKELETON_WARRIOR_SHIELD_STRIKE_2", "states": ["Attack_Defend01"] },
+        { "ability_id": "NPC_SKELETON_WARRIOR_SHIELD_STRIKE", "states": ["Attack_Defend"] }
+      ],
       "status_reactions": [
         { "status_kind": "STUN", "clip_file_id": -8461751401230989136, "clip_guid": "4c313c1a5b453304d94edc5c5a0e9d69", "require_humanoid_avatar": false }
       ]
@@ -55,6 +70,12 @@
         "idle": ["Idle_DualWield"], "ready": ["Ready_DualWield"], "walk": ["Walk_DualWield"], "run": ["Run_DualWield"],
         "basicAttack": ["Attack_1H_Right_DualWield"], "hit": ["Hit_1H_DualWield"], "death": ["Death_DualWield"]
       },
+      "action_animations": [
+        { "ability_id": "NPC_SKELETON_WARRIOR_DUAL_LEFT_STRIKE_2", "states": ["Attack_1H_Left_DualWield01"] },
+        { "ability_id": "NPC_SKELETON_WARRIOR_DUAL_LEFT_STRIKE", "states": ["Attack_1H_Left_DualWield"] },
+        { "ability_id": "NPC_SKELETON_WARRIOR_DUAL_RIGHT_STRIKE_2", "states": ["Attack_1H_Right_DualWield01"] },
+        { "ability_id": "NPC_SKELETON_WARRIOR_DUAL_RIGHT_STRIKE", "states": ["Attack_1H_Right_DualWield"] }
+      ],
       "status_reactions": [
         { "status_kind": "STUN", "clip_file_id": -7802518808344939147, "clip_guid": "4c313c1a5b453304d94edc5c5a0e9d69", "require_humanoid_avatar": false }
       ]
@@ -64,6 +85,12 @@
         "idle": ["Idle_Unarmed"], "ready": ["Ready_Unarmed"], "walk": ["Walk_Unarmed"], "run": ["Run_Unarmed"],
         "basicAttack": ["Attack_Unarmed"], "hit": ["Hit_Unarmed"], "death": ["Death_Unarmed"]
       },
+      "action_animations": [
+        { "ability_id": "NPC_SKELETON_WARRIOR_UNARMED_STRIKE_4", "states": ["Attack_Unarmed03"] },
+        { "ability_id": "NPC_SKELETON_WARRIOR_UNARMED_STRIKE_3", "states": ["Attack_Unarmed02"] },
+        { "ability_id": "NPC_SKELETON_WARRIOR_UNARMED_STRIKE_2", "states": ["Attack_Unarmed01"] },
+        { "ability_id": "NPC_SKELETON_WARRIOR_UNARMED_STRIKE", "states": ["Attack_Unarmed"] }
+      ],
       "status_reactions": [
         { "status_kind": "STUN", "clip_file_id": -6446724128879666000, "clip_guid": "4c313c1a5b453304d94edc5c5a0e9d69", "require_humanoid_avatar": false }
       ]

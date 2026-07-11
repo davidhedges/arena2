@@ -16,10 +16,6 @@ namespace Arena.Presentation
         private const string IdleStateName = "Idle01";
         private const string WalkForwardStateName = "Walk_Forward";
         private const string RunForwardStateName = "Run_Forward";
-        private const string KoboldWarriorSwordShield = "KOBOLD_WARRIOR_RD_SWORD_SHIELD";
-        private const string KoboldWarriorSpear = "KOBOLD_WARRIOR_GN_SPEAR";
-        private const string KoboldThiefDualSword = "KOBOLD_THIEF_BK_DUAL_SWORD";
-        private const string KoboldKnightSwordShield = "KOBOLD_KNIGHT_RD_SWORD_SHIELD";
         private static readonly string[] HitStateCandidates =
         {
             "Combat_1H_Hit",
@@ -31,7 +27,6 @@ namespace Arena.Presentation
 
         private Animator? _animator;
         private NpcVisualProfile? _visualProfile;
-        private string _templateId = string.Empty;
         private float _hideAt = -1f;
         private float _returnToIdleAt = -1f;
         private float _locomotionTimeoutAt = -1f;
@@ -54,13 +49,6 @@ namespace Arena.Presentation
                 controller = root.AddComponent<NpcAnimationController>();
             controller.EnsureAnimator();
             return controller;
-        }
-
-        public void SetTemplate(string templateId)
-        {
-            _templateId = string.IsNullOrWhiteSpace(templateId)
-                ? string.Empty
-                : templateId.Trim().ToUpperInvariant();
         }
 
         public void SetVisualProfile(NpcVisualProfile? profile)
@@ -407,14 +395,7 @@ namespace Arena.Presentation
                     ? _visualProfile.Animations.ready.ToArray()
                     : ProfileCandidates(_visualProfile.Animations.idle, new[] { IdleStateName });
 
-            return _templateId switch
-            {
-                KoboldWarriorSwordShield => new[] { "Combat_Defend_Ready", "Combat_1H_Ready", "Combat_Unarmed_Ready", IdleStateName },
-                KoboldWarriorSpear => new[] { "Combat_2HL_Ready", "Combat_Unarmed_Ready", IdleStateName },
-                KoboldThiefDualSword => new[] { "Combat_1H_Ready", "Combat_Unarmed_Ready", IdleStateName },
-                KoboldKnightSwordShield => new[] { "Combat_Defend_Ready", "Combat_1H_Ready", "Combat_Unarmed_Ready", IdleStateName },
-                _ => new[] { "Combat_Unarmed_Ready", IdleStateName },
-            };
+            return new[] { "Combat_Unarmed_Ready", IdleStateName };
         }
 
         private string[] AttackStateCandidatesForTemplate(string? abilityId)
@@ -431,14 +412,7 @@ namespace Arena.Presentation
             if (_visualProfile != null && _visualProfile.Animations.basicAttack.Count > 0)
                 return _visualProfile.Animations.basicAttack.ToArray();
 
-            return _templateId switch
-            {
-                KoboldWarriorSwordShield => new[] { "Combat_1H_Attack", "Combat_Defend_Attack", "Combat_Unarmed_Attack" },
-                KoboldWarriorSpear => new[] { "Combat_2HL_Attack", "Combat_2HL_Attack01", "Combat_Unarmed_Attack" },
-                KoboldThiefDualSword => new[] { "Combat_1H_AttackDual", "Combat_1H_Attack", "Combat_Unarmed_Attack" },
-                KoboldKnightSwordShield => new[] { "Combat_1H_Attack", "Combat_Defend_Attack", "Combat_Unarmed_Attack" },
-                _ => new[] { "Combat_Unarmed_Attack" },
-            };
+            return new[] { "Combat_Unarmed_Attack" };
         }
 
         private bool TryFindStateHash(string stateName, out int layer, out int stateHash)

@@ -14,6 +14,11 @@
     "hit": ["hit"],
     "death": ["Death"]
   },
+  "action_animations": [
+    { "ability_id": "NPC_SKELETON_REAPER_SLASH_3", "states": ["Attack02"] },
+    { "ability_id": "NPC_SKELETON_REAPER_SLASH_2", "states": ["Attack01"] },
+    { "ability_id": "NPC_SKELETON_REAPER_SLASH", "states": ["attack"] }
+  ],
   "hard_crowd_control_fallback_policy": 0,
   "vfx_sockets": [
     {

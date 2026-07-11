@@ -92,7 +92,6 @@ namespace Arena.Entity
             _nameTag.SetName(instance.DisplayName);
             _worldHealthBar = WorldHealthBar.Create(GameObject.transform, isLocalPlayer: false);
             _animationController = NpcAnimationController.Attach(GameObject);
-            _animationController.SetTemplate(instance.TemplateId);
             ConfigureAnimationProfile(instance.VisualId);
             if (state != null)
                 _worldHealthBar.SetHealth(state.Hp, state.MaxHp);
@@ -109,7 +108,6 @@ namespace Arena.Entity
 
             GameObject.name = $"NPC_{SafeName(instance.DisplayName)}_{instance.Identity}";
             _nameTag.SetName(instance.DisplayName);
-            _animationController.SetTemplate(instance.TemplateId);
             ConfigureAnimationProfile(instance.VisualId);
             RefreshHardCrowdControlAnimation();
         }

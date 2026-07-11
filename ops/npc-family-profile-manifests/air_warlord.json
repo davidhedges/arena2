@@ -14,6 +14,10 @@
     "hit": ["hit"],
     "death": ["Death"]
   },
+  "action_animations": [
+    { "ability_id": "NPC_AIR_WARLORD_HEAVY_STRIKE", "states": ["Attack01"] },
+    { "ability_id": "NPC_AIR_WARLORD_STRIKE", "states": ["attack"] }
+  ],
   "hard_crowd_control_fallback_policy": 1,
   "vfx_sockets": [
     {
