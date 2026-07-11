@@ -1,7 +1,7 @@
 # NPC System Design
 
 Date: 2026-07-11
-Status: implementation in progress; actor-generic targeting/world queries, shared melee/spell/projectile/heal execution, caster/support/archer exemplars, validated native visual profiles with shared VFX sockets, searchable catalog spawning, mixed-group acceptance, and a catalog-driven sequential appearance sweep are landed through `b6eaebcf`, while full visual authoring remains
+Status: implementation in progress; actor-generic targeting/world queries, shared melee/spell/projectile/heal execution, caster/support/archer exemplars, searchable catalog spawning, deterministic inventory/sweep tooling, explicit Generic-rig crowd-control fallback, and the first post-exemplar family batch are landed through `f97697e8`, while full visual authoring remains
 
 ## Outcome
 
@@ -18,7 +18,7 @@ This is a substantial engineering project. The existing kobold implementation is
 
 ## Implementation progress (2026-07-11 handoff)
 
-The implementation has started and has been committed in coherent slices. The implementation baseline summarized here is `b6eaebcf` (`Add catalog driven NPC appearance sweep`). Player combat semantics are an explicit guardrail: actor-generic seams were extended where required, but player damage, healing arithmetic, authorization, animation fallback, input, prediction, rewind, and action-bar behavior must not be redesigned as part of the NPC rollout.
+The implementation has started and has been committed in coherent slices. The implementation baseline summarized here is `f97697e8` (`Author Abomination NPC family`). Player combat semantics are an explicit guardrail: actor-generic seams were extended where required, but player damage, healing arithmetic, authorization, animation fallback, input, prediction, rewind, and action-bar behavior must not be redesigned as part of the NPC rollout.
 
 ### Landed foundations
 
@@ -53,13 +53,16 @@ The implementation has started and has been committed in coherent slices. The im
 - Kobold melee now commits into the shared `PendingMeleeImpact` schedule and resolves through the same actor-generic defense, combat-event, effect, damage, death, and cleanup machinery as player/practice melee. `NpcPendingSwing` and its generated binding are removed. Server-actor audience, current-facing, and current-LOS impact gates are opt-in pending-impact fields; every player row explicitly leaves them disabled, preserving existing player prediction and rewind semantics.
 - The playground target panel already provides the catalog-driven searchable NPC browser landed in `267ccc57`. It reads the synchronized template/visual catalogs and calls the existing exact-visual `spawn_npc` reducer; no family-specific spawn path was added.
 - `NpcHeadlessAcceptanceRunner` now also supports `ARENA_NPC_ACCEPTANCE_MODE=APPEARANCE_SWEEP`. It deterministically orders every synchronized visual, spawns one exact appearance at a time through `spawn_npc`, resolves the Unity catalog prefab and primary Animator/controller, drives locomotion, ready, hit, and visible death through the existing `NpcAnimationController`, then requires authoritative `despawn_npc` row removal and `EntityRegistry` cleanup before advancing.
+- The read-only NPC appearance inventory scans all 146 relocated vendor prefabs across 35 families and exports deterministic review JSON without writing runtime mappings. It records candidate IDs, Animator/controller choices, native states, clip lengths, renderer bounds, ground offsets, root-motion flags, and review warnings. The current inventory exposes 33 appearances with multiple Animators, 16 with root motion enabled, and 34 whose death mapping remains unresolved until a primary Animator is reviewed.
+- Generic-rig profiles can explicitly select `FreezeCurrentPose` when no native hard-crowd-control clip exists. The NPC animation adapter freezes and restores the authored Animator speed without changing player animation fallback behavior.
+- Abomination is the first post-exemplar family batch: one gameplay template, three exact appearances, a shared authored melee ability/brain contract, explicit Generic visual profiles, native locomotion/attack/hit/death states, reviewed sockets, and frozen-pose hard-CC policy all use the existing shared pipelines.
 
 ### Still incomplete
 
 - Utility execution currently supports melee offense, hostile projectile spells, allied targeted buffs, and direct allied healing. Debuff, interrupt, summon, and mobility execution are not implemented.
 - Basic ranged approach/hold/retreat bands are implemented. Richer kiting, unreachable-target recovery, navigation, and local avoidance remain.
-- Healing/buff support threat, taunts, assist/call-for-help, and richer threat decay remain later work.
-- The searchable browser and automated sequential sweep are implemented, but only 7 of the imported 146 appearances are currently synchronized and therefore covered. The remaining 139 appearance mappings, family profiles, action/brain/loot contracts, reaction policies, sockets, and bounds remain. Archer melee fallback is explicitly deferred: the imported family has only bow/load/shot presentation, no melee weapon, draw/stow animation, or verified melee attack clip.
+- Healing/buff support threat, taunts, assist/call-for-help, richer threat decay, and other threat-model expansion are explicitly deferred to a later date. Do not pull them into current appearance/family authoring slices.
+- The searchable browser and automated sequential sweep are implemented, but only 10 of the imported 146 appearances are currently synchronized. The remaining 136 appearance mappings, family profiles, action/brain/loot contracts, reaction policies, sockets, and bounds remain. Archer melee fallback is explicitly deferred: the imported family has only bow/load/shot presentation, no melee weapon, draw/stow animation, or verified melee attack clip.
 - All four acceptance archetypes now have initial gameplay paths, native presentation where authored, and passing mixed-group runtime evidence. Full acceptance still needs the 146-appearance authoring/sweep and the remaining family contracts.
 
 ### Current verification
@@ -72,7 +75,7 @@ The implementation has started and has been committed in coherent slices. The im
 - `ops/npc-support-decision-probe.py`: passed after the shared melee migration against isolated database `npcmixedprobe`. At full health the Lich applied Bone Ward to a 125/125 Kobold; after one real player auto-attack reduced it to 91/125, Lich Mend raised it to 109/125.
 - Shared Kobold telegraph parity: three live `NPC_KOBOLD_WARRIOR_SWORD_SLASH` CAST-to-IMPACT pairs resolved at 461.4–462.1 ms for the authored 450 ms windup, matching fixed-tick rounding.
 - Two-client mixed-exemplar acceptance: passed after the shared melee migration against isolated database `npcmixedprobe`. The observer materialized four NPCs owned by the separate websocket client; Kobold entered `Combat_1H_Attack`, Archer entered `attack`, Wizard entered `SpellCast`, and Lich entered `SpellA`. All four emitted CAST/IMPACT, Archer and Wizard emitted RELEASE plus projectile RELEASE/IMPACT, three shared projectile visuals started, four shared VFX instances spawned, and no projectile/VFX template was missing.
-- Catalog-driven appearance sweep: passed against isolated database `npcmixedprobe` for all 7 synchronized visuals. All 7 resolved their exact prefab, Animator/controller, locomotion, ready, distinct hit response, visible death state, authoritative row removal, and client entity cleanup. The report records 3 explicit first-party visual profiles and 4 existing kobold fallback entries, making the remaining profile-authoring boundary visible rather than silently treating it as complete.
+- Catalog-driven appearance sweep: the original 7-visual run passed against isolated database `npcmixedprobe`. All 7 resolved their exact prefab, Animator/controller, locomotion, ready, distinct hit response, visible death state, authoritative row removal, and client entity cleanup. A 10-visual rerun including Abomination is the current verification target.
 - Generated C# bindings are current for the landed runtime schema.
 - The working tree still contains the user-owned `.gitignore` change; preserve it unless its owner explicitly brings it into scope. `Assets/Arena/Resources/NpcVisualCatalog.asset` is also user-owned if it changes again.
 
@@ -80,9 +83,9 @@ The implementation has started and has been committed in coherent slices. The im
 
 The next coherent slice should begin the remaining full-package authoring surface without inventing new combat paths:
 
-1. Add an editor inventory/draft-authoring surface that scans the relocated vendor prefab families and emits deterministic, reviewable appearance-to-family mapping candidates without writing guessed runtime mappings automatically.
-2. Review the draft family by family, then author a first coherent batch with explicit gameplay template, visual profile, action kit, brain, reactions, sockets, bounds, and loot contracts before adding it to the synchronized catalog.
-3. Run the sequential sweep after each accepted batch so its coverage grows from 7 toward all 146 appearances and profile/fallback counts stay explicit.
+1. Use the landed inventory draft to review the next low-risk family batch, including primary Animator, root-motion, native state, clip timing, sockets, bounds, action-kit, brain, and loot behavior before adding runtime mappings.
+2. Run the sequential sweep after each accepted batch so its coverage grows from 10 toward all 146 appearances and profile/fallback counts stay explicit.
+3. Keep threat-model expansion deferred while completing appearance/family authoring and shared execution coverage.
 4. Keep the Skeleton Archer purely ranged with retreat/hold behavior until suitable melee weapon and animation assets are deliberately authored.
 
 ## Asset relocation completed
