@@ -59,7 +59,9 @@ namespace Arena.Editor
             if (animators.Length == 1)
             {
                 serialized.FindProperty("primaryAnimatorPath").stringValue =
-                    AnimationUtility.CalculateTransformPath(animators[0].transform, prefab.transform);
+                    animators[0].transform == prefab.transform
+                        ? "."
+                        : AnimationUtility.CalculateTransformPath(animators[0].transform, prefab.transform);
                 PopulateDraftRoles(serialized.FindProperty("animations"), animators[0].runtimeAnimatorController);
             }
 
