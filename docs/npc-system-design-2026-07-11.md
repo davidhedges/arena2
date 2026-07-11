@@ -1,7 +1,7 @@
 # NPC System Design
 
 Date: 2026-07-11
-Status: implementation in progress; authored/runtime foundations and the initial kobold utility-AI slice are landed through `cac7bb52`, while exemplar ranged/caster/support gameplay and full visual authoring remain
+Status: implementation in progress; actor-generic targeting, authoritative commitments, shared spell/projectile execution, and initial caster/support gameplay are landed through `c119e3d2`, while full exemplar presentation and visual authoring remain
 
 ## Outcome
 
@@ -18,7 +18,7 @@ This is a substantial engineering project. The existing kobold implementation is
 
 ## Implementation progress (2026-07-11 handoff)
 
-The implementation has started and has been committed in coherent slices. The implementation baseline summarized here is `cac7bb52` (`Explain rejected NPC actions`). Player combat semantics are an explicit guardrail: actor-generic seams were extended where required, but player damage, healing arithmetic, authorization, animation fallback, input, prediction, rewind, and action-bar behavior must not be redesigned as part of the NPC rollout.
+The implementation has started and has been committed in coherent slices. The implementation baseline summarized here is `c119e3d2` (`Add NPC allied buff exemplar`). Player combat semantics are an explicit guardrail: actor-generic seams were extended where required, but player damage, healing arithmetic, authorization, animation fallback, input, prediction, rewind, and action-bar behavior must not be redesigned as part of the NPC rollout.
 
 ### Landed foundations
 
@@ -39,31 +39,37 @@ The implementation has started and has been committed in coherent slices. The im
 - The selected ability is stored in private NPC runtime state so utility is not rescored every fixed tick.
 - Once a melee CAST telegraph is emitted, its pending action/target cannot be silently replaced. Replanning pauses until impact or an explicit interrupt.
 - A server-private decision inspector is available when `ARENA_NPC_AI_DEBUG=1`. It records decision sequence, chosen action/target, score and threat summaries, plus deterministic rejection counts for role, selector, health, nearby-count, status, missing-ability, cooldown, and distance gates.
+- Perception now exposes relation-filtered enemy and ally candidate views. `CURRENT_ENEMY`, `NEAREST_ENEMY`, `SELF`, and `LOWEST_HEALTH_ALLY` resolve independently of execution with deterministic health/distance/identity tie-breaking, and the winning selector is included in inspector output.
+- NPC melee commitments validate current actor-generic pose, audience/relation, range, facing, and the shared scene-query LOS path both when committing and at impact.
+- The existing server-actor spell adapter resolves NPC-scoped authored abilities and free-resource contracts without player action bars or a parallel cast path. A Skeleton Wizard frost projectile uses the shared cast, active-cast, cooldown, projectile, effect, combat-event, and VFX-cue lifecycle.
+- Ranged actions honor authored approach/hold/retreat distance bands, and active casts pause replanning/movement until the shared cast lifecycle reaches a terminal state.
+- A Lich support exemplar uses `LOWEST_HEALTH_ALLY` to apply an authored Bone Ward through the shared targeted buff/status pipeline, including ally relation, LOS, forbidden-status, cast-event, and VFX contracts.
 
 ### Still incomplete
 
 - `NpcPendingSwing` remains the kobold melee executor. The common validated action executor beneath player/practice/NPC adapters has not yet replaced that special path.
-- Utility execution currently supports hostile melee offense against real players. General enemy/ally candidate sets, `SELF`, `LOWEST_HEALTH_ALLY`, ranged, spell, heal, buff, debuff, interrupt, summon, and mobility execution are not implemented.
-- Hold/retreat/kite movement bands, commitment-time LOS, unreachable-target recovery, navigation, and local avoidance remain.
+- Utility execution currently supports melee offense, one hostile projectile spell, and one allied targeted buff. Direct healing, debuff, interrupt, summon, mobility, and melee-fallback execution are not implemented.
+- Basic ranged approach/hold/retreat bands are implemented. Richer kiting, unreachable-target recovery, navigation, and local avoidance remain.
 - Healing/buff support threat, taunts, assist/call-for-help, and richer threat decay remain later work.
 - `NpcVisualProfile`, explicit primary Animator paths, native Generic-rig role maps, searchable catalog spawning, exemplar profiles, all 146 appearance mappings, and automated presentation sweeps remain.
-- The four-archetype acceptance group (Kobold Warrior, Skeleton Archer, Skeleton Wizard, and Demon Summoner/Lich support) is not complete.
+- The four-archetype acceptance group is not complete: Kobold Warrior gameplay remains, Skeleton Wizard and Lich support gameplay are authored, Skeleton Archer is absent, and the new exemplars still lack complete Unity visual profiles/native presentation.
 
 ### Current verification
 
-- `cargo test --quiet`: 468 passed, 0 failed.
+- `cargo test --quiet`: 471 passed, 0 failed.
+- `spacetime build -p server`: succeeded; the local optional `wasm-opt` binary is absent, so SpacetimeDB emitted an unoptimized module after a successful release build.
 - `dotnet build Assembly-CSharp.csproj --no-restore`: succeeded with 0 errors and 11 existing obsolete-API warnings in third-party/current Unity code.
 - Generated C# bindings are current for the landed runtime schema.
 - The working tree also contains user-owned changes to `.gitignore` and `Assets/Arena/Resources/NpcVisualCatalog.asset`, plus an unrelated untracked `docs/perf-opportunities-2026-07-11.md`; preserve those unless their owner explicitly brings them into scope.
 
 ### Recommended next slice
 
-Start by making the action-selection result a target/action commitment that can support actor-generic candidate sets without touching player combat semantics. A safe sequence is:
+The next coherent slice should finish presentation for the landed gameplay exemplars without creating a creature-only event language:
 
-1. Add relation-filtered enemy and ally candidate views over the existing `NpcPerceptionIndex`.
-2. Implement target selectors independently of action execution (`CURRENT_ENEMY`, `NEAREST_ENEMY`, `SELF`, then `LOWEST_HEALTH_ALLY`) with deterministic tests and inspector output.
-3. Generalize commitment-time authoritative gates (current pose, audience/relation, range, facing, and existing scene-query LOS).
-4. Only then route one ranged exemplar through the existing shared authored projectile/spell executor seam; do not create another NPC-only damage/effect path.
+1. Add `NpcVisualProfile` and generalize the existing animation-request translator for native Generic-rig action/cast phases.
+2. Author explicit Skeleton Wizard and Lich primary Animator paths, cast/release/impact roles, sockets, and fallback policies; preserve the user-owned `NpcVisualCatalog.asset` change while integrating deliberately.
+3. Add the Skeleton Archer ranged/melee-fallback exemplar through the same shared action executor and ranged-band movement.
+4. Add direct allied healing only by extending the shared authored spell/effect contract; do not implement an NPC-only heal path.
 
 ## Asset relocation completed
 
