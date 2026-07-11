@@ -17,14 +17,26 @@ namespace SpacetimeDB.Types
         public SpacetimeDB.Identity Identity;
         [DataMember(Name = "target")]
         public SpacetimeDB.Identity Target;
+        [DataMember(Name = "decision_sequence")]
+        public ulong DecisionSequence;
+        [DataMember(Name = "next_decision_at")]
+        public SpacetimeDB.Timestamp NextDecisionAt;
+        [DataMember(Name = "next_decision_at_micros")]
+        public long NextDecisionAtMicros;
 
         public NpcCombatRuntime(
             SpacetimeDB.Identity Identity,
-            SpacetimeDB.Identity Target
+            SpacetimeDB.Identity Target,
+            ulong DecisionSequence,
+            SpacetimeDB.Timestamp NextDecisionAt,
+            long NextDecisionAtMicros
         )
         {
             this.Identity = Identity;
             this.Target = Target;
+            this.DecisionSequence = DecisionSequence;
+            this.NextDecisionAt = NextDecisionAt;
+            this.NextDecisionAtMicros = NextDecisionAtMicros;
         }
 
         public NpcCombatRuntime()

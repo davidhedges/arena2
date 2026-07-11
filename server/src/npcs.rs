@@ -218,6 +218,9 @@ pub struct NpcCombatRuntime {
     #[primary_key]
     pub identity: Identity,
     pub target: Identity,
+    pub decision_sequence: u64,
+    pub next_decision_at: Timestamp,
+    pub next_decision_at_micros: i64,
 }
 
 #[table(accessor = npc_target_override)]
@@ -1279,12 +1282,8 @@ pub(crate) fn tick_npc_combat(
             clear_npc_combat_runtime(ctx, npc.identity);
             continue;
         };
-        let target_is_pinned = ctx
-            .db
-            .npc_target_override()
-            .identity()
-            .find(npc.identity)
-            .is_some();
+        let target_override = ctx.db.npc_target_override().identity().find(npc.identity);
+        let target_is_pinned = target_override.is_some();
         if target_is_pinned {
             ctx.db.npc_return_home().identity().delete(npc.identity);
         } else if ctx
@@ -1321,24 +1320,61 @@ pub(crate) fn tick_npc_combat(
         }
 
         let existing_runtime = ctx.db.npc_combat_runtime().identity().find(npc.identity);
-        let Some(target) = acquire_npc_attack_target(
-            ctx,
-            npc.identity,
-            &physics,
-            &template,
-            &candidates,
-            existing_runtime.as_ref().map(|runtime| runtime.target),
-            brain.target_stickiness,
-        ) else {
+        let committed_target = existing_runtime.as_ref().and_then(|runtime| {
+            if now >= runtime.next_decision_at
+                || target_override
+                    .as_ref()
+                    .is_some_and(|pinned| pinned.target != runtime.target)
+            {
+                return None;
+            }
+            resolve_committed_npc_target(
+                ctx,
+                npc.identity,
+                &physics,
+                &template,
+                &candidates,
+                runtime.target,
+                target_is_pinned,
+            )
+        });
+        let decision_was_due = committed_target.is_none();
+        let target = committed_target.or_else(|| {
+            acquire_npc_attack_target(
+                ctx,
+                npc.identity,
+                &physics,
+                &template,
+                &candidates,
+                existing_runtime.as_ref().map(|runtime| runtime.target),
+                brain.target_stickiness,
+            )
+        });
+        let Some(target) = target else {
             clear_npc_combat_runtime(ctx, npc.identity);
             continue;
         };
-        let runtime = existing_runtime
-            .filter(|row| row.target == target.identity)
-            .unwrap_or_else(|| NpcCombatRuntime {
+        let runtime = if decision_was_due {
+            let decision_sequence = existing_runtime
+                .as_ref()
+                .map_or(1, |runtime| runtime.decision_sequence.saturating_add(1));
+            let interval_ms = npc_decision_interval_ms(
+                npc.identity,
+                decision_sequence,
+                brain.decision_interval_ms,
+                brain.deterministic_variation,
+            );
+            let next_decision_at = now + Duration::from_millis(interval_ms);
+            NpcCombatRuntime {
                 identity: npc.identity,
                 target: target.identity,
-            });
+                decision_sequence,
+                next_decision_at,
+                next_decision_at_micros: timestamp_to_micros(next_decision_at),
+            }
+        } else {
+            existing_runtime.expect("committed target requires existing NPC runtime")
+        };
         if movement_modifiers.is_disabled(&npc.identity) {
             upsert_npc_combat_runtime(ctx, runtime);
             continue;
@@ -1348,15 +1384,17 @@ pub(crate) fn tick_npc_combat(
             upsert_npc_combat_runtime(ctx, runtime);
             continue;
         };
-        record_npc_decision_debug(
-            ctx,
-            now,
-            &npc,
-            &template,
-            &action,
-            &target,
-            target_is_pinned,
-        );
+        if decision_was_due {
+            record_npc_decision_debug(
+                ctx,
+                now,
+                &npc,
+                &template,
+                &action,
+                &target,
+                target_is_pinned,
+            );
+        }
 
         if target.distance > npc_attack_reach(action.range, &target) {
             let move_speed_multiplier = movement_modifiers.move_speed_multiplier(&npc.identity, 0);
@@ -1395,6 +1433,28 @@ pub(crate) fn tick_npc_combat(
         );
         upsert_npc_combat_runtime(ctx, runtime);
     }
+}
+
+fn npc_decision_interval_ms(
+    identity: Identity,
+    decision_sequence: u64,
+    base_interval_ms: u64,
+    variation: f32,
+) -> u64 {
+    let identity_hex = identity.to_hex();
+    let identity_tail = identity_hex
+        .get(identity_hex.len().saturating_sub(16)..)
+        .and_then(|tail| u64::from_str_radix(tail, 16).ok())
+        .unwrap_or(0);
+    let mut mixed = identity_tail ^ decision_sequence.wrapping_mul(0x9e37_79b9_7f4a_7c15);
+    mixed ^= mixed >> 30;
+    mixed = mixed.wrapping_mul(0xbf58_476d_1ce4_e5b9);
+    mixed ^= mixed >> 27;
+    mixed = mixed.wrapping_mul(0x94d0_49bb_1331_11eb);
+    mixed ^= mixed >> 31;
+    let unit = (mixed % 10_001) as f32 / 10_000.0;
+    let scalar = 1.0 + (unit * 2.0 - 1.0) * variation.clamp(0.0, 1.0);
+    ((base_interval_ms.max(1) as f32 * scalar).round() as u64).max(1)
 }
 
 #[derive(Clone, Copy)]
@@ -1522,6 +1582,31 @@ fn acquire_npc_attack_target(
         }
         (_, best) => best,
     }
+}
+
+fn resolve_committed_npc_target(
+    ctx: &ReducerContext,
+    npc_identity: Identity,
+    npc_physics: &NpcPhysics,
+    template: &NpcTemplate,
+    candidates: &[NpcTargetCandidate],
+    target_identity: Identity,
+    target_is_pinned: bool,
+) -> Option<NpcAttackTarget> {
+    let npc_context = resolve_player_world_context(ctx, npc_identity)?;
+    let candidate = candidates
+        .iter()
+        .find(|candidate| candidate.identity == target_identity)?;
+    if !world_contexts_share(&npc_context, &candidate.context)
+        || !can_harm(ctx, npc_identity, candidate.identity)
+    {
+        return None;
+    }
+    let target = npc_attack_target_from_candidate(npc_physics, candidate);
+    if !target_is_pinned && target.distance > template.aggro_radius {
+        return None;
+    }
+    Some(target)
 }
 
 fn npc_target_stickiness_keeps_current(
@@ -2374,9 +2459,10 @@ fn yaw_delta_abs(a: f32, b: f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::{
-        npc_action_distance_score, npc_catalog, npc_identity, npc_is_outside_leash_from_positions,
-        npc_melee_defense_event_type, npc_target_stickiness_keeps_current, npc_template,
-        parse_npc_catalog, visual_id_for_template, yaw_for_direction, NpcFaction, NPC_CATALOG_JSON,
+        npc_action_distance_score, npc_catalog, npc_decision_interval_ms, npc_identity,
+        npc_is_outside_leash_from_positions, npc_melee_defense_event_type,
+        npc_target_stickiness_keeps_current, npc_template, parse_npc_catalog,
+        visual_id_for_template, yaw_for_direction, NpcFaction, NPC_CATALOG_JSON,
         NPC_FACTION_FRIENDLY, NPC_FACTION_HOSTILE, NPC_FACTION_NEUTRAL,
         NPC_TEMPLATE_KOBOLD_THIEF_BK_DUAL_SWORD, NPC_TEMPLATE_KOBOLD_WARRIOR_GN_SPEAR,
         NPC_TEMPLATE_KOBOLD_WARRIOR_RD_SWORD_SHIELD,
@@ -2419,6 +2505,16 @@ mod tests {
         assert!(npc_target_stickiness_keeps_current(8.0, 6.0, 0.35));
         assert!(!npc_target_stickiness_keeps_current(8.0, 5.0, 0.35));
         assert!(!npc_target_stickiness_keeps_current(8.0, 7.9, 0.0));
+    }
+
+    #[test]
+    fn npc_decision_jitter_is_deterministic_and_bounded() {
+        let identity = Identity::from_hex(format!("{:064x}", 42).as_str()).unwrap();
+        let first = npc_decision_interval_ms(identity, 7, 150, 0.05);
+
+        assert_eq!(first, npc_decision_interval_ms(identity, 7, 150, 0.05));
+        assert!((143..=158).contains(&first));
+        assert_eq!(npc_decision_interval_ms(identity, 7, 150, 0.0), 150);
     }
 
     #[test]
