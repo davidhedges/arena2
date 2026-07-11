@@ -1,7 +1,7 @@
 # NPC System Design
 
 Date: 2026-07-11
-Status: implementation in progress; actor-generic targeting, shared spell/projectile/heal execution, caster/support/archer exemplars, and native visual profiles are landed through `f5e8fe34`, while full visual authoring remains
+Status: implementation in progress; actor-generic targeting, shared spell/projectile/heal execution, caster/support/archer exemplars, and native visual profiles are landed through `0bda1cff`, while full visual authoring remains
 
 ## Outcome
 
@@ -18,7 +18,7 @@ This is a substantial engineering project. The existing kobold implementation is
 
 ## Implementation progress (2026-07-11 handoff)
 
-The implementation has started and has been committed in coherent slices. The implementation baseline summarized here is `f5e8fe34` (`Add shared direct target healing`). Player combat semantics are an explicit guardrail: actor-generic seams were extended where required, but player damage, healing arithmetic, authorization, animation fallback, input, prediction, rewind, and action-bar behavior must not be redesigned as part of the NPC rollout.
+The implementation has started and has been committed in coherent slices. The implementation baseline summarized here is `0bda1cff` (`Pin NPC heal decision ordering`). Player combat semantics are an explicit guardrail: actor-generic seams were extended where required, but player damage, healing arithmetic, authorization, animation fallback, input, prediction, rewind, and action-bar behavior must not be redesigned as part of the NPC rollout.
 
 ### Landed foundations
 
@@ -59,7 +59,7 @@ The implementation has started and has been committed in coherent slices. The im
 
 ### Current verification
 
-- `cargo test --quiet`: 472 passed, 0 failed.
+- `cargo test --quiet`: 473 passed, 0 failed.
 - `spacetime build -p server`: succeeded; the local optional `wasm-opt` binary is absent, so SpacetimeDB emitted an unoptimized module after a successful release build.
 - `dotnet build Assembly-CSharp.csproj --no-restore`: succeeded with 0 errors and 11 existing obsolete-API warnings in third-party/current Unity code.
 - `dotnet build Assembly-CSharp-Editor.csproj --no-restore`: succeeded with 0 errors and 17 existing obsolete/dead-field warnings.
