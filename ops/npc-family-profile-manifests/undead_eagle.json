@@ -1,0 +1,36 @@
+{
+  "source_family_name": "UndeadEagle",
+  "expected_appearance_count": 3,
+  "primary_animator_path": ".",
+  "animations": {
+    "idle": ["idle"],
+    "ready": ["idle"],
+    "walk": ["walk"],
+    "run": ["walk"],
+    "basicAttack": ["attack"],
+    "spellCastStart": [],
+    "spellRelease": [],
+    "spellCancel": [],
+    "hit": ["hit"],
+    "death": ["Death"]
+  },
+  "hard_crowd_control_fallback_policy": 1,
+  "vfx_sockets": [
+    {
+      "anchor": "LEFT_HAND",
+      "transform_path": "Root/Spine_01/Spine_02/Clavicle_L/UpperArm_L/LowerArm_L/Hand_L_01/Hand_L_02",
+      "fallback_policy": 0
+    },
+    {
+      "anchor": "RIGHT_HAND",
+      "transform_path": "Root/Spine_01/Spine_02/Clavicle_R/UpperArm_R/LowerArm_R/Hand_R_01/Hand_R_02",
+      "fallback_policy": 0
+    },
+    {
+      "anchor": "TARGET",
+      "transform_path": "Root/Spine_01/Spine_02",
+      "fallback_policy": 1
+    }
+  ],
+  "status_reactions": []
+}

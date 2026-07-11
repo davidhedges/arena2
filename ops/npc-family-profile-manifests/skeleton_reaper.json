@@ -1,0 +1,43 @@
+{
+  "source_family_name": "SkeletonReaper",
+  "expected_appearance_count": 3,
+  "primary_animator_path": ".",
+  "animations": {
+    "idle": ["idle"],
+    "ready": ["Idle_Land"],
+    "walk": ["walk"],
+    "run": ["run"],
+    "basicAttack": ["attack"],
+    "spellCastStart": ["Idle_Land"],
+    "spellRelease": ["SpellA"],
+    "spellCancel": [],
+    "hit": ["hit"],
+    "death": ["Death"]
+  },
+  "hard_crowd_control_fallback_policy": 0,
+  "vfx_sockets": [
+    {
+      "anchor": "LEFT_HAND",
+      "transform_path": "root/pelvis/spine_01/spine_02/spine_03/clavicle_L/upperarm_L/lowerarm_L/hand_L",
+      "fallback_policy": 0
+    },
+    {
+      "anchor": "RIGHT_HAND",
+      "transform_path": "root/pelvis/spine_01/spine_02/spine_03/clavicle_R/upperarm_R/lowerarm_R/hand_R",
+      "fallback_policy": 0
+    },
+    {
+      "anchor": "TARGET",
+      "transform_path": "root/pelvis/spine_01/spine_02/spine_03",
+      "fallback_policy": 1
+    }
+  ],
+  "status_reactions": [
+    {
+      "status_kind": "STUN",
+      "clip_file_id": 7666019288946695810,
+      "clip_guid": "53e1fe06c5b155a4aa7d533e800bc4b2",
+      "require_humanoid_avatar": false
+    }
+  ]
+}

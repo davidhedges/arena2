@@ -85,6 +85,13 @@ namespace Arena.Editor
                 return errors;
             }
 
+            if (float.IsNaN(profile.PresentationVerticalOffset)
+                || float.IsInfinity(profile.PresentationVerticalOffset)
+                || Mathf.Abs(profile.PresentationVerticalOffset) > 5f)
+            {
+                errors.Add("Presentation vertical offset must be finite and within -5 to 5 meters.");
+            }
+
             Animator[] animators = prefab.GetComponentsInChildren<Animator>(includeInactive: true);
             if (animators.Length == 0)
                 errors.Add("Prefab contains no Animator.");

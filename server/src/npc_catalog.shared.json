@@ -208,6 +208,179 @@
       "aggro_radius": 9.0,
       "move_speed": 4.0,
       "attack_windup_ms": 800
+    },
+    {
+      "template_id": "AIR_WARLORD",
+      "species_id": "AIR_WARLORD",
+      "display_name": "Air Warlord",
+      "visual_ids": ["AIR_WARLORD_BL", "AIR_WARLORD_CN", "AIR_WARLORD_PE", "AIR_WARLORD_YE"],
+      "brain_profile_id": "BASIC_HOSTILE_MELEE",
+      "resource_policy": "FREE_ACTIONS_ONLY",
+      "action_kit": [
+        { "ability_id": "NPC_AIR_WARLORD_STRIKE", "role": "MELEE_OFFENSE", "target_selector": "CURRENT_ENEMY", "base_utility": 1.0, "min_self_health_pct": 0.0, "max_self_health_pct": 1.0, "preferred_min_distance": 0.0, "preferred_max_distance": 4.8, "min_nearby_allies": 0, "min_nearby_enemies": 1, "required_target_status": "", "forbidden_target_status": "", "movement_may_enable": true, "sort_order": 10 }
+      ],
+      "max_hp": 360,
+      "hit_radius": 2.2,
+      "hit_height": 6.5,
+      "aggro_radius": 11.0,
+      "move_speed": 4.2,
+      "attack_windup_ms": 700
+    },
+    {
+      "template_id": "SPIDER",
+      "species_id": "SPIDER",
+      "display_name": "Spider",
+      "visual_ids": ["SPIDER_BK", "SPIDER_CN", "SPIDER_GN", "SPIDER_YE"],
+      "brain_profile_id": "BASIC_HOSTILE_MELEE",
+      "resource_policy": "FREE_ACTIONS_ONLY",
+      "action_kit": [
+        { "ability_id": "NPC_SPIDER_BITE", "role": "MELEE_OFFENSE", "target_selector": "CURRENT_ENEMY", "base_utility": 1.0, "min_self_health_pct": 0.0, "max_self_health_pct": 1.0, "preferred_min_distance": 0.0, "preferred_max_distance": 2.4, "min_nearby_allies": 0, "min_nearby_enemies": 1, "required_target_status": "", "forbidden_target_status": "", "movement_may_enable": true, "sort_order": 10 }
+      ],
+      "max_hp": 90,
+      "hit_radius": 1.3,
+      "hit_height": 1.3,
+      "aggro_radius": 9.0,
+      "move_speed": 5.5,
+      "attack_windup_ms": 600
+    },
+    {
+      "template_id": "SLIME",
+      "species_id": "SLIME",
+      "display_name": "Slime",
+      "visual_ids": ["SLIME_BL", "SLIME_CN", "SLIME_GN", "SLIME_RD"],
+      "brain_profile_id": "BASIC_HOSTILE_MELEE",
+      "resource_policy": "FREE_ACTIONS_ONLY",
+      "action_kit": [
+        { "ability_id": "NPC_SLIME_STRIKE", "role": "MELEE_OFFENSE", "target_selector": "CURRENT_ENEMY", "base_utility": 1.0, "min_self_health_pct": 0.0, "max_self_health_pct": 1.0, "preferred_min_distance": 0.0, "preferred_max_distance": 2.1, "min_nearby_allies": 0, "min_nearby_enemies": 1, "required_target_status": "", "forbidden_target_status": "", "movement_may_enable": true, "sort_order": 10 }
+      ],
+      "max_hp": 80,
+      "hit_radius": 1.15,
+      "hit_height": 2.0,
+      "aggro_radius": 8.0,
+      "move_speed": 4.5,
+      "attack_windup_ms": 500
+    },
+    {
+      "template_id": "IMP",
+      "species_id": "IMP",
+      "display_name": "Imp",
+      "visual_ids": ["IMP_BL", "IMP_BR", "IMP_GN", "IMP_OLD_BL", "IMP_OLD_RD", "IMP_PE", "IMP_RD", "IMP_VT"],
+      "brain_profile_id": "BASIC_HOSTILE_CASTER",
+      "resource_policy": "FREE_ACTIONS_ONLY",
+      "action_kit": [
+        { "ability_id": "NPC_IMP_FIRE_BOLT", "role": "RANGED_OFFENSE", "target_selector": "CURRENT_ENEMY", "base_utility": 1.0, "min_self_health_pct": 0.0, "max_self_health_pct": 1.0, "preferred_min_distance": 5.0, "preferred_max_distance": 16.0, "min_nearby_allies": 0, "min_nearby_enemies": 1, "required_target_status": "", "forbidden_target_status": "", "movement_may_enable": true, "sort_order": 10 },
+        { "ability_id": "NPC_IMP_CLAW", "role": "MELEE_OFFENSE", "target_selector": "CURRENT_ENEMY", "base_utility": 1.1, "min_self_health_pct": 0.0, "max_self_health_pct": 1.0, "preferred_min_distance": 0.0, "preferred_max_distance": 2.5, "min_nearby_allies": 0, "min_nearby_enemies": 1, "required_target_status": "", "forbidden_target_status": "", "movement_may_enable": true, "sort_order": 20 }
+      ],
+      "max_hp": 115,
+      "hit_radius": 1.0,
+      "hit_height": 4.1,
+      "aggro_radius": 18.0,
+      "move_speed": 6.0,
+      "attack_windup_ms": 500
+    },
+    {
+      "template_id": "DEEP_SEA_LIZARD",
+      "species_id": "DEEP_SEA_LIZARD",
+      "display_name": "Deep Sea Lizard",
+      "visual_ids": ["DEEP_SEA_LIZARD_BK", "DEEP_SEA_LIZARD_BK_2", "DEEP_SEA_LIZARD_CN", "DEEP_SEA_LIZARD_CN_2", "DEEP_SEA_LIZARD_GN", "DEEP_SEA_LIZARD_GN_2", "DEEP_SEA_LIZARD_PE", "DEEP_SEA_LIZARD_PE_2", "DEEP_SEA_LIZARD_RD", "DEEP_SEA_LIZARD_RD_2"],
+      "brain_profile_id": "BASIC_HOSTILE_CASTER",
+      "resource_policy": "FREE_ACTIONS_ONLY",
+      "action_kit": [
+        { "ability_id": "NPC_DEEP_SEA_LIZARD_TIDAL_BOLT", "role": "RANGED_OFFENSE", "target_selector": "CURRENT_ENEMY", "base_utility": 1.0, "min_self_health_pct": 0.0, "max_self_health_pct": 1.0, "preferred_min_distance": 5.0, "preferred_max_distance": 17.0, "min_nearby_allies": 0, "min_nearby_enemies": 1, "required_target_status": "", "forbidden_target_status": "", "movement_may_enable": true, "sort_order": 10 },
+        { "ability_id": "NPC_DEEP_SEA_LIZARD_CLAW", "role": "MELEE_OFFENSE", "target_selector": "CURRENT_ENEMY", "base_utility": 1.1, "min_self_health_pct": 0.0, "max_self_health_pct": 1.0, "preferred_min_distance": 0.0, "preferred_max_distance": 2.8, "min_nearby_allies": 0, "min_nearby_enemies": 1, "required_target_status": "", "forbidden_target_status": "", "movement_may_enable": true, "sort_order": 20 }
+      ],
+      "max_hp": 165,
+      "hit_radius": 1.0,
+      "hit_height": 4.1,
+      "aggro_radius": 19.0,
+      "move_speed": 5.5,
+      "attack_windup_ms": 550
+    },
+    {
+      "template_id": "DEMON_WARRIOR",
+      "species_id": "DEMON_WARRIOR",
+      "display_name": "Demon Warrior",
+      "visual_ids": ["DEMON_WARRIOR_2H", "DEMON_WARRIOR_DUAL_WIELD", "DEMON_WARRIOR_UNARMED", "DEMON_WARRIOR_WEP_L", "DEMON_WARRIOR_WEP_R"],
+      "brain_profile_id": "BASIC_HOSTILE_MELEE",
+      "resource_policy": "FREE_ACTIONS_ONLY",
+      "action_kit": [
+        { "ability_id": "NPC_DEMON_WARRIOR_STRIKE", "role": "MELEE_OFFENSE", "target_selector": "CURRENT_ENEMY", "base_utility": 1.0, "min_self_health_pct": 0.0, "max_self_health_pct": 1.0, "preferred_min_distance": 0.0, "preferred_max_distance": 3.0, "min_nearby_allies": 0, "min_nearby_enemies": 1, "required_target_status": "", "forbidden_target_status": "", "movement_may_enable": true, "sort_order": 10 }
+      ],
+      "max_hp": 210,
+      "hit_radius": 1.0,
+      "hit_height": 4.7,
+      "aggro_radius": 10.0,
+      "move_speed": 5.2,
+      "attack_windup_ms": 600
+    },
+    {
+      "template_id": "SKELETON_WARRIOR",
+      "species_id": "SKELETON_WARRIOR",
+      "display_name": "Skeleton Warrior",
+      "visual_ids": ["SKELETON_WARRIOR_2H_WEP", "SKELETON_WARRIOR_AXES", "SKELETON_WARRIOR_SHIELD", "SKELETON_WARRIOR_SWORDS", "SKELETON_WARRIOR_UNARMED"],
+      "brain_profile_id": "BASIC_HOSTILE_MELEE",
+      "resource_policy": "FREE_ACTIONS_ONLY",
+      "action_kit": [
+        { "ability_id": "NPC_SKELETON_WARRIOR_STRIKE", "role": "MELEE_OFFENSE", "target_selector": "CURRENT_ENEMY", "base_utility": 1.0, "min_self_health_pct": 0.0, "max_self_health_pct": 1.0, "preferred_min_distance": 0.0, "preferred_max_distance": 2.6, "min_nearby_allies": 0, "min_nearby_enemies": 1, "required_target_status": "", "forbidden_target_status": "", "movement_may_enable": true, "sort_order": 10 }
+      ],
+      "max_hp": 145,
+      "hit_radius": 0.8,
+      "hit_height": 4.3,
+      "aggro_radius": 10.0,
+      "move_speed": 5.8,
+      "attack_windup_ms": 550
+    },
+    {
+      "template_id": "SKELETON_REAPER",
+      "species_id": "SKELETON_REAPER",
+      "display_name": "Skeleton Reaper",
+      "visual_ids": ["SKELETON_REAPER_BL", "SKELETON_REAPER_RD", "SKELETON_REAPER_YE"],
+      "brain_profile_id": "BASIC_HOSTILE_CASTER",
+      "resource_policy": "FREE_ACTIONS_ONLY",
+      "action_kit": [
+        { "ability_id": "NPC_SKELETON_REAPER_SOUL_BOLT", "role": "RANGED_OFFENSE", "target_selector": "CURRENT_ENEMY", "base_utility": 1.0, "min_self_health_pct": 0.0, "max_self_health_pct": 1.0, "preferred_min_distance": 5.0, "preferred_max_distance": 16.0, "min_nearby_allies": 0, "min_nearby_enemies": 1, "required_target_status": "", "forbidden_target_status": "", "movement_may_enable": true, "sort_order": 10 },
+        { "ability_id": "NPC_SKELETON_REAPER_SLASH", "role": "MELEE_OFFENSE", "target_selector": "CURRENT_ENEMY", "base_utility": 1.1, "min_self_health_pct": 0.0, "max_self_health_pct": 1.0, "preferred_min_distance": 0.0, "preferred_max_distance": 3.0, "min_nearby_allies": 0, "min_nearby_enemies": 1, "required_target_status": "", "forbidden_target_status": "", "movement_may_enable": true, "sort_order": 20 }
+      ],
+      "max_hp": 155,
+      "hit_radius": 1.0,
+      "hit_height": 4.4,
+      "aggro_radius": 18.0,
+      "move_speed": 5.8,
+      "attack_windup_ms": 500
+    },
+    {
+      "template_id": "TOMB_SHADE",
+      "species_id": "TOMB_SHADE",
+      "display_name": "Tomb Shade",
+      "visual_ids": ["TOMB_SHADE_BL", "TOMB_SHADE_GN", "TOMB_SHADE_RD"],
+      "brain_profile_id": "BASIC_HOSTILE_MELEE",
+      "resource_policy": "FREE_ACTIONS_ONLY",
+      "action_kit": [
+        { "ability_id": "NPC_TOMB_SHADE_STRIKE", "role": "MELEE_OFFENSE", "target_selector": "CURRENT_ENEMY", "base_utility": 1.0, "min_self_health_pct": 0.0, "max_self_health_pct": 1.0, "preferred_min_distance": 0.0, "preferred_max_distance": 1.7, "min_nearby_allies": 0, "min_nearby_enemies": 1, "required_target_status": "", "forbidden_target_status": "", "movement_may_enable": true, "sort_order": 10 }
+      ],
+      "max_hp": 75,
+      "hit_radius": 0.6,
+      "hit_height": 1.4,
+      "aggro_radius": 8.0,
+      "move_speed": 5.0,
+      "attack_windup_ms": 450
+    },
+    {
+      "template_id": "UNDEAD_EAGLE",
+      "species_id": "UNDEAD_EAGLE",
+      "display_name": "Undead Eagle",
+      "visual_ids": ["UNDEAD_EAGLE_BL", "UNDEAD_EAGLE_BR", "UNDEAD_EAGLE_GN"],
+      "brain_profile_id": "BASIC_HOSTILE_MELEE",
+      "resource_policy": "FREE_ACTIONS_ONLY",
+      "action_kit": [
+        { "ability_id": "NPC_UNDEAD_EAGLE_STRIKE", "role": "MELEE_OFFENSE", "target_selector": "CURRENT_ENEMY", "base_utility": 1.0, "min_self_health_pct": 0.0, "max_self_health_pct": 1.0, "preferred_min_distance": 0.0, "preferred_max_distance": 2.2, "min_nearby_allies": 0, "min_nearby_enemies": 1, "required_target_status": "", "forbidden_target_status": "", "movement_may_enable": true, "sort_order": 10 }
+      ],
+      "max_hp": 70,
+      "hit_radius": 1.3,
+      "hit_height": 1.8,
+      "aggro_radius": 11.0,
+      "move_speed": 7.0,
+      "attack_windup_ms": 500
     }
   ]
 }

@@ -1,0 +1,36 @@
+{
+  "source_family_name": "AirWarlord",
+  "expected_appearance_count": 4,
+  "primary_animator_path": ".",
+  "animations": {
+    "idle": ["idle"],
+    "ready": ["Ready"],
+    "walk": ["walk"],
+    "run": ["run"],
+    "basicAttack": ["attack"],
+    "spellCastStart": [],
+    "spellRelease": [],
+    "spellCancel": [],
+    "hit": ["hit"],
+    "death": ["Death"]
+  },
+  "hard_crowd_control_fallback_policy": 1,
+  "vfx_sockets": [
+    {
+      "anchor": "LEFT_HAND",
+      "transform_path": "Root/Pelvis/spine_01/spine_02/Clavicle_L/upper_arm_L/forearm_L/hand_L",
+      "fallback_policy": 0
+    },
+    {
+      "anchor": "RIGHT_HAND",
+      "transform_path": "Root/Pelvis/spine_01/spine_02/Clavicle_R/upper_arm_R/forearm_R/hand_R",
+      "fallback_policy": 0
+    },
+    {
+      "anchor": "TARGET",
+      "transform_path": "Root/Pelvis/spine_01/spine_02",
+      "fallback_policy": 1
+    }
+  ],
+  "status_reactions": []
+}

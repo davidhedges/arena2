@@ -11,6 +11,7 @@ namespace Arena.Entity
     {
         [SerializeField] private UnityEngine.Object? prefab;
         [SerializeField] private string primaryAnimatorPath = string.Empty;
+        [SerializeField] private float presentationVerticalOffset;
         [SerializeField] private NpcNativeAnimationRoleMap animations = new();
         [SerializeField] private NpcHardCrowdControlFallbackPolicy hardCrowdControlFallbackPolicy =
             NpcHardCrowdControlFallbackPolicy.ReadyPose;
@@ -19,6 +20,7 @@ namespace Arena.Entity
 
         public UnityEngine.Object? Prefab => prefab;
         public string PrimaryAnimatorPath => primaryAnimatorPath?.Trim() ?? string.Empty;
+        public float PresentationVerticalOffset => presentationVerticalOffset;
         public NpcNativeAnimationRoleMap Animations => animations;
         public NpcHardCrowdControlFallbackPolicy HardCrowdControlFallbackPolicy => hardCrowdControlFallbackPolicy;
         public IReadOnlyList<NpcVisualSocketEntry> VfxSockets => vfxSockets;

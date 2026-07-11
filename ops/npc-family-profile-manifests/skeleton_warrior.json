@@ -1,0 +1,72 @@
+{
+  "source_family_name": "SkeletonWarrior",
+  "expected_appearance_count": 5,
+  "primary_animator_path": ".",
+  "animations": {},
+  "hard_crowd_control_fallback_policy": 0,
+  "vfx_sockets": [
+    {
+      "anchor": "LEFT_HAND",
+      "transform_path": "root/pelvis/spine_01/spine_02/spine_03/clavicle_l/upperarm_l/lowerarm_l/hand_l",
+      "fallback_policy": 0
+    },
+    {
+      "anchor": "RIGHT_HAND",
+      "transform_path": "root/pelvis/spine_01/spine_02/spine_03/clavicle_r/upperarm_r/lowerarm_r/hand_r",
+      "fallback_policy": 0
+    },
+    {
+      "anchor": "TARGET",
+      "transform_path": "root/pelvis/spine_01/spine_02/spine_03",
+      "fallback_policy": 1
+    }
+  ],
+  "status_reactions": [],
+  "appearance_overrides": {
+    "SKELETON_WARRIOR_2H_WEP": {
+      "animations": {
+        "idle": ["Idle_2H"], "ready": ["Ready_2H"], "walk": ["Walk_2H"], "run": ["Run_2H"],
+        "basicAttack": ["Attack_2H"], "hit": ["Hit_2H"], "death": ["Death_2H"]
+      },
+      "status_reactions": [
+        { "status_kind": "STUN", "clip_file_id": -5572742682052347208, "clip_guid": "4c313c1a5b453304d94edc5c5a0e9d69", "require_humanoid_avatar": false }
+      ]
+    },
+    "SKELETON_WARRIOR_AXES": {
+      "animations": {
+        "idle": ["Idle_DualWield"], "ready": ["Ready_DualWield"], "walk": ["Walk_DualWield"], "run": ["Run_DualWield"],
+        "basicAttack": ["Attack_1H_Right_DualWield"], "hit": ["Hit_1H_DualWield"], "death": ["Death_DualWield"]
+      },
+      "status_reactions": [
+        { "status_kind": "STUN", "clip_file_id": -7802518808344939147, "clip_guid": "4c313c1a5b453304d94edc5c5a0e9d69", "require_humanoid_avatar": false }
+      ]
+    },
+    "SKELETON_WARRIOR_SHIELD": {
+      "animations": {
+        "idle": ["Idle_Defend"], "ready": ["Ready_Defend"], "walk": ["Walk_Defend"], "run": ["Run_Defend"],
+        "basicAttack": ["Attack_Defend"], "hit": ["Hit_Defend"], "death": ["Death_Defend"]
+      },
+      "status_reactions": [
+        { "status_kind": "STUN", "clip_file_id": -8461751401230989136, "clip_guid": "4c313c1a5b453304d94edc5c5a0e9d69", "require_humanoid_avatar": false }
+      ]
+    },
+    "SKELETON_WARRIOR_SWORDS": {
+      "animations": {
+        "idle": ["Idle_DualWield"], "ready": ["Ready_DualWield"], "walk": ["Walk_DualWield"], "run": ["Run_DualWield"],
+        "basicAttack": ["Attack_1H_Right_DualWield"], "hit": ["Hit_1H_DualWield"], "death": ["Death_DualWield"]
+      },
+      "status_reactions": [
+        { "status_kind": "STUN", "clip_file_id": -7802518808344939147, "clip_guid": "4c313c1a5b453304d94edc5c5a0e9d69", "require_humanoid_avatar": false }
+      ]
+    },
+    "SKELETON_WARRIOR_UNARMED": {
+      "animations": {
+        "idle": ["Idle_Unarmed"], "ready": ["Ready_Unarmed"], "walk": ["Walk_Unarmed"], "run": ["Run_Unarmed"],
+        "basicAttack": ["Attack_Unarmed"], "hit": ["Hit_Unarmed"], "death": ["Death_Unarmed"]
+      },
+      "status_reactions": [
+        { "status_kind": "STUN", "clip_file_id": -6446724128879666000, "clip_guid": "4c313c1a5b453304d94edc5c5a0e9d69", "require_humanoid_avatar": false }
+      ]
+    }
+  }
+}

@@ -1,0 +1,72 @@
+{
+  "source_family_name": "DemonWarrior",
+  "expected_appearance_count": 5,
+  "primary_animator_path": ".",
+  "animations": {},
+  "hard_crowd_control_fallback_policy": 0,
+  "vfx_sockets": [
+    {
+      "anchor": "LEFT_HAND",
+      "transform_path": "origin/root/SpineLow/SpineMid/SpineUp/Clavicle_L/Shoulder_L/Forearm_L/Hand_L",
+      "fallback_policy": 0
+    },
+    {
+      "anchor": "RIGHT_HAND",
+      "transform_path": "origin/root/SpineLow/SpineMid/SpineUp/Clavicle_R/Shoulder_R/Forearm_R/Hand_R",
+      "fallback_policy": 0
+    },
+    {
+      "anchor": "TARGET",
+      "transform_path": "origin/root/SpineLow/SpineMid/SpineUp",
+      "fallback_policy": 1
+    }
+  ],
+  "status_reactions": [],
+  "appearance_overrides": {
+    "DEMON_WARRIOR_2H": {
+      "animations": {
+        "idle": ["Idle_2H"], "ready": ["Ready_2H"], "walk": ["Walk_2H"], "run": ["Run_2H"],
+        "basicAttack": ["Attack_2H"], "hit": ["Hit_2H"], "death": ["Death_2H"]
+      },
+      "status_reactions": [
+        { "status_kind": "STUN", "clip_file_id": -5572742682052347208, "clip_guid": "104fd1367073b194fb6d4b3ff648f15e", "require_humanoid_avatar": false }
+      ]
+    },
+    "DEMON_WARRIOR_DUAL_WIELD": {
+      "animations": {
+        "idle": ["Idle_1H_DualWield"], "ready": ["Ready_1H_DualWield"], "walk": ["Walk_1H_DualWield"], "run": ["Walk_1H_DualWield"],
+        "basicAttack": ["Attack_1H_DualWield"], "hit": ["Hit_1H_DualWield"], "death": ["Death_1H_DualWield"]
+      },
+      "status_reactions": [
+        { "status_kind": "STUN", "clip_file_id": 3774741537375433762, "clip_guid": "104fd1367073b194fb6d4b3ff648f15e", "require_humanoid_avatar": false }
+      ]
+    },
+    "DEMON_WARRIOR_UNARMED": {
+      "animations": {
+        "idle": ["idle"], "ready": ["ReadyUnarmed"], "walk": ["walk"], "run": ["run"],
+        "basicAttack": ["AttackUnarmed"], "hit": ["HitUnarmed"], "death": ["Death"]
+      },
+      "status_reactions": [
+        { "status_kind": "STUN", "clip_file_id": 7666019288946695810, "clip_guid": "104fd1367073b194fb6d4b3ff648f15e", "require_humanoid_avatar": false }
+      ]
+    },
+    "DEMON_WARRIOR_WEP_L": {
+      "animations": {
+        "idle": ["Idle_1H_WepL"], "ready": ["Ready_1H_WepL"], "walk": ["Walk_1H_WepL"], "run": ["Walk_1H_WepL"],
+        "basicAttack": ["Attack_1H_Off_WepL"], "hit": ["Hit_1H_WepL"], "death": ["Death_1H_WepL"]
+      },
+      "status_reactions": [
+        { "status_kind": "STUN", "clip_file_id": 255439898016928561, "clip_guid": "104fd1367073b194fb6d4b3ff648f15e", "require_humanoid_avatar": false }
+      ]
+    },
+    "DEMON_WARRIOR_WEP_R": {
+      "animations": {
+        "idle": ["Idle_1H_WepR"], "ready": ["Ready_1H_WepR"], "walk": ["Walk_1H_WepR"], "run": ["Walk_1H_WepR"],
+        "basicAttack": ["Attack_1H_WepR"], "hit": ["Hit_1H_WepR"], "death": ["Death_1H_WepR"]
+      },
+      "status_reactions": [
+        { "status_kind": "STUN", "clip_file_id": -8390275400534808103, "clip_guid": "104fd1367073b194fb6d4b3ff648f15e", "require_humanoid_avatar": false }
+      ]
+    }
+  }
+}

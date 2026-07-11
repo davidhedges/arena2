@@ -1,0 +1,43 @@
+{
+  "source_family_name": "DeepSeaLizard",
+  "expected_appearance_count": 10,
+  "primary_animator_path": ".",
+  "animations": {
+    "idle": ["idle"],
+    "ready": ["Ready"],
+    "walk": ["walk"],
+    "run": ["run"],
+    "basicAttack": ["attack"],
+    "spellCastStart": ["Spell_Ready"],
+    "spellRelease": ["Spell_A"],
+    "spellCancel": [],
+    "hit": ["hit"],
+    "death": ["Death"]
+  },
+  "hard_crowd_control_fallback_policy": 0,
+  "vfx_sockets": [
+    {
+      "anchor": "LEFT_HAND",
+      "transform_path": "Root/Pelvis/Spine_01/Spine_02/Clavicle_L/Upperarm_L/Lowerarm_L/Hand_L",
+      "fallback_policy": 0
+    },
+    {
+      "anchor": "RIGHT_HAND",
+      "transform_path": "Root/Pelvis/Spine_01/Spine_02/Clavicle_R/Upperarm_R/Lowerarm_R/Hand_R",
+      "fallback_policy": 0
+    },
+    {
+      "anchor": "TARGET",
+      "transform_path": "Root/Pelvis/Spine_01/Spine_02",
+      "fallback_policy": 1
+    }
+  ],
+  "status_reactions": [
+    {
+      "status_kind": "STUN",
+      "clip_file_id": 7400018,
+      "clip_guid": "e6ca43762441b5b4f82fb9d11a5d4a77",
+      "require_humanoid_avatar": false
+    }
+  ]
+}

@@ -22,6 +22,7 @@ namespace Arena.Entity
         private readonly WorldHealthBar _worldHealthBar;
         private readonly NpcAnimationController _animationController;
         private NpcVisualProfile? _visualProfile;
+        private float _presentationVerticalOffset;
         private readonly Dictionary<string, int> _effectCounts = new(StringComparer.OrdinalIgnoreCase);
         private readonly Renderer[] _renderers;
         private readonly Dictionary<Material, Color> _baseMaterialColors = new();
@@ -169,7 +170,7 @@ namespace Arena.Entity
             {
                 _presentation.ForceRenderPose(nextPosition, physics.Yaw);
                 GameObject.transform.SetPositionAndRotation(
-                    nextPosition,
+                    WithPresentationVerticalOffset(nextPosition),
                     Quaternion.Euler(0f, physics.Yaw * Mathf.Rad2Deg, 0f));
                 _hasPhysicsSample = true;
             }
@@ -197,7 +198,7 @@ namespace Arena.Entity
 
             Vector3 renderPosition = _presentation.RenderPosition;
             GameObject.transform.SetPositionAndRotation(
-                renderPosition,
+                WithPresentationVerticalOffset(renderPosition),
                 Quaternion.Euler(0f, _presentation.RenderYawRadians * Mathf.Rad2Deg, 0f));
 
             bool hardSnapped = _presentation.HardSnapCount != hardSnapsBefore;
@@ -377,6 +378,9 @@ namespace Arena.Entity
                 && catalog.TryGetEntry(visualId, out NpcVisualCatalogEntry entry))
             {
                 _visualProfile = entry.profile;
+                _presentationVerticalOffset = entry.profile != null
+                    ? entry.profile.PresentationVerticalOffset
+                    : 0f;
                 _animationController.SetVisualProfile(entry.profile);
                 _animationController.SetStatusReactions(entry.profile != null
                     ? entry.profile.StatusReactions
@@ -385,6 +389,7 @@ namespace Arena.Entity
             }
 
             _visualProfile = null;
+            _presentationVerticalOffset = 0f;
             _animationController.SetVisualProfile(null);
             _animationController.SetStatusReactions(null);
         }
@@ -405,6 +410,9 @@ namespace Arena.Entity
 
         private bool IsCombatFaction()
             => string.Equals(_instance.Faction, "HOSTILE", StringComparison.OrdinalIgnoreCase);
+
+        private Vector3 WithPresentationVerticalOffset(Vector3 authoritativePosition)
+            => authoritativePosition + Vector3.up * _presentationVerticalOffset;
 
         private static string SafeName(string value)
             => string.IsNullOrWhiteSpace(value)

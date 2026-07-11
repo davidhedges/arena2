@@ -12,49 +12,36 @@ namespace Arena.Tests.Editor
 {
     public sealed class NpcVisualProfileTests
     {
-        [TestCase("Assets/Arena/Content/NPC/VisualProfiles/SkeletonWizard_Gn_VisualProfile.asset")]
-        [TestCase("Assets/Arena/Content/NPC/VisualProfiles/SkeletonWizard_Pe_VisualProfile.asset")]
-        [TestCase("Assets/Arena/Content/NPC/VisualProfiles/SkeletonWizard_Rd_VisualProfile.asset")]
-        [TestCase("Assets/Arena/Content/NPC/VisualProfiles/Lich_Gn_VisualProfile.asset")]
-        [TestCase("Assets/Arena/Content/NPC/VisualProfiles/Lich_Cn_VisualProfile.asset")]
-        [TestCase("Assets/Arena/Content/NPC/VisualProfiles/Lich_Gr_VisualProfile.asset")]
-        [TestCase("Assets/Arena/Content/NPC/VisualProfiles/Lich_Or_VisualProfile.asset")]
-        [TestCase("Assets/Arena/Content/NPC/VisualProfiles/Lich_Pe_VisualProfile.asset")]
-        [TestCase("Assets/Arena/Content/NPC/VisualProfiles/Lich_Rd_VisualProfile.asset")]
-        [TestCase("Assets/Arena/Content/NPC/VisualProfiles/SkeletonArcher_Gn_VisualProfile.asset")]
-        [TestCase("Assets/Arena/Content/NPC/VisualProfiles/SkeletonArcher_Bk_VisualProfile.asset")]
-        [TestCase("Assets/Arena/Content/NPC/VisualProfiles/SkeletonArcher_Ye_VisualProfile.asset")]
-        [TestCase("Assets/Arena/Content/NPC/VisualProfiles/Abomination_Gn_VisualProfile.asset")]
-        [TestCase("Assets/Arena/Content/NPC/VisualProfiles/Abomination_Gr_VisualProfile.asset")]
-        [TestCase("Assets/Arena/Content/NPC/VisualProfiles/Abomination_Pe_VisualProfile.asset")]
-        [TestCase("Assets/Arena/Content/NPC/VisualProfiles/HumanoidScarab_Bl_VisualProfile.asset")]
-        [TestCase("Assets/Arena/Content/NPC/VisualProfiles/HumanoidScarab_Gn_VisualProfile.asset")]
-        [TestCase("Assets/Arena/Content/NPC/VisualProfiles/HumanoidScarab_Rd_VisualProfile.asset")]
-        [TestCase("Assets/Arena/Content/NPC/VisualProfiles/HumanoidScarab_Ye_VisualProfile.asset")]
-        [TestCase("Assets/Arena/Content/NPC/VisualProfiles/SlimeMan_Bl_VisualProfile.asset")]
-        [TestCase("Assets/Arena/Content/NPC/VisualProfiles/SlimeMan_Gn_VisualProfile.asset")]
-        [TestCase("Assets/Arena/Content/NPC/VisualProfiles/SlimeMan_Pe_VisualProfile.asset")]
-        [TestCase("Assets/Arena/Content/NPC/VisualProfiles/SlimeMan_Rd_VisualProfile.asset")]
-        public void ExemplarProfile_ResolvesAuthoredAnimatorAndStates(string path)
+        private const string ProfileFolder = "Assets/Arena/Content/NPC/VisualProfiles";
+
+        [Test]
+        public void EveryFirstPartyProfile_ResolvesAuthoredAnimatorStatesAndSockets()
         {
             Type profileType = RequireType("Arena.Entity.NpcVisualProfile");
-            UnityEngine.Object profile = AssetDatabase.LoadAssetAtPath(path, profileType);
-            Assert.That(profile, Is.Not.Null, $"Missing profile at {path}");
-
             Type editorType = RequireType("Arena.Editor.NpcVisualProfileEditor");
             MethodInfo validate = editorType.GetMethod(
                 "Validate",
                 BindingFlags.Static | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(editorType.FullName, "Validate");
-            var errors = (IReadOnlyList<string>)validate.Invoke(null, new object[] { profile })!;
-            Assert.That(errors, Is.Empty, string.Join("\n", errors));
-
             PropertyInfo prefabProperty = profileType.GetProperty("Prefab")
                 ?? throw new MissingMemberException(profileType.FullName, "Prefab");
-            var prefab = prefabProperty.GetValue(profile) as GameObject;
-            Assert.That(prefab, Is.Not.Null);
-            AssertSocketResolves(profileType, profile, prefab!, "LEFT_HAND");
-            AssertSocketResolves(profileType, profile, prefab!, "TARGET");
+
+            string[] profileGuids = AssetDatabase.FindAssets("t:NpcVisualProfile", new[] { ProfileFolder });
+            Assert.That(profileGuids, Is.Not.Empty);
+            foreach (string profileGuid in profileGuids.OrderBy(value => value, StringComparer.Ordinal))
+            {
+                string path = AssetDatabase.GUIDToAssetPath(profileGuid);
+                UnityEngine.Object profile = AssetDatabase.LoadAssetAtPath(path, profileType);
+                Assert.That(profile, Is.Not.Null, $"Missing profile at {path}");
+
+                var errors = (IReadOnlyList<string>)validate.Invoke(null, new object[] { profile })!;
+                Assert.That(errors, Is.Empty, $"{path}:\n{string.Join("\n", errors)}");
+
+                var prefab = prefabProperty.GetValue(profile) as GameObject;
+                Assert.That(prefab, Is.Not.Null, path);
+                AssertSocketResolves(profileType, profile, prefab!, "LEFT_HAND");
+                AssertSocketResolves(profileType, profile, prefab!, "TARGET");
+            }
         }
 
         [Test]
@@ -149,6 +136,27 @@ namespace Arena.Tests.Editor
             finally
             {
                 UnityEngine.Object.DestroyImmediate(root);
+                UnityEngine.Object.DestroyImmediate(profile);
+            }
+        }
+
+        [Test]
+        public void PresentationVerticalOffset_IsExplicitProfileData()
+        {
+            Type profileType = RequireType("Arena.Entity.NpcVisualProfile");
+            var profile = (ScriptableObject)ScriptableObject.CreateInstance(profileType);
+            try
+            {
+                var serialized = new SerializedObject(profile);
+                serialized.FindProperty("presentationVerticalOffset").floatValue = 1.25f;
+                serialized.ApplyModifiedPropertiesWithoutUndo();
+
+                PropertyInfo property = profileType.GetProperty("PresentationVerticalOffset")
+                    ?? throw new MissingMemberException(profileType.FullName, "PresentationVerticalOffset");
+                Assert.That((float)property.GetValue(profile)!, Is.EqualTo(1.25f));
+            }
+            finally
+            {
                 UnityEngine.Object.DestroyImmediate(profile);
             }
         }

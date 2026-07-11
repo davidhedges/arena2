@@ -1,0 +1,43 @@
+{
+  "source_family_name": "Imp",
+  "expected_appearance_count": 8,
+  "primary_animator_path": ".",
+  "animations": {
+    "idle": ["idle"],
+    "ready": ["Ready"],
+    "walk": ["walk"],
+    "run": ["run"],
+    "basicAttack": ["attack"],
+    "spellCastStart": ["Ready_Spell"],
+    "spellRelease": ["SpellA"],
+    "spellCancel": [],
+    "hit": ["hit"],
+    "death": ["Death"]
+  },
+  "hard_crowd_control_fallback_policy": 0,
+  "vfx_sockets": [
+    {
+      "anchor": "LEFT_HAND",
+      "transform_path": "Imp_root/Imp_SpineLower/Imp_SpineUpper/Imp_Clavicle_L/Imp_Shoulder_L/Imp_Forearm_L/Imp_Hand_L",
+      "fallback_policy": 0
+    },
+    {
+      "anchor": "RIGHT_HAND",
+      "transform_path": "Imp_root/Imp_SpineLower/Imp_SpineUpper/Imp_Clavicle_R/Imp_Shoulder_R/Imp_Forearm_R/Imp_Hand_R",
+      "fallback_policy": 0
+    },
+    {
+      "anchor": "TARGET",
+      "transform_path": "Imp_root/Imp_SpineLower/Imp_SpineUpper",
+      "fallback_policy": 1
+    }
+  ],
+  "status_reactions": [
+    {
+      "status_kind": "STUN",
+      "clip_file_id": 7666019288946695810,
+      "clip_guid": "fd7aeb148b5db21459e236ece3959c16",
+      "require_humanoid_avatar": false
+    }
+  ]
+}

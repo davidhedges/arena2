@@ -1,0 +1,38 @@
+{
+  "source_family_name": "Slime",
+  "expected_appearance_count": 4,
+  "primary_animator_path": ".",
+  "animations": {
+    "idle": ["idle"],
+    "ready": ["idle"],
+    "walk": ["walk"],
+    "run": ["walk"],
+    "basicAttack": ["attack"],
+    "spellCastStart": [],
+    "spellRelease": [],
+    "spellCancel": [],
+    "hit": ["hit"],
+    "death": ["Death"]
+  },
+  "hard_crowd_control_fallback_policy": 1,
+  "vfx_sockets": [
+    {
+      "anchor": "LEFT_HAND",
+      "transform_path": "root/Pelvis/Front",
+      "fallback_policy": 0
+    },
+    {
+      "anchor": "TARGET",
+      "transform_path": "root/Pelvis/Neck/Head",
+      "fallback_policy": 1
+    }
+  ],
+  "status_reactions": [
+    {
+      "status_kind": "STUN",
+      "clip_file_id": 7400008,
+      "clip_guid": "134635c96dd12354e8ee45289b0cd38e",
+      "require_humanoid_avatar": false
+    }
+  ]
+}
