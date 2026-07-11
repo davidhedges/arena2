@@ -3212,6 +3212,7 @@ mod tests {
             .iter()
             .all(|template| !template.visual_ids.is_empty() && !template.action_kit.is_empty()));
         let wizard = npc_template("SKELETON_WIZARD").expect("wizard exemplar should be authored");
+        assert_eq!(wizard.visual_ids.len(), 3);
         assert_eq!(wizard.action_kit[0].role, "RANGED_OFFENSE");
         assert_eq!(wizard.action_kit[0].target_selector, "CURRENT_ENEMY");
         assert_eq!(wizard.action_kit[1].role, "DEBUFF");

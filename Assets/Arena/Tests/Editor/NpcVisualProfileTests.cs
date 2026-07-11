@@ -13,6 +13,8 @@ namespace Arena.Tests.Editor
     public sealed class NpcVisualProfileTests
     {
         [TestCase("Assets/Arena/Content/NPC/VisualProfiles/SkeletonWizard_Gn_VisualProfile.asset")]
+        [TestCase("Assets/Arena/Content/NPC/VisualProfiles/SkeletonWizard_Pe_VisualProfile.asset")]
+        [TestCase("Assets/Arena/Content/NPC/VisualProfiles/SkeletonWizard_Rd_VisualProfile.asset")]
         [TestCase("Assets/Arena/Content/NPC/VisualProfiles/Lich_Gn_VisualProfile.asset")]
         [TestCase("Assets/Arena/Content/NPC/VisualProfiles/Lich_Cn_VisualProfile.asset")]
         [TestCase("Assets/Arena/Content/NPC/VisualProfiles/Lich_Gr_VisualProfile.asset")]
@@ -66,6 +68,8 @@ namespace Arena.Tests.Editor
 
             MethodInfo tryGetEntry = catalogType.GetMethod("TryGetEntry")!;
             AssertProfile(tryGetEntry, catalog, "SKELETON_WIZARD_GN");
+            AssertProfile(tryGetEntry, catalog, "SKELETON_WIZARD_PE");
+            AssertProfile(tryGetEntry, catalog, "SKELETON_WIZARD_RD");
             AssertProfile(tryGetEntry, catalog, "LICH_GN");
             AssertProfile(tryGetEntry, catalog, "LICH_CN");
             AssertProfile(tryGetEntry, catalog, "LICH_GR");
