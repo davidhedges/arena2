@@ -2151,6 +2151,7 @@ struct NpcActionRejectCounts {
     selector: u32,
     health: u32,
     target_health: u32,
+    target_casting: u32,
     nearby_count: u32,
     required_status: u32,
     forbidden_status: u32,
@@ -2166,6 +2167,7 @@ impl NpcActionRejectCounts {
             ("SELECTOR", self.selector),
             ("SELF_HEALTH", self.health),
             ("TARGET_HEALTH", self.target_health),
+            ("TARGET_CASTING", self.target_casting),
             ("NEARBY_COUNT", self.nearby_count),
             ("REQUIRED_STATUS", self.required_status),
             ("FORBIDDEN_STATUS", self.forbidden_status),
@@ -2210,7 +2212,7 @@ fn select_npc_melee_action(
     for entry in &template.action_kit {
         if !matches!(
             entry.role.as_str(),
-            "MELEE_OFFENSE" | "RANGED_OFFENSE" | "BUFF" | "HEAL" | "DEBUFF"
+            "MELEE_OFFENSE" | "RANGED_OFFENSE" | "BUFF" | "HEAL" | "DEBUFF" | "INTERRUPT"
         ) {
             rejects.role = rejects.role.saturating_add(1);
             continue;
@@ -2246,6 +2248,17 @@ fn select_npc_melee_action(
         };
         if entry.role == "HEAL" && npc_target_is_full_health(ctx, target.identity) {
             rejects.target_health = rejects.target_health.saturating_add(1);
+            continue;
+        }
+        if entry.role == "INTERRUPT"
+            && ctx
+                .db
+                .active_cast()
+                .caster()
+                .find(target.identity)
+                .is_none()
+        {
+            rejects.target_casting = rejects.target_casting.saturating_add(1);
             continue;
         }
         if health_pct < entry.min_self_health_pct || health_pct > entry.max_self_health_pct {
@@ -2295,7 +2308,7 @@ fn select_npc_melee_action(
         } else if ability.ability_kind == "SPELL"
             && matches!(
                 entry.role.as_str(),
-                "RANGED_OFFENSE" | "BUFF" | "HEAL" | "DEBUFF"
+                "RANGED_OFFENSE" | "BUFF" | "HEAL" | "DEBUFF" | "INTERRUPT"
             )
         {
             let Some(spell) = spell_definition_by_str(ability.action_id.as_str()) else {
@@ -3102,9 +3115,10 @@ mod tests {
 
         let rejects = NpcActionRejectCounts {
             target_health: 1,
+            target_casting: 2,
             ..NpcActionRejectCounts::default()
         };
-        assert_eq!(rejects.summary(), "TARGET_HEALTH=1");
+        assert_eq!(rejects.summary(), "TARGET_HEALTH=1 TARGET_CASTING=2");
     }
 
     #[test]
@@ -3206,6 +3220,8 @@ mod tests {
             wizard.action_kit[1].forbidden_target_status,
             "NPC_SKELETON_FROSTBITE"
         );
+        assert_eq!(wizard.action_kit[2].role, "INTERRUPT");
+        assert_eq!(wizard.action_kit[2].target_selector, "CURRENT_ENEMY");
         let lich = npc_template("LICH_SUPPORT").expect("support exemplar should be authored");
         assert_eq!(lich.action_kit[0].role, "HEAL");
         assert_eq!(lich.action_kit[0].target_selector, "LOWEST_HEALTH_ALLY");

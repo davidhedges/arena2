@@ -3530,6 +3530,44 @@
       }
     },
     {
+      "ability_id": "NPC_SKELETON_WIZARD_ICE_LOCK",
+      "actor_scope": "NPC",
+      "combat_profile_id": "",
+      "action_id": "SKELETON_WIZARD_ICE_LOCK",
+      "display_name": "Skeleton Wizard Ice Lock",
+      "resource_kind": "",
+      "resource_cost": 0,
+      "ability_tags": [],
+      "sort_order": 56,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 8000,
+        "uses_global_cooldown": false,
+        "cast_time_ms": 200,
+        "cast_mobility": "GROUNDED_STATIONARY",
+        "targeting": "TARGET",
+        "target_audience": "HOSTILE",
+        "requires_target": true,
+        "requires_target_los": true,
+        "resource_cost": 0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "APPLY_STATUS",
+          "duration_ms": 1200,
+          "max_distance": 14,
+          "status_stack_group": "NPC_SKELETON_ICE_LOCK",
+          "polarity": "DEBUFF",
+          "status": {
+            "kind": "STUN",
+            "modifier_scalar": 0,
+            "max_stacks": 1,
+            "stack_policy": "REFRESH",
+            "dispel_types": ["MAGIC"]
+          }
+        }
+      }
+    },
+    {
       "ability_id": "NPC_LICH_BONE_WARD",
       "actor_scope": "NPC",
       "combat_profile_id": "",
@@ -5306,6 +5344,32 @@
       "lifecycle": "DURATION",
       "duration_ms": 1000,
       "sort_order": 290
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "NPC_SKELETON_WIZARD_ICE_LOCK",
+      "slot": "cast_glow",
+      "trigger": "SPELL_CAST",
+      "anchor": "LEFT_HAND",
+      "vfx_id": "VFX_ICE_CAST_HAND_01",
+      "attach_mode": "FOLLOW_ANCHOR",
+      "vfx_role": "ATTACHED",
+      "lifecycle": "UNTIL_RELEASE_EVENT",
+      "duration_ms": 0,
+      "sort_order": 295
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "NPC_SKELETON_WIZARD_ICE_LOCK",
+      "slot": "impact",
+      "trigger": "SPELL_IMPACT",
+      "anchor": "TARGET",
+      "vfx_id": "VFX_ICE_HIT_01",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "DURATION",
+      "duration_ms": 1000,
+      "sort_order": 300
     }
   ],
   "combat_profile_action_bar_defaults": [

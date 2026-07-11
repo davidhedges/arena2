@@ -2453,6 +2453,7 @@ mod tests {
                 "SACRED_FLAME",
                 "SKELETON_WIZARD_FROST_BOLT",
                 "SKELETON_WIZARD_FROSTBITE",
+                "SKELETON_WIZARD_ICE_LOCK",
                 "LICH_BONE_WARD",
                 "SKELETON_ARCHER_SHOT",
                 "LICH_MEND",
@@ -3358,6 +3359,26 @@ mod tests {
         assert_eq!(
             frostbite.apply_status_polarity,
             Some(StatusPolarity::Debuff)
+        );
+
+        let ice_lock = spell_definition_by_str("SKELETON_WIZARD_ICE_LOCK")
+            .expect("NPC Skeleton Wizard Ice Lock should exist");
+        assert_eq!(ice_lock.behavior, SpellBehavior::ApplyStatus);
+        assert_eq!(ice_lock.targeting, SpellTargeting::Target);
+        assert!(ice_lock.requires_target);
+        assert_eq!(ice_lock.target_audience, TargetAudience::Hostile);
+        assert!((ice_lock.max_distance - 14.0).abs() < 0.0001);
+        assert_eq!(
+            ice_lock
+                .apply_status
+                .as_ref()
+                .expect("Ice Lock should define a status")
+                .payload(),
+            StatusPayload::Stun
+        );
+        assert_eq!(
+            ice_lock.status_stack_group.as_deref(),
+            Some("NPC_SKELETON_ICE_LOCK")
         );
 
         let frost_nova = spell_definition_by_str("FROST_NOVA").expect("FROST_NOVA should exist");
