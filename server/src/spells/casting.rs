@@ -349,7 +349,7 @@ pub(super) fn cast_spell(
     predicted_cast_id: String,
     client_action_seq: u64,
 ) -> Result<(), String> {
-    cast_spell_for(
+    execute_cast_intent(
         ctx,
         ctx.sender(),
         spell_kind,
@@ -365,6 +365,7 @@ pub(super) fn cast_spell(
         ctx.timestamp,
         predicted_cast_id,
         client_action_seq,
+        CastIntentAdapter::PlayerInput,
     )
 }
 
@@ -559,7 +560,7 @@ pub(crate) fn resolve_pending_casts(ctx: &ReducerContext, now: Timestamp) -> Res
             continue;
         };
 
-        cast_spell_for(
+        execute_cast_intent(
             ctx,
             request.caster,
             &spell_kind,
@@ -579,6 +580,7 @@ pub(crate) fn resolve_pending_casts(ctx: &ReducerContext, now: Timestamp) -> Res
             request.received_at,
             request.predicted_cast_id,
             request.client_action_seq,
+            CastIntentAdapter::PlayerInput,
         )?;
     }
 
@@ -596,7 +598,46 @@ fn pending_cast_request_is_ready(ctx: &ReducerContext, request: &PendingCastRequ
     }
 }
 
-pub(crate) fn cast_spell_for(
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum CastIntentAdapter {
+    PlayerInput,
+    ServerActor,
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn cast_spell_for_server_actor(
+    ctx: &ReducerContext,
+    caster: Identity,
+    spell_kind: &SpellId,
+    target_id: &str,
+    aim_x: f32,
+    aim_y: f32,
+    aim_z: f32,
+    cast_yaw: f32,
+    cast_started_at: Timestamp,
+) -> Result<(), String> {
+    execute_cast_intent(
+        ctx,
+        caster,
+        spell_kind,
+        target_id,
+        aim_x,
+        aim_y,
+        aim_z,
+        0,
+        0.0,
+        0.0,
+        0.0,
+        cast_yaw,
+        cast_started_at,
+        String::new(),
+        0,
+        CastIntentAdapter::ServerActor,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn execute_cast_intent(
     ctx: &ReducerContext,
     caster: Identity,
     spell_kind: &SpellId,
@@ -612,6 +653,7 @@ pub(crate) fn cast_spell_for(
     cast_started_at: Timestamp,
     predicted_cast_id: String,
     client_action_seq: u64,
+    adapter: CastIntentAdapter,
 ) -> Result<(), String> {
     prune_cast_prediction_rows(ctx, ctx.timestamp);
     if !valid_cast_action_token(predicted_cast_id.as_str(), client_action_seq) {
@@ -667,57 +709,62 @@ pub(crate) fn cast_spell_for(
         log_cast_rejected(caster, spell_kind, "caster_dead", "");
         return Ok(());
     }
-    let Some(validated_snapshot) = validate_authoritative_action_snapshot(
-        ctx,
-        caster,
-        ActionSnapshotRequest {
-            input_tick: cast_input_tick,
-            pos_x: cast_pos_x,
-            pos_y: cast_pos_y,
-            pos_z: cast_pos_z,
-            yaw: cast_yaw,
-        },
-    ) else {
-        record_spell_prediction_result(
-            ctx,
-            caster,
-            "",
-            predicted_cast_id.as_str(),
-            client_action_seq,
-            SPELL_PREDICTION_RESULT_REJECTED,
-            ActionRejectReason::StaleSnapshot,
-            ctx.timestamp,
-        );
-        log_cast_rejected(
-            caster,
-            spell_kind,
-            "invalid_action_snapshot",
-            &format!("tick={cast_input_tick}"),
-        );
-        return Ok(());
-    };
-    if let ActionSnapshotFallback::PositionDeltaExceeded {
-        position_delta,
-        allowed_delta,
-        ..
-    } = validated_snapshot.fallback
-    {
-        log::debug!(
-            "[SPELL_CAST_FRAME_DROP] caster={} cast_tick={} server_tick={} pos_delta={:.2} allowed={:.2}",
-            caster_state.player_id.to_hex(),
-            cast_input_tick,
-            caster_state.last_processed_tick,
-            position_delta,
-            allowed_delta
-        );
-    }
-    let cast_state = CombatActorSnapshot {
-        pos_x: validated_snapshot.pos_x,
-        pos_y: validated_snapshot.pos_y,
-        pos_z: validated_snapshot.pos_z,
-        facing_yaw: validated_snapshot.facing_yaw,
-        last_processed_tick: validated_snapshot.last_processed_tick,
-        ..caster_state
+    let cast_state = match adapter {
+        CastIntentAdapter::ServerActor => caster_state,
+        CastIntentAdapter::PlayerInput => {
+            let Some(validated_snapshot) = validate_authoritative_action_snapshot(
+                ctx,
+                caster,
+                ActionSnapshotRequest {
+                    input_tick: cast_input_tick,
+                    pos_x: cast_pos_x,
+                    pos_y: cast_pos_y,
+                    pos_z: cast_pos_z,
+                    yaw: cast_yaw,
+                },
+            ) else {
+                record_spell_prediction_result(
+                    ctx,
+                    caster,
+                    "",
+                    predicted_cast_id.as_str(),
+                    client_action_seq,
+                    SPELL_PREDICTION_RESULT_REJECTED,
+                    ActionRejectReason::StaleSnapshot,
+                    ctx.timestamp,
+                );
+                log_cast_rejected(
+                    caster,
+                    spell_kind,
+                    "invalid_action_snapshot",
+                    &format!("tick={cast_input_tick}"),
+                );
+                return Ok(());
+            };
+            if let ActionSnapshotFallback::PositionDeltaExceeded {
+                position_delta,
+                allowed_delta,
+                ..
+            } = validated_snapshot.fallback
+            {
+                log::debug!(
+                    "[SPELL_CAST_FRAME_DROP] caster={} cast_tick={} server_tick={} pos_delta={:.2} allowed={:.2}",
+                    caster_state.player_id.to_hex(),
+                    cast_input_tick,
+                    caster_state.last_processed_tick,
+                    position_delta,
+                    allowed_delta
+                );
+            }
+            CombatActorSnapshot {
+                pos_x: validated_snapshot.pos_x,
+                pos_y: validated_snapshot.pos_y,
+                pos_z: validated_snapshot.pos_z,
+                facing_yaw: validated_snapshot.facing_yaw,
+                last_processed_tick: validated_snapshot.last_processed_tick,
+                ..caster_state
+            }
+        }
     };
     let now = ctx.timestamp;
     let Some(definition) = super::catalog::spell_definition(spell_kind) else {

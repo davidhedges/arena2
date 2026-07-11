@@ -20,7 +20,7 @@ use crate::melee::{
     melee_range_for, perform_melee_attack_for_practice,
 };
 use crate::player::DEFAULT_COMBAT_PROFILE;
-use crate::spells::{cast_spell_for, spell_definition_by_str};
+use crate::spells::{cast_spell_for_server_actor, spell_definition_by_str};
 use crate::world_collision::resolve_world_spawn_position_with_layout;
 
 #[allow(unused_imports)]
@@ -226,7 +226,7 @@ pub(crate) fn tick_practice(ctx: &ReducerContext, now: Timestamp) -> Result<(), 
                 let Some(spell_definition) = spell_definition_by_str("FIREBALL") else {
                     continue;
                 };
-                cast_spell_for(
+                cast_spell_for_server_actor(
                     ctx,
                     actor.identity,
                     &spell_definition.kind,
@@ -234,14 +234,8 @@ pub(crate) fn tick_practice(ctx: &ReducerContext, now: Timestamp) -> Result<(), 
                     0.0,
                     0.0,
                     0.0,
-                    0,
-                    0.0,
-                    0.0,
-                    0.0,
                     yaw,
                     now,
-                    String::new(),
-                    0,
                 )?;
                 actor.next_action_at = now + duration_from_millis(actor.cadence_ms);
             }
