@@ -1,21 +1,22 @@
 //! Player Intent Table
 //!
-//! OWNERSHIP RULE: This table is written by `game_tick` to reflect the
-//! currently applied fallback input state for each player.
+//! OWNERSHIP RULE: `game_tick` owns hot-path updates to the currently applied
+//! fallback input state. Lifecycle, teleport, and harness paths may perform
+//! explicit resets.
 //!
 //! This table represents "what the player wants to do" - not "what the player is doing".
 //! Intent is data, not action.
 
 use spacetimedb::{table, Identity, Timestamp};
 
-/// Player movement intent - the raw input from the client.
+/// Retained player movement fallback - the latest applied axis/facing state.
 ///
 /// Fields:
 /// - `forward`: -1 (backward) to 1 (forward), from W/S keys
 /// - `strafe`: -1 (left) to 1 (right), from A/D keys (in strafe mode)
 /// - `yaw`: absolute facing direction in radians
-/// - `jump`: true if jump was requested THIS FRAME (edge-triggered, not held)
-/// - `input_tick`: latest authoritative input tick applied to the movement loop
+/// - `jump`: always false here; edge-triggered jumps live in the command queue
+/// - `input_tick`: authoritative input tick that last changed the retained fallback state
 ///
 /// INVARIANT: This row represents the currently applied fallback intent used if
 /// the next input tick has not arrived yet.
@@ -39,9 +40,10 @@ pub struct PlayerIntent {
     /// row; jump edges live in the queued command stream.
     pub jump: bool,
 
-    /// Latest authoritative input tick applied to this fallback state.
+    /// Authoritative input tick that last changed this retained fallback state.
+    /// The every-tick simulation acknowledgement lives on `PlayerPhysics`.
     pub input_tick: u32,
 
-    /// When this intent was last updated (for debugging)
+    /// When this retained fallback state last changed (for debugging)
     pub updated_at: Timestamp,
 }

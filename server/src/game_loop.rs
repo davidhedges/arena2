@@ -1654,6 +1654,32 @@ fn uses_fixed_y_collision_policy(collision_policy: &str) -> bool {
         || collision_policy == SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK_KEEP_HEIGHT_LEGACY
 }
 
+/// Synchronizes the persistent fallback state used when the next queued input
+/// command has not arrived. Tick/timestamp bookkeeping alone is intentionally
+/// excluded: the every-tick acknowledgement lives on `PlayerPhysics`, while
+/// `PlayerIntent` only needs a write when gameplay-observable retained input
+/// changes. Jump edges remain queue-only and are never retained here.
+fn apply_player_intent_fallback_if_changed(
+    current: &mut PlayerIntent,
+    applied: &PlayerIntent,
+) -> bool {
+    let changed = current.forward != applied.forward
+        || current.strafe != applied.strafe
+        || current.yaw != applied.yaw
+        || current.jump;
+    if !changed {
+        return false;
+    }
+
+    current.forward = applied.forward;
+    current.strafe = applied.strafe;
+    current.yaw = applied.yaw;
+    current.jump = false;
+    current.input_tick = applied.input_tick;
+    current.updated_at = applied.updated_at;
+    true
+}
+
 fn try_tick_special_movement_player(
     ctx: &ReducerContext,
     identity: Identity,
@@ -1696,22 +1722,18 @@ fn try_tick_special_movement_player(
     physics.last_tick_consumed_command = consumed_real_command;
     physics.buffered_command_count = count_buffered_commands(ctx, identity);
     physics.updated_at = now;
-    intent.forward = step_intent.forward;
-    intent.strafe = step_intent.strafe;
-    intent.yaw = step_intent.yaw;
-    intent.jump = false;
-    intent.input_tick = next_input_tick;
-    intent.updated_at = now;
-    record_table_write(TableWriteKind::PlayerIntent);
-    ctx.db.player_intent().identity().update(PlayerIntent {
-        identity: intent.identity,
-        forward: intent.forward,
-        strafe: intent.strafe,
-        yaw: intent.yaw,
-        jump: intent.jump,
-        input_tick: intent.input_tick,
-        updated_at: intent.updated_at,
-    });
+    if apply_player_intent_fallback_if_changed(intent, &step_intent) {
+        record_table_write(TableWriteKind::PlayerIntent);
+        ctx.db.player_intent().identity().update(PlayerIntent {
+            identity: intent.identity,
+            forward: intent.forward,
+            strafe: intent.strafe,
+            yaw: intent.yaw,
+            jump: intent.jump,
+            input_tick: intent.input_tick,
+            updated_at: intent.updated_at,
+        });
+    }
 
     let state_changed = sync_player_movement_context(
         state,
@@ -1914,14 +1936,10 @@ fn tick_player(
         state.hit_height,
     );
     physics.last_processed_tick = next_input_tick;
-    intent.forward = step_intent.forward;
-    intent.strafe = step_intent.strafe;
-    intent.yaw = step_intent.yaw;
-    intent.jump = false;
-    intent.input_tick = next_input_tick;
-    intent.updated_at = now;
-    record_table_write(TableWriteKind::PlayerIntent);
-    ctx.db.player_intent().identity().update(intent);
+    if apply_player_intent_fallback_if_changed(&mut intent, &step_intent) {
+        record_table_write(TableWriteKind::PlayerIntent);
+        ctx.db.player_intent().identity().update(intent);
+    }
     let resource_inputs = ResourceSpecInputs {
         status_modifiers: temporary_modifiers,
         equipment: &equipment,
@@ -2078,10 +2096,10 @@ fn tick_countdowns(ctx: &ReducerContext, now: Timestamp) {
 #[cfg(test)]
 mod tests {
     use super::{
-        percentile_sorted, settle_stationary_dummy, settle_stationary_playground_target,
-        special_movement_grounded_state, sync_player_voluntary_move_epoch, PlayerIntent,
-        PlayerPhysics, TickProfileSample, TickProfileWindowState,
-        SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK_FIXED_Y,
+        apply_player_intent_fallback_if_changed, percentile_sorted, settle_stationary_dummy,
+        settle_stationary_playground_target, special_movement_grounded_state,
+        sync_player_voluntary_move_epoch, PlayerIntent, PlayerPhysics, TickProfileSample,
+        TickProfileWindowState, SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK_FIXED_Y,
         SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK_KEEP_HEIGHT_LEGACY,
     };
     use crate::combat::new_player_state;
@@ -2108,6 +2126,72 @@ mod tests {
             input_tick: 1,
             updated_at: Timestamp::UNIX_EPOCH,
         }
+    }
+
+    #[test]
+    fn player_intent_fallback_skips_bookkeeping_only_advances() {
+        let mut current = intent(1.0, -0.5, false);
+        let mut applied = intent(1.0, -0.5, false);
+        applied.input_tick = 2;
+        applied.updated_at = Timestamp::from_micros_since_unix_epoch(2);
+
+        assert!(!apply_player_intent_fallback_if_changed(
+            &mut current,
+            &applied
+        ));
+        assert_eq!(current.input_tick, 1);
+        assert_eq!(current.updated_at, Timestamp::UNIX_EPOCH);
+    }
+
+    #[test]
+    fn player_intent_fallback_persists_key_up() {
+        let mut current = intent(1.0, -0.5, false);
+        let mut applied = intent(0.0, 0.0, false);
+        applied.input_tick = 2;
+        applied.updated_at = Timestamp::from_micros_since_unix_epoch(2);
+
+        assert!(apply_player_intent_fallback_if_changed(
+            &mut current,
+            &applied
+        ));
+        assert_eq!(current.forward, 0.0);
+        assert_eq!(current.strafe, 0.0);
+        assert_eq!(current.input_tick, 2);
+        assert_eq!(
+            current.updated_at,
+            Timestamp::from_micros_since_unix_epoch(2)
+        );
+    }
+
+    #[test]
+    fn player_intent_fallback_persists_yaw_only_changes() {
+        let mut current = intent(0.0, 0.0, false);
+        let mut applied = intent(0.0, 0.0, false);
+        applied.yaw = 2.5;
+        applied.input_tick = 2;
+        applied.updated_at = Timestamp::from_micros_since_unix_epoch(2);
+
+        assert!(apply_player_intent_fallback_if_changed(
+            &mut current,
+            &applied
+        ));
+        assert_eq!(current.yaw, 2.5);
+        assert_eq!(current.input_tick, 2);
+    }
+
+    #[test]
+    fn player_intent_fallback_does_not_persist_jump_edges() {
+        let mut current = intent(0.0, 0.0, false);
+        let mut applied = intent(0.0, 0.0, true);
+        applied.input_tick = 2;
+        applied.updated_at = Timestamp::from_micros_since_unix_epoch(2);
+
+        assert!(!apply_player_intent_fallback_if_changed(
+            &mut current,
+            &applied
+        ));
+        assert!(!current.jump);
+        assert_eq!(current.input_tick, 1);
     }
 
     #[test]

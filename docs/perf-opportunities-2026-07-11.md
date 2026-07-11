@@ -12,14 +12,13 @@ Except where an item is marked complete, rankings remain hypotheses until measur
 
 ## Worth doing
 
-### 1. Change-gate `PlayerIntent` writes — preserve the table
+### 1. Change-gate `PlayerIntent` writes — complete
 
-`PlayerIntent` is updated at 30 Hz for every live player (`server/src/game_loop.rs:1705-1714,1923-1924`) and is absent from client subscriptions. That makes its write rate worth reducing, but it is not unused: the server retains movement intent there and reads it for movement simulation, stationary-cast validation/cancellation, and facing-sensitive combat behavior.
+Completed 2026-07-11 in `server/src/game_loop.rs` and `server/src/player_intent.rs`.
 
-- Direction: preserve the authoritative row, but avoid `.update()` when its meaningful retained state has not changed.
-- Contract work: decide whether `input_tick` and `updated_at` are authoritative state or incidental bookkeeping before gating them.
-- Verification: use the existing `writes_player_intent` counter and cover held movement, key-up, yaw-only changes, fallback input, special movement, and stationary cast cancellation.
-- Do not attribute the prior 31 GB local commitlog incident to this table until table-level byte growth is measured.
+The table remains the server's authoritative retained movement fallback for movement simulation, stationary-cast validation/cancellation, and facing-sensitive combat behavior. The normal and special-movement tick paths now update it only when retained `forward`, `strafe`, or `yaw` changes. Jump remains queue-only and persistently false. `input_tick` and `updated_at` now identify when the retained fallback last changed; every-tick acknowledgement and command-buffer feedback remain on `PlayerPhysics`.
+
+Lifecycle and explicit reset paths remain unconditional. The existing `writes_player_intent` counter therefore records real row writes rather than attempted per-tick refreshes. This change does not attribute the prior 31 GB local commitlog incident to any one table; table-level byte growth is still unmeasured.
 
 ### 2. Pool floating combat text — complete
 
