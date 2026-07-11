@@ -1,7 +1,7 @@
 # NPC System Design
 
 Date: 2026-07-11
-Status: implementation in progress; actor-generic targeting, shared spell/projectile/heal execution, caster/support/archer exemplars, and native visual profiles are landed through `0bda1cff`, while full visual authoring remains
+Status: implementation in progress; actor-generic targeting, shared spell/projectile/heal execution, caster/support/archer exemplars, and validated native visual profiles are landed through `461e33de`, while full visual authoring remains
 
 ## Outcome
 
@@ -18,7 +18,7 @@ This is a substantial engineering project. The existing kobold implementation is
 
 ## Implementation progress (2026-07-11 handoff)
 
-The implementation has started and has been committed in coherent slices. The implementation baseline summarized here is `0bda1cff` (`Pin NPC heal decision ordering`). Player combat semantics are an explicit guardrail: actor-generic seams were extended where required, but player damage, healing arithmetic, authorization, animation fallback, input, prediction, rewind, and action-bar behavior must not be redesigned as part of the NPC rollout.
+The implementation has started and has been committed in coherent slices. The implementation baseline summarized here is `461e33de` (`Fix NPC profile prefab references`). Player combat semantics are an explicit guardrail: actor-generic seams were extended where required, but player damage, healing arithmetic, authorization, animation fallback, input, prediction, rewind, and action-bar behavior must not be redesigned as part of the NPC rollout.
 
 ### Landed foundations
 
@@ -55,7 +55,7 @@ The implementation has started and has been committed in coherent slices. The im
 - Basic ranged approach/hold/retreat bands are implemented. Richer kiting, unreachable-target recovery, navigation, and local avoidance remain.
 - Healing/buff support threat, taunts, assist/call-for-help, and richer threat decay remain later work.
 - Searchable catalog spawning, all 146 appearance mappings, and automated presentation sweeps remain. Archer melee fallback is explicitly deferred: the imported family has only bow/load/shot presentation, no melee weapon, draw/stow animation, or verified melee attack clip.
-- All four acceptance archetypes now have initial gameplay paths, and Wizard/Lich/Archer have native visual profiles. Full acceptance still needs profile test execution and mixed-group runtime evidence.
+- All four acceptance archetypes now have initial gameplay paths, and Wizard/Lich/Archer have native visual profiles. Full acceptance still needs mixed-group runtime evidence.
 
 ### Current verification
 
@@ -63,6 +63,7 @@ The implementation has started and has been committed in coherent slices. The im
 - `spacetime build -p server`: succeeded; the local optional `wasm-opt` binary is absent, so SpacetimeDB emitted an unoptimized module after a successful release build.
 - `dotnet build Assembly-CSharp.csproj --no-restore`: succeeded with 0 errors and 11 existing obsolete-API warnings in third-party/current Unity code.
 - `dotnet build Assembly-CSharp-Editor.csproj --no-restore`: succeeded with 0 errors and 17 existing obsolete/dead-field warnings.
+- Focused Unity edit-mode profile validation: 4 passed, 0 failed. The tests load all three real vendor prefabs, validate explicit Animator/state mappings, and resolve their catalog entries.
 - Generated C# bindings are current for the landed runtime schema.
 - The working tree still contains the user-owned `.gitignore` change and an unrelated untracked `docs/perf-opportunities-2026-07-11.md`; preserve those unless their owner explicitly brings them into scope.
 
@@ -70,10 +71,10 @@ The implementation has started and has been committed in coherent slices. The im
 
 The next coherent slice should finish presentation for the landed gameplay exemplars without creating a creature-only event language:
 
-1. Run the focused NPC visual-profile edit-mode tests after the open Unity instance releases the project lock, then capture mixed-group presentation evidence.
+1. Capture mixed-group presentation evidence for Kobold, Skeleton Archer, Skeleton Wizard, and Lich together.
 2. Add cast/hit sockets and explicit fallback policies to the three exemplar profiles.
 3. Keep the Skeleton Archer purely ranged with retreat/hold behavior until suitable melee weapon and animation assets are deliberately authored.
-4. Capture deterministic server/runtime evidence for Lich heal-versus-buff choice under controlled ally health and status conditions.
+4. Capture runtime evidence for Lich heal-versus-buff choice under controlled ally health and status conditions.
 
 ## Asset relocation completed
 
