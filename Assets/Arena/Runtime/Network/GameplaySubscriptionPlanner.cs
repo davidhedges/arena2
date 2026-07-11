@@ -35,6 +35,8 @@ namespace Arena.Network
                 new QueryBuilder().From.CombatRuleCatalog().ToSql(),
                 new QueryBuilder().From.ResourceCatalog().ToSql(),
                 new QueryBuilder().From.StatScalingCatalog().ToSql(),
+                new QueryBuilder().From.NpcTemplateCatalog().ToSql(),
+                new QueryBuilder().From.NpcVisualCatalog().ToSql(),
                 new QueryBuilder().From.ArenaInstance().ToSql(),
                 new QueryBuilder().From.ContractVersion().ToSql(),
                 new QueryBuilder().From.Party().ToSql(),

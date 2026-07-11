@@ -70,6 +70,8 @@ namespace SpacetimeDB.Types
             AddTable(NpcInstance = new(conn));
             AddTable(NpcPhysics = new(conn));
             AddTable(NpcState = new(conn));
+            AddTable(NpcTemplateCatalog = new(conn));
+            AddTable(NpcVisualCatalog = new(conn));
             AddTable(Party = new(conn));
             AddTable(PartyInvite = new(conn));
             AddTable(PartyMember = new(conn));
@@ -631,6 +633,8 @@ namespace SpacetimeDB.Types
             new QueryBuilder().From.NpcInstance().ToSql(),
             new QueryBuilder().From.NpcPhysics().ToSql(),
             new QueryBuilder().From.NpcState().ToSql(),
+            new QueryBuilder().From.NpcTemplateCatalog().ToSql(),
+            new QueryBuilder().From.NpcVisualCatalog().ToSql(),
             new QueryBuilder().From.Party().ToSql(),
             new QueryBuilder().From.PartyInvite().ToSql(),
             new QueryBuilder().From.PartyMember().ToSql(),
@@ -702,6 +706,8 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Table<NpcInstance, NpcInstanceCols, NpcInstanceIxCols> NpcInstance() => new("npc_instance", new NpcInstanceCols("npc_instance"), new NpcInstanceIxCols("npc_instance"));
         public global::SpacetimeDB.Table<NpcPhysics, NpcPhysicsCols, NpcPhysicsIxCols> NpcPhysics() => new("npc_physics", new NpcPhysicsCols("npc_physics"), new NpcPhysicsIxCols("npc_physics"));
         public global::SpacetimeDB.Table<NpcState, NpcStateCols, NpcStateIxCols> NpcState() => new("npc_state", new NpcStateCols("npc_state"), new NpcStateIxCols("npc_state"));
+        public global::SpacetimeDB.Table<NpcTemplateCatalog, NpcTemplateCatalogCols, NpcTemplateCatalogIxCols> NpcTemplateCatalog() => new("npc_template_catalog", new NpcTemplateCatalogCols("npc_template_catalog"), new NpcTemplateCatalogIxCols("npc_template_catalog"));
+        public global::SpacetimeDB.Table<NpcVisualCatalog, NpcVisualCatalogCols, NpcVisualCatalogIxCols> NpcVisualCatalog() => new("npc_visual_catalog", new NpcVisualCatalogCols("npc_visual_catalog"), new NpcVisualCatalogIxCols("npc_visual_catalog"));
         public global::SpacetimeDB.Table<Party, PartyCols, PartyIxCols> Party() => new("party", new PartyCols("party"), new PartyIxCols("party"));
         public global::SpacetimeDB.Table<PartyInvite, PartyInviteCols, PartyInviteIxCols> PartyInvite() => new("party_invite", new PartyInviteCols("party_invite"), new PartyInviteIxCols("party_invite"));
         public global::SpacetimeDB.Table<PartyMember, PartyMemberCols, PartyMemberIxCols> PartyMember() => new("party_member", new PartyMemberCols("party_member"), new PartyMemberIxCols("party_member"));

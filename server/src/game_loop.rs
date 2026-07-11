@@ -68,6 +68,7 @@ use crate::movement_actions::{
     reset_dodge_charge_state_to_full, sync_all_fixed_action_charge_states,
     tick_fixed_action_charge_states, tick_movement_actions,
 };
+use crate::npcs::sync_npc_catalog;
 use crate::npcs::{prune_due_npc_corpse_despawns, tick_npc_combat};
 use crate::party::expire_party_invites;
 use crate::player_input::{
@@ -661,6 +662,7 @@ fn bootstrap_server_state(ctx: &ReducerContext) {
     }
 
     sync_progression_catalogs(ctx);
+    sync_npc_catalog(ctx);
     sync_item_definitions(ctx);
     sync_combat_projectile_definitions(ctx);
     sync_spell_definitions(ctx);

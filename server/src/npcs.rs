@@ -1,5 +1,8 @@
+use std::collections::HashSet;
+use std::sync::OnceLock;
 use std::time::Duration;
 
+use serde::Deserialize;
 use spacetimedb::{reducer, table, Identity, ReducerContext, Table, Timestamp};
 
 use crate::arena::open_world_scene_name_for_identity;
@@ -14,7 +17,7 @@ use crate::defense::{
     resolve_defensible_combat_hit, CombatHitDeliveryKind, DefenseResolution, DefensibleCombatHit,
 };
 use crate::inventory::{clear_loot_for_anchor, corpse_loot_has_items};
-use crate::movement::{FIXED_TICK_SECONDS, MOVE_SPEED};
+use crate::movement::FIXED_TICK_SECONDS;
 use crate::practice::is_training_instance;
 use crate::relations::can_harm;
 use crate::world_collision::{
@@ -68,6 +71,28 @@ const NPC_CHASE_STOP_EPSILON: f32 = 0.05;
 const NPC_FACE_EPSILON: f32 = 0.001;
 const NPC_LOOTED_CORPSE_DESPAWN_DELAY: Duration = Duration::from_secs(8);
 const NPC_UNLOOTED_CORPSE_DESPAWN_DELAY: Duration = Duration::from_secs(60);
+const NPC_CATALOG_JSON: &str = include_str!("npc_catalog.shared.json");
+
+#[table(accessor = npc_template_catalog, public)]
+pub struct NpcTemplateCatalog {
+    #[primary_key]
+    pub template_id: String,
+    #[index(btree)]
+    pub species_id: String,
+    pub display_name: String,
+    pub default_visual_id: String,
+    pub max_hp: i32,
+    pub hit_radius: f32,
+    pub hit_height: f32,
+}
+
+#[table(accessor = npc_visual_catalog, public)]
+pub struct NpcVisualCatalog {
+    #[primary_key]
+    pub visual_id: String,
+    #[index(btree)]
+    pub template_id: String,
+}
 
 #[table(accessor = npc_instance, public)]
 #[derive(Clone)]
@@ -161,11 +186,13 @@ pub struct NpcDespawn {
     pub despawn_at_micros: i64,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct NpcTemplate {
-    pub template_id: &'static str,
-    pub species_id: &'static str,
-    pub display_name: &'static str,
+    pub template_id: String,
+    pub species_id: String,
+    pub display_name: String,
+    pub visual_ids: Vec<String>,
     pub max_hp: i32,
     pub hit_radius: f32,
     pub hit_height: f32,
@@ -179,6 +206,12 @@ pub(crate) struct NpcTemplate {
     /// above the victim's render delay (~100-166 ms) or the telegraph reads
     /// as nothing; design floor is 300 ms.
     pub attack_windup_ms: u64,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct NpcCatalogDocument {
+    templates: Vec<NpcTemplate>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -278,67 +311,12 @@ fn npc_aggro_radius_override() -> Option<f32> {
 }
 
 pub(crate) fn npc_template(template_id: &str) -> Option<NpcTemplate> {
-    let mut template = match normalize_id(template_id).as_str() {
-        NPC_TEMPLATE_KOBOLD_WARRIOR_RD_SWORD_SHIELD => Some(NpcTemplate {
-            template_id: NPC_TEMPLATE_KOBOLD_WARRIOR_RD_SWORD_SHIELD,
-            species_id: "KOBOLD_WARRIOR",
-            display_name: "Kobold Warrior",
-            max_hp: 125,
-            hit_radius: 0.45,
-            hit_height: 1.35,
-            aggro_radius: 8.0,
-            attack_range: 1.90,
-            move_speed: MOVE_SPEED,
-            attack_damage: 8,
-            attack_cadence_ms: 1800,
-            attack_windup_ms: 450,
-        }),
-        NPC_TEMPLATE_KOBOLD_WARRIOR_GN_SPEAR => Some(NpcTemplate {
-            template_id: NPC_TEMPLATE_KOBOLD_WARRIOR_GN_SPEAR,
-            species_id: "KOBOLD_WARRIOR",
-            display_name: "Kobold Spearman",
-            max_hp: 113,
-            hit_radius: 0.45,
-            hit_height: 1.35,
-            aggro_radius: 9.0,
-            attack_range: 2.40,
-            move_speed: MOVE_SPEED,
-            attack_damage: 7,
-            attack_cadence_ms: 1900,
-            // Longest kobold windup after the knight: the spear's 2.40 m
-            // reach is the biggest threat bubble, so it gets the most warning.
-            attack_windup_ms: 500,
-        }),
-        NPC_TEMPLATE_KOBOLD_THIEF_BK_DUAL_SWORD => Some(NpcTemplate {
-            template_id: NPC_TEMPLATE_KOBOLD_THIEF_BK_DUAL_SWORD,
-            species_id: "KOBOLD_THIEF",
-            display_name: "Kobold Thief",
-            max_hp: 90,
-            hit_radius: 0.4,
-            hit_height: 1.25,
-            aggro_radius: 8.5,
-            attack_range: 1.80,
-            move_speed: MOVE_SPEED + 0.5,
-            attack_damage: 6,
-            attack_cadence_ms: 1400,
-            attack_windup_ms: 350,
-        }),
-        NPC_TEMPLATE_KOBOLD_KNIGHT_RD_SWORD_SHIELD => Some(NpcTemplate {
-            template_id: NPC_TEMPLATE_KOBOLD_KNIGHT_RD_SWORD_SHIELD,
-            species_id: "KOBOLD_KNIGHT",
-            display_name: "Kobold Knight",
-            max_hp: 163,
-            hit_radius: 0.5,
-            hit_height: 1.45,
-            aggro_radius: 8.0,
-            attack_range: 1.95,
-            move_speed: MOVE_SPEED,
-            attack_damage: 10,
-            attack_cadence_ms: 2100,
-            attack_windup_ms: 600,
-        }),
-        _ => None,
-    }?;
+    let normalized = normalize_id(template_id);
+    let mut template = npc_catalog()
+        .templates
+        .iter()
+        .find(|row| row.template_id == normalized)?
+        .clone();
 
     if npc_attacks_are_harmless() {
         template.attack_damage = 0;
@@ -352,7 +330,7 @@ pub(crate) fn npc_template(template_id: &str) -> Option<NpcTemplate> {
     Some(template)
 }
 
-fn visual_id_for_template(template: NpcTemplate, visual_id: &str) -> Result<String, String> {
+fn visual_id_for_template(template: &NpcTemplate, visual_id: &str) -> Result<String, String> {
     let visual_id = normalize_id(visual_id);
     if visual_id.is_empty() {
         return Err("NPC visual_id is required".to_string());
@@ -360,13 +338,182 @@ fn visual_id_for_template(template: NpcTemplate, visual_id: &str) -> Result<Stri
 
     // The current kobold templates each expose one appearance. This explicit
     // gate becomes visual-set membership validation when the authored catalog lands.
-    if visual_id != template.template_id {
+    if !template
+        .visual_ids
+        .iter()
+        .any(|candidate| candidate == &visual_id)
+    {
         return Err(format!(
             "NPC visual '{visual_id}' is not valid for template '{}'",
             template.template_id
         ));
     }
     Ok(visual_id)
+}
+
+fn npc_catalog() -> &'static NpcCatalogDocument {
+    static CATALOG: OnceLock<NpcCatalogDocument> = OnceLock::new();
+    CATALOG.get_or_init(|| {
+        parse_npc_catalog(NPC_CATALOG_JSON)
+            .unwrap_or_else(|error| panic!("Invalid npc_catalog.shared.json: {error}"))
+    })
+}
+
+fn parse_npc_catalog(json: &str) -> Result<NpcCatalogDocument, String> {
+    let mut document: NpcCatalogDocument =
+        serde_json::from_str(json).map_err(|error| error.to_string())?;
+    let mut template_ids = HashSet::new();
+    let mut visual_ids = HashSet::new();
+    if document.templates.is_empty() {
+        return Err("templates must not be empty".to_string());
+    }
+
+    for template in &mut document.templates {
+        template.template_id = normalize_id(template.template_id.as_str());
+        template.species_id = normalize_id(template.species_id.as_str());
+        template.display_name = template.display_name.trim().to_string();
+        template.visual_ids = template
+            .visual_ids
+            .iter()
+            .map(|visual_id| normalize_id(visual_id))
+            .collect();
+
+        if template.template_id.is_empty() || !template_ids.insert(template.template_id.clone()) {
+            return Err(format!(
+                "template_id '{}' is empty or duplicated",
+                template.template_id
+            ));
+        }
+        if template.species_id.is_empty() || template.display_name.is_empty() {
+            return Err(format!(
+                "template '{}' requires species_id and display_name",
+                template.template_id
+            ));
+        }
+        if template.visual_ids.is_empty() {
+            return Err(format!(
+                "template '{}' requires at least one visual_id",
+                template.template_id
+            ));
+        }
+        for visual_id in &template.visual_ids {
+            if visual_id.is_empty() || !visual_ids.insert(visual_id.clone()) {
+                return Err(format!("visual_id '{visual_id}' is empty or duplicated"));
+            }
+        }
+        if template.max_hp <= 0
+            || !template.hit_radius.is_finite()
+            || template.hit_radius <= 0.0
+            || !template.hit_height.is_finite()
+            || template.hit_height <= 0.0
+            || !template.aggro_radius.is_finite()
+            || template.aggro_radius <= 0.0
+            || !template.attack_range.is_finite()
+            || template.attack_range <= 0.0
+            || !template.move_speed.is_finite()
+            || template.move_speed <= 0.0
+            || template.attack_damage < 0
+            || template.attack_cadence_ms == 0
+            || template.attack_windup_ms == 0
+        {
+            return Err(format!(
+                "template '{}' has invalid combat or geometry values",
+                template.template_id
+            ));
+        }
+    }
+    Ok(document)
+}
+
+pub(crate) fn sync_npc_catalog(ctx: &ReducerContext) {
+    let catalog = npc_catalog();
+    let expected_templates: HashSet<_> = catalog
+        .templates
+        .iter()
+        .map(|template| template.template_id.clone())
+        .collect();
+    let expected_visuals: HashSet<_> = catalog
+        .templates
+        .iter()
+        .flat_map(|template| template.visual_ids.iter().cloned())
+        .collect();
+
+    for template in &catalog.templates {
+        let row = NpcTemplateCatalog {
+            template_id: template.template_id.clone(),
+            species_id: template.species_id.clone(),
+            display_name: template.display_name.clone(),
+            default_visual_id: template.visual_ids[0].clone(),
+            max_hp: template.max_hp,
+            hit_radius: template.hit_radius,
+            hit_height: template.hit_height,
+        };
+        match ctx
+            .db
+            .npc_template_catalog()
+            .template_id()
+            .find(template.template_id.clone())
+        {
+            Some(existing)
+                if existing.species_id == row.species_id
+                    && existing.display_name == row.display_name
+                    && existing.default_visual_id == row.default_visual_id
+                    && existing.max_hp == row.max_hp
+                    && existing.hit_radius == row.hit_radius
+                    && existing.hit_height == row.hit_height => {}
+            Some(_) => {
+                ctx.db.npc_template_catalog().template_id().update(row);
+            }
+            None => {
+                ctx.db.npc_template_catalog().insert(row);
+            }
+        }
+
+        for visual_id in &template.visual_ids {
+            let row = NpcVisualCatalog {
+                visual_id: visual_id.clone(),
+                template_id: template.template_id.clone(),
+            };
+            match ctx
+                .db
+                .npc_visual_catalog()
+                .visual_id()
+                .find(visual_id.clone())
+            {
+                Some(existing) if existing.template_id == row.template_id => {}
+                Some(_) => {
+                    ctx.db.npc_visual_catalog().visual_id().update(row);
+                }
+                None => {
+                    ctx.db.npc_visual_catalog().insert(row);
+                }
+            }
+        }
+    }
+
+    let stale_templates: Vec<_> = ctx
+        .db
+        .npc_template_catalog()
+        .iter()
+        .map(|row| row.template_id)
+        .filter(|template_id| !expected_templates.contains(template_id))
+        .collect();
+    for template_id in stale_templates {
+        ctx.db
+            .npc_template_catalog()
+            .template_id()
+            .delete(template_id);
+    }
+    let stale_visuals: Vec<_> = ctx
+        .db
+        .npc_visual_catalog()
+        .iter()
+        .map(|row| row.visual_id)
+        .filter(|visual_id| !expected_visuals.contains(visual_id))
+        .collect();
+    for visual_id in stale_visuals {
+        ctx.db.npc_visual_catalog().visual_id().delete(visual_id);
+    }
 }
 
 /// Local measurement aid: `ARENA_NPC_TANKY=1` at build time gives every NPC a
@@ -399,7 +546,7 @@ pub fn spawn_npc(
     let owner = ctx.sender();
     let template = npc_template(template_id.as_str())
         .ok_or_else(|| format!("Unknown NPC template '{template_id}'"))?;
-    let visual_id = visual_id_for_template(template, visual_id.as_str())?;
+    let visual_id = visual_id_for_template(&template, visual_id.as_str())?;
     let faction = NpcFaction::from_wire(faction.as_str())
         .ok_or_else(|| format!("Unknown NPC faction '{faction}'"))?;
 
@@ -653,7 +800,7 @@ pub(crate) fn tick_npc_combat(
         };
 
         let Some(target) =
-            acquire_npc_attack_target(ctx, npc.identity, &physics, template, &candidates)
+            acquire_npc_attack_target(ctx, npc.identity, &physics, &template, &candidates)
         else {
             clear_npc_combat_runtime(ctx, npc.identity);
             continue;
@@ -683,7 +830,7 @@ pub(crate) fn tick_npc_combat(
             continue;
         }
 
-        if target.distance > npc_attack_reach(template, &target) {
+        if target.distance > npc_attack_reach(&template, &target) {
             let move_speed_multiplier = movement_modifiers.move_speed_multiplier(&npc.identity, 0);
             if move_speed_multiplier > 0.0 {
                 chase_npc_toward_target(
@@ -691,7 +838,7 @@ pub(crate) fn tick_npc_combat(
                     now,
                     &npc,
                     &physics,
-                    template,
+                    &template,
                     &target,
                     move_speed_multiplier,
                 );
@@ -715,7 +862,7 @@ pub(crate) fn tick_npc_combat(
             continue;
         }
 
-        begin_npc_melee_swing(ctx, now, &npc, &physics, template, &target);
+        begin_npc_melee_swing(ctx, now, &npc, &physics, &template, &target);
         runtime.next_attack_at = now + Duration::from_millis(template.attack_cadence_ms);
         runtime.next_attack_at_micros = timestamp_to_micros(runtime.next_attack_at);
         upsert_npc_combat_runtime(ctx, runtime);
@@ -781,7 +928,7 @@ fn acquire_npc_attack_target(
     ctx: &ReducerContext,
     npc_identity: Identity,
     npc_physics: &NpcPhysics,
-    template: NpcTemplate,
+    template: &NpcTemplate,
     candidates: &[NpcTargetCandidate],
 ) -> Option<NpcAttackTarget> {
     let Some(npc_context) = resolve_player_world_context(ctx, npc_identity) else {
@@ -838,7 +985,7 @@ fn acquire_npc_attack_target(
     best
 }
 
-fn npc_attack_reach(template: NpcTemplate, target: &NpcAttackTarget) -> f32 {
+fn npc_attack_reach(template: &NpcTemplate, target: &NpcAttackTarget) -> f32 {
     template.attack_range + target.hit_radius
 }
 
@@ -847,7 +994,7 @@ fn chase_npc_toward_target(
     now: Timestamp,
     npc: &NpcInstance,
     physics: &NpcPhysics,
-    template: NpcTemplate,
+    template: &NpcTemplate,
     target: &NpcAttackTarget,
     move_speed_multiplier: f32,
 ) -> NpcPhysics {
@@ -985,7 +1132,7 @@ fn begin_npc_melee_swing(
     now: Timestamp,
     npc: &NpcInstance,
     physics: &NpcPhysics,
-    template: NpcTemplate,
+    template: &NpcTemplate,
     target: &NpcAttackTarget,
 ) {
     let action_instance_id = format!("npc:{}:{}", npc.identity.to_hex(), timestamp_to_micros(now));
@@ -1075,7 +1222,7 @@ fn resolve_npc_pending_swing(
     let Some(target) = resolve_npc_swing_target(ctx, swing.identity, &physics, swing.target) else {
         return;
     };
-    if target.distance > npc_attack_reach(template, &target) {
+    if target.distance > npc_attack_reach(&template, &target) {
         return;
     }
 
@@ -1377,10 +1524,11 @@ fn yaw_delta_abs(a: f32, b: f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::{
-        npc_identity, npc_melee_defense_event_type, npc_template, visual_id_for_template,
-        yaw_for_direction, NpcFaction, NPC_FACTION_FRIENDLY, NPC_FACTION_HOSTILE,
-        NPC_FACTION_NEUTRAL, NPC_TEMPLATE_KOBOLD_THIEF_BK_DUAL_SWORD,
-        NPC_TEMPLATE_KOBOLD_WARRIOR_GN_SPEAR, NPC_TEMPLATE_KOBOLD_WARRIOR_RD_SWORD_SHIELD,
+        npc_catalog, npc_identity, npc_melee_defense_event_type, npc_template, parse_npc_catalog,
+        visual_id_for_template, yaw_for_direction, NpcFaction, NPC_CATALOG_JSON,
+        NPC_FACTION_FRIENDLY, NPC_FACTION_HOSTILE, NPC_FACTION_NEUTRAL,
+        NPC_TEMPLATE_KOBOLD_THIEF_BK_DUAL_SWORD, NPC_TEMPLATE_KOBOLD_WARRIOR_GN_SPEAR,
+        NPC_TEMPLATE_KOBOLD_WARRIOR_RD_SWORD_SHIELD,
     };
     use crate::combat::{COMBAT_EVENT_BLOCK, COMBAT_EVENT_PARRY};
     use crate::defense::DefenseResolution;
@@ -1413,14 +1561,48 @@ mod tests {
     }
 
     #[test]
+    fn authored_npc_catalog_is_valid_and_complete_for_current_templates() {
+        let parsed = parse_npc_catalog(NPC_CATALOG_JSON).unwrap();
+        assert_eq!(parsed.templates.len(), 4);
+        assert_eq!(npc_catalog().templates.len(), 4);
+        assert!(parsed
+            .templates
+            .iter()
+            .all(|template| !template.visual_ids.is_empty()));
+    }
+
+    #[test]
+    fn authored_npc_catalog_rejects_duplicate_visual_ids() {
+        let invalid = r#"{
+            "templates": [
+                {
+                    "template_id": "ONE", "species_id": "TEST", "display_name": "One",
+                    "visual_ids": ["SHARED"], "max_hp": 1, "hit_radius": 1.0,
+                    "hit_height": 1.0, "aggro_radius": 1.0, "attack_range": 1.0,
+                    "move_speed": 1.0, "attack_damage": 0, "attack_cadence_ms": 1,
+                    "attack_windup_ms": 1
+                },
+                {
+                    "template_id": "TWO", "species_id": "TEST", "display_name": "Two",
+                    "visual_ids": ["SHARED"], "max_hp": 1, "hit_radius": 1.0,
+                    "hit_height": 1.0, "aggro_radius": 1.0, "attack_range": 1.0,
+                    "move_speed": 1.0, "attack_damage": 0, "attack_cadence_ms": 1,
+                    "attack_windup_ms": 1
+                }
+            ]
+        }"#;
+        assert!(parse_npc_catalog(invalid).is_err());
+    }
+
+    #[test]
     fn visual_identity_is_normalized_and_scoped_to_its_template() {
         let template = npc_template(NPC_TEMPLATE_KOBOLD_WARRIOR_RD_SWORD_SHIELD).unwrap();
         assert_eq!(
-            visual_id_for_template(template, " kobold_warrior_rd_sword_shield ").unwrap(),
+            visual_id_for_template(&template, " kobold_warrior_rd_sword_shield ").unwrap(),
             NPC_TEMPLATE_KOBOLD_WARRIOR_RD_SWORD_SHIELD
         );
-        assert!(visual_id_for_template(template, "").is_err());
-        assert!(visual_id_for_template(template, NPC_TEMPLATE_KOBOLD_WARRIOR_GN_SPEAR).is_err());
+        assert!(visual_id_for_template(&template, "").is_err());
+        assert!(visual_id_for_template(&template, NPC_TEMPLATE_KOBOLD_WARRIOR_GN_SPEAR).is_err());
     }
 
     #[test]

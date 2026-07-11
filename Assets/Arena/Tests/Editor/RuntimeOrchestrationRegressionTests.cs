@@ -255,6 +255,8 @@ namespace Arena.Tests.Editor
             Assert.That(staticSqlText, Does.Contain("\"combat_rule_catalog\""));
             Assert.That(staticSqlText, Does.Contain("\"resource_catalog\""));
             Assert.That(staticSqlText, Does.Contain("\"stat_scaling_catalog\""));
+            Assert.That(staticSqlText, Does.Contain("\"npc_template_catalog\""));
+            Assert.That(staticSqlText, Does.Contain("\"npc_visual_catalog\""));
             Assert.That(staticSqlText, Does.Contain("\"arena_instance\""));
             Assert.That(staticSqlText, Does.Not.Contain("\"fixed_action_binding_catalog\""));
             Assert.That(staticSqlText, Does.Not.Contain("\"class_catalog\""));

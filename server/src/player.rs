@@ -59,6 +59,7 @@ pub fn client_connected(ctx: &ReducerContext) -> Result<(), String> {
     // Hot module updates do not re-run init; refresh the shared-data stamps
     // here instead. Change-gated, so this writes nothing on a normal connect.
     crate::contract_version::sync_contract_versions(ctx);
+    crate::npcs::sync_npc_catalog(ctx);
 
     if ctx.db.player().identity().find(identity).is_some() {
         // Stale transient rows (mid-flight casts, scheduled melee impacts,
