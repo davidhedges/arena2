@@ -700,6 +700,13 @@ pub(crate) fn open_world_scene_name_for_identity(
             }
         }
     }
+    if let Some(npc) = ctx.db.npc_instance().identity().find(identity) {
+        if world_kind_is_open(npc.world_kind.as_str())
+            && is_known_open_world_scene(npc.open_world_scene_name.as_str())
+        {
+            return npc.open_world_scene_name;
+        }
+    }
 
     ctx.db
         .player_open_world_scene()
@@ -945,11 +952,10 @@ pub fn surface_height_at_y(seed: u64, x: f32, z: f32, current_y: f32) -> f32 {
 }
 
 pub fn arena_seed_for_identity(ctx: &ReducerContext, identity: Identity) -> Option<u64> {
-    let world = ctx.db.player_world().identity().find(identity)?;
-    if !world_kind_is_instance(world.world_kind.as_str()) {
+    let ResolvedWorldContext::Instance(instance_id) = resolve_player_world_context(ctx, identity)?
+    else {
         return None;
-    }
-    let instance_id = world.instance_id?;
+    };
     let arena = ctx.db.arena_instance().id().find(instance_id)?;
     Some(arena.seed)
 }
@@ -959,15 +965,12 @@ pub fn shared_arena_seed_for_identities(
     a: Identity,
     b: Identity,
 ) -> Option<u64> {
-    let a_world = ctx.db.player_world().identity().find(a)?;
-    let b_world = ctx.db.player_world().identity().find(b)?;
-    if !world_kind_is_instance(a_world.world_kind.as_str())
-        || !world_kind_is_instance(b_world.world_kind.as_str())
-    {
+    let ResolvedWorldContext::Instance(a_instance) = resolve_player_world_context(ctx, a)? else {
         return None;
-    }
-    let a_instance = a_world.instance_id?;
-    let b_instance = b_world.instance_id?;
+    };
+    let ResolvedWorldContext::Instance(b_instance) = resolve_player_world_context(ctx, b)? else {
+        return None;
+    };
     if a_instance != b_instance {
         return None;
     }

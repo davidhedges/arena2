@@ -2,7 +2,8 @@ use spacetimedb::{Identity, ReducerContext};
 
 use crate::arena::{
     arena_seed_for_identity, open_world_scene_name_for_identity, players_share_world_context,
-    shared_arena_seed_for_identities, WorldRayHit, WorldRaycastRequest,
+    resolve_player_world_context, shared_arena_seed_for_identities, ResolvedWorldContext,
+    WorldRayHit, WorldRaycastRequest,
 };
 use crate::combat::actor_snapshot::CombatActorSnapshot;
 use crate::practice::is_training_instance;
@@ -886,31 +887,27 @@ pub(crate) fn terrain_surface_y_for_caster(
 }
 
 fn flat_ground_only_for_identity(ctx: &ReducerContext, identity: Identity) -> bool {
-    let Some(world) = ctx.db.player_world().identity().find(identity) else {
+    let Some(ResolvedWorldContext::Instance(instance_id)) =
+        resolve_player_world_context(ctx, identity)
+    else {
         return false;
     };
-
-    let Some(instance_id) = world.instance_id else {
-        return false;
-    };
-
     is_training_instance(ctx, instance_id)
 }
 
 fn shared_flat_ground_only_for_identities(ctx: &ReducerContext, a: Identity, b: Identity) -> bool {
-    let Some(world_a) = ctx.db.player_world().identity().find(a) else {
+    let Some(ResolvedWorldContext::Instance(instance_a)) = resolve_player_world_context(ctx, a)
+    else {
         return false;
     };
-    let Some(world_b) = ctx.db.player_world().identity().find(b) else {
+    let Some(ResolvedWorldContext::Instance(instance_b)) = resolve_player_world_context(ctx, b)
+    else {
         return false;
     };
-    if world_a.instance_id != world_b.instance_id {
+    if instance_a != instance_b {
         return false;
     }
-    let Some(instance_id) = world_a.instance_id else {
-        return false;
-    };
-    is_training_instance(ctx, instance_id)
+    is_training_instance(ctx, instance_a)
 }
 
 #[cfg(test)]

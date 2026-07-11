@@ -1038,6 +1038,17 @@ pub fn spawn_npc(
     let target_yaw = wrap_yaw(owner_physics.yaw + std::f32::consts::PI);
     let spawn_x = owner_physics.pos_x + owner_physics.yaw.sin() * NPC_SPAWN_FORWARD;
     let spawn_z = owner_physics.pos_z + owner_physics.yaw.cos() * NPC_SPAWN_FORWARD;
+    let arena_seed =
+        instance_id.and_then(|id| ctx.db.arena_instance().id().find(id).map(|row| row.seed));
+    let flat_ground_only = instance_id.is_some_and(|id| is_training_instance(ctx, id));
+    let spawn_y = surface_height_for_world_at_y_with_layout_for_scene(
+        arena_seed,
+        flat_ground_only,
+        (!is_instance).then_some(open_world_scene_name.as_str()),
+        spawn_x,
+        spawn_z,
+        owner_physics.pos_y,
+    );
 
     ctx.db.npc_instance().insert(NpcInstance {
         identity,
@@ -1056,7 +1067,7 @@ pub fn spawn_npc(
         instance_id,
         open_world_scene_name,
         home_x: spawn_x,
-        home_y: owner_physics.pos_y,
+        home_y: spawn_y,
         home_z: spawn_z,
         spawned_at: ctx.timestamp,
     });
@@ -1073,7 +1084,7 @@ pub fn spawn_npc(
     ctx.db.npc_physics().insert(NpcPhysics {
         identity,
         pos_x: spawn_x,
-        pos_y: owner_physics.pos_y,
+        pos_y: spawn_y,
         pos_z: spawn_z,
         yaw: target_yaw,
         updated_at: ctx.timestamp,
