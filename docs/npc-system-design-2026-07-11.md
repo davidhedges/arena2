@@ -1,7 +1,7 @@
 # NPC System Design
 
 Date: 2026-07-11
-Status: implementation in progress; actor-generic targeting, shared spell/projectile/heal execution, caster/support/archer exemplars, and validated native visual profiles with shared VFX sockets are landed through `32b2fa28`, while full visual authoring remains
+Status: implementation in progress; actor-generic targeting/world queries, shared spell/projectile/heal execution, caster/support/archer exemplars, and validated native visual profiles with shared VFX sockets are landed through `981ecefb`, while full visual authoring remains
 
 ## Outcome
 
@@ -18,7 +18,7 @@ This is a substantial engineering project. The existing kobold implementation is
 
 ## Implementation progress (2026-07-11 handoff)
 
-The implementation has started and has been committed in coherent slices. The implementation baseline summarized here is `32b2fa28` (`Author NPC presentation sockets`). Player combat semantics are an explicit guardrail: actor-generic seams were extended where required, but player damage, healing arithmetic, authorization, animation fallback, input, prediction, rewind, and action-bar behavior must not be redesigned as part of the NPC rollout.
+The implementation has started and has been committed in coherent slices. The implementation baseline summarized here is `981ecefb` (`Fix NPC LOS world context`). Player combat semantics are an explicit guardrail: actor-generic seams were extended where required, but player damage, healing arithmetic, authorization, animation fallback, input, prediction, rewind, and action-bar behavior must not be redesigned as part of the NPC rollout.
 
 ### Landed foundations
 
@@ -41,6 +41,7 @@ The implementation has started and has been committed in coherent slices. The im
 - A server-private decision inspector is available when `ARENA_NPC_AI_DEBUG=1`. It records decision sequence, chosen action/target, score and threat summaries, plus deterministic rejection counts for role, selector, health, nearby-count, status, missing-ability, cooldown, and distance gates.
 - Perception now exposes relation-filtered enemy and ally candidate views. `CURRENT_ENEMY`, `NEAREST_ENEMY`, `SELF`, and `LOWEST_HEALTH_ALLY` resolve independently of execution with deterministic health/distance/identity tie-breaking, and the winning selector is included in inspector output.
 - NPC melee commitments validate current actor-generic pose, audience/relation, range, facing, and the shared scene-query LOS path both when committing and at impact.
+- Scene-query world resolution now uses the actor-generic world context for NPC arena seeds, training-instance flat-ground policy, and open-world scene identity. Debug NPC spawns also resolve ground height at their actual forward X/Z point, preventing valid NPC support casts from querying unrelated or origin-overlapping world geometry.
 - The existing server-actor spell adapter resolves NPC-scoped authored abilities and free-resource contracts without player action bars or a parallel cast path. A Skeleton Wizard frost projectile uses the shared cast, active-cast, cooldown, projectile, effect, combat-event, and VFX-cue lifecycle.
 - Ranged actions honor authored approach/hold/retreat distance bands, and active casts pause replanning/movement until the shared cast lifecycle reaches a terminal state.
 - A Lich support exemplar uses `LOWEST_HEALTH_ALLY` to apply an authored Bone Ward through the shared targeted buff/status pipeline, including ally relation, LOS, forbidden-status, cast-event, and VFX contracts.
@@ -65,6 +66,7 @@ The implementation has started and has been committed in coherent slices. The im
 - `dotnet build Assembly-CSharp.csproj --no-restore`: succeeded with 0 errors and 11 existing obsolete-API warnings in third-party/current Unity code.
 - `dotnet build Assembly-CSharp-Editor.csproj --no-restore`: succeeded with 0 errors and 17 existing obsolete/dead-field warnings.
 - Focused Unity edit-mode profile validation: 5 passed, 0 failed. The tests load all three real vendor prefabs, validate explicit Animator/state/socket mappings and fallback policies, and resolve their catalog entries.
+- `ops/npc-support-decision-probe.py`: passed against an isolated local database. At full health the Lich applied Bone Ward to a 125/125 Kobold; after one real player auto-attack reduced it to 103/125, Lich Mend raised it to 121/125.
 - Generated C# bindings are current for the landed runtime schema.
 - The working tree still contains the user-owned `.gitignore` change and an unrelated untracked `docs/perf-opportunities-2026-07-11.md`; preserve those unless their owner explicitly brings them into scope.
 
@@ -73,7 +75,7 @@ The implementation has started and has been committed in coherent slices. The im
 The next coherent slice should finish presentation for the landed gameplay exemplars without creating a creature-only event language:
 
 1. Capture mixed-group presentation evidence for Kobold, Skeleton Archer, Skeleton Wizard, and Lich together.
-2. Capture runtime evidence for Lich heal-versus-buff choice under controlled ally health and status conditions.
+2. Add a batch-mode mixed-group presentation runner only if the manual evidence pass cannot cover repeatable animation/VFX lifecycle assertions.
 3. Extend profile authoring to nameplate, ground-effect, selection, and bounds anchors only as concrete exemplar presentation evidence requires.
 4. Keep the Skeleton Archer purely ranged with retreat/hold behavior until suitable melee weapon and animation assets are deliberately authored.
 
