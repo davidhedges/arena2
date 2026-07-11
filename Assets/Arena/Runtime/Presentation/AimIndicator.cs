@@ -27,6 +27,7 @@ namespace Arena.Presentation
         private const float GroundOffset = 0.05f;
         private const int SegmentCount = 144;
         private const int RadialBandCount = 32;
+        private const int SurfaceSampleRingCount = 4;
         private const float InnerFadeRadiusFraction = 0.20f;
         private const float EdgeStartRadiusFraction = 0.96f;
         private const float MaxAimRayDistance = 1000f;
@@ -36,6 +37,13 @@ namespace Arena.Presentation
         private const float RebuildPositionEpsilonSquared = 0.000025f;
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
         private static readonly int ColorId = Shader.PropertyToID("_Color");
+
+        private Vector3[]? _vertices;
+        private Vector2[]? _uvs;
+        private Color[]? _colors;
+        private int[]? _triangles;
+        private float[]? _surfaceHeights;
+        private bool _meshTopologyInitialized;
 
         /// <summary>Current aim point on the ground plane. Valid only when active.</summary>
         public Vector3 AimPoint { get; private set; }
@@ -93,22 +101,6 @@ namespace Arena.Presentation
             _lastCenter = new Vector3(float.PositiveInfinity, float.PositiveInfinity, float.PositiveInfinity);
             _lastRadius = -1f;
             _lastColor = new Color(float.NaN, float.NaN, float.NaN, float.NaN);
-        }
-
-        private void Update()
-        {
-            if (!ArenaRuntimeSceneGate.ShouldRunArenaRuntimeInActiveScene())
-            {
-                Hide();
-                return;
-            }
-
-            if (_circle == null || !_circle.activeSelf) return;
-
-            LocalPlayerInputSource? input = EntityRegistry.Instance?.LocalPlayerEntity?.GetLocalInputSource();
-            if (input == null) return;
-
-            RefreshFromCursor(input.MousePosition);
         }
 
         public bool RefreshFromCursor(Vector2 mousePosition)
@@ -212,6 +204,7 @@ namespace Arena.Presentation
 
             var mf = go.AddComponent<MeshFilter>();
             _circleMesh = new Mesh { name = "AimCircle_Surface" };
+            _circleMesh.MarkDynamic();
             mf.sharedMesh = _circleMesh;
 
             var mr = go.AddComponent<MeshRenderer>();
@@ -287,39 +280,119 @@ namespace Arena.Presentation
                 && Mathf.Abs(a.a - b.a) < 0.001f;
         }
 
-        private static void RebuildCircleMesh(Mesh mesh, Vector3 center, float radius, Color color)
+        private void RebuildCircleMesh(Mesh mesh, Vector3 center, float radius, Color color)
         {
-            int verticesPerRing = SegmentCount + 1;
-            int vertexCount = verticesPerRing * (RadialBandCount + 1);
-            var vertices = new Vector3[vertexCount];
-            var uvs = new Vector2[vertexCount];
-            var colors = new Color[vertexCount];
-            var triangles = new int[RadialBandCount * SegmentCount * 6];
+            EnsureMeshBuffers();
+            if (_vertices == null
+                || _uvs == null
+                || _colors == null
+                || _triangles == null
+                || _surfaceHeights == null)
+            {
+                return;
+            }
 
+            int verticesPerRing = SegmentCount + 1;
             float innerFadeRadius = radius * InnerFadeRadiusFraction;
             float edgeStartRadius = radius * EdgeStartRadiusFraction;
+            TryGetMovementEnvironment(out IMovementEnvironment? environment);
+            SampleSurfaceRings(
+                _surfaceHeights,
+                center,
+                innerFadeRadius,
+                radius,
+                environment);
+
             for (int ring = 0; ring <= RadialBandCount; ring++)
             {
                 float radialT = ring / (float)RadialBandCount;
                 float ringRadius = Mathf.Lerp(innerFadeRadius, radius, radialT);
                 float radialAlpha = EvaluateRadialAlpha(radialT, innerFadeRadius, radius, edgeStartRadius);
+                float samplePosition = radialT * (SurfaceSampleRingCount - 1);
+                int lowerSampleRing = Mathf.FloorToInt(samplePosition);
+                int upperSampleRing = Mathf.Min(lowerSampleRing + 1, SurfaceSampleRingCount - 1);
+                float sampleBlend = samplePosition - lowerSampleRing;
 
                 for (int segment = 0; segment <= SegmentCount; segment++)
                 {
                     float radians = (segment / (float)SegmentCount) * Mathf.PI * 2f;
                     int vertexIndex = ring * verticesPerRing + segment;
-                    WriteCircleVertex(vertices, uvs, vertexIndex, center, radians, ringRadius, radius);
-                    colors[vertexIndex] = new Color(color.r, color.g, color.b, color.a * radialAlpha);
+                    float localY = Mathf.Lerp(
+                        _surfaceHeights[lowerSampleRing * verticesPerRing + segment],
+                        _surfaceHeights[upperSampleRing * verticesPerRing + segment],
+                        sampleBlend);
+                    WriteCircleVertex(_vertices, vertexIndex, radians, ringRadius, localY);
+                    _colors[vertexIndex] = new Color(color.r, color.g, color.b, color.a * radialAlpha);
                 }
             }
 
-            WriteCircleTriangles(triangles);
-            mesh.Clear();
-            mesh.vertices = vertices;
-            mesh.uv = uvs;
-            mesh.colors = colors;
-            mesh.triangles = triangles;
+            mesh.vertices = _vertices;
+            mesh.colors = _colors;
+            if (!_meshTopologyInitialized)
+            {
+                mesh.uv = _uvs;
+                mesh.triangles = _triangles;
+                _meshTopologyInitialized = true;
+            }
             mesh.RecalculateBounds();
+        }
+
+        private void EnsureMeshBuffers()
+        {
+            if (_vertices != null)
+                return;
+
+            int verticesPerRing = SegmentCount + 1;
+            int vertexCount = verticesPerRing * (RadialBandCount + 1);
+            _vertices = new Vector3[vertexCount];
+            _uvs = new Vector2[vertexCount];
+            _colors = new Color[vertexCount];
+            _triangles = new int[RadialBandCount * SegmentCount * 6];
+            _surfaceHeights = new float[SurfaceSampleRingCount * verticesPerRing];
+
+            for (int ring = 0; ring <= RadialBandCount; ring++)
+            {
+                float radialT = ring / (float)RadialBandCount;
+                float normalizedRadius = Mathf.Lerp(InnerFadeRadiusFraction, 1f, radialT);
+                for (int segment = 0; segment <= SegmentCount; segment++)
+                {
+                    float radians = (segment / (float)SegmentCount) * Mathf.PI * 2f;
+                    int vertexIndex = ring * verticesPerRing + segment;
+                    _uvs[vertexIndex] = new Vector2(
+                        0.5f + Mathf.Cos(radians) * normalizedRadius * 0.5f,
+                        0.5f + Mathf.Sin(radians) * normalizedRadius * 0.5f);
+                }
+            }
+
+            WriteCircleTriangles(_triangles);
+        }
+
+        private static void SampleSurfaceRings(
+            float[] surfaceHeights,
+            Vector3 center,
+            float innerRadius,
+            float outerRadius,
+            IMovementEnvironment? environment)
+        {
+            int verticesPerRing = SegmentCount + 1;
+            for (int sampleRing = 0; sampleRing < SurfaceSampleRingCount; sampleRing++)
+            {
+                float radialT = sampleRing / (float)(SurfaceSampleRingCount - 1);
+                float ringRadius = Mathf.Lerp(innerRadius, outerRadius, radialT);
+                int ringStart = sampleRing * verticesPerRing;
+                for (int segment = 0; segment < SegmentCount; segment++)
+                {
+                    float radians = (segment / (float)SegmentCount) * Mathf.PI * 2f;
+                    float worldX = center.x + Mathf.Cos(radians) * ringRadius;
+                    float worldZ = center.z + Mathf.Sin(radians) * ringRadius;
+                    float surfaceY = environment != null
+                        ? SampleSurfaceY(new Vector3(worldX, center.y, worldZ), environment)
+                        : center.y;
+                    surfaceHeights[ringStart + segment] = surfaceY - center.y + GroundOffset;
+                }
+
+                surfaceHeights[ringStart + SegmentCount] = surfaceHeights[ringStart];
+            }
         }
 
         private static float EvaluateRadialAlpha(
@@ -336,22 +409,14 @@ namespace Arena.Presentation
 
         private static void WriteCircleVertex(
             Vector3[] vertices,
-            Vector2[] uvs,
             int index,
-            Vector3 center,
             float radians,
             float ringRadius,
-            float outerRadius)
+            float localY)
         {
             float localX = Mathf.Cos(radians) * ringRadius;
             float localZ = Mathf.Sin(radians) * ringRadius;
-            var world = new Vector3(center.x + localX, center.y, center.z + localZ);
-            float localY = SampleSurfaceY(world) - center.y + GroundOffset;
-
             vertices[index] = new Vector3(localX, localY, localZ);
-            uvs[index] = new Vector2(
-                0.5f + localX / (outerRadius * 2f),
-                0.5f + localZ / (outerRadius * 2f));
         }
 
         private static void WriteCircleTriangles(int[] triangles)

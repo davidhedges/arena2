@@ -85,7 +85,7 @@ namespace Arena.Combat
                 return;
             bool aimActive = SpellInputHandler.Instance?.IsAimActive == true;
 
-            if (input.LeftMousePressed)
+            if (!aimActive && input.LeftMousePressed)
                 TrySelectTargetAtCursor(false);
 
             if (!aimActive && input.RightMouseReleased)
@@ -113,7 +113,10 @@ namespace Arena.Combat
             }
 
             // Hover highlighting
-            if (!input.CursorLocked)
+            // Point-targeted spell aim owns the unlocked cursor. Entity hover is
+            // irrelevant in that mode and otherwise performs four screen-space
+            // projections for every visible player/NPC each frame.
+            if (!aimActive && !input.CursorLocked)
                 UpdateHover(input.MousePosition);
             else
                 HoveredTarget = null;

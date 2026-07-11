@@ -51,9 +51,11 @@ Mesh combining is a larger compatibility project: the runtime can rebuild an exi
 
 The main HUD uses one root canvas, while cast-bar and cooldown fills change every combat frame (`HUDController.cs:1507,2459`). If a representative capture shows material `Canvas.BuildBatch`/UI rebuild time, isolate animated regions behind nested canvases or evaluate shader-driven fills. Do not restructure the HUD from static inference alone.
 
-### Target hover throttling
+### Area-spell aim cursor hot path — complete
 
-With the cursor unlocked, `TargetSelector` projects four points per selectable player/NPC every frame (`Combat/TargetSelector.cs:196-282`). Throttle or reuse the result only if crowd captures show this scan matters; preserve immediate click selection even if hover refresh is throttled.
+Completed 2026-07-11 in `TargetSelector.cs` and `AimIndicator.cs`.
+
+Spell aim now owns the unlocked cursor without also running the entity-hover scan. `SpellInputHandler` is the single aim-point refresh owner, eliminating the duplicate per-frame surface ray. The terrain-conforming indicator retains its 144-segment/32-band presentation mesh, but reuses persistent mesh buffers and topology while sampling four radial terrain rings and interpolating the remaining visual bands. This removes per-moving-frame mesh-array churn and reduces ground-height queries from 4,785 to 576 per rebuild without flattening the indicator onto uneven ground.
 
 ### Melee interruption ghost pooling
 

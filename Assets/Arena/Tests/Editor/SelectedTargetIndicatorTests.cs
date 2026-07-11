@@ -9,6 +9,8 @@ namespace Arena.Tests.Editor
     {
         private const string IndicatorPath = "Assets/Arena/Runtime/Presentation/Targeting/SelectedTargetIndicator.cs";
         private const string AimIndicatorPath = "Assets/Arena/Runtime/Presentation/AimIndicator.cs";
+        private const string SpellInputHandlerPath = "Assets/Arena/Runtime/Input/SpellInputHandler.cs";
+        private const string TargetSelectorPath = "Assets/Arena/Runtime/Combat/TargetSelector.cs";
         private const string PlayerEntityPath = "Assets/Arena/Runtime/Entity/PlayerEntity.cs";
 
         [Test]
@@ -55,6 +57,23 @@ namespace Arena.Tests.Editor
             Assert.That(source, Does.Contain("RefreshSelectedTargetIndicator();"));
             Assert.That(source, Does.Contain("_isSelected && !IsLocalPlayer && IsAlive && !IsEliminated && !IsDestroyed"));
             Assert.That(source, Does.Not.Contain("SetFollowTransform"));
+        }
+
+        [Test]
+        public void AreaSpellAimCursorPath_AvoidsDuplicateRefreshAndPerVertexSurfaceQueries()
+        {
+            string aimSource = File.ReadAllText(AimIndicatorPath);
+            string spellInputSource = File.ReadAllText(SpellInputHandlerPath);
+            string targetSelectorSource = File.ReadAllText(TargetSelectorPath);
+
+            Assert.That(aimSource, Does.Not.Contain("private void Update()"));
+            Assert.That(aimSource, Does.Contain("private const int SurfaceSampleRingCount = 4;"));
+            Assert.That(aimSource, Does.Contain("EnsureMeshBuffers();"));
+            Assert.That(aimSource, Does.Contain("SampleSurfaceRings("));
+            Assert.That(aimSource, Does.Contain("_meshTopologyInitialized"));
+            Assert.That(spellInputSource, Does.Contain("aim.RefreshFromCursor(input.MousePosition)"));
+            Assert.That(targetSelectorSource, Does.Contain("if (!aimActive && input.LeftMousePressed)"));
+            Assert.That(targetSelectorSource, Does.Contain("if (!aimActive && !input.CursorLocked)"));
         }
     }
 }

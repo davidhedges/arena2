@@ -46,9 +46,13 @@ Backups/**/*.bak
 Assets/**/*.unitypackage
 Assets/**/*.unitypackage.meta
 
-# Imported local package
-Assets/NHance/
-Assets/NHance.meta
+# Imported local character packages
+Assets/ThirdParty/AssetStore/Characters/KoboldPack/
+Assets/ThirdParty/AssetStore/Characters/KoboldPack.meta
+Assets/ThirdParty/AssetStore/Characters/StylizedFantasyEnemyNPCBundle/
+Assets/ThirdParty/AssetStore/Characters/StylizedFantasyEnemyNPCBundle.meta
+Assets/ThirdParty/AssetStore/Characters/StylizedFantasyEnemyNPCBundle2/
+Assets/ThirdParty/AssetStore/Characters/StylizedFantasyEnemyNPCBundle2.meta
 
 # Imported local UI package
 Assets/Heat - Complete Modern UI/
