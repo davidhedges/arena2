@@ -11,9 +11,9 @@ use crate::combat::actor_snapshot::CombatActorSnapshotSet;
 #[allow(unused_imports)]
 use crate::combat::status_effect as _;
 use crate::combat::{
-    mark_harmful_combat_action, queue_effects, timestamp_to_micros, CombatEvent, DamageDelivery,
-    EffectPacket, MovementModifiers, COMBAT_EVENT_BLOCK, COMBAT_EVENT_CAST, COMBAT_EVENT_FIZZLE,
-    COMBAT_EVENT_IMPACT, COMBAT_EVENT_PARRY, COMBAT_METADATA_NONE,
+    is_in_combat, mark_harmful_combat_action, queue_effects, timestamp_to_micros, CombatEvent,
+    DamageDelivery, EffectPacket, MovementModifiers, COMBAT_EVENT_BLOCK, COMBAT_EVENT_CAST,
+    COMBAT_EVENT_FIZZLE, COMBAT_EVENT_IMPACT, COMBAT_EVENT_PARRY, COMBAT_METADATA_NONE,
     COMBAT_SCALAR_MELEE_RELEASE_DELAY_SECONDS, COMBAT_SCALAR_NONE, COMBAT_SEQUENCE_NONE,
     DAMAGE_SOURCE_KIND_MELEE,
 };
@@ -1364,6 +1364,9 @@ pub(crate) fn tick_npc_combat(
             )
         });
         let decision_was_due = committed_target.is_none();
+        if decision_was_due && !is_in_combat(ctx, npc.identity, now) {
+            clear_npc_threat(ctx, npc.identity);
+        }
         let target = committed_target.or_else(|| {
             acquire_npc_attack_target(
                 ctx,
