@@ -1480,6 +1480,58 @@ pub(crate) fn tick_npc_combat(
             upsert_npc_combat_runtime(ctx, runtime);
             continue;
         };
+        let ranged_band = template
+            .action_kit
+            .iter()
+            .find(|entry| entry.ability_id == action.ability_id() && entry.role == "RANGED_OFFENSE")
+            .map(|entry| {
+                (
+                    npc_tactical_band(
+                        target.distance,
+                        entry.preferred_min_distance,
+                        entry.preferred_max_distance,
+                        brain.retreat_tolerance,
+                    ),
+                    entry.preferred_max_distance,
+                )
+            });
+        if ranged_band.is_some_and(|(band, _)| band == NpcTacticalBand::Retreat) {
+            let move_speed_multiplier = movement_modifiers.move_speed_multiplier(&npc.identity, 0);
+            if move_speed_multiplier > 0.0 {
+                retreat_npc_from_target(
+                    ctx,
+                    now,
+                    &npc,
+                    &physics,
+                    &template,
+                    &target,
+                    move_speed_multiplier,
+                );
+            } else {
+                face_npc_target(ctx, now, &physics, &target);
+            }
+            upsert_npc_combat_runtime(ctx, runtime);
+            continue;
+        }
+        if let Some((NpcTacticalBand::Approach, preferred_max)) = ranged_band {
+            let move_speed_multiplier = movement_modifiers.move_speed_multiplier(&npc.identity, 0);
+            if move_speed_multiplier > 0.0 {
+                chase_npc_toward_target(
+                    ctx,
+                    now,
+                    &npc,
+                    &physics,
+                    &template,
+                    (preferred_max - target.hit_radius).max(0.0),
+                    &target,
+                    move_speed_multiplier,
+                );
+            } else {
+                face_npc_target(ctx, now, &physics, &target);
+            }
+            upsert_npc_combat_runtime(ctx, runtime);
+            continue;
+        }
         if target.distance > npc_attack_reach(action.range(), &target) {
             let move_speed_multiplier = movement_modifiers.move_speed_multiplier(&npc.identity, 0);
             if move_speed_multiplier > 0.0 {
@@ -2038,6 +2090,13 @@ enum NpcExecutableAction {
     },
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum NpcTacticalBand {
+    Approach,
+    Hold,
+    Retreat,
+}
+
 impl NpcExecutableAction {
     fn ability_id(&self) -> &str {
         match self {
@@ -2087,6 +2146,21 @@ fn npc_executable_action_for_ability(
             })
         }
         _ => None,
+    }
+}
+
+fn npc_tactical_band(
+    distance: f32,
+    preferred_min_distance: f32,
+    preferred_max_distance: f32,
+    retreat_tolerance: f32,
+) -> NpcTacticalBand {
+    if distance + retreat_tolerance.max(0.0) < preferred_min_distance {
+        NpcTacticalBand::Retreat
+    } else if distance > preferred_max_distance {
+        NpcTacticalBand::Approach
+    } else {
+        NpcTacticalBand::Hold
     }
 }
 
@@ -2494,6 +2568,32 @@ fn chase_npc_toward_target(
         target.dir_z,
         travel,
         desired_yaw,
+    )
+}
+
+fn retreat_npc_from_target(
+    ctx: &ReducerContext,
+    now: Timestamp,
+    npc: &NpcInstance,
+    physics: &NpcPhysics,
+    template: &NpcTemplate,
+    target: &NpcAttackTarget,
+    move_speed_multiplier: f32,
+) -> NpcPhysics {
+    let travel = template.move_speed * move_speed_multiplier * FIXED_TICK_SECONDS;
+    if travel <= f32::EPSILON {
+        return face_npc_target(ctx, now, physics, target);
+    }
+    move_npc_along(
+        ctx,
+        now,
+        npc,
+        physics,
+        template,
+        -target.dir_x,
+        -target.dir_z,
+        travel,
+        yaw_for_direction(target.dir_x, target.dir_z),
     )
 }
 
@@ -3214,13 +3314,13 @@ mod tests {
     use super::{
         npc_action_count_requirements_met, npc_action_distance_score, npc_catalog,
         npc_decision_interval_ms, npc_health_fraction, npc_identity, npc_identity_cmp,
-        npc_is_outside_leash_from_positions, npc_melee_defense_event_type,
+        npc_is_outside_leash_from_positions, npc_melee_defense_event_type, npc_tactical_band,
         npc_target_stickiness_keeps_current, npc_target_stickiness_keeps_scored_current,
         npc_template, npc_threat_key, parse_npc_catalog, visual_id_for_template, yaw_for_direction,
-        NpcAttackTarget, NpcFaction, NpcNearbyCounts, NpcScoredTarget, NpcThreatComponents,
-        NPC_CATALOG_JSON, NPC_FACTION_FRIENDLY, NPC_FACTION_HOSTILE, NPC_FACTION_NEUTRAL,
-        NPC_TEMPLATE_KOBOLD_THIEF_BK_DUAL_SWORD, NPC_TEMPLATE_KOBOLD_WARRIOR_GN_SPEAR,
-        NPC_TEMPLATE_KOBOLD_WARRIOR_RD_SWORD_SHIELD,
+        NpcAttackTarget, NpcFaction, NpcNearbyCounts, NpcScoredTarget, NpcTacticalBand,
+        NpcThreatComponents, NPC_CATALOG_JSON, NPC_FACTION_FRIENDLY, NPC_FACTION_HOSTILE,
+        NPC_FACTION_NEUTRAL, NPC_TEMPLATE_KOBOLD_THIEF_BK_DUAL_SWORD,
+        NPC_TEMPLATE_KOBOLD_WARRIOR_GN_SPEAR, NPC_TEMPLATE_KOBOLD_WARRIOR_RD_SWORD_SHIELD,
     };
     use crate::combat::{COMBAT_EVENT_BLOCK, COMBAT_EVENT_PARRY};
     use crate::defense::DefenseResolution;
@@ -3253,6 +3353,26 @@ mod tests {
         );
         assert!(npc_action_distance_score(1.0, 1.0, 3.0, 5.0, false).is_none());
         assert!(npc_action_distance_score(1.0, 1.0, 3.0, 5.0, true).unwrap() < 1.0);
+    }
+
+    #[test]
+    fn npc_ranged_tactical_band_respects_retreat_tolerance() {
+        assert_eq!(
+            npc_tactical_band(3.9, 6.0, 16.0, 1.0),
+            NpcTacticalBand::Retreat
+        );
+        assert_eq!(
+            npc_tactical_band(5.0, 6.0, 16.0, 1.0),
+            NpcTacticalBand::Hold
+        );
+        assert_eq!(
+            npc_tactical_band(10.0, 6.0, 16.0, 1.0),
+            NpcTacticalBand::Hold
+        );
+        assert_eq!(
+            npc_tactical_band(16.1, 6.0, 16.0, 1.0),
+            NpcTacticalBand::Approach
+        );
     }
 
     #[test]
