@@ -32,6 +32,7 @@ namespace Arena.Tests.Editor
             Assert.That(source, Does.Contain("new CueLookupKey(OwnerKindSpell, fact.SpellId, fact.Trigger)"));
             Assert.That(source, Does.Contain("new CueLookupKey(OwnerKindMeleeStrike, fact.StrikeId, fact.Trigger)"));
             Assert.That(source, Does.Contain("suppressSpellOverrides: true"));
+            Assert.That(source, Does.Contain("VfxRoleProjectileTrail"));
             Assert.That(source, Does.Contain("entry.MatchesHitIndex(fact.HitIndex)"));
             Assert.That(source, Does.Contain("output.Sort((a, b) => a.SortOrder.CompareTo(b.SortOrder))"));
         }

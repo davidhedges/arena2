@@ -33,6 +33,7 @@ namespace Arena.Presentation
         private const string AttachModeFollowAnchor = "FOLLOW_ANCHOR";
         private const string AttachModeWorldAlignedToFacing = "WORLD_ALIGNED_TO_FACING";
         private const string VfxRoleProjectileBody = "PROJECTILE_BODY";
+        private const string VfxRoleProjectileTrail = "PROJECTILE_TRAIL";
         private const string VfxRoleTravelBody = "TRAVEL_BODY";
         private const string OwnerKindAbility = "ABILITY";
         private const string AnchorLeftHand = "LEFT_HAND";
@@ -328,10 +329,13 @@ namespace Arena.Presentation
                 string role = WireIdentifier.Normalize(cue.VfxRole);
                 if (string.Equals(role, VfxRoleProjectileBody, StringComparison.Ordinal))
                 {
-                    if (TryStartPredictedProjectile(cue, fact, pending, spellDef, out string predictedProjectileKey))
+                    string trailVfxId = ResolveProjectileTrailVfxId(matchingCues, cue.ProjectileSequenceIndex);
+                    if (TryStartPredictedProjectile(cue, trailVfxId, fact, pending, spellDef, out string predictedProjectileKey))
                         pending = pending.WithProjectileKey(predictedProjectileKey);
                     continue;
                 }
+                if (string.Equals(role, VfxRoleProjectileTrail, StringComparison.Ordinal))
+                    continue;
                 if (string.Equals(role, VfxRoleTravelBody, StringComparison.Ordinal))
                     continue;
 
@@ -943,6 +947,7 @@ namespace Arena.Presentation
 
         private bool TryStartPredictedProjectile(
             CombatVfxCueCatalog cue,
+            string projectileTrailVfxId,
             CombatVfxFact fact,
             PendingPredictedSpellVfx pending,
             SpellDefinition spellDef,
@@ -956,6 +961,7 @@ namespace Arena.Presentation
                 AbilityId = fact.AbilityId,
                 SourceKind = CombatEventSources.Spell,
                 ProjectileId = cue.VfxId,
+                ProjectileTrailVfxId = projectileTrailVfxId,
                 ProjectileInstanceId = predictedProjectileKey,
                 HitIndex = -1,
                 EventType = CombatEventTypes.Release,
@@ -983,6 +989,25 @@ namespace Arena.Presentation
 
             ProjectileVisuals.Start(row);
             return true;
+        }
+
+        private static string ResolveProjectileTrailVfxId(
+            IEnumerable<CombatVfxCueCatalog> cues,
+            int projectileSequenceIndex)
+        {
+            foreach (CombatVfxCueCatalog cue in cues)
+            {
+                if (cue.ProjectileSequenceIndex == projectileSequenceIndex
+                    && string.Equals(
+                        WireIdentifier.Normalize(cue.VfxRole),
+                        VfxRoleProjectileTrail,
+                        StringComparison.Ordinal))
+                {
+                    return cue.VfxId;
+                }
+            }
+
+            return string.Empty;
         }
 
         private static Vector3 ResolveLocalCasterPosition(PlayerEntity caster)
@@ -1158,7 +1183,8 @@ namespace Arena.Presentation
         private void DispatchCue(CombatVfxFact fact, CombatVfxCueCatalog cue)
         {
             string vfxRole = WireIdentifier.Normalize(cue.VfxRole);
-            if (string.Equals(vfxRole, VfxRoleProjectileBody, StringComparison.Ordinal))
+            if (string.Equals(vfxRole, VfxRoleProjectileBody, StringComparison.Ordinal)
+                || string.Equals(vfxRole, VfxRoleProjectileTrail, StringComparison.Ordinal))
                 return;
             if (string.Equals(vfxRole, VfxRoleTravelBody, StringComparison.Ordinal))
             {

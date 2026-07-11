@@ -39,6 +39,7 @@ namespace Arena.Presentation.VFX
             float maxDistance,
             float visualScale,
             GameObject prefab,
+            CombatVFXRegistry.Template? trailTemplate = null,
             bool authoritativeLifetime = false)
         {
             _group = new GameObject($"VFX_Projectile_{ShortId(instanceId)}");
@@ -48,7 +49,16 @@ namespace Arena.Presentation.VFX
             _projectileBody.transform.localRotation = Quaternion.identity;
             _projectileBody.transform.localScale = Vector3.one;
             VFXUtils.ApplyPrefabPresentationScale(_projectileBody, ResolveVisualScale(visualScale));
-            _hasVisualEffect = _projectileBody.GetComponentInChildren<VisualEffect>(true) != null;
+            if (trailTemplate != null)
+            {
+                GameObject trail = Object.Instantiate(trailTemplate.Prefab, _group.transform, false);
+                trail.name = $"{trailTemplate.Prefab.name}_Trail";
+                trail.transform.localPosition = Vector3.zero;
+                trail.transform.localRotation = Quaternion.identity;
+                trail.transform.localScale = Vector3.one;
+                VFXUtils.ApplyPrefabPresentationScale(trail, ResolveVisualScale(trailTemplate.Scale));
+            }
+            _hasVisualEffect = _group.GetComponentInChildren<VisualEffect>(true) != null;
             Initialize(instanceId, position, direction, speed, maxDistance, authoritativeLifetime);
         }
 

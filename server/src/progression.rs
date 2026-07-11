@@ -824,6 +824,8 @@ struct CombatVfxCueDefinition {
 struct CombatVfxPresentationManifest {
     projectile_body_by_ability: HashMap<(String, u32), CombatVfxProjectileBodySelection>,
     projectile_body_by_spell: HashMap<(String, u32), CombatVfxProjectileBodySelection>,
+    projectile_trail_by_ability: HashMap<(String, u32), CombatVfxProjectileBodySelection>,
+    projectile_trail_by_spell: HashMap<(String, u32), CombatVfxProjectileBodySelection>,
 }
 
 #[derive(Clone, Debug)]
@@ -837,9 +839,12 @@ impl CombatVfxPresentationManifest {
     fn build(catalog: &ProgressionCatalogFile) -> Self {
         let mut manifest = Self::default();
         for cue in &catalog.combat_vfx_cues {
-            if normalize_identifier(cue.trigger.as_str()) != "SPELL_RELEASE"
-                || normalize_identifier(cue.vfx_role.as_str()) != "PROJECTILE_BODY"
-            {
+            if normalize_identifier(cue.trigger.as_str()) != "SPELL_RELEASE" {
+                continue;
+            }
+
+            let role = normalize_identifier(cue.vfx_role.as_str());
+            if role != "PROJECTILE_BODY" && role != "PROJECTILE_TRAIL" {
                 continue;
             }
 
@@ -847,23 +852,20 @@ impl CombatVfxPresentationManifest {
             let owner_id = normalize_identifier(cue.owner_id.as_str());
             let sequence_index = cue.projectile_sequence_index.unwrap_or(0);
             let vfx_id = normalize_identifier(cue.vfx_id.as_str());
-            match owner_kind.as_str() {
-                "ABILITY" => Self::insert_projectile_body_selection(
-                    &mut manifest.projectile_body_by_ability,
-                    owner_id,
-                    sequence_index,
-                    vfx_id,
-                    cue.sort_order,
-                ),
-                "SPELL" => Self::insert_projectile_body_selection(
-                    &mut manifest.projectile_body_by_spell,
-                    owner_id,
-                    sequence_index,
-                    vfx_id,
-                    cue.sort_order,
-                ),
-                _ => {}
-            }
+            let selections = match (role.as_str(), owner_kind.as_str()) {
+                ("PROJECTILE_BODY", "ABILITY") => &mut manifest.projectile_body_by_ability,
+                ("PROJECTILE_BODY", "SPELL") => &mut manifest.projectile_body_by_spell,
+                ("PROJECTILE_TRAIL", "ABILITY") => &mut manifest.projectile_trail_by_ability,
+                ("PROJECTILE_TRAIL", "SPELL") => &mut manifest.projectile_trail_by_spell,
+                _ => continue,
+            };
+            Self::insert_projectile_body_selection(
+                selections,
+                owner_id,
+                sequence_index,
+                vfx_id,
+                cue.sort_order,
+            );
         }
 
         manifest
@@ -886,6 +888,23 @@ impl CombatVfxPresentationManifest {
             .map(|selection| selection.vfx_id.as_str())
     }
 
+    fn projectile_trail_vfx_id_for_spell(
+        &self,
+        ability_id: &str,
+        spell_kind: &str,
+        projectile_sequence_index: u32,
+    ) -> Option<&str> {
+        let normalized_ability_id = normalize_identifier(ability_id);
+        let normalized_spell_kind = normalize_identifier(spell_kind);
+        self.projectile_trail_by_ability
+            .get(&(normalized_ability_id, projectile_sequence_index))
+            .or_else(|| {
+                self.projectile_trail_by_spell
+                    .get(&(normalized_spell_kind, projectile_sequence_index))
+            })
+            .map(|selection| selection.vfx_id.as_str())
+    }
+
     #[cfg(test)]
     fn selected_projectile_body_cue_count(
         &self,
@@ -899,6 +918,24 @@ impl CombatVfxPresentationManifest {
             .get(&(normalized_ability_id, projectile_sequence_index))
             .or_else(|| {
                 self.projectile_body_by_spell
+                    .get(&(normalized_spell_kind, projectile_sequence_index))
+            })
+            .map_or(0, |selection| selection.authored_count)
+    }
+
+    #[cfg(test)]
+    fn selected_projectile_trail_cue_count(
+        &self,
+        ability_id: &str,
+        spell_kind: &str,
+        projectile_sequence_index: u32,
+    ) -> usize {
+        let normalized_ability_id = normalize_identifier(ability_id);
+        let normalized_spell_kind = normalize_identifier(spell_kind);
+        self.projectile_trail_by_ability
+            .get(&(normalized_ability_id, projectile_sequence_index))
+            .or_else(|| {
+                self.projectile_trail_by_spell
                     .get(&(normalized_spell_kind, projectile_sequence_index))
             })
             .map_or(0, |selection| selection.authored_count)
@@ -2599,6 +2636,16 @@ pub(crate) fn projectile_body_vfx_id_for_spell(
 ) -> Option<String> {
     combat_vfx_presentation_manifest()
         .projectile_body_vfx_id_for_spell(ability_id, spell_kind, projectile_sequence_index)
+        .map(str::to_string)
+}
+
+pub(crate) fn projectile_trail_vfx_id_for_spell(
+    ability_id: &str,
+    spell_kind: &str,
+    projectile_sequence_index: u32,
+) -> Option<String> {
+    combat_vfx_presentation_manifest()
+        .projectile_trail_vfx_id_for_spell(ability_id, spell_kind, projectile_sequence_index)
         .map(str::to_string)
 }
 
@@ -6206,7 +6253,14 @@ mod tests {
             "FOLLOW_ANCHOR",
             "WORLD_ALIGNED_TO_FACING",
         ];
-        let supported_vfx_roles = ["", "ONE_SHOT", "ATTACHED", "PROJECTILE_BODY", "TRAVEL_BODY"];
+        let supported_vfx_roles = [
+            "",
+            "ONE_SHOT",
+            "ATTACHED",
+            "PROJECTILE_BODY",
+            "PROJECTILE_TRAIL",
+            "TRAVEL_BODY",
+        ];
         let supported_lifecycles = [
             "",
             "DURATION",
@@ -6369,6 +6423,22 @@ mod tests {
                         "combat VFX cue '{}' PROJECTILE_BODY must not use FOLLOW_ANCHOR",
                         cue.vfx_id
                     ),
+                    V::ProjectileTrailOffRelease => format!(
+                        "combat VFX cue '{}' uses PROJECTILE_TRAIL outside SPELL_RELEASE",
+                        cue.vfx_id
+                    ),
+                    V::ProjectileTrailFollowAnchor => format!(
+                        "combat VFX cue '{}' PROJECTILE_TRAIL must not use FOLLOW_ANCHOR",
+                        cue.vfx_id
+                    ),
+                    V::ProjectileTrailBadLifecycle => format!(
+                        "combat VFX cue '{}' PROJECTILE_TRAIL must use UNTIL_TERMINAL_EVENT",
+                        cue.vfx_id
+                    ),
+                    V::ProjectileTrailNonZeroDuration => format!(
+                        "combat VFX cue '{}' PROJECTILE_TRAIL must set duration_ms to 0",
+                        cue.vfx_id
+                    ),
                     V::TravelBodyOffRelease => format!(
                         "combat VFX cue '{}' uses TRAVEL_BODY outside SPELL_RELEASE",
                         cue.vfx_id
@@ -6399,14 +6469,14 @@ mod tests {
                     message,
                 ));
             }
-            // Context-dependent PROJECTILE_BODY rules (field legality is in the shared checker above).
-            if vfx_role == "PROJECTILE_BODY" {
+            // Context-dependent projectile visual rules (field legality is in the shared checker above).
+            if matches!(vfx_role.as_str(), "PROJECTILE_BODY" | "PROJECTILE_TRAIL") {
                 if cue.start_delay_ms > 0 {
                     errors.push(CombatAuthoringError::new(
                         CombatAuthoringRule::CombatVfxCueResolves,
                         format!(
-                            "combat VFX cue '{}' PROJECTILE_BODY must not author start_delay_ms; projectile body visuals bind to active projectile runtime rows",
-                            cue.vfx_id
+                            "combat VFX cue '{}' {} must not author start_delay_ms; projectile visuals bind to active projectile runtime rows",
+                            cue.vfx_id, vfx_role
                         ),
                     ));
                 }
@@ -6416,8 +6486,8 @@ mod tests {
                         errors.push(CombatAuthoringError::new(
                             CombatAuthoringRule::CombatVfxCueResolves,
                             format!(
-                                "combat VFX cue '{}' PROJECTILE_BODY owner '{}:{}' must resolve to a projectile-producing spell ability",
-                                cue.vfx_id, cue.owner_kind, cue.owner_id
+                                "combat VFX cue '{}' {} owner '{}:{}' must resolve to a projectile-producing spell ability",
+                                cue.vfx_id, vfx_role, cue.owner_kind, cue.owner_id
                             ),
                         ));
                     }
@@ -6440,8 +6510,8 @@ mod tests {
                         errors.push(CombatAuthoringError::new(
                             CombatAuthoringRule::CombatVfxCueResolves,
                             format!(
-                                "combat VFX cue '{}' PROJECTILE_BODY owner '{}:{}' must resolve to a projectile-producing spell kind",
-                                cue.vfx_id, cue.owner_kind, cue.owner_id
+                                "combat VFX cue '{}' {} owner '{}:{}' must resolve to a projectile-producing spell kind",
+                                cue.vfx_id, vfx_role, cue.owner_kind, cue.owner_id
                             ),
                         ));
                     }
@@ -6526,6 +6596,27 @@ mod tests {
                         selected_count
                     ),
                 ));
+            }
+
+            let sequence_count = projectile_sequence_count_by_ability
+                .get(ability_id.as_str())
+                .copied()
+                .unwrap_or(1);
+            for sequence_index in 0..sequence_count {
+                let selected_trail_count = vfx_manifest.selected_projectile_trail_cue_count(
+                    ability_id.as_str(),
+                    spell_kind.as_str(),
+                    sequence_index,
+                );
+                if selected_trail_count > 1 {
+                    errors.push(CombatAuthoringError::new(
+                        CombatAuthoringRule::CombatVfxCueResolves,
+                        format!(
+                            "spell projectile ability '{}' kind '{}' must resolve at most one selected PROJECTILE_TRAIL cue for projectile_sequence_index {}; found {}",
+                            ability_id, spell_kind, sequence_index, selected_trail_count
+                        ),
+                    ));
+                }
             }
         }
 
@@ -6652,6 +6743,30 @@ mod tests {
                         "lifecycle": "UNTIL_TERMINAL_EVENT",
                         "projectile_sequence_index": 0,
                         "sort_order": 30
+                    },
+                    {
+                        "owner_kind": "SPELL",
+                        "owner_id": "FIREBALL",
+                        "trigger": "SPELL_RELEASE",
+                        "anchor": "RIGHT_HAND",
+                        "vfx_id": "SPELL_FIREBALL_TRAIL",
+                        "attach_mode": "SPAWN_WORLD",
+                        "vfx_role": "PROJECTILE_TRAIL",
+                        "lifecycle": "UNTIL_TERMINAL_EVENT",
+                        "projectile_sequence_index": 0,
+                        "sort_order": 40
+                    },
+                    {
+                        "owner_kind": "ABILITY",
+                        "owner_id": "SPELL_FIREBALL",
+                        "trigger": "SPELL_RELEASE",
+                        "anchor": "RIGHT_HAND",
+                        "vfx_id": "ABILITY_FIREBALL_TRAIL",
+                        "attach_mode": "SPAWN_WORLD",
+                        "vfx_role": "PROJECTILE_TRAIL",
+                        "lifecycle": "UNTIL_TERMINAL_EVENT",
+                        "projectile_sequence_index": 0,
+                        "sort_order": 50
                     }
                 ]
             }"#,
@@ -6666,6 +6781,14 @@ mod tests {
         assert_eq!(
             manifest.projectile_body_vfx_id_for_spell("OTHER_FIREBALL", "FIREBALL", 0),
             Some("SPELL_FIREBALL_PROJECTILE")
+        );
+        assert_eq!(
+            manifest.projectile_trail_vfx_id_for_spell("SPELL_FIREBALL", "FIREBALL", 0),
+            Some("ABILITY_FIREBALL_TRAIL")
+        );
+        assert_eq!(
+            manifest.projectile_trail_vfx_id_for_spell("OTHER_FIREBALL", "FIREBALL", 0),
+            Some("SPELL_FIREBALL_TRAIL")
         );
     }
 

@@ -54,7 +54,7 @@ namespace Arena.Presentation
             if (_active.TryGetValue(key, out ISpellVFX old))
                 DisposeVfx(old);
 
-            ProjectileVfxPool.Rental? rental = _projectilePool.TryRent(template, context.ActionInstanceId);
+            ProjectileVfxPool.Rental? rental = _projectilePool.TryRent(template, null, context.ActionInstanceId);
             _active[key] = rental != null
                 ? new WeaponProjectileVFX(
                     context.ActionInstanceId,

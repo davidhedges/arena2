@@ -35,6 +35,10 @@ pub enum CueFieldViolation {
     ProjectileBodyOffRelease,
     /// Rule 12b — `PROJECTILE_BODY` must not `FOLLOW_ANCHOR`.
     ProjectileBodyFollowAnchor,
+    ProjectileTrailOffRelease,
+    ProjectileTrailFollowAnchor,
+    ProjectileTrailBadLifecycle,
+    ProjectileTrailNonZeroDuration,
     /// Rule 13a — `TRAVEL_BODY` only on `SPELL_RELEASE`.
     TravelBodyOffRelease,
     /// Rule 13b — `TRAVEL_BODY` must not `FOLLOW_ANCHOR`.
@@ -88,6 +92,21 @@ pub fn check_cue_field_rules(f: &CueFields) -> Vec<CueFieldViolation> {
         }
         if f.attach_mode == "FOLLOW_ANCHOR" {
             violations.push(ProjectileBodyFollowAnchor);
+        }
+    }
+    // Rule 12c-f — an optional trail is a second visual on the same authoritative projectile.
+    if f.role == "PROJECTILE_TRAIL" {
+        if f.trigger != "SPELL_RELEASE" {
+            violations.push(ProjectileTrailOffRelease);
+        }
+        if f.attach_mode == "FOLLOW_ANCHOR" {
+            violations.push(ProjectileTrailFollowAnchor);
+        }
+        if f.lifecycle != "UNTIL_TERMINAL_EVENT" {
+            violations.push(ProjectileTrailBadLifecycle);
+        }
+        if !f.duration_is_zero {
+            violations.push(ProjectileTrailNonZeroDuration);
         }
     }
     // Rule 13 — TRAVEL_BODY.
@@ -191,6 +210,21 @@ mod tests {
         let v = check_cue_field_rules(&f);
         assert!(v.contains(&CueFieldViolation::ProjectileBodyOffRelease));
         assert!(v.contains(&CueFieldViolation::ProjectileBodyFollowAnchor));
+    }
+
+    #[test]
+    fn rule12_projectile_trail_field_legality() {
+        let mut f = legal_one_shot();
+        f.role = "PROJECTILE_TRAIL";
+        f.trigger = "SPELL_CAST";
+        f.attach_mode = "FOLLOW_ANCHOR";
+        f.lifecycle = "DURATION";
+        f.duration_is_zero = false;
+        let v = check_cue_field_rules(&f);
+        assert!(v.contains(&CueFieldViolation::ProjectileTrailOffRelease));
+        assert!(v.contains(&CueFieldViolation::ProjectileTrailFollowAnchor));
+        assert!(v.contains(&CueFieldViolation::ProjectileTrailBadLifecycle));
+        assert!(v.contains(&CueFieldViolation::ProjectileTrailNonZeroDuration));
     }
 
     #[test]

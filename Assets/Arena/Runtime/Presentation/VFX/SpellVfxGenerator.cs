@@ -81,6 +81,8 @@ namespace Arena.Presentation
         SelfFlash = 7,
         /// <summary>Brief one-shot burst at the caster's feet — the common aura visual.</summary>
         AuraGround = 8,
+        /// <summary>Optional visual that shares the projectile body's runtime root and lifetime.</summary>
+        ProjectileTrail = 9,
     }
 
     /// <summary>
@@ -203,6 +205,10 @@ namespace Arena.Presentation
         ProjectileBodyOffRelease,
         /// <summary>Rule 12b — <c>PROJECTILE_BODY</c> must not <c>FOLLOW_ANCHOR</c>.</summary>
         ProjectileBodyFollowAnchor,
+        ProjectileTrailOffRelease,
+        ProjectileTrailFollowAnchor,
+        ProjectileTrailBadLifecycle,
+        ProjectileTrailNonZeroDuration,
         /// <summary>Rule 13a — <c>TRAVEL_BODY</c> only on <c>SPELL_RELEASE</c>.</summary>
         TravelBodyOffRelease,
         /// <summary>Rule 13b — <c>TRAVEL_BODY</c> must not <c>FOLLOW_ANCHOR</c>.</summary>
@@ -233,6 +239,10 @@ namespace Arena.Presentation
                 CueFieldViolation.CastTimeHandGlowNotUntilRelease => "cast-time hand SPELL_CAST cue must be UNTIL_RELEASE_EVENT",
                 CueFieldViolation.ProjectileBodyOffRelease => "PROJECTILE_BODY outside SPELL_RELEASE",
                 CueFieldViolation.ProjectileBodyFollowAnchor => "PROJECTILE_BODY must not FOLLOW_ANCHOR",
+                CueFieldViolation.ProjectileTrailOffRelease => "PROJECTILE_TRAIL outside SPELL_RELEASE",
+                CueFieldViolation.ProjectileTrailFollowAnchor => "PROJECTILE_TRAIL must not FOLLOW_ANCHOR",
+                CueFieldViolation.ProjectileTrailBadLifecycle => "PROJECTILE_TRAIL must use UNTIL_TERMINAL_EVENT",
+                CueFieldViolation.ProjectileTrailNonZeroDuration => "PROJECTILE_TRAIL must set duration 0",
                 CueFieldViolation.TravelBodyOffRelease => "TRAVEL_BODY outside SPELL_RELEASE",
                 CueFieldViolation.TravelBodyFollowAnchor => "TRAVEL_BODY must not FOLLOW_ANCHOR",
                 CueFieldViolation.TravelBodyBadLifecycle => "TRAVEL_BODY must use UNTIL_TERMINAL_EVENT",
@@ -264,6 +274,7 @@ namespace Arena.Presentation
         public const string RoleOneShot = "ONE_SHOT";
         public const string RoleAttached = "ATTACHED";
         public const string RoleProjectileBody = "PROJECTILE_BODY";
+        public const string RoleProjectileTrail = "PROJECTILE_TRAIL";
         public const string RoleTravelBody = "TRAVEL_BODY";
 
         public const string LifecycleDuration = "DURATION";
@@ -423,6 +434,16 @@ namespace Arena.Presentation
                         anchor: CueAnchor.Hand,
                         attachMode: AttachSpawnWorld,
                         vfxRole: RoleProjectileBody,
+                        lifecycle: LifecycleUntilTerminalEvent,
+                        duration: CueDurationPolicy.Zero,
+                        projectileSequenceIndex: 0);
+
+                case SpellVfxSlot.ProjectileTrail:
+                    return new CueWiring(
+                        trigger: TriggerSpellRelease,
+                        anchor: CueAnchor.Hand,
+                        attachMode: AttachSpawnWorld,
+                        vfxRole: RoleProjectileTrail,
                         lifecycle: LifecycleUntilTerminalEvent,
                         duration: CueDurationPolicy.Zero,
                         projectileSequenceIndex: 0);
@@ -602,6 +623,18 @@ namespace Arena.Presentation
                     violations.Add(CueFieldViolation.ProjectileBodyFollowAnchor);
             }
 
+            if (f.Role == RoleProjectileTrail)
+            {
+                if (f.Trigger != TriggerSpellRelease)
+                    violations.Add(CueFieldViolation.ProjectileTrailOffRelease);
+                if (f.AttachMode == AttachFollowAnchor)
+                    violations.Add(CueFieldViolation.ProjectileTrailFollowAnchor);
+                if (f.Lifecycle != LifecycleUntilTerminalEvent)
+                    violations.Add(CueFieldViolation.ProjectileTrailBadLifecycle);
+                if (!f.DurationIsZero)
+                    violations.Add(CueFieldViolation.ProjectileTrailNonZeroDuration);
+            }
+
             // Rule 13 — TRAVEL_BODY.
             if (f.Role == RoleTravelBody)
             {
@@ -654,6 +687,8 @@ namespace Arena.Presentation
             // index. (The server instead derives/defaults it from the catalog row — not a shared rule.)
             if (w.VfxRole == RoleProjectileBody && w.ProjectileSequenceIndex == null)
                 return "PROJECTILE_BODY needs a projectile_sequence_index";
+            if (w.VfxRole == RoleProjectileTrail && w.ProjectileSequenceIndex == null)
+                return "PROJECTILE_TRAIL needs a projectile_sequence_index";
 
             return null;
         }

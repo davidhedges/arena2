@@ -224,7 +224,7 @@ namespace Arena.Editor
                     string attachMode = Normalize(cue.attach_mode);
                     string role = EffectiveRole(cue.vfx_role);
                     string lifecycle = EffectiveLifecycle(cue.lifecycle);
-                    string sequence = role == RoleProjectileBody
+                    string sequence = role == RoleProjectileBody || role == SpellVfxGenerator.RoleProjectileTrail
                         ? $" | sequence={cue.projectile_sequence_index}"
                         : string.Empty;
                     string templateStatus = CombatVFXTemplateRegistry.CanResolveTemplate(cue.vfx_id)

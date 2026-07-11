@@ -12,6 +12,7 @@ namespace Arena.Presentation
         private const string OwnerKindSpell = "SPELL";
         private const string OwnerKindAbility = "ABILITY";
         private const string VfxRoleProjectileBody = "PROJECTILE_BODY";
+        private const string VfxRoleProjectileTrail = "PROJECTILE_TRAIL";
         private const string VfxRoleTravelBody = "TRAVEL_BODY";
 
         internal sealed class Index
@@ -196,6 +197,7 @@ namespace Arena.Presentation
             {
                 string role = WireIdentifier.Normalize(cue.VfxRole);
                 bool bodyRole = string.Equals(role, VfxRoleProjectileBody, StringComparison.Ordinal)
+                    || string.Equals(role, VfxRoleProjectileTrail, StringComparison.Ordinal)
                     || string.Equals(role, VfxRoleTravelBody, StringComparison.Ordinal);
                 return new CueOverrideKey(
                     WireIdentifier.Normalize(cue.Trigger),

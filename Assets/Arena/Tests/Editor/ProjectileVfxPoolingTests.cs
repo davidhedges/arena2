@@ -21,7 +21,8 @@ namespace Arena.Tests.Editor
             Assert.That(source, Does.Contain("internal sealed class ProjectileVfxPool"));
             Assert.That(source, Does.Contain("MaxInactivePerVfxId"));
             Assert.That(source, Does.Contain("Dictionary<string, Stack<Rental>>"));
-            Assert.That(source, Does.Contain("WireIdentifier.Normalize(template.VfxId)"));
+            Assert.That(source, Does.Contain("CompositionKey(template.VfxId, trailTemplate?.VfxId)"));
+            Assert.That(source, Does.Contain("trailTemplate.Prefab"));
             Assert.That(source, Does.Contain("HasUnsafePoolingComponents(template.Prefab)"));
             Assert.That(source, Does.Contain("GetComponentsInChildren<VisualEffect>(true)"));
             Assert.That(source, Does.Contain("UnityEngine.Object.Instantiate(template.Prefab"));
@@ -49,11 +50,11 @@ namespace Arena.Tests.Editor
             string travelController = File.ReadAllText(TravelControllerPath);
 
             Assert.That(projectileController, Does.Contain("private readonly ProjectileVfxPool _projectilePool"));
-            Assert.That(projectileController, Does.Contain("_projectilePool.TryRent(template, projectileKey)"));
+            Assert.That(projectileController, Does.Contain("_projectilePool.TryRent(template, trailTemplate, projectileKey)"));
             Assert.That(projectileController, Does.Contain("_projectilePool.Dispose();"));
 
             Assert.That(travelController, Does.Contain("private readonly ProjectileVfxPool _projectilePool"));
-            Assert.That(travelController, Does.Contain("_projectilePool.TryRent(template, context.ActionInstanceId)"));
+            Assert.That(travelController, Does.Contain("_projectilePool.TryRent(template, null, context.ActionInstanceId)"));
             Assert.That(travelController, Does.Contain("_projectilePool.Dispose();"));
         }
     }

@@ -325,14 +325,21 @@ namespace Arena.Editor
             slotNotes = new List<string>();
             var rows = new List<GeneratedCue>();
 
-            foreach (SpellVfxSlot slot in SpellVfxGenerator.RequestedSlots(archetype, mode))
+            var requestedSlots = new List<SpellVfxSlot>(SpellVfxGenerator.RequestedSlots(archetype, mode));
+            if (archetype == SpellVfxArchetype.Projectile)
+                requestedSlots.Insert(requestedSlots.IndexOf(SpellVfxSlot.ProjectileBody) + 1, SpellVfxSlot.ProjectileTrail);
+
+            foreach (SpellVfxSlot slot in requestedSlots)
             {
                 if (!TryResolvePaletteEntry(
                         schoolPalettes, spellOverrides, school, abilityId, slot, out PaletteEntry entry))
                 {
-                    slotNotes.Add(
-                        $"Slot '{slot}' is requested by the {archetype} archetype but neither the {NoneIfEmpty(school)} "
-                        + $"school palette nor a {abilityId} signature override provides a vfx_id — the generator omits it.");
+                    if (slot != SpellVfxSlot.ProjectileTrail)
+                    {
+                        slotNotes.Add(
+                            $"Slot '{slot}' is requested by the {archetype} archetype but neither the {NoneIfEmpty(school)} "
+                            + $"school palette nor a {abilityId} signature override provides a vfx_id — the generator omits it.");
+                    }
                     continue;
                 }
 
@@ -691,6 +698,7 @@ namespace Arena.Editor
                 SpellVfxSlot.CastGlow => "cast_glow",
                 SpellVfxSlot.Muzzle => "muzzle",
                 SpellVfxSlot.ProjectileBody => "projectile_body",
+                SpellVfxSlot.ProjectileTrail => "projectile_trail",
                 SpellVfxSlot.TravelBody => "travel_body",
                 SpellVfxSlot.Impact => "impact",
                 SpellVfxSlot.Burst => "burst",
@@ -711,9 +719,10 @@ namespace Arena.Editor
             AddDiff(diffs, "vfx_id", gen.VfxId, Normalize(cat.vfx_id));
             AddDiff(diffs, "duration_ms", gen.DurationMs.ToString(), cat.duration_ms.ToString());
 
-            // projectile_sequence_index only participates for PROJECTILE_BODY rows (elsewhere the catalog omits it).
+            // projectile_sequence_index participates for visuals bound to an authoritative projectile row.
             if (gen.ProjectileSequenceIndex.HasValue
-                && string.Equals(gen.Role, SpellVfxGenerator.RoleProjectileBody, System.StringComparison.Ordinal))
+                && (string.Equals(gen.Role, SpellVfxGenerator.RoleProjectileBody, System.StringComparison.Ordinal)
+                    || string.Equals(gen.Role, SpellVfxGenerator.RoleProjectileTrail, System.StringComparison.Ordinal)))
             {
                 AddDiff(diffs, "projectile_sequence_index",
                     gen.ProjectileSequenceIndex.Value.ToString(), cat.projectile_sequence_index.ToString());
@@ -745,6 +754,7 @@ namespace Arena.Editor
                 case "cast_glow": slot = SpellVfxSlot.CastGlow; return true;
                 case "muzzle": slot = SpellVfxSlot.Muzzle; return true;
                 case "projectile_body": slot = SpellVfxSlot.ProjectileBody; return true;
+                case "projectile_trail": slot = SpellVfxSlot.ProjectileTrail; return true;
                 case "travel_body": slot = SpellVfxSlot.TravelBody; return true;
                 case "impact": slot = SpellVfxSlot.Impact; return true;
                 case "burst": slot = SpellVfxSlot.Burst; return true;
@@ -763,6 +773,11 @@ namespace Arena.Editor
             if (string.Equals(role, SpellVfxGenerator.RoleProjectileBody, System.StringComparison.Ordinal))
             {
                 slot = SpellVfxSlot.ProjectileBody;
+                return true;
+            }
+            if (string.Equals(role, SpellVfxGenerator.RoleProjectileTrail, System.StringComparison.Ordinal))
+            {
+                slot = SpellVfxSlot.ProjectileTrail;
                 return true;
             }
             if (string.Equals(role, SpellVfxGenerator.RoleTravelBody, System.StringComparison.Ordinal))
@@ -848,7 +863,8 @@ namespace Arena.Editor
         private static string DescribeGenerated(GeneratedCue gen)
         {
             string sequence = gen.ProjectileSequenceIndex.HasValue
-                && string.Equals(gen.Role, SpellVfxGenerator.RoleProjectileBody, System.StringComparison.Ordinal)
+                && (string.Equals(gen.Role, SpellVfxGenerator.RoleProjectileBody, System.StringComparison.Ordinal)
+                    || string.Equals(gen.Role, SpellVfxGenerator.RoleProjectileTrail, System.StringComparison.Ordinal))
                 ? $" | sequence={gen.ProjectileSequenceIndex.Value}"
                 : string.Empty;
             return $"{gen.Trigger} | {gen.Role} | {gen.Anchor} | {gen.AttachMode} | {gen.VfxId} | {gen.Lifecycle} "
@@ -859,6 +875,7 @@ namespace Arena.Editor
         {
             string role = EffectiveRole(cue.vfx_role);
             string sequence = string.Equals(role, SpellVfxGenerator.RoleProjectileBody, System.StringComparison.Ordinal)
+                || string.Equals(role, SpellVfxGenerator.RoleProjectileTrail, System.StringComparison.Ordinal)
                 ? $" | sequence={cue.projectile_sequence_index}"
                 : string.Empty;
             return $"{Normalize(cue.trigger)} | {role} | {Normalize(cue.anchor)} | {Normalize(cue.attach_mode)} "

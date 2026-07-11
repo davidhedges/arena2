@@ -1647,6 +1647,23 @@ fn emit_projectile_event_with_metadata(
     metrics: &mut ProjectileTickMetricsFrame,
 ) {
     let hit = hit.unwrap_or(Identity::ZERO);
+    let projectile_trail_vfx_id = if projectile.source_kind == "SPELL" {
+        crate::progression::projectile_trail_vfx_id_for_spell(
+            projectile.ability_id.as_str(),
+            projectile.action_kind.as_str(),
+            projectile.projectile_sequence_index,
+        )
+        .or_else(|| {
+            crate::progression::projectile_trail_vfx_id_for_spell(
+                projectile.ability_id.as_str(),
+                projectile.action_kind.as_str(),
+                0,
+            )
+        })
+        .unwrap_or_default()
+    } else {
+        String::new()
+    };
     let terminal = is_projectile_presentation_terminal(
         event_type,
         metadata_kind,
@@ -1663,6 +1680,7 @@ fn emit_projectile_event_with_metadata(
             ability_id: projectile.ability_id.clone(),
             source_kind: projectile.source_kind.clone(),
             projectile_id: projectile.projectile_id.clone(),
+            projectile_trail_vfx_id,
             projectile_instance_id: projectile.projectile_instance_id.clone(),
             hit_index: projectile.hit_index as i32,
             event_type: event_type.to_string(),

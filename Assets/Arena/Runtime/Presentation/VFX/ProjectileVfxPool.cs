@@ -23,14 +23,18 @@ namespace Arena.Presentation.VFX
             _poolRoot.SetActive(false);
         }
 
-        public Rental? TryRent(CombatVFXRegistry.Template template, string instanceId)
+        public Rental? TryRent(
+            CombatVFXRegistry.Template template,
+            CombatVFXRegistry.Template? trailTemplate,
+            string instanceId)
         {
             if (_disposed || template.Prefab == null)
                 return null;
-            if (HasUnsafePoolingComponents(template.Prefab))
+            if (HasUnsafePoolingComponents(template.Prefab)
+                || (trailTemplate != null && HasUnsafePoolingComponents(trailTemplate.Prefab)))
                 return null;
 
-            string key = WireIdentifier.Normalize(template.VfxId);
+            string key = CompositionKey(template.VfxId, trailTemplate?.VfxId);
             Rental? rental = null;
             try
             {
@@ -42,7 +46,7 @@ namespace Arena.Presentation.VFX
 
                 rental = inactive.Count > 0
                     ? inactive.Pop()
-                    : CreateRental(key, template);
+                    : CreateRental(key, template, trailTemplate);
                 rental.PrepareForRent(instanceId);
                 return rental;
             }
@@ -71,7 +75,10 @@ namespace Arena.Presentation.VFX
                 UnityEngine.Object.Destroy(_poolRoot);
         }
 
-        private Rental CreateRental(string key, CombatVFXRegistry.Template template)
+        private Rental CreateRental(
+            string key,
+            CombatVFXRegistry.Template template,
+            CombatVFXRegistry.Template? trailTemplate)
         {
             var root = new GameObject("PooledProjectileVFX");
             root.SetActive(false);
@@ -82,6 +89,16 @@ namespace Arena.Presentation.VFX
             body.transform.localRotation = Quaternion.identity;
             body.transform.localScale = Vector3.one;
             VFXUtils.ApplyPrefabPresentationScale(body, template.Scale);
+
+            if (trailTemplate != null)
+            {
+                GameObject trail = UnityEngine.Object.Instantiate(trailTemplate.Prefab, root.transform, false);
+                trail.name = $"{trailTemplate.Prefab.name}_Trail";
+                trail.transform.localPosition = Vector3.zero;
+                trail.transform.localRotation = Quaternion.identity;
+                trail.transform.localScale = Vector3.one;
+                VFXUtils.ApplyPrefabPresentationScale(trail, trailTemplate.Scale);
+            }
 
             var rental = new Rental(this, key, root, body, body.transform.localScale);
             rental.ReturnToPool();
@@ -113,6 +130,9 @@ namespace Arena.Presentation.VFX
         }
 
         private Transform PoolRootTransform => _poolRoot.transform;
+
+        private static string CompositionKey(string bodyVfxId, string? trailVfxId)
+            => $"{WireIdentifier.Normalize(bodyVfxId)}|{WireIdentifier.Normalize(trailVfxId)}";
 
         // VFX Graph (VisualEffect) state can't be safely reset between rentals — particles in flight have
         // no way to be re-keyed to a different cast — so prefabs containing one fall back to direct

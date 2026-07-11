@@ -3770,6 +3770,14 @@ fn emit_spell_projectile_release_event(
     point: Vec3,
     now: Timestamp,
 ) {
+    let projectile_trail_vfx_id = crate::progression::projectile_trail_vfx_id_for_spell(
+        ability_id,
+        kind.as_str(),
+        projectile_sequence_index,
+    )
+    .or_else(|| crate::progression::projectile_trail_vfx_id_for_spell(ability_id, kind.as_str(), 0))
+    .unwrap_or_default();
+
     ctx.db.combat_event().insert(CombatEvent {
         event_id: 0,
         action_instance_id: action_instance_id.to_string(),
@@ -3813,6 +3821,7 @@ fn emit_spell_projectile_release_event(
             ability_id: ability_id.to_string(),
             source_kind: "SPELL".to_string(),
             projectile_id: projectile_id.to_string(),
+            projectile_trail_vfx_id,
             projectile_instance_id: projectile_instance_id.to_string(),
             hit_index: -1,
             event_type: EVENT_RELEASE.to_string(),

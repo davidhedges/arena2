@@ -447,6 +447,7 @@ pub struct ProjectilePresentationEvent {
     pub ability_id: String,
     pub source_kind: String,
     pub projectile_id: String,
+    pub projectile_trail_vfx_id: String,
     pub projectile_instance_id: String,
     pub hit_index: i32,
     pub event_type: String,

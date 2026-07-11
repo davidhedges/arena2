@@ -25,6 +25,8 @@ namespace SpacetimeDB.Types
         public string SourceKind;
         [DataMember(Name = "projectile_id")]
         public string ProjectileId;
+        [DataMember(Name = "projectile_trail_vfx_id")]
+        public string ProjectileTrailVfxId;
         [DataMember(Name = "projectile_instance_id")]
         public string ProjectileInstanceId;
         [DataMember(Name = "hit_index")]
@@ -113,6 +115,7 @@ namespace SpacetimeDB.Types
             string AbilityId,
             string SourceKind,
             string ProjectileId,
+            string ProjectileTrailVfxId,
             string ProjectileInstanceId,
             int HitIndex,
             string EventType,
@@ -161,6 +164,7 @@ namespace SpacetimeDB.Types
             this.AbilityId = AbilityId;
             this.SourceKind = SourceKind;
             this.ProjectileId = ProjectileId;
+            this.ProjectileTrailVfxId = ProjectileTrailVfxId;
             this.ProjectileInstanceId = ProjectileInstanceId;
             this.HitIndex = HitIndex;
             this.EventType = EventType;
@@ -210,6 +214,7 @@ namespace SpacetimeDB.Types
             this.AbilityId = "";
             this.SourceKind = "";
             this.ProjectileId = "";
+            this.ProjectileTrailVfxId = "";
             this.ProjectileInstanceId = "";
             this.EventType = "";
             this.MotionKind = "";

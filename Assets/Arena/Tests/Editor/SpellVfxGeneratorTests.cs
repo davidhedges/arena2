@@ -221,7 +221,7 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
-        public void ProjectileBodyAndTravelBody_Wiring()
+        public void ProjectileBodyTrailAndTravelBody_Wiring()
         {
             object body = Wire("Projectile", "ProjectileBody", "Instant", false, false);
             Assert.That(WireStr(body, "Trigger"), Is.EqualTo("SPELL_RELEASE"));
@@ -229,6 +229,13 @@ namespace Arena.Tests.Editor
             Assert.That(WireStr(body, "Lifecycle"), Is.EqualTo("UNTIL_TERMINAL_EVENT"));
             Assert.That(WireVal(body, "ProjectileSequenceIndex"), Is.EqualTo(0));
             Assert.That(WireStr(body, "Duration"), Is.EqualTo("Zero"));
+
+            object trail = Wire("Projectile", "ProjectileTrail", "Instant", false, false);
+            Assert.That(WireStr(trail, "Trigger"), Is.EqualTo("SPELL_RELEASE"));
+            Assert.That(WireStr(trail, "VfxRole"), Is.EqualTo("PROJECTILE_TRAIL"));
+            Assert.That(WireStr(trail, "Lifecycle"), Is.EqualTo("UNTIL_TERMINAL_EVENT"));
+            Assert.That(WireVal(trail, "ProjectileSequenceIndex"), Is.EqualTo(0));
+            Assert.That(WireStr(trail, "Duration"), Is.EqualTo("Zero"));
 
             object travel = Wire("SkyDrop", "TravelBody", "Charged", false, false);
             Assert.That(WireStr(travel, "VfxRole"), Is.EqualTo("TRAVEL_BODY"));
@@ -384,6 +391,17 @@ namespace Arena.Tests.Editor
                 Fields("SPELL_CAST", "IMPACT_POINT", "FOLLOW_ANCHOR", "PROJECTILE_BODY", "UNTIL_TERMINAL_EVENT", false, false));
             Assert.That(v, Does.Contain("ProjectileBodyOffRelease"));
             Assert.That(v, Does.Contain("ProjectileBodyFollowAnchor"));
+        }
+
+        [Test]
+        public void Rule12_ProjectileTrailFieldLegality()
+        {
+            List<string> v = CheckRules(
+                Fields("SPELL_CAST", "IMPACT_POINT", "FOLLOW_ANCHOR", "PROJECTILE_TRAIL", "DURATION", false, false));
+            Assert.That(v, Does.Contain("ProjectileTrailOffRelease"));
+            Assert.That(v, Does.Contain("ProjectileTrailFollowAnchor"));
+            Assert.That(v, Does.Contain("ProjectileTrailBadLifecycle"));
+            Assert.That(v, Does.Contain("ProjectileTrailNonZeroDuration"));
         }
 
         [Test]

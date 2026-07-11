@@ -23,6 +23,7 @@ namespace Arena.Editor
         private const string AttachModeFollowAnchor = "FOLLOW_ANCHOR";
         private const string RoleAttached = "ATTACHED";
         private const string RoleProjectileBody = "PROJECTILE_BODY";
+        private const string RoleProjectileTrail = "PROJECTILE_TRAIL";
         private const string RoleTravelBody = "TRAVEL_BODY";
         private const string LifecycleDuration = "DURATION";
         private const string LifecycleUntilReleaseEvent = "UNTIL_RELEASE_EVENT";
@@ -79,12 +80,14 @@ namespace Arena.Editor
                     unresolvedTemplateIds.Add(vfxId);
                 string role = WireIdentifier.Normalize(cue.vfx_role);
                 if ((string.Equals(role, RoleProjectileBody, StringComparison.Ordinal)
+                        || string.Equals(role, RoleProjectileTrail, StringComparison.Ordinal)
                         || string.Equals(role, RoleTravelBody, StringComparison.Ordinal))
                     && validatedTravelTemplateIds.Add(vfxId))
                 {
                     ValidateTravelTemplateIsVisualOnly(vfxId, errors);
                 }
                 if (!string.Equals(role, RoleProjectileBody, StringComparison.Ordinal)
+                    && !string.Equals(role, RoleProjectileTrail, StringComparison.Ordinal)
                     && !string.Equals(role, RoleTravelBody, StringComparison.Ordinal)
                     && string.Equals(WireIdentifier.Normalize(cue.lifecycle), LifecycleUntilTerminalEvent, StringComparison.Ordinal)
                     && !CombatVFXTemplateRegistry.IsScriptedTemplate(vfxId))

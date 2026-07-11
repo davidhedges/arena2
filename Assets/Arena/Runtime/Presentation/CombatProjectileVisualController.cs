@@ -172,9 +172,9 @@ namespace Arena.Presentation
                     Time.time);
             else
                 _launchOffsets.Remove(projectileKey);
-            ReplaceProjectile(projectileKey, row.ProjectileId, template =>
+            ReplaceProjectile(projectileKey, row.ProjectileId, row.ProjectileTrailVfxId, (template, trailTemplate) =>
             {
-                ProjectileVfxPool.Rental? rental = _projectilePool.TryRent(template, projectileKey);
+                ProjectileVfxPool.Rental? rental = _projectilePool.TryRent(template, trailTemplate, projectileKey);
                 return rental != null
                     ? new WeaponProjectileVFX(
                         projectileKey,
@@ -192,6 +192,7 @@ namespace Arena.Presentation
                         row.MaxDistance,
                         template.Scale,
                         template.Prefab,
+                        trailTemplate,
                         authoritativeLifetime: true);
             });
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
@@ -560,7 +561,11 @@ namespace Arena.Presentation
             return attachments != null;
         }
 
-        private void ReplaceProjectile(string projectileKey, string projectileId, Func<CombatVFXRegistry.Template, ISpellVFX> create)
+        private void ReplaceProjectile(
+            string projectileKey,
+            string projectileId,
+            string projectileTrailVfxId,
+            Func<CombatVFXRegistry.Template, CombatVFXRegistry.Template?, ISpellVFX> create)
         {
             if (_activeProjectiles.TryGetValue(projectileKey, out var old))
             {
@@ -585,7 +590,16 @@ namespace Arena.Presentation
                 return;
             }
 
-            _activeProjectiles[projectileKey] = create(template);
+            CombatVFXRegistry.Template? trailTemplate = null;
+            string normalizedTrailId = WireIdentifier.Normalize(projectileTrailVfxId);
+            if (!string.IsNullOrWhiteSpace(normalizedTrailId))
+            {
+                trailTemplate = CombatVFXTemplateRegistry.ResolveTemplate(normalizedTrailId);
+                if (trailTemplate == null && _missingProjectilePrefabWarnings.Add($"trail:{normalizedTrailId}"))
+                    Debug.LogWarning($"No CombatVFXRegistry prefab registered for projectile trail id '{normalizedTrailId}'. Continuing with the projectile body only.");
+            }
+
+            _activeProjectiles[projectileKey] = create(template, trailTemplate);
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
             RefreshDebugCounts();
 #endif
