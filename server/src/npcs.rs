@@ -45,6 +45,8 @@ use crate::npcs::npc_pending_swing as _;
 #[allow(unused_imports)]
 use crate::npcs::npc_physics as _;
 #[allow(unused_imports)]
+use crate::npcs::npc_return_home as _;
+#[allow(unused_imports)]
 use crate::npcs::npc_spawn_counter as _;
 #[allow(unused_imports)]
 use crate::npcs::npc_state as _;
@@ -221,6 +223,13 @@ pub struct NpcTargetOverride {
     pub target: Identity,
     pub set_by: Identity,
     pub updated_at: Timestamp,
+}
+
+#[table(accessor = npc_return_home)]
+pub struct NpcReturnHome {
+    #[primary_key]
+    pub identity: Identity,
+    pub started_at: Timestamp,
 }
 
 /// One in-flight telegraphed swing per NPC (S3): the CAST event is emitted at
@@ -475,6 +484,14 @@ fn npc_catalog() -> &'static NpcCatalogDocument {
         parse_npc_catalog(NPC_CATALOG_JSON)
             .unwrap_or_else(|error| panic!("Invalid npc_catalog.shared.json: {error}"))
     })
+}
+
+fn npc_brain_profile(brain_profile_id: &str) -> Option<&'static NpcBrainProfile> {
+    let brain_profile_id = normalize_id(brain_profile_id);
+    npc_catalog()
+        .brain_profiles
+        .iter()
+        .find(|brain| brain.brain_profile_id == brain_profile_id)
 }
 
 fn parse_npc_catalog(json: &str) -> Result<NpcCatalogDocument, String> {
@@ -1217,6 +1234,10 @@ pub(crate) fn tick_npc_combat(
             clear_npc_combat_runtime(ctx, npc.identity);
             continue;
         };
+        let Some(brain) = npc_brain_profile(template.brain_profile_id.as_str()) else {
+            clear_npc_combat_runtime(ctx, npc.identity);
+            continue;
+        };
         let Some(action) = npc_primary_melee_action(ctx, &template) else {
             clear_npc_combat_runtime(ctx, npc.identity);
             continue;
@@ -1233,6 +1254,46 @@ pub(crate) fn tick_npc_combat(
             clear_npc_combat_runtime(ctx, npc.identity);
             continue;
         };
+        let target_is_pinned = ctx
+            .db
+            .npc_target_override()
+            .identity()
+            .find(npc.identity)
+            .is_some();
+        if target_is_pinned {
+            ctx.db.npc_return_home().identity().delete(npc.identity);
+        } else if ctx
+            .db
+            .npc_return_home()
+            .identity()
+            .find(npc.identity)
+            .is_some()
+            || npc_is_outside_leash(&npc, &physics, brain.leash_radius)
+        {
+            if ctx
+                .db
+                .npc_return_home()
+                .identity()
+                .find(npc.identity)
+                .is_none()
+            {
+                interrupt_npc_actions_for_crowd_control(ctx, npc.identity, now);
+                ctx.db.npc_return_home().insert(NpcReturnHome {
+                    identity: npc.identity,
+                    started_at: now,
+                });
+            }
+            clear_npc_combat_runtime(ctx, npc.identity);
+            return_npc_home(
+                ctx,
+                now,
+                &npc,
+                &physics,
+                &template,
+                movement_modifiers.move_speed_multiplier(&npc.identity, 0),
+            );
+            continue;
+        }
 
         let Some(target) =
             acquire_npc_attack_target(ctx, npc.identity, &physics, &template, &candidates)
@@ -1439,6 +1500,62 @@ fn npc_attack_target_from_candidate(
 
 fn npc_attack_reach(range: f32, target: &NpcAttackTarget) -> f32 {
     range + target.hit_radius
+}
+
+fn npc_is_outside_leash(npc: &NpcInstance, physics: &NpcPhysics, leash_radius: f32) -> bool {
+    npc_is_outside_leash_from_positions(
+        npc.home_x,
+        npc.home_z,
+        physics.pos_x,
+        physics.pos_z,
+        leash_radius,
+    )
+}
+
+fn npc_is_outside_leash_from_positions(
+    home_x: f32,
+    home_z: f32,
+    pos_x: f32,
+    pos_z: f32,
+    leash_radius: f32,
+) -> bool {
+    let dx = pos_x - home_x;
+    let dz = pos_z - home_z;
+    dx * dx + dz * dz > leash_radius * leash_radius
+}
+
+fn return_npc_home(
+    ctx: &ReducerContext,
+    now: Timestamp,
+    npc: &NpcInstance,
+    physics: &NpcPhysics,
+    template: &NpcTemplate,
+    move_speed_multiplier: f32,
+) {
+    let dx = npc.home_x - physics.pos_x;
+    let dz = npc.home_z - physics.pos_z;
+    let distance = (dx * dx + dz * dz).sqrt();
+    if distance <= NPC_CHASE_STOP_EPSILON {
+        ctx.db.npc_return_home().identity().delete(npc.identity);
+        return;
+    }
+    if move_speed_multiplier <= 0.0 {
+        return;
+    }
+    let dir_x = dx / distance;
+    let dir_z = dz / distance;
+    let travel = (template.move_speed * move_speed_multiplier * FIXED_TICK_SECONDS).min(distance);
+    move_npc_along(
+        ctx,
+        now,
+        npc,
+        physics,
+        template,
+        dir_x,
+        dir_z,
+        travel,
+        yaw_for_direction(dir_x, dir_z),
+    );
 }
 
 fn npc_primary_melee_action(
@@ -1954,6 +2071,7 @@ fn despawn_npc_identity(ctx: &ReducerContext, identity: Identity) {
     clear_npc_combat_runtime(ctx, identity);
     clear_actor_cooldowns(ctx, identity);
     ctx.db.npc_target_override().identity().delete(identity);
+    ctx.db.npc_return_home().identity().delete(identity);
     if ctx
         .db
         .npc_pending_swing()
@@ -2065,11 +2183,11 @@ fn yaw_delta_abs(a: f32, b: f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::{
-        npc_catalog, npc_identity, npc_melee_defense_event_type, npc_template, parse_npc_catalog,
-        visual_id_for_template, yaw_for_direction, NpcFaction, NPC_CATALOG_JSON,
-        NPC_FACTION_FRIENDLY, NPC_FACTION_HOSTILE, NPC_FACTION_NEUTRAL,
-        NPC_TEMPLATE_KOBOLD_THIEF_BK_DUAL_SWORD, NPC_TEMPLATE_KOBOLD_WARRIOR_GN_SPEAR,
-        NPC_TEMPLATE_KOBOLD_WARRIOR_RD_SWORD_SHIELD,
+        npc_catalog, npc_identity, npc_is_outside_leash_from_positions,
+        npc_melee_defense_event_type, npc_template, parse_npc_catalog, visual_id_for_template,
+        yaw_for_direction, NpcFaction, NPC_CATALOG_JSON, NPC_FACTION_FRIENDLY, NPC_FACTION_HOSTILE,
+        NPC_FACTION_NEUTRAL, NPC_TEMPLATE_KOBOLD_THIEF_BK_DUAL_SWORD,
+        NPC_TEMPLATE_KOBOLD_WARRIOR_GN_SPEAR, NPC_TEMPLATE_KOBOLD_WARRIOR_RD_SWORD_SHIELD,
     };
     use crate::combat::{COMBAT_EVENT_BLOCK, COMBAT_EVENT_PARRY};
     use crate::defense::DefenseResolution;
@@ -2082,6 +2200,16 @@ mod tests {
         assert_eq!(NpcFaction::Friendly.as_str(), NPC_FACTION_FRIENDLY);
         assert_eq!(NpcFaction::from_wire("hostile"), Some(NpcFaction::Hostile));
         assert_eq!(NpcFaction::from_wire("party_member"), None);
+    }
+
+    #[test]
+    fn npc_leash_boundary_is_inclusive() {
+        assert!(!npc_is_outside_leash_from_positions(
+            10.0, 20.0, 13.0, 24.0, 5.0
+        ));
+        assert!(npc_is_outside_leash_from_positions(
+            10.0, 20.0, 13.1, 24.0, 5.0
+        ));
     }
 
     #[test]
