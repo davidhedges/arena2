@@ -24,7 +24,7 @@ use crate::inventory::{clear_loot_for_anchor, corpse_loot_has_items};
 use crate::movement::FIXED_TICK_SECONDS;
 use crate::practice::is_training_instance;
 use crate::progression::MeleeAbilityCatalog;
-use crate::relations::can_harm;
+use crate::relations::{can_harm, combat_relation, CombatRelation};
 use crate::spells::{
     clear_actor_cooldowns, is_on_named_cooldown, stamp_named_cooldown_for_duration,
 };
@@ -1385,7 +1385,14 @@ pub(crate) fn tick_npc_combat(
             continue;
         };
         let planned_action = if decision_was_due {
-            select_npc_melee_action(ctx, now, &template, &state, &target)
+            let nearby = perception.nearby_counts(
+                ctx,
+                npc.identity,
+                physics.pos_x,
+                physics.pos_z,
+                brain.perception_radius,
+            );
+            select_npc_melee_action(ctx, now, &template, &state, &target, nearby)
         } else {
             existing_runtime.as_ref().and_then(|runtime| {
                 (!runtime.planned_ability_id.is_empty())
@@ -1548,32 +1555,49 @@ struct NpcScoredTarget {
 
 struct NpcPerceptionIndex {
     actors: CombatActorSnapshotSet,
-    player_contexts: HashMap<Identity, ResolvedWorldContext>,
+    actor_contexts: HashMap<Identity, ResolvedWorldContext>,
+    eligible_player_targets: HashSet<Identity>,
+}
+
+#[derive(Clone, Copy, Default)]
+struct NpcNearbyCounts {
+    allies: u32,
+    enemies: u32,
 }
 
 impl NpcPerceptionIndex {
     fn collect(ctx: &ReducerContext) -> Self {
         let actors = CombatActorSnapshotSet::collect(ctx);
-        let mut player_contexts = HashMap::new();
+        let eligible_player_targets: HashSet<Identity> = ctx
+            .db
+            .player_state()
+            .iter()
+            .filter(|state| state.alive && !state.is_dummy)
+            .map(|state| state.player_id)
+            .collect();
+        let mut actor_contexts = HashMap::new();
         // The current hostile-NPC contract targets real players only. Keep
         // that eligibility filter explicit while using the actor-generic
         // broadphase, so later relation work can widen it deliberately.
-        for state in ctx.db.player_state().iter() {
-            if !state.alive || state.is_dummy {
+        for actor in actors.as_slice() {
+            if !actor.alive {
                 continue;
             }
-            let Some(context) = resolve_player_world_context(ctx, state.player_id) else {
-                log::warn!(
-                    "[WORLD] Missing player_world row for NPC target candidate {}",
-                    state.player_id.to_hex()
-                );
+            let Some(context) = resolve_player_world_context(ctx, actor.player_id) else {
+                if eligible_player_targets.contains(&actor.player_id) {
+                    log::warn!(
+                        "[WORLD] Missing player_world row for NPC target candidate {}",
+                        actor.player_id.to_hex()
+                    );
+                }
                 continue;
             };
-            player_contexts.insert(state.player_id, context);
+            actor_contexts.insert(actor.player_id, context);
         }
         Self {
             actors,
-            player_contexts,
+            actor_contexts,
+            eligible_player_targets,
         }
     }
 
@@ -1597,7 +1621,10 @@ impl NpcPerceptionIndex {
 
     fn candidate_at(&self, index: usize) -> Option<NpcTargetCandidate> {
         let actor = self.actors.as_slice().get(index)?;
-        let context = self.player_contexts.get(&actor.player_id)?.clone();
+        if !self.eligible_player_targets.contains(&actor.player_id) {
+            return None;
+        }
+        let context = self.actor_contexts.get(&actor.player_id)?.clone();
         Some(NpcTargetCandidate {
             identity: actor.player_id,
             pos_x: actor.pos_x,
@@ -1607,6 +1634,49 @@ impl NpcPerceptionIndex {
             hit_height: actor.hit_height,
             context,
         })
+    }
+
+    fn nearby_counts(
+        &self,
+        ctx: &ReducerContext,
+        npc_identity: Identity,
+        center_x: f32,
+        center_z: f32,
+        radius: f32,
+    ) -> NpcNearbyCounts {
+        let Some(npc_context) = self.actor_contexts.get(&npc_identity) else {
+            return NpcNearbyCounts::default();
+        };
+        let radius_sq = radius.max(0.0) * radius.max(0.0);
+        let mut indices = Vec::new();
+        self.actors
+            .query_disc_indices(center_x, center_z, radius, &mut indices);
+        let mut counts = NpcNearbyCounts::default();
+        for actor in indices
+            .into_iter()
+            .filter_map(|index| self.actors.as_slice().get(index))
+        {
+            if !actor.alive || actor.player_id == npc_identity {
+                continue;
+            }
+            let Some(context) = self.actor_contexts.get(&actor.player_id) else {
+                continue;
+            };
+            if !world_contexts_share(npc_context, context) {
+                continue;
+            }
+            let dx = actor.pos_x - center_x;
+            let dz = actor.pos_z - center_z;
+            if dx * dx + dz * dz > radius_sq {
+                continue;
+            }
+            match combat_relation(ctx, npc_identity, actor.player_id) {
+                CombatRelation::PartyAlly => counts.allies = counts.allies.saturating_add(1),
+                CombatRelation::Hostile => counts.enemies = counts.enemies.saturating_add(1),
+                CombatRelation::Self_ | CombatRelation::Neutral => {}
+            }
+        }
+        counts
     }
 }
 
@@ -1857,6 +1927,7 @@ fn select_npc_melee_action(
     template: &NpcTemplate,
     state: &NpcState,
     target: &NpcAttackTarget,
+    nearby: NpcNearbyCounts,
 ) -> Option<MeleeAbilityCatalog> {
     let health_pct = if state.max_hp > 0 {
         state.hp.max(0) as f32 / state.max_hp as f32
@@ -1897,8 +1968,11 @@ fn select_npc_melee_action(
         .filter(|entry| {
             health_pct >= entry.min_self_health_pct
                 && health_pct <= entry.max_self_health_pct
-                && entry.min_nearby_allies == 0
-                && entry.min_nearby_enemies <= 1
+                && npc_action_count_requirements_met(
+                    entry.min_nearby_allies,
+                    entry.min_nearby_enemies,
+                    nearby,
+                )
                 && (entry.required_target_status.is_empty()
                     || target_statuses.contains(entry.required_target_status.as_str()))
                 && (entry.forbidden_target_status.is_empty()
@@ -1928,6 +2002,14 @@ fn select_npc_melee_action(
                 .then_with(|| right.1.cmp(&left.1))
         })
         .map(|(_, _, action)| action)
+}
+
+fn npc_action_count_requirements_met(
+    min_nearby_allies: u32,
+    min_nearby_enemies: u32,
+    nearby: NpcNearbyCounts,
+) -> bool {
+    nearby.allies >= min_nearby_allies && nearby.enemies >= min_nearby_enemies
 }
 
 fn npc_action_distance_score(
@@ -2676,11 +2758,12 @@ fn yaw_delta_abs(a: f32, b: f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::{
-        npc_action_distance_score, npc_catalog, npc_decision_interval_ms, npc_identity,
-        npc_is_outside_leash_from_positions, npc_melee_defense_event_type,
-        npc_target_stickiness_keeps_current, npc_target_stickiness_keeps_scored_current,
-        npc_template, npc_threat_key, parse_npc_catalog, visual_id_for_template, yaw_for_direction,
-        NpcAttackTarget, NpcFaction, NpcScoredTarget, NpcThreatComponents, NPC_CATALOG_JSON,
+        npc_action_count_requirements_met, npc_action_distance_score, npc_catalog,
+        npc_decision_interval_ms, npc_identity, npc_is_outside_leash_from_positions,
+        npc_melee_defense_event_type, npc_target_stickiness_keeps_current,
+        npc_target_stickiness_keeps_scored_current, npc_template, npc_threat_key,
+        parse_npc_catalog, visual_id_for_template, yaw_for_direction, NpcAttackTarget, NpcFaction,
+        NpcNearbyCounts, NpcScoredTarget, NpcThreatComponents, NPC_CATALOG_JSON,
         NPC_FACTION_FRIENDLY, NPC_FACTION_HOSTILE, NPC_FACTION_NEUTRAL,
         NPC_TEMPLATE_KOBOLD_THIEF_BK_DUAL_SWORD, NPC_TEMPLATE_KOBOLD_WARRIOR_GN_SPEAR,
         NPC_TEMPLATE_KOBOLD_WARRIOR_RD_SWORD_SHIELD,
@@ -2716,6 +2799,18 @@ mod tests {
         );
         assert!(npc_action_distance_score(1.0, 1.0, 3.0, 5.0, false).is_none());
         assert!(npc_action_distance_score(1.0, 1.0, 3.0, 5.0, true).unwrap() < 1.0);
+    }
+
+    #[test]
+    fn npc_action_count_requirements_use_indexed_perception_totals() {
+        let nearby = NpcNearbyCounts {
+            allies: 2,
+            enemies: 3,
+        };
+
+        assert!(npc_action_count_requirements_met(2, 3, nearby));
+        assert!(!npc_action_count_requirements_met(3, 3, nearby));
+        assert!(!npc_action_count_requirements_met(2, 4, nearby));
     }
 
     #[test]
