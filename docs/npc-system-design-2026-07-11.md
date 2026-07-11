@@ -1,7 +1,7 @@
 # NPC System Design
 
 Date: 2026-07-11
-Status: implementation in progress; actor-generic targeting, authoritative commitments, shared spell/projectile execution, initial caster/support gameplay, and native NPC spell-phase requests are landed through `73190b8b`, while exemplar profile assets and full visual authoring remain
+Status: implementation in progress; actor-generic targeting, shared spell/projectile execution, caster/support/archer exemplars, and native visual profiles are landed through `b3f17bd5`, while melee fallback and full visual authoring remain
 
 ## Outcome
 
@@ -18,7 +18,7 @@ This is a substantial engineering project. The existing kobold implementation is
 
 ## Implementation progress (2026-07-11 handoff)
 
-The implementation has started and has been committed in coherent slices. The implementation baseline summarized here is `73190b8b` (`Route NPC spell animation phases`). Player combat semantics are an explicit guardrail: actor-generic seams were extended where required, but player damage, healing arithmetic, authorization, animation fallback, input, prediction, rewind, and action-bar behavior must not be redesigned as part of the NPC rollout.
+The implementation has started and has been committed in coherent slices. The implementation baseline summarized here is `b3f17bd5` (`Add Skeleton Archer exemplar`). Player combat semantics are an explicit guardrail: actor-generic seams were extended where required, but player damage, healing arithmetic, authorization, animation fallback, input, prediction, rewind, and action-bar behavior must not be redesigned as part of the NPC rollout.
 
 ### Landed foundations
 
@@ -45,6 +45,7 @@ The implementation has started and has been committed in coherent slices. The im
 - Ranged actions honor authored approach/hold/retreat distance bands, and active casts pause replanning/movement until the shared cast lifecycle reaches a terminal state.
 - A Lich support exemplar uses `LOWEST_HEALTH_ALLY` to apply an authored Bone Ward through the shared targeted buff/status pipeline, including ally relation, LOS, forbidden-status, cast-event, and VFX contracts.
 - `NpcVisualProfile` native role maps now include spell cast-start, release, and cancel states. Actor-scoped `ActiveCast` and shared spell release/fizzle events translate into the same `CombatAnimationRequest` phase contract used by players before the NPC adapter resolves native controller states.
+- Skeleton Wizard, Lich, and Skeleton Archer have explicit first-party visual profiles and catalog entries with validated prefab GUIDs, root Animator selection, and native locomotion/action/reaction state maps. The Archer uses the shared projectile executor and `ARROW_STANDARD` projectile cue.
 
 ### Still incomplete
 
@@ -52,8 +53,8 @@ The implementation has started and has been committed in coherent slices. The im
 - Utility execution currently supports melee offense, one hostile projectile spell, and one allied targeted buff. Direct healing, debuff, interrupt, summon, mobility, and melee-fallback execution are not implemented.
 - Basic ranged approach/hold/retreat bands are implemented. Richer kiting, unreachable-target recovery, navigation, and local avoidance remain.
 - Healing/buff support threat, taunts, assist/call-for-help, and richer threat decay remain later work.
-- Explicit exemplar `NpcVisualProfile` assets, primary Animator paths, native state authoring, searchable catalog spawning, all 146 appearance mappings, and automated presentation sweeps remain.
-- The four-archetype acceptance group is not complete: Kobold Warrior gameplay remains, Skeleton Wizard and Lich support gameplay are authored, Skeleton Archer is absent, and the new exemplars still lack complete Unity visual profiles/native presentation.
+- Searchable catalog spawning, all 146 appearance mappings, and automated presentation sweeps remain. The Archer still needs its authored melee fallback when pressured.
+- All four acceptance archetypes now have initial gameplay paths, and Wizard/Lich/Archer have native visual profiles. Full acceptance still needs Archer melee fallback, direct healing, profile test execution, and mixed-group runtime evidence.
 
 ### Current verification
 
@@ -68,9 +69,9 @@ The implementation has started and has been committed in coherent slices. The im
 
 The next coherent slice should finish presentation for the landed gameplay exemplars without creating a creature-only event language:
 
-1. Author explicit Skeleton Wizard and Lich profile assets with primary Animator paths, cast/release/cancel roles, sockets, and fallback policies; preserve the user-owned `NpcVisualCatalog.asset` change while integrating deliberately.
-2. Pin NPC spell phase translation and profile validation with focused Unity edit-mode tests.
-3. Add the Skeleton Archer ranged/melee-fallback exemplar through the same shared action executor and ranged-band movement.
+1. Run the focused NPC visual-profile edit-mode tests after the open Unity instance releases the project lock, then capture mixed-group presentation evidence.
+2. Add the Skeleton Archer melee fallback through the shared melee executor and select it with authored distance utility when pressured.
+3. Add cast/hit sockets and explicit fallback policies to the three exemplar profiles.
 4. Add direct allied healing only by extending the shared authored spell/effect contract; do not implement an NPC-only heal path.
 
 ## Asset relocation completed
