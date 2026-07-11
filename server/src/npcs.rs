@@ -22,7 +22,9 @@ use crate::movement::FIXED_TICK_SECONDS;
 use crate::practice::is_training_instance;
 use crate::progression::MeleeAbilityCatalog;
 use crate::relations::can_harm;
-use crate::spells::{is_on_named_cooldown, stamp_named_cooldown_for_duration};
+use crate::spells::{
+    clear_actor_cooldowns, is_on_named_cooldown, stamp_named_cooldown_for_duration,
+};
 use crate::world_collision::{
     resolve_world_horizontal_sweep_collision_y_with_layout_for_scene,
     surface_height_for_world_at_y_with_layout_for_scene,
@@ -1625,6 +1627,7 @@ fn emit_npc_combat_event(
 
 fn despawn_npc_identity(ctx: &ReducerContext, identity: Identity) {
     clear_npc_combat_runtime(ctx, identity);
+    clear_actor_cooldowns(ctx, identity);
     if ctx
         .db
         .npc_pending_swing()

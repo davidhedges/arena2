@@ -89,6 +89,23 @@ pub(crate) fn stamp_named_cooldown_for_duration(
     });
 }
 
+/// Removes cooldown state for an identity that will never be resumed.
+/// Player disconnect intentionally does not call this: reconnecting must not
+/// reset anti-abuse cooldowns. Permanent NPC despawn does.
+pub(crate) fn clear_actor_cooldowns(ctx: &ReducerContext, actor: Identity) {
+    let named_keys: Vec<String> = ctx
+        .db
+        .spell_cooldown()
+        .caster()
+        .filter(actor)
+        .map(|row| row.key)
+        .collect();
+    for key in named_keys {
+        ctx.db.spell_cooldown().key().delete(key);
+    }
+    ctx.db.global_cooldown().caster().delete(actor);
+}
+
 pub(crate) fn is_on_global_cooldown(
     ctx: &ReducerContext,
     caster: Identity,
