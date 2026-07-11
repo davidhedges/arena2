@@ -1,7 +1,7 @@
 # NPC System Design
 
 Date: 2026-07-11
-Status: implementation in progress; actor-generic targeting, authoritative commitments, shared spell/projectile execution, and initial caster/support gameplay are landed through `c119e3d2`, while full exemplar presentation and visual authoring remain
+Status: implementation in progress; actor-generic targeting, authoritative commitments, shared spell/projectile execution, initial caster/support gameplay, and native NPC spell-phase requests are landed through `73190b8b`, while exemplar profile assets and full visual authoring remain
 
 ## Outcome
 
@@ -18,7 +18,7 @@ This is a substantial engineering project. The existing kobold implementation is
 
 ## Implementation progress (2026-07-11 handoff)
 
-The implementation has started and has been committed in coherent slices. The implementation baseline summarized here is `c119e3d2` (`Add NPC allied buff exemplar`). Player combat semantics are an explicit guardrail: actor-generic seams were extended where required, but player damage, healing arithmetic, authorization, animation fallback, input, prediction, rewind, and action-bar behavior must not be redesigned as part of the NPC rollout.
+The implementation has started and has been committed in coherent slices. The implementation baseline summarized here is `73190b8b` (`Route NPC spell animation phases`). Player combat semantics are an explicit guardrail: actor-generic seams were extended where required, but player damage, healing arithmetic, authorization, animation fallback, input, prediction, rewind, and action-bar behavior must not be redesigned as part of the NPC rollout.
 
 ### Landed foundations
 
@@ -44,6 +44,7 @@ The implementation has started and has been committed in coherent slices. The im
 - The existing server-actor spell adapter resolves NPC-scoped authored abilities and free-resource contracts without player action bars or a parallel cast path. A Skeleton Wizard frost projectile uses the shared cast, active-cast, cooldown, projectile, effect, combat-event, and VFX-cue lifecycle.
 - Ranged actions honor authored approach/hold/retreat distance bands, and active casts pause replanning/movement until the shared cast lifecycle reaches a terminal state.
 - A Lich support exemplar uses `LOWEST_HEALTH_ALLY` to apply an authored Bone Ward through the shared targeted buff/status pipeline, including ally relation, LOS, forbidden-status, cast-event, and VFX contracts.
+- `NpcVisualProfile` native role maps now include spell cast-start, release, and cancel states. Actor-scoped `ActiveCast` and shared spell release/fizzle events translate into the same `CombatAnimationRequest` phase contract used by players before the NPC adapter resolves native controller states.
 
 ### Still incomplete
 
@@ -51,7 +52,7 @@ The implementation has started and has been committed in coherent slices. The im
 - Utility execution currently supports melee offense, one hostile projectile spell, and one allied targeted buff. Direct healing, debuff, interrupt, summon, mobility, and melee-fallback execution are not implemented.
 - Basic ranged approach/hold/retreat bands are implemented. Richer kiting, unreachable-target recovery, navigation, and local avoidance remain.
 - Healing/buff support threat, taunts, assist/call-for-help, and richer threat decay remain later work.
-- `NpcVisualProfile`, explicit primary Animator paths, native Generic-rig role maps, searchable catalog spawning, exemplar profiles, all 146 appearance mappings, and automated presentation sweeps remain.
+- Explicit exemplar `NpcVisualProfile` assets, primary Animator paths, native state authoring, searchable catalog spawning, all 146 appearance mappings, and automated presentation sweeps remain.
 - The four-archetype acceptance group is not complete: Kobold Warrior gameplay remains, Skeleton Wizard and Lich support gameplay are authored, Skeleton Archer is absent, and the new exemplars still lack complete Unity visual profiles/native presentation.
 
 ### Current verification
@@ -59,6 +60,7 @@ The implementation has started and has been committed in coherent slices. The im
 - `cargo test --quiet`: 471 passed, 0 failed.
 - `spacetime build -p server`: succeeded; the local optional `wasm-opt` binary is absent, so SpacetimeDB emitted an unoptimized module after a successful release build.
 - `dotnet build Assembly-CSharp.csproj --no-restore`: succeeded with 0 errors and 11 existing obsolete-API warnings in third-party/current Unity code.
+- `dotnet build Assembly-CSharp-Editor.csproj --no-restore`: succeeded with 0 errors and 17 existing obsolete/dead-field warnings.
 - Generated C# bindings are current for the landed runtime schema.
 - The working tree also contains user-owned changes to `.gitignore` and `Assets/Arena/Resources/NpcVisualCatalog.asset`, plus an unrelated untracked `docs/perf-opportunities-2026-07-11.md`; preserve those unless their owner explicitly brings them into scope.
 
@@ -66,8 +68,8 @@ The implementation has started and has been committed in coherent slices. The im
 
 The next coherent slice should finish presentation for the landed gameplay exemplars without creating a creature-only event language:
 
-1. Add `NpcVisualProfile` and generalize the existing animation-request translator for native Generic-rig action/cast phases.
-2. Author explicit Skeleton Wizard and Lich primary Animator paths, cast/release/impact roles, sockets, and fallback policies; preserve the user-owned `NpcVisualCatalog.asset` change while integrating deliberately.
+1. Author explicit Skeleton Wizard and Lich profile assets with primary Animator paths, cast/release/cancel roles, sockets, and fallback policies; preserve the user-owned `NpcVisualCatalog.asset` change while integrating deliberately.
+2. Pin NPC spell phase translation and profile validation with focused Unity edit-mode tests.
 3. Add the Skeleton Archer ranged/melee-fallback exemplar through the same shared action executor and ranged-band movement.
 4. Add direct allied healing only by extending the shared authored spell/effect contract; do not implement an NPC-only heal path.
 
