@@ -17,22 +17,14 @@ namespace SpacetimeDB.Types
         public SpacetimeDB.Identity Identity;
         [DataMember(Name = "target")]
         public SpacetimeDB.Identity Target;
-        [DataMember(Name = "next_attack_at")]
-        public SpacetimeDB.Timestamp NextAttackAt;
-        [DataMember(Name = "next_attack_at_micros")]
-        public long NextAttackAtMicros;
 
         public NpcCombatRuntime(
             SpacetimeDB.Identity Identity,
-            SpacetimeDB.Identity Target,
-            SpacetimeDB.Timestamp NextAttackAt,
-            long NextAttackAtMicros
+            SpacetimeDB.Identity Target
         )
         {
             this.Identity = Identity;
             this.Target = Target;
-            this.NextAttackAt = NextAttackAt;
-            this.NextAttackAtMicros = NextAttackAtMicros;
         }
 
         public NpcCombatRuntime()

@@ -88,6 +88,7 @@ pub struct NpcTemplateCatalog {
     pub species_id: String,
     pub display_name: String,
     pub default_visual_id: String,
+    pub resource_policy: String,
     pub max_hp: i32,
     pub hit_radius: f32,
     pub hit_height: f32,
@@ -214,6 +215,7 @@ pub(crate) struct NpcTemplate {
     pub species_id: String,
     pub display_name: String,
     pub visual_ids: Vec<String>,
+    pub resource_policy: String,
     pub action_kit: Vec<NpcActionKitEntry>,
     pub max_hp: i32,
     pub hit_radius: f32,
@@ -413,6 +415,7 @@ fn parse_npc_catalog(json: &str) -> Result<NpcCatalogDocument, String> {
         template.template_id = normalize_id(template.template_id.as_str());
         template.species_id = normalize_id(template.species_id.as_str());
         template.display_name = template.display_name.trim().to_string();
+        template.resource_policy = normalize_id(template.resource_policy.as_str());
         template.visual_ids = template
             .visual_ids
             .iter()
@@ -434,6 +437,12 @@ fn parse_npc_catalog(json: &str) -> Result<NpcCatalogDocument, String> {
             return Err(format!(
                 "template '{}' requires species_id and display_name",
                 template.template_id
+            ));
+        }
+        if template.resource_policy != "FREE_ACTIONS_ONLY" {
+            return Err(format!(
+                "template '{}' has unsupported resource_policy '{}'",
+                template.template_id, template.resource_policy
             ));
         }
         if template.visual_ids.is_empty() {
@@ -502,6 +511,20 @@ fn parse_npc_catalog(json: &str) -> Result<NpcCatalogDocument, String> {
                     ));
                 }
             }
+            let Some((resource_kind, resource_cost)) =
+                crate::progression::authored_ability_resource(entry.ability_id.as_str())
+            else {
+                return Err(format!(
+                    "template '{}' action '{}' has no authored resource contract",
+                    template.template_id, entry.ability_id
+                ));
+            };
+            if !resource_kind.trim().is_empty() || resource_cost != 0.0 {
+                return Err(format!(
+                    "template '{}' FREE_ACTIONS_ONLY kit cannot grant resource-spending ability '{}'",
+                    template.template_id, entry.ability_id
+                ));
+            }
         }
         if template.max_hp <= 0
             || !template.hit_radius.is_finite()
@@ -552,6 +575,7 @@ pub(crate) fn sync_npc_catalog(ctx: &ReducerContext) {
             species_id: template.species_id.clone(),
             display_name: template.display_name.clone(),
             default_visual_id: template.visual_ids[0].clone(),
+            resource_policy: template.resource_policy.clone(),
             max_hp: template.max_hp,
             hit_radius: template.hit_radius,
             hit_height: template.hit_height,
@@ -566,6 +590,7 @@ pub(crate) fn sync_npc_catalog(ctx: &ReducerContext) {
                 if existing.species_id == row.species_id
                     && existing.display_name == row.display_name
                     && existing.default_visual_id == row.default_visual_id
+                    && existing.resource_policy == row.resource_policy
                     && existing.max_hp == row.max_hp
                     && existing.hit_radius == row.hit_radius
                     && existing.hit_height == row.hit_height => {}
@@ -1803,13 +1828,15 @@ mod tests {
             "templates": [
                 {
                     "template_id": "ONE", "species_id": "TEST", "display_name": "One",
-                    "visual_ids": ["SHARED"], "action_kit": [], "max_hp": 1, "hit_radius": 1.0,
+                    "visual_ids": ["SHARED"], "resource_policy": "FREE_ACTIONS_ONLY",
+                    "action_kit": [], "max_hp": 1, "hit_radius": 1.0,
                     "hit_height": 1.0, "aggro_radius": 1.0, "move_speed": 1.0,
                     "attack_windup_ms": 1
                 },
                 {
                     "template_id": "TWO", "species_id": "TEST", "display_name": "Two",
-                    "visual_ids": ["SHARED"], "action_kit": [], "max_hp": 1, "hit_radius": 1.0,
+                    "visual_ids": ["SHARED"], "resource_policy": "FREE_ACTIONS_ONLY",
+                    "action_kit": [], "max_hp": 1, "hit_radius": 1.0,
                     "hit_height": 1.0, "aggro_radius": 1.0, "move_speed": 1.0,
                     "attack_windup_ms": 1
                 }

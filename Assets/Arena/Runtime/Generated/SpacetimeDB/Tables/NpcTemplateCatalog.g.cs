@@ -53,6 +53,7 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Col<NpcTemplateCatalog, string> SpeciesId { get; }
         public global::SpacetimeDB.Col<NpcTemplateCatalog, string> DisplayName { get; }
         public global::SpacetimeDB.Col<NpcTemplateCatalog, string> DefaultVisualId { get; }
+        public global::SpacetimeDB.Col<NpcTemplateCatalog, string> ResourcePolicy { get; }
         public global::SpacetimeDB.Col<NpcTemplateCatalog, int> MaxHp { get; }
         public global::SpacetimeDB.Col<NpcTemplateCatalog, float> HitRadius { get; }
         public global::SpacetimeDB.Col<NpcTemplateCatalog, float> HitHeight { get; }
@@ -63,6 +64,7 @@ namespace SpacetimeDB.Types
             SpeciesId = new global::SpacetimeDB.Col<NpcTemplateCatalog, string>(tableName, "species_id");
             DisplayName = new global::SpacetimeDB.Col<NpcTemplateCatalog, string>(tableName, "display_name");
             DefaultVisualId = new global::SpacetimeDB.Col<NpcTemplateCatalog, string>(tableName, "default_visual_id");
+            ResourcePolicy = new global::SpacetimeDB.Col<NpcTemplateCatalog, string>(tableName, "resource_policy");
             MaxHp = new global::SpacetimeDB.Col<NpcTemplateCatalog, int>(tableName, "max_hp");
             HitRadius = new global::SpacetimeDB.Col<NpcTemplateCatalog, float>(tableName, "hit_radius");
             HitHeight = new global::SpacetimeDB.Col<NpcTemplateCatalog, float>(tableName, "hit_height");

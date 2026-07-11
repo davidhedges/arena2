@@ -4124,6 +4124,11 @@ pub(crate) fn authored_ability_actor_scope(ability_id: &str) -> Option<&'static 
     ability_definition(ability_id).map(|definition| definition.actor_scope.as_str())
 }
 
+pub(crate) fn authored_ability_resource(ability_id: &str) -> Option<(&'static str, f32)> {
+    ability_definition(ability_id)
+        .map(|definition| (definition.resource_kind.as_str(), definition.resource_cost))
+}
+
 fn slot_definition(slot_id: &str) -> Option<&'static ActionBarSlotDefinition> {
     let slot_id = canonical_action_bar_slot_id(slot_id);
     progression_catalog()

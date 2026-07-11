@@ -17,6 +17,8 @@ namespace SpacetimeDB.Types
         public SpacetimeDB.Identity Identity;
         [DataMember(Name = "target")]
         public SpacetimeDB.Identity Target;
+        [DataMember(Name = "ability_id")]
+        public string AbilityId;
         [DataMember(Name = "action_instance_id")]
         public string ActionInstanceId;
         [DataMember(Name = "cast_at")]
@@ -29,6 +31,7 @@ namespace SpacetimeDB.Types
         public NpcPendingSwing(
             SpacetimeDB.Identity Identity,
             SpacetimeDB.Identity Target,
+            string AbilityId,
             string ActionInstanceId,
             SpacetimeDB.Timestamp CastAt,
             SpacetimeDB.Timestamp ResolveAt,
@@ -37,6 +40,7 @@ namespace SpacetimeDB.Types
         {
             this.Identity = Identity;
             this.Target = Target;
+            this.AbilityId = AbilityId;
             this.ActionInstanceId = ActionInstanceId;
             this.CastAt = CastAt;
             this.ResolveAt = ResolveAt;
@@ -45,6 +49,7 @@ namespace SpacetimeDB.Types
 
         public NpcPendingSwing()
         {
+            this.AbilityId = "";
             this.ActionInstanceId = "";
         }
     }
