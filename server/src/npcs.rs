@@ -58,6 +58,8 @@ use crate::npcs::npc_state as _;
 #[allow(unused_imports)]
 use crate::npcs::npc_target_override as _;
 #[allow(unused_imports)]
+use crate::npcs::npc_threat as _;
+#[allow(unused_imports)]
 use crate::player_physics::player_physics as _;
 #[allow(unused_imports)]
 use crate::player_state::player_state as _;
@@ -252,6 +254,18 @@ pub struct NpcDecisionDebug {
     pub score_summary: String,
     pub hard_reject_summary: String,
     pub threat_summary: String,
+    pub updated_at: Timestamp,
+}
+
+#[table(accessor = npc_threat)]
+pub struct NpcThreat {
+    #[primary_key]
+    pub threat_key: String,
+    #[index(btree)]
+    pub npc_identity: Identity,
+    #[index(btree)]
+    pub source_identity: Identity,
+    pub damage_threat: f32,
     pub updated_at: Timestamp,
 }
 
@@ -2378,6 +2392,7 @@ fn emit_npc_combat_event(
 fn despawn_npc_identity(ctx: &ReducerContext, identity: Identity) {
     clear_npc_combat_runtime(ctx, identity);
     clear_actor_cooldowns(ctx, identity);
+    clear_npc_threat(ctx, identity);
     ctx.db.npc_target_override().identity().delete(identity);
     ctx.db.npc_return_home().identity().delete(identity);
     ctx.db.npc_decision_debug().identity().delete(identity);
@@ -2404,6 +2419,57 @@ fn despawn_npc_identity(ctx: &ReducerContext, identity: Identity) {
         ctx.db.npc_physics().identity().delete(identity);
     }
     crate::combat::position_history::clear_position_history(ctx, identity);
+}
+
+pub(crate) fn record_npc_damage_threat(
+    ctx: &ReducerContext,
+    npc_identity: Identity,
+    source_identity: Identity,
+    damage: i32,
+) {
+    if source_identity == Identity::ZERO || source_identity == npc_identity || damage <= 0 {
+        return;
+    }
+    let threat_key = npc_threat_key(npc_identity, source_identity);
+    let previous = ctx.db.npc_threat().threat_key().find(&threat_key);
+    let row = NpcThreat {
+        threat_key,
+        npc_identity,
+        source_identity,
+        damage_threat: previous
+            .as_ref()
+            .map_or(damage as f32, |row| row.damage_threat + damage as f32),
+        updated_at: ctx.timestamp,
+    };
+    if previous.is_some() {
+        ctx.db.npc_threat().threat_key().update(row);
+    } else {
+        ctx.db.npc_threat().insert(row);
+    }
+}
+
+fn clear_npc_threat(ctx: &ReducerContext, identity: Identity) {
+    let mut keys: HashSet<String> = ctx
+        .db
+        .npc_threat()
+        .npc_identity()
+        .filter(identity)
+        .map(|row| row.threat_key)
+        .collect();
+    keys.extend(
+        ctx.db
+            .npc_threat()
+            .source_identity()
+            .filter(identity)
+            .map(|row| row.threat_key),
+    );
+    for key in keys {
+        ctx.db.npc_threat().threat_key().delete(key);
+    }
+}
+
+fn npc_threat_key(npc_identity: Identity, source_identity: Identity) -> String {
+    format!("{}:{}", npc_identity.to_hex(), source_identity.to_hex())
 }
 
 fn clear_npc_combat_runtime(ctx: &ReducerContext, identity: Identity) {
@@ -2494,7 +2560,7 @@ mod tests {
     use super::{
         npc_action_distance_score, npc_catalog, npc_decision_interval_ms, npc_identity,
         npc_is_outside_leash_from_positions, npc_melee_defense_event_type,
-        npc_target_stickiness_keeps_current, npc_template, parse_npc_catalog,
+        npc_target_stickiness_keeps_current, npc_template, npc_threat_key, parse_npc_catalog,
         visual_id_for_template, yaw_for_direction, NpcFaction, NPC_CATALOG_JSON,
         NPC_FACTION_FRIENDLY, NPC_FACTION_HOSTILE, NPC_FACTION_NEUTRAL,
         NPC_TEMPLATE_KOBOLD_THIEF_BK_DUAL_SWORD, NPC_TEMPLATE_KOBOLD_WARRIOR_GN_SPEAR,
@@ -2548,6 +2614,22 @@ mod tests {
         assert_eq!(first, npc_decision_interval_ms(identity, 7, 150, 0.05));
         assert!((143..=158).contains(&first));
         assert_eq!(npc_decision_interval_ms(identity, 7, 150, 0.0), 150);
+    }
+
+    #[test]
+    fn npc_threat_keys_are_pair_specific() {
+        let npc = Identity::from_hex(format!("{:064x}", 1).as_str()).unwrap();
+        let first_source = Identity::from_hex(format!("{:064x}", 2).as_str()).unwrap();
+        let second_source = Identity::from_hex(format!("{:064x}", 3).as_str()).unwrap();
+
+        assert_ne!(
+            npc_threat_key(npc, first_source),
+            npc_threat_key(npc, second_source)
+        );
+        assert_ne!(
+            npc_threat_key(npc, first_source),
+            npc_threat_key(first_source, npc)
+        );
     }
 
     #[test]

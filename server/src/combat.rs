@@ -3834,6 +3834,7 @@ fn apply_damage_to_npc_state(
         absorb_damage_with_temporary_hitpoints(ctx, target, resolved_amount, ctx.timestamp);
     resolved.final_amount = hp_damage;
     state.hp -= hp_damage;
+    crate::npcs::record_npc_damage_threat(ctx, target, source, hp_damage);
     let defeated = state.hp <= 0;
     if defeated {
         state.hp = 0;
