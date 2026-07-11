@@ -11,6 +11,7 @@ namespace Arena.Entity
     {
         [SerializeField] private UnityEngine.Object? prefab;
         [SerializeField] private string primaryAnimatorPath = string.Empty;
+        [SerializeField] private RuntimeAnimatorController? animatorControllerOverride;
         [SerializeField] private float presentationVerticalOffset;
         [SerializeField] private NpcNativeAnimationRoleMap animations = new();
         [SerializeField] private List<NpcNativeActionAnimationEntry> actionAnimations = new();
@@ -21,6 +22,7 @@ namespace Arena.Entity
 
         public UnityEngine.Object? Prefab => prefab;
         public string PrimaryAnimatorPath => primaryAnimatorPath?.Trim() ?? string.Empty;
+        public RuntimeAnimatorController? AnimatorControllerOverride => animatorControllerOverride;
         public float PresentationVerticalOffset => presentationVerticalOffset;
         public NpcNativeAnimationRoleMap Animations => animations;
         public IReadOnlyList<NpcNativeActionAnimationEntry> ActionAnimations => actionAnimations;

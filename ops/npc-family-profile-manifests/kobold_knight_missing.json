@@ -1,0 +1,43 @@
+{
+  "source_family_name": "KoboldKnight",
+  "appearance_ids": ["KOBOLD_KNIGHT_BK", "KOBOLD_KNIGHT_GN"],
+  "expected_appearance_count": 2,
+  "primary_animator_path": ".",
+  "allow_root_motion": true,
+  "acknowledge_inventory_warnings": true,
+  "presentation_vertical_offset": -0.1879199743270874,
+  "animations": {
+    "idle": ["idle"], "ready": [], "walk": ["Walk_Forward"], "run": ["Run_Forward"],
+    "basicAttack": [], "spellCastStart": [], "spellRelease": [], "spellCancel": [], "hit": [], "death": ["Death"]
+  },
+  "hard_crowd_control_fallback_policy": 0,
+  "vfx_sockets": [
+    { "anchor": "LEFT_HAND", "transform_path": ".", "fallback_policy": 1 },
+    { "anchor": "RIGHT_HAND", "transform_path": ".", "fallback_policy": 1 },
+    { "anchor": "TARGET", "transform_path": ".", "fallback_policy": 1 }
+  ],
+  "status_reactions": [
+    { "status_kind": "STUN", "clip_file_id": -8767420384561272259, "clip_guid": "2a111d1970d16ed40be00ccc99d5d0c6", "require_humanoid_avatar": true }
+  ],
+  "appearance_overrides": {
+    "KOBOLD_KNIGHT_BK": {
+      "animations": { "ready": ["Combat_1H_Ready"], "basicAttack": ["Combat_1H_AttackDual"], "hit": ["Combat_1H_Hit"] },
+      "action_animations": [
+        { "ability_id": "NPC_KOBOLD_DUAL_SPECIAL_2", "states": ["Combat_1H_AttackSpecialDual01"] },
+        { "ability_id": "NPC_KOBOLD_DUAL_SPECIAL", "states": ["Combat_1H_AttackSpecialDual"] },
+        { "ability_id": "NPC_KOBOLD_DUAL_STRIKE_2", "states": ["Combat_1H_AttackDual01"] },
+        { "ability_id": "NPC_KOBOLD_DUAL_STRIKE", "states": ["Combat_1H_AttackDual"] }
+      ]
+    },
+    "KOBOLD_KNIGHT_GN": {
+      "animations": { "ready": ["Combat_2HL_Ready"], "basicAttack": ["Combat_2HL_Attack"], "hit": ["Combat_2HL_Hit"] },
+      "action_animations": [
+        { "ability_id": "NPC_KOBOLD_SPEAR_SPECIAL_2", "states": ["Combat_2HL_AttackSpecial01"] },
+        { "ability_id": "NPC_KOBOLD_SPEAR_SPECIAL", "states": ["Combat_2HL_AttackSpecial"] },
+        { "ability_id": "NPC_KOBOLD_SPEAR_STRIKE_3", "states": ["Combat_2HL_Attack02"] },
+        { "ability_id": "NPC_KOBOLD_SPEAR_STRIKE_2", "states": ["Combat_2HL_Attack01"] },
+        { "ability_id": "NPC_KOBOLD_SPEAR_STRIKE", "states": ["Combat_2HL_Attack"] }
+      ]
+    }
+  }
+}

@@ -3230,8 +3230,8 @@ mod tests {
     #[test]
     fn authored_npc_catalog_is_valid_and_complete_for_current_templates() {
         let parsed = parse_npc_catalog(NPC_CATALOG_JSON).unwrap();
-        assert_eq!(parsed.templates.len(), 33);
-        assert_eq!(npc_catalog().templates.len(), 33);
+        assert_eq!(parsed.templates.len(), 45);
+        assert_eq!(npc_catalog().templates.len(), 45);
         assert!(parsed
             .templates
             .iter()
@@ -3386,6 +3386,55 @@ mod tests {
         assert_eq!(npc_template("MUSHROOM").unwrap().action_kit.len(), 2);
         assert_eq!(npc_template("VAMPIRE").unwrap().action_kit.len(), 2);
         assert_eq!(npc_template("ZOMBIE_HOUND").unwrap().action_kit.len(), 2);
+        assert_eq!(npc_template("ROCK_GOLEM").unwrap().visual_ids.len(), 6);
+        assert_eq!(
+            npc_template("HELLGUARD_ARMORED").unwrap().action_kit.len(),
+            4
+        );
+        assert_eq!(
+            npc_template("HELLGUARD_UNARMED").unwrap().action_kit.len(),
+            2
+        );
+        assert_eq!(
+            npc_template("ZOMBIE_DUAL_WIELD").unwrap().visual_ids.len(),
+            4
+        );
+        assert_eq!(npc_template("ZOMBIE_UNARMED").unwrap().action_kit.len(), 2);
+        assert_eq!(
+            npc_template("KOBOLD_WARRIOR_BK_DUAL_SWORD")
+                .unwrap()
+                .action_kit
+                .len(),
+            4
+        );
+        assert_eq!(
+            npc_template("KOBOLD_THIEF_GN_SPEAR")
+                .unwrap()
+                .action_kit
+                .len(),
+            5
+        );
+        assert_eq!(
+            npc_template("KOBOLD_THIEF_RD_SWORD_SHIELD")
+                .unwrap()
+                .action_kit
+                .len(),
+            5
+        );
+        assert_eq!(
+            npc_template("KOBOLD_KNIGHT_BK_DUAL_SWORD")
+                .unwrap()
+                .action_kit
+                .len(),
+            4
+        );
+        assert_eq!(
+            npc_template("KOBOLD_KNIGHT_GN_SPEAR")
+                .unwrap()
+                .action_kit
+                .len(),
+            5
+        );
     }
 
     #[test]

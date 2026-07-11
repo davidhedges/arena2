@@ -101,12 +101,17 @@ namespace Arena.Editor
                 errors.Add($"Primary Animator path '{profile.PrimaryAnimatorPath}' does not resolve.");
             else
             {
-                if (animator.runtimeAnimatorController == null)
+                RuntimeAnimatorController? controller = profile.AnimatorControllerOverride != null
+                    ? profile.AnimatorControllerOverride
+                    : animator.runtimeAnimatorController;
+                if (controller == null)
                     errors.Add("Primary Animator has no controller.");
                 if (animator.avatar == null || !animator.avatar.isValid)
                     errors.Add("Primary Animator has no valid avatar.");
 
-                HashSet<string> states = CollectStateNames(animator.runtimeAnimatorController);
+                HashSet<string> states = controller != null
+                    ? CollectStateNames(controller)
+                    : new HashSet<string>(StringComparer.Ordinal);
                 ValidateRoleStates(errors, "idle", profile.Animations.idle, states);
                 ValidateRoleStates(errors, "ready", profile.Animations.ready, states, required: false);
                 ValidateRoleStates(errors, "walk", profile.Animations.walk, states);

@@ -35,6 +35,17 @@ family_name = manifest.fetch("source_family_name")
 appearances = inventory.fetch("appearances")
   .select { |entry| entry.fetch("family_name") == family_name }
   .sort_by { |entry| entry.fetch("appearance_id_candidate") }
+if manifest["appearance_ids"]
+  requested_appearance_ids = manifest.fetch("appearance_ids").to_set
+  available_appearance_ids = appearances.map { |entry| entry.fetch("appearance_id_candidate") }.to_set
+  unknown_appearance_ids = requested_appearance_ids - available_appearance_ids
+  unless unknown_appearance_ids.empty?
+    abort("#{family_name}: unknown requested appearances: #{unknown_appearance_ids.to_a.sort.join(", ")}")
+  end
+  appearances.select! do |entry|
+    requested_appearance_ids.include?(entry.fetch("appearance_id_candidate"))
+  end
+end
 expected_count = Integer(manifest.fetch("expected_appearance_count"))
 abort("#{family_name}: expected #{expected_count} appearances, found #{appearances.length}") unless appearances.length == expected_count
 
@@ -68,7 +79,7 @@ def parse_prefab(path)
     transforms[id] = [game_object, parent]
   end
   root = transforms.find { |_id, (_game_object, parent)| parent == "0" }
-  abort("#{path}: no root Transform") unless root
+  return { root_game_object_id: "100100000", transform_paths: Set.new(["."]) } unless root
 
   transform_paths = transforms.keys.to_set do |transform_id|
     parts = []
@@ -104,7 +115,7 @@ def yaml_string_list(key, values, indent: 4)
   output
 end
 
-def profile_yaml(profile_name:, prefab_id:, prefab_guid:, primary_animator_path:, presentation_vertical_offset:, animations:, action_animations:, fallback_policy:, sockets:, reactions:)
+def profile_yaml(profile_name:, prefab_id:, prefab_guid:, primary_animator_path:, controller_override:, presentation_vertical_offset:, animations:, action_animations:, fallback_policy:, sockets:, reactions:)
   output = +<<~YAML
     %YAML 1.1
     %TAG !u! tag:unity3d.com,2011:
@@ -123,6 +134,9 @@ def profile_yaml(profile_name:, prefab_id:, prefab_guid:, primary_animator_path:
       prefab: {fileID: #{prefab_id}, guid: #{prefab_guid}, type: 3}
       primaryAnimatorPath: #{primary_animator_path}
   YAML
+  if controller_override
+    output << "  animatorControllerOverride: {fileID: 9100000, guid: #{controller_override}, type: 2}\n"
+  end
   if presentation_vertical_offset != 0.0
     output << "  presentationVerticalOffset: #{presentation_vertical_offset}\n"
   end
@@ -220,6 +234,13 @@ appearances.each do |entry|
   else
     entry.fetch("controller_states").to_set
   end
+  controller_override_guid = nil
+  if manifest["override_animator_controller"]
+    abort("#{visual_id}: controller override requires animator_controller_path") unless controller_path
+    controller_meta_path = Pathname.new("#{ROOT.join(controller_path)}.meta")
+    controller_override_guid = controller_meta_path.read[/^guid: (\w+)/, 1]
+    abort("#{visual_id}: controller override GUID is missing") unless controller_override_guid
+  end
   animations.values.flatten.each do |state|
     abort("#{visual_id}: controller state '#{state}' is missing") unless available_states.include?(state)
   end
@@ -242,7 +263,7 @@ appearances.each do |entry|
   end
   sockets.each do |socket|
     path = socket.fetch("transform_path")
-    abort("#{visual_id}: socket path '#{path}' is missing") unless prefab.fetch(:transform_paths).include?(path)
+    abort("#{visual_id}: socket path '#{path}' is missing") unless path == "." || prefab.fetch(:transform_paths).include?(path)
   end
   prefab_guid = Pathname.new("#{prefab_path}.meta").read[/^guid: (\w+)/, 1]
   abort("#{visual_id}: prefab GUID is missing") unless prefab_guid
@@ -257,6 +278,7 @@ appearances.each do |entry|
     prefab_id: prefab.fetch(:root_game_object_id),
     prefab_guid: prefab_guid,
     primary_animator_path: primary_animator_path,
+    controller_override: controller_override_guid,
     presentation_vertical_offset: presentation_vertical_offset,
     animations: animations,
     action_animations: action_animations,

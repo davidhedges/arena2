@@ -1,0 +1,29 @@
+{
+  "source_family_name": "KoboldWarrior",
+  "appearance_ids": ["KOBOLD_WARRIOR_BK"],
+  "expected_appearance_count": 1,
+  "primary_animator_path": ".",
+  "allow_root_motion": true,
+  "acknowledge_inventory_warnings": true,
+  "presentation_vertical_offset": -0.027874469757080078,
+  "animations": {
+    "idle": ["idle"], "ready": ["Combat_1H_Ready"], "walk": ["Walk_Forward"], "run": ["Run_Forward"],
+    "basicAttack": ["Combat_1H_AttackDual"], "spellCastStart": [], "spellRelease": [], "spellCancel": [],
+    "hit": ["Combat_1H_Hit"], "death": ["Death"]
+  },
+  "action_animations": [
+    { "ability_id": "NPC_KOBOLD_DUAL_SPECIAL_2", "states": ["Combat_1H_AttackSpecialDual01"] },
+    { "ability_id": "NPC_KOBOLD_DUAL_SPECIAL", "states": ["Combat_1H_AttackSpecialDual"] },
+    { "ability_id": "NPC_KOBOLD_DUAL_STRIKE_2", "states": ["Combat_1H_AttackDual01"] },
+    { "ability_id": "NPC_KOBOLD_DUAL_STRIKE", "states": ["Combat_1H_AttackDual"] }
+  ],
+  "hard_crowd_control_fallback_policy": 0,
+  "vfx_sockets": [
+    { "anchor": "LEFT_HAND", "transform_path": ".", "fallback_policy": 1 },
+    { "anchor": "RIGHT_HAND", "transform_path": ".", "fallback_policy": 1 },
+    { "anchor": "TARGET", "transform_path": ".", "fallback_policy": 1 }
+  ],
+  "status_reactions": [
+    { "status_kind": "STUN", "clip_file_id": -8767420384561272259, "clip_guid": "6bacdad010f1d9d4d87b2717a0d5d087", "require_humanoid_avatar": true }
+  ]
+}

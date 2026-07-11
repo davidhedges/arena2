@@ -522,6 +522,8 @@ namespace Arena.Presentation
                     Animator[] animators = GetComponentsInChildren<Animator>(includeInactive: true);
                     for (int i = 0; i < animators.Length; i++)
                         animators[i].enabled = ReferenceEquals(animators[i], profileAnimator);
+                    if (_visualProfile.AnimatorControllerOverride != null)
+                        _animator.runtimeAnimatorController = _visualProfile.AnimatorControllerOverride;
                     _animator.applyRootMotion = false;
                 }
             }
