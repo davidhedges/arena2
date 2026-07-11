@@ -84,6 +84,38 @@ namespace Arena.Tests.Editor
             }
         }
 
+        [Test]
+        public void FreezeCurrentPoseFallback_FreezesAndRestoresAnimatorSpeed()
+        {
+            Type profileType = RequireType("Arena.Entity.NpcVisualProfile");
+            Type animationType = RequireType("Arena.Presentation.NpcAnimationController");
+            var profile = (ScriptableObject)ScriptableObject.CreateInstance(profileType);
+            var root = new GameObject("FreezeFallbackNpc");
+            Animator animator = root.AddComponent<Animator>();
+            try
+            {
+                var serialized = new SerializedObject(profile);
+                serialized.FindProperty("primaryAnimatorPath").stringValue = ".";
+                serialized.FindProperty("hardCrowdControlFallbackPolicy").enumValueIndex = 1;
+                serialized.ApplyModifiedPropertiesWithoutUndo();
+
+                object controller = animationType.GetMethod("Attach")!.Invoke(null, new object[] { root })!;
+                animationType.GetMethod("SetVisualProfile")!.Invoke(controller, new object[] { profile });
+                animator.speed = 0.65f;
+
+                animationType.GetMethod("SetHardCrowdControl")!.Invoke(controller, new object?[] { "STUN" });
+                Assert.That(animator.speed, Is.EqualTo(0f));
+
+                animationType.GetMethod("SetHardCrowdControl")!.Invoke(controller, new object?[] { null });
+                Assert.That(animator.speed, Is.EqualTo(0.65f).Within(0.0001f));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(root);
+                UnityEngine.Object.DestroyImmediate(profile);
+            }
+        }
+
         private static void AssertProfile(MethodInfo tryGetEntry, UnityEngine.Object catalog, string visualId)
         {
             object?[] args = { visualId, null };

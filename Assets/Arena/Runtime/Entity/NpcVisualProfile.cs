@@ -12,12 +12,15 @@ namespace Arena.Entity
         [SerializeField] private UnityEngine.Object? prefab;
         [SerializeField] private string primaryAnimatorPath = string.Empty;
         [SerializeField] private NpcNativeAnimationRoleMap animations = new();
+        [SerializeField] private NpcHardCrowdControlFallbackPolicy hardCrowdControlFallbackPolicy =
+            NpcHardCrowdControlFallbackPolicy.ReadyPose;
         [SerializeField] private List<NpcVisualSocketEntry> vfxSockets = new();
         [SerializeField] private List<NpcStatusReactionEntry> statusReactions = new();
 
         public UnityEngine.Object? Prefab => prefab;
         public string PrimaryAnimatorPath => primaryAnimatorPath?.Trim() ?? string.Empty;
         public NpcNativeAnimationRoleMap Animations => animations;
+        public NpcHardCrowdControlFallbackPolicy HardCrowdControlFallbackPolicy => hardCrowdControlFallbackPolicy;
         public IReadOnlyList<NpcVisualSocketEntry> VfxSockets => vfxSockets;
         public IReadOnlyList<NpcStatusReactionEntry> StatusReactions => statusReactions;
 
@@ -89,6 +92,12 @@ namespace Arena.Entity
     {
         SkipCue = 0,
         PresentationRoot = 1,
+    }
+
+    public enum NpcHardCrowdControlFallbackPolicy
+    {
+        ReadyPose = 0,
+        FreezeCurrentPose = 1,
     }
 
     [Serializable]

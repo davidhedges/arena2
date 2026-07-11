@@ -43,6 +43,8 @@ namespace Arena.Presentation
         private string _hardCrowdControlStatusKind = string.Empty;
         private RuntimeAnimatorController? _statusReactionBaseController;
         private AnimatorOverrideController? _statusReactionOverrideController;
+        private bool _hardCrowdControlPoseFrozen;
+        private float _animatorSpeedBeforeHardCrowdControl = 1f;
         private readonly Dictionary<string, NpcStatusReactionEntry> _statusReactions = new(StringComparer.Ordinal);
 
         public static NpcAnimationController Attach(GameObject root)
@@ -66,6 +68,7 @@ namespace Arena.Presentation
             if (_visualProfile == profile)
                 return;
 
+            RestoreFrozenHardCrowdControlPose();
             _visualProfile = profile;
             _animator = null;
             EnsureAnimator();
@@ -101,6 +104,7 @@ namespace Arena.Presentation
             }
 
             _hardCrowdControlStatusKind = normalized;
+            RestoreFrozenHardCrowdControlPose();
             _returnToIdleAt = -1f;
             _locomotionActive = false;
             _locomotionTimeoutAt = -1f;
@@ -110,6 +114,8 @@ namespace Arena.Presentation
                 return;
 
             RestoreStatusReactionController();
+            if (!_dead && gameObject.activeSelf && TryFreezeHardCrowdControlPose())
+                return;
             if (!_dead && gameObject.activeSelf)
                 TryCrossFade(ReadyStateCandidatesForTemplate(), out _);
         }
@@ -121,6 +127,7 @@ namespace Arena.Presentation
             _returnToIdleAt = -1f;
             _locomotionTimeoutAt = -1f;
             _hardCrowdControlStatusKind = string.Empty;
+            RestoreFrozenHardCrowdControlPose();
             RestoreStatusReactionController();
             _locomotionActive = false;
             if (!gameObject.activeSelf)
@@ -231,6 +238,7 @@ namespace Arena.Presentation
             _dead = true;
             _returnToIdleAt = -1f;
             _hardCrowdControlStatusKind = string.Empty;
+            RestoreFrozenHardCrowdControlPose();
             RestoreStatusReactionController();
             if (!gameObject.activeSelf)
                 gameObject.SetActive(true);
@@ -334,6 +342,7 @@ namespace Arena.Presentation
         private void ClearHardCrowdControl()
         {
             _hardCrowdControlStatusKind = string.Empty;
+            RestoreFrozenHardCrowdControlPose();
             RestoreStatusReactionController();
 
             if (_dead || !gameObject.activeSelf)
@@ -343,6 +352,33 @@ namespace Arena.Presentation
                 PlayLocomotion();
             else
                 TryCrossFade(ReadyStateCandidatesForTemplate(), out _);
+        }
+
+        private bool TryFreezeHardCrowdControlPose()
+        {
+            if (_visualProfile?.HardCrowdControlFallbackPolicy
+                    != NpcHardCrowdControlFallbackPolicy.FreezeCurrentPose
+                || !EnsureAnimator())
+            {
+                return false;
+            }
+
+            if (!_hardCrowdControlPoseFrozen)
+                _animatorSpeedBeforeHardCrowdControl = _animator!.speed;
+            _animator!.speed = 0f;
+            _hardCrowdControlPoseFrozen = true;
+            return true;
+        }
+
+        private void RestoreFrozenHardCrowdControlPose()
+        {
+            if (!_hardCrowdControlPoseFrozen)
+                return;
+
+            if (_animator != null)
+                _animator.speed = _animatorSpeedBeforeHardCrowdControl;
+            _hardCrowdControlPoseFrozen = false;
+            _animatorSpeedBeforeHardCrowdControl = 1f;
         }
 
         private void RestoreStatusReactionController()
