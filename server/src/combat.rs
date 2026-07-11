@@ -4419,9 +4419,7 @@ fn apply_status_internal(
                     encode_status_dispel_types(&dispel_types),
                 );
                 ctx.db.status_effect().status_id().update(existing);
-                if kind == StatusEffectKind::Stagger {
-                    apply_stagger_status_side_effects(ctx, now, source, target);
-                }
+                apply_status_side_effects(ctx, now, source, target, kind);
                 return;
             }
         }
@@ -4442,9 +4440,7 @@ fn apply_status_internal(
                     encode_status_dispel_types(&dispel_types),
                 );
                 ctx.db.status_effect().status_id().update(existing);
-                if kind == StatusEffectKind::Stagger {
-                    apply_stagger_status_side_effects(ctx, now, source, target);
-                }
+                apply_status_side_effects(ctx, now, source, target, kind);
                 return;
             }
         }
@@ -4467,9 +4463,7 @@ fn apply_status_internal(
                     encode_status_dispel_types(&dispel_types),
                 );
                 ctx.db.status_effect().status_id().update(existing);
-                if kind == StatusEffectKind::Stagger {
-                    apply_stagger_status_side_effects(ctx, now, source, target);
-                }
+                apply_status_side_effects(ctx, now, source, target, kind);
                 return;
             }
         }
@@ -4488,6 +4482,19 @@ fn apply_status_internal(
         expires_at,
         encode_status_dispel_types(&dispel_types),
     ));
+    apply_status_side_effects(ctx, now, source, target, kind);
+}
+
+fn apply_status_side_effects(
+    ctx: &ReducerContext,
+    now: Timestamp,
+    source: Identity,
+    target: Identity,
+    kind: StatusEffectKind,
+) {
+    if is_hard_crowd_control_kind(kind) {
+        crate::npcs::interrupt_npc_actions_for_crowd_control(ctx, target, now);
+    }
     if kind == StatusEffectKind::Stagger {
         apply_stagger_status_side_effects(ctx, now, source, target);
     }

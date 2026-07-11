@@ -9,9 +9,10 @@ use crate::arena::open_world_scene_name_for_identity;
 use crate::arena::{resolve_player_world_context, world_contexts_share, ResolvedWorldContext};
 use crate::combat::{
     mark_harmful_combat_action, queue_effects, timestamp_to_micros, CombatEvent, DamageDelivery,
-    EffectPacket, MovementModifiers, COMBAT_EVENT_BLOCK, COMBAT_EVENT_CAST, COMBAT_EVENT_IMPACT,
-    COMBAT_EVENT_PARRY, COMBAT_METADATA_NONE, COMBAT_SCALAR_MELEE_RELEASE_DELAY_SECONDS,
-    COMBAT_SCALAR_NONE, COMBAT_SEQUENCE_NONE, DAMAGE_SOURCE_KIND_MELEE,
+    EffectPacket, MovementModifiers, COMBAT_EVENT_BLOCK, COMBAT_EVENT_CAST, COMBAT_EVENT_FIZZLE,
+    COMBAT_EVENT_IMPACT, COMBAT_EVENT_PARRY, COMBAT_METADATA_NONE,
+    COMBAT_SCALAR_MELEE_RELEASE_DELAY_SECONDS, COMBAT_SCALAR_NONE, COMBAT_SEQUENCE_NONE,
+    DAMAGE_SOURCE_KIND_MELEE,
 };
 use crate::defense::{
     resolve_defensible_combat_hit, CombatHitDeliveryKind, DefenseResolution, DefensibleCombatHit,
@@ -1213,6 +1214,39 @@ fn resolve_due_npc_pending_swings(
         ctx.db.npc_pending_swing().identity().delete(swing.identity);
         resolve_npc_pending_swing(ctx, now, &swing, movement_modifiers);
     }
+}
+
+pub(crate) fn interrupt_npc_actions_for_crowd_control(
+    ctx: &ReducerContext,
+    identity: Identity,
+    now: Timestamp,
+) {
+    let Some(swing) = ctx.db.npc_pending_swing().identity().find(identity) else {
+        return;
+    };
+    ctx.db.npc_pending_swing().identity().delete(identity);
+
+    let Some(npc) = ctx.db.npc_instance().identity().find(identity) else {
+        return;
+    };
+    let Some(physics) = ctx.db.npc_physics().identity().find(identity) else {
+        return;
+    };
+    let Some(target) = resolve_npc_swing_target(ctx, identity, &physics, swing.target) else {
+        return;
+    };
+    emit_npc_combat_event(
+        ctx,
+        now,
+        &npc,
+        &physics,
+        &target,
+        swing.action_instance_id.as_str(),
+        COMBAT_EVENT_FIZZLE,
+        0,
+        COMBAT_SCALAR_NONE,
+        0.0,
+    );
 }
 
 /// Swing resolution (S3), re-validated against present-time state: the swing
