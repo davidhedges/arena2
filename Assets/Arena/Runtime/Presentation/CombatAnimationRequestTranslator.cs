@@ -58,7 +58,11 @@ namespace Arena.Presentation
                     ShouldDriveMeleePhasesFromSpecialMovement(conn, combatProfile, row));
             }
 
-            return BuildActorNeutralAuthoritativeFromCombatEvent(row);
+            return CombatAnimationRequest.Authoritative(
+                row.ActionKind,
+                CombatAnimationCategory.Spell,
+                row.CreatedAt.MicrosecondsSinceUnixEpoch / 1000L,
+                row.SourceKind);
         }
 
         private static bool ShouldDriveMeleePhasesFromSpecialMovement(

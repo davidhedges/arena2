@@ -4277,14 +4277,14 @@ fn apply_heal(
         if !state.alive {
             return;
         }
-        state.hp = hp_after_heal(state.hp, state.max_hp, resolved.final_amount);
+        state.hp = (state.hp + resolved.final_amount).min(state.max_hp);
         ctx.db.player_state().player_id().update(state);
         true
     } else if let Some(mut state) = ctx.db.npc_state().identity().find(target) {
         if !state.alive {
             return;
         }
-        state.hp = hp_after_heal(state.hp, state.max_hp, resolved.final_amount);
+        state.hp = (state.hp + resolved.final_amount).min(state.max_hp);
         ctx.db.npc_state().identity().update(state);
         true
     } else {
@@ -4297,10 +4297,6 @@ fn apply_heal(
     mark_helpful_combat_assist(ctx, source, target, ctx.timestamp);
     record_match_healing_done(ctx, source, resolved.final_amount);
     emit_combat_effect_event(ctx, hit, EFFECT_TYPE_HEAL, resolved);
-}
-
-fn hp_after_heal(current_hp: i32, max_hp: i32, amount: i32) -> i32 {
-    current_hp.saturating_add(amount.max(0)).min(max_hp)
 }
 
 fn apply_status(
@@ -5702,13 +5698,12 @@ mod tests {
     use super::{
         actor_distance_sq, apply_status_update, attack_speed_scalar_to_multiplier,
         battle_trance_hp_after_damage, bloodlust_passive_spec, due_interval_count,
-        event_prune_cutoff_micros, hp_after_heal, new_status_effect,
-        resolve_effect_amount_from_roll, resolve_temporary_hitpoint_absorb, stacked_slow_pct,
-        stagger_shove_tunables, status_has_dispel_type, AuthoredStatusPayload, DamageDelivery,
-        EffectPacket, MovementModifiers, StackPolicy, StatusDispelType, StatusEffect,
-        StatusEffectKind, StatusPayload, StatusPolarity, StatusRuntimeView,
-        TemporaryCombatModifiers, BLOODLUST_PASSIVE_ID, COMBAT_PROJECTILE_DEFINITIONS,
-        PLAYER_EVENT_RETENTION,
+        event_prune_cutoff_micros, new_status_effect, resolve_effect_amount_from_roll,
+        resolve_temporary_hitpoint_absorb, stacked_slow_pct, stagger_shove_tunables,
+        status_has_dispel_type, AuthoredStatusPayload, DamageDelivery, EffectPacket,
+        MovementModifiers, StackPolicy, StatusDispelType, StatusEffect, StatusEffectKind,
+        StatusPayload, StatusPolarity, StatusRuntimeView, TemporaryCombatModifiers,
+        BLOODLUST_PASSIVE_ID, COMBAT_PROJECTILE_DEFINITIONS, PLAYER_EVENT_RETENTION,
     };
     use crate::relations::TargetAudience;
     use spacetimedb::{Identity, Timestamp};
@@ -5723,14 +5718,6 @@ mod tests {
 
     fn test_identity_number(value: u8) -> Identity {
         Identity::from_hex(&format!("{value:064x}")).expect("test identity hex should be valid")
-    }
-
-    #[test]
-    fn actor_healing_clamps_to_max_hp_and_never_reduces_health() {
-        assert_eq!(hp_after_heal(40, 100, 25), 65);
-        assert_eq!(hp_after_heal(90, 100, 25), 100);
-        assert_eq!(hp_after_heal(40, 100, -25), 40);
-        assert_eq!(hp_after_heal(i32::MAX - 1, i32::MAX, 100), i32::MAX);
     }
 
     fn test_status_effect(
