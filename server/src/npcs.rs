@@ -2210,7 +2210,7 @@ fn select_npc_melee_action(
     for entry in &template.action_kit {
         if !matches!(
             entry.role.as_str(),
-            "MELEE_OFFENSE" | "RANGED_OFFENSE" | "BUFF" | "HEAL"
+            "MELEE_OFFENSE" | "RANGED_OFFENSE" | "BUFF" | "HEAL" | "DEBUFF"
         ) {
             rejects.role = rejects.role.saturating_add(1);
             continue;
@@ -2293,7 +2293,10 @@ fn select_npc_melee_action(
             };
             NpcExecutableAction::Melee(melee)
         } else if ability.ability_kind == "SPELL"
-            && matches!(entry.role.as_str(), "RANGED_OFFENSE" | "BUFF" | "HEAL")
+            && matches!(
+                entry.role.as_str(),
+                "RANGED_OFFENSE" | "BUFF" | "HEAL" | "DEBUFF"
+            )
         {
             let Some(spell) = spell_definition_by_str(ability.action_id.as_str()) else {
                 rejects.missing_ability = rejects.missing_ability.saturating_add(1);
@@ -3197,12 +3200,19 @@ mod tests {
         let wizard = npc_template("SKELETON_WIZARD").expect("wizard exemplar should be authored");
         assert_eq!(wizard.action_kit[0].role, "RANGED_OFFENSE");
         assert_eq!(wizard.action_kit[0].target_selector, "CURRENT_ENEMY");
+        assert_eq!(wizard.action_kit[1].role, "DEBUFF");
+        assert_eq!(wizard.action_kit[1].target_selector, "CURRENT_ENEMY");
+        assert_eq!(
+            wizard.action_kit[1].forbidden_target_status,
+            "NPC_SKELETON_FROSTBITE"
+        );
         let lich = npc_template("LICH_SUPPORT").expect("support exemplar should be authored");
         assert_eq!(lich.action_kit[0].role, "HEAL");
         assert_eq!(lich.action_kit[0].target_selector, "LOWEST_HEALTH_ALLY");
         assert!(lich.action_kit[0].base_utility > lich.action_kit[1].base_utility);
         assert_eq!(lich.action_kit[1].role, "BUFF");
-        let abomination = npc_template("ABOMINATION").expect("abomination family should be authored");
+        let abomination =
+            npc_template("ABOMINATION").expect("abomination family should be authored");
         assert_eq!(abomination.visual_ids.len(), 3);
         assert_eq!(abomination.action_kit[0].ability_id, "NPC_ABOMINATION_CLAW");
         assert_eq!(abomination.action_kit[0].role, "MELEE_OFFENSE");

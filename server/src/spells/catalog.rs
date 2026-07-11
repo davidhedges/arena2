@@ -2330,6 +2330,7 @@ fn validate_apply_status_kind_for_target(
         | StatusEffectKind::Intimidated
         | StatusEffectKind::Stagger
         | StatusEffectKind::Knockdown
+        | StatusEffectKind::Slow
         | StatusEffectKind::Dot => Ok(()),
         other => Err(format!(
             "{spell_id} TARGET APPLY_STATUS status '{}' is not supported",
@@ -2451,6 +2452,7 @@ mod tests {
                 "BLADE_BARRIER",
                 "SACRED_FLAME",
                 "SKELETON_WIZARD_FROST_BOLT",
+                "SKELETON_WIZARD_FROSTBITE",
                 "LICH_BONE_WARD",
                 "SKELETON_ARCHER_SHOT",
                 "LICH_MEND",
@@ -3332,6 +3334,30 @@ mod tests {
                 10,
                 StackPolicy::AddStackRefresh,
             )]
+        );
+
+        let frostbite = spell_definition_by_str("SKELETON_WIZARD_FROSTBITE")
+            .expect("NPC Skeleton Wizard Frostbite should exist");
+        assert_eq!(frostbite.behavior, SpellBehavior::ApplyStatus);
+        assert_eq!(frostbite.targeting, SpellTargeting::Target);
+        assert!(frostbite.requires_target);
+        assert_eq!(frostbite.target_audience, TargetAudience::Hostile);
+        assert!((frostbite.max_distance - 14.0).abs() < 0.0001);
+        assert_eq!(
+            frostbite
+                .apply_status
+                .as_ref()
+                .expect("Frostbite should define a status")
+                .payload(),
+            StatusPayload::Slow { slow_pct: 0.25 }
+        );
+        assert_eq!(
+            frostbite.status_stack_group.as_deref(),
+            Some("NPC_SKELETON_FROSTBITE")
+        );
+        assert_eq!(
+            frostbite.apply_status_polarity,
+            Some(StatusPolarity::Debuff)
         );
 
         let frost_nova = spell_definition_by_str("FROST_NOVA").expect("FROST_NOVA should exist");

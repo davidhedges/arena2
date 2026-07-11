@@ -112,7 +112,8 @@
       "brain_profile_id": "BASIC_HOSTILE_CASTER",
       "resource_policy": "FREE_ACTIONS_ONLY",
       "action_kit": [
-        { "ability_id": "NPC_SKELETON_WIZARD_FROST_BOLT", "role": "RANGED_OFFENSE", "target_selector": "CURRENT_ENEMY", "base_utility": 1.0, "min_self_health_pct": 0.0, "max_self_health_pct": 1.0, "preferred_min_distance": 6.0, "preferred_max_distance": 16.0, "min_nearby_allies": 0, "min_nearby_enemies": 1, "required_target_status": "", "forbidden_target_status": "", "movement_may_enable": true, "sort_order": 10 }
+        { "ability_id": "NPC_SKELETON_WIZARD_FROST_BOLT", "role": "RANGED_OFFENSE", "target_selector": "CURRENT_ENEMY", "base_utility": 1.0, "min_self_health_pct": 0.0, "max_self_health_pct": 1.0, "preferred_min_distance": 6.0, "preferred_max_distance": 16.0, "min_nearby_allies": 0, "min_nearby_enemies": 1, "required_target_status": "", "forbidden_target_status": "", "movement_may_enable": true, "sort_order": 10 },
+        { "ability_id": "NPC_SKELETON_WIZARD_FROSTBITE", "role": "DEBUFF", "target_selector": "CURRENT_ENEMY", "base_utility": 1.1, "min_self_health_pct": 0.0, "max_self_health_pct": 1.0, "preferred_min_distance": 6.0, "preferred_max_distance": 14.0, "min_nearby_allies": 0, "min_nearby_enemies": 1, "required_target_status": "", "forbidden_target_status": "NPC_SKELETON_FROSTBITE", "movement_may_enable": true, "sort_order": 20 }
       ],
       "max_hp": 95,
       "hit_radius": 0.45,

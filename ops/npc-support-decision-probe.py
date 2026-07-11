@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Headless acceptance probe for the Lich support decision boundary.
+"""Headless acceptance probe for NPC support and hostile debuff decisions.
 
 The probe creates one hostile Kobold ally and one hostile Lich beside a
 headless player. It proves the two utility outcomes through public runtime
@@ -8,6 +8,8 @@ rows:
   1. a full-health ally receives NPC_LICH_BONE_WARD;
   2. after one player auto-attack damages that same ally, it receives
      NPC_LICH_MEND and its HP increases.
+  3. a Skeleton Wizard applies NPC_SKELETON_WIZARD_FROSTBITE to its pinned
+     hostile player target through the shared targeted status pipeline.
 
 Run this against a dedicated local database built from the current module:
 
@@ -38,6 +40,10 @@ LICH_TEMPLATE = "LICH_SUPPORT"
 LICH_VISUAL = "LICH_GN"
 BONE_WARD_ABILITY = "NPC_LICH_BONE_WARD"
 MEND_ABILITY = "NPC_LICH_MEND"
+WIZARD_TEMPLATE = "SKELETON_WIZARD"
+WIZARD_VISUAL = "SKELETON_WIZARD_GN"
+FROSTBITE_ABILITY = "NPC_SKELETON_WIZARD_FROSTBITE"
+FROSTBITE_STACK_GROUP = "NPC_SKELETON_FROSTBITE"
 
 
 class Probe:
@@ -304,7 +310,32 @@ def main():
             f"  PASS damaged-ally choice: {MEND_ABILITY} "
             f"raised HP {damaged_hp}->{healed_hp}"
         )
-        print("PASS: Lich full-health buff and damaged-ally heal decisions observed")
+
+        print("== hostile debuff: Skeleton Wizard Frostbite")
+        probe.call("despawn_all_npcs", [])
+        time.sleep(0.4)
+        probe.call("spawn_npc", [WIZARD_TEMPLATE, WIZARD_VISUAL, "HOSTILE"])
+        time.sleep(0.5)
+        wizard = probe.npc_identity(WIZARD_TEMPLATE)
+        probe.call(
+            "set_npc_target_override",
+            [wire_identity(wizard), wire_optional_identity(probe.identity)],
+        )
+        wait_until(
+            "Frostbite impact and slow status on the hostile player",
+            lambda: probe.has_impact(wizard, probe.identity, FROSTBITE_ABILITY)
+            and probe.has_status(
+                probe.identity,
+                wizard,
+                FROSTBITE_STACK_GROUP,
+            ),
+            timeout=10.0,
+        )
+        print(
+            f"  PASS hostile choice: {FROSTBITE_ABILITY} applied "
+            f"{FROSTBITE_STACK_GROUP}"
+        )
+        print("PASS: support buff/heal and hostile debuff decisions observed")
         return 0
     except Exception as error:
         probe.call("clear_auto_attack_target", [])
