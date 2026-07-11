@@ -1,0 +1,21 @@
+{
+  "source_family_name": "SwampHound", "expected_appearance_count": 4,
+  "primary_animator_path": ".", "presentation_vertical_offset": 1.8117892,
+  "animations": {
+    "idle": ["idle"], "ready": ["Ready"], "walk": ["walk"], "run": ["run"],
+    "basicAttack": ["attack"], "spellCastStart": [], "spellRelease": [], "spellCancel": [], "hit": ["hit"], "death": ["Death"]
+  },
+  "action_animations": [
+    { "ability_id": "NPC_SWAMP_HOUND_HEAVY_STRIKE", "states": ["Attack01"] },
+    { "ability_id": "NPC_SWAMP_HOUND_STRIKE", "states": ["attack"] }
+  ],
+  "hard_crowd_control_fallback_policy": 0,
+  "vfx_sockets": [
+    { "anchor": "LEFT_HAND", "transform_path": "Root/Pelvis/Spine_01/Spine_02/Spine_03/Spine_04/Spine_05/Spine_06/Clavicle_L/Shoulder_L/Forearm_L/Hand_L", "fallback_policy": 0 },
+    { "anchor": "RIGHT_HAND", "transform_path": "Root/Pelvis/Spine_01/Spine_02/Spine_03/Spine_04/Spine_05/Spine_06/Clavicle_R/Shoulder_R/Forearm_R/Hand_R", "fallback_policy": 0 },
+    { "anchor": "TARGET", "transform_path": "Root/Pelvis/Spine_01/Spine_02/Spine_03/Spine_04/Spine_05/Spine_06", "fallback_policy": 1 }
+  ],
+  "status_reactions": [
+    { "status_kind": "STUN", "clip_file_id": 7666019288946695810, "clip_guid": "a0c142862a7424f42a3960720f793036", "require_humanoid_avatar": false }
+  ]
+}

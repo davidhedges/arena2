@@ -176,6 +176,39 @@ namespace Arena.Tests.Editor
             AssertActionState(resolve, profile, "NPC_SLIME_MAN_SLAM", "attack");
         }
 
+        [Test]
+        public void ExplicitPrimaryAnimator_DisablesRootMotionAndCompetingAnimators()
+        {
+            Type profileType = RequireType("Arena.Entity.NpcVisualProfile");
+            Type animationType = RequireType("Arena.Presentation.NpcAnimationController");
+            var profile = (ScriptableObject)ScriptableObject.CreateInstance(profileType);
+            var root = new GameObject("PrimaryAnimatorNpc");
+            Animator primary = root.AddComponent<Animator>();
+            var child = new GameObject("CompetingAnimator");
+            child.transform.SetParent(root.transform, false);
+            Animator competing = child.AddComponent<Animator>();
+            try
+            {
+                primary.applyRootMotion = true;
+                competing.applyRootMotion = true;
+                var serialized = new SerializedObject(profile);
+                serialized.FindProperty("primaryAnimatorPath").stringValue = ".";
+                serialized.ApplyModifiedPropertiesWithoutUndo();
+
+                object controller = animationType.GetMethod("Attach")!.Invoke(null, new object[] { root })!;
+                animationType.GetMethod("SetVisualProfile")!.Invoke(controller, new object[] { profile });
+
+                Assert.That(primary.enabled, Is.True);
+                Assert.That(primary.applyRootMotion, Is.False);
+                Assert.That(competing.enabled, Is.False);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(root);
+                UnityEngine.Object.DestroyImmediate(profile);
+            }
+        }
+
         private static void AssertProfile(MethodInfo tryGetEntry, UnityEngine.Object catalog, string visualId)
         {
             object?[] args = { visualId, null };

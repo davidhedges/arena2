@@ -87,6 +87,14 @@ def profile_guid(visual_id)
   Digest::SHA256.hexdigest("Arena.NpcVisualProfile/#{visual_id}")[0, 32]
 end
 
+def controller_states(path)
+  states = path.read.scan(/^--- !u!1102 &\d+\n(.*?)(?=^--- |\z)/m).filter_map do |(block)|
+    block[/^  m_Name: ([^\n]+)/, 1]
+  end
+  abort("#{path}: controller has no Animator states") if states.empty?
+  states.to_set
+end
+
 def yaml_string_list(key, values, indent: 4)
   prefix = " " * indent
   return "#{prefix}#{key}: []\n" if values.empty?
@@ -193,14 +201,25 @@ appearances.each do |entry|
   abort("#{visual_id}: TARGET socket is required") unless sockets.any? { |socket| socket.fetch("anchor") == "TARGET" }
   prefab_path = ROOT.join(entry.fetch("prefab_path"))
   abort("#{visual_id}: missing prefab #{prefab_path}") unless prefab_path.file?
-  abort("#{visual_id}: expected one Animator, found #{entry.fetch("animator_count")}") unless entry.fetch("animator_count") == 1
+  expected_animator_count = Integer(manifest.fetch("expected_animator_count", 1))
+  unless entry.fetch("animator_count") == expected_animator_count
+    abort("#{visual_id}: expected #{expected_animator_count} Animators, found #{entry.fetch("animator_count")}")
+  end
   abort("#{visual_id}: root motion requires separate review") if entry.fetch("root_motion_enabled") && !manifest["allow_root_motion"]
   warnings = entry.fetch("review_warnings")
-  abort("#{visual_id}: unresolved inventory warnings: #{warnings.join("; ")}") unless warnings.empty?
+  if !warnings.empty? && !manifest["acknowledge_inventory_warnings"]
+    abort("#{visual_id}: unresolved inventory warnings: #{warnings.join("; ")}")
+  end
 
   primary_animator_path = manifest.fetch("primary_animator_path", entry.fetch("primary_animator_path_candidate"))
-  abort("#{visual_id}: generator currently requires a root Animator") unless primary_animator_path == "."
-  available_states = entry.fetch("controller_states").to_set
+  controller_path = override.fetch("animator_controller_path", manifest["animator_controller_path"])
+  available_states = if controller_path
+    resolved_controller_path = ROOT.join(controller_path)
+    abort("#{visual_id}: missing Animator controller #{resolved_controller_path}") unless resolved_controller_path.file?
+    controller_states(resolved_controller_path)
+  else
+    entry.fetch("controller_states").to_set
+  end
   animations.values.flatten.each do |state|
     abort("#{visual_id}: controller state '#{state}' is missing") unless available_states.include?(state)
   end
@@ -218,6 +237,9 @@ appearances.each do |entry|
   end
 
   prefab = parse_prefab(prefab_path)
+  if primary_animator_path != "." && !prefab.fetch(:transform_paths).include?(primary_animator_path)
+    abort("#{visual_id}: primary Animator path '#{primary_animator_path}' is missing")
+  end
   sockets.each do |socket|
     path = socket.fetch("transform_path")
     abort("#{visual_id}: socket path '#{path}' is missing") unless prefab.fetch(:transform_paths).include?(path)

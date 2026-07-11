@@ -382,6 +382,63 @@
       "aggro_radius": 11.0,
       "move_speed": 7.0,
       "attack_windup_ms": 500
+    },
+    {
+      "template_id": "DRAGON_BRUTE",
+      "species_id": "DRAGON_BRUTE",
+      "display_name": "Dragon Brute",
+      "visual_ids": ["DRAGON_BRUTE_BL", "DRAGON_BRUTE_RD", "DRAGON_BRUTE_YE"],
+      "brain_profile_id": "BASIC_HOSTILE_MELEE",
+      "resource_policy": "FREE_ACTIONS_ONLY",
+      "action_kit": [
+        { "ability_id": "NPC_DRAGON_BRUTE_HEAVY_STRIKE", "role": "MELEE_OFFENSE", "target_selector": "CURRENT_ENEMY", "base_utility": 1.2, "min_self_health_pct": 0.0, "max_self_health_pct": 1.0, "preferred_min_distance": 0.0, "preferred_max_distance": 3.2, "min_nearby_allies": 0, "min_nearby_enemies": 1, "required_target_status": "", "forbidden_target_status": "", "movement_may_enable": true, "windup_ms": 850, "sort_order": 10 },
+        { "ability_id": "NPC_DRAGON_BRUTE_STRIKE", "role": "MELEE_OFFENSE", "target_selector": "CURRENT_ENEMY", "base_utility": 1.0, "min_self_health_pct": 0.0, "max_self_health_pct": 1.0, "preferred_min_distance": 0.0, "preferred_max_distance": 3.2, "min_nearby_allies": 0, "min_nearby_enemies": 1, "required_target_status": "", "forbidden_target_status": "", "movement_may_enable": true, "windup_ms": 650, "sort_order": 20 }
+      ],
+      "max_hp": 240,
+      "hit_radius": 1.2,
+      "hit_height": 4.6,
+      "aggro_radius": 10.0,
+      "move_speed": 5.0,
+      "attack_windup_ms": 650
+    },
+    {
+      "template_id": "SWAMP_HOUND", "species_id": "SWAMP_HOUND", "display_name": "Swamp Hound",
+      "visual_ids": ["SWAMP_HOUND_BK", "SWAMP_HOUND_BR", "SWAMP_HOUND_GN", "SWAMP_HOUND_YE"],
+      "brain_profile_id": "BASIC_HOSTILE_MELEE", "resource_policy": "FREE_ACTIONS_ONLY",
+      "action_kit": [
+        { "ability_id": "NPC_SWAMP_HOUND_HEAVY_STRIKE", "role": "MELEE_OFFENSE", "target_selector": "CURRENT_ENEMY", "base_utility": 1.2, "min_self_health_pct": 0.0, "max_self_health_pct": 1.0, "preferred_min_distance": 0.0, "preferred_max_distance": 4.2, "min_nearby_allies": 0, "min_nearby_enemies": 1, "required_target_status": "", "forbidden_target_status": "", "movement_may_enable": true, "windup_ms": 900, "sort_order": 10 },
+        { "ability_id": "NPC_SWAMP_HOUND_STRIKE", "role": "MELEE_OFFENSE", "target_selector": "CURRENT_ENEMY", "base_utility": 1.0, "min_self_health_pct": 0.0, "max_self_health_pct": 1.0, "preferred_min_distance": 0.0, "preferred_max_distance": 4.2, "min_nearby_allies": 0, "min_nearby_enemies": 1, "required_target_status": "", "forbidden_target_status": "", "movement_may_enable": true, "windup_ms": 700, "sort_order": 20 }
+      ],
+      "max_hp": 280, "hit_radius": 2.3, "hit_height": 6.7, "aggro_radius": 11.0, "move_speed": 4.8, "attack_windup_ms": 700
+    },
+    {
+      "template_id": "UNDEAD_BEAR", "species_id": "UNDEAD_BEAR", "display_name": "Undead Bear",
+      "visual_ids": ["UNDEAD_BEAR_BL", "UNDEAD_BEAR_BR", "UNDEAD_BEAR_GN"], "brain_profile_id": "BASIC_HOSTILE_MELEE", "resource_policy": "FREE_ACTIONS_ONLY",
+      "action_kit": [
+        { "ability_id": "NPC_UNDEAD_BEAR_MAUL", "role": "MELEE_OFFENSE", "target_selector": "CURRENT_ENEMY", "base_utility": 1.3, "min_self_health_pct": 0.0, "max_self_health_pct": 1.0, "preferred_min_distance": 0.0, "preferred_max_distance": 2.8, "min_nearby_allies": 0, "min_nearby_enemies": 1, "required_target_status": "", "forbidden_target_status": "", "movement_may_enable": true, "windup_ms": 950, "sort_order": 10 },
+        { "ability_id": "NPC_UNDEAD_BEAR_HEAVY_SWIPE", "role": "MELEE_OFFENSE", "target_selector": "CURRENT_ENEMY", "base_utility": 1.15, "min_self_health_pct": 0.0, "max_self_health_pct": 1.0, "preferred_min_distance": 0.0, "preferred_max_distance": 2.8, "min_nearby_allies": 0, "min_nearby_enemies": 1, "required_target_status": "", "forbidden_target_status": "", "movement_may_enable": true, "windup_ms": 800, "sort_order": 20 },
+        { "ability_id": "NPC_UNDEAD_BEAR_SWIPE", "role": "MELEE_OFFENSE", "target_selector": "CURRENT_ENEMY", "base_utility": 1.0, "min_self_health_pct": 0.0, "max_self_health_pct": 1.0, "preferred_min_distance": 0.0, "preferred_max_distance": 2.8, "min_nearby_allies": 0, "min_nearby_enemies": 1, "required_target_status": "", "forbidden_target_status": "", "movement_may_enable": true, "windup_ms": 650, "sort_order": 30 }
+      ],
+      "max_hp": 190, "hit_radius": 0.9, "hit_height": 3.8, "aggro_radius": 10.0, "move_speed": 5.2, "attack_windup_ms": 650
+    },
+    {
+      "template_id": "UNDEAD_BOAR", "species_id": "UNDEAD_BOAR", "display_name": "Undead Boar",
+      "visual_ids": ["UNDEAD_BOAR_BL", "UNDEAD_BOAR_BR", "UNDEAD_BOAR_GN"], "brain_profile_id": "BASIC_HOSTILE_MELEE", "resource_policy": "FREE_ACTIONS_ONLY",
+      "action_kit": [
+        { "ability_id": "NPC_UNDEAD_BOAR_CHARGE_STRIKE", "role": "MELEE_OFFENSE", "target_selector": "CURRENT_ENEMY", "base_utility": 1.2, "min_self_health_pct": 0.0, "max_self_health_pct": 1.0, "preferred_min_distance": 0.0, "preferred_max_distance": 2.5, "min_nearby_allies": 0, "min_nearby_enemies": 1, "required_target_status": "", "forbidden_target_status": "", "movement_may_enable": true, "windup_ms": 850, "sort_order": 10 },
+        { "ability_id": "NPC_UNDEAD_BOAR_GORE", "role": "MELEE_OFFENSE", "target_selector": "CURRENT_ENEMY", "base_utility": 1.0, "min_self_health_pct": 0.0, "max_self_health_pct": 1.0, "preferred_min_distance": 0.0, "preferred_max_distance": 2.5, "min_nearby_allies": 0, "min_nearby_enemies": 1, "required_target_status": "", "forbidden_target_status": "", "movement_may_enable": true, "windup_ms": 650, "sort_order": 20 }
+      ],
+      "max_hp": 130, "hit_radius": 0.65, "hit_height": 2.8, "aggro_radius": 9.0, "move_speed": 6.0, "attack_windup_ms": 650
+    },
+    {
+      "template_id": "UNDEAD_RAT", "species_id": "UNDEAD_RAT", "display_name": "Undead Rat",
+      "visual_ids": ["UNDEAD_RAT_BL", "UNDEAD_RAT_BR", "UNDEAD_RAT_GN"], "brain_profile_id": "BASIC_HOSTILE_MELEE", "resource_policy": "FREE_ACTIONS_ONLY",
+      "action_kit": [
+        { "ability_id": "NPC_UNDEAD_RAT_MAUL", "role": "MELEE_OFFENSE", "target_selector": "CURRENT_ENEMY", "base_utility": 1.3, "min_self_health_pct": 0.0, "max_self_health_pct": 1.0, "preferred_min_distance": 0.0, "preferred_max_distance": 4.2, "min_nearby_allies": 0, "min_nearby_enemies": 1, "required_target_status": "", "forbidden_target_status": "", "movement_may_enable": true, "windup_ms": 900, "sort_order": 10 },
+        { "ability_id": "NPC_UNDEAD_RAT_HEAVY_BITE", "role": "MELEE_OFFENSE", "target_selector": "CURRENT_ENEMY", "base_utility": 1.15, "min_self_health_pct": 0.0, "max_self_health_pct": 1.0, "preferred_min_distance": 0.0, "preferred_max_distance": 4.2, "min_nearby_allies": 0, "min_nearby_enemies": 1, "required_target_status": "", "forbidden_target_status": "", "movement_may_enable": true, "windup_ms": 800, "sort_order": 20 },
+        { "ability_id": "NPC_UNDEAD_RAT_BITE", "role": "MELEE_OFFENSE", "target_selector": "CURRENT_ENEMY", "base_utility": 1.0, "min_self_health_pct": 0.0, "max_self_health_pct": 1.0, "preferred_min_distance": 0.0, "preferred_max_distance": 4.2, "min_nearby_allies": 0, "min_nearby_enemies": 1, "required_target_status": "", "forbidden_target_status": "", "movement_may_enable": true, "windup_ms": 650, "sort_order": 30 }
+      ],
+      "max_hp": 220, "hit_radius": 2.0, "hit_height": 7.9, "aggro_radius": 11.0, "move_speed": 5.8, "attack_windup_ms": 650
     }
   ]
 }

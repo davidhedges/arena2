@@ -3230,8 +3230,8 @@ mod tests {
     #[test]
     fn authored_npc_catalog_is_valid_and_complete_for_current_templates() {
         let parsed = parse_npc_catalog(NPC_CATALOG_JSON).unwrap();
-        assert_eq!(parsed.templates.len(), 20);
-        assert_eq!(npc_catalog().templates.len(), 20);
+        assert_eq!(parsed.templates.len(), 25);
+        assert_eq!(npc_catalog().templates.len(), 25);
         assert!(parsed
             .templates
             .iter()
@@ -3365,6 +3365,19 @@ mod tests {
             "NPC_UNDEAD_EAGLE_STRIKE"
         );
         assert_eq!(undead_eagle.action_kit[0].role, "MELEE_OFFENSE");
+        let dragon_brute =
+            npc_template("DRAGON_BRUTE").expect("dragon brute family should be authored");
+        assert_eq!(dragon_brute.visual_ids.len(), 3);
+        assert_eq!(dragon_brute.action_kit.len(), 2);
+        assert_eq!(dragon_brute.action_kit[0].windup_ms, 850);
+        assert_eq!(dragon_brute.action_kit[1].windup_ms, 650);
+        let swamp_hound =
+            npc_template("SWAMP_HOUND").expect("swamp hound family should be authored");
+        assert_eq!(swamp_hound.visual_ids.len(), 4);
+        assert_eq!(swamp_hound.action_kit.len(), 2);
+        assert_eq!(npc_template("UNDEAD_BEAR").unwrap().action_kit.len(), 3);
+        assert_eq!(npc_template("UNDEAD_BOAR").unwrap().action_kit.len(), 2);
+        assert_eq!(npc_template("UNDEAD_RAT").unwrap().action_kit.len(), 3);
     }
 
     #[test]

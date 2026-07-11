@@ -1,0 +1,17 @@
+{
+  "source_family_name": "UndeadBoar", "expected_appearance_count": 3, "primary_animator_path": ".", "presentation_vertical_offset": 0.4188107,
+  "animations": { "idle": ["idle"], "ready": ["idle"], "walk": ["walk"], "run": ["run"], "basicAttack": ["attack"], "spellCastStart": [], "spellRelease": [], "spellCancel": [], "hit": ["hit"], "death": ["Death"] },
+  "action_animations": [
+    { "ability_id": "NPC_UNDEAD_BOAR_CHARGE_STRIKE", "states": ["Attack01"] },
+    { "ability_id": "NPC_UNDEAD_BOAR_GORE", "states": ["attack"] }
+  ],
+  "hard_crowd_control_fallback_policy": 0,
+  "vfx_sockets": [
+    { "anchor": "LEFT_HAND", "transform_path": "Root/Pelvis/Spine/Spine01/UpperArm_L/LowerArm_L/Hand_L", "fallback_policy": 0 },
+    { "anchor": "RIGHT_HAND", "transform_path": "Root/Pelvis/Spine/Spine01/UpperArm_R/LowerArm_R/Hand_R", "fallback_policy": 0 },
+    { "anchor": "TARGET", "transform_path": "Root/Pelvis/Spine/Spine01", "fallback_policy": 1 }
+  ],
+  "status_reactions": [
+    { "status_kind": "STUN", "clip_file_id": 7666019288946695810, "clip_guid": "a4e28e803d0749c45a2fd8f02dd65323", "require_humanoid_avatar": false }
+  ]
+}

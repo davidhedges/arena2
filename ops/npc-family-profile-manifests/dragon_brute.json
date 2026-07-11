@@ -1,0 +1,24 @@
+{
+  "source_family_name": "DragonBrute",
+  "expected_appearance_count": 3,
+  "primary_animator_path": ".",
+  "presentation_vertical_offset": 1.2911282,
+  "animations": {
+    "idle": ["idle"], "ready": ["Ready"], "walk": ["walk"], "run": ["run"],
+    "basicAttack": ["attack"], "spellCastStart": [], "spellRelease": [], "spellCancel": [],
+    "hit": ["hit"], "death": ["Death"]
+  },
+  "action_animations": [
+    { "ability_id": "NPC_DRAGON_BRUTE_HEAVY_STRIKE", "states": ["Attack01"] },
+    { "ability_id": "NPC_DRAGON_BRUTE_STRIKE", "states": ["attack"] }
+  ],
+  "hard_crowd_control_fallback_policy": 0,
+  "vfx_sockets": [
+    { "anchor": "LEFT_HAND", "transform_path": "root/pelvis/spine_01/spine_02/spine_03/clavicle_L/upperarm_L/lowerarm_L/hand_L", "fallback_policy": 0 },
+    { "anchor": "RIGHT_HAND", "transform_path": "root/pelvis/spine_01/spine_02/spine_03/clavicle_R/upperarm_R/lowerarm_R/hand_R", "fallback_policy": 0 },
+    { "anchor": "TARGET", "transform_path": "root/pelvis/spine_01/spine_02/spine_03", "fallback_policy": 1 }
+  ],
+  "status_reactions": [
+    { "status_kind": "STUN", "clip_file_id": 7666019288946695810, "clip_guid": "e5abe2725881565459f98581512721d4", "require_humanoid_avatar": false }
+  ]
+}

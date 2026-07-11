@@ -3855,6 +3855,62 @@
       }
     },
     {
+      "ability_id": "NPC_DRAGON_BRUTE_STRIKE",
+      "actor_scope": "NPC", "combat_profile_id": "", "action_id": "NPC_MELEE_ATTACK",
+      "display_name": "Dragon Brute Strike", "resource_kind": "", "resource_cost": 0,
+      "ability_tags": [], "sort_order": 61,
+      "gameplay": { "kind": "MELEE", "base_damage": 14, "applies_stagger": false, "range": 3.2, "cooldown_ms": 2200, "uses_global_cooldown": false, "parry_behavior": "PARRYABLE", "block_behavior": "BLOCKABLE", "airborne_targeting_mode": "ANY_TARGET" }
+    },
+    {
+      "ability_id": "NPC_DRAGON_BRUTE_HEAVY_STRIKE",
+      "actor_scope": "NPC", "combat_profile_id": "", "action_id": "NPC_MELEE_ATTACK",
+      "display_name": "Dragon Brute Heavy Strike", "resource_kind": "", "resource_cost": 0,
+      "ability_tags": [], "sort_order": 62,
+      "gameplay": { "kind": "MELEE", "base_damage": 20, "applies_stagger": false, "range": 3.2, "cooldown_ms": 4500, "uses_global_cooldown": false, "parry_behavior": "PARRYABLE", "block_behavior": "BLOCKABLE", "airborne_targeting_mode": "ANY_TARGET" }
+    },
+    {
+      "ability_id": "NPC_SWAMP_HOUND_STRIKE", "actor_scope": "NPC", "combat_profile_id": "", "action_id": "NPC_MELEE_ATTACK",
+      "display_name": "Swamp Hound Strike", "resource_kind": "", "resource_cost": 0, "ability_tags": [], "sort_order": 63,
+      "gameplay": { "kind": "MELEE", "base_damage": 17, "applies_stagger": false, "range": 4.2, "cooldown_ms": 2400, "uses_global_cooldown": false, "parry_behavior": "PARRYABLE", "block_behavior": "BLOCKABLE", "airborne_targeting_mode": "ANY_TARGET" }
+    },
+    {
+      "ability_id": "NPC_SWAMP_HOUND_HEAVY_STRIKE", "actor_scope": "NPC", "combat_profile_id": "", "action_id": "NPC_MELEE_ATTACK",
+      "display_name": "Swamp Hound Heavy Strike", "resource_kind": "", "resource_cost": 0, "ability_tags": [], "sort_order": 64,
+      "gameplay": { "kind": "MELEE", "base_damage": 24, "applies_stagger": false, "range": 4.2, "cooldown_ms": 5000, "uses_global_cooldown": false, "parry_behavior": "PARRYABLE", "block_behavior": "BLOCKABLE", "airborne_targeting_mode": "ANY_TARGET" }
+    },
+    {
+      "ability_id": "NPC_UNDEAD_BEAR_SWIPE", "actor_scope": "NPC", "combat_profile_id": "", "action_id": "NPC_MELEE_ATTACK", "display_name": "Undead Bear Swipe", "resource_kind": "", "resource_cost": 0, "ability_tags": [], "sort_order": 65,
+      "gameplay": { "kind": "MELEE", "base_damage": 13, "applies_stagger": false, "range": 2.8, "cooldown_ms": 2200, "uses_global_cooldown": false, "parry_behavior": "PARRYABLE", "block_behavior": "BLOCKABLE", "airborne_targeting_mode": "ANY_TARGET" }
+    },
+    {
+      "ability_id": "NPC_UNDEAD_BEAR_HEAVY_SWIPE", "actor_scope": "NPC", "combat_profile_id": "", "action_id": "NPC_MELEE_ATTACK", "display_name": "Undead Bear Heavy Swipe", "resource_kind": "", "resource_cost": 0, "ability_tags": [], "sort_order": 66,
+      "gameplay": { "kind": "MELEE", "base_damage": 17, "applies_stagger": false, "range": 2.8, "cooldown_ms": 4000, "uses_global_cooldown": false, "parry_behavior": "PARRYABLE", "block_behavior": "BLOCKABLE", "airborne_targeting_mode": "ANY_TARGET" }
+    },
+    {
+      "ability_id": "NPC_UNDEAD_BEAR_MAUL", "actor_scope": "NPC", "combat_profile_id": "", "action_id": "NPC_MELEE_ATTACK", "display_name": "Undead Bear Maul", "resource_kind": "", "resource_cost": 0, "ability_tags": [], "sort_order": 67,
+      "gameplay": { "kind": "MELEE", "base_damage": 22, "applies_stagger": false, "range": 2.8, "cooldown_ms": 6000, "uses_global_cooldown": false, "parry_behavior": "PARRYABLE", "block_behavior": "BLOCKABLE", "airborne_targeting_mode": "ANY_TARGET" }
+    },
+    {
+      "ability_id": "NPC_UNDEAD_BOAR_GORE", "actor_scope": "NPC", "combat_profile_id": "", "action_id": "NPC_MELEE_ATTACK", "display_name": "Undead Boar Gore", "resource_kind": "", "resource_cost": 0, "ability_tags": [], "sort_order": 68,
+      "gameplay": { "kind": "MELEE", "base_damage": 11, "applies_stagger": false, "range": 2.5, "cooldown_ms": 2100, "uses_global_cooldown": false, "parry_behavior": "PARRYABLE", "block_behavior": "BLOCKABLE", "airborne_targeting_mode": "ANY_TARGET" }
+    },
+    {
+      "ability_id": "NPC_UNDEAD_BOAR_CHARGE_STRIKE", "actor_scope": "NPC", "combat_profile_id": "", "action_id": "NPC_MELEE_ATTACK", "display_name": "Undead Boar Charge Strike", "resource_kind": "", "resource_cost": 0, "ability_tags": [], "sort_order": 69,
+      "gameplay": { "kind": "MELEE", "base_damage": 17, "applies_stagger": false, "range": 2.5, "cooldown_ms": 5000, "uses_global_cooldown": false, "parry_behavior": "PARRYABLE", "block_behavior": "BLOCKABLE", "airborne_targeting_mode": "ANY_TARGET" }
+    },
+    {
+      "ability_id": "NPC_UNDEAD_RAT_BITE", "actor_scope": "NPC", "combat_profile_id": "", "action_id": "NPC_MELEE_ATTACK", "display_name": "Undead Rat Bite", "resource_kind": "", "resource_cost": 0, "ability_tags": [], "sort_order": 70,
+      "gameplay": { "kind": "MELEE", "base_damage": 12, "applies_stagger": false, "range": 4.2, "cooldown_ms": 2200, "uses_global_cooldown": false, "parry_behavior": "PARRYABLE", "block_behavior": "BLOCKABLE", "airborne_targeting_mode": "ANY_TARGET" }
+    },
+    {
+      "ability_id": "NPC_UNDEAD_RAT_HEAVY_BITE", "actor_scope": "NPC", "combat_profile_id": "", "action_id": "NPC_MELEE_ATTACK", "display_name": "Undead Rat Heavy Bite", "resource_kind": "", "resource_cost": 0, "ability_tags": [], "sort_order": 71,
+      "gameplay": { "kind": "MELEE", "base_damage": 17, "applies_stagger": false, "range": 4.2, "cooldown_ms": 4200, "uses_global_cooldown": false, "parry_behavior": "PARRYABLE", "block_behavior": "BLOCKABLE", "airborne_targeting_mode": "ANY_TARGET" }
+    },
+    {
+      "ability_id": "NPC_UNDEAD_RAT_MAUL", "actor_scope": "NPC", "combat_profile_id": "", "action_id": "NPC_MELEE_ATTACK", "display_name": "Undead Rat Maul", "resource_kind": "", "resource_cost": 0, "ability_tags": [], "sort_order": 72,
+      "gameplay": { "kind": "MELEE", "base_damage": 21, "applies_stagger": false, "range": 4.2, "cooldown_ms": 6000, "uses_global_cooldown": false, "parry_behavior": "PARRYABLE", "block_behavior": "BLOCKABLE", "airborne_targeting_mode": "ANY_TARGET" }
+    },
+    {
       "ability_id": "NPC_SKELETON_WIZARD_FROST_BOLT",
       "actor_scope": "NPC",
       "combat_profile_id": "",

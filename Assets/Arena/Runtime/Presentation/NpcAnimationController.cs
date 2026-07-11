@@ -517,10 +517,20 @@ namespace Arena.Presentation
             if (_visualProfile != null)
             {
                 if (_visualProfile.TryResolvePrimaryAnimator(gameObject, out Animator profileAnimator))
+                {
                     _animator = profileAnimator;
+                    Animator[] animators = GetComponentsInChildren<Animator>(includeInactive: true);
+                    for (int i = 0; i < animators.Length; i++)
+                        animators[i].enabled = ReferenceEquals(animators[i], profileAnimator);
+                    _animator.applyRootMotion = false;
+                }
             }
             else
+            {
                 _animator = GetComponentInChildren<Animator>(includeInactive: true);
+                if (_animator != null)
+                    _animator.applyRootMotion = false;
+            }
             return _animator != null;
         }
 
