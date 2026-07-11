@@ -3340,6 +3340,94 @@
         "block_behavior": "BLOCKABLE",
         "airborne_targeting_mode": "ANY_TARGET"
       }
+    },
+    {
+      "ability_id": "NPC_KOBOLD_WARRIOR_SWORD_SLASH",
+      "actor_scope": "NPC",
+      "combat_profile_id": "",
+      "action_id": "NPC_MELEE_ATTACK",
+      "display_name": "Kobold Sword Slash",
+      "resource_kind": "",
+      "resource_cost": 0,
+      "ability_tags": [],
+      "sort_order": 10,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 8,
+        "applies_stagger": false,
+        "range": 1.9,
+        "cooldown_ms": 1800,
+        "uses_global_cooldown": false,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET"
+      }
+    },
+    {
+      "ability_id": "NPC_KOBOLD_SPEAR_THRUST",
+      "actor_scope": "NPC",
+      "combat_profile_id": "",
+      "action_id": "NPC_MELEE_ATTACK",
+      "display_name": "Kobold Spear Thrust",
+      "resource_kind": "",
+      "resource_cost": 0,
+      "ability_tags": [],
+      "sort_order": 20,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 7,
+        "applies_stagger": false,
+        "range": 2.4,
+        "cooldown_ms": 1900,
+        "uses_global_cooldown": false,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET"
+      }
+    },
+    {
+      "ability_id": "NPC_KOBOLD_THIEF_DUAL_SLASH",
+      "actor_scope": "NPC",
+      "combat_profile_id": "",
+      "action_id": "NPC_MELEE_ATTACK",
+      "display_name": "Kobold Dual Slash",
+      "resource_kind": "",
+      "resource_cost": 0,
+      "ability_tags": [],
+      "sort_order": 30,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 6,
+        "applies_stagger": false,
+        "range": 1.8,
+        "cooldown_ms": 1400,
+        "uses_global_cooldown": false,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET"
+      }
+    },
+    {
+      "ability_id": "NPC_KOBOLD_KNIGHT_SWORD_SLASH",
+      "actor_scope": "NPC",
+      "combat_profile_id": "",
+      "action_id": "NPC_MELEE_ATTACK",
+      "display_name": "Kobold Knight Sword Slash",
+      "resource_kind": "",
+      "resource_cost": 0,
+      "ability_tags": [],
+      "sort_order": 40,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 10,
+        "applies_stagger": false,
+        "range": 1.95,
+        "cooldown_ms": 2100,
+        "uses_global_cooldown": false,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET"
+      }
     }
   ],
   "auto_attacks": [

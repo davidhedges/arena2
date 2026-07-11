@@ -95,6 +95,20 @@ pub struct NpcVisualCatalog {
     pub template_id: String,
 }
 
+#[table(accessor = npc_action_kit_catalog, public)]
+pub struct NpcActionKitCatalog {
+    #[primary_key]
+    pub entry_id: String,
+    #[index(btree)]
+    pub template_id: String,
+    #[index(btree)]
+    pub ability_id: String,
+    pub role: String,
+    pub target_selector: String,
+    pub base_utility: f32,
+    pub sort_order: u32,
+}
+
 #[table(accessor = npc_instance, public)]
 #[derive(Clone)]
 pub struct NpcInstance {
@@ -196,6 +210,7 @@ pub(crate) struct NpcTemplate {
     pub species_id: String,
     pub display_name: String,
     pub visual_ids: Vec<String>,
+    pub action_kit: Vec<NpcActionKitEntry>,
     pub max_hp: i32,
     pub hit_radius: f32,
     pub hit_height: f32,
@@ -209,6 +224,16 @@ pub(crate) struct NpcTemplate {
     /// above the victim's render delay (~100-166 ms) or the telegraph reads
     /// as nothing; design floor is 300 ms.
     pub attack_windup_ms: u64,
+}
+
+#[derive(Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct NpcActionKitEntry {
+    pub ability_id: String,
+    pub role: String,
+    pub target_selector: String,
+    pub base_utility: f32,
+    pub sort_order: u32,
 }
 
 #[derive(Deserialize)]
@@ -395,6 +420,11 @@ fn parse_npc_catalog(json: &str) -> Result<NpcCatalogDocument, String> {
             .iter()
             .map(|visual_id| normalize_id(visual_id))
             .collect();
+        for entry in &mut template.action_kit {
+            entry.ability_id = normalize_id(entry.ability_id.as_str());
+            entry.role = normalize_id(entry.role.as_str());
+            entry.target_selector = normalize_id(entry.target_selector.as_str());
+        }
 
         if template.template_id.is_empty() || !template_ids.insert(template.template_id.clone()) {
             return Err(format!(
@@ -417,6 +447,62 @@ fn parse_npc_catalog(json: &str) -> Result<NpcCatalogDocument, String> {
         for visual_id in &template.visual_ids {
             if visual_id.is_empty() || !visual_ids.insert(visual_id.clone()) {
                 return Err(format!("visual_id '{visual_id}' is empty or duplicated"));
+            }
+        }
+        let mut action_ids = HashSet::new();
+        for entry in &template.action_kit {
+            if entry.ability_id.is_empty() || !action_ids.insert(entry.ability_id.clone()) {
+                return Err(format!(
+                    "template '{}' has an empty or duplicate action-kit ability_id '{}'",
+                    template.template_id, entry.ability_id
+                ));
+            }
+            if !matches!(
+                entry.role.as_str(),
+                "MELEE_OFFENSE"
+                    | "RANGED_OFFENSE"
+                    | "HEAL"
+                    | "BUFF"
+                    | "DEBUFF"
+                    | "DEFENSE"
+                    | "MOBILITY"
+                    | "INTERRUPT"
+                    | "SUMMON"
+            ) {
+                return Err(format!(
+                    "template '{}' action '{}' has invalid role '{}'",
+                    template.template_id, entry.ability_id, entry.role
+                ));
+            }
+            if !matches!(
+                entry.target_selector.as_str(),
+                "SELF" | "CURRENT_ENEMY" | "LOWEST_HEALTH_ALLY" | "NEAREST_ENEMY"
+            ) {
+                return Err(format!(
+                    "template '{}' action '{}' has invalid target_selector '{}'",
+                    template.template_id, entry.ability_id, entry.target_selector
+                ));
+            }
+            if !entry.base_utility.is_finite() || entry.base_utility < 0.0 {
+                return Err(format!(
+                    "template '{}' action '{}' has invalid base_utility",
+                    template.template_id, entry.ability_id
+                ));
+            }
+            match crate::progression::authored_ability_actor_scope(entry.ability_id.as_str()) {
+                Some(scope) if matches!(normalize_id(scope).as_str(), "NPC" | "BOTH") => {}
+                Some(scope) => {
+                    return Err(format!(
+                        "template '{}' action '{}' references {scope}-scoped ability",
+                        template.template_id, entry.ability_id
+                    ));
+                }
+                None => {
+                    return Err(format!(
+                        "template '{}' action '{}' references unknown ability",
+                        template.template_id, entry.ability_id
+                    ));
+                }
             }
         }
         if template.max_hp <= 0
@@ -454,6 +540,16 @@ pub(crate) fn sync_npc_catalog(ctx: &ReducerContext) {
         .templates
         .iter()
         .flat_map(|template| template.visual_ids.iter().cloned())
+        .collect();
+    let expected_actions: HashSet<_> = catalog
+        .templates
+        .iter()
+        .flat_map(|template| {
+            template
+                .action_kit
+                .iter()
+                .map(|entry| format!("{}:{}", template.template_id, entry.ability_id))
+        })
         .collect();
 
     for template in &catalog.templates {
@@ -507,6 +603,29 @@ pub(crate) fn sync_npc_catalog(ctx: &ReducerContext) {
                 }
             }
         }
+        for entry in &template.action_kit {
+            let entry_id = format!("{}:{}", template.template_id, entry.ability_id);
+            let row = NpcActionKitCatalog {
+                entry_id: entry_id.clone(),
+                template_id: template.template_id.clone(),
+                ability_id: entry.ability_id.clone(),
+                role: entry.role.clone(),
+                target_selector: entry.target_selector.clone(),
+                base_utility: entry.base_utility,
+                sort_order: entry.sort_order,
+            };
+            if ctx
+                .db
+                .npc_action_kit_catalog()
+                .entry_id()
+                .find(entry_id)
+                .is_some()
+            {
+                ctx.db.npc_action_kit_catalog().entry_id().update(row);
+            } else {
+                ctx.db.npc_action_kit_catalog().insert(row);
+            }
+        }
     }
 
     let stale_templates: Vec<_> = ctx
@@ -531,6 +650,16 @@ pub(crate) fn sync_npc_catalog(ctx: &ReducerContext) {
         .collect();
     for visual_id in stale_visuals {
         ctx.db.npc_visual_catalog().visual_id().delete(visual_id);
+    }
+    let stale_actions: Vec<_> = ctx
+        .db
+        .npc_action_kit_catalog()
+        .iter()
+        .map(|row| row.entry_id)
+        .filter(|entry_id| !expected_actions.contains(entry_id))
+        .collect();
+    for entry_id in stale_actions {
+        ctx.db.npc_action_kit_catalog().entry_id().delete(entry_id);
     }
 }
 
@@ -1628,7 +1757,18 @@ mod tests {
         assert!(parsed
             .templates
             .iter()
-            .all(|template| !template.visual_ids.is_empty()));
+            .all(|template| !template.visual_ids.is_empty() && template.action_kit.len() == 1));
+    }
+
+    #[test]
+    fn npc_action_kits_reject_player_only_abilities() {
+        let mut catalog: serde_json::Value = serde_json::from_str(NPC_CATALOG_JSON).unwrap();
+        catalog["templates"][0]["action_kit"][0]["ability_id"] =
+            serde_json::Value::String("WARRIOR_HEW".to_string());
+        let error = parse_npc_catalog(&serde_json::to_string(&catalog).unwrap())
+            .err()
+            .expect("player-only grant should fail");
+        assert!(error.contains("PLAYER-scoped ability"), "{error}");
     }
 
     #[test]
@@ -1637,14 +1777,14 @@ mod tests {
             "templates": [
                 {
                     "template_id": "ONE", "species_id": "TEST", "display_name": "One",
-                    "visual_ids": ["SHARED"], "max_hp": 1, "hit_radius": 1.0,
+                    "visual_ids": ["SHARED"], "action_kit": [], "max_hp": 1, "hit_radius": 1.0,
                     "hit_height": 1.0, "aggro_radius": 1.0, "attack_range": 1.0,
                     "move_speed": 1.0, "attack_damage": 0, "attack_cadence_ms": 1,
                     "attack_windup_ms": 1
                 },
                 {
                     "template_id": "TWO", "species_id": "TEST", "display_name": "Two",
-                    "visual_ids": ["SHARED"], "max_hp": 1, "hit_radius": 1.0,
+                    "visual_ids": ["SHARED"], "action_kit": [], "max_hp": 1, "hit_radius": 1.0,
                     "hit_height": 1.0, "aggro_radius": 1.0, "attack_range": 1.0,
                     "move_speed": 1.0, "attack_damage": 0, "attack_cadence_ms": 1,
                     "attack_windup_ms": 1

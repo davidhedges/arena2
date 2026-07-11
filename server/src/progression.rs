@@ -4120,6 +4120,10 @@ fn ability_definition(ability_id: &str) -> Option<&'static AbilityDefinition> {
         .find(|definition| normalize_identifier(definition.ability_id.as_str()) == ability_id)
 }
 
+pub(crate) fn authored_ability_actor_scope(ability_id: &str) -> Option<&'static str> {
+    ability_definition(ability_id).map(|definition| definition.actor_scope.as_str())
+}
+
 fn slot_definition(slot_id: &str) -> Option<&'static ActionBarSlotDefinition> {
     let slot_id = canonical_action_bar_slot_id(slot_id);
     progression_catalog()
@@ -7145,9 +7149,13 @@ mod tests {
                 gameplay_kind.as_str(),
                 "MELEE" | "MOVEMENT" | "AUTO_ATTACK_REPLACEMENT" | "PASSIVE"
             ) {
-                assert_eq!(
-                    ability_resource_kind, RESOURCE_KIND_STAMINA,
-                    "martial ability '{}' must use STAMINA",
+                let is_free_npc_action = normalize_identifier(definition.actor_scope.as_str())
+                    == "NPC"
+                    && definition.resource_cost == 0.0;
+                assert!(
+                    ability_resource_kind == RESOURCE_KIND_STAMINA
+                        || (is_free_npc_action && ability_resource_kind.is_empty()),
+                    "martial ability '{}' must use STAMINA unless it is an explicit zero-cost NPC action",
                     definition.ability_id
                 );
             }

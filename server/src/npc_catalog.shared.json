@@ -5,6 +5,9 @@
       "species_id": "KOBOLD_WARRIOR",
       "display_name": "Kobold Warrior",
       "visual_ids": ["KOBOLD_WARRIOR_RD_SWORD_SHIELD"],
+      "action_kit": [
+        { "ability_id": "NPC_KOBOLD_WARRIOR_SWORD_SLASH", "role": "MELEE_OFFENSE", "target_selector": "CURRENT_ENEMY", "base_utility": 1.0, "sort_order": 10 }
+      ],
       "max_hp": 125,
       "hit_radius": 0.45,
       "hit_height": 1.35,
@@ -20,6 +23,9 @@
       "species_id": "KOBOLD_WARRIOR",
       "display_name": "Kobold Spearman",
       "visual_ids": ["KOBOLD_WARRIOR_GN_SPEAR"],
+      "action_kit": [
+        { "ability_id": "NPC_KOBOLD_SPEAR_THRUST", "role": "MELEE_OFFENSE", "target_selector": "CURRENT_ENEMY", "base_utility": 1.0, "sort_order": 10 }
+      ],
       "max_hp": 113,
       "hit_radius": 0.45,
       "hit_height": 1.35,
@@ -35,6 +41,9 @@
       "species_id": "KOBOLD_THIEF",
       "display_name": "Kobold Thief",
       "visual_ids": ["KOBOLD_THIEF_BK_DUAL_SWORD"],
+      "action_kit": [
+        { "ability_id": "NPC_KOBOLD_THIEF_DUAL_SLASH", "role": "MELEE_OFFENSE", "target_selector": "CURRENT_ENEMY", "base_utility": 1.0, "sort_order": 10 }
+      ],
       "max_hp": 90,
       "hit_radius": 0.4,
       "hit_height": 1.25,
@@ -50,6 +59,9 @@
       "species_id": "KOBOLD_KNIGHT",
       "display_name": "Kobold Knight",
       "visual_ids": ["KOBOLD_KNIGHT_RD_SWORD_SHIELD"],
+      "action_kit": [
+        { "ability_id": "NPC_KOBOLD_KNIGHT_SWORD_SLASH", "role": "MELEE_OFFENSE", "target_selector": "CURRENT_ENEMY", "base_utility": 1.0, "sort_order": 10 }
+      ],
       "max_hp": 163,
       "hit_radius": 0.5,
       "hit_height": 1.45,
