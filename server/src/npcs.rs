@@ -1320,17 +1320,20 @@ pub(crate) fn tick_npc_combat(
             continue;
         }
 
-        let Some(target) =
-            acquire_npc_attack_target(ctx, npc.identity, &physics, &template, &candidates)
-        else {
+        let existing_runtime = ctx.db.npc_combat_runtime().identity().find(npc.identity);
+        let Some(target) = acquire_npc_attack_target(
+            ctx,
+            npc.identity,
+            &physics,
+            &template,
+            &candidates,
+            existing_runtime.as_ref().map(|runtime| runtime.target),
+            brain.target_stickiness,
+        ) else {
             clear_npc_combat_runtime(ctx, npc.identity);
             continue;
         };
-        let runtime = ctx
-            .db
-            .npc_combat_runtime()
-            .identity()
-            .find(npc.identity)
+        let runtime = existing_runtime
             .filter(|row| row.target == target.identity)
             .unwrap_or_else(|| NpcCombatRuntime {
                 identity: npc.identity,
@@ -1455,6 +1458,8 @@ fn acquire_npc_attack_target(
     npc_physics: &NpcPhysics,
     template: &NpcTemplate,
     candidates: &[NpcTargetCandidate],
+    current_target: Option<Identity>,
+    target_stickiness: f32,
 ) -> Option<NpcAttackTarget> {
     let Some(npc_context) = resolve_player_world_context(ctx, npc_identity) else {
         log::warn!(
@@ -1477,6 +1482,7 @@ fn acquire_npc_attack_target(
 
     let aggro_radius_sq = template.aggro_radius * template.aggro_radius;
     let mut best: Option<NpcAttackTarget> = None;
+    let mut current: Option<NpcAttackTarget> = None;
     for candidate in candidates {
         if !world_contexts_share(&npc_context, &candidate.context) {
             continue;
@@ -1489,19 +1495,41 @@ fn acquire_npc_attack_target(
         if dist_sq > aggro_radius_sq {
             continue;
         }
-        if best
-            .as_ref()
-            .is_some_and(|existing| dist_sq >= existing.distance * existing.distance)
-        {
-            continue;
-        }
         if !can_harm(ctx, npc_identity, candidate.identity) {
             continue;
         }
 
-        best = Some(npc_attack_target_from_candidate(npc_physics, candidate));
+        let resolved = npc_attack_target_from_candidate(npc_physics, candidate);
+        if current_target == Some(candidate.identity) {
+            current = Some(resolved);
+        }
+        if best
+            .as_ref()
+            .is_none_or(|existing| dist_sq < existing.distance * existing.distance)
+        {
+            best = Some(resolved);
+        }
     }
-    best
+    match (current, best) {
+        (Some(current), Some(best))
+            if npc_target_stickiness_keeps_current(
+                current.distance,
+                best.distance,
+                target_stickiness,
+            ) =>
+        {
+            Some(current)
+        }
+        (_, best) => best,
+    }
+}
+
+fn npc_target_stickiness_keeps_current(
+    current_distance: f32,
+    challenger_distance: f32,
+    target_stickiness: f32,
+) -> bool {
+    challenger_distance >= current_distance * (1.0 - target_stickiness.clamp(0.0, 1.0))
 }
 
 fn npc_attack_target_from_candidate(
@@ -2347,10 +2375,11 @@ fn yaw_delta_abs(a: f32, b: f32) -> f32 {
 mod tests {
     use super::{
         npc_action_distance_score, npc_catalog, npc_identity, npc_is_outside_leash_from_positions,
-        npc_melee_defense_event_type, npc_template, parse_npc_catalog, visual_id_for_template,
-        yaw_for_direction, NpcFaction, NPC_CATALOG_JSON, NPC_FACTION_FRIENDLY, NPC_FACTION_HOSTILE,
-        NPC_FACTION_NEUTRAL, NPC_TEMPLATE_KOBOLD_THIEF_BK_DUAL_SWORD,
-        NPC_TEMPLATE_KOBOLD_WARRIOR_GN_SPEAR, NPC_TEMPLATE_KOBOLD_WARRIOR_RD_SWORD_SHIELD,
+        npc_melee_defense_event_type, npc_target_stickiness_keeps_current, npc_template,
+        parse_npc_catalog, visual_id_for_template, yaw_for_direction, NpcFaction, NPC_CATALOG_JSON,
+        NPC_FACTION_FRIENDLY, NPC_FACTION_HOSTILE, NPC_FACTION_NEUTRAL,
+        NPC_TEMPLATE_KOBOLD_THIEF_BK_DUAL_SWORD, NPC_TEMPLATE_KOBOLD_WARRIOR_GN_SPEAR,
+        NPC_TEMPLATE_KOBOLD_WARRIOR_RD_SWORD_SHIELD,
     };
     use crate::combat::{COMBAT_EVENT_BLOCK, COMBAT_EVENT_PARRY};
     use crate::defense::DefenseResolution;
@@ -2383,6 +2412,13 @@ mod tests {
         );
         assert!(npc_action_distance_score(1.0, 1.0, 3.0, 5.0, false).is_none());
         assert!(npc_action_distance_score(1.0, 1.0, 3.0, 5.0, true).unwrap() < 1.0);
+    }
+
+    #[test]
+    fn npc_target_stickiness_requires_a_meaningfully_closer_challenger() {
+        assert!(npc_target_stickiness_keeps_current(8.0, 6.0, 0.35));
+        assert!(!npc_target_stickiness_keeps_current(8.0, 5.0, 0.35));
+        assert!(!npc_target_stickiness_keeps_current(8.0, 7.9, 0.0));
     }
 
     #[test]
