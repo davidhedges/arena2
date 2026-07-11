@@ -21,6 +21,7 @@ namespace Arena.Entity
         private readonly NameTag _nameTag;
         private readonly WorldHealthBar _worldHealthBar;
         private readonly NpcAnimationController _animationController;
+        private NpcVisualProfile? _visualProfile;
         private readonly Dictionary<string, int> _effectCounts = new(StringComparer.OrdinalIgnoreCase);
         private readonly Renderer[] _renderers;
         private readonly Dictionary<Material, Color> _baseMaterialColors = new();
@@ -239,6 +240,19 @@ namespace Arena.Entity
             return GameObject.transform;
         }
 
+        public bool TryResolveVfxAnchor(
+            string anchor,
+            out Transform transform,
+            out bool authored)
+        {
+            if (_visualProfile != null)
+                return _visualProfile.TryResolveVfxAnchor(GameObject, anchor, out transform, out authored);
+
+            authored = false;
+            transform = null!;
+            return false;
+        }
+
         public Vector3 GetRenderPosition()
         {
             return GameObject.transform.position;
@@ -362,6 +376,7 @@ namespace Arena.Entity
             if (NpcVisualCatalog.TryLoadDefault(out NpcVisualCatalog catalog, out _)
                 && catalog.TryGetEntry(visualId, out NpcVisualCatalogEntry entry))
             {
+                _visualProfile = entry.profile;
                 _animationController.SetVisualProfile(entry.profile);
                 _animationController.SetStatusReactions(entry.profile != null
                     ? entry.profile.StatusReactions
@@ -369,6 +384,7 @@ namespace Arena.Entity
                 return;
             }
 
+            _visualProfile = null;
             _animationController.SetVisualProfile(null);
             _animationController.SetStatusReactions(null);
         }

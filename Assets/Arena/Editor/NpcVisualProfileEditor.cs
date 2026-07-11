@@ -111,7 +111,50 @@ namespace Arena.Editor
                 ValidateRoleStates(errors, "hit", profile.Animations.hit, states, required: false);
                 ValidateRoleStates(errors, "death", profile.Animations.death, states);
             }
+
+            ValidateVfxSockets(errors, profile, prefab);
             return errors;
+        }
+
+        private static void ValidateVfxSockets(
+            List<string> errors,
+            NpcVisualProfile profile,
+            GameObject prefab)
+        {
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            for (int i = 0; i < profile.VfxSockets.Count; i++)
+            {
+                NpcVisualSocketEntry? entry = profile.VfxSockets[i];
+                if (entry == null)
+                {
+                    errors.Add($"VFX socket entry {i} is null.");
+                    continue;
+                }
+
+                string anchor = entry.AnchorOrEmpty;
+                if (string.IsNullOrEmpty(anchor))
+                {
+                    errors.Add($"VFX socket entry {i} has no anchor.");
+                    continue;
+                }
+                if (!seen.Add(anchor))
+                    errors.Add($"VFX socket anchor '{anchor}' is duplicated.");
+                if (!NpcVisualProfile.SupportsVfxAnchor(anchor))
+                    errors.Add($"VFX socket anchor '{anchor}' is not supported by the shared resolver.");
+
+                string path = entry.TransformPathOrEmpty;
+                if (string.IsNullOrEmpty(path))
+                {
+                    errors.Add($"VFX socket anchor '{anchor}' has no transform path.");
+                    continue;
+                }
+
+                Transform? transform = string.Equals(path, ".", StringComparison.Ordinal)
+                    ? prefab.transform
+                    : prefab.transform.Find(path);
+                if (transform == null)
+                    errors.Add($"VFX socket anchor '{anchor}' path '{path}' does not resolve.");
+            }
         }
 
         private static void ValidateAndLog(NpcVisualProfile profile)

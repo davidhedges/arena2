@@ -28,6 +28,13 @@ namespace Arena.Tests.Editor
                 ?? throw new MissingMethodException(editorType.FullName, "Validate");
             var errors = (IReadOnlyList<string>)validate.Invoke(null, new object[] { profile })!;
             Assert.That(errors, Is.Empty, string.Join("\n", errors));
+
+            PropertyInfo prefabProperty = profileType.GetProperty("Prefab")
+                ?? throw new MissingMemberException(profileType.FullName, "Prefab");
+            var prefab = prefabProperty.GetValue(profile) as GameObject;
+            Assert.That(prefab, Is.Not.Null);
+            AssertSocketResolves(profileType, profile, prefab!, "LEFT_HAND");
+            AssertSocketResolves(profileType, profile, prefab!, "TARGET");
         }
 
         [Test]
@@ -47,12 +54,56 @@ namespace Arena.Tests.Editor
             AssertProfile(tryGetEntry, catalog, "SKELETON_ARCHER_GN");
         }
 
+        [Test]
+        public void ExemplarProfile_AppliesExplicitMissingSocketFallbackPolicies()
+        {
+            Type profileType = RequireType("Arena.Entity.NpcVisualProfile");
+            UnityEngine.Object profile = AssetDatabase.LoadAssetAtPath(
+                "Assets/Arena/Content/NPC/VisualProfiles/SkeletonWizard_Gn_VisualProfile.asset",
+                profileType);
+            Assert.That(profile, Is.Not.Null);
+
+            MethodInfo tryResolve = profileType.GetMethod("TryResolveVfxAnchor")
+                ?? throw new MissingMethodException(profileType.FullName, "TryResolveVfxAnchor");
+            var root = new GameObject("MissingSocketRoot");
+            try
+            {
+                object?[] castArgs = { root, "LEFT_HAND", null, false };
+                Assert.That(tryResolve.Invoke(profile, castArgs), Is.EqualTo(false));
+                Assert.That(castArgs[2], Is.Null);
+                Assert.That(castArgs[3], Is.EqualTo(true));
+
+                object?[] hitArgs = { root, "TARGET", null, false };
+                Assert.That(tryResolve.Invoke(profile, hitArgs), Is.EqualTo(true));
+                Assert.That(hitArgs[2], Is.SameAs(root.transform));
+                Assert.That(hitArgs[3], Is.EqualTo(true));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
         private static void AssertProfile(MethodInfo tryGetEntry, UnityEngine.Object catalog, string visualId)
         {
             object?[] args = { visualId, null };
             Assert.That(tryGetEntry.Invoke(catalog, args), Is.EqualTo(true));
             object entry = args[1] ?? throw new AssertionException($"No entry returned for {visualId}");
             Assert.That(entry.GetType().GetField("profile")!.GetValue(entry), Is.Not.Null);
+        }
+
+        private static void AssertSocketResolves(
+            Type profileType,
+            UnityEngine.Object profile,
+            GameObject prefab,
+            string anchor)
+        {
+            MethodInfo tryResolve = profileType.GetMethod("TryResolveVfxAnchor")
+                ?? throw new MissingMethodException(profileType.FullName, "TryResolveVfxAnchor");
+            object?[] args = { prefab, anchor, null, false };
+            Assert.That(tryResolve.Invoke(profile, args), Is.EqualTo(true), $"{anchor} did not resolve");
+            Assert.That(args[2], Is.TypeOf<Transform>());
+            Assert.That(args[3], Is.EqualTo(true));
         }
 
         private static Type RequireType(string fullName)

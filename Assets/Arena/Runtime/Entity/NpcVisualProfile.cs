@@ -12,11 +12,13 @@ namespace Arena.Entity
         [SerializeField] private UnityEngine.Object? prefab;
         [SerializeField] private string primaryAnimatorPath = string.Empty;
         [SerializeField] private NpcNativeAnimationRoleMap animations = new();
+        [SerializeField] private List<NpcVisualSocketEntry> vfxSockets = new();
         [SerializeField] private List<NpcStatusReactionEntry> statusReactions = new();
 
         public UnityEngine.Object? Prefab => prefab;
         public string PrimaryAnimatorPath => primaryAnimatorPath?.Trim() ?? string.Empty;
         public NpcNativeAnimationRoleMap Animations => animations;
+        public IReadOnlyList<NpcVisualSocketEntry> VfxSockets => vfxSockets;
         public IReadOnlyList<NpcStatusReactionEntry> StatusReactions => statusReactions;
 
         public bool TryResolvePrimaryAnimator(GameObject root, out Animator animator)
@@ -28,6 +30,76 @@ namespace Arena.Entity
             animator = target != null ? target.GetComponent<Animator>() : null!;
             return animator != null;
         }
+
+        public bool TryResolveVfxAnchor(
+            GameObject root,
+            string anchor,
+            out Transform transform,
+            out bool authored)
+        {
+            string normalized = NormalizeAnchor(anchor);
+            for (int i = 0; i < vfxSockets.Count; i++)
+            {
+                NpcVisualSocketEntry? entry = vfxSockets[i];
+                if (entry == null
+                    || !string.Equals(entry.AnchorOrEmpty, normalized, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                authored = true;
+                string path = entry.TransformPathOrEmpty;
+                Transform? resolved = string.Equals(path, ".", StringComparison.Ordinal)
+                    ? root.transform
+                    : root.transform.Find(path);
+                if (resolved != null)
+                {
+                    transform = resolved;
+                    return true;
+                }
+
+                if (entry.fallbackPolicy == NpcVisualSocketFallbackPolicy.PresentationRoot)
+                {
+                    transform = root.transform;
+                    return true;
+                }
+
+                transform = null!;
+                return false;
+            }
+
+            authored = false;
+            transform = null!;
+            return false;
+        }
+
+        internal static string NormalizeAnchor(string? value)
+            => string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim().ToUpperInvariant();
+
+        public static bool SupportsVfxAnchor(string anchor)
+        {
+            string normalized = NormalizeAnchor(anchor);
+            return string.Equals(normalized, "LEFT_HAND", StringComparison.Ordinal)
+                || string.Equals(normalized, "RIGHT_HAND", StringComparison.Ordinal)
+                || string.Equals(normalized, "TARGET", StringComparison.Ordinal);
+        }
+    }
+
+    public enum NpcVisualSocketFallbackPolicy
+    {
+        SkipCue = 0,
+        PresentationRoot = 1,
+    }
+
+    [Serializable]
+    public sealed class NpcVisualSocketEntry
+    {
+        public string anchor = string.Empty;
+        public string transformPath = string.Empty;
+        public NpcVisualSocketFallbackPolicy fallbackPolicy = NpcVisualSocketFallbackPolicy.SkipCue;
+
+        public string AnchorOrEmpty => NpcVisualProfile.NormalizeAnchor(anchor);
+        public string TransformPathOrEmpty => transformPath?.Trim() ?? string.Empty;
     }
 
     [Serializable]

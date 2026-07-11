@@ -86,11 +86,29 @@ namespace Arena.Presentation
             if (string.Equals(anchor, AnchorCasterOverhead, StringComparison.Ordinal))
                 return TryResolveEntityTransform(fact.Caster, out transform);
             if (string.Equals(anchor, AnchorTarget, StringComparison.Ordinal))
+            {
+                if (TryResolveNpcAnchor(fact.Hit, anchor, out transform, out bool authored))
+                    return true;
+                if (authored)
+                    return false;
                 return TryResolveEntityTransform(fact.Hit, out transform);
+            }
             if (string.Equals(anchor, AnchorLeftHand, StringComparison.Ordinal))
+            {
+                if (TryResolveNpcAnchor(fact.Caster, anchor, out transform, out bool authored))
+                    return true;
+                if (authored)
+                    return false;
                 return TryResolveHumanoidBone(fact.Caster, HumanBodyBones.LeftHand, out transform);
+            }
             if (string.Equals(anchor, AnchorRightHand, StringComparison.Ordinal))
+            {
+                if (TryResolveNpcAnchor(fact.Caster, anchor, out transform, out bool authored))
+                    return true;
+                if (authored)
+                    return false;
                 return TryResolveHumanoidBone(fact.Caster, HumanBodyBones.RightHand, out transform);
+            }
             if (string.Equals(anchor, AnchorWeaponMainHand, StringComparison.Ordinal))
                 return TryResolveWeaponMount(fact.Caster, AvatarWeaponMounts.MainHandMountId, out transform);
             if (string.Equals(anchor, AnchorWeaponOffHand, StringComparison.Ordinal))
@@ -100,6 +118,23 @@ namespace Arena.Presentation
             if (string.Equals(anchor, AnchorWeaponBladeEnd, StringComparison.Ordinal))
                 return TryResolveWeaponBladeMarker(fact.Caster, AvatarWeaponMounts.MainHandMountId, BladeEndMarkerName, out transform);
 
+            return false;
+        }
+
+        private static bool TryResolveNpcAnchor(
+            Identity identity,
+            string anchor,
+            out Transform transform,
+            out bool authored)
+        {
+            if (EntityRegistry.Instance != null
+                && EntityRegistry.Instance.TryGetNpc(identity, out NpcEntity entity))
+            {
+                return entity.TryResolveVfxAnchor(anchor, out transform, out authored);
+            }
+
+            authored = false;
+            transform = null!;
             return false;
         }
 
