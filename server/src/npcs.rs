@@ -1429,6 +1429,17 @@ pub(crate) fn tick_npc_combat(
         } else {
             existing_runtime.expect("committed target requires existing NPC runtime")
         };
+        if decision_was_due {
+            record_npc_decision_debug(
+                ctx,
+                now,
+                &npc,
+                &template,
+                planned_action.as_ref(),
+                &target,
+                target_is_pinned,
+            );
+        }
         if movement_modifiers.is_disabled(&npc.identity) {
             upsert_npc_combat_runtime(ctx, runtime);
             continue;
@@ -1438,18 +1449,6 @@ pub(crate) fn tick_npc_combat(
             upsert_npc_combat_runtime(ctx, runtime);
             continue;
         };
-        if decision_was_due {
-            record_npc_decision_debug(
-                ctx,
-                now,
-                &npc,
-                &template,
-                &action,
-                &target,
-                target_is_pinned,
-            );
-        }
-
         if target.distance > npc_attack_reach(action.range, &target) {
             let move_speed_multiplier = movement_modifiers.move_speed_multiplier(&npc.identity, 0);
             if move_speed_multiplier > 0.0 {
@@ -2038,7 +2037,7 @@ fn record_npc_decision_debug(
     now: Timestamp,
     npc: &NpcInstance,
     template: &NpcTemplate,
-    action: &MeleeAbilityCatalog,
+    action: Option<&MeleeAbilityCatalog>,
     target: &NpcAttackTarget,
     target_was_pinned: bool,
 ) {
@@ -2048,7 +2047,7 @@ fn record_npc_decision_debug(
     let base_utility = template
         .action_kit
         .iter()
-        .find(|entry| entry.ability_id == action.ability_id)
+        .find(|entry| action.is_some_and(|action| entry.ability_id == action.ability_id))
         .map_or(0.0, |entry| entry.base_utility);
     let threat_summary = if target_was_pinned {
         "PINNED_TARGET".to_string()
@@ -2077,11 +2076,19 @@ fn record_npc_decision_debug(
             .as_ref()
             .map_or(1, |row| row.decision_sequence.saturating_add(1)),
         considered_action_count: template.action_kit.len() as u32,
-        chosen_ability_id: action.ability_id.clone(),
+        chosen_ability_id: action.map_or_else(String::new, |action| action.ability_id.clone()),
         chosen_target: target.identity,
         target_was_pinned,
-        score_summary: format!("base={base_utility:.3} distance={:.3}", target.distance),
-        hard_reject_summary: String::new(),
+        score_summary: if action.is_some() {
+            format!("base={base_utility:.3} distance={:.3}", target.distance)
+        } else {
+            format!("distance={:.3}", target.distance)
+        },
+        hard_reject_summary: if action.is_some() {
+            String::new()
+        } else {
+            "NO_ELIGIBLE_ACTION".to_string()
+        },
         threat_summary,
         updated_at: now,
     };
