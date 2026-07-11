@@ -26,11 +26,14 @@ namespace Arena.UI
         private const string FactionHostile = "HOSTILE";
         private const string FactionNeutral = "NEUTRAL";
         private const string FactionFriendly = "FRIENDLY";
-        private const string KoboldWarriorRed = "KOBOLD_WARRIOR_RD_SWORD_SHIELD";
-        private const string KoboldWarriorGreen = "KOBOLD_WARRIOR_GN_SPEAR";
-        private const string KoboldThiefBlack = "KOBOLD_THIEF_BK_DUAL_SWORD";
 
         private GameObject _menuRoot = null!;
+        private GameObject _npcBrowserRoot = null!;
+        private RectTransform _npcBrowserContent = null!;
+        private InputField _npcSearchInput = null!;
+        private Text _npcFactionText = null!;
+        private string _npcSpawnFaction = FactionHostile;
+        private int _npcCatalogSourceCount = -1;
         private GameObject _meshEffectMenuRoot = null!;
         private Text _statusText = null!;
         private DbConnection? _subscribedConnection;
@@ -46,6 +49,7 @@ namespace Arena.UI
         public int EscapeClosePriority => 40;
         public bool IsEscapeCloseable =>
             (_meshEffectMenuRoot != null && _meshEffectMenuRoot.activeSelf)
+            || (_npcBrowserRoot != null && _npcBrowserRoot.activeSelf)
             || (_menuRoot != null && _menuRoot.activeSelf);
 
         private void Awake()
@@ -84,15 +88,13 @@ namespace Arena.UI
             BuildTargetButton("HostileButton", "PLAYER HOSTILE", 0, false, () => SpawnTarget(KindHostile));
             BuildTargetButton("NeutralButton", "PLAYER NEUTRAL", 1, false, () => SpawnTarget(KindNeutral));
             BuildTargetButton("PartyMemberButton", "PLAYER FRIENDLY", 2, false, () => SpawnTarget(KindPartyMember));
-            BuildTargetButton("NpcHostileButton", "KOBOLD HOSTILE", 3, false, () => SpawnNpc(KoboldWarriorRed, FactionHostile, "KOBOLD HOSTILE"));
-            BuildTargetButton("NpcNeutralButton", "KOBOLD NEUTRAL", 4, false, () => SpawnNpc(KoboldWarriorGreen, FactionNeutral, "KOBOLD NEUTRAL"));
-            BuildTargetButton("NpcFriendlyButton", "KOBOLD FRIENDLY", 5, false, () => SpawnNpc(KoboldThiefBlack, FactionFriendly, "KOBOLD FRIENDLY"));
-            BuildTargetButton("WeaponMeshEffectsButton", "WEAPON MESH FX", 6, false, ToggleMeshEffectMenu);
-            BuildTargetButton("ClearButton", "CLEAR TARGETS", 7, true, ClearTargets);
+            BuildTargetButton("NpcBrowserButton", "NPC BROWSER", 3, false, ToggleNpcBrowser);
+            BuildTargetButton("WeaponMeshEffectsButton", "WEAPON MESH FX", 4, false, ToggleMeshEffectMenu);
+            BuildTargetButton("ClearButton", "CLEAR TARGETS", 5, true, ClearTargets);
 
             _statusText = Label(_menuRoot.transform, "Status",
                 new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
-                new Vector2(190f, 18f), new Vector2(0f, -266f),
+                new Vector2(190f, 18f), new Vector2(0f, -238f),
                 9, new Color(0.75f, 0.80f, 0.90f), TextAnchor.MiddleCenter);
             _statusText.text = string.Empty;
             _statusText.resizeTextForBestFit = true;
@@ -100,7 +102,143 @@ namespace Arena.UI
             _statusText.resizeTextMaxSize = 9;
 
             BuildMeshEffectMenu();
+            BuildNpcBrowser();
             _menuRoot.SetActive(false);
+        }
+
+        private void BuildNpcBrowser()
+        {
+            _npcBrowserRoot = Panel("PlaygroundNpcBrowser", transform,
+                new Vector2(1f, 1f), new Vector2(1f, 1f),
+                new Vector2(320f, 420f), new Vector2(-226f, -MenuTopOffset));
+            Img(_npcBrowserRoot, HeatUiStyle.Panel);
+            HeatUiStyle.StylePanel(_npcBrowserRoot, raycastTarget: false);
+
+            Text title = Label(_npcBrowserRoot.transform, "Title",
+                new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
+                new Vector2(300f, 22f), new Vector2(0f, -8f),
+                11, HeatUiStyle.Text, TextAnchor.MiddleCenter);
+            title.text = "NPC BROWSER";
+            title.fontStyle = FontStyle.Bold;
+
+            _npcSearchInput = MakeSearchInput(_npcBrowserRoot.transform);
+            _npcSearchInput.onValueChanged.AddListener(_ => RefreshNpcBrowserRows());
+
+            Button faction = MakeHudButton(_npcBrowserRoot.transform, "Faction", "",
+                new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
+                new Vector2(286f, 24f), new Vector2(0f, -72f), HeatUiStyle.RowAlt);
+            _npcFactionText = faction.GetComponentInChildren<Text>();
+            faction.onClick.AddListener(CycleNpcSpawnFaction);
+            RefreshNpcFactionLabel();
+
+            RectTransform root = (RectTransform)_npcBrowserRoot.transform;
+            _npcBrowserContent = ArenaUiKit.MakeScrollView(root, "NpcScroll", out ScrollRect scrollRect);
+            RectTransform scrollRoot = (RectTransform)scrollRect.transform;
+            scrollRoot.anchorMin = new Vector2(0f, 0f);
+            scrollRoot.anchorMax = new Vector2(1f, 1f);
+            scrollRoot.offsetMin = new Vector2(10f, 10f);
+            scrollRoot.offsetMax = new Vector2(-10f, -104f);
+            _npcBrowserRoot.SetActive(false);
+        }
+
+        private static InputField MakeSearchInput(Transform parent)
+        {
+            GameObject root = Panel("Search", parent,
+                new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
+                new Vector2(286f, 26f), new Vector2(0f, -40f));
+            Img(root, HeatUiStyle.RowAlt);
+            Image image = root.GetComponent<Image>();
+            image.raycastTarget = true;
+
+            Text text = Label(root.transform, "Text",
+                Vector2.zero, Vector2.one, new Vector2(-14f, -4f), Vector2.zero,
+                10, HeatUiStyle.Text, TextAnchor.MiddleLeft);
+            Text placeholder = Label(root.transform, "Placeholder",
+                Vector2.zero, Vector2.one, new Vector2(-14f, -4f), Vector2.zero,
+                10, new Color(0.55f, 0.58f, 0.65f), TextAnchor.MiddleLeft);
+            placeholder.text = "SEARCH TEMPLATE OR APPEARANCE";
+
+            var input = root.AddComponent<InputField>();
+            input.textComponent = text;
+            input.placeholder = placeholder;
+            input.targetGraphic = image;
+            return input;
+        }
+
+        private void ToggleNpcBrowser()
+        {
+            bool show = !_npcBrowserRoot.activeSelf;
+            _npcBrowserRoot.SetActive(show);
+            if (show)
+            {
+                _meshEffectMenuRoot.SetActive(false);
+                RefreshNpcBrowserRows();
+            }
+        }
+
+        private void CycleNpcSpawnFaction()
+        {
+            _npcSpawnFaction = _npcSpawnFaction switch
+            {
+                FactionHostile => FactionNeutral,
+                FactionNeutral => FactionFriendly,
+                _ => FactionHostile,
+            };
+            RefreshNpcFactionLabel();
+        }
+
+        private void RefreshNpcFactionLabel()
+        {
+            if (_npcFactionText != null)
+                _npcFactionText.text = $"RELATION: {_npcSpawnFaction}";
+        }
+
+        private void RefreshNpcBrowserRows()
+        {
+            for (int i = _npcBrowserContent.childCount - 1; i >= 0; i--)
+            {
+                Transform child = _npcBrowserContent.GetChild(i);
+                child.SetParent(null, worldPositionStays: false);
+                DestroyUnityObject(child.gameObject);
+            }
+
+            DbConnection? conn = NetworkManager.Instance?.Conn;
+            if (conn == null)
+                return;
+
+            string search = _npcSearchInput.text.Trim();
+            var rows = new List<(string TemplateId, string VisualId, string Label)>();
+            int sourceCount = 0;
+            foreach (SpacetimeDB.Types.NpcVisualCatalog visual in conn.Db.NpcVisualCatalog.Iter())
+            {
+                sourceCount++;
+                SpacetimeDB.Types.NpcTemplateCatalog? template =
+                    conn.Db.NpcTemplateCatalog.TemplateId.Find(visual.TemplateId);
+                if (template == null)
+                    continue;
+
+                string label = $"{template.DisplayName}  [{visual.VisualId}]";
+                if (!string.IsNullOrEmpty(search)
+                    && label.IndexOf(search, StringComparison.OrdinalIgnoreCase) < 0
+                    && template.TemplateId.IndexOf(search, StringComparison.OrdinalIgnoreCase) < 0)
+                {
+                    continue;
+                }
+                rows.Add((template.TemplateId, visual.VisualId, label));
+            }
+            _npcCatalogSourceCount = sourceCount;
+            rows.Sort((left, right) => string.Compare(left.Label, right.Label, StringComparison.Ordinal));
+
+            for (int i = 0; i < rows.Count; i++)
+            {
+                (string templateId, string visualId, string label) = rows[i];
+                Button button = MakeHudButton(_npcBrowserContent, $"Npc_{visualId}", label,
+                    new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
+                    new Vector2(286f, 26f), new Vector2(0f, -i * 30f), HeatUiStyle.RowAlt);
+                button.GetComponentInChildren<Text>().resizeTextForBestFit = true;
+                button.onClick.AddListener(() => SpawnNpc(templateId, visualId, _npcSpawnFaction, label));
+            }
+            _npcBrowserContent.sizeDelta = new Vector2(0f, rows.Count * 30f);
         }
 
         private void BuildMeshEffectMenu()
@@ -198,12 +336,18 @@ namespace Arena.UI
             bool show = !_menuRoot.activeSelf;
             _menuRoot.SetActive(show);
             if (!show)
+            {
                 _meshEffectMenuRoot.SetActive(false);
+                _npcBrowserRoot.SetActive(false);
+            }
         }
 
         private void ToggleMeshEffectMenu()
         {
-            _meshEffectMenuRoot.SetActive(!_meshEffectMenuRoot.activeSelf);
+            bool show = !_meshEffectMenuRoot.activeSelf;
+            _meshEffectMenuRoot.SetActive(show);
+            if (show)
+                _npcBrowserRoot.SetActive(false);
         }
 
         private void OnEnable()
@@ -216,11 +360,28 @@ namespace Arena.UI
         {
             TrySubscribeToReducerErrors();
             RefreshSelectedWeaponMeshEffectBinding();
+            RefreshNpcBrowserWhenCatalogChanges();
             if (_statusText != null && _statusUntilTime > 0f && Time.unscaledTime >= _statusUntilTime)
             {
                 _statusText.text = string.Empty;
                 _statusUntilTime = 0f;
             }
+        }
+
+        private void RefreshNpcBrowserWhenCatalogChanges()
+        {
+            if (_npcBrowserRoot == null || !_npcBrowserRoot.activeSelf)
+                return;
+
+            DbConnection? conn = NetworkManager.Instance?.Conn;
+            if (conn == null)
+                return;
+
+            int sourceCount = 0;
+            foreach (SpacetimeDB.Types.NpcVisualCatalog _ in conn.Db.NpcVisualCatalog.Iter())
+                sourceCount++;
+            if (sourceCount != _npcCatalogSourceCount)
+                RefreshNpcBrowserRows();
         }
 
         private void OnDisable()
@@ -244,6 +405,12 @@ namespace Arena.UI
             if (_meshEffectMenuRoot.activeSelf)
             {
                 _meshEffectMenuRoot.SetActive(false);
+                return true;
+            }
+
+            if (_npcBrowserRoot.activeSelf)
+            {
+                _npcBrowserRoot.SetActive(false);
                 return true;
             }
 
@@ -447,7 +614,7 @@ namespace Arena.UI
             }
         }
 
-        private void SpawnNpc(string templateId, string faction, string label)
+        private void SpawnNpc(string templateId, string visualId, string faction, string label)
         {
             var conn = NetworkManager.Instance?.Conn;
             if (conn == null)
@@ -458,7 +625,7 @@ namespace Arena.UI
 
             try
             {
-                conn.Reducers.SpawnNpc(templateId, templateId, faction);
+                conn.Reducers.SpawnNpc(templateId, visualId, faction);
                 SetStatus($"{label} SENT", false);
             }
             catch (Exception error)
