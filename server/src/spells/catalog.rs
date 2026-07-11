@@ -2434,6 +2434,7 @@ mod tests {
                 "BLESSED_SHIELD",
                 "BLADE_BARRIER",
                 "SACRED_FLAME",
+                "SKELETON_WIZARD_FROST_BOLT",
             ]
         );
     }

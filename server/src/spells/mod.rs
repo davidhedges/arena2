@@ -63,8 +63,8 @@ pub(crate) use casting::{
 };
 pub(crate) use catalog::spell_definition_by_str;
 pub(crate) use cooldowns::{
-    clear_actor_cooldowns, is_on_global_cooldown, is_on_named_cooldown,
-    stamp_global_cooldown_for_duration, stamp_named_cooldown_for_duration,
+    clear_actor_cooldowns, is_on_cooldown as is_on_spell_cooldown, is_on_global_cooldown,
+    is_on_named_cooldown, stamp_global_cooldown_for_duration, stamp_named_cooldown_for_duration,
 };
 pub(crate) use events::Vec3 as SpellVec3;
 pub(crate) use manifest::{

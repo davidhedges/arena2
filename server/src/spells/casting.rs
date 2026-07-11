@@ -48,13 +48,16 @@ use crate::derived_stats::{
     derived_combat_stats_for_owner, scale_cast_duration,
     scale_fortify_temporary_hitpoints_from_allocations,
 };
+#[allow(unused_imports)]
+use crate::npcs::npc_instance as _;
 use crate::player_intent::PlayerIntent;
 #[cfg(feature = "spellcasting_terminal_harness")]
 use crate::player_physics::{commit_player_physics, PhysicsWriteMode, PlayerPhysics};
 use crate::practice::is_training_instance;
 use crate::progression::{
     ability_catalog as _, active_selectable_ability_for_authored_action,
-    derived_combat_profile_id_for_owner, movement_delivery_for_action_id, MovementDeliveryRuntime,
+    authored_npc_spell_ability_id, derived_combat_profile_id_for_owner,
+    movement_delivery_for_action_id, MovementDeliveryRuntime,
 };
 use crate::relations::{target_audience_allows, TargetAudience};
 use crate::resources::{
@@ -174,11 +177,13 @@ fn resolved_primary_resource_cost_for_amount(
     spell_kind: &SpellId,
     amount: f32,
 ) -> Option<ResolvedActionResourceCost> {
-    let Some(ability) = active_selectable_ability_for_authored_action(
+    let ability = active_selectable_ability_for_authored_action(
         ctx,
         caster,
         &AuthoredActionId::new(spell_kind.as_str()),
-    ) else {
+    )
+    .or_else(|| npc_spell_ability_for_actor(ctx, caster, spell_kind));
+    let Some(ability) = ability else {
         return Some(ResolvedActionResourceCost::mana(amount));
     };
 
@@ -2151,6 +2156,10 @@ fn ability_id_for_spell(ctx: &ReducerContext, caster: Identity, spell_kind: &Spe
         return ability.ability_id;
     }
 
+    if let Some(ability) = npc_spell_ability_for_actor(ctx, caster, spell_kind) {
+        return ability.ability_id;
+    }
+
     if !player_knows_spell(ctx, caster, spell_kind.as_str()) {
         return String::new();
     }
@@ -2183,6 +2192,19 @@ fn ability_id_for_spell(ctx: &ReducerContext, caster: Identity, spell_kind: &Spe
     fallback
         .map(|(_, ability_id)| ability_id)
         .unwrap_or_default()
+}
+
+fn npc_spell_ability_for_actor(
+    ctx: &ReducerContext,
+    caster: Identity,
+    spell_kind: &SpellId,
+) -> Option<crate::progression::AbilityCatalog> {
+    ctx.db.npc_instance().identity().find(caster)?;
+    let ability_id = authored_npc_spell_ability_id(spell_kind.as_str())?;
+    ctx.db
+        .ability_catalog()
+        .ability_id()
+        .find(ability_id.to_string())
 }
 
 fn spell_can_be_cast_while_disabled(definition: &SpellDefinition) -> bool {

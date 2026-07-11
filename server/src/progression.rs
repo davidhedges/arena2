@@ -4129,6 +4129,18 @@ pub(crate) fn authored_ability_resource(ability_id: &str) -> Option<(&'static st
         .map(|definition| (definition.resource_kind.as_str(), definition.resource_cost))
 }
 
+pub(crate) fn authored_npc_spell_ability_id(action_id: &str) -> Option<&'static str> {
+    let action_id = normalize_identifier(action_id);
+    progression_catalog()
+        .abilities
+        .iter()
+        .filter(|ability| normalize_identifier(ability.actor_scope.as_str()) == "NPC")
+        .filter(|ability| ability_gameplay_kind(ability) == "SPELL")
+        .filter(|ability| normalize_identifier(ability.action_id.as_str()) == action_id)
+        .min_by_key(|ability| ability.sort_order)
+        .map(|ability| ability.ability_id.as_str())
+}
+
 fn slot_definition(slot_id: &str) -> Option<&'static ActionBarSlotDefinition> {
     let slot_id = canonical_action_bar_slot_id(slot_id);
     progression_catalog()
@@ -7145,9 +7157,13 @@ mod tests {
             );
             let gameplay_kind = normalize_identifier(definition.gameplay.kind.as_str());
             if gameplay_kind == "SPELL" {
-                assert_eq!(
-                    ability_resource_kind, "MANA",
-                    "spell ability '{}' must use MANA",
+                let is_free_npc_action = normalize_identifier(definition.actor_scope.as_str())
+                    == "NPC"
+                    && ability_resource_kind.is_empty()
+                    && definition.resource_cost == 0.0;
+                assert!(
+                    ability_resource_kind == "MANA" || is_free_npc_action,
+                    "spell ability '{}' must use MANA unless it is an explicitly free NPC action",
                     definition.ability_id
                 );
             } else if matches!(
@@ -7205,6 +7221,15 @@ mod tests {
                 "PLAYER" | "NPC" | "BOTH"
             ));
         }
+    }
+
+    #[test]
+    fn npc_spell_action_resolves_its_authored_ability() {
+        assert_eq!(
+            super::authored_npc_spell_ability_id("skeleton_wizard_frost_bolt"),
+            Some("NPC_SKELETON_WIZARD_FROST_BOLT")
+        );
+        assert_eq!(super::authored_npc_spell_ability_id("FIREBALL"), None);
     }
 
     #[test]

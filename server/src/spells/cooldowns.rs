@@ -43,7 +43,7 @@ pub(crate) fn is_on_named_cooldown(
     now < cooldown.last_cast_at + Duration::from_millis(cooldown.duration_ms.max(1))
 }
 
-pub(super) fn is_on_cooldown(
+pub(crate) fn is_on_cooldown(
     ctx: &ReducerContext,
     caster: Identity,
     kind: &SpellId,

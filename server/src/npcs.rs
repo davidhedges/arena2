@@ -24,12 +24,15 @@ use crate::defense::{
 use crate::inventory::{clear_loot_for_anchor, corpse_loot_has_items};
 use crate::movement::FIXED_TICK_SECONDS;
 use crate::practice::is_training_instance;
-use crate::progression::MeleeAbilityCatalog;
+use crate::progression::{ability_catalog as _, MeleeAbilityCatalog};
 use crate::relations::{
     can_harm, combat_relation, target_audience_allows, CombatRelation, TargetAudience,
 };
+#[allow(unused_imports)]
+use crate::spells::active_cast as _;
 use crate::spells::{
-    clear_actor_cooldowns, is_on_named_cooldown, stamp_named_cooldown_for_duration,
+    cast_spell_for_server_actor, clear_actor_cooldowns, is_on_named_cooldown, is_on_spell_cooldown,
+    spell_definition_by_str, stamp_named_cooldown_for_duration, SpellId,
 };
 use crate::world_collision::{
     resolve_world_horizontal_sweep_collision_y_with_layout_for_scene,
@@ -1347,6 +1350,22 @@ pub(crate) fn tick_npc_combat(
             }
             continue;
         }
+        if ctx.db.active_cast().caster().find(npc.identity).is_some() {
+            if let Some(runtime) = ctx.db.npc_combat_runtime().identity().find(npc.identity) {
+                if let Some(target) = resolve_committed_npc_target(
+                    ctx,
+                    npc.identity,
+                    &physics,
+                    &template,
+                    &perception,
+                    runtime.target,
+                    target_is_pinned,
+                ) {
+                    face_npc_target(ctx, now, &physics, &target);
+                }
+            }
+            continue;
+        }
 
         let existing_runtime = ctx.db.npc_combat_runtime().identity().find(npc.identity);
         let committed_target = existing_runtime.as_ref().and_then(|runtime| {
@@ -1423,15 +1442,12 @@ pub(crate) fn tick_npc_combat(
             existing_runtime.as_ref().and_then(|runtime| {
                 (!runtime.planned_ability_id.is_empty())
                     .then(|| {
-                        ctx.db
-                            .melee_ability_catalog()
-                            .ability_id()
-                            .find(runtime.planned_ability_id.clone())
+                        npc_executable_action_for_ability(ctx, runtime.planned_ability_id.as_str())
                     })
                     .flatten()
             })
         };
-        let runtime = if decision_was_due {
+        let mut runtime = if decision_was_due {
             let decision_sequence = existing_runtime
                 .as_ref()
                 .map_or(1, |runtime| runtime.decision_sequence.saturating_add(1));
@@ -1447,7 +1463,7 @@ pub(crate) fn tick_npc_combat(
                 target: target.identity,
                 planned_ability_id: planned_action
                     .as_ref()
-                    .map_or_else(String::new, |action| action.ability_id.clone()),
+                    .map_or_else(String::new, |action| action.ability_id().to_string()),
                 decision_sequence,
                 next_decision_at,
                 next_decision_at_micros: timestamp_to_micros(next_decision_at),
@@ -1464,7 +1480,7 @@ pub(crate) fn tick_npc_combat(
             upsert_npc_combat_runtime(ctx, runtime);
             continue;
         };
-        if target.distance > npc_attack_reach(action.range, &target) {
+        if target.distance > npc_attack_reach(action.range(), &target) {
             let move_speed_multiplier = movement_modifiers.move_speed_multiplier(&npc.identity, 0);
             if move_speed_multiplier > 0.0 {
                 chase_npc_toward_target(
@@ -1473,7 +1489,7 @@ pub(crate) fn tick_npc_combat(
                     &npc,
                     &physics,
                     &template,
-                    &action,
+                    action.range(),
                     &target,
                     move_speed_multiplier,
                 );
@@ -1491,14 +1507,36 @@ pub(crate) fn tick_npc_combat(
             continue;
         }
 
-        if begin_npc_melee_swing(ctx, now, &npc, &physics, &template, &action, &target) {
-            stamp_named_cooldown_for_duration(
-                ctx,
-                npc.identity,
-                action.ability_id.as_str(),
-                Duration::from_millis(action.cooldown_ms),
-                now,
-            );
+        match &action {
+            NpcExecutableAction::Melee(melee) => {
+                if begin_npc_melee_swing(ctx, now, &npc, &physics, &template, melee, &target) {
+                    stamp_named_cooldown_for_duration(
+                        ctx,
+                        npc.identity,
+                        action.ability_id(),
+                        Duration::from_millis(action.cooldown_ms()),
+                        now,
+                    );
+                }
+            }
+            NpcExecutableAction::Spell { spell_kind, .. } => {
+                if let Err(err) = cast_spell_for_server_actor(
+                    ctx,
+                    npc.identity,
+                    spell_kind,
+                    target.identity.to_hex().as_str(),
+                    target.pos_x,
+                    target.pos_y,
+                    target.pos_z,
+                    physics.yaw,
+                    now,
+                ) {
+                    log::warn!("[NPC_AI] spell execution failed: {err}");
+                }
+                runtime.planned_ability_id.clear();
+                runtime.next_decision_at = now;
+                runtime.next_decision_at_micros = timestamp_to_micros(now);
+            }
         }
         upsert_npc_combat_runtime(ctx, runtime);
     }
@@ -1984,10 +2022,72 @@ fn return_npc_home(
 }
 
 struct NpcActionSelection {
-    action: Option<MeleeAbilityCatalog>,
+    action: Option<NpcExecutableAction>,
     target: Option<NpcAttackTarget>,
     score_summary: String,
     hard_reject_summary: String,
+}
+
+enum NpcExecutableAction {
+    Melee(MeleeAbilityCatalog),
+    Spell {
+        ability_id: String,
+        spell_kind: SpellId,
+        range: f32,
+        cooldown_ms: u64,
+    },
+}
+
+impl NpcExecutableAction {
+    fn ability_id(&self) -> &str {
+        match self {
+            Self::Melee(action) => action.ability_id.as_str(),
+            Self::Spell { ability_id, .. } => ability_id.as_str(),
+        }
+    }
+
+    fn range(&self) -> f32 {
+        match self {
+            Self::Melee(action) => action.range,
+            Self::Spell { range, .. } => *range,
+        }
+    }
+
+    fn cooldown_ms(&self) -> u64 {
+        match self {
+            Self::Melee(action) => action.cooldown_ms,
+            Self::Spell { cooldown_ms, .. } => *cooldown_ms,
+        }
+    }
+}
+
+fn npc_executable_action_for_ability(
+    ctx: &ReducerContext,
+    ability_id: &str,
+) -> Option<NpcExecutableAction> {
+    let ability = ctx
+        .db
+        .ability_catalog()
+        .ability_id()
+        .find(ability_id.to_string())?;
+    match ability.ability_kind.as_str() {
+        "MELEE" => ctx
+            .db
+            .melee_ability_catalog()
+            .ability_id()
+            .find(ability.ability_id)
+            .map(NpcExecutableAction::Melee),
+        "SPELL" => {
+            let spell = spell_definition_by_str(ability.action_id.as_str())?;
+            Some(NpcExecutableAction::Spell {
+                ability_id: ability.ability_id,
+                spell_kind: spell.kind.clone(),
+                range: spell.max_distance,
+                cooldown_ms: spell.cooldown.as_millis() as u64,
+            })
+        }
+        _ => None,
+    }
 }
 
 #[derive(Default)]
@@ -2049,9 +2149,9 @@ fn select_npc_melee_action(
         !entry.required_target_status.is_empty() || !entry.forbidden_target_status.is_empty()
     });
     let mut rejects = NpcActionRejectCounts::default();
-    let mut best: Option<(f32, u32, f32, String, MeleeAbilityCatalog, NpcAttackTarget)> = None;
+    let mut best: Option<(f32, u32, f32, String, NpcExecutableAction, NpcAttackTarget)> = None;
     for entry in &template.action_kit {
-        if entry.role != "MELEE_OFFENSE" {
+        if !matches!(entry.role.as_str(), "MELEE_OFFENSE" | "RANGED_OFFENSE") {
             rejects.role = rejects.role.saturating_add(1);
             continue;
         }
@@ -2108,16 +2208,50 @@ fn select_npc_melee_action(
             rejects.forbidden_status = rejects.forbidden_status.saturating_add(1);
             continue;
         }
-        let Some(action) = ctx
+        let Some(ability) = ctx
             .db
-            .melee_ability_catalog()
+            .ability_catalog()
             .ability_id()
             .find(entry.ability_id.clone())
         else {
             rejects.missing_ability = rejects.missing_ability.saturating_add(1);
             continue;
         };
-        if is_on_named_cooldown(ctx, state.identity, action.ability_id.as_str(), now) {
+        let action = if ability.ability_kind == "MELEE" && entry.role == "MELEE_OFFENSE" {
+            let Some(melee) = ctx
+                .db
+                .melee_ability_catalog()
+                .ability_id()
+                .find(entry.ability_id.clone())
+            else {
+                rejects.missing_ability = rejects.missing_ability.saturating_add(1);
+                continue;
+            };
+            NpcExecutableAction::Melee(melee)
+        } else if ability.ability_kind == "SPELL" && entry.role == "RANGED_OFFENSE" {
+            let Some(spell) = spell_definition_by_str(ability.action_id.as_str()) else {
+                rejects.missing_ability = rejects.missing_ability.saturating_add(1);
+                continue;
+            };
+            NpcExecutableAction::Spell {
+                ability_id: ability.ability_id,
+                spell_kind: spell.kind.clone(),
+                range: spell.max_distance,
+                cooldown_ms: spell.cooldown.as_millis() as u64,
+            }
+        } else {
+            rejects.role = rejects.role.saturating_add(1);
+            continue;
+        };
+        let on_cooldown = match &action {
+            NpcExecutableAction::Melee(action) => {
+                is_on_named_cooldown(ctx, state.identity, action.ability_id.as_str(), now)
+            }
+            NpcExecutableAction::Spell { spell_kind, .. } => {
+                is_on_spell_cooldown(ctx, state.identity, spell_kind, now)
+            }
+        };
+        if on_cooldown {
             rejects.cooldown = rejects.cooldown.saturating_add(1);
             continue;
         }
@@ -2317,7 +2451,7 @@ fn record_npc_decision_debug(
         chosen_ability_id: selection
             .action
             .as_ref()
-            .map_or_else(String::new, |action| action.ability_id.clone()),
+            .map_or_else(String::new, |action| action.ability_id().to_string()),
         chosen_target: target.identity,
         target_was_pinned,
         score_summary: selection.score_summary.clone(),
@@ -2338,12 +2472,12 @@ fn chase_npc_toward_target(
     npc: &NpcInstance,
     physics: &NpcPhysics,
     template: &NpcTemplate,
-    action: &MeleeAbilityCatalog,
+    action_range: f32,
     target: &NpcAttackTarget,
     move_speed_multiplier: f32,
 ) -> NpcPhysics {
     let desired_yaw = yaw_for_direction(target.dir_x, target.dir_z);
-    let stop_distance = (npc_attack_reach(action.range, target) - NPC_CHASE_STOP_EPSILON).max(0.0);
+    let stop_distance = (npc_attack_reach(action_range, target) - NPC_CHASE_STOP_EPSILON).max(0.0);
     let remaining = (target.distance - stop_distance).max(0.0);
     let travel = (template.move_speed * move_speed_multiplier * FIXED_TICK_SECONDS).min(remaining);
     if travel <= f32::EPSILON {
@@ -3228,12 +3362,15 @@ mod tests {
     #[test]
     fn authored_npc_catalog_is_valid_and_complete_for_current_templates() {
         let parsed = parse_npc_catalog(NPC_CATALOG_JSON).unwrap();
-        assert_eq!(parsed.templates.len(), 4);
-        assert_eq!(npc_catalog().templates.len(), 4);
+        assert_eq!(parsed.templates.len(), 5);
+        assert_eq!(npc_catalog().templates.len(), 5);
         assert!(parsed
             .templates
             .iter()
             .all(|template| !template.visual_ids.is_empty() && template.action_kit.len() == 1));
+        let wizard = npc_template("SKELETON_WIZARD").expect("wizard exemplar should be authored");
+        assert_eq!(wizard.action_kit[0].role, "RANGED_OFFENSE");
+        assert_eq!(wizard.action_kit[0].target_selector, "CURRENT_ENEMY");
     }
 
     #[test]
