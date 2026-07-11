@@ -112,6 +112,22 @@ namespace Arena.Network
             string serializedServerUri,
             string serializedModuleName)
         {
+            if (Application.isBatchMode)
+            {
+                string? headlessModule = Environment.GetEnvironmentVariable("ARENA_HEADLESS_MODULE");
+                if (!string.IsNullOrWhiteSpace(headlessModule))
+                {
+                    string? headlessServer = Environment.GetEnvironmentVariable("ARENA_HEADLESS_SERVER_URI");
+                    return new NetworkEnvironmentEndpoint(
+                        NetworkEnvironmentKind.Custom,
+                        "Headless",
+                        string.IsNullOrWhiteSpace(headlessServer)
+                            ? LocalServerUri
+                            : headlessServer.Trim(),
+                        headlessModule.Trim());
+                }
+            }
+
             if (!useSerializedEndpointOverride || string.IsNullOrWhiteSpace(serializedServerUri))
                 return CurrentEndpoint;
 

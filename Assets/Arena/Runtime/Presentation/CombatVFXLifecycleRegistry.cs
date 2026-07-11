@@ -18,6 +18,12 @@ namespace Arena.Presentation
         private const string LifecycleUntilTerminalEvent = "UNTIL_TERMINAL_EVENT";
         private const string LifecycleUntilCastEnd = "UNTIL_CAST_END";
 
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        internal static long DebugSpawnedScriptedCount { get; private set; }
+        internal static long DebugSpawnedPrefabCount { get; private set; }
+        internal static long DebugMissingTemplateCount { get; private set; }
+#endif
+
         private readonly MonoBehaviour _coroutineOwner;
         private readonly Dictionary<string, ScriptedEntry> _scripted = new();
         private readonly Dictionary<string, PrefabEntry> _prefabs = new();
@@ -200,6 +206,9 @@ namespace Arena.Presentation
                 context.ActionInstanceId,
                 WireIdentifier.Normalize(cue.Lifecycle),
                 visual);
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            DebugSpawnedScriptedCount++;
+#endif
         }
 
         private IEnumerator SpawnAfterDelay(
@@ -228,6 +237,9 @@ namespace Arena.Presentation
             GameObject prefab = template.Prefab;
             GameObject instance = Object.Instantiate(prefab, position, rotation);
             instance.name = $"{prefab.name}_{cue.Key}";
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            DebugSpawnedPrefabCount++;
+#endif
             if (followAnchor != null)
                 instance.transform.SetParent(followAnchor, true);
 
@@ -449,6 +461,10 @@ namespace Arena.Presentation
                 normalizedId = "<missing>";
             if (!_missingTemplateWarnings.Add(normalizedId))
                 return;
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            DebugMissingTemplateCount++;
+#endif
 
             Debug.LogWarning(
                 $"Combat VFX cue references unresolved template id '{normalizedId}'. Register a prefab in CombatVFXRegistry or a scripted template in {nameof(CombatVFXTemplateRegistry)}.");
