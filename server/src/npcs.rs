@@ -3205,8 +3205,8 @@ mod tests {
     #[test]
     fn authored_npc_catalog_is_valid_and_complete_for_current_templates() {
         let parsed = parse_npc_catalog(NPC_CATALOG_JSON).unwrap();
-        assert_eq!(parsed.templates.len(), 8);
-        assert_eq!(npc_catalog().templates.len(), 8);
+        assert_eq!(parsed.templates.len(), 9);
+        assert_eq!(npc_catalog().templates.len(), 9);
         assert!(parsed
             .templates
             .iter()
@@ -3232,6 +3232,14 @@ mod tests {
         assert_eq!(abomination.visual_ids.len(), 3);
         assert_eq!(abomination.action_kit[0].ability_id, "NPC_ABOMINATION_CLAW");
         assert_eq!(abomination.action_kit[0].role, "MELEE_OFFENSE");
+        let humanoid_scarab =
+            npc_template("HUMANOID_SCARAB").expect("humanoid scarab family should be authored");
+        assert_eq!(humanoid_scarab.visual_ids.len(), 4);
+        assert_eq!(
+            humanoid_scarab.action_kit[0].ability_id,
+            "NPC_HUMANOID_SCARAB_STRIKE"
+        );
+        assert_eq!(humanoid_scarab.action_kit[0].role, "MELEE_OFFENSE");
     }
 
     #[test]

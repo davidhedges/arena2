@@ -18,6 +18,10 @@ namespace Arena.Tests.Editor
         [TestCase("Assets/Arena/Content/NPC/VisualProfiles/Abomination_Gn_VisualProfile.asset")]
         [TestCase("Assets/Arena/Content/NPC/VisualProfiles/Abomination_Gr_VisualProfile.asset")]
         [TestCase("Assets/Arena/Content/NPC/VisualProfiles/Abomination_Pe_VisualProfile.asset")]
+        [TestCase("Assets/Arena/Content/NPC/VisualProfiles/HumanoidScarab_Bl_VisualProfile.asset")]
+        [TestCase("Assets/Arena/Content/NPC/VisualProfiles/HumanoidScarab_Gn_VisualProfile.asset")]
+        [TestCase("Assets/Arena/Content/NPC/VisualProfiles/HumanoidScarab_Rd_VisualProfile.asset")]
+        [TestCase("Assets/Arena/Content/NPC/VisualProfiles/HumanoidScarab_Ye_VisualProfile.asset")]
         public void ExemplarProfile_ResolvesAuthoredAnimatorAndStates(string path)
         {
             Type profileType = RequireType("Arena.Entity.NpcVisualProfile");
@@ -55,6 +59,10 @@ namespace Arena.Tests.Editor
             AssertProfile(tryGetEntry, catalog, "SKELETON_WIZARD_GN");
             AssertProfile(tryGetEntry, catalog, "LICH_GN");
             AssertProfile(tryGetEntry, catalog, "SKELETON_ARCHER_GN");
+            AssertProfile(tryGetEntry, catalog, "HUMANOID_SCARAB_BL");
+            AssertProfile(tryGetEntry, catalog, "HUMANOID_SCARAB_GN");
+            AssertProfile(tryGetEntry, catalog, "HUMANOID_SCARAB_RD");
+            AssertProfile(tryGetEntry, catalog, "HUMANOID_SCARAB_YE");
         }
 
         [Test]

@@ -3452,6 +3452,28 @@
       }
     },
     {
+      "ability_id": "NPC_HUMANOID_SCARAB_STRIKE",
+      "actor_scope": "NPC",
+      "combat_profile_id": "",
+      "action_id": "NPC_MELEE_ATTACK",
+      "display_name": "Humanoid Scarab Strike",
+      "resource_kind": "",
+      "resource_cost": 0,
+      "ability_tags": [],
+      "sort_order": 46,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 12,
+        "applies_stagger": false,
+        "range": 2.6,
+        "cooldown_ms": 2200,
+        "uses_global_cooldown": false,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET"
+      }
+    },
+    {
       "ability_id": "NPC_SKELETON_WIZARD_FROST_BOLT",
       "actor_scope": "NPC",
       "combat_profile_id": "",
