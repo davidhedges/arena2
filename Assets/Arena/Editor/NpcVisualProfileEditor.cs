@@ -184,7 +184,7 @@ namespace Arena.Editor
                 errors.Add($"No authored {label} state exists in the primary Animator controller.");
         }
 
-        private static HashSet<string> CollectStateNames(RuntimeAnimatorController? controller)
+        internal static HashSet<string> CollectStateNames(RuntimeAnimatorController? controller)
         {
             if (controller is AnimatorOverrideController overrideController)
                 controller = overrideController.runtimeAnimatorController;
