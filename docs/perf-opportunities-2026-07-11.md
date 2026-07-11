@@ -1,96 +1,140 @@
 # Performance Opportunities — 2026-07-11
 
-Full-stack survey (client rendering, client CPU, server tick loop, netcode data volume). All rankings are from static analysis — **nothing here has been measured live yet**; see "Measure first" at the end. Row/byte sizes are estimates.
+Current performance backlog after re-checking the static survey against the live repository. This is deliberately split into work that is safe now, work that needs profiler evidence, and work that should not be pursued under its original rationale.
 
-## Client wins (ranked)
+Except where an item is marked complete, rankings remain hypotheses until measured. Row and byte sizes are estimates.
 
-### 1. Merge modular character meshes + add LODs
+## Recommended order
 
-Players are assembled from body/head/face/hair/eyes/outfit/equipment parts as **separate SkinnedMeshRenderers** — `NHAvatar.Compile()` only reassigns `sharedMaterials`, it never merges meshes (`Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Scripts/NHAvatar.cs:141-159`, assembly at `CharacterAvatarAssembler.cs:105-111`). That is N skinning passes + N draw calls per character, multiplied by crowd size. There are **zero LODGroups** in the project, so distant avatars cost the same as near ones.
+1. Capture one representative busy-fight client profile and one NPC-pack server profile.
+2. Land narrow, contract-preserving reductions in known allocation/write churn.
+3. Choose larger rendering or netcode projects from measured bottlenecks rather than static rankings.
 
-- Fix: mesh-combine on `Compile()` (or a skinned-mesh combiner), and add character LODs. Biggest structural GPU/draw-call lever in the project.
+## Worth doing
 
-### 2. Pool floating combat text
+### 1. Change-gate `PlayerIntent` writes — preserve the table
 
-Every damage/heal number allocates a new GameObject + legacy `TextMesh` + `FloatingTextAnimation` + interpolated strings (`Assets/Arena/Runtime/Presentation/FloatingCombatText.cs:87,123-137`), calls `Camera.main` (a tagged-object search) every frame while alive (`:168`), then `Destroy`s itself (`:160`). Dominant GC-spike source during fights.
+`PlayerIntent` is updated at 30 Hz for every live player (`server/src/game_loop.rs:1705-1714,1923-1924`) and is absent from client subscriptions. That makes its write rate worth reducing, but it is not unused: the server retains movement intent there and reads it for movement simulation, stationary-cast validation/cancellation, and facing-sensitive combat behavior.
 
-- Fix: pool instances, switch to TMP, cache the camera reference.
+- Direction: preserve the authoritative row, but avoid `.update()` when its meaningful retained state has not changed.
+- Contract work: decide whether `input_tick` and `updated_at` are authoritative state or incidental bookkeeping before gating them.
+- Verification: use the existing `writes_player_intent` counter and cover held movement, key-up, yaw-only changes, fallback input, special movement, and stationary cast cancellation.
+- Do not attribute the prior 31 GB local commitlog incident to this table until table-level byte growth is measured.
 
-### 3. Stop whole-HUD canvas rebuilds during combat
+### 2. Pool floating combat text — complete
 
-The HUD is one canvas with no nested sub-canvases (`Assets/Arena/Runtime/UI/HUDController.cs:281`). Cast-bar fill (`:2459`) and cooldown/GCD sweeps (`:1507`) mutate `Image.fillAmount` every combat frame, dirtying the entire canvas each frame. The existing `SetTextIfChanged`/`SetActiveIfChanged` guards (`:2757,2769`) can't help against a moving fill.
+Completed 2026-07-11 in `Assets/Arena/Runtime/Presentation/FloatingCombatText.cs`.
 
-- Fix: move the animated fills onto a nested sub-canvas, or drive fills via material/shader instead of `fillAmount`.
+Damage, healing, and lifecycle labels now reuse a bounded pool instead of creating and destroying a GameObject, `TextMesh`, and animation component for every event. The existing presentation remains unchanged; switching to TMP was intentionally kept out of the performance fix. The owner also resolves the active main camera once and shares it with live text instances rather than each instance querying `Camera.main` every frame.
 
-### 4. Fix SRP-batch breakers and material cloning
+### 3. Remove repeated NPC template lookup allocations
 
-Zero `MaterialPropertyBlock` usage anywhere; 12 `.material` (instance-clone) sites: `Match/MatchController.cs:258`, `Presentation/WorldHealthBar.cs:54,66`, `Presentation/MeleeRangeGuideIndicator.cs:92`, and all procedural VFX (`FireballVFX.cs:70,82`, `IcicleVFX.cs:65,75`, `BeamVFX.cs:112`, `NegateVFX.cs:73`, `ImpactBurstVFX.cs:31`, `VFXUtils.cs:185`). Each clone breaks SRP batching and allocates.
+`npc_template(...)` normalizes the ID, linearly searches the immutable catalog, and clones the complete template (`server/src/npcs.rs:494-508`). That remains on the hostile-NPC tick path even though decision selection itself is now cadence-gated.
 
-Worst case: `Presentation/MeleeAnimationGhostLayer.cs:144-168` — every interrupted melee does `SkinnedMeshRenderer.BakeMesh` into a **new Mesh** plus **new Material per submaterial**, no caching, up to 3 ghosts, destroyed after 0.75 s, with per-frame `SetColor` on the clones (`:359-375`). (`AnimatedAutoAttackGhostLayer` caches its clone correctly — use it as the model.)
+- Direction: index normalized template IDs and cache effective immutable templates, including compile-time measurement overrides.
+- Verification: compare `npc_combat` CPU and allocation behavior on the NPC-pack fixture before and after. Treat this as a small cleanup unless the capture shows material cost.
 
-- Fix: MPB for tints/fades; cache ghost meshes/materials like the auto-attack layer does.
+### 4. Cache `LocalPlayerMotor` in `PlayerAnimator`
 
-### 5. Smaller cleanups
+`PlayerAnimator.Update` still calls `GetComponent<LocalPlayerMotor>()` every frame. Cache it with the animator's other component references. This is safe incidental cleanup, not a standalone performance project.
 
-- `ProjectileVfxPool` silently bypasses pooling for any prefab containing a `VisualEffect` — those Instantiate/Destroy every cast (`Assets/Arena/Runtime/Presentation/VFX/ProjectileVfxPool.cs:120-123`). Rent path also allocates via `GetComponentsInChildren` (`:127,134,141`).
-- `Camera.main` per frame in ~8 live components (`VFXUtils.cs:354-357` billboards, `SelectedTargetIndicator.cs:176`, `AimIndicator.cs:116`, `LocalPlayerCamera.cs:52`, `CameraOrbitController.cs:100`, `TargetSelector.cs:168,198`). Cache in a shared provider.
-- `TargetSelector` hover scan: full players+NPCs scan with 4–5 `WorldToScreenPoint` per entity per frame while the cursor is unlocked (`Combat/TargetSelector.cs:196-223`), plus `RefreshTargetingPresentation()` every frame (`:136`). Gate/throttle the recompute.
-- `PlayerAnimator.Update` calls `GetComponent<LocalPlayerMotor>()` every frame (`PlayerAnimator.cs:2708`) — local player only, but free to cache.
-- Additional-light shadows are enabled with a 2048 atlas on the PC renderer (`PC_RPAsset.asset:47-50`) but the only runtime point lights (projectile VFX) have shadows off — disable to reclaim memory/prefiltering.
+## Worth doing only if profiling confirms the bottleneck
 
-### Unknown pending profiler
+### Character LODs
 
-SpacetimeDB `FrameTick()` callback dispatch + generated-binding row deserialization (`Network/NetworkManager.cs:494`) scales with moving-entity count × 30 Hz and is invisible to static analysis. Most likely hidden client cost; capture before trusting the ranking above.
+Arena-owned modular characters do not currently author `LODGroup`s. Character LODs are likely useful at crowd scale, but they should be evaluated separately from mesh combining.
 
-## Server wins (ranked)
+Mesh combining is a larger compatibility project: the runtime can rebuild an existing avatar when appearance/equipment changes, and combining meshes does not collapse multiple material/submesh passes into one draw call without compatible material consolidation or atlasing. Measure skinning time, draw calls, triangles, and material passes by distance before choosing the implementation.
 
-### 1. Wire up the NPC decision throttle that already exists
+### HUD canvas isolation
 
-`decision_interval_ms` and `perception_radius` are authored, validated, and persisted on NPC templates (`server/src/npcs.rs:141-142`, validation `:564-572`) but **never read at runtime**. Every hostile NPC re-scans targets and re-selects actions at the full 30 Hz (`tick_npc_combat`, `npcs.rs:1235`) — O(NPCs × alive players) per tick. Chase motion must stay per-tick for smoothness; re-acquisition/selection does not.
+The main HUD uses one root canvas, while cast-bar and cooldown fills change every combat frame (`HUDController.cs:1507,2459`). If a representative capture shows material `Canvas.BuildBatch`/UI rebuild time, isolate animated regions behind nested canvases or evaluate shader-driven fills. Do not restructure the HUD from static inference alone.
 
-- Fix: gate re-scan/selection on the authored cadence. Payoff is already measurable via `npc_target_pairs_scanned` (`npcs.rs:1481`) and the `npc_combat` subphase timer.
+### Target hover throttling
 
-### 2. Kill per-tick template clones and world-context allocations
+With the cursor unlocked, `TargetSelector` projects four points per selectable player/NPC every frame (`Combat/TargetSelector.cs:196-282`). Throttle or reuse the result only if crowd captures show this scan matters; preserve immediate click selection even if hover refresh is throttled.
 
-- `npc_template(...).clone()` clones the whole template — including the `Vec<NpcActionKitEntry>` of 6 Strings each — once per hostile NPC per tick (`npcs.rs:1262`, struct `:477`). Runtime-immutable data; cache or borrow it.
-- `resolve_player_world_context` per NPC does a wasted `player_world().find()` miss then an `npc_instance().find()`, returning an owned scene-name String per NPC and per candidate every tick (`server/src/arena.rs:978-1010`, callers `npcs.rs:1432,1464`).
-- `normalize_id` allocates via `to_ascii_uppercase` on the template-lookup and action-selection paths (`npcs.rs:2358`).
+### Melee interruption ghost pooling
 
-### 3. Stop persisting `PlayerIntent` at 30 Hz
+`MeleeAnimationGhostLayer` bakes the current animated pose into new mesh/material resources for interruption ghosts. If allocation captures identify this path, reuse mesh and material containers. A fresh `BakeMesh` operation is still required to capture each distinct pose; one cached static baked mesh is not a correct replacement.
 
-Written every tick for every live player (`server/src/game_loop.rs:1923-1924`, also `:1706`) but present in **no client subscription** (absent from `GameplaySubscriptionPlanner`) — pure commitlog churn, roughly doubling per-player row writes for zero wire benefit. Likely a major contributor to the 31 GB commitlog incident (2026-07-05, `docs/netcode-open-items.md:99-103`).
+### VFX Graph projectile pooling
 
-- Fix: gate on change or drop it from the persistent path entirely.
+`ProjectileVfxPool` intentionally bypasses prefabs containing `VisualEffect` because their state is not currently reset safely (`ProjectileVfxPool.cs:117-123`). Add an explicit reset/reinitialization contract only if those prefabs produce meaningful instantiate/destroy spikes. Cache component arrays inside each rental if rent/return allocations appear in the capture.
 
-### 4. Gate idle-player `PlayerPhysics` writes
+### SpacetimeDB `FrameTick` and binding deserialization
 
-`commit_player_physics` always `.update()`s at 30 Hz per live player even when standing still (`game_loop.rs:1945`, `server/src/player_physics.rs:162`) — the top combined wire + commitlog stream (~80 B × 30 Hz × players). Harder than the NPC gate because `last_processed_tick` (the input ack) genuinely changes every tick — gating requires splitting the ack out of the position row. The client already tolerates lower cadence: `RemotePresentationBuffer` handles change-gated NPCs today (`SourceRowCadence`, `Assets/Arena/Runtime/Simulation/RemotePresentationBuffer.cs:75-89`), so players would move off `EveryTick`.
+`NetworkManager.Update` dispatches pending network messages through `FrameTick()` on the main thread (`NetworkManager.cs:490-499`). Capture callback counts, deserialization time, and row types before attempting generated-binding or subscription changes.
 
-### 5. Distance/relevance interest filtering (deferred, known)
+## Deferred projects
 
-Subscriptions are scoped by world/instance but not by range — every entity in a scene replicates to everyone at full rate (`GameplaySubscriptionPlanner.cs:108-151`; already tracked in `docs/netcode-open-items.md:85-87`). Matters as scene populations grow, not before. Mind the SpacetimeDB two-table-semijoin limit.
+### Idle `PlayerPhysics` write gating
 
-### 6. Minor tick-loop trims
+`PlayerPhysics` is still written every tick and is the main replicated movement row. It also carries the local prediction acknowledgment, command-consumption truth, buffer occupancy, and interpolation timestamp. Change-gating position therefore requires a deliberate split or replacement contract for those every-tick signals, plus changes to the client's `SourceRowCadence` handling. Do not treat this as a simple idle-row guard.
 
-- `tick_auras` runs unconditionally every tick with 3 full scans and no empty early-out (`server/src/combat.rs:1217-1234`).
-- `StatusRuntimeView::collect` full-scans `status_effect` twice per tick (pre/post mutation, `combat.rs:5220`, `game_loop.rs:853,1032`) — already instrumented; likely negligible until status counts grow.
+### Distance/relevance interest management
 
-## Already well-optimized — don't redo
+Subscriptions are scoped by world/instance rather than distance (`GameplaySubscriptionPlanner.cs:108-151`). Distance or relevance filtering matters for larger populations and competitive information exposure, but it needs a feasible SpacetimeDB subscription design within the two-table-semijoin constraint. Defer until scale or exposure makes it a priority.
 
-- `world_collision.rs`: parse-once `OnceLock` geometry, uniform-grid broadphase + BVH, thread-local scratch, fallback-scan warnings at init. Best subsystem in the codebase.
-- Single batched `game_tick` with anchor-based rescheduling + watchdog; no per-entity scheduler rows; `has_active_*`/`has_due_*` gating keeps idle load low; T1–T4 tick-audit optimizations landed.
-- NPC AI fires zero raycasts (targeting is pure distance); NPC physics/facing writes are change-gated.
-- Client: `RemotePresentationBuffer` 12-slot ring interpolation with zero per-push allocation; no per-row GameObject churn; projectile VFX pooling; scoped (not subscribe-all) subscriptions; hot/cold table split already done server-side.
+### Aura and status scan cleanup
 
-## Measure first
+`tick_auras` and `StatusRuntimeView::collect` perform repeated scans, but they are already visible in tick profiling and are likely small at current populations. Optimize only when the corresponding subphase/counters are material.
 
-Nothing above has live numbers. Before spending implementation effort:
+## Completed or rejected recommendations
 
-1. **Client:** Unity profiler capture during a busy fight — canvas rebuild (`Canvas.BuildBatch`/`WillRenderCanvases`), GC alloc rate, animator eval per avatar (incl. ghost clones), `FrameTick` deserialization.
-2. **Server:** `ARENA_PROFILE_TICKS` build + NPC-pack fixture (aggro knobs `ARENA_NPC_AGGRO_RADIUS`/`ARENA_NPC_TANKY`, `npcs.rs:451,948`), reading `npc_combat` subphase p95/max and `npc_target_pairs_scanned`.
-3. **Commitlog:** GB/hour growth split by table has never been measured; write counters exist (`tick_metrics.rs:132-154`) but `npc_physics` isn't among them and byte volume isn't tracked.
+### NPC decision throttling — complete
 
-## Quick wins vs projects
+The earlier survey said `decision_interval_ms` and `perception_radius` were unused. That became stale immediately after the survey. NPC combat now preserves committed targets/actions until `next_decision_at`, uses the authored interval and deterministic variation, and queries candidates through a shared perception index (`server/src/npcs.rs:1352-1455,1592-1652`). Keep chase/facing execution per tick; do not add a second throttle path.
 
-- Near-free: FCT pooling (#C2), `PlayerIntent` gating (#S3), `Camera.main` caching, template-clone caching (#S2).
-- Big projects: character mesh merging + LODs (#C1), NPC decision throttling (#S1), idle `PlayerPhysics` gating (#S4), interest filtering (#S5).
+### Blanket `MaterialPropertyBlock` conversion — rejected
+
+Do not convert material instances to `MaterialPropertyBlock` under an “SRP batching” rationale. In Unity 6 URP, MPBs remove SRP Batcher compatibility. Material work must distinguish:
+
+- implicit material cloning through `Renderer.material` getters;
+- explicitly owned procedural VFX materials;
+- ordinary draw-call batching and GPU instancing;
+- SRP Batcher shader/material compatibility.
+
+Profile the actual renderer/shader path before changing it. Shared material variants, instanced shader data, or pooled owned materials may each be appropriate in different sites.
+
+### Disable additional-light shadows globally — rejected
+
+The PC render-pipeline asset enables additional-light shadows, and shipped scenes such as `Adventure_Island.unity` contain shadow-casting point lights. Disabling the global setting is a visual-quality change, not a free memory cleanup. Audit the active scene lights and shadow atlas in a capture before changing per-light or pipeline settings.
+
+### Remove `PlayerIntent` — rejected
+
+Clients do not subscribe to the table, but server simulation and spell rules read it. Only its redundant updates are candidates for removal.
+
+### Shared `Camera.main` provider as a performance project — rejected
+
+Modern Unity caches MainCamera-tagged objects internally. Local caching in components with hot repeated access is fine, but a new global provider is not justified from static analysis.
+
+### Broad TMP migration for floating text — rejected
+
+Pooling removes the known GameObject/component lifetime churn without coupling the fix to a visual/text-system migration. Evaluate TMP separately if text rendering quality, glyph behavior, or measured rendering cost warrants it.
+
+## Measurement gates
+
+### Client
+
+Capture a representative busy fight and record:
+
+- main-thread and render-thread frame time;
+- GC allocation rate and allocation call stacks;
+- `Canvas.BuildBatch`/`WillRenderCanvases`;
+- skinning/animator cost, character draw calls, triangles, and material passes;
+- `FrameTick` plus callback/deserialization cost;
+- interruption ghost and projectile instantiation paths.
+
+### Server
+
+Use an `ARENA_PROFILE_TICKS` build and the NPC-pack fixture. Record:
+
+- `npc_combat` p95/max and `npc_target_pairs_scanned`;
+- table-write counters, especially `player_intent` and `player_physics`;
+- status/aura subphase time and scan counts;
+- allocation evidence where the local runtime exposes it.
+
+### Commitlog
+
+Measure GB/hour by workload and, if possible, attribute bytes by table. Existing counters report write counts rather than serialized byte volume, and `npc_physics` is not currently among the instrumented write kinds.

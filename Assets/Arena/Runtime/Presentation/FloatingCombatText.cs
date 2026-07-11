@@ -1,4 +1,5 @@
 #nullable enable
+using System.Collections.Generic;
 using UnityEngine;
 using SpacetimeDB;
 using SpacetimeDB.Types;
@@ -14,7 +15,13 @@ namespace Arena.Presentation
     /// </summary>
     public class FloatingCombatText : MonoBehaviour
     {
+        private const int MaxInactiveInstances = 64;
+
         private DbConnection? _subscribedConnection;
+        private readonly Stack<FloatingTextAnimation> _inactive = new();
+        private Camera? _mainCamera;
+
+        internal Camera? MainCamera => _mainCamera;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
@@ -33,6 +40,9 @@ namespace Arena.Presentation
         {
             if (!ArenaRuntimeSceneGate.ShouldRunArenaRuntimeInActiveScene())
                 return;
+
+            if (_mainCamera == null || !_mainCamera.isActiveAndEnabled)
+                _mainCamera = Camera.main;
 
             var conn = NetworkManager.Instance?.Conn;
             SubscribeToConnection(conn);
@@ -120,44 +130,98 @@ namespace Arena.Presentation
             SpawnFloatingText(pos, text, color);
         }
 
-        private static void SpawnFloatingText(Vector3 position, string text, Color color, int fontSize = 28)
+        private void SpawnFloatingText(Vector3 position, string text, Color color, int fontSize = 28)
         {
-            var go = new GameObject($"FCT_{text}");
-            go.transform.position = position;
+            FloatingTextAnimation animation = _inactive.Count > 0
+                ? _inactive.Pop()
+                : CreateInstance();
+            animation.Play(position, text, color, fontSize);
+        }
+
+        private FloatingTextAnimation CreateInstance()
+        {
+            var go = new GameObject("FloatingCombatTextItem");
+            go.SetActive(false);
+            go.transform.SetParent(transform, false);
 
             var tm = go.AddComponent<TextMesh>();
-            tm.text = text;
-            tm.fontSize = fontSize;
             tm.characterSize = 0.08f;
             tm.alignment = TextAlignment.Center;
             tm.anchor = TextAnchor.MiddleCenter;
-            tm.color = color;
 
-            go.AddComponent<FloatingTextAnimation>();
+            var animation = go.AddComponent<FloatingTextAnimation>();
+            animation.Initialize(this, tm);
+            return animation;
+        }
+
+        internal void ReturnToPool(FloatingTextAnimation animation)
+        {
+            animation.Deactivate();
+            if (_inactive.Count >= MaxInactiveInstances)
+            {
+                Destroy(animation.gameObject);
+                return;
+            }
+
+            _inactive.Push(animation);
         }
     }
 
     /// <summary>
-    /// Animates a floating text: rises and fades over 1.5 seconds, then self-destructs.
+    /// Animates a floating text: rises and fades over 1.5 seconds, then returns to its owner pool.
     /// </summary>
     internal class FloatingTextAnimation : MonoBehaviour
     {
         private const float Duration = 1.5f;
         private const float RiseSpeed = 1.5f;
-        private float _age;
-        private TextMesh? _tm;
 
-        private void Awake()
+        private FloatingCombatText? _owner;
+        private TextMesh? _textMesh;
+        private Color _baseColor;
+        private float _age;
+        private bool _isPlaying;
+
+        internal void Initialize(FloatingCombatText owner, TextMesh textMesh)
         {
-            _tm = GetComponent<TextMesh>();
+            _owner = owner;
+            _textMesh = textMesh;
+        }
+
+        internal void Play(Vector3 position, string text, Color color, int fontSize)
+        {
+            _age = 0f;
+            _baseColor = color;
+            _isPlaying = true;
+            transform.SetPositionAndRotation(position, Quaternion.identity);
+
+            if (_textMesh != null)
+            {
+                _textMesh.text = text;
+                _textMesh.fontSize = fontSize;
+                _textMesh.color = color;
+            }
+
+            gameObject.SetActive(true);
+        }
+
+        internal void Deactivate()
+        {
+            _isPlaying = false;
+            gameObject.SetActive(false);
         }
 
         private void Update()
         {
+            if (!_isPlaying)
+                return;
+
             _age += Time.deltaTime;
             if (_age >= Duration)
             {
-                Destroy(gameObject);
+                if (_owner != null)
+                    _owner.ReturnToPool(this);
+                else
+                    Destroy(gameObject);
                 return;
             }
 
@@ -165,7 +229,7 @@ namespace Arena.Presentation
             transform.position += Vector3.up * (RiseSpeed * Time.deltaTime);
 
             // Billboard toward camera
-            var cam = Camera.main;
+            Camera? cam = _owner != null ? _owner.MainCamera : null;
             if (cam != null)
             {
                 transform.LookAt(cam.transform.position);
@@ -173,11 +237,11 @@ namespace Arena.Presentation
             }
 
             // Fade
-            if (_tm != null)
+            if (_textMesh != null)
             {
-                var c = _tm.color;
-                c.a = Mathf.Lerp(1f, 0f, _age / Duration);
-                _tm.color = c;
+                Color color = _baseColor;
+                color.a = Mathf.Lerp(_baseColor.a, 0f, _age / Duration);
+                _textMesh.color = color;
             }
         }
     }
