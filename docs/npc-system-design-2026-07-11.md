@@ -1,7 +1,7 @@
 # NPC System Design
 
 Date: 2026-07-11
-Status: implementation in progress; actor-generic targeting/world queries, shared melee/spell/projectile/heal/status execution, caster/support/archer exemplars, searchable catalog spawning, deterministic inventory/sweep tooling, explicit Generic-rig crowd-control fallback, the first three post-exemplar family batches, completed Lich appearance coverage, and debuff/interrupt utility actions are landed through `32bab797`, while full visual authoring remains
+Status: implementation in progress; actor-generic targeting/world queries, shared melee/spell/projectile/heal/status execution, caster/support/archer exemplars, searchable catalog spawning, deterministic inventory/sweep tooling, explicit Generic-rig crowd-control fallback, the first three post-exemplar family batches, completed Lich and Skeleton Wizard appearance coverage, and debuff/interrupt utility actions are landed through `99f54be2`, while full visual authoring remains
 
 ## Outcome
 
@@ -18,7 +18,7 @@ This is a substantial engineering project. The existing kobold implementation is
 
 ## Implementation progress (2026-07-11 handoff)
 
-The implementation has started and has been committed in coherent slices. The implementation baseline summarized here is `32bab797` (`Complete Lich NPC appearances`). Player combat semantics are an explicit guardrail: actor-generic seams were extended where required, but player damage, healing arithmetic, authorization, animation fallback, input, prediction, rewind, and action-bar behavior must not be redesigned as part of the NPC rollout.
+The implementation has started and has been committed in coherent slices. The implementation baseline summarized here is `99f54be2` (`Complete Skeleton Wizard appearances`). Player combat semantics are an explicit guardrail: actor-generic seams were extended where required, but player damage, healing arithmetic, authorization, animation fallback, input, prediction, rewind, and action-bar behavior must not be redesigned as part of the NPC rollout.
 
 ### Landed foundations
 
@@ -59,6 +59,7 @@ The implementation has started and has been committed in coherent slices. The im
 - Humanoid Scarab is the second post-exemplar family batch: one gameplay template, four exact appearances, a shared authored melee ability/brain contract, explicit Generic visual profiles, native locomotion/attack/hit/death states, reviewed sockets and near-ground renderer bounds, and frozen-pose hard-CC policy all use the existing shared pipelines. The running Unity editor imported all four new profiles successfully without requiring the project to close.
 - Slime Man is the third post-exemplar family batch: one gameplay template, four exact appearances, a shared authored large-melee ability/brain contract, explicit Generic visual profiles, native locomotion/attack/hit/death states, reviewed sockets and bounds, and frozen-pose hard-CC policy all use the existing shared pipelines. The running Unity editor imported all four profiles successfully.
 - All six Lich appearances now share the proven support gameplay template and each has an exact prefab/profile/catalog mapping. Their common Generic controller, cast phases, sockets, bounds, and native `Stun` clip are explicitly authored; the original GN profile was upgraded from an empty reaction map to the same native stun contract.
+- All three Skeleton Wizard appearances now share the proven ranged/debuff/interrupt gameplay template and each has an exact prefab/profile/catalog mapping. Their common Generic controller, cast phases, sockets, near-ground bounds, and native `Stun` clip are explicitly authored; the original GN profile was upgraded to the same native stun contract.
 - Skeleton Wizard Frostbite proves hostile debuff utility through the existing targeted shared spell/status executor. It applies the authored `SLOW` payload, status stack/refresh rules, LOS/audience gates, cast lifecycle, cooldown, events, and VFX cues without an NPC-only status path.
 - Skeleton Wizard Ice Lock proves interrupt utility independently of execution. The planner selects it only while the chosen hostile target has an authoritative shared `ActiveCast`; the action then applies an authored short `STUN` through the existing targeted spell/status path, whose actor-generic crowd-control lifecycle owns cast cancellation.
 
@@ -67,7 +68,7 @@ The implementation has started and has been committed in coherent slices. The im
 - Utility execution currently supports melee offense, hostile projectile spells, allied targeted buffs, direct allied healing, hostile debuffs, and hostile cast interrupts. Summon and mobility action execution are not implemented.
 - Basic ranged approach/hold/retreat bands are implemented. Richer kiting, unreachable-target recovery, navigation, and local avoidance remain.
 - Healing/buff support threat, taunts, assist/call-for-help, richer threat decay, and other threat-model expansion are explicitly deferred to a later date. Do not pull them into current appearance/family authoring slices.
-- The searchable browser and automated sequential sweep are implemented, but only 23 of the imported 146 appearances are currently synchronized. The remaining 123 appearance mappings, family profiles, action/brain/loot contracts, reaction policies, sockets, and bounds remain. Archer melee fallback is explicitly deferred: the imported family has only bow/load/shot presentation, no melee weapon, draw/stow animation, or verified melee attack clip.
+- The searchable browser and automated sequential sweep are implemented, but only 25 of the imported 146 appearances are currently synchronized. The remaining 121 appearance mappings, family profiles, action/brain/loot contracts, reaction policies, sockets, and bounds remain. Archer melee fallback is explicitly deferred: the imported family has only bow/load/shot presentation, no melee weapon, draw/stow animation, or verified melee attack clip.
 - Dragon Brute is not a low-risk batch despite its clean Animator/state inventory: its renderer bounds extend about 1.29 m below the prefab origin, while the current NPC presenter has no authored visual ground-offset field. It needs an in-editor ground review or an explicit shared presentation offset contract before synchronization.
 - All four acceptance archetypes now have initial gameplay paths, native presentation where authored, and passing mixed-group runtime evidence. Full acceptance still needs the 146-appearance authoring/sweep and the remaining family contracts.
 
@@ -82,7 +83,7 @@ The implementation has started and has been committed in coherent slices. The im
 - Static catalog and planner coverage pins Frostbite's `SLOW` payload, Ice Lock's `STUN` payload, deterministic Wizard action order, and the inspector's `TARGET_CASTING` rejection.
 - Shared Kobold telegraph parity: three live `NPC_KOBOLD_WARRIOR_SWORD_SLASH` CAST-to-IMPACT pairs resolved at 461.4–462.1 ms for the authored 450 ms windup, matching fixed-tick rounding.
 - Two-client mixed-exemplar acceptance: passed after the shared melee migration against isolated database `npcmixedprobe`. The observer materialized four NPCs owned by the separate websocket client; Kobold entered `Combat_1H_Attack`, Archer entered `attack`, Wizard entered `SpellCast`, and Lich entered `SpellA`. All four emitted CAST/IMPACT, Archer and Wizard emitted RELEASE plus projectile RELEASE/IMPACT, three shared projectile visuals started, four shared VFX instances spawned, and no projectile/VFX template was missing.
-- Catalog-driven appearance sweep: the original 7-visual run passed against isolated database `npcmixedprobe`. All 7 resolved their exact prefab, Animator/controller, locomotion, ready, distinct hit response, visible death state, authoritative row removal, and client entity cleanup. A 23-visual rerun including Abomination, Humanoid Scarab, Slime Man, and the completed Lich appearances is the current verification target.
+- Catalog-driven appearance sweep: the original 7-visual run passed against isolated database `npcmixedprobe`. All 7 resolved their exact prefab, Animator/controller, locomotion, ready, distinct hit response, visible death state, authoritative row removal, and client entity cleanup. A 25-visual rerun including Abomination, Humanoid Scarab, Slime Man, and the completed Lich and Skeleton Wizard appearances is the current verification target.
 - Generated C# bindings are current for the landed runtime schema.
 - The working tree still contains the user-owned `.gitignore` change; preserve it unless its owner explicitly brings it into scope. `Assets/Arena/Resources/NpcVisualCatalog.asset` is also user-owned if it changes again.
 
@@ -91,7 +92,7 @@ The implementation has started and has been committed in coherent slices. The im
 The next coherent slice should begin the remaining full-package authoring surface without inventing new combat paths:
 
 1. Use the landed inventory draft to review the next low-risk family batch, including primary Animator, root-motion, native state, clip timing, sockets, bounds, action-kit, brain, and loot behavior before adding runtime mappings.
-2. Run the sequential sweep after each accepted batch so its coverage grows from 23 toward all 146 appearances and profile/fallback counts stay explicit.
+2. Run the sequential sweep after each accepted batch so its coverage grows from 25 toward all 146 appearances and profile/fallback counts stay explicit.
 3. Keep threat-model expansion deferred while completing appearance/family authoring and shared execution coverage.
 4. Keep the Skeleton Archer purely ranged with retreat/hold behavior until suitable melee weapon and animation assets are deliberately authored.
 
