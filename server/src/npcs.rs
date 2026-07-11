@@ -1392,7 +1392,17 @@ pub(crate) fn tick_npc_combat(
                 physics.pos_z,
                 brain.perception_radius,
             );
-            select_npc_melee_action(ctx, now, &template, &state, &target, nearby)
+            let selection = select_npc_melee_action(ctx, now, &template, &state, &target, nearby);
+            record_npc_decision_debug(
+                ctx,
+                now,
+                &npc,
+                &template,
+                &selection,
+                &target,
+                target_is_pinned,
+            );
+            selection.action
         } else {
             existing_runtime.as_ref().and_then(|runtime| {
                 (!runtime.planned_ability_id.is_empty())
@@ -1429,17 +1439,6 @@ pub(crate) fn tick_npc_combat(
         } else {
             existing_runtime.expect("committed target requires existing NPC runtime")
         };
-        if decision_was_due {
-            record_npc_decision_debug(
-                ctx,
-                now,
-                &npc,
-                &template,
-                planned_action.as_ref(),
-                &target,
-                target_is_pinned,
-            );
-        }
         if movement_modifiers.is_disabled(&npc.identity) {
             upsert_npc_combat_runtime(ctx, runtime);
             continue;
@@ -1920,6 +1919,51 @@ fn return_npc_home(
     );
 }
 
+struct NpcActionSelection {
+    action: Option<MeleeAbilityCatalog>,
+    score_summary: String,
+    hard_reject_summary: String,
+}
+
+#[derive(Default)]
+struct NpcActionRejectCounts {
+    role: u32,
+    selector: u32,
+    health: u32,
+    nearby_count: u32,
+    required_status: u32,
+    forbidden_status: u32,
+    missing_ability: u32,
+    cooldown: u32,
+    distance: u32,
+}
+
+impl NpcActionRejectCounts {
+    fn summary(&self) -> String {
+        let ordered = [
+            ("ROLE", self.role),
+            ("SELECTOR", self.selector),
+            ("SELF_HEALTH", self.health),
+            ("NEARBY_COUNT", self.nearby_count),
+            ("REQUIRED_STATUS", self.required_status),
+            ("FORBIDDEN_STATUS", self.forbidden_status),
+            ("MISSING_ABILITY", self.missing_ability),
+            ("COOLDOWN", self.cooldown),
+            ("DISTANCE", self.distance),
+        ];
+        let parts: Vec<String> = ordered
+            .into_iter()
+            .filter(|(_, count)| *count > 0)
+            .map(|(reason, count)| format!("{reason}={count}"))
+            .collect();
+        if parts.is_empty() {
+            String::new()
+        } else {
+            parts.join(" ")
+        }
+    }
+}
+
 fn select_npc_melee_action(
     ctx: &ReducerContext,
     now: Timestamp,
@@ -1927,7 +1971,7 @@ fn select_npc_melee_action(
     state: &NpcState,
     target: &NpcAttackTarget,
     nearby: NpcNearbyCounts,
-) -> Option<MeleeAbilityCatalog> {
+) -> NpcActionSelection {
     let health_pct = if state.max_hp > 0 {
         state.hp.max(0) as f32 / state.max_hp as f32
     } else {
@@ -1954,53 +1998,96 @@ fn select_npc_melee_action(
         HashSet::new()
     };
 
-    template
-        .action_kit
-        .iter()
-        .filter(|entry| entry.role == "MELEE_OFFENSE")
-        .filter(|entry| {
-            matches!(
-                entry.target_selector.as_str(),
-                "CURRENT_ENEMY" | "NEAREST_ENEMY"
-            )
-        })
-        .filter(|entry| {
-            health_pct >= entry.min_self_health_pct
-                && health_pct <= entry.max_self_health_pct
-                && npc_action_count_requirements_met(
-                    entry.min_nearby_allies,
-                    entry.min_nearby_enemies,
-                    nearby,
-                )
-                && (entry.required_target_status.is_empty()
-                    || target_statuses.contains(entry.required_target_status.as_str()))
-                && (entry.forbidden_target_status.is_empty()
-                    || !target_statuses.contains(entry.forbidden_target_status.as_str()))
-        })
-        .filter_map(|entry| {
-            let action = ctx
-                .db
-                .melee_ability_catalog()
-                .ability_id()
-                .find(entry.ability_id.clone())?;
-            if is_on_named_cooldown(ctx, state.identity, action.ability_id.as_str(), now) {
-                return None;
-            }
-            let score = npc_action_distance_score(
-                entry.base_utility,
-                entry.preferred_min_distance,
-                entry.preferred_max_distance,
-                target.distance,
-                entry.movement_may_enable,
-            )?;
-            Some((score, entry.sort_order, action))
-        })
-        .max_by(|left, right| {
-            left.0
-                .total_cmp(&right.0)
-                .then_with(|| right.1.cmp(&left.1))
-        })
-        .map(|(_, _, action)| action)
+    let mut rejects = NpcActionRejectCounts::default();
+    let mut best: Option<(f32, u32, f32, MeleeAbilityCatalog)> = None;
+    for entry in &template.action_kit {
+        if entry.role != "MELEE_OFFENSE" {
+            rejects.role = rejects.role.saturating_add(1);
+            continue;
+        }
+        if !matches!(
+            entry.target_selector.as_str(),
+            "CURRENT_ENEMY" | "NEAREST_ENEMY"
+        ) {
+            rejects.selector = rejects.selector.saturating_add(1);
+            continue;
+        }
+        if health_pct < entry.min_self_health_pct || health_pct > entry.max_self_health_pct {
+            rejects.health = rejects.health.saturating_add(1);
+            continue;
+        }
+        if !npc_action_count_requirements_met(
+            entry.min_nearby_allies,
+            entry.min_nearby_enemies,
+            nearby,
+        ) {
+            rejects.nearby_count = rejects.nearby_count.saturating_add(1);
+            continue;
+        }
+        if !entry.required_target_status.is_empty()
+            && !target_statuses.contains(entry.required_target_status.as_str())
+        {
+            rejects.required_status = rejects.required_status.saturating_add(1);
+            continue;
+        }
+        if !entry.forbidden_target_status.is_empty()
+            && target_statuses.contains(entry.forbidden_target_status.as_str())
+        {
+            rejects.forbidden_status = rejects.forbidden_status.saturating_add(1);
+            continue;
+        }
+        let Some(action) = ctx
+            .db
+            .melee_ability_catalog()
+            .ability_id()
+            .find(entry.ability_id.clone())
+        else {
+            rejects.missing_ability = rejects.missing_ability.saturating_add(1);
+            continue;
+        };
+        if is_on_named_cooldown(ctx, state.identity, action.ability_id.as_str(), now) {
+            rejects.cooldown = rejects.cooldown.saturating_add(1);
+            continue;
+        }
+        let Some(score) = npc_action_distance_score(
+            entry.base_utility,
+            entry.preferred_min_distance,
+            entry.preferred_max_distance,
+            target.distance,
+            entry.movement_may_enable,
+        ) else {
+            rejects.distance = rejects.distance.saturating_add(1);
+            continue;
+        };
+        let replace = best.as_ref().is_none_or(|(best_score, best_order, _, _)| {
+            score.total_cmp(best_score).is_gt()
+                || (score.total_cmp(best_score).is_eq() && entry.sort_order < *best_order)
+        });
+        if replace {
+            best = Some((score, entry.sort_order, entry.base_utility, action));
+        }
+    }
+
+    let hard_reject_summary = rejects.summary();
+    let Some((score, _, base_utility, action)) = best else {
+        return NpcActionSelection {
+            action: None,
+            score_summary: format!("distance={:.3}", target.distance),
+            hard_reject_summary: if hard_reject_summary.is_empty() {
+                "NO_ACTIONS_AUTHORED".to_string()
+            } else {
+                hard_reject_summary
+            },
+        };
+    };
+    NpcActionSelection {
+        action: Some(action),
+        score_summary: format!(
+            "utility={score:.3} base={base_utility:.3} distance={:.3}",
+            target.distance
+        ),
+        hard_reject_summary,
+    }
 }
 
 fn npc_action_count_requirements_met(
@@ -2037,18 +2124,13 @@ fn record_npc_decision_debug(
     now: Timestamp,
     npc: &NpcInstance,
     template: &NpcTemplate,
-    action: Option<&MeleeAbilityCatalog>,
+    selection: &NpcActionSelection,
     target: &NpcAttackTarget,
     target_was_pinned: bool,
 ) {
     if !npc_ai_debug_enabled() {
         return;
     }
-    let base_utility = template
-        .action_kit
-        .iter()
-        .find(|entry| action.is_some_and(|action| entry.ability_id == action.ability_id))
-        .map_or(0.0, |entry| entry.base_utility);
     let threat_summary = if target_was_pinned {
         "PINNED_TARGET".to_string()
     } else if let Some(brain) = npc_brain_profile(template.brain_profile_id.as_str()) {
@@ -2076,19 +2158,14 @@ fn record_npc_decision_debug(
             .as_ref()
             .map_or(1, |row| row.decision_sequence.saturating_add(1)),
         considered_action_count: template.action_kit.len() as u32,
-        chosen_ability_id: action.map_or_else(String::new, |action| action.ability_id.clone()),
+        chosen_ability_id: selection
+            .action
+            .as_ref()
+            .map_or_else(String::new, |action| action.ability_id.clone()),
         chosen_target: target.identity,
         target_was_pinned,
-        score_summary: if action.is_some() {
-            format!("base={base_utility:.3} distance={:.3}", target.distance)
-        } else {
-            format!("distance={:.3}", target.distance)
-        },
-        hard_reject_summary: if action.is_some() {
-            String::new()
-        } else {
-            "NO_ELIGIBLE_ACTION".to_string()
-        },
+        score_summary: selection.score_summary.clone(),
+        hard_reject_summary: selection.hard_reject_summary.clone(),
         threat_summary,
         updated_at: now,
     };
