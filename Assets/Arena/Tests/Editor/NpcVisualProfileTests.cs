@@ -14,6 +14,11 @@ namespace Arena.Tests.Editor
     {
         [TestCase("Assets/Arena/Content/NPC/VisualProfiles/SkeletonWizard_Gn_VisualProfile.asset")]
         [TestCase("Assets/Arena/Content/NPC/VisualProfiles/Lich_Gn_VisualProfile.asset")]
+        [TestCase("Assets/Arena/Content/NPC/VisualProfiles/Lich_Cn_VisualProfile.asset")]
+        [TestCase("Assets/Arena/Content/NPC/VisualProfiles/Lich_Gr_VisualProfile.asset")]
+        [TestCase("Assets/Arena/Content/NPC/VisualProfiles/Lich_Or_VisualProfile.asset")]
+        [TestCase("Assets/Arena/Content/NPC/VisualProfiles/Lich_Pe_VisualProfile.asset")]
+        [TestCase("Assets/Arena/Content/NPC/VisualProfiles/Lich_Rd_VisualProfile.asset")]
         [TestCase("Assets/Arena/Content/NPC/VisualProfiles/SkeletonArcher_Gn_VisualProfile.asset")]
         [TestCase("Assets/Arena/Content/NPC/VisualProfiles/Abomination_Gn_VisualProfile.asset")]
         [TestCase("Assets/Arena/Content/NPC/VisualProfiles/Abomination_Gr_VisualProfile.asset")]
@@ -62,6 +67,11 @@ namespace Arena.Tests.Editor
             MethodInfo tryGetEntry = catalogType.GetMethod("TryGetEntry")!;
             AssertProfile(tryGetEntry, catalog, "SKELETON_WIZARD_GN");
             AssertProfile(tryGetEntry, catalog, "LICH_GN");
+            AssertProfile(tryGetEntry, catalog, "LICH_CN");
+            AssertProfile(tryGetEntry, catalog, "LICH_GR");
+            AssertProfile(tryGetEntry, catalog, "LICH_OR");
+            AssertProfile(tryGetEntry, catalog, "LICH_PE");
+            AssertProfile(tryGetEntry, catalog, "LICH_RD");
             AssertProfile(tryGetEntry, catalog, "SKELETON_ARCHER_GN");
             AssertProfile(tryGetEntry, catalog, "HUMANOID_SCARAB_BL");
             AssertProfile(tryGetEntry, catalog, "HUMANOID_SCARAB_GN");

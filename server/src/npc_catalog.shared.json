@@ -127,7 +127,7 @@
       "template_id": "LICH_SUPPORT",
       "species_id": "LICH",
       "display_name": "Lich Support",
-      "visual_ids": ["LICH_GN"],
+      "visual_ids": ["LICH_CN", "LICH_GN", "LICH_GR", "LICH_OR", "LICH_PE", "LICH_RD"],
       "brain_profile_id": "BASIC_HOSTILE_CASTER",
       "resource_policy": "FREE_ACTIONS_ONLY",
       "action_kit": [

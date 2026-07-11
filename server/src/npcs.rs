@@ -3223,6 +3223,7 @@ mod tests {
         assert_eq!(wizard.action_kit[2].role, "INTERRUPT");
         assert_eq!(wizard.action_kit[2].target_selector, "CURRENT_ENEMY");
         let lich = npc_template("LICH_SUPPORT").expect("support exemplar should be authored");
+        assert_eq!(lich.visual_ids.len(), 6);
         assert_eq!(lich.action_kit[0].role, "HEAL");
         assert_eq!(lich.action_kit[0].target_selector, "LOWEST_HEALTH_ALLY");
         assert!(lich.action_kit[0].base_utility > lich.action_kit[1].base_utility);
