@@ -8,6 +8,7 @@ use spacetimedb::{reducer, table, Identity, ReducerContext, Table, Timestamp};
 use crate::arena::open_world_scene_name_for_identity;
 use crate::arena::{resolve_player_world_context, world_contexts_share, ResolvedWorldContext};
 use crate::combat::actor_snapshot::CombatActorSnapshotSet;
+use crate::combat::scene_query::{has_line_of_sight, is_direction_within_facing_arc};
 #[allow(unused_imports)]
 use crate::combat::status_effect as _;
 use crate::combat::{
@@ -24,7 +25,9 @@ use crate::inventory::{clear_loot_for_anchor, corpse_loot_has_items};
 use crate::movement::FIXED_TICK_SECONDS;
 use crate::practice::is_training_instance;
 use crate::progression::MeleeAbilityCatalog;
-use crate::relations::{can_harm, combat_relation, CombatRelation};
+use crate::relations::{
+    can_harm, combat_relation, target_audience_allows, CombatRelation, TargetAudience,
+};
 use crate::spells::{
     clear_actor_cooldowns, is_on_named_cooldown, stamp_named_cooldown_for_duration,
 };
@@ -2511,6 +2514,41 @@ fn begin_npc_melee_swing(
     {
         return false;
     }
+    let Some(audience) = TargetAudience::from_wire(action.target_audience.as_str()) else {
+        return false;
+    };
+    if !target_audience_allows(ctx, npc.identity, target.identity, audience)
+        || target.distance > npc_attack_reach(action.range, target)
+        || !is_direction_within_facing_arc(
+            physics.yaw,
+            target.dir_x,
+            target.dir_z,
+            std::f32::consts::PI,
+            0.0,
+        )
+    {
+        return false;
+    }
+    if action.requires_target_los {
+        let actors = CombatActorSnapshotSet::collect(ctx);
+        let Some(caster) = actors
+            .index_by_id()
+            .get(&npc.identity)
+            .and_then(|index| actors.as_slice().get(*index))
+        else {
+            return false;
+        };
+        let Some(target_snapshot) = actors
+            .index_by_id()
+            .get(&target.identity)
+            .and_then(|index| actors.as_slice().get(*index))
+        else {
+            return false;
+        };
+        if !has_line_of_sight(ctx, caster, target_snapshot) {
+            return false;
+        }
+    }
     let action_instance_id = format!("npc:{}:{}", npc.identity.to_hex(), timestamp_to_micros(now));
     emit_npc_combat_event(
         ctx,
@@ -2632,8 +2670,43 @@ fn resolve_npc_pending_swing(
     let Some(target) = resolve_npc_swing_target(ctx, swing.identity, &physics, swing.target) else {
         return;
     };
+    let Some(audience) = TargetAudience::from_wire(action.target_audience.as_str()) else {
+        return;
+    };
+    if !target_audience_allows(ctx, swing.identity, target.identity, audience) {
+        return;
+    }
     if target.distance > npc_attack_reach(action.range, &target) {
         return;
+    }
+    if !is_direction_within_facing_arc(
+        physics.yaw,
+        target.dir_x,
+        target.dir_z,
+        std::f32::consts::PI,
+        0.0,
+    ) {
+        return;
+    }
+    if action.requires_target_los {
+        let actors = CombatActorSnapshotSet::collect(ctx);
+        let Some(caster) = actors
+            .index_by_id()
+            .get(&swing.identity)
+            .and_then(|index| actors.as_slice().get(*index))
+        else {
+            return;
+        };
+        let Some(target_snapshot) = actors
+            .index_by_id()
+            .get(&target.identity)
+            .and_then(|index| actors.as_slice().get(*index))
+        else {
+            return;
+        };
+        if !has_line_of_sight(ctx, caster, target_snapshot) {
+            return;
+        }
     }
 
     if let Some(defense_event_type) = resolve_npc_melee_defense(ctx, now, &physics, &target) {
@@ -2695,17 +2768,29 @@ fn resolve_npc_pending_swing(
     );
 }
 
-/// Present-time target state for a resolving swing: same eligibility rules as
-/// acquisition (alive, non-dummy, shared world, harmable), but looked up
-/// directly for the single stored target instead of scanning candidates.
+/// Present-time target state for a resolving swing: actor-generic current pose,
+/// vitality, world, and relation checks for the single committed target.
 fn resolve_npc_swing_target(
     ctx: &ReducerContext,
     npc_identity: Identity,
     npc_physics: &NpcPhysics,
     target_identity: Identity,
 ) -> Option<NpcAttackTarget> {
-    let state = ctx.db.player_state().player_id().find(target_identity)?;
-    if !state.alive || state.is_dummy {
+    if ctx
+        .db
+        .player_state()
+        .player_id()
+        .find(target_identity)
+        .is_some_and(|state| state.is_dummy)
+    {
+        return None;
+    }
+    let actors = CombatActorSnapshotSet::collect(ctx);
+    let target_snapshot = actors
+        .index_by_id()
+        .get(&target_identity)
+        .and_then(|index| actors.as_slice().get(*index))?;
+    if !target_snapshot.alive {
         return None;
     }
     let npc_context = resolve_player_world_context(ctx, npc_identity)?;
@@ -2716,10 +2801,8 @@ fn resolve_npc_swing_target(
     if !can_harm(ctx, npc_identity, target_identity) {
         return None;
     }
-    let physics = ctx.db.player_physics().identity().find(target_identity)?;
-
-    let dx = physics.pos_x - npc_physics.pos_x;
-    let dz = physics.pos_z - npc_physics.pos_z;
+    let dx = target_snapshot.pos_x - npc_physics.pos_x;
+    let dz = target_snapshot.pos_z - npc_physics.pos_z;
     let distance = (dx * dx + dz * dz).sqrt();
     let (dir_x, dir_z) = if distance > 0.001 {
         (dx / distance, dz / distance)
@@ -2728,11 +2811,11 @@ fn resolve_npc_swing_target(
     };
     Some(NpcAttackTarget {
         identity: target_identity,
-        pos_x: physics.pos_x,
-        pos_y: physics.pos_y,
-        pos_z: physics.pos_z,
-        hit_radius: state.hit_radius,
-        hit_height: state.hit_height,
+        pos_x: target_snapshot.pos_x,
+        pos_y: target_snapshot.pos_y,
+        pos_z: target_snapshot.pos_z,
+        hit_radius: target_snapshot.hit_radius,
+        hit_height: target_snapshot.hit_height,
         distance,
         dir_x,
         dir_z,
