@@ -100,6 +100,9 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Col<NpcInstance, string> WorldKind { get; }
         public global::SpacetimeDB.Col<NpcInstance, ulong> InstanceId { get; }
         public global::SpacetimeDB.Col<NpcInstance, string> OpenWorldSceneName { get; }
+        public global::SpacetimeDB.Col<NpcInstance, float> HomeX { get; }
+        public global::SpacetimeDB.Col<NpcInstance, float> HomeY { get; }
+        public global::SpacetimeDB.Col<NpcInstance, float> HomeZ { get; }
         public global::SpacetimeDB.Col<NpcInstance, SpacetimeDB.Timestamp> SpawnedAt { get; }
 
         public NpcInstanceCols(string tableName)
@@ -115,6 +118,9 @@ namespace SpacetimeDB.Types
             WorldKind = new global::SpacetimeDB.Col<NpcInstance, string>(tableName, "world_kind");
             InstanceId = new global::SpacetimeDB.Col<NpcInstance, ulong>(tableName, "instance_id");
             OpenWorldSceneName = new global::SpacetimeDB.Col<NpcInstance, string>(tableName, "open_world_scene_name");
+            HomeX = new global::SpacetimeDB.Col<NpcInstance, float>(tableName, "home_x");
+            HomeY = new global::SpacetimeDB.Col<NpcInstance, float>(tableName, "home_y");
+            HomeZ = new global::SpacetimeDB.Col<NpcInstance, float>(tableName, "home_z");
             SpawnedAt = new global::SpacetimeDB.Col<NpcInstance, SpacetimeDB.Timestamp>(tableName, "spawned_at");
         }
     }

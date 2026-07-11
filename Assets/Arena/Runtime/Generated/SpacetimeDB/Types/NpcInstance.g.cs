@@ -35,6 +35,12 @@ namespace SpacetimeDB.Types
         public ulong? InstanceId;
         [DataMember(Name = "open_world_scene_name")]
         public string OpenWorldSceneName;
+        [DataMember(Name = "home_x")]
+        public float HomeX;
+        [DataMember(Name = "home_y")]
+        public float HomeY;
+        [DataMember(Name = "home_z")]
+        public float HomeZ;
         [DataMember(Name = "spawned_at")]
         public SpacetimeDB.Timestamp SpawnedAt;
 
@@ -50,6 +56,9 @@ namespace SpacetimeDB.Types
             string WorldKind,
             ulong? InstanceId,
             string OpenWorldSceneName,
+            float HomeX,
+            float HomeY,
+            float HomeZ,
             SpacetimeDB.Timestamp SpawnedAt
         )
         {
@@ -64,6 +73,9 @@ namespace SpacetimeDB.Types
             this.WorldKind = WorldKind;
             this.InstanceId = InstanceId;
             this.OpenWorldSceneName = OpenWorldSceneName;
+            this.HomeX = HomeX;
+            this.HomeY = HomeY;
+            this.HomeZ = HomeZ;
             this.SpawnedAt = SpawnedAt;
         }
 

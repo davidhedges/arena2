@@ -4686,6 +4686,9 @@ mod tests {
             world_kind: world_kind.to_string(),
             instance_id,
             open_world_scene_name: scene.to_string(),
+            home_x: 0.0,
+            home_y: 0.0,
+            home_z: 0.0,
             spawned_at: Timestamp::UNIX_EPOCH,
         }
     }

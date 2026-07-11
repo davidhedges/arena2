@@ -168,6 +168,9 @@ pub struct NpcInstance {
     pub world_kind: String,
     pub instance_id: Option<u64>,
     pub open_world_scene_name: String,
+    pub home_x: f32,
+    pub home_y: f32,
+    pub home_z: f32,
     pub spawned_at: Timestamp,
 }
 
@@ -982,6 +985,9 @@ pub fn spawn_npc(
         },
         instance_id,
         open_world_scene_name,
+        home_x: spawn_x,
+        home_y: owner_physics.pos_y,
+        home_z: spawn_z,
         spawned_at: ctx.timestamp,
     });
 
