@@ -191,6 +191,35 @@ namespace Arena.Presentation
                 case CombatAnimationCategory.MeleeSkill:
                     PlayAttack();
                     break;
+                case CombatAnimationCategory.Spell:
+                    PlaySpell(request.SpellPhase);
+                    break;
+            }
+        }
+
+        private void PlaySpell(CombatSpellAnimationPhase phase)
+        {
+            if (_dead || HasHardCrowdControl || _visualProfile == null)
+                return;
+
+            List<string> states = phase switch
+            {
+                CombatSpellAnimationPhase.HoldStart => _visualProfile.Animations.spellCastStart,
+                CombatSpellAnimationPhase.Cancel => _visualProfile.Animations.spellCancel,
+                _ => _visualProfile.Animations.spellRelease,
+            };
+            if (states.Count == 0)
+            {
+                if (phase != CombatSpellAnimationPhase.HoldStart)
+                    TryCrossFade(ReadyStateCandidatesForTemplate(), out _);
+                return;
+            }
+            if (TryCrossFade(ProfileCandidates(states, Array.Empty<string>()), out string? stateName)
+                && stateName != null)
+            {
+                _returnToIdleAt = phase == CombatSpellAnimationPhase.HoldStart
+                    ? -1f
+                    : Time.time + ResolveClipLength(stateName, DefaultHitReturnDelay) + 0.05f;
             }
         }
 

@@ -617,6 +617,14 @@ namespace Arena.Entity
 
         public void OnActiveCastInsert(EventContext ctx, ActiveCast row)
         {
+            if (TryGetLiveNpc(row.Caster, out var npc))
+            {
+                npc.RequestCombatAnimation(CombatAnimationRequest.AuthoritativeSpell(
+                    row.Kind,
+                    row.StartedAt.MicrosecondsSinceUnixEpoch / 1000L,
+                    CombatSpellAnimationPhase.HoldStart));
+                return;
+            }
             if (TryGetCastTimeMs(row.Kind, out ulong castTimeMs)
                 && TryGetLivePlayer(row.Caster, out var entity)
                 && ShouldForwardSpellActiveCast(entity, row.Kind, castTimeMs))
@@ -1302,13 +1310,33 @@ namespace Arena.Entity
                 return;
             }
 
-            if (row.EventType == CombatEventTypes.Cast
-                && string.Equals(row.SourceKind, CombatEventSources.NpcMelee, System.StringComparison.Ordinal)
-                && TryGetLiveNpc(row.Caster, out var npcCaster))
+            if (TryGetLiveNpc(row.Caster, out var npcCaster))
             {
-                npcCaster.RequestCombatAnimation(
-                    CombatAnimationRequestTranslator.BuildActorNeutralAuthoritativeFromCombatEvent(row));
-                return;
+                bool npcMeleeCast = row.EventType == CombatEventTypes.Cast
+                    && string.Equals(row.SourceKind, CombatEventSources.NpcMelee, System.StringComparison.Ordinal);
+                bool npcInstantSpellCast = row.EventType == CombatEventTypes.Cast
+                    && string.Equals(row.SourceKind, CombatEventSources.Spell, System.StringComparison.Ordinal)
+                    && !IsCastTimeSpellEvent(row);
+                bool npcSpellRelease = row.EventType == CombatEventTypes.Release
+                    && string.Equals(row.SourceKind, CombatEventSources.Spell, System.StringComparison.Ordinal);
+                bool npcSpellCancel = row.EventType == CombatEventTypes.Fizzle
+                    && string.Equals(row.SourceKind, CombatEventSources.Spell, System.StringComparison.Ordinal);
+                if (npcMeleeCast || npcInstantSpellCast)
+                {
+                    npcCaster.RequestCombatAnimation(
+                        CombatAnimationRequestTranslator.BuildActorNeutralAuthoritativeFromCombatEvent(row));
+                    return;
+                }
+                if (npcSpellRelease || npcSpellCancel)
+                {
+                    npcCaster.RequestCombatAnimation(CombatAnimationRequest.AuthoritativeSpell(
+                        row.ActionKind,
+                        row.CreatedAt.MicrosecondsSinceUnixEpoch / 1000L,
+                        npcSpellCancel ? CombatSpellAnimationPhase.Cancel : CombatSpellAnimationPhase.Release,
+                        row.SourceKind,
+                        new Vector3(row.PointX, row.PointY, row.PointZ)));
+                    return;
+                }
             }
 
             if (row.EventType != CombatEventTypes.Cast)

@@ -103,6 +103,9 @@ namespace Arena.Editor
                 ValidateRoleStates(errors, "walk", profile.Animations.walk, states);
                 ValidateRoleStates(errors, "run", profile.Animations.run, states, required: false);
                 ValidateRoleStates(errors, "basic attack", profile.Animations.basicAttack, states);
+                ValidateRoleStates(errors, "spell cast start", profile.Animations.spellCastStart, states, required: false);
+                ValidateRoleStates(errors, "spell release", profile.Animations.spellRelease, states, required: false);
+                ValidateRoleStates(errors, "spell cancel", profile.Animations.spellCancel, states, required: false);
                 ValidateRoleStates(errors, "hit", profile.Animations.hit, states, required: false);
                 ValidateRoleStates(errors, "death", profile.Animations.death, states);
             }

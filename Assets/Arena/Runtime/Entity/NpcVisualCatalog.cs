@@ -38,6 +38,9 @@ namespace Arena.Entity
         public List<string> walk = new() { "Walk_Forward" };
         public List<string> run = new() { "Run_Forward" };
         public List<string> basicAttack = new();
+        public List<string> spellCastStart = new();
+        public List<string> spellRelease = new();
+        public List<string> spellCancel = new();
         public List<string> hit = new();
         public List<string> death = new() { "Death" };
     }
