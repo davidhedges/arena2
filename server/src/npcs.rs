@@ -20,6 +20,7 @@ use crate::defense::{
 use crate::inventory::{clear_loot_for_anchor, corpse_loot_has_items};
 use crate::movement::FIXED_TICK_SECONDS;
 use crate::practice::is_training_instance;
+use crate::progression::MeleeAbilityCatalog;
 use crate::relations::can_harm;
 use crate::world_collision::{
     resolve_world_horizontal_sweep_collision_y_with_layout_for_scene,
@@ -48,6 +49,8 @@ use crate::npcs::npc_state as _;
 use crate::player_physics::player_physics as _;
 #[allow(unused_imports)]
 use crate::player_state::player_state as _;
+#[allow(unused_imports)]
+use crate::progression::melee_ability_catalog as _;
 
 pub(crate) const NPC_FACTION_HOSTILE: &str = "HOSTILE";
 pub(crate) const NPC_FACTION_NEUTRAL: &str = "NEUTRAL";
@@ -187,6 +190,7 @@ pub struct NpcPendingSwing {
     #[primary_key]
     pub identity: Identity,
     pub target: Identity,
+    pub ability_id: String,
     pub action_instance_id: String,
     pub cast_at: Timestamp,
     pub resolve_at: Timestamp,
@@ -942,6 +946,10 @@ pub(crate) fn tick_npc_combat(
             clear_npc_combat_runtime(ctx, npc.identity);
             continue;
         };
+        let Some(action) = npc_primary_melee_action(ctx, &template) else {
+            clear_npc_combat_runtime(ctx, npc.identity);
+            continue;
+        };
         let Some(state) = ctx.db.npc_state().identity().find(npc.identity) else {
             clear_npc_combat_runtime(ctx, npc.identity);
             continue;
@@ -986,7 +994,7 @@ pub(crate) fn tick_npc_combat(
             continue;
         }
 
-        if target.distance > npc_attack_reach(&template, &target) {
+        if target.distance > npc_attack_reach(action.range, &target) {
             let move_speed_multiplier = movement_modifiers.move_speed_multiplier(&npc.identity, 0);
             if move_speed_multiplier > 0.0 {
                 chase_npc_toward_target(
@@ -995,6 +1003,7 @@ pub(crate) fn tick_npc_combat(
                     &npc,
                     &physics,
                     &template,
+                    &action,
                     &target,
                     move_speed_multiplier,
                 );
@@ -1018,8 +1027,8 @@ pub(crate) fn tick_npc_combat(
             continue;
         }
 
-        begin_npc_melee_swing(ctx, now, &npc, &physics, &template, &target);
-        runtime.next_attack_at = now + Duration::from_millis(template.attack_cadence_ms);
+        begin_npc_melee_swing(ctx, now, &npc, &physics, &template, &action, &target);
+        runtime.next_attack_at = now + Duration::from_millis(action.cooldown_ms);
         runtime.next_attack_at_micros = timestamp_to_micros(runtime.next_attack_at);
         upsert_npc_combat_runtime(ctx, runtime);
     }
@@ -1141,8 +1150,20 @@ fn acquire_npc_attack_target(
     best
 }
 
-fn npc_attack_reach(template: &NpcTemplate, target: &NpcAttackTarget) -> f32 {
-    template.attack_range + target.hit_radius
+fn npc_attack_reach(range: f32, target: &NpcAttackTarget) -> f32 {
+    range + target.hit_radius
+}
+
+fn npc_primary_melee_action(
+    ctx: &ReducerContext,
+    template: &NpcTemplate,
+) -> Option<MeleeAbilityCatalog> {
+    template.action_kit.iter().find_map(|entry| {
+        ctx.db
+            .melee_ability_catalog()
+            .ability_id()
+            .find(entry.ability_id.clone())
+    })
 }
 
 fn chase_npc_toward_target(
@@ -1151,11 +1172,12 @@ fn chase_npc_toward_target(
     npc: &NpcInstance,
     physics: &NpcPhysics,
     template: &NpcTemplate,
+    action: &MeleeAbilityCatalog,
     target: &NpcAttackTarget,
     move_speed_multiplier: f32,
 ) -> NpcPhysics {
     let desired_yaw = yaw_for_direction(target.dir_x, target.dir_z);
-    let stop_distance = (npc_attack_reach(template, target) - NPC_CHASE_STOP_EPSILON).max(0.0);
+    let stop_distance = (npc_attack_reach(action.range, target) - NPC_CHASE_STOP_EPSILON).max(0.0);
     let remaining = (target.distance - stop_distance).max(0.0);
     let travel = (template.move_speed * move_speed_multiplier * FIXED_TICK_SECONDS).min(remaining);
     if travel <= f32::EPSILON {
@@ -1289,6 +1311,7 @@ fn begin_npc_melee_swing(
     npc: &NpcInstance,
     physics: &NpcPhysics,
     template: &NpcTemplate,
+    action: &MeleeAbilityCatalog,
     target: &NpcAttackTarget,
 ) {
     let action_instance_id = format!("npc:{}:{}", npc.identity.to_hex(), timestamp_to_micros(now));
@@ -1299,6 +1322,8 @@ fn begin_npc_melee_swing(
         physics,
         target,
         action_instance_id.as_str(),
+        action.ability_id.as_str(),
+        action.range,
         COMBAT_EVENT_CAST,
         0,
         COMBAT_SCALAR_MELEE_RELEASE_DELAY_SECONDS,
@@ -1309,6 +1334,7 @@ fn begin_npc_melee_swing(
     let row = NpcPendingSwing {
         identity: npc.identity,
         target: target.identity,
+        ability_id: action.ability_id.clone(),
         action_instance_id,
         cast_at: now,
         resolve_at,
@@ -1371,6 +1397,8 @@ pub(crate) fn interrupt_npc_actions_for_crowd_control(
         &physics,
         &target,
         swing.action_instance_id.as_str(),
+        swing.ability_id.as_str(),
+        0.0,
         COMBAT_EVENT_FIZZLE,
         0,
         COMBAT_SCALAR_NONE,
@@ -1392,7 +1420,12 @@ fn resolve_npc_pending_swing(
     let Some(npc) = ctx.db.npc_instance().identity().find(swing.identity) else {
         return;
     };
-    let Some(template) = npc_template(npc.template_id.as_str()) else {
+    let Some(action) = ctx
+        .db
+        .melee_ability_catalog()
+        .ability_id()
+        .find(swing.ability_id.clone())
+    else {
         return;
     };
     let Some(state) = ctx.db.npc_state().identity().find(swing.identity) else {
@@ -1411,7 +1444,7 @@ fn resolve_npc_pending_swing(
     let Some(target) = resolve_npc_swing_target(ctx, swing.identity, &physics, swing.target) else {
         return;
     };
-    if target.distance > npc_attack_reach(&template, &target) {
+    if target.distance > npc_attack_reach(action.range, &target) {
         return;
     }
 
@@ -1430,6 +1463,8 @@ fn resolve_npc_pending_swing(
             &physics,
             &target,
             swing.action_instance_id.as_str(),
+            action.ability_id.as_str(),
+            action.range,
             defense_event_type,
             0,
             COMBAT_SCALAR_NONE,
@@ -1445,21 +1480,23 @@ fn resolve_npc_pending_swing(
         &physics,
         &target,
         swing.action_instance_id.as_str(),
+        action.ability_id.as_str(),
+        action.range,
         COMBAT_EVENT_IMPACT,
-        template.attack_damage,
+        action.base_damage,
         COMBAT_SCALAR_NONE,
         0.0,
     );
     queue_effects(
         ctx,
         vec![EffectPacket::Damage {
-            amount: template.attack_damage,
+            amount: action.base_damage,
             damage_type: crate::combat::DamageType::Physical,
             source: npc.identity,
             target: target.identity,
             spell_id: swing.action_instance_id.clone(),
             delivery: DamageDelivery::Direct,
-            direct_action_key: NPC_MELEE_ACTION_KIND.to_string(),
+            direct_action_key: action.ability_id.clone(),
             source_kind: DAMAGE_SOURCE_KIND_MELEE.to_string(),
         }],
     );
@@ -1554,6 +1591,8 @@ fn emit_npc_combat_event(
     physics: &NpcPhysics,
     target: &NpcAttackTarget,
     action_instance_id: &str,
+    ability_id: &str,
+    max_distance: f32,
     event_type: &str,
     damage: i32,
     scalar_kind: &str,
@@ -1563,7 +1602,7 @@ fn emit_npc_combat_event(
         event_id: 0,
         action_instance_id: action_instance_id.to_string(),
         action_kind: NPC_MELEE_ACTION_KIND.to_string(),
-        ability_id: npc.template_id.clone(),
+        ability_id: ability_id.to_string(),
         hit_index: 0,
         event_type: event_type.to_string(),
         source_kind: NPC_MELEE_SOURCE_KIND.to_string(),
@@ -1576,7 +1615,7 @@ fn emit_npc_combat_event(
         dir_y: 0.0,
         dir_z: target.dir_z,
         speed: 0.0,
-        max_distance: template_attack_range_for_event(npc.template_id.as_str()),
+        max_distance,
         scalar_kind: scalar_kind.to_string(),
         scalar_value,
         sequence_kind: COMBAT_SEQUENCE_NONE.to_string(),
@@ -1592,12 +1631,6 @@ fn emit_npc_combat_event(
         metadata_key: String::new(),
         metadata_value: String::new(),
     });
-}
-
-fn template_attack_range_for_event(template_id: &str) -> f32 {
-    npc_template(template_id)
-        .map(|template| template.attack_range)
-        .unwrap_or(0.0)
 }
 
 fn despawn_npc_identity(ctx: &ReducerContext, identity: Identity) {
