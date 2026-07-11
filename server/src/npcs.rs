@@ -219,10 +219,7 @@ pub(crate) struct NpcTemplate {
     pub hit_radius: f32,
     pub hit_height: f32,
     pub aggro_radius: f32,
-    pub attack_range: f32,
     pub move_speed: f32,
-    pub attack_damage: i32,
-    pub attack_cadence_ms: u64,
     /// Authored telegraph (S3): delay between the CAST event (swing start,
     /// what the victim's screen shows) and damage resolution. Must stay well
     /// above the victim's render delay (~100-166 ms) or the telegraph reads
@@ -365,9 +362,6 @@ pub(crate) fn npc_template(template_id: &str) -> Option<NpcTemplate> {
         .find(|row| row.template_id == normalized)?
         .clone();
 
-    if npc_attacks_are_harmless() {
-        template.attack_damage = 0;
-    }
     if npc_is_tanky() {
         template.max_hp = 1_000_000;
     }
@@ -516,12 +510,8 @@ fn parse_npc_catalog(json: &str) -> Result<NpcCatalogDocument, String> {
             || template.hit_height <= 0.0
             || !template.aggro_radius.is_finite()
             || template.aggro_radius <= 0.0
-            || !template.attack_range.is_finite()
-            || template.attack_range <= 0.0
             || !template.move_speed.is_finite()
             || template.move_speed <= 0.0
-            || template.attack_damage < 0
-            || template.attack_cadence_ms == 0
             || template.attack_windup_ms == 0
         {
             return Err(format!(
@@ -1473,6 +1463,11 @@ fn resolve_npc_pending_swing(
         return;
     }
 
+    let damage = if npc_attacks_are_harmless() {
+        0
+    } else {
+        action.base_damage
+    };
     emit_npc_combat_event(
         ctx,
         now,
@@ -1483,14 +1478,14 @@ fn resolve_npc_pending_swing(
         action.ability_id.as_str(),
         action.range,
         COMBAT_EVENT_IMPACT,
-        action.base_damage,
+        damage,
         COMBAT_SCALAR_NONE,
         0.0,
     );
     queue_effects(
         ctx,
         vec![EffectPacket::Damage {
-            amount: action.base_damage,
+            amount: damage,
             damage_type: crate::combat::DamageType::Physical,
             source: npc.identity,
             target: target.identity,
@@ -1811,15 +1806,13 @@ mod tests {
                 {
                     "template_id": "ONE", "species_id": "TEST", "display_name": "One",
                     "visual_ids": ["SHARED"], "action_kit": [], "max_hp": 1, "hit_radius": 1.0,
-                    "hit_height": 1.0, "aggro_radius": 1.0, "attack_range": 1.0,
-                    "move_speed": 1.0, "attack_damage": 0, "attack_cadence_ms": 1,
+                    "hit_height": 1.0, "aggro_radius": 1.0, "move_speed": 1.0,
                     "attack_windup_ms": 1
                 },
                 {
                     "template_id": "TWO", "species_id": "TEST", "display_name": "Two",
                     "visual_ids": ["SHARED"], "action_kit": [], "max_hp": 1, "hit_radius": 1.0,
-                    "hit_height": 1.0, "aggro_radius": 1.0, "attack_range": 1.0,
-                    "move_speed": 1.0, "attack_damage": 0, "attack_cadence_ms": 1,
+                    "hit_height": 1.0, "aggro_radius": 1.0, "move_speed": 1.0,
                     "attack_windup_ms": 1
                 }
             ]

@@ -12,10 +12,7 @@
       "hit_radius": 0.45,
       "hit_height": 1.35,
       "aggro_radius": 8.0,
-      "attack_range": 1.9,
       "move_speed": 7.0,
-      "attack_damage": 8,
-      "attack_cadence_ms": 1800,
       "attack_windup_ms": 450
     },
     {
@@ -30,10 +27,7 @@
       "hit_radius": 0.45,
       "hit_height": 1.35,
       "aggro_radius": 9.0,
-      "attack_range": 2.4,
       "move_speed": 7.0,
-      "attack_damage": 7,
-      "attack_cadence_ms": 1900,
       "attack_windup_ms": 500
     },
     {
@@ -48,10 +42,7 @@
       "hit_radius": 0.4,
       "hit_height": 1.25,
       "aggro_radius": 8.5,
-      "attack_range": 1.8,
       "move_speed": 7.5,
-      "attack_damage": 6,
-      "attack_cadence_ms": 1400,
       "attack_windup_ms": 350
     },
     {
@@ -66,10 +57,7 @@
       "hit_radius": 0.5,
       "hit_height": 1.45,
       "aggro_radius": 8.0,
-      "attack_range": 1.95,
       "move_speed": 7.0,
-      "attack_damage": 10,
-      "attack_cadence_ms": 2100,
       "attack_windup_ms": 600
     }
   ]
