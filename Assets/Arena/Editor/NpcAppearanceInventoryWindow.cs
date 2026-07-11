@@ -20,6 +20,17 @@ namespace Arena.Editor
     }
 
     [Serializable]
+    internal sealed class NpcVector3Draft
+    {
+        public float x;
+        public float y;
+        public float z;
+
+        public static NpcVector3Draft From(Vector3 value)
+            => new() { x = value.x, y = value.y, z = value.z };
+    }
+
+    [Serializable]
     internal sealed class NpcAppearanceInventoryEntry
     {
         public string source_package = string.Empty;
@@ -33,6 +44,11 @@ namespace Arena.Editor
         public string avatar_kind = string.Empty;
         public bool root_motion_enabled;
         public List<string> animator_candidates = new();
+        public List<string> animation_clips = new();
+        public int renderer_count;
+        public NpcVector3Draft renderer_bounds_center = new();
+        public NpcVector3Draft renderer_bounds_size = new();
+        public float ground_offset_candidate;
         public List<string> controller_states = new();
         public List<string> idle_candidates = new();
         public List<string> ready_candidates = new();
@@ -155,6 +171,10 @@ namespace Arena.Editor
                     EditorGUILayout.LabelField(
                         $"Package: {entry.source_package}    Animators: {entry.animator_count}    "
                         + $"Avatar: {entry.avatar_kind}    States: {entry.controller_states.Count}");
+                    EditorGUILayout.LabelField(
+                        $"Renderers: {entry.renderer_count}    Bounds: "
+                        + $"{entry.renderer_bounds_size.x:F2} x {entry.renderer_bounds_size.y:F2} x {entry.renderer_bounds_size.z:F2}    "
+                        + $"Ground offset: {entry.ground_offset_candidate:F3}");
                     EditorGUILayout.LabelField(
                         $"Animator: {DisplayOrReview(entry.primary_animator_path_candidate)}    "
                         + $"Controller: {DisplayOrReview(entry.animator_controller_path)}");
@@ -285,6 +305,8 @@ namespace Arena.Editor
                 return entry;
             }
 
+            InspectRendererBounds(prefab, entry);
+
             Animator[] animators = prefab.GetComponentsInChildren<Animator>(includeInactive: true);
             entry.animator_count = animators.Length;
             bool anyRootMotion = false;
@@ -320,6 +342,18 @@ namespace Arena.Editor
             if (animator.runtimeAnimatorController == null)
                 entry.review_warnings.Add("Primary Animator has no runtime controller.");
 
+            if (animator.runtimeAnimatorController != null)
+            {
+                var clipRows = new HashSet<string>(StringComparer.Ordinal);
+                foreach (AnimationClip clip in animator.runtimeAnimatorController.animationClips)
+                {
+                    if (clip != null)
+                        clipRows.Add($"{clip.name} | seconds={clip.length:F3}");
+                }
+                entry.animation_clips.AddRange(clipRows);
+                entry.animation_clips.Sort(StringComparer.Ordinal);
+            }
+
             HashSet<string> states = NpcVisualProfileEditor.CollectStateNames(animator.runtimeAnimatorController);
             entry.controller_states.AddRange(states);
             entry.controller_states.Sort(StringComparer.Ordinal);
@@ -347,6 +381,53 @@ namespace Arena.Editor
             if (entry.death_candidates.Count == 0)
                 entry.review_warnings.Add("No death state candidate was inferred; this appearance cannot ship without a death policy.");
             return entry;
+        }
+
+        private static void InspectRendererBounds(GameObject prefab, NpcAppearanceInventoryEntry entry)
+        {
+            GameObject? instance = PrefabUtility.InstantiatePrefab(prefab) as GameObject;
+            if (instance == null)
+            {
+                entry.review_warnings.Add("Prefab could not be instantiated for renderer-bounds review.");
+                return;
+            }
+
+            try
+            {
+                instance.hideFlags = HideFlags.HideAndDontSave;
+                Renderer[] renderers = instance.GetComponentsInChildren<Renderer>(includeInactive: true);
+                entry.renderer_count = renderers.Length;
+                bool hasBounds = false;
+                Bounds combined = default;
+                foreach (Renderer renderer in renderers)
+                {
+                    if (renderer == null)
+                        continue;
+                    if (!hasBounds)
+                    {
+                        combined = renderer.bounds;
+                        hasBounds = true;
+                    }
+                    else
+                    {
+                        combined.Encapsulate(renderer.bounds);
+                    }
+                }
+
+                if (!hasBounds)
+                {
+                    entry.review_warnings.Add("Prefab contains no renderers for bounds review.");
+                    return;
+                }
+
+                entry.renderer_bounds_center = NpcVector3Draft.From(combined.center - instance.transform.position);
+                entry.renderer_bounds_size = NpcVector3Draft.From(combined.size);
+                entry.ground_offset_candidate = combined.min.y - instance.transform.position.y;
+            }
+            finally
+            {
+                DestroyImmediate(instance);
+            }
         }
 
         private static string AnimatorPath(GameObject prefab, Animator animator)
