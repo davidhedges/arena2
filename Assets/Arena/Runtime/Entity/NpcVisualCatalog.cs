@@ -83,6 +83,32 @@ namespace Arena.Entity
             return _entriesByTemplateId!.TryGetValue(key, out entry!) && entry != null;
         }
 
+        public IReadOnlyList<string> ValidateEntries()
+        {
+            var errors = new List<string>();
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            for (int i = 0; i < entries.Count; i++)
+            {
+                NpcVisualCatalogEntry? entry = entries[i];
+                if (entry == null)
+                {
+                    errors.Add($"Entry {i} is null.");
+                    continue;
+                }
+
+                string key = Normalize(entry.templateId);
+                if (string.IsNullOrEmpty(key))
+                    errors.Add($"Entry {i} has no template ID.");
+                else if (!seen.Add(key))
+                    errors.Add($"Template ID '{key}' is duplicated.");
+
+                if (entry.ResolvePrefab() == null)
+                    errors.Add($"Template '{key}' has no resolvable prefab.");
+            }
+
+            return errors;
+        }
+
         private void EnsureIndex()
         {
             if (_prefabsByTemplateId != null)

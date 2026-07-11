@@ -8,6 +8,25 @@ using UnityEngine;
 
 namespace Arena.Editor
 {
+    [CustomEditor(typeof(NpcVisualCatalog))]
+    public sealed class NpcVisualCatalogEditor : UnityEditor.Editor
+    {
+        public override void OnInspectorGUI()
+        {
+            DrawDefaultInspector();
+            EditorGUILayout.Space();
+            if (!GUILayout.Button("Validate Catalog"))
+                return;
+
+            var catalog = (NpcVisualCatalog)target;
+            IReadOnlyList<string> errors = catalog.ValidateEntries();
+            if (errors.Count == 0)
+                Debug.Log($"[NPC Catalog] '{catalog.name}' passed validation.", catalog);
+            else
+                Debug.LogError($"[NPC Catalog] '{catalog.name}' failed:\n- {string.Join("\n- ", errors)}", catalog);
+        }
+    }
+
     [CustomEditor(typeof(NpcVisualProfile))]
     public sealed class NpcVisualProfileEditor : UnityEditor.Editor
     {
