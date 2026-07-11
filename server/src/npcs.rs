@@ -3205,8 +3205,8 @@ mod tests {
     #[test]
     fn authored_npc_catalog_is_valid_and_complete_for_current_templates() {
         let parsed = parse_npc_catalog(NPC_CATALOG_JSON).unwrap();
-        assert_eq!(parsed.templates.len(), 9);
-        assert_eq!(npc_catalog().templates.len(), 9);
+        assert_eq!(parsed.templates.len(), 10);
+        assert_eq!(npc_catalog().templates.len(), 10);
         assert!(parsed
             .templates
             .iter()
@@ -3240,6 +3240,10 @@ mod tests {
             "NPC_HUMANOID_SCARAB_STRIKE"
         );
         assert_eq!(humanoid_scarab.action_kit[0].role, "MELEE_OFFENSE");
+        let slime_man = npc_template("SLIME_MAN").expect("slime man family should be authored");
+        assert_eq!(slime_man.visual_ids.len(), 4);
+        assert_eq!(slime_man.action_kit[0].ability_id, "NPC_SLIME_MAN_SLAM");
+        assert_eq!(slime_man.action_kit[0].role, "MELEE_OFFENSE");
     }
 
     #[test]
