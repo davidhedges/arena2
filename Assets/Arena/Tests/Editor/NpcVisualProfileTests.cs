@@ -22,6 +22,8 @@ namespace Arena.Tests.Editor
         [TestCase("Assets/Arena/Content/NPC/VisualProfiles/Lich_Pe_VisualProfile.asset")]
         [TestCase("Assets/Arena/Content/NPC/VisualProfiles/Lich_Rd_VisualProfile.asset")]
         [TestCase("Assets/Arena/Content/NPC/VisualProfiles/SkeletonArcher_Gn_VisualProfile.asset")]
+        [TestCase("Assets/Arena/Content/NPC/VisualProfiles/SkeletonArcher_Bk_VisualProfile.asset")]
+        [TestCase("Assets/Arena/Content/NPC/VisualProfiles/SkeletonArcher_Ye_VisualProfile.asset")]
         [TestCase("Assets/Arena/Content/NPC/VisualProfiles/Abomination_Gn_VisualProfile.asset")]
         [TestCase("Assets/Arena/Content/NPC/VisualProfiles/Abomination_Gr_VisualProfile.asset")]
         [TestCase("Assets/Arena/Content/NPC/VisualProfiles/Abomination_Pe_VisualProfile.asset")]
@@ -77,6 +79,8 @@ namespace Arena.Tests.Editor
             AssertProfile(tryGetEntry, catalog, "LICH_PE");
             AssertProfile(tryGetEntry, catalog, "LICH_RD");
             AssertProfile(tryGetEntry, catalog, "SKELETON_ARCHER_GN");
+            AssertProfile(tryGetEntry, catalog, "SKELETON_ARCHER_BK");
+            AssertProfile(tryGetEntry, catalog, "SKELETON_ARCHER_YE");
             AssertProfile(tryGetEntry, catalog, "HUMANOID_SCARAB_BL");
             AssertProfile(tryGetEntry, catalog, "HUMANOID_SCARAB_GN");
             AssertProfile(tryGetEntry, catalog, "HUMANOID_SCARAB_RD");

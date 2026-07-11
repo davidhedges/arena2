@@ -145,7 +145,7 @@
       "template_id": "SKELETON_ARCHER",
       "species_id": "SKELETON_ARCHER",
       "display_name": "Skeleton Archer",
-      "visual_ids": ["SKELETON_ARCHER_GN"],
+      "visual_ids": ["SKELETON_ARCHER_BK", "SKELETON_ARCHER_GN", "SKELETON_ARCHER_YE"],
       "brain_profile_id": "BASIC_HOSTILE_CASTER",
       "resource_policy": "FREE_ACTIONS_ONLY",
       "action_kit": [

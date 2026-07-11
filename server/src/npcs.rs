@@ -3229,6 +3229,9 @@ mod tests {
         assert_eq!(lich.action_kit[0].target_selector, "LOWEST_HEALTH_ALLY");
         assert!(lich.action_kit[0].base_utility > lich.action_kit[1].base_utility);
         assert_eq!(lich.action_kit[1].role, "BUFF");
+        let archer = npc_template("SKELETON_ARCHER").expect("archer exemplar should be authored");
+        assert_eq!(archer.visual_ids.len(), 3);
+        assert_eq!(archer.action_kit[0].role, "RANGED_OFFENSE");
         let abomination =
             npc_template("ABOMINATION").expect("abomination family should be authored");
         assert_eq!(abomination.visual_ids.len(), 3);
