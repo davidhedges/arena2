@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::OnceLock;
 use std::time::Duration;
 
@@ -7,6 +7,7 @@ use spacetimedb::{reducer, table, Identity, ReducerContext, Table, Timestamp};
 
 use crate::arena::open_world_scene_name_for_identity;
 use crate::arena::{resolve_player_world_context, world_contexts_share, ResolvedWorldContext};
+use crate::combat::actor_snapshot::CombatActorSnapshotSet;
 #[allow(unused_imports)]
 use crate::combat::status_effect as _;
 use crate::combat::{
@@ -1249,9 +1250,10 @@ pub(crate) fn tick_npc_combat(
         return;
     }
 
-    // Candidates resolved once per tick (tick audit T4): world context and
-    // physics per alive non-dummy player, instead of per NPC x player pair.
-    let candidates = collect_npc_target_candidates(ctx);
+    // Build the shared actor broadphase once. Ordinary target acquisition then
+    // queries only the NPC's perception disc on its bounded decision tick;
+    // committed and fixture-pinned targets use exact indexed lookup.
+    let perception = NpcPerceptionIndex::collect(ctx);
     for npc in npcs {
         let Some(faction) = NpcFaction::from_wire(npc.faction.as_str()) else {
             clear_npc_combat_runtime(ctx, npc.identity);
@@ -1333,7 +1335,7 @@ pub(crate) fn tick_npc_combat(
                 npc.identity,
                 &physics,
                 &template,
-                &candidates,
+                &perception,
                 runtime.target,
                 target_is_pinned,
             )
@@ -1345,7 +1347,7 @@ pub(crate) fn tick_npc_combat(
                 npc.identity,
                 &physics,
                 &template,
-                &candidates,
+                &perception,
                 existing_runtime.as_ref().map(|runtime| runtime.target),
                 brain.target_stickiness,
             )
@@ -1480,36 +1482,68 @@ struct NpcTargetCandidate {
     context: ResolvedWorldContext,
 }
 
-/// One pass over `player_state` per tick, in table order (target tie-breaking
-/// depends on it): alive non-dummy players with their world context and
-/// physics resolved once, shared by every NPC's target acquisition.
-fn collect_npc_target_candidates(ctx: &ReducerContext) -> Vec<NpcTargetCandidate> {
-    let mut candidates = Vec::new();
-    for state in ctx.db.player_state().iter() {
-        if !state.alive || state.is_dummy {
-            continue;
+struct NpcPerceptionIndex {
+    actors: CombatActorSnapshotSet,
+    player_contexts: HashMap<Identity, ResolvedWorldContext>,
+}
+
+impl NpcPerceptionIndex {
+    fn collect(ctx: &ReducerContext) -> Self {
+        let actors = CombatActorSnapshotSet::collect(ctx);
+        let mut player_contexts = HashMap::new();
+        // The current hostile-NPC contract targets real players only. Keep
+        // that eligibility filter explicit while using the actor-generic
+        // broadphase, so later relation work can widen it deliberately.
+        for state in ctx.db.player_state().iter() {
+            if !state.alive || state.is_dummy {
+                continue;
+            }
+            let Some(context) = resolve_player_world_context(ctx, state.player_id) else {
+                log::warn!(
+                    "[WORLD] Missing player_world row for NPC target candidate {}",
+                    state.player_id.to_hex()
+                );
+                continue;
+            };
+            player_contexts.insert(state.player_id, context);
         }
-        let Some(context) = resolve_player_world_context(ctx, state.player_id) else {
-            log::warn!(
-                "[WORLD] Missing player_world row for NPC target candidate {}",
-                state.player_id.to_hex()
-            );
-            continue;
-        };
-        let Some(physics) = ctx.db.player_physics().identity().find(state.player_id) else {
-            continue;
-        };
-        candidates.push(NpcTargetCandidate {
-            identity: state.player_id,
-            pos_x: physics.pos_x,
-            pos_y: physics.pos_y,
-            pos_z: physics.pos_z,
-            hit_radius: state.hit_radius,
-            hit_height: state.hit_height,
-            context,
-        });
+        Self {
+            actors,
+            player_contexts,
+        }
     }
-    candidates
+
+    fn exact(&self, identity: Identity) -> Option<NpcTargetCandidate> {
+        let index = *self.actors.index_by_id().get(&identity)?;
+        self.candidate_at(index)
+    }
+
+    fn query_disc(&self, center_x: f32, center_z: f32, radius: f32) -> Vec<NpcTargetCandidate> {
+        let mut indices = Vec::new();
+        self.actors
+            .query_disc_indices(center_x, center_z, radius, &mut indices);
+        // Snapshot insertion order matches the former player-table scan and is
+        // the deterministic tie-breaker for exactly equidistant candidates.
+        indices.sort_unstable();
+        indices
+            .into_iter()
+            .filter_map(|index| self.candidate_at(index))
+            .collect()
+    }
+
+    fn candidate_at(&self, index: usize) -> Option<NpcTargetCandidate> {
+        let actor = self.actors.as_slice().get(index)?;
+        let context = self.player_contexts.get(&actor.player_id)?.clone();
+        Some(NpcTargetCandidate {
+            identity: actor.player_id,
+            pos_x: actor.pos_x,
+            pos_y: actor.pos_y,
+            pos_z: actor.pos_z,
+            hit_radius: actor.hit_radius,
+            hit_height: actor.hit_height,
+            context,
+        })
+    }
 }
 
 fn acquire_npc_attack_target(
@@ -1517,7 +1551,7 @@ fn acquire_npc_attack_target(
     npc_identity: Identity,
     npc_physics: &NpcPhysics,
     template: &NpcTemplate,
-    candidates: &[NpcTargetCandidate],
+    perception: &NpcPerceptionIndex,
     current_target: Option<Identity>,
     target_stickiness: f32,
 ) -> Option<NpcAttackTarget> {
@@ -1529,21 +1563,22 @@ fn acquire_npc_attack_target(
         return None;
     };
     if let Some(pinned) = ctx.db.npc_target_override().identity().find(npc_identity) {
-        if let Some(candidate) = candidates
-            .iter()
-            .find(|candidate| candidate.identity == pinned.target)
+        if let Some(candidate) = perception
+            .exact(pinned.target)
             .filter(|candidate| world_contexts_share(&npc_context, &candidate.context))
             .filter(|candidate| can_harm(ctx, npc_identity, candidate.identity))
         {
-            return Some(npc_attack_target_from_candidate(npc_physics, candidate));
+            return Some(npc_attack_target_from_candidate(npc_physics, &candidate));
         }
     }
+    let candidates =
+        perception.query_disc(npc_physics.pos_x, npc_physics.pos_z, template.aggro_radius);
     crate::tick_metrics::record_npc_target_pairs_scanned(candidates.len() as u64);
 
     let aggro_radius_sq = template.aggro_radius * template.aggro_radius;
     let mut best: Option<NpcAttackTarget> = None;
     let mut current: Option<NpcAttackTarget> = None;
-    for candidate in candidates {
+    for candidate in &candidates {
         if !world_contexts_share(&npc_context, &candidate.context) {
             continue;
         }
@@ -1589,20 +1624,18 @@ fn resolve_committed_npc_target(
     npc_identity: Identity,
     npc_physics: &NpcPhysics,
     template: &NpcTemplate,
-    candidates: &[NpcTargetCandidate],
+    perception: &NpcPerceptionIndex,
     target_identity: Identity,
     target_is_pinned: bool,
 ) -> Option<NpcAttackTarget> {
     let npc_context = resolve_player_world_context(ctx, npc_identity)?;
-    let candidate = candidates
-        .iter()
-        .find(|candidate| candidate.identity == target_identity)?;
+    let candidate = perception.exact(target_identity)?;
     if !world_contexts_share(&npc_context, &candidate.context)
         || !can_harm(ctx, npc_identity, candidate.identity)
     {
         return None;
     }
-    let target = npc_attack_target_from_candidate(npc_physics, candidate);
+    let target = npc_attack_target_from_candidate(npc_physics, &candidate);
     if !target_is_pinned && target.distance > template.aggro_radius {
         return None;
     }
