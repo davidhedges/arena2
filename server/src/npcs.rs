@@ -108,6 +108,8 @@ pub struct NpcInstance {
     pub species_id: String,
     #[index(btree)]
     pub faction: String,
+    #[index(btree)]
+    pub combat_team_id: String,
     pub display_name: String,
     pub world_kind: String,
     pub instance_id: Option<u64>,
@@ -237,6 +239,21 @@ impl NpcFaction {
             NPC_FACTION_FRIENDLY => Some(Self::Friendly),
             _ => None,
         }
+    }
+}
+
+#[derive(Clone)]
+pub(crate) struct NpcRelationProfile {
+    pub faction: NpcFaction,
+    pub spawned_by: Identity,
+    pub combat_team_id: String,
+}
+
+fn debug_combat_team_id(faction: NpcFaction, owner: Identity, npc: Identity) -> String {
+    match faction {
+        NpcFaction::Hostile => "DEBUG_HOSTILE".to_string(),
+        NpcFaction::Neutral => format!("DEBUG_NEUTRAL:{}", npc.to_hex()),
+        NpcFaction::Friendly => format!("PLAYER_ALLIANCE:{}", owner.to_hex()),
     }
 }
 
@@ -585,6 +602,7 @@ pub fn spawn_npc(
 
     let sequence = next_npc_sequence(ctx, owner);
     let identity = npc_identity(owner, sequence)?;
+    let combat_team_id = debug_combat_team_id(faction, owner, identity);
     let target_yaw = wrap_yaw(owner_physics.yaw + std::f32::consts::PI);
     let spawn_x = owner_physics.pos_x + owner_physics.yaw.sin() * NPC_SPAWN_FORWARD;
     let spawn_z = owner_physics.pos_z + owner_physics.yaw.cos() * NPC_SPAWN_FORWARD;
@@ -596,6 +614,7 @@ pub fn spawn_npc(
         visual_id,
         species_id: template.species_id.to_string(),
         faction: faction.as_str().to_string(),
+        combat_team_id,
         display_name: template.display_name.to_string(),
         world_kind: if is_instance {
             WORLD_KIND_INSTANCE.to_string()
@@ -750,9 +769,16 @@ pub(crate) fn prune_due_npc_corpse_despawns(ctx: &ReducerContext, now: Timestamp
     }
 }
 
-pub(crate) fn npc_faction(ctx: &ReducerContext, identity: Identity) -> Option<NpcFaction> {
+pub(crate) fn npc_relation_profile(
+    ctx: &ReducerContext,
+    identity: Identity,
+) -> Option<NpcRelationProfile> {
     let row = ctx.db.npc_instance().identity().find(identity)?;
-    NpcFaction::from_wire(row.faction.as_str())
+    Some(NpcRelationProfile {
+        faction: NpcFaction::from_wire(row.faction.as_str())?,
+        spawned_by: row.spawned_by,
+        combat_team_id: row.combat_team_id,
+    })
 }
 
 pub(crate) fn tick_npc_combat(

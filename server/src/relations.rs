@@ -4,7 +4,7 @@ use spacetimedb::{Identity, ReducerContext};
 use crate::arena::{
     players_share_world_context, ArenaInstance, MATCH_PHASE_COUNTDOWN, MATCH_PHASE_IN_PROGRESS,
 };
-use crate::npcs::{npc_faction, NpcFaction};
+use crate::npcs::{npc_relation_profile, NpcFaction, NpcRelationProfile};
 use crate::party::same_party;
 use crate::playground_targets::{playground_target_kind_for_relation, PlaygroundTargetKind};
 
@@ -85,16 +85,19 @@ pub(crate) fn combat_relation(
         return CombatRelation::Self_;
     }
 
-    if let Some(faction) = npc_faction(ctx, target) {
-        return match faction {
-            NpcFaction::Hostile => CombatRelation::Hostile,
-            NpcFaction::Neutral => CombatRelation::Neutral,
-            NpcFaction::Friendly => CombatRelation::PartyAlly,
-        };
-    }
-
-    if npc_faction(ctx, source) == Some(NpcFaction::Hostile) && target_is_player(ctx, target) {
-        return CombatRelation::Hostile;
+    let source_npc = npc_relation_profile(ctx, source);
+    let target_npc = npc_relation_profile(ctx, target);
+    match (source_npc.as_ref(), target_npc.as_ref()) {
+        (Some(source_profile), Some(target_profile)) => {
+            return npc_pair_relation(source_profile, target_profile);
+        }
+        (Some(profile), None) if target_is_player(ctx, target) => {
+            return npc_player_relation(ctx, profile, target);
+        }
+        (None, Some(profile)) if target_is_player(ctx, source) => {
+            return npc_player_relation(ctx, profile, source);
+        }
+        _ => {}
     }
 
     // Playground-only override for local targeting and party-frame testing. This
@@ -129,6 +132,37 @@ pub(crate) fn combat_relation(
     }
 
     CombatRelation::Neutral
+}
+
+fn npc_pair_relation(source: &NpcRelationProfile, target: &NpcRelationProfile) -> CombatRelation {
+    if source.combat_team_id == target.combat_team_id {
+        return CombatRelation::PartyAlly;
+    }
+    if source.faction == NpcFaction::Neutral || target.faction == NpcFaction::Neutral {
+        CombatRelation::Neutral
+    } else {
+        CombatRelation::Hostile
+    }
+}
+
+fn npc_player_relation(
+    ctx: &ReducerContext,
+    npc: &NpcRelationProfile,
+    player: Identity,
+) -> CombatRelation {
+    match npc.faction {
+        NpcFaction::Hostile => CombatRelation::Hostile,
+        NpcFaction::Neutral => CombatRelation::Neutral,
+        NpcFaction::Friendly => {
+            if player == npc.spawned_by || same_party(ctx, player, npc.spawned_by) {
+                CombatRelation::PartyAlly
+            } else if match_context_makes_hostile(ctx, npc.spawned_by, player) {
+                CombatRelation::Hostile
+            } else {
+                CombatRelation::Neutral
+            }
+        }
+    }
 }
 
 pub(crate) fn target_audience_allows(
@@ -223,7 +257,17 @@ fn arena_is_hostile_match_context(arena: &ArenaInstance) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{CombatRelation, TargetAudience};
+    use super::{npc_pair_relation, CombatRelation, TargetAudience};
+    use crate::npcs::{NpcFaction, NpcRelationProfile};
+    use spacetimedb::Identity;
+
+    fn npc_profile(faction: NpcFaction, team: &str) -> NpcRelationProfile {
+        NpcRelationProfile {
+            faction,
+            spawned_by: Identity::ZERO,
+            combat_team_id: team.to_string(),
+        }
+    }
 
     #[test]
     fn audience_allows_expected_relationships() {
@@ -235,5 +279,34 @@ mod tests {
         assert!(!TargetAudience::PartyOrSelf.allows(CombatRelation::Neutral));
         assert!(TargetAudience::Assistable.allows(CombatRelation::Neutral));
         assert!(!TargetAudience::Assistable.allows(CombatRelation::Hostile));
+    }
+
+    #[test]
+    fn npc_team_relations_are_symmetric_and_neutral_safe() {
+        let hostile_a = npc_profile(NpcFaction::Hostile, "ENCOUNTER_A");
+        let hostile_a_ally = npc_profile(NpcFaction::Hostile, "ENCOUNTER_A");
+        let hostile_b = npc_profile(NpcFaction::Hostile, "ENCOUNTER_B");
+        let neutral = npc_profile(NpcFaction::Neutral, "NEUTRAL_A");
+
+        assert_eq!(
+            npc_pair_relation(&hostile_a, &hostile_a_ally),
+            CombatRelation::PartyAlly
+        );
+        assert_eq!(
+            npc_pair_relation(&hostile_a, &hostile_b),
+            CombatRelation::Hostile
+        );
+        assert_eq!(
+            npc_pair_relation(&hostile_b, &hostile_a),
+            CombatRelation::Hostile
+        );
+        assert_eq!(
+            npc_pair_relation(&hostile_a, &neutral),
+            CombatRelation::Neutral
+        );
+        assert_eq!(
+            npc_pair_relation(&neutral, &hostile_a),
+            CombatRelation::Neutral
+        );
     }
 }

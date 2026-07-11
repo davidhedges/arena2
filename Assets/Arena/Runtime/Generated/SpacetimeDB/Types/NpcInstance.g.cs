@@ -25,6 +25,8 @@ namespace SpacetimeDB.Types
         public string SpeciesId;
         [DataMember(Name = "faction")]
         public string Faction;
+        [DataMember(Name = "combat_team_id")]
+        public string CombatTeamId;
         [DataMember(Name = "display_name")]
         public string DisplayName;
         [DataMember(Name = "world_kind")]
@@ -43,6 +45,7 @@ namespace SpacetimeDB.Types
             string VisualId,
             string SpeciesId,
             string Faction,
+            string CombatTeamId,
             string DisplayName,
             string WorldKind,
             ulong? InstanceId,
@@ -56,6 +59,7 @@ namespace SpacetimeDB.Types
             this.VisualId = VisualId;
             this.SpeciesId = SpeciesId;
             this.Faction = Faction;
+            this.CombatTeamId = CombatTeamId;
             this.DisplayName = DisplayName;
             this.WorldKind = WorldKind;
             this.InstanceId = InstanceId;
@@ -69,6 +73,7 @@ namespace SpacetimeDB.Types
             this.VisualId = "";
             this.SpeciesId = "";
             this.Faction = "";
+            this.CombatTeamId = "";
             this.DisplayName = "";
             this.WorldKind = "";
             this.OpenWorldSceneName = "";
