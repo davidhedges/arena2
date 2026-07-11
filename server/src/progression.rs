@@ -206,6 +206,7 @@ struct StatScalingDefinition {
 #[serde(deny_unknown_fields)]
 struct AbilityDefinition {
     ability_id: String,
+    actor_scope: String,
     combat_profile_id: String,
     gameplay: AbilityGameplayDefinition,
     action_id: String,
@@ -1216,6 +1217,7 @@ pub struct StatScalingCatalog {
 pub struct AbilityCatalog {
     #[primary_key]
     pub ability_id: String,
+    pub actor_scope: String,
     pub combat_profile_id: String,
     pub ability_kind: String,
     pub action_id: String,
@@ -2944,6 +2946,7 @@ fn sync_ability_catalog(ctx: &ReducerContext) {
         let ability_id = normalize_identifier(definition.ability_id.as_str());
         let row = AbilityCatalog {
             ability_id: ability_id.clone(),
+            actor_scope: normalize_identifier(definition.actor_scope.as_str()),
             combat_profile_id: resolved_combat_profile_id_for_ability_definition(definition)
                 .unwrap_or_default(),
             ability_kind: ability_gameplay_kind(definition),
@@ -4348,6 +4351,8 @@ fn validate_ability_catalog() {
 
     for ability in &progression_catalog().abilities {
         let ability_id = normalize_identifier(ability.ability_id.as_str());
+        let actor_scope =
+            validated_ability_actor_scope(ability_id.as_str(), ability.actor_scope.as_str());
         let explicit_combat_profile_id = normalize_identifier(ability.combat_profile_id.as_str());
         if !explicit_combat_profile_id.is_empty() {
             assert!(
@@ -4360,8 +4365,9 @@ fn validate_ability_catalog() {
         let ability_kind = ability_gameplay_kind(ability);
         assert!(
             ability_kind == "SPELL"
+                || actor_scope == "NPC"
                 || resolved_combat_profile_id_for_ability_definition(ability).is_some(),
-            "ability '{ability_id}' must resolve to a combat profile unless it is a generic spell"
+            "ability '{ability_id}' must resolve to a combat profile unless it is a generic spell or NPC-only action"
         );
         if ability_kind == "MOVEMENT" {
             assert!(
@@ -4452,6 +4458,15 @@ fn validate_ability_catalog() {
             );
         }
     }
+}
+
+fn validated_ability_actor_scope(ability_id: &str, actor_scope: &str) -> String {
+    let actor_scope = normalize_identifier(actor_scope);
+    assert!(
+        matches!(actor_scope.as_str(), "PLAYER" | "NPC" | "BOTH"),
+        "ability '{ability_id}' must define actor_scope as PLAYER, NPC, or BOTH"
+    );
+    actor_scope
 }
 
 fn validate_melee_gameplay_fields(ability_id: &str, gameplay: &AbilityGameplayDefinition) {
@@ -5367,6 +5382,7 @@ mod tests {
     #[derive(Clone, Debug)]
     struct ResolvedCombatAuthoringAction {
         ability_id: String,
+        actor_scope: String,
         category: ResolvedAuthoringCategory,
         combat_profile_id: String,
         authored_action_id: String,
@@ -5556,6 +5572,7 @@ mod tests {
 
                 ResolvedCombatAuthoringAction {
                     ability_id,
+                    actor_scope: normalize_identifier(ability.actor_scope.as_str()),
                     category,
                     combat_profile_id,
                     authored_action_id,
@@ -5595,6 +5612,7 @@ mod tests {
         for action in graph {
             let is_generic_spell = action.category == ResolvedAuthoringCategory::Spell
                 && action.combat_profile_id.is_empty();
+            let is_npc_only_action = action.actor_scope == "NPC";
             if !action.combat_profile_id.is_empty()
                 && !known_profiles.contains(action.combat_profile_id.as_str())
             {
@@ -5606,7 +5624,7 @@ mod tests {
                     ),
                 ));
             }
-            if action.combat_profile_id.is_empty() && !is_generic_spell {
+            if action.combat_profile_id.is_empty() && !is_generic_spell && !is_npc_only_action {
                 errors.push(CombatAuthoringError::new(
                     CombatAuthoringRule::AbilityProfileResolves,
                     format!(
@@ -6713,6 +6731,7 @@ mod tests {
                 "abilities": [
                     {
                         "ability_id": "TEST_STATUS_ABILITY",
+                        "actor_scope": "PLAYER",
                         "combat_profile_id": "TWO_HANDED_SWORD",
                         "action_id": "TEST_STATUS",
                         "display_name": "Test Status",
@@ -7159,6 +7178,26 @@ mod tests {
             assert!(slot_ids.insert(definition.slot_id.clone()));
             assert_grid_slot_id(definition.slot_id.as_str());
         }
+    }
+
+    #[test]
+    fn authored_ability_actor_scopes_are_valid() {
+        for ability in &progression_catalog().abilities {
+            assert!(matches!(
+                super::validated_ability_actor_scope(
+                    ability.ability_id.as_str(),
+                    ability.actor_scope.as_str(),
+                )
+                .as_str(),
+                "PLAYER" | "NPC" | "BOTH"
+            ));
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "must define actor_scope as PLAYER, NPC, or BOTH")]
+    fn unknown_ability_actor_scope_is_rejected() {
+        super::validated_ability_actor_scope("TEST_ABILITY", "COMPANION");
     }
 
     #[test]

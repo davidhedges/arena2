@@ -40,6 +40,7 @@ namespace SpacetimeDB.Types
     public sealed class AbilityCatalogCols
     {
         public global::SpacetimeDB.Col<AbilityCatalog, string> AbilityId { get; }
+        public global::SpacetimeDB.Col<AbilityCatalog, string> ActorScope { get; }
         public global::SpacetimeDB.Col<AbilityCatalog, string> CombatProfileId { get; }
         public global::SpacetimeDB.Col<AbilityCatalog, string> AbilityKind { get; }
         public global::SpacetimeDB.Col<AbilityCatalog, string> ActionId { get; }
@@ -52,6 +53,7 @@ namespace SpacetimeDB.Types
         public AbilityCatalogCols(string tableName)
         {
             AbilityId = new global::SpacetimeDB.Col<AbilityCatalog, string>(tableName, "ability_id");
+            ActorScope = new global::SpacetimeDB.Col<AbilityCatalog, string>(tableName, "actor_scope");
             CombatProfileId = new global::SpacetimeDB.Col<AbilityCatalog, string>(tableName, "combat_profile_id");
             AbilityKind = new global::SpacetimeDB.Col<AbilityCatalog, string>(tableName, "ability_kind");
             ActionId = new global::SpacetimeDB.Col<AbilityCatalog, string>(tableName, "action_id");
