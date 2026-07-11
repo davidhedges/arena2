@@ -221,6 +221,7 @@ pub struct NpcCombatRuntime {
     #[primary_key]
     pub identity: Identity,
     pub target: Identity,
+    pub planned_ability_id: String,
     pub decision_sequence: u64,
     pub next_decision_at: Timestamp,
     pub next_decision_at_micros: i64,
@@ -1383,6 +1384,20 @@ pub(crate) fn tick_npc_combat(
             clear_npc_combat_runtime(ctx, npc.identity);
             continue;
         };
+        let planned_action = if decision_was_due {
+            select_npc_melee_action(ctx, now, &template, &state, &target)
+        } else {
+            existing_runtime.as_ref().and_then(|runtime| {
+                (!runtime.planned_ability_id.is_empty())
+                    .then(|| {
+                        ctx.db
+                            .melee_ability_catalog()
+                            .ability_id()
+                            .find(runtime.planned_ability_id.clone())
+                    })
+                    .flatten()
+            })
+        };
         let runtime = if decision_was_due {
             let decision_sequence = existing_runtime
                 .as_ref()
@@ -1397,6 +1412,9 @@ pub(crate) fn tick_npc_combat(
             NpcCombatRuntime {
                 identity: npc.identity,
                 target: target.identity,
+                planned_ability_id: planned_action
+                    .as_ref()
+                    .map_or_else(String::new, |action| action.ability_id.clone()),
                 decision_sequence,
                 next_decision_at,
                 next_decision_at_micros: timestamp_to_micros(next_decision_at),
@@ -1408,7 +1426,7 @@ pub(crate) fn tick_npc_combat(
             upsert_npc_combat_runtime(ctx, runtime);
             continue;
         }
-        let Some(action) = select_npc_melee_action(ctx, now, &template, &state, &target) else {
+        let Some(action) = planned_action else {
             face_npc_target(ctx, now, &physics, &target);
             upsert_npc_combat_runtime(ctx, runtime);
             continue;

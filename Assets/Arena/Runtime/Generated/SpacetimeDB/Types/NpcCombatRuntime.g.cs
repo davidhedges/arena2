@@ -17,6 +17,8 @@ namespace SpacetimeDB.Types
         public SpacetimeDB.Identity Identity;
         [DataMember(Name = "target")]
         public SpacetimeDB.Identity Target;
+        [DataMember(Name = "planned_ability_id")]
+        public string PlannedAbilityId;
         [DataMember(Name = "decision_sequence")]
         public ulong DecisionSequence;
         [DataMember(Name = "next_decision_at")]
@@ -27,6 +29,7 @@ namespace SpacetimeDB.Types
         public NpcCombatRuntime(
             SpacetimeDB.Identity Identity,
             SpacetimeDB.Identity Target,
+            string PlannedAbilityId,
             ulong DecisionSequence,
             SpacetimeDB.Timestamp NextDecisionAt,
             long NextDecisionAtMicros
@@ -34,6 +37,7 @@ namespace SpacetimeDB.Types
         {
             this.Identity = Identity;
             this.Target = Target;
+            this.PlannedAbilityId = PlannedAbilityId;
             this.DecisionSequence = DecisionSequence;
             this.NextDecisionAt = NextDecisionAt;
             this.NextDecisionAtMicros = NextDecisionAtMicros;
@@ -41,6 +45,7 @@ namespace SpacetimeDB.Types
 
         public NpcCombatRuntime()
         {
+            this.PlannedAbilityId = "";
         }
     }
 }
