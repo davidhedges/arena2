@@ -1380,7 +1380,7 @@ pub(crate) fn tick_npc_combat(
                 brain.target_stickiness,
             )
         });
-        let Some(target) = target else {
+        let Some(mut target) = target else {
             clear_npc_combat_runtime(ctx, npc.identity);
             continue;
         };
@@ -1392,7 +1392,20 @@ pub(crate) fn tick_npc_combat(
                 physics.pos_z,
                 brain.perception_radius,
             );
-            let selection = select_npc_melee_action(ctx, now, &template, &state, &target, nearby);
+            let selection = select_npc_melee_action(
+                ctx,
+                now,
+                &template,
+                &state,
+                &physics,
+                &target,
+                &perception,
+                brain.perception_radius,
+                nearby,
+            );
+            if let Some(selected_target) = selection.target {
+                target = selected_target;
+            }
             record_npc_decision_debug(
                 ctx,
                 now,
@@ -1530,6 +1543,8 @@ struct NpcTargetCandidate {
     pos_z: f32,
     hit_radius: f32,
     hit_height: f32,
+    hp: i32,
+    max_hp: i32,
     context: ResolvedWorldContext,
 }
 
@@ -1554,7 +1569,14 @@ struct NpcScoredTarget {
 struct NpcPerceptionIndex {
     actors: CombatActorSnapshotSet,
     actor_contexts: HashMap<Identity, ResolvedWorldContext>,
-    eligible_player_targets: HashSet<Identity>,
+    actor_health: HashMap<Identity, (i32, i32)>,
+    ineligible_targets: HashSet<Identity>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum NpcCandidateRelation {
+    Enemy,
+    Ally,
 }
 
 #[derive(Clone, Copy, Default)]
@@ -1566,28 +1588,35 @@ struct NpcNearbyCounts {
 impl NpcPerceptionIndex {
     fn collect(ctx: &ReducerContext) -> Self {
         let actors = CombatActorSnapshotSet::collect(ctx);
-        let eligible_player_targets: HashSet<Identity> = ctx
+        let ineligible_targets: HashSet<Identity> = ctx
             .db
             .player_state()
             .iter()
-            .filter(|state| state.alive && !state.is_dummy)
+            .filter(|state| state.is_dummy)
             .map(|state| state.player_id)
             .collect();
+        let mut actor_health: HashMap<Identity, (i32, i32)> = ctx
+            .db
+            .player_state()
+            .iter()
+            .map(|state| (state.player_id, (state.hp, state.max_hp)))
+            .collect();
+        actor_health.extend(
+            ctx.db
+                .npc_state()
+                .iter()
+                .map(|state| (state.identity, (state.hp, state.max_hp))),
+        );
         let mut actor_contexts = HashMap::new();
-        // The current hostile-NPC contract targets real players only. Keep
-        // that eligibility filter explicit while using the actor-generic
-        // broadphase, so later relation work can widen it deliberately.
         for actor in actors.as_slice() {
             if !actor.alive {
                 continue;
             }
             let Some(context) = resolve_player_world_context(ctx, actor.player_id) else {
-                if eligible_player_targets.contains(&actor.player_id) {
-                    log::warn!(
-                        "[WORLD] Missing player_world row for NPC target candidate {}",
-                        actor.player_id.to_hex()
-                    );
-                }
+                log::warn!(
+                    "[WORLD] Missing world context for NPC target candidate {}",
+                    actor.player_id.to_hex()
+                );
                 continue;
             };
             actor_contexts.insert(actor.player_id, context);
@@ -1595,7 +1624,8 @@ impl NpcPerceptionIndex {
         Self {
             actors,
             actor_contexts,
-            eligible_player_targets,
+            actor_health,
+            ineligible_targets,
         }
     }
 
@@ -1617,12 +1647,35 @@ impl NpcPerceptionIndex {
             .collect()
     }
 
+    fn relation_candidates(
+        &self,
+        ctx: &ReducerContext,
+        source: Identity,
+        center_x: f32,
+        center_z: f32,
+        radius: f32,
+        relation: NpcCandidateRelation,
+    ) -> Vec<NpcTargetCandidate> {
+        self.query_disc(center_x, center_z, radius)
+            .into_iter()
+            .filter(|candidate| candidate.identity != source)
+            .filter(|candidate| {
+                matches!(
+                    (relation, combat_relation(ctx, source, candidate.identity)),
+                    (NpcCandidateRelation::Enemy, CombatRelation::Hostile)
+                        | (NpcCandidateRelation::Ally, CombatRelation::PartyAlly)
+                )
+            })
+            .collect()
+    }
+
     fn candidate_at(&self, index: usize) -> Option<NpcTargetCandidate> {
         let actor = self.actors.as_slice().get(index)?;
-        if !self.eligible_player_targets.contains(&actor.player_id) {
+        if self.ineligible_targets.contains(&actor.player_id) {
             return None;
         }
         let context = self.actor_contexts.get(&actor.player_id)?.clone();
+        let (hp, max_hp) = self.actor_health.get(&actor.player_id).copied()?;
         Some(NpcTargetCandidate {
             identity: actor.player_id,
             pos_x: actor.pos_x,
@@ -1630,6 +1683,8 @@ impl NpcPerceptionIndex {
             pos_z: actor.pos_z,
             hit_radius: actor.hit_radius,
             hit_height: actor.hit_height,
+            hp,
+            max_hp,
             context,
         })
     }
@@ -1704,8 +1759,14 @@ fn acquire_npc_attack_target(
             return Some(npc_attack_target_from_candidate(npc_physics, &candidate));
         }
     }
-    let candidates =
-        perception.query_disc(npc_physics.pos_x, npc_physics.pos_z, template.aggro_radius);
+    let candidates = perception.relation_candidates(
+        ctx,
+        npc_identity,
+        npc_physics.pos_x,
+        npc_physics.pos_z,
+        template.aggro_radius,
+        NpcCandidateRelation::Enemy,
+    );
     crate::tick_metrics::record_npc_target_pairs_scanned(candidates.len() as u64);
 
     let aggro_radius_sq = template.aggro_radius * template.aggro_radius;
@@ -1921,6 +1982,7 @@ fn return_npc_home(
 
 struct NpcActionSelection {
     action: Option<MeleeAbilityCatalog>,
+    target: Option<NpcAttackTarget>,
     score_summary: String,
     hard_reject_summary: String,
 }
@@ -1969,7 +2031,10 @@ fn select_npc_melee_action(
     now: Timestamp,
     template: &NpcTemplate,
     state: &NpcState,
-    target: &NpcAttackTarget,
+    npc_physics: &NpcPhysics,
+    current_enemy: &NpcAttackTarget,
+    perception: &NpcPerceptionIndex,
+    perception_radius: f32,
     nearby: NpcNearbyCounts,
 ) -> NpcActionSelection {
     let health_pct = if state.max_hp > 0 {
@@ -1980,38 +2045,42 @@ fn select_npc_melee_action(
     let needs_target_statuses = template.action_kit.iter().any(|entry| {
         !entry.required_target_status.is_empty() || !entry.forbidden_target_status.is_empty()
     });
-    let target_statuses: HashSet<String> = if needs_target_statuses {
-        ctx.db
-            .status_effect()
-            .target()
-            .filter(target.identity)
-            .filter(|status| now < status.expires_at)
-            .flat_map(|status| {
-                [
-                    normalize_id(status.effect_kind.as_str()),
-                    normalize_id(status.stack_group.as_str()),
-                ]
-            })
-            .filter(|status| !status.is_empty())
-            .collect()
-    } else {
-        HashSet::new()
-    };
-
     let mut rejects = NpcActionRejectCounts::default();
-    let mut best: Option<(f32, u32, f32, MeleeAbilityCatalog)> = None;
+    let mut best: Option<(f32, u32, f32, String, MeleeAbilityCatalog, NpcAttackTarget)> = None;
     for entry in &template.action_kit {
         if entry.role != "MELEE_OFFENSE" {
             rejects.role = rejects.role.saturating_add(1);
             continue;
         }
-        if !matches!(
+        let Some(target) = select_npc_action_target(
+            ctx,
+            state.identity,
+            npc_physics,
+            current_enemy,
+            perception,
+            perception_radius,
             entry.target_selector.as_str(),
-            "CURRENT_ENEMY" | "NEAREST_ENEMY"
-        ) {
+        ) else {
             rejects.selector = rejects.selector.saturating_add(1);
             continue;
-        }
+        };
+        let target_statuses: HashSet<String> = if needs_target_statuses {
+            ctx.db
+                .status_effect()
+                .target()
+                .filter(target.identity)
+                .filter(|status| now < status.expires_at)
+                .flat_map(|status| {
+                    [
+                        normalize_id(status.effect_kind.as_str()),
+                        normalize_id(status.stack_group.as_str()),
+                    ]
+                })
+                .filter(|status| !status.is_empty())
+                .collect()
+        } else {
+            HashSet::new()
+        };
         if health_pct < entry.min_self_health_pct || health_pct > entry.max_self_health_pct {
             rejects.health = rejects.health.saturating_add(1);
             continue;
@@ -2059,20 +2128,30 @@ fn select_npc_melee_action(
             rejects.distance = rejects.distance.saturating_add(1);
             continue;
         };
-        let replace = best.as_ref().is_none_or(|(best_score, best_order, _, _)| {
-            score.total_cmp(best_score).is_gt()
-                || (score.total_cmp(best_score).is_eq() && entry.sort_order < *best_order)
-        });
+        let replace = best
+            .as_ref()
+            .is_none_or(|(best_score, best_order, _, _, _, _)| {
+                score.total_cmp(best_score).is_gt()
+                    || (score.total_cmp(best_score).is_eq() && entry.sort_order < *best_order)
+            });
         if replace {
-            best = Some((score, entry.sort_order, entry.base_utility, action));
+            best = Some((
+                score,
+                entry.sort_order,
+                entry.base_utility,
+                entry.target_selector.clone(),
+                action,
+                target,
+            ));
         }
     }
 
     let hard_reject_summary = rejects.summary();
-    let Some((score, _, base_utility, action)) = best else {
+    let Some((score, _, base_utility, selector, action, target)) = best else {
         return NpcActionSelection {
             action: None,
-            score_summary: format!("distance={:.3}", target.distance),
+            target: None,
+            score_summary: format!("distance={:.3}", current_enemy.distance),
             hard_reject_summary: if hard_reject_summary.is_empty() {
                 "NO_ACTIONS_AUTHORED".to_string()
             } else {
@@ -2082,12 +2161,86 @@ fn select_npc_melee_action(
     };
     NpcActionSelection {
         action: Some(action),
+        target: Some(target),
         score_summary: format!(
-            "utility={score:.3} base={base_utility:.3} distance={:.3}",
+            "selector={selector} utility={score:.3} base={base_utility:.3} distance={:.3}",
             target.distance
         ),
         hard_reject_summary,
     }
+}
+
+fn select_npc_action_target(
+    ctx: &ReducerContext,
+    npc_identity: Identity,
+    npc_physics: &NpcPhysics,
+    current_enemy: &NpcAttackTarget,
+    perception: &NpcPerceptionIndex,
+    perception_radius: f32,
+    selector: &str,
+) -> Option<NpcAttackTarget> {
+    match selector {
+        "CURRENT_ENEMY" => Some(*current_enemy),
+        "SELF" => perception
+            .exact(npc_identity)
+            .map(|candidate| npc_attack_target_from_candidate(npc_physics, &candidate)),
+        "NEAREST_ENEMY" | "LOWEST_HEALTH_ALLY" => {
+            let relation = if selector == "NEAREST_ENEMY" {
+                NpcCandidateRelation::Enemy
+            } else {
+                NpcCandidateRelation::Ally
+            };
+            let candidates = perception.relation_candidates(
+                ctx,
+                npc_identity,
+                npc_physics.pos_x,
+                npc_physics.pos_z,
+                perception_radius,
+                relation,
+            );
+            select_npc_candidate(selector, npc_physics, &candidates)
+        }
+        _ => None,
+    }
+}
+
+fn select_npc_candidate(
+    selector: &str,
+    npc_physics: &NpcPhysics,
+    candidates: &[NpcTargetCandidate],
+) -> Option<NpcAttackTarget> {
+    let candidate = match selector {
+        "NEAREST_ENEMY" => candidates.iter().min_by(|a, b| {
+            npc_candidate_distance_sq(npc_physics, a)
+                .total_cmp(&npc_candidate_distance_sq(npc_physics, b))
+                .then_with(|| npc_identity_cmp(a.identity, b.identity))
+        }),
+        "LOWEST_HEALTH_ALLY" => candidates.iter().min_by(|a, b| {
+            npc_health_fraction(a.hp, a.max_hp)
+                .total_cmp(&npc_health_fraction(b.hp, b.max_hp))
+                .then_with(|| npc_identity_cmp(a.identity, b.identity))
+        }),
+        _ => None,
+    }?;
+    Some(npc_attack_target_from_candidate(npc_physics, candidate))
+}
+
+fn npc_candidate_distance_sq(physics: &NpcPhysics, candidate: &NpcTargetCandidate) -> f32 {
+    let dx = candidate.pos_x - physics.pos_x;
+    let dz = candidate.pos_z - physics.pos_z;
+    dx * dx + dz * dz
+}
+
+fn npc_health_fraction(hp: i32, max_hp: i32) -> f32 {
+    if max_hp > 0 {
+        hp.max(0) as f32 / max_hp as f32
+    } else {
+        0.0
+    }
+}
+
+fn npc_identity_cmp(left: Identity, right: Identity) -> std::cmp::Ordering {
+    left.to_hex().cmp(&right.to_hex())
 }
 
 fn npc_action_count_requirements_met(
@@ -2843,12 +2996,12 @@ fn yaw_delta_abs(a: f32, b: f32) -> f32 {
 mod tests {
     use super::{
         npc_action_count_requirements_met, npc_action_distance_score, npc_catalog,
-        npc_decision_interval_ms, npc_identity, npc_is_outside_leash_from_positions,
-        npc_melee_defense_event_type, npc_target_stickiness_keeps_current,
-        npc_target_stickiness_keeps_scored_current, npc_template, npc_threat_key,
-        parse_npc_catalog, visual_id_for_template, yaw_for_direction, NpcAttackTarget, NpcFaction,
-        NpcNearbyCounts, NpcScoredTarget, NpcThreatComponents, NPC_CATALOG_JSON,
-        NPC_FACTION_FRIENDLY, NPC_FACTION_HOSTILE, NPC_FACTION_NEUTRAL,
+        npc_decision_interval_ms, npc_health_fraction, npc_identity, npc_identity_cmp,
+        npc_is_outside_leash_from_positions, npc_melee_defense_event_type,
+        npc_target_stickiness_keeps_current, npc_target_stickiness_keeps_scored_current,
+        npc_template, npc_threat_key, parse_npc_catalog, visual_id_for_template, yaw_for_direction,
+        NpcAttackTarget, NpcFaction, NpcNearbyCounts, NpcScoredTarget, NpcThreatComponents,
+        NPC_CATALOG_JSON, NPC_FACTION_FRIENDLY, NPC_FACTION_HOSTILE, NPC_FACTION_NEUTRAL,
         NPC_TEMPLATE_KOBOLD_THIEF_BK_DUAL_SWORD, NPC_TEMPLATE_KOBOLD_WARRIOR_GN_SPEAR,
         NPC_TEMPLATE_KOBOLD_WARRIOR_RD_SWORD_SHIELD,
     };
@@ -2895,6 +3048,16 @@ mod tests {
         assert!(npc_action_count_requirements_met(2, 3, nearby));
         assert!(!npc_action_count_requirements_met(3, 3, nearby));
         assert!(!npc_action_count_requirements_met(2, 4, nearby));
+    }
+
+    #[test]
+    fn npc_target_selectors_use_deterministic_health_and_identity_ordering() {
+        assert!(npc_health_fraction(25, 100) < npc_health_fraction(2, 4));
+        assert_eq!(npc_health_fraction(10, 0), 0.0);
+
+        let first = Identity::from_hex(format!("{:064x}", 1).as_str()).unwrap();
+        let second = Identity::from_hex(format!("{:064x}", 2).as_str()).unwrap();
+        assert_eq!(npc_identity_cmp(first, second), std::cmp::Ordering::Less);
     }
 
     #[test]
