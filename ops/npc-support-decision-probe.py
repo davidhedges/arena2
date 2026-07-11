@@ -10,6 +10,9 @@ rows:
      NPC_LICH_MEND and its HP increases.
   3. a Skeleton Wizard applies NPC_SKELETON_WIZARD_FROSTBITE to its pinned
      hostile player target through the shared targeted status pipeline.
+  4. while that player casts ICICLE, the Wizard selects
+     NPC_SKELETON_WIZARD_ICE_LOCK, applies its shared stun status, and the
+     existing crowd-control interruption lifecycle fizzles the active cast.
 
 Run this against a dedicated local database built from the current module:
 
@@ -44,6 +47,10 @@ WIZARD_TEMPLATE = "SKELETON_WIZARD"
 WIZARD_VISUAL = "SKELETON_WIZARD_GN"
 FROSTBITE_ABILITY = "NPC_SKELETON_WIZARD_FROSTBITE"
 FROSTBITE_STACK_GROUP = "NPC_SKELETON_FROSTBITE"
+ICE_LOCK_ABILITY = "NPC_SKELETON_WIZARD_ICE_LOCK"
+ICE_LOCK_STACK_GROUP = "NPC_SKELETON_ICE_LOCK"
+INTERRUPTIBLE_PLAYER_SPELL = "ICICLE"
+INTERRUPTIBLE_PLAYER_ABILITY = "SPELL_ICICLE"
 
 
 class Probe:
@@ -136,6 +143,16 @@ class Probe:
                 return float(x), float(z), int(tick)
         raise RuntimeError("no player_physics row for probe identity")
 
+    def cast_pose(self):
+        rows = self.sql(
+            "SELECT identity, pos_x, pos_y, pos_z, yaw, last_processed_tick "
+            "FROM player_physics"
+        )
+        for identity, x, y, z, yaw, tick in rows:
+            if normalize_identity(identity) == self.identity:
+                return float(x), float(y), float(z), float(yaw), int(tick)
+        raise RuntimeError("no player_physics row for probe identity")
+
     def move_to(self, target_x, target_z, timeout=12.0):
         deadline = time.time() + timeout
         while time.time() < deadline:
@@ -184,6 +201,15 @@ class Probe:
             and row_ability == ability
             and row_event == "COMBAT_IMPACT"
             for row_caster, row_hit, row_ability, row_event in rows
+        )
+
+    def has_caster_event(self, caster, ability, event_type):
+        rows = self.sql("SELECT caster, ability_id, event_type FROM combat_event")
+        return any(
+            normalize_identity(row_caster) == caster
+            and row_ability == ability
+            and row_event == event_type
+            for row_caster, row_ability, row_event in rows
         )
 
     def dump_recent(self):
@@ -335,7 +361,57 @@ def main():
             f"  PASS hostile choice: {FROSTBITE_ABILITY} applied "
             f"{FROSTBITE_STACK_GROUP}"
         )
-        print("PASS: support buff/heal and hostile debuff decisions observed")
+
+        print("== hostile interrupt: Skeleton Wizard Ice Lock")
+        probe.call("learn_spell", [INTERRUPTIBLE_PLAYER_SPELL])
+        time.sleep(0.3)
+        cast_x, cast_y, cast_z, cast_yaw, cast_tick = probe.cast_pose()
+        probe.call(
+            "cast_request",
+            [
+                INTERRUPTIBLE_PLAYER_SPELL,
+                f"0x{wizard}",
+                0.0,
+                0.0,
+                0.0,
+                cast_tick,
+                cast_x,
+                cast_y,
+                cast_z,
+                cast_yaw,
+                "npc-interrupt-probe",
+                1,
+                int(time.time() * 1000),
+            ],
+        )
+        wait_until(
+            "Ice Lock impact and stun status on the casting player",
+            lambda: probe.has_impact(wizard, probe.identity, ICE_LOCK_ABILITY)
+            and probe.has_status(
+                probe.identity,
+                wizard,
+                ICE_LOCK_STACK_GROUP,
+            ),
+            timeout=10.0,
+        )
+        wait_until(
+            "the interrupted player cast to fizzle",
+            lambda: probe.has_caster_event(
+                probe.identity,
+                INTERRUPTIBLE_PLAYER_ABILITY,
+                "COMBAT_FIZZLE",
+            ),
+            timeout=4.0,
+        )
+        print(
+            f"  PASS hostile choice: {ICE_LOCK_ABILITY} interrupted "
+            f"{INTERRUPTIBLE_PLAYER_SPELL} through shared crowd control"
+        )
+        probe.call("clear_auto_attack_target", [])
+        print(
+            "PASS: support buff/heal, hostile debuff, and hostile interrupt "
+            "decisions observed"
+        )
         return 0
     except Exception as error:
         probe.call("clear_auto_attack_target", [])
