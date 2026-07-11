@@ -269,12 +269,11 @@ pub struct NpcThreat {
     pub updated_at: Timestamp,
 }
 
-/// One in-flight telegraphed swing per NPC (S3): the CAST event is emitted at
-/// swing start, this row schedules damage resolution `attack_windup_ms` later.
-/// At most one exists per NPC (cadence >> windup); a retarget mid-windup
-/// replaces — i.e. cancels — the in-flight swing. Resolution re-validates
-/// everything against present-time state, so rows never need proactive
-/// cleanup beyond NPC despawn.
+/// One immutable in-flight telegraphed swing per NPC (S3): the CAST event is
+/// emitted at swing start, this row schedules damage resolution
+/// `attack_windup_ms` later. Replanning pauses until resolution or an explicit
+/// interrupt deletes the row, so a later utility result cannot replace a
+/// telegraph the player has already seen.
 #[table(accessor = npc_pending_swing)]
 #[derive(Clone)]
 pub struct NpcPendingSwing {
@@ -1336,6 +1335,15 @@ pub(crate) fn tick_npc_combat(
             continue;
         }
 
+        if let Some(swing) = ctx.db.npc_pending_swing().identity().find(npc.identity) {
+            if let Some(target) =
+                resolve_npc_swing_target(ctx, npc.identity, &physics, swing.target)
+            {
+                face_npc_target(ctx, now, &physics, &target);
+            }
+            continue;
+        }
+
         let existing_runtime = ctx.db.npc_combat_runtime().identity().find(npc.identity);
         let committed_target = existing_runtime.as_ref().and_then(|runtime| {
             if now >= runtime.next_decision_at
@@ -1441,14 +1449,15 @@ pub(crate) fn tick_npc_combat(
             continue;
         }
 
-        begin_npc_melee_swing(ctx, now, &npc, &physics, &template, &action, &target);
-        stamp_named_cooldown_for_duration(
-            ctx,
-            npc.identity,
-            action.ability_id.as_str(),
-            Duration::from_millis(action.cooldown_ms),
-            now,
-        );
+        if begin_npc_melee_swing(ctx, now, &npc, &physics, &template, &action, &target) {
+            stamp_named_cooldown_for_duration(
+                ctx,
+                npc.identity,
+                action.ability_id.as_str(),
+                Duration::from_millis(action.cooldown_ms),
+                now,
+            );
+        }
         upsert_npc_combat_runtime(ctx, runtime);
     }
 }
@@ -2152,7 +2161,16 @@ fn begin_npc_melee_swing(
     template: &NpcTemplate,
     action: &MeleeAbilityCatalog,
     target: &NpcAttackTarget,
-) {
+) -> bool {
+    if ctx
+        .db
+        .npc_pending_swing()
+        .identity()
+        .find(npc.identity)
+        .is_some()
+    {
+        return false;
+    }
     let action_instance_id = format!("npc:{}:{}", npc.identity.to_hex(), timestamp_to_micros(now));
     emit_npc_combat_event(
         ctx,
@@ -2179,17 +2197,8 @@ fn begin_npc_melee_swing(
         resolve_at,
         resolve_at_micros: timestamp_to_micros(resolve_at),
     };
-    if ctx
-        .db
-        .npc_pending_swing()
-        .identity()
-        .find(row.identity)
-        .is_some()
-    {
-        ctx.db.npc_pending_swing().identity().update(row);
-    } else {
-        ctx.db.npc_pending_swing().insert(row);
-    }
+    ctx.db.npc_pending_swing().insert(row);
+    true
 }
 
 fn resolve_due_npc_pending_swings(
