@@ -1,7 +1,6 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
-using System.IO;
 using Arena.Entity;
 using UnityEditor;
 using UnityEditor.Animations;
@@ -78,12 +77,16 @@ namespace Arena.Editor
                     errors.Add("Primary Animator has no controller.");
                 if (animator.avatar == null || !animator.avatar.isValid)
                     errors.Add("Primary Animator has no valid avatar.");
-            }
 
-            RequireRole(errors, "idle", profile.Animations.idle);
-            RequireRole(errors, "walk", profile.Animations.walk);
-            RequireRole(errors, "basic attack", profile.Animations.basicAttack);
-            RequireRole(errors, "death", profile.Animations.death);
+                HashSet<string> states = CollectStateNames(animator.runtimeAnimatorController);
+                ValidateRoleStates(errors, "idle", profile.Animations.idle, states);
+                ValidateRoleStates(errors, "ready", profile.Animations.ready, states, required: false);
+                ValidateRoleStates(errors, "walk", profile.Animations.walk, states);
+                ValidateRoleStates(errors, "run", profile.Animations.run, states, required: false);
+                ValidateRoleStates(errors, "basic attack", profile.Animations.basicAttack, states);
+                ValidateRoleStates(errors, "hit", profile.Animations.hit, states, required: false);
+                ValidateRoleStates(errors, "death", profile.Animations.death, states);
+            }
             return errors;
         }
 
@@ -96,10 +99,44 @@ namespace Arena.Editor
                 Debug.LogError($"[NPC Profile] '{profile.name}' failed:\n- {string.Join("\n- ", errors)}", profile);
         }
 
-        private static void RequireRole(List<string> errors, string label, List<string> states)
+        private static void ValidateRoleStates(
+            List<string> errors,
+            string label,
+            List<string> authored,
+            HashSet<string> controllerStates,
+            bool required = true)
         {
-            if (states.Count == 0 || states.TrueForAll(string.IsNullOrWhiteSpace))
-                errors.Add($"At least one {label} state is required.");
+            if (authored.Count == 0 || authored.TrueForAll(string.IsNullOrWhiteSpace))
+            {
+                if (required)
+                    errors.Add($"At least one {label} state is required.");
+                return;
+            }
+
+            if (authored.TrueForAll(state => !controllerStates.Contains(state.Trim())))
+                errors.Add($"No authored {label} state exists in the primary Animator controller.");
+        }
+
+        private static HashSet<string> CollectStateNames(RuntimeAnimatorController? controller)
+        {
+            if (controller is AnimatorOverrideController overrideController)
+                controller = overrideController.runtimeAnimatorController;
+
+            var names = new HashSet<string>(StringComparer.Ordinal);
+            if (controller is not AnimatorController animatorController)
+                return names;
+
+            foreach (AnimatorControllerLayer layer in animatorController.layers)
+                CollectStateNames(layer.stateMachine, names);
+            return names;
+        }
+
+        private static void CollectStateNames(AnimatorStateMachine stateMachine, HashSet<string> names)
+        {
+            foreach (ChildAnimatorState child in stateMachine.states)
+                names.Add(child.state.name);
+            foreach (ChildAnimatorStateMachine child in stateMachine.stateMachines)
+                CollectStateNames(child.stateMachine, names);
         }
 
         private static void PopulateDraftRoles(SerializedProperty roles, RuntimeAnimatorController? controller)
@@ -107,9 +144,7 @@ namespace Arena.Editor
             if (controller == null)
                 return;
 
-            var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (AnimationClip clip in controller.animationClips)
-                names.Add(clip.name);
+            HashSet<string> names = CollectStateNames(controller);
 
             Populate(roles.FindPropertyRelative("idle"), names, "idle", "Idle01");
             Populate(roles.FindPropertyRelative("ready"), names, "ready");
