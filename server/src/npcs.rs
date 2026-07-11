@@ -1471,6 +1471,31 @@ fn chase_npc_toward_target(
         return update_npc_facing(ctx, now, physics, desired_yaw);
     }
 
+    move_npc_along(
+        ctx,
+        now,
+        npc,
+        physics,
+        template,
+        target.dir_x,
+        target.dir_z,
+        travel,
+        desired_yaw,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn move_npc_along(
+    ctx: &ReducerContext,
+    now: Timestamp,
+    npc: &NpcInstance,
+    physics: &NpcPhysics,
+    template: &NpcTemplate,
+    dir_x: f32,
+    dir_z: f32,
+    travel: f32,
+    desired_yaw: f32,
+) -> NpcPhysics {
     let (arena_seed, flat_ground_only) = npc_movement_world(ctx, npc);
     let open_world_scene_name = if npc.world_kind.eq_ignore_ascii_case(WORLD_KIND_OPEN) {
         Some(npc.open_world_scene_name.as_str())
@@ -1478,8 +1503,8 @@ fn chase_npc_toward_target(
         None
     };
     let step_count = ((travel / NPC_CHASE_COLLISION_STEP).ceil() as usize).max(1);
-    let step_x = target.dir_x * travel / step_count as f32;
-    let step_z = target.dir_z * travel / step_count as f32;
+    let step_x = dir_x * travel / step_count as f32;
+    let step_z = dir_z * travel / step_count as f32;
     let mut next_x = physics.pos_x;
     let mut next_y = physics.pos_y;
     let mut next_z = physics.pos_z;
