@@ -4132,15 +4132,12 @@ fn resolve_pending_melee_hit_volume(
     now: Timestamp,
     actor_snapshots: &CombatActorSnapshotSet,
 ) {
-    let Some(source_state) = ctx.db.player_state().player_id().find(row.source) else {
+    let Some(caster_pose) = actor_snapshot_for(ctx, row.source) else {
         return;
     };
-    if !source_state.alive {
+    if !caster_pose.alive {
         return;
     }
-    let Some(caster_phys) = ctx.db.player_physics().identity().find(row.source) else {
-        return;
-    };
     let Some(airborne_targeting_mode) =
         AirborneTargetingMode::from_wire(row.airborne_targeting_mode.as_str())
     else {
@@ -4167,15 +4164,15 @@ fn resolve_pending_melee_hit_volume(
     let players = actor_snapshots.as_slice();
     let mut candidate_indices = Vec::new();
     actor_snapshots.query_disc_indices(
-        caster_phys.pos_x,
-        caster_phys.pos_z,
+        caster_pose.pos_x,
+        caster_pose.pos_z,
         candidate_radius,
         &mut candidate_indices,
     );
 
     // AREA_IMPACT is the area action/VFX signal and intentionally fires even when no targets pass
     // the later per-target filters; CONTACT/damage events remain the "hit landed" signal.
-    emit_melee_area_impact_event(ctx, row, now, &caster_phys);
+    emit_melee_area_impact_event(ctx, row, now, &caster_pose);
 
     for player in candidate_indices
         .iter()
@@ -4190,7 +4187,7 @@ fn resolve_pending_melee_hit_volume(
         if !can_harm(ctx, row.source, player.player_id) {
             continue;
         }
-        if !airborne_targeting_mode.allows_target(caster_phys.grounded, player.grounded) {
+        if !airborne_targeting_mode.allows_target(caster_pose.grounded, player.grounded) {
             continue;
         }
         if !sweep_rewind_membership(
@@ -4201,7 +4198,7 @@ fn resolve_pending_melee_hit_volume(
             now,
             sweep_rewind_on,
             row.kind.as_str(),
-            |p| melee_hit_volume_contains_player(row, &caster_phys, p),
+            |p| melee_hit_volume_contains_player(row, &caster_pose, p),
         ) {
             continue;
         }
@@ -4216,16 +4213,16 @@ fn emit_melee_area_impact_event(
     ctx: &ReducerContext,
     row: &PendingMeleeImpact,
     now: Timestamp,
-    caster_phys: &crate::player_physics::PlayerPhysics,
+    caster_pose: &CombatActorSnapshot,
 ) {
-    let dir_x = caster_phys.yaw.sin();
-    let dir_z = caster_phys.yaw.cos();
+    let dir_x = caster_pose.facing_yaw.sin();
+    let dir_z = caster_pose.facing_yaw.cos();
     let origin_y = terrain_surface_y_for_caster(
         ctx,
         row.source,
-        caster_phys.pos_x,
-        caster_phys.pos_z,
-        caster_phys.pos_y,
+        caster_pose.pos_x,
+        caster_pose.pos_z,
+        caster_pose.pos_y,
     );
 
     ctx.db.combat_event().insert(CombatEvent {
@@ -4238,9 +4235,9 @@ fn emit_melee_area_impact_event(
         source_kind: row.event_source.clone(),
         caster: row.source,
         hit: Identity::ZERO,
-        origin_x: caster_phys.pos_x,
+        origin_x: caster_pose.pos_x,
         origin_y,
-        origin_z: caster_phys.pos_z,
+        origin_z: caster_pose.pos_z,
         dir_x,
         dir_y: 0.0,
         dir_z,
@@ -4251,9 +4248,9 @@ fn emit_melee_area_impact_event(
         sequence_kind: COMBAT_SEQUENCE_NONE.to_string(),
         sequence_index: 0,
         sequence_count: 1,
-        point_x: caster_phys.pos_x,
+        point_x: caster_pose.pos_x,
         point_y: origin_y,
-        point_z: caster_phys.pos_z,
+        point_z: caster_pose.pos_z,
         created_at: now,
         created_at_micros: timestamp_to_micros(now),
         damage: 0,
@@ -4265,14 +4262,14 @@ fn emit_melee_area_impact_event(
 
 fn melee_hit_volume_contains_player(
     row: &PendingMeleeImpact,
-    caster_phys: &crate::player_physics::PlayerPhysics,
+    caster_pose: &CombatActorSnapshot,
     player: &crate::combat::actor_snapshot::CombatActorSnapshot,
 ) -> bool {
     match row.targeting_kind.trim().to_ascii_uppercase().as_str() {
         "CASTER_RADIUS" => CombatAreaShape::Disc { radius: row.range }.contains_player_xz(
-            caster_phys.pos_x,
-            caster_phys.pos_z,
-            caster_phys.yaw,
+            caster_pose.pos_x,
+            caster_pose.pos_z,
+            caster_pose.facing_yaw,
             player,
             0.0,
         ),
@@ -4282,10 +4279,10 @@ fn melee_hit_volume_contains_player(
             vertical_tolerance: None,
         }
         .contains_player(
-            caster_phys.pos_x,
-            caster_phys.pos_y,
-            caster_phys.pos_z,
-            caster_phys.yaw,
+            caster_pose.pos_x,
+            caster_pose.pos_y,
+            caster_pose.pos_z,
+            caster_pose.facing_yaw,
             player,
             0.0,
         ),
@@ -4299,10 +4296,10 @@ fn resolve_pending_melee_target_impact(
     now: Timestamp,
     actor_snapshots: &CombatActorSnapshotSet,
 ) {
-    let Some(source_state) = ctx.db.player_state().player_id().find(row.source) else {
+    let Some(caster_pose) = actor_snapshot_for(ctx, row.source) else {
         return;
     };
-    if !source_state.alive {
+    if !caster_pose.alive {
         return;
     }
 
@@ -4320,11 +4317,8 @@ fn resolve_pending_melee_target_impact(
         return;
     }
 
-    let Some(caster_phys) = ctx.db.player_physics().identity().find(row.source) else {
-        return;
-    };
-    let dx = target_snapshot.pos_x - caster_phys.pos_x;
-    let dz = target_snapshot.pos_z - caster_phys.pos_z;
+    let dx = target_snapshot.pos_x - caster_pose.pos_x;
+    let dz = target_snapshot.pos_z - caster_pose.pos_z;
     let horiz_dist = (dx * dx + dz * dz).sqrt();
     let (dir_x, dir_z) = if horiz_dist > 0.001 {
         (dx / horiz_dist, dz / horiz_dist)
@@ -4336,8 +4330,8 @@ fn resolve_pending_melee_target_impact(
     // delay applied to this moment. Sweeps and unreported presses stay
     // present-time; the whiff itself stays silent (player-melee parity).
     let present_in_reach = target_within_area_range_xz(
-        caster_phys.pos_x,
-        caster_phys.pos_z,
+        caster_pose.pos_x,
+        caster_pose.pos_z,
         target_snapshot.pos_x,
         target_snapshot.pos_z,
         target_snapshot.hit_radius,
@@ -4355,8 +4349,8 @@ fn resolve_pending_melee_target_impact(
         );
         if pose.rewound_by_micros > 0 {
             let rewound_in_reach = target_within_area_range_xz(
-                caster_phys.pos_x,
-                caster_phys.pos_z,
+                caster_pose.pos_x,
+                caster_pose.pos_z,
                 pose.pos_x,
                 pose.pos_z,
                 target_snapshot.hit_radius,
@@ -4401,7 +4395,7 @@ fn resolve_pending_melee_target_impact(
             ctx,
             row,
             now,
-            &caster_phys,
+            &caster_pose,
             target_snapshot.pos_x,
             target_snapshot.pos_y,
             target_snapshot.pos_z,
@@ -4422,9 +4416,9 @@ fn resolve_pending_melee_target_impact(
             active_until: row.active_until,
             parry_behavior: row.parry_behavior.as_str(),
             block_behavior: row.block_behavior.as_str(),
-            source_x: caster_phys.pos_x,
-            source_y: caster_phys.pos_y,
-            source_z: caster_phys.pos_z,
+            source_x: caster_pose.pos_x,
+            source_y: caster_pose.pos_y,
+            source_z: caster_pose.pos_z,
             impact_x: target_snapshot.pos_x,
             impact_y: target_snapshot.pos_y + target_snapshot.hit_height * 0.5,
             impact_z: target_snapshot.pos_z,
@@ -4449,7 +4443,7 @@ fn resolve_pending_melee_target_impact(
                 ctx,
                 row,
                 now,
-                &caster_phys,
+                &caster_pose,
                 target_snapshot.pos_x,
                 target_snapshot.pos_y,
                 target_snapshot.pos_z,
@@ -4475,7 +4469,7 @@ fn resolve_pending_melee_target_impact(
                 ctx,
                 row,
                 now,
-                &caster_phys,
+                &caster_pose,
                 target_snapshot.pos_x,
                 target_snapshot.pos_y,
                 target_snapshot.pos_z,
@@ -4516,9 +4510,9 @@ fn resolve_pending_melee_target_impact(
         source_kind: row.event_source.clone(),
         caster: row.source,
         hit: row.target,
-        origin_x: caster_phys.pos_x,
-        origin_y: caster_phys.pos_y,
-        origin_z: caster_phys.pos_z,
+        origin_x: caster_pose.pos_x,
+        origin_y: caster_pose.pos_y,
+        origin_z: caster_pose.pos_z,
         dir_x,
         dir_y: 0.0,
         dir_z,
@@ -5006,7 +5000,7 @@ fn emit_parry_event(
     ctx: &ReducerContext,
     row: &PendingMeleeImpact,
     now: Timestamp,
-    caster_phys: &crate::player_physics::PlayerPhysics,
+    caster_phys: &CombatActorSnapshot,
     target_x: f32,
     target_y: f32,
     target_z: f32,
@@ -5058,7 +5052,7 @@ fn emit_block_event(
     ctx: &ReducerContext,
     row: &PendingMeleeImpact,
     now: Timestamp,
-    caster_phys: &crate::player_physics::PlayerPhysics,
+    caster_phys: &CombatActorSnapshot,
     target_x: f32,
     target_y: f32,
     target_z: f32,
@@ -5111,7 +5105,7 @@ fn emit_miss_event(
     ctx: &ReducerContext,
     row: &PendingMeleeImpact,
     now: Timestamp,
-    caster_phys: &crate::player_physics::PlayerPhysics,
+    caster_phys: &CombatActorSnapshot,
     target_x: f32,
     target_y: f32,
     target_z: f32,
@@ -5232,29 +5226,10 @@ mod tests {
         StatusPolarity,
     };
     use crate::player::{DEFAULT_COMBAT_PROFILE, TWO_HANDED_SWORD_COMBAT_PROFILE};
-    use crate::player_physics::PlayerPhysics;
     use crate::player_state::PlayerState;
     use crate::progression::MeleeGapCloseCatalog;
 
     const TEST_GAP_CLOSE_DESTINATION_EPSILON_METERS: f32 = 0.10;
-
-    fn test_player_physics(identity: Identity, pos_x: f32, pos_z: f32, yaw: f32) -> PlayerPhysics {
-        PlayerPhysics {
-            identity,
-            pos_x,
-            pos_y: 0.0,
-            pos_z,
-            vel_x: 0.0,
-            vel_y: 0.0,
-            vel_z: 0.0,
-            yaw,
-            grounded: true,
-            last_processed_tick: 0,
-            last_tick_consumed_command: true,
-            buffered_command_count: 0,
-            updated_at: Timestamp::UNIX_EPOCH,
-        }
-    }
 
     fn test_actor_snapshot(identity: Identity, pos_x: f32, pos_z: f32) -> CombatActorSnapshot {
         CombatActorSnapshot {
@@ -6542,7 +6517,7 @@ mod tests {
 
     #[test]
     fn targetless_radius_melee_hit_volume_uses_caster_center() {
-        let caster = test_player_physics(test_identity_with_byte(1), 0.0, 0.0, 0.0);
+        let caster = test_actor_snapshot(test_identity_with_byte(1), 0.0, 0.0);
         let row = test_targetless_impact_row("CASTER_RADIUS", 3.25, 0.0);
         let inside = test_actor_snapshot(test_identity_with_byte(2), 0.0, 3.0);
         let outside = test_actor_snapshot(test_identity_with_byte(3), 0.0, 4.0);
@@ -6553,7 +6528,7 @@ mod tests {
 
     #[test]
     fn targetless_cone_melee_hit_volume_uses_caster_facing() {
-        let caster = test_player_physics(test_identity_with_byte(1), 0.0, 0.0, 0.0);
+        let caster = test_actor_snapshot(test_identity_with_byte(1), 0.0, 0.0);
         let row = test_targetless_impact_row("CASTER_CONE", 4.0, 60.0);
         let front = test_actor_snapshot(test_identity_with_byte(2), 0.0, 3.0);
         let side = test_actor_snapshot(test_identity_with_byte(3), 3.0, 0.0);
