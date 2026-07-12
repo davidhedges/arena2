@@ -112,10 +112,8 @@ namespace Arena.EditorTools
         {
             new(
                 "KOBOLD_WARRIOR_RD_SWORD_SHIELD",
-                "NPC_KOBOLD_WARRIOR_SWORD_SLASH",
-                "Combat_1H_Attack",
-                "Combat_Defend_Attack",
-                "Combat_Unarmed_Attack"),
+                "NPC_KOBOLD_SHIELD_STRIKE",
+                "Combat_Defend_Attack"),
             new(
                 "SKELETON_ARCHER",
                 "NPC_SKELETON_ARCHER_SHOT",
@@ -378,10 +376,14 @@ namespace Arena.EditorTools
                     if (!TryGetCurrentSweepPresentation(out _, out NpcAnimationController hitAnimation))
                         return;
                     SweepEvidence hitEvidence = SweepEvidenceRows[_sweepIndex];
+                    bool hitSuppressed = CurrentSweepExplicitlySuppressesHit();
                     hitAnimation.PlayHit();
-                    hitEvidence.HitState = ReadActiveAnimationState(hitAnimation);
-                    hitEvidence.HitResolved = !string.IsNullOrEmpty(hitEvidence.HitState)
-                        && !string.Equals(hitEvidence.HitState, hitEvidence.ReadyState, StringComparison.Ordinal);
+                    hitEvidence.HitState = hitSuppressed
+                        ? "SUPPRESSED"
+                        : ReadActiveAnimationState(hitAnimation);
+                    hitEvidence.HitResolved = hitSuppressed
+                        || (!string.IsNullOrEmpty(hitEvidence.HitState)
+                            && !string.Equals(hitEvidence.HitState, hitEvidence.ReadyState, StringComparison.Ordinal));
                     if (!hitEvidence.HitResolved)
                     {
                         Finish(false, $"{CurrentSweepLabel()} did not resolve a distinct hit/impact-response state");
@@ -629,6 +631,18 @@ namespace Arena.EditorTools
                 return "uninitialized appearance";
             SweepEntry entry = SweepPlan[_sweepIndex];
             return $"template '{entry.TemplateId}' visual '{entry.VisualId}'";
+        }
+
+        private static bool CurrentSweepExplicitlySuppressesHit()
+        {
+            if (_sweepIndex < 0 || _sweepIndex >= SweepPlan.Count)
+                return false;
+
+            string visualId = SweepPlan[_sweepIndex].VisualId;
+            return Arena.Entity.NpcVisualCatalog.TryLoadDefault(out Arena.Entity.NpcVisualCatalog catalog, out _)
+                && catalog.TryGetEntry(visualId, out NpcVisualCatalogEntry entry)
+                && entry.profile != null
+                && entry.profile.Animations.hit.Count == 0;
         }
 
         private static string ReadActiveAnimationState(NpcAnimationController animation)

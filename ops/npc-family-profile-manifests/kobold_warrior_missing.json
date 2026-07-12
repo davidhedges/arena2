@@ -27,7 +27,9 @@
     { "status_kind": "STUN", "clip_file_id": -8767420384561272259, "clip_guid": "6bacdad010f1d9d4d87b2717a0d5d087", "require_humanoid_avatar": true }
   ],
   "appearance_overrides": {
+    "KOBOLD_WARRIOR_BK": { "prefab_file_id": 6765231170549451891 },
     "KOBOLD_WARRIOR_GN": {
+      "prefab_file_id": 4458771613176611703,
       "animations": { "ready": ["Combat_2HL_Ready"], "basicAttack": ["Combat_2HL_Attack"], "hit": ["Combat_2HL_Hit"] },
       "action_animations": [
         { "ability_id": "NPC_KOBOLD_SPEAR_SPECIAL_2", "states": ["Combat_2HL_AttackSpecial01"] },
@@ -38,6 +40,7 @@
       ]
     },
     "KOBOLD_WARRIOR_RD": {
+      "prefab_file_id": 1416310187555642562,
       "animations": { "ready": ["Combat_Defend_Ready"], "basicAttack": ["Combat_Defend_Attack"], "hit": ["Combat_Defend_Hit"] },
       "action_animations": [
         { "ability_id": "NPC_KOBOLD_SHIELD_BASH", "states": ["Combat_Defend_ShieldBash"] },

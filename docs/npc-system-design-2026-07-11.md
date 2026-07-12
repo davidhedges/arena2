@@ -1,7 +1,7 @@
 # NPC System Design
 
 Date: 2026-07-11
-Status: implementation in progress; actor-generic targeting/world queries, shared melee/spell/projectile/heal/status execution, caster/support/archer exemplars, searchable catalog spawning, deterministic inventory/sweep tooling, explicit Generic-rig crowd-control fallback, the first three post-exemplar family batches, completed Lich/Skeleton Wizard/Skeleton Archer appearance coverage, and debuff/interrupt utility actions are landed through `17f32488`, while full visual authoring remains
+Status: package rollout complete for all 146 imported appearances; shared combat execution, utility selection, authored presentation, complete stance-appropriate attack sets, catalog spawning, and the full sequential runtime sweep are landed through `e513a871` plus the final prefab-variant/sweep slice described below. Summon/mobility execution, deeper navigation, and explicitly deferred threat expansion remain future system work.
 
 ## Outcome
 
@@ -16,9 +16,9 @@ The design has four central decisions:
 
 This is a substantial engineering project. The existing kobold implementation is a useful vertical slice, but it is not a general NPC system yet.
 
-## Implementation progress (2026-07-11 handoff)
+## Implementation progress (2026-07-12 completion handoff)
 
-The implementation has started and has been committed in coherent slices. The implementation baseline summarized here is `17f32488` (`Complete Skeleton Archer appearances`). Player combat semantics are an explicit guardrail: actor-generic seams were extended where required, but player damage, healing arithmetic, authorization, animation fallback, input, prediction, rewind, and action-bar behavior must not be redesigned as part of the NPC rollout.
+The imported-package rollout has been implemented in coherent slices through `e513a871` (`Enable complete authored NPC attack sets`) plus the final prefab-variant/sweep slice. Player combat semantics remain an explicit guardrail: actor-generic seams were extended where required, but player damage, healing arithmetic, authorization, animation fallback, input, prediction, rewind, action-bar behavior, and keybind semantics were not redesigned as part of the NPC rollout.
 
 ### Landed foundations
 
@@ -63,39 +63,44 @@ The implementation has started and has been committed in coherent slices. The im
 - All three Skeleton Archer appearances now share the proven ranged projectile gameplay template and each has an exact prefab/profile/catalog mapping. Their deliberate root Animator selection resolves the package's three-Animator prefab structure, and their load/release phases, arrow socket, bounds, and native `Stun` clip are explicitly authored. The family remains ranged-only.
 - Skeleton Wizard Frostbite proves hostile debuff utility through the existing targeted shared spell/status executor. It applies the authored `SLOW` payload, status stack/refresh rules, LOS/audience gates, cast lifecycle, cooldown, events, and VFX cues without an NPC-only status path.
 - Skeleton Wizard Ice Lock proves interrupt utility independently of execution. The planner selects it only while the chosen hostile target has an authoritative shared `ActiveCast`; the action then applies an authored short `STUN` through the existing targeted spell/status path, whose actor-generic crowd-control lifecycle owns cast cancellation.
+- All 146 inventory appearances across all 35 imported families now have canonical synchronized visual IDs, explicit first-party `NpcVisualProfile` assets, reviewed gameplay-template ownership, and searchable exact-appearance spawning. The catalog contains exactly 146 unique entries and the server template catalog owns exactly the same 146 canonical IDs.
+- Every stance-appropriate native attack clip is reachable through the authored NPC action kit. Distinct timings/counterplay use NPC-scoped abilities and independent cooldowns; equipment-dependent Demon Warrior, Skeleton Warrior, Zombie, Hellguard, and Kobold appearances use separate stance templates so they cannot select incompatible controller states. Slime Man, Lich, and Skeleton Wizard all use both native melee attacks; Skeleton Archer remains deliberately ranged-only because the imported asset has no melee weapon or melee attack clip.
+- Native action lookup is keyed by the authoritative `CombatEvent.ability_id`. The remaining kobold template switch/state-name fallback was removed, so package-specific runtime animation switches are no longer required.
+- Presentation profiles support reviewed vertical offsets, explicit primary Animator selection, forced root-motion suppression, and an optional reviewed controller override. The generator validates controller states, sockets, warnings, nested-prefab GameObject IDs, deterministic profile GUIDs, and idempotent output.
+- The final `APPEARANCE_SWEEP` passed all 146 appearances against isolated database `npcappearancesweep`: every exact visual resolved its authored profile and prefab, primary Animator/controller, locomotion, ready, hit animation or explicit hit suppression, visible death, authoritative despawn, and `EntityRegistry` cleanup.
 
 ### Still incomplete
 
 - Utility execution currently supports melee offense, hostile projectile spells, allied targeted buffs, direct allied healing, hostile debuffs, and hostile cast interrupts. Summon and mobility action execution are not implemented.
 - Basic ranged approach/hold/retreat bands are implemented. Richer kiting, unreachable-target recovery, navigation, and local avoidance remain.
 - Healing/buff support threat, taunts, assist/call-for-help, richer threat decay, and other threat-model expansion are explicitly deferred to a later date. Do not pull them into current appearance/family authoring slices.
-- The searchable browser and automated sequential sweep are implemented, but only 27 of the imported 146 appearances are currently synchronized. The remaining 119 appearance mappings, family profiles, action/brain/loot contracts, reaction policies, sockets, and bounds remain. Archer melee fallback is explicitly deferred: the imported family has only bow/load/shot presentation, no melee weapon, draw/stow animation, or verified melee attack clip.
-- Dragon Brute is not a low-risk batch despite its clean Animator/state inventory: its renderer bounds extend about 1.29 m below the prefab origin, while the current NPC presenter has no authored visual ground-offset field. It needs an in-editor ground review or an explicit shared presentation offset contract before synchronization.
-- All four acceptance archetypes now have initial gameplay paths, native presentation where authored, and passing mixed-group runtime evidence. Full acceptance still needs the 146-appearance authoring/sweep and the remaining family contracts.
+- Skeleton Archer melee fallback remains deliberately deferred: the imported family has bow/load/shot presentation but no melee weapon, draw/stow animation, or verified melee attack clip.
+- Encounter-specific stat, cooldown, utility-weight, loot, socket, offset, and visual-polish tuning remains content work even though every imported appearance now satisfies the baseline functional contract.
 
 ### Current verification
 
-- `cargo test --quiet`: 478 passed, 0 failed.
+- `cargo test --quiet`: 479 passed, 0 failed.
 - `spacetime build -p server`: succeeded; the local optional `wasm-opt` binary is absent, so SpacetimeDB emitted an unoptimized module after a successful release build.
 - `dotnet build Assembly-CSharp.csproj --no-restore`: succeeded with 0 errors and 11 existing obsolete-API warnings in third-party/current Unity code.
-- `dotnet build Assembly-CSharp-Editor.csproj --no-restore`: succeeded with 0 errors and 17 existing obsolete/dead-field warnings.
+- `dotnet build Assembly-CSharp-Editor.csproj --no-restore`: succeeded with 0 errors and 28 existing obsolete/dead-field warnings after a full rebuild.
 - Focused Unity edit-mode profile validation: 5 passed, 0 failed. The tests load all three real vendor prefabs, validate explicit Animator/state/socket mappings and fallback policies, and resolve their catalog entries.
 - `ops/npc-support-decision-probe.py`: passed against fresh isolated database `npcinterruptprobe`. At full health the Lich applied Bone Ward to a 125/125 Kobold; after one real player auto-attack reduced it to 103/125, Lich Mend raised it to 121/125. The Skeleton Wizard then applied Frostbite's shared slow and selected Ice Lock only during an authoritative player Icicle cast; Ice Lock's shared stun impact caused the existing crowd-control lifecycle to emit the Icicle `COMBAT_FIZZLE`.
 - Static catalog and planner coverage pins Frostbite's `SLOW` payload, Ice Lock's `STUN` payload, deterministic Wizard action order, and the inspector's `TARGET_CASTING` rejection.
-- Shared Kobold telegraph parity: three live `NPC_KOBOLD_WARRIOR_SWORD_SLASH` CAST-to-IMPACT pairs resolved at 461.4–462.1 ms for the authored 450 ms windup, matching fixed-tick rounding.
+- Shared Kobold telegraph parity remains covered through the actor-generic pending-melee path; the legacy single-attack kobold abilities were replaced in active kits by the complete stance-specific authored sets.
 - Two-client mixed-exemplar acceptance: passed after the shared melee migration against isolated database `npcmixedprobe`. The observer materialized four NPCs owned by the separate websocket client; Kobold entered `Combat_1H_Attack`, Archer entered `attack`, Wizard entered `SpellCast`, and Lich entered `SpellA`. All four emitted CAST/IMPACT, Archer and Wizard emitted RELEASE plus projectile RELEASE/IMPACT, three shared projectile visuals started, four shared VFX instances spawned, and no projectile/VFX template was missing.
-- Catalog-driven appearance sweep: the original 7-visual run passed against isolated database `npcmixedprobe`. All 7 resolved their exact prefab, Animator/controller, locomotion, ready, distinct hit response, visible death state, authoritative row removal, and client entity cleanup. A 27-visual rerun including Abomination, Humanoid Scarab, Slime Man, and the completed Lich, Skeleton Wizard, and Skeleton Archer appearances is the current verification target.
+- Catalog-driven appearance sweep: all 146 synchronized appearances passed against isolated database `npcappearancesweep`. The result recorded 146 catalog appearances, 146 authored profiles, and 146 authoritative cleanup completions.
 - Generated C# bindings are current for the landed runtime schema.
 - The working tree still contains the user-owned `.gitignore` change; preserve it unless its owner explicitly brings it into scope. `Assets/Arena/Resources/NpcVisualCatalog.asset` is also user-owned if it changes again.
 
 ### Recommended next slice
 
-The next coherent slice should begin the remaining full-package authoring surface without inventing new combat paths:
+The imported-package coverage milestone is complete. Future work should be chosen as a separate capability/content slice:
 
-1. Use the landed inventory draft to review the next low-risk family batch, including primary Animator, root-motion, native state, clip timing, sockets, bounds, action-kit, brain, and loot behavior before adding runtime mappings.
-2. Run the sequential sweep after each accepted batch so its coverage grows from 27 toward all 146 appearances and profile/fallback counts stay explicit.
-3. Keep threat-model expansion deferred while completing appearance/family authoring and shared execution coverage.
-4. Keep the Skeleton Archer purely ranged with retreat/hold behavior until suitable melee weapon and animation assets are deliberately authored.
+1. Keep threat-model expansion—including taunts, assist/call-for-help, support threat, and richer decay—deferred until explicitly resumed.
+2. Add summon or mobility execution only when an exemplar requires it, through the existing authored/shared action executor rather than an NPC-only path.
+3. Add authoritative navigation, unreachable-target recovery, and local avoidance before relying on these NPCs in complex layouts.
+4. Tune family stats, cooldowns, utility weights, loot, sockets, offsets, and visual polish from encounter playtests while retaining the 146-appearance sweep as a regression gate.
+5. Keep Skeleton Archer ranged-only until suitable melee weapon and animation assets are deliberately authored.
 
 ## Asset relocation completed
 

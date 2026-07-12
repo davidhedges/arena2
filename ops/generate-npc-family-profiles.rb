@@ -64,6 +64,9 @@ appearance_overrides = manifest.fetch("appearance_overrides", {})
 appearance_ids = appearances.map { |entry| entry.fetch("appearance_id_candidate") }.to_set
 unknown_override_ids = appearance_overrides.keys.reject { |visual_id| appearance_ids.include?(visual_id) }
 abort("#{family_name}: unknown appearance overrides: #{unknown_override_ids.join(", ")}") unless unknown_override_ids.empty?
+prefab_file_ids = manifest.fetch("prefab_file_ids", {})
+unknown_prefab_ids = prefab_file_ids.keys.reject { |visual_id| appearance_ids.include?(visual_id) }
+abort("#{family_name}: unknown prefab file IDs: #{unknown_prefab_ids.join(", ")}") unless unknown_prefab_ids.empty?
 
 def parse_prefab(path)
   text = path.read
@@ -79,7 +82,7 @@ def parse_prefab(path)
     transforms[id] = [game_object, parent]
   end
   root = transforms.find { |_id, (_game_object, parent)| parent == "0" }
-  return { root_game_object_id: "100100000", transform_paths: Set.new(["."]) } unless root
+  return { root_game_object_id: nil, transform_paths: Set.new(["."]) } unless root
 
   transform_paths = transforms.keys.to_set do |transform_id|
     parts = []
@@ -258,6 +261,10 @@ appearances.each do |entry|
   end
 
   prefab = parse_prefab(prefab_path)
+  prefab_id = override["prefab_file_id"] || prefab_file_ids[visual_id] || manifest["prefab_file_id"] || prefab.fetch(:root_game_object_id)
+  abort("#{visual_id}: nested prefab requires reviewed prefab_file_id") unless prefab_id
+  prefab_id = Integer(prefab_id)
+  abort("#{visual_id}: prefab_file_id must be positive") unless prefab_id.positive?
   if primary_animator_path != "." && !prefab.fetch(:transform_paths).include?(primary_animator_path)
     abort("#{visual_id}: primary Animator path '#{primary_animator_path}' is missing")
   end
@@ -275,7 +282,7 @@ appearances.each do |entry|
   guid = profile_guid(visual_id)
   yaml = profile_yaml(
     profile_name: profile_name,
-    prefab_id: prefab.fetch(:root_game_object_id),
+    prefab_id: prefab_id,
     prefab_guid: prefab_guid,
     primary_animator_path: primary_animator_path,
     controller_override: controller_override_guid,
@@ -302,7 +309,7 @@ appearances.each do |entry|
       "  - visualId: #{visual_id}",
       "    profile: {fileID: 11400000, guid: #{guid}, type: 2}",
       "    assetPath: #{relative_prefab}",
-      "    prefab: {fileID: #{prefab.fetch(:root_game_object_id)}, guid: #{prefab_guid}, type: 3}",
+      "    prefab: {fileID: #{prefab_id}, guid: #{prefab_guid}, type: 3}",
       "    statusReactions: []"
     ].join("\n")
   end

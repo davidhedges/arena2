@@ -21,6 +21,7 @@
   ],
   "appearance_overrides": {
     "KOBOLD_THIEF_BK": {
+      "prefab_file_id": 1880509093640075716,
       "animations": { "ready": ["Combat_1H_Ready"], "basicAttack": ["Combat_1H_AttackDual"], "hit": ["Combat_1H_Hit"] },
       "action_animations": [
         { "ability_id": "NPC_KOBOLD_DUAL_SPECIAL_2", "states": ["Combat_1H_AttackSpecialDual01"] },
@@ -30,6 +31,7 @@
       ]
     },
     "KOBOLD_THIEF_GN": {
+      "prefab_file_id": 7524267261053355553,
       "animations": { "ready": ["Combat_2HL_Ready"], "basicAttack": ["Combat_2HL_Attack"], "hit": ["Combat_2HL_Hit"] },
       "action_animations": [
         { "ability_id": "NPC_KOBOLD_SPEAR_SPECIAL_2", "states": ["Combat_2HL_AttackSpecial01"] },
@@ -40,6 +42,7 @@
       ]
     },
     "KOBOLD_THIEF_RD": {
+      "prefab_file_id": 3033277909591008497,
       "animations": { "ready": ["Combat_Defend_Ready"], "basicAttack": ["Combat_Defend_Attack"], "hit": ["Combat_Defend_Hit"] },
       "action_animations": [
         { "ability_id": "NPC_KOBOLD_SHIELD_BASH", "states": ["Combat_Defend_ShieldBash"] },
