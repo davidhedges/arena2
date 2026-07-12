@@ -461,7 +461,7 @@ fn emit_release_event(
             ability_id: spec.ability_id.to_string(),
             source_kind: spec.source_kind.to_string(),
             projectile_id: spec.projectile_id.clone(),
-            projectile_trail_vfx_id: String::new(),
+            projectile_trail_vfx_id: None,
             projectile_instance_id: projectile_instance_id.to_string(),
             hit_index: 0,
             event_type: COMBAT_EVENT_RELEASE.to_string(),

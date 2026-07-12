@@ -3775,8 +3775,9 @@ fn emit_spell_projectile_release_event(
         kind.as_str(),
         projectile_sequence_index,
     )
-    .or_else(|| crate::progression::projectile_trail_vfx_id_for_spell(ability_id, kind.as_str(), 0))
-    .unwrap_or_default();
+    .or_else(|| {
+        crate::progression::projectile_trail_vfx_id_for_spell(ability_id, kind.as_str(), 0)
+    });
 
     ctx.db.combat_event().insert(CombatEvent {
         event_id: 0,

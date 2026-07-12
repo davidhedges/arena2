@@ -131,8 +131,9 @@ pub struct NpcActionKitCatalog {
     pub required_target_status: String,
     pub forbidden_target_status: String,
     pub movement_may_enable: bool,
-    pub windup_ms: u64,
     pub sort_order: u32,
+    #[default(0u64)]
+    pub windup_ms: u64,
 }
 
 #[table(accessor = npc_brain_catalog, public)]

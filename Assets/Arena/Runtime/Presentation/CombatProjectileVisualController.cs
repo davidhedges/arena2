@@ -172,7 +172,7 @@ namespace Arena.Presentation
                     Time.time);
             else
                 _launchOffsets.Remove(projectileKey);
-            ReplaceProjectile(projectileKey, row.ProjectileId, row.ProjectileTrailVfxId, (template, trailTemplate) =>
+            ReplaceProjectile(projectileKey, row.ProjectileId, row.ProjectileTrailVfxId ?? string.Empty, (template, trailTemplate) =>
             {
                 ProjectileVfxPool.Rental? rental = _projectilePool.TryRent(template, trailTemplate, projectileKey);
                 return rental != null

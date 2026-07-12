@@ -1660,9 +1660,8 @@ fn emit_projectile_event_with_metadata(
                 0,
             )
         })
-        .unwrap_or_default()
     } else {
-        String::new()
+        None
     };
     let terminal = is_projectile_presentation_terminal(
         event_type,

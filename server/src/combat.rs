@@ -7,7 +7,7 @@
 use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use spacetimedb::{reducer, table, Identity, ReducerContext, Table, Timestamp};
 
 use crate::arena::{
@@ -447,7 +447,6 @@ pub struct ProjectilePresentationEvent {
     pub ability_id: String,
     pub source_kind: String,
     pub projectile_id: String,
-    pub projectile_trail_vfx_id: String,
     pub projectile_instance_id: String,
     pub hit_index: i32,
     pub event_type: String,
@@ -492,6 +491,8 @@ pub struct ProjectilePresentationEvent {
     // the Timestamp payload is retained for client/event readability.
     #[index(btree)]
     pub created_at_micros: i64,
+    #[default(None::<String>)]
+    pub projectile_trail_vfx_id: Option<String>,
 }
 
 #[table(accessor = combat_engagement, public)]
@@ -1954,7 +1955,7 @@ pub struct StatusEffect {
     pub spell_id: String,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Hash, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Hash, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum StatusEffectKind {
     Root,
@@ -2909,7 +2910,7 @@ impl StatusPayload {
     }
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum StatusPolarity {
     Buff,
@@ -2933,7 +2934,7 @@ impl StatusPolarity {
     }
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Hash, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Hash, serde::Serialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub(crate) enum StatusDispelType {
     Magic,
@@ -2990,7 +2991,7 @@ pub(crate) fn decode_status_dispel_types(value: &str) -> Vec<StatusDispelType> {
         .collect()
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum StackPolicy {
     Refresh,

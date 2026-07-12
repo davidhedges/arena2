@@ -25,8 +25,6 @@ namespace SpacetimeDB.Types
         public string SourceKind;
         [DataMember(Name = "projectile_id")]
         public string ProjectileId;
-        [DataMember(Name = "projectile_trail_vfx_id")]
-        public string ProjectileTrailVfxId;
         [DataMember(Name = "projectile_instance_id")]
         public string ProjectileInstanceId;
         [DataMember(Name = "hit_index")]
@@ -107,6 +105,8 @@ namespace SpacetimeDB.Types
         public SpacetimeDB.Timestamp CreatedAt;
         [DataMember(Name = "created_at_micros")]
         public long CreatedAtMicros;
+        [DataMember(Name = "projectile_trail_vfx_id")]
+        public string? ProjectileTrailVfxId;
 
         public ProjectilePresentationEvent(
             ulong EventId,
@@ -115,7 +115,6 @@ namespace SpacetimeDB.Types
             string AbilityId,
             string SourceKind,
             string ProjectileId,
-            string ProjectileTrailVfxId,
             string ProjectileInstanceId,
             int HitIndex,
             string EventType,
@@ -155,7 +154,8 @@ namespace SpacetimeDB.Types
             uint SequenceCount,
             bool Terminal,
             SpacetimeDB.Timestamp CreatedAt,
-            long CreatedAtMicros
+            long CreatedAtMicros,
+            string? ProjectileTrailVfxId
         )
         {
             this.EventId = EventId;
@@ -164,7 +164,6 @@ namespace SpacetimeDB.Types
             this.AbilityId = AbilityId;
             this.SourceKind = SourceKind;
             this.ProjectileId = ProjectileId;
-            this.ProjectileTrailVfxId = ProjectileTrailVfxId;
             this.ProjectileInstanceId = ProjectileInstanceId;
             this.HitIndex = HitIndex;
             this.EventType = EventType;
@@ -205,6 +204,7 @@ namespace SpacetimeDB.Types
             this.Terminal = Terminal;
             this.CreatedAt = CreatedAt;
             this.CreatedAtMicros = CreatedAtMicros;
+            this.ProjectileTrailVfxId = ProjectileTrailVfxId;
         }
 
         public ProjectilePresentationEvent()
@@ -214,7 +214,6 @@ namespace SpacetimeDB.Types
             this.AbilityId = "";
             this.SourceKind = "";
             this.ProjectileId = "";
-            this.ProjectileTrailVfxId = "";
             this.ProjectileInstanceId = "";
             this.EventType = "";
             this.MotionKind = "";

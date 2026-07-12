@@ -65,7 +65,6 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Col<ProjectilePresentationEvent, string> AbilityId { get; }
         public global::SpacetimeDB.Col<ProjectilePresentationEvent, string> SourceKind { get; }
         public global::SpacetimeDB.Col<ProjectilePresentationEvent, string> ProjectileId { get; }
-        public global::SpacetimeDB.Col<ProjectilePresentationEvent, string> ProjectileTrailVfxId { get; }
         public global::SpacetimeDB.Col<ProjectilePresentationEvent, string> ProjectileInstanceId { get; }
         public global::SpacetimeDB.Col<ProjectilePresentationEvent, int> HitIndex { get; }
         public global::SpacetimeDB.Col<ProjectilePresentationEvent, string> EventType { get; }
@@ -106,6 +105,7 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Col<ProjectilePresentationEvent, bool> Terminal { get; }
         public global::SpacetimeDB.Col<ProjectilePresentationEvent, SpacetimeDB.Timestamp> CreatedAt { get; }
         public global::SpacetimeDB.Col<ProjectilePresentationEvent, long> CreatedAtMicros { get; }
+        public global::SpacetimeDB.Col<ProjectilePresentationEvent, string> ProjectileTrailVfxId { get; }
 
         public ProjectilePresentationEventCols(string tableName)
         {
@@ -115,7 +115,6 @@ namespace SpacetimeDB.Types
             AbilityId = new global::SpacetimeDB.Col<ProjectilePresentationEvent, string>(tableName, "ability_id");
             SourceKind = new global::SpacetimeDB.Col<ProjectilePresentationEvent, string>(tableName, "source_kind");
             ProjectileId = new global::SpacetimeDB.Col<ProjectilePresentationEvent, string>(tableName, "projectile_id");
-            ProjectileTrailVfxId = new global::SpacetimeDB.Col<ProjectilePresentationEvent, string>(tableName, "projectile_trail_vfx_id");
             ProjectileInstanceId = new global::SpacetimeDB.Col<ProjectilePresentationEvent, string>(tableName, "projectile_instance_id");
             HitIndex = new global::SpacetimeDB.Col<ProjectilePresentationEvent, int>(tableName, "hit_index");
             EventType = new global::SpacetimeDB.Col<ProjectilePresentationEvent, string>(tableName, "event_type");
@@ -156,6 +155,7 @@ namespace SpacetimeDB.Types
             Terminal = new global::SpacetimeDB.Col<ProjectilePresentationEvent, bool>(tableName, "terminal");
             CreatedAt = new global::SpacetimeDB.Col<ProjectilePresentationEvent, SpacetimeDB.Timestamp>(tableName, "created_at");
             CreatedAtMicros = new global::SpacetimeDB.Col<ProjectilePresentationEvent, long>(tableName, "created_at_micros");
+            ProjectileTrailVfxId = new global::SpacetimeDB.Col<ProjectilePresentationEvent, string>(tableName, "projectile_trail_vfx_id");
         }
     }
 

@@ -43,10 +43,10 @@ namespace SpacetimeDB.Types
         public string ForbiddenTargetStatus;
         [DataMember(Name = "movement_may_enable")]
         public bool MovementMayEnable;
-        [DataMember(Name = "windup_ms")]
-        public ulong WindupMs;
         [DataMember(Name = "sort_order")]
         public uint SortOrder;
+        [DataMember(Name = "windup_ms")]
+        public ulong WindupMs;
 
         public NpcActionKitCatalog(
             string EntryId,
@@ -64,8 +64,8 @@ namespace SpacetimeDB.Types
             string RequiredTargetStatus,
             string ForbiddenTargetStatus,
             bool MovementMayEnable,
-            ulong WindupMs,
-            uint SortOrder
+            uint SortOrder,
+            ulong WindupMs
         )
         {
             this.EntryId = EntryId;
@@ -83,8 +83,8 @@ namespace SpacetimeDB.Types
             this.RequiredTargetStatus = RequiredTargetStatus;
             this.ForbiddenTargetStatus = ForbiddenTargetStatus;
             this.MovementMayEnable = MovementMayEnable;
-            this.WindupMs = WindupMs;
             this.SortOrder = SortOrder;
+            this.WindupMs = WindupMs;
         }
 
         public NpcActionKitCatalog()
