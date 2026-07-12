@@ -24,7 +24,6 @@ namespace Arena.Presentation
 
         private static SpellCastAnimationLibrary? _library;
         private static SpellCastAnimationMap? _map;
-        private static bool _loaded;
         private static readonly Dictionary<ComposedCacheKey, WeaponSpellAnimationEntry> ComposedEntries = new();
 
         private readonly struct ComposedCacheKey : IEquatable<ComposedCacheKey>
@@ -272,12 +271,19 @@ namespace Arena.Presentation
 
         private static void EnsureLoaded()
         {
-            if (_loaded)
+            if (_library != null && _map != null)
                 return;
 
-            _library = Resources.Load<SpellCastAnimationLibrary>(LibraryResource);
-            _map = Resources.Load<SpellCastAnimationMap>(MapResource);
-            _loaded = true;
+            // Resources.Load can invoke ScriptableObject validation callbacks in the editor.
+            // Those callbacks deliberately invalidate this cache, so hold both results locally
+            // and publish the pair only after both loads finish. This prevents a map validation
+            // from clearing the library halfway through initialization.
+            SpellCastAnimationLibrary? library = _library;
+            SpellCastAnimationMap? map = _map;
+            library ??= Resources.Load<SpellCastAnimationLibrary>(LibraryResource);
+            map ??= Resources.Load<SpellCastAnimationMap>(MapResource);
+            _library = library;
+            _map = map;
         }
 
         /// <summary>Editor/test hook: drop cached Resources so a rescan or new map is picked up.</summary>
@@ -285,7 +291,6 @@ namespace Arena.Presentation
         {
             _library = null;
             _map = null;
-            _loaded = false;
             ComposedEntries.Clear();
         }
     }

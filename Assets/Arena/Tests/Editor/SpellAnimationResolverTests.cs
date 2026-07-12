@@ -88,6 +88,12 @@ namespace Arena.Tests.Editor
             FieldInfo cacheField = resolverType.GetField(
                 "ComposedEntries",
                 BindingFlags.NonPublic | BindingFlags.Static)!;
+            FieldInfo libraryField = resolverType.GetField(
+                "_library",
+                BindingFlags.NonPublic | BindingFlags.Static)!;
+            FieldInfo mapField = resolverType.GetField(
+                "_map",
+                BindingFlags.NonPublic | BindingFlags.Static)!;
             var cache = (IDictionary)cacheField.GetValue(null)!;
             UnityEngine.Object set = Resources.Load("CombatAnimationSets/TwoHandedSword", setType);
             Assert.That(set, Is.Not.Null);
@@ -102,6 +108,8 @@ namespace Arena.Tests.Editor
 
             object?[] firstArgs = { set, "ICICLE", charged, Activator.CreateInstance(entryType) };
             Assert.That(resolve.Invoke(null, firstArgs), Is.True);
+            Assert.That(libraryField.GetValue(null), Is.Not.Null, "cold resolution must retain the loaded family library");
+            Assert.That(mapField.GetValue(null), Is.Not.Null, "cold resolution must retain the loaded spell map");
             Assert.That(cache.Count, Is.EqualTo(1));
 
             object?[] secondArgs = { set, "icicle", charged, Activator.CreateInstance(entryType) };
