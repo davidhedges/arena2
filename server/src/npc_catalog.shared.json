@@ -185,15 +185,16 @@
       "brain_profile_id": "BASIC_HOSTILE_MELEE",
       "resource_policy": "FREE_ACTIONS_ONLY",
       "action_kit": [
-        { "ability_id": "NPC_ABOMINATION_HEAVY_CLAW", "role": "MELEE_OFFENSE", "target_selector": "CURRENT_ENEMY", "base_utility": 1.2, "min_self_health_pct": 0.0, "max_self_health_pct": 1.0, "preferred_min_distance": 0.0, "preferred_max_distance": 2.8, "min_nearby_allies": 0, "min_nearby_enemies": 1, "required_target_status": "", "forbidden_target_status": "", "movement_may_enable": true, "windup_ms": 900, "sort_order": 10 },
-        { "ability_id": "NPC_ABOMINATION_CLAW", "role": "MELEE_OFFENSE", "target_selector": "CURRENT_ENEMY", "base_utility": 1.0, "min_self_health_pct": 0.0, "max_self_health_pct": 1.0, "preferred_min_distance": 0.0, "preferred_max_distance": 2.8, "min_nearby_allies": 0, "min_nearby_enemies": 1, "required_target_status": "", "forbidden_target_status": "", "movement_may_enable": true, "sort_order": 20 }
+        { "ability_id": "NPC_ABOMINATION_HEAVY_CLAW", "role": "MELEE_OFFENSE", "target_selector": "CURRENT_ENEMY", "base_utility": 1.2, "min_self_health_pct": 0.0, "max_self_health_pct": 1.0, "preferred_min_distance": 0.0, "preferred_max_distance": 2.8, "min_nearby_allies": 0, "min_nearby_enemies": 1, "required_target_status": "", "forbidden_target_status": "", "movement_may_enable": true, "windup_ms": 900, "recovery_ms": 850, "sort_order": 10 },
+        { "ability_id": "NPC_ABOMINATION_CLAW", "role": "MELEE_OFFENSE", "target_selector": "CURRENT_ENEMY", "base_utility": 1.0, "min_self_health_pct": 0.0, "max_self_health_pct": 1.0, "preferred_min_distance": 0.0, "preferred_max_distance": 2.8, "min_nearby_allies": 0, "min_nearby_enemies": 1, "required_target_status": "", "forbidden_target_status": "", "movement_may_enable": true, "recovery_ms": 900, "sort_order": 20 }
       ],
       "max_hp": 220,
       "hit_radius": 0.75,
       "hit_height": 2.6,
       "aggro_radius": 9.0,
       "move_speed": 4.5,
-      "attack_windup_ms": 700
+      "attack_windup_ms": 700,
+      "attack_recovery_ms": 900
     },
     {
       "template_id": "HUMANOID_SCARAB",

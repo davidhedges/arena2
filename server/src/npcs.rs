@@ -81,6 +81,8 @@ const NPC_MELEE_SOURCE_KIND: &str = "NPC_MELEE";
 const NPC_MELEE_ACTION_KIND: &str = "NPC_MELEE_ATTACK";
 const NPC_MELEE_PARRY_BEHAVIOR: &str = "PARRYABLE";
 const NPC_MELEE_BLOCK_BEHAVIOR: &str = "BLOCKABLE";
+const DEFAULT_NPC_ATTACK_RECOVERY_MS: u64 = 500;
+const MAX_NPC_ATTACK_RECOVERY_MS: u64 = 10_000;
 const NPC_CHASE_COLLISION_STEP: f32 = 0.35;
 const NPC_CHASE_STOP_EPSILON: f32 = 0.05;
 const NPC_FACE_EPSILON: f32 = 0.001;
@@ -224,6 +226,8 @@ pub struct NpcCombatRuntime {
     pub decision_sequence: u64,
     pub next_decision_at: Timestamp,
     pub next_decision_at_micros: i64,
+    #[default(0i64)]
+    pub hold_movement_until_micros: i64,
 }
 
 #[table(accessor = npc_target_override)]
@@ -298,6 +302,10 @@ pub(crate) struct NpcTemplate {
     /// above the victim's render delay (~100-166 ms) or the telegraph reads
     /// as nothing; design floor is 300 ms.
     pub attack_windup_ms: u64,
+    /// Default follow-through after impact/release during which movement stays
+    /// planted. Individual action-kit rows can override this value.
+    #[serde(default = "default_npc_attack_recovery_ms")]
+    pub attack_recovery_ms: u64,
 }
 
 #[derive(Clone, Deserialize)]
@@ -318,7 +326,13 @@ pub(crate) struct NpcActionKitEntry {
     pub movement_may_enable: bool,
     #[serde(default)]
     pub windup_ms: u64,
+    #[serde(default)]
+    pub recovery_ms: u64,
     pub sort_order: u32,
+}
+
+const fn default_npc_attack_recovery_ms() -> u64 {
+    DEFAULT_NPC_ATTACK_RECOVERY_MS
 }
 
 #[derive(Clone, Deserialize)]
@@ -701,6 +715,14 @@ fn parse_npc_catalog(json: &str) -> Result<NpcCatalogDocument, String> {
                     template.template_id, entry.ability_id
                 ));
             }
+            if entry.recovery_ms != 0
+                && !(50..=MAX_NPC_ATTACK_RECOVERY_MS).contains(&entry.recovery_ms)
+            {
+                return Err(format!(
+                    "template '{}' action '{}' has invalid recovery_ms",
+                    template.template_id, entry.ability_id
+                ));
+            }
             match crate::progression::authored_ability_actor_scope(entry.ability_id.as_str()) {
                 Some(scope) if matches!(normalize_id(scope).as_str(), "NPC" | "BOTH") => {}
                 Some(scope) => {
@@ -741,6 +763,7 @@ fn parse_npc_catalog(json: &str) -> Result<NpcCatalogDocument, String> {
             || !template.move_speed.is_finite()
             || template.move_speed <= 0.0
             || template.attack_windup_ms == 0
+            || !(50..=MAX_NPC_ATTACK_RECOVERY_MS).contains(&template.attack_recovery_ms)
         {
             return Err(format!(
                 "template '{}' has invalid combat or geometry values",
@@ -1346,8 +1369,28 @@ pub(crate) fn tick_npc_combat(
             }
             continue;
         }
+        let existing_runtime = ctx.db.npc_combat_runtime().identity().find(npc.identity);
         if ctx.db.active_cast().caster().find(npc.identity).is_some() {
-            if let Some(runtime) = ctx.db.npc_combat_runtime().identity().find(npc.identity) {
+            if let Some(runtime) = existing_runtime.as_ref() {
+                if let Some(target) = resolve_committed_npc_target(
+                    ctx,
+                    npc.identity,
+                    &physics,
+                    &template,
+                    &perception,
+                    runtime.target,
+                    target_is_pinned,
+                ) {
+                    face_npc_target(ctx, now, &physics, &target);
+                }
+            }
+            continue;
+        }
+        if existing_runtime
+            .as_ref()
+            .is_some_and(|runtime| npc_movement_hold_active(runtime, now))
+        {
+            if let Some(runtime) = existing_runtime.as_ref() {
                 if let Some(target) = resolve_committed_npc_target(
                     ctx,
                     npc.identity,
@@ -1363,7 +1406,6 @@ pub(crate) fn tick_npc_combat(
             continue;
         }
 
-        let existing_runtime = ctx.db.npc_combat_runtime().identity().find(npc.identity);
         let committed_target = existing_runtime.as_ref().and_then(|runtime| {
             if now >= runtime.next_decision_at
                 || target_override
@@ -1463,6 +1505,7 @@ pub(crate) fn tick_npc_combat(
                 decision_sequence,
                 next_decision_at,
                 next_decision_at_micros: timestamp_to_micros(next_decision_at),
+                hold_movement_until_micros: 0,
             }
         } else {
             existing_runtime.expect("committed target requires existing NPC runtime")
@@ -1557,7 +1600,16 @@ pub(crate) fn tick_npc_combat(
 
         match &action {
             NpcExecutableAction::Melee(melee) => {
-                if begin_npc_melee_swing(ctx, now, &npc, &physics, &template, melee, &target) {
+                if begin_npc_melee_swing(
+                    ctx,
+                    now,
+                    &npc,
+                    &physics,
+                    &template,
+                    melee,
+                    &target,
+                    &mut runtime,
+                ) {
                     stamp_named_cooldown_for_duration(
                         ctx,
                         npc.identity,
@@ -1568,7 +1620,7 @@ pub(crate) fn tick_npc_combat(
                 }
             }
             NpcExecutableAction::Spell { spell_kind, .. } => {
-                if let Err(err) = cast_spell_for_server_actor(
+                let cast_result = cast_spell_for_server_actor(
                     ctx,
                     npc.identity,
                     spell_kind,
@@ -1578,8 +1630,24 @@ pub(crate) fn tick_npc_combat(
                     target.pos_z,
                     physics.yaw,
                     now,
-                ) {
-                    log::warn!("[NPC_AI] spell execution failed: {err}");
+                );
+                match cast_result {
+                    Err(err) => log::warn!("[NPC_AI] spell execution failed: {err}"),
+                    Ok(()) => {
+                        let recovery_ms = npc_action_recovery_ms(&template, action.ability_id());
+                        if let Some(active_cast) = ctx.db.active_cast().caster().find(npc.identity)
+                        {
+                            stamp_npc_movement_hold(
+                                &mut runtime,
+                                active_cast.ends_at + Duration::from_millis(recovery_ms),
+                            );
+                        } else if npc_spell_cast_started_at(ctx, npc.identity, now) {
+                            stamp_npc_movement_hold(
+                                &mut runtime,
+                                now + Duration::from_millis(recovery_ms),
+                            );
+                        }
+                    }
                 }
                 runtime.planned_ability_id.clear();
                 runtime.next_decision_at = now;
@@ -2772,6 +2840,7 @@ fn begin_npc_melee_swing(
     template: &NpcTemplate,
     action: &MeleeAbilityCatalog,
     target: &NpcAttackTarget,
+    runtime: &mut NpcCombatRuntime,
 ) -> bool {
     if pending_melee_commitment_target_for_source(ctx, npc.identity, NPC_MELEE_SOURCE_KIND)
         .is_some()
@@ -2788,7 +2857,7 @@ fn begin_npc_melee_swing(
         action.base_damage
     };
     let windup_ms = npc_action_windup_ms(template, action.ability_id.as_str());
-    commit_server_actor_targeted_melee(
+    let committed = commit_server_actor_targeted_melee(
         ctx,
         now,
         ServerActorMeleeCommitment {
@@ -2808,7 +2877,15 @@ fn begin_npc_melee_swing(
             facing_arc_radians: std::f32::consts::PI,
             direct_action_key: action.ability_id.as_str(),
         },
-    )
+    );
+    if committed {
+        let recovery_ms = npc_action_recovery_ms(template, action.ability_id.as_str());
+        stamp_npc_movement_hold(
+            runtime,
+            now + Duration::from_millis(windup_ms.saturating_add(recovery_ms)),
+        );
+    }
+    committed
 }
 
 fn npc_action_windup_ms(template: &NpcTemplate, ability_id: &str) -> u64 {
@@ -2823,6 +2900,41 @@ fn npc_action_windup_ms(template: &NpcTemplate, ability_id: &str) -> u64 {
                 entry.windup_ms
             }
         })
+}
+
+fn npc_action_recovery_ms(template: &NpcTemplate, ability_id: &str) -> u64 {
+    template
+        .action_kit
+        .iter()
+        .find(|entry| entry.ability_id == ability_id)
+        .map_or(template.attack_recovery_ms, |entry| {
+            if entry.recovery_ms == 0 {
+                template.attack_recovery_ms
+            } else {
+                entry.recovery_ms
+            }
+        })
+}
+
+fn npc_movement_hold_active(runtime: &NpcCombatRuntime, now: Timestamp) -> bool {
+    timestamp_to_micros(now) < runtime.hold_movement_until_micros
+}
+
+fn stamp_npc_movement_hold(runtime: &mut NpcCombatRuntime, hold_until: Timestamp) {
+    let hold_until_micros = timestamp_to_micros(hold_until);
+    if hold_until_micros <= runtime.hold_movement_until_micros {
+        return;
+    }
+    runtime.hold_movement_until_micros = hold_until_micros;
+}
+
+fn npc_spell_cast_started_at(ctx: &ReducerContext, identity: Identity, now: Timestamp) -> bool {
+    let now_micros = timestamp_to_micros(now);
+    ctx.db.combat_event().caster().filter(identity).any(|row| {
+        row.created_at_micros == now_micros
+            && row.event_type == "CAST"
+            && row.source_kind == "SPELL"
+    })
 }
 
 pub(crate) fn interrupt_npc_actions_for_crowd_control(
@@ -3048,19 +3160,22 @@ fn yaw_delta_abs(a: f32, b: f32) -> f32 {
 mod tests {
     use std::fs;
     use std::path::Path;
+    use std::time::Duration;
 
     use super::{
-        npc_action_count_requirements_met, npc_action_distance_score, npc_catalog,
-        npc_decision_interval_ms, npc_health_fraction, npc_health_needs_healing, npc_identity,
-        npc_identity_cmp, npc_is_outside_leash_from_positions, npc_tactical_band,
-        npc_target_stickiness_keeps_current, npc_target_stickiness_keeps_scored_current,
-        npc_template, npc_threat_key, parse_npc_catalog, visual_id_for_template, yaw_for_direction,
-        NpcActionRejectCounts, NpcAttackTarget, NpcFaction, NpcNearbyCounts, NpcScoredTarget,
-        NpcTacticalBand, NpcThreatComponents, NPC_CATALOG_JSON, NPC_FACTION_FRIENDLY,
-        NPC_FACTION_HOSTILE, NPC_FACTION_NEUTRAL, NPC_TEMPLATE_KOBOLD_THIEF_BK_DUAL_SWORD,
-        NPC_TEMPLATE_KOBOLD_WARRIOR_GN_SPEAR, NPC_TEMPLATE_KOBOLD_WARRIOR_RD_SWORD_SHIELD,
+        npc_action_count_requirements_met, npc_action_distance_score, npc_action_recovery_ms,
+        npc_catalog, npc_decision_interval_ms, npc_health_fraction, npc_health_needs_healing,
+        npc_identity, npc_identity_cmp, npc_is_outside_leash_from_positions,
+        npc_movement_hold_active, npc_tactical_band, npc_target_stickiness_keeps_current,
+        npc_target_stickiness_keeps_scored_current, npc_template, npc_threat_key,
+        parse_npc_catalog, stamp_npc_movement_hold, visual_id_for_template, yaw_for_direction,
+        NpcActionRejectCounts, NpcAttackTarget, NpcCombatRuntime, NpcFaction, NpcNearbyCounts,
+        NpcScoredTarget, NpcTacticalBand, NpcThreatComponents, NPC_CATALOG_JSON,
+        NPC_FACTION_FRIENDLY, NPC_FACTION_HOSTILE, NPC_FACTION_NEUTRAL,
+        NPC_TEMPLATE_KOBOLD_THIEF_BK_DUAL_SWORD, NPC_TEMPLATE_KOBOLD_WARRIOR_GN_SPEAR,
+        NPC_TEMPLATE_KOBOLD_WARRIOR_RD_SWORD_SHIELD,
     };
-    use spacetimedb::Identity;
+    use spacetimedb::{Identity, Timestamp};
 
     #[test]
     fn npc_faction_wire_values_are_stable() {
@@ -3238,6 +3353,7 @@ mod tests {
             .iter()
             .all(|template| !template.visual_ids.is_empty() && !template.action_kit.is_empty()));
         let wizard = npc_template("SKELETON_WIZARD").expect("wizard exemplar should be authored");
+        assert_eq!(wizard.attack_recovery_ms, 500);
         assert_eq!(wizard.visual_ids.len(), 3);
         assert_eq!(wizard.action_kit.len(), 5);
         assert_eq!(wizard.action_kit[0].role, "RANGED_OFFENSE");
@@ -3265,6 +3381,15 @@ mod tests {
         assert_eq!(abomination.visual_ids.len(), 3);
         assert_eq!(abomination.action_kit.len(), 2);
         assert_eq!(abomination.action_kit[0].role, "MELEE_OFFENSE");
+        assert_eq!(abomination.attack_recovery_ms, 900);
+        assert_eq!(
+            npc_action_recovery_ms(&abomination, "NPC_ABOMINATION_HEAVY_CLAW"),
+            850
+        );
+        assert_eq!(
+            npc_action_recovery_ms(&abomination, "NPC_ABOMINATION_CLAW"),
+            900
+        );
         let humanoid_scarab =
             npc_template("HUMANOID_SCARAB").expect("humanoid scarab family should be authored");
         assert_eq!(humanoid_scarab.visual_ids.len(), 4);
@@ -3499,6 +3624,46 @@ mod tests {
             .err()
             .expect("inverted health thresholds should fail");
         assert!(error.contains("invalid self-health thresholds"), "{error}");
+    }
+
+    #[test]
+    fn npc_action_kits_reject_invalid_recovery_timing() {
+        let mut catalog: serde_json::Value = serde_json::from_str(NPC_CATALOG_JSON).unwrap();
+        catalog["templates"][0]["action_kit"][0]["recovery_ms"] = serde_json::json!(10);
+        let error = parse_npc_catalog(&serde_json::to_string(&catalog).unwrap())
+            .err()
+            .expect("too-short recovery should fail");
+        assert!(error.contains("invalid recovery_ms"), "{error}");
+    }
+
+    #[test]
+    fn npc_movement_hold_is_monotonic_and_expires_at_the_deadline() {
+        let now = Timestamp::UNIX_EPOCH + Duration::from_secs(10);
+        let first_deadline = now + Duration::from_millis(850);
+        let later_deadline = now + Duration::from_millis(900);
+        let mut runtime = NpcCombatRuntime {
+            identity: Identity::ZERO,
+            target: Identity::ZERO,
+            planned_ability_id: String::new(),
+            decision_sequence: 1,
+            next_decision_at: now,
+            next_decision_at_micros: now.to_micros_since_unix_epoch(),
+            hold_movement_until_micros: 0,
+        };
+
+        stamp_npc_movement_hold(&mut runtime, first_deadline);
+        stamp_npc_movement_hold(&mut runtime, now + Duration::from_millis(500));
+        stamp_npc_movement_hold(&mut runtime, later_deadline);
+
+        assert_eq!(
+            runtime.hold_movement_until_micros,
+            later_deadline.to_micros_since_unix_epoch()
+        );
+        assert!(npc_movement_hold_active(
+            &runtime,
+            later_deadline - Duration::from_micros(1)
+        ));
+        assert!(!npc_movement_hold_active(&runtime, later_deadline));
     }
 
     #[test]
