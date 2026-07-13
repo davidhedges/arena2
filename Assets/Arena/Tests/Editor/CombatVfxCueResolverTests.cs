@@ -77,5 +77,17 @@ namespace Arena.Tests.Editor
             Assert.That(source, Does.Contain("ProjectilePresentationEvent row,"));
         }
 
+        [Test]
+        public void CombatVfxDispatcher_AreaContactsRouteTargetAnchoredSpellImpactCues()
+        {
+            string source = File.ReadAllText(DispatcherPath);
+
+            Assert.That(source, Does.Contain("CombatEventTypes.Contact => TriggerSpellImpact"));
+            Assert.That(source, Does.Contain("targetAnchoredSpellContact"));
+            Assert.That(source, Does.Contain("DispatchFact(fact.Value, targetAnchoredSpellContact);"));
+            Assert.That(source, Does.Contain("IsTargetAnchoredCue(cue)"));
+            Assert.That(source, Does.Contain("AnchorGroundUnderTarget"));
+        }
+
     }
 }

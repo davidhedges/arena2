@@ -6979,6 +6979,68 @@ mod tests {
     }
 
     #[test]
+    fn nova_authors_self_centered_arcane_area_and_target_hit_vfx() {
+        let catalog = progression_catalog();
+        let ability = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "SPELL_NOVA")
+            .expect("Nova ability should be authored");
+
+        assert_eq!(normalize_identifier(ability.action_id.as_str()), "NOVA");
+        assert_eq!(
+            normalize_identifier(ability.gameplay.targeting.as_str()),
+            "SELF"
+        );
+        assert_eq!(ability.gameplay.requires_target, Some(false));
+        assert_eq!(ability.gameplay.cast_time_ms, Some(0));
+        assert_eq!(ability.gameplay.resource_cost, Some(20.0));
+
+        let delivery = ability
+            .gameplay
+            .delivery
+            .as_ref()
+            .expect("Nova should author area delivery");
+        assert_eq!(
+            delivery.get("kind").and_then(|value| value.as_str()),
+            Some("AREA")
+        );
+        assert_eq!(
+            delivery.get("damage_type").and_then(|value| value.as_str()),
+            Some("ARCANE")
+        );
+        assert_eq!(
+            delivery.get("radius").and_then(|value| value.as_f64()),
+            Some(4.6)
+        );
+
+        let release = catalog
+            .combat_vfx_cues
+            .iter()
+            .find(|cue| {
+                normalize_identifier(cue.owner_id.as_str()) == "SPELL_NOVA"
+                    && normalize_identifier(cue.trigger.as_str()) == "SPELL_RELEASE"
+            })
+            .expect("Nova release VFX cue should be authored");
+        assert_eq!(normalize_identifier(release.anchor.as_str()), "CASTER");
+        assert_eq!(
+            normalize_identifier(release.vfx_id.as_str()),
+            "VFX_NOVA_CAST_01"
+        );
+
+        let hit = catalog
+            .combat_vfx_cues
+            .iter()
+            .find(|cue| {
+                normalize_identifier(cue.owner_id.as_str()) == "SPELL_NOVA"
+                    && normalize_identifier(cue.trigger.as_str()) == "SPELL_IMPACT"
+            })
+            .expect("Nova target-hit VFX cue should be authored");
+        assert_eq!(normalize_identifier(hit.anchor.as_str()), "TARGET");
+        assert_eq!(normalize_identifier(hit.vfx_id.as_str()), "VFX_NOVA_HIT_01");
+    }
+
+    #[test]
     fn blinding_light_authors_overhead_release_vfx() {
         let catalog = progression_catalog();
         let cue = catalog
@@ -8958,6 +9020,7 @@ mod tests {
             ("SPELL_NEGATE", "NEGATE", "ARCANE"),
             ("SPELL_WITHERING_ORB", "WITHERING_ORB", "SHADOW"),
             ("SPELL_FROST_NOVA", "FROST_NOVA", "COLD"),
+            ("SPELL_NOVA", "NOVA", "ARCANE"),
             ("SPELL_ICE_SPIKES", "ICE_SPIKES", "COLD"),
             ("SPELL_GLACIAL_SPIKE", "GLACIAL_SPIKE", "COLD"),
             ("SPELL_FROZEN_GRASP", "FROZEN_GRASP", "COLD"),

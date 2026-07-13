@@ -38,6 +38,8 @@ namespace Arena.Tests.Editor
         private const string NegateVfxPath = "Assets/Arena/Runtime/Presentation/VFX/NegateVFX.cs";
         private const string BeamVfxPath = "Assets/Arena/Runtime/Presentation/VFX/BeamVFX.cs";
         private const string FrostNovaPrefabMetaPath = "Assets/Arena/Resources/CombatVFX/Area/VFX_DebuffAoE02_Ice_Arena.prefab.meta";
+        private const string NovaCastPrefabMetaPath = "Assets/Arena/Resources/CombatVFX/playground/Arcane Explosion.prefab.meta";
+        private const string NovaHitPrefabMetaPath = "Assets/ThirdParty/AssetStore/VFX/Piloto Studio/Super Realistic FX Bundle/ARPG Realistic Essentials Fire/Prefabs/Melee/Green_Fire/Hit_Nova_Light_green.prefab.meta";
         private const string LightningPrefabMetaPath = "Assets/Arena/Resources/CombatVFX/Area/VFX_Lightning01_Arena.prefab.meta";
         private const string MeteorPrefabMetaPath = "Assets/Arena/Resources/CombatVFX/Area/VFX_SingleComet01_Fire_Arena.prefab.meta";
         private const string MeteorHeadPrefabMetaPath = "Assets/Arena/Resources/CombatVFX/Projectiles/VFX_Projectile_Comet_Orange_Arena.prefab.meta";
@@ -160,6 +162,25 @@ namespace Arena.Tests.Editor
             string registry = File.ReadAllText(CombatVfxRegistryPath);
             Assert.That(registry, Does.Contain("vfxId: VFX_LIGHTNING_01"));
             Assert.That(registry, Does.Contain($"guid: {prefabGuid}"));
+        }
+
+        [Test]
+        public void NovaVfx_UsesAuthoredCastAndTargetHitPrefabs()
+        {
+            string castPrefabGuid = File.ReadLines(NovaCastPrefabMetaPath)
+                .First(line => line.StartsWith("guid: ", StringComparison.Ordinal))
+                .Substring("guid: ".Length)
+                .Trim();
+            string hitPrefabGuid = File.ReadLines(NovaHitPrefabMetaPath)
+                .First(line => line.StartsWith("guid: ", StringComparison.Ordinal))
+                .Substring("guid: ".Length)
+                .Trim();
+
+            string registry = File.ReadAllText(CombatVfxRegistryPath);
+            Assert.That(registry, Does.Contain("vfxId: VFX_NOVA_CAST_01"));
+            Assert.That(registry, Does.Contain($"guid: {castPrefabGuid}"));
+            Assert.That(registry, Does.Contain("vfxId: VFX_NOVA_HIT_01"));
+            Assert.That(registry, Does.Contain($"guid: {hitPrefabGuid}"));
         }
 
         [Test]
@@ -373,12 +394,17 @@ namespace Arena.Tests.Editor
             string panel = File.ReadAllText(CharacterActionBarPanelPath);
             Assert.That(panel, Does.Contain("\"CharacterActionBarRoot\""));
             Assert.That(panel, Does.Contain("\"AvailableActions\""));
+            Assert.That(panel, Does.Contain("conn.Db.AbilityCatalog.Iter()"));
             Assert.That(panel, Does.Contain("HasAbilityTag(ability, ActionBarActionTag)"));
             Assert.That(panel, Does.Contain("ActionTooltipResolver.ResolveForAbility"));
             Assert.That(panel, Does.Contain("SpellsFilterKey"));
             Assert.That(panel, Does.Contain("AbilityIsKnownIfSpell"));
             Assert.That(panel, Does.Contain("new AbilityCategory(SpellsFilterKey, \"Spells\""));
             Assert.That(panel, Does.Contain("string.Equals(action.CategoryKey, SpellsFilterKey"));
+
+            string serverPlayer = File.ReadAllText(ServerPlayerPath);
+            Assert.That(serverPlayer, Does.Contain("crate::progression::sync_progression_catalogs(ctx);"));
+            Assert.That(serverPlayer, Does.Contain("crate::spells::sync_spell_definitions(ctx);"));
 
             string dragDrop = File.ReadAllText(ActionBarDragDropPath);
             Assert.That(dragDrop, Does.Contain("conn.Reducers.AssignCharacterActionBarAbilityToSlot"));

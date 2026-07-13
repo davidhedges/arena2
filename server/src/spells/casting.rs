@@ -7575,6 +7575,10 @@ mod tests {
             crate::spells::spell_definition_by_str(frost_nova.as_str()).unwrap();
         assert!(is_generic_area_spell(&frost_nova, frost_nova_definition));
 
+        let nova = spell_id("NOVA");
+        let nova_definition = crate::spells::spell_definition_by_str(nova.as_str()).unwrap();
+        assert!(is_generic_area_spell(&nova, nova_definition));
+
         for id in ["METEOR", "NEGATE"] {
             let spell = spell_id(id);
             let definition = crate::spells::spell_definition_by_str(spell.as_str()).unwrap();

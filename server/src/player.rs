@@ -56,9 +56,12 @@ pub fn client_connected(ctx: &ReducerContext) -> Result<(), String> {
     let identity = ctx.sender();
     let now = ctx.timestamp;
 
-    // Hot module updates do not re-run init; refresh the shared-data stamps
-    // here instead. Change-gated, so this writes nothing on a normal connect.
+    // Hot module updates do not re-run init. Reconcile the authored catalogs
+    // before any player-facing progression/inventory setup reads them so new
+    // spells and abilities appear automatically after reconnect.
     crate::contract_version::sync_contract_versions(ctx);
+    crate::progression::sync_progression_catalogs(ctx);
+    crate::spells::sync_spell_definitions(ctx);
     crate::npcs::sync_npc_catalog(ctx);
 
     if ctx.db.player().identity().find(identity).is_some() {
@@ -160,10 +163,35 @@ pub fn client_disconnected(ctx: &ReducerContext) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::{DEFAULT_COMBAT_PROFILE, TWO_HANDED_SWORD_COMBAT_PROFILE};
+    use std::{fs, path::Path};
 
     #[test]
     fn combat_profile_constants_remain_stable() {
         assert_eq!(DEFAULT_COMBAT_PROFILE, "SWORD_AND_SHIELD");
         assert_eq!(TWO_HANDED_SWORD_COMBAT_PROFILE, "TWO_HANDED_SWORD");
+    }
+
+    #[test]
+    fn hot_module_reconnect_refreshes_authored_spell_catalogs() {
+        let source =
+            fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("src/player.rs"))
+                .expect("player.rs should be readable");
+        let connect_start = source
+            .find("pub fn client_connected")
+            .expect("client_connected should exist");
+        let disconnect_start = source[connect_start..]
+            .find("pub fn client_disconnected")
+            .map(|offset| connect_start + offset)
+            .expect("client_disconnected should exist");
+        let connect_body = &source[connect_start..disconnect_start];
+
+        assert!(
+            connect_body.contains("crate::progression::sync_progression_catalogs(ctx)"),
+            "hot module reconnects must refresh AbilityCatalog so newly authored spells appear in the J panel"
+        );
+        assert!(
+            connect_body.contains("crate::spells::sync_spell_definitions(ctx)"),
+            "hot module reconnects must refresh SpellDefinition alongside AbilityCatalog"
+        );
     }
 }

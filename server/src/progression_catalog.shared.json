@@ -1387,7 +1387,7 @@
       "actor_scope": "PLAYER",
       "combat_profile_id": "",
       "action_id": "FROST_NOVA",
-      "display_name": "Nova",
+      "display_name": "Frost Nova",
       "resource_kind": "MANA",
       "ability_tags": [
         "ACTION_BAR_ACTION"
@@ -1416,6 +1416,37 @@
               "status_stack_group": "ROOT"
             }
           ]
+        }
+      }
+    },
+    {
+      "ability_id": "SPELL_NOVA",
+      "actor_scope": "PLAYER",
+      "combat_profile_id": "",
+      "action_id": "NOVA",
+      "display_name": "Nova",
+      "resource_kind": "MANA",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 1008,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 1200,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "SELF",
+        "requires_target": false,
+        "resource_cost": 20,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "AREA",
+          "damage": 28,
+          "damage_type": "ARCANE",
+          "radius": 4.6,
+          "block_behavior": "BLOCKABLE",
+          "impact_effects": []
         }
       }
     },
@@ -4649,9 +4680,16 @@
     {
       "presentation_kind": "ABILITY",
       "presentation_id": "SPELL_FROST_NOVA",
-      "display_name": "Nova",
+      "display_name": "Frost Nova",
       "description": "Releases a burst of ice around the caster.",
       "sort_order": 84
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "SPELL_NOVA",
+      "display_name": "Nova",
+      "description": "Unleashes an arcane explosion around the caster.",
+      "sort_order": 85
     },
     {
       "presentation_kind": "ABILITY",
@@ -5523,6 +5561,32 @@
       "lifecycle": "UNTIL_RELEASE_EVENT",
       "duration_ms": 0,
       "sort_order": 180
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "SPELL_NOVA",
+      "slot": "burst",
+      "trigger": "SPELL_RELEASE",
+      "anchor": "CASTER",
+      "vfx_id": "VFX_NOVA_CAST_01",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "PARTICLE_SYSTEM",
+      "duration_ms": 0,
+      "sort_order": 181
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "SPELL_NOVA",
+      "slot": "impact",
+      "trigger": "SPELL_IMPACT",
+      "anchor": "TARGET",
+      "vfx_id": "VFX_NOVA_HIT_01",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "PARTICLE_SYSTEM",
+      "duration_ms": 0,
+      "sort_order": 182
     },
     {
       "owner_kind": "ABILITY",

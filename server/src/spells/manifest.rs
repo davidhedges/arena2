@@ -622,6 +622,7 @@ mod tests {
         for id in [
             "FIREBALL",
             "FROST_NOVA",
+            "NOVA",
             "NEGATE",
             "BLINDING_LIGHT",
             "GLACIAL_SPIKE",
@@ -671,6 +672,7 @@ mod tests {
         for id in [
             "METEOR",
             "FROST_NOVA",
+            "NOVA",
             "NEGATE",
             "BLINDING_LIGHT",
             "FROZEN_GRASP",

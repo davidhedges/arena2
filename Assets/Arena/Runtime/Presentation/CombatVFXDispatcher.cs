@@ -36,6 +36,8 @@ namespace Arena.Presentation
         private const string VfxRoleProjectileTrail = "PROJECTILE_TRAIL";
         private const string VfxRoleTravelBody = "TRAVEL_BODY";
         private const string OwnerKindAbility = "ABILITY";
+        private const string AnchorTarget = "TARGET";
+        private const string AnchorGroundUnderTarget = "GROUND_UNDER_TARGET";
         private const string AnchorLeftHand = "LEFT_HAND";
         private const string AnchorRightHand = "RIGHT_HAND";
         private const string AnchorWeaponMainHand = "WEAPON_MAIN_HAND";
@@ -512,7 +514,12 @@ namespace Arena.Presentation
             // combat_event impact must not also dispatch it — that would double single-projectile spells
             // and can't key per-missile for channels. Non-projectile spell impacts keep this path.
             if (!suppressPredictedMeleeContactCue && !IsProjectileDeliveredSpellImpact(row))
-                DispatchFact(fact.Value);
+            {
+                bool targetAnchoredSpellContact =
+                    string.Equals(row.SourceKind, CombatEventSources.Spell, StringComparison.Ordinal)
+                    && string.Equals(row.EventType, CombatEventTypes.Contact, StringComparison.Ordinal);
+                DispatchFact(fact.Value, targetAnchoredSpellContact);
+            }
         }
 
         // True for a spell's terminal IMPACT combat_event whose spell delivers projectiles — those now
@@ -698,7 +705,7 @@ namespace Arena.Presentation
             DispatchFact(fact.Value);
         }
 
-        private void DispatchFact(CombatVfxFact fact)
+        private void DispatchFact(CombatVfxFact fact, bool targetAnchoredOnly = false)
         {
             var conn = NetworkManager.Instance?.Conn;
             if (conn == null)
@@ -711,7 +718,19 @@ namespace Arena.Presentation
                 return;
 
             foreach (CombatVfxCueCatalog cue in matchingCues)
+            {
+                if (targetAnchoredOnly && !IsTargetAnchoredCue(cue))
+                    continue;
+
                 DispatchCue(fact, cue);
+            }
+        }
+
+        private static bool IsTargetAnchoredCue(CombatVfxCueCatalog cue)
+        {
+            string anchor = WireIdentifier.Normalize(cue.Anchor);
+            return string.Equals(anchor, AnchorTarget, StringComparison.Ordinal)
+                || string.Equals(anchor, AnchorGroundUnderTarget, StringComparison.Ordinal);
         }
 
         private static CombatVfxFact? BuildFact(CombatEvent row, bool allowMissingTrigger = false)
@@ -1136,6 +1155,7 @@ namespace Arena.Presentation
                 {
                     CombatEventTypes.Cast => TriggerSpellCast,
                     CombatEventTypes.Release => TriggerSpellRelease,
+                    CombatEventTypes.Contact => TriggerSpellImpact,
                     CombatEventTypes.Impact => TriggerSpellImpact,
                     CombatEventTypes.Block => TriggerSpellBlock,
                     CombatEventTypes.Parry => TriggerSpellParry,
