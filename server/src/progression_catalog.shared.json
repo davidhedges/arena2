@@ -1633,6 +1633,40 @@
       }
     },
     {
+      "ability_id": "SPELL_NECROTIC_AURA",
+      "actor_scope": "PLAYER",
+      "combat_profile_id": "",
+      "action_id": "NECROTIC_AURA",
+      "display_name": "Necrotic Aura",
+      "resource_kind": "MANA",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 1013,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 1,
+        "uses_global_cooldown": false,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "SELF",
+        "target_audience": "HOSTILE",
+        "requires_target": false,
+        "resource_cost": 0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "EMANATION",
+          "radius": 4.6,
+          "pulse_interval_ms": 1000,
+          "resource_cost_per_second": 2,
+          "damage": 1,
+          "damage_type": "NECROTIC",
+          "vfx_school": "NECROMANCY",
+          "impact_effects": []
+        }
+      }
+    },
+    {
       "ability_id": "WARRIOR_MOMENTUM",
       "actor_scope": "PLAYER",
       "combat_profile_id": "TWO_HANDED_SWORD",
@@ -4692,6 +4726,13 @@
     },
     {
       "presentation_kind": "ABILITY",
+      "presentation_id": "SPELL_NECROTIC_AURA",
+      "display_name": "Necrotic Aura",
+      "description": "Maintains a necrotic field that damages nearby enemies each second.",
+      "sort_order": 87
+    },
+    {
+      "presentation_kind": "ABILITY",
       "presentation_id": "WARRIOR_MOMENTUM",
       "display_name": "Momentum",
       "description": "Grants brief immunity to movement slows.",
@@ -5996,6 +6037,19 @@
       "lifecycle": "DURATION",
       "duration_ms": 2000,
       "sort_order": 200
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "SPELL_NECROTIC_AURA",
+      "slot": "persistent_field",
+      "trigger": "EMANATION_ACTIVE",
+      "anchor": "CASTER",
+      "vfx_id": "VFX_NECROTIC_EMANATION_01",
+      "attach_mode": "FOLLOW_GROUND_POSITION",
+      "vfx_role": "ATTACHED",
+      "lifecycle": "UNTIL_RADIAL_EFFECT_END",
+      "duration_ms": 0,
+      "sort_order": 201
     },
     {
       "owner_kind": "ABILITY", "owner_id": "NPC_DEMON_SUMMONER_SHADOW_BOLT", "slot": "cast_glow", "trigger": "SPELL_CAST", "anchor": "LEFT_HAND",

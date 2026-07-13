@@ -562,7 +562,7 @@ namespace Arena.Input
                 return 0f;
 
             float cost = SpellPrimaryResourceCost(spellDef);
-            if (string.Equals(spellDef.Behavior, SpellDefinitionContracts.BehaviorChannel, System.StringComparison.Ordinal))
+            if (SpellDefinitionContracts.UsesPerSecondResourceCost(spellDef))
                 return Mathf.Max(0f, cost * Mathf.Max(0f, spellDef.UpdateInterval));
 
             return cost;
@@ -586,6 +586,9 @@ namespace Arena.Input
             string spellId,
             SpacetimeDB.Types.SpellDefinition? spellDef)
         {
+            if (IsActiveEmanationToggleOff(conn, entity.Identity, spellId, spellDef))
+                return true;
+
             float cost = SpellStartResourceCost(spellDef);
             if (cost <= 0.001f)
                 return true;
@@ -629,6 +632,8 @@ namespace Arena.Input
             string resourceKind = localPlayer != null
                 ? SpellResourceKind(conn, localPlayer, spellId)
                 : "MANA";
+            bool togglingOff = localPlayer != null
+                && IsActiveEmanationToggleOff(conn, localPlayer.Identity, spellId, spellDef);
             PredictedActionLedger ledger = LocalCombatState.Instance.PredictActionStart(
                 localPlayer,
                 spellId,
@@ -636,7 +641,9 @@ namespace Arena.Input
                 spellDef.UsesGlobalCooldown,
                 GameplayTuning.ResolveDefaultGlobalCooldownDurationMs(conn),
                 resourceKind,
-                ShouldReserveResourceAtCastStart(spellDef) ? SpellStartResourceCost(spellDef) : 0f,
+                ShouldReserveResourceAtCastStart(spellDef) && !togglingOff
+                    ? SpellStartResourceCost(spellDef)
+                    : 0f,
                 nowMs);
             if (token.IsPredicted)
                 _predictionLedgersByToken[SpellTokenKey(token)] = (ledger, nowMs + PendingInstantSpellPredictionTtlMs);
@@ -644,6 +651,36 @@ namespace Arena.Input
 
         private static bool ShouldReserveResourceAtCastStart(SpacetimeDB.Types.SpellDefinition spellDef)
             => spellDef.CastTimeMs == 0UL;
+
+        private static bool IsActiveEmanationToggleOff(
+            SpacetimeDB.Types.DbConnection conn,
+            SpacetimeDB.Identity owner,
+            string spellId,
+            SpacetimeDB.Types.SpellDefinition? spellDef)
+        {
+            if (spellDef == null
+                || !string.Equals(
+                    spellDef.Behavior,
+                    SpellDefinitionContracts.BehaviorEmanation,
+                    System.StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            string normalizedSpellId = WireIdentifier.Normalize(spellId);
+            foreach (SpacetimeDB.Types.ActiveRadialEffect row in conn.Db.ActiveRadialEffect.Owner.Filter(owner))
+            {
+                if (string.Equals(
+                    WireIdentifier.Normalize(row.SpellId),
+                    normalizedSpellId,
+                    System.StringComparison.Ordinal))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
 
         private static void PredictCastTimeSpellHold(
             string spellId,

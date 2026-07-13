@@ -394,7 +394,7 @@ namespace Arena.UI
         private static string FormatSpellResourceCost(DbConnection? conn, AbilityCatalog? ability, SpellDefinition spell, float cost)
         {
             string resource = ResolveResourceDisplayName(conn, ability?.ResourceKind);
-            string suffix = string.Equals(spell.Behavior, SpellDefinitionContracts.BehaviorChannel, StringComparison.Ordinal)
+            string suffix = SpellDefinitionContracts.UsesPerSecondResourceCost(spell)
                 ? "/s"
                 : string.Empty;
             return $"{cost:0.#} {resource}{suffix}";

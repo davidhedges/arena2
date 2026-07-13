@@ -20,7 +20,7 @@ namespace Arena.Presentation.VFX
             public string vfxId = string.Empty;
             public UnityEngine.Object prefab = null!;
             [Min(0f)] public float scale = 1f;
-            [Tooltip("Local-space position applied after a FOLLOW_ANCHOR VFX is parented to its anchor.")]
+            [Tooltip("Position offset applied to FOLLOW_ANCHOR and FOLLOW_GROUND_POSITION VFX.")]
             public Vector3 localPositionOffset = Vector3.zero;
             [Tooltip("Projectile-body scale multiplier at the end of its travel lifetime. Zero or one preserves the authored scale.")]
             [Range(0f, 1f)] public float scaleMultiplierAtLifetimeEnd = 1f;

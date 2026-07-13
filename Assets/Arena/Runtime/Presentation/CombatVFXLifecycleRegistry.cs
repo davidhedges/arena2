@@ -2,6 +2,8 @@
 using System.Collections;
 using System.Collections.Generic;
 using Arena.Combat;
+using Arena.Entity;
+using Arena.Input;
 using Arena.Presentation.VFX;
 using SpacetimeDB.Types;
 using UnityEngine;
@@ -17,6 +19,8 @@ namespace Arena.Presentation
         private const string LifecycleUntilReleaseEvent = "UNTIL_RELEASE_EVENT";
         private const string LifecycleUntilTerminalEvent = "UNTIL_TERMINAL_EVENT";
         private const string LifecycleUntilCastEnd = "UNTIL_CAST_END";
+        private const string LifecycleUntilRadialEffectEnd = "UNTIL_RADIAL_EFFECT_END";
+        private const float GroundYOffset = 0.03f;
 
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         internal static long DebugSpawnedScriptedCount { get; private set; }
@@ -65,7 +69,25 @@ namespace Arena.Presentation
             foreach (var (key, entry) in _prefabs)
             {
                 if (entry.Instance == null)
+                {
                     _removeList.Add(key);
+                    continue;
+                }
+
+                Transform? groundFollowAnchor = entry.GroundFollowAnchor;
+                if (groundFollowAnchor == null)
+                    continue;
+
+                Vector3 anchorPosition = groundFollowAnchor.position;
+                bool hasGroundHeight = TrySampleGroundHeight(anchorPosition, out float groundHeight);
+                entry.Instance.transform.SetPositionAndRotation(
+                    ResolveGroundFollowPosition(
+                        entry.Instance.transform.position,
+                        anchorPosition,
+                        entry.LocalPositionOffset,
+                        hasGroundHeight,
+                        groundHeight),
+                    Quaternion.identity);
             }
 
             foreach (string key in _removeList)
@@ -88,7 +110,8 @@ namespace Arena.Presentation
             CombatVFXTemplateContext context,
             Vector3 position,
             Quaternion rotation,
-            Transform? followAnchor)
+            Transform? followAnchor,
+            bool followsGroundPosition = false)
         {
             if (CombatVFXTemplateRegistry.IsScriptedTemplate(cue.VfxId))
             {
@@ -111,11 +134,18 @@ namespace Arena.Presentation
 
             if (cue.StartDelayMs > 0)
             {
-                _coroutineOwner.StartCoroutine(SpawnAfterDelay(template, cue, context, position, rotation, followAnchor));
+                _coroutineOwner.StartCoroutine(SpawnAfterDelay(
+                    template,
+                    cue,
+                    context,
+                    position,
+                    rotation,
+                    followAnchor,
+                    followsGroundPosition));
                 return;
             }
 
-            SpawnPrefab(template, cue, context, position, rotation, followAnchor);
+            SpawnPrefab(template, cue, context, position, rotation, followAnchor, followsGroundPosition);
         }
 
         public void RouteUpdate(CombatVFXTemplateContext context)
@@ -164,6 +194,22 @@ namespace Arena.Presentation
 
             DestroyMatchingScripted(actionInstanceId, LifecycleUntilCastEnd);
             DestroyMatchingPrefabs(actionInstanceId, LifecycleUntilCastEnd);
+        }
+
+        // Ends persistent emanation cues when the authoritative radial-effect row is deleted.
+        public void DestroyForRadialEffectEnd(string radialEffectKey)
+        {
+            if (string.IsNullOrWhiteSpace(radialEffectKey))
+                return;
+
+            DestroyMatchingScripted(radialEffectKey, LifecycleUntilRadialEffectEnd);
+            DestroyMatchingPrefabs(radialEffectKey, LifecycleUntilRadialEffectEnd);
+        }
+
+        public void DestroyAllRadialEffects()
+        {
+            DestroyAllMatchingScripted(LifecycleUntilRadialEffectEnd);
+            DestroyAllMatchingPrefabs(LifecycleUntilRadialEffectEnd);
         }
 
         public void Dispose()
@@ -217,13 +263,14 @@ namespace Arena.Presentation
             CombatVFXTemplateContext context,
             Vector3 position,
             Quaternion rotation,
-            Transform? followAnchor)
+            Transform? followAnchor,
+            bool followsGroundPosition)
         {
             yield return new WaitForSeconds(cue.StartDelayMs / 1000f);
             if (IsReleaseBoundActionFinished(cue, context))
                 yield break;
 
-            SpawnPrefab(template, cue, context, position, rotation, followAnchor);
+            SpawnPrefab(template, cue, context, position, rotation, followAnchor, followsGroundPosition);
         }
 
         private void SpawnPrefab(
@@ -232,15 +279,28 @@ namespace Arena.Presentation
             CombatVFXTemplateContext context,
             Vector3 position,
             Quaternion rotation,
-            Transform? followAnchor)
+            Transform? followAnchor,
+            bool followsGroundPosition)
         {
+            if (followsGroundPosition && followAnchor != null)
+            {
+                bool hasGroundHeight = TrySampleGroundHeight(followAnchor.position, out float groundHeight);
+                position = ResolveGroundFollowPosition(
+                    position,
+                    followAnchor.position,
+                    template.LocalPositionOffset,
+                    hasGroundHeight,
+                    groundHeight);
+                rotation = Quaternion.identity;
+            }
+
             GameObject prefab = template.Prefab;
             GameObject instance = Object.Instantiate(prefab, position, rotation);
             instance.name = $"{prefab.name}_{cue.Key}";
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
             DebugSpawnedPrefabCount++;
 #endif
-            if (followAnchor != null)
+            if (followAnchor != null && !followsGroundPosition)
             {
                 instance.transform.SetParent(followAnchor, true);
                 instance.transform.localPosition = template.LocalPositionOffset;
@@ -272,14 +332,19 @@ namespace Arena.Presentation
                     _prefabs.Remove(key);
                 }
 
-                _prefabs[key] = new PrefabEntry(context.ActionInstanceId, lifecycle, instance);
+                _prefabs[key] = new PrefabEntry(
+                    context.ActionInstanceId,
+                    lifecycle,
+                    instance,
+                    followsGroundPosition ? followAnchor : null,
+                    template.LocalPositionOffset);
                 return;
             }
 
-            if (string.Equals(lifecycle, LifecycleUntilCastEnd, System.StringComparison.Ordinal))
+            if (string.Equals(lifecycle, LifecycleUntilCastEnd, System.StringComparison.Ordinal)
+                || string.Equals(lifecycle, LifecycleUntilRadialEffectEnd, System.StringComparison.Ordinal))
             {
-                // Loop and hold until the owning ActiveCast row is deleted, so held prefabs last
-                // exactly as long as their authoritative cast/channel.
+                // Loop and hold until the owning authoritative state row is deleted.
                 ConfigureReleaseBoundParticleSystems(instance);
                 string key = PrefabKey(context);
                 if (_prefabs.TryGetValue(key, out PrefabEntry old))
@@ -288,7 +353,12 @@ namespace Arena.Presentation
                     _prefabs.Remove(key);
                 }
 
-                _prefabs[key] = new PrefabEntry(context.ActionInstanceId, lifecycle, instance);
+                _prefabs[key] = new PrefabEntry(
+                    context.ActionInstanceId,
+                    lifecycle,
+                    instance,
+                    followsGroundPosition ? followAnchor : null,
+                    template.LocalPositionOffset);
                 return;
             }
 
@@ -395,6 +465,38 @@ namespace Arena.Presentation
                 _prefabs.Remove(key);
         }
 
+        private void DestroyAllMatchingScripted(string lifecycle)
+        {
+            _removeList.Clear();
+            foreach (var (key, entry) in _scripted)
+            {
+                if (!string.Equals(entry.Lifecycle, lifecycle, System.StringComparison.Ordinal))
+                    continue;
+
+                DisposeVfx(entry.Visual);
+                _removeList.Add(key);
+            }
+
+            foreach (string key in _removeList)
+                _scripted.Remove(key);
+        }
+
+        private void DestroyAllMatchingPrefabs(string lifecycle)
+        {
+            _removeList.Clear();
+            foreach (var (key, entry) in _prefabs)
+            {
+                if (!string.Equals(entry.Lifecycle, lifecycle, System.StringComparison.Ordinal))
+                    continue;
+
+                DestroyInstance(entry.Instance);
+                _removeList.Add(key);
+            }
+
+            foreach (string key in _removeList)
+                _prefabs.Remove(key);
+        }
+
         private static void RouteToVfx(ISpellVFX visual, System.Action route)
         {
             try
@@ -457,6 +559,38 @@ namespace Arena.Presentation
                 Object.Destroy(instance);
         }
 
+        internal static Vector3 ResolveGroundFollowPosition(
+            Vector3 currentPosition,
+            Vector3 anchorPosition,
+            Vector3 localPositionOffset,
+            bool hasGroundHeight,
+            float groundHeight)
+        {
+            return new Vector3(
+                anchorPosition.x + localPositionOffset.x,
+                hasGroundHeight
+                    ? groundHeight + GroundYOffset + localPositionOffset.y
+                    : currentPosition.y,
+                anchorPosition.z + localPositionOffset.z);
+        }
+
+        private static bool TrySampleGroundHeight(Vector3 anchorPosition, out float groundHeight)
+        {
+            if (EntityRegistry.Instance != null
+                && EntityRegistry.Instance.TryGetLocalPredictionEnvironment(out IMovementEnvironment? environment)
+                && environment != null)
+            {
+                groundHeight = environment.SampleGroundHeight(
+                    anchorPosition.x,
+                    anchorPosition.z,
+                    anchorPosition.y);
+                return true;
+            }
+
+            groundHeight = 0f;
+            return false;
+        }
+
         private void WarnMissingTemplate(string vfxId)
         {
             string normalizedId = WireIdentifier.Normalize(vfxId);
@@ -492,12 +626,21 @@ namespace Arena.Presentation
             public readonly string ActionInstanceId;
             public readonly string Lifecycle;
             public readonly GameObject Instance;
+            public readonly Transform? GroundFollowAnchor;
+            public readonly Vector3 LocalPositionOffset;
 
-            public PrefabEntry(string actionInstanceId, string lifecycle, GameObject instance)
+            public PrefabEntry(
+                string actionInstanceId,
+                string lifecycle,
+                GameObject instance,
+                Transform? groundFollowAnchor,
+                Vector3 localPositionOffset)
             {
                 ActionInstanceId = actionInstanceId;
                 Lifecycle = lifecycle;
                 Instance = instance;
+                GroundFollowAnchor = groundFollowAnchor;
+                LocalPositionOffset = localPositionOffset;
             }
         }
     }

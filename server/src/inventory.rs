@@ -2067,6 +2067,7 @@ impl EquipmentModifierTotals {
             "POISON" => self.magic_resistance + self.poison_resistance,
             "HOLY" => self.magic_resistance + self.holy_resistance,
             "SHADOW" => self.magic_resistance + self.shadow_resistance,
+            "NECROTIC" => self.magic_resistance,
             "ARCANE" => self.magic_resistance + self.arcane_resistance,
             _ => self.physical_resistance,
         }
@@ -4892,12 +4893,15 @@ mod tests {
             magic_resistance: 0.15,
             fire_resistance: 0.10,
             cold_resistance: 0.05,
+            shadow_resistance: 0.30,
             ..EquipmentModifierTotals::default()
         };
 
         assert!((totals.resistance_for_damage_type("PHYSICAL") - 0.20).abs() < 0.0001);
         assert!((totals.resistance_for_damage_type("FIRE") - 0.25).abs() < 0.0001);
         assert!((totals.resistance_for_damage_type("COLD") - 0.20).abs() < 0.0001);
+        assert!((totals.resistance_for_damage_type("SHADOW") - 0.45).abs() < 0.0001);
+        assert!((totals.resistance_for_damage_type("NECROTIC") - 0.15).abs() < 0.0001);
         assert!((totals.resistance_for_damage_type("ARCANE") - 0.15).abs() < 0.0001);
     }
 

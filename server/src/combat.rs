@@ -31,11 +31,13 @@ use crate::relations::{
 use crate::resources::{
     grant_primary_resource_amount, grant_primary_resource_amount_for_kind,
     grant_primary_resource_for_damage_dealt, grant_primary_resource_for_damage_taken,
+    pay_action_resource_cost,
 };
 use crate::spells::{
     bake_linear_special_movement, begin_special_movement_with_facing_policy,
-    fizzle_active_cast_for_interrupt, spell_definition_by_str, SpellBehavior, SpellVec3,
-    SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK, SPECIAL_MOVEMENT_FACING_FACE_START,
+    fizzle_active_cast_for_interrupt, resolved_primary_resource_cost_for_amount,
+    spell_definition_by_str, SpellBehavior, SpellVec3, SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK,
+    SPECIAL_MOVEMENT_FACING_FACE_START,
 };
 use crate::world_collision::{
     resolve_world_spawn_position, resolve_world_spawn_position_with_layout_for_scene,
@@ -59,9 +61,9 @@ use crate::arena::arena_instance as _;
 #[allow(unused_imports)]
 use crate::arena::player_world as _;
 #[allow(unused_imports)]
-use crate::combat::active_aura as _;
-#[allow(unused_imports)]
 use crate::combat::active_combat_projectile as _;
+#[allow(unused_imports)]
+use crate::combat::active_radial_effect as _;
 #[allow(unused_imports)]
 use crate::combat::combat_effect_event as _;
 #[allow(unused_imports)]
@@ -181,6 +183,7 @@ pub enum DamageType {
     Poison,
     Holy,
     Shadow,
+    Necrotic,
     Arcane,
 }
 
@@ -194,6 +197,7 @@ impl DamageType {
             Self::Poison => "POISON",
             Self::Holy => "HOLY",
             Self::Shadow => "SHADOW",
+            Self::Necrotic => "NECROTIC",
             Self::Arcane => "ARCANE",
         }
     }
@@ -206,6 +210,7 @@ impl DamageType {
             "POISON" => Self::Poison,
             "HOLY" => Self::Holy,
             "SHADOW" => Self::Shadow,
+            "NECROTIC" => Self::Necrotic,
             "ARCANE" => Self::Arcane,
             _ => Self::Physical,
         }
@@ -254,6 +259,7 @@ pub fn new_player_spawn_state(player_id: Identity, now: Timestamp) -> (f32, f32,
 
 pub fn clear_player_combat_state(ctx: &ReducerContext, identity: Identity) {
     clear_statuses_for_identity(ctx, identity);
+    clear_active_radial_effects_for_owner(ctx, identity);
     clear_combat_engagement_for_identity(ctx, identity);
     clear_combat_stacking_passive_runtime_for_identity(ctx, identity);
 }
@@ -523,14 +529,17 @@ pub struct CombatStackingPassiveRuntime {
     pub last_consumed_action_key: String,
 }
 
-#[table(accessor = active_aura)]
+#[table(accessor = active_radial_effect, public)]
 #[derive(Clone)]
-pub struct ActiveAura {
+pub struct ActiveRadialEffect {
     #[primary_key]
+    pub key: String,
+    #[index(btree)]
     pub owner: Identity,
     pub spell_id: String,
     pub ability_id: String,
     pub activated_at: Timestamp,
+    pub next_pulse_at: Timestamp,
 }
 
 #[table(accessor = combat_projectile_definition, public)]
@@ -1217,7 +1226,13 @@ struct AuraStatusKey {
 }
 
 pub fn tick_auras(ctx: &ReducerContext, now: Timestamp) {
-    let mut owners: HashSet<Identity> = ctx.db.active_aura().iter().map(|row| row.owner).collect();
+    let mut owners: HashSet<Identity> = ctx
+        .db
+        .active_radial_effect()
+        .iter()
+        .filter(|row| radial_effect_behavior(ctx, row) == Some(SpellBehavior::Aura))
+        .map(|row| row.owner)
+        .collect();
     owners.extend(
         ctx.db
             .status_effect()
@@ -1243,25 +1258,26 @@ pub fn tick_auras(ctx: &ReducerContext, now: Timestamp) {
             .find(owner)
             .is_some_and(|state| state.alive && !state.is_dummy);
         if !owner_alive {
-            ctx.db.active_aura().owner().delete(owner);
+            clear_active_radial_effects_for_owner(ctx, owner);
             continue;
         }
         let Some(owner_physics) = ctx.db.player_physics().identity().find(owner) else {
             continue;
         };
-        let Some(active_aura) = ctx.db.active_aura().owner().find(owner) else {
+        let aura_key = active_radial_effect_key(owner, SpellBehavior::Aura);
+        let Some(active_aura) = ctx.db.active_radial_effect().key().find(aura_key) else {
             continue;
         };
         let Some(definition) = spell_definition_by_str(active_aura.spell_id.as_str()) else {
-            ctx.db.active_aura().owner().delete(owner);
+            ctx.db.active_radial_effect().key().delete(active_aura.key);
             continue;
         };
         if definition.behavior != SpellBehavior::Aura {
-            ctx.db.active_aura().owner().delete(owner);
+            ctx.db.active_radial_effect().key().delete(active_aura.key);
             continue;
         };
         let Some(aura) = definition.secondary.aura.as_ref() else {
-            ctx.db.active_aura().owner().delete(owner);
+            ctx.db.active_radial_effect().key().delete(active_aura.key);
             continue;
         };
 
@@ -1412,17 +1428,191 @@ pub fn set_active_aura(
     ability_id: &str,
     now: Timestamp,
 ) {
-    let row = ActiveAura {
+    let key = active_radial_effect_key(owner, SpellBehavior::Aura);
+    let row = ActiveRadialEffect {
+        key: key.clone(),
         owner,
         spell_id: spell_id.trim().to_ascii_uppercase(),
         ability_id: ability_id.trim().to_ascii_uppercase(),
         activated_at: now,
+        next_pulse_at: now,
     };
-    if ctx.db.active_aura().owner().find(owner).is_some() {
-        ctx.db.active_aura().owner().update(row);
+    if ctx.db.active_radial_effect().key().find(key).is_some() {
+        ctx.db.active_radial_effect().key().update(row);
     } else {
-        ctx.db.active_aura().insert(row);
+        ctx.db.active_radial_effect().insert(row);
     }
+}
+
+pub(crate) fn active_radial_effect_key(owner: Identity, behavior: SpellBehavior) -> String {
+    format!("{}:{}", owner.to_hex(), behavior.as_str())
+}
+
+fn radial_effect_behavior(
+    _ctx: &ReducerContext,
+    row: &ActiveRadialEffect,
+) -> Option<SpellBehavior> {
+    spell_definition_by_str(row.spell_id.as_str()).map(|definition| definition.behavior)
+}
+
+pub(crate) fn active_emanation_for_owner(
+    ctx: &ReducerContext,
+    owner: Identity,
+) -> Option<ActiveRadialEffect> {
+    ctx.db
+        .active_radial_effect()
+        .key()
+        .find(active_radial_effect_key(owner, SpellBehavior::Emanation))
+}
+
+pub(crate) fn toggle_active_emanation(
+    ctx: &ReducerContext,
+    owner: Identity,
+    spell_id: &str,
+    ability_id: &str,
+    pulse_interval: Duration,
+    now: Timestamp,
+) {
+    let key = active_radial_effect_key(owner, SpellBehavior::Emanation);
+    if ctx
+        .db
+        .active_radial_effect()
+        .key()
+        .find(key.clone())
+        .is_some_and(|row| row.spell_id == spell_id.trim().to_ascii_uppercase())
+    {
+        ctx.db.active_radial_effect().key().delete(key);
+        return;
+    }
+
+    let row = ActiveRadialEffect {
+        key: key.clone(),
+        owner,
+        spell_id: spell_id.trim().to_ascii_uppercase(),
+        ability_id: ability_id.trim().to_ascii_uppercase(),
+        activated_at: now,
+        next_pulse_at: now + pulse_interval.max(Duration::from_millis(1)),
+    };
+    if ctx.db.active_radial_effect().key().find(key).is_some() {
+        ctx.db.active_radial_effect().key().update(row);
+    } else {
+        ctx.db.active_radial_effect().insert(row);
+    }
+}
+
+pub fn tick_emanations(ctx: &ReducerContext, now: Timestamp) {
+    let active_rows: Vec<_> = ctx
+        .db
+        .active_radial_effect()
+        .iter()
+        .filter(|row| radial_effect_behavior(ctx, row) == Some(SpellBehavior::Emanation))
+        .collect();
+    if active_rows.is_empty() {
+        return;
+    }
+
+    let snapshots = actor_snapshot::CombatActorSnapshotSet::collect(ctx);
+    let actors = snapshots.as_slice();
+    let actor_indices = snapshots.index_by_id();
+    let mut candidate_indices = Vec::new();
+
+    for mut active in active_rows {
+        let Some(owner_index) = actor_indices.get(&active.owner).copied() else {
+            ctx.db.active_radial_effect().key().delete(active.key);
+            continue;
+        };
+        let owner = &actors[owner_index];
+        if !owner.alive {
+            ctx.db.active_radial_effect().key().delete(active.key);
+            continue;
+        }
+        let Some(definition) = spell_definition_by_str(active.spell_id.as_str()) else {
+            ctx.db.active_radial_effect().key().delete(active.key);
+            continue;
+        };
+        let Some(emanation) = definition.secondary.emanation.as_ref() else {
+            ctx.db.active_radial_effect().key().delete(active.key);
+            continue;
+        };
+        if now < active.next_pulse_at {
+            continue;
+        }
+
+        snapshots.query_disc_indices(
+            owner.pos_x,
+            owner.pos_z,
+            emanation.radius,
+            &mut candidate_indices,
+        );
+        let radius_sq = emanation.radius * emanation.radius;
+        let mut effects = Vec::new();
+        for target in candidate_indices
+            .iter()
+            .filter_map(|index| actors.get(*index))
+        {
+            if !target.alive || target.player_id == active.owner {
+                continue;
+            }
+            if !players_share_world_context(ctx, active.owner, target.player_id)
+                || !target_audience_allows(
+                    ctx,
+                    active.owner,
+                    target.player_id,
+                    definition.target_audience,
+                )
+            {
+                continue;
+            }
+            let dx = owner.pos_x - target.pos_x;
+            let dy = owner.pos_y - target.pos_y;
+            let dz = owner.pos_z - target.pos_z;
+            if dx.mul_add(dx, dy.mul_add(dy, dz * dz)) > radius_sq {
+                continue;
+            }
+
+            if definition.damage > 0 {
+                effects.push(EffectPacket::Damage {
+                    amount: definition.damage,
+                    damage_type: definition.damage_type,
+                    source: active.owner,
+                    target: target.player_id,
+                    spell_id: active.spell_id.clone(),
+                    delivery: DamageDelivery::Periodic,
+                    source_kind: DAMAGE_SOURCE_KIND_SPELL.to_string(),
+                    direct_action_key: String::new(),
+                });
+            }
+            for impact_effect in &emanation.impact_effects {
+                effects.push(impact_effect.to_effect_packet_for_audience(
+                    active.owner,
+                    target.player_id,
+                    active.spell_id.as_str(),
+                    StatusPolarity::Debuff,
+                    definition.target_audience,
+                    active.spell_id.as_str(),
+                ));
+            }
+        }
+        if !effects.is_empty() {
+            queue_effects(ctx, effects);
+        }
+
+        let upkeep =
+            definition.primary_resource_cost * emanation.pulse_interval.as_secs_f32().max(0.001);
+        let paid =
+            resolved_primary_resource_cost_for_amount(ctx, active.owner, &definition.kind, upkeep)
+                .is_some_and(|cost| pay_action_resource_cost(ctx, active.owner, &cost, now));
+        if !paid {
+            ctx.db.active_radial_effect().key().delete(active.key);
+            continue;
+        }
+        active.next_pulse_at = now + emanation.pulse_interval.max(Duration::from_millis(1));
+        ctx.db.active_radial_effect().key().update(active);
+    }
+}
+
+pub(crate) fn clear_active_radial_effects_for_owner(ctx: &ReducerContext, owner: Identity) {
+    ctx.db.active_radial_effect().owner().delete(owner);
 }
 
 fn tick_combat_stacking_passive_for_owner(
@@ -5074,7 +5264,7 @@ pub fn clear_statuses_for_dead_players(ctx: &ReducerContext) {
 
     for identity in dead_players {
         ctx.db.status_effect().target().delete(identity);
-        ctx.db.active_aura().owner().delete(identity);
+        clear_active_radial_effects_for_owner(ctx, identity);
         clear_combat_engagement_for_identity(ctx, identity);
         clear_combat_stacking_passive_runtime_for_identity(ctx, identity);
     }

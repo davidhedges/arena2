@@ -232,6 +232,7 @@ namespace Arena.Tests.Editor
 
             // AURA is supported (decision 11): all spell types generate.
             Assert.That(DeriveArchetype(Facts("AURA", "SELF")), Is.EqualTo("Aura")); // PALADIN_FERVOR
+            Assert.That(DeriveArchetype(Facts("EMANATION", "SELF")), Is.EqualTo("Emanation")); // NECROTIC_AURA
         }
 
         [Test]
@@ -377,6 +378,21 @@ namespace Arena.Tests.Editor
             Assert.That(WireStr(w, "Anchor"), Is.EqualTo("Caster")); // follows the caster (FOLLOW_ANCHOR needs a transform)
             Assert.That(WireStr(w, "AttachMode"), Is.EqualTo("FOLLOW_ANCHOR"));
             Assert.That(WireStr(w, "VfxRole"), Is.EqualTo("ONE_SHOT"));
+        }
+
+        [Test]
+        public void EmanationDefaults_ToAPersistentCasterField()
+        {
+            Assert.That(RequestedSlotNames("Emanation"),
+                Is.EqualTo(new[] { "CastGlow", "CharacterFx", "PersistentField" }));
+
+            object w = Wire("Emanation", "PersistentField", "Instant", false, false);
+            Assert.That(WireStr(w, "Trigger"), Is.EqualTo("EMANATION_ACTIVE"));
+            Assert.That(WireStr(w, "Anchor"), Is.EqualTo("Caster"));
+            Assert.That(WireStr(w, "AttachMode"), Is.EqualTo("FOLLOW_GROUND_POSITION"));
+            Assert.That(WireStr(w, "VfxRole"), Is.EqualTo("ATTACHED"));
+            Assert.That(WireStr(w, "Lifecycle"), Is.EqualTo("UNTIL_RADIAL_EFFECT_END"));
+            Assert.That(WireStr(w, "Duration"), Is.EqualTo("Zero"));
         }
 
         // ----- the whole generator is correct-by-construction against Class-A rules -----

@@ -25,6 +25,8 @@ namespace SpacetimeDB.Types
         public SpacetimeDB.Timestamp NextDecisionAt;
         [DataMember(Name = "next_decision_at_micros")]
         public long NextDecisionAtMicros;
+        [DataMember(Name = "hold_movement_until_micros")]
+        public long HoldMovementUntilMicros;
 
         public NpcCombatRuntime(
             SpacetimeDB.Identity Identity,
@@ -32,7 +34,8 @@ namespace SpacetimeDB.Types
             string PlannedAbilityId,
             ulong DecisionSequence,
             SpacetimeDB.Timestamp NextDecisionAt,
-            long NextDecisionAtMicros
+            long NextDecisionAtMicros,
+            long HoldMovementUntilMicros
         )
         {
             this.Identity = Identity;
@@ -41,6 +44,7 @@ namespace SpacetimeDB.Types
             this.DecisionSequence = DecisionSequence;
             this.NextDecisionAt = NextDecisionAt;
             this.NextDecisionAtMicros = NextDecisionAtMicros;
+            this.HoldMovementUntilMicros = HoldMovementUntilMicros;
         }
 
         public NpcCombatRuntime()

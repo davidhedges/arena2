@@ -92,9 +92,19 @@ namespace Arena.Combat
     {
         public const string BehaviorInstantBeam = "INSTANT_BEAM";
         public const string BehaviorChannel = "CHANNEL";
+        public const string BehaviorEmanation = "EMANATION";
         public const string BehaviorChargedRelease = "CHARGE";
         public const string TargetingPoint = "POINT";
         public const string TargetingSelf = "SELF";
+
+        public static bool UsesPerSecondResourceCost(SpellDefinition? definition)
+        {
+            if (definition == null)
+                return false;
+
+            return string.Equals(definition.Behavior, BehaviorChannel, StringComparison.Ordinal)
+                || string.Equals(definition.Behavior, BehaviorEmanation, StringComparison.Ordinal);
+        }
 
         public static bool CastsOnRelease(SpellDefinition? definition)
         {

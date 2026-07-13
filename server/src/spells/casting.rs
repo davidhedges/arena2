@@ -33,10 +33,11 @@ use crate::combat::scene_query::{
 };
 use crate::combat::status_effect;
 use crate::combat::{
-    decode_status_dispel_types, has_active_disabling_status, hostile_targeted_ability_misses,
-    mark_harmful_combat_action, queue_effects, set_active_aura, temporary_combat_modifiers,
-    timestamp_to_micros, ActiveCombatProjectile, CombatEvent, DamageDelivery, DamageType,
-    EffectPacket, ProjectilePresentationEvent, StatusApplication, StatusDispelType, StatusEffect,
+    active_emanation_for_owner, decode_status_dispel_types, has_active_disabling_status,
+    hostile_targeted_ability_misses, mark_harmful_combat_action, queue_effects, set_active_aura,
+    temporary_combat_modifiers, timestamp_to_micros, toggle_active_emanation,
+    ActiveCombatProjectile, CombatEvent, DamageDelivery, DamageType, EffectPacket,
+    ProjectilePresentationEvent, StatusApplication, StatusDispelType, StatusEffect,
     StatusEffectKind, StatusPayload, StatusPolarity, StatusStackGroupDefault, COMBAT_EVENT_MISS,
     COMBAT_METADATA_NONE, COMBAT_SCALAR_NONE, COMBAT_SEQUENCE_NONE, DAMAGE_SOURCE_KIND_SPELL,
 };
@@ -132,15 +133,6 @@ const SPECIAL_MOVEMENT_AIR_PATH_GROUND_CLEARANCE: f32 = 0.10;
 // rows without changing action identity or cue resolution contracts.
 const PROJECTILE_SEQUENCE_INDEX_V1: u32 = 0;
 
-fn resolved_primary_resource_cost_for_action(
-    ctx: &ReducerContext,
-    caster: Identity,
-    spell_kind: &SpellId,
-) -> Option<ResolvedActionResourceCost> {
-    let spell_cost = spell_primary_resource_cost_for_action(spell_kind);
-    resolved_primary_resource_cost_for_amount(ctx, caster, spell_kind, spell_cost.amount)
-}
-
 fn resolved_initial_primary_resource_cost_for_action(
     ctx: &ReducerContext,
     caster: Identity,
@@ -148,10 +140,18 @@ fn resolved_initial_primary_resource_cost_for_action(
 ) -> Option<ResolvedActionResourceCost> {
     let definition = super::catalog::spell_definition(spell_kind)
         .expect("validated spell id must resolve to a definition");
-    let amount = if definition.behavior == SpellBehavior::Channel {
-        channel_tick_resource_cost_amount(definition)
-    } else {
-        definition.primary_resource_cost
+    let amount = match definition.behavior {
+        SpellBehavior::Channel => channel_tick_resource_cost_amount(definition),
+        SpellBehavior::Emanation => {
+            if active_emanation_for_owner(ctx, caster)
+                .is_some_and(|active| active.spell_id == spell_kind.as_str())
+            {
+                0.0
+            } else {
+                definition.primary_resource_cost * definition.update_interval.max(0.001)
+            }
+        }
+        _ => definition.primary_resource_cost,
     };
     resolved_primary_resource_cost_for_amount(ctx, caster, spell_kind, amount)
 }
@@ -171,7 +171,7 @@ fn resolved_channel_tick_resource_cost_for_action(
     )
 }
 
-fn resolved_primary_resource_cost_for_amount(
+pub(crate) fn resolved_primary_resource_cost_for_amount(
     ctx: &ReducerContext,
     caster: Identity,
     spell_kind: &SpellId,
@@ -197,6 +197,7 @@ fn channel_tick_resource_cost_amount(definition: &SpellDefinition) -> f32 {
     definition.primary_resource_cost * definition.update_interval.max(0.0)
 }
 
+#[cfg(test)]
 fn spell_primary_resource_cost_for_action(spell_kind: &SpellId) -> ResolvedActionResourceCost {
     let definition = super::catalog::spell_definition(spell_kind)
         .expect("validated spell id must resolve to a definition");
@@ -1206,7 +1207,8 @@ fn commit_primary_resource_for_spell(
     spell_kind: &SpellId,
     now: Timestamp,
 ) -> bool {
-    let Some(cost) = resolved_primary_resource_cost_for_action(ctx, caster, spell_kind) else {
+    let Some(cost) = resolved_initial_primary_resource_cost_for_action(ctx, caster, spell_kind)
+    else {
         return false;
     };
     if !pay_action_resource_cost(ctx, caster, &cost, now) {
@@ -2245,6 +2247,7 @@ fn process_spell_cast(
             | SpellBehavior::RemoveStatus
             | SpellBehavior::ConsumeStatus
             | SpellBehavior::Aura
+            | SpellBehavior::Emanation
             | SpellBehavior::SelfResource
     ) {
         if mode == CastExecutionMode::Execute {
@@ -2312,6 +2315,9 @@ fn process_spell_cast(
                 SpellBehavior::Aura => {
                     cast_aura(ctx, caster, spell_kind, ability_id);
                 }
+                SpellBehavior::Emanation => {
+                    cast_emanation(ctx, caster, spell_kind, ability_id);
+                }
                 SpellBehavior::SelfResource => {
                     cast_self_resource(
                         ctx,
@@ -2350,6 +2356,9 @@ fn process_spell_cast(
             ));
         }
         if definition.behavior == SpellBehavior::Aura {
+            return Ok(None);
+        }
+        if definition.behavior == SpellBehavior::Emanation {
             return Ok(None);
         }
         return Ok(None);
@@ -6774,6 +6783,24 @@ fn cast_aura(ctx: &ReducerContext, caster: Identity, kind: &SpellId, ability_id:
     };
     debug_assert_eq!(definition.behavior, SpellBehavior::Aura);
     set_active_aura(ctx, caster, kind.as_str(), ability_id, ctx.timestamp);
+}
+
+fn cast_emanation(ctx: &ReducerContext, caster: Identity, kind: &SpellId, ability_id: &str) {
+    let Some(definition) = super::catalog::spell_definition(kind) else {
+        return;
+    };
+    debug_assert_eq!(definition.behavior, SpellBehavior::Emanation);
+    let Some(emanation) = definition.secondary.emanation.as_ref() else {
+        return;
+    };
+    toggle_active_emanation(
+        ctx,
+        caster,
+        kind.as_str(),
+        ability_id,
+        emanation.pulse_interval,
+        ctx.timestamp,
+    );
 }
 
 fn cast_remove_status(

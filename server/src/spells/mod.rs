@@ -57,9 +57,9 @@ pub(crate) use casting::{
     clear_active_cast, contact_distance_from_radii, fizzle_active_cast_for_interrupt,
     has_due_pending_area_impacts, horizontal_movement_duration_ms, movement_delivery_destination,
     resolve_pending_area_impacts, resolve_pending_casts, resolve_special_movement_y,
-    special_movement_uses_air_path, tick_active_casts, validate_movement_delivery_target,
-    SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK, SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK_FIXED_Y,
-    SPECIAL_MOVEMENT_FACING_FACE_START,
+    resolved_primary_resource_cost_for_amount, special_movement_uses_air_path, tick_active_casts,
+    validate_movement_delivery_target, SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK,
+    SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK_FIXED_Y, SPECIAL_MOVEMENT_FACING_FACE_START,
 };
 pub(crate) use catalog::spell_definition_by_str;
 pub(crate) use cooldowns::{

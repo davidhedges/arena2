@@ -4830,7 +4830,7 @@ fn validate_spell_delivery_damage_type(ability_id: &str, gameplay: &AbilityGamep
     };
     if !matches!(
         kind.as_str(),
-        "DIRECT_TARGET" | "PROJECTILE" | "AREA" | "INSTANT_BEAM" | "CHANNEL"
+        "DIRECT_TARGET" | "PROJECTILE" | "AREA" | "INSTANT_BEAM" | "CHANNEL" | "EMANATION"
     ) {
         return;
     }
@@ -4857,7 +4857,15 @@ fn validate_spell_delivery_damage_type(ability_id: &str, gameplay: &AbilityGamep
 fn is_known_damage_type(value: &str) -> bool {
     matches!(
         normalize_identifier(value).as_str(),
-        "PHYSICAL" | "FIRE" | "COLD" | "LIGHTNING" | "POISON" | "HOLY" | "SHADOW" | "ARCANE"
+        "PHYSICAL"
+            | "FIRE"
+            | "COLD"
+            | "LIGHTNING"
+            | "POISON"
+            | "HOLY"
+            | "SHADOW"
+            | "NECROTIC"
+            | "ARCANE"
     )
 }
 
@@ -6228,6 +6236,7 @@ mod tests {
             "SPELL_BLOCK",
             "SPELL_PARRY",
             "SPELL_FIZZLE",
+            "EMANATION_ACTIVE",
             "SPECIAL_MOVEMENT_START",
             "SPECIAL_MOVEMENT_ARRIVAL",
         ];
@@ -6251,6 +6260,7 @@ mod tests {
             "",
             "SPAWN_WORLD",
             "FOLLOW_ANCHOR",
+            "FOLLOW_GROUND_POSITION",
             "WORLD_ALIGNED_TO_FACING",
         ];
         let supported_vfx_roles = [
@@ -6270,6 +6280,8 @@ mod tests {
             // Persists until the owning cast/channel's ActiveCast row is deleted (channel
             // end / cancel). Used for hand-attached channel cues like Magic Missile's glow.
             "UNTIL_CAST_END",
+            // State-backed caster field; ends when its ActiveRadialEffect row is deleted.
+            "UNTIL_RADIAL_EFFECT_END",
         ];
         for cue in &catalog.combat_vfx_cues {
             let owner_kind = normalize_identifier(cue.owner_kind.as_str());
@@ -6350,6 +6362,20 @@ mod tests {
                     format!(
                         "combat VFX cue '{}' uses unsupported attach_mode '{}'",
                         cue.vfx_id, cue.attach_mode
+                    ),
+                ));
+            }
+            if attach_mode == "FOLLOW_GROUND_POSITION"
+                && (trigger != "EMANATION_ACTIVE"
+                    || anchor != "CASTER"
+                    || effective_vfx_role != "ATTACHED"
+                    || effective_lifecycle != "UNTIL_RADIAL_EFFECT_END")
+            {
+                errors.push(CombatAuthoringError::new(
+                    CombatAuthoringRule::CombatVfxCueResolves,
+                    format!(
+                        "combat VFX cue '{}' FOLLOW_GROUND_POSITION requires EMANATION_ACTIVE + CASTER + ATTACHED + UNTIL_RADIAL_EFFECT_END",
+                        cue.vfx_id
                     ),
                 ));
             }
@@ -9042,6 +9068,7 @@ mod tests {
             ("SPELL_METEOR", "METEOR", "FIRE"),
             ("SPELL_NEGATE", "NEGATE", "ARCANE"),
             ("SPELL_WITHERING_ORB", "WITHERING_ORB", "SHADOW"),
+            ("SPELL_NECROTIC_AURA", "NECROTIC_AURA", "NECROTIC"),
             ("SPELL_FROST_NOVA", "FROST_NOVA", "COLD"),
             ("SPELL_NOVA", "NOVA", "ARCANE"),
             ("SPELL_ICE_SPIKES", "ICE_SPIKES", "COLD"),
@@ -9073,6 +9100,28 @@ mod tests {
                 Some(damage_type)
             );
         }
+    }
+
+    #[test]
+    fn necrotic_aura_vfx_follows_ground_without_inheriting_caster_transform() {
+        let cue = progression_catalog()
+            .combat_vfx_cues
+            .iter()
+            .find(|cue| {
+                normalize_identifier(cue.owner_id.as_str()) == "SPELL_NECROTIC_AURA"
+                    && normalize_identifier(cue.trigger.as_str()) == "EMANATION_ACTIVE"
+            })
+            .expect("Necrotic Aura must author its active emanation VFX");
+
+        assert_eq!(normalize_identifier(cue.anchor.as_str()), "CASTER");
+        assert_eq!(
+            normalize_identifier(cue.attach_mode.as_str()),
+            "FOLLOW_GROUND_POSITION"
+        );
+        assert_eq!(
+            normalize_identifier(cue.lifecycle.as_str()),
+            "UNTIL_RADIAL_EFFECT_END"
+        );
     }
 
     #[test]

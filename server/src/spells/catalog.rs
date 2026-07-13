@@ -16,11 +16,11 @@ use super::manifest::{
     ApplyStatusDefinition, ApplyStatusSecondaryTunables, AreaSecondaryTunables,
     AuraSecondaryTunables, BespokeRuntimeSpell, BlockBehavior, BoomerangCasterProjectileTunables,
     ConsumeStatusSecondaryTunables, CurvedTargetProjectileTunables, DirectTargetSecondaryTunables,
-    ImpactEffect, InstantBeamChargeScaling, InstantBeamSecondaryTunables, MeteorSkyOrigin,
-    OrbitCasterProjectileTunables, ProjectileMotionTunables, ProjectileSecondaryTunables,
-    RemoveStatusDefinition, RemoveStatusSecondaryTunables, SpellBehavior, SpellCastMobility,
-    SpellDefinition, SpellId, SpellParryBehavior, SpellSecondaryTunables, SpellTargeting,
-    SPELL_METEOR,
+    EmanationSecondaryTunables, ImpactEffect, InstantBeamChargeScaling,
+    InstantBeamSecondaryTunables, MeteorSkyOrigin, OrbitCasterProjectileTunables,
+    ProjectileMotionTunables, ProjectileSecondaryTunables, RemoveStatusDefinition,
+    RemoveStatusSecondaryTunables, SpellBehavior, SpellCastMobility, SpellDefinition, SpellId,
+    SpellParryBehavior, SpellSecondaryTunables, SpellTargeting, SPELL_METEOR,
 };
 
 const PROGRESSION_CATALOG_JSON: &str = include_str!("../progression_catalog.shared.json");
@@ -169,6 +169,18 @@ enum SpellCatalogDelivery {
         tick_interval_ms: u64,
         #[serde(default)]
         effects: Vec<ImpactEffectRow>,
+    },
+    Emanation {
+        radius: f32,
+        pulse_interval_ms: u64,
+        resource_cost_per_second: f32,
+        damage: i32,
+        #[serde(default)]
+        damage_type: String,
+        #[serde(default)]
+        vfx_school: String,
+        #[serde(default)]
+        impact_effects: Vec<ImpactEffectRow>,
     },
     SelfResource {},
 }
@@ -750,11 +762,19 @@ impl SpellGameplayCatalogRow {
             SpellCatalogDelivery::Channel {
                 resource_cost_per_second,
                 ..
+            }
+            | SpellCatalogDelivery::Emanation {
+                resource_cost_per_second,
+                ..
             } => {
                 if authored_spell_resource_cost > 0.0 {
                     return Err(format!(
-                        "spell ability '{}' CHANNEL delivery must author resource_cost_per_second instead of gameplay.resource_cost",
-                        ability.ability_id
+                        "spell ability '{}' {} delivery must author resource_cost_per_second instead of gameplay.resource_cost",
+                        ability.ability_id,
+                        match &self.delivery {
+                            SpellCatalogDelivery::Channel { .. } => "CHANNEL",
+                            _ => "EMANATION",
+                        }
                     ));
                 }
                 *resource_cost_per_second
@@ -1092,6 +1112,27 @@ impl SpellCatalogRow {
                     radius,
                     tick_interval: Duration::from_millis(tick_interval_ms),
                     effects: effects.into_iter().map(Into::into).collect(),
+                });
+            }
+            SpellCatalogDelivery::Emanation {
+                radius,
+                pulse_interval_ms,
+                resource_cost_per_second: _,
+                damage,
+                damage_type,
+                vfx_school: _,
+                impact_effects,
+            } => {
+                definition.behavior = SpellBehavior::Emanation;
+                definition.radius = radius;
+                definition.damage = damage;
+                definition.damage_type = DamageType::from_wire(damage_type.as_str());
+                definition.update_interval = pulse_interval_ms as f32 / 1000.0;
+                definition.block_behavior = BlockBehavior::Unblockable;
+                definition.secondary.emanation = Some(EmanationSecondaryTunables {
+                    radius,
+                    pulse_interval: Duration::from_millis(pulse_interval_ms),
+                    impact_effects: impact_effects.into_iter().map(Into::into).collect(),
                 });
             }
             SpellCatalogDelivery::SelfResource {} => {
@@ -1630,6 +1671,12 @@ fn validate_secondary_tunables(def: &SpellDefinition) -> Result<(), String> {
             def.kind.as_str()
         ));
     }
+    if def.behavior != SpellBehavior::Emanation && def.secondary.emanation.is_some() {
+        return Err(format!(
+            "{} must not define emanation secondary data",
+            def.kind.as_str()
+        ));
+    }
 
     match def.behavior {
         SpellBehavior::DirectTarget => {
@@ -1965,6 +2012,50 @@ fn validate_secondary_tunables(def: &SpellDefinition) -> Result<(), String> {
                 validate_impact_effect(def, effect)?;
             }
             ensure_no_secondary(def, true, true, true, true, true, true)?;
+        }
+        SpellBehavior::Emanation => {
+            let Some(emanation) = def.secondary.emanation.as_ref() else {
+                return Err(format!(
+                    "{} EMANATION must define secondary emanation data",
+                    def.kind.as_str()
+                ));
+            };
+            if def.targeting != SpellTargeting::Self_ || def.requires_target {
+                return Err(format!(
+                    "{} EMANATION must use SELF targeting without a target requirement",
+                    def.kind.as_str()
+                ));
+            }
+            ensure_positive_f32(def.kind.as_str(), "delivery.radius", emanation.radius)?;
+            ensure_positive_duration(
+                def.kind.as_str(),
+                "delivery.pulse_interval_ms",
+                emanation.pulse_interval,
+            )?;
+            ensure_positive_f32(
+                def.kind.as_str(),
+                "delivery.resource_cost_per_second",
+                def.primary_resource_cost,
+            )?;
+            if def.damage <= 0 && emanation.impact_effects.is_empty() {
+                return Err(format!(
+                    "{} EMANATION must define positive damage or at least one impact effect",
+                    def.kind.as_str()
+                ));
+            }
+            for effect in &emanation.impact_effects {
+                validate_impact_effect(def, effect)?;
+            }
+            let expected = SpellSecondaryTunables {
+                emanation: Some(emanation.clone()),
+                ..SpellSecondaryTunables::default()
+            };
+            if def.secondary != expected {
+                return Err(format!(
+                    "{} EMANATION must only define emanation secondary spell tunables",
+                    def.kind.as_str()
+                ));
+            }
         }
         SpellBehavior::Channel => {
             let expected = SpellSecondaryTunables {
@@ -2446,6 +2537,7 @@ mod tests {
                 "BLINDING_LIGHT",
                 "GLACIAL_SPIKE",
                 "FROZEN_GRASP",
+                "NECROTIC_AURA",
                 "MOMENTUM",
                 "FORTIFY",
                 "IRON_WILL",
@@ -2485,6 +2577,29 @@ mod tests {
                 "LICH_MEND",
             ]
         );
+    }
+
+    #[test]
+    fn necrotic_aura_authors_emanation_upkeep_and_damage() {
+        let definition =
+            spell_definition_by_str("NECROTIC_AURA").expect("NECROTIC_AURA should exist");
+        assert_eq!(definition.behavior, SpellBehavior::Emanation);
+        assert_eq!(definition.targeting, SpellTargeting::Self_);
+        assert_eq!(definition.target_audience, TargetAudience::Hostile);
+        assert_eq!(definition.damage, 1);
+        assert_eq!(definition.damage_type, DamageType::Necrotic);
+        assert!((definition.primary_resource_cost - 2.0).abs() < 0.0001);
+        assert!((definition.update_interval - 1.0).abs() < 0.0001);
+        assert!(!definition.uses_global_cooldown);
+        assert_eq!(definition.cooldown, Duration::from_millis(1));
+        let emanation = definition
+            .secondary
+            .emanation
+            .as_ref()
+            .expect("Necrotic Aura must define emanation tunables");
+        assert_eq!(emanation.radius, 4.6);
+        assert_eq!(emanation.pulse_interval, Duration::from_secs(1));
+        assert!(emanation.impact_effects.is_empty());
     }
 
     #[test]

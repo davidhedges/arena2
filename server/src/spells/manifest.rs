@@ -144,11 +144,12 @@ pub(crate) enum SpellBehavior {
     RemoveStatus,
     ConsumeStatus,
     Aura,
+    Emanation,
     SelfResource,
 }
 
 impl SpellBehavior {
-    pub(super) fn as_str(self) -> &'static str {
+    pub(crate) fn as_str(self) -> &'static str {
         match self {
             Self::DirectTarget => "DIRECT_TARGET",
             Self::Projectile => "PROJECTILE",
@@ -159,6 +160,7 @@ impl SpellBehavior {
             Self::RemoveStatus => "REMOVE_STATUS",
             Self::ConsumeStatus => "CONSUME_STATUS",
             Self::Aura => "AURA",
+            Self::Emanation => "EMANATION",
             Self::SelfResource => "SELF_RESOURCE",
         }
     }
@@ -279,6 +281,7 @@ pub(crate) struct SpellSecondaryTunables {
     pub remove_status: Option<RemoveStatusSecondaryTunables>,
     pub consume_status: Option<ConsumeStatusSecondaryTunables>,
     pub aura: Option<AuraSecondaryTunables>,
+    pub emanation: Option<EmanationSecondaryTunables>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -436,6 +439,13 @@ pub(crate) struct AuraSecondaryTunables {
     pub radius: f32,
     pub tick_interval: Duration,
     pub effects: Vec<ImpactEffect>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct EmanationSecondaryTunables {
+    pub radius: f32,
+    pub pulse_interval: Duration,
+    pub impact_effects: Vec<ImpactEffect>,
 }
 
 #[derive(Clone, Debug, PartialEq)]

@@ -29,8 +29,10 @@ namespace Arena.Presentation
         private const string TriggerSpellBlock = "SPELL_BLOCK";
         private const string TriggerSpellParry = "SPELL_PARRY";
         private const string TriggerSpellFizzle = "SPELL_FIZZLE";
+        private const string TriggerEmanationActive = "EMANATION_ACTIVE";
         private const string AttachModeSpawnWorld = "SPAWN_WORLD";
         private const string AttachModeFollowAnchor = "FOLLOW_ANCHOR";
+        private const string AttachModeFollowGroundPosition = "FOLLOW_GROUND_POSITION";
         private const string AttachModeWorldAlignedToFacing = "WORLD_ALIGNED_TO_FACING";
         private const string VfxRoleProjectileBody = "PROJECTILE_BODY";
         private const string VfxRoleProjectileTrail = "PROJECTILE_TRAIL";
@@ -64,6 +66,7 @@ namespace Arena.Presentation
         private readonly Dictionary<string, PendingPredictedSpellVfx> _pendingSpellVfxByToken = new(StringComparer.Ordinal);
         private readonly Dictionary<string, string> _spellVfxTokenByActionInstance = new(StringComparer.Ordinal);
         private readonly Dictionary<string, bool> _projectileDeliveredSpellImpactByActionKind = new(StringComparer.Ordinal);
+        private readonly HashSet<string> _activeRadialEffectVfxKeys = new(StringComparer.Ordinal);
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
@@ -187,12 +190,18 @@ namespace Arena.Presentation
             conn.Db.ProjectilePresentationEvent.OnInsert += OnProjectilePresentationEventInsert;
             conn.Db.PredictedActionResult.OnInsert += OnPredictedActionResultInsert;
             conn.Db.ActiveCast.OnDelete += OnActiveCastDeleteForVfx;
+            conn.Db.ActiveRadialEffect.OnInsert += OnActiveRadialEffectInsertForVfx;
+            conn.Db.ActiveRadialEffect.OnUpdate += OnActiveRadialEffectUpdateForVfx;
+            conn.Db.ActiveRadialEffect.OnDelete += OnActiveRadialEffectDeleteForVfx;
             conn.Db.SpellDefinition.OnInsert += OnSpellDefinitionInsertForVfx;
             conn.Db.SpellDefinition.OnUpdate += OnSpellDefinitionUpdateForVfx;
             conn.Db.SpellDefinition.OnDelete += OnSpellDefinitionDeleteForVfx;
             conn.Db.CombatVfxCueCatalog.OnInsert += OnCombatVfxCueCatalogInsert;
             conn.Db.CombatVfxCueCatalog.OnUpdate += OnCombatVfxCueCatalogUpdate;
             conn.Db.CombatVfxCueCatalog.OnDelete += OnCombatVfxCueCatalogDelete;
+
+            foreach (ActiveRadialEffect row in conn.Db.ActiveRadialEffect.Iter())
+                SpawnActiveRadialEffectVfx(row);
         }
 
         // Channel/cast end: tear down any UNTIL_CAST_END cues bound to this cast. The cue's
@@ -202,6 +211,78 @@ namespace Arena.Presentation
         {
             _ = ctx;
             _lifecycle?.DestroyForCastEnd(row.CastId);
+        }
+
+        private void OnActiveRadialEffectInsertForVfx(EventContext ctx, ActiveRadialEffect row)
+        {
+            _ = ctx;
+            SpawnActiveRadialEffectVfx(row);
+        }
+
+        private void OnActiveRadialEffectUpdateForVfx(
+            EventContext ctx,
+            ActiveRadialEffect oldRow,
+            ActiveRadialEffect newRow)
+        {
+            _ = ctx;
+            // Pulse scheduling updates this row every interval. Only presentation identity changes
+            // should replace the persistent visual.
+            if (string.Equals(oldRow.Key, newRow.Key, StringComparison.Ordinal)
+                && oldRow.Owner.Equals(newRow.Owner)
+                && string.Equals(oldRow.SpellId, newRow.SpellId, StringComparison.Ordinal)
+                && string.Equals(oldRow.AbilityId, newRow.AbilityId, StringComparison.Ordinal))
+            {
+                if (!_activeRadialEffectVfxKeys.Contains(newRow.Key))
+                    SpawnActiveRadialEffectVfx(newRow);
+                return;
+            }
+
+            _lifecycle?.DestroyForRadialEffectEnd(oldRow.Key);
+            _activeRadialEffectVfxKeys.Remove(oldRow.Key);
+            SpawnActiveRadialEffectVfx(newRow);
+        }
+
+        private void OnActiveRadialEffectDeleteForVfx(EventContext ctx, ActiveRadialEffect row)
+        {
+            _ = ctx;
+            _lifecycle?.DestroyForRadialEffectEnd(row.Key);
+            _activeRadialEffectVfxKeys.Remove(row.Key);
+        }
+
+        private void SpawnActiveRadialEffectVfx(ActiveRadialEffect row)
+        {
+            if (_activeRadialEffectVfxKeys.Contains(row.Key))
+                return;
+            if (EntityRegistry.Instance == null
+                || !EntityRegistry.Instance.TryGetCombatTarget(row.Owner, out ICombatTargetEntity caster))
+            {
+                return;
+            }
+
+            Transform root = caster.GetPresentationRoot();
+            Vector3 direction = root.forward;
+            var fact = new CombatVfxFact(
+                TriggerEmanationActive,
+                WireIdentifier.Normalize(row.SpellId),
+                WireIdentifier.Normalize(row.AbilityId),
+                string.Empty,
+                -1,
+                row.Owner,
+                default,
+                row.Key,
+                row.SpellId,
+                root.position,
+                direction,
+                root.position,
+                0f,
+                0f,
+                CombatEventScalarKinds.None,
+                0f,
+                0,
+                0,
+                true);
+            if (DispatchFact(fact))
+                _activeRadialEffectVfxKeys.Add(row.Key);
         }
 
         private void OnSpellDefinitionInsertForVfx(EventContext ctx, SpellDefinition row)
@@ -705,25 +786,28 @@ namespace Arena.Presentation
             DispatchFact(fact.Value);
         }
 
-        private void DispatchFact(CombatVfxFact fact, bool targetAnchoredOnly = false)
+        private bool DispatchFact(CombatVfxFact fact, bool targetAnchoredOnly = false)
         {
             var conn = NetworkManager.Instance?.Conn;
             if (conn == null)
-                return;
+                return false;
 
             List<CombatVfxCueCatalog> matchingCues = MatchingCues;
             CueResolver.Resolve(conn.Db.CombatVfxCueCatalog.Iter(), fact.ToResolutionFact(), matchingCues);
 
             if (matchingCues.Count == 0)
-                return;
+                return false;
 
+            bool dispatched = false;
             foreach (CombatVfxCueCatalog cue in matchingCues)
             {
                 if (targetAnchoredOnly && !IsTargetAnchoredCue(cue))
                     continue;
 
                 DispatchCue(fact, cue);
+                dispatched = true;
             }
+            return dispatched;
         }
 
         private static bool IsTargetAnchoredCue(CombatVfxCueCatalog cue)
@@ -1217,15 +1301,20 @@ namespace Arena.Presentation
                 attachMode = AttachModeSpawnWorld;
             if (!string.Equals(attachMode, AttachModeSpawnWorld, StringComparison.Ordinal)
                 && !string.Equals(attachMode, AttachModeFollowAnchor, StringComparison.Ordinal)
+                && !string.Equals(attachMode, AttachModeFollowGroundPosition, StringComparison.Ordinal)
                 && !string.Equals(attachMode, AttachModeWorldAlignedToFacing, StringComparison.Ordinal))
                 return;
 
             Vector3 position = CombatVFXAnchorResolver.ResolvePosition(fact.ToAnchorFact(), cue);
-            Transform? followAnchor = string.Equals(attachMode, AttachModeFollowAnchor, StringComparison.Ordinal)
+            bool followsTransform = string.Equals(attachMode, AttachModeFollowAnchor, StringComparison.Ordinal);
+            bool followsGroundPosition = string.Equals(
+                attachMode,
+                AttachModeFollowGroundPosition,
+                StringComparison.Ordinal);
+            Transform? followAnchor = followsTransform || followsGroundPosition
                 ? CombatVFXAnchorResolver.ResolveFollowAnchor(fact.ToAnchorFact(), cue)
                 : null;
-            if (string.Equals(attachMode, AttachModeFollowAnchor, StringComparison.Ordinal)
-                && followAnchor == null)
+            if ((followsTransform || followsGroundPosition) && followAnchor == null)
                 return;
 
             Quaternion rotation = string.Equals(attachMode, AttachModeWorldAlignedToFacing, StringComparison.Ordinal)
@@ -1233,7 +1322,13 @@ namespace Arena.Presentation
                 : Quaternion.identity;
 
             _lifecycle ??= new CombatVFXLifecycleRegistry(this);
-            _lifecycle.Spawn(cue, fact.ToTemplateContext(cue.Key, followAnchor), position, rotation, followAnchor);
+            _lifecycle.Spawn(
+                cue,
+                fact.ToTemplateContext(cue.Key, followAnchor),
+                position,
+                rotation,
+                followAnchor,
+                followsGroundPosition);
         }
 
         private static Quaternion ResolveWorldAlignedFacingRotation(Vector3 direction)
@@ -1269,6 +1364,9 @@ namespace Arena.Presentation
             conn.Db.ProjectilePresentationEvent.OnInsert -= OnProjectilePresentationEventInsert;
             conn.Db.PredictedActionResult.OnInsert -= OnPredictedActionResultInsert;
             conn.Db.ActiveCast.OnDelete -= OnActiveCastDeleteForVfx;
+            conn.Db.ActiveRadialEffect.OnInsert -= OnActiveRadialEffectInsertForVfx;
+            conn.Db.ActiveRadialEffect.OnUpdate -= OnActiveRadialEffectUpdateForVfx;
+            conn.Db.ActiveRadialEffect.OnDelete -= OnActiveRadialEffectDeleteForVfx;
             conn.Db.SpellDefinition.OnInsert -= OnSpellDefinitionInsertForVfx;
             conn.Db.SpellDefinition.OnUpdate -= OnSpellDefinitionUpdateForVfx;
             conn.Db.SpellDefinition.OnDelete -= OnSpellDefinitionDeleteForVfx;
@@ -1278,6 +1376,8 @@ namespace Arena.Presentation
             _subscribedConnection = null;
             _cueResolver?.MarkDirty();
             _projectileDeliveredSpellImpactByActionKind.Clear();
+            _lifecycle?.DestroyAllRadialEffects();
+            _activeRadialEffectVfxKeys.Clear();
         }
 
         private readonly struct CombatVfxFact

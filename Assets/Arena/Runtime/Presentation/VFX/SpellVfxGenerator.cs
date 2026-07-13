@@ -32,6 +32,7 @@ namespace Arena.Presentation
         TargetHit = 5,
         SelfFx = 6,
         Aura = 7,
+        Emanation = 8,
     }
 
     /// <summary>
@@ -88,6 +89,8 @@ namespace Arena.Presentation
         /// <see cref="CastGlow"/>, this surrounds the character and may be authored more than once.
         /// </summary>
         CharacterFx = 10,
+        /// <summary>Persistent ground-following field backed by an ActiveRadialEffect row.</summary>
+        PersistentField = 11,
     }
 
     /// <summary>
@@ -272,9 +275,11 @@ namespace Arena.Presentation
         public const string TriggerSpellRelease = "SPELL_RELEASE";
         public const string TriggerSpellImpact = "SPELL_IMPACT";
         public const string TriggerAreaImpact = "AREA_IMPACT";
+        public const string TriggerEmanationActive = "EMANATION_ACTIVE";
 
         public const string AttachSpawnWorld = "SPAWN_WORLD";
         public const string AttachFollowAnchor = "FOLLOW_ANCHOR";
+        public const string AttachFollowGroundPosition = "FOLLOW_GROUND_POSITION";
 
         public const string RoleOneShot = "ONE_SHOT";
         public const string RoleAttached = "ATTACHED";
@@ -287,6 +292,7 @@ namespace Arena.Presentation
         public const string LifecycleUntilReleaseEvent = "UNTIL_RELEASE_EVENT";
         public const string LifecycleUntilTerminalEvent = "UNTIL_TERMINAL_EVENT";
         public const string LifecycleUntilCastEnd = "UNTIL_CAST_END";
+        public const string LifecycleUntilRadialEffectEnd = "UNTIL_RADIAL_EFFECT_END";
 
         public const string AnchorLeftHand = "LEFT_HAND";
         public const string AnchorRightHand = "RIGHT_HAND";
@@ -308,6 +314,7 @@ namespace Arena.Presentation
         private const string DeliveryConsumeStatus = "CONSUME_STATUS";
         private const string DeliverySelfResource = "SELF_RESOURCE";
         private const string DeliveryAura = "AURA";
+        private const string DeliveryEmanation = "EMANATION";
 
         private const string TargetingSelf = "SELF";
         private const string TargetingTarget = "TARGET";
@@ -343,6 +350,8 @@ namespace Arena.Presentation
                         : SpellVfxArchetype.SelfFx;
                 case DeliveryAura:
                     return SpellVfxArchetype.Aura;
+                case DeliveryEmanation:
+                    return SpellVfxArchetype.Emanation;
                 default:
                     return null;
             }
@@ -389,6 +398,8 @@ namespace Arena.Presentation
                 // Aura buffs persist, but their aura_ground visual is only a brief ground flourish.
                 case SpellVfxArchetype.Aura:
                     return new[] { SpellVfxSlot.CastGlow, SpellVfxSlot.CharacterFx, SpellVfxSlot.AuraGround };
+                case SpellVfxArchetype.Emanation:
+                    return new[] { SpellVfxSlot.CastGlow, SpellVfxSlot.CharacterFx, SpellVfxSlot.PersistentField };
                 default:
                     return System.Array.Empty<SpellVfxSlot>();
             }
@@ -580,6 +591,16 @@ namespace Arena.Presentation
                         vfxRole: RoleOneShot,
                         lifecycle: oneShotLifecycle,
                         duration: oneShotDuration,
+                        projectileSequenceIndex: null);
+
+                case SpellVfxSlot.PersistentField:
+                    return new CueWiring(
+                        trigger: TriggerEmanationActive,
+                        anchor: CueAnchor.Caster,
+                        attachMode: AttachFollowGroundPosition,
+                        vfxRole: RoleAttached,
+                        lifecycle: LifecycleUntilRadialEffectEnd,
+                        duration: CueDurationPolicy.Zero,
                         projectileSequenceIndex: null);
 
                 default:

@@ -42,10 +42,7 @@ namespace Arena.Combat
             if (resourceCost <= 0.0001f && spellDefinition?.PrimaryResourceCost > 0.0001f)
             {
                 resourceCost = spellDefinition.PrimaryResourceCost;
-                costIsPerSecond = string.Equals(
-                    spellDefinition.Behavior,
-                    SpellDefinitionContracts.BehaviorChannel,
-                    System.StringComparison.Ordinal);
+                costIsPerSecond = SpellDefinitionContracts.UsesPerSecondResourceCost(spellDefinition);
                 if (string.IsNullOrWhiteSpace(resourceKind))
                     resourceKind = "MANA";
             }

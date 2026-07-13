@@ -355,7 +355,7 @@ namespace Arena.UI
             string targeting = WireIdentifier.Normalize(spell.Targeting);
             string behavior = WireIdentifier.Normalize(spell.Behavior);
             float cost = Math.Max(0f, spell.PrimaryResourceCost);
-            string costLabel = string.Equals(behavior, SpellDefinitionContracts.BehaviorChannel, StringComparison.Ordinal)
+            string costLabel = SpellDefinitionContracts.UsesPerSecondResourceCost(spell)
                 ? $"{cost:0.#}/s"
                 : $"{cost:0.#}";
             return $"{targeting} | {behavior} | Cost {costLabel}";

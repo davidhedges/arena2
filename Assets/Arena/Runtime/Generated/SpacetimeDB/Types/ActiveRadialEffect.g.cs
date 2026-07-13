@@ -11,8 +11,10 @@ namespace SpacetimeDB.Types
 {
     [SpacetimeDB.Type]
     [DataContract]
-    public sealed partial class ActiveAura
+    public sealed partial class ActiveRadialEffect
     {
+        [DataMember(Name = "key")]
+        public string Key;
         [DataMember(Name = "owner")]
         public SpacetimeDB.Identity Owner;
         [DataMember(Name = "spell_id")]
@@ -21,22 +23,29 @@ namespace SpacetimeDB.Types
         public string AbilityId;
         [DataMember(Name = "activated_at")]
         public SpacetimeDB.Timestamp ActivatedAt;
+        [DataMember(Name = "next_pulse_at")]
+        public SpacetimeDB.Timestamp NextPulseAt;
 
-        public ActiveAura(
+        public ActiveRadialEffect(
+            string Key,
             SpacetimeDB.Identity Owner,
             string SpellId,
             string AbilityId,
-            SpacetimeDB.Timestamp ActivatedAt
+            SpacetimeDB.Timestamp ActivatedAt,
+            SpacetimeDB.Timestamp NextPulseAt
         )
         {
+            this.Key = Key;
             this.Owner = Owner;
             this.SpellId = SpellId;
             this.AbilityId = AbilityId;
             this.ActivatedAt = ActivatedAt;
+            this.NextPulseAt = NextPulseAt;
         }
 
-        public ActiveAura()
+        public ActiveRadialEffect()
         {
+            this.Key = "";
             this.SpellId = "";
             this.AbilityId = "";
         }

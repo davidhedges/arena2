@@ -717,8 +717,7 @@ namespace Arena.Editor
         {
             public string kind = string.Empty;
             // School tint inputs (design doc §2.3: SCHOOL = vfx_school ?? damage_type ?? profile_default).
-            // vfx_school is the planned override field — not authored anywhere in the catalog yet, so it
-            // stays empty and damage_type wins today.
+            // vfx_school lets presentation schools remain distinct from combat damage types.
             public string vfx_school = string.Empty;
             public string damage_type = string.Empty;
             // Archetype-derivation signals (design doc B.9). Nested objects are left un-initialised so an

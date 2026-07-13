@@ -311,6 +311,53 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void GameplaySubscriptionPlanner_ScopesActiveRadialEffectsToVisibleOwners()
+        {
+            Type plannerType = RequireRuntimeType("Arena.Network.GameplaySubscriptionPlanner");
+            Type gameplayScopeType = RequireRuntimeType("Arena.Network.NetworkManager+GameplayScope");
+            Type playerWorldType = RequireRuntimeType("SpacetimeDB.Types.PlayerWorld");
+            object row = Activator.CreateInstance(playerWorldType, CreateIdentity(1), "OPEN", null, "Oasis_Day")!;
+            object scope = RequireMethod(gameplayScopeType, "FromPlayerWorld", playerWorldType, typeof(string))
+                .Invoke(null, new[] { row, null })!;
+
+            string[] scopedSql = (string[])RequireMethod(plannerType, "BuildScopedQuerySqls", gameplayScopeType)
+                .Invoke(null, new[] { scope })!;
+            string scopedSqlText = string.Join("\n", scopedSql);
+
+            Assert.That(scopedSqlText, Does.Contain("\"active_radial_effect\""));
+            Assert.That(scopedSqlText, Does.Contain("\"player_world\".\"identity\" = \"active_radial_effect\".\"owner\""));
+        }
+
+        [Test]
+        public void CombatVfxGroundFollow_UsesAnchorXZWithoutInheritingJumpHeight()
+        {
+            Type registryType = RequireRuntimeType("Arena.Presentation.CombatVFXLifecycleRegistry");
+            MethodInfo resolve = RequireMethod(
+                registryType,
+                "ResolveGroundFollowPosition",
+                typeof(Vector3),
+                typeof(Vector3),
+                typeof(Vector3),
+                typeof(bool),
+                typeof(float));
+            var current = new Vector3(1f, 7f, 2f);
+            var jumpingAnchor = new Vector3(10f, 20f, 30f);
+            var offset = new Vector3(0.25f, 0.5f, -0.75f);
+
+            var grounded = (Vector3)resolve.Invoke(
+                null,
+                new object[] { current, jumpingAnchor, offset, true, 3f })!;
+            Assert.That(grounded.x, Is.EqualTo(10.25f).Within(0.0001f));
+            Assert.That(grounded.y, Is.EqualTo(3.53f).Within(0.0001f));
+            Assert.That(grounded.z, Is.EqualTo(29.25f).Within(0.0001f));
+
+            var fallback = (Vector3)resolve.Invoke(
+                null,
+                new object[] { current, jumpingAnchor, offset, false, 0f })!;
+            Assert.That(fallback.y, Is.EqualTo(current.y).Within(0.0001f));
+        }
+
+        [Test]
         public void GameplaySubscriptionPlanner_ScopesCombatEffectsByVisibleSourceAndTarget()
         {
             Type plannerType = RequireRuntimeType("Arena.Network.GameplaySubscriptionPlanner");

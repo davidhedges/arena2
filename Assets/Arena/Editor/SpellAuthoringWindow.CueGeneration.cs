@@ -798,6 +798,7 @@ namespace Arena.Editor
                 SpellVfxSlot.SelfFlash => "self_flash",
                 SpellVfxSlot.AuraGround => "aura_ground",
                 SpellVfxSlot.CharacterFx => "character_fx",
+                SpellVfxSlot.PersistentField => "persistent_field",
                 _ => slot.ToString().ToLowerInvariant(),
             };
 
@@ -892,6 +893,7 @@ namespace Arena.Editor
                 case "self_flash": slot = SpellVfxSlot.SelfFlash; return true;
                 case "aura_ground": slot = SpellVfxSlot.AuraGround; return true;
                 case "character_fx": slot = SpellVfxSlot.CharacterFx; return true;
+                case "persistent_field": slot = SpellVfxSlot.PersistentField; return true;
                 default:
                     slot = default;
                     return false;
