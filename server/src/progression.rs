@@ -6676,6 +6676,25 @@ mod tests {
             "LEFT_HAND",
             "Fireball's cast-hand cue should follow only the authored casting hand"
         );
+
+        let flaming_orb_hand_cues: Vec<_> = catalog
+            .combat_vfx_cues
+            .iter()
+            .filter(|cue| {
+                normalize_identifier(cue.owner_id.as_str()) == "SPELL_FLAMING_ORB"
+                    && normalize_identifier(cue.trigger.as_str()) == "SPELL_CAST"
+                    && normalize_identifier(cue.vfx_id.as_str()) == "VFX_FIRE_CAST_HAND_01"
+            })
+            .collect();
+        assert_eq!(
+            flaming_orb_hand_cues.len(),
+            1,
+            "Flaming Orb should reuse the fire school's single shared cast-hand template"
+        );
+        assert_eq!(
+            normalize_identifier(flaming_orb_hand_cues[0].anchor.as_str()),
+            "LEFT_HAND"
+        );
     }
 
     #[test]
@@ -6683,6 +6702,10 @@ mod tests {
         assert_eq!(
             projectile_body_vfx_id_for_spell("SPELL_FIREBALL", "FIREBALL", 0).as_deref(),
             Some("VFX_FIREBALL_PROJECTILE_01")
+        );
+        assert_eq!(
+            projectile_body_vfx_id_for_spell("SPELL_FLAMING_ORB", "FLAMING_ORB", 0).as_deref(),
+            Some("VFX_FLAMING_ORB_PROJECTILE_01")
         );
         assert_eq!(
             projectile_body_vfx_id_for_spell("SPELL_ICICLE", "ICICLE", 0).as_deref(),

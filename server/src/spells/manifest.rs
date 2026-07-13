@@ -293,6 +293,9 @@ pub(crate) struct ProjectileSecondaryTunables {
     pub motion: ProjectileMotionTunables,
     pub parry_behavior: SpellParryBehavior,
     pub homing_window_seconds: f32,
+    /// Linear damage falloff over the projectile's authoritative lifetime. A value of 1 preserves
+    /// full damage; lower values reduce damage toward this multiplier at lifetime end.
+    pub damage_multiplier_at_lifetime_end: f32,
     pub impact_effects: Vec<ImpactEffect>,
     // When true, the projectile ignores world geometry for collision (skips terrain fizzle) and tracks
     // the terrain surface height as it travels. For ground-skimming visuals like Ground Slash that need

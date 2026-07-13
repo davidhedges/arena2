@@ -23,6 +23,8 @@ namespace Arena.Presentation.VFX
         private float _speed;
         private float _maxDistance;
         private float _traveled;
+        private Vector3 _initialBodyScale;
+        private float _scaleMultiplierAtLifetimeEnd = 1f;
         private bool _authoritativeLifetime;
         private bool _active = true;
         private bool _disposed;
@@ -40,6 +42,7 @@ namespace Arena.Presentation.VFX
             float visualScale,
             GameObject prefab,
             CombatVFXRegistry.Template? trailTemplate = null,
+            float scaleMultiplierAtLifetimeEnd = 1f,
             bool authoritativeLifetime = false)
         {
             _group = new GameObject($"VFX_Projectile_{ShortId(instanceId)}");
@@ -49,6 +52,8 @@ namespace Arena.Presentation.VFX
             _projectileBody.transform.localRotation = Quaternion.identity;
             _projectileBody.transform.localScale = Vector3.one;
             VFXUtils.ApplyPrefabPresentationScale(_projectileBody, ResolveVisualScale(visualScale));
+            _initialBodyScale = _projectileBody.transform.localScale;
+            _scaleMultiplierAtLifetimeEnd = ResolveEndScaleMultiplier(scaleMultiplierAtLifetimeEnd);
             if (trailTemplate != null)
             {
                 GameObject trail = Object.Instantiate(trailTemplate.Prefab, _group.transform, false);
@@ -69,11 +74,14 @@ namespace Arena.Presentation.VFX
             float speed,
             float maxDistance,
             ProjectileVfxPool.Rental rental,
+            float scaleMultiplierAtLifetimeEnd = 1f,
             bool authoritativeLifetime = false)
         {
             _rental = rental;
             _group = rental.Root;
             _projectileBody = rental.Body;
+            _initialBodyScale = _projectileBody.transform.localScale;
+            _scaleMultiplierAtLifetimeEnd = ResolveEndScaleMultiplier(scaleMultiplierAtLifetimeEnd);
             // Pool bypass already excludes VisualEffect prefabs, so the rental path never carries one.
             _hasVisualEffect = false;
             Initialize(instanceId, position, direction, speed, maxDistance, authoritativeLifetime);
@@ -115,6 +123,7 @@ namespace Arena.Presentation.VFX
             {
                 float step = _speed * dt;
                 _traveled += step;
+                ApplyLifetimeScale();
                 _group.transform.position += _direction * step;
 
                 if (_visualSweepExtended)
@@ -298,6 +307,23 @@ namespace Arena.Presentation.VFX
         private static float ResolveVisualScale(float visualScale)
         {
             return visualScale > 0f ? visualScale : 1f;
+        }
+
+        private void ApplyLifetimeScale()
+        {
+            if (_projectileBody == null || Mathf.Approximately(_scaleMultiplierAtLifetimeEnd, 1f))
+                return;
+
+            float progress = _maxDistance > 0f
+                ? Mathf.Clamp01(_traveled / _maxDistance)
+                : 0f;
+            _projectileBody.transform.localScale = _initialBodyScale
+                * Mathf.Lerp(1f, _scaleMultiplierAtLifetimeEnd, progress);
+        }
+
+        private static float ResolveEndScaleMultiplier(float multiplier)
+        {
+            return multiplier > 0f ? Mathf.Clamp01(multiplier) : 1f;
         }
     }
 }

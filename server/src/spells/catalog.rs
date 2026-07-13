@@ -200,12 +200,18 @@ struct ProjectileTuningRow {
     parry_behavior: Option<SpellParryBehavior>,
     #[serde(default)]
     homing_window_seconds: f32,
+    #[serde(default = "default_projectile_end_damage_multiplier")]
+    damage_multiplier_at_lifetime_end: f32,
     #[serde(default)]
     motion: ProjectileMotionRow,
     #[serde(default)]
     impact_effects: Vec<ImpactEffectRow>,
     #[serde(default)]
     terrain_conforming: bool,
+}
+
+fn default_projectile_end_damage_multiplier() -> f32 {
+    1.0
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
@@ -905,6 +911,7 @@ impl SpellCatalogRow {
                         .parry_behavior
                         .unwrap_or(SpellParryBehavior::Unparryable),
                     homing_window_seconds: projectile.homing_window_seconds,
+                    damage_multiplier_at_lifetime_end: projectile.damage_multiplier_at_lifetime_end,
                     impact_effects: projectile
                         .impact_effects
                         .into_iter()
@@ -1000,6 +1007,8 @@ impl SpellCatalogRow {
                             .parry_behavior
                             .unwrap_or(SpellParryBehavior::Unparryable),
                         homing_window_seconds: projectile.homing_window_seconds,
+                        damage_multiplier_at_lifetime_end: projectile
+                            .damage_multiplier_at_lifetime_end,
                         impact_effects: projectile
                             .impact_effects
                             .into_iter()
@@ -1994,6 +2003,17 @@ fn validate_projectile_motion(
         "delivery.homing_window_seconds",
         projectile.homing_window_seconds,
     )?;
+    ensure_finite_non_negative(
+        def.kind.as_str(),
+        "delivery.damage_multiplier_at_lifetime_end",
+        projectile.damage_multiplier_at_lifetime_end,
+    )?;
+    if projectile.damage_multiplier_at_lifetime_end > 1.0 {
+        return Err(format!(
+            "{} delivery.damage_multiplier_at_lifetime_end must be <= 1",
+            def.kind.as_str()
+        ));
+    }
 
     match &projectile.motion {
         ProjectileMotionTunables::Linear => {
@@ -2405,6 +2425,7 @@ mod tests {
             kinds,
             vec![
                 "FIREBALL",
+                "FLAMING_ORB",
                 "GROUND_SLASH",
                 "ICICLE",
                 "ORBITING_BLADES",
@@ -2514,6 +2535,7 @@ mod tests {
             "BLINDING_LIGHT",
             "GLACIAL_SPIKE",
             "FROZEN_GRASP",
+            "FLAMING_ORB",
             "MOMENTUM",
             "FORTIFY",
             "IRON_WILL",
@@ -2565,6 +2587,7 @@ mod tests {
                         "turn_rate": 0.0,
                         "update_interval_seconds": 0.1,
                         "radius": 0.35,
+                        "damage_multiplier_at_lifetime_end": 0.25,
                         "block_behavior": "BLOCKABLE"
                     }
                 }
@@ -2578,6 +2601,33 @@ mod tests {
         assert_eq!(definitions.len(), 1);
         assert_eq!(definitions[0].kind.as_str(), "TEST_PROJECTILE");
         assert_eq!(definitions[0].behavior, SpellBehavior::Projectile);
+        assert_eq!(
+            definitions[0]
+                .secondary
+                .projectile
+                .as_ref()
+                .expect("projectile tunables should derive")
+                .damage_multiplier_at_lifetime_end,
+            0.25
+        );
+    }
+
+    #[test]
+    fn flaming_orb_authors_non_decaying_fire_projectile() {
+        let definition = spell_definition_by_str("FLAMING_ORB")
+            .expect("FLAMING_ORB should derive from the shared catalog");
+        let projectile = definition
+            .secondary
+            .projectile
+            .as_ref()
+            .expect("FLAMING_ORB should use projectile delivery");
+
+        assert_eq!(definition.cast_time, Duration::from_millis(1000));
+        assert_eq!(definition.damage, 30);
+        assert_eq!(definition.damage_type, DamageType::Fire);
+        assert_eq!(definition.speed, 20.0);
+        assert_eq!(definition.max_distance, 18.0);
+        assert_eq!(projectile.damage_multiplier_at_lifetime_end, 1.0);
     }
 
     #[test]

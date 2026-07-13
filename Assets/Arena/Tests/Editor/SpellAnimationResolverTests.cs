@@ -146,5 +146,36 @@ namespace Arena.Tests.Editor
             Assert.That(ground, Is.Not.Null);
             Assert.That(ground!.name, Is.EqualTo("HumanM@SpecialMagicAttack01 - Cast"));
         }
+
+        [Test]
+        public void FlamingOrb_ComposesDirectOneHandFamilyAsChargedCast()
+        {
+            Type resolverType = RuntimeAssembly.GetType(
+                "Arena.Presentation.SpellCastAnimationResolver", throwOnError: true)!;
+            Type setType = RuntimeAssembly.GetType(
+                "Arena.Presentation.CombatAnimationSet", throwOnError: true)!;
+            Type archetypeType = RuntimeAssembly.GetType(
+                "Arena.Presentation.SpellAnimationArchetype", throwOnError: true)!;
+            Type entryType = RuntimeAssembly.GetType(
+                "Arena.Presentation.WeaponSpellAnimationEntry", throwOnError: true)!;
+            Type holdType = RuntimeAssembly.GetType(
+                "Arena.Presentation.SpellCastHoldProfile", throwOnError: true)!;
+            MethodInfo resolve = resolverType.GetMethod(
+                "TryResolveComposed",
+                new[] { setType, typeof(string), archetypeType, entryType.MakeByRefType() })!;
+
+            object charged = Enum.Parse(archetypeType, "Charged");
+            object?[] args = { null, "FLAMING_ORB", charged, Activator.CreateInstance(entryType) };
+
+            Assert.That(resolve.Invoke(null, args), Is.True);
+            object entry = args[3]!;
+            var release = (AnimationClip?)entryType.GetField("ground")!.GetValue(entry);
+            object hold = entryType.GetField("holdOverride")!.GetValue(entry)!;
+            var enter = (AnimationClip?)holdType.GetField("enter")!.GetValue(hold);
+            var loop = (AnimationClip?)holdType.GetField("idleLoop")!.GetValue(hold);
+            Assert.That(release?.name, Is.EqualTo("HumanM@MagicAttackDirect1H01_L - Cast"));
+            Assert.That(enter?.name, Is.EqualTo("HumanM@MagicAttackDirect1H01_L"));
+            Assert.That(loop?.name, Is.EqualTo("HumanM@MagicAttackDirect1H01_L - Load"));
+        }
     }
 }

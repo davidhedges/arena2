@@ -12,6 +12,7 @@ namespace Arena.Tests.Editor
         private const string ProjectileControllerPath = "Assets/Arena/Runtime/Presentation/CombatProjectileVisualController.cs";
         private const string TravelControllerPath = "Assets/Arena/Runtime/Presentation/CombatTravelVisualController.cs";
         private const string LifecycleRegistryPath = "Assets/Arena/Runtime/Presentation/CombatVFXLifecycleRegistry.cs";
+        private const string VfxRegistryPath = "Assets/Arena/Runtime/Presentation/VFX/CombatVFXRegistry.cs";
 
         [Test]
         public void ProjectileVfxPool_ReusesProjectileBodiesUnderHiddenRoot()
@@ -41,6 +42,29 @@ namespace Arena.Tests.Editor
             Assert.That(source, Does.Contain("internal WeaponProjectileVFX("));
             Assert.That(source, Does.Contain("_rental.Return();"));
             Assert.That(source, Does.Contain("Object.Destroy(_group)"));
+        }
+
+        [Test]
+        public void WeaponProjectileVfx_AppliesAuthoredLifetimeScaleFalloff()
+        {
+            string source = File.ReadAllText(WeaponProjectilePath);
+
+            Assert.That(source, Does.Contain("_scaleMultiplierAtLifetimeEnd"));
+            Assert.That(source, Does.Contain("ApplyLifetimeScale();"));
+            Assert.That(source, Does.Contain("_traveled / _maxDistance"));
+            Assert.That(source, Does.Contain("Mathf.Lerp(1f, _scaleMultiplierAtLifetimeEnd, progress)"));
+        }
+
+        [Test]
+        public void FollowAnchorVfx_AppliesRegistryLocalPositionOffset()
+        {
+            string registry = File.ReadAllText(VfxRegistryPath);
+            string lifecycle = File.ReadAllText(LifecycleRegistryPath);
+
+            Assert.That(registry, Does.Contain("public Vector3 localPositionOffset = Vector3.zero"));
+            Assert.That(registry, Does.Contain("public Vector3 LocalPositionOffset { get; }"));
+            Assert.That(lifecycle, Does.Contain("if (followAnchor != null)"));
+            Assert.That(lifecycle, Does.Contain("instance.transform.localPosition = template.LocalPositionOffset"));
         }
 
         [Test]

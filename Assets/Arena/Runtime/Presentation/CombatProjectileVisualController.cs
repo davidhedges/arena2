@@ -183,6 +183,7 @@ namespace Arena.Presentation
                         PresentationSpeed(row),
                         row.MaxDistance,
                         rental,
+                        template.ScaleMultiplierAtLifetimeEnd,
                         authoritativeLifetime: true)
                     : new WeaponProjectileVFX(
                         projectileKey,
@@ -193,6 +194,7 @@ namespace Arena.Presentation
                         template.Scale,
                         template.Prefab,
                         trailTemplate,
+                        template.ScaleMultiplierAtLifetimeEnd,
                         authoritativeLifetime: true);
             });
 #if UNITY_EDITOR || DEVELOPMENT_BUILD

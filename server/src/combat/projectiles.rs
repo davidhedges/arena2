@@ -284,6 +284,9 @@ fn tick_projectile_instance(
                 finish_projectile_without_event(ctx, &projectile);
                 return;
             }
+            let impact_damage = spell_definition
+                .map(|definition| projectile_damage_at_current_lifetime(&projectile, definition))
+                .unwrap_or(projectile.damage);
             emit_projectile_event(
                 ctx,
                 &projectile,
@@ -292,7 +295,7 @@ fn tick_projectile_instance(
                 advance.end_x,
                 advance.end_y,
                 advance.end_z,
-                projectile.damage,
+                impact_damage,
                 now,
                 metrics,
             );
@@ -617,6 +620,7 @@ fn resolve_orbit_projectile_contacts(
         }
 
         metrics.contacts_resolved = metrics.contacts_resolved.saturating_add(1);
+        let impact_damage = projectile_damage_at_current_lifetime(projectile, definition);
         emit_projectile_event_with_metadata(
             ctx,
             projectile,
@@ -625,7 +629,7 @@ fn resolve_orbit_projectile_contacts(
             projectile.pos_x,
             projectile.pos_y,
             projectile.pos_z,
-            projectile.damage,
+            impact_damage,
             now,
             PROJECTILE_CONTACT_METADATA_KIND,
             PROJECTILE_CONTACT_TERMINAL_KEY,
@@ -1097,6 +1101,7 @@ fn resolve_boomerang_enemy_contacts_on_segment(
         }
 
         metrics.contacts_resolved = metrics.contacts_resolved.saturating_add(1);
+        let impact_damage = projectile_damage_at_current_lifetime(projectile, definition);
         emit_projectile_event_with_metadata(
             ctx,
             projectile,
@@ -1105,7 +1110,7 @@ fn resolve_boomerang_enemy_contacts_on_segment(
             hit_x,
             hit_y,
             hit_z,
-            projectile.damage,
+            impact_damage,
             now,
             PROJECTILE_CONTACT_METADATA_KIND,
             PROJECTILE_CONTACT_TERMINAL_KEY,
@@ -1517,8 +1522,9 @@ fn queue_spell_projectile_hit_effects(
     definition: &SpellRuntimeDefinition,
     target: Identity,
 ) {
+    let impact_damage = projectile_damage_at_current_lifetime(projectile, definition);
     let mut effects = vec![EffectPacket::Damage {
-        amount: projectile.damage,
+        amount: impact_damage,
         damage_type: crate::combat::DamageType::from_wire(projectile.damage_type.as_str()),
         source: projectile.caster,
         target,
@@ -1535,10 +1541,35 @@ fn queue_spell_projectile_hit_effects(
             target,
             projectile.projectile_instance_id.as_str(),
             definition.kind.as_str(),
-            projectile.damage > 0,
+            impact_damage > 0,
         );
     }
     queue_effects(ctx, effects);
+}
+
+fn projectile_damage_at_current_lifetime(
+    projectile: &ActiveCombatProjectile,
+    definition: &SpellRuntimeDefinition,
+) -> i32 {
+    if projectile.damage <= 0 {
+        return projectile.damage;
+    }
+
+    let end_multiplier = definition
+        .secondary
+        .projectile
+        .as_ref()
+        .or(definition.secondary.channel_projectile.as_ref())
+        .map(|tunables| tunables.damage_multiplier_at_lifetime_end)
+        .unwrap_or(1.0)
+        .clamp(0.0, 1.0);
+    let lifetime_progress = if projectile.lifetime > 0.0 {
+        (projectile.age / projectile.lifetime).clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    let multiplier = 1.0 + (end_multiplier - 1.0) * lifetime_progress;
+    ((projectile.damage as f32) * multiplier).round().max(1.0) as i32
 }
 
 fn queue_weapon_projectile_hit_effects(
@@ -2373,6 +2404,35 @@ mod tests {
         let electrocute = spell_definition_by_str("ELECTROCUTE").expect("Electrocute should exist");
         assert_eq!(electrocute.behavior, SpellBehavior::Channel);
         assert!(!spell_definition_drives_active_projectile(electrocute));
+    }
+
+    #[test]
+    fn projectile_damage_falls_linearly_over_authoritative_lifetime() {
+        let caster_id = test_identity(1);
+        let mut projectile = test_projectile(caster_id);
+        projectile.damage = 30;
+        projectile.lifetime = 2.0;
+        projectile.age = 1.0;
+
+        let mut definition = spell_definition_by_str("FIREBALL")
+            .expect("FIREBALL should exist")
+            .clone();
+        definition
+            .secondary
+            .projectile
+            .as_mut()
+            .expect("FIREBALL should have projectile tunables")
+            .damage_multiplier_at_lifetime_end = 0.25;
+
+        assert_eq!(
+            projectile_damage_at_current_lifetime(&projectile, &definition),
+            19
+        );
+        projectile.age = 2.0;
+        assert_eq!(
+            projectile_damage_at_current_lifetime(&projectile, &definition),
+            8
+        );
     }
 
     #[test]

@@ -241,7 +241,10 @@ namespace Arena.Presentation
             DebugSpawnedPrefabCount++;
 #endif
             if (followAnchor != null)
+            {
                 instance.transform.SetParent(followAnchor, true);
+                instance.transform.localPosition = template.LocalPositionOffset;
+            }
 
             VFXUtils.ApplyPrefabPresentationScale(instance, template.Scale);
 

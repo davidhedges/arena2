@@ -58,7 +58,10 @@ namespace Arena.Editor
                 GameObject? prefab = registry.ResolvePrefab(vfxId);
                 string prefabPath = prefab != null ? AssetDatabase.GetAssetPath(prefab) : "<unresolved>";
                 string prefabName = prefab != null ? prefab.name : "<null>";
-                Debug.Log($"{vfxId} -> {prefabName} ({prefabPath}) scale={entry.scale:0.###}", registry);
+                Debug.Log(
+                    $"{vfxId} -> {prefabName} ({prefabPath}) scale={entry.scale:0.###} "
+                    + $"localPositionOffset={entry.localPositionOffset}",
+                    registry);
             }
         }
     }
