@@ -3670,24 +3670,25 @@ mod tests {
 
     #[test]
     fn orbit_projectile_spell_uses_catalog_owned_motion_tunables() {
-        let orbiting_blades =
-            spell_definition_by_str("ORBITING_BLADES").expect("Orbiting Blades should exist");
-        assert_eq!(orbiting_blades.targeting, SpellTargeting::Self_);
-        assert!(!orbiting_blades.requires_target);
-        assert_eq!(orbiting_blades.damage, 18);
-        assert!((orbiting_blades.duration - 10.0).abs() < 0.0001);
-        assert!((orbiting_blades.radius - 0.45).abs() < 0.0001);
+        let sparks = spell_definition_by_str("ORBITING_BLADES")
+            .expect("Sparks should retain the stable ORBITING_BLADES action id");
+        assert_eq!(sparks.targeting, SpellTargeting::Self_);
+        assert!(!sparks.requires_target);
+        assert_eq!(sparks.damage, 18);
+        assert_eq!(sparks.damage_type, DamageType::Lightning);
+        assert!((sparks.duration - 10.0).abs() < 0.0001);
+        assert!((sparks.radius - 0.45).abs() < 0.0001);
 
-        let projectile = orbiting_blades
+        let projectile = sparks
             .secondary
             .projectile
             .as_ref()
-            .expect("Orbiting Blades should define projectile secondary data");
+            .expect("Sparks should define projectile secondary data");
         assert_eq!(projectile.motion.kind(), "ORBIT_CASTER");
         let orbit = projectile
             .motion
             .orbit()
-            .expect("Orbiting Blades should use orbit-caster projectile motion");
+            .expect("Sparks should use orbit-caster projectile motion");
         assert_eq!(orbit.projectile_count, 3);
         assert!((orbit.orbit_radius - 2.0).abs() < 0.0001);
         assert!((orbit.orbit_height - 1.0).abs() < 0.0001);

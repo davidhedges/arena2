@@ -949,7 +949,7 @@
       "actor_scope": "PLAYER",
       "combat_profile_id": "",
       "action_id": "ORBITING_BLADES",
-      "display_name": "Orbiting Blades",
+      "display_name": "Sparks",
       "resource_kind": "MANA",
       "ability_tags": [
         "ACTION_BAR_ACTION"
@@ -968,7 +968,7 @@
         "delivery": {
           "kind": "PROJECTILE",
           "damage": 18,
-          "damage_type": "ARCANE",
+          "damage_type": "LIGHTNING",
           "update_interval_seconds": 0.05,
           "block_behavior": "BLOCKABLE",
           "parry_behavior": "PARRYABLE",
@@ -4678,8 +4678,8 @@
     {
       "presentation_kind": "ABILITY",
       "presentation_id": "SPELL_ORBITING_BLADES",
-      "display_name": "Orbiting Blades",
-      "description": "Creates short-lived projectiles that circle the caster.",
+      "display_name": "Sparks",
+      "description": "Creates short-lived electric sparks that circle the caster.",
       "sort_order": 79
     },
     {

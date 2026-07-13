@@ -9077,7 +9077,7 @@ mod tests {
             ("SPELL_ERUPTION", "ERUPTION", "FIRE"),
             ("SPELL_FROST_NEEDLE", "FROST_NEEDLE", "COLD"),
             ("SPELL_INSTANT_BEAM", "INSTANT_BEAM", "ARCANE"),
-            ("SPELL_ORBITING_BLADES", "ORBITING_BLADES", "ARCANE"),
+            ("SPELL_ORBITING_BLADES", "ORBITING_BLADES", "LIGHTNING"),
         ];
 
         for (ability_id, action_id, damage_type) in expected {
@@ -9100,6 +9100,23 @@ mod tests {
                 Some(damage_type)
             );
         }
+
+        let sparks = progression_catalog()
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "SPELL_ORBITING_BLADES")
+            .expect("Sparks should retain the stable SPELL_ORBITING_BLADES ability id");
+        assert_eq!(sparks.display_name, "Sparks");
+
+        assert!(progression_catalog()
+            .action_presentations
+            .iter()
+            .any(|presentation| {
+                normalize_identifier(presentation.presentation_kind.as_str()) == "ABILITY"
+                    && normalize_identifier(presentation.presentation_id.as_str())
+                        == "SPELL_ORBITING_BLADES"
+                    && presentation.display_name == "Sparks"
+            }));
     }
 
     #[test]
