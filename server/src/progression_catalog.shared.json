@@ -1269,7 +1269,7 @@
       "actor_scope": "PLAYER",
       "combat_profile_id": "",
       "action_id": "ELECTROCUTE",
-      "display_name": "Elec",
+      "display_name": "Electrocute",
       "resource_kind": "MANA",
       "ability_tags": [
         "ACTION_BAR_ACTION"
@@ -4701,7 +4701,7 @@
     {
       "presentation_kind": "ABILITY",
       "presentation_id": "SPELL_ELECTROCUTE",
-      "display_name": "Elec",
+      "display_name": "Electrocute",
       "description": "Channels lightning into the target for a short duration.",
       "sort_order": 86
     },
