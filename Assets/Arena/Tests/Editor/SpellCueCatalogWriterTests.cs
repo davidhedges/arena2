@@ -265,9 +265,30 @@ namespace Arena.Tests.Editor
             Assert.That(selfFlash, Is.EqualTo("SelfFlash"));
             Assert.That(TryParseSlotKey("aura_ground", out string auraGround), Is.True);
             Assert.That(auraGround, Is.EqualTo("AuraGround"));
-            Assert.That(TryParseSlotKey("aura", out string aura), Is.True);
-            Assert.That(aura, Is.EqualTo("Aura"));
+            Assert.That(TryParseSlotKey("character_fx", out string characterFx), Is.True);
+            Assert.That(characterFx, Is.EqualTo("CharacterFx"));
+            Assert.That(TryParseSlotKey("character_fx/body_rings", out string characterVariant), Is.True);
+            Assert.That(characterVariant, Is.EqualTo("CharacterFx"));
             Assert.That(TryParseSlotKey("not_a_slot", out _), Is.False);
+        }
+
+        [Test]
+        public void CharacterFxSlotIdentity_IsStableAndRequiresVariantsForMultiplicity()
+        {
+            Assert.That(TryBuildGeneratedSlotKey("CharacterFx", "", 1, out string single, out _), Is.True);
+            Assert.That(single, Is.EqualTo("character_fx"));
+
+            Assert.That(TryBuildGeneratedSlotKey(
+                "CharacterFx", "Body Rings", 2, out string first, out _), Is.True);
+            Assert.That(first, Is.EqualTo("character_fx/body_rings"));
+            Assert.That(TryBuildGeneratedSlotKey(
+                "CharacterFx", "Shoulder Flames", 2, out string second, out _), Is.True);
+            Assert.That(second, Is.EqualTo("character_fx/shoulder_flames"));
+            Assert.That(first, Is.Not.EqualTo(second));
+
+            Assert.That(TryBuildGeneratedSlotKey(
+                "CharacterFx", "", 2, out _, out string error), Is.False);
+            Assert.That(error, Does.Contain("variantId"));
         }
 
         private static int NextInsertSortOrder(int maxExistingSortOrder, int insertIndex)
@@ -288,6 +309,26 @@ namespace Arena.Tests.Editor
             object?[] args = { slotKey, null };
             bool result = (bool)method.Invoke(null, args)!;
             parsedSlot = args[1]?.ToString() ?? string.Empty;
+            return result;
+        }
+
+        private static bool TryBuildGeneratedSlotKey(
+            string slotName,
+            string variantId,
+            int entryCount,
+            out string slotKey,
+            out string error)
+        {
+            Type windowType = EditorAssembly.GetType("Arena.Editor.SpellAuthoringWindow", throwOnError: true)!;
+            MethodInfo method = windowType.GetMethod(
+                "TryBuildGeneratedSlotKey",
+                BindingFlags.NonPublic | BindingFlags.Static)!;
+            Type slotType = method.GetParameters()[0].ParameterType;
+            object slot = Enum.Parse(slotType, slotName);
+            object?[] args = { slot, variantId, entryCount, null, null };
+            bool result = (bool)method.Invoke(null, args)!;
+            slotKey = args[3]?.ToString() ?? string.Empty;
+            error = args[4]?.ToString() ?? string.Empty;
             return result;
         }
 

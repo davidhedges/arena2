@@ -5507,6 +5507,19 @@
     },
     {
       "owner_kind": "ABILITY",
+      "owner_id": "SPELL_FLAMING_ORB",
+      "slot": "muzzle",
+      "trigger": "SPELL_RELEASE",
+      "anchor": "LEFT_HAND",
+      "vfx_id": "VFX_FIRE_MUZZLE_01",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "DURATION",
+      "duration_ms": 300,
+      "sort_order": 130
+    },
+    {
+      "owner_kind": "ABILITY",
       "owner_id": "WARRIOR_GROUND_SLASH",
       "trigger": "SPELL_RELEASE",
       "anchor": "CASTER",

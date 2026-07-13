@@ -22,16 +22,22 @@ namespace Arena.Editor
         /// (design doc §3.1 — the only palette influence on lifecycle).</summary>
         private readonly struct PaletteEntry
         {
-            public PaletteEntry(string vfxId, bool selfTerminating = false, int durationMs = 0)
+            public PaletteEntry(
+                string vfxId,
+                bool selfTerminating = false,
+                int durationMs = 0,
+                string variantId = "")
             {
                 VfxId = vfxId;
                 SelfTerminating = selfTerminating;
                 DurationMs = durationMs;
+                VariantId = variantId;
             }
 
             public string VfxId { get; }
             public bool SelfTerminating { get; }
             public int DurationMs { get; }
+            public string VariantId { get; }
         }
 
         private enum CueMatchState
@@ -49,6 +55,7 @@ namespace Arena.Editor
         {
             public GeneratedCue(
                 SpellVfxSlot slot,
+                string slotKey,
                 string trigger,
                 string anchor,
                 string attachMode,
@@ -59,6 +66,7 @@ namespace Arena.Editor
                 int? projectileSequenceIndex)
             {
                 Slot = slot;
+                SlotKey = slotKey;
                 Trigger = trigger;
                 Anchor = anchor;
                 AttachMode = attachMode;
@@ -70,6 +78,7 @@ namespace Arena.Editor
             }
 
             public SpellVfxSlot Slot { get; }
+            public string SlotKey { get; }
             public string Trigger { get; }
             public string Anchor { get; }
             public string AttachMode { get; }
@@ -114,7 +123,7 @@ namespace Arena.Editor
 
         private readonly Dictionary<string, GeneratedCuePreview> _generatedCuePreviewByAbilityId =
             new(System.StringComparer.Ordinal);
-        private Dictionary<string, Dictionary<SpellVfxSlot, PaletteEntry>> _cachedSchoolPalettes =
+        private Dictionary<string, Dictionary<SpellVfxSlot, List<PaletteEntry>>> _cachedSchoolPalettes =
             new(System.StringComparer.Ordinal);
         private SpellVfxOverrideCatalog? _cachedSpellOverrides;
         private bool _vfxAuthoringAssetsLoaded;
@@ -168,8 +177,8 @@ namespace Arena.Editor
                 EditorGUILayout.HelpBox(note, MessageType.Warning);
 
             BuildCatalogBySlot(
-                out Dictionary<SpellVfxSlot, CombatVfxCueDefinition> catalogBySlot,
-                out List<SpellVfxSlot> ambiguousSlots,
+                out Dictionary<string, CombatVfxCueDefinition> catalogBySlot,
+                out List<string> ambiguousSlots,
                 out List<CombatVfxCueDefinition> uninferrableCues);
             DrawCueDiff(preview.Cues, catalogBySlot, ambiguousSlots, uninferrableCues);
             DrawWriteToCatalogButton(
@@ -315,7 +324,7 @@ namespace Arena.Editor
             SpellVfxArchetype archetype,
             SpellAnimationArchetype mode,
             SpellDeliveryFacts facts,
-            Dictionary<string, Dictionary<SpellVfxSlot, PaletteEntry>> schoolPalettes,
+            Dictionary<string, Dictionary<SpellVfxSlot, List<PaletteEntry>>> schoolPalettes,
             SpellVfxOverrideCatalog? spellOverrides,
             string abilityId,
             string school,
@@ -326,15 +335,14 @@ namespace Arena.Editor
             var rows = new List<GeneratedCue>();
 
             var requestedSlots = new List<SpellVfxSlot>(SpellVfxGenerator.RequestedSlots(archetype, mode));
-            if (archetype == SpellVfxArchetype.Projectile)
-                requestedSlots.Insert(requestedSlots.IndexOf(SpellVfxSlot.ProjectileBody) + 1, SpellVfxSlot.ProjectileTrail);
 
             foreach (SpellVfxSlot slot in requestedSlots)
             {
-                if (!TryResolvePaletteEntry(
-                        schoolPalettes, spellOverrides, school, abilityId, slot, out PaletteEntry entry))
+                IReadOnlyList<PaletteEntry> entries = ResolvePaletteEntries(
+                    schoolPalettes, spellOverrides, school, abilityId, slot);
+                if (entries.Count == 0)
                 {
-                    if (slot != SpellVfxSlot.ProjectileTrail)
+                    if (!IsOptionalSlot(slot))
                     {
                         slotNotes.Add(
                             $"Slot '{slot}' is requested by the {archetype} archetype but neither the {NoneIfEmpty(school)} "
@@ -343,135 +351,215 @@ namespace Arena.Editor
                     continue;
                 }
 
-                CueWiring wiring = SpellVfxGenerator.Wire(archetype, slot, mode, entry.SelfTerminating, facts.Deferred);
-                string anchor = wiring.Anchor == CueAnchor.Hand
-                    ? castHandAnchor
-                    : SpellVfxGenerator.AnchorToCatalog(wiring.Anchor);
-                int durationMs = 0;
-                if (wiring.Duration == CueDurationPolicy.PalettePositive)
+                bool repeatable = slot == SpellVfxSlot.CharacterFx;
+                if (!repeatable && entries.Count > 1)
                 {
-                    if (entry.DurationMs <= 0)
+                    slotNotes.Add(
+                        $"Slot '{slot}' resolves {entries.Count} palette entries, but only CharacterFx is repeatable. "
+                        + "The generator uses the first entry; remove the duplicate authoring.");
+                }
+
+                int entryCount = repeatable ? entries.Count : 1;
+                var emittedSlotKeys = new HashSet<string>(System.StringComparer.Ordinal);
+                for (int entryIndex = 0; entryIndex < entryCount; entryIndex++)
+                {
+                    PaletteEntry entry = entries[entryIndex];
+                    if (!TryBuildGeneratedSlotKey(slot, entry.VariantId, entryCount, out string slotKey, out string keyError))
                     {
-                        slotNotes.Add(
-                            $"Slot '{slot}' resolves vfx_id '{entry.VfxId}' but requires a positive duration_ms because it is not self-terminating; set the slot duration above 0 or mark it self-terminating.");
+                        slotNotes.Add($"Slot '{slot}' vfx_id '{entry.VfxId}' cannot be generated: {keyError}");
                         continue;
                     }
 
-                    durationMs = entry.DurationMs;
-                }
+                    if (!emittedSlotKeys.Add(slotKey))
+                    {
+                        slotNotes.Add(
+                            $"Slot '{slot}' uses duplicate variant identity '{slotKey}'. CharacterFx variantId values must be unique per spell.");
+                        continue;
+                    }
 
-                rows.Add(new GeneratedCue(
-                    slot: slot,
-                    trigger: wiring.Trigger,
-                    anchor: anchor,
-                    attachMode: wiring.AttachMode,
-                    role: wiring.VfxRole,
-                    lifecycle: wiring.Lifecycle,
-                    durationMs: durationMs,
-                    vfxId: entry.VfxId,
-                    projectileSequenceIndex: wiring.ProjectileSequenceIndex));
+                    CueWiring wiring = SpellVfxGenerator.Wire(archetype, slot, mode, entry.SelfTerminating, facts.Deferred);
+                    string anchor = wiring.Anchor == CueAnchor.Hand
+                        ? castHandAnchor
+                        : SpellVfxGenerator.AnchorToCatalog(wiring.Anchor);
+                    int durationMs = 0;
+                    if (wiring.Duration == CueDurationPolicy.PalettePositive)
+                    {
+                        if (entry.DurationMs <= 0)
+                        {
+                            slotNotes.Add(
+                                $"Slot '{slotKey}' resolves vfx_id '{entry.VfxId}' but requires a positive duration_ms because it is not self-terminating; set the slot duration above 0.");
+                            continue;
+                        }
+
+                        durationMs = entry.DurationMs;
+                    }
+
+                    rows.Add(new GeneratedCue(
+                        slot: slot,
+                        slotKey: slotKey,
+                        trigger: wiring.Trigger,
+                        anchor: anchor,
+                        attachMode: wiring.AttachMode,
+                        role: wiring.VfxRole,
+                        lifecycle: wiring.Lifecycle,
+                        durationMs: durationMs,
+                        vfxId: entry.VfxId,
+                        projectileSequenceIndex: wiring.ProjectileSequenceIndex));
+                }
             }
 
             return rows;
         }
 
-        private static Dictionary<string, Dictionary<SpellVfxSlot, PaletteEntry>> LoadSchoolPalettesFromAssets()
+        private static bool IsOptionalSlot(SpellVfxSlot slot)
+            => slot == SpellVfxSlot.Muzzle
+                || slot == SpellVfxSlot.ProjectileTrail
+                || slot == SpellVfxSlot.CharacterFx
+                || slot == SpellVfxSlot.SelfFlash;
+
+        private static bool TryBuildGeneratedSlotKey(
+            SpellVfxSlot slot,
+            string variantId,
+            int entryCount,
+            out string slotKey,
+            out string error)
         {
-            var map = new Dictionary<string, Dictionary<SpellVfxSlot, PaletteEntry>>(System.StringComparer.Ordinal);
+            if (slot != SpellVfxSlot.CharacterFx)
+            {
+                slotKey = SlotKey(slot);
+                error = string.Empty;
+                return true;
+            }
+
+            string variant = WireIdentifier.Normalize(variantId);
+            if (variant.Length == 0)
+            {
+                if (entryCount == 1)
+                {
+                    slotKey = SlotKey(slot);
+                    error = string.Empty;
+                    return true;
+                }
+
+                slotKey = string.Empty;
+                error = "multiple CharacterFx entries require distinct variantId values so their slot identities remain stable";
+                return false;
+            }
+
+            slotKey = $"{SlotKey(slot)}/{variant.ToLowerInvariant()}";
+            error = string.Empty;
+            return true;
+        }
+
+        private static Dictionary<string, Dictionary<SpellVfxSlot, List<PaletteEntry>>> LoadSchoolPalettesFromAssets()
+        {
+            var map = new Dictionary<string, Dictionary<SpellVfxSlot, List<PaletteEntry>>>(System.StringComparer.Ordinal);
             foreach (string guid in AssetDatabase.FindAssets("t:SchoolVfxSet"))
             {
                 var set = AssetDatabase.LoadAssetAtPath<SchoolVfxSet>(AssetDatabase.GUIDToAssetPath(guid));
                 if (set == null || set.SchoolIdOrEmpty.Length == 0) continue;
 
-                if (!map.TryGetValue(set.SchoolIdOrEmpty, out Dictionary<SpellVfxSlot, PaletteEntry> slotMap))
-                    map[set.SchoolIdOrEmpty] = slotMap = new Dictionary<SpellVfxSlot, PaletteEntry>();
+                if (!map.TryGetValue(set.SchoolIdOrEmpty, out Dictionary<SpellVfxSlot, List<PaletteEntry>> slotMap))
+                    map[set.SchoolIdOrEmpty] = slotMap = new Dictionary<SpellVfxSlot, List<PaletteEntry>>();
                 foreach (SchoolVfxSlotEntry e in set.Slots)
+                {
                     if (!string.IsNullOrWhiteSpace(e.vfxId))
-                        slotMap[e.slot] = new PaletteEntry(e.vfxId, e.selfTerminating, e.durationMs);
+                    {
+                        if (!slotMap.TryGetValue(e.slot, out List<PaletteEntry> entries))
+                            slotMap[e.slot] = entries = new List<PaletteEntry>();
+                        entries.Add(new PaletteEntry(e.vfxId, e.selfTerminating, e.durationMs, e.variantId));
+                    }
+                }
             }
 
             return map;
         }
 
-        private static bool TryResolvePaletteEntry(
-            Dictionary<string, Dictionary<SpellVfxSlot, PaletteEntry>> schoolPalettes,
+        private static IReadOnlyList<PaletteEntry> ResolvePaletteEntries(
+            Dictionary<string, Dictionary<SpellVfxSlot, List<PaletteEntry>>> schoolPalettes,
             SpellVfxOverrideCatalog? spellOverrides,
             string school,
             string abilityId,
-            SpellVfxSlot slot,
-            out PaletteEntry entry)
+            SpellVfxSlot slot)
         {
             if (spellOverrides != null
-                && spellOverrides.TryGet(abilityId, out SpellVfxAbilityOverride spellOverride)
-                && spellOverride.TryGet(slot, out SchoolVfxSlotEntry overrideEntry))
+                && spellOverrides.TryGet(abilityId, out SpellVfxAbilityOverride spellOverride))
             {
-                entry = new PaletteEntry(
-                    overrideEntry.vfxId,
-                    overrideEntry.selfTerminating,
-                    overrideEntry.durationMs);
-                return true;
+                var overrides = new List<PaletteEntry>();
+                foreach (SchoolVfxSlotEntry overrideEntry in spellOverride.Slots)
+                {
+                    if (overrideEntry.slot != slot || string.IsNullOrWhiteSpace(overrideEntry.vfxId))
+                        continue;
+                    overrides.Add(new PaletteEntry(
+                        overrideEntry.vfxId,
+                        overrideEntry.selfTerminating,
+                        overrideEntry.durationMs,
+                        overrideEntry.variantId));
+                }
+
+                if (overrides.Count > 0)
+                    return overrides;
             }
 
             if (!string.IsNullOrEmpty(school))
             {
-                if (schoolPalettes.TryGetValue(school, out Dictionary<SpellVfxSlot, PaletteEntry> palette)
-                    && palette.TryGetValue(slot, out entry))
+                if (schoolPalettes.TryGetValue(school, out Dictionary<SpellVfxSlot, List<PaletteEntry>> palette)
+                    && palette.TryGetValue(slot, out List<PaletteEntry> entries))
                 {
-                    return true;
+                    return entries;
                 }
             }
 
-            entry = default;
-            return false;
+            return System.Array.Empty<PaletteEntry>();
         }
 
         // Assign every authored cue a slot via the design-doc §3.4 legacy inference table. The slot is
         // the stable identity across the two stores (the diff and the writer both key on it): matching
         // is exact by slot, ambiguous/uninferrable rows are surfaced rather than silently dropped.
         private void BuildCatalogBySlot(
-            out Dictionary<SpellVfxSlot, CombatVfxCueDefinition> catalogBySlot,
-            out List<SpellVfxSlot> ambiguous,
+            out Dictionary<string, CombatVfxCueDefinition> catalogBySlot,
+            out List<string> ambiguous,
             out List<CombatVfxCueDefinition> uninferrable)
         {
-            catalogBySlot = new Dictionary<SpellVfxSlot, CombatVfxCueDefinition>();
-            ambiguous = new List<SpellVfxSlot>();
+            catalogBySlot = new Dictionary<string, CombatVfxCueDefinition>(System.StringComparer.Ordinal);
+            ambiguous = new List<string>();
             uninferrable = new List<CombatVfxCueDefinition>();
             foreach (CombatVfxCueDefinition cue in _selectedAbilityCues)
             {
-                if (!TryResolveCatalogSlot(cue, out SpellVfxSlot slot))
+                if (!TryResolveCatalogSlotKey(cue, out string slotKey))
                 {
                     uninferrable.Add(cue);
                     continue;
                 }
 
-                if (catalogBySlot.ContainsKey(slot))
+                if (catalogBySlot.ContainsKey(slotKey))
                 {
-                    if (!ambiguous.Contains(slot))
-                        ambiguous.Add(slot);
+                    if (!ambiguous.Contains(slotKey))
+                        ambiguous.Add(slotKey);
                     continue;
                 }
 
-                catalogBySlot.Add(slot, cue);
+                catalogBySlot.Add(slotKey, cue);
             }
         }
 
         private void DrawCueDiff(
             List<GeneratedCue> generated,
-            Dictionary<SpellVfxSlot, CombatVfxCueDefinition> catalogBySlot,
-            List<SpellVfxSlot> ambiguous,
+            Dictionary<string, CombatVfxCueDefinition> catalogBySlot,
+            List<string> ambiguous,
             List<CombatVfxCueDefinition> uninferrable)
         {
-            var generatedBySlot = generated.ToDictionary(row => row.Slot);
-            IEnumerable<SpellVfxSlot> allSlots = generatedBySlot.Keys
+            var generatedBySlot = generated.ToDictionary(row => row.SlotKey, System.StringComparer.Ordinal);
+            IEnumerable<string> allSlots = generatedBySlot.Keys
                 .Union(catalogBySlot.Keys)
-                .OrderBy(slot => (int)slot);
+                .OrderBy(slot => slot, System.StringComparer.Ordinal);
 
             int matches = 0;
             int changed = 0;
             int generatorOnly = 0;
             int catalogOnly = 0;
 
-            foreach (SpellVfxSlot slot in allSlots)
+            foreach (string slot in allSlots)
             {
                 bool hasGenerated = generatedBySlot.TryGetValue(slot, out GeneratedCue gen);
                 bool hasCatalog = catalogBySlot.TryGetValue(slot, out CombatVfxCueDefinition cat);
@@ -512,7 +600,7 @@ namespace Arena.Editor
                 }
             }
 
-            foreach (SpellVfxSlot slot in ambiguous)
+            foreach (string slot in ambiguous)
             {
                 EditorGUILayout.HelpBox(
                     $"Two or more authored cues infer to slot '{slot}'. §3.4 refuses to auto-key ambiguous rows — "
@@ -550,7 +638,7 @@ namespace Arena.Editor
         private void DrawWriteToCatalogButton(
             string abilityId,
             List<GeneratedCue> generated,
-            Dictionary<SpellVfxSlot, CombatVfxCueDefinition> catalogBySlot,
+            Dictionary<string, CombatVfxCueDefinition> catalogBySlot,
             bool inferenceClean)
         {
             int maxExistingSortOrder = 0;
@@ -562,10 +650,12 @@ namespace Arena.Editor
             int inserted = 0;
             // Slot-enum order so a multi-insert (e.g. BLESSED_SHIELD: cast_glow + impact) assigns the
             // inserted sort_orders deterministically.
-            foreach (GeneratedCue gen in generated.OrderBy(g => (int)g.Slot))
+            foreach (GeneratedCue gen in generated
+                         .OrderBy(g => (int)g.Slot)
+                         .ThenBy(g => g.SlotKey, System.StringComparer.Ordinal))
             {
                 int sortOrder;
-                if (catalogBySlot.TryGetValue(gen.Slot, out CombatVfxCueDefinition authored))
+                if (catalogBySlot.TryGetValue(gen.SlotKey, out CombatVfxCueDefinition authored))
                 {
                     if (DiffFields(gen, authored).Count > 0)
                         changed++;
@@ -578,7 +668,7 @@ namespace Arena.Editor
                 }
 
                 rows.Add(new SpellCueRow(
-                    slot: SlotKey(gen.Slot),
+                    slot: gen.SlotKey,
                     trigger: gen.Trigger,
                     anchor: gen.Anchor,
                     vfxId: gen.VfxId,
@@ -591,8 +681,10 @@ namespace Arena.Editor
             }
 
             int catalogOnly = 0;
-            var generatedSlots = new HashSet<SpellVfxSlot>(generated.Select(g => g.Slot));
-            foreach (SpellVfxSlot slot in catalogBySlot.Keys)
+            var generatedSlots = new HashSet<string>(
+                generated.Select(g => g.SlotKey),
+                System.StringComparer.Ordinal);
+            foreach (string slot in catalogBySlot.Keys)
                 if (!generatedSlots.Contains(slot))
                     catalogOnly++;
 
@@ -705,6 +797,7 @@ namespace Arena.Editor
                 SpellVfxSlot.Beam => "beam",
                 SpellVfxSlot.SelfFlash => "self_flash",
                 SpellVfxSlot.AuraGround => "aura_ground",
+                SpellVfxSlot.CharacterFx => "character_fx",
                 _ => slot.ToString().ToLowerInvariant(),
             };
 
@@ -739,17 +832,54 @@ namespace Arena.Editor
 
         // Design doc §3.4: assign an un-migrated cue a slot from (trigger, role, anchor-class). Total and
         // collision-free over the current catalog; anything it can't key is surfaced, never silently dropped.
-        private static bool TryResolveCatalogSlot(CombatVfxCueDefinition cue, out SpellVfxSlot slot)
+        private static bool TryResolveCatalogSlotKey(CombatVfxCueDefinition cue, out string slotKey)
         {
             if (!string.IsNullOrWhiteSpace(cue.slot))
-                return TryParseSlotKey(cue.slot, out slot);
+                return TryNormalizeExplicitSlotKey(cue.slot, out slotKey);
 
-            return TryInferLegacySlot(cue, out slot);
+            if (TryInferLegacySlot(cue, out SpellVfxSlot inferred))
+            {
+                slotKey = SlotKey(inferred);
+                return true;
+            }
+
+            slotKey = string.Empty;
+            return false;
+        }
+
+        private static bool TryNormalizeExplicitSlotKey(string value, out string slotKey)
+        {
+            string normalized = value.Trim().ToLowerInvariant();
+            if (normalized.StartsWith("character_fx/", System.StringComparison.Ordinal))
+            {
+                string variant = WireIdentifier.Normalize(normalized.Substring("character_fx/".Length));
+                if (variant.Length > 0)
+                {
+                    slotKey = $"character_fx/{variant.ToLowerInvariant()}";
+                    return true;
+                }
+            }
+
+            if (TryParseSlotKey(normalized, out SpellVfxSlot slot))
+            {
+                slotKey = SlotKey(slot);
+                return true;
+            }
+
+            slotKey = string.Empty;
+            return false;
         }
 
         private static bool TryParseSlotKey(string slotKey, out SpellVfxSlot slot)
         {
-            switch (slotKey.Trim().ToLowerInvariant())
+            string normalized = slotKey.Trim().ToLowerInvariant();
+            if (normalized.StartsWith("character_fx/", System.StringComparison.Ordinal))
+            {
+                slot = SpellVfxSlot.CharacterFx;
+                return normalized.Length > "character_fx/".Length;
+            }
+
+            switch (normalized)
             {
                 case "cast_glow": slot = SpellVfxSlot.CastGlow; return true;
                 case "muzzle": slot = SpellVfxSlot.Muzzle; return true;
@@ -761,6 +891,7 @@ namespace Arena.Editor
                 case "beam": slot = SpellVfxSlot.Beam; return true;
                 case "self_flash": slot = SpellVfxSlot.SelfFlash; return true;
                 case "aura_ground": slot = SpellVfxSlot.AuraGround; return true;
+                case "character_fx": slot = SpellVfxSlot.CharacterFx; return true;
                 default:
                     slot = default;
                     return false;

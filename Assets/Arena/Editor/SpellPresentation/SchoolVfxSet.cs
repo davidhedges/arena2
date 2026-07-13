@@ -16,6 +16,8 @@ namespace Arena.Presentation
     public struct SchoolVfxSlotEntry
     {
         public SpellVfxSlot slot;
+        [Tooltip("Stable variant id for repeatable slots such as CharacterFx (for example BODY_RINGS or SHOULDER_FLAMES). Leave blank for non-repeatable slots or a single CharacterFx entry.")]
+        public string variantId;
         [Tooltip("Catalog vfx_id this slot resolves to, e.g. VFX_FIRE_CAST_HAND_01.")]
         public string vfxId;
         [Tooltip("The prefab is a self-ending particle system → PARTICLE_SYSTEM lifecycle (duration ignored).")]

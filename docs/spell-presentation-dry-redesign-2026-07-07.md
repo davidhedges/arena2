@@ -1,7 +1,7 @@
 # Spell Presentation Pipeline — DRY Redesign (Design Doc)
 
-**Status:** Agreed 2026-07-07 (§7 decisions locked). Ready to implement, starting at build-order step 0 + resolver.
-**Date:** 2026-07-07 · **Rev 2026-07-07b:** incorporated external review — fixed `vfx_school` precedence (§2.3), specified slot identity + legacy inference (§3.4, decision 6), gave the rule table a concrete Class A/B shape (§4.3, decision 5), fenced step 0 to cue-row cleanup only (decision 7). · **Rev 2026-07-07c:** added generator wiring table (Appendix B); fixed `scale`-in-palette bug (§3.1); resolved CHANNEL beam lifecycle → `UNTIL_CAST_END` (§B.7, decision 8). · **Rev 2026-07-07d:** parked ELECTROCUTE as legacy relic (decision 9, downgrades decision 8 to deferred); added animation template table (Appendix C). · **Rev 2026-07-07e (implementation begins):** step 0 verified NO-OP (ICE_SPIKES SPELL cue is a tested spell-kind fallback, not an orphan — decision 7 corrected); logged `CombatVfxCueResolver` prior art (VFX resolver + override model already exist; step-1 work is the animation face). · **Rev 2026-07-07f (end-state alignment):** registry+palette merge into per-school VFX sets + generator=Unity editor tool (decision 10); **all spell types supported**, AURA un-deferred via new `UNTIL_STATUS_END` lifecycle (decision 11); full `delivery.kind`→archetype coverage table + projectile-body no-drop guarantee (Rule 18) in B.9. · **Rev 2026-07-08a (implementation):** Class-A single-cue rules unified behind one shared checker (`vfx_generation::check_cue_field_rules`), consumed by both the generator's `validate_wiring` and the server contract (decisions 5/10, Rust half); corrected Appendix A — the server contract is a **test-time** check (`#[cfg(test)] mod tests`), not a catalog-load guard, and no separate production relational validator exists. Editor-side (C#) Class-A consumption remains pending the Unity generator tool (decision 10).
+**Status:** Implemented authoring architecture; this document remains the contract record.
+**Date:** 2026-07-07 · **Rev 2026-07-07b:** incorporated external review — fixed `vfx_school` precedence (§2.3), specified slot identity + legacy inference (§3.4, decision 6), gave the rule table a concrete Class A/B shape (§4.3, decision 5), fenced step 0 to cue-row cleanup only (decision 7). · **Rev 2026-07-07c:** added generator wiring table (Appendix B); fixed `scale`-in-palette bug (§3.1); resolved CHANNEL beam lifecycle → `UNTIL_CAST_END` (§B.7, decision 8). · **Rev 2026-07-07d:** parked ELECTROCUTE as legacy relic (decision 9, downgrades decision 8 to deferred); added animation template table (Appendix C). · **Rev 2026-07-07e (implementation begins):** step 0 verified NO-OP (ICE_SPIKES SPELL cue is a tested spell-kind fallback, not an orphan — decision 7 corrected); logged `CombatVfxCueResolver` prior art (VFX resolver + override model already exist; step-1 work is the animation face). · **Rev 2026-07-07f (end-state alignment):** registry+palette merge into per-school VFX sets + generator=Unity editor tool (decision 10); **all spell types supported**, AURA un-deferred via new `UNTIL_STATUS_END` lifecycle (decision 11); full `delivery.kind`→archetype coverage table + projectile-body no-drop guarantee (Rule 18) in B.9. · **Rev 2026-07-08a (implementation):** Class-A single-cue rules unified behind one shared checker (`vfx_generation::check_cue_field_rules`), consumed by both the generator's `validate_wiring` and the server contract (decisions 5/10, Rust half); corrected Appendix A — the server contract is a **test-time** check (`#[cfg(test)] mod tests`), not a catalog-load guard, and no separate production relational validator exists. Editor-side (C#) Class-A consumption remains pending the Unity generator tool (decision 10). · **Rev 2026-07-13:** every spell archetype now supports `cast_glow` plus repeatable caster-root `character_fx`; projectile archetypes now request optional `muzzle` and `projectile_trail` slots directly.
 **Scope:** Author-time surface for spell *presentation* — animation (Unity `CombatAnimationSet`) and VFX cues (`combat_vfx_cues[]` in `progression_catalog.shared.json`). Gameplay authoring is out of scope except as the *input* we derive from.
 
 This doc is deliberately adversarial about the requested direction. Where the direction is right I say so; where the data contradicts it I push back and propose the corrected version. Everything below was verified against the code and the live catalog, not the prompt summary.
@@ -105,17 +105,17 @@ A secondary animation axis is **playback layer + stance**, which is genuinely pe
 
 ### 2.2 VFX archetypes (the "shape" of the cue set)
 
-Derived from `delivery.kind` + `targeting` + a few delivery sub-fields (`motion`/`sky_origin`, `projectile` presence, `target_audience`). Each archetype declares a **slot set** and how each slot is wired. Populated cells, from the live catalog:
+Derived from `delivery.kind` + `targeting` + a few delivery sub-fields (`motion`/`sky_origin`, `projectile` presence, `target_audience`). Every archetype begins with optional `cast_glow` and repeatable `character_fx` cast slots; the table lists its delivery-specific slots:
 
 | VFX archetype | Derivation | Slot set (trigger/anchor/role/lifecycle) | Examples |
 |---|---|---|---|
-| **`PROJECTILE`** | `delivery.kind==PROJECTILE`, or `CHANNEL` w/ `delivery.projectile` | `cast_glow` (SPELL_CAST / hand / ATTACHED / *lifecycle-by-archetype*) + `projectile_body` (SPELL_RELEASE / hand-launch / PROJECTILE_BODY / UNTIL_TERMINAL_EVENT) + `impact` (SPELL_IMPACT / IMPACT_POINT / ONE_SHOT / DURATION\|PARTICLE_SYSTEM) | FIREBALL, ICICLE, BOOMERANG_ORB, MAGIC_MISSILE, BLESSED_SHIELD, GROUND_SLASH |
+| **`PROJECTILE`** | `delivery.kind==PROJECTILE`, or `CHANNEL` w/ `delivery.projectile` | optional `muzzle` + `projectile_body` + optional `projectile_trail` + `impact` | FIREBALL, ICICLE, BOOMERANG_ORB, MAGIC_MISSILE, BLESSED_SHIELD, GROUND_SLASH |
 | **`SKY_DROP`** | `delivery.kind==AREA && sky_origin` | `travel_body` (SPELL_RELEASE / ORIGIN / TRAVEL_BODY / UNTIL_TERMINAL_EVENT, `duration_ms=0`) + `impact` | METEOR |
-| **`GROUND_AOE`** | `delivery.kind==AREA && targeting∈{POINT,TARGET}` | `impact` at IMPACT_POINT/AREA_ORIGIN (ONE_SHOT / DURATION\|PARTICLE_SYSTEM) [+ optional `cast_glow`] | LIGHTNING, ERUPTION, FROST_NEEDLE, NEGATE |
+| **`GROUND_AOE`** | `delivery.kind==AREA && targeting∈{POINT,TARGET}` | `impact` at IMPACT_POINT/AREA_ORIGIN (ONE_SHOT / DURATION\|PARTICLE_SYSTEM) | LIGHTNING, ERUPTION, FROST_NEEDLE, NEGATE |
 | **`SELF_NOVA`** | `delivery.kind==AREA && targeting==SELF` | `burst` at CASTER (ONE_SHOT / PARTICLE_SYSTEM) | FROST_NOVA, ICE_SPIKES, SHOCKWAVE, INTIMIDATE |
 | **`BEAM`** | `delivery.kind∈{INSTANT_BEAM, CHANNEL-no-projectile}` | `beam` (SPELL_RELEASE / hand / ATTACHED / UNTIL_TERMINAL_EVENT or DURATION) | ELECTROCUTE, INSTANT_BEAM |
 | **`TARGET_HIT`** | `delivery.kind==DIRECT_TARGET`, or `APPLY_STATUS`/`REMOVE_STATUS` w/ `targeting==TARGET` | `impact` at TARGET (ONE_SHOT / PARTICLE_SYSTEM) — **TARGET anchor only, never on SPELL_CAST/RELEASE** | GLACIAL_SPIKE, SACRED_FLAME, CLEANSING_TOUCH, ABSOLUTION |
-| **`AURA`** | `delivery.kind==AURA` | `aura` at CASTER, sustained — **UNPOPULATED: 0/6 have cues** | (none authored yet) |
+| **`AURA`** | `delivery.kind==AURA` | finite `aura_ground` flourish; persistent gameplay aura has no mirrored persistent VFX | WARDING_AURA |
 | **`SELF_FX` / `NONE`** | `APPLY_STATUS`/`SELF_RESOURCE`, `targeting==SELF` | optional `self_flash`/overhead ONE_SHOT, or nothing | BLINDING_LIGHT (overhead), most WARRIOR buffs (none) |
 
 Cross-checks that matter:
@@ -138,18 +138,20 @@ Cross-checks that matter:
 
 ### 3.1 Palette definition (one per school)
 
-A palette is a map `slot → PaletteEntry`, where `PaletteEntry = { vfx_id, self_terminating?: bool, duration_ms?: int }`. **No `scale`** — Rule 1/E1 forbid authoring `scale` in the JSON (it lives in `CombatVFXRegistry`). The two optional fields are the *only* palette influence on lifecycle, and they don't author a raw lifecycle string: `self_terminating=true` means the prefab is a self-ending particle system → generator emits `PARTICLE_SYSTEM`; otherwise a `ONE_SHOT` slot emits `DURATION` with `duration_ms` (Rule 14 needs `>0`). Every other lifecycle is computed purely from the archetype (Appendix B). Slots, unified across archetypes:
+A palette is a map `slot → PaletteEntry`, where `PaletteEntry = { vfx_id, self_terminating?: bool, duration_ms?: int, variant_id?: string }`. `character_fx` is the one repeatable slot; multiple entries require unique `variant_id` values so materialized identities such as `character_fx/body_rings` remain stable. **No `scale`** — Rule 1/E1 forbid authoring `scale` in the JSON (it lives in `CombatVFXRegistry`). Lifecycle remains computed from the slot and archetype (Appendix B).
 
 | Slot | Used by archetypes | Fills |
 |---|---|---|
-| `cast_glow` | PROJECTILE, CHARGED-anything, CHANNEL, BEAM | hand charge/cast effect |
-| `muzzle` | PROJECTILE, BEAM (optional) | release flash at the hand (currently folded into launch — see §6) |
+| `cast_glow` | all spell archetypes (optional look) | hand charge/cast effect |
+| `character_fx` | all spell archetypes (optional, repeatable) | effect surrounding and following the caster root during the cast |
+| `muzzle` | PROJECTILE (optional) | release flash at the hand |
 | `projectile_body` | PROJECTILE | the flying body (rendered by projectile controller) |
+| `projectile_trail` | PROJECTILE (optional) | second visual composed on the projectile runtime root |
 | `travel_body` | SKY_DROP | falling/travelling body |
 | `impact` | PROJECTILE, GROUND_AOE, SKY_DROP, TARGET_HIT | hit burst |
 | `burst` | SELF_NOVA | self-centered nova |
 | `beam` | BEAM | sustained beam |
-| `aura` | AURA | sustained caster aura (unimplemented) |
+| `aura_ground` | AURA | finite caster-following ground flourish |
 
 A school need not fill every slot; the archetype declares which slots it *requests*, and generation only emits cues for `slots requested ∩ slots the school provides`. Missing a *required* slot is a validator warning (see §4).
 
@@ -312,6 +314,8 @@ This is the tool that makes migration safe and observable; it is not optional po
 
 11. **AURA gameplay persists; AURA visuals do not (owner correction 2026-07-10).** The authoritative `ActiveAura` row remains server-only and has no expiry. While it exists, the server refreshes short recipient status leases for targets in range; those buffs are removed when recipients leave range. Casting another aura replaces the row, and invalid/dead casters lose it. Presentation is independent: an aura cast emits only the finite `aura_ground` one-shot and never mirrors `ActiveAura`. There is no `UNTIL_AURA_END` lifecycle, sustained `aura` slot, client `active_aura` subscription, or reconnect hydration. An explicit caster-controlled toggle-off action is a separate gameplay contract and is not currently implemented.
 
+12. **Universal cast surfaces (owner direction 2026-07-13).** Every VFX archetype requests optional `cast_glow` and repeatable `character_fx`. `character_fx` follows `CASTER`, uses the same INSTANT/CHARGED/CHANNEL lifecycle as the hand glow, and uses explicit variant identities when more than one is authored. Projectile archetypes also request optional `muzzle` and `projectile_trail` entries directly.
+
 ---
 
 ## Appendix A — Contract every generated/overridden cue must satisfy
@@ -354,7 +358,7 @@ This is the concrete definition of the `trigger_for` / `anchor_for` / `attach_fo
 - `DEFERRED` = delivery resolves its area on a delay (`impact_delay_ms`/deferred-area) rather than at release. Selects `AREA_IMPACT@AREA_ORIGIN` over `SPELL_RELEASE@IMPACT_POINT` for ground/nova impacts.
 - `PS?` = the slot's `PaletteEntry.self_terminating` (→ `PARTICLE_SYSTEM`, else `DURATION`+`duration_ms`).
 
-### B.1 `cast_glow` (PROJECTILE, BEAM, SKY_DROP-charged, all CHARGED/CHANNEL)
+### B.1 `cast_glow` (all spell archetypes)
 
 | field | value | rule / grounding |
 |---|---|---|
@@ -365,7 +369,11 @@ This is the concrete definition of the `trigger_for` / `anchor_for` / `attach_fo
 | lifecycle | `INSTANT→DURATION` · `CHARGED→UNTIL_RELEASE_EVENT` · `CHANNEL→UNTIL_CAST_END` | **exactly** FIREBALL(350)/ICICLE/MAGIC_MISSILE. Rule 11 *forces* UNTIL_RELEASE_EVENT for CHARGED (cast_time>0); Rule 11 antecedent is false for INSTANT/CHANNEL (cast_time 0) so DURATION / UNTIL_CAST_END are legal. Rule 9: UNTIL_RELEASE_EVENT only on SPELL_CAST ✓ |
 | duration_ms | `INSTANT → PaletteEntry.duration_ms (>0)` · else `0` | CHARGED/CHANNEL ignore duration |
 
-### B.2 `muzzle` (PROJECTILE, BEAM — opt-in, off by default, decision #2)
+### B.1b `character_fx` (all spell archetypes, optional and repeatable)
+
+Same trigger, role, and lifecycle rules as `cast_glow`, but anchored to `CASTER` with `FOLLOW_ANCHOR`. This is a body-root effect that surrounds and moves with the character; it is not constrained to the ground. Multiple entries use distinct `variant_id` values and materialize as distinct author-time slot keys.
+
+### B.2 `muzzle` (PROJECTILE — opt-in, off by default, decisions #2/#12)
 
 | field | value | rule / grounding |
 |---|---|---|
@@ -451,22 +459,24 @@ This is the concrete definition of the `trigger_for` / `anchor_for` / `attach_fo
 
 | `delivery.kind` (+ discriminator) | archetype | slots |
 |---|---|---|
-| `PROJECTILE` | Projectile | cast_glow, projectile_body, impact |
-| `CHANNEL` + fires projectiles | Projectile | cast_glow, projectile_body, impact |
-| `CHANNEL` + beam | Beam | cast_glow, beam |
-| `INSTANT_BEAM` | Beam (charged) | cast_glow, beam |
-| `DIRECT_TARGET` | TargetHit | impact @ TARGET |
-| `AREA` + sky_origin | SkyDrop | (cast_glow), travel_body, impact |
-| `AREA` + targeting SELF | SelfNova | burst |
-| `AREA` + targeting POINT/TARGET | GroundAoe | impact |
-| `APPLY_STATUS` / `SELF_RESOURCE` (SELF) | SelfFx | self_flash (or none) |
-| `APPLY_STATUS` (TARGET) / `CONSUME_STATUS` | TargetHit | impact @ TARGET |
-| `REMOVE_STATUS` | TargetHit / SelfFx | cleanse flash |
-| `AURA` | Aura | `aura_ground` (brief feet flourish) |
+| `PROJECTILE` | Projectile | cast_glow, character_fx*, muzzle*, projectile_body, projectile_trail*, impact |
+| `CHANNEL` + fires projectiles | Projectile | cast_glow, character_fx*, muzzle*, projectile_body, projectile_trail*, impact |
+| `CHANNEL` + beam | Beam | cast_glow, character_fx*, beam |
+| `INSTANT_BEAM` | Beam (charged) | cast_glow, character_fx*, beam |
+| `DIRECT_TARGET` | TargetHit | cast_glow, character_fx*, impact @ TARGET |
+| `AREA` + sky_origin | SkyDrop | cast_glow, character_fx*, travel_body, impact |
+| `AREA` + targeting SELF | SelfNova | cast_glow, character_fx*, burst |
+| `AREA` + targeting POINT/TARGET | GroundAoe | cast_glow, character_fx*, impact |
+| `APPLY_STATUS` / `SELF_RESOURCE` (SELF) | SelfFx | cast_glow, character_fx*, self_flash* |
+| `APPLY_STATUS` (TARGET) / `CONSUME_STATUS` | TargetHit | cast_glow, character_fx*, impact @ TARGET |
+| `REMOVE_STATUS` | TargetHit / SelfFx | cast_glow, character_fx*, cleanse flash |
+| `AURA` | Aura | cast_glow, character_fx*, `aura_ground` (brief feet flourish) |
+
+`*` denotes an optional look: the archetype supports the slot, but generation omits it when neither the school palette nor a per-spell override provides an entry.
 
 **The projectile body is never dropped.** For a projectile spell the `projectile_body` slot is filled by the school VFX set's generic body **or** a per-spell signature override — either way a registered `vfx_id`. And it cannot be silently forgotten: **server Rule 18 hard-fails any projectile spell that resolves to zero `PROJECTILE_BODY` cues** (exactly one required at index 0). A missing projectile prefab is a build-time contract error, not a broken spell at runtime.
 
-**Cells still needing a first exemplar** (author one before relying on them): `muzzle` (none today — opt-in), `beam × CHANNEL` (only ELECTROCUTE, parked — decision 9), `projectile_body` index >0 (never used, and per B.3 never should be), `cast_glow` on SKY_DROP/BEAM (optional, none today). `beam × CHARGED` has INSTANT_BEAM. Out of scope regardless: the pure-melee cue owners (`PALADIN_AVENGE`/`WARRIOR_EARTHSHATTER`/`WARRIOR_CATACLYSM`, §6.11).
+**Cells still needing a checked-in visual exemplar:** `muzzle`, `character_fx`, `beam × CHANNEL` (only ELECTROCUTE, parked — decision 9), and `cast_glow` on SKY_DROP/BEAM. The authoring/runtime contracts support them; they simply have no current palette entry to inspect in play. `projectile_body` index >0 remains intentionally unsupported because multi-projectile channels reuse index 0.
 
 ---
 

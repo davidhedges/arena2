@@ -59,8 +59,52 @@ namespace Arena.Tests.Editor
         private static object? WireVal(object wiring, string prop)
             => CueWiringType.GetProperty(prop)!.GetValue(wiring);
 
+        private static void AssertSlotEntriesValid(SerializedProperty slots, string owner)
+        {
+            int characterFxSlotId = Convert.ToInt32(Enum.Parse(VfxSlotType, "CharacterFx"));
+            int characterFxCount = 0;
+            for (int slotIndex = 0; slotIndex < slots.arraySize; slotIndex++)
+            {
+                if (slots.GetArrayElementAtIndex(slotIndex)
+                        .FindPropertyRelative("slot").enumValueIndex == characterFxSlotId)
+                    characterFxCount++;
+            }
+
+            var slotIds = new HashSet<int>();
+            var characterFxVariants = new HashSet<string>(StringComparer.Ordinal);
+            for (int slotIndex = 0; slotIndex < slots.arraySize; slotIndex++)
+            {
+                SerializedProperty slot = slots.GetArrayElementAtIndex(slotIndex);
+                int slotId = slot.FindPropertyRelative("slot").enumValueIndex;
+                if (slotId == characterFxSlotId)
+                {
+                    string variant = slot.FindPropertyRelative("variantId").stringValue.Trim().ToUpperInvariant();
+                    if (characterFxCount > 1)
+                        Assert.That(variant, Is.Not.Empty, $"repeatable {owner} CharacterFx entries need variantId");
+                    Assert.That(characterFxVariants.Add(variant), Is.True,
+                        $"duplicate {owner} CharacterFx variant '{variant}'");
+                }
+                else
+                {
+                    Assert.That(slotIds.Add(slotId), Is.True, $"duplicate {owner} slot {slotId}");
+                }
+                Assert.That(slot.FindPropertyRelative("vfxId").stringValue, Is.Not.Empty);
+                Assert.That(slot.FindPropertyRelative("durationMs").intValue, Is.GreaterThanOrEqualTo(0));
+            }
+        }
+
         private static string? ValidateWiring(object wiring, string mode)
             => (string?)GeneratorType.GetMethod("ValidateWiring")!.Invoke(null, new object[] { wiring, AnimMode(mode) });
+
+        private static List<string> RequestedSlotNames(string archetype, string mode = "Instant")
+        {
+            var slots = (IEnumerable)GeneratorType.GetMethod("RequestedSlots")!
+                .Invoke(null, new object[] { VfxArch(archetype), AnimMode(mode) })!;
+            var names = new List<string>();
+            foreach (object? slot in slots)
+                names.Add(slot!.ToString()!);
+            return names;
+        }
 
         private static object Fields(
             string trigger, string anchor, string attach, string role, string lifecycle,
@@ -98,7 +142,9 @@ namespace Arena.Tests.Editor
                 string path = AssetDatabase.GUIDToAssetPath(guid);
                 Assert.That(path, Does.StartWith("Assets/Arena/Editor/"));
                 Assert.That(path, Does.Not.Contain("/Resources/"));
-                Assert.That(AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(path), Is.Not.Null);
+                UnityEngine.Object asset = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(path);
+                Assert.That(asset, Is.Not.Null);
+                AssertSlotEntriesValid(new SerializedObject(asset).FindProperty("slots"), path);
             }
         }
 
@@ -149,15 +195,7 @@ namespace Arena.Tests.Editor
                 Assert.That(castHand, Is.InRange(0, 2));
                 Assert.That(slots.arraySize > 0 || castHand != 0, Is.True);
 
-                var slotIds = new HashSet<int>();
-                for (int slotIndex = 0; slotIndex < slots.arraySize; slotIndex++)
-                {
-                    SerializedProperty slot = slots.GetArrayElementAtIndex(slotIndex);
-                    int slotId = slot.FindPropertyRelative("slot").enumValueIndex;
-                    Assert.That(slotIds.Add(slotId), Is.True, $"duplicate {abilityId} slot {slotId}");
-                    Assert.That(slot.FindPropertyRelative("vfxId").stringValue, Is.Not.Empty);
-                    Assert.That(slot.FindPropertyRelative("durationMs").intValue, Is.GreaterThanOrEqualTo(0));
-                }
+                AssertSlotEntriesValid(slots, abilityId);
 
                 if (abilityId == "PALADIN_BLADE_BARRIER")
                     foundBladeBarrierRightHand = castHand == 2;
@@ -221,6 +259,58 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void EverySpellArchetype_RequestsCastGlowAndRepeatableCharacterFx()
+        {
+            foreach (string archetype in Enum.GetNames(VfxArchetypeType))
+            {
+                List<string> slots = RequestedSlotNames(archetype);
+                Assert.That(slots, Does.Contain("CastGlow"), $"{archetype} must support a hand cast glow");
+                Assert.That(slots, Does.Contain("CharacterFx"), $"{archetype} must support character-attached VFX");
+            }
+        }
+
+        [Test]
+        public void ProjectileArchetype_RequestsMuzzleBodyTrailAndImpact()
+        {
+            Assert.That(RequestedSlotNames("Projectile"), Is.EqualTo(new[]
+            {
+                "CastGlow",
+                "CharacterFx",
+                "Muzzle",
+                "ProjectileBody",
+                "ProjectileTrail",
+                "Impact",
+            }));
+        }
+
+        [Test]
+        public void CharacterFx_UsesCasterRootAndCastLifecycle()
+        {
+            object instant = Wire("GroundAoe", "CharacterFx", "Instant", false, false);
+            Assert.That(WireStr(instant, "Trigger"), Is.EqualTo("SPELL_CAST"));
+            Assert.That(WireStr(instant, "Anchor"), Is.EqualTo("Caster"));
+            Assert.That(WireStr(instant, "AttachMode"), Is.EqualTo("FOLLOW_ANCHOR"));
+            Assert.That(WireStr(instant, "VfxRole"), Is.EqualTo("ATTACHED"));
+            Assert.That(WireStr(instant, "Lifecycle"), Is.EqualTo("DURATION"));
+
+            object charged = Wire("TargetHit", "CharacterFx", "Charged", false, false);
+            Assert.That(WireStr(charged, "Lifecycle"), Is.EqualTo("UNTIL_RELEASE_EVENT"));
+            object channel = Wire("Beam", "CharacterFx", "Channel", false, false);
+            Assert.That(WireStr(channel, "Lifecycle"), Is.EqualTo("UNTIL_CAST_END"));
+        }
+
+        [Test]
+        public void Muzzle_IsAProjectileReleaseOneShotAtTheCastHand()
+        {
+            object muzzle = Wire("Projectile", "Muzzle", "Instant", true, false);
+            Assert.That(WireStr(muzzle, "Trigger"), Is.EqualTo("SPELL_RELEASE"));
+            Assert.That(WireStr(muzzle, "Anchor"), Is.EqualTo("Hand"));
+            Assert.That(WireStr(muzzle, "AttachMode"), Is.EqualTo("SPAWN_WORLD"));
+            Assert.That(WireStr(muzzle, "VfxRole"), Is.EqualTo("ONE_SHOT"));
+            Assert.That(WireStr(muzzle, "Lifecycle"), Is.EqualTo("PARTICLE_SYSTEM"));
+        }
+
+        [Test]
         public void ProjectileBodyTrailAndTravelBody_Wiring()
         {
             object body = Wire("Projectile", "ProjectileBody", "Instant", false, false);
@@ -279,11 +369,8 @@ namespace Arena.Tests.Editor
         public void AuraDefaults_ToABriefGroundBurst()
         {
             // Aura buffs persist, but their cast visual is just a brief effect at the caster's feet.
-            var slots = (IEnumerable)GeneratorType.GetMethod("RequestedSlots")!
-                .Invoke(null, new object[] { VfxArch("Aura"), AnimMode("Instant") })!;
-            var slotNames = new List<string>();
-            foreach (object? s in slots) slotNames.Add(s!.ToString());
-            Assert.That(slotNames, Is.EqualTo(new[] { "AuraGround" }));
+            Assert.That(RequestedSlotNames("Aura"),
+                Is.EqualTo(new[] { "CastGlow", "CharacterFx", "AuraGround" }));
 
             object w = Wire("Aura", "AuraGround", "Instant", false, false);
             Assert.That(WireStr(w, "Trigger"), Is.EqualTo("SPELL_RELEASE"));

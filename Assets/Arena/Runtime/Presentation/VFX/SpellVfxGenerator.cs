@@ -83,6 +83,11 @@ namespace Arena.Presentation
         AuraGround = 8,
         /// <summary>Optional visual that shares the projectile body's runtime root and lifetime.</summary>
         ProjectileTrail = 9,
+        /// <summary>
+        /// A cast-time visual attached to the caster presentation root. Unlike the hand-specific
+        /// <see cref="CastGlow"/>, this surrounds the character and may be authored more than once.
+        /// </summary>
+        CharacterFx = 10,
     }
 
     /// <summary>
@@ -344,35 +349,46 @@ namespace Arena.Presentation
         }
 
         /// <summary>
-        /// The slots an archetype requests by default. <see cref="SpellVfxSlot.Muzzle"/> is
-        /// palette-gated (design doc decision 2: optional per-school, off by default) so it is
-        /// never requested here — the palette layer adds it only when a school provides a
-        /// <c>muzzle</c> entry.
+        /// The slots an archetype supports. Optional slots are still listed here; the palette/override
+        /// layer omits them when no look is authored. Every spell archetype supports a hand cast glow
+        /// and one or more caster-attached character effects. Projectile spells additionally support
+        /// an optional release muzzle and an optional trail.
         /// </summary>
         public static IReadOnlyList<SpellVfxSlot> RequestedSlots(SpellVfxArchetype archetype, SpellAnimationArchetype mode)
         {
             switch (archetype)
             {
                 case SpellVfxArchetype.Projectile:
-                    return new[] { SpellVfxSlot.CastGlow, SpellVfxSlot.ProjectileBody, SpellVfxSlot.Impact };
+                    return new[]
+                    {
+                        SpellVfxSlot.CastGlow,
+                        SpellVfxSlot.CharacterFx,
+                        SpellVfxSlot.Muzzle,
+                        SpellVfxSlot.ProjectileBody,
+                        SpellVfxSlot.ProjectileTrail,
+                        SpellVfxSlot.Impact,
+                    };
                 case SpellVfxArchetype.SkyDrop:
-                    // A charged sky-drop can show a hand cast-glow while charging; instant has none today.
-                    return mode == SpellAnimationArchetype.Instant
-                        ? new[] { SpellVfxSlot.TravelBody, SpellVfxSlot.Impact }
-                        : new[] { SpellVfxSlot.CastGlow, SpellVfxSlot.TravelBody, SpellVfxSlot.Impact };
+                    return new[]
+                    {
+                        SpellVfxSlot.CastGlow,
+                        SpellVfxSlot.CharacterFx,
+                        SpellVfxSlot.TravelBody,
+                        SpellVfxSlot.Impact,
+                    };
                 case SpellVfxArchetype.GroundAoe:
-                    return new[] { SpellVfxSlot.Impact };
+                    return new[] { SpellVfxSlot.CastGlow, SpellVfxSlot.CharacterFx, SpellVfxSlot.Impact };
                 case SpellVfxArchetype.SelfNova:
-                    return new[] { SpellVfxSlot.Burst };
+                    return new[] { SpellVfxSlot.CastGlow, SpellVfxSlot.CharacterFx, SpellVfxSlot.Burst };
                 case SpellVfxArchetype.Beam:
-                    return new[] { SpellVfxSlot.CastGlow, SpellVfxSlot.Beam };
+                    return new[] { SpellVfxSlot.CastGlow, SpellVfxSlot.CharacterFx, SpellVfxSlot.Beam };
                 case SpellVfxArchetype.TargetHit:
-                    return new[] { SpellVfxSlot.Impact };
+                    return new[] { SpellVfxSlot.CastGlow, SpellVfxSlot.CharacterFx, SpellVfxSlot.Impact };
                 case SpellVfxArchetype.SelfFx:
-                    return new[] { SpellVfxSlot.SelfFlash };
-                // Aura buffs persist, but their cast visual is only a brief ground flourish.
+                    return new[] { SpellVfxSlot.CastGlow, SpellVfxSlot.CharacterFx, SpellVfxSlot.SelfFlash };
+                // Aura buffs persist, but their aura_ground visual is only a brief ground flourish.
                 case SpellVfxArchetype.Aura:
-                    return new[] { SpellVfxSlot.AuraGround };
+                    return new[] { SpellVfxSlot.CastGlow, SpellVfxSlot.CharacterFx, SpellVfxSlot.AuraGround };
                 default:
                     return System.Array.Empty<SpellVfxSlot>();
             }
@@ -402,6 +418,27 @@ namespace Arena.Presentation
                     return new CueWiring(
                         trigger: TriggerSpellCast,
                         anchor: CueAnchor.Hand,
+                        attachMode: AttachFollowAnchor,
+                        vfxRole: RoleAttached,
+                        lifecycle: mode switch
+                        {
+                            SpellAnimationArchetype.Instant => LifecycleDuration,
+                            SpellAnimationArchetype.Charged => LifecycleUntilReleaseEvent,
+                            SpellAnimationArchetype.Channel => LifecycleUntilCastEnd,
+                            _ => LifecycleUntilCastEnd,
+                        },
+                        duration: mode == SpellAnimationArchetype.Instant
+                            ? CueDurationPolicy.PalettePositive
+                            : CueDurationPolicy.Zero,
+                        projectileSequenceIndex: null);
+
+                // B.1b — the body-root counterpart to cast_glow. It deliberately shares the cast
+                // lifecycle, so instant effects play for their authored duration, charged effects end
+                // on release, and channel effects end with the authoritative ActiveCast.
+                case SpellVfxSlot.CharacterFx:
+                    return new CueWiring(
+                        trigger: TriggerSpellCast,
+                        anchor: CueAnchor.Caster,
                         attachMode: AttachFollowAnchor,
                         vfxRole: RoleAttached,
                         lifecycle: mode switch
