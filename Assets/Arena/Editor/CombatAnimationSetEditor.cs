@@ -14,6 +14,7 @@ using UnityEngine;
 using Arena.Combat;
 using Arena.Input;
 using Arena.Presentation;
+using Arena.Presentation.Appearance;
 using Arena.Presentation.VFX;
 using PresentationAerialExecutionMode = Arena.Presentation.AerialExecutionMode;
 
@@ -94,6 +95,7 @@ namespace Arena.Editor
         private bool _attackPreviewGraphCreated;
         private CombatAnimationSet? _attackPreviewSet;
         private AnimationClip? _attackPreviewClip;
+        private string _attackPreviewError = string.Empty;
         private int _attackPreviewStrikeIndex;
         private float _attackPreviewTime;
         private bool _attackPreviewPlaying;
@@ -549,7 +551,7 @@ namespace Arena.Editor
 
                     using (new EditorGUI.DisabledScope(attackIndex == 0))
                     {
-                        if (GUILayout.Button("Up", GUILayout.Width(42f)))
+                        if (GUILayout.Button("+", GUILayout.Width(24f)))
                         {
                             Undo.RecordObject(set, "Move Melee Attack");
                             WeaponMeleeAttackAuthoring attack = set.meleeAttacks[attackIndex];
@@ -562,7 +564,7 @@ namespace Arena.Editor
 
                     using (new EditorGUI.DisabledScope(attackIndex == meleeAttacksProperty.arraySize - 1))
                     {
-                        if (GUILayout.Button("Down", GUILayout.Width(52f)))
+                        if (GUILayout.Button("-", GUILayout.Width(24f)))
                         {
                             Undo.RecordObject(set, "Move Melee Attack");
                             WeaponMeleeAttackAuthoring attack = set.meleeAttacks[attackIndex];
@@ -573,7 +575,7 @@ namespace Arena.Editor
                         }
                     }
 
-                    if (GUILayout.Button("Remove", GUILayout.Width(70f)))
+                    if (GUILayout.Button("x", GUILayout.Width(24f)))
                     {
                         if (EditorUtility.DisplayDialog(
                                 "Remove Melee Attack",
@@ -928,6 +930,7 @@ namespace Arena.Editor
             _attackPreviewSet = set;
             _attackPreviewStrikeIndex = strikeIndex;
             _attackPreviewClip = previewClip;
+            _attackPreviewError = string.Empty;
             _attackPreviewTime = Mathf.Clamp(_attackPreviewTime, 0f, previewClip.length);
             _attackPreviewLastEditorTime = EditorApplication.timeSinceStartup;
 
@@ -945,23 +948,44 @@ namespace Arena.Editor
             _attackPreviewInstance = Instantiate(prefab);
             _attackPreviewInstance.name = $"{prefab.name}_AnimationSetPreview";
             StarterAssetsRuntimeStripper.StripFrom(_attackPreviewInstance);
-            SetHideFlagsRecursive(_attackPreviewInstance, HideFlags.HideAndDontSave);
             _attackPreviewInstance.transform.position = Vector3.zero;
             _attackPreviewInstance.transform.rotation = Quaternion.identity;
+
+            RuntimeAvatarController? avatarController =
+                _attackPreviewInstance.GetComponent<RuntimeAvatarController>();
+            if (avatarController == null)
+                avatarController = _attackPreviewInstance.AddComponent<RuntimeAvatarController>();
+            avatarController.SetVisualRootParent(_attackPreviewInstance.transform);
+
+            CharacterAppearanceSelection previewAppearance =
+                CharacterAppearanceSelection.DefaultHumanMale();
+            previewAppearance.outfitId = string.Empty;
+            string previewAppearanceSignature = RuntimeAvatarController.SignatureFor(previewAppearance);
+            if (!avatarController.Apply(
+                    previewAppearance,
+                    previewAppearanceSignature,
+                    out RuntimeAvatarBinding binding,
+                    out string appearanceError))
+            {
+                _attackPreviewError = $"Runtime avatar appearance could not be assembled: {appearanceError}";
+                Debug.LogWarning($"[{nameof(CombatAnimationSetEditor)}] {_attackPreviewError}", set);
+                DestroyImmediate(_attackPreviewInstance);
+                _attackPreviewInstance = null;
+                return;
+            }
 
             WeaponAttachmentController? attachments =
                 _attackPreviewInstance.GetComponentInChildren<WeaponAttachmentController>(true);
             if (attachments != null)
             {
                 attachments.Initialize();
-                AvatarWeaponMounts? mounts = _attackPreviewInstance.GetComponentInChildren<AvatarWeaponMounts>(true);
-                if (mounts != null)
-                    attachments.BindMounts(mounts);
+                attachments.BindMounts(binding.Mounts);
                 attachments.ApplyAnimationSet(set);
                 attachments.SetInCombat(true);
             }
 
-            _attackPreviewAnimator = _attackPreviewInstance.GetComponentInChildren<Animator>(true);
+            SetHideFlagsRecursive(_attackPreviewInstance, HideFlags.HideAndDontSave);
+            _attackPreviewAnimator = binding.Animator;
             CreateAttackPreviewGraph(previewClip);
             _attackPreviewUtility.AddSingleGO(_attackPreviewInstance);
             SampleAttackPreview();
@@ -986,6 +1010,7 @@ namespace Arena.Editor
             _attackPreviewAnimator = null;
             _attackPreviewSet = null;
             _attackPreviewClip = null;
+            _attackPreviewError = string.Empty;
             _attackPreviewStrikeIndex = 0;
             _attackPreviewPlaying = false;
         }
@@ -1072,7 +1097,10 @@ namespace Arena.Editor
         {
             if (_attackPreviewUtility == null || _attackPreviewInstance == null)
             {
-                EditorGUI.HelpBox(previewRect, "Runtime avatar prefab could not be loaded.", MessageType.Warning);
+                string message = string.IsNullOrWhiteSpace(_attackPreviewError)
+                    ? "Runtime avatar prefab could not be loaded."
+                    : _attackPreviewError;
+                EditorGUI.HelpBox(previewRect, message, MessageType.Warning);
                 return;
             }
 
@@ -1103,14 +1131,26 @@ namespace Arena.Editor
         private static Bounds CalculateAttackPreviewBounds(GameObject previewInstance)
         {
             Renderer[] renderers = previewInstance.GetComponentsInChildren<Renderer>(false);
-            if (renderers.Length == 0)
-                return new Bounds(Vector3.up, Vector3.one * 2f);
+            bool hasBounds = false;
+            Bounds bounds = default;
+            for (int i = 0; i < renderers.Length; i++)
+            {
+                Renderer renderer = renderers[i];
+                if (renderer == null || !renderer.enabled)
+                    continue;
 
-            Bounds bounds = renderers[0].bounds;
-            for (int i = 1; i < renderers.Length; i++)
-                bounds.Encapsulate(renderers[i].bounds);
+                if (!hasBounds)
+                {
+                    bounds = renderer.bounds;
+                    hasBounds = true;
+                }
+                else
+                {
+                    bounds.Encapsulate(renderer.bounds);
+                }
+            }
 
-            return bounds;
+            return hasBounds ? bounds : new Bounds(Vector3.up, Vector3.one * 2f);
         }
 
         private void HandleAttackPreviewCameraInput(Rect previewRect)
