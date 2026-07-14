@@ -15,6 +15,7 @@ namespace Arena.UI
         public const int CellCount = Rows * Columns;
         public const float SlotSize = 68f;
         public const float Gap = 4f;
+        public const float IconInset = 6f;
         public const string SlotPrefabResourcePath = "UI/ActionBar/ActionBarSlot";
 
         public static float Pitch => SlotSize + Gap;

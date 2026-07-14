@@ -84,8 +84,8 @@ namespace Arena.UI
                 RectTransform iconRt = iconGo.AddComponent<RectTransform>();
                 iconRt.anchorMin = Vector2.zero;
                 iconRt.anchorMax = Vector2.one;
-                iconRt.offsetMin = Vector2.zero;
-                iconRt.offsetMax = Vector2.zero;
+                iconRt.offsetMin = Vector2.one * ActionBarLayout.IconInset;
+                iconRt.offsetMax = Vector2.one * -ActionBarLayout.IconInset;
 
                 Image icon = iconGo.AddComponent<Image>();
                 icon.sprite = iconSprite;

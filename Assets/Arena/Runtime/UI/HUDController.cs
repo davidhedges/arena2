@@ -700,8 +700,8 @@ namespace Arena.UI
             var iconGo = Child(slot.transform, "Icon");
             Stretch(iconGo);
             var iconRt = (RectTransform)iconGo.transform;
-            iconRt.offsetMin = Vector2.zero;
-            iconRt.offsetMax = Vector2.zero;
+            iconRt.offsetMin = Vector2.one * ActionBarLayout.IconInset;
+            iconRt.offsetMax = Vector2.one * -ActionBarLayout.IconInset;
             iconImg = iconGo.AddComponent<Image>();
             iconImg.color = Color.white;
             iconImg.preserveAspect = true;

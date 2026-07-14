@@ -434,6 +434,7 @@ def authored_icon_ids() -> set[str]:
 
 def validate_manifest(manifest: dict[str, Any]) -> None:
     expected = authored_icon_ids()
+    output_root = ROOT / manifest["output_root"]
     authored: set[str] = set()
     for sheet in manifest["sheets"]:
         columns = int(sheet["columns"])
@@ -453,9 +454,27 @@ def validate_manifest(manifest: dict[str, Any]) -> None:
             if column + colspan > columns or row + rowspan > rows:
                 raise ValueError(f"{icon_id} exceeds grid bounds in {sheet['source']}")
             authored.add(icon_id)
-    missing = sorted(expected - authored)
+    # New-style icons are authored as independent runtime PNGs. The sheet
+    # manifest only owns legacy sheet cells and must never overwrite those
+    # standalone files.
+    standalone = {
+        icon_id for icon_id in expected
+        if (output_root / f"{icon_id}.png").exists()
+    }
+    missing = sorted(expected - authored - standalone)
     if missing:
-        raise ValueError("Missing item icon mappings: " + ", ".join(missing))
+        raise ValueError("Missing item icon mappings or runtime PNGs: " + ", ".join(missing))
+
+
+def validate_runtime_icon_coverage(output_root: Path) -> None:
+    missing: list[str] = []
+    for icon_id in sorted(authored_icon_ids()):
+        png = output_root / f"{icon_id}.png"
+        meta = png.with_name(png.name + ".meta")
+        if not png.exists() or not meta.exists():
+            missing.append(icon_id)
+    if missing:
+        raise ValueError("Missing runtime item icons or Unity metadata: " + ", ".join(missing))
 
 
 def main() -> None:
@@ -505,6 +524,7 @@ def main() -> None:
             write_meta(out, texture_meta(out, sprite=True))
             generated += 1
 
+    validate_runtime_icon_coverage(output_root)
     print(f"Imported {generated} item icons from {len(manifest['sheets'])} sheets")
 
 

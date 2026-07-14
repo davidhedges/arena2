@@ -1171,8 +1171,8 @@ namespace Arena.UI
             RectTransform iconRt = iconGo.AddComponent<RectTransform>();
             iconRt.anchorMin = Vector2.zero;
             iconRt.anchorMax = Vector2.one;
-            iconRt.offsetMin = Vector2.zero;
-            iconRt.offsetMax = Vector2.zero;
+            iconRt.offsetMin = Vector2.one * ActionBarLayout.IconInset;
+            iconRt.offsetMax = Vector2.one * -ActionBarLayout.IconInset;
 
             Image icon = iconGo.AddComponent<Image>();
             icon.color = Color.white;
@@ -1183,6 +1183,7 @@ namespace Arena.UI
             labelGo.transform.SetAsLastSibling();
             Image border = ArenaUiKit.AddBorder(rt, ArenaUiTheme.Hairline, ArenaUiSprites.SmallRadius);
             ArenaUiKit.ApplySurface(border, ArenaUiSprites.SlotFrame, ArenaUiTheme.Hairline);
+            border.rectTransform.SetAsFirstSibling();
 
             return cellGo.AddComponent<EquipmentSlotCell>().Initialize(background, icon, label, border);
         }
@@ -1244,8 +1245,8 @@ namespace Arena.UI
             RectTransform iconRt = iconGo.AddComponent<RectTransform>();
             iconRt.anchorMin = Vector2.zero;
             iconRt.anchorMax = Vector2.one;
-            iconRt.offsetMin = Vector2.zero;
-            iconRt.offsetMax = Vector2.zero;
+            iconRt.offsetMin = Vector2.one * ActionBarLayout.IconInset;
+            iconRt.offsetMax = Vector2.one * -ActionBarLayout.IconInset;
 
             Image icon = iconGo.AddComponent<Image>();
             icon.color = Color.white;
@@ -1291,6 +1292,7 @@ namespace Arena.UI
 
             Image border = ArenaUiKit.AddBorder(rt, ArenaUiTheme.Hairline, ArenaUiSprites.SmallRadius);
             ArenaUiKit.ApplySurface(border, ArenaUiSprites.SlotFrame, ArenaUiTheme.Hairline);
+            border.rectTransform.SetAsFirstSibling();
             cellGo.AddComponent<InventoryGridCell>().Initialize(background, icon, label, quantity, border);
         }
 
