@@ -5,6 +5,7 @@ using System.IO;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
+using System.Text.RegularExpressions;
 using UnityEditor;
 using UnityEditor.Animations;
 using UnityEditorInternal;
@@ -345,6 +346,16 @@ namespace Arena.Editor
 
             using (new EditorGUI.DisabledScope(hasErrors || !canExportManifest))
             {
+                if (GUILayout.Button("Synchronize All Authored Hit Events & Export Profile"))
+                {
+                    bool synchronized = SynchronizeAllHitEventsForSet(set, out string syncSummary);
+                    EditorUtility.DisplayDialog(
+                        synchronized ? "Hit Windows Synchronized" : "Hit Window Sync Failed",
+                        syncSummary,
+                        "OK");
+                    GUIUtility.ExitGUI();
+                }
+
                 if (GUILayout.Button("Export Shared Melee Manifest"))
                 {
                     Directory.CreateDirectory(Path.GetDirectoryName(ExportPath)!);
@@ -373,6 +384,262 @@ namespace Arena.Editor
             }
 
             DrawNonAssetChanging(() => DrawMeleeAnimationPreviewPane(set));
+        }
+
+        internal static bool IsReferencedByMeleeAttack(AnimationClip? clip)
+        {
+            if (clip == null)
+                return false;
+
+            string[] setGuids = AssetDatabase.FindAssets("t:CombatAnimationSet");
+            for (int setIndex = 0; setIndex < setGuids.Length; setIndex++)
+            {
+                string assetPath = AssetDatabase.GUIDToAssetPath(setGuids[setIndex]);
+                CombatAnimationSet? set = AssetDatabase.LoadAssetAtPath<CombatAnimationSet>(assetPath);
+                if (set?.meleeAttacks == null)
+                    continue;
+
+                for (int attackIndex = 0; attackIndex < set.meleeAttacks.Count; attackIndex++)
+                {
+                    if (set.meleeAttacks[attackIndex].ReferencesClip(clip))
+                        return true;
+                }
+            }
+
+            return false;
+        }
+
+        internal static bool SynchronizeHitEventsForClip(
+            AnimationClip? clip,
+            out string summary)
+        {
+            if (clip == null)
+            {
+                summary = "No animation clip is selected.";
+                return false;
+            }
+
+            var affectedBySet = new Dictionary<CombatAnimationSet, List<int>>();
+            string[] setGuids = AssetDatabase.FindAssets("t:CombatAnimationSet");
+            for (int setIndex = 0; setIndex < setGuids.Length; setIndex++)
+            {
+                string assetPath = AssetDatabase.GUIDToAssetPath(setGuids[setIndex]);
+                CombatAnimationSet? set = AssetDatabase.LoadAssetAtPath<CombatAnimationSet>(assetPath);
+                if (set?.meleeAttacks == null)
+                    continue;
+
+                for (int attackIndex = 0; attackIndex < set.meleeAttacks.Count; attackIndex++)
+                {
+                    WeaponMeleeAttackAuthoring attack = set.meleeAttacks[attackIndex];
+                    if (!attack.ReferencesClip(clip))
+                        continue;
+
+                    if (!attack.TryBuildHitWindowMirrorFromEvents(out _))
+                    {
+                        summary =
+                            $"Cannot synchronize '{attack.combat.AuthoredStrikeIdOrDefault}': its resolved presentation has no {CombatAnimationEvents.OnStrikeHit} event. " +
+                            "Every assigned melee attack must retain at least one hit event.";
+                        return false;
+                    }
+
+                    if (!affectedBySet.TryGetValue(set, out List<int>? attackIndices))
+                    {
+                        attackIndices = new List<int>();
+                        affectedBySet.Add(set, attackIndices);
+                    }
+                    attackIndices.Add(attackIndex);
+                }
+            }
+
+            if (affectedBySet.Count == 0)
+            {
+                summary = $"'{clip.name}' is not assigned to a CombatAnimationSet melee attack; only the clip event was saved.";
+                return true;
+            }
+
+            MeleeManifestDocument manifest;
+            try
+            {
+                manifest = File.Exists(ExportPath)
+                    ? DeserializeMeleeManifestDocument(File.ReadAllText(ExportPath))
+                    : new MeleeManifestDocument();
+            }
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException || ex is ArgumentException)
+            {
+                summary = $"Cannot synchronize the shared melee manifest: {ex.Message}";
+                return false;
+            }
+
+            var affectedStrikeIdsBySet = new Dictionary<CombatAnimationSet, HashSet<string>>();
+            int affectedStrikeCount = 0;
+            foreach (KeyValuePair<CombatAnimationSet, List<int>> pair in affectedBySet)
+            {
+                CombatAnimationSet set = pair.Key;
+                Undo.RecordObject(set, "Synchronize melee hit windows from animation events");
+                CombatAnimationSetProtection.MarkTrustedMutation(set, "hit-event-sync");
+
+                var affectedStrikeIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                for (int i = 0; i < pair.Value.Count; i++)
+                {
+                    int attackIndex = pair.Value[i];
+                    WeaponMeleeAttackAuthoring attack = set.meleeAttacks[attackIndex];
+                    attack.TryBuildHitWindowMirrorFromEvents(
+                        out WeaponStrikeHitWindowAuthoring[] mirroredHitWindows);
+
+                    WeaponStrikeCombatAuthoring combat = attack.combat;
+                    combat.hitWindows = mirroredHitWindows;
+                    combat.impactNormalized = mirroredHitWindows.Length > 0
+                        ? mirroredHitWindows[0].timeNormalized
+                        : 0f;
+                    attack.combat = combat;
+                    set.meleeAttacks[attackIndex] = attack;
+
+                    affectedStrikeIds.Add(combat.AuthoredStrikeIdOrDefault);
+                    if (set.IsAutoAttackVisualSourceStrike(attackIndex + 1))
+                        affectedStrikeIds.Add(set.AutoAttackAuthoredStrikeIdOrDefault);
+                    affectedStrikeCount += 1;
+                }
+
+                PersistAnimationSetEdit(set, "hit-event-sync");
+                CombatAnimationSetProtection.RecordTrustedState(set, "hit-event-sync");
+                affectedStrikeIdsBySet.Add(set, affectedStrikeIds);
+            }
+
+            foreach (KeyValuePair<CombatAnimationSet, HashSet<string>> pair in affectedStrikeIdsBySet)
+            {
+                MeleeManifestProfile[] generatedProfiles = pair.Key.BuildMeleeExport().profiles;
+                if (generatedProfiles == null || generatedProfiles.Length == 0)
+                    continue;
+                MergeSelectedStrikes(manifest, generatedProfiles[0], pair.Value);
+            }
+
+            string exportedJson = SerializeMeleeManifestDocument(manifest);
+            string currentJson = File.Exists(ExportPath) ? File.ReadAllText(ExportPath) : string.Empty;
+            bool manifestChanged = NormalizeJson(exportedJson) != NormalizeJson(currentJson);
+            if (manifestChanged)
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(ExportPath)!);
+                BackupFile(ExportPath, "pre-hit-event-sync");
+                File.WriteAllText(ExportPath, exportedJson);
+            }
+
+            InternalEditorUtility.RepaintAllViews();
+            summary = manifestChanged
+                ? $"Synchronized {affectedStrikeCount} melee strike(s) from '{clip.name}' and updated the shared server manifest. Republish the server to make the timing live."
+                : $"Synchronized {affectedStrikeCount} melee strike(s) from '{clip.name}'; the shared server manifest already matched.";
+            return true;
+        }
+
+        internal static bool SynchronizeAllHitEventsForSet(
+            CombatAnimationSet? set,
+            out string summary)
+        {
+            if (set == null || set.meleeAttacks == null)
+            {
+                summary = "No CombatAnimationSet is selected.";
+                return false;
+            }
+
+            try
+            {
+                Undo.RecordObject(set, "Synchronize all melee hit windows from animation events");
+                CombatAnimationSetProtection.MarkTrustedMutation(set, "bulk-hit-event-sync");
+
+                int synchronizedCount = 0;
+                var legacyFallbackIds = new List<string>();
+                for (int attackIndex = 0; attackIndex < set.meleeAttacks.Count; attackIndex++)
+                {
+                    WeaponMeleeAttackAuthoring attack = set.meleeAttacks[attackIndex];
+                    if (!attack.TryBuildHitWindowMirrorFromEvents(
+                            out WeaponStrikeHitWindowAuthoring[] mirroredHitWindows))
+                    {
+                        legacyFallbackIds.Add(attack.combat.AuthoredStrikeIdOrDefault);
+                        continue;
+                    }
+
+                    WeaponStrikeCombatAuthoring combat = attack.combat;
+                    combat.hitWindows = mirroredHitWindows;
+                    combat.impactNormalized = mirroredHitWindows.Length > 0
+                        ? mirroredHitWindows[0].timeNormalized
+                        : 0f;
+                    attack.combat = combat;
+                    set.meleeAttacks[attackIndex] = attack;
+                    synchronizedCount += 1;
+                }
+
+                PersistAnimationSetEdit(set, "bulk-hit-event-sync");
+                CombatAnimationSetProtection.RecordTrustedState(set, "bulk-hit-event-sync");
+
+                MeleeManifestDocument manifest = BuildMergedExportDocument(set);
+                string exportedJson = SerializeMeleeManifestDocument(manifest);
+                string currentJson = File.Exists(ExportPath) ? File.ReadAllText(ExportPath) : string.Empty;
+                if (NormalizeJson(exportedJson) != NormalizeJson(currentJson))
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(ExportPath)!);
+                    BackupFile(ExportPath, "pre-bulk-hit-event-sync");
+                    File.WriteAllText(ExportPath, exportedJson);
+                }
+
+                InternalEditorUtility.RepaintAllViews();
+                summary = $"Synchronized {synchronizedCount} authored melee attack(s) in '{set.name}' and exported the complete '{set.CombatProfileIdOrDefault}' profile.";
+                if (legacyFallbackIds.Count > 0)
+                {
+                    summary +=
+                        $"\n\nKept {legacyFallbackIds.Count} attack(s) on their existing serialized fallback because no {CombatAnimationEvents.OnStrikeHit} event is authored:\n- "
+                        + string.Join("\n- ", legacyFallbackIds);
+                }
+                summary += "\n\nRepublish the server module to make these timings live.";
+                return true;
+            }
+            catch (Exception ex) when (ex is IOException
+                                       || ex is UnauthorizedAccessException
+                                       || ex is InvalidOperationException
+                                       || ex is ArgumentException)
+            {
+                summary = $"Could not synchronize '{set.name}': {ex.Message}";
+                return false;
+            }
+        }
+
+        private static void MergeSelectedStrikes(
+            MeleeManifestDocument manifest,
+            MeleeManifestProfile generatedProfile,
+            HashSet<string> affectedStrikeIds)
+        {
+            var profiles = new List<MeleeManifestProfile>(manifest.profiles ?? Array.Empty<MeleeManifestProfile>());
+            int profileIndex = profiles.FindIndex(profile =>
+                profile != null
+                && string.Equals(
+                    profile.combat_profile,
+                    generatedProfile.combat_profile,
+                    StringComparison.OrdinalIgnoreCase));
+            if (profileIndex < 0)
+            {
+                profiles.Add(generatedProfile);
+                manifest.profiles = profiles.ToArray();
+                return;
+            }
+
+            MeleeManifestProfile existingProfile = profiles[profileIndex];
+            var strikes = new List<MeleeManifestStrike>(existingProfile.strikes ?? Array.Empty<MeleeManifestStrike>());
+            foreach (MeleeManifestStrike generatedStrike in generatedProfile.strikes ?? Array.Empty<MeleeManifestStrike>())
+            {
+                if (generatedStrike == null || !affectedStrikeIds.Contains(generatedStrike.id))
+                    continue;
+
+                int strikeIndex = strikes.FindIndex(strike =>
+                    strike != null
+                    && string.Equals(strike.id, generatedStrike.id, StringComparison.OrdinalIgnoreCase));
+                if (strikeIndex >= 0)
+                    strikes[strikeIndex] = generatedStrike;
+                else
+                    strikes.Add(generatedStrike);
+            }
+
+            existingProfile.auto_attack_strike_id = generatedProfile.auto_attack_strike_id;
+            existingProfile.strikes = strikes.ToArray();
+            profiles[profileIndex] = existingProfile;
+            manifest.profiles = profiles.ToArray();
         }
 
         private static string[] BuildDefaultInspectorExclusions()
@@ -1193,14 +1460,25 @@ namespace Arena.Editor
             {
                 var clip = set.GetStrikeClip(strikeIndex);
                 var strike = set.GetStrikeCombat(strikeIndex);
-                var hitWindows = strike.GetResolvedHitWindows();
+                WeaponMeleeAttackAuthoring attack = set.meleeAttacks[strikeIndex - 1];
+                bool hasHitEvents = attack.TryBuildHitWindowMirrorFromEvents(
+                    out WeaponStrikeHitWindowAuthoring[] eventHitWindows);
+                WeaponStrikeHitWindowAuthoring[] hitWindows = hasHitEvents
+                    ? eventHitWindows
+                    : strike.GetResolvedHitWindows();
                 string strikeLabel = $"Strike {strikeIndex} ({strike.AuthoredStrikeIdOrDefault})";
 
-                if (strike.AuthoredHitWindowCount == 0)
+                if (!hasHitEvents)
                 {
                     messages.Add((
                         MessageType.Warning,
-                        $"{strikeLabel}: using single-hit timing. Add hit windows to author a real multi-hit strike."));
+                        $"{strikeLabel}: no {CombatAnimationEvents.OnStrikeHit} event is authored; this attack is still using its legacy serialized hit-window fallback. Stamp the clip to migrate it."));
+                }
+                else if (!HitWindowMirrorsMatch(strike.hitWindows, eventHitWindows))
+                {
+                    messages.Add((
+                        MessageType.Warning,
+                        $"{strikeLabel}: its compatibility hit-window mirror is stale. Open the assigned clip in Event Stamper and use Synchronize This Clip Now."));
                 }
 
                 if (string.IsNullOrWhiteSpace(strike.id))
@@ -1230,7 +1508,6 @@ namespace Arena.Editor
                     }
                 }
 
-                WeaponMeleeAttackAuthoring attack = set.meleeAttacks[strikeIndex - 1];
                 float timingReferenceLengthSeconds = set.GetStrikeTimingReferenceLengthSeconds(strikeIndex);
                 bool usesPhasedPresentation = attack.UsesPhasedPresentation;
                 if (!usesPhasedPresentation && clip == null)
@@ -1269,11 +1546,11 @@ namespace Arena.Editor
                     }
                 }
 
-                if (strike.hitWindows != null)
+                if (hitWindows != null)
                 {
-                    for (int hitIndex = 0; hitIndex < strike.hitWindows.Length; hitIndex++)
+                    for (int hitIndex = 0; hitIndex < hitWindows.Length; hitIndex++)
                     {
-                        var hitWindow = strike.hitWindows[hitIndex];
+                        var hitWindow = hitWindows[hitIndex];
                         if (hitWindow.timeNormalized < 0f || hitWindow.timeNormalized > 1f)
                         {
                             messages.Add((
@@ -1347,6 +1624,22 @@ namespace Arena.Editor
             }
 
             return messages;
+        }
+
+        private static bool HitWindowMirrorsMatch(
+            WeaponStrikeHitWindowAuthoring[]? authored,
+            WeaponStrikeHitWindowAuthoring[] resolved)
+        {
+            if (authored == null || authored.Length != resolved.Length)
+                return false;
+
+            for (int i = 0; i < authored.Length; i++)
+            {
+                if (!Mathf.Approximately(authored[i].timeNormalized, resolved[i].timeNormalized))
+                    return false;
+            }
+
+            return true;
         }
 
         private static bool IsUpperSnakeIdentifier(string value)
@@ -1434,7 +1727,7 @@ namespace Arena.Editor
                 return;
             }
 
-            var doc = JsonUtility.FromJson<MeleeManifestDocument>(File.ReadAllText(ExportPath));
+            var doc = DeserializeMeleeManifestDocument(File.ReadAllText(ExportPath));
             if (!TryResolveImportedStrikes(doc, set, out MeleeManifestStrike[] strikes, out string importError))
             {
                 EditorUtility.DisplayDialog("Manifest Invalid", importError, "OK");
@@ -1501,8 +1794,7 @@ namespace Arena.Editor
                 return set.BuildMeleeExport();
 
             MeleeManifestDocument existing = File.Exists(ExportPath)
-                ? JsonUtility.FromJson<MeleeManifestDocument>(File.ReadAllText(ExportPath))
-                    ?? new MeleeManifestDocument()
+                ? DeserializeMeleeManifestDocument(File.ReadAllText(ExportPath))
                 : new MeleeManifestDocument();
 
             var mergedProfiles = new System.Collections.Generic.List<MeleeManifestProfile>();
@@ -1532,6 +1824,111 @@ namespace Arena.Editor
 
             existing.profiles = mergedProfiles.ToArray();
             return existing;
+        }
+
+        /// <summary>
+        /// JsonUtility materializes missing nullable nested objects on newer Unity
+        /// versions. Preserve the JSON contract's optional projectile field explicitly
+        /// so a one-strike timing sync cannot add projectile delivery to unrelated attacks.
+        /// </summary>
+        private static MeleeManifestDocument DeserializeMeleeManifestDocument(string json)
+        {
+            MeleeManifestDocument document = JsonUtility.FromJson<MeleeManifestDocument>(json)
+                ?? new MeleeManifestDocument();
+            int searchStart = 0;
+            foreach (MeleeManifestProfile profile in document.profiles ?? Array.Empty<MeleeManifestProfile>())
+            {
+                if (profile == null)
+                    continue;
+
+                foreach (MeleeManifestStrike strike in profile.strikes ?? Array.Empty<MeleeManifestStrike>())
+                {
+                    if (strike == null)
+                        continue;
+
+                    if (!TryFindJsonObjectForStrike(json, strike.id, searchStart, out int objectStart, out int objectEnd))
+                    {
+                        throw new InvalidOperationException(
+                            $"Could not preserve optional fields while reading melee strike '{strike.id}'.");
+                    }
+
+                    int projectileProperty = json.IndexOf(
+                        "\"projectile\"",
+                        objectStart,
+                        objectEnd - objectStart + 1,
+                        StringComparison.Ordinal);
+                    if (projectileProperty < 0)
+                        strike.projectile = null;
+
+                    searchStart = objectEnd + 1;
+                }
+            }
+
+            return document;
+        }
+
+        private static bool TryFindJsonObjectForStrike(
+            string json,
+            string strikeId,
+            int searchStart,
+            out int objectStart,
+            out int objectEnd)
+        {
+            objectStart = -1;
+            objectEnd = -1;
+            System.Text.RegularExpressions.Match idMatch = Regex.Match(
+                json,
+                $"\"id\"\\s*:\\s*\"{Regex.Escape(strikeId)}\"",
+                RegexOptions.CultureInvariant,
+                TimeSpan.FromMilliseconds(100));
+            while (idMatch.Success && idMatch.Index < searchStart)
+                idMatch = idMatch.NextMatch();
+            if (!idMatch.Success)
+                return false;
+
+            objectStart = json.LastIndexOf('{', idMatch.Index);
+            if (objectStart < 0)
+                return false;
+
+            bool inString = false;
+            bool escaped = false;
+            int depth = 0;
+            for (int index = objectStart; index < json.Length; index++)
+            {
+                char character = json[index];
+                if (inString)
+                {
+                    if (escaped)
+                    {
+                        escaped = false;
+                    }
+                    else if (character == '\\')
+                    {
+                        escaped = true;
+                    }
+                    else if (character == '"')
+                    {
+                        inString = false;
+                    }
+                    continue;
+                }
+
+                if (character == '"')
+                {
+                    inString = true;
+                }
+                else if (character == '{')
+                {
+                    depth += 1;
+                }
+                else if (character == '}' && --depth == 0)
+                {
+                    objectEnd = index;
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private static string SerializeMeleeManifestDocument(MeleeManifestDocument document)
@@ -2113,7 +2510,7 @@ namespace Arena.Editor
                 return;
 
             Directory.CreateDirectory(BackupRootPath);
-            string timestamp = System.DateTime.Now.ToString("yyyyMMdd-HHmmss");
+            string timestamp = System.DateTime.Now.ToString("yyyyMMdd-HHmmss-fff");
             string fileName = Path.GetFileName(sourcePath);
             string backupPath = Path.Combine(BackupRootPath, $"{timestamp}-{prefix}-{fileName}.bak");
             File.Copy(sourcePath, backupPath, overwrite: false);

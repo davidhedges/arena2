@@ -193,6 +193,52 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void CombatAnimationSet_HitWindowMirrorTracksEveryStrikeHitEvent()
+        {
+            Type combatAnimationSetType = RequireType("Arena.Presentation.CombatAnimationSet");
+            Type attackType = RequireType("Arena.Presentation.WeaponMeleeAttackAuthoring");
+            Type hitWindowType = RequireType("Arena.Presentation.WeaponStrikeHitWindowAuthoring");
+            ScriptableObject set = CreateMinimalExportableCombatAnimationSet(combatAnimationSetType);
+            AnimationClip clip = CreateClipWithLength(2f);
+            try
+            {
+                AnimationUtility.SetAnimationEvents(
+                    clip,
+                    new[]
+                    {
+                        new AnimationEvent { functionName = "OnStrikeHit", time = 0.5f },
+                        new AnimationEvent { functionName = "OnStrikeHit", time = 1.5f },
+                    });
+                SetFirstMeleeAttackField(combatAnimationSetType, attackType, set, "clip", clip);
+
+                System.Collections.IList attacks =
+                    (System.Collections.IList)combatAnimationSetType.GetField("meleeAttacks")!.GetValue(set)!;
+                object attack = attacks[0]!;
+                object?[] args = { null };
+                bool found = (bool)RequireMethod(
+                        attackType,
+                        "TryBuildHitWindowMirrorFromEvents",
+                        hitWindowType.MakeArrayType().MakeByRefType())
+                    .Invoke(attack, args)!;
+
+                Assert.That(found, Is.True);
+                Array mirrored = (Array)args[0]!;
+                Assert.That(mirrored.Length, Is.EqualTo(2));
+                Assert.That(
+                    (float)hitWindowType.GetField("timeNormalized")!.GetValue(mirrored.GetValue(0))!,
+                    Is.EqualTo(0.25f).Within(PositionTolerance));
+                Assert.That(
+                    (float)hitWindowType.GetField("timeNormalized")!.GetValue(mirrored.GetValue(1))!,
+                    Is.EqualTo(0.75f).Within(PositionTolerance));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(clip);
+                UnityEngine.Object.DestroyImmediate(set);
+            }
+        }
+
+        [Test]
         public void CombatAnimationSet_PhasedMeleeExportOffsetsStrikeHitEventByStartAndLoop()
         {
             Type combatAnimationSetType = RequireType("Arena.Presentation.CombatAnimationSet");
@@ -811,6 +857,29 @@ namespace Arena.Tests.Editor
 
             Assert.That(resolved, Is.False);
             Assert.That((string)args[3], Does.Contain("exact combat-profile match"));
+        }
+
+        [Test]
+        public void CombatAnimationSetEditor_ManifestReadPreservesOptionalProjectilePresence()
+        {
+            Type editorType = AppDomain.CurrentDomain.Load("Assembly-CSharp-Editor")
+                .GetType("Arena.Editor.CombatAnimationSetEditor", throwOnError: true)!;
+            MethodInfo deserialize = editorType.GetMethod(
+                "DeserializeMeleeManifestDocument",
+                BindingFlags.Static | BindingFlags.NonPublic)!;
+            string json =
+                "{\"profiles\":[{\"combat_profile\":\"TEST\",\"strikes\":[" +
+                "{\"id\":\"MELEE\",\"hit_windows\":[{\"impact_delay_ms\":100}]}," +
+                "{\"id\":\"ARROW\",\"hit_windows\":[{\"impact_delay_ms\":200}]," +
+                "\"projectile\":{\"projectile_id\":\"ARROW_STANDARD\"}}]}]}";
+
+            object document = deserialize.Invoke(null, new object[] { json })!;
+            Array profiles = (Array)document.GetType().GetField("profiles")!.GetValue(document)!;
+            Array strikes = (Array)profiles.GetValue(0)!.GetType().GetField("strikes")!.GetValue(profiles.GetValue(0))!;
+            FieldInfo projectileField = strikes.GetValue(0)!.GetType().GetField("projectile")!;
+
+            Assert.That(projectileField.GetValue(strikes.GetValue(0)), Is.Null);
+            Assert.That(projectileField.GetValue(strikes.GetValue(1)), Is.Not.Null);
         }
 
         [Test]

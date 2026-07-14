@@ -46,7 +46,7 @@ Files: `Assets/Arena/Resources/CombatAnimationSets/*.asset`
 - draw and stow clips
 - melee authored strike ids
 - melee runtime slot ids
-- melee hit windows
+- melee hit-window identity and compatibility mirrors; authored timing lives on `OnStrikeHit` clip events
 - melee recovery timing
 - melee combo links
 - melee presentation mode
@@ -106,7 +106,7 @@ Progression owns player-facing gameplay data and action exposure. It does not ow
 
 File: `server/src/melee_manifest.shared.json`
 
-This is an exported bridge from `CombatAnimationSet` assets to the server. Do not hand-edit it to fix animation timing. Fix the animation set and re-export.
+This is an exported bridge from `CombatAnimationSet` assets and their assigned clip events to the server. Do not hand-edit it to fix animation timing. Author `OnStrikeHit` in the Event Stamper; the stamper synchronizes the affected strike automatically. Republish the server module before expecting exported timing changes to be live.
 
 ## Timing Semantics
 
@@ -114,7 +114,9 @@ Keep these concepts separate. They are intentionally not aliases.
 
 ### Hit Windows
 
-Hit Windows define when gameplay contact or release occurs inside a melee attack timeline.
+Hit Windows define when gameplay contact or release occurs inside a melee attack timeline. For migrated attacks, each `OnStrikeHit` event on the assigned single or phased presentation is authoritative. The Event Stamper mirrors those times into `WeaponStrikeCombatAuthoring.hitWindows` for compatibility and replaces only the affected strike in `server/src/melee_manifest.shared.json`.
+
+Attacks without an `OnStrikeHit` event retain their serialized hit-window fallback until they are explicitly migrated. Once an attack has events, do not edit the mirrored array directly.
 
 For direct melee, each hit window schedules a `PendingMeleeImpact` on the server. For projectile weapon attacks, each hit window may schedule a projectile release instead. Multi-hit damage is currently split across hit windows.
 

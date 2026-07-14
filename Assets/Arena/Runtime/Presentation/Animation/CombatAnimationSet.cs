@@ -349,7 +349,7 @@ namespace Arena.Presentation
         [Tooltip("Internal runtime action id used for cooldown/combo plumbing. Leave blank unless you intentionally need to override the generated runtime mapping. Do not point abilities at this.")]
         public string slotId;
         [HideInInspector] [Range(0f, 1f)] public float impactNormalized;
-        [Tooltip("One or more hit moments inside the clip. Use this for multi-hit attacks.")]
+        [Tooltip("Compatibility mirror of OnStrikeHit animation events. Use Arena/Animation/Event Stamper to author hit timing; editor synchronization keeps this array aligned for legacy tools and tests.")]
         public WeaponStrikeHitWindowAuthoring[] hitWindows;
         [Tooltip("Extra time after the last hit before another root action should be allowed, in milliseconds.")]
         public float recoveryMs;
@@ -1083,6 +1083,46 @@ namespace Arena.Presentation
             times.Sort();
             eventTimesSeconds = times.ToArray();
             return true;
+        }
+
+        public bool TryBuildHitWindowMirrorFromEvents(
+            out WeaponStrikeHitWindowAuthoring[] mirroredHitWindows)
+        {
+            mirroredHitWindows = Array.Empty<WeaponStrikeHitWindowAuthoring>();
+            if (!TryGetStrikeHitEventTimesSeconds(out float[] eventTimesSeconds))
+                return false;
+
+            float timingReferenceLengthSeconds = ResolveTimingReferenceLengthSeconds();
+            if (timingReferenceLengthSeconds <= 0f)
+                return false;
+
+            mirroredHitWindows = new WeaponStrikeHitWindowAuthoring[eventTimesSeconds.Length];
+            for (int i = 0; i < eventTimesSeconds.Length; i++)
+            {
+                mirroredHitWindows[i] = new WeaponStrikeHitWindowAuthoring
+                {
+                    timeNormalized = Mathf.Clamp01(
+                        eventTimesSeconds[i] / timingReferenceLengthSeconds),
+                };
+            }
+
+            return true;
+        }
+
+        public bool ReferencesClip(AnimationClip? candidate)
+        {
+            if (candidate == null)
+                return false;
+
+            if (ReferenceEquals(clip, candidate))
+                return true;
+
+            return ReferenceEquals(phasedGround.start, candidate)
+                || ReferenceEquals(phasedGround.loop, candidate)
+                || ReferenceEquals(phasedGround.end, candidate)
+                || ReferenceEquals(phasedAir.start, candidate)
+                || ReferenceEquals(phasedAir.loop, candidate)
+                || ReferenceEquals(phasedAir.end, candidate);
         }
 
         private static bool AppendPhasedStrikeHitEventTimes(
@@ -1852,6 +1892,9 @@ namespace Arena.Presentation
                 return 1;
             }
         }
+
+        public bool IsAutoAttackVisualSourceStrike(int strikeIndex)
+            => strikeIndex == AutoAttackVisualSourceStrikeIndex;
 
         private bool ContainsAuthoredStrikeId(string authoredStrikeId)
         {

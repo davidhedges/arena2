@@ -10,6 +10,9 @@ namespace Arena.Editor
     public sealed class WeaponStrikeCombatAuthoringDrawer : PropertyDrawer
     {
         private const float SectionSpacing = 4f;
+        private const string HitWindowGuidance =
+            "Hit windows are authored with OnStrikeHit events in Arena/Animation/Event Stamper. " +
+            "This read-only array is synchronized for compatibility.";
 
         public override void OnGUI(Rect position, SerializedProperty property, GUIContent label)
         {
@@ -19,7 +22,9 @@ namespace Arena.Editor
 
             DrawField(ref current, property, "id");
             DrawField(ref current, property, "slotId");
-            DrawField(ref current, property, "hitWindows", true);
+            using (new EditorGUI.DisabledScope(true))
+                DrawField(ref current, property, "hitWindows", true, "Hit Windows (Event Mirror)");
+            DrawHelpBox(ref current, HitWindowGuidance);
             DrawField(ref current, property, "recoveryMs");
             DrawField(ref current, property, "comboFrom");
             DrawField(ref current, property, "comboOpenMs");
@@ -41,6 +46,7 @@ namespace Arena.Editor
             total += FieldHeight(property, "id");
             total += FieldHeight(property, "slotId");
             total += FieldHeight(property, "hitWindows", true);
+            total += HelpBoxHeight(HitWindowGuidance);
             total += FieldHeight(property, "recoveryMs");
             total += FieldHeight(property, "comboFrom");
             total += FieldHeight(property, "comboOpenMs");
@@ -77,6 +83,23 @@ namespace Arena.Editor
             current.height = EditorGUIUtility.singleLineHeight;
             EditorGUI.LabelField(current, text, EditorStyles.boldLabel);
             current.y += EditorGUIUtility.singleLineHeight + EditorGUIUtility.standardVerticalSpacing;
+        }
+
+        private static void DrawHelpBox(ref Rect current, string text)
+        {
+            current.height = HelpBoxHeight(text) - EditorGUIUtility.standardVerticalSpacing;
+            EditorGUI.HelpBox(current, text, MessageType.Info);
+            current.y += current.height + EditorGUIUtility.standardVerticalSpacing;
+            current.height = EditorGUIUtility.singleLineHeight;
+        }
+
+        private static float HelpBoxHeight(string text)
+        {
+            float contentHeight = EditorStyles.helpBox.CalcHeight(
+                new GUIContent(text),
+                Mathf.Max(100f, EditorGUIUtility.currentViewWidth - 60f));
+            return Mathf.Max(EditorGUIUtility.singleLineHeight * 2f, contentHeight)
+                + EditorGUIUtility.standardVerticalSpacing;
         }
 
         private static float FieldHeight(

@@ -76,7 +76,7 @@ namespace Arena.Editor
                 {
                     new CombatClipEventTemplate(
                         "OnStrikeHit", 0.40f, required: true,
-                        "Visible hit moment. VFX/audio cue. Damage timing remains server-authoritative."),
+                        "Authoritative hit moment. The stamper mirrors and exports it to server gameplay timing."),
                     new CombatClipEventTemplate(
                         "OnLowerBodyUnlock", 0.70f, required: true,
                         "When locomotion may regain lower-body control."),

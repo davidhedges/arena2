@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using Arena.Presentation;
 using UnityEditor;
 using UnityEngine;
 
@@ -24,7 +25,11 @@ namespace Arena.Editor
         public static void Open()
         {
             AnimationEventStamperWindow window = GetWindow<AnimationEventStamperWindow>("Event Stamper");
-            window.minSize = new Vector2(380, 420);
+            window.titleContent = new GUIContent(
+                "Event Stamper",
+                "Stamp combat animation events at the current animation playhead.");
+            window.minSize = new Vector2(300, 300);
+            window.maxSize = new Vector2(4096, 4096);
             window.Show();
         }
 
@@ -44,6 +49,8 @@ namespace Arena.Editor
         private CombatClipRole _manualRoleOverride = CombatClipRole.Unknown;
         private bool _useManualRoleOverride;
         private AnimationClip? _previousClipForRoleSync;
+        private string _hitWindowSyncStatus = string.Empty;
+        private bool _hitWindowSyncSucceeded;
 
         private UnityEditor.Editor? _embeddedClipEditor;
         private bool _embeddedPreviewSyncs;
@@ -55,10 +62,18 @@ namespace Arena.Editor
         private const float FolderListMaxHeight = 180f;
 
         private Dictionary<AnimationClip, List<CombatClipRoleObservation>>? _roleMap;
-        private Vector2 _scroll;
+        private Vector2 _mainScroll;
+
+        [SerializeField] private bool _showFolderBrowser;
+        [SerializeField] private bool _showPreview = true;
+        [SerializeField] private bool _showCustomEvent;
+        [SerializeField] private bool _showExistingEvents = true;
 
         private void OnEnable()
         {
+            // Reset any restrictive dimensions retained by an older saved layout.
+            minSize = new Vector2(300, 300);
+            maxSize = new Vector2(4096, 4096);
             CacheAnimationWindowReflection();
             RefreshRoleMap();
             EditorApplication.update += OnEditorUpdate;
@@ -275,45 +290,77 @@ namespace Arena.Editor
         private void OnGUI()
         {
             DrawHeader();
-            DrawFolderContext();
-            EditorGUILayout.Space();
+            EditorGUILayout.Space(2f);
 
-            if (_clip == null)
+            using (EditorGUILayout.ScrollViewScope scroll = new(_mainScroll))
             {
-                EditorGUILayout.HelpBox(
-                    _folder != null
-                        ? "Pick a clip from the folder list above."
-                        : _syncedWithAnimationWindow
-                            ? "Select a clip in the Animation window."
-                            : "Drop a clip into the Clip field, set a folder context above, or open the Animation window with a clip selected to enable sync.",
-                    MessageType.Info);
-                return;
-            }
+                _mainScroll = scroll.scrollPosition;
+                DrawFolderContext();
+                EditorGUILayout.Space(4f);
 
-            // When the active clip changes, reset the override dropdown to the new clip's
-            // inferred role so the dropdown never shows the previous clip's value. The
-            // override checkbox itself stays sticky — useful for batch authoring where
-            // the inferred role is consistently Unknown and the user picks the right one.
-            if (!ReferenceEquals(_clip, _previousClipForRoleSync))
-            {
-                _previousClipForRoleSync = _clip;
-                _manualRoleOverride = InferRole(_clip);
-            }
+                if (_clip == null)
+                {
+                    EditorGUILayout.HelpBox(
+                        _folder != null
+                            ? "Pick a clip from the folder list above."
+                            : _syncedWithAnimationWindow
+                                ? "Select a clip in the Animation window."
+                                : "Drop a clip into the Clip field, set a folder context above, or open the Animation window with a clip selected to enable sync.",
+                        MessageType.Info);
+                    return;
+                }
 
-            EnsureEmbeddedClipEditor();
-            DrawEmbeddedPreview();
-            EditorGUILayout.Space();
-            DrawTimeAndRole();
-            EditorGUILayout.Space();
-            DrawStampButtons();
-            EditorGUILayout.Space();
-            DrawCustomEventStamp();
-            EditorGUILayout.Space();
-            DrawExistingEvents();
+                // When the active clip changes, reset the override dropdown to the new clip's
+                // inferred role so the dropdown never shows the previous clip's value. The
+                // override checkbox itself stays sticky — useful for batch authoring where
+                // the inferred role is consistently Unknown and the user picks the right one.
+                if (!ReferenceEquals(_clip, _previousClipForRoleSync))
+                {
+                    _previousClipForRoleSync = _clip;
+                    _manualRoleOverride = InferRole(_clip);
+                }
+
+                _showPreview = EditorGUILayout.Foldout(
+                    _showPreview,
+                    "Clip preview",
+                    true,
+                    EditorStyles.foldoutHeader);
+                if (_showPreview)
+                {
+                    EnsureEmbeddedClipEditor();
+                    DrawEmbeddedPreview();
+                    EditorGUILayout.Space(4f);
+                }
+                else
+                {
+                    _embeddedPreviewSyncs = false;
+                }
+
+                DrawTimeAndRole();
+                EditorGUILayout.Space(8f);
+                DrawStampButtons();
+                EditorGUILayout.Space(8f);
+                DrawCustomEventStamp();
+                DrawHitWindowSynchronization();
+                DrawExistingEvents();
+                EditorGUILayout.Space(8f);
+            }
         }
 
         private void DrawFolderContext()
         {
+            string folderSummary = _folder == null
+                ? "Folder browser"
+                : $"Folder browser ({_folderClips?.Length ?? 0} clips)";
+            _showFolderBrowser = EditorGUILayout.Foldout(
+                _showFolderBrowser,
+                folderSummary,
+                true,
+                EditorStyles.foldoutHeader);
+            if (!_showFolderBrowser)
+                return;
+
+            using EditorGUILayout.VerticalScope section = new(EditorStyles.helpBox);
             using (new EditorGUILayout.HorizontalScope())
             {
                 EditorGUI.BeginChangeCheck();
@@ -366,31 +413,41 @@ namespace Arena.Editor
             if (isSelected)
                 GUI.backgroundColor = new Color(0.55f, 0.85f, 1f);
 
-            using (new EditorGUILayout.HorizontalScope("box"))
+            bool narrow = position.width < 520f;
+            using (new EditorGUILayout.VerticalScope("box"))
             {
-                if (GUILayout.Button(clip.name, EditorStyles.miniButton, GUILayout.MinWidth(180), GUILayout.ExpandWidth(true)))
+                using (new EditorGUILayout.HorizontalScope())
                 {
-                    _clip = clip;
-                    _time = 0f;
-                    Selection.activeObject = clip;
-                    GUI.FocusControl(null);
+                    if (GUILayout.Button(clip.name, EditorStyles.miniButton, GUILayout.ExpandWidth(true)))
+                    {
+                        _clip = clip;
+                        _time = 0f;
+                        Selection.activeObject = clip;
+                        GUI.FocusControl(null);
+                    }
+
+                    Color prevFg = GUI.color;
+                    GUI.color = rowColor;
+                    string completion = required > 0 ? $"{present}/{required}" : "—";
+                    GUILayout.Label(completion, GUILayout.Width(44));
+                    GUI.color = prevFg;
+
+                    if (!narrow)
+                        GUILayout.Label(BuildRoleLabel(role, source), EditorStyles.miniLabel, GUILayout.Width(150));
                 }
 
-                Color prevFg = GUI.color;
-                GUI.color = rowColor;
-                string completion = required > 0 ? $"{present}/{required}" : "—";
-                GUILayout.Label(completion, GUILayout.Width(44));
-                GUI.color = prevFg;
-
-                // "·" prefix = name-inferred (lower confidence). No prefix = reference-
-                // inferred (asset graph confirms the role).
-                string roleLabel = source == CombatClipRoleSource.Name
-                    ? "· " + role
-                    : role.ToString();
-                GUILayout.Label(roleLabel, EditorStyles.miniLabel, GUILayout.Width(150));
+                if (narrow)
+                    GUILayout.Label(BuildRoleLabel(role, source), EditorStyles.miniLabel);
             }
 
             GUI.backgroundColor = prevBg;
+        }
+
+        private static string BuildRoleLabel(CombatClipRole role, CombatClipRoleSource source)
+        {
+            // "·" prefix = name-inferred (lower confidence). No prefix = reference-
+            // inferred (asset graph confirms the role).
+            return source == CombatClipRoleSource.Name ? "· " + role : role.ToString();
         }
 
         private (int present, int required) CountRequiredEventsAuthored(AnimationClip clip, CombatClipRole role)
@@ -459,14 +516,18 @@ namespace Arena.Editor
 
         private void DrawHeader()
         {
-            using (new EditorGUILayout.HorizontalScope())
+            using (new EditorGUILayout.HorizontalScope(EditorStyles.toolbar))
             {
                 GUI.color = _syncedWithAnimationWindow ? new Color(0.6f, 1f, 0.6f) : Color.white;
-                EditorGUILayout.LabelField(
-                    _syncedWithAnimationWindow ? "● synced with Animation window" : "○ not synced (using manual slider)",
-                    EditorStyles.boldLabel);
+                GUILayout.Label(
+                    _syncedWithAnimationWindow ? "● Animation sync" : "○ Manual time",
+                    EditorStyles.miniBoldLabel,
+                    GUILayout.ExpandWidth(true));
                 GUI.color = Color.white;
-                if (GUILayout.Button("Refresh roles", GUILayout.Width(110)))
+                if (GUILayout.Button(
+                        new GUIContent("Refresh", "Rebuild combat clip role inference."),
+                        EditorStyles.toolbarButton,
+                        GUILayout.Width(58f)))
                     RefreshRoleMap();
             }
 
@@ -499,8 +560,8 @@ namespace Arena.Editor
                 _embeddedClipEditor.OnPreviewSettings();
             }
 
-            Rect rect = GUILayoutUtility.GetRect(
-                10f, EmbeddedPreviewHeight, GUILayout.ExpandWidth(true));
+            float previewHeight = Mathf.Clamp(position.height * 0.32f, 120f, EmbeddedPreviewHeight);
+            Rect rect = GUILayoutUtility.GetRect(10f, previewHeight, GUILayout.ExpandWidth(true));
             _embeddedClipEditor.OnInteractivePreviewGUI(rect, GUIStyle.none);
 
             // Drive the stamp time from the preview's playhead when reflection works.
@@ -521,6 +582,7 @@ namespace Arena.Editor
 
         private void DrawTimeAndRole()
         {
+            using EditorGUILayout.VerticalScope section = new(EditorStyles.helpBox);
             CombatClipRole inferred = InferRoleWithSource(_clip, out CombatClipRoleSource source);
             string sourceLabel = source switch
             {
@@ -530,13 +592,21 @@ namespace Arena.Editor
             };
             EditorGUILayout.LabelField("Inferred role:", inferred + sourceLabel);
 
-            using (new EditorGUILayout.HorizontalScope())
+            if (position.width < 440f)
             {
                 _useManualRoleOverride = EditorGUILayout.ToggleLeft(
-                    "Manual role override", _useManualRoleOverride, GUILayout.Width(170));
+                    "Manual role override", _useManualRoleOverride);
                 using (new EditorGUI.DisabledScope(!_useManualRoleOverride))
-                {
                     _manualRoleOverride = (CombatClipRole)EditorGUILayout.EnumPopup(_manualRoleOverride);
+            }
+            else
+            {
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    _useManualRoleOverride = EditorGUILayout.ToggleLeft(
+                        "Manual role override", _useManualRoleOverride, GUILayout.Width(170));
+                    using (new EditorGUI.DisabledScope(!_useManualRoleOverride))
+                        _manualRoleOverride = (CombatClipRole)EditorGUILayout.EnumPopup(_manualRoleOverride);
                 }
             }
 
@@ -567,6 +637,7 @@ namespace Arena.Editor
             CombatClipRole role = ResolveActiveRole();
             CombatClipEventTemplate[] templates = CombatClipEventTemplates.GetTemplates(role);
 
+            using EditorGUILayout.VerticalScope section = new(EditorStyles.helpBox);
             EditorGUILayout.LabelField("Stamp event at current time:", EditorStyles.boldLabel);
             if (templates.Length == 0)
             {
@@ -578,12 +649,22 @@ namespace Arena.Editor
 
             foreach (CombatClipEventTemplate tmpl in templates)
             {
-                using (new EditorGUILayout.HorizontalScope())
+                string label = tmpl.Required ? $"{tmpl.FunctionName} *" : tmpl.FunctionName;
+                if (position.width < 600f)
                 {
-                    string label = tmpl.Required ? $"{tmpl.FunctionName} *" : tmpl.FunctionName;
-                    if (GUILayout.Button(label, GUILayout.Width(220), GUILayout.Height(22)))
+                    if (GUILayout.Button(label, GUILayout.Height(24f), GUILayout.ExpandWidth(true)))
                         StampEvent(tmpl.FunctionName, _time);
-                    EditorGUILayout.LabelField(tmpl.Description, EditorStyles.miniLabel);
+                    GUILayout.Label(tmpl.Description, EditorStyles.wordWrappedMiniLabel);
+                    EditorGUILayout.Space(2f);
+                }
+                else
+                {
+                    using (new EditorGUILayout.HorizontalScope())
+                    {
+                        if (GUILayout.Button(label, GUILayout.Width(220), GUILayout.Height(22)))
+                            StampEvent(tmpl.FunctionName, _time);
+                        GUILayout.Label(tmpl.Description, EditorStyles.wordWrappedMiniLabel);
+                    }
                 }
             }
             EditorGUILayout.LabelField("* = required for this role", EditorStyles.miniLabel);
@@ -591,7 +672,15 @@ namespace Arena.Editor
 
         private void DrawCustomEventStamp()
         {
-            EditorGUILayout.LabelField("Custom event name:", EditorStyles.boldLabel);
+            _showCustomEvent = EditorGUILayout.Foldout(
+                _showCustomEvent,
+                "Custom event",
+                true,
+                EditorStyles.foldoutHeader);
+            if (!_showCustomEvent)
+                return;
+
+            using EditorGUILayout.VerticalScope section = new(EditorStyles.helpBox);
             using (new EditorGUILayout.HorizontalScope())
             {
                 _customEventName = EditorGUILayout.TextField(_customEventName);
@@ -607,41 +696,86 @@ namespace Arena.Editor
             }
         }
 
+        private void DrawHitWindowSynchronization()
+        {
+            CombatClipRole role = ResolveActiveRole();
+            bool meleeRole = role == CombatClipRole.MeleeStrike
+                || role == CombatClipRole.PhasedMeleeStart
+                || role == CombatClipRole.PhasedMeleeLoop
+                || role == CombatClipRole.PhasedMeleeEnd;
+            if (!meleeRole)
+                return;
+
+            EditorGUILayout.Space(8f);
+            using EditorGUILayout.VerticalScope section = new(EditorStyles.helpBox);
+            EditorGUILayout.LabelField("Gameplay hit-window synchronization:", EditorStyles.boldLabel);
+            EditorGUILayout.HelpBox(
+                "OnStrikeHit is authoritative for assigned melee attacks. Adding or removing one automatically mirrors the CombatAnimationSet hit-window array and updates only the affected strike in the shared server manifest.",
+                MessageType.Info);
+            int hitEventCount = AnimationUtility.GetAnimationEvents(_clip!)
+                .Count(animationEvent => string.Equals(
+                    animationEvent.functionName,
+                    CombatAnimationEvents.OnStrikeHit,
+                    StringComparison.Ordinal));
+            EditorGUILayout.LabelField(
+                $"Authored gameplay hit windows: {hitEventCount}",
+                EditorStyles.miniBoldLabel);
+            if (GUILayout.Button("Synchronize This Clip Now", GUILayout.Height(22)))
+                SynchronizeHitWindows();
+
+            if (!string.IsNullOrWhiteSpace(_hitWindowSyncStatus))
+            {
+                EditorGUILayout.HelpBox(
+                    _hitWindowSyncStatus,
+                    _hitWindowSyncSucceeded ? MessageType.Info : MessageType.Error);
+            }
+        }
+
         private void DrawExistingEvents()
         {
-            EditorGUILayout.LabelField("Existing events:", EditorStyles.boldLabel);
             AnimationEvent[] events = AnimationUtility.GetAnimationEvents(_clip!);
+            EditorGUILayout.Space(8f);
+            _showExistingEvents = EditorGUILayout.Foldout(
+                _showExistingEvents,
+                $"Existing events ({events.Length})",
+                true,
+                EditorStyles.foldoutHeader);
+            if (!_showExistingEvents)
+                return;
+
+            using EditorGUILayout.VerticalScope section = new(EditorStyles.helpBox);
             if (events.Length == 0)
             {
                 EditorGUILayout.LabelField("(none)", EditorStyles.miniLabel);
                 return;
             }
 
-            using (EditorGUILayout.ScrollViewScope scroll = new(_scroll))
+            AnimationEvent[] sorted = events.OrderBy(e => e.time).ToArray();
+            for (int i = 0; i < sorted.Length; i++)
             {
-                _scroll = scroll.scrollPosition;
-                AnimationEvent[] sorted = events.OrderBy(e => e.time).ToArray();
-                for (int i = 0; i < sorted.Length; i++)
+                AnimationEvent ev = sorted[i];
+                using (new EditorGUILayout.HorizontalScope())
                 {
-                    AnimationEvent ev = sorted[i];
-                    using (new EditorGUILayout.HorizontalScope())
+                    float norm = _clip!.length > 0f ? ev.time / _clip.length : 0f;
+                    EditorGUILayout.LabelField(
+                        $"{ev.time:F3}s ({norm:F2})  {ev.functionName}",
+                        GUILayout.MinWidth(120f),
+                        GUILayout.ExpandWidth(true));
+                    if (GUILayout.Button(
+                            new GUIContent("→", "Move the manual playhead to this event."),
+                            GUILayout.Width(28f)))
                     {
-                        float norm = _clip!.length > 0f ? ev.time / _clip.length : 0f;
-                        EditorGUILayout.LabelField(
-                            $"{ev.time:F3}s ({norm:F2})  {ev.functionName}",
-                            GUILayout.MinWidth(220));
-                        if (GUILayout.Button("→ time", GUILayout.Width(60)))
-                        {
-                            // Best-effort: jump scrubber to this event's time.
-                            if (!_syncedWithAnimationWindow)
-                                _time = ev.time;
-                        }
-                        if (GUILayout.Button("Remove", GUILayout.Width(72)))
-                        {
-                            RemoveEventAt(ev.time, ev.functionName);
-                            GUIUtility.ExitGUI();
-                            return;
-                        }
+                        // Best-effort: jump scrubber to this event's time.
+                        if (!_syncedWithAnimationWindow)
+                            _time = ev.time;
+                    }
+                    if (GUILayout.Button(
+                            new GUIContent("×", "Remove this event."),
+                            GUILayout.Width(28f)))
+                    {
+                        RemoveEventAt(ev.time, ev.functionName);
+                        GUIUtility.ExitGUI();
+                        return;
                     }
                 }
             }
@@ -660,6 +794,9 @@ namespace Arena.Editor
             AnimationUtility.SetAnimationEvents(_clip, next);
             EditorUtility.SetDirty(_clip);
             AssetDatabase.SaveAssetIfDirty(_clip);
+
+            if (string.Equals(functionName, CombatAnimationEvents.OnStrikeHit, StringComparison.Ordinal))
+                SynchronizeHitWindows();
         }
 
         private void RemoveEventAt(float time, string functionName)
@@ -667,16 +804,43 @@ namespace Arena.Editor
             if (_clip == null)
                 return;
 
-            Undo.RegisterCompleteObjectUndo(_clip, $"Remove animation event '{functionName}'");
             List<AnimationEvent> remaining = AnimationUtility.GetAnimationEvents(_clip).ToList();
             int idx = remaining.FindIndex(e =>
                 Mathf.Approximately(e.time, time) && string.Equals(e.functionName, functionName, StringComparison.Ordinal));
             if (idx < 0)
                 return;
+
+            if (string.Equals(functionName, CombatAnimationEvents.OnStrikeHit, StringComparison.Ordinal)
+                && remaining.Count(e => string.Equals(
+                    e.functionName,
+                    CombatAnimationEvents.OnStrikeHit,
+                    StringComparison.Ordinal)) == 1
+                && CombatAnimationSetEditor.IsReferencedByMeleeAttack(_clip))
+            {
+                _hitWindowSyncSucceeded = false;
+                _hitWindowSyncStatus =
+                    "Cannot remove the final OnStrikeHit from an assigned melee attack. Stamp its replacement first, then remove the old event.";
+                ShowNotification(new GUIContent("Assigned melee attacks need at least one OnStrikeHit."));
+                return;
+            }
+
+            Undo.RegisterCompleteObjectUndo(_clip, $"Remove animation event '{functionName}'");
             remaining.RemoveAt(idx);
             AnimationUtility.SetAnimationEvents(_clip, remaining.ToArray());
             EditorUtility.SetDirty(_clip);
             AssetDatabase.SaveAssetIfDirty(_clip);
+
+            if (string.Equals(functionName, CombatAnimationEvents.OnStrikeHit, StringComparison.Ordinal))
+                SynchronizeHitWindows();
+        }
+
+        private void SynchronizeHitWindows()
+        {
+            _hitWindowSyncSucceeded = CombatAnimationSetEditor.SynchronizeHitEventsForClip(
+                _clip,
+                out _hitWindowSyncStatus);
+            ShowNotification(new GUIContent(_hitWindowSyncStatus));
+            Repaint();
         }
     }
 }

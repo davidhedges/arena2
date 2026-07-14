@@ -973,14 +973,194 @@
             "auto_attack_strike_id": "AUTO_ATTACK_1",
             "strikes": [
                 {
+                    "id": "DAGGER_COMBO_ATTACK_01_01",
+                    "slot_id": "dagger_combo_attack_01_01_slot",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 408
+                        }
+                    ],
+                    "recovery_ms": 250,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY"
+                },
+                {
+                    "id": "DAGGER_COMBO_ATTACK_01_02",
+                    "slot_id": "dagger_combo_attack_01_02_slot",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 261
+                        }
+                    ],
+                    "recovery_ms": 250,
+                    "is_gap_closer": false,
+                    "combo_from": "dagger_combo_attack_01_01_slot",
+                    "combo_open_ms": 380,
+                    "combo_grace_ms": 350,
+                    "aerial_execution_mode": "GROUNDED_ONLY"
+                },
+                {
+                    "id": "DAGGER_COMBO_ATTACK_01_03",
+                    "slot_id": "dagger_combo_attack_01_03_slot",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 225
+                        },
+                        {
+                            "impact_delay_ms": 423
+                        }
+                    ],
+                    "recovery_ms": 300,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY"
+                },
+                {
+                    "id": "DAGGER_COMBO_ATTACK_01_04",
+                    "slot_id": "dagger_combo_attack_01_04_slot",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 617
+                        }
+                    ],
+                    "recovery_ms": 350,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY"
+                },
+                {
+                    "id": "DAGGER_COMBO_ATTACK_02_01",
+                    "slot_id": "dagger_combo_attack_02_01_slot",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 225
+                        },
+                        {
+                            "impact_delay_ms": 287
+                        }
+                    ],
+                    "recovery_ms": 250,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY"
+                },
+                {
+                    "id": "DAGGER_COMBO_ATTACK_02_02",
+                    "slot_id": "dagger_combo_attack_02_02_slot",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 30
+                        },
+                        {
+                            "impact_delay_ms": 190
+                        },
+                        {
+                            "impact_delay_ms": 401
+                        },
+                        {
+                            "impact_delay_ms": 520
+                        }
+                    ],
+                    "recovery_ms": 250,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY"
+                },
+                {
+                    "id": "DAGGER_COMBO_ATTACK_02_03",
+                    "slot_id": "dagger_combo_attack_02_03_slot",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 589
+                        },
+                        {
+                            "impact_delay_ms": 589
+                        }
+                    ],
+                    "recovery_ms": 300,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY"
+                },
+                {
+                    "id": "DAGGER_COMBO_ATTACK_02_04",
+                    "slot_id": "dagger_combo_attack_02_04_slot",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 99
+                        },
+                        {
+                            "impact_delay_ms": 254
+                        }
+                    ],
+                    "recovery_ms": 350,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY"
+                },
+                {
+                    "id": "DAGGER_COMBO_ATTACK_03_01",
+                    "slot_id": "dagger_combo_attack_03_01_slot",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 217
+                        },
+                        {
+                            "impact_delay_ms": 332
+                        }
+                    ],
+                    "recovery_ms": 250,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY"
+                },
+                {
                     "id": "DAGGER_QUICK_CUT",
                     "slot_id": "dagger_quick_cut_slot",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 110
+                        },
+                        {
+                            "impact_delay_ms": 305
+                        },
+                        {
+                            "impact_delay_ms": 486
+                        }
+                    ],
+                    "recovery_ms": 250,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY"
+                },
+                {
+                    "id": "DAGGER_COMBO_ATTACK_03_03",
+                    "slot_id": "dagger_combo_attack_03_03_slot",
                     "hit_windows": [
                         {
                             "impact_delay_ms": 220
                         }
                     ],
-                    "recovery_ms": 220,
+                    "recovery_ms": 300,
                     "is_gap_closer": false,
                     "combo_from": "",
                     "combo_open_ms": 0,
@@ -992,10 +1172,43 @@
                     "slot_id": "dagger_riposte_slot",
                     "hit_windows": [
                         {
-                            "impact_delay_ms": 260
+                            "impact_delay_ms": 504
                         }
                     ],
-                    "recovery_ms": 300,
+                    "recovery_ms": 350,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 450,
+                    "combo_grace_ms": 100,
+                    "aerial_execution_mode": "GROUNDED_ONLY"
+                },
+                {
+                    "id": "DAGGER_COMBO_ATTACK_04_01",
+                    "slot_id": "dagger_combo_attack_04_01_slot",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 175
+                        }
+                    ],
+                    "recovery_ms": 250,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY"
+                },
+                {
+                    "id": "DAGGER_COMBO_ATTACK_04_04",
+                    "slot_id": "dagger_combo_attack_04_04_slot",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 507
+                        },
+                        {
+                            "impact_delay_ms": 974
+                        }
+                    ],
+                    "recovery_ms": 350,
                     "is_gap_closer": false,
                     "combo_from": "",
                     "combo_open_ms": 0,
@@ -1007,7 +1220,28 @@
                     "slot_id": "dagger_dashing_cut_slot",
                     "hit_windows": [
                         {
-                            "impact_delay_ms": 260
+                            "impact_delay_ms": 209
+                        }
+                    ],
+                    "recovery_ms": 250,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY"
+                },
+                {
+                    "id": "DAGGER_PARRY_COUNTER_ATTACK_R",
+                    "slot_id": "dagger_parry_counter_attack_r_slot",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 198
+                        },
+                        {
+                            "impact_delay_ms": 298
+                        },
+                        {
+                            "impact_delay_ms": 460
                         }
                     ],
                     "recovery_ms": 250,
@@ -1022,10 +1256,10 @@
                     "slot_id": "auto_attack_1",
                     "hit_windows": [
                         {
-                            "impact_delay_ms": 180
+                            "impact_delay_ms": 408
                         }
                     ],
-                    "recovery_ms": 200,
+                    "recovery_ms": 250,
                     "is_gap_closer": false,
                     "combo_from": "",
                     "combo_open_ms": 0,

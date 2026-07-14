@@ -51,13 +51,13 @@ Own Unity-authored presentation and melee timing:
 - spell animation entries
 - weapon presentation data
 
-Melee hit timing comes from hit windows and recovery timing. Hit Windows are gameplay contact/release timing, not lower-body unlock or visual interruption timing. Animation presentation phase rules are defined in `docs/combat-animation-authoring-contract.md`.
+Melee hit timing comes from `OnStrikeHit`-authored hit windows and recovery timing. The Event Stamper mirrors and exports the affected strike automatically; legacy attacks with no hit event still use their serialized fallback. Hit Windows are gameplay contact/release timing, not lower-body unlock or visual interruption timing. Animation presentation phase rules are defined in `docs/combat-animation-authoring-contract.md`.
 
 ### Melee Manifest
 
 File: `server/src/melee_manifest.shared.json`
 
-This is a generated/exported bridge from Unity combat animation sets to the server. Do not hand-edit it to fix identity drift; fix the animation set and re-export.
+This is a generated/exported bridge from Unity combat animation sets to the server. Do not hand-edit it to fix identity drift. Event Stamper changes to `OnStrikeHit` update the affected manifest strike automatically; other combat-profile changes still use the animation-set manifest export.
 
 ### Loadout Assignments
 

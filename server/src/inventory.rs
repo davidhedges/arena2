@@ -393,7 +393,7 @@ struct StarterEquipmentAffixSpec {
 
 const BASELINE_STARTER_WEAPONS: &[StarterEquipmentSpec] = &[starter_equipment(
     EQUIP_SLOT_MAIN_HAND,
-    "TRAINING_TWO_HAND_SWORD",
+    "TRAINING_DAGGER_PAIR",
 )];
 
 const BASELINE_STARTER_EQUIPMENT: &[StarterEquipmentSpec] = &[
@@ -402,7 +402,7 @@ const BASELINE_STARTER_EQUIPMENT: &[StarterEquipmentSpec] = &[
     starter_equipment(EQUIP_SLOT_BOOTS, "PEASANT_BOOTS"),
     starter_equipment(EQUIP_SLOT_GLOVES, "PEASANT_GLOVES"),
     starter_equipment("RING_1", STARTER_INSIGHT_RING_ITEM_DEF_ID),
-    starter_equipment(EQUIP_SLOT_MAIN_HAND, "TRAINING_TWO_HAND_SWORD"),
+    starter_equipment(EQUIP_SLOT_MAIN_HAND, "TRAINING_DAGGER_PAIR"),
     starter_equipment(EQUIP_SLOT_SPELLBOOK, STARTER_SPELLBOOK_ITEM_DEF_ID),
 ];
 
@@ -416,12 +416,13 @@ const BASELINE_STARTER_EQUIPMENT_AFFIXES: &[StarterEquipmentAffixSpec] =
 
 const BASELINE_STARTER_INVENTORY_ITEMS: &[&str] = &[
     "NEWBIE_STAFF_01",
-    "TRAINING_DAGGER_PAIR",
+    "TRAINING_TWO_HAND_SWORD",
     "TRAINING_SWORD_AND_SHIELD",
     "TRAINING_BOW",
 ];
 
 const LEGACY_STARTER_WEAPON_DEFINITION_IDS: &[&str] = &[
+    "TRAINING_TWO_HAND_SWORD",
     "TRAINING_ONE_HAND_SWORD",
     "TRAINING_SHIELD",
     "TRAINING_SWORD_AND_SHIELD",
@@ -4781,7 +4782,7 @@ mod tests {
         assert_eq!(BASELINE_STARTER_WEAPONS.len(), 1);
         assert_eq!(
             BASELINE_STARTER_WEAPONS[0].item_def_id,
-            "TRAINING_TWO_HAND_SWORD"
+            "TRAINING_DAGGER_PAIR"
         );
         assert_eq!(BASELINE_STARTER_WEAPONS[0].slot_id, EQUIP_SLOT_MAIN_HAND);
         assert_eq!(
@@ -4795,7 +4796,7 @@ mod tests {
                 (EQUIP_SLOT_BOOTS, "PEASANT_BOOTS"),
                 (EQUIP_SLOT_GLOVES, "PEASANT_GLOVES"),
                 ("RING_1", STARTER_INSIGHT_RING_ITEM_DEF_ID),
-                (EQUIP_SLOT_MAIN_HAND, "TRAINING_TWO_HAND_SWORD"),
+                (EQUIP_SLOT_MAIN_HAND, "TRAINING_DAGGER_PAIR"),
                 (EQUIP_SLOT_SPELLBOOK, STARTER_SPELLBOOK_ITEM_DEF_ID),
             ]
         );
@@ -4829,7 +4830,7 @@ mod tests {
             BASELINE_STARTER_INVENTORY_ITEMS,
             &[
                 "NEWBIE_STAFF_01",
-                "TRAINING_DAGGER_PAIR",
+                "TRAINING_TWO_HAND_SWORD",
                 "TRAINING_SWORD_AND_SHIELD",
                 "TRAINING_BOW",
             ]
@@ -5189,6 +5190,7 @@ mod tests {
 
     #[test]
     fn starter_item_classifiers_only_match_authored_starters() {
+        assert!(is_starter_weapon_definition_id("TRAINING_DAGGER_PAIR"));
         assert!(is_starter_weapon_definition_id("TRAINING_TWO_HAND_SWORD"));
         assert!(is_starter_weapon_definition_id("TRAINING_SHIELD"));
         assert!(is_starter_weapon_definition_id("training-one-hand-sword"));
