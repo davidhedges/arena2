@@ -75,3 +75,18 @@ spacetime generate --yes --lang csharp --bin-path server/target/wasm32-unknown-u
 ```
 
 Do not generate with `--module-path server` — that builds default features and drops the harness surface from the generated output.
+
+## Development Build Cleanup
+
+Repeated native server tests can accumulate large hard-linked Cargo debug and
+incremental artifacts under `server/target/debug`. Periodically inspect the
+physical disk usage and clean those generated artifacts with:
+
+```bash
+ops/cleanup-server-build-artifacts.sh --dry-run
+ops/cleanup-server-build-artifacts.sh
+```
+
+The cleanup preserves release artifacts, including
+`server/target/wasm32-unknown-unknown/release/arena.wasm`. It is separate from
+`ops/cleanup-local-spacetimedb-data.sh`, which deletes local database/cache data.
