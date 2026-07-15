@@ -30,6 +30,17 @@ MAPS = [
      os.path.join(ENVIRONMENT_ART, "Lava/T_Lava_FireShoreMagma_Flow.tga")),
     (os.path.join(PACK_TEXTURES, "Alien/Alien_SpiderAcid/T_Alien_SpiderAcid_H.tga"),
      os.path.join(ENVIRONMENT_ART, "Poison/T_Poison_AlienSpiderAcid_Flow.tga")),
+    # MoltenRockSurface materials: flow generated from each source's own height
+    # map, so the field circulates around that material's stones/cracks and the
+    # molten channels between them carry the motion.
+    (os.path.join(PACK_TEXTURES, "FireShore/FireShore_Rock/T_FireShore_Rock_H.tga"),
+     os.path.join(ENVIRONMENT_ART, "Lava/T_Lava_FireShoreRock_Flow.tga")),
+    (os.path.join(PACK_TEXTURES, "FireShore/FireShore_CrackedCliff/T_FireShore_CrackedCliff_H.tga"),
+     os.path.join(ENVIRONMENT_ART, "Lava/T_Lava_FireShoreCrackedCliff_Flow.tga")),
+    (os.path.join(PACK_TEXTURES, "FireShore/FireShore_MoltenObsidian/T_FireShore_MoltenObsidian_H.tga"),
+     os.path.join(ENVIRONMENT_ART, "Lava/T_Lava_FireShoreMoltenObsidian_Flow.tga")),
+    (os.path.join(PACK_TEXTURES, "FireShore/FireShore_Cobblestone/T_FireShore_Cobblestone_H.tga"),
+     os.path.join(ENVIRONMENT_ART, "Lava/T_Lava_FireShoreCobblestone_Flow.tga")),
 ]
 
 
