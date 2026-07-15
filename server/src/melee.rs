@@ -53,10 +53,10 @@ use crate::player::DEFAULT_COMBAT_PROFILE;
 use crate::practice::is_training_instance;
 use crate::progression::{
     active_action_bar_assignment_debug_summary, active_selectable_ability_for_authored_action,
-    combat_profile_has_modes, derived_combat_profile_id_for_owner,
-    melee_impact_effects_for_ability_id, melee_timed_movement_for_ability_id,
-    primary_resource_gain_on_action_accept, resolved_auto_attack_mode_for_owner, AbilityCatalog,
-    AutoAttackCatalog, AutoAttackReplacementCatalog, MeleeAbilityCatalog, MeleeGapCloseCatalog,
+    derived_combat_profile_id_for_owner, melee_impact_effects_for_ability_id,
+    melee_timed_movement_for_ability_id, primary_resource_gain_on_action_accept,
+    resolved_auto_attack_mode_for_owner, AbilityCatalog, AutoAttackCatalog,
+    AutoAttackReplacementCatalog, MeleeAbilityCatalog, MeleeGapCloseCatalog,
     MeleeTimedMovementRuntime,
 };
 use crate::relations::{can_harm, combat_relation, target_audience_allows, TargetAudience};
@@ -1714,26 +1714,34 @@ pub(crate) fn auto_attack_catalog_key_for_mode(
     format!("{}:{}:{}", combat_profile, mode_id, action_id.as_str())
 }
 
+fn auto_attack_catalog_resolution_keys(
+    combat_profile: &str,
+    mode_id: &str,
+    action_id: &AuthoredActionId,
+) -> (Option<String>, String) {
+    let mode_key = (!mode_id.trim().is_empty())
+        .then(|| auto_attack_catalog_key_for_mode(combat_profile, mode_id, action_id));
+    let profile_key = auto_attack_catalog_key(combat_profile, action_id);
+    (mode_key, profile_key)
+}
+
 pub(crate) fn auto_attack_gameplay_for_profile_mode_action(
     ctx: &ReducerContext,
     combat_profile: &str,
     mode_id: &str,
     action_id: &AuthoredActionId,
 ) -> Option<AutoAttackCatalog> {
-    let normalized_mode_id = mode_id.trim().to_ascii_uppercase();
-    let mode_key = auto_attack_catalog_key_for_mode(combat_profile, mode_id, action_id);
-    if let Some(row) = ctx.db.auto_attack_catalog().key().find(mode_key) {
-        return Some(row);
+    let (mode_key, profile_key) =
+        auto_attack_catalog_resolution_keys(combat_profile, mode_id, action_id);
+    if let Some(mode_key) = mode_key {
+        if let Some(row) = ctx.db.auto_attack_catalog().key().find(mode_key) {
+            return Some(row);
+        }
     }
 
-    if !normalized_mode_id.is_empty() && combat_profile_has_modes(ctx, combat_profile) {
-        return None;
-    }
-
-    ctx.db
-        .auto_attack_catalog()
-        .key()
-        .find(auto_attack_catalog_key(combat_profile, action_id))
+    // Combat modes may override auto-attack gameplay, but a profile-level row
+    // remains the shared default for every mode that does not define one.
+    ctx.db.auto_attack_catalog().key().find(profile_key)
 }
 
 fn auto_attack_melee_gameplay_from_catalog(
@@ -5541,8 +5549,8 @@ mod tests {
     }
 
     use super::{
-        auto_attack_reference_for_profile, canonical_slot_id, combo_input_decision,
-        default_aerial_execution_mode, find_combo_root_for_authorization,
+        auto_attack_catalog_resolution_keys, auto_attack_reference_for_profile, canonical_slot_id,
+        combo_input_decision, default_aerial_execution_mode, find_combo_root_for_authorization,
         gap_close_destination_within_epsilon, gap_close_has_horizontal_travel,
         gap_close_pre_commit_decision, gap_close_target_facing_satisfied,
         melee_hit_volume_contains_player, melee_manifest, pending_melee_impact_range,
@@ -6632,6 +6640,16 @@ mod tests {
         assert!(!super::MeleeExecutionPolicy::PLAYER_INPUT.grants_primary_resource_on_hit);
         assert!(!super::MeleeExecutionPolicy::QUEUED_FOLLOWUP.grants_primary_resource_on_hit);
         assert!(!super::MeleeExecutionPolicy::PRACTICE.grants_primary_resource_on_hit);
+    }
+
+    #[test]
+    fn mode_auto_attack_lookup_falls_back_to_shared_profile_row() {
+        let action_id = AuthoredActionId::new("AUTO_ATTACK_1");
+        let (mode_key, profile_key) =
+            auto_attack_catalog_resolution_keys("DAGGERS", "READY", &action_id);
+
+        assert_eq!(mode_key.as_deref(), Some("DAGGERS:READY:AUTO_ATTACK_1"));
+        assert_eq!(profile_key, "DAGGERS:AUTO_ATTACK_1");
     }
 
     #[test]

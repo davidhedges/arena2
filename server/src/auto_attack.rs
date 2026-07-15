@@ -181,22 +181,49 @@ pub fn arm_auto_attack_replacement(ctx: &ReducerContext, ability_id: String) -> 
 
 #[reducer]
 pub fn arm_auto_attack_target(ctx: &ReducerContext, target_id: String) -> Result<(), String> {
+    let owner = ctx.sender();
     let Some(target) = resolve_live_target(ctx, ctx.sender(), target_id.as_str()) else {
         log::info!(
             "[AUTO_ATTACK] owner={} source=right_click failed_to_resolve_target target_id={}",
-            short_identity(ctx.sender()),
+            short_identity(owner),
             target_id
         );
         return Ok(());
     };
 
-    arm_auto_attack_with_cadence(ctx, ctx.sender(), target, ctx.timestamp);
+    if let (Some(existing), Some(runtime)) = (
+        ctx.db.auto_attack_state().owner().find(owner),
+        resolved_auto_attack_runtime(ctx, owner),
+    ) {
+        if existing_auto_attack_matches_request(&existing, target, &runtime) {
+            log::info!(
+                "[AUTO_ATTACK] owner={} source=right_click kept_existing target={} profile={} mode={} strike={} next_at_micros={} pending_due={}",
+                short_identity(owner),
+                short_identity(existing.target),
+                existing.combat_profile_id,
+                existing.mode_id,
+                existing.strike_id,
+                existing.next_swing_at.to_micros_since_unix_epoch(),
+                existing.pending_due
+            );
+            return Ok(());
+        }
+    }
+
+    arm_auto_attack_with_cadence(ctx, owner, target, ctx.timestamp);
     Ok(())
 }
 
 #[reducer]
 pub fn clear_auto_attack_target(ctx: &ReducerContext) -> Result<(), String> {
-    clear_auto_attack_for_owner(ctx, ctx.sender());
+    let owner = ctx.sender();
+    let cleared = ctx.db.auto_attack_state().owner().find(owner).is_some();
+    clear_auto_attack_for_owner(ctx, owner);
+    log::info!(
+        "[AUTO_ATTACK] owner={} source=client_clear cleared={}",
+        short_identity(owner),
+        cleared
+    );
     Ok(())
 }
 
@@ -1043,14 +1070,49 @@ struct ResolvedAutoAttackRuntime {
     strike_id: String,
 }
 
+fn existing_auto_attack_matches_request(
+    existing: &AutoAttackState,
+    target: Identity,
+    runtime: &ResolvedAutoAttackRuntime,
+) -> bool {
+    existing.target == target
+        && existing
+            .combat_profile_id
+            .eq_ignore_ascii_case(runtime.combat_profile_id.as_str())
+        && existing
+            .strike_id
+            .eq_ignore_ascii_case(runtime.strike_id.as_str())
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{preserved_cadence_readiness, should_reset_cadence_for_voluntary_move};
+    use super::{
+        existing_auto_attack_matches_request, preserved_cadence_readiness,
+        should_reset_cadence_for_voluntary_move, AutoAttackState, ResolvedAutoAttackRuntime,
+    };
     use crate::progression::{
         AUTO_ATTACK_MOVEMENT_ALLOW_MOVING, AUTO_ATTACK_MOVEMENT_RESET_ON_VOLUNTARY_MOVE,
     };
-    use spacetimedb::Timestamp;
+    use spacetimedb::{Identity, Timestamp};
     use std::time::Duration;
+
+    fn test_identity(byte: u8) -> Identity {
+        Identity::from_hex(format!("{byte:064x}").as_str()).unwrap()
+    }
+
+    fn test_auto_attack_state(target: Identity, combat_profile_id: &str) -> AutoAttackState {
+        AutoAttackState {
+            owner: test_identity(1),
+            target,
+            combat_profile_id: combat_profile_id.to_string(),
+            mode_id: String::new(),
+            strike_id: "AUTO_ATTACK_1".to_string(),
+            cadence_started_at: Timestamp::UNIX_EPOCH,
+            next_swing_at: Timestamp::UNIX_EPOCH + Duration::from_millis(3500),
+            pending_due: false,
+            movement_epoch_at_schedule: 0,
+        }
+    }
 
     #[test]
     fn mode_switch_preserves_elapsed_cadence_and_can_be_due_immediately() {
@@ -1060,6 +1122,46 @@ mod tests {
 
         assert_eq!(next, started + Duration::from_millis(600));
         assert!(due);
+    }
+
+    #[test]
+    fn repeated_same_target_arm_keeps_existing_cadence() {
+        let target = test_identity(2);
+        let existing = test_auto_attack_state(target, "TWO_HANDED_SWORD");
+        let runtime = ResolvedAutoAttackRuntime {
+            combat_profile_id: "TWO_HANDED_SWORD".to_string(),
+            strike_id: "AUTO_ATTACK_1".to_string(),
+        };
+
+        assert!(existing_auto_attack_matches_request(
+            &existing, target, &runtime
+        ));
+    }
+
+    #[test]
+    fn changed_target_or_profile_rearms_auto_attack() {
+        let target = test_identity(2);
+        let other_target = test_identity(3);
+        let existing = test_auto_attack_state(target, "TWO_HANDED_SWORD");
+        let same_profile = ResolvedAutoAttackRuntime {
+            combat_profile_id: "TWO_HANDED_SWORD".to_string(),
+            strike_id: "AUTO_ATTACK_1".to_string(),
+        };
+        let changed_profile = ResolvedAutoAttackRuntime {
+            combat_profile_id: "DAGGERS".to_string(),
+            strike_id: "AUTO_ATTACK_1".to_string(),
+        };
+
+        assert!(!existing_auto_attack_matches_request(
+            &existing,
+            other_target,
+            &same_profile
+        ));
+        assert!(!existing_auto_attack_matches_request(
+            &existing,
+            target,
+            &changed_profile
+        ));
     }
 
     #[test]

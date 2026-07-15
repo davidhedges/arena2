@@ -5178,7 +5178,7 @@ mod tests {
         DamageType, StackPolicy, StatusApplication, StatusDispelType, StatusEffectKind,
         StatusPayload, StatusStackGroupDefault, DEFAULT_HIT_RADIUS,
     };
-    use crate::melee::profile_supports_action_reference;
+    use crate::melee::{auto_attack_reference_for_profile, profile_supports_action_reference};
     use crate::progression::melee_timed_movement_for_ability_id;
     use crate::resources::RESOURCE_KIND_MANA;
     use crate::spells::spell_definition_by_str;
@@ -7695,21 +7695,44 @@ mod tests {
     }
 
     #[test]
-    fn progression_auto_attacks_cover_every_combat_profile() {
+    fn progression_auto_attacks_resolve_for_every_combat_profile_mode() {
         let catalog = progression_catalog();
-        let auto_attack_profiles: HashSet<_> = catalog
-            .auto_attacks
-            .iter()
-            .map(|row| normalize_identifier(row.combat_profile_id.as_str()))
-            .collect();
 
         for profile in &catalog.combat_profiles {
-            assert!(
-                auto_attack_profiles
-                    .contains(normalize_identifier(profile.combat_profile_id.as_str()).as_str()),
-                "combat profile '{}' is missing auto_attacks[] gameplay",
-                profile.combat_profile_id
-            );
+            let profile_id = normalize_identifier(profile.combat_profile_id.as_str());
+            let action_id =
+                auto_attack_reference_for_profile(profile_id.as_str()).unwrap_or_else(|| {
+                    panic!("combat profile '{profile_id}' is missing an auto attack reference")
+                });
+            let profile_modes: Vec<String> = catalog
+                .combat_modes
+                .iter()
+                .filter(|mode| normalize_identifier(mode.combat_profile_id.as_str()) == profile_id)
+                .map(|mode| normalize_identifier(mode.mode_id.as_str()))
+                .collect();
+            let modes_to_resolve = if profile_modes.is_empty() {
+                vec![String::new()]
+            } else {
+                profile_modes
+            };
+
+            for mode_id in modes_to_resolve {
+                assert!(
+                    catalog.auto_attacks.iter().any(|row| {
+                        normalize_identifier(row.combat_profile_id.as_str()) == profile_id
+                            && AuthoredActionId::new(row.action_id.as_str()).as_str()
+                                == action_id
+                            && {
+                                let row_mode = normalize_identifier(row.mode_id.as_str());
+                                row_mode.is_empty() || row_mode == mode_id
+                            }
+                    }),
+                    "combat profile '{}' mode '{}' cannot resolve auto attack '{}' from a mode override or shared profile row",
+                    profile_id,
+                    mode_id,
+                    action_id
+                );
+            }
         }
     }
 

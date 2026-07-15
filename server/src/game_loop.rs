@@ -568,7 +568,7 @@ pub(crate) fn ensure_game_loop_schedule(ctx: &ReducerContext) {
     // fed the client input loop a permanent surplus.
     ctx.db.game_loop_timer().insert(GameLoopTimer {
         scheduled_id: 0,
-        scheduled_at: ScheduleAt::Time(ctx.timestamp),
+        scheduled_at: ScheduleAt::Time(fresh_game_tick_schedule(ctx.timestamp)),
     });
     log::info!("[GAME_LOOP] Scheduled game_tick fixed-rate chain (33ms tick)");
 }
@@ -590,9 +590,56 @@ pub(crate) fn ensure_game_loop_watchdog_schedule(ctx: &ReducerContext) {
 /// Anchor policy: next = this row's scheduled time + one tick — never
 /// "now + one tick" — so per-tick overhead cannot accumulate into the
 /// period. Brief stalls are caught up (the host fires overdue rows
-/// immediately); a stall deeper than the catch-up cap re-anchors to now and
-/// drops the backlog instead of spiraling (those wall-milliseconds dilate,
-/// once, honestly).
+/// immediately); a stall deeper than the catch-up cap drops the backlog and
+/// re-anchors one tick into the future instead of leaving a due-now recovery
+/// row that may remain inert after a module publish.
+fn fresh_game_tick_schedule(now: Timestamp) -> Timestamp {
+    let tick_micros = GAME_TICK_INTERVAL.as_micros() as i64;
+    Timestamp::from_micros_since_unix_epoch(
+        now.to_micros_since_unix_epoch().saturating_add(tick_micros),
+    )
+}
+
+fn next_game_tick_schedule(now: Timestamp, fired_at: &ScheduleAt) -> (Timestamp, bool) {
+    let now_micros = now.to_micros_since_unix_epoch();
+    let tick_micros = GAME_TICK_INTERVAL.as_micros() as i64;
+    let anchor_micros = match fired_at {
+        ScheduleAt::Time(scheduled) => scheduled.to_micros_since_unix_epoch(),
+        // Legacy Interval row (pre-fix DB) has no scheduled-time anchor.
+        ScheduleAt::Interval(_) => now_micros,
+    };
+
+    let anchored_next_micros = anchor_micros.saturating_add(tick_micros);
+    let max_backlog_micros = tick_micros * GAME_TICK_MAX_CATCHUP_TICKS;
+    let reanchored = anchored_next_micros < now_micros.saturating_sub(max_backlog_micros);
+    let next_micros = if reanchored {
+        // A recovery link must be strictly future-dated. Re-inserting a Time
+        // row at the current reducer timestamp can leave an inert, overdue row
+        // behind after a data-preserving module publish.
+        now_micros.saturating_add(tick_micros)
+    } else {
+        anchored_next_micros
+    };
+
+    (
+        Timestamp::from_micros_since_unix_epoch(next_micros),
+        reanchored,
+    )
+}
+
+fn game_loop_timer_is_overdue(now: Timestamp, scheduled_at: &ScheduleAt) -> bool {
+    let ScheduleAt::Time(scheduled) = scheduled_at else {
+        return false;
+    };
+
+    let tick_micros = GAME_TICK_INTERVAL.as_micros() as i64;
+    let max_backlog_micros = tick_micros * GAME_TICK_MAX_CATCHUP_TICKS;
+    scheduled.to_micros_since_unix_epoch()
+        < now
+            .to_micros_since_unix_epoch()
+            .saturating_sub(max_backlog_micros)
+}
+
 fn reschedule_game_tick(ctx: &ReducerContext, fired: &GameLoopTimer) {
     // Defensive sweep: clears the fired row regardless of host one-shot
     // delete semantics, and migrates the legacy Interval row on first fire
@@ -607,27 +654,17 @@ fn reschedule_game_tick(ctx: &ReducerContext, fired: &GameLoopTimer) {
         ctx.db.game_loop_timer().scheduled_id().delete(scheduled_id);
     }
 
-    let now_micros = ctx.timestamp.to_micros_since_unix_epoch();
-    let tick_micros = GAME_TICK_INTERVAL.as_micros() as i64;
-    let anchor_micros = match &fired.scheduled_at {
-        ScheduleAt::Time(scheduled) => scheduled.to_micros_since_unix_epoch(),
-        // Legacy Interval row (pre-fix DB) has no scheduled-time anchor.
-        ScheduleAt::Interval(_) => now_micros,
-    };
-
-    let mut next_micros = anchor_micros.saturating_add(tick_micros);
-    let max_backlog_micros = tick_micros * GAME_TICK_MAX_CATCHUP_TICKS;
-    if next_micros < now_micros.saturating_sub(max_backlog_micros) {
+    let (next_scheduled_at, reanchored) =
+        next_game_tick_schedule(ctx.timestamp, &fired.scheduled_at);
+    if reanchored {
         log::warn!(
-            "[GAME_LOOP] tick chain fell {}ms behind; re-anchoring to now (backlog dropped)",
-            (now_micros - next_micros) / 1000
+            "[GAME_LOOP] tick chain fell behind; re-anchoring one tick in the future (backlog dropped)"
         );
-        next_micros = now_micros;
     }
 
     ctx.db.game_loop_timer().insert(GameLoopTimer {
         scheduled_id: 0,
-        scheduled_at: ScheduleAt::Time(Timestamp::from_micros_since_unix_epoch(next_micros)),
+        scheduled_at: ScheduleAt::Time(next_scheduled_at),
     });
 }
 
@@ -742,9 +779,9 @@ pub struct GameLoopTimer {
 }
 
 /// Immortal (host-managed Interval) backstop for the fixed-rate chain: a
-/// panicked or rolled-back game_tick would take its re-inserted next link
-/// down with it, and a chain with no live row never fires again. This runs
-/// at 1 Hz, reads one tiny table, and re-seeds only when the chain is gone.
+/// panicked or rolled-back game_tick can remove the next link, while a module
+/// publish can leave an overdue row present but inert. This runs at 1 Hz,
+/// reads one tiny table, and replaces either failure state.
 #[table(accessor = game_loop_watchdog, scheduled(game_loop_watchdog_tick))]
 pub struct GameLoopWatchdog {
     #[primary_key]
@@ -758,11 +795,28 @@ pub fn game_loop_watchdog_tick(
     ctx: &ReducerContext,
     _timer: GameLoopWatchdog,
 ) -> Result<(), String> {
+    let overdue_ids: Vec<u64> = ctx
+        .db
+        .game_loop_timer()
+        .iter()
+        .filter(|row| game_loop_timer_is_overdue(ctx.timestamp, &row.scheduled_at))
+        .map(|row| row.scheduled_id)
+        .collect();
+    for scheduled_id in &overdue_ids {
+        ctx.db
+            .game_loop_timer()
+            .scheduled_id()
+            .delete(*scheduled_id);
+    }
+
     if ctx.db.game_loop_timer().iter().next().is_none() {
-        log::warn!("[GAME_LOOP] watchdog re-seeding a dead game_tick chain");
+        log::warn!(
+            "[GAME_LOOP] watchdog re-seeding a dead game_tick chain overdue_rows={}",
+            overdue_ids.len()
+        );
         ctx.db.game_loop_timer().insert(GameLoopTimer {
             scheduled_id: 0,
-            scheduled_at: ScheduleAt::Time(ctx.timestamp),
+            scheduled_at: ScheduleAt::Time(fresh_game_tick_schedule(ctx.timestamp)),
         });
     }
     Ok(())
@@ -2097,14 +2151,16 @@ fn tick_countdowns(ctx: &ReducerContext, now: Timestamp) {
 #[cfg(test)]
 mod tests {
     use super::{
-        apply_player_intent_fallback_if_changed, percentile_sorted, settle_stationary_dummy,
-        settle_stationary_playground_target, special_movement_grounded_state,
-        sync_player_voluntary_move_epoch, PlayerIntent, PlayerPhysics, TickProfileSample,
-        TickProfileWindowState, SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK_FIXED_Y,
+        apply_player_intent_fallback_if_changed, fresh_game_tick_schedule,
+        game_loop_timer_is_overdue, next_game_tick_schedule, percentile_sorted,
+        settle_stationary_dummy, settle_stationary_playground_target,
+        special_movement_grounded_state, sync_player_voluntary_move_epoch, PlayerIntent,
+        PlayerPhysics, TickProfileSample, TickProfileWindowState,
+        SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK_FIXED_Y,
         SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK_KEEP_HEIGHT_LEGACY,
     };
     use crate::combat::new_player_state;
-    use spacetimedb::{Identity, Timestamp};
+    use spacetimedb::{Identity, ScheduleAt, Timestamp};
 
     fn sample(total_micros: u32, pre_micros: u32) -> TickProfileSample {
         TickProfileSample {
@@ -2127,6 +2183,38 @@ mod tests {
             input_tick: 1,
             updated_at: Timestamp::UNIX_EPOCH,
         }
+    }
+
+    #[test]
+    fn game_tick_recovery_schedule_is_strictly_future_dated() {
+        let now = Timestamp::from_micros_since_unix_epoch(1_000_000);
+        let fresh = fresh_game_tick_schedule(now);
+        assert_eq!(fresh.to_micros_since_unix_epoch(), 1_033_000);
+
+        let stale = ScheduleAt::Time(Timestamp::from_micros_since_unix_epoch(500_000));
+        let (recovered, reanchored) = next_game_tick_schedule(now, &stale);
+        assert!(reanchored);
+        assert_eq!(recovered.to_micros_since_unix_epoch(), 1_033_000);
+    }
+
+    #[test]
+    fn healthy_game_tick_chain_preserves_fixed_rate_anchor() {
+        let now = Timestamp::from_micros_since_unix_epoch(1_000_000);
+        let fired = ScheduleAt::Time(Timestamp::from_micros_since_unix_epoch(990_000));
+        let (next, reanchored) = next_game_tick_schedule(now, &fired);
+
+        assert!(!reanchored);
+        assert_eq!(next.to_micros_since_unix_epoch(), 1_023_000);
+    }
+
+    #[test]
+    fn watchdog_treats_overdue_present_timer_as_dead_chain() {
+        let now = Timestamp::from_micros_since_unix_epoch(1_000_000);
+        let overdue = ScheduleAt::Time(Timestamp::from_micros_since_unix_epoch(900_000));
+        let recent = ScheduleAt::Time(Timestamp::from_micros_since_unix_epoch(902_000));
+
+        assert!(game_loop_timer_is_overdue(now, &overdue));
+        assert!(!game_loop_timer_is_overdue(now, &recent));
     }
 
     #[test]
