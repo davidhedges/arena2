@@ -385,7 +385,7 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
-        public void DecideCombatAnimationRequest_PreservesPriorityAndComboPolicy()
+        public void DecideCombatAnimationRequest_PreservesPriorityAndAutoAttackSequenceHandoffPolicy()
         {
             Assert.That(
                 InvokeCombatAnimationDecision(
@@ -394,6 +394,7 @@ namespace Arena.Tests.Editor
                     isSpellActive: false,
                     isMeleeActive: true,
                     isComboFollowUp: false,
+                    isAutoAttackSequenceRestart: false,
                     activeMeleeIsPhased: false,
                     visualGateEvaluated: true,
                     visualDecision: "SuppressIncomingWithGhost").ToString(),
@@ -406,6 +407,33 @@ namespace Arena.Tests.Editor
                     isSpellActive: false,
                     isMeleeActive: true,
                     isComboFollowUp: true,
+                    isAutoAttackSequenceRestart: false,
+                    activeMeleeIsPhased: false,
+                    visualGateEvaluated: false,
+                    visualDecision: "PreserveExistingBehavior").ToString(),
+                Is.EqualTo("HandoffComboFollowUpAndPlay"));
+
+            Assert.That(
+                InvokeCombatAnimationDecision(
+                    incomingCategory: "AutoAttack",
+                    isHigherPriorityActive: true,
+                    isSpellActive: false,
+                    isMeleeActive: true,
+                    isComboFollowUp: true,
+                    isAutoAttackSequenceRestart: false,
+                    activeMeleeIsPhased: false,
+                    visualGateEvaluated: false,
+                    visualDecision: "PreserveExistingBehavior").ToString(),
+                Is.EqualTo("HandoffComboFollowUpAndPlay"));
+
+            Assert.That(
+                InvokeCombatAnimationDecision(
+                    incomingCategory: "AutoAttack",
+                    isHigherPriorityActive: true,
+                    isSpellActive: false,
+                    isMeleeActive: true,
+                    isComboFollowUp: false,
+                    isAutoAttackSequenceRestart: true,
                     activeMeleeIsPhased: false,
                     visualGateEvaluated: false,
                     visualDecision: "PreserveExistingBehavior").ToString(),
@@ -418,6 +446,7 @@ namespace Arena.Tests.Editor
                     isSpellActive: false,
                     isMeleeActive: true,
                     isComboFollowUp: false,
+                    isAutoAttackSequenceRestart: false,
                     activeMeleeIsPhased: false,
                     visualGateEvaluated: true,
                     visualDecision: "InterruptCurrentWithoutGhost").ToString(),
@@ -788,6 +817,7 @@ namespace Arena.Tests.Editor
             bool isSpellActive,
             bool isMeleeActive,
             bool isComboFollowUp,
+            bool isAutoAttackSequenceRestart,
             bool activeMeleeIsPhased,
             bool visualGateEvaluated,
             string visualDecision)
@@ -805,6 +835,7 @@ namespace Arena.Tests.Editor
                 typeof(bool),
                 typeof(bool),
                 typeof(bool),
+                typeof(bool),
                 visualDecisionType);
 
             return method.Invoke(
@@ -816,6 +847,7 @@ namespace Arena.Tests.Editor
                     isSpellActive,
                     isMeleeActive,
                     isComboFollowUp,
+                    isAutoAttackSequenceRestart,
                     activeMeleeIsPhased,
                     visualGateEvaluated,
                     Enum.Parse(visualDecisionType, visualDecision),

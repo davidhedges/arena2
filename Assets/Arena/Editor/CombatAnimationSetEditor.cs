@@ -637,6 +637,8 @@ namespace Arena.Editor
             }
 
             existingProfile.auto_attack_strike_id = generatedProfile.auto_attack_strike_id;
+            existingProfile.auto_attack_sequence = generatedProfile.auto_attack_sequence;
+            existingProfile.auto_attack_sequence_interval_ms = generatedProfile.auto_attack_sequence_interval_ms;
             existingProfile.strikes = strikes.ToArray();
             profiles[profileIndex] = existingProfile;
             manifest.profiles = profiles.ToArray();
@@ -1623,6 +1625,57 @@ namespace Arena.Editor
                 }
             }
 
+            if (set.autoAttackVisualSequenceActionIds == null || set.autoAttackVisualSequenceActionIds.Count == 0)
+            {
+                messages.Add((MessageType.Error, "Auto Attack: visual sequence must contain at least one authored strike id."));
+            }
+            else
+            {
+                if (set.autoAttackVisualSequenceActionIds.Count > 1 && set.autoAttackSequenceIntervalMs <= 0)
+                {
+                    messages.Add((
+                        MessageType.Error,
+                        "Auto Attack: Sequence Interval Ms must be positive when the visual sequence contains multiple strikes."));
+                }
+
+                var sequenceIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                string previousActionId = string.Empty;
+                for (int sequenceIndex = 0; sequenceIndex < set.autoAttackVisualSequenceActionIds.Count; sequenceIndex++)
+                {
+                    string actionId = set.autoAttackVisualSequenceActionIds[sequenceIndex]?.Trim() ?? string.Empty;
+                    string sequenceLabel = $"Auto Attack: visual sequence element {sequenceIndex}";
+                    if (string.IsNullOrWhiteSpace(actionId))
+                    {
+                        messages.Add((MessageType.Error, $"{sequenceLabel} must not be empty."));
+                        continue;
+                    }
+                    if (!strikeIds.Contains(actionId))
+                    {
+                        messages.Add((MessageType.Error, $"{sequenceLabel} '{actionId}' does not match any strike id in this animation set."));
+                        continue;
+                    }
+                    if (!sequenceIds.Add(actionId))
+                    {
+                        messages.Add((MessageType.Error, $"{sequenceLabel} repeats '{actionId}'. Auto-attack sequence entries must be unique."));
+                        continue;
+                    }
+
+                    if (sequenceIndex > 0)
+                    {
+                        int strikeIndex = set.GetStrikeIndexForActionId(actionId);
+                        WeaponStrikeCombatAuthoring strike = set.GetStrikeCombat(strikeIndex);
+                        if (!string.Equals(strike.ComboFromOrEmpty, previousActionId, StringComparison.OrdinalIgnoreCase))
+                        {
+                            messages.Add((
+                                MessageType.Error,
+                                $"{sequenceLabel} '{actionId}' must author Combo From '{previousActionId}' so it remains part of the same authored attack chain."));
+                        }
+                    }
+
+                    previousActionId = actionId;
+                }
+            }
+
             return messages;
         }
 
@@ -1768,6 +1821,9 @@ namespace Arena.Editor
             if (importedProfile != null)
             {
                 set.autoAttackAuthoredStrikeId = importedProfile.auto_attack_strike_id ?? string.Empty;
+                if (importedProfile.auto_attack_sequence != null && importedProfile.auto_attack_sequence.Length > 0)
+                    set.autoAttackVisualSequenceActionIds = new List<string>(importedProfile.auto_attack_sequence);
+                set.autoAttackSequenceIntervalMs = Mathf.Max(0, importedProfile.auto_attack_sequence_interval_ms);
             }
 
             EditorUtility.SetDirty(set);
@@ -1961,6 +2017,8 @@ namespace Arena.Editor
             AppendJsonProperty(builder, indent + 1, "stagger_duration_l_ms", profile.stagger_duration_l_ms, trailingComma: true);
             AppendJsonProperty(builder, indent + 1, "stagger_duration_r_ms", profile.stagger_duration_r_ms, trailingComma: true);
             AppendJsonProperty(builder, indent + 1, "auto_attack_strike_id", profile.auto_attack_strike_id, trailingComma: true);
+            AppendJsonStringArrayProperty(builder, indent + 1, "auto_attack_sequence", profile.auto_attack_sequence, trailingComma: true);
+            AppendJsonProperty(builder, indent + 1, "auto_attack_sequence_interval_ms", profile.auto_attack_sequence_interval_ms, trailingComma: true);
             AppendIndent(builder, indent + 1);
             builder.Append("\"strikes\": [\n");
             for (int strikeIndex = 0; strikeIndex < profile.strikes.Length; strikeIndex++)
@@ -2069,6 +2127,27 @@ namespace Arena.Editor
             AppendJsonString(builder, name);
             builder.Append(": ");
             builder.Append(value ? "true" : "false");
+            AppendPropertyTerminator(builder, trailingComma);
+        }
+
+        private static void AppendJsonStringArrayProperty(
+            StringBuilder builder,
+            int indent,
+            string name,
+            string[]? values,
+            bool trailingComma)
+        {
+            AppendIndent(builder, indent);
+            AppendJsonString(builder, name);
+            builder.Append(": [");
+            string[] resolved = values ?? Array.Empty<string>();
+            for (int index = 0; index < resolved.Length; index++)
+            {
+                if (index > 0)
+                    builder.Append(", ");
+                AppendJsonString(builder, resolved[index] ?? string.Empty);
+            }
+            builder.Append(']');
             AppendPropertyTerminator(builder, trailingComma);
         }
 

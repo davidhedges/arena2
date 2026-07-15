@@ -48,6 +48,8 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Col<AutoAttackState, SpacetimeDB.Timestamp> NextSwingAt { get; }
         public global::SpacetimeDB.Col<AutoAttackState, bool> PendingDue { get; }
         public global::SpacetimeDB.Col<AutoAttackState, ulong> MovementEpochAtSchedule { get; }
+        public global::SpacetimeDB.Col<AutoAttackState, uint> PendingSequenceIndex { get; }
+        public global::SpacetimeDB.Col<AutoAttackState, SpacetimeDB.Timestamp> NextSequenceAt { get; }
 
         public AutoAttackStateCols(string tableName)
         {
@@ -60,6 +62,8 @@ namespace SpacetimeDB.Types
             NextSwingAt = new global::SpacetimeDB.Col<AutoAttackState, SpacetimeDB.Timestamp>(tableName, "next_swing_at");
             PendingDue = new global::SpacetimeDB.Col<AutoAttackState, bool>(tableName, "pending_due");
             MovementEpochAtSchedule = new global::SpacetimeDB.Col<AutoAttackState, ulong>(tableName, "movement_epoch_at_schedule");
+            PendingSequenceIndex = new global::SpacetimeDB.Col<AutoAttackState, uint>(tableName, "pending_sequence_index");
+            NextSequenceAt = new global::SpacetimeDB.Col<AutoAttackState, SpacetimeDB.Timestamp>(tableName, "next_sequence_at");
         }
     }
 

@@ -7,6 +7,8 @@
             "stagger_duration_l_ms": 1000,
             "stagger_duration_r_ms": 1000,
             "auto_attack_strike_id": "AUTO_ATTACK_1",
+            "auto_attack_sequence": ["SWORD_AND_SHIELD_LIGHT_COMBO_1"],
+            "auto_attack_sequence_interval_ms": 0,
             "strikes": [
                 {
                     "id": "SWORD_AND_SHIELD_LIGHT_COMBO_1",
@@ -353,6 +355,8 @@
             "stagger_duration_l_ms": 1000,
             "stagger_duration_r_ms": 1000,
             "auto_attack_strike_id": "AUTO_ATTACK_1",
+            "auto_attack_sequence": ["COMBO_ATTACK_1_1_HIGH_TO_LOW"],
+            "auto_attack_sequence_interval_ms": 0,
             "strikes": [
                 {
                     "id": "COMBO_ATTACK_1_1_HIGH_TO_LOW",
@@ -738,6 +742,8 @@
             "stagger_duration_l_ms": 1000,
             "stagger_duration_r_ms": 1000,
             "auto_attack_strike_id": "AUTO_ATTACK_1",
+            "auto_attack_sequence": ["ARCHER_QUICK_SHOT"],
+            "auto_attack_sequence_interval_ms": 0,
             "strikes": [
                 {
                     "id": "ARCHER_QUICK_SHOT",
@@ -971,6 +977,8 @@
             "stagger_duration_l_ms": 1000,
             "stagger_duration_r_ms": 1000,
             "auto_attack_strike_id": "AUTO_ATTACK_1",
+            "auto_attack_sequence": ["DAGGER_COMBO_ATTACK_01_01", "DAGGER_COMBO_ATTACK_01_02"],
+            "auto_attack_sequence_interval_ms": 500,
             "strikes": [
                 {
                     "id": "DAGGER_COMBO_ATTACK_01_01",
@@ -1275,6 +1283,8 @@
             "stagger_duration_l_ms": 1000,
             "stagger_duration_r_ms": 1000,
             "auto_attack_strike_id": "AUTO_ATTACK_1",
+            "auto_attack_sequence": ["COMBO_ATTACK_1_1_HIGH_TO_LOW"],
+            "auto_attack_sequence_interval_ms": 0,
             "strikes": [
                 {
                     "id": "COMBO_ATTACK_1_1_HIGH_TO_LOW",

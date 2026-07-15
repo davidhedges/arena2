@@ -541,6 +541,10 @@ struct MeleeProfileData {
     stagger_duration_r_ms: u64,
     #[serde(default)]
     auto_attack_strike_id: String,
+    #[serde(default)]
+    auto_attack_sequence: Vec<String>,
+    #[serde(default)]
+    auto_attack_sequence_interval_ms: u64,
     strikes: Vec<StrikeData>,
 }
 
@@ -681,6 +685,58 @@ pub(crate) fn auto_attack_reference_for_profile(combat_profile: &str) -> Option<
     }
 
     profile.strikes.first().map(|strike| strike.id.clone())
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct AutoAttackSequenceStep {
+    pub strike_id: AuthoredActionId,
+    pub transition_delay_ms: u64,
+    pub has_successor: bool,
+}
+
+pub(crate) fn auto_attack_sequence_len_for_profile(combat_profile: &str) -> Option<usize> {
+    melee_manifest()
+        .profiles
+        .iter()
+        .find(|profile| profile.combat_profile.eq_ignore_ascii_case(combat_profile))
+        .map(|profile| profile.auto_attack_sequence.len())
+}
+
+pub(crate) fn auto_attack_sequence_step_for_profile(
+    combat_profile: &str,
+    sequence_index: usize,
+) -> Option<AutoAttackSequenceStep> {
+    if sequence_index == 0 {
+        return None;
+    }
+
+    let profile = melee_manifest()
+        .profiles
+        .iter()
+        .find(|profile| profile.combat_profile.eq_ignore_ascii_case(combat_profile))?;
+    let current_action_id = profile.auto_attack_sequence.get(sequence_index)?;
+    let previous_action_id = profile.auto_attack_sequence.get(sequence_index - 1)?;
+    let current = resolve_melee_authored_action_in_strikes(
+        profile.strikes.as_slice(),
+        &AuthoredActionId::new(current_action_id.as_str()),
+    )?;
+    let previous = resolve_melee_authored_action_in_strikes(
+        profile.strikes.as_slice(),
+        &AuthoredActionId::new(previous_action_id.as_str()),
+    )?;
+    let required_predecessor = current.strike.combo_from.as_deref()?.trim();
+    if required_predecessor.is_empty()
+        || RuntimeActionId::new(required_predecessor).as_str() != previous.runtime_id.as_str()
+        || profile.auto_attack_sequence_interval_ms == 0
+    {
+        return None;
+    }
+
+    Some(AutoAttackSequenceStep {
+        strike_id: current.authored_id,
+        transition_delay_ms: profile.auto_attack_sequence_interval_ms,
+        has_successor: sequence_index + 1 < profile.auto_attack_sequence.len(),
+    })
 }
 
 pub(crate) fn authored_strike_id_for_profile_position(
@@ -2733,6 +2789,62 @@ pub(crate) fn perform_intrinsic_auto_attack_for(
     )
 }
 
+pub(crate) fn perform_intrinsic_auto_attack_sequence_strike_for(
+    ctx: &ReducerContext,
+    caster: Identity,
+    auto_attack_strike_id: &AuthoredActionId,
+    sequence_strike_id: &AuthoredActionId,
+    target_id: &str,
+    cast_pos_x: f32,
+    cast_pos_y: f32,
+    cast_pos_z: f32,
+    cast_yaw: f32,
+) -> Result<MeleeAttackDispatch, String> {
+    let (combat_profile, sequence_strike) =
+        resolve_melee_authored_action_for_caster(ctx, caster, sequence_strike_id)?;
+    let mode_id = resolved_auto_attack_mode_for_owner(ctx, caster, combat_profile.as_str());
+    let auto_attack_row = auto_attack_gameplay_for_profile_mode_action(
+        ctx,
+        combat_profile.as_str(),
+        mode_id.as_str(),
+        auto_attack_strike_id,
+    )
+    .ok_or_else(|| {
+        format!(
+            "auto-attack '{}' has no gameplay row for combat profile '{}' mode '{}'",
+            auto_attack_strike_id.as_str(),
+            combat_profile,
+            mode_id
+        )
+    })?;
+    let gameplay = auto_attack_melee_gameplay_from_catalog(auto_attack_row).ok_or_else(|| {
+        format!(
+            "auto-attack '{}' has invalid gameplay row for combat profile '{}' mode '{}'",
+            auto_attack_strike_id.as_str(),
+            combat_profile,
+            mode_id
+        )
+    })?;
+
+    perform_melee_attack_for_internal(
+        ctx,
+        caster,
+        combat_profile,
+        sequence_strike,
+        target_id,
+        cast_pos_x,
+        cast_pos_y,
+        cast_pos_z,
+        cast_yaw,
+        false,
+        MeleeExecutionPolicy::INTRINSIC_AUTO_ATTACK,
+        None,
+        Some(gameplay),
+        None,
+        None,
+    )
+}
+
 #[derive(Clone, Debug)]
 struct ResolvedMeleeActionResourceCost {
     ability_id: String,
@@ -3170,7 +3282,9 @@ fn perform_melee_attack_for_internal(
     } else {
         // Once a combo follow-up was validly queued, release-time execution should
         // not be rejected for missing the original input window on a later tick.
-        if !combo_release_allowed(&caster_state, combat_profile.as_str(), &strike) {
+        if policy.authorization == MeleeAuthorization::ActionBar
+            && !combo_release_allowed(&caster_state, combat_profile.as_str(), &strike)
+        {
             return Ok(MeleeAttackDispatch::Rejected(
                 ActionRejectReason::ComboWindow,
             ));
@@ -5549,8 +5663,9 @@ mod tests {
     }
 
     use super::{
-        auto_attack_catalog_resolution_keys, auto_attack_reference_for_profile, canonical_slot_id,
-        combo_input_decision, default_aerial_execution_mode, find_combo_root_for_authorization,
+        auto_attack_catalog_resolution_keys, auto_attack_reference_for_profile,
+        auto_attack_sequence_step_for_profile, canonical_slot_id, combo_input_decision,
+        default_aerial_execution_mode, find_combo_root_for_authorization,
         gap_close_destination_within_epsilon, gap_close_has_horizontal_travel,
         gap_close_pre_commit_decision, gap_close_target_facing_satisfied,
         melee_hit_volume_contains_player, melee_manifest, pending_melee_impact_range,
@@ -5683,6 +5798,45 @@ mod tests {
             );
             let auto_attack_id = auto_attack_reference_for_profile(profile.combat_profile.as_str())
                 .expect("auto-attack strike id should resolve");
+            assert!(
+                !profile.auto_attack_sequence.is_empty(),
+                "combat profile {} must author a visual auto-attack sequence",
+                profile.combat_profile
+            );
+            if profile.auto_attack_sequence.len() > 1 {
+                assert!(
+                    profile.auto_attack_sequence_interval_ms > 0,
+                    "multi-strike auto-attack sequence for profile {} must author a positive sequence interval",
+                    profile.combat_profile
+                );
+            }
+            let mut auto_attack_sequence_ids = HashSet::new();
+            for (sequence_index, action_id) in profile.auto_attack_sequence.iter().enumerate() {
+                assert!(
+                    auto_attack_sequence_ids.insert(action_id.clone()),
+                    "auto-attack sequence for profile {} repeats strike {}",
+                    profile.combat_profile,
+                    action_id
+                );
+                assert!(
+                    profile.strikes.iter().any(|strike| strike.id == *action_id),
+                    "auto-attack sequence strike {} for profile {} must exist in the manifest",
+                    action_id,
+                    profile.combat_profile
+                );
+                if sequence_index > 0 {
+                    assert!(
+                        auto_attack_sequence_step_for_profile(
+                            profile.combat_profile.as_str(),
+                            sequence_index
+                        )
+                        .is_some(),
+                        "auto-attack sequence strike {} for profile {} must chain from its predecessor and use the profile sequence interval",
+                        action_id,
+                        profile.combat_profile
+                    );
+                }
+            }
             let mut strike_ids = HashSet::new();
             let mut slot_ids = HashSet::new();
             for strike in &profile.strikes {
@@ -6078,6 +6232,38 @@ mod tests {
             .filter(|value| !value.is_empty())
     }
 
+    fn parse_auto_attack_sequence_from_animation_set_asset(asset_contents: &str) -> Vec<String> {
+        let mut sequence = Vec::new();
+        let mut in_sequence = false;
+        for line in asset_contents.lines() {
+            if line == "  autoAttackVisualSequenceActionIds:" {
+                in_sequence = true;
+                continue;
+            }
+            if !in_sequence {
+                continue;
+            }
+            if let Some(value) = line.strip_prefix("  - ") {
+                let action_id = AuthoredActionId::new(value).into_string();
+                if !action_id.is_empty() {
+                    sequence.push(action_id);
+                }
+                continue;
+            }
+            break;
+        }
+        sequence
+    }
+
+    fn parse_auto_attack_sequence_interval_from_animation_set_asset(
+        asset_contents: &str,
+    ) -> Option<u64> {
+        asset_contents
+            .lines()
+            .find_map(|line| line.strip_prefix("  autoAttackSequenceIntervalMs: "))
+            .and_then(|value| value.trim().parse().ok())
+    }
+
     fn parse_animation_set_clip_reference(
         asset_contents: &str,
         field_name: &str,
@@ -6129,6 +6315,20 @@ mod tests {
                 auto_attack_reference_for_profile(profile.combat_profile.as_str()),
                 Some(auto_attack_strike_id),
                 "combat profile '{}' auto-attack authoring drifted from its animation-set asset",
+                profile.combat_profile
+            );
+            assert_eq!(
+                profile.auto_attack_sequence,
+                parse_auto_attack_sequence_from_animation_set_asset(asset_contents.as_str()),
+                "combat profile '{}' auto-attack visual sequence drifted from its animation-set asset",
+                profile.combat_profile
+            );
+            assert_eq!(
+                Some(profile.auto_attack_sequence_interval_ms),
+                parse_auto_attack_sequence_interval_from_animation_set_asset(
+                    asset_contents.as_str()
+                ),
+                "combat profile '{}' auto-attack sequence interval drifted from its animation-set asset",
                 profile.combat_profile
             );
         }
@@ -6650,6 +6850,17 @@ mod tests {
 
         assert_eq!(mode_key.as_deref(), Some("DAGGERS:READY:AUTO_ATTACK_1"));
         assert_eq!(profile_key, "DAGGERS:AUTO_ATTACK_1");
+    }
+
+    #[test]
+    fn dagger_auto_attack_sequence_uses_profile_sequence_interval() {
+        let step = auto_attack_sequence_step_for_profile("DAGGERS", 1)
+            .expect("Dagger auto-attack should author a second sequence strike");
+
+        assert_eq!(step.strike_id.as_str(), "DAGGER_COMBO_ATTACK_01_02");
+        assert_eq!(step.transition_delay_ms, 500);
+        assert!(!step.has_successor);
+        assert!(auto_attack_sequence_step_for_profile("DAGGERS", 2).is_none());
     }
 
     #[test]

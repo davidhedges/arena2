@@ -1263,8 +1263,11 @@ namespace Arena.Presentation
         [Header("Auto Attack")]
         [Tooltip("Design-facing authored strike id used for this combat profile's intrinsic repeating auto-attack. Defaults to Strike 1 if left empty.")]
         public string autoAttackAuthoredStrikeId = "";
-        [Tooltip("Authored strike id whose animation/visual bank should be reused when the intrinsic auto-attack plays.")]
-        public string autoAttackVisualSourceActionId = "";
+        [Tooltip("Ordered authored strike ids played during one intrinsic auto-attack charge. Most combat sets use one entry; multi-strike sets author each swing here in order.")]
+        public List<string> autoAttackVisualSequenceActionIds = new();
+        [Min(0)]
+        [Tooltip("Delay in milliseconds between consecutive strikes in this auto-attack sequence. This does not change the normal auto-attack charge/cooldown interval.")]
+        public int autoAttackSequenceIntervalMs;
 
         [Header("Dodge Actions")]
         public DirectionalClipSet dodge;
@@ -1548,6 +1551,11 @@ namespace Arena.Presentation
             string normalizedSlotId = CombatActionIds.NormalizeRuntimeActionReference(actionId);
             if (MatchesAutoAttackActionId(normalizedActionId, normalizedSlotId))
                 return AutoAttackVisualSourceStrikeIndex;
+            return GetRegularStrikeIndexForActionReference(normalizedActionId, normalizedSlotId);
+        }
+
+        private int GetRegularStrikeIndexForActionReference(string normalizedActionId, string normalizedSlotId)
+        {
             for (int strikeIndex = 1; strikeIndex <= MeleeAttackCount; strikeIndex++)
             {
                 var combat = GetStrikeCombat(strikeIndex);
@@ -1762,6 +1770,8 @@ namespace Arena.Presentation
                         stagger_duration_l_ms = RequiredClipDurationMs(staggerL, nameof(staggerL)),
                         stagger_duration_r_ms = RequiredClipDurationMs(staggerR, nameof(staggerR)),
                         auto_attack_strike_id = AutoAttackAuthoredStrikeIdOrDefault,
+                        auto_attack_sequence = AutoAttackVisualSequenceActionIds,
+                        auto_attack_sequence_interval_ms = Mathf.Max(0, autoAttackSequenceIntervalMs),
                         strikes = BuildExportStrikes(),
                     },
                 },
@@ -1871,9 +1881,29 @@ namespace Arena.Presentation
             ? "AUTO_ATTACK_1"
             : autoAttackAuthoredStrikeId.Trim();
 
-        public string AutoAttackVisualSourceActionIdOrDefault => string.IsNullOrWhiteSpace(autoAttackVisualSourceActionId)
-            ? GetDefaultAutoAttackVisualSourceActionId()
-            : autoAttackVisualSourceActionId.Trim();
+        public string[] AutoAttackVisualSequenceActionIds
+        {
+            get
+            {
+                if (autoAttackVisualSequenceActionIds != null && autoAttackVisualSequenceActionIds.Count > 0)
+                {
+                    var resolved = new List<string>(autoAttackVisualSequenceActionIds.Count);
+                    for (int index = 0; index < autoAttackVisualSequenceActionIds.Count; index++)
+                    {
+                        string actionId = autoAttackVisualSequenceActionIds[index]?.Trim() ?? string.Empty;
+                        if (!string.IsNullOrWhiteSpace(actionId))
+                            resolved.Add(actionId);
+                    }
+
+                    if (resolved.Count > 0)
+                        return resolved.ToArray();
+                }
+
+                return new[] { GetDefaultAutoAttackVisualSourceActionId() };
+            }
+        }
+
+        public string AutoAttackVisualSourceActionIdOrDefault => AutoAttackVisualSequenceActionIds[0];
 
         private int AutoAttackVisualSourceStrikeIndex
         {
@@ -1895,6 +1925,80 @@ namespace Arena.Presentation
 
         public bool IsAutoAttackVisualSourceStrike(int strikeIndex)
             => strikeIndex == AutoAttackVisualSourceStrikeIndex;
+
+        public bool IsAutoAttackVisualSequenceTransition(int activeStrikeIndex, string incomingActionId)
+        {
+            if (!TryGetAutoAttackVisualSequencePosition(activeStrikeIndex, out int activePosition)
+                || !TryGetAutoAttackVisualSequencePosition(incomingActionId, out int incomingPosition))
+            {
+                return false;
+            }
+
+            return incomingPosition == activePosition + 1;
+        }
+
+        public bool IsAutoAttackVisualSequenceRestart(int activeStrikeIndex, string incomingActionId)
+        {
+            if (!TryGetAutoAttackVisualSequencePosition(activeStrikeIndex, out int activePosition)
+                || !TryGetAutoAttackVisualSequencePosition(incomingActionId, out int incomingPosition))
+            {
+                return false;
+            }
+
+            return activePosition > 0 && incomingPosition == 0;
+        }
+
+        public bool IsAutoAttackVisualSequenceContinuation(string actionId)
+            => TryGetAutoAttackVisualSequencePosition(actionId, out int position) && position > 0;
+
+        private bool TryGetAutoAttackVisualSequencePosition(int strikeIndex, out int position)
+        {
+            if (strikeIndex <= 0)
+            {
+                position = -1;
+                return false;
+            }
+
+            string[] sequence = AutoAttackVisualSequenceActionIds;
+            for (int sequenceIndex = 0; sequenceIndex < sequence.Length; sequenceIndex++)
+            {
+                if (ResolveAutoAttackVisualSequenceStrikeIndex(sequence[sequenceIndex]) == strikeIndex)
+                {
+                    position = sequenceIndex;
+                    return true;
+                }
+            }
+
+            position = -1;
+            return false;
+        }
+
+        private bool TryGetAutoAttackVisualSequencePosition(string actionId, out int position)
+        {
+            if (string.IsNullOrWhiteSpace(actionId))
+            {
+                position = -1;
+                return false;
+            }
+
+            string normalizedActionId = actionId.Trim();
+            string normalizedSlotId = CombatActionIds.NormalizeRuntimeActionReference(actionId);
+            if (MatchesAutoAttackActionId(normalizedActionId, normalizedSlotId))
+            {
+                position = 0;
+                return true;
+            }
+
+            int strikeIndex = GetRegularStrikeIndexForActionReference(normalizedActionId, normalizedSlotId);
+            return TryGetAutoAttackVisualSequencePosition(strikeIndex, out position);
+        }
+
+        private int ResolveAutoAttackVisualSequenceStrikeIndex(string actionId)
+        {
+            string normalizedActionId = actionId?.Trim() ?? string.Empty;
+            string normalizedSlotId = CombatActionIds.NormalizeRuntimeActionReference(normalizedActionId);
+            return GetRegularStrikeIndexForActionReference(normalizedActionId, normalizedSlotId);
+        }
 
         private bool ContainsAuthoredStrikeId(string authoredStrikeId)
         {

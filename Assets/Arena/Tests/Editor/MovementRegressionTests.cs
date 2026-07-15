@@ -159,6 +159,72 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void DaggerCombatAnimationSet_AuthorsTwoStrikeAutoAttackSequence()
+        {
+            Type combatAnimationSetType = RequireType("Arena.Presentation.CombatAnimationSet");
+            UnityEngine.Object set = Resources.Load("CombatAnimationSets/Daggers", combatAnimationSetType);
+            Assert.That(set, Is.Not.Null);
+
+            string[] sequence = (string[])RequireProperty(
+                    combatAnimationSetType,
+                    "AutoAttackVisualSequenceActionIds")
+                .GetValue(set)!;
+            Assert.That(
+                sequence,
+                Is.EqualTo(new[]
+                {
+                    "DAGGER_COMBO_ATTACK_01_01",
+                    "DAGGER_COMBO_ATTACK_01_02",
+                }));
+            Assert.That(
+                combatAnimationSetType.GetField("autoAttackSequenceIntervalMs")!.GetValue(set),
+                Is.EqualTo(500));
+
+            Assert.That(
+                (bool)RequireMethod(
+                        combatAnimationSetType,
+                        "IsAutoAttackVisualSequenceTransition",
+                        typeof(int),
+                        typeof(string))
+                    .Invoke(set, new object[] { 1, "DAGGER_COMBO_ATTACK_01_02" })!,
+                Is.True);
+            Assert.That(
+                (bool)RequireMethod(
+                        combatAnimationSetType,
+                        "IsAutoAttackVisualSequenceRestart",
+                        typeof(int),
+                        typeof(string))
+                    .Invoke(set, new object[] { 2, "AUTO_ATTACK_1" })!,
+                Is.True);
+
+            string json = JsonUtility.ToJson(InvokeInstanceMethod(set, "BuildMeleeExport"), true);
+            Assert.That(json, Does.Contain("\"auto_attack_sequence\""));
+            Assert.That(json, Does.Contain("\"auto_attack_sequence_interval_ms\": 500"));
+            Assert.That(json, Does.Contain("DAGGER_COMBO_ATTACK_01_02"));
+
+            Type schedulerType = RequireType("Arena.Presentation.AutoAttackSwingScheduler");
+            Assert.That(
+                (bool)RequireMethod(
+                        schedulerType,
+                        "SupportsLocalPrediction",
+                        combatAnimationSetType)
+                    .Invoke(null, new[] { set })!,
+                Is.False);
+
+            UnityEngine.Object swordAndShield = Resources.Load(
+                "CombatAnimationSets/SwordAndShield",
+                combatAnimationSetType);
+            Assert.That(swordAndShield, Is.Not.Null);
+            Assert.That(
+                (bool)RequireMethod(
+                        schedulerType,
+                        "SupportsLocalPrediction",
+                        combatAnimationSetType)
+                    .Invoke(null, new[] { swordAndShield })!,
+                Is.True);
+        }
+
+        [Test]
         public void CombatAnimationSet_MeleeExportUsesStrikeHitEventBeforeAuthoredHitWindows()
         {
             Type combatAnimationSetType = RequireType("Arena.Presentation.CombatAnimationSet");

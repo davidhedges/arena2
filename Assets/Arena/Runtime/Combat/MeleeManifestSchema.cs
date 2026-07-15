@@ -79,6 +79,8 @@ namespace Arena.Combat
         public int stagger_duration_l_ms;
         public int stagger_duration_r_ms;
         public string auto_attack_strike_id = "";
+        public string[] auto_attack_sequence = Array.Empty<string>();
+        public int auto_attack_sequence_interval_ms;
         public MeleeManifestStrike[] strikes = Array.Empty<MeleeManifestStrike>();
     }
 

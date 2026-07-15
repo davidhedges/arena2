@@ -681,10 +681,21 @@ namespace Arena.Presentation
             bool isSpellActive,
             bool isMeleeActive,
             bool isComboFollowUp,
+            bool isAutoAttackSequenceRestart,
             bool activeMeleeIsPhased,
             bool visualGateEvaluated,
             CombatVisualInterruptDecision visualDecision)
         {
+            // A repeating authored auto-attack sequence wraps from its last strike back to its
+            // first. Keep that boundary on the same Animator handoff path as adjacent strikes;
+            // preempting here clears the active melee layer before the first strike is retriggered.
+            if (isMeleeActive && (isComboFollowUp || isAutoAttackSequenceRestart))
+            {
+                return activeMeleeIsPhased
+                    ? CombatAnimationDecision.InterruptCurrentWithoutGhostAndPlay
+                    : CombatAnimationDecision.HandoffComboFollowUpAndPlay;
+            }
+
             if (incomingCategory == CombatAnimationCategory.AutoAttack && isHigherPriorityActive)
             {
                 return visualGateEvaluated && visualDecision == CombatVisualInterruptDecision.InterruptCurrentWithoutGhost
@@ -697,13 +708,6 @@ namespace Arena.Presentation
 
             if (incomingCategory != CombatAnimationCategory.AutoAttack && isMeleeActive)
             {
-                if (isComboFollowUp)
-                {
-                    return activeMeleeIsPhased
-                        ? CombatAnimationDecision.InterruptCurrentWithoutGhostAndPlay
-                        : CombatAnimationDecision.HandoffComboFollowUpAndPlay;
-                }
-
                 return visualGateEvaluated && visualDecision == CombatVisualInterruptDecision.InterruptCurrentWithoutGhost
                     ? CombatAnimationDecision.InterruptCurrentWithoutGhostAndPlay
                     : CombatAnimationDecision.InterruptCurrentAndPlay;

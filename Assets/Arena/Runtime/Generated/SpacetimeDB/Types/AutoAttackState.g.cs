@@ -31,6 +31,10 @@ namespace SpacetimeDB.Types
         public bool PendingDue;
         [DataMember(Name = "movement_epoch_at_schedule")]
         public ulong MovementEpochAtSchedule;
+        [DataMember(Name = "pending_sequence_index")]
+        public uint PendingSequenceIndex;
+        [DataMember(Name = "next_sequence_at")]
+        public SpacetimeDB.Timestamp NextSequenceAt;
 
         public AutoAttackState(
             SpacetimeDB.Identity Owner,
@@ -41,7 +45,9 @@ namespace SpacetimeDB.Types
             SpacetimeDB.Timestamp CadenceStartedAt,
             SpacetimeDB.Timestamp NextSwingAt,
             bool PendingDue,
-            ulong MovementEpochAtSchedule
+            ulong MovementEpochAtSchedule,
+            uint PendingSequenceIndex,
+            SpacetimeDB.Timestamp NextSequenceAt
         )
         {
             this.Owner = Owner;
@@ -53,6 +59,8 @@ namespace SpacetimeDB.Types
             this.NextSwingAt = NextSwingAt;
             this.PendingDue = PendingDue;
             this.MovementEpochAtSchedule = MovementEpochAtSchedule;
+            this.PendingSequenceIndex = PendingSequenceIndex;
+            this.NextSequenceAt = NextSequenceAt;
         }
 
         public AutoAttackState()

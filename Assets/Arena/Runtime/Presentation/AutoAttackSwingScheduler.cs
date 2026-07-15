@@ -179,6 +179,17 @@ namespace Arena.Presentation
             if (_lastScheduleResolved)
                 return;
 
+            CombatAnimationSet? animationSet = CombatAnimationSetCatalog.Resolve(row.CombatProfileId);
+            if (!SupportsLocalPrediction(animationSet))
+            {
+                // The current prediction ledger correlates one local swing to
+                // one authoritative CAST. Multi-strike charge windows stay
+                // authoritative until that ledger can represent the complete
+                // sequence without consuming or reordering continuation CASTs.
+                _lastScheduleResolved = true;
+                return;
+            }
+
             if (!DebugEnabled || !ArenaServerClock.HasPreciseSample)
                 return; // No prediction without a precise clock (contract item 1).
 
@@ -366,6 +377,16 @@ namespace Arena.Presentation
             if (_instance == null)
                 return false;
 
+            string combatProfile = CombatProfileResolver.ResolveForEntity(conn, entity);
+            CombatAnimationSet? animationSet = CombatAnimationSetCatalog.Resolve(combatProfile);
+            if (animationSet?.IsAutoAttackVisualSequenceContinuation(request.ActionId) == true)
+            {
+                // Continuation CASTs are distinct authored swings. They must
+                // reach PlayerAnimator and must never consume the root swing's
+                // local-prediction correlation slot.
+                return false;
+            }
+
             _instance._lastAutoCastReceivedAtMs = nowMs;
             // Any auto CAST resolves an armed replacement (consumed or fallen
             // back to the intrinsic strike server-side).
@@ -386,7 +407,6 @@ namespace Arena.Presentation
                 return false;
             }
 
-            string combatProfile = CombatProfileResolver.ResolveForEntity(conn, entity);
             string incomingRuntimeActionId =
                 CombatActionIds.ResolveRuntimeActionId(conn, combatProfile, request.ActionId);
             _instance._hasPendingLocalSwing = false;
@@ -417,6 +437,9 @@ namespace Arena.Presentation
                 $"[AA_SCHED] suppressed duplicate auto cast strike={incomingRuntimeActionId} cast_align_ms={CastAlignLastMs}");
             return true;
         }
+
+        internal static bool SupportsLocalPrediction(CombatAnimationSet? animationSet)
+            => animationSet == null || animationSet.AutoAttackVisualSequenceActionIds.Length <= 1;
 
         private void ExpirePendingLocalSwing(long nowMs)
         {

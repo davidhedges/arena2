@@ -635,19 +635,42 @@ namespace Arena.Presentation
             bool isMeleeActive = IsMeleePresentationStateActive();
             bool isSpellActive = IsAnySpellPresentationStateActive();
             bool isComboFollowUp = false;
+            bool isAutoAttackSequenceRestart = false;
             bool activeMeleeIsPhased = false;
 
-            if (request.Category != CombatAnimationCategory.AutoAttack && isMeleeActive)
+            if (isMeleeActive)
             {
-                isComboFollowUp = IsComboFollowUpOfActiveMelee(request);
-                if (isComboFollowUp)
+                ActiveMeleePresentation active = _actionPlayback.ActiveMeleePresentation.GetValueOrDefault();
+                bool ownsAutoAttackSequence = request.Category == CombatAnimationCategory.AutoAttack
+                    && active.Category == CombatAnimationCategory.AutoAttack
+                    && active.StrikeIndex > 0
+                    && _animationSet != null;
+                if (ownsAutoAttackSequence)
+                {
+                    isComboFollowUp = _animationSet!.IsAutoAttackVisualSequenceTransition(
+                        active.StrikeIndex,
+                        request.ActionId);
+                    isAutoAttackSequenceRestart = !isComboFollowUp
+                        && _animationSet.IsAutoAttackVisualSequenceRestart(
+                            active.StrikeIndex,
+                            request.ActionId);
+                }
+                else if (request.Category != CombatAnimationCategory.AutoAttack)
+                {
+                    isComboFollowUp = IsComboFollowUpOfActiveMelee(request);
+                }
+
+                if (isComboFollowUp || isAutoAttackSequenceRestart)
                 {
                     activeMeleeIsPhased = _actionPlayback.ActiveMeleePresentation.HasValue && _actionPlayback.ActiveMeleePresentation.Value.IsPhased;
                 }
             }
 
             bool shouldEvaluateVisualGate =
-                (request.Category == CombatAnimationCategory.AutoAttack && isHigherPriority)
+                (request.Category == CombatAnimationCategory.AutoAttack
+                    && isHigherPriority
+                    && !isComboFollowUp
+                    && !isAutoAttackSequenceRestart)
                 || isSpellActive
                 || (request.Category != CombatAnimationCategory.AutoAttack && isMeleeActive && !isComboFollowUp);
             bool gateEvaluated = false;
@@ -665,6 +688,7 @@ namespace Arena.Presentation
                 isSpellActive,
                 isMeleeActive,
                 isComboFollowUp,
+                isAutoAttackSequenceRestart,
                 activeMeleeIsPhased,
                 gateEvaluated,
                 visualDecision);

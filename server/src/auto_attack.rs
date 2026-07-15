@@ -15,8 +15,10 @@ use crate::combat::temporary_combat_modifiers;
 use crate::defense::is_defense_active;
 use crate::melee::{
     auto_attack_gameplay_for_profile_mode_action, auto_attack_reference_for_profile,
+    auto_attack_sequence_len_for_profile, auto_attack_sequence_step_for_profile,
     get_melee_definition_for_authored, melee_range_bonus, perform_intrinsic_auto_attack_for,
-    perform_intrinsic_auto_attack_replacement_for, scaled_auto_attack_cadence_ms,
+    perform_intrinsic_auto_attack_replacement_for,
+    perform_intrinsic_auto_attack_sequence_strike_for, scaled_auto_attack_cadence_ms,
     MeleeAttackDispatch,
 };
 use crate::movement_actions::MovementActionKind;
@@ -63,6 +65,8 @@ pub struct AutoAttackState {
     pub next_swing_at: Timestamp,
     pub pending_due: bool,
     pub movement_epoch_at_schedule: u64,
+    pub pending_sequence_index: u32,
+    pub next_sequence_at: Timestamp,
 }
 
 #[table(accessor = pending_auto_attack_replacement)]
@@ -328,6 +332,8 @@ fn schedule_auto_attack_after_cadence(
             next_swing_at,
             pending_due: false,
             movement_epoch_at_schedule: movement_epoch,
+            pending_sequence_index: 0,
+            next_sequence_at: Timestamp::UNIX_EPOCH,
         },
     );
     log::info!(
@@ -400,6 +406,7 @@ pub(crate) fn tick_auto_attacks(ctx: &ReducerContext, now: Timestamp) {
         }
 
         if auto_attack_paused(ctx, row.owner, now) {
+            clear_pending_auto_attack_sequence(ctx, row.owner);
             continue;
         }
 
@@ -460,6 +467,96 @@ pub(crate) fn tick_auto_attacks(ctx: &ReducerContext, now: Timestamp) {
             );
             schedule_auto_attack_after_cadence(ctx, row.owner, row.target, now);
             continue;
+        }
+
+        if row.pending_sequence_index > 0 && now >= row.next_sequence_at {
+            let sequence_index = row.pending_sequence_index as usize;
+            let Some(sequence_step) = auto_attack_sequence_step_for_profile(
+                row.combat_profile_id.as_str(),
+                sequence_index,
+            ) else {
+                log::info!(
+                    "[AUTO_ATTACK] owner={} target={} sequence_cancelled reason=invalid_step profile={} index={}",
+                    short_identity(row.owner),
+                    short_identity(row.target),
+                    row.combat_profile_id,
+                    sequence_index
+                );
+                clear_pending_auto_attack_sequence(ctx, row.owner);
+                continue;
+            };
+            let Some(caster_phys) = ctx.db.player_physics().identity().find(row.owner) else {
+                clear_auto_attack_for_owner(ctx, row.owner);
+                continue;
+            };
+            let target_id = row.target.to_hex();
+            let dispatch = perform_intrinsic_auto_attack_sequence_strike_for(
+                ctx,
+                row.owner,
+                &authored_strike_id,
+                &sequence_step.strike_id,
+                target_id.as_str(),
+                caster_phys.pos_x,
+                caster_phys.pos_y,
+                caster_phys.pos_z,
+                caster_phys.yaw,
+            );
+            match dispatch {
+                Ok(MeleeAttackDispatch::Started) => {
+                    log::info!(
+                        "[AUTO_ATTACK] owner={} target={} sequence_started index={} strike={}",
+                        short_identity(row.owner),
+                        short_identity(row.target),
+                        sequence_index,
+                        sequence_step.strike_id.as_str()
+                    );
+                    if sequence_step.has_successor {
+                        if let Err(error) = schedule_auto_attack_sequence_step(
+                            ctx,
+                            row.owner,
+                            sequence_index + 1,
+                            now,
+                        ) {
+                            log::info!(
+                                "[AUTO_ATTACK] owner={} target={} sequence_cancelled reason=schedule_error index={} error={}",
+                                short_identity(row.owner),
+                                short_identity(row.target),
+                                sequence_index + 1,
+                                error
+                            );
+                            clear_pending_auto_attack_sequence(ctx, row.owner);
+                        }
+                    } else {
+                        clear_pending_auto_attack_sequence(ctx, row.owner);
+                    }
+                }
+                Ok(MeleeAttackDispatch::Queued | MeleeAttackDispatch::Rejected(_)) => {
+                    log::info!(
+                        "[AUTO_ATTACK] owner={} target={} sequence_cancelled reason=rejected index={} strike={}",
+                        short_identity(row.owner),
+                        short_identity(row.target),
+                        sequence_index,
+                        sequence_step.strike_id.as_str()
+                    );
+                    clear_pending_auto_attack_sequence(ctx, row.owner);
+                }
+                Err(error) => {
+                    log::info!(
+                        "[AUTO_ATTACK] owner={} target={} sequence_cancelled reason=execution_error index={} strike={} error={}",
+                        short_identity(row.owner),
+                        short_identity(row.target),
+                        sequence_index,
+                        sequence_step.strike_id.as_str(),
+                        error
+                    );
+                    clear_pending_auto_attack_sequence(ctx, row.owner);
+                }
+            }
+
+            let Some(refreshed) = ctx.db.auto_attack_state().owner().find(row.owner) else {
+                continue;
+            };
+            row = refreshed;
         }
 
         let pending_due = row.pending_due || now >= row.next_swing_at;
@@ -644,18 +741,24 @@ pub(crate) fn tick_auto_attacks(ctx: &ReducerContext, now: Timestamp) {
                     caster_phys.yaw,
                 )
             });
-        let dispatch = attempted_replacement.unwrap_or_else(|| {
-            perform_intrinsic_auto_attack_for(
-                ctx,
-                row.owner,
-                &authored_strike_id,
-                target_id.as_str(),
-                caster_phys.pos_x,
-                caster_phys.pos_y,
-                caster_phys.pos_z,
-                caster_phys.yaw,
+        let (dispatch, starts_authored_sequence) = if let Some(replacement) = attempted_replacement
+        {
+            (replacement, false)
+        } else {
+            (
+                perform_intrinsic_auto_attack_for(
+                    ctx,
+                    row.owner,
+                    &authored_strike_id,
+                    target_id.as_str(),
+                    caster_phys.pos_x,
+                    caster_phys.pos_y,
+                    caster_phys.pos_z,
+                    caster_phys.yaw,
+                ),
+                true,
             )
-        });
+        };
 
         match dispatch {
             Ok(MeleeAttackDispatch::Started) => {
@@ -666,6 +769,19 @@ pub(crate) fn tick_auto_attacks(ctx: &ReducerContext, now: Timestamp) {
                     row.strike_id
                 );
                 schedule_auto_attack_from_swing_start(ctx, row.owner, row.target, now);
+                if starts_authored_sequence {
+                    if let Err(error) = schedule_auto_attack_sequence_step(ctx, row.owner, 1, now) {
+                        log::info!(
+                            "[AUTO_ATTACK] owner={} target={} clear reason=invalid_sequence strike={} error={}",
+                            short_identity(row.owner),
+                            short_identity(row.target),
+                            row.strike_id,
+                            error
+                        );
+                        clear_auto_attack_for_owner(ctx, row.owner);
+                        continue;
+                    }
+                }
             }
             Ok(MeleeAttackDispatch::Queued | MeleeAttackDispatch::Rejected(_)) => {
                 log::info!(
@@ -688,6 +804,59 @@ pub(crate) fn tick_auto_attacks(ctx: &ReducerContext, now: Timestamp) {
             }
         }
     }
+}
+
+fn schedule_auto_attack_sequence_step(
+    ctx: &ReducerContext,
+    owner: Identity,
+    sequence_index: usize,
+    started_at: Timestamp,
+) -> Result<(), String> {
+    let Some(mut row) = ctx.db.auto_attack_state().owner().find(owner) else {
+        return Ok(());
+    };
+    let sequence_len = auto_attack_sequence_len_for_profile(row.combat_profile_id.as_str())
+        .ok_or_else(|| format!("missing melee profile '{}'", row.combat_profile_id))?;
+    if sequence_index >= sequence_len {
+        clear_pending_auto_attack_sequence(ctx, owner);
+        return Ok(());
+    }
+    let sequence_step = auto_attack_sequence_step_for_profile(
+        row.combat_profile_id.as_str(),
+        sequence_index,
+    )
+    .ok_or_else(|| {
+        format!(
+            "auto-attack sequence step {} for profile '{}' is not a valid authored combo transition",
+            sequence_index, row.combat_profile_id
+        )
+    })?;
+    let execute_at = started_at + Duration::from_millis(sequence_step.transition_delay_ms);
+    row.pending_sequence_index = sequence_index as u32;
+    row.next_sequence_at = execute_at;
+    upsert_auto_attack_state(ctx, row.clone());
+    log::info!(
+        "[AUTO_ATTACK] owner={} target={} sequence_scheduled index={} strike={} delay_ms={} execute_at_micros={}",
+        short_identity(owner),
+        short_identity(row.target),
+        sequence_index,
+        sequence_step.strike_id.as_str(),
+        sequence_step.transition_delay_ms,
+        execute_at.to_micros_since_unix_epoch()
+    );
+    Ok(())
+}
+
+fn clear_pending_auto_attack_sequence(ctx: &ReducerContext, owner: Identity) {
+    let Some(mut row) = ctx.db.auto_attack_state().owner().find(owner) else {
+        return;
+    };
+    if row.pending_sequence_index == 0 && row.next_sequence_at == Timestamp::UNIX_EPOCH {
+        return;
+    }
+    row.pending_sequence_index = 0;
+    row.next_sequence_at = Timestamp::UNIX_EPOCH;
+    upsert_auto_attack_state(ctx, row);
 }
 
 fn prune_expired_pending_auto_attack_replacements(ctx: &ReducerContext, now: Timestamp) {
@@ -1111,6 +1280,8 @@ mod tests {
             next_swing_at: Timestamp::UNIX_EPOCH + Duration::from_millis(3500),
             pending_due: false,
             movement_epoch_at_schedule: 0,
+            pending_sequence_index: 0,
+            next_sequence_at: Timestamp::UNIX_EPOCH,
         }
     }
 
