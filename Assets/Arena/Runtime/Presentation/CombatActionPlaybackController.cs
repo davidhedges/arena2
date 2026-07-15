@@ -686,9 +686,9 @@ namespace Arena.Presentation
             bool visualGateEvaluated,
             CombatVisualInterruptDecision visualDecision)
         {
-            // A repeating authored auto-attack sequence wraps from its last strike back to its
-            // first. Keep that boundary on the same Animator handoff path as adjacent strikes;
-            // preempting here clears the active melee layer before the first strike is retriggered.
+            // Explicit melee combo follow-ups and auto-attack sequence steps may hand off
+            // directly. An auto-attack reaches this branch only when the active presentation
+            // also owns that auto-attack sequence, never when a skill or spell owns the pose.
             if (isMeleeActive && (isComboFollowUp || isAutoAttackSequenceRestart))
             {
                 return activeMeleeIsPhased
@@ -697,11 +697,7 @@ namespace Arena.Presentation
             }
 
             if (incomingCategory == CombatAnimationCategory.AutoAttack && isHigherPriorityActive)
-            {
-                return visualGateEvaluated && visualDecision == CombatVisualInterruptDecision.InterruptCurrentWithoutGhost
-                    ? CombatAnimationDecision.InterruptCurrentWithoutGhostAndPlay
-                    : CombatAnimationDecision.DropAsLowerPriority;
-            }
+                return CombatAnimationDecision.DropAsLowerPriority;
 
             if (isSpellActive)
                 return CombatAnimationDecision.InterruptCurrentWithoutGhostAndPlay;
@@ -762,11 +758,13 @@ namespace Arena.Presentation
             _ = activeCategory;
             _ = activeIsPhased;
 
-            if (activeElapsedSeconds >= activeVisualInterruptibleAtSeconds)
-                return CombatVisualInterruptDecision.InterruptCurrentWithoutGhost;
+            // Auto-attack gameplay is independent of its presentation. A due swing may still
+            // resolve, but its animation never replaces a higher-priority skill or spell.
+            if (incomingCategory == CombatAnimationCategory.AutoAttack)
+                return CombatVisualInterruptDecision.SuppressIncomingWithGhost;
 
-            return incomingCategory == CombatAnimationCategory.AutoAttack
-                ? CombatVisualInterruptDecision.SuppressIncomingWithGhost
+            return activeElapsedSeconds >= activeVisualInterruptibleAtSeconds
+                ? CombatVisualInterruptDecision.InterruptCurrentWithoutGhost
                 : CombatVisualInterruptDecision.InterruptCurrentWithGhost;
         }
 

@@ -385,7 +385,7 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
-        public void DecideCombatAnimationRequest_PreservesPriorityAndAutoAttackSequenceHandoffPolicy()
+        public void DecideCombatAnimationRequest_NeverLetsAutoAttackPreemptAbilities()
         {
             Assert.That(
                 InvokeCombatAnimationDecision(
@@ -441,8 +441,60 @@ namespace Arena.Tests.Editor
 
             Assert.That(
                 InvokeCombatAnimationDecision(
+                    incomingCategory: "AutoAttack",
+                    isHigherPriorityActive: true,
+                    isSpellActive: false,
+                    isMeleeActive: true,
+                    isComboFollowUp: false,
+                    isAutoAttackSequenceRestart: false,
+                    activeMeleeIsPhased: false,
+                    visualGateEvaluated: true,
+                    visualDecision: "InterruptCurrentWithoutGhost").ToString(),
+                Is.EqualTo("DropAsLowerPriority"));
+
+            Assert.That(
+                InvokeCombatAnimationDecision(
                     incomingCategory: "MeleeSkill",
                     isHigherPriorityActive: false,
+                    isSpellActive: false,
+                    isMeleeActive: true,
+                    isComboFollowUp: false,
+                    isAutoAttackSequenceRestart: false,
+                    activeMeleeIsPhased: false,
+                    visualGateEvaluated: true,
+                    visualDecision: "InterruptCurrentWithoutGhost").ToString(),
+                Is.EqualTo("InterruptCurrentWithoutGhostAndPlay"));
+
+            Assert.That(
+                InvokeCombatAnimationDecision(
+                    incomingCategory: "AutoAttack",
+                    isHigherPriorityActive: true,
+                    isSpellActive: true,
+                    isMeleeActive: false,
+                    isComboFollowUp: false,
+                    isAutoAttackSequenceRestart: false,
+                    activeMeleeIsPhased: false,
+                    visualGateEvaluated: false,
+                    visualDecision: "PreserveExistingBehavior").ToString(),
+                Is.EqualTo("DropAsLowerPriority"));
+
+            Assert.That(
+                InvokeCombatAnimationDecision(
+                    incomingCategory: "AutoAttack",
+                    isHigherPriorityActive: true,
+                    isSpellActive: false,
+                    isMeleeActive: true,
+                    isComboFollowUp: false,
+                    isAutoAttackSequenceRestart: false,
+                    activeMeleeIsPhased: true,
+                    visualGateEvaluated: true,
+                    visualDecision: "InterruptCurrentWithoutGhost").ToString(),
+                Is.EqualTo("DropAsLowerPriority"));
+
+            Assert.That(
+                InvokeCombatAnimationDecision(
+                    incomingCategory: "Spell",
+                    isHigherPriorityActive: true,
                     isSpellActive: false,
                     isMeleeActive: true,
                     isComboFollowUp: false,
@@ -542,7 +594,7 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
-        public void DecideVisualInterrupt_AllowsAutoAttackAfterThreshold()
+        public void DecideVisualInterrupt_SuppressesAutoAttackAfterThreshold()
         {
             object result = InvokeVisualInterruptDecision(
                 activeCategory: "MeleeSkill",
@@ -551,7 +603,7 @@ namespace Arena.Tests.Editor
                 activeElapsedSeconds: 0.50f,
                 activeVisualInterruptibleAtSeconds: 0.50f);
 
-            Assert.That(result.ToString(), Is.EqualTo("InterruptCurrentWithoutGhost"));
+            Assert.That(result.ToString(), Is.EqualTo("SuppressIncomingWithGhost"));
         }
 
         [Test]

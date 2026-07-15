@@ -667,11 +667,7 @@ namespace Arena.Presentation
             }
 
             bool shouldEvaluateVisualGate =
-                (request.Category == CombatAnimationCategory.AutoAttack
-                    && isHigherPriority
-                    && !isComboFollowUp
-                    && !isAutoAttackSequenceRestart)
-                || isSpellActive
+                isSpellActive
                 || (request.Category != CombatAnimationCategory.AutoAttack && isMeleeActive && !isComboFollowUp);
             bool gateEvaluated = false;
             CombatVisualInterruptDecision visualDecision = CombatVisualInterruptDecision.PreserveExistingBehavior;
