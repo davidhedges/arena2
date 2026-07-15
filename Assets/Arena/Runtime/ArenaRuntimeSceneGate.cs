@@ -9,13 +9,18 @@ namespace Arena
     {
         private const string ArenaScenePathPrefix = "Assets/Arena/Content/Scenes/";
 
+        // Authoring/demo scenes (shader demos, art review, etc.) live with the
+        // other scenes but must not boot the networked runtime in play mode.
+        private const string AuthoringScenePathPrefix = "Assets/Arena/Content/Scenes/Authoring/";
+
         internal static bool IsArenaRuntimeScene(Scene scene)
             => IsArenaRuntimeScene(scene.name, scene.path);
 
         internal static bool IsArenaRuntimeScene(string sceneName, string scenePath)
         {
             if (!string.IsNullOrEmpty(scenePath))
-                return scenePath.StartsWith(ArenaScenePathPrefix, System.StringComparison.Ordinal);
+                return scenePath.StartsWith(ArenaScenePathPrefix, System.StringComparison.Ordinal)
+                       && !scenePath.StartsWith(AuthoringScenePathPrefix, System.StringComparison.Ordinal);
 
             return string.Equals(sceneName, "Arena", System.StringComparison.Ordinal)
                    || string.Equals(sceneName, "Arena_VerdantStand_Blockout", System.StringComparison.Ordinal)

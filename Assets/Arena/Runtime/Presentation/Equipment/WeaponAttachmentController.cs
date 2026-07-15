@@ -289,6 +289,40 @@ namespace Arena.Presentation
             return false;
         }
 
+        /// <summary>
+        /// Appends renderers owned by current equipped and temporary weapon visuals.
+        /// Callers use this for whole-character presentation effects without scanning
+        /// unrelated UI or VFX under the player entity root.
+        /// </summary>
+        public void AppendVisualRenderers(List<Renderer> results)
+        {
+            if (results == null)
+                throw new ArgumentNullException(nameof(results));
+
+            // GetComponentsInChildren(List<T>) clears the destination list, so collect
+            // into a scratch list and append to preserve the caller's entries.
+            var scratch = new List<Renderer>();
+            for (int i = 0; i < _spawnedVisuals.Count; i++)
+            {
+                GameObject instance = _spawnedVisuals[i].Instance;
+                if (instance == null)
+                    continue;
+
+                instance.GetComponentsInChildren(includeInactive: true, scratch);
+                results.AddRange(scratch);
+            }
+
+            for (int i = 0; i < _temporaryAnimatedProps.Count; i++)
+            {
+                GameObject instance = _temporaryAnimatedProps[i].Instance;
+                if (instance == null)
+                    continue;
+
+                instance.GetComponentsInChildren(includeInactive: true, scratch);
+                results.AddRange(scratch);
+            }
+        }
+
         public bool BeginTemporaryAnimatedProp(
             string actionId,
             in SpellAnimatedPropHandoff handoff,

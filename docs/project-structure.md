@@ -30,6 +30,9 @@ Assets/Arena/Content/
   Input/            Input action assets.
   Prefabs/          First-party authored prefabs.
   Scenes/           Build, open-world, and development scenes.
+    Authoring/      Authoring/demo scenes (shader demos, art review). Excluded
+                    from ArenaRuntimeSceneGate, so play mode there does not
+                    boot the networked Arena runtime. Never added to builds.
   Settings/         Render pipeline and project content settings.
   Shaders/          First-party shaders and shader graphs.
 ```

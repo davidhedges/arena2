@@ -73,6 +73,7 @@ namespace Arena.Entity
         private RuntimeAvatarController? _avatarController;
         private RuntimeAvatarBinding? _avatarBinding;
         private WeaponAttachmentController? _weaponAttachments;
+        private StealthVisualController? _stealthVisual;
         private LocalPlayerStateProvider? _stateProvider;
         private CombatAnimationSet? _combatAnimationSet;
         private string _combatAnimationModeId = string.Empty;
@@ -140,6 +141,11 @@ namespace Arena.Entity
                     _avatarController = GameObject.AddComponent<RuntimeAvatarController>();
                 _avatarController.SetVisualRootParent(GameObject.transform);
             }
+
+            _stealthVisual = GameObject.GetComponent<StealthVisualController>();
+            if (_stealthVisual == null)
+                _stealthVisual = GameObject.AddComponent<StealthVisualController>();
+            _stealthVisual.MaterialsRestored += RefreshEffectTint;
 
             GameObject.name = $"Player_{identity}";
 
@@ -244,6 +250,7 @@ namespace Arena.Entity
                 color = Color.Lerp(color, Color.white, 0.3f);
 
             ApplyColorToRenderers(color);
+            _stealthVisual?.ReapplyOpacity();
         }
 
         private void ApplyColorToRenderers(Color color)
@@ -400,6 +407,7 @@ namespace Arena.Entity
             _animator?.ApplyAnimationSet(set);
             _animator?.ApplyCombatLocomotionMode(_combatAnimationModeId);
             _weaponAttachments?.ApplyAnimationSet(set, _equippedWeaponVisualsByRole);
+            RefreshStealthVisualTargets();
         }
 
         public void SetCombatAnimationMode(string? modeId)
@@ -408,6 +416,11 @@ namespace Arena.Entity
                 ? string.Empty
                 : modeId.Trim().ToUpperInvariant();
             _animator?.ApplyCombatLocomotionMode(_combatAnimationModeId);
+            RefreshStealthVisualTargets();
+            _stealthVisual?.SetStealthed(string.Equals(
+                _combatAnimationModeId,
+                CombatModeIds.Stealthed,
+                System.StringComparison.Ordinal));
         }
 
         public void SetEquippedWeaponVisuals(IEnumerable<EquippedWeaponVisual> visuals)
@@ -423,6 +436,7 @@ namespace Arena.Entity
 
             if (_combatAnimationSet != null)
                 _weaponAttachments?.ApplyAnimationSet(_combatAnimationSet, _equippedWeaponVisualsByRole);
+            RefreshStealthVisualTargets();
         }
 
         public void SetEquippedArmorItemDefIdsBySlot(Dictionary<string, string> itemDefIdsBySlot)
@@ -534,6 +548,19 @@ namespace Arena.Entity
             if (_sharedActionProfile != null)
                 SetSharedActionProfile(_sharedActionProfile);
             RefreshEffectTint();
+            RefreshStealthVisualTargets();
+        }
+
+        private void RefreshStealthVisualTargets()
+        {
+            if (_stealthVisual == null)
+                return;
+
+            var renderers = new List<Renderer>();
+            if (_renderers != null)
+                renderers.AddRange(_renderers);
+            _weaponAttachments?.AppendVisualRenderers(renderers);
+            _stealthVisual.RefreshRenderers(renderers);
         }
 
         public void SetSharedActionProfile(SharedActionProfile profile)
@@ -729,6 +756,8 @@ namespace Arena.Entity
         {
             if (IsDestroyed) return;
 
+            if (_stealthVisual != null)
+                _stealthVisual.MaterialsRestored -= RefreshEffectTint;
             DisablePlayerInput(GameObject);
             Object.Destroy(GameObject);
         }
