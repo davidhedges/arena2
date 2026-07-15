@@ -4445,7 +4445,7 @@
       "action_id": "AUTO_ATTACK_1",
       "base_damage": 18,
       "range": 2,
-      "cooldown_ms": 1200,
+      "cooldown_ms": 2000,
       "movement_policy": "ALLOW_MOVING",
       "uses_global_cooldown": false,
       "parry_behavior": "PARRYABLE",
