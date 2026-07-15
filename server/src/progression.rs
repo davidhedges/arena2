@@ -1770,7 +1770,7 @@ pub(crate) fn clear_generic_fixed_action_bar_assignments(ctx: &ReducerContext) -
     removed
 }
 
-pub(crate) fn migrate_renamed_skyfall_action_bar_assignments(ctx: &ReducerContext) -> usize {
+pub(crate) fn migrate_renamed_melee_action_bar_assignments(ctx: &ReducerContext) -> usize {
     const ID_MIGRATIONS: &[(&str, &str, Option<&str>)] = &[
         ("WARRIOR_SKYFALL_1", "WARRIOR_CRUSHING_BLOW", None),
         ("WARRIOR_SKYFALL_2", "WARRIOR_CATACLYSM", None),
@@ -1779,7 +1779,8 @@ pub(crate) fn migrate_renamed_skyfall_action_bar_assignments(ctx: &ReducerContex
             "WARRIOR_CATACLYSM",
             Some("slot_0_2"),
         ),
-        ("WARRIOR_SKYFALL_3", "WARRIOR_BLADESTORM", None),
+        ("WARRIOR_SKYFALL_3", "WARRIOR_BUZZSAW", None),
+        ("WARRIOR_BLADESTORM", "WARRIOR_BUZZSAW", None),
     ];
 
     let id_migrations: Vec<_> = ID_MIGRATIONS
@@ -8913,7 +8914,7 @@ mod tests {
     }
 
     #[test]
-    fn renamed_skyfall_sequence_authors_final_ids() {
+    fn renamed_skyfall_sequence_authors_current_ids() {
         let catalog = progression_catalog();
         let expected = [
             (
@@ -8923,7 +8924,7 @@ mod tests {
                 "slot_0_1",
             ),
             ("WARRIOR_CATACLYSM", "CATACLYSM", "Cataclysm", "slot_0_2"),
-            ("WARRIOR_BLADESTORM", "BLADESTORM", "Bladestorm", "slot_0_3"),
+            ("WARRIOR_BUZZSAW", "BUZZSAW", "Buzzsaw", "slot_0_3"),
         ];
 
         for (ability_id, action_id, display_name, slot_id) in expected {
@@ -8951,6 +8952,7 @@ mod tests {
             "WARRIOR_SKYFALL_1",
             "WARRIOR_SKYFALL_2",
             "WARRIOR_SKYFALL_3",
+            "WARRIOR_BLADESTORM",
         ] {
             assert!(
                 catalog

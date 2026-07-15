@@ -82,7 +82,7 @@ use crate::practice::{is_training_instance, tick_practice};
 use crate::progression::{
     backfill_character_action_bar_rows, backfill_sword_and_shield_visible_action_bar_rows,
     clear_generic_fixed_action_bar_assignments, migrate_generic_spell_action_bar_assignments,
-    migrate_renamed_skyfall_action_bar_assignments, sync_progression_catalogs,
+    migrate_renamed_melee_action_bar_assignments, sync_progression_catalogs,
 };
 use crate::resources::{
     reset_player_resources_to_full, sync_all_player_resources,
@@ -713,11 +713,11 @@ fn bootstrap_server_state(ctx: &ReducerContext) {
             removed_generic_fixed_action_bar_rows
         );
     }
-    let migrated_skyfall_action_bar_rows = migrate_renamed_skyfall_action_bar_assignments(ctx);
-    if migrated_skyfall_action_bar_rows > 0 {
+    let migrated_melee_action_bar_rows = migrate_renamed_melee_action_bar_assignments(ctx);
+    if migrated_melee_action_bar_rows > 0 {
         log::warn!(
-            "[INIT] Migrated {} renamed Skyfall action-bar assignment row(s)",
-            migrated_skyfall_action_bar_rows
+            "[INIT] Migrated {} renamed melee action-bar assignment row(s)",
+            migrated_melee_action_bar_rows
         );
     }
     let migrated_generic_spell_action_bar_rows = migrate_generic_spell_action_bar_assignments(ctx);

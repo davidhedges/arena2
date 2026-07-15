@@ -12,7 +12,7 @@
         {"kind": "ABILITY", "id": "WARRIOR_CRUSHING_BLOW"},
         {"kind": "ABILITY", "id": "WARRIOR_CATACLYSM"},
         {"kind": "ABILITY", "id": "SPELL_ICE_SPIKES"},
-        {"kind": "ABILITY", "id": "WARRIOR_BLADESTORM"},
+        {"kind": "ABILITY", "id": "WARRIOR_BUZZSAW"},
         {"kind": "ABILITY", "id": "WARRIOR_WHIRLWIND"},
         {"kind": "ABILITY", "id": "WARRIOR_SUNDER"},
         {"kind": "ABILITY", "id": "WARRIOR_CLEAVE"},

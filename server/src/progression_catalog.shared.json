@@ -529,11 +529,11 @@
       }
     },
     {
-      "ability_id": "WARRIOR_BLADESTORM",
+      "ability_id": "WARRIOR_BUZZSAW",
       "actor_scope": "PLAYER",
       "combat_profile_id": "TWO_HANDED_SWORD",
-      "action_id": "BLADESTORM",
-      "display_name": "Bladestorm",
+      "action_id": "BUZZSAW",
+      "display_name": "Buzzsaw",
       "resource_kind": "STAMINA",
       "resource_cost": 35,
       "ability_tags": [
@@ -4593,8 +4593,8 @@
     },
     {
       "presentation_kind": "ABILITY",
-      "presentation_id": "WARRIOR_BLADESTORM",
-      "display_name": "Bladestorm",
+      "presentation_id": "WARRIOR_BUZZSAW",
+      "display_name": "Buzzsaw",
       "description": "Finishes the chain with a sweeping greatsword storm.",
       "sort_order": 40
     },
@@ -6399,7 +6399,7 @@
     {
       "slot_id": "slot_0_3",
       "combat_profile_id": "TWO_HANDED_SWORD",
-      "ability_id": "WARRIOR_BLADESTORM",
+      "ability_id": "WARRIOR_BUZZSAW",
       "sort_order": 40
     },
     {
