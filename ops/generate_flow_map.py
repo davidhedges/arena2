@@ -9,7 +9,7 @@ tiles. Output is an uncompressed 24-bit TGA with R = flow.x, G = flow.y
 (0.5 = still, matching DecodeFlowVector in Common/AnimatedSurface.hlsl).
 Import into Unity with sRGB OFF (the checked-in .meta already does this).
 
-Stdlib only. Run with no arguments to regenerate the FireShore magma flow map:
+Stdlib only. Run with no arguments to regenerate every checked-in flow map:
   python3 ops/generate_flow_map.py
 """
 import argparse
@@ -18,11 +18,19 @@ import struct
 import sys
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DEFAULT_INPUT = os.path.join(
+PACK_TEXTURES = os.path.join(
     REPO, "Assets/ThirdParty/AssetStore/Environments/StylizedMaterialsBundle",
-    "Textures/FireShore/FireShore_Magma/T_FireShore_Magma_H.tga")
-DEFAULT_OUTPUT = os.path.join(
-    REPO, "Assets/Arena/Content/Art/Environment/Lava/T_Lava_FireShoreMagma_Flow.tga")
+    "Textures")
+ENVIRONMENT_ART = os.path.join(REPO, "Assets/Arena/Content/Art/Environment")
+
+# (height-map input, flow-map output) pairs regenerated when run with no
+# arguments. Add a row here when a new animated surface gets a flow map.
+MAPS = [
+    (os.path.join(PACK_TEXTURES, "FireShore/FireShore_Magma/T_FireShore_Magma_H.tga"),
+     os.path.join(ENVIRONMENT_ART, "Lava/T_Lava_FireShoreMagma_Flow.tga")),
+    (os.path.join(PACK_TEXTURES, "Alien/Alien_SpiderAcid/T_Alien_SpiderAcid_H.tga"),
+     os.path.join(ENVIRONMENT_ART, "Poison/T_Poison_AlienSpiderAcid_Flow.tga")),
+]
 
 
 def read_tga_gray(path):
@@ -118,10 +126,22 @@ def normalize(fx, fy):
     return fx, fy
 
 
+def generate(input_path, output_path, size, blur_radius, blur_passes):
+    w, h, vals = read_tga_gray(input_path)
+    if w % size or h % size:
+        sys.exit(f"input {w}x{h} is not a multiple of --size {size}")
+    w, h, vals = downsample(vals, w, h, w // size)
+    vals = box_blur_wrap(vals, w, h, blur_radius, blur_passes)
+    fx, fy = curl_field(vals, w, h)
+    fx, fy = normalize(fx, fy)
+    write_tga_rg(output_path, w, h, fx, fy)
+    print(f"wrote {output_path} ({w}x{h})")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--input", default=DEFAULT_INPUT)
-    ap.add_argument("--output", default=DEFAULT_OUTPUT)
+    ap.add_argument("--input", help="height map (with --output: one map only)")
+    ap.add_argument("--output", help="flow map to write")
     ap.add_argument("--size", type=int, default=512,
                     help="output resolution (input must be a multiple)")
     ap.add_argument("--blur-radius", type=int, default=10,
@@ -130,15 +150,12 @@ def main():
                     help="box blur passes (3 approximates a gaussian)")
     args = ap.parse_args()
 
-    w, h, vals = read_tga_gray(args.input)
-    if w % args.size or h % args.size:
-        sys.exit(f"input {w}x{h} is not a multiple of --size {args.size}")
-    w, h, vals = downsample(vals, w, h, w // args.size)
-    vals = box_blur_wrap(vals, w, h, args.blur_radius, args.blur_passes)
-    fx, fy = curl_field(vals, w, h)
-    fx, fy = normalize(fx, fy)
-    write_tga_rg(args.output, w, h, fx, fy)
-    print(f"wrote {args.output} ({w}x{h})")
+    if bool(args.input) != bool(args.output):
+        sys.exit("--input and --output must be given together")
+    maps = [(args.input, args.output)] if args.input else MAPS
+    for input_path, output_path in maps:
+        generate(input_path, output_path,
+                 args.size, args.blur_radius, args.blur_passes)
 
 
 if __name__ == "__main__":
