@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 # Fast catalog/cue iteration.
 #
-# Use this when you've only edited progression_catalog.shared.json (cues, abilities, VFX, etc.)
-# and haven't changed the module schema. It rebuilds + publishes the module PRESERVING your data
-# (character, world state), then re-syncs every table derived from the shared progression JSON so
-# the JSON edits are live immediately -- no manual reducer calls needed.
+# Use this when you've only edited authored catalog data and haven't changed the module schema. It
+# rebuilds + publishes the module PRESERVING your data (character, world state), then re-syncs the
+# authored catalogs so content edits are live immediately -- no manual reducer calls needed.
 #
 # A data-preserving republish does NOT re-populate the catalog tables on its own (SpacetimeDB only
 # re-syncs on a fresh-DB init), which is why the explicit resync call below exists.
@@ -29,5 +28,8 @@ spacetime call "$ARENA_DATABASE" publish_spell_definitions
 
 echo "Re-syncing progression catalogs (cue/ability JSON changes go live now)..."
 spacetime call "$ARENA_DATABASE" publish_progression_catalogs
+
+echo "Re-syncing item definitions and affixes..."
+spacetime call "$ARENA_DATABASE" publish_item_definitions
 
 echo "Done -- catalog changes are live on '$ARENA_DATABASE', data preserved."

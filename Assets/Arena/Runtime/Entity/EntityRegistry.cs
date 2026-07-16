@@ -411,18 +411,24 @@ namespace Arena.Entity
 
         public void OnItemInstanceInsert(EventContext ctx, ItemInstance row)
         {
-            ApplyCombatProfileForNullableOwner(row.CurrentOwner);
+            if (IsCombatProfileItemReference(row.CurrentOwner, row.ItemInstanceId))
+                ApplyCombatProfileForNullableOwner(row.CurrentOwner);
         }
 
         public void OnItemInstanceUpdate(EventContext ctx, ItemInstance oldRow, ItemInstance newRow)
         {
-            ApplyCombatProfileForNullableOwner(oldRow.CurrentOwner);
-            ApplyCombatProfileForNullableOwner(newRow.CurrentOwner);
+            bool oldOwnerAffected = IsCombatProfileItemReference(oldRow.CurrentOwner, oldRow.ItemInstanceId);
+            bool newOwnerAffected = IsCombatProfileItemReference(newRow.CurrentOwner, newRow.ItemInstanceId);
+            if (oldOwnerAffected)
+                ApplyCombatProfileForNullableOwner(oldRow.CurrentOwner);
+            if (newOwnerAffected && (!oldOwnerAffected || oldRow.CurrentOwner != newRow.CurrentOwner))
+                ApplyCombatProfileForNullableOwner(newRow.CurrentOwner);
         }
 
         public void OnItemInstanceDelete(EventContext ctx, ItemInstance row)
         {
-            ApplyCombatProfileForNullableOwner(row.CurrentOwner);
+            if (IsCombatProfileItemReference(row.CurrentOwner, row.ItemInstanceId))
+                ApplyCombatProfileForNullableOwner(row.CurrentOwner);
         }
 
         public void OnItemDefinitionInsert(EventContext ctx, ItemDefinition row)
@@ -1047,6 +1053,43 @@ namespace Arena.Entity
                 return;
 
             ApplyOwnerCombatProfile(owner.Value);
+        }
+
+        private static bool IsCombatProfileItemReference(Identity? owner, string? itemInstanceId)
+        {
+            if (!owner.HasValue || string.IsNullOrWhiteSpace(itemInstanceId))
+                return false;
+
+            var conn = NetworkManager.Instance?.Conn;
+            if (conn == null)
+                return false;
+
+            string normalizedItemInstanceId = itemInstanceId.Trim();
+            EquipmentLoadout? equipment = conn.Db.EquipmentLoadout.Owner.Find(owner.Value);
+            if (equipment != null
+                && (ItemInstanceIdsMatch(equipment.MainHandItemId, normalizedItemInstanceId)
+                    || ItemInstanceIdsMatch(equipment.OffHandItemId, normalizedItemInstanceId)))
+            {
+                return true;
+            }
+
+            foreach (CharacterCombatDisciplineWeaponLoadout loadout in
+                     conn.Db.CharacterCombatDisciplineWeaponLoadout.Owner.Filter(owner.Value))
+            {
+                if (ItemInstanceIdsMatch(loadout.MainHandItemId, normalizedItemInstanceId)
+                    || ItemInstanceIdsMatch(loadout.OffHandItemId, normalizedItemInstanceId))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool ItemInstanceIdsMatch(string? candidate, string expected)
+        {
+            return !string.IsNullOrWhiteSpace(candidate)
+                && string.Equals(candidate.Trim(), expected, System.StringComparison.Ordinal);
         }
 
         private void ApplyAllEquipmentPresentations()

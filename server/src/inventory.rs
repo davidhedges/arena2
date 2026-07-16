@@ -158,7 +158,7 @@ const ARMOR_EQUIPMENT_SLOTS: &str = "HEAD,SHOULDER,CAPE,CHEST,LEGS,BOOTS,GLOVES"
 const JEWELRY_EQUIPMENT_SLOTS: &str = "RING,AMULET";
 
 #[table(accessor = item_definition, public)]
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct ItemDefinition {
     #[primary_key]
     pub item_def_id: String,
@@ -182,7 +182,7 @@ pub struct ItemDefinition {
 }
 
 #[table(accessor = item_affix_definition, public)]
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct ItemAffixDefinition {
     #[primary_key]
     pub affix_id: String,
@@ -1469,8 +1469,6 @@ pub fn publish_item_affix_definitions(ctx: &ReducerContext) -> Result<(), String
 
 #[reducer]
 pub fn open_loot_npc(ctx: &ReducerContext, npc_identity: Identity) -> Result<(), String> {
-    sync_item_definitions(ctx);
-
     let state = ctx
         .db
         .npc_state()
@@ -1668,8 +1666,6 @@ pub fn move_item(
     destination_y: u32,
     quantity: u32,
 ) -> Result<(), String> {
-    sync_item_definitions(ctx);
-
     let owner = ctx.sender();
     let source_container = require_accessible_container(ctx, owner, source_container_id.as_str())?;
     let source_corpse_anchor = corpse_anchor_identity(&source_container);
@@ -1769,8 +1765,6 @@ pub fn quick_loot(
     source_container_id: String,
     item_instance_id: String,
 ) -> Result<(), String> {
-    sync_item_definitions(ctx);
-
     let owner = ctx.sender();
     let source_container = require_accessible_container(ctx, owner, source_container_id.as_str())?;
     if source_container
@@ -1817,8 +1811,6 @@ pub fn merge_stack(
     source_item_instance_id: String,
     target_item_instance_id: String,
 ) -> Result<(), String> {
-    sync_item_definitions(ctx);
-
     let owner = ctx.sender();
     let mut source = require_item_instance(ctx, source_item_instance_id.as_str())?;
     let mut target = require_item_instance(ctx, target_item_instance_id.as_str())?;
@@ -1857,8 +1849,6 @@ pub fn merge_stack(
 
 #[reducer]
 pub fn consume_item(ctx: &ReducerContext, item_instance_id: String) -> Result<(), String> {
-    sync_item_definitions(ctx);
-
     let owner = ctx.sender();
     let slot = require_slot_for_accessible_item(ctx, owner, item_instance_id.as_str())?;
     let source_container = require_accessible_container(ctx, owner, slot.container_id.as_str())?;
@@ -1966,8 +1956,6 @@ pub fn equip_item(
     item_instance_id: String,
     target_slot: String,
 ) -> Result<(), String> {
-    sync_item_definitions(ctx);
-
     let owner = ctx.sender();
     let item = require_item_instance(ctx, item_instance_id.as_str())?;
     let definition = require_item_definition(ctx, item.item_def_id.as_str())?;
@@ -2058,8 +2046,6 @@ pub fn unequip_item(
     destination_x: u32,
     destination_y: u32,
 ) -> Result<(), String> {
-    sync_item_definitions(ctx);
-
     let owner = ctx.sender();
     let (mut equipment, _) = ensure_equipment_loadout(ctx, owner);
     let normalized_slot = normalize_equipment_slot(source_slot.as_str());
@@ -2142,16 +2128,19 @@ pub(crate) fn sync_item_definitions(ctx: &ReducerContext) {
                 0.0
             },
         };
-        if ctx
+        match ctx
             .db
             .item_definition()
             .item_def_id()
             .find(row.item_def_id.clone())
-            .is_some()
         {
-            ctx.db.item_definition().item_def_id().update(row);
-        } else {
-            ctx.db.item_definition().insert(row);
+            Some(existing) if existing == row => {}
+            Some(_) => {
+                ctx.db.item_definition().item_def_id().update(row);
+            }
+            None => {
+                ctx.db.item_definition().insert(row);
+            }
         }
     }
     sync_item_affix_definitions(ctx);
@@ -2176,16 +2165,19 @@ pub(crate) fn sync_item_affix_definitions(ctx: &ReducerContext) {
             jewelry_only: spec.jewelry_only,
             sort_order: spec.sort_order,
         };
-        if ctx
+        match ctx
             .db
             .item_affix_definition()
             .affix_id()
             .find(row.affix_id.clone())
-            .is_some()
         {
-            ctx.db.item_affix_definition().affix_id().update(row);
-        } else {
-            ctx.db.item_affix_definition().insert(row);
+            Some(existing) if existing == row => {}
+            Some(_) => {
+                ctx.db.item_affix_definition().affix_id().update(row);
+            }
+            None => {
+                ctx.db.item_affix_definition().insert(row);
+            }
         }
     }
 
@@ -2529,7 +2521,6 @@ pub(crate) fn create_corpse_loot_for_npc(
     npc_identity: Identity,
     looter_hint: Identity,
 ) {
-    sync_item_definitions(ctx);
     let Some(npc) = ctx.db.npc_instance().identity().find(npc_identity) else {
         return;
     };
@@ -3252,7 +3243,6 @@ pub(crate) fn apply_combat_discipline_weapon_loadout(
     main_hand_item_id: Option<&str>,
     off_hand_item_id: Option<&str>,
 ) -> Result<(), String> {
-    sync_item_definitions(ctx);
     if !combat_discipline_weapon_loadout_is_available(
         ctx,
         owner,
@@ -4837,9 +4827,97 @@ fn identity_key(identity: Identity) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::{fs, path::Path};
+
+    fn source_function<'a>(source: &'a str, signature: &str) -> &'a str {
+        let start = source
+            .find(signature)
+            .unwrap_or_else(|| panic!("{signature} should exist"));
+        let open = source[start..]
+            .find('{')
+            .map(|offset| start + offset)
+            .unwrap_or_else(|| panic!("{signature} should have a body"));
+        let mut depth = 0usize;
+        for (offset, character) in source[open..].char_indices() {
+            match character {
+                '{' => depth += 1,
+                '}' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        return &source[start..=open + offset];
+                    }
+                }
+                _ => {}
+            }
+        }
+        panic!("{signature} should have a complete body");
+    }
 
     fn test_identity(number: u8) -> Identity {
         Identity::from_hex(format!("{number:064x}").as_str()).expect("valid test identity")
+    }
+
+    #[test]
+    fn item_catalog_reconciliation_is_idempotent_and_lifecycle_only() {
+        let source =
+            fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("src/inventory.rs"))
+                .expect("inventory.rs should be readable");
+
+        for signature in [
+            "pub fn open_loot_npc",
+            "pub fn move_item",
+            "pub fn quick_loot",
+            "pub fn merge_stack",
+            "pub fn consume_item",
+            "pub fn equip_item",
+            "pub fn unequip_item",
+            "pub(crate) fn create_corpse_loot_for_npc",
+            "pub(crate) fn apply_combat_discipline_weapon_loadout",
+        ] {
+            assert!(
+                !source_function(&source, signature).contains("sync_item_definitions(ctx)"),
+                "{signature} must not reconcile authored catalogs during gameplay"
+            );
+        }
+
+        assert!(
+            source_function(&source, "pub fn publish_item_definitions")
+                .contains("sync_item_definitions(ctx)"),
+            "the explicit item publication reducer must reconcile the catalog"
+        );
+        assert!(
+            source_function(
+                &source,
+                "pub(crate) fn ensure_player_inventory_for_identity"
+            )
+            .contains("sync_item_definitions(ctx)"),
+            "player inventory initialization must reconcile definitions before seeding items"
+        );
+        assert!(
+            source_function(&source, "pub(crate) fn sync_item_definitions")
+                .contains("Some(existing) if existing == row => {}"),
+            "unchanged item definitions must not be rewritten"
+        );
+        assert!(
+            source_function(&source, "pub(crate) fn sync_item_affix_definitions")
+                .contains("Some(existing) if existing == row => {}"),
+            "unchanged affix definitions must not be rewritten"
+        );
+    }
+
+    #[test]
+    fn data_preserving_republish_workflows_publish_item_catalogs() {
+        let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .expect("server should have a repository parent");
+        for relative_path in ["ops/republish-local-clear.sh", "ops/republish-catalog.sh"] {
+            let source = fs::read_to_string(repo_root.join(relative_path))
+                .unwrap_or_else(|error| panic!("{relative_path} should be readable: {error}"));
+            assert!(
+                source.contains("spacetime call \"$ARENA_DATABASE\" publish_item_definitions"),
+                "{relative_path} must publish item definitions after a data-preserving publish"
+            );
+        }
     }
 
     #[test]

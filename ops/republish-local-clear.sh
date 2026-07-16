@@ -58,15 +58,17 @@ else
     spacetime publish "${publish_args[@]}" -p "$MODULE_PATH" "$ARENA_DATABASE"
 fi
 
-# Re-sync every table derived from progression_catalog.shared.json. A fresh init
-# (delete-data=always) already syncs both families, but a data-preserving publish does not, so call
-# both reducers unconditionally (they are idempotent). SpellDefinition is a separate public table
-# consumed by client cast/animation/VFX logic; progression catalogs cover cues and ability rows.
+# Re-sync authored catalogs after every publish. A fresh init (delete-data=always) already syncs
+# these families, but a data-preserving publish does not, so call the idempotent reducers
+# unconditionally.
 echo "Re-syncing spell definitions..."
 spacetime call "$ARENA_DATABASE" publish_spell_definitions
 
 echo "Re-syncing progression catalogs..."
 spacetime call "$ARENA_DATABASE" publish_progression_catalogs
+
+echo "Re-syncing item definitions and affixes..."
+spacetime call "$ARENA_DATABASE" publish_item_definitions
 
 if [ "$ARENA_GENERATE_BINDINGS" = "1" ]; then
     # Canonical regen mode (netcode audit R5): bindings are ALWAYS generated
