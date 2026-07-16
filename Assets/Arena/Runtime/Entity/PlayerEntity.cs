@@ -77,6 +77,7 @@ namespace Arena.Entity
         private LocalPlayerStateProvider? _stateProvider;
         private CombatAnimationSet? _combatAnimationSet;
         private string _combatAnimationModeId = string.Empty;
+        private bool _combatAnimationModeInitialized;
         private readonly Dictionary<string, EquippedWeaponVisual> _equippedWeaponVisualsByRole = new(System.StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, string> _equippedArmorItemDefIdsBySlot = new(System.StringComparer.Ordinal);
         private SharedActionProfile? _sharedActionProfile;
@@ -410,13 +411,23 @@ namespace Arena.Entity
             RefreshStealthVisualTargets();
         }
 
+        public bool UsesCombatAnimationSet(CombatAnimationSet set)
+        {
+            return ReferenceEquals(_combatAnimationSet, set);
+        }
+
         public void SetCombatAnimationMode(string? modeId)
         {
-            _combatAnimationModeId = string.IsNullOrWhiteSpace(modeId)
+            string normalizedModeId = string.IsNullOrWhiteSpace(modeId)
                 ? string.Empty
                 : modeId.Trim().ToUpperInvariant();
+            if (_combatAnimationModeInitialized
+                && string.Equals(_combatAnimationModeId, normalizedModeId, System.StringComparison.Ordinal))
+                return;
+
+            _combatAnimationModeId = normalizedModeId;
+            _combatAnimationModeInitialized = true;
             _animator?.ApplyCombatLocomotionMode(_combatAnimationModeId);
-            RefreshStealthVisualTargets();
             _stealthVisual?.SetStealthed(string.Equals(
                 _combatAnimationModeId,
                 CombatModeIds.Stealthed,

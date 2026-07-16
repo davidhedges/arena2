@@ -365,7 +365,12 @@ namespace Arena.Entity
 
         public void OnPlayerEquipmentPresentationUpdate(EventContext ctx, PlayerEquipmentPresentation oldRow, PlayerEquipmentPresentation newRow)
         {
-            ApplyPlayerEquipmentPresentation(newRow);
+            bool weaponsChanged = !HasSameWeaponPresentation(oldRow, newRow);
+            bool armorChanged = !HasSameArmorPresentation(oldRow, newRow);
+            if (weaponsChanged)
+                ApplyOwnerWeaponPresentation(newRow.Owner, newRow);
+            if (armorChanged)
+                ApplyOwnerArmorPresentation(newRow.Owner, newRow);
         }
 
         public void OnPlayerEquipmentPresentationDelete(EventContext ctx, PlayerEquipmentPresentation row)
@@ -385,7 +390,8 @@ namespace Arena.Entity
         public void OnActiveCombatDisciplineUpdate(EventContext ctx, ActiveCombatDiscipline oldRow, ActiveCombatDiscipline newRow)
         {
             ApplyOwnerCombatProfile(oldRow.Owner);
-            ApplyOwnerCombatProfile(newRow.Owner);
+            if (oldRow.Owner != newRow.Owner)
+                ApplyOwnerCombatProfile(newRow.Owner);
         }
 
         public void OnActiveCombatDisciplineDelete(EventContext ctx, ActiveCombatDiscipline row)
@@ -401,7 +407,8 @@ namespace Arena.Entity
         public void OnActiveCombatModeUpdate(EventContext ctx, ActiveCombatMode oldRow, ActiveCombatMode newRow)
         {
             ApplyOwnerCombatMode(oldRow.Owner);
-            ApplyOwnerCombatMode(newRow.Owner);
+            if (oldRow.Owner != newRow.Owner)
+                ApplyOwnerCombatMode(newRow.Owner);
         }
 
         public void OnActiveCombatModeDelete(EventContext ctx, ActiveCombatMode row)
@@ -417,6 +424,11 @@ namespace Arena.Entity
 
         public void OnItemInstanceUpdate(EventContext ctx, ItemInstance oldRow, ItemInstance newRow)
         {
+            bool combatResolutionChanged = oldRow.CurrentOwner != newRow.CurrentOwner
+                || !string.Equals(oldRow.ItemDefId, newRow.ItemDefId, System.StringComparison.Ordinal);
+            if (!combatResolutionChanged)
+                return;
+
             bool oldOwnerAffected = IsCombatProfileItemReference(oldRow.CurrentOwner, oldRow.ItemInstanceId);
             bool newOwnerAffected = IsCombatProfileItemReference(newRow.CurrentOwner, newRow.ItemInstanceId);
             if (oldOwnerAffected)
@@ -1047,6 +1059,27 @@ namespace Arena.Entity
             ApplyOwnerEquipmentPresentation(row.Owner, row);
         }
 
+        private static bool HasSameWeaponPresentation(
+            PlayerEquipmentPresentation oldRow,
+            PlayerEquipmentPresentation newRow)
+        {
+            return string.Equals(oldRow.MainHandItemDefId, newRow.MainHandItemDefId, System.StringComparison.Ordinal)
+                && string.Equals(oldRow.OffHandItemDefId, newRow.OffHandItemDefId, System.StringComparison.Ordinal);
+        }
+
+        private static bool HasSameArmorPresentation(
+            PlayerEquipmentPresentation oldRow,
+            PlayerEquipmentPresentation newRow)
+        {
+            return string.Equals(oldRow.HeadItemDefId, newRow.HeadItemDefId, System.StringComparison.Ordinal)
+                && string.Equals(oldRow.ShoulderItemDefId, newRow.ShoulderItemDefId, System.StringComparison.Ordinal)
+                && string.Equals(oldRow.CapeItemDefId, newRow.CapeItemDefId, System.StringComparison.Ordinal)
+                && string.Equals(oldRow.ChestItemDefId, newRow.ChestItemDefId, System.StringComparison.Ordinal)
+                && string.Equals(oldRow.LegsItemDefId, newRow.LegsItemDefId, System.StringComparison.Ordinal)
+                && string.Equals(oldRow.BootsItemDefId, newRow.BootsItemDefId, System.StringComparison.Ordinal)
+                && string.Equals(oldRow.GlovesItemDefId, newRow.GlovesItemDefId, System.StringComparison.Ordinal);
+        }
+
         private void ApplyCombatProfileForNullableOwner(Identity? owner)
         {
             if (!owner.HasValue)
@@ -1114,7 +1147,31 @@ namespace Arena.Entity
             if (presentation == null)
                 return;
 
+            ApplyOwnerWeaponPresentation(owner, presentation);
+            ApplyOwnerArmorPresentation(owner, presentation);
+        }
+
+        private void ApplyOwnerWeaponPresentation(Identity owner, PlayerEquipmentPresentation presentation)
+        {
+            if (!TryGetLivePlayer(owner, out var entity))
+                return;
+
+            var conn = NetworkManager.Instance?.Conn;
+            if (conn == null)
+                return;
+
             entity.SetEquippedWeaponVisuals(BuildEquippedWeaponVisuals(conn, presentation));
+        }
+
+        private void ApplyOwnerArmorPresentation(Identity owner, PlayerEquipmentPresentation presentation)
+        {
+            if (!TryGetLivePlayer(owner, out var entity))
+                return;
+
+            var conn = NetworkManager.Instance?.Conn;
+            if (conn == null)
+                return;
+
             entity.SetEquippedArmorItemDefIdsBySlot(BuildEquippedArmorItemDefIdsBySlot(conn, presentation));
         }
 
@@ -1247,7 +1304,7 @@ namespace Arena.Entity
             entity.SetCombatProfile(combatProfile);
 
             CombatAnimationSet? animationSet = ResolveAnimationSet(combatProfile);
-            if (animationSet != null)
+            if (animationSet != null && !entity.UsesCombatAnimationSet(animationSet))
             {
                 entity.SetCombatAnimationSet(animationSet);
             }

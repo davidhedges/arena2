@@ -6,6 +6,8 @@ namespace Arena.Presentation
 {
     internal sealed class CombatAnimationSetBinder
     {
+        private readonly List<KeyValuePair<AnimationClip, AnimationClip>> _overridePairs = new();
+
         public void Bind(CombatAnimationSet set, AnimatorOverrideController overrideController)
         {
             var clipMap = new Dictionary<string, AnimationClip>(128);
@@ -61,8 +63,7 @@ namespace Arena.Presentation
 
             if (set.death != null) clipMap["slot_death"] = set.death;
 
-            foreach ((string slotName, AnimationClip newClip) in clipMap)
-                overrideController[slotName] = newClip;
+            ApplyClipMap(overrideController, clipMap);
         }
 
         public void ApplyLocomotionMode(
@@ -79,8 +80,7 @@ namespace Arena.Presentation
                 MapLocomotionModeOverride(clipMap, modeOverride);
             }
 
-            foreach ((string slotName, AnimationClip newClip) in clipMap)
-                overrideController[slotName] = newClip;
+            ApplyClipMap(overrideController, clipMap);
         }
 
         public void ApplyDirectionalOverrideSet(
@@ -88,14 +88,16 @@ namespace Arena.Presentation
             string prefix,
             DirectionalClipSet set)
         {
-            ApplyOptionalOverride(overrideController, $"{prefix}_N", set.n);
-            ApplyOptionalOverride(overrideController, $"{prefix}_NE", set.ne);
-            ApplyOptionalOverride(overrideController, $"{prefix}_E", set.e);
-            ApplyOptionalOverride(overrideController, $"{prefix}_SE", set.se);
-            ApplyOptionalOverride(overrideController, $"{prefix}_S", set.s);
-            ApplyOptionalOverride(overrideController, $"{prefix}_SW", set.sw);
-            ApplyOptionalOverride(overrideController, $"{prefix}_W", set.w);
-            ApplyOptionalOverride(overrideController, $"{prefix}_NW", set.nw);
+            var clipMap = new Dictionary<string, AnimationClip>(8);
+            MapOptionalClip(clipMap, $"{prefix}_N", set.n);
+            MapOptionalClip(clipMap, $"{prefix}_NE", set.ne);
+            MapOptionalClip(clipMap, $"{prefix}_E", set.e);
+            MapOptionalClip(clipMap, $"{prefix}_SE", set.se);
+            MapOptionalClip(clipMap, $"{prefix}_S", set.s);
+            MapOptionalClip(clipMap, $"{prefix}_SW", set.sw);
+            MapOptionalClip(clipMap, $"{prefix}_W", set.w);
+            MapOptionalClip(clipMap, $"{prefix}_NW", set.nw);
+            ApplyClipMap(overrideController, clipMap);
         }
 
         public void ApplyPreferredClipOverride(
@@ -114,10 +116,40 @@ namespace Arena.Presentation
             bool inCombat)
         {
             HitReactionClipSet clips = set.ResolveHitReactionClips(grounded, inCombat);
-            ApplyOptionalOverride(overrideController, "slot_hit_F", clips.Forward);
-            ApplyOptionalOverride(overrideController, "slot_hit_B", clips.Back);
-            ApplyOptionalOverride(overrideController, "slot_hit_L", clips.Left);
-            ApplyOptionalOverride(overrideController, "slot_hit_R", clips.Right);
+            var clipMap = new Dictionary<string, AnimationClip>(4);
+            MapOptionalClip(clipMap, "slot_hit_F", clips.Forward);
+            MapOptionalClip(clipMap, "slot_hit_B", clips.Back);
+            MapOptionalClip(clipMap, "slot_hit_L", clips.Left);
+            MapOptionalClip(clipMap, "slot_hit_R", clips.Right);
+            ApplyClipMap(overrideController, clipMap);
+        }
+
+        private void ApplyClipMap(
+            AnimatorOverrideController overrideController,
+            IReadOnlyDictionary<string, AnimationClip> clipMap)
+        {
+            if (clipMap.Count == 0)
+                return;
+
+            _overridePairs.Clear();
+            overrideController.GetOverrides(_overridePairs);
+            bool changed = false;
+            for (int index = 0; index < _overridePairs.Count; index++)
+            {
+                KeyValuePair<AnimationClip, AnimationClip> pair = _overridePairs[index];
+                if (pair.Key == null
+                    || !clipMap.TryGetValue(pair.Key.name, out AnimationClip newClip)
+                    || ReferenceEquals(pair.Value, newClip))
+                {
+                    continue;
+                }
+
+                _overridePairs[index] = new KeyValuePair<AnimationClip, AnimationClip>(pair.Key, newClip);
+                changed = true;
+            }
+
+            if (changed)
+                overrideController.ApplyOverrides(_overridePairs);
         }
 
         private static void MapBaseLocomotion(Dictionary<string, AnimationClip> clipMap, CombatAnimationSet set)

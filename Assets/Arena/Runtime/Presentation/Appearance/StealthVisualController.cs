@@ -25,11 +25,6 @@ namespace Arena.Presentation.Appearance
         private bool _isStealthed;
         private float _currentOpacity = 1f;
 
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
-        private static readonly float[] AuditDelaysSeconds = { 0.5f, 2f };
-        private readonly List<float> _pendingAuditTimes = new();
-#endif
-
         public event Action? MaterialsRestored;
 
         public bool IsStealthed => _isStealthed;
@@ -62,16 +57,6 @@ namespace Arena.Presentation.Appearance
             if (stealthed && _overrides.Count == 0)
                 CaptureOverrides();
 
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
-            Debug.Log(
-                $"[StealthVisual] SetStealthed({stealthed}) targets={_targets.Count} " +
-                $"overrides={_overrides.Count} opacity={_currentOpacity:F2}",
-                this);
-            _pendingAuditTimes.Clear();
-            for (int i = 0; i < AuditDelaysSeconds.Length; i++)
-                _pendingAuditTimes.Add(Time.unscaledTime + AuditDelaysSeconds[i]);
-#endif
-
             float targetOpacity = stealthed ? ResolveStealthOpacity() : 1f;
             if (!immediate && fadeSeconds > 0f)
                 return;
@@ -90,9 +75,6 @@ namespace Arena.Presentation.Appearance
 
         private void Update()
         {
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
-            RunPendingAudit();
-#endif
             if (_overrides.Count == 0)
                 return;
 
@@ -252,98 +234,6 @@ namespace Arena.Presentation.Appearance
         {
             ReleaseOverrides(restoreOriginals: true, notify: false);
         }
-
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
-        private void RunPendingAudit()
-        {
-            if (_pendingAuditTimes.Count == 0 || Time.unscaledTime < _pendingAuditTimes[0])
-                return;
-
-            _pendingAuditTimes.RemoveAt(0);
-
-            var owned = new HashSet<Renderer>();
-            var replaced = new List<string>();
-            for (int i = 0; i < _overrides.Count; i++)
-            {
-                RendererOverride rendererOverride = _overrides[i];
-                Renderer renderer = rendererOverride.Renderer;
-                if (renderer == null)
-                    continue;
-
-                owned.Add(renderer);
-                Material[] current = renderer.sharedMaterials;
-                bool holdsStealthMaterials =
-                    current.Length == rendererOverride.StealthMaterials.Length;
-                for (int m = 0; holdsStealthMaterials && m < current.Length; m++)
-                {
-                    if (!ReferenceEquals(current[m], rendererOverride.StealthMaterials[m]))
-                        holdsStealthMaterials = false;
-                }
-
-                if (!holdsStealthMaterials)
-                {
-                    string materialName = current.Length > 0 && current[0] != null
-                        ? $"{current[0].name} ({current[0].shader.name})"
-                        : "<none>";
-                    replaced.Add($"{RendererPath(renderer)} now holds {materialName}");
-                }
-            }
-
-            var report = new System.Text.StringBuilder();
-            report.AppendLine(
-                $"[StealthVisual] audit stealthed={_isStealthed} targets={_targets.Count} " +
-                $"overrides={_overrides.Count} opacity={_currentOpacity:F2}");
-
-            if (replaced.Count > 0)
-            {
-                report.AppendLine($"  REPLACED after override ({replaced.Count}):");
-                foreach (string entry in replaced)
-                    report.AppendLine($"    {entry}");
-            }
-
-            foreach (Renderer renderer in GetComponentsInChildren<Renderer>(includeInactive: false))
-            {
-                if (renderer == null || owned.Contains(renderer))
-                    continue;
-
-                Material material = renderer.sharedMaterial;
-                string materialName = material != null
-                    ? $"{material.name} ({material.shader.name})"
-                    : "<none>";
-                report.AppendLine($"  UNOWNED visible: {RendererPath(renderer)} mat={materialName}");
-            }
-
-            for (int i = 0; i < _overrides.Count && i < 3; i++)
-            {
-                Material material = _overrides[i].StealthMaterials.Length > 0
-                    ? _overrides[i].StealthMaterials[0]
-                    : null;
-                if (material == null)
-                    continue;
-
-                float surface = material.HasProperty("_Surface") ? material.GetFloat("_Surface") : -1f;
-                float alpha = material.HasProperty("_BaseColor") ? material.GetColor("_BaseColor").a : -1f;
-                report.AppendLine(
-                    $"  sample[{i}]: {material.name} shader={material.shader.name} " +
-                    $"_Surface={surface} _BaseColor.a={alpha:F2} queue={material.renderQueue}");
-            }
-
-            Debug.Log(report.ToString(), this);
-        }
-
-        private string RendererPath(Renderer renderer)
-        {
-            var path = new System.Text.StringBuilder(renderer.name);
-            Transform current = renderer.transform.parent;
-            while (current != null && current != transform)
-            {
-                path.Insert(0, $"{current.name}/");
-                current = current.parent;
-            }
-
-            return path.ToString();
-        }
-#endif
 
         private sealed class RendererOverride
         {
