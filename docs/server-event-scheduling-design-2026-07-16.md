@@ -143,7 +143,8 @@ Consequences that constrain every option:
 | C4 | Server-initiated attacks | auto-attack due swings, NPC swings/casts | P-T, due-gated | soft (cadence stretch) |
 | C5 | Damage & status resolution | melee impacts, projectile releases, area impacts, pending effects | P-T Pass A/B (§6: player-combat subset optionally P-X) | never |
 | C6 | Continuous simulation | projectile integration, kinematics, regen | P-T every tick | never |
-| C7 | Periodic effects | DoT/HoT, equipment periodic, auras, emanations, passives, expiries | P-T at authored interval | never (per-interval packets, §7) |
+| C7a | Committed-target recurrences | DoT/HoT, equipment periodic | P-T at authored interval | never (per-interval packets, §4.4) |
+| C7b | Live-membership pulses | auras, emanations, passives, status expiries | P-T at authored interval | missed pulses skip (§4.4) — replaying spatial pulses against current positions would be wrong |
 | C8a | Semantic timers | countdown → phase flip, corpse despawn (loot anchor), invite expiry | P-T, own clocks | never (gameplay deadlines) |
 | C8b | Replication-history maintenance | event/prediction prune, backfills | P-T, 0.5–1 s clocks | deferrable, bounded |
 
@@ -160,7 +161,9 @@ Consequences that constrain every option:
   transaction calls the resolve function** — the choke point is a function +
   a global sequence, not a phase.
 - **R5** — Effects enqueued by C4–C6 and periodic DoT/HoT resolve in the
-  same tick's Pass B; Lane-arrival effects resolve next Pass A. Exception:
+  same tick's Pass B; P-A-produced effects resolve **no later than** the
+  next Pass A (under Option C a P-X fire may resolve them earlier, §5).
+  Exception:
   ambient producers after Pass B (passives/auras/emanations,
   `game_loop.rs:1056`) resolve next tick (+1, accepted).
 - **R6** — One movement command consumed per player per tick; queued casts
@@ -196,10 +199,12 @@ Consequences that constrain every option:
   6 s/1 s DoT like `WARRIOR_CARVE_BLEED` ticks five times, `combat.rs:5786`).
   Per-interval packets, never one N × amount aggregate — crit/absorb/death
   are per-`PendingHit` (`combat.rs:4346`).
-- **Initiation cadences** (auto-attack, NPC decisions, pulses): skipped,
-  never replayed — re-anchor to the next authored grid point strictly in the
-  future. Intrinsic auto-attacks bypass shared cooldowns (`melee.rs:323`); a
-  10 s stall must not produce 10 catch-up swings.
+- **Initiation cadences** (auto-attack, NPC decisions, C7b pulses):
+  skipped, never replayed — re-anchor to the next authored grid point
+  strictly in the future. Intrinsic auto-attacks bypass shared cooldowns
+  (`melee.rs:323`); a 10 s stall must not produce 10 catch-up swings.
+  Emanations already skip correctly but re-anchor from `now`
+  (`combat.rs:1609`) — the A2 drift class; the Phase 2 sweep includes them.
 
 ### 4.5 Determinism
 
@@ -278,9 +283,11 @@ targeting a thin reducer that calls the existing resolve function.
 - **Ordering/determinism:** per-event interleaving with the tick is
   timing-dependent, and the sharpest cost is precise: **two deadlines within
   jitter of each other resolve in host commit order** — under D their
-  tiebreak was deterministic (R7). Anchoring (§4.4) means values cannot
-  change and host timing is uncorrelated with either player, so *fairness*
-  is intact — but bit-level reproducibility of sub-jitter races is lost;
+  tiebreak was deterministic (R7). Anchoring (§4.4) pins *derived*
+  quantities (amounts, next-deadlines) — though not outcomes that read live
+  state at execution (see Option C) — and host timing is uncorrelated with
+  either player, so *fairness* is intact; but bit-level reproducibility of
+  sub-jitter races is lost;
   replaying one requires the recorded transaction schedule. Everything
   outside that window is unaffected: transactions are internally
   deterministic (R7) and arrival-vs-deadline races stay governed by R9
@@ -303,13 +310,34 @@ Option B restricted to the event classes where sub-tick timing is
 player-perceivable and PvP-relevant, with the monolithic tick keeping
 everything else and sweeping stragglers:
 
-- **P-X classes:** player melee impacts + melee projectile releases. They
-  are the pilot because authored windup timing *is* the melee feel (the
-  startup-trim work tunes tens of ms, so ±16.5 ms alignment noise is largest
-  relative to authored values), they are the highest-frequency PvP
-  deadlines, and they have **no post-deadline arbitration mechanic** to
-  perturb. **Not** P-X: DoT/HoT ticks, auras, pulses, NPC-source impacts
-  (NPC cadence is already coarse), maintenance.
+- **P-X trigger classes:** player melee impacts + melee projectile releases
+  — authored windup timing *is* the melee feel (the startup-trim work tunes
+  tens of ms, so ±16.5 ms alignment noise is largest relative to authored
+  values) and they are the highest-frequency PvP deadlines. No triggers
+  for: DoT/HoT ticks, auras/pulses, NPC-source impacts (cadence already
+  coarse), maintenance.
+- **The boundary is trigger *scheduling*, not resolution.** The thin
+  reducer calls the existing family-wide resolvers, which sweep **all** due
+  rows regardless of source (`resolve_pending_melee_impacts`,
+  `melee.rs:4023`) and drain the global due-effect queue after each impact
+  (`melee.rs:4057`). A player trigger therefore opportunistically
+  accelerates due NPC impacts and due arrival-produced effects. This is the
+  accepted contract: everything swept is committed, already-due work,
+  uniformly safe to resolve early under §4 anchoring — and R5 weakens to
+  "no later than" accordingly. If a hard player-only boundary is preferred,
+  the source-filtered resolver already exists
+  (`resolve_due_pending_melee_impacts_for_event_source`, `melee.rs:1093`),
+  at the cost of forgoing opportunistic acceleration.
+- **Earlier execution changes outcomes, not just ordering — the pilot needs
+  the same owner decision as casts.** Impact resolution reads live state at
+  execution time: caster/target alive, present-time facing and reach,
+  defense state, health-scaled damage (`melee.rs:4734-4940`,
+  `defense.rs:540`). Under D, tick alignment grants defenders a hidden
+  0–33 ms window in which a parry, block, or death *after* the authored
+  impact time still averts the hit; exact-fire removes it. Arguably the
+  authored-correct behavior — but combat-visible, the same decision class
+  as the cast grace, decided once for both: build the pilot **default OFF**
+  (S8 pattern) and let the A/B plus feel check make the call.
 - **Cast completions are deferred deliberately**, not just sequenced:
   completing at ~jitter instead of at the next tick narrows the effective
   post-`ends_at` cancel window from ≤33 ms to ~jitter (the R9 grace
@@ -361,8 +389,10 @@ everything else and sweeping stragglers:
 1. **Phase 0 measures the substrate** (below). If one-shot fire jitter
    turns out ≥ ~half a tick, exact-fire buys little — stop at Option D +
    §4 hardening and revisit only with a feel complaint in hand.
-2. Pilot P-X on **player melee impacts + projectile releases** behind a
-   config-row kill switch (the S8 pattern: flip without republish).
+2. Pilot P-X on **player melee impacts + projectile releases**, built
+   **default OFF** behind a config-row kill switch (the S8 pattern: flip
+   without republish). The hidden-defense-window decision (§5 Option C) is
+   made on the pilot's A/B and feel check, not before it.
 3. Extend to **cast completions** only after the owner decides the grace
    interaction (§5 Option C) *and* the pilot's measured latency and feel
    check both pass.
@@ -414,7 +444,9 @@ A1 sorted iteration; A4 unique final sort keys. Tests: sort-key units; the
 
 **Phase 2 — Anchors, recurrence, A6.**
 A2 via skip-to-grid; A6 per-interval packet emission; sweep all deadline
-consumers to §4.3/§4.4. Tests: cadence-drift probe (±1 ms over 2 min);
+consumers to §4.3/§4.4 (including emanation `next_pulse_at = now + interval`,
+`combat.rs:1609` — same drift class as A2). Tests: cadence-drift probe
+(±1 ms over 2 min);
 stall test (zero replayed swings, next swing on grid); DoT stall test (5
 packets for the 6 s/1 s shape, per-packet amounts).
 
@@ -424,8 +456,11 @@ projectile-release scheduling + config kill switch. Tests: measured
 deadline-resolve latency distribution for piloted classes vs. Phase 0
 baseline; kill the one-shot mid-flight (panic injection) and assert the tick
 sweep resolves the event ≤ one tick late; cancel a swing between trigger
-insert and fire and assert the trigger no-ops; tick-cost non-regression;
-value-invariant fixture with exact-fire on (see criterion 1).
+insert and fire and assert the trigger no-ops; defense-boundary race (parry
+pressed just after the authored impact time — averts under D, connects under
+C: assert the configured contract both ways); simultaneous-lethal trade
+under both configs; tick-cost non-regression; value-invariant fixture with
+exact-fire on (see criterion 1).
 
 **Phase 4 — Overload ladder (on observed need).**
 Ledger + `tick_overload_state` + lateness-derived L1/L2. Tests: load-harness
