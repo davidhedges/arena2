@@ -83,6 +83,7 @@ pub(crate) const RESOURCE_KIND_STAMINA: &str = "STAMINA";
 pub(crate) const COMBAT_MODE_SHORT_DRAW: &str = "SHORT_DRAW";
 pub(crate) const COMBAT_MODE_FULL_DRAW: &str = "FULL_DRAW";
 pub(crate) const COMBAT_MODE_READY: &str = "READY";
+#[cfg(test)]
 pub(crate) const COMBAT_MODE_STEALTHED: &str = "STEALTHED";
 pub(crate) const AUTO_ATTACK_MOVEMENT_ALLOW_MOVING: &str = "ALLOW_MOVING";
 pub(crate) const AUTO_ATTACK_MOVEMENT_RESET_ON_VOLUNTARY_MOVE: &str =

@@ -5204,6 +5204,7 @@ fn push_melee_impact_effects(
     }
 }
 
+#[cfg(test)]
 fn push_melee_impact_status_effects(effects: &mut Vec<EffectPacket>, row: &PendingMeleeImpact) {
     if row.ability_id.trim().is_empty() {
         return;

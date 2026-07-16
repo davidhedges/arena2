@@ -45,5 +45,6 @@ mod relations;
 mod resources;
 mod spells;
 mod tick_metrics;
+#[cfg(test)]
 mod vfx_generation;
 mod world_collision;

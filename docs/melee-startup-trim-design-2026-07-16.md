@@ -49,6 +49,14 @@ produces a zero-delay hit.
    debounce before performing that synchronization.
 5. Republish the catalog before expecting the server timing to change live.
 
+When the selected clip has an `OnStrikeHit` event, the Event Stamper also shows
+an informational estimate for input to first authoritative server damage. The
+estimate uses the exported effective first-hit delay, an idealized 20–40 ms
+input-to-server leg, and 0–33 ms of alignment to the current combat tick. It is
+not a validation rule or a measured connection value. Queued combo execution,
+gap-close arrival, projectile travel, server stalls, and replication back to the
+client can add time beyond the displayed direct-melee estimate.
+
 ## V1 Scope
 
 - Supported: single-clip player melee and auto attacks using that strike as

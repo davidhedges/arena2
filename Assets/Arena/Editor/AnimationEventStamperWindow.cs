@@ -57,6 +57,10 @@ namespace Arena.Editor
         private UnityEditor.Editor? _embeddedClipEditor;
         private bool _embeddedPreviewSyncs;
         private const float EmbeddedPreviewHeight = 220f;
+        private const int IdealInputToServerLatencyMinMs = 20;
+        private const int IdealInputToServerLatencyMaxMs = 40;
+        private const int ServerCombatTickMaxDelayMs = 33;
+        private const float PreviewScrollSpeed = 20f;
 
         private DefaultAsset? _folder;
         private AnimationClip[]? _folderClips;
@@ -651,6 +655,7 @@ namespace Arena.Editor
 
             float previewHeight = Mathf.Clamp(position.height * 0.32f, 120f, EmbeddedPreviewHeight);
             Rect rect = GUILayoutUtility.GetRect(10f, previewHeight, GUILayout.ExpandWidth(true));
+            RoutePreviewScrollToWindow(rect);
             _embeddedClipEditor.OnInteractivePreviewGUI(rect, GUIStyle.none);
 
             // Drive the stamp time from the preview's playhead when reflection works.
@@ -667,6 +672,22 @@ namespace Arena.Editor
             {
                 _embeddedPreviewSyncs = false;
             }
+        }
+
+        private void RoutePreviewScrollToWindow(Rect previewRect)
+        {
+            Event current = Event.current;
+            if (current.type != EventType.ScrollWheel
+                || !previewRect.Contains(current.mousePosition))
+            {
+                return;
+            }
+
+            _mainScroll.y = Mathf.Max(
+                0f,
+                _mainScroll.y + current.delta.y * PreviewScrollSpeed);
+            current.Use();
+            Repaint();
         }
 
         private void DrawTimeAndRole()
@@ -792,7 +813,15 @@ namespace Arena.Editor
                 || role == CombatClipRole.PhasedMeleeStart
                 || role == CombatClipRole.PhasedMeleeLoop
                 || role == CombatClipRole.PhasedMeleeEnd;
-            if (!meleeRole)
+
+            AnimationEvent[] hitEvents = AnimationUtility.GetAnimationEvents(_clip!)
+                .Where(animationEvent => string.Equals(
+                    animationEvent.functionName,
+                    CombatAnimationEvents.OnStrikeHit,
+                    StringComparison.Ordinal))
+                .OrderBy(animationEvent => animationEvent.time)
+                .ToArray();
+            if (!meleeRole && hitEvents.Length == 0)
                 return;
 
             EditorGUILayout.Space(8f);
@@ -805,18 +834,14 @@ namespace Arena.Editor
                 "Startup trim skips the opening during playback; it does not modify the animation clip or move OnStrikeHit.",
                 MessageType.Info);
 
-            AnimationEvent[] hitEvents = AnimationUtility.GetAnimationEvents(_clip!)
-                .Where(animationEvent => string.Equals(
-                    animationEvent.functionName,
-                    CombatAnimationEvents.OnStrikeHit,
-                    StringComparison.Ordinal))
-                .OrderBy(animationEvent => animationEvent.time)
-                .ToArray();
             EditorGUILayout.LabelField(
                 $"Authored contact events: {hitEvents.Length}",
                 EditorStyles.miniBoldLabel);
 
-            DrawStartupTrimAuthoring(hitEvents);
+            IReadOnlyList<CombatAnimationSetEditor.StartupTrimTarget> targets =
+                GetStartupTrimTargets();
+            DrawHypotheticalInputToDamageEstimate(hitEvents, targets);
+            DrawStartupTrimAuthoring(hitEvents, targets);
 
             EditorGUILayout.Space(6f);
             EditorGUILayout.LabelField("Automatic synchronization", EditorStyles.miniBoldLabel);
@@ -834,12 +859,59 @@ namespace Arena.Editor
             }
         }
 
-        private void DrawStartupTrimAuthoring(AnimationEvent[] hitEvents)
+        private static void DrawHypotheticalInputToDamageEstimate(
+            AnimationEvent[] hitEvents,
+            IReadOnlyList<CombatAnimationSetEditor.StartupTrimTarget> targets)
+        {
+            if (hitEvents.Length == 0)
+                return;
+
+            var effectiveFirstHitDelayMs = new List<int>();
+            for (int targetIndex = 0; targetIndex < targets.Count; targetIndex++)
+            {
+                CombatAnimationSetEditor.StartupTrimTarget target = targets[targetIndex];
+                WeaponMeleeAttackAuthoring attack = target.Set.meleeAttacks[target.AttackIndex];
+                if (attack.TryGetEffectiveStrikeHitTimesSeconds(out float[] effectiveHitTimes)
+                    && effectiveHitTimes.Length > 0)
+                {
+                    effectiveFirstHitDelayMs.Add(
+                        Mathf.Max(0, Mathf.RoundToInt(effectiveHitTimes[0] * 1000f)));
+                }
+            }
+
+            bool usesUnassignedClipFallback = effectiveFirstHitDelayMs.Count == 0;
+            if (usesUnassignedClipFallback)
+            {
+                effectiveFirstHitDelayMs.Add(
+                    Mathf.Max(0, Mathf.RoundToInt(hitEvents[0].time * 1000f)));
+            }
+
+            int minimumEffectiveHitDelayMs = effectiveFirstHitDelayMs.Min();
+            int maximumEffectiveHitDelayMs = effectiveFirstHitDelayMs.Max();
+            int estimatedMinimumMs = minimumEffectiveHitDelayMs + IdealInputToServerLatencyMinMs;
+            int estimatedMaximumMs = maximumEffectiveHitDelayMs
+                + IdealInputToServerLatencyMaxMs
+                + ServerCombatTickMaxDelayMs;
+            string effectiveDelay = minimumEffectiveHitDelayMs == maximumEffectiveHitDelayMs
+                ? $"{minimumEffectiveHitDelayMs} ms"
+                : $"{minimumEffectiveHitDelayMs}–{maximumEffectiveHitDelayMs} ms across assignments";
+            string fallbackNote = usesUnassignedClipFallback
+                ? " No CombatAnimationSet assignment was found, so this assumes zero startup trim."
+                : string.Empty;
+
+            EditorGUILayout.HelpBox(
+                $"Hypothetical input → first server damage: {estimatedMinimumMs}–{estimatedMaximumMs} ms\n" +
+                $"Effective first hit {effectiveDelay} + {IdealInputToServerLatencyMinMs}–{IdealInputToServerLatencyMaxMs} ms input-to-server latency + 0–{ServerCombatTickMaxDelayMs} ms combat-tick alignment.{fallbackNote}\n\n" +
+                "Informational direct-melee estimate only. Queueing, gap-close arrival, projectile travel, server stalls, and return replication are not included.",
+                MessageType.None);
+        }
+
+        private void DrawStartupTrimAuthoring(
+            AnimationEvent[] hitEvents,
+            IReadOnlyList<CombatAnimationSetEditor.StartupTrimTarget> targets)
         {
             EditorGUILayout.LabelField("Startup trim", EditorStyles.boldLabel);
 
-            IReadOnlyList<CombatAnimationSetEditor.StartupTrimTarget> targets =
-                GetStartupTrimTargets();
             List<CombatAnimationSetEditor.StartupTrimTarget> supportedTargets = targets
                 .Where(target => target.SupportsStartupTrim)
                 .ToList();

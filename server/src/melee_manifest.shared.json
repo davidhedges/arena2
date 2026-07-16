@@ -363,7 +363,7 @@
                     "slot_id": "light_combo_1",
                     "hit_windows": [
                         {
-                            "impact_delay_ms": 292
+                            "impact_delay_ms": 76
                         }
                     ],
                     "recovery_ms": 250,
@@ -378,7 +378,7 @@
                     "slot_id": "maim",
                     "hit_windows": [
                         {
-                            "impact_delay_ms": 292
+                            "impact_delay_ms": 76
                         }
                     ],
                     "recovery_ms": 250,
@@ -393,7 +393,7 @@
                     "slot_id": "light_combo_2",
                     "hit_windows": [
                         {
-                            "impact_delay_ms": 269
+                            "impact_delay_ms": 49
                         }
                     ],
                     "recovery_ms": 250,
@@ -408,7 +408,7 @@
                     "slot_id": "carve",
                     "hit_windows": [
                         {
-                            "impact_delay_ms": 269
+                            "impact_delay_ms": 49
                         }
                     ],
                     "recovery_ms": 250,
@@ -423,7 +423,7 @@
                     "slot_id": "light_3",
                     "hit_windows": [
                         {
-                            "impact_delay_ms": 256
+                            "impact_delay_ms": 52
                         }
                     ],
                     "recovery_ms": 300,
@@ -456,7 +456,7 @@
                     "slot_id": "alt_light_1",
                     "hit_windows": [
                         {
-                            "impact_delay_ms": 358
+                            "impact_delay_ms": 149
                         }
                     ],
                     "recovery_ms": 250,
@@ -471,7 +471,7 @@
                     "slot_id": "alt_light_2",
                     "hit_windows": [
                         {
-                            "impact_delay_ms": 399
+                            "impact_delay_ms": 190
                         }
                     ],
                     "recovery_ms": 250,
@@ -501,7 +501,7 @@
                     "slot_id": "alt_heavy_gapclose",
                     "hit_windows": [
                         {
-                            "impact_delay_ms": 360
+                            "impact_delay_ms": 166
                         }
                     ],
                     "recovery_ms": 350,
@@ -516,7 +516,7 @@
                     "slot_id": "utility_1",
                     "hit_windows": [
                         {
-                            "impact_delay_ms": 935
+                            "impact_delay_ms": 184
                         }
                     ],
                     "recovery_ms": 250,
@@ -654,13 +654,7 @@
                     "slot_id": "finisher_1",
                     "hit_windows": [
                         {
-                            "impact_delay_ms": 167
-                        },
-                        {
                             "impact_delay_ms": 333
-                        },
-                        {
-                            "impact_delay_ms": 500
                         },
                         {
                             "impact_delay_ms": 667
@@ -723,7 +717,7 @@
                     "slot_id": "auto_attack_1",
                     "hit_windows": [
                         {
-                            "impact_delay_ms": 292
+                            "impact_delay_ms": 76
                         }
                     ],
                     "recovery_ms": 250,
@@ -1291,7 +1285,7 @@
                     "slot_id": "light_combo_1",
                     "hit_windows": [
                         {
-                            "impact_delay_ms": 292
+                            "impact_delay_ms": 76
                         }
                     ],
                     "recovery_ms": 250,
@@ -1306,7 +1300,7 @@
                     "slot_id": "alt_light_1",
                     "hit_windows": [
                         {
-                            "impact_delay_ms": 260
+                            "impact_delay_ms": 149
                         }
                     ],
                     "recovery_ms": 250,
@@ -1336,7 +1330,97 @@
                     "slot_id": "auto_attack_1",
                     "hit_windows": [
                         {
-                            "impact_delay_ms": 320
+                            "impact_delay_ms": 76
+                        }
+                    ],
+                    "recovery_ms": 250,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY"
+                },
+                {
+                    "id": "WARRIOR_MAIM",
+                    "slot_id": "maim",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 76
+                        }
+                    ],
+                    "recovery_ms": 250,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY"
+                },
+                {
+                    "id": "COMBO_ATTACK_1_2_LOW_TO_HIGH",
+                    "slot_id": "light_combo_2",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 49
+                        }
+                    ],
+                    "recovery_ms": 250,
+                    "is_gap_closer": false,
+                    "combo_from": "light_combo_1",
+                    "combo_open_ms": 790,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY"
+                },
+                {
+                    "id": "COMBO_ATTACK_1_3_GROUND_TO_AIR",
+                    "slot_id": "light_3",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 52
+                        }
+                    ],
+                    "recovery_ms": 300,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY"
+                },
+                {
+                    "id": "COMBO_ATTACK_2_2_HIGH_TO_LOW",
+                    "slot_id": "alt_light_2",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 190
+                        }
+                    ],
+                    "recovery_ms": 250,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY"
+                },
+                {
+                    "id": "COMBO_ATTACK_2_4_LUNGE",
+                    "slot_id": "alt_heavy_gapclose",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 166
+                        }
+                    ],
+                    "recovery_ms": 350,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY"
+                },
+                {
+                    "id": "COMBO_ATTACK_3_1_LOW_TO_HIGH",
+                    "slot_id": "utility_1",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 935
                         }
                     ],
                     "recovery_ms": 250,
