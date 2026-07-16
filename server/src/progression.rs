@@ -9085,6 +9085,7 @@ mod tests {
     fn generic_spell_abilities_are_profile_neutral_and_author_damage_types() {
         let expected = [
             ("SPELL_FIREBALL", "FIREBALL", "FIRE"),
+            ("SPELL_BOLT", "BOLT", "LIGHTNING"),
             ("SPELL_ICICLE", "ICICLE", "COLD"),
             ("SPELL_ELECTROCUTE", "ELECTROCUTE", "LIGHTNING"),
             ("SPELL_FROZEN_SPLINTERS", "FROZEN_SPLINTERS", "COLD"),
