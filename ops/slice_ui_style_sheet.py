@@ -300,6 +300,94 @@ def bake_all_plates() -> None:
             save(bake_plate(source, width, height, cap), f"{name}_{width}x{height}.png")
 
 
+def make_tileable(strip: Image.Image, horizontal: bool, fade: int = 8) -> Image.Image:
+    """Wrap cross-fade a strip's ends so background-repeat tiles it seamlessly
+    at native scale (runtime REPEAT of texture is safe — runtime STRETCH is not)."""
+    if not horizontal:
+        return make_tileable(strip.transpose(Image.ROTATE_90), True, fade).transpose(Image.ROTATE_270)
+    w, h = strip.size
+    out = strip.copy()
+    pixels, src = out.load(), strip.load()
+    for dx in range(fade):
+        t = (dx + 1) / (fade + 1)
+        for y in range(h):
+            a = src[dx, y]
+            b = src[w - fade + dx, y]
+            blended = tuple(round(b[i] * (1 - t) + a[i] * t) for i in range(4))
+            pixels[dx, y] = blended
+            pixels[w - fade + dx, y] = blended
+    return out
+
+
+def gen_inventory_kit() -> None:
+    """Connected-slot grid, rarity glows, tooltip + subpanel (Standard) frames,
+    close button, demo icons, currency coin."""
+    # One lattice pitch, junction-to-junction (measured ~59.5x61), shown at the
+    # game's 68px cell. Tiling per-cell reconstructs shared lines + diamonds.
+    cell = cut((511, 706, 570, 767), key=False).resize((68, 68), Image.LANCZOS)
+    save(cell, "grid_cell.png")
+
+    # Corner cut from the grid's top-right (top-left is covered by the sheet's
+    # caption overlay), flipped to authored top-left orientation.
+    rim_corner = cut((746, 625, 802, 681), key=False).transpose(Image.FLIP_LEFT_RIGHT)
+    save(rim_corner, "grid_rim_corner.png")
+    save(make_tileable(cut((386, 625, 506, 647), key=False), horizontal=True), "grid_rim_edge_h.png")
+    rim_v = make_tileable(cut((780, 685, 802, 805), key=False).transpose(Image.FLIP_LEFT_RIGHT),
+                          horizontal=False)
+    # The sheet's right rim sits in shade; lift it toward the top edge's tone.
+    save(ImageEnhance.Brightness(rim_v).enhance(1.12), "grid_rim_edge_v.png")
+
+    # Rarity glows: authored well interiors, dropped whole into a cell.
+    glows = {
+        "common": (817, 658, 876, 712), "uncommon": (899, 658, 961, 712),
+        "rare": (981, 658, 1042, 712), "epic": (817, 737, 876, 799),
+        "legendary": (899, 737, 961, 799), "red": (981, 737, 1042, 799),
+    }
+    for name, box in glows.items():
+        save(cut(box, key=False).resize((68, 68), Image.LANCZOS), f"rarity_glow_{name}.png")
+
+    # Tooltip frame (thin, elegant): corners + native-scale repeating edges.
+    save(cut((1071, 466, 1097, 492), key=False), "tooltip_corner.png")
+    save(make_tileable(cut((1100, 466, 1200, 476), key=False), horizontal=True), "tooltip_edge_h.png")
+    save(make_tileable(cut((1071, 495, 1081, 590), key=False), horizontal=False), "tooltip_edge_v.png")
+
+    # Standard (subpanel) frame: gold filigree corner. The authored edges are
+    # near-invisible in the sheet; panels use hairline CSS edges instead.
+    save(cut((858, 121, 908, 171), key=False), "subpanel_corner.png")
+
+    # Close button (red X plate) + brightened hover variant.
+    close = tight_cut((870, 40, 928, 96))
+    save(close, "close_button.png")
+    save(ImageEnhance.Brightness(close).enhance(1.3), "close_button_hover.png")
+
+    # Standalone slot box (framed well) for sparse layouts like the paper doll.
+    # The sheet only shows these boxes WITH demo icons, so the empty box is
+    # synthesized: sword-box frame + a clean well interior from the lattice
+    # cell, cross-faded at the joint.
+    box = tight_cut((356, 380, 447, 471))
+    well = cut((511, 706, 570, 767), key=False).crop((10, 10, 50, 52))
+    inset = 9
+    interior = well.resize((box.width - 2 * inset, box.height - 2 * inset), Image.LANCZOS)
+    mask = Image.new("L", interior.size, 255)
+    mask_px = mask.load()
+    for d in range(4):
+        alpha = round(255 * (d + 1) / 5)
+        for x in range(interior.width):
+            mask_px[x, d] = min(mask_px[x, d], alpha)
+            mask_px[x, interior.height - 1 - d] = min(mask_px[x, interior.height - 1 - d], alpha)
+        for y in range(interior.height):
+            mask_px[d, y] = min(mask_px[d, y], alpha)
+            mask_px[interior.width - 1 - d, y] = min(mask_px[interior.width - 1 - d, y], alpha)
+    box.paste(interior, (inset, inset), mask)
+    save(box, "slot_box.png")
+
+    # Demo item art (icon + well interior) and the gold coin.
+    save(cut((368, 391, 436, 459), key=False), "demo_item_sword.png")
+    save(cut((466, 390, 534, 458), key=False), "demo_item_shield.png")
+    save(cut((564, 390, 632, 458), key=False), "demo_item_helm.png")
+    save(cut((716, 386, 738, 408)), "coin_gold.png")
+
+
 def gen_leather_tile() -> None:
     # Clean interior strip between the icon row and the CONFIRM plate.
     strip = SHEET_IMAGE.crop((376, 468, 600, 496)).convert("RGBA")
@@ -356,17 +444,21 @@ def main() -> None:
     save(cut((279, 32, 370, 122), key=False), "window_corner.png")
     # Calm rail span between the title plate's arrow tail (~773) and the
     # mid-rail diamond (~855): rivets only, per "stretchable surfaces remain
-    # visually calm".
+    # visually calm". Lengths = window dimension - 2*52 (corner inset); one
+    # entry per window size (System Menu 400x442, Character/Inventory 640-660).
     rail_h = cut((776, 41, 852, 79), key=False)
     rail_v = cut((279, 130, 317, 235), key=False)
-    save(bake_rail(rail_h, 296, 23), "window_rail_h_296x23.png")
-    save(bake_rail(rail_v, 338, 23, vertical=True), "window_rail_v_338x23.png")
+    for length in (296, 536, 556):
+        save(bake_rail(rail_h, length, 23), f"window_rail_h_{length}x23.png")
+    for length in (338, 536):
+        save(bake_rail(rail_v, length, 23, vertical=True), f"window_rail_v_{length}x23.png")
 
     # Ornaments.
     save(cut((977, 396, 1531, 429)), "divider.png")
     save(cut((340, 151, 680, 167), tolerance=20), "section_rule.png")
 
     bake_all_plates()
+    gen_inventory_kit()
     gen_leather_tile()
     gen_window_shadow()
 

@@ -1,0 +1,666 @@
+/* Arena UI prototype kit — shared classes for every screen spec.
+ * Same dialect rules as screen sheets: must pass ops/uss_dialect_lint.py and
+ * translate 1:1 into USS (game-side twin: ArenaKit.uss, created at first
+ * translation). Screens link this BEFORE their own sheet and only define
+ * layout: window size, rail-length image overrides, rows, screen widgets.
+ * All art: Assets/Arena/Content/UI/Art (ops/slice_ui_style_sheet.py). */
+
+/* ---- veil ---------------------------------------------------------------- */
+
+.menu-veil {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: var(--arena-veil);
+}
+
+/* ---- window chrome: shadow, leather, forged frame, title plate ----------- */
+
+.menu-window {
+    position: relative;
+    opacity: 0;
+    scale: 0.97;
+    transition-property: opacity, scale;
+    transition-duration: 0.12s;
+    transition-timing-function: ease-out;
+}
+
+.menu-window.is-open {
+    opacity: 1;
+    scale: 1;
+}
+
+.window-shadow {
+    position: absolute;
+    left: -26px;
+    right: -26px;
+    top: -20px;
+    bottom: -30px;
+    background-image: url("../../Assets/Arena/Content/UI/Art/window_shadow.png");
+    background-size: 100% 100%;
+    opacity: 0.55;
+    pointer-events: none;
+}
+
+.window-body {
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    right: 4px;
+    bottom: 4px;
+    background-color: var(--arena-charcoal);
+    background-image: url("../../Assets/Arena/Content/UI/Art/leather_fill.png");
+    background-repeat: repeat;
+}
+
+/* Rails are pre-baked per window size (length = dimension - 104); each screen
+ * overrides the two background-images with its own lengths. */
+.frame-rail {
+    position: absolute;
+    background-size: 100% 100%;
+    pointer-events: none;
+}
+
+.frame-rail--top,
+.frame-rail--bottom {
+    left: 52px;
+    right: 52px;
+    height: 23px;
+}
+
+.frame-rail--top { top: 0; }
+.frame-rail--bottom { bottom: 0; scale: 1 -1; }
+
+.frame-rail--left,
+.frame-rail--right {
+    top: 52px;
+    bottom: 52px;
+    width: 23px;
+}
+
+.frame-rail--left { left: 0; }
+.frame-rail--right { right: 0; scale: -1 1; }
+
+.frame-corner {
+    position: absolute;
+    width: 56px;
+    height: 55px;
+    background-image: url("../../Assets/Arena/Content/UI/Art/window_corner.png");
+    background-size: 100% 100%;
+    pointer-events: none;
+}
+
+.frame-corner--tl { top: 0; left: 0; }
+.frame-corner--tr { top: 0; right: 0; scale: -1 1; }
+.frame-corner--bl { bottom: 0; left: 0; scale: 1 -1; }
+.frame-corner--br { bottom: 0; right: 0; scale: -1 -1; }
+
+.window-flow {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+/* Arrow-ended title plate riding the top rail (~half window width). */
+.header-plate {
+    width: 230px;
+    height: 57px;
+    margin-top: -13px;
+    flex-shrink: 0;
+    background-image: url("../../Assets/Arena/Content/UI/Art/window_title_plate.png");
+    background-size: 100% 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.window-title {
+    font-family: "Cinzel", "Times New Roman", serif;
+    font-size: 17px;
+    color: var(--arena-gold-text);
+    letter-spacing: 2px;
+    padding-top: 2px;
+}
+
+/* Red X plate, top-right on the frame. */
+.window-close {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    width: 44px;
+    height: 43px;
+    background-image: url("../../Assets/Arena/Content/UI/Art/close_button.png");
+    background-size: 100% 100%;
+    cursor: pointer;
+}
+
+.window-close:hover {
+    background-image: url("../../Assets/Arena/Content/UI/Art/close_button_hover.png");
+}
+
+/* ---- buttons: authored plates pre-baked at exact display size ------------ */
+
+.arena-button {
+    height: var(--arena-button-height);
+    background-image: url("../../Assets/Arena/Content/UI/Art/button_plate_340x36.png");
+    background-size: 100% 100%;
+    color: var(--arena-text);
+    font-family: "Cinzel", "Times New Roman", serif;
+    font-size: var(--arena-font-button);
+    letter-spacing: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.arena-button:hover {
+    background-image: url("../../Assets/Arena/Content/UI/Art/button_plate_hover_340x36.png");
+}
+
+.arena-button:active {
+    background-image: url("../../Assets/Arena/Content/UI/Art/button_plate_pressed_340x36.png");
+}
+
+.row-control .arena-button {
+    background-image: url("../../Assets/Arena/Content/UI/Art/button_plate_187x36.png");
+}
+.row-control .arena-button:hover {
+    background-image: url("../../Assets/Arena/Content/UI/Art/button_plate_hover_187x36.png");
+}
+.row-control .arena-button:active {
+    background-image: url("../../Assets/Arena/Content/UI/Art/button_plate_pressed_187x36.png");
+}
+
+.arena-button--primary {
+    background-image: url("../../Assets/Arena/Content/UI/Art/button_plate_ember_340x36.png");
+}
+.arena-button--primary:hover {
+    background-image: url("../../Assets/Arena/Content/UI/Art/button_plate_ember_hover_340x36.png");
+}
+.arena-button--primary:active {
+    background-image: url("../../Assets/Arena/Content/UI/Art/button_plate_ember_340x36.png");
+}
+
+.arena-button--danger {
+    background-image: url("../../Assets/Arena/Content/UI/Art/button_plate_danger_280x36.png");
+}
+.arena-button--danger:hover {
+    background-image: url("../../Assets/Arena/Content/UI/Art/button_plate_danger_hover_280x36.png");
+}
+.arena-button--danger:active {
+    background-image: url("../../Assets/Arena/Content/UI/Art/button_plate_danger_pressed_280x36.png");
+}
+
+/* ---- settings rows -------------------------------------------------------- */
+
+.menu-row {
+    margin-top: 10px;
+    height: var(--arena-row-height);
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.row-label {
+    width: 45%;
+    font-size: var(--arena-font-body);
+    color: var(--arena-text-muted);
+}
+
+.row-control {
+    width: 55%;
+    height: 100%;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+}
+
+.row-control .arena-button {
+    flex-grow: 1;
+    height: 100%;
+}
+
+/* ---- section heading + ornaments ----------------------------------------- */
+
+.section-heading {
+    margin-top: 14px;
+    height: 24px;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.section-gem {
+    width: 8px;
+    height: 8px;
+    background-color: var(--arena-ember);
+    rotate: 45deg;
+    margin-right: 10px;
+    flex-shrink: 0;
+}
+
+.section-title {
+    font-family: "Cinzel", "Times New Roman", serif;
+    font-size: var(--arena-font-section);
+    color: var(--arena-gold-text);
+    letter-spacing: 2px;
+}
+
+.section-rule {
+    height: 10px;
+    margin-top: 2px;
+    background-image: url("../../Assets/Arena/Content/UI/Art/section_rule.png");
+    background-size: 100% 100%;
+    flex-shrink: 0;
+}
+
+.divider-ornament {
+    margin-top: 16px;
+    height: 20px;
+    background-image: url("../../Assets/Arena/Content/UI/Art/divider.png");
+    background-size: 100% 100%;
+    flex-shrink: 0;
+}
+
+/* ---- slider: recessed well + ember fill + gem tip ------------------------- */
+
+.volume-slider {
+    flex-grow: 1;
+    height: 12px;
+    background-color: var(--arena-well);
+    border-radius: 6px;
+    border-width: 1px;
+    border-style: solid;
+    border-top-color: #060708;
+    border-left-color: #0B0C0E;
+    border-right-color: #0B0C0E;
+    border-bottom-color: rgba(231, 225, 211, 0.08);
+    position: relative;
+    cursor: pointer;
+}
+
+.volume-fill {
+    position: absolute;
+    top: 1px;
+    left: 1px;
+    bottom: 1px;
+    width: 100%;
+    background-color: var(--arena-ember);
+    border-radius: 5px;
+    pointer-events: none;
+}
+
+.volume-gem {
+    position: absolute;
+    right: -4px;
+    top: 1px;
+    width: 8px;
+    height: 8px;
+    background-color: var(--arena-ember-bright);
+    rotate: 45deg;
+    pointer-events: none;
+}
+
+/* ---- dropdown (thin tooltip-style menu, opens upward) --------------------- */
+
+.dropdown {
+    position: relative;
+    flex-grow: 1;
+    height: 100%;
+    display: flex;
+}
+
+.dropdown-menu {
+    position: absolute;
+    bottom: 38px;
+    left: 0;
+    right: 0;
+    display: none;
+    flex-direction: column;
+    background-color: rgba(16, 17, 20, 0.98);
+    border-width: 1px;
+    border-style: solid;
+    border-color: #4A4E55;
+    padding-top: 4px;
+    padding-bottom: 4px;
+}
+
+.dropdown.is-open .dropdown-menu {
+    display: flex;
+}
+
+.dropdown-item {
+    height: 30px;
+    padding-left: 12px;
+    display: flex;
+    align-items: center;
+    font-size: var(--arena-font-body);
+    color: var(--arena-text);
+    cursor: pointer;
+}
+
+.dropdown-item:hover {
+    background-color: rgba(197, 143, 42, 0.08);
+    color: var(--arena-ember-bright);
+}
+
+.dropdown-item.is-selected {
+    color: var(--arena-gold-text);
+}
+
+/* ---- connected inventory grid (rim + tiled lattice cells) ----------------- */
+
+.arena-grid {
+    position: relative;
+    flex-shrink: 0;
+}
+
+.grid-cells {
+    position: absolute;
+    top: 18px;
+    left: 18px;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+}
+
+.grid-cell {
+    width: 68px;
+    height: 68px;
+    background-image: url("../../Assets/Arena/Content/UI/Art/grid_cell.png");
+    background-size: 100% 100%;
+    flex-shrink: 0;
+}
+
+.grid-rim-edge {
+    position: absolute;
+    pointer-events: none;
+}
+
+.grid-rim-edge--top,
+.grid-rim-edge--bottom {
+    left: 38px;
+    right: 38px;
+    height: 22px;
+    background-image: url("../../Assets/Arena/Content/UI/Art/grid_rim_edge_h.png");
+    background-repeat: repeat-x;
+}
+
+.grid-rim-edge--top { top: 0; }
+.grid-rim-edge--bottom { bottom: 0; scale: 1 -1; }
+
+.grid-rim-edge--left,
+.grid-rim-edge--right {
+    top: 38px;
+    bottom: 38px;
+    width: 22px;
+    background-image: url("../../Assets/Arena/Content/UI/Art/grid_rim_edge_v.png");
+    background-repeat: repeat-y;
+}
+
+.grid-rim-edge--left { left: 0; }
+.grid-rim-edge--right { right: 0; scale: -1 1; }
+
+.grid-rim-corner {
+    position: absolute;
+    width: 56px;
+    height: 56px;
+    background-image: url("../../Assets/Arena/Content/UI/Art/grid_rim_corner.png");
+    background-size: 100% 100%;
+    pointer-events: none;
+}
+
+.grid-rim-corner--tl { top: 0; left: 0; }
+.grid-rim-corner--tr { top: 0; right: 0; scale: -1 1; }
+.grid-rim-corner--bl { bottom: 0; left: 0; scale: 1 -1; }
+.grid-rim-corner--br { bottom: 0; right: 0; scale: -1 -1; }
+
+/* Items overlay the lattice; footprint = cell coords * 68 (set inline). */
+.grid-item {
+    position: absolute;
+    background-size: 100% 100%;
+    cursor: pointer;
+}
+
+.grid-item .item-icon {
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    right: 4px;
+    bottom: 4px;
+    background-size: 100% 100%;
+    pointer-events: none;
+}
+
+.grid-item:hover .item-icon {
+    top: 2px;
+    left: 2px;
+    right: 2px;
+    bottom: 2px;
+}
+
+/* Rarity is an interior glow, never a colored border. */
+.rarity-common     { background-image: url("../../Assets/Arena/Content/UI/Art/rarity_glow_common.png"); }
+.rarity-uncommon   { background-image: url("../../Assets/Arena/Content/UI/Art/rarity_glow_uncommon.png"); }
+.rarity-rare       { background-image: url("../../Assets/Arena/Content/UI/Art/rarity_glow_rare.png"); }
+.rarity-epic       { background-image: url("../../Assets/Arena/Content/UI/Art/rarity_glow_epic.png"); }
+.rarity-legendary  { background-image: url("../../Assets/Arena/Content/UI/Art/rarity_glow_legendary.png"); }
+.rarity-red        { background-image: url("../../Assets/Arena/Content/UI/Art/rarity_glow_red.png"); }
+
+.qty-badge {
+    position: absolute;
+    right: 5px;
+    bottom: 4px;
+    font-family: "Alegreya", Georgia, serif;
+    font-size: 13px;
+    color: var(--arena-text);
+    letter-spacing: 0.5px;
+    pointer-events: none;
+}
+
+/* ---- standalone slot box (paper doll etc.) -------------------------------- */
+
+.slot-box {
+    position: relative;
+    width: 76px;
+    height: 76px;
+    background-image: url("../../Assets/Arena/Content/UI/Art/slot_box.png");
+    background-size: 100% 100%;
+}
+
+.slot-box .item-icon,
+.slot-box .slot-glow {
+    position: absolute;
+    top: 7px;
+    left: 7px;
+    right: 7px;
+    bottom: 7px;
+    background-size: 100% 100%;
+    pointer-events: none;
+}
+
+.slot-label {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 8px;
+    font-size: 11px;
+    color: var(--arena-text-dim);
+    text-align: center;
+    letter-spacing: 1px;
+    pointer-events: none;
+}
+
+/* ---- standard (subpanel) frame: filigree corners + hairline edges + recess.
+ * The sheet's subpanel edges are near-invisible; the frame reads through its
+ * corners and the darker interior, so edges are plain hairlines here. ------- */
+
+.arena-subpanel {
+    position: relative;
+    background-color: rgba(0, 0, 0, 0.20);
+    border-width: 1px;
+    border-style: solid;
+    border-color: rgba(231, 225, 211, 0.10);
+}
+
+.subpanel-corner {
+    position: absolute;
+    width: 38px;
+    height: 38px;
+    background-image: url("../../Assets/Arena/Content/UI/Art/subpanel_corner.png");
+    background-size: 100% 100%;
+    pointer-events: none;
+}
+
+.subpanel-corner--tl { top: -2px; left: -2px; }
+.subpanel-corner--tr { top: -2px; right: -2px; scale: -1 1; }
+.subpanel-corner--bl { bottom: -2px; left: -2px; scale: 1 -1; }
+.subpanel-corner--br { bottom: -2px; right: -2px; scale: -1 -1; }
+
+/* ---- tooltip frame (thin, elegant, any size) ------------------------------ */
+
+.arena-tooltip {
+    position: absolute;
+    background-color: rgba(12, 12, 15, 0.97);
+    padding: 16px 18px;
+    pointer-events: none;
+}
+
+.tooltip-edge {
+    position: absolute;
+}
+
+.tooltip-edge--top,
+.tooltip-edge--bottom {
+    left: 24px;
+    right: 24px;
+    height: 10px;
+    background-image: url("../../Assets/Arena/Content/UI/Art/tooltip_edge_h.png");
+    background-repeat: repeat-x;
+}
+
+.tooltip-edge--top { top: 0; }
+.tooltip-edge--bottom { bottom: 0; scale: 1 -1; }
+
+.tooltip-edge--left,
+.tooltip-edge--right {
+    top: 24px;
+    bottom: 24px;
+    width: 10px;
+    background-image: url("../../Assets/Arena/Content/UI/Art/tooltip_edge_v.png");
+    background-repeat: repeat-y;
+}
+
+.tooltip-edge--left { left: 0; }
+.tooltip-edge--right { right: 0; scale: -1 1; }
+
+.tooltip-corner {
+    position: absolute;
+    width: 26px;
+    height: 26px;
+    background-image: url("../../Assets/Arena/Content/UI/Art/tooltip_corner.png");
+    background-size: 100% 100%;
+}
+
+.tooltip-corner--tl { top: 0; left: 0; }
+.tooltip-corner--tr { top: 0; right: 0; scale: -1 1; }
+.tooltip-corner--bl { bottom: 0; left: 0; scale: 1 -1; }
+.tooltip-corner--br { bottom: 0; right: 0; scale: -1 -1; }
+
+.tt-name {
+    font-family: "Cinzel", "Times New Roman", serif;
+    font-size: 17px;
+    color: var(--arena-gold-text);
+    letter-spacing: 1px;
+}
+
+.tt-rarity {
+    font-size: var(--arena-font-body);
+    margin-top: 2px;
+}
+
+.tt-rarity--common    { color: var(--arena-rarity-common); }
+.tt-rarity--uncommon  { color: var(--arena-rarity-uncommon); }
+.tt-rarity--rare      { color: var(--arena-rarity-rare); }
+.tt-rarity--epic      { color: var(--arena-rarity-epic); }
+.tt-rarity--legendary { color: var(--arena-rarity-legendary); }
+
+.tt-line {
+    font-size: var(--arena-font-body);
+    color: var(--arena-text-muted);
+    margin-top: 6px;
+}
+
+.tt-stat {
+    font-size: var(--arena-font-body);
+    color: var(--arena-text);
+    margin-top: 3px;
+}
+
+.tt-footer {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    margin-top: 10px;
+    font-size: var(--arena-font-body);
+    color: var(--arena-text-muted);
+}
+
+/* ---- currency ------------------------------------------------------------- */
+
+.coin {
+    width: 18px;
+    height: 18px;
+    background-image: url("../../Assets/Arena/Content/UI/Art/coin_gold.png");
+    background-size: 100% 100%;
+    flex-shrink: 0;
+}
+
+.currency-row {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-end;
+}
+
+.currency-value {
+    margin-left: 6px;
+    font-size: var(--arena-font-body);
+    color: var(--arena-text);
+}
+
+/* ---- stat rows (attributes subpanel) --------------------------------------- */
+
+.stat-row {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    height: 26px;
+    flex-shrink: 0;
+}
+
+.stat-label {
+    flex-grow: 1;
+    font-size: var(--arena-font-body);
+    color: var(--arena-text-muted);
+}
+
+.stat-value {
+    font-size: var(--arena-font-body);
+    color: var(--arena-text);
+}
+
+.stat-empty {
+    font-size: var(--arena-font-small);
+    color: var(--arena-text-dim);
+}

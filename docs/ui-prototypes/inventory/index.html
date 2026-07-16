@@ -1,0 +1,388 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Arena — Inventory &amp; Character (UI spec)</title>
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../kit.css">
+<link rel="stylesheet" href="inventory.css">
+<style>
+/* ============ SCAFFOLD — browser-only, never translated ============ */
+
+@font-face {
+  font-family: "Cinzel";
+  font-weight: 400 900;
+  src: url("../../../Assets/Arena/Content/UI/Fonts/Cinzel.ttf") format("truetype");
+}
+@font-face {
+  font-family: "Alegreya";
+  font-weight: 400 900;
+  src: url("../../../Assets/Arena/Content/UI/Fonts/Alegreya.ttf") format("truetype");
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  height: 100%;
+  background: #08090b;
+  color: #a89f8d;
+  font-family: "Alegreya", Georgia, serif;
+  overflow: hidden;
+}
+
+.sc-shell { height: 100%; display: flex; flex-direction: column; }
+
+.sc-toolbar {
+  flex: none;
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  padding: 10px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.sc-toolbar .sc-brand {
+  font-family: "Cinzel", serif;
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 2px;
+  color: #c58f2a;
+}
+.sc-toolbar .sc-screen { font-size: 13px; color: #f0f2f7; }
+.sc-toolbar .sc-hint { margin-left: auto; font-size: 12px; color: #6f7176; }
+.sc-toolbar .sc-hint b { color: #a3a5a9; font-weight: 700; }
+
+.sc-stagewrap { flex: 1; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+
+.sc-stage {
+  position: relative;
+  width: 1920px;
+  height: 1080px;
+  flex: none;
+  transform-origin: center center;
+  outline: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.sc-backdrop { position: absolute; inset: 0; }
+
+.sc-open-hint {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 15px;
+  letter-spacing: 1px;
+  color: #6f7176;
+  border: 1px dashed rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  padding: 12px 22px;
+  cursor: pointer;
+  user-select: none;
+}
+.sc-open-hint b { color: #c58f2a; }
+.sc-open-hint.sc-hidden { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .menu-window { transition-duration: 0s !important; }
+}
+</style>
+</head>
+<body>
+<div class="sc-shell">
+  <div class="sc-toolbar">
+    <span class="sc-brand">ARENA · UI SPEC</span>
+    <span class="sc-screen">Inventory &amp; Character</span>
+    <span class="sc-hint"><b>I</b> toggles · hover items for tooltips · spec for Inventory.uxml/.uss</span>
+  </div>
+
+  <div class="sc-stagewrap">
+    <div class="sc-stage" id="Stage">
+      <canvas class="sc-backdrop" id="Backdrop" width="1920" height="1080"></canvas>
+
+      <div class="sc-open-hint" id="OpenHint">press <b>I</b> — or click here — to open Inventory &amp; Character</div>
+
+      <!-- ================= SPEC MARKUP =================
+           ids/names are the binding contract for the future controller. -->
+      <div class="inventory-screen" id="InventoryScreen">
+
+        <div class="menu-window char-window" id="CharacterWindow">
+          <div class="window-shadow"></div>
+          <div class="window-body"></div>
+          <div class="frame-rail frame-rail--top"></div>
+          <div class="frame-rail frame-rail--bottom"></div>
+          <div class="frame-rail frame-rail--left"></div>
+          <div class="frame-rail frame-rail--right"></div>
+          <div class="frame-corner frame-corner--tl"></div>
+          <div class="frame-corner frame-corner--tr"></div>
+          <div class="frame-corner frame-corner--bl"></div>
+          <div class="frame-corner frame-corner--br"></div>
+
+          <div class="window-flow">
+            <div class="header-plate"><div class="window-title">CHARACTER</div></div>
+
+            <div class="char-content">
+              <div class="equip-doll" id="EquipDoll">
+                <div class="slot-box equip-slot equip-slot--head grid-item-like" data-tt-name="Tempered Greathelm" data-tt-rarity="epic" data-tt-line="Helmet · Plate · Head" data-tt-stats="Armor +18|Arcane Resistance +6%" data-tt-value="842">
+                  <div class="slot-glow rarity-epic"></div>
+                  <div class="item-icon" style="background-image:url('../../../Assets/Arena/Content/UI/Art/demo_item_helm.png')"></div>
+                </div>
+                <div class="slot-box equip-slot equip-slot--shoulder"><div class="slot-label">SHOULDER</div></div>
+                <div class="slot-box equip-slot equip-slot--amulet"><div class="slot-label">AMULET</div></div>
+                <div class="slot-box equip-slot equip-slot--cape"><div class="slot-label">CAPE</div></div>
+                <div class="slot-box equip-slot equip-slot--chest"><div class="slot-label">CHEST</div></div>
+                <div class="slot-box equip-slot equip-slot--gloves"><div class="slot-label">GLOVES</div></div>
+                <div class="slot-box equip-slot equip-slot--legs"><div class="slot-label">LEGS</div></div>
+                <div class="slot-box equip-slot equip-slot--boots"><div class="slot-label">BOOTS</div></div>
+                <div class="slot-box equip-slot equip-slot--ring1"><div class="slot-label">RING</div></div>
+                <div class="slot-box equip-slot equip-slot--ring2"><div class="slot-label">RING</div></div>
+                <div class="slot-box equip-slot equip-slot--mainhand" data-tt-name="Pitfighter's Blade" data-tt-rarity="rare" data-tt-line="Sword · One-Hand · Weapon" data-tt-stats="Weapon Damage 24-31|Crit Chance +3%" data-tt-value="516">
+                  <div class="slot-glow rarity-rare"></div>
+                  <div class="item-icon" style="background-image:url('../../../Assets/Arena/Content/UI/Art/demo_item_sword.png')"></div>
+                </div>
+                <div class="slot-box equip-slot equip-slot--offhand" data-tt-name="Roundshield of the Wall" data-tt-rarity="uncommon" data-tt-line="Shield · Offhand" data-tt-stats="Armor +9|Block +4%" data-tt-value="203">
+                  <div class="slot-glow rarity-uncommon"></div>
+                  <div class="item-icon" style="background-image:url('../../../Assets/Arena/Content/UI/Art/demo_item_shield.png')"></div>
+                </div>
+                <div class="slot-box equip-slot equip-slot--spellbook"><div class="slot-label">SPELLBOOK</div></div>
+              </div>
+
+              <div class="arena-subpanel stats-panel" id="StatsPanel">
+                <div class="subpanel-corner subpanel-corner--tl"></div>
+                <div class="subpanel-corner subpanel-corner--tr"></div>
+                <div class="subpanel-corner subpanel-corner--bl"></div>
+                <div class="subpanel-corner subpanel-corner--br"></div>
+
+                <div class="section-heading">
+                  <div class="section-gem"></div>
+                  <div class="section-title">ATTRIBUTES</div>
+                </div>
+                <div class="section-rule"></div>
+
+                <div class="stat-row"><div class="stat-label">Armor</div><div class="stat-value">27</div></div>
+                <div class="stat-row"><div class="stat-label">Block</div><div class="stat-value">4%</div></div>
+                <div class="stat-row"><div class="stat-label">Crit Chance</div><div class="stat-value">3%</div></div>
+                <div class="stat-row"><div class="stat-label">Arcane Resistance</div><div class="stat-value">6%</div></div>
+                <div class="stat-row"><div class="stat-label">Weapon Damage</div><div class="stat-value">24–31</div></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="window-close" id="CharacterClose"></div>
+        </div>
+
+        <div class="menu-window inv-window" id="InventoryWindow">
+          <div class="window-shadow"></div>
+          <div class="window-body"></div>
+          <div class="frame-rail frame-rail--top"></div>
+          <div class="frame-rail frame-rail--bottom"></div>
+          <div class="frame-rail frame-rail--left"></div>
+          <div class="frame-rail frame-rail--right"></div>
+          <div class="frame-corner frame-corner--tl"></div>
+          <div class="frame-corner frame-corner--tr"></div>
+          <div class="frame-corner frame-corner--bl"></div>
+          <div class="frame-corner frame-corner--br"></div>
+
+          <div class="window-flow">
+            <div class="header-plate"><div class="window-title">INVENTORY</div></div>
+
+            <div class="inv-content">
+              <div class="arena-grid inv-grid" id="InventoryGrid">
+                <div class="grid-cells" id="GridCells"></div>
+
+                <div class="grid-item" style="left:18px; top:18px; width:68px; height:68px;"
+                     data-tt-name="Emberforged Warblade" data-tt-rarity="legendary" data-tt-line="Sword · Two-Hand · Weapon" data-tt-stats="Weapon Damage 61-74|Crit Chance +7%|Haste +5%" data-tt-value="4,120">
+                  <div class="slot-glow rarity-legendary"></div>
+                  <div class="item-icon" style="background-image:url('../../../Assets/Arena/Content/UI/Art/demo_item_sword.png')"></div>
+                </div>
+
+                <div class="grid-item" style="left:154px; top:18px; width:68px; height:68px;"
+                     data-tt-name="Footman's Helm" data-tt-rarity="common" data-tt-line="Helmet · Mail · Head" data-tt-stats="Armor +7" data-tt-value="38">
+                  <div class="slot-glow rarity-common"></div>
+                  <div class="item-icon" style="background-image:url('../../../Assets/Arena/Content/UI/Art/demo_item_helm.png')"></div>
+                </div>
+
+                <div class="grid-item" style="left:290px; top:86px; width:136px; height:136px;"
+                     data-tt-name="Bulwark of the Deep" data-tt-rarity="epic" data-tt-line="Shield · Offhand · 2×2" data-tt-stats="Armor +26|Block +9%|Physical Resistance +4%" data-tt-value="1,876">
+                  <div class="slot-glow rarity-epic"></div>
+                  <div class="item-icon" style="background-image:url('../../../Assets/Arena/Content/UI/Art/demo_item_shield.png')"></div>
+                </div>
+
+                <div class="grid-item" style="left:86px; top:222px; width:68px; height:68px;"
+                     data-tt-name="Skirmisher's Buckler" data-tt-rarity="uncommon" data-tt-line="Shield · Offhand" data-tt-stats="Armor +8|Block +3%" data-tt-value="167" data-tt-qty="3">
+                  <div class="slot-glow rarity-uncommon"></div>
+                  <div class="item-icon" style="background-image:url('../../../Assets/Arena/Content/UI/Art/demo_item_shield.png')"></div>
+                  <div class="qty-badge">3</div>
+                </div>
+
+                <div class="grid-item" style="left:426px; top:358px; width:68px; height:68px;"
+                     data-tt-name="Gladiator's Visage" data-tt-rarity="rare" data-tt-line="Helmet · Plate · Head" data-tt-stats="Armor +14|Crit Chance +2%" data-tt-value="490">
+                  <div class="slot-glow rarity-rare"></div>
+                  <div class="item-icon" style="background-image:url('../../../Assets/Arena/Content/UI/Art/demo_item_helm.png')"></div>
+                </div>
+
+                <div class="grid-rim-edge grid-rim-edge--top"></div>
+                <div class="grid-rim-edge grid-rim-edge--bottom"></div>
+                <div class="grid-rim-edge grid-rim-edge--left"></div>
+                <div class="grid-rim-edge grid-rim-edge--right"></div>
+                <div class="grid-rim-corner grid-rim-corner--tl"></div>
+                <div class="grid-rim-corner grid-rim-corner--tr"></div>
+                <div class="grid-rim-corner grid-rim-corner--bl"></div>
+                <div class="grid-rim-corner grid-rim-corner--br"></div>
+              </div>
+
+              <div class="inv-footer">
+                <div class="slot-count" id="SlotCount">8/56 SLOTS</div>
+                <div class="currency-row">
+                  <div class="coin"></div>
+                  <div class="currency-value">12,345</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="window-close" id="InventoryClose"></div>
+        </div>
+      </div>
+      <!-- =============== END SPEC MARKUP =============== -->
+
+      <div class="arena-tooltip" id="Tooltip" style="display:none; width: 300px;">
+        <div class="tooltip-edge tooltip-edge--top"></div>
+        <div class="tooltip-edge tooltip-edge--bottom"></div>
+        <div class="tooltip-edge tooltip-edge--left"></div>
+        <div class="tooltip-edge tooltip-edge--right"></div>
+        <div class="tooltip-corner tooltip-corner--tl"></div>
+        <div class="tooltip-corner tooltip-corner--tr"></div>
+        <div class="tooltip-corner tooltip-corner--bl"></div>
+        <div class="tooltip-corner tooltip-corner--br"></div>
+        <div class="tt-name" id="TtName"></div>
+        <div class="tt-rarity" id="TtRarity"></div>
+        <div class="tt-line" id="TtLine"></div>
+        <div id="TtStats"></div>
+        <div class="tt-footer" id="TtFooter">
+          <span id="TtValue">Value: 1,234</span>
+          <div class="coin" style="margin-left:6px; width:16px; height:16px;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* Scaffold JS — throwaway. Demonstrates the states/behaviors the controller
+ * will drive: open/close, cell population, hover tooltips. */
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+  var stage = $("Stage"), root = $("InventoryScreen");
+
+  function fitStage() {
+    var wrap = stage.parentElement;
+    var scale = Math.min(wrap.clientWidth / 1920, wrap.clientHeight / 1080);
+    stage.style.transform = "scale(" + scale + ")";
+    stage.dataset.scale = scale;
+  }
+  window.addEventListener("resize", fitStage);
+  fitStage();
+
+  (function paintBackdrop() {
+    var ctx = $("Backdrop").getContext("2d");
+    var g = ctx.createLinearGradient(0, 0, 0, 1080);
+    g.addColorStop(0, "#101216");
+    g.addColorStop(0.62, "#0b0c10");
+    g.addColorStop(1, "#151009");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 1920, 1080);
+    var vig = ctx.createRadialGradient(960, 540, 420, 960, 540, 1150);
+    vig.addColorStop(0, "rgba(0,0,0,0)");
+    vig.addColorStop(1, "rgba(0,0,0,0.55)");
+    ctx.fillStyle = vig;
+    ctx.fillRect(0, 0, 1920, 1080);
+  })();
+
+  // 8x7 lattice cells (the controller sizes this from the server container).
+  (function buildCells() {
+    var cells = $("GridCells");
+    cells.style.width = (8 * 68) + "px";
+    for (var i = 0; i < 8 * 7; i++) {
+      var c = document.createElement("div");
+      c.className = "grid-cell";
+      cells.appendChild(c);
+    }
+  })();
+
+  var open = false;
+  function setOpen(next) {
+    open = next;
+    $("OpenHint").classList.toggle("sc-hidden", open);
+    root.classList.toggle("is-open", open);
+    var wins = root.querySelectorAll(".menu-window");
+    if (open) {
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () {
+          wins.forEach(function (w) { w.classList.add("is-open"); });
+        });
+      });
+    } else {
+      wins.forEach(function (w) { w.classList.remove("is-open"); });
+      hideTooltip();
+    }
+  }
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "i" || e.key === "I") { setOpen(!open); e.preventDefault(); }
+    if (e.key === "Escape" && open) { setOpen(false); e.preventDefault(); }
+  });
+  $("OpenHint").addEventListener("click", function () { setOpen(true); });
+  $("CharacterClose").addEventListener("click", function () { setOpen(false); });
+  $("InventoryClose").addEventListener("click", function () { setOpen(false); });
+
+  // --- tooltips from data attributes ---
+  var tip = $("Tooltip");
+  function hideTooltip() { tip.style.display = "none"; }
+  function showTooltip(el, evt) {
+    $("TtName").textContent = el.dataset.ttName;
+    var rar = el.dataset.ttRarity;
+    var rEl = $("TtRarity");
+    rEl.textContent = rar.charAt(0).toUpperCase() + rar.slice(1);
+    rEl.className = "tt-rarity tt-rarity--" + rar;
+    $("TtLine").textContent = el.dataset.ttLine + (el.dataset.ttQty ? " · Stack: " + el.dataset.ttQty : "");
+    var stats = $("TtStats");
+    stats.innerHTML = "";
+    (el.dataset.ttStats || "").split("|").forEach(function (sLine) {
+      if (!sLine) return;
+      var d = document.createElement("div");
+      d.className = "tt-stat";
+      d.textContent = sLine;
+      stats.appendChild(d);
+    });
+    $("TtValue").textContent = "Value: " + el.dataset.ttValue;
+    tip.style.display = "block";
+    moveTooltip(evt);
+  }
+  function moveTooltip(evt) {
+    var srect = stage.getBoundingClientRect();
+    var scale = parseFloat(stage.dataset.scale || "1");
+    var x = (evt.clientX - srect.left) / scale + 22;
+    var y = (evt.clientY - srect.top) / scale + 18;
+    x = Math.min(x, 1920 - 320);
+    y = Math.min(y, 1080 - (tip.offsetHeight + 20));
+    tip.style.left = x + "px";
+    tip.style.top = y + "px";
+  }
+  document.querySelectorAll("[data-tt-name]").forEach(function (el) {
+    el.addEventListener("mouseenter", function (e) { showTooltip(el, e); });
+    el.addEventListener("mousemove", moveTooltip);
+    el.addEventListener("mouseleave", hideTooltip);
+  });
+
+  // ?open auto-opens (screenshot tooling); ?tip also shows a tooltip.
+  if (/[?&](open|tip)\b/.test(location.search)) setOpen(true);
+  if (/[?&]tip\b/.test(location.search)) {
+    var el = document.querySelector('[data-tt-name="Emberforged Warblade"]');
+    showTooltip(el, { clientX: 0, clientY: 0 });
+    tip.style.left = "1180px";
+    tip.style.top = "300px";
+  }
+})();
+</script>
+</body>
+</html>
