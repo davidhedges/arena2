@@ -9,6 +9,7 @@ namespace Arena.Presentation.Appearance
         private const string PartCatalogResource = "CharacterAppearance/AvatarPartCatalog";
         private const string OutfitCatalogResource = "CharacterAppearance/OutfitCatalog";
         private const string EquipmentAppearanceCatalogResource = "CharacterAppearance/EquipmentAppearanceCatalog";
+        private static CharacterAppearanceCatalogSet? _cachedDefault;
 
         public CharacterAppearanceCatalogSet(
             AvatarBaseCatalog baseCatalog,
@@ -29,6 +30,16 @@ namespace Arena.Presentation.Appearance
 
         public static bool TryLoadDefault(out CharacterAppearanceCatalogSet catalogs, out string error)
         {
+            if (_cachedDefault != null
+                && _cachedDefault.BaseCatalog != null
+                && _cachedDefault.PartCatalog != null
+                && _cachedDefault.OutfitCatalog != null)
+            {
+                catalogs = _cachedDefault;
+                error = string.Empty;
+                return true;
+            }
+
             AvatarBaseCatalog? baseCatalog = Resources.Load<AvatarBaseCatalog>(BaseCatalogResource);
             AvatarPartCatalog? partCatalog = Resources.Load<AvatarPartCatalog>(PartCatalogResource);
             OutfitCatalog? outfitCatalog = Resources.Load<OutfitCatalog>(OutfitCatalogResource);
@@ -44,11 +55,12 @@ namespace Arena.Presentation.Appearance
                 return false;
             }
 
-            catalogs = new CharacterAppearanceCatalogSet(
+            _cachedDefault = new CharacterAppearanceCatalogSet(
                 baseCatalog,
                 partCatalog,
                 outfitCatalog,
                 equipmentAppearanceCatalog);
+            catalogs = _cachedDefault;
             error = string.Empty;
             return true;
         }

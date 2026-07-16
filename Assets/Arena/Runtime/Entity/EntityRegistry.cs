@@ -41,7 +41,6 @@ namespace Arena.Entity
         private const string FearStatusKind = "FEAR";
         private const string DefenseBlockKind = "BLOCK";
         private const string DefenseParryKind = "PARRY";
-        private const string EquipmentAppearanceCatalogResource = "CharacterAppearance/EquipmentAppearanceCatalog";
 
         public static EntityRegistry Instance { get; private set; } = null!;
 
@@ -63,6 +62,7 @@ namespace Arena.Entity
         private readonly ScopedPlayerCacheHydrator _scopedPlayerCacheHydrator = new();
 
         private PlayerEntity? _localPlayerEntity;
+        private EquipmentAppearanceCatalog? _equipmentAppearanceCatalog;
 
         public PlayerEntity? LocalPlayerEntity
         {
@@ -147,6 +147,11 @@ namespace Arena.Entity
         {
             if (Instance != null && Instance != this) { Destroy(gameObject); return; }
             Instance = this;
+
+            if (CharacterAppearanceCatalogSet.TryLoadDefault(out CharacterAppearanceCatalogSet catalogs, out string catalogError))
+                _equipmentAppearanceCatalog = catalogs.EquipmentAppearanceCatalog;
+            else
+                Debug.LogWarning($"[EntityRegistry] Could not preload character appearance catalogs: {catalogError}");
 
             PurgeScenePlacedPlayers();
 
@@ -1175,7 +1180,7 @@ namespace Arena.Entity
             entity.SetEquippedArmorItemDefIdsBySlot(BuildEquippedArmorItemDefIdsBySlot(conn, presentation));
         }
 
-        private static List<EquippedWeaponVisual> BuildEquippedWeaponVisuals(
+        private List<EquippedWeaponVisual> BuildEquippedWeaponVisuals(
             DbConnection? conn,
             PlayerEquipmentPresentation presentation)
         {
@@ -1183,10 +1188,8 @@ namespace Arena.Entity
             if (conn == null)
                 return visuals;
 
-            EquipmentAppearanceCatalog? equipmentAppearanceCatalog =
-                Resources.Load<EquipmentAppearanceCatalog>(EquipmentAppearanceCatalogResource);
-            AddWeaponVisuals(conn, equipmentAppearanceCatalog, presentation.MainHandItemDefId, visuals);
-            AddWeaponVisuals(conn, equipmentAppearanceCatalog, presentation.OffHandItemDefId, visuals);
+            AddWeaponVisuals(conn, _equipmentAppearanceCatalog, presentation.MainHandItemDefId, visuals);
+            AddWeaponVisuals(conn, _equipmentAppearanceCatalog, presentation.OffHandItemDefId, visuals);
             return visuals;
         }
 
