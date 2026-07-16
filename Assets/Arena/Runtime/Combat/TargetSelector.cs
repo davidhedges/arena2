@@ -108,7 +108,7 @@ namespace Arena.Combat
                     // Nothing to close and nothing targeted: fall through to the
                     // system menu.
                     if (!hadTarget)
-                        SystemMenuPanel.OpenFromEscape();
+                        SystemMenuScreen.OpenFromEscape();
                 }
             }
 

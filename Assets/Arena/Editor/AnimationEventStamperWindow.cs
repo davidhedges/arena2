@@ -49,6 +49,8 @@ namespace Arena.Editor
         private CombatClipRole _manualRoleOverride = CombatClipRole.Unknown;
         private bool _useManualRoleOverride;
         private AnimationClip? _previousClipForRoleSync;
+        private AnimationClip? _startupTrimTargetsClip;
+        private List<CombatAnimationSetEditor.StartupTrimTarget> _startupTrimTargets = new();
         private string _hitWindowSyncStatus = string.Empty;
         private bool _hitWindowSyncSucceeded;
 
@@ -59,12 +61,19 @@ namespace Arena.Editor
         private DefaultAsset? _folder;
         private AnimationClip[]? _folderClips;
         private Vector2 _folderListScroll;
-        private const float FolderListMaxHeight = 180f;
+        private float _folderListResizeStartMouseY;
+        private float _folderListResizeStartHeight;
+        private const float FolderListMinHeight = 120f;
+        private const float FolderListDefaultHeight = 320f;
+        private const float FolderListMaxHeight = 1600f;
+        private const float FolderListResizeHandleHeight = 16f;
+        private const int FolderListResizeControlHint = 0x464C5253;
 
         private Dictionary<AnimationClip, List<CombatClipRoleObservation>>? _roleMap;
         private Vector2 _mainScroll;
 
         [SerializeField] private bool _showFolderBrowser;
+        [SerializeField] private float _folderListHeight = FolderListDefaultHeight;
         [SerializeField] private bool _showPreview = true;
         [SerializeField] private bool _showCustomEvent;
         [SerializeField] private bool _showExistingEvents = true;
@@ -74,6 +83,16 @@ namespace Arena.Editor
             // Reset any restrictive dimensions retained by an older saved layout.
             minSize = new Vector2(300, 300);
             maxSize = new Vector2(4096, 4096);
+            if (float.IsNaN(_folderListHeight)
+                || float.IsInfinity(_folderListHeight)
+                || _folderListHeight < FolderListMinHeight)
+            {
+                _folderListHeight = FolderListDefaultHeight;
+            }
+            else
+            {
+                _folderListHeight = Mathf.Min(_folderListHeight, FolderListMaxHeight);
+            }
             CacheAnimationWindowReflection();
             RefreshRoleMap();
             EditorApplication.update += OnEditorUpdate;
@@ -179,6 +198,7 @@ namespace Arena.Editor
         private void RefreshRoleMap()
         {
             _roleMap = CombatClipRoleInferer.BuildClipRoleMap();
+            _startupTrimTargetsClip = null;
         }
 
         private void OnEditorUpdate()
@@ -392,13 +412,82 @@ namespace Arena.Editor
             if (_folderClips == null || _folderClips.Length == 0)
                 return;
 
-            using (EditorGUILayout.ScrollViewScope scroll = new(_folderListScroll, GUILayout.MaxHeight(FolderListMaxHeight)))
+            using (EditorGUILayout.ScrollViewScope scroll = new(
+                _folderListScroll,
+                GUILayout.Height(_folderListHeight)))
             {
                 _folderListScroll = scroll.scrollPosition;
                 foreach (AnimationClip clip in _folderClips)
                 {
                     DrawFolderClipRow(clip);
                 }
+            }
+
+            DrawFolderListResizeHandle();
+        }
+
+        private void DrawFolderListResizeHandle()
+        {
+            Rect handleRect = GUILayoutUtility.GetRect(
+                1f,
+                FolderListResizeHandleHeight,
+                GUILayout.ExpandWidth(true));
+            int controlId = GUIUtility.GetControlID(
+                FolderListResizeControlHint,
+                FocusType.Passive,
+                handleRect);
+
+            EditorGUIUtility.AddCursorRect(handleRect, MouseCursor.ResizeVertical);
+            GUI.Label(
+                handleRect,
+                new GUIContent(
+                    "Drag to resize",
+                    "Drag vertically to resize the clip list. Double-click to reset its height."),
+                EditorStyles.centeredGreyMiniLabel);
+
+            Event current = Event.current;
+            switch (current.GetTypeForControl(controlId))
+            {
+                case EventType.MouseDown:
+                    if (current.button != 0 || !handleRect.Contains(current.mousePosition))
+                        break;
+
+                    if (current.clickCount == 2)
+                    {
+                        _folderListHeight = FolderListDefaultHeight;
+                        GUI.changed = true;
+                        Repaint();
+                    }
+                    else
+                    {
+                        GUIUtility.hotControl = controlId;
+                        _folderListResizeStartMouseY = current.mousePosition.y;
+                        _folderListResizeStartHeight = _folderListHeight;
+                    }
+                    current.Use();
+                    break;
+
+                case EventType.MouseDrag:
+                    if (GUIUtility.hotControl != controlId)
+                        break;
+
+                    float mouseDelta = current.mousePosition.y - _folderListResizeStartMouseY;
+                    _folderListHeight = Mathf.Clamp(
+                        _folderListResizeStartHeight + mouseDelta,
+                        FolderListMinHeight,
+                        FolderListMaxHeight);
+                    GUI.changed = true;
+                    current.Use();
+                    Repaint();
+                    break;
+
+                case EventType.MouseUp:
+                    if (GUIUtility.hotControl != controlId)
+                        break;
+
+                    GUIUtility.hotControl = 0;
+                    current.Use();
+                    break;
             }
         }
 
@@ -708,18 +797,32 @@ namespace Arena.Editor
 
             EditorGUILayout.Space(8f);
             using EditorGUILayout.VerticalScope section = new(EditorStyles.helpBox);
-            EditorGUILayout.LabelField("Gameplay hit-window synchronization:", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField("Melee contact and startup", EditorStyles.boldLabel);
             EditorGUILayout.HelpBox(
-                "OnStrikeHit is authoritative for assigned melee attacks. Adding or removing one automatically mirrors the CombatAnimationSet hit-window array and updates only the affected strike in the shared server manifest.",
+                "1. Stamp OnStrikeHit on the physical contact pose.\n" +
+                "2. Scrub the preview to the frame where the attack should begin.\n" +
+                "3. Click Set Start Here below.\n\n" +
+                "Startup trim skips the opening during playback; it does not modify the animation clip or move OnStrikeHit.",
                 MessageType.Info);
-            int hitEventCount = AnimationUtility.GetAnimationEvents(_clip!)
-                .Count(animationEvent => string.Equals(
+
+            AnimationEvent[] hitEvents = AnimationUtility.GetAnimationEvents(_clip!)
+                .Where(animationEvent => string.Equals(
                     animationEvent.functionName,
                     CombatAnimationEvents.OnStrikeHit,
-                    StringComparison.Ordinal));
+                    StringComparison.Ordinal))
+                .OrderBy(animationEvent => animationEvent.time)
+                .ToArray();
             EditorGUILayout.LabelField(
-                $"Authored gameplay hit windows: {hitEventCount}",
+                $"Authored contact events: {hitEvents.Length}",
                 EditorStyles.miniBoldLabel);
+
+            DrawStartupTrimAuthoring(hitEvents);
+
+            EditorGUILayout.Space(6f);
+            EditorGUILayout.LabelField("Automatic synchronization", EditorStyles.miniBoldLabel);
+            EditorGUILayout.HelpBox(
+                "Setting startup trim saves the CombatAnimationSet and updates its hit-window mirror and the shared server manifest immediately. Republish the server module when you want the new gameplay timing live.",
+                MessageType.None);
             if (GUILayout.Button("Synchronize This Clip Now", GUILayout.Height(22)))
                 SynchronizeHitWindows();
 
@@ -729,6 +832,153 @@ namespace Arena.Editor
                     _hitWindowSyncStatus,
                     _hitWindowSyncSucceeded ? MessageType.Info : MessageType.Error);
             }
+        }
+
+        private void DrawStartupTrimAuthoring(AnimationEvent[] hitEvents)
+        {
+            EditorGUILayout.LabelField("Startup trim", EditorStyles.boldLabel);
+
+            IReadOnlyList<CombatAnimationSetEditor.StartupTrimTarget> targets =
+                GetStartupTrimTargets();
+            List<CombatAnimationSetEditor.StartupTrimTarget> supportedTargets = targets
+                .Where(target => target.SupportsStartupTrim)
+                .ToList();
+            int unsupportedTargetCount = targets.Count - supportedTargets.Count;
+
+            if (supportedTargets.Count == 0)
+            {
+                EditorGUILayout.HelpBox(
+                    targets.Count == 0
+                        ? "The selected clip is not used by a CombatAnimationSet melee attack, so there is no runtime melee playback to trim."
+                        : "This clip is referenced only by phased melee attacks. Startup trim is supported only for single-clip melee.",
+                    MessageType.Warning);
+                return;
+            }
+
+            if (hitEvents.Length == 0)
+            {
+                EditorGUILayout.HelpBox(
+                    $"Stamp {CombatAnimationEvents.OnStrikeHit} before choosing a startup frame.",
+                    MessageType.Warning);
+                return;
+            }
+
+            float firstContactSeconds = hitEvents[0].time;
+            float authoredTrimSeconds = supportedTargets[0].AuthoredTrimSeconds;
+            bool hasMixedTrimValues = supportedTargets.Any(target =>
+                !Mathf.Approximately(target.AuthoredTrimSeconds, authoredTrimSeconds));
+
+            if (supportedTargets.Count > 1)
+            {
+                EditorGUILayout.LabelField(
+                    $"This clip is reused by {supportedTargets.Count} melee attacks; this trim applies to all of them.",
+                    EditorStyles.wordWrappedMiniLabel);
+            }
+            if (hasMixedTrimValues)
+            {
+                EditorGUILayout.HelpBox(
+                    "This clip currently has different startup values across its melee assignments. Setting it here will unify them, because the selected clip is the authoring context.",
+                    MessageType.Warning);
+            }
+
+            EditorGUI.showMixedValue = hasMixedTrimValues;
+            EditorGUI.BeginChangeCheck();
+            float enteredTrimSeconds = EditorGUILayout.DelayedFloatField(
+                new GUIContent(
+                    "Startup trim (seconds)",
+                    "The timestamp of the first frame that will play for the selected clip. Values are limited to the first OnStrikeHit contact event."),
+                authoredTrimSeconds);
+            if (EditorGUI.EndChangeCheck())
+                ApplyStartupTrim(enteredTrimSeconds);
+            EditorGUI.showMixedValue = false;
+
+            if (!hasMixedTrimValues)
+            {
+                float resolvedTrimSeconds = Mathf.Clamp(
+                    authoredTrimSeconds,
+                    0f,
+                    firstContactSeconds);
+                EditorGUILayout.LabelField(
+                    $"Playback starts at {resolvedTrimSeconds:0.000}s; " +
+                    $"contact occurs {Mathf.Max(0f, firstContactSeconds - resolvedTrimSeconds):0.000}s after input.",
+                    EditorStyles.wordWrappedMiniLabel);
+            }
+
+            bool playheadCanBeStartup = _time <= firstContactSeconds + 0.0001f;
+            if (position.width < 560f)
+            {
+                using (new EditorGUI.DisabledScope(!playheadCanBeStartup))
+                {
+                    if (GUILayout.Button($"Set Start Here ({_time:0.000}s)"))
+                        ApplyStartupTrim(_time);
+                }
+                if (GUILayout.Button($"Trim to Contact ({firstContactSeconds:0.000}s, instant)"))
+                    ApplyStartupTrim(firstContactSeconds);
+                using (new EditorGUI.DisabledScope(
+                           !hasMixedTrimValues && authoredTrimSeconds <= 0f))
+                {
+                    if (GUILayout.Button("Remove Trim"))
+                        ApplyStartupTrim(0f);
+                }
+            }
+            else
+            {
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    using (new EditorGUI.DisabledScope(!playheadCanBeStartup))
+                    {
+                        if (GUILayout.Button($"Set Start Here ({_time:0.000}s)"))
+                            ApplyStartupTrim(_time);
+                    }
+                    if (GUILayout.Button($"Trim to Contact ({firstContactSeconds:0.000}s, instant)"))
+                        ApplyStartupTrim(firstContactSeconds);
+                    using (new EditorGUI.DisabledScope(
+                               !hasMixedTrimValues && authoredTrimSeconds <= 0f))
+                    {
+                        if (GUILayout.Button("Remove Trim", GUILayout.Width(90f)))
+                            ApplyStartupTrim(0f);
+                    }
+                }
+            }
+
+            if (!playheadCanBeStartup)
+            {
+                EditorGUILayout.LabelField(
+                    "Scrub to or before the first contact event to use Set Start Here.",
+                    EditorStyles.wordWrappedMiniLabel);
+            }
+
+            if (unsupportedTargetCount > 0)
+            {
+                EditorGUILayout.LabelField(
+                    $"{unsupportedTargetCount} phased reference(s) are unchanged; phased melee does not use startup trim.",
+                    EditorStyles.wordWrappedMiniLabel);
+            }
+        }
+
+        private IReadOnlyList<CombatAnimationSetEditor.StartupTrimTarget> GetStartupTrimTargets()
+        {
+            if (!ReferenceEquals(_startupTrimTargetsClip, _clip))
+                RefreshStartupTrimTargets();
+            return _startupTrimTargets;
+        }
+
+        private void RefreshStartupTrimTargets()
+        {
+            _startupTrimTargetsClip = _clip;
+            _startupTrimTargets = CombatAnimationSetEditor.FindStartupTrimTargets(_clip);
+        }
+
+        private void ApplyStartupTrim(float requestedTrimSeconds)
+        {
+            GUI.FocusControl(null);
+            _hitWindowSyncSucceeded = CombatAnimationSetEditor.SetStartupTrimForClip(
+                _clip,
+                requestedTrimSeconds,
+                out _hitWindowSyncStatus);
+            RefreshStartupTrimTargets();
+            ShowNotification(new GUIContent(_hitWindowSyncStatus));
+            Repaint();
         }
 
         private void DrawExistingEvents()

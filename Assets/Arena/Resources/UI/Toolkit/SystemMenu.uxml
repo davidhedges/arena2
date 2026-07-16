@@ -1,0 +1,81 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <!-- Translated from docs/ui-prototypes/system-menu (the spec, art direction v2).
+         name="" attributes are the binding contract SystemMenuScreen.cs queries;
+         keep them in sync with the prototype's ids. -->
+    <Style src="SystemMenu.uss" />
+
+    <ui:VisualElement name="SystemMenu" class="system-menu">
+        <ui:VisualElement name="Veil" class="menu-veil" />
+
+        <ui:VisualElement name="Window" class="menu-window">
+            <ui:VisualElement class="window-shadow" picking-mode="Ignore" />
+            <ui:VisualElement class="window-body" />
+            <ui:VisualElement class="frame-rail frame-rail--top" picking-mode="Ignore" />
+            <ui:VisualElement class="frame-rail frame-rail--bottom" picking-mode="Ignore" />
+            <ui:VisualElement class="frame-rail frame-rail--left" picking-mode="Ignore" />
+            <ui:VisualElement class="frame-rail frame-rail--right" picking-mode="Ignore" />
+            <ui:VisualElement class="frame-corner frame-corner--tl" picking-mode="Ignore" />
+            <ui:VisualElement class="frame-corner frame-corner--tr" picking-mode="Ignore" />
+            <ui:VisualElement class="frame-corner frame-corner--bl" picking-mode="Ignore" />
+            <ui:VisualElement class="frame-corner frame-corner--br" picking-mode="Ignore" />
+
+            <ui:VisualElement class="window-flow">
+                <ui:VisualElement class="header-plate">
+                    <ui:Label name="Title" class="window-title" text="SYSTEM MENU" />
+                </ui:VisualElement>
+
+                <ui:VisualElement class="window-content">
+                    <ui:Button name="ResumeButton" class="arena-button arena-button--primary resume-button" text="RESUME" />
+
+                    <ui:VisualElement class="section-heading">
+                        <ui:VisualElement class="section-gem" />
+                        <ui:Label class="section-title" text="SETTINGS" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="section-rule" picking-mode="Ignore" />
+
+                    <ui:VisualElement class="menu-row">
+                        <ui:Label class="row-label" text="Window Mode" />
+                        <ui:VisualElement class="row-control">
+                            <ui:Button name="WindowModeButton" class="arena-button" text="FULLSCREEN" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+
+                    <ui:VisualElement class="menu-row">
+                        <ui:Label class="row-label" text="VSync" />
+                        <ui:VisualElement class="row-control">
+                            <ui:Button name="VsyncButton" class="arena-button" text="ON" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+
+                    <ui:VisualElement class="menu-row">
+                        <ui:Label class="row-label" text="Quality" />
+                        <ui:VisualElement class="row-control">
+                            <ui:VisualElement name="QualityDropdown" class="dropdown">
+                                <ui:Button name="QualityButton" class="arena-button" text="QUALITY ▾" />
+                                <!-- Items are built by SystemMenuScreen from QualitySettings.names. -->
+                                <ui:VisualElement name="QualityMenu" class="dropdown-menu" />
+                            </ui:VisualElement>
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+
+                    <ui:VisualElement class="menu-row">
+                        <ui:Label class="row-label" text="Master Volume" />
+                        <ui:VisualElement class="row-control">
+                            <ui:VisualElement name="VolumeSlider" class="volume-slider">
+                                <ui:VisualElement name="VolumeFill" class="volume-fill" picking-mode="Ignore">
+                                    <ui:VisualElement class="volume-gem" picking-mode="Ignore" />
+                                </ui:VisualElement>
+                            </ui:VisualElement>
+                            <ui:Label name="VolumeValue" class="volume-value" text="100%" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+
+                    <ui:VisualElement class="divider-ornament" picking-mode="Ignore" />
+
+                    <ui:Button name="QuitButton" class="arena-button arena-button--danger quit-button" text="QUIT GAME" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

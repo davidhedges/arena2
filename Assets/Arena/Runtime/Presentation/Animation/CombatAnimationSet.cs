@@ -902,6 +902,8 @@ namespace Arena.Presentation
         public WeaponStrikeCombatAuthoring combat;
         [Tooltip("How this attack is presented. Single Clip plays the Clip field directly. Phased stitches start/loop/end clips together.")]
         public WeaponMeleePresentationMode presentationMode;
+        [Tooltip("Seconds skipped from the beginning of a single-clip melee presentation. OnStrikeHit remains stamped on the physical contact pose; exported gameplay hit times subtract this trim. Phased melee does not support startup trim.")]
+        [Min(0f)] public float startupTrimSeconds;
         [Tooltip("Obsolete serialized compatibility field. Runtime reads OnLowerBodyUnlock from the selected clip or phased segment instead.")]
         public float lowerBodyUnlockAtSeconds;
         [Tooltip("Obsolete serialized compatibility field. Runtime uses the default lower-body blend-out duration.")]
@@ -916,6 +918,28 @@ namespace Arena.Presentation
         public bool drivePhasesFromSpecialMovement;
 
         public bool UsesPhasedPresentation => presentationMode == WeaponMeleePresentationMode.Phased;
+
+        public float ResolveStartupTrimSeconds()
+        {
+            if (UsesPhasedPresentation || clip == null || startupTrimSeconds <= 0f)
+                return 0f;
+
+            if (!TryGetStrikeHitEventTimesSeconds(out float[] eventTimesSeconds)
+                || eventTimesSeconds.Length == 0)
+            {
+                return 0f;
+            }
+
+            return Mathf.Clamp(startupTrimSeconds, 0f, eventTimesSeconds[0]);
+        }
+
+        public float ResolveStartupTrimNormalized()
+        {
+            float clipLengthSeconds = clip != null ? Mathf.Max(0f, clip.length) : 0f;
+            return clipLengthSeconds > 0.001f
+                ? Mathf.Clamp01(ResolveStartupTrimSeconds() / clipLengthSeconds)
+                : 0f;
+        }
 
         public bool TryBuildPhasedActionEntry(out WeaponPhasedActionEntry entry)
         {
@@ -1085,11 +1109,26 @@ namespace Arena.Presentation
             return true;
         }
 
+        public bool TryGetEffectiveStrikeHitTimesSeconds(out float[] eventTimesSeconds)
+        {
+            if (!TryGetStrikeHitEventTimesSeconds(out float[] authoredEventTimesSeconds))
+            {
+                eventTimesSeconds = Array.Empty<float>();
+                return false;
+            }
+
+            float startupTrim = ResolveStartupTrimSeconds();
+            eventTimesSeconds = new float[authoredEventTimesSeconds.Length];
+            for (int index = 0; index < authoredEventTimesSeconds.Length; index++)
+                eventTimesSeconds[index] = Mathf.Max(0f, authoredEventTimesSeconds[index] - startupTrim);
+            return true;
+        }
+
         public bool TryBuildHitWindowMirrorFromEvents(
             out WeaponStrikeHitWindowAuthoring[] mirroredHitWindows)
         {
             mirroredHitWindows = Array.Empty<WeaponStrikeHitWindowAuthoring>();
-            if (!TryGetStrikeHitEventTimesSeconds(out float[] eventTimesSeconds))
+            if (!TryGetEffectiveStrikeHitTimesSeconds(out float[] eventTimesSeconds))
                 return false;
 
             float timingReferenceLengthSeconds = ResolveTimingReferenceLengthSeconds();
@@ -1483,27 +1522,60 @@ namespace Arena.Presentation
             return 0f;
         }
 
-        public float GetStrikeFirstHitWindowSeconds(int strikeIndex)
+        public float GetStrikeStartupTrimSeconds(int strikeIndex)
         {
             if (strikeIndex <= 0)
                 return 0f;
 
             EnsureMeleeAttackListInitialized();
             int zeroBasedIndex = strikeIndex - 1;
-            if (zeroBasedIndex < 0 || zeroBasedIndex >= meleeAttacks.Count)
+            return zeroBasedIndex >= 0 && zeroBasedIndex < meleeAttacks.Count
+                ? meleeAttacks[zeroBasedIndex].ResolveStartupTrimSeconds()
+                : 0f;
+        }
+
+        public float GetStrikeStartupTrimNormalized(int strikeIndex)
+        {
+            if (strikeIndex <= 0)
                 return 0f;
+
+            EnsureMeleeAttackListInitialized();
+            int zeroBasedIndex = strikeIndex - 1;
+            return zeroBasedIndex >= 0 && zeroBasedIndex < meleeAttacks.Count
+                ? meleeAttacks[zeroBasedIndex].ResolveStartupTrimNormalized()
+                : 0f;
+        }
+
+        public float GetStrikeFirstHitWindowSeconds(int strikeIndex)
+            => TryGetStrikeFirstHitWindowSeconds(strikeIndex, out float seconds) ? seconds : 0f;
+
+        public bool TryGetStrikeFirstHitWindowSeconds(int strikeIndex, out float seconds)
+        {
+            seconds = 0f;
+            if (strikeIndex <= 0)
+                return false;
+
+            EnsureMeleeAttackListInitialized();
+            int zeroBasedIndex = strikeIndex - 1;
+            if (zeroBasedIndex < 0 || zeroBasedIndex >= meleeAttacks.Count)
+                return false;
 
             float timingReferenceLengthSeconds = meleeAttacks[zeroBasedIndex].ResolveTimingReferenceLengthSeconds();
             if (timingReferenceLengthSeconds <= 0f)
-                return 0f;
+                return false;
 
-            if (meleeAttacks[zeroBasedIndex].TryGetStrikeHitEventTimesSeconds(out float[] eventTimesSeconds)
+            if (meleeAttacks[zeroBasedIndex].TryGetEffectiveStrikeHitTimesSeconds(out float[] eventTimesSeconds)
                 && eventTimesSeconds.Length > 0)
             {
-                return eventTimesSeconds[0];
+                seconds = eventTimesSeconds[0];
+                return true;
             }
 
-            return meleeAttacks[zeroBasedIndex].combat.FirstImpactDelayMs(timingReferenceLengthSeconds) / 1000f;
+            if (meleeAttacks[zeroBasedIndex].combat.ResolvedHitWindowCount <= 0)
+                return false;
+
+            seconds = meleeAttacks[zeroBasedIndex].combat.FirstImpactDelayMs(timingReferenceLengthSeconds) / 1000f;
+            return true;
         }
 
         public float GetVisualInterruptibleAtSeconds(int strikeIndex, bool grounded)
@@ -1850,7 +1922,7 @@ namespace Arena.Presentation
             float timingReferenceLengthSeconds,
             WeaponMeleeAttackAuthoring attack)
         {
-            if (attack.TryGetStrikeHitEventTimesSeconds(out float[] eventTimesSeconds))
+            if (attack.TryGetEffectiveStrikeHitTimesSeconds(out float[] eventTimesSeconds))
             {
                 var eventExported = new MeleeManifestHitWindow[eventTimesSeconds.Length];
                 for (int i = 0; i < eventTimesSeconds.Length; i++)
@@ -2043,6 +2115,7 @@ namespace Arena.Presentation
                 clip = null,
                 combat = WeaponStrikeCombatAuthoring.CreateDefault(authoredId),
                 presentationMode = WeaponMeleePresentationMode.SingleClip,
+                startupTrimSeconds = 0f,
                 lowerBodyUnlockAtSeconds = 0f,
                 lowerBodyBlendOutSeconds = 0f,
                 visualInterruptibleAtSeconds = 0f,

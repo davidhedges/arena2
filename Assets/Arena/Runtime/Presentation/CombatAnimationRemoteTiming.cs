@@ -14,6 +14,7 @@ namespace Arena.Presentation
             bool isLocalPlayer,
             float timingReferenceLengthSeconds,
             float playedClipLengthSeconds,
+            float startupTrimSeconds,
             float firstHitWindowSeconds,
             out float normalizedStart,
             out float appliedCatchupSeconds)
@@ -56,7 +57,12 @@ namespace Arena.Presentation
             if (appliedCatchupSeconds <= 0.001f)
                 return false;
 
-            normalizedStart = Mathf.Clamp01(appliedCatchupSeconds / playedClipLengthSeconds);
+            float playedStartupTrimSeconds = ScaleAuthoredSeconds(
+                startupTrimSeconds,
+                timingReferenceLengthSeconds,
+                playedClipLengthSeconds);
+            normalizedStart = Mathf.Clamp01(
+                (playedStartupTrimSeconds + appliedCatchupSeconds) / playedClipLengthSeconds);
             return normalizedStart > 0f;
         }
 

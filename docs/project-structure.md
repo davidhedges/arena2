@@ -35,7 +35,13 @@ Assets/Arena/Content/
                     boot the networked Arena runtime. Never added to builds.
   Settings/         Render pipeline and project content settings.
   Shaders/          First-party shaders and shader graphs.
+  UI/               UI Toolkit design-system assets: Art/ (generated theme
+                    art, ops/gen_ui_theme_art.py) and Fonts/ (OFL serif faces).
 ```
+
+UI Toolkit runtime assets (UXML/USS/theme, loaded via `Resources.Load`) live in
+`Assets/Arena/Resources/UI/Toolkit/`; web prototype specs live in
+`docs/ui-prototypes/`. See `docs/ui-toolkit-workflow.md` for the pipeline.
 
 ## Runtime Data
 

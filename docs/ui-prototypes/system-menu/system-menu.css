@@ -1,0 +1,405 @@
+/* System Menu — spec stylesheet (art direction v2: forged, handcrafted, calm).
+ * This file IS the specification for SystemMenu.uss: every rule must pass
+ * ops/uss_dialect_lint.py and translate 1:1 into USS. Browser-only scaffolding
+ * lives in index.html, never here. Colors/metrics come from ../tokens.css;
+ * plate/bracket art from Assets/Arena/Content/UI/Art (ops/gen_ui_theme_art.py).
+ * 9-slice note: border-image here == background-image + -unity-slice-* in USS. */
+
+/* ---- root: veil + centered window -------------------------------------- */
+
+.system-menu {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    font-family: "Alegreya", Georgia, serif;
+}
+
+.system-menu.is-open {
+    display: flex;
+}
+
+.menu-veil {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: var(--arena-veil);
+}
+
+/* ---- window: iron frame, leather fill, corner brackets ------------------ */
+
+/* Height = title-plate overhang end (44) + content padding (18 + 30) +
+ * content column (350). Re-derive when rows change. */
+.menu-window {
+    position: relative;
+    width: 400px;
+    height: 442px;
+    opacity: 0;
+    scale: 0.97;
+    transition-property: opacity, scale;
+    transition-duration: 0.12s;
+    transition-timing-function: ease-out;
+}
+
+.menu-window.is-open {
+    opacity: 1;
+    scale: 1;
+}
+
+.window-shadow {
+    position: absolute;
+    left: -26px;
+    right: -26px;
+    top: -20px;
+    bottom: -30px;
+    background-image: url("../../../Assets/Arena/Content/UI/Art/window_shadow.png");
+    background-size: 100% 100%;
+    opacity: 0.55;
+    pointer-events: none;
+}
+
+/* Leather fill sits under the authored frame pieces. */
+.window-body {
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    right: 4px;
+    bottom: 4px;
+    background-color: var(--arena-charcoal);
+    background-image: url("../../../Assets/Arena/Content/UI/Art/leather_fill.png");
+    background-repeat: repeat;
+}
+
+/* Authored frame: sliced from the style sheet's window. The corner and the
+ * rivet-free rail strips are authored top-left/top; the other sides mirror. */
+.frame-rail {
+    position: absolute;
+    background-size: 100% 100%;
+    pointer-events: none;
+}
+
+.frame-rail--top,
+.frame-rail--bottom {
+    left: 52px;
+    right: 52px;
+    height: 23px;
+    background-image: url("../../../Assets/Arena/Content/UI/Art/window_rail_h.png");
+}
+
+.frame-rail--top { top: 0; }
+.frame-rail--bottom { bottom: 0; scale: 1 -1; }
+
+.frame-rail--left,
+.frame-rail--right {
+    top: 52px;
+    bottom: 52px;
+    width: 23px;
+    background-image: url("../../../Assets/Arena/Content/UI/Art/window_rail_v.png");
+}
+
+.frame-rail--left { left: 0; }
+.frame-rail--right { right: 0; scale: -1 1; }
+
+.frame-corner {
+    position: absolute;
+    width: 56px;
+    height: 55px;
+    background-image: url("../../../Assets/Arena/Content/UI/Art/window_corner.png");
+    background-size: 100% 100%;
+    pointer-events: none;
+}
+
+.frame-corner--tl { top: 0; left: 0; }
+.frame-corner--tr { top: 0; right: 0; scale: -1 1; }
+.frame-corner--bl { bottom: 0; left: 0; scale: 1 -1; }
+.frame-corner--br { bottom: 0; right: 0; scale: -1 -1; }
+
+/* ---- header plate (defining motif) + content flow ----------------------- */
+
+.window-flow {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+/* Arrow-ended title plate riding the top rail, at the sheet's proportion
+ * (about half the window width). */
+.header-plate {
+    width: 230px;
+    height: 57px;
+    margin-top: -13px;
+    flex-shrink: 0;
+    background-image: url("../../../Assets/Arena/Content/UI/Art/window_title_plate.png");
+    background-size: 100% 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.window-title {
+    font-family: "Cinzel", "Times New Roman", serif;
+    font-size: 17px;
+    color: var(--arena-gold-text);
+    letter-spacing: 2px;
+    padding-top: 2px;
+}
+
+.window-content {
+    width: 100%;
+    padding-top: 18px;
+    padding-left: 30px;
+    padding-right: 30px;
+    padding-bottom: 30px;
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+}
+
+/* ---- buttons: authored plates pre-baked at exact display size (340x36
+ * full-width, 187x36 row-control) — runtime 9-slicing draws seam lines
+ * through textured art, so plates ship whole. Label is always parchment. --- */
+
+.arena-button {
+    height: var(--arena-button-height);
+    background-image: url("../../../Assets/Arena/Content/UI/Art/button_plate_340x36.png");
+    background-size: 100% 100%;
+    color: var(--arena-text);
+    font-family: "Cinzel", "Times New Roman", serif;
+    font-size: var(--arena-font-button);
+    letter-spacing: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.arena-button:hover {
+    background-image: url("../../../Assets/Arena/Content/UI/Art/button_plate_hover_340x36.png");
+}
+
+.arena-button:active {
+    background-image: url("../../../Assets/Arena/Content/UI/Art/button_plate_pressed_340x36.png");
+}
+
+.row-control .arena-button {
+    background-image: url("../../../Assets/Arena/Content/UI/Art/button_plate_187x36.png");
+}
+.row-control .arena-button:hover {
+    background-image: url("../../../Assets/Arena/Content/UI/Art/button_plate_hover_187x36.png");
+}
+.row-control .arena-button:active {
+    background-image: url("../../../Assets/Arena/Content/UI/Art/button_plate_pressed_187x36.png");
+}
+
+.arena-button--primary {
+    background-image: url("../../../Assets/Arena/Content/UI/Art/button_plate_ember_340x36.png");
+}
+.arena-button--primary:hover {
+    background-image: url("../../../Assets/Arena/Content/UI/Art/button_plate_ember_hover_340x36.png");
+}
+.arena-button--primary:active {
+    background-image: url("../../../Assets/Arena/Content/UI/Art/button_plate_ember_340x36.png");
+}
+
+.arena-button--danger {
+    background-image: url("../../../Assets/Arena/Content/UI/Art/button_plate_danger_280x36.png");
+}
+.arena-button--danger:hover {
+    background-image: url("../../../Assets/Arena/Content/UI/Art/button_plate_danger_hover_280x36.png");
+}
+.arena-button--danger:active {
+    background-image: url("../../../Assets/Arena/Content/UI/Art/button_plate_danger_pressed_280x36.png");
+}
+
+/* ---- content rows ------------------------------------------------------- */
+
+.resume-button {
+    flex-shrink: 0;
+}
+
+.section-heading {
+    margin-top: 14px;
+    height: 24px;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.section-gem {
+    width: 8px;
+    height: 8px;
+    background-color: var(--arena-ember);
+    rotate: 45deg;
+    margin-right: 10px;
+    flex-shrink: 0;
+}
+
+.section-title {
+    font-family: "Cinzel", "Times New Roman", serif;
+    font-size: var(--arena-font-section);
+    color: var(--arena-gold-text);
+    letter-spacing: 2px;
+}
+
+/* Authored tapered rule with diamond clusters, drawn under the heading. */
+.section-rule {
+    height: 10px;
+    margin-top: 2px;
+    background-image: url("../../../Assets/Arena/Content/UI/Art/section_rule.png");
+    background-size: 100% 100%;
+    flex-shrink: 0;
+}
+
+.menu-row {
+    margin-top: 10px;
+    height: var(--arena-row-height);
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.row-label {
+    width: 45%;
+    font-size: var(--arena-font-body);
+    color: var(--arena-text-muted);
+}
+
+.row-control {
+    width: 55%;
+    height: 100%;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+}
+
+.row-control .arena-button {
+    flex-grow: 1;
+    height: 100%;
+}
+
+.divider-ornament {
+    margin-top: 16px;
+    height: 20px;
+    background-image: url("../../../Assets/Arena/Content/UI/Art/divider.png");
+    background-size: 100% 100%;
+    flex-shrink: 0;
+}
+
+/* Inset so the plate clears the window's bottom corner pieces (56px reach). */
+.quit-button {
+    margin-top: 8px;
+    margin-left: 30px;
+    margin-right: 30px;
+    flex-shrink: 0;
+}
+
+/* ---- volume slider: recessed well + ember fill --------------------------- */
+
+.volume-slider {
+    flex-grow: 1;
+    height: 12px;
+    background-color: var(--arena-well);
+    border-radius: 6px;
+    border-width: 1px;
+    border-style: solid;
+    border-top-color: #060708;
+    border-left-color: #0B0C0E;
+    border-right-color: #0B0C0E;
+    border-bottom-color: rgba(231, 225, 211, 0.08);
+    position: relative;
+    cursor: pointer;
+}
+
+.volume-fill {
+    position: absolute;
+    top: 1px;
+    left: 1px;
+    bottom: 1px;
+    width: 100%;
+    background-color: var(--arena-ember);
+    border-radius: 5px;
+    pointer-events: none;
+}
+
+/* Brass gem riding the fill tip (mirrors the section/divider diamonds). */
+.volume-gem {
+    position: absolute;
+    right: -4px;
+    top: 1px;
+    width: 8px;
+    height: 8px;
+    background-color: var(--arena-ember-bright);
+    rotate: 45deg;
+    pointer-events: none;
+}
+
+.volume-value {
+    width: 48px;
+    margin-left: 10px;
+    font-size: var(--arena-font-small);
+    color: var(--arena-text);
+    text-align: right;
+    flex-shrink: 0;
+}
+
+/* ---- quality dropdown: tooltip-frame menu, opens upward ------------------ */
+
+.dropdown {
+    position: relative;
+    flex-grow: 1;
+    height: 100%;
+    display: flex;
+}
+
+/* Opens upward: USS paints in document order, so a downward menu would be
+ * painted over by the rows that follow it. Upward covers earlier rows only. */
+.dropdown-menu {
+    position: absolute;
+    bottom: 38px;
+    left: 0;
+    right: 0;
+    display: none;
+    flex-direction: column;
+    background-color: rgba(16, 17, 20, 0.98);
+    border-width: 1px;
+    border-style: solid;
+    border-color: #4A4E55;
+    padding-top: 4px;
+    padding-bottom: 4px;
+}
+
+.dropdown.is-open .dropdown-menu {
+    display: flex;
+}
+
+.dropdown-item {
+    height: 30px;
+    padding-left: 12px;
+    display: flex;
+    align-items: center;
+    font-size: var(--arena-font-body);
+    color: var(--arena-text);
+    cursor: pointer;
+}
+
+.dropdown-item:hover {
+    background-color: rgba(197, 143, 42, 0.08);
+    color: var(--arena-ember-bright);
+}
+
+.dropdown-item.is-selected {
+    color: var(--arena-gold-text);
+}

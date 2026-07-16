@@ -1524,6 +1524,7 @@ namespace Arena.Presentation
                 _isLocalPlayer,
                 clipLengthSeconds,
                 clipLengthSeconds,
+                0f,
                 authoredReleasePointSeconds,
                 out float normalizedStart,
                 out _)
@@ -1690,13 +1691,23 @@ namespace Arena.Presentation
             if (strikeIndex <= 0)
                 return;
 
+            float startupTrimSeconds = _animationSet?.GetStrikeStartupTrimSeconds(strikeIndex) ?? 0f;
             float appliedCatchupSeconds = 0f;
             bool playedWithRemoteCatchup = TryPlayRemoteCatchupStrike(
                 request,
                 strikeIndex,
+                startupTrimSeconds,
                 out appliedCatchupSeconds);
-            if (!playedWithRemoteCatchup && !TriggerStrike(strikeIndex))
-                return;
+            if (!playedWithRemoteCatchup)
+            {
+                bool playedFromAuthoredStart = startupTrimSeconds > 0.001f
+                    ? PlayStrikeAtNormalizedTime(
+                        strikeIndex,
+                        _animationSet?.GetStrikeStartupTrimNormalized(strikeIndex) ?? 0f)
+                    : TriggerStrike(strikeIndex);
+                if (!playedFromAuthoredStart)
+                    return;
+            }
 
             TriggerWeaponPresentationEffects(request, strikeIndex);
             SetActiveMeleePresentation(
@@ -1744,6 +1755,7 @@ namespace Arena.Presentation
         private bool TryPlayRemoteCatchupStrike(
             in CombatAnimationRequest request,
             int strikeIndex,
+            float startupTrimSeconds,
             out float appliedCatchupSeconds)
         {
             appliedCatchupSeconds = 0f;
@@ -1759,6 +1771,7 @@ namespace Arena.Presentation
                     _isLocalPlayer,
                     _animationSet.GetStrikeTimingReferenceLengthSeconds(strikeIndex),
                     playedClip.length,
+                    startupTrimSeconds,
                     _animationSet.GetStrikeFirstHitWindowSeconds(strikeIndex),
                     out float normalizedStart,
                     out appliedCatchupSeconds))
@@ -1806,7 +1819,10 @@ namespace Arena.Presentation
                 return;
 
             float totalDuration = strikeIndex > 0
-                ? _animationSet.GetStrikeTimingReferenceLengthSeconds(strikeIndex)
+                ? Mathf.Max(
+                    0f,
+                    _animationSet.GetStrikeTimingReferenceLengthSeconds(strikeIndex)
+                    - _animationSet.GetStrikeStartupTrimSeconds(strikeIndex))
                 : 0f;
             if (totalDuration <= 0.01f)
                 totalDuration = 0.45f;

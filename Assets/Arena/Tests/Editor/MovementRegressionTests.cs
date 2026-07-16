@@ -259,6 +259,138 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void CombatAnimationSet_StartupTrimShiftsPlaybackAndExportOntoSameTimeline()
+        {
+            Type combatAnimationSetType = RequireType("Arena.Presentation.CombatAnimationSet");
+            Type attackType = RequireType("Arena.Presentation.WeaponMeleeAttackAuthoring");
+            ScriptableObject set = CreateMinimalExportableCombatAnimationSet(combatAnimationSetType);
+            AnimationClip clip = CreateClipWithLength(1f);
+            try
+            {
+                AnimationUtility.SetAnimationEvents(
+                    clip,
+                    new[]
+                    {
+                        new AnimationEvent
+                        {
+                            functionName = "OnStrikeHit",
+                            time = 0.73f,
+                        },
+                    });
+
+                SetFirstMeleeAttackField(combatAnimationSetType, attackType, set, "clip", clip);
+                SetFirstMeleeAttackField(combatAnimationSetType, attackType, set, "startupTrimSeconds", 0.53f);
+
+                Assert.That(
+                    (float)RequireMethod(combatAnimationSetType, "GetStrikeStartupTrimSeconds", typeof(int))
+                        .Invoke(set, new object[] { 1 })!,
+                    Is.EqualTo(0.53f).Within(PositionTolerance));
+                Assert.That(
+                    (float)RequireMethod(combatAnimationSetType, "GetStrikeStartupTrimNormalized", typeof(int))
+                        .Invoke(set, new object[] { 1 })!,
+                    Is.EqualTo(0.53f).Within(PositionTolerance));
+
+                object export = InvokeInstanceMethod(set, "BuildMeleeExport");
+                object strike = FindExportedStrike(GetExportedStrikes(export), "MELEE_ATTACK_1");
+                Assert.That(GetFirstImpactDelayMs(strike), Is.EqualTo(200));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(clip);
+                UnityEngine.Object.DestroyImmediate(set);
+            }
+        }
+
+        [Test]
+        public void CombatAnimationSet_StartupTrimAtContactProducesValidZeroDelayHit()
+        {
+            Type combatAnimationSetType = RequireType("Arena.Presentation.CombatAnimationSet");
+            Type attackType = RequireType("Arena.Presentation.WeaponMeleeAttackAuthoring");
+            ScriptableObject set = CreateMinimalExportableCombatAnimationSet(combatAnimationSetType);
+            AnimationClip clip = CreateClipWithLength(1f);
+            try
+            {
+                AnimationUtility.SetAnimationEvents(
+                    clip,
+                    new[]
+                    {
+                        new AnimationEvent
+                        {
+                            functionName = "OnStrikeHit",
+                            time = 0.4f,
+                        },
+                    });
+
+                SetFirstMeleeAttackField(combatAnimationSetType, attackType, set, "clip", clip);
+                SetFirstMeleeAttackField(combatAnimationSetType, attackType, set, "startupTrimSeconds", 0.4f);
+
+                MethodInfo firstHitResolver = RequireMethod(
+                    combatAnimationSetType,
+                    "TryGetStrikeFirstHitWindowSeconds",
+                    typeof(int),
+                    typeof(float).MakeByRefType());
+                object?[] firstHitArgs = { 1, -1f };
+                Assert.That((bool)firstHitResolver.Invoke(set, firstHitArgs)!, Is.True);
+                Assert.That((float)firstHitArgs[1]!, Is.EqualTo(0f).Within(PositionTolerance));
+
+                object export = InvokeInstanceMethod(set, "BuildMeleeExport");
+                object strike = FindExportedStrike(GetExportedStrikes(export), "MELEE_ATTACK_1");
+                Assert.That(GetFirstImpactDelayMs(strike), Is.Zero);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(clip);
+                UnityEngine.Object.DestroyImmediate(set);
+            }
+        }
+
+        [Test]
+        public void CombatAnimationSet_StartupTrimUpdatesCompatibilityHitWindowMirror()
+        {
+            Type combatAnimationSetType = RequireType("Arena.Presentation.CombatAnimationSet");
+            Type attackType = RequireType("Arena.Presentation.WeaponMeleeAttackAuthoring");
+            Type hitWindowType = RequireType("Arena.Presentation.WeaponStrikeHitWindowAuthoring");
+            ScriptableObject set = CreateMinimalExportableCombatAnimationSet(combatAnimationSetType);
+            AnimationClip clip = CreateClipWithLength(2f);
+            try
+            {
+                AnimationUtility.SetAnimationEvents(
+                    clip,
+                    new[]
+                    {
+                        new AnimationEvent { functionName = "OnStrikeHit", time = 0.75f },
+                        new AnimationEvent { functionName = "OnStrikeHit", time = 1.5f },
+                    });
+                SetFirstMeleeAttackField(combatAnimationSetType, attackType, set, "clip", clip);
+                SetFirstMeleeAttackField(combatAnimationSetType, attackType, set, "startupTrimSeconds", 0.5f);
+
+                System.Collections.IList attacks =
+                    (System.Collections.IList)combatAnimationSetType.GetField("meleeAttacks")!.GetValue(set)!;
+                object?[] args = { null };
+                Assert.That(
+                    (bool)RequireMethod(
+                            attackType,
+                            "TryBuildHitWindowMirrorFromEvents",
+                            hitWindowType.MakeArrayType().MakeByRefType())
+                        .Invoke(attacks[0], args)!,
+                    Is.True);
+
+                Array mirrored = (Array)args[0]!;
+                Assert.That(
+                    (float)hitWindowType.GetField("timeNormalized")!.GetValue(mirrored.GetValue(0))!,
+                    Is.EqualTo(0.125f).Within(PositionTolerance));
+                Assert.That(
+                    (float)hitWindowType.GetField("timeNormalized")!.GetValue(mirrored.GetValue(1))!,
+                    Is.EqualTo(0.5f).Within(PositionTolerance));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(clip);
+                UnityEngine.Object.DestroyImmediate(set);
+            }
+        }
+
+        [Test]
         public void CombatAnimationSet_HitWindowMirrorTracksEveryStrikeHitEvent()
         {
             Type combatAnimationSetType = RequireType("Arena.Presentation.CombatAnimationSet");

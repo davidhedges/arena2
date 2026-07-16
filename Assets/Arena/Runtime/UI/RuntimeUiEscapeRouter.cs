@@ -87,10 +87,20 @@ namespace Arena.UI
             if (canvas == null)
                 return;
 
+            canvas.sortingOrder = NextSortingOrder();
+        }
+
+        /// <summary>
+        /// Allocates the next interface sorting order. UI Toolkit panels share
+        /// the same allocation pool so uGUI canvases and UITK documents keep a
+        /// consistent front-most ordering.
+        /// </summary>
+        public static int NextSortingOrder()
+        {
             if (s_nextInterfaceSortingOrder >= MaxInterfaceSortingOrder)
                 s_nextInterfaceSortingOrder = BaseInterfaceSortingOrder;
 
-            canvas.sortingOrder = ++s_nextInterfaceSortingOrder;
+            return ++s_nextInterfaceSortingOrder;
         }
     }
 }

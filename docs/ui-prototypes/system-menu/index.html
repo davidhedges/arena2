@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Arena — System Menu (UI spec)</title>
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="system-menu.css">
+<style>
+/* ============ SCAFFOLD — browser-only, never translated ============
+ * Everything in this block simulates the game viewport so the spec above
+ * can be judged in context. The stage renders at the game's 1920x1080
+ * reference resolution and is scaled to fit the browser window, so every
+ * px value in system-menu.css is true to in-game size. Single dark theme
+ * by design: this is a spec for an in-game overlay. */
+
+@font-face {
+  font-family: "Cinzel";
+  font-weight: 400 900;
+  src: url("../../../Assets/Arena/Content/UI/Fonts/Cinzel.ttf") format("truetype");
+}
+@font-face {
+  font-family: "Alegreya";
+  font-weight: 400 900;
+  src: url("../../../Assets/Arena/Content/UI/Fonts/Alegreya.ttf") format("truetype");
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  height: 100%;
+  background: #08090b;
+  color: #a89f8d;
+  font-family: "Alegreya", Georgia, serif;
+  overflow: hidden;
+}
+
+.sc-shell {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.sc-toolbar {
+  flex: none;
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  padding: 10px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.sc-toolbar .sc-brand {
+  font-family: "Cinzel", serif;
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 2px;
+  color: #c58f2a;
+}
+
+.sc-toolbar .sc-screen {
+  font-size: 13px;
+  color: #f0f2f7;
+}
+
+.sc-toolbar .sc-hint {
+  margin-left: auto;
+  font-size: 12px;
+  color: #6f7176;
+}
+.sc-toolbar .sc-hint b { color: #a3a5a9; font-weight: 700; }
+
+.sc-stagewrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.sc-stage {
+  position: relative;
+  width: 1920px;
+  height: 1080px;
+  flex: none;
+  transform-origin: center center;
+  outline: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.sc-backdrop { position: absolute; inset: 0; }
+
+.sc-toast {
+  position: absolute;
+  left: 50%;
+  bottom: 64px;
+  transform: translateX(-50%);
+  padding: 10px 18px;
+  background: rgba(13, 14, 16, 0.97);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 8px;
+  font-size: 15px;
+  color: #f0f2f7;
+  opacity: 0;
+  transition: opacity 0.25s;
+  pointer-events: none;
+}
+.sc-toast.sc-show { opacity: 1; }
+
+.sc-open-hint {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 15px;
+  letter-spacing: 1px;
+  color: #6f7176;
+  border: 1px dashed rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  padding: 12px 22px;
+  cursor: pointer;
+  user-select: none;
+}
+.sc-open-hint b { color: #ebb840; }
+.sc-open-hint.sc-hidden { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .menu-window { transition-duration: 0s !important; }
+  .sc-toast { transition-duration: 0s !important; }
+}
+</style>
+</head>
+<body>
+<div class="sc-shell">
+  <div class="sc-toolbar">
+    <span class="sc-brand">ARENA · UI SPEC</span>
+    <span class="sc-screen">System Menu</span>
+    <span class="sc-hint"><b>Esc</b> toggles · this prototype is the spec for SystemMenu.uxml/.uss</span>
+  </div>
+
+  <div class="sc-stagewrap">
+    <div class="sc-stage" id="Stage">
+      <canvas class="sc-backdrop" id="Backdrop" width="1920" height="1080"></canvas>
+
+      <div class="sc-open-hint" id="OpenHint">press <b>Esc</b> — or click here — to open the System Menu</div>
+
+      <!-- ================= SPEC MARKUP =================
+           ids below are the binding contract: each id becomes name="" in
+           SystemMenu.uxml and is what SystemMenuScreen.cs queries. -->
+      <div class="system-menu" id="SystemMenu">
+        <div class="menu-veil" id="Veil"></div>
+
+        <div class="menu-window" id="Window">
+          <div class="window-shadow"></div>
+          <div class="window-body"></div>
+          <div class="frame-rail frame-rail--top"></div>
+          <div class="frame-rail frame-rail--bottom"></div>
+          <div class="frame-rail frame-rail--left"></div>
+          <div class="frame-rail frame-rail--right"></div>
+          <div class="frame-corner frame-corner--tl"></div>
+          <div class="frame-corner frame-corner--tr"></div>
+          <div class="frame-corner frame-corner--bl"></div>
+          <div class="frame-corner frame-corner--br"></div>
+
+          <div class="window-flow">
+            <div class="header-plate">
+              <div class="window-title" id="Title">SYSTEM MENU</div>
+            </div>
+
+            <div class="window-content">
+              <button class="arena-button arena-button--primary resume-button" id="ResumeButton" type="button">RESUME</button>
+
+              <div class="section-heading">
+                <div class="section-gem"></div>
+                <div class="section-title">SETTINGS</div>
+              </div>
+              <div class="section-rule"></div>
+
+              <div class="menu-row">
+                <div class="row-label">Window Mode</div>
+                <div class="row-control">
+                  <button class="arena-button" id="WindowModeButton" type="button">FULLSCREEN</button>
+                </div>
+              </div>
+
+              <div class="menu-row">
+                <div class="row-label">VSync</div>
+                <div class="row-control">
+                  <button class="arena-button" id="VsyncButton" type="button">ON</button>
+                </div>
+              </div>
+
+              <div class="menu-row">
+                <div class="row-label">Quality</div>
+                <div class="row-control">
+                  <div class="dropdown" id="QualityDropdown">
+                    <button class="arena-button" id="QualityButton" type="button">PC&nbsp;&nbsp;▾</button>
+                    <div class="dropdown-menu" id="QualityMenu">
+                      <div class="dropdown-item" data-value="Mobile">Mobile</div>
+                      <div class="dropdown-item is-selected" data-value="PC">PC</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="menu-row">
+                <div class="row-label">Master Volume</div>
+                <div class="row-control">
+                  <div class="volume-slider" id="VolumeSlider">
+                    <div class="volume-fill" id="VolumeFill"><div class="volume-gem"></div></div>
+                  </div>
+                  <div class="volume-value" id="VolumeValue">100%</div>
+                </div>
+              </div>
+
+              <div class="divider-ornament"></div>
+
+              <button class="arena-button arena-button--danger quit-button" id="QuitButton" type="button">QUIT GAME</button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+      <!-- =============== END SPEC MARKUP =============== -->
+
+      <div class="sc-toast" id="Toast"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* Scaffold JS — throwaway. Its only job is to demonstrate the states the C#
+ * controller will drive by toggling the same classes on the same ids. */
+(function () {
+  "use strict";
+
+  var $ = function (id) { return document.getElementById(id); };
+  var stage = $("Stage"), root = $("SystemMenu"), win = $("Window");
+
+  // --- stage scaling: keep 1920x1080 logical pixels, fit the browser ---
+  function fitStage() {
+    var wrap = stage.parentElement;
+    var scale = Math.min(wrap.clientWidth / 1920, wrap.clientHeight / 1080);
+    stage.style.transform = "scale(" + scale + ")";
+  }
+  window.addEventListener("resize", fitStage);
+  fitStage();
+
+  // --- backdrop: moody arena stand-in (scaffold only) ---
+  (function paintBackdrop() {
+    var ctx = $("Backdrop").getContext("2d");
+    var g = ctx.createLinearGradient(0, 0, 0, 1080);
+    g.addColorStop(0, "#101216");
+    g.addColorStop(0.62, "#0b0c10");
+    g.addColorStop(1, "#151009");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 1920, 1080);
+    var ember = ctx.createRadialGradient(960, 1180, 80, 960, 1180, 720);
+    ember.addColorStop(0, "rgba(235, 140, 40, 0.28)");
+    ember.addColorStop(1, "rgba(235, 140, 40, 0)");
+    ctx.fillStyle = ember;
+    ctx.fillRect(0, 0, 1920, 1080);
+    var vig = ctx.createRadialGradient(960, 540, 420, 960, 540, 1150);
+    vig.addColorStop(0, "rgba(0, 0, 0, 0)");
+    vig.addColorStop(1, "rgba(0, 0, 0, 0.55)");
+    ctx.fillStyle = vig;
+    ctx.fillRect(0, 0, 1920, 1080);
+  })();
+
+  // --- open/close: veil is instant, window runs the 120ms fade/scale ---
+  var open = false;
+  function setOpen(next) {
+    open = next;
+    $("OpenHint").classList.toggle("sc-hidden", open);
+    if (open) {
+      root.classList.add("is-open");
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () { win.classList.add("is-open"); });
+      });
+      refreshRows();
+    } else {
+      win.classList.remove("is-open");
+      setTimeout(function () {
+        if (!open) root.classList.remove("is-open");
+      }, 130);
+      closeQuality();
+    }
+  }
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") { setOpen(!open); e.preventDefault(); }
+  });
+  $("OpenHint").addEventListener("click", function () { setOpen(true); });
+  $("ResumeButton").addEventListener("click", function () { setOpen(false); });
+
+  // --- fake client settings state ---
+  var state = { fullscreen: true, vsync: true, quality: "PC", volume: 1.0 };
+
+  function refreshRows() {
+    $("WindowModeButton").textContent = state.fullscreen ? "FULLSCREEN" : "WINDOWED";
+    $("VsyncButton").textContent = state.vsync ? "ON" : "OFF";
+    $("QualityButton").textContent = state.quality.toUpperCase() + "  ▾";
+    $("VolumeFill").style.width = Math.round(state.volume * 100) + "%";
+    $("VolumeValue").textContent = Math.round(state.volume * 100) + "%";
+    var items = $("QualityMenu").children;
+    for (var i = 0; i < items.length; i++)
+      items[i].classList.toggle("is-selected", items[i].dataset.value === state.quality);
+  }
+
+  $("WindowModeButton").addEventListener("click", function () {
+    state.fullscreen = !state.fullscreen; refreshRows();
+  });
+  $("VsyncButton").addEventListener("click", function () {
+    state.vsync = !state.vsync; refreshRows();
+  });
+
+  // --- quality dropdown ---
+  function closeQuality() { $("QualityDropdown").classList.remove("is-open"); }
+  $("QualityButton").addEventListener("click", function (e) {
+    $("QualityDropdown").classList.toggle("is-open");
+    e.stopPropagation();
+  });
+  Array.prototype.forEach.call($("QualityMenu").children, function (item) {
+    item.addEventListener("click", function () {
+      state.quality = item.dataset.value;
+      closeQuality();
+      refreshRows();
+    });
+  });
+  document.addEventListener("click", function (e) {
+    if (!$("QualityDropdown").contains(e.target)) closeQuality();
+  });
+
+  // --- volume slider: click/drag sets value (fill-only, no handle) ---
+  var slider = $("VolumeSlider"), dragging = false;
+  function setVolumeFromEvent(e) {
+    var rect = slider.getBoundingClientRect();
+    var t = (e.clientX - rect.left) / rect.width;
+    state.volume = Math.min(1, Math.max(0, t));
+    refreshRows();
+  }
+  slider.addEventListener("pointerdown", function (e) {
+    dragging = true; slider.setPointerCapture(e.pointerId); setVolumeFromEvent(e);
+  });
+  slider.addEventListener("pointermove", function (e) { if (dragging) setVolumeFromEvent(e); });
+  slider.addEventListener("pointerup", function () { dragging = false; });
+
+  // --- quit: in-game this quits; here it just says so ---
+  var toastTimer = null;
+  $("QuitButton").addEventListener("click", function () {
+    var toast = $("Toast");
+    toast.textContent = "In game: quits the application";
+    toast.classList.add("sc-show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { toast.classList.remove("sc-show"); }, 1600);
+  });
+
+  refreshRows();
+
+  // ?open auto-opens the menu, ?quality also opens the dropdown
+  // (handy for screenshot tooling).
+  if (/[?&](open|quality)\b/.test(location.search)) setOpen(true);
+  if (/[?&]quality\b/.test(location.search))
+    $("QualityDropdown").classList.add("is-open");
+})();
+</script>
+</body>
+</html>

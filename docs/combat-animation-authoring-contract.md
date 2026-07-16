@@ -120,6 +120,8 @@ Attacks without an `OnStrikeHit` event retain their serialized hit-window fallba
 
 For direct melee, each hit window schedules a `PendingMeleeImpact` on the server. For projectile weapon attacks, each hit window may schedule a projectile release instead. Multi-hit damage is currently split across hit windows.
 
+Single-clip melee may author `startupTrimSeconds` on its existing `CombatAnimationSet` attack entry. The event stays on the physical contact pose, playback begins at the trim point, and hit-window mirroring/export uses `max(0, event time - startup trim)`. A trim equal to first contact intentionally produces a zero-delay hit. Startup trim is not supported for phased melee. See `docs/melee-startup-trim-design-2026-07-16.md` for the bounded contract and Unity workflow.
+
 Hit Windows do not mean:
 
 - when the animation may be interrupted

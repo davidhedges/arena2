@@ -1013,6 +1013,7 @@ namespace Arena.Tests.Editor
                 bool isLocalPlayer,
                 float timingReferenceLengthSeconds,
                 float playedClipLengthSeconds,
+                float startupTrimSeconds,
                 float firstHitWindowSeconds)
         {
             Type requestType = RequireRuntimeType("Arena.Presentation.CombatAnimationRequest");
@@ -1025,6 +1026,7 @@ namespace Arena.Tests.Editor
                 typeof(float),
                 typeof(float),
                 typeof(float),
+                typeof(float),
                 typeof(float).MakeByRefType(),
                 typeof(float).MakeByRefType());
             object?[] args =
@@ -1033,13 +1035,14 @@ namespace Arena.Tests.Editor
                 isLocalPlayer,
                 timingReferenceLengthSeconds,
                 playedClipLengthSeconds,
+                startupTrimSeconds,
                 firstHitWindowSeconds,
                 0f,
                 0f,
             };
 
             bool resolved = (bool)method.Invoke(null, args)!;
-            return (resolved, (float)args[5]!, (float)args[6]!);
+            return (resolved, (float)args[6]!, (float)args[7]!);
         }
 
         private static Type RequireRuntimeType(string fullName)

@@ -91,3 +91,7 @@ Backups/
 
 # Python
 __pycache__/
+
+# Claude UI-preview throwaway Unity project (ops/ui-preview.py)
+.ui-preview/
+Assembly-CSharp.uicheck.csproj

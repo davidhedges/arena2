@@ -57,6 +57,39 @@ namespace Arena.Editor
             public double DueTime { get; set; }
         }
 
+        private sealed class PendingStartupTrimSynchronization
+        {
+            public PendingStartupTrimSynchronization(CombatAnimationSet set, double dueTime)
+            {
+                Set = set;
+                DueTime = dueTime;
+            }
+
+            public CombatAnimationSet Set { get; }
+            public HashSet<AnimationClip> Clips { get; } = new();
+            public double DueTime { get; set; }
+        }
+
+        internal readonly struct StartupTrimTarget
+        {
+            public StartupTrimTarget(
+                CombatAnimationSet set,
+                int attackIndex,
+                bool supportsStartupTrim,
+                float authoredTrimSeconds)
+            {
+                Set = set;
+                AttackIndex = attackIndex;
+                SupportsStartupTrim = supportsStartupTrim;
+                AuthoredTrimSeconds = authoredTrimSeconds;
+            }
+
+            public CombatAnimationSet Set { get; }
+            public int AttackIndex { get; }
+            public bool SupportsStartupTrim { get; }
+            public float AuthoredTrimSeconds { get; }
+        }
+
         private sealed class CachedAvatarValidation
         {
             public string Signature { get; set; } = string.Empty;
@@ -83,10 +116,13 @@ namespace Arena.Editor
             Path.GetFullPath(Path.Combine(Application.dataPath, "..", "Backups", "combat-animation-sets"));
         private static readonly Dictionary<string, PendingAnimationSetPersist> PendingPersists =
             new(StringComparer.OrdinalIgnoreCase);
+        private static readonly Dictionary<string, PendingStartupTrimSynchronization> PendingStartupTrimSynchronizations =
+            new(StringComparer.OrdinalIgnoreCase);
         private static readonly Dictionary<string, CachedAvatarValidation> CachedAvatarValidations =
             new(StringComparer.OrdinalIgnoreCase);
         private const string StrictRigValidationEditorPrefKey = "Arena.CombatAnimationSetEditor.StrictRigValidation";
         private const double AutoPersistDelaySeconds = 5.0;
+        private const double AutoStartupTrimSyncDelaySeconds = 0.75;
         internal const int MaxAnimationSetBackupsPerAsset = 40;
         private PreviewRenderUtility? _attackPreviewUtility;
         private GameObject? _attackPreviewInstance;
@@ -103,6 +139,7 @@ namespace Arena.Editor
         private double _attackPreviewLastEditorTime;
         private Vector2 _attackPreviewOrbit = new(25f, -12f);
         private float _attackPreviewDistanceMultiplier = 1f;
+        private readonly List<AnimationClip> _startupTrimChangedClips = new();
 
         private sealed class AnimatedPropRequirement
         {
@@ -146,6 +183,7 @@ namespace Arena.Editor
         public override void OnInspectorGUI()
         {
             var set = (CombatAnimationSet)target;
+            _startupTrimChangedClips.Clear();
             bool initializedIdentity = set.EnsureAnimationSetIdentityInitialized();
             bool initializedMelee = EnsureMeleeAttackListInitialized(set);
             bool initializedPresentation = set.EnsureWeaponPresentationProfileInitialized();
@@ -172,6 +210,8 @@ namespace Arena.Editor
                 EditorUtility.SetDirty(set);
                 ScheduleAnimationSetPersist(set, "auto-save");
                 InvalidateAvatarValidationCache(set);
+                for (int clipIndex = 0; clipIndex < _startupTrimChangedClips.Count; clipIndex++)
+                    ScheduleStartupTrimSynchronization(set, _startupTrimChangedClips[clipIndex]);
             }
 
             DrawOptionalMeleeAnimationPreviewPane(set);
@@ -407,6 +447,120 @@ namespace Arena.Editor
             }
 
             return false;
+        }
+
+        internal static List<StartupTrimTarget> FindStartupTrimTargets(AnimationClip? clip)
+        {
+            var targets = new List<StartupTrimTarget>();
+            if (clip == null)
+                return targets;
+
+            string[] setGuids = AssetDatabase.FindAssets("t:CombatAnimationSet");
+            for (int setIndex = 0; setIndex < setGuids.Length; setIndex++)
+            {
+                string assetPath = AssetDatabase.GUIDToAssetPath(setGuids[setIndex]);
+                CombatAnimationSet? set = AssetDatabase.LoadAssetAtPath<CombatAnimationSet>(assetPath);
+                if (set?.meleeAttacks == null)
+                    continue;
+
+                for (int attackIndex = 0; attackIndex < set.meleeAttacks.Count; attackIndex++)
+                {
+                    WeaponMeleeAttackAuthoring attack = set.meleeAttacks[attackIndex];
+                    if (!attack.ReferencesClip(clip))
+                        continue;
+
+                    bool supportsStartupTrim =
+                        !attack.UsesPhasedPresentation && ReferenceEquals(attack.clip, clip);
+                    targets.Add(new StartupTrimTarget(
+                        set,
+                        attackIndex,
+                        supportsStartupTrim,
+                        attack.startupTrimSeconds));
+                }
+            }
+
+            targets.Sort((left, right) =>
+            {
+                int pathComparison = string.Compare(
+                    AssetDatabase.GetAssetPath(left.Set),
+                    AssetDatabase.GetAssetPath(right.Set),
+                    StringComparison.OrdinalIgnoreCase);
+                return pathComparison != 0
+                    ? pathComparison
+                    : left.AttackIndex.CompareTo(right.AttackIndex);
+            });
+            return targets;
+        }
+
+        internal static bool SetStartupTrimForClip(
+            AnimationClip? clip,
+            float requestedTrimSeconds,
+            out string summary)
+        {
+            if (clip == null)
+            {
+                summary = "No animation clip is selected.";
+                return false;
+            }
+
+            List<StartupTrimTarget> targets = FindStartupTrimTargets(clip);
+            var supportedTargets = new List<StartupTrimTarget>();
+            for (int targetIndex = 0; targetIndex < targets.Count; targetIndex++)
+            {
+                if (targets[targetIndex].SupportsStartupTrim)
+                    supportedTargets.Add(targets[targetIndex]);
+            }
+
+            if (supportedTargets.Count == 0)
+            {
+                summary = targets.Count == 0
+                    ? $"'{clip.name}' is not assigned to a CombatAnimationSet melee attack."
+                    : $"'{clip.name}' is used only by phased melee. Startup trim is supported only for single-clip melee.";
+                return false;
+            }
+
+            WeaponMeleeAttackAuthoring firstAttack =
+                supportedTargets[0].Set.meleeAttacks[supportedTargets[0].AttackIndex];
+            if (!firstAttack.TryGetStrikeHitEventTimesSeconds(out float[] authoredHitTimes)
+                || authoredHitTimes.Length == 0)
+            {
+                summary =
+                    $"Stamp {CombatAnimationEvents.OnStrikeHit} at the physical contact pose before setting startup trim.";
+                return false;
+            }
+
+            float firstContactSeconds = authoredHitTimes[0];
+            float resolvedTrimSeconds = Mathf.Clamp(
+                requestedTrimSeconds,
+                0f,
+                firstContactSeconds);
+
+            var affectedSets = new HashSet<CombatAnimationSet>();
+            for (int targetIndex = 0; targetIndex < supportedTargets.Count; targetIndex++)
+                affectedSets.Add(supportedTargets[targetIndex].Set);
+
+            var undoTargets = new List<UnityEngine.Object>(affectedSets.Count);
+            foreach (CombatAnimationSet set in affectedSets)
+                undoTargets.Add(set);
+            Undo.RecordObjects(undoTargets.ToArray(), "Set melee startup trim");
+            foreach (CombatAnimationSet set in affectedSets)
+                CombatAnimationSetProtection.MarkTrustedMutation(set, "event-stamper-startup-trim");
+
+            for (int targetIndex = 0; targetIndex < supportedTargets.Count; targetIndex++)
+            {
+                StartupTrimTarget target = supportedTargets[targetIndex];
+                WeaponMeleeAttackAuthoring attack = target.Set.meleeAttacks[target.AttackIndex];
+                attack.startupTrimSeconds = resolvedTrimSeconds;
+                target.Set.meleeAttacks[target.AttackIndex] = attack;
+                EditorUtility.SetDirty(target.Set);
+            }
+
+            bool synchronized = SynchronizeHitEventsForClip(clip, out string syncSummary);
+            summary =
+                $"Set '{clip.name}' startup to {resolvedTrimSeconds:0.000}s for " +
+                $"{supportedTargets.Count} melee assignment(s); first contact now occurs " +
+                $"{Mathf.Max(0f, firstContactSeconds - resolvedTrimSeconds):0.000}s after input.\n\n{syncSummary}";
+            return synchronized;
         }
 
         internal static bool SynchronizeHitEventsForClip(
@@ -797,6 +951,7 @@ namespace Arena.Editor
                 SerializedProperty clipProperty = attackProperty.FindPropertyRelative("clip");
                 SerializedProperty combatProperty = attackProperty.FindPropertyRelative("combat");
                 SerializedProperty presentationModeProperty = attackProperty.FindPropertyRelative("presentationMode");
+                SerializedProperty startupTrimSecondsProperty = attackProperty.FindPropertyRelative("startupTrimSeconds");
                 SerializedProperty phasedGroundProperty = attackProperty.FindPropertyRelative("phasedGround");
                 SerializedProperty phasedAirProperty = attackProperty.FindPropertyRelative("phasedAir");
                 SerializedProperty drivePhasesFromSpecialMovementProperty = attackProperty.FindPropertyRelative("drivePhasesFromSpecialMovement");
@@ -887,6 +1042,31 @@ namespace Arena.Editor
                 else
                 {
                     EditorGUILayout.PropertyField(clipProperty, new GUIContent("Clip"));
+                    EditorGUI.BeginChangeCheck();
+                    EditorGUILayout.PropertyField(
+                        startupTrimSecondsProperty,
+                        new GUIContent(
+                            "Startup Trim",
+                            "Seconds skipped from the clip start. Keep OnStrikeHit on the physical contact pose; effective gameplay timing subtracts this trim."));
+                    bool startupTrimChanged = EditorGUI.EndChangeCheck();
+
+                    AnimationClip? assignedClip = clipProperty.objectReferenceValue as AnimationClip;
+                    if (startupTrimChanged && assignedClip != null)
+                        _startupTrimChangedClips.Add(assignedClip);
+                    if (assignedClip != null
+                        && CombatAnimationEvents.TryGetEventTime(
+                            assignedClip,
+                            CombatAnimationEvents.OnStrikeHit,
+                            out float firstHitSeconds))
+                    {
+                        float resolvedTrim = Mathf.Clamp(
+                            startupTrimSecondsProperty.floatValue,
+                            0f,
+                            firstHitSeconds);
+                        EditorGUILayout.HelpBox(
+                            $"Playback begins at {resolvedTrim:0.000}s. First contact is {Mathf.Max(0f, firstHitSeconds - resolvedTrim):0.000}s after input. Hit windows and the server manifest synchronize automatically after editing stops; republishing remains explicit.",
+                            MessageType.None);
+                    }
                 }
 
                 EditorGUILayout.HelpBox(
@@ -1003,7 +1183,7 @@ namespace Arena.Editor
 
                 if (GUILayout.Button("Restart", GUILayout.Width(70f)))
                 {
-                    _attackPreviewTime = 0f;
+                    _attackPreviewTime = ResolveAttackPreviewStartTime();
                     SampleAttackPreview();
                 }
 
@@ -1200,7 +1380,10 @@ namespace Arena.Editor
             _attackPreviewStrikeIndex = strikeIndex;
             _attackPreviewClip = previewClip;
             _attackPreviewError = string.Empty;
-            _attackPreviewTime = Mathf.Clamp(_attackPreviewTime, 0f, previewClip.length);
+            _attackPreviewTime = Mathf.Clamp(
+                _attackPreviewTime > 0.001f ? _attackPreviewTime : ResolveAttackPreviewStartTime(),
+                0f,
+                previewClip.length);
             _attackPreviewLastEditorTime = EditorApplication.timeSinceStartup;
 
             GameObject? prefab = RuntimeAvatarPrefabResolver.LoadRuntimePlayerPrefab();
@@ -1362,6 +1545,23 @@ namespace Arena.Editor
             _attackPreviewClip.SampleAnimation(_attackPreviewInstance, _attackPreviewTime);
         }
 
+        private float ResolveAttackPreviewStartTime()
+        {
+            if (_attackPreviewSet == null
+                || _attackPreviewClip == null
+                || _attackPreviewStrikeIndex <= 0
+                || _attackPreviewStrikeIndex > _attackPreviewSet.MeleeAttackCount)
+            {
+                return 0f;
+            }
+
+            WeaponMeleeAttackAuthoring attack =
+                _attackPreviewSet.meleeAttacks[_attackPreviewStrikeIndex - 1];
+            return !attack.UsesPhasedPresentation && ReferenceEquals(attack.clip, _attackPreviewClip)
+                ? attack.ResolveStartupTrimSeconds()
+                : 0f;
+        }
+
         private void DrawAttackPreview(Rect previewRect)
         {
             if (_attackPreviewUtility == null || _attackPreviewInstance == null)
@@ -1481,6 +1681,31 @@ namespace Arena.Editor
                     messages.Add((
                         MessageType.Warning,
                         $"{strikeLabel}: its compatibility hit-window mirror is stale. Open the assigned clip in Event Stamper and use Synchronize This Clip Now."));
+                }
+
+                if (attack.startupTrimSeconds < 0f)
+                {
+                    messages.Add((MessageType.Error, $"{strikeLabel}: startup trim must be non-negative."));
+                }
+                else if (attack.UsesPhasedPresentation && attack.startupTrimSeconds > 0f)
+                {
+                    messages.Add((MessageType.Error, $"{strikeLabel}: startup trim is supported only for single-clip melee."));
+                }
+                else if (attack.startupTrimSeconds > 0f)
+                {
+                    if (!attack.TryGetStrikeHitEventTimesSeconds(out float[] authoredHitTimes)
+                        || authoredHitTimes.Length == 0)
+                    {
+                        messages.Add((
+                            MessageType.Error,
+                            $"{strikeLabel}: startup trim requires an authored {CombatAnimationEvents.OnStrikeHit} event."));
+                    }
+                    else if (attack.startupTrimSeconds > authoredHitTimes[0] + 0.0001f)
+                    {
+                        messages.Add((
+                            MessageType.Error,
+                            $"{strikeLabel}: startup trim {attack.startupTrimSeconds:0.000}s exceeds first contact at {authoredHitTimes[0]:0.000}s. Trim to the contact pose or earlier."));
+                    }
                 }
 
                 if (string.IsNullOrWhiteSpace(strike.id))
@@ -2667,6 +2892,8 @@ namespace Arena.Editor
 
         private static void FlushPendingAnimationSetPersists()
         {
+            FlushPendingStartupTrimSynchronizations();
+
             if (PendingPersists.Count == 0)
                 return;
 
@@ -2694,6 +2921,76 @@ namespace Arena.Editor
 
                 PersistAnimationSetEdit(pending.Set, pending.Reason);
                 CombatAnimationSetProtection.RecordTrustedState(pending.Set, "inspector-edit");
+            }
+        }
+
+        private static void ScheduleStartupTrimSynchronization(
+            CombatAnimationSet set,
+            AnimationClip clip)
+        {
+            string assetPath = AssetDatabase.GetAssetPath(set);
+            if (string.IsNullOrWhiteSpace(assetPath) || clip == null)
+                return;
+
+            if (!PendingStartupTrimSynchronizations.TryGetValue(
+                    assetPath,
+                    out PendingStartupTrimSynchronization? pending))
+            {
+                pending = new PendingStartupTrimSynchronization(
+                    set,
+                    EditorApplication.timeSinceStartup + AutoStartupTrimSyncDelaySeconds);
+                PendingStartupTrimSynchronizations.Add(assetPath, pending);
+            }
+
+            pending.Clips.Add(clip);
+            pending.DueTime = EditorApplication.timeSinceStartup + AutoStartupTrimSyncDelaySeconds;
+        }
+
+        private static void FlushPendingStartupTrimSynchronizations()
+        {
+            if (PendingStartupTrimSynchronizations.Count == 0 || EditorGUIUtility.editingTextField)
+                return;
+
+            var readyAssetPaths = new List<string>();
+            foreach (KeyValuePair<string, PendingStartupTrimSynchronization> pair in PendingStartupTrimSynchronizations)
+            {
+                if (EditorApplication.timeSinceStartup >= pair.Value.DueTime)
+                    readyAssetPaths.Add(pair.Key);
+            }
+
+            for (int pathIndex = 0; pathIndex < readyAssetPaths.Count; pathIndex++)
+            {
+                string assetPath = readyAssetPaths[pathIndex];
+                if (!PendingStartupTrimSynchronizations.TryGetValue(
+                        assetPath,
+                        out PendingStartupTrimSynchronization? pending))
+                {
+                    continue;
+                }
+
+                PendingStartupTrimSynchronizations.Remove(assetPath);
+                if (pending.Set == null)
+                    continue;
+
+                bool synchronizedAll = true;
+                foreach (AnimationClip clip in pending.Clips)
+                {
+                    if (!SynchronizeHitEventsForClip(clip, out string summary))
+                    {
+                        synchronizedAll = false;
+                        Debug.LogWarning(
+                            $"[{nameof(CombatAnimationSetEditor)}] Startup Trim auto-sync failed for '{pending.Set.name}': {summary}",
+                            pending.Set);
+                        continue;
+                    }
+
+                    Debug.Log(
+                        $"[{nameof(CombatAnimationSetEditor)}] Startup Trim auto-sync: {summary}",
+                        pending.Set);
+                }
+
+                if (synchronizedAll)
+                    CancelPendingAnimationSetPersist(pending.Set);
             }
         }
 

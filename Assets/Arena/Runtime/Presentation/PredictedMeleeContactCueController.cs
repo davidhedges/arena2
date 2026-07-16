@@ -151,8 +151,7 @@ namespace Arena.Presentation
             if (strikeIndex <= 0)
                 return;
 
-            float hitWindowSeconds = animationSet.GetStrikeFirstHitWindowSeconds(strikeIndex);
-            if (hitWindowSeconds <= 0f)
+            if (!animationSet.TryGetStrikeFirstHitWindowSeconds(strikeIndex, out float hitWindowSeconds))
                 return;
 
             AnimationClip? playedClip = animationSet.GetStrikeClip(strikeIndex);

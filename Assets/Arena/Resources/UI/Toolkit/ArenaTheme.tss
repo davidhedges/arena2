@@ -1,0 +1,5 @@
+/* Runtime theme for all Arena UI Toolkit panels: Unity's default control
+ * styles plus the generated Arena design tokens (single source of truth:
+ * ArenaUiTheme.cs via ops/gen_ui_tokens.py). Loaded by ArenaPanel. */
+@import url("unity-theme://default");
+@import url("tokens.uss");
