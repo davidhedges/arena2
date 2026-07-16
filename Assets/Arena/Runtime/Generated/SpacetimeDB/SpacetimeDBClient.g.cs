@@ -832,6 +832,7 @@ namespace SpacetimeDB.Types
                 Reducer.CleanupProjectileLoadHarness args => Reducers.InvokeCleanupProjectileLoadHarness(eventContext, args),
                 Reducer.ClearAutoAttackTarget args => Reducers.InvokeClearAutoAttackTarget(eventContext, args),
                 Reducer.ClearCharacterActionBarSlot args => Reducers.InvokeClearCharacterActionBarSlot(eventContext, args),
+                Reducer.ConsumeItem args => Reducers.InvokeConsumeItem(eventContext, args),
                 Reducer.CreateInstance args => Reducers.InvokeCreateInstance(eventContext, args),
                 Reducer.CreateOrUpdateCharacter args => Reducers.InvokeCreateOrUpdateCharacter(eventContext, args),
                 Reducer.DeclinePartyInvite args => Reducers.InvokeDeclinePartyInvite(eventContext, args),

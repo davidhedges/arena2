@@ -508,6 +508,12 @@ namespace Arena.UI
                 return;
             }
 
+            if (IsConsumable(cell.Definition))
+            {
+                conn.Reducers.ConsumeItem(cell.ItemInstanceId);
+                return;
+            }
+
             if (cell.Definition != null && TryResolveEquipSlot(conn, cell.Definition, out string targetSlot))
                 conn.Reducers.EquipItem(cell.ItemInstanceId, targetSlot);
         }
@@ -857,6 +863,7 @@ namespace Arena.UI
 
             if (definition != null)
             {
+                AppendConsumableTooltipPart(parts, definition);
                 AppendLabeledTooltipPart(parts, "Weapon", definition.WeaponKind);
                 AppendLabeledTooltipPart(parts, "Profile", definition.CombatProfileId);
                 if (definition.UniqueEquipped)
@@ -866,6 +873,25 @@ namespace Arena.UI
             AppendSpellbookTooltipParts(conn, item.ItemInstanceId, parts);
 
             return string.Join("\n", parts);
+        }
+
+        private static void AppendConsumableTooltipPart(List<string> parts, ItemDefinition definition)
+        {
+            if (!IsConsumable(definition) || definition.ConsumableAmount <= 0f)
+                return;
+
+            string amount = definition.ConsumableAmount.ToString("0.##");
+            switch (Normalize(definition.ConsumableEffectKind))
+            {
+                case "RESTORE_HEALTH":
+                    parts.Add($"Restores {amount} health.");
+                    break;
+                case "RESTORE_RESOURCE":
+                    string resource = FormatTooltipValue(definition.ConsumableResourceKind);
+                    if (!string.IsNullOrWhiteSpace(resource))
+                        parts.Add($"Restores {amount} {resource}.");
+                    break;
+            }
         }
 
         private static List<TooltipStat> BuildItemTooltipStats(
@@ -945,6 +971,12 @@ namespace Arena.UI
                 "SPELLBOOK",
                 StringComparison.Ordinal);
 
+        private static bool IsConsumable(ItemDefinition? definition)
+            => string.Equals(
+                WireIdentifier.Normalize(definition?.ItemKind),
+                "CONSUMABLE",
+                StringComparison.Ordinal);
+
         private static string BuildCellFootnote(string context, ItemDefinition? definition)
         {
             if (string.Equals(context, "Loot", StringComparison.Ordinal))
@@ -952,6 +984,9 @@ namespace Arena.UI
 
             if (IsSpellbook(definition))
                 return "Left-click to open - Right-click to equip";
+
+            if (IsConsumable(definition))
+                return "Right-click to consume";
 
             bool equipable = !string.IsNullOrWhiteSpace(definition?.EquipSlot);
             return equipable ? "Right-click to equip - Drag to move" : "Drag to move";

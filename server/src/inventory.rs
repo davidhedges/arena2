@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use spacetimedb::{reducer, table, Identity, ReducerContext, Table, Timestamp};
 
 use crate::arena::{open_world_scene_name_for_identity, player_world as _};
@@ -10,10 +12,13 @@ use crate::player::DEFAULT_COMBAT_PROFILE;
 use crate::player_physics::player_physics as _;
 use crate::player_state::player_state as _;
 use crate::progression::{
-    sync_progression_for_equipment_change, AllocatedStatTotals, COMBAT_PROFILE_ARCHER_BOW,
-    DISCIPLINE_ARCANA, DISCIPLINE_PRECISION, DISCIPLINE_SUBTLETY, DISCIPLINE_WAR, DISCIPLINE_ZEAL,
+    default_global_cooldown_ms, sync_progression_for_equipment_change, AllocatedStatTotals,
+    COMBAT_PROFILE_ARCHER_BOW, DISCIPLINE_ARCANA, DISCIPLINE_PRECISION, DISCIPLINE_SUBTLETY,
+    DISCIPLINE_WAR, DISCIPLINE_ZEAL,
 };
 use crate::relations::TargetAudience;
+use crate::resources::grant_primary_resource_amount_for_kind;
+use crate::spells::{is_on_global_cooldown, stamp_global_cooldown_for_duration};
 
 #[allow(unused_imports)]
 use crate::inventory::equipment_loadout as _;
@@ -73,7 +78,13 @@ const ITEM_KIND_ARMOR: &str = "ARMOR";
 const ITEM_KIND_JEWELRY: &str = "JEWELRY";
 const ITEM_KIND_WEAPON: &str = "WEAPON";
 const ITEM_KIND_SPELLBOOK: &str = "SPELLBOOK";
+const ITEM_KIND_CONSUMABLE: &str = "CONSUMABLE";
 const ITEM_KIND_MISC: &str = "MISC";
+
+const CONSUMABLE_EFFECT_RESTORE_HEALTH: &str = "RESTORE_HEALTH";
+const CONSUMABLE_EFFECT_RESTORE_RESOURCE: &str = "RESTORE_RESOURCE";
+const SIMPLE_POTION_RESTORE_AMOUNT: f32 = 25.0;
+const SIMPLE_POTION_MAX_STACK: u32 = 5;
 
 pub(crate) const ARMOR_KIND_CLOTH: &str = "CLOTH";
 const ARMOR_KIND_LEATHER: &str = "LEATHER";
@@ -165,6 +176,9 @@ pub struct ItemDefinition {
     pub combat_profile_id: String,
     pub armor_kind: String,
     pub physical_resistance: f32,
+    pub consumable_effect_kind: String,
+    pub consumable_resource_kind: String,
+    pub consumable_amount: f32,
 }
 
 #[table(accessor = item_affix_definition, public)]
@@ -336,6 +350,9 @@ struct ItemDefinitionSpec {
     combat_profile_id: &'static str,
     armor_kind: &'static str,
     physical_resistance: f32,
+    consumable_effect_kind: &'static str,
+    consumable_resource_kind: &'static str,
+    consumable_amount: f32,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -391,6 +408,12 @@ struct StarterEquipmentAffixSpec {
     value: f32,
 }
 
+#[derive(Clone, Copy)]
+struct StarterInventorySpec {
+    item_def_id: &'static str,
+    quantity: u32,
+}
+
 const BASELINE_STARTER_WEAPONS: &[StarterEquipmentSpec] = &[starter_equipment(
     EQUIP_SLOT_MAIN_HAND,
     "TRAINING_DAGGER_PAIR",
@@ -414,11 +437,13 @@ const BASELINE_STARTER_EQUIPMENT_AFFIXES: &[StarterEquipmentAffixSpec] =
         STARTER_INSIGHT_RING_VALUE,
     )];
 
-const BASELINE_STARTER_INVENTORY_ITEMS: &[&str] = &[
-    "NEWBIE_STAFF_01",
-    "TRAINING_TWO_HAND_SWORD",
-    "TRAINING_SWORD_AND_SHIELD",
-    "TRAINING_BOW",
+const BASELINE_STARTER_INVENTORY_ITEMS: &[StarterInventorySpec] = &[
+    starter_inventory("NEWBIE_STAFF_01", 1),
+    starter_inventory("TRAINING_TWO_HAND_SWORD", 1),
+    starter_inventory("TRAINING_SWORD_AND_SHIELD", 1),
+    starter_inventory("TRAINING_BOW", 1),
+    starter_inventory("SIMPLE_HEALTH_POTION", SIMPLE_POTION_MAX_STACK),
+    starter_inventory("SIMPLE_MANA_POTION", SIMPLE_POTION_MAX_STACK),
 ];
 
 const LEGACY_STARTER_WEAPON_DEFINITION_IDS: &[&str] = &[
@@ -913,6 +938,22 @@ const STARTER_ITEM_DEFINITIONS: &[ItemDefinitionSpec] = &[
         "Apprentice Spellbook",
         "apprentice_spellbook",
     ),
+    consumable(
+        "SIMPLE_HEALTH_POTION",
+        "Simple Health Potion",
+        "simple_health_potion",
+        CONSUMABLE_EFFECT_RESTORE_HEALTH,
+        "",
+        SIMPLE_POTION_RESTORE_AMOUNT,
+    ),
+    consumable(
+        "SIMPLE_MANA_POTION",
+        "Simple Mana Potion",
+        "simple_mana_potion",
+        CONSUMABLE_EFFECT_RESTORE_RESOURCE,
+        "MANA",
+        SIMPLE_POTION_RESTORE_AMOUNT,
+    ),
     ItemDefinitionSpec {
         item_def_id: "CRACKED_KOBOLD_CHARM",
         display_name: "Cracked Kobold Charm",
@@ -929,6 +970,9 @@ const STARTER_ITEM_DEFINITIONS: &[ItemDefinitionSpec] = &[
         combat_profile_id: "",
         armor_kind: "",
         physical_resistance: 0.0,
+        consumable_effect_kind: "",
+        consumable_resource_kind: "",
+        consumable_amount: 0.0,
     },
 ];
 
@@ -1234,6 +1278,9 @@ const fn armor(
         combat_profile_id: "",
         armor_kind,
         physical_resistance,
+        consumable_effect_kind: "",
+        consumable_resource_kind: "",
+        consumable_amount: 0.0,
     }
 }
 
@@ -1260,6 +1307,9 @@ const fn jewelry(
         combat_profile_id: "",
         armor_kind: "",
         physical_resistance: 0.0,
+        consumable_effect_kind: "",
+        consumable_resource_kind: "",
+        consumable_amount: 0.0,
     }
 }
 
@@ -1287,6 +1337,9 @@ const fn weapon(
         combat_profile_id,
         armor_kind: "",
         physical_resistance: 0.0,
+        consumable_effect_kind: "",
+        consumable_resource_kind: "",
+        consumable_amount: 0.0,
     }
 }
 
@@ -1311,6 +1364,39 @@ const fn spellbook(
         combat_profile_id: "",
         armor_kind: "",
         physical_resistance: 0.0,
+        consumable_effect_kind: "",
+        consumable_resource_kind: "",
+        consumable_amount: 0.0,
+    }
+}
+
+const fn consumable(
+    item_def_id: &'static str,
+    display_name: &'static str,
+    icon_id: &'static str,
+    consumable_effect_kind: &'static str,
+    consumable_resource_kind: &'static str,
+    consumable_amount: f32,
+) -> ItemDefinitionSpec {
+    ItemDefinitionSpec {
+        item_def_id,
+        display_name,
+        item_kind: ITEM_KIND_CONSUMABLE,
+        rarity: "COMMON",
+        icon_id,
+        max_stack: SIMPLE_POTION_MAX_STACK,
+        width: 1,
+        height: 1,
+        equip_slot: "",
+        weapon_kind: "",
+        hand_requirement: HAND_REQUIREMENT_NONE,
+        unique_equipped: false,
+        combat_profile_id: "",
+        armor_kind: "",
+        physical_resistance: 0.0,
+        consumable_effect_kind,
+        consumable_resource_kind,
+        consumable_amount,
     }
 }
 
@@ -1321,6 +1407,13 @@ const fn starter_equipment(
     StarterEquipmentSpec {
         slot_id,
         item_def_id,
+    }
+}
+
+const fn starter_inventory(item_def_id: &'static str, quantity: u32) -> StarterInventorySpec {
+    StarterInventorySpec {
+        item_def_id,
+        quantity,
     }
 }
 
@@ -1763,6 +1856,111 @@ pub fn merge_stack(
 }
 
 #[reducer]
+pub fn consume_item(ctx: &ReducerContext, item_instance_id: String) -> Result<(), String> {
+    sync_item_definitions(ctx);
+
+    let owner = ctx.sender();
+    let slot = require_slot_for_accessible_item(ctx, owner, item_instance_id.as_str())?;
+    let source_container = require_accessible_container(ctx, owner, slot.container_id.as_str())?;
+    if !source_container
+        .container_kind
+        .eq_ignore_ascii_case(CONTAINER_KIND_PLAYER_BAG)
+    {
+        return Err("consumables can only be used from player inventory".to_string());
+    }
+
+    let mut item = require_item_instance(ctx, item_instance_id.as_str())?;
+    let definition = require_item_definition(ctx, item.item_def_id.as_str())?;
+    if !definition
+        .item_kind
+        .eq_ignore_ascii_case(ITEM_KIND_CONSUMABLE)
+    {
+        return Err("item is not consumable".to_string());
+    }
+    if item.quantity == 0 {
+        return Err("consumable stack is empty".to_string());
+    }
+    if !definition.consumable_amount.is_finite() || definition.consumable_amount <= 0.0 {
+        return Err("consumable amount must be positive".to_string());
+    }
+
+    let player_state = ctx
+        .db
+        .player_state()
+        .player_id()
+        .find(owner)
+        .ok_or_else(|| "player combat state not found".to_string())?;
+    if !player_state.alive || player_state.eliminated {
+        return Err("eliminated players cannot consume items".to_string());
+    }
+    if is_on_global_cooldown(ctx, owner, ctx.timestamp) {
+        return Err("global cooldown is active".to_string());
+    }
+
+    match normalize_id(definition.consumable_effect_kind.as_str()).as_str() {
+        CONSUMABLE_EFFECT_RESTORE_HEALTH => {
+            if player_state.hp >= player_state.max_hp {
+                return Err("health is already full".to_string());
+            }
+            let amount = definition.consumable_amount.round() as i32;
+            if amount <= 0 {
+                return Err("health consumable amount must restore at least 1 health".to_string());
+            }
+            queue_effects(
+                ctx,
+                vec![EffectPacket::Heal {
+                    amount,
+                    source: owner,
+                    target: owner,
+                    spell_id: definition.item_def_id.clone(),
+                    target_audience: TargetAudience::PartyOrSelf,
+                }],
+            );
+        }
+        CONSUMABLE_EFFECT_RESTORE_RESOURCE => {
+            let restored = grant_primary_resource_amount_for_kind(
+                ctx,
+                owner,
+                definition.consumable_resource_kind.as_str(),
+                definition.consumable_amount,
+                ctx.timestamp,
+            );
+            if restored <= 0.0001 {
+                return Err(format!(
+                    "{} is already full or unavailable",
+                    normalize_id(definition.consumable_resource_kind.as_str())
+                ));
+            }
+        }
+        effect_kind => {
+            return Err(format!(
+                "unsupported consumable effect kind '{}'",
+                effect_kind
+            ));
+        }
+    }
+
+    if item.quantity > 1 {
+        item.quantity -= 1;
+        ctx.db.item_instance().item_instance_id().update(item);
+    } else {
+        ctx.db.inventory_slot().key().delete(slot.key);
+        ctx.db
+            .item_instance()
+            .item_instance_id()
+            .delete(item.item_instance_id);
+    }
+    stamp_global_cooldown_for_duration(
+        ctx,
+        owner,
+        Duration::from_millis(default_global_cooldown_ms()),
+        ctx.timestamp,
+    );
+    touch_container(ctx, source_container);
+    Ok(())
+}
+
+#[reducer]
 pub fn equip_item(
     ctx: &ReducerContext,
     item_instance_id: String,
@@ -1936,6 +2134,13 @@ pub(crate) fn sync_item_definitions(ctx: &ReducerContext) {
             physical_resistance: spec
                 .physical_resistance
                 .clamp(0.0, MAX_EQUIPMENT_PHYSICAL_RESISTANCE),
+            consumable_effect_kind: normalize_id(spec.consumable_effect_kind),
+            consumable_resource_kind: normalize_id(spec.consumable_resource_kind),
+            consumable_amount: if spec.consumable_amount.is_finite() {
+                spec.consumable_amount.max(0.0)
+            } else {
+                0.0
+            },
         };
         if ctx
             .db
@@ -3300,8 +3505,8 @@ fn ensure_player_bag(ctx: &ReducerContext, owner: Identity) -> (InventoryContain
 
 fn seed_baseline_inventory_items(ctx: &ReducerContext, owner: Identity, bag: &InventoryContainer) {
     let mut inserted_any = false;
-    for item_def_id in BASELINE_STARTER_INVENTORY_ITEMS {
-        let normalized_item_def_id = normalize_id(item_def_id);
+    for spec in BASELINE_STARTER_INVENTORY_ITEMS {
+        let normalized_item_def_id = normalize_id(spec.item_def_id);
         let Some(definition) = ctx
             .db
             .item_definition()
@@ -3315,6 +3520,15 @@ fn seed_baseline_inventory_items(ctx: &ReducerContext, owner: Identity, bag: &In
             );
             continue;
         };
+        if spec.quantity == 0 || spec.quantity > definition.max_stack {
+            log::warn!(
+                "[INVENTORY] Starter inventory quantity {} is invalid for '{}' with max stack {}",
+                spec.quantity,
+                normalized_item_def_id,
+                definition.max_stack
+            );
+            continue;
+        }
         let Some((x, y)) = first_free_position(
             ctx,
             bag.container_id.as_str(),
@@ -3338,7 +3552,7 @@ fn seed_baseline_inventory_items(ctx: &ReducerContext, owner: Identity, bag: &In
             item_def_id: normalized_item_def_id,
             current_owner_key: identity_key(owner),
             current_owner: Some(owner),
-            quantity: 1,
+            quantity: spec.quantity,
             created_at: ctx.timestamp,
         });
         upsert_inventory_slot(
@@ -4656,6 +4870,9 @@ mod tests {
             combat_profile_id: String::new(),
             armor_kind: String::new(),
             physical_resistance: 0.0,
+            consumable_effect_kind: String::new(),
+            consumable_resource_kind: String::new(),
+            consumable_amount: 0.0,
         }
     }
 
@@ -4827,20 +5044,56 @@ mod tests {
             .collect();
 
         assert_eq!(
-            BASELINE_STARTER_INVENTORY_ITEMS,
-            &[
-                "NEWBIE_STAFF_01",
-                "TRAINING_TWO_HAND_SWORD",
-                "TRAINING_SWORD_AND_SHIELD",
-                "TRAINING_BOW",
+            BASELINE_STARTER_INVENTORY_ITEMS
+                .iter()
+                .map(|spec| (spec.item_def_id, spec.quantity))
+                .collect::<Vec<_>>(),
+            vec![
+                ("NEWBIE_STAFF_01", 1),
+                ("TRAINING_TWO_HAND_SWORD", 1),
+                ("TRAINING_SWORD_AND_SHIELD", 1),
+                ("TRAINING_BOW", 1),
+                ("SIMPLE_HEALTH_POTION", 5),
+                ("SIMPLE_MANA_POTION", 5),
             ]
         );
-        for item_def_id in BASELINE_STARTER_INVENTORY_ITEMS {
+        for spec in BASELINE_STARTER_INVENTORY_ITEMS {
             assert!(
-                authored_definitions.contains(item_def_id),
-                "{item_def_id} should be an authored starter item definition"
+                authored_definitions.contains(spec.item_def_id),
+                "{} should be an authored starter item definition",
+                spec.item_def_id
             );
         }
+    }
+
+    #[test]
+    fn simple_potions_share_the_first_class_consumable_contract() {
+        let health = STARTER_ITEM_DEFINITIONS
+            .iter()
+            .find(|definition| definition.item_def_id == "SIMPLE_HEALTH_POTION")
+            .expect("health potion should be authored");
+        let mana = STARTER_ITEM_DEFINITIONS
+            .iter()
+            .find(|definition| definition.item_def_id == "SIMPLE_MANA_POTION")
+            .expect("mana potion should be authored");
+
+        assert_eq!(health.item_kind, ITEM_KIND_CONSUMABLE);
+        assert_eq!(health.max_stack, SIMPLE_POTION_MAX_STACK);
+        assert_eq!(
+            health.consumable_effect_kind,
+            CONSUMABLE_EFFECT_RESTORE_HEALTH
+        );
+        assert_eq!(health.consumable_resource_kind, "");
+        assert_eq!(health.consumable_amount, SIMPLE_POTION_RESTORE_AMOUNT);
+
+        assert_eq!(mana.item_kind, ITEM_KIND_CONSUMABLE);
+        assert_eq!(mana.max_stack, SIMPLE_POTION_MAX_STACK);
+        assert_eq!(
+            mana.consumable_effect_kind,
+            CONSUMABLE_EFFECT_RESTORE_RESOURCE
+        );
+        assert_eq!(mana.consumable_resource_kind, "MANA");
+        assert_eq!(mana.consumable_amount, SIMPLE_POTION_RESTORE_AMOUNT);
     }
 
     #[test]
@@ -5089,6 +5342,9 @@ mod tests {
             combat_profile_id: "",
             armor_kind: "",
             physical_resistance: 0.0,
+            consumable_effect_kind: "",
+            consumable_resource_kind: "",
+            consumable_amount: 0.0,
         };
         let affixes = eligible_affix_specs_for_item_definition(&weapon_spec);
 
@@ -5133,6 +5389,9 @@ mod tests {
             combat_profile_id: "",
             armor_kind: ARMOR_KIND_CLOTH,
             physical_resistance: 0.0,
+            consumable_effect_kind: "",
+            consumable_resource_kind: "",
+            consumable_amount: 0.0,
         };
         let leather_spec = ItemDefinitionSpec {
             armor_kind: ARMOR_KIND_LEATHER,

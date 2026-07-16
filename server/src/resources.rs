@@ -393,27 +393,29 @@ pub(crate) fn grant_primary_resource_amount_for_kind(
     resource_kind: &str,
     amount: f32,
     now: Timestamp,
-) {
+) -> f32 {
     let amount = amount.max(0.0);
     if amount <= 0.0 {
-        return;
+        return 0.0;
     }
     if !standard_resource_kind(resource_kind) {
-        return;
+        return 0.0;
     }
     let Some(mut resource) = sync_resource_for_player(ctx, owner, resource_kind, now) else {
-        return;
+        return 0.0;
     };
 
     let next = (resource.current + amount).clamp(0.0, resource.max);
-    if (next - resource.current).abs() <= 0.0001 {
-        return;
+    let restored = next - resource.current;
+    if restored.abs() <= 0.0001 {
+        return 0.0;
     }
 
     resource.current = next;
     resource.updated_at = now;
     record_resource_write();
     ctx.db.player_resource().key().update(resource);
+    restored
 }
 
 #[allow(dead_code)]

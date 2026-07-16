@@ -43,6 +43,12 @@ namespace SpacetimeDB.Types
         public string ArmorKind;
         [DataMember(Name = "physical_resistance")]
         public float PhysicalResistance;
+        [DataMember(Name = "consumable_effect_kind")]
+        public string ConsumableEffectKind;
+        [DataMember(Name = "consumable_resource_kind")]
+        public string ConsumableResourceKind;
+        [DataMember(Name = "consumable_amount")]
+        public float ConsumableAmount;
 
         public ItemDefinition(
             string ItemDefId,
@@ -59,7 +65,10 @@ namespace SpacetimeDB.Types
             bool UniqueEquipped,
             string CombatProfileId,
             string ArmorKind,
-            float PhysicalResistance
+            float PhysicalResistance,
+            string ConsumableEffectKind,
+            string ConsumableResourceKind,
+            float ConsumableAmount
         )
         {
             this.ItemDefId = ItemDefId;
@@ -77,6 +86,9 @@ namespace SpacetimeDB.Types
             this.CombatProfileId = CombatProfileId;
             this.ArmorKind = ArmorKind;
             this.PhysicalResistance = PhysicalResistance;
+            this.ConsumableEffectKind = ConsumableEffectKind;
+            this.ConsumableResourceKind = ConsumableResourceKind;
+            this.ConsumableAmount = ConsumableAmount;
         }
 
         public ItemDefinition()
@@ -91,6 +103,8 @@ namespace SpacetimeDB.Types
             this.HandRequirement = "";
             this.CombatProfileId = "";
             this.ArmorKind = "";
+            this.ConsumableEffectKind = "";
+            this.ConsumableResourceKind = "";
         }
     }
 }

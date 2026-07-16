@@ -426,7 +426,7 @@ def ensure_folder(path: Path) -> None:
 def authored_icon_ids() -> set[str]:
     source = INVENTORY_SOURCE.read_text(encoding="utf-8")
     icon_ids = set(re.findall(r'icon_id:\s*"([^"]+)"', source))
-    for helper in ("armor", "jewelry", "weapon"):
+    for helper in ("armor", "jewelry", "weapon", "consumable"):
         pattern = rf'{helper}\(\s*"[^"]+"\s*,\s*"[^"]+"\s*,\s*"([^"]+)"'
         icon_ids.update(re.findall(pattern, source, flags=re.MULTILINE))
     return icon_ids

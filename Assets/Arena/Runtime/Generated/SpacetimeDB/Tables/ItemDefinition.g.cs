@@ -54,6 +54,9 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Col<ItemDefinition, string> CombatProfileId { get; }
         public global::SpacetimeDB.Col<ItemDefinition, string> ArmorKind { get; }
         public global::SpacetimeDB.Col<ItemDefinition, float> PhysicalResistance { get; }
+        public global::SpacetimeDB.Col<ItemDefinition, string> ConsumableEffectKind { get; }
+        public global::SpacetimeDB.Col<ItemDefinition, string> ConsumableResourceKind { get; }
+        public global::SpacetimeDB.Col<ItemDefinition, float> ConsumableAmount { get; }
 
         public ItemDefinitionCols(string tableName)
         {
@@ -72,6 +75,9 @@ namespace SpacetimeDB.Types
             CombatProfileId = new global::SpacetimeDB.Col<ItemDefinition, string>(tableName, "combat_profile_id");
             ArmorKind = new global::SpacetimeDB.Col<ItemDefinition, string>(tableName, "armor_kind");
             PhysicalResistance = new global::SpacetimeDB.Col<ItemDefinition, float>(tableName, "physical_resistance");
+            ConsumableEffectKind = new global::SpacetimeDB.Col<ItemDefinition, string>(tableName, "consumable_effect_kind");
+            ConsumableResourceKind = new global::SpacetimeDB.Col<ItemDefinition, string>(tableName, "consumable_resource_kind");
+            ConsumableAmount = new global::SpacetimeDB.Col<ItemDefinition, float>(tableName, "consumable_amount");
         }
     }
 
