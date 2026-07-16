@@ -50,8 +50,14 @@ Consequences that constrain every option:
   per-fire overhead). Exact one-shot fire latency has **never been measured
   in this deployment** — Phase 0 measures it, and the recommendation is
   gated on the result.
-- Reducers roll back atomically on panic/Err; a one-shot row consumed by a
-  failed transaction is gone. Any P-X design needs a sweep backstop.
+- Reducers roll back atomically on panic/Err. What happens to the fired
+  one-shot row is **not reliably known**: the game loop's own defensive
+  sweep exists "regardless of host one-shot delete semantics"
+  (`reschedule_game_tick`), and its watchdog exists because a panicked tick
+  can lose the next link while a republish can leave overdue rows inert
+  (`game_loop.rs:782`) — the codebase already treats these semantics as
+  unspecified. Any P-X design therefore needs a sweep backstop, and Phase 0
+  verifies failure behavior empirically rather than assuming it.
 
 ## 3. As-built survey
 
@@ -85,7 +91,11 @@ Consequences that constrain every option:
   scan + explicit sort. All HP/status mutations flow through one choke
   point: `resolve_pending_effects` (`combat.rs:3768`), applied in a global
   monotonic `queued_order` from the single-row `pending_effect_sequence`
-  table — **monotonic across transactions**, not just within one.
+  table — monotonic across transactions, not just within one. Note what
+  that sequence is and is not: it serializes **application**; assigned at
+  enqueue time, across transactions it encodes commit order, not semantic
+  priority. Which event *should* win is decided by §4.3 clocks and R9,
+  never by the sequence.
 - The resolve functions are standalone-callable and idempotent
   (existence-check before resolve, delete after; `resolve_pending_melee_impacts(ctx, now)`
   is already invoked from two contexts today). This is what makes P-X
@@ -251,22 +261,30 @@ Every deadline row (impact, release, area impact, cast completion, DoT tick)
 also inserts a one-shot `ScheduleAt::Time` row at its authored time,
 targeting a thin reducer that calls the existing resolve function.
 
-- **Path?** Yes — per-event exact scheduling; fires at authored time ±host
-  jitter.
+- **Path?** Yes — per-event one-shot scheduling. ("Exact-fire" throughout
+  this doc means *scheduled at* the authored time; execution adds host
+  jitter and possibly one in-flight transaction's wait — target time is
+  never a guarantee of execution time.)
 - **Latency:** quantization eliminated at the scheduling layer. Residual =
   host one-shot jitter (**unmeasured**; S5's data suggests low single-digit
   ms — Phase 0 measures) + occasionally waiting out an in-flight tick.
 - **Transactions:** proportional to combat activity. Arena scale (~20
   actors): tens/s for impacts+releases, but **hundreds/s if DoT ticks and
   every periodic occurrence are included** — this is where B overreaches.
-  Simultaneous deadlines coalesce naturally: the resolve functions batch all
-  due rows, and later fires no-op (idempotent existence checks already in
-  place).
+  Simultaneous deadlines coalesce naturally: the thin reducer resolves
+  **every due row in its family**, not just its linked event, and a later
+  trigger whose event was already resolved no-ops (idempotent existence
+  checks already in place).
 - **Ordering/determinism:** per-event interleaving with the tick is
-  timing-dependent. Mitigated by §4: each transaction is internally
-  deterministic (R7), amounts/next-deadlines are anchored (§4.4) so ±ms of
-  interleave cannot change *values*, and genuine races are governed by R9
-  semantic time, not by which transaction ran first.
+  timing-dependent, and the sharpest cost is precise: **two deadlines within
+  jitter of each other resolve in host commit order** — under D their
+  tiebreak was deterministic (R7). Anchoring (§4.4) means values cannot
+  change and host timing is uncorrelated with either player, so *fairness*
+  is intact — but bit-level reproducibility of sub-jitter races is lost;
+  replaying one requires the recorded transaction schedule. Everything
+  outside that window is unaffected: transactions are internally
+  deterministic (R7) and arrival-vs-deadline races stay governed by R9
+  semantic time.
 - **Damage serialization:** intact — same choke point, same global sequence.
 - **Failure/overload:** a panicked one-shot is lost; the tick's Pass A sweep
   (unchanged) is the backstop → graceful degradation to Option D latency for
@@ -285,10 +303,26 @@ Option B restricted to the event classes where sub-tick timing is
 player-perceivable and PvP-relevant, with the monolithic tick keeping
 everything else and sweeping stragglers:
 
-- **P-X classes:** player melee impacts + melee projectile releases (one
-  table family, the highest-frequency PvP deadlines), then cast completions
-  if the pilot measures well. **Not** P-X: DoT/HoT ticks, auras, pulses,
-  NPC-source impacts (NPC cadence is already coarse), maintenance.
+- **P-X classes:** player melee impacts + melee projectile releases. They
+  are the pilot because authored windup timing *is* the melee feel (the
+  startup-trim work tunes tens of ms, so ±16.5 ms alignment noise is largest
+  relative to authored values), they are the highest-frequency PvP
+  deadlines, and they have **no post-deadline arbitration mechanic** to
+  perturb. **Not** P-X: DoT/HoT ticks, auras, pulses, NPC-source impacts
+  (NPC cadence is already coarse), maintenance.
+- **Cast completions are deferred deliberately**, not just sequenced:
+  completing at ~jitter instead of at the next tick narrows the effective
+  post-`ends_at` cancel window from ≤33 ms to ~jitter (the R9 grace
+  interaction). Arguably *more* correct — the grace partly compensates for
+  tick alignment — but it is a combat-visible change that needs its own
+  owner decision.
+- **Authority contract:** deadline rows remain the sole authority; trigger
+  rows carry none. A cancel deletes the deadline row — an in-flight trigger
+  then finds nothing due and no-ops. Duplicate and stale triggers no-op.
+  Triggers defensively self-delete on fire (the game-loop pattern, since
+  host one-shot delete semantics are unspecified), and a data-preserving
+  republish that leaves trigger rows inert costs nothing — the sweep covers
+  exactly that case.
 - The tick's Pass A continues to sweep all due rows unconditionally — the
   exact-fire row is an accelerator, never a correctness requirement. Lost
   one-shot ⇒ the event resolves at most one tick late (= today's behavior).
@@ -329,8 +363,14 @@ everything else and sweeping stragglers:
    §4 hardening and revisit only with a feel complaint in hand.
 2. Pilot P-X on **player melee impacts + projectile releases** behind a
    config-row kill switch (the S8 pattern: flip without republish).
-3. Extend to **cast completions** if the pilot's measured latency and the
-   owner's feel check both pass.
+3. Extend to **cast completions** only after the owner decides the grace
+   interaction (§5 Option C) *and* the pilot's measured latency and feel
+   check both pass.
+
+The goal metric is **committed-deadline resolve latency, not tick cost** —
+P-X adds transactions overall; any tick-cost reduction (the sweep finding
+fewer due rows) is incidental, and Phases 0/3 need only confirm no
+regression.
 4. Options A and B-unscoped are rejected: A pays standing cost for less
    precision than per-event exact fire; B-unscoped schedules transactions
    for event classes with no perceptual payoff.
@@ -359,10 +399,14 @@ committed outcomes.
 ## 8. Phased plan
 
 **Phase 0 — Measure the substrate (new, cheap, gates Phase 3).**
-An ops probe (existing headless-probe pattern) that (a) schedules one-shot
-rows at known times across load levels and logs fire deltas, and (b) samples
-press-arrival wait behind tick transactions. Deliverable: measured one-shot
-jitter distribution; go/no-go for exact-fire.
+An ops probe (existing headless-probe pattern) measuring, as distributions
+(p50/p95/p99, not means): (a) one-shot fire latency vs. target time, idle
+and under load; (b) fire latency when the target instant falls inside a
+heavy tick (worst-case contention); (c) burst behavior — N rows scheduled
+at the same instant; (d) press-arrival wait behind tick transactions;
+(e) **failure semantics** — a deliberately panicking scheduled fire: is the
+row consumed, re-fired, or left inert? Deliverable: go/no-go for exact-fire
+plus the empirical failure contract §2 currently leaves unspecified.
 
 **Phase 1 — Determinism hardening (no behavior change).**
 A1 sorted iteration; A4 unique final sort keys. Tests: sort-key units; the
@@ -376,10 +420,12 @@ packets for the 6 s/1 s shape, per-packet amounts).
 
 **Phase 3 — Exact-fire pilot (Option C, gated on Phase 0).**
 Scheduled table + thin resolve reducer + inserts beside melee-impact /
-projectile-release scheduling + config kill switch. Tests: measured mean
-deadline-resolve latency for piloted classes vs. Phase 0 baseline; kill the
-one-shot mid-flight (panic injection) and assert the tick sweep resolves the
-event ≤ one tick late; determinism fixture re-run with exact-fire on.
+projectile-release scheduling + config kill switch. Tests: measured
+deadline-resolve latency distribution for piloted classes vs. Phase 0
+baseline; kill the one-shot mid-flight (panic injection) and assert the tick
+sweep resolves the event ≤ one tick late; cancel a swing between trigger
+insert and fire and assert the trigger no-ops; tick-cost non-regression;
+value-invariant fixture with exact-fire on (see criterion 1).
 
 **Phase 4 — Overload ladder (on observed need).**
 Ledger + `tick_overload_state` + lateness-derived L1/L2. Tests: load-harness
@@ -389,7 +435,11 @@ quota honors trigger/ceiling, recovery to L0).
 ## 9. Success criteria
 
 1. Determinism: canonicalized event streams identical across
-   insertion-order-permuted runs, under both D and C configurations.
+   insertion-order-permuted runs with exact-fire **off** (the D
+   configuration). With exact-fire **on**, sub-jitter deadline races may
+   order either way, so the fixture asserts value and semantic invariants
+   instead (amounts, anchors, R9 outcomes) — byte-identical streams are not
+   claimed under C.
 2. No drift, no loss, no replay: auto-attack period ±1 ms of authored; zero
    post-stall catch-up swings; DoT per-interval packet counts/amounts exact
    across stalls with half-open expiry preserved.
