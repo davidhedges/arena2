@@ -60,6 +60,11 @@ Assets/ThirdParty/AssetStore/Characters/StylizedUndeadBundle.meta
 Assets/ThirdParty/AssetStore/Environments/StylizedMaterialsBundle/
 Assets/ThirdParty/AssetStore/Environments/StylizedMaterialsBundle.meta
 
+# Imported local audio package
+Assets/ThirdParty/AssetStore/Audio.meta
+Assets/ThirdParty/AssetStore/Audio/Big Fantasy Bundle 2.0/
+Assets/ThirdParty/AssetStore/Audio/Big Fantasy Bundle 2.0.meta
+
 # Imported local UI package
 Assets/Heat - Complete Modern UI/
 Assets/Heat - Complete Modern UI.meta
