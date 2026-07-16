@@ -12,7 +12,7 @@ namespace Arena.Editor
     internal sealed class NpcAppearanceInventoryDocument
     {
         public string schema = "ARENA_NPC_APPEARANCE_INVENTORY_DRAFT_V1";
-        public int expected_appearance_count = 146;
+        public int expected_appearance_count = 204;
         public int appearance_count;
         public int family_count;
         public List<string> global_warnings = new();
@@ -38,6 +38,7 @@ namespace Arena.Editor
         public string template_id_candidate = string.Empty;
         public string appearance_id_candidate = string.Empty;
         public string prefab_path = string.Empty;
+        public string prefab_file_id_candidate = string.Empty;
         public int animator_count;
         public string primary_animator_path_candidate = string.Empty;
         public string animator_controller_path = string.Empty;
@@ -94,6 +95,9 @@ namespace Arena.Editor
             new(
                 "STYLIZED_FANTASY_ENEMY_NPC_BUNDLE_2",
                 "Assets/ThirdParty/AssetStore/Characters/StylizedFantasyEnemyNPCBundle2/Prefabs"),
+            new(
+                "STYLIZED_UNDEAD_BUNDLE",
+                "Assets/ThirdParty/AssetStore/Characters/StylizedUndeadBundle/Prefabs"),
         };
 
         private NpcAppearanceInventoryDocument? _document;
@@ -304,6 +308,9 @@ namespace Arena.Editor
                 entry.review_warnings.Add("Prefab could not be loaded.");
                 return entry;
             }
+
+            entry.prefab_file_id_candidate =
+                GlobalObjectId.GetGlobalObjectIdSlow(prefab).targetObjectId.ToString();
 
             InspectRendererBounds(prefab, entry);
 

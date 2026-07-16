@@ -16,6 +16,7 @@ namespace Arena.Tests.Editor
             "Assets/ThirdParty/AssetStore/Characters/KoboldPack/Prefabs",
             "Assets/ThirdParty/AssetStore/Characters/StylizedFantasyEnemyNPCBundle/Prefabs",
             "Assets/ThirdParty/AssetStore/Characters/StylizedFantasyEnemyNPCBundle2/Prefabs",
+            "Assets/ThirdParty/AssetStore/Characters/StylizedUndeadBundle/Prefabs",
         };
 
         [TestCase("DeepSeaLizard_Rd2", "DEEP_SEA_LIZARD_RD_2")]
@@ -48,17 +49,17 @@ namespace Arena.Tests.Editor
             object first = scan.Invoke(null, null)!;
             object second = scan.Invoke(null, null)!;
             Type documentType = first.GetType();
-            Assert.That(ReadInt(documentType, first, "appearance_count"), Is.EqualTo(146));
-            Assert.That(ReadInt(documentType, first, "family_count"), Is.EqualTo(35));
+            Assert.That(ReadInt(documentType, first, "appearance_count"), Is.EqualTo(204));
+            Assert.That(ReadInt(documentType, first, "family_count"), Is.EqualTo(51));
 
             List<string> firstPaths = ReadAppearanceField(documentType, first, "prefab_path");
             List<string> secondPaths = ReadAppearanceField(documentType, second, "prefab_path");
             List<string> appearanceIds = ReadAppearanceField(documentType, first, "appearance_id_candidate");
             Assert.That(firstPaths, Is.EqualTo(secondPaths));
-            Assert.That(firstPaths, Has.Count.EqualTo(146));
-            Assert.That(firstPaths.Distinct(StringComparer.Ordinal).Count(), Is.EqualTo(146));
+            Assert.That(firstPaths, Has.Count.EqualTo(204));
+            Assert.That(firstPaths.Distinct(StringComparer.Ordinal).Count(), Is.EqualTo(204));
             Assert.That(appearanceIds.All(value => !string.IsNullOrWhiteSpace(value)), Is.True);
-            Assert.That(appearanceIds.Distinct(StringComparer.Ordinal).Count(), Is.EqualTo(146));
+            Assert.That(appearanceIds.Distinct(StringComparer.Ordinal).Count(), Is.EqualTo(204));
         }
 
         private static int ReadInt(Type type, object instance, string fieldName)

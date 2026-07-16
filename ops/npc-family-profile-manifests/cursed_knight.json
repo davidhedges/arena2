@@ -1,0 +1,9 @@
+{
+  "source_family_name": "CursedKnight", "expected_appearance_count": 3, "primary_animator_path": ".", "allow_root_motion": true, "acknowledge_inventory_warnings": true, "presentation_vertical_offset": 0.12078022956848145,
+  "prefab_file_ids": { "CURSED_KNIGHT_GN": 4492129310674017213, "CURSED_KNIGHT_PE": 1789163158092248582, "CURSED_KNIGHT_RD": 5211334870721875755 },
+  "animations": { "idle": ["idle"], "ready": ["Combat_1H_Ready"], "walk": ["Walk_Forward"], "run": ["Run_Forward"], "basicAttack": ["Combat_1H_Attack"], "spellCastStart": [], "spellRelease": [], "spellCancel": [], "hit": ["Combat_1H_Hit"], "death": ["Death"] },
+  "action_animations": [{ "ability_id": "NPC_CURSED_KNIGHT_HEAVY_STRIKE", "states": ["Combat_1H_Attack01"] }, { "ability_id": "NPC_CURSED_KNIGHT_STRIKE", "states": ["Combat_1H_Attack"] }],
+  "hard_crowd_control_fallback_policy": 0,
+  "vfx_sockets": [{ "anchor": "LEFT_HAND", "transform_path": ".", "fallback_policy": 1 }, { "anchor": "RIGHT_HAND", "transform_path": ".", "fallback_policy": 1 }, { "anchor": "TARGET", "transform_path": ".", "fallback_policy": 1 }],
+  "status_reactions": [{ "status_kind": "STUN", "clip_file_id": -8767420384561272259, "clip_guid": "ade1f526823cd9e46991d7fc0af50d6f", "require_humanoid_avatar": true }]
+}

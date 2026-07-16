@@ -1,0 +1,9 @@
+{
+  "source_family_name": "SkeletalDragon", "expected_appearance_count": 4, "primary_animator_path": ".", "presentation_vertical_offset": 1.289041519165039,
+  "prefab_file_ids": { "SKELETAL_DRAGON_BL": 7269627197899649561, "SKELETAL_DRAGON_BR": 3704288723939335838, "SKELETAL_DRAGON_GN": 6948172246704473365, "SKELETAL_DRAGON_YE": 2413575277443085398 },
+  "animations": { "idle": ["Idle_Ground"], "ready": ["Combat_Ground_Ready"], "walk": ["Walk_Ground_Forward"], "run": ["Run_Ground_Forward"], "basicAttack": ["Combat_Ground_Attack"], "spellCastStart": ["Combat_Ground_Spell_Start"], "spellRelease": ["Combat_Ground_Spell_End"], "spellCancel": [], "hit": ["Combat_Ground_Hit"], "death": ["Death_Ground"] },
+  "action_animations": [{ "ability_id": "NPC_SKELETAL_DRAGON_STRIKE_4", "states": ["Combat_Ground_Attack03"] }, { "ability_id": "NPC_SKELETAL_DRAGON_STRIKE_3", "states": ["Combat_Ground_Attack02"] }, { "ability_id": "NPC_SKELETAL_DRAGON_STRIKE_2", "states": ["Combat_Ground_Attack01"] }, { "ability_id": "NPC_SKELETAL_DRAGON_STRIKE", "states": ["Combat_Ground_Attack"] }],
+  "hard_crowd_control_fallback_policy": 0,
+  "vfx_sockets": [{ "anchor": "LEFT_HAND", "transform_path": ".", "fallback_policy": 1 }, { "anchor": "RIGHT_HAND", "transform_path": ".", "fallback_policy": 1 }, { "anchor": "TARGET", "transform_path": ".", "fallback_policy": 1 }],
+  "status_reactions": [{ "status_kind": "STUN", "clip_file_id": 5792537106913136455, "clip_guid": "c04235a29d7c1a14f88d90b4de5bb5c1", "require_humanoid_avatar": false }]
+}

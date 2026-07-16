@@ -1,0 +1,9 @@
+{
+  "source_family_name": "LichWarrior", "expected_appearance_count": 3, "primary_animator_path": ".", "presentation_vertical_offset": -0.014202475547790528,
+  "prefab_file_ids": { "LICH_WARRIOR_BL": 6513395130635235663, "LICH_WARRIOR_GN": 1887595927541841969, "LICH_WARRIOR_RD": 3932620497917977780 },
+  "animations": { "idle": ["idle"], "ready": ["Combat_Unarmed_Ready"], "walk": ["Walk_Forward"], "run": ["Run_Forward"], "basicAttack": ["Combat_Unarmed_Attack"], "spellCastStart": [], "spellRelease": [], "spellCancel": [], "hit": ["Combat_Unarmed_Hit"], "death": ["Death"] },
+  "action_animations": [{ "ability_id": "NPC_LICH_WARRIOR_SPECIAL_STRIKE", "states": ["Combat_Unarmed_AttackSpecial"] }, { "ability_id": "NPC_LICH_WARRIOR_STRIKE_4", "states": ["Combat_Unarmed_Attack03"] }, { "ability_id": "NPC_LICH_WARRIOR_STRIKE_3", "states": ["Combat_Unarmed_Attack02"] }, { "ability_id": "NPC_LICH_WARRIOR_STRIKE_2", "states": ["Combat_Unarmed_Attack01"] }, { "ability_id": "NPC_LICH_WARRIOR_STRIKE", "states": ["Combat_Unarmed_Attack"] }],
+  "hard_crowd_control_fallback_policy": 0,
+  "vfx_sockets": [{ "anchor": "LEFT_HAND", "transform_path": ".", "fallback_policy": 1 }, { "anchor": "RIGHT_HAND", "transform_path": ".", "fallback_policy": 1 }, { "anchor": "TARGET", "transform_path": ".", "fallback_policy": 1 }],
+  "status_reactions": [{ "status_kind": "STUN", "clip_file_id": -8767420384561272259, "clip_guid": "56532b4a961dd794c9cbe70ae72ee2ba", "require_humanoid_avatar": false }]
+}

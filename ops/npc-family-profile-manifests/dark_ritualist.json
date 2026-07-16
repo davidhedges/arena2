@@ -1,0 +1,9 @@
+{
+  "source_family_name": "DarkRitualist", "expected_appearance_count": 3, "primary_animator_path": ".", "presentation_vertical_offset": -0.1888909935951233,
+  "prefab_file_ids": { "DARK_RITUALIST_BL": 5479932263510623050, "DARK_RITUALIST_GN": 3236561097832945013, "DARK_RITUALIST_RD": 7352476825276641329 },
+  "animations": { "idle": ["idle"], "ready": ["Combat_Cast_Ready"], "walk": ["Walk_Forward"], "run": ["Run_Forward"], "basicAttack": ["Combat_Cast_Attack"], "spellCastStart": ["Spell_Unarmed_Forward_Start"], "spellRelease": ["Spell_Unarmed_Forward_End"], "spellCancel": [], "hit": ["Combat_Cast_Hit"], "death": ["Death"] },
+  "action_animations": [{ "ability_id": "NPC_DARK_RITUALIST_CAST_STRIKE_3", "states": ["Combat_Cast_Attack02"] }, { "ability_id": "NPC_DARK_RITUALIST_CAST_STRIKE_2", "states": ["Combat_Cast_Attack01"] }, { "ability_id": "NPC_DARK_RITUALIST_CAST_STRIKE", "states": ["Combat_Cast_Attack"] }],
+  "hard_crowd_control_fallback_policy": 0,
+  "vfx_sockets": [{ "anchor": "LEFT_HAND", "transform_path": ".", "fallback_policy": 1 }, { "anchor": "RIGHT_HAND", "transform_path": ".", "fallback_policy": 1 }, { "anchor": "TARGET", "transform_path": ".", "fallback_policy": 1 }],
+  "status_reactions": [{ "status_kind": "STUN", "clip_file_id": -8767420384561272259, "clip_guid": "83a682452d087c6418b3c75ab39c5c5a", "require_humanoid_avatar": false }]
+}

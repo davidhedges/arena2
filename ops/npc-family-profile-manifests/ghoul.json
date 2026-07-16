@@ -1,0 +1,9 @@
+{
+  "source_family_name": "Ghoul", "expected_appearance_count": 3, "primary_animator_path": ".", "allow_root_motion": true, "acknowledge_inventory_warnings": true, "presentation_vertical_offset": 0.06776702404022217,
+  "prefab_file_ids": { "GHOUL_BL": 738089694771118327, "GHOUL_GR": 4435243098426057799, "GHOUL_PE": 1051840753706462179 },
+  "animations": { "idle": ["idle"], "ready": ["Combat_Unarmed_Ready"], "walk": ["Walk_Normal_Forward"], "run": ["Run_Forward"], "basicAttack": ["Combat_Unarmed_Attack"], "spellCastStart": [], "spellRelease": [], "spellCancel": [], "hit": ["Combat_Unarmed_Hit"], "death": ["Death"] },
+  "action_animations": [{ "ability_id": "NPC_GHOUL_SPECIAL_STRIKE", "states": ["Combat_Unarmed_AttackSpecial"] }, { "ability_id": "NPC_GHOUL_STRIKE_3", "states": ["Combat_Unarmed_Attack02"] }, { "ability_id": "NPC_GHOUL_STRIKE_2", "states": ["Combat_Unarmed_Attack01"] }, { "ability_id": "NPC_GHOUL_STRIKE", "states": ["Combat_Unarmed_Attack"] }],
+  "hard_crowd_control_fallback_policy": 0,
+  "vfx_sockets": [{ "anchor": "LEFT_HAND", "transform_path": ".", "fallback_policy": 1 }, { "anchor": "RIGHT_HAND", "transform_path": ".", "fallback_policy": 1 }, { "anchor": "TARGET", "transform_path": ".", "fallback_policy": 1 }],
+  "status_reactions": [{ "status_kind": "STUN", "clip_file_id": -8767420384561272259, "clip_guid": "736da33777f0544479ceafd2abd7bd4b", "require_humanoid_avatar": true }]
+}

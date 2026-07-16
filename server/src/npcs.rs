@@ -3346,12 +3346,44 @@ mod tests {
     #[test]
     fn authored_npc_catalog_is_valid_and_complete_for_current_templates() {
         let parsed = parse_npc_catalog(NPC_CATALOG_JSON).unwrap();
-        assert_eq!(parsed.templates.len(), 53);
-        assert_eq!(npc_catalog().templates.len(), 53);
+        assert_eq!(parsed.templates.len(), 65);
+        assert_eq!(npc_catalog().templates.len(), 65);
+        assert_eq!(
+            parsed
+                .templates
+                .iter()
+                .map(|template| template.visual_ids.len())
+                .sum::<usize>(),
+            204
+        );
         assert!(parsed
             .templates
             .iter()
             .all(|template| !template.visual_ids.is_empty() && !template.action_kit.is_empty()));
+        let undead_bundle_expectations = [
+            ("BANSHEE", 15, 4),
+            ("CURSED_KNIGHT", 3, 2),
+            ("DARK_RITUALIST", 3, 4),
+            ("GHOUL", 3, 4),
+            ("GRAVE_BRUTE", 3, 4),
+            ("LICH_BOSS", 3, 5),
+            ("LICH_CASTER", 3, 4),
+            ("LICH_WARRIOR", 3, 5),
+            ("SKELETAL_DRAGON", 4, 5),
+            ("SKELETAL_HOUND", 3, 4),
+            ("SKELETON_CULTIST", 5, 5),
+            ("UNDEAD_ABOMINATION", 10, 2),
+        ];
+        for (template_id, visual_count, action_count) in undead_bundle_expectations {
+            let template = npc_template(template_id)
+                .unwrap_or_else(|| panic!("{template_id} should be authored"));
+            assert_eq!(template.visual_ids.len(), visual_count, "{template_id}");
+            assert_eq!(template.action_kit.len(), action_count, "{template_id}");
+        }
+        assert_eq!(
+            npc_template("SKELETAL_DRAGON").unwrap().action_kit[0].ability_id,
+            "NPC_SKELETAL_DRAGON_BONE_BREATH"
+        );
         let wizard = npc_template("SKELETON_WIZARD").expect("wizard exemplar should be authored");
         assert_eq!(wizard.attack_recovery_ms, 500);
         assert_eq!(wizard.visual_ids.len(), 3);

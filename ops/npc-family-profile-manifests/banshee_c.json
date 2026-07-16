@@ -1,0 +1,9 @@
+{
+  "source_family_name": "BansheeC", "expected_appearance_count": 3, "primary_animator_path": ".", "presentation_vertical_offset": 0.16431689262390138,
+  "prefab_file_ids": { "BANSHEE_C_BL": 1337063372541672946, "BANSHEE_C_GN": 8272191419419638068, "BANSHEE_C_RD": 5504976015710510247 },
+  "animations": { "idle": ["idle"], "ready": ["Combat_Cast_Ready"], "walk": ["Walk_Forward"], "run": ["Run_Forward"], "basicAttack": ["Combat_Cast_Attack"], "spellCastStart": ["Combat_Cast_Spell_Start"], "spellRelease": ["Combat_Cast_Spell_End"], "spellCancel": [], "hit": ["Combat_Cast_Hit"], "death": ["Death"] },
+  "action_animations": [{ "ability_id": "NPC_BANSHEE_CAST_STRIKE_3", "states": ["Combat_Cast_Attack02"] }, { "ability_id": "NPC_BANSHEE_CAST_STRIKE_2", "states": ["Combat_Cast_Attack01"] }, { "ability_id": "NPC_BANSHEE_CAST_STRIKE", "states": ["Combat_Cast_Attack"] }],
+  "hard_crowd_control_fallback_policy": 0,
+  "vfx_sockets": [{ "anchor": "LEFT_HAND", "transform_path": ".", "fallback_policy": 1 }, { "anchor": "RIGHT_HAND", "transform_path": ".", "fallback_policy": 1 }, { "anchor": "TARGET", "transform_path": ".", "fallback_policy": 1 }],
+  "status_reactions": [{ "status_kind": "STUN", "clip_file_id": -8767420384561272259, "clip_guid": "4d7aca762454a9a4fb46375a9b569e3c", "require_humanoid_avatar": false }]
+}

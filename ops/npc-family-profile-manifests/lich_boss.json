@@ -1,0 +1,9 @@
+{
+  "source_family_name": "LichBoss", "expected_appearance_count": 3, "primary_animator_path": ".", "presentation_vertical_offset": 0.5793470144271851,
+  "prefab_file_ids": { "LICH_BOSS_BL": 8385236424739262041, "LICH_BOSS_CN": 9116408440568297531, "LICH_BOSS_RD": 3299879574100068223 },
+  "animations": { "idle": ["idle"], "ready": ["Combat_Cast_Ready"], "walk": ["Walk_Forward"], "run": ["Run_Forward"], "basicAttack": ["Combat_Cast_Attack"], "spellCastStart": ["Spell_Unarmed_Forward_Start"], "spellRelease": ["Spell_Unarmed_Forward_End"], "spellCancel": [], "hit": ["Combat_Cast_Hit"], "death": ["Death"] },
+  "action_animations": [{ "ability_id": "NPC_LICH_BOSS_CAST_SPECIAL_2", "states": ["Combat_Cast_AttackSpecial01"] }, { "ability_id": "NPC_LICH_BOSS_CAST_SPECIAL", "states": ["Combat_Cast_AttackSpecial"] }, { "ability_id": "NPC_LICH_BOSS_CAST_STRIKE_2", "states": ["Combat_Cast_Attack01"] }, { "ability_id": "NPC_LICH_BOSS_CAST_STRIKE", "states": ["Combat_Cast_Attack"] }],
+  "hard_crowd_control_fallback_policy": 0,
+  "vfx_sockets": [{ "anchor": "LEFT_HAND", "transform_path": ".", "fallback_policy": 1 }, { "anchor": "RIGHT_HAND", "transform_path": ".", "fallback_policy": 1 }, { "anchor": "TARGET", "transform_path": ".", "fallback_policy": 1 }],
+  "status_reactions": [{ "status_kind": "STUN", "clip_file_id": -8767420384561272259, "clip_guid": "5488ff122b389134a9b16e500386bfe7", "require_humanoid_avatar": false }]
+}

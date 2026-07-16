@@ -1,0 +1,9 @@
+{
+  "source_family_name": "UndeadAbomination", "expected_appearance_count": 10, "primary_animator_path": ".", "allow_root_motion": true, "acknowledge_inventory_warnings": true, "presentation_vertical_offset": 0.4836733937263489,
+  "prefab_file_ids": { "UNDEAD_ABOMINATION_BK": 6297455520666635913, "UNDEAD_ABOMINATION_BL": 4179339813281707403, "UNDEAD_ABOMINATION_CN": 5718383370590492757, "UNDEAD_ABOMINATION_GN": 2080198788702302182, "UNDEAD_ABOMINATION_NAKED_BK": 2437358663980850960, "UNDEAD_ABOMINATION_NAKED_BL": 2372453619780735141, "UNDEAD_ABOMINATION_NAKED_CN": 7412157418494927413, "UNDEAD_ABOMINATION_NAKED_GN": 1157109353004194421, "UNDEAD_ABOMINATION_NAKED_RD": 2811587832763534110, "UNDEAD_ABOMINATION_RD": 8727473715311122656 },
+  "animations": { "idle": ["idle"], "ready": ["Combat_Unarmed_Ready"], "walk": ["Walk_Forward"], "run": ["Run_Forward"], "basicAttack": ["Combat_Unarmed_Attack"], "spellCastStart": [], "spellRelease": [], "spellCancel": [], "hit": ["Combat_Unarmed_Hit"], "death": ["Death"] },
+  "action_animations": [{ "ability_id": "NPC_UNDEAD_ABOMINATION_HEAVY_STRIKE", "states": ["Combat_Unarmed_Attack01"] }, { "ability_id": "NPC_UNDEAD_ABOMINATION_STRIKE", "states": ["Combat_Unarmed_Attack"] }],
+  "hard_crowd_control_fallback_policy": 0,
+  "vfx_sockets": [{ "anchor": "LEFT_HAND", "transform_path": ".", "fallback_policy": 1 }, { "anchor": "RIGHT_HAND", "transform_path": ".", "fallback_policy": 1 }, { "anchor": "TARGET", "transform_path": ".", "fallback_policy": 1 }],
+  "status_reactions": [{ "status_kind": "STUN", "clip_file_id": -8767420384561272259, "clip_guid": "118e288aa866201438249cfecdf7bb38", "require_humanoid_avatar": true }]
+}

@@ -1,0 +1,9 @@
+{
+  "source_family_name": "LichCaster", "expected_appearance_count": 3, "primary_animator_path": ".", "presentation_vertical_offset": 0.025277554988861085,
+  "prefab_file_ids": { "LICH_CASTER_BL": 7522720922618332177, "LICH_CASTER_GN": 7946241343721743705, "LICH_CASTER_RD": 5177862153777593007 },
+  "animations": { "idle": ["idle"], "ready": ["Combat_Cast_Ready"], "walk": ["Walk_Forward"], "run": ["Run_Forward"], "basicAttack": ["Combat_Cast_Attack"], "spellCastStart": ["Spell_Unarmed_Forward_Start"], "spellRelease": ["Spell_Unarmed_Forward_End"], "spellCancel": [], "hit": ["Combat_Cast_Hit"], "death": ["Death"] },
+  "action_animations": [{ "ability_id": "NPC_LICH_CASTER_CAST_STRIKE_3", "states": ["Combat_Cast_Attack02"] }, { "ability_id": "NPC_LICH_CASTER_CAST_STRIKE_2", "states": ["Combat_Cast_Attack01"] }, { "ability_id": "NPC_LICH_CASTER_CAST_STRIKE", "states": ["Combat_Cast_Attack"] }],
+  "hard_crowd_control_fallback_policy": 0,
+  "vfx_sockets": [{ "anchor": "LEFT_HAND", "transform_path": ".", "fallback_policy": 1 }, { "anchor": "RIGHT_HAND", "transform_path": ".", "fallback_policy": 1 }, { "anchor": "TARGET", "transform_path": ".", "fallback_policy": 1 }],
+  "status_reactions": [{ "status_kind": "STUN", "clip_file_id": -8767420384561272259, "clip_guid": "b1be21d0c517f20439508ffafe5ac64c", "require_humanoid_avatar": false }]
+}

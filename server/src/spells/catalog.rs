@@ -2575,6 +2575,12 @@ mod tests {
                 "LICH_BONE_WARD",
                 "SKELETON_ARCHER_SHOT",
                 "LICH_MEND",
+                "BANSHEE_WAIL",
+                "DARK_RITUALIST_SHADOW_BOLT",
+                "LICH_BOSS_SHADOW_BOLT",
+                "LICH_CASTER_SHADOW_BOLT",
+                "SKELETAL_DRAGON_BONE_BREATH",
+                "SKELETON_CULTIST_SHADOW_BOLT",
             ]
         );
     }

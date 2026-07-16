@@ -1,0 +1,9 @@
+{
+  "source_family_name": "SkeletonCultist", "expected_appearance_count": 5, "primary_animator_path": ".", "allow_root_motion": true, "acknowledge_inventory_warnings": true, "presentation_vertical_offset": 0.02576291561126709,
+  "prefab_file_ids": { "SKELETON_CULTIST_BK": 4980102581548464744, "SKELETON_CULTIST_BL": 3886044252431295793, "SKELETON_CULTIST_GN": 3662158478695690495, "SKELETON_CULTIST_PE": 5061822521665365213, "SKELETON_CULTIST_RD": 3379225540711263110 },
+  "animations": { "idle": ["idle"], "ready": ["Combat_Unarmed_Ready"], "walk": ["Walk_Forward"], "run": ["Run_Forward"], "basicAttack": ["Combat_Unarmed_Attack"], "spellCastStart": ["Combat_Spell_Forward_Start"], "spellRelease": ["Combat_Spell_Forward_End"], "spellCancel": [], "hit": ["Combat_Unarmed_Hit"], "death": ["Death"] },
+  "action_animations": [{ "ability_id": "NPC_SKELETON_CULTIST_STRIKE_4", "states": ["Combat_Unarmed_Attack03"] }, { "ability_id": "NPC_SKELETON_CULTIST_STRIKE_3", "states": ["Combat_Unarmed_Attack02"] }, { "ability_id": "NPC_SKELETON_CULTIST_STRIKE_2", "states": ["Combat_Unarmed_Attack01"] }, { "ability_id": "NPC_SKELETON_CULTIST_STRIKE", "states": ["Combat_Unarmed_Attack"] }],
+  "hard_crowd_control_fallback_policy": 0,
+  "vfx_sockets": [{ "anchor": "LEFT_HAND", "transform_path": ".", "fallback_policy": 1 }, { "anchor": "RIGHT_HAND", "transform_path": ".", "fallback_policy": 1 }, { "anchor": "TARGET", "transform_path": ".", "fallback_policy": 1 }],
+  "status_reactions": [{ "status_kind": "STUN", "clip_file_id": -8767420384561272259, "clip_guid": "cc99abd9c5698784ab202fcfc5ac738e", "require_humanoid_avatar": true }]
+}
