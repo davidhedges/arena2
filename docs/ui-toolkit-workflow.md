@@ -79,6 +79,11 @@ brass/ember gold, serif small-caps, restrained ornament.
   caps scaled uniformly, center stretched once, joints cross-faded at 2x). A
   new button width = one new entry in that table. Runtime slicing remains fine
   for untextured/blurry images (window_shadow).
+- **No runtime stretching of textured rails either** — stretch smears the
+  steel grain into streaks (the QUIT GAME "bottom rail" bug). Rails are baked
+  at exact display length by mirror-bounce TILING (`bake_rail`), cut from a
+  calm span (rivets fine; keep medallions/ornaments out of tiled sources per
+  "stretchable surfaces remain visually calm").
 - **Transparent pixels must be premultiply-safe**: Unity's bilinear filtering
   bleeds the RGB of alpha-0 texels across edges (white fringes the browser
   never shows). Any keyed/faded pixel gets its RGB zeroed/scaled too.

@@ -354,7 +354,10 @@ def main() -> None:
     # exact display length by tiling (stretch smears the grain — see the
     # QUIT GAME rail bug, 2026-07-16). Window is 400x442, corners inset 52.
     save(cut((279, 32, 370, 122), key=False), "window_corner.png")
-    rail_h = cut((750, 41, 865, 79), key=False)   # top rail right of the title plate
+    # Calm rail span between the title plate's arrow tail (~773) and the
+    # mid-rail diamond (~855): rivets only, per "stretchable surfaces remain
+    # visually calm".
+    rail_h = cut((776, 41, 852, 79), key=False)
     rail_v = cut((279, 130, 317, 235), key=False)
     save(bake_rail(rail_h, 296, 23), "window_rail_h_296x23.png")
     save(bake_rail(rail_v, 338, 23, vertical=True), "window_rail_v_338x23.png")
