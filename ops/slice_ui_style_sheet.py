@@ -2,8 +2,8 @@
 """Slice the authored UI master style sheet into game-ready theme art.
 
 The visual source of truth is the owner-provided style sheet
-("ChatGPT Image Jul 10, 2026, 01_56_33 PM.png", repo root) — painterly forged
-components. This script carves the reusable pieces out of it:
+(docs/ui-design/ui-master-style-sheet.png) — painterly forged components.
+This script carves the reusable pieces out of it:
 
   - flood-keys the near-black sheet background to alpha around silhouettes
   - removes baked-in labels (BUTTON/DANGER/PRIMARY) by rebuilding each plate
@@ -26,7 +26,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageEnhance, ImageFilter
 
 REPO = Path(__file__).resolve().parent.parent
-SHEET = REPO / "ChatGPT Image Jul 10, 2026, 01_56_33 PM.png"
+SHEET = REPO / "docs/ui-design/ui-master-style-sheet.png"
 OUT = REPO / "Assets/Arena/Content/UI/Art"
 
 

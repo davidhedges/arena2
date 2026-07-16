@@ -3,8 +3,9 @@
 Owner decisions (2026-07-15/16): new UI defaults to **UI Toolkit**; the visual
 source of truth is the **web prototype**, iterated in a browser, then translated
 to UXML/USS; the look follows **"Arena UI Art Direction & Design System" (v2)**
-(PDF + master style sheet at the repo root) — forged iron/steel, aged leather,
-brass/ember gold, serif small-caps, restrained ornament.
+(`docs/ui-design/arena-ui-art-direction.pdf` + `docs/ui-design/ui-master-style-sheet.png`)
+— forged iron/steel, aged leather, brass/ember gold, serif small-caps,
+restrained ornament.
 
 ## Technology policy
 
@@ -29,7 +30,7 @@ brass/ember gold, serif small-caps, restrained ornament.
    `Assets/Arena/Resources/UI/Toolkit/tokens.uss` (loaded panel-wide via
    `ArenaTheme.tss`). Edit the token table in the script, never the outputs.
 2. **Theme art** — `ops/slice_ui_style_sheet.py` carves the modular forged
-   pieces out of the authored master style sheet (repo-root PNG) into
+   pieces out of the authored master style sheet (docs/ui-design/) into
    `Assets/Arena/Content/UI/Art/`: window corner + rails, title/header plates,
    button plates per state (labels inpainted out), divider, section rule,
    leather fill. THE STYLE SHEET IS THE ASSET SOURCE — never synthesize
