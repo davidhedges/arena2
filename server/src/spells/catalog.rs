@@ -447,6 +447,9 @@ struct InstantBeamChargeScalingRow {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(tag = "kind", rename_all = "SCREAMING_SNAKE_CASE", deny_unknown_fields)]
 enum ImpactEffectRow {
+    Knockback {
+        distance_meters: f32,
+    },
     Burn {
         duration_ms: u64,
         tick_interval_ms: u64,
@@ -533,6 +536,16 @@ enum ImpactEffectRow {
         stack_policy: StackPolicy,
     },
     MagicResistance {
+        duration_ms: u64,
+        modifier_scalar: f32,
+        #[serde(default)]
+        status_stack_group: Option<String>,
+        #[serde(default = "default_one_stack")]
+        max_stacks: u32,
+        #[serde(default = "default_refresh_stack_policy")]
+        stack_policy: StackPolicy,
+    },
+    KnockbackResistance {
         duration_ms: u64,
         modifier_scalar: f32,
         #[serde(default)]
@@ -1282,238 +1295,255 @@ impl From<InstantBeamChargeScalingRow> for InstantBeamChargeScaling {
 impl From<ImpactEffectRow> for ImpactEffect {
     fn from(row: ImpactEffectRow) -> Self {
         match row {
-            ImpactEffectRow::Burn {
-                duration_ms,
-                tick_interval_ms,
-                tick_damage,
-                status_stack_group,
-                dispel_types,
-            } => StatusApplication::new(
-                AuthoredStatusPayload::new(
-                    StatusEffectKind::Dot,
-                    0.0,
-                    tick_damage,
-                    0,
-                    tick_interval_ms,
-                    0.0,
-                )
-                .payload(),
-                Duration::from_millis(duration_ms),
-                status_stack_group,
-                StatusStackGroupDefault::InstanceScopedActionSuffix("BURN"),
-                1,
-                StackPolicy::Refresh,
-            )
-            .with_dispel_types(dispel_types),
-            ImpactEffectRow::Stun {
-                duration_ms,
-                dispel_types,
-            } => StatusApplication::new(
-                StatusPayload::Stun,
-                Duration::from_millis(duration_ms),
-                None,
-                StatusStackGroupDefault::ActionSuffix("STUN"),
-                1,
-                StackPolicy::Refresh,
-            )
-            .with_dispel_types(dispel_types),
-            ImpactEffectRow::Freeze {
-                duration_ms,
-                dispel_types,
-            } => StatusApplication::new(
-                StatusPayload::Freeze,
-                Duration::from_millis(duration_ms),
-                None,
-                StatusStackGroupDefault::ActionSuffix("FREEZE"),
-                1,
-                StackPolicy::Refresh,
-            )
-            .with_dispel_types(dispel_types),
-            ImpactEffectRow::Knockdown {
-                duration_ms,
-                dispel_types,
-            } => StatusApplication::new(
-                StatusPayload::Knockdown,
-                Duration::from_millis(duration_ms),
-                None,
-                StatusStackGroupDefault::ActionSuffix("KNOCKDOWN"),
-                1,
-                StackPolicy::Refresh,
-            )
-            .with_dispel_types(dispel_types),
-            ImpactEffectRow::Stagger {
-                duration_ms,
-                dispel_types,
-            } => StatusApplication::new(
-                StatusPayload::Stagger,
-                Duration::from_millis(duration_ms),
-                None,
-                StatusStackGroupDefault::Global("STAGGER"),
-                1,
-                StackPolicy::Refresh,
-            )
-            .with_dispel_types(dispel_types),
-            ImpactEffectRow::Root {
-                duration_ms,
-                status_stack_group,
-                dispel_types,
-            } => StatusApplication::new(
-                StatusPayload::Root,
-                Duration::from_millis(duration_ms),
-                status_stack_group,
-                StatusStackGroupDefault::Global("ROOT"),
-                1,
-                StackPolicy::Refresh,
-            )
-            .with_dispel_types(dispel_types),
-            ImpactEffectRow::Intimidated {
-                duration_ms,
-                status_stack_group,
-                dispel_types,
-            } => StatusApplication::new(
-                StatusPayload::Intimidated,
-                Duration::from_millis(duration_ms),
-                status_stack_group,
-                StatusStackGroupDefault::ActionSuffix("INTIMIDATED"),
-                1,
-                StackPolicy::Refresh,
-            )
-            .with_dispel_types(dispel_types),
-            ImpactEffectRow::Slow {
-                duration_ms,
-                slow_pct,
-                status_stack_group,
-                dispel_types,
-                max_stacks,
-                stack_policy,
-            } => StatusApplication::new(
-                AuthoredStatusPayload::new(StatusEffectKind::Slow, slow_pct, 0, 0, 0, 0.0)
-                    .payload(),
-                Duration::from_millis(duration_ms),
-                status_stack_group,
-                StatusStackGroupDefault::ActionSuffix("SLOW"),
-                max_stacks,
-                stack_policy,
-            )
-            .with_dispel_types(dispel_types),
-            ImpactEffectRow::MoveSpeed {
-                duration_ms,
-                modifier_scalar,
-                status_stack_group,
-                max_stacks,
-                stack_policy,
-            } => StatusApplication::new(
-                AuthoredStatusPayload::new(
-                    StatusEffectKind::MoveSpeed,
-                    0.0,
-                    0,
-                    0,
-                    0,
-                    modifier_scalar,
-                )
-                .payload(),
-                Duration::from_millis(duration_ms),
-                status_stack_group,
-                StatusStackGroupDefault::ActionSuffix("MOVE_SPEED"),
-                max_stacks,
-                stack_policy,
-            ),
-            ImpactEffectRow::ManaRegen {
-                duration_ms,
-                modifier_scalar,
-                status_stack_group,
-                max_stacks,
-                stack_policy,
-            } => StatusApplication::new(
-                AuthoredStatusPayload::new(
-                    StatusEffectKind::ManaRegen,
-                    0.0,
-                    0,
-                    0,
-                    0,
-                    modifier_scalar,
-                )
-                .payload(),
-                Duration::from_millis(duration_ms),
-                status_stack_group,
-                StatusStackGroupDefault::ActionSuffix("MANA_REGEN"),
-                max_stacks,
-                stack_policy,
-            ),
-            ImpactEffectRow::StaminaRegen {
-                duration_ms,
-                modifier_scalar,
-                status_stack_group,
-                max_stacks,
-                stack_policy,
-            } => StatusApplication::new(
-                AuthoredStatusPayload::new(
-                    StatusEffectKind::StaminaRegen,
-                    0.0,
-                    0,
-                    0,
-                    0,
-                    modifier_scalar,
-                )
-                .payload(),
-                Duration::from_millis(duration_ms),
-                status_stack_group,
-                StatusStackGroupDefault::ActionSuffix("STAMINA_REGEN"),
-                max_stacks,
-                stack_policy,
-            ),
-            ImpactEffectRow::MagicResistance {
-                duration_ms,
-                modifier_scalar,
-                status_stack_group,
-                max_stacks,
-                stack_policy,
-            } => StatusApplication::new(
-                AuthoredStatusPayload::new(
-                    StatusEffectKind::MagicResistance,
-                    0.0,
-                    0,
-                    0,
-                    0,
-                    modifier_scalar,
-                )
-                .payload(),
-                Duration::from_millis(duration_ms),
-                status_stack_group,
-                StatusStackGroupDefault::ActionSuffix("MAGIC_RESISTANCE"),
-                max_stacks,
-                stack_policy,
-            ),
-            ImpactEffectRow::Thorns {
-                duration_ms,
-                tick_damage,
-                status_stack_group,
-                max_stacks,
-                stack_policy,
-            } => StatusApplication::new(
-                AuthoredStatusPayload::new(StatusEffectKind::Thorns, 0.0, tick_damage, 0, 0, 0.0)
-                    .payload(),
-                Duration::from_millis(duration_ms),
-                status_stack_group,
-                StatusStackGroupDefault::ActionSuffix("THORNS"),
-                max_stacks,
-                stack_policy,
-            ),
-            ImpactEffectRow::VengeanceAura {
-                duration_ms,
-                status_stack_group,
-                max_stacks,
-                stack_policy,
-            } => StatusApplication::new(
-                AuthoredStatusPayload::new(StatusEffectKind::VengeanceAura, 0.0, 0, 0, 0, 0.0)
-                    .payload(),
-                Duration::from_millis(duration_ms),
-                status_stack_group,
-                StatusStackGroupDefault::ActionSuffix("VENGEANCE_AURA"),
-                max_stacks,
-                stack_policy,
-            ),
+            ImpactEffectRow::Knockback { distance_meters } => Self::Knockback { distance_meters },
+            status_row => Self::Status(status_application_from_impact_effect_row(status_row)),
         }
+    }
+}
+
+fn status_application_from_impact_effect_row(row: ImpactEffectRow) -> StatusApplication {
+    match row {
+        ImpactEffectRow::Knockback { .. } => {
+            unreachable!("knockback is converted before status application mapping")
+        }
+        ImpactEffectRow::Burn {
+            duration_ms,
+            tick_interval_ms,
+            tick_damage,
+            status_stack_group,
+            dispel_types,
+        } => StatusApplication::new(
+            AuthoredStatusPayload::new(
+                StatusEffectKind::Dot,
+                0.0,
+                tick_damage,
+                0,
+                tick_interval_ms,
+                0.0,
+            )
+            .payload(),
+            Duration::from_millis(duration_ms),
+            status_stack_group,
+            StatusStackGroupDefault::InstanceScopedActionSuffix("BURN"),
+            1,
+            StackPolicy::Refresh,
+        )
+        .with_dispel_types(dispel_types),
+        ImpactEffectRow::Stun {
+            duration_ms,
+            dispel_types,
+        } => StatusApplication::new(
+            StatusPayload::Stun,
+            Duration::from_millis(duration_ms),
+            None,
+            StatusStackGroupDefault::ActionSuffix("STUN"),
+            1,
+            StackPolicy::Refresh,
+        )
+        .with_dispel_types(dispel_types),
+        ImpactEffectRow::Freeze {
+            duration_ms,
+            dispel_types,
+        } => StatusApplication::new(
+            StatusPayload::Freeze,
+            Duration::from_millis(duration_ms),
+            None,
+            StatusStackGroupDefault::ActionSuffix("FREEZE"),
+            1,
+            StackPolicy::Refresh,
+        )
+        .with_dispel_types(dispel_types),
+        ImpactEffectRow::Knockdown {
+            duration_ms,
+            dispel_types,
+        } => StatusApplication::new(
+            StatusPayload::Knockdown,
+            Duration::from_millis(duration_ms),
+            None,
+            StatusStackGroupDefault::ActionSuffix("KNOCKDOWN"),
+            1,
+            StackPolicy::Refresh,
+        )
+        .with_dispel_types(dispel_types),
+        ImpactEffectRow::Stagger {
+            duration_ms,
+            dispel_types,
+        } => StatusApplication::new(
+            StatusPayload::Stagger,
+            Duration::from_millis(duration_ms),
+            None,
+            StatusStackGroupDefault::Global("STAGGER"),
+            1,
+            StackPolicy::Refresh,
+        )
+        .with_dispel_types(dispel_types),
+        ImpactEffectRow::Root {
+            duration_ms,
+            status_stack_group,
+            dispel_types,
+        } => StatusApplication::new(
+            StatusPayload::Root,
+            Duration::from_millis(duration_ms),
+            status_stack_group,
+            StatusStackGroupDefault::Global("ROOT"),
+            1,
+            StackPolicy::Refresh,
+        )
+        .with_dispel_types(dispel_types),
+        ImpactEffectRow::Intimidated {
+            duration_ms,
+            status_stack_group,
+            dispel_types,
+        } => StatusApplication::new(
+            StatusPayload::Intimidated,
+            Duration::from_millis(duration_ms),
+            status_stack_group,
+            StatusStackGroupDefault::ActionSuffix("INTIMIDATED"),
+            1,
+            StackPolicy::Refresh,
+        )
+        .with_dispel_types(dispel_types),
+        ImpactEffectRow::Slow {
+            duration_ms,
+            slow_pct,
+            status_stack_group,
+            dispel_types,
+            max_stacks,
+            stack_policy,
+        } => StatusApplication::new(
+            AuthoredStatusPayload::new(StatusEffectKind::Slow, slow_pct, 0, 0, 0, 0.0).payload(),
+            Duration::from_millis(duration_ms),
+            status_stack_group,
+            StatusStackGroupDefault::ActionSuffix("SLOW"),
+            max_stacks,
+            stack_policy,
+        )
+        .with_dispel_types(dispel_types),
+        ImpactEffectRow::MoveSpeed {
+            duration_ms,
+            modifier_scalar,
+            status_stack_group,
+            max_stacks,
+            stack_policy,
+        } => StatusApplication::new(
+            AuthoredStatusPayload::new(StatusEffectKind::MoveSpeed, 0.0, 0, 0, 0, modifier_scalar)
+                .payload(),
+            Duration::from_millis(duration_ms),
+            status_stack_group,
+            StatusStackGroupDefault::ActionSuffix("MOVE_SPEED"),
+            max_stacks,
+            stack_policy,
+        ),
+        ImpactEffectRow::ManaRegen {
+            duration_ms,
+            modifier_scalar,
+            status_stack_group,
+            max_stacks,
+            stack_policy,
+        } => StatusApplication::new(
+            AuthoredStatusPayload::new(StatusEffectKind::ManaRegen, 0.0, 0, 0, 0, modifier_scalar)
+                .payload(),
+            Duration::from_millis(duration_ms),
+            status_stack_group,
+            StatusStackGroupDefault::ActionSuffix("MANA_REGEN"),
+            max_stacks,
+            stack_policy,
+        ),
+        ImpactEffectRow::StaminaRegen {
+            duration_ms,
+            modifier_scalar,
+            status_stack_group,
+            max_stacks,
+            stack_policy,
+        } => StatusApplication::new(
+            AuthoredStatusPayload::new(
+                StatusEffectKind::StaminaRegen,
+                0.0,
+                0,
+                0,
+                0,
+                modifier_scalar,
+            )
+            .payload(),
+            Duration::from_millis(duration_ms),
+            status_stack_group,
+            StatusStackGroupDefault::ActionSuffix("STAMINA_REGEN"),
+            max_stacks,
+            stack_policy,
+        ),
+        ImpactEffectRow::MagicResistance {
+            duration_ms,
+            modifier_scalar,
+            status_stack_group,
+            max_stacks,
+            stack_policy,
+        } => StatusApplication::new(
+            AuthoredStatusPayload::new(
+                StatusEffectKind::MagicResistance,
+                0.0,
+                0,
+                0,
+                0,
+                modifier_scalar,
+            )
+            .payload(),
+            Duration::from_millis(duration_ms),
+            status_stack_group,
+            StatusStackGroupDefault::ActionSuffix("MAGIC_RESISTANCE"),
+            max_stacks,
+            stack_policy,
+        ),
+        ImpactEffectRow::KnockbackResistance {
+            duration_ms,
+            modifier_scalar,
+            status_stack_group,
+            max_stacks,
+            stack_policy,
+        } => StatusApplication::new(
+            AuthoredStatusPayload::new(
+                StatusEffectKind::KnockbackResistance,
+                0.0,
+                0,
+                0,
+                0,
+                modifier_scalar,
+            )
+            .payload(),
+            Duration::from_millis(duration_ms),
+            status_stack_group,
+            StatusStackGroupDefault::ActionSuffix("KNOCKBACK_RESISTANCE"),
+            max_stacks,
+            stack_policy,
+        ),
+        ImpactEffectRow::Thorns {
+            duration_ms,
+            tick_damage,
+            status_stack_group,
+            max_stacks,
+            stack_policy,
+        } => StatusApplication::new(
+            AuthoredStatusPayload::new(StatusEffectKind::Thorns, 0.0, tick_damage, 0, 0, 0.0)
+                .payload(),
+            Duration::from_millis(duration_ms),
+            status_stack_group,
+            StatusStackGroupDefault::ActionSuffix("THORNS"),
+            max_stacks,
+            stack_policy,
+        ),
+        ImpactEffectRow::VengeanceAura {
+            duration_ms,
+            status_stack_group,
+            max_stacks,
+            stack_policy,
+        } => StatusApplication::new(
+            AuthoredStatusPayload::new(StatusEffectKind::VengeanceAura, 0.0, 0, 0, 0, 0.0)
+                .payload(),
+            Duration::from_millis(duration_ms),
+            status_stack_group,
+            StatusStackGroupDefault::ActionSuffix("VENGEANCE_AURA"),
+            max_stacks,
+            stack_policy,
+        ),
     }
 }
 
@@ -1703,6 +1733,19 @@ fn validate_definition(def: &SpellDefinition) -> Result<(), String> {
 }
 
 fn validate_impact_effect(def: &SpellDefinition, effect: &ImpactEffect) -> Result<(), String> {
+    let effect = match effect {
+        ImpactEffect::Status(status) => status,
+        ImpactEffect::Knockback { distance_meters } => {
+            if !distance_meters.is_finite() || *distance_meters <= 0.0 {
+                return Err(format!(
+                    "{} delivery.impact_effects[].distance_meters must be positive",
+                    def.kind.as_str()
+                ));
+            }
+            return Ok(());
+        }
+    };
+
     ensure_positive_duration(
         def.kind.as_str(),
         "delivery.impact_effects[].duration_ms",
@@ -1886,7 +1929,10 @@ fn validate_secondary_tunables(def: &SpellDefinition) -> Result<(), String> {
             }
             let mut has_stun = false;
             for effect in &area.impact_effects {
-                if effect.payload().kind() == StatusEffectKind::Stun {
+                if effect
+                    .as_status()
+                    .is_some_and(|status| status.payload().kind() == StatusEffectKind::Stun)
+                {
                     has_stun = true;
                 }
                 validate_impact_effect(def, effect)?;
@@ -2074,7 +2120,10 @@ fn validate_secondary_tunables(def: &SpellDefinition) -> Result<(), String> {
                 ));
             }
             for effect in &aura.effects {
-                if !effect.dispel_types().is_empty() {
+                if effect
+                    .as_status()
+                    .is_some_and(|status| !status.dispel_types().is_empty())
+                {
                     return Err(format!(
                         "{} AURA effects must not define dispel_types",
                         def.kind.as_str()
@@ -4074,7 +4123,9 @@ mod tests {
         assert_eq!(definition.radius, 6.0);
         assert!(definition.apply_status.is_none());
         assert_eq!(area.impact_effects.len(), 1);
-        let effect = &area.impact_effects[0];
+        let effect = area.impact_effects[0]
+            .as_status()
+            .expect("Intimidate impact effect must be a status");
         assert_eq!(effect.payload().kind(), StatusEffectKind::Intimidated);
         assert_eq!(effect.explicit_stack_group(), Some("INTIMIDATED"));
         assert_eq!(effect.duration(), Duration::from_millis(4_000));

@@ -115,6 +115,8 @@ fn push_impact_effect_packets(
     spell_id: &str,
     action_key: &str,
     positive_damage: bool,
+    dir_x: f32,
+    dir_z: f32,
 ) {
     for effect in impact_effects {
         if effect.requires_positive_damage() && !positive_damage {
@@ -126,6 +128,8 @@ fn push_impact_effect_packets(
             spell_id,
             StatusPolarity::Debuff,
             action_key,
+            dir_x,
+            dir_z,
         ));
     }
 }
@@ -392,6 +396,13 @@ fn tick_meteor_spell(
                     source_kind: DAMAGE_SOURCE_KIND_SPELL.to_string(),
                 });
                 if let Some(area) = definition.secondary.area.as_ref() {
+                    let (dir_x, dir_z) = radial_knockback_direction(
+                        impact_x,
+                        impact_z,
+                        spell.origin_x,
+                        spell.origin_z,
+                        player,
+                    );
                     push_impact_effect_packets(
                         &mut effects,
                         area.impact_effects.as_slice(),
@@ -400,6 +411,8 @@ fn tick_meteor_spell(
                         spell_id.as_str(),
                         definition.kind.as_str(),
                         definition.damage > 0,
+                        dir_x,
+                        dir_z,
                     );
                 }
             }
@@ -414,6 +427,26 @@ fn tick_meteor_spell(
     spell.pos_y = end_y;
     spell.pos_z = end_z;
     ctx.db.active_bespoke_spell().spell_id().update(spell);
+}
+
+fn radial_knockback_direction(
+    center_x: f32,
+    center_z: f32,
+    origin_x: f32,
+    origin_z: f32,
+    target: &CombatActorSnapshot,
+) -> (f32, f32) {
+    for (dx, dz) in [
+        (target.pos_x - center_x, target.pos_z - center_z),
+        (target.pos_x - origin_x, target.pos_z - origin_z),
+    ] {
+        let len_sq = dx * dx + dz * dz;
+        if len_sq > 0.0001 {
+            let inv_len = 1.0 / len_sq.sqrt();
+            return (dx * inv_len, dz * inv_len);
+        }
+    }
+    (target.facing_yaw.sin(), target.facing_yaw.cos())
 }
 
 fn finish_active_bespoke_spell_with_event(

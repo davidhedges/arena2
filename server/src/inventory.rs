@@ -52,6 +52,7 @@ const CONTAINER_STATE_ACTIVE: &str = "ACTIVE";
 const MAX_EQUIPMENT_PHYSICAL_RESISTANCE: f32 = 0.75;
 const MAX_EQUIPMENT_MAGIC_RESISTANCE: f32 = 0.75;
 const MAX_EQUIPMENT_SPECIFIC_MAGIC_RESISTANCE: f32 = 0.75;
+const MAX_EQUIPMENT_KNOCKBACK_RESISTANCE: f32 = 1.0;
 const MAX_EQUIPMENT_DAMAGE_BONUS: f32 = 5.0;
 const MAX_EQUIPMENT_CRIT_CHANCE_BONUS: f32 = 1.0;
 const MAX_EQUIPMENT_MOVE_SPEED_BONUS: f32 = 3.0;
@@ -125,6 +126,7 @@ const STARTER_SPELLBOOK_ITEM_DEF_ID: &str = "APPRENTICE_SPELLBOOK";
 const STARTER_SPELLBOOK_SPELL_COUNT: u32 = 10;
 const STARTER_INSIGHT_RING_ITEM_DEF_ID: &str = "BRONZE_RING";
 const STARTER_INSIGHT_RING_AFFIX_ID: &str = "AFFIX_INSIGHT_STARTER";
+pub(crate) const AFFIX_KNOCKBACK_RESISTANCE_MINOR: &str = "AFFIX_KNOCKBACK_RESISTANCE_MINOR";
 const STARTER_INSIGHT_RING_VALUE: f32 = 10.0;
 
 pub(crate) const MODIFIER_PHYSICAL_RESISTANCE: &str = "PHYSICAL_RESISTANCE";
@@ -136,6 +138,7 @@ pub(crate) const MODIFIER_POISON_RESISTANCE: &str = "POISON_RESISTANCE";
 pub(crate) const MODIFIER_HOLY_RESISTANCE: &str = "HOLY_RESISTANCE";
 pub(crate) const MODIFIER_SHADOW_RESISTANCE: &str = "SHADOW_RESISTANCE";
 pub(crate) const MODIFIER_ARCANE_RESISTANCE: &str = "ARCANE_RESISTANCE";
+pub(crate) const MODIFIER_KNOCKBACK_RESISTANCE: &str = "KNOCKBACK_RESISTANCE";
 pub(crate) const MODIFIER_PHYSICAL_DAMAGE: &str = "PHYSICAL_DAMAGE";
 pub(crate) const MODIFIER_CRIT_CHANCE: &str = "CRIT_CHANCE";
 pub(crate) const MODIFIER_MOVE_SPEED: &str = "MOVE_SPEED";
@@ -1075,6 +1078,17 @@ const ITEM_AFFIX_DEFINITIONS: &[ItemAffixDefinitionSpec] = &[
         ALL_EQUIPMENT_SLOTS,
         false,
         90,
+    ),
+    affix(
+        AFFIX_KNOCKBACK_RESISTANCE_MINOR,
+        "Knockback Resistance",
+        MODIFIER_KNOCKBACK_RESISTANCE,
+        0.005,
+        0.040,
+        "ARMOR,JEWELRY",
+        ALL_EQUIPMENT_SLOTS,
+        false,
+        95,
     ),
     affix(
         "AFFIX_PHYSICAL_DAMAGE_MINOR",
@@ -2256,6 +2270,7 @@ pub(crate) struct EquipmentModifierTotals {
     pub holy_resistance: f32,
     pub shadow_resistance: f32,
     pub arcane_resistance: f32,
+    pub knockback_resistance: f32,
     pub physical_damage_bonus: f32,
     pub crit_chance_bonus: f32,
     pub move_speed_bonus: f32,
@@ -2379,6 +2394,9 @@ pub(crate) fn equipment_modifier_totals_for_owner(
     totals.arcane_resistance = totals
         .arcane_resistance
         .clamp(0.0, MAX_EQUIPMENT_SPECIFIC_MAGIC_RESISTANCE);
+    totals.knockback_resistance = totals
+        .knockback_resistance
+        .clamp(0.0, MAX_EQUIPMENT_KNOCKBACK_RESISTANCE);
     totals.physical_damage_bonus = totals
         .physical_damage_bonus
         .clamp(0.0, MAX_EQUIPMENT_DAMAGE_BONUS);
@@ -3752,6 +3770,95 @@ fn seed_starter_equipment_affixes(ctx: &ReducerContext, item_instance_id: &str, 
     }
 }
 
+/// Local acceptance-probe fixture. The canonical binding build includes the
+/// existing projectile harness feature, so this reducer is unavailable in a
+/// normal production module. It attaches a legitimate max-roll knockback
+/// affix to each equipped armor/jewelry item, exercising the real equipment
+/// aggregation path without relying on random loot.
+#[cfg(feature = "projectile_load_harness")]
+#[reducer]
+pub fn set_knockback_probe_equipment_resistance(
+    ctx: &ReducerContext,
+    enabled: bool,
+) -> Result<(), String> {
+    let owner = ctx.sender();
+    let equipment = ctx
+        .db
+        .equipment_loadout()
+        .owner()
+        .find(owner)
+        .ok_or_else(|| "knockback probe requires an equipment loadout".to_string())?;
+    let authored = ctx
+        .db
+        .item_affix_definition()
+        .affix_id()
+        .find(AFFIX_KNOCKBACK_RESISTANCE_MINOR.to_string())
+        .ok_or_else(|| "knockback resistance affix definition is missing".to_string())?;
+    let item_ids = [
+        equipment.head_item_id.as_ref(),
+        equipment.shoulder_item_id.as_ref(),
+        equipment.cape_item_id.as_ref(),
+        equipment.chest_item_id.as_ref(),
+        equipment.legs_item_id.as_ref(),
+        equipment.boots_item_id.as_ref(),
+        equipment.gloves_item_id.as_ref(),
+        equipment.ring_1_item_id.as_ref(),
+        equipment.ring_2_item_id.as_ref(),
+        equipment.amulet_item_id.as_ref(),
+    ];
+
+    let mut changed = 0usize;
+    for item_instance_id in item_ids.into_iter().flatten() {
+        let key =
+            item_affix_instance_key(item_instance_id.as_str(), AFFIX_KNOCKBACK_RESISTANCE_MINOR);
+        if !enabled {
+            changed += usize::from(ctx.db.item_affix_instance().key().delete(key));
+            continue;
+        }
+
+        let item = ctx
+            .db
+            .item_instance()
+            .item_instance_id()
+            .find(item_instance_id.clone())
+            .ok_or_else(|| format!("equipped item '{}' is missing", item_instance_id))?;
+        let definition = ctx
+            .db
+            .item_definition()
+            .item_def_id()
+            .find(item.item_def_id.clone())
+            .ok_or_else(|| format!("item definition '{}' is missing", item.item_def_id))?;
+        let affix = ItemAffixInstance {
+            key: key.clone(),
+            item_instance_id: item_instance_id.clone(),
+            affix_id: AFFIX_KNOCKBACK_RESISTANCE_MINOR.to_string(),
+            modifier_kind: MODIFIER_KNOCKBACK_RESISTANCE.to_string(),
+            value: authored.value_max,
+            sort_order: authored.sort_order,
+        };
+        if !affix_is_valid_for_definition(ctx, &affix, &definition) {
+            return Err(format!(
+                "knockback resistance affix is invalid for equipped item '{}'",
+                item_instance_id
+            ));
+        }
+        if ctx.db.item_affix_instance().key().find(key).is_some() {
+            ctx.db.item_affix_instance().key().update(affix);
+        } else {
+            ctx.db.item_affix_instance().insert(affix);
+        }
+        changed += 1;
+    }
+
+    log::info!(
+        "[KNOCKBACK_PROBE] equipment resistance enabled={} owner={} affix_rows={}",
+        enabled,
+        owner.to_hex(),
+        changed
+    );
+    Ok(())
+}
+
 fn reconcile_spellbook_equipment(
     ctx: &ReducerContext,
     owner: Identity,
@@ -4052,6 +4159,7 @@ fn apply_modifier_value(totals: &mut EquipmentModifierTotals, modifier_kind: &st
         MODIFIER_HOLY_RESISTANCE => totals.holy_resistance += value,
         MODIFIER_SHADOW_RESISTANCE => totals.shadow_resistance += value,
         MODIFIER_ARCANE_RESISTANCE => totals.arcane_resistance += value,
+        MODIFIER_KNOCKBACK_RESISTANCE => totals.knockback_resistance += value,
         MODIFIER_PHYSICAL_DAMAGE => totals.physical_damage_bonus += value,
         MODIFIER_CRIT_CHANCE => totals.crit_chance_bonus += value,
         MODIFIER_MOVE_SPEED => totals.move_speed_bonus += value,

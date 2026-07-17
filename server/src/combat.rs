@@ -18,12 +18,14 @@ use crate::derived_stats::{derived_combat_stats_for_owner, derived_combat_stats_
 use crate::inventory::{
     create_corpse_loot_for_npc, equipment_modifier_totals_for_owner, EquipmentModifierTotals,
 };
+use crate::movement::FIXED_TICK_MILLIS;
 use crate::npcs::schedule_npc_corpse_despawn;
 use crate::open_world_scene::{OPEN_WORLD_SPAWN_X, OPEN_WORLD_SPAWN_YAW, OPEN_WORLD_SPAWN_Z};
 use crate::player_state::PlayerState;
 use crate::practice::{is_training_instance, resolve_respawn_pose};
 use crate::progression::{
-    combat_rule_value, derived_combat_profile_id_for_owner, COMBAT_PROFILE_TWO_HANDED_SWORD,
+    combat_rule_value, derived_combat_profile_id_for_owner, movement_delivery_for_action_id,
+    COMBAT_PROFILE_TWO_HANDED_SWORD,
 };
 use crate::relations::{
     can_apply_status_polarity, can_harm, target_audience_allows, TargetAudience,
@@ -35,9 +37,11 @@ use crate::resources::{
 };
 use crate::spells::{
     bake_linear_special_movement, begin_special_movement_with_facing_policy,
-    fizzle_active_cast_for_interrupt, resolved_primary_resource_cost_for_amount,
-    spell_definition_by_str, SpellBehavior, SpellVec3, SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK,
-    SPECIAL_MOVEMENT_FACING_FACE_START,
+    fizzle_active_cast_for_interrupt, horizontal_movement_duration_ms,
+    is_externally_imposed_movement_kind, resolved_primary_resource_cost_for_amount,
+    spell_definition_by_str, SpellBehavior, SpellVec3, KNOCKBACK_MOVEMENT_KIND,
+    SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK, SPECIAL_MOVEMENT_FACING_FACE_START,
+    STAGGER_SHOVE_MOVEMENT_KIND,
 };
 use crate::world_collision::{
     resolve_world_spawn_position, resolve_world_spawn_position_with_layout_for_scene,
@@ -83,6 +87,8 @@ use crate::combat::pending_effect_sequence as _;
 #[allow(unused_imports)]
 use crate::combat::pending_hit as _;
 #[allow(unused_imports)]
+use crate::combat::pending_knockback as _;
+#[allow(unused_imports)]
 use crate::combat::pending_remove_status as _;
 #[allow(unused_imports)]
 use crate::combat::player_event as _;
@@ -107,6 +113,8 @@ use crate::player_physics::player_physics as _;
 #[allow(unused_imports)]
 use crate::player_state::player_state as _;
 #[allow(unused_imports)]
+use crate::spells::active_cast as _;
+#[allow(unused_imports)]
 use crate::spells::special_movement_runtime as _;
 pub const DEFAULT_MAX_HP: i32 = 200;
 // Keep authoritative player collision in sync with the Unity PlayerArmature
@@ -120,7 +128,11 @@ const PLAYER_EVENT_RETENTION: Duration = Duration::from_secs(20);
 const RULE_CRIT_DAMAGE_MULTIPLIER: &str = "CRIT_DAMAGE_MULTIPLIER";
 const RULE_STAGGER_SHOVE_DISTANCE_METERS: &str = "STAGGER_SHOVE_DISTANCE_METERS";
 const RULE_STAGGER_SHOVE_DURATION_MS: &str = "STAGGER_SHOVE_DURATION_MS";
-const STAGGER_SHOVE_KIND: &str = "STAGGER_SHOVE";
+const RULE_KNOCKBACK_SPEED_METERS_PER_SEC: &str = "KNOCKBACK_SPEED_METERS_PER_SEC";
+const RULE_KNOCKBACK_MAX_DISTANCE_METERS: &str = "KNOCKBACK_MAX_DISTANCE_METERS";
+const RULE_KNOCKBACK_MIN_EFFECTIVE_DISTANCE_METERS: &str =
+    "KNOCKBACK_MIN_EFFECTIVE_DISTANCE_METERS";
+const RULE_MAX_EQUIPMENT_KNOCKBACK_RESISTANCE: &str = "MAX_EQUIPMENT_KNOCKBACK_RESISTANCE";
 const EFFECT_TYPE_DAMAGE: &str = "DAMAGE";
 const EFFECT_TYPE_HEAL: &str = "HEAL";
 pub(crate) const DAMAGE_SOURCE_KIND_MELEE: &str = "MELEE";
@@ -130,6 +142,7 @@ pub(crate) const DAMAGE_SOURCE_KIND_PERIODIC: &str = "PERIODIC";
 const DEFAULT_COMBAT_ENGAGEMENT_DURATION: Duration = Duration::from_secs(5);
 const COMBAT_REASON_DAMAGE: &str = "DAMAGE";
 const COMBAT_REASON_DEBUFF: &str = "DEBUFF";
+const COMBAT_REASON_KNOCKBACK: &str = "KNOCKBACK";
 const COMBAT_REASON_HELPFUL_ASSIST: &str = "HELPFUL_ASSIST";
 const RESTLESS_PASSIVE_ID: &str = "WARRIOR_RESTLESS";
 const BLOODLUST_PASSIVE_ID: &str = "WARRIOR_BLOODLUST";
@@ -1265,7 +1278,7 @@ pub fn tick_auras(ctx: &ReducerContext, now: Timestamp) {
             continue;
         };
         let aura_key = active_radial_effect_key(owner, SpellBehavior::Aura);
-        let Some(active_aura) = ctx.db.active_radial_effect().key().find(aura_key) else {
+        let Some(mut active_aura) = ctx.db.active_radial_effect().key().find(aura_key) else {
             continue;
         };
         let Some(definition) = spell_definition_by_str(active_aura.spell_id.as_str()) else {
@@ -1287,6 +1300,12 @@ pub fn tick_auras(ctx: &ReducerContext, now: Timestamp) {
             continue;
         }
         let radius_sq = radius * radius;
+        let has_knockback = aura
+            .effects
+            .iter()
+            .any(|effect| matches!(effect, crate::spells::ImpactEffect::Knockback { .. }));
+        let knockback_pulse_due = has_knockback && now >= active_aura.next_pulse_at;
+        let mut knockback_effects = Vec::new();
 
         for target in &candidate_targets {
             if !players_share_world_context(ctx, owner, *target)
@@ -1305,6 +1324,26 @@ pub fn tick_auras(ctx: &ReducerContext, now: Timestamp) {
             }
 
             for effect in &aura.effects {
+                let Some(effect) = effect.as_status() else {
+                    if knockback_pulse_due {
+                        let (dir_x, dir_z) = normalized_horizontal_direction_or_yaw(
+                            target_physics.pos_x - owner_physics.pos_x,
+                            target_physics.pos_z - owner_physics.pos_z,
+                            target_physics.yaw,
+                        );
+                        knockback_effects.push(effect.to_effect_packet_for_audience(
+                            owner,
+                            *target,
+                            active_aura.spell_id.as_str(),
+                            StatusPolarity::Debuff,
+                            target_audience,
+                            active_aura.spell_id.as_str(),
+                            dir_x,
+                            dir_z,
+                        ));
+                    }
+                    continue;
+                };
                 let payload = effect.payload();
                 let stack_group = aura_stack_group(
                     owner,
@@ -1345,6 +1384,13 @@ pub fn tick_auras(ctx: &ReducerContext, now: Timestamp) {
                     false,
                 );
             }
+        }
+        if !knockback_effects.is_empty() {
+            queue_effects(ctx, knockback_effects);
+        }
+        if knockback_pulse_due {
+            active_aura.next_pulse_at = now + aura.tick_interval.max(Duration::from_millis(1));
+            ctx.db.active_radial_effect().key().update(active_aura);
         }
     }
 
@@ -1583,6 +1629,11 @@ pub fn tick_emanations(ctx: &ReducerContext, now: Timestamp) {
                 });
             }
             for impact_effect in &emanation.impact_effects {
+                let (dir_x, dir_z) = normalized_horizontal_direction_or_yaw(
+                    target.pos_x - owner.pos_x,
+                    target.pos_z - owner.pos_z,
+                    target.facing_yaw,
+                );
                 effects.push(impact_effect.to_effect_packet_for_audience(
                     active.owner,
                     target.player_id,
@@ -1590,6 +1641,8 @@ pub fn tick_emanations(ctx: &ReducerContext, now: Timestamp) {
                     StatusPolarity::Debuff,
                     definition.target_audience,
                     active.spell_id.as_str(),
+                    dir_x,
+                    dir_z,
                 ));
             }
         }
@@ -2091,6 +2144,25 @@ pub struct PendingApplyStatus {
     pub queued_order: u64,
 }
 
+#[table(accessor = pending_knockback)]
+pub struct PendingKnockback {
+    #[primary_key]
+    #[auto_inc]
+    pub knockback_id: u64,
+    pub source: Identity,
+    #[index(btree)]
+    pub target: Identity,
+    pub spell_id: String,
+    pub dir_x: f32,
+    pub dir_z: f32,
+    pub distance_meters: f32,
+    pub queued_at: Timestamp,
+    #[index(btree)]
+    pub queued_at_micros: i64,
+    #[index(btree)]
+    pub queued_order: u64,
+}
+
 #[table(accessor = pending_remove_status)]
 pub struct PendingRemoveStatus {
     #[primary_key]
@@ -2168,6 +2240,7 @@ pub enum StatusEffectKind {
     ManaRegen,
     StaminaRegen,
     MagicResistance,
+    KnockbackResistance,
     Thorns,
     VengeanceAura,
     DamageTakenFromSourceAmp,
@@ -2202,6 +2275,7 @@ impl StatusEffectKind {
             Self::ManaRegen => "MANA_REGEN",
             Self::StaminaRegen => "STAMINA_REGEN",
             Self::MagicResistance => "MAGIC_RESISTANCE",
+            Self::KnockbackResistance => "KNOCKBACK_RESISTANCE",
             Self::Thorns => "THORNS",
             Self::VengeanceAura => "VENGEANCE_AURA",
             Self::DamageTakenFromSourceAmp => "DAMAGE_TAKEN_FROM_SOURCE_AMP",
@@ -2236,6 +2310,7 @@ impl StatusEffectKind {
             "MANA_REGEN" => Some(Self::ManaRegen),
             "STAMINA_REGEN" => Some(Self::StaminaRegen),
             "MAGIC_RESISTANCE" => Some(Self::MagicResistance),
+            "KNOCKBACK_RESISTANCE" => Some(Self::KnockbackResistance),
             "THORNS" => Some(Self::Thorns),
             "VENGEANCE_AURA" => Some(Self::VengeanceAura),
             "DAMAGE_TAKEN_FROM_SOURCE_AMP" => Some(Self::DamageTakenFromSourceAmp),
@@ -2295,6 +2370,9 @@ pub enum StatusPayload {
         modifier_scalar: f32,
     },
     MagicResistance {
+        modifier_scalar: f32,
+    },
+    KnockbackResistance {
         modifier_scalar: f32,
     },
     Thorns {
@@ -2424,6 +2502,9 @@ impl AuthoredStatusPayload {
             StatusEffectKind::MagicResistance => StatusPayload::MagicResistance {
                 modifier_scalar: self.modifier_scalar,
             },
+            StatusEffectKind::KnockbackResistance => StatusPayload::KnockbackResistance {
+                modifier_scalar: self.modifier_scalar,
+            },
             StatusEffectKind::Thorns => StatusPayload::Thorns {
                 damage: self.tick_damage,
             },
@@ -2503,6 +2584,7 @@ impl AuthoredStatusPayload {
             | StatusEffectKind::ManaRegen
             | StatusEffectKind::StaminaRegen
             | StatusEffectKind::MagicResistance
+            | StatusEffectKind::KnockbackResistance
             | StatusEffectKind::DamageTakenFromSourceAmp
             | StatusEffectKind::CastSpeed => {
                 if !self.modifier_scalar.is_finite() || self.modifier_scalar <= 0.0 {
@@ -2635,6 +2717,7 @@ impl StatusPayload {
             Self::ManaRegen { .. } => StatusEffectKind::ManaRegen,
             Self::StaminaRegen { .. } => StatusEffectKind::StaminaRegen,
             Self::MagicResistance { .. } => StatusEffectKind::MagicResistance,
+            Self::KnockbackResistance { .. } => StatusEffectKind::KnockbackResistance,
             Self::Thorns { .. } => StatusEffectKind::Thorns,
             Self::VengeanceAura => StatusEffectKind::VengeanceAura,
             Self::DamageTakenFromSourceAmp { .. } => StatusEffectKind::DamageTakenFromSourceAmp,
@@ -2755,6 +2838,15 @@ impl StatusPayload {
                 absorb_amount: 0,
                 absorb_cap: 0,
             },
+            Self::KnockbackResistance { modifier_scalar } => StatusEffectColumns {
+                slow_pct: 0.0,
+                tick_amount: 0,
+                tick_interval_ms: 0,
+                damage_type: DamageType::Physical,
+                modifier_scalar: modifier_scalar.clamp(0.0, 1.0),
+                absorb_amount: 0,
+                absorb_cap: 0,
+            },
             Self::Thorns { damage } => StatusEffectColumns {
                 slow_pct: 0.0,
                 tick_amount: damage.max(0),
@@ -2839,6 +2931,9 @@ impl StatusPayload {
             StatusEffectKind::MagicResistance => Self::MagicResistance {
                 modifier_scalar: columns.modifier_scalar.clamp(0.0, 1.0),
             },
+            StatusEffectKind::KnockbackResistance => Self::KnockbackResistance {
+                modifier_scalar: columns.modifier_scalar.clamp(0.0, 1.0),
+            },
             StatusEffectKind::Thorns => Self::Thorns {
                 damage: columns.tick_amount.max(0),
             },
@@ -2910,6 +3005,9 @@ impl StatusPayload {
                     || modifier_scalar > MAX_HEALING_TAKEN_REDUCTION
             }
             Self::MagicResistance { modifier_scalar } => {
+                !modifier_scalar.is_finite() || modifier_scalar <= 0.0 || modifier_scalar > 1.0
+            }
+            Self::KnockbackResistance { modifier_scalar } => {
                 !modifier_scalar.is_finite() || modifier_scalar <= 0.0 || modifier_scalar > 1.0
             }
             Self::Thorns { damage } => damage <= 0,
@@ -3012,6 +3110,14 @@ impl StatusPayload {
                 }
                 Ok(())
             }
+            Self::KnockbackResistance { modifier_scalar } => {
+                if !modifier_scalar.is_finite() || modifier_scalar <= 0.0 || modifier_scalar > 1.0 {
+                    return Err(format!(
+                        "{subject} {path}.modifier_scalar must be > 0 and <= 1"
+                    ));
+                }
+                Ok(())
+            }
             Self::Thorns { damage } => {
                 if damage <= 0 {
                     return Err(format!("{subject} {path}.tick_damage must be positive"));
@@ -3083,6 +3189,9 @@ impl StatusPayload {
                         .clamp(0.0, MAX_HEALING_TAKEN_REDUCTION)
             }
             Self::MagicResistance { modifier_scalar } => {
+                modifier_scalar > existing.modifier_scalar.clamp(0.0, 1.0)
+            }
+            Self::KnockbackResistance { modifier_scalar } => {
                 modifier_scalar > existing.modifier_scalar.clamp(0.0, 1.0)
             }
             Self::Thorns { damage } => damage > existing.tick_amount.max(0),
@@ -3400,6 +3509,14 @@ pub enum EffectPacket {
         stack_policy: StackPolicy,
         dispel_types: Vec<StatusDispelType>,
     },
+    Knockback {
+        source: Identity,
+        target: Identity,
+        spell_id: String,
+        dir_x: f32,
+        dir_z: f32,
+        distance_meters: f32,
+    },
     RemoveStatus {
         target: Identity,
         kind: StatusEffectKind,
@@ -3510,6 +3627,40 @@ fn queue_effect(ctx: &ReducerContext, effect: EffectPacket) {
                     stack_policy,
                     encode_status_dispel_types(&dispel_types),
                 ));
+        }
+        EffectPacket::Knockback {
+            source,
+            target,
+            spell_id,
+            dir_x,
+            dir_z,
+            distance_meters,
+        } => {
+            if !dir_x.is_finite()
+                || !dir_z.is_finite()
+                || !distance_meters.is_finite()
+                || distance_meters <= 0.0
+            {
+                log::warn!(
+                    "[COMBAT] Rejected invalid queued knockback source={} target={} spell_id={}",
+                    source.to_hex(),
+                    target.to_hex(),
+                    spell_id
+                );
+                return;
+            }
+            ctx.db.pending_knockback().insert(PendingKnockback {
+                knockback_id: 0,
+                source,
+                target,
+                spell_id,
+                dir_x,
+                dir_z,
+                distance_meters,
+                queued_at,
+                queued_at_micros,
+                queued_order,
+            });
         }
         EffectPacket::RemoveStatus {
             target,
@@ -3652,6 +3803,7 @@ fn new_pending_remove_status(
 enum DuePendingEffect {
     Hit(PendingHit),
     ApplyStatus(PendingApplyStatus),
+    Knockback(PendingKnockback),
     RemoveStatus(PendingRemoveStatus),
 }
 
@@ -3686,6 +3838,7 @@ impl DuePendingEffect {
         match self {
             Self::Hit(row) => (row.queued_at_micros, 0, row.queued_order),
             Self::ApplyStatus(row) => (row.queued_at_micros, 0, row.queued_order),
+            Self::Knockback(row) => (row.queued_at_micros, 0, row.queued_order),
             Self::RemoveStatus(row) => (row.queued_at_micros, 0, row.queued_order),
         }
     }
@@ -3732,6 +3885,9 @@ impl DuePendingEffect {
                 );
                 status_cache.invalidate();
             }
+            Self::Knockback(row) => {
+                apply_pending_knockback(ctx, now, row);
+            }
             Self::RemoveStatus(row) => {
                 apply_pending_remove_status_fields(
                     ctx,
@@ -3754,6 +3910,12 @@ impl DuePendingEffect {
                     .pending_apply_status()
                     .apply_status_id()
                     .delete(row.apply_status_id);
+            }
+            Self::Knockback(row) => {
+                ctx.db
+                    .pending_knockback()
+                    .knockback_id()
+                    .delete(row.knockback_id);
             }
             Self::RemoveStatus(row) => {
                 ctx.db
@@ -3785,6 +3947,15 @@ pub fn resolve_pending_effects(ctx: &ReducerContext, now: Timestamp) {
         .filter(..=now_micros)
     {
         pending.push(DuePendingEffect::ApplyStatus(row));
+    }
+
+    for row in ctx
+        .db
+        .pending_knockback()
+        .queued_at_micros()
+        .filter(..=now_micros)
+    {
+        pending.push(DuePendingEffect::Knockback(row));
     }
 
     for row in ctx
@@ -3831,6 +4002,36 @@ pub fn has_due_pending_effects(ctx: &ReducerContext, now: Timestamp) -> bool {
             .filter(..=now_micros)
             .next()
             .is_some()
+        || ctx
+            .db
+            .pending_knockback()
+            .queued_at_micros()
+            .filter(..=now_micros)
+            .next()
+            .is_some()
+}
+
+fn apply_pending_knockback(ctx: &ReducerContext, now: Timestamp, row: &PendingKnockback) {
+    if row.source == Identity::ZERO
+        || row.target == Identity::ZERO
+        || row.source == row.target
+        || !target_is_alive_for_status(ctx, row.target)
+        || !players_share_world_context(ctx, row.source, row.target)
+        || !can_harm(ctx, row.source, row.target)
+    {
+        return;
+    }
+
+    mark_harmful_combat_action(ctx, row.source, row.target, now, COMBAT_REASON_KNOCKBACK);
+    start_knockback_shove(
+        ctx,
+        now,
+        row.source,
+        row.target,
+        row.dir_x,
+        row.dir_z,
+        row.distance_meters,
+    );
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -4031,6 +4232,7 @@ fn apply_damage_to_npc_state(
     if defeated {
         state.hp = 0;
         state.alive = false;
+        crate::npcs::clear_npc_forced_movement(ctx, target);
         clear_statuses_for_target(ctx, target);
         clear_combat_engagement_for_identity(ctx, target);
         clear_combat_stacking_passive_runtime_for_identity(ctx, target);
@@ -4729,7 +4931,15 @@ pub(crate) fn interrupt_player_actions_for_stagger(ctx: &ReducerContext, target:
     ctx.db.queued_melee_followup().caster().delete(target);
     ctx.db.defense_state().owner().delete(target);
     ctx.db.movement_action_state().owner().delete(target);
-    ctx.db.special_movement_runtime().owner().delete(target);
+    if !ctx
+        .db
+        .special_movement_runtime()
+        .owner()
+        .find(target)
+        .is_some_and(|runtime| is_externally_imposed_movement_kind(runtime.kind.as_str()))
+    {
+        ctx.db.special_movement_runtime().owner().delete(target);
+    }
     ctx.db.pending_melee_timed_movement().owner().delete(target);
 
     let pending_impact_ids: Vec<u64> = ctx
@@ -4758,13 +4968,23 @@ fn yaw_direction(yaw: f32) -> (f32, f32) {
     (yaw.sin(), yaw.cos())
 }
 
+fn normalized_horizontal_direction_or_yaw(dx: f32, dz: f32, fallback_yaw: f32) -> (f32, f32) {
+    let len_sq = dx * dx + dz * dz;
+    if len_sq > 0.0001 {
+        let inv_len = 1.0 / len_sq.sqrt();
+        (dx * inv_len, dz * inv_len)
+    } else {
+        yaw_direction(fallback_yaw)
+    }
+}
+
 fn source_to_target_direction(
-    source_physics: Option<&crate::player_physics::PlayerPhysics>,
-    target_physics: &crate::player_physics::PlayerPhysics,
+    source: Option<&actor_snapshot::CombatActorSnapshot>,
+    target: &actor_snapshot::CombatActorSnapshot,
 ) -> (f32, f32) {
-    if let Some(source_physics) = source_physics {
-        let dx = target_physics.pos_x - source_physics.pos_x;
-        let dz = target_physics.pos_z - source_physics.pos_z;
+    if let Some(source) = source {
+        let dx = target.pos_x - source.pos_x;
+        let dz = target.pos_z - source.pos_z;
         let len_sq = dx * dx + dz * dz;
         if len_sq > 0.0001 {
             let inv_len = 1.0 / len_sq.sqrt();
@@ -4772,16 +4992,129 @@ fn source_to_target_direction(
         }
     }
 
-    yaw_direction(target_physics.yaw)
+    yaw_direction(target.facing_yaw)
 }
 
 fn start_stagger_shove(ctx: &ReducerContext, now: Timestamp, source: Identity, target: Identity) {
-    let Some((distance, duration_ms)) = stagger_shove_tunables(
+    if ctx
+        .db
+        .pending_knockback()
+        .target()
+        .filter(target)
+        .next()
+        .is_some()
+        || ctx
+            .db
+            .special_movement_runtime()
+            .owner()
+            .find(target)
+            .is_some_and(|runtime| runtime.kind == KNOCKBACK_MOVEMENT_KIND)
+        || crate::npcs::has_npc_forced_movement(ctx, target)
+    {
+        return;
+    }
+
+    let Some((authored_distance, authored_duration_ms)) = stagger_shove_tunables(
         combat_rule_value(RULE_STAGGER_SHOVE_DISTANCE_METERS),
         combat_rule_value(RULE_STAGGER_SHOVE_DURATION_MS),
     ) else {
         return;
     };
+    let nominal_speed = authored_distance / (authored_duration_ms as f32 / 1000.0);
+    let Some(target_snapshot) = actor_snapshot::actor_snapshot_for(ctx, target) else {
+        return;
+    };
+    if !target_snapshot.alive {
+        return;
+    }
+    let source_snapshot = if source == Identity::ZERO {
+        None
+    } else {
+        actor_snapshot::actor_snapshot_for(ctx, source)
+    };
+    let (dir_x, dir_z) = source_to_target_direction(source_snapshot.as_ref(), &target_snapshot);
+    start_resisted_shove(
+        ctx,
+        now,
+        source,
+        target,
+        dir_x,
+        dir_z,
+        authored_distance,
+        nominal_speed,
+        STAGGER_SHOVE_MOVEMENT_KIND,
+        false,
+    );
+}
+
+fn start_knockback_shove(
+    ctx: &ReducerContext,
+    now: Timestamp,
+    source: Identity,
+    target: Identity,
+    dir_x: f32,
+    dir_z: f32,
+    authored_distance: f32,
+) {
+    start_resisted_shove(
+        ctx,
+        now,
+        source,
+        target,
+        dir_x,
+        dir_z,
+        authored_distance,
+        combat_rule_value(RULE_KNOCKBACK_SPEED_METERS_PER_SEC),
+        KNOCKBACK_MOVEMENT_KIND,
+        true,
+    );
+}
+
+#[allow(clippy::too_many_arguments)]
+fn start_resisted_shove(
+    ctx: &ReducerContext,
+    now: Timestamp,
+    source: Identity,
+    target: Identity,
+    dir_x: f32,
+    dir_z: f32,
+    authored_distance: f32,
+    nominal_speed: f32,
+    movement_kind: &str,
+    preempt_self_initiated_movement: bool,
+) {
+    let total_resistance = knockback_resistance_for_target(ctx, target, now);
+    let Some((distance, duration_ms)) = resolved_shove_tunables(
+        authored_distance,
+        nominal_speed,
+        total_resistance,
+        combat_rule_value(RULE_KNOCKBACK_MAX_DISTANCE_METERS),
+        combat_rule_value(RULE_KNOCKBACK_MIN_EFFECTIVE_DISTANCE_METERS),
+    ) else {
+        return;
+    };
+    let Some(target_snapshot) = actor_snapshot::actor_snapshot_for(ctx, target) else {
+        return;
+    };
+    if !target_snapshot.alive {
+        return;
+    }
+    let (dir_x, dir_z) =
+        normalized_horizontal_direction_or_yaw(dir_x, dir_z, target_snapshot.facing_yaw);
+
+    if crate::npcs::start_npc_forced_movement(
+        ctx,
+        now,
+        source,
+        target,
+        dir_x,
+        dir_z,
+        distance,
+        duration_ms,
+        movement_kind,
+    ) {
+        return;
+    }
     let Some(state) = ctx.db.player_state().player_id().find(target) else {
         return;
     };
@@ -4791,12 +5124,22 @@ fn start_stagger_shove(ctx: &ReducerContext, now: Timestamp, source: Identity, t
     let Some(target_physics) = ctx.db.player_physics().identity().find(target) else {
         return;
     };
-    let source_physics = if source == Identity::ZERO {
-        None
-    } else {
-        ctx.db.player_physics().identity().find(source)
-    };
-    let (dir_x, dir_z) = source_to_target_direction(source_physics.as_ref(), &target_physics);
+    if preempt_self_initiated_movement {
+        if ctx
+            .db
+            .active_cast()
+            .caster()
+            .find(target)
+            .is_some_and(|active_cast| {
+                movement_delivery_for_action_id(active_cast.kind.as_str()).is_some()
+            })
+        {
+            fizzle_active_cast_for_interrupt(ctx, target, now);
+        }
+        ctx.db.movement_action_state().owner().delete(target);
+        ctx.db.pending_melee_timed_movement().owner().delete(target);
+    }
+
     let start = SpellVec3::new(
         target_physics.pos_x,
         target_physics.pos_y,
@@ -4817,9 +5160,12 @@ fn start_stagger_shove(ctx: &ReducerContext, now: Timestamp, source: Identity, t
         SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK,
     );
     log::info!(
-        "[STAGGER_SHOVE] source={} target={} distance={:.3} duration_ms={} start=({:.3},{:.3},{:.3}) intended_end=({:.3},{:.3},{:.3}) baked_end=({:.3},{:.3},{:.3})",
+        "[FORCED_SHOVE] kind={} source={} target={} authored_distance={:.3} resistance={:.3} distance={:.3} duration_ms={} start=({:.3},{:.3},{:.3}) intended_end=({:.3},{:.3},{:.3}) baked_end=({:.3},{:.3},{:.3})",
+        movement_kind,
         source.to_hex(),
         target.to_hex(),
+        authored_distance,
+        total_resistance,
         distance,
         duration_ms,
         start.x,
@@ -4835,7 +5181,7 @@ fn start_stagger_shove(ctx: &ReducerContext, now: Timestamp, source: Identity, t
     begin_special_movement_with_facing_policy(
         ctx,
         target,
-        STAGGER_SHOVE_KIND,
+        movement_kind,
         now,
         duration_ms,
         start,
@@ -4844,6 +5190,54 @@ fn start_stagger_shove(ctx: &ReducerContext, now: Timestamp, source: Identity, t
         SPECIAL_MOVEMENT_FACING_FACE_START,
         SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK,
     );
+}
+
+fn knockback_resistance_for_target(ctx: &ReducerContext, target: Identity, now: Timestamp) -> f32 {
+    let equipment_cap = combat_rule_value(RULE_MAX_EQUIPMENT_KNOCKBACK_RESISTANCE).clamp(0.0, 1.0);
+    let equipment = equipment_modifier_totals_for_owner(ctx, target)
+        .knockback_resistance
+        .clamp(0.0, equipment_cap);
+    let temporary = StatusRuntimeView::collect(ctx, now)
+        .temporary_combat_modifiers()
+        .knockback_resistance_for(&target);
+    let innate = crate::npcs::npc_knockback_resistance(ctx, target);
+    (equipment + temporary + innate).clamp(0.0, 1.0)
+}
+
+fn resolved_shove_tunables(
+    authored_distance: f32,
+    nominal_speed: f32,
+    resistance: f32,
+    max_distance: f32,
+    min_effective_distance: f32,
+) -> Option<(f32, u64)> {
+    if !authored_distance.is_finite()
+        || !nominal_speed.is_finite()
+        || !resistance.is_finite()
+        || !max_distance.is_finite()
+        || !min_effective_distance.is_finite()
+        || authored_distance <= 0.0
+        || nominal_speed <= 0.0
+        || max_distance <= 0.0
+        || resistance >= 1.0
+    {
+        return None;
+    }
+
+    let effective_distance =
+        authored_distance.min(max_distance).max(0.0) * (1.0 - resistance.clamp(0.0, 1.0));
+    if effective_distance < min_effective_distance.max(0.0) {
+        return None;
+    }
+    let duration_ms = horizontal_movement_duration_ms(
+        0.0,
+        0.0,
+        effective_distance,
+        0.0,
+        nominal_speed,
+        FIXED_TICK_MILLIS,
+    );
+    Some((effective_distance, duration_ms))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -5587,6 +5981,13 @@ impl StatusRuntimeView {
                             .or_insert(0.0);
                         *entry = (*entry).max(effect.modifier_scalar.max(0.0));
                     }
+                    StatusEffectKind::KnockbackResistance => {
+                        let entry = modifiers
+                            .knockback_resistance_by_target
+                            .entry(*target)
+                            .or_insert(0.0);
+                        *entry += effect.modifier_scalar.max(0.0) * effect.stacks.max(1) as f32;
+                    }
                     StatusEffectKind::Thorns => {
                         let entry = modifiers
                             .thorns_damage_by_target
@@ -5642,6 +6043,7 @@ pub struct TemporaryCombatModifiers {
     mana_regen_by_target: HashMap<Identity, f32>,
     stamina_regen_by_target: HashMap<Identity, f32>,
     magic_resistance_by_target: HashMap<Identity, f32>,
+    knockback_resistance_by_target: HashMap<Identity, f32>,
     thorns_damage_by_target: HashMap<Identity, i32>,
     attack_speed_multiplier_by_target: HashMap<Identity, f32>,
     cast_speed_by_target: HashMap<Identity, f32>,
@@ -5724,6 +6126,14 @@ impl TemporaryCombatModifiers {
 
     pub(crate) fn magic_resistance_for(&self, identity: &Identity) -> f32 {
         self.magic_resistance_by_target
+            .get(identity)
+            .copied()
+            .unwrap_or(0.0)
+            .clamp(0.0, 1.0)
+    }
+
+    pub(crate) fn knockback_resistance_for(&self, identity: &Identity) -> f32 {
+        self.knockback_resistance_by_target
             .get(identity)
             .copied()
             .unwrap_or(0.0)
@@ -5892,12 +6302,14 @@ mod tests {
         actor_distance_sq, apply_status_update, attack_speed_scalar_to_multiplier,
         battle_trance_hp_after_damage, bloodlust_passive_spec, due_interval_count,
         event_prune_cutoff_micros, new_status_effect, resolve_effect_amount_from_roll,
-        resolve_temporary_hitpoint_absorb, stacked_slow_pct, stagger_shove_tunables,
-        status_has_dispel_type, AuthoredStatusPayload, DamageDelivery, EffectPacket,
-        MovementModifiers, StackPolicy, StatusDispelType, StatusEffect, StatusEffectKind,
-        StatusPayload, StatusPolarity, StatusRuntimeView, TemporaryCombatModifiers,
-        BLOODLUST_PASSIVE_ID, COMBAT_PROJECTILE_DEFINITIONS, PLAYER_EVENT_RETENTION,
+        resolve_temporary_hitpoint_absorb, resolved_shove_tunables, stacked_slow_pct,
+        stagger_shove_tunables, status_has_dispel_type, AuthoredStatusPayload, DamageDelivery,
+        EffectPacket, MovementModifiers, StackPolicy, StatusDispelType, StatusEffect,
+        StatusEffectKind, StatusPayload, StatusPolarity, StatusRuntimeView,
+        TemporaryCombatModifiers, BLOODLUST_PASSIVE_ID, COMBAT_PROJECTILE_DEFINITIONS,
+        PLAYER_EVENT_RETENTION,
     };
+    use crate::movement::FIXED_TICK_MILLIS;
     use crate::relations::TargetAudience;
     use spacetimedb::{Identity, Timestamp};
     use std::{collections::HashSet, time::Duration};
@@ -6303,6 +6715,28 @@ mod tests {
     }
 
     #[test]
+    fn knockback_tunables_preserve_speed_resistance_and_tick_floor() {
+        assert_eq!(
+            resolved_shove_tunables(4.0, 12.0, 0.0, 10.0, 0.1),
+            Some((4.0, 334))
+        );
+        assert_eq!(
+            resolved_shove_tunables(4.0, 12.0, 0.5, 10.0, 0.1),
+            Some((2.0, 167))
+        );
+        assert_eq!(
+            resolved_shove_tunables(0.2, 12.0, 0.0, 10.0, 0.1),
+            Some((0.2, FIXED_TICK_MILLIS))
+        );
+    }
+
+    #[test]
+    fn knockback_tunables_skip_immunity_and_negligible_distance() {
+        assert_eq!(resolved_shove_tunables(4.0, 12.0, 1.0, 10.0, 0.1), None);
+        assert_eq!(resolved_shove_tunables(0.15, 12.0, 0.5, 10.0, 0.1), None);
+    }
+
+    #[test]
     fn status_payload_kind_and_columns_round_trip_every_variant() {
         let cases = [
             (
@@ -6444,6 +6878,15 @@ mod tests {
                 StatusEffectKind::MagicResistance,
                 StatusPayload::MagicResistance {
                     modifier_scalar: 0.15,
+                },
+            ),
+            (
+                StatusPayload::KnockbackResistance {
+                    modifier_scalar: 0.60,
+                },
+                StatusEffectKind::KnockbackResistance,
+                StatusPayload::KnockbackResistance {
+                    modifier_scalar: 0.60,
                 },
             ),
             (
@@ -7304,6 +7747,51 @@ fn mark_respawn_ready(state: &mut PlayerState, now: Timestamp) {
 
 fn mark_respawn_pending(state: &mut PlayerState, now: Timestamp) {
     state.respawn_at = respawn_pending_at(now);
+}
+
+/// Local acceptance-probe fixture for a hostile zero-damage shove. It queues
+/// the same first-class knockback packet used by authored impacts; only the
+/// spell damage packet is intentionally absent so combat-entry behavior can
+/// be verified independently.
+#[cfg(feature = "projectile_load_harness")]
+#[reducer]
+pub fn run_knockback_probe_shove(
+    ctx: &ReducerContext,
+    target: Identity,
+    distance_meters: f32,
+) -> Result<(), String> {
+    let source = ctx.sender();
+    if source == target {
+        return Err("knockback probe source and target must differ".to_string());
+    }
+    if !distance_meters.is_finite() || distance_meters <= 0.0 {
+        return Err("knockback probe distance must be finite and positive".to_string());
+    }
+    let source_snapshot = actor_snapshot::actor_snapshot_for(ctx, source)
+        .ok_or_else(|| "knockback probe source snapshot is missing".to_string())?;
+    let target_snapshot = actor_snapshot::actor_snapshot_for(ctx, target)
+        .ok_or_else(|| "knockback probe target snapshot is missing".to_string())?;
+    if !source_snapshot.alive || !target_snapshot.alive {
+        return Err("knockback probe actors must be alive".to_string());
+    }
+    if !players_share_world_context(ctx, source, target) || !can_harm(ctx, source, target) {
+        return Err(
+            "knockback probe target is not a hostile actor in the shared world".to_string(),
+        );
+    }
+    let (dir_x, dir_z) = source_to_target_direction(Some(&source_snapshot), &target_snapshot);
+    queue_effects(
+        ctx,
+        vec![EffectPacket::Knockback {
+            source,
+            target,
+            spell_id: "KNOCKBACK_PROBE_ZERO_DAMAGE".to_string(),
+            dir_x,
+            dir_z,
+            distance_meters,
+        }],
+    );
+    Ok(())
 }
 
 const HARNESS_TARGET_HEX: &str = "0000000000000000000000000000000000000000000000000000000000000a11";

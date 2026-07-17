@@ -5017,7 +5017,15 @@ fn resolve_pending_melee_target_impact(
         damage,
         row.applies_stagger,
     );
-    push_melee_impact_effects(ctx, &mut effects, row);
+    let (knockback_dir_x, knockback_dir_z) = if horiz_dist > 0.001 {
+        (dir_x, dir_z)
+    } else {
+        (
+            target_snapshot.facing_yaw.sin(),
+            target_snapshot.facing_yaw.cos(),
+        )
+    };
+    push_melee_impact_effects(ctx, &mut effects, row, knockback_dir_x, knockback_dir_z);
     let attack_modifiers = resolve_melee_attack_modifiers(ctx, row.source, now);
     push_melee_attack_modifier_bleed_effects(&mut effects, row, damage, &attack_modifiers);
     push_melee_impact_area_effects(
@@ -5176,6 +5184,8 @@ fn push_melee_impact_effects(
     ctx: &ReducerContext,
     effects: &mut Vec<EffectPacket>,
     row: &PendingMeleeImpact,
+    dir_x: f32,
+    dir_z: f32,
 ) {
     if row.ability_id.trim().is_empty() {
         return;
@@ -5183,6 +5193,16 @@ fn push_melee_impact_effects(
 
     for effect in melee_impact_effects_for_ability_id(row.ability_id.as_str()) {
         match effect {
+            crate::progression::MeleeImpactEffectRuntime::Knockback { distance_meters } => {
+                effects.push(EffectPacket::Knockback {
+                    source: row.source,
+                    target: row.target,
+                    spell_id: format!("{}:knockback:{}", row.spell_id, row.hit_index),
+                    dir_x,
+                    dir_z,
+                    distance_meters,
+                });
+            }
             crate::progression::MeleeImpactEffectRuntime::ApplyStatus { status } => {
                 push_melee_impact_status_effect(effects, row, &status);
             }

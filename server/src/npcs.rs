@@ -44,6 +44,8 @@ use crate::npcs::npc_combat_runtime as _;
 #[allow(unused_imports)]
 use crate::npcs::npc_decision_debug as _;
 #[allow(unused_imports)]
+use crate::npcs::npc_forced_movement as _;
+#[allow(unused_imports)]
 use crate::npcs::npc_instance as _;
 #[allow(unused_imports)]
 use crate::npcs::npc_physics as _;
@@ -247,6 +249,21 @@ pub struct NpcReturnHome {
     pub started_at: Timestamp,
 }
 
+#[table(accessor = npc_forced_movement)]
+#[derive(Clone)]
+pub struct NpcForcedMovement {
+    #[primary_key]
+    pub identity: Identity,
+    pub started_at: Timestamp,
+    pub duration_ms: u64,
+    pub start_x: f32,
+    pub start_y: f32,
+    pub start_z: f32,
+    pub end_x: f32,
+    pub end_y: f32,
+    pub end_z: f32,
+}
+
 #[table(accessor = npc_decision_debug)]
 pub struct NpcDecisionDebug {
     #[primary_key]
@@ -296,6 +313,8 @@ pub(crate) struct NpcTemplate {
     pub max_hp: i32,
     pub hit_radius: f32,
     pub hit_height: f32,
+    #[serde(default)]
+    pub knockback_resistance: f32,
     pub aggro_radius: f32,
     pub move_speed: f32,
     /// Authored telegraph (S3): delay between the CAST event (swing start,
@@ -759,6 +778,8 @@ fn parse_npc_catalog(json: &str) -> Result<NpcCatalogDocument, String> {
             || template.hit_radius <= 0.0
             || !template.hit_height.is_finite()
             || template.hit_height <= 0.0
+            || !template.knockback_resistance.is_finite()
+            || !(0.0..=1.0).contains(&template.knockback_resistance)
             || !template.aggro_radius.is_finite()
             || template.aggro_radius <= 0.0
             || !template.move_speed.is_finite()
@@ -1293,6 +1314,17 @@ pub(crate) fn tick_npc_combat(
     // committed and fixture-pinned targets use exact indexed lookup.
     let perception = NpcPerceptionIndex::collect(ctx);
     for npc in npcs {
+        // Forced displacement exclusively owns NPC physics until its row is
+        // removed. This gate must precede leash, facing, and all AI steering.
+        if ctx
+            .db
+            .npc_forced_movement()
+            .identity()
+            .find(npc.identity)
+            .is_some()
+        {
+            continue;
+        }
         let Some(faction) = NpcFaction::from_wire(npc.faction.as_str()) else {
             clear_npc_combat_runtime(ctx, npc.identity);
             continue;
@@ -2701,33 +2733,225 @@ fn retreat_npc_from_target(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn move_npc_along(
+pub(crate) fn start_npc_forced_movement(
     ctx: &ReducerContext,
     now: Timestamp,
-    npc: &NpcInstance,
-    physics: &NpcPhysics,
-    template: &NpcTemplate,
+    source: Identity,
+    target: Identity,
     dir_x: f32,
     dir_z: f32,
-    travel: f32,
-    desired_yaw: f32,
-) -> NpcPhysics {
+    distance: f32,
+    duration_ms: u64,
+    movement_kind: &str,
+) -> bool {
+    let Some(npc) = ctx.db.npc_instance().identity().find(target) else {
+        return false;
+    };
+    let Some(state) = ctx.db.npc_state().identity().find(target) else {
+        return false;
+    };
+    if !state.alive {
+        return false;
+    }
+    let Some(physics) = ctx.db.npc_physics().identity().find(target) else {
+        return false;
+    };
+
+    let intended_x = physics.pos_x + dir_x * distance;
+    let intended_z = physics.pos_z + dir_z * distance;
+    let (end_x, end_y, end_z) = resolve_npc_movement_path(
+        ctx,
+        &npc,
+        target,
+        physics.pos_x,
+        physics.pos_y,
+        physics.pos_z,
+        intended_x,
+        intended_z,
+        state.hit_radius,
+        state.hit_height,
+    );
+    log::info!(
+        "[NPC_FORCED_MOVEMENT] kind={} source={} target={} distance={:.3} duration_ms={} start=({:.3},{:.3},{:.3}) intended_end=({:.3},{:.3}) baked_end=({:.3},{:.3},{:.3})",
+        movement_kind,
+        source.to_hex(),
+        target.to_hex(),
+        distance,
+        duration_ms,
+        physics.pos_x,
+        physics.pos_y,
+        physics.pos_z,
+        intended_x,
+        intended_z,
+        end_x,
+        end_y,
+        end_z
+    );
+
+    ctx.db.npc_forced_movement().identity().delete(target);
+    ctx.db.npc_forced_movement().insert(NpcForcedMovement {
+        identity: target,
+        started_at: now,
+        duration_ms,
+        start_x: physics.pos_x,
+        start_y: physics.pos_y,
+        start_z: physics.pos_z,
+        end_x,
+        end_y,
+        end_z,
+    });
+    true
+}
+
+pub(crate) fn tick_npc_forced_movement(ctx: &ReducerContext, now: Timestamp) {
+    let runtimes: Vec<NpcForcedMovement> = ctx.db.npc_forced_movement().iter().collect();
+    for runtime in runtimes {
+        let Some(npc) = ctx.db.npc_instance().identity().find(runtime.identity) else {
+            clear_npc_forced_movement(ctx, runtime.identity);
+            continue;
+        };
+        let Some(state) = ctx.db.npc_state().identity().find(runtime.identity) else {
+            clear_npc_forced_movement(ctx, runtime.identity);
+            continue;
+        };
+        if !state.alive {
+            clear_npc_forced_movement(ctx, runtime.identity);
+            continue;
+        }
+        let Some(mut physics) = ctx.db.npc_physics().identity().find(runtime.identity) else {
+            clear_npc_forced_movement(ctx, runtime.identity);
+            continue;
+        };
+
+        let (desired_x, desired_y, desired_z, mut finished) =
+            sample_npc_forced_movement_pose(&runtime, now);
+        let (resolved_x, resolved_z) = resolve_active_world_obstacle_movement(
+            ctx,
+            runtime.identity,
+            physics.pos_x,
+            physics.pos_z,
+            desired_x,
+            desired_z,
+            state.hit_radius.max(0.1),
+            physics.pos_y,
+            state.hit_height.max(0.5),
+        );
+        if (resolved_x - desired_x).abs() > 0.0001 || (resolved_z - desired_z).abs() > 0.0001 {
+            finished = true;
+        }
+        let (arena_seed, flat_ground_only) = npc_movement_world(ctx, &npc);
+        let open_world_scene_name = if npc.world_kind.eq_ignore_ascii_case(WORLD_KIND_OPEN) {
+            Some(npc.open_world_scene_name.as_str())
+        } else {
+            None
+        };
+        let resolved_y = surface_height_for_world_at_y_with_layout_for_scene(
+            arena_seed,
+            flat_ground_only,
+            open_world_scene_name,
+            resolved_x,
+            resolved_z,
+            desired_y,
+        );
+
+        physics.pos_x = resolved_x;
+        physics.pos_y = resolved_y;
+        physics.pos_z = resolved_z;
+        physics.updated_at = now;
+        ctx.db.npc_physics().identity().update(physics.clone());
+        crate::combat::position_history::record_position_sample(
+            ctx,
+            physics.identity,
+            physics.pos_x,
+            physics.pos_y,
+            physics.pos_z,
+            physics.yaw,
+            now,
+        );
+        crate::combat::position_history::stamp_rewind_barrier(ctx, physics.identity, now);
+
+        if finished {
+            clear_npc_forced_movement(ctx, runtime.identity);
+        }
+    }
+}
+
+pub(crate) fn has_npc_forced_movement(ctx: &ReducerContext, identity: Identity) -> bool {
+    ctx.db
+        .npc_forced_movement()
+        .identity()
+        .find(identity)
+        .is_some()
+}
+
+pub(crate) fn clear_npc_forced_movement(ctx: &ReducerContext, identity: Identity) {
+    ctx.db.npc_forced_movement().identity().delete(identity);
+}
+
+pub(crate) fn npc_knockback_resistance(ctx: &ReducerContext, identity: Identity) -> f32 {
+    ctx.db
+        .npc_instance()
+        .identity()
+        .find(identity)
+        .and_then(|npc| npc_template(npc.template_id.as_str()))
+        .map(|template| template.knockback_resistance)
+        .unwrap_or(0.0)
+}
+
+fn sample_npc_forced_movement_pose(
+    runtime: &NpcForcedMovement,
+    now: Timestamp,
+) -> (f32, f32, f32, bool) {
+    let start_micros = runtime.started_at.to_micros_since_unix_epoch();
+    let duration_micros = (runtime.duration_ms as i64).saturating_mul(1000);
+    let end_micros = start_micros.saturating_add(duration_micros);
+    let now_micros = now.to_micros_since_unix_epoch();
+    let finished = runtime.duration_ms == 0 || now_micros >= end_micros;
+    let progress = if duration_micros <= 0 {
+        1.0
+    } else {
+        ((now_micros - start_micros) as f64 / duration_micros as f64).clamp(0.0, 1.0) as f32
+    };
+    (
+        runtime.start_x + (runtime.end_x - runtime.start_x) * progress,
+        runtime.start_y + (runtime.end_y - runtime.start_y) * progress,
+        runtime.start_z + (runtime.end_z - runtime.start_z) * progress,
+        finished,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn resolve_npc_movement_path(
+    ctx: &ReducerContext,
+    npc: &NpcInstance,
+    identity: Identity,
+    start_x: f32,
+    start_y: f32,
+    start_z: f32,
+    target_x: f32,
+    target_z: f32,
+    hit_radius: f32,
+    hit_height: f32,
+) -> (f32, f32, f32) {
     let (arena_seed, flat_ground_only) = npc_movement_world(ctx, npc);
     let open_world_scene_name = if npc.world_kind.eq_ignore_ascii_case(WORLD_KIND_OPEN) {
         Some(npc.open_world_scene_name.as_str())
     } else {
         None
     };
+    let dx = target_x - start_x;
+    let dz = target_z - start_z;
+    let travel = (dx * dx + dz * dz).sqrt();
     let step_count = ((travel / NPC_CHASE_COLLISION_STEP).ceil() as usize).max(1);
-    let step_x = dir_x * travel / step_count as f32;
-    let step_z = dir_z * travel / step_count as f32;
-    let mut next_x = physics.pos_x;
-    let mut next_y = physics.pos_y;
-    let mut next_z = physics.pos_z;
+    let step_x = dx / step_count as f32;
+    let step_z = dz / step_count as f32;
+    let mut next_x = start_x;
+    let mut next_y = start_y;
+    let mut next_z = start_z;
 
     for _ in 0..step_count {
-        let target_x = next_x + step_x;
-        let target_z = next_z + step_z;
+        let step_target_x = next_x + step_x;
+        let step_target_z = next_z + step_z;
         let (resolved_x, resolved_z) =
             resolve_world_horizontal_sweep_collision_y_with_layout_for_scene(
                 arena_seed,
@@ -2735,22 +2959,22 @@ fn move_npc_along(
                 open_world_scene_name,
                 next_x,
                 next_z,
-                target_x,
-                target_z,
-                template.hit_radius.max(0.1),
-                template.hit_height.max(0.5),
+                step_target_x,
+                step_target_z,
+                hit_radius.max(0.1),
+                hit_height.max(0.5),
                 next_y,
             );
         let (resolved_x, resolved_z) = resolve_active_world_obstacle_movement(
             ctx,
-            npc.identity,
+            identity,
             next_x,
             next_z,
             resolved_x,
             resolved_z,
-            template.hit_radius.max(0.1),
+            hit_radius.max(0.1),
             next_y,
-            template.hit_height.max(0.5),
+            hit_height.max(0.5),
         );
         next_x = resolved_x;
         next_z = resolved_z;
@@ -2763,6 +2987,34 @@ fn move_npc_along(
             next_y,
         );
     }
+
+    (next_x, next_y, next_z)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn move_npc_along(
+    ctx: &ReducerContext,
+    now: Timestamp,
+    npc: &NpcInstance,
+    physics: &NpcPhysics,
+    template: &NpcTemplate,
+    dir_x: f32,
+    dir_z: f32,
+    travel: f32,
+    desired_yaw: f32,
+) -> NpcPhysics {
+    let (next_x, next_y, next_z) = resolve_npc_movement_path(
+        ctx,
+        npc,
+        npc.identity,
+        physics.pos_x,
+        physics.pos_y,
+        physics.pos_z,
+        physics.pos_x + dir_x * travel,
+        physics.pos_z + dir_z * travel,
+        template.hit_radius,
+        template.hit_height,
+    );
 
     let mut next = physics.clone();
     next.pos_x = next_x;
@@ -3011,6 +3263,7 @@ fn resolve_npc_swing_target(
 }
 
 fn despawn_npc_identity(ctx: &ReducerContext, identity: Identity) {
+    clear_npc_forced_movement(ctx, identity);
     clear_npc_combat_runtime(ctx, identity);
     clear_actor_cooldowns(ctx, identity);
     clear_npc_threat(ctx, identity);
@@ -3180,12 +3433,12 @@ mod tests {
         npc_identity, npc_identity_cmp, npc_is_outside_leash_from_positions,
         npc_movement_hold_active, npc_tactical_band, npc_target_stickiness_keeps_current,
         npc_target_stickiness_keeps_scored_current, npc_template, npc_threat_key,
-        parse_npc_catalog, stamp_npc_movement_hold, visual_id_for_template, yaw_for_direction,
-        NpcActionRejectCounts, NpcAttackTarget, NpcCombatRuntime, NpcFaction, NpcNearbyCounts,
-        NpcScoredTarget, NpcTacticalBand, NpcThreatComponents, NPC_CATALOG_JSON,
-        NPC_FACTION_FRIENDLY, NPC_FACTION_HOSTILE, NPC_FACTION_NEUTRAL,
-        NPC_TEMPLATE_KOBOLD_THIEF_BK_DUAL_SWORD, NPC_TEMPLATE_KOBOLD_WARRIOR_GN_SPEAR,
-        NPC_TEMPLATE_KOBOLD_WARRIOR_RD_SWORD_SHIELD,
+        parse_npc_catalog, sample_npc_forced_movement_pose, stamp_npc_movement_hold,
+        visual_id_for_template, yaw_for_direction, NpcActionRejectCounts, NpcAttackTarget,
+        NpcCombatRuntime, NpcFaction, NpcForcedMovement, NpcNearbyCounts, NpcScoredTarget,
+        NpcTacticalBand, NpcThreatComponents, NPC_CATALOG_JSON, NPC_FACTION_FRIENDLY,
+        NPC_FACTION_HOSTILE, NPC_FACTION_NEUTRAL, NPC_TEMPLATE_KOBOLD_THIEF_BK_DUAL_SWORD,
+        NPC_TEMPLATE_KOBOLD_WARRIOR_GN_SPEAR, NPC_TEMPLATE_KOBOLD_WARRIOR_RD_SWORD_SHIELD,
     };
     use spacetimedb::{Identity, Timestamp};
 
@@ -3196,6 +3449,37 @@ mod tests {
         assert_eq!(NpcFaction::Friendly.as_str(), NPC_FACTION_FRIENDLY);
         assert_eq!(NpcFaction::from_wire("hostile"), Some(NpcFaction::Hostile));
         assert_eq!(NpcFaction::from_wire("party_member"), None);
+    }
+
+    #[test]
+    fn npc_forced_movement_sampling_lerps_and_finishes_at_deadline() {
+        let started_at = Timestamp::from_micros_since_unix_epoch(1_000_000);
+        let runtime = NpcForcedMovement {
+            identity: Identity::ZERO,
+            started_at,
+            duration_ms: 400,
+            start_x: 2.0,
+            start_y: 3.0,
+            start_z: 4.0,
+            end_x: 6.0,
+            end_y: 5.0,
+            end_z: 12.0,
+        };
+
+        assert_eq!(
+            sample_npc_forced_movement_pose(
+                &runtime,
+                Timestamp::from_micros_since_unix_epoch(1_200_000)
+            ),
+            (4.0, 4.0, 8.0, false)
+        );
+        assert_eq!(
+            sample_npc_forced_movement_pose(
+                &runtime,
+                Timestamp::from_micros_since_unix_epoch(1_400_000)
+            ),
+            (6.0, 5.0, 12.0, true)
+        );
     }
 
     #[test]
@@ -3590,6 +3874,10 @@ mod tests {
         assert_eq!(npc_template("UNDEAD_BOAR").unwrap().action_kit.len(), 2);
         assert_eq!(npc_template("UNDEAD_RAT").unwrap().action_kit.len(), 3);
         assert_eq!(npc_template("BONE_GOLEM").unwrap().action_kit.len(), 3);
+        assert_eq!(
+            npc_template("BONE_GOLEM").unwrap().knockback_resistance,
+            1.0
+        );
         assert_eq!(npc_template("DEMON_SUMMONER").unwrap().action_kit.len(), 3);
         assert_eq!(npc_template("FOREST_DEMON").unwrap().action_kit.len(), 2);
         assert_eq!(npc_template("GRAVEDIGGER").unwrap().action_kit.len(), 2);
@@ -3598,6 +3886,16 @@ mod tests {
         assert_eq!(npc_template("VAMPIRE").unwrap().action_kit.len(), 2);
         assert_eq!(npc_template("ZOMBIE_HOUND").unwrap().action_kit.len(), 2);
         assert_eq!(npc_template("ROCK_GOLEM").unwrap().visual_ids.len(), 6);
+        assert_eq!(
+            npc_template("ROCK_GOLEM").unwrap().knockback_resistance,
+            1.0
+        );
+        assert_eq!(
+            npc_template("SKELETAL_DRAGON")
+                .unwrap()
+                .knockback_resistance,
+            1.0
+        );
         assert_eq!(
             npc_template("HELLGUARD_ARMORED").unwrap().action_kit.len(),
             4

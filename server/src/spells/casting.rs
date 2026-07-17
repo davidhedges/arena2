@@ -242,6 +242,8 @@ fn push_impact_effect_packets(
     spell_id: &str,
     action_key: &str,
     positive_damage: bool,
+    dir_x: f32,
+    dir_z: f32,
 ) {
     for effect in impact_effects {
         if effect.requires_positive_damage() && !positive_damage {
@@ -253,6 +255,8 @@ fn push_impact_effect_packets(
             spell_id,
             StatusPolarity::Debuff,
             action_key,
+            dir_x,
+            dir_z,
         ));
     }
 }
@@ -261,7 +265,7 @@ fn movement_impact_effects(movement: &MovementDeliveryRuntime) -> Vec<ImpactEffe
     movement
         .impact_effects
         .iter()
-        .map(|effect| effect.status.clone())
+        .map(|effect| ImpactEffect::Status(effect.status.clone()))
         .collect()
 }
 const SPECIAL_MOVEMENT_BAKE_STEP_METERS: f32 = 0.20;
@@ -271,6 +275,8 @@ const SPECIAL_MOVEMENT_PATH_LINEAR: &str = "LINEAR";
 pub(crate) const SPECIAL_MOVEMENT_FACING_FACE_PATH: &str = "FACE_PATH";
 pub(crate) const SPECIAL_MOVEMENT_FACING_FACE_START: &str = "FACE_START";
 pub(crate) const SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK: &str = "STOP_AT_BLOCK";
+pub(crate) const KNOCKBACK_MOVEMENT_KIND: &str = "KNOCKBACK";
+pub(crate) const STAGGER_SHOVE_MOVEMENT_KIND: &str = "STAGGER_SHOVE";
 pub(crate) const SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK_FIXED_Y: &str = "STOP_AT_BLOCK_FIXED_Y";
 const SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK_KEEP_HEIGHT_LEGACY: &str =
     "STOP_AT_BLOCK_KEEP_HEIGHT";
@@ -4085,9 +4091,21 @@ fn update_instant_beam_charge_cycle(
 
 pub(crate) fn clear_active_cast(ctx: &ReducerContext, caster: Identity) {
     ctx.db.channel_cast_runtime().caster().delete(caster);
-    ctx.db.special_movement_runtime().owner().delete(caster);
+    if !ctx
+        .db
+        .special_movement_runtime()
+        .owner()
+        .find(caster)
+        .is_some_and(|runtime| is_externally_imposed_movement_kind(runtime.kind.as_str()))
+    {
+        ctx.db.special_movement_runtime().owner().delete(caster);
+    }
     ctx.db.cast_prediction_correlation().caster().delete(caster);
     ctx.db.active_cast().caster().delete(caster);
+}
+
+pub(crate) fn is_externally_imposed_movement_kind(kind: &str) -> bool {
+    matches!(kind, KNOCKBACK_MOVEMENT_KIND | STAGGER_SHOVE_MOVEMENT_KIND)
 }
 
 pub(crate) fn fizzle_active_cast_for_interrupt(
@@ -5914,6 +5932,13 @@ fn resolve_area_impact(ctx: &ReducerContext, impact: AreaImpactResolution<'_>) {
             source_kind: DAMAGE_SOURCE_KIND_SPELL.to_string(),
             direct_action_key: impact.spell_id.to_string(),
         });
+        let contact_direction = area_contact_direction(
+            impact.area_center.x,
+            impact.area_center.z,
+            impact.origin.x,
+            impact.origin.z,
+            player,
+        );
         if let Some(area) = impact.definition.secondary.area.as_ref() {
             push_impact_effect_packets(
                 &mut effects,
@@ -5923,6 +5948,8 @@ fn resolve_area_impact(ctx: &ReducerContext, impact: AreaImpactResolution<'_>) {
                 impact.spell_id,
                 impact.definition.kind.as_str(),
                 impact.definition.damage > 0,
+                contact_direction.x,
+                contact_direction.z,
             );
         }
     }
@@ -5981,7 +6008,20 @@ fn area_contact_direction(
         return Vec3::new(dir_x, 0.0, dir_z);
     }
 
-    Vec3::new(0.0, 0.0, 1.0)
+    Vec3::new(target.facing_yaw.sin(), 0.0, target.facing_yaw.cos())
+}
+
+fn direct_knockback_direction(
+    source: &CombatActorSnapshot,
+    target: &CombatActorSnapshot,
+) -> (f32, f32) {
+    normalize_vec3(
+        target.pos_x - source.pos_x,
+        0.0,
+        target.pos_z - source.pos_z,
+    )
+    .map(|(dir_x, _, dir_z)| (dir_x, dir_z))
+    .unwrap_or_else(|| (target.facing_yaw.sin(), target.facing_yaw.cos()))
 }
 
 fn resolve_generic_area_center(
@@ -6346,6 +6386,7 @@ fn apply_direct_target_spell(
         );
     }
 
+    let (knockback_dir_x, knockback_dir_z) = direct_knockback_direction(state, target);
     push_impact_effect_packets(
         &mut effects,
         direct_target.impact_effects.as_slice(),
@@ -6354,6 +6395,8 @@ fn apply_direct_target_spell(
         spell_id.as_str(),
         definition.kind.as_str(),
         definition.damage > 0,
+        knockback_dir_x,
+        knockback_dir_z,
     );
 
     if !effects.is_empty() {
@@ -7380,6 +7423,8 @@ fn resolve_movement_delivery_hit(
         action_instance_id,
         kind.as_str(),
         movement.damage > 0,
+        dir_x,
+        dir_z,
     );
     queue_effects(ctx, effects);
 

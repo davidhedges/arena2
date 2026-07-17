@@ -39,6 +39,7 @@ namespace Arena.Entity
         private const string FreezeStatusKind = "FREEZE";
         private const string IntimidatedStatusKind = "INTIMIDATED";
         private const string FearStatusKind = "FEAR";
+        private const string KnockbackMovementKind = "KNOCKBACK";
         private const string DefenseBlockKind = "BLOCK";
         private const string DefenseParryKind = "PARRY";
 
@@ -712,14 +713,18 @@ namespace Arena.Entity
 
         public void OnSpecialMovementRuntimeInsert(EventContext ctx, SpecialMovementRuntime row)
         {
-            if (TryGetLivePlayer(row.Owner, out var entity))
-                entity.SetSpecialMovementRuntime(row);
+            ApplySpecialMovementRuntime(row, true);
         }
 
         public void OnSpecialMovementRuntimeUpdate(EventContext ctx, SpecialMovementRuntime oldRow, SpecialMovementRuntime newRow)
         {
-            if (TryGetLivePlayer(newRow.Owner, out var entity))
-                entity.SetSpecialMovementRuntime(newRow);
+            bool shouldTriggerReaction = !string.Equals(
+                    oldRow.RuntimeId,
+                    newRow.RuntimeId,
+                    System.StringComparison.Ordinal)
+                || oldRow.StartedAt.MicrosecondsSinceUnixEpoch != newRow.StartedAt.MicrosecondsSinceUnixEpoch
+                || (!IsKnockbackMovement(oldRow) && IsKnockbackMovement(newRow));
+            ApplySpecialMovementRuntime(newRow, shouldTriggerReaction);
         }
 
         public void OnSpecialMovementRuntimeDelete(EventContext ctx, SpecialMovementRuntime row)
@@ -727,6 +732,28 @@ namespace Arena.Entity
             if (TryGetLivePlayer(row.Owner, out var entity))
                 entity.ClearSpecialMovementRuntime();
         }
+
+        private void ApplySpecialMovementRuntime(SpecialMovementRuntime row, bool shouldTriggerReaction)
+        {
+            if (!TryGetLivePlayer(row.Owner, out var entity))
+                return;
+
+            entity.SetSpecialMovementRuntime(row);
+            if (!shouldTriggerReaction || !IsKnockbackMovement(row))
+                return;
+
+            Vector3 incomingDirection = new(
+                row.StartX - row.EndX,
+                0f,
+                row.StartZ - row.EndZ);
+            entity.TriggerStagger(incomingDirection);
+        }
+
+        private static bool IsKnockbackMovement(SpecialMovementRuntime row) =>
+            string.Equals(
+                row.Kind,
+                KnockbackMovementKind,
+                System.StringComparison.OrdinalIgnoreCase);
 
         // -------------------------------------------------------------------
         // PlayerResource table callbacks (class resources)

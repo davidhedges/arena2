@@ -366,6 +366,10 @@ struct MovementDeliveryImpactStatusDefinition {
 #[derive(Clone, Deserialize)]
 #[serde(tag = "kind", rename_all = "SCREAMING_SNAKE_CASE", deny_unknown_fields)]
 enum MeleeImpactEffectDefinition {
+    Knockback {
+        #[serde(deserialize_with = "deserialize_authored_f32")]
+        distance_meters: f32,
+    },
     ApplyStatus {
         status: MeleeImpactStatusDefinition,
     },
@@ -642,6 +646,9 @@ pub(crate) struct MovementDeliveryImpactEffectRuntime {
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum MeleeImpactEffectRuntime {
+    Knockback {
+        distance_meters: f32,
+    },
     ApplyStatus {
         status: StatusApplication,
     },
@@ -1063,6 +1070,7 @@ fn authored_status_presentation_ids(catalog: &ProgressionCatalogFile) -> HashSet
         }
         for effect in &ability.gameplay.melee_impact_effects {
             match effect {
+                MeleeImpactEffectDefinition::Knockback { .. } => {}
                 MeleeImpactEffectDefinition::ApplyStatus { status } => {
                     collect_optional_status_stack_group(
                         status.status_stack_group.as_deref(),
@@ -1096,6 +1104,7 @@ fn known_status_kind_ids() -> HashSet<String> {
         StatusEffectKind::ManaRegen,
         StatusEffectKind::StaminaRegen,
         StatusEffectKind::MagicResistance,
+        StatusEffectKind::KnockbackResistance,
         StatusEffectKind::Thorns,
         StatusEffectKind::VengeanceAura,
         StatusEffectKind::DamageTakenFromSourceAmp,
@@ -2495,6 +2504,11 @@ pub(crate) fn melee_impact_effects_for_ability_id(
                 .melee_impact_effects
                 .iter()
                 .map(|effect| match effect {
+                    MeleeImpactEffectDefinition::Knockback { distance_meters } => {
+                        MeleeImpactEffectRuntime::Knockback {
+                            distance_meters: *distance_meters,
+                        }
+                    }
                     MeleeImpactEffectDefinition::ApplyStatus { status } => {
                         MeleeImpactEffectRuntime::ApplyStatus {
                             status: status_application_from_definition(
@@ -4653,6 +4667,12 @@ fn validate_melee_timed_movement(ability_id: &str, movement: &MeleeTimedMovement
 fn validate_melee_impact_effects(ability_id: &str, effects: &[MeleeImpactEffectDefinition]) {
     for effect in effects {
         match effect {
+            MeleeImpactEffectDefinition::Knockback { distance_meters } => {
+                assert!(
+                    distance_meters.is_finite() && *distance_meters > 0.0,
+                    "melee ability '{ability_id}' KNOCKBACK impact effect distance_meters must be positive"
+                );
+            }
             MeleeImpactEffectDefinition::ApplyStatus { status } => {
                 validate_status_application_definition(
                     ability_id,
@@ -8452,6 +8472,7 @@ mod tests {
         let [effect] = aura.effects.as_slice() else {
             panic!("Fervor must author exactly one aura status effect");
         };
+        let effect = effect.as_status().expect("Fervor effect must be a status");
         assert_eq!(
             effect.payload(),
             StatusPayload::MoveSpeed {
@@ -8581,6 +8602,7 @@ mod tests {
             let [effect] = aura.effects.as_slice() else {
                 panic!("{action_id} must author exactly one aura status effect");
             };
+            let effect = effect.as_status().expect("aura effect must be a status");
             assert_eq!(effect.payload(), payload);
             assert_eq!(effect.duration(), Duration::from_millis(750));
             assert_eq!(effect.explicit_stack_group(), Some(stack_group));

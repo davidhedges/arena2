@@ -3,10 +3,11 @@ use std::time::Duration;
 use crate::combat::scene_query::CombatAreaShape;
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use spacetimedb::Identity;
 
 use crate::combat::{
-    AuthoredStatusPayload, DamageType, StackPolicy, StatusApplication, StatusDispelType,
-    StatusEffectKind, StatusPayload, StatusPolarity,
+    AuthoredStatusPayload, DamageType, EffectPacket, StackPolicy, StatusApplication,
+    StatusDispelType, StatusEffectKind, StatusPayload, StatusPolarity,
 };
 use crate::relations::TargetAudience;
 
@@ -382,7 +383,90 @@ pub(crate) struct BoomerangCasterProjectileTunables {
     pub max_hits_per_target: u32,
 }
 
-pub(crate) type ImpactEffect = StatusApplication;
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) enum ImpactEffect {
+    Status(StatusApplication),
+    Knockback { distance_meters: f32 },
+}
+
+impl PartialEq<StatusApplication> for ImpactEffect {
+    fn eq(&self, other: &StatusApplication) -> bool {
+        self.as_status().is_some_and(|status| status == other)
+    }
+}
+
+impl ImpactEffect {
+    pub(crate) fn as_status(&self) -> Option<&StatusApplication> {
+        match self {
+            Self::Status(status) => Some(status),
+            Self::Knockback { .. } => None,
+        }
+    }
+
+    pub(crate) fn requires_positive_damage(&self) -> bool {
+        self.as_status()
+            .is_some_and(StatusApplication::requires_positive_damage)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn to_effect_packet(
+        &self,
+        source: Identity,
+        target: Identity,
+        spell_id: &str,
+        polarity: StatusPolarity,
+        action_key: &str,
+        dir_x: f32,
+        dir_z: f32,
+    ) -> EffectPacket {
+        let target_audience = match polarity {
+            StatusPolarity::Debuff => TargetAudience::Hostile,
+            StatusPolarity::Buff => TargetAudience::PartyOrSelf,
+        };
+        self.to_effect_packet_for_audience(
+            source,
+            target,
+            spell_id,
+            polarity,
+            target_audience,
+            action_key,
+            dir_x,
+            dir_z,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn to_effect_packet_for_audience(
+        &self,
+        source: Identity,
+        target: Identity,
+        spell_id: &str,
+        polarity: StatusPolarity,
+        target_audience: TargetAudience,
+        action_key: &str,
+        dir_x: f32,
+        dir_z: f32,
+    ) -> EffectPacket {
+        match self {
+            Self::Status(status) => status.to_effect_packet_for_audience(
+                source,
+                target,
+                spell_id,
+                polarity,
+                target_audience,
+                action_key,
+            ),
+            Self::Knockback { distance_meters } => EffectPacket::Knockback {
+                source,
+                target,
+                spell_id: spell_id.to_string(),
+                dir_x,
+                dir_z,
+                distance_meters: *distance_meters,
+            },
+        }
+    }
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct AreaSecondaryTunables {
@@ -512,7 +596,7 @@ mod tests {
 
     use crate::spells::spell_definition_by_str;
 
-    use super::{spell_definitions, SpellCastMobility, SpellId};
+    use super::{spell_definitions, ImpactEffect, SpellCastMobility, SpellId};
 
     fn definition(id: &str) -> &'static super::SpellDefinition {
         spell_definition_by_str(id).expect("spell should exist in catalog")
@@ -1033,7 +1117,9 @@ mod tests {
             .as_ref()
             .expect("Glacial Spike should define direct-target secondary data");
         assert_eq!(direct_target.impact_effects.len(), 1);
-        let status = &direct_target.impact_effects[0];
+        let status = direct_target.impact_effects[0]
+            .as_status()
+            .expect("Glacial Spike impact effect must be a status");
         assert_eq!(status.payload().kind(), StatusEffectKind::Freeze);
         assert_eq!(status.duration(), Duration::from_millis(1_200));
         assert!((definition.primary_resource_gain_on_cast - 0.0).abs() < 0.0001);
@@ -1122,7 +1208,9 @@ mod tests {
             .as_ref()
             .expect("Frozen Grasp should define area secondary data");
         assert_eq!(area.impact_effects.len(), 1);
-        let status = &area.impact_effects[0];
+        let status = area.impact_effects[0]
+            .as_status()
+            .expect("Frozen Grasp impact effect must be a status");
         assert_eq!(status.payload().kind(), StatusEffectKind::Root);
         assert_eq!(status.duration(), Duration::from_millis(1_200));
         assert!((definition.primary_resource_gain_on_cast - 0.0).abs() < 0.0001);
@@ -1185,10 +1273,18 @@ mod tests {
             .area
             .as_ref()
             .expect("Shockwave should define area secondary data");
-        assert_eq!(area.impact_effects.len(), 1);
-        let effect = &area.impact_effects[0];
+        assert_eq!(area.impact_effects.len(), 2);
+        let effect = area.impact_effects[0]
+            .as_status()
+            .expect("Shockwave first impact effect must be stagger");
         assert_eq!(effect.payload().kind(), StatusEffectKind::Stagger);
         assert_eq!(effect.duration(), Duration::from_millis(1_000));
+        assert!(matches!(
+            area.impact_effects[1],
+            ImpactEffect::Knockback {
+                distance_meters: 4.0
+            }
+        ));
     }
 
     #[test]
@@ -1213,7 +1309,9 @@ mod tests {
             .as_ref()
             .expect("Intimidate should define area secondary data");
         assert_eq!(area.impact_effects.len(), 1);
-        let status = &area.impact_effects[0];
+        let status = area.impact_effects[0]
+            .as_status()
+            .expect("Intimidate impact effect must be a status");
         assert_eq!(status.payload().kind(), StatusEffectKind::Intimidated);
         assert_eq!(status.explicit_stack_group(), Some("INTIMIDATED"));
         assert_eq!(status.duration(), Duration::from_millis(4_000));

@@ -300,7 +300,7 @@ fn tick_projectile_instance(
                 metrics,
             );
             if let Some(definition) = spell_definition {
-                queue_spell_projectile_hit_effects(ctx, &projectile, definition, target);
+                queue_spell_projectile_hit_effects(ctx, &projectile, definition, &target_state);
             } else {
                 queue_weapon_projectile_hit_effects(ctx, &projectile, target, now);
             }
@@ -364,6 +364,8 @@ fn push_impact_effect_packets(
     spell_id: &str,
     action_key: &str,
     positive_damage: bool,
+    dir_x: f32,
+    dir_z: f32,
 ) {
     for effect in impact_effects {
         if effect.requires_positive_damage() && !positive_damage {
@@ -375,6 +377,8 @@ fn push_impact_effect_packets(
             spell_id,
             StatusPolarity::Debuff,
             action_key,
+            dir_x,
+            dir_z,
         ));
     }
 }
@@ -636,7 +640,7 @@ fn resolve_orbit_projectile_contacts(
             PROJECTILE_CONTACT_NON_TERMINAL_VALUE,
             metrics,
         );
-        queue_spell_projectile_hit_effects(ctx, projectile, definition, target.player_id);
+        queue_spell_projectile_hit_effects(ctx, projectile, definition, &target);
 
         state.hit_count = state.hit_count.saturating_add(1);
         state.next_allowed_at =
@@ -1117,7 +1121,7 @@ fn resolve_boomerang_enemy_contacts_on_segment(
             PROJECTILE_CONTACT_NON_TERMINAL_VALUE,
             metrics,
         );
-        queue_spell_projectile_hit_effects(ctx, projectile, definition, target.player_id);
+        queue_spell_projectile_hit_effects(ctx, projectile, definition, &target);
 
         state.hit_count = state.hit_count.saturating_add(1);
         state.next_allowed_at =
@@ -1520,31 +1524,55 @@ fn queue_spell_projectile_hit_effects(
     ctx: &ReducerContext,
     projectile: &ActiveCombatProjectile,
     definition: &SpellRuntimeDefinition,
-    target: Identity,
+    target: &CombatActorSnapshot,
 ) {
     let impact_damage = projectile_damage_at_current_lifetime(projectile, definition);
     let mut effects = vec![EffectPacket::Damage {
         amount: impact_damage,
         damage_type: crate::combat::DamageType::from_wire(projectile.damage_type.as_str()),
         source: projectile.caster,
-        target,
+        target: target.player_id,
         spell_id: projectile.projectile_instance_id.clone(),
         delivery: DamageDelivery::Direct,
         source_kind: DAMAGE_SOURCE_KIND_PROJECTILE.to_string(),
         direct_action_key: projectile.projectile_instance_id.clone(),
     }];
     if let Some(projectile_tunables) = definition.secondary.projectile.as_ref() {
+        let (dir_x, dir_z) = projectile_knockback_direction(projectile, target);
         push_impact_effect_packets(
             &mut effects,
             projectile_tunables.impact_effects.as_slice(),
             projectile.caster,
-            target,
+            target.player_id,
             projectile.projectile_instance_id.as_str(),
             definition.kind.as_str(),
             impact_damage > 0,
+            dir_x,
+            dir_z,
         );
     }
     queue_effects(ctx, effects);
+}
+
+fn projectile_knockback_direction(
+    projectile: &ActiveCombatProjectile,
+    target: &CombatActorSnapshot,
+) -> (f32, f32) {
+    let origin_dx = target.pos_x - projectile.origin_x;
+    let origin_dz = target.pos_z - projectile.origin_z;
+    let origin_len_sq = origin_dx * origin_dx + origin_dz * origin_dz;
+    if origin_len_sq > 0.0001 {
+        let inv_len = 1.0 / origin_len_sq.sqrt();
+        return (origin_dx * inv_len, origin_dz * inv_len);
+    }
+
+    let travel_len_sq = projectile.dir_x * projectile.dir_x + projectile.dir_z * projectile.dir_z;
+    if travel_len_sq > 0.0001 {
+        let inv_len = 1.0 / travel_len_sq.sqrt();
+        return (projectile.dir_x * inv_len, projectile.dir_z * inv_len);
+    }
+
+    (target.facing_yaw.sin(), target.facing_yaw.cos())
 }
 
 fn projectile_damage_at_current_lifetime(

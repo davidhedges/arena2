@@ -56,6 +56,8 @@ use crate::spells::pending_area_impact as _;
 use crate::spells::pending_cast_cancel as _;
 #[allow(unused_imports)]
 use crate::spells::pending_cast_request as _;
+#[allow(unused_imports)]
+use crate::spells::special_movement_runtime as _;
 
 pub(crate) enum ActorWorldAssignment {
     Open,
@@ -167,6 +169,9 @@ pub(crate) fn clear_transient_actor_state(ctx: &ReducerContext, identity: Identi
     // Active cast plus channel runtime, special-movement runtime, and
     // cast-prediction correlation.
     clear_active_cast(ctx, identity);
+    // Ordinary cast cleanup preserves externally imposed movement. Actor
+    // teardown never does: reconnect/despawn cannot retain any live track.
+    ctx.db.special_movement_runtime().owner().delete(identity);
     clear_movement_action_for_owner(ctx, identity);
     clear_pending_player_commands(ctx, identity);
     clear_world_obstacles_for_owner(ctx, identity);

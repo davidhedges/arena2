@@ -287,6 +287,26 @@
       "combat_rule_id": "STAGGER_SHOVE_DURATION_MS",
       "scalar_value": 100,
       "sort_order": 50
+    },
+    {
+      "combat_rule_id": "KNOCKBACK_SPEED_METERS_PER_SEC",
+      "scalar_value": 12,
+      "sort_order": 60
+    },
+    {
+      "combat_rule_id": "KNOCKBACK_MAX_DISTANCE_METERS",
+      "scalar_value": 10,
+      "sort_order": 70
+    },
+    {
+      "combat_rule_id": "KNOCKBACK_MIN_EFFECTIVE_DISTANCE_METERS",
+      "scalar_value": 0.1,
+      "sort_order": 80
+    },
+    {
+      "combat_rule_id": "MAX_EQUIPMENT_KNOCKBACK_RESISTANCE",
+      "scalar_value": 0.6,
+      "sort_order": 90
     }
   ],
   "stat_scalings": [
@@ -2217,6 +2237,10 @@
             {
               "kind": "STAGGER",
               "duration_ms": 1000
+            },
+            {
+              "kind": "KNOCKBACK",
+              "distance_meters": 4
             }
           ]
         }

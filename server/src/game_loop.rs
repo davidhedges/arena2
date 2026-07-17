@@ -69,7 +69,7 @@ use crate::movement_actions::{
     tick_fixed_action_charge_states, tick_movement_actions,
 };
 use crate::npcs::sync_npc_catalog;
-use crate::npcs::{prune_due_npc_corpse_despawns, tick_npc_combat};
+use crate::npcs::{prune_due_npc_corpse_despawns, tick_npc_combat, tick_npc_forced_movement};
 use crate::party::expire_party_invites;
 use crate::player_input::{
     clear_pending_player_commands, clear_pending_player_commands_through_tick,
@@ -992,7 +992,10 @@ fn run_pre_tick_housekeeping_phase(
         stopwatch_active,
         PRE_TICK_SUBPHASE_NAMES[PRE_SUB_NPC_COMBAT],
         &mut subphase_micros[PRE_SUB_NPC_COMBAT],
-        || tick_npc_combat(ctx, now, &npc_movement_modifiers),
+        || {
+            tick_npc_forced_movement(ctx, now);
+            tick_npc_combat(ctx, now, &npc_movement_modifiers);
+        },
     );
 
     // Pass A: resolve effects already queued (casts/reducers from previous frame boundary).
@@ -1584,9 +1587,11 @@ fn tick_special_movement_runtimes(ctx: &ReducerContext, now: Timestamp) {
         }
         let arena_seed = arena_seed_for_identity(ctx, runtime.owner);
         let flat_ground_only = uses_flat_training_collision(ctx, runtime.owner);
-        let ground_y = surface_height_for_world_at_y_with_layout(
+        let open_world_scene_name = open_world_scene_name_for_identity(ctx, runtime.owner);
+        let ground_y = surface_height_for_world_at_y_with_layout_for_scene(
             arena_seed,
             flat_ground_only,
+            Some(open_world_scene_name.as_str()),
             resolved_x,
             resolved_z,
             desired_y,
