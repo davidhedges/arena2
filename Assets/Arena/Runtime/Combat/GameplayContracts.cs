@@ -24,6 +24,7 @@ namespace Arena.Combat
         public const string BlindingLight = "BLINDING_LIGHT";
         public const string GlacialSpike = "GLACIAL_SPIKE";
         public const string GustOfWind = "GUST_OF_WIND";
+        public const string Buffet = "BUFFET";
         public const string Momentum = "MOMENTUM";
         public const string GiantSwing = "GIANT_SWING";
         public const string Intimidate = "INTIMIDATE";

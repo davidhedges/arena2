@@ -3520,6 +3520,11 @@ pub enum EffectPacket {
         dir_z: f32,
         distance_meters: f32,
     },
+    InterruptCast {
+        source: Identity,
+        target: Identity,
+        spell_id: String,
+    },
     RemoveStatus {
         target: Identity,
         kind: StatusEffectKind,
@@ -3534,6 +3539,16 @@ pub fn queue_effects(ctx: &ReducerContext, effects: Vec<EffectPacket>) {
 }
 
 fn queue_effect(ctx: &ReducerContext, effect: EffectPacket) {
+    if let EffectPacket::InterruptCast {
+        source,
+        target,
+        spell_id,
+    } = &effect
+    {
+        apply_interrupt_cast(ctx, ctx.timestamp, *source, *target, spell_id.as_str());
+        return;
+    }
+
     let (queued_at, queued_at_micros) = with_micros(ctx.timestamp);
     let queued_order = next_pending_effect_order(ctx);
     match effect {
@@ -3665,6 +3680,7 @@ fn queue_effect(ctx: &ReducerContext, effect: EffectPacket) {
                 queued_order,
             });
         }
+        EffectPacket::InterruptCast { .. } => unreachable!("interrupts resolve immediately"),
         EffectPacket::RemoveStatus {
             target,
             kind,
@@ -4012,6 +4028,28 @@ pub fn has_due_pending_effects(ctx: &ReducerContext, now: Timestamp) -> bool {
             .filter(..=now_micros)
             .next()
             .is_some()
+}
+
+fn apply_interrupt_cast(
+    ctx: &ReducerContext,
+    now: Timestamp,
+    source: Identity,
+    target: Identity,
+    spell_id: &str,
+) {
+    if source == Identity::ZERO
+        || target == Identity::ZERO
+        || source == target
+        || !target_is_alive_for_status(ctx, target)
+        || !players_share_world_context(ctx, source, target)
+        || !can_harm(ctx, source, target)
+        || ctx.db.active_cast().caster().find(target).is_none()
+    {
+        return;
+    }
+
+    mark_harmful_combat_action(ctx, source, target, now, spell_id);
+    fizzle_active_cast_for_interrupt(ctx, target, now);
 }
 
 fn apply_pending_knockback(ctx: &ReducerContext, now: Timestamp, row: &PendingKnockback) {

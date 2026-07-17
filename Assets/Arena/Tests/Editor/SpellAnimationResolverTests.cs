@@ -230,5 +230,31 @@ namespace Arena.Tests.Editor
             var ground = (AnimationClip?)entryType.GetField("ground")!.GetValue(entry);
             Assert.That(ground?.name, Is.EqualTo("HumanM@MagicAttackDirect1H01_L - Cast"));
         }
+
+        [Test]
+        public void Buffet_ComposedDefaultUsesDirectOneHandCastClip()
+        {
+            Type resolverType = RuntimeAssembly.GetType(
+                "Arena.Presentation.SpellCastAnimationResolver", throwOnError: true)!;
+            Type setType = RuntimeAssembly.GetType(
+                "Arena.Presentation.CombatAnimationSet", throwOnError: true)!;
+            Type archetypeType = RuntimeAssembly.GetType(
+                "Arena.Presentation.SpellAnimationArchetype", throwOnError: true)!;
+            Type entryType = RuntimeAssembly.GetType(
+                "Arena.Presentation.WeaponSpellAnimationEntry", throwOnError: true)!;
+            MethodInfo invalidate = resolverType.GetMethod("InvalidateCache")!;
+            MethodInfo resolve = resolverType.GetMethod(
+                "TryResolveComposed",
+                new[] { setType, typeof(string), archetypeType, entryType.MakeByRefType() })!;
+
+            invalidate.Invoke(null, null);
+            object instant = Enum.Parse(archetypeType, "Instant");
+            object?[] args = { null, "BUFFET", instant, Activator.CreateInstance(entryType) };
+
+            Assert.That(resolve.Invoke(null, args), Is.True);
+            object entry = args[3]!;
+            var ground = (AnimationClip?)entryType.GetField("ground")!.GetValue(entry);
+            Assert.That(ground?.name, Is.EqualTo("HumanM@MagicAttackDirect1H01_L - Cast"));
+        }
     }
 }

@@ -9205,6 +9205,7 @@ mod tests {
             ("SPELL_INSTANT_BEAM", "INSTANT_BEAM", "ARCANE"),
             ("SPELL_ORBITING_BLADES", "ORBITING_BLADES", "LIGHTNING"),
             ("SPELL_GUST_OF_WIND", "GUST_OF_WIND", "AIR"),
+            ("SPELL_BUFFET", "BUFFET", "AIR"),
         ];
 
         for (ability_id, action_id, damage_type) in expected {
@@ -9288,6 +9289,30 @@ mod tests {
                 &AuthoredActionId::new(ability.action_id.as_str())
             ));
         }
+    }
+
+    #[test]
+    fn buffet_authors_target_hit_vfx_without_projectile_cues() {
+        let catalog = progression_catalog();
+        let cues: Vec<_> = catalog
+            .combat_vfx_cues
+            .iter()
+            .filter(|cue| normalize_identifier(cue.owner_id.as_str()) == "SPELL_BUFFET")
+            .collect();
+
+        assert_eq!(cues.len(), 1);
+        let cue = cues[0];
+        assert_eq!(normalize_identifier(cue.trigger.as_str()), "SPELL_IMPACT");
+        assert_eq!(normalize_identifier(cue.anchor.as_str()), "TARGET");
+        assert_eq!(
+            normalize_identifier(cue.vfx_id.as_str()),
+            "VFX_BUFFET_IMPACT_01"
+        );
+        assert_eq!(normalize_identifier(cue.vfx_role.as_str()), "ONE_SHOT");
+        assert_eq!(
+            normalize_identifier(cue.lifecycle.as_str()),
+            "PARTICLE_SYSTEM"
+        );
     }
 
     #[test]

@@ -447,6 +447,7 @@ struct InstantBeamChargeScalingRow {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(tag = "kind", rename_all = "SCREAMING_SNAKE_CASE", deny_unknown_fields)]
 enum ImpactEffectRow {
+    InterruptCast,
     Knockback {
         distance_meters: f32,
     },
@@ -1295,6 +1296,7 @@ impl From<InstantBeamChargeScalingRow> for InstantBeamChargeScaling {
 impl From<ImpactEffectRow> for ImpactEffect {
     fn from(row: ImpactEffectRow) -> Self {
         match row {
+            ImpactEffectRow::InterruptCast => Self::InterruptCast,
             ImpactEffectRow::Knockback { distance_meters } => Self::Knockback { distance_meters },
             status_row => Self::Status(status_application_from_impact_effect_row(status_row)),
         }
@@ -1303,6 +1305,9 @@ impl From<ImpactEffectRow> for ImpactEffect {
 
 fn status_application_from_impact_effect_row(row: ImpactEffectRow) -> StatusApplication {
     match row {
+        ImpactEffectRow::InterruptCast => {
+            unreachable!("interrupt cast is converted before status application mapping")
+        }
         ImpactEffectRow::Knockback { .. } => {
             unreachable!("knockback is converted before status application mapping")
         }
@@ -1735,6 +1740,7 @@ fn validate_definition(def: &SpellDefinition) -> Result<(), String> {
 fn validate_impact_effect(def: &SpellDefinition, effect: &ImpactEffect) -> Result<(), String> {
     let effect = match effect {
         ImpactEffect::Status(status) => status,
+        ImpactEffect::InterruptCast => return Ok(()),
         ImpactEffect::Knockback { distance_meters } => {
             if !distance_meters.is_finite() || *distance_meters <= 0.0 {
                 return Err(format!(
@@ -2739,6 +2745,7 @@ mod tests {
                 "FROZEN_GRASP",
                 "NECROTIC_AURA",
                 "GUST_OF_WIND",
+                "BUFFET",
                 "STONESPIRE",
                 "MOMENTUM",
                 "FORTIFY",
@@ -2891,6 +2898,7 @@ mod tests {
             "FROZEN_GRASP",
             "FLAMING_ORB",
             "GUST_OF_WIND",
+            "BUFFET",
             "MOMENTUM",
             "FORTIFY",
             "IRON_WILL",
@@ -3015,6 +3023,35 @@ mod tests {
             vec![ImpactEffect::Knockback {
                 distance_meters: 4.0,
             }]
+        );
+    }
+
+    #[test]
+    fn buffet_authors_zero_damage_air_cast_interrupt() {
+        let definition = spell_definition_by_str("BUFFET")
+            .expect("BUFFET should derive from the shared catalog");
+        let direct_target = definition
+            .secondary
+            .direct_target
+            .as_ref()
+            .expect("BUFFET should use direct-target delivery");
+
+        assert_eq!(definition.behavior, SpellBehavior::DirectTarget);
+        assert_eq!(definition.targeting, SpellTargeting::Target);
+        assert_eq!(definition.target_audience, TargetAudience::Hostile);
+        assert!(definition.requires_target);
+        assert_eq!(definition.cast_time, Duration::ZERO);
+        assert_eq!(definition.damage, 0);
+        assert_eq!(definition.damage_type, DamageType::Air);
+        assert_eq!(definition.max_distance, 18.0);
+        assert!(!definition.uses_global_cooldown);
+        assert_eq!(
+            direct_target.parry_behavior,
+            SpellParryBehavior::Unparryable
+        );
+        assert_eq!(
+            direct_target.impact_effects,
+            vec![ImpactEffect::InterruptCast]
         );
     }
 

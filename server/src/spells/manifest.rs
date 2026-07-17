@@ -387,6 +387,7 @@ pub(crate) struct BoomerangCasterProjectileTunables {
 pub(crate) enum ImpactEffect {
     Status(StatusApplication),
     Knockback { distance_meters: f32 },
+    InterruptCast,
 }
 
 impl PartialEq<StatusApplication> for ImpactEffect {
@@ -399,7 +400,7 @@ impl ImpactEffect {
     pub(crate) fn as_status(&self) -> Option<&StatusApplication> {
         match self {
             Self::Status(status) => Some(status),
-            Self::Knockback { .. } => None,
+            Self::Knockback { .. } | Self::InterruptCast => None,
         }
     }
 
@@ -463,6 +464,11 @@ impl ImpactEffect {
                 dir_x,
                 dir_z,
                 distance_meters: *distance_meters,
+            },
+            Self::InterruptCast => EffectPacket::InterruptCast {
+                source,
+                target,
+                spell_id: spell_id.to_string(),
             },
         }
     }
@@ -739,6 +745,7 @@ mod tests {
             "GLACIAL_SPIKE",
             "FROZEN_GRASP",
             "GUST_OF_WIND",
+            "BUFFET",
             "FROST_NEEDLE",
             "MOMENTUM",
             "INTIMIDATE",
@@ -789,6 +796,7 @@ mod tests {
             "BLINDING_LIGHT",
             "FROZEN_GRASP",
             "GUST_OF_WIND",
+            "BUFFET",
             "FROST_NEEDLE",
             "MOMENTUM",
             "BATTLE_CRY",
@@ -1255,6 +1263,36 @@ mod tests {
                 distance_meters: 4.0
             }
         ));
+    }
+
+    #[test]
+    fn buffet_catalog_matches_instant_zero_damage_interrupt_defaults() {
+        let definition = definition("BUFFET");
+
+        assert_eq!(definition.kind.as_str(), "BUFFET");
+        assert_eq!(definition.cooldown, Duration::from_millis(12_000));
+        assert!(!definition.uses_global_cooldown);
+        assert_eq!(definition.behavior.as_str(), "DIRECT_TARGET");
+        assert_eq!(definition.targeting.as_str(), "TARGET");
+        assert_eq!(definition.target_audience.as_str(), "HOSTILE");
+        assert!(definition.requires_target);
+        assert_eq!(definition.cast_time, Duration::ZERO);
+        assert_eq!(definition.damage, 0);
+        assert_eq!(definition.damage_type.as_str(), "AIR");
+        assert!((definition.max_distance - 18.0).abs() < 0.0001);
+        assert!((definition.primary_resource_cost - 0.0).abs() < 0.0001);
+        assert!(!definition.arms_auto_attack_on_cast);
+        let direct_target = definition
+            .secondary
+            .direct_target
+            .as_ref()
+            .expect("Buffet should define direct-target secondary data");
+        assert_eq!(direct_target.parry_behavior.as_str(), "UNPARRYABLE");
+        assert_eq!(
+            direct_target.impact_effects,
+            vec![ImpactEffect::InterruptCast]
+        );
+        assert!(!definition.generates_primary_resource_on_cast);
     }
 
     #[test]

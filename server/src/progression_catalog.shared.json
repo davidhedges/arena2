@@ -1775,6 +1775,43 @@
       }
     },
     {
+      "ability_id": "SPELL_BUFFET",
+      "actor_scope": "PLAYER",
+      "combat_profile_id": "",
+      "action_id": "BUFFET",
+      "display_name": "Buffet",
+      "resource_kind": "MANA",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 1015,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 12000,
+        "uses_global_cooldown": false,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "TARGET",
+        "target_audience": "HOSTILE",
+        "requires_target": true,
+        "resource_cost": 0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "DIRECT_TARGET",
+          "max_distance": 18,
+          "damage": 0,
+          "damage_type": "AIR",
+          "block_behavior": "UNBLOCKABLE",
+          "parry_behavior": "UNPARRYABLE",
+          "impact_effects": [
+            {
+              "kind": "INTERRUPT_CAST"
+            }
+          ]
+        }
+      }
+    },
+    {
       "ability_id": "SPELL_STONESPIRE",
       "actor_scope": "PLAYER",
       "combat_profile_id": "",
@@ -5064,6 +5101,13 @@
     },
     {
       "presentation_kind": "ABILITY",
+      "presentation_id": "SPELL_BUFFET",
+      "display_name": "Buffet",
+      "description": "Strikes the target with a burst of air, interrupting its current cast.",
+      "sort_order": 93
+    },
+    {
+      "presentation_kind": "ABILITY",
       "presentation_id": "WARRIOR_GIANT_SWING",
       "display_name": "Giant Swing",
       "description": "Empowers the next attack to reach farther and stagger enemies hit.",
@@ -6316,6 +6360,19 @@
       "lifecycle": "PARTICLE_SYSTEM",
       "duration_ms": 0,
       "sort_order": 202
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "SPELL_BUFFET",
+      "slot": "impact",
+      "trigger": "SPELL_IMPACT",
+      "anchor": "TARGET",
+      "vfx_id": "VFX_BUFFET_IMPACT_01",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "PARTICLE_SYSTEM",
+      "duration_ms": 0,
+      "sort_order": 203
     },
     {
       "owner_kind": "ABILITY", "owner_id": "NPC_DEMON_SUMMONER_SHADOW_BOLT", "slot": "cast_glow", "trigger": "SPELL_CAST", "anchor": "LEFT_HAND",
