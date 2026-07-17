@@ -1329,7 +1329,7 @@ const fn weapon(
         icon_id,
         max_stack: 1,
         width: 1,
-        height: 2,
+        height: 1,
         equip_slot: EQUIP_SLOT_MAIN_HAND,
         weapon_kind,
         hand_requirement,
@@ -2143,7 +2143,41 @@ pub(crate) fn sync_item_definitions(ctx: &ReducerContext) {
             }
         }
     }
+    reconcile_weapon_inventory_slot_footprints(ctx);
     sync_item_affix_definitions(ctx);
+}
+
+fn reconcile_weapon_inventory_slot_footprints(ctx: &ReducerContext) {
+    let slots: Vec<_> = ctx.db.inventory_slot().iter().collect();
+    for mut slot in slots {
+        let Some(item) = ctx
+            .db
+            .item_instance()
+            .item_instance_id()
+            .find(slot.item_instance_id.clone())
+        else {
+            continue;
+        };
+        let Some(definition) = ctx
+            .db
+            .item_definition()
+            .item_def_id()
+            .find(item.item_def_id)
+        else {
+            continue;
+        };
+        if definition.item_kind != ITEM_KIND_WEAPON
+            || definition.width != 1
+            || definition.height != 1
+            || (slot.width == 1 && slot.height == 1)
+        {
+            continue;
+        }
+
+        slot.width = 1;
+        slot.height = 1;
+        ctx.db.inventory_slot().key().update(slot);
+    }
 }
 
 pub(crate) fn sync_item_affix_definitions(ctx: &ReducerContext) {
@@ -4899,10 +4933,23 @@ mod tests {
             "unchanged item definitions must not be rewritten"
         );
         assert!(
+            source_function(&source, "pub(crate) fn sync_item_definitions")
+                .contains("reconcile_weapon_inventory_slot_footprints(ctx)"),
+            "item publication must update existing weapon slot footprints"
+        );
+        assert!(
             source_function(&source, "pub(crate) fn sync_item_affix_definitions")
                 .contains("Some(existing) if existing == row => {}"),
             "unchanged affix definitions must not be rewritten"
         );
+    }
+
+    #[test]
+    fn authored_weapons_use_one_inventory_slot() {
+        assert!(STARTER_ITEM_DEFINITIONS
+            .iter()
+            .filter(|definition| definition.item_kind == ITEM_KIND_WEAPON)
+            .all(|definition| definition.width == 1 && definition.height == 1));
     }
 
     #[test]

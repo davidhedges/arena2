@@ -25,10 +25,6 @@
                 <ui:VisualElement class="grid-window-content">
                     <ui:VisualElement name="LootGrid" class="arena-grid">
                         <ui:VisualElement name="LootCells" class="grid-cells" picking-mode="Ignore" />
-                        <ui:VisualElement class="grid-edge grid-edge--top" picking-mode="Ignore" />
-                        <ui:VisualElement class="grid-edge grid-edge--bottom" picking-mode="Ignore" />
-                        <ui:VisualElement class="grid-edge grid-edge--left" picking-mode="Ignore" />
-                        <ui:VisualElement class="grid-edge grid-edge--right" picking-mode="Ignore" />
                         <ui:VisualElement name="LootItems" class="grid-items" picking-mode="Ignore" />
                     </ui:VisualElement>
                 </ui:VisualElement>
@@ -148,10 +144,6 @@
                 <ui:VisualElement class="grid-window-content">
                     <ui:VisualElement name="InventoryGrid" class="arena-grid">
                         <ui:VisualElement name="InventoryCells" class="grid-cells" picking-mode="Ignore" />
-                        <ui:VisualElement class="grid-edge grid-edge--top" picking-mode="Ignore" />
-                        <ui:VisualElement class="grid-edge grid-edge--bottom" picking-mode="Ignore" />
-                        <ui:VisualElement class="grid-edge grid-edge--left" picking-mode="Ignore" />
-                        <ui:VisualElement class="grid-edge grid-edge--right" picking-mode="Ignore" />
                         <ui:VisualElement name="InventoryItems" class="grid-items" picking-mode="Ignore" />
                     </ui:VisualElement>
                 </ui:VisualElement>

@@ -362,7 +362,7 @@
     color: var(--arena-gold-text);
 }
 
-/* ---- connected inventory grid (tiled lattice + closing edge lines) -------- */
+/* ---- inventory grid: complete cells only ---------------------------------- */
 
 .arena-grid {
     position: relative;
@@ -371,8 +371,8 @@
 
 .grid-cells {
     position: absolute;
-    top: 5px;
-    left: 5px;
+    top: 0;
+    left: 0;
     display: flex;
     flex-direction: row;
     flex-wrap: wrap;
@@ -386,35 +386,17 @@
     flex-shrink: 0;
 }
 
-.grid-edge {
-    position: absolute;
+.grid-cell--right {
+    background-image: url("/Assets/Arena/Content/UI/Art/grid_cell_right.png");
 }
 
-.grid-edge--top,
-.grid-edge--bottom {
-    left: 0;
-    right: 0;
-    height: 10px;
-    background-image: url("/Assets/Arena/Content/UI/Art/grid_line_h.png");
-    background-repeat: repeat;
-    background-size: auto;
+.grid-cell--bottom {
+    background-image: url("/Assets/Arena/Content/UI/Art/grid_cell_bottom.png");
 }
 
-.grid-edge--top { top: 0; }
-.grid-edge--bottom { bottom: 0; scale: 1 -1; }
-
-.grid-edge--left,
-.grid-edge--right {
-    top: 0;
-    bottom: 0;
-    width: 10px;
-    background-image: url("/Assets/Arena/Content/UI/Art/grid_line_v.png");
-    background-repeat: repeat;
-    background-size: auto;
+.grid-cell--right.grid-cell--bottom {
+    background-image: url("/Assets/Arena/Content/UI/Art/grid_cell_bottom_right.png");
 }
-
-.grid-edge--left { left: 0; }
-.grid-edge--right { right: 0; scale: -1 1; }
 
 /* Items overlay the lattice; footprint = cell coords * 68 (set from code). */
 .grid-item {

@@ -2,8 +2,8 @@
  * Structural components come from ArenaKit.uss; this file lays out the
  * windows. Twin: docs/ui-prototypes/inventory/. Grid windows are sized by
  * InventoryScreen.cs from server container dimensions:
- *   window width  = cols*68 + 10 + 52   (grid + edge lines + chrome pads)
- *   window height = 44 + 12 + rows*68 + 10 + 26
+ *   window width  = cols*68 + 62
+ *   window height = 44 + 12 + rows*68 + 36
  * Non-modal: no veil, the game stays visible. */
 
 @import url("ArenaKit.uss");
@@ -55,9 +55,9 @@
 .grid-window-content {
     width: 100%;
     padding-top: 12px;
-    padding-left: 26px;
-    padding-right: 26px;
-    padding-bottom: 26px;
+    padding-left: 31px;
+    padding-right: 31px;
+    padding-bottom: 36px;
     display: flex;
     flex-direction: column;
     align-items: center;

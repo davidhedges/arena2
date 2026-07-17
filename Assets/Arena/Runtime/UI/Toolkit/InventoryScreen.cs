@@ -30,8 +30,6 @@ namespace Arena.UI
         private const float RefreshIntervalSeconds = 0.12f;
         private const float LootPickScreenRadius = 82f;
         private const int CellSize = 68;
-        private const int GridInset = 5;      // cells offset inside the edge lines
-        private const int GridEdge = 10;      // closing edge line thickness
         private const float DragThresholdSq = 36f;
         private const string OpenClass = "is-open";
 
@@ -423,15 +421,16 @@ namespace Arena.UI
             view.Cols = cols;
             view.Rows = rows;
 
-            int gridWidth = cols * CellSize + GridEdge;
-            int gridHeight = rows * CellSize + GridEdge;
+            int gridWidth = cols * CellSize;
+            int gridHeight = rows * CellSize;
             view.Grid.style.width = gridWidth;
             view.Grid.style.height = gridHeight;
             view.Cells.style.width = cols * CellSize;
 
-            // Window chrome: 26px side pads; 44 title-plate zone + 12 top + 26 bottom.
-            view.Window.style.width = gridWidth + 52;
-            view.Window.style.height = 44 + 12 + gridHeight + 26;
+            // Preserve the existing outer window dimensions after removing the
+            // grid's old 10px perimeter strips.
+            view.Window.style.width = gridWidth + 62;
+            view.Window.style.height = 44 + 12 + gridHeight + 36;
 
             int total = cols * rows;
             while (view.Cells.childCount < total)
@@ -442,7 +441,13 @@ namespace Arena.UI
                 view.Cells.Add(cell);
             }
             for (int i = 0; i < view.Cells.childCount; i++)
-                view.Cells[i].style.display = i < total ? DisplayStyle.Flex : DisplayStyle.None;
+            {
+                VisualElement cell = view.Cells[i];
+                bool visible = i < total;
+                cell.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
+                cell.EnableInClassList("grid-cell--right", visible && i % cols == cols - 1);
+                cell.EnableInClassList("grid-cell--bottom", visible && i / cols == rows - 1);
+            }
         }
 
         private VisualElement CreateGridItem(GridView view)
@@ -475,8 +480,8 @@ namespace Arena.UI
         {
             element.userData = itemRef;
             element.style.display = DisplayStyle.Flex;
-            element.style.left = GridInset + (int)itemRef.X * CellSize;
-            element.style.top = GridInset + (int)itemRef.Y * CellSize;
+            element.style.left = (int)itemRef.X * CellSize;
+            element.style.top = (int)itemRef.Y * CellSize;
             element.style.width = width * CellSize;
             element.style.height = height * CellSize;
 

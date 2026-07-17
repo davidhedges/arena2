@@ -101,12 +101,12 @@
 }
 
 .inv-grid {
-    width: 554px;
-    height: 494px;
+    width: 544px;
+    height: 476px;
 }
 
 .inv-footer {
-    width: 554px;
+    width: 544px;
     height: 26px;
     margin-top: 10px;
     display: flex;

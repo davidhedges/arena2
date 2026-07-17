@@ -195,8 +195,8 @@ html, body {
                   <div class="slot-glow rarity-common"></div>
                 </div>
 
-                <div class="grid-item" style="left:277px; top:73px; width:136px; height:136px;"
-                     data-tt-name="Bulwark of the Deep" data-tt-rarity="epic" data-tt-line="Shield · Offhand · 2×2" data-tt-stats="Armor +26|Block +9%|Physical Resistance +4%" data-tt-value="1,876">
+                <div class="grid-item" style="left:277px; top:73px; width:68px; height:68px;"
+                     data-tt-name="Bulwark of the Deep" data-tt-rarity="epic" data-tt-line="Shield · Offhand" data-tt-stats="Armor +26|Block +9%|Physical Resistance +4%" data-tt-value="1,876">
                   <div class="item-icon" style="background-image:url('../../../Assets/Arena/Content/UI/Art/demo_item_shield.png')"></div>
                   <div class="slot-glow rarity-epic"></div>
                 </div>
@@ -214,10 +214,6 @@ html, body {
                   <div class="slot-glow rarity-rare"></div>
                 </div>
 
-                <div class="grid-edge grid-edge--top"></div>
-                <div class="grid-edge grid-edge--bottom"></div>
-                <div class="grid-edge grid-edge--left"></div>
-                <div class="grid-edge grid-edge--right"></div>
               </div>
 
               <div class="inv-footer">
@@ -294,6 +290,8 @@ html, body {
     for (var i = 0; i < 8 * 7; i++) {
       var c = document.createElement("div");
       c.className = "grid-cell";
+      if (i % 8 === 7) c.classList.add("grid-cell--right");
+      if (Math.floor(i / 8) === 6) c.classList.add("grid-cell--bottom");
       cells.appendChild(c);
     }
   })();
