@@ -6,7 +6,7 @@ only test-only reducers are compiled behind the repo's existing
 `projectile_load_harness` feature: one queues a zero-damage first-class
 knockback packet, and one equips legitimate max-roll resistance affixes on the
 victim's current armor/jewelry. All displacement, resistance, collision,
-composition, preemption, combat-entry, and teardown behavior runs through the
+interruption, combat-entry, and teardown behavior runs through the
 production paths.
 
 Typical isolated local run:
@@ -408,7 +408,7 @@ def main():
         spawn_x, _, spawn_z, _, _ = attacker.physics()
         attacker.face(spawn_x, spawn_z + 10.0)
 
-        print("\n== authored Shockwave: NPC displacement + composition")
+        print("\n== authored Shockwave: NPC displacement")
         kobold = spawn_npc(attacker, KOBOLD_TEMPLATE, KOBOLD_VISUAL)
         motion = sample_displacement(
             attacker,
@@ -420,12 +420,6 @@ def main():
             "NPC moves outward by authored knockback",
             3.45 <= motion["projection"] <= 4.25 and motion["lateral"] < 0.35,
             f"projection={motion['projection']:.3f}m lateral={motion['lateral']:.3f}m",
-            failures,
-        )
-        expect(
-            "stagger + knockback composes to knockback distance",
-            motion["projection"] > 3.0,
-            f"projection={motion['projection']:.3f}m (stagger-only would be 0.45m)",
             failures,
         )
         despawn_npc(attacker, kobold)

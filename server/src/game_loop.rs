@@ -1222,13 +1222,7 @@ fn try_tick_dummy_player(
         return None;
     }
 
-    if ctx
-        .db
-        .special_movement_runtime()
-        .owner()
-        .find(identity)
-        .is_some()
-    {
+    if has_special_movement_runtime(ctx, identity) {
         return Some(false);
     }
 
@@ -1255,8 +1249,21 @@ fn try_tick_playground_target(
         return None;
     }
 
-    ctx.db.special_movement_runtime().owner().delete(identity);
+    // Playground targets are stationary player-shaped fixtures, but externally
+    // imposed movement still owns their pose while its runtime is active.
+    if has_special_movement_runtime(ctx, identity) {
+        return Some(false);
+    }
+
     Some(settle_stationary_playground_target(physics, now))
+}
+
+fn has_special_movement_runtime(ctx: &ReducerContext, identity: Identity) -> bool {
+    ctx.db
+        .special_movement_runtime()
+        .owner()
+        .find(identity)
+        .is_some()
 }
 
 fn stationary_pose_is_settled(physics: &PlayerPhysics) -> bool {
@@ -1539,14 +1546,6 @@ fn tick_special_movement_runtimes(ctx: &ReducerContext, now: Timestamp) {
     let runtimes: Vec<crate::spells::SpecialMovementRuntime> =
         ctx.db.special_movement_runtime().iter().collect();
     for runtime in runtimes {
-        if is_playground_target(ctx, runtime.owner) {
-            ctx.db
-                .special_movement_runtime()
-                .owner()
-                .delete(runtime.owner);
-            continue;
-        }
-
         let Some(mut physics) = ctx.db.player_physics().identity().find(runtime.owner) else {
             ctx.db
                 .special_movement_runtime()

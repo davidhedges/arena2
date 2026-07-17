@@ -5209,7 +5209,7 @@ mod tests {
         ability_gameplay_kind, ability_is_compatible_with_slot, action_presentation_key,
         action_ref_for_action_bar_default, authored_status_presentation_ids,
         canonical_action_bar_slot_id, character_action_bar_assignment_is_generic_fixed_action,
-        combat_vfx_cue_key, derived_spell_action_presentation_rows,
+        combat_rule_value, combat_vfx_cue_key, derived_spell_action_presentation_rows,
         melee_impact_effects_for_ability_id, normalize_identifier,
         normalize_optional_target_audience, primary_resource_gain_on_action_accept,
         progression_catalog, projectile_body_vfx_id_for_spell,
@@ -5227,6 +5227,11 @@ mod tests {
     use crate::action_ids::{AuthoredActionId, RuntimeActionId};
 
     const GAP_CLOSE_TARGET_ARRIVAL_DISTANCE_METERS: f32 = 2.0;
+
+    #[test]
+    fn knockback_speed_rule_matches_authored_tuning() {
+        assert!((combat_rule_value("KNOCKBACK_SPEED_METERS_PER_SEC") - 24.0).abs() < f32::EPSILON);
+    }
 
     fn parse_spell_ids_from_animation_set_asset(asset_contents: &str) -> HashSet<String> {
         asset_contents

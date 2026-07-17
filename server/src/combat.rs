@@ -24,8 +24,7 @@ use crate::open_world_scene::{OPEN_WORLD_SPAWN_X, OPEN_WORLD_SPAWN_YAW, OPEN_WOR
 use crate::player_state::PlayerState;
 use crate::practice::{is_training_instance, resolve_respawn_pose};
 use crate::progression::{
-    combat_rule_value, derived_combat_profile_id_for_owner, movement_delivery_for_action_id,
-    COMBAT_PROFILE_TWO_HANDED_SWORD,
+    combat_rule_value, derived_combat_profile_id_for_owner, COMBAT_PROFILE_TWO_HANDED_SWORD,
 };
 use crate::relations::{
     can_apply_status_polarity, can_harm, target_audience_allows, TargetAudience,
@@ -129,6 +128,7 @@ const RULE_CRIT_DAMAGE_MULTIPLIER: &str = "CRIT_DAMAGE_MULTIPLIER";
 const RULE_STAGGER_SHOVE_DISTANCE_METERS: &str = "STAGGER_SHOVE_DISTANCE_METERS";
 const RULE_STAGGER_SHOVE_DURATION_MS: &str = "STAGGER_SHOVE_DURATION_MS";
 const RULE_KNOCKBACK_SPEED_METERS_PER_SEC: &str = "KNOCKBACK_SPEED_METERS_PER_SEC";
+const RULE_KNOCKBACK_STAGGER_DURATION_MS: &str = "KNOCKBACK_STAGGER_DURATION_MS";
 const RULE_KNOCKBACK_MAX_DISTANCE_METERS: &str = "KNOCKBACK_MAX_DISTANCE_METERS";
 const RULE_KNOCKBACK_MIN_EFFECTIVE_DISTANCE_METERS: &str =
     "KNOCKBACK_MIN_EFFECTIVE_DISTANCE_METERS";
@@ -4028,6 +4028,7 @@ fn apply_pending_knockback(ctx: &ReducerContext, now: Timestamp, row: &PendingKn
         now,
         row.source,
         row.target,
+        row.spell_id.as_str(),
         row.dir_x,
         row.dir_z,
         row.distance_meters,
@@ -4964,6 +4965,15 @@ fn stagger_shove_tunables(distance: f32, duration_ms: f32) -> Option<(f32, u64)>
     }
 }
 
+fn knockback_stagger_duration(duration_ms: f32) -> Option<Duration> {
+    if !duration_ms.is_finite() || duration_ms <= 0.0 {
+        return None;
+    }
+
+    let duration_ms = duration_ms.round() as u64;
+    (duration_ms > 0).then(|| Duration::from_millis(duration_ms))
+}
+
 fn yaw_direction(yaw: f32) -> (f32, f32) {
     (yaw.sin(), yaw.cos())
 }
@@ -5043,7 +5053,6 @@ fn start_stagger_shove(ctx: &ReducerContext, now: Timestamp, source: Identity, t
         authored_distance,
         nominal_speed,
         STAGGER_SHOVE_MOVEMENT_KIND,
-        false,
     );
 }
 
@@ -5052,11 +5061,22 @@ fn start_knockback_shove(
     now: Timestamp,
     source: Identity,
     target: Identity,
+    spell_id: &str,
     dir_x: f32,
     dir_z: f32,
     authored_distance: f32,
 ) {
-    start_resisted_shove(
+    let Some(stagger_duration) =
+        knockback_stagger_duration(combat_rule_value(RULE_KNOCKBACK_STAGGER_DURATION_MS))
+    else {
+        log::error!(
+            "[FORCED_SHOVE] Knockback disabled because {} is not a positive finite duration",
+            RULE_KNOCKBACK_STAGGER_DURATION_MS
+        );
+        return;
+    };
+
+    if !start_resisted_shove(
         ctx,
         now,
         source,
@@ -5066,7 +5086,25 @@ fn start_knockback_shove(
         authored_distance,
         combat_rule_value(RULE_KNOCKBACK_SPEED_METERS_PER_SEC),
         KNOCKBACK_MOVEMENT_KIND,
-        true,
+    ) {
+        return;
+    }
+
+    apply_status_internal(
+        ctx,
+        now,
+        source,
+        target,
+        spell_id,
+        StatusPayload::Stagger,
+        StatusPolarity::Debuff,
+        stagger_duration,
+        StatusEffectKind::Stagger.as_str(),
+        1,
+        StackPolicy::Refresh,
+        TargetAudience::Hostile,
+        Vec::new(),
+        false,
     );
 }
 
@@ -5081,8 +5119,7 @@ fn start_resisted_shove(
     authored_distance: f32,
     nominal_speed: f32,
     movement_kind: &str,
-    preempt_self_initiated_movement: bool,
-) {
+) -> bool {
     let total_resistance = knockback_resistance_for_target(ctx, target, now);
     let Some((distance, duration_ms)) = resolved_shove_tunables(
         authored_distance,
@@ -5091,13 +5128,13 @@ fn start_resisted_shove(
         combat_rule_value(RULE_KNOCKBACK_MAX_DISTANCE_METERS),
         combat_rule_value(RULE_KNOCKBACK_MIN_EFFECTIVE_DISTANCE_METERS),
     ) else {
-        return;
+        return false;
     };
     let Some(target_snapshot) = actor_snapshot::actor_snapshot_for(ctx, target) else {
-        return;
+        return false;
     };
     if !target_snapshot.alive {
-        return;
+        return false;
     }
     let (dir_x, dir_z) =
         normalized_horizontal_direction_or_yaw(dir_x, dir_z, target_snapshot.facing_yaw);
@@ -5113,32 +5150,17 @@ fn start_resisted_shove(
         duration_ms,
         movement_kind,
     ) {
-        return;
+        return true;
     }
     let Some(state) = ctx.db.player_state().player_id().find(target) else {
-        return;
+        return false;
     };
     if !state.alive {
-        return;
+        return false;
     }
     let Some(target_physics) = ctx.db.player_physics().identity().find(target) else {
-        return;
+        return false;
     };
-    if preempt_self_initiated_movement {
-        if ctx
-            .db
-            .active_cast()
-            .caster()
-            .find(target)
-            .is_some_and(|active_cast| {
-                movement_delivery_for_action_id(active_cast.kind.as_str()).is_some()
-            })
-        {
-            fizzle_active_cast_for_interrupt(ctx, target, now);
-        }
-        ctx.db.movement_action_state().owner().delete(target);
-        ctx.db.pending_melee_timed_movement().owner().delete(target);
-    }
 
     let start = SpellVec3::new(
         target_physics.pos_x,
@@ -5190,6 +5212,7 @@ fn start_resisted_shove(
         SPECIAL_MOVEMENT_FACING_FACE_START,
         SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK,
     );
+    true
 }
 
 fn knockback_resistance_for_target(ctx: &ReducerContext, target: Identity, now: Timestamp) -> f32 {
@@ -6301,13 +6324,13 @@ mod tests {
     use super::{
         actor_distance_sq, apply_status_update, attack_speed_scalar_to_multiplier,
         battle_trance_hp_after_damage, bloodlust_passive_spec, due_interval_count,
-        event_prune_cutoff_micros, new_status_effect, resolve_effect_amount_from_roll,
-        resolve_temporary_hitpoint_absorb, resolved_shove_tunables, stacked_slow_pct,
-        stagger_shove_tunables, status_has_dispel_type, AuthoredStatusPayload, DamageDelivery,
-        EffectPacket, MovementModifiers, StackPolicy, StatusDispelType, StatusEffect,
-        StatusEffectKind, StatusPayload, StatusPolarity, StatusRuntimeView,
-        TemporaryCombatModifiers, BLOODLUST_PASSIVE_ID, COMBAT_PROJECTILE_DEFINITIONS,
-        PLAYER_EVENT_RETENTION,
+        event_prune_cutoff_micros, knockback_stagger_duration, new_status_effect,
+        resolve_effect_amount_from_roll, resolve_temporary_hitpoint_absorb,
+        resolved_shove_tunables, stacked_slow_pct, stagger_shove_tunables, status_has_dispel_type,
+        AuthoredStatusPayload, DamageDelivery, EffectPacket, MovementModifiers, StackPolicy,
+        StatusDispelType, StatusEffect, StatusEffectKind, StatusPayload, StatusPolarity,
+        StatusRuntimeView, TemporaryCombatModifiers, BLOODLUST_PASSIVE_ID,
+        COMBAT_PROJECTILE_DEFINITIONS, PLAYER_EVENT_RETENTION,
     };
     use crate::movement::FIXED_TICK_MILLIS;
     use crate::relations::TargetAudience;
@@ -6717,23 +6740,33 @@ mod tests {
     #[test]
     fn knockback_tunables_preserve_speed_resistance_and_tick_floor() {
         assert_eq!(
-            resolved_shove_tunables(4.0, 12.0, 0.0, 10.0, 0.1),
-            Some((4.0, 334))
+            resolved_shove_tunables(4.0, 24.0, 0.0, 10.0, 0.1),
+            Some((4.0, 167))
         );
         assert_eq!(
-            resolved_shove_tunables(4.0, 12.0, 0.5, 10.0, 0.1),
-            Some((2.0, 167))
+            resolved_shove_tunables(4.0, 24.0, 0.5, 10.0, 0.1),
+            Some((2.0, 84))
         );
         assert_eq!(
-            resolved_shove_tunables(0.2, 12.0, 0.0, 10.0, 0.1),
+            resolved_shove_tunables(0.2, 24.0, 0.0, 10.0, 0.1),
             Some((0.2, FIXED_TICK_MILLIS))
         );
     }
 
     #[test]
     fn knockback_tunables_skip_immunity_and_negligible_distance() {
-        assert_eq!(resolved_shove_tunables(4.0, 12.0, 1.0, 10.0, 0.1), None);
-        assert_eq!(resolved_shove_tunables(0.15, 12.0, 0.5, 10.0, 0.1), None);
+        assert_eq!(resolved_shove_tunables(4.0, 24.0, 1.0, 10.0, 0.1), None);
+        assert_eq!(resolved_shove_tunables(0.15, 24.0, 0.5, 10.0, 0.1), None);
+    }
+
+    #[test]
+    fn knockback_stagger_duration_requires_a_positive_finite_rule() {
+        assert_eq!(
+            knockback_stagger_duration(1_000.0),
+            Some(Duration::from_millis(1_000))
+        );
+        assert_eq!(knockback_stagger_duration(0.0), None);
+        assert_eq!(knockback_stagger_duration(f32::NAN), None);
     }
 
     #[test]

@@ -24,8 +24,9 @@ use crate::relations::{can_harm, combat_relation, CombatRelation, TargetAudience
 #[allow(unused_imports)]
 use crate::spells::active_cast as _;
 use crate::spells::{
-    cast_spell_for_server_actor, clear_actor_cooldowns, is_on_named_cooldown, is_on_spell_cooldown,
-    spell_definition_by_str, stamp_named_cooldown_for_duration, SpellId,
+    cast_spell_for_server_actor, clear_actor_cooldowns, fizzle_active_cast_for_interrupt,
+    is_on_named_cooldown, is_on_spell_cooldown, spell_definition_by_str,
+    stamp_named_cooldown_for_duration, SpellId,
 };
 use crate::world_collision::{
     resolve_world_horizontal_sweep_collision_y_with_layout_for_scene,
@@ -3206,6 +3207,9 @@ pub(crate) fn interrupt_npc_actions_for_crowd_control(
     identity: Identity,
     now: Timestamp,
 ) {
+    if ctx.db.npc_state().identity().find(identity).is_some() {
+        fizzle_active_cast_for_interrupt(ctx, identity, now);
+    }
     interrupt_server_actor_melee_commitments(ctx, identity, NPC_MELEE_SOURCE_KIND, now);
 }
 

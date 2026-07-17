@@ -290,8 +290,13 @@
     },
     {
       "combat_rule_id": "KNOCKBACK_SPEED_METERS_PER_SEC",
-      "scalar_value": 12,
+      "scalar_value": 24,
       "sort_order": 60
+    },
+    {
+      "combat_rule_id": "KNOCKBACK_STAGGER_DURATION_MS",
+      "scalar_value": 1000,
+      "sort_order": 65
     },
     {
       "combat_rule_id": "KNOCKBACK_MAX_DISTANCE_METERS",
@@ -2234,10 +2239,6 @@
           "radius": 4.6,
           "block_behavior": "BLOCKABLE",
           "impact_effects": [
-            {
-              "kind": "STAGGER",
-              "duration_ms": 1000
-            },
             {
               "kind": "KNOCKBACK",
               "distance_meters": 4

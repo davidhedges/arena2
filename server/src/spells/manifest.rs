@@ -1273,14 +1273,9 @@ mod tests {
             .area
             .as_ref()
             .expect("Shockwave should define area secondary data");
-        assert_eq!(area.impact_effects.len(), 2);
-        let effect = area.impact_effects[0]
-            .as_status()
-            .expect("Shockwave first impact effect must be stagger");
-        assert_eq!(effect.payload().kind(), StatusEffectKind::Stagger);
-        assert_eq!(effect.duration(), Duration::from_millis(1_000));
+        assert_eq!(area.impact_effects.len(), 1);
         assert!(matches!(
-            area.impact_effects[1],
+            area.impact_effects[0],
             ImpactEffect::Knockback {
                 distance_meters: 4.0
             }
