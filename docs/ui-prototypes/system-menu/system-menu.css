@@ -26,14 +26,20 @@
     height: 442px;
 }
 
-.system-menu .frame-rail--top,
-.system-menu .frame-rail--bottom {
+.system-menu .frame-rail--top {
     background-image: url("../../../Assets/Arena/Content/UI/Art/window_rail_h_296x23.png");
 }
 
-.system-menu .frame-rail--left,
-.system-menu .frame-rail--right {
+.system-menu .frame-rail--bottom {
+    background-image: url("../../../Assets/Arena/Content/UI/Art/window_rail_bottom_296x23.png");
+}
+
+.system-menu .frame-rail--left {
     background-image: url("../../../Assets/Arena/Content/UI/Art/window_rail_v_338x23.png");
+}
+
+.system-menu .frame-rail--right {
+    background-image: url("../../../Assets/Arena/Content/UI/Art/window_rail_right_338x23.png");
 }
 
 .window-content {

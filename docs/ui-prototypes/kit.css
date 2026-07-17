@@ -71,7 +71,7 @@
 }
 
 .frame-rail--top { top: 0; }
-.frame-rail--bottom { bottom: 0; scale: 1 -1; }
+.frame-rail--bottom { bottom: 0; }
 
 .frame-rail--left,
 .frame-rail--right {
@@ -81,7 +81,7 @@
 }
 
 .frame-rail--left { left: 0; }
-.frame-rail--right { right: 0; scale: -1 1; }
+.frame-rail--right { right: 0; }
 
 .frame-corner {
     position: absolute;

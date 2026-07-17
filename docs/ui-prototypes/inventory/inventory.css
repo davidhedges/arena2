@@ -34,24 +34,36 @@
     height: 600px;
 }
 
-.char-window .frame-rail--top,
-.char-window .frame-rail--bottom {
+.char-window .frame-rail--top {
     background-image: url("../../../Assets/Arena/Content/UI/Art/window_rail_h_556x23.png");
 }
 
-.inv-window .frame-rail--top,
-.inv-window .frame-rail--bottom {
+.char-window .frame-rail--bottom {
+    background-image: url("../../../Assets/Arena/Content/UI/Art/window_rail_bottom_556x23.png");
+}
+
+.inv-window .frame-rail--top {
     background-image: url("../../../Assets/Arena/Content/UI/Art/window_rail_h_500x23.png");
 }
 
-.char-window .frame-rail--left,
-.char-window .frame-rail--right {
+.inv-window .frame-rail--bottom {
+    background-image: url("../../../Assets/Arena/Content/UI/Art/window_rail_bottom_500x23.png");
+}
+
+.char-window .frame-rail--left {
     background-image: url("../../../Assets/Arena/Content/UI/Art/window_rail_v_536x23.png");
 }
 
-.inv-window .frame-rail--left,
-.inv-window .frame-rail--right {
+.char-window .frame-rail--right {
+    background-image: url("../../../Assets/Arena/Content/UI/Art/window_rail_right_536x23.png");
+}
+
+.inv-window .frame-rail--left {
     background-image: url("../../../Assets/Arena/Content/UI/Art/window_rail_v_496x23.png");
+}
+
+.inv-window .frame-rail--right {
+    background-image: url("../../../Assets/Arena/Content/UI/Art/window_rail_right_496x23.png");
 }
 
 /* ---- character window: doll + attributes ---------------------------------- */

@@ -88,22 +88,32 @@
     left: 52px;
     right: 52px;
     height: 23px;
-    background-image: url("/Assets/Arena/Content/UI/Art/window_rail_h_296x23.png");
 }
 
-.frame-rail--top { top: 0; }
-.frame-rail--bottom { bottom: 0; scale: 1 -1; }
+.frame-rail--top {
+    top: 0;
+    background-image: url("/Assets/Arena/Content/UI/Art/window_rail_h_296x23.png");
+}
+.frame-rail--bottom {
+    bottom: 0;
+    background-image: url("/Assets/Arena/Content/UI/Art/window_rail_bottom_296x23.png");
+}
 
 .frame-rail--left,
 .frame-rail--right {
     top: 52px;
     bottom: 52px;
     width: 23px;
-    background-image: url("/Assets/Arena/Content/UI/Art/window_rail_v_338x23.png");
 }
 
-.frame-rail--left { left: 0; }
-.frame-rail--right { right: 0; scale: -1 1; }
+.frame-rail--left {
+    left: 0;
+    background-image: url("/Assets/Arena/Content/UI/Art/window_rail_v_338x23.png");
+}
+.frame-rail--right {
+    right: 0;
+    background-image: url("/Assets/Arena/Content/UI/Art/window_rail_right_338x23.png");
+}
 
 .frame-corner {
     position: absolute;

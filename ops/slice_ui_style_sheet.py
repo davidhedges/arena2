@@ -462,10 +462,17 @@ def main() -> None:
     # entry per window size (System Menu 400x442, Character/Inventory 640-660).
     rail_h = cut((776, 41, 852, 79), key=False)
     rail_v = cut((279, 130, 317, 235), key=False)
+    # The window is painted lit from the top-left: right/bottom rails are the
+    # AUTHORED shaded rails, never the lit left/top rails mirrored (mirroring
+    # flips the highlight to the wrong side — owner-flagged 2026-07-17).
+    rail_bottom = cut((394, 545, 450, 583), key=False)
+    rail_right = cut((909, 130, 947, 235), key=False)
     for length in (296, 500, 556):
         save(bake_rail(rail_h, length, 23), f"window_rail_h_{length}x23.png")
+        save(bake_rail(rail_bottom, length, 23), f"window_rail_bottom_{length}x23.png")
     for length in (338, 496, 536):
         save(bake_rail(rail_v, length, 23, vertical=True), f"window_rail_v_{length}x23.png")
+        save(bake_rail(rail_right, length, 23, vertical=True), f"window_rail_right_{length}x23.png")
 
     # Ornaments.
     save(cut((977, 396, 1531, 429)), "divider.png")
