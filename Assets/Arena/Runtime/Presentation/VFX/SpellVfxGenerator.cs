@@ -280,6 +280,7 @@ namespace Arena.Presentation
         public const string AttachSpawnWorld = "SPAWN_WORLD";
         public const string AttachFollowAnchor = "FOLLOW_ANCHOR";
         public const string AttachFollowGroundPosition = "FOLLOW_GROUND_POSITION";
+        public const string AttachWorldAlignedToFacing = "WORLD_ALIGNED_TO_FACING";
 
         public const string RoleOneShot = "ONE_SHOT";
         public const string RoleAttached = "ATTACHED";
@@ -547,7 +548,7 @@ namespace Arena.Presentation
                     return new CueWiring(
                         trigger: deferred ? TriggerAreaImpact : TriggerSpellRelease,
                         anchor: deferred ? CueAnchor.AreaOrigin : CueAnchor.Caster,
-                        attachMode: AttachSpawnWorld,
+                        attachMode: deferred ? AttachWorldAlignedToFacing : AttachSpawnWorld,
                         vfxRole: RoleOneShot,
                         lifecycle: oneShotLifecycle,
                         duration: oneShotDuration,

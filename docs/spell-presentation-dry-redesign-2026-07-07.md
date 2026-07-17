@@ -424,7 +424,7 @@ Same trigger, role, and lifecycle rules as `cast_glow`, but anchored to `CASTER`
 |---|---|---|
 | trigger | `DEFERRED ? AREA_IMPACT : SPELL_RELEASE` | FROST_NOVA(SPELL_RELEASE) / ICE_SPIKES(AREA_IMPACT) |
 | anchor | `DEFERRED ? AREA_ORIGIN : CASTER` | — |
-| attach_mode | `SPAWN_WORLD` | — |
+| attach_mode | `DEFERRED ? WORLD_ALIGNED_TO_FACING : SPAWN_WORLD` | Deferred self-origin areas preserve the cast-facing direction (ICE_SPIKES / GUST_OF_WIND). |
 | vfx_role | `ONE_SHOT` | — |
 | lifecycle / duration | as `impact` (B.5) | FROST_NOVA/SHOCKWAVE/INTIMIDATE all PARTICLE_SYSTEM |
 

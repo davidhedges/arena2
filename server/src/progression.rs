@@ -4882,6 +4882,7 @@ fn is_known_damage_type(value: &str) -> bool {
         "PHYSICAL"
             | "FIRE"
             | "COLD"
+            | "AIR"
             | "LIGHTNING"
             | "POISON"
             | "HOLY"
@@ -9109,6 +9110,77 @@ mod tests {
     }
 
     #[test]
+    fn gust_of_wind_authors_air_cone_knockback_and_facing_aligned_vfx() {
+        let catalog = progression_catalog();
+        let ability = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "SPELL_GUST_OF_WIND")
+            .expect("expected Gust of Wind ability");
+        assert_eq!(
+            normalize_identifier(ability.action_id.as_str()),
+            "GUST_OF_WIND"
+        );
+        assert_eq!(
+            normalize_identifier(ability.gameplay.targeting.as_str()),
+            "SELF"
+        );
+        assert_eq!(ability.gameplay.requires_target, Some(false));
+        assert_eq!(ability.gameplay.cast_time_ms, Some(0));
+
+        let delivery = ability
+            .gameplay
+            .delivery
+            .as_ref()
+            .expect("Gust of Wind should author spell delivery");
+        assert_eq!(
+            delivery.get("damage").and_then(|value| value.as_i64()),
+            Some(0)
+        );
+        assert_eq!(
+            delivery.get("damage_type").and_then(|value| value.as_str()),
+            Some("AIR")
+        );
+        let shape = delivery
+            .get("shape")
+            .and_then(|value| value.as_object())
+            .expect("Gust of Wind should author cone geometry");
+        assert_eq!(
+            shape.get("kind").and_then(|value| value.as_str()),
+            Some("CASTER_CONE")
+        );
+        let effects = delivery
+            .get("impact_effects")
+            .and_then(|value| value.as_array())
+            .expect("Gust of Wind should author impact effects");
+        assert!(effects.iter().any(|effect| {
+            effect.get("kind").and_then(|value| value.as_str()) == Some("KNOCKBACK")
+                && effect
+                    .get("distance_meters")
+                    .and_then(|value| value.as_f64())
+                    == Some(4.0)
+        }));
+
+        let cue = catalog
+            .combat_vfx_cues
+            .iter()
+            .find(|cue| {
+                normalize_identifier(cue.owner_id.as_str()) == "SPELL_GUST_OF_WIND"
+                    && normalize_identifier(cue.trigger.as_str()) == "AREA_IMPACT"
+            })
+            .expect("Gust of Wind should author an area-impact VFX cue");
+        assert_eq!(normalize_identifier(cue.anchor.as_str()), "AREA_ORIGIN");
+        assert_eq!(
+            normalize_identifier(cue.vfx_id.as_str()),
+            "VFX_AIR_GUST_CONE_01"
+        );
+        assert_eq!(
+            normalize_identifier(cue.attach_mode.as_str()),
+            "WORLD_ALIGNED_TO_FACING"
+        );
+    }
+
+    #[test]
     fn generic_spell_abilities_are_profile_neutral_and_author_damage_types() {
         let expected = [
             ("SPELL_FIREBALL", "FIREBALL", "FIRE"),
@@ -9132,6 +9204,7 @@ mod tests {
             ("SPELL_FROST_NEEDLE", "FROST_NEEDLE", "COLD"),
             ("SPELL_INSTANT_BEAM", "INSTANT_BEAM", "ARCANE"),
             ("SPELL_ORBITING_BLADES", "ORBITING_BLADES", "LIGHTNING"),
+            ("SPELL_GUST_OF_WIND", "GUST_OF_WIND", "AIR"),
         ];
 
         for (ability_id, action_id, damage_type) in expected {

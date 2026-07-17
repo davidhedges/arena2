@@ -39,7 +39,7 @@ namespace Arena.Presentation
     [CreateAssetMenu(menuName = "Arena/School VFX Set", fileName = "SchoolVfxSet")]
     public sealed class SchoolVfxSet : ScriptableObject
     {
-        [Tooltip("School id — FIRE / COLD / LIGHTNING / ARCANE / HOLY / SHADOW / VOID / DARK / …")]
+        [Tooltip("School id — FIRE / COLD / AIR / LIGHTNING / ARCANE / HOLY / SHADOW / VOID / DARK / …")]
         public string schoolId = string.Empty;
         [SerializeField] private List<SchoolVfxSlotEntry> slots = new();
 

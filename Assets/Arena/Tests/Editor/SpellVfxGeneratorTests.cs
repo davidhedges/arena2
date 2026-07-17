@@ -348,6 +348,16 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void DeferredSelfNovaBurst_AlignsToCastFacing()
+        {
+            object burst = Wire("SelfNova", "Burst", "Instant", true, true);
+            Assert.That(WireStr(burst, "Trigger"), Is.EqualTo("AREA_IMPACT"));
+            Assert.That(WireStr(burst, "Anchor"), Is.EqualTo("AreaOrigin"));
+            Assert.That(WireStr(burst, "AttachMode"), Is.EqualTo("WORLD_ALIGNED_TO_FACING"));
+            Assert.That(WireStr(burst, "Lifecycle"), Is.EqualTo("PARTICLE_SYSTEM"));
+        }
+
+        [Test]
         public void TargetHitImpact_UsesSpellImpactTargetAnchor()
         {
             // Rule 15: TARGET anchor is only legal because the trigger is SPELL_IMPACT (post-impact).

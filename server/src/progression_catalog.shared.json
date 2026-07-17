@@ -1733,6 +1733,48 @@
       }
     },
     {
+      "ability_id": "SPELL_GUST_OF_WIND",
+      "actor_scope": "PLAYER",
+      "combat_profile_id": "",
+      "action_id": "GUST_OF_WIND",
+      "display_name": "Gust of Wind",
+      "resource_kind": "MANA",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 1014,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 1200,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "SELF",
+        "target_audience": "HOSTILE",
+        "requires_target": false,
+        "resource_cost": 20,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "AREA",
+          "max_distance": 7.5,
+          "damage": 0,
+          "damage_type": "AIR",
+          "block_behavior": "BLOCKABLE",
+          "shape": {
+            "kind": "CASTER_CONE",
+            "angle_degrees": 65,
+            "vertical_tolerance": 2.5
+          },
+          "impact_effects": [
+            {
+              "kind": "KNOCKBACK",
+              "distance_meters": 4
+            }
+          ]
+        }
+      }
+    },
+    {
       "ability_id": "SPELL_STONESPIRE",
       "actor_scope": "PLAYER",
       "combat_profile_id": "",
@@ -5015,6 +5057,13 @@
     },
     {
       "presentation_kind": "ABILITY",
+      "presentation_id": "SPELL_GUST_OF_WIND",
+      "display_name": "Gust of Wind",
+      "description": "Blasts enemies in a frontal cone, knocking them backward without dealing damage.",
+      "sort_order": 92
+    },
+    {
+      "presentation_kind": "ABILITY",
       "presentation_id": "WARRIOR_GIANT_SWING",
       "display_name": "Giant Swing",
       "description": "Empowers the next attack to reach farther and stagger enemies hit.",
@@ -6254,6 +6303,19 @@
       "lifecycle": "UNTIL_RADIAL_EFFECT_END",
       "duration_ms": 0,
       "sort_order": 201
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "SPELL_GUST_OF_WIND",
+      "slot": "burst",
+      "trigger": "AREA_IMPACT",
+      "anchor": "AREA_ORIGIN",
+      "vfx_id": "VFX_AIR_GUST_CONE_01",
+      "attach_mode": "WORLD_ALIGNED_TO_FACING",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "PARTICLE_SYSTEM",
+      "duration_ms": 0,
+      "sort_order": 202
     },
     {
       "owner_kind": "ABILITY", "owner_id": "NPC_DEMON_SUMMONER_SHADOW_BOLT", "slot": "cast_glow", "trigger": "SPELL_CAST", "anchor": "LEFT_HAND",

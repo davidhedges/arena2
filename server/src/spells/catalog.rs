@@ -2738,6 +2738,7 @@ mod tests {
                 "GLACIAL_SPIKE",
                 "FROZEN_GRASP",
                 "NECROTIC_AURA",
+                "GUST_OF_WIND",
                 "STONESPIRE",
                 "MOMENTUM",
                 "FORTIFY",
@@ -2889,6 +2890,7 @@ mod tests {
             "GLACIAL_SPIKE",
             "FROZEN_GRASP",
             "FLAMING_ORB",
+            "GUST_OF_WIND",
             "MOMENTUM",
             "FORTIFY",
             "IRON_WILL",
@@ -2981,6 +2983,39 @@ mod tests {
         assert_eq!(definition.speed, 20.0);
         assert_eq!(definition.max_distance, 18.0);
         assert_eq!(projectile.damage_multiplier_at_lifetime_end, 1.0);
+    }
+
+    #[test]
+    fn gust_of_wind_authors_zero_damage_air_cone_knockback() {
+        let definition = spell_definition_by_str("GUST_OF_WIND")
+            .expect("GUST_OF_WIND should derive from the shared catalog");
+        let area = definition
+            .secondary
+            .area
+            .as_ref()
+            .expect("GUST_OF_WIND should use area delivery");
+
+        assert_eq!(definition.behavior, SpellBehavior::Area);
+        assert_eq!(definition.targeting, SpellTargeting::Self_);
+        assert_eq!(definition.target_audience, TargetAudience::Hostile);
+        assert!(!definition.requires_target);
+        assert_eq!(definition.cast_time, Duration::ZERO);
+        assert_eq!(definition.damage, 0);
+        assert_eq!(definition.damage_type, DamageType::Air);
+        assert_eq!(
+            area.shape,
+            CombatAreaShape::Cone {
+                range: 7.5,
+                angle_degrees: 65.0,
+                vertical_tolerance: Some(2.5),
+            }
+        );
+        assert_eq!(
+            area.impact_effects,
+            vec![ImpactEffect::Knockback {
+                distance_meters: 4.0,
+            }]
+        );
     }
 
     #[test]

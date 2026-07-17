@@ -738,6 +738,7 @@ mod tests {
             "BLINDING_LIGHT",
             "GLACIAL_SPIKE",
             "FROZEN_GRASP",
+            "GUST_OF_WIND",
             "FROST_NEEDLE",
             "MOMENTUM",
             "INTIMIDATE",
@@ -787,6 +788,7 @@ mod tests {
             "NEGATE",
             "BLINDING_LIGHT",
             "FROZEN_GRASP",
+            "GUST_OF_WIND",
             "FROST_NEEDLE",
             "MOMENTUM",
             "BATTLE_CRY",
@@ -1215,6 +1217,44 @@ mod tests {
         assert_eq!(status.duration(), Duration::from_millis(1_200));
         assert!((definition.primary_resource_gain_on_cast - 0.0).abs() < 0.0001);
         assert!(!definition.generates_primary_resource_on_cast);
+    }
+
+    #[test]
+    fn gust_of_wind_catalog_matches_zero_damage_cone_knockback_defaults() {
+        let definition = definition("GUST_OF_WIND");
+
+        assert_eq!(definition.kind.as_str(), "GUST_OF_WIND");
+        assert_eq!(definition.cooldown, Duration::from_millis(1_200));
+        assert!(definition.uses_global_cooldown);
+        assert_eq!(definition.behavior.as_str(), "AREA");
+        assert_eq!(definition.targeting.as_str(), "SELF");
+        assert_eq!(definition.target_audience.as_str(), "HOSTILE");
+        assert!(!definition.requires_target);
+        assert_eq!(definition.cast_time, Duration::ZERO);
+        assert_eq!(definition.damage, 0);
+        assert_eq!(definition.damage_type.as_str(), "AIR");
+        assert!((definition.primary_resource_cost - 20.0).abs() < 0.0001);
+        assert!(!definition.arms_auto_attack_on_cast);
+        let area = definition
+            .secondary
+            .area
+            .as_ref()
+            .expect("Gust of Wind should define area secondary data");
+        assert_eq!(
+            area.shape,
+            crate::combat::scene_query::CombatAreaShape::Cone {
+                range: 7.5,
+                angle_degrees: 65.0,
+                vertical_tolerance: Some(2.5),
+            }
+        );
+        assert_eq!(area.impact_effects.len(), 1);
+        assert!(matches!(
+            area.impact_effects[0],
+            ImpactEffect::Knockback {
+                distance_meters: 4.0
+            }
+        ));
     }
 
     #[test]

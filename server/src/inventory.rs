@@ -2310,6 +2310,7 @@ impl EquipmentModifierTotals {
             }
             "FIRE" => self.magic_resistance + self.fire_resistance,
             "COLD" => self.magic_resistance + self.cold_resistance,
+            "AIR" => self.magic_resistance,
             "LIGHTNING" => self.magic_resistance + self.lightning_resistance,
             "POISON" => self.magic_resistance + self.poison_resistance,
             "HOLY" => self.magic_resistance + self.holy_resistance,
@@ -5387,6 +5388,7 @@ mod tests {
         assert!((totals.resistance_for_damage_type("PHYSICAL") - 0.20).abs() < 0.0001);
         assert!((totals.resistance_for_damage_type("FIRE") - 0.25).abs() < 0.0001);
         assert!((totals.resistance_for_damage_type("COLD") - 0.20).abs() < 0.0001);
+        assert!((totals.resistance_for_damage_type("AIR") - 0.15).abs() < 0.0001);
         assert!((totals.resistance_for_damage_type("SHADOW") - 0.45).abs() < 0.0001);
         assert!((totals.resistance_for_damage_type("NECROTIC") - 0.15).abs() < 0.0001);
         assert!((totals.resistance_for_damage_type("ARCANE") - 0.15).abs() < 0.0001);

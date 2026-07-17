@@ -192,6 +192,7 @@ pub enum DamageType {
     Physical,
     Fire,
     Cold,
+    Air,
     Lightning,
     Poison,
     Holy,
@@ -206,6 +207,7 @@ impl DamageType {
             Self::Physical => "PHYSICAL",
             Self::Fire => "FIRE",
             Self::Cold => "COLD",
+            Self::Air => "AIR",
             Self::Lightning => "LIGHTNING",
             Self::Poison => "POISON",
             Self::Holy => "HOLY",
@@ -219,6 +221,7 @@ impl DamageType {
         match value.trim().to_ascii_uppercase().as_str() {
             "FIRE" => Self::Fire,
             "COLD" => Self::Cold,
+            "AIR" => Self::Air,
             "LIGHTNING" => Self::Lightning,
             "POISON" => Self::Poison,
             "HOLY" => Self::Holy,
