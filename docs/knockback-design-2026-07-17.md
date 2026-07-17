@@ -1,8 +1,10 @@
-# Knockback — Formal Design (2026-07-17, rev 2)
+# Knockback — Formal Design (2026-07-17, rev 3)
 
-Status: PROPOSED — rev 2 resolves the five P1 contract gaps + corrections from the 2026-07-17 review. No code has been changed.
+Status: PROPOSED — rev 2 resolved the five P1 contract gaps from the first review; rev 3 resolves the second review's findings. No code has been changed.
 
 Rev 2 changes at a glance: knockback is now a **first-class effect packet** (not a `StatusApplication` masquerade) carrying impact-time direction; explicit ordering-independent **stagger/knockback composition rule**; knockback **terminates self-initiated movement deliveries** (dash casts) instead of orphaning them; NPC AI is gated by the **forced-movement row itself**, not the hold stamp; the player mover's **non-scene-aware ground-Y sampling** is called out as a prerequisite fix; NPC resistance stays off the public catalog table; duration clamp contradiction removed.
+
+Rev 3 changes at a glance: actor **teardown deletes forced movement unconditionally** (the scoped delete applies only to ordinary cast termination); zero-damage knockbacks **explicitly enter combat** via `mark_harmful_combat_action`; phases 1–2 **do require binding regen and the schema-change publish path** (new private tables still change the module schema); the stagger shove **keeps its authored 4.5 m/s feel** (no silent retune to 12 m/s); 12 m/s is documented as the *nominal* speed (the one-tick duration floor makes sub-0.4 m pushes slower).
 
 ## 1. What we're building
 
@@ -80,12 +82,12 @@ Global tuning (new `combat_rules` entries, published via the existing catalog fl
 
 | Rule | Default | Meaning |
 |---|---|---|
-| `KNOCKBACK_SPEED_METERS_PER_SEC` | 12.0 | Constant push speed; duration derived exactly (`distance / speed`, floor one tick) |
+| `KNOCKBACK_SPEED_METERS_PER_SEC` | 12.0 | **Nominal** push speed; duration derived (`distance / speed`, floor one tick = 33 ms) |
 | `KNOCKBACK_MAX_DISTANCE_METERS` | 10.0 | Authored-distance cap (sanity bound; replaces any duration clamp) |
 | `KNOCKBACK_MIN_EFFECTIVE_DISTANCE_METERS` | 0.1 | Below this (post-resistance), skip the shove entirely |
 | `MAX_EQUIPMENT_KNOCKBACK_RESISTANCE` | 0.6 | Gear alone can never reach immunity |
 
-Strength = authored distance, not an abstract tier. Duration is derived exactly from the constant speed — no independent clamp, so push speed is uniform at every distance (the rev-1 `[60, 800]` ms clamp contradicted constant speed outside 0.72–9.6 m and is dropped). After resistance scaling, duration shrinks with distance.
+Strength = authored distance, not an abstract tier. Duration is derived from the nominal speed with no independent clamp (the rev-1 `[60, 800]` ms clamp contradicted constant speed outside 0.72–9.6 m and is dropped). The one-tick duration floor means pushes under ~0.4 m travel slower than nominal — 12 m/s is the contract for every push above that, not a universal constant. After resistance scaling, duration shrinks with distance.
 
 ### 3.3 Direction rules (per delivery, captured at the hit site)
 
@@ -112,30 +114,31 @@ Sources, each on an existing rail:
 
 1. **Equipment** (persistent): new `knockback_resistance` field on `EquipmentModifierTotals`, new `MODIFIER_KNOCKBACK_RESISTANCE` constant + `apply_modifier_value` arm + clamp, new seeded `AFFIX_KNOCKBACK_RESISTANCE_MINOR` (mirrors the elemental-resistance affixes). Character sheet displays it automatically as a `+X%` row.
 2. **Status buff** (temporary): new `StatusEffectKind::KnockbackResistance` carrying `modifier_scalar` (an authored buff spell can set 1.0 = immunity — the "Steadfast" pattern), accumulated in `TemporaryCombatModifiers` with an accessor like `knockback_resistance_for(target)`; modeled on `MagicResistance`/`MoveSlowImmunity`. Needs a `StatusTooltipResolver` entry client-side.
-3. **NPC template** (innate): new optional `knockback_resistance` field on the **private authored `NpcTemplate` only** (`npcs.rs:286-310` + `npc_catalog.shared.json`, serde default 0.0 — none of the 65 templates need touching). It is deliberately **not** added to the public `NpcTemplateCatalog` table: the client has no use for it and keeping it private avoids a binding regen (review correction). Bosses/heavies author 1.0; this doubles as the boss-immunity flag.
+3. **NPC template** (innate): new optional `knockback_resistance` field on the **private authored `NpcTemplate` only** (`npcs.rs:286-310` + `npc_catalog.shared.json`, serde default 0.0 — none of the 65 templates need touching). It is deliberately **not** added to the public `NpcTemplateCatalog` table: the client has no use for it, and keeping it private avoids a public catalog-column change (review correction). Bosses/heavies author 1.0; this doubles as the boss-immunity flag.
 
-Resistance is read once, at effect application time (not at cast time, not re-checked mid-push). **Decided**: the existing stagger shove routes through the same formula — resist gear will shrink stagger shoves (flagged behavior change).
+Resistance is read once, at effect application time (not at cast time, not re-checked mid-push). **Decided**: the existing stagger shove routes through the same *resistance* formula — resist gear will shrink stagger shoves (flagged behavior change). It does **not** adopt the knockback speed rule: stagger keeps its authored 0.45 m / 100 ms (4.5 m/s) feel, and `STAGGER_SHOVE_DURATION_MS` stays live (§3.5.3).
 
 ### 3.5 Server pipeline changes
 
 1. **Parse**: new `ImpactEffectRow::Knockback { distance_meters }` variant (`catalog.rs:431-548`) converting to `ImpactEffect::Knockback`; melee variant per §3.2. `deny_unknown_fields` forces JSON and structs to move together. New `StatusEffectKind::KnockbackResistance` (buff only — there is **no** knockback status kind).
-2. **Queue/resolve**: `EffectPacket::Knockback` → `PendingKnockback` (private table) → `resolve_pending_effects` arm → `start_knockback_shove(ctx, now, source, target, dir, authored_distance)`. Zero-damage knockbacks are legal (no `requires_positive_damage` coupling); knockback is not hard CC.
-3. **Shove (players)**: `start_knockback_shove` mirrors `start_stagger_shove` (`combat.rs:4778`) with parameters: applies resistance, derives duration, bakes via `bake_linear_special_movement`, starts kind `KNOCKBACK` with `FACE_START` facing and `STOP_AT_BLOCK` collision. `start_stagger_shove` becomes a thin call into it (direction from `source_to_target_direction`, distance from the `STAGGER_SHOVE_*` rules).
+2. **Queue/resolve**: `EffectPacket::Knockback` → `PendingKnockback` (private table) → `resolve_pending_effects` arm → `start_knockback_shove(ctx, now, source, target, dir, authored_distance)`. Zero-damage knockbacks are legal (no `requires_positive_damage` coupling); knockback is not hard CC. **Combat entry (review P1)**: damage marks harmful engagement only when the hit amount is positive (`combat.rs:3954`) and statuses mark it through the status path (`combat.rs:4572`) — a dedicated zero-damage knockback packet bypasses both, which would let utility pushes keep the victim out of combat (and regenerating). `PendingKnockback` resolution therefore explicitly calls `mark_harmful_combat_action` after validating the hostile interaction.
+3. **Shove (players)**: `start_knockback_shove` mirrors `start_stagger_shove` (`combat.rs:4778`) with parameters: applies resistance, derives duration from a per-shove **nominal speed**, bakes via `bake_linear_special_movement`, starts kind `KNOCKBACK` with `FACE_START` facing and `STOP_AT_BLOCK` collision. `start_stagger_shove` becomes a thin call into it — direction from `source_to_target_direction`, distance from `STAGGER_SHOVE_DISTANCE_METERS`, and **its own nominal speed derived from the authored `STAGGER_SHOVE_DISTANCE_METERS` / `STAGGER_SHOVE_DURATION_MS` pair (4.5 m/s)**, not the 12 m/s knockback rule. Both rules stay live; resistance scales distance and duration proportionally, preserving each shove's authored speed (review correction — rev 2 silently retuned stagger to ~38 ms).
 4. **Preemption & composition rules** (all flagged behavior changes):
    - **Externally-imposed kinds.** Define `is_externally_imposed_movement_kind(kind)` = {`KNOCKBACK`, `STAGGER_SHOVE`}. Both runtime-deletion sites — `clear_active_cast` (`casting.rs:4086-4091`, reached via cast fizzle) and `interrupt_player_actions_for_stagger` (`combat.rs:4729-4733`) — scope their `special_movement_runtime` delete to **skip externally-imposed kinds**. Semantics: those deletes exist to tear down movement the victim *initiated* (a dash cast owns its track); an imposed push is never cast-owned. Rev 1 only patched the explicit delete; the review showed the fizzle→`clear_active_cast` path deletes the runtime too, so both sites must be scoped.
+   - **Teardown carve-out (review P1).** `clear_transient_actor_state` (`server/src/actor_lifecycle.rs:164`) currently relies on `clear_active_cast` to delete *all* special movement on despawn and reconnect; scoping that helper alone would leak a live knockback track across teardown. Actor teardown therefore deletes `special_movement_runtime` **unconditionally** (explicit delete added in `clear_transient_actor_state`); the scoped delete applies only to ordinary cast termination.
    - **Stagger + knockback co-authored (ordering-independent rule).** `start_stagger_shove` **no-ops** when a `PendingKnockback` row exists for the target (knockback later in this resolution batch) **or** an active `KNOCKBACK`-kind runtime exists (knockback already applied). Combined with the scoped deletes above, both resolution orders converge: the authored knockback wins, the 0.45 m stagger shove never stomps it.
-   - **Knockback vs self-initiated movement deliveries (review P1-3).** Replacing only the runtime row would orphan a dash's owning state: dash-to-target also holds an `ActiveCast` and `MovementActionState`, and `tick_active_casts` (`casting.rs:2047`) would wait out the knockback then resolve the dash's hit/fizzle from the victim's new position. Therefore `start_knockback_shove`, before inserting its track: deletes `movement_action_state` and `pending_melee_timed_movement` for the victim, and — **only if** the victim's `ActiveCast` is a movement delivery (`movement_delivery_for_action_id` resolves) — fizzles that cast via the interrupt path. Ordinary non-movement casts continue through the push (**decided**; special-movement ticks do not bump `voluntary_move_epoch` — verified, no cast-mobility conflict).
+   - **Knockback vs self-initiated movement deliveries (review P1-3).** Replacing only the runtime row would orphan a dash's owning state: dash-to-target also holds an `ActiveCast` and `MovementActionState`, and `tick_active_casts` (`casting.rs:2047`) would wait out the knockback then resolve the dash's hit/fizzle from the victim's new position. Therefore `start_knockback_shove`, before inserting its track: deletes `movement_action_state` and `pending_melee_timed_movement` for the victim, and — **only if** the victim's `ActiveCast` is a movement delivery (`movement_delivery_for_action_id` resolves) — fizzles that cast via the interrupt path. Ordinary non-movement casts continue through the push (**decided**; special-movement ticks do not bump `voluntary_move_epoch` — verified, no cast-mobility conflict). **Ordering**: resistance/immunity and the minimum-effective-distance check run *first* — if no shove will be produced, no preemption happens; an immune or negligibly-pushed target never loses its dash or movement action.
    - Root does not anchor against knockback (anchoring is expressed as a resistance buff on the root spell if desired).
 5. **Shove (NPCs)** — the genuinely new machinery:
    - New **private** table `NpcForcedMovement { npc identity (pk), started_at, duration_ms, start, end }`. Baked at apply time with the NPC's `hit_radius` against the same movement sweep + obstacle helpers NPCs already use (`resolve_world_horizontal_sweep_collision_y_with_layout_for_scene`, `resolve_active_world_obstacle_movement`), scene-aware from day one.
    - New `tick_npc_forced_movement` in `game_tick`: lerp along the path, re-resolve live obstacles, write `npc_physics`, `record_position_sample`, and **stamp the NPC's rewind barrier on every forced-movement commit** — player parity with `commit_player_physics`'s per-commit stamping (`player_physics.rs:142`), not a single stamp at start (review correction).
    - **Exclusive ownership gate (review P1-4)**: the NPC combat loop checks for an active `NpcForcedMovement` row **at the top of each NPC's iteration** — before return-home/leash (`npcs.rs:1329-1360`), commitment facing, and steering — and skips all AI physics writes while it exists. The `hold_movement_until_micros` stamp is *not* the gate: return-home runs before the hold check (`npcs.rs:1390`), `clear_npc_combat_runtime` (`npcs.rs:1351`) wipes the hold, and idle NPCs may have no combat runtime to stamp. (A hold stamp may still be set as a courtesy so post-push AI doesn't instantly lunge, but correctness never depends on it.)
    - Lifecycle: delete the row on completion, death, and **despawn via `despawn_npc_identity` in `npcs.rs`** (review correction; not `actor_lifecycle.rs`).
-   - Client rendering: **ordinary `NpcPhysics` interpolation.** At 12 m/s the per-tick delta is ~0.4 m — under the 2.0 m hard-snap threshold, so `RemotePresentationBuffer` renders it as fast smooth motion, exactly how NPC chase movement renders today. No new public table, no binding regen, no client wiring for v1. (Extending `SpecialMovementRuntime` to NPC owners is the polish path if the smoothing reads poorly — deferred.)
+   - Client rendering: **ordinary `NpcPhysics` interpolation.** At 12 m/s the per-tick delta is ~0.4 m — under the 2.0 m hard-snap threshold, so `RemotePresentationBuffer` renders it as fast smooth motion, exactly how NPC chase movement renders today. No new public subscription and no handwritten client wiring for v1 (the new private table still triggers the standard binding regen, §3.6). (Extending `SpecialMovementRuntime` to NPC owners is the polish path if the smoothing reads poorly — deferred.)
 
 ### 3.6 Client changes
 
-Phase 1 (functionality) needs **no client changes**: player displacement plays through the existing `SpecialMovementRuntime` path on local and remote clients (sampler is kind-agnostic — verified); NPC displacement renders through normal physics interpolation; the resistance affix auto-appears on the character sheet. Nothing in phases 1–2 touches a public table schema, so no binding regen is required.
+Phase 1 (functionality) needs **no handwritten client changes**: player displacement plays through the existing `SpecialMovementRuntime` path on local and remote clients (sampler is kind-agnostic — verified); NPC displacement renders through normal physics interpolation; the resistance affix auto-appears on the character sheet. Note (review correction): `PendingKnockback` and `NpcForcedMovement` are new tables and therefore **module schema changes even though private** — this repo regenerates bindings after all server schema changes (private tables produce generated C# types too), so phases 1–2 each require the canonical binding regen and the schema-change publish path; what they don't require is any hand-authored client wiring.
 
 Phase 3 (presentation polish):
 
@@ -159,7 +162,7 @@ Phase 3 (presentation polish):
 | Knockback off a ledge | Y follows terrain down (accepted; no aerial arc in v1) |
 | LOS at impact | Never re-checked (per combat geometry contract — knockback inherits the delivering action's targeting rules) |
 | Damage vs knockback order | Damage first (existing packet queue order: damage packet precedes impact effects) |
-| Resistance ≥ 1.0 | No shove, no track, no reaction |
+| Resistance ≥ 1.0 (or effective distance < min) | No shove, no track, no reaction, **no preemption** — the victim's dash/cast is untouched |
 | Lag comp | Rewind barrier stamped on every shove tick (players: automatic via `commit_player_physics`; NPCs: stamped per commit by the new mover) |
 
 ## 5. Full touchpoint inventory
@@ -168,7 +171,8 @@ Phase 3 (presentation polish):
 - `server/src/spells/manifest.rs` — `ImpactEffect` alias → enum (`:385`); ripple through `SpellSecondaryTunables` consumers
 - `server/src/spells/catalog.rs` — `ImpactEffectRow::Knockback` + conversion (`:431-548`, `:1265+`)
 - `server/src/spells/casting.rs` / `server/src/combat/projectiles.rs` — `push_impact_effect_packets` gains hit-site direction (`casting.rs:237`, `projectiles.rs:359`) at all call sites (direct `casting.rs:6349`, area `casting.rs:5917`, projectile `projectiles.rs:1536`)
-- `server/src/combat.rs` — `EffectPacket::Knockback` (`:3371`), `queue_effect` arm (`:3416`), `PendingKnockback` table + `resolve_pending_effects` arm (`:3768`), `start_knockback_shove` (generalizing `:4778-4847`), stagger no-op composition rule (`:4747/:4778`), scoped runtime deletes (`:4729-4733`), `StatusEffectKind::KnockbackResistance` (`:2150`) + `TemporaryCombatModifiers` accumulation + accessor (`:5520-5629`)
+- `server/src/combat.rs` — `EffectPacket::Knockback` (`:3371`), `queue_effect` arm (`:3416`), `PendingKnockback` table + `resolve_pending_effects` arm (`:3768`) including `mark_harmful_combat_action` on resolution (combat entry for zero-damage pushes, cf. `:3954`/`:4572`), `start_knockback_shove` (generalizing `:4778-4847`), stagger no-op composition rule (`:4747/:4778`), scoped runtime deletes (`:4729-4733`), `StatusEffectKind::KnockbackResistance` (`:2150`) + `TemporaryCombatModifiers` accumulation + accessor (`:5520-5629`)
+- `server/src/actor_lifecycle.rs` — unconditional `special_movement_runtime` delete in `clear_transient_actor_state` (`:164`), compensating for the scoped delete in `clear_active_cast`
 - `server/src/spells/casting.rs` — scoped runtime delete in `clear_active_cast` (`:4086-4091`); `is_externally_imposed_movement_kind` helper; `KNOCKBACK` kind constant
 - `server/src/progression.rs` — `MeleeImpactEffectDefinition::Knockback` (`:368`) + mapping in `melee_impact_effects_for_ability_id` (`:2487`); melee impact push site (`melee.rs:5020/:5175`)
 - `server/src/progression_catalog.shared.json` — new combat rules (§3.2); knockback authored on pilot spells; resistance buff spell (optional)
@@ -188,25 +192,26 @@ Phase 3 (presentation polish):
 - `Assets/Arena/Runtime/Presentation/CombatStatusReactionController.cs` / `PlayerAnimator.cs` — dedicated reaction (v1 reuses `TriggerStagger`)
 - `Assets/Arena/Runtime/Presentation/Animation/CombatAnimationSet.cs` + `CombatAnimationSetBinder.cs` + `Arena_Character.controller` — dedicated clips/slots (deferred)
 - `Assets/Arena/Runtime/Combat/StatusTooltipResolver.cs` — `KnockbackResistance` buff tooltip
-- Generated bindings — **no regen needed for phases 1–2** (no public schema changes); regen only if phase-3 adds public data (canonical regen = harness-featured cargo build + `spacetime generate --bin-path`)
+- Generated bindings — **regen required in phases 1 and 2** (new tables = schema change even when private; canonical regen = harness-featured cargo build + `spacetime generate --bin-path`, per `docs/project-structure.md:77`)
 
 **Not touched (by contract)**: LOS/query raycast paths (`raycast_world_with_layout_for_scene_with_stats`, `ServerLosCollisionData`) — knockback uses *movement* geometry only, which is the correct dataset for displacement per the combat geometry contract.
 
 ## 6. Phasing
 
-1. **Phase 1 — server core (players)**: scene-aware mover Y fix (prerequisite), effect variant end-to-end (`ImpactEffect` enum, packet, pending table, resolve), `start_knockback_shove` + composition/preemption rules, resistance plumbing (equipment + buff kind + NPC template field parsed but unused), combat rules, 1–2 pilot spells authored. Publish via `ops/republish-catalog.sh`. *Playable immediately with zero client changes.*
-2. **Phase 2 — NPC displacement**: `NpcForcedMovement` + mover + top-of-loop AI gate + lifecycle + per-commit rewind stamps; author resistance on heavy/boss templates.
+1. **Phase 1 — server core (players)**: scene-aware mover Y fix (prerequisite), effect variant end-to-end (`ImpactEffect` enum, packet, pending table, resolve + combat-entry mark), `start_knockback_shove` + composition/preemption/teardown rules, resistance plumbing (equipment + buff kind + NPC template field parsed but unused), combat rules, 1–2 pilot spells authored. Deploy via the **schema-change publish path** + catalog re-sync (`publish_progression_catalogs`) + canonical binding regen — `ops/republish-catalog.sh` is explicitly for no-schema changes only (`ops/republish-catalog.sh:4`) and does not apply here. *Playable with zero handwritten client changes.*
+2. **Phase 2 — NPC displacement**: `NpcForcedMovement` + mover + top-of-loop AI gate + lifecycle + per-commit rewind stamps; author resistance on heavy/boss templates. Same schema-change publish + regen requirement (new table).
 3. **Phase 3 — presentation polish**: knockback reaction dispatch + clips, tooltip entry, optional hitstop/immune floater.
 
-Verification (per phase, live): headless probe in the `ops/s*-probe` style — cast a pilot knockback spell at a fixture target; assert displacement distance/direction from `PlayerPhysics`/`NpcPhysics` deltas; repeat with resistance gear equipped (scaled) and an immune NPC (unmoved); shove-into-wall asserts the baked stop; stagger+knockback pilot spell asserts the composition rule; dash-victim case asserts the dash cast fizzles. Catalog parse errors self-report at boot via the `deny_unknown_fields` panic.
+Verification (per phase, live): headless probe in the `ops/s*-probe` style — cast a pilot knockback spell at a fixture target; assert displacement distance/direction from `PlayerPhysics`/`NpcPhysics` deltas; repeat with resistance gear equipped (scaled) and an immune NPC (unmoved); shove-into-wall asserts the baked stop; stagger+knockback pilot spell asserts the composition rule; dash-victim case asserts the dash cast fizzles; zero-damage push asserts the victim enters combat (regen stops); disconnect mid-push asserts no runtime row survives teardown. Catalog parse errors self-report at boot via the `deny_unknown_fields` panic.
 
 ## 7. Decision log
 
-**Decided (owner, 2026-07-17 review):**
+**Decided (owner, 2026-07-17 reviews):**
 - AoE knockback direction is radial from area center.
-- Knockback resistance applies to the existing stagger shove (behavior change: resist gear shrinks stagger shoves).
+- Knockback resistance applies to the existing stagger shove (behavior change: resist gear shrinks stagger shoves) — but stagger keeps its authored 0.45 m / 100 ms (4.5 m/s) feel; it is *not* retuned to the knockback speed rule.
 - Fortitude-derived resistance is deferred.
 - Ordinary (non-movement) casts continue through a knockback; interruption is authored by composing with Stagger.
+- Hostile zero-damage pushes count as harmful combat actions (combat entry, regen interruption).
 
 **Still open:**
 - Tuning defaults: 12 m/s push speed, 10 m distance cap, 0.6 gear cap — all in `combat_rules`, cheap to retune post-playtest.
