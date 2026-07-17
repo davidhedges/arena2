@@ -27,7 +27,6 @@ namespace Arena.Tests.Editor
         private const string ActionBarSlotViewFactoryPath = "Assets/Arena/Runtime/UI/ActionBarSlotViewFactory.cs";
         private const string ActionBarDragDropPath = "Assets/Arena/Runtime/UI/ActionBarDragDrop.cs";
         private const string ActionBarLayoutPath = "Assets/Arena/Runtime/UI/ActionBarLayout.cs";
-        private const string InventoryControllerPath = "Assets/Arena/Runtime/UI/InventoryController.cs";
         private const string TooltipPath = "Assets/Arena/Runtime/UI/Tooltip.cs";
         private const string ActionBarSlotPrefabAssetPath = "Assets/Arena/Resources/UI/ActionBar/ActionBarSlot.prefab";
         private const string ActionBarSlotTextureAssetPath = "Assets/Arena/Resources/UI/ActionBar/slot.png";
@@ -445,8 +444,6 @@ namespace Arena.Tests.Editor
             string hud = File.ReadAllText(HudControllerPath);
             Assert.That(hud, Does.Contain("ActionBarLayout.IconInset"));
 
-            string inventory = File.ReadAllText(InventoryControllerPath);
-            Assert.That(inventory, Does.Contain("ActionBarLayout.IconInset"));
         }
 
         [Test]

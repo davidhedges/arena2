@@ -465,14 +465,23 @@ def main() -> None:
     # The window is painted lit from the top-left: right/bottom rails are the
     # AUTHORED shaded rails, never the lit left/top rails mirrored (mirroring
     # flips the highlight to the wrong side — owner-flagged 2026-07-17).
+    # Rails ship as native-scale TILEABLE strips (background-repeat) so windows
+    # can be any size at runtime; the clipped tile at each end hides under the
+    # corner pieces (rails inset 52, corners 56).
     rail_bottom = cut((394, 545, 450, 583), key=False)
     rail_right = cut((909, 130, 947, 235), key=False)
-    for length in (296, 500, 556):
-        save(bake_rail(rail_h, length, 23), f"window_rail_h_{length}x23.png")
-        save(bake_rail(rail_bottom, length, 23), f"window_rail_bottom_{length}x23.png")
-    for length in (338, 496, 536):
-        save(bake_rail(rail_v, length, 23, vertical=True), f"window_rail_v_{length}x23.png")
-        save(bake_rail(rail_right, length, 23, vertical=True), f"window_rail_right_{length}x23.png")
+
+    def rail_strip(source: Image.Image, vertical: bool = False) -> Image.Image:
+        if vertical:
+            scaled = source.resize((23, round(source.height * (23 / source.width))), Image.LANCZOS)
+        else:
+            scaled = source.resize((round(source.width * (23 / source.height)), 23), Image.LANCZOS)
+        return make_tileable(scaled, horizontal=not vertical)
+
+    save(rail_strip(rail_h), "window_rail_top.png")
+    save(rail_strip(rail_bottom), "window_rail_bottom.png")
+    save(rail_strip(rail_v, vertical=True), "window_rail_left.png")
+    save(rail_strip(rail_right, vertical=True), "window_rail_right.png")
 
     # Ornaments.
     save(cut((977, 396, 1531, 429)), "divider.png")

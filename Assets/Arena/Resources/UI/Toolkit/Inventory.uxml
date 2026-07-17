@@ -1,0 +1,182 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <!-- Translated from docs/ui-prototypes/inventory (the spec). name="" is the
+         binding contract InventoryScreen.cs queries. Grid cells and item
+         elements are built by the controller from server container data. -->
+    <Style src="Inventory.uss" />
+
+    <ui:VisualElement name="InventoryScreen" class="inventory-screen">
+
+        <ui:VisualElement name="LootWindow" class="menu-window loot-window">
+            <ui:VisualElement class="window-shadow" picking-mode="Ignore" />
+            <ui:VisualElement class="window-body" />
+            <ui:VisualElement class="frame-rail frame-rail--top" picking-mode="Ignore" />
+            <ui:VisualElement class="frame-rail frame-rail--bottom" picking-mode="Ignore" />
+            <ui:VisualElement class="frame-rail frame-rail--left" picking-mode="Ignore" />
+            <ui:VisualElement class="frame-rail frame-rail--right" picking-mode="Ignore" />
+            <ui:VisualElement class="frame-corner frame-corner--tl" picking-mode="Ignore" />
+            <ui:VisualElement class="frame-corner frame-corner--tr" picking-mode="Ignore" />
+            <ui:VisualElement class="frame-corner frame-corner--bl" picking-mode="Ignore" />
+            <ui:VisualElement class="frame-corner frame-corner--br" picking-mode="Ignore" />
+
+            <ui:VisualElement class="window-flow">
+                <ui:VisualElement class="header-plate">
+                    <ui:Label name="LootTitle" class="window-title" text="LOOT" />
+                </ui:VisualElement>
+                <ui:VisualElement class="grid-window-content">
+                    <ui:VisualElement name="LootGrid" class="arena-grid">
+                        <ui:VisualElement name="LootCells" class="grid-cells" picking-mode="Ignore" />
+                        <ui:VisualElement class="grid-edge grid-edge--top" picking-mode="Ignore" />
+                        <ui:VisualElement class="grid-edge grid-edge--bottom" picking-mode="Ignore" />
+                        <ui:VisualElement class="grid-edge grid-edge--left" picking-mode="Ignore" />
+                        <ui:VisualElement class="grid-edge grid-edge--right" picking-mode="Ignore" />
+                        <ui:VisualElement name="LootItems" class="grid-items" picking-mode="Ignore" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:VisualElement name="CharacterWindow" class="menu-window char-window">
+            <ui:VisualElement class="window-shadow" picking-mode="Ignore" />
+            <ui:VisualElement class="window-body" />
+            <ui:VisualElement class="frame-rail frame-rail--top" picking-mode="Ignore" />
+            <ui:VisualElement class="frame-rail frame-rail--bottom" picking-mode="Ignore" />
+            <ui:VisualElement class="frame-rail frame-rail--left" picking-mode="Ignore" />
+            <ui:VisualElement class="frame-rail frame-rail--right" picking-mode="Ignore" />
+            <ui:VisualElement class="frame-corner frame-corner--tl" picking-mode="Ignore" />
+            <ui:VisualElement class="frame-corner frame-corner--tr" picking-mode="Ignore" />
+            <ui:VisualElement class="frame-corner frame-corner--bl" picking-mode="Ignore" />
+            <ui:VisualElement class="frame-corner frame-corner--br" picking-mode="Ignore" />
+
+            <ui:VisualElement class="window-flow">
+                <ui:VisualElement class="header-plate">
+                    <ui:Label class="window-title" text="CHARACTER" />
+                </ui:VisualElement>
+
+                <ui:VisualElement class="char-content">
+                    <ui:VisualElement name="EquipDoll" class="equip-doll">
+                        <ui:VisualElement name="Slot_HEAD" class="slot-box equip-slot equip-slot--head">
+                            <ui:VisualElement class="item-icon" picking-mode="Ignore" />
+                            <ui:VisualElement class="slot-glow" picking-mode="Ignore" />
+                            <ui:Label class="slot-label" text="HEAD" />
+                        </ui:VisualElement>
+                        <ui:VisualElement name="Slot_SHOULDER" class="slot-box equip-slot equip-slot--shoulder">
+                            <ui:VisualElement class="item-icon" picking-mode="Ignore" />
+                            <ui:VisualElement class="slot-glow" picking-mode="Ignore" />
+                            <ui:Label class="slot-label" text="SHOULDER" />
+                        </ui:VisualElement>
+                        <ui:VisualElement name="Slot_AMULET" class="slot-box equip-slot equip-slot--amulet">
+                            <ui:VisualElement class="item-icon" picking-mode="Ignore" />
+                            <ui:VisualElement class="slot-glow" picking-mode="Ignore" />
+                            <ui:Label class="slot-label" text="AMULET" />
+                        </ui:VisualElement>
+                        <ui:VisualElement name="Slot_CHEST" class="slot-box equip-slot equip-slot--chest">
+                            <ui:VisualElement class="item-icon" picking-mode="Ignore" />
+                            <ui:VisualElement class="slot-glow" picking-mode="Ignore" />
+                            <ui:Label class="slot-label" text="CHEST" />
+                        </ui:VisualElement>
+                        <ui:VisualElement name="Slot_GLOVES" class="slot-box equip-slot equip-slot--gloves">
+                            <ui:VisualElement class="item-icon" picking-mode="Ignore" />
+                            <ui:VisualElement class="slot-glow" picking-mode="Ignore" />
+                            <ui:Label class="slot-label" text="GLOVES" />
+                        </ui:VisualElement>
+                        <ui:VisualElement name="Slot_LEGS" class="slot-box equip-slot equip-slot--legs">
+                            <ui:VisualElement class="item-icon" picking-mode="Ignore" />
+                            <ui:VisualElement class="slot-glow" picking-mode="Ignore" />
+                            <ui:Label class="slot-label" text="LEGS" />
+                        </ui:VisualElement>
+                        <ui:VisualElement name="Slot_BOOTS" class="slot-box equip-slot equip-slot--boots">
+                            <ui:VisualElement class="item-icon" picking-mode="Ignore" />
+                            <ui:VisualElement class="slot-glow" picking-mode="Ignore" />
+                            <ui:Label class="slot-label" text="BOOTS" />
+                        </ui:VisualElement>
+                        <ui:VisualElement name="Slot_RING_1" class="slot-box equip-slot equip-slot--ring1">
+                            <ui:VisualElement class="item-icon" picking-mode="Ignore" />
+                            <ui:VisualElement class="slot-glow" picking-mode="Ignore" />
+                            <ui:Label class="slot-label" text="RING" />
+                        </ui:VisualElement>
+                        <ui:VisualElement name="Slot_RING_2" class="slot-box equip-slot equip-slot--ring2">
+                            <ui:VisualElement class="item-icon" picking-mode="Ignore" />
+                            <ui:VisualElement class="slot-glow" picking-mode="Ignore" />
+                            <ui:Label class="slot-label" text="RING" />
+                        </ui:VisualElement>
+                        <ui:VisualElement name="Slot_MAIN_HAND" class="slot-box equip-slot equip-slot--mainhand">
+                            <ui:VisualElement class="item-icon" picking-mode="Ignore" />
+                            <ui:VisualElement class="slot-glow" picking-mode="Ignore" />
+                            <ui:Label class="slot-label" text="WEAPON" />
+                        </ui:VisualElement>
+                        <ui:VisualElement name="Slot_SPELLBOOK" class="slot-box equip-slot equip-slot--spellbook">
+                            <ui:VisualElement class="item-icon" picking-mode="Ignore" />
+                            <ui:VisualElement class="slot-glow" picking-mode="Ignore" />
+                            <ui:Label class="slot-label" text="SPELLBOOK" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+
+                    <ui:VisualElement class="arena-subpanel stats-panel">
+                        <ui:VisualElement class="subpanel-corner subpanel-corner--tl" picking-mode="Ignore" />
+                        <ui:VisualElement class="subpanel-corner subpanel-corner--tr" picking-mode="Ignore" />
+                        <ui:VisualElement class="subpanel-corner subpanel-corner--bl" picking-mode="Ignore" />
+                        <ui:VisualElement class="subpanel-corner subpanel-corner--br" picking-mode="Ignore" />
+
+                        <ui:VisualElement class="section-heading">
+                            <ui:VisualElement class="section-gem" />
+                            <ui:Label class="section-title" text="ATTRIBUTES" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="section-rule" picking-mode="Ignore" />
+
+                        <ui:VisualElement name="StatsList" class="stats-list" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:VisualElement name="InventoryWindow" class="menu-window inv-window">
+            <ui:VisualElement class="window-shadow" picking-mode="Ignore" />
+            <ui:VisualElement class="window-body" />
+            <ui:VisualElement class="frame-rail frame-rail--top" picking-mode="Ignore" />
+            <ui:VisualElement class="frame-rail frame-rail--bottom" picking-mode="Ignore" />
+            <ui:VisualElement class="frame-rail frame-rail--left" picking-mode="Ignore" />
+            <ui:VisualElement class="frame-rail frame-rail--right" picking-mode="Ignore" />
+            <ui:VisualElement class="frame-corner frame-corner--tl" picking-mode="Ignore" />
+            <ui:VisualElement class="frame-corner frame-corner--tr" picking-mode="Ignore" />
+            <ui:VisualElement class="frame-corner frame-corner--bl" picking-mode="Ignore" />
+            <ui:VisualElement class="frame-corner frame-corner--br" picking-mode="Ignore" />
+
+            <ui:VisualElement class="window-flow">
+                <ui:VisualElement class="header-plate">
+                    <ui:Label class="window-title" text="INVENTORY" />
+                </ui:VisualElement>
+                <ui:VisualElement class="grid-window-content">
+                    <ui:VisualElement name="InventoryGrid" class="arena-grid">
+                        <ui:VisualElement name="InventoryCells" class="grid-cells" picking-mode="Ignore" />
+                        <ui:VisualElement class="grid-edge grid-edge--top" picking-mode="Ignore" />
+                        <ui:VisualElement class="grid-edge grid-edge--bottom" picking-mode="Ignore" />
+                        <ui:VisualElement class="grid-edge grid-edge--left" picking-mode="Ignore" />
+                        <ui:VisualElement class="grid-edge grid-edge--right" picking-mode="Ignore" />
+                        <ui:VisualElement name="InventoryItems" class="grid-items" picking-mode="Ignore" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:VisualElement name="ItemTooltip" class="arena-tooltip" picking-mode="Ignore">
+            <ui:VisualElement class="tooltip-edge tooltip-edge--top" picking-mode="Ignore" />
+            <ui:VisualElement class="tooltip-edge tooltip-edge--bottom" picking-mode="Ignore" />
+            <ui:VisualElement class="tooltip-edge tooltip-edge--left" picking-mode="Ignore" />
+            <ui:VisualElement class="tooltip-edge tooltip-edge--right" picking-mode="Ignore" />
+            <ui:VisualElement class="tooltip-corner tooltip-corner--tl" picking-mode="Ignore" />
+            <ui:VisualElement class="tooltip-corner tooltip-corner--tr" picking-mode="Ignore" />
+            <ui:VisualElement class="tooltip-corner tooltip-corner--bl" picking-mode="Ignore" />
+            <ui:VisualElement class="tooltip-corner tooltip-corner--br" picking-mode="Ignore" />
+            <ui:Label name="TtName" class="tt-name" />
+            <ui:Label name="TtRarity" class="tt-rarity" />
+            <ui:Label name="TtLine" class="tt-line" />
+            <ui:VisualElement name="TtStats" class="tt-stats" />
+            <ui:Label name="TtFootnote" class="tt-footnote" />
+        </ui:VisualElement>
+
+        <ui:VisualElement name="DragGhost" class="drag-ghost" picking-mode="Ignore">
+            <ui:VisualElement name="DragGhostIcon" class="item-icon" picking-mode="Ignore" />
+            <ui:Label name="DragGhostLabel" class="drag-ghost-label" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

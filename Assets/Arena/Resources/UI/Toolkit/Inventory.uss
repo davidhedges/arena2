@@ -1,11 +1,12 @@
-/* Inventory & Character — screen spec. Structural components come from
- * ../kit.css; this file lays out the two windows. Must pass
- * ops/uss_dialect_lint.py; game twins: Inventory.uss (on translation).
- *
- * Character window 660x640 (rails 556/536): paper-doll equipment (13 slots,
- * 5x7 sparse, pitch 78) + ATTRIBUTES subpanel. Inventory window 640x640
- * (rails 536/536): 8x7 connected grid + slots/currency footer. Non-modal:
- * no veil, the game stays visible. */
+/* Inventory.uss — screen spec for the Inventory/Character/Loot windows.
+ * Structural components come from ArenaKit.uss; this file lays out the
+ * windows. Twin: docs/ui-prototypes/inventory/. Grid windows are sized by
+ * InventoryScreen.cs from server container dimensions:
+ *   window width  = cols*68 + 10 + 52   (grid + edge lines + chrome pads)
+ *   window height = 44 + 12 + rows*68 + 10 + 26
+ * Non-modal: no veil, the game stays visible. */
+
+@import url("ArenaKit.uss");
 
 .inventory-screen {
     position: absolute;
@@ -14,9 +15,10 @@
     right: 0;
     bottom: 0;
     display: none;
+    flex-direction: row;
     align-items: center;
     justify-content: center;
-    font-family: "Alegreya", Georgia, serif;
+    -unity-font-definition: url("/Assets/Arena/Content/UI/Fonts/Alegreya.ttf");
 }
 
 .inventory-screen.is-open {
@@ -27,13 +29,48 @@
     width: 660px;
     height: 640px;
     margin-right: 16px;
+    flex-shrink: 0;
 }
 
 .inv-window {
-    width: 604px;
-    height: 600px;
+    width: 742px;
+    height: 364px;
+    flex-shrink: 0;
 }
 
+.loot-window {
+    width: 380px;
+    height: 364px;
+    margin-right: 16px;
+    display: none;
+    flex-shrink: 0;
+}
+
+.loot-window.is-open {
+    display: flex;
+}
+
+/* ---- grid windows: plate + padded grid ------------------------------------ */
+
+.grid-window-content {
+    width: 100%;
+    padding-top: 12px;
+    padding-left: 26px;
+    padding-right: 26px;
+    padding-bottom: 26px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex-grow: 1;
+}
+
+.grid-items {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+}
 
 /* ---- character window: doll + attributes ---------------------------------- */
 
@@ -68,7 +105,7 @@
 .equip-slot--mainhand  { left: 78px;  top: 468px; }
 .equip-slot--spellbook { left: 312px; top: 468px; }
 
-/* Padding clears the 50px corner filigree so content never sits under it. */
+/* Padding clears the corner filigree so content never sits under it. */
 .stats-panel {
     flex-grow: 1;
     margin-left: 14px;
@@ -87,30 +124,14 @@
     margin-bottom: 8px;
 }
 
-/* ---- inventory window: connected grid + footer ----------------------------- */
-
-.inv-content {
-    width: 100%;
-    padding-top: 12px;
-    padding-left: 25px;
-    padding-right: 25px;
+.stats-list {
     display: flex;
     flex-direction: column;
-    align-items: center;
     flex-grow: 1;
 }
 
-.inv-grid {
-    width: 554px;
-    height: 494px;
-}
-
-.inv-footer {
-    width: 554px;
-    height: 26px;
-    margin-top: 10px;
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    justify-content: flex-end;
+/* Hidden until the controller drives them (also keeps static previews clean). */
+#ItemTooltip,
+#DragGhost {
+    display: none;
 }
