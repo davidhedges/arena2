@@ -30,8 +30,8 @@
 }
 
 .inv-window {
-    width: 640px;
-    height: 640px;
+    width: 604px;
+    height: 600px;
 }
 
 .char-window .frame-rail--top,
@@ -41,14 +41,17 @@
 
 .inv-window .frame-rail--top,
 .inv-window .frame-rail--bottom {
-    background-image: url("../../../Assets/Arena/Content/UI/Art/window_rail_h_536x23.png");
+    background-image: url("../../../Assets/Arena/Content/UI/Art/window_rail_h_500x23.png");
 }
 
 .char-window .frame-rail--left,
-.char-window .frame-rail--right,
+.char-window .frame-rail--right {
+    background-image: url("../../../Assets/Arena/Content/UI/Art/window_rail_v_536x23.png");
+}
+
 .inv-window .frame-rail--left,
 .inv-window .frame-rail--right {
-    background-image: url("../../../Assets/Arena/Content/UI/Art/window_rail_v_536x23.png");
+    background-image: url("../../../Assets/Arena/Content/UI/Art/window_rail_v_496x23.png");
 }
 
 /* ---- character window: doll + attributes ---------------------------------- */
@@ -109,9 +112,9 @@
 
 .inv-content {
     width: 100%;
-    padding-top: 14px;
-    padding-left: 30px;
-    padding-right: 30px;
+    padding-top: 12px;
+    padding-left: 25px;
+    padding-right: 25px;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -119,22 +122,16 @@
 }
 
 .inv-grid {
-    width: 580px;
-    height: 512px;
+    width: 554px;
+    height: 494px;
 }
 
 .inv-footer {
-    width: 580px;
-    height: 30px;
-    margin-top: 12px;
+    width: 554px;
+    height: 26px;
+    margin-top: 10px;
     display: flex;
     flex-direction: row;
     align-items: center;
-}
-
-.slot-count {
-    flex-grow: 1;
-    font-size: var(--arena-font-small);
-    color: var(--arena-text-dim);
-    letter-spacing: 1px;
+    justify-content: flex-end;
 }

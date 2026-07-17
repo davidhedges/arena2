@@ -55,7 +55,8 @@ def inline_urls(css: str, base: Path) -> str:
         if not target.exists():
             print(f"warning: missing url ref {target}", file=sys.stderr)
             return match.group(0)
-        return f'url("{data_uri(target)}")'
+        # Single quotes: safe inside double-quoted style="" attributes too.
+        return f"url('{data_uri(target)}')"
 
     return re.sub(r"url\(([^)]+)\)", replace, css)
 
@@ -75,6 +76,9 @@ def bundle(screen_dir: Path) -> str:
         html,
         flags=re.S,
     )
+    # Catch url() refs outside stylesheets too (inline style="" attributes);
+    # already-inlined data: URIs are skipped by inline_urls.
+    html = inline_urls(html, screen_dir)
 
     title = re.search(r"<title>.*?</title>", html, re.S)
     styles = re.findall(r"<style>.*?</style>", html, re.S)

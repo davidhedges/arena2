@@ -129,22 +129,6 @@
     padding-top: 2px;
 }
 
-/* Red X plate, top-right on the frame. */
-.window-close {
-    position: absolute;
-    top: -6px;
-    right: -6px;
-    width: 44px;
-    height: 43px;
-    background-image: url("../../Assets/Arena/Content/UI/Art/close_button.png");
-    background-size: 100% 100%;
-    cursor: pointer;
-}
-
-.window-close:hover {
-    background-image: url("../../Assets/Arena/Content/UI/Art/close_button_hover.png");
-}
-
 /* ---- buttons: authored plates pre-baked at exact display size ------------ */
 
 .arena-button {
@@ -358,7 +342,9 @@
     color: var(--arena-gold-text);
 }
 
-/* ---- connected inventory grid (rim + tiled lattice cells) ----------------- */
+/* ---- connected inventory grid (tiled lattice + closing edge lines) --------
+ * The cell tile carries half-lines; interior borders complete via neighbors,
+ * the outer edges via the four .grid-edge line strips. No ornate rim. */
 
 .arena-grid {
     position: relative;
@@ -367,8 +353,8 @@
 
 .grid-cells {
     position: absolute;
-    top: 18px;
-    left: 18px;
+    top: 5px;
+    left: 5px;
     display: flex;
     flex-direction: row;
     flex-wrap: wrap;
@@ -382,48 +368,34 @@
     flex-shrink: 0;
 }
 
-.grid-rim-edge {
+.grid-edge {
     position: absolute;
     pointer-events: none;
 }
 
-.grid-rim-edge--top,
-.grid-rim-edge--bottom {
-    left: 38px;
-    right: 38px;
-    height: 22px;
-    background-image: url("../../Assets/Arena/Content/UI/Art/grid_rim_edge_h.png");
+.grid-edge--top,
+.grid-edge--bottom {
+    left: 0;
+    right: 0;
+    height: 10px;
+    background-image: url("../../Assets/Arena/Content/UI/Art/grid_line_h.png");
     background-repeat: repeat-x;
 }
 
-.grid-rim-edge--top { top: 0; }
-.grid-rim-edge--bottom { bottom: 0; scale: 1 -1; }
+.grid-edge--top { top: 0; }
+.grid-edge--bottom { bottom: 0; scale: 1 -1; }
 
-.grid-rim-edge--left,
-.grid-rim-edge--right {
-    top: 38px;
-    bottom: 38px;
-    width: 22px;
-    background-image: url("../../Assets/Arena/Content/UI/Art/grid_rim_edge_v.png");
+.grid-edge--left,
+.grid-edge--right {
+    top: 0;
+    bottom: 0;
+    width: 10px;
+    background-image: url("../../Assets/Arena/Content/UI/Art/grid_line_v.png");
     background-repeat: repeat-y;
 }
 
-.grid-rim-edge--left { left: 0; }
-.grid-rim-edge--right { right: 0; scale: -1 1; }
-
-.grid-rim-corner {
-    position: absolute;
-    width: 56px;
-    height: 56px;
-    background-image: url("../../Assets/Arena/Content/UI/Art/grid_rim_corner.png");
-    background-size: 100% 100%;
-    pointer-events: none;
-}
-
-.grid-rim-corner--tl { top: 0; left: 0; }
-.grid-rim-corner--tr { top: 0; right: 0; scale: -1 1; }
-.grid-rim-corner--bl { bottom: 0; left: 0; scale: 1 -1; }
-.grid-rim-corner--br { bottom: 0; right: 0; scale: -1 -1; }
+.grid-edge--left { left: 0; }
+.grid-edge--right { right: 0; scale: -1 1; }
 
 /* Items overlay the lattice; footprint = cell coords * 68 (set inline). */
 .grid-item {
@@ -432,7 +404,8 @@
     cursor: pointer;
 }
 
-.grid-item .item-icon {
+.grid-item .item-icon,
+.grid-item .slot-glow {
     position: absolute;
     top: 4px;
     left: 4px;

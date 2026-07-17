@@ -327,24 +327,40 @@ def gen_inventory_kit() -> None:
     cell = cut((511, 706, 570, 767), key=False).resize((68, 68), Image.LANCZOS)
     save(cell, "grid_cell.png")
 
-    # Corner cut from the grid's top-right (top-left is covered by the sheet's
-    # caption overlay), flipped to authored top-left orientation.
-    rim_corner = cut((746, 625, 802, 681), key=False).transpose(Image.FLIP_LEFT_RIGHT)
-    save(rim_corner, "grid_rim_corner.png")
-    save(make_tileable(cut((386, 625, 506, 647), key=False), horizontal=True), "grid_rim_edge_h.png")
-    rim_v = make_tileable(cut((780, 685, 802, 805), key=False).transpose(Image.FLIP_LEFT_RIGHT),
-                          horizontal=False)
-    # The sheet's right rim sits in shade; lift it toward the top edge's tone.
-    save(ImageEnhance.Brightness(rim_v).enhance(1.12), "grid_rim_edge_v.png")
+    # Closing lattice lines for the grid's outer edges (the cell tile carries
+    # half-lines; interior edges complete via neighbors, outer edges via these).
+    # No ornate rim — owner feedback 2026-07-17: no nested corners on the grid.
+    line_h = cut((516, 702, 564, 711), key=False).resize((55, 10), Image.LANCZOS)
+    save(make_tileable(line_h, horizontal=True), "grid_line_h.png")
+    line_v = cut((506, 716, 515, 762), key=False).resize((10, 52), Image.LANCZOS)
+    save(make_tileable(line_v, horizontal=False), "grid_line_v.png")
 
-    # Rarity glows: authored well interiors, dropped whole into a cell.
+    # Rarity glows: authored well interiors converted to alpha glows
+    # (brightness -> alpha, color normalized) so they can overlay item icons —
+    # the game's item icons are opaque full-bleed squares, so an under-glow
+    # would be invisible. Overlay reads as light on the item.
     glows = {
         "common": (817, 658, 876, 712), "uncommon": (899, 658, 961, 712),
         "rare": (981, 658, 1042, 712), "epic": (817, 737, 876, 799),
         "legendary": (899, 737, 961, 799), "red": (981, 737, 1042, 799),
     }
     for name, box in glows.items():
-        save(cut(box, key=False).resize((68, 68), Image.LANCZOS), f"rarity_glow_{name}.png")
+        well = cut(box, key=False).resize((68, 68), Image.LANCZOS)
+        pixels = well.load()
+        baseline = sorted(max(pixels[x, y][:3]) for x, y in
+                          [(3, 3), (64, 3), (3, 64), (64, 64), (34, 3), (3, 34)])[2]
+        for y in range(68):
+            for x in range(68):
+                r, g, b, _ = pixels[x, y]
+                v = max(r, g, b)
+                alpha = min(255, max(0, round((v - baseline * 1.35) * 2.2)))
+                if v > 0 and alpha > 0:
+                    scale = min(255 / v, 2.0)
+                    pixels[x, y] = (min(255, round(r * scale)), min(255, round(g * scale)),
+                                    min(255, round(b * scale)), alpha)
+                else:
+                    pixels[x, y] = (0, 0, 0, 0)
+        save(well, f"rarity_glow_{name}.png")
 
     # Tooltip frame (thin, elegant): corners + native-scale repeating edges.
     save(cut((1071, 466, 1097, 492), key=False), "tooltip_corner.png")
@@ -355,10 +371,8 @@ def gen_inventory_kit() -> None:
     # near-invisible in the sheet; panels use hairline CSS edges instead.
     save(cut((858, 121, 908, 171), key=False), "subpanel_corner.png")
 
-    # Close button (red X plate) + brightened hover variant.
-    close = tight_cut((870, 40, 928, 96))
-    save(close, "close_button.png")
-    save(ImageEnhance.Brightness(close).enhance(1.3), "close_button_hover.png")
+    # (Close button dropped — owner feedback 2026-07-17: no red X plates;
+    # screens close via their toggle key / Escape.)
 
     # Standalone slot box (framed well) for sparse layouts like the paper doll.
     # The sheet only shows these boxes WITH demo icons, so the empty box is
@@ -448,9 +462,9 @@ def main() -> None:
     # entry per window size (System Menu 400x442, Character/Inventory 640-660).
     rail_h = cut((776, 41, 852, 79), key=False)
     rail_v = cut((279, 130, 317, 235), key=False)
-    for length in (296, 536, 556):
+    for length in (296, 500, 556):
         save(bake_rail(rail_h, length, 23), f"window_rail_h_{length}x23.png")
-    for length in (338, 536):
+    for length in (338, 496, 536):
         save(bake_rail(rail_v, length, 23, vertical=True), f"window_rail_v_{length}x23.png")
 
     # Ornaments.
