@@ -68,7 +68,8 @@ pub(crate) use cooldowns::{
 };
 pub(crate) use events::Vec3 as SpellVec3;
 pub(crate) use manifest::{
-    ImpactEffect, SpellBehavior, SpellDefinition as SpellRuntimeDefinition, SpellId, SpellTargeting,
+    ImpactEffect, SpellBehavior, SpellDefinition as SpellRuntimeDefinition, SpellId,
+    SpellTargeting, WorldObstacleSecondaryTunables,
 };
 #[allow(unused_imports)]
 pub(crate) use simulation::{tick_bespoke_spells, tick_bespoke_spells_with_snapshots};

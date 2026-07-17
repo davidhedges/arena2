@@ -2,6 +2,7 @@
 
 using System;
 using Arena.Entity;
+using Arena.Input;
 using Arena.Network;
 using Arena.World;
 using SpacetimeDB.Types;
@@ -53,8 +54,6 @@ namespace Arena.Combat
                 return false;
 
             ServerLosCollisionData? collision = ResolveCollisionData();
-            if (collision == null)
-                return false;
 
             Vector3 casterBase = local.SimState.GetServerPosition();
             Vector3 targetBase = target.GetRenderPosition();
@@ -118,17 +117,22 @@ namespace Arena.Combat
         }
 
         private static bool ProbeIsClear(
-            ServerLosCollisionData collision,
+            ServerLosCollisionData? collision,
             Vector3 origin,
             Vector3 end,
             float clearMargin)
         {
-            ServerLosProbeHit? hit = collision.FindFirstHit(origin, end, ProbeRadius);
-            if (!hit.HasValue)
+            ServerLosProbeHit? staticHit = collision?.FindFirstHit(origin, end, ProbeRadius);
+            bool hasDynamicHit = ActiveWorldObstacleRuntime.TryFindFirstLineHitDistance(
+                origin, end, ProbeRadius, out float dynamicHitDistance);
+            if (!staticHit.HasValue && !hasDynamicHit)
                 return true;
 
             float probeDistance = Vector3.Distance(origin, end);
-            return hit.Value.Distance >= probeDistance - clearMargin;
+            float hitDistance = staticHit?.Distance ?? float.PositiveInfinity;
+            if (hasDynamicHit)
+                hitDistance = Mathf.Min(hitDistance, dynamicHitDistance);
+            return hitDistance >= probeDistance - clearMargin;
         }
 
         private static ServerLosCollisionData? ResolveCollisionData()

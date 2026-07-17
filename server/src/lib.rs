@@ -48,3 +48,4 @@ mod tick_metrics;
 #[cfg(test)]
 mod vfx_generation;
 mod world_collision;
+mod world_obstacles;

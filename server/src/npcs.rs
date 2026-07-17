@@ -31,6 +31,7 @@ use crate::world_collision::{
     resolve_world_horizontal_sweep_collision_y_with_layout_for_scene,
     surface_height_for_world_at_y_with_layout_for_scene,
 };
+use crate::world_obstacles::resolve_active_world_obstacle_movement;
 
 #[allow(unused_imports)]
 use crate::arena::arena_instance as _;
@@ -2740,6 +2741,17 @@ fn move_npc_along(
                 template.hit_height.max(0.5),
                 next_y,
             );
+        let (resolved_x, resolved_z) = resolve_active_world_obstacle_movement(
+            ctx,
+            npc.identity,
+            next_x,
+            next_z,
+            resolved_x,
+            resolved_z,
+            template.hit_radius.max(0.1),
+            next_y,
+            template.hit_height.max(0.5),
+        );
         next_x = resolved_x;
         next_z = resolved_z;
         next_y = surface_height_for_world_at_y_with_layout_for_scene(

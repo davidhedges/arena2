@@ -20,7 +20,8 @@ use super::manifest::{
     InstantBeamSecondaryTunables, MeteorSkyOrigin, OrbitCasterProjectileTunables,
     ProjectileMotionTunables, ProjectileSecondaryTunables, RemoveStatusDefinition,
     RemoveStatusSecondaryTunables, SpellBehavior, SpellCastMobility, SpellDefinition, SpellId,
-    SpellParryBehavior, SpellSecondaryTunables, SpellTargeting, SPELL_METEOR,
+    SpellParryBehavior, SpellSecondaryTunables, SpellTargeting, WorldObstacleSecondaryTunables,
+    SPELL_METEOR,
 };
 
 const PROGRESSION_CATALOG_JSON: &str = include_str!("../progression_catalog.shared.json");
@@ -181,6 +182,22 @@ enum SpellCatalogDelivery {
         vfx_school: String,
         #[serde(default)]
         impact_effects: Vec<ImpactEffectRow>,
+    },
+    WorldObstacle {
+        forward_distance: f32,
+        duration_ms: u64,
+        width: f32,
+        height: f32,
+        depth: f32,
+        #[serde(default)]
+        center_right_offset: f32,
+        #[serde(default)]
+        center_up_offset: f32,
+        #[serde(default)]
+        center_forward_offset: f32,
+        #[serde(default)]
+        yaw_offset_degrees: f32,
+        visual_resource_path: String,
     },
     SelfResource {},
 }
@@ -1135,6 +1152,37 @@ impl SpellCatalogRow {
                     impact_effects: impact_effects.into_iter().map(Into::into).collect(),
                 });
             }
+            SpellCatalogDelivery::WorldObstacle {
+                forward_distance,
+                duration_ms,
+                width,
+                height,
+                depth,
+                center_right_offset,
+                center_up_offset,
+                center_forward_offset,
+                yaw_offset_degrees,
+                visual_resource_path,
+            } => {
+                definition.behavior = SpellBehavior::WorldObstacle;
+                definition.max_distance = forward_distance;
+                definition.duration = duration_ms as f32 / 1000.0;
+                definition.damage = 0;
+                definition.damage_type = DamageType::Physical;
+                definition.block_behavior = BlockBehavior::Unblockable;
+                definition.secondary.world_obstacle = Some(WorldObstacleSecondaryTunables {
+                    forward_distance,
+                    duration: Duration::from_millis(duration_ms),
+                    width,
+                    height,
+                    depth,
+                    center_right_offset,
+                    center_up_offset,
+                    center_forward_offset,
+                    yaw_offset_degrees,
+                    visual_resource_path,
+                });
+            }
             SpellCatalogDelivery::SelfResource {} => {
                 definition.behavior = SpellBehavior::SelfResource;
                 definition.block_behavior = BlockBehavior::Unblockable;
@@ -1677,6 +1725,12 @@ fn validate_secondary_tunables(def: &SpellDefinition) -> Result<(), String> {
             def.kind.as_str()
         ));
     }
+    if def.behavior != SpellBehavior::WorldObstacle && def.secondary.world_obstacle.is_some() {
+        return Err(format!(
+            "{} must not define world-obstacle secondary data",
+            def.kind.as_str()
+        ));
+    }
 
     match def.behavior {
         SpellBehavior::DirectTarget => {
@@ -2078,6 +2132,65 @@ fn validate_secondary_tunables(def: &SpellDefinition) -> Result<(), String> {
                     "{} {:?} must not define secondary spell tunables",
                     def.kind.as_str(),
                     def.behavior
+                ));
+            }
+        }
+        SpellBehavior::WorldObstacle => {
+            let Some(obstacle) = def.secondary.world_obstacle.as_ref() else {
+                return Err(format!(
+                    "{} WORLD_OBSTACLE must define secondary world-obstacle data",
+                    def.kind.as_str()
+                ));
+            };
+            if def.targeting != SpellTargeting::Self_ || def.requires_target {
+                return Err(format!(
+                    "{} WORLD_OBSTACLE must use SELF targeting without a target requirement",
+                    def.kind.as_str()
+                ));
+            }
+            ensure_positive_f32(
+                def.kind.as_str(),
+                "delivery.forward_distance",
+                obstacle.forward_distance,
+            )?;
+            ensure_positive_duration(def.kind.as_str(), "delivery.duration_ms", obstacle.duration)?;
+            ensure_positive_f32(def.kind.as_str(), "delivery.width", obstacle.width)?;
+            ensure_positive_f32(def.kind.as_str(), "delivery.height", obstacle.height)?;
+            ensure_positive_f32(def.kind.as_str(), "delivery.depth", obstacle.depth)?;
+            ensure_finite(
+                def.kind.as_str(),
+                "delivery.center_right_offset",
+                obstacle.center_right_offset,
+            )?;
+            ensure_finite(
+                def.kind.as_str(),
+                "delivery.center_up_offset",
+                obstacle.center_up_offset,
+            )?;
+            ensure_finite(
+                def.kind.as_str(),
+                "delivery.center_forward_offset",
+                obstacle.center_forward_offset,
+            )?;
+            ensure_finite(
+                def.kind.as_str(),
+                "delivery.yaw_offset_degrees",
+                obstacle.yaw_offset_degrees,
+            )?;
+            if obstacle.visual_resource_path.trim().is_empty() {
+                return Err(format!(
+                    "{} WORLD_OBSTACLE visual_resource_path must not be empty",
+                    def.kind.as_str()
+                ));
+            }
+            let expected = SpellSecondaryTunables {
+                world_obstacle: Some(obstacle.clone()),
+                ..SpellSecondaryTunables::default()
+            };
+            if def.secondary != expected {
+                return Err(format!(
+                    "{} WORLD_OBSTACLE must only define world-obstacle secondary spell tunables",
+                    def.kind.as_str()
                 ));
             }
         }
@@ -2539,6 +2652,7 @@ mod tests {
                 "GLACIAL_SPIKE",
                 "FROZEN_GRASP",
                 "NECROTIC_AURA",
+                "STONESPIRE",
                 "MOMENTUM",
                 "FORTIFY",
                 "IRON_WILL",
@@ -2607,6 +2721,37 @@ mod tests {
         assert_eq!(emanation.radius, 4.6);
         assert_eq!(emanation.pulse_interval, Duration::from_secs(1));
         assert!(emanation.impact_effects.is_empty());
+    }
+
+    #[test]
+    fn stonespire_authors_temporary_physical_world_obstacle() {
+        let definition = spell_definition_by_str("STONESPIRE").expect("STONESPIRE should exist");
+        assert_eq!(definition.behavior, SpellBehavior::WorldObstacle);
+        assert_eq!(definition.targeting, SpellTargeting::Self_);
+        assert!(!definition.requires_target);
+        assert!(!definition.requires_target_los);
+        assert_eq!(definition.cast_time, Duration::ZERO);
+        assert_eq!(definition.damage, 0);
+        assert_eq!(definition.damage_type, DamageType::Physical);
+        let obstacle = definition
+            .secondary
+            .world_obstacle
+            .as_ref()
+            .expect("Stonespire must define obstacle tunables");
+        assert_eq!(obstacle.forward_distance, 2.0);
+        assert_eq!(obstacle.duration, Duration::from_millis(5550));
+        assert_eq!(
+            (obstacle.width, obstacle.height, obstacle.depth),
+            (3.92, 7.28, 2.5)
+        );
+        assert_eq!(obstacle.center_right_offset, -0.57);
+        assert_eq!(obstacle.center_up_offset, 1.12);
+        assert_eq!(obstacle.center_forward_offset, 1.4);
+        assert_eq!(obstacle.yaw_offset_degrees, 70.0);
+        assert_eq!(
+            obstacle.visual_resource_path,
+            "CombatVFX/playground/5) Rune AoE aftershock stuff 1"
+        );
     }
 
     #[test]

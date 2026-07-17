@@ -371,7 +371,7 @@ namespace Arena.Presentation
             Object.Destroy(instance, durationSeconds);
         }
 
-        private static IEnumerator DestroyWhenParticleSystemsFinish(GameObject instance, string vfxId)
+        internal static IEnumerator DestroyWhenParticleSystemsFinish(GameObject instance, string vfxId)
         {
             ParticleSystem[] systems = instance.GetComponentsInChildren<ParticleSystem>(true);
             if (systems.Length == 0)

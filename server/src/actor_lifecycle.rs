@@ -14,6 +14,7 @@ use crate::player_physics::PlayerPhysics;
 use crate::player_state::PlayerState;
 use crate::resources::clear_player_resources;
 use crate::spells::clear_active_cast;
+use crate::world_obstacles::clear_world_obstacles_for_owner;
 
 #[allow(unused_imports)]
 use crate::arena::player_world as _;
@@ -168,6 +169,7 @@ pub(crate) fn clear_transient_actor_state(ctx: &ReducerContext, identity: Identi
     clear_active_cast(ctx, identity);
     clear_movement_action_for_owner(ctx, identity);
     clear_pending_player_commands(ctx, identity);
+    clear_world_obstacles_for_owner(ctx, identity);
 
     ctx.db.pending_cast_request().caster().delete(identity);
     let stale_cast_cancels: Vec<String> = ctx
@@ -311,11 +313,12 @@ mod tests {
     /// Per-identity transient tables (or the helpers that own their deletion)
     /// that the unified teardown must cover. Add every new transient table's
     /// accessor here AND to `clear_transient_actor_state`.
-    const TRANSIENT_TEARDOWN_MARKERS: [&str; 17] = [
+    const TRANSIENT_TEARDOWN_MARKERS: [&str; 18] = [
         "clear_player_combat_state",
         "clear_active_cast",
         "clear_movement_action_for_owner",
         "clear_pending_player_commands",
+        "clear_world_obstacles_for_owner",
         "pending_cast_request()",
         "pending_cast_cancel()",
         "pending_area_impact()",

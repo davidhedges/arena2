@@ -34,6 +34,7 @@ namespace SpacetimeDB.Types
             AddTable(ActiveCombatDiscipline = new(conn));
             AddTable(ActiveCombatMode = new(conn));
             AddTable(ActiveRadialEffect = new(conn));
+            AddTable(ActiveWorldObstacle = new(conn));
             AddTable(ArenaInstance = new(conn));
             AddTable(AutoAttackCatalog = new(conn));
             AddTable(AutoAttackState = new(conn));
@@ -600,6 +601,7 @@ namespace SpacetimeDB.Types
             new QueryBuilder().From.ActiveCombatDiscipline().ToSql(),
             new QueryBuilder().From.ActiveCombatMode().ToSql(),
             new QueryBuilder().From.ActiveRadialEffect().ToSql(),
+            new QueryBuilder().From.ActiveWorldObstacle().ToSql(),
             new QueryBuilder().From.ArenaInstance().ToSql(),
             new QueryBuilder().From.AutoAttackCatalog().ToSql(),
             new QueryBuilder().From.AutoAttackState().ToSql(),
@@ -676,6 +678,7 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Table<ActiveCombatDiscipline, ActiveCombatDisciplineCols, ActiveCombatDisciplineIxCols> ActiveCombatDiscipline() => new("active_combat_discipline", new ActiveCombatDisciplineCols("active_combat_discipline"), new ActiveCombatDisciplineIxCols("active_combat_discipline"));
         public global::SpacetimeDB.Table<ActiveCombatMode, ActiveCombatModeCols, ActiveCombatModeIxCols> ActiveCombatMode() => new("active_combat_mode", new ActiveCombatModeCols("active_combat_mode"), new ActiveCombatModeIxCols("active_combat_mode"));
         public global::SpacetimeDB.Table<ActiveRadialEffect, ActiveRadialEffectCols, ActiveRadialEffectIxCols> ActiveRadialEffect() => new("active_radial_effect", new ActiveRadialEffectCols("active_radial_effect"), new ActiveRadialEffectIxCols("active_radial_effect"));
+        public global::SpacetimeDB.Table<ActiveWorldObstacle, ActiveWorldObstacleCols, ActiveWorldObstacleIxCols> ActiveWorldObstacle() => new("active_world_obstacle", new ActiveWorldObstacleCols("active_world_obstacle"), new ActiveWorldObstacleIxCols("active_world_obstacle"));
         public global::SpacetimeDB.Table<ArenaInstance, ArenaInstanceCols, ArenaInstanceIxCols> ArenaInstance() => new("arena_instance", new ArenaInstanceCols("arena_instance"), new ArenaInstanceIxCols("arena_instance"));
         public global::SpacetimeDB.Table<AutoAttackCatalog, AutoAttackCatalogCols, AutoAttackCatalogIxCols> AutoAttackCatalog() => new("auto_attack_catalog", new AutoAttackCatalogCols("auto_attack_catalog"), new AutoAttackCatalogIxCols("auto_attack_catalog"));
         public global::SpacetimeDB.Table<AutoAttackState, AutoAttackStateCols, AutoAttackStateIxCols> AutoAttackState() => new("auto_attack_state", new AutoAttackStateCols("auto_attack_state"), new AutoAttackStateIxCols("auto_attack_state"));

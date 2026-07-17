@@ -345,7 +345,16 @@ namespace Arena.Input
                 }
             }
 
-            return ResolveGameplayHorizontalCollision(outX, outZ, playerRadius, playerHeight, currentY);
+            Vector2 staticResolved = ResolveGameplayHorizontalCollision(
+                outX, outZ, playerRadius, playerHeight, currentY);
+            return ActiveWorldObstacleRuntime.ResolveHorizontalCollision(
+                startX,
+                startZ,
+                staticResolved.x,
+                staticResolved.y,
+                playerRadius,
+                playerHeight,
+                currentY);
         }
 
         public Vector2 ResolveHorizontalCollision(

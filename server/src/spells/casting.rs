@@ -69,6 +69,7 @@ use crate::world_collision::{
     resolve_world_horizontal_collision_y_with_layout_for_scene,
     surface_height_for_world_at_y_with_layout_for_scene,
 };
+use crate::world_obstacles::spawn_world_obstacle;
 
 #[cfg(feature = "spellcasting_terminal_harness")]
 use super::cooldowns::stamp_global_cooldown;
@@ -2249,6 +2250,7 @@ fn process_spell_cast(
             | SpellBehavior::Aura
             | SpellBehavior::Emanation
             | SpellBehavior::SelfResource
+            | SpellBehavior::WorldObstacle
     ) {
         if mode == CastExecutionMode::Execute {
             match definition.behavior {
@@ -2327,6 +2329,16 @@ fn process_spell_cast(
                         action_instance_id,
                         ability_id,
                     );
+                }
+                SpellBehavior::WorldObstacle => {
+                    cast_world_obstacle(
+                        ctx,
+                        caster,
+                        state,
+                        spell_kind,
+                        action_instance_id,
+                        ability_id,
+                    )?;
                 }
                 _ => unreachable!(),
             }
@@ -6801,6 +6813,57 @@ fn cast_emanation(ctx: &ReducerContext, caster: Identity, kind: &SpellId, abilit
         emanation.pulse_interval,
         ctx.timestamp,
     );
+}
+
+fn cast_world_obstacle(
+    ctx: &ReducerContext,
+    caster: Identity,
+    state: &CombatActorSnapshot,
+    kind: &SpellId,
+    action_instance_id: &str,
+    ability_id: &str,
+) -> Result<(), String> {
+    let definition = super::catalog::spell_definition(kind)
+        .expect("validated WORLD_OBSTACLE spell must resolve to a definition");
+    let obstacle = definition
+        .secondary
+        .world_obstacle
+        .as_ref()
+        .expect("validated WORLD_OBSTACLE spell must define obstacle tunables");
+    spawn_world_obstacle(
+        ctx,
+        caster,
+        state,
+        kind.as_str(),
+        ability_id,
+        obstacle,
+        ctx.timestamp,
+    )?;
+    emit_spell_combat_event(
+        ctx,
+        SpellCombatEventPayload {
+            action_instance_id,
+            ability_id,
+            kind,
+            event_type: EVENT_RELEASE,
+            caster,
+            hit: Identity::ZERO,
+            origin: Vec3::new(state.pos_x, state.pos_y, state.pos_z),
+            direction: default_forward_direction(state),
+            speed: 0.0,
+            max_distance: obstacle.forward_distance,
+            scalar: SpellCombatEventScalar::None,
+            sequence_index: 0,
+            sequence_count: 1,
+            point: Vec3::new(
+                state.pos_x + state.facing_yaw.sin() * obstacle.forward_distance,
+                state.pos_y,
+                state.pos_z + state.facing_yaw.cos() * obstacle.forward_distance,
+            ),
+            now: ctx.timestamp,
+        },
+    );
+    Ok(())
 }
 
 fn cast_remove_status(

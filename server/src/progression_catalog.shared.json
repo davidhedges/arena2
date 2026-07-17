@@ -1708,6 +1708,43 @@
       }
     },
     {
+      "ability_id": "SPELL_STONESPIRE",
+      "actor_scope": "PLAYER",
+      "combat_profile_id": "",
+      "action_id": "STONESPIRE",
+      "display_name": "Stonespire",
+      "resource_kind": "MANA",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 1012,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 8000,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "SELF",
+        "requires_target": false,
+        "requires_target_los": false,
+        "resource_cost": 0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "WORLD_OBSTACLE",
+          "forward_distance": 2,
+          "duration_ms": 5550,
+          "width": 3.92,
+          "height": 7.28,
+          "depth": 2.5,
+          "center_right_offset": -0.57,
+          "center_up_offset": 1.12,
+          "center_forward_offset": 1.4,
+          "yaw_offset_degrees": 70,
+          "visual_resource_path": "CombatVFX/playground/5) Rune AoE aftershock stuff 1"
+        }
+      }
+    },
+    {
       "ability_id": "WARRIOR_MOMENTUM",
       "actor_scope": "PLAYER",
       "combat_profile_id": "TWO_HANDED_SWORD",
@@ -4931,6 +4968,13 @@
       "display_name": "Frozen Grasp",
       "description": "Roots nearby enemies in ice.",
       "sort_order": 90
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "SPELL_STONESPIRE",
+      "display_name": "Stonespire",
+      "description": "Raises a short-lived stone spire that blocks movement and line of sight.",
+      "sort_order": 91
     },
     {
       "presentation_kind": "ABILITY",

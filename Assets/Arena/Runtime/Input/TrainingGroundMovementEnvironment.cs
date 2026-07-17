@@ -29,7 +29,14 @@ namespace Arena.Input
             float playerHeight,
             float currentY)
         {
-            return new Vector2(desiredX, desiredZ);
+            return ActiveWorldObstacleRuntime.ResolveHorizontalCollision(
+                startX,
+                startZ,
+                desiredX,
+                desiredZ,
+                playerRadius,
+                playerHeight,
+                currentY);
         }
 
         public Vector2 ResolveHorizontalCollision(

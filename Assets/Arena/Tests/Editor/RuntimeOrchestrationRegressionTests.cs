@@ -329,6 +329,81 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void GameplaySubscriptionPlanner_ScopesActiveWorldObstaclesToTheVisibleWorld()
+        {
+            Type plannerType = RequireRuntimeType("Arena.Network.GameplaySubscriptionPlanner");
+            Type gameplayScopeType = RequireRuntimeType("Arena.Network.NetworkManager+GameplayScope");
+            Type playerWorldType = RequireRuntimeType("SpacetimeDB.Types.PlayerWorld");
+            object row = Activator.CreateInstance(playerWorldType, CreateIdentity(1), "OPEN", null, "Oasis_Day")!;
+            object scope = RequireMethod(gameplayScopeType, "FromPlayerWorld", playerWorldType, typeof(string))
+                .Invoke(null, new[] { row, null })!;
+
+            string[] scopedSql = (string[])RequireMethod(plannerType, "BuildScopedQuerySqls", gameplayScopeType)
+                .Invoke(null, new[] { scope })!;
+            string scopedSqlText = string.Join("\n", scopedSql);
+
+            Assert.That(scopedSqlText, Does.Contain("\"active_world_obstacle\""));
+            Assert.That(scopedSqlText, Does.Contain("\"active_world_obstacle\".\"world_kind\" = 'OPEN'"));
+            Assert.That(scopedSqlText, Does.Contain("\"active_world_obstacle\".\"open_world_scene_name\" = 'Oasis_Day'"));
+        }
+
+        [Test]
+        public void ActiveWorldObstacleRuntime_BlocksPredictedMovementAndSight()
+        {
+            Type runtimeType = RequireRuntimeType("Arena.Input.ActiveWorldObstacleRuntime");
+            Type obstacleType = RequireRuntimeType("SpacetimeDB.Types.ActiveWorldObstacle");
+            object obstacle = Activator.CreateInstance(obstacleType)!;
+            obstacleType.GetField("ObstacleId")!.SetValue(obstacle, 1UL);
+            obstacleType.GetField("CenterX")!.SetValue(obstacle, 0f);
+            obstacleType.GetField("CenterY")!.SetValue(obstacle, 4.5f);
+            obstacleType.GetField("CenterZ")!.SetValue(obstacle, 0f);
+            obstacleType.GetField("Yaw")!.SetValue(obstacle, 0f);
+            obstacleType.GetField("HalfWidth")!.SetValue(obstacle, 2.25f);
+            obstacleType.GetField("HalfHeight")!.SetValue(obstacle, 4.5f);
+            obstacleType.GetField("HalfDepth")!.SetValue(obstacle, 1.25f);
+
+            RequireMethod(runtimeType, "Clear").Invoke(null, null);
+            try
+            {
+                RequireMethod(runtimeType, "Upsert", obstacleType).Invoke(null, new[] { obstacle });
+                var resolved = (Vector2)RequireMethod(
+                        runtimeType,
+                        "ResolveHorizontalCollision",
+                        typeof(float),
+                        typeof(float),
+                        typeof(float),
+                        typeof(float),
+                        typeof(float),
+                        typeof(float),
+                        typeof(float))
+                    .Invoke(null, new object[] { 0f, -4f, 0f, 4f, 0.25f, 1.8f, 0f })!;
+                Assert.That(resolved.y, Is.InRange(-1.52f, -1.49f));
+
+                object[] lineArgs =
+                {
+                    new Vector3(0f, 1.5f, -4f),
+                    new Vector3(0f, 1.5f, 4f),
+                    0.05f,
+                    0f,
+                };
+                bool hit = (bool)RequireMethod(
+                        runtimeType,
+                        "TryFindFirstLineHitDistance",
+                        typeof(Vector3),
+                        typeof(Vector3),
+                        typeof(float),
+                        typeof(float).MakeByRefType())
+                    .Invoke(null, lineArgs)!;
+                Assert.That(hit, Is.True);
+                Assert.That((float)lineArgs[3], Is.LessThan(4f));
+            }
+            finally
+            {
+                RequireMethod(runtimeType, "Clear").Invoke(null, null);
+            }
+        }
+
+        [Test]
         public void CombatVfxGroundFollow_UsesAnchorXZWithoutInheritingJumpHeight()
         {
             Type registryType = RequireRuntimeType("Arena.Presentation.CombatVFXLifecycleRegistry");

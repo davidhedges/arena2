@@ -146,6 +146,7 @@ pub(crate) enum SpellBehavior {
     Aura,
     Emanation,
     SelfResource,
+    WorldObstacle,
 }
 
 impl SpellBehavior {
@@ -162,6 +163,7 @@ impl SpellBehavior {
             Self::Aura => "AURA",
             Self::Emanation => "EMANATION",
             Self::SelfResource => "SELF_RESOURCE",
+            Self::WorldObstacle => "WORLD_OBSTACLE",
         }
     }
 }
@@ -282,6 +284,7 @@ pub(crate) struct SpellSecondaryTunables {
     pub consume_status: Option<ConsumeStatusSecondaryTunables>,
     pub aura: Option<AuraSecondaryTunables>,
     pub emanation: Option<EmanationSecondaryTunables>,
+    pub world_obstacle: Option<WorldObstacleSecondaryTunables>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -446,6 +449,20 @@ pub(crate) struct EmanationSecondaryTunables {
     pub radius: f32,
     pub pulse_interval: Duration,
     pub impact_effects: Vec<ImpactEffect>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct WorldObstacleSecondaryTunables {
+    pub forward_distance: f32,
+    pub duration: Duration,
+    pub width: f32,
+    pub height: f32,
+    pub depth: f32,
+    pub center_right_offset: f32,
+    pub center_up_offset: f32,
+    pub center_forward_offset: f32,
+    pub yaw_offset_degrees: f32,
+    pub visual_resource_path: String,
 }
 
 #[derive(Clone, Debug, PartialEq)]

@@ -11,6 +11,7 @@ use crate::world_collision::{
     raycast_world_with_layout_for_scene, raycast_world_with_layout_for_scene_with_stats,
     surface_height_for_world_at_y_with_layout_for_scene, WorldRaycastStats,
 };
+use crate::world_obstacles::first_active_world_obstacle_hit;
 
 #[allow(unused_imports)]
 use crate::arena::player_world as _;
@@ -106,6 +107,8 @@ pub(crate) fn line_of_sight_blocker(
     let mut best_blocker: Option<LineOfSightBlocker> = None;
     for (target_x, target_y, target_z) in target_points {
         let hit = match world_hit_on_segment(
+            ctx,
+            caster.player_id,
             seed,
             flat_ground_only,
             open_world_scene_name.as_deref(),
@@ -375,6 +378,21 @@ where
         }
     }
 
+    if let Some(hit) = first_active_world_obstacle_hit(
+        ctx, caster, start_x, start_y, start_z, end_x, end_y, end_z, radius,
+    ) {
+        let world_hit = SceneHit {
+            kind: SceneHitKind::World,
+            t: hit.t,
+            x: hit.x,
+            y: hit.y,
+            z: hit.z,
+        };
+        if best.is_none_or(|existing| world_hit.t < existing.t) {
+            best = Some(world_hit);
+        }
+    }
+
     if let Some(player_hit) = first_player_hit_on_segment(
         caster,
         start_x,
@@ -453,7 +471,7 @@ fn first_world_hit_on_segment_with_optional_stats(
         Some(open_world_scene_name_for_identity(ctx, caster))
     };
 
-    raycast_world_with_layout_for_scene_with_stats(
+    let static_hit = raycast_world_with_layout_for_scene_with_stats(
         seed,
         flat_ground_only,
         open_world_scene_name.as_deref(),
@@ -475,7 +493,26 @@ fn first_world_hit_on_segment_with_optional_stats(
         x: hit.x,
         y: hit.y,
         z: hit.z,
-    })
+    });
+    let dynamic_hit = first_active_world_obstacle_hit(
+        ctx, caster, start_x, start_y, start_z, end_x, end_y, end_z, radius,
+    )
+    .map(|hit| SceneHit {
+        kind: SceneHitKind::World,
+        t: hit.t,
+        x: hit.x,
+        y: hit.y,
+        z: hit.z,
+    });
+    match (static_hit, dynamic_hit) {
+        (Some(static_hit), Some(dynamic_hit)) => Some(if dynamic_hit.t < static_hit.t {
+            dynamic_hit
+        } else {
+            static_hit
+        }),
+        (Some(hit), None) | (None, Some(hit)) => Some(hit),
+        (None, None) => None,
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -816,6 +853,8 @@ fn ray_sphere_hit(
 }
 
 fn world_hit_on_segment(
+    ctx: &ReducerContext,
+    actor: Identity,
     seed: Option<u64>,
     flat_ground_only: bool,
     open_world_scene_name: Option<&str>,
@@ -841,7 +880,7 @@ fn world_hit_on_segment(
     let dir_y = dy * inv;
     let dir_z = dz * inv;
 
-    let hit = raycast_world_with_layout_for_scene(
+    let static_hit = raycast_world_with_layout_for_scene(
         seed,
         flat_ground_only,
         open_world_scene_name,
@@ -855,7 +894,21 @@ fn world_hit_on_segment(
             max_distance: distance,
             radius,
         },
-    )?;
+    );
+    let dynamic_hit = first_active_world_obstacle_hit(
+        ctx, actor, start_x, start_y, start_z, end_x, end_y, end_z, radius,
+    );
+    let hit = match (static_hit, dynamic_hit) {
+        (Some(static_hit), Some(dynamic_hit)) => {
+            if dynamic_hit.t < static_hit.t {
+                dynamic_hit
+            } else {
+                static_hit
+            }
+        }
+        (Some(hit), None) | (None, Some(hit)) => hit,
+        (None, None) => return None,
+    };
 
     Some((hit, distance))
 }

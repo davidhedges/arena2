@@ -126,6 +126,7 @@ namespace Arena.Network
                 BuildScopedDefenseStateQuery(new QueryBuilder(), scope),
                 BuildScopedActiveCastQuery(new QueryBuilder(), scope),
                 BuildScopedActiveRadialEffectQuery(new QueryBuilder(), scope),
+                BuildScopedActiveWorldObstacleQuery(new QueryBuilder(), scope),
                 BuildScopedMovementActionStateQuery(new QueryBuilder(), scope),
                 BuildScopedSpecialMovementRuntimeQuery(new QueryBuilder(), scope),
                 BuildScopedStatusEffectQuery(new QueryBuilder(), scope),
@@ -524,6 +525,26 @@ namespace Arena.Network
                     .RightSemijoin(qb.From.ActiveRadialEffect(), (world, effect) => world.Identity.Eq(effect.Owner))
                     .ToSql(),
                 _ => throw new InvalidOperationException("Scoped active-radial-effect query requested for GameplayScope.None"),
+            };
+        }
+
+        private static string BuildScopedActiveWorldObstacleQuery(QueryBuilder qb, NetworkManager.GameplayScope scope)
+        {
+            return scope.Kind switch
+            {
+                NetworkManager.GameplayScopeKind.OpenWorld => qb
+                    .From
+                    .ActiveWorldObstacle()
+                    .Where(c => c.WorldKind.Eq("OPEN"))
+                    .Where(c => c.OpenWorldSceneName.Eq(OpenWorldSceneName(scope)))
+                    .ToSql(),
+                NetworkManager.GameplayScopeKind.Instance => qb
+                    .From
+                    .ActiveWorldObstacle()
+                    .Where(c => c.WorldKind.Eq("INSTANCE"))
+                    .Where(c => c.InstanceId.Eq(scope.InstanceId.GetValueOrDefault()))
+                    .ToSql(),
+                _ => throw new InvalidOperationException("Scoped active-world-obstacle query requested for GameplayScope.None"),
             };
         }
 
