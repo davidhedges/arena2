@@ -495,10 +495,11 @@
     pointer-events: none;
 }
 
+/* Rotated (not mirrored): the filigree has handedness, mirroring flips it. */
 .subpanel-corner--tl { top: -2px; left: -2px; }
-.subpanel-corner--tr { top: -2px; right: -2px; scale: -1 1; }
-.subpanel-corner--bl { bottom: -2px; left: -2px; scale: 1 -1; }
-.subpanel-corner--br { bottom: -2px; right: -2px; scale: -1 -1; }
+.subpanel-corner--tr { top: -2px; right: -2px; rotate: 90deg; }
+.subpanel-corner--br { bottom: -2px; right: -2px; rotate: 180deg; }
+.subpanel-corner--bl { bottom: -2px; left: -2px; rotate: 270deg; }
 
 /* ---- tooltip frame (thin, elegant, any size) ------------------------------ */
 

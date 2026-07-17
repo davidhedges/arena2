@@ -85,7 +85,6 @@
 .equip-slot--ring1     { left: 0;     top: 390px; }
 .equip-slot--ring2     { left: 312px; top: 390px; }
 .equip-slot--mainhand  { left: 78px;  top: 468px; }
-.equip-slot--offhand   { left: 234px; top: 468px; }
 .equip-slot--spellbook { left: 312px; top: 468px; }
 
 /* Padding clears the 50px corner filigree so content never sits under it. */
