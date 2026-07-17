@@ -1731,15 +1731,27 @@
         "arms_auto_attack_on_cast": false,
         "delivery": {
           "kind": "WORLD_OBSTACLE",
-          "forward_distance": 2,
-          "duration_ms": 5550,
-          "width": 3.92,
-          "height": 7.28,
-          "depth": 2.5,
-          "center_right_offset": -0.57,
-          "center_up_offset": 1.12,
-          "center_forward_offset": 1.4,
-          "yaw_offset_degrees": 70,
+          "forward_distance": 3,
+          "duration_ms": 4000,
+          "visual_yaw_offset_degrees": 70,
+          "collider": {
+            "local_center": {
+              "x": -0.57,
+              "y": 1.12,
+              "z": 1.4
+            },
+            "local_rotation": {
+              "x": 0.08267053,
+              "y": 0.5675874,
+              "z": 0.11806578,
+              "w": 0.81059897
+            },
+            "size": {
+              "x": 2,
+              "y": 7,
+              "z": 2.5
+            }
+          },
           "visual_resource_path": "CombatVFX/playground/5) Rune AoE aftershock stuff 1"
         }
       }

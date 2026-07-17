@@ -7,7 +7,7 @@ namespace Arena.Input
 {
     /// <summary>
     /// Replicated dynamic obstacle collision used by local movement prediction.
-    /// The authoritative server owns the same yaw-aligned box and lifetime.
+    /// The authoritative server owns the same fully oriented box and lifetime.
     /// </summary>
     public static class ActiveWorldObstacleRuntime
     {
@@ -33,11 +33,6 @@ namespace Arena.Input
             float outZ = targetZ;
             foreach (ActiveWorldObstacle obstacle in Rows.Values)
             {
-                float obstacleMinY = obstacle.CenterY - obstacle.HalfHeight;
-                float obstacleMaxY = obstacle.CenterY + obstacle.HalfHeight;
-                if (footY + playerHeight <= obstacleMinY || footY >= obstacleMaxY)
-                    continue;
-
                 if (!TrySegmentHitFraction(
                         obstacle,
                         startX,
@@ -45,6 +40,8 @@ namespace Arena.Input
                         outX,
                         outZ,
                         Mathf.Max(0f, playerRadius),
+                        footY,
+                        Mathf.Max(0f, playerHeight),
                         out float hitFraction))
                 {
                     continue;
@@ -68,27 +65,27 @@ namespace Arena.Input
             float bestFraction = float.PositiveInfinity;
             foreach (ActiveWorldObstacle obstacle in Rows.Values)
             {
-                ToLocal(obstacle, start.x, start.z, out float startLocalX, out float startLocalZ);
-                ToLocal(obstacle, end.x, end.z, out float endLocalX, out float endLocalZ);
+                Vector3 startLocal = ToLocal(obstacle, start);
+                Vector3 endLocal = ToLocal(obstacle, end);
                 float enter = 0f;
                 float exit = 1f;
                 if (ClipAxis(
-                        startLocalX,
-                        endLocalX,
+                        startLocal.x,
+                        endLocal.x,
                         -obstacle.HalfWidth - radius,
                         obstacle.HalfWidth + radius,
                         ref enter,
                         ref exit)
                     && ClipAxis(
-                        start.y - obstacle.CenterY,
-                        end.y - obstacle.CenterY,
+                        startLocal.y,
+                        endLocal.y,
                         -obstacle.HalfHeight - radius,
                         obstacle.HalfHeight + radius,
                         ref enter,
                         ref exit)
                     && ClipAxis(
-                        startLocalZ,
-                        endLocalZ,
+                        startLocal.z,
+                        endLocal.z,
                         -obstacle.HalfDepth - radius,
                         obstacle.HalfDepth + radius,
                         ref enter,
@@ -117,13 +114,29 @@ namespace Arena.Input
             float endX,
             float endZ,
             float radius,
+            float footY,
+            float height,
             out float fraction)
         {
-            ToLocal(obstacle, startX, startZ, out float startLocalX, out float startLocalZ);
-            ToLocal(obstacle, endX, endZ, out float endLocalX, out float endLocalZ);
-            float halfX = obstacle.HalfWidth + radius;
-            float halfZ = obstacle.HalfDepth + radius;
-            if (Mathf.Abs(startLocalX) <= halfX && Mathf.Abs(startLocalZ) <= halfZ)
+            float halfHeight = height * 0.5f;
+            float actorCenterY = footY + halfHeight;
+            Vector3 startLocal = ToLocal(obstacle, new Vector3(startX, actorCenterY, startZ));
+            Vector3 endLocal = ToLocal(obstacle, new Vector3(endX, actorCenterY, endZ));
+
+            Quaternion inverseRotation = Quaternion.Inverse(CollisionRotation(obstacle));
+            Vector3 worldXLocal = inverseRotation * Vector3.right;
+            Vector3 worldYLocal = inverseRotation * Vector3.up;
+            Vector3 worldZLocal = inverseRotation * Vector3.forward;
+            Vector3 actorExtentLocal = Abs(worldXLocal) * radius
+                + Abs(worldYLocal) * halfHeight
+                + Abs(worldZLocal) * radius;
+            Vector3 halfExtents = new(
+                obstacle.HalfWidth + actorExtentLocal.x,
+                obstacle.HalfHeight + actorExtentLocal.y,
+                obstacle.HalfDepth + actorExtentLocal.z);
+            if (Mathf.Abs(startLocal.x) <= halfExtents.x
+                && Mathf.Abs(startLocal.y) <= halfExtents.y
+                && Mathf.Abs(startLocal.z) <= halfExtents.z)
             {
                 fraction = 0f;
                 return false;
@@ -131,8 +144,9 @@ namespace Arena.Input
 
             float enter = 0f;
             float exit = 1f;
-            if (!ClipAxis(startLocalX, endLocalX, -halfX, halfX, ref enter, ref exit)
-                || !ClipAxis(startLocalZ, endLocalZ, -halfZ, halfZ, ref enter, ref exit))
+            if (!ClipAxis(startLocal.x, endLocal.x, -halfExtents.x, halfExtents.x, ref enter, ref exit)
+                || !ClipAxis(startLocal.y, endLocal.y, -halfExtents.y, halfExtents.y, ref enter, ref exit)
+                || !ClipAxis(startLocal.z, endLocal.z, -halfExtents.z, halfExtents.z, ref enter, ref exit))
             {
                 fraction = 0f;
                 return false;
@@ -163,19 +177,36 @@ namespace Arena.Input
             return enter <= exit;
         }
 
-        private static void ToLocal(
-            ActiveWorldObstacle obstacle,
-            float worldX,
-            float worldZ,
-            out float localX,
-            out float localZ)
+        private static Vector3 ToLocal(ActiveWorldObstacle obstacle, Vector3 world)
         {
-            float dx = worldX - obstacle.CenterX;
-            float dz = worldZ - obstacle.CenterZ;
-            float sinYaw = Mathf.Sin(obstacle.Yaw);
-            float cosYaw = Mathf.Cos(obstacle.Yaw);
-            localX = dx * cosYaw - dz * sinYaw;
-            localZ = dx * sinYaw + dz * cosYaw;
+            Vector3 center = new(obstacle.CenterX, obstacle.CenterY, obstacle.CenterZ);
+            return Quaternion.Inverse(CollisionRotation(obstacle)) * (world - center);
         }
+
+        private static Quaternion CollisionRotation(ActiveWorldObstacle obstacle)
+        {
+            Quaternion rotation = new(
+                obstacle.CollisionRotationX,
+                obstacle.CollisionRotationY,
+                obstacle.CollisionRotationZ,
+                obstacle.CollisionRotationW);
+            float magnitude = Mathf.Sqrt(
+                rotation.x * rotation.x
+                + rotation.y * rotation.y
+                + rotation.z * rotation.z
+                + rotation.w * rotation.w);
+            if (magnitude <= Mathf.Epsilon)
+                return Quaternion.identity;
+            return new Quaternion(
+                rotation.x / magnitude,
+                rotation.y / magnitude,
+                rotation.z / magnitude,
+                rotation.w / magnitude);
+        }
+
+        private static Vector3 Abs(Vector3 value) => new(
+            Mathf.Abs(value.x),
+            Mathf.Abs(value.y),
+            Mathf.Abs(value.z));
     }
 }

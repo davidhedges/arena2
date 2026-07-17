@@ -355,12 +355,16 @@ namespace Arena.Tests.Editor
             object obstacle = Activator.CreateInstance(obstacleType)!;
             obstacleType.GetField("ObstacleId")!.SetValue(obstacle, 1UL);
             obstacleType.GetField("CenterX")!.SetValue(obstacle, 0f);
-            obstacleType.GetField("CenterY")!.SetValue(obstacle, 4.5f);
+            obstacleType.GetField("CenterY")!.SetValue(obstacle, 3.5f);
             obstacleType.GetField("CenterZ")!.SetValue(obstacle, 0f);
             obstacleType.GetField("Yaw")!.SetValue(obstacle, 0f);
-            obstacleType.GetField("HalfWidth")!.SetValue(obstacle, 2.25f);
-            obstacleType.GetField("HalfHeight")!.SetValue(obstacle, 4.5f);
+            obstacleType.GetField("HalfWidth")!.SetValue(obstacle, 1f);
+            obstacleType.GetField("HalfHeight")!.SetValue(obstacle, 3.5f);
             obstacleType.GetField("HalfDepth")!.SetValue(obstacle, 1.25f);
+            obstacleType.GetField("CollisionRotationX")!.SetValue(obstacle, 0f);
+            obstacleType.GetField("CollisionRotationY")!.SetValue(obstacle, 0f);
+            obstacleType.GetField("CollisionRotationZ")!.SetValue(obstacle, 0f);
+            obstacleType.GetField("CollisionRotationW")!.SetValue(obstacle, 1f);
 
             RequireMethod(runtimeType, "Clear").Invoke(null, null);
             try

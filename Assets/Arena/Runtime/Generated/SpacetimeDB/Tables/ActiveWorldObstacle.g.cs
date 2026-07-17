@@ -80,6 +80,10 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Col<ActiveWorldObstacle, SpacetimeDB.Timestamp> SpawnedAt { get; }
         public global::SpacetimeDB.Col<ActiveWorldObstacle, SpacetimeDB.Timestamp> ExpiresAt { get; }
         public global::SpacetimeDB.Col<ActiveWorldObstacle, long> ExpiresAtMicros { get; }
+        public global::SpacetimeDB.Col<ActiveWorldObstacle, float> CollisionRotationX { get; }
+        public global::SpacetimeDB.Col<ActiveWorldObstacle, float> CollisionRotationY { get; }
+        public global::SpacetimeDB.Col<ActiveWorldObstacle, float> CollisionRotationZ { get; }
+        public global::SpacetimeDB.Col<ActiveWorldObstacle, float> CollisionRotationW { get; }
 
         public ActiveWorldObstacleCols(string tableName)
         {
@@ -104,6 +108,10 @@ namespace SpacetimeDB.Types
             SpawnedAt = new global::SpacetimeDB.Col<ActiveWorldObstacle, SpacetimeDB.Timestamp>(tableName, "spawned_at");
             ExpiresAt = new global::SpacetimeDB.Col<ActiveWorldObstacle, SpacetimeDB.Timestamp>(tableName, "expires_at");
             ExpiresAtMicros = new global::SpacetimeDB.Col<ActiveWorldObstacle, long>(tableName, "expires_at_micros");
+            CollisionRotationX = new global::SpacetimeDB.Col<ActiveWorldObstacle, float>(tableName, "collision_rotation_x");
+            CollisionRotationY = new global::SpacetimeDB.Col<ActiveWorldObstacle, float>(tableName, "collision_rotation_y");
+            CollisionRotationZ = new global::SpacetimeDB.Col<ActiveWorldObstacle, float>(tableName, "collision_rotation_z");
+            CollisionRotationW = new global::SpacetimeDB.Col<ActiveWorldObstacle, float>(tableName, "collision_rotation_w");
         }
     }
 

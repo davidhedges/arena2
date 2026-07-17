@@ -38,6 +38,14 @@ pub struct ActiveWorldObstacle {
     pub expires_at: Timestamp,
     #[index(btree)]
     pub expires_at_micros: i64,
+    #[default(0.0f32)]
+    pub collision_rotation_x: f32,
+    #[default(0.0f32)]
+    pub collision_rotation_y: f32,
+    #[default(0.0f32)]
+    pub collision_rotation_z: f32,
+    #[default(1.0f32)]
+    pub collision_rotation_w: f32,
 }
 
 pub(crate) fn spawn_world_obstacle(
@@ -55,8 +63,6 @@ pub(crate) fn spawn_world_obstacle(
 
     let forward_x = caster_state.facing_yaw.sin();
     let forward_z = caster_state.facing_yaw.cos();
-    let right_x = forward_z;
-    let right_z = -forward_x;
     let root_x = caster_state.pos_x + forward_x * tunables.forward_distance;
     let root_z = caster_state.pos_z + forward_z * tunables.forward_distance;
     let arena_seed = arena_seed_for_identity(ctx, caster);
@@ -73,14 +79,16 @@ pub(crate) fn spawn_world_obstacle(
         root_z,
         caster_state.pos_y,
     );
-    let center_x = root_x
-        + right_x * tunables.center_right_offset
-        + forward_x * tunables.center_forward_offset;
-    let center_z = root_z
-        + right_z * tunables.center_right_offset
-        + forward_z * tunables.center_forward_offset;
-    let center_y = root_y + tunables.center_up_offset;
-    let yaw = caster_state.facing_yaw + tunables.yaw_offset_degrees.to_radians();
+    let yaw = caster_state.facing_yaw + tunables.visual_yaw_offset_degrees.to_radians();
+    let local_center = tunables.collider_local_center;
+    let center_x = root_x + local_center[0] * yaw.cos() + local_center[2] * yaw.sin();
+    let center_y = root_y + local_center[1];
+    let center_z = root_z - local_center[0] * yaw.sin() + local_center[2] * yaw.cos();
+    let root_rotation = [0.0, (yaw * 0.5).sin(), 0.0, (yaw * 0.5).cos()];
+    let collision_rotation = normalize_quaternion(quaternion_multiply(
+        root_rotation,
+        tunables.collider_local_rotation,
+    ));
     let expires_at = now + tunables.duration;
     let (world_kind, instance_id, open_world_scene_name) = match world_context {
         ResolvedWorldContext::Open(scene) => ("OPEN".to_string(), None, scene),
@@ -105,12 +113,16 @@ pub(crate) fn spawn_world_obstacle(
         center_y,
         center_z,
         yaw,
-        half_width: tunables.width * 0.5,
-        half_height: tunables.height * 0.5,
-        half_depth: tunables.depth * 0.5,
+        half_width: tunables.collider_size[0] * 0.5,
+        half_height: tunables.collider_size[1] * 0.5,
+        half_depth: tunables.collider_size[2] * 0.5,
         spawned_at: now,
         expires_at,
         expires_at_micros: timestamp_to_micros(expires_at),
+        collision_rotation_x: collision_rotation[0],
+        collision_rotation_y: collision_rotation[1],
+        collision_rotation_z: collision_rotation[2],
+        collision_rotation_w: collision_rotation[3],
     });
     Ok(())
 }
@@ -178,14 +190,16 @@ pub(crate) fn resolve_active_world_obstacle_movement(
     let mut out_x = target_x;
     let mut out_z = target_z;
     for obstacle in active_obstacles_for_actor(ctx, actor) {
-        let obstacle_min_y = obstacle.center_y - obstacle.half_height;
-        let obstacle_max_y = obstacle.center_y + obstacle.half_height;
-        if foot_y + height <= obstacle_min_y || foot_y >= obstacle_max_y {
-            continue;
-        }
-        let Some(t) =
-            segment_obb_hit_fraction_xz(&obstacle, start_x, start_z, out_x, out_z, radius.max(0.0))
-        else {
+        let Some(t) = segment_obb_movement_hit_fraction(
+            &obstacle,
+            start_x,
+            start_z,
+            out_x,
+            out_z,
+            radius.max(0.0),
+            foot_y,
+            height.max(0.0),
+        ) else {
             continue;
         };
         let safe_t = (t - COLLISION_EPSILON).max(0.0);
@@ -235,26 +249,43 @@ pub(crate) fn first_active_world_obstacle_hit(
     best
 }
 
-fn segment_obb_hit_fraction_xz(
+fn segment_obb_movement_hit_fraction(
     obstacle: &ActiveWorldObstacle,
     start_x: f32,
     start_z: f32,
     end_x: f32,
     end_z: f32,
     radius: f32,
+    foot_y: f32,
+    height: f32,
 ) -> Option<f32> {
-    let (start_local_x, start_local_z) = obstacle_local_xz(obstacle, start_x, start_z);
-    let (end_local_x, end_local_z) = obstacle_local_xz(obstacle, end_x, end_z);
-    let half_x = obstacle.half_width + radius;
-    let half_z = obstacle.half_depth + radius;
-    if start_local_x.abs() <= half_x && start_local_z.abs() <= half_z {
+    let half_height = height * 0.5;
+    let actor_center_y = foot_y + half_height;
+    let start_local = obstacle_local_point(obstacle, [start_x, actor_center_y, start_z]);
+    let end_local = obstacle_local_point(obstacle, [end_x, actor_center_y, end_z]);
+    let rotation = obstacle_collision_rotation(obstacle);
+    let world_x_local = inverse_rotate_vector(rotation, [1.0, 0.0, 0.0]);
+    let world_y_local = inverse_rotate_vector(rotation, [0.0, 1.0, 0.0]);
+    let world_z_local = inverse_rotate_vector(rotation, [0.0, 0.0, 1.0]);
+    let mut actor_extent_local = [0.0; 3];
+    for axis in 0..3 {
+        actor_extent_local[axis] = world_x_local[axis].abs() * radius
+            + world_y_local[axis].abs() * half_height
+            + world_z_local[axis].abs() * radius;
+    }
+    let half_extents = [
+        obstacle.half_width + actor_extent_local[0],
+        obstacle.half_height + actor_extent_local[1],
+        obstacle.half_depth + actor_extent_local[2],
+    ];
+    if (0..3).all(|axis| start_local[axis].abs() <= half_extents[axis]) {
         return None;
     }
     segment_aabb_fraction(
-        [start_local_x, start_local_z],
-        [end_local_x, end_local_z],
-        [-half_x, -half_z],
-        [half_x, half_z],
+        start_local,
+        end_local,
+        [-half_extents[0], -half_extents[1], -half_extents[2]],
+        half_extents,
     )
 }
 
@@ -269,11 +300,11 @@ fn segment_obb_hit_fraction_3d(
     end_z: f32,
     radius: f32,
 ) -> Option<f32> {
-    let (start_local_x, start_local_z) = obstacle_local_xz(obstacle, start_x, start_z);
-    let (end_local_x, end_local_z) = obstacle_local_xz(obstacle, end_x, end_z);
+    let start_local = obstacle_local_point(obstacle, [start_x, start_y, start_z]);
+    let end_local = obstacle_local_point(obstacle, [end_x, end_y, end_z]);
     segment_aabb_fraction(
-        [start_local_x, start_y - obstacle.center_y, start_local_z],
-        [end_local_x, end_y - obstacle.center_y, end_local_z],
+        start_local,
+        end_local,
         [
             -obstacle.half_width - radius,
             -obstacle.half_height - radius,
@@ -287,12 +318,74 @@ fn segment_obb_hit_fraction_3d(
     )
 }
 
-fn obstacle_local_xz(obstacle: &ActiveWorldObstacle, world_x: f32, world_z: f32) -> (f32, f32) {
-    let dx = world_x - obstacle.center_x;
-    let dz = world_z - obstacle.center_z;
-    let sin_yaw = obstacle.yaw.sin();
-    let cos_yaw = obstacle.yaw.cos();
-    (dx * cos_yaw - dz * sin_yaw, dx * sin_yaw + dz * cos_yaw)
+fn obstacle_collision_rotation(obstacle: &ActiveWorldObstacle) -> [f32; 4] {
+    normalize_quaternion([
+        obstacle.collision_rotation_x,
+        obstacle.collision_rotation_y,
+        obstacle.collision_rotation_z,
+        obstacle.collision_rotation_w,
+    ])
+}
+
+fn obstacle_local_point(obstacle: &ActiveWorldObstacle, world: [f32; 3]) -> [f32; 3] {
+    inverse_rotate_vector(
+        obstacle_collision_rotation(obstacle),
+        [
+            world[0] - obstacle.center_x,
+            world[1] - obstacle.center_y,
+            world[2] - obstacle.center_z,
+        ],
+    )
+}
+
+fn normalize_quaternion(quaternion: [f32; 4]) -> [f32; 4] {
+    let magnitude_squared = quaternion.iter().map(|value| value * value).sum::<f32>();
+    if magnitude_squared <= f32::EPSILON {
+        return [0.0, 0.0, 0.0, 1.0];
+    }
+    let inverse_magnitude = magnitude_squared.sqrt().recip();
+    [
+        quaternion[0] * inverse_magnitude,
+        quaternion[1] * inverse_magnitude,
+        quaternion[2] * inverse_magnitude,
+        quaternion[3] * inverse_magnitude,
+    ]
+}
+
+fn quaternion_multiply(left: [f32; 4], right: [f32; 4]) -> [f32; 4] {
+    [
+        left[3] * right[0] + left[0] * right[3] + left[1] * right[2] - left[2] * right[1],
+        left[3] * right[1] - left[0] * right[2] + left[1] * right[3] + left[2] * right[0],
+        left[3] * right[2] + left[0] * right[1] - left[1] * right[0] + left[2] * right[3],
+        left[3] * right[3] - left[0] * right[0] - left[1] * right[1] - left[2] * right[2],
+    ]
+}
+
+fn inverse_rotate_vector(quaternion: [f32; 4], vector: [f32; 3]) -> [f32; 3] {
+    rotate_vector(
+        [
+            -quaternion[0],
+            -quaternion[1],
+            -quaternion[2],
+            quaternion[3],
+        ],
+        vector,
+    )
+}
+
+fn rotate_vector(quaternion: [f32; 4], vector: [f32; 3]) -> [f32; 3] {
+    let vector_quaternion = [vector[0], vector[1], vector[2], 0.0];
+    let conjugate = [
+        -quaternion[0],
+        -quaternion[1],
+        -quaternion[2],
+        quaternion[3],
+    ];
+    let rotated = quaternion_multiply(
+        quaternion_multiply(quaternion, vector_quaternion),
+        conjugate,
+    );
+    [rotated[0], rotated[1], rotated[2]]
 }
 
 fn segment_aabb_fraction<const N: usize>(
@@ -344,21 +437,26 @@ mod tests {
             root_y: 0.0,
             root_z: 0.0,
             center_x: 0.0,
-            center_y: 4.5,
+            center_y: 3.5,
             center_z: 0.0,
             yaw: 0.0,
-            half_width: 2.25,
-            half_height: 4.5,
+            half_width: 1.0,
+            half_height: 3.5,
             half_depth: 1.25,
             spawned_at: Timestamp::UNIX_EPOCH,
             expires_at: Timestamp::UNIX_EPOCH + std::time::Duration::from_secs(3),
             expires_at_micros: 3_000_000,
+            collision_rotation_x: 0.0,
+            collision_rotation_y: 0.0,
+            collision_rotation_z: 0.0,
+            collision_rotation_w: 1.0,
         }
     }
 
     #[test]
     fn movement_segment_stops_at_expanded_obstacle_face() {
-        let hit = segment_obb_hit_fraction_xz(&obstacle(), 0.0, -4.0, 0.0, 4.0, 0.25);
+        let hit =
+            segment_obb_movement_hit_fraction(&obstacle(), 0.0, -4.0, 0.0, 4.0, 0.25, 0.0, 1.8);
         assert!(hit.is_some_and(|fraction| (fraction - 0.3125).abs() < 0.001));
     }
 
@@ -366,5 +464,19 @@ mod tests {
     fn sight_segment_hits_vertical_obstacle() {
         let hit = segment_obb_hit_fraction_3d(&obstacle(), 0.0, 1.5, -4.0, 0.0, 1.5, 4.0, 0.05);
         assert!(hit.is_some());
+    }
+
+    #[test]
+    fn local_point_uses_full_collision_rotation() {
+        let mut rotated = obstacle();
+        let half_sqrt_two = 0.5_f32.sqrt();
+        rotated.collision_rotation_z = half_sqrt_two;
+        rotated.collision_rotation_w = half_sqrt_two;
+        rotated.center_y = 0.0;
+
+        let local = obstacle_local_point(&rotated, [0.0, 1.0, 0.0]);
+        assert!((local[0] - 1.0).abs() < 0.001);
+        assert!(local[1].abs() < 0.001);
+        assert!(local[2].abs() < 0.001);
     }
 }

@@ -455,13 +455,10 @@ pub(crate) struct EmanationSecondaryTunables {
 pub(crate) struct WorldObstacleSecondaryTunables {
     pub forward_distance: f32,
     pub duration: Duration,
-    pub width: f32,
-    pub height: f32,
-    pub depth: f32,
-    pub center_right_offset: f32,
-    pub center_up_offset: f32,
-    pub center_forward_offset: f32,
-    pub yaw_offset_degrees: f32,
+    pub visual_yaw_offset_degrees: f32,
+    pub collider_local_center: [f32; 3],
+    pub collider_local_rotation: [f32; 4],
+    pub collider_size: [f32; 3],
     pub visual_resource_path: String,
 }
 

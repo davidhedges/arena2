@@ -92,11 +92,18 @@ namespace Arena.Presentation
                 new Vector3(row.RootX, row.RootY, row.RootZ),
                 Quaternion.Euler(0f, row.Yaw * Mathf.Rad2Deg, 0f));
             visual.name = $"{row.SpellId}_Obstacle_{row.ObstacleId}";
+            DisablePrefabColliders(visual);
             _visuals[row.ObstacleId] = visual;
             StartCoroutine(
                 CombatVFXLifecycleRegistry.DestroyWhenParticleSystemsFinish(
                     visual,
                     row.VisualResourcePath));
+        }
+
+        private static void DisablePrefabColliders(GameObject visual)
+        {
+            foreach (Collider collider in visual.GetComponentsInChildren<Collider>(true))
+                collider.enabled = false;
         }
 
         private void Remove(ulong obstacleId)

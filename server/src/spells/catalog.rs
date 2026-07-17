@@ -52,6 +52,31 @@ struct SpellCatalogRow {
     delivery: SpellCatalogDelivery,
 }
 
+#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct Vector3Row {
+    x: f32,
+    y: f32,
+    z: f32,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct QuaternionRow {
+    x: f32,
+    y: f32,
+    z: f32,
+    w: f32,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct WorldObstacleColliderRow {
+    local_center: Vector3Row,
+    local_rotation: QuaternionRow,
+    size: Vector3Row,
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(tag = "kind", rename_all = "SCREAMING_SNAKE_CASE", deny_unknown_fields)]
 enum SpellCatalogDelivery {
@@ -186,17 +211,8 @@ enum SpellCatalogDelivery {
     WorldObstacle {
         forward_distance: f32,
         duration_ms: u64,
-        width: f32,
-        height: f32,
-        depth: f32,
-        #[serde(default)]
-        center_right_offset: f32,
-        #[serde(default)]
-        center_up_offset: f32,
-        #[serde(default)]
-        center_forward_offset: f32,
-        #[serde(default)]
-        yaw_offset_degrees: f32,
+        visual_yaw_offset_degrees: f32,
+        collider: WorldObstacleColliderRow,
         visual_resource_path: String,
     },
     SelfResource {},
@@ -1155,13 +1171,8 @@ impl SpellCatalogRow {
             SpellCatalogDelivery::WorldObstacle {
                 forward_distance,
                 duration_ms,
-                width,
-                height,
-                depth,
-                center_right_offset,
-                center_up_offset,
-                center_forward_offset,
-                yaw_offset_degrees,
+                visual_yaw_offset_degrees,
+                collider,
                 visual_resource_path,
             } => {
                 definition.behavior = SpellBehavior::WorldObstacle;
@@ -1173,13 +1184,19 @@ impl SpellCatalogRow {
                 definition.secondary.world_obstacle = Some(WorldObstacleSecondaryTunables {
                     forward_distance,
                     duration: Duration::from_millis(duration_ms),
-                    width,
-                    height,
-                    depth,
-                    center_right_offset,
-                    center_up_offset,
-                    center_forward_offset,
-                    yaw_offset_degrees,
+                    visual_yaw_offset_degrees,
+                    collider_local_center: [
+                        collider.local_center.x,
+                        collider.local_center.y,
+                        collider.local_center.z,
+                    ],
+                    collider_local_rotation: [
+                        collider.local_rotation.x,
+                        collider.local_rotation.y,
+                        collider.local_rotation.z,
+                        collider.local_rotation.w,
+                    ],
+                    collider_size: [collider.size.x, collider.size.y, collider.size.z],
                     visual_resource_path,
                 });
             }
@@ -2154,29 +2171,49 @@ fn validate_secondary_tunables(def: &SpellDefinition) -> Result<(), String> {
                 obstacle.forward_distance,
             )?;
             ensure_positive_duration(def.kind.as_str(), "delivery.duration_ms", obstacle.duration)?;
-            ensure_positive_f32(def.kind.as_str(), "delivery.width", obstacle.width)?;
-            ensure_positive_f32(def.kind.as_str(), "delivery.height", obstacle.height)?;
-            ensure_positive_f32(def.kind.as_str(), "delivery.depth", obstacle.depth)?;
             ensure_finite(
                 def.kind.as_str(),
-                "delivery.center_right_offset",
-                obstacle.center_right_offset,
+                "delivery.visual_yaw_offset_degrees",
+                obstacle.visual_yaw_offset_degrees,
             )?;
-            ensure_finite(
-                def.kind.as_str(),
-                "delivery.center_up_offset",
-                obstacle.center_up_offset,
-            )?;
-            ensure_finite(
-                def.kind.as_str(),
-                "delivery.center_forward_offset",
-                obstacle.center_forward_offset,
-            )?;
-            ensure_finite(
-                def.kind.as_str(),
-                "delivery.yaw_offset_degrees",
-                obstacle.yaw_offset_degrees,
-            )?;
+            for (axis, value) in ["x", "y", "z"]
+                .into_iter()
+                .zip(obstacle.collider_local_center)
+            {
+                ensure_finite(
+                    def.kind.as_str(),
+                    format!("delivery.collider.local_center.{axis}").as_str(),
+                    value,
+                )?;
+            }
+            for (axis, value) in ["x", "y", "z"].into_iter().zip(obstacle.collider_size) {
+                ensure_positive_f32(
+                    def.kind.as_str(),
+                    format!("delivery.collider.size.{axis}").as_str(),
+                    value,
+                )?;
+            }
+            for (axis, value) in ["x", "y", "z", "w"]
+                .into_iter()
+                .zip(obstacle.collider_local_rotation)
+            {
+                ensure_finite(
+                    def.kind.as_str(),
+                    format!("delivery.collider.local_rotation.{axis}").as_str(),
+                    value,
+                )?;
+            }
+            let rotation_norm_squared = obstacle
+                .collider_local_rotation
+                .iter()
+                .map(|component| component * component)
+                .sum::<f32>();
+            if (rotation_norm_squared - 1.0).abs() > 0.001 {
+                return Err(format!(
+                    "{} WORLD_OBSTACLE delivery.collider.local_rotation must be a unit quaternion",
+                    def.kind.as_str()
+                ));
+            }
             if obstacle.visual_resource_path.trim().is_empty() {
                 return Err(format!(
                     "{} WORLD_OBSTACLE visual_resource_path must not be empty",
@@ -2738,16 +2775,15 @@ mod tests {
             .world_obstacle
             .as_ref()
             .expect("Stonespire must define obstacle tunables");
-        assert_eq!(obstacle.forward_distance, 2.0);
-        assert_eq!(obstacle.duration, Duration::from_millis(5550));
+        assert_eq!(obstacle.forward_distance, 3.0);
+        assert_eq!(obstacle.duration, Duration::from_millis(4000));
+        assert_eq!(obstacle.visual_yaw_offset_degrees, 70.0);
+        assert_eq!(obstacle.collider_local_center, [-0.57, 1.12, 1.4]);
         assert_eq!(
-            (obstacle.width, obstacle.height, obstacle.depth),
-            (3.92, 7.28, 2.5)
+            obstacle.collider_local_rotation,
+            [0.08267053, 0.5675874, 0.11806578, 0.81059897]
         );
-        assert_eq!(obstacle.center_right_offset, -0.57);
-        assert_eq!(obstacle.center_up_offset, 1.12);
-        assert_eq!(obstacle.center_forward_offset, 1.4);
-        assert_eq!(obstacle.yaw_offset_degrees, 70.0);
+        assert_eq!(obstacle.collider_size, [2.0, 7.0, 2.5]);
         assert_eq!(
             obstacle.visual_resource_path,
             "CombatVFX/playground/5) Rune AoE aftershock stuff 1"

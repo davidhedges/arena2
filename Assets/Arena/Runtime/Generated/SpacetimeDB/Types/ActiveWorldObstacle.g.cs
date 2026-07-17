@@ -55,6 +55,14 @@ namespace SpacetimeDB.Types
         public SpacetimeDB.Timestamp ExpiresAt;
         [DataMember(Name = "expires_at_micros")]
         public long ExpiresAtMicros;
+        [DataMember(Name = "collision_rotation_x")]
+        public float CollisionRotationX;
+        [DataMember(Name = "collision_rotation_y")]
+        public float CollisionRotationY;
+        [DataMember(Name = "collision_rotation_z")]
+        public float CollisionRotationZ;
+        [DataMember(Name = "collision_rotation_w")]
+        public float CollisionRotationW;
 
         public ActiveWorldObstacle(
             ulong ObstacleId,
@@ -77,7 +85,11 @@ namespace SpacetimeDB.Types
             float HalfDepth,
             SpacetimeDB.Timestamp SpawnedAt,
             SpacetimeDB.Timestamp ExpiresAt,
-            long ExpiresAtMicros
+            long ExpiresAtMicros,
+            float CollisionRotationX,
+            float CollisionRotationY,
+            float CollisionRotationZ,
+            float CollisionRotationW
         )
         {
             this.ObstacleId = ObstacleId;
@@ -101,6 +113,10 @@ namespace SpacetimeDB.Types
             this.SpawnedAt = SpawnedAt;
             this.ExpiresAt = ExpiresAt;
             this.ExpiresAtMicros = ExpiresAtMicros;
+            this.CollisionRotationX = CollisionRotationX;
+            this.CollisionRotationY = CollisionRotationY;
+            this.CollisionRotationZ = CollisionRotationZ;
+            this.CollisionRotationW = CollisionRotationW;
         }
 
         public ActiveWorldObstacle()
