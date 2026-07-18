@@ -918,7 +918,7 @@
         "arms_auto_attack_on_cast": true,
         "delivery": {
           "kind": "PROJECTILE",
-          "speed": 50,
+          "speed": 100,
           "max_distance": 30,
           "damage": 30,
           "damage_type": "LIGHTNING",
@@ -1799,7 +1799,7 @@
         "delivery": {
           "kind": "DIRECT_TARGET",
           "max_distance": 18,
-          "damage": 0,
+          "damage": 1,
           "damage_type": "AIR",
           "block_behavior": "UNBLOCKABLE",
           "parry_behavior": "UNPARRYABLE",
@@ -6366,7 +6366,7 @@
       "owner_id": "SPELL_BUFFET",
       "slot": "impact",
       "trigger": "SPELL_IMPACT",
-      "anchor": "TARGET",
+      "anchor": "IMPACT_POINT",
       "vfx_id": "VFX_BUFFET_IMPACT_01",
       "attach_mode": "SPAWN_WORLD",
       "vfx_role": "ONE_SHOT",

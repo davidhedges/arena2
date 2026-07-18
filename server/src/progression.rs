@@ -9292,7 +9292,7 @@ mod tests {
     }
 
     #[test]
-    fn buffet_authors_target_hit_vfx_without_projectile_cues() {
+    fn buffet_authors_impact_point_hit_vfx_without_projectile_cues() {
         let catalog = progression_catalog();
         let cues: Vec<_> = catalog
             .combat_vfx_cues
@@ -9303,7 +9303,7 @@ mod tests {
         assert_eq!(cues.len(), 1);
         let cue = cues[0];
         assert_eq!(normalize_identifier(cue.trigger.as_str()), "SPELL_IMPACT");
-        assert_eq!(normalize_identifier(cue.anchor.as_str()), "TARGET");
+        assert_eq!(normalize_identifier(cue.anchor.as_str()), "IMPACT_POINT");
         assert_eq!(
             normalize_identifier(cue.vfx_id.as_str()),
             "VFX_BUFFET_IMPACT_01"

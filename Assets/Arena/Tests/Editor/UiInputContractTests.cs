@@ -41,7 +41,7 @@ namespace Arena.Tests.Editor
         private const string NovaCastPrefabMetaPath = "Assets/Arena/Resources/CombatVFX/playground/Arcane Explosion.prefab.meta";
         private const string NovaHitPrefabMetaPath = "Assets/ThirdParty/AssetStore/VFX/Piloto Studio/Super Realistic FX Bundle/ARPG Realistic Essentials Fire/Prefabs/Melee/Green_Fire/Hit_Nova_Light_green.prefab.meta";
         private const string BuffetHitPrefabMetaPath = "Assets/Arena/Resources/CombatVFX/Hits/Air/1) Wind Blast 1.prefab.meta";
-        private const string LightningPrefabMetaPath = "Assets/Arena/Resources/CombatVFX/Area/VFX_Lightning01_Arena.prefab.meta";
+        private const string LightningPrefabMetaPath = "Assets/Arena/Resources/CombatVFX/Area/Electric/8) Vertical Lightning blue 1.prefab.meta";
         private const string MeteorPrefabMetaPath = "Assets/Arena/Resources/CombatVFX/Area/VFX_SingleComet01_Fire_Arena.prefab.meta";
         private const string MeteorHeadPrefabMetaPath = "Assets/Arena/Resources/CombatVFX/Projectiles/VFX_Projectile_Comet_Orange_Arena.prefab.meta";
         private const string ServerSpellsPath = "server/src/spells/mod.rs";

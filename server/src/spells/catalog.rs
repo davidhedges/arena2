@@ -3027,7 +3027,7 @@ mod tests {
     }
 
     #[test]
-    fn buffet_authors_zero_damage_air_cast_interrupt() {
+    fn buffet_authors_one_damage_air_cast_interrupt() {
         let definition = spell_definition_by_str("BUFFET")
             .expect("BUFFET should derive from the shared catalog");
         let direct_target = definition
@@ -3041,7 +3041,7 @@ mod tests {
         assert_eq!(definition.target_audience, TargetAudience::Hostile);
         assert!(definition.requires_target);
         assert_eq!(definition.cast_time, Duration::ZERO);
-        assert_eq!(definition.damage, 0);
+        assert_eq!(definition.damage, 1);
         assert_eq!(definition.damage_type, DamageType::Air);
         assert_eq!(definition.max_distance, 18.0);
         assert!(!definition.uses_global_cooldown);
@@ -3067,7 +3067,7 @@ mod tests {
 
         assert_eq!(definition.cast_time, Duration::ZERO);
         assert_eq!(definition.damage_type, DamageType::Lightning);
-        assert_eq!(definition.speed, 50.0);
+        assert_eq!(definition.speed, 100.0);
         assert_eq!(definition.max_distance, 30.0);
         assert_eq!(projectile.damage_multiplier_at_lifetime_end, 1.0);
     }

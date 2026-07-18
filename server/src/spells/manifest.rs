@@ -1266,7 +1266,7 @@ mod tests {
     }
 
     #[test]
-    fn buffet_catalog_matches_instant_zero_damage_interrupt_defaults() {
+    fn buffet_catalog_matches_instant_one_damage_interrupt_defaults() {
         let definition = definition("BUFFET");
 
         assert_eq!(definition.kind.as_str(), "BUFFET");
@@ -1277,7 +1277,7 @@ mod tests {
         assert_eq!(definition.target_audience.as_str(), "HOSTILE");
         assert!(definition.requires_target);
         assert_eq!(definition.cast_time, Duration::ZERO);
-        assert_eq!(definition.damage, 0);
+        assert_eq!(definition.damage, 1);
         assert_eq!(definition.damage_type.as_str(), "AIR");
         assert!((definition.max_distance - 18.0).abs() < 0.0001);
         assert!((definition.primary_resource_cost - 0.0).abs() < 0.0001);
