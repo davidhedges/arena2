@@ -42,6 +42,7 @@ namespace Arena.Tests.Editor
         private const string NovaHitPrefabMetaPath = "Assets/ThirdParty/AssetStore/VFX/Piloto Studio/Super Realistic FX Bundle/ARPG Realistic Essentials Fire/Prefabs/Melee/Green_Fire/Hit_Nova_Light_green.prefab.meta";
         private const string BuffetHitPrefabMetaPath = "Assets/Arena/Resources/CombatVFX/Hits/Air/1) Wind Blast 1.prefab.meta";
         private const string LightningPrefabMetaPath = "Assets/Arena/Resources/CombatVFX/Area/Electric/8) Vertical Lightning blue 1.prefab.meta";
+        private const string NegateArcaneShockPrefabMetaPath = "Assets/Arena/Resources/CombatVFX/playground/ARPG Realistic Arcane 1/Simple/ARPG_Arcane_Shock_Calling.prefab.meta";
         private const string MeteorPrefabMetaPath = "Assets/Arena/Resources/CombatVFX/Area/VFX_SingleComet01_Fire_Arena.prefab.meta";
         private const string MeteorHeadPrefabMetaPath = "Assets/Arena/Resources/CombatVFX/Projectiles/VFX_Projectile_Comet_Orange_Arena.prefab.meta";
         private const string ServerSpellsPath = "server/src/spells/mod.rs";
@@ -162,6 +163,22 @@ namespace Arena.Tests.Editor
 
             string registry = File.ReadAllText(CombatVfxRegistryPath);
             Assert.That(registry, Does.Contain("vfxId: VFX_LIGHTNING_01"));
+            Assert.That(registry, Does.Contain($"guid: {prefabGuid}"));
+        }
+
+        [Test]
+        public void NegateVfx_UsesAuthoredArcaneShockPrefab()
+        {
+            string templateRegistry = File.ReadAllText(CombatVfxTemplateRegistryPath);
+            Assert.That(templateRegistry, Does.Not.Contain("VFX_NEGATE_ARCANE_SHOCK_01"));
+
+            string prefabGuid = File.ReadLines(NegateArcaneShockPrefabMetaPath)
+                .First(line => line.StartsWith("guid: ", StringComparison.Ordinal))
+                .Substring("guid: ".Length)
+                .Trim();
+
+            string registry = File.ReadAllText(CombatVfxRegistryPath);
+            Assert.That(registry, Does.Contain("vfxId: VFX_NEGATE_ARCANE_SHOCK_01"));
             Assert.That(registry, Does.Contain($"guid: {prefabGuid}"));
         }
 

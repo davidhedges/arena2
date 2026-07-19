@@ -9686,6 +9686,29 @@ mod tests {
     }
 
     #[test]
+    fn negate_authors_arcane_shock_particle_vfx() {
+        let cue = progression_catalog()
+            .combat_vfx_cues
+            .iter()
+            .find(|cue| {
+                normalize_identifier(cue.owner_id.as_str()) == "SPELL_NEGATE"
+                    && normalize_identifier(cue.trigger.as_str()) == "SPELL_RELEASE"
+            })
+            .expect("Negate should author a release VFX cue");
+
+        assert_eq!(normalize_identifier(cue.anchor.as_str()), "CASTER");
+        assert_eq!(
+            normalize_identifier(cue.vfx_id.as_str()),
+            "VFX_NEGATE_ARCANE_SHOCK_01"
+        );
+        assert_eq!(
+            normalize_identifier(cue.lifecycle.as_str()),
+            "PARTICLE_SYSTEM"
+        );
+        assert_eq!(cue.duration_ms, 0);
+    }
+
+    #[test]
     fn necrotic_aura_vfx_follows_ground_without_inheriting_caster_transform() {
         let cue = progression_catalog()
             .combat_vfx_cues

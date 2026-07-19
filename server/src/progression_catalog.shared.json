@@ -6516,11 +6516,11 @@
       "owner_id": "SPELL_NEGATE",
       "trigger": "SPELL_RELEASE",
       "anchor": "CASTER",
-      "vfx_id": "VFX_NEGATE_01",
+      "vfx_id": "VFX_NEGATE_ARCANE_SHOCK_01",
       "attach_mode": "SPAWN_WORLD",
       "vfx_role": "ONE_SHOT",
-      "lifecycle": "DURATION",
-      "duration_ms": 400,
+      "lifecycle": "PARTICLE_SYSTEM",
+      "duration_ms": 0,
       "sort_order": 191
     },
     {
