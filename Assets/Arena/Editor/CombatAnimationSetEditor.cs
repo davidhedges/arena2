@@ -431,11 +431,10 @@ namespace Arena.Editor
             if (clip == null)
                 return false;
 
-            string[] setGuids = AssetDatabase.FindAssets("t:CombatAnimationSet");
-            for (int setIndex = 0; setIndex < setGuids.Length; setIndex++)
+            IReadOnlyList<CombatAnimationSet> sets = CombatAnimationSetAssetIndex.LoadAll();
+            for (int setIndex = 0; setIndex < sets.Count; setIndex++)
             {
-                string assetPath = AssetDatabase.GUIDToAssetPath(setGuids[setIndex]);
-                CombatAnimationSet? set = AssetDatabase.LoadAssetAtPath<CombatAnimationSet>(assetPath);
+                CombatAnimationSet set = sets[setIndex];
                 if (set?.meleeAttacks == null)
                     continue;
 
@@ -455,11 +454,10 @@ namespace Arena.Editor
             if (clip == null)
                 return targets;
 
-            string[] setGuids = AssetDatabase.FindAssets("t:CombatAnimationSet");
-            for (int setIndex = 0; setIndex < setGuids.Length; setIndex++)
+            IReadOnlyList<CombatAnimationSet> sets = CombatAnimationSetAssetIndex.LoadAll();
+            for (int setIndex = 0; setIndex < sets.Count; setIndex++)
             {
-                string assetPath = AssetDatabase.GUIDToAssetPath(setGuids[setIndex]);
-                CombatAnimationSet? set = AssetDatabase.LoadAssetAtPath<CombatAnimationSet>(assetPath);
+                CombatAnimationSet set = sets[setIndex];
                 if (set?.meleeAttacks == null)
                     continue;
 
@@ -574,11 +572,10 @@ namespace Arena.Editor
             }
 
             var affectedBySet = new Dictionary<CombatAnimationSet, List<int>>();
-            string[] setGuids = AssetDatabase.FindAssets("t:CombatAnimationSet");
-            for (int setIndex = 0; setIndex < setGuids.Length; setIndex++)
+            IReadOnlyList<CombatAnimationSet> sets = CombatAnimationSetAssetIndex.LoadAll();
+            for (int setIndex = 0; setIndex < sets.Count; setIndex++)
             {
-                string assetPath = AssetDatabase.GUIDToAssetPath(setGuids[setIndex]);
-                CombatAnimationSet? set = AssetDatabase.LoadAssetAtPath<CombatAnimationSet>(assetPath);
+                CombatAnimationSet set = sets[setIndex];
                 if (set?.meleeAttacks == null)
                     continue;
 

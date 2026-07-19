@@ -8967,7 +8967,7 @@ mod tests {
         );
         assert_eq!(
             normalize_identifier(ability.gameplay.target_audience.as_str()),
-            "HOSTILE"
+            "ANY"
         );
         assert_eq!(ability.gameplay.requires_target, Some(true));
         assert_eq!(ability.gameplay.requires_target_los, Some(true));
@@ -8999,7 +8999,7 @@ mod tests {
             crate::spells::SpellBehavior::PersistentArea
         );
         assert_eq!(definition.targeting, crate::spells::SpellTargeting::Target);
-        assert_eq!(definition.target_audience.as_str(), "HOSTILE");
+        assert_eq!(definition.target_audience.as_str(), "ANY");
         assert!(definition.requires_target);
         assert!(definition.requires_target_los);
         assert_eq!(definition.damage, 18);
@@ -9014,6 +9014,7 @@ mod tests {
             .as_ref()
             .expect("Blade Barrier should define persistent-area tunables");
         assert_eq!(persistent.pulse_interval, Duration::from_millis(1_000));
+        assert_eq!(persistent.effect_target_audience.as_str(), "HOSTILE");
         assert!(persistent.impact_effects.is_empty());
         assert_eq!(
             projectile_body_vfx_id_for_spell("PALADIN_BLADE_BARRIER", "BLADE_BARRIER", 0),

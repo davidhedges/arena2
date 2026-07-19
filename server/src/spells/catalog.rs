@@ -954,7 +954,6 @@ impl SpellCatalogRow {
                 max_distance,
                 damage,
                 damage_type,
-                effect_target_audience,
                 block_behavior,
             } => {
                 definition.behavior = SpellBehavior::Projectile;
@@ -2037,9 +2036,7 @@ fn validate_secondary_tunables(def: &SpellDefinition) -> Result<(), String> {
                     def.kind.as_str()
                 ));
             }
-            if def.damage > 0
-                && persistent_area.effect_target_audience != TargetAudience::Hostile
-            {
+            if def.damage > 0 && persistent_area.effect_target_audience != TargetAudience::Hostile {
                 return Err(format!(
                     "{} damaging PERSISTENT_AREA must use HOSTILE effect_target_audience",
                     def.kind.as_str()

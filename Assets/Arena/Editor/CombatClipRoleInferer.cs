@@ -9,6 +9,35 @@ using UnityEngine;
 namespace Arena.Editor
 {
     /// <summary>
+    /// Shared editor index of the animation sets that can actually be resolved at runtime.
+    /// Keeping this aligned with CombatAnimationSetCatalog avoids repeated project-wide
+    /// AssetDatabase searches when animation authoring tools open or repaint.
+    /// </summary>
+    internal static class CombatAnimationSetAssetIndex
+    {
+        private const string ResourceFolder = "CombatAnimationSets";
+        private static CombatAnimationSet[]? _cachedSets;
+
+        static CombatAnimationSetAssetIndex()
+        {
+            EditorApplication.projectChanged += Invalidate;
+        }
+
+        internal static IReadOnlyList<CombatAnimationSet> LoadAll()
+        {
+            _cachedSets ??= Resources.LoadAll<CombatAnimationSet>(ResourceFolder)
+                .OrderBy(set => AssetDatabase.GetAssetPath(set), System.StringComparer.Ordinal)
+                .ToArray();
+            return _cachedSets;
+        }
+
+        private static void Invalidate()
+        {
+            _cachedSets = null;
+        }
+    }
+
+    /// <summary>
     /// One observation of an AnimationClip being referenced by a CombatAnimationSet.
     /// A clip may have multiple observations (referenced by multiple sets, or in multiple
     /// roles within the same set). The authoring tool surfaces conflicts so the user can
@@ -32,8 +61,8 @@ namespace Arena.Editor
     }
 
     /// <summary>
-    /// Walks every CombatAnimationSet asset and builds a map from AnimationClip → list of
-    /// role observations. Pure inference; never writes events.
+    /// Walks every runtime-loadable CombatAnimationSet asset and builds a map from
+    /// AnimationClip → list of role observations. Pure inference; never writes events.
     /// </summary>
     public static class CombatClipRoleInferer
     {
@@ -47,15 +76,9 @@ namespace Arena.Editor
         public static Dictionary<AnimationClip, List<CombatClipRoleObservation>> BuildClipRoleMap()
         {
             Dictionary<AnimationClip, List<CombatClipRoleObservation>> map = new();
-            string[] setGuids = AssetDatabase.FindAssets("t:CombatAnimationSet");
-
-            foreach (string guid in setGuids)
+            foreach (CombatAnimationSet set in CombatAnimationSetAssetIndex.LoadAll())
             {
-                string path = AssetDatabase.GUIDToAssetPath(guid);
-                CombatAnimationSet? set = AssetDatabase.LoadAssetAtPath<CombatAnimationSet>(path);
-                if (set == null)
-                    continue;
-
+                string path = AssetDatabase.GetAssetPath(set);
                 ObserveSet(set, path, map);
             }
 

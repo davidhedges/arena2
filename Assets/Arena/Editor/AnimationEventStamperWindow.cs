@@ -78,7 +78,7 @@ namespace Arena.Editor
 
         [SerializeField] private bool _showFolderBrowser;
         [SerializeField] private float _folderListHeight = FolderListDefaultHeight;
-        [SerializeField] private bool _showPreview = true;
+        [SerializeField] private bool _showPreview;
         [SerializeField] private bool _showCustomEvent;
         [SerializeField] private bool _showExistingEvents = true;
 
@@ -346,7 +346,7 @@ namespace Arena.Editor
 
                 _showPreview = EditorGUILayout.Foldout(
                     _showPreview,
-                    "Clip preview",
+                    "Clip preview (load on demand)",
                     true,
                     EditorStyles.foldoutHeader);
                 if (_showPreview)
@@ -358,6 +358,7 @@ namespace Arena.Editor
                 else
                 {
                     _embeddedPreviewSyncs = false;
+                    DestroyEmbeddedClipEditor();
                 }
 
                 DrawTimeAndRole();
@@ -958,12 +959,11 @@ namespace Arena.Editor
                     }
                 }
 
-                if (!playheadCanBeStartup)
-                {
-                    EditorGUILayout.LabelField(
-                        $"Scrub to or before {CombatAnimationEvents.OnReleaseFrame} to use Set Start Here.",
-                        EditorStyles.wordWrappedMiniLabel);
-                }
+                EditorGUILayout.LabelField(
+                    playheadCanBeStartup
+                        ? "The current playhead can be used as the instant-cast start."
+                        : $"Scrub to or before {CombatAnimationEvents.OnReleaseFrame} to use Set Start Here.",
+                    EditorStyles.wordWrappedMiniLabel);
             }
 
             if (!hasReleaseEvent && trimEvents.Length > 0 && GUILayout.Button("Remove Trim"))
@@ -1183,12 +1183,11 @@ namespace Arena.Editor
                 }
             }
 
-            if (!playheadCanBeStartup)
-            {
-                EditorGUILayout.LabelField(
-                    "Scrub to or before the first contact event to use Set Start Here.",
-                    EditorStyles.wordWrappedMiniLabel);
-            }
+            EditorGUILayout.LabelField(
+                playheadCanBeStartup
+                    ? "The current playhead can be used as the melee start."
+                    : "Scrub to or before the first contact event to use Set Start Here.",
+                EditorStyles.wordWrappedMiniLabel);
 
             if (unsupportedTargetCount > 0)
             {

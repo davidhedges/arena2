@@ -5507,7 +5507,7 @@
       "presentation_kind": "ABILITY",
       "presentation_id": "PALADIN_BLADE_BARRIER",
       "display_name": "Blade Barrier",
-      "description": "Surrounds a hostile target with holy blades that damage nearby enemies for 7.5 seconds.",
+      "description": "Surrounds a target with holy blades that damage nearby enemies for 7.5 seconds.",
       "sort_order": 166
     },
     {
