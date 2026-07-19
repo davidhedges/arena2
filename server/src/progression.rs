@@ -8809,6 +8809,90 @@ mod tests {
     }
 
     #[test]
+    fn paladin_radiant_burst_is_a_sword_and_shield_holy_cone_with_baked_animation() {
+        let catalog = progression_catalog();
+        let ability = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "PALADIN_RADIANT_BURST")
+            .expect("PALADIN_RADIANT_BURST must exist");
+
+        assert_eq!(
+            normalize_identifier(ability.combat_profile_id.as_str()),
+            COMBAT_PROFILE_SWORD_AND_SHIELD
+        );
+        assert_eq!(ability_gameplay_kind(ability), "SPELL");
+        assert_eq!(
+            normalize_identifier(ability.action_id.as_str()),
+            "RADIANT_BURST"
+        );
+        assert_eq!(ability.gameplay.resource_cost, Some(20.0));
+
+        let definition =
+            spell_definition_by_str("RADIANT_BURST").expect("Radiant Burst spell definition");
+        assert_eq!(definition.behavior, crate::spells::SpellBehavior::Area);
+        assert_eq!(definition.targeting, crate::spells::SpellTargeting::Self_);
+        assert_eq!(definition.target_audience.as_str(), "HOSTILE");
+        assert!(!definition.requires_target);
+        assert_eq!(definition.cast_time, Duration::ZERO);
+        assert_eq!(definition.damage, 35);
+        assert_eq!(definition.damage_type, DamageType::Holy);
+
+        let delivery = ability
+            .gameplay
+            .delivery
+            .as_ref()
+            .expect("Radiant Burst should author area delivery");
+        let shape = delivery
+            .get("shape")
+            .and_then(|value| value.as_object())
+            .expect("Radiant Burst should author cone geometry");
+        assert_eq!(
+            shape.get("kind").and_then(|value| value.as_str()),
+            Some("CASTER_CONE")
+        );
+        assert_eq!(
+            shape.get("angle_degrees").and_then(|value| value.as_f64()),
+            Some(65.0)
+        );
+
+        let cue = catalog
+            .combat_vfx_cues
+            .iter()
+            .find(|cue| {
+                normalize_identifier(cue.owner_kind.as_str()) == "ABILITY"
+                    && normalize_identifier(cue.owner_id.as_str()) == "PALADIN_RADIANT_BURST"
+                    && normalize_identifier(cue.trigger.as_str()) == "AREA_IMPACT"
+            })
+            .expect("Radiant Burst should author a facing-aligned area VFX cue");
+        assert_eq!(normalize_identifier(cue.anchor.as_str()), "AREA_ORIGIN");
+        assert_eq!(
+            normalize_identifier(cue.attach_mode.as_str()),
+            "WORLD_ALIGNED_TO_FACING"
+        );
+        assert_eq!(
+            normalize_identifier(cue.vfx_id.as_str()),
+            "VFX_RADIANT_BURST_CONE_01"
+        );
+        assert_eq!(normalize_identifier(cue.lifecycle.as_str()), "DURATION");
+        assert_eq!(cue.duration_ms, 2500);
+
+        let sword_and_shield_asset = animation_set_assets_by_combat_profile()
+            .get(COMBAT_PROFILE_SWORD_AND_SHIELD)
+            .expect("SwordAndShield animation set");
+        assert!(
+            sword_and_shield_asset.contains("- spellId: RADIANT_BURST"),
+            "Radiant Burst must resolve through the SwordAndShield spell animation entries"
+        );
+        assert!(
+            sword_and_shield_asset.contains(
+                "ground: {fileID: 7400000, guid: b77a7a02d110945d7bd3e5e445fbc043, type: 2}"
+            ),
+            "Radiant Burst must use the requested SwordAndShield Combo_Attack_01_03 clip"
+        );
+    }
+
+    #[test]
     fn warrior_disengage_strike_authors_timed_backstep() {
         let movement = melee_timed_movement_for_ability_id("WARRIOR_DISENGAGE_STRIKE")
             .expect("disengage strike should author timed movement");

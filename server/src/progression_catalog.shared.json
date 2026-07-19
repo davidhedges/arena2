@@ -3310,6 +3310,43 @@
       }
     },
     {
+      "ability_id": "PALADIN_RADIANT_BURST",
+      "actor_scope": "PLAYER",
+      "combat_profile_id": "SWORD_AND_SHIELD",
+      "action_id": "RADIANT_BURST",
+      "display_name": "Radiant Burst",
+      "resource_kind": "MANA",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 167,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 1200,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "SELF",
+        "target_audience": "HOSTILE",
+        "requires_target": false,
+        "resource_cost": 20,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "AREA",
+          "max_distance": 7.5,
+          "damage": 35,
+          "damage_type": "HOLY",
+          "block_behavior": "BLOCKABLE",
+          "shape": {
+            "kind": "CASTER_CONE",
+            "angle_degrees": 65,
+            "vertical_tolerance": 2.5
+          },
+          "impact_effects": []
+        }
+      }
+    },
+    {
       "ability_id": "PALADIN_SACRED_FLAME",
       "actor_scope": "PLAYER",
       "combat_profile_id": "SWORD_AND_SHIELD",
@@ -5353,6 +5390,13 @@
     },
     {
       "presentation_kind": "ABILITY",
+      "presentation_id": "PALADIN_RADIANT_BURST",
+      "display_name": "Radiant Burst",
+      "description": "Unleashes a burst of holy light in a cone before the wielder.",
+      "sort_order": 167
+    },
+    {
+      "presentation_kind": "ABILITY",
       "presentation_id": "PALADIN_SACRED_FLAME",
       "display_name": "Sacred Flame",
       "description": "Brands an enemy with holy damage over time.",
@@ -5718,6 +5762,19 @@
       "lifecycle": "DURATION",
       "duration_ms": 1000,
       "sort_order": 20
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "PALADIN_RADIANT_BURST",
+      "slot": "impact",
+      "trigger": "AREA_IMPACT",
+      "anchor": "AREA_ORIGIN",
+      "vfx_id": "VFX_RADIANT_BURST_CONE_01",
+      "attach_mode": "WORLD_ALIGNED_TO_FACING",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "DURATION",
+      "duration_ms": 2500,
+      "sort_order": 17
     },
     {
       "owner_kind": "ABILITY",

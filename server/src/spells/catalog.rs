@@ -2773,6 +2773,7 @@ mod tests {
                 "AURA_OF_VENGEANCE",
                 "BLESSED_SHIELD",
                 "BLADE_BARRIER",
+                "RADIANT_BURST",
                 "SACRED_FLAME",
                 "IMP_FIRE_BOLT",
                 "DEEP_SEA_LIZARD_TIDAL_BOLT",
@@ -2916,6 +2917,7 @@ mod tests {
             "AURA_OF_VENGEANCE",
             "BLESSED_SHIELD",
             "BLADE_BARRIER",
+            "RADIANT_BURST",
         ] {
             assert!(
                 spell_definition_by_str(id).is_some(),
