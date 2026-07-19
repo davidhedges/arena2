@@ -465,7 +465,8 @@ namespace Arena.Presentation
                 return;
 
             Vector3 origin = caster.GameObject.transform.position;
-            Vector3 point = target.GetPresentationRoot().position;
+            Vector3 point = target.GetPresentationRoot().position
+                + Vector3.up * (Mathf.Max(target.HitHeight, 0f) * 0.5f);
             Vector3 direction = point - origin;
             direction.y = 0f;
             direction = direction.sqrMagnitude > 0.000001f

@@ -76,7 +76,7 @@ Projectiles / AoE (want a real cast gesture):
 - [ ] `NEGATE` — Staff, 2H
 - [ ] `BLINDING_LIGHT` — Staff, 2H, S&S, Dag *(four-set)*
 - [ ] `BLESSED_SHIELD` — S&S *(set the map entry's `animatedProp` override — copy it from the explicit entry — so the shield visual survives)*
-- [ ] `BLADE_BARRIER` — S&S *(same — set the `animatedProp` override in the map entry)*
+- [x] `BLADE_BARRIER` — S&S *(uses the standard left-hand `MagicAttackCall1H02` one-shot; the replaced target-field spell no longer launches or hides an animated sword prop)*
 - [ ] `SACRED_FLAME` — S&S, Dag
 - [ ] `CONSECRATE` — S&S, Dag
 - [ ] `CLEANSING_TOUCH` — S&S, Dag

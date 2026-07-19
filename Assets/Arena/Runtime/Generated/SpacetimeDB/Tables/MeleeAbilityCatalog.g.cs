@@ -65,6 +65,7 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Col<MeleeAbilityCatalog, float> ImpactAreaDamageMultiplier { get; }
         public global::SpacetimeDB.Col<MeleeAbilityCatalog, int> ImpactAreaHitIndex { get; }
         public global::SpacetimeDB.Col<MeleeAbilityCatalog, bool> ImpactAreaIncludePrimaryTarget { get; }
+        public global::SpacetimeDB.Col<MeleeAbilityCatalog, float> TargetingWidth { get; }
 
         public MeleeAbilityCatalogCols(string tableName)
         {
@@ -94,6 +95,7 @@ namespace SpacetimeDB.Types
             ImpactAreaDamageMultiplier = new global::SpacetimeDB.Col<MeleeAbilityCatalog, float>(tableName, "impact_area_damage_multiplier");
             ImpactAreaHitIndex = new global::SpacetimeDB.Col<MeleeAbilityCatalog, int>(tableName, "impact_area_hit_index");
             ImpactAreaIncludePrimaryTarget = new global::SpacetimeDB.Col<MeleeAbilityCatalog, bool>(tableName, "impact_area_include_primary_target");
+            TargetingWidth = new global::SpacetimeDB.Col<MeleeAbilityCatalog, float>(tableName, "targeting_width");
         }
     }
 

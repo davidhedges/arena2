@@ -717,6 +717,8 @@ struct MeleeTargetingDefinition {
     requires_target: Option<bool>,
     #[serde(default)]
     angle_degrees: Option<f32>,
+    #[serde(default)]
+    width: Option<f32>,
 }
 
 #[derive(Clone, Deserialize)]
@@ -1304,6 +1306,8 @@ pub struct MeleeAbilityCatalog {
     pub impact_area_damage_multiplier: f32,
     pub impact_area_hit_index: i32,
     pub impact_area_include_primary_target: bool,
+    #[default(0.0f32)]
+    pub targeting_width: f32,
 }
 
 #[table(accessor = melee_gap_close_catalog, public)]
@@ -3145,6 +3149,7 @@ fn sync_melee_ability_catalog(ctx: &ReducerContext) {
             impact_area_include_primary_target: impact_area
                 .map(|area| area.include_primary_target)
                 .unwrap_or(false),
+            targeting_width: targeting.width,
         };
         if ctx
             .db
@@ -3257,6 +3262,7 @@ struct ResolvedMeleeTargetingCatalogFields {
     radius: f32,
     range: f32,
     angle_degrees: f32,
+    width: f32,
 }
 
 fn resolved_melee_targeting_for_catalog(
@@ -3281,6 +3287,9 @@ fn resolved_melee_targeting_for_catalog(
         range: gameplay.range.unwrap_or(0.0),
         angle_degrees: targeting
             .and_then(|targeting| targeting.angle_degrees)
+            .unwrap_or(0.0),
+        width: targeting
+            .and_then(|targeting| targeting.width)
             .unwrap_or(0.0),
         kind,
     }
@@ -4623,8 +4632,19 @@ fn validate_melee_gameplay_fields(ability_id: &str, gameplay: &AbilityGameplayDe
                 "melee ability '{ability_id}' CASTER_CONE melee_targeting.angle_degrees must be in (0, 360]"
             );
         }
+        "CASTER_RECTANGLE" => {
+            assert!(
+                !targeting.requires_target.unwrap_or(false),
+                "melee ability '{ability_id}' CASTER_RECTANGLE melee_targeting must not require a target"
+            );
+            let width = targeting.width.unwrap_or(0.0);
+            assert!(
+                width.is_finite() && width > 0.0,
+                "melee ability '{ability_id}' CASTER_RECTANGLE melee_targeting.width must be positive"
+            );
+        }
         _ => panic!(
-            "melee ability '{ability_id}' melee_targeting.kind must be TARGET, CASTER_RADIUS, or CASTER_CONE, got '{targeting_kind}'"
+            "melee ability '{ability_id}' melee_targeting.kind must be TARGET, CASTER_RADIUS, CASTER_CONE, or CASTER_RECTANGLE, got '{targeting_kind}'"
         ),
     }
 }
@@ -4852,7 +4872,13 @@ fn validate_spell_delivery_damage_type(ability_id: &str, gameplay: &AbilityGamep
     };
     if !matches!(
         kind.as_str(),
-        "DIRECT_TARGET" | "PROJECTILE" | "AREA" | "INSTANT_BEAM" | "CHANNEL" | "EMANATION"
+        "DIRECT_TARGET"
+            | "PROJECTILE"
+            | "AREA"
+            | "INSTANT_BEAM"
+            | "CHANNEL"
+            | "EMANATION"
+            | "PERSISTENT_AREA"
     ) {
         return;
     }
@@ -6517,6 +6543,10 @@ mod tests {
                         "combat VFX cue '{}' uses TARGET anchor on {}; TARGET is only valid once an impact/block/parry/fizzle target is known",
                         cue.vfx_id, trigger
                     ),
+                    V::WorldImpactTargetAnchor => format!(
+                        "combat VFX cue '{}' is a world-spawned {} cue using TARGET; use IMPACT_POINT for detached hit VFX or FOLLOW_ANCHOR for an effect that intentionally tracks the target",
+                        cue.vfx_id, trigger
+                    ),
                 };
                 errors.push(CombatAuthoringError::new(
                     CombatAuthoringRule::CombatVfxCueResolves,
@@ -6779,9 +6809,9 @@ mod tests {
             Some("VFX_BLESSED_SHIELD_PROJECTILE_01")
         );
         assert_eq!(
-            projectile_body_vfx_id_for_spell("PALADIN_BLADE_BARRIER", "BLADE_BARRIER", 0)
-                .as_deref(),
-            Some("VFX_BLADE_BARRIER_PROJECTILE_01")
+            projectile_body_vfx_id_for_spell("PALADIN_BLADE_BARRIER", "BLADE_BARRIER", 0),
+            None,
+            "Blade Barrier is a persistent target field, not an orbiting projectile"
         );
         assert_eq!(
             projectile_body_vfx_id_for_spell("SPELL_FIREBALL", "FIREBALL", 1),
@@ -7113,7 +7143,7 @@ mod tests {
                     && normalize_identifier(cue.trigger.as_str()) == "SPELL_IMPACT"
             })
             .expect("Nova target-hit VFX cue should be authored");
-        assert_eq!(normalize_identifier(hit.anchor.as_str()), "TARGET");
+        assert_eq!(normalize_identifier(hit.anchor.as_str()), "IMPACT_POINT");
         assert_eq!(normalize_identifier(hit.vfx_id.as_str()), "VFX_NOVA_HIT_01");
     }
 
@@ -7154,7 +7184,7 @@ mod tests {
             })
             .expect("Glacial Spike impact VFX cue should be authored");
 
-        assert_eq!(normalize_identifier(cue.anchor.as_str()), "TARGET");
+        assert_eq!(normalize_identifier(cue.anchor.as_str()), "IMPACT_POINT");
         assert_eq!(
             normalize_identifier(cue.vfx_id.as_str()),
             "VFX_GLACIAL_SPIKE_TARGET_01"
@@ -7196,6 +7226,156 @@ mod tests {
             projectile_body_vfx_id_for_spell("SPELL_MAGIC_MISSILE", "MAGIC_MISSILE", 0).as_deref(),
             Some("VFX_MAGIC_MISSILE_PROJECTILE_01")
         );
+    }
+
+    #[test]
+    fn restoration_authors_healing_channel_and_cast_lifetime_vfx() {
+        let catalog = progression_catalog();
+        let ability = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "SPELL_RESTORATION")
+            .expect("Restoration ability should be authored");
+        assert_eq!(ability.action_id, "RESTORATION");
+        assert_eq!(ability_delivery_kind(ability), "CHANNEL");
+        assert_eq!(projectile_delivery_projectile_count(ability), 0);
+        assert_eq!(
+            normalize_optional_target_audience(ability.gameplay.target_audience.as_str()),
+            "ASSISTABLE"
+        );
+
+        let delivery = ability
+            .gameplay
+            .delivery
+            .as_ref()
+            .and_then(serde_json::Value::as_object)
+            .expect("Restoration should define delivery data");
+        assert_eq!(
+            delivery.get("heal").and_then(serde_json::Value::as_i64),
+            Some(1)
+        );
+        assert_eq!(
+            delivery
+                .get("resource_cost_per_second")
+                .and_then(serde_json::Value::as_f64),
+            Some(1.0)
+        );
+        assert_eq!(
+            delivery
+                .get("duration_seconds")
+                .and_then(serde_json::Value::as_f64),
+            Some(5.0)
+        );
+        assert_eq!(
+            normalize_identifier(
+                delivery
+                    .get("damage_type")
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or_default()
+            ),
+            "HOLY"
+        );
+
+        let cue = catalog
+            .combat_vfx_cues
+            .iter()
+            .find(|cue| {
+                normalize_identifier(cue.owner_kind.as_str()) == "ABILITY"
+                    && normalize_identifier(cue.owner_id.as_str()) == "SPELL_RESTORATION"
+                    && normalize_identifier(cue.trigger.as_str()) == "SPELL_IMPACT"
+            })
+            .expect("Restoration channel VFX cue should be authored");
+        assert_eq!(normalize_identifier(cue.anchor.as_str()), "TARGET");
+        assert_eq!(
+            normalize_identifier(cue.vfx_id.as_str()),
+            "VFX_RESTORATION_CHANNEL_01"
+        );
+        assert_eq!(
+            normalize_identifier(cue.lifecycle.as_str()),
+            "UNTIL_CAST_END"
+        );
+    }
+
+    #[test]
+    fn protection_authors_targeted_damage_reduction_and_attached_vfx() {
+        let catalog = progression_catalog();
+        let ability = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "SPELL_PROTECTION")
+            .expect("Protection ability should be authored");
+        assert_eq!(ability.action_id, "PROTECTION");
+        assert_eq!(ability_delivery_kind(ability), "APPLY_STATUS");
+        assert_eq!(
+            normalize_identifier(ability.gameplay.targeting.as_str()),
+            "TARGET"
+        );
+        assert_eq!(
+            normalize_optional_target_audience(ability.gameplay.target_audience.as_str()),
+            "PARTY_OR_SELF"
+        );
+
+        let delivery = ability
+            .gameplay
+            .delivery
+            .as_ref()
+            .and_then(serde_json::Value::as_object)
+            .expect("Protection should define delivery data");
+        assert_eq!(
+            delivery
+                .get("duration_ms")
+                .and_then(serde_json::Value::as_u64),
+            Some(5_000)
+        );
+        assert_eq!(
+            delivery
+                .get("max_distance")
+                .and_then(serde_json::Value::as_f64),
+            Some(18.0)
+        );
+        assert_eq!(
+            delivery
+                .get("damage_type")
+                .and_then(serde_json::Value::as_str),
+            Some("HOLY")
+        );
+        assert_eq!(
+            delivery
+                .get("status")
+                .and_then(serde_json::Value::as_object)
+                .and_then(|status| status.get("kind"))
+                .and_then(serde_json::Value::as_str),
+            Some("DAMAGE_TAKEN_REDUCTION")
+        );
+        assert_eq!(
+            delivery
+                .get("status")
+                .and_then(serde_json::Value::as_object)
+                .and_then(|status| status.get("modifier_scalar"))
+                .and_then(serde_json::Value::as_f64),
+            Some(0.5)
+        );
+
+        let cue = catalog
+            .combat_vfx_cues
+            .iter()
+            .find(|cue| {
+                normalize_identifier(cue.owner_kind.as_str()) == "ABILITY"
+                    && normalize_identifier(cue.owner_id.as_str()) == "SPELL_PROTECTION"
+                    && normalize_identifier(cue.trigger.as_str()) == "SPELL_IMPACT"
+            })
+            .expect("Protection target VFX cue should be authored");
+        assert_eq!(normalize_identifier(cue.anchor.as_str()), "TARGET");
+        assert_eq!(
+            normalize_identifier(cue.attach_mode.as_str()),
+            "FOLLOW_ANCHOR"
+        );
+        assert_eq!(
+            normalize_identifier(cue.vfx_id.as_str()),
+            "VFX_PROTECTION_SHIELD_BUFF_01"
+        );
+        assert_eq!(normalize_identifier(cue.lifecycle.as_str()), "DURATION");
+        assert_eq!(cue.duration_ms, 5_000);
     }
 
     #[test]
@@ -8384,6 +8564,105 @@ mod tests {
     }
 
     #[test]
+    fn paladin_sacred_thrust_is_a_distinct_rectangular_melee_with_requested_vfx() {
+        let catalog = progression_catalog();
+        let ability = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "PALADIN_SACRED_THRUST")
+            .expect("PALADIN_SACRED_THRUST must exist");
+
+        assert_eq!(
+            normalize_identifier(ability.combat_profile_id.as_str()),
+            COMBAT_PROFILE_SWORD_AND_SHIELD
+        );
+        assert_eq!(ability.action_id, "SWORD_AND_SHIELD_ALT_LIGHT_3");
+        assert_eq!(ability.display_name, "Sacred Thrust");
+        assert_eq!(ability_gameplay_kind(ability), "MELEE");
+        assert_eq!(ability.resource_cost, 20.0);
+        assert_eq!(ability.gameplay.base_damage, Some(30));
+        assert_eq!(ability.gameplay.damage_type.as_deref(), Some("HOLY"));
+        assert_eq!(ability.gameplay.range, Some(5.0));
+        assert_eq!(ability.gameplay.requires_target_los, Some(true));
+
+        let targeting = resolved_melee_targeting_for_catalog(&ability.gameplay);
+        assert_eq!(targeting.kind, "CASTER_RECTANGLE");
+        assert!(!targeting.requires_target);
+        assert_eq!(targeting.range, 5.0);
+        assert_eq!(targeting.width, 1.25);
+        assert!(profile_supports_action_reference(
+            COMBAT_PROFILE_SWORD_AND_SHIELD,
+            &AuthoredActionId::new("SWORD_AND_SHIELD_ALT_LIGHT_3")
+        ));
+        assert!(!catalog
+            .combat_profile_action_bar_defaults
+            .iter()
+            .any(|assignment| {
+                normalize_identifier(assignment.combat_profile_id.as_str())
+                    == COMBAT_PROFILE_SWORD_AND_SHIELD
+                    && normalize_identifier(assignment.ability_id.as_str())
+                        == "PALADIN_SACRED_THRUST"
+            }));
+
+        let forward_cue = catalog
+            .combat_vfx_cues
+            .iter()
+            .find(|cue| {
+                normalize_identifier(cue.owner_kind.as_str()) == "ABILITY"
+                    && normalize_identifier(cue.owner_id.as_str()) == "PALADIN_SACRED_THRUST"
+                    && normalize_identifier(cue.trigger.as_str()) == "AREA_IMPACT"
+            })
+            .expect("Sacred Thrust should author a facing-aligned forward VFX cue");
+        assert_eq!(
+            normalize_identifier(forward_cue.anchor.as_str()),
+            "AREA_ORIGIN"
+        );
+        assert_eq!(
+            normalize_identifier(forward_cue.attach_mode.as_str()),
+            "WORLD_ALIGNED_TO_FACING"
+        );
+        assert_eq!(
+            normalize_identifier(forward_cue.vfx_id.as_str()),
+            "VFX_SACRED_THRUST_FORWARD_01"
+        );
+        assert_eq!(
+            normalize_identifier(forward_cue.lifecycle.as_str()),
+            "DURATION"
+        );
+        assert_eq!(forward_cue.duration_ms, 2500);
+
+        let hit_cue = catalog
+            .combat_vfx_cues
+            .iter()
+            .find(|cue| {
+                normalize_identifier(cue.owner_kind.as_str()) == "ABILITY"
+                    && normalize_identifier(cue.owner_id.as_str()) == "PALADIN_SACRED_THRUST"
+                    && normalize_identifier(cue.trigger.as_str()) == "MELEE_IMPACT"
+            })
+            .expect("Sacred Thrust should author a per-target melee hit VFX cue");
+        assert_eq!(
+            normalize_identifier(hit_cue.anchor.as_str()),
+            "IMPACT_POINT"
+        );
+        assert_eq!(hit_cue.hit_index, Some(0));
+        assert_eq!(
+            normalize_identifier(hit_cue.vfx_id.as_str()),
+            "VFX_SACRED_THRUST_HIT_01"
+        );
+        assert_eq!(
+            normalize_identifier(hit_cue.lifecycle.as_str()),
+            "PARTICLE_SYSTEM"
+        );
+
+        let sword_and_shield_asset = animation_set_assets_by_combat_profile()
+            .get(COMBAT_PROFILE_SWORD_AND_SHIELD)
+            .expect("SwordAndShield animation set");
+        assert!(sword_and_shield_asset.contains("id: SWORD_AND_SHIELD_ALT_LIGHT_3"));
+        assert!(sword_and_shield_asset
+            .contains("clip: {fileID: 7400000, guid: 065abbc4be9a94fd5a87d76ce7b75cc7, type: 2}"));
+    }
+
+    #[test]
     fn paladin_serrated_blades_authors_melee_bleed_modifier_buff() {
         let catalog = progression_catalog();
         let ability = catalog
@@ -8617,100 +8896,149 @@ mod tests {
     }
 
     #[test]
-    fn paladin_blessed_shield_and_blade_barrier_author_orbit_spells() {
+    fn paladin_blessed_shield_authors_orbit_spell() {
         let catalog = progression_catalog();
-        let expected = [
-            (
-                "PALADIN_BLESSED_SHIELD",
-                "BLESSED_SHIELD",
-                "Blessed Shield",
-                "SLOT_1_7",
-                "VFX_BLESSED_SHIELD_PROJECTILE_01",
-            ),
-            (
-                "PALADIN_BLADE_BARRIER",
-                "BLADE_BARRIER",
-                "Blade Barrier",
-                "SLOT_1_8",
-                "VFX_BLADE_BARRIER_PROJECTILE_01",
-            ),
-        ];
+        let ability = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "PALADIN_BLESSED_SHIELD")
+            .expect("PALADIN_BLESSED_SHIELD must exist");
+        assert_eq!(
+            normalize_identifier(ability.combat_profile_id.as_str()),
+            COMBAT_PROFILE_SWORD_AND_SHIELD
+        );
+        assert_eq!(ability.action_id, "BLESSED_SHIELD");
+        assert_eq!(ability.display_name, "Blessed Shield");
+        assert_eq!(ability_gameplay_kind(ability), "SPELL");
+        assert_eq!(
+            normalize_identifier(ability.gameplay.targeting.as_str()),
+            "SELF"
+        );
+        assert_eq!(ability.gameplay.requires_target, Some(false));
+        assert_eq!(ability.gameplay.resource_cost, Some(0.0));
 
-        for (ability_id, action_id, display_name, slot_id, vfx_id) in expected {
-            let ability = catalog
-                .abilities
-                .iter()
-                .find(|ability| ability.ability_id == ability_id)
-                .unwrap_or_else(|| panic!("{ability_id} must exist"));
-            assert_eq!(
-                normalize_identifier(ability.combat_profile_id.as_str()),
-                COMBAT_PROFILE_SWORD_AND_SHIELD
-            );
-            assert_eq!(ability.action_id, action_id);
-            assert_eq!(ability.display_name, display_name);
-            assert_eq!(ability_gameplay_kind(ability), "SPELL");
-            assert_eq!(
-                normalize_identifier(ability.gameplay.targeting.as_str()),
-                "SELF"
-            );
-            assert_eq!(ability.gameplay.requires_target, Some(false));
-            assert_eq!(ability.gameplay.resource_cost, Some(0.0));
+        let definition =
+            spell_definition_by_str("BLESSED_SHIELD").expect("BLESSED_SHIELD spell definition");
+        assert_eq!(
+            definition.behavior,
+            crate::spells::SpellBehavior::Projectile
+        );
+        assert_eq!(definition.damage, 18);
+        assert_eq!(definition.damage_type, DamageType::Holy);
+        let orbit = definition
+            .secondary
+            .projectile
+            .as_ref()
+            .expect("Blessed Shield should define projectile secondary tunables")
+            .motion
+            .orbit()
+            .expect("Blessed Shield should use orbit-caster projectile motion");
+        assert_eq!(orbit.projectile_count, 1);
+        assert!((orbit.orbit_radius - 2.0).abs() < 0.0001);
+        assert!((orbit.angular_speed_deg_per_sec - 180.0).abs() < 0.0001);
+        assert!((orbit.lifetime_seconds - 10.0).abs() < 0.0001);
+        assert_eq!(
+            projectile_body_vfx_id_for_spell("PALADIN_BLESSED_SHIELD", "BLESSED_SHIELD", 0)
+                .as_deref(),
+            Some("VFX_BLESSED_SHIELD_PROJECTILE_01")
+        );
+    }
 
-            let default_assignment = catalog
-                .combat_profile_action_bar_defaults
-                .iter()
-                .find(|assignment| {
-                    normalize_identifier(assignment.combat_profile_id.as_str())
-                        == COMBAT_PROFILE_SWORD_AND_SHIELD
-                        && normalize_identifier(assignment.ability_id.as_str()) == ability_id
-                })
-                .unwrap_or_else(|| {
-                    panic!("{ability_id} should appear on the SwordAndShield default action bar")
-                });
-            assert_eq!(
-                normalize_identifier(default_assignment.slot_id.as_str()),
-                slot_id
-            );
+    #[test]
+    fn paladin_blade_barrier_authors_persistent_holy_target_field() {
+        let catalog = progression_catalog();
+        let ability = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "PALADIN_BLADE_BARRIER")
+            .expect("PALADIN_BLADE_BARRIER must exist");
+        assert_eq!(
+            normalize_identifier(ability.combat_profile_id.as_str()),
+            COMBAT_PROFILE_SWORD_AND_SHIELD
+        );
+        assert_eq!(ability.action_id, "BLADE_BARRIER");
+        assert_eq!(ability.display_name, "Blade Barrier");
+        assert_eq!(ability_gameplay_kind(ability), "SPELL");
+        assert_eq!(ability.gameplay.cast_time_ms, Some(0));
+        assert_eq!(ability.gameplay.cooldown_ms, Some(7_500));
+        assert_eq!(
+            normalize_identifier(ability.gameplay.targeting.as_str()),
+            "TARGET"
+        );
+        assert_eq!(
+            normalize_identifier(ability.gameplay.target_audience.as_str()),
+            "HOSTILE"
+        );
+        assert_eq!(ability.gameplay.requires_target, Some(true));
+        assert_eq!(ability.gameplay.requires_target_los, Some(true));
+        assert_eq!(ability.gameplay.resource_cost, Some(0.0));
+        assert_eq!(
+            ability.gameplay.delivery.as_ref().unwrap()["kind"],
+            "PERSISTENT_AREA"
+        );
 
-            let definition = spell_definition_by_str(action_id)
-                .unwrap_or_else(|| panic!("{action_id} spell definition"));
-            assert_eq!(definition.primary_resource_cost, 0.0);
-            assert_eq!(
-                definition.behavior,
-                crate::spells::SpellBehavior::Projectile
-            );
-            assert_eq!(definition.damage, 18);
-            assert_eq!(definition.damage_type, DamageType::Holy);
-            assert_eq!(definition.targeting, crate::spells::SpellTargeting::Self_);
-            assert!(!definition.requires_target);
-            let projectile = definition
-                .secondary
-                .projectile
-                .as_ref()
-                .expect("orbit spell should define projectile secondary tunables");
-            assert_eq!(projectile.motion.kind(), "ORBIT_CASTER");
-            let orbit = projectile
-                .motion
-                .orbit()
-                .expect("orbit spell should use orbit-caster projectile motion");
-            assert_eq!(orbit.projectile_count, 1);
-            assert!((orbit.orbit_radius - 2.0).abs() < 0.0001);
-            assert!((orbit.orbit_height - 1.0).abs() < 0.0001);
-            let expected_angular_speed = if action_id == "BLADE_BARRIER" {
-                -180.0
-            } else {
-                180.0
-            };
-            assert!((orbit.angular_speed_deg_per_sec - expected_angular_speed).abs() < 0.0001);
-            assert!((orbit.lifetime_seconds - 10.0).abs() < 0.0001);
-            assert!((orbit.hit_radius - 0.45).abs() < 0.0001);
-            assert!((orbit.hit_cooldown_seconds - 0.35).abs() < 0.0001);
-            assert_eq!(orbit.max_hits_per_target, 0);
-            assert_eq!(
-                projectile_body_vfx_id_for_spell(ability_id, action_id, 0).as_deref(),
-                Some(vfx_id)
-            );
-        }
+        let default_assignment = catalog
+            .combat_profile_action_bar_defaults
+            .iter()
+            .find(|assignment| {
+                normalize_identifier(assignment.combat_profile_id.as_str())
+                    == COMBAT_PROFILE_SWORD_AND_SHIELD
+                    && normalize_identifier(assignment.ability_id.as_str())
+                        == "PALADIN_BLADE_BARRIER"
+            })
+            .expect("Blade Barrier should remain in SwordAndShield slot 1-8");
+        assert_eq!(
+            normalize_identifier(default_assignment.slot_id.as_str()),
+            "SLOT_1_8"
+        );
+
+        let definition =
+            spell_definition_by_str("BLADE_BARRIER").expect("BLADE_BARRIER spell definition");
+        assert_eq!(
+            definition.behavior,
+            crate::spells::SpellBehavior::PersistentArea
+        );
+        assert_eq!(definition.targeting, crate::spells::SpellTargeting::Target);
+        assert_eq!(definition.target_audience.as_str(), "HOSTILE");
+        assert!(definition.requires_target);
+        assert!(definition.requires_target_los);
+        assert_eq!(definition.damage, 18);
+        assert_eq!(definition.damage_type, DamageType::Holy);
+        assert_eq!(definition.max_distance, 18.0);
+        assert_eq!(definition.radius, 2.0);
+        assert_eq!(definition.update_interval, 1.0);
+        assert_eq!(definition.duration, 7.5);
+        let persistent = definition
+            .secondary
+            .persistent_area
+            .as_ref()
+            .expect("Blade Barrier should define persistent-area tunables");
+        assert_eq!(persistent.pulse_interval, Duration::from_millis(1_000));
+        assert!(persistent.impact_effects.is_empty());
+        assert_eq!(
+            projectile_body_vfx_id_for_spell("PALADIN_BLADE_BARRIER", "BLADE_BARRIER", 0),
+            None
+        );
+
+        let cue = catalog
+            .combat_vfx_cues
+            .iter()
+            .find(|cue| {
+                normalize_identifier(cue.owner_kind.as_str()) == "ABILITY"
+                    && normalize_identifier(cue.owner_id.as_str()) == "PALADIN_BLADE_BARRIER"
+                    && normalize_identifier(cue.slot.as_str()) == "PERSISTENT_FIELD"
+            })
+            .expect("Blade Barrier should author one persistent target-field cue");
+        assert_eq!(cue.vfx_id, "VFX_BLADE_BARRIER_AREA_01");
+        assert_eq!(normalize_identifier(cue.trigger.as_str()), "SPELL_IMPACT");
+        assert_eq!(normalize_identifier(cue.anchor.as_str()), "TARGET");
+        assert_eq!(
+            normalize_identifier(cue.attach_mode.as_str()),
+            "FOLLOW_ANCHOR"
+        );
+        assert_eq!(normalize_identifier(cue.vfx_role.as_str()), "ATTACHED");
+        assert_eq!(normalize_identifier(cue.lifecycle.as_str()), "DURATION");
+        assert_eq!(cue.duration_ms, 7_500);
     }
 
     #[test]
@@ -8792,7 +9120,7 @@ mod tests {
             })
             .expect("Sacred Flame should author an initial landing VFX cue");
 
-        assert_eq!(normalize_identifier(cue.anchor.as_str()), "TARGET");
+        assert_eq!(normalize_identifier(cue.anchor.as_str()), "IMPACT_POINT");
         assert_eq!(
             normalize_identifier(cue.vfx_id.as_str()),
             "VFX_SACRED_FLAME_HIT_01"

@@ -510,6 +510,13 @@ namespace Arena.Input
         {
             string targetId = TargetSelector.Instance?.SelectedTargetId ?? "";
             var spellDef = GetSpellDefinition(conn, spellId);
+            if (string.IsNullOrEmpty(targetId)
+                && spellDef?.RequiresTarget == true
+                && PartyRelationship.TargetAudienceAllowsSelf(spellDef.TargetAudience))
+            {
+                targetId = EntityRegistry.Instance?.LocalPlayerEntity?.Identity.ToString() ?? "";
+                ActionBarTrace.Trace($"spell dispatch defaulted {spellId} target to self");
+            }
             if (string.IsNullOrEmpty(targetId) && spellDef?.RequiresTarget == true)
             {
                 Debug.LogWarning($"[SpellInput] {spellId} — no target selected (use Tab or click a target)");

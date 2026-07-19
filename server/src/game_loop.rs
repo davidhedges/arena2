@@ -91,7 +91,7 @@ use crate::resources::{
 use crate::spells::{
     has_due_pending_area_impacts, resolve_pending_area_impacts, resolve_pending_casts,
     resolve_special_movement_y, sync_spell_definitions, tick_active_casts,
-    tick_bespoke_spells_with_snapshots,
+    tick_bespoke_spells_with_snapshots, tick_persistent_areas,
 };
 use crate::tick_metrics::{
     profiling_enabled as tick_profiling_enabled, record_table_write, PhaseStopwatch, ScopeTimer,
@@ -1066,6 +1066,7 @@ fn run_pre_tick_housekeeping_phase(
             tick_combat_stacking_passives(ctx, now);
             tick_auras(ctx, now);
             tick_emanations(ctx, now);
+            tick_persistent_areas(ctx, now);
         },
     );
     timed_subphase(

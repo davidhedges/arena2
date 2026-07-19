@@ -697,6 +697,11 @@ pub(crate) enum CombatAreaShape {
         angle_degrees: f32,
         vertical_tolerance: Option<f32>,
     },
+    Rectangle {
+        length: f32,
+        width: f32,
+        vertical_tolerance: Option<f32>,
+    },
 }
 
 impl CombatAreaShape {
@@ -704,6 +709,7 @@ impl CombatAreaShape {
         match self {
             Self::Disc { radius } => radius,
             Self::Cone { range, .. } => range,
+            Self::Rectangle { length, width, .. } => length.max(0.0).hypot(width.max(0.0) * 0.5),
         }
     }
 
@@ -748,6 +754,24 @@ impl CombatAreaShape {
                     dot_epsilon,
                 )
             }
+            Self::Rectangle { length, width, .. } => {
+                let forward_x = facing_yaw.sin();
+                let forward_z = facing_yaw.cos();
+                let right_x = forward_z;
+                let right_z = -forward_x;
+                let dx = player.pos_x - origin_x;
+                let dz = player.pos_z - origin_z;
+                let local_forward = dx * forward_x + dz * forward_z;
+                let local_right = dx * right_x + dz * right_z;
+                let half_width = width.max(0.0) * 0.5;
+                let closest_forward = local_forward.clamp(0.0, length.max(0.0));
+                let closest_right = local_right.clamp(-half_width, half_width);
+                let forward_delta = local_forward - closest_forward;
+                let right_delta = local_right - closest_right;
+                let target_radius = player.hit_radius.max(0.0);
+                forward_delta * forward_delta + right_delta * right_delta
+                    <= target_radius * target_radius
+            }
         }
     }
 
@@ -763,6 +787,9 @@ impl CombatAreaShape {
         match self {
             Self::Disc { radius } => aoe_hits_player(origin_x, origin_y, origin_z, radius, player),
             Self::Cone {
+                vertical_tolerance, ..
+            }
+            | Self::Rectangle {
                 vertical_tolerance, ..
             } => {
                 if !self.contains_player_xz(origin_x, origin_z, facing_yaw, player, dot_epsilon) {
@@ -1127,6 +1154,26 @@ mod tests {
 
         assert!(shape.contains_player(0.0, 0.0, 0.0, 0.0, &near_y, 0.0));
         assert!(!shape.contains_player(0.0, 0.0, 0.0, 0.0, &high_y, 0.0));
+    }
+
+    #[test]
+    fn combat_area_rectangle_contains_forward_strip_and_rejects_side_and_behind() {
+        let shape = CombatAreaShape::Rectangle {
+            length: 5.0,
+            width: 1.25,
+            vertical_tolerance: None,
+        };
+        let front = snapshot(test_identity(2), 0.0, 0.0, 4.5);
+        let edge_overlap = snapshot(test_identity(3), 0.9, 0.0, 3.0);
+        let side = snapshot(test_identity(4), 1.2, 0.0, 3.0);
+        let behind = snapshot(test_identity(5), 0.0, 0.0, -0.6);
+        let far = snapshot(test_identity(6), 0.0, 0.0, 5.6);
+
+        assert!(shape.contains_player_xz(0.0, 0.0, 0.0, &front, 0.0));
+        assert!(shape.contains_player_xz(0.0, 0.0, 0.0, &edge_overlap, 0.0));
+        assert!(!shape.contains_player_xz(0.0, 0.0, 0.0, &side, 0.0));
+        assert!(!shape.contains_player_xz(0.0, 0.0, 0.0, &behind, 0.0));
+        assert!(!shape.contains_player_xz(0.0, 0.0, 0.0, &far, 0.0));
     }
 
     #[test]

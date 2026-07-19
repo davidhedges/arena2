@@ -139,6 +139,7 @@ pub(crate) enum SpellBehavior {
     DirectTarget,
     Projectile,
     Area,
+    PersistentArea,
     InstantBeam,
     Channel,
     ApplyStatus,
@@ -156,6 +157,7 @@ impl SpellBehavior {
             Self::DirectTarget => "DIRECT_TARGET",
             Self::Projectile => "PROJECTILE",
             Self::Area => "AREA",
+            Self::PersistentArea => "PERSISTENT_AREA",
             Self::InstantBeam => "INSTANT_BEAM",
             Self::Channel => "CHANNEL",
             Self::ApplyStatus => "APPLY_STATUS",
@@ -277,8 +279,10 @@ impl ApplyStatusDefinition {
 pub(crate) struct SpellSecondaryTunables {
     pub direct_target: Option<DirectTargetSecondaryTunables>,
     pub projectile: Option<ProjectileSecondaryTunables>,
+    pub channel: Option<ChannelSecondaryTunables>,
     pub channel_projectile: Option<ProjectileSecondaryTunables>,
     pub area: Option<AreaSecondaryTunables>,
+    pub persistent_area: Option<PersistentAreaSecondaryTunables>,
     pub instant_beam: Option<InstantBeamSecondaryTunables>,
     pub apply_status: Option<ApplyStatusSecondaryTunables>,
     pub remove_status: Option<RemoveStatusSecondaryTunables>,
@@ -292,6 +296,18 @@ pub(crate) struct SpellSecondaryTunables {
 pub(crate) struct DirectTargetSecondaryTunables {
     pub heal_amount: i32,
     pub parry_behavior: SpellParryBehavior,
+    pub impact_effects: Vec<ImpactEffect>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct ChannelSecondaryTunables {
+    pub heal_amount: i32,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct PersistentAreaSecondaryTunables {
+    pub pulse_interval: Duration,
+    pub effect_target_audience: TargetAudience,
     pub impact_effects: Vec<ImpactEffect>,
 }
 
@@ -742,6 +758,7 @@ mod tests {
             "NOVA",
             "NEGATE",
             "BLINDING_LIGHT",
+            "PROTECTION",
             "GLACIAL_SPIKE",
             "FROZEN_GRASP",
             "GUST_OF_WIND",
@@ -794,6 +811,7 @@ mod tests {
             "NOVA",
             "NEGATE",
             "BLINDING_LIGHT",
+            "PROTECTION",
             "FROZEN_GRASP",
             "GUST_OF_WIND",
             "BUFFET",
@@ -1195,6 +1213,70 @@ mod tests {
         assert!((curve.arc_amplitude_max - 4.25).abs() < 0.0001);
         assert!((curve.control_point_fraction - 0.5).abs() < 0.0001);
         assert_eq!(projectile.parry_behavior.as_str(), "PARRYABLE");
+    }
+
+    #[test]
+    fn restoration_catalog_matches_friendly_healing_channel_defaults() {
+        let definition = definition("RESTORATION");
+
+        assert_eq!(definition.kind.as_str(), "RESTORATION");
+        assert_eq!(definition.cooldown, Duration::from_millis(1_100));
+        assert!(definition.uses_global_cooldown);
+        assert_eq!(definition.behavior.as_str(), "CHANNEL");
+        assert_eq!(definition.targeting.as_str(), "TARGET");
+        assert_eq!(definition.target_audience, TargetAudience::Assistable);
+        assert!(definition.requires_target);
+        assert!(definition.requires_target_los);
+        assert_eq!(definition.cast_time, Duration::ZERO);
+        assert_eq!(definition.damage, 0);
+        assert_eq!(definition.damage_type.as_str(), "HOLY");
+        assert!((definition.max_distance - 18.0).abs() < 0.0001);
+        assert!((definition.primary_resource_cost - 1.0).abs() < 0.0001);
+        assert!((definition.update_interval - 1.0).abs() < 0.0001);
+        assert!((definition.duration - 5.0).abs() < 0.0001);
+        assert!(!definition.arms_auto_attack_on_cast);
+        assert_eq!(
+            definition
+                .secondary
+                .channel
+                .expect("Restoration should define channel healing data")
+                .heal_amount,
+            1
+        );
+        assert!(definition.secondary.channel_projectile.is_none());
+    }
+
+    #[test]
+    fn protection_catalog_matches_targeted_damage_reduction_buff_defaults() {
+        let definition = definition("PROTECTION");
+
+        assert_eq!(definition.kind.as_str(), "PROTECTION");
+        assert_eq!(definition.cooldown, Duration::from_millis(30_000));
+        assert!(definition.uses_global_cooldown);
+        assert_eq!(definition.behavior.as_str(), "APPLY_STATUS");
+        assert_eq!(definition.targeting.as_str(), "TARGET");
+        assert_eq!(definition.target_audience, TargetAudience::PartyOrSelf);
+        assert!(definition.requires_target);
+        assert!(definition.requires_target_los);
+        assert_eq!(definition.cast_time, Duration::ZERO);
+        assert_eq!(definition.damage_type.as_str(), "HOLY");
+        assert!((definition.duration - 5.0).abs() < 0.0001);
+        assert!((definition.max_distance - 18.0).abs() < 0.0001);
+        assert!((definition.primary_resource_cost - 0.0).abs() < 0.0001);
+        assert_eq!(definition.status_stack_group.as_deref(), Some("PROTECTION"));
+        assert_eq!(
+            definition.apply_status_polarity,
+            Some(crate::combat::StatusPolarity::Buff)
+        );
+        let status = definition
+            .apply_status
+            .as_ref()
+            .expect("Protection should define an apply-status payload");
+        assert_eq!(status.kind, StatusEffectKind::DamageTakenReduction);
+        assert!((status.modifier_scalar - 0.5).abs() < 0.0001);
+        assert_eq!(status.max_stacks, 1);
+        assert_eq!(status.stack_policy, StackPolicy::Refresh);
+        assert!(!definition.arms_auto_attack_on_cast);
     }
 
     #[test]

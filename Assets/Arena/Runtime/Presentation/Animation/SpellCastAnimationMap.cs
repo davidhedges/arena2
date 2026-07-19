@@ -28,7 +28,7 @@ namespace Arena.Presentation
     /// Weapon-agnostic assignment of a spell to a cast-animation flavor family (design doc §4/§5):
     /// <c>spellId → baseName</c>, authored once, plus optional per-spell overrides for the handful of
     /// spells that need a specific playback layer, entry mode, or an animated prop (e.g.
-    /// <c>BLESSED_SHIELD</c>/<c>BLADE_BARRIER</c> keep their shield/weapon visual). The resolver
+    /// <c>BLESSED_SHIELD</c> keeps its shield visual). The resolver
     /// combines this with the casting weapon's <see cref="CombatAnimationSet.OneHandedCastHand"/> and
     /// the spell's derived archetype. A spell absent here (or whose weapon authored an explicit entry)
     /// is unaffected. Lives in Resources so the resolver can load it globally.

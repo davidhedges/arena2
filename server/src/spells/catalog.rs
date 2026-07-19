@@ -15,13 +15,13 @@ use crate::relations::{default_spell_target_audience, TargetAudience};
 use super::manifest::{
     ApplyStatusDefinition, ApplyStatusSecondaryTunables, AreaSecondaryTunables,
     AuraSecondaryTunables, BespokeRuntimeSpell, BlockBehavior, BoomerangCasterProjectileTunables,
-    ConsumeStatusSecondaryTunables, CurvedTargetProjectileTunables, DirectTargetSecondaryTunables,
-    EmanationSecondaryTunables, ImpactEffect, InstantBeamChargeScaling,
-    InstantBeamSecondaryTunables, MeteorSkyOrigin, OrbitCasterProjectileTunables,
-    ProjectileMotionTunables, ProjectileSecondaryTunables, RemoveStatusDefinition,
-    RemoveStatusSecondaryTunables, SpellBehavior, SpellCastMobility, SpellDefinition, SpellId,
-    SpellParryBehavior, SpellSecondaryTunables, SpellTargeting, WorldObstacleSecondaryTunables,
-    SPELL_METEOR,
+    ChannelSecondaryTunables, ConsumeStatusSecondaryTunables, CurvedTargetProjectileTunables,
+    DirectTargetSecondaryTunables, EmanationSecondaryTunables, ImpactEffect,
+    InstantBeamChargeScaling, InstantBeamSecondaryTunables, MeteorSkyOrigin,
+    OrbitCasterProjectileTunables, PersistentAreaSecondaryTunables, ProjectileMotionTunables,
+    ProjectileSecondaryTunables, RemoveStatusDefinition, RemoveStatusSecondaryTunables,
+    SpellBehavior, SpellCastMobility, SpellDefinition, SpellId, SpellParryBehavior,
+    SpellSecondaryTunables, SpellTargeting, WorldObstacleSecondaryTunables, SPELL_METEOR,
 };
 
 const PROGRESSION_CATALOG_JSON: &str = include_str!("../progression_catalog.shared.json");
@@ -132,6 +132,19 @@ enum SpellCatalogDelivery {
         #[serde(default)]
         impact_effects: Vec<ImpactEffectRow>,
     },
+    PersistentArea {
+        max_distance: f32,
+        radius: f32,
+        pulse_interval_ms: u64,
+        duration_ms: u64,
+        damage: i32,
+        #[serde(default)]
+        damage_type: String,
+        effect_target_audience: TargetAudience,
+        block_behavior: BlockBehavior,
+        #[serde(default)]
+        impact_effects: Vec<ImpactEffectRow>,
+    },
     InstantBeam {
         max_distance: f32,
         damage: i32,
@@ -144,6 +157,8 @@ enum SpellCatalogDelivery {
     Channel {
         max_distance: f32,
         damage: i32,
+        #[serde(default)]
+        heal: i32,
         #[serde(default)]
         damage_type: String,
         #[serde(default)]
@@ -160,6 +175,8 @@ enum SpellCatalogDelivery {
         max_distance: f32,
         #[serde(default)]
         radius: f32,
+        #[serde(default)]
+        damage_type: String,
         #[serde(default)]
         status_stack_group: Option<String>,
         polarity: StatusPolarity,
@@ -937,6 +954,7 @@ impl SpellCatalogRow {
                 max_distance,
                 damage,
                 damage_type,
+                effect_target_audience,
                 block_behavior,
             } => {
                 definition.behavior = SpellBehavior::Projectile;
@@ -1029,6 +1047,31 @@ impl SpellCatalogRow {
                     impact_effects: impact_effects.into_iter().map(Into::into).collect(),
                 });
             }
+            SpellCatalogDelivery::PersistentArea {
+                max_distance,
+                radius,
+                pulse_interval_ms,
+                duration_ms,
+                damage,
+                damage_type,
+                effect_target_audience,
+                block_behavior,
+                impact_effects,
+            } => {
+                definition.behavior = SpellBehavior::PersistentArea;
+                definition.max_distance = max_distance;
+                definition.damage = damage;
+                definition.damage_type = DamageType::from_wire(damage_type.as_str());
+                definition.update_interval = pulse_interval_ms as f32 / 1000.0;
+                definition.duration = Duration::from_millis(duration_ms).as_secs_f32();
+                definition.radius = radius;
+                definition.block_behavior = block_behavior;
+                definition.secondary.persistent_area = Some(PersistentAreaSecondaryTunables {
+                    pulse_interval: Duration::from_millis(pulse_interval_ms),
+                    effect_target_audience,
+                    impact_effects: impact_effects.into_iter().map(Into::into).collect(),
+                });
+            }
             SpellCatalogDelivery::InstantBeam {
                 max_distance,
                 damage,
@@ -1048,6 +1091,7 @@ impl SpellCatalogRow {
             SpellCatalogDelivery::Channel {
                 max_distance,
                 damage,
+                heal,
                 damage_type,
                 resource_cost_per_second: _,
                 update_interval_seconds,
@@ -1062,6 +1106,10 @@ impl SpellCatalogRow {
                 definition.update_interval = update_interval_seconds;
                 definition.duration = duration_seconds;
                 definition.block_behavior = block_behavior;
+                if heal != 0 {
+                    definition.secondary.channel =
+                        Some(ChannelSecondaryTunables { heal_amount: heal });
+                }
                 if let Some(projectile) = projectile {
                     definition.speed = projectile.speed;
                     definition.spawn_forward = projectile.spawn_forward;
@@ -1089,6 +1137,7 @@ impl SpellCatalogRow {
                 duration_ms,
                 max_distance,
                 radius,
+                damage_type,
                 status_stack_group,
                 polarity,
                 block_behavior,
@@ -1099,6 +1148,7 @@ impl SpellCatalogRow {
                 definition.duration = Duration::from_millis(duration_ms).as_secs_f32();
                 definition.max_distance = max_distance;
                 definition.radius = radius;
+                definition.damage_type = DamageType::from_wire(damage_type.as_str());
                 definition.status_stack_group = status_stack_group;
                 definition.block_behavior = block_behavior;
                 definition.apply_status = Some(status);
@@ -1725,7 +1775,10 @@ fn validate_definition(def: &SpellDefinition) -> Result<(), String> {
         }
     }
 
-    if def.damage > 0 && def.target_audience != TargetAudience::Hostile {
+    if def.damage > 0
+        && def.behavior != SpellBehavior::PersistentArea
+        && def.target_audience != TargetAudience::Hostile
+    {
         return Err(format!(
             "{} damaging spells must use HOSTILE target_audience",
             def.kind.as_str()
@@ -1788,6 +1841,12 @@ fn validate_secondary_tunables(def: &SpellDefinition) -> Result<(), String> {
     if def.behavior != SpellBehavior::Emanation && def.secondary.emanation.is_some() {
         return Err(format!(
             "{} must not define emanation secondary data",
+            def.kind.as_str()
+        ));
+    }
+    if def.behavior != SpellBehavior::PersistentArea && def.secondary.persistent_area.is_some() {
+        return Err(format!(
+            "{} must not define persistent-area secondary data",
             def.kind.as_str()
         ));
     }
@@ -1950,6 +2009,55 @@ fn validate_secondary_tunables(def: &SpellDefinition) -> Result<(), String> {
                 ));
             }
             ensure_no_secondary(def, true, false, true, true, true, true)?;
+        }
+        SpellBehavior::PersistentArea => {
+            let Some(persistent_area) = def.secondary.persistent_area.as_ref() else {
+                return Err(format!(
+                    "{} PERSISTENT_AREA must define secondary persistent-area data",
+                    def.kind.as_str()
+                ));
+            };
+            if def.targeting != SpellTargeting::Target || !def.requires_target {
+                return Err(format!(
+                    "{} PERSISTENT_AREA must use required TARGET targeting",
+                    def.kind.as_str()
+                ));
+            }
+            ensure_positive_f32(def.kind.as_str(), "delivery.max_distance", def.max_distance)?;
+            ensure_positive_f32(def.kind.as_str(), "delivery.radius", def.radius)?;
+            ensure_positive_f32(def.kind.as_str(), "delivery.duration_ms", def.duration)?;
+            ensure_positive_duration(
+                def.kind.as_str(),
+                "delivery.pulse_interval_ms",
+                persistent_area.pulse_interval,
+            )?;
+            if def.damage <= 0 && persistent_area.impact_effects.is_empty() {
+                return Err(format!(
+                    "{} PERSISTENT_AREA must define positive damage or at least one impact effect",
+                    def.kind.as_str()
+                ));
+            }
+            if def.damage > 0
+                && persistent_area.effect_target_audience != TargetAudience::Hostile
+            {
+                return Err(format!(
+                    "{} damaging PERSISTENT_AREA must use HOSTILE effect_target_audience",
+                    def.kind.as_str()
+                ));
+            }
+            for effect in &persistent_area.impact_effects {
+                validate_impact_effect(def, effect)?;
+            }
+            let expected = SpellSecondaryTunables {
+                persistent_area: Some(persistent_area.clone()),
+                ..SpellSecondaryTunables::default()
+            };
+            if def.secondary != expected {
+                return Err(format!(
+                    "{} PERSISTENT_AREA must only define persistent-area secondary spell tunables",
+                    def.kind.as_str()
+                ));
+            }
         }
         SpellBehavior::InstantBeam => {
             let Some(instant_beam) = def.secondary.instant_beam else {
@@ -2184,7 +2292,56 @@ fn validate_secondary_tunables(def: &SpellDefinition) -> Result<(), String> {
             }
         }
         SpellBehavior::Channel => {
+            if def.targeting != SpellTargeting::Target || !def.requires_target {
+                return Err(format!(
+                    "{} CHANNEL must use required TARGET targeting",
+                    def.kind.as_str()
+                ));
+            }
+            ensure_positive_f32(def.kind.as_str(), "delivery.max_distance", def.max_distance)?;
+            ensure_positive_f32(
+                def.kind.as_str(),
+                "delivery.update_interval_seconds",
+                def.update_interval,
+            )?;
+            ensure_positive_f32(def.kind.as_str(), "delivery.duration_seconds", def.duration)?;
+            let heal_amount = def
+                .secondary
+                .channel
+                .map_or(0, |channel| channel.heal_amount);
+            if heal_amount < 0 {
+                return Err(format!(
+                    "{} CHANNEL heal must be non-negative",
+                    def.kind.as_str()
+                ));
+            }
+            if def.damage > 0 && heal_amount > 0 {
+                return Err(format!(
+                    "{} CHANNEL cannot both damage and heal",
+                    def.kind.as_str()
+                ));
+            }
+            if heal_amount > 0
+                && !matches!(
+                    def.target_audience,
+                    TargetAudience::SelfOnly
+                        | TargetAudience::PartyOrSelf
+                        | TargetAudience::Assistable
+                )
+            {
+                return Err(format!(
+                    "{} healing CHANNEL must use a friendly target_audience",
+                    def.kind.as_str()
+                ));
+            }
+            if heal_amount > 0 && def.secondary.channel_projectile.is_some() {
+                return Err(format!(
+                    "{} healing CHANNEL must not define projectile data",
+                    def.kind.as_str()
+                ));
+            }
             let expected = SpellSecondaryTunables {
+                channel: def.secondary.channel,
                 channel_projectile: def.secondary.channel_projectile.clone(),
                 ..SpellSecondaryTunables::default()
             };
@@ -2737,6 +2894,8 @@ mod tests {
                 "ELECTROCUTE",
                 "FROZEN_SPLINTERS",
                 "MAGIC_MISSILE",
+                "RESTORATION",
+                "PROTECTION",
                 "FROST_NOVA",
                 "NOVA",
                 "NEGATE",
@@ -2891,6 +3050,7 @@ mod tests {
             "ELECTROCUTE",
             "FROZEN_SPLINTERS",
             "MAGIC_MISSILE",
+            "PROTECTION",
             "FROST_NOVA",
             "NOVA",
             "NEGATE",
@@ -3109,6 +3269,59 @@ mod tests {
         assert_eq!(definitions[0].kind.as_str(), "TEST_CHANNEL");
         assert_eq!(definitions[0].behavior, SpellBehavior::Channel);
         assert!((definitions[0].primary_resource_cost - 20.0).abs() < 0.0001);
+    }
+
+    #[test]
+    fn channel_spells_author_generic_friendly_healing() {
+        let json = r#"{
+            "abilities": [{
+                "ability_id": "TEST_CHANNEL_HEAL_ABILITY",
+                "action_id": "TEST_CHANNEL_HEAL",
+                "gameplay": {
+                    "kind": "SPELL",
+                    "cooldown_ms": 1000,
+                    "uses_global_cooldown": true,
+                    "cast_time_ms": 0,
+                    "cast_mobility": "GROUNDED_STATIONARY",
+                    "targeting": "TARGET",
+                    "target_audience": "PARTY_OR_SELF",
+                    "requires_target": true,
+                    "arms_auto_attack_on_cast": false,
+                    "delivery": {
+                        "kind": "CHANNEL",
+                        "max_distance": 18.0,
+                        "damage": 0,
+                        "heal": 1,
+                        "damage_type": "HOLY",
+                        "resource_cost_per_second": 1.0,
+                        "update_interval_seconds": 1.0,
+                        "duration_seconds": 5.0,
+                        "block_behavior": "UNBLOCKABLE"
+                    }
+                }
+            }]
+        }"#;
+
+        let definitions =
+            definitions_from_rows(spell_rows_from_json(json).expect("test row should parse"))
+                .expect("healing channel should load");
+        let definition = &definitions[0];
+
+        assert_eq!(definition.kind.as_str(), "TEST_CHANNEL_HEAL");
+        assert_eq!(definition.target_audience, TargetAudience::PartyOrSelf);
+        assert_eq!(definition.damage, 0);
+        assert_eq!(definition.damage_type, DamageType::Holy);
+        assert!((definition.primary_resource_cost - 1.0).abs() < 0.0001);
+        assert!((definition.update_interval - 1.0).abs() < 0.0001);
+        assert!((definition.duration - 5.0).abs() < 0.0001);
+        assert_eq!(
+            definition
+                .secondary
+                .channel
+                .expect("channel healing payload should be present")
+                .heal_amount,
+            1
+        );
     }
 
     #[test]

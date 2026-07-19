@@ -298,7 +298,7 @@ namespace Arena.Editor
             WeaponSpellAnimationEntry resolvedAnimation)
         {
             // An explicit per-spell override wins — the authored E7 hand for spells the animation resolves
-            // wrongly (or can't resolve), e.g. BLADE_BARRIER's RIGHT launch.
+            // wrongly (or can't resolve), e.g. an explicitly right-handed launch.
             if (spellOverrides != null && spellOverrides.TryGet(abilityId, out SpellVfxAbilityOverride spellOverride))
             {
                 if (spellOverride.castHand == SpellVfxCastHandOverride.Left)

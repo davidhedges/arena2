@@ -65,6 +65,8 @@ namespace SpacetimeDB.Types
         public int ImpactAreaHitIndex;
         [DataMember(Name = "impact_area_include_primary_target")]
         public bool ImpactAreaIncludePrimaryTarget;
+        [DataMember(Name = "targeting_width")]
+        public float TargetingWidth;
 
         public MeleeAbilityCatalog(
             string AbilityId,
@@ -92,7 +94,8 @@ namespace SpacetimeDB.Types
             float ImpactAreaRadius,
             float ImpactAreaDamageMultiplier,
             int ImpactAreaHitIndex,
-            bool ImpactAreaIncludePrimaryTarget
+            bool ImpactAreaIncludePrimaryTarget,
+            float TargetingWidth
         )
         {
             this.AbilityId = AbilityId;
@@ -121,6 +124,7 @@ namespace SpacetimeDB.Types
             this.ImpactAreaDamageMultiplier = ImpactAreaDamageMultiplier;
             this.ImpactAreaHitIndex = ImpactAreaHitIndex;
             this.ImpactAreaIncludePrimaryTarget = ImpactAreaIncludePrimaryTarget;
+            this.TargetingWidth = TargetingWidth;
         }
 
         public MeleeAbilityCatalog()

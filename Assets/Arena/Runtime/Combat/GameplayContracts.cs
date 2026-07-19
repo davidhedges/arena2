@@ -22,6 +22,7 @@ namespace Arena.Combat
         public const string FrozenGrasp = "FROZEN_GRASP";
         public const string Negate = "NEGATE";
         public const string BlindingLight = "BLINDING_LIGHT";
+        public const string Protection = "PROTECTION";
         public const string GlacialSpike = "GLACIAL_SPIKE";
         public const string GustOfWind = "GUST_OF_WIND";
         public const string Buffet = "BUFFET";

@@ -84,10 +84,11 @@ subscription/hydration, and public replication surface have therefore been remov
   silently fall back to Instant. The map editor and resolved view share the same asset/set discovery.
 
 - [x] **C8. Per-spell authoring data compiled into editor source — FIXED**
-  The 19 signature override rows and Blade Barrier's cast-hand exception now live in the editor-only
+  The 19 signature override rows and the then-current Blade Barrier cast-hand exception lived in the editor-only
   `SpellVfxOverrideCatalog` asset. Each ability entry reuses `SchoolVfxSlotEntry` for slot look data and
   may author an explicit hand. The generator contains no per-spell dictionaries; new bespoke looks are
-  asset edits and do not require code changes or a domain reload.
+  asset edits and do not require code changes or a domain reload. Blade Barrier's later target-field
+  replacement removed that cast-hand exception.
 
 - [x] **C9. `_assetSchoolPalettes` static-as-hidden-parameter**
   `SpellAuthoringWindow.CueGeneration.cs:418` — assigned at top of `GenerateCues`, read in `TryResolvePaletteEntry` same call. Make it a local passed as a parameter. (Dies naturally with C3.)

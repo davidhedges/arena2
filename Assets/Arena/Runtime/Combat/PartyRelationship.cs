@@ -23,6 +23,7 @@ namespace Arena.Combat
         public const string TargetAudienceHostile = "HOSTILE";
         public const string TargetAudiencePartyOrSelf = "PARTY_OR_SELF";
         public const string TargetAudienceAssistable = "ASSISTABLE";
+        public const string TargetAudienceAny = "ANY";
         public const string PlaygroundKindHostile = "HOSTILE";
         public const string PlaygroundKindNeutral = "NEUTRAL";
         public const string PlaygroundKindPartyMember = "PARTY_MEMBER";
@@ -106,6 +107,9 @@ namespace Arena.Combat
             return TargetAudienceAllowsRelation(relation, targetAudience);
         }
 
+        public static bool TargetAudienceAllowsSelf(string? targetAudience)
+            => TargetAudienceAllowsRelation(ClientCombatRelation.Self, targetAudience);
+
         private static bool TargetAudienceAllowsRelation(ClientCombatRelation relation, string? targetAudience)
         {
             return NormalizeAudience(targetAudience) switch
@@ -114,6 +118,7 @@ namespace Arena.Combat
                 TargetAudienceHostile => relation == ClientCombatRelation.Hostile,
                 TargetAudiencePartyOrSelf => relation is ClientCombatRelation.Self or ClientCombatRelation.PartyAlly,
                 TargetAudienceAssistable => relation is ClientCombatRelation.Self or ClientCombatRelation.PartyAlly or ClientCombatRelation.Neutral,
+                TargetAudienceAny => true,
                 _ => false,
             };
         }

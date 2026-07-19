@@ -83,6 +83,8 @@ namespace SpacetimeDB.Types
         public long ViewDelayMicros;
         [DataMember(Name = "resolve_at_micros")]
         public long ResolveAtMicros;
+        [DataMember(Name = "targeting_width")]
+        public float TargetingWidth;
 
         public PendingMeleeImpact(
             ulong ImpactId,
@@ -119,7 +121,8 @@ namespace SpacetimeDB.Types
             float ImpactEventMaxDistance,
             string DirectActionKey,
             long ViewDelayMicros,
-            long ResolveAtMicros
+            long ResolveAtMicros,
+            float TargetingWidth
         )
         {
             this.ImpactId = ImpactId;
@@ -157,6 +160,7 @@ namespace SpacetimeDB.Types
             this.DirectActionKey = DirectActionKey;
             this.ViewDelayMicros = ViewDelayMicros;
             this.ResolveAtMicros = ResolveAtMicros;
+            this.TargetingWidth = TargetingWidth;
         }
 
         public PendingMeleeImpact()

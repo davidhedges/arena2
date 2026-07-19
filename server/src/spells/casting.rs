@@ -86,10 +86,10 @@ use super::manifest::{
     MeteorSkyOrigin, SpellDefinition,
 };
 use super::{
-    normalize_vec3, player_knows_spell, ActiveBespokeSpell, ActiveCast, CastPredictionCorrelation,
-    ChannelCastRuntime, PendingAreaImpact, PendingCastCancel, PendingCastRequest,
-    SpecialMovementRuntime, SpellBehavior, SpellId, EVENT_AREA_IMPACT, EVENT_CAST, EVENT_CONTACT,
-    EVENT_FIZZLE, EVENT_IMPACT, EVENT_RELEASE, EVENT_UPDATE,
+    normalize_vec3, player_knows_spell, ActiveBespokeSpell, ActiveCast, ActivePersistentArea,
+    CastPredictionCorrelation, ChannelCastRuntime, PendingAreaImpact, PendingCastCancel,
+    PendingCastRequest, SpecialMovementRuntime, SpellBehavior, SpellId, EVENT_AREA_IMPACT,
+    EVENT_CAST, EVENT_CONTACT, EVENT_FIZZLE, EVENT_IMPACT, EVENT_RELEASE, EVENT_UPDATE,
 };
 use crate::combat::scene_query::aoe_hits_player;
 
@@ -112,6 +112,8 @@ use crate::player_state::player_state as _;
 use crate::spells::active_bespoke_spell as _;
 #[allow(unused_imports)]
 use crate::spells::active_cast as _;
+#[allow(unused_imports)]
+use crate::spells::active_persistent_area as _;
 #[allow(unused_imports)]
 use crate::spells::cast_prediction_correlation as _;
 #[allow(unused_imports)]
@@ -2250,6 +2252,7 @@ fn process_spell_cast(
     if matches!(
         definition.behavior,
         SpellBehavior::DirectTarget
+            | SpellBehavior::PersistentArea
             | SpellBehavior::ApplyStatus
             | SpellBehavior::RemoveStatus
             | SpellBehavior::ConsumeStatus
@@ -2263,6 +2266,21 @@ fn process_spell_cast(
                 SpellBehavior::DirectTarget => {
                     return Ok(reject_unless(
                         cast_direct_target(
+                            ctx,
+                            caster,
+                            state,
+                            spell_kind,
+                            target_id,
+                            mode,
+                            action_instance_id,
+                            ability_id,
+                        )?,
+                        ActionRejectReason::InvalidTarget,
+                    ));
+                }
+                SpellBehavior::PersistentArea => {
+                    return Ok(reject_unless(
+                        cast_persistent_area(
                             ctx,
                             caster,
                             state,
@@ -2352,6 +2370,12 @@ fn process_spell_cast(
         if definition.behavior == SpellBehavior::DirectTarget {
             return Ok(reject_unless(
                 cast_direct_target(ctx, caster, state, spell_kind, target_id, mode, "", "")?,
+                ActionRejectReason::InvalidTarget,
+            ));
+        }
+        if definition.behavior == SpellBehavior::PersistentArea {
+            return Ok(reject_unless(
+                cast_persistent_area(ctx, caster, state, spell_kind, target_id, mode, "", "")?,
                 ActionRejectReason::InvalidTarget,
             ));
         }
@@ -3145,9 +3169,11 @@ pub(crate) fn resolve_target(
     let Ok(identity) = Identity::from_hex(target_id) else {
         return None;
     };
-    if identity == caster {
-        return None;
-    }
+    // Self is a valid target identity. Whether a spell may affect its caster is
+    // decided by the spell's target_audience at the call site, alongside party,
+    // neutral, and hostile relations. Rejecting self here bypassed that authored
+    // contract and made PARTY_OR_SELF / ASSISTABLE target spells impossible to
+    // cast on the caster.
     let target = actor_snapshot_for(ctx, identity)?;
     if !target.alive {
         return None;
@@ -4747,6 +4773,17 @@ fn start_channel(
         return start_projectile_channel(ctx, active_cast, caster_state, now);
     }
 
+    if !apply_generic_channel_heal(
+        ctx,
+        active_cast,
+        caster_state,
+        definition,
+        EVENT_IMPACT,
+        now,
+    ) {
+        return Ok(false);
+    }
+
     ctx.db.channel_cast_runtime().insert(ChannelCastRuntime {
         caster: active_cast.caster,
         spell_instance_id: active_cast.cast_id.clone(),
@@ -4787,8 +4824,23 @@ fn tick_channel(
     if now < runtime.last_update_at + update_interval {
         return Ok(true);
     }
+    if definition.secondary.channel.is_some() && now >= active_cast.ends_at {
+        return Ok(true);
+    }
 
     if !commit_channel_tick_resource_for_spell(ctx, active_cast.caster, &definition.kind, now) {
+        stop_channel(ctx, active_cast, caster_state, now, None);
+        return Ok(false);
+    }
+
+    if !apply_generic_channel_heal(
+        ctx,
+        active_cast,
+        caster_state,
+        definition,
+        EVENT_UPDATE,
+        now,
+    ) {
         stop_channel(ctx, active_cast, caster_state, now, None);
         return Ok(false);
     }
@@ -4804,6 +4856,91 @@ fn tick_channel(
     next_runtime.last_update_at = now;
     ctx.db.channel_cast_runtime().caster().update(next_runtime);
     Ok(true)
+}
+
+fn apply_generic_channel_heal(
+    ctx: &ReducerContext,
+    active_cast: &ActiveCast,
+    caster_state: &CombatActorSnapshot,
+    definition: &SpellDefinition,
+    event_type: &str,
+    now: Timestamp,
+) -> bool {
+    let Some(channel) = definition.secondary.channel else {
+        return true;
+    };
+    if channel.heal_amount <= 0 {
+        return true;
+    }
+    if validate_targeted_channel_cast(
+        ctx,
+        caster_state,
+        active_cast.caster,
+        &definition.kind,
+        active_cast.target_id.as_str(),
+        definition,
+    )
+    .is_some()
+    {
+        return false;
+    }
+    let Some(target) = resolve_target(ctx, caster_state.player_id, active_cast.target_id.as_str())
+    else {
+        return false;
+    };
+
+    let origin = Vec3::new(
+        caster_state.pos_x,
+        caster_state.pos_y + caster_state.hit_height * 0.5,
+        caster_state.pos_z,
+    );
+    let point = Vec3::new(
+        target.pos_x,
+        target.pos_y + target.hit_height * 0.5,
+        target.pos_z,
+    );
+    let dx = point.x - origin.x;
+    let dy = point.y - origin.y;
+    let dz = point.z - origin.z;
+    let distance_sq = dx * dx + dy * dy + dz * dz;
+    let direction = if distance_sq > 0.0001 {
+        let inv_len = 1.0 / distance_sq.sqrt();
+        Vec3::new(dx * inv_len, dy * inv_len, dz * inv_len)
+    } else {
+        default_forward_direction(caster_state)
+    };
+
+    emit_spell_combat_event(
+        ctx,
+        SpellCombatEventPayload {
+            action_instance_id: active_cast.cast_id.as_str(),
+            ability_id: active_cast.ability_id.as_str(),
+            kind: &definition.kind,
+            event_type,
+            caster: active_cast.caster,
+            hit: target.player_id,
+            origin,
+            direction,
+            speed: 0.0,
+            max_distance: definition.max_distance,
+            scalar: SpellCombatEventScalar::None,
+            sequence_index: 0,
+            sequence_count: 1,
+            point,
+            now,
+        },
+    );
+    queue_effects(
+        ctx,
+        vec![EffectPacket::Heal {
+            amount: channel.heal_amount,
+            source: active_cast.caster,
+            target: target.player_id,
+            spell_id: active_cast.cast_id.clone(),
+            target_audience: definition.target_audience,
+        }],
+    );
+    true
 }
 
 fn stop_channel(
@@ -6141,6 +6278,247 @@ fn spawn_negate(
     });
 
     Ok(())
+}
+
+fn cast_persistent_area(
+    ctx: &ReducerContext,
+    caster: Identity,
+    state: &CombatActorSnapshot,
+    kind: &SpellId,
+    target_id: &str,
+    mode: CastExecutionMode,
+    action_instance_id: &str,
+    ability_id: &str,
+) -> Result<bool, String> {
+    let definition = super::catalog::spell_definition(kind)
+        .expect("validated PERSISTENT_AREA spell must resolve to a definition");
+    if definition.targeting != super::manifest::SpellTargeting::Target
+        || !definition.requires_target
+    {
+        return Ok(false);
+    }
+
+    let Some(target) = resolve_target(ctx, caster, target_id) else {
+        return Ok(false);
+    };
+    if !target_audience_allows(ctx, caster, target.player_id, definition.target_audience) {
+        return Ok(false);
+    }
+    let check_target = overlay_press_rewound_target_pose(ctx, caster, target);
+    if !is_target_within_facing_arc(state, &check_target, TARGET_FACING_ARC_RADIANS) {
+        return Ok(false);
+    }
+    if definition.requires_target_los && !has_line_of_sight(ctx, state, &check_target) {
+        return Ok(false);
+    }
+    if distance_to_target(state, &check_target) > definition.max_distance {
+        return Ok(false);
+    }
+
+    if mode == CastExecutionMode::Execute {
+        start_persistent_area(
+            ctx,
+            caster,
+            state,
+            &target,
+            kind,
+            action_instance_id,
+            ability_id,
+            definition,
+        );
+    }
+    Ok(true)
+}
+
+fn start_persistent_area(
+    ctx: &ReducerContext,
+    caster: Identity,
+    state: &CombatActorSnapshot,
+    target: &CombatActorSnapshot,
+    kind: &SpellId,
+    action_instance_id: &str,
+    ability_id: &str,
+    definition: &SpellDefinition,
+) {
+    let now = ctx.timestamp;
+    let origin = Vec3::new(
+        state.pos_x,
+        state.pos_y + state.hit_height * 0.5,
+        state.pos_z,
+    );
+    let point = Vec3::new(
+        target.pos_x,
+        target.pos_y + target.hit_height * 0.5,
+        target.pos_z,
+    );
+    let direction = normalize_vec3(point.x - origin.x, point.y - origin.y, point.z - origin.z)
+        .map(|(x, y, z)| Vec3::new(x, y, z))
+        .unwrap_or_else(|| default_forward_direction(state));
+
+    for event_type in [EVENT_RELEASE, EVENT_IMPACT] {
+        emit_spell_combat_event(
+            ctx,
+            SpellCombatEventPayload {
+                action_instance_id,
+                ability_id,
+                kind,
+                event_type,
+                caster,
+                hit: target.player_id,
+                origin,
+                direction,
+                speed: 0.0,
+                max_distance: definition.max_distance,
+                scalar: SpellCombatEventScalar::None,
+                sequence_index: 0,
+                sequence_count: 1,
+                point,
+                now,
+            },
+        );
+    }
+
+    let key = format!("{}:{}", caster.to_hex(), kind.as_str());
+    let row = ActivePersistentArea {
+        key: key.clone(),
+        caster,
+        target: target.player_id,
+        spell_instance_id: action_instance_id.to_string(),
+        kind: kind.as_str().to_string(),
+        ability_id: ability_id.to_string(),
+        activated_at: now,
+        expires_at: now + Duration::from_secs_f32(definition.duration.max(0.001)),
+        next_pulse_at: now,
+    };
+    if ctx.db.active_persistent_area().key().find(key).is_some() {
+        ctx.db.active_persistent_area().key().update(row);
+    } else {
+        ctx.db.active_persistent_area().insert(row);
+    }
+}
+
+pub(crate) fn tick_persistent_areas(ctx: &ReducerContext, now: Timestamp) {
+    let active_rows: Vec<_> = ctx.db.active_persistent_area().iter().collect();
+    if active_rows.is_empty() {
+        return;
+    }
+
+    let snapshots = CombatActorSnapshotSet::collect(ctx);
+    let actors = snapshots.as_slice();
+    let actor_indices = snapshots.index_by_id();
+    let mut candidate_indices = Vec::new();
+
+    for mut active in active_rows {
+        if now >= active.expires_at {
+            ctx.db.active_persistent_area().key().delete(active.key);
+            continue;
+        }
+        let Some(caster_index) = actor_indices.get(&active.caster).copied() else {
+            ctx.db.active_persistent_area().key().delete(active.key);
+            continue;
+        };
+        let Some(anchor_index) = actor_indices.get(&active.target).copied() else {
+            ctx.db.active_persistent_area().key().delete(active.key);
+            continue;
+        };
+        let caster = &actors[caster_index];
+        let anchor = &actors[anchor_index];
+        if !caster.alive
+            || !anchor.alive
+            || !players_share_world_context(ctx, active.caster, active.target)
+        {
+            ctx.db.active_persistent_area().key().delete(active.key);
+            continue;
+        }
+        if now < active.next_pulse_at {
+            continue;
+        }
+
+        let Ok(kind) = SpellId::new(active.kind.as_str()) else {
+            ctx.db.active_persistent_area().key().delete(active.key);
+            continue;
+        };
+        let Some(definition) = super::catalog::spell_definition(&kind) else {
+            ctx.db.active_persistent_area().key().delete(active.key);
+            continue;
+        };
+        if definition.behavior != SpellBehavior::PersistentArea {
+            ctx.db.active_persistent_area().key().delete(active.key);
+            continue;
+        }
+        let Some(persistent_area) = definition.secondary.persistent_area.as_ref() else {
+            ctx.db.active_persistent_area().key().delete(active.key);
+            continue;
+        };
+
+        snapshots.query_disc_indices(
+            anchor.pos_x,
+            anchor.pos_z,
+            definition.radius,
+            &mut candidate_indices,
+        );
+        let mut effects = Vec::new();
+        for candidate in candidate_indices
+            .iter()
+            .filter_map(|index| actors.get(*index))
+        {
+            if !candidate.alive
+                || !players_share_world_context(ctx, active.caster, candidate.player_id)
+                || !target_audience_allows(
+                    ctx,
+                    active.caster,
+                    candidate.player_id,
+                    persistent_area.effect_target_audience,
+                )
+                || !aoe_hits_player(
+                    anchor.pos_x,
+                    anchor.pos_y,
+                    anchor.pos_z,
+                    definition.radius,
+                    candidate,
+                )
+            {
+                continue;
+            }
+
+            if definition.damage > 0 {
+                effects.push(EffectPacket::Damage {
+                    amount: definition.damage,
+                    damage_type: definition.damage_type,
+                    source: active.caster,
+                    target: candidate.player_id,
+                    spell_id: active.spell_instance_id.clone(),
+                    delivery: DamageDelivery::Periodic,
+                    source_kind: DAMAGE_SOURCE_KIND_SPELL.to_string(),
+                    direct_action_key: String::new(),
+                });
+            }
+            let direction = area_contact_direction(
+                anchor.pos_x,
+                anchor.pos_z,
+                caster.pos_x,
+                caster.pos_z,
+                candidate,
+            );
+            push_impact_effect_packets(
+                &mut effects,
+                persistent_area.impact_effects.as_slice(),
+                active.caster,
+                candidate.player_id,
+                active.spell_instance_id.as_str(),
+                definition.kind.as_str(),
+                definition.damage > 0,
+                direction.x,
+                direction.z,
+            );
+        }
+        if !effects.is_empty() {
+            queue_effects(ctx, effects);
+        }
+
+        active.next_pulse_at = now + persistent_area.pulse_interval.max(Duration::from_millis(1));
+        ctx.db.active_persistent_area().key().update(active);
+    }
 }
 
 fn cast_direct_target(

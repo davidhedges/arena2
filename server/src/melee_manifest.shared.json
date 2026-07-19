@@ -108,7 +108,7 @@
                     "slot_id": "alt_light_3",
                     "hit_windows": [
                         {
-                            "impact_delay_ms": 274
+                            "impact_delay_ms": 93
                         }
                     ],
                     "recovery_ms": 300,

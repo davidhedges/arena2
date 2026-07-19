@@ -59,7 +59,7 @@ pub(crate) use casting::{
     is_externally_imposed_movement_kind, movement_delivery_destination,
     resolve_pending_area_impacts, resolve_pending_casts, resolve_special_movement_y,
     resolved_primary_resource_cost_for_amount, special_movement_uses_air_path, tick_active_casts,
-    validate_movement_delivery_target, KNOCKBACK_MOVEMENT_KIND,
+    tick_persistent_areas, validate_movement_delivery_target, KNOCKBACK_MOVEMENT_KIND,
     SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK, SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK_FIXED_Y,
     SPECIAL_MOVEMENT_FACING_FACE_START, STAGGER_SHOVE_MOVEMENT_KIND,
 };
@@ -145,6 +145,22 @@ pub struct PendingAreaImpact {
     pub view_delay_micros: i64,
     #[index(btree)]
     pub resolve_at_micros: i64,
+}
+
+#[table(accessor = active_persistent_area)]
+#[derive(Clone)]
+pub struct ActivePersistentArea {
+    #[primary_key]
+    pub key: String,
+    #[index(btree)]
+    pub caster: Identity,
+    pub target: Identity,
+    pub spell_instance_id: String,
+    pub kind: String,
+    pub ability_id: String,
+    pub activated_at: Timestamp,
+    pub expires_at: Timestamp,
+    pub next_pulse_at: Timestamp,
 }
 
 #[table(accessor = active_cast, public)]

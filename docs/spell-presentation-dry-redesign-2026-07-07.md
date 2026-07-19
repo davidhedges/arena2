@@ -114,7 +114,7 @@ Derived from `delivery.kind` + `targeting` + a few delivery sub-fields (`motion`
 | **`GROUND_AOE`** | `delivery.kind==AREA && targeting∈{POINT,TARGET}` | `impact` at IMPACT_POINT/AREA_ORIGIN (ONE_SHOT / DURATION\|PARTICLE_SYSTEM) | LIGHTNING, ERUPTION, FROST_NEEDLE, NEGATE |
 | **`SELF_NOVA`** | `delivery.kind==AREA && targeting==SELF` | `burst` at CASTER (ONE_SHOT / PARTICLE_SYSTEM) | FROST_NOVA, ICE_SPIKES, SHOCKWAVE, INTIMIDATE |
 | **`BEAM`** | `delivery.kind∈{INSTANT_BEAM, CHANNEL-no-projectile}` | `beam` (SPELL_RELEASE / hand / ATTACHED / UNTIL_TERMINAL_EVENT or DURATION) | ELECTROCUTE, INSTANT_BEAM |
-| **`TARGET_HIT`** | `delivery.kind==DIRECT_TARGET`, or `APPLY_STATUS`/`REMOVE_STATUS` w/ `targeting==TARGET` | `impact` at TARGET (ONE_SHOT / PARTICLE_SYSTEM) — **TARGET anchor only, never on SPELL_CAST/RELEASE** | GLACIAL_SPIKE, SACRED_FLAME, CLEANSING_TOUCH, ABSOLUTION |
+| **`TARGET_HIT`** | `delivery.kind==DIRECT_TARGET`, or `APPLY_STATUS`/`REMOVE_STATUS` w/ `targeting==TARGET` | detached `impact` at IMPACT_POINT (ONE_SHOT / PARTICLE_SYSTEM); TARGET is reserved for FOLLOW_ANCHOR effects that intentionally track the entity | GLACIAL_SPIKE, SACRED_FLAME, CLEANSING_TOUCH, ABSOLUTION |
 | **`AURA`** | `delivery.kind==AURA` | finite `aura_ground` flourish; persistent gameplay aura has no mirrored persistent VFX | WARDING_AURA |
 | **`SELF_FX` / `NONE`** | `APPLY_STATUS`/`SELF_RESOURCE`, `targeting==SELF` | optional `self_flash`/overhead ONE_SHOT, or nothing | BLINDING_LIGHT (overhead), most WARRIOR buffs (none) |
 
@@ -412,7 +412,7 @@ Same trigger, role, and lifecycle rules as `cast_glow`, but anchored to `CASTER`
 | field | value | rule / grounding |
 |---|---|---|
 | trigger | PROJECTILE/SKY_DROP → `SPELL_IMPACT` · GROUND_AOE → `DEFERRED ? AREA_IMPACT : SPELL_RELEASE` · TARGET_HIT → `SPELL_IMPACT` | FIREBALL(SPELL_IMPACT) / LIGHTNING(SPELL_RELEASE) / ICE_SPIKES(AREA_IMPACT) / GLACIAL_SPIKE(SPELL_IMPACT) |
-| anchor | PROJECTILE/SKY_DROP → `IMPACT_POINT` · GROUND_AOE → `DEFERRED ? AREA_ORIGIN : IMPACT_POINT` · TARGET_HIT → `TARGET` | Rule 15: `TARGET` legal only on SPELL_IMPACT (never CAST/RELEASE) — TARGET_HIT is SPELL_IMPACT ✓ |
+| anchor | PROJECTILE/SKY_DROP → `IMPACT_POINT` · GROUND_AOE → `DEFERRED ? AREA_ORIGIN : IMPACT_POINT` · TARGET_HIT → `IMPACT_POINT` | Rule 15: `TARGET` is never legal on SPELL_CAST/RELEASE. Rule 16: detached world-spawned terminal hit cues use `IMPACT_POINT`; `TARGET` is reserved for FOLLOW_ANCHOR effects. |
 | attach_mode | `SPAWN_WORLD` | — |
 | vfx_role | `ONE_SHOT` | — |
 | lifecycle | `PS? → PARTICLE_SYSTEM` else `DURATION` | Rule 10 / Rule 14 |
@@ -463,12 +463,12 @@ Same trigger, role, and lifecycle rules as `cast_glow`, but anchored to `CASTER`
 | `CHANNEL` + fires projectiles | Projectile | cast_glow, character_fx*, muzzle*, projectile_body, projectile_trail*, impact |
 | `CHANNEL` + beam | Beam | cast_glow, character_fx*, beam |
 | `INSTANT_BEAM` | Beam (charged) | cast_glow, character_fx*, beam |
-| `DIRECT_TARGET` | TargetHit | cast_glow, character_fx*, impact @ TARGET |
+| `DIRECT_TARGET` | TargetHit | cast_glow, character_fx*, impact @ IMPACT_POINT |
 | `AREA` + sky_origin | SkyDrop | cast_glow, character_fx*, travel_body, impact |
 | `AREA` + targeting SELF | SelfNova | cast_glow, character_fx*, burst |
 | `AREA` + targeting POINT/TARGET | GroundAoe | cast_glow, character_fx*, impact |
 | `APPLY_STATUS` / `SELF_RESOURCE` (SELF) | SelfFx | cast_glow, character_fx*, self_flash* |
-| `APPLY_STATUS` (TARGET) / `CONSUME_STATUS` | TargetHit | cast_glow, character_fx*, impact @ TARGET |
+| `APPLY_STATUS` (TARGET) / `CONSUME_STATUS` | TargetHit | cast_glow, character_fx*, impact @ IMPACT_POINT |
 | `REMOVE_STATUS` | TargetHit / SelfFx | cast_glow, character_fx*, cleanse flash |
 | `AURA` | Aura | cast_glow, character_fx*, `aura_ground` (brief feet flourish) |
 

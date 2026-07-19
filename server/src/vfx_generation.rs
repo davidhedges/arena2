@@ -51,9 +51,20 @@ pub enum CueFieldViolation {
     OneShotDurationZero,
     /// Rule 15 — `TARGET` anchor invalid on `SPELL_CAST` / `SPELL_RELEASE`.
     TargetAnchorPreImpact,
+    /// Rule 16 — world-spawned per-target terminal cues use `IMPACT_POINT`;
+    /// `TARGET` is reserved for transform-following effects.
+    WorldImpactTargetAnchor,
 }
 
 const HAND_ANCHORS: [&str; 2] = ["LEFT_HAND", "RIGHT_HAND"];
+const POINT_IMPACT_TRIGGERS: [&str; 6] = [
+    "MELEE_IMPACT",
+    "MELEE_BLOCK",
+    "MELEE_PARRY",
+    "SPELL_IMPACT",
+    "SPELL_BLOCK",
+    "SPELL_PARRY",
+];
 
 /// The single source of truth for Class-A single-cue field-relation rules. Rules that
 /// need catalog context (enum allow-lists, owner resolution, projectile ownership/count,
@@ -131,6 +142,14 @@ pub fn check_cue_field_rules(f: &CueFields) -> Vec<CueFieldViolation> {
     // Rule 15 — TARGET anchor only valid post-impact.
     if f.anchor == "TARGET" && matches!(f.trigger, "SPELL_CAST" | "SPELL_RELEASE") {
         violations.push(TargetAnchorPreImpact);
+    }
+    // Rule 16 — a detached world-space impact belongs at the event's resolved hit point.
+    // TARGET remains valid for FOLLOW_ANCHOR effects that intentionally track an entity.
+    if f.anchor == "TARGET"
+        && matches!(f.attach_mode, "" | "SPAWN_WORLD")
+        && POINT_IMPACT_TRIGGERS.contains(&f.trigger)
+    {
+        violations.push(WorldImpactTargetAnchor);
     }
 
     violations
@@ -257,5 +276,19 @@ mod tests {
         assert!(check_cue_field_rules(&f).contains(&CueFieldViolation::TargetAnchorPreImpact));
         f.trigger = "SPELL_IMPACT";
         assert!(!check_cue_field_rules(&f).contains(&CueFieldViolation::TargetAnchorPreImpact));
+    }
+
+    #[test]
+    fn rule16_world_impacts_default_to_impact_point() {
+        let mut f = legal_one_shot();
+        f.anchor = "TARGET";
+        assert!(check_cue_field_rules(&f).contains(&CueFieldViolation::WorldImpactTargetAnchor));
+
+        f.anchor = "IMPACT_POINT";
+        assert!(!check_cue_field_rules(&f).contains(&CueFieldViolation::WorldImpactTargetAnchor));
+
+        f.anchor = "TARGET";
+        f.attach_mode = "FOLLOW_ANCHOR";
+        assert!(!check_cue_field_rules(&f).contains(&CueFieldViolation::WorldImpactTargetAnchor));
     }
 }

@@ -182,7 +182,6 @@ namespace Arena.Tests.Editor
             Assert.That(entries.arraySize, Is.GreaterThanOrEqualTo(19));
 
             var abilityIds = new HashSet<string>(StringComparer.Ordinal);
-            bool foundBladeBarrierRightHand = false;
             for (int i = 0; i < entries.arraySize; i++)
             {
                 SerializedProperty row = entries.GetArrayElementAtIndex(i);
@@ -196,12 +195,7 @@ namespace Arena.Tests.Editor
                 Assert.That(slots.arraySize > 0 || castHand != 0, Is.True);
 
                 AssertSlotEntriesValid(slots, abilityId);
-
-                if (abilityId == "PALADIN_BLADE_BARRIER")
-                    foundBladeBarrierRightHand = castHand == 2;
             }
-
-            Assert.That(foundBladeBarrierRightHand, Is.True);
 
             string generatorSource = File.ReadAllText(Path.Combine(
                 Directory.GetCurrentDirectory(),
@@ -233,6 +227,7 @@ namespace Arena.Tests.Editor
             // AURA is supported (decision 11): all spell types generate.
             Assert.That(DeriveArchetype(Facts("AURA", "SELF")), Is.EqualTo("Aura")); // PALADIN_FERVOR
             Assert.That(DeriveArchetype(Facts("EMANATION", "SELF")), Is.EqualTo("Emanation")); // NECROTIC_AURA
+            Assert.That(DeriveArchetype(Facts("PERSISTENT_AREA", "TARGET")), Is.EqualTo("TargetField")); // BLADE_BARRIER
         }
 
         [Test]
@@ -358,12 +353,11 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
-        public void TargetHitImpact_UsesSpellImpactTargetAnchor()
+        public void TargetHitImpact_UsesSpellImpactPointAnchor()
         {
-            // Rule 15: TARGET anchor is only legal because the trigger is SPELL_IMPACT (post-impact).
             object hit = Wire("TargetHit", "Impact", "Charged", true, false);
             Assert.That(WireStr(hit, "Trigger"), Is.EqualTo("SPELL_IMPACT")); // GLACIAL_SPIKE
-            Assert.That(WireStr(hit, "Anchor"), Is.EqualTo("Target"));
+            Assert.That(WireStr(hit, "Anchor"), Is.EqualTo("ImpactPoint"));
         }
 
         [Test]
@@ -403,6 +397,21 @@ namespace Arena.Tests.Editor
             Assert.That(WireStr(w, "VfxRole"), Is.EqualTo("ATTACHED"));
             Assert.That(WireStr(w, "Lifecycle"), Is.EqualTo("UNTIL_RADIAL_EFFECT_END"));
             Assert.That(WireStr(w, "Duration"), Is.EqualTo("Zero"));
+        }
+
+        [Test]
+        public void TargetFieldDefaults_ToAPersistentTargetField()
+        {
+            Assert.That(RequestedSlotNames("TargetField"),
+                Is.EqualTo(new[] { "CastGlow", "CharacterFx", "PersistentField" }));
+
+            object w = Wire("TargetField", "PersistentField", "Instant", false, false);
+            Assert.That(WireStr(w, "Trigger"), Is.EqualTo("SPELL_IMPACT"));
+            Assert.That(WireStr(w, "Anchor"), Is.EqualTo("Target"));
+            Assert.That(WireStr(w, "AttachMode"), Is.EqualTo("FOLLOW_ANCHOR"));
+            Assert.That(WireStr(w, "VfxRole"), Is.EqualTo("ATTACHED"));
+            Assert.That(WireStr(w, "Lifecycle"), Is.EqualTo("DURATION"));
+            Assert.That(WireStr(w, "Duration"), Is.EqualTo("PalettePositive"));
         }
 
         // ----- the whole generator is correct-by-construction against Class-A rules -----
@@ -545,6 +554,20 @@ namespace Arena.Tests.Editor
             Assert.That(
                 CheckRules(Fields("SPELL_IMPACT", "TARGET", "SPAWN_WORLD", "ONE_SHOT", "DURATION", false, false)),
                 Does.Not.Contain("TargetAnchorPreImpact")); // post-impact: legal
+        }
+
+        [Test]
+        public void Rule16_WorldImpactsUseImpactPointUnlessFollowingTarget()
+        {
+            Assert.That(
+                CheckRules(Fields("SPELL_IMPACT", "TARGET", "SPAWN_WORLD", "ONE_SHOT", "DURATION", false, false)),
+                Does.Contain("WorldImpactTargetAnchor"));
+            Assert.That(
+                CheckRules(Fields("SPELL_IMPACT", "IMPACT_POINT", "SPAWN_WORLD", "ONE_SHOT", "DURATION", false, false)),
+                Does.Not.Contain("WorldImpactTargetAnchor"));
+            Assert.That(
+                CheckRules(Fields("SPELL_IMPACT", "TARGET", "FOLLOW_ANCHOR", "ATTACHED", "DURATION", false, false)),
+                Does.Not.Contain("WorldImpactTargetAnchor"));
         }
     }
 }

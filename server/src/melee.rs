@@ -839,6 +839,8 @@ pub struct PendingMeleeImpact {
     pub view_delay_micros: i64,
     #[index(btree)]
     pub resolve_at_micros: i64,
+    #[default(0.0f32)]
+    pub targeting_width: f32,
 }
 
 /// Actor-generic server-side melee commitment used below player input and NPC
@@ -982,6 +984,7 @@ pub(crate) fn commit_server_actor_targeted_melee(
         direct_action_key: commitment.direct_action_key.to_string(),
         view_delay_micros: 0,
         resolve_at_micros: timestamp_to_micros(impact_at),
+        targeting_width: 0.0,
     });
     true
 }
@@ -1232,6 +1235,7 @@ enum ResolvedMeleeTargeting {
     Target,
     CasterRadius { radius: f32 },
     CasterCone { range: f32, angle_degrees: f32 },
+    CasterRectangle { length: f32, width: f32 },
 }
 
 impl ResolvedMeleeTargeting {
@@ -1262,6 +1266,20 @@ impl ResolvedMeleeTargeting {
                     None
                 }
             }
+            "CASTER_RECTANGLE" => {
+                if melee.targeting_range.is_finite()
+                    && melee.targeting_range > 0.0
+                    && melee.targeting_width.is_finite()
+                    && melee.targeting_width > 0.0
+                {
+                    Some(Self::CasterRectangle {
+                        length: melee.targeting_range,
+                        width: melee.targeting_width,
+                    })
+                } else {
+                    None
+                }
+            }
             _ => None,
         }
     }
@@ -1275,6 +1293,7 @@ impl ResolvedMeleeTargeting {
             Self::Target => "TARGET",
             Self::CasterRadius { .. } => "CASTER_RADIUS",
             Self::CasterCone { .. } => "CASTER_CONE",
+            Self::CasterRectangle { .. } => "CASTER_RECTANGLE",
         }
     }
 
@@ -1283,6 +1302,7 @@ impl ResolvedMeleeTargeting {
             Self::Target => target_range,
             Self::CasterRadius { radius } => radius,
             Self::CasterCone { range, .. } => range,
+            Self::CasterRectangle { length, .. } => length,
         }
     }
 
@@ -1298,6 +1318,17 @@ impl ResolvedMeleeTargeting {
             Self::CasterCone { angle_degrees, .. } => angle_degrees,
             _ => 0.0,
         }
+    }
+
+    fn pending_width(self) -> f32 {
+        match self {
+            Self::CasterRectangle { width, .. } => width,
+            _ => 0.0,
+        }
+    }
+
+    fn pending_requires_present_time_los(self, requires_target_los: bool) -> bool {
+        !self.requires_target() && requires_target_los
     }
 }
 
@@ -3866,11 +3897,14 @@ fn perform_melee_attack_for_internal(
             target_audience: String::new(),
             requires_present_time_facing: false,
             present_time_facing_arc_radians: 0.0,
-            requires_present_time_los: false,
+            requires_present_time_los: gameplay
+                .targeting
+                .pending_requires_present_time_los(gameplay.requires_target_los),
             impact_event_max_distance: 0.0,
             direct_action_key: String::new(),
             view_delay_micros: press_view_delay_micros(ctx, caster),
             resolve_at_micros: timestamp_to_micros(impact_at),
+            targeting_width: gameplay.targeting.pending_width(),
         });
         log::info!(
             "[MELEE] owner={} source={} strike={} target={} scheduled_impact hit_index={} damage={} impact_at_micros={}",
@@ -4590,10 +4624,13 @@ fn resolve_pending_melee_hit_volume(
     let view_delay_micros = row.view_delay_micros;
     // Widen the candidate disc so a victim who strafed out of the shape during
     // the view delay is still rewound-tested (§2.3); only adds candidates.
+    let shape_query_radius = melee_hit_volume_shape(row)
+        .map(CombatAreaShape::query_radius)
+        .unwrap_or(row.range);
     let candidate_radius = if view_delay_micros > 0 {
-        row.range + (max_rewind_ms as f32 / 1000.0) * SWEEP_REWIND_MARGIN_SPEED_MPS
+        shape_query_radius + (max_rewind_ms as f32 / 1000.0) * SWEEP_REWIND_MARGIN_SPEED_MPS
     } else {
-        row.range
+        shape_query_radius
     };
 
     let players = actor_snapshots.as_slice();
@@ -4700,28 +4737,31 @@ fn melee_hit_volume_contains_player(
     caster_pose: &CombatActorSnapshot,
     player: &crate::combat::actor_snapshot::CombatActorSnapshot,
 ) -> bool {
-    match row.targeting_kind.trim().to_ascii_uppercase().as_str() {
-        "CASTER_RADIUS" => CombatAreaShape::Disc { radius: row.range }.contains_player_xz(
+    melee_hit_volume_shape(row).is_some_and(|shape| {
+        shape.contains_player_xz(
             caster_pose.pos_x,
             caster_pose.pos_z,
             caster_pose.facing_yaw,
             player,
             0.0,
-        ),
-        "CASTER_CONE" => CombatAreaShape::Cone {
+        )
+    })
+}
+
+fn melee_hit_volume_shape(row: &PendingMeleeImpact) -> Option<CombatAreaShape> {
+    match row.targeting_kind.trim().to_ascii_uppercase().as_str() {
+        "CASTER_RADIUS" => Some(CombatAreaShape::Disc { radius: row.range }),
+        "CASTER_CONE" => Some(CombatAreaShape::Cone {
             range: row.range,
             angle_degrees: row.targeting_angle_degrees,
             vertical_tolerance: None,
-        }
-        .contains_player(
-            caster_pose.pos_x,
-            caster_pose.pos_y,
-            caster_pose.pos_z,
-            caster_pose.facing_yaw,
-            player,
-            0.0,
-        ),
-        _ => false,
+        }),
+        "CASTER_RECTANGLE" => Some(CombatAreaShape::Rectangle {
+            length: row.range,
+            width: row.targeting_width,
+            vertical_tolerance: None,
+        }),
+        _ => None,
     }
 }
 
@@ -4766,6 +4806,7 @@ fn resolve_pending_melee_target_impact(
     } else {
         (0.0, 0.0)
     };
+    let target_impact_y = melee_target_impact_point_y(&target_snapshot);
     if row.requires_present_time_facing
         && !is_direction_within_facing_arc(
             caster_pose.facing_yaw,
@@ -4852,7 +4893,7 @@ fn resolve_pending_melee_target_impact(
             now,
             &caster_pose,
             target_snapshot.pos_x,
-            target_snapshot.pos_y,
+            target_impact_y,
             target_snapshot.pos_z,
             dx,
             dz,
@@ -4875,7 +4916,7 @@ fn resolve_pending_melee_target_impact(
             source_y: caster_pose.pos_y,
             source_z: caster_pose.pos_z,
             impact_x: target_snapshot.pos_x,
-            impact_y: target_snapshot.pos_y + target_snapshot.hit_height * 0.5,
+            impact_y: target_impact_y,
             impact_z: target_snapshot.pos_z,
             dir_x,
             dir_y: 0.0,
@@ -4900,7 +4941,7 @@ fn resolve_pending_melee_target_impact(
                 now,
                 &caster_pose,
                 target_snapshot.pos_x,
-                target_snapshot.pos_y,
+                target_impact_y,
                 target_snapshot.pos_z,
                 dx,
                 dz,
@@ -4926,7 +4967,7 @@ fn resolve_pending_melee_target_impact(
                 now,
                 &caster_pose,
                 target_snapshot.pos_x,
-                target_snapshot.pos_y,
+                target_impact_y,
                 target_snapshot.pos_z,
                 dx,
                 dz,
@@ -4979,7 +5020,7 @@ fn resolve_pending_melee_target_impact(
         sequence_index: 0,
         sequence_count: 0,
         point_x: target_snapshot.pos_x,
-        point_y: target_snapshot.pos_y,
+        point_y: target_impact_y,
         point_z: target_snapshot.pos_z,
         created_at: now,
         created_at_micros: timestamp_to_micros(now),
@@ -5046,6 +5087,10 @@ fn resolve_pending_melee_target_impact(
         now,
     );
     grant_hallowed_thrust_branded_mana(ctx, row, damage, now);
+}
+
+fn melee_target_impact_point_y(target: &CombatActorSnapshot) -> f32 {
+    target.pos_y + target.hit_height.max(0.0) * 0.5
 }
 
 fn scaled_melee_damage_for_target(
@@ -5689,17 +5734,18 @@ mod tests {
         default_aerial_execution_mode, find_combo_root_for_authorization,
         gap_close_destination_within_epsilon, gap_close_has_horizontal_travel,
         gap_close_pre_commit_decision, gap_close_target_facing_satisfied,
-        melee_hit_volume_contains_player, melee_manifest, pending_melee_impact_range,
-        positive_projectile_override, projectile_max_distance_for_policy,
-        push_melee_impact_status_effects, push_stagger_effect_with_duration_if_applicable,
-        resolve_gap_close_destination, resolve_melee_action_reference,
-        resolve_melee_action_reference_in_strikes, resolved_hit_window_damages,
-        scaled_auto_attack_cadence_ms, scaled_impact_area_damage, scheduled_melee_impact_at,
-        strike_total_duration_ms, timed_melee_movement_destination, AerialExecutionMode,
-        AirborneTargetingMode, ComboInputDecision, ConsumedMeleeAttackModifier,
-        GapCloseActorSnapshot, GapClosePreCommitDecision, MeleeAuthorization, PendingMeleeImpact,
-        ResolvedMeleeAttackModifiers, ResolvedMeleeGapClose, SpellVec3, StaggerDirection,
-        StrikeData, StrikeHitWindowData, GAP_CLOSE_COLLISION_REQUIRE_CLEAR_PATH,
+        melee_hit_volume_contains_player, melee_manifest, melee_target_impact_point_y,
+        pending_melee_impact_range, positive_projectile_override,
+        projectile_max_distance_for_policy, push_melee_impact_status_effects,
+        push_stagger_effect_with_duration_if_applicable, resolve_gap_close_destination,
+        resolve_melee_action_reference, resolve_melee_action_reference_in_strikes,
+        resolved_hit_window_damages, scaled_auto_attack_cadence_ms, scaled_impact_area_damage,
+        scheduled_melee_impact_at, strike_total_duration_ms, timed_melee_movement_destination,
+        AerialExecutionMode, AirborneTargetingMode, ComboInputDecision,
+        ConsumedMeleeAttackModifier, GapCloseActorSnapshot, GapClosePreCommitDecision,
+        MeleeAuthorization, PendingMeleeImpact, ResolvedMeleeAttackModifiers,
+        ResolvedMeleeGapClose, ResolvedMeleeTargeting, SpellVec3, StaggerDirection, StrikeData,
+        StrikeHitWindowData, GAP_CLOSE_COLLISION_REQUIRE_CLEAR_PATH,
         GAP_CLOSE_DESTINATION_BEHIND_TARGET, GAP_CLOSE_DESTINATION_NEAREST_CONTACT_POINT,
         GAP_CLOSE_KIND_LINEAR, MELEE_MANIFEST_JSON, MELEE_TARGET_FACING_ARC_RADIANS,
     };
@@ -5736,6 +5782,7 @@ mod tests {
         kind: &str,
         range: f32,
         angle_degrees: f32,
+        width: f32,
     ) -> PendingMeleeImpact {
         let now = Timestamp::UNIX_EPOCH;
         PendingMeleeImpact {
@@ -5774,12 +5821,13 @@ mod tests {
             direct_action_key: String::new(),
             view_delay_micros: 0,
             resolve_at_micros: 0,
+            targeting_width: width,
         }
     }
 
     #[test]
     fn player_pending_melee_fixture_keeps_server_actor_gates_disabled() {
-        let row = test_targetless_impact_row("TARGET", 2.5, 0.0);
+        let row = test_targetless_impact_row("TARGET", 2.5, 0.0, 0.0);
 
         assert!(row.target_audience.is_empty());
         assert!(!row.requires_present_time_facing);
@@ -6467,6 +6515,7 @@ mod tests {
             direct_action_key: String::new(),
             view_delay_micros: 0,
             resolve_at_micros: 0,
+            targeting_width: 0.0,
         };
 
         let mut effects = Vec::new();
@@ -6536,6 +6585,7 @@ mod tests {
             direct_action_key: String::new(),
             view_delay_micros: 0,
             resolve_at_micros: 0,
+            targeting_width: 0.0,
         };
         let modifiers = ResolvedMeleeAttackModifiers {
             bleed_damage_ratio: 0.10,
@@ -7140,7 +7190,7 @@ mod tests {
     #[test]
     fn targetless_radius_melee_hit_volume_uses_caster_center() {
         let caster = test_actor_snapshot(test_identity_with_byte(1), 0.0, 0.0);
-        let row = test_targetless_impact_row("CASTER_RADIUS", 3.25, 0.0);
+        let row = test_targetless_impact_row("CASTER_RADIUS", 3.25, 0.0, 0.0);
         let inside = test_actor_snapshot(test_identity_with_byte(2), 0.0, 3.0);
         let outside = test_actor_snapshot(test_identity_with_byte(3), 0.0, 4.0);
 
@@ -7151,12 +7201,52 @@ mod tests {
     #[test]
     fn targetless_cone_melee_hit_volume_uses_caster_facing() {
         let caster = test_actor_snapshot(test_identity_with_byte(1), 0.0, 0.0);
-        let row = test_targetless_impact_row("CASTER_CONE", 4.0, 60.0);
+        let row = test_targetless_impact_row("CASTER_CONE", 4.0, 60.0, 0.0);
         let front = test_actor_snapshot(test_identity_with_byte(2), 0.0, 3.0);
         let side = test_actor_snapshot(test_identity_with_byte(3), 3.0, 0.0);
 
         assert!(melee_hit_volume_contains_player(&row, &caster, &front));
         assert!(!melee_hit_volume_contains_player(&row, &caster, &side));
+    }
+
+    #[test]
+    fn targetless_rectangle_melee_hit_volume_uses_caster_facing_and_authored_width() {
+        let caster = test_actor_snapshot(test_identity_with_byte(1), 0.0, 0.0);
+        let row = test_targetless_impact_row("CASTER_RECTANGLE", 5.0, 0.0, 1.25);
+        let front = test_actor_snapshot(test_identity_with_byte(2), 0.0, 4.5);
+        let edge_overlap = test_actor_snapshot(test_identity_with_byte(3), 0.9, 3.0);
+        let side = test_actor_snapshot(test_identity_with_byte(4), 1.1, 3.0);
+        let behind = test_actor_snapshot(test_identity_with_byte(5), 0.0, -0.6);
+
+        assert!(melee_hit_volume_contains_player(&row, &caster, &front));
+        assert!(melee_hit_volume_contains_player(
+            &row,
+            &caster,
+            &edge_overlap
+        ));
+        assert!(!melee_hit_volume_contains_player(&row, &caster, &side));
+        assert!(!melee_hit_volume_contains_player(&row, &caster, &behind));
+    }
+
+    #[test]
+    fn targetless_melee_los_is_authored_without_changing_targeted_impact_rechecks() {
+        let rectangle = ResolvedMeleeTargeting::CasterRectangle {
+            length: 5.0,
+            width: 1.25,
+        };
+
+        assert!(rectangle.pending_requires_present_time_los(true));
+        assert!(!rectangle.pending_requires_present_time_los(false));
+        assert!(!ResolvedMeleeTargeting::Target.pending_requires_present_time_los(true));
+    }
+
+    #[test]
+    fn melee_impact_point_uses_target_capsule_center() {
+        let mut target = test_actor_snapshot(test_identity_with_byte(2), 0.0, 0.0);
+        target.pos_y = 3.0;
+        target.hit_height = 2.0;
+
+        assert_eq!(melee_target_impact_point_y(&target), 4.0);
     }
 
     #[test]

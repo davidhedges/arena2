@@ -19,6 +19,7 @@ pub(crate) const TARGET_AUDIENCE_SELF_ONLY: &str = "SELF_ONLY";
 pub(crate) const TARGET_AUDIENCE_HOSTILE: &str = "HOSTILE";
 pub(crate) const TARGET_AUDIENCE_PARTY_OR_SELF: &str = "PARTY_OR_SELF";
 pub(crate) const TARGET_AUDIENCE_ASSISTABLE: &str = "ASSISTABLE";
+pub(crate) const TARGET_AUDIENCE_ANY: &str = "ANY";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum CombatRelation {
@@ -37,6 +38,7 @@ pub(crate) enum TargetAudience {
     #[serde(rename = "PARTY_OR_SELF")]
     PartyOrSelf,
     Assistable,
+    Any,
 }
 
 impl TargetAudience {
@@ -46,6 +48,7 @@ impl TargetAudience {
             Self::Hostile => TARGET_AUDIENCE_HOSTILE,
             Self::PartyOrSelf => TARGET_AUDIENCE_PARTY_OR_SELF,
             Self::Assistable => TARGET_AUDIENCE_ASSISTABLE,
+            Self::Any => TARGET_AUDIENCE_ANY,
         }
     }
 
@@ -55,6 +58,7 @@ impl TargetAudience {
             TARGET_AUDIENCE_HOSTILE => Some(Self::Hostile),
             TARGET_AUDIENCE_PARTY_OR_SELF => Some(Self::PartyOrSelf),
             TARGET_AUDIENCE_ASSISTABLE => Some(Self::Assistable),
+            TARGET_AUDIENCE_ANY => Some(Self::Any),
             _ => None,
         }
     }
@@ -72,6 +76,7 @@ impl TargetAudience {
                     CombatRelation::Self_ | CombatRelation::PartyAlly | CombatRelation::Neutral
                 )
             }
+            Self::Any => true,
         }
     }
 }
@@ -276,9 +281,16 @@ mod tests {
         assert!(TargetAudience::Hostile.allows(CombatRelation::Hostile));
         assert!(!TargetAudience::Hostile.allows(CombatRelation::Neutral));
         assert!(TargetAudience::PartyOrSelf.allows(CombatRelation::PartyAlly));
+        assert!(TargetAudience::PartyOrSelf.allows(CombatRelation::Self_));
         assert!(!TargetAudience::PartyOrSelf.allows(CombatRelation::Neutral));
+        assert!(TargetAudience::Assistable.allows(CombatRelation::Self_));
+        assert!(TargetAudience::Assistable.allows(CombatRelation::PartyAlly));
         assert!(TargetAudience::Assistable.allows(CombatRelation::Neutral));
         assert!(!TargetAudience::Assistable.allows(CombatRelation::Hostile));
+        assert!(TargetAudience::Any.allows(CombatRelation::Self_));
+        assert!(TargetAudience::Any.allows(CombatRelation::PartyAlly));
+        assert!(TargetAudience::Any.allows(CombatRelation::Neutral));
+        assert!(TargetAudience::Any.allows(CombatRelation::Hostile));
     }
 
     #[test]

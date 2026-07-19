@@ -16,7 +16,7 @@ does **not** mean the *visuals* are right (a drifted spell can be wiring-clean).
 | bucket | count | what it needs |
 |---|---|---|
 | **Clean — zero-diff-ready** | 8 | palette-structure decision (which `vfx_id`s are school-generic vs per-spell signature); then the 1:1 writer (done) materializes them |
-| **Generator adds a slot** | 8 | **✅ all writable (2026-07-08):** write gate relaxed to insert generator-only slots + signatures/palette encoded for all 8 (BLESSED_SHIELD/BLADE_BARRIER/METEOR/FROZEN_SPLINTERS/INSTANT_BEAM + BOOMERANG/WITHERING slot-stamp; MAGIC_MISSILE needs nothing). Owner Writes + republishes the ones with a real new cue. |
+| **Generator adds a slot** | 8 | **✅ all writable (2026-07-08):** write gate relaxed to insert generator-only slots + signatures/palette encoded for all 8. Blade Barrier was subsequently reauthored as a `TargetField` with a persistent target-attached slot (2026-07-20). |
 | **Catalog-only slot** | 6 | a slot-inference / archetype nuance (deferred SelfNova burst vs impact) to resolve |
 | **Wiring diff** | 7 | a real finding to adjudicate (generator rule vs authoring) — some are known/expected |
 | **No cues authored** | 18 | palette + prefab + writer insertion (mostly auras/buffs) |
@@ -54,11 +54,11 @@ materializes slots that resolve. The **one** required slot is `projectile_body` 
 | `SPELL_BOOMERANG_ORB` | — | **✅ writable (`6cd6bbcd`):** body+hit signatures; no SHADOW cast-glow prefab → pure slot-stamp (no new effect, no republish). |
 | `SPELL_WITHERING_ORB` | — | **✅ writable (`6cd6bbcd`):** as BOOMERANG — slot-stamp only. |
 | `PALADIN_BLESSED_SHIELD` | Impact | **✅ writable (2026-07-08, commit `6ca4f329`):** HOLY palette (`impact=VFX_HOLY_HIT_01`) + body signature encoded; LEFT-hand matches the generator default → body matches, impact inserts via the relaxed gate. cast_glow deferred (no holy hand-glow prefab). Needs `VFX_HOLY_HIT_01` registered → the Orb08 holy hit + republish. |
-| `PALADIN_BLADE_BARRIER` | Impact | **✅ writable (2026-07-08):** a per-spell cast-hand override (`CastHandOverrides[BLADE_BARRIER]=RIGHT_HAND`, wins over the LEFT animation inference) makes its `projectile_body` match at RIGHT_HAND; the HOLY impact inserts like BLESSED_SHIELD. Same registered `VFX_HOLY_HIT_01`. cast_glow deferred. |
+| `PALADIN_BLADE_BARRIER` | PersistentField | **✅ replaced (2026-07-20):** `PERSISTENT_AREA` derives the `TargetField` archetype. Its `persistent_field` fires on `SPELL_IMPACT`, follows `TARGET`, and uses `VFX_BLADE_BARRIER_AREA_01` for 7500 ms. The old orbiting projectile body and cast-hand exception are removed. |
 
 These are the concrete justification for the **writer insertion path**: the 1:1 update writer can't add a
 row that has no authored counterpart. **HOLY school encoded (commit `6ca4f329`):** generic `impact` +
-BLESSED_SHIELD/BLADE_BARRIER body signatures; `cast_glow` omitted until a holy hand-glow prefab exists (so
+BLESSED_SHIELD body signature and Blade Barrier's target-field signature; `cast_glow` omitted until a holy hand-glow prefab exists (so
 these "add Impact" now, not CastGlow). The remaining CastGlow-adders (METEOR/FROZEN_SPLINTERS/INSTANT_BEAM/
 BOOMERANG_ORB/WITHERING_ORB) need their school's `cast_glow` (FIRE/COLD have one; SHADOW does not yet).
 
@@ -80,7 +80,7 @@ slot name.
 |---|---|---|
 | `SPELL_ERUPTION`, `SPELL_FROST_NEEDLE`, `PALADIN_CONSECRATE` | generator `AREA_IMPACT`@`AREA_ORIGIN` vs authored `SPELL_RELEASE`@`IMPACT_POINT` | **✅ FIXED (2026-07-08, commit `6ef2cb14`).** These carry real `impact_delay_ms` (500 / 500 / 2000) — deferred — but showed the burst at **cast**, 0.5–2s early. Retriggered to `AREA_IMPACT@AREA_ORIGIN` (fires at detonation; `casting.rs:5651` emits it, `AREA_ORIGIN` resolves as for ICE_SPIKES). **Needs republish.** (`SPELL_LIGHTNING` has no delay → immediate → generator agrees; clean.) |
 | `SPELL_ICE_SPIKES` (cone, no delay) | matches authoring | The generator's `deferred` flag also covers `CASTER_CONE` geometry (not a *timing* delay). Same correct output; the flag just conflates two reasons for `AREA_IMPACT@AREA_ORIGIN` (delay vs cone-at-origin). No change needed; keep the note that "deferred" here = "resolves at area origin," not strictly a delay. |
-| `PALADIN_SACRED_FLAME` | generator `TARGET` anchor vs authored `IMPACT_POINT` | **Generator is right.** Owner: it's a no-projectile spell with an immediate impact *on the target*. `TARGET` (tracks the target entity) is the correct anchor; `IMPACT_POINT` (a projectile-hit location) was legacy for a projectile-less spell. Fix on migration. |
+| `PALADIN_SACRED_FLAME` | legacy generator `TARGET` anchor vs authored `IMPACT_POINT` | **Resolved in favor of `IMPACT_POINT`.** Detached world-spawned terminal hit VFX use the combat event's impact point regardless of projectile delivery. `TARGET` is reserved for FOLLOW_ANCHOR effects that intentionally track the entity. |
 | `PALADIN_CLEANSING_TOUCH` | generator `SPAWN_WORLD` vs authored `FOLLOW_ANCHOR` | Per-spell **signature override** (a cleanse effect that sticks to the target). Keep the generator default `SPAWN_WORLD` and author `FOLLOW_ANCHOR` as this spell's override; not a generator-default change. |
 | `SPELL_ELECTROCUTE` | generator `UNTIL_CAST_END` vs authored `UNTIL_TERMINAL_EVENT` | **expected** — parked legacy relic (decision 9), off-palette by design. |
 | `WARRIOR_GROUND_SLASH` | generator `projectile_body` `LEFT_HAND` vs authored `CASTER` | **expected** — known per-spell body-origin override (design B.3). |

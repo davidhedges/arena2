@@ -536,6 +536,7 @@
         "parry_behavior": "PARRYABLE",
         "block_behavior": "BLOCKABLE",
         "airborne_targeting_mode": "ANY_TARGET",
+        "requires_target_los": false,
         "melee_targeting": {
           "kind": "CASTER_CONE",
           "requires_target": false,
@@ -624,6 +625,7 @@
         "parry_behavior": "UNPARRYABLE",
         "block_behavior": "BLOCKABLE",
         "airborne_targeting_mode": "ANY_TARGET",
+        "requires_target_los": false,
         "melee_targeting": {
           "kind": "CASTER_RADIUS",
           "requires_target": false
@@ -1485,6 +1487,80 @@
               "arc_amplitude_max": 4.25,
               "control_point_fraction": 0.5
             }
+          }
+        }
+      }
+    },
+    {
+      "ability_id": "SPELL_RESTORATION",
+      "actor_scope": "PLAYER",
+      "combat_profile_id": "",
+      "action_id": "RESTORATION",
+      "display_name": "Restoration",
+      "resource_kind": "MANA",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 1016,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 1100,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "GROUNDED_STATIONARY",
+        "targeting": "TARGET",
+        "target_audience": "ASSISTABLE",
+        "requires_target": true,
+        "requires_target_los": true,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "CHANNEL",
+          "max_distance": 18,
+          "damage": 0,
+          "heal": 1,
+          "damage_type": "HOLY",
+          "resource_cost_per_second": 1,
+          "update_interval_seconds": 1,
+          "duration_seconds": 5,
+          "block_behavior": "UNBLOCKABLE"
+        }
+      }
+    },
+    {
+      "ability_id": "SPELL_PROTECTION",
+      "actor_scope": "PLAYER",
+      "combat_profile_id": "",
+      "action_id": "PROTECTION",
+      "display_name": "Protection",
+      "resource_kind": "MANA",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 1017,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 30000,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "TARGET",
+        "target_audience": "PARTY_OR_SELF",
+        "requires_target": true,
+        "requires_target_los": true,
+        "resource_cost": 0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "APPLY_STATUS",
+          "duration_ms": 5000,
+          "max_distance": 18,
+          "damage_type": "HOLY",
+          "status_stack_group": "PROTECTION",
+          "polarity": "BUFF",
+          "status": {
+            "kind": "DAMAGE_TAKEN_REDUCTION",
+            "modifier_scalar": 0.5,
+            "max_stacks": 1,
+            "stack_policy": "REFRESH"
           }
         }
       }
@@ -2678,6 +2754,37 @@
       }
     },
     {
+      "ability_id": "PALADIN_SACRED_THRUST",
+      "actor_scope": "PLAYER",
+      "combat_profile_id": "SWORD_AND_SHIELD",
+      "action_id": "SWORD_AND_SHIELD_ALT_LIGHT_3",
+      "display_name": "Sacred Thrust",
+      "resource_kind": "STAMINA",
+      "resource_cost": 20,
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 53,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 30,
+        "damage_type": "HOLY",
+        "applies_stagger": false,
+        "range": 5,
+        "cooldown_ms": 900,
+        "uses_global_cooldown": true,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET",
+        "requires_target_los": true,
+        "melee_targeting": {
+          "kind": "CASTER_RECTANGLE",
+          "requires_target": false,
+          "width": 1.25
+        }
+      }
+    },
+    {
       "ability_id": "PALADIN_SERRATED_BLADES",
       "actor_scope": "PLAYER",
       "combat_profile_id": "SWORD_AND_SHIELD",
@@ -3278,33 +3385,26 @@
       "sort_order": 166,
       "gameplay": {
         "kind": "SPELL",
-        "cooldown_ms": 1200,
+        "cooldown_ms": 7500,
         "uses_global_cooldown": true,
         "cast_time_ms": 0,
         "cast_mobility": "MOBILE",
-        "targeting": "SELF",
-        "requires_target": false,
+        "targeting": "TARGET",
+        "target_audience": "ANY",
+        "requires_target": true,
+        "requires_target_los": true,
         "resource_cost": 0,
         "arms_auto_attack_on_cast": false,
         "delivery": {
-          "kind": "PROJECTILE",
+          "kind": "PERSISTENT_AREA",
+          "max_distance": 18,
+          "radius": 2,
+          "pulse_interval_ms": 1000,
+          "duration_ms": 7500,
           "damage": 18,
           "damage_type": "HOLY",
-          "update_interval_seconds": 0.05,
-          "block_behavior": "BLOCKABLE",
-          "parry_behavior": "PARRYABLE",
-          "motion": {
-            "kind": "ORBIT_CASTER",
-            "projectile_count": 1,
-            "orbit_radius": 2,
-            "orbit_height": 1,
-            "angular_speed_deg_per_sec": -180,
-            "lifetime_seconds": 10,
-            "hit_radius": 0.45,
-            "hit_cooldown_seconds": 0.35,
-            "max_hits_per_target": 0,
-            "phase_offset_deg": 0
-          },
+          "effect_target_audience": "HOSTILE",
+          "block_behavior": "UNBLOCKABLE",
           "impact_effects": []
         }
       }
@@ -3648,6 +3748,7 @@
         "parry_behavior": "PARRYABLE",
         "block_behavior": "BLOCKABLE",
         "airborne_targeting_mode": "ANY_TARGET",
+        "requires_target_los": false,
         "melee_targeting": {
           "kind": "CASTER_RADIUS",
           "requires_target": false
@@ -5096,6 +5197,20 @@
     },
     {
       "presentation_kind": "ABILITY",
+      "presentation_id": "SPELL_RESTORATION",
+      "display_name": "Restoration",
+      "description": "Channels holy energy into an ally, restoring 1 health per second for up to 5 seconds.",
+      "sort_order": 94
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "SPELL_PROTECTION",
+      "display_name": "Protection",
+      "description": "Protects an ally, reducing damage taken by 50% for 5 seconds.",
+      "sort_order": 95
+    },
+    {
+      "presentation_kind": "ABILITY",
       "presentation_id": "SPELL_NEGATE",
       "display_name": "Negate",
       "description": "Releases an arcane pulse that disrupts hostile magic.",
@@ -5278,10 +5393,17 @@
     },
     {
       "presentation_kind": "ABILITY",
+      "presentation_id": "PALADIN_SACRED_THRUST",
+      "display_name": "Sacred Thrust",
+      "description": "Drives sacred power through enemies in a narrow line.",
+      "sort_order": 147
+    },
+    {
+      "presentation_kind": "ABILITY",
       "presentation_id": "PALADIN_SERRATED_BLADES",
       "display_name": "Serrated Blades",
       "description": "For 10s, melee attacks apply a stacking bleed for 10% of the damage dealt.",
-      "sort_order": 147
+      "sort_order": 148
     },
     {
       "presentation_kind": "ABILITY",
@@ -5385,7 +5507,7 @@
       "presentation_kind": "ABILITY",
       "presentation_id": "PALADIN_BLADE_BARRIER",
       "display_name": "Blade Barrier",
-      "description": "Summons a holy blade to orbit the wielder.",
+      "description": "Surrounds a hostile target with holy blades that damage nearby enemies for 7.5 seconds.",
       "sort_order": 166
     },
     {
@@ -5513,6 +5635,13 @@
       "display_name": "Blinding Light",
       "description": "Hostile targeted abilities miss.",
       "sort_order": 10015
+    },
+    {
+      "presentation_kind": "STATUS",
+      "presentation_id": "PROTECTION",
+      "display_name": "Protection",
+      "description": "Damage taken reduced by 50%.",
+      "sort_order": 10016
     },
     {
       "presentation_kind": "STATUS",
@@ -5701,7 +5830,7 @@
       "owner_id": "PALADIN_SACRED_FLAME",
       "slot": "impact",
       "trigger": "SPELL_IMPACT",
-      "anchor": "TARGET",
+      "anchor": "IMPACT_POINT",
       "vfx_id": "VFX_SACRED_FLAME_HIT_01",
       "attach_mode": "SPAWN_WORLD",
       "vfx_role": "ONE_SHOT",
@@ -5739,29 +5868,15 @@
     {
       "owner_kind": "ABILITY",
       "owner_id": "PALADIN_BLADE_BARRIER",
-      "slot": "projectile_body",
-      "trigger": "SPELL_RELEASE",
-      "anchor": "RIGHT_HAND",
-      "vfx_id": "VFX_BLADE_BARRIER_PROJECTILE_01",
-      "attach_mode": "SPAWN_WORLD",
-      "vfx_role": "PROJECTILE_BODY",
-      "lifecycle": "UNTIL_TERMINAL_EVENT",
-      "projectile_sequence_index": 0,
-      "duration_ms": 0,
-      "sort_order": 16
-    },
-    {
-      "owner_kind": "ABILITY",
-      "owner_id": "PALADIN_BLADE_BARRIER",
-      "slot": "impact",
+      "slot": "persistent_field",
       "trigger": "SPELL_IMPACT",
-      "anchor": "IMPACT_POINT",
-      "vfx_id": "VFX_HOLY_HIT_01",
-      "attach_mode": "SPAWN_WORLD",
-      "vfx_role": "ONE_SHOT",
+      "anchor": "TARGET",
+      "vfx_id": "VFX_BLADE_BARRIER_AREA_01",
+      "attach_mode": "FOLLOW_ANCHOR",
+      "vfx_role": "ATTACHED",
       "lifecycle": "DURATION",
-      "duration_ms": 1000,
-      "sort_order": 20
+      "duration_ms": 7500,
+      "sort_order": 16
     },
     {
       "owner_kind": "ABILITY",
@@ -5775,6 +5890,33 @@
       "lifecycle": "DURATION",
       "duration_ms": 2500,
       "sort_order": 17
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "PALADIN_SACRED_THRUST",
+      "slot": "forward",
+      "trigger": "AREA_IMPACT",
+      "anchor": "AREA_ORIGIN",
+      "vfx_id": "VFX_SACRED_THRUST_FORWARD_01",
+      "attach_mode": "WORLD_ALIGNED_TO_FACING",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "DURATION",
+      "duration_ms": 2500,
+      "sort_order": 18
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "PALADIN_SACRED_THRUST",
+      "slot": "impact",
+      "trigger": "MELEE_IMPACT",
+      "hit_index": 0,
+      "anchor": "IMPACT_POINT",
+      "vfx_id": "VFX_SACRED_THRUST_HIT_01",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "PARTICLE_SYSTEM",
+      "duration_ms": 0,
+      "sort_order": 19
     },
     {
       "owner_kind": "ABILITY",
@@ -6063,7 +6205,7 @@
       "owner_id": "SPELL_NOVA",
       "slot": "impact",
       "trigger": "SPELL_IMPACT",
-      "anchor": "TARGET",
+      "anchor": "IMPACT_POINT",
       "vfx_id": "VFX_NOVA_HIT_01",
       "attach_mode": "SPAWN_WORLD",
       "vfx_role": "ONE_SHOT",
@@ -6335,6 +6477,32 @@
     },
     {
       "owner_kind": "ABILITY",
+      "owner_id": "SPELL_RESTORATION",
+      "slot": "character_fx",
+      "trigger": "SPELL_IMPACT",
+      "anchor": "TARGET",
+      "vfx_id": "VFX_RESTORATION_CHANNEL_01",
+      "attach_mode": "FOLLOW_ANCHOR",
+      "vfx_role": "ATTACHED",
+      "lifecycle": "UNTIL_CAST_END",
+      "duration_ms": 0,
+      "sort_order": 201
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "SPELL_PROTECTION",
+      "slot": "character_fx",
+      "trigger": "SPELL_IMPACT",
+      "anchor": "TARGET",
+      "vfx_id": "VFX_PROTECTION_SHIELD_BUFF_01",
+      "attach_mode": "FOLLOW_ANCHOR",
+      "vfx_role": "ATTACHED",
+      "lifecycle": "DURATION",
+      "duration_ms": 5000,
+      "sort_order": 202
+    },
+    {
+      "owner_kind": "ABILITY",
       "owner_id": "SPELL_NEGATE",
       "trigger": "SPELL_RELEASE",
       "anchor": "CASTER",
@@ -6362,7 +6530,7 @@
       "owner_id": "SPELL_GLACIAL_SPIKE",
       "slot": "impact",
       "trigger": "SPELL_IMPACT",
-      "anchor": "TARGET",
+      "anchor": "IMPACT_POINT",
       "vfx_id": "VFX_GLACIAL_SPIKE_TARGET_01",
       "attach_mode": "SPAWN_WORLD",
       "vfx_role": "ONE_SHOT",
@@ -6621,7 +6789,7 @@
       "owner_id": "NPC_LICH_BONE_WARD",
       "slot": "impact",
       "trigger": "SPELL_IMPACT",
-      "anchor": "TARGET",
+      "anchor": "IMPACT_POINT",
       "vfx_id": "VFX_NEGATE_01",
       "attach_mode": "SPAWN_WORLD",
       "vfx_role": "ONE_SHOT",
@@ -6661,7 +6829,7 @@
       "owner_id": "NPC_LICH_MEND",
       "slot": "impact",
       "trigger": "SPELL_IMPACT",
-      "anchor": "TARGET",
+      "anchor": "IMPACT_POINT",
       "vfx_id": "VFX_HOLY_HIT_01",
       "attach_mode": "SPAWN_WORLD",
       "vfx_role": "ONE_SHOT",
@@ -6687,7 +6855,7 @@
       "owner_id": "NPC_SKELETON_WIZARD_FROSTBITE",
       "slot": "impact",
       "trigger": "SPELL_IMPACT",
-      "anchor": "TARGET",
+      "anchor": "IMPACT_POINT",
       "vfx_id": "VFX_ICE_HIT_01",
       "attach_mode": "SPAWN_WORLD",
       "vfx_role": "ONE_SHOT",
@@ -6713,7 +6881,7 @@
       "owner_id": "NPC_SKELETON_WIZARD_ICE_LOCK",
       "slot": "impact",
       "trigger": "SPELL_IMPACT",
-      "anchor": "TARGET",
+      "anchor": "IMPACT_POINT",
       "vfx_id": "VFX_ICE_HIT_01",
       "attach_mode": "SPAWN_WORLD",
       "vfx_role": "ONE_SHOT",

@@ -33,6 +33,7 @@ namespace Arena.Presentation
         SelfFx = 6,
         Aura = 7,
         Emanation = 8,
+        TargetField = 9,
     }
 
     /// <summary>
@@ -89,7 +90,7 @@ namespace Arena.Presentation
         /// <see cref="CastGlow"/>, this surrounds the character and may be authored more than once.
         /// </summary>
         CharacterFx = 10,
-        /// <summary>Persistent ground-following field backed by an ActiveRadialEffect row.</summary>
+        /// <summary>Persistent field attached to a caster or hostile target.</summary>
         PersistentField = 11,
     }
 
@@ -229,6 +230,8 @@ namespace Arena.Presentation
         OneShotDurationZero,
         /// <summary>Rule 15 — <c>TARGET</c> anchor invalid on <c>SPELL_CAST</c> / <c>SPELL_RELEASE</c>.</summary>
         TargetAnchorPreImpact,
+        /// <summary>Rule 16 — detached world-space terminal cues use <c>IMPACT_POINT</c>.</summary>
+        WorldImpactTargetAnchor,
     }
 
     public static class CueFieldViolations
@@ -257,6 +260,7 @@ namespace Arena.Presentation
                 CueFieldViolation.TravelBodyNonZeroDuration => "TRAVEL_BODY must set duration 0",
                 CueFieldViolation.OneShotDurationZero => "ONE_SHOT DURATION must define positive duration_ms",
                 CueFieldViolation.TargetAnchorPreImpact => "TARGET anchor invalid on cast/release trigger",
+                CueFieldViolation.WorldImpactTargetAnchor => "world-spawned terminal hit cue must use IMPACT_POINT",
                 _ => violation.ToString(),
             };
     }
@@ -274,6 +278,7 @@ namespace Arena.Presentation
         public const string TriggerSpellCast = "SPELL_CAST";
         public const string TriggerSpellRelease = "SPELL_RELEASE";
         public const string TriggerSpellImpact = "SPELL_IMPACT";
+        public const string TriggerMeleeImpact = "MELEE_IMPACT";
         public const string TriggerAreaImpact = "AREA_IMPACT";
         public const string TriggerEmanationActive = "EMANATION_ACTIVE";
 
@@ -316,6 +321,7 @@ namespace Arena.Presentation
         private const string DeliverySelfResource = "SELF_RESOURCE";
         private const string DeliveryAura = "AURA";
         private const string DeliveryEmanation = "EMANATION";
+        private const string DeliveryPersistentArea = "PERSISTENT_AREA";
 
         private const string TargetingSelf = "SELF";
         private const string TargetingTarget = "TARGET";
@@ -353,6 +359,8 @@ namespace Arena.Presentation
                     return SpellVfxArchetype.Aura;
                 case DeliveryEmanation:
                     return SpellVfxArchetype.Emanation;
+                case DeliveryPersistentArea:
+                    return SpellVfxArchetype.TargetField;
                 default:
                     return null;
             }
@@ -400,6 +408,8 @@ namespace Arena.Presentation
                 case SpellVfxArchetype.Aura:
                     return new[] { SpellVfxSlot.CastGlow, SpellVfxSlot.CharacterFx, SpellVfxSlot.AuraGround };
                 case SpellVfxArchetype.Emanation:
+                    return new[] { SpellVfxSlot.CastGlow, SpellVfxSlot.CharacterFx, SpellVfxSlot.PersistentField };
+                case SpellVfxArchetype.TargetField:
                     return new[] { SpellVfxSlot.CastGlow, SpellVfxSlot.CharacterFx, SpellVfxSlot.PersistentField };
                 default:
                     return System.Array.Empty<SpellVfxSlot>();
@@ -517,7 +527,7 @@ namespace Arena.Presentation
                     {
                         case SpellVfxArchetype.TargetHit:
                             impactTrigger = TriggerSpellImpact;
-                            impactAnchor = CueAnchor.Target;
+                            impactAnchor = CueAnchor.ImpactPoint;
                             break;
                         case SpellVfxArchetype.GroundAoe when deferred:
                             impactTrigger = TriggerAreaImpact;
@@ -595,6 +605,17 @@ namespace Arena.Presentation
                         projectileSequenceIndex: null);
 
                 case SpellVfxSlot.PersistentField:
+                    if (archetype == SpellVfxArchetype.TargetField)
+                    {
+                        return new CueWiring(
+                            trigger: TriggerSpellImpact,
+                            anchor: CueAnchor.Target,
+                            attachMode: AttachFollowAnchor,
+                            vfxRole: RoleAttached,
+                            lifecycle: LifecycleDuration,
+                            duration: CueDurationPolicy.PalettePositive,
+                            projectileSequenceIndex: null);
+                    }
                     return new CueWiring(
                         trigger: TriggerEmanationActive,
                         anchor: CueAnchor.Caster,
@@ -717,6 +738,18 @@ namespace Arena.Presentation
             {
                 violations.Add(CueFieldViolation.TargetAnchorPreImpact);
             }
+
+            // Rule 16 — world-spawned terminal effects belong at the event's resolved hit point.
+            // TARGET remains available for FOLLOW_ANCHOR effects that intentionally track an entity.
+            bool worldSpawn = string.IsNullOrEmpty(f.AttachMode) || f.AttachMode == AttachSpawnWorld;
+            bool pointImpactTrigger = f.Trigger == TriggerMeleeImpact
+                || f.Trigger == "MELEE_BLOCK"
+                || f.Trigger == "MELEE_PARRY"
+                || f.Trigger == TriggerSpellImpact
+                || f.Trigger == "SPELL_BLOCK"
+                || f.Trigger == "SPELL_PARRY";
+            if (f.Anchor == AnchorTarget && worldSpawn && pointImpactTrigger)
+                violations.Add(CueFieldViolation.WorldImpactTargetAnchor);
 
             return violations;
         }
