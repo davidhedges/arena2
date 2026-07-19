@@ -969,7 +969,7 @@ mod tests {
     }
 
     #[test]
-    fn absolution_catalog_filters_all_magic_debuffs_at_range() {
+    fn absolution_catalog_filters_all_independent_debuffs_at_range() {
         let definition = definition("ABSOLUTION");
 
         assert_eq!(definition.kind.as_str(), "ABSOLUTION");
@@ -978,7 +978,7 @@ mod tests {
         assert_eq!(definition.targeting.as_str(), "TARGET");
         assert!(!definition.requires_target);
         assert!((definition.max_distance - 30.0).abs() < 0.0001);
-        assert_eq!(definition.target_audience, TargetAudience::PartyOrSelf);
+        assert_eq!(definition.target_audience, TargetAudience::Assistable);
 
         let remove_status = definition
             .secondary
@@ -991,7 +991,10 @@ mod tests {
             remove_status.polarity,
             Some(crate::combat::StatusPolarity::Debuff)
         );
-        assert_eq!(remove_status.dispel_types, vec![StatusDispelType::Magic]);
+        assert!(
+            remove_status.dispel_types.is_empty(),
+            "an empty dispel-type filter means every debuff category"
+        );
     }
 
     #[test]

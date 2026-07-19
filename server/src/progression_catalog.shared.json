@@ -3092,7 +3092,7 @@
         "cast_time_ms": 0,
         "cast_mobility": "MOBILE",
         "targeting": "TARGET",
-        "target_audience": "PARTY_OR_SELF",
+        "target_audience": "ASSISTABLE",
         "requires_target": false,
         "resource_cost": 0,
         "arms_auto_attack_on_cast": false,
@@ -3100,10 +3100,7 @@
           "kind": "REMOVE_STATUS",
           "max_distance": 30,
           "max_count": 0,
-          "polarity": "DEBUFF",
-          "dispel_types": [
-            "MAGIC"
-          ]
+          "polarity": "DEBUFF"
         }
       }
     },
@@ -5451,7 +5448,7 @@
       "presentation_kind": "ABILITY",
       "presentation_id": "PALADIN_ABSOLUTION",
       "display_name": "Absolution",
-      "description": "Removes all magical debuffs from a distant ally or yourself.",
+      "description": "Removes all independent debuffs from a friendly unit or yourself. Effects projected by an active aura remain.",
       "sort_order": 158
     },
     {
@@ -5824,6 +5821,19 @@
       "lifecycle": "PARTICLE_SYSTEM",
       "duration_ms": 0,
       "sort_order": 13
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "PALADIN_ABSOLUTION",
+      "slot": "impact",
+      "trigger": "SPELL_IMPACT",
+      "anchor": "TARGET",
+      "vfx_id": "VFX_ABSOLUTION_HOLY_01",
+      "attach_mode": "FOLLOW_ANCHOR",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "DURATION",
+      "duration_ms": 5000,
+      "sort_order": 14
     },
     {
       "owner_kind": "ABILITY",

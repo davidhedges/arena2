@@ -33,13 +33,13 @@ use crate::combat::scene_query::{
 };
 use crate::combat::status_effect;
 use crate::combat::{
-    active_emanation_for_owner, decode_status_dispel_types, has_active_disabling_status,
-    hostile_targeted_ability_misses, mark_harmful_combat_action, queue_effects, set_active_aura,
+    active_emanation_for_owner, has_active_disabling_status, hostile_targeted_ability_misses,
+    mark_harmful_combat_action, queue_effects, set_active_aura, status_matches_removal_filter,
     temporary_combat_modifiers, timestamp_to_micros, toggle_active_emanation,
     ActiveCombatProjectile, CombatEvent, DamageDelivery, DamageType, EffectPacket,
-    ProjectilePresentationEvent, StatusApplication, StatusDispelType, StatusEffect,
-    StatusEffectKind, StatusPayload, StatusPolarity, StatusStackGroupDefault, COMBAT_EVENT_MISS,
-    COMBAT_METADATA_NONE, COMBAT_SCALAR_NONE, COMBAT_SEQUENCE_NONE, DAMAGE_SOURCE_KIND_SPELL,
+    ProjectilePresentationEvent, StatusApplication, StatusEffect, StatusEffectKind, StatusPayload,
+    StatusPolarity, StatusStackGroupDefault, COMBAT_EVENT_MISS, COMBAT_METADATA_NONE,
+    COMBAT_SCALAR_NONE, COMBAT_SEQUENCE_NONE, DAMAGE_SOURCE_KIND_SPELL,
 };
 use crate::defense::{
     clear_interruptible_defense_for_owner, resolve_defensible_combat_hit, CombatHitDeliveryKind,
@@ -7568,13 +7568,12 @@ fn filtered_remove_status_effects(
         .target()
         .filter(target)
         .filter(|effect| {
-            remove_status
-                .polarity
-                .is_none_or(|polarity| effect.polarity == polarity.as_str())
-                && status_matches_any_dispel_type(
-                    effect.dispel_types.as_str(),
-                    remove_status.dispel_types.as_slice(),
-                )
+            status_matches_removal_filter(
+                ctx,
+                effect,
+                remove_status.polarity,
+                remove_status.dispel_types.as_slice(),
+            )
         })
         .collect();
     matches.sort_by_key(|effect| effect.status_id);
@@ -7604,13 +7603,12 @@ fn matched_consume_status_effects(
         .target()
         .filter(target)
         .filter(|effect| {
-            consume_status
-                .polarity
-                .is_none_or(|polarity| effect.polarity == polarity.as_str())
-                && status_matches_any_dispel_type(
-                    effect.dispel_types.as_str(),
-                    consume_status.dispel_types.as_slice(),
-                )
+            status_matches_removal_filter(
+                ctx,
+                effect,
+                consume_status.polarity,
+                consume_status.dispel_types.as_slice(),
+            )
         })
         .collect();
     matches.sort_by_key(|effect| effect.status_id);
@@ -7643,19 +7641,6 @@ fn consume_status_heal_amount_from_stacks(
     }
     let consumed_stacks = consumed_status_stacks(stacks).min(i32::MAX as u32) as i32;
     heal_per_stack.saturating_mul(consumed_stacks)
-}
-
-fn status_matches_any_dispel_type(
-    encoded_status_types: &str,
-    filter_types: &[StatusDispelType],
-) -> bool {
-    if filter_types.is_empty() {
-        return true;
-    }
-    let status_types = decode_status_dispel_types(encoded_status_types);
-    filter_types
-        .iter()
-        .any(|filter_type| status_types.contains(filter_type))
 }
 
 fn resolve_movement_delivery_hit(

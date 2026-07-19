@@ -34,14 +34,15 @@ use crate::combat::scene_query::{
 };
 use crate::combat::status_effect as _;
 use crate::combat::{
-    combat_projectile_definition_for_id, decode_status_dispel_types, has_active_disabling_status,
-    has_active_status_group, has_due_pending_effects, hostile_targeted_ability_misses,
-    mark_harmful_combat_action, queue_effects, remove_active_status_group, resolve_pending_effects,
-    ActiveCombatProjectile, CombatEvent, CombatProjectileDefinition, DamageDelivery, DamageType,
-    EffectPacket, ProjectilePresentationEvent, StackPolicy, StatusDispelType, StatusEffectKind,
-    StatusPayload, StatusPolarity, COMBAT_EVENT_AREA_IMPACT, COMBAT_EVENT_BLOCK, COMBAT_EVENT_CAST,
-    COMBAT_EVENT_FIZZLE, COMBAT_EVENT_IMPACT, COMBAT_EVENT_MISS, COMBAT_EVENT_PARRY,
-    COMBAT_EVENT_RELEASE, COMBAT_METADATA_CONSUMED_MELEE_MODIFIER, COMBAT_METADATA_NONE,
+    combat_projectile_definition_for_id, has_active_disabling_status, has_active_status_group,
+    has_due_pending_effects, hostile_targeted_ability_misses, mark_harmful_combat_action,
+    queue_effects, remove_active_status_group, resolve_pending_effects,
+    status_matches_removal_filter, ActiveCombatProjectile, CombatEvent, CombatProjectileDefinition,
+    DamageDelivery, DamageType, EffectPacket, ProjectilePresentationEvent, StackPolicy,
+    StatusDispelType, StatusEffectKind, StatusPayload, StatusPolarity, COMBAT_EVENT_AREA_IMPACT,
+    COMBAT_EVENT_BLOCK, COMBAT_EVENT_CAST, COMBAT_EVENT_FIZZLE, COMBAT_EVENT_IMPACT,
+    COMBAT_EVENT_MISS, COMBAT_EVENT_PARRY, COMBAT_EVENT_RELEASE,
+    COMBAT_METADATA_CONSUMED_MELEE_MODIFIER, COMBAT_METADATA_NONE,
     COMBAT_SCALAR_MELEE_RELEASE_DELAY_SECONDS, COMBAT_SCALAR_NONE, COMBAT_SEQUENCE_NONE,
     DAMAGE_SOURCE_KIND_MELEE,
 };
@@ -5412,10 +5413,7 @@ fn push_melee_remove_status_effects(
         .status_effect()
         .target()
         .filter(target)
-        .filter(|effect| {
-            polarity.is_none_or(|polarity| effect.polarity == polarity.as_str())
-                && status_matches_any_dispel_type(effect.dispel_types.as_str(), dispel_types)
-        })
+        .filter(|effect| status_matches_removal_filter(ctx, effect, polarity, dispel_types))
         .collect();
     matches.sort_by_key(|effect| effect.status_id);
 
@@ -5429,19 +5427,6 @@ fn push_melee_remove_status_effects(
             stack_group: effect.stack_group,
         });
     }
-}
-
-fn status_matches_any_dispel_type(
-    encoded_status_types: &str,
-    filter_types: &[crate::combat::StatusDispelType],
-) -> bool {
-    if filter_types.is_empty() {
-        return true;
-    }
-    let status_types = decode_status_dispel_types(encoded_status_types);
-    filter_types
-        .iter()
-        .any(|filter_type| status_types.contains(filter_type))
 }
 
 fn scaled_impact_area_damage(primary_damage: i32, damage_multiplier: f32) -> i32 {

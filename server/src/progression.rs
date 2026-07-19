@@ -9066,6 +9066,31 @@ mod tests {
     }
 
     #[test]
+    fn paladin_absolution_authors_target_wings_blessing_vfx() {
+        let cue = progression_catalog()
+            .combat_vfx_cues
+            .iter()
+            .find(|cue| {
+                normalize_identifier(cue.owner_kind.as_str()) == "ABILITY"
+                    && normalize_identifier(cue.owner_id.as_str()) == "PALADIN_ABSOLUTION"
+                    && normalize_identifier(cue.trigger.as_str()) == "SPELL_IMPACT"
+            })
+            .expect("Absolution should author a target-side impact VFX cue");
+
+        assert_eq!(normalize_identifier(cue.anchor.as_str()), "TARGET");
+        assert_eq!(
+            normalize_identifier(cue.attach_mode.as_str()),
+            "FOLLOW_ANCHOR"
+        );
+        assert_eq!(normalize_identifier(cue.lifecycle.as_str()), "DURATION");
+        assert_eq!(cue.duration_ms, 5_000);
+        assert_eq!(
+            normalize_identifier(cue.vfx_id.as_str()),
+            "VFX_ABSOLUTION_HOLY_01"
+        );
+    }
+
+    #[test]
     fn paladin_sacred_flame_authors_non_projectile_dot_and_landing_vfx() {
         let catalog = progression_catalog();
         let ability = catalog

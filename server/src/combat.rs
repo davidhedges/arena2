@@ -1504,6 +1504,62 @@ fn radial_effect_behavior(
     spell_definition_by_str(row.spell_id.as_str()).map(|definition| definition.behavior)
 }
 
+/// Returns true while a status is being projected onto its target by a live radial source.
+///
+/// Projected statuses are not independent effects: the radial owner remains authoritative for
+/// their membership and lifetime. Broad dispels should therefore leave them alone while the
+/// source is active and the target is still inside its area of influence.
+pub(crate) fn status_is_projected_by_active_radial_effect(
+    ctx: &ReducerContext,
+    effect: &StatusEffect,
+) -> bool {
+    ctx.db
+        .active_radial_effect()
+        .owner()
+        .filter(effect.source)
+        .any(|active| {
+            if !active
+                .spell_id
+                .eq_ignore_ascii_case(effect.spell_id.as_str())
+            {
+                return false;
+            }
+            let Some(definition) = spell_definition_by_str(active.spell_id.as_str()) else {
+                return false;
+            };
+            let radius = match definition.behavior {
+                SpellBehavior::Aura => definition.secondary.aura.as_ref().map(|aura| aura.radius),
+                SpellBehavior::Emanation => definition
+                    .secondary
+                    .emanation
+                    .as_ref()
+                    .map(|emanation| emanation.radius),
+                _ => None,
+            };
+            let Some(radius) = radius.filter(|radius| radius.is_finite() && *radius > 0.0) else {
+                return false;
+            };
+            if !players_share_world_context(ctx, active.owner, effect.target)
+                || !target_audience_allows(
+                    ctx,
+                    active.owner,
+                    effect.target,
+                    definition.target_audience,
+                )
+            {
+                return false;
+            }
+            let (Some(source_position), Some(target_position)) = (
+                actor_position(ctx, active.owner),
+                actor_position(ctx, effect.target),
+            ) else {
+                return false;
+            };
+            actor_distance_sq(source_position, target_position)
+                .is_some_and(|distance_sq| distance_sq <= radius * radius)
+        })
+}
+
 pub(crate) fn active_emanation_for_owner(
     ctx: &ReducerContext,
     owner: Identity,
@@ -3291,6 +3347,42 @@ pub(crate) fn decode_status_dispel_types(value: &str) -> Vec<StatusDispelType> {
         .filter(|part| !part.is_empty())
         .filter_map(StatusDispelType::from_wire)
         .collect()
+}
+
+pub(crate) fn status_matches_removal_filter(
+    ctx: &ReducerContext,
+    effect: &StatusEffect,
+    polarity: Option<StatusPolarity>,
+    dispel_types: &[StatusDispelType],
+) -> bool {
+    status_matches_removal_filter_values(
+        effect.polarity.as_str(),
+        effect.dispel_types.as_str(),
+        polarity,
+        dispel_types,
+        status_is_projected_by_active_radial_effect(ctx, effect),
+    )
+}
+
+fn status_matches_removal_filter_values(
+    effect_polarity: &str,
+    encoded_effect_dispel_types: &str,
+    polarity: Option<StatusPolarity>,
+    filter_dispel_types: &[StatusDispelType],
+    is_projected_by_active_radial_effect: bool,
+) -> bool {
+    if is_projected_by_active_radial_effect
+        || polarity.is_some_and(|polarity| effect_polarity != polarity.as_str())
+    {
+        return false;
+    }
+    if filter_dispel_types.is_empty() {
+        return true;
+    }
+    let effect_dispel_types = decode_status_dispel_types(encoded_effect_dispel_types);
+    filter_dispel_types
+        .iter()
+        .any(|filter_type| effect_dispel_types.contains(filter_type))
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, serde::Serialize)]
@@ -6368,10 +6460,10 @@ mod tests {
         event_prune_cutoff_micros, knockback_stagger_duration, new_status_effect,
         resolve_effect_amount_from_roll, resolve_temporary_hitpoint_absorb,
         resolved_shove_tunables, stacked_slow_pct, stagger_shove_tunables, status_has_dispel_type,
-        AuthoredStatusPayload, DamageDelivery, EffectPacket, MovementModifiers, StackPolicy,
-        StatusDispelType, StatusEffect, StatusEffectKind, StatusPayload, StatusPolarity,
-        StatusRuntimeView, TemporaryCombatModifiers, BLOODLUST_PASSIVE_ID,
-        COMBAT_PROJECTILE_DEFINITIONS, PLAYER_EVENT_RETENTION,
+        status_matches_removal_filter_values, AuthoredStatusPayload, DamageDelivery, EffectPacket,
+        MovementModifiers, StackPolicy, StatusDispelType, StatusEffect, StatusEffectKind,
+        StatusPayload, StatusPolarity, StatusRuntimeView, TemporaryCombatModifiers,
+        BLOODLUST_PASSIVE_ID, COMBAT_PROJECTILE_DEFINITIONS, PLAYER_EVENT_RETENTION,
     };
     use crate::movement::FIXED_TICK_MILLIS;
     use crate::relations::TargetAudience;
@@ -6455,6 +6547,35 @@ mod tests {
 
         assert!(status_has_dispel_type(&effect, StatusDispelType::Bleed));
         assert!(!status_has_dispel_type(&effect, StatusDispelType::Magic));
+    }
+
+    #[test]
+    fn broad_debuff_removal_matches_untyped_independent_debuffs() {
+        assert!(status_matches_removal_filter_values(
+            "DEBUFF",
+            "",
+            Some(StatusPolarity::Debuff),
+            &[],
+            false,
+        ));
+        assert!(!status_matches_removal_filter_values(
+            "BUFF",
+            "",
+            Some(StatusPolarity::Debuff),
+            &[],
+            false,
+        ));
+    }
+
+    #[test]
+    fn broad_debuff_removal_excludes_active_radial_projections() {
+        assert!(!status_matches_removal_filter_values(
+            "DEBUFF",
+            "MAGIC|POISON",
+            Some(StatusPolarity::Debuff),
+            &[],
+            true,
+        ));
     }
 
     #[test]
