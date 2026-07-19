@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using Arena.Combat;
 using Arena.Presentation;
 using Arena.Presentation.VFX;
@@ -260,6 +261,9 @@ namespace Arena.Editor
 
                 ValidateSpellCueHandAnchors(catalog, errors, abilityId, actionId, animationSet, entry);
 
+                if (archetype == SpellAnimationArchetype.Instant && entry.PlaysReleasePresentation)
+                    ValidateInstantCastStartupTrim(errors, abilityId, actionId, animationSet, entry);
+
                 int castTimeMs = ability.gameplay.cast_time_ms;
                 if (castTimeMs <= 0)
                     continue;
@@ -420,6 +424,52 @@ namespace Arena.Editor
 
             errors.Add(
                 $"spell ability '{abilityId}' action '{actionId}' {stance} release offset in CombatAnimationSet '{animationSet.name}' is {releaseOffsetSeconds:0.000}s, but gameplay.cast_time_ms is {castSeconds:0.000}s. The release offset must fit inside the cast time. Tolerance is {ReleaseTimingToleranceSeconds:0.000}s.");
+        }
+
+        private static void ValidateInstantCastStartupTrim(
+            List<string> errors,
+            string abilityId,
+            string actionId,
+            CombatAnimationSet animationSet,
+            WeaponSpellAnimationEntry entry)
+        {
+            var clips = new List<(AnimationClip Clip, string Label)>();
+            AddUniqueClip(clips, entry.ground, "ground");
+            AddUniqueClip(clips, entry.air, "air");
+            foreach ((AnimationClip clip, string label) in clips)
+            {
+                AnimationEvent[] trimEvents = clip.events
+                    .Where(animationEvent => string.Equals(
+                        animationEvent.functionName,
+                        CombatAnimationEvents.OnInstantCastStart,
+                        StringComparison.Ordinal))
+                    .OrderBy(animationEvent => animationEvent.time)
+                    .ToArray();
+                if (trimEvents.Length == 0)
+                    continue;
+
+                string context =
+                    $"instant spell ability '{abilityId}' action '{actionId}' {label} release clip '{ClipLabel(clip)}' in CombatAnimationSet '{animationSet.name}'";
+                if (trimEvents.Length > 1)
+                {
+                    errors.Add(
+                        $"{context} has {trimEvents.Length} {CombatAnimationEvents.OnInstantCastStart} events; author exactly one startup marker.");
+                }
+
+                if (!TryGetEventTime(clip, CombatAnimationEvents.OnReleaseFrame, out float releaseOffsetSeconds))
+                {
+                    errors.Add(
+                        $"{context} uses {CombatAnimationEvents.OnInstantCastStart} but is missing required event {CombatAnimationEvents.OnReleaseFrame}.");
+                    continue;
+                }
+
+                float trimSeconds = trimEvents[0].time;
+                if (trimSeconds > releaseOffsetSeconds + 0.0001f)
+                {
+                    errors.Add(
+                        $"{context} starts at {trimSeconds:0.000}s, after {CombatAnimationEvents.OnReleaseFrame} at {releaseOffsetSeconds:0.000}s. Instant startup trim must not skip the visible release pose.");
+                }
+            }
         }
 
         private static void ValidateGreatswordCombatAnimationEvents(List<string> errors)

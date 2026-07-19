@@ -75,6 +75,24 @@ namespace Arena.Presentation
         }
 
         /// <summary>
+        /// Runtime playback overload that also reports whether authoritative synced gameplay confirms
+        /// the resolved spell is Instant. Animation resolution retains its existing fallback behavior;
+        /// the confirmation fails closed so missing gameplay data can only disable startup trim.
+        /// </summary>
+        public static bool TryResolve(
+            CombatAnimationSet? set,
+            string spellId,
+            out WeaponSpellAnimationEntry entry,
+            out bool confirmedInstant)
+        {
+            bool resolved = TryResolve(set, spellId, out entry);
+            confirmedInstant = resolved
+                && TryDeriveSyncedArchetype(spellId, out SpellAnimationArchetype archetype)
+                && archetype == SpellAnimationArchetype.Instant;
+            return resolved;
+        }
+
+        /// <summary>
         /// Authoring/offline overload. The caller supplies the archetype derived from the authored
         /// catalog so validation never guesses Instant merely because no runtime connection exists.
         /// </summary>
@@ -266,6 +284,24 @@ namespace Arena.Presentation
             }
 
             archetype = SpellAnimationArchetypes.Derive(def);
+            return true;
+        }
+
+        private static bool TryDeriveSyncedArchetype(
+            string spellId,
+            out SpellAnimationArchetype archetype)
+        {
+            archetype = default;
+            DbConnection? conn = NetworkManager.Instance?.Conn;
+            if (conn == null)
+                return false;
+
+            string normalizedSpellId = WireIdentifier.Normalize(spellId);
+            SpellDefinition? definition = conn.Db.SpellDefinition.Kind.Find(normalizedSpellId);
+            if (definition == null)
+                return false;
+
+            archetype = SpellAnimationArchetypes.Derive(definition);
             return true;
         }
 

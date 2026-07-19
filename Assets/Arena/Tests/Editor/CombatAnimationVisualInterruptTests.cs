@@ -811,6 +811,115 @@ namespace Arena.Tests.Editor
             }
         }
 
+        [Test]
+        public void WeaponSpellAnimationEntry_InstantStartupTrimRequiresConfirmationAndStopsAtRelease()
+        {
+            Type spellEntryType = RequireRuntimeType("Arena.Presentation.WeaponSpellAnimationEntry");
+            AnimationClip clip = CreateOneSecondClip();
+            try
+            {
+                object entry = Activator.CreateInstance(spellEntryType)!;
+                RequireField(spellEntryType, "ground").SetValue(entry, clip);
+                MethodInfo resolver = RequireMethod(
+                    spellEntryType,
+                    "ResolveInstantCastStartupTrimSeconds",
+                    typeof(bool),
+                    typeof(bool));
+
+                SetClipEvents(
+                    clip,
+                    ("OnInstantCastStart", 0.2f),
+                    ("OnReleaseFrame", 0.4f));
+
+                Assert.That(
+                    (float)resolver.Invoke(entry, new object[] { true, true })!,
+                    Is.EqualTo(0.2f).Within(0.001f),
+                    "confirmed Instant playback should use the clip-authored marker");
+                Assert.That(
+                    (float)resolver.Invoke(entry, new object[] { true, false })!,
+                    Is.Zero,
+                    "a Charged/Channel spell sharing the same clip must retain its full opening");
+
+                SetClipEvents(
+                    clip,
+                    ("OnReleaseFrame", 0.4f),
+                    ("OnInstantCastStart", 0.65f));
+                Assert.That(
+                    (float)resolver.Invoke(entry, new object[] { true, true })!,
+                    Is.EqualTo(0.4f).Within(0.001f),
+                    "runtime must never trim past the visible release pose");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(clip);
+            }
+        }
+
+        [Test]
+        public void WeaponSpellAnimationEntry_PropHandoffUsesRemainingReleaseDelay()
+        {
+            Type spellEntryType = RequireRuntimeType("Arena.Presentation.WeaponSpellAnimationEntry");
+            AnimationClip clip = CreateOneSecondClip();
+            try
+            {
+                object entry = Activator.CreateInstance(spellEntryType)!;
+                RequireField(spellEntryType, "ground").SetValue(entry, clip);
+                SetClipEvents(clip, ("OnReleaseFrame", 0.4f));
+                MethodInfo resolver = RequireMethod(
+                    spellEntryType,
+                    "ResolveReleaseDelayAfterPlaybackStartSeconds",
+                    typeof(bool),
+                    typeof(float));
+
+                Assert.That(
+                    (float)resolver.Invoke(entry, new object[] { true, 0.15f })!,
+                    Is.EqualTo(0.25f).Within(0.001f));
+                Assert.That(
+                    (float)resolver.Invoke(entry, new object[] { true, 0.5f })!,
+                    Is.Zero,
+                    "catch-up at or beyond release must hand the prop off immediately");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(clip);
+            }
+        }
+
+        [Test]
+        public void CombatAnimationRemoteTiming_InstantTrimAndCatchupRemainBeforeRelease()
+        {
+            ResetServerClock();
+            try
+            {
+                long clientNowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                RecordServerClockReducerSample(
+                    clientNowMs - 10L,
+                    clientNowMs - 5L,
+                    clientNowMs);
+                object request = BuildAuthoritativeCombatAnimationRequest(
+                    "FIREBALL",
+                    "Spell",
+                    GetServerNowMs() - 500L);
+
+                (bool resolved, float normalizedStart, float appliedCatchupSeconds) =
+                    ResolveRemoteStartNormalizedTime(
+                        request,
+                        isLocalPlayer: false,
+                        timingReferenceLengthSeconds: 1f,
+                        playedClipLengthSeconds: 1f,
+                        startupTrimSeconds: 0.1f,
+                        firstHitWindowSeconds: 0.15f);
+
+                Assert.That(resolved, Is.True);
+                Assert.That(appliedCatchupSeconds, Is.EqualTo(0.1f).Within(0.001f));
+                Assert.That(normalizedStart, Is.EqualTo(0.2f).Within(0.001f));
+            }
+            finally
+            {
+                ResetServerClock();
+            }
+        }
+
         private static object MakeStrikeCombat(string id, string comboFrom)
         {
             Type combatType = RequireRuntimeType("Arena.Presentation.WeaponStrikeCombatAuthoring");
@@ -991,7 +1100,8 @@ namespace Arena.Tests.Editor
                 typeof(string),
                 typeof(Vector3?),
                 typeof(string),
-                typeof(string));
+                typeof(string),
+                typeof(bool));
 
             return method.Invoke(
                 null,
@@ -1004,6 +1114,7 @@ namespace Arena.Tests.Editor
                     null,
                     null,
                     null,
+                    false,
                 })!;
         }
 

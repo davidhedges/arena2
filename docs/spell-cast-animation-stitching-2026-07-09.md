@@ -63,7 +63,7 @@ projectile + VFX dispatch synchronously on press).
 
 ---
 
-## 3. It maps onto today's entry shape with **zero runtime change**
+## 3. It maps onto today's entry shape without changing stitch selection
 
 The runtime already plays held casts from `SpellCastHoldProfile { enter, idleLoop }` and the release
 from `ground`/`air` (`CombatActionPlaybackController`, `SpellCastPresentationController`,
@@ -76,8 +76,13 @@ from `ground`/`air` (`CombatActionPlaybackController`, `SpellCastPresentationCon
 | Charged | `{Base}{Hand} - Cast` | `{Base}{Hand}` | `{Base}{Hand} - Load` |
 
 Release timing keeps coming from the release clip's `OnReleaseFrame`; enter→loop hand-off from the
-enter clip's `OnEnterComplete` — both already stamped/read today. **Nothing in the animator, the
-presentation controller, or the release scheduler changes.**
+enter clip's `OnEnterComplete` — both already stamped/read today. An optional
+`OnInstantCastStart` event on a release clip marks the first frame played by Instant spells. Runtime
+applies that offset only when the synced `SpellDefinition` confirms the gameplay archetype is
+Instant, after explicit-or-composed resolution has selected the clip. Charged and Channel spells
+therefore keep the full opening even when they share that clip, and the resolver's enter/loop/release
+stitch selection remains unchanged. The marker is clamped to `OnReleaseFrame` so it cannot skip the
+visible release pose.
 
 ---
 

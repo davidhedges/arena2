@@ -989,9 +989,11 @@ namespace Arena.Presentation
             string spellKind,
             bool grounded,
             int bankSlot,
-            out WeaponSpellAnimationEntry spellEntry)
+            out WeaponSpellAnimationEntry spellEntry,
+            out bool confirmedInstant)
         {
             spellEntry = default;
+            confirmedInstant = false;
             if (overrideController == null || animationSet == null)
             {
                 Debug.LogWarning(
@@ -999,7 +1001,11 @@ namespace Arena.Presentation
                 return false;
             }
 
-            if (!SpellCastAnimationResolver.TryResolve(animationSet, spellKind, out spellEntry))
+            if (!SpellCastAnimationResolver.TryResolve(
+                    animationSet,
+                    spellKind,
+                    out spellEntry,
+                    out confirmedInstant))
             {
                 if (SpellCastAnimationResolver.TryDescribeMappedResolutionFailure(animationSet, spellKind, out string reason))
                     WarnSpellAnimationResolutionFailure(animationSet, spellKind, reason);

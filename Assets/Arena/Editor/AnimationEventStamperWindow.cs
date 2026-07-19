@@ -365,6 +365,7 @@ namespace Arena.Editor
                 DrawStampButtons();
                 EditorGUILayout.Space(8f);
                 DrawCustomEventStamp();
+                DrawInstantCastStartupTrim();
                 DrawHitWindowSynchronization();
                 DrawExistingEvents();
                 EditorGUILayout.Space(8f);
@@ -857,6 +858,175 @@ namespace Arena.Editor
                     _hitWindowSyncStatus,
                     _hitWindowSyncSucceeded ? MessageType.Info : MessageType.Error);
             }
+        }
+
+        private void DrawInstantCastStartupTrim()
+        {
+            CombatClipRole role = ResolveActiveRole();
+            AnimationEvent[] clipEvents = AnimationUtility.GetAnimationEvents(_clip!);
+            AnimationEvent[] trimEvents = clipEvents
+                .Where(animationEvent => string.Equals(
+                    animationEvent.functionName,
+                    CombatAnimationEvents.OnInstantCastStart,
+                    StringComparison.Ordinal))
+                .OrderBy(animationEvent => animationEvent.time)
+                .ToArray();
+            if (role != CombatClipRole.SpellRelease && trimEvents.Length == 0)
+                return;
+
+            EditorGUILayout.Space(8f);
+            using EditorGUILayout.VerticalScope section = new(EditorStyles.helpBox);
+            EditorGUILayout.LabelField("Instant-cast startup", EditorStyles.boldLabel);
+            EditorGUILayout.HelpBox(
+                $"{CombatAnimationEvents.OnInstantCastStart} skips the selected clip's opening only when synced gameplay confirms the spell is Instant. " +
+                "Charged and channel releases that share this clip still start at the beginning.",
+                MessageType.Info);
+
+            AnimationEvent[] releaseEvents = clipEvents
+                .Where(animationEvent => string.Equals(
+                    animationEvent.functionName,
+                    CombatAnimationEvents.OnReleaseFrame,
+                    StringComparison.Ordinal))
+                .OrderBy(animationEvent => animationEvent.time)
+                .ToArray();
+            bool hasReleaseEvent = releaseEvents.Length > 0;
+            float releaseSeconds = hasReleaseEvent ? releaseEvents[0].time : 0f;
+            float authoredTrimSeconds = trimEvents.Length > 0 ? trimEvents[0].time : 0f;
+
+            if (trimEvents.Length > 1)
+            {
+                EditorGUILayout.HelpBox(
+                    $"This clip has {trimEvents.Length} {CombatAnimationEvents.OnInstantCastStart} events. Setting a start here will replace them with one marker.",
+                    MessageType.Warning);
+            }
+
+            if (!hasReleaseEvent)
+            {
+                EditorGUILayout.HelpBox(
+                    $"Stamp {CombatAnimationEvents.OnReleaseFrame} at the visible hand-release pose before setting instant startup trim.",
+                    MessageType.Warning);
+            }
+            else
+            {
+                EditorGUI.BeginChangeCheck();
+                float enteredTrimSeconds = EditorGUILayout.DelayedFloatField(
+                    new GUIContent(
+                        "Startup trim (seconds)",
+                        $"The first frame played by confirmed instant casts. Limited to {CombatAnimationEvents.OnReleaseFrame}."),
+                    authoredTrimSeconds);
+                if (EditorGUI.EndChangeCheck())
+                    ApplyInstantCastStartupTrim(enteredTrimSeconds, releaseSeconds);
+
+                float resolvedTrimSeconds = Mathf.Clamp(authoredTrimSeconds, 0f, releaseSeconds);
+                EditorGUILayout.LabelField(
+                    $"Instant playback starts at {resolvedTrimSeconds:0.000}s; " +
+                    $"the visible release follows after {Mathf.Max(0f, releaseSeconds - resolvedTrimSeconds):0.000}s.",
+                    EditorStyles.wordWrappedMiniLabel);
+
+                bool playheadCanBeStartup = _time <= releaseSeconds + 0.0001f;
+                if (position.width < 560f)
+                {
+                    using (new EditorGUI.DisabledScope(!playheadCanBeStartup))
+                    {
+                        if (GUILayout.Button($"Set Start Here ({_time:0.000}s)"))
+                            ApplyInstantCastStartupTrim(_time, releaseSeconds);
+                    }
+                    if (GUILayout.Button($"Trim to Release ({releaseSeconds:0.000}s)"))
+                        ApplyInstantCastStartupTrim(releaseSeconds, releaseSeconds);
+                    using (new EditorGUI.DisabledScope(trimEvents.Length == 0))
+                    {
+                        if (GUILayout.Button("Remove Trim"))
+                            RemoveInstantCastStartupTrim();
+                    }
+                }
+                else
+                {
+                    using (new EditorGUILayout.HorizontalScope())
+                    {
+                        using (new EditorGUI.DisabledScope(!playheadCanBeStartup))
+                        {
+                            if (GUILayout.Button($"Set Start Here ({_time:0.000}s)"))
+                                ApplyInstantCastStartupTrim(_time, releaseSeconds);
+                        }
+                        if (GUILayout.Button($"Trim to Release ({releaseSeconds:0.000}s)"))
+                            ApplyInstantCastStartupTrim(releaseSeconds, releaseSeconds);
+                        using (new EditorGUI.DisabledScope(trimEvents.Length == 0))
+                        {
+                            if (GUILayout.Button("Remove Trim", GUILayout.Width(90f)))
+                                RemoveInstantCastStartupTrim();
+                        }
+                    }
+                }
+
+                if (!playheadCanBeStartup)
+                {
+                    EditorGUILayout.LabelField(
+                        $"Scrub to or before {CombatAnimationEvents.OnReleaseFrame} to use Set Start Here.",
+                        EditorStyles.wordWrappedMiniLabel);
+                }
+            }
+
+            if (!hasReleaseEvent && trimEvents.Length > 0 && GUILayout.Button("Remove Trim"))
+                RemoveInstantCastStartupTrim();
+        }
+
+        private void ApplyInstantCastStartupTrim(float requestedTrimSeconds, float releaseSeconds)
+        {
+            if (_clip == null)
+                return;
+
+            float resolvedTrimSeconds = Mathf.Clamp(
+                requestedTrimSeconds,
+                0f,
+                Mathf.Min(Mathf.Max(0f, _clip.length), Mathf.Max(0f, releaseSeconds)));
+            if (resolvedTrimSeconds <= 0.0001f)
+            {
+                RemoveInstantCastStartupTrim();
+                return;
+            }
+
+            Undo.RegisterCompleteObjectUndo(_clip, "Set instant-cast startup trim");
+            List<AnimationEvent> events = AnimationUtility.GetAnimationEvents(_clip)
+                .Where(animationEvent => !string.Equals(
+                    animationEvent.functionName,
+                    CombatAnimationEvents.OnInstantCastStart,
+                    StringComparison.Ordinal))
+                .ToList();
+            events.Add(new AnimationEvent
+            {
+                functionName = CombatAnimationEvents.OnInstantCastStart,
+                time = resolvedTrimSeconds,
+            });
+            AnimationUtility.SetAnimationEvents(
+                _clip,
+                events.OrderBy(animationEvent => animationEvent.time).ToArray());
+            EditorUtility.SetDirty(_clip);
+            AssetDatabase.SaveAssetIfDirty(_clip);
+            ShowNotification(new GUIContent($"Instant casts now start at {resolvedTrimSeconds:0.000}s."));
+            Repaint();
+        }
+
+        private void RemoveInstantCastStartupTrim()
+        {
+            if (_clip == null)
+                return;
+
+            AnimationEvent[] existing = AnimationUtility.GetAnimationEvents(_clip);
+            AnimationEvent[] remaining = existing
+                .Where(animationEvent => !string.Equals(
+                    animationEvent.functionName,
+                    CombatAnimationEvents.OnInstantCastStart,
+                    StringComparison.Ordinal))
+                .ToArray();
+            if (remaining.Length == existing.Length)
+                return;
+
+            Undo.RegisterCompleteObjectUndo(_clip, "Remove instant-cast startup trim");
+            AnimationUtility.SetAnimationEvents(_clip, remaining);
+            EditorUtility.SetDirty(_clip);
+            AssetDatabase.SaveAssetIfDirty(_clip);
+            ShowNotification(new GUIContent("Instant-cast startup trim removed."));
+            Repaint();
         }
 
         private static void DrawHypotheticalInputToDamageEstimate(

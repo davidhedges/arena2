@@ -10,6 +10,7 @@ namespace Arena.Presentation
     public static class CombatAnimationEvents
     {
         public const string OnReleaseFrame = "OnReleaseFrame";
+        public const string OnInstantCastStart = "OnInstantCastStart";
         public const string OnEnterComplete = "OnEnterComplete";
         public const string OnHoldFadeStart = "OnHoldFadeStart";
         public const string OnHoldFadeEnd = "OnHoldFadeEnd";
@@ -652,6 +653,49 @@ namespace Arena.Presentation
                 CombatAnimationEvents.OnReleaseFrame,
                 fallbackSeconds: 0f,
                 context: $"spell '{SpellIdOrEmpty}' release alignment");
+        }
+
+        /// <summary>
+        /// Resolves the optional clip-authored start offset for a gameplay-confirmed instant cast.
+        /// Charged/channel releases deliberately return zero even when they share a release clip
+        /// carrying the marker. The marker is clamped to OnReleaseFrame so playback never skips the
+        /// visible hand-release pose.
+        /// </summary>
+        public float ResolveInstantCastStartupTrimSeconds(bool grounded, bool confirmedInstant)
+        {
+            if (!confirmedInstant)
+                return 0f;
+
+            AnimationClip? clip = ResolveClip(grounded);
+            if (clip == null
+                || !CombatAnimationEvents.TryGetEventTime(
+                    clip,
+                    CombatAnimationEvents.OnInstantCastStart,
+                    out float authoredTrimSeconds))
+            {
+                return 0f;
+            }
+
+            float releaseOffsetSeconds = ResolveReleaseOffsetSeconds(grounded);
+            return Mathf.Clamp(
+                authoredTrimSeconds,
+                0f,
+                Mathf.Min(Mathf.Max(0f, clip.length), releaseOffsetSeconds));
+        }
+
+        /// <summary>
+        /// Resolves how long an animation-driven prop remains attached after playback begins.
+        /// Startup trim and remote catch-up both advance the playback start, so neither should
+        /// delay the handoff beyond the still-visible portion of the release gesture.
+        /// </summary>
+        public float ResolveReleaseDelayAfterPlaybackStartSeconds(
+            bool grounded,
+            float playbackStartOffsetSeconds)
+        {
+            return Mathf.Max(
+                0f,
+                ResolveReleaseOffsetSeconds(grounded)
+                - Mathf.Max(0f, playbackStartOffsetSeconds));
         }
 
         public float ResolveLowerBodyUnlockAtSeconds(bool grounded)

@@ -26,6 +26,7 @@ namespace Arena.Presentation
         }
 
         public void OnReleaseFrame() { }
+        public void OnInstantCastStart() { }
         public void OnEnterComplete() { }
         public void OnHoldFadeStart() { }
         public void OnHoldFadeEnd() { }
@@ -1427,15 +1428,32 @@ namespace Arena.Presentation
             string spellKind = request.ActionId;
             bool grounded = IsCurrentlyGrounded();
             int bankSlot = ResolveNextSpellBankSlot();
-            if (!TryBindSpellClip(spellKind, grounded, bankSlot, out WeaponSpellAnimationEntry spellEntry))
+            if (!TryBindSpellClip(
+                    spellKind,
+                    grounded,
+                    bankSlot,
+                    out WeaponSpellAnimationEntry spellEntry,
+                    out bool confirmedInstant))
                 return;
 
             AnimationClip? spellClip = spellEntry.ResolveClip(grounded);
             if (spellClip == null)
                 return;
 
-            float normalizedStart = ResolveSpellReleaseStartNormalizedTime(request, spellEntry, grounded, spellClip);
-            BeginAnimatedSpellPropHandoff(spellKind, spellEntry, grounded);
+            float normalizedStart = ResolveSpellReleaseStartNormalizedTime(
+                request,
+                spellEntry,
+                grounded,
+                spellClip,
+                confirmedInstant);
+            BeginAnimatedSpellPropHandoff(
+                spellKind,
+                spellEntry,
+                grounded,
+                // Keep legacy prop timing byte-for-byte for every other archetype.
+                confirmedInstant
+                    ? normalizedStart * Mathf.Max(0f, spellClip.length)
+                    : 0f);
 
             bool useOverlaySpellPlayback = spellEntry.ResolveUsesOverlayPlayback(
                 _latestLocomotionRawMagnitude,
@@ -1509,10 +1527,17 @@ namespace Arena.Presentation
             in CombatAnimationRequest request,
             WeaponSpellAnimationEntry spellEntry,
             bool grounded,
-            AnimationClip spellClip)
+            AnimationClip spellClip,
+            bool confirmedInstant)
         {
             float clipLengthSeconds = Mathf.Max(0f, spellClip.length);
             float authoredReleasePointSeconds = spellEntry.ResolveReleaseOffsetSeconds(grounded);
+            float startupTrimSeconds = spellEntry.ResolveInstantCastStartupTrimSeconds(
+                grounded,
+                confirmedInstant);
+            float effectiveReleasePointSeconds = Mathf.Max(
+                0f,
+                authoredReleasePointSeconds - startupTrimSeconds);
 
             // request.StartedAtMs is the scheduled release-animation start, not the
             // gameplay cast start. If the ActiveCast row arrives late or cast speed
@@ -1524,18 +1549,21 @@ namespace Arena.Presentation
                 _isLocalPlayer,
                 clipLengthSeconds,
                 clipLengthSeconds,
-                0f,
-                authoredReleasePointSeconds,
+                startupTrimSeconds,
+                effectiveReleasePointSeconds,
                 out float normalizedStart,
                 out _)
                     ? normalizedStart
-                    : 0f;
+                    : clipLengthSeconds > 0.001f
+                        ? Mathf.Clamp01(startupTrimSeconds / clipLengthSeconds)
+                        : 0f;
         }
 
         private void BeginAnimatedSpellPropHandoff(
             string spellKind,
             WeaponSpellAnimationEntry spellEntry,
-            bool grounded)
+            bool grounded,
+            float playbackStartOffsetSeconds)
         {
             if (!spellEntry.HasAnimatedPropHandoff)
                 return;
@@ -1548,7 +1576,9 @@ namespace Arena.Presentation
             _weaponAttachments.BeginTemporaryAnimatedProp(
                 spellKind,
                 spellEntry.animatedProp,
-                spellEntry.ResolveReleaseOffsetSeconds(grounded));
+                spellEntry.ResolveReleaseDelayAfterPlaybackStartSeconds(
+                    grounded,
+                    playbackStartOffsetSeconds));
         }
 
         private static int ResolveSpellActionStateHash(int bankSlot)
@@ -2048,9 +2078,17 @@ namespace Arena.Presentation
             string spellKind,
             bool grounded,
             int bankSlot,
-            out WeaponSpellAnimationEntry spellEntry)
+            out WeaponSpellAnimationEntry spellEntry,
+            out bool confirmedInstant)
         {
-            return _actionPlayback.TryBindSpellClip(_overrideController, _animationSet, spellKind, grounded, bankSlot, out spellEntry);
+            return _actionPlayback.TryBindSpellClip(
+                _overrideController,
+                _animationSet,
+                spellKind,
+                grounded,
+                bankSlot,
+                out spellEntry,
+                out confirmedInstant);
         }
 
         public void StartParry()
