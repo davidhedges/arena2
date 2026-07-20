@@ -8,7 +8,8 @@ use crate::open_world_scene::{
     ADVENTURE_ISLAND_PROFILE, DESERT_DAY_PROFILE, DOCKS_DAY_PROFILE, GIANT_SKELETON_PROFILE,
     GOLDEN_VALLEY_OVERCAST_PROFILE, GOLDEN_VALLEY_SUNNY_PROFILE, GREAT_HALL_DAY_PROFILE,
     IDOL_DAY_PROFILE, OASIS_DAY_PROFILE, OPEN_WORLD_GAMEPLAY_COLLISION_JSON,
-    OPEN_WORLD_GAMEPLAY_QUERY_COLLISION_JSON, OPEN_WORLD_SCENE_PROFILES, TEMPLE_GARDENS_PROFILE,
+    OPEN_WORLD_GAMEPLAY_QUERY_COLLISION_JSON, OPEN_WORLD_SCENE_PROFILES, RANDOM_DUNGEON_PROFILE,
+    TEMPLE_GARDENS_PROFILE,
 };
 use crate::open_world_terrain::{
     open_world_half_size_for_profile, open_world_heightfield_enabled_for_profile,
@@ -1903,6 +1904,7 @@ fn open_world_colliders(profile: &OpenWorldSceneProfile) -> &'static [Collider] 
     static GOLDEN_VALLEY_SUNNY_COLLIDERS: OnceLock<Vec<Collider>> = OnceLock::new();
     static GREAT_HALL_DAY_COLLIDERS: OnceLock<Vec<Collider>> = OnceLock::new();
     static IDOL_DAY_COLLIDERS: OnceLock<Vec<Collider>> = OnceLock::new();
+    static RANDOM_DUNGEON_COLLIDERS: OnceLock<Vec<Collider>> = OnceLock::new();
     static TEMPLE_GARDENS_COLLIDERS: OnceLock<Vec<Collider>> = OnceLock::new();
 
     if profile.scene_name == ADVENTURE_ISLAND_PROFILE.scene_name {
@@ -1935,6 +1937,10 @@ fn open_world_colliders(profile: &OpenWorldSceneProfile) -> &'static [Collider] 
             .as_slice()
     } else if profile.scene_name == IDOL_DAY_PROFILE.scene_name {
         IDOL_DAY_COLLIDERS
+            .get_or_init(|| generate_open_world_colliders(profile))
+            .as_slice()
+    } else if profile.scene_name == RANDOM_DUNGEON_PROFILE.scene_name {
+        RANDOM_DUNGEON_COLLIDERS
             .get_or_init(|| generate_open_world_colliders(profile))
             .as_slice()
     } else if profile.scene_name == TEMPLE_GARDENS_PROFILE.scene_name {
@@ -2025,6 +2031,7 @@ fn open_world_gameplay_collision_boxes(
     static GREAT_HALL_DAY_GAMEPLAY_BOXES: OnceLock<Vec<GameplayCollisionBox>> = OnceLock::new();
     static IDOL_DAY_GAMEPLAY_BOXES: OnceLock<Vec<GameplayCollisionBox>> = OnceLock::new();
     static OASIS_DAY_GAMEPLAY_BOXES: OnceLock<Vec<GameplayCollisionBox>> = OnceLock::new();
+    static RANDOM_DUNGEON_GAMEPLAY_BOXES: OnceLock<Vec<GameplayCollisionBox>> = OnceLock::new();
     static TEMPLE_GARDENS_GAMEPLAY_BOXES: OnceLock<Vec<GameplayCollisionBox>> = OnceLock::new();
 
     if profile.scene_name == OASIS_DAY_PROFILE.scene_name {
@@ -2063,6 +2070,10 @@ fn open_world_gameplay_collision_boxes(
         IDOL_DAY_GAMEPLAY_BOXES
             .get_or_init(|| load_open_world_gameplay_collision_boxes(profile))
             .as_slice()
+    } else if profile.scene_name == RANDOM_DUNGEON_PROFILE.scene_name {
+        RANDOM_DUNGEON_GAMEPLAY_BOXES
+            .get_or_init(|| load_open_world_gameplay_collision_boxes(profile))
+            .as_slice()
     } else if profile.scene_name == TEMPLE_GARDENS_PROFILE.scene_name {
         TEMPLE_GARDENS_GAMEPLAY_BOXES
             .get_or_init(|| load_open_world_gameplay_collision_boxes(profile))
@@ -2088,6 +2099,7 @@ fn open_world_gameplay_query_collision_boxes(
     static GREAT_HALL_DAY_QUERY_BOXES: OnceLock<Vec<GameplayCollisionBox>> = OnceLock::new();
     static IDOL_DAY_QUERY_BOXES: OnceLock<Vec<GameplayCollisionBox>> = OnceLock::new();
     static OASIS_DAY_QUERY_BOXES: OnceLock<Vec<GameplayCollisionBox>> = OnceLock::new();
+    static RANDOM_DUNGEON_QUERY_BOXES: OnceLock<Vec<GameplayCollisionBox>> = OnceLock::new();
     static TEMPLE_GARDENS_QUERY_BOXES: OnceLock<Vec<GameplayCollisionBox>> = OnceLock::new();
 
     if profile.scene_name == OASIS_DAY_PROFILE.scene_name {
@@ -2126,6 +2138,10 @@ fn open_world_gameplay_query_collision_boxes(
         IDOL_DAY_QUERY_BOXES
             .get_or_init(|| load_open_world_gameplay_query_collision_boxes(profile))
             .as_slice()
+    } else if profile.scene_name == RANDOM_DUNGEON_PROFILE.scene_name {
+        RANDOM_DUNGEON_QUERY_BOXES
+            .get_or_init(|| load_open_world_gameplay_query_collision_boxes(profile))
+            .as_slice()
     } else if profile.scene_name == TEMPLE_GARDENS_PROFILE.scene_name {
         TEMPLE_GARDENS_QUERY_BOXES
             .get_or_init(|| load_open_world_gameplay_query_collision_boxes(profile))
@@ -2152,6 +2168,7 @@ fn open_world_gameplay_collision_broadphase(
     static GREAT_HALL_DAY_GAMEPLAY_BROADPHASE: OnceLock<GameplayBoxBroadphase> = OnceLock::new();
     static IDOL_DAY_GAMEPLAY_BROADPHASE: OnceLock<GameplayBoxBroadphase> = OnceLock::new();
     static OASIS_DAY_GAMEPLAY_BROADPHASE: OnceLock<GameplayBoxBroadphase> = OnceLock::new();
+    static RANDOM_DUNGEON_GAMEPLAY_BROADPHASE: OnceLock<GameplayBoxBroadphase> = OnceLock::new();
     static TEMPLE_GARDENS_GAMEPLAY_BROADPHASE: OnceLock<GameplayBoxBroadphase> = OnceLock::new();
 
     if profile.scene_name == OASIS_DAY_PROFILE.scene_name {
@@ -2190,6 +2207,10 @@ fn open_world_gameplay_collision_broadphase(
         IDOL_DAY_GAMEPLAY_BROADPHASE.get_or_init(|| {
             GameplayBoxBroadphase::build(open_world_gameplay_collision_boxes(profile))
         })
+    } else if profile.scene_name == RANDOM_DUNGEON_PROFILE.scene_name {
+        RANDOM_DUNGEON_GAMEPLAY_BROADPHASE.get_or_init(|| {
+            GameplayBoxBroadphase::build(open_world_gameplay_collision_boxes(profile))
+        })
     } else if profile.scene_name == TEMPLE_GARDENS_PROFILE.scene_name {
         TEMPLE_GARDENS_GAMEPLAY_BROADPHASE.get_or_init(|| {
             GameplayBoxBroadphase::build(open_world_gameplay_collision_boxes(profile))
@@ -2215,6 +2236,7 @@ fn open_world_gameplay_query_collision_broadphase(
     static GREAT_HALL_DAY_QUERY_BROADPHASE: OnceLock<GameplayBoxBroadphase> = OnceLock::new();
     static IDOL_DAY_QUERY_BROADPHASE: OnceLock<GameplayBoxBroadphase> = OnceLock::new();
     static OASIS_DAY_QUERY_BROADPHASE: OnceLock<GameplayBoxBroadphase> = OnceLock::new();
+    static RANDOM_DUNGEON_QUERY_BROADPHASE: OnceLock<GameplayBoxBroadphase> = OnceLock::new();
     static TEMPLE_GARDENS_QUERY_BROADPHASE: OnceLock<GameplayBoxBroadphase> = OnceLock::new();
 
     if profile.scene_name == OASIS_DAY_PROFILE.scene_name {
@@ -2251,6 +2273,10 @@ fn open_world_gameplay_query_collision_broadphase(
         })
     } else if profile.scene_name == IDOL_DAY_PROFILE.scene_name {
         IDOL_DAY_QUERY_BROADPHASE.get_or_init(|| {
+            GameplayBoxBroadphase::build(open_world_gameplay_query_collision_boxes(profile))
+        })
+    } else if profile.scene_name == RANDOM_DUNGEON_PROFILE.scene_name {
+        RANDOM_DUNGEON_QUERY_BROADPHASE.get_or_init(|| {
             GameplayBoxBroadphase::build(open_world_gameplay_query_collision_boxes(profile))
         })
     } else if profile.scene_name == TEMPLE_GARDENS_PROFILE.scene_name {
@@ -4956,7 +4982,7 @@ mod tests {
     use crate::arena::{WorldRayHit, WorldRaycastRequest};
     use crate::open_world_scene::{
         DESERT_DAY_PROFILE, DOCKS_DAY_PROFILE, GIANT_SKELETON_PROFILE, GREAT_HALL_DAY_PROFILE,
-        IDOL_DAY_PROFILE, OASIS_DAY_PROFILE, TEMPLE_GARDENS_PROFILE,
+        IDOL_DAY_PROFILE, OASIS_DAY_PROFILE, RANDOM_DUNGEON_PROFILE, TEMPLE_GARDENS_PROFILE,
     };
 
     const TEST_PLAYER_RADIUS: f32 = 0.45;
@@ -6456,7 +6482,10 @@ mod tests {
     #[test]
     fn preload_world_collision_data_initializes_known_scene_indexes() {
         let summary = super::preload_world_collision_data();
-        assert_eq!(summary.scene_count, 10);
+        assert_eq!(
+            summary.scene_count as usize,
+            super::OPEN_WORLD_SCENE_PROFILES.len()
+        );
         assert!(summary.arena_gameplay_boxes > 0);
         assert!(summary.open_world_gameplay_boxes > 0);
         assert!(summary.broadphase_cells > 0);
@@ -6609,6 +6638,26 @@ mod tests {
         assert!(
             temple_y < 12.0,
             "Temple spawn resolved too high: {temple_y}"
+        );
+    }
+
+    #[test]
+    fn random_dungeon_spawn_resolves_on_baked_origin_floor() {
+        let (spawn_x, spawn_y, spawn_z) = resolve_world_spawn_position_with_layout_for_scene(
+            None,
+            false,
+            Some(RANDOM_DUNGEON_PROFILE.scene_name),
+            RANDOM_DUNGEON_PROFILE.spawn_x,
+            RANDOM_DUNGEON_PROFILE.spawn_z,
+            TEST_PLAYER_RADIUS,
+            TEST_PLAYER_HEIGHT,
+        );
+
+        assert!(spawn_x.abs() < 0.01, "Dungeon spawn moved on X: {spawn_x}");
+        assert!(spawn_z.abs() < 0.01, "Dungeon spawn moved on Z: {spawn_z}");
+        assert!(
+            spawn_y.abs() < 0.01,
+            "Dungeon spawn missed origin floor: {spawn_y}"
         );
     }
 

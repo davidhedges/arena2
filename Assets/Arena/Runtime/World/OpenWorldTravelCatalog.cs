@@ -21,6 +21,7 @@ namespace Arena.World
 
         private const string PreferredScenePlayerPrefsKey = "arena.open_world.preferred_scene";
         public const string DefaultSceneName = "Oasis_Day";
+        public const string RandomDungeonSceneName = "RandomDungeon";
 
         private static readonly Destination[] Destinations =
         {
@@ -33,6 +34,7 @@ namespace Arena.World
             new("Great_Hall_Day", "Great Hall Day"),
             new("Idol_Day", "Idol Day"),
             new("Oasis_Day", "Oasis Day"),
+            new(RandomDungeonSceneName, "Random Dungeon"),
             new("Temple_Gardens", "Temple Gardens"),
         };
 

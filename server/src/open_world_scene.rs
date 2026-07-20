@@ -16,6 +16,8 @@ pub const GREAT_HALL_DAY_SCENE_NAME: &str = "Great_Hall_Day";
 pub const GREAT_HALL_DAY_DISPLAY_NAME: &str = "Great Hall Day";
 pub const IDOL_DAY_SCENE_NAME: &str = "Idol_Day";
 pub const IDOL_DAY_DISPLAY_NAME: &str = "Idol Day";
+pub const RANDOM_DUNGEON_SCENE_NAME: &str = "RandomDungeon";
+pub const RANDOM_DUNGEON_DISPLAY_NAME: &str = "Random Dungeon";
 pub const TEMPLE_GARDENS_SCENE_NAME: &str = "Temple_Gardens";
 pub const TEMPLE_GARDENS_DISPLAY_NAME: &str = "Temple Gardens";
 
@@ -29,6 +31,7 @@ pub const KNOWN_OPEN_WORLD_SCENES: &[&str] = &[
     GREAT_HALL_DAY_SCENE_NAME,
     IDOL_DAY_SCENE_NAME,
     OPEN_WORLD_SCENE_NAME,
+    RANDOM_DUNGEON_SCENE_NAME,
     TEMPLE_GARDENS_SCENE_NAME,
 ];
 
@@ -78,6 +81,10 @@ const IDOL_DAY_GAMEPLAY_COLLISION_JSON: &str =
     include_str!("world_data/idol_day.collision.shared.json");
 const IDOL_DAY_GAMEPLAY_QUERY_COLLISION_JSON: &str =
     include_str!("world_data/idol_day.query_collision.shared.json");
+const RANDOM_DUNGEON_GAMEPLAY_COLLISION_JSON: &str =
+    include_str!("world_data/random_dungeon.collision.shared.json");
+const RANDOM_DUNGEON_GAMEPLAY_QUERY_COLLISION_JSON: &str =
+    include_str!("world_data/random_dungeon.query_collision.shared.json");
 const TEMPLE_GARDENS_GAMEPLAY_COLLISION_JSON: &str =
     include_str!("world_data/temple_gardens.collision.shared.json");
 const TEMPLE_GARDENS_GAMEPLAY_QUERY_COLLISION_JSON: &str =
@@ -214,6 +221,19 @@ pub const IDOL_DAY_PROFILE: OpenWorldSceneProfile = OpenWorldSceneProfile {
     use_procedural_fallback_colliders: true,
 };
 
+pub const RANDOM_DUNGEON_PROFILE: OpenWorldSceneProfile = OpenWorldSceneProfile {
+    scene_name: RANDOM_DUNGEON_SCENE_NAME,
+    display_name: RANDOM_DUNGEON_DISPLAY_NAME,
+    spawn_x: 0.0,
+    ground_y: 0.0,
+    spawn_z: 0.0,
+    spawn_yaw: 0.0,
+    heightfield_json: NO_HEIGHTFIELD_JSON,
+    gameplay_collision_json: RANDOM_DUNGEON_GAMEPLAY_COLLISION_JSON,
+    gameplay_query_collision_json: RANDOM_DUNGEON_GAMEPLAY_QUERY_COLLISION_JSON,
+    use_procedural_fallback_colliders: false,
+};
+
 pub const TEMPLE_GARDENS_PROFILE: OpenWorldSceneProfile = OpenWorldSceneProfile {
     scene_name: TEMPLE_GARDENS_SCENE_NAME,
     display_name: TEMPLE_GARDENS_DISPLAY_NAME,
@@ -263,5 +283,6 @@ pub const OPEN_WORLD_SCENE_PROFILES: &[OpenWorldSceneProfile] = &[
     GOLDEN_VALLEY_SUNNY_PROFILE,
     GREAT_HALL_DAY_PROFILE,
     IDOL_DAY_PROFILE,
+    RANDOM_DUNGEON_PROFILE,
     TEMPLE_GARDENS_PROFILE,
 ];

@@ -1,0 +1,17 @@
+{
+  "cellSize": 4.0,
+  "activeFamilyId": "fantastic.one_sided.med",
+  "families": [
+    {
+      "id": "fantastic.one_sided.med",
+      "description": "Fantastic Dungeon Pack modular OneSided medium role table. Geometry contracts are measured from the prefabs at editor generation time.",
+      "floorPrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Floor/OneSided/P_MOD_Floor_01_O_straight_med.prefab",
+      "wallPrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/02_COMPS/Wall/OneSided/COMP_Wall_01_O_straight_med.prefab",
+      "cornerPrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/02_COMPS/Wall/OneSided/COMP_Wall_01_O_corner_med.prefab",
+      "columnPrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/02_COMPS/Column/COMP_Column_01_med.prefab",
+      "roundedConvexPrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/02_COMPS/Wall/OneSided/COMP_Wall_01_O_convex_med.prefab",
+      "roundedConcavePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/02_COMPS/Wall/OneSided/COMP_Wall_01_O_concave_med.prefab",
+      "gatewayPrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/02_COMPS/Gateway/COMP_Door_01_med_01.prefab"
+    }
+  ]
+}

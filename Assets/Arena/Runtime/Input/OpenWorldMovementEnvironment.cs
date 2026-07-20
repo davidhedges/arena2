@@ -17,6 +17,7 @@ namespace Arena.World
         private const string GoldenValleySunnySceneName = "Golden_Valley_Sunny";
         private const string GreatHallDaySceneName = "Great_Hall_Day";
         private const string IdolDaySceneName = "Idol_Day";
+        private const string RandomDungeonSceneName = OpenWorldTravelCatalog.RandomDungeonSceneName;
         private const string TempleGardensSceneName = "Temple_Gardens";
 
         private OpenWorldSceneProfile(
@@ -110,6 +111,14 @@ namespace Arena.World
             0.0f,
             new Vector3(328.09f, 70.01f, 233.949f));
 
+        public static OpenWorldSceneProfile RandomDungeon { get; } = new(
+            RandomDungeonSceneName,
+            "random_dungeon",
+            0.0f,
+            0.0f,
+            Vector3.zero,
+            useProceduralFallbackColliders: false);
+
         public static OpenWorldSceneProfile TempleGardens { get; } = new(
             TempleGardensSceneName,
             "temple_gardens",
@@ -129,6 +138,7 @@ namespace Arena.World
                 GoldenValleySunnySceneName => GoldenValleySunny,
                 GreatHallDaySceneName => GreatHallDay,
                 IdolDaySceneName => IdolDay,
+                RandomDungeonSceneName => RandomDungeon,
                 TempleGardensSceneName => TempleGardens,
                 _ => OasisDay,
             };

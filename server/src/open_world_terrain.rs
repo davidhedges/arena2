@@ -2,7 +2,7 @@ use crate::open_world_scene::{
     default_open_world_scene_profile, OpenWorldSceneProfile, ADVENTURE_ISLAND_PROFILE,
     DESERT_DAY_PROFILE, DOCKS_DAY_PROFILE, GIANT_SKELETON_PROFILE, GOLDEN_VALLEY_OVERCAST_PROFILE,
     GOLDEN_VALLEY_SUNNY_PROFILE, GREAT_HALL_DAY_PROFILE, IDOL_DAY_PROFILE, OASIS_DAY_PROFILE,
-    OPEN_WORLD_HEIGHTFIELD_JSON, TEMPLE_GARDENS_PROFILE,
+    OPEN_WORLD_HEIGHTFIELD_JSON, RANDOM_DUNGEON_PROFILE, TEMPLE_GARDENS_PROFILE,
 };
 use serde::Deserialize;
 use std::sync::OnceLock;
@@ -32,6 +32,7 @@ fn open_world_heightfield_for_profile(
     static GOLDEN_VALLEY_SUNNY_HEIGHTFIELD: OnceLock<OpenWorldHeightfieldConfig> = OnceLock::new();
     static GREAT_HALL_DAY_HEIGHTFIELD: OnceLock<OpenWorldHeightfieldConfig> = OnceLock::new();
     static IDOL_DAY_HEIGHTFIELD: OnceLock<OpenWorldHeightfieldConfig> = OnceLock::new();
+    static RANDOM_DUNGEON_HEIGHTFIELD: OnceLock<OpenWorldHeightfieldConfig> = OnceLock::new();
     static TEMPLE_GARDENS_HEIGHTFIELD: OnceLock<OpenWorldHeightfieldConfig> = OnceLock::new();
 
     let (heightfield, json) = if profile.scene_name == ADVENTURE_ISLAND_PROFILE.scene_name {
@@ -53,6 +54,8 @@ fn open_world_heightfield_for_profile(
         (&GREAT_HALL_DAY_HEIGHTFIELD, profile.heightfield_json)
     } else if profile.scene_name == IDOL_DAY_PROFILE.scene_name {
         (&IDOL_DAY_HEIGHTFIELD, profile.heightfield_json)
+    } else if profile.scene_name == RANDOM_DUNGEON_PROFILE.scene_name {
+        (&RANDOM_DUNGEON_HEIGHTFIELD, profile.heightfield_json)
     } else if profile.scene_name == TEMPLE_GARDENS_PROFILE.scene_name {
         (&TEMPLE_GARDENS_HEIGHTFIELD, profile.heightfield_json)
     } else if profile.scene_name == OASIS_DAY_PROFILE.scene_name {

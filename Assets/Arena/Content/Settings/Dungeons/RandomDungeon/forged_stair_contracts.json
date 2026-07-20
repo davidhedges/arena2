@@ -1,0 +1,3207 @@
+{
+  "_doc": "Forge output (stair-forge step 6). Same contract shape as stair_proof_contracts.json; entries stay reviewStatus \"pending\" until a human reviews the prefab in-editor and flips them to \"reviewed\", which admits them to active generation on equal cost terms with the hand-authored pool.",
+  "cellSize": 4.0,
+  "levelHeight": 1.0,
+  "contracts": [
+    {
+      "name": "forge_r2_l1_walled_straight_s2",
+      "prefab": "Assets/Arena/Content/Prefabs/Dungeons/FantasticDungeon/Stairs/Forged/forge_r2_l1_walled_straight_s2.prefab",
+      "source": "forge",
+      "reviewStatus": "reviewed",
+      "forgeStyle": {
+        "steepness": 2,
+        "flight": "P_MOD_Stairs_01_E_straight_3",
+        "sideStyle": "walled",
+        "shape": "straight",
+        "cost": 1
+      },
+      "rise": 2,
+      "laneCount": 1,
+      "runLength": 1,
+      "topology": "straight",
+      "bridgeAllowed": false,
+      "localBoundsMin": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "localBoundsSizeCells": {
+        "x": 1,
+        "z": 1
+      },
+      "footprintCells": [
+        {
+          "x": 0,
+          "z": 0
+        }
+      ],
+      "occupiedCells": [
+        {
+          "x": 0,
+          "z": 0
+        }
+      ],
+      "reservedCells": [],
+      "ports": [
+        {
+          "side": "W",
+          "level": 0,
+          "cells": [
+            {
+              "x": 0,
+              "z": 0
+            }
+          ],
+          "localEdgePosition": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 2.0
+          }
+        },
+        {
+          "side": "E",
+          "level": 2,
+          "cells": [
+            {
+              "x": 0,
+              "z": 0
+            }
+          ],
+          "localEdgePosition": {
+            "x": 4.0,
+            "y": 2.0,
+            "z": 2.0
+          }
+        }
+      ],
+      "visualAnchors": [
+        {
+          "role": "exitSurfaceRoots",
+          "sourcePrefabs": [
+            "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab"
+          ]
+        }
+      ],
+      "sourceRootPoses": [
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab",
+          "localPosition": {
+            "x": 4.0,
+            "y": 2.0,
+            "z": 0.0
+          },
+          "localYawDegrees": 0.0
+        }
+      ]
+    },
+    {
+      "name": "forge_r3_l1_walled_straight_s3",
+      "prefab": "Assets/Arena/Content/Prefabs/Dungeons/FantasticDungeon/Stairs/Forged/forge_r3_l1_walled_straight_s3.prefab",
+      "source": "forge",
+      "reviewStatus": "reviewed",
+      "forgeStyle": {
+        "steepness": 3,
+        "flight": "P_MOD_Stairs_01_E_straight_2",
+        "sideStyle": "walled",
+        "shape": "straight",
+        "cost": 1
+      },
+      "rise": 3,
+      "laneCount": 1,
+      "runLength": 1,
+      "topology": "straight",
+      "bridgeAllowed": false,
+      "localBoundsMin": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "localBoundsSizeCells": {
+        "x": 1,
+        "z": 1
+      },
+      "footprintCells": [
+        {
+          "x": 0,
+          "z": 0
+        }
+      ],
+      "occupiedCells": [
+        {
+          "x": 0,
+          "z": 0
+        }
+      ],
+      "reservedCells": [],
+      "ports": [
+        {
+          "side": "W",
+          "level": 0,
+          "cells": [
+            {
+              "x": 0,
+              "z": 0
+            }
+          ],
+          "localEdgePosition": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 2.0
+          }
+        },
+        {
+          "side": "E",
+          "level": 3,
+          "cells": [
+            {
+              "x": 0,
+              "z": 0
+            }
+          ],
+          "localEdgePosition": {
+            "x": 4.0,
+            "y": 3.0,
+            "z": 2.0
+          }
+        }
+      ],
+      "visualAnchors": [
+        {
+          "role": "exitSurfaceRoots",
+          "sourcePrefabs": [
+            "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_2.prefab"
+          ]
+        }
+      ],
+      "sourceRootPoses": [
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_2.prefab",
+          "localPosition": {
+            "x": 4.0,
+            "y": 3.0,
+            "z": 0.0
+          },
+          "localYawDegrees": 0.0
+        }
+      ]
+    },
+    {
+      "name": "forge_r3_l2_walled_straight_s3",
+      "prefab": "Assets/Arena/Content/Prefabs/Dungeons/FantasticDungeon/Stairs/Forged/forge_r3_l2_walled_straight_s3.prefab",
+      "source": "forge",
+      "reviewStatus": "reviewed",
+      "forgeStyle": {
+        "steepness": 3,
+        "flight": "P_MOD_Stairs_01_E_straight_2",
+        "sideStyle": "walled",
+        "shape": "straight",
+        "cost": 2
+      },
+      "rise": 3,
+      "laneCount": 2,
+      "runLength": 1,
+      "topology": "straight",
+      "bridgeAllowed": false,
+      "localBoundsMin": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "localBoundsSizeCells": {
+        "x": 1,
+        "z": 2
+      },
+      "footprintCells": [
+        {
+          "x": 0,
+          "z": 0
+        },
+        {
+          "x": 0,
+          "z": 1
+        }
+      ],
+      "occupiedCells": [
+        {
+          "x": 0,
+          "z": 0
+        },
+        {
+          "x": 0,
+          "z": 1
+        }
+      ],
+      "reservedCells": [],
+      "ports": [
+        {
+          "side": "W",
+          "level": 0,
+          "cells": [
+            {
+              "x": 0,
+              "z": 0
+            },
+            {
+              "x": 0,
+              "z": 1
+            }
+          ],
+          "localEdgePosition": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 4.0
+          }
+        },
+        {
+          "side": "E",
+          "level": 3,
+          "cells": [
+            {
+              "x": 0,
+              "z": 0
+            },
+            {
+              "x": 0,
+              "z": 1
+            }
+          ],
+          "localEdgePosition": {
+            "x": 4.0,
+            "y": 3.0,
+            "z": 4.0
+          }
+        }
+      ],
+      "visualAnchors": [
+        {
+          "role": "exitSurfaceRoots",
+          "sourcePrefabs": [
+            "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_2.prefab"
+          ]
+        }
+      ],
+      "sourceRootPoses": [
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_2.prefab",
+          "localPosition": {
+            "x": 4.0,
+            "y": 3.0,
+            "z": 0.0
+          },
+          "localYawDegrees": 0.0
+        },
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_2.prefab",
+          "localPosition": {
+            "x": 4.0,
+            "y": 3.0,
+            "z": 4.0
+          },
+          "localYawDegrees": 0.0
+        }
+      ]
+    },
+    {
+      "name": "forge_r3_l1_bridge_straight_s1",
+      "prefab": "Assets/Arena/Content/Prefabs/Dungeons/FantasticDungeon/Stairs/Forged/forge_r3_l1_bridge_straight_s1.prefab",
+      "source": "forge",
+      "reviewStatus": "reviewed",
+      "forgeStyle": {
+        "steepness": 1,
+        "flight": "P_MOD_Stairs_01_E_straight_4",
+        "sideStyle": "bridge",
+        "shape": "straight",
+        "cost": 4
+      },
+      "rise": 3,
+      "laneCount": 1,
+      "runLength": 2,
+      "topology": "straight",
+      "bridgeAllowed": true,
+      "localBoundsMin": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "localBoundsSizeCells": {
+        "x": 2,
+        "z": 1
+      },
+      "footprintCells": [
+        {
+          "x": 0,
+          "z": 0
+        },
+        {
+          "x": 1,
+          "z": 0
+        }
+      ],
+      "occupiedCells": [
+        {
+          "x": 0,
+          "z": 0
+        },
+        {
+          "x": 1,
+          "z": 0
+        }
+      ],
+      "reservedCells": [],
+      "ports": [
+        {
+          "side": "W",
+          "level": 0,
+          "cells": [
+            {
+              "x": 0,
+              "z": 0
+            }
+          ],
+          "localEdgePosition": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 2.0
+          }
+        },
+        {
+          "side": "E",
+          "level": 3,
+          "cells": [
+            {
+              "x": 1,
+              "z": 0
+            }
+          ],
+          "localEdgePosition": {
+            "x": 8.0,
+            "y": 3.0,
+            "z": 2.0
+          }
+        }
+      ],
+      "visualAnchors": [
+        {
+          "role": "exitSurfaceRoots",
+          "sourcePrefabs": [
+            "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab",
+            "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_4.prefab"
+          ]
+        }
+      ],
+      "sourceRootPoses": [
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_4.prefab",
+          "localPosition": {
+            "x": 2.0,
+            "y": 1.0,
+            "z": 0.0
+          },
+          "localYawDegrees": 0.0
+        },
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab",
+          "localPosition": {
+            "x": 8.0,
+            "y": 3.0,
+            "z": 0.0
+          },
+          "localYawDegrees": 0.0
+        }
+      ]
+    },
+    {
+      "name": "forge_r4_l1_walled_straight_s4",
+      "prefab": "Assets/Arena/Content/Prefabs/Dungeons/FantasticDungeon/Stairs/Forged/forge_r4_l1_walled_straight_s4.prefab",
+      "source": "forge",
+      "reviewStatus": "reviewed",
+      "forgeStyle": {
+        "steepness": 4,
+        "flight": "P_MOD_Stairs_01_E_straight_1",
+        "sideStyle": "walled",
+        "shape": "straight",
+        "cost": 1
+      },
+      "rise": 4,
+      "laneCount": 1,
+      "runLength": 1,
+      "topology": "straight",
+      "bridgeAllowed": false,
+      "localBoundsMin": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "localBoundsSizeCells": {
+        "x": 1,
+        "z": 1
+      },
+      "footprintCells": [
+        {
+          "x": 0,
+          "z": 0
+        }
+      ],
+      "occupiedCells": [
+        {
+          "x": 0,
+          "z": 0
+        }
+      ],
+      "reservedCells": [],
+      "ports": [
+        {
+          "side": "W",
+          "level": 0,
+          "cells": [
+            {
+              "x": 0,
+              "z": 0
+            }
+          ],
+          "localEdgePosition": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 2.0
+          }
+        },
+        {
+          "side": "E",
+          "level": 4,
+          "cells": [
+            {
+              "x": 0,
+              "z": 0
+            }
+          ],
+          "localEdgePosition": {
+            "x": 4.0,
+            "y": 4.0,
+            "z": 2.0
+          }
+        }
+      ],
+      "visualAnchors": [
+        {
+          "role": "exitSurfaceRoots",
+          "sourcePrefabs": [
+            "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_1.prefab"
+          ]
+        }
+      ],
+      "sourceRootPoses": [
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_1.prefab",
+          "localPosition": {
+            "x": 4.0,
+            "y": 4.0,
+            "z": 0.0
+          },
+          "localYawDegrees": 0.0
+        }
+      ]
+    },
+    {
+      "name": "forge_r4_l1_walled_turnL_s2",
+      "prefab": "Assets/Arena/Content/Prefabs/Dungeons/FantasticDungeon/Stairs/Forged/forge_r4_l1_walled_turnL_s2.prefab",
+      "source": "forge",
+      "reviewStatus": "reviewed",
+      "forgeStyle": {
+        "steepness": 2,
+        "flight": "P_MOD_Stairs_01_E_straight_3",
+        "sideStyle": "walled",
+        "shape": "turnL",
+        "cost": 8
+      },
+      "rise": 4,
+      "laneCount": 1,
+      "runLength": 1,
+      "topology": "turning",
+      "bridgeAllowed": false,
+      "localBoundsMin": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "localBoundsSizeCells": {
+        "x": 2,
+        "z": 2
+      },
+      "footprintCells": [
+        {
+          "x": 0,
+          "z": 0
+        },
+        {
+          "x": 1,
+          "z": 0
+        },
+        {
+          "x": 1,
+          "z": 1
+        }
+      ],
+      "occupiedCells": [
+        {
+          "x": 0,
+          "z": 0
+        },
+        {
+          "x": 1,
+          "z": 0
+        },
+        {
+          "x": 1,
+          "z": 1
+        }
+      ],
+      "reservedCells": [],
+      "ports": [
+        {
+          "side": "W",
+          "level": 0,
+          "cells": [
+            {
+              "x": 0,
+              "z": 0
+            }
+          ],
+          "localEdgePosition": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 2.0
+          }
+        },
+        {
+          "side": "N",
+          "level": 4,
+          "cells": [
+            {
+              "x": 1,
+              "z": 1
+            }
+          ],
+          "localEdgePosition": {
+            "x": 6.0,
+            "y": 4.0,
+            "z": 8.0
+          }
+        }
+      ],
+      "visualAnchors": [
+        {
+          "role": "exitSurfaceRoots",
+          "sourcePrefabs": [
+            "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab"
+          ]
+        }
+      ],
+      "sourceRootPoses": [
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab",
+          "localPosition": {
+            "x": 4.0,
+            "y": 2.0,
+            "z": 0.0
+          },
+          "localYawDegrees": 0.0
+        },
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab",
+          "localPosition": {
+            "x": 8.0,
+            "y": 4.0,
+            "z": 8.0
+          },
+          "localYawDegrees": 270.0
+        }
+      ]
+    },
+    {
+      "name": "forge_r5_l1_walled_straight_s1",
+      "prefab": "Assets/Arena/Content/Prefabs/Dungeons/FantasticDungeon/Stairs/Forged/forge_r5_l1_walled_straight_s1.prefab",
+      "source": "forge",
+      "reviewStatus": "reviewed",
+      "forgeStyle": {
+        "steepness": 1,
+        "flight": "P_MOD_Stairs_01_E_straight_4",
+        "sideStyle": "walled",
+        "shape": "straight",
+        "cost": 6
+      },
+      "rise": 5,
+      "laneCount": 1,
+      "runLength": 3,
+      "topology": "straight",
+      "bridgeAllowed": false,
+      "localBoundsMin": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "localBoundsSizeCells": {
+        "x": 3,
+        "z": 1
+      },
+      "footprintCells": [
+        {
+          "x": 0,
+          "z": 0
+        },
+        {
+          "x": 1,
+          "z": 0
+        },
+        {
+          "x": 2,
+          "z": 0
+        }
+      ],
+      "occupiedCells": [
+        {
+          "x": 0,
+          "z": 0
+        },
+        {
+          "x": 1,
+          "z": 0
+        },
+        {
+          "x": 2,
+          "z": 0
+        }
+      ],
+      "reservedCells": [],
+      "ports": [
+        {
+          "side": "W",
+          "level": 0,
+          "cells": [
+            {
+              "x": 0,
+              "z": 0
+            }
+          ],
+          "localEdgePosition": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 2.0
+          }
+        },
+        {
+          "side": "E",
+          "level": 5,
+          "cells": [
+            {
+              "x": 2,
+              "z": 0
+            }
+          ],
+          "localEdgePosition": {
+            "x": 12.0,
+            "y": 5.0,
+            "z": 2.0
+          }
+        }
+      ],
+      "visualAnchors": [
+        {
+          "role": "exitSurfaceRoots",
+          "sourcePrefabs": [
+            "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab",
+            "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_4.prefab"
+          ]
+        }
+      ],
+      "sourceRootPoses": [
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab",
+          "localPosition": {
+            "x": 4.0,
+            "y": 2.0,
+            "z": 0.0
+          },
+          "localYawDegrees": 0.0
+        },
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab",
+          "localPosition": {
+            "x": 10.0,
+            "y": 4.0,
+            "z": 0.0
+          },
+          "localYawDegrees": 0.0
+        },
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_4.prefab",
+          "localPosition": {
+            "x": 12.0,
+            "y": 5.0,
+            "z": 0.0
+          },
+          "localYawDegrees": 0.0
+        }
+      ]
+    },
+    {
+      "name": "forge_r5_l2_walled_straight_s1",
+      "prefab": "Assets/Arena/Content/Prefabs/Dungeons/FantasticDungeon/Stairs/Forged/forge_r5_l2_walled_straight_s1.prefab",
+      "source": "forge",
+      "reviewStatus": "reviewed",
+      "forgeStyle": {
+        "steepness": 1,
+        "flight": "P_MOD_Stairs_01_E_straight_4",
+        "sideStyle": "walled",
+        "shape": "straight",
+        "cost": 12
+      },
+      "rise": 5,
+      "laneCount": 2,
+      "runLength": 3,
+      "topology": "straight",
+      "bridgeAllowed": false,
+      "localBoundsMin": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "localBoundsSizeCells": {
+        "x": 3,
+        "z": 2
+      },
+      "footprintCells": [
+        {
+          "x": 0,
+          "z": 0
+        },
+        {
+          "x": 0,
+          "z": 1
+        },
+        {
+          "x": 1,
+          "z": 0
+        },
+        {
+          "x": 1,
+          "z": 1
+        },
+        {
+          "x": 2,
+          "z": 0
+        },
+        {
+          "x": 2,
+          "z": 1
+        }
+      ],
+      "occupiedCells": [
+        {
+          "x": 0,
+          "z": 0
+        },
+        {
+          "x": 0,
+          "z": 1
+        },
+        {
+          "x": 1,
+          "z": 0
+        },
+        {
+          "x": 1,
+          "z": 1
+        },
+        {
+          "x": 2,
+          "z": 0
+        },
+        {
+          "x": 2,
+          "z": 1
+        }
+      ],
+      "reservedCells": [],
+      "ports": [
+        {
+          "side": "W",
+          "level": 0,
+          "cells": [
+            {
+              "x": 0,
+              "z": 0
+            },
+            {
+              "x": 0,
+              "z": 1
+            }
+          ],
+          "localEdgePosition": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 4.0
+          }
+        },
+        {
+          "side": "E",
+          "level": 5,
+          "cells": [
+            {
+              "x": 2,
+              "z": 0
+            },
+            {
+              "x": 2,
+              "z": 1
+            }
+          ],
+          "localEdgePosition": {
+            "x": 12.0,
+            "y": 5.0,
+            "z": 4.0
+          }
+        }
+      ],
+      "visualAnchors": [
+        {
+          "role": "exitSurfaceRoots",
+          "sourcePrefabs": [
+            "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab",
+            "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_4.prefab"
+          ]
+        }
+      ],
+      "sourceRootPoses": [
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab",
+          "localPosition": {
+            "x": 4.0,
+            "y": 2.0,
+            "z": 0.0
+          },
+          "localYawDegrees": 0.0
+        },
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab",
+          "localPosition": {
+            "x": 4.0,
+            "y": 2.0,
+            "z": 4.0
+          },
+          "localYawDegrees": 0.0
+        },
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab",
+          "localPosition": {
+            "x": 10.0,
+            "y": 4.0,
+            "z": 0.0
+          },
+          "localYawDegrees": 0.0
+        },
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab",
+          "localPosition": {
+            "x": 10.0,
+            "y": 4.0,
+            "z": 4.0
+          },
+          "localYawDegrees": 0.0
+        },
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_4.prefab",
+          "localPosition": {
+            "x": 12.0,
+            "y": 5.0,
+            "z": 0.0
+          },
+          "localYawDegrees": 0.0
+        },
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_4.prefab",
+          "localPosition": {
+            "x": 12.0,
+            "y": 5.0,
+            "z": 4.0
+          },
+          "localYawDegrees": 0.0
+        }
+      ]
+    },
+    {
+      "name": "forge_r5_l1_bridge_turnL_s1",
+      "prefab": "Assets/Arena/Content/Prefabs/Dungeons/FantasticDungeon/Stairs/Forged/forge_r5_l1_bridge_turnL_s1.prefab",
+      "source": "forge",
+      "reviewStatus": "reviewed",
+      "forgeStyle": {
+        "steepness": 1,
+        "flight": "P_MOD_Stairs_01_E_straight_4",
+        "sideStyle": "bridge",
+        "shape": "turnL",
+        "cost": 12
+      },
+      "rise": 5,
+      "laneCount": 1,
+      "runLength": 2,
+      "topology": "turning",
+      "bridgeAllowed": true,
+      "localBoundsMin": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "localBoundsSizeCells": {
+        "x": 3,
+        "z": 2
+      },
+      "footprintCells": [
+        {
+          "x": 0,
+          "z": 0
+        },
+        {
+          "x": 1,
+          "z": 0
+        },
+        {
+          "x": 2,
+          "z": 0
+        },
+        {
+          "x": 2,
+          "z": 1
+        }
+      ],
+      "occupiedCells": [
+        {
+          "x": 0,
+          "z": 0
+        },
+        {
+          "x": 1,
+          "z": 0
+        },
+        {
+          "x": 2,
+          "z": 0
+        },
+        {
+          "x": 2,
+          "z": 1
+        }
+      ],
+      "reservedCells": [],
+      "ports": [
+        {
+          "side": "W",
+          "level": 0,
+          "cells": [
+            {
+              "x": 0,
+              "z": 0
+            }
+          ],
+          "localEdgePosition": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 2.0
+          }
+        },
+        {
+          "side": "N",
+          "level": 5,
+          "cells": [
+            {
+              "x": 2,
+              "z": 1
+            }
+          ],
+          "localEdgePosition": {
+            "x": 10.0,
+            "y": 5.0,
+            "z": 8.0
+          }
+        }
+      ],
+      "visualAnchors": [
+        {
+          "role": "exitSurfaceRoots",
+          "sourcePrefabs": [
+            "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab",
+            "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_4.prefab"
+          ]
+        }
+      ],
+      "sourceRootPoses": [
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab",
+          "localPosition": {
+            "x": 4.0,
+            "y": 2.0,
+            "z": 0.0
+          },
+          "localYawDegrees": 0.0
+        },
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_4.prefab",
+          "localPosition": {
+            "x": 6.0,
+            "y": 3.0,
+            "z": 0.0
+          },
+          "localYawDegrees": 0.0
+        },
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab",
+          "localPosition": {
+            "x": 12.0,
+            "y": 5.0,
+            "z": 8.0
+          },
+          "localYawDegrees": 270.0
+        }
+      ]
+    },
+    {
+      "name": "forge_r6_l1_walled_straight_s3",
+      "prefab": "Assets/Arena/Content/Prefabs/Dungeons/FantasticDungeon/Stairs/Forged/forge_r6_l1_walled_straight_s3.prefab",
+      "source": "forge",
+      "reviewStatus": "reviewed",
+      "forgeStyle": {
+        "steepness": 3,
+        "flight": "P_MOD_Stairs_01_E_straight_2",
+        "sideStyle": "walled",
+        "shape": "straight",
+        "cost": 2
+      },
+      "rise": 6,
+      "laneCount": 1,
+      "runLength": 2,
+      "topology": "straight",
+      "bridgeAllowed": false,
+      "localBoundsMin": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "localBoundsSizeCells": {
+        "x": 2,
+        "z": 1
+      },
+      "footprintCells": [
+        {
+          "x": 0,
+          "z": 0
+        },
+        {
+          "x": 1,
+          "z": 0
+        }
+      ],
+      "occupiedCells": [
+        {
+          "x": 0,
+          "z": 0
+        },
+        {
+          "x": 1,
+          "z": 0
+        }
+      ],
+      "reservedCells": [],
+      "ports": [
+        {
+          "side": "W",
+          "level": 0,
+          "cells": [
+            {
+              "x": 0,
+              "z": 0
+            }
+          ],
+          "localEdgePosition": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 2.0
+          }
+        },
+        {
+          "side": "E",
+          "level": 6,
+          "cells": [
+            {
+              "x": 1,
+              "z": 0
+            }
+          ],
+          "localEdgePosition": {
+            "x": 8.0,
+            "y": 6.0,
+            "z": 2.0
+          }
+        }
+      ],
+      "visualAnchors": [
+        {
+          "role": "exitSurfaceRoots",
+          "sourcePrefabs": [
+            "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_2.prefab"
+          ]
+        }
+      ],
+      "sourceRootPoses": [
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_2.prefab",
+          "localPosition": {
+            "x": 4.0,
+            "y": 3.0,
+            "z": 0.0
+          },
+          "localYawDegrees": 0.0
+        },
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_2.prefab",
+          "localPosition": {
+            "x": 8.0,
+            "y": 6.0,
+            "z": 0.0
+          },
+          "localYawDegrees": 0.0
+        }
+      ]
+    },
+    {
+      "name": "forge_r6_l1_walled_turnL_s1",
+      "prefab": "Assets/Arena/Content/Prefabs/Dungeons/FantasticDungeon/Stairs/Forged/forge_r6_l1_walled_turnL_s1.prefab",
+      "source": "forge",
+      "reviewStatus": "reviewed",
+      "forgeStyle": {
+        "steepness": 1,
+        "flight": "P_MOD_Stairs_01_E_straight_4",
+        "sideStyle": "walled",
+        "shape": "turnL",
+        "cost": 12
+      },
+      "rise": 6,
+      "laneCount": 1,
+      "runLength": 2,
+      "topology": "turning",
+      "bridgeAllowed": false,
+      "localBoundsMin": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "localBoundsSizeCells": {
+        "x": 3,
+        "z": 2
+      },
+      "footprintCells": [
+        {
+          "x": 0,
+          "z": 0
+        },
+        {
+          "x": 1,
+          "z": 0
+        },
+        {
+          "x": 2,
+          "z": 0
+        },
+        {
+          "x": 2,
+          "z": 1
+        }
+      ],
+      "occupiedCells": [
+        {
+          "x": 0,
+          "z": 0
+        },
+        {
+          "x": 1,
+          "z": 0
+        },
+        {
+          "x": 2,
+          "z": 0
+        },
+        {
+          "x": 2,
+          "z": 1
+        }
+      ],
+      "reservedCells": [],
+      "ports": [
+        {
+          "side": "W",
+          "level": 0,
+          "cells": [
+            {
+              "x": 0,
+              "z": 0
+            }
+          ],
+          "localEdgePosition": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 2.0
+          }
+        },
+        {
+          "side": "N",
+          "level": 6,
+          "cells": [
+            {
+              "x": 2,
+              "z": 1
+            }
+          ],
+          "localEdgePosition": {
+            "x": 10.0,
+            "y": 6.0,
+            "z": 8.0
+          }
+        }
+      ],
+      "visualAnchors": [
+        {
+          "role": "exitSurfaceRoots",
+          "sourcePrefabs": [
+            "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab"
+          ]
+        }
+      ],
+      "sourceRootPoses": [
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab",
+          "localPosition": {
+            "x": 4.0,
+            "y": 2.0,
+            "z": 0.0
+          },
+          "localYawDegrees": 0.0
+        },
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab",
+          "localPosition": {
+            "x": 8.0,
+            "y": 4.0,
+            "z": 0.0
+          },
+          "localYawDegrees": 0.0
+        },
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab",
+          "localPosition": {
+            "x": 12.0,
+            "y": 6.0,
+            "z": 8.0
+          },
+          "localYawDegrees": 270.0
+        }
+      ]
+    },
+    {
+      "name": "forge_r7_l1_walled_straight_s1",
+      "prefab": "Assets/Arena/Content/Prefabs/Dungeons/FantasticDungeon/Stairs/Forged/forge_r7_l1_walled_straight_s1.prefab",
+      "source": "forge",
+      "reviewStatus": "reviewed",
+      "forgeStyle": {
+        "steepness": 1,
+        "flight": "P_MOD_Stairs_01_E_straight_4",
+        "sideStyle": "walled",
+        "shape": "straight",
+        "cost": 8
+      },
+      "rise": 7,
+      "laneCount": 1,
+      "runLength": 4,
+      "topology": "straight",
+      "bridgeAllowed": false,
+      "localBoundsMin": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "localBoundsSizeCells": {
+        "x": 4,
+        "z": 1
+      },
+      "footprintCells": [
+        {
+          "x": 0,
+          "z": 0
+        },
+        {
+          "x": 1,
+          "z": 0
+        },
+        {
+          "x": 2,
+          "z": 0
+        },
+        {
+          "x": 3,
+          "z": 0
+        }
+      ],
+      "occupiedCells": [
+        {
+          "x": 0,
+          "z": 0
+        },
+        {
+          "x": 1,
+          "z": 0
+        },
+        {
+          "x": 2,
+          "z": 0
+        },
+        {
+          "x": 3,
+          "z": 0
+        }
+      ],
+      "reservedCells": [],
+      "ports": [
+        {
+          "side": "W",
+          "level": 0,
+          "cells": [
+            {
+              "x": 0,
+              "z": 0
+            }
+          ],
+          "localEdgePosition": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 2.0
+          }
+        },
+        {
+          "side": "E",
+          "level": 7,
+          "cells": [
+            {
+              "x": 3,
+              "z": 0
+            }
+          ],
+          "localEdgePosition": {
+            "x": 16.0,
+            "y": 7.0,
+            "z": 2.0
+          }
+        }
+      ],
+      "visualAnchors": [
+        {
+          "role": "exitSurfaceRoots",
+          "sourcePrefabs": [
+            "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab",
+            "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_4.prefab"
+          ]
+        }
+      ],
+      "sourceRootPoses": [
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab",
+          "localPosition": {
+            "x": 4.0,
+            "y": 2.0,
+            "z": 0.0
+          },
+          "localYawDegrees": 0.0
+        },
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_4.prefab",
+          "localPosition": {
+            "x": 6.0,
+            "y": 3.0,
+            "z": 0.0
+          },
+          "localYawDegrees": 0.0
+        },
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab",
+          "localPosition": {
+            "x": 12.0,
+            "y": 5.0,
+            "z": 0.0
+          },
+          "localYawDegrees": 0.0
+        },
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab",
+          "localPosition": {
+            "x": 16.0,
+            "y": 7.0,
+            "z": 0.0
+          },
+          "localYawDegrees": 0.0
+        }
+      ]
+    },
+    {
+      "name": "forge_r7_l1_walled_turnL_s1",
+      "prefab": "Assets/Arena/Content/Prefabs/Dungeons/FantasticDungeon/Stairs/Forged/forge_r7_l1_walled_turnL_s1.prefab",
+      "source": "forge",
+      "reviewStatus": "reviewed",
+      "forgeStyle": {
+        "steepness": 1,
+        "flight": "P_MOD_Stairs_01_E_straight_4",
+        "sideStyle": "walled",
+        "shape": "turnL",
+        "cost": 14
+      },
+      "rise": 7,
+      "laneCount": 1,
+      "runLength": 2,
+      "topology": "turning",
+      "bridgeAllowed": false,
+      "localBoundsMin": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "localBoundsSizeCells": {
+        "x": 3,
+        "z": 3
+      },
+      "footprintCells": [
+        {
+          "x": 0,
+          "z": 0
+        },
+        {
+          "x": 1,
+          "z": 0
+        },
+        {
+          "x": 2,
+          "z": 0
+        },
+        {
+          "x": 2,
+          "z": 1
+        },
+        {
+          "x": 2,
+          "z": 2
+        }
+      ],
+      "occupiedCells": [
+        {
+          "x": 0,
+          "z": 0
+        },
+        {
+          "x": 1,
+          "z": 0
+        },
+        {
+          "x": 2,
+          "z": 0
+        },
+        {
+          "x": 2,
+          "z": 1
+        },
+        {
+          "x": 2,
+          "z": 2
+        }
+      ],
+      "reservedCells": [],
+      "ports": [
+        {
+          "side": "W",
+          "level": 0,
+          "cells": [
+            {
+              "x": 0,
+              "z": 0
+            }
+          ],
+          "localEdgePosition": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 2.0
+          }
+        },
+        {
+          "side": "N",
+          "level": 7,
+          "cells": [
+            {
+              "x": 2,
+              "z": 2
+            }
+          ],
+          "localEdgePosition": {
+            "x": 10.0,
+            "y": 7.0,
+            "z": 12.0
+          }
+        }
+      ],
+      "visualAnchors": [
+        {
+          "role": "exitSurfaceRoots",
+          "sourcePrefabs": [
+            "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab",
+            "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_4.prefab"
+          ]
+        }
+      ],
+      "sourceRootPoses": [
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab",
+          "localPosition": {
+            "x": 4.0,
+            "y": 2.0,
+            "z": 0.0
+          },
+          "localYawDegrees": 0.0
+        },
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab",
+          "localPosition": {
+            "x": 8.0,
+            "y": 4.0,
+            "z": 0.0
+          },
+          "localYawDegrees": 0.0
+        },
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab",
+          "localPosition": {
+            "x": 12.0,
+            "y": 6.0,
+            "z": 8.0
+          },
+          "localYawDegrees": 270.0
+        },
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_4.prefab",
+          "localPosition": {
+            "x": 12.0,
+            "y": 7.0,
+            "z": 10.0
+          },
+          "localYawDegrees": 270.0
+        }
+      ]
+    },
+    {
+      "name": "forge_r8_l1_walled_straight_s4",
+      "prefab": "Assets/Arena/Content/Prefabs/Dungeons/FantasticDungeon/Stairs/Forged/forge_r8_l1_walled_straight_s4.prefab",
+      "source": "forge",
+      "reviewStatus": "reviewed",
+      "forgeStyle": {
+        "steepness": 4,
+        "flight": "P_MOD_Stairs_01_E_straight_1",
+        "sideStyle": "walled",
+        "shape": "straight",
+        "cost": 2
+      },
+      "rise": 8,
+      "laneCount": 1,
+      "runLength": 2,
+      "topology": "straight",
+      "bridgeAllowed": false,
+      "localBoundsMin": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "localBoundsSizeCells": {
+        "x": 2,
+        "z": 1
+      },
+      "footprintCells": [
+        {
+          "x": 0,
+          "z": 0
+        },
+        {
+          "x": 1,
+          "z": 0
+        }
+      ],
+      "occupiedCells": [
+        {
+          "x": 0,
+          "z": 0
+        },
+        {
+          "x": 1,
+          "z": 0
+        }
+      ],
+      "reservedCells": [],
+      "ports": [
+        {
+          "side": "W",
+          "level": 0,
+          "cells": [
+            {
+              "x": 0,
+              "z": 0
+            }
+          ],
+          "localEdgePosition": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 2.0
+          }
+        },
+        {
+          "side": "E",
+          "level": 8,
+          "cells": [
+            {
+              "x": 1,
+              "z": 0
+            }
+          ],
+          "localEdgePosition": {
+            "x": 8.0,
+            "y": 8.0,
+            "z": 2.0
+          }
+        }
+      ],
+      "visualAnchors": [
+        {
+          "role": "exitSurfaceRoots",
+          "sourcePrefabs": [
+            "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_1.prefab"
+          ]
+        }
+      ],
+      "sourceRootPoses": [
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_1.prefab",
+          "localPosition": {
+            "x": 4.0,
+            "y": 4.0,
+            "z": 0.0
+          },
+          "localYawDegrees": 0.0
+        },
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_1.prefab",
+          "localPosition": {
+            "x": 8.0,
+            "y": 8.0,
+            "z": 0.0
+          },
+          "localYawDegrees": 0.0
+        }
+      ]
+    },
+    {
+      "name": "forge_r8_l2_walled_straight_s2",
+      "prefab": "Assets/Arena/Content/Prefabs/Dungeons/FantasticDungeon/Stairs/Forged/forge_r8_l2_walled_straight_s2.prefab",
+      "source": "forge",
+      "reviewStatus": "reviewed",
+      "forgeStyle": {
+        "steepness": 2,
+        "flight": "P_MOD_Stairs_01_E_straight_3",
+        "sideStyle": "walled",
+        "shape": "straight",
+        "cost": 8
+      },
+      "rise": 8,
+      "laneCount": 2,
+      "runLength": 4,
+      "topology": "straight",
+      "bridgeAllowed": false,
+      "localBoundsMin": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "localBoundsSizeCells": {
+        "x": 4,
+        "z": 2
+      },
+      "footprintCells": [
+        {
+          "x": 0,
+          "z": 0
+        },
+        {
+          "x": 0,
+          "z": 1
+        },
+        {
+          "x": 1,
+          "z": 0
+        },
+        {
+          "x": 1,
+          "z": 1
+        },
+        {
+          "x": 2,
+          "z": 0
+        },
+        {
+          "x": 2,
+          "z": 1
+        },
+        {
+          "x": 3,
+          "z": 0
+        },
+        {
+          "x": 3,
+          "z": 1
+        }
+      ],
+      "occupiedCells": [
+        {
+          "x": 0,
+          "z": 0
+        },
+        {
+          "x": 0,
+          "z": 1
+        },
+        {
+          "x": 1,
+          "z": 0
+        },
+        {
+          "x": 1,
+          "z": 1
+        },
+        {
+          "x": 2,
+          "z": 0
+        },
+        {
+          "x": 2,
+          "z": 1
+        },
+        {
+          "x": 3,
+          "z": 0
+        },
+        {
+          "x": 3,
+          "z": 1
+        }
+      ],
+      "reservedCells": [],
+      "ports": [
+        {
+          "side": "W",
+          "level": 0,
+          "cells": [
+            {
+              "x": 0,
+              "z": 0
+            },
+            {
+              "x": 0,
+              "z": 1
+            }
+          ],
+          "localEdgePosition": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 4.0
+          }
+        },
+        {
+          "side": "E",
+          "level": 8,
+          "cells": [
+            {
+              "x": 3,
+              "z": 0
+            },
+            {
+              "x": 3,
+              "z": 1
+            }
+          ],
+          "localEdgePosition": {
+            "x": 16.0,
+            "y": 8.0,
+            "z": 4.0
+          }
+        }
+      ],
+      "visualAnchors": [
+        {
+          "role": "exitSurfaceRoots",
+          "sourcePrefabs": [
+            "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab"
+          ]
+        }
+      ],
+      "sourceRootPoses": [
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab",
+          "localPosition": {
+            "x": 4.0,
+            "y": 2.0,
+            "z": 0.0
+          },
+          "localYawDegrees": 0.0
+        },
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab",
+          "localPosition": {
+            "x": 4.0,
+            "y": 2.0,
+            "z": 4.0
+          },
+          "localYawDegrees": 0.0
+        },
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab",
+          "localPosition": {
+            "x": 8.0,
+            "y": 4.0,
+            "z": 0.0
+          },
+          "localYawDegrees": 0.0
+        },
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab",
+          "localPosition": {
+            "x": 8.0,
+            "y": 4.0,
+            "z": 4.0
+          },
+          "localYawDegrees": 0.0
+        },
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab",
+          "localPosition": {
+            "x": 12.0,
+            "y": 6.0,
+            "z": 0.0
+          },
+          "localYawDegrees": 0.0
+        },
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab",
+          "localPosition": {
+            "x": 12.0,
+            "y": 6.0,
+            "z": 4.0
+          },
+          "localYawDegrees": 0.0
+        },
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab",
+          "localPosition": {
+            "x": 16.0,
+            "y": 8.0,
+            "z": 0.0
+          },
+          "localYawDegrees": 0.0
+        },
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab",
+          "localPosition": {
+            "x": 16.0,
+            "y": 8.0,
+            "z": 4.0
+          },
+          "localYawDegrees": 0.0
+        }
+      ]
+    },
+    {
+      "name": "forge_r8_l1_bridge_straight_s1",
+      "prefab": "Assets/Arena/Content/Prefabs/Dungeons/FantasticDungeon/Stairs/Forged/forge_r8_l1_bridge_straight_s1.prefab",
+      "source": "forge",
+      "reviewStatus": "reviewed",
+      "forgeStyle": {
+        "steepness": 1,
+        "flight": "P_MOD_Stairs_01_E_straight_4",
+        "sideStyle": "bridge",
+        "shape": "straight",
+        "cost": 8
+      },
+      "rise": 8,
+      "laneCount": 1,
+      "runLength": 4,
+      "topology": "straight",
+      "bridgeAllowed": true,
+      "localBoundsMin": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "localBoundsSizeCells": {
+        "x": 4,
+        "z": 1
+      },
+      "footprintCells": [
+        {
+          "x": 0,
+          "z": 0
+        },
+        {
+          "x": 1,
+          "z": 0
+        },
+        {
+          "x": 2,
+          "z": 0
+        },
+        {
+          "x": 3,
+          "z": 0
+        }
+      ],
+      "occupiedCells": [
+        {
+          "x": 0,
+          "z": 0
+        },
+        {
+          "x": 1,
+          "z": 0
+        },
+        {
+          "x": 2,
+          "z": 0
+        },
+        {
+          "x": 3,
+          "z": 0
+        }
+      ],
+      "reservedCells": [],
+      "ports": [
+        {
+          "side": "W",
+          "level": 0,
+          "cells": [
+            {
+              "x": 0,
+              "z": 0
+            }
+          ],
+          "localEdgePosition": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 2.0
+          }
+        },
+        {
+          "side": "E",
+          "level": 8,
+          "cells": [
+            {
+              "x": 3,
+              "z": 0
+            }
+          ],
+          "localEdgePosition": {
+            "x": 16.0,
+            "y": 8.0,
+            "z": 2.0
+          }
+        }
+      ],
+      "visualAnchors": [
+        {
+          "role": "exitSurfaceRoots",
+          "sourcePrefabs": [
+            "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab"
+          ]
+        }
+      ],
+      "sourceRootPoses": [
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab",
+          "localPosition": {
+            "x": 4.0,
+            "y": 2.0,
+            "z": 0.0
+          },
+          "localYawDegrees": 0.0
+        },
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab",
+          "localPosition": {
+            "x": 8.0,
+            "y": 4.0,
+            "z": 0.0
+          },
+          "localYawDegrees": 0.0
+        },
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab",
+          "localPosition": {
+            "x": 12.0,
+            "y": 6.0,
+            "z": 0.0
+          },
+          "localYawDegrees": 0.0
+        },
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab",
+          "localPosition": {
+            "x": 16.0,
+            "y": 8.0,
+            "z": 0.0
+          },
+          "localYawDegrees": 0.0
+        }
+      ]
+    },
+    {
+      "name": "forge_r9_l1_walled_straight_s3",
+      "prefab": "Assets/Arena/Content/Prefabs/Dungeons/FantasticDungeon/Stairs/Forged/forge_r9_l1_walled_straight_s3.prefab",
+      "source": "forge",
+      "reviewStatus": "reviewed",
+      "forgeStyle": {
+        "steepness": 3,
+        "flight": "P_MOD_Stairs_01_E_straight_2",
+        "sideStyle": "walled",
+        "shape": "straight",
+        "cost": 3
+      },
+      "rise": 9,
+      "laneCount": 1,
+      "runLength": 3,
+      "topology": "straight",
+      "bridgeAllowed": false,
+      "localBoundsMin": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "localBoundsSizeCells": {
+        "x": 3,
+        "z": 1
+      },
+      "footprintCells": [
+        {
+          "x": 0,
+          "z": 0
+        },
+        {
+          "x": 1,
+          "z": 0
+        },
+        {
+          "x": 2,
+          "z": 0
+        }
+      ],
+      "occupiedCells": [
+        {
+          "x": 0,
+          "z": 0
+        },
+        {
+          "x": 1,
+          "z": 0
+        },
+        {
+          "x": 2,
+          "z": 0
+        }
+      ],
+      "reservedCells": [],
+      "ports": [
+        {
+          "side": "W",
+          "level": 0,
+          "cells": [
+            {
+              "x": 0,
+              "z": 0
+            }
+          ],
+          "localEdgePosition": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 2.0
+          }
+        },
+        {
+          "side": "E",
+          "level": 9,
+          "cells": [
+            {
+              "x": 2,
+              "z": 0
+            }
+          ],
+          "localEdgePosition": {
+            "x": 12.0,
+            "y": 9.0,
+            "z": 2.0
+          }
+        }
+      ],
+      "visualAnchors": [
+        {
+          "role": "exitSurfaceRoots",
+          "sourcePrefabs": [
+            "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_2.prefab"
+          ]
+        }
+      ],
+      "sourceRootPoses": [
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_2.prefab",
+          "localPosition": {
+            "x": 4.0,
+            "y": 3.0,
+            "z": 0.0
+          },
+          "localYawDegrees": 0.0
+        },
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_2.prefab",
+          "localPosition": {
+            "x": 8.0,
+            "y": 6.0,
+            "z": 0.0
+          },
+          "localYawDegrees": 0.0
+        },
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_2.prefab",
+          "localPosition": {
+            "x": 12.0,
+            "y": 9.0,
+            "z": 0.0
+          },
+          "localYawDegrees": 0.0
+        }
+      ]
+    },
+    {
+      "name": "forge_r9_l1_walled_turnL_s1",
+      "prefab": "Assets/Arena/Content/Prefabs/Dungeons/FantasticDungeon/Stairs/Forged/forge_r9_l1_walled_turnL_s1.prefab",
+      "source": "forge",
+      "reviewStatus": "reviewed",
+      "forgeStyle": {
+        "steepness": 1,
+        "flight": "P_MOD_Stairs_01_E_straight_4",
+        "sideStyle": "walled",
+        "shape": "turnL",
+        "cost": 16
+      },
+      "rise": 9,
+      "laneCount": 1,
+      "runLength": 3,
+      "topology": "turning",
+      "bridgeAllowed": false,
+      "localBoundsMin": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "localBoundsSizeCells": {
+        "x": 4,
+        "z": 3
+      },
+      "footprintCells": [
+        {
+          "x": 0,
+          "z": 0
+        },
+        {
+          "x": 1,
+          "z": 0
+        },
+        {
+          "x": 2,
+          "z": 0
+        },
+        {
+          "x": 3,
+          "z": 0
+        },
+        {
+          "x": 3,
+          "z": 1
+        },
+        {
+          "x": 3,
+          "z": 2
+        }
+      ],
+      "occupiedCells": [
+        {
+          "x": 0,
+          "z": 0
+        },
+        {
+          "x": 1,
+          "z": 0
+        },
+        {
+          "x": 2,
+          "z": 0
+        },
+        {
+          "x": 3,
+          "z": 0
+        },
+        {
+          "x": 3,
+          "z": 1
+        },
+        {
+          "x": 3,
+          "z": 2
+        }
+      ],
+      "reservedCells": [],
+      "ports": [
+        {
+          "side": "W",
+          "level": 0,
+          "cells": [
+            {
+              "x": 0,
+              "z": 0
+            }
+          ],
+          "localEdgePosition": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 2.0
+          }
+        },
+        {
+          "side": "N",
+          "level": 9,
+          "cells": [
+            {
+              "x": 3,
+              "z": 2
+            }
+          ],
+          "localEdgePosition": {
+            "x": 14.0,
+            "y": 9.0,
+            "z": 12.0
+          }
+        }
+      ],
+      "visualAnchors": [
+        {
+          "role": "exitSurfaceRoots",
+          "sourcePrefabs": [
+            "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab",
+            "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_4.prefab"
+          ]
+        }
+      ],
+      "sourceRootPoses": [
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab",
+          "localPosition": {
+            "x": 4.0,
+            "y": 2.0,
+            "z": 0.0
+          },
+          "localYawDegrees": 0.0
+        },
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab",
+          "localPosition": {
+            "x": 8.0,
+            "y": 4.0,
+            "z": 0.0
+          },
+          "localYawDegrees": 0.0
+        },
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_4.prefab",
+          "localPosition": {
+            "x": 10.0,
+            "y": 5.0,
+            "z": 0.0
+          },
+          "localYawDegrees": 0.0
+        },
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab",
+          "localPosition": {
+            "x": 16.0,
+            "y": 7.0,
+            "z": 8.0
+          },
+          "localYawDegrees": 270.0
+        },
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab",
+          "localPosition": {
+            "x": 16.0,
+            "y": 9.0,
+            "z": 12.0
+          },
+          "localYawDegrees": 270.0
+        }
+      ]
+    },
+    {
+      "name": "forge_r10_l1_walled_straight_s1",
+      "prefab": "Assets/Arena/Content/Prefabs/Dungeons/FantasticDungeon/Stairs/Forged/forge_r10_l1_walled_straight_s1.prefab",
+      "source": "forge",
+      "reviewStatus": "reviewed",
+      "forgeStyle": {
+        "steepness": 1,
+        "flight": "P_MOD_Stairs_01_E_straight_4",
+        "sideStyle": "walled",
+        "shape": "straight",
+        "cost": 10
+      },
+      "rise": 10,
+      "laneCount": 1,
+      "runLength": 5,
+      "topology": "straight",
+      "bridgeAllowed": false,
+      "localBoundsMin": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "localBoundsSizeCells": {
+        "x": 5,
+        "z": 1
+      },
+      "footprintCells": [
+        {
+          "x": 0,
+          "z": 0
+        },
+        {
+          "x": 1,
+          "z": 0
+        },
+        {
+          "x": 2,
+          "z": 0
+        },
+        {
+          "x": 3,
+          "z": 0
+        },
+        {
+          "x": 4,
+          "z": 0
+        }
+      ],
+      "occupiedCells": [
+        {
+          "x": 0,
+          "z": 0
+        },
+        {
+          "x": 1,
+          "z": 0
+        },
+        {
+          "x": 2,
+          "z": 0
+        },
+        {
+          "x": 3,
+          "z": 0
+        },
+        {
+          "x": 4,
+          "z": 0
+        }
+      ],
+      "reservedCells": [],
+      "ports": [
+        {
+          "side": "W",
+          "level": 0,
+          "cells": [
+            {
+              "x": 0,
+              "z": 0
+            }
+          ],
+          "localEdgePosition": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 2.0
+          }
+        },
+        {
+          "side": "E",
+          "level": 10,
+          "cells": [
+            {
+              "x": 4,
+              "z": 0
+            }
+          ],
+          "localEdgePosition": {
+            "x": 20.0,
+            "y": 10.0,
+            "z": 2.0
+          }
+        }
+      ],
+      "visualAnchors": [
+        {
+          "role": "exitSurfaceRoots",
+          "sourcePrefabs": [
+            "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab"
+          ]
+        }
+      ],
+      "sourceRootPoses": [
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab",
+          "localPosition": {
+            "x": 4.0,
+            "y": 2.0,
+            "z": 0.0
+          },
+          "localYawDegrees": 0.0
+        },
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab",
+          "localPosition": {
+            "x": 8.0,
+            "y": 4.0,
+            "z": 0.0
+          },
+          "localYawDegrees": 0.0
+        },
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab",
+          "localPosition": {
+            "x": 12.0,
+            "y": 6.0,
+            "z": 0.0
+          },
+          "localYawDegrees": 0.0
+        },
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab",
+          "localPosition": {
+            "x": 16.0,
+            "y": 8.0,
+            "z": 0.0
+          },
+          "localYawDegrees": 0.0
+        },
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab",
+          "localPosition": {
+            "x": 20.0,
+            "y": 10.0,
+            "z": 0.0
+          },
+          "localYawDegrees": 0.0
+        }
+      ]
+    },
+    {
+      "name": "forge_r10_l1_walled_turnL_s2",
+      "prefab": "Assets/Arena/Content/Prefabs/Dungeons/FantasticDungeon/Stairs/Forged/forge_r10_l1_walled_turnL_s2.prefab",
+      "source": "forge",
+      "reviewStatus": "reviewed",
+      "forgeStyle": {
+        "steepness": 2,
+        "flight": "P_MOD_Stairs_01_E_straight_3",
+        "sideStyle": "walled",
+        "shape": "turnL",
+        "cost": 11
+      },
+      "rise": 10,
+      "laneCount": 1,
+      "runLength": 3,
+      "topology": "turning",
+      "bridgeAllowed": false,
+      "localBoundsMin": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "localBoundsSizeCells": {
+        "x": 4,
+        "z": 3
+      },
+      "footprintCells": [
+        {
+          "x": 0,
+          "z": 0
+        },
+        {
+          "x": 1,
+          "z": 0
+        },
+        {
+          "x": 2,
+          "z": 0
+        },
+        {
+          "x": 3,
+          "z": 0
+        },
+        {
+          "x": 3,
+          "z": 1
+        },
+        {
+          "x": 3,
+          "z": 2
+        }
+      ],
+      "occupiedCells": [
+        {
+          "x": 0,
+          "z": 0
+        },
+        {
+          "x": 1,
+          "z": 0
+        },
+        {
+          "x": 2,
+          "z": 0
+        },
+        {
+          "x": 3,
+          "z": 0
+        },
+        {
+          "x": 3,
+          "z": 1
+        },
+        {
+          "x": 3,
+          "z": 2
+        }
+      ],
+      "reservedCells": [],
+      "ports": [
+        {
+          "side": "W",
+          "level": 0,
+          "cells": [
+            {
+              "x": 0,
+              "z": 0
+            }
+          ],
+          "localEdgePosition": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 2.0
+          }
+        },
+        {
+          "side": "N",
+          "level": 10,
+          "cells": [
+            {
+              "x": 3,
+              "z": 2
+            }
+          ],
+          "localEdgePosition": {
+            "x": 14.0,
+            "y": 10.0,
+            "z": 12.0
+          }
+        }
+      ],
+      "visualAnchors": [
+        {
+          "role": "exitSurfaceRoots",
+          "sourcePrefabs": [
+            "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab"
+          ]
+        }
+      ],
+      "sourceRootPoses": [
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab",
+          "localPosition": {
+            "x": 4.0,
+            "y": 2.0,
+            "z": 0.0
+          },
+          "localYawDegrees": 0.0
+        },
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab",
+          "localPosition": {
+            "x": 8.0,
+            "y": 4.0,
+            "z": 0.0
+          },
+          "localYawDegrees": 0.0
+        },
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab",
+          "localPosition": {
+            "x": 12.0,
+            "y": 6.0,
+            "z": 0.0
+          },
+          "localYawDegrees": 0.0
+        },
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab",
+          "localPosition": {
+            "x": 16.0,
+            "y": 8.0,
+            "z": 8.0
+          },
+          "localYawDegrees": 270.0
+        },
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab",
+          "localPosition": {
+            "x": 16.0,
+            "y": 10.0,
+            "z": 12.0
+          },
+          "localYawDegrees": 270.0
+        }
+      ]
+    },
+    {
+      "name": "forge_r10_l1_bridge_straight_s2",
+      "prefab": "Assets/Arena/Content/Prefabs/Dungeons/FantasticDungeon/Stairs/Forged/forge_r10_l1_bridge_straight_s2.prefab",
+      "source": "forge",
+      "reviewStatus": "reviewed",
+      "forgeStyle": {
+        "steepness": 2,
+        "flight": "P_MOD_Stairs_01_E_straight_3",
+        "sideStyle": "bridge",
+        "shape": "straight",
+        "cost": 5
+      },
+      "rise": 10,
+      "laneCount": 1,
+      "runLength": 5,
+      "topology": "straight",
+      "bridgeAllowed": true,
+      "localBoundsMin": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "localBoundsSizeCells": {
+        "x": 5,
+        "z": 1
+      },
+      "footprintCells": [
+        {
+          "x": 0,
+          "z": 0
+        },
+        {
+          "x": 1,
+          "z": 0
+        },
+        {
+          "x": 2,
+          "z": 0
+        },
+        {
+          "x": 3,
+          "z": 0
+        },
+        {
+          "x": 4,
+          "z": 0
+        }
+      ],
+      "occupiedCells": [
+        {
+          "x": 0,
+          "z": 0
+        },
+        {
+          "x": 1,
+          "z": 0
+        },
+        {
+          "x": 2,
+          "z": 0
+        },
+        {
+          "x": 3,
+          "z": 0
+        },
+        {
+          "x": 4,
+          "z": 0
+        }
+      ],
+      "reservedCells": [],
+      "ports": [
+        {
+          "side": "W",
+          "level": 0,
+          "cells": [
+            {
+              "x": 0,
+              "z": 0
+            }
+          ],
+          "localEdgePosition": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 2.0
+          }
+        },
+        {
+          "side": "E",
+          "level": 10,
+          "cells": [
+            {
+              "x": 4,
+              "z": 0
+            }
+          ],
+          "localEdgePosition": {
+            "x": 20.0,
+            "y": 10.0,
+            "z": 2.0
+          }
+        }
+      ],
+      "visualAnchors": [
+        {
+          "role": "exitSurfaceRoots",
+          "sourcePrefabs": [
+            "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab"
+          ]
+        }
+      ],
+      "sourceRootPoses": [
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab",
+          "localPosition": {
+            "x": 4.0,
+            "y": 2.0,
+            "z": 0.0
+          },
+          "localYawDegrees": 0.0
+        },
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab",
+          "localPosition": {
+            "x": 8.0,
+            "y": 4.0,
+            "z": 0.0
+          },
+          "localYawDegrees": 0.0
+        },
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab",
+          "localPosition": {
+            "x": 12.0,
+            "y": 6.0,
+            "z": 0.0
+          },
+          "localYawDegrees": 0.0
+        },
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab",
+          "localPosition": {
+            "x": 16.0,
+            "y": 8.0,
+            "z": 0.0
+          },
+          "localYawDegrees": 0.0
+        },
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab",
+          "localPosition": {
+            "x": 20.0,
+            "y": 10.0,
+            "z": 0.0
+          },
+          "localYawDegrees": 0.0
+        }
+      ]
+    },
+    {
+      "name": "forge_r2_l1_walled_curveL_s2",
+      "prefab": "Assets/Arena/Content/Prefabs/Dungeons/FantasticDungeon/Stairs/Forged/forge_r2_l1_walled_curveL_s2.prefab",
+      "source": "forge",
+      "reviewStatus": "reviewed",
+      "forgeStyle": {
+        "steepness": 2,
+        "flight": "P_MOD_Stairs_01_E_straight_3",
+        "sideStyle": "walled",
+        "shape": "curveL",
+        "cost": 4
+      },
+      "rise": 2,
+      "laneCount": 1,
+      "runLength": 1,
+      "topology": "turning",
+      "bridgeAllowed": false,
+      "localBoundsMin": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "localBoundsSizeCells": {
+        "x": 1,
+        "z": 1
+      },
+      "footprintCells": [
+        {
+          "x": 0,
+          "z": 0
+        }
+      ],
+      "occupiedCells": [
+        {
+          "x": 0,
+          "z": 0
+        }
+      ],
+      "reservedCells": [],
+      "ports": [
+        {
+          "side": "W",
+          "level": 0,
+          "cells": [
+            {
+              "x": 0,
+              "z": 0
+            }
+          ],
+          "localEdgePosition": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 2.0
+          }
+        },
+        {
+          "side": "N",
+          "level": 2,
+          "cells": [
+            {
+              "x": 0,
+              "z": 0
+            }
+          ],
+          "localEdgePosition": {
+            "x": 2.0,
+            "y": 2.0,
+            "z": 4.0
+          }
+        }
+      ],
+      "visualAnchors": [
+        {
+          "role": "exitSurfaceRoots",
+          "sourcePrefabs": [
+            "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_med_SW.prefab"
+          ]
+        }
+      ],
+      "sourceRootPoses": [
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_med_SW.prefab",
+          "localPosition": {
+            "x": 0.045,
+            "y": 2.0,
+            "z": 4.0
+          },
+          "localYawDegrees": 180.0
+        }
+      ]
+    },
+    {
+      "name": "forge_r4_l1_walled_curveL_s2",
+      "prefab": "Assets/Arena/Content/Prefabs/Dungeons/FantasticDungeon/Stairs/Forged/forge_r4_l1_walled_curveL_s2.prefab",
+      "source": "forge",
+      "reviewStatus": "reviewed",
+      "forgeStyle": {
+        "steepness": 2,
+        "flight": "P_MOD_Stairs_01_E_straight_3",
+        "sideStyle": "walled",
+        "shape": "curveL",
+        "cost": 5
+      },
+      "rise": 4,
+      "laneCount": 1,
+      "runLength": 1,
+      "topology": "turning",
+      "bridgeAllowed": false,
+      "localBoundsMin": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "localBoundsSizeCells": {
+        "x": 2,
+        "z": 1
+      },
+      "footprintCells": [
+        {
+          "x": 0,
+          "z": 0
+        },
+        {
+          "x": 1,
+          "z": 0
+        }
+      ],
+      "occupiedCells": [
+        {
+          "x": 0,
+          "z": 0
+        },
+        {
+          "x": 1,
+          "z": 0
+        }
+      ],
+      "reservedCells": [],
+      "ports": [
+        {
+          "side": "W",
+          "level": 0,
+          "cells": [
+            {
+              "x": 0,
+              "z": 0
+            }
+          ],
+          "localEdgePosition": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 2.0
+          }
+        },
+        {
+          "side": "N",
+          "level": 4,
+          "cells": [
+            {
+              "x": 1,
+              "z": 0
+            }
+          ],
+          "localEdgePosition": {
+            "x": 6.0,
+            "y": 4.0,
+            "z": 4.0
+          }
+        }
+      ],
+      "visualAnchors": [
+        {
+          "role": "exitSurfaceRoots",
+          "sourcePrefabs": [
+            "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_med_SW.prefab",
+            "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab"
+          ]
+        }
+      ],
+      "sourceRootPoses": [
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab",
+          "localPosition": {
+            "x": 4.0,
+            "y": 2.0,
+            "z": 0.0
+          },
+          "localYawDegrees": 0.0
+        },
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_med_SW.prefab",
+          "localPosition": {
+            "x": 4.045,
+            "y": 4.0,
+            "z": 4.0
+          },
+          "localYawDegrees": 180.0
+        }
+      ]
+    },
+    {
+      "name": "forge_r10_l1_walled_curveL_s2",
+      "prefab": "Assets/Arena/Content/Prefabs/Dungeons/FantasticDungeon/Stairs/Forged/forge_r10_l1_walled_curveL_s2.prefab",
+      "source": "forge",
+      "reviewStatus": "reviewed",
+      "forgeStyle": {
+        "steepness": 2,
+        "flight": "P_MOD_Stairs_01_E_straight_3",
+        "sideStyle": "walled",
+        "shape": "curveL",
+        "cost": 8
+      },
+      "rise": 10,
+      "laneCount": 1,
+      "runLength": 2,
+      "topology": "turning",
+      "bridgeAllowed": false,
+      "localBoundsMin": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "localBoundsSizeCells": {
+        "x": 3,
+        "z": 3
+      },
+      "footprintCells": [
+        {
+          "x": 0,
+          "z": 0
+        },
+        {
+          "x": 1,
+          "z": 0
+        },
+        {
+          "x": 2,
+          "z": 0
+        },
+        {
+          "x": 2,
+          "z": 1
+        },
+        {
+          "x": 2,
+          "z": 2
+        }
+      ],
+      "occupiedCells": [
+        {
+          "x": 0,
+          "z": 0
+        },
+        {
+          "x": 1,
+          "z": 0
+        },
+        {
+          "x": 2,
+          "z": 0
+        },
+        {
+          "x": 2,
+          "z": 1
+        },
+        {
+          "x": 2,
+          "z": 2
+        }
+      ],
+      "reservedCells": [],
+      "ports": [
+        {
+          "side": "W",
+          "level": 0,
+          "cells": [
+            {
+              "x": 0,
+              "z": 0
+            }
+          ],
+          "localEdgePosition": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 2.0
+          }
+        },
+        {
+          "side": "N",
+          "level": 10,
+          "cells": [
+            {
+              "x": 2,
+              "z": 2
+            }
+          ],
+          "localEdgePosition": {
+            "x": 10.0,
+            "y": 10.0,
+            "z": 12.0
+          }
+        }
+      ],
+      "visualAnchors": [
+        {
+          "role": "exitSurfaceRoots",
+          "sourcePrefabs": [
+            "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_med_SW.prefab",
+            "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab"
+          ]
+        }
+      ],
+      "sourceRootPoses": [
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab",
+          "localPosition": {
+            "x": 4.0,
+            "y": 2.0,
+            "z": 0.0
+          },
+          "localYawDegrees": 0.0
+        },
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab",
+          "localPosition": {
+            "x": 8.0,
+            "y": 4.0,
+            "z": 0.0
+          },
+          "localYawDegrees": 0.0
+        },
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_med_SW.prefab",
+          "localPosition": {
+            "x": 8.045,
+            "y": 6.0,
+            "z": 4.0
+          },
+          "localYawDegrees": 180.0
+        },
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab",
+          "localPosition": {
+            "x": 12.0,
+            "y": 8.0,
+            "z": 8.0
+          },
+          "localYawDegrees": 270.0
+        },
+        {
+          "sourcePrefab": "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/Stairs/P_MOD_Stairs_01_E_straight_3.prefab",
+          "localPosition": {
+            "x": 12.0,
+            "y": 10.0,
+            "z": 12.0
+          },
+          "localYawDegrees": 270.0
+        }
+      ]
+    }
+  ]
+}

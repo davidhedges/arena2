@@ -175,6 +175,36 @@ namespace Arena.Editor
         [MenuItem("Arena/OpenWorld/Scene Prep/4 Export Active Scene World Data", false, 400)]
         public static void ExportActiveSceneWorldData()
         {
+            ExportActiveSceneWorldData(
+                reuseMovementCollisionForQueries: false,
+                exportHeightfield: true,
+                dataKeyOverride: null);
+        }
+
+        /// <summary>
+        /// Exports authored collision for a scene whose movement and combat-query
+        /// geometry intentionally share the same collider set. Generated dungeons
+        /// use this so one baked layout is authoritative for movement, line of
+        /// sight, projectiles, and local prediction.
+        /// </summary>
+        public static void ExportActiveSceneSharedCollisionData()
+        {
+            ExportActiveSceneSharedCollisionData(dataKey: null);
+        }
+
+        public static void ExportActiveSceneSharedCollisionData(string? dataKey)
+        {
+            ExportActiveSceneWorldData(
+                reuseMovementCollisionForQueries: true,
+                exportHeightfield: false,
+                dataKeyOverride: dataKey);
+        }
+
+        private static void ExportActiveSceneWorldData(
+            bool reuseMovementCollisionForQueries,
+            bool exportHeightfield,
+            string? dataKeyOverride)
+        {
             Scene activeScene = SceneManager.GetActiveScene();
             if (!activeScene.IsValid())
             {
@@ -182,10 +212,14 @@ namespace Arena.Editor
                 return;
             }
 
-            string dataKey = BuildSceneDataKey(activeScene.name);
+            string dataKey = BuildSceneDataKey(
+                string.IsNullOrWhiteSpace(dataKeyOverride)
+                    ? activeScene.name
+                    : dataKeyOverride);
             ExportSceneGameplayCollision(activeScene, dataKey);
-            ExportSceneGameplayQueryCollision(activeScene, dataKey);
-            ExportSelectedTerrainHeightfieldInternal(activeScene, dataKey);
+            ExportSceneGameplayQueryCollision(activeScene, dataKey, reuseMovementCollisionForQueries);
+            if (exportHeightfield)
+                ExportSelectedTerrainHeightfieldInternal(activeScene, dataKey);
             AssetDatabase.Refresh();
             Debug.Log($"[GameplayCollisionExporter] Exported scene world data for '{activeScene.name}' (key '{dataKey}').");
         }
@@ -1505,12 +1539,18 @@ namespace Arena.Editor
             LogExportErrors(errors);
         }
 
-        private static void ExportSceneGameplayQueryCollision(Scene activeScene, string dataKey)
+        private static void ExportSceneGameplayQueryCollision(
+            Scene activeScene,
+            string dataKey,
+            bool reuseMovementCollisionForQueries)
         {
-            int layer = LayerMask.NameToLayer(GameplayQueryCollisionLayer);
+            string layerName = reuseMovementCollisionForQueries
+                ? GameplayCollisionLayer
+                : GameplayQueryCollisionLayer;
+            int layer = LayerMask.NameToLayer(layerName);
             if (layer < 0)
             {
-                Debug.LogError($"[GameplayCollisionExporter] Layer '{GameplayQueryCollisionLayer}' does not exist.");
+                Debug.LogError($"[GameplayCollisionExporter] Layer '{layerName}' does not exist.");
                 return;
             }
 
@@ -1521,7 +1561,7 @@ namespace Arena.Editor
                 layer,
                 warnings,
                 errors,
-                requireArenaEnvironmentVariantSource: true,
+                requireArenaEnvironmentVariantSource: !reuseMovementCollisionForQueries,
                 tiltedBoxExportMode: TiltedBoxExportMode.FullRotation);
             WriteExportLayout(SceneServerQueryCollisionPath(dataKey), SceneBundledQueryCollisionPath(dataKey), queryCollision);
 
