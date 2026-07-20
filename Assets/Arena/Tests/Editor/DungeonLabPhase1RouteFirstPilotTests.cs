@@ -18,7 +18,7 @@ namespace Arena.Tests.Editor
         public void RouteIntent_ExistsBeforeSpatialCoordinates()
         {
             Dictionary<string, string> intent = ParseSnapshot(
-                InvokeSnapshot("BuildPhase1RouteIntentOnlySnapshot", PilotSeed));
+                InvokeSnapshot("BuildRouteIntentOnlySnapshot", PilotSeed));
 
             Assert.That(intent["route.pattern"], Is.EqualTo("processional-spine"));
             Assert.That(intent["route.nodeCount"], Is.EqualTo("13"));
@@ -33,8 +33,8 @@ namespace Arena.Tests.Editor
         [Test]
         public void FixedSeed_ProducesIdenticalIntentLayoutAndTierHashes()
         {
-            string firstText = InvokeSnapshot("BuildPhase1CharacterizationSnapshot", PilotSeed);
-            string secondText = InvokeSnapshot("BuildPhase1CharacterizationSnapshot", PilotSeed);
+            string firstText = InvokeSnapshot("BuildRouteCharacterizationSnapshot", PilotSeed);
+            string secondText = InvokeSnapshot("BuildRouteCharacterizationSnapshot", PilotSeed);
             Dictionary<string, string> first = ParseSnapshot(firstText);
             Dictionary<string, string> second = ParseSnapshot(secondText);
 
@@ -90,7 +90,7 @@ namespace Arena.Tests.Editor
         [Test]
         public void Pilot_ExistingRendererProducesCollisionInputsWithoutRepair()
         {
-            string snapshot = InvokeSnapshot("BuildPhase1RendererProbeSnapshot", PilotSeed);
+            string snapshot = InvokeSnapshot("BuildRendererProbeSnapshot", PilotSeed);
             Dictionary<string, string> report = ParseSnapshot(snapshot);
 
             Assert.That(report["accepted"], Is.EqualTo("true"), snapshot);
@@ -104,7 +104,7 @@ namespace Arena.Tests.Editor
 
         private static Dictionary<string, string> PilotSnapshot()
         {
-            return ParseSnapshot(InvokeSnapshot("BuildPhase1CharacterizationSnapshot", PilotSeed));
+            return ParseSnapshot(InvokeSnapshot("BuildRouteCharacterizationSnapshot", PilotSeed));
         }
 
         private static string InvokeSnapshot(string methodName, int seed)

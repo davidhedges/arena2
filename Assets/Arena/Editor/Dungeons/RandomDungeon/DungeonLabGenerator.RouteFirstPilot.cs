@@ -1,13 +1,11 @@
 using System;
 using System.Collections.Generic;
-using UnityEditor;
 using UnityEngine;
 
 namespace DungeonLab.Editor
 {
-    // Phase 1 pilot only. The semantic graph exists before any room coordinates,
-    // then this solver compiles it directly into the existing DungeonLayout.
-    // The temporary selector is removed in Phase 2 with the old 2D builder.
+    // The semantic graph exists before any room coordinates, then this solver
+    // compiles it directly into the existing DungeonLayout.
     internal sealed partial class DungeonLabGenerator
     {
         private const string Phase1PlannerVersion = "processional-spine-v1";
@@ -23,14 +21,7 @@ namespace DungeonLab.Editor
         private const int Phase1BranchSearchExpansionLimit = 24;
         private const int Phase1RoomInflationAttemptLimit = 6;
 
-        // The production generation fork exists only at the candidate-layout
-        // assignment in TryBuildAcceptedPlan. Menu, batch, and test entry points
-        // scope this comparison state with try/finally; diagnostics also read it
-        // to label the selected builder's report. The existing builder remains
-        // the default in Phase 1.
-        private static bool phase1RouteFirstPilotSelected;
-
-        // Ephemeral diagnostic evidence for the most recent selected attempt.
+        // Ephemeral diagnostic evidence for the most recent attempt.
         // It is never consumed by generation or carried into DungeonLayout.
         private static RouteIntent phase1LastRouteIntent;
         private static Vector2Int[] phase1LastNodeCenters = Array.Empty<Vector2Int>();
@@ -42,30 +33,6 @@ namespace DungeonLab.Editor
         private static int phase1LastBranchSearchExpansions;
         private static int phase1LastRoomInflationAttempts;
         private static string phase1LastFailureCode = string.Empty;
-
-        [MenuItem("Tools/Dungeon Lab/Phase 1/Generate Route-First Pilot")]
-        public static void GeneratePhase1RouteFirstPilot()
-        {
-            RunWithPhase1RouteFirstPilot(() => GenerateWithSeed(CreateRandomSeed()));
-        }
-
-        [MenuItem("Tools/Dungeon Lab/Phase 1/Generate Route-First Pilot (Specific Seed)")]
-        public static void GeneratePhase1RouteFirstPilotSpecificSeed()
-        {
-            ScriptableWizard.DisplayWizard<GeneratePhase1SeedWizard>(
-                "Generate Phase 1 Route-First Pilot",
-                "Generate");
-        }
-
-        private sealed class GeneratePhase1SeedWizard : ScriptableWizard
-        {
-            public int seed = 2026072100;
-
-            private void OnWizardCreate()
-            {
-                RunWithPhase1RouteFirstPilot(() => GenerateWithSeed(seed));
-            }
-        }
 
         private sealed class RouteIntent
         {
@@ -155,42 +122,6 @@ namespace DungeonLab.Editor
                 this.sourceNode = sourceNode;
                 this.targetNode = targetNode;
                 this.minimumReservedVoidCells = minimumReservedVoidCells;
-            }
-        }
-
-        private static void RunWithPhase1RouteFirstPilot(Action action)
-        {
-            bool previous = phase1RouteFirstPilotSelected;
-            try
-            {
-                phase1RouteFirstPilotSelected = true;
-                action();
-            }
-            finally
-            {
-                phase1RouteFirstPilotSelected = previous;
-                if (!previous)
-                {
-                    ResetPhase1RouteDiagnostics();
-                }
-            }
-        }
-
-        private static T RunWithPhase1RouteFirstPilot<T>(Func<T> action)
-        {
-            bool previous = phase1RouteFirstPilotSelected;
-            try
-            {
-                phase1RouteFirstPilotSelected = true;
-                return action();
-            }
-            finally
-            {
-                phase1RouteFirstPilotSelected = previous;
-                if (!previous)
-                {
-                    ResetPhase1RouteDiagnostics();
-                }
             }
         }
 

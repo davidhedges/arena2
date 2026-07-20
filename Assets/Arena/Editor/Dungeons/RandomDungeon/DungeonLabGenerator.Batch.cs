@@ -11,17 +11,15 @@ using Unity.Plastic.Newtonsoft.Json.Linq;
 
 namespace DungeonLab.Editor
 {
-    // Phase 0 characterization plus the Phase 1 comparison reports. This file
-    // projects canonical plans into evidence; it never participates in generation.
+    // Canonical diagnostic projections. This file records evidence and never
+    // participates in generation.
     internal sealed partial class DungeonLabGenerator
     {
         private const string BatchReportDirectory = "DungeonLabReports";
-        private const string Phase0SummaryVersion = "phase0-v1";
-        private const string Phase0GeneratorVersion = "current-room-first-2026-07-21";
-        private const string Phase1SummaryVersion = "phase1-v1";
+        private const string DungeonPlanSummaryVersion = "dungeon-plan-v1";
         private const int Phase0BaselineFirstSeed = 2026072100;
         private const int Phase0BaselineSeedCount = 200;
-        private const int Phase1PilotSeedCount = 100;
+        private const int LockedSeedCount = 100;
         private const int Phase0SentinelImageWidth = 1600;
         private const int Phase0SentinelImageHeight = 900;
 
@@ -39,14 +37,9 @@ namespace DungeonLab.Editor
 
         private static string phase0CatalogDigestCache;
 
-        private static string ActiveDiagnosticSummaryVersion =>
-            phase1RouteFirstPilotSelected ? Phase1SummaryVersion : Phase0SummaryVersion;
+        private static string ActiveDiagnosticSummaryVersion => DungeonPlanSummaryVersion;
 
-        private static string ActiveDiagnosticGeneratorVersion =>
-            phase1RouteFirstPilotSelected ? Phase1PlannerVersion : Phase0GeneratorVersion;
-
-        private static string ActiveDiagnosticLabel =>
-            phase1RouteFirstPilotSelected ? "Phase 1" : "Phase 0";
+        private static string ActiveDiagnosticGeneratorVersion => Phase1PlannerVersion;
 
         [MenuItem("Tools/Dungeon Lab/Batch Validate (50 Fixed Seeds)")]
         public static void BatchValidate50Seeds()
@@ -54,30 +47,22 @@ namespace DungeonLab.Editor
             RunBatchValidation(Phase0BaselineFirstSeed, 50);
         }
 
-        [MenuItem("Tools/Dungeon Lab/Batch Validate Phase 0 Baseline (200 Fixed Seeds)")]
+        [MenuItem("Tools/Dungeon Lab/Batch Validate (200 Fixed Seeds)")]
         public static void BatchValidate200Seeds()
         {
             RunBatchValidation(Phase0BaselineFirstSeed, Phase0BaselineSeedCount);
         }
 
-        [MenuItem("Tools/Dungeon Lab/Phase 1/Batch Validate Pilot (100 Fixed Seeds)")]
-        public static void BatchValidatePhase1Pilot100Seeds()
+        [MenuItem("Tools/Dungeon Lab/Batch Validate (100 Locked Seeds)")]
+        public static void BatchValidateLocked100Seeds()
         {
-            RunWithPhase1RouteFirstPilot(() =>
-                RunBatchValidation(Phase0BaselineFirstSeed, Phase1PilotSeedCount));
+            RunBatchValidation(Phase0BaselineFirstSeed, LockedSeedCount);
         }
 
-        [MenuItem("Tools/Dungeon Lab/Capture Phase 0 Visual Sentinels")]
-        public static void CapturePhase0VisualSentinels()
+        [MenuItem("Tools/Dungeon Lab/Capture Visual Sentinels")]
+        public static void CaptureVisualSentinels()
         {
-            CaptureVisualSentinels("phase0_visual_sentinels");
-        }
-
-        [MenuItem("Tools/Dungeon Lab/Phase 1/Capture Pilot Visual Sentinels")]
-        public static void CapturePhase1VisualSentinels()
-        {
-            RunWithPhase1RouteFirstPilot(() =>
-                CaptureVisualSentinels("phase1_visual_sentinels"));
+            CaptureVisualSentinels("visual_sentinels");
         }
 
         private static void CaptureVisualSentinels(string directoryName)
@@ -135,7 +120,7 @@ namespace DungeonLab.Editor
             };
             string manifestPath = Path.Combine(directory, "manifest.json");
             File.WriteAllText(manifestPath, manifest.ToString(Formatting.Indented));
-            Debug.Log($"Dungeon Lab: {ActiveDiagnosticLabel} visual sentinels written to {directory} (manifest {manifestPath}).");
+            Debug.Log($"Dungeon Lab: visual sentinels written to {directory} (manifest {manifestPath}).");
         }
 
         private static void RunBatchValidation(int firstSeed, int requestedSeedCount)
@@ -167,7 +152,7 @@ namespace DungeonLab.Editor
                 {
                     int seed = firstSeed + i;
                     if (!Application.isBatchMode && EditorUtility.DisplayCancelableProgressBar(
-                            $"Dungeon Lab {ActiveDiagnosticLabel} Batch Validate",
+                            "Dungeon Lab Batch Validate",
                             $"Seed {seed} ({i + 1}/{requestedSeedCount})",
                             (float)i / requestedSeedCount))
                     {
@@ -231,7 +216,7 @@ namespace DungeonLab.Editor
 
             if (completedSeedCount <= 0)
             {
-                Debug.Log($"Dungeon Lab: {ActiveDiagnosticLabel} batch validation cancelled before any seeds ran.");
+                Debug.Log("Dungeon Lab: batch validation cancelled before any seeds ran.");
                 return;
             }
 
@@ -241,7 +226,7 @@ namespace DungeonLab.Editor
             string failedSummary = failedSeeds.Count == 0 ? "none" : string.Join(", ", failedSeeds);
             JObject attemptDistribution = BuildIntDistribution(allAttemptCounts);
             Debug.Log(
-                $"Dungeon Lab {(phase1RouteFirstPilotSelected ? "PHASE1_PILOT_VALIDATION" : "PHASE0_BATCH_VALIDATION")} " +
+                "Dungeon Lab BATCH_VALIDATION " +
                 $"range={firstSeed}..{firstSeed + completedSeedCount - 1}; seeds={completedSeedCount}; " +
                 $"accepted={successCount}; failed={failedSeeds.Count}; hardValid={hardValidCount}; " +
                 $"meanLayoutAttempts={attemptDistribution.Value<double>("mean"):0.##}; " +
@@ -270,7 +255,7 @@ namespace DungeonLab.Editor
                 transitionCounts,
                 visibleDistantRoomProxyCounts,
                 seedReports);
-            Debug.Log($"Dungeon Lab: {ActiveDiagnosticLabel} batch validation report written to {reportPath}");
+            Debug.Log($"Dungeon Lab: batch validation report written to {reportPath}");
         }
 
         private static JObject BuildPhase0SeedReport(int seed)
@@ -324,7 +309,7 @@ namespace DungeonLab.Editor
 
         // Flat standard-library-only projection for the separate test assembly,
         // which intentionally has no compile-time dependency on Plastic's JSON DLL.
-        private static string BuildPhase0CharacterizationSnapshot(int seed)
+        private static string BuildCharacterizationSnapshot(int seed)
         {
             JObject report = BuildPhase0SeedReport(seed);
             var lines = new List<string>
@@ -351,69 +336,63 @@ namespace DungeonLab.Editor
             return string.Join("\n", lines);
         }
 
-        private static string BuildPhase1CharacterizationSnapshot(int seed)
+        private static string BuildRouteCharacterizationSnapshot(int seed)
         {
-            return RunWithPhase1RouteFirstPilot(() =>
+            JObject report = BuildPhase0SeedReport(seed);
+            var lines = new List<string>
             {
-                JObject report = BuildPhase0SeedReport(seed);
-                var lines = new List<string>
-                {
-                    SnapshotLine("accepted", report["accepted"]),
-                    SnapshotLine("layoutAttempts", report["layoutAttempts"]),
-                    SnapshotLine("hash.routeIntent", report["hashes"]?["routeIntent"]),
-                    SnapshotLine("hash.layout", report["hashes"]?["layout"]),
-                    SnapshotLine("hash.tieredLevelPlan", report["hashes"]?["tieredLevelPlan"]),
-                    SnapshotLine("hash.canonical", report["hashes"]?["canonical"]),
-                    SnapshotLine("route.pattern", report["routeIntent"]?["patternId"]),
-                    SnapshotLine("route.nodeCount", report["routeIntent"]?["nodeCount"]),
-                    SnapshotLine("route.mainRouteCount", report["routeIntent"]?["graph"]?["mainRouteCount"]),
-                    SnapshotLine("route.branchNodeCount", report["routeIntent"]?["graph"]?["branchNodeCount"]),
-                    SnapshotLine("route.loopEdges", report["routeIntent"]?["graph"]?["loopEdges"]),
-                    SnapshotLine("route.bottomNode", report["routeIntent"]?["bottomNode"]),
-                    SnapshotLine("route.topNode", report["routeIntent"]?["topNode"]),
-                    SnapshotLine("vista.sourceFacing", report["routePlacement"]?["vista"]?["sourceFacing"]),
-                    SnapshotLine("vista.targetFacing", report["routePlacement"]?["vista"]?["targetFacing"]),
-                    SnapshotLine("vista.facingOpposed", report["routePlacement"]?["vista"]?["facingOpposed"]),
-                    SnapshotLine("vista.reservedVoidCells", report["routePlacement"]?["vista"]?["reservedVoidCellCount"]),
-                    SnapshotLine("vista.unobstructed", report["routePlacement"]?["vista"]?["unobstructedCandidateVolume"]),
-                    SnapshotLine("validation.passed", report["validation"]?["passed"]),
-                    SnapshotLine("validation.layoutConnectivity", report["validation"]?["layoutConnectivity"]?["passed"]),
-                    SnapshotLine("validation.roomGraphConnectivity", report["validation"]?["roomGraphConnectivity"]?["passed"]),
-                    SnapshotLine("validation.verticalTraversal", report["validation"]?["verticalTraversal"]?["passed"]),
-                    SnapshotLine("validation.headroom", report["validation"]?["headroom"]?["passed"]),
-                    SnapshotLine("metric.rooms", report["layout"]?["rooms"]),
-                    SnapshotLine("metric.connections", report["layout"]?["connections"]),
-                    SnapshotLine("metric.loopEdges", report["layout"]?["graph"]?["loopEdges"]),
-                    SnapshotLine("lastRejectionCode", report["lastRejectionCode"]),
-                    SnapshotLine("failure", report["lastRejection"])
-                };
-                return string.Join("\n", lines);
-            });
+                SnapshotLine("accepted", report["accepted"]),
+                SnapshotLine("layoutAttempts", report["layoutAttempts"]),
+                SnapshotLine("hash.routeIntent", report["hashes"]?["routeIntent"]),
+                SnapshotLine("hash.layout", report["hashes"]?["layout"]),
+                SnapshotLine("hash.tieredLevelPlan", report["hashes"]?["tieredLevelPlan"]),
+                SnapshotLine("hash.canonical", report["hashes"]?["canonical"]),
+                SnapshotLine("route.pattern", report["routeIntent"]?["patternId"]),
+                SnapshotLine("route.nodeCount", report["routeIntent"]?["nodeCount"]),
+                SnapshotLine("route.mainRouteCount", report["routeIntent"]?["graph"]?["mainRouteCount"]),
+                SnapshotLine("route.branchNodeCount", report["routeIntent"]?["graph"]?["branchNodeCount"]),
+                SnapshotLine("route.loopEdges", report["routeIntent"]?["graph"]?["loopEdges"]),
+                SnapshotLine("route.bottomNode", report["routeIntent"]?["bottomNode"]),
+                SnapshotLine("route.topNode", report["routeIntent"]?["topNode"]),
+                SnapshotLine("vista.sourceFacing", report["routePlacement"]?["vista"]?["sourceFacing"]),
+                SnapshotLine("vista.targetFacing", report["routePlacement"]?["vista"]?["targetFacing"]),
+                SnapshotLine("vista.facingOpposed", report["routePlacement"]?["vista"]?["facingOpposed"]),
+                SnapshotLine("vista.reservedVoidCells", report["routePlacement"]?["vista"]?["reservedVoidCellCount"]),
+                SnapshotLine("vista.unobstructed", report["routePlacement"]?["vista"]?["unobstructedCandidateVolume"]),
+                SnapshotLine("validation.passed", report["validation"]?["passed"]),
+                SnapshotLine("validation.layoutConnectivity", report["validation"]?["layoutConnectivity"]?["passed"]),
+                SnapshotLine("validation.roomGraphConnectivity", report["validation"]?["roomGraphConnectivity"]?["passed"]),
+                SnapshotLine("validation.verticalTraversal", report["validation"]?["verticalTraversal"]?["passed"]),
+                SnapshotLine("validation.headroom", report["validation"]?["headroom"]?["passed"]),
+                SnapshotLine("metric.rooms", report["layout"]?["rooms"]),
+                SnapshotLine("metric.connections", report["layout"]?["connections"]),
+                SnapshotLine("metric.loopEdges", report["layout"]?["graph"]?["loopEdges"]),
+                SnapshotLine("lastRejectionCode", report["lastRejectionCode"]),
+                SnapshotLine("failure", report["lastRejection"])
+            };
+            return string.Join("\n", lines);
         }
 
-        private static string BuildPhase1RouteIntentOnlySnapshot(int seed)
+        private static string BuildRouteIntentOnlySnapshot(int seed)
         {
-            return RunWithPhase1RouteFirstPilot(() =>
+            ResetPhase1RouteDiagnostics();
+            phase1LastRouteIntent = BuildProcessionalRouteIntent(seed);
+            JObject intent = BuildPhase1RouteIntentProjection();
+            bool containsSpatialCoordinates = intent.ToString(Formatting.None).Contains("\"center\"");
+            var lines = new List<string>
             {
-                ResetPhase1RouteDiagnostics();
-                phase1LastRouteIntent = BuildProcessionalRouteIntent(seed);
-                JObject intent = BuildPhase1RouteIntentProjection();
-                bool containsSpatialCoordinates = intent.ToString(Formatting.None).Contains("\"center\"");
-                var lines = new List<string>
-                {
-                    SnapshotLine("route.pattern", intent["patternId"]),
-                    SnapshotLine("route.nodeCount", intent["nodeCount"]),
-                    SnapshotLine("route.mainRouteCount", intent["graph"]?["mainRouteCount"]),
-                    SnapshotLine("route.branchNodeCount", intent["graph"]?["branchNodeCount"]),
-                    SnapshotLine("route.loopEdges", intent["graph"]?["loopEdges"]),
-                    SnapshotLine("route.bottomNode", intent["bottomNode"]),
-                    SnapshotLine("route.topNode", intent["topNode"]),
-                    SnapshotLine("vista.facingRequirement", intent["vista"]?["facingRequirement"]),
-                    SnapshotLine("vista.minimumReservedVoidCells", intent["vista"]?["minimumReservedVoidCells"]),
-                    $"containsSpatialCoordinates={containsSpatialCoordinates}"
-                };
-                return string.Join("\n", lines);
-            });
+                SnapshotLine("route.pattern", intent["patternId"]),
+                SnapshotLine("route.nodeCount", intent["nodeCount"]),
+                SnapshotLine("route.mainRouteCount", intent["graph"]?["mainRouteCount"]),
+                SnapshotLine("route.branchNodeCount", intent["graph"]?["branchNodeCount"]),
+                SnapshotLine("route.loopEdges", intent["graph"]?["loopEdges"]),
+                SnapshotLine("route.bottomNode", intent["bottomNode"]),
+                SnapshotLine("route.topNode", intent["topNode"]),
+                SnapshotLine("vista.facingRequirement", intent["vista"]?["facingRequirement"]),
+                SnapshotLine("vista.minimumReservedVoidCells", intent["vista"]?["minimumReservedVoidCells"]),
+                $"containsSpatialCoordinates={containsSpatialCoordinates}"
+            };
+            return string.Join("\n", lines);
         }
 
         // Reflection entry point for the one-seed renderer/collision precondition
@@ -513,7 +492,7 @@ namespace DungeonLab.Editor
             }
         }
 
-        private static string BuildPhase0RendererProbeSnapshot(int seed)
+        private static string BuildRendererProbeSnapshot(int seed)
         {
             JObject report = JObject.Parse(BuildPhase0RendererProbeJson(seed));
             var lines = new List<string>
@@ -531,12 +510,6 @@ namespace DungeonLab.Editor
             return string.Join("\n", lines);
         }
 
-        private static string BuildPhase1RendererProbeSnapshot(int seed)
-        {
-            return RunWithPhase1RouteFirstPilot(() =>
-                BuildPhase0RendererProbeSnapshot(seed));
-        }
-
         private static JObject CreateAcceptedPhase0SeedReport(
             int seed,
             int layoutAttemptsUsed,
@@ -550,15 +523,10 @@ namespace DungeonLab.Editor
             JObject canonicalPlan = BuildCanonicalTieredLevelPlanProjection(plan);
             string layoutHash = ComputeSha256(canonicalLayout.ToString(Formatting.None));
             string planHash = ComputeSha256(canonicalPlan.ToString(Formatting.None));
-            JObject routeIntentProjection = phase1RouteFirstPilotSelected
-                ? BuildPhase1RouteIntentProjection()
-                : null;
-            string routeIntentHash = routeIntentProjection == null
-                ? string.Empty
-                : ComputeSha256(routeIntentProjection.ToString(Formatting.None));
-            string canonicalHash = phase1RouteFirstPilotSelected
-                ? ComputeSha256($"{Phase1SummaryVersion}\n{routeIntentHash}\n{layoutHash}\n{planHash}")
-                : ComputeSha256($"{Phase0SummaryVersion}\n{layoutHash}\n{planHash}");
+            JObject routeIntentProjection = BuildPhase1RouteIntentProjection();
+            string routeIntentHash = ComputeSha256(routeIntentProjection.ToString(Formatting.None));
+            string canonicalHash = ComputeSha256(
+                $"{DungeonPlanSummaryVersion}\n{routeIntentHash}\n{layoutHash}\n{planHash}");
             float correlation = CalculateDepthLevelCorrelation(layout, plan);
             JObject validation = BuildPhase0ValidationSummary(layout, plan, random, out _);
             JObject graphSummary = BuildLayoutGraphSummary(layout);
@@ -615,12 +583,9 @@ namespace DungeonLab.Editor
                     ["canonical"] = canonicalHash
                 }
             };
-            if (phase1RouteFirstPilotSelected)
-            {
-                report["routeIntent"] = routeIntentProjection;
-                report["routePlacement"] = BuildPhase1RoutePlacementProjection(layout);
-                ((JObject)report["hashes"])["routeIntent"] = routeIntentHash;
-            }
+            report["routeIntent"] = routeIntentProjection;
+            report["routePlacement"] = BuildPhase1RoutePlacementProjection(layout);
+            ((JObject)report["hashes"])["routeIntent"] = routeIntentHash;
 
             return report;
         }
@@ -647,7 +612,7 @@ namespace DungeonLab.Editor
                 ["rejectionHistogram"] = HistogramToken(rejectionHistogram),
                 ["rejectionCodes"] = RejectionCodeHistogramToken(rejectionHistogram)
             };
-            if (phase1RouteFirstPilotSelected && phase1LastRouteIntent != null)
+            if (phase1LastRouteIntent != null)
             {
                 report["routeIntent"] = BuildPhase1RouteIntentProjection();
                 report["routeBuilderFailureCode"] = phase1LastFailureCode;
@@ -1034,7 +999,7 @@ namespace DungeonLab.Editor
                     out string rejectionReason))
             {
                 throw new InvalidOperationException(
-                    $"{ActiveDiagnosticLabel} sentinel seed {seed} failed after {layoutAttemptsUsed} attempts: " +
+                    $"Sentinel seed {seed} failed after {layoutAttemptsUsed} attempts: " +
                     $"{Phase0RejectionCode(rejectionReason, exception: null)}: {rejectionReason}");
             }
 
@@ -1049,7 +1014,7 @@ namespace DungeonLab.Editor
             if (seedReport["validation"]?.Value<bool?>("passed") != true)
             {
                 throw new InvalidOperationException(
-                    $"{ActiveDiagnosticLabel} sentinel seed {seed} failed pre-render validation: " +
+                    $"Sentinel seed {seed} failed pre-render validation: " +
                     seedReport["validation"]?.ToString(Formatting.None));
             }
 
@@ -1065,7 +1030,7 @@ namespace DungeonLab.Editor
                     out _,
                     out _))
             {
-                throw new InvalidOperationException($"{ActiveDiagnosticLabel} seed {seed} did not reproduce its accepted plan.");
+                throw new InvalidOperationException($"Seed {seed} did not reproduce its accepted plan.");
             }
 
             if (!TryBuildRoomBoundaryContext(
@@ -1076,7 +1041,7 @@ namespace DungeonLab.Editor
                     out ElevationEdgeModel.RoomBoundaryContext boundaryContext,
                     out string boundaryError))
             {
-                throw new InvalidOperationException($"{ActiveDiagnosticLabel} seed {seed} could not reproduce boundary context: {boundaryError}");
+                throw new InvalidOperationException($"Seed {seed} could not reproduce boundary context: {boundaryError}");
             }
 
             Vector3 levelFieldOrigin = CalculateCenteredLevelFieldOrigin(layout.floorCells, Vector3.zero);
@@ -1088,7 +1053,7 @@ namespace DungeonLab.Editor
                 null,
                 boundaryContext,
                 plan.promontoryCells,
-                $"DungeonLab {ActiveDiagnosticLabel} Renderer Probe",
+                "DungeonLab Renderer Probe",
                 out buildReport,
                 out bounds);
             if (plan.daisShowpieces != null && plan.daisShowpieces.Count > 0)
@@ -1739,18 +1704,18 @@ namespace DungeonLab.Editor
                 ["validationFailureCodes"] = HistogramToken(validationFailureCodeHistogram),
                 ["resultHashAlgorithm"] = "SHA-256 over the ordered seed-report array; generatedAtUtc excluded",
                 ["resultHash"] = resultHash,
-                ["deletionLedger"] = phase1RouteFirstPilotSelected
-                    ? Phase1DeletionLedgerToken()
-                    : new JArray(),
+                ["deletionLedger"] = new JArray(),
                 ["seeds"] = seedReports
             };
-            if (phase1RouteFirstPilotSelected)
+            bool isLockedReliabilityCorpus =
+                firstSeed == Phase0BaselineFirstSeed && seedCount == LockedSeedCount;
+            if (isLockedReliabilityCorpus)
             {
                 bool completionPassed = hardValidCount >= 95;
                 bool attemptCeilingPassed = attemptDistribution.Value<int>("max") <= Phase1LayoutAttemptLimit;
                 bool p95Passed = attemptDistribution.Value<int>("p95") <= 1;
                 bool acceptedHardValid = hardValidCount == successCount;
-                bool failuresReasonCoded = Phase1FailuresAreReasonCoded(seedReports);
+                bool failuresReasonCoded = FailuresAreReasonCoded(seedReports);
                 report["lockedReliabilityBudget"] = new JObject
                 {
                     ["corpus"] = $"{firstSeed}..{firstSeed + seedCount - 1}",
@@ -1771,37 +1736,14 @@ namespace DungeonLab.Editor
             }
 
             Directory.CreateDirectory(BatchReportDirectory);
-            string filePrefix = phase1RouteFirstPilotSelected
-                ? "phase1_pilot"
-                : "phase0_baseline";
             string reportPath = Path.Combine(
                 BatchReportDirectory,
-                $"{filePrefix}_{firstSeed}_{firstSeed + seedCount - 1}.json");
+                $"dungeon_plan_{firstSeed}_{firstSeed + seedCount - 1}.json");
             File.WriteAllText(reportPath, report.ToString(Formatting.Indented));
             return reportPath;
         }
 
-        private static JArray Phase1DeletionLedgerToken()
-        {
-            return new JArray
-            {
-                new JObject
-                {
-                    ["symbol"] = "phase1RouteFirstPilotSelected and the candidate-layout selector branch",
-                    ["status"] = "open",
-                    ["removeInPhase"] = "Phase 2",
-                    ["deletionTargets"] = new JArray
-                    {
-                        "phase1RouteFirstPilotSelected",
-                        "BuildRandomDungeonLayoutData",
-                        "the old-builder branch in TryBuildAcceptedPlan",
-                        "Phase 1-only comparison menu and report labels"
-                    }
-                }
-            };
-        }
-
-        private static bool Phase1FailuresAreReasonCoded(JArray seedReports)
+        private static bool FailuresAreReasonCoded(JArray seedReports)
         {
             foreach (JToken token in seedReports)
             {

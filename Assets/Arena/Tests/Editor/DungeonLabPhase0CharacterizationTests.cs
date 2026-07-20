@@ -17,8 +17,8 @@ namespace Arena.Tests.Editor
         [Test]
         public void FixedSeed_ProducesIdenticalCanonicalSummaries()
         {
-            string firstText = InvokeSnapshot("BuildPhase0CharacterizationSnapshot", CharacterizationSeed);
-            string secondText = InvokeSnapshot("BuildPhase0CharacterizationSnapshot", CharacterizationSeed);
+            string firstText = InvokeSnapshot("BuildCharacterizationSnapshot", CharacterizationSeed);
+            string secondText = InvokeSnapshot("BuildCharacterizationSnapshot", CharacterizationSeed);
             Dictionary<string, string> first = ParseSnapshot(firstText);
             Dictionary<string, string> second = ParseSnapshot(secondText);
 
@@ -74,7 +74,7 @@ namespace Arena.Tests.Editor
         [Test]
         public void ExistingRenderer_ProducesCollisionExportInputsWithoutRepair()
         {
-            string snapshot = InvokeSnapshot("BuildPhase0RendererProbeSnapshot", CharacterizationSeed);
+            string snapshot = InvokeSnapshot("BuildRendererProbeSnapshot", CharacterizationSeed);
             Dictionary<string, string> report = ParseSnapshot(snapshot);
 
             Assert.That(report["accepted"], Is.EqualTo("true"), snapshot);
@@ -95,7 +95,7 @@ namespace Arena.Tests.Editor
 
         private static Dictionary<string, string> SeedSnapshot(int seed)
         {
-            return ParseSnapshot(InvokeSnapshot("BuildPhase0CharacterizationSnapshot", seed));
+            return ParseSnapshot(InvokeSnapshot("BuildCharacterizationSnapshot", seed));
         }
 
         private static string InvokeSnapshot(string methodName, int seed)

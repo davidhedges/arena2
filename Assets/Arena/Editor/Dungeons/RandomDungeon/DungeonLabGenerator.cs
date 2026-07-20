@@ -118,7 +118,6 @@ namespace DungeonLab.Editor
         private const string ExternalSpanStairPlacementClass = "externalSpan";
         private const string StairwellStairPlacementClass = "stairwell";
         private const int LevelAssignmentAttempts = 32;
-        private const int LayoutRegenerationAttempts = 40;
         private const float EnclosedRoomChance = 0.5f;
         private static readonly bool ActiveStepFormationPlacementEnabled = false;
         private const string AuthoredFlatRailingModuleName = "LVL_01_O_rail_straight_S";
@@ -1305,35 +1304,6 @@ namespace DungeonLab.Editor
             return child;
         }
 
-        private static DungeonLayout BuildRandomDungeonLayoutData(System.Random random)
-        {
-            DungeonGenerationSettings settings = CurrentGenerationSettings.Validated();
-            int width = random.Next(settings.mapWidthMinCells, settings.mapWidthMaxCells + 1);
-            int depth = random.Next(settings.mapDepthMinCells, settings.mapDepthMaxCells + 1);
-            StepFormationModeTable connectorTable = LoadAuthoredStairConnectorTableForGeneration();
-            int connectorCandidateCount = connectorTable != null ? CountConfiguredStairConnectorPrefabs(connectorTable) : 0;
-
-            HashSet<Vector2Int> floorCells = BuildDungeonFloorMask(
-                width,
-                depth,
-                random,
-                settings,
-                out List<RoomFootprint> rooms,
-                out List<RoomConnection> connections);
-
-            if (!IsConnected(floorCells))
-            {
-                LogPlanningWarning("Dungeon Lab: generated disconnected mask; falling back to a connected chamber.");
-                floorCells = BuildRandomRoomShape(random);
-                rooms = new List<RoomFootprint> { RoomFootprint.FromRect(GetCellRect(floorCells)) };
-                connections = new List<RoomConnection>();
-            }
-
-            Dictionary<int, HashSet<Vector2Int>> roomThresholds = BuildRoomThresholdCells(rooms, connections);
-            List<RoomZonePlan> roomZones = ChooseRoomZoneSplits(rooms, roomThresholds, random, settings);
-            return new DungeonLayout(floorCells, rooms, connections, roomZones, connectorCandidateCount);
-        }
-
         // Intra-room 1u splits (design step 5): each room deep enough on some axis
         // may split into a lower and a raised (+1u) zone along one straight seam.
         // Both sides keep at least MinZoneDepthCells of depth so the seam's step
@@ -1527,324 +1497,6 @@ namespace DungeonLab.Editor
             }
 
             return thresholds;
-        }
-
-        // Profile-driven floorplan: one hall placed first, then room bands
-        // corridor-connected to their nearest placed room. The renderer still
-        // consumes only the accepted plan; it does not repair placement.
-        private static HashSet<Vector2Int> BuildDungeonFloorMask(
-            int width,
-            int depth,
-            System.Random random,
-            DungeonGenerationSettings settings,
-            out List<RoomFootprint> rooms,
-            out List<RoomConnection> connections)
-        {
-            var floorCells = new HashSet<Vector2Int>();
-            rooms = new List<RoomFootprint>();
-            connections = new List<RoomConnection>();
-
-            RoomFootprint hall = null;
-            for (int attempt = 0; attempt < 80 && hall == null; attempt++)
-            {
-                List<RectInt> shape = RollRoomShapeParts(
-                    random,
-                    settings.hallMinAreaCells,
-                    settings.hallMaxAreaCells,
-                    settings.nonRectChanceGrand,
-                    settings);
-                if (TryPlaceRoomShape(shape, width, depth, floorCells, random, out RoomFootprint candidate))
-                {
-                    hall = candidate;
-                }
-            }
-
-            if (hall == null)
-            {
-                // An empty grid of >= 24 cells always fits a 6x7 hall; this is
-                // unreachable, but the mask must never be hall-less.
-                hall = RoomFootprint.FromRect(new RectInt(width / 2 - 3, depth / 2 - 3, 6, 7));
-            }
-
-            rooms.Add(hall);
-            floorCells.UnionWith(hall.cells);
-
-            PlaceRoomBand(
-                settings.largeRoomMinCount,
-                random.Next(settings.largeRoomMinCount, settings.largeRoomMaxCount + 1),
-                settings.largeRoomMinAreaCells, settings.largeRoomMaxAreaCells, settings.nonRectChanceGrand,
-                width, depth, floorCells, rooms, connections, random, settings);
-            PlaceRoomBand(
-                settings.midRoomMinCount,
-                random.Next(settings.midRoomMinCount, settings.midRoomMaxCount + 1),
-                settings.midRoomMinAreaCells, settings.midRoomMaxAreaCells, settings.nonRectChanceMid,
-                width, depth, floorCells, rooms, connections, random, settings);
-            PlaceRoomBand(
-                settings.smallRoomMinCount,
-                random.Next(settings.smallRoomMinCount, settings.smallRoomMaxCount + 1),
-                settings.smallRoomMinAreaCells, settings.smallRoomMaxAreaCells, 0f,
-                width, depth, floorCells, rooms, connections, random, settings);
-
-            return floorCells;
-        }
-
-        private static void PlaceRoomBand(
-            int minCount,
-            int count,
-            int minArea,
-            int maxArea,
-            float nonRectChance,
-            int width,
-            int depth,
-            HashSet<Vector2Int> floorCells,
-            List<RoomFootprint> rooms,
-            List<RoomConnection> connections,
-            System.Random random,
-            DungeonGenerationSettings settings)
-        {
-            for (int roomIndex = 0; roomIndex < count; roomIndex++)
-            {
-                if (roomIndex >= minCount && floorCells.Count >= settings.floorBudgetCells)
-                {
-                    break;
-                }
-                for (int attempt = 0; attempt < 160; attempt++)
-                {
-                    List<RectInt> shape = RollRoomShapeParts(random, minArea, maxArea, nonRectChance, settings);
-                    if (!TryPlaceRoomShape(shape, width, depth, floorCells, random, out RoomFootprint candidate))
-                    {
-                        continue;
-                    }
-
-                    int fromRoom = FindNearestRoomIndex(rooms, candidate);
-                    int toRoom = rooms.Count;
-                    List<Vector2Int> path = BuildCorridorPath(rooms[fromRoom].Center, candidate.Center, random);
-                    if (!ValidatePathCardinality(path, out _) ||
-                        PathTouchesExistingFloorOutsideEndpointRooms(path, floorCells, rooms[fromRoom], candidate))
-                    {
-                        continue;
-                    }
-
-                    AddPathCells(floorCells, path);
-                    connections.Add(new RoomConnection(fromRoom, toRoom, path));
-                    rooms.Add(candidate);
-                    floorCells.UnionWith(candidate.cells);
-                    break;
-                }
-            }
-        }
-
-        // Rolls a local-space room shape with total area in [minArea, maxArea]:
-        // a single rect, or (B.2) a dominant rect plus 1-2 edge-adjacent wings.
-        // Wings keep the profile's minimum dimension and stay within the dominant
-        // edge band, so parts are disjoint and the union is connected.
-        private static List<RectInt> RollRoomShapeParts(
-            System.Random random,
-            int minArea,
-            int maxArea,
-            float nonRectChance,
-            DungeonGenerationSettings settings)
-        {
-            if (random.NextDouble() >= nonRectChance)
-            {
-                return new List<RectInt> { RollRectWithArea(random, minArea, maxArea, settings) };
-            }
-
-            for (int attempt = 0; attempt < 24; attempt++)
-            {
-                int targetArea = random.Next(minArea, maxArea + 1);
-                int dominantMin = Mathf.Max(settings.wingMinDimCells * settings.wingMinDimCells, Mathf.CeilToInt(targetArea * 0.55f));
-                int dominantMax = Mathf.FloorToInt(targetArea * 0.8f);
-                if (dominantMax < dominantMin)
-                {
-                    continue;
-                }
-
-                RectInt dominant = RollRectWithArea(random, dominantMin, dominantMax, settings);
-                if (dominant.width == 0)
-                {
-                    continue;
-                }
-
-                var parts = new List<RectInt> { dominant };
-                var usedSides = new List<int>();
-                int area = dominant.width * dominant.height;
-                int wingCount = random.NextDouble() < 0.35 ? 2 : 1;
-                for (int wing = 0; wing < wingCount; wing++)
-                {
-                    int remaining = targetArea - area;
-                    if (remaining < settings.wingMinDimCells * settings.wingMinDimCells)
-                    {
-                        break;
-                    }
-
-                    if (TryRollWing(random, dominant, remaining, usedSides, settings, out RectInt wingRect, out int side))
-                    {
-                        parts.Add(wingRect);
-                        usedSides.Add(side);
-                        area += wingRect.width * wingRect.height;
-                    }
-                }
-
-                if (parts.Count >= 2 && area >= minArea && area <= maxArea)
-                {
-                    return parts;
-                }
-            }
-
-            return new List<RectInt> { RollRectWithArea(random, minArea, maxArea, settings) };
-        }
-
-        private static RectInt RollRectWithArea(
-            System.Random random,
-            int minArea,
-            int maxArea,
-            DungeonGenerationSettings settings)
-        {
-            var candidates = new List<Vector2Int>();
-            for (int w = settings.wingMinDimCells; w <= settings.roomMaxSideCells; w++)
-            {
-                for (int d = settings.wingMinDimCells; d <= settings.roomMaxSideCells; d++)
-                {
-                    int area = w * d;
-                    if (area < minArea || area > maxArea)
-                    {
-                        continue;
-                    }
-
-                    // Very long slabs read as corridors, not rooms, so the
-                    // profile still supplies an aspect cap for rolled parts.
-                    if (Mathf.Max(w, d) > Mathf.Min(w, d) * settings.roomMaxAspectRatio)
-                    {
-                        continue;
-                    }
-
-                    candidates.Add(new Vector2Int(w, d));
-                }
-            }
-
-            if (candidates.Count == 0)
-            {
-                return new RectInt(0, 0, 0, 0);
-            }
-
-            Vector2Int size = candidates[random.Next(candidates.Count)];
-            return new RectInt(0, 0, size.x, size.y);
-        }
-
-        private static bool TryRollWing(
-            System.Random random,
-            RectInt dominant,
-            int targetArea,
-            List<int> usedSides,
-            DungeonGenerationSettings settings,
-            out RectInt wing,
-            out int side)
-        {
-            wing = default;
-            side = random.Next(4);
-            for (int i = 0; i < 4; i++, side = (side + 1) % 4)
-            {
-                if (usedSides.Contains(side))
-                {
-                    continue;
-                }
-
-                bool alongX = side == 0 || side == 2;
-                int edgeRun = alongX ? dominant.width : dominant.height;
-                if (edgeRun < settings.wingMinDimCells)
-                {
-                    continue;
-                }
-
-                int along = random.Next(settings.wingMinDimCells, edgeRun + 1);
-                int depthCap = Mathf.Min(settings.wingMaxDepthCells, targetArea / along);
-                if (depthCap < settings.wingMinDimCells)
-                {
-                    continue;
-                }
-
-                int wingDepth = random.Next(settings.wingMinDimCells, depthCap + 1);
-                int offset = random.Next(0, edgeRun - along + 1);
-                switch (side)
-                {
-                    case 0: // +y of dominant
-                        wing = new RectInt(dominant.xMin + offset, dominant.yMax, along, wingDepth);
-                        break;
-                    case 1: // +x
-                        wing = new RectInt(dominant.xMax, dominant.yMin + offset, wingDepth, along);
-                        break;
-                    case 2: // -y
-                        wing = new RectInt(dominant.xMin + offset, dominant.yMin - wingDepth, along, wingDepth);
-                        break;
-                    default: // -x
-                        wing = new RectInt(dominant.xMin - wingDepth, dominant.yMin + offset, wingDepth, along);
-                        break;
-                }
-
-                return true;
-            }
-
-            return false;
-        }
-
-        // Translates a local-space shape to a random grid origin keeping a
-        // 1-cell margin to the mask border, rejecting any overlap with
-        // existing floor (rooms or corridors).
-        private static bool TryPlaceRoomShape(
-            List<RectInt> shapeParts,
-            int width,
-            int depth,
-            HashSet<Vector2Int> floorCells,
-            System.Random random,
-            out RoomFootprint footprint)
-        {
-            footprint = null;
-            if (shapeParts.Count == 0 || shapeParts[0].width == 0)
-            {
-                return false;
-            }
-
-            int xMin = int.MaxValue;
-            int yMin = int.MaxValue;
-            int xMax = int.MinValue;
-            int yMax = int.MinValue;
-            foreach (RectInt part in shapeParts)
-            {
-                xMin = Mathf.Min(xMin, part.xMin);
-                yMin = Mathf.Min(yMin, part.yMin);
-                xMax = Mathf.Max(xMax, part.xMax);
-                yMax = Mathf.Max(yMax, part.yMax);
-            }
-
-            int originXMin = 1 - xMin;
-            int originXMax = width - 1 - xMax;
-            int originYMin = 1 - yMin;
-            int originYMax = depth - 1 - yMax;
-            if (originXMax < originXMin || originYMax < originYMin)
-            {
-                return false;
-            }
-
-            int originX = random.Next(originXMin, originXMax + 1);
-            int originY = random.Next(originYMin, originYMax + 1);
-            var placedParts = new List<RectInt>(shapeParts.Count);
-            foreach (RectInt part in shapeParts)
-            {
-                placedParts.Add(new RectInt(part.xMin + originX, part.yMin + originY, part.width, part.height));
-            }
-
-            var candidate = new RoomFootprint(placedParts);
-            foreach (Vector2Int cell in candidate.cells)
-            {
-                if (floorCells.Contains(cell))
-                {
-                    return false;
-                }
-            }
-
-            footprint = candidate;
-            return true;
         }
 
         private static bool DirectionsAreOpposed(int first, int second)
@@ -2068,94 +1720,6 @@ namespace DungeonLab.Editor
             }
         }
 
-        private static int FindNearestRoomIndex(IReadOnlyList<RoomFootprint> rooms, RoomFootprint candidate)
-        {
-            Vector2Int candidateCenter = candidate.Center;
-            int nearestIndex = 0;
-            int nearestDistance = int.MaxValue;
-            for (int i = 0; i < rooms.Count; i++)
-            {
-                int distance = SquaredDistance(candidateCenter, rooms[i].Center);
-                if (distance >= nearestDistance)
-                {
-                    continue;
-                }
-
-                nearestDistance = distance;
-                nearestIndex = i;
-            }
-
-            return nearestIndex;
-        }
-
-        private static HashSet<Vector2Int> BuildRandomRoomShape(System.Random random)
-        {
-            var floorCells = new HashSet<Vector2Int>();
-
-            int baseWidth = random.Next(4, 9);
-            int baseDepth = random.Next(4, 8);
-            AddRoomCells(floorCells, new RectInt(0, 0, baseWidth, baseDepth));
-
-            int attachmentCount = random.Next(2, 6);
-            for (int i = 0; i < attachmentCount; i++)
-            {
-                for (int attempt = 0; attempt < 20; attempt++)
-                {
-                    RectInt bounds = GetCellRect(floorCells);
-                    int side = random.Next(4);
-                    int width = random.Next(2, 5);
-                    int depth = random.Next(2, 5);
-                    RectInt attachment;
-
-                    switch (side)
-                    {
-                        case 0:
-                            attachment = new RectInt(
-                                random.Next(bounds.xMin, Mathf.Max(bounds.xMin + 1, bounds.xMax - width + 1)),
-                                bounds.yMax,
-                                width,
-                                depth);
-                            break;
-                        case 1:
-                            attachment = new RectInt(
-                                random.Next(bounds.xMin, Mathf.Max(bounds.xMin + 1, bounds.xMax - width + 1)),
-                                bounds.yMin - depth,
-                                width,
-                                depth);
-                            break;
-                        case 2:
-                            attachment = new RectInt(
-                                bounds.xMin - width,
-                                random.Next(bounds.yMin, Mathf.Max(bounds.yMin + 1, bounds.yMax - depth + 1)),
-                                width,
-                                depth);
-                            break;
-                        default:
-                            attachment = new RectInt(
-                                bounds.xMax,
-                                random.Next(bounds.yMin, Mathf.Max(bounds.yMin + 1, bounds.yMax - depth + 1)),
-                                width,
-                                depth);
-                            break;
-                    }
-
-                    var candidate = new HashSet<Vector2Int>(floorCells);
-                    AddRoomCells(candidate, attachment);
-
-                    if (!IsConnected(candidate))
-                    {
-                        continue;
-                    }
-
-                    floorCells = candidate;
-                    break;
-                }
-            }
-
-            PunchNotches(floorCells, random.Next(1, 4), random);
-            return floorCells;
-        }
-
         private static RectInt GetCellRect(HashSet<Vector2Int> floorCells)
         {
             GetCellBounds(floorCells, out Vector2Int minCell, out Vector2Int maxCell);
@@ -2179,50 +1743,6 @@ namespace DungeonLab.Editor
             }
 
             return largest;
-        }
-
-        private static void PunchNotches(HashSet<Vector2Int> floorCells, int count, System.Random random)
-        {
-            for (int i = 0; i < count; i++)
-            {
-                var candidates = new List<Vector2Int>();
-                foreach (var cell in floorCells)
-                {
-                    int neighbors = 0;
-                    if (floorCells.Contains(cell + Vector2Int.up)) neighbors++;
-                    if (floorCells.Contains(cell + Vector2Int.down)) neighbors++;
-                    if (floorCells.Contains(cell + Vector2Int.left)) neighbors++;
-                    if (floorCells.Contains(cell + Vector2Int.right)) neighbors++;
-
-                    if (neighbors >= 2 && neighbors <= 3 && IsBoundaryCell(floorCells, cell))
-                    {
-                        candidates.Add(cell);
-                    }
-                }
-
-                if (candidates.Count == 0)
-                {
-                    return;
-                }
-
-                // Candidates were gathered from HashSet enumeration; sort before the random
-                // pick so the same seed selects the same notch on every runtime.
-                candidates.Sort(CompareCells);
-                Vector2Int removed = candidates[random.Next(candidates.Count)];
-                floorCells.Remove(removed);
-                if (!IsConnected(floorCells))
-                {
-                    floorCells.Add(removed);
-                }
-            }
-        }
-
-        private static bool IsBoundaryCell(HashSet<Vector2Int> floorCells, Vector2Int cell)
-        {
-            return !floorCells.Contains(cell + Vector2Int.up) ||
-                !floorCells.Contains(cell + Vector2Int.down) ||
-                !floorCells.Contains(cell + Vector2Int.left) ||
-                !floorCells.Contains(cell + Vector2Int.right);
         }
 
         private static HashSet<WallEdge> PickOpenings(HashSet<Vector2Int> floorCells, int requestedCount, System.Random random)
@@ -2252,8 +1772,8 @@ namespace DungeonLab.Editor
                 }
             }
 
-            // Same hazard as PunchNotches: order the HashSet-derived candidates before the
-            // seeded shuffle so openings are reproducible per seed across runtimes.
+            // Order HashSet-derived candidates before the seeded shuffle so
+            // openings are reproducible per seed across runtimes.
             candidates.Sort((left, right) =>
             {
                 int byCell = CompareCells(left.cell, right.cell);
@@ -2347,17 +1867,6 @@ namespace DungeonLab.Editor
             int dx = first.x - second.x;
             int dz = first.y - second.y;
             return dx * dx + dz * dz;
-        }
-
-        private static void AddRoomCells(HashSet<Vector2Int> floorCells, RectInt room)
-        {
-            for (int z = room.yMin; z < room.yMax; z++)
-            {
-                for (int x = room.xMin; x < room.xMax; x++)
-                {
-                    floorCells.Add(new Vector2Int(x, z));
-                }
-            }
         }
 
         private static void AddPathCells(HashSet<Vector2Int> floorCells, IReadOnlyList<Vector2Int> path)
@@ -2516,30 +2025,17 @@ namespace DungeonLab.Editor
             levelPlan = default;
             layoutAttemptsUsed = 0;
             rejectionReason = string.Empty;
-            int layoutAttemptLimit = phase1RouteFirstPilotSelected
-                ? Phase1LayoutAttemptLimit
-                : LayoutRegenerationAttempts;
-            for (int attempt = 0; attempt < layoutAttemptLimit; attempt++)
+            for (int attempt = 0; attempt < Phase1LayoutAttemptLimit; attempt++)
             {
                 layoutAttemptsUsed = attempt + 1;
-                DungeonLayout candidateLayout;
-                // Phase 1's sole temporary comparison selector. Remove this
-                // branch and BuildRandomDungeonLayoutData in Phase 2.
-                if (phase1RouteFirstPilotSelected)
+                if (!TryBuildProcessionalSpineDungeonLayout(
+                        dungeonSeed,
+                        layoutAttemptsUsed,
+                        out DungeonLayout candidateLayout,
+                        out rejectionReason))
                 {
-                    if (!TryBuildProcessionalSpineDungeonLayout(
-                            dungeonSeed,
-                            layoutAttemptsUsed,
-                            out candidateLayout,
-                            out rejectionReason))
-                    {
-                        RecordRejection(rejectionHistogram, rejectionReason);
-                        continue;
-                    }
-                }
-                else
-                {
-                    candidateLayout = BuildRandomDungeonLayoutData(random);
+                    RecordRejection(rejectionHistogram, rejectionReason);
+                    continue;
                 }
 
                 if (TryBuildTieredLevelPlan(candidateLayout, dungeonSeed, random, rejectionHistogram, out layout, out levelPlan, out rejectionReason))

@@ -1,6 +1,7 @@
 # Coherent floorplan generation plan
 
-Status: revised single-path execution plan; implementation has not started  
+Status: Phases 0-2 complete and verified; Phase 3 is ready but has not started
+
 Last updated: 2026-07-21
 
 This is the execution plan for evolving Dungeon Lab from a room-placement generator into a route-first, recipe-assisted dungeon planner. It is deliberately incremental: the existing renderer, stair forge, bridge work, verticality, distant views, and abyss construction remain useful assets rather than being replaced by a second generator.
