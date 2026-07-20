@@ -1,111 +1,123 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Security.Cryptography;
+using System.Text;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.Rendering;
+using Unity.Plastic.Newtonsoft.Json;
 using Unity.Plastic.Newtonsoft.Json.Linq;
 
 namespace DungeonLab.Editor
 {
-    // Headless batch validation: builds tiered plans (no scene geometry) for many seeds and
-    // reports success rate, archetype mix, tier spreads, and the depth/level correlation that
-    // measures how "same" the elevation grammar is across dungeons.
+    // Phase 0 characterization plus the Phase 1 comparison reports. This file
+    // projects canonical plans into evidence; it never participates in generation.
     internal sealed partial class DungeonLabGenerator
     {
         private const string BatchReportDirectory = "DungeonLabReports";
+        private const string Phase0SummaryVersion = "phase0-v1";
+        private const string Phase0GeneratorVersion = "current-room-first-2026-07-21";
+        private const string Phase1SummaryVersion = "phase1-v1";
+        private const int Phase0BaselineFirstSeed = 2026072100;
+        private const int Phase0BaselineSeedCount = 200;
+        private const int Phase1PilotSeedCount = 100;
+        private const int Phase0SentinelImageWidth = 1600;
+        private const int Phase0SentinelImageHeight = 900;
 
-        [MenuItem("Tools/Dungeon Lab/Batch Validate (50 Seeds)")]
+        // Six and only six visual sentinels. Their lightweight annotations are
+        // characterization notes, not an aesthetic taxonomy or acceptance gate.
+        private static readonly (int seed, string category, string annotation)[] Phase0VisualSentinels =
+        {
+            (2026072140, "representative-a", "Median-like route, branch, loop, elevation, transition, and distant-room proxy counts."),
+            (2026072186, "representative-b", "Median-like alternate archetype with comparable graph and elevation measures."),
+            (2026072169, "weak-a", "No adjacent-cell distant-room proxy despite a multi-tier layout."),
+            (2026072245, "weak-b", "Short rooted route and near-minimum distant-room proxy."),
+            (2026072262, "edge-a", "Maximum transition count in the fixed 200-seed range."),
+            (2026072223, "edge-b", "Maximum elevation span with a sparse branch/loop graph and high transition count.")
+        };
+
+        private static string phase0CatalogDigestCache;
+
+        private static string ActiveDiagnosticSummaryVersion =>
+            phase1RouteFirstPilotSelected ? Phase1SummaryVersion : Phase0SummaryVersion;
+
+        private static string ActiveDiagnosticGeneratorVersion =>
+            phase1RouteFirstPilotSelected ? Phase1PlannerVersion : Phase0GeneratorVersion;
+
+        private static string ActiveDiagnosticLabel =>
+            phase1RouteFirstPilotSelected ? "Phase 1" : "Phase 0";
+
+        [MenuItem("Tools/Dungeon Lab/Batch Validate (50 Fixed Seeds)")]
         public static void BatchValidate50Seeds()
         {
-            RunBatchValidation(50);
+            RunBatchValidation(Phase0BaselineFirstSeed, 50);
         }
 
-        [MenuItem("Tools/Dungeon Lab/Batch Validate (200 Seeds)")]
+        [MenuItem("Tools/Dungeon Lab/Batch Validate Phase 0 Baseline (200 Fixed Seeds)")]
         public static void BatchValidate200Seeds()
         {
-            RunBatchValidation(200);
+            RunBatchValidation(Phase0BaselineFirstSeed, Phase0BaselineSeedCount);
         }
 
-        private static void RunBatchValidation(int seedCount)
+        [MenuItem("Tools/Dungeon Lab/Phase 1/Batch Validate Pilot (100 Fixed Seeds)")]
+        public static void BatchValidatePhase1Pilot100Seeds()
         {
-            CurrentGenerationSettings = LoadActiveGenerationSettings();
-            int baseSeed = CreateRandomSeed();
-            var rejectionHistogram = new Dictionary<string, int>();
-            var archetypeCounts = new SortedDictionary<string, int>(StringComparer.Ordinal);
-            var tierSpanCounts = new SortedDictionary<int, int>();
-            var correlations = new List<float>();
-            var failedSeeds = new List<int>();
-            var seedReports = new JArray();
-            int successCount = 0;
-            int totalLayoutAttempts = 0;
+            RunWithPhase1RouteFirstPilot(() =>
+                RunBatchValidation(Phase0BaselineFirstSeed, Phase1PilotSeedCount));
+        }
+
+        [MenuItem("Tools/Dungeon Lab/Capture Phase 0 Visual Sentinels")]
+        public static void CapturePhase0VisualSentinels()
+        {
+            CaptureVisualSentinels("phase0_visual_sentinels");
+        }
+
+        [MenuItem("Tools/Dungeon Lab/Phase 1/Capture Pilot Visual Sentinels")]
+        public static void CapturePhase1VisualSentinels()
+        {
+            RunWithPhase1RouteFirstPilot(() =>
+                CaptureVisualSentinels("phase1_visual_sentinels"));
+        }
+
+        private static void CaptureVisualSentinels(string directoryName)
+        {
+            string directory = Path.Combine(BatchReportDirectory, directoryName);
+            Directory.CreateDirectory(directory);
+            var manifestEntries = new JArray();
 
             try
             {
-                for (int i = 0; i < seedCount; i++)
+                foreach ((int seed, string category, string annotation) sentinel in Phase0VisualSentinels)
                 {
-                    int seed = baseSeed + i;
-                    if (EditorUtility.DisplayCancelableProgressBar(
-                            "Dungeon Lab Batch Validate",
-                            $"Seed {seed} ({i + 1}/{seedCount})",
-                            (float)i / seedCount))
+                    GameObject root = null;
+                    try
                     {
-                        seedCount = i;
-                        break;
-                    }
-
-                    var random = new System.Random(seed);
-                    if (!TryBuildAcceptedPlan(
-                            seed,
-                            random,
-                            rejectionHistogram,
-                            out DungeonLayout layout,
-                            out TieredLevelPlan plan,
-                            out int layoutAttemptsUsed,
-                            out string rejectionReason))
-                    {
-                        failedSeeds.Add(seed);
-                        totalLayoutAttempts += layoutAttemptsUsed;
-                        seedReports.Add(new JObject
+                        root = BuildPhase0RenderedSeed(
+                            sentinel.seed,
+                            out Bounds bounds,
+                            out JObject seedReport,
+                            out ElevationEdgeModel.BuildReport buildReport);
+                        string fileName = $"{sentinel.seed}_{sentinel.category}.png";
+                        string path = Path.Combine(directory, fileName);
+                        CapturePhase0SentinelImage(bounds, path);
+                        manifestEntries.Add(new JObject
                         {
-                            ["seed"] = seed,
-                            ["accepted"] = false,
-                            ["lastRejection"] = rejectionReason
+                            ["seed"] = sentinel.seed,
+                            ["category"] = sentinel.category,
+                            ["annotation"] = sentinel.annotation,
+                            ["image"] = path.Replace('\\', '/'),
+                            ["canonicalHash"] = seedReport["hashes"]?["canonical"],
+                            ["rendererSummary"] = buildReport.Summary
                         });
-                        continue;
                     }
-
-                    successCount++;
-                    totalLayoutAttempts += layoutAttemptsUsed;
-                    archetypeCounts.TryGetValue(plan.archetypeName, out int archetypeCount);
-                    archetypeCounts[plan.archetypeName] = archetypeCount + 1;
-                    int tierSpan = plan.maxLevel - plan.minLevel;
-                    tierSpanCounts.TryGetValue(tierSpan, out int spanCount);
-                    tierSpanCounts[tierSpan] = spanCount + 1;
-                    float correlation = CalculateDepthLevelCorrelation(layout, plan);
-                    if (!float.IsNaN(correlation))
+                    finally
                     {
-                        correlations.Add(correlation);
+                        if (root != null)
+                        {
+                            DestroyImmediate(root);
+                        }
                     }
-
-                    seedReports.Add(new JObject
-                    {
-                        ["seed"] = seed,
-                        ["accepted"] = true,
-                        ["archetype"] = plan.archetypeName,
-                        ["layoutAttempts"] = layoutAttemptsUsed,
-                        ["rooms"] = layout.rooms.Count,
-                        ["floorCells"] = layout.floorCells.Count,
-                        ["floorFillPercent"] = CalculateFloorFillPercent(layout.floorCells) * 100f,
-                        ["loopEdges"] = CountLoopEdges(layout),
-                        ["minLevel"] = plan.minLevel,
-                        ["maxLevel"] = plan.maxLevel,
-                        ["levelCount"] = plan.levelCount,
-                        ["roomsPerTier"] = plan.roomsPerTierSummary,
-                        ["overlooks"] = plan.overlookCount,
-                        ["depthLevelCorrelation"] = correlation,
-                        ["synthesizedStairs"] = plan.synthesizedStairs == null ? 0 : plan.synthesizedStairs.Count,
-                        ["synthesizedStairUsage"] = plan.synthesizedStairSummary
-                    });
                 }
             }
             finally
@@ -113,36 +125,1353 @@ namespace DungeonLab.Editor
                 EditorUtility.ClearProgressBar();
             }
 
-            if (seedCount <= 0)
+            var manifest = new JObject
             {
-                Debug.Log("Dungeon Lab: batch validation cancelled before any seeds ran.");
+                ["summaryVersion"] = ActiveDiagnosticSummaryVersion,
+                ["generatorVersion"] = ActiveDiagnosticGeneratorVersion,
+                ["captureWidth"] = Phase0SentinelImageWidth,
+                ["captureHeight"] = Phase0SentinelImageHeight,
+                ["sentinels"] = manifestEntries
+            };
+            string manifestPath = Path.Combine(directory, "manifest.json");
+            File.WriteAllText(manifestPath, manifest.ToString(Formatting.Indented));
+            Debug.Log($"Dungeon Lab: {ActiveDiagnosticLabel} visual sentinels written to {directory} (manifest {manifestPath}).");
+        }
+
+        private static void RunBatchValidation(int firstSeed, int requestedSeedCount)
+        {
+            CurrentGenerationSettings = LoadActiveGenerationSettings();
+            var rejectionHistogram = new Dictionary<string, int>(StringComparer.Ordinal);
+            var rejectionCodeHistogram = new Dictionary<string, int>(StringComparer.Ordinal);
+            var validationFailureCodeHistogram = new Dictionary<string, int>(StringComparer.Ordinal);
+            var archetypeCounts = new SortedDictionary<string, int>(StringComparer.Ordinal);
+            var tierSpanCounts = new SortedDictionary<int, int>();
+            var correlations = new List<float>();
+            var failedSeeds = new List<int>();
+            var seedReports = new JArray();
+            var allAttemptCounts = new List<int>();
+            var acceptedAttemptCounts = new List<int>();
+            var routeRoomCounts = new List<int>();
+            var branchNodeCounts = new List<int>();
+            var loopEdgeCounts = new List<int>();
+            var elevationSpans = new List<int>();
+            var transitionCounts = new List<int>();
+            var visibleDistantRoomProxyCounts = new List<int>();
+            int successCount = 0;
+            int hardValidCount = 0;
+            int completedSeedCount = 0;
+
+            try
+            {
+                for (int i = 0; i < requestedSeedCount; i++)
+                {
+                    int seed = firstSeed + i;
+                    if (!Application.isBatchMode && EditorUtility.DisplayCancelableProgressBar(
+                            $"Dungeon Lab {ActiveDiagnosticLabel} Batch Validate",
+                            $"Seed {seed} ({i + 1}/{requestedSeedCount})",
+                            (float)i / requestedSeedCount))
+                    {
+                        break;
+                    }
+
+                    JObject seedReport = BuildPhase0SeedReport(seed);
+                    seedReports.Add(seedReport);
+                    completedSeedCount++;
+                    int layoutAttempts = seedReport.Value<int?>("layoutAttempts") ?? 0;
+                    allAttemptCounts.Add(layoutAttempts);
+                    MergeJsonHistogram(seedReport["rejectionHistogram"] as JObject, rejectionHistogram);
+                    MergeJsonHistogram(seedReport["rejectionCodes"] as JObject, rejectionCodeHistogram);
+
+                    if (seedReport.Value<bool?>("accepted") != true)
+                    {
+                        failedSeeds.Add(seed);
+                        continue;
+                    }
+
+                    successCount++;
+                    acceptedAttemptCounts.Add(layoutAttempts);
+                    if (seedReport["validation"]?.Value<bool?>("passed") == true)
+                    {
+                        hardValidCount++;
+                    }
+                    else
+                    {
+                        MergeJsonCodeArray(
+                            seedReport["validation"]?["failureCodes"] as JArray,
+                            validationFailureCodeHistogram);
+                    }
+
+                    JObject layoutSummary = (JObject)seedReport["layout"];
+                    JObject planSummary = (JObject)seedReport["tieredLevelPlan"];
+                    JObject graphSummary = (JObject)layoutSummary["graph"];
+                    string archetype = planSummary.Value<string>("archetype") ?? "unknown";
+                    archetypeCounts.TryGetValue(archetype, out int archetypeCount);
+                    archetypeCounts[archetype] = archetypeCount + 1;
+                    int tierSpan = planSummary.Value<int>("elevationSpan");
+                    tierSpanCounts.TryGetValue(tierSpan, out int tierSpanCount);
+                    tierSpanCounts[tierSpan] = tierSpanCount + 1;
+                    routeRoomCounts.Add(graphSummary.Value<int>("longestRootRouteRooms"));
+                    branchNodeCounts.Add(graphSummary.Value<int>("branchNodes"));
+                    loopEdgeCounts.Add(graphSummary.Value<int>("loopEdges"));
+                    elevationSpans.Add(tierSpan);
+                    transitionCounts.Add(planSummary.Value<int>("transitionCount"));
+                    visibleDistantRoomProxyCounts.Add(planSummary.Value<int>("visibleDistantRoomProxyCount"));
+
+                    JToken correlationToken = planSummary["depthLevelCorrelation"];
+                    if (correlationToken != null && correlationToken.Type != JTokenType.Null)
+                    {
+                        correlations.Add(correlationToken.Value<float>());
+                    }
+                }
+            }
+            finally
+            {
+                EditorUtility.ClearProgressBar();
+            }
+
+            if (completedSeedCount <= 0)
+            {
+                Debug.Log($"Dungeon Lab: {ActiveDiagnosticLabel} batch validation cancelled before any seeds ran.");
                 return;
             }
 
             string archetypeSummary = FormatCountSummary(archetypeCounts);
             string tierSpanSummary = FormatTierSpanSummary(tierSpanCounts);
             string correlationSummary = FormatCorrelationSummary(correlations);
-            string failedSummary = failedSeeds.Count == 0
-                ? "none"
-                : string.Join(", ", failedSeeds);
+            string failedSummary = failedSeeds.Count == 0 ? "none" : string.Join(", ", failedSeeds);
+            JObject attemptDistribution = BuildIntDistribution(allAttemptCounts);
             Debug.Log(
-                "Dungeon Lab BATCH_VALIDATION " +
-                $"seeds={seedCount}; accepted={successCount}; failed={failedSeeds.Count}; " +
-                $"meanLayoutAttempts={(float)totalLayoutAttempts / seedCount:0.##}; " +
+                $"Dungeon Lab {(phase1RouteFirstPilotSelected ? "PHASE1_PILOT_VALIDATION" : "PHASE0_BATCH_VALIDATION")} " +
+                $"range={firstSeed}..{firstSeed + completedSeedCount - 1}; seeds={completedSeedCount}; " +
+                $"accepted={successCount}; failed={failedSeeds.Count}; hardValid={hardValidCount}; " +
+                $"meanLayoutAttempts={attemptDistribution.Value<double>("mean"):0.##}; " +
+                $"p95LayoutAttempts={attemptDistribution.Value<int>("p95")}; maxLayoutAttempts={attemptDistribution.Value<int>("max")}; " +
                 $"archetypes={archetypeSummary}; tierSpans={tierSpanSummary}; " +
-                $"depthLevelCorrelation={correlationSummary}; " +
-                $"failedSeeds={failedSummary}; " +
-                $"rejections={FormatRejectionHistogram(rejectionHistogram)}");
+                $"depthLevelCorrelation={correlationSummary}; failedSeeds={failedSummary}; " +
+                $"rejectionCodes={FormatRejectionHistogram(rejectionCodeHistogram)}; " +
+                $"validationFailureCodes={FormatRejectionHistogram(validationFailureCodeHistogram)}");
 
-            string reportPath = WriteBatchReport(
-                baseSeed,
-                seedCount,
+            string reportPath = WritePhase0BatchReport(
+                firstSeed,
+                completedSeedCount,
                 successCount,
+                hardValidCount,
                 rejectionHistogram,
+                rejectionCodeHistogram,
+                validationFailureCodeHistogram,
                 archetypeCounts,
                 correlations,
+                allAttemptCounts,
+                acceptedAttemptCounts,
+                routeRoomCounts,
+                branchNodeCounts,
+                loopEdgeCounts,
+                elevationSpans,
+                transitionCounts,
+                visibleDistantRoomProxyCounts,
                 seedReports);
-            Debug.Log($"Dungeon Lab: batch validation report written to {reportPath}");
+            Debug.Log($"Dungeon Lab: {ActiveDiagnosticLabel} batch validation report written to {reportPath}");
+        }
+
+        private static JObject BuildPhase0SeedReport(int seed)
+        {
+            CurrentGenerationSettings = LoadActiveGenerationSettings();
+            var rejectionHistogram = new Dictionary<string, int>(StringComparer.Ordinal);
+            var random = new System.Random(seed);
+            try
+            {
+                bool accepted = TryBuildAcceptedPlan(
+                    seed,
+                    random,
+                    rejectionHistogram,
+                    out DungeonLayout layout,
+                    out TieredLevelPlan plan,
+                    out int layoutAttemptsUsed,
+                    out string rejectionReason);
+                return accepted
+                    ? CreateAcceptedPhase0SeedReport(
+                        seed,
+                        layoutAttemptsUsed,
+                        rejectionReason,
+                        rejectionHistogram,
+                        layout,
+                        plan,
+                        random)
+                    : CreateRejectedPhase0SeedReport(
+                        seed,
+                        layoutAttemptsUsed,
+                        rejectionReason,
+                        rejectionHistogram,
+                        exception: null);
+            }
+            catch (Exception exception)
+            {
+                return CreateRejectedPhase0SeedReport(
+                    seed,
+                    0,
+                    exception.Message,
+                    rejectionHistogram,
+                    exception);
+            }
+        }
+
+        // Reflection entry point for the edit-mode characterization tests. The
+        // returned JSON is a diagnostic projection, never a generation input.
+        private static string BuildPhase0SeedReportJson(int seed)
+        {
+            return BuildPhase0SeedReport(seed).ToString(Formatting.None);
+        }
+
+        // Flat standard-library-only projection for the separate test assembly,
+        // which intentionally has no compile-time dependency on Plastic's JSON DLL.
+        private static string BuildPhase0CharacterizationSnapshot(int seed)
+        {
+            JObject report = BuildPhase0SeedReport(seed);
+            var lines = new List<string>
+            {
+                SnapshotLine("accepted", report["accepted"]),
+                SnapshotLine("hash.layout", report["hashes"]?["layout"]),
+                SnapshotLine("hash.tieredLevelPlan", report["hashes"]?["tieredLevelPlan"]),
+                SnapshotLine("hash.canonical", report["hashes"]?["canonical"]),
+                SnapshotLine("validation.layoutConnectivity", report["validation"]?["layoutConnectivity"]?["passed"]),
+                SnapshotLine("validation.roomGraphConnectivity", report["validation"]?["roomGraphConnectivity"]?["passed"]),
+                SnapshotLine("validation.transitionContracts", report["validation"]?["transitionContracts"]?["passed"]),
+                SnapshotLine("validation.verticalTraversal", report["validation"]?["verticalTraversal"]?["passed"]),
+                SnapshotLine("validation.bottomToTopTraversal", report["validation"]?["bottomToTopTraversal"]?["passed"]),
+                SnapshotLine("validation.headroom", report["validation"]?["headroom"]?["passed"]),
+                SnapshotLine("validation.boundary", report["validation"]?["boundary"]?["passed"]),
+                SnapshotLine("validation.rendererInputs", report["validation"]?["rendererInputs"]?["passed"]),
+                SnapshotLine("validation.passed", report["validation"]?["passed"]),
+                SnapshotLine("metric.rootedRouteCount", report["layout"]?["graph"]?["rootedRouteCount"]),
+                SnapshotLine("metric.longestRootRouteRooms", report["layout"]?["graph"]?["longestRootRouteRooms"]),
+                SnapshotLine("metric.transitionCount", report["tieredLevelPlan"]?["transitionCount"]),
+                SnapshotLine("metric.elevationSpan", report["tieredLevelPlan"]?["elevationSpan"]),
+                SnapshotLine("failure", report["lastRejection"])
+            };
+            return string.Join("\n", lines);
+        }
+
+        private static string BuildPhase1CharacterizationSnapshot(int seed)
+        {
+            return RunWithPhase1RouteFirstPilot(() =>
+            {
+                JObject report = BuildPhase0SeedReport(seed);
+                var lines = new List<string>
+                {
+                    SnapshotLine("accepted", report["accepted"]),
+                    SnapshotLine("layoutAttempts", report["layoutAttempts"]),
+                    SnapshotLine("hash.routeIntent", report["hashes"]?["routeIntent"]),
+                    SnapshotLine("hash.layout", report["hashes"]?["layout"]),
+                    SnapshotLine("hash.tieredLevelPlan", report["hashes"]?["tieredLevelPlan"]),
+                    SnapshotLine("hash.canonical", report["hashes"]?["canonical"]),
+                    SnapshotLine("route.pattern", report["routeIntent"]?["patternId"]),
+                    SnapshotLine("route.nodeCount", report["routeIntent"]?["nodeCount"]),
+                    SnapshotLine("route.mainRouteCount", report["routeIntent"]?["graph"]?["mainRouteCount"]),
+                    SnapshotLine("route.branchNodeCount", report["routeIntent"]?["graph"]?["branchNodeCount"]),
+                    SnapshotLine("route.loopEdges", report["routeIntent"]?["graph"]?["loopEdges"]),
+                    SnapshotLine("route.bottomNode", report["routeIntent"]?["bottomNode"]),
+                    SnapshotLine("route.topNode", report["routeIntent"]?["topNode"]),
+                    SnapshotLine("vista.sourceFacing", report["routePlacement"]?["vista"]?["sourceFacing"]),
+                    SnapshotLine("vista.targetFacing", report["routePlacement"]?["vista"]?["targetFacing"]),
+                    SnapshotLine("vista.facingOpposed", report["routePlacement"]?["vista"]?["facingOpposed"]),
+                    SnapshotLine("vista.reservedVoidCells", report["routePlacement"]?["vista"]?["reservedVoidCellCount"]),
+                    SnapshotLine("vista.unobstructed", report["routePlacement"]?["vista"]?["unobstructedCandidateVolume"]),
+                    SnapshotLine("validation.passed", report["validation"]?["passed"]),
+                    SnapshotLine("validation.layoutConnectivity", report["validation"]?["layoutConnectivity"]?["passed"]),
+                    SnapshotLine("validation.roomGraphConnectivity", report["validation"]?["roomGraphConnectivity"]?["passed"]),
+                    SnapshotLine("validation.verticalTraversal", report["validation"]?["verticalTraversal"]?["passed"]),
+                    SnapshotLine("validation.headroom", report["validation"]?["headroom"]?["passed"]),
+                    SnapshotLine("metric.rooms", report["layout"]?["rooms"]),
+                    SnapshotLine("metric.connections", report["layout"]?["connections"]),
+                    SnapshotLine("metric.loopEdges", report["layout"]?["graph"]?["loopEdges"]),
+                    SnapshotLine("lastRejectionCode", report["lastRejectionCode"]),
+                    SnapshotLine("failure", report["lastRejection"])
+                };
+                return string.Join("\n", lines);
+            });
+        }
+
+        private static string BuildPhase1RouteIntentOnlySnapshot(int seed)
+        {
+            return RunWithPhase1RouteFirstPilot(() =>
+            {
+                ResetPhase1RouteDiagnostics();
+                phase1LastRouteIntent = BuildProcessionalRouteIntent(seed);
+                JObject intent = BuildPhase1RouteIntentProjection();
+                bool containsSpatialCoordinates = intent.ToString(Formatting.None).Contains("\"center\"");
+                var lines = new List<string>
+                {
+                    SnapshotLine("route.pattern", intent["patternId"]),
+                    SnapshotLine("route.nodeCount", intent["nodeCount"]),
+                    SnapshotLine("route.mainRouteCount", intent["graph"]?["mainRouteCount"]),
+                    SnapshotLine("route.branchNodeCount", intent["graph"]?["branchNodeCount"]),
+                    SnapshotLine("route.loopEdges", intent["graph"]?["loopEdges"]),
+                    SnapshotLine("route.bottomNode", intent["bottomNode"]),
+                    SnapshotLine("route.topNode", intent["topNode"]),
+                    SnapshotLine("vista.facingRequirement", intent["vista"]?["facingRequirement"]),
+                    SnapshotLine("vista.minimumReservedVoidCells", intent["vista"]?["minimumReservedVoidCells"]),
+                    $"containsSpatialCoordinates={containsSpatialCoordinates}"
+                };
+                return string.Join("\n", lines);
+            });
+        }
+
+        // Reflection entry point for the one-seed renderer/collision precondition
+        // probe. It destroys all generated scene objects before returning.
+        private static string BuildPhase0RendererProbeJson(int seed)
+        {
+            GameObject root = null;
+            try
+            {
+                root = BuildPhase0RenderedSeed(
+                    seed,
+                    out Bounds bounds,
+                    out JObject seedReport,
+                    out ElevationEdgeModel.BuildReport buildReport);
+                Collider[] colliders = root.GetComponentsInChildren<Collider>(includeInactive: false);
+                int enabledCollisionSources = 0;
+                int meshColliderCount = 0;
+                int missingMeshCount = 0;
+                int unreadableMeshCount = 0;
+                foreach (Collider collider in colliders)
+                {
+                    if (collider == null || !collider.enabled || collider.isTrigger)
+                    {
+                        continue;
+                    }
+
+                    enabledCollisionSources++;
+                    if (collider is MeshCollider meshCollider)
+                    {
+                        meshColliderCount++;
+                        if (meshCollider.sharedMesh == null)
+                        {
+                            missingMeshCount++;
+                        }
+                        else if (!meshCollider.sharedMesh.isReadable)
+                        {
+                            // RandomDungeonSceneBuilder makes these readable before
+                            // collision export. Count them here without mutating importers.
+                            unreadableMeshCount++;
+                        }
+                    }
+                }
+
+                bool rendererPassed =
+                    buildReport.rejected == 0 &&
+                    buildReport.floorCells > 0 &&
+                    buildReport.transitionEdges > 0 &&
+                    bounds.size.sqrMagnitude > 0.01f;
+                bool collisionPreconditionsPassed =
+                    enabledCollisionSources > 0 &&
+                    missingMeshCount == 0;
+                return new JObject
+                {
+                    ["summaryVersion"] = ActiveDiagnosticSummaryVersion,
+                    ["seed"] = seed,
+                    ["accepted"] = true,
+                    ["seedReportHash"] = seedReport["hashes"]?["canonical"],
+                    ["boundary"] = seedReport["validation"]?["boundary"],
+                    ["renderer"] = new JObject
+                    {
+                        ["passed"] = rendererPassed,
+                        ["floorCells"] = buildReport.floorCells,
+                        ["transitionEdges"] = buildReport.transitionEdges,
+                        ["stairFootprintChecks"] = buildReport.stairFootprintChecks,
+                        ["multiRiseStairChecks"] = buildReport.multiRiseStairChecks,
+                        ["rejectedPlacements"] = buildReport.rejected,
+                        ["boundsSize"] = Vector3Token(bounds.size),
+                        ["summary"] = buildReport.Summary
+                    },
+                    ["collisionPreconditions"] = new JObject
+                    {
+                        ["passed"] = collisionPreconditionsPassed,
+                        ["enabledNonTriggerColliders"] = enabledCollisionSources,
+                        ["meshColliders"] = meshColliderCount,
+                        ["missingMeshes"] = missingMeshCount,
+                        ["meshesRequiringReadWriteNormalization"] = unreadableMeshCount
+                    }
+                }.ToString(Formatting.None);
+            }
+            catch (Exception exception)
+            {
+                return new JObject
+                {
+                    ["summaryVersion"] = ActiveDiagnosticSummaryVersion,
+                    ["seed"] = seed,
+                    ["accepted"] = false,
+                    ["failureCode"] = Phase0RejectionCode(exception.Message, exception),
+                    ["failure"] = exception.Message
+                }.ToString(Formatting.None);
+            }
+            finally
+            {
+                if (root != null)
+                {
+                    DestroyImmediate(root);
+                }
+            }
+        }
+
+        private static string BuildPhase0RendererProbeSnapshot(int seed)
+        {
+            JObject report = JObject.Parse(BuildPhase0RendererProbeJson(seed));
+            var lines = new List<string>
+            {
+                SnapshotLine("accepted", report["accepted"]),
+                SnapshotLine("boundary", report["boundary"]?["passed"]),
+                SnapshotLine("renderer.passed", report["renderer"]?["passed"]),
+                SnapshotLine("renderer.rejectedPlacements", report["renderer"]?["rejectedPlacements"]),
+                SnapshotLine("renderer.stairFootprintChecks", report["renderer"]?["stairFootprintChecks"]),
+                SnapshotLine("collision.passed", report["collisionPreconditions"]?["passed"]),
+                SnapshotLine("collision.enabledNonTriggerColliders", report["collisionPreconditions"]?["enabledNonTriggerColliders"]),
+                SnapshotLine("collision.missingMeshes", report["collisionPreconditions"]?["missingMeshes"]),
+                SnapshotLine("failure", report["failure"])
+            };
+            return string.Join("\n", lines);
+        }
+
+        private static string BuildPhase1RendererProbeSnapshot(int seed)
+        {
+            return RunWithPhase1RouteFirstPilot(() =>
+                BuildPhase0RendererProbeSnapshot(seed));
+        }
+
+        private static JObject CreateAcceptedPhase0SeedReport(
+            int seed,
+            int layoutAttemptsUsed,
+            string lastRejection,
+            Dictionary<string, int> rejectionHistogram,
+            DungeonLayout layout,
+            TieredLevelPlan plan,
+            System.Random random)
+        {
+            JObject canonicalLayout = BuildCanonicalLayoutProjection(layout);
+            JObject canonicalPlan = BuildCanonicalTieredLevelPlanProjection(plan);
+            string layoutHash = ComputeSha256(canonicalLayout.ToString(Formatting.None));
+            string planHash = ComputeSha256(canonicalPlan.ToString(Formatting.None));
+            JObject routeIntentProjection = phase1RouteFirstPilotSelected
+                ? BuildPhase1RouteIntentProjection()
+                : null;
+            string routeIntentHash = routeIntentProjection == null
+                ? string.Empty
+                : ComputeSha256(routeIntentProjection.ToString(Formatting.None));
+            string canonicalHash = phase1RouteFirstPilotSelected
+                ? ComputeSha256($"{Phase1SummaryVersion}\n{routeIntentHash}\n{layoutHash}\n{planHash}")
+                : ComputeSha256($"{Phase0SummaryVersion}\n{layoutHash}\n{planHash}");
+            float correlation = CalculateDepthLevelCorrelation(layout, plan);
+            JObject validation = BuildPhase0ValidationSummary(layout, plan, random, out _);
+            JObject graphSummary = BuildLayoutGraphSummary(layout);
+
+            var report = new JObject
+            {
+                ["summaryVersion"] = ActiveDiagnosticSummaryVersion,
+                ["generatorVersion"] = ActiveDiagnosticGeneratorVersion,
+                ["seed"] = seed,
+                ["profile"] = CurrentGenerationSettings.profileName,
+                ["catalogDigest"] = Phase0CatalogDigest(),
+                ["accepted"] = true,
+                ["layoutAttempts"] = layoutAttemptsUsed,
+                ["lastRejectedAttempt"] = string.IsNullOrEmpty(lastRejection) ? null : lastRejection,
+                ["lastRejectedAttemptCode"] = string.IsNullOrEmpty(lastRejection)
+                    ? null
+                    : Phase0RejectionCode(lastRejection, exception: null),
+                ["rejectionHistogram"] = HistogramToken(rejectionHistogram),
+                ["rejectionCodes"] = RejectionCodeHistogramToken(rejectionHistogram),
+                ["layout"] = new JObject
+                {
+                    ["floorCells"] = layout.floorCells.Count,
+                    ["rooms"] = layout.rooms.Count,
+                    ["connections"] = layout.connections.Count,
+                    ["roomZones"] = layout.roomZones.Count,
+                    ["floorFillPercent"] = CalculateFloorFillPercent(layout.floorCells) * 100f,
+                    ["graph"] = graphSummary
+                },
+                ["tieredLevelPlan"] = new JObject
+                {
+                    ["archetype"] = plan.archetypeName,
+                    ["levelCount"] = plan.levelCount,
+                    ["minLevel"] = plan.minLevel,
+                    ["maxLevel"] = plan.maxLevel,
+                    ["elevationSpan"] = plan.maxLevel - plan.minLevel,
+                    ["transitionCount"] = plan.transitions.Count,
+                    ["transitionSummary"] = plan.transitionSummary,
+                    ["stairUsage"] = plan.stairUsageSummary,
+                    ["stairTopology"] = plan.topologySummary,
+                    ["stairPlacementClass"] = plan.placementClassSummary,
+                    ["portGraph"] = plan.portGraphSummary,
+                    ["visibleDistantRoomProxyCount"] = plan.overlookCount,
+                    ["visibleDistantRoomMeasurement"] = "adjacent-cell elevation delta >= 4u; current generator has no explicit line-of-sight graph",
+                    ["synthesizedStairs"] = plan.synthesizedStairs == null ? 0 : plan.synthesizedStairs.Count,
+                    ["promontories"] = plan.promontoryCells == null ? 0 : plan.promontoryCells.Count,
+                    ["depthLevelCorrelation"] = float.IsNaN(correlation) ? JValue.CreateNull() : new JValue(correlation)
+                },
+                ["validation"] = validation,
+                ["hashes"] = new JObject
+                {
+                    ["algorithm"] = "SHA-256",
+                    ["layout"] = layoutHash,
+                    ["tieredLevelPlan"] = planHash,
+                    ["canonical"] = canonicalHash
+                }
+            };
+            if (phase1RouteFirstPilotSelected)
+            {
+                report["routeIntent"] = routeIntentProjection;
+                report["routePlacement"] = BuildPhase1RoutePlacementProjection(layout);
+                ((JObject)report["hashes"])["routeIntent"] = routeIntentHash;
+            }
+
+            return report;
+        }
+
+        private static JObject CreateRejectedPhase0SeedReport(
+            int seed,
+            int layoutAttemptsUsed,
+            string rejectionReason,
+            Dictionary<string, int> rejectionHistogram,
+            Exception exception)
+        {
+            var report = new JObject
+            {
+                ["summaryVersion"] = ActiveDiagnosticSummaryVersion,
+                ["generatorVersion"] = ActiveDiagnosticGeneratorVersion,
+                ["seed"] = seed,
+                ["profile"] = CurrentGenerationSettings.profileName,
+                ["catalogDigest"] = Phase0CatalogDigest(),
+                ["accepted"] = false,
+                ["layoutAttempts"] = layoutAttemptsUsed,
+                ["lastRejection"] = rejectionReason ?? string.Empty,
+                ["lastRejectionCode"] = Phase0RejectionCode(rejectionReason, exception),
+                ["exceptionType"] = exception?.GetType().FullName,
+                ["rejectionHistogram"] = HistogramToken(rejectionHistogram),
+                ["rejectionCodes"] = RejectionCodeHistogramToken(rejectionHistogram)
+            };
+            if (phase1RouteFirstPilotSelected && phase1LastRouteIntent != null)
+            {
+                report["routeIntent"] = BuildPhase1RouteIntentProjection();
+                report["routeBuilderFailureCode"] = phase1LastFailureCode;
+            }
+
+            return report;
+        }
+
+        private static JObject BuildPhase1RouteIntentProjection()
+        {
+            if (phase1LastRouteIntent == null)
+            {
+                return new JObject();
+            }
+
+            RouteIntent intent = phase1LastRouteIntent;
+            var nodes = new JArray();
+            var mainRoute = new JArray();
+            var branch = new JArray();
+            foreach (RouteNodeIntent node in intent.nodes)
+            {
+                nodes.Add(new JObject
+                {
+                    ["id"] = node.id,
+                    ["role"] = node.role,
+                    ["beat"] = node.beat,
+                    ["mainRouteOrder"] = node.mainRouteOrder,
+                    ["branchOrder"] = node.branchOrder
+                });
+                if (node.IsOnMainRoute)
+                {
+                    mainRoute.Add(node.id);
+                }
+                else
+                {
+                    branch.Add(node.id);
+                }
+            }
+
+            var traversalEdges = new JArray();
+            foreach (RouteTraversalIntent edge in intent.traversalEdges)
+            {
+                traversalEdges.Add(new JObject
+                {
+                    ["id"] = edge.id,
+                    ["fromNode"] = intent.nodes[edge.fromNode].id,
+                    ["toNode"] = intent.nodes[edge.toNode].id,
+                    ["connectionType"] = "corridor",
+                    ["laneCount"] = edge.laneCount
+                });
+            }
+
+            int loopEdges = intent.traversalEdges.Length - (intent.nodes.Length - 1);
+            return new JObject
+            {
+                ["seed"] = intent.seed,
+                ["plannerVersion"] = intent.plannerVersion,
+                ["patternId"] = intent.patternId,
+                ["nodeCount"] = intent.nodes.Length,
+                ["nodes"] = nodes,
+                ["bottomNode"] = intent.nodes[intent.bottomNode].id,
+                ["topNode"] = intent.nodes[intent.topNode].id,
+                ["graph"] = new JObject
+                {
+                    ["mainRoute"] = mainRoute,
+                    ["mainRouteCount"] = mainRoute.Count,
+                    ["branch"] = branch,
+                    ["branchNodeCount"] = branch.Count,
+                    ["traversalEdges"] = traversalEdges,
+                    ["traversalEdgeCount"] = traversalEdges.Count,
+                    ["loopEdges"] = loopEdges,
+                    ["branchAttachNode"] = intent.nodes[Phase1BranchAttachNode].id,
+                    ["branchRejoinNode"] = intent.nodes[Phase1BranchRejoinNode].id
+                },
+                ["vista"] = new JObject
+                {
+                    ["id"] = intent.vista.id,
+                    ["sourceNode"] = intent.nodes[intent.vista.sourceNode].id,
+                    ["targetNode"] = intent.nodes[intent.vista.targetNode].id,
+                    ["facingRequirement"] = "mutual-facing",
+                    ["minimumReservedVoidCells"] = intent.vista.minimumReservedVoidCells,
+                    ["candidateSightVolumeRequired"] = true
+                }
+            };
+        }
+
+        private static JObject BuildPhase1RoutePlacementProjection(DungeonLayout layout)
+        {
+            var centers = new JArray();
+            if (phase1LastRouteIntent != null &&
+                phase1LastNodeCenters.Length == phase1LastRouteIntent.nodes.Length)
+            {
+                for (int node = 0; node < phase1LastNodeCenters.Length; node++)
+                {
+                    centers.Add(new JObject
+                    {
+                        ["nodeId"] = phase1LastRouteIntent.nodes[node].id,
+                        ["center"] = CellToken(phase1LastNodeCenters[node]),
+                        ["envelope"] = RectToken(new RectInt(
+                            phase1LastNodeCenters[node].x - Phase1RoomEnvelopeRadius,
+                            phase1LastNodeCenters[node].y - Phase1RoomEnvelopeRadius,
+                            Phase1RoomEnvelopeRadius * 2 + 1,
+                            Phase1RoomEnvelopeRadius * 2 + 1))
+                    });
+                }
+            }
+
+            var approaches = new JArray();
+            if (phase1LastRouteIntent != null &&
+                phase1LastNodeCenters.Length == phase1LastRouteIntent.nodes.Length)
+            {
+                foreach (RouteTraversalIntent edge in phase1LastRouteIntent.traversalEdges)
+                {
+                    Vector2Int delta = phase1LastNodeCenters[edge.toNode] - phase1LastNodeCenters[edge.fromNode];
+                    var direction = new Vector2Int(Math.Sign(delta.x), Math.Sign(delta.y));
+                    approaches.Add(new JObject
+                    {
+                        ["edgeId"] = edge.id,
+                        ["fromApproach"] = CellToken(direction),
+                        ["toApproach"] = CellToken(-direction)
+                    });
+                }
+            }
+
+            bool vistaUnobstructedAtLayoutHandoff = phase1LastVistaCells.Length >=
+                (phase1LastRouteIntent?.vista.minimumReservedVoidCells ?? int.MaxValue);
+            bool reservedVoidPreservedAfterTierLooping = vistaUnobstructedAtLayoutHandoff;
+            foreach (Vector2Int cell in phase1LastVistaCells)
+            {
+                if (layout.floorCells.Contains(cell))
+                {
+                    reservedVoidPreservedAfterTierLooping = false;
+                    break;
+                }
+            }
+
+            return new JObject
+            {
+                ["layoutAttempt"] = phase1LastLayoutAttempt,
+                ["mainEmbeddingAttempts"] = phase1LastMainEmbeddingAttempts,
+                ["branchSearchExpansions"] = phase1LastBranchSearchExpansions,
+                ["roomInflationAttempts"] = phase1LastRoomInflationAttempts,
+                ["nodeCenters"] = centers,
+                ["pinnedApproaches"] = approaches,
+                ["vista"] = new JObject
+                {
+                    ["sourceFacing"] = CellToken(phase1LastVistaSourceFacing),
+                    ["targetFacing"] = CellToken(phase1LastVistaTargetFacing),
+                    ["facingOpposed"] = phase1LastVistaSourceFacing == -phase1LastVistaTargetFacing &&
+                        phase1LastVistaSourceFacing != Vector2Int.zero,
+                    ["reservedVoidCellCount"] = phase1LastVistaCells.Length,
+                    ["reservedVoidCells"] = CellsToken(phase1LastVistaCells, sort: false),
+                    ["unobstructedCandidateVolume"] = vistaUnobstructedAtLayoutHandoff,
+                    ["measurementStage"] = "DungeonLayout handoff before unchanged tier planner loop additions",
+                    ["reservedVoidPreservedAfterTierLooping"] = reservedVoidPreservedAfterTierLooping
+                }
+            };
+        }
+
+        private static JObject BuildPhase0ValidationSummary(
+            DungeonLayout layout,
+            TieredLevelPlan plan,
+            System.Random random,
+            out ElevationEdgeModel.RoomBoundaryContext boundaryContext)
+        {
+            bool layoutConnected = IsConnected(layout.floorCells);
+            bool roomGraphConnected = TryValidateRoomGraphConnectivity(layout, out string roomGraphMessage);
+            bool transitionContractsValid = TryValidateTransitionLevelDeltas(
+                plan.cellLevels,
+                plan.transitions,
+                out string transitionMessage);
+            bool portGraphBuilt = TryBuildFloorStairPortGraph(
+                plan.cellLevels,
+                plan.transitions,
+                out FloorStairPortGraph portGraph,
+                out string portGraphBuildMessage);
+            bool portGraphConnected = false;
+            string portGraphConnectedMessage = portGraphBuildMessage;
+            if (portGraphBuilt)
+            {
+                portGraphConnected = portGraph.IsGloballyConnected(out portGraphConnectedMessage);
+            }
+
+            bool bottomToTop = portGraphConnected && plan.minLevel < plan.maxLevel;
+            bool headroomValid = TryValidateAcceptedPlanHeadroom(plan, out string headroomMessage);
+            bool boundaryValid = TryBuildRoomBoundaryContext(
+                layout,
+                plan.cellLevels,
+                plan.transitions,
+                random,
+                out boundaryContext,
+                out string boundaryMessage);
+            bool rendererInputsValid = TryValidatePhase0RendererInputs(plan, out string rendererInputMessage);
+            bool passed =
+                layoutConnected &&
+                roomGraphConnected &&
+                transitionContractsValid &&
+                portGraphConnected &&
+                bottomToTop &&
+                headroomValid &&
+                boundaryValid &&
+                rendererInputsValid;
+            var failureCodes = new JArray();
+            AddFailureCode(failureCodes, layoutConnected, "FLOOR_CONNECTIVITY");
+            AddFailureCode(failureCodes, roomGraphConnected, "ROOM_GRAPH_CONNECTIVITY");
+            AddFailureCode(failureCodes, transitionContractsValid, "TRANSITION_CONTRACT");
+            AddFailureCode(failureCodes, portGraphConnected, "VERTICAL_TRAVERSAL");
+            AddFailureCode(failureCodes, bottomToTop, "BOTTOM_TO_TOP_TRAVERSAL");
+            AddFailureCode(failureCodes, headroomValid, "POST_PLAN_HEADROOM_CLEARANCE");
+            AddFailureCode(failureCodes, boundaryValid, "BOUNDARY_CONTEXT");
+            AddFailureCode(failureCodes, rendererInputsValid, "RENDERER_INPUT");
+
+            return new JObject
+            {
+                ["passed"] = passed,
+                ["failureCodes"] = failureCodes,
+                ["layoutConnectivity"] = CheckToken(layoutConnected, layoutConnected ? "floor mask connected" : "floor mask disconnected"),
+                ["roomGraphConnectivity"] = CheckToken(roomGraphConnected, roomGraphMessage),
+                ["transitionContracts"] = CheckToken(transitionContractsValid, transitionMessage),
+                ["verticalTraversal"] = CheckToken(portGraphConnected, portGraphConnectedMessage),
+                ["bottomToTopTraversal"] = CheckToken(
+                    bottomToTop,
+                    bottomToTop
+                        ? $"connected traversal spans levels {plan.minLevel}..{plan.maxLevel}"
+                        : $"traversal did not span distinct bottom/top levels ({plan.minLevel}..{plan.maxLevel})"),
+                ["headroom"] = CheckToken(headroomValid, headroomMessage),
+                ["boundary"] = CheckToken(boundaryValid, boundaryMessage),
+                ["rendererInputs"] = CheckToken(rendererInputsValid, rendererInputMessage)
+            };
+        }
+
+        private static bool TryValidateRoomGraphConnectivity(DungeonLayout layout, out string message)
+        {
+            if (layout.rooms == null || layout.rooms.Count == 0)
+            {
+                message = "room graph had no rooms";
+                return false;
+            }
+
+            List<int>[] adjacency = BuildRoomAdjacency(layout.rooms.Count, layout.connections);
+            var visited = new HashSet<int> { 0 };
+            var queue = new Queue<int>();
+            queue.Enqueue(0);
+            while (queue.Count > 0)
+            {
+                int current = queue.Dequeue();
+                foreach (int neighbor in adjacency[current])
+                {
+                    if (visited.Add(neighbor))
+                    {
+                        queue.Enqueue(neighbor);
+                    }
+                }
+            }
+
+            message = $"room graph reached {visited.Count}/{layout.rooms.Count} rooms";
+            return visited.Count == layout.rooms.Count;
+        }
+
+        private static bool TryValidateAcceptedPlanHeadroom(TieredLevelPlan plan, out string rejectionReason)
+        {
+            var spanDeckLevels = new Dictionary<Vector2Int, int>();
+            foreach (ElevationEdgeModel.TransitionEdge transition in plan.transitions)
+            {
+                if (!string.Equals(
+                        transition.placementClass,
+                        ExternalSpanStairPlacementClass,
+                        StringComparison.Ordinal) ||
+                    transition.footprintCells == null ||
+                    transition.footprintCells.Length == 0 ||
+                    transition.lowerLandingCells == null ||
+                    transition.lowerLandingCells.Length == 0 ||
+                    transition.upperLandingCells == null ||
+                    transition.upperLandingCells.Length == 0)
+                {
+                    continue;
+                }
+
+                Vector2Int lowerLanding = transition.lowerLandingCells[0];
+                Vector2Int upperLanding = transition.upperLandingCells[0];
+                if (!plan.cellLevels.TryGetValue(lowerLanding, out int lowerLevel) ||
+                    !plan.cellLevels.TryGetValue(upperLanding, out int upperLevel))
+                {
+                    rejectionReason = $"external span {lowerLanding}->{upperLanding} referenced a missing landing";
+                    return false;
+                }
+
+                int spanLength = Mathf.Abs(upperLanding.x - lowerLanding.x) +
+                    Mathf.Abs(upperLanding.y - lowerLanding.y);
+                foreach (Vector2Int deckCell in transition.footprintCells)
+                {
+                    int deckDistance = Mathf.Abs(deckCell.x - lowerLanding.x) +
+                        Mathf.Abs(deckCell.y - lowerLanding.y);
+                    int deckLevel = Mathf.FloorToInt(Mathf.Lerp(
+                        Mathf.Min(lowerLevel, upperLevel),
+                        Mathf.Max(lowerLevel, upperLevel),
+                        spanLength > 0 ? (float)deckDistance / spanLength : 0f));
+                    if (!spanDeckLevels.TryGetValue(deckCell, out int existing) || deckLevel < existing)
+                    {
+                        spanDeckLevels[deckCell] = deckLevel;
+                    }
+                }
+            }
+
+            bool passed = TryValidateSpanHeadroom(plan.cellLevels, spanDeckLevels, out rejectionReason);
+            if (passed)
+            {
+                rejectionReason = $"headroom gate passed for {spanDeckLevels.Count} external-span deck cells";
+            }
+
+            return passed;
+        }
+
+        private static bool TryValidatePhase0RendererInputs(TieredLevelPlan plan, out string message)
+        {
+            if (plan.cellLevels == null || plan.cellLevels.Count == 0)
+            {
+                message = "renderer input had no leveled floor cells";
+                return false;
+            }
+
+            var prefabPaths = new HashSet<string>(StringComparer.Ordinal);
+            foreach (ElevationEdgeModel.TransitionEdge transition in plan.transitions)
+            {
+                if (transition.synthesizedSetPiece != null)
+                {
+                    foreach (ElevationEdgeModel.SynthesizedPiecePlacement piece in transition.synthesizedSetPiece.pieces)
+                    {
+                        if (!string.IsNullOrWhiteSpace(piece.sourcePrefab))
+                        {
+                            prefabPaths.Add(piece.sourcePrefab);
+                        }
+                    }
+                }
+                else if (!string.IsNullOrWhiteSpace(transition.stairPrefabPath))
+                {
+                    prefabPaths.Add(transition.stairPrefabPath);
+                }
+            }
+
+            if (plan.daisShowpieces != null)
+            {
+                foreach (DaisShowpiece showpiece in plan.daisShowpieces)
+                {
+                    foreach (ElevationEdgeModel.SynthesizedPiecePlacement piece in showpiece.pieces ?? Array.Empty<ElevationEdgeModel.SynthesizedPiecePlacement>())
+                    {
+                        if (!string.IsNullOrWhiteSpace(piece.sourcePrefab))
+                        {
+                            prefabPaths.Add(piece.sourcePrefab);
+                        }
+                    }
+                }
+            }
+
+            foreach (string prefabPath in prefabPaths)
+            {
+                if (AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath) == null)
+                {
+                    message = $"renderer input prefab was missing at '{prefabPath}'";
+                    return false;
+                }
+            }
+
+            message = $"renderer inputs resolved {plan.cellLevels.Count} leveled cells and {prefabPaths.Count} transition/set-piece prefabs";
+            return true;
+        }
+
+        private static GameObject BuildPhase0RenderedSeed(
+            int seed,
+            out Bounds bounds,
+            out JObject seedReport,
+            out ElevationEdgeModel.BuildReport buildReport)
+        {
+            CurrentGenerationSettings = LoadActiveGenerationSettings();
+            var rejectionHistogram = new Dictionary<string, int>(StringComparer.Ordinal);
+            var random = new System.Random(seed);
+            if (!TryBuildAcceptedPlan(
+                    seed,
+                    random,
+                    rejectionHistogram,
+                    out DungeonLayout layout,
+                    out TieredLevelPlan plan,
+                    out int layoutAttemptsUsed,
+                    out string rejectionReason))
+            {
+                throw new InvalidOperationException(
+                    $"{ActiveDiagnosticLabel} sentinel seed {seed} failed after {layoutAttemptsUsed} attempts: " +
+                    $"{Phase0RejectionCode(rejectionReason, exception: null)}: {rejectionReason}");
+            }
+
+            seedReport = CreateAcceptedPhase0SeedReport(
+                seed,
+                layoutAttemptsUsed,
+                rejectionReason,
+                rejectionHistogram,
+                layout,
+                plan,
+                random);
+            if (seedReport["validation"]?.Value<bool?>("passed") != true)
+            {
+                throw new InvalidOperationException(
+                    $"{ActiveDiagnosticLabel} sentinel seed {seed} failed pre-render validation: " +
+                    seedReport["validation"]?.ToString(Formatting.None));
+            }
+
+            // Rebuild the same deterministic boundary context because the report
+            // consumed the shared RNG while characterizing it.
+            random = new System.Random(seed);
+            if (!TryBuildAcceptedPlan(
+                    seed,
+                    random,
+                    new Dictionary<string, int>(StringComparer.Ordinal),
+                    out layout,
+                    out plan,
+                    out _,
+                    out _))
+            {
+                throw new InvalidOperationException($"{ActiveDiagnosticLabel} seed {seed} did not reproduce its accepted plan.");
+            }
+
+            if (!TryBuildRoomBoundaryContext(
+                    layout,
+                    plan.cellLevels,
+                    plan.transitions,
+                    random,
+                    out ElevationEdgeModel.RoomBoundaryContext boundaryContext,
+                    out string boundaryError))
+            {
+                throw new InvalidOperationException($"{ActiveDiagnosticLabel} seed {seed} could not reproduce boundary context: {boundaryError}");
+            }
+
+            Vector3 levelFieldOrigin = CalculateCenteredLevelFieldOrigin(layout.floorCells, Vector3.zero);
+            GameObject root = ElevationEdgeModel.BuildLevelField(
+                levelFieldOrigin,
+                plan.cellLevels,
+                plan.transitions,
+                null,
+                null,
+                boundaryContext,
+                plan.promontoryCells,
+                $"DungeonLab {ActiveDiagnosticLabel} Renderer Probe",
+                out buildReport,
+                out bounds);
+            if (plan.daisShowpieces != null && plan.daisShowpieces.Count > 0)
+            {
+                PlaceDaisShowpieces(root.transform, plan.daisShowpieces, levelFieldOrigin, buildReport.levelHeight, ref bounds);
+            }
+
+            return root;
+        }
+
+        private static JObject BuildLayoutGraphSummary(DungeonLayout layout)
+        {
+            if (layout.rooms == null || layout.rooms.Count == 0)
+            {
+                return new JObject
+                {
+                    ["rootedRouteCount"] = 0,
+                    ["longestRootRouteRooms"] = 0,
+                    ["branchNodes"] = 0,
+                    ["leafNodes"] = 0,
+                    ["loopEdges"] = 0
+                };
+            }
+
+            List<int>[] adjacency = BuildRoomAdjacency(layout.rooms.Count, layout.connections);
+            var depths = new int[layout.rooms.Count];
+            for (int i = 0; i < depths.Length; i++)
+            {
+                depths[i] = -1;
+            }
+
+            int branchNodes = 0;
+            int leafNodes = 0;
+            for (int i = 0; i < adjacency.Length; i++)
+            {
+                if (adjacency[i].Count >= 3)
+                {
+                    branchNodes++;
+                }
+
+                if (i != 0 && adjacency[i].Count == 1)
+                {
+                    leafNodes++;
+                }
+            }
+
+            int maxDepth = 0;
+            var queue = new Queue<int>();
+            depths[0] = 0;
+            queue.Enqueue(0);
+            while (queue.Count > 0)
+            {
+                int current = queue.Dequeue();
+                maxDepth = Mathf.Max(maxDepth, depths[current]);
+                foreach (int neighbor in adjacency[current])
+                {
+                    if (depths[neighbor] >= 0)
+                    {
+                        continue;
+                    }
+
+                    depths[neighbor] = depths[current] + 1;
+                    queue.Enqueue(neighbor);
+                }
+            }
+
+            return new JObject
+            {
+                ["rootedRouteCount"] = 1,
+                ["longestRootRouteRooms"] = maxDepth + 1,
+                ["branchNodes"] = branchNodes,
+                ["leafNodes"] = leafNodes,
+                ["loopEdges"] = CountLoopEdges(layout),
+                ["measurement"] = "current room graph rooted at room 0; no semantic route catalog exists"
+            };
+        }
+
+        private static JObject BuildCanonicalLayoutProjection(DungeonLayout layout)
+        {
+            var floorCells = new List<Vector2Int>(layout.floorCells);
+            floorCells.Sort(CompareCells);
+            var rooms = new JArray();
+            for (int roomIndex = 0; roomIndex < layout.rooms.Count; roomIndex++)
+            {
+                RoomFootprint room = layout.rooms[roomIndex];
+                var parts = new JArray();
+                foreach (RectInt part in room.parts)
+                {
+                    parts.Add(RectToken(part));
+                }
+
+                var cells = new JArray();
+                foreach (Vector2Int cell in room.CellsRowMajor())
+                {
+                    cells.Add(CellToken(cell));
+                }
+
+                rooms.Add(new JObject
+                {
+                    ["index"] = roomIndex,
+                    ["parts"] = parts,
+                    ["cells"] = cells
+                });
+            }
+
+            var connections = new JArray();
+            for (int index = 0; index < layout.connections.Count; index++)
+            {
+                RoomConnection connection = layout.connections[index];
+                connections.Add(new JObject
+                {
+                    ["index"] = index,
+                    ["fromRoom"] = connection.fromRoom,
+                    ["toRoom"] = connection.toRoom,
+                    ["path"] = CellsToken(connection.path, sort: false)
+                });
+            }
+
+            var zones = new JArray();
+            foreach (RoomZonePlan zone in layout.roomZones)
+            {
+                var seamPairs = new JArray();
+                foreach ((Vector2Int lowerCell, Vector2Int raisedCell) pair in zone.SeamCellPairs())
+                {
+                    seamPairs.Add(new JObject
+                    {
+                        ["lower"] = CellToken(pair.lowerCell),
+                        ["raised"] = CellToken(pair.raisedCell)
+                    });
+                }
+
+                zones.Add(new JObject
+                {
+                    ["roomIndex"] = zone.roomIndex,
+                    ["lowerCells"] = CellsToken(zone.lowerCells, sort: true),
+                    ["raisedCells"] = CellsToken(zone.raisedCells, sort: true),
+                    ["seamPairs"] = seamPairs
+                });
+            }
+
+            return new JObject
+            {
+                ["floorCells"] = CellsToken(floorCells, sort: false),
+                ["rooms"] = rooms,
+                ["connections"] = connections,
+                ["roomZones"] = zones,
+                ["connectorCandidateCount"] = layout.connectorCandidateCount
+            };
+        }
+
+        private static JObject BuildCanonicalTieredLevelPlanProjection(TieredLevelPlan plan)
+        {
+            var levelCells = new List<Vector2Int>(plan.cellLevels.Keys);
+            levelCells.Sort(CompareCells);
+            var levels = new JArray();
+            foreach (Vector2Int cell in levelCells)
+            {
+                levels.Add(new JObject
+                {
+                    ["cell"] = CellToken(cell),
+                    ["level"] = plan.cellLevels[cell]
+                });
+            }
+
+            var transitions = new JArray();
+            for (int index = 0; index < plan.transitions.Count; index++)
+            {
+                ElevationEdgeModel.TransitionEdge transition = plan.transitions[index];
+                transitions.Add(new JObject
+                {
+                    ["index"] = index,
+                    ["firstCell"] = CellToken(transition.firstCell),
+                    ["secondCell"] = CellToken(transition.secondCell),
+                    ["stairPrefabPath"] = transition.stairPrefabPath,
+                    ["placementClass"] = transition.placementClass,
+                    ["hasLandings"] = transition.hasLandings,
+                    ["lowerLandingCells"] = CellsToken(transition.lowerLandingCells, sort: false),
+                    ["upperLandingCells"] = CellsToken(transition.upperLandingCells, sort: false),
+                    ["footprintCells"] = CellsToken(transition.footprintCells, sort: false),
+                    ["hasPortDirections"] = transition.hasPortDirections,
+                    ["lowerPortDirection"] = transition.lowerPortDirection,
+                    ["upperPortDirection"] = transition.upperPortDirection,
+                    ["synthesizedSetPiece"] = SynthesizedSetPieceToken(transition.synthesizedSetPiece)
+                });
+            }
+
+            var synthesizedStairs = new JArray();
+            if (plan.synthesizedStairs != null)
+            {
+                foreach ((string gapId, ElevationEdgeModel.SynthesizedStairSetPiece setPiece) item in plan.synthesizedStairs)
+                {
+                    synthesizedStairs.Add(new JObject
+                    {
+                        ["gapId"] = item.gapId,
+                        ["setPiece"] = SynthesizedSetPieceToken(item.setPiece)
+                    });
+                }
+            }
+
+            var showpieces = new JArray();
+            if (plan.daisShowpieces != null)
+            {
+                foreach (DaisShowpiece showpiece in plan.daisShowpieces)
+                {
+                    var pieces = new JArray();
+                    foreach (ElevationEdgeModel.SynthesizedPiecePlacement piece in showpiece.pieces ?? Array.Empty<ElevationEdgeModel.SynthesizedPiecePlacement>())
+                    {
+                        pieces.Add(SynthesizedPieceToken(piece));
+                    }
+
+                    showpieces.Add(new JObject
+                    {
+                        ["designName"] = showpiece.designName,
+                        ["originCell"] = CellToken(showpiece.originCell),
+                        ["yawDegrees"] = showpiece.yawDegrees,
+                        ["roomLevel"] = showpiece.roomLevel,
+                        ["pieces"] = pieces
+                    });
+                }
+            }
+
+            return new JObject
+            {
+                ["cellLevels"] = levels,
+                ["transitions"] = transitions,
+                ["levelCount"] = plan.levelCount,
+                ["minLevel"] = plan.minLevel,
+                ["maxLevel"] = plan.maxLevel,
+                ["roomsPerTierSummary"] = plan.roomsPerTierSummary,
+                ["overlookCount"] = plan.overlookCount,
+                ["transitionSummary"] = plan.transitionSummary,
+                ["connectorCandidateCount"] = plan.connectorCandidateCount,
+                ["stairUsageSummary"] = plan.stairUsageSummary,
+                ["topologySummary"] = plan.topologySummary,
+                ["placementClassSummary"] = plan.placementClassSummary,
+                ["stairCandidateSummary"] = plan.stairCandidateSummary,
+                ["portGraphSummary"] = plan.portGraphSummary,
+                ["archetypeName"] = plan.archetypeName,
+                ["synthesizedStairs"] = synthesizedStairs,
+                ["synthesizedStairSummary"] = plan.synthesizedStairSummary,
+                ["daisShowpieces"] = showpieces,
+                ["promontoryCells"] = CellsToken(plan.promontoryCells, sort: true)
+            };
+        }
+
+        private static JToken SynthesizedSetPieceToken(ElevationEdgeModel.SynthesizedStairSetPiece setPiece)
+        {
+            if (setPiece == null)
+            {
+                return JValue.CreateNull();
+            }
+
+            var pieces = new JArray();
+            foreach (ElevationEdgeModel.SynthesizedPiecePlacement piece in setPiece.pieces)
+            {
+                pieces.Add(SynthesizedPieceToken(piece));
+            }
+
+            return new JObject
+            {
+                ["name"] = setPiece.name,
+                ["contractToken"] = CanonicalizeJson(setPiece.contractToken),
+                ["pieces"] = pieces
+            };
+        }
+
+        private static JObject SynthesizedPieceToken(ElevationEdgeModel.SynthesizedPiecePlacement piece)
+        {
+            return new JObject
+            {
+                ["sourcePrefab"] = piece.sourcePrefab,
+                ["pieceName"] = piece.pieceName,
+                ["localPosition"] = Vector3Token(piece.localPosition),
+                ["localYawDegrees"] = piece.localYawDegrees,
+                ["localPitchDegrees"] = piece.localPitchDegrees
+            };
+        }
+
+        private static JToken CanonicalizeJson(JToken token)
+        {
+            if (token == null)
+            {
+                return JValue.CreateNull();
+            }
+
+            if (token is JObject obj)
+            {
+                var names = new List<string>();
+                foreach (JProperty property in obj.Properties())
+                {
+                    names.Add(property.Name);
+                }
+
+                names.Sort(StringComparer.Ordinal);
+                var result = new JObject();
+                foreach (string name in names)
+                {
+                    result[name] = CanonicalizeJson(obj[name]);
+                }
+
+                return result;
+            }
+
+            if (token is JArray array)
+            {
+                var result = new JArray();
+                foreach (JToken child in array)
+                {
+                    result.Add(CanonicalizeJson(child));
+                }
+
+                return result;
+            }
+
+            return token.DeepClone();
+        }
+
+        private static JArray CellsToken(IEnumerable<Vector2Int> source, bool sort)
+        {
+            var cells = source == null ? new List<Vector2Int>() : new List<Vector2Int>(source);
+            if (sort)
+            {
+                cells.Sort(CompareCells);
+            }
+
+            var result = new JArray();
+            foreach (Vector2Int cell in cells)
+            {
+                result.Add(CellToken(cell));
+            }
+
+            return result;
+        }
+
+        private static JObject CellToken(Vector2Int cell)
+        {
+            return new JObject
+            {
+                ["x"] = cell.x,
+                ["y"] = cell.y
+            };
+        }
+
+        private static JObject RectToken(RectInt rect)
+        {
+            return new JObject
+            {
+                ["x"] = rect.x,
+                ["y"] = rect.y,
+                ["width"] = rect.width,
+                ["height"] = rect.height
+            };
+        }
+
+        private static JObject Vector3Token(Vector3 vector)
+        {
+            return new JObject
+            {
+                ["x"] = vector.x,
+                ["y"] = vector.y,
+                ["z"] = vector.z
+            };
+        }
+
+        private static JObject CheckToken(bool passed, string message)
+        {
+            return new JObject
+            {
+                ["passed"] = passed,
+                ["message"] = message ?? string.Empty
+            };
+        }
+
+        private static string SnapshotLine(string key, JToken value)
+        {
+            string serialized = value == null || value.Type == JTokenType.Null
+                ? string.Empty
+                : value.Type == JTokenType.Boolean
+                    ? (value.Value<bool>() ? "true" : "false")
+                    : value.Type == JTokenType.String
+                        ? value.Value<string>()
+                    : value.ToString(Formatting.None);
+            return $"{key}={serialized}";
         }
 
         // Pearson correlation between a room's BFS depth from the hall and its assigned tier.
@@ -298,46 +1627,434 @@ namespace DungeonLab.Editor
             return $"mean {sum / correlations.Count:0.##}, min {min:0.##}, max {max:0.##}";
         }
 
-        private static string WriteBatchReport(
-            int baseSeed,
-            int seedCount,
-            int successCount,
-            Dictionary<string, int> rejectionHistogram,
-            SortedDictionary<string, int> archetypeCounts,
-            List<float> correlations,
-            JArray seedReports)
+        private static JObject BuildIntDistribution(List<int> values)
         {
-            var rejections = new JObject();
-            foreach (KeyValuePair<string, int> entry in rejectionHistogram)
+            if (values == null || values.Count == 0)
             {
-                rejections[entry.Key] = entry.Value;
+                return new JObject
+                {
+                    ["sampleCount"] = 0,
+                    ["min"] = 0,
+                    ["p50"] = 0,
+                    ["p95"] = 0,
+                    ["max"] = 0,
+                    ["mean"] = 0d,
+                    ["histogram"] = new JObject()
+                };
             }
 
+            var sorted = new List<int>(values);
+            sorted.Sort();
+            double sum = 0;
+            var histogram = new SortedDictionary<int, int>();
+            foreach (int value in sorted)
+            {
+                sum += value;
+                histogram.TryGetValue(value, out int count);
+                histogram[value] = count + 1;
+            }
+
+            var histogramToken = new JObject();
+            foreach (KeyValuePair<int, int> entry in histogram)
+            {
+                histogramToken[entry.Key.ToString()] = entry.Value;
+            }
+
+            return new JObject
+            {
+                ["sampleCount"] = sorted.Count,
+                ["min"] = sorted[0],
+                ["p50"] = NearestRank(sorted, 0.50),
+                ["p95"] = NearestRank(sorted, 0.95),
+                ["max"] = sorted[sorted.Count - 1],
+                ["mean"] = sum / sorted.Count,
+                ["histogram"] = histogramToken
+            };
+        }
+
+        private static int NearestRank(IReadOnlyList<int> sortedValues, double percentile)
+        {
+            int index = Math.Max(0, Math.Min(
+                sortedValues.Count - 1,
+                (int)Math.Ceiling(percentile * sortedValues.Count) - 1));
+            return sortedValues[index];
+        }
+
+        private static string WritePhase0BatchReport(
+            int firstSeed,
+            int seedCount,
+            int successCount,
+            int hardValidCount,
+            Dictionary<string, int> rejectionHistogram,
+            Dictionary<string, int> rejectionCodeHistogram,
+            Dictionary<string, int> validationFailureCodeHistogram,
+            SortedDictionary<string, int> archetypeCounts,
+            List<float> correlations,
+            List<int> allAttemptCounts,
+            List<int> acceptedAttemptCounts,
+            List<int> routeRoomCounts,
+            List<int> branchNodeCounts,
+            List<int> loopEdgeCounts,
+            List<int> elevationSpans,
+            List<int> transitionCounts,
+            List<int> visibleDistantRoomProxyCounts,
+            JArray seedReports)
+        {
             var archetypes = new JObject();
             foreach (KeyValuePair<string, int> entry in archetypeCounts)
             {
                 archetypes[entry.Key] = entry.Value;
             }
 
+            string resultHash = ComputeSha256(seedReports.ToString(Formatting.None));
+            JObject attemptDistribution = BuildIntDistribution(allAttemptCounts);
             var report = new JObject
             {
                 ["generatedAtUtc"] = DateTime.UtcNow.ToString("o"),
-                ["baseSeed"] = baseSeed,
+                ["summaryVersion"] = ActiveDiagnosticSummaryVersion,
+                ["generatorVersion"] = ActiveDiagnosticGeneratorVersion,
+                ["profile"] = CurrentGenerationSettings.profileName,
+                ["catalogDigest"] = Phase0CatalogDigest(),
+                ["firstSeed"] = firstSeed,
+                ["lastSeed"] = firstSeed + seedCount - 1,
                 ["seedCount"] = seedCount,
                 ["accepted"] = successCount,
                 ["failed"] = seedCount - successCount,
+                ["hardValid"] = hardValidCount,
+                ["attemptDistribution"] = attemptDistribution,
+                ["acceptedAttemptDistribution"] = BuildIntDistribution(acceptedAttemptCounts),
                 ["archetypes"] = archetypes,
                 ["depthLevelCorrelation"] = FormatCorrelationSummary(correlations),
-                ["rejectionHistogram"] = rejections,
+                ["metrics"] = new JObject
+                {
+                    ["longestRootRouteRooms"] = BuildIntDistribution(routeRoomCounts),
+                    ["branchNodes"] = BuildIntDistribution(branchNodeCounts),
+                    ["loopEdges"] = BuildIntDistribution(loopEdgeCounts),
+                    ["elevationSpan"] = BuildIntDistribution(elevationSpans),
+                    ["transitions"] = BuildIntDistribution(transitionCounts),
+                    ["visibleDistantRoomProxy"] = BuildIntDistribution(visibleDistantRoomProxyCounts)
+                },
+                ["rejectionHistogram"] = HistogramToken(rejectionHistogram),
+                ["rejectionCodes"] = HistogramToken(rejectionCodeHistogram),
+                ["validationFailureCodes"] = HistogramToken(validationFailureCodeHistogram),
+                ["resultHashAlgorithm"] = "SHA-256 over the ordered seed-report array; generatedAtUtc excluded",
+                ["resultHash"] = resultHash,
+                ["deletionLedger"] = phase1RouteFirstPilotSelected
+                    ? Phase1DeletionLedgerToken()
+                    : new JArray(),
                 ["seeds"] = seedReports
             };
+            if (phase1RouteFirstPilotSelected)
+            {
+                bool completionPassed = hardValidCount >= 95;
+                bool attemptCeilingPassed = attemptDistribution.Value<int>("max") <= Phase1LayoutAttemptLimit;
+                bool p95Passed = attemptDistribution.Value<int>("p95") <= 1;
+                bool acceptedHardValid = hardValidCount == successCount;
+                bool failuresReasonCoded = Phase1FailuresAreReasonCoded(seedReports);
+                report["lockedReliabilityBudget"] = new JObject
+                {
+                    ["corpus"] = $"{firstSeed}..{firstSeed + seedCount - 1}",
+                    ["completionFloor"] = 95,
+                    ["attemptCeiling"] = Phase1LayoutAttemptLimit,
+                    ["p95AttemptTarget"] = 1
+                };
+                report["budgetResult"] = new JObject
+                {
+                    ["passed"] = completionPassed && attemptCeilingPassed && p95Passed && acceptedHardValid && failuresReasonCoded,
+                    ["hardValidCompletions"] = hardValidCount,
+                    ["completionFloorPassed"] = completionPassed,
+                    ["attemptCeilingPassed"] = attemptCeilingPassed,
+                    ["p95AttemptTargetPassed"] = p95Passed,
+                    ["everyAcceptedPlanHardValid"] = acceptedHardValid,
+                    ["everyFailureReasonCoded"] = failuresReasonCoded
+                };
+            }
 
             Directory.CreateDirectory(BatchReportDirectory);
+            string filePrefix = phase1RouteFirstPilotSelected
+                ? "phase1_pilot"
+                : "phase0_baseline";
             string reportPath = Path.Combine(
                 BatchReportDirectory,
-                $"batch_validation_{DateTime.Now:yyyyMMdd_HHmmss}.json");
-            File.WriteAllText(reportPath, report.ToString());
+                $"{filePrefix}_{firstSeed}_{firstSeed + seedCount - 1}.json");
+            File.WriteAllText(reportPath, report.ToString(Formatting.Indented));
             return reportPath;
+        }
+
+        private static JArray Phase1DeletionLedgerToken()
+        {
+            return new JArray
+            {
+                new JObject
+                {
+                    ["symbol"] = "phase1RouteFirstPilotSelected and the candidate-layout selector branch",
+                    ["status"] = "open",
+                    ["removeInPhase"] = "Phase 2",
+                    ["deletionTargets"] = new JArray
+                    {
+                        "phase1RouteFirstPilotSelected",
+                        "BuildRandomDungeonLayoutData",
+                        "the old-builder branch in TryBuildAcceptedPlan",
+                        "Phase 1-only comparison menu and report labels"
+                    }
+                }
+            };
+        }
+
+        private static bool Phase1FailuresAreReasonCoded(JArray seedReports)
+        {
+            foreach (JToken token in seedReports)
+            {
+                if (token.Value<bool?>("accepted") == true)
+                {
+                    continue;
+                }
+
+                string code = token.Value<string>("lastRejectionCode");
+                if (string.IsNullOrEmpty(code) || string.Equals(code, "NONE", StringComparison.Ordinal))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static JObject HistogramToken(IReadOnlyDictionary<string, int> histogram)
+        {
+            var result = new JObject();
+            if (histogram == null)
+            {
+                return result;
+            }
+
+            var keys = new List<string>(histogram.Keys);
+            keys.Sort(StringComparer.Ordinal);
+            foreach (string key in keys)
+            {
+                result[key] = histogram[key];
+            }
+
+            return result;
+        }
+
+        private static JObject RejectionCodeHistogramToken(IReadOnlyDictionary<string, int> rejectionHistogram)
+        {
+            var codes = new Dictionary<string, int>(StringComparer.Ordinal);
+            if (rejectionHistogram != null)
+            {
+                foreach (KeyValuePair<string, int> entry in rejectionHistogram)
+                {
+                    string code = Phase0RejectionCode(entry.Key, exception: null);
+                    codes.TryGetValue(code, out int count);
+                    codes[code] = count + entry.Value;
+                }
+            }
+
+            return HistogramToken(codes);
+        }
+
+        private static void MergeJsonHistogram(JObject source, Dictionary<string, int> destination)
+        {
+            if (source == null)
+            {
+                return;
+            }
+
+            foreach (JProperty property in source.Properties())
+            {
+                destination.TryGetValue(property.Name, out int count);
+                destination[property.Name] = count + property.Value.Value<int>();
+            }
+        }
+
+        private static void MergeJsonCodeArray(JArray source, Dictionary<string, int> destination)
+        {
+            if (source == null)
+            {
+                return;
+            }
+
+            foreach (JToken token in source)
+            {
+                string code = token.Value<string>();
+                if (string.IsNullOrEmpty(code))
+                {
+                    continue;
+                }
+
+                destination.TryGetValue(code, out int count);
+                destination[code] = count + 1;
+            }
+        }
+
+        private static void AddFailureCode(JArray failureCodes, bool passed, string code)
+        {
+            if (!passed)
+            {
+                failureCodes.Add(code);
+            }
+        }
+
+        private static string Phase0RejectionCode(string reason, Exception exception)
+        {
+            if (exception != null)
+            {
+                return "PLANNING_EXCEPTION";
+            }
+
+            string raw = reason ?? string.Empty;
+            if (raw.StartsWith("[ROUTE_", StringComparison.Ordinal))
+            {
+                int closingBracket = raw.IndexOf(']');
+                if (closingBracket > 1)
+                {
+                    return raw.Substring(1, closingBracket - 1);
+                }
+            }
+
+            string value = raw.ToLowerInvariant();
+            if (value.Contains("headroom")) return "HEADROOM_CLEARANCE";
+            if (value.Contains("no floor cells") || value.Contains("no leveled floor")) return "EMPTY_FLOOR";
+            if (value.Contains("enough connected regions")) return "INSUFFICIENT_CONNECTED_REGIONS";
+            if (value.Contains("no loop edges")) return "NO_LOOP_EDGE";
+            if (value.Contains("floorplan had only")) return "INSUFFICIENT_ROOM_COUNT";
+            if (value.Contains("floor-fill")) return "LOW_FLOOR_FILL";
+            if (value.Contains("enough depth") || value.Contains("zone graph") || value.Contains("room graph left")) return "LEVEL_ASSIGNMENT";
+            if (value.Contains("single level")) return "SINGLE_LEVEL";
+            if (value.Contains("off-grammar") || value.Contains("differed by")) return "ROOM_LEVEL_DELTA";
+            if (value.Contains("no usable corridor") || value.Contains("non-cardinal") || value.Contains("corridor cell pair")) return "CORRIDOR_PATH";
+            if (value.Contains("reviewed active stair contract placement") || value.Contains("synthesis offered no fitting")) return "STAIR_PLACEMENT";
+            if (value.Contains("without a reviewed active stair contract")) return "STAIR_CONTRACT";
+            if (value.Contains("assigned both level")) return "CELL_LEVEL_CONFLICT";
+            if (value.Contains("transition") && (value.Contains("missing") || value.Contains("level delta") || value.Contains("landing") || value.Contains("different levels"))) return "TRANSITION_CONTRACT";
+            if (value.Contains("port graph") || value.Contains("floor/stair")) return "PORT_GRAPH";
+            if (value.Contains("sealed with no doorway") || value.Contains("boundary context")) return "BOUNDARY_CONTEXT";
+            if (string.IsNullOrWhiteSpace(value)) return "NONE";
+            return "UNCLASSIFIED_REJECTION";
+        }
+
+        private static string Phase0CatalogDigest()
+        {
+            if (!string.IsNullOrEmpty(phase0CatalogDigestCache))
+            {
+                return phase0CatalogDigestCache;
+            }
+
+            string[] paths =
+            {
+                GenerationProfilePath,
+                PrefabContractsPath,
+                PackageInventoryPath,
+                StairProofContractsPath,
+                ForgedStairContractsPath,
+                "Assets/Arena/Content/Settings/Dungeons/RandomDungeon/step_formation_modes.json",
+                "Assets/Arena/Content/Settings/Dungeons/RandomDungeon/step_piece_library.json"
+            };
+            var digestInput = new StringBuilder();
+            foreach (string path in paths)
+            {
+                digestInput.Append(path).Append('\n');
+                if (File.Exists(path))
+                {
+                    digestInput.Append(Convert.ToBase64String(File.ReadAllBytes(path)));
+                }
+                else
+                {
+                    digestInput.Append("<missing>");
+                }
+
+                digestInput.Append('\n');
+            }
+
+            phase0CatalogDigestCache = ComputeSha256(digestInput.ToString());
+            return phase0CatalogDigestCache;
+        }
+
+        private static string ComputeSha256(string value)
+        {
+            using (SHA256 sha = SHA256.Create())
+            {
+                byte[] hash = sha.ComputeHash(Encoding.UTF8.GetBytes(value ?? string.Empty));
+                var result = new StringBuilder(hash.Length * 2);
+                foreach (byte item in hash)
+                {
+                    result.Append(item.ToString("x2"));
+                }
+
+                return result.ToString();
+            }
+        }
+
+        private static void CapturePhase0SentinelImage(Bounds bounds, string path)
+        {
+            var cameraObject = new GameObject("DungeonLab Phase0 Sentinel Camera")
+            {
+                hideFlags = HideFlags.HideAndDontSave
+            };
+            var lightObject = new GameObject("DungeonLab Phase0 Sentinel Light")
+            {
+                hideFlags = HideFlags.HideAndDontSave
+            };
+            Camera camera = cameraObject.AddComponent<Camera>();
+            Light light = lightObject.AddComponent<Light>();
+            AmbientMode previousAmbientMode = RenderSettings.ambientMode;
+            Color previousAmbientLight = RenderSettings.ambientLight;
+            Color previousAmbientSky = RenderSettings.ambientSkyColor;
+            Color previousAmbientEquator = RenderSettings.ambientEquatorColor;
+            Color previousAmbientGround = RenderSettings.ambientGroundColor;
+            bool previousFog = RenderSettings.fog;
+            var renderTexture = new RenderTexture(Phase0SentinelImageWidth, Phase0SentinelImageHeight, 24);
+            var texture = new Texture2D(Phase0SentinelImageWidth, Phase0SentinelImageHeight, TextureFormat.RGB24, false);
+            RenderTexture previousActive = RenderTexture.active;
+            try
+            {
+                Vector3 center = bounds.center;
+                float radius = Mathf.Max(16f, bounds.extents.magnitude);
+                // Looking direction points down toward the floorplan; subtracting
+                // it therefore places the review camera above the dungeon.
+                Vector3 direction = new Vector3(-0.85f, -0.68f, -0.95f).normalized;
+                camera.transform.position = center - direction * (radius * 1.7f);
+                camera.transform.LookAt(center + Vector3.up * Mathf.Max(1.5f, bounds.extents.y * 0.1f));
+                camera.nearClipPlane = 0.1f;
+                camera.farClipPlane = Mathf.Max(250f, radius * 8f);
+                camera.fieldOfView = 35f;
+                camera.clearFlags = CameraClearFlags.SolidColor;
+                camera.backgroundColor = new Color(0.035f, 0.04f, 0.055f, 1f);
+                camera.targetTexture = renderTexture;
+
+                light.type = LightType.Directional;
+                light.intensity = 1.25f;
+                light.color = new Color(1f, 0.82f, 0.68f);
+                light.transform.rotation = Quaternion.Euler(48f, -32f, 0f);
+                RenderSettings.ambientMode = AmbientMode.Flat;
+                RenderSettings.ambientLight = new Color(0.22f, 0.23f, 0.28f);
+                RenderSettings.fog = false;
+
+                RenderTexture.active = renderTexture;
+                camera.Render();
+                texture.ReadPixels(
+                    new Rect(0, 0, Phase0SentinelImageWidth, Phase0SentinelImageHeight),
+                    0,
+                    0);
+                texture.Apply();
+                File.WriteAllBytes(path, texture.EncodeToPNG());
+            }
+            finally
+            {
+                camera.targetTexture = null;
+                RenderTexture.active = previousActive;
+                RenderSettings.ambientMode = previousAmbientMode;
+                RenderSettings.ambientLight = previousAmbientLight;
+                RenderSettings.ambientSkyColor = previousAmbientSky;
+                RenderSettings.ambientEquatorColor = previousAmbientEquator;
+                RenderSettings.ambientGroundColor = previousAmbientGround;
+                RenderSettings.fog = previousFog;
+                DestroyImmediate(renderTexture);
+                DestroyImmediate(texture);
+                DestroyImmediate(cameraObject);
+                DestroyImmediate(lightObject);
+            }
         }
     }
 }

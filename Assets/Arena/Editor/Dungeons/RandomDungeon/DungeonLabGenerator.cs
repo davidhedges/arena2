@@ -220,7 +220,7 @@ namespace DungeonLab.Editor
                     out string rejectionReason))
             {
                 Debug.LogError(
-                    $"Dungeon Lab: failed to build reachable tiered dungeon after {LayoutRegenerationAttempts} attempts. Last rejection: {rejectionReason}. " +
+                    $"Dungeon Lab: failed to build reachable tiered dungeon after {layoutAttemptsUsed} attempts. Last rejection: {rejectionReason}. " +
                     $"Rejection histogram: {FormatRejectionHistogram(rejectionHistogram)}");
                 return;
             }
@@ -2516,10 +2516,32 @@ namespace DungeonLab.Editor
             levelPlan = default;
             layoutAttemptsUsed = 0;
             rejectionReason = string.Empty;
-            for (int attempt = 0; attempt < LayoutRegenerationAttempts; attempt++)
+            int layoutAttemptLimit = phase1RouteFirstPilotSelected
+                ? Phase1LayoutAttemptLimit
+                : LayoutRegenerationAttempts;
+            for (int attempt = 0; attempt < layoutAttemptLimit; attempt++)
             {
                 layoutAttemptsUsed = attempt + 1;
-                DungeonLayout candidateLayout = BuildRandomDungeonLayoutData(random);
+                DungeonLayout candidateLayout;
+                // Phase 1's sole temporary comparison selector. Remove this
+                // branch and BuildRandomDungeonLayoutData in Phase 2.
+                if (phase1RouteFirstPilotSelected)
+                {
+                    if (!TryBuildProcessionalSpineDungeonLayout(
+                            dungeonSeed,
+                            layoutAttemptsUsed,
+                            out candidateLayout,
+                            out rejectionReason))
+                    {
+                        RecordRejection(rejectionHistogram, rejectionReason);
+                        continue;
+                    }
+                }
+                else
+                {
+                    candidateLayout = BuildRandomDungeonLayoutData(random);
+                }
+
                 if (TryBuildTieredLevelPlan(candidateLayout, dungeonSeed, random, rejectionHistogram, out layout, out levelPlan, out rejectionReason))
                 {
                     return true;
