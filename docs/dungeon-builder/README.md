@@ -2,7 +2,19 @@
 
 The former `dungeon_builder` Unity project is integrated as an Arena feature instead of a second project root.
 
-Read [`PROJECT_INVARIANTS.md`](PROJECT_INVARIANTS.md) before changing generator, measurement, contract, or placement code.
+## Start here
+
+If you are returning after time away, read these in order:
+
+1. [`CURRENT_STATUS.md`](CURRENT_STATUS.md) — active milestone, exact next action, and known state.
+2. [`COHERENT_FLOORPLAN_PLAN.md`](COHERENT_FLOORPLAN_PLAN.md) — the route-first implementation roadmap and exit gates.
+3. [`PROJECT_INVARIANTS.md`](PROJECT_INVARIANTS.md) — hard geometry, traversal, and placement rules.
+4. [`RECIPE_AUTHORING_WORKFLOW.md`](RECIPE_AUTHORING_WORKFLOW.md) — the workflow to use once the recipe foundation is implemented.
+5. [`stair_forge_design.md`](stair_forge_design.md) — vertical-traversal design decisions and implementation history.
+
+Always read [`PROJECT_INVARIANTS.md`](PROJECT_INVARIANTS.md) before changing generator, measurement, contract, or placement code.
+
+## Repository locations
 
 - `Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack` contains the original asset-pack content.
 - `Assets/Arena/Content/Prefabs/Dungeons/FantasticDungeon` contains Dungeon Lab's authored stairs and set pieces.
