@@ -9,6 +9,7 @@ using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.SceneManagement;
+using Stopwatch = System.Diagnostics.Stopwatch;
 
 namespace DungeonLab.Editor
 {
@@ -54,12 +55,69 @@ namespace DungeonLab.Editor
 
         internal static void RebuildWithSeed(int seed)
         {
+            RebuildWithSeed(
+                seed,
+                ScenePath,
+                DataKey,
+                addSceneToBuildSettings: true,
+                beforeModelImporterMutation: null,
+                stageRecorder: null);
+        }
+
+        // Phase 7 validation uses the exact production rebuild core with unique
+        // temporary destinations so evidence cannot overwrite the baked scene
+        // or its checked-in client/server collision payloads.
+        internal static void RebuildWithSeedForValidation(
+            int seed,
+            string destinationScenePath,
+            string dataKey,
+            Action<string>? beforeModelImporterMutation = null,
+            Action<string, double>? stageRecorder = null)
+        {
+            if (string.IsNullOrWhiteSpace(destinationScenePath) ||
+                !destinationScenePath.StartsWith("Assets/", StringComparison.Ordinal) ||
+                !destinationScenePath.EndsWith(".unity", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new ArgumentException(
+                    "Validation destination must be a Unity scene asset path.",
+                    nameof(destinationScenePath));
+            }
+
+            if (string.IsNullOrWhiteSpace(dataKey))
+                throw new ArgumentException("Validation collision data key is required.", nameof(dataKey));
+            if (string.Equals(destinationScenePath, ScenePath, StringComparison.Ordinal) ||
+                string.Equals(dataKey, DataKey, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    "Phase 7 validation must not target the checked-in production scene or collision key.");
+            }
+
+            RebuildWithSeed(
+                seed,
+                destinationScenePath,
+                dataKey,
+                addSceneToBuildSettings: false,
+                beforeModelImporterMutation,
+                stageRecorder);
+        }
+
+        private static void RebuildWithSeed(
+            int seed,
+            string destinationScenePath,
+            string dataKey,
+            bool addSceneToBuildSettings,
+            Action<string>? beforeModelImporterMutation,
+            Action<string, double>? stageRecorder)
+        {
+            long stageStart = Stopwatch.GetTimestamp();
             EnsureDestinationFolder();
 
             Scene destination = EditorSceneManager.NewScene(
                 NewSceneSetup.EmptyScene,
                 NewSceneMode.Single);
+            RecordValidationStage(stageRecorder, "newScene", ref stageStart);
             DungeonLabGenerator.GenerateWithSeed(seed);
+            RecordValidationStage(stageRecorder, "planAndRender", ref stageStart);
             GameObject? dungeonRoot = destination.GetRootGameObjects()
                 .FirstOrDefault(root => string.Equals(
                     root.name,
@@ -70,23 +128,36 @@ namespace DungeonLab.Editor
                 throw new InvalidOperationException(
                     $"Dungeon generation for seed {seed} did not create '{GeneratedRootName}'.");
             }
+            RecordValidationStage(stageRecorder, "resolveGeneratedRoot", ref stageStart);
 
             CenterDungeonSpawn(dungeonRoot);
-            EnsureCollisionMeshesReadable(dungeonRoot);
+            RecordValidationStage(stageRecorder, "centerDungeonSpawn", ref stageStart);
+            EnsureCollisionMeshesReadable(dungeonRoot, beforeModelImporterMutation);
+            RecordValidationStage(stageRecorder, "normalizeCollisionMeshImporters", ref stageStart);
             MarkDungeonCollision(dungeonRoot);
+            RecordValidationStage(stageRecorder, "markDungeonCollision", ref stageStart);
             CreateSceneMetadata(seed);
             CloneGameplayCameraRig(destination);
             CreateLighting();
+            RecordValidationStage(stageRecorder, "sceneMetadataCameraAndLighting", ref stageStart);
 
             EditorSceneManager.MarkSceneDirty(destination);
-            if (!EditorSceneManager.SaveScene(destination, ScenePath))
-                throw new InvalidOperationException($"Failed to save generated dungeon scene '{ScenePath}'.");
+            if (!EditorSceneManager.SaveScene(destination, destinationScenePath))
+            {
+                throw new InvalidOperationException(
+                    $"Failed to save generated dungeon scene '{destinationScenePath}'.");
+            }
+            RecordValidationStage(stageRecorder, "saveSceneBeforeExport", ref stageStart);
 
-            AddSceneToBuildSettings();
+            if (addSceneToBuildSettings)
+                AddSceneToBuildSettings(destinationScenePath);
             SceneManager.SetActiveScene(destination);
-            GameplayCollisionExporter.ExportActiveSceneSharedCollisionData(DataKey);
-            EditorSceneManager.SaveScene(destination, ScenePath);
+            RecordValidationStage(stageRecorder, "activateAndRegisterScene", ref stageStart);
+            GameplayCollisionExporter.ExportActiveSceneSharedCollisionData(dataKey);
+            RecordValidationStage(stageRecorder, "exportSharedCollision", ref stageStart);
+            EditorSceneManager.SaveScene(destination, destinationScenePath);
             AssetDatabase.SaveAssets();
+            RecordValidationStage(stageRecorder, "saveSceneAndAssetsAfterExport", ref stageStart);
 
             Debug.Log(
                 $"[RandomDungeonSceneBuilder] Rebuilt {SceneName} with seed {seed}. " +
@@ -139,7 +210,9 @@ namespace DungeonLab.Editor
                 throw new InvalidOperationException("Generated dungeon contains no enabled collision geometry.");
         }
 
-        private static void EnsureCollisionMeshesReadable(GameObject dungeonRoot)
+        private static void EnsureCollisionMeshesReadable(
+            GameObject dungeonRoot,
+            Action<string>? beforeModelImporterMutation)
         {
             string[] modelPaths = dungeonRoot
                 .GetComponentsInChildren<MeshCollider>(includeInactive: false)
@@ -157,6 +230,7 @@ namespace DungeonLab.Editor
                 if (AssetImporter.GetAtPath(modelPath) is not ModelImporter importer || importer.isReadable)
                     continue;
 
+                beforeModelImporterMutation?.Invoke(modelPath);
                 importer.isReadable = true;
                 importer.SaveAndReimport();
                 updatedImporterCount++;
@@ -271,24 +345,40 @@ namespace DungeonLab.Editor
                 throw new InvalidOperationException($"Required Arena scene folder '{folder}' is missing.");
         }
 
-        private static void AddSceneToBuildSettings()
+        private static void AddSceneToBuildSettings(string scenePath)
         {
             EditorBuildSettingsScene[] scenes = EditorBuildSettings.scenes;
             int existingIndex = Array.FindIndex(
                 scenes,
-                scene => string.Equals(scene.path, ScenePath, StringComparison.Ordinal));
+                scene => string.Equals(scene.path, scenePath, StringComparison.Ordinal));
             if (existingIndex >= 0)
             {
                 if (!scenes[existingIndex].enabled)
-                    scenes[existingIndex] = new EditorBuildSettingsScene(ScenePath, enabled: true);
+                    scenes[existingIndex] = new EditorBuildSettingsScene(scenePath, enabled: true);
             }
             else
             {
                 Array.Resize(ref scenes, scenes.Length + 1);
-                scenes[^1] = new EditorBuildSettingsScene(ScenePath, enabled: true);
+                scenes[^1] = new EditorBuildSettingsScene(scenePath, enabled: true);
             }
 
             EditorBuildSettings.scenes = scenes;
+        }
+
+        private static void RecordValidationStage(
+            Action<string, double>? stageRecorder,
+            string stage,
+            ref long stageStart)
+        {
+            long end = Stopwatch.GetTimestamp();
+            if (stageRecorder != null)
+            {
+                stageRecorder(
+                    stage,
+                    (end - stageStart) * 1000d / Stopwatch.Frequency);
+            }
+
+            stageStart = end;
         }
 
         private static int CreateSeed()

@@ -1,6 +1,6 @@
 # Coherent floorplan generation plan
 
-Status: Phases 0-6 complete and verified; the Phase 7 automated sweep gate passes, while curated review and collision-export parity remain
+Status: Phases 0-6 complete and verified; the Phase 7 automated sweep and collision-export gates pass, while curated human review remains
 
 Last updated: 2026-07-22
 
@@ -466,7 +466,7 @@ The current plain wall gap remains a valid doorway expression. Door leaves, arch
 
 Goal: demonstrate that the single generator is dependable enough for ordinary use.
 
-Entry status: the reliability, attempt, performance, environment, gallery-selection, reviewer, and passing thresholds were approved and locked on 2026-07-21 before implementing measurement support or judging the larger sweep. The numeric budget is recorded in `CURRENT_STATUS.md`. The first valid sweeps exposed a maximum-time failure caused by processional seed `2026072486` repeating pure stair-option preparation and placement-geometry work across 32 failed tier assignments. The bounded production revision caches only those invariant computations and preserves placement order, random streams, retry ceilings, rejections, accepted plans, and canonical hashes. A locked diagnostic and two replacement 2,000-seed sweeps now pass reliability, hard validity, attempts, every performance limit, and exact determinism. The automated sweep gate passes; curated-gallery review and collision-export-parity work have not started.
+Entry status: the reliability, attempt, performance, environment, gallery-selection, reviewer, and passing thresholds were approved and locked on 2026-07-21 before implementing measurement support or judging the larger sweep. The numeric budget is recorded in `CURRENT_STATUS.md`. The first valid sweeps exposed a maximum-time failure caused by processional seed `2026072486` repeating pure stair-option preparation and placement-geometry work across 32 failed tier assignments. The bounded production revision caches only those invariant computations and preserves placement order, random streams, retry ceilings, rejections, accepted plans, and canonical hashes. A locked diagnostic and two replacement 2,000-seed sweeps pass reliability, hard validity, attempts, every planning-performance limit, and exact determinism. The locked 30-floor corpus also passes actual collision export for every rendered source, exact server/client payload copies, artifact restoration, and the plan-through-export performance limits. The automated sweep and collision-export gates pass; curated-gallery generation and human review have not started.
 
 Deliverables:
 
