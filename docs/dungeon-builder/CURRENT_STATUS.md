@@ -2,9 +2,9 @@
 
 Start here when returning to dungeon work. Keep this page short and update it at the end of every dungeon-generation session.
 
-Last updated: 2026-07-21
+Last updated: 2026-07-22
 
-Active milestone: Phase 6 complete and verified at Phase 6f; Phase 7 production hardening is next
+Active milestone: Phase 6 complete and verified at Phase 6f; the Phase 7 automated sweep gate passes, with curated review and collision-export parity still remaining
 
 Production mode: one route-first layout builder deterministically selects processional-spine, atrium-ring, or twin-wing-keep, resolves exactly three reviewed recipes plus any target-bearing named-vista promontory, and feeds the shared canonical pipeline
 
@@ -499,6 +499,73 @@ These gates are locked before the recipe asset, catalog, route-slot, placement, 
 - All six real-graphics sentinels use `dungeon-plan-v8` / `route-topologies-v8` and report `REJECTED 0`. Representative processional, atrium, and twin-wing captures were inspected at original resolution with continuous routes, clean raised returns, and no visible seams, floating pieces, or blocked circulation. The full EditMode suite is 362/383: exactly the same 21 unrelated baseline failures and zero Dungeon Lab failures.
 - Producer/consumer/test and symbol audits find one generalized exit-edge orientation definition with two production consumers. The temporary promotion entry point is deleted, no pattern-specific recipe renderer or validator exists, multiple-vista scoring and the parked late step pass remain absent, and the Phase 6f deletion ledger is empty.
 
+## Phase 7 acceptance budget — locked before measurement and final results
+
+This budget was approved on 2026-07-21 after a read-only review of the Phase 6f report, current batch/renderer diagnostics, retained logs, sentinels, recipe evidence, and local Unity environment. It is locked before implementing timing support, generating the Phase 7 gallery, running either larger sweep, or judging any Phase 7 result.
+
+### Deterministic sweep and reliability
+
+- Use the unseen inclusive range `2026072300..2026074299`: exactly 2,000 seeds with the active spacious profile and exact selector counts of 1,000 processional-spine, 500 atrium-ring, and 500 twin-wing-keep.
+- Run the complete range twice. At least 1,990/2,000 seeds must be accepted overall. Processional-spine must accept at least 990/1,000; atrium-ring and twin-wing-keep must each accept at least 495/500.
+- Every accepted seed must pass every current hard validator. Every rejection must carry a stable reason code. The two sweeps must match per seed on selected topology, acceptance, attempt count, rejection code, and route-intent/layout/tier/recipe/catalog/canonical hashes, with identical aggregate digests.
+- This reliability sweep does not replace the separate Phase 7 exit requirement that accepted production plans prove real collision-export parity. The current renderer diagnostic checks collision preconditions only and cannot be reported as actual export evidence.
+
+### Attempt budget
+
+- Maximum layout attempts per seed: 2.
+- p95 layout attempts: 1 overall and independently for each topology.
+
+### Performance budget and measurement environment
+
+- Planning measurement wraps the existing `BuildPhase0SeedReport(seed)` boundary with a monotonic clock. It includes planning, canonical hard validation, diagnostic projection, and hash construction; it excludes Unity startup, imports/compilation, progress UI, final report serialization, and file writing.
+- On each of the two complete sweeps, mean planning time must be at most 125 ms/seed, p95 at most 200 ms/seed, maximum at most 750 ms for any seed, and the measured 2,000-seed section at most 250 seconds.
+- Separately, the curated 30-seed set measures plan through the real renderer and actual collision export, excluding screenshot encoding. Its p95 must be at most 2.5 seconds/seed and its maximum at most 5 seconds. This becomes measurable only when the existing Phase 7 collision-parity deliverable supplies actual export evidence; the current collision-precondition probe is not a substitute.
+- Lock the reference environment to Unity `6000.4.0f1`, native arm64, macOS 14.3, MacBook Pro M1 Pro with 8 CPU cores, 14 GPU cores, and 16 GB RAM. Run on AC power with Low Power Mode off, a warm imported project, no compilation/import during measurement, no competing Unity process, and no substantial competing CPU workload.
+- Warm each process with 40 existing known seeds before measuring. A valid slow result cannot be discarded. A run may be invalidated only for a logged environmental violation such as compilation/import, another Unity process, or a power-mode change.
+
+### Curated gallery and human review
+
+- Review exactly 30 floors: the six established historical sentinels as blinded regression controls plus 24 accepted Phase 7 seeds, exactly eight new seeds per topology.
+- For each topology, choose unique seeds in this locked order: closest to the topology medians for transitions and distant-visibility proxy; minimum transitions; maximum transitions; minimum distant-visibility proxy; maximum distant-visibility proxy; a named-promontory-present seed; a named-promontory-absent seed or stable-hash replacement if none exists; and one stable hash-ranked sample. Break ties by lowest seed and take the next eligible seed when a slot would duplicate an earlier selection.
+- Each floor receives three consistently framed, unannotated scored views: overview, player-height arrival/threshold, and player-height landmark/vista approach. A route overlay may be supplied afterward only as unscored diagnostic evidence.
+- Two reviewers familiar with third-person traversal score independently in a fixed randomized order. At least one reviewer must not have implemented the generator. Hide seed numbers, topology labels, historical categories, and automated metrics during scoring.
+- Use a 1-5 scale: 1 unusable or contradictory; 2 major revision required; 3 acceptable for ordinary use; 4 strong; 5 exemplary. Score rubric items 1-6 and 8 per floor. Score repetition across seeds once per topology and once for the full gallery.
+- No score of 1 is permitted. Both reviewers must score every floor at least 3 for route readability, entrance/threshold clarity, and vertical-circulation legibility. Any 2 on another criterion requires documented joint re-review, and an unresolved 2 fails.
+- Every floor's combined average must be at least 3.25; at least 24/30 floors must average at least 3.5; and every per-floor criterion must average at least 3.5 across the gallery. Repetition must receive at least 3 from each reviewer for every topology and overall, with a combined overall mean of at least 3.5.
+
+Missing any locked gate requires revising the implementation or reporting the Phase 7 failure. Do not weaken or reinterpret the budget after observing results.
+
+## Phase 7 sweep-support implementation and initial pre-fix evidence
+
+- Diagnostic-only support adds separate run-1/run-2 entry points for the exact `2026072300..2026074299` corpus, performs the required 40 known-seed warm-up, times `BuildPhase0SeedReport(seed)` with monotonic timestamps, evaluates every locked automated gate, writes run-specific reports and compact per-seed determinism sidecars, and makes run 2 write and enforce a combined comparison result. Timing and comparison data remain outside generation random streams and canonical seed hashes.
+- The focused Phase 7 support fixture passes 5/5, including the diagnostic-boundary contract. All Dungeon Lab focused fixtures pass 76/76. `git diff --check` passes; no generator behavior, topology, recipe, vista, motif, renderer, collision, schema, profile, catalog, random version, or canonical diagnostic version changed.
+- Both complete sweeps ran in the locked environment: Unity `6000.4.0f1`, native arm64, macOS 14.3, Apple M1 Pro with 8 CPU cores, 14 GPU cores, and 16 GB RAM, on AC power with Low Power Mode off, no competing Unity process, and the required warm-up.
+- Both sweeps produced 2,000/2,000 accepted and hard-valid plans with exact 1,000/500/500 selection and acceptance. Attempts were identical at min/p50/p95/max/mean `1/1/1/2/1.0005`; 1,999 seeds used one attempt and processional seed `2026072486` used two. Rejection codes were identical at `PORT_GRAPH:56` and `STAIR_PLACEMENT:32`; there were no failed seeds or post-plan validation failures.
+- Every compact per-seed determinism record is identical between runs. Both determinism digests are `6d13f5d68cec7d19011d32704edf7d5dfe8e56370f88d9e83d58379886ff73a8`, and both full ordered seed-report hashes are `75085c837577222cb6e933505d5fed087075fd92198978649fd6a60b9b85f632`.
+- Run 1 planning performance was mean 78.419 ms, p95 107.366 ms, maximum 1,400.655 ms, and measured loop 156.869 seconds. Run 2 was mean 78.155 ms, p95 104.196 ms, maximum 1,610.890 ms, and measured loop 156.340 seconds. Both pass the locked mean, p95, and loop budgets but fail the locked 750 ms maximum.
+- The combined comparison correctly reports `passed: false` only because both individual performance budgets fail. The valid slow results were not discarded, the threshold was not weakened, and Phase 7 stops before curated-gallery or collision-export-parity work.
+- The valid failed reports and logs were retained with `_pre_fix` suffixes before replacement. The locked budget was not changed.
+
+## Phase 7 maximum planning-time diagnosis
+
+- The authorized diagnostic-only reproduction retained the same 2,000 full seed reports in memory and added nested monotonic stage timers, per-seed process CPU, managed-memory, and garbage-collection counters. It ran in the locked environment and is explicitly not an acceptance sweep.
+- The reproduction is functionally exact: 2,000/2,000 accepted and hard-valid, result hash `75085c837577222cb6e933505d5fed087075fd92198978649fd6a60b9b85f632`, and determinism digest `6d13f5d68cec7d19011d32704edf7d5dfe8e56370f88d9e83d58379886ff73a8`, all matching the first official sweep. Its mean was 76.338 ms, p95 100.044 ms, loop 153.493 seconds, and one seed exceeded 750 ms.
+- Processional seed `2026072486` reproduced at 1,381.465 ms. `BuildPhase0SeedReport` spent 1,360.816 ms in accepted-plan construction, including 1,357.072 ms in `TryBuildTieredLevelPlan`; route layout took 3.739 ms and accepted-report projection, validation, and hashing took 20.628 ms. Process CPU was 1,379.595 ms, only 1.870 ms below wall time, excluding external scheduling or file I/O as the explanation.
+- Both official run reports show that this same sole two-layout-attempt seed records exactly 32 `STAIR_PLACEMENT` rejections. The code has `LevelAssignmentAttempts = 32`; on the first layout, every tier-assignment attempt reaches `TryBuildCellLevelField` and rejects because neither a reviewed stair placement nor synthesized design fits. Only after all 32 retries does the outer layout loop build the second layout, which succeeds. This deterministic retry amplification is the root cause of the locked maximum-time failure.
+- One generation-0/1/2 collection overlapped the outlier, but garbage collection is not the root cause: 89 other collection-bearing seeds had a maximum of 170.087 ms. The repeated failed tier attempts create allocation pressure and the collection can add cost, but eliminating collection alone would not remove the 32-attempt retry path.
+- Diagnostic support does not enter random streams, plans, hashes, renderer inputs, or collision output. The focused fixture passes 5/5, all Dungeon Lab fixtures pass 76/76, the diagnostic log exits successfully, and `git diff --check` passes.
+
+### Bounded tier-retry performance revision — accepted by the automated gate
+
+- The authorized revision changes only invariant stair-option preparation and pure placement-geometry evaluation inside tier planning. `StairForge` already returns immutable design lists cached by rise and measured-library version; the planner weakly keys its parsed `ReviewedActiveStairOption` catalog to that returned list. A per-`TryBuildTieredLevelPlan` cache then memoizes the pure reviewed/active stair-port geometry results by the exact immutable option geometry, anchor cells, scalar inputs, and placement mode.
+- The geometry cache exists only for one tier-plan build. Occupancy checks, rejection handling, placement candidate construction and order, the shared layout random stream, per-gap synthesis random streams, the 32 tier-attempt ceiling, the two-layout-attempt ceiling, canonical projections, and accepted plans remain unchanged. Metrology invalidation returns a new immutable design list, which naturally misses the weak preparation cache.
+- The exact outlier seed still accepts hard-valid on layout attempt 2 with 32 `STAIR_PLACEMENT` rejections and canonical hash `237cb023d29d8540ea6aa8cfb3bbd56055254612604d26cbd7731ec253288289`. The focused Phase 7 fixture passes 7/7, including cache reuse and exact outlier preservation. All Dungeon Lab fixtures pass 78/78 with no compilation error. The known full-suite baseline remains 362/383 with 21 unrelated failures; it was not rerun for this bounded revision.
+- The locked diagnostic passes with 2,000/2,000 accepted and hard-valid plans, zero planning outliers, mean 65.132 ms, p95 86.129 ms, maximum 269.470 ms, and measured loop 131.082 seconds. It preserves result hash `75085c837577222cb6e933505d5fed087075fd92198978649fd6a60b9b85f632` and determinism digest `6d13f5d68cec7d19011d32704edf7d5dfe8e56370f88d9e83d58379886ff73a8` exactly.
+- Both replacement official sweeps ran in the locked environment with the required warm-up and pass every unchanged automated threshold. Each produced 2,000/2,000 accepted and hard-valid plans, the exact 1,000/500/500 topology split, p95 layout attempts 1, and maximum layout attempts 2. Run 1 measured mean 75.386 ms, p95 95.317 ms, maximum 416.365 ms, and loop 150.805 seconds. Run 2 measured mean 75.164 ms, p95 98.350 ms, maximum 274.317 ms, and loop 150.358 seconds.
+- Every compact per-seed record matches across the replacement sweeps. Both result hashes are `75085c837577222cb6e933505d5fed087075fd92198978649fd6a60b9b85f632`, both determinism digests are `6d13f5d68cec7d19011d32704edf7d5dfe8e56370f88d9e83d58379886ff73a8`, and `phase7_sweep_comparison_2026072300_2026074299.json` reports `passed: true` with no mismatch.
+- Active ignored acceptance evidence is `DungeonLabReports/dungeon_plan_2026072300_2026074299_phase7_run1.json`, `DungeonLabReports/dungeon_plan_2026072300_2026074299_phase7_run2.json`, both `phase7_determinism_..._runN.json` sidecars, `DungeonLabReports/phase7_sweep_comparison_2026072300_2026074299.json`, and `DungeonLabReports/phase7_planning_outlier_diagnostic_2026072300_2026074299.json`. Corresponding logs are under `Logs/phase7_*`; failed pre-fix evidence remains separately suffixed `_pre_fix`.
+- The Phase 7 automated sweep gate now passes. Curated-gallery review and collision-export-parity work have not started.
+
 ## Known implementation facts and blockers
 
 - Generator code: `Assets/Arena/Editor/Dungeons/RandomDungeon/`.
@@ -507,18 +574,18 @@ These gates are locked before the recipe asset, catalog, route-slot, placement, 
 - Gold reference scene: `Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/scenes/demoscene_dungeon_level_1_dungeon.unity`.
 - Baked destination: `Assets/Arena/Content/Scenes/OpenWorld/RandomDungeon.unity`.
 - `ActiveStepFormationPlacementEnabled` remains false, and `step_library_index.json` is absent. Do not enable the parked path by flipping the flag.
-- There is no current dungeon design, code, or validation blocker. The 21 unrelated full-suite failures remain outside this workstream.
+- There is no current automated-sweep blocker: the locked Phase 7 reliability, attempt, planning-performance, measurement-environment, and determinism gates pass. Curated human review and real collision-export parity remain unexecuted Phase 7 deliverables. The 21 unrelated full-suite failures remain outside this workstream.
 
 ## End-of-session handoff
 
 ```text
-Milestone/phase: Phase 6 is closed at the verified Phase 6f corner-return milestone; Phase 7 production hardening is the only next plan item.
-Completed this session: reverted the unapproved Phase 6g content expansion with a non-destructive commit; removed its ignored gallery/report evidence; restored the exact Phase 6f tracked assets and code; regenerated the canonical Phase 6f corpus report and sentinels; added repository-level scope controls; and corrected the plan/handoff so assistant-written status text cannot authorize optional breadth.
-Current validation result: restored tracked assets/code match Phase 6f exactly; the regenerated corpus is 200/200 accepted and hard-valid with exact 100/50/50 selection, 600 recipe resolutions, 200 corner returns, 114 named promontories, result hash 98f56a4e...e02dba, and the executable Phase 6f budget passes; all Dungeon Lab tests pass 71/71; all six regenerated v8 sentinels report REJECTED 0. The prior full EditMode evidence remains 362/383 with the same 21 unrelated baseline failures and no dungeon failure.
-Last known-good seeds and reports: processional 2026072100; atrium 2026072101; twin-wing 2026072103; DungeonLabReports/dungeon_plan_2026072100_2026072299.json, DungeonLabReports/Recipes/connector_corner_return_01/gallery_manifest.json, and DungeonLabReports/visual_sentinels/manifest.json.
-Last diagnostic fact: the shared `RouteForward` resolver accepts a cardinal named `exit` edge regardless of route-array position and rejects missing or unrelated exit identity before inflation or placement; all three pattern-specific bindings reach the same recipe validator, canonical plan, renderer, abyss, and collision consumers.
-Deletion-ledger items added/closed: the Phase 6g recipe, catalog/route/report/version changes, tests, production rejection diagnostic, and generated gallery were removed. No compatibility adapter, alternate contract, pattern-specific renderer/validator, diagnostic production path, multiple-vista scorer, active late step pass, or unused extension point remains. Phase 6 ledger is empty and closed.
-Exact next action: begin the existing Phase 7 production-hardening plan by locking reliability, attempt, performance, and curated-review thresholds before judging a larger deterministic sweep. Do not add another Phase 6 recipe, topology, vista, motif, or content slice without explicit user approval.
-Blocker or decision needed: none. Phase 6 is closed; optional additional content breadth is not authorized by "continue".
+Milestone/phase: Phase 6 remains closed at verified Phase 6f. The Phase 7 automated sweep gate passes after the bounded tier-retry performance revision; curated gallery review and collision-export parity have not started.
+Completed this session: cached immutable synthesized-stair preparation and pure per-tier-build stair-placement geometry without changing placement order, retries, random streams, rejections, accepted plans, or canonical hashes; passed the locked diagnostic; and completed two independent replacement official sweeps in the locked environment.
+Current validation result: each replacement sweep is 2,000/2,000 accepted and hard-valid with exact 1,000/500/500 topology selection and acceptance, p95/max attempts 1/2, all planning-time limits passing, and identical per-seed records. Run 1 mean/p95/max/loop is 75.386 ms/95.317 ms/416.365 ms/150.805 s; run 2 is 75.164 ms/98.350 ms/274.317 ms/150.358 s. The combined comparison passes with result hash 75085c...3289289 and determinism digest 6d13f5...ff73a8 on both runs.
+Last known-good seeds and reports: Phase 6f sentinels remain processional 2026072100, atrium 2026072101, twin-wing 2026072103. Phase 7 acceptance reports and sidecars cover 2026072300..2026074299, the passing combined comparison is at DungeonLabReports/phase7_sweep_comparison_2026072300_2026074299.json, and the passing bounded diagnostic is at DungeonLabReports/phase7_planning_outlier_diagnostic_2026072300_2026074299.json.
+Last diagnostic fact: the pre-fix outlier seed 2026072486 spent 1,357.072 ms in tier planning while its first layout exhausted 32 STAIR_PLACEMENT retries. After caching only invariant preparation and pure placement geometry, the locked diagnostic has zero seeds above 750 ms and a maximum of 269.470 ms while preserving the exact corpus result and determinism hashes.
+Deletion-ledger items added/closed: none. Phase 7 sweep and diagnostic support remains active evidence; Phase 6 remains empty and closed.
+Exact next action: stop. The currently authorized automated-sweep validation item is complete. Curated-gallery review and collision-export-parity are separate remaining Phase 7 deliverables and must not begin without explicit user direction selecting the next task.
+Blocker or decision needed: the user must explicitly choose the next Phase 7 deliverable before implementation continues; there is no automated-sweep blocker and no manual action is currently required.
 New chat necessary: no.
 ```

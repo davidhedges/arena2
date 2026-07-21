@@ -2024,18 +2024,22 @@ namespace DungeonLab.Editor
             for (int attempt = 0; attempt < Phase1LayoutAttemptLimit; attempt++)
             {
                 layoutAttemptsUsed = attempt + 1;
-                if (!TryBuildRouteFirstDungeonLayout(
+                long routeLayoutStart = BeginPhase7OutlierStage();
+                bool routeLayoutBuilt = TryBuildRouteFirstDungeonLayout(
                         dungeonSeed,
                         layoutAttemptsUsed,
                         out DungeonLayout candidateLayout,
                         out RouteTierRequirements routeRequirements,
-                        out rejectionReason))
+                        out rejectionReason);
+                EndPhase7OutlierStage("routeLayout", routeLayoutStart);
+                if (!routeLayoutBuilt)
                 {
                     RecordRejection(rejectionHistogram, rejectionReason);
                     continue;
                 }
 
-                if (TryBuildTieredLevelPlan(
+                long tieredPlanStart = BeginPhase7OutlierStage();
+                bool tieredPlanBuilt = TryBuildTieredLevelPlan(
                         candidateLayout,
                         routeRequirements,
                         dungeonSeed,
@@ -2043,7 +2047,9 @@ namespace DungeonLab.Editor
                         rejectionHistogram,
                         out layout,
                         out levelPlan,
-                        out rejectionReason))
+                        out rejectionReason);
+                EndPhase7OutlierStage("tieredLevelPlan", tieredPlanStart);
+                if (tieredPlanBuilt)
                 {
                     return true;
                 }
@@ -2121,7 +2127,41 @@ namespace DungeonLab.Editor
             return string.Join("; ", parts);
         }
 
+        [ThreadStatic]
+        private static ReviewedStairPlacementGeometryCache activeReviewedStairPlacementGeometryCache;
+
         private static bool TryBuildTieredLevelPlan(
+            DungeonLayout layout,
+            RouteTierRequirements routeRequirements,
+            int dungeonSeed,
+            System.Random random,
+            Dictionary<string, int> rejectionHistogram,
+            out DungeonLayout acceptedLayout,
+            out TieredLevelPlan plan,
+            out string rejectionReason)
+        {
+            ReviewedStairPlacementGeometryCache previousCache =
+                activeReviewedStairPlacementGeometryCache;
+            activeReviewedStairPlacementGeometryCache = new ReviewedStairPlacementGeometryCache();
+            try
+            {
+                return TryBuildTieredLevelPlanCore(
+                    layout,
+                    routeRequirements,
+                    dungeonSeed,
+                    random,
+                    rejectionHistogram,
+                    out acceptedLayout,
+                    out plan,
+                    out rejectionReason);
+            }
+            finally
+            {
+                activeReviewedStairPlacementGeometryCache = previousCache;
+            }
+        }
+
+        private static bool TryBuildTieredLevelPlanCore(
             DungeonLayout layout,
             RouteTierRequirements routeRequirements,
             int dungeonSeed,
@@ -2148,11 +2188,14 @@ namespace DungeonLab.Editor
                 return false;
             }
 
+            long reviewedStairsStart = BeginPhase7OutlierStage();
             IReadOnlyList<ReviewedActiveStairOption> reviewedStairOptions = LoadReviewedActiveStairOptions();
+            EndPhase7OutlierStage("tiered.loadReviewedStairs", reviewedStairsStart);
 
             for (int attempt = 0; attempt < LevelAssignmentAttempts; attempt++)
             {
-                if (TryBuildTieredLevelPlanAttempt(
+                long tierAttemptStart = BeginPhase7OutlierStage();
+                bool tierAttemptBuilt = TryBuildTieredLevelPlanAttempt(
                         layout,
                         routeRequirements,
                         reviewedStairOptions,
@@ -2160,7 +2203,9 @@ namespace DungeonLab.Editor
                         random,
                         out acceptedLayout,
                         out plan,
-                        out rejectionReason))
+                        out rejectionReason);
+                EndPhase7OutlierStage("tierAttempt.total", tierAttemptStart);
+                if (tierAttemptBuilt)
                 {
                     return true;
                 }
@@ -2183,19 +2228,23 @@ namespace DungeonLab.Editor
         {
             acceptedLayout = default;
             plan = default;
+            long zoneAndLevelsStart = BeginPhase7OutlierStage();
             RoomZoneContext zones = RoomZoneContext.Build(layout);
-            if (!TryAssignRoomLevels(
+            bool levelsAssigned = TryAssignRoomLevels(
                     layout,
                     zones,
                     routeRequirements,
                     reviewedStairOptions,
                     out int[] zoneLevels,
                     out RouteElevationPolicy archetype,
-                    out rejectionReason))
+                    out rejectionReason);
+            EndPhase7OutlierStage("tierAttempt.zoneAndLevels", zoneAndLevelsStart);
+            if (!levelsAssigned)
             {
                 return false;
             }
 
+            long loopConnectionsStart = BeginPhase7OutlierStage();
             DungeonLayout loopedLayout = AddLevelSafeLoopConnections(
                 layout,
                 zones,
@@ -2204,6 +2253,8 @@ namespace DungeonLab.Editor
                 random,
                 CurrentGenerationSettings);
             int loopEdges = CountLoopEdges(loopedLayout);
+            float floorFillPercent = CalculateFloorFillPercent(loopedLayout.floorCells);
+            EndPhase7OutlierStage("tierAttempt.loopConnectionsAndDensity", loopConnectionsStart);
             if (loopEdges <= 0)
             {
                 rejectionReason = "floorplan had no loop edges";
@@ -2216,7 +2267,6 @@ namespace DungeonLab.Editor
                 return false;
             }
 
-            float floorFillPercent = CalculateFloorFillPercent(loopedLayout.floorCells);
             if (floorFillPercent < CurrentGenerationSettings.denseFloorplanMinFillPercent)
             {
                 rejectionReason = $"floor-fill {floorFillPercent * 100f:0.#}% was below dense gate {CurrentGenerationSettings.denseFloorplanMinFillPercent * 100f:0.#}%";
@@ -2225,12 +2275,21 @@ namespace DungeonLab.Editor
 
             // Loop connections never change rooms or zone plans, so the zone context
             // stays valid for the looped layout; only its connection list grew.
-            if (!TryValidateConnectedRoomLevelDeltas(loopedLayout, zones, zoneLevels, reviewedStairOptions, out rejectionReason))
+            long connectedDeltaStart = BeginPhase7OutlierStage();
+            bool connectedDeltasValid = TryValidateConnectedRoomLevelDeltas(
+                loopedLayout,
+                zones,
+                zoneLevels,
+                reviewedStairOptions,
+                out rejectionReason);
+            EndPhase7OutlierStage("tierAttempt.connectedDeltaValidation", connectedDeltaStart);
+            if (!connectedDeltasValid)
             {
                 return false;
             }
 
-            if (!TryBuildCellLevelField(
+            long cellLevelFieldStart = BeginPhase7OutlierStage();
+            bool cellLevelFieldBuilt = TryBuildCellLevelField(
                     loopedLayout,
                     zones,
                     zoneLevels,
@@ -2246,31 +2305,38 @@ namespace DungeonLab.Editor
                     out List<DaisShowpiece> daisShowpieces,
                     out NamedVistaPromontoryResolution[] namedPromontories,
                     out RecipeResolution[] recipeResolutions,
-                    out rejectionReason))
+                    out rejectionReason);
+            EndPhase7OutlierStage("tierAttempt.cellLevelField", cellLevelFieldStart);
+            if (!cellLevelFieldBuilt)
             {
                 return false;
             }
 
+            long postFieldValidationStart = BeginPhase7OutlierStage();
             GetLevelRange(cellLevels, out int minLevel, out int maxLevel);
             int levelCount = CountDistinctLevels(cellLevels);
             if (levelCount <= 1)
             {
+                EndPhase7OutlierStage("tierAttempt.postFieldValidation", postFieldValidationStart);
                 rejectionReason = $"room graph resolved to a single level (archetype {archetype})";
                 return false;
             }
 
             if (!TryValidateTransitionLevelDeltas(cellLevels, transitions, out rejectionReason))
             {
+                EndPhase7OutlierStage("tierAttempt.postFieldValidation", postFieldValidationStart);
                 return false;
             }
 
             if (!TryBuildFloorStairPortGraph(cellLevels, transitions, out FloorStairPortGraph portGraph, out rejectionReason))
             {
+                EndPhase7OutlierStage("tierAttempt.postFieldValidation", postFieldValidationStart);
                 return false;
             }
 
             if (!portGraph.IsGloballyConnected(out string portGraphReachability))
             {
+                EndPhase7OutlierStage("tierAttempt.postFieldValidation", postFieldValidationStart);
                 rejectionReason = portGraphReachability;
                 return false;
             }
@@ -2284,12 +2350,15 @@ namespace DungeonLab.Editor
                     out RouteRequirementResolution routeRequirementResolution,
                     out rejectionReason))
             {
+                EndPhase7OutlierStage("tierAttempt.postFieldValidation", postFieldValidationStart);
                 return false;
             }
+            EndPhase7OutlierStage("tierAttempt.postFieldValidation", postFieldValidationStart);
 
             // Reported stat only (demoted from a hard gate 2026-06-10): route
             // intent now guarantees the vertical story and separately proves its
             // named vista, so this older adjacent-cell proxy remains diagnostic.
+            long planAssemblyStart = BeginPhase7OutlierStage();
             int overlookCount = CountSpatialOverlookEdges(cellLevels, transitions);
 
             plan = new TieredLevelPlan(
@@ -2315,6 +2384,7 @@ namespace DungeonLab.Editor
                 recipeResolutions,
                 routeRequirementResolution);
             acceptedLayout = loopedLayout;
+            EndPhase7OutlierStage("tierAttempt.planAssembly", planAssemblyStart);
             return true;
         }
 
@@ -3051,14 +3121,18 @@ namespace DungeonLab.Editor
                     return false;
                 }
 
-                if (delta > 1 &&
-                    !TryChooseReviewedActiveStairTransition(
+                if (delta > 1)
+                {
+                    ZoneArea fromNodeArea = zones.NodeArea(layout.rooms, fromNode);
+                    ZoneArea toNodeArea = zones.NodeArea(layout.rooms, toNode);
+                    long reviewedStairSearchStart = BeginPhase7OutlierStage();
+                    bool reviewedStairChosen = TryChooseReviewedActiveStairTransition(
                         reviewedStairOptions,
                         delta,
                         maxLaneCount: MaxActiveStairLaneCount,
                         path,
-                        zones.NodeArea(layout.rooms, fromNode),
-                        zones.NodeArea(layout.rooms, toNode),
+                        fromNodeArea,
+                        toNodeArea,
                         layout.floorCells,
                         cellLevels,
                         fromLevel,
@@ -3079,22 +3153,25 @@ namespace DungeonLab.Editor
                         out stairOptionPlannedLowerPortDirection,
                         out stairOptionPlannedUpperPortDirection,
                         out stairOptionPlacementClass,
-                        out stairOption))
-                {
-                    // Online synthesis fallback (step 7, decisions 16-21): the
-                    // reviewed pool offered no (contract, position) fit for this
-                    // corridor, so shape a staircase to the gap. Same placement
-                    // search, level gates and ledger as pool contracts; the
-                    // per-gap RNG keeps synthesis independent of the shared
-                    // draw stream (decision 18).
-                    if (!TrySynthesizeActiveStairTransition(
+                        out stairOption);
+                    EndPhase7OutlierStage("cellField.reviewedStairSearch", reviewedStairSearchStart);
+                    if (!reviewedStairChosen)
+                    {
+                        // Online synthesis fallback (step 7, decisions 16-21): the
+                        // reviewed pool offered no (contract, position) fit for this
+                        // corridor, so shape a staircase to the gap. Same placement
+                        // search, level gates and ledger as pool contracts; the
+                        // per-gap RNG keeps synthesis independent of the shared
+                        // draw stream (decision 18).
+                        long activeSynthesisStart = BeginPhase7OutlierStage();
+                        bool activeStairSynthesized = TrySynthesizeActiveStairTransition(
                             dungeonSeed,
                             connection.fromRoom,
                             connection.toRoom,
                             delta,
                             path,
-                            zones.NodeArea(layout.rooms, fromNode),
-                            zones.NodeArea(layout.rooms, toNode),
+                            fromNodeArea,
+                            toNodeArea,
                             layout.floorCells,
                             cellLevels,
                             fromLevel,
@@ -3115,44 +3192,56 @@ namespace DungeonLab.Editor
                             out stairOptionPlacementClass,
                             out stairOption,
                             out synthesizedSetPiece,
-                            out synthesizedGapId) &&
-                        (!string.IsNullOrEmpty(requiredPlacementClass) &&
-                         !string.Equals(requiredPlacementClass, StairwellStairPlacementClass, StringComparison.Ordinal) ||
-                        // Third tier (decision 27): a 180-degree tower on void
-                        // cells beside the path, only when nothing in-corridor fit.
-                        !TrySynthesizeStairwellTransition(
-                            dungeonSeed,
-                            connection.fromRoom,
-                            connection.toRoom,
-                            delta,
-                            path,
-                            zones.NodeArea(layout.rooms, fromNode),
-                            zones.NodeArea(layout.rooms, toNode),
-                            layout.floorCells,
-                            cellLevels,
-                            fromLevel,
-                            toLevel,
-                            stairCandidateCounts,
-                            plannedStairLedger,
-                            out transitionIndex,
-                            out lowerLandingCell,
-                            out upperLandingCell,
-                            out stairOptionPlannedLowerLandingCells,
-                            out stairOptionPlannedUpperLandingCells,
-                            out stairOptionPlannedFootprintCells,
-                            out stairOptionPlannedTransitionFirstCell,
-                            out stairOptionPlannedTransitionSecondCell,
-                            out stairOptionPlannedLowerPortDirection,
-                            out stairOptionPlannedUpperPortDirection,
-                            out stairOptionPlacementClass,
-                            out stairOption,
-                            out synthesizedSetPiece,
-                            out synthesizedGapId)))
-                    {
-                        rejectionReason = hasRouteRequirement
-                            ? $"[ROUTE_TRANSITION_RESERVATION] edge '{routeTransitionRequirement.id}' could not reserve its required {routeTransitionRequirement.transitionKind} for rise {delta}u"
-                            : $"connection {connection.fromRoom}->{connection.toRoom} had no reviewed active stair contract placement for rise {delta}, lane count <= {MaxActiveStairLaneCount}; synthesis offered no fitting design";
-                        return false;
+                                out synthesizedGapId);
+                        EndPhase7OutlierStage("cellField.activeSynthesis", activeSynthesisStart);
+                        bool stairwellStairSynthesized = false;
+                        bool stairwellEligible = string.IsNullOrEmpty(requiredPlacementClass) ||
+                            string.Equals(requiredPlacementClass, StairwellStairPlacementClass, StringComparison.Ordinal);
+                        if (!activeStairSynthesized && stairwellEligible)
+                        {
+                            // Third tier (decision 27): a 180-degree tower on void
+                            // cells beside the path, only when nothing in-corridor fit.
+                            long stairwellSynthesisStart = BeginPhase7OutlierStage();
+                            stairwellStairSynthesized = TrySynthesizeStairwellTransition(
+                                dungeonSeed,
+                                connection.fromRoom,
+                                connection.toRoom,
+                                delta,
+                                path,
+                                fromNodeArea,
+                                toNodeArea,
+                                layout.floorCells,
+                                cellLevels,
+                                fromLevel,
+                                toLevel,
+                                stairCandidateCounts,
+                                plannedStairLedger,
+                                out transitionIndex,
+                                out lowerLandingCell,
+                                out upperLandingCell,
+                                out stairOptionPlannedLowerLandingCells,
+                                out stairOptionPlannedUpperLandingCells,
+                                out stairOptionPlannedFootprintCells,
+                                out stairOptionPlannedTransitionFirstCell,
+                                out stairOptionPlannedTransitionSecondCell,
+                                out stairOptionPlannedLowerPortDirection,
+                                out stairOptionPlannedUpperPortDirection,
+                                out stairOptionPlacementClass,
+                                out stairOption,
+                                    out synthesizedSetPiece,
+                                    out synthesizedGapId);
+                            EndPhase7OutlierStage("cellField.stairwellSynthesis", stairwellSynthesisStart);
+                        }
+
+                        if (!activeStairSynthesized && !stairwellStairSynthesized)
+                        {
+                            rejectionReason = StairPlacementFailureReason(
+                                hasRouteRequirement,
+                                routeTransitionRequirement,
+                                connection,
+                                delta);
+                            return false;
+                        }
                     }
                 }
 
@@ -3431,6 +3520,18 @@ namespace DungeonLab.Editor
 
             return true;
         }
+
+        private static string StairPlacementFailureReason(
+            bool hasRouteRequirement,
+            RouteTraversalIntent routeTransitionRequirement,
+            RoomConnection connection,
+            int delta)
+        {
+            return hasRouteRequirement
+                ? $"[ROUTE_TRANSITION_RESERVATION] edge '{routeTransitionRequirement.id}' could not reserve its required {routeTransitionRequirement.transitionKind} for rise {delta}u"
+                : $"connection {connection.fromRoom}->{connection.toRoom} had no reviewed active stair contract placement for rise {delta}, lane count <= {MaxActiveStairLaneCount}; synthesis offered no fitting design";
+        }
+
 
         private static bool TryResolveRouteRequirements(
             RouteTierRequirements requirements,
@@ -5460,28 +5561,9 @@ namespace DungeonLab.Editor
                 return false;
             }
 
-            var options = new List<ReviewedActiveStairOption>();
-            var designsByName = new Dictionary<string, StairForge.SynthesizedStaircaseDesign>(StringComparer.Ordinal);
-            foreach (StairForge.SynthesizedStaircaseDesign design in designs)
-            {
-                string parserError = ElevationEdgeModel.ValidateSynthesizedContractToken(design.contract, StairForge.LevelHeight);
-                if (!string.IsNullOrEmpty(parserError))
-                {
-                    LogPlanningWarning($"Dungeon Lab Generate: synthesized design '{design.name}' rejected by the edge-model parser: {parserError}");
-                    continue;
-                }
-
-                if (!TryBuildSynthesizedStairOption(design.contract, out ReviewedActiveStairOption option, out string optionError))
-                {
-                    LogPlanningWarning($"Dungeon Lab Generate: synthesized design '{design.name}' rejected by the planner parser: {optionError}");
-                    continue;
-                }
-
-                options.Add(option);
-                designsByName[option.name] = design;
-            }
-
-            if (options.Count == 0)
+            PreparedSynthesizedStairCatalog preparedCatalog =
+                PrepareSynthesizedStairCatalog(designs, "synthesized");
+            if (preparedCatalog.options.Count == 0)
             {
                 return false;
             }
@@ -5490,7 +5572,7 @@ namespace DungeonLab.Editor
             // so adding or removing gaps never reshuffles another gap's synthesis.
             var gapRandom = new System.Random(dungeonSeed ^ StairForge.StableHash($"synth:{fromRoomIndex}:{toRoomIndex}:{rise}"));
             if (!TryChooseReviewedActiveStairTransition(
-                    options,
+                    preparedCatalog.options,
                     rise,
                     maxLaneCount: MaxActiveStairLaneCount,
                     path,
@@ -5523,9 +5605,82 @@ namespace DungeonLab.Editor
                 return false;
             }
 
-            StairForge.SynthesizedStaircaseDesign chosen = designsByName[selected.name];
+            StairForge.SynthesizedStaircaseDesign chosen = preparedCatalog.designsByName[selected.name];
             synthesizedSetPiece = new ElevationEdgeModel.SynthesizedStairSetPiece(chosen.name, chosen.contract, chosen.pieces);
             return true;
+        }
+
+        // StairForge already caches immutable synthesized designs by rise and
+        // measured-library version. Preparing those same contracts for the planner
+        // was still repeating both canonical parsers for every failed tier attempt.
+        // Key this second-stage cache by the forge's returned list instance: a
+        // measured-library invalidation produces a new list, while the weak key lets
+        // the superseded preparation disappear without a parallel invalidation path.
+        private sealed class PreparedSynthesizedStairCatalog
+        {
+            internal readonly IReadOnlyList<ReviewedActiveStairOption> options;
+            internal readonly IReadOnlyDictionary<string, StairForge.SynthesizedStaircaseDesign> designsByName;
+
+            internal PreparedSynthesizedStairCatalog(
+                IReadOnlyList<ReviewedActiveStairOption> options,
+                IReadOnlyDictionary<string, StairForge.SynthesizedStaircaseDesign> designsByName)
+            {
+                this.options = options;
+                this.designsByName = designsByName;
+            }
+        }
+
+        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<
+            List<StairForge.SynthesizedStaircaseDesign>,
+            PreparedSynthesizedStairCatalog> PreparedSynthesizedStairCatalogs =
+                new System.Runtime.CompilerServices.ConditionalWeakTable<
+                    List<StairForge.SynthesizedStaircaseDesign>,
+                    PreparedSynthesizedStairCatalog>();
+
+        private static PreparedSynthesizedStairCatalog PrepareSynthesizedStairCatalog(
+            List<StairForge.SynthesizedStaircaseDesign> designs,
+            string diagnosticLabel)
+        {
+            if (PreparedSynthesizedStairCatalogs.TryGetValue(
+                    designs,
+                    out PreparedSynthesizedStairCatalog cached))
+            {
+                return cached;
+            }
+
+            var options = new List<ReviewedActiveStairOption>(designs.Count);
+            var designsByName = new Dictionary<string, StairForge.SynthesizedStaircaseDesign>(
+                designs.Count,
+                StringComparer.Ordinal);
+            foreach (StairForge.SynthesizedStaircaseDesign design in designs)
+            {
+                string parserError = ElevationEdgeModel.ValidateSynthesizedContractToken(
+                    design.contract,
+                    StairForge.LevelHeight);
+                if (!string.IsNullOrEmpty(parserError))
+                {
+                    LogPlanningWarning(
+                        $"Dungeon Lab Generate: {diagnosticLabel} design '{design.name}' rejected by the edge-model parser: {parserError}");
+                    continue;
+                }
+
+                if (!TryBuildSynthesizedStairOption(
+                        design.contract,
+                        out ReviewedActiveStairOption option,
+                        out string optionError))
+                {
+                    LogPlanningWarning(
+                        $"Dungeon Lab Generate: {diagnosticLabel} design '{design.name}' rejected by the planner parser: {optionError}");
+                    continue;
+                }
+
+                options.Add(option);
+                designsByName[option.name] = design;
+            }
+
+            var prepared = new PreparedSynthesizedStairCatalog(options.ToArray(), designsByName);
+            PreparedSynthesizedStairCatalogs.Add(designs, prepared);
+            return prepared;
         }
 
         // The synthesized counterpart of TryAppendReviewedActiveStairOption: same
@@ -6107,28 +6262,9 @@ namespace DungeonLab.Editor
                 return false;
             }
 
-            var options = new List<ReviewedActiveStairOption>();
-            var designsByName = new Dictionary<string, StairForge.SynthesizedStaircaseDesign>(StringComparer.Ordinal);
-            foreach (StairForge.SynthesizedStaircaseDesign design in designs)
-            {
-                string parserError = ElevationEdgeModel.ValidateSynthesizedContractToken(design.contract, StairForge.LevelHeight);
-                if (!string.IsNullOrEmpty(parserError))
-                {
-                    LogPlanningWarning($"Dungeon Lab Generate: stairwell design '{design.name}' rejected by the edge-model parser: {parserError}");
-                    continue;
-                }
-
-                if (!TryBuildSynthesizedStairOption(design.contract, out ReviewedActiveStairOption option, out string optionError))
-                {
-                    LogPlanningWarning($"Dungeon Lab Generate: stairwell design '{design.name}' rejected by the planner parser: {optionError}");
-                    continue;
-                }
-
-                options.Add(option);
-                designsByName[option.name] = design;
-            }
-
-            if (options.Count == 0)
+            PreparedSynthesizedStairCatalog preparedCatalog =
+                PrepareSynthesizedStairCatalog(designs, "stairwell");
+            if (preparedCatalog.options.Count == 0)
             {
                 return false;
             }
@@ -6156,7 +6292,7 @@ namespace DungeonLab.Editor
             int lowerLevel = Mathf.Min(fromLevel, toLevel);
             int higherLevel = Mathf.Max(fromLevel, toLevel);
             var candidates = new List<StairTransitionCandidate>();
-            foreach (ReviewedActiveStairOption option in options)
+            foreach (ReviewedActiveStairOption option in preparedCatalog.options)
             {
                 AddValidStairwellTransitionCandidates(
                     path,
@@ -6175,7 +6311,7 @@ namespace DungeonLab.Editor
             RemovePlannedStairConflicts(candidates, plannedStairLedger);
             if (candidates.Count == 0)
             {
-                foreach (ReviewedActiveStairOption option in options)
+                foreach (ReviewedActiveStairOption option in preparedCatalog.options)
                 {
                     AddValidStairwellTransitionCandidates(
                         path,
@@ -6217,7 +6353,7 @@ namespace DungeonLab.Editor
             placementClass = candidate.placementClass;
             selected = candidate.option;
 
-            StairForge.SynthesizedStaircaseDesign chosen = designsByName[selected.name];
+            StairForge.SynthesizedStaircaseDesign chosen = preparedCatalog.designsByName[selected.name];
             synthesizedSetPiece = new ElevationEdgeModel.SynthesizedStairSetPiece(chosen.name, chosen.contract, chosen.pieces);
             return true;
         }
@@ -7069,7 +7205,176 @@ namespace DungeonLab.Editor
             return path[Mathf.Clamp(firstLandingIndex + 1, 0, secondLandingIndex - 1)];
         }
 
+        // Geometry mapping depends only on the immutable option arrays/measurements
+        // and its requested anchor cells. A tier retry may test the same mapping
+        // hundreds of times against different live occupancy; cache only this pure
+        // mapping, then run every occupancy, ledger, candidate-order, and random
+        // selection check exactly as before.
+        private sealed class ReviewedStairPlacementGeometryCache
+        {
+            private readonly Dictionary<ReviewedStairPlacementGeometryKey, CachedReviewedStairPlacement> entries =
+                new Dictionary<ReviewedStairPlacementGeometryKey, CachedReviewedStairPlacement>();
+
+            internal bool TryGet(
+                ReviewedStairPlacementGeometryKey key,
+                out CachedReviewedStairPlacement placement)
+            {
+                return entries.TryGetValue(key, out placement);
+            }
+
+            internal void Store(
+                ReviewedStairPlacementGeometryKey key,
+                bool succeeded,
+                ReviewedStairPortPlacement placement)
+            {
+                entries[key] = new CachedReviewedStairPlacement(succeeded, placement);
+            }
+        }
+
+        private readonly struct CachedReviewedStairPlacement
+        {
+            internal readonly bool succeeded;
+            internal readonly ReviewedStairPortPlacement placement;
+
+            internal CachedReviewedStairPlacement(
+                bool succeeded,
+                ReviewedStairPortPlacement placement)
+            {
+                this.succeeded = succeeded;
+                this.placement = placement;
+            }
+        }
+
+        private readonly struct ReviewedStairPlacementGeometryKey :
+            IEquatable<ReviewedStairPlacementGeometryKey>
+        {
+            private readonly Vector2Int[] footprintCells;
+            private readonly Vector2Int[] entryCells;
+            private readonly Vector2Int[] exitCells;
+            private readonly Vector2 localBoundsMin;
+            private readonly Vector2 localBoundsMax;
+            private readonly Vector2 localEntryPoint;
+            private readonly Vector2 localExitPoint;
+            private readonly int entryDirection;
+            private readonly int exitDirection;
+            private readonly Vector2Int first;
+            private readonly Vector2Int second;
+            private readonly Vector2Int third;
+            private readonly bool betweenLandings;
+
+            internal ReviewedStairPlacementGeometryKey(
+                ReviewedActiveStairOption option,
+                Vector2Int first,
+                Vector2Int second,
+                Vector2Int third,
+                bool betweenLandings)
+            {
+                footprintCells = option.footprintCells;
+                entryCells = option.entryCells;
+                exitCells = option.exitCells;
+                localBoundsMin = option.localBoundsMin;
+                localBoundsMax = option.localBoundsMax;
+                localEntryPoint = option.localEntryPoint;
+                localExitPoint = option.localExitPoint;
+                entryDirection = option.entryDirection;
+                exitDirection = option.exitDirection;
+                this.first = first;
+                this.second = second;
+                this.third = third;
+                this.betweenLandings = betweenLandings;
+            }
+
+            public bool Equals(ReviewedStairPlacementGeometryKey other)
+            {
+                return ReferenceEquals(footprintCells, other.footprintCells) &&
+                    ReferenceEquals(entryCells, other.entryCells) &&
+                    ReferenceEquals(exitCells, other.exitCells) &&
+                    localBoundsMin == other.localBoundsMin &&
+                    localBoundsMax == other.localBoundsMax &&
+                    localEntryPoint == other.localEntryPoint &&
+                    localExitPoint == other.localExitPoint &&
+                    entryDirection == other.entryDirection &&
+                    exitDirection == other.exitDirection &&
+                    first == other.first &&
+                    second == other.second &&
+                    third == other.third &&
+                    betweenLandings == other.betweenLandings;
+            }
+
+            public override bool Equals(object obj)
+            {
+                return obj is ReviewedStairPlacementGeometryKey other && Equals(other);
+            }
+
+            public override int GetHashCode()
+            {
+                unchecked
+                {
+                    int hash = 17;
+                    hash = hash * 31 + ReferenceHash(footprintCells);
+                    hash = hash * 31 + ReferenceHash(entryCells);
+                    hash = hash * 31 + ReferenceHash(exitCells);
+                    hash = hash * 31 + localBoundsMin.GetHashCode();
+                    hash = hash * 31 + localBoundsMax.GetHashCode();
+                    hash = hash * 31 + localEntryPoint.GetHashCode();
+                    hash = hash * 31 + localExitPoint.GetHashCode();
+                    hash = hash * 31 + entryDirection;
+                    hash = hash * 31 + exitDirection;
+                    hash = hash * 31 + first.GetHashCode();
+                    hash = hash * 31 + second.GetHashCode();
+                    hash = hash * 31 + third.GetHashCode();
+                    hash = hash * 31 + (betweenLandings ? 1 : 0);
+                    return hash;
+                }
+            }
+
+            private static int ReferenceHash(object value)
+            {
+                return value == null
+                    ? 0
+                    : System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(value);
+            }
+        }
+
         private static bool TryBuildReviewedStairPortPlacementBetweenLandings(
+            ReviewedActiveStairOption option,
+            Vector2Int lowerLandingCell,
+            Vector2Int upperLandingCell,
+            out ReviewedStairPortPlacement placement)
+        {
+            ReviewedStairPlacementGeometryCache cache =
+                activeReviewedStairPlacementGeometryCache;
+            if (cache == null)
+            {
+                return TryBuildReviewedStairPortPlacementBetweenLandingsUncached(
+                    option,
+                    lowerLandingCell,
+                    upperLandingCell,
+                    out placement);
+            }
+
+            var key = new ReviewedStairPlacementGeometryKey(
+                option,
+                lowerLandingCell,
+                upperLandingCell,
+                default,
+                betweenLandings: true);
+            if (cache.TryGet(key, out CachedReviewedStairPlacement cached))
+            {
+                placement = cached.placement;
+                return cached.succeeded;
+            }
+
+            bool succeeded = TryBuildReviewedStairPortPlacementBetweenLandingsUncached(
+                option,
+                lowerLandingCell,
+                upperLandingCell,
+                out placement);
+            cache.Store(key, succeeded, placement);
+            return succeeded;
+        }
+
+        private static bool TryBuildReviewedStairPortPlacementBetweenLandingsUncached(
             ReviewedActiveStairOption option,
             Vector2Int lowerLandingCell,
             Vector2Int upperLandingCell,
@@ -7128,6 +7433,47 @@ namespace DungeonLab.Editor
         }
 
         private static bool TryBuildReviewedStairPortPlacement(
+            ReviewedActiveStairOption option,
+            Vector2Int lowerCellAdjacentToUpper,
+            Vector2Int upperLandingCell,
+            Vector2Int lowerLandingCellOnPath,
+            out ReviewedStairPortPlacement placement)
+        {
+            ReviewedStairPlacementGeometryCache cache =
+                activeReviewedStairPlacementGeometryCache;
+            if (cache == null)
+            {
+                return TryBuildReviewedStairPortPlacementUncached(
+                    option,
+                    lowerCellAdjacentToUpper,
+                    upperLandingCell,
+                    lowerLandingCellOnPath,
+                    out placement);
+            }
+
+            var key = new ReviewedStairPlacementGeometryKey(
+                option,
+                lowerCellAdjacentToUpper,
+                upperLandingCell,
+                lowerLandingCellOnPath,
+                betweenLandings: false);
+            if (cache.TryGet(key, out CachedReviewedStairPlacement cached))
+            {
+                placement = cached.placement;
+                return cached.succeeded;
+            }
+
+            bool succeeded = TryBuildReviewedStairPortPlacementUncached(
+                option,
+                lowerCellAdjacentToUpper,
+                upperLandingCell,
+                lowerLandingCellOnPath,
+                out placement);
+            cache.Store(key, succeeded, placement);
+            return succeeded;
+        }
+
+        private static bool TryBuildReviewedStairPortPlacementUncached(
             ReviewedActiveStairOption option,
             Vector2Int lowerCellAdjacentToUpper,
             Vector2Int upperLandingCell,

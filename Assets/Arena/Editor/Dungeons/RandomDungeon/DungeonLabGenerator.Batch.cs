@@ -126,9 +126,15 @@ namespace DungeonLab.Editor
             Debug.Log($"Dungeon Lab: visual sentinels written to {directory} (manifest {manifestPath}).");
         }
 
-        private static void RunBatchValidation(int firstSeed, int requestedSeedCount)
+        private static string RunBatchValidation(
+            int firstSeed,
+            int requestedSeedCount,
+            int phase7SweepOrdinal = 0)
         {
             CurrentGenerationSettings = LoadActiveGenerationSettings();
+            Phase7BatchEvidence phase7Evidence = phase7SweepOrdinal > 0
+                ? new Phase7BatchEvidence(phase7SweepOrdinal, Phase7WarmupSeedCount)
+                : null;
             var rejectionHistogram = new Dictionary<string, int>(StringComparer.Ordinal);
             var rejectionCodeHistogram = new Dictionary<string, int>(StringComparer.Ordinal);
             var validationFailureCodeHistogram = new Dictionary<string, int>(StringComparer.Ordinal);
@@ -154,6 +160,9 @@ namespace DungeonLab.Editor
             int finalVistaValidCount = 0;
             int recipeSetValidCount = 0;
             int completedSeedCount = 0;
+            long measuredLoopStart = phase7Evidence == null
+                ? 0L
+                : System.Diagnostics.Stopwatch.GetTimestamp();
 
             try
             {
@@ -171,7 +180,15 @@ namespace DungeonLab.Editor
                         break;
                     }
 
+                    long seedTimingStart = phase7Evidence == null
+                        ? 0L
+                        : System.Diagnostics.Stopwatch.GetTimestamp();
                     JObject seedReport = BuildPhase0SeedReport(seed);
+                    if (phase7Evidence != null)
+                    {
+                        phase7Evidence.planningMilliseconds.Add(
+                            ElapsedMilliseconds(seedTimingStart, System.Diagnostics.Stopwatch.GetTimestamp()));
+                    }
                     seedReports.Add(seedReport);
                     completedSeedCount++;
                     int layoutAttempts = seedReport.Value<int?>("layoutAttempts") ?? 0;
@@ -245,10 +262,16 @@ namespace DungeonLab.Editor
                 EditorUtility.ClearProgressBar();
             }
 
+            if (phase7Evidence != null)
+            {
+                phase7Evidence.measuredLoopSeconds =
+                    ElapsedMilliseconds(measuredLoopStart, System.Diagnostics.Stopwatch.GetTimestamp()) / 1000d;
+            }
+
             if (completedSeedCount <= 0)
             {
                 Debug.Log("Dungeon Lab: batch validation cancelled before any seeds ran.");
-                return;
+                return string.Empty;
             }
 
             string archetypeSummary = FormatCountSummary(archetypeCounts);
@@ -292,17 +315,22 @@ namespace DungeonLab.Editor
                 routeRequirementsValidCount,
                 finalVistaValidCount,
                 recipeSetValidCount,
-                seedReports);
+                seedReports,
+                phase7Evidence);
             Debug.Log($"Dungeon Lab: batch validation report written to {reportPath}");
+            return reportPath;
         }
 
         private static JObject BuildPhase0SeedReport(int seed)
         {
+            long initializationStart = BeginPhase7OutlierStage();
             CurrentGenerationSettings = LoadActiveGenerationSettings();
             var rejectionHistogram = new Dictionary<string, int>(StringComparer.Ordinal);
             var random = new System.Random(seed);
+            EndPhase7OutlierStage("settingsAndRandomInitialization", initializationStart);
             try
             {
+                long acceptedPlanStart = BeginPhase7OutlierStage();
                 bool accepted = TryBuildAcceptedPlan(
                     seed,
                     random,
@@ -311,30 +339,43 @@ namespace DungeonLab.Editor
                     out TieredLevelPlan plan,
                     out int layoutAttemptsUsed,
                     out string rejectionReason);
-                return accepted
-                    ? CreateAcceptedPhase0SeedReport(
+                EndPhase7OutlierStage("acceptedPlanTotal", acceptedPlanStart);
+                if (accepted)
+                {
+                    long acceptedReportStart = BeginPhase7OutlierStage();
+                    JObject acceptedReport = CreateAcceptedPhase0SeedReport(
                         seed,
                         layoutAttemptsUsed,
                         rejectionReason,
                         rejectionHistogram,
                         layout,
                         plan,
-                        random)
-                    : CreateRejectedPhase0SeedReport(
+                        random);
+                    EndPhase7OutlierStage("acceptedReportTotal", acceptedReportStart);
+                    return acceptedReport;
+                }
+
+                long rejectedReportStart = BeginPhase7OutlierStage();
+                JObject rejectedReport = CreateRejectedPhase0SeedReport(
                         seed,
                         layoutAttemptsUsed,
                         rejectionReason,
                         rejectionHistogram,
                         exception: null);
+                EndPhase7OutlierStage("rejectedReportTotal", rejectedReportStart);
+                return rejectedReport;
             }
             catch (Exception exception)
             {
-                return CreateRejectedPhase0SeedReport(
+                long exceptionReportStart = BeginPhase7OutlierStage();
+                JObject exceptionReport = CreateRejectedPhase0SeedReport(
                     seed,
                     0,
                     exception.Message,
                     rejectionHistogram,
                     exception);
+                EndPhase7OutlierStage("exceptionReportTotal", exceptionReportStart);
+                return exceptionReport;
             }
         }
 
@@ -2024,9 +2065,13 @@ namespace DungeonLab.Editor
             TieredLevelPlan plan,
             System.Random random)
         {
+            long canonicalProjectionStart = BeginPhase7OutlierStage();
             JObject canonicalLayout = BuildCanonicalLayoutProjection(layout);
             JObject canonicalPlan = BuildCanonicalTieredLevelPlanProjection(plan);
             JArray recipeResolutions = BuildRecipeResolutionsProjection(plan.recipeResolutions);
+            EndPhase7OutlierStage("canonicalProjections", canonicalProjectionStart);
+
+            long identityStart = BeginPhase7OutlierStage();
             string layoutHash = ComputeSha256(canonicalLayout.ToString(Formatting.None));
             string planHash = ComputeSha256(canonicalPlan.ToString(Formatting.None));
             string recipeResolutionHash = ComputeSha256(recipeResolutions.ToString(Formatting.None));
@@ -2040,10 +2085,15 @@ namespace DungeonLab.Editor
             string canonicalHashVersion = DungeonPlanSummaryVersion;
             string canonicalHash = ComputeSha256(
                 $"{canonicalHashVersion}\n{routeIntentHash}\n{layoutHash}\n{planHash}");
+            EndPhase7OutlierStage("identityHashesAndCatalog", identityStart);
+
+            long validationStart = BeginPhase7OutlierStage();
             float correlation = CalculateDepthLevelCorrelation(layout, plan);
             JObject validation = BuildPhase0ValidationSummary(layout, plan, random, out _);
             JObject graphSummary = BuildLayoutGraphSummary(layout);
+            EndPhase7OutlierStage("metricsAndHardValidation", validationStart);
 
+            long reportAssemblyStart = BeginPhase7OutlierStage();
             var report = new JObject
             {
                 ["summaryVersion"] = ActiveDiagnosticSummaryVersion,
@@ -2108,6 +2158,7 @@ namespace DungeonLab.Editor
             report["namedPromontories"] = BuildNamedPromontoryProjection(plan.namedPromontories);
             report["schemaUsage"] = BuildRecipeSchemaUsageProjection();
             ((JObject)report["hashes"])["routeIntent"] = routeIntentHash;
+            EndPhase7OutlierStage("reportAssemblyAndDiagnosticProjections", reportAssemblyStart);
 
             return report;
         }
@@ -2574,8 +2625,12 @@ namespace DungeonLab.Editor
             System.Random random,
             out ElevationEdgeModel.RoomBoundaryContext boundaryContext)
         {
+            long connectivityStart = BeginPhase7OutlierStage();
             bool layoutConnected = IsConnected(layout.floorCells);
             bool roomGraphConnected = TryValidateRoomGraphConnectivity(layout, out string roomGraphMessage);
+            EndPhase7OutlierStage("hardValidation.connectivity", connectivityStart);
+
+            long transitionStart = BeginPhase7OutlierStage();
             bool transitionContractsValid = TryValidateTransitionLevelDeltas(
                 plan.cellLevels,
                 plan.transitions,
@@ -2591,7 +2646,9 @@ namespace DungeonLab.Editor
             {
                 portGraphConnected = portGraph.IsGloballyConnected(out portGraphConnectedMessage);
             }
+            EndPhase7OutlierStage("hardValidation.transitionsAndPortGraph", transitionStart);
 
+            long contractStart = BeginPhase7OutlierStage();
             bool bottomToTop = portGraphConnected && plan.minLevel < plan.maxLevel;
             bool routeRequirementsValid = TryValidateAcceptedRouteRequirements(
                 plan,
@@ -2603,6 +2660,9 @@ namespace DungeonLab.Editor
                 plan,
                 out string namedPromontoryMessage);
             bool headroomValid = TryValidateAcceptedPlanHeadroom(plan, out string headroomMessage);
+            EndPhase7OutlierStage("hardValidation.routeRecipesPromontoriesHeadroom", contractStart);
+
+            long boundaryStart = BeginPhase7OutlierStage();
             bool boundaryValid = TryBuildRoomBoundaryContext(
                 layout,
                 plan.cellLevels,
@@ -2610,7 +2670,11 @@ namespace DungeonLab.Editor
                 random,
                 out boundaryContext,
                 out string boundaryMessage);
+            EndPhase7OutlierStage("hardValidation.boundary", boundaryStart);
+
+            long rendererInputsStart = BeginPhase7OutlierStage();
             bool rendererInputsValid = TryValidatePhase0RendererInputs(plan, out string rendererInputMessage);
+            EndPhase7OutlierStage("hardValidation.rendererInputs", rendererInputsStart);
             bool passed =
                 layoutConnected &&
                 roomGraphConnected &&
@@ -3685,7 +3749,8 @@ namespace DungeonLab.Editor
             int routeRequirementsValidCount,
             int finalVistaValidCount,
             int recipeSetValidCount,
-            JArray seedReports)
+            JArray seedReports,
+            Phase7BatchEvidence phase7Evidence)
         {
             var archetypes = new JObject();
             foreach (KeyValuePair<string, int> entry in archetypeCounts)
@@ -4173,10 +4238,30 @@ namespace DungeonLab.Editor
                 };
             }
 
+            if (phase7Evidence != null)
+            {
+                AppendPhase7SweepEvidence(
+                    report,
+                    seedReports,
+                    selectedPatternCounts,
+                    acceptedPatternCounts,
+                    attemptDistribution,
+                    successCount,
+                    hardValidCount,
+                    phase7Evidence);
+            }
+
             Directory.CreateDirectory(BatchReportDirectory);
+            string phase7Suffix = phase7Evidence == null
+                ? string.Empty
+                : $"_phase7_run{phase7Evidence.sweepOrdinal}";
             string reportPath = Path.Combine(
                 BatchReportDirectory,
-                $"dungeon_plan_{firstSeed}_{firstSeed + seedCount - 1}.json");
+                $"dungeon_plan_{firstSeed}_{firstSeed + seedCount - 1}{phase7Suffix}.json");
+            if (phase7Evidence != null)
+            {
+                WritePhase7DeterminismSidecar(report, seedReports, phase7Evidence);
+            }
             File.WriteAllText(reportPath, report.ToString(Formatting.Indented));
             return reportPath;
         }
