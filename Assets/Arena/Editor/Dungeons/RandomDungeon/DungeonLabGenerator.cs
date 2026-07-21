@@ -54,14 +54,11 @@ namespace DungeonLab.Editor
         private const string DaisStairPlacementClass = "dais";
         private const int MaxDaisPerDungeon = 2;
         private const int MaxDaisSpanCells = 2;
-        // Magnificence decision J (2026-06-15): promontory piers. A 1-cell-wide
-        // walkway juts out of a grand room straight into the open void and
-        // dead-ends — gold's "long pier" jutting over the chasm. The strip cells
-        // join cellLevels at the room's level (walkable + reachable); decision C's
-        // cliffs make every side drop to the abyss automatically, so the spur
-        // rides over the void. Dense support columns are a follow-up increment.
-        // 0-2 per dungeon, off large rooms only (stays a grand, rare focal piece).
-        private const int MaxPromontoriesPerDungeon = 2;
+        // Magnificence decision J, hardened by Phase 6e: a promontory is now the
+        // source-side walkable prefix of one already-declared named vista. The
+        // route planner reserves it before structural fill and leaves the vista's
+        // minimum clear void untouched. The canonical tier plan owns target
+        // identity; the renderer still consumes only the exact projected cells.
         private const int InternalOpenPathMinRunCells = 3;
         private const int InternalOpenPathRailingPercent = 25;
         // Dais variants (decision 41, gallery-approved 2026-06-12): sunken
@@ -261,7 +258,7 @@ namespace DungeonLab.Editor
                     null,
                     null,
                     roomBoundaryContext,
-                    levelPlan.promontoryCells,
+                    CollectNamedPromontoryCells(levelPlan.namedPromontories),
                     GeneratedRootName,
                     out report,
                     out bounds);
@@ -2247,7 +2244,7 @@ namespace DungeonLab.Editor
                     out string stairCandidateSummary,
                     out List<(string gapId, ElevationEdgeModel.SynthesizedStairSetPiece setPiece)> synthesizedStairs,
                     out List<DaisShowpiece> daisShowpieces,
-                    out List<Vector2Int> promontoryCells,
+                    out NamedVistaPromontoryResolution[] namedPromontories,
                     out RecipeResolution[] recipeResolutions,
                     out rejectionReason))
             {
@@ -2314,7 +2311,7 @@ namespace DungeonLab.Editor
                 synthesizedStairs,
                 FormatSynthesizedStairSummary(synthesizedStairs),
                 daisShowpieces,
-                promontoryCells,
+                namedPromontories,
                 recipeResolutions,
                 routeRequirementResolution);
             acceptedLayout = loopedLayout;
@@ -2828,7 +2825,7 @@ namespace DungeonLab.Editor
             out string stairCandidateSummary,
             out List<(string gapId, ElevationEdgeModel.SynthesizedStairSetPiece setPiece)> synthesizedStairs,
             out List<DaisShowpiece> daisShowpieces,
-            out List<Vector2Int> promontoryCells,
+            out NamedVistaPromontoryResolution[] namedPromontories,
             out RecipeResolution[] recipeResolutions,
             out string rejectionReason)
         {
@@ -2838,7 +2835,7 @@ namespace DungeonLab.Editor
             stairCandidateSummary = "[]";
             synthesizedStairs = new List<(string gapId, ElevationEdgeModel.SynthesizedStairSetPiece setPiece)>();
             daisShowpieces = new List<DaisShowpiece>();
-            promontoryCells = new List<Vector2Int>();
+            namedPromontories = Array.Empty<NamedVistaPromontoryResolution>();
             recipeResolutions = Array.Empty<RecipeResolution>();
             rejectionReason = string.Empty;
 
@@ -2877,6 +2874,16 @@ namespace DungeonLab.Editor
                     Array.Empty<Vector2Int>(),
                     new[] { routeRequirements.vistaSourceCell },
                     new[] { routeRequirements.vistaTargetCell });
+            }
+
+            if (routeRequirements?.namedPromontoryCells != null &&
+                routeRequirements.namedPromontoryCells.Length > 0)
+            {
+                protectedStructuralCells.UnionWith(routeRequirements.namedPromontoryCells);
+                plannedStairLedger.Register(
+                    routeRequirements.namedPromontoryCells,
+                    Array.Empty<Vector2Int>(),
+                    Array.Empty<Vector2Int>());
             }
 
             var resolvedRouteTransitions = new List<RouteTransitionResolution>();
@@ -3370,17 +3377,19 @@ namespace DungeonLab.Editor
                 doorwayCells,
                 seamStairPrefabPath);
 
-            // Decision J: promontory piers jut out into the void at the end of the
-            // level-field build, so they read the final cell levels (and never
-            // collide with stairs/dais, which are all placed by now).
-            int promontoryCount = ChoosePromontorySpurs(
-                layout,
+            // Phase 6e: realize the route-planned source-side prefix atomically
+            // after every other level-field feature. The canonical resolution
+            // names the vista and target; no random room or direction is rolled.
+            if (!TryResolveNamedVistaPromontory(
+                routeRequirements,
                 cellLevels,
-                dungeonSeed,
-                random,
-                promontoryCells,
-                protectedStructuralCells,
-                CurrentGenerationSettings);
+                out namedPromontories,
+                out rejectionReason))
+            {
+                return false;
+            }
+
+            List<Vector2Int> promontoryCells = CollectNamedPromontoryCells(namedPromontories);
 
             if (!TryValidateResolvedRecipes(
                     routeRequirements.recipes,
@@ -3403,9 +3412,9 @@ namespace DungeonLab.Editor
                 stairCandidateSummary += $" backedDais:{backedDaisCount}";
             }
 
-            if (promontoryCount > 0)
+            if (namedPromontories.Length > 0)
             {
-                stairCandidateSummary += $" promontory:{promontoryCount}";
+                stairCandidateSummary += $" namedPromontory:{namedPromontories.Length}";
             }
 
             foreach (DaisShowpiece showpiece in daisShowpieces)
@@ -3682,111 +3691,110 @@ namespace DungeonLab.Editor
             return false;
         }
 
-        // Decision J: carve 0-2 promontory piers. Each is a straight 1-cell-wide
-        // strip of floor extending from a large room's void-facing boundary out
-        // into the open void, at that boundary cell's level. Added to cellLevels
-        // only (not a room) — walkable and reachable via floor-adjacency, with
-        // decision C's cliffs dropping every exposed side to the abyss. Per-room
-        // RNG keeps the choice independent of the shared draw stream (the dais
-        // pattern), so adding/removing the feature never reshuffles other rooms.
-        private static int ChoosePromontorySpurs(
-            DungeonLayout layout,
+        private static bool TryResolveNamedVistaPromontory(
+            RouteTierRequirements requirements,
             Dictionary<Vector2Int, int> cellLevels,
-            int dungeonSeed,
-            System.Random random,
-            List<Vector2Int> promontoryCells,
-            HashSet<Vector2Int> protectedCells,
-            DungeonGenerationSettings settings)
+            out NamedVistaPromontoryResolution[] resolutions,
+            out string rejectionReason)
         {
-            int placed = 0;
-            for (int roomIndex = 0; roomIndex < layout.rooms.Count && placed < MaxPromontoriesPerDungeon; roomIndex++)
+            resolutions = Array.Empty<NamedVistaPromontoryResolution>();
+            rejectionReason = string.Empty;
+            Vector2Int[] plannedCells = requirements?.namedPromontoryCells ?? Array.Empty<Vector2Int>();
+            if (plannedCells.Length == 0)
             {
-                if (layout.rooms[roomIndex].Area < settings.largeRoomMinAreaCells)
-                {
-                    continue;
-                }
-
-                var spurRandom = new System.Random(dungeonSeed ^ StairForge.StableHash($"promontory:{roomIndex}"));
-                if (spurRandom.NextDouble() >= settings.promontoryChancePerRoom)
-                {
-                    continue;
-                }
-
-                int length = spurRandom.Next(settings.promontoryMinLengthCells, settings.promontoryMaxLengthCells + 1);
-
-                // Collect every void-facing boundary cell whose outward run stays
-                // void for the full length, then pick one deterministically.
-                var candidates = new List<(Vector2Int start, Vector2Int direction, int level)>();
-                foreach (Vector2Int cell in layout.rooms[roomIndex].CellsRowMajor())
-                {
-                    if (protectedCells?.Contains(cell) == true)
-                    {
-                        continue;
-                    }
-
-                    if (!cellLevels.TryGetValue(cell, out int level))
-                    {
-                        continue;
-                    }
-
-                    foreach (Vector2Int direction in new[] { Vector2Int.up, Vector2Int.right, Vector2Int.down, Vector2Int.left })
-                    {
-                        if (cellLevels.ContainsKey(cell + direction) ||
-                            !VoidRunFits(cellLevels, protectedCells, cell, direction, length))
-                        {
-                            continue;
-                        }
-
-                        candidates.Add((cell, direction, level));
-                    }
-                }
-
-                if (candidates.Count == 0)
-                {
-                    continue;
-                }
-
-                (Vector2Int start, Vector2Int direction, int level) chosen = candidates[spurRandom.Next(candidates.Count)];
-                for (int i = 1; i <= length; i++)
-                {
-                    Vector2Int spurCell = chosen.start + chosen.direction * i;
-                    cellLevels[spurCell] = chosen.level;
-                    promontoryCells.Add(spurCell);
-                }
-
-                placed++;
+                return true;
             }
 
-            return placed;
-        }
-
-        // The `length` cells stepping out from `cell` in `direction` are all void
-        // (and the flanks of the first cell too, so the pier starts genuinely
-        // exposed rather than hugging the room's outer wall).
-        private static bool VoidRunFits(
-            IReadOnlyDictionary<Vector2Int, int> cellLevels,
-            HashSet<Vector2Int> protectedCells,
-            Vector2Int cell,
-            Vector2Int direction,
-            int length)
-        {
-            var lateral = new Vector2Int(-direction.y, direction.x);
-            Vector2Int first = cell + direction;
-            if (cellLevels.ContainsKey(first + lateral) || cellLevels.ContainsKey(first - lateral))
+            RouteIntent intent = requirements?.intent;
+            if (intent == null || cellLevels == null || plannedCells.Length > MaximumNamedVistaPromontoryCells)
             {
+                rejectionReason = $"[ROUTE_PROMONTORY] {NamedVistaPromontoryPolicyVersion} had invalid requirements or exceeded the {MaximumNamedVistaPromontoryCells}-cell limit";
                 return false;
             }
 
-            for (int i = 1; i <= length; i++)
+            RouteVistaIntent vista = intent.vista;
+            string targetNodeId = vista.targetNode >= 0 && vista.targetNode < intent.nodes.Length
+                ? intent.nodes[vista.targetNode].id
+                : string.Empty;
+            if (string.IsNullOrEmpty(vista.id) || string.IsNullOrEmpty(targetNodeId))
             {
-                Vector2Int candidate = cell + direction * i;
-                if (cellLevels.ContainsKey(candidate) || protectedCells?.Contains(candidate) == true)
+                rejectionReason = $"[ROUTE_PROMONTORY] {NamedVistaPromontoryPolicyVersion} had no named target identity";
+                return false;
+            }
+
+            Vector2Int facing = requirements.vistaSourceFacing;
+            bool cardinalFacing = Mathf.Abs(facing.x) + Mathf.Abs(facing.y) == 1;
+            if (!cardinalFacing || facing != -requirements.vistaTargetFacing)
+            {
+                rejectionReason = $"[ROUTE_PROMONTORY] {NamedVistaPromontoryPolicyVersion} required cardinal opposed facing";
+                return false;
+            }
+
+            if (requirements.reservedVistaCells.Count < vista.minimumReservedVoidCells)
+            {
+                rejectionReason = $"[ROUTE_PROMONTORY] {NamedVistaPromontoryPolicyVersion} left fewer than {vista.minimumReservedVoidCells} void cells";
+                return false;
+            }
+
+            if (!cellLevels.TryGetValue(requirements.vistaSourceCell, out int sourceLevel) ||
+                !cellLevels.TryGetValue(requirements.vistaTargetCell, out int targetLevel) ||
+                sourceLevel - targetLevel < MajorRiseLevels)
+            {
+                rejectionReason = $"[ROUTE_PROMONTORY] {NamedVistaPromontoryPolicyVersion} target was not at least {MajorRiseLevels}u below its source";
+                return false;
+            }
+
+            for (int index = 0; index < plannedCells.Length; index++)
+            {
+                Vector2Int expected = requirements.vistaSourceCell + facing * (index + 1);
+                if (plannedCells[index] != expected ||
+                    requirements.reservedVistaCells.Contains(expected) ||
+                    cellLevels.ContainsKey(expected))
                 {
+                    rejectionReason = $"[ROUTE_PROMONTORY] {NamedVistaPromontoryPolicyVersion} found an occupied, off-axis, or non-contiguous planned cell {plannedCells[index]}";
                     return false;
                 }
             }
 
+            foreach (Vector2Int cell in requirements.reservedVistaCells)
+            {
+                if (cellLevels.ContainsKey(cell))
+                {
+                    rejectionReason = $"[ROUTE_PROMONTORY] {NamedVistaPromontoryPolicyVersion} found occupied remaining vista cell {cell}";
+                    return false;
+                }
+            }
+
+            foreach (Vector2Int cell in plannedCells)
+            {
+                cellLevels[cell] = sourceLevel;
+            }
+
+            resolutions = new[]
+            {
+                new NamedVistaPromontoryResolution(
+                    vista.id,
+                    targetNodeId,
+                    requirements.vistaSourceCell,
+                    requirements.vistaTargetCell,
+                    facing,
+                    sourceLevel,
+                    plannedCells)
+            };
             return true;
+        }
+
+        private static List<Vector2Int> CollectNamedPromontoryCells(
+            IReadOnlyList<NamedVistaPromontoryResolution> resolutions)
+        {
+            var cells = new List<Vector2Int>();
+            foreach (NamedVistaPromontoryResolution resolution in
+                resolutions ?? Array.Empty<NamedVistaPromontoryResolution>())
+            {
+                cells.AddRange(resolution.cells ?? Array.Empty<Vector2Int>());
+            }
+
+            return cells;
         }
 
         // Step 9, decision 37: a dais is a cosmetic interior 1u platform — an
@@ -12451,6 +12459,35 @@ namespace DungeonLab.Editor
             public int RouteClimbLevels => topLevel - bottomLevel;
         }
 
+        private readonly struct NamedVistaPromontoryResolution
+        {
+            public readonly string vistaId;
+            public readonly string targetNodeId;
+            public readonly Vector2Int sourceCell;
+            public readonly Vector2Int targetCell;
+            public readonly Vector2Int facing;
+            public readonly int level;
+            public readonly Vector2Int[] cells;
+
+            public NamedVistaPromontoryResolution(
+                string vistaId,
+                string targetNodeId,
+                Vector2Int sourceCell,
+                Vector2Int targetCell,
+                Vector2Int facing,
+                int level,
+                Vector2Int[] cells)
+            {
+                this.vistaId = vistaId ?? string.Empty;
+                this.targetNodeId = targetNodeId ?? string.Empty;
+                this.sourceCell = sourceCell;
+                this.targetCell = targetCell;
+                this.facing = facing;
+                this.level = level;
+                this.cells = cells ?? Array.Empty<Vector2Int>();
+            }
+        }
+
         private readonly struct TieredLevelPlan
         {
             public readonly Dictionary<Vector2Int, int> cellLevels;
@@ -12475,9 +12512,9 @@ namespace DungeonLab.Editor
             // Showpiece dais (decision 46 increment 2): approved gallery
             // designs placed verbatim as wall-anchored set pieces.
             public readonly List<DaisShowpiece> daisShowpieces;
-            // Decision J: promontory pier cells (jut into the void) — the render
-            // places dense support columns under these down to the abyss base.
-            public readonly List<Vector2Int> promontoryCells;
+            // Phase 6e target-aware promontories. Canonical identity stays here;
+            // renderer/abyss consumers receive only the derived cell projection.
+            public readonly NamedVistaPromontoryResolution[] namedPromontories;
             public readonly RecipeResolution[] recipeResolutions;
             public readonly RouteRequirementResolution routeRequirementResolution;
 
@@ -12500,7 +12537,7 @@ namespace DungeonLab.Editor
                 List<(string gapId, ElevationEdgeModel.SynthesizedStairSetPiece setPiece)> synthesizedStairs,
                 string synthesizedStairSummary,
                 List<DaisShowpiece> daisShowpieces,
-                List<Vector2Int> promontoryCells,
+                NamedVistaPromontoryResolution[] namedPromontories,
                 RecipeResolution[] recipeResolutions,
                 RouteRequirementResolution routeRequirementResolution)
             {
@@ -12522,7 +12559,7 @@ namespace DungeonLab.Editor
                 this.synthesizedStairs = synthesizedStairs;
                 this.synthesizedStairSummary = synthesizedStairSummary;
                 this.daisShowpieces = daisShowpieces;
-                this.promontoryCells = promontoryCells;
+                this.namedPromontories = namedPromontories ?? Array.Empty<NamedVistaPromontoryResolution>();
                 this.recipeResolutions = recipeResolutions ?? Array.Empty<RecipeResolution>();
                 this.routeRequirementResolution = routeRequirementResolution;
             }

@@ -18,11 +18,6 @@ namespace DungeonLab.Editor
         [Tooltip("Maximum plan depth in 4u grid cells. Route embeddings that exceed it are rejected.")]
         public int mapDepthMaxCells = 28;
 
-        [Header("Interior Feature Eligibility")]
-        [Min(4)]
-        [Tooltip("Minimum room area in grid cells for promontory eligibility.")]
-        public int largeRoomMinAreaCells = 25;
-
         [Header("Density And Loops")]
         [Min(1)]
         [Tooltip("Minimum accepted room count. Layouts below this are rejected before rendering.")]
@@ -49,18 +44,6 @@ namespace DungeonLab.Editor
         [Tooltip("Chance per eligible unsplit room to try a dais. Failed dais placements are skipped, not repaired.")]
         public float daisChancePerRoom = 0.25f;
 
-        [Range(0f, 1f)]
-        [Tooltip("Chance per eligible large room to try a promontory pier into void space.")]
-        public float promontoryChancePerRoom = 0.3f;
-
-        [Min(1)]
-        [Tooltip("Minimum promontory length in grid cells.")]
-        public int promontoryMinLengthCells = 7;
-
-        [Min(1)]
-        [Tooltip("Maximum promontory length in grid cells.")]
-        public int promontoryMaxLengthCells = 14;
-
         internal DungeonGenerationSettings ToSettings()
         {
             return new DungeonGenerationSettings
@@ -68,16 +51,12 @@ namespace DungeonLab.Editor
                 profileName = profileName,
                 mapWidthMaxCells = mapWidthMaxCells,
                 mapDepthMaxCells = mapDepthMaxCells,
-                largeRoomMinAreaCells = largeRoomMinAreaCells,
                 denseFloorplanMinRooms = denseFloorplanMinRooms,
                 denseFloorplanMinFillPercent = denseFloorplanMinFillPercent,
                 loopConnectionFraction = loopConnectionFraction,
                 maxLoopCandidateDistanceCells = maxLoopCandidateDistanceCells,
                 roomZoneSplitChance = roomZoneSplitChance,
-                daisChancePerRoom = daisChancePerRoom,
-                promontoryChancePerRoom = promontoryChancePerRoom,
-                promontoryMinLengthCells = promontoryMinLengthCells,
-                promontoryMaxLengthCells = promontoryMaxLengthCells
+                daisChancePerRoom = daisChancePerRoom
             }.Validated();
         }
     }
@@ -87,32 +66,24 @@ namespace DungeonLab.Editor
         public string profileName;
         public int mapWidthMaxCells;
         public int mapDepthMaxCells;
-        public int largeRoomMinAreaCells;
         public int denseFloorplanMinRooms;
         public float denseFloorplanMinFillPercent;
         public float loopConnectionFraction;
         public int maxLoopCandidateDistanceCells;
         public float roomZoneSplitChance;
         public float daisChancePerRoom;
-        public float promontoryChancePerRoom;
-        public int promontoryMinLengthCells;
-        public int promontoryMaxLengthCells;
 
         public static DungeonGenerationSettings Default => new DungeonGenerationSettings
         {
             profileName = "default",
             mapWidthMaxCells = 28,
             mapDepthMaxCells = 28,
-            largeRoomMinAreaCells = 25,
             denseFloorplanMinRooms = 9,
             denseFloorplanMinFillPercent = 0.34f,
             loopConnectionFraction = 0.35f,
             maxLoopCandidateDistanceCells = 14,
             roomZoneSplitChance = 0.35f,
-            daisChancePerRoom = 0.25f,
-            promontoryChancePerRoom = 0.3f,
-            promontoryMinLengthCells = 7,
-            promontoryMaxLengthCells = 14
+            daisChancePerRoom = 0.25f
         }.Validated();
 
         public DungeonGenerationSettings Validated()
@@ -121,26 +92,13 @@ namespace DungeonLab.Editor
             value.profileName = string.IsNullOrWhiteSpace(value.profileName) ? "unnamed" : value.profileName.Trim();
             value.mapWidthMaxCells = Mathf.Max(12, value.mapWidthMaxCells);
             value.mapDepthMaxCells = Mathf.Max(12, value.mapDepthMaxCells);
-            value.largeRoomMinAreaCells = Mathf.Max(4, value.largeRoomMinAreaCells);
             value.denseFloorplanMinRooms = Mathf.Max(1, value.denseFloorplanMinRooms);
             value.denseFloorplanMinFillPercent = Mathf.Clamp01(value.denseFloorplanMinFillPercent);
             value.loopConnectionFraction = Mathf.Clamp01(value.loopConnectionFraction);
             value.maxLoopCandidateDistanceCells = Mathf.Max(1, value.maxLoopCandidateDistanceCells);
             value.roomZoneSplitChance = Mathf.Clamp01(value.roomZoneSplitChance);
             value.daisChancePerRoom = Mathf.Clamp01(value.daisChancePerRoom);
-            value.promontoryChancePerRoom = Mathf.Clamp01(value.promontoryChancePerRoom);
-            NormalizeRange(ref value.promontoryMinLengthCells, ref value.promontoryMaxLengthCells, 1);
             return value;
-        }
-
-        private static void NormalizeRange(ref int min, ref int max, int floor)
-        {
-            min = Mathf.Max(floor, min);
-            max = Mathf.Max(floor, max);
-            if (max < min)
-            {
-                max = min;
-            }
         }
     }
 }

@@ -8,11 +8,12 @@ namespace DungeonLab.Editor
     // compiles it directly into the existing DungeonLayout.
     internal sealed partial class DungeonLabGenerator
     {
-        private const string RoutePlannerVersion = "route-topologies-v6";
+        private const string RoutePlannerVersion = "route-topologies-v7";
         private const string ProcessionalPlannerVersion = "processional-spine-v4";
         private const string AtriumRingPlannerVersion = "atrium-ring-v1";
         private const string TwinWingPlannerVersion = "twin-wing-keep-v1";
         private const string RouteRhythmPolicyVersion = "route-rhythm-v1";
+        private const string NamedVistaPromontoryPolicyVersion = "named-vista-promontory-v1";
         // Preserve the proven route embedding stream. Phase 5 changes only the
         // reviewed recipe contract/ports and uses named per-recipe streams.
         private const string RouteSpatialRandomVersion = "processional-spine-v1";
@@ -40,6 +41,7 @@ namespace DungeonLab.Editor
         private const int Phase1RoomInflationAttemptLimit = 6;
         private const int MaxMainRouteRoleOccurrences = 2;
         private const int MinimumMainRouteNodesBetweenRecipeSlots = 2;
+        private const int MaximumNamedVistaPromontoryCells = 4;
 
         // Ephemeral diagnostic evidence for the most recent attempt.
         // It is never consumed by generation or carried into DungeonLayout.
@@ -238,6 +240,7 @@ namespace DungeonLab.Editor
             public readonly Vector2Int vistaTargetCell;
             public readonly Vector2Int vistaSourceFacing;
             public readonly Vector2Int vistaTargetFacing;
+            public readonly Vector2Int[] namedPromontoryCells;
             public readonly RecipePlacement[] recipes;
 
             public RouteTierRequirements(
@@ -247,6 +250,7 @@ namespace DungeonLab.Editor
                 Vector2Int vistaTargetCell,
                 Vector2Int vistaSourceFacing,
                 Vector2Int vistaTargetFacing,
+                Vector2Int[] namedPromontoryCells,
                 RecipePlacement[] recipes)
             {
                 this.intent = intent;
@@ -255,6 +259,7 @@ namespace DungeonLab.Editor
                 this.vistaTargetCell = vistaTargetCell;
                 this.vistaSourceFacing = vistaSourceFacing;
                 this.vistaTargetFacing = vistaTargetFacing;
+                this.namedPromontoryCells = namedPromontoryCells ?? Array.Empty<Vector2Int>();
                 this.recipes = recipes ?? Array.Empty<RecipePlacement>();
             }
 
@@ -380,6 +385,20 @@ namespace DungeonLab.Editor
                 return RejectPhase1Route("ROUTE_VISTA_RESERVATION_BLOCKED", rejectionReason, out rejectionReason);
             }
 
+            var protectedVistaCells = new HashSet<Vector2Int>(reservedVistaCells);
+            if (!TryPlanNamedVistaPromontory(
+                    intent,
+                    reservedVistaCells,
+                    sourceVistaCell,
+                    targetVistaCell,
+                    sourceFacing,
+                    targetFacing,
+                    out Vector2Int[] namedPromontoryCells,
+                    out rejectionReason))
+            {
+                return RejectPhase1Route("ROUTE_PROMONTORY_RESERVATION_INVALID", rejectionReason, out rejectionReason);
+            }
+
             phase1LastVistaCells = SortedCells(reservedVistaCells).ToArray();
             phase1LastVistaSourceFacing = sourceFacing;
             phase1LastVistaTargetFacing = targetFacing;
@@ -401,7 +420,7 @@ namespace DungeonLab.Editor
             if (!TryConnectProcessionalRooms(
                     intent,
                     rooms,
-                    reservedVistaCells,
+                    protectedVistaCells,
                     recipePlacements,
                     out HashSet<Vector2Int> floorCells,
                     out List<RoomConnection> connections,
@@ -463,8 +482,88 @@ namespace DungeonLab.Editor
                 targetVistaCell,
                 sourceFacing,
                 targetFacing,
+                namedPromontoryCells,
                 recipePlacements);
             phase1LastFailureCode = string.Empty;
+            return true;
+        }
+
+        private static bool TryPlanNamedVistaPromontory(
+            RouteIntent intent,
+            HashSet<Vector2Int> reservedVistaCells,
+            Vector2Int sourceCell,
+            Vector2Int targetCell,
+            Vector2Int sourceFacing,
+            Vector2Int targetFacing,
+            out Vector2Int[] promontoryCells,
+            out string rejectionReason)
+        {
+            promontoryCells = Array.Empty<Vector2Int>();
+            rejectionReason = string.Empty;
+            if (intent == null ||
+                string.IsNullOrEmpty(intent.vista.id) ||
+                intent.vista.targetNode < 0 ||
+                intent.vista.targetNode >= intent.nodes.Length ||
+                string.IsNullOrEmpty(intent.nodes[intent.vista.targetNode].id))
+            {
+                rejectionReason = $"{NamedVistaPromontoryPolicyVersion} had no named vista target";
+                return false;
+            }
+
+            bool cardinalFacing = Mathf.Abs(sourceFacing.x) + Mathf.Abs(sourceFacing.y) == 1;
+            if (!cardinalFacing || sourceFacing != -targetFacing)
+            {
+                rejectionReason = $"{NamedVistaPromontoryPolicyVersion} required cardinal opposed vista facing";
+                return false;
+            }
+
+            int sourceToTargetDistance = Mathf.Abs(targetCell.x - sourceCell.x) +
+                Mathf.Abs(targetCell.y - sourceCell.y);
+            if (targetCell != sourceCell + sourceFacing * sourceToTargetDistance ||
+                sourceToTargetDistance != reservedVistaCells.Count + 1)
+            {
+                rejectionReason = $"{NamedVistaPromontoryPolicyVersion} required one complete cardinal source-to-target reservation";
+                return false;
+            }
+
+            for (int step = 1; step < sourceToTargetDistance; step++)
+            {
+                if (!reservedVistaCells.Contains(sourceCell + sourceFacing * step))
+                {
+                    rejectionReason = $"{NamedVistaPromontoryPolicyVersion} found a gap in the reserved vista line";
+                    return false;
+                }
+            }
+
+            int availableCells = reservedVistaCells.Count - intent.vista.minimumReservedVoidCells;
+            int promontoryLength = Mathf.Min(MaximumNamedVistaPromontoryCells, Mathf.Max(0, availableCells));
+            if (promontoryLength == 0)
+            {
+                return true;
+            }
+
+            var planned = new Vector2Int[promontoryLength];
+            for (int index = 0; index < planned.Length; index++)
+            {
+                Vector2Int cell = sourceCell + sourceFacing * (index + 1);
+                if (!reservedVistaCells.Contains(cell))
+                {
+                    rejectionReason = $"{NamedVistaPromontoryPolicyVersion} could not atomically reserve cell {cell}";
+                    return false;
+                }
+
+                planned[index] = cell;
+            }
+
+            reservedVistaCells.ExceptWith(planned);
+
+            if (reservedVistaCells.Count < intent.vista.minimumReservedVoidCells)
+            {
+                rejectionReason = $"{NamedVistaPromontoryPolicyVersion} left fewer than {intent.vista.minimumReservedVoidCells} void cells";
+                return false;
+            }
+
+            promontoryCells = planned;
             return true;
         }
 

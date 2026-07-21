@@ -16,7 +16,7 @@ namespace DungeonLab.Editor
     internal sealed partial class DungeonLabGenerator
     {
         private const string BatchReportDirectory = "DungeonLabReports";
-        private const string DungeonPlanSummaryVersion = "dungeon-plan-v6";
+        private const string DungeonPlanSummaryVersion = "dungeon-plan-v7";
         private const int Phase0BaselineFirstSeed = 2026072100;
         private const int Phase0BaselineSeedCount = 200;
         private const int LockedSeedCount = 100;
@@ -817,6 +817,229 @@ namespace DungeonLab.Editor
             });
         }
 
+        private static string BuildPhase6eNamedPromontorySnapshot(int seed)
+        {
+            JObject processional = BuildPhase0SeedReport(2026072124);
+            JObject noSurplus = BuildPhase0SeedReport(2026072100);
+            JObject atrium = BuildPhase0SeedReport(2026072101);
+            JObject twinWing = BuildPhase0SeedReport(2026072103);
+
+            RouteIntent probeIntent = BuildDiagnosticSelectedRouteIntent(2026072100);
+            Vector2Int probeSource = Vector2Int.zero;
+            Vector2Int probeTarget = new Vector2Int(0, 5);
+            Vector2Int probeFacing = Vector2Int.up;
+            Vector2Int[] probePlanned = { new Vector2Int(0, 1) };
+            Vector2Int[] probeReserved =
+            {
+                new Vector2Int(0, 2),
+                new Vector2Int(0, 3),
+                new Vector2Int(0, 4)
+            };
+
+            RouteIntent missingIdentityIntent = WithDiagnosticVista(
+                probeIntent,
+                new RouteVistaIntent(
+                    string.Empty,
+                    probeIntent.vista.sourceNode,
+                    probeIntent.vista.targetNode,
+                    minimumReservedVoidCells: 3));
+            bool missingIdentityRejected = !TryResolveNamedVistaPromontory(
+                PromontoryProbeRequirements(
+                    missingIdentityIntent,
+                    probeReserved,
+                    probeSource,
+                    probeTarget,
+                    probeFacing,
+                    -probeFacing,
+                    probePlanned),
+                PromontoryProbeLevels(probeSource, 12, probeTarget, 8),
+                out _,
+                out string missingIdentityError);
+            bool facingRejected = !TryResolveNamedVistaPromontory(
+                PromontoryProbeRequirements(
+                    probeIntent,
+                    probeReserved,
+                    probeSource,
+                    probeTarget,
+                    probeFacing,
+                    probeFacing,
+                    probePlanned),
+                PromontoryProbeLevels(probeSource, 12, probeTarget, 8),
+                out _,
+                out string facingError);
+            bool offAxisRejected = !TryResolveNamedVistaPromontory(
+                PromontoryProbeRequirements(
+                    probeIntent,
+                    probeReserved,
+                    probeSource,
+                    probeTarget,
+                    probeFacing,
+                    -probeFacing,
+                    new[] { new Vector2Int(1, 1) }),
+                PromontoryProbeLevels(probeSource, 12, probeTarget, 8),
+                out _,
+                out string offAxisError);
+            Dictionary<Vector2Int, int> occupiedLevels = PromontoryProbeLevels(
+                probeSource,
+                12,
+                probeTarget,
+                8);
+            occupiedLevels[probePlanned[0]] = 12;
+            bool occupiedRejected = !TryResolveNamedVistaPromontory(
+                PromontoryProbeRequirements(
+                    probeIntent,
+                    probeReserved,
+                    probeSource,
+                    probeTarget,
+                    probeFacing,
+                    -probeFacing,
+                    probePlanned),
+                occupiedLevels,
+                out _,
+                out string occupiedError);
+            bool voidBudgetRejected = !TryResolveNamedVistaPromontory(
+                PromontoryProbeRequirements(
+                    probeIntent,
+                    new[] { new Vector2Int(0, 3), new Vector2Int(0, 4) },
+                    probeSource,
+                    probeTarget,
+                    probeFacing,
+                    -probeFacing,
+                    probePlanned),
+                PromontoryProbeLevels(probeSource, 12, probeTarget, 8),
+                out _,
+                out string voidBudgetError);
+            bool lowerTargetRejected = !TryResolveNamedVistaPromontory(
+                PromontoryProbeRequirements(
+                    probeIntent,
+                    probeReserved,
+                    probeSource,
+                    probeTarget,
+                    probeFacing,
+                    -probeFacing,
+                    probePlanned),
+                PromontoryProbeLevels(probeSource, 8, probeTarget, 8),
+                out _,
+                out string lowerTargetError);
+            bool validResolved = TryResolveNamedVistaPromontory(
+                PromontoryProbeRequirements(
+                    probeIntent,
+                    probeReserved,
+                    probeSource,
+                    probeTarget,
+                    probeFacing,
+                    -probeFacing,
+                    probePlanned),
+                PromontoryProbeLevels(probeSource, 12, probeTarget, 8),
+                out NamedVistaPromontoryResolution[] validResolutions,
+                out string validError);
+
+            JObject renderer = JObject.Parse(BuildPhase0RendererProbeJson(2026072101));
+            return string.Join("\n", new[]
+            {
+                $"policy.version={NamedVistaPromontoryPolicyVersion}",
+                $"policy.maximumCells={MaximumNamedVistaPromontoryCells}",
+                $"versions.summary={DungeonPlanSummaryVersion}",
+                $"versions.generator={RoutePlannerVersion}",
+                PromontorySeedSnapshot("processional", processional),
+                PromontorySeedSnapshot("noSurplus", noSurplus),
+                PromontorySeedSnapshot("atrium", atrium),
+                PromontorySeedSnapshot("twinWing", twinWing),
+                $"probe.validResolved={validResolved}",
+                $"probe.validResolutionCount={validResolutions.Length}",
+                $"probe.validError={validError}",
+                $"probe.missingIdentityRejected={missingIdentityRejected}",
+                $"probe.missingIdentityError={missingIdentityError}",
+                $"probe.facingRejected={facingRejected}",
+                $"probe.facingError={facingError}",
+                $"probe.offAxisRejected={offAxisRejected}",
+                $"probe.offAxisError={offAxisError}",
+                $"probe.occupiedRejected={occupiedRejected}",
+                $"probe.occupiedError={occupiedError}",
+                $"probe.voidBudgetRejected={voidBudgetRejected}",
+                $"probe.voidBudgetError={voidBudgetError}",
+                $"probe.lowerTargetRejected={lowerTargetRejected}",
+                $"probe.lowerTargetError={lowerTargetError}",
+                $"renderer.accepted={renderer.Value<bool?>("accepted") == true}",
+                $"renderer.passed={renderer["renderer"]?.Value<bool?>("passed") == true}",
+                $"renderer.rejected={renderer["renderer"]?.Value<int?>("rejectedPlacements") ?? -1}",
+                $"diagnostic.seed={seed}"
+            });
+        }
+
+        private static string PromontorySeedSnapshot(string prefix, JObject report)
+        {
+            JArray named = report["namedPromontories"] as JArray ?? new JArray();
+            JObject resolution = named.Count > 0 ? named[0] as JObject : null;
+            return string.Join("\n", new[]
+            {
+                $"{prefix}.accepted={report.Value<bool?>("accepted") == true}",
+                $"{prefix}.pattern={report["routeIntent"]?.Value<string>("patternId") ?? string.Empty}",
+                $"{prefix}.validation={report["validation"]?["namedPromontories"]?.Value<bool?>("passed") == true}",
+                $"{prefix}.resolutionCount={named.Count}",
+                $"{prefix}.cellCount={(resolution?["cells"] as JArray)?.Count ?? 0}",
+                $"{prefix}.vistaId={resolution?.Value<string>("vistaId") ?? string.Empty}",
+                $"{prefix}.targetNodeId={resolution?.Value<string>("targetNodeId") ?? string.Empty}",
+                $"{prefix}.remainingVoid={report["routeResolution"]?["vista"]?.Value<int?>("reservedVoidCellCount") ?? 0}"
+            });
+        }
+
+        private static RouteIntent WithDiagnosticVista(RouteIntent source, RouteVistaIntent vista)
+        {
+            return new RouteIntent(
+                source.seed,
+                source.plannerVersion,
+                source.patternId,
+                source.nodes,
+                source.traversalEdges,
+                vista,
+                source.elevationPolicy,
+                source.recipeSlots,
+                source.catalogDigest,
+                source.bottomNode,
+                source.topNode,
+                source.branchAttachNode,
+                source.branchRejoinNode,
+                source.requiredCycleRank,
+                source.requiredCycleCoreNodeCount,
+                source.requiredJunctionDegree,
+                source.plannedOverlooks,
+                source.allowGenericRoomWings);
+        }
+
+        private static RouteTierRequirements PromontoryProbeRequirements(
+            RouteIntent intent,
+            IEnumerable<Vector2Int> reservedCells,
+            Vector2Int sourceCell,
+            Vector2Int targetCell,
+            Vector2Int sourceFacing,
+            Vector2Int targetFacing,
+            Vector2Int[] plannedCells)
+        {
+            return new RouteTierRequirements(
+                intent,
+                reservedCells,
+                sourceCell,
+                targetCell,
+                sourceFacing,
+                targetFacing,
+                plannedCells,
+                Array.Empty<RecipePlacement>());
+        }
+
+        private static Dictionary<Vector2Int, int> PromontoryProbeLevels(
+            Vector2Int sourceCell,
+            int sourceLevel,
+            Vector2Int targetCell,
+            int targetLevel)
+        {
+            return new Dictionary<Vector2Int, int>
+            {
+                [sourceCell] = sourceLevel,
+                [targetCell] = targetLevel
+            };
+        }
+
         private static RouteNodeIntent RhythmProbeNode(
             string id,
             int mainRouteOrder,
@@ -1549,19 +1772,7 @@ namespace DungeonLab.Editor
                 out _)
                 ? activeRecipeCatalog.digest
                 : string.Empty;
-            string canonicalHashVersion;
-            if (string.Equals(phase1LastRouteIntent?.patternId, Phase1PatternId, StringComparison.Ordinal))
-            {
-                canonicalHashVersion = "dungeon-plan-v4";
-            }
-            else if (string.Equals(phase1LastRouteIntent?.patternId, AtriumRingPatternId, StringComparison.Ordinal))
-            {
-                canonicalHashVersion = "dungeon-plan-v5";
-            }
-            else
-            {
-                canonicalHashVersion = DungeonPlanSummaryVersion;
-            }
+            string canonicalHashVersion = DungeonPlanSummaryVersion;
             string canonicalHash = ComputeSha256(
                 $"{canonicalHashVersion}\n{routeIntentHash}\n{layoutHash}\n{planHash}");
             float correlation = CalculateDepthLevelCorrelation(layout, plan);
@@ -1608,7 +1819,8 @@ namespace DungeonLab.Editor
                     ["visibleDistantRoomProxyCount"] = plan.overlookCount,
                     ["visibleDistantRoomMeasurement"] = "adjacent-cell elevation delta >= 4u; current generator has no explicit line-of-sight graph",
                     ["synthesizedStairs"] = plan.synthesizedStairs == null ? 0 : plan.synthesizedStairs.Count,
-                    ["promontories"] = plan.promontoryCells == null ? 0 : plan.promontoryCells.Count,
+                    ["promontories"] = plan.namedPromontories?.Length ?? 0,
+                    ["promontoryCells"] = CollectNamedPromontoryCells(plan.namedPromontories).Count,
                     ["recipeCount"] = plan.recipeResolutions?.Length ?? 0,
                     ["depthLevelCorrelation"] = float.IsNaN(correlation) ? JValue.CreateNull() : new JValue(correlation)
                 },
@@ -1628,6 +1840,7 @@ namespace DungeonLab.Editor
             report["routePlacement"] = BuildPhase1RoutePlacementProjection(layout);
             report["routeResolution"] = BuildRouteRequirementResolutionProjection(plan.routeRequirementResolution);
             report["recipeResolutions"] = recipeResolutions;
+            report["namedPromontories"] = BuildNamedPromontoryProjection(plan.namedPromontories);
             report["schemaUsage"] = BuildRecipeSchemaUsageProjection();
             ((JObject)report["hashes"])["routeIntent"] = routeIntentHash;
 
@@ -2121,6 +2334,9 @@ namespace DungeonLab.Editor
             bool recipesValid = TryValidateAcceptedRecipes(
                 plan,
                 out string recipesMessage);
+            bool namedPromontoriesValid = TryValidateAcceptedNamedPromontories(
+                plan,
+                out string namedPromontoryMessage);
             bool headroomValid = TryValidateAcceptedPlanHeadroom(plan, out string headroomMessage);
             bool boundaryValid = TryBuildRoomBoundaryContext(
                 layout,
@@ -2138,6 +2354,7 @@ namespace DungeonLab.Editor
                 bottomToTop &&
                 routeRequirementsValid &&
                 recipesValid &&
+                namedPromontoriesValid &&
                 headroomValid &&
                 boundaryValid &&
                 rendererInputsValid;
@@ -2149,6 +2366,7 @@ namespace DungeonLab.Editor
             AddFailureCode(failureCodes, bottomToTop, "BOTTOM_TO_TOP_TRAVERSAL");
             AddFailureCode(failureCodes, routeRequirementsValid, "ROUTE_REQUIREMENTS");
             AddFailureCode(failureCodes, recipesValid, "RECIPES");
+            AddFailureCode(failureCodes, namedPromontoriesValid, "NAMED_PROMONTORY");
             AddFailureCode(failureCodes, headroomValid, "POST_PLAN_HEADROOM_CLEARANCE");
             AddFailureCode(failureCodes, boundaryValid, "BOUNDARY_CONTEXT");
             AddFailureCode(failureCodes, rendererInputsValid, "RENDERER_INPUT");
@@ -2168,6 +2386,7 @@ namespace DungeonLab.Editor
                         : $"traversal did not span distinct bottom/top levels ({plan.minLevel}..{plan.maxLevel})"),
                 ["routeRequirements"] = CheckToken(routeRequirementsValid, routeRequirementsMessage),
                 ["recipes"] = CheckToken(recipesValid, recipesMessage),
+                ["namedPromontories"] = CheckToken(namedPromontoriesValid, namedPromontoryMessage),
                 ["headroom"] = CheckToken(headroomValid, headroomMessage),
                 ["boundary"] = CheckToken(boundaryValid, boundaryMessage),
                 ["rendererInputs"] = CheckToken(rendererInputsValid, rendererInputMessage)
@@ -2278,6 +2497,75 @@ namespace DungeonLab.Editor
             }
 
             message = $"two reviewed recipes resolved atomically with catalog {catalog.digest}";
+            return true;
+        }
+
+        private static bool TryValidateAcceptedNamedPromontories(
+            TieredLevelPlan plan,
+            out string message)
+        {
+            RouteIntent intent = phase1LastRouteIntent;
+            RouteRequirementResolution route = plan.routeRequirementResolution;
+            NamedVistaPromontoryResolution[] resolutions =
+                plan.namedPromontories ?? Array.Empty<NamedVistaPromontoryResolution>();
+            if (intent == null || string.IsNullOrEmpty(intent.vista.id))
+            {
+                message = "accepted plan had no named vista for promontory validation";
+                return false;
+            }
+
+            Vector2Int facing = route.vistaSourceFacing;
+            int distance = Mathf.Abs(route.vistaTargetCell.x - route.vistaSourceCell.x) +
+                Mathf.Abs(route.vistaTargetCell.y - route.vistaSourceCell.y);
+            int expectedLength = Mathf.Min(
+                MaximumNamedVistaPromontoryCells,
+                Mathf.Max(0, distance - 1 - intent.vista.minimumReservedVoidCells));
+            if (expectedLength == 0)
+            {
+                bool absentAndClear = resolutions.Length == 0 &&
+                    route.reservedVistaCells.Length >= intent.vista.minimumReservedVoidCells;
+                message = absentAndClear
+                    ? "vista had no surplus cell; no named promontory was emitted"
+                    : "vista without surplus cells emitted a named promontory or lost its void reservation";
+                return absentAndClear;
+            }
+
+            if (resolutions.Length != 1)
+            {
+                message = $"expected one named promontory; found {resolutions.Length}";
+                return false;
+            }
+
+            NamedVistaPromontoryResolution resolution = resolutions[0];
+            string targetNodeId = intent.nodes[intent.vista.targetNode].id;
+            if (!string.Equals(resolution.vistaId, intent.vista.id, StringComparison.Ordinal) ||
+                !string.Equals(resolution.targetNodeId, targetNodeId, StringComparison.Ordinal) ||
+                resolution.sourceCell != route.vistaSourceCell ||
+                resolution.targetCell != route.vistaTargetCell ||
+                resolution.facing != facing ||
+                resolution.cells == null ||
+                resolution.cells.Length != expectedLength ||
+                route.reservedVistaCells.Length < intent.vista.minimumReservedVoidCells ||
+                route.vistaSourceLevel - route.vistaTargetLevel < MajorRiseLevels)
+            {
+                message = "named promontory identity, geometry, or vista clearance did not match its route target";
+                return false;
+            }
+
+            for (int index = 0; index < resolution.cells.Length; index++)
+            {
+                Vector2Int expectedCell = route.vistaSourceCell + facing * (index + 1);
+                if (resolution.cells[index] != expectedCell ||
+                    !plan.cellLevels.TryGetValue(expectedCell, out int level) ||
+                    level != resolution.level ||
+                    level != route.vistaSourceLevel)
+                {
+                    message = $"named promontory cell {index} was off-axis, non-contiguous, or at the wrong level";
+                    return false;
+                }
+            }
+
+            message = $"named promontory '{resolution.vistaId}' targets '{resolution.targetNodeId}' with {resolution.cells.Length} cell(s) and preserves {route.reservedVistaCells.Length} void cell(s)";
             return true;
         }
 
@@ -2489,7 +2777,7 @@ namespace DungeonLab.Editor
                 null,
                 null,
                 boundaryContext,
-                plan.promontoryCells,
+                CollectNamedPromontoryCells(plan.namedPromontories),
                 "DungeonLab Renderer Probe",
                 out buildReport,
                 out bounds);
@@ -2732,10 +3020,33 @@ namespace DungeonLab.Editor
                 ["synthesizedStairs"] = synthesizedStairs,
                 ["synthesizedStairSummary"] = plan.synthesizedStairSummary,
                 ["daisShowpieces"] = showpieces,
-                ["promontoryCells"] = CellsToken(plan.promontoryCells, sort: true),
+                ["promontoryCells"] = CellsToken(CollectNamedPromontoryCells(plan.namedPromontories), sort: true),
+                ["namedPromontories"] = BuildNamedPromontoryProjection(plan.namedPromontories),
                 ["recipeResolutions"] = BuildRecipeResolutionsProjection(plan.recipeResolutions),
                 ["routeRequirements"] = BuildRouteRequirementResolutionProjection(plan.routeRequirementResolution)
             };
+        }
+
+        private static JArray BuildNamedPromontoryProjection(
+            IReadOnlyList<NamedVistaPromontoryResolution> resolutions)
+        {
+            var result = new JArray();
+            foreach (NamedVistaPromontoryResolution resolution in
+                resolutions ?? Array.Empty<NamedVistaPromontoryResolution>())
+            {
+                result.Add(new JObject
+                {
+                    ["vistaId"] = resolution.vistaId,
+                    ["targetNodeId"] = resolution.targetNodeId,
+                    ["sourceCell"] = CellToken(resolution.sourceCell),
+                    ["targetCell"] = CellToken(resolution.targetCell),
+                    ["facing"] = CellToken(resolution.facing),
+                    ["level"] = resolution.level,
+                    ["cells"] = CellsToken(resolution.cells, sort: false)
+                });
+            }
+
+            return result;
         }
 
         private static JToken SynthesizedSetPieceToken(ElevationEdgeModel.SynthesizedStairSetPiece setPiece)
@@ -3393,45 +3704,98 @@ namespace DungeonLab.Editor
                     ["everyFailureReasonCoded"] = FailuresAreReasonCoded(seedReports)
                 };
 
-                bool phase6dExactCompletion = successCount == Phase0BaselineSeedCount &&
-                    hardValidCount == Phase0BaselineSeedCount &&
-                    processionalAccepted == processionalSelected &&
-                    atriumAccepted == atriumSelected &&
-                    twinWingAccepted == twinWingSelected;
-                bool phase6dAttemptOne = attemptDistribution.Value<int>("max") == 1;
-                bool phase6dResultHashPreserved = string.Equals(
-                    resultHash,
-                    Phase6cLockedResultHash,
-                    StringComparison.Ordinal);
-                report["phase6dReliabilityBudget"] = new JObject
+                report["phase6dHistoricalReference"] = new JObject
+                {
+                    ["policyVersion"] = RouteRhythmPolicyVersion,
+                    ["passedAtPhaseBoundary"] = true,
+                    ["lockedResultHash"] = Phase6cLockedResultHash,
+                    ["supersededAggregateReason"] = "Phase 6e intentionally advances the canonical tier plan to named promontory resolutions"
+                };
+
+                int namedPromontoryCount = 0;
+                int processionalPromontories = 0;
+                int atriumPromontories = 0;
+                int twinWingPromontories = 0;
+                int namedPromontoryValidCount = 0;
+                foreach (JToken seedReport in seedReports)
+                {
+                    if (seedReport.Value<bool?>("accepted") != true)
+                    {
+                        continue;
+                    }
+
+                    JArray named = seedReport["namedPromontories"] as JArray ?? new JArray();
+                    if (named.Count > 0)
+                    {
+                        namedPromontoryCount += named.Count;
+                        string patternId = seedReport["routeIntent"]?.Value<string>("patternId") ?? string.Empty;
+                        if (string.Equals(patternId, Phase1PatternId, StringComparison.Ordinal))
+                        {
+                            processionalPromontories += named.Count;
+                        }
+                        else if (string.Equals(patternId, AtriumRingPatternId, StringComparison.Ordinal))
+                        {
+                            atriumPromontories += named.Count;
+                        }
+                        else if (string.Equals(patternId, TwinWingPatternId, StringComparison.Ordinal))
+                        {
+                            twinWingPromontories += named.Count;
+                        }
+                    }
+
+                    if (seedReport["validation"]?["namedPromontories"]?.Value<bool?>("passed") == true)
+                    {
+                        namedPromontoryValidCount++;
+                    }
+                }
+
+                bool phase6eExactCompletion = successCount == Phase0BaselineSeedCount &&
+                    hardValidCount == Phase0BaselineSeedCount;
+                bool phase6eAttemptOne = attemptDistribution.Value<int>("max") == 1;
+                bool phase6eExactPromontories = namedPromontoryCount == 114 &&
+                    processionalPromontories == 22 &&
+                    atriumPromontories == 50 &&
+                    twinWingPromontories == 42;
+                bool phase6eNamedValid = namedPromontoryValidCount == successCount;
+                report["phase6eReliabilityBudget"] = new JObject
                 {
                     ["corpus"] = $"{firstSeed}..{firstSeed + seedCount - 1}",
-                    ["policyVersion"] = RouteRhythmPolicyVersion,
+                    ["policyVersion"] = NamedVistaPromontoryPolicyVersion,
                     ["requiredAccepted"] = Phase0BaselineSeedCount,
                     ["requiredHardValid"] = Phase0BaselineSeedCount,
                     ["requiredMaximumAttempt"] = 1,
-                    ["requiredResultHash"] = Phase6cLockedResultHash
+                    ["requiredNamedPromontories"] = 114,
+                    ["requiredProcessionalPromontories"] = 22,
+                    ["requiredAtriumPromontories"] = 50,
+                    ["requiredTwinWingPromontories"] = 42
                 };
-                report["phase6dBudgetResult"] = new JObject
+                report["phase6eBudgetResult"] = new JObject
                 {
                     ["passed"] = exactSplit &&
-                        phase6dExactCompletion &&
-                        phase6dAttemptOne &&
+                        phase6eExactCompletion &&
+                        phase6eAttemptOne &&
                         acceptedHardValid &&
                         routeRequirementsPassed &&
                         finalVistasPassed &&
                         recipeSetsPassed &&
-                        FailuresAreReasonCoded(seedReports) &&
-                        phase6dResultHashPreserved,
+                        phase6eExactPromontories &&
+                        phase6eNamedValid &&
+                        FailuresAreReasonCoded(seedReports),
                     ["exactPatternSplit"] = exactSplit,
-                    ["exactCompletion"] = phase6dExactCompletion,
-                    ["maximumAttemptOne"] = phase6dAttemptOne,
+                    ["exactCompletion"] = phase6eExactCompletion,
+                    ["maximumAttemptOne"] = phase6eAttemptOne,
                     ["everyAcceptedPlanHardValid"] = acceptedHardValid,
                     ["everyAcceptedRouteRequirementValid"] = routeRequirementsPassed,
                     ["everyAcceptedFinalVistaValid"] = finalVistasPassed,
                     ["everyAcceptedRecipeSetValid"] = recipeSetsPassed,
-                    ["everyFailureReasonCoded"] = FailuresAreReasonCoded(seedReports),
-                    ["resultHashPreserved"] = phase6dResultHashPreserved
+                    ["namedPromontories"] = namedPromontoryCount,
+                    ["processionalPromontories"] = processionalPromontories,
+                    ["atriumPromontories"] = atriumPromontories,
+                    ["twinWingPromontories"] = twinWingPromontories,
+                    ["exactNamedPromontoryDistribution"] = phase6eExactPromontories,
+                    ["namedPromontoryValidSeeds"] = namedPromontoryValidCount,
+                    ["everyAcceptedNamedPromontoryValid"] = phase6eNamedValid,
+                    ["everyFailureReasonCoded"] = FailuresAreReasonCoded(seedReports)
                 };
             }
 

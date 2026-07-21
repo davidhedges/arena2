@@ -4,9 +4,9 @@ Start here when returning to dungeon work. Keep this page short and update it at
 
 Last updated: 2026-07-21
 
-Active milestone: Phase 6d route-rhythm policy complete and verified; the next Phase 6 increment is not yet selected
+Active milestone: Phase 6e named-vista promontories complete and verified; the next Phase 6 increment is not yet selected
 
-Production mode: one route-first layout builder deterministically selects processional-spine, atrium-ring, or twin-wing-keep and feeds the shared canonical pipeline
+Production mode: one route-first layout builder deterministically selects processional-spine, atrium-ring, or twin-wing-keep, resolves a target-bearing promontory from any surplus named-vista cells, and feeds the shared canonical pipeline
 
 Recipe authoring UI: implemented for the Phase 5 contract, validation, deterministic gallery, review, and promotion workflow
 
@@ -104,10 +104,11 @@ GenerateWithSeed
   -> GenerateRandomDungeonLayout
   -> TryBuildAcceptedPlan
   -> TryBuildProcessionalSpineDungeonLayout
-  -> DungeonLayout + ephemeral RouteTierRequirements (route + two placed recipe resolutions)
+  -> DungeonLayout + ephemeral RouteTierRequirements (route + two placed recipe resolutions + named-vista reservation)
   -> TryBuildTieredLevelPlan / TryBuildTieredLevelPlanAttempt
      -> atomically realize protected recipes before generic structural fill
-  -> TieredLevelPlan
+     -> resolve any source-side named-vista promontory after structural fill
+  -> TieredLevelPlan (including canonical target-bearing promontory resolution)
   -> TryBuildRoomBoundaryContext
   -> ElevationEdgeModel.BuildLevelField
   -> renderer / abyss support / collision export
@@ -420,6 +421,48 @@ Because every currently valid production plan must remain byte-identical, Phase 
 - All six real-renderer sentinels preserve their Phase 6c canonical hashes and retain `REJECTED 0`. The full EditMode suite is 348/369 with no dungeon failure and exactly the same 21 unrelated baseline failures.
 - Symbol and deletion audits find one policy definition and one production call site, with diagnostics remaining read-only. No schema/profile/asset/topology/embedding/canonical-plan/renderer/collision/random-stream change or compatibility scaffold was added; the Phase 6d deletion ledger is empty.
 
+## Phase 6e entry audit — named targets for promontories
+
+The next increment is `named_vista_promontory_01`. Every production pattern already declares one stable `RouteVistaIntent`, resolves its exact source/target cells and facing, and protects at least three intervening void cells through final tier validation. The canonical tier plan also already carries generic promontory cells to the unchanged renderer, but the late selector has no target identity and no relationship to a planned sightline.
+
+The locked Phase 6d report exposes the gap directly: all 200 seeds contain zero promontory cells. The active profile requires a 36-cell generic room, while every room large enough to approach that threshold is either smaller or protected by the reviewed recipe/vista reservations. The old random-room pass is reachable but produces nothing in the locked corpus, so preserving its nominal chance/length controls would preserve dead policy rather than reviewed behavior.
+
+The other remaining Phase 6 candidates are larger or currently lack an immediate producer:
+
+- a third reviewed recipe requires one newly eligible role/node plus the complete isolated, variation, neighbor, full-dungeon, lifecycle, gallery, and human-review matrix;
+- multiple-vista scoring has no route pattern with more than one legitimate candidate vista;
+- an explicit step motif remains blocked by the absent reviewed `step_library_index.json` and cannot be enabled by reviving the parked global pass.
+
+Phase 6e therefore replaces only the inert generic late selector. A named promontory may occupy the source-side prefix of the already-resolved vista line only when at least three cells remain reserved as void. Its canonical resolution names the vista and target node, records exact source/target/facing/cells, and projects only those cells to the existing renderer and abyss-support path. It adds no new route schema, profile control, random draw, topology, recipe, visibility-candidate scorer, renderer branch, or collision branch.
+
+## Phase 6e acceptance budget — locked before production edits
+
+The deterministic corpus remains `2026072100..2026072299`. Its Phase 6d reference is 200/200 accepted and hard-valid on attempt 1 with the exact 100/50/50 topology split, result hash `f7462647e9f079ef8a72b3c8f9f88f2ce939978ffa7125eb0b9081f4e1ab76f8`, ordered multi-hash digest `62f1d8e9915cb26db8ba5ef0952462992b6999b91d1abe1ea61cc096a59ac383`, zero promontory cells, and reserved-vista counts of processional `3:78, 4:22`, atrium `7:9, 8:41`, and twin-wing `3:8, 4:42`.
+
+Phase 6e passes only if all of these predeclared gates hold:
+
+- the named selector consumes the one existing resolved vista for all three patterns, occupies at most four source-side cells, and leaves at least the declared three-cell void reservation; a vista with no surplus cell produces no promontory rather than weakening the vista or moving either endpoint;
+- the locked corpus produces exactly 114 named promontories: 22 processional, 50 atrium, and 42 twin-wing; every resolution has non-empty contiguous cells beginning beside the declared source, faces the declared target, names both the vista and target node, remains at the source level, and overlooks a target at least 4u lower;
+- malformed reservations deterministically reject missing target identity, non-cardinal/opposed facing, non-contiguous or off-axis cells, occupied planned cells, fewer than three remaining void cells, or a target that is not lower; no invalid named promontory reaches rendering;
+- all 200 seeds preserve their Phase 6d route-intent, layout, recipe-resolution, and recipe-catalog hashes exactly; pattern planner versions, recipe/schema versions, topology selection, and every random stream remain unchanged;
+- both independent sweeps remain 200/200 accepted and hard-valid on attempt 1 with the exact 100/50/50 split and produce identical new aggregate result hashes and ordered pattern-plus-per-seed multi-hash digests;
+- the report/generator envelope and canonical plan advance to `dungeon-plan-v7` / `route-topologies-v7` because the tier plan now records target identity; diagnostics report named resolutions rather than inferring semantics from rendered cells;
+- all prior focused fixtures plus the new Phase 6e production tests pass; all six real-renderer sentinels retain `REJECTED 0`, with the two atrium and one twin-wing sentinels visibly carrying their named promontories while the three processional sentinels preserve the minimum three-cell vista void;
+- the old random large-room `ChoosePromontorySpurs`/`VoidRunFits` path, maximum-count constant, and its four now-unused profile/settings fields are deleted in the same increment; producer/consumer/test and symbol audits find one target-aware production path, the deletion ledger is empty, and work stops before a third recipe, multiple-vista scoring, step motifs, new topology, renderer, collision, or runtime-generation work.
+
+This is an intentional canonical-plan behavior change, so Phase 6d tier/canonical and aggregate hashes are not preservation targets. Route intent, layout, recipes, catalog, selection, and spatial randomness remain the locked identity boundary.
+
+## Phase 6e implementation status
+
+- `named-vista-promontory-v1` consumes only the already-declared route vista. The route handoff carries an ordered source-side prefix of at most four cells; the tier planner validates identity, opposed cardinal facing, contiguous clear cells, source level, lower target, and the remaining void budget before mutating the level field.
+- `TieredLevelPlan` now owns one canonical `NamedVistaPromontoryResolution` when a vista has surplus space. Reports name its vista and target node and record exact source, target, facing, level, and cells. Rendering, abyss supports, boundary construction, and collision still receive only the flattened cells through their existing shared path.
+- The old generic `ChoosePromontorySpurs` / `VoidRunFits` room scan, maximum-count constant, random roll, and four profile/settings fields were deleted. The active profile asset was migrated, and the symbol/deletion audit finds no surviving reference.
+- The new Phase 6e fixture passes 6/6; all Dungeon Lab focused fixtures pass 63/63. Both editor projects compile with zero errors (`Arena.EditModeTests` has zero warnings; the editor assembly retains its existing warnings).
+- Two independent corpus sweeps are byte-identical at the seed-record level: 200/200 accepted and hard-valid on attempt 1, exact 100/50/50 topology split, only `PORT_GRAPH:3` internal candidate rejections, and exact named-promontory distribution 114 = 22 processional + 50 atrium + 42 twin-wing. The new result hash is `ce00305a6b3d4c7043ca7e725689ed514ed99c99776668867675adfe8a9b0410`; the ordered seed/pattern/six-hash digest is `30ff994aed66b58a846ca68354f887e9fdcf72e79a31c7c2868daab27a5d6dc0`.
+- All 200 seeds exactly preserve their Phase 6d route-intent, layout, recipe-resolution, and recipe-catalog hashes. The report/generator versions are now `dungeon-plan-v7` / `route-topologies-v7`, and the executable `phase6eBudgetResult` passes every gate.
+- All six real-graphics sentinels retain `REJECTED 0`. The two atrium and one twin-wing captures render the named deck/support geometry cleanly; the three processional sentinels have no surplus and preserve their three-cell void. The full EditMode suite is 354/375 with no dungeon failure and exactly the same 21 unrelated baseline failures.
+- `git diff --check` passes. One target-aware planner/resolver path remains, diagnostics are read-only, and the Phase 6e deletion ledger is empty.
+
 ## Known implementation facts and blockers
 
 - Generator code: `Assets/Arena/Editor/Dungeons/RandomDungeon/`.
@@ -433,13 +476,13 @@ Because every currently valid production plan must remain byte-identical, Phase 
 ## End-of-session handoff
 
 ```text
-Milestone/phase: Phase 6d route-rhythm policy complete and verified; all three production topologies reject semantic repetition and recipe crowding before embedding.
-Completed this session: audited the remaining Phase 6 needs; selected and budget-locked `route_rhythm_policy_01`; added the shared versioned main-route order/role/beat/recipe-spacing validator, preserved the existing invalid-intent boundary, added an executable report budget and six focused rejection tests, and completed every locked identity, corpus, determinism, renderer, regression, symbol, deletion, and diff gate.
-Current validation result: focused fixtures 57/57; two final corpus sweeps each 200/200 accepted and hard-valid with a 100/50/50 processional/atrium/twin split, all attempts equal to 1, and only `PORT_GRAPH:3` internal candidate rejections; the Phase 6c result hash f7462647...1ab76f8 and ordered multi-hash digest 62f1d8e9...ac383 remain exact; all 200 seeds preserve all six Phase 6c hashes; all six sentinels preserve their canonical hashes and report REJECTED 0; full EditMode 348/369 with exactly the same 21 unrelated baseline failures and no dungeon failure; `git diff --check` passes.
-Last known-good seeds and reports: processional 2026072140; atrium 2026072101; twin-wing 2026072103; DungeonLabReports/dungeon_plan_2026072100_2026072299.json and DungeonLabReports/visual_sentinels/manifest.json.
-Last diagnostic fact: the three current main routes satisfy `route-rhythm-v1`; malformed probes deterministically reject non-contiguous order, adjacent role/beat repetition, a third role occurrence, and fewer than two intervening nodes between recipe slots through `ROUTE_INTENT_INVALID`.
-Deletion-ledger items added/closed: no old production policy was displaced. The new policy has one definition and one production call; its diagnostics are read-only. No compatibility layer, unused setting, serialized field, fallback, or temporary production symbol remains. Phase 6d ledger is empty and closed.
-Exact next action: begin the next Phase 6 entry audit. Compare the remaining needs—the third reviewed recipe, multiple-candidate vista scoring, named-target promontories, or an explicit reviewed step motif—select the smallest slice with an immediate producer and consumer, and lock its acceptance budget before production edits. Do not re-open Phase 6d unless one of its identity or validation gates changes.
+Milestone/phase: Phase 6e named-vista promontories complete and verified; all three production topologies now convert only surplus source-side vista cells into canonical target-bearing resolutions while preserving the declared void.
+Completed this session: audited the remaining Phase 6 needs; selected and budget-locked `named_vista_promontory_01`; replaced the inert random large-room pass with one route-planned/tier-resolved target-aware path; added canonical/report identity, hard validation, executable corpus budgets, adversarial diagnostics, and six focused tests; removed the superseded pass and settings; and completed every locked identity, corpus, determinism, renderer, regression, symbol, deletion, and diff gate.
+Current validation result: focused fixtures 63/63; two final corpus sweeps each 200/200 accepted and hard-valid with a 100/50/50 processional/atrium/twin split, every attempt equal to 1, only `PORT_GRAPH:3` internal candidate rejections, and exact promontory distribution 114 = 22/50/42; result hash ce00305a...a0410 and ordered multi-hash digest 30ff994a...d6dc0 repeat exactly; all 200 route/layout/recipe/catalog hashes preserve Phase 6d; all six sentinels report REJECTED 0; full EditMode 354/375 with exactly the same 21 unrelated baseline failures and no dungeon failure; `git diff --check` passes.
+Last known-good seeds and reports: processional promontory 2026072124; processional no-surplus 2026072100; atrium 2026072101; twin-wing 2026072103; DungeonLabReports/dungeon_plan_2026072100_2026072299.json and DungeonLabReports/visual_sentinels/manifest.json.
+Last diagnostic fact: `named-vista-promontory-v1` rejects missing target identity, invalid facing, off-axis/non-contiguous or occupied cells, lost three-cell void, non-lower targets, and overlong resolutions before level-field mutation; accepted resolutions retain exact vista/target identity and source level.
+Deletion-ledger items added/closed: `ChoosePromontorySpurs`, `VoidRunFits`, `MaxPromontoriesPerDungeon`, `largeRoomMinAreaCells`, `promontoryChancePerRoom`, `promontoryMinLengthCells`, and `promontoryMaxLengthCells` are deleted from production, settings, and the profile asset. One named planner/resolver remains; no compatibility layer, random stream, renderer/collision branch, or temporary production symbol remains. Phase 6e ledger is empty and closed.
+Exact next action: begin the next Phase 6 entry audit. Compare the remaining needs—the third reviewed recipe, multiple-candidate vista scoring, or an explicit reviewed step motif—select the smallest slice with an immediate producer and consumer, and lock its acceptance budget before production edits. Do not re-open Phase 6e unless one of its identity, clearance, or validation gates changes.
 Blocker or decision needed: none. The next Phase 6 slice is not yet selected.
 New chat necessary: no.
 ```
