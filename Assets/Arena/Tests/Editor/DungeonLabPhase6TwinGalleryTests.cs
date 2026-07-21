@@ -7,7 +7,7 @@ using NUnit.Framework;
 
 namespace Arena.Tests.Editor
 {
-    public sealed class DungeonLabPhase6ThirdRecipeTests
+    public sealed class DungeonLabPhase6TwinGalleryTests
     {
         private const int Seed = 2026072100;
         private static readonly Type GeneratorType = AppDomain.CurrentDomain
@@ -17,37 +17,40 @@ namespace Arena.Tests.Editor
             new Lazy<Dictionary<string, string>>(BuildSnapshot);
 
         [Test]
-        public void ReviewedCatalog_ContainsTheCurrentCornerReturnContract()
+        public void ReviewedCatalog_ContainsTheCurrentTwinGalleryConnector()
         {
             Dictionary<string, string> values = Snapshot.Value;
 
             Assert.That(values["catalog.valid"], Is.EqualTo("True"));
             Assert.That(values["catalog.reviewedCount"], Is.EqualTo("4"));
             Assert.That(values["catalog.digest"], Has.Length.EqualTo(64));
-            Assert.That(values["recipe.id"], Is.EqualTo("connector_corner_return_01"));
+            Assert.That(values["recipe.id"], Is.EqualTo("connector_twin_gallery_01"));
+            Assert.That(values["recipe.kind"], Is.EqualTo("Connector"));
             Assert.That(values["recipe.schema"], Is.EqualTo("1"));
             Assert.That(values["recipe.lifecycle"], Is.EqualTo("Reviewed"));
             Assert.That(values["recipe.reviewCurrent"], Is.EqualTo("True"));
             Assert.That(values["recipe.role"], Is.EqualTo("connector"));
-            Assert.That(values["recipe.beat"], Is.EqualTo("return"));
+            Assert.That(values["recipe.beat"], Is.EqualTo("branch"));
         }
 
         [Test]
-        public void CornerReturn_UsesTheLockedGeometryAndExistingStairMotif()
+        public void TwinGallery_UsesTheLockedClearLaneAndSymmetricRiseGeometry()
         {
             Dictionary<string, string> values = Snapshot.Value;
 
             Assert.That(values["recipe.zoneCount"], Is.EqualTo("4"));
             Assert.That(values["recipe.portCount"], Is.EqualTo("2"));
-            Assert.That(values["recipe.transitionCount"], Is.EqualTo("1"));
-            Assert.That(values["recipe.walkableCells"], Is.EqualTo("25"));
-            Assert.That(values["recipe.elevatedCells"], Is.EqualTo("6"));
-            Assert.That(values["recipe.protectedCells"], Is.EqualTo("5"));
-            Assert.That(values["recipe.localPortsPerpendicular"], Is.EqualTo("True"));
-            Assert.That(values["recipe.transitionImplementation"], Is.EqualTo("seam-rise-1"));
-            Assert.That(values["recipe.transitionRise"], Is.EqualTo("1"));
-            Assert.That(values["recipe.transitionLanes"], Is.EqualTo("1"));
-            Assert.That(values["recipe.transitionHeadroom"], Is.EqualTo("3"));
+            Assert.That(values["recipe.walkableCells"], Is.EqualTo("49"));
+            Assert.That(values["recipe.elevatedCells"], Is.EqualTo("20"));
+            Assert.That(values["recipe.circulationCells"], Is.EqualTo("7"));
+            Assert.That(values["recipe.protectedCells"], Is.EqualTo("7"));
+            Assert.That(values["recipe.portsOpposed"], Is.EqualTo("True"));
+            Assert.That(values["recipe.allowMirror"], Is.EqualTo("True"));
+            Assert.That(values["recipe.transitionCount"], Is.EqualTo("2"));
+            Assert.That(values["recipe.transitionsComplete"], Is.EqualTo("True"));
+            Assert.That(values["recipe.motifCount"], Is.EqualTo("1"));
+            Assert.That(values["recipe.variationCount"], Is.EqualTo("0"));
+            Assert.That(values["recipe.symmetryCount"], Is.EqualTo("1"));
             Assert.That(values["recipe.contract"], Is.EqualTo("True"));
             Assert.That(values["recipe.schemaValid"], Is.EqualTo("True"));
             Assert.That(values["recipe.structureValid"], Is.EqualTo("True"));
@@ -73,56 +76,62 @@ namespace Arena.Tests.Editor
             Assert.That(values["gallery.collision"], Is.EqualTo("True"));
         }
 
-        [TestCase("processional", "processional-spine-v6", "branch-11-12", "rejoin-12-7", "4")]
-        [TestCase("atrium", "atrium-ring-v2", "branch-11-12", "rejoin-12-6", "3")]
-        [TestCase("twinWing", "twin-wing-keep-v2", "wing-b-11-12", "wing-b-rejoin-12-5", "3")]
-        public void EveryTopology_BindsAndResolvesTheSharedCornerReturn(
-            string prefix,
-            string plannerVersion,
-            string entryEdge,
-            string exitEdge,
-            string recipeCount)
+        [Test]
+        public void ProcessionalBranchPassage_BindsAndResolvesTheTwinGallery()
         {
             Dictionary<string, string> values = Snapshot.Value;
 
-            Assert.That(values[$"{prefix}.accepted"], Is.EqualTo("True"));
-            Assert.That(values[$"{prefix}.validation"], Is.EqualTo("True"));
-            Assert.That(values[$"{prefix}.plannerVersion"], Is.EqualTo(plannerVersion));
-            Assert.That(values[$"{prefix}.recipeCount"], Is.EqualTo(recipeCount));
-            Assert.That(values[$"{prefix}.slotNode"], Is.EqualTo("12"));
-            Assert.That(values[$"{prefix}.nodeRole"], Is.EqualTo("connector"));
-            Assert.That(values[$"{prefix}.nodeBeat"], Is.EqualTo("return"));
-            Assert.That(values[$"{prefix}.orientation"], Is.EqualTo("RouteForward"));
-            Assert.That(values[$"{prefix}.entryEdge"], Is.EqualTo(entryEdge));
-            Assert.That(values[$"{prefix}.exitEdge"], Is.EqualTo(exitEdge));
-            Assert.That(values[$"{prefix}.atomic"], Is.EqualTo("True"));
-            Assert.That(values[$"{prefix}.roomIndex"], Is.EqualTo("12"));
-            Assert.That(values[$"{prefix}.transitionCount"], Is.EqualTo("1"));
-            Assert.That(int.Parse(values[$"{prefix}.protectedCount"]), Is.GreaterThan(0));
-            Assert.That(values[$"{prefix}.portsPerpendicular"], Is.EqualTo("True"));
-            Assert.That(values[$"{prefix}.axisMatchesExit"], Is.EqualTo("True"));
+            Assert.That(values["processional.accepted"], Is.EqualTo("True"));
+            Assert.That(values["processional.validation"], Is.EqualTo("True"));
+            Assert.That(values["processional.recipeCount"], Is.EqualTo("4"));
+            Assert.That(values["processional.slotNode"], Is.EqualTo("10"));
+            Assert.That(values["processional.nodeRole"], Is.EqualTo("connector"));
+            Assert.That(values["processional.nodeBeat"], Is.EqualTo("branch"));
+            Assert.That(values["processional.orientation"], Is.EqualTo("RouteForward"));
+            Assert.That(values["processional.entryEdge"], Is.EqualTo("branch-9-10"));
+            Assert.That(values["processional.exitEdge"], Is.EqualTo("branch-10-11"));
+            Assert.That(values["processional.atomic"], Is.EqualTo("True"));
+            Assert.That(values["processional.roomIndex"], Is.EqualTo("10"));
+            Assert.That(values["processional.transitionCount"], Is.EqualTo("2"));
+            Assert.That(values["processional.protectedCount"], Is.EqualTo("7"));
+            Assert.That(values["processional.axisMatchesExit"], Is.EqualTo("True"));
+            Assert.That(values["processional.entryOpposesExit"], Is.EqualTo("True"));
+            Assert.That(values["processional.finalVista"], Is.EqualTo("True"));
+            Assert.That(int.Parse(values["processional.reservedVoid"]), Is.GreaterThanOrEqualTo(3));
         }
 
         [Test]
-        public void ExitEdgeOrientation_IsCardinalAndRejectsInvalidIdentity()
+        public void StructurallyDifferentPatterns_RetainTheirThreeRecipeSets()
         {
             Dictionary<string, string> values = Snapshot.Value;
 
-            Assert.That(values["axis.validResolved"], Is.EqualTo("True"));
-            Assert.That(values["axis.validCardinal"], Is.EqualTo("True"));
+            Assert.That(values["atrium.recipeCount"], Is.EqualTo("3"));
+            Assert.That(values["atrium.galleryAbsent"], Is.EqualTo("True"));
+            Assert.That(values["twin.recipeCount"], Is.EqualTo("3"));
+            Assert.That(values["twin.galleryAbsent"], Is.EqualTo("True"));
+        }
+
+        [Test]
+        public void RouteForwardAxisResolver_UsesBothDeclaredEndpoints()
+        {
+            Dictionary<string, string> values = Snapshot.Value;
+
+            Assert.That(values["axis.routeResolved"], Is.EqualTo("True"));
+            Assert.That(values["axis.routeCardinal"], Is.EqualTo("True"));
             Assert.That(values["axis.missingExitRejected"], Is.EqualTo("True"));
-            Assert.That(values["axis.unrelatedExitRejected"], Is.EqualTo("True"));
         }
 
         [Test]
-        public void VersionsAdvanceWithoutChangingSchemaOrSpatialRandomness()
+        public void VersionsAdvanceWithoutChangingOtherPatternVersionsOrSpatialRandomness()
         {
             Dictionary<string, string> values = Snapshot.Value;
 
             Assert.That(values["versions.summary"], Is.EqualTo("dungeon-plan-v9"));
             Assert.That(values["versions.generator"], Is.EqualTo("route-topologies-v9"));
+            Assert.That(values["versions.processional"], Is.EqualTo("processional-spine-v6"));
+            Assert.That(values["versions.atrium"], Is.EqualTo("atrium-ring-v2"));
+            Assert.That(values["versions.twin"], Is.EqualTo("twin-wing-keep-v2"));
             Assert.That(values["versions.spatialRandom"], Is.EqualTo("processional-spine-v1"));
-            Assert.That(values["recipe.schema"], Is.EqualTo("1"));
             Assert.That(values["lifecycle.staleDetected"], Is.EqualTo("True"));
             Assert.That(values["lifecycle.staleExcluded"], Is.EqualTo("True"));
         }
@@ -130,9 +139,9 @@ namespace Arena.Tests.Editor
         private static Dictionary<string, string> BuildSnapshot()
         {
             MethodInfo method = GeneratorType.GetMethod(
-                "BuildPhase6fCornerReturnSnapshot",
+                "BuildPhase6gTwinGallerySnapshot",
                 BindingFlags.Static | BindingFlags.NonPublic)!;
-            Assert.That(method, Is.Not.Null, "Missing Phase 6f third-recipe diagnostic.");
+            Assert.That(method, Is.Not.Null, "Missing Phase 6g twin-gallery diagnostic.");
             return Parse((string)method.Invoke(null, new object[] { Seed })!);
         }
 

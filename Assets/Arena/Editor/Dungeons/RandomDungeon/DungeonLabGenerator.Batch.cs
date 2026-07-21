@@ -16,7 +16,7 @@ namespace DungeonLab.Editor
     internal sealed partial class DungeonLabGenerator
     {
         private const string BatchReportDirectory = "DungeonLabReports";
-        private const string DungeonPlanSummaryVersion = "dungeon-plan-v8";
+        private const string DungeonPlanSummaryVersion = "dungeon-plan-v9";
         private const int Phase0BaselineFirstSeed = 2026072100;
         private const int Phase0BaselineSeedCount = 200;
         private const int LockedSeedCount = 100;
@@ -227,8 +227,14 @@ namespace DungeonLab.Editor
                         finalVistaValidCount++;
                     }
 
+                    int expectedRecipeCount = string.Equals(
+                        selectedPattern,
+                        Phase1PatternId,
+                        StringComparison.Ordinal)
+                        ? 4
+                        : 3;
                     if (seedReport["validation"]?["recipes"]?.Value<bool?>("passed") == true &&
-                        (seedReport["recipeResolutions"] as JArray)?.Count == 3)
+                        (seedReport["recipeResolutions"] as JArray)?.Count == expectedRecipeCount)
                     {
                         recipeSetValidCount++;
                     }
@@ -1196,6 +1202,238 @@ namespace DungeonLab.Editor
             return string.Join("\n", lines);
         }
 
+        private static string BuildPhase6gTwinGallerySnapshot(int seed)
+        {
+            bool catalogValid = DungeonRecipeCatalogService.TryLoadActiveCatalog(
+                out ActiveDungeonRecipeCatalog catalog,
+                out string catalogError);
+            DungeonRecipeAsset recipe = null;
+            catalog?.TryGet(DungeonRecipeIds.TwinGalleryConnector, out recipe);
+            DungeonRecipeValidationResult contract = DungeonRecipeValidator.ValidateContract(recipe);
+            int walkableCellCount = 0;
+            int elevatedCellCount = 0;
+            var circulationCells = new HashSet<Vector2Int>();
+            var protectedCells = new HashSet<Vector2Int>();
+            foreach (DungeonRecipeZone zone in recipe?.zones ?? Array.Empty<DungeonRecipeZone>())
+            {
+                if (zone?.kind == DungeonRecipeZoneKind.Walkable)
+                {
+                    walkableCellCount += zone.size.x * zone.size.y;
+                }
+                if (zone?.kind == DungeonRecipeZoneKind.Elevated)
+                {
+                    elevatedCellCount += zone.size.x * zone.size.y;
+                }
+
+                if (zone?.kind != DungeonRecipeZoneKind.ProtectedCirculation &&
+                    zone?.kind != DungeonRecipeZoneKind.ProtectedFocal)
+                {
+                    continue;
+                }
+
+                foreach (Vector2Int cell in DungeonRecipeAuthoringWindow.ZoneCells(zone))
+                {
+                    protectedCells.Add(cell);
+                    if (zone.kind == DungeonRecipeZoneKind.ProtectedCirculation) circulationCells.Add(cell);
+                }
+            }
+
+            DungeonRecipePort contractEntry = null;
+            DungeonRecipePort contractExit = null;
+            foreach (DungeonRecipePort port in recipe?.ports ?? Array.Empty<DungeonRecipePort>())
+            {
+                if (string.Equals(port?.id, "entry", StringComparison.Ordinal)) contractEntry = port;
+                if (string.Equals(port?.id, "exit", StringComparison.Ordinal)) contractExit = port;
+            }
+            bool transitionsComplete = recipe?.transitions?.Length == 2;
+            var lowerTransitionCells = new HashSet<Vector2Int>();
+            var upperTransitionCells = new HashSet<Vector2Int>();
+            foreach (DungeonRecipeTransition transition in recipe?.transitions ?? Array.Empty<DungeonRecipeTransition>())
+            {
+                transitionsComplete &= transition != null &&
+                    transition.riseLevels == 1 &&
+                    transition.laneCount == 1 &&
+                    transition.headroomLevels == 3 &&
+                    transition.lowerLandingCells?.Length == 1 &&
+                    transition.upperLandingCells?.Length == 1 &&
+                    transition.footprintCells?.Length == 1;
+                if (transition != null)
+                {
+                    lowerTransitionCells.Add(transition.lowerTransitionCell);
+                    upperTransitionCells.Add(transition.upperTransitionCell);
+                }
+            }
+            transitionsComplete &= lowerTransitionCells.Count == 2 && upperTransitionCells.Count == 2;
+
+            DungeonRecipeAsset staleRecipe = recipe == null ? null : Instantiate(recipe);
+            if (staleRecipe != null)
+            {
+                staleRecipe.hideFlags = HideFlags.HideAndDontSave;
+                staleRecipe.contentVersion++;
+            }
+            bool staleReviewDetected = staleRecipe != null && !DungeonRecipeValidator.ReviewIsCurrent(staleRecipe);
+            bool staleExcluded = staleRecipe != null && !DungeonRecipeCatalogService.IsEligibleForOrdinaryGeneration(staleRecipe);
+            if (staleRecipe != null) DestroyImmediate(staleRecipe);
+
+            bool firstGalleryPassed = DungeonRecipeAuthoringService.TryBuildReviewGallery(
+                recipe,
+                seed,
+                out string firstGalleryPath,
+                out string firstGalleryMessage);
+            JObject firstGallery = firstGalleryPassed
+                ? JObject.Parse(File.ReadAllText(firstGalleryPath))
+                : new JObject();
+            bool secondGalleryPassed = DungeonRecipeAuthoringService.TryBuildReviewGallery(
+                recipe,
+                seed,
+                out string secondGalleryPath,
+                out string secondGalleryMessage);
+            JObject secondGallery = secondGalleryPassed
+                ? JObject.Parse(File.ReadAllText(secondGalleryPath))
+                : new JObject();
+            var galleryKinds = new HashSet<string>(StringComparer.Ordinal);
+            var mirrorStates = new HashSet<bool>();
+            foreach (JToken entry in firstGallery["entries"] as JArray ?? new JArray())
+            {
+                galleryKinds.Add(entry.Value<string>("kind") ?? string.Empty);
+                if (entry["mirrored"] != null) mirrorStates.Add(entry.Value<bool>("mirrored"));
+            }
+
+            JObject processional = BuildPhase0SeedReport(seed);
+            JObject slot = FindRecipeProjection(
+                processional["routeIntent"]?["recipeSlots"] as JArray,
+                DungeonRecipeIds.TwinGalleryConnector);
+            JObject resolution = FindRecipeProjection(
+                processional["recipeResolutions"] as JArray,
+                DungeonRecipeIds.TwinGalleryConnector);
+            JObject node = processional["routeIntent"]?["nodes"]?[Phase1BranchPassageNode] as JObject;
+            JObject entryPort = null;
+            JObject exitPort = null;
+            foreach (JToken port in slot?["ports"] as JArray ?? new JArray())
+            {
+                if (string.Equals(port.Value<string>("id"), "entry", StringComparison.Ordinal)) entryPort = port as JObject;
+                if (string.Equals(port.Value<string>("id"), "exit", StringComparison.Ordinal)) exitPort = port as JObject;
+            }
+
+            JObject resolvedEntry = null;
+            JObject resolvedExit = null;
+            foreach (JToken port in resolution?["ports"] as JArray ?? new JArray())
+            {
+                if (string.Equals(port.Value<string>("id"), "entry", StringComparison.Ordinal)) resolvedEntry = port as JObject;
+                if (string.Equals(port.Value<string>("id"), "exit", StringComparison.Ordinal)) resolvedExit = port as JObject;
+            }
+
+            int axisX = resolution?["primaryAxis"]?.Value<int?>("x") ?? 0;
+            int axisY = resolution?["primaryAxis"]?.Value<int?>("y") ?? 0;
+            int entryX = resolvedEntry?["outwardDirection"]?.Value<int?>("x") ?? 0;
+            int entryY = resolvedEntry?["outwardDirection"]?.Value<int?>("y") ?? 0;
+            int exitX = resolvedExit?["outwardDirection"]?.Value<int?>("x") ?? 0;
+            int exitY = resolvedExit?["outwardDirection"]?.Value<int?>("y") ?? 0;
+
+            RecipeSlotIntent productionSlot = null;
+            foreach (RecipeSlotIntent candidate in phase1LastRouteIntent?.recipeSlots ?? Array.Empty<RecipeSlotIntent>())
+            {
+                if (candidate.slotNode == Phase1BranchPassageNode) productionSlot = candidate;
+            }
+
+            bool routeAxisResolved = TryResolveRouteForwardRecipeAxis(
+                phase1LastRouteIntent,
+                productionSlot,
+                phase1LastNodeCenters,
+                out Vector2Int routeAxis);
+            var missingExitSlot = new RecipeSlotIntent(
+                Phase1BranchPassageNode,
+                recipe,
+                RecipeOrientationBinding.RouteForward,
+                new[] { new RecipePortBinding("entry", "branch-9-10") });
+            bool missingExitRejected = !TryResolveRouteForwardRecipeAxis(
+                phase1LastRouteIntent,
+                missingExitSlot,
+                phase1LastNodeCenters,
+                out _);
+
+            JObject atrium = BuildPhase0SeedReport(2026072101);
+            JObject twin = BuildPhase0SeedReport(2026072103);
+            return string.Join("\n", new[]
+            {
+                $"versions.summary={DungeonPlanSummaryVersion}",
+                $"versions.generator={RoutePlannerVersion}",
+                $"versions.processional={ProcessionalPlannerVersion}",
+                $"versions.atrium={AtriumRingPlannerVersion}",
+                $"versions.twin={TwinWingPlannerVersion}",
+                $"versions.spatialRandom={RouteSpatialRandomVersion}",
+                $"catalog.valid={catalogValid}",
+                $"catalog.error={catalogError}",
+                $"catalog.reviewedCount={catalog?.recipes.Length ?? 0}",
+                $"catalog.digest={catalog?.digest ?? string.Empty}",
+                $"recipe.id={recipe?.recipeId ?? string.Empty}",
+                $"recipe.kind={recipe?.kind.ToString() ?? string.Empty}",
+                $"recipe.schema={recipe?.schemaVersion ?? 0}",
+                $"recipe.lifecycle={recipe?.lifecycle.ToString() ?? string.Empty}",
+                $"recipe.reviewCurrent={DungeonRecipeValidator.ReviewIsCurrent(recipe)}",
+                $"recipe.role={((recipe?.eligibleRoles?.Length ?? 0) == 1 ? recipe.eligibleRoles[0] : string.Empty)}",
+                $"recipe.beat={((recipe?.eligibleBeats?.Length ?? 0) == 1 ? recipe.eligibleBeats[0] : string.Empty)}",
+                $"recipe.zoneCount={recipe?.zones?.Length ?? 0}",
+                $"recipe.portCount={recipe?.ports?.Length ?? 0}",
+                $"recipe.walkableCells={walkableCellCount}",
+                $"recipe.elevatedCells={elevatedCellCount}",
+                $"recipe.circulationCells={circulationCells.Count}",
+                $"recipe.protectedCells={protectedCells.Count}",
+                $"recipe.portsOpposed={contractEntry != null && contractExit != null && contractEntry.outwardDirection == -contractExit.outwardDirection}",
+                $"recipe.allowMirror={recipe?.allowMirror == true}",
+                $"recipe.transitionCount={recipe?.transitions?.Length ?? 0}",
+                $"recipe.transitionsComplete={transitionsComplete}",
+                $"recipe.motifCount={recipe?.motifs?.Length ?? 0}",
+                $"recipe.variationCount={recipe?.variations?.Length ?? 0}",
+                $"recipe.symmetryCount={recipe?.symmetryPairs?.Length ?? 0}",
+                $"recipe.contract={contract.Passed}",
+                $"recipe.schemaValid={contract.LayerPassed(DungeonRecipeValidationLayer.Schema)}",
+                $"recipe.structureValid={contract.LayerPassed(DungeonRecipeValidationLayer.Structure)}",
+                $"recipe.variationValid={contract.LayerPassed(DungeonRecipeValidationLayer.Variation)}",
+                $"recipe.neighborValid={contract.LayerPassed(DungeonRecipeValidationLayer.Neighbor)}",
+                $"lifecycle.staleDetected={staleReviewDetected}",
+                $"lifecycle.staleExcluded={staleExcluded}",
+                $"gallery.firstPassed={firstGalleryPassed}",
+                $"gallery.secondPassed={secondGalleryPassed}",
+                $"gallery.samePath={string.Equals(firstGalleryPath, secondGalleryPath, StringComparison.Ordinal)}",
+                $"gallery.sameHash={string.Equals(firstGallery.Value<string>("galleryHash"), secondGallery.Value<string>("galleryHash"), StringComparison.Ordinal)}",
+                $"gallery.entryCount={(firstGallery["entries"] as JArray)?.Count ?? 0}",
+                $"gallery.requiredViews={galleryKinds.IsSupersetOf(new[] { "contract", "top_down", "player_height", "below_floor", "neighbor" })}",
+                $"gallery.mirrorStateCount={mirrorStates.Count}",
+                $"gallery.fullDungeon={firstGallery["fullDungeon"]?.Value<bool?>("canonicalPlan") == true}",
+                $"gallery.renderer={firstGallery["fullDungeon"]?.Value<bool?>("renderer") == true}",
+                $"gallery.abyss={firstGallery["fullDungeon"]?.Value<bool?>("abyssSupport") == true}",
+                $"gallery.collision={firstGallery["fullDungeon"]?.Value<bool?>("collision") == true}",
+                $"gallery.message={firstGalleryMessage}",
+                $"gallery.secondMessage={secondGalleryMessage}",
+                $"processional.accepted={processional.Value<bool?>("accepted") == true}",
+                $"processional.validation={processional["validation"]?.Value<bool?>("passed") == true}",
+                $"processional.recipeCount={(processional["recipeResolutions"] as JArray)?.Count ?? 0}",
+                $"processional.slotNode={slot?.Value<int?>("slotNode") ?? -1}",
+                $"processional.nodeRole={node?.Value<string>("role") ?? string.Empty}",
+                $"processional.nodeBeat={node?.Value<string>("beat") ?? string.Empty}",
+                $"processional.orientation={slot?.Value<string>("orientationBinding") ?? string.Empty}",
+                $"processional.entryEdge={entryPort?.Value<string>("edgeId") ?? string.Empty}",
+                $"processional.exitEdge={exitPort?.Value<string>("edgeId") ?? string.Empty}",
+                $"processional.atomic={resolution?.Value<bool?>("atomicAndValid") == true}",
+                $"processional.roomIndex={resolution?.Value<int?>("roomIndex") ?? -1}",
+                $"processional.transitionCount={(resolution?["transitions"] as JArray)?.Count ?? 0}",
+                $"processional.protectedCount={(resolution?["protectedCells"] as JArray)?.Count ?? 0}",
+                $"processional.axisMatchesExit={axisX == exitX && axisY == exitY}",
+                $"processional.entryOpposesExit={entryX == -exitX && entryY == -exitY}",
+                $"processional.finalVista={processional["routeResolution"]?["vista"]?.Value<bool?>("finalValid") == true}",
+                $"processional.reservedVoid={(processional["routeResolution"]?["vista"]?["reservedVoidCells"] as JArray)?.Count ?? 0}",
+                $"atrium.recipeCount={(atrium["recipeResolutions"] as JArray)?.Count ?? 0}",
+                $"atrium.galleryAbsent={FindRecipeProjection(atrium["recipeResolutions"] as JArray, DungeonRecipeIds.TwinGalleryConnector) == null}",
+                $"twin.recipeCount={(twin["recipeResolutions"] as JArray)?.Count ?? 0}",
+                $"twin.galleryAbsent={FindRecipeProjection(twin["recipeResolutions"] as JArray, DungeonRecipeIds.TwinGalleryConnector) == null}",
+                $"axis.routeResolved={routeAxisResolved}",
+                $"axis.routeCardinal={Mathf.Abs(routeAxis.x) + Mathf.Abs(routeAxis.y) == 1}",
+                $"axis.missingExitRejected={missingExitRejected}",
+                $"diagnostic.seed={seed}"
+            });
+        }
+
         private static string PromontorySeedSnapshot(string prefix, JObject report)
         {
             JArray named = report["namedPromontories"] as JArray ?? new JArray();
@@ -1714,9 +1952,11 @@ namespace DungeonLab.Editor
             DungeonRecipeAsset throne = null;
             DungeonRecipeAsset vestibule = null;
             DungeonRecipeAsset cornerReturn = null;
+            DungeonRecipeAsset twinGallery = null;
             catalog?.TryGet(DungeonRecipeIds.ProcessionalLandmark, out throne);
             catalog?.TryGet(DungeonRecipeIds.CompressionConnector, out vestibule);
             catalog?.TryGet(DungeonRecipeIds.CornerReturnConnector, out cornerReturn);
+            catalog?.TryGet(DungeonRecipeIds.TwinGalleryConnector, out twinGallery);
             bool firstPassed = DungeonRecipeAuthoringService.TryBuildReviewGallery(
                 throne,
                 seed,
@@ -1761,6 +2001,22 @@ namespace DungeonLab.Editor
             JObject thirdSecond = thirdSecondPassed
                 ? JObject.Parse(File.ReadAllText(thirdSecondPath))
                 : new JObject();
+            bool fourthFirstPassed = DungeonRecipeAuthoringService.TryBuildReviewGallery(
+                twinGallery,
+                seed,
+                out string fourthFirstPath,
+                out string fourthFirstMessage);
+            JObject fourthFirst = fourthFirstPassed
+                ? JObject.Parse(File.ReadAllText(fourthFirstPath))
+                : new JObject();
+            bool fourthSecondPassed = DungeonRecipeAuthoringService.TryBuildReviewGallery(
+                twinGallery,
+                seed,
+                out string fourthSecondPath,
+                out string fourthSecondMessage);
+            JObject fourthSecond = fourthSecondPassed
+                ? JObject.Parse(File.ReadAllText(fourthSecondPath))
+                : new JObject();
             var kinds = new HashSet<string>(StringComparer.Ordinal);
             var mirrorStates = new HashSet<bool>();
             foreach (JToken entry in first["entries"] as JArray ?? new JArray())
@@ -1781,6 +2037,13 @@ namespace DungeonLab.Editor
             {
                 thirdKinds.Add(entry.Value<string>("kind") ?? string.Empty);
                 if (entry["mirrored"] != null) thirdMirrorStates.Add(entry.Value<bool>("mirrored"));
+            }
+            var fourthKinds = new HashSet<string>(StringComparer.Ordinal);
+            var fourthMirrorStates = new HashSet<bool>();
+            foreach (JToken entry in fourthFirst["entries"] as JArray ?? new JArray())
+            {
+                fourthKinds.Add(entry.Value<string>("kind") ?? string.Empty);
+                if (entry["mirrored"] != null) fourthMirrorStates.Add(entry.Value<bool>("mirrored"));
             }
 
             return string.Join("\n", new[]
@@ -1814,12 +2077,22 @@ namespace DungeonLab.Editor
                 $"third.requiredViews={thirdKinds.IsSupersetOf(new[] { "contract", "top_down", "player_height", "below_floor", "neighbor" })}",
                 $"third.mirrorStateCount={thirdMirrorStates.Count}",
                 $"third.fullDungeon={thirdFirst["fullDungeon"]?.Value<bool?>("canonicalPlan") == true}",
+                $"fourth.firstPassed={fourthFirstPassed}",
+                $"fourth.secondPassed={fourthSecondPassed}",
+                $"fourth.samePath={string.Equals(fourthFirstPath, fourthSecondPath, StringComparison.Ordinal)}",
+                $"fourth.sameHash={string.Equals(fourthFirst.Value<string>("galleryHash"), fourthSecond.Value<string>("galleryHash"), StringComparison.Ordinal)}",
+                $"fourth.entryCount={(fourthFirst["entries"] as JArray)?.Count ?? 0}",
+                $"fourth.requiredViews={fourthKinds.IsSupersetOf(new[] { "contract", "top_down", "player_height", "below_floor", "neighbor" })}",
+                $"fourth.mirrorStateCount={fourthMirrorStates.Count}",
+                $"fourth.fullDungeon={fourthFirst["fullDungeon"]?.Value<bool?>("canonicalPlan") == true}",
                 $"gallery.message={firstMessage}",
                 $"gallery.secondMessage={secondMessage}",
                 $"contrast.message={contrastFirstMessage}",
                 $"contrast.secondMessage={contrastSecondMessage}",
                 $"third.message={thirdFirstMessage}",
-                $"third.secondMessage={thirdSecondMessage}"
+                $"third.secondMessage={thirdSecondMessage}",
+                $"fourth.message={fourthFirstMessage}",
+                $"fourth.secondMessage={fourthSecondMessage}"
             });
         }
 
@@ -2715,24 +2988,35 @@ namespace DungeonLab.Editor
             TieredLevelPlan plan,
             out string message)
         {
+            bool processional = string.Equals(
+                phase1LastRouteIntent?.patternId,
+                Phase1PatternId,
+                StringComparison.Ordinal);
+            int expectedRecipeCount = processional ? 4 : 3;
             if (!DungeonRecipeCatalogService.TryLoadActiveCatalog(
                     out ActiveDungeonRecipeCatalog catalog,
                     out message) ||
                 plan.recipeResolutions == null ||
-                plan.recipeResolutions.Length != 3)
+                plan.recipeResolutions.Length != expectedRecipeCount)
             {
                 message = string.IsNullOrEmpty(message)
-                    ? $"expected three recipe resolutions; found {plan.recipeResolutions?.Length ?? 0}"
+                    ? $"expected {expectedRecipeCount} recipe resolutions; found {plan.recipeResolutions?.Length ?? 0}"
                     : message;
                 return false;
             }
 
-            foreach (string requiredId in new[]
-                     {
-                         DungeonRecipeIds.ProcessionalLandmark,
-                         DungeonRecipeIds.CompressionConnector,
-                         DungeonRecipeIds.CornerReturnConnector
-                     })
+            var requiredIds = new List<string>
+            {
+                DungeonRecipeIds.ProcessionalLandmark,
+                DungeonRecipeIds.CompressionConnector,
+                DungeonRecipeIds.CornerReturnConnector
+            };
+            if (processional)
+            {
+                requiredIds.Add(DungeonRecipeIds.TwinGalleryConnector);
+            }
+
+            foreach (string requiredId in requiredIds)
             {
                 RecipeResolution resolution = FindRecipeResolution(plan.recipeResolutions, requiredId);
                 if (!catalog.TryGet(requiredId, out DungeonRecipeAsset recipe) ||
@@ -2762,7 +3046,7 @@ namespace DungeonLab.Editor
                 }
             }
 
-            message = $"three reviewed recipes resolved atomically with catalog {catalog.digest}";
+            message = $"{expectedRecipeCount} reviewed recipes resolved atomically with catalog {catalog.digest}";
             return true;
         }
 
@@ -4065,9 +4349,13 @@ namespace DungeonLab.Editor
                     ["everyFailureReasonCoded"] = FailuresAreReasonCoded(seedReports)
                 };
 
-                int exactThreeRecipeSeedCount = 0;
+                int phase6fCompatibleSeedCount = 0;
+                int exactPhase6gRecipeSeedCount = 0;
+                int processionalFourRecipeSeedCount = 0;
+                int otherThreeRecipeSeedCount = 0;
                 int totalRecipeResolutionCount = 0;
                 int cornerReturnResolutionCount = 0;
+                int twinGalleryResolutionCount = 0;
                 int plannerVersionMatchCount = 0;
                 foreach (JToken seedReport in seedReports)
                 {
@@ -4079,6 +4367,7 @@ namespace DungeonLab.Editor
                     JArray recipes = seedReport["recipeResolutions"] as JArray ?? new JArray();
                     totalRecipeResolutionCount += recipes.Count;
                     int seedCornerReturns = 0;
+                    int seedTwinGalleries = 0;
                     foreach (JToken recipe in recipes)
                     {
                         if (string.Equals(
@@ -4089,16 +4378,42 @@ namespace DungeonLab.Editor
                             seedCornerReturns++;
                             cornerReturnResolutionCount++;
                         }
+
+                        if (string.Equals(
+                                recipe.Value<string>("id"),
+                                DungeonRecipeIds.TwinGalleryConnector,
+                                StringComparison.Ordinal))
+                        {
+                            seedTwinGalleries++;
+                            twinGalleryResolutionCount++;
+                        }
                     }
 
-                    if (recipes.Count == 3 && seedCornerReturns == 1 &&
-                        seedReport["validation"]?["recipes"]?.Value<bool?>("passed") == true)
+                    bool recipesValid = seedReport["validation"]?["recipes"]?.Value<bool?>("passed") == true;
+                    if (recipes.Count >= 3 && seedCornerReturns == 1 && recipesValid)
                     {
-                        exactThreeRecipeSeedCount++;
+                        phase6fCompatibleSeedCount++;
                     }
 
                     string patternId = seedReport["routeIntent"]?.Value<string>("patternId") ?? string.Empty;
                     string plannerVersion = seedReport["routeIntent"]?.Value<string>("plannerVersion") ?? string.Empty;
+                    bool exactCurrentRecipeSet;
+                    if (string.Equals(patternId, Phase1PatternId, StringComparison.Ordinal))
+                    {
+                        exactCurrentRecipeSet = recipes.Count == 4 && seedTwinGalleries == 1;
+                        if (exactCurrentRecipeSet) processionalFourRecipeSeedCount++;
+                    }
+                    else
+                    {
+                        exactCurrentRecipeSet = recipes.Count == 3 && seedTwinGalleries == 0;
+                        if (exactCurrentRecipeSet) otherThreeRecipeSeedCount++;
+                    }
+
+                    if (exactCurrentRecipeSet && seedCornerReturns == 1 && recipesValid)
+                    {
+                        exactPhase6gRecipeSeedCount++;
+                    }
+
                     if (string.Equals(patternId, Phase1PatternId, StringComparison.Ordinal) &&
                             string.Equals(plannerVersion, ProcessionalPlannerVersion, StringComparison.Ordinal) ||
                         string.Equals(patternId, AtriumRingPatternId, StringComparison.Ordinal) &&
@@ -4110,65 +4425,108 @@ namespace DungeonLab.Editor
                     }
                 }
 
-                bool phase6fExactCompletion = successCount == Phase0BaselineSeedCount &&
+                bool exactCompletion = successCount == Phase0BaselineSeedCount &&
                     hardValidCount == Phase0BaselineSeedCount;
-                bool phase6fAttemptBudget = attemptDistribution.Value<int>("p95") <= 1 &&
+                bool attemptBudget = attemptDistribution.Value<int>("p95") <= 1 &&
                     attemptDistribution.Value<int>("max") <= Phase1LayoutAttemptLimit;
-                bool phase6fExactRecipeSet = exactThreeRecipeSeedCount == successCount &&
-                    totalRecipeResolutionCount == Phase0BaselineSeedCount * 3 &&
-                    cornerReturnResolutionCount == Phase0BaselineSeedCount;
-                bool phase6fVersionsMatch = plannerVersionMatchCount == successCount;
                 bool phase6fCatalogValid = DungeonRecipeCatalogService.TryLoadActiveCatalog(
-                    out ActiveDungeonRecipeCatalog phase6fCatalog,
+                    out ActiveDungeonRecipeCatalog activeCatalog,
                     out _) &&
-                    phase6fCatalog.recipes.Length == 3 &&
-                    phase6fCatalog.TryGet(DungeonRecipeIds.CornerReturnConnector, out DungeonRecipeAsset phase6fRecipe) &&
+                    activeCatalog.TryGet(DungeonRecipeIds.CornerReturnConnector, out DungeonRecipeAsset phase6fRecipe) &&
                     phase6fRecipe.schemaVersion == DungeonRecipeAsset.CurrentSchemaVersion &&
                     DungeonRecipeValidator.ReviewIsCurrent(phase6fRecipe);
-                report["phase6fReliabilityBudget"] = new JObject
+                report["phase6fHistoricalReference"] = new JObject
                 {
                     ["corpus"] = $"{firstSeed}..{firstSeed + seedCount - 1}",
-                    ["requiredAccepted"] = Phase0BaselineSeedCount,
-                    ["requiredHardValid"] = Phase0BaselineSeedCount,
-                    ["requiredP95Attempt"] = 1,
-                    ["requiredMaximumAttempt"] = Phase1LayoutAttemptLimit,
-                    ["requiredRecipeCountPerSeed"] = 3,
-                    ["requiredCornerReturnResolutions"] = Phase0BaselineSeedCount,
-                    ["requiredRecipeId"] = DungeonRecipeIds.CornerReturnConnector,
-                    ["requiredSummaryVersion"] = DungeonPlanSummaryVersion,
-                    ["requiredGeneratorVersion"] = RoutePlannerVersion
+                    ["requiredRecipeCountPerSeedAtBoundary"] = 3,
+                    ["requiredCornerReturnResolutionsAtBoundary"] = Phase0BaselineSeedCount,
+                    ["requiredRecipeIdAtBoundary"] = DungeonRecipeIds.CornerReturnConnector,
+                    ["summaryVersionAtBoundary"] = "dungeon-plan-v8",
+                    ["generatorVersionAtBoundary"] = "route-topologies-v8",
+                    ["supersededBy"] = "phase6gReliabilityBudget"
                 };
-                report["phase6fBudgetResult"] = new JObject
+                report["phase6fHistoricalResult"] = new JObject
                 {
-                    ["passed"] = exactSplit &&
-                        phase6fExactCompletion &&
-                        phase6fAttemptBudget &&
+                    ["currentCompatibilityPassed"] = exactSplit &&
+                        exactCompletion &&
+                        attemptBudget &&
                         acceptedHardValid &&
                         routeRequirementsPassed &&
                         finalVistasPassed &&
                         recipeSetsPassed &&
                         phase6eExactPromontories &&
                         phase6eNamedValid &&
-                        phase6fExactRecipeSet &&
-                        phase6fVersionsMatch &&
+                        phase6fCompatibleSeedCount == successCount &&
+                        cornerReturnResolutionCount == Phase0BaselineSeedCount &&
                         phase6fCatalogValid &&
                         FailuresAreReasonCoded(seedReports),
+                    ["compatibleSeeds"] = phase6fCompatibleSeedCount,
+                    ["cornerReturnResolutions"] = cornerReturnResolutionCount,
+                    ["reviewedCornerReturnStillValid"] = phase6fCatalogValid
+                };
+
+                bool phase6gExactRecipeDistribution =
+                    exactPhase6gRecipeSeedCount == successCount &&
+                    processionalFourRecipeSeedCount == Phase0BaselineSeedCount / 2 &&
+                    otherThreeRecipeSeedCount == Phase0BaselineSeedCount / 2 &&
+                    totalRecipeResolutionCount == 700 &&
+                    twinGalleryResolutionCount == Phase0BaselineSeedCount / 2;
+                bool phase6gVersionsMatch = plannerVersionMatchCount == successCount;
+                bool phase6gCatalogValid = phase6fCatalogValid &&
+                    activeCatalog.recipes.Length == 4 &&
+                    activeCatalog.TryGet(
+                        DungeonRecipeIds.TwinGalleryConnector,
+                        out DungeonRecipeAsset phase6gRecipe) &&
+                    phase6gRecipe.schemaVersion == DungeonRecipeAsset.CurrentSchemaVersion &&
+                    DungeonRecipeValidator.ReviewIsCurrent(phase6gRecipe);
+                report["phase6gReliabilityBudget"] = new JObject
+                {
+                    ["corpus"] = $"{firstSeed}..{firstSeed + seedCount - 1}",
+                    ["requiredAccepted"] = Phase0BaselineSeedCount,
+                    ["requiredHardValid"] = Phase0BaselineSeedCount,
+                    ["requiredP95Attempt"] = 1,
+                    ["requiredMaximumAttempt"] = Phase1LayoutAttemptLimit,
+                    ["requiredProcessionalRecipeCount"] = 4,
+                    ["requiredOtherPatternRecipeCount"] = 3,
+                    ["requiredRecipeResolutions"] = 700,
+                    ["requiredTwinGalleryResolutions"] = Phase0BaselineSeedCount / 2,
+                    ["requiredRecipeId"] = DungeonRecipeIds.TwinGalleryConnector,
+                    ["requiredSummaryVersion"] = DungeonPlanSummaryVersion,
+                    ["requiredGeneratorVersion"] = RoutePlannerVersion
+                };
+                report["phase6gBudgetResult"] = new JObject
+                {
+                    ["passed"] = exactSplit &&
+                        exactCompletion &&
+                        attemptBudget &&
+                        acceptedHardValid &&
+                        routeRequirementsPassed &&
+                        finalVistasPassed &&
+                        recipeSetsPassed &&
+                        phase6eExactPromontories &&
+                        phase6eNamedValid &&
+                        phase6gExactRecipeDistribution &&
+                        phase6gVersionsMatch &&
+                        phase6gCatalogValid &&
+                        FailuresAreReasonCoded(seedReports),
                     ["exactPatternSplit"] = exactSplit,
-                    ["exactCompletion"] = phase6fExactCompletion,
-                    ["attemptBudgetPassed"] = phase6fAttemptBudget,
+                    ["exactCompletion"] = exactCompletion,
+                    ["attemptBudgetPassed"] = attemptBudget,
                     ["everyAcceptedPlanHardValid"] = acceptedHardValid,
                     ["everyAcceptedRouteRequirementValid"] = routeRequirementsPassed,
                     ["everyAcceptedFinalVistaValid"] = finalVistasPassed,
                     ["everyAcceptedRecipeSetValid"] = recipeSetsPassed,
                     ["everyAcceptedNamedPromontoryValid"] = phase6eNamedValid,
                     ["namedPromontories"] = namedPromontoryCount,
-                    ["exactThreeRecipeSeeds"] = exactThreeRecipeSeedCount,
+                    ["exactRecipeSeeds"] = exactPhase6gRecipeSeedCount,
+                    ["processionalFourRecipeSeeds"] = processionalFourRecipeSeedCount,
+                    ["otherThreeRecipeSeeds"] = otherThreeRecipeSeedCount,
                     ["recipeResolutions"] = totalRecipeResolutionCount,
-                    ["cornerReturnResolutions"] = cornerReturnResolutionCount,
-                    ["exactRecipeDistribution"] = phase6fExactRecipeSet,
+                    ["twinGalleryResolutions"] = twinGalleryResolutionCount,
+                    ["exactRecipeDistribution"] = phase6gExactRecipeDistribution,
                     ["plannerVersionMatchSeeds"] = plannerVersionMatchCount,
-                    ["everyPlannerVersionCurrent"] = phase6fVersionsMatch,
-                    ["reviewedThreeRecipeCatalogValid"] = phase6fCatalogValid,
+                    ["everyPlannerVersionCurrent"] = phase6gVersionsMatch,
+                    ["reviewedFourRecipeCatalogValid"] = phase6gCatalogValid,
                     ["everyFailureReasonCoded"] = FailuresAreReasonCoded(seedReports)
                 };
             }
