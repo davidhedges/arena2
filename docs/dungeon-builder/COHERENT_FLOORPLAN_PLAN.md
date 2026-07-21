@@ -1,6 +1,6 @@
 # Coherent floorplan generation plan
 
-Status: Phases 0-5 and Phase 6a/6b/6c complete and verified; the next Phase 6 increment is not yet selected
+Status: Phases 0-5 and Phase 6a/6b/6c/6d complete and verified; the next Phase 6 increment is not yet selected
 
 Last updated: 2026-07-21
 
@@ -436,7 +436,7 @@ Result: complete and verified on 2026-07-21. Two reviewed recipes now share one 
 
 Goal: add breadth in small increments after both planning and authoring foundations have been proven.
 
-Progress: Phase 6a completed the identity-preserving spine/branch/rejoin composition foundation on 2026-07-21. Phase 6b completed `atrium_ring_topology_01`, and Phase 6c completed `twin_wing_topology_01`: three structurally distinct graphs/embeddings now share the existing recipes, vista contract, canonical pipeline, renderer, abyss support, and collision export. The final Phase 6c corpus is 200/200 hard-valid with an exact 100/50/50 pattern split; all 100 processional and 50 retained atrium seeds preserve their prior six hashes. The next Phase 6 increment must be selected and acceptance-budget locked before production edits.
+Progress: Phase 6a completed the identity-preserving spine/branch/rejoin composition foundation on 2026-07-21. Phase 6b completed `atrium_ring_topology_01`, and Phase 6c completed `twin_wing_topology_01`: three structurally distinct graphs/embeddings now share the existing recipes, vista contract, canonical pipeline, renderer, abyss support, and collision export. Phase 6d then completed the behavior-preserving `route_rhythm_policy_01` slice: existing ordered roles, beats, and recipe bindings now reject repetition and crowding before embedding. Its final corpus remains 200/200 with exact Phase 6c per-seed hashes and versions. The next Phase 6 increment must be selected and acceptance-budget locked before production edits.
 
 Deliverables, added one at a time:
 

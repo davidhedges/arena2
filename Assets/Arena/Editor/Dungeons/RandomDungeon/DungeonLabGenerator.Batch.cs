@@ -21,6 +21,8 @@ namespace DungeonLab.Editor
         private const int Phase0BaselineSeedCount = 200;
         private const int LockedSeedCount = 100;
         private const int Phase3HardValidCompletionFloor = 190;
+        private const string Phase6cLockedResultHash =
+            "f7462647e9f079ef8a72b3c8f9f88f2ce939978ffa7125eb0b9081f4e1ab76f8";
         private const int Phase0SentinelImageWidth = 1600;
         private const int Phase0SentinelImageHeight = 900;
 
@@ -529,6 +531,24 @@ namespace DungeonLab.Editor
             return BuildTwinWingRouteIntent(seed, slots, catalog.digest);
         }
 
+        private static RouteIntent BuildDiagnosticSelectedRouteIntent(int seed)
+        {
+            RoutePatternKind pattern = SelectRoutePattern(seed);
+            if (!DungeonRecipeCatalogService.TryLoadActiveCatalog(
+                    out ActiveDungeonRecipeCatalog catalog,
+                    out string rejectionReason) ||
+                !TryBuildRequiredRecipeSlots(
+                    catalog,
+                    LandmarkNodeForPattern(pattern),
+                    out RecipeSlotIntent[] slots,
+                    out rejectionReason))
+            {
+                throw new InvalidOperationException(rejectionReason);
+            }
+
+            return BuildSelectedRouteIntent(pattern, seed, slots, catalog.digest);
+        }
+
         private static string BuildPhase6bAtriumRingSnapshot(int seed)
         {
             CurrentGenerationSettings = LoadActiveGenerationSettings();
@@ -683,6 +703,135 @@ namespace DungeonLab.Editor
                 $"profile.mapWidthMaxCells={CurrentGenerationSettings.mapWidthMaxCells}",
                 $"profile.mapDepthMaxCells={CurrentGenerationSettings.mapDepthMaxCells}"
             });
+        }
+
+        private static string BuildPhase6dRouteRhythmSnapshot(int seed)
+        {
+            RouteIntent processional = BuildDiagnosticSelectedRouteIntent(2026072100);
+            RouteIntent atrium = BuildDiagnosticSelectedRouteIntent(2026072101);
+            RouteIntent twinWing = BuildDiagnosticSelectedRouteIntent(2026072103);
+            bool processionalValid = TryValidateRouteRhythm(processional.nodes, out string processionalError);
+            bool atriumValid = TryValidateRouteRhythm(atrium.nodes, out string atriumError);
+            bool twinWingValid = TryValidateRouteRhythm(twinWing.nodes, out string twinWingError);
+
+            bool orderRejected = !TryValidateRouteRhythm(
+                new[]
+                {
+                    RhythmProbeNode("order-a", 0, "arrival", "arrival"),
+                    RhythmProbeNode("order-b", 2, "connector", "approach")
+                },
+                out string orderError);
+            bool adjacentRoleRejected = !TryValidateRouteRhythm(
+                new[]
+                {
+                    RhythmProbeNode("role-a", 0, "hall", "arrival"),
+                    RhythmProbeNode("role-b", 1, "hall", "approach")
+                },
+                out string adjacentRoleError);
+            bool adjacentBeatRejected = !TryValidateRouteRhythm(
+                new[]
+                {
+                    RhythmProbeNode("beat-a", 0, "arrival", "reveal"),
+                    RhythmProbeNode("beat-b", 1, "connector", "reveal")
+                },
+                out string adjacentBeatError);
+            bool roleLimitRejected = !TryValidateRouteRhythm(
+                new[]
+                {
+                    RhythmProbeNode("limit-a", 0, "hall", "arrival"),
+                    RhythmProbeNode("limit-b", 1, "connector", "compression"),
+                    RhythmProbeNode("limit-c", 2, "hall", "reveal"),
+                    RhythmProbeNode("limit-d", 3, "junction", "choice"),
+                    RhythmProbeNode("limit-e", 4, "hall", "approach")
+                },
+                out string roleLimitError);
+            bool recipeSpacingRejected = !TryValidateRouteRhythm(
+                new[]
+                {
+                    RhythmProbeNode("recipe-a", 0, "connector", "compression", "recipe-a"),
+                    RhythmProbeNode("recipe-middle", 1, "hall", "approach"),
+                    RhythmProbeNode("recipe-b", 2, "landmark", "landmark", "recipe-b")
+                },
+                out string recipeSpacingError);
+
+            var invalidNodes = (RouteNodeIntent[])processional.nodes.Clone();
+            RouteNodeIntent invalidSecond = invalidNodes[1];
+            invalidNodes[1] = new RouteNodeIntent(
+                invalidSecond.id,
+                invalidNodes[0].role,
+                invalidSecond.beat,
+                invalidSecond.mainRouteOrder,
+                invalidSecond.branchOrder,
+                invalidSecond.relativeElevationLevels,
+                invalidSecond.landmarkSlotId);
+            var invalidIntent = new RouteIntent(
+                processional.seed,
+                processional.plannerVersion,
+                processional.patternId,
+                invalidNodes,
+                processional.traversalEdges,
+                processional.vista,
+                processional.elevationPolicy,
+                processional.recipeSlots,
+                processional.catalogDigest,
+                processional.bottomNode,
+                processional.topNode,
+                processional.branchAttachNode,
+                processional.branchRejoinNode,
+                processional.requiredCycleRank,
+                processional.requiredCycleCoreNodeCount,
+                processional.requiredJunctionDegree,
+                processional.plannedOverlooks,
+                processional.allowGenericRoomWings);
+            bool fullValidatorRejected = !TryValidateRouteIntent(
+                invalidIntent,
+                out string fullValidationError);
+
+            return string.Join("\n", new[]
+            {
+                $"policy.version={RouteRhythmPolicyVersion}",
+                $"policy.maxMainRouteRoleOccurrences={MaxMainRouteRoleOccurrences}",
+                "policy.maxConsecutiveSameRole=1",
+                "policy.maxConsecutiveSameBeat=1",
+                $"policy.minimumMainRouteNodesBetweenRecipeSlots={MinimumMainRouteNodesBetweenRecipeSlots}",
+                $"production.processionalValid={processionalValid}",
+                $"production.processionalError={processionalError}",
+                $"production.atriumValid={atriumValid}",
+                $"production.atriumError={atriumError}",
+                $"production.twinWingValid={twinWingValid}",
+                $"production.twinWingError={twinWingError}",
+                $"probe.orderRejected={orderRejected}",
+                $"probe.orderError={orderError}",
+                $"probe.adjacentRoleRejected={adjacentRoleRejected}",
+                $"probe.adjacentRoleError={adjacentRoleError}",
+                $"probe.adjacentBeatRejected={adjacentBeatRejected}",
+                $"probe.adjacentBeatError={adjacentBeatError}",
+                $"probe.roleLimitRejected={roleLimitRejected}",
+                $"probe.roleLimitError={roleLimitError}",
+                $"probe.recipeSpacingRejected={recipeSpacingRejected}",
+                $"probe.recipeSpacingError={recipeSpacingError}",
+                $"probe.fullValidatorRejected={fullValidatorRejected}",
+                $"probe.fullValidationError={fullValidationError}",
+                $"probe.productionFailureCode={RouteIntentInvalidFailureCode}",
+                $"diagnostic.seed={seed}"
+            });
+        }
+
+        private static RouteNodeIntent RhythmProbeNode(
+            string id,
+            int mainRouteOrder,
+            string role,
+            string beat,
+            string recipeId = "")
+        {
+            return new RouteNodeIntent(
+                id,
+                role,
+                beat,
+                mainRouteOrder,
+                branchOrder: -1,
+                relativeElevationLevels: mainRouteOrder * MajorRiseLevels,
+                landmarkSlotId: recipeId);
         }
 
         private static string BuildRouteGraphCompositionSnapshot(int seed)
@@ -3242,6 +3391,47 @@ namespace DungeonLab.Editor
                     ["everyAcceptedFinalVistaValid"] = finalVistasPassed,
                     ["everyAcceptedRecipeSetValid"] = recipeSetsPassed,
                     ["everyFailureReasonCoded"] = FailuresAreReasonCoded(seedReports)
+                };
+
+                bool phase6dExactCompletion = successCount == Phase0BaselineSeedCount &&
+                    hardValidCount == Phase0BaselineSeedCount &&
+                    processionalAccepted == processionalSelected &&
+                    atriumAccepted == atriumSelected &&
+                    twinWingAccepted == twinWingSelected;
+                bool phase6dAttemptOne = attemptDistribution.Value<int>("max") == 1;
+                bool phase6dResultHashPreserved = string.Equals(
+                    resultHash,
+                    Phase6cLockedResultHash,
+                    StringComparison.Ordinal);
+                report["phase6dReliabilityBudget"] = new JObject
+                {
+                    ["corpus"] = $"{firstSeed}..{firstSeed + seedCount - 1}",
+                    ["policyVersion"] = RouteRhythmPolicyVersion,
+                    ["requiredAccepted"] = Phase0BaselineSeedCount,
+                    ["requiredHardValid"] = Phase0BaselineSeedCount,
+                    ["requiredMaximumAttempt"] = 1,
+                    ["requiredResultHash"] = Phase6cLockedResultHash
+                };
+                report["phase6dBudgetResult"] = new JObject
+                {
+                    ["passed"] = exactSplit &&
+                        phase6dExactCompletion &&
+                        phase6dAttemptOne &&
+                        acceptedHardValid &&
+                        routeRequirementsPassed &&
+                        finalVistasPassed &&
+                        recipeSetsPassed &&
+                        FailuresAreReasonCoded(seedReports) &&
+                        phase6dResultHashPreserved,
+                    ["exactPatternSplit"] = exactSplit,
+                    ["exactCompletion"] = phase6dExactCompletion,
+                    ["maximumAttemptOne"] = phase6dAttemptOne,
+                    ["everyAcceptedPlanHardValid"] = acceptedHardValid,
+                    ["everyAcceptedRouteRequirementValid"] = routeRequirementsPassed,
+                    ["everyAcceptedFinalVistaValid"] = finalVistasPassed,
+                    ["everyAcceptedRecipeSetValid"] = recipeSetsPassed,
+                    ["everyFailureReasonCoded"] = FailuresAreReasonCoded(seedReports),
+                    ["resultHashPreserved"] = phase6dResultHashPreserved
                 };
             }
 

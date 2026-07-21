@@ -12,12 +12,14 @@ namespace DungeonLab.Editor
         private const string ProcessionalPlannerVersion = "processional-spine-v4";
         private const string AtriumRingPlannerVersion = "atrium-ring-v1";
         private const string TwinWingPlannerVersion = "twin-wing-keep-v1";
+        private const string RouteRhythmPolicyVersion = "route-rhythm-v1";
         // Preserve the proven route embedding stream. Phase 5 changes only the
         // reviewed recipe contract/ports and uses named per-recipe streams.
         private const string RouteSpatialRandomVersion = "processional-spine-v1";
         private const string Phase1PatternId = "processional-spine";
         private const string AtriumRingPatternId = "atrium-ring";
         private const string TwinWingPatternId = "twin-wing-keep";
+        private const string RouteIntentInvalidFailureCode = "ROUTE_INTENT_INVALID";
         private const int Phase1LayoutAttemptLimit = 2;
         private const int RouteMainNodeCount = 9;
         private const int RouteBranchNodeCount = 4;
@@ -36,6 +38,8 @@ namespace DungeonLab.Editor
         private const int Phase1RoomEnvelopeRadius = 4;
         private const int Phase1BranchSearchExpansionLimit = 24;
         private const int Phase1RoomInflationAttemptLimit = 6;
+        private const int MaxMainRouteRoleOccurrences = 2;
+        private const int MinimumMainRouteNodesBetweenRecipeSlots = 2;
 
         // Ephemeral diagnostic evidence for the most recent attempt.
         // It is never consumed by generation or carried into DungeonLayout.
@@ -324,7 +328,7 @@ namespace DungeonLab.Editor
             phase1LastRouteIntent = intent;
             if (!TryValidateRouteIntent(intent, out rejectionReason))
             {
-                return RejectPhase1Route("ROUTE_INTENT_INVALID", rejectionReason, out rejectionReason);
+                return RejectPhase1Route(RouteIntentInvalidFailureCode, rejectionReason, out rejectionReason);
             }
 
             if (!TryEmbedRoute(
@@ -965,6 +969,11 @@ namespace DungeonLab.Editor
                 return false;
             }
 
+            if (!TryValidateRouteRhythm(intent.nodes, out rejectionReason))
+            {
+                return false;
+            }
+
             foreach (RecipeSlotIntent slot in intent.recipeSlots)
             {
                 if (slot == null || slot.recipe == null ||
@@ -1072,6 +1081,101 @@ namespace DungeonLab.Editor
             {
                 rejectionReason = "route intent did not declare stair, bridge, and stairwell requirements";
                 return false;
+            }
+
+            return true;
+        }
+
+        private static bool TryValidateRouteRhythm(
+            IReadOnlyList<RouteNodeIntent> nodes,
+            out string rejectionReason)
+        {
+            rejectionReason = string.Empty;
+            if (nodes == null)
+            {
+                rejectionReason = $"{RouteRhythmPolicyVersion} received a null node sequence";
+                return false;
+            }
+
+            var mainRoute = new List<RouteNodeIntent>();
+            foreach (RouteNodeIntent node in nodes)
+            {
+                if (node.IsOnMainRoute)
+                {
+                    mainRoute.Add(node);
+                }
+            }
+
+            mainRoute.Sort((first, second) => first.mainRouteOrder.CompareTo(second.mainRouteOrder));
+            if (mainRoute.Count == 0)
+            {
+                rejectionReason = $"{RouteRhythmPolicyVersion} found no main-route nodes";
+                return false;
+            }
+
+            var roleOccurrences = new Dictionary<string, int>(StringComparer.Ordinal);
+            int previousRecipeOrder = -1;
+            for (int index = 0; index < mainRoute.Count; index++)
+            {
+                RouteNodeIntent node = mainRoute[index];
+                if (node.mainRouteOrder != index)
+                {
+                    rejectionReason =
+                        $"{RouteRhythmPolicyVersion} requires contiguous unique main-route orders; " +
+                        $"position {index} declared order {node.mainRouteOrder}";
+                    return false;
+                }
+
+                if (!string.IsNullOrEmpty(node.role))
+                {
+                    int count = roleOccurrences.TryGetValue(node.role, out int current)
+                        ? current + 1
+                        : 1;
+                    roleOccurrences[node.role] = count;
+                    if (count > MaxMainRouteRoleOccurrences)
+                    {
+                        rejectionReason =
+                            $"{RouteRhythmPolicyVersion} permits at most {MaxMainRouteRoleOccurrences} " +
+                            $"main-route nodes with role '{node.role}'";
+                        return false;
+                    }
+                }
+
+                if (index > 0)
+                {
+                    RouteNodeIntent previous = mainRoute[index - 1];
+                    if (!string.IsNullOrEmpty(node.role) &&
+                        string.Equals(previous.role, node.role, StringComparison.Ordinal))
+                    {
+                        rejectionReason =
+                            $"{RouteRhythmPolicyVersion} forbids adjacent main-route role '{node.role}'";
+                        return false;
+                    }
+
+                    if (!string.IsNullOrEmpty(node.beat) &&
+                        string.Equals(previous.beat, node.beat, StringComparison.Ordinal))
+                    {
+                        rejectionReason =
+                            $"{RouteRhythmPolicyVersion} forbids adjacent main-route beat '{node.beat}'";
+                        return false;
+                    }
+                }
+
+                if (node.HasLandmarkSlot)
+                {
+                    if (previousRecipeOrder >= 0 &&
+                        node.mainRouteOrder - previousRecipeOrder - 1 <
+                            MinimumMainRouteNodesBetweenRecipeSlots)
+                    {
+                        rejectionReason =
+                            $"{RouteRhythmPolicyVersion} requires at least " +
+                            $"{MinimumMainRouteNodesBetweenRecipeSlots} intervening main-route nodes " +
+                            "between recipe-bearing nodes";
+                        return false;
+                    }
+
+                    previousRecipeOrder = node.mainRouteOrder;
+                }
             }
 
             return true;

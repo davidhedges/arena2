@@ -4,7 +4,7 @@ Start here when returning to dungeon work. Keep this page short and update it at
 
 Last updated: 2026-07-21
 
-Active milestone: Phase 6c twin-wing topology complete and verified; the next Phase 6 increment is not yet selected
+Active milestone: Phase 6d route-rhythm policy complete and verified; the next Phase 6 increment is not yet selected
 
 Production mode: one route-first layout builder deterministically selects processional-spine, atrium-ring, or twin-wing-keep and feeds the shared canonical pipeline
 
@@ -380,6 +380,46 @@ Phase 6c advances the report envelope to `dungeon-plan-v6` and the active genera
 - The six real-renderer sentinels split three processional, two atrium, and one twin-wing and all retain `REJECTED 0`. The full EditMode suite is 342/363 with no dungeon failure and exactly the same 21 unrelated baseline failures.
 - Symbol and deletion audits find one reachable layout builder, no redundant hub combinator, no cross-link or long-return operation, no new recipe or serialized topology, no renderer/collision branch, no unused compatibility scaffold, and no silent fallback. `git diff --check` passes and the Phase 6c deletion ledger is empty.
 
+## Phase 6d entry audit — route rhythm before new content
+
+The next increment is `route_rhythm_policy_01`, a behavior-preserving validation slice over semantic facts already produced by every `RouteIntent`. Main-route order, role, beat, and recipe-bearing nodes are present and reported, but no production consumer currently prevents long semantic repetition or recipe crowding before embedding.
+
+| Remaining Phase 6 need | Current producer/consumer state | Phase 6d treatment |
+| --- | --- | --- |
+| Route-level spacing and repetition | Every topology already produces ordered main-route roles, beats, and recipe bindings; production validation does not consume them as a rhythm policy. | Select now. Add one shared pre-embedding validator and rejection diagnostics. |
+| Next reviewed recipe | The catalog and route validator still deliberately require exactly two reviewed recipes and two bound slots. | Defer until one new eligible node/role and its full isolated/neighbor/full-dungeon review matrix are budgeted together. |
+| Coarse vista scoring | Each pattern produces exactly one required `RouteVistaIntent`; there is no candidate set to score. | Defer until a topology or recipe produces multiple legitimate vista candidates. |
+| Named-target promontories | Generic promontory cells exist, but no canonical target identity or target-aware selector exists. | Defer as its own canonical-plan and renderer-consumer slice. |
+| Explicit step motifs | The global pass remains parked and `step_library_index.json` is absent. | Defer until one reviewed measured motif can replace a specific late responsibility without enabling the parked pass. |
+
+No new schema field, profile field, serialized asset, recipe, topology, graph operation, embedding, canonical-plan field, renderer branch, collision branch, or random stream is earned by this slice.
+
+## Phase 6d acceptance budget — locked before production edits
+
+The shared `route-rhythm-v1` policy applies to the ordered main route before coordinates are assigned. It requires contiguous unique main-route orders, forbids adjacent nodes with the same non-empty role or beat, permits no more than two occurrences of one role on the main route, and requires at least two intervening main-route nodes between recipe-bearing nodes. Branch order and topology structure remain governed by the existing graph validator; disconnected branch arrays are not treated as one false linear sequence.
+
+Phase 6d passes only if all of these predeclared gates hold:
+
+- the production validator consumes the policy for processional-spine, atrium-ring, and twin-wing-keep before embedding, and all three current semantic sequences pass;
+- focused probes independently reject a duplicate/gapped main-route order, adjacent repeated role, adjacent repeated beat, a third separated occurrence of one role, and recipe-bearing nodes with fewer than two intervening main-route nodes;
+- every rejection is deterministic, reason-coded through the existing `ROUTE_INTENT_INVALID` boundary, and cannot fall through to embedding or another topology;
+- all 200 locked seeds preserve their Phase 6c route-intent, layout, tier, recipe-resolution, recipe-catalog, and canonical hashes exactly; `dungeon-plan-v6`, the three pattern planner/canonical versions, and every spatial random stream remain unchanged;
+- two independent corpus sweeps remain 200/200 accepted and hard-valid on attempt 1 with the exact 100/50/50 split, repeat the Phase 6c result hash `f7462647e9f079ef8a72b3c8f9f88f2ce939978ffa7125eb0b9081f4e1ab76f8`, and repeat ordered multi-hash digest `62f1d8e9915cb26db8ba5ef0952462992b6999b91d1abe1ea61cc096a59ac383`;
+- all prior focused fixtures plus the new Phase 6d production-policy tests pass; all six real-renderer sentinels retain their Phase 6c canonical hashes and `REJECTED 0`; the full EditMode suite has no dungeon failure and no regression beyond the same 21 unrelated baseline failures;
+- the policy has one production definition and one production consumer, diagnostics do not participate in generation, the deletion ledger is empty, and work stops before a third recipe, multiple-vista scoring, named-target promontory, step motif, topology, renderer, collision, or runtime-generation change.
+
+Because every currently valid production plan must remain byte-identical, Phase 6d does not advance the report, generator, pattern, recipe, or canonical versions. A changed locked hash is a regression, not a reason to advance a version.
+
+## Phase 6d implementation status
+
+- `TryValidateRouteIntent` now invokes one shared `route-rhythm-v1` validator before recipe compatibility, graph traversal, or embedding. The policy sorts only declared main-route nodes, verifies contiguous unique order, enforces role/beat repetition limits, and checks recipe spacing; branch arrays remain governed by graph structure rather than being misread as one linear route.
+- Production invalid intents leave through the existing `ROUTE_INTENT_INVALID` boundary. There is no repair, alternate pattern, embedding attempt, or fallback after a rhythm rejection.
+- Six new focused tests prove all three production patterns pass and independently prove rejection of gapped/duplicate order, adjacent role repetition, adjacent beat repetition, a third separated role occurrence, and recipe crowding through the full route validator. All dungeon-builder fixtures pass 57/57.
+- Both final locked-corpus sweeps are 200/200 accepted and hard-valid with the exact 100/50/50 topology split, every seed on attempt 1, and only the retained `PORT_GRAPH:3` internal candidate rejections. The executable `phase6dBudgetResult` passes and pins the unchanged result hash `f7462647e9f079ef8a72b3c8f9f88f2ce939978ffa7125eb0b9081f4e1ab76f8`.
+- All 200 seeds preserve all six Phase 6c hashes exactly. The ordered pattern-plus-per-seed digest remains `62f1d8e9915cb26db8ba5ef0952462992b6999b91d1abe1ea61cc096a59ac383`; report/generator, pattern/canonical, recipe, catalog, and spatial-random versions remain unchanged.
+- All six real-renderer sentinels preserve their Phase 6c canonical hashes and retain `REJECTED 0`. The full EditMode suite is 348/369 with no dungeon failure and exactly the same 21 unrelated baseline failures.
+- Symbol and deletion audits find one policy definition and one production call site, with diagnostics remaining read-only. No schema/profile/asset/topology/embedding/canonical-plan/renderer/collision/random-stream change or compatibility scaffold was added; the Phase 6d deletion ledger is empty.
+
 ## Known implementation facts and blockers
 
 - Generator code: `Assets/Arena/Editor/Dungeons/RandomDungeon/`.
@@ -393,13 +433,13 @@ Phase 6c advances the report envelope to `dungeon-plan-v6` and the active genera
 ## End-of-session handoff
 
 ```text
-Milestone/phase: Phase 6c twin-wing topology complete and verified; three named production topologies share one canonical downstream pipeline.
-Completed this session: budget-locked and implemented `twin_wing_topology_01`; added the stable modulo-four selector, the 13-node/14-edge twin-wing graph, its bounded 51-cell embedding, generalized cycle-rank/core/junction validation, dynamic transition-count diagnostics, v6 report contracts, six focused tests, and the active 52x52 spacious envelope; completed every locked corpus, preservation, determinism, renderer, regression, symbol, deletion, and diff gate.
-Current validation result: focused fixtures 51/51; two final corpus sweeps each 200/200 accepted and hard-valid with a 100/50/50 processional/atrium/twin split, all attempts equal to 1, and only `PORT_GRAPH:3` internal candidate rejections; result hash f7462647...1ab76f8 and ordered multi-hash digest 62f1d8e9...ac383 repeat exactly; all 100 processional and 50 retained atrium seeds preserve all six Phase 6b hashes; six sentinels split 3/2/1 and report REJECTED 0; full EditMode 342/363 with exactly the same 21 unrelated baseline failures and no dungeon failure; `git diff --check` passes.
+Milestone/phase: Phase 6d route-rhythm policy complete and verified; all three production topologies reject semantic repetition and recipe crowding before embedding.
+Completed this session: audited the remaining Phase 6 needs; selected and budget-locked `route_rhythm_policy_01`; added the shared versioned main-route order/role/beat/recipe-spacing validator, preserved the existing invalid-intent boundary, added an executable report budget and six focused rejection tests, and completed every locked identity, corpus, determinism, renderer, regression, symbol, deletion, and diff gate.
+Current validation result: focused fixtures 57/57; two final corpus sweeps each 200/200 accepted and hard-valid with a 100/50/50 processional/atrium/twin split, all attempts equal to 1, and only `PORT_GRAPH:3` internal candidate rejections; the Phase 6c result hash f7462647...1ab76f8 and ordered multi-hash digest 62f1d8e9...ac383 remain exact; all 200 seeds preserve all six Phase 6c hashes; all six sentinels preserve their canonical hashes and report REJECTED 0; full EditMode 348/369 with exactly the same 21 unrelated baseline failures and no dungeon failure; `git diff --check` passes.
 Last known-good seeds and reports: processional 2026072140; atrium 2026072101; twin-wing 2026072103; DungeonLabReports/dungeon_plan_2026072100_2026072299.json and DungeonLabReports/visual_sentinels/manifest.json.
-Last diagnostic fact: residues 0/2 select the unchanged ten-node-cycle processional graph, residue 1 selects the retained eight-node-cycle atrium ring, and residue 3 selects the new two-cycle twin-wing keep. All use the same two reviewed recipes, required-vista contract, 0..24u route, tier plan, renderer, abyss, and collision consumers.
-Deletion-ledger items added/closed: the single-cycle validator fields and fixed 13-edge diagnostic assumption were displaced by consumed per-intent graph facts. No compatibility layer, hub combinator, unused graph operation, profile weight, serialized topology, fallback, or temporary production symbol remains. Phase 6c ledger is empty and closed.
-Exact next action: begin the next Phase 6 entry audit. Compare the remaining needs—the next reviewed recipe, coarse vista scoring, named-target promontories, spacing/repetition rules, or explicit step motifs—select the smallest slice with an immediate producer and consumer, and lock its acceptance budget before production edits. Do not re-open Phase 6c unless one of its locked hashes or gates changes.
+Last diagnostic fact: the three current main routes satisfy `route-rhythm-v1`; malformed probes deterministically reject non-contiguous order, adjacent role/beat repetition, a third role occurrence, and fewer than two intervening nodes between recipe slots through `ROUTE_INTENT_INVALID`.
+Deletion-ledger items added/closed: no old production policy was displaced. The new policy has one definition and one production call; its diagnostics are read-only. No compatibility layer, unused setting, serialized field, fallback, or temporary production symbol remains. Phase 6d ledger is empty and closed.
+Exact next action: begin the next Phase 6 entry audit. Compare the remaining needs—the third reviewed recipe, multiple-candidate vista scoring, named-target promontories, or an explicit reviewed step motif—select the smallest slice with an immediate producer and consumer, and lock its acceptance budget before production edits. Do not re-open Phase 6d unless one of its identity or validation gates changes.
 Blocker or decision needed: none. The next Phase 6 slice is not yet selected.
 New chat necessary: no.
 ```
