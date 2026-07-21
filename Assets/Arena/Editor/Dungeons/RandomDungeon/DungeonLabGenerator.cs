@@ -2271,8 +2271,7 @@ namespace DungeonLab.Editor
 
             if (!portGraph.IsGloballyConnected(out string portGraphReachability))
             {
-                rejectionReason = portGraphReachability + "; " +
-                    DescribeDisconnectedFloorNeighborhoods(cellLevels, transitions, portGraphReachability);
+                rejectionReason = portGraphReachability;
                 return false;
             }
 
@@ -7683,40 +7682,6 @@ namespace DungeonLab.Editor
             return true;
         }
 
-        private static string DescribeDisconnectedFloorNeighborhoods(
-            IReadOnlyDictionary<Vector2Int, int> cellLevels,
-            IReadOnlyList<ElevationEdgeModel.TransitionEdge> transitions,
-            string reachabilityMessage)
-        {
-            HashSet<Vector2Int> stairFootprintCells = BuildTransitionFootprintCellSet(transitions);
-            var descriptions = new List<string>();
-            foreach (var item in cellLevels)
-            {
-                string key = PortGraphNode.Floor(item.Key, item.Value).key;
-                if (string.IsNullOrEmpty(reachabilityMessage) ||
-                    reachabilityMessage.IndexOf(key, StringComparison.Ordinal) < 0)
-                {
-                    continue;
-                }
-
-                var neighbors = new List<string>();
-                foreach (Vector2Int neighbor in CardinalNeighbors(item.Key))
-                {
-                    string neighborLevel = cellLevels.TryGetValue(neighbor, out int level)
-                        ? $"L{level}"
-                        : "void";
-                    neighbors.Add($"{neighbor}:{neighborLevel}:footprint={stairFootprintCells.Contains(neighbor)}");
-                }
-
-                descriptions.Add(
-                    $"{key}:footprint={stairFootprintCells.Contains(item.Key)}:neighbors=[{string.Join(",", neighbors)}]");
-            }
-
-            return descriptions.Count > 0
-                ? "disconnected-floor-neighborhoods=" + string.Join("|", descriptions)
-                : "disconnected-floor-neighborhoods=[]";
-        }
-
         private static bool TryAddTransitionToPortGraph(
             IReadOnlyDictionary<Vector2Int, int> cellLevels,
             ElevationEdgeModel.TransitionEdge transition,
@@ -12363,14 +12328,7 @@ namespace DungeonLab.Editor
 
                 if (visited.Count != adjacency.Count)
                 {
-                    var missing = new List<string>();
-                    foreach (string key in adjacency.Keys)
-                    {
-                        if (!visited.Contains(key)) missing.Add(key);
-                    }
-                    missing.Sort(StringComparer.Ordinal);
-                    if (missing.Count > 8) missing.RemoveRange(8, missing.Count - 8);
-                    message = $"floor/stair port graph reached {visited.Count}/{adjacency.Count} nodes; missing={string.Join(",", missing)}";
+                    message = $"floor/stair port graph reached {visited.Count}/{adjacency.Count} nodes";
                     return false;
                 }
 

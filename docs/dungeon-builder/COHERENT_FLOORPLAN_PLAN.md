@@ -1,6 +1,6 @@
 # Coherent floorplan generation plan
 
-Status: Phases 0-5 and Phase 6a/6b/6c/6d/6e/6f/6g complete and verified
+Status: Phases 0-5 and Phase 6a/6b/6c/6d/6e/6f complete and verified; next Phase 6 increment not yet selected
 
 Last updated: 2026-07-21
 
@@ -436,7 +436,7 @@ Result: complete and verified on 2026-07-21. Two reviewed recipes now share one 
 
 Goal: add breadth in small increments after both planning and authoring foundations have been proven.
 
-Progress: Phase 6a completed the identity-preserving spine/branch/rejoin composition foundation on 2026-07-21. Phase 6b completed `atrium_ring_topology_01`, and Phase 6c completed `twin_wing_topology_01`: three structurally distinct graphs/embeddings now share the existing recipes, vista contract, canonical pipeline, renderer, abyss support, and collision export. Phase 6d then completed the behavior-preserving `route_rhythm_policy_01` slice: existing ordered roles, beats, and recipe bindings reject repetition and crowding before embedding. Phase 6e completed `named_vista_promontory_01`: the inert generic random-room pass and settings are gone, and each accepted promontory is now a canonical target-bearing resolution carved only from surplus source-side cells on the existing resolved vista line. Phase 6f completed `connector_corner_return_01`: the common perpendicular `connector` / `return` node at index 12 now adds a third reviewed recipe through the existing schema, workflow, canonical plan, renderer, abyss, and collision path, with one shared named-exit orientation rule. Phase 6g completed `connector_twin_gallery_01`: the exact processional node-10 producer now carries a reviewed 7x7 clear-lane connector with two mirrored rise-1 galleries, while the turning atrium/twin connectors remain generic. Its repeat-identical final corpus is 200/200 on attempt 1 with 700 recipe resolutions, exactly 100 twin galleries, 114 named promontories, exact Phase 6f route/vista/promontory/prior-recipe preservation, and all six sentinels at `REJECTED 0`.
+Progress: Phase 6a completed the identity-preserving spine/branch/rejoin composition foundation on 2026-07-21. Phase 6b completed `atrium_ring_topology_01`, and Phase 6c completed `twin_wing_topology_01`: three structurally distinct graphs/embeddings now share the existing recipes, vista contract, canonical pipeline, renderer, abyss support, and collision export. Phase 6d then completed the behavior-preserving `route_rhythm_policy_01` slice: existing ordered roles, beats, and recipe bindings reject repetition and crowding before embedding. Phase 6e completed `named_vista_promontory_01`: the inert generic random-room pass and settings are gone, and each accepted promontory is now a canonical target-bearing resolution carved only from surplus source-side cells on the existing resolved vista line. Phase 6f completed `connector_corner_return_01`: the common perpendicular `connector` / `return` node at index 12 now adds a third reviewed recipe through the existing schema, workflow, canonical plan, renderer, abyss, and collision path, with one shared named-exit orientation rule. Its repeat-identical final corpus is 200/200 on attempt 1 with 600 recipe resolutions, exactly 200 corner returns, 114 named promontories, and all six sentinels at `REJECTED 0`.
 
 Deliverables, added one at a time:
 

@@ -22,7 +22,7 @@ namespace Arena.Tests.Editor
             Dictionary<string, string> values = Snapshot.Value;
 
             Assert.That(values["catalog.valid"], Is.EqualTo("True"));
-            Assert.That(values["catalog.reviewedCount"], Is.EqualTo("4"));
+            Assert.That(values["catalog.reviewedCount"], Is.EqualTo("3"));
             Assert.That(values["catalog.digest"], Has.Length.EqualTo(64));
             Assert.That(values["recipe.id"], Is.EqualTo("connector_corner_return_01"));
             Assert.That(values["recipe.schema"], Is.EqualTo("1"));
@@ -73,22 +73,21 @@ namespace Arena.Tests.Editor
             Assert.That(values["gallery.collision"], Is.EqualTo("True"));
         }
 
-        [TestCase("processional", "processional-spine-v6", "branch-11-12", "rejoin-12-7", "4")]
-        [TestCase("atrium", "atrium-ring-v2", "branch-11-12", "rejoin-12-6", "3")]
-        [TestCase("twinWing", "twin-wing-keep-v2", "wing-b-11-12", "wing-b-rejoin-12-5", "3")]
+        [TestCase("processional", "processional-spine-v5", "branch-11-12", "rejoin-12-7")]
+        [TestCase("atrium", "atrium-ring-v2", "branch-11-12", "rejoin-12-6")]
+        [TestCase("twinWing", "twin-wing-keep-v2", "wing-b-11-12", "wing-b-rejoin-12-5")]
         public void EveryTopology_BindsAndResolvesTheSharedCornerReturn(
             string prefix,
             string plannerVersion,
             string entryEdge,
-            string exitEdge,
-            string recipeCount)
+            string exitEdge)
         {
             Dictionary<string, string> values = Snapshot.Value;
 
             Assert.That(values[$"{prefix}.accepted"], Is.EqualTo("True"));
             Assert.That(values[$"{prefix}.validation"], Is.EqualTo("True"));
             Assert.That(values[$"{prefix}.plannerVersion"], Is.EqualTo(plannerVersion));
-            Assert.That(values[$"{prefix}.recipeCount"], Is.EqualTo(recipeCount));
+            Assert.That(values[$"{prefix}.recipeCount"], Is.EqualTo("3"));
             Assert.That(values[$"{prefix}.slotNode"], Is.EqualTo("12"));
             Assert.That(values[$"{prefix}.nodeRole"], Is.EqualTo("connector"));
             Assert.That(values[$"{prefix}.nodeBeat"], Is.EqualTo("return"));
@@ -119,8 +118,8 @@ namespace Arena.Tests.Editor
         {
             Dictionary<string, string> values = Snapshot.Value;
 
-            Assert.That(values["versions.summary"], Is.EqualTo("dungeon-plan-v9"));
-            Assert.That(values["versions.generator"], Is.EqualTo("route-topologies-v9"));
+            Assert.That(values["versions.summary"], Is.EqualTo("dungeon-plan-v8"));
+            Assert.That(values["versions.generator"], Is.EqualTo("route-topologies-v8"));
             Assert.That(values["versions.spatialRandom"], Is.EqualTo("processional-spine-v1"));
             Assert.That(values["recipe.schema"], Is.EqualTo("1"));
             Assert.That(values["lifecycle.staleDetected"], Is.EqualTo("True"));

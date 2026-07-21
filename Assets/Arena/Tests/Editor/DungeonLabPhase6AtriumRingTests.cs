@@ -21,7 +21,7 @@ namespace Arena.Tests.Editor
 
             Assert.That(snapshot["selector.evenPattern"], Is.EqualTo("processional-spine"));
             Assert.That(snapshot["selector.oddPattern"], Is.EqualTo("atrium-ring"));
-            Assert.That(snapshot["processional.plannerVersion"], Is.EqualTo("processional-spine-v6"));
+            Assert.That(snapshot["processional.plannerVersion"], Is.EqualTo("processional-spine-v5"));
             Assert.That(snapshot["processional.cycleLength"], Is.EqualTo("10"));
         }
 

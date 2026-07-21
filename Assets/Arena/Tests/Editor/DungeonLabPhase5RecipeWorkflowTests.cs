@@ -16,27 +16,24 @@ namespace Arena.Tests.Editor
             throwOnError: true)!;
 
         [Test]
-        public void ReviewedCatalog_ContainsFourCurrentVersionedRecipes()
+        public void ReviewedCatalog_ContainsThreeCurrentVersionedRecipes()
         {
             Dictionary<string, string> snapshot = Snapshot("BuildPhase5RecipeContractSnapshot");
             string throne = RecipePrefix(snapshot, "episode_throne_twin_stairs_01");
             string vestibule = RecipePrefix(snapshot, "connector_flexible_vestibule_01");
             string cornerReturn = RecipePrefix(snapshot, "connector_corner_return_01");
-            string twinGallery = RecipePrefix(snapshot, "connector_twin_gallery_01");
 
             Assert.That(snapshot["catalog.valid"], Is.EqualTo("True"));
-            Assert.That(snapshot["catalog.reviewedCount"], Is.EqualTo("4"));
+            Assert.That(snapshot["catalog.reviewedCount"], Is.EqualTo("3"));
             Assert.That(snapshot["catalog.digest"], Has.Length.EqualTo(64));
-            Assert.That(snapshot["route.recipeSlotCount"], Is.EqualTo("4"));
+            Assert.That(snapshot["route.recipeSlotCount"], Is.EqualTo("3"));
             Assert.That(snapshot["route.catalogDigestMatches"], Is.EqualTo("True"));
             Assert.That(snapshot[$"{throne}.schema"], Is.EqualTo("1"));
             Assert.That(snapshot[$"{vestibule}.schema"], Is.EqualTo("1"));
             Assert.That(snapshot[$"{cornerReturn}.schema"], Is.EqualTo("1"));
-            Assert.That(snapshot[$"{twinGallery}.schema"], Is.EqualTo("1"));
             Assert.That(snapshot[$"{throne}.reviewCurrent"], Is.EqualTo("True"));
             Assert.That(snapshot[$"{vestibule}.reviewCurrent"], Is.EqualTo("True"));
             Assert.That(snapshot[$"{cornerReturn}.reviewCurrent"], Is.EqualTo("True"));
-            Assert.That(snapshot[$"{twinGallery}.reviewCurrent"], Is.EqualTo("True"));
         }
 
         [Test]
@@ -46,9 +43,8 @@ namespace Arena.Tests.Editor
             string throne = RecipePrefix(snapshot, "episode_throne_twin_stairs_01");
             string vestibule = RecipePrefix(snapshot, "connector_flexible_vestibule_01");
             string cornerReturn = RecipePrefix(snapshot, "connector_corner_return_01");
-            string twinGallery = RecipePrefix(snapshot, "connector_twin_gallery_01");
 
-            foreach (string prefix in new[] { throne, vestibule, cornerReturn, twinGallery })
+            foreach (string prefix in new[] { throne, vestibule, cornerReturn })
             {
                 Assert.That(snapshot[$"{prefix}.schemaValid"], Is.EqualTo("True"));
                 Assert.That(snapshot[$"{prefix}.structureValid"], Is.EqualTo("True"));
@@ -66,21 +62,18 @@ namespace Arena.Tests.Editor
             Assert.That(snapshot[$"{vestibule}.isolatedCombinationCount"], Is.EqualTo("4"));
             Assert.That(snapshot[$"{cornerReturn}.isolatedAlternativeCount"], Is.EqualTo("1"));
             Assert.That(snapshot[$"{cornerReturn}.isolatedCombinationCount"], Is.EqualTo("4"));
-            Assert.That(snapshot[$"{twinGallery}.isolatedAlternativeCount"], Is.EqualTo("1"));
-            Assert.That(snapshot[$"{twinGallery}.isolatedCombinationCount"], Is.EqualTo("4"));
 
             Assert.That(snapshot["schema.fieldCount"], Is.EqualTo("17"));
             Assert.That(snapshot["schema.allFieldsConsumed"], Is.EqualTo("True"));
         }
 
         [Test]
-        public void ReviewedRecipes_AreStructurallyDifferentWithoutSpecialCaseSchema()
+        public void ContrastRecipe_IsStructurallyDifferentWithoutSpecialCaseSchema()
         {
             Dictionary<string, string> snapshot = Snapshot("BuildPhase5RecipeContractSnapshot");
             string throne = RecipePrefix(snapshot, "episode_throne_twin_stairs_01");
             string vestibule = RecipePrefix(snapshot, "connector_flexible_vestibule_01");
             string cornerReturn = RecipePrefix(snapshot, "connector_corner_return_01");
-            string twinGallery = RecipePrefix(snapshot, "connector_twin_gallery_01");
 
             Assert.That(snapshot[$"{throne}.transitions"], Is.EqualTo("2"));
             Assert.That(snapshot[$"{throne}.symmetryPairs"], Is.EqualTo("1"));
@@ -91,9 +84,6 @@ namespace Arena.Tests.Editor
             Assert.That(snapshot[$"{cornerReturn}.transitions"], Is.EqualTo("1"));
             Assert.That(snapshot[$"{cornerReturn}.symmetryPairs"], Is.EqualTo("0"));
             Assert.That(snapshot[$"{cornerReturn}.variations"], Is.EqualTo("0"));
-            Assert.That(snapshot[$"{twinGallery}.transitions"], Is.EqualTo("2"));
-            Assert.That(snapshot[$"{twinGallery}.symmetryPairs"], Is.EqualTo("1"));
-            Assert.That(snapshot[$"{twinGallery}.variations"], Is.EqualTo("0"));
 
             Type schemaType = EditorAssembly.GetType("DungeonLab.Editor.DungeonRecipeAsset", true)!;
             foreach (FieldInfo field in schemaType.GetFields(BindingFlags.Instance | BindingFlags.Public))
@@ -101,36 +91,30 @@ namespace Arena.Tests.Editor
                 Assert.That(field.Name, Does.Not.Contain("throne").IgnoreCase);
                 Assert.That(field.Name, Does.Not.Contain("vestibule").IgnoreCase);
                 Assert.That(field.Name, Does.Not.Contain("corner").IgnoreCase);
-                Assert.That(field.Name, Does.Not.Contain("overlook").IgnoreCase);
-                Assert.That(field.Name, Does.Not.Contain("gallery").IgnoreCase);
             }
         }
 
         [Test]
-        public void FullDungeon_ResolvesAllFourProcessionalRecipesThroughCanonicalConsumers()
+        public void FullDungeon_ResolvesAllThreeRecipesThroughCanonicalConsumers()
         {
             Dictionary<string, string> snapshot = Snapshot("BuildPhase5FullDungeonSnapshot");
             string throne = RecipePrefix(snapshot, "episode_throne_twin_stairs_01");
             string vestibule = RecipePrefix(snapshot, "connector_flexible_vestibule_01");
             string cornerReturn = RecipePrefix(snapshot, "connector_corner_return_01");
-            string twinGallery = RecipePrefix(snapshot, "connector_twin_gallery_01");
 
             Assert.That(snapshot["accepted"], Is.EqualTo("true"));
             Assert.That(snapshot["validation.passed"], Is.EqualTo("true"));
             Assert.That(snapshot["validation.recipes"], Is.EqualTo("true"));
-            Assert.That(snapshot["recipes.count"], Is.EqualTo("4"));
+            Assert.That(snapshot["recipes.count"], Is.EqualTo("3"));
             Assert.That(snapshot[$"{throne}.atomic"], Is.EqualTo("true"));
             Assert.That(snapshot[$"{vestibule}.atomic"], Is.EqualTo("true"));
             Assert.That(snapshot[$"{cornerReturn}.atomic"], Is.EqualTo("true"));
-            Assert.That(snapshot[$"{twinGallery}.atomic"], Is.EqualTo("true"));
             Assert.That(snapshot[$"{throne}.transitions"], Is.EqualTo("2"));
             Assert.That(snapshot[$"{vestibule}.transitions"], Is.EqualTo("1"));
             Assert.That(snapshot[$"{cornerReturn}.transitions"], Is.EqualTo("1"));
-            Assert.That(snapshot[$"{twinGallery}.transitions"], Is.EqualTo("2"));
             Assert.That(int.Parse(snapshot[$"{throne}.protected"]), Is.GreaterThan(0));
             Assert.That(int.Parse(snapshot[$"{vestibule}.protected"]), Is.GreaterThan(0));
             Assert.That(int.Parse(snapshot[$"{cornerReturn}.protected"]), Is.GreaterThan(0));
-            Assert.That(int.Parse(snapshot[$"{twinGallery}.protected"]), Is.GreaterThan(0));
         }
 
         [Test]
@@ -195,14 +179,6 @@ namespace Arena.Tests.Editor
             Assert.That(snapshot["third.requiredViews"], Is.EqualTo("True"));
             Assert.That(snapshot["third.mirrorStateCount"], Is.EqualTo("2"));
             Assert.That(snapshot["third.fullDungeon"], Is.EqualTo("True"));
-            Assert.That(snapshot["fourth.firstPassed"], Is.EqualTo("True"));
-            Assert.That(snapshot["fourth.secondPassed"], Is.EqualTo("True"));
-            Assert.That(snapshot["fourth.samePath"], Is.EqualTo("True"));
-            Assert.That(snapshot["fourth.sameHash"], Is.EqualTo("True"));
-            Assert.That(int.Parse(snapshot["fourth.entryCount"]), Is.GreaterThanOrEqualTo(34));
-            Assert.That(snapshot["fourth.requiredViews"], Is.EqualTo("True"));
-            Assert.That(snapshot["fourth.mirrorStateCount"], Is.EqualTo("2"));
-            Assert.That(snapshot["fourth.fullDungeon"], Is.EqualTo("True"));
         }
 
         [Test]

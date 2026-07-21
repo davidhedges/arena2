@@ -8,8 +8,8 @@ namespace DungeonLab.Editor
     // compiles it directly into the existing DungeonLayout.
     internal sealed partial class DungeonLabGenerator
     {
-        private const string RoutePlannerVersion = "route-topologies-v9";
-        private const string ProcessionalPlannerVersion = "processional-spine-v6";
+        private const string RoutePlannerVersion = "route-topologies-v8";
+        private const string ProcessionalPlannerVersion = "processional-spine-v5";
         private const string AtriumRingPlannerVersion = "atrium-ring-v2";
         private const string TwinWingPlannerVersion = "twin-wing-keep-v2";
         private const string RouteRhythmPolicyVersion = "route-rhythm-v1";
@@ -29,7 +29,6 @@ namespace DungeonLab.Editor
         private const int Phase1BranchRejoinNode = 7;
         private const int Phase1VistaSourceNode = 9;
         private const int Phase1VistaTargetNode = 4;
-        private const int Phase1BranchPassageNode = 10;
         private const int AtriumRingBranchAttachNode = 3;
         private const int AtriumRingBranchRejoinNode = 6;
         private const int AtriumRingVistaSourceNode = 10;
@@ -624,7 +623,7 @@ namespace DungeonLab.Editor
             var branchNodes = new[]
             {
                 new RouteNodeIntent("vista-source", "overlook", "reveal", -1, 0, 12),
-                new RouteNodeIntent("branch-passage", "connector", "branch", -1, 1, 12, DungeonRecipeIds.TwinGalleryConnector),
+                new RouteNodeIntent("branch-passage", "connector", "branch", -1, 1, 12),
                 new RouteNodeIntent("branch-reward", "optional-room", "reward", -1, 2, 16),
                 new RouteNodeIntent("branch-return", "connector", "return", -1, 3, 20, DungeonRecipeIds.CornerReturnConnector)
             };
@@ -1063,18 +1062,12 @@ namespace DungeonLab.Editor
                 }
             }
 
-            int expectedRecipeSlots = string.Equals(
-                intent.patternId,
-                Phase1PatternId,
-                StringComparison.Ordinal)
-                ? 4
-                : 3;
             if (intent.recipeSlots == null ||
-                intent.recipeSlots.Length != expectedRecipeSlots ||
-                recipeSlotCount != expectedRecipeSlots ||
+                intent.recipeSlots.Length != 3 ||
+                recipeSlotCount != 3 ||
                 string.IsNullOrEmpty(intent.catalogDigest))
             {
-                rejectionReason = $"route intent did not declare exactly {expectedRecipeSlots} reviewed recipe slots and a catalog digest";
+                rejectionReason = "route intent did not declare exactly three reviewed recipe slots and a catalog digest";
                 return false;
             }
 

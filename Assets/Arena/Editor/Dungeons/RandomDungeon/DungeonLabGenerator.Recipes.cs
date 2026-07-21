@@ -279,8 +279,7 @@ namespace DungeonLab.Editor
             if (catalog == null ||
                 !catalog.TryGet(DungeonRecipeIds.ProcessionalLandmark, out DungeonRecipeAsset throne) ||
                 !catalog.TryGet(DungeonRecipeIds.CompressionConnector, out DungeonRecipeAsset vestibule) ||
-                !catalog.TryGet(DungeonRecipeIds.CornerReturnConnector, out DungeonRecipeAsset cornerReturn) ||
-                !catalog.TryGet(DungeonRecipeIds.TwinGalleryConnector, out DungeonRecipeAsset twinGallery))
+                !catalog.TryGet(DungeonRecipeIds.CornerReturnConnector, out DungeonRecipeAsset cornerReturn))
             {
                 rejectionReason = "[RECIPE_CATALOG] required reviewed production recipes were not active";
                 return false;
@@ -306,7 +305,7 @@ namespace DungeonLab.Editor
                 };
             }
 
-            var required = new List<RecipeSlotIntent>
+            slots = new[]
             {
                 new RecipeSlotIntent(
                     1,
@@ -332,20 +331,6 @@ namespace DungeonLab.Editor
                     RecipeOrientationBinding.RouteForward,
                     cornerBindings)
             };
-            if (pattern == RoutePatternKind.ProcessionalSpine)
-            {
-                required.Add(new RecipeSlotIntent(
-                    Phase1BranchPassageNode,
-                    twinGallery,
-                    RecipeOrientationBinding.RouteForward,
-                    new[]
-                    {
-                        new RecipePortBinding("entry", "branch-9-10"),
-                        new RecipePortBinding("exit", "branch-10-11")
-                    }));
-            }
-
-            slots = required.ToArray();
             return true;
         }
 
