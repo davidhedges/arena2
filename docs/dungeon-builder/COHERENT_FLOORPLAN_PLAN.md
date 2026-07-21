@@ -1,6 +1,6 @@
 # Coherent floorplan generation plan
 
-Status: Phases 0-3 complete and verified; Phase 4 is ready but has not started
+Status: Phases 0-4 complete and verified; Phase 5 recipe-contract hardening ready and not started
 
 Last updated: 2026-07-21
 

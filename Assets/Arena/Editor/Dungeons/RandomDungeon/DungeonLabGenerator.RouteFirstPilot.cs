@@ -8,9 +8,10 @@ namespace DungeonLab.Editor
     // compiles it directly into the existing DungeonLayout.
     internal sealed partial class DungeonLabGenerator
     {
-        private const string RoutePlannerVersion = "processional-spine-v2";
-        // Preserve the Phase 2 spatial stream while Phase 3 changes only the
-        // semantic elevation/transition contract and its downstream consumer.
+        private const string RoutePlannerVersion = "processional-spine-v3";
+        // Preserve the proven route embedding stream. Phase 4 changes only the
+        // declared landmark footprint/ports and uses a named episode stream for
+        // its bounded focal variation.
         private const string RouteSpatialRandomVersion = "processional-spine-v1";
         private const string Phase1PatternId = "processional-spine";
         private const int Phase1LayoutAttemptLimit = 2;
@@ -46,6 +47,7 @@ namespace DungeonLab.Editor
             public readonly RouteTraversalIntent[] traversalEdges;
             public readonly RouteVistaIntent vista;
             public readonly RouteElevationPolicy elevationPolicy;
+            public readonly ThroneHallEpisodeIntent landmarkEpisode;
             public readonly int bottomNode;
             public readonly int topNode;
 
@@ -55,6 +57,7 @@ namespace DungeonLab.Editor
                 RouteTraversalIntent[] traversalEdges,
                 RouteVistaIntent vista,
                 RouteElevationPolicy elevationPolicy,
+                ThroneHallEpisodeIntent landmarkEpisode,
                 int bottomNode,
                 int topNode)
             {
@@ -65,6 +68,7 @@ namespace DungeonLab.Editor
                 this.traversalEdges = traversalEdges;
                 this.vista = vista;
                 this.elevationPolicy = elevationPolicy;
+                this.landmarkEpisode = landmarkEpisode;
                 this.bottomNode = bottomNode;
                 this.topNode = topNode;
             }
@@ -91,6 +95,7 @@ namespace DungeonLab.Editor
             public readonly int mainRouteOrder;
             public readonly int branchOrder;
             public readonly int relativeElevationLevels;
+            public readonly string landmarkSlotId;
 
             public RouteNodeIntent(
                 string id,
@@ -98,7 +103,8 @@ namespace DungeonLab.Editor
                 string beat,
                 int mainRouteOrder,
                 int branchOrder,
-                int relativeElevationLevels)
+                int relativeElevationLevels,
+                string landmarkSlotId = "")
             {
                 this.id = id;
                 this.role = role;
@@ -106,9 +112,12 @@ namespace DungeonLab.Editor
                 this.mainRouteOrder = mainRouteOrder;
                 this.branchOrder = branchOrder;
                 this.relativeElevationLevels = relativeElevationLevels;
+                this.landmarkSlotId = landmarkSlotId ?? string.Empty;
             }
 
             public bool IsOnMainRoute => mainRouteOrder >= 0;
+
+            public bool HasLandmarkSlot => !string.IsNullOrEmpty(landmarkSlotId);
         }
 
         private readonly struct RouteTraversalIntent
@@ -156,7 +165,7 @@ namespace DungeonLab.Editor
             }
         }
 
-        // The only Phase 3 companion value. It carries the already-produced route
+        // The narrow Phase 3/4 companion value. It carries the already-produced route
         // requirements and exact 2D vista reservation into the existing tier
         // planner, then dies with the generation attempt. It is not a canonical
         // plan, renderer input, adapter, or serializable DTO family.
@@ -168,6 +177,7 @@ namespace DungeonLab.Editor
             public readonly Vector2Int vistaTargetCell;
             public readonly Vector2Int vistaSourceFacing;
             public readonly Vector2Int vistaTargetFacing;
+            public readonly ThroneHallEpisodePlacement landmarkEpisode;
 
             public RouteTierRequirements(
                 RouteIntent intent,
@@ -175,7 +185,8 @@ namespace DungeonLab.Editor
                 Vector2Int vistaSourceCell,
                 Vector2Int vistaTargetCell,
                 Vector2Int vistaSourceFacing,
-                Vector2Int vistaTargetFacing)
+                Vector2Int vistaTargetFacing,
+                ThroneHallEpisodePlacement landmarkEpisode)
             {
                 this.intent = intent;
                 this.reservedVistaCells = new HashSet<Vector2Int>(reservedVistaCells);
@@ -183,6 +194,7 @@ namespace DungeonLab.Editor
                 this.vistaTargetCell = vistaTargetCell;
                 this.vistaSourceFacing = vistaSourceFacing;
                 this.vistaTargetFacing = vistaTargetFacing;
+                this.landmarkEpisode = landmarkEpisode;
             }
 
             public bool TryGetTransition(int firstRoom, int secondRoom, out RouteTraversalIntent requirement)
@@ -289,10 +301,25 @@ namespace DungeonLab.Editor
             phase1LastVistaSourceFacing = sourceFacing;
             phase1LastVistaTargetFacing = targetFacing;
 
+            if (!TryPlaceThroneHallEpisode(
+                    dungeonSeed,
+                    layoutAttempt,
+                    intent,
+                    rooms,
+                    nodeCenters,
+                    sourceFacing,
+                    targetFacing,
+                    out ThroneHallEpisodePlacement landmarkEpisode,
+                    out rejectionReason))
+            {
+                return RejectPhase1Route("THRONE_EPISODE_PLACEMENT", rejectionReason, out rejectionReason);
+            }
+
             if (!TryConnectProcessionalRooms(
                     intent,
                     rooms,
                     reservedVistaCells,
+                    landmarkEpisode,
                     out HashSet<Vector2Int> floorCells,
                     out List<RoomConnection> connections,
                     out rejectionReason))
@@ -351,7 +378,8 @@ namespace DungeonLab.Editor
                 sourceVistaCell,
                 targetVistaCell,
                 sourceFacing,
-                targetFacing);
+                targetFacing,
+                landmarkEpisode);
             phase1LastFailureCode = string.Empty;
             return true;
         }
@@ -364,7 +392,7 @@ namespace DungeonLab.Editor
                 new RouteNodeIntent("threshold", "connector", "compression", 1, -1, 0),
                 new RouteNodeIntent("choice", "junction", "choice", 2, -1, 4),
                 new RouteNodeIntent("reveal", "grand-room", "reveal", 3, -1, 4),
-                new RouteNodeIntent("vista-target", "landmark", "landmark", 4, -1, 8),
+                new RouteNodeIntent("vista-target", "landmark", "landmark", 4, -1, 8, ThroneHallEpisodeId),
                 new RouteNodeIntent("ascent", "connector", "ascent", 5, -1, 12),
                 new RouteNodeIntent("approach", "processional-hall", "approach", 6, -1, 16),
                 new RouteNodeIntent("rejoin", "return-hall", "rejoin", 7, -1, 20),
@@ -424,6 +452,7 @@ namespace DungeonLab.Editor
                     Phase1VistaTargetNode,
                     minimumReservedVoidCells: 3),
                 RouteElevationPolicy.AscendingSpine,
+                BuildThroneHallEpisodeIntent(),
                 bottomNode: 0,
                 topNode: Phase1MainNodeCount - 1);
         }
@@ -444,6 +473,7 @@ namespace DungeonLab.Editor
             }
 
             var ids = new HashSet<string>(StringComparer.Ordinal);
+            int landmarkSlotCount = 0;
             foreach (RouteNodeIntent node in intent.nodes)
             {
                 if (string.IsNullOrEmpty(node.id) || !ids.Add(node.id))
@@ -451,6 +481,22 @@ namespace DungeonLab.Editor
                     rejectionReason = $"route intent contained a missing or duplicate node id '{node.id}'";
                     return false;
                 }
+
+                if (node.HasLandmarkSlot)
+                {
+                    landmarkSlotCount++;
+                }
+            }
+
+            if (intent.landmarkEpisode == null ||
+                intent.landmarkEpisode.slotNode != ThroneHallSlotNode ||
+                landmarkSlotCount != 1 ||
+                !string.Equals(intent.nodes[ThroneHallSlotNode].landmarkSlotId, intent.landmarkEpisode.id, StringComparison.Ordinal) ||
+                !string.Equals(intent.nodes[ThroneHallSlotNode].role, "landmark", StringComparison.Ordinal) ||
+                !string.Equals(intent.nodes[ThroneHallSlotNode].beat, "landmark", StringComparison.Ordinal))
+            {
+                rejectionReason = "route intent did not declare exactly one compatible processional landmark episode slot";
+                return false;
             }
 
             var adjacency = new List<int>[intent.nodes.Length];
@@ -785,6 +831,7 @@ namespace DungeonLab.Editor
                         nodeIndex,
                         nodeCenters[nodeIndex],
                         nodeCenters,
+                        intent.landmarkEpisode,
                         roomRandom,
                         allowWing:
                             attempt < Phase1RoomInflationAttemptLimit - 1 &&
@@ -841,9 +888,16 @@ namespace DungeonLab.Editor
             int nodeIndex,
             Vector2Int center,
             IReadOnlyList<Vector2Int> nodeCenters,
+            ThroneHallEpisodeIntent landmarkEpisode,
             System.Random random,
             bool allowWing)
         {
+            if (node.HasLandmarkSlot && landmarkEpisode != null && landmarkEpisode.slotNode == nodeIndex)
+            {
+                Vector2Int focalAxis = CardinalUnit(center - nodeCenters[Phase1VistaSourceNode]);
+                return BuildThroneHallRoomParts(landmarkEpisode, center, focalAxis);
+            }
+
             int width;
             int depth;
             switch (node.role)
@@ -1059,6 +1113,7 @@ namespace DungeonLab.Editor
             RouteIntent intent,
             IReadOnlyList<RoomFootprint> rooms,
             HashSet<Vector2Int> reservedVistaCells,
+            ThroneHallEpisodePlacement landmarkEpisode,
             out HashSet<Vector2Int> floorCells,
             out List<RoomConnection> connections,
             out string rejectionReason)
@@ -1082,7 +1137,31 @@ namespace DungeonLab.Editor
                     return false;
                 }
 
-                List<Vector2Int> path = BuildStraightCardinalPath(fromRoom.Center, toRoom.Center);
+                bool fromEpisode = edge.fromNode == landmarkEpisode.roomIndex;
+                bool toEpisode = edge.toNode == landmarkEpisode.roomIndex;
+                Vector2Int pathStart = fromRoom.Center;
+                Vector2Int pathEnd = toRoom.Center;
+                if (fromEpisode || toEpisode)
+                {
+                    if (!landmarkEpisode.TryGetThreshold(edge.id, out ThroneThresholdPlacement threshold))
+                    {
+                        rejectionReason = $"edge '{edge.id}' touched the episode without a declared typed threshold";
+                        return false;
+                    }
+
+                    if (fromEpisode)
+                    {
+                        pathStart = threshold.cell;
+                    }
+                    else
+                    {
+                        pathEnd = threshold.cell;
+                    }
+                }
+
+                List<Vector2Int> path = fromEpisode || toEpisode
+                    ? BuildEpisodePortPath(pathStart, pathEnd, delta, fromEpisode)
+                    : BuildStraightCardinalPath(pathStart, pathEnd);
                 if (!ValidatePathCardinality(path, out string pathError) ||
                     PathCrossesThirdRoom(path, rooms, edge.fromNode, edge.toNode) ||
                     PathTouchesExistingFloorOutsideEndpointRooms(path, floorCells, fromRoom, toRoom))
@@ -1116,6 +1195,41 @@ namespace DungeonLab.Editor
             }
 
             return true;
+        }
+
+        private static List<Vector2Int> BuildEpisodePortPath(
+            Vector2Int start,
+            Vector2Int end,
+            Vector2Int roomCenterDelta,
+            bool episodeIsStart)
+        {
+            bool routeAlongX = roomCenterDelta.x != 0;
+            Vector2Int bend;
+            if (episodeIsStart)
+            {
+                // Leave the exact episode port along the route axis, then make
+                // the one-cell transverse correction inside the generic room.
+                bend = routeAlongX
+                    ? new Vector2Int(end.x, start.y)
+                    : new Vector2Int(start.x, end.y);
+            }
+            else
+            {
+                // Make the transverse correction inside the generic room, then
+                // approach the exact episode port along its outward normal.
+                bend = routeAlongX
+                    ? new Vector2Int(start.x, end.y)
+                    : new Vector2Int(end.x, start.y);
+            }
+
+            var path = BuildStraightCardinalPath(start, bend);
+            List<Vector2Int> tail = BuildStraightCardinalPath(bend, end);
+            for (int index = 1; index < tail.Count; index++)
+            {
+                path.Add(tail[index]);
+            }
+
+            return path;
         }
 
         private static List<Vector2Int> BuildStraightCardinalPath(Vector2Int start, Vector2Int end)

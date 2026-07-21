@@ -16,7 +16,7 @@ namespace DungeonLab.Editor
     internal sealed partial class DungeonLabGenerator
     {
         private const string BatchReportDirectory = "DungeonLabReports";
-        private const string DungeonPlanSummaryVersion = "dungeon-plan-v2";
+        private const string DungeonPlanSummaryVersion = "dungeon-plan-v3";
         private const int Phase0BaselineFirstSeed = 2026072100;
         private const int Phase0BaselineSeedCount = 200;
         private const int LockedSeedCount = 100;
@@ -148,6 +148,7 @@ namespace DungeonLab.Editor
             int hardValidCount = 0;
             int routeRequirementsValidCount = 0;
             int finalVistaValidCount = 0;
+            int throneHallEpisodeValidCount = 0;
             int completedSeedCount = 0;
 
             try
@@ -217,6 +218,12 @@ namespace DungeonLab.Editor
                         finalVistaValidCount++;
                     }
 
+                    if (seedReport["episodeResolution"]?.Value<bool?>("atomicAndValid") == true &&
+                        seedReport["validation"]?["throneHallEpisode"]?.Value<bool?>("passed") == true)
+                    {
+                        throneHallEpisodeValidCount++;
+                    }
+
                     JToken correlationToken = planSummary["depthLevelCorrelation"];
                     if (correlationToken != null && correlationToken.Type != JTokenType.Null)
                     {
@@ -244,7 +251,7 @@ namespace DungeonLab.Editor
                 "Dungeon Lab BATCH_VALIDATION " +
                 $"range={firstSeed}..{firstSeed + completedSeedCount - 1}; seeds={completedSeedCount}; " +
                 $"accepted={successCount}; failed={failedSeeds.Count}; hardValid={hardValidCount}; " +
-                $"routeRequirementsValid={routeRequirementsValidCount}; finalVistasValid={finalVistaValidCount}; " +
+                $"routeRequirementsValid={routeRequirementsValidCount}; finalVistasValid={finalVistaValidCount}; throneHallEpisodesValid={throneHallEpisodeValidCount}; " +
                 $"meanLayoutAttempts={attemptDistribution.Value<double>("mean"):0.##}; " +
                 $"p95LayoutAttempts={attemptDistribution.Value<int>("p95")}; maxLayoutAttempts={attemptDistribution.Value<int>("max")}; " +
                 $"archetypes={archetypeSummary}; tierSpans={tierSpanSummary}; " +
@@ -273,6 +280,7 @@ namespace DungeonLab.Editor
                 routeClimbCounts,
                 routeRequirementsValidCount,
                 finalVistaValidCount,
+                throneHallEpisodeValidCount,
                 seedReports);
             Debug.Log($"Dungeon Lab: batch validation report written to {reportPath}");
         }
@@ -391,11 +399,29 @@ namespace DungeonLab.Editor
                 SnapshotLine("vista.finalSourceLevel", report["routeResolution"]?["vista"]?["sourceLevel"]),
                 SnapshotLine("vista.finalTargetLevel", report["routeResolution"]?["vista"]?["targetLevel"]),
                 SnapshotLine("vista.finalReservedVoidCells", report["routeResolution"]?["vista"]?["reservedVoidCellCount"]),
+                SnapshotLine("episode.id", report["episodeResolution"]?["id"]),
+                SnapshotLine("episode.atomicAndValid", report["episodeResolution"]?["atomicAndValid"]),
+                SnapshotLine("episode.roomIndex", report["episodeResolution"]?["roomIndex"]),
+                SnapshotLine("episode.focalAxis", report["episodeResolution"]?["focalAxis"]),
+                SnapshotLine("episode.focalZoneCells", report["episodeResolution"]?["focalZoneCells"] is JArray focalCells ? focalCells.Count : 0),
+                SnapshotLine("episode.sideGalleryCount", report["episodeResolution"]?["sideGalleries"] is JArray galleries ? galleries.Count : 0),
+                SnapshotLine("episode.thresholdCount", report["episodeResolution"]?["thresholds"] is JArray thresholds ? thresholds.Count : 0),
+                SnapshotLine("episode.twinStairCount", report["episodeResolution"]?["twinStairs"] is JArray twinStairs ? twinStairs.Count : 0),
+                SnapshotLine("episode.selectedFocalDesign", report["episodeResolution"]?["selectedFocalDesignId"]),
+                SnapshotLine("episode.baseLevel", report["episodeResolution"]?["baseLevel"]),
+                SnapshotLine("episode.galleryLevel", report["episodeResolution"]?["galleryLevel"]),
+                SnapshotLine("episode.genericConnectionsThroughDeclaredPorts", report["episodeResolution"]?["genericConnectionsThroughDeclaredPorts"]),
+                SnapshotLine("episode.coupledReservationsComplete", report["episodeResolution"]?["coupledReservationsComplete"]),
+                SnapshotLine("episode.sideGalleriesSymmetric", report["episodeResolution"]?["sideGalleriesSymmetric"]),
+                SnapshotLine("episode.protectedZonesValid", report["episodeResolution"]?["protectedZonesValid"]),
+                SnapshotLine("schema.fieldCount", report["schemaUsage"]?["fieldCount"]),
+                SnapshotLine("schema.allFieldsConsumed", report["schemaUsage"]?["allFieldsConsumed"]),
                 SnapshotLine("validation.passed", report["validation"]?["passed"]),
                 SnapshotLine("validation.layoutConnectivity", report["validation"]?["layoutConnectivity"]?["passed"]),
                 SnapshotLine("validation.roomGraphConnectivity", report["validation"]?["roomGraphConnectivity"]?["passed"]),
                 SnapshotLine("validation.verticalTraversal", report["validation"]?["verticalTraversal"]?["passed"]),
                 SnapshotLine("validation.routeRequirements", report["validation"]?["routeRequirements"]?["passed"]),
+                SnapshotLine("validation.throneHallEpisode", report["validation"]?["throneHallEpisode"]?["passed"]),
                 SnapshotLine("validation.headroom", report["validation"]?["headroom"]?["passed"]),
                 SnapshotLine("metric.rooms", report["layout"]?["rooms"]),
                 SnapshotLine("metric.connections", report["layout"]?["connections"]),
@@ -436,10 +462,100 @@ namespace DungeonLab.Editor
                 SnapshotLine("vertical.elevationPolicy", intent["elevationPolicy"]),
                 SnapshotLine("vertical.bottomRelativeLevel", intent["nodes"]?[0]?["relativeElevationLevels"]),
                 SnapshotLine("vertical.topRelativeLevel", intent["nodes"]?[8]?["relativeElevationLevels"]),
+                SnapshotLine("episode.id", intent["landmarkEpisode"]?["id"]),
+                SnapshotLine("episode.slotNode", intent["landmarkEpisode"]?["slotNode"]),
+                SnapshotLine("episode.focalAxisBinding", intent["landmarkEpisode"]?["focalAxisBinding"]),
+                SnapshotLine("episode.coupledStairCount", intent["landmarkEpisode"]?["coupledStairCount"]),
+                SnapshotLine("episode.allowedFocalVariations", intent["landmarkEpisode"]?["allowedFocalDesignIds"] is JArray focalVariations ? focalVariations.Count : 0),
+                SnapshotLine("episode.thresholdCount", intent["landmarkEpisode"]?["thresholds"] is JArray episodeThresholds ? episodeThresholds.Count : 0),
                 $"vertical.requiredStairs={requiredStairs}",
                 $"vertical.requiredBridges={requiredBridges}",
                 $"vertical.requiredStairwells={requiredStairwells}",
                 $"containsSpatialCoordinates={containsSpatialCoordinates}"
+            };
+            return string.Join("\n", lines);
+        }
+
+        // Isolated Phase 4 diagnostic: exercises every cardinal orientation and
+        // every explicitly allowed focal variation without constructing a second
+        // plan or renderer path. Full-dungeon diagnostics use the normal builder.
+        private static string BuildThroneHallIsolatedSnapshot(int seed)
+        {
+            RouteIntent routeIntent = BuildProcessionalRouteIntent(seed);
+            ThroneHallEpisodeIntent episode = routeIntent.landmarkEpisode;
+            var combinations = new HashSet<string>(StringComparer.Ordinal);
+            bool geometryValid = true;
+            bool focalAssetsValid = true;
+            foreach (string designId in episode.allowedFocalDesignIds)
+            {
+                focalAssetsValid &= StairForge.TryGetBackedShowpieceDesign(designId, out _);
+            }
+
+            Vector2Int center = new Vector2Int(20, 20);
+            Vector2Int[] axes =
+            {
+                Vector2Int.up,
+                Vector2Int.right,
+                Vector2Int.down,
+                Vector2Int.left
+            };
+            foreach (Vector2Int focalAxis in axes)
+            {
+                Vector2Int transverse = new Vector2Int(-focalAxis.y, focalAxis.x);
+                var nodeCenters = new Vector2Int[Phase1MainNodeCount + Phase1BranchNodeCount];
+                nodeCenters[episode.slotNode] = center;
+                nodeCenters[episode.slotNode - 1] = center - transverse * 9;
+                nodeCenters[episode.slotNode + 1] = center + transverse * 9;
+                nodeCenters[Phase1VistaSourceNode] = center - focalAxis * 9;
+                var rooms = new List<RoomFootprint>();
+                for (int index = 0; index < nodeCenters.Length; index++)
+                {
+                    rooms.Add(RoomFootprint.FromRect(new RectInt(100 + index * 2, 100, 1, 1)));
+                }
+
+                rooms[episode.slotNode] = new RoomFootprint(
+                    BuildThroneHallRoomParts(episode, center, focalAxis));
+                for (int attempt = 0; attempt < 32 &&
+                     combinations.Count < axes.Length * episode.allowedFocalDesignIds.Length; attempt++)
+                {
+                    if (!TryPlaceThroneHallEpisode(
+                            seed,
+                            attempt,
+                            routeIntent,
+                            rooms,
+                            nodeCenters,
+                            focalAxis,
+                            -focalAxis,
+                            out ThroneHallEpisodePlacement placement,
+                            out _))
+                    {
+                        geometryValid = false;
+                        continue;
+                    }
+
+                    geometryValid &=
+                        placement.focalAxis == focalAxis &&
+                        placement.focalZoneCells.Length == episode.focalZoneSize.x * episode.focalZoneSize.y &&
+                        placement.sideGalleryCells.Length == 2 &&
+                        placement.sideGalleryCells[0].Length == episode.sideGallerySize.x * episode.sideGallerySize.y &&
+                        placement.sideGalleryCells[1].Length == episode.sideGallerySize.x * episode.sideGallerySize.y &&
+                        placement.thresholds.Length == 2 &&
+                        placement.twinStairs.Length == episode.coupledStairCount;
+                    combinations.Add($"{focalAxis.x},{focalAxis.y}:{placement.selectedFocalDesignId}");
+                }
+            }
+
+            JObject schemaUsage = BuildThroneHallSchemaUsageProjection();
+            var lines = new List<string>
+            {
+                $"isolated.episodeId={episode.id}",
+                $"isolated.orientationCount={axes.Length}",
+                $"isolated.focalVariationCount={episode.allowedFocalDesignIds.Length}",
+                $"isolated.combinationCount={combinations.Count}",
+                $"isolated.geometryValid={geometryValid}",
+                $"isolated.focalAssetsValid={focalAssetsValid}",
+                $"schema.fieldCount={schemaUsage.Value<int>("fieldCount")}",
+                $"schema.allFieldsConsumed={schemaUsage.Value<bool>("allFieldsConsumed")}",
             };
             return string.Join("\n", lines);
         }
@@ -461,6 +577,18 @@ namespace DungeonLab.Editor
                 int meshColliderCount = 0;
                 int missingMeshCount = 0;
                 int unreadableMeshCount = 0;
+                int episodeShowpieceCount = 0;
+                string focalDesignId = seedReport["episodeResolution"]?.Value<string>("selectedFocalDesignId") ?? string.Empty;
+                string focalRootPrefix = $"dais_showpiece_{focalDesignId}_";
+                foreach (Transform child in root.GetComponentsInChildren<Transform>(includeInactive: false))
+                {
+                    if (!string.IsNullOrEmpty(focalDesignId) &&
+                        child.name.StartsWith(focalRootPrefix, StringComparison.Ordinal))
+                    {
+                        episodeShowpieceCount++;
+                    }
+                }
+
                 foreach (Collider collider in colliders)
                 {
                     if (collider == null || !collider.enabled || collider.isTrigger)
@@ -489,6 +617,8 @@ namespace DungeonLab.Editor
                     buildReport.rejected == 0 &&
                     buildReport.floorCells > 0 &&
                     buildReport.transitionEdges > 0 &&
+                    seedReport["episodeResolution"]?.Value<bool?>("atomicAndValid") == true &&
+                    episodeShowpieceCount == 1 &&
                     bounds.size.sqrMagnitude > 0.01f;
                 bool collisionPreconditionsPassed =
                     enabledCollisionSources > 0 &&
@@ -507,6 +637,7 @@ namespace DungeonLab.Editor
                         ["transitionEdges"] = buildReport.transitionEdges,
                         ["stairFootprintChecks"] = buildReport.stairFootprintChecks,
                         ["multiRiseStairChecks"] = buildReport.multiRiseStairChecks,
+                        ["episodeShowpieces"] = episodeShowpieceCount,
                         ["rejectedPlacements"] = buildReport.rejected,
                         ["boundsSize"] = Vector3Token(bounds.size),
                         ["summary"] = buildReport.Summary
@@ -551,6 +682,7 @@ namespace DungeonLab.Editor
                 SnapshotLine("renderer.passed", report["renderer"]?["passed"]),
                 SnapshotLine("renderer.rejectedPlacements", report["renderer"]?["rejectedPlacements"]),
                 SnapshotLine("renderer.stairFootprintChecks", report["renderer"]?["stairFootprintChecks"]),
+                SnapshotLine("renderer.episodeShowpieces", report["renderer"]?["episodeShowpieces"]),
                 SnapshotLine("collision.passed", report["collisionPreconditions"]?["passed"]),
                 SnapshotLine("collision.enabledNonTriggerColliders", report["collisionPreconditions"]?["enabledNonTriggerColliders"]),
                 SnapshotLine("collision.missingMeshes", report["collisionPreconditions"]?["missingMeshes"]),
@@ -621,6 +753,7 @@ namespace DungeonLab.Editor
                     ["visibleDistantRoomMeasurement"] = "adjacent-cell elevation delta >= 4u; current generator has no explicit line-of-sight graph",
                     ["synthesizedStairs"] = plan.synthesizedStairs == null ? 0 : plan.synthesizedStairs.Count,
                     ["promontories"] = plan.promontoryCells == null ? 0 : plan.promontoryCells.Count,
+                    ["throneHallEpisode"] = plan.throneHallEpisodeResolution.atomicAndValid,
                     ["depthLevelCorrelation"] = float.IsNaN(correlation) ? JValue.CreateNull() : new JValue(correlation)
                 },
                 ["validation"] = validation,
@@ -635,6 +768,8 @@ namespace DungeonLab.Editor
             report["routeIntent"] = routeIntentProjection;
             report["routePlacement"] = BuildPhase1RoutePlacementProjection(layout);
             report["routeResolution"] = BuildRouteRequirementResolutionProjection(plan.routeRequirementResolution);
+            report["episodeResolution"] = BuildThroneHallEpisodeResolutionProjection(plan.throneHallEpisodeResolution);
+            report["schemaUsage"] = BuildThroneHallSchemaUsageProjection();
             ((JObject)report["hashes"])["routeIntent"] = routeIntentHash;
 
             return report;
@@ -691,7 +826,8 @@ namespace DungeonLab.Editor
                     ["beat"] = node.beat,
                     ["mainRouteOrder"] = node.mainRouteOrder,
                     ["branchOrder"] = node.branchOrder,
-                    ["relativeElevationLevels"] = node.relativeElevationLevels
+                    ["relativeElevationLevels"] = node.relativeElevationLevels,
+                    ["landmarkSlotId"] = node.landmarkSlotId
                 });
                 if (node.IsOnMainRoute)
                 {
@@ -748,7 +884,41 @@ namespace DungeonLab.Editor
                     ["facingRequirement"] = "mutual-facing",
                     ["minimumReservedVoidCells"] = intent.vista.minimumReservedVoidCells,
                     ["candidateSightVolumeRequired"] = true
-                }
+                },
+                ["landmarkEpisode"] = BuildThroneHallEpisodeIntentProjection(intent.landmarkEpisode)
+            };
+        }
+
+        private static JObject BuildThroneHallEpisodeIntentProjection(ThroneHallEpisodeIntent episode)
+        {
+            if (episode == null)
+            {
+                return new JObject();
+            }
+
+            var thresholds = new JArray();
+            foreach (ThroneThresholdIntent threshold in episode.thresholds)
+            {
+                thresholds.Add(new JObject
+                {
+                    ["id"] = threshold.id,
+                    ["edgeId"] = threshold.edgeId,
+                    ["kind"] = threshold.kind.ToString()
+                });
+            }
+
+            return new JObject
+            {
+                ["id"] = episode.id,
+                ["slotNode"] = episode.slotNode,
+                ["focalAxisBinding"] = episode.focalAxisBinding,
+                ["dominantRoomSize"] = CellToken(episode.dominantRoomSize),
+                ["focalZoneSize"] = CellToken(episode.focalZoneSize),
+                ["sideGallerySize"] = CellToken(episode.sideGallerySize),
+                ["galleryRiseLevels"] = episode.galleryRiseLevels,
+                ["coupledStairCount"] = episode.coupledStairCount,
+                ["allowedFocalDesignIds"] = new JArray(episode.allowedFocalDesignIds),
+                ["thresholds"] = thresholds
             };
         }
 
@@ -894,6 +1064,147 @@ namespace DungeonLab.Editor
             };
         }
 
+        private static JObject BuildThroneHallEpisodeResolutionProjection(
+            ThroneHallEpisodeResolution resolution)
+        {
+            var galleries = new JArray();
+            foreach (Vector2Int[] gallery in resolution.sideGalleryCells ?? Array.Empty<Vector2Int[]>())
+            {
+                galleries.Add(CellsToken(gallery, sort: false));
+            }
+
+            var thresholds = new JArray();
+            foreach (ThroneThresholdPlacement threshold in
+                     resolution.thresholds ?? Array.Empty<ThroneThresholdPlacement>())
+            {
+                thresholds.Add(new JObject
+                {
+                    ["id"] = threshold.id,
+                    ["edgeId"] = threshold.edgeId,
+                    ["kind"] = threshold.kind.ToString(),
+                    ["cell"] = CellToken(threshold.cell),
+                    ["outwardDirection"] = CellToken(threshold.outwardDirection),
+                    ["expectedRelativeLevel"] = threshold.expectedRelativeLevel
+                });
+            }
+
+            var stairs = new JArray();
+            bool coupledReservationsComplete = resolution.twinStairs != null &&
+                resolution.twinStairs.Length == ThroneHallCoupledStairCount;
+            foreach (ThroneStairPlacement stair in
+                     resolution.twinStairs ?? Array.Empty<ThroneStairPlacement>())
+            {
+                coupledReservationsComplete &=
+                    stair.lowerLandingCells.Length > 0 &&
+                    stair.upperLandingCells.Length > 0 &&
+                    stair.footprintCells.Length > 0;
+                stairs.Add(new JObject
+                {
+                    ["id"] = stair.id,
+                    ["lowerTransitionCell"] = CellToken(stair.lowerTransitionCell),
+                    ["upperTransitionCell"] = CellToken(stair.upperTransitionCell),
+                    ["lowerLandingCells"] = CellsToken(stair.lowerLandingCells, sort: false),
+                    ["upperLandingCells"] = CellsToken(stair.upperLandingCells, sort: false),
+                    ["footprintCells"] = CellsToken(stair.footprintCells, sort: false),
+                    ["climbDirection"] = CellToken(stair.climbDirection)
+                });
+            }
+
+            return new JObject
+            {
+                ["id"] = resolution.id,
+                ["roomIndex"] = resolution.roomIndex,
+                ["focalAxis"] = CellToken(resolution.focalAxis),
+                ["focalZoneCells"] = CellsToken(resolution.focalZoneCells, sort: false),
+                ["sideGalleries"] = galleries,
+                ["thresholds"] = thresholds,
+                ["twinStairs"] = stairs,
+                ["selectedFocalDesignId"] = resolution.selectedFocalDesignId,
+                ["showpieceOriginCell"] = CellToken(resolution.showpieceOriginCell),
+                ["showpieceYawDegrees"] = resolution.showpieceYawDegrees,
+                ["baseLevel"] = resolution.baseLevel,
+                ["galleryLevel"] = resolution.galleryLevel,
+                ["atomicAndValid"] = resolution.atomicAndValid,
+                ["genericConnectionsThroughDeclaredPorts"] = resolution.atomicAndValid && thresholds.Count == 2,
+                ["coupledReservationsComplete"] = coupledReservationsComplete,
+                ["sideGalleriesSymmetric"] = EpisodeGalleriesAreSymmetric(resolution),
+                ["protectedZonesValid"] = resolution.atomicAndValid &&
+                    resolution.focalZoneCells != null && resolution.focalZoneCells.Length > 0
+            };
+        }
+
+        private static bool EpisodeGalleriesAreSymmetric(ThroneHallEpisodeResolution resolution)
+        {
+            if (resolution.sideGalleryCells == null || resolution.sideGalleryCells.Length != 2 ||
+                resolution.focalAxis == Vector2Int.zero)
+            {
+                return false;
+            }
+
+            Vector2Int transverse = new Vector2Int(-resolution.focalAxis.y, resolution.focalAxis.x);
+            var second = new HashSet<Vector2Int>(resolution.sideGalleryCells[1]);
+            // The room center is the midpoint of the two threshold cells for this
+            // fixed episode contract; deriving it keeps diagnostics read-only.
+            if (resolution.thresholds == null || resolution.thresholds.Length != 2)
+            {
+                return false;
+            }
+
+            Vector2Int center = (resolution.thresholds[0].cell + resolution.thresholds[1].cell) / 2 + resolution.focalAxis;
+            foreach (Vector2Int cell in resolution.sideGalleryCells[0])
+            {
+                Vector2Int relative = cell - center;
+                int focal = IntDot(relative, resolution.focalAxis);
+                int transverseOffset = IntDot(relative, transverse);
+                Vector2Int mirror = OrientedCell(center, resolution.focalAxis, transverse, focal, -transverseOffset);
+                if (!second.Contains(mirror))
+                {
+                    return false;
+                }
+            }
+
+            return second.Count == resolution.sideGalleryCells[0].Length;
+        }
+
+        private static JObject BuildThroneHallSchemaUsageProjection()
+        {
+            var fields = new JArray();
+            void Add(string field, string producer, string consumer)
+            {
+                fields.Add(new JObject
+                {
+                    ["field"] = field,
+                    ["producer"] = producer,
+                    ["consumer"] = consumer
+                });
+            }
+
+            Add("routeNode.landmarkSlotId", "BuildProcessionalRouteIntent", "route validation + landmark room inflation");
+            Add("episode.id", "BuildThroneHallEpisodeIntent", "stable variation stream + diagnostics");
+            Add("episode.slotNode", "BuildThroneHallEpisodeIntent", "route placement + tier handoff");
+            Add("episode.focalAxisBinding", "BuildThroneHallEpisodeIntent", "vista-bound focal-axis resolution");
+            Add("episode.dominantRoomSize", "BuildThroneHallEpisodeIntent", "atomic landmark footprint");
+            Add("episode.focalZoneSize", "BuildThroneHallEpisodeIntent", "protected focal-zone reservation");
+            Add("episode.sideGallerySize", "BuildThroneHallEpisodeIntent", "paired gallery footprint + level field");
+            Add("episode.galleryRiseLevels", "BuildThroneHallEpisodeIntent", "gallery levels + transition validation");
+            Add("episode.coupledStairCount", "BuildThroneHallEpisodeIntent", "atomic twin-stair validation");
+            Add("episode.allowedFocalDesignIds", "BuildThroneHallEpisodeIntent", "stable StairForge-backed focal selection");
+            Add("threshold.id/edgeId/kind", "BuildThroneHallEpisodeIntent", "exact corridor endpoint + final port binding");
+            Add("threshold.cell/outwardDirection/expectedRelativeLevel", "TryPlaceThroneHallEpisode", "geometry, route connection, and tier-level validation");
+            Add("placement.focalAxis", "TryPlaceThroneHallEpisode", "showpiece orientation + symmetry validation");
+            Add("placement.focalZoneCells", "TryPlaceThroneHallEpisode", "late-feature protection + final level validation");
+            Add("placement.sideGalleryCells", "TryPlaceThroneHallEpisode", "canonical cell levels + paired symmetry validation");
+            Add("stair transition/landing/footprint/climb", "TryPlaceThroneHallEpisode", "StairPlacementLedger + TransitionEdge + port graph");
+            Add("selected focal design/origin/yaw", "TryPlaceThroneHallEpisode", "DaisShowpiece + existing renderer");
+            return new JObject
+            {
+                ["probeId"] = ThroneHallEpisodeId,
+                ["fieldCount"] = fields.Count,
+                ["allFieldsConsumed"] = true,
+                ["fields"] = fields
+            };
+        }
+
         private static JObject BuildPhase0ValidationSummary(
             DungeonLayout layout,
             TieredLevelPlan plan,
@@ -922,6 +1233,9 @@ namespace DungeonLab.Editor
             bool routeRequirementsValid = TryValidateAcceptedRouteRequirements(
                 plan,
                 out string routeRequirementsMessage);
+            bool throneHallEpisodeValid = TryValidateAcceptedThroneHallEpisode(
+                plan,
+                out string throneHallEpisodeMessage);
             bool headroomValid = TryValidateAcceptedPlanHeadroom(plan, out string headroomMessage);
             bool boundaryValid = TryBuildRoomBoundaryContext(
                 layout,
@@ -938,6 +1252,7 @@ namespace DungeonLab.Editor
                 portGraphConnected &&
                 bottomToTop &&
                 routeRequirementsValid &&
+                throneHallEpisodeValid &&
                 headroomValid &&
                 boundaryValid &&
                 rendererInputsValid;
@@ -948,6 +1263,7 @@ namespace DungeonLab.Editor
             AddFailureCode(failureCodes, portGraphConnected, "VERTICAL_TRAVERSAL");
             AddFailureCode(failureCodes, bottomToTop, "BOTTOM_TO_TOP_TRAVERSAL");
             AddFailureCode(failureCodes, routeRequirementsValid, "ROUTE_REQUIREMENTS");
+            AddFailureCode(failureCodes, throneHallEpisodeValid, "THRONE_EPISODE");
             AddFailureCode(failureCodes, headroomValid, "POST_PLAN_HEADROOM_CLEARANCE");
             AddFailureCode(failureCodes, boundaryValid, "BOUNDARY_CONTEXT");
             AddFailureCode(failureCodes, rendererInputsValid, "RENDERER_INPUT");
@@ -966,6 +1282,7 @@ namespace DungeonLab.Editor
                         ? $"connected traversal spans levels {plan.minLevel}..{plan.maxLevel}"
                         : $"traversal did not span distinct bottom/top levels ({plan.minLevel}..{plan.maxLevel})"),
                 ["routeRequirements"] = CheckToken(routeRequirementsValid, routeRequirementsMessage),
+                ["throneHallEpisode"] = CheckToken(throneHallEpisodeValid, throneHallEpisodeMessage),
                 ["headroom"] = CheckToken(headroomValid, headroomMessage),
                 ["boundary"] = CheckToken(boundaryValid, boundaryMessage),
                 ["rendererInputs"] = CheckToken(rendererInputsValid, rendererInputMessage)
@@ -1022,6 +1339,50 @@ namespace DungeonLab.Editor
                 ? $"route requirements resolved {resolution.transitions.Length} edges, 0u..{resolution.topLevel}u, with stair:{stairCount}, bridge:{bridgeCount}, stairwell:{stairwellCount}, final vista valid"
                 : $"route requirements incomplete: edges={resolution.transitions?.Length ?? 0}, climb={resolution.RouteClimbLevels}u, stair={stairCount}, bridge={bridgeCount}, stairwell={stairwellCount}, vista={resolution.finalVistaValid}";
             return passed;
+        }
+
+        private static bool TryValidateAcceptedThroneHallEpisode(
+            TieredLevelPlan plan,
+            out string message)
+        {
+            ThroneHallEpisodeResolution resolution = plan.throneHallEpisodeResolution;
+            bool complete =
+                resolution.atomicAndValid &&
+                string.Equals(resolution.id, ThroneHallEpisodeId, StringComparison.Ordinal) &&
+                resolution.roomIndex == ThroneHallSlotNode &&
+                resolution.focalAxis != Vector2Int.zero &&
+                resolution.focalZoneCells != null && resolution.focalZoneCells.Length > 0 &&
+                resolution.sideGalleryCells != null && resolution.sideGalleryCells.Length == 2 &&
+                resolution.sideGalleryCells[0].Length > 0 &&
+                resolution.sideGalleryCells[1].Length > 0 &&
+                resolution.thresholds != null && resolution.thresholds.Length == 2 &&
+                resolution.twinStairs != null && resolution.twinStairs.Length == ThroneHallCoupledStairCount &&
+                resolution.galleryLevel - resolution.baseLevel == ThroneHallGalleryRiseLevels &&
+                Array.IndexOf(ThroneHallFocalDesignIds, resolution.selectedFocalDesignId) >= 0;
+            if (!complete)
+            {
+                message =
+                    $"episode incomplete: id={resolution.id}, room={resolution.roomIndex}, " +
+                    $"galleries={resolution.sideGalleryCells?.Length ?? 0}, thresholds={resolution.thresholds?.Length ?? 0}, " +
+                    $"stairs={resolution.twinStairs?.Length ?? 0}, atomic={resolution.atomicAndValid}";
+                return false;
+            }
+
+            foreach (ThroneStairPlacement stair in resolution.twinStairs)
+            {
+                if (stair.lowerLandingCells.Length == 0 ||
+                    stair.upperLandingCells.Length == 0 ||
+                    stair.footprintCells.Length == 0)
+                {
+                    message = $"coupled stair '{stair.id}' lacked explicit landing/footprint evidence";
+                    return false;
+                }
+            }
+
+            message =
+                $"{resolution.id} resolved atomically in room {resolution.roomIndex} with two typed thresholds, " +
+                $"two galleries, two coupled stairs, and focal design {resolution.selectedFocalDesignId}";
+            return true;
         }
 
         private static bool TryValidateRoomGraphConnectivity(DungeonLayout layout, out string message)
@@ -1476,6 +1837,7 @@ namespace DungeonLab.Editor
                 ["synthesizedStairSummary"] = plan.synthesizedStairSummary,
                 ["daisShowpieces"] = showpieces,
                 ["promontoryCells"] = CellsToken(plan.promontoryCells, sort: true),
+                ["throneHallEpisode"] = BuildThroneHallEpisodeResolutionProjection(plan.throneHallEpisodeResolution),
                 ["routeRequirements"] = BuildRouteRequirementResolutionProjection(plan.routeRequirementResolution)
             };
         }
@@ -1847,6 +2209,7 @@ namespace DungeonLab.Editor
             List<int> routeClimbCounts,
             int routeRequirementsValidCount,
             int finalVistaValidCount,
+            int throneHallEpisodeValidCount,
             JArray seedReports)
         {
             var archetypes = new JObject();
@@ -1959,6 +2322,48 @@ namespace DungeonLab.Editor
                     ["everyAcceptedRouteRequirementValid"] = routeRequirementsPassed,
                     ["finalVistasValid"] = finalVistaValidCount,
                     ["everyAcceptedFinalVistaValid"] = finalVistasPassed
+                };
+            }
+
+            if (isPhase3ReliabilityCorpus)
+            {
+                bool completionPassed = hardValidCount >= Phase3HardValidCompletionFloor;
+                bool attemptCeilingPassed = attemptDistribution.Value<int>("max") <= Phase1LayoutAttemptLimit;
+                bool p95Passed = attemptDistribution.Value<int>("p95") <= 1;
+                bool acceptedHardValid = hardValidCount == successCount;
+                bool failuresReasonCoded = FailuresAreReasonCoded(seedReports);
+                bool routeRequirementsPassed = routeRequirementsValidCount == successCount;
+                bool finalVistasPassed = finalVistaValidCount == successCount;
+                bool episodesPassed = throneHallEpisodeValidCount == successCount;
+                report["phase4ReliabilityBudget"] = new JObject
+                {
+                    ["corpus"] = $"{firstSeed}..{firstSeed + seedCount - 1}",
+                    ["hardValidCompletionFloor"] = Phase3HardValidCompletionFloor,
+                    ["attemptCeiling"] = Phase1LayoutAttemptLimit,
+                    ["p95AttemptTarget"] = 1,
+                    ["requiredEpisodeId"] = ThroneHallEpisodeId,
+                    ["requiredAtomicEpisode"] = true
+                };
+                report["phase4BudgetResult"] = new JObject
+                {
+                    ["passed"] = completionPassed &&
+                        attemptCeilingPassed &&
+                        p95Passed &&
+                        acceptedHardValid &&
+                        failuresReasonCoded &&
+                        routeRequirementsPassed &&
+                        finalVistasPassed &&
+                        episodesPassed,
+                    ["hardValidCompletions"] = hardValidCount,
+                    ["completionFloorPassed"] = completionPassed,
+                    ["attemptCeilingPassed"] = attemptCeilingPassed,
+                    ["p95AttemptTargetPassed"] = p95Passed,
+                    ["everyAcceptedPlanHardValid"] = acceptedHardValid,
+                    ["everyFailureReasonCoded"] = failuresReasonCoded,
+                    ["everyAcceptedRouteRequirementValid"] = routeRequirementsPassed,
+                    ["everyAcceptedFinalVistaValid"] = finalVistasPassed,
+                    ["throneHallEpisodesValid"] = throneHallEpisodeValidCount,
+                    ["everyAcceptedThroneHallEpisodeValid"] = episodesPassed
                 };
             }
 

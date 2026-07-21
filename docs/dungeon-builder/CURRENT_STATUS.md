@@ -4,7 +4,7 @@ Start here when returning to dungeon work. Keep this page short and update it at
 
 Last updated: 2026-07-21
 
-Active milestone: Phase 3 complete and verified; Phase 4 is ready but has not started
+Active milestone: Phase 4 throne-hall schema probe complete and verified; Phase 5 ready and not started
 
 Production mode: the processional-spine route-first planner is the sole reachable layout builder
 
@@ -15,8 +15,8 @@ Recipe authoring UI: design only; not implemented
 1. [`PROJECT_INVARIANTS.md`](PROJECT_INVARIANTS.md) — non-negotiable geometry and placement rules.
 2. This file — current evidence and exact handoff.
 3. [`COHERENT_FLOORPLAN_PLAN.md`](COHERENT_FLOORPLAN_PLAN.md) — architecture, phases, and exit gates.
-4. [`RECIPE_AUTHORING_WORKFLOW.md`](RECIPE_AUTHORING_WORKFLOW.md) — required context for the Phase 4 throne-hall schema probe; do not generalize it into a platform yet.
-5. [`stair_forge_design.md`](stair_forge_design.md) — exact stair contracts reused by the coupled twin-stair episode.
+4. [`RECIPE_AUTHORING_WORKFLOW.md`](RECIPE_AUTHORING_WORKFLOW.md) — required contract for Phase 5 lifecycle, validation, preview, and review work.
+5. [`stair_forge_design.md`](stair_forge_design.md) — exact stair contracts already reused by the coupled twin-stair episode and any Phase 5 contrast recipe.
 
 ## Locked context
 
@@ -28,10 +28,10 @@ Recipe authoring UI: design only; not implemented
 - Traversal and visibility are separate graphs. Phase 3 proved one final source-to-target vista, not merely an adjacent elevation delta; later phases must preserve it.
 - `DungeonLayout` and `TieredLevelPlan` remain the canonical downstream plans. Do not create parallel intent/placed/compiled DTO families or a legacy adapter.
 - The ephemeral `RouteIntent` is the sole pre-coordinate graph. Named topology variants must eventually compose shared graph operations rather than become separate planner implementations.
-- Recipes complement generic generation; they do not replace the floor with a large prefab pool. Recipe assets, catalogs, and authoring are Phase 4+.
+- Recipes complement generic generation; they do not replace the floor with a large prefab pool. The general schema, lifecycle, catalog, and authoring workflow remain Phase 5 work.
 - Locks, ability gates, and one-way traversal remain out of scope.
 - Each phase has a deletion ledger. A phase is incomplete if its scheduled temporary or superseded code remains reachable.
-- Phase 3 now proves explicit route-relative elevation, typed structural transitions, and one final named vista. Phase 4 must consume that foundation rather than introduce another elevation, stair, or visibility path.
+- Phase 4 now proves one atomic authored throne-hall episode on the existing route/tier seam. Phase 5 may generalize only its consumed contract, must add a structurally different contrast recipe, and must not introduce another plan, stair, visibility, renderer, or collision path.
 
 ## Foundation already established
 
@@ -71,6 +71,18 @@ Phase 3 moved the vertical story into the existing route/tier seam and closed it
 - Diagnostics now use `dungeon-plan-v2` / `processional-spine-v2` and include intent, route-resolution, transition-reservation, final-vista, validation, and canonical hash evidence.
 - Displaced late elevation assignment was deleted: the random archetype target-field planner and its eleven policy implementations, BFS/depth repair helpers, allowed-delta builders, target snapping, deepest-room selection, and the obsolete optional-bridge constant are gone. Only the active route elevation policy remains.
 
+## Phase 4 result
+
+Phase 4 used one throne-hall episode as a schema probe and closed its deletion ledger.
+
+- The pre-coordinate route intent declares exactly one `episode_throne_twin_stairs_01` slot at the existing `vista-target` landmark beat. No second topology, general socket solver, parallel canonical plan, adapter, renderer repair, or recipe catalog was added.
+- One narrow internal episode contract supplies a vista-bound focal axis, a `7x5` dominant room, a protected `3x5` focal zone, two symmetric `4x2` side galleries at rise 1, two coupled stairs with explicit lower/upper landings and footprints, two typed processional thresholds, and two explicit StairForge-backed focal variations.
+- Placement is atomic before generic fill. The two adjacent main-route connections terminate at declared off-center threshold cells; generic loops and late features cannot consume the episode room, galleries, focal zone, stairs, landings, or showpiece.
+- The existing stair prefab contract, `TransitionEdge`, placement ledger, StairForge showpiece data, `DungeonLayout`, `TieredLevelPlan`, renderer, abyss support, and collision export remain the only downstream production path.
+- Final validation proves exact port endpoints and levels, gallery symmetry, complete twin-stair reservations, one backed focal showpiece, protected zones, and absence of generic promontory intrusion before publishing one canonical atomic episode resolution.
+- Diagnostics use `dungeon-plan-v3` / `processional-spine-v3`. The schema-usage projection reports 17 represented field groups, all with active producers and production consumers; isolated diagnostics cover four cardinal orientations by both focal designs.
+- Producer/consumer and symbol audits found no unconsumed speculative field, helper, duplicate system, or scheduled Phase 4 deletion. The Phase 4 deletion ledger is empty.
+
 ## Current sole generation seam
 
 ```text
@@ -78,8 +90,9 @@ GenerateWithSeed
   -> GenerateRandomDungeonLayout
   -> TryBuildAcceptedPlan
   -> TryBuildProcessionalSpineDungeonLayout
-  -> DungeonLayout + ephemeral RouteTierRequirements
+  -> DungeonLayout + ephemeral RouteTierRequirements (route + placed landmark episode)
   -> TryBuildTieredLevelPlan / TryBuildTieredLevelPlanAttempt
+     -> atomically realize protected episode before generic structural fill
   -> TieredLevelPlan
   -> TryBuildRoomBoundaryContext
   -> ElevationEdgeModel.BuildLevelField
@@ -140,6 +153,40 @@ These thresholds were locked before the first Phase 3 production behavior edit. 
 | Locked Phase 3 corpus | `2026072100..2026072299` | 200/200 hard-valid; repeat hash matched | `DungeonLabReports/dungeon_plan_2026072100_2026072299.json` |
 | Phase 3 visual review | six established fixed seeds | 6/6 rendered; `REJECTED 0`; readability improved | `DungeonLabReports/visual_sentinels/manifest.json` |
 
+## Phase 4 acceptance budget — locked before behavior changes
+
+The deterministic Phase 4 corpus remains the 200 inclusive seeds `2026072100..2026072299` with the active spacious profile. The pre-change reference is the final Phase 3 result above: 200/200 accepted and hard-valid, attempts min/p50/p95/max/mean `1/1/1/2/1.005`, and repeat-identical hash `80b79cbebe991aa7bd0b65cf28486217655e8bbc63f679e6c486f396a1930229`.
+
+Phase 4 passes only if all of these predeclared gates hold:
+
+- at least 190/200 seeds are accepted and post-plan hard-valid; no seed uses more than two layout attempts and p95 layout attempts remain at most one;
+- every Phase 3 route, transition, landing, headroom, port-graph, final-vista, renderer-input, renderer, abyss, and collision gate remains unchanged and passing;
+- every accepted route contains exactly one `episode_throne_twin_stairs_01` slot at the existing `vista-target` landmark beat, and the slot resolves to either one complete episode or one stable pre-render rejection—never a partial placement;
+- every resolved episode has one consumed focal axis, one protected backed dais/focal zone, two non-empty symmetric side-gallery cell sets, exactly two coupled rise-1 stair transitions, and two explicit non-empty lower-landing plus upper-landing sets;
+- the two main-route connections touching the landmark terminate at the episode's declared typed threshold cells at the declared level; neither uses the room center as a repair endpoint, moves a port, or opens an undeclared episode boundary;
+- the protected focal zone, gallery cells, stair footprints, and landing cells remain free of generic dais, promontory, bridge, stair, and dressing placement; the focal showpiece is selected only from the contract's explicit stable variation set;
+- isolated diagnostics prove every allowed focal variation and orientation using canonical cell/transition data; full-dungeon diagnostics prove episode atomicity, port binding, symmetry, protection, render success, and enabled non-trigger collision;
+- two independent corpus sweeps produce identical per-seed intent/layout/tier/episode hashes and the same aggregate result hash;
+- all six established visual sentinels render with `REJECTED 0`, and all six visibly pass focal-axis, paired-stair/gallery, declared-threshold, and uncluttered-protected-zone review against the equivalent Phase 3 landmark rooms.
+
+These thresholds were locked after the required read-only producer/consumer inventory and before the first Phase 4 production behavior edit. Missing one requires revising placement, reservation, or canonical-plan consumption—not editing this budget after seeing results.
+
+## Phase 4 validation evidence
+
+- Focused Phase 4 throne-hall suite: 7/7 passed in 2.522 seconds. The Phase 0, Phase 1, and Phase 3 fixtures also passed 6/6 each.
+- Locked corpus `2026072100..2026072299`: 200/200 accepted and post-plan hard-valid; route requirements 200/200; final vistas 200/200; atomic throne-hall episodes 200/200.
+- Attempts min/p50/p95/max/mean were `1/1/1/2/1.005`; histogram `1:199, 2:1`. Pre-acceptance retry codes were `STAIR_PLACEMENT:32`, `PORT_GRAPH:12`, and `CELL_LEVEL_CONFLICT:1`; there were no failed seeds or post-plan validation failures.
+- Two independent 200-seed sweeps produced the same result hash: `40cb04c8d8334bbaa8ace02bbb06a31551def30dbe914eae66178f40a602a08e`. Both the preserved Phase 3 budget and the locked Phase 4 budget passed.
+- The isolated diagnostic passed all eight orientation/design combinations and reported all 17 schema field groups consumed. Full-dungeon tests proved atomicity, exact typed-port connection, coupled stairs/landings, symmetry, protected zones, real rendering, and enabled non-trigger collision.
+- All six fixed sentinels rendered through the real graphics path with `REJECTED 0`. Direct comparison with their preserved Phase 3 images shows a materially stronger single focal room in every representative, weak, and edge seed: the backed dais, paired gallery stairs, transverse thresholds, and uncluttered protected zone read as a coupled composition rather than independent late rolls.
+- Full EditMode suite compiled and ran 337 tests: 316 passed, 21 failed. No dungeon test failed. The failures are the same unrelated baseline: ten `PredictedMeleeContactCueTests`, eight `RemotePresentationBufferTests`, and one each in `ProjectileVfxPoolingTests`, `SpellCueCatalogWriterTests`, and `UiInputContractTests`.
+- Schema producer/consumer/test and duplicate-system audits found no unused speculative surface. `git diff --check` passed, the deletion ledger is empty, and the Phase 4 go/no-go review approves generalizing only the proven contract in Phase 5.
+
+| Purpose | Seed or range | Result | Report path |
+| --- | ---: | --- | --- |
+| Locked Phase 4 corpus | `2026072100..2026072299` | 200/200 hard-valid and atomic; repeat hash matched | `DungeonLabReports/dungeon_plan_2026072100_2026072299.json` |
+| Phase 4 visual review | six established fixed seeds | 6/6 rendered; `REJECTED 0`; throne episode visibly stronger | `DungeonLabReports/visual_sentinels/manifest.json` |
+
 ## Exact Phase 4 handoff
 
 Phase 4 is one throne-hall episode used as a schema probe. It is not permission to build the general recipe platform. Perform these steps in order:
@@ -155,6 +202,21 @@ Phase 4 is one throne-hall episode used as a schema probe. It is not permission 
 
 Phase 4 exits only when the entire episode places or rejects atomically, generic generation connects through declared ports without repair, isolated and full-dungeon tests pass, the episode is visibly stronger than independent late rolls, unused schema surface is deleted, and the go/no-go review approves generalization.
 
+## Exact Phase 5 handoff
+
+Phase 5 hardens only the recipe contract demonstrated by the working throne-hall probe. Perform these steps in order:
+
+1. Read `PROJECT_INVARIANTS.md`, this file, `COHERENT_FLOORPLAN_PLAN.md`, `RECIPE_AUTHORING_WORKFLOW.md`, and `stair_forge_design.md`. Inventory the 17 consumed Phase 4 field groups, their producers/consumers/tests, the canonical route/tier seam, existing validation services, and the temporary throne-specific boundary before editing.
+2. Preserve the Phase 4 corpus, all Phase 3/4 hard gates, stable reason codes, repeat hashes, and six-sentinel comparison. Lock any Phase 5 contrast-recipe and authoring-workflow review thresholds before behavior changes.
+3. Separate reusable recipe semantics from throne-specific placement facts. Generalize only fields with a current production consumer; do not copy the throne episode into a nominally generic DTO, add an unused extension point, or create a parallel canonical plan.
+4. Introduce the smallest versioned recipe/motif asset contract and non-mutating schema/structure/variation/neighbor/full-dungeon validators needed by the proven episode. Validation is a computed result, not a stored lifecycle state.
+5. Add one deliberately different contrast recipe, preferably a stair tower or flexible vestibule, and force both recipes through the same contract, placement seam, stair/landing/headroom rules, canonical plans, renderer, abyss, dressing, and collision consumers. No schema field may be named for either recipe.
+6. Add `Draft`, `Reviewed`, and `Deprecated` lifecycle behavior plus a catalog that admits only reviewed assets whose validation digest still matches. Editing a reviewed asset must make its review stale without mutating validation state.
+7. Implement only the overlays, deterministic previews, validation output, review action, and preview-gallery support required to complete `RECIPE_AUTHORING_WORKFLOW.md`; do not build speculative editor panes or future recipe kinds.
+8. Add isolated, neighbor, full-dungeon, lifecycle, digest, and workflow tests; run the locked corpus, sentinels, prior fixtures, and full EditMode suite; delete superseded throne-only scaffolding and every unused extension point; close the deletion ledger and stop before Phase 6 topology or content expansion.
+
+Phase 5 exits only when two structurally different recipes share one explicit contract without recipe-specific fields, review stales on change, invalid structure cannot be promoted, the required authoring workflow completes end to end, and no unused editor or schema extension point remains.
+
 ## Known implementation facts and blockers
 
 - Generator code: `Assets/Arena/Editor/Dungeons/RandomDungeon/`.
@@ -163,18 +225,18 @@ Phase 4 exits only when the entire episode places or rejects atomically, generic
 - Gold reference scene: `Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/scenes/demoscene_dungeon_level_1_dungeon.unity`.
 - Baked destination: `Assets/Arena/Content/Scenes/OpenWorld/RandomDungeon.unity`.
 - `ActiveStepFormationPlacementEnabled` remains false, and `step_library_index.json` is absent. Do not enable the parked path by flipping the flag.
-- There is no dungeon blocker for Phase 4. The 21 unrelated full-suite failures remain outside this workstream.
+- There is no dungeon blocker for Phase 5. The 21 unrelated full-suite failures remain outside this workstream.
 
 ## End-of-session handoff
 
 ```text
-Milestone/phase: Phase 3 complete and verified; Phase 4 ready and not started; Phase 5 not begun.
-Completed this session: explicit route-relative elevation; typed stair/bridge/stairwell intent; pre-fill footprint/landing/vista reservations; existing tier/stair/forge consumption; final vista and route proof; diagnostics/tests; deletion of displaced late elevation assignment.
-Current validation result: Phase 3 EditMode 6/6; Phase 0 fixture 6/6; Phase 1 fixture 6/6; locked corpus 200/200 hard-valid with p95 1 and max 2; repeat hash 80b79cbe...30229; six sentinels REJECTED 0 with improved vertical readability; full EditMode 309/330 with the same 21 unrelated failures.
+Milestone/phase: Phase 4 complete and verified; Phase 5 ready and not started; Phase 6 not begun.
+Completed this session: one route-bound throne-hall episode; atomic footprint, focal zone, symmetric galleries, coupled stairs/landings, typed thresholds, explicit focal variations, pre-fill protection, direct canonical-plan consumption, schema-usage diagnostics, tests, corpus and visual review.
+Current validation result: Phase 4 EditMode 7/7; Phase 0/1/3 fixtures 6/6 each; locked corpus 200/200 hard-valid and atomic with p95 1 and max 2; repeat hash 40cb04c8...a08e; six sentinels REJECTED 0 and visibly stronger than Phase 3; full EditMode 316/337 with the same 21 unrelated failures.
 Last known-good seed and report: 2026072140; DungeonLabReports/dungeon_plan_2026072100_2026072299.json and DungeonLabReports/visual_sentinels/manifest.json.
-Last diagnostic fact: all 200 accepted plans realize the 24u route climb, seven required stairs, one bridge, one stairwell, and the final named vista before rendering.
-Deletion-ledger items added/closed: late archetype target-field planner, BFS/depth repair, level-delta/snapping helpers, optional-bridge late policy / all closed; current ledger empty.
-Exact next action: begin only the eight-step Exact Phase 4 handoff above, starting with the required reads and a read-only throne-hall producer/consumer/seam inventory before locking thresholds.
+Last diagnostic fact: all 200 accepted plans retain the Phase 3 route/vista gates and resolve exactly one protected, port-bound, symmetric, twin-stair throne-hall episode; all 17 represented schema field groups have active production consumers.
+Deletion-ledger items added/closed: no speculative Phase 4 schema field or helper survived the producer/consumer audit; current ledger empty.
+Exact next action: begin only the eight-step Exact Phase 5 handoff above, starting with the required reads and a read-only audit of the 17 proven field groups and the throne-specific/general boundary before locking Phase 5 review thresholds.
 Blocker or decision needed: none.
-New chat necessary: no. A new chat is recommended because Phase 3 is a complete verified boundary and this file now contains the exact Phase 4 handoff.
+New chat necessary: no. A new chat is recommended because Phase 4 is a complete verified boundary and this file now contains the exact Phase 5 handoff.
 ```

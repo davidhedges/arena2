@@ -2245,6 +2245,7 @@ namespace DungeonLab.Editor
                     out List<(string gapId, ElevationEdgeModel.SynthesizedStairSetPiece setPiece)> synthesizedStairs,
                     out List<DaisShowpiece> daisShowpieces,
                     out List<Vector2Int> promontoryCells,
+                    out ThroneHallEpisodeResolution throneHallEpisodeResolution,
                     out rejectionReason))
             {
                 return false;
@@ -2311,6 +2312,7 @@ namespace DungeonLab.Editor
                 FormatSynthesizedStairSummary(synthesizedStairs),
                 daisShowpieces,
                 promontoryCells,
+                throneHallEpisodeResolution,
                 routeRequirementResolution);
             acceptedLayout = loopedLayout;
             return true;
@@ -2507,6 +2509,16 @@ namespace DungeonLab.Editor
             {
                 for (int second = first + 1; second < layout.rooms.Count; second++)
                 {
+                    if (routeRequirements?.landmarkEpisode != null &&
+                        (first == routeRequirements.landmarkEpisode.roomIndex ||
+                         second == routeRequirements.landmarkEpisode.roomIndex))
+                    {
+                        // Authored episode boundaries open only at declared
+                        // thresholds; generic loops cannot add a center-routed
+                        // doorway to the landmark room.
+                        continue;
+                    }
+
                     if (connectedPairs.Contains(RoomPairKey(first, second)))
                     {
                         continue;
@@ -2815,6 +2827,7 @@ namespace DungeonLab.Editor
             out List<(string gapId, ElevationEdgeModel.SynthesizedStairSetPiece setPiece)> synthesizedStairs,
             out List<DaisShowpiece> daisShowpieces,
             out List<Vector2Int> promontoryCells,
+            out ThroneHallEpisodeResolution throneHallEpisodeResolution,
             out string rejectionReason)
         {
             cellLevels = new Dictionary<Vector2Int, int>();
@@ -2824,6 +2837,7 @@ namespace DungeonLab.Editor
             synthesizedStairs = new List<(string gapId, ElevationEdgeModel.SynthesizedStairSetPiece setPiece)>();
             daisShowpieces = new List<DaisShowpiece>();
             promontoryCells = new List<Vector2Int>();
+            throneHallEpisodeResolution = default;
             rejectionReason = string.Empty;
 
             for (int roomIndex = 0; roomIndex < layout.rooms.Count; roomIndex++)
@@ -2840,8 +2854,10 @@ namespace DungeonLab.Editor
             var transitionKeys = new HashSet<string>();
             var stairCandidateCounts = new SortedDictionary<string, int>(StringComparer.Ordinal);
             var plannedStairLedger = new StairPlacementLedger();
+            var protectedStructuralCells = new HashSet<Vector2Int>();
             if (routeRequirements?.reservedVistaCells != null)
             {
+                protectedStructuralCells.UnionWith(routeRequirements.reservedVistaCells);
                 // Treat the sight volume as protected structural space before any
                 // stair/bridge/stairwell candidate is chosen. The ledger already
                 // owns footprint/landing conflict rules, so this adds no parallel
@@ -2877,6 +2893,24 @@ namespace DungeonLab.Editor
                 doorwayCells.Add(doorway.secondCell);
             }
 
+            string seamStairPrefabPath = ResolveSeamStairPrefabPath();
+            if (!TryRealizeThroneHallEpisode(
+                    routeRequirements?.landmarkEpisode,
+                    layout.rooms,
+                    cellLevels,
+                    transitions,
+                    transitionKeys,
+                    plannedStairLedger,
+                    seamStairPrefabPath,
+                    daisShowpieces,
+                    out int throneHallBaseLevel,
+                    out rejectionReason))
+            {
+                return false;
+            }
+
+            protectedStructuralCells.UnionWith(routeRequirements.landmarkEpisode.roomCells);
+
             // Seam transitions first (deterministic room order): every adjacent cell
             // pair across a zone seam carries a rise-1 step strip, so the 1u delta is
             // never freely walkable (design decision 3). The strip's geometry sits in
@@ -2884,7 +2918,6 @@ namespace DungeonLab.Editor
             // other landings but never a footprint, which keeps contract stair landings
             // (and footprints) off the steps. The raised cell is clean floor and stays
             // a shareable landing.
-            string seamStairPrefabPath = ResolveSeamStairPrefabPath();
             foreach (RoomZonePlan zonePlan in layout.roomZones)
             {
                 foreach ((Vector2Int lowerCell, Vector2Int raisedCell) in zonePlan.SeamCellPairs())
@@ -3298,7 +3331,7 @@ namespace DungeonLab.Editor
                 plannedStairLedger,
                 spanDeckLevels,
                 synthesizedStairs,
-                routeRequirements?.reservedVistaCells);
+                protectedStructuralCells);
 
             FillUnassignedFloorCells(layout.floorCells, cellLevels, externalSpanGapCells);
             if (!TryValidateSpanHeadroom(cellLevels, spanDeckLevels, out rejectionReason))
@@ -3341,8 +3374,22 @@ namespace DungeonLab.Editor
                 dungeonSeed,
                 random,
                 promontoryCells,
-                routeRequirements?.reservedVistaCells,
+                protectedStructuralCells,
                 CurrentGenerationSettings);
+
+            if (!TryValidateResolvedThroneHallEpisode(
+                    routeRequirements.landmarkEpisode,
+                    layout,
+                    cellLevels,
+                    transitions,
+                    daisShowpieces,
+                    promontoryCells,
+                    throneHallBaseLevel,
+                    out throneHallEpisodeResolution,
+                    out rejectionReason))
+            {
+                return false;
+            }
 
             stairCandidateSummary = FormatStairCandidateHistogram(stairCandidateCounts);
 
@@ -3667,6 +3714,11 @@ namespace DungeonLab.Editor
                 var candidates = new List<(Vector2Int start, Vector2Int direction, int level)>();
                 foreach (Vector2Int cell in layout.rooms[roomIndex].CellsRowMajor())
                 {
+                    if (protectedCells?.Contains(cell) == true)
+                    {
+                        continue;
+                    }
+
                     if (!cellLevels.TryGetValue(cell, out int level))
                     {
                         continue;
@@ -12418,6 +12470,7 @@ namespace DungeonLab.Editor
             // Decision J: promontory pier cells (jut into the void) — the render
             // places dense support columns under these down to the abyss base.
             public readonly List<Vector2Int> promontoryCells;
+            public readonly ThroneHallEpisodeResolution throneHallEpisodeResolution;
             public readonly RouteRequirementResolution routeRequirementResolution;
 
             public TieredLevelPlan(
@@ -12440,6 +12493,7 @@ namespace DungeonLab.Editor
                 string synthesizedStairSummary,
                 List<DaisShowpiece> daisShowpieces,
                 List<Vector2Int> promontoryCells,
+                ThroneHallEpisodeResolution throneHallEpisodeResolution,
                 RouteRequirementResolution routeRequirementResolution)
             {
                 this.archetypeName = archetypeName;
@@ -12461,6 +12515,7 @@ namespace DungeonLab.Editor
                 this.synthesizedStairSummary = synthesizedStairSummary;
                 this.daisShowpieces = daisShowpieces;
                 this.promontoryCells = promontoryCells;
+                this.throneHallEpisodeResolution = throneHallEpisodeResolution;
                 this.routeRequirementResolution = routeRequirementResolution;
             }
         }
