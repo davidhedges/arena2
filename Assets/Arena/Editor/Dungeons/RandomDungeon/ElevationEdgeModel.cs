@@ -11,7 +11,6 @@ namespace DungeonLab.Editor
     public static class ElevationEdgeModel
     {
         private const string PackageInventoryPath = "Assets/Arena/Content/Settings/Dungeons/RandomDungeon/package_inventory.json";
-        private const string StepLibraryIndexPath = "Assets/Arena/Content/Settings/Dungeons/RandomDungeon/step_library_index.json";
         private const string StairProofContractsPath = "Assets/Arena/Content/Settings/Dungeons/RandomDungeon/stair_proof_contracts.json";
         // Forge output (design step 6): same contract shape as the hand-authored
         // file, separate file so the reviewed hand-authored record is never touched.
@@ -2824,7 +2823,7 @@ namespace DungeonLab.Editor
 
         private static string LoadPrimaryStairPrefabPath()
         {
-            return StepFormationModeTable.Load().PrimaryStairPath;
+            return StairConnectorSettings.Load().PrimaryStairPath;
         }
 
         private static ConnectionPointPlacement CalculateConnectionPointPlacement(

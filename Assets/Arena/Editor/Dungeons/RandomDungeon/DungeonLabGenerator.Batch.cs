@@ -381,11 +381,6 @@ namespace DungeonLab.Editor
 
         // Reflection entry point for the edit-mode characterization tests. The
         // returned JSON is a diagnostic projection, never a generation input.
-        private static string BuildPhase0SeedReportJson(int seed)
-        {
-            return BuildPhase0SeedReport(seed).ToString(Formatting.None);
-        }
-
         // Flat standard-library-only projection for the separate test assembly,
         // which intentionally has no compile-time dependency on Plastic's JSON DLL.
         private static string BuildCharacterizationSnapshot(int seed)
@@ -4432,11 +4427,10 @@ namespace DungeonLab.Editor
             string[] paths =
             {
                 GenerationProfilePath,
-                PrefabContractsPath,
                 PackageInventoryPath,
                 StairProofContractsPath,
                 ForgedStairContractsPath,
-                "Assets/Arena/Content/Settings/Dungeons/RandomDungeon/step_formation_modes.json",
+                "Assets/Arena/Content/Settings/Dungeons/RandomDungeon/stair_connector_settings.json",
                 "Assets/Arena/Content/Settings/Dungeons/RandomDungeon/step_piece_library.json"
             };
             var digestInput = new StringBuilder();

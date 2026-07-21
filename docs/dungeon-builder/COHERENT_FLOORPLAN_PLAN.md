@@ -1,6 +1,6 @@
 # Coherent floorplan generation plan
 
-Status: Phases 0-6 complete and verified; the Phase 7 automated sweep and collision-export gates pass, the blinded curated gallery is generated, and human review remains
+Status: Phases 0-6 complete and verified; Phase 7 engineering is complete and its automated gates pass, but the user skipped curated human review, so the complete Phase 7 exit gate is not passed
 
 Last updated: 2026-07-22
 
@@ -466,7 +466,7 @@ The current plain wall gap remains a valid doorway expression. Door leaves, arch
 
 Goal: demonstrate that the single generator is dependable enough for ordinary use.
 
-Entry status: the reliability, attempt, performance, environment, gallery-selection, reviewer, and passing thresholds were approved and locked on 2026-07-21 before implementing measurement support or judging the larger sweep. The numeric budget is recorded in `CURRENT_STATUS.md`. The first valid sweeps exposed a maximum-time failure caused by processional seed `2026072486` repeating pure stair-option preparation and placement-geometry work across 32 failed tier assignments. The bounded production revision caches only those invariant computations and preserves placement order, random streams, retry ceilings, rejections, accepted plans, and canonical hashes. A locked diagnostic and two replacement 2,000-seed sweeps pass reliability, hard validity, attempts, every planning-performance limit, and exact determinism. The locked 30-floor corpus also passes actual collision export for every rendered source, exact server/client payload copies, artifact restoration, and the plan-through-export performance limits. Its blinded 90-image review gallery and empty scoring materials are generated in the fixed randomized order. The automated sweep, collision-export, and gallery-generation items pass; independent human review has not started.
+Entry status: the reliability, attempt, performance, environment, gallery-selection, reviewer, and passing thresholds were approved and locked on 2026-07-21 before implementing measurement support or judging the larger sweep. The numeric budget is recorded in `CURRENT_STATUS.md`. The first valid sweeps exposed a maximum-time failure caused by processional seed `2026072486` repeating pure stair-option preparation and placement-geometry work across 32 failed tier assignments. The bounded production revision caches only those invariant computations and preserves placement order, random streams, retry ceilings, rejections, accepted plans, and canonical hashes. A locked diagnostic and two replacement 2,000-seed sweeps pass reliability, hard validity, attempts, every planning-performance limit, and exact determinism. The locked 30-floor corpus also passes actual collision export for every rendered source, exact server/client payload copies, artifact restoration, and the plan-through-export performance limits. Its blinded 90-image review gallery and empty scoring materials are generated in the fixed randomized order. The final production-path, schema/failure, settings/asset, and deletion-ledger audit is complete. The user explicitly skipped independent human review on 2026-07-22; therefore the automated engineering work is complete, but the curated-review requirement and complete Phase 7 exit gate are not passed.
 
 Deliverables:
 
@@ -484,6 +484,8 @@ Exit gate:
 - the curated review set passes the coherence rubric below;
 - one production planning, validation, transition, rendering, abyss, and collision path exists;
 - no migration mode, legacy adapter, silent fallback, or scheduled deletion remains.
+
+Closure result: all automated reliability, attempt, performance, determinism, hard-validity, collision-export, single-production-path, explicit-failure, asset-reference, and deletion-ledger requirements pass. Curated human scoring was explicitly skipped by user direction on 2026-07-22. Per the locked rule, that missing gate is recorded as a Phase 7 exit-gate failure; it is not waived, inferred, or reinterpreted as a pass. No engineering plan item or later phase remains authorized.
 
 ## 10. Acceptance rubric
 

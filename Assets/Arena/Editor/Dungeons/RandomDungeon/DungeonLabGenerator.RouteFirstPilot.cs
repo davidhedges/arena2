@@ -468,7 +468,7 @@ namespace DungeonLab.Editor
                 zone.roomIndex == intent.vista.sourceNode ||
                 zone.roomIndex == intent.vista.targetNode ||
                 TryGetRecipeSlot(intent.recipeSlots, zone.roomIndex, out _));
-            StepFormationModeTable connectorTable = LoadAuthoredStairConnectorTableForGeneration();
+            StairConnectorSettings connectorTable = LoadAuthoredStairConnectorTableForGeneration();
             int connectorCandidateCount = connectorTable != null
                 ? CountConfiguredStairConnectorPrefabs(connectorTable)
                 : 0;

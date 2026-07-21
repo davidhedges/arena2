@@ -1,0 +1,8 @@
+{
+  "_doc": "Active authored stair-connector settings. Late room-scanning step formations and their reference-only records were retired by the Phase 7 deletion ledger.",
+  "stairConnectors": {
+    "directory": "Assets/Arena/Content/Prefabs/Dungeons/FantasticDungeon/Stairs",
+    "primaryStair": "straight_stair_1x",
+    "_primaryStairDoc": "The designated primary straight stair. The canonical planner and renderer validate its current reviewed geometry before use."
+  }
+}
