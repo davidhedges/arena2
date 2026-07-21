@@ -404,7 +404,8 @@ namespace DungeonLab.Editor
             RecipeSlotIntent[] recipeSlots,
             string catalogDigest)
         {
-            var nodes = new[]
+            var composer = new RouteGraphComposer();
+            var mainNodes = new[]
             {
                 new RouteNodeIntent("arrival", "arrival", "arrival", 0, -1, 0),
                 new RouteNodeIntent("threshold", "connector", "compression", 1, -1, 0, DungeonRecipeIds.CompressionConnector),
@@ -414,56 +415,94 @@ namespace DungeonLab.Editor
                 new RouteNodeIntent("ascent", "connector", "ascent", 5, -1, 12),
                 new RouteNodeIntent("approach", "processional-hall", "approach", 6, -1, 16),
                 new RouteNodeIntent("rejoin", "return-hall", "rejoin", 7, -1, 20),
-                new RouteNodeIntent("culmination", "culmination", "culmination", 8, -1, 24),
+                new RouteNodeIntent("culmination", "culmination", "culmination", 8, -1, 24)
+            };
+            string[] mainEdgeIds =
+            {
+                "main-0-1",
+                "main-1-2",
+                "main-2-3",
+                "main-3-4",
+                "main-4-5",
+                "main-5-6",
+                "main-6-7",
+                "main-7-8"
+            };
+            RouteTransitionKind[] mainTransitionKinds =
+            {
+                RouteTransitionKind.LevelCorridor,
+                RouteTransitionKind.Stair,
+                RouteTransitionKind.LevelCorridor,
+                RouteTransitionKind.Stair,
+                RouteTransitionKind.Stair,
+                RouteTransitionKind.Stairwell,
+                RouteTransitionKind.Stair,
+                RouteTransitionKind.Stair
+            };
+            if (!composer.TryAddSpine(
+                    mainNodes,
+                    mainEdgeIds,
+                    mainTransitionKinds,
+                    out int[] mainNodeIndices,
+                    out string compositionError))
+            {
+                throw new InvalidOperationException($"Invalid processional spine definition: {compositionError}");
+            }
+
+            var branchNodes = new[]
+            {
                 new RouteNodeIntent("vista-source", "overlook", "reveal", -1, 0, 12),
                 new RouteNodeIntent("branch-passage", "connector", "branch", -1, 1, 12),
                 new RouteNodeIntent("branch-reward", "optional-room", "reward", -1, 2, 16),
                 new RouteNodeIntent("branch-return", "connector", "return", -1, 3, 20)
             };
-
-            var edges = new List<RouteTraversalIntent>();
-            void AddEdge(string id, int fromNode, int toNode, RouteTransitionKind transitionKind)
+            string[] branchEdgeIds =
             {
-                edges.Add(new RouteTraversalIntent(
-                    id,
-                    fromNode,
-                    toNode,
-                    nodes[toNode].relativeElevationLevels - nodes[fromNode].relativeElevationLevels,
-                    transitionKind));
+                "branch-2-9",
+                "branch-9-10",
+                "branch-10-11",
+                "branch-11-12"
+            };
+            RouteTransitionKind[] branchTransitionKinds =
+            {
+                RouteTransitionKind.Bridge,
+                RouteTransitionKind.LevelCorridor,
+                RouteTransitionKind.Stair,
+                RouteTransitionKind.Stair
+            };
+            if (!composer.TryAddBranch(
+                    mainNodeIndices[Phase1BranchAttachNode],
+                    branchNodes,
+                    branchEdgeIds,
+                    branchTransitionKinds,
+                    out int[] branchNodeIndices,
+                    out compositionError))
+            {
+                throw new InvalidOperationException($"Invalid processional branch definition: {compositionError}");
             }
 
-            for (int node = 0; node < Phase1MainNodeCount - 1; node++)
+            if (!composer.TryRejoin(
+                    branchNodeIndices[branchNodeIndices.Length - 1],
+                    mainNodeIndices[Phase1BranchRejoinNode],
+                    "rejoin-12-7",
+                    RouteTransitionKind.LevelCorridor,
+                    out compositionError))
             {
-                RouteTransitionKind kind = node == 0 || node == 2
-                    ? RouteTransitionKind.LevelCorridor
-                    : node == 5
-                        ? RouteTransitionKind.Stairwell
-                        : RouteTransitionKind.Stair;
-                AddEdge($"main-{node}-{node + 1}", node, node + 1, kind);
+                throw new InvalidOperationException($"Invalid processional rejoin definition: {compositionError}");
             }
 
-            int previous = Phase1BranchAttachNode;
-            for (int branch = 0; branch < Phase1BranchNodeCount; branch++)
+            if (!composer.TryPublish(
+                    out RouteNodeIntent[] nodes,
+                    out RouteTraversalIntent[] edges,
+                    out compositionError))
             {
-                int current = Phase1MainNodeCount + branch;
-                RouteTransitionKind kind = branch == 0
-                    ? RouteTransitionKind.Bridge
-                    : branch == 1
-                        ? RouteTransitionKind.LevelCorridor
-                        : RouteTransitionKind.Stair;
-                AddEdge($"branch-{previous}-{current}", previous, current, kind);
-                previous = current;
+                throw new InvalidOperationException($"Invalid processional graph definition: {compositionError}");
             }
 
-            AddEdge(
-                $"rejoin-{previous}-{Phase1BranchRejoinNode}",
-                previous,
-                Phase1BranchRejoinNode,
-                RouteTransitionKind.LevelCorridor);
             return new RouteIntent(
                 dungeonSeed,
                 nodes,
-                edges.ToArray(),
+                edges,
                 new RouteVistaIntent(
                     "branch-overlook-to-landmark",
                     Phase1VistaSourceNode,

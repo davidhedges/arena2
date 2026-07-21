@@ -482,6 +482,134 @@ namespace DungeonLab.Editor
             return BuildProcessionalRouteIntent(seed, slots, catalog.digest);
         }
 
+        private static string BuildRouteGraphCompositionSnapshot(int seed)
+        {
+            RouteIntent intent = BuildDiagnosticRouteIntent(seed);
+            var nodeIds = new List<string>(intent.nodes.Length);
+            var edgeIds = new List<string>(intent.traversalEdges.Length);
+            var edgeDetails = new List<string>(intent.traversalEdges.Length);
+            foreach (RouteNodeIntent node in intent.nodes)
+            {
+                nodeIds.Add(node.id);
+            }
+
+            foreach (RouteTraversalIntent edge in intent.traversalEdges)
+            {
+                edgeIds.Add(edge.id);
+                edgeDetails.Add(
+                    $"{edge.id}:{intent.nodes[edge.fromNode].id}>{intent.nodes[edge.toNode].id}:" +
+                    $"{edge.transitionKind}:{edge.requiredRiseLevels}");
+            }
+
+            var contract = new RouteGraphComposer();
+            bool spineAdded = contract.TryAddSpine(
+                new[]
+                {
+                    new RouteNodeIntent("test-a", "arrival", "arrival", 0, -1, 0),
+                    new RouteNodeIntent("test-b", "culmination", "culmination", 1, -1, MajorRiseLevels)
+                },
+                new[] { "test-main" },
+                new[] { RouteTransitionKind.Stair },
+                out int[] contractSpine,
+                out _);
+            int nodesAfterSpine = contract.NodeCount;
+            int edgesAfterSpine = contract.EdgeCount;
+            bool duplicateNodeRejected = !contract.TryAddBranch(
+                contractSpine[0],
+                new[] { new RouteNodeIntent("test-b", "connector", "branch", -1, 0, 0) },
+                new[] { "test-duplicate-node" },
+                new[] { RouteTransitionKind.LevelCorridor },
+                out _,
+                out _);
+            bool duplicateEdgeRejected = !contract.TryAddBranch(
+                contractSpine[0],
+                new[] { new RouteNodeIntent("test-c", "connector", "branch", -1, 0, 0) },
+                new[] { "test-main" },
+                new[] { RouteTransitionKind.LevelCorridor },
+                out _,
+                out _);
+            bool missingEndpointRejected = !contract.TryAddBranch(
+                99,
+                new[] { new RouteNodeIntent("test-c", "connector", "branch", -1, 0, 0) },
+                new[] { "test-branch" },
+                new[] { RouteTransitionKind.LevelCorridor },
+                out _,
+                out _);
+            bool failedBranchesWereAtomic = contract.NodeCount == nodesAfterSpine &&
+                contract.EdgeCount == edgesAfterSpine;
+            bool branchAdded = contract.TryAddBranch(
+                contractSpine[0],
+                new[] { new RouteNodeIntent("test-c", "connector", "branch", -1, 0, 0) },
+                new[] { "test-branch" },
+                new[] { RouteTransitionKind.LevelCorridor },
+                out int[] contractBranch,
+                out _);
+            int nodesBeforeInvalidRejoins = contract.NodeCount;
+            int edgesBeforeInvalidRejoins = contract.EdgeCount;
+            bool selfEdgeRejected = !contract.TryRejoin(
+                contractBranch[0],
+                contractBranch[0],
+                "test-self",
+                RouteTransitionKind.LevelCorridor,
+                out _);
+            bool missingRejoinTargetRejected = !contract.TryRejoin(
+                contractBranch[0],
+                99,
+                "test-missing-target",
+                RouteTransitionKind.LevelCorridor,
+                out _);
+            bool failedRejoinsWereAtomic = contract.NodeCount == nodesBeforeInvalidRejoins &&
+                contract.EdgeCount == edgesBeforeInvalidRejoins;
+            bool rejoinAdded = contract.TryRejoin(
+                contractBranch[0],
+                contractSpine[1],
+                "test-rejoin",
+                RouteTransitionKind.Stair,
+                out _);
+            bool secondRejoinRejected = !contract.TryRejoin(
+                contractBranch[0],
+                contractSpine[0],
+                "test-second-rejoin",
+                RouteTransitionKind.LevelCorridor,
+                out _);
+            bool published = contract.TryPublish(
+                out RouteNodeIntent[] contractNodes,
+                out RouteTraversalIntent[] contractEdges,
+                out _);
+            bool publishedGraphHasOneCycle = published &&
+                contractEdges.Length - (contractNodes.Length - 1) == 1;
+            bool publishedGraphIsImmutable = !contract.TryAddBranch(
+                contractSpine[0],
+                new[] { new RouteNodeIntent("test-d", "connector", "branch", -1, 1, 0) },
+                new[] { "test-after-publish" },
+                new[] { RouteTransitionKind.LevelCorridor },
+                out _,
+                out _);
+
+            return string.Join("\n", new[]
+            {
+                $"graph.pattern={intent.patternId}",
+                $"graph.operations=spine,branch,rejoin",
+                $"graph.nodeIds={string.Join("|", nodeIds)}",
+                $"graph.edgeIds={string.Join("|", edgeIds)}",
+                $"graph.edgeDetails={string.Join("|", edgeDetails)}",
+                $"graph.loopEdges={intent.traversalEdges.Length - (intent.nodes.Length - 1)}",
+                $"contract.spineAdded={spineAdded}",
+                $"contract.branchAdded={branchAdded}",
+                $"contract.rejoinAdded={rejoinAdded}",
+                $"contract.duplicateNodeRejected={duplicateNodeRejected}",
+                $"contract.duplicateEdgeRejected={duplicateEdgeRejected}",
+                $"contract.missingEndpointRejected={missingEndpointRejected}",
+                $"contract.selfEdgeRejected={selfEdgeRejected}",
+                $"contract.missingRejoinTargetRejected={missingRejoinTargetRejected}",
+                $"contract.secondRejoinRejected={secondRejoinRejected}",
+                $"contract.failedBranchesWereAtomic={failedBranchesWereAtomic}",
+                $"contract.failedRejoinsWereAtomic={failedRejoinsWereAtomic}",
+                $"contract.publishedGraphHasOneCycle={publishedGraphHasOneCycle}",
+                $"contract.publishedGraphIsImmutable={publishedGraphIsImmutable}"
+            });
+        }
+
         private static string BuildPhase5RecipeContractSnapshot(int seed)
         {
             RouteIntent intent = BuildDiagnosticRouteIntent(seed);

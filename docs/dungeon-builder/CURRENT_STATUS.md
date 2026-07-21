@@ -4,7 +4,7 @@ Start here when returning to dungeon work. Keep this page short and update it at
 
 Last updated: 2026-07-21
 
-Active milestone: Phase 5 recipe-contract hardening complete and verified; Phase 6 ready and not started
+Active milestone: Phase 5 complete and verified; Phase 6a graph-composition foundation implemented and compile-verified, locked Unity/runtime gates pending
 
 Production mode: the processional-spine route-first planner is the sole reachable layout builder
 
@@ -253,6 +253,67 @@ Phase 5 hardens only the recipe contract demonstrated by the working throne-hall
 
 Phase 5 exits only when two structurally different recipes share one explicit contract without recipe-specific fields, review stales on change, invalid structure cannot be promoted, the required authoring workflow completes end to end, and no unused editor or schema extension point remains.
 
+## Phase 6 entry audit — shared graph operations
+
+The first Phase 6 increment is deliberately behavior-preserving. It extracts only the graph operations already proven by the processional-spine production slice; it does not add topology selection or another layout.
+
+| Operation | Current production evidence | Phase 6a treatment |
+| --- | --- | --- |
+| Spine | `BuildProcessionalRouteIntent` declares nine ordered main-route nodes and eight typed edges. | Compose the same ordered nodes/edges through one narrow internal spine operation. |
+| Branch | The same method attaches four ordered branch nodes at `choice` and declares four typed branch edges. | Compose the same branch through one narrow internal branch operation. |
+| Rejoin | The final `branch-return -> rejoin` edge closes the purposeful branch. | Add the same typed rejoin edge through one narrow internal rejoin operation. |
+| Loop | The one macro loop is the graph consequence of branch plus rejoin. Generic `AddLevelSafeLoopConnections` is a later canonical-plan enrichment pass, not a macro-planning operation. | Report and validate the resulting cycle; do not create a redundant loop combinator or move the late loop pass. |
+| Hub, cross-link, long return | No current route-intent producer or production consumer exists. | Do not add them in Phase 6a. Introduce each only with the first topology that consumes it. |
+
+The current processional boundary is intentionally still specialized outside graph construction:
+
+- `RouteIntent` is the sole pre-coordinate graph and `BuildProcessionalRouteIntent` is its only production constructor. `TryBuildAcceptedPlan` directly reaches only `TryBuildProcessionalSpineDungeonLayout`.
+- `TryEmbedProcessionalRoute` owns the fixed coarse lattice, bounded branch search, rotation/mirroring, room-envelope spacing, and processional node-index mapping. These are spatial-solver facts, not graph combinators, and remain unchanged in Phase 6a.
+- `TryValidateProcessionalRouteIntent`, `BuildPhase1RouteIntentProjection`, `BuildRouteIntentOnlySnapshot`, `TryValidateAcceptedRouteRequirements`, recipe slot/port binding, vista reservation, room inflation, and planned-overlook appendages currently depend on exact processional counts, indices, IDs, degrees, or edge order. Phase 6a must preserve those facts and may not pretend they are generic.
+- The two reviewed recipes remain bound outside the reusable assets to `threshold` and `vista-target`; their exact typed route edges, orientations, atomic placement, canonical-plan consumers, and catalog digest remain unchanged.
+- `TransformCoarseCell`, stable route random streams, corridor compilation, `RouteTierRequirements`, tier planning, `DungeonLayout`, `TieredLevelPlan`, renderer, abyss support, dressing protection, and collision export are reused unchanged.
+- There is no serialized macro-topology definition, profile weight, selector, hub/cross-link/long-return operation, generic embedding framework, second validator, renderer branch, or collision branch. Phase 6a adds none.
+
+## Phase 6a acceptance budget — locked before production edits
+
+The first increment is `processional_graph_composition_01`: replace only the hand-written processional node/edge assembly with a minimal internal composition builder supporting the already-used spine, branch, and rejoin operations. It produces the existing `RouteIntent` arrays directly. It is not a serialized definition, parallel graph DTO, public framework, topology selector, or new generation mode.
+
+The deterministic corpus remains the 200 inclusive seeds `2026072100..2026072299` with the active spacious profile. The locked pre-change reference is Phase 5: 200/200 accepted and hard-valid, attempts min/p50/p95/max/mean `1/1/1/2/1.005`, retry codes `STAIR_PLACEMENT:32` and `PORT_GRAPH:11`, aggregate result hash `765ead1a87f95732fb66dfa617b33e91d1ea921cb91f0287226309d17af46155`, independent ordered per-seed multi-hash digest `1d35718f9d9b0d31f752a3b630f64d5f2ee134cbc651a2e79759a3c0a1b01f01`, and six sentinels with `REJECTED 0`.
+
+Phase 6a passes only if all of these predeclared gates hold:
+
+- the processional graph projection is exactly unchanged: pattern ID, planner/spatial random versions, node and edge order, stable IDs, roles, beats, main/branch order, relative elevations, transition kinds/rises, bottom/top nodes, recipe slots, vista endpoints, branch attach/rejoin nodes, degrees, and one-cycle count;
+- focused operation tests prove that spine preserves order and connects consecutive nodes, branch attaches at its declared existing node, rejoin closes the declared branch once, and duplicate IDs, missing endpoints, self-edges, or a second rejoin are rejected without mutating a published graph;
+- `BuildProcessionalRouteIntent` remains the sole production constructor and composes directly into the existing ephemeral `RouteIntent`; no placed/compiled graph DTO, adapter, serialized topology asset, profile selector, fallback, or pattern-specific downstream path is introduced;
+- no unused hub, cross-link, long-return, topology-weight, recipe, vista, renderer, collision, lock, one-way edge, or runtime-generation extension point is added;
+- all 33 Phase 0/1/3/4/5 focused fixtures remain passing, and any Phase 6a fixture exercises production composition rather than a diagnostic-only copy;
+- both independent 200-seed sweeps are byte-identical to the locked Phase 5 per-seed intent, layout, tier, recipe, catalog, and canonical hashes; the aggregate result hash must remain exactly `765ead1a87f95732fb66dfa617b33e91d1ea921cb91f0287226309d17af46155` and the independent ordered digest exactly `1d35718f9d9b0d31f752a3b630f64d5f2ee134cbc651a2e79759a3c0a1b01f01`;
+- attempt distribution and retry codes remain exactly the Phase 5 reference, every route/vista/recipe/hard validator remains passing, and all six real-renderer sentinels retain `REJECTED 0`; any drift is an implementation failure, not permission to advance a version or rewrite the budget;
+- the full EditMode suite has no dungeon failure and no regression beyond the same 21 unrelated baseline failures; producer/consumer/test and symbol audits find one reachable graph-construction path and no unused combinator or compatibility scaffolding;
+- the manual `AddEdge`/node-edge assembly displaced by the composition builder is deleted in the same increment, the Phase 6a deletion ledger is empty, and work stops before an atrium ring, twin-wing keep, topology selector, new recipe, generalized vista scoring, or promontory change.
+
+Phase 6a is an identity-preserving extraction, so `dungeon-plan-v4`, `processional-spine-v4`, and `processional-spine-v1` remain the report, planner, and spatial-random versions. Advancing a version would hide an accidental output change and is forbidden in this increment.
+
+## Exact Phase 6a handoff
+
+1. Add the smallest internal graph composition builder beside the existing route intent. It may expose only the spine, branch, and rejoin operations consumed by `BuildProcessionalRouteIntent` in the same change.
+2. Re-express the existing 13-node/13-edge processional graph through those operations without changing construction order, IDs, indices, edge order, recipes, elevation, vista, or random streams.
+3. Keep processional validation and embedding specialized. Extract a shared validation helper only where the new builder and the existing production validator both consume it immediately; do not generalize index-bound spatial behavior ahead of a second topology.
+4. Add focused deterministic composition tests and retain all prior fixtures. Prove the old manual assembly is gone and that no unconsumed operation or parallel graph family exists.
+5. Run the locked corpus twice, compare every per-seed hash and both aggregate digests to Phase 5, run all six sentinels and the full EditMode suite, record evidence, close the deletion ledger, and stop.
+
+Phase 6a exits only on exact identity. The next topology increment is not selected or budget-locked by this slice.
+
+## Phase 6a implementation status
+
+- `RouteGraphComposer` is a focused internal producer with only `TryAddSpine`, `TryAddBranch`, `TryRejoin`, and atomic `TryPublish`. It publishes the existing `RouteNodeIntent[]` and `RouteTraversalIntent[]` directly; it is not another route model.
+- `BuildProcessionalRouteIntent` now composes the exact existing nine-node spine, four-node branch, and rejoin in the original node/edge order. The former local `AddEdge` helper and manual edge loops are gone. Planner/report/random versions are unchanged.
+- Six focused EditMode tests assert the exact production node/edge/type/rise projection, the earned operation surface, one resulting cycle, invalid-ID/endpoint/self-edge/second-rejoin rejection, failed-operation atomicity, post-publication immutability, and fixed-seed determinism.
+- Compile-only verification passed for `Assembly-CSharp-Editor.csproj` and `Arena.EditModeTests.csproj` with 0 errors and 0 warnings after temporarily refreshing their generated compile item lists; those generated project-file edits were reverted.
+- Symbol and deletion audits find no hub, cross-link, long-return, atrium, twin-wing, topology-weight, selector, fallback, or local `AddEdge` production symbol in this slice. `git diff --check` passes.
+- The pinned Unity `6000.4.0f1` focused-test run could not reach compilation/test execution in batch mode. The sandboxed run first hit the expected local package-manager socket restriction; the approved unsandboxed run then failed before tests because the installed Unity Licensing Client reported unsupported protocol `1.18.1`, disconnected, and never wrote a test-results file. This is an environment blocker, not a test failure.
+- Because Unity did not execute the tests, the focused fixtures, two locked corpus sweeps, independent digest, six sentinels, and full EditMode suite remain pending. Phase 6a has not exited and no Phase 6b work is authorized.
+
 ## Known implementation facts and blockers
 
 - Generator code: `Assets/Arena/Editor/Dungeons/RandomDungeon/`.
@@ -261,18 +322,18 @@ Phase 5 exits only when two structurally different recipes share one explicit co
 - Gold reference scene: `Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/scenes/demoscene_dungeon_level_1_dungeon.unity`.
 - Baked destination: `Assets/Arena/Content/Scenes/OpenWorld/RandomDungeon.unity`.
 - `ActiveStepFormationPlacementEnabled` remains false, and `step_library_index.json` is absent. Do not enable the parked path by flipping the flag.
-- There is no dungeon blocker for Phase 6. The 21 unrelated full-suite failures remain outside this workstream.
+- There is no dungeon design/code blocker for Phase 6a. Batch validation is currently blocked by the local Unity Licensing Client protocol mismatch described above; the 21 unrelated full-suite failures remain outside this workstream.
 
 ## End-of-session handoff
 
 ```text
-Milestone/phase: Phase 5 complete and verified; Phase 6 ready and not started.
-Completed this session: one versioned shared recipe/motif contract; reviewed catalog; two structurally different recipes on one atomic placement seam; five non-mutating validation layers; lifecycle/digest admission; deterministic authoring overlays/galleries/review; generalized diagnostics; deletion of the throne-only production boundary.
-Current validation result: Phase 0/1/3/4/5 fixtures 33/33; locked corpus 200/200 hard-valid with two complete recipe resolutions, p95 1 and max 2; repeat hash 765ead1a...46155 and per-seed multi-hash digest 1d35718f...01f01; six sentinels REJECTED 0; full EditMode 324/345 with the same 21 unrelated failures.
+Milestone/phase: Phase 5 complete and verified; Phase 6a graph-composition foundation implemented and compile-verified; locked Unity/runtime validation pending.
+Completed this session: read the full required handoff set; audited the active route-intent and canonical consumers; locked `processional_graph_composition_01` before production edits; added one internal spine/branch/rejoin composer; re-expressed the exact processional graph; added six focused tests; deleted the displaced local edge assembly; completed compile, symbol, and diff checks.
+Current validation result: editor and test assemblies compile with 0 errors/0 warnings; `git diff --check` passes. The retained last known runtime evidence is Phase 5: focused fixtures 33/33; locked corpus 200/200 hard-valid with p95 1 and max 2; repeat hash 765ead1a...46155 and per-seed multi-hash digest 1d35718f...01f01; six sentinels REJECTED 0; full EditMode 324/345 with the same 21 unrelated failures. No Phase 6a runtime result is claimed.
 Last known-good seed and report: 2026072140; DungeonLabReports/dungeon_plan_2026072100_2026072299.json and DungeonLabReports/visual_sentinels/manifest.json.
-Last diagnostic fact: all 200 accepted plans retain the Phase 3/4 route, vista, and focal gates and resolve exactly one complete throne episode plus one complete flexible vestibule from reviewed catalog digest e9150ada...669ec through the same canonical consumers.
-Deletion-ledger items added/closed: the temporary throne-only DTO/file and compatibility diagnostics were deleted; no unused Phase 5 schema field, validator branch, editor control, recipe kind, or helper survived; current ledger empty.
-Exact next action: stop before Phase 6. In a new authorized session, inventory the shared graph operations and lock one Phase 6 topology/content increment and its acceptance budget before changing behavior.
-Blocker or decision needed: none.
-New chat necessary: no. A new chat is recommended because Phase 5 is a complete verified boundary.
+Last diagnostic fact: production construction exposes only spine, branch, rejoin, and publish; it produces the same explicit 13 node IDs and 13 typed edge IDs in the original order. Processional validation, embedding, recipe/vista bindings, diagnostics, and accepted-route validation remain specialized.
+Deletion-ledger items added/closed: the local `AddEdge` helper and manual main/branch edge loops were deleted; no compatibility layer, unused operation, or temporary production symbol was added. Phase 6a code ledger is empty, but the phase remains open until validation.
+Exact next action: with a working Unity 6000.4 license channel, run `DungeonLabPhase6GraphCompositionTests`, then all Phase 0/1/3/4/5/6a focused fixtures, the locked 200-seed corpus twice with exact hash/digest comparison, six sentinels, and the full EditMode suite. Record results and stop; do not begin another topology.
+Blocker or decision needed: the installed Unity Licensing Client rejects the pinned editor's handshake as unsupported protocol `1.18.1`, so batch EditMode/corpus/render validation cannot currently start.
+New chat necessary: no.
 ```
