@@ -4,7 +4,7 @@ Start here when returning to dungeon work. Keep this page short and update it at
 
 Last updated: 2026-07-21
 
-Active milestone: Phase 6f third reviewed corner-return recipe complete and verified; next Phase 6 increment not yet selected
+Active milestone: Phase 6 complete and verified at Phase 6f; Phase 7 production hardening is next
 
 Production mode: one route-first layout builder deterministically selects processional-spine, atrium-ring, or twin-wing-keep, resolves exactly three reviewed recipes plus any target-bearing named-vista promontory, and feeds the shared canonical pipeline
 
@@ -512,13 +512,13 @@ These gates are locked before the recipe asset, catalog, route-slot, placement, 
 ## End-of-session handoff
 
 ```text
-Milestone/phase: Phase 6f third reviewed corner-return connector complete and verified; every production topology now resolves exactly three recipes through the shared contract and canonical consumers.
-Completed this session: audited the remaining Phase 6 needs; selected and budget-locked `connector_corner_return_01`; authored, validated, gallery-tested, reviewed, and cataloged the exact raised-return contract; bound the common node-12 producer in all three route intents; generalized `RouteForward` orientation to the named exit edge; advanced the report/planner envelopes; added executable corpus evidence and eight focused tests; and completed every locked preservation, corpus, determinism, renderer, regression, symbol, and deletion gate.
-Current validation result: Phase 6f 8/8, updated Phase 5 workflow 8/8, and all Dungeon Lab 71/71; two final sweeps each 200/200 accepted and hard-valid on attempt 1 with exact 100/50/50 selection, 600 recipe resolutions, 200 corner returns, 114 named promontories, result hash 98f56a4e...e02dba, seed-array digest 1ff32dd0...fcaba4, and ordered six-hash digest 0852a30c...db122f repeated exactly; all six sentinels report REJECTED 0; full EditMode 362/383 with the same 21 unrelated baseline failures and no dungeon failure.
+Milestone/phase: Phase 6 is closed at the verified Phase 6f corner-return milestone; Phase 7 production hardening is the only next plan item.
+Completed this session: reverted the unapproved Phase 6g content expansion with a non-destructive commit; removed its ignored gallery/report evidence; restored the exact Phase 6f tracked assets and code; regenerated the canonical Phase 6f corpus report and sentinels; added repository-level scope controls; and corrected the plan/handoff so assistant-written status text cannot authorize optional breadth.
+Current validation result: restored tracked assets/code match Phase 6f exactly; the regenerated corpus is 200/200 accepted and hard-valid with exact 100/50/50 selection, 600 recipe resolutions, 200 corner returns, 114 named promontories, result hash 98f56a4e...e02dba, and the executable Phase 6f budget passes; all Dungeon Lab tests pass 71/71; all six regenerated v8 sentinels report REJECTED 0. The prior full EditMode evidence remains 362/383 with the same 21 unrelated baseline failures and no dungeon failure.
 Last known-good seeds and reports: processional 2026072100; atrium 2026072101; twin-wing 2026072103; DungeonLabReports/dungeon_plan_2026072100_2026072299.json, DungeonLabReports/Recipes/connector_corner_return_01/gallery_manifest.json, and DungeonLabReports/visual_sentinels/manifest.json.
 Last diagnostic fact: the shared `RouteForward` resolver accepts a cardinal named `exit` edge regardless of route-array position and rejects missing or unrelated exit identity before inflation or placement; all three pattern-specific bindings reach the same recipe validator, canonical plan, renderer, abyss, and collision consumers.
-Deletion-ledger items added/closed: the temporary Phase 6f promotion entry point was removed after the real workflow completed. No compatibility adapter, alternate contract, pattern-specific renderer/validator, diagnostic production path, multiple-vista scorer, active late step pass, or unused extension point remains. Phase 6f ledger is empty and closed.
-Exact next action: begin the next Phase 6 entry audit from current production evidence. Multiple-vista scoring remains blocked until a pattern owns two legitimate candidate vistas; explicit step formation remains blocked until `step_library_index.json` supplies a reviewed measured motif. Select only a slice with an immediate producer and consumer and lock its budget before production edits.
-Blocker or decision needed: none for the completed implementation. The next Phase 6 slice is not yet selected.
+Deletion-ledger items added/closed: the Phase 6g recipe, catalog/route/report/version changes, tests, production rejection diagnostic, and generated gallery were removed. No compatibility adapter, alternate contract, pattern-specific renderer/validator, diagnostic production path, multiple-vista scorer, active late step pass, or unused extension point remains. Phase 6 ledger is empty and closed.
+Exact next action: begin the existing Phase 7 production-hardening plan by locking reliability, attempt, performance, and curated-review thresholds before judging a larger deterministic sweep. Do not add another Phase 6 recipe, topology, vista, motif, or content slice without explicit user approval.
+Blocker or decision needed: none. Phase 6 is closed; optional additional content breadth is not authorized by "continue".
 New chat necessary: no.
 ```
