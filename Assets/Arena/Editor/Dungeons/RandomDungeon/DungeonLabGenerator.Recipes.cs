@@ -269,6 +269,7 @@ namespace DungeonLab.Editor
 
         private static bool TryBuildRequiredRecipeSlots(
             ActiveDungeonRecipeCatalog catalog,
+            RoutePatternKind pattern,
             int landmarkNode,
             out RecipeSlotIntent[] slots,
             out string rejectionReason)
@@ -277,10 +278,31 @@ namespace DungeonLab.Editor
             rejectionReason = string.Empty;
             if (catalog == null ||
                 !catalog.TryGet(DungeonRecipeIds.ProcessionalLandmark, out DungeonRecipeAsset throne) ||
-                !catalog.TryGet(DungeonRecipeIds.CompressionConnector, out DungeonRecipeAsset vestibule))
+                !catalog.TryGet(DungeonRecipeIds.CompressionConnector, out DungeonRecipeAsset vestibule) ||
+                !catalog.TryGet(DungeonRecipeIds.CornerReturnConnector, out DungeonRecipeAsset cornerReturn))
             {
-                rejectionReason = "[RECIPE_CATALOG] required reviewed Phase 5 recipes were not active";
+                rejectionReason = "[RECIPE_CATALOG] required reviewed production recipes were not active";
                 return false;
+            }
+
+            RecipePortBinding[] cornerBindings;
+            if (pattern == RoutePatternKind.TwinWingKeep)
+            {
+                cornerBindings = new[]
+                {
+                    new RecipePortBinding("entry", "wing-b-11-12"),
+                    new RecipePortBinding("exit", "wing-b-rejoin-12-5")
+                };
+            }
+            else
+            {
+                cornerBindings = new[]
+                {
+                    new RecipePortBinding("entry", "branch-11-12"),
+                    new RecipePortBinding(
+                        "exit",
+                        pattern == RoutePatternKind.AtriumRing ? "rejoin-12-6" : "rejoin-12-7")
+                };
             }
 
             slots = new[]
@@ -302,7 +324,12 @@ namespace DungeonLab.Editor
                     {
                         new RecipePortBinding("entry", "main-3-4"),
                         new RecipePortBinding("exit", "main-4-5")
-                    })
+                    }),
+                new RecipeSlotIntent(
+                    SharedReturnRecipeNode,
+                    cornerReturn,
+                    RecipeOrientationBinding.RouteForward,
+                    cornerBindings)
             };
             return true;
         }
@@ -492,7 +519,15 @@ namespace DungeonLab.Editor
             }
             else
             {
-                primaryAxis = CardinalUnit(nodeCenters[slot.slotNode + 1] - nodeCenters[slot.slotNode]);
+                if (!TryResolveRouteForwardRecipeAxis(
+                        routeIntent,
+                        slot,
+                        nodeCenters,
+                        out primaryAxis))
+                {
+                    rejectionReason = $"recipe '{slot.recipe.recipeId}' had no usable named exit-edge orientation";
+                    return false;
+                }
             }
 
             int quarterTurns = QuarterTurnsForAxis(primaryAxis);
@@ -696,6 +731,50 @@ namespace DungeonLab.Editor
 
             traversal = default;
             return false;
+        }
+
+        private static bool TryResolveRouteForwardRecipeAxis(
+            RouteIntent intent,
+            RecipeSlotIntent slot,
+            IReadOnlyList<Vector2Int> nodeCenters,
+            out Vector2Int primaryAxis)
+        {
+            primaryAxis = Vector2Int.zero;
+            if (intent == null || slot == null || nodeCenters == null ||
+                slot.slotNode < 0 || slot.slotNode >= nodeCenters.Count ||
+                !slot.TryGetEdgeId("exit", out string exitEdgeId) ||
+                !TryGetTraversal(intent, exitEdgeId, out RouteTraversalIntent exitEdge))
+            {
+                return false;
+            }
+
+            int neighbor;
+            if (exitEdge.fromNode == slot.slotNode)
+            {
+                neighbor = exitEdge.toNode;
+            }
+            else if (exitEdge.toNode == slot.slotNode)
+            {
+                neighbor = exitEdge.fromNode;
+            }
+            else
+            {
+                return false;
+            }
+
+            if (neighbor < 0 || neighbor >= nodeCenters.Count)
+            {
+                return false;
+            }
+
+            Vector2Int delta = nodeCenters[neighbor] - nodeCenters[slot.slotNode];
+            if (delta.x != 0 && delta.y != 0 || delta == Vector2Int.zero)
+            {
+                return false;
+            }
+
+            primaryAxis = CardinalUnit(delta);
+            return true;
         }
 
         private static int NeighborForEdge(RouteIntent intent, string edgeId, int slotNode)

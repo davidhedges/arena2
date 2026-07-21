@@ -8,12 +8,13 @@ namespace DungeonLab.Editor
     // compiles it directly into the existing DungeonLayout.
     internal sealed partial class DungeonLabGenerator
     {
-        private const string RoutePlannerVersion = "route-topologies-v7";
-        private const string ProcessionalPlannerVersion = "processional-spine-v4";
-        private const string AtriumRingPlannerVersion = "atrium-ring-v1";
-        private const string TwinWingPlannerVersion = "twin-wing-keep-v1";
+        private const string RoutePlannerVersion = "route-topologies-v8";
+        private const string ProcessionalPlannerVersion = "processional-spine-v5";
+        private const string AtriumRingPlannerVersion = "atrium-ring-v2";
+        private const string TwinWingPlannerVersion = "twin-wing-keep-v2";
         private const string RouteRhythmPolicyVersion = "route-rhythm-v1";
         private const string NamedVistaPromontoryPolicyVersion = "named-vista-promontory-v1";
+        internal static string ActiveRecipePlannerVersion => RoutePlannerVersion;
         // Preserve the proven route embedding stream. Phase 5 changes only the
         // reviewed recipe contract/ports and uses named per-recipe streams.
         private const string RouteSpatialRandomVersion = "processional-spine-v1";
@@ -42,6 +43,7 @@ namespace DungeonLab.Editor
         private const int MaxMainRouteRoleOccurrences = 2;
         private const int MinimumMainRouteNodesBetweenRecipeSlots = 2;
         private const int MaximumNamedVistaPromontoryCells = 4;
+        private const int SharedReturnRecipeNode = 12;
 
         // Ephemeral diagnostic evidence for the most recent attempt.
         // It is never consumed by generation or carried into DungeonLayout.
@@ -318,6 +320,7 @@ namespace DungeonLab.Editor
             int landmarkNode = LandmarkNodeForPattern(pattern);
             if (!TryBuildRequiredRecipeSlots(
                     recipeCatalog,
+                    pattern,
                     landmarkNode,
                     out RecipeSlotIntent[] recipeSlots,
                     out rejectionReason))
@@ -622,7 +625,7 @@ namespace DungeonLab.Editor
                 new RouteNodeIntent("vista-source", "overlook", "reveal", -1, 0, 12),
                 new RouteNodeIntent("branch-passage", "connector", "branch", -1, 1, 12),
                 new RouteNodeIntent("branch-reward", "optional-room", "reward", -1, 2, 16),
-                new RouteNodeIntent("branch-return", "connector", "return", -1, 3, 20)
+                new RouteNodeIntent("branch-return", "connector", "return", -1, 3, 20, DungeonRecipeIds.CornerReturnConnector)
             };
             string[] branchEdgeIds =
             {
@@ -819,7 +822,7 @@ namespace DungeonLab.Editor
                 new RouteNodeIntent("lower-ring-gallery", "connector", "branch", -1, 0, 8),
                 new RouteNodeIntent("ring-overlook", "overlook", "reveal", -1, 1, 8),
                 new RouteNodeIntent("far-ring-gallery", "optional-room", "reward", -1, 2, 12),
-                new RouteNodeIntent("upper-ring-gallery", "connector", "return", -1, 3, 16)
+                new RouteNodeIntent("upper-ring-gallery", "connector", "return", -1, 3, 16, DungeonRecipeIds.CornerReturnConnector)
             };
             string[] branchEdgeIds =
             {
@@ -965,7 +968,7 @@ namespace DungeonLab.Editor
             {
                 new RouteNodeIntent("wing-b-entry", "connector", "branch", -1, 3, 4),
                 new RouteNodeIntent("wing-b-reward", "optional-room", "reward", -1, 4, 8),
-                new RouteNodeIntent("wing-b-return", "connector", "return", -1, 5, 12)
+                new RouteNodeIntent("wing-b-return", "connector", "return", -1, 5, 12, DungeonRecipeIds.CornerReturnConnector)
             };
             if (!composer.TryAddBranch(
                     mainNodeIndices[TwinWingBranchAttachNode],
@@ -1060,11 +1063,11 @@ namespace DungeonLab.Editor
             }
 
             if (intent.recipeSlots == null ||
-                intent.recipeSlots.Length != 2 ||
-                recipeSlotCount != 2 ||
+                intent.recipeSlots.Length != 3 ||
+                recipeSlotCount != 3 ||
                 string.IsNullOrEmpty(intent.catalogDigest))
             {
-                rejectionReason = "route intent did not declare exactly two reviewed recipe slots and a catalog digest";
+                rejectionReason = "route intent did not declare exactly three reviewed recipe slots and a catalog digest";
                 return false;
             }
 
@@ -1792,9 +1795,21 @@ namespace DungeonLab.Editor
         {
             if (node.HasLandmarkSlot && TryGetRecipeSlot(recipeSlots, nodeIndex, out RecipeSlotIntent recipeSlot))
             {
-                Vector2Int primaryAxis = recipeSlot.orientationBinding == RecipeOrientationBinding.VistaSourceToTarget
-                    ? CardinalUnit(center - nodeCenters[intent.vista.sourceNode])
-                    : CardinalUnit(nodeCenters[nodeIndex + 1] - center);
+                Vector2Int primaryAxis;
+                if (recipeSlot.orientationBinding == RecipeOrientationBinding.VistaSourceToTarget)
+                {
+                    primaryAxis = CardinalUnit(center - nodeCenters[intent.vista.sourceNode]);
+                }
+                else if (!TryResolveRouteForwardRecipeAxis(
+                             intent,
+                             recipeSlot,
+                             nodeCenters,
+                             out primaryAxis))
+                {
+                    throw new InvalidOperationException(
+                        $"Recipe '{recipeSlot.recipe?.recipeId}' had no usable named exit-edge orientation");
+                }
+
                 return BuildRecipeRoomParts(recipeSlot, center, primaryAxis, mirrored: false);
             }
 

@@ -4,9 +4,9 @@ Start here when returning to dungeon work. Keep this page short and update it at
 
 Last updated: 2026-07-21
 
-Active milestone: Phase 6e named-vista promontories complete and verified; the next Phase 6 increment is not yet selected
+Active milestone: Phase 6f third reviewed corner-return recipe complete and verified; next Phase 6 increment not yet selected
 
-Production mode: one route-first layout builder deterministically selects processional-spine, atrium-ring, or twin-wing-keep, resolves a target-bearing promontory from any surplus named-vista cells, and feeds the shared canonical pipeline
+Production mode: one route-first layout builder deterministically selects processional-spine, atrium-ring, or twin-wing-keep, resolves exactly three reviewed recipes plus any target-bearing named-vista promontory, and feeds the shared canonical pipeline
 
 Recipe authoring UI: implemented for the Phase 5 contract, validation, deterministic gallery, review, and promotion workflow
 
@@ -31,7 +31,7 @@ Recipe authoring UI: implemented for the Phase 5 contract, validation, determini
 - Recipes complement generic generation; they do not replace the floor with a large prefab pool. The reviewed schema, lifecycle, catalog, and authoring workflow are now the Phase 5 production foundation.
 - Locks, ability gates, and one-way traversal remain out of scope.
 - Each phase has a deletion ledger. A phase is incomplete if its scheduled temporary or superseded code remains reachable.
-- Phase 5 now proves two structurally different reviewed recipes on one existing route/tier seam. Phase 6 may add breadth only through this contract and must not introduce another plan, stair, visibility, renderer, or collision path.
+- Phase 5 proved two structurally different reviewed recipes on one existing route/tier seam; Phase 6f now proves a third. Further breadth must use this contract and must not introduce another plan, stair, visibility, renderer, or collision path.
 
 ## Foundation already established
 
@@ -463,6 +463,42 @@ This is an intentional canonical-plan behavior change, so Phase 6d tier/canonica
 - All six real-graphics sentinels retain `REJECTED 0`. The two atrium and one twin-wing captures render the named deck/support geometry cleanly; the three processional sentinels have no surplus and preserve their three-cell void. The full EditMode suite is 354/375 with no dungeon failure and exactly the same 21 unrelated baseline failures.
 - `git diff --check` passes. One target-aware planner/resolver path remains, diagnostics are read-only, and the Phase 6e deletion ledger is empty.
 
+## Phase 6f entry audit — third reviewed corner-return connector
+
+The remaining Phase 6 candidates were re-audited against current production data. Multiple-vista scoring still has no pattern that produces two independently valid source/target reservations, so adding a scorer would create policy without a real choice. The parked step-formation pass still depends on the absent reviewed `step_library_index.json`; reviving it or treating unreviewed prefab measurements as a motif contract remains forbidden.
+
+The third-recipe seam now has one exact common producer. Node index 12 is a `connector` / `return` beat in processional-spine, atrium-ring, and twin-wing-keep. In every accepted Phase 6e layout it has exactly two perpendicular route neighbors: the branch reward on entry and the existing rejoin edge on exit. It is outside the main-route recipe-spacing rule, has a 9x9 reserved envelope, and already reaches the shared recipe placement, tier, validation, renderer, abyss, and collision consumers.
+
+Phase 6f therefore added only `connector_corner_return_01`: a reviewed 5x5 corner connector with perpendicular mandatory corridor ports, protected L-shaped circulation, one offset rise-1 reward bay, and one explicit `seam-rise-1` transition. The `RouteForward` binding derives its axis from the named `exit` edge rather than array position, so terminal branch nodes use the same recipe contract without a pattern-specific placement path. No schema kind, optional-port behavior, topology edge, vista, renderer branch, collision branch, or step-library dependency was added.
+
+## Phase 6f acceptance budget — locked before production edits
+
+The deterministic corpus remains `2026072100..2026072299`. Its Phase 6e reference is 200/200 accepted and hard-valid on attempt 1 with exact 100/50/50 topology selection, result hash `ce00305a6b3d4c7043ca7e725689ed514ed99c99776668867675adfe8a9b0410`, ordered multi-hash digest `30ff994aed66b58a846ca68354f887e9fdcf72e79a31c7c2868daab27a5d6dc0`, catalog digest `ffb857de9265a73b1d5357bdb90caf9a376b02d2433e72b4f43c38c2966f6f5e`, and 114 valid named promontories.
+
+Phase 6f passes only if all of these predeclared gates hold:
+
+- the reviewed catalog contains exactly three current schema-v1 recipes, including `connector_corner_return_01` eligible only for `connector` / `return`; every production intent binds it at node 12 with `entry` on the branch reward edge and `exit` on the pattern's existing rejoin edge;
+- the new recipe has one exact 5x5 walkable footprint, two perpendicular mandatory ports, protected L-shaped circulation, one offset 2x3 rise-1 bay, and one reviewed `seam-rise-1` transition with complete footprint, landing, lane, rise, and headroom contracts; it introduces no new recipe field or enum value;
+- all four rotations and both mirror states pass isolated structure/port/transition checks; generic-neighbor, full-dungeon, lifecycle, stale-review, digest, gallery, renderer, abyss-support, and collision evidence pass through the existing Phase 5 workflow before promotion to `Reviewed`;
+- every accepted seed resolves exactly three atomic recipes and names the new connector once; the two existing recipes retain their content digests and named random streams, while recipe slot IDs, catalog digest, route/tier/canonical hashes, and aggregate hashes may change intentionally;
+- all 200 seeds remain accepted, post-plan hard-valid, route/vista/recipe/named-promontory valid, p95 layout attempt 1, maximum attempt at most 2, and exact 100/50/50 topology selection; two independent sweeps produce identical per-seed records, aggregate hashes, and ordered multi-hash digests;
+- the report/generator envelope advances to `dungeon-plan-v8` / `route-topologies-v8`; processional, atrium, and twin-wing planner versions advance because each route intent gains the third slot, while `processional-spine-v1` spatial randomness, recipe schema v1, graph edges, elevations, topology selection, and vista/promontory policy remain unchanged;
+- all prior focused fixtures plus new Phase 6f production/workflow tests pass; all six real-renderer sentinels retain `REJECTED 0` and visibly preserve route, throne, vestibule, vista, and promontory readability around the new corner-return composition; the full EditMode suite has no dungeon failure or regression beyond the same 21 unrelated baseline failures;
+- producer/consumer/test and symbol audits find one three-recipe production path and one generalized exit-edge orientation rule. No diagnostic-only contract copy, pattern-specific recipe renderer/validator, compatibility fallback, multiple-vista scorer, active late step pass, runtime path, or unused extension point remains; the Phase 6f deletion ledger is empty.
+
+These gates are locked before the recipe asset, catalog, route-slot, placement, or version changes. Missing a gate requires revising the contract or placement algorithm, not weakening this budget after observing results.
+
+## Phase 6f implementation status
+
+- `connector_corner_return_01` is a current reviewed schema-v1 asset with review digest `f6844e4202cb7b04e666657756e264701d2ea9f0589c906bea482441551ffa22`. Its exact 5x5 footprint, perpendicular ports, five-cell protected L path, offset 2x3 rise-1 bay, and complete `seam-rise-1` transition pass the existing contract validator without a new field or enum value.
+- The real authoring workflow generated 34 deterministic isolated/neighbor/full-dungeon/renderer evidence entries across all legal rotations and mirrors, gallery hash `d9f650dc86f9d8f7f90ad75ef5173e9641f54ea4e9ef221ff4e65ec0d4c32402`, then promoted the asset to `Reviewed`. The three-recipe catalog loads current with recipe-catalog digest `f907a758c49c25a84d5931004a81f673904b86db6bd4109e130d8631528cdaf4`.
+- All three route intents bind node 12 once: processional uses `branch-11-12` / `rejoin-12-7`, atrium uses `branch-11-12` / `rejoin-12-6`, and twin-wing uses `wing-b-11-12` / `wing-b-rejoin-12-5`. One shared `RouteForward` rule resolves orientation from the named `exit` edge and rejects missing or unrelated exit identity before placement.
+- Two independent 200-seed sweeps are seed-record identical: 200/200 accepted and hard-valid on attempt 1, exact 100/50/50 topology split, 600 total recipe resolutions, exactly 200 corner-return resolutions, 114 valid named promontories, no post-plan failures, and only `CELL_LEVEL_CONFLICT:1` plus `PORT_GRAPH:9` internal candidate rejections. Both result hashes are `98f56a4ef0e8dd33912342b99799b3d4954d71b2aa4ccf3be9f366a296e02dba`; the seed-array digest is `1ff32dd0b3d543fa29d025719a91f3a4bede82d83bfe2028b1b845e490fcaba4`, and the ordered seed/pattern/six-hash digest is `0852a30c1014d732c11e8e4fcda798b6c4aa3c5b9e24eeb107f6efe5bbdb122f`.
+- The intentional new slot changes recipe/catalog/route/tier/canonical identities. The unchanged graph, edge, elevation, vista, and node-placement projection preserves Phase 6e exactly at digest `db51e5e74a3741a54242a0c522f2e0c385942d06b34e959fd32b9cbd5d7b4cca`; named promontories plus the two pre-existing recipe resolutions preserve exactly at digest `fc4c60c1b55914e525c680ef3dd630418f3a8f7b564df7bfa8fcc2801b1ddb94`.
+- The new Phase 6f fixture passes 8/8, the updated Phase 5 workflow fixture passes 8/8, and all Dungeon Lab fixtures pass 71/71. `Arena.EditModeTests` compiles with zero errors and warnings; the editor assembly compiles with zero errors and its existing warnings.
+- All six real-graphics sentinels use `dungeon-plan-v8` / `route-topologies-v8` and report `REJECTED 0`. Representative processional, atrium, and twin-wing captures were inspected at original resolution with continuous routes, clean raised returns, and no visible seams, floating pieces, or blocked circulation. The full EditMode suite is 362/383: exactly the same 21 unrelated baseline failures and zero Dungeon Lab failures.
+- Producer/consumer/test and symbol audits find one generalized exit-edge orientation definition with two production consumers. The temporary promotion entry point is deleted, no pattern-specific recipe renderer or validator exists, multiple-vista scoring and the parked late step pass remain absent, and the Phase 6f deletion ledger is empty.
+
 ## Known implementation facts and blockers
 
 - Generator code: `Assets/Arena/Editor/Dungeons/RandomDungeon/`.
@@ -476,13 +512,13 @@ This is an intentional canonical-plan behavior change, so Phase 6d tier/canonica
 ## End-of-session handoff
 
 ```text
-Milestone/phase: Phase 6e named-vista promontories complete and verified; all three production topologies now convert only surplus source-side vista cells into canonical target-bearing resolutions while preserving the declared void.
-Completed this session: audited the remaining Phase 6 needs; selected and budget-locked `named_vista_promontory_01`; replaced the inert random large-room pass with one route-planned/tier-resolved target-aware path; added canonical/report identity, hard validation, executable corpus budgets, adversarial diagnostics, and six focused tests; removed the superseded pass and settings; and completed every locked identity, corpus, determinism, renderer, regression, symbol, deletion, and diff gate.
-Current validation result: focused fixtures 63/63; two final corpus sweeps each 200/200 accepted and hard-valid with a 100/50/50 processional/atrium/twin split, every attempt equal to 1, only `PORT_GRAPH:3` internal candidate rejections, and exact promontory distribution 114 = 22/50/42; result hash ce00305a...a0410 and ordered multi-hash digest 30ff994a...d6dc0 repeat exactly; all 200 route/layout/recipe/catalog hashes preserve Phase 6d; all six sentinels report REJECTED 0; full EditMode 354/375 with exactly the same 21 unrelated baseline failures and no dungeon failure; `git diff --check` passes.
-Last known-good seeds and reports: processional promontory 2026072124; processional no-surplus 2026072100; atrium 2026072101; twin-wing 2026072103; DungeonLabReports/dungeon_plan_2026072100_2026072299.json and DungeonLabReports/visual_sentinels/manifest.json.
-Last diagnostic fact: `named-vista-promontory-v1` rejects missing target identity, invalid facing, off-axis/non-contiguous or occupied cells, lost three-cell void, non-lower targets, and overlong resolutions before level-field mutation; accepted resolutions retain exact vista/target identity and source level.
-Deletion-ledger items added/closed: `ChoosePromontorySpurs`, `VoidRunFits`, `MaxPromontoriesPerDungeon`, `largeRoomMinAreaCells`, `promontoryChancePerRoom`, `promontoryMinLengthCells`, and `promontoryMaxLengthCells` are deleted from production, settings, and the profile asset. One named planner/resolver remains; no compatibility layer, random stream, renderer/collision branch, or temporary production symbol remains. Phase 6e ledger is empty and closed.
-Exact next action: begin the next Phase 6 entry audit. Compare the remaining needs—the third reviewed recipe, multiple-candidate vista scoring, or an explicit reviewed step motif—select the smallest slice with an immediate producer and consumer, and lock its acceptance budget before production edits. Do not re-open Phase 6e unless one of its identity, clearance, or validation gates changes.
-Blocker or decision needed: none. The next Phase 6 slice is not yet selected.
+Milestone/phase: Phase 6f third reviewed corner-return connector complete and verified; every production topology now resolves exactly three recipes through the shared contract and canonical consumers.
+Completed this session: audited the remaining Phase 6 needs; selected and budget-locked `connector_corner_return_01`; authored, validated, gallery-tested, reviewed, and cataloged the exact raised-return contract; bound the common node-12 producer in all three route intents; generalized `RouteForward` orientation to the named exit edge; advanced the report/planner envelopes; added executable corpus evidence and eight focused tests; and completed every locked preservation, corpus, determinism, renderer, regression, symbol, and deletion gate.
+Current validation result: Phase 6f 8/8, updated Phase 5 workflow 8/8, and all Dungeon Lab 71/71; two final sweeps each 200/200 accepted and hard-valid on attempt 1 with exact 100/50/50 selection, 600 recipe resolutions, 200 corner returns, 114 named promontories, result hash 98f56a4e...e02dba, seed-array digest 1ff32dd0...fcaba4, and ordered six-hash digest 0852a30c...db122f repeated exactly; all six sentinels report REJECTED 0; full EditMode 362/383 with the same 21 unrelated baseline failures and no dungeon failure.
+Last known-good seeds and reports: processional 2026072100; atrium 2026072101; twin-wing 2026072103; DungeonLabReports/dungeon_plan_2026072100_2026072299.json, DungeonLabReports/Recipes/connector_corner_return_01/gallery_manifest.json, and DungeonLabReports/visual_sentinels/manifest.json.
+Last diagnostic fact: the shared `RouteForward` resolver accepts a cardinal named `exit` edge regardless of route-array position and rejects missing or unrelated exit identity before inflation or placement; all three pattern-specific bindings reach the same recipe validator, canonical plan, renderer, abyss, and collision consumers.
+Deletion-ledger items added/closed: the temporary Phase 6f promotion entry point was removed after the real workflow completed. No compatibility adapter, alternate contract, pattern-specific renderer/validator, diagnostic production path, multiple-vista scorer, active late step pass, or unused extension point remains. Phase 6f ledger is empty and closed.
+Exact next action: begin the next Phase 6 entry audit from current production evidence. Multiple-vista scoring remains blocked until a pattern owns two legitimate candidate vistas; explicit step formation remains blocked until `step_library_index.json` supplies a reviewed measured motif. Select only a slice with an immediate producer and consumer and lock its budget before production edits.
+Blocker or decision needed: none for the completed implementation. The next Phase 6 slice is not yet selected.
 New chat necessary: no.
 ```

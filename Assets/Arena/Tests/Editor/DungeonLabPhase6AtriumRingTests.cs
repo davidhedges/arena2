@@ -21,7 +21,7 @@ namespace Arena.Tests.Editor
 
             Assert.That(snapshot["selector.evenPattern"], Is.EqualTo("processional-spine"));
             Assert.That(snapshot["selector.oddPattern"], Is.EqualTo("atrium-ring"));
-            Assert.That(snapshot["processional.plannerVersion"], Is.EqualTo("processional-spine-v4"));
+            Assert.That(snapshot["processional.plannerVersion"], Is.EqualTo("processional-spine-v5"));
             Assert.That(snapshot["processional.cycleLength"], Is.EqualTo("10"));
         }
 
@@ -31,7 +31,7 @@ namespace Arena.Tests.Editor
             Dictionary<string, string> snapshot = AtriumIntentSnapshot();
 
             Assert.That(snapshot["graph.pattern"], Is.EqualTo("atrium-ring"));
-            Assert.That(snapshot["graph.plannerVersion"], Is.EqualTo("atrium-ring-v1"));
+            Assert.That(snapshot["graph.plannerVersion"], Is.EqualTo("atrium-ring-v2"));
             Assert.That(snapshot["graph.nodeCount"], Is.EqualTo("13"));
             Assert.That(snapshot["graph.edgeCount"], Is.EqualTo("13"));
             Assert.That(snapshot["graph.loopEdges"], Is.EqualTo("1"));

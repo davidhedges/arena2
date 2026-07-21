@@ -23,8 +23,8 @@ namespace Arena.Tests.Editor
             Assert.That(snapshot["selector.residue1Pattern"], Is.EqualTo("atrium-ring"));
             Assert.That(snapshot["selector.residue2Pattern"], Is.EqualTo("processional-spine"));
             Assert.That(snapshot["selector.residue3Pattern"], Is.EqualTo("twin-wing-keep"));
-            Assert.That(snapshot["processional.plannerVersion"], Is.EqualTo("processional-spine-v4"));
-            Assert.That(snapshot["atrium.plannerVersion"], Is.EqualTo("atrium-ring-v1"));
+            Assert.That(snapshot["processional.plannerVersion"], Is.EqualTo("processional-spine-v5"));
+            Assert.That(snapshot["atrium.plannerVersion"], Is.EqualTo("atrium-ring-v2"));
         }
 
         [Test]
@@ -33,7 +33,7 @@ namespace Arena.Tests.Editor
             Dictionary<string, string> snapshot = TwinWingIntentSnapshot();
 
             Assert.That(snapshot["graph.pattern"], Is.EqualTo("twin-wing-keep"));
-            Assert.That(snapshot["graph.plannerVersion"], Is.EqualTo("twin-wing-keep-v1"));
+            Assert.That(snapshot["graph.plannerVersion"], Is.EqualTo("twin-wing-keep-v2"));
             Assert.That(snapshot["graph.nodeCount"], Is.EqualTo("13"));
             Assert.That(snapshot["graph.edgeCount"], Is.EqualTo("14"));
             Assert.That(snapshot["graph.mainRouteCount"], Is.EqualTo("7"));
