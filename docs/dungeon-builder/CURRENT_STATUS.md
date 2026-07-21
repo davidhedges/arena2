@@ -4,11 +4,11 @@ Start here when returning to dungeon work. Keep this page short and update it at
 
 Last updated: 2026-07-21
 
-Active milestone: Phase 4 throne-hall schema probe complete and verified; Phase 5 ready and not started
+Active milestone: Phase 5 recipe-contract hardening complete and verified; Phase 6 ready and not started
 
 Production mode: the processional-spine route-first planner is the sole reachable layout builder
 
-Recipe authoring UI: design only; not implemented
+Recipe authoring UI: implemented for the Phase 5 contract, validation, deterministic gallery, review, and promotion workflow
 
 ## Read next
 
@@ -28,10 +28,10 @@ Recipe authoring UI: design only; not implemented
 - Traversal and visibility are separate graphs. Phase 3 proved one final source-to-target vista, not merely an adjacent elevation delta; later phases must preserve it.
 - `DungeonLayout` and `TieredLevelPlan` remain the canonical downstream plans. Do not create parallel intent/placed/compiled DTO families or a legacy adapter.
 - The ephemeral `RouteIntent` is the sole pre-coordinate graph. Named topology variants must eventually compose shared graph operations rather than become separate planner implementations.
-- Recipes complement generic generation; they do not replace the floor with a large prefab pool. The general schema, lifecycle, catalog, and authoring workflow remain Phase 5 work.
+- Recipes complement generic generation; they do not replace the floor with a large prefab pool. The reviewed schema, lifecycle, catalog, and authoring workflow are now the Phase 5 production foundation.
 - Locks, ability gates, and one-way traversal remain out of scope.
 - Each phase has a deletion ledger. A phase is incomplete if its scheduled temporary or superseded code remains reachable.
-- Phase 4 now proves one atomic authored throne-hall episode on the existing route/tier seam. Phase 5 may generalize only its consumed contract, must add a structurally different contrast recipe, and must not introduce another plan, stair, visibility, renderer, or collision path.
+- Phase 5 now proves two structurally different reviewed recipes on one existing route/tier seam. Phase 6 may add breadth only through this contract and must not introduce another plan, stair, visibility, renderer, or collision path.
 
 ## Foundation already established
 
@@ -83,6 +83,20 @@ Phase 4 used one throne-hall episode as a schema probe and closed its deletion l
 - Diagnostics use `dungeon-plan-v3` / `processional-spine-v3`. The schema-usage projection reports 17 represented field groups, all with active producers and production consumers; isolated diagnostics cover four cardinal orientations by both focal designs.
 - Producer/consumer and symbol audits found no unconsumed speculative field, helper, duplicate system, or scheduled Phase 4 deletion. The Phase 4 deletion ledger is empty.
 
+## Phase 5 result
+
+Phase 5 generalized the proven recipe semantics, completed the authoring workflow, and closed its deletion ledger.
+
+- `DungeonRecipeAsset` is the single versioned recipe contract. Its current kinds are only `Connector` and `Episode`; embedded motifs are only `StairTransition` and `FocalVisual`. The schema has no field named for either shipped recipe and no future topology, lock, runtime, renderer, or collision extension point.
+- The reviewed catalog contains `episode_throne_twin_stairs_01` and the structurally different `connector_flexible_vestibule_01`. The vestibule has two opposed corridor ports, one protected circulation strip, one offset raised bay, and one rise-1 stair; it has no symmetry pair or focal alternative. Both recipes use the same slot, placement, canonical-plan, stair, validation, render, abyss, dressing-protection, and collision path.
+- Schema, structure, variation, neighbor, and full-dungeon validation are non-mutating. Ordinary generation admits only `Reviewed` assets whose stored review digest matches current content. A content edit makes review stale; invalid structure cannot promote; `Draft`, `Reviewed`, and `Deprecated` are the only lifecycle states.
+- The authoring window implements Draft creation, catalog/current validation, grid/zone/port/landing/headroom/protected-axis overlays, deterministic orientation/mirror/alternative galleries, below-floor support views, generic-neighbor evidence, full-dungeon evidence, review metadata, and promotion. The throne gallery has 66 entries and hash `1f815e2e...b61d32e`; the vestibule gallery has 34 entries and hash `7f2b9267...dfa08e`.
+- The temporary throne-only production DTO and compatibility diagnostic layer were deleted. Route-specific node/edge bindings remain outside the asset contract; `DungeonLayout` and `TieredLevelPlan` remain the only canonical downstream plans.
+- Phase 0/1/3/4/5 fixtures pass 33/33. The final full EditMode suite is 324/345 with the same 21 unrelated baseline failures and no dungeon failure.
+- The locked corpus passed twice at 200/200 accepted, hard-valid, route-valid, vista-valid, and complete two-recipe sets. Attempts min/p50/p95/max/mean are `1/1/1/2/1.005`; retry codes are `STAIR_PLACEMENT:32` and `PORT_GRAPH:11`; both aggregate hashes are `765ead1a87f95732fb66dfa617b33e91d1ea921cb91f0287226309d17af46155`. The independent ordered digest over every per-seed intent/layout/tier/recipe/catalog/canonical hash is `1d35718f9d9b0d31f752a3b630f64d5f2ee134cbc651a2e79759a3c0a1b01f01` in both sweeps.
+- All six final real-graphics sentinels report `REJECTED 0`. Comparison with the preserved Phase 4 captures retains the throne composition and route readability; the contrast connector's asymmetric raised bay, protected route, and single stair are also present without a renderer repair.
+- Producer/consumer/test, duplicate-path, recipe-named schema/validator/diagnostic, and removed-symbol audits found no surviving throne-only production scaffolding or unused extension point. The Phase 5 deletion ledger is empty.
+
 ## Current sole generation seam
 
 ```text
@@ -90,9 +104,9 @@ GenerateWithSeed
   -> GenerateRandomDungeonLayout
   -> TryBuildAcceptedPlan
   -> TryBuildProcessionalSpineDungeonLayout
-  -> DungeonLayout + ephemeral RouteTierRequirements (route + placed landmark episode)
+  -> DungeonLayout + ephemeral RouteTierRequirements (route + two placed recipe resolutions)
   -> TryBuildTieredLevelPlan / TryBuildTieredLevelPlanAttempt
-     -> atomically realize protected episode before generic structural fill
+     -> atomically realize protected recipes before generic structural fill
   -> TieredLevelPlan
   -> TryBuildRoomBoundaryContext
   -> ElevationEdgeModel.BuildLevelField
@@ -202,6 +216,28 @@ Phase 4 is one throne-hall episode used as a schema probe. It is not permission 
 
 Phase 4 exits only when the entire episode places or rejects atomically, generic generation connects through declared ports without repair, isolated and full-dungeon tests pass, the episode is visibly stronger than independent late rolls, unused schema surface is deleted, and the go/no-go review approves generalization.
 
+## Phase 5 acceptance budget — locked before behavior changes
+
+The deterministic Phase 5 corpus remains the 200 inclusive seeds `2026072100..2026072299` with the active spacious profile. The preserved pre-change reference is the final Phase 4 result above: 200/200 accepted and hard-valid, attempts min/p50/p95/max/mean `1/1/1/2/1.005`, repeat-identical hash `40cb04c8d8334bbaa8ace02bbb06a31551def30dbe914eae66178f40a602a08e`, and six sentinels with `REJECTED 0`.
+
+The required read-only boundary audit found the 17 consumed Phase 4 field groups at the temporary throne-specific seam: stable ID; route slot; focal-axis binding; dominant footprint; protected focal zone; paired side regions; relative region rise; coupled transition count; allowed focal alternatives; typed port identity/binding/kind; resolved port cell/direction/level; resolved primary axis; protected cells; resolved region cells; transition footprint/landings/climb; and selected visual alternative/origin/yaw. Their active consumers are route placement, exact corridor termination, canonical cell levels, `StairPlacementLedger`, `TransitionEdge`, port-graph and landing/headroom validation, protected generic-fill/dressing exclusions, StairForge-backed showpieces, diagnostics, renderer, abyss support, and collision export. Phase 5 may rename and group these semantics, but may not retain a field without one of those current consumers.
+
+Phase 5 passes only if all of these predeclared gates hold:
+
+- at least 190/200 seeds are accepted and post-plan hard-valid; no seed uses more than two layout attempts and p95 layout attempts remain at most one;
+- every Phase 3/4 route, transition, landing, headroom, port-graph, final-vista, throne-episode, renderer-input, renderer, abyss, dressing-protection, and collision gate remains passing with the same stable reason-code categories;
+- the throne hall and one structurally different flexible-vestibule connector are both selected from one reviewed versioned catalog and placed through one recipe seam; every accepted seed contains exactly one complete resolution of each recipe and never a partial transition, region, port, protected zone, or visual alternative;
+- the contrast connector proves that focal alternatives and symmetry groups are optional contract semantics: it has two opposed typed route ports, one protected circulation strip, one offset raised region, and exactly one rise-1 stair with explicit lower/upper landings and footprint, while the throne recipe retains its two symmetric raised regions, two coupled stairs, protected focal zone, and two explicit focal alternatives;
+- no serialized schema field, validator branch, placement field, diagnostic field, or editor control is named for either recipe; route-specific node and edge bindings remain outside the reusable asset contract;
+- schema, structure, variation, neighbor, and full-dungeon validation are computed without mutating recipe content or lifecycle state; invalid structure cannot be promoted; editing reviewed content changes its digest, makes review stale, and excludes it from the active catalog until re-review;
+- only `Draft`, `Reviewed`, and `Deprecated` lifecycle behavior exists, and ordinary generation admits only `Reviewed` assets whose recorded review digest matches the current validation digest;
+- deterministic authoring previews cover every legal orientation and meaningful alternative, expose grid/zone/port/landing/headroom/protected-axis overlays, include compatible-neighbor and full-dungeon evidence plus a below-floor structural view, and reproduce the same manifest/hash for the same recipe digest and preview seeds;
+- the required workflow completes end to end in tests: create Draft, edit explicit structure, validate all five layers, build deterministic previews/gallery evidence, record review metadata, promote, admit through catalog, detect a stale edit, and reject invalid promotion;
+- two independent corpus sweeps produce identical per-seed intent/layout/tier/recipe/catalog hashes and the same aggregate result hash; all six established sentinels render with `REJECTED 0`, retain the Phase 4 throne composition, and show the contrast connector without weakening route readability;
+- producer/consumer/test and symbol audits find no surviving throne-only DTO/scaffolding, duplicate plan/validator/render/collision path, unused editor extension point, speculative recipe kind, or open Phase 5 deletion-ledger item.
+
+These thresholds were locked after the required Phase 4 producer/consumer inventory and before the first Phase 5 production behavior edit. Missing one requires revising the shared contract, placement, validation, lifecycle, or workflow implementation—not editing this budget after seeing results.
+
 ## Exact Phase 5 handoff
 
 Phase 5 hardens only the recipe contract demonstrated by the working throne-hall probe. Perform these steps in order:
@@ -225,18 +261,18 @@ Phase 5 exits only when two structurally different recipes share one explicit co
 - Gold reference scene: `Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/scenes/demoscene_dungeon_level_1_dungeon.unity`.
 - Baked destination: `Assets/Arena/Content/Scenes/OpenWorld/RandomDungeon.unity`.
 - `ActiveStepFormationPlacementEnabled` remains false, and `step_library_index.json` is absent. Do not enable the parked path by flipping the flag.
-- There is no dungeon blocker for Phase 5. The 21 unrelated full-suite failures remain outside this workstream.
+- There is no dungeon blocker for Phase 6. The 21 unrelated full-suite failures remain outside this workstream.
 
 ## End-of-session handoff
 
 ```text
-Milestone/phase: Phase 4 complete and verified; Phase 5 ready and not started; Phase 6 not begun.
-Completed this session: one route-bound throne-hall episode; atomic footprint, focal zone, symmetric galleries, coupled stairs/landings, typed thresholds, explicit focal variations, pre-fill protection, direct canonical-plan consumption, schema-usage diagnostics, tests, corpus and visual review.
-Current validation result: Phase 4 EditMode 7/7; Phase 0/1/3 fixtures 6/6 each; locked corpus 200/200 hard-valid and atomic with p95 1 and max 2; repeat hash 40cb04c8...a08e; six sentinels REJECTED 0 and visibly stronger than Phase 3; full EditMode 316/337 with the same 21 unrelated failures.
+Milestone/phase: Phase 5 complete and verified; Phase 6 ready and not started.
+Completed this session: one versioned shared recipe/motif contract; reviewed catalog; two structurally different recipes on one atomic placement seam; five non-mutating validation layers; lifecycle/digest admission; deterministic authoring overlays/galleries/review; generalized diagnostics; deletion of the throne-only production boundary.
+Current validation result: Phase 0/1/3/4/5 fixtures 33/33; locked corpus 200/200 hard-valid with two complete recipe resolutions, p95 1 and max 2; repeat hash 765ead1a...46155 and per-seed multi-hash digest 1d35718f...01f01; six sentinels REJECTED 0; full EditMode 324/345 with the same 21 unrelated failures.
 Last known-good seed and report: 2026072140; DungeonLabReports/dungeon_plan_2026072100_2026072299.json and DungeonLabReports/visual_sentinels/manifest.json.
-Last diagnostic fact: all 200 accepted plans retain the Phase 3 route/vista gates and resolve exactly one protected, port-bound, symmetric, twin-stair throne-hall episode; all 17 represented schema field groups have active production consumers.
-Deletion-ledger items added/closed: no speculative Phase 4 schema field or helper survived the producer/consumer audit; current ledger empty.
-Exact next action: begin only the eight-step Exact Phase 5 handoff above, starting with the required reads and a read-only audit of the 17 proven field groups and the throne-specific/general boundary before locking Phase 5 review thresholds.
+Last diagnostic fact: all 200 accepted plans retain the Phase 3/4 route, vista, and focal gates and resolve exactly one complete throne episode plus one complete flexible vestibule from reviewed catalog digest e9150ada...669ec through the same canonical consumers.
+Deletion-ledger items added/closed: the temporary throne-only DTO/file and compatibility diagnostics were deleted; no unused Phase 5 schema field, validator branch, editor control, recipe kind, or helper survived; current ledger empty.
+Exact next action: stop before Phase 6. In a new authorized session, inventory the shared graph operations and lock one Phase 6 topology/content increment and its acceptance budget before changing behavior.
 Blocker or decision needed: none.
-New chat necessary: no. A new chat is recommended because Phase 4 is a complete verified boundary and this file now contains the exact Phase 5 handoff.
+New chat necessary: no. A new chat is recommended because Phase 5 is a complete verified boundary.
 ```

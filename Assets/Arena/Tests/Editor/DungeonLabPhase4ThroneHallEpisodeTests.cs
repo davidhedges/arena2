@@ -22,7 +22,7 @@ namespace Arena.Tests.Editor
 
             Assert.That(intent["episode.id"], Is.EqualTo("episode_throne_twin_stairs_01"));
             Assert.That(intent["episode.slotNode"], Is.EqualTo("4"));
-            Assert.That(intent["episode.focalAxisBinding"], Is.EqualTo("vista-source-to-target"));
+            Assert.That(intent["episode.focalAxisBinding"], Is.EqualTo("VistaSourceToTarget"));
             Assert.That(intent["episode.coupledStairCount"], Is.EqualTo("2"));
             Assert.That(intent["episode.allowedFocalVariations"], Is.EqualTo("2"));
             Assert.That(intent["episode.thresholdCount"], Is.EqualTo("2"));
@@ -33,14 +33,15 @@ namespace Arena.Tests.Editor
         public void IsolatedProbe_CoversEveryAllowedOrientationAndFocalVariation()
         {
             Dictionary<string, string> isolated = ParseSnapshot(
-                InvokeSnapshot("BuildThroneHallIsolatedSnapshot", EpisodeSeed));
+                InvokeSnapshot("BuildPhase5RecipeContractSnapshot", EpisodeSeed));
+            string recipe = RecipePrefix(isolated);
 
-            Assert.That(isolated["isolated.episodeId"], Is.EqualTo("episode_throne_twin_stairs_01"));
-            Assert.That(isolated["isolated.orientationCount"], Is.EqualTo("4"));
-            Assert.That(isolated["isolated.focalVariationCount"], Is.EqualTo("2"));
-            Assert.That(isolated["isolated.combinationCount"], Is.EqualTo("8"));
-            Assert.That(isolated["isolated.geometryValid"], Is.EqualTo("True"));
-            Assert.That(isolated["isolated.focalAssetsValid"], Is.EqualTo("True"));
+            Assert.That(isolated[$"{recipe}.id"], Is.EqualTo("episode_throne_twin_stairs_01"));
+            Assert.That(isolated[$"{recipe}.isolatedOrientationCount"], Is.EqualTo("4"));
+            Assert.That(isolated[$"{recipe}.isolatedAlternativeCount"], Is.EqualTo("2"));
+            Assert.That(isolated[$"{recipe}.isolatedCombinationCount"], Is.EqualTo("8"));
+            Assert.That(isolated[$"{recipe}.isolatedGeometryValid"], Is.EqualTo("True"));
+            Assert.That(isolated[$"{recipe}.isolatedVisualAssetsValid"], Is.EqualTo("True"));
             Assert.That(isolated["schema.allFieldsConsumed"], Is.EqualTo("True"));
             Assert.That(int.Parse(isolated["schema.fieldCount"]), Is.GreaterThan(0));
         }
@@ -52,9 +53,10 @@ namespace Arena.Tests.Editor
             string secondText = InvokeSnapshot("BuildRouteCharacterizationSnapshot", EpisodeSeed);
             Dictionary<string, string> first = ParseSnapshot(firstText);
             Dictionary<string, string> second = ParseSnapshot(secondText);
+            string recipe = RecipePrefix(first);
 
             Assert.That(first["accepted"], Is.EqualTo("true"), firstText);
-            Assert.That(first["episode.atomicAndValid"], Is.EqualTo("true"), firstText);
+            Assert.That(first[$"{recipe}.atomic"], Is.EqualTo("true"), firstText);
             Assert.That(first["hash.routeIntent"], Is.EqualTo(second["hash.routeIntent"]));
             Assert.That(first["hash.layout"], Is.EqualTo(second["hash.layout"]));
             Assert.That(first["hash.tieredLevelPlan"], Is.EqualTo(second["hash.tieredLevelPlan"]));
@@ -66,25 +68,30 @@ namespace Arena.Tests.Editor
         public void GenericRouteConnections_EndAtTheTwoDeclaredTypedThresholds()
         {
             Dictionary<string, string> report = EpisodeSnapshot();
+            string recipe = RecipePrefix(report);
 
-            Assert.That(report["episode.thresholdCount"], Is.EqualTo("2"));
-            Assert.That(report["episode.genericConnectionsThroughDeclaredPorts"], Is.EqualTo("true"));
-            Assert.That(report["validation.throneHallEpisode"], Is.EqualTo("true"));
+            Assert.That(report[$"{recipe}.ports"], Is.EqualTo("2"));
+            Assert.That(report[$"{recipe}.portsBound"], Is.EqualTo("true"));
+            Assert.That(report["validation.recipes"], Is.EqualTo("true"));
         }
 
         [Test]
         public void TwinStairs_Landings_GalleriesAndFocalZoneRemainCoupledAndProtected()
         {
             Dictionary<string, string> report = EpisodeSnapshot();
+            Dictionary<string, string> contract = ParseSnapshot(
+                InvokeSnapshot("BuildPhase5RecipeContractSnapshot", EpisodeSeed));
+            string recipe = RecipePrefix(report);
+            string contractRecipe = RecipePrefix(contract);
 
-            Assert.That(report["episode.focalZoneCells"], Is.EqualTo("15"));
-            Assert.That(report["episode.sideGalleryCount"], Is.EqualTo("2"));
-            Assert.That(report["episode.twinStairCount"], Is.EqualTo("2"));
-            Assert.That(report["episode.baseLevel"], Is.EqualTo("8"));
-            Assert.That(report["episode.galleryLevel"], Is.EqualTo("9"));
-            Assert.That(report["episode.coupledReservationsComplete"], Is.EqualTo("true"));
-            Assert.That(report["episode.sideGalleriesSymmetric"], Is.EqualTo("true"));
-            Assert.That(report["episode.protectedZonesValid"], Is.EqualTo("true"));
+            Assert.That(report[$"{recipe}.protectedFocalCells"], Is.EqualTo("15"));
+            Assert.That(report[$"{recipe}.elevatedZones"], Is.EqualTo("2"));
+            Assert.That(report[$"{recipe}.transitions"], Is.EqualTo("2"));
+            Assert.That(report[$"{recipe}.baseLevel"], Is.EqualTo("8"));
+            Assert.That(report[$"{recipe}.elevatedLevel"], Is.EqualTo("9"));
+            Assert.That(report[$"{recipe}.reservationsComplete"], Is.EqualTo("true"));
+            Assert.That(contract[$"{contractRecipe}.symmetryPairs"], Is.EqualTo("1"));
+            Assert.That(report[$"{recipe}.protectedZonesValid"], Is.EqualTo("true"));
             Assert.That(report["schema.allFieldsConsumed"], Is.EqualTo("true"));
         }
 
@@ -113,7 +120,7 @@ namespace Arena.Tests.Editor
             Assert.That(report["accepted"], Is.EqualTo("true"), snapshot);
             Assert.That(report["boundary"], Is.EqualTo("true"), snapshot);
             Assert.That(report["renderer.passed"], Is.EqualTo("true"), snapshot);
-            Assert.That(report["renderer.episodeShowpieces"], Is.EqualTo("1"));
+            Assert.That(report["renderer.selectedShowpieces"], Is.EqualTo("1"));
             Assert.That(int.Parse(report["renderer.rejectedPlacements"]), Is.Zero);
             Assert.That(report["collision.passed"], Is.EqualTo("true"), snapshot);
             Assert.That(int.Parse(report["collision.enabledNonTriggerColliders"]), Is.GreaterThan(0));
@@ -123,6 +130,22 @@ namespace Arena.Tests.Editor
         private static Dictionary<string, string> EpisodeSnapshot()
         {
             return ParseSnapshot(InvokeSnapshot("BuildRouteCharacterizationSnapshot", EpisodeSeed));
+        }
+
+        private static string RecipePrefix(Dictionary<string, string> snapshot)
+        {
+            for (int index = 0; index < 8; index++)
+            {
+                string prefix = $"recipe{index}";
+                if (snapshot.TryGetValue($"{prefix}.id", out string id) &&
+                    string.Equals(id, "episode_throne_twin_stairs_01", StringComparison.Ordinal))
+                {
+                    return prefix;
+                }
+            }
+
+            Assert.Fail("The Phase 4 recipe probe was absent from the generic recipe diagnostics.");
+            return string.Empty;
         }
 
         private static string InvokeSnapshot(string methodName, int seed)

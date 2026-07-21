@@ -1295,7 +1295,10 @@ namespace DungeonLab.Editor
         private static GameObject CreateChild(Transform parent, string name)
         {
             var child = new GameObject(name);
-            Undo.RegisterCreatedObjectUndo(child, $"Create {name}");
+            if (!Application.isBatchMode)
+            {
+                Undo.RegisterCreatedObjectUndo(child, $"Create {name}");
+            }
             child.transform.SetParent(parent, false);
             return child;
         }
@@ -2245,7 +2248,7 @@ namespace DungeonLab.Editor
                     out List<(string gapId, ElevationEdgeModel.SynthesizedStairSetPiece setPiece)> synthesizedStairs,
                     out List<DaisShowpiece> daisShowpieces,
                     out List<Vector2Int> promontoryCells,
-                    out ThroneHallEpisodeResolution throneHallEpisodeResolution,
+                    out RecipeResolution[] recipeResolutions,
                     out rejectionReason))
             {
                 return false;
@@ -2312,7 +2315,7 @@ namespace DungeonLab.Editor
                 FormatSynthesizedStairSummary(synthesizedStairs),
                 daisShowpieces,
                 promontoryCells,
-                throneHallEpisodeResolution,
+                recipeResolutions,
                 routeRequirementResolution);
             acceptedLayout = loopedLayout;
             return true;
@@ -2509,13 +2512,12 @@ namespace DungeonLab.Editor
             {
                 for (int second = first + 1; second < layout.rooms.Count; second++)
                 {
-                    if (routeRequirements?.landmarkEpisode != null &&
-                        (first == routeRequirements.landmarkEpisode.roomIndex ||
-                         second == routeRequirements.landmarkEpisode.roomIndex))
+                    if (FindRecipePlacement(routeRequirements?.recipes, first) != null ||
+                        FindRecipePlacement(routeRequirements?.recipes, second) != null)
                     {
-                        // Authored episode boundaries open only at declared
+                        // Authored recipe boundaries open only at declared
                         // thresholds; generic loops cannot add a center-routed
-                        // doorway to the landmark room.
+                        // doorway to an authored room.
                         continue;
                     }
 
@@ -2827,7 +2829,7 @@ namespace DungeonLab.Editor
             out List<(string gapId, ElevationEdgeModel.SynthesizedStairSetPiece setPiece)> synthesizedStairs,
             out List<DaisShowpiece> daisShowpieces,
             out List<Vector2Int> promontoryCells,
-            out ThroneHallEpisodeResolution throneHallEpisodeResolution,
+            out RecipeResolution[] recipeResolutions,
             out string rejectionReason)
         {
             cellLevels = new Dictionary<Vector2Int, int>();
@@ -2837,7 +2839,7 @@ namespace DungeonLab.Editor
             synthesizedStairs = new List<(string gapId, ElevationEdgeModel.SynthesizedStairSetPiece setPiece)>();
             daisShowpieces = new List<DaisShowpiece>();
             promontoryCells = new List<Vector2Int>();
-            throneHallEpisodeResolution = default;
+            recipeResolutions = Array.Empty<RecipeResolution>();
             rejectionReason = string.Empty;
 
             for (int roomIndex = 0; roomIndex < layout.rooms.Count; roomIndex++)
@@ -2894,8 +2896,8 @@ namespace DungeonLab.Editor
             }
 
             string seamStairPrefabPath = ResolveSeamStairPrefabPath();
-            if (!TryRealizeThroneHallEpisode(
-                    routeRequirements?.landmarkEpisode,
+            if (!TryRealizeRecipes(
+                    routeRequirements?.recipes,
                     layout.rooms,
                     cellLevels,
                     transitions,
@@ -2903,13 +2905,16 @@ namespace DungeonLab.Editor
                     plannedStairLedger,
                     seamStairPrefabPath,
                     daisShowpieces,
-                    out int throneHallBaseLevel,
+                    out Dictionary<string, int> recipeBaseLevels,
                     out rejectionReason))
             {
                 return false;
             }
 
-            protectedStructuralCells.UnionWith(routeRequirements.landmarkEpisode.roomCells);
+            foreach (RecipePlacement recipePlacement in routeRequirements.recipes)
+            {
+                protectedStructuralCells.UnionWith(recipePlacement.roomCells);
+            }
 
             // Seam transitions first (deterministic room order): every adjacent cell
             // pair across a zone seam carries a rise-1 step strip, so the 1u delta is
@@ -3377,15 +3382,15 @@ namespace DungeonLab.Editor
                 protectedStructuralCells,
                 CurrentGenerationSettings);
 
-            if (!TryValidateResolvedThroneHallEpisode(
-                    routeRequirements.landmarkEpisode,
+            if (!TryValidateResolvedRecipes(
+                    routeRequirements.recipes,
                     layout,
                     cellLevels,
                     transitions,
                     daisShowpieces,
                     promontoryCells,
-                    throneHallBaseLevel,
-                    out throneHallEpisodeResolution,
+                    recipeBaseLevels,
+                    out recipeResolutions,
                     out rejectionReason))
             {
                 return false;
@@ -9974,7 +9979,10 @@ namespace DungeonLab.Editor
             }
 
             var instance = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
-            Undo.RegisterCreatedObjectUndo(instance, $"Create {name}");
+            if (!Application.isBatchMode)
+            {
+                Undo.RegisterCreatedObjectUndo(instance, $"Create {name}");
+            }
             instance.name = name;
             instance.transform.SetParent(parent);
             instance.transform.position = position;
@@ -12470,7 +12478,7 @@ namespace DungeonLab.Editor
             // Decision J: promontory pier cells (jut into the void) — the render
             // places dense support columns under these down to the abyss base.
             public readonly List<Vector2Int> promontoryCells;
-            public readonly ThroneHallEpisodeResolution throneHallEpisodeResolution;
+            public readonly RecipeResolution[] recipeResolutions;
             public readonly RouteRequirementResolution routeRequirementResolution;
 
             public TieredLevelPlan(
@@ -12493,7 +12501,7 @@ namespace DungeonLab.Editor
                 string synthesizedStairSummary,
                 List<DaisShowpiece> daisShowpieces,
                 List<Vector2Int> promontoryCells,
-                ThroneHallEpisodeResolution throneHallEpisodeResolution,
+                RecipeResolution[] recipeResolutions,
                 RouteRequirementResolution routeRequirementResolution)
             {
                 this.archetypeName = archetypeName;
@@ -12515,7 +12523,7 @@ namespace DungeonLab.Editor
                 this.synthesizedStairSummary = synthesizedStairSummary;
                 this.daisShowpieces = daisShowpieces;
                 this.promontoryCells = promontoryCells;
-                this.throneHallEpisodeResolution = throneHallEpisodeResolution;
+                this.recipeResolutions = recipeResolutions ?? Array.Empty<RecipeResolution>();
                 this.routeRequirementResolution = routeRequirementResolution;
             }
         }

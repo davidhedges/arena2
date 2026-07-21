@@ -1,6 +1,6 @@
 # Coherent floorplan generation plan
 
-Status: Phases 0-4 complete and verified; Phase 5 recipe-contract hardening ready and not started
+Status: Phases 0-5 complete and verified; Phase 6 expansion ready and not started
 
 Last updated: 2026-07-21
 
@@ -429,6 +429,8 @@ Exit gate:
 - invalid ports, stairs, landings, protected zones, symmetry groups, and overlaps cannot be promoted;
 - the companion authoring workflow's required outcomes can be completed end to end; its illustrative menu names may differ;
 - no unused editor extension point or future recipe kind remains in the implementation.
+
+Result: complete and verified on 2026-07-21. Two reviewed recipes now share one versioned contract, placement seam, five-layer validation path, lifecycle/catalog admission rule, deterministic gallery/review workflow, and the existing canonical renderer/abyss/collision consumers. The locked corpus passed twice at 200/200 with identical result hash `765ead1a87f95732fb66dfa617b33e91d1ea921cb91f0287226309d17af46155`; all six sentinels reported `REJECTED 0`; Phase 0/1/3/4/5 fixtures passed 33/33. The throne-only production boundary and unused compatibility scaffolding were deleted, and the Phase 5 deletion ledger is empty.
 
 ### Phase 6 — Expand topologies, recipes, and planned vistas
 

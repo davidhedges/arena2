@@ -203,7 +203,10 @@ namespace DungeonLab.Editor
             }
 
             root = new GameObject(tempRootName);
-            Undo.RegisterCreatedObjectUndo(root, $"Create {rootName}");
+            if (!Application.isBatchMode)
+            {
+                Undo.RegisterCreatedObjectUndo(root, $"Create {rootName}");
+            }
             var floorRoot = CreateChild(root.transform, "Floors");
             var wallsRoot = CreateChild(root.transform, "Elevation Edge Walls");
             var cornersRoot = CreateChild(root.transform, "Elevation Edge Corners");
@@ -7414,7 +7417,10 @@ namespace DungeonLab.Editor
             }
 
             var instance = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
-            Undo.RegisterCreatedObjectUndo(instance, $"Create {name}");
+            if (!Application.isBatchMode)
+            {
+                Undo.RegisterCreatedObjectUndo(instance, $"Create {name}");
+            }
             instance.name = name;
             instance.transform.SetParent(parent);
             instance.transform.position = position;
@@ -7426,7 +7432,10 @@ namespace DungeonLab.Editor
         private static GameObject CreateChild(Transform parent, string name)
         {
             var child = new GameObject(name);
-            Undo.RegisterCreatedObjectUndo(child, $"Create {name}");
+            if (!Application.isBatchMode)
+            {
+                Undo.RegisterCreatedObjectUndo(child, $"Create {name}");
+            }
             child.transform.SetParent(parent, false);
             return child;
         }

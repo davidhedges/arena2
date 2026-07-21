@@ -8,10 +8,9 @@ namespace DungeonLab.Editor
     // compiles it directly into the existing DungeonLayout.
     internal sealed partial class DungeonLabGenerator
     {
-        private const string RoutePlannerVersion = "processional-spine-v3";
-        // Preserve the proven route embedding stream. Phase 4 changes only the
-        // declared landmark footprint/ports and uses a named episode stream for
-        // its bounded focal variation.
+        private const string RoutePlannerVersion = "processional-spine-v4";
+        // Preserve the proven route embedding stream. Phase 5 changes only the
+        // reviewed recipe contract/ports and uses named per-recipe streams.
         private const string RouteSpatialRandomVersion = "processional-spine-v1";
         private const string Phase1PatternId = "processional-spine";
         private const int Phase1LayoutAttemptLimit = 2;
@@ -47,7 +46,8 @@ namespace DungeonLab.Editor
             public readonly RouteTraversalIntent[] traversalEdges;
             public readonly RouteVistaIntent vista;
             public readonly RouteElevationPolicy elevationPolicy;
-            public readonly ThroneHallEpisodeIntent landmarkEpisode;
+            public readonly RecipeSlotIntent[] recipeSlots;
+            public readonly string catalogDigest;
             public readonly int bottomNode;
             public readonly int topNode;
 
@@ -57,7 +57,8 @@ namespace DungeonLab.Editor
                 RouteTraversalIntent[] traversalEdges,
                 RouteVistaIntent vista,
                 RouteElevationPolicy elevationPolicy,
-                ThroneHallEpisodeIntent landmarkEpisode,
+                RecipeSlotIntent[] recipeSlots,
+                string catalogDigest,
                 int bottomNode,
                 int topNode)
             {
@@ -68,7 +69,8 @@ namespace DungeonLab.Editor
                 this.traversalEdges = traversalEdges;
                 this.vista = vista;
                 this.elevationPolicy = elevationPolicy;
-                this.landmarkEpisode = landmarkEpisode;
+                this.recipeSlots = recipeSlots ?? Array.Empty<RecipeSlotIntent>();
+                this.catalogDigest = catalogDigest ?? string.Empty;
                 this.bottomNode = bottomNode;
                 this.topNode = topNode;
             }
@@ -177,7 +179,7 @@ namespace DungeonLab.Editor
             public readonly Vector2Int vistaTargetCell;
             public readonly Vector2Int vistaSourceFacing;
             public readonly Vector2Int vistaTargetFacing;
-            public readonly ThroneHallEpisodePlacement landmarkEpisode;
+            public readonly RecipePlacement[] recipes;
 
             public RouteTierRequirements(
                 RouteIntent intent,
@@ -186,7 +188,7 @@ namespace DungeonLab.Editor
                 Vector2Int vistaTargetCell,
                 Vector2Int vistaSourceFacing,
                 Vector2Int vistaTargetFacing,
-                ThroneHallEpisodePlacement landmarkEpisode)
+                RecipePlacement[] recipes)
             {
                 this.intent = intent;
                 this.reservedVistaCells = new HashSet<Vector2Int>(reservedVistaCells);
@@ -194,7 +196,7 @@ namespace DungeonLab.Editor
                 this.vistaTargetCell = vistaTargetCell;
                 this.vistaSourceFacing = vistaSourceFacing;
                 this.vistaTargetFacing = vistaTargetFacing;
-                this.landmarkEpisode = landmarkEpisode;
+                this.recipes = recipes ?? Array.Empty<RecipePlacement>();
             }
 
             public bool TryGetTransition(int firstRoom, int secondRoom, out RouteTraversalIntent requirement)
@@ -241,7 +243,19 @@ namespace DungeonLab.Editor
             ResetPhase1RouteDiagnostics();
             phase1LastLayoutAttempt = layoutAttempt;
 
-            RouteIntent intent = BuildProcessionalRouteIntent(dungeonSeed);
+            if (!DungeonRecipeCatalogService.TryLoadActiveCatalog(
+                    out ActiveDungeonRecipeCatalog recipeCatalog,
+                    out rejectionReason))
+            {
+                return RejectPhase1Route("RECIPE_CATALOG", rejectionReason, out rejectionReason);
+            }
+
+            if (!TryBuildRequiredRecipeSlots(recipeCatalog, out RecipeSlotIntent[] recipeSlots, out rejectionReason))
+            {
+                return RejectPhase1Route("RECIPE_CATALOG", rejectionReason, out rejectionReason);
+            }
+
+            RouteIntent intent = BuildProcessionalRouteIntent(dungeonSeed, recipeSlots, recipeCatalog.digest);
             phase1LastRouteIntent = intent;
             if (!TryValidateProcessionalRouteIntent(intent, out rejectionReason))
             {
@@ -301,7 +315,7 @@ namespace DungeonLab.Editor
             phase1LastVistaSourceFacing = sourceFacing;
             phase1LastVistaTargetFacing = targetFacing;
 
-            if (!TryPlaceThroneHallEpisode(
+            if (!TryPlaceRouteRecipes(
                     dungeonSeed,
                     layoutAttempt,
                     intent,
@@ -309,17 +323,17 @@ namespace DungeonLab.Editor
                     nodeCenters,
                     sourceFacing,
                     targetFacing,
-                    out ThroneHallEpisodePlacement landmarkEpisode,
+                    out RecipePlacement[] recipePlacements,
                     out rejectionReason))
             {
-                return RejectPhase1Route("THRONE_EPISODE_PLACEMENT", rejectionReason, out rejectionReason);
+                return RejectPhase1Route("RECIPE_PLACEMENT", rejectionReason, out rejectionReason);
             }
 
             if (!TryConnectProcessionalRooms(
                     intent,
                     rooms,
                     reservedVistaCells,
-                    landmarkEpisode,
+                    recipePlacements,
                     out HashSet<Vector2Int> floorCells,
                     out List<RoomConnection> connections,
                     out rejectionReason))
@@ -361,7 +375,8 @@ namespace DungeonLab.Editor
             roomZones.RemoveAll(zone =>
                 intent.nodes[zone.roomIndex].relativeElevationLevels >= MaxGeneratedLevel ||
                 zone.roomIndex == intent.vista.sourceNode ||
-                zone.roomIndex == intent.vista.targetNode);
+                zone.roomIndex == intent.vista.targetNode ||
+                TryGetRecipeSlot(intent.recipeSlots, zone.roomIndex, out _));
             StepFormationModeTable connectorTable = LoadAuthoredStairConnectorTableForGeneration();
             int connectorCandidateCount = connectorTable != null
                 ? CountConfiguredStairConnectorPrefabs(connectorTable)
@@ -379,20 +394,23 @@ namespace DungeonLab.Editor
                 targetVistaCell,
                 sourceFacing,
                 targetFacing,
-                landmarkEpisode);
+                recipePlacements);
             phase1LastFailureCode = string.Empty;
             return true;
         }
 
-        private static RouteIntent BuildProcessionalRouteIntent(int dungeonSeed)
+        private static RouteIntent BuildProcessionalRouteIntent(
+            int dungeonSeed,
+            RecipeSlotIntent[] recipeSlots,
+            string catalogDigest)
         {
             var nodes = new[]
             {
                 new RouteNodeIntent("arrival", "arrival", "arrival", 0, -1, 0),
-                new RouteNodeIntent("threshold", "connector", "compression", 1, -1, 0),
+                new RouteNodeIntent("threshold", "connector", "compression", 1, -1, 0, DungeonRecipeIds.CompressionConnector),
                 new RouteNodeIntent("choice", "junction", "choice", 2, -1, 4),
                 new RouteNodeIntent("reveal", "grand-room", "reveal", 3, -1, 4),
-                new RouteNodeIntent("vista-target", "landmark", "landmark", 4, -1, 8, ThroneHallEpisodeId),
+                new RouteNodeIntent("vista-target", "landmark", "landmark", 4, -1, 8, DungeonRecipeIds.ProcessionalLandmark),
                 new RouteNodeIntent("ascent", "connector", "ascent", 5, -1, 12),
                 new RouteNodeIntent("approach", "processional-hall", "approach", 6, -1, 16),
                 new RouteNodeIntent("rejoin", "return-hall", "rejoin", 7, -1, 20),
@@ -452,7 +470,8 @@ namespace DungeonLab.Editor
                     Phase1VistaTargetNode,
                     minimumReservedVoidCells: 3),
                 RouteElevationPolicy.AscendingSpine,
-                BuildThroneHallEpisodeIntent(),
+                recipeSlots,
+                catalogDigest,
                 bottomNode: 0,
                 topNode: Phase1MainNodeCount - 1);
         }
@@ -473,7 +492,7 @@ namespace DungeonLab.Editor
             }
 
             var ids = new HashSet<string>(StringComparer.Ordinal);
-            int landmarkSlotCount = 0;
+            int recipeSlotCount = 0;
             foreach (RouteNodeIntent node in intent.nodes)
             {
                 if (string.IsNullOrEmpty(node.id) || !ids.Add(node.id))
@@ -484,19 +503,30 @@ namespace DungeonLab.Editor
 
                 if (node.HasLandmarkSlot)
                 {
-                    landmarkSlotCount++;
+                    recipeSlotCount++;
                 }
             }
 
-            if (intent.landmarkEpisode == null ||
-                intent.landmarkEpisode.slotNode != ThroneHallSlotNode ||
-                landmarkSlotCount != 1 ||
-                !string.Equals(intent.nodes[ThroneHallSlotNode].landmarkSlotId, intent.landmarkEpisode.id, StringComparison.Ordinal) ||
-                !string.Equals(intent.nodes[ThroneHallSlotNode].role, "landmark", StringComparison.Ordinal) ||
-                !string.Equals(intent.nodes[ThroneHallSlotNode].beat, "landmark", StringComparison.Ordinal))
+            if (intent.recipeSlots == null ||
+                intent.recipeSlots.Length != 2 ||
+                recipeSlotCount != 2 ||
+                string.IsNullOrEmpty(intent.catalogDigest))
             {
-                rejectionReason = "route intent did not declare exactly one compatible processional landmark episode slot";
+                rejectionReason = "route intent did not declare exactly two reviewed recipe slots and a catalog digest";
                 return false;
+            }
+
+            foreach (RecipeSlotIntent slot in intent.recipeSlots)
+            {
+                if (slot == null || slot.recipe == null ||
+                    slot.slotNode < 0 || slot.slotNode >= intent.nodes.Length ||
+                    !string.Equals(intent.nodes[slot.slotNode].landmarkSlotId, slot.recipe.recipeId, StringComparison.Ordinal) ||
+                    Array.IndexOf(slot.recipe.eligibleRoles, intent.nodes[slot.slotNode].role) < 0 ||
+                    Array.IndexOf(slot.recipe.eligibleBeats, intent.nodes[slot.slotNode].beat) < 0)
+                {
+                    rejectionReason = "route intent contained an incompatible recipe slot binding";
+                    return false;
+                }
             }
 
             var adjacency = new List<int>[intent.nodes.Length];
@@ -831,7 +861,7 @@ namespace DungeonLab.Editor
                         nodeIndex,
                         nodeCenters[nodeIndex],
                         nodeCenters,
-                        intent.landmarkEpisode,
+                        intent.recipeSlots,
                         roomRandom,
                         allowWing:
                             attempt < Phase1RoomInflationAttemptLimit - 1 &&
@@ -888,14 +918,16 @@ namespace DungeonLab.Editor
             int nodeIndex,
             Vector2Int center,
             IReadOnlyList<Vector2Int> nodeCenters,
-            ThroneHallEpisodeIntent landmarkEpisode,
+            IReadOnlyList<RecipeSlotIntent> recipeSlots,
             System.Random random,
             bool allowWing)
         {
-            if (node.HasLandmarkSlot && landmarkEpisode != null && landmarkEpisode.slotNode == nodeIndex)
+            if (node.HasLandmarkSlot && TryGetRecipeSlot(recipeSlots, nodeIndex, out RecipeSlotIntent recipeSlot))
             {
-                Vector2Int focalAxis = CardinalUnit(center - nodeCenters[Phase1VistaSourceNode]);
-                return BuildThroneHallRoomParts(landmarkEpisode, center, focalAxis);
+                Vector2Int primaryAxis = recipeSlot.orientationBinding == RecipeOrientationBinding.VistaSourceToTarget
+                    ? CardinalUnit(center - nodeCenters[Phase1VistaSourceNode])
+                    : CardinalUnit(nodeCenters[nodeIndex + 1] - center);
+                return BuildRecipeRoomParts(recipeSlot, center, primaryAxis, mirrored: false);
             }
 
             int width;
@@ -966,6 +998,24 @@ namespace DungeonLab.Editor
             }
 
             return parts;
+        }
+
+        private static bool TryGetRecipeSlot(
+            IReadOnlyList<RecipeSlotIntent> slots,
+            int nodeIndex,
+            out RecipeSlotIntent slot)
+        {
+            foreach (RecipeSlotIntent candidate in slots ?? Array.Empty<RecipeSlotIntent>())
+            {
+                if (candidate != null && candidate.slotNode == nodeIndex)
+                {
+                    slot = candidate;
+                    return true;
+                }
+            }
+
+            slot = null;
+            return false;
         }
 
         // Three non-traversal neighbor pairs receive narrow, facing room
@@ -1113,7 +1163,7 @@ namespace DungeonLab.Editor
             RouteIntent intent,
             IReadOnlyList<RoomFootprint> rooms,
             HashSet<Vector2Int> reservedVistaCells,
-            ThroneHallEpisodePlacement landmarkEpisode,
+            IReadOnlyList<RecipePlacement> recipePlacements,
             out HashSet<Vector2Int> floorCells,
             out List<RoomConnection> connections,
             out string rejectionReason)
@@ -1137,30 +1187,33 @@ namespace DungeonLab.Editor
                     return false;
                 }
 
-                bool fromEpisode = edge.fromNode == landmarkEpisode.roomIndex;
-                bool toEpisode = edge.toNode == landmarkEpisode.roomIndex;
+                RecipePlacement fromRecipe = FindRecipePlacement(recipePlacements, edge.fromNode);
+                RecipePlacement toRecipe = FindRecipePlacement(recipePlacements, edge.toNode);
+                bool fromAuthored = fromRecipe != null;
+                bool toAuthored = toRecipe != null;
                 Vector2Int pathStart = fromRoom.Center;
                 Vector2Int pathEnd = toRoom.Center;
-                if (fromEpisode || toEpisode)
+                if (fromAuthored || toAuthored)
                 {
-                    if (!landmarkEpisode.TryGetThreshold(edge.id, out ThroneThresholdPlacement threshold))
+                    RecipePlacement authored = fromRecipe ?? toRecipe;
+                    if (!authored.TryGetPort(edge.id, out RecipePortPlacement port))
                     {
-                        rejectionReason = $"edge '{edge.id}' touched the episode without a declared typed threshold";
+                        rejectionReason = $"edge '{edge.id}' touched recipe '{authored.RecipeId}' without a declared typed port";
                         return false;
                     }
 
-                    if (fromEpisode)
+                    if (fromAuthored)
                     {
-                        pathStart = threshold.cell;
+                        pathStart = port.cell;
                     }
                     else
                     {
-                        pathEnd = threshold.cell;
+                        pathEnd = port.cell;
                     }
                 }
 
-                List<Vector2Int> path = fromEpisode || toEpisode
-                    ? BuildEpisodePortPath(pathStart, pathEnd, delta, fromEpisode)
+                List<Vector2Int> path = fromAuthored || toAuthored
+                    ? BuildRecipePortPath(pathStart, pathEnd, delta, fromAuthored)
                     : BuildStraightCardinalPath(pathStart, pathEnd);
                 if (!ValidatePathCardinality(path, out string pathError) ||
                     PathCrossesThirdRoom(path, rooms, edge.fromNode, edge.toNode) ||
@@ -1197,7 +1250,22 @@ namespace DungeonLab.Editor
             return true;
         }
 
-        private static List<Vector2Int> BuildEpisodePortPath(
+        private static RecipePlacement FindRecipePlacement(
+            IReadOnlyList<RecipePlacement> placements,
+            int roomIndex)
+        {
+            foreach (RecipePlacement placement in placements ?? Array.Empty<RecipePlacement>())
+            {
+                if (placement != null && placement.roomIndex == roomIndex)
+                {
+                    return placement;
+                }
+            }
+
+            return null;
+        }
+
+        private static List<Vector2Int> BuildRecipePortPath(
             Vector2Int start,
             Vector2Int end,
             Vector2Int roomCenterDelta,

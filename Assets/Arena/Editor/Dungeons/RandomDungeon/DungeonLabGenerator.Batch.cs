@@ -16,7 +16,7 @@ namespace DungeonLab.Editor
     internal sealed partial class DungeonLabGenerator
     {
         private const string BatchReportDirectory = "DungeonLabReports";
-        private const string DungeonPlanSummaryVersion = "dungeon-plan-v3";
+        private const string DungeonPlanSummaryVersion = "dungeon-plan-v4";
         private const int Phase0BaselineFirstSeed = 2026072100;
         private const int Phase0BaselineSeedCount = 200;
         private const int LockedSeedCount = 100;
@@ -148,7 +148,7 @@ namespace DungeonLab.Editor
             int hardValidCount = 0;
             int routeRequirementsValidCount = 0;
             int finalVistaValidCount = 0;
-            int throneHallEpisodeValidCount = 0;
+            int recipeSetValidCount = 0;
             int completedSeedCount = 0;
 
             try
@@ -218,10 +218,10 @@ namespace DungeonLab.Editor
                         finalVistaValidCount++;
                     }
 
-                    if (seedReport["episodeResolution"]?.Value<bool?>("atomicAndValid") == true &&
-                        seedReport["validation"]?["throneHallEpisode"]?.Value<bool?>("passed") == true)
+                    if (seedReport["validation"]?["recipes"]?.Value<bool?>("passed") == true &&
+                        (seedReport["recipeResolutions"] as JArray)?.Count == 2)
                     {
-                        throneHallEpisodeValidCount++;
+                        recipeSetValidCount++;
                     }
 
                     JToken correlationToken = planSummary["depthLevelCorrelation"];
@@ -251,7 +251,7 @@ namespace DungeonLab.Editor
                 "Dungeon Lab BATCH_VALIDATION " +
                 $"range={firstSeed}..{firstSeed + completedSeedCount - 1}; seeds={completedSeedCount}; " +
                 $"accepted={successCount}; failed={failedSeeds.Count}; hardValid={hardValidCount}; " +
-                $"routeRequirementsValid={routeRequirementsValidCount}; finalVistasValid={finalVistaValidCount}; throneHallEpisodesValid={throneHallEpisodeValidCount}; " +
+                $"routeRequirementsValid={routeRequirementsValidCount}; finalVistasValid={finalVistaValidCount}; recipeSetsValid={recipeSetValidCount}; " +
                 $"meanLayoutAttempts={attemptDistribution.Value<double>("mean"):0.##}; " +
                 $"p95LayoutAttempts={attemptDistribution.Value<int>("p95")}; maxLayoutAttempts={attemptDistribution.Value<int>("max")}; " +
                 $"archetypes={archetypeSummary}; tierSpans={tierSpanSummary}; " +
@@ -280,7 +280,7 @@ namespace DungeonLab.Editor
                 routeClimbCounts,
                 routeRequirementsValidCount,
                 finalVistaValidCount,
-                throneHallEpisodeValidCount,
+                recipeSetValidCount,
                 seedReports);
             Debug.Log($"Dungeon Lab: batch validation report written to {reportPath}");
         }
@@ -399,21 +399,6 @@ namespace DungeonLab.Editor
                 SnapshotLine("vista.finalSourceLevel", report["routeResolution"]?["vista"]?["sourceLevel"]),
                 SnapshotLine("vista.finalTargetLevel", report["routeResolution"]?["vista"]?["targetLevel"]),
                 SnapshotLine("vista.finalReservedVoidCells", report["routeResolution"]?["vista"]?["reservedVoidCellCount"]),
-                SnapshotLine("episode.id", report["episodeResolution"]?["id"]),
-                SnapshotLine("episode.atomicAndValid", report["episodeResolution"]?["atomicAndValid"]),
-                SnapshotLine("episode.roomIndex", report["episodeResolution"]?["roomIndex"]),
-                SnapshotLine("episode.focalAxis", report["episodeResolution"]?["focalAxis"]),
-                SnapshotLine("episode.focalZoneCells", report["episodeResolution"]?["focalZoneCells"] is JArray focalCells ? focalCells.Count : 0),
-                SnapshotLine("episode.sideGalleryCount", report["episodeResolution"]?["sideGalleries"] is JArray galleries ? galleries.Count : 0),
-                SnapshotLine("episode.thresholdCount", report["episodeResolution"]?["thresholds"] is JArray thresholds ? thresholds.Count : 0),
-                SnapshotLine("episode.twinStairCount", report["episodeResolution"]?["twinStairs"] is JArray twinStairs ? twinStairs.Count : 0),
-                SnapshotLine("episode.selectedFocalDesign", report["episodeResolution"]?["selectedFocalDesignId"]),
-                SnapshotLine("episode.baseLevel", report["episodeResolution"]?["baseLevel"]),
-                SnapshotLine("episode.galleryLevel", report["episodeResolution"]?["galleryLevel"]),
-                SnapshotLine("episode.genericConnectionsThroughDeclaredPorts", report["episodeResolution"]?["genericConnectionsThroughDeclaredPorts"]),
-                SnapshotLine("episode.coupledReservationsComplete", report["episodeResolution"]?["coupledReservationsComplete"]),
-                SnapshotLine("episode.sideGalleriesSymmetric", report["episodeResolution"]?["sideGalleriesSymmetric"]),
-                SnapshotLine("episode.protectedZonesValid", report["episodeResolution"]?["protectedZonesValid"]),
                 SnapshotLine("schema.fieldCount", report["schemaUsage"]?["fieldCount"]),
                 SnapshotLine("schema.allFieldsConsumed", report["schemaUsage"]?["allFieldsConsumed"]),
                 SnapshotLine("validation.passed", report["validation"]?["passed"]),
@@ -421,7 +406,7 @@ namespace DungeonLab.Editor
                 SnapshotLine("validation.roomGraphConnectivity", report["validation"]?["roomGraphConnectivity"]?["passed"]),
                 SnapshotLine("validation.verticalTraversal", report["validation"]?["verticalTraversal"]?["passed"]),
                 SnapshotLine("validation.routeRequirements", report["validation"]?["routeRequirements"]?["passed"]),
-                SnapshotLine("validation.throneHallEpisode", report["validation"]?["throneHallEpisode"]?["passed"]),
+                SnapshotLine("validation.recipes", report["validation"]?["recipes"]?["passed"]),
                 SnapshotLine("validation.headroom", report["validation"]?["headroom"]?["passed"]),
                 SnapshotLine("metric.rooms", report["layout"]?["rooms"]),
                 SnapshotLine("metric.connections", report["layout"]?["connections"]),
@@ -429,14 +414,20 @@ namespace DungeonLab.Editor
                 SnapshotLine("lastRejectionCode", report["lastRejectionCode"]),
                 SnapshotLine("failure", report["lastRejection"])
             };
+            AppendRecipeResolutionSnapshot(
+                lines,
+                report["recipeResolutions"] as JArray);
             return string.Join("\n", lines);
         }
 
         private static string BuildRouteIntentOnlySnapshot(int seed)
         {
             ResetPhase1RouteDiagnostics();
-            phase1LastRouteIntent = BuildProcessionalRouteIntent(seed);
+            phase1LastRouteIntent = BuildDiagnosticRouteIntent(seed);
             JObject intent = BuildPhase1RouteIntentProjection();
+            JObject phase4Recipe = FindRecipeProjection(
+                intent["recipeSlots"] as JArray,
+                DungeonRecipeIds.ProcessionalLandmark);
             bool containsSpatialCoordinates = intent.ToString(Formatting.None).Contains("\"center\"");
             int requiredStairs = 0;
             int requiredBridges = 0;
@@ -462,12 +453,14 @@ namespace DungeonLab.Editor
                 SnapshotLine("vertical.elevationPolicy", intent["elevationPolicy"]),
                 SnapshotLine("vertical.bottomRelativeLevel", intent["nodes"]?[0]?["relativeElevationLevels"]),
                 SnapshotLine("vertical.topRelativeLevel", intent["nodes"]?[8]?["relativeElevationLevels"]),
-                SnapshotLine("episode.id", intent["landmarkEpisode"]?["id"]),
-                SnapshotLine("episode.slotNode", intent["landmarkEpisode"]?["slotNode"]),
-                SnapshotLine("episode.focalAxisBinding", intent["landmarkEpisode"]?["focalAxisBinding"]),
-                SnapshotLine("episode.coupledStairCount", intent["landmarkEpisode"]?["coupledStairCount"]),
-                SnapshotLine("episode.allowedFocalVariations", intent["landmarkEpisode"]?["allowedFocalDesignIds"] is JArray focalVariations ? focalVariations.Count : 0),
-                SnapshotLine("episode.thresholdCount", intent["landmarkEpisode"]?["thresholds"] is JArray episodeThresholds ? episodeThresholds.Count : 0),
+                SnapshotLine("episode.id", phase4Recipe?["id"]),
+                SnapshotLine("episode.slotNode", phase4Recipe?["slotNode"]),
+                SnapshotLine("episode.focalAxisBinding", phase4Recipe?["orientationBinding"]),
+                SnapshotLine("episode.coupledStairCount", phase4Recipe?["transitionCount"]),
+                SnapshotLine("episode.allowedFocalVariations", phase4Recipe?["variationCount"]),
+                SnapshotLine("episode.thresholdCount", phase4Recipe?["ports"] is JArray episodePorts ? episodePorts.Count : 0),
+                SnapshotLine("recipes.slotCount", intent["recipeSlots"] is JArray slots ? slots.Count : 0),
+                SnapshotLine("recipes.catalogDigest", intent["catalogDigest"]),
                 $"vertical.requiredStairs={requiredStairs}",
                 $"vertical.requiredBridges={requiredBridges}",
                 $"vertical.requiredStairwells={requiredStairwells}",
@@ -476,22 +469,76 @@ namespace DungeonLab.Editor
             return string.Join("\n", lines);
         }
 
-        // Isolated Phase 4 diagnostic: exercises every cardinal orientation and
-        // every explicitly allowed focal variation without constructing a second
-        // plan or renderer path. Full-dungeon diagnostics use the normal builder.
-        private static string BuildThroneHallIsolatedSnapshot(int seed)
+        private static RouteIntent BuildDiagnosticRouteIntent(int seed)
         {
-            RouteIntent routeIntent = BuildProcessionalRouteIntent(seed);
-            ThroneHallEpisodeIntent episode = routeIntent.landmarkEpisode;
-            var combinations = new HashSet<string>(StringComparer.Ordinal);
-            bool geometryValid = true;
-            bool focalAssetsValid = true;
-            foreach (string designId in episode.allowedFocalDesignIds)
+            if (!DungeonRecipeCatalogService.TryLoadActiveCatalog(
+                    out ActiveDungeonRecipeCatalog catalog,
+                    out string rejectionReason) ||
+                !TryBuildRequiredRecipeSlots(catalog, out RecipeSlotIntent[] slots, out rejectionReason))
             {
-                focalAssetsValid &= StairForge.TryGetBackedShowpieceDesign(designId, out _);
+                throw new InvalidOperationException(rejectionReason);
             }
 
-            Vector2Int center = new Vector2Int(20, 20);
+            return BuildProcessionalRouteIntent(seed, slots, catalog.digest);
+        }
+
+        private static string BuildPhase5RecipeContractSnapshot(int seed)
+        {
+            RouteIntent intent = BuildDiagnosticRouteIntent(seed);
+            DungeonRecipeCatalogService.TryLoadActiveCatalog(
+                out ActiveDungeonRecipeCatalog catalog,
+                out string catalogError);
+            var lines = new List<string>
+            {
+                $"catalog.valid={catalog != null}",
+                $"catalog.error={catalogError}",
+                $"catalog.reviewedCount={catalog?.recipes.Length ?? 0}",
+                $"catalog.digest={catalog?.digest ?? string.Empty}",
+                $"route.recipeSlotCount={intent.recipeSlots.Length}",
+                $"route.catalogDigestMatches={string.Equals(intent.catalogDigest, catalog?.digest, StringComparison.Ordinal)}",
+                $"schema.fieldCount={BuildRecipeSchemaUsageProjection().Value<int>("fieldCount")}",
+                $"schema.allFieldsConsumed={BuildRecipeSchemaUsageProjection().Value<bool>("allFieldsConsumed")}"
+            };
+            int recipeIndex = 0;
+            foreach (DungeonRecipeAsset recipe in catalog?.recipes ?? Array.Empty<DungeonRecipeAsset>())
+            {
+                DungeonRecipeValidationResult validation = DungeonRecipeValidator.ValidateContract(recipe);
+                string prefix = $"recipe{recipeIndex++}";
+                RecipeSlotIntent slot = null;
+                foreach (RecipeSlotIntent candidate in intent.recipeSlots)
+                {
+                    if (string.Equals(candidate.recipe.recipeId, recipe.recipeId, StringComparison.Ordinal))
+                    {
+                        slot = candidate;
+                        break;
+                    }
+                }
+                lines.Add($"{prefix}.id={recipe.recipeId}");
+                lines.Add($"{prefix}.schema={recipe.schemaVersion}");
+                lines.Add($"{prefix}.slotNode={slot?.slotNode ?? -1}");
+                lines.Add($"{prefix}.orientationBinding={slot?.orientationBinding.ToString() ?? string.Empty}");
+                lines.Add($"{prefix}.reviewCurrent={DungeonRecipeValidator.ReviewIsCurrent(recipe)}");
+                lines.Add($"{prefix}.schemaValid={validation.LayerPassed(DungeonRecipeValidationLayer.Schema)}");
+                lines.Add($"{prefix}.structureValid={validation.LayerPassed(DungeonRecipeValidationLayer.Structure)}");
+                lines.Add($"{prefix}.variationValid={validation.LayerPassed(DungeonRecipeValidationLayer.Variation)}");
+                lines.Add($"{prefix}.neighborValid={validation.LayerPassed(DungeonRecipeValidationLayer.Neighbor)}");
+                lines.Add($"{prefix}.ports={recipe.ports.Length}");
+                lines.Add($"{prefix}.transitions={recipe.transitions.Length}");
+                lines.Add($"{prefix}.symmetryPairs={recipe.symmetryPairs.Length}");
+                lines.Add($"{prefix}.variations={recipe.variations.Length}");
+                AppendIsolatedRecipeEvidence(lines, prefix, seed, intent, slot);
+            }
+
+            return string.Join("\n", lines);
+        }
+
+        private static void AppendIsolatedRecipeEvidence(
+            List<string> lines,
+            string prefix,
+            int seed,
+            RouteIntent routeIntent,
+            RecipeSlotIntent slot)
+        {
             Vector2Int[] axes =
             {
                 Vector2Int.up,
@@ -499,34 +546,62 @@ namespace DungeonLab.Editor
                 Vector2Int.down,
                 Vector2Int.left
             };
-            foreach (Vector2Int focalAxis in axes)
+            int alternativeCount = Math.Max(1, slot?.recipe?.variations?.Length ?? 0);
+            var combinations = new HashSet<string>(StringComparer.Ordinal);
+            bool geometryValid = slot?.recipe != null;
+            bool visualAssetsValid = geometryValid;
+            foreach (DungeonRecipeVariation variation in slot?.recipe?.variations ?? Array.Empty<DungeonRecipeVariation>())
             {
-                Vector2Int transverse = new Vector2Int(-focalAxis.y, focalAxis.x);
-                var nodeCenters = new Vector2Int[Phase1MainNodeCount + Phase1BranchNodeCount];
-                nodeCenters[episode.slotNode] = center;
-                nodeCenters[episode.slotNode - 1] = center - transverse * 9;
-                nodeCenters[episode.slotNode + 1] = center + transverse * 9;
-                nodeCenters[Phase1VistaSourceNode] = center - focalAxis * 9;
+                DungeonRecipeMotif motif = FindRecipeMotif(slot.recipe, variation.motifId);
+                visualAssetsValid &= motif != null &&
+                    StairForge.TryGetBackedShowpieceDesign(motif.implementationId, out _);
+            }
+
+            Vector2Int center = new Vector2Int(20, 20);
+            foreach (Vector2Int primaryAxis in axes)
+            {
+                Vector2Int transverse = new Vector2Int(-primaryAxis.y, primaryAxis.x);
+                var nodeCenters = new Vector2Int[routeIntent.nodes.Length];
+                nodeCenters[slot.slotNode] = center;
+                foreach (DungeonRecipePort port in slot.recipe.ports)
+                {
+                    if (!slot.TryGetEdgeId(port.id, out string edgeId) ||
+                        !TryGetTraversal(routeIntent, edgeId, out RouteTraversalIntent edge))
+                    {
+                        geometryValid = false;
+                        continue;
+                    }
+
+                    int neighbor = edge.fromNode == slot.slotNode ? edge.toNode : edge.fromNode;
+                    Vector2Int outward = TransformRecipeDirection(
+                        port.outwardDirection,
+                        primaryAxis,
+                        transverse,
+                        mirrored: false);
+                    nodeCenters[neighbor] = center + outward * 9;
+                }
+
                 var rooms = new List<RoomFootprint>();
                 for (int index = 0; index < nodeCenters.Length; index++)
                 {
                     rooms.Add(RoomFootprint.FromRect(new RectInt(100 + index * 2, 100, 1, 1)));
                 }
 
-                rooms[episode.slotNode] = new RoomFootprint(
-                    BuildThroneHallRoomParts(episode, center, focalAxis));
-                for (int attempt = 0; attempt < 32 &&
-                     combinations.Count < axes.Length * episode.allowedFocalDesignIds.Length; attempt++)
+                rooms[slot.slotNode] = new RoomFootprint(
+                    BuildRecipeRoomParts(slot, center, primaryAxis, mirrored: false));
+                int expectedCombinations = axes.Length * alternativeCount;
+                for (int attempt = 0; attempt < 64 && combinations.Count < expectedCombinations; attempt++)
                 {
-                    if (!TryPlaceThroneHallEpisode(
+                    if (!TryPlaceRecipe(
                             seed,
                             attempt,
                             routeIntent,
+                            slot,
                             rooms,
                             nodeCenters,
-                            focalAxis,
-                            -focalAxis,
-                            out ThroneHallEpisodePlacement placement,
+                            primaryAxis,
+                            -primaryAxis,
+                            out RecipePlacement placement,
                             out _))
                     {
                         geometryValid = false;
@@ -534,30 +609,251 @@ namespace DungeonLab.Editor
                     }
 
                     geometryValid &=
-                        placement.focalAxis == focalAxis &&
-                        placement.focalZoneCells.Length == episode.focalZoneSize.x * episode.focalZoneSize.y &&
-                        placement.sideGalleryCells.Length == 2 &&
-                        placement.sideGalleryCells[0].Length == episode.sideGallerySize.x * episode.sideGallerySize.y &&
-                        placement.sideGalleryCells[1].Length == episode.sideGallerySize.x * episode.sideGallerySize.y &&
-                        placement.thresholds.Length == 2 &&
-                        placement.twinStairs.Length == episode.coupledStairCount;
-                    combinations.Add($"{focalAxis.x},{focalAxis.y}:{placement.selectedFocalDesignId}");
+                        placement.primaryAxis == primaryAxis &&
+                        placement.protectedCells.Length > 0 &&
+                        placement.zones.Length == slot.recipe.zones.Length &&
+                        placement.ports.Length == slot.recipe.ports.Length &&
+                        placement.transitions.Length == slot.recipe.transitions.Length;
+                    string alternative = string.IsNullOrEmpty(placement.selectedVisualImplementationId)
+                        ? "structural"
+                        : placement.selectedVisualImplementationId;
+                    combinations.Add($"{primaryAxis.x},{primaryAxis.y}:{alternative}");
                 }
             }
 
-            JObject schemaUsage = BuildThroneHallSchemaUsageProjection();
+            lines.Add($"{prefix}.isolatedOrientationCount={axes.Length}");
+            lines.Add($"{prefix}.isolatedAlternativeCount={alternativeCount}");
+            lines.Add($"{prefix}.isolatedCombinationCount={combinations.Count}");
+            lines.Add($"{prefix}.isolatedGeometryValid={geometryValid}");
+            lines.Add($"{prefix}.isolatedVisualAssetsValid={visualAssetsValid}");
+        }
+
+        private static string BuildPhase5FullDungeonSnapshot(int seed)
+        {
+            JObject report = BuildPhase0SeedReport(seed);
+            JObject renderer = JObject.Parse(BuildPhase0RendererProbeJson(seed));
             var lines = new List<string>
             {
-                $"isolated.episodeId={episode.id}",
-                $"isolated.orientationCount={axes.Length}",
-                $"isolated.focalVariationCount={episode.allowedFocalDesignIds.Length}",
-                $"isolated.combinationCount={combinations.Count}",
-                $"isolated.geometryValid={geometryValid}",
-                $"isolated.focalAssetsValid={focalAssetsValid}",
-                $"schema.fieldCount={schemaUsage.Value<int>("fieldCount")}",
-                $"schema.allFieldsConsumed={schemaUsage.Value<bool>("allFieldsConsumed")}",
+                SnapshotLine("accepted", report["accepted"]),
+                SnapshotLine("validation.passed", report["validation"]?["passed"]),
+                SnapshotLine("validation.recipes", report["validation"]?["recipes"]?["passed"]),
+                SnapshotLine("renderer.passed", renderer["renderer"]?["passed"]),
+                SnapshotLine("renderer.rejectedPlacements", renderer["renderer"]?["rejectedPlacements"]),
+                SnapshotLine("abyss.passed", renderer["boundary"]?["passed"]),
+                SnapshotLine("collision.passed", renderer["collisionPreconditions"]?["passed"])
             };
+            AppendRecipeResolutionSnapshot(lines, report["recipeResolutions"] as JArray);
+
             return string.Join("\n", lines);
+        }
+
+        private static void AppendRecipeResolutionSnapshot(List<string> lines, JArray recipes)
+        {
+            lines.Add($"recipes.count={recipes?.Count ?? 0}");
+            for (int index = 0; index < (recipes?.Count ?? 0); index++)
+            {
+                JToken token = recipes[index];
+                string prefix = $"recipe{index}";
+                int elevatedZoneCount = 0;
+                int protectedFocalCellCount = 0;
+                int elevatedLevel = token.Value<int?>("baseLevel") ?? 0;
+                foreach (JToken zone in token["zones"] as JArray ?? new JArray())
+                {
+                    if (string.Equals(
+                            zone.Value<string>("kind"),
+                            DungeonRecipeZoneKind.Elevated.ToString(),
+                            StringComparison.Ordinal))
+                    {
+                        elevatedZoneCount++;
+                        elevatedLevel = Math.Max(
+                            elevatedLevel,
+                            (token.Value<int?>("baseLevel") ?? 0) +
+                            (zone.Value<int?>("relativeLevel") ?? 0));
+                    }
+
+                    if (string.Equals(
+                            zone.Value<string>("kind"),
+                            DungeonRecipeZoneKind.ProtectedFocal.ToString(),
+                            StringComparison.Ordinal))
+                    {
+                        protectedFocalCellCount += (zone["cells"] as JArray)?.Count ?? 0;
+                    }
+                }
+
+                lines.Add(SnapshotLine($"{prefix}.id", token["id"]));
+                lines.Add(SnapshotLine($"{prefix}.atomic", token["atomicAndValid"]));
+                lines.Add(SnapshotLine($"{prefix}.roomIndex", token["roomIndex"]));
+                lines.Add(SnapshotLine($"{prefix}.primaryAxis", token["primaryAxis"]));
+                lines.Add(SnapshotLine($"{prefix}.ports", token["ports"] is JArray ports ? ports.Count : 0));
+                lines.Add(SnapshotLine($"{prefix}.portsBound", token["mandatoryPortsBound"]));
+                lines.Add(SnapshotLine($"{prefix}.transitions", token["transitions"] is JArray transitions ? transitions.Count : 0));
+                lines.Add(SnapshotLine($"{prefix}.reservationsComplete", token["reservationsComplete"]));
+                lines.Add(SnapshotLine($"{prefix}.protected", token["protectedCells"] is JArray protectedCells ? protectedCells.Count : 0));
+                lines.Add(SnapshotLine($"{prefix}.protectedZonesValid", token["protectedZonesValid"]));
+                lines.Add(SnapshotLine($"{prefix}.elevatedZones", elevatedZoneCount));
+                lines.Add(SnapshotLine($"{prefix}.protectedFocalCells", protectedFocalCellCount));
+                lines.Add(SnapshotLine($"{prefix}.baseLevel", token["baseLevel"]));
+                lines.Add(SnapshotLine($"{prefix}.elevatedLevel", elevatedLevel));
+                lines.Add(SnapshotLine($"{prefix}.variation", token["selectedVariationId"]));
+                lines.Add(SnapshotLine($"{prefix}.visualImplementation", token["selectedVisualImplementationId"]));
+            }
+        }
+
+        private static string BuildPhase5LifecycleSnapshot(int seed)
+        {
+            DungeonRecipeCatalogService.TryLoadActiveCatalog(
+                out ActiveDungeonRecipeCatalog catalog,
+                out string catalogError);
+            DungeonRecipeAsset source = null;
+            catalog?.TryGet(DungeonRecipeIds.CompressionConnector, out source);
+            string before = EditorJsonUtility.ToJson(source);
+            DungeonRecipeValidationResult validation = DungeonRecipeValidator.ValidateContract(source);
+            string after = EditorJsonUtility.ToJson(source);
+
+            var stale = Instantiate(source);
+            stale.hideFlags = HideFlags.HideAndDontSave;
+            stale.contentVersion++;
+            bool staleReview = !DungeonRecipeValidator.ReviewIsCurrent(stale);
+            bool staleEligible = DungeonRecipeCatalogService.IsEligibleForOrdinaryGeneration(stale);
+
+            TryBuildRecipeFullDungeonEvidence(
+                source.recipeId,
+                seed,
+                out DungeonRecipeFullDungeonEvidence evidence,
+                out _);
+            var invalid = Instantiate(source);
+            invalid.hideFlags = HideFlags.HideAndDontSave;
+            invalid.lifecycle = DungeonRecipeLifecycle.Draft;
+            invalid.reviewedDigest = string.Empty;
+            invalid.reviewer = string.Empty;
+            invalid.reviewedAtUtc = string.Empty;
+            invalid.transitions[0].upperLandingCells = Array.Empty<Vector2Int>();
+            bool invalidPromoted = DungeonRecipeLifecycleService.TryPromote(
+                invalid,
+                "test-reviewer",
+                "invalid",
+                evidence,
+                out DungeonRecipeValidationResult invalidValidation);
+
+            var draft = Instantiate(source);
+            draft.hideFlags = HideFlags.HideAndDontSave;
+            draft.lifecycle = DungeonRecipeLifecycle.Draft;
+            draft.reviewedDigest = string.Empty;
+            draft.reviewer = string.Empty;
+            draft.reviewedAtUtc = string.Empty;
+            bool draftPromoted = DungeonRecipeLifecycleService.TryPromote(
+                draft,
+                "test-reviewer",
+                "valid",
+                evidence,
+                out DungeonRecipeValidationResult promotionValidation);
+            bool promotedCurrent = DungeonRecipeValidator.ReviewIsCurrent(draft);
+            bool promotionMetadataRecorded =
+                !string.IsNullOrEmpty(draft.reviewedDigest) &&
+                !string.IsNullOrEmpty(draft.reviewer) &&
+                !string.IsNullOrEmpty(draft.reviewedAtUtc);
+            bool promotedEligible = DungeonRecipeCatalogService.IsEligibleForOrdinaryGeneration(draft);
+
+            DestroyImmediate(stale);
+            DestroyImmediate(invalid);
+            DestroyImmediate(draft);
+            return string.Join("\n", new[]
+            {
+                $"catalog.error={catalogError}",
+                $"validation.passed={validation.Passed}",
+                $"validation.nonMutating={string.Equals(before, after, StringComparison.Ordinal)}",
+                $"stale.detected={staleReview}",
+                $"stale.eligible={staleEligible}",
+                $"invalid.promoted={invalidPromoted}",
+                $"invalid.structurePassed={invalidValidation.LayerPassed(DungeonRecipeValidationLayer.Structure)}",
+                $"draft.promoted={draftPromoted}",
+                $"draft.allLayersPassed={promotionValidation.Passed}",
+                $"draft.reviewCurrent={promotedCurrent}",
+                $"draft.reviewMetadataRecorded={promotionMetadataRecorded}",
+                $"draft.ordinaryGenerationEligible={promotedEligible}"
+            });
+        }
+
+        private static string BuildPhase5WorkflowSnapshot(int seed)
+        {
+            DungeonRecipeCatalogService.TryLoadActiveCatalog(
+                out ActiveDungeonRecipeCatalog catalog,
+                out string catalogError);
+            DungeonRecipeAsset throne = null;
+            DungeonRecipeAsset vestibule = null;
+            catalog?.TryGet(DungeonRecipeIds.ProcessionalLandmark, out throne);
+            catalog?.TryGet(DungeonRecipeIds.CompressionConnector, out vestibule);
+            bool firstPassed = DungeonRecipeAuthoringService.TryBuildReviewGallery(
+                throne,
+                seed,
+                out string firstPath,
+                out string firstMessage);
+            JObject first = firstPassed ? JObject.Parse(File.ReadAllText(firstPath)) : new JObject();
+            bool secondPassed = DungeonRecipeAuthoringService.TryBuildReviewGallery(
+                throne,
+                seed,
+                out string secondPath,
+                out string secondMessage);
+            JObject second = secondPassed ? JObject.Parse(File.ReadAllText(secondPath)) : new JObject();
+            bool contrastFirstPassed = DungeonRecipeAuthoringService.TryBuildReviewGallery(
+                vestibule,
+                seed,
+                out string contrastFirstPath,
+                out string contrastFirstMessage);
+            JObject contrastFirst = contrastFirstPassed
+                ? JObject.Parse(File.ReadAllText(contrastFirstPath))
+                : new JObject();
+            bool contrastSecondPassed = DungeonRecipeAuthoringService.TryBuildReviewGallery(
+                vestibule,
+                seed,
+                out string contrastSecondPath,
+                out string contrastSecondMessage);
+            JObject contrastSecond = contrastSecondPassed
+                ? JObject.Parse(File.ReadAllText(contrastSecondPath))
+                : new JObject();
+            var kinds = new HashSet<string>(StringComparer.Ordinal);
+            var mirrorStates = new HashSet<bool>();
+            foreach (JToken entry in first["entries"] as JArray ?? new JArray())
+            {
+                kinds.Add(entry.Value<string>("kind") ?? string.Empty);
+                if (entry["mirrored"] != null) mirrorStates.Add(entry.Value<bool>("mirrored"));
+            }
+            var contrastKinds = new HashSet<string>(StringComparer.Ordinal);
+            var contrastMirrorStates = new HashSet<bool>();
+            foreach (JToken entry in contrastFirst["entries"] as JArray ?? new JArray())
+            {
+                contrastKinds.Add(entry.Value<string>("kind") ?? string.Empty);
+                if (entry["mirrored"] != null) contrastMirrorStates.Add(entry.Value<bool>("mirrored"));
+            }
+
+            return string.Join("\n", new[]
+            {
+                $"catalog.error={catalogError}",
+                $"gallery.firstPassed={firstPassed}",
+                $"gallery.secondPassed={secondPassed}",
+                $"gallery.samePath={string.Equals(firstPath, secondPath, StringComparison.Ordinal)}",
+                $"gallery.sameHash={string.Equals(first.Value<string>("galleryHash"), second.Value<string>("galleryHash"), StringComparison.Ordinal)}",
+                $"gallery.entryCount={(first["entries"] as JArray)?.Count ?? 0}",
+                $"gallery.contract={kinds.Contains("contract")}",
+                $"gallery.topDown={kinds.Contains("top_down")}",
+                $"gallery.playerHeight={kinds.Contains("player_height")}",
+                $"gallery.belowFloor={kinds.Contains("below_floor")}",
+                $"gallery.neighbor={kinds.Contains("neighbor")}",
+                $"gallery.mirrorStateCount={mirrorStates.Count}",
+                $"gallery.fullDungeon={first["fullDungeon"]?.Value<bool?>("canonicalPlan") == true}",
+                $"contrast.firstPassed={contrastFirstPassed}",
+                $"contrast.secondPassed={contrastSecondPassed}",
+                $"contrast.samePath={string.Equals(contrastFirstPath, contrastSecondPath, StringComparison.Ordinal)}",
+                $"contrast.sameHash={string.Equals(contrastFirst.Value<string>("galleryHash"), contrastSecond.Value<string>("galleryHash"), StringComparison.Ordinal)}",
+                $"contrast.entryCount={(contrastFirst["entries"] as JArray)?.Count ?? 0}",
+                $"contrast.requiredViews={contrastKinds.IsSupersetOf(new[] { "contract", "top_down", "player_height", "below_floor", "neighbor" })}",
+                $"contrast.mirrorStateCount={contrastMirrorStates.Count}",
+                $"contrast.fullDungeon={contrastFirst["fullDungeon"]?.Value<bool?>("canonicalPlan") == true}",
+                $"gallery.message={firstMessage}",
+                $"gallery.secondMessage={secondMessage}",
+                $"contrast.message={contrastFirstMessage}",
+                $"contrast.secondMessage={contrastSecondMessage}"
+            });
         }
 
         // Reflection entry point for the one-seed renderer/collision precondition
@@ -577,15 +873,18 @@ namespace DungeonLab.Editor
                 int meshColliderCount = 0;
                 int missingMeshCount = 0;
                 int unreadableMeshCount = 0;
-                int episodeShowpieceCount = 0;
-                string focalDesignId = seedReport["episodeResolution"]?.Value<string>("selectedFocalDesignId") ?? string.Empty;
+                int selectedShowpieceCount = 0;
+                JObject visualRecipe = FindRecipeProjection(
+                    seedReport["recipeResolutions"] as JArray,
+                    DungeonRecipeIds.ProcessionalLandmark);
+                string focalDesignId = visualRecipe?.Value<string>("selectedVisualImplementationId") ?? string.Empty;
                 string focalRootPrefix = $"dais_showpiece_{focalDesignId}_";
                 foreach (Transform child in root.GetComponentsInChildren<Transform>(includeInactive: false))
                 {
                     if (!string.IsNullOrEmpty(focalDesignId) &&
                         child.name.StartsWith(focalRootPrefix, StringComparison.Ordinal))
                     {
-                        episodeShowpieceCount++;
+                        selectedShowpieceCount++;
                     }
                 }
 
@@ -617,8 +916,8 @@ namespace DungeonLab.Editor
                     buildReport.rejected == 0 &&
                     buildReport.floorCells > 0 &&
                     buildReport.transitionEdges > 0 &&
-                    seedReport["episodeResolution"]?.Value<bool?>("atomicAndValid") == true &&
-                    episodeShowpieceCount == 1 &&
+                    visualRecipe?.Value<bool?>("atomicAndValid") == true &&
+                    selectedShowpieceCount == 1 &&
                     bounds.size.sqrMagnitude > 0.01f;
                 bool collisionPreconditionsPassed =
                     enabledCollisionSources > 0 &&
@@ -637,7 +936,7 @@ namespace DungeonLab.Editor
                         ["transitionEdges"] = buildReport.transitionEdges,
                         ["stairFootprintChecks"] = buildReport.stairFootprintChecks,
                         ["multiRiseStairChecks"] = buildReport.multiRiseStairChecks,
-                        ["episodeShowpieces"] = episodeShowpieceCount,
+                        ["selectedShowpieces"] = selectedShowpieceCount,
                         ["rejectedPlacements"] = buildReport.rejected,
                         ["boundsSize"] = Vector3Token(bounds.size),
                         ["summary"] = buildReport.Summary
@@ -682,13 +981,70 @@ namespace DungeonLab.Editor
                 SnapshotLine("renderer.passed", report["renderer"]?["passed"]),
                 SnapshotLine("renderer.rejectedPlacements", report["renderer"]?["rejectedPlacements"]),
                 SnapshotLine("renderer.stairFootprintChecks", report["renderer"]?["stairFootprintChecks"]),
-                SnapshotLine("renderer.episodeShowpieces", report["renderer"]?["episodeShowpieces"]),
+                SnapshotLine("renderer.selectedShowpieces", report["renderer"]?["selectedShowpieces"]),
                 SnapshotLine("collision.passed", report["collisionPreconditions"]?["passed"]),
                 SnapshotLine("collision.enabledNonTriggerColliders", report["collisionPreconditions"]?["enabledNonTriggerColliders"]),
                 SnapshotLine("collision.missingMeshes", report["collisionPreconditions"]?["missingMeshes"]),
                 SnapshotLine("failure", report["failure"])
             };
             return string.Join("\n", lines);
+        }
+
+        internal static bool TryBuildRecipeFullDungeonEvidence(
+            string recipeId,
+            int seed,
+            out DungeonRecipeFullDungeonEvidence evidence,
+            out string message)
+        {
+            evidence = default;
+            message = string.Empty;
+            JObject seedReport = BuildPhase0SeedReport(seed);
+            if (seedReport.Value<bool?>("accepted") != true)
+            {
+                message = seedReport.Value<string>("lastRejection") ?? "full-dungeon preview rejected";
+                return false;
+            }
+
+            JObject recipe = null;
+            foreach (JToken token in seedReport["recipeResolutions"] as JArray ?? new JArray())
+            {
+                if (string.Equals(token.Value<string>("id"), recipeId, StringComparison.Ordinal))
+                {
+                    recipe = token as JObject;
+                    break;
+                }
+            }
+
+            if (recipe == null)
+            {
+                message = $"recipe '{recipeId}' did not resolve in the fixed full-dungeon preview";
+                return false;
+            }
+
+            JObject rendererReport = JObject.Parse(BuildPhase0RendererProbeJson(seed));
+            bool canonicalValid = seedReport["validation"]?.Value<bool?>("passed") == true;
+            bool rendererValid = rendererReport["renderer"]?.Value<bool?>("passed") == true;
+            bool boundaryValid = rendererReport["boundary"]?.Value<bool?>("passed") == true;
+            bool collisionValid = rendererReport["collisionPreconditions"]?.Value<bool?>("passed") == true;
+            int mandatoryPorts = 0;
+            foreach (JToken port in recipe["ports"] as JArray ?? new JArray())
+            {
+                mandatoryPorts += port.Value<bool?>("mandatory") == true ? 1 : 0;
+            }
+
+            evidence = new DungeonRecipeFullDungeonEvidence(
+                recipeId,
+                recipe.Value<bool?>("atomicAndValid") == true,
+                mandatoryPorts,
+                (recipe["transitions"] as JArray)?.Count ?? 0,
+                canonicalValid,
+                rendererValid,
+                boundaryValid && rendererValid,
+                collisionValid);
+            message = canonicalValid && rendererValid && boundaryValid && collisionValid
+                ? "canonical plan, renderer, abyss boundary, and collision evidence passed"
+                : "full-dungeon renderer, boundary, or collision evidence failed";
+            return canonicalValid && rendererValid && boundaryValid && collisionValid;
         }
 
         private static JObject CreateAcceptedPhase0SeedReport(
@@ -702,10 +1058,17 @@ namespace DungeonLab.Editor
         {
             JObject canonicalLayout = BuildCanonicalLayoutProjection(layout);
             JObject canonicalPlan = BuildCanonicalTieredLevelPlanProjection(plan);
+            JArray recipeResolutions = BuildRecipeResolutionsProjection(plan.recipeResolutions);
             string layoutHash = ComputeSha256(canonicalLayout.ToString(Formatting.None));
             string planHash = ComputeSha256(canonicalPlan.ToString(Formatting.None));
+            string recipeResolutionHash = ComputeSha256(recipeResolutions.ToString(Formatting.None));
             JObject routeIntentProjection = BuildPhase1RouteIntentProjection();
             string routeIntentHash = ComputeSha256(routeIntentProjection.ToString(Formatting.None));
+            string recipeCatalogDigest = DungeonRecipeCatalogService.TryLoadActiveCatalog(
+                out ActiveDungeonRecipeCatalog activeRecipeCatalog,
+                out _)
+                ? activeRecipeCatalog.digest
+                : string.Empty;
             string canonicalHash = ComputeSha256(
                 $"{DungeonPlanSummaryVersion}\n{routeIntentHash}\n{layoutHash}\n{planHash}");
             float correlation = CalculateDepthLevelCorrelation(layout, plan);
@@ -753,7 +1116,7 @@ namespace DungeonLab.Editor
                     ["visibleDistantRoomMeasurement"] = "adjacent-cell elevation delta >= 4u; current generator has no explicit line-of-sight graph",
                     ["synthesizedStairs"] = plan.synthesizedStairs == null ? 0 : plan.synthesizedStairs.Count,
                     ["promontories"] = plan.promontoryCells == null ? 0 : plan.promontoryCells.Count,
-                    ["throneHallEpisode"] = plan.throneHallEpisodeResolution.atomicAndValid,
+                    ["recipeCount"] = plan.recipeResolutions?.Length ?? 0,
                     ["depthLevelCorrelation"] = float.IsNaN(correlation) ? JValue.CreateNull() : new JValue(correlation)
                 },
                 ["validation"] = validation,
@@ -762,14 +1125,16 @@ namespace DungeonLab.Editor
                     ["algorithm"] = "SHA-256",
                     ["layout"] = layoutHash,
                     ["tieredLevelPlan"] = planHash,
+                    ["recipeResolutions"] = recipeResolutionHash,
+                    ["recipeCatalog"] = recipeCatalogDigest,
                     ["canonical"] = canonicalHash
                 }
             };
             report["routeIntent"] = routeIntentProjection;
             report["routePlacement"] = BuildPhase1RoutePlacementProjection(layout);
             report["routeResolution"] = BuildRouteRequirementResolutionProjection(plan.routeRequirementResolution);
-            report["episodeResolution"] = BuildThroneHallEpisodeResolutionProjection(plan.throneHallEpisodeResolution);
-            report["schemaUsage"] = BuildThroneHallSchemaUsageProjection();
+            report["recipeResolutions"] = recipeResolutions;
+            report["schemaUsage"] = BuildRecipeSchemaUsageProjection();
             ((JObject)report["hashes"])["routeIntent"] = routeIntentHash;
 
             return report;
@@ -854,11 +1219,18 @@ namespace DungeonLab.Editor
             }
 
             int loopEdges = intent.traversalEdges.Length - (intent.nodes.Length - 1);
+            var recipeSlots = new JArray();
+            foreach (RecipeSlotIntent slot in intent.recipeSlots)
+            {
+                recipeSlots.Add(BuildRecipeSlotIntentProjection(slot));
+            }
+
             return new JObject
             {
                 ["seed"] = intent.seed,
                 ["plannerVersion"] = intent.plannerVersion,
                 ["patternId"] = intent.patternId,
+                ["catalogDigest"] = intent.catalogDigest,
                 ["elevationPolicy"] = intent.elevationPolicy.ToString(),
                 ["nodeCount"] = intent.nodes.Length,
                 ["nodes"] = nodes,
@@ -885,40 +1257,47 @@ namespace DungeonLab.Editor
                     ["minimumReservedVoidCells"] = intent.vista.minimumReservedVoidCells,
                     ["candidateSightVolumeRequired"] = true
                 },
-                ["landmarkEpisode"] = BuildThroneHallEpisodeIntentProjection(intent.landmarkEpisode)
+                ["recipeSlots"] = recipeSlots
             };
         }
 
-        private static JObject BuildThroneHallEpisodeIntentProjection(ThroneHallEpisodeIntent episode)
+        private static JObject BuildRecipeSlotIntentProjection(RecipeSlotIntent slot)
         {
-            if (episode == null)
+            if (slot?.recipe == null)
             {
                 return new JObject();
             }
 
-            var thresholds = new JArray();
-            foreach (ThroneThresholdIntent threshold in episode.thresholds)
+            var ports = new JArray();
+            foreach (DungeonRecipePort port in slot.recipe.ports)
             {
-                thresholds.Add(new JObject
+                slot.TryGetEdgeId(port.id, out string edgeId);
+                ports.Add(new JObject
                 {
-                    ["id"] = threshold.id,
-                    ["edgeId"] = threshold.edgeId,
-                    ["kind"] = threshold.kind.ToString()
+                    ["id"] = port.id,
+                    ["edgeId"] = edgeId,
+                    ["type"] = port.type.ToString(),
+                    ["mandatory"] = port.mandatory,
+                    ["cell"] = CellToken(port.cell),
+                    ["outwardDirection"] = CellToken(port.outwardDirection),
+                    ["relativeLevel"] = port.relativeLevel
                 });
             }
 
             return new JObject
             {
-                ["id"] = episode.id,
-                ["slotNode"] = episode.slotNode,
-                ["focalAxisBinding"] = episode.focalAxisBinding,
-                ["dominantRoomSize"] = CellToken(episode.dominantRoomSize),
-                ["focalZoneSize"] = CellToken(episode.focalZoneSize),
-                ["sideGallerySize"] = CellToken(episode.sideGallerySize),
-                ["galleryRiseLevels"] = episode.galleryRiseLevels,
-                ["coupledStairCount"] = episode.coupledStairCount,
-                ["allowedFocalDesignIds"] = new JArray(episode.allowedFocalDesignIds),
-                ["thresholds"] = thresholds
+                ["id"] = slot.recipe.recipeId,
+                ["slotNode"] = slot.slotNode,
+                ["kind"] = slot.recipe.kind.ToString(),
+                ["schemaVersion"] = slot.recipe.schemaVersion,
+                ["contentVersion"] = slot.recipe.contentVersion,
+                ["contentDigest"] = DungeonRecipeValidator.ComputeContentDigest(slot.recipe),
+                ["orientationBinding"] = slot.orientationBinding.ToString(),
+                ["ports"] = ports,
+                ["zoneCount"] = slot.recipe.zones.Length,
+                ["transitionCount"] = slot.recipe.transitions.Length,
+                ["symmetryPairCount"] = slot.recipe.symmetryPairs.Length,
+                ["variationCount"] = slot.recipe.variations.Length
             };
         }
 
@@ -1064,109 +1443,121 @@ namespace DungeonLab.Editor
             };
         }
 
-        private static JObject BuildThroneHallEpisodeResolutionProjection(
-            ThroneHallEpisodeResolution resolution)
+        private static JArray BuildRecipeResolutionsProjection(IEnumerable<RecipeResolution> resolutions)
         {
-            var galleries = new JArray();
-            foreach (Vector2Int[] gallery in resolution.sideGalleryCells ?? Array.Empty<Vector2Int[]>())
+            var result = new JArray();
+            foreach (RecipeResolution resolution in resolutions ?? Array.Empty<RecipeResolution>())
             {
-                galleries.Add(CellsToken(gallery, sort: false));
+                result.Add(BuildRecipeResolutionProjection(resolution));
             }
 
-            var thresholds = new JArray();
-            foreach (ThroneThresholdPlacement threshold in
-                     resolution.thresholds ?? Array.Empty<ThroneThresholdPlacement>())
+            return result;
+        }
+
+        private static JObject BuildRecipeResolutionProjection(RecipeResolution resolution)
+        {
+            var zones = new JArray();
+            foreach (RecipeZonePlacement zone in resolution.zones ?? Array.Empty<RecipeZonePlacement>())
             {
-                thresholds.Add(new JObject
+                zones.Add(new JObject
                 {
-                    ["id"] = threshold.id,
-                    ["edgeId"] = threshold.edgeId,
-                    ["kind"] = threshold.kind.ToString(),
-                    ["cell"] = CellToken(threshold.cell),
-                    ["outwardDirection"] = CellToken(threshold.outwardDirection),
-                    ["expectedRelativeLevel"] = threshold.expectedRelativeLevel
+                    ["id"] = zone.id,
+                    ["kind"] = zone.kind.ToString(),
+                    ["relativeLevel"] = zone.relativeLevel,
+                    ["cells"] = CellsToken(zone.cells, sort: false)
                 });
             }
 
-            var stairs = new JArray();
-            bool coupledReservationsComplete = resolution.twinStairs != null &&
-                resolution.twinStairs.Length == ThroneHallCoupledStairCount;
-            foreach (ThroneStairPlacement stair in
-                     resolution.twinStairs ?? Array.Empty<ThroneStairPlacement>())
+            var ports = new JArray();
+            foreach (RecipePortPlacement port in resolution.ports ?? Array.Empty<RecipePortPlacement>())
             {
-                coupledReservationsComplete &=
-                    stair.lowerLandingCells.Length > 0 &&
-                    stair.upperLandingCells.Length > 0 &&
-                    stair.footprintCells.Length > 0;
-                stairs.Add(new JObject
+                ports.Add(new JObject
                 {
-                    ["id"] = stair.id,
-                    ["lowerTransitionCell"] = CellToken(stair.lowerTransitionCell),
-                    ["upperTransitionCell"] = CellToken(stair.upperTransitionCell),
-                    ["lowerLandingCells"] = CellsToken(stair.lowerLandingCells, sort: false),
-                    ["upperLandingCells"] = CellsToken(stair.upperLandingCells, sort: false),
-                    ["footprintCells"] = CellsToken(stair.footprintCells, sort: false),
-                    ["climbDirection"] = CellToken(stair.climbDirection)
+                    ["id"] = port.id,
+                    ["edgeId"] = port.edgeId,
+                    ["type"] = port.type.ToString(),
+                    ["mandatory"] = port.mandatory,
+                    ["neighborRoomIndex"] = port.neighborRoomIndex,
+                    ["cell"] = CellToken(port.cell),
+                    ["outwardDirection"] = CellToken(port.outwardDirection),
+                    ["expectedRelativeLevel"] = port.expectedRelativeLevel
+                });
+            }
+
+            var recipeTransitions = new JArray();
+            bool reservationsComplete = true;
+            foreach (RecipeTransitionPlacement transition in
+                     resolution.transitions ?? Array.Empty<RecipeTransitionPlacement>())
+            {
+                reservationsComplete &= transition.lowerLandingCells.Length > 0 &&
+                    transition.upperLandingCells.Length > 0 &&
+                    transition.footprintCells.Length > 0;
+                recipeTransitions.Add(new JObject
+                {
+                    ["id"] = transition.id,
+                    ["atomicGroupId"] = transition.atomicGroupId,
+                    ["lowerTransitionCell"] = CellToken(transition.lowerTransitionCell),
+                    ["upperTransitionCell"] = CellToken(transition.upperTransitionCell),
+                    ["lowerLandingCells"] = CellsToken(transition.lowerLandingCells, sort: false),
+                    ["upperLandingCells"] = CellsToken(transition.upperLandingCells, sort: false),
+                    ["footprintCells"] = CellsToken(transition.footprintCells, sort: false),
+                    ["climbDirection"] = CellToken(transition.climbDirection)
                 });
             }
 
             return new JObject
             {
                 ["id"] = resolution.id,
+                ["kind"] = resolution.kind.ToString(),
+                ["contentDigest"] = resolution.contentDigest,
                 ["roomIndex"] = resolution.roomIndex,
-                ["focalAxis"] = CellToken(resolution.focalAxis),
-                ["focalZoneCells"] = CellsToken(resolution.focalZoneCells, sort: false),
-                ["sideGalleries"] = galleries,
-                ["thresholds"] = thresholds,
-                ["twinStairs"] = stairs,
-                ["selectedFocalDesignId"] = resolution.selectedFocalDesignId,
+                ["primaryAxis"] = CellToken(resolution.primaryAxis),
+                ["mirrored"] = resolution.mirrored,
+                ["protectedCells"] = CellsToken(resolution.protectedCells, sort: false),
+                ["zones"] = zones,
+                ["ports"] = ports,
+                ["transitions"] = recipeTransitions,
+                ["selectedVariationId"] = resolution.selectedVariationId,
+                ["selectedVisualImplementationId"] = resolution.selectedVisualImplementationId,
                 ["showpieceOriginCell"] = CellToken(resolution.showpieceOriginCell),
                 ["showpieceYawDegrees"] = resolution.showpieceYawDegrees,
                 ["baseLevel"] = resolution.baseLevel,
-                ["galleryLevel"] = resolution.galleryLevel,
                 ["atomicAndValid"] = resolution.atomicAndValid,
-                ["genericConnectionsThroughDeclaredPorts"] = resolution.atomicAndValid && thresholds.Count == 2,
-                ["coupledReservationsComplete"] = coupledReservationsComplete,
-                ["sideGalleriesSymmetric"] = EpisodeGalleriesAreSymmetric(resolution),
-                ["protectedZonesValid"] = resolution.atomicAndValid &&
-                    resolution.focalZoneCells != null && resolution.focalZoneCells.Length > 0
+                ["mandatoryPortsBound"] = resolution.atomicAndValid && ports.Count > 0,
+                ["reservationsComplete"] = reservationsComplete,
+                ["protectedZonesValid"] = resolution.atomicAndValid && resolution.protectedCells.Length > 0
             };
         }
 
-        private static bool EpisodeGalleriesAreSymmetric(ThroneHallEpisodeResolution resolution)
+        private static RecipeResolution FindRecipeResolution(
+            IEnumerable<RecipeResolution> resolutions,
+            string recipeId)
         {
-            if (resolution.sideGalleryCells == null || resolution.sideGalleryCells.Length != 2 ||
-                resolution.focalAxis == Vector2Int.zero)
+            foreach (RecipeResolution resolution in resolutions ?? Array.Empty<RecipeResolution>())
             {
-                return false;
-            }
-
-            Vector2Int transverse = new Vector2Int(-resolution.focalAxis.y, resolution.focalAxis.x);
-            var second = new HashSet<Vector2Int>(resolution.sideGalleryCells[1]);
-            // The room center is the midpoint of the two threshold cells for this
-            // fixed episode contract; deriving it keeps diagnostics read-only.
-            if (resolution.thresholds == null || resolution.thresholds.Length != 2)
-            {
-                return false;
-            }
-
-            Vector2Int center = (resolution.thresholds[0].cell + resolution.thresholds[1].cell) / 2 + resolution.focalAxis;
-            foreach (Vector2Int cell in resolution.sideGalleryCells[0])
-            {
-                Vector2Int relative = cell - center;
-                int focal = IntDot(relative, resolution.focalAxis);
-                int transverseOffset = IntDot(relative, transverse);
-                Vector2Int mirror = OrientedCell(center, resolution.focalAxis, transverse, focal, -transverseOffset);
-                if (!second.Contains(mirror))
+                if (string.Equals(resolution.id, recipeId, StringComparison.Ordinal))
                 {
-                    return false;
+                    return resolution;
                 }
             }
 
-            return second.Count == resolution.sideGalleryCells[0].Length;
+            return default;
         }
 
-        private static JObject BuildThroneHallSchemaUsageProjection()
+        private static JObject FindRecipeProjection(JArray recipes, string recipeId)
+        {
+            foreach (JToken token in recipes ?? new JArray())
+            {
+                if (string.Equals(token.Value<string>("id"), recipeId, StringComparison.Ordinal))
+                {
+                    return token as JObject;
+                }
+            }
+
+            return null;
+        }
+
+        private static JObject BuildRecipeSchemaUsageProjection()
         {
             var fields = new JArray();
             void Add(string field, string producer, string consumer)
@@ -1179,26 +1570,26 @@ namespace DungeonLab.Editor
                 });
             }
 
-            Add("routeNode.landmarkSlotId", "BuildProcessionalRouteIntent", "route validation + landmark room inflation");
-            Add("episode.id", "BuildThroneHallEpisodeIntent", "stable variation stream + diagnostics");
-            Add("episode.slotNode", "BuildThroneHallEpisodeIntent", "route placement + tier handoff");
-            Add("episode.focalAxisBinding", "BuildThroneHallEpisodeIntent", "vista-bound focal-axis resolution");
-            Add("episode.dominantRoomSize", "BuildThroneHallEpisodeIntent", "atomic landmark footprint");
-            Add("episode.focalZoneSize", "BuildThroneHallEpisodeIntent", "protected focal-zone reservation");
-            Add("episode.sideGallerySize", "BuildThroneHallEpisodeIntent", "paired gallery footprint + level field");
-            Add("episode.galleryRiseLevels", "BuildThroneHallEpisodeIntent", "gallery levels + transition validation");
-            Add("episode.coupledStairCount", "BuildThroneHallEpisodeIntent", "atomic twin-stair validation");
-            Add("episode.allowedFocalDesignIds", "BuildThroneHallEpisodeIntent", "stable StairForge-backed focal selection");
-            Add("threshold.id/edgeId/kind", "BuildThroneHallEpisodeIntent", "exact corridor endpoint + final port binding");
-            Add("threshold.cell/outwardDirection/expectedRelativeLevel", "TryPlaceThroneHallEpisode", "geometry, route connection, and tier-level validation");
-            Add("placement.focalAxis", "TryPlaceThroneHallEpisode", "showpiece orientation + symmetry validation");
-            Add("placement.focalZoneCells", "TryPlaceThroneHallEpisode", "late-feature protection + final level validation");
-            Add("placement.sideGalleryCells", "TryPlaceThroneHallEpisode", "canonical cell levels + paired symmetry validation");
-            Add("stair transition/landing/footprint/climb", "TryPlaceThroneHallEpisode", "StairPlacementLedger + TransitionEdge + port graph");
-            Add("selected focal design/origin/yaw", "TryPlaceThroneHallEpisode", "DaisShowpiece + existing renderer");
+            Add("asset.recipeId/schemaVersion/contentVersion", "reviewed recipe assets", "stable streams, digest, catalog, diagnostics");
+            Add("routeSlot.node/recipeId", "BuildProcessionalRouteIntent", "eligibility, room inflation, tier handoff");
+            Add("routeSlot.orientationBinding", "BuildProcessionalRouteIntent", "route/vista-bound primary axis");
+            Add("zones.walkable", "reviewed recipe assets", "atomic room footprint");
+            Add("zones.protected", "reviewed recipe assets", "late-feature and dressing protection");
+            Add("zones.elevated", "reviewed recipe assets", "canonical cell levels");
+            Add("zones.relativeLevel", "reviewed recipe assets", "level and transition validation");
+            Add("transitions.atomicGroup", "reviewed recipe assets", "atomic transition validation");
+            Add("variations/motifs", "reviewed recipe assets", "stable StairForge-backed visual selection");
+            Add("ports.id/type/mandatory", "reviewed recipe assets", "route edge binding and neighbor validation");
+            Add("ports.cell/outward/level", "TryPlaceRecipe", "exact corridor endpoint and tier validation");
+            Add("placement.primaryAxis/mirror", "TryPlaceRecipe", "orientation, variations, symmetry validation");
+            Add("placement.protectedCells", "TryPlaceRecipe", "generic feature exclusions and final validation");
+            Add("placement.zoneCells", "TryPlaceRecipe", "canonical levels and structural validation");
+            Add("transition.cells/landings/footprint/climb", "TryPlaceRecipe", "StairPlacementLedger, TransitionEdge, headroom, port graph");
+            Add("selected variation/visual", "TryPlaceRecipe", "DaisShowpiece and renderer");
+            Add("reviewDigest/lifecycle", "review action", "stale-review detection and active catalog admission");
             return new JObject
             {
-                ["probeId"] = ThroneHallEpisodeId,
+                ["probeId"] = "dungeon-recipe-v1",
                 ["fieldCount"] = fields.Count,
                 ["allFieldsConsumed"] = true,
                 ["fields"] = fields
@@ -1233,9 +1624,9 @@ namespace DungeonLab.Editor
             bool routeRequirementsValid = TryValidateAcceptedRouteRequirements(
                 plan,
                 out string routeRequirementsMessage);
-            bool throneHallEpisodeValid = TryValidateAcceptedThroneHallEpisode(
+            bool recipesValid = TryValidateAcceptedRecipes(
                 plan,
-                out string throneHallEpisodeMessage);
+                out string recipesMessage);
             bool headroomValid = TryValidateAcceptedPlanHeadroom(plan, out string headroomMessage);
             bool boundaryValid = TryBuildRoomBoundaryContext(
                 layout,
@@ -1252,7 +1643,7 @@ namespace DungeonLab.Editor
                 portGraphConnected &&
                 bottomToTop &&
                 routeRequirementsValid &&
-                throneHallEpisodeValid &&
+                recipesValid &&
                 headroomValid &&
                 boundaryValid &&
                 rendererInputsValid;
@@ -1263,7 +1654,7 @@ namespace DungeonLab.Editor
             AddFailureCode(failureCodes, portGraphConnected, "VERTICAL_TRAVERSAL");
             AddFailureCode(failureCodes, bottomToTop, "BOTTOM_TO_TOP_TRAVERSAL");
             AddFailureCode(failureCodes, routeRequirementsValid, "ROUTE_REQUIREMENTS");
-            AddFailureCode(failureCodes, throneHallEpisodeValid, "THRONE_EPISODE");
+            AddFailureCode(failureCodes, recipesValid, "RECIPES");
             AddFailureCode(failureCodes, headroomValid, "POST_PLAN_HEADROOM_CLEARANCE");
             AddFailureCode(failureCodes, boundaryValid, "BOUNDARY_CONTEXT");
             AddFailureCode(failureCodes, rendererInputsValid, "RENDERER_INPUT");
@@ -1282,7 +1673,7 @@ namespace DungeonLab.Editor
                         ? $"connected traversal spans levels {plan.minLevel}..{plan.maxLevel}"
                         : $"traversal did not span distinct bottom/top levels ({plan.minLevel}..{plan.maxLevel})"),
                 ["routeRequirements"] = CheckToken(routeRequirementsValid, routeRequirementsMessage),
-                ["throneHallEpisode"] = CheckToken(throneHallEpisodeValid, throneHallEpisodeMessage),
+                ["recipes"] = CheckToken(recipesValid, recipesMessage),
                 ["headroom"] = CheckToken(headroomValid, headroomMessage),
                 ["boundary"] = CheckToken(boundaryValid, boundaryMessage),
                 ["rendererInputs"] = CheckToken(rendererInputsValid, rendererInputMessage)
@@ -1341,47 +1732,57 @@ namespace DungeonLab.Editor
             return passed;
         }
 
-        private static bool TryValidateAcceptedThroneHallEpisode(
+        private static bool TryValidateAcceptedRecipes(
             TieredLevelPlan plan,
             out string message)
         {
-            ThroneHallEpisodeResolution resolution = plan.throneHallEpisodeResolution;
-            bool complete =
-                resolution.atomicAndValid &&
-                string.Equals(resolution.id, ThroneHallEpisodeId, StringComparison.Ordinal) &&
-                resolution.roomIndex == ThroneHallSlotNode &&
-                resolution.focalAxis != Vector2Int.zero &&
-                resolution.focalZoneCells != null && resolution.focalZoneCells.Length > 0 &&
-                resolution.sideGalleryCells != null && resolution.sideGalleryCells.Length == 2 &&
-                resolution.sideGalleryCells[0].Length > 0 &&
-                resolution.sideGalleryCells[1].Length > 0 &&
-                resolution.thresholds != null && resolution.thresholds.Length == 2 &&
-                resolution.twinStairs != null && resolution.twinStairs.Length == ThroneHallCoupledStairCount &&
-                resolution.galleryLevel - resolution.baseLevel == ThroneHallGalleryRiseLevels &&
-                Array.IndexOf(ThroneHallFocalDesignIds, resolution.selectedFocalDesignId) >= 0;
-            if (!complete)
+            if (!DungeonRecipeCatalogService.TryLoadActiveCatalog(
+                    out ActiveDungeonRecipeCatalog catalog,
+                    out message) ||
+                plan.recipeResolutions == null ||
+                plan.recipeResolutions.Length != 2)
             {
-                message =
-                    $"episode incomplete: id={resolution.id}, room={resolution.roomIndex}, " +
-                    $"galleries={resolution.sideGalleryCells?.Length ?? 0}, thresholds={resolution.thresholds?.Length ?? 0}, " +
-                    $"stairs={resolution.twinStairs?.Length ?? 0}, atomic={resolution.atomicAndValid}";
+                message = string.IsNullOrEmpty(message)
+                    ? $"expected two recipe resolutions; found {plan.recipeResolutions?.Length ?? 0}"
+                    : message;
                 return false;
             }
 
-            foreach (ThroneStairPlacement stair in resolution.twinStairs)
+            foreach (string requiredId in new[]
+                     {
+                         DungeonRecipeIds.ProcessionalLandmark,
+                         DungeonRecipeIds.CompressionConnector
+                     })
             {
-                if (stair.lowerLandingCells.Length == 0 ||
-                    stair.upperLandingCells.Length == 0 ||
-                    stair.footprintCells.Length == 0)
+                RecipeResolution resolution = FindRecipeResolution(plan.recipeResolutions, requiredId);
+                if (!catalog.TryGet(requiredId, out DungeonRecipeAsset recipe) ||
+                    !resolution.atomicAndValid ||
+                    resolution.primaryAxis == Vector2Int.zero ||
+                    resolution.ports == null || resolution.ports.Length != recipe.ports.Length ||
+                    resolution.transitions == null || resolution.transitions.Length != recipe.transitions.Length ||
+                    resolution.protectedCells == null || resolution.protectedCells.Length == 0 ||
+                    !string.Equals(
+                        resolution.contentDigest,
+                        DungeonRecipeValidator.ComputeContentDigest(recipe),
+                        StringComparison.Ordinal))
                 {
-                    message = $"coupled stair '{stair.id}' lacked explicit landing/footprint evidence";
+                    message = $"recipe '{requiredId}' was absent, stale, partial, or invalid";
                     return false;
+                }
+
+                foreach (RecipeTransitionPlacement transition in resolution.transitions)
+                {
+                    if (transition.lowerLandingCells.Length == 0 ||
+                        transition.upperLandingCells.Length == 0 ||
+                        transition.footprintCells.Length == 0)
+                    {
+                        message = $"recipe transition '{transition.id}' lacked landing/footprint evidence";
+                        return false;
+                    }
                 }
             }
 
-            message =
-                $"{resolution.id} resolved atomically in room {resolution.roomIndex} with two typed thresholds, " +
-                $"two galleries, two coupled stairs, and focal design {resolution.selectedFocalDesignId}";
+            message = $"two reviewed recipes resolved atomically with catalog {catalog.digest}";
             return true;
         }
 
@@ -1837,7 +2238,7 @@ namespace DungeonLab.Editor
                 ["synthesizedStairSummary"] = plan.synthesizedStairSummary,
                 ["daisShowpieces"] = showpieces,
                 ["promontoryCells"] = CellsToken(plan.promontoryCells, sort: true),
-                ["throneHallEpisode"] = BuildThroneHallEpisodeResolutionProjection(plan.throneHallEpisodeResolution),
+                ["recipeResolutions"] = BuildRecipeResolutionsProjection(plan.recipeResolutions),
                 ["routeRequirements"] = BuildRouteRequirementResolutionProjection(plan.routeRequirementResolution)
             };
         }
@@ -2209,7 +2610,7 @@ namespace DungeonLab.Editor
             List<int> routeClimbCounts,
             int routeRequirementsValidCount,
             int finalVistaValidCount,
-            int throneHallEpisodeValidCount,
+            int recipeSetValidCount,
             JArray seedReports)
         {
             var archetypes = new JObject();
@@ -2334,14 +2735,14 @@ namespace DungeonLab.Editor
                 bool failuresReasonCoded = FailuresAreReasonCoded(seedReports);
                 bool routeRequirementsPassed = routeRequirementsValidCount == successCount;
                 bool finalVistasPassed = finalVistaValidCount == successCount;
-                bool episodesPassed = throneHallEpisodeValidCount == successCount;
+                bool recipeProbePassed = recipeSetValidCount == successCount;
                 report["phase4ReliabilityBudget"] = new JObject
                 {
                     ["corpus"] = $"{firstSeed}..{firstSeed + seedCount - 1}",
                     ["hardValidCompletionFloor"] = Phase3HardValidCompletionFloor,
                     ["attemptCeiling"] = Phase1LayoutAttemptLimit,
                     ["p95AttemptTarget"] = 1,
-                    ["requiredEpisodeId"] = ThroneHallEpisodeId,
+                    ["requiredEpisodeId"] = DungeonRecipeIds.ProcessionalLandmark,
                     ["requiredAtomicEpisode"] = true
                 };
                 report["phase4BudgetResult"] = new JObject
@@ -2353,7 +2754,7 @@ namespace DungeonLab.Editor
                         failuresReasonCoded &&
                         routeRequirementsPassed &&
                         finalVistasPassed &&
-                        episodesPassed,
+                        recipeProbePassed,
                     ["hardValidCompletions"] = hardValidCount,
                     ["completionFloorPassed"] = completionPassed,
                     ["attemptCeilingPassed"] = attemptCeilingPassed,
@@ -2362,8 +2763,60 @@ namespace DungeonLab.Editor
                     ["everyFailureReasonCoded"] = failuresReasonCoded,
                     ["everyAcceptedRouteRequirementValid"] = routeRequirementsPassed,
                     ["everyAcceptedFinalVistaValid"] = finalVistasPassed,
-                    ["throneHallEpisodesValid"] = throneHallEpisodeValidCount,
-                    ["everyAcceptedThroneHallEpisodeValid"] = episodesPassed
+                    ["recipeProbeValid"] = recipeSetValidCount,
+                    ["everyAcceptedRecipeProbeValid"] = recipeProbePassed
+                };
+            }
+
+            if (isPhase3ReliabilityCorpus)
+            {
+                bool completionPassed = hardValidCount >= Phase3HardValidCompletionFloor;
+                bool attemptCeilingPassed = attemptDistribution.Value<int>("max") <= Phase1LayoutAttemptLimit;
+                bool p95Passed = attemptDistribution.Value<int>("p95") <= 1;
+                bool acceptedHardValid = hardValidCount == successCount;
+                bool failuresReasonCoded = FailuresAreReasonCoded(seedReports);
+                bool routeRequirementsPassed = routeRequirementsValidCount == successCount;
+                bool finalVistasPassed = finalVistaValidCount == successCount;
+                bool recipeSetsPassed = recipeSetValidCount == successCount;
+                string reviewedCatalogDigest = DungeonRecipeCatalogService.TryLoadActiveCatalog(
+                    out ActiveDungeonRecipeCatalog activeCatalog,
+                    out _)
+                    ? activeCatalog.digest
+                    : string.Empty;
+                report["phase5ReliabilityBudget"] = new JObject
+                {
+                    ["corpus"] = $"{firstSeed}..{firstSeed + seedCount - 1}",
+                    ["hardValidCompletionFloor"] = Phase3HardValidCompletionFloor,
+                    ["attemptCeiling"] = Phase1LayoutAttemptLimit,
+                    ["p95AttemptTarget"] = 1,
+                    ["requiredRecipeCount"] = 2,
+                    ["requiredRecipeIds"] = new JArray(
+                        DungeonRecipeIds.ProcessionalLandmark,
+                        DungeonRecipeIds.CompressionConnector),
+                    ["reviewedRecipeCatalogDigest"] = reviewedCatalogDigest
+                };
+                report["phase5BudgetResult"] = new JObject
+                {
+                    ["passed"] = completionPassed &&
+                        attemptCeilingPassed &&
+                        p95Passed &&
+                        acceptedHardValid &&
+                        failuresReasonCoded &&
+                        routeRequirementsPassed &&
+                        finalVistasPassed &&
+                        recipeSetsPassed &&
+                        !string.IsNullOrEmpty(reviewedCatalogDigest),
+                    ["hardValidCompletions"] = hardValidCount,
+                    ["completionFloorPassed"] = completionPassed,
+                    ["attemptCeilingPassed"] = attemptCeilingPassed,
+                    ["p95AttemptTargetPassed"] = p95Passed,
+                    ["everyAcceptedPlanHardValid"] = acceptedHardValid,
+                    ["everyFailureReasonCoded"] = failuresReasonCoded,
+                    ["everyAcceptedRouteRequirementValid"] = routeRequirementsPassed,
+                    ["everyAcceptedFinalVistaValid"] = finalVistasPassed,
+                    ["recipeSetsValid"] = recipeSetValidCount,
+                    ["everyAcceptedRecipeSetValid"] = recipeSetsPassed,
+                    ["reviewedRecipeCatalogLoaded"] = !string.IsNullOrEmpty(reviewedCatalogDigest)
                 };
             }
 
@@ -2500,6 +2953,8 @@ namespace DungeonLab.Editor
             if (value.Contains("no usable corridor") || value.Contains("non-cardinal") || value.Contains("corridor cell pair")) return "CORRIDOR_PATH";
             if (value.Contains("reviewed active stair contract placement") || value.Contains("synthesis offered no fitting")) return "STAIR_PLACEMENT";
             if (value.Contains("without a reviewed active stair contract")) return "STAIR_CONTRACT";
+            if (value.Contains("[RECIPE_CATALOG]")) return "RECIPE_CATALOG";
+            if (value.Contains("[RECIPE_")) return "RECIPE_CONTRACT";
             if (value.Contains("assigned both level")) return "CELL_LEVEL_CONFLICT";
             if (value.Contains("transition") && (value.Contains("missing") || value.Contains("level delta") || value.Contains("landing") || value.Contains("different levels"))) return "TRANSITION_CONTRACT";
             if (value.Contains("port graph") || value.Contains("floor/stair")) return "PORT_GRAPH";
@@ -2539,6 +2994,19 @@ namespace DungeonLab.Editor
                 }
 
                 digestInput.Append('\n');
+            }
+
+            if (DungeonRecipeCatalogService.TryLoadActiveCatalog(
+                    out ActiveDungeonRecipeCatalog recipeCatalog,
+                    out string recipeCatalogError))
+            {
+                digestInput.Append("reviewed-recipes\n").Append(recipeCatalog.digest).Append('\n');
+            }
+            else
+            {
+                digestInput.Append("reviewed-recipes\n<invalid:")
+                    .Append(recipeCatalogError)
+                    .Append(">\n");
             }
 
             phase0CatalogDigestCache = ComputeSha256(digestInput.ToString());

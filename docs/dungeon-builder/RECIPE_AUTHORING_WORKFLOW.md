@@ -1,13 +1,11 @@
 # Dungeon recipe authoring workflow
 
-Status: target workflow; usable after Phase 5 of [`COHERENT_FLOORPLAN_PLAN.md`](COHERENT_FLOORPLAN_PLAN.md)  
+Status: implemented and verified for the Phase 5 recipe contract
 Last updated: 2026-07-21
 
 This document is the operational checklist for creating or changing a room recipe after the planner foundation is solid. It is intentionally written for someone returning after weeks or months away.
 
-Until the roadmap reaches Phase 5's exit gate, treat this as a design target for the authoring tools—not as a binding UI specification or a claim that the menus and validators already exist. The required outcomes are explicit contracts, reproducible validation, stale-review detection, and an easy return-after-absence workflow. Exact menu names and screen organization are illustrative and should be trimmed or changed when the Phase 4 probe provides evidence.
-
-Phase 4 deliberately precedes this workflow: it places one throne-hall episode using the smallest explicit draft contract necessary. That schema probe is not a reviewed catalog entry, and it does not justify building speculative menus or fields. This general workflow is implemented only after the probe passes and reveals the real authoring needs.
+Phase 5 implemented the required outcomes: explicit versioned contracts, five non-mutating validation layers, deterministic previews, stale-review detection, reviewed catalog admission, and an easy return-after-absence workflow. The menus below are the current implemented commands. The deliberately narrow schema contains only the recipe kinds, motif kinds, overlays, and review actions proven by the throne-hall probe and flexible-vestibule contrast recipe.
 
 ## Returning after a break
 
@@ -51,21 +49,18 @@ Validation is a result attached to the current content digest, not a lifecycle s
 
 ## 2. Source-of-truth layout
 
-Target locations:
+Implemented locations:
 
 ```text
 Assets/Arena/Content/Settings/Dungeons/RandomDungeon/Recipes/
   Catalog/
   Rooms/
   Episodes/
-  Motifs/
-
-Assets/Arena/Content/Prefabs/Dungeons/FantasticDungeon/Recipes/
-  <recipe_id>/
-
 DungeonLabReports/Recipes/
   <recipe_id>/
 ```
+
+Motif declarations are embedded in the recipe asset and reference the existing reviewed StairForge/content libraries; Phase 5 did not create an unused standalone motif-asset family or prefab directory.
 
 - The recipe `ScriptableObject` is the semantic source of truth.
 - A composed prefab is an explicitly referenced visual payload, not a source of inferred ports or dimensions.
@@ -124,17 +119,17 @@ If the brief says only “cool room with random stairs,” it is not ready. Stat
 
 Use **Arena > Dungeons > Recipes > Create Recipe** and choose the narrowest kind that describes the content:
 
-- **Room** for one chamber whose ports connect to the rest of the plan;
 - **Connector** when traversal itself is the purpose, such as a stair tower or bridge landing;
 - **Episode** for multiple coupled architectural elements that must be selected and placed as a unit;
-- **Motif** for a subordinate reusable composition that occupies declared cells inside a compatible room or episode.
+
+Those are the only Phase 5 recipe kinds. Subordinate `StairTransition` and `FocalVisual` motifs are embedded declarations inside a recipe, not independently selectable recipes.
 
 The creation flow should:
 
 1. allocate a stable ID and content version;
 2. create the asset in the correct folder;
 3. mark it `Draft`;
-4. open the dedicated authoring stage;
+4. select it in the authoring window and asset inspector;
 5. show the 4-unit cell grid and elevation legend;
 6. create no implicit ports or semantics.
 
@@ -144,18 +139,14 @@ Work in this order.
 
 ### 5.1 Paint spatial zones
 
-Declare each cell or volume as one of:
+Declare the smallest current zone set:
 
-- walkable floor at an exact elevation;
-- structural transition reservation;
-- required landing;
-- protected circulation;
-- protected focal space;
-- optional motif region;
-- solid/closed boundary;
-- intended opening;
-- void/atrium;
-- generic-fill permission.
+- `Walkable` floor at the room base;
+- `Elevated` floor at an exact relative level;
+- `ProtectedCirculation` that generic fill and dressing cannot occlude;
+- `ProtectedFocal` that preserves the focal composition.
+
+Transitions separately declare their exact footprint, lower/upper cells, landing arrays, climb, lane count, rise, and headroom. Phase 5 intentionally leaves recipe-specific boundary, void, and generic-fill policy out of the schema; the existing canonical room/boundary services remain authoritative.
 
 Do not use the preview mesh as a substitute for these declarations.
 
@@ -163,14 +154,12 @@ Do not use the preview mesh as a substitute for these declarations.
 
 Every connection has a stable port ID and declares:
 
-- connection type;
+- the current `Corridor` connection type;
 - mandatory or optional status;
 - exact edge, orientation, width, and walkable elevation;
-- compatible counterpart types;
 - approach clearance and landing depth;
 - headroom volume;
-- whether it participates in the focal axis, symmetry pair, or route order;
-- boundary expression policy.
+- route-edge binding, which remains in `RouteIntent` rather than the reusable asset.
 
 A stair port additionally declares rise, run topology, lane width, top and bottom landings, and permitted stair contracts. A bridge port declares span rules and both landing contracts.
 
@@ -180,14 +169,14 @@ Never put a port at a convenient room center and expect the corridor pass to fin
 
 Mark:
 
-- the primary entry and expected approach vector;
-- focal axis and focal zone;
-- required reveal or compression points;
-- symmetry planes;
-- features that are atomic pairs or groups;
-- vista origin sockets and allowed target categories;
-- areas that dressing must never occlude;
-- enclosure policy for each relevant boundary.
+- typed port directions and the route binding that derives the primary axis;
+- protected focal or circulation zones;
+- symmetry pairs between declared zones;
+- transition atomic-group IDs;
+- explicit focal alternatives through embedded motifs;
+- areas that generic fill and dressing must never occlude.
+
+Vista endpoints, route order, and node/edge bindings remain outside the reusable asset. Phase 6 may add a new semantic only after a working slice proves its consumer.
 
 For a throne-hall episode, the dais, throne/focal zone, twin stairs, both landings, side galleries, and their symmetry relationship belong to one contract. Do not author them as unrelated random chances.
 
@@ -253,7 +242,6 @@ Use **Arena > Dungeons > Recipes > Validate Current Recipe**. Validation is non-
 ### Layer C — Variation sweep
 
 - every legal rotation and mirror is valid;
-- dimension endpoints and representative interior values are valid;
 - optional motif combinations stay within the contract;
 - the same preview seed is deterministic.
 
@@ -262,15 +250,13 @@ Use **Arena > Dungeons > Recipes > Validate Current Recipe**. Validation is non-
 Test each port against a small matrix of compatible neighbors:
 
 - generic corridor;
-- generic room;
-- matching stair/bridge connector where applicable;
-- closed optional-port state;
-- at least one adjacent recipe;
 - minimum and maximum supported elevation context.
+
+Phase 5's only typed neighbor is the generic corridor at the port's exact declared level. Add generic-room, recipe-to-recipe, optional-closed, or stair/bridge neighbor states only with the Phase 6 content that consumes them.
 
 ### Layer E — Full-dungeon integration
 
-Run the recipe through each eligible macro pattern and role using fixed seeds. The report must distinguish:
+Run the recipe through the current processional-spine pattern and eligible role using fixed seeds. The report must distinguish:
 
 - recipe incompatibility;
 - spatial-solver exhaustion;
@@ -285,10 +271,10 @@ Use **Arena > Dungeons > Recipes > Build Review Gallery**. The gallery should in
 
 - an undressed contract view with grid and port labels;
 - top-down and player-height views for every legal orientation;
-- minimum, typical, and maximum dimension variants;
+- every legal mirror state;
 - each meaningful motif alternative;
 - port-to-neighbor examples;
-- the recipe in several full-dungeon contexts;
+- the recipe in the fixed full-dungeon review context;
 - focal-axis and vista overlays;
 - one below-floor view confirming abyss supports and transition structure.
 
