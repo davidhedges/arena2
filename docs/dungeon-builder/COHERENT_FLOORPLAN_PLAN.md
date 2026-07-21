@@ -1,6 +1,6 @@
 # Coherent floorplan generation plan
 
-Status: Phases 0-2 complete and verified; Phase 3 is ready but has not started
+Status: Phases 0-3 complete and verified; Phase 4 is ready but has not started
 
 Last updated: 2026-07-21
 

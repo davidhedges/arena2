@@ -8,7 +8,10 @@ namespace DungeonLab.Editor
     // compiles it directly into the existing DungeonLayout.
     internal sealed partial class DungeonLabGenerator
     {
-        private const string Phase1PlannerVersion = "processional-spine-v1";
+        private const string RoutePlannerVersion = "processional-spine-v2";
+        // Preserve the Phase 2 spatial stream while Phase 3 changes only the
+        // semantic elevation/transition contract and its downstream consumer.
+        private const string RouteSpatialRandomVersion = "processional-spine-v1";
         private const string Phase1PatternId = "processional-spine";
         private const int Phase1LayoutAttemptLimit = 2;
         private const int Phase1MainNodeCount = 9;
@@ -42,6 +45,7 @@ namespace DungeonLab.Editor
             public readonly RouteNodeIntent[] nodes;
             public readonly RouteTraversalIntent[] traversalEdges;
             public readonly RouteVistaIntent vista;
+            public readonly RouteElevationPolicy elevationPolicy;
             public readonly int bottomNode;
             public readonly int topNode;
 
@@ -50,18 +54,33 @@ namespace DungeonLab.Editor
                 RouteNodeIntent[] nodes,
                 RouteTraversalIntent[] traversalEdges,
                 RouteVistaIntent vista,
+                RouteElevationPolicy elevationPolicy,
                 int bottomNode,
                 int topNode)
             {
                 this.seed = seed;
-                plannerVersion = Phase1PlannerVersion;
+                plannerVersion = RoutePlannerVersion;
                 patternId = Phase1PatternId;
                 this.nodes = nodes;
                 this.traversalEdges = traversalEdges;
                 this.vista = vista;
+                this.elevationPolicy = elevationPolicy;
                 this.bottomNode = bottomNode;
                 this.topNode = topNode;
             }
+        }
+
+        private enum RouteTransitionKind
+        {
+            LevelCorridor,
+            Stair,
+            Bridge,
+            Stairwell
+        }
+
+        private enum RouteElevationPolicy
+        {
+            AscendingSpine
         }
 
         private readonly struct RouteNodeIntent
@@ -71,19 +90,22 @@ namespace DungeonLab.Editor
             public readonly string beat;
             public readonly int mainRouteOrder;
             public readonly int branchOrder;
+            public readonly int relativeElevationLevels;
 
             public RouteNodeIntent(
                 string id,
                 string role,
                 string beat,
                 int mainRouteOrder,
-                int branchOrder)
+                int branchOrder,
+                int relativeElevationLevels)
             {
                 this.id = id;
                 this.role = role;
                 this.beat = beat;
                 this.mainRouteOrder = mainRouteOrder;
                 this.branchOrder = branchOrder;
+                this.relativeElevationLevels = relativeElevationLevels;
             }
 
             public bool IsOnMainRoute => mainRouteOrder >= 0;
@@ -95,13 +117,22 @@ namespace DungeonLab.Editor
             public readonly int fromNode;
             public readonly int toNode;
             public readonly int laneCount;
+            public readonly int requiredRiseLevels;
+            public readonly RouteTransitionKind transitionKind;
 
-            public RouteTraversalIntent(string id, int fromNode, int toNode)
+            public RouteTraversalIntent(
+                string id,
+                int fromNode,
+                int toNode,
+                int requiredRiseLevels,
+                RouteTransitionKind transitionKind)
             {
                 this.id = id;
                 this.fromNode = fromNode;
                 this.toNode = toNode;
                 laneCount = 1;
+                this.requiredRiseLevels = requiredRiseLevels;
+                this.transitionKind = transitionKind;
             }
         }
 
@@ -125,6 +156,52 @@ namespace DungeonLab.Editor
             }
         }
 
+        // The only Phase 3 companion value. It carries the already-produced route
+        // requirements and exact 2D vista reservation into the existing tier
+        // planner, then dies with the generation attempt. It is not a canonical
+        // plan, renderer input, adapter, or serializable DTO family.
+        private sealed class RouteTierRequirements
+        {
+            public readonly RouteIntent intent;
+            public readonly HashSet<Vector2Int> reservedVistaCells;
+            public readonly Vector2Int vistaSourceCell;
+            public readonly Vector2Int vistaTargetCell;
+            public readonly Vector2Int vistaSourceFacing;
+            public readonly Vector2Int vistaTargetFacing;
+
+            public RouteTierRequirements(
+                RouteIntent intent,
+                IEnumerable<Vector2Int> reservedVistaCells,
+                Vector2Int vistaSourceCell,
+                Vector2Int vistaTargetCell,
+                Vector2Int vistaSourceFacing,
+                Vector2Int vistaTargetFacing)
+            {
+                this.intent = intent;
+                this.reservedVistaCells = new HashSet<Vector2Int>(reservedVistaCells);
+                this.vistaSourceCell = vistaSourceCell;
+                this.vistaTargetCell = vistaTargetCell;
+                this.vistaSourceFacing = vistaSourceFacing;
+                this.vistaTargetFacing = vistaTargetFacing;
+            }
+
+            public bool TryGetTransition(int firstRoom, int secondRoom, out RouteTraversalIntent requirement)
+            {
+                foreach (RouteTraversalIntent edge in intent.traversalEdges)
+                {
+                    if (edge.fromNode == firstRoom && edge.toNode == secondRoom ||
+                        edge.fromNode == secondRoom && edge.toNode == firstRoom)
+                    {
+                        requirement = edge;
+                        return true;
+                    }
+                }
+
+                requirement = default;
+                return false;
+            }
+        }
+
         private static void ResetPhase1RouteDiagnostics()
         {
             phase1LastRouteIntent = null;
@@ -143,9 +220,11 @@ namespace DungeonLab.Editor
             int dungeonSeed,
             int layoutAttempt,
             out DungeonLayout layout,
+            out RouteTierRequirements routeRequirements,
             out string rejectionReason)
         {
             layout = default;
+            routeRequirements = null;
             rejectionReason = string.Empty;
             ResetPhase1RouteDiagnostics();
             phase1LastLayoutAttempt = layoutAttempt;
@@ -197,6 +276,8 @@ namespace DungeonLab.Editor
                     rooms,
                     nodeCenters,
                     out HashSet<Vector2Int> reservedVistaCells,
+                    out Vector2Int sourceVistaCell,
+                    out Vector2Int targetVistaCell,
                     out Vector2Int sourceFacing,
                     out Vector2Int targetFacing,
                     out rejectionReason))
@@ -248,6 +329,12 @@ namespace DungeonLab.Editor
                 thresholds,
                 zoneRandom,
                 settings);
+            // A +1 intraroom accent cannot sit above the declared 24u
+            // culmination. All other route rooms retain the existing zone policy.
+            roomZones.RemoveAll(zone =>
+                intent.nodes[zone.roomIndex].relativeElevationLevels >= MaxGeneratedLevel ||
+                zone.roomIndex == intent.vista.sourceNode ||
+                zone.roomIndex == intent.vista.targetNode);
             StepFormationModeTable connectorTable = LoadAuthoredStairConnectorTableForGeneration();
             int connectorCandidateCount = connectorTable != null
                 ? CountConfiguredStairConnectorPrefabs(connectorTable)
@@ -258,6 +345,13 @@ namespace DungeonLab.Editor
                 connections,
                 roomZones,
                 connectorCandidateCount);
+            routeRequirements = new RouteTierRequirements(
+                intent,
+                reservedVistaCells,
+                sourceVistaCell,
+                targetVistaCell,
+                sourceFacing,
+                targetFacing);
             phase1LastFailureCode = string.Empty;
             return true;
         }
@@ -266,39 +360,60 @@ namespace DungeonLab.Editor
         {
             var nodes = new[]
             {
-                new RouteNodeIntent("arrival", "arrival", "arrival", 0, -1),
-                new RouteNodeIntent("threshold", "connector", "compression", 1, -1),
-                new RouteNodeIntent("choice", "junction", "choice", 2, -1),
-                new RouteNodeIntent("reveal", "grand-room", "reveal", 3, -1),
-                new RouteNodeIntent("vista-target", "landmark", "landmark", 4, -1),
-                new RouteNodeIntent("ascent", "connector", "ascent", 5, -1),
-                new RouteNodeIntent("approach", "processional-hall", "approach", 6, -1),
-                new RouteNodeIntent("rejoin", "return-hall", "rejoin", 7, -1),
-                new RouteNodeIntent("culmination", "culmination", "culmination", 8, -1),
-                new RouteNodeIntent("vista-source", "overlook", "reveal", -1, 0),
-                new RouteNodeIntent("branch-passage", "connector", "branch", -1, 1),
-                new RouteNodeIntent("branch-reward", "optional-room", "reward", -1, 2),
-                new RouteNodeIntent("branch-return", "connector", "return", -1, 3)
+                new RouteNodeIntent("arrival", "arrival", "arrival", 0, -1, 0),
+                new RouteNodeIntent("threshold", "connector", "compression", 1, -1, 0),
+                new RouteNodeIntent("choice", "junction", "choice", 2, -1, 4),
+                new RouteNodeIntent("reveal", "grand-room", "reveal", 3, -1, 4),
+                new RouteNodeIntent("vista-target", "landmark", "landmark", 4, -1, 8),
+                new RouteNodeIntent("ascent", "connector", "ascent", 5, -1, 12),
+                new RouteNodeIntent("approach", "processional-hall", "approach", 6, -1, 16),
+                new RouteNodeIntent("rejoin", "return-hall", "rejoin", 7, -1, 20),
+                new RouteNodeIntent("culmination", "culmination", "culmination", 8, -1, 24),
+                new RouteNodeIntent("vista-source", "overlook", "reveal", -1, 0, 12),
+                new RouteNodeIntent("branch-passage", "connector", "branch", -1, 1, 12),
+                new RouteNodeIntent("branch-reward", "optional-room", "reward", -1, 2, 16),
+                new RouteNodeIntent("branch-return", "connector", "return", -1, 3, 20)
             };
 
             var edges = new List<RouteTraversalIntent>();
+            void AddEdge(string id, int fromNode, int toNode, RouteTransitionKind transitionKind)
+            {
+                edges.Add(new RouteTraversalIntent(
+                    id,
+                    fromNode,
+                    toNode,
+                    nodes[toNode].relativeElevationLevels - nodes[fromNode].relativeElevationLevels,
+                    transitionKind));
+            }
+
             for (int node = 0; node < Phase1MainNodeCount - 1; node++)
             {
-                edges.Add(new RouteTraversalIntent($"main-{node}-{node + 1}", node, node + 1));
+                RouteTransitionKind kind = node == 0 || node == 2
+                    ? RouteTransitionKind.LevelCorridor
+                    : node == 5
+                        ? RouteTransitionKind.Stairwell
+                        : RouteTransitionKind.Stair;
+                AddEdge($"main-{node}-{node + 1}", node, node + 1, kind);
             }
 
             int previous = Phase1BranchAttachNode;
             for (int branch = 0; branch < Phase1BranchNodeCount; branch++)
             {
                 int current = Phase1MainNodeCount + branch;
-                edges.Add(new RouteTraversalIntent($"branch-{previous}-{current}", previous, current));
+                RouteTransitionKind kind = branch == 0
+                    ? RouteTransitionKind.Bridge
+                    : branch == 1
+                        ? RouteTransitionKind.LevelCorridor
+                        : RouteTransitionKind.Stair;
+                AddEdge($"branch-{previous}-{current}", previous, current, kind);
                 previous = current;
             }
 
-            edges.Add(new RouteTraversalIntent(
+            AddEdge(
                 $"rejoin-{previous}-{Phase1BranchRejoinNode}",
                 previous,
-                Phase1BranchRejoinNode));
+                Phase1BranchRejoinNode,
+                RouteTransitionKind.LevelCorridor);
             return new RouteIntent(
                 dungeonSeed,
                 nodes,
@@ -308,6 +423,7 @@ namespace DungeonLab.Editor
                     Phase1VistaSourceNode,
                     Phase1VistaTargetNode,
                     minimumReservedVoidCells: 3),
+                RouteElevationPolicy.AscendingSpine,
                 bottomNode: 0,
                 topNode: Phase1MainNodeCount - 1);
         }
@@ -354,6 +470,17 @@ namespace DungeonLab.Editor
                     return false;
                 }
 
+                int declaredRise = intent.nodes[edge.toNode].relativeElevationLevels -
+                    intent.nodes[edge.fromNode].relativeElevationLevels;
+                if (edge.requiredRiseLevels != declaredRise ||
+                    edge.transitionKind == RouteTransitionKind.LevelCorridor && declaredRise != 0 ||
+                    edge.transitionKind != RouteTransitionKind.LevelCorridor &&
+                    declaredRise != MajorRiseLevels && declaredRise != DoubleMajorRiseLevels)
+                {
+                    rejectionReason = $"route edge '{edge.id}' had an incompatible elevation/transition requirement";
+                    return false;
+                }
+
                 adjacency[edge.fromNode].Add(edge.toNode);
                 adjacency[edge.toNode].Add(edge.fromNode);
             }
@@ -391,6 +518,29 @@ namespace DungeonLab.Editor
                 intent.vista.minimumReservedVoidCells < 1)
             {
                 rejectionReason = "route vista intent had invalid endpoints or reservation length";
+                return false;
+            }
+
+            if (intent.nodes[intent.bottomNode].relativeElevationLevels != 0 ||
+                intent.nodes[intent.topNode].relativeElevationLevels != MaxGeneratedLevel ||
+                intent.nodes[intent.vista.sourceNode].relativeElevationLevels -
+                    intent.nodes[intent.vista.targetNode].relativeElevationLevels < MajorRiseLevels)
+            {
+                rejectionReason = "route elevation story did not span 0..24u or raise the vista source at least one major above its target";
+                return false;
+            }
+
+            var requiredKinds = new HashSet<RouteTransitionKind>();
+            foreach (RouteTraversalIntent edge in intent.traversalEdges)
+            {
+                requiredKinds.Add(edge.transitionKind);
+            }
+
+            if (!requiredKinds.Contains(RouteTransitionKind.Stair) ||
+                !requiredKinds.Contains(RouteTransitionKind.Bridge) ||
+                !requiredKinds.Contains(RouteTransitionKind.Stairwell))
+            {
+                rejectionReason = "route intent did not declare stair, bridge, and stairwell requirements";
                 return false;
             }
 
@@ -832,11 +982,15 @@ namespace DungeonLab.Editor
             IReadOnlyList<RoomFootprint> rooms,
             IReadOnlyList<Vector2Int> nodeCenters,
             out HashSet<Vector2Int> reservedCells,
+            out Vector2Int sourceEdge,
+            out Vector2Int targetEdge,
             out Vector2Int sourceFacing,
             out Vector2Int targetFacing,
             out string rejectionReason)
         {
             reservedCells = new HashSet<Vector2Int>();
+            sourceEdge = default;
+            targetEdge = default;
             sourceFacing = Vector2Int.zero;
             targetFacing = Vector2Int.zero;
             rejectionReason = string.Empty;
@@ -854,8 +1008,8 @@ namespace DungeonLab.Editor
             int transverse = sourceFacing.x != 0 ? sourceCenter.y : sourceCenter.x;
             RoomFootprint sourceRoom = rooms[intent.vista.sourceNode];
             RoomFootprint targetRoom = rooms[intent.vista.targetNode];
-            if (!sourceRoom.TryGetEdgeCellTowards(sourceFacing, transverse, out Vector2Int sourceEdge) ||
-                !targetRoom.TryGetEdgeCellTowards(targetFacing, transverse, out Vector2Int targetEdge))
+            if (!sourceRoom.TryGetEdgeCellTowards(sourceFacing, transverse, out sourceEdge) ||
+                !targetRoom.TryGetEdgeCellTowards(targetFacing, transverse, out targetEdge))
             {
                 rejectionReason = "vista endpoints did not expose aligned room boundary cells";
                 return false;
@@ -1006,7 +1160,7 @@ namespace DungeonLab.Editor
             {
                 uint hash = 2166136261u;
                 MixPhase1Hash(ref hash, dungeonSeed.ToString(System.Globalization.CultureInfo.InvariantCulture));
-                MixPhase1Hash(ref hash, Phase1PlannerVersion);
+                MixPhase1Hash(ref hash, RouteSpatialRandomVersion);
                 MixPhase1Hash(ref hash, layoutAttempt.ToString(System.Globalization.CultureInfo.InvariantCulture));
                 MixPhase1Hash(ref hash, stableId ?? string.Empty);
                 MixPhase1Hash(ref hash, purpose ?? string.Empty);

@@ -16,10 +16,11 @@ namespace DungeonLab.Editor
     internal sealed partial class DungeonLabGenerator
     {
         private const string BatchReportDirectory = "DungeonLabReports";
-        private const string DungeonPlanSummaryVersion = "dungeon-plan-v1";
+        private const string DungeonPlanSummaryVersion = "dungeon-plan-v2";
         private const int Phase0BaselineFirstSeed = 2026072100;
         private const int Phase0BaselineSeedCount = 200;
         private const int LockedSeedCount = 100;
+        private const int Phase3HardValidCompletionFloor = 190;
         private const int Phase0SentinelImageWidth = 1600;
         private const int Phase0SentinelImageHeight = 900;
 
@@ -27,19 +28,19 @@ namespace DungeonLab.Editor
         // characterization notes, not an aesthetic taxonomy or acceptance gate.
         private static readonly (int seed, string category, string annotation)[] Phase0VisualSentinels =
         {
-            (2026072140, "representative-a", "Median-like route, branch, loop, elevation, transition, and distant-room proxy counts."),
-            (2026072186, "representative-b", "Median-like alternate archetype with comparable graph and elevation measures."),
-            (2026072169, "weak-a", "No adjacent-cell distant-room proxy despite a multi-tier layout."),
-            (2026072245, "weak-b", "Short rooted route and near-minimum distant-room proxy."),
-            (2026072262, "edge-a", "Maximum transition count in the fixed 200-seed range."),
-            (2026072223, "edge-b", "Maximum elevation span with a sparse branch/loop graph and high transition count.")
+            (2026072140, "representative-a", "Phase 0 representative selection retained for cross-phase visual comparison."),
+            (2026072186, "representative-b", "Phase 0 alternate representative selection retained for cross-phase visual comparison."),
+            (2026072169, "weak-a", "Phase 0 weak selection retained to expose cross-phase readability regressions."),
+            (2026072245, "weak-b", "Phase 0 second weak selection retained to expose cross-phase readability regressions."),
+            (2026072262, "edge-a", "Phase 0 transition-count edge selection retained for cross-phase comparison."),
+            (2026072223, "edge-b", "Phase 0 elevation-span edge selection retained for cross-phase comparison.")
         };
 
         private static string phase0CatalogDigestCache;
 
         private static string ActiveDiagnosticSummaryVersion => DungeonPlanSummaryVersion;
 
-        private static string ActiveDiagnosticGeneratorVersion => Phase1PlannerVersion;
+        private static string ActiveDiagnosticGeneratorVersion => RoutePlannerVersion;
 
         [MenuItem("Tools/Dungeon Lab/Batch Validate (50 Fixed Seeds)")]
         public static void BatchValidate50Seeds()
@@ -142,8 +143,11 @@ namespace DungeonLab.Editor
             var elevationSpans = new List<int>();
             var transitionCounts = new List<int>();
             var visibleDistantRoomProxyCounts = new List<int>();
+            var routeClimbCounts = new List<int>();
             int successCount = 0;
             int hardValidCount = 0;
+            int routeRequirementsValidCount = 0;
+            int finalVistaValidCount = 0;
             int completedSeedCount = 0;
 
             try
@@ -201,6 +205,17 @@ namespace DungeonLab.Editor
                     elevationSpans.Add(tierSpan);
                     transitionCounts.Add(planSummary.Value<int>("transitionCount"));
                     visibleDistantRoomProxyCounts.Add(planSummary.Value<int>("visibleDistantRoomProxyCount"));
+                    JObject routeResolution = (JObject)seedReport["routeResolution"];
+                    routeClimbCounts.Add(routeResolution.Value<int>("routeClimbLevels"));
+                    if (routeResolution.Value<bool?>("requirementsSatisfied") == true)
+                    {
+                        routeRequirementsValidCount++;
+                    }
+
+                    if (routeResolution["vista"]?.Value<bool?>("finalValid") == true)
+                    {
+                        finalVistaValidCount++;
+                    }
 
                     JToken correlationToken = planSummary["depthLevelCorrelation"];
                     if (correlationToken != null && correlationToken.Type != JTokenType.Null)
@@ -229,6 +244,7 @@ namespace DungeonLab.Editor
                 "Dungeon Lab BATCH_VALIDATION " +
                 $"range={firstSeed}..{firstSeed + completedSeedCount - 1}; seeds={completedSeedCount}; " +
                 $"accepted={successCount}; failed={failedSeeds.Count}; hardValid={hardValidCount}; " +
+                $"routeRequirementsValid={routeRequirementsValidCount}; finalVistasValid={finalVistaValidCount}; " +
                 $"meanLayoutAttempts={attemptDistribution.Value<double>("mean"):0.##}; " +
                 $"p95LayoutAttempts={attemptDistribution.Value<int>("p95")}; maxLayoutAttempts={attemptDistribution.Value<int>("max")}; " +
                 $"archetypes={archetypeSummary}; tierSpans={tierSpanSummary}; " +
@@ -254,6 +270,9 @@ namespace DungeonLab.Editor
                 elevationSpans,
                 transitionCounts,
                 visibleDistantRoomProxyCounts,
+                routeClimbCounts,
+                routeRequirementsValidCount,
+                finalVistaValidCount,
                 seedReports);
             Debug.Log($"Dungeon Lab: batch validation report written to {reportPath}");
         }
@@ -323,6 +342,7 @@ namespace DungeonLab.Editor
                 SnapshotLine("validation.transitionContracts", report["validation"]?["transitionContracts"]?["passed"]),
                 SnapshotLine("validation.verticalTraversal", report["validation"]?["verticalTraversal"]?["passed"]),
                 SnapshotLine("validation.bottomToTopTraversal", report["validation"]?["bottomToTopTraversal"]?["passed"]),
+                SnapshotLine("validation.routeRequirements", report["validation"]?["routeRequirements"]?["passed"]),
                 SnapshotLine("validation.headroom", report["validation"]?["headroom"]?["passed"]),
                 SnapshotLine("validation.boundary", report["validation"]?["boundary"]?["passed"]),
                 SnapshotLine("validation.rendererInputs", report["validation"]?["rendererInputs"]?["passed"]),
@@ -359,10 +379,23 @@ namespace DungeonLab.Editor
                 SnapshotLine("vista.facingOpposed", report["routePlacement"]?["vista"]?["facingOpposed"]),
                 SnapshotLine("vista.reservedVoidCells", report["routePlacement"]?["vista"]?["reservedVoidCellCount"]),
                 SnapshotLine("vista.unobstructed", report["routePlacement"]?["vista"]?["unobstructedCandidateVolume"]),
+                SnapshotLine("vertical.elevationPolicy", report["routeIntent"]?["elevationPolicy"]),
+                SnapshotLine("vertical.routeClimb", report["routeResolution"]?["routeClimbLevels"]),
+                SnapshotLine("vertical.requirementsSatisfied", report["routeResolution"]?["requirementsSatisfied"]),
+                SnapshotLine("vertical.requiredTransitionCount", report["routeResolution"]?["requiredTransitionCount"]),
+                SnapshotLine("vertical.stairCount", report["routeResolution"]?["transitionKinds"]?["Stair"]),
+                SnapshotLine("vertical.bridgeCount", report["routeResolution"]?["transitionKinds"]?["Bridge"]),
+                SnapshotLine("vertical.stairwellCount", report["routeResolution"]?["transitionKinds"]?["Stairwell"]),
+                SnapshotLine("vertical.allStructuralReservedBeforeFill", report["routeResolution"]?["allStructuralReservedBeforeFill"]),
+                SnapshotLine("vista.finalValid", report["routeResolution"]?["vista"]?["finalValid"]),
+                SnapshotLine("vista.finalSourceLevel", report["routeResolution"]?["vista"]?["sourceLevel"]),
+                SnapshotLine("vista.finalTargetLevel", report["routeResolution"]?["vista"]?["targetLevel"]),
+                SnapshotLine("vista.finalReservedVoidCells", report["routeResolution"]?["vista"]?["reservedVoidCellCount"]),
                 SnapshotLine("validation.passed", report["validation"]?["passed"]),
                 SnapshotLine("validation.layoutConnectivity", report["validation"]?["layoutConnectivity"]?["passed"]),
                 SnapshotLine("validation.roomGraphConnectivity", report["validation"]?["roomGraphConnectivity"]?["passed"]),
                 SnapshotLine("validation.verticalTraversal", report["validation"]?["verticalTraversal"]?["passed"]),
+                SnapshotLine("validation.routeRequirements", report["validation"]?["routeRequirements"]?["passed"]),
                 SnapshotLine("validation.headroom", report["validation"]?["headroom"]?["passed"]),
                 SnapshotLine("metric.rooms", report["layout"]?["rooms"]),
                 SnapshotLine("metric.connections", report["layout"]?["connections"]),
@@ -379,6 +412,16 @@ namespace DungeonLab.Editor
             phase1LastRouteIntent = BuildProcessionalRouteIntent(seed);
             JObject intent = BuildPhase1RouteIntentProjection();
             bool containsSpatialCoordinates = intent.ToString(Formatting.None).Contains("\"center\"");
+            int requiredStairs = 0;
+            int requiredBridges = 0;
+            int requiredStairwells = 0;
+            foreach (RouteTraversalIntent edge in phase1LastRouteIntent.traversalEdges)
+            {
+                if (edge.transitionKind == RouteTransitionKind.Stair) requiredStairs++;
+                if (edge.transitionKind == RouteTransitionKind.Bridge) requiredBridges++;
+                if (edge.transitionKind == RouteTransitionKind.Stairwell) requiredStairwells++;
+            }
+
             var lines = new List<string>
             {
                 SnapshotLine("route.pattern", intent["patternId"]),
@@ -390,6 +433,12 @@ namespace DungeonLab.Editor
                 SnapshotLine("route.topNode", intent["topNode"]),
                 SnapshotLine("vista.facingRequirement", intent["vista"]?["facingRequirement"]),
                 SnapshotLine("vista.minimumReservedVoidCells", intent["vista"]?["minimumReservedVoidCells"]),
+                SnapshotLine("vertical.elevationPolicy", intent["elevationPolicy"]),
+                SnapshotLine("vertical.bottomRelativeLevel", intent["nodes"]?[0]?["relativeElevationLevels"]),
+                SnapshotLine("vertical.topRelativeLevel", intent["nodes"]?[8]?["relativeElevationLevels"]),
+                $"vertical.requiredStairs={requiredStairs}",
+                $"vertical.requiredBridges={requiredBridges}",
+                $"vertical.requiredStairwells={requiredStairwells}",
                 $"containsSpatialCoordinates={containsSpatialCoordinates}"
             };
             return string.Join("\n", lines);
@@ -585,6 +634,7 @@ namespace DungeonLab.Editor
             };
             report["routeIntent"] = routeIntentProjection;
             report["routePlacement"] = BuildPhase1RoutePlacementProjection(layout);
+            report["routeResolution"] = BuildRouteRequirementResolutionProjection(plan.routeRequirementResolution);
             ((JObject)report["hashes"])["routeIntent"] = routeIntentHash;
 
             return report;
@@ -640,7 +690,8 @@ namespace DungeonLab.Editor
                     ["role"] = node.role,
                     ["beat"] = node.beat,
                     ["mainRouteOrder"] = node.mainRouteOrder,
-                    ["branchOrder"] = node.branchOrder
+                    ["branchOrder"] = node.branchOrder,
+                    ["relativeElevationLevels"] = node.relativeElevationLevels
                 });
                 if (node.IsOnMainRoute)
                 {
@@ -660,7 +711,8 @@ namespace DungeonLab.Editor
                     ["id"] = edge.id,
                     ["fromNode"] = intent.nodes[edge.fromNode].id,
                     ["toNode"] = intent.nodes[edge.toNode].id,
-                    ["connectionType"] = "corridor",
+                    ["connectionType"] = edge.transitionKind.ToString(),
+                    ["requiredRiseLevels"] = edge.requiredRiseLevels,
                     ["laneCount"] = edge.laneCount
                 });
             }
@@ -671,6 +723,7 @@ namespace DungeonLab.Editor
                 ["seed"] = intent.seed,
                 ["plannerVersion"] = intent.plannerVersion,
                 ["patternId"] = intent.patternId,
+                ["elevationPolicy"] = intent.elevationPolicy.ToString(),
                 ["nodeCount"] = intent.nodes.Length,
                 ["nodes"] = nodes,
                 ["bottomNode"] = intent.nodes[intent.bottomNode].id,
@@ -766,8 +819,77 @@ namespace DungeonLab.Editor
                     ["reservedVoidCellCount"] = phase1LastVistaCells.Length,
                     ["reservedVoidCells"] = CellsToken(phase1LastVistaCells, sort: false),
                     ["unobstructedCandidateVolume"] = vistaUnobstructedAtLayoutHandoff,
-                    ["measurementStage"] = "DungeonLayout handoff before unchanged tier planner loop additions",
+                    ["measurementStage"] = "DungeonLayout handoff before route-constrained tier planning and loop additions",
                     ["reservedVoidPreservedAfterTierLooping"] = reservedVoidPreservedAfterTierLooping
+                }
+            };
+        }
+
+        private static JObject BuildRouteRequirementResolutionProjection(
+            RouteRequirementResolution resolution)
+        {
+            var transitions = new JArray();
+            var transitionKinds = new JObject
+            {
+                [RouteTransitionKind.LevelCorridor.ToString()] = 0,
+                [RouteTransitionKind.Stair.ToString()] = 0,
+                [RouteTransitionKind.Bridge.ToString()] = 0,
+                [RouteTransitionKind.Stairwell.ToString()] = 0
+            };
+            bool allStructuralReservedBeforeFill = true;
+            foreach (RouteTransitionResolution transition in
+                     resolution.transitions ?? Array.Empty<RouteTransitionResolution>())
+            {
+                string kind = transition.transitionKind.ToString();
+                transitionKinds[kind] = (transitionKinds.Value<int?>(kind) ?? 0) + 1;
+                bool reservedBeforeFill = transition.transitionKind == RouteTransitionKind.LevelCorridor ||
+                    transition.lowerLandingCells.Length > 0 &&
+                    transition.upperLandingCells.Length > 0 &&
+                    transition.footprintCells.Length > 0;
+                allStructuralReservedBeforeFill &= reservedBeforeFill;
+                transitions.Add(new JObject
+                {
+                    ["edgeId"] = transition.edgeId,
+                    ["fromRoom"] = transition.fromRoom,
+                    ["toRoom"] = transition.toRoom,
+                    ["transitionKind"] = kind,
+                    ["requiredRiseLevels"] = transition.requiredRiseLevels,
+                    ["resolvedRiseLevels"] = transition.resolvedRiseLevels,
+                    ["placementClass"] = transition.placementClass,
+                    ["transitionFirstCell"] = CellToken(transition.transitionFirstCell),
+                    ["transitionSecondCell"] = CellToken(transition.transitionSecondCell),
+                    ["lowerLandingCells"] = CellsToken(transition.lowerLandingCells, sort: false),
+                    ["upperLandingCells"] = CellsToken(transition.upperLandingCells, sort: false),
+                    ["footprintCells"] = CellsToken(transition.footprintCells, sort: false),
+                    ["reservedBeforeFill"] = reservedBeforeFill
+                });
+            }
+
+            return new JObject
+            {
+                ["requirementsSatisfied"] = resolution.transitions != null &&
+                    resolution.transitions.Length > 0 &&
+                    resolution.finalVistaValid,
+                ["requiredTransitionCount"] = transitions.Count,
+                ["transitionKinds"] = transitionKinds,
+                ["allStructuralReservedBeforeFill"] = allStructuralReservedBeforeFill,
+                ["bottomLevel"] = resolution.bottomLevel,
+                ["topLevel"] = resolution.topLevel,
+                ["routeClimbLevels"] = resolution.RouteClimbLevels,
+                ["transitions"] = transitions,
+                ["vista"] = new JObject
+                {
+                    ["sourceCell"] = CellToken(resolution.vistaSourceCell),
+                    ["targetCell"] = CellToken(resolution.vistaTargetCell),
+                    ["sourceLevel"] = resolution.vistaSourceLevel,
+                    ["targetLevel"] = resolution.vistaTargetLevel,
+                    ["levelDelta"] = resolution.vistaSourceLevel - resolution.vistaTargetLevel,
+                    ["sourceFacing"] = CellToken(resolution.vistaSourceFacing),
+                    ["targetFacing"] = CellToken(resolution.vistaTargetFacing),
+                    ["reservedVoidCells"] = CellsToken(resolution.reservedVistaCells, sort: false),
+                    ["reservedVoidCellCount"] = resolution.reservedVistaCells?.Length ?? 0,
+                    ["finalValid"] = resolution.finalVistaValid,
+                    ["measurementStage"] = "final TieredLevelPlan before boundary construction and rendering"
                 }
             };
         }
@@ -797,6 +919,9 @@ namespace DungeonLab.Editor
             }
 
             bool bottomToTop = portGraphConnected && plan.minLevel < plan.maxLevel;
+            bool routeRequirementsValid = TryValidateAcceptedRouteRequirements(
+                plan,
+                out string routeRequirementsMessage);
             bool headroomValid = TryValidateAcceptedPlanHeadroom(plan, out string headroomMessage);
             bool boundaryValid = TryBuildRoomBoundaryContext(
                 layout,
@@ -812,6 +937,7 @@ namespace DungeonLab.Editor
                 transitionContractsValid &&
                 portGraphConnected &&
                 bottomToTop &&
+                routeRequirementsValid &&
                 headroomValid &&
                 boundaryValid &&
                 rendererInputsValid;
@@ -821,6 +947,7 @@ namespace DungeonLab.Editor
             AddFailureCode(failureCodes, transitionContractsValid, "TRANSITION_CONTRACT");
             AddFailureCode(failureCodes, portGraphConnected, "VERTICAL_TRAVERSAL");
             AddFailureCode(failureCodes, bottomToTop, "BOTTOM_TO_TOP_TRAVERSAL");
+            AddFailureCode(failureCodes, routeRequirementsValid, "ROUTE_REQUIREMENTS");
             AddFailureCode(failureCodes, headroomValid, "POST_PLAN_HEADROOM_CLEARANCE");
             AddFailureCode(failureCodes, boundaryValid, "BOUNDARY_CONTEXT");
             AddFailureCode(failureCodes, rendererInputsValid, "RENDERER_INPUT");
@@ -838,10 +965,63 @@ namespace DungeonLab.Editor
                     bottomToTop
                         ? $"connected traversal spans levels {plan.minLevel}..{plan.maxLevel}"
                         : $"traversal did not span distinct bottom/top levels ({plan.minLevel}..{plan.maxLevel})"),
+                ["routeRequirements"] = CheckToken(routeRequirementsValid, routeRequirementsMessage),
                 ["headroom"] = CheckToken(headroomValid, headroomMessage),
                 ["boundary"] = CheckToken(boundaryValid, boundaryMessage),
                 ["rendererInputs"] = CheckToken(rendererInputsValid, rendererInputMessage)
             };
+        }
+
+        private static bool TryValidateAcceptedRouteRequirements(
+            TieredLevelPlan plan,
+            out string message)
+        {
+            RouteRequirementResolution resolution = plan.routeRequirementResolution;
+            int stairCount = 0;
+            int bridgeCount = 0;
+            int stairwellCount = 0;
+            foreach (RouteTransitionResolution transition in
+                     resolution.transitions ?? Array.Empty<RouteTransitionResolution>())
+            {
+                switch (transition.transitionKind)
+                {
+                    case RouteTransitionKind.Stair:
+                        stairCount++;
+                        break;
+                    case RouteTransitionKind.Bridge:
+                        bridgeCount++;
+                        break;
+                    case RouteTransitionKind.Stairwell:
+                        stairwellCount++;
+                        break;
+                }
+
+                if (transition.transitionKind != RouteTransitionKind.LevelCorridor &&
+                    (transition.lowerLandingCells.Length == 0 ||
+                     transition.upperLandingCells.Length == 0 ||
+                     transition.footprintCells.Length == 0))
+                {
+                    message = $"route edge '{transition.edgeId}' lacked pre-fill landing/footprint evidence";
+                    return false;
+                }
+            }
+
+            bool passed = resolution.transitions != null &&
+                resolution.transitions.Length == Phase1MainNodeCount + Phase1BranchNodeCount &&
+                resolution.bottomLevel == 0 &&
+                resolution.topLevel == MaxGeneratedLevel &&
+                resolution.RouteClimbLevels == MaxGeneratedLevel &&
+                stairCount > 0 &&
+                bridgeCount > 0 &&
+                stairwellCount > 0 &&
+                resolution.finalVistaValid &&
+                resolution.reservedVistaCells != null &&
+                resolution.reservedVistaCells.Length >= 3 &&
+                resolution.vistaSourceLevel - resolution.vistaTargetLevel >= MajorRiseLevels;
+            message = passed
+                ? $"route requirements resolved {resolution.transitions.Length} edges, 0u..{resolution.topLevel}u, with stair:{stairCount}, bridge:{bridgeCount}, stairwell:{stairwellCount}, final vista valid"
+                : $"route requirements incomplete: edges={resolution.transitions?.Length ?? 0}, climb={resolution.RouteClimbLevels}u, stair={stairCount}, bridge={bridgeCount}, stairwell={stairwellCount}, vista={resolution.finalVistaValid}";
+            return passed;
         }
 
         private static bool TryValidateRoomGraphConnectivity(DungeonLayout layout, out string message)
@@ -1295,7 +1475,8 @@ namespace DungeonLab.Editor
                 ["synthesizedStairs"] = synthesizedStairs,
                 ["synthesizedStairSummary"] = plan.synthesizedStairSummary,
                 ["daisShowpieces"] = showpieces,
-                ["promontoryCells"] = CellsToken(plan.promontoryCells, sort: true)
+                ["promontoryCells"] = CellsToken(plan.promontoryCells, sort: true),
+                ["routeRequirements"] = BuildRouteRequirementResolutionProjection(plan.routeRequirementResolution)
             };
         }
 
@@ -1439,9 +1620,9 @@ namespace DungeonLab.Editor
             return $"{key}={serialized}";
         }
 
-        // Pearson correlation between a room's BFS depth from the hall and its assigned tier.
-        // The pre-archetype generator scored ~+1 on every seed; a healthy archetype mix should
-        // spread this across negative and positive values.
+        // Historical Pearson correlation between a room's BFS depth from the hall and its
+        // assigned tier. Retained for cross-phase characterization; the active ascending-spine
+        // route policy is intentionally expected to correlate depth and elevation.
         private static float CalculateDepthLevelCorrelation(DungeonLayout layout, TieredLevelPlan plan)
         {
             int roomCount = layout.rooms.Count;
@@ -1663,6 +1844,9 @@ namespace DungeonLab.Editor
             List<int> elevationSpans,
             List<int> transitionCounts,
             List<int> visibleDistantRoomProxyCounts,
+            List<int> routeClimbCounts,
+            int routeRequirementsValidCount,
+            int finalVistaValidCount,
             JArray seedReports)
         {
             var archetypes = new JObject();
@@ -1697,7 +1881,8 @@ namespace DungeonLab.Editor
                     ["loopEdges"] = BuildIntDistribution(loopEdgeCounts),
                     ["elevationSpan"] = BuildIntDistribution(elevationSpans),
                     ["transitions"] = BuildIntDistribution(transitionCounts),
-                    ["visibleDistantRoomProxy"] = BuildIntDistribution(visibleDistantRoomProxyCounts)
+                    ["visibleDistantRoomProxy"] = BuildIntDistribution(visibleDistantRoomProxyCounts),
+                    ["routeClimbLevels"] = BuildIntDistribution(routeClimbCounts)
                 },
                 ["rejectionHistogram"] = HistogramToken(rejectionHistogram),
                 ["rejectionCodes"] = HistogramToken(rejectionCodeHistogram),
@@ -1732,6 +1917,48 @@ namespace DungeonLab.Editor
                     ["p95AttemptTargetPassed"] = p95Passed,
                     ["everyAcceptedPlanHardValid"] = acceptedHardValid,
                     ["everyFailureReasonCoded"] = failuresReasonCoded
+                };
+            }
+
+            bool isPhase3ReliabilityCorpus =
+                firstSeed == Phase0BaselineFirstSeed && seedCount == Phase0BaselineSeedCount;
+            if (isPhase3ReliabilityCorpus)
+            {
+                bool completionPassed = hardValidCount >= Phase3HardValidCompletionFloor;
+                bool attemptCeilingPassed = attemptDistribution.Value<int>("max") <= Phase1LayoutAttemptLimit;
+                bool p95Passed = attemptDistribution.Value<int>("p95") <= 1;
+                bool acceptedHardValid = hardValidCount == successCount;
+                bool failuresReasonCoded = FailuresAreReasonCoded(seedReports);
+                bool routeRequirementsPassed = routeRequirementsValidCount == successCount;
+                bool finalVistasPassed = finalVistaValidCount == successCount;
+                report["phase3ReliabilityBudget"] = new JObject
+                {
+                    ["corpus"] = $"{firstSeed}..{firstSeed + seedCount - 1}",
+                    ["hardValidCompletionFloor"] = Phase3HardValidCompletionFloor,
+                    ["attemptCeiling"] = Phase1LayoutAttemptLimit,
+                    ["p95AttemptTarget"] = 1,
+                    ["requiredRouteClimbLevels"] = MaxGeneratedLevel,
+                    ["requiredFinalVista"] = true
+                };
+                report["phase3BudgetResult"] = new JObject
+                {
+                    ["passed"] = completionPassed &&
+                        attemptCeilingPassed &&
+                        p95Passed &&
+                        acceptedHardValid &&
+                        failuresReasonCoded &&
+                        routeRequirementsPassed &&
+                        finalVistasPassed,
+                    ["hardValidCompletions"] = hardValidCount,
+                    ["completionFloorPassed"] = completionPassed,
+                    ["attemptCeilingPassed"] = attemptCeilingPassed,
+                    ["p95AttemptTargetPassed"] = p95Passed,
+                    ["everyAcceptedPlanHardValid"] = acceptedHardValid,
+                    ["everyFailureReasonCoded"] = failuresReasonCoded,
+                    ["routeRequirementsValid"] = routeRequirementsValidCount,
+                    ["everyAcceptedRouteRequirementValid"] = routeRequirementsPassed,
+                    ["finalVistasValid"] = finalVistaValidCount,
+                    ["everyAcceptedFinalVistaValid"] = finalVistasPassed
                 };
             }
 
