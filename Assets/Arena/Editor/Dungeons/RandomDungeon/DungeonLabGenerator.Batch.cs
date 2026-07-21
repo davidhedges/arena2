@@ -3041,6 +3041,26 @@ namespace DungeonLab.Editor
             out JObject seedReport,
             out ElevationEdgeModel.BuildReport buildReport)
         {
+            return BuildPhase0RenderedSeed(
+                seed,
+                out bounds,
+                out seedReport,
+                out buildReport,
+                out _,
+                out _);
+        }
+
+        // The additional outputs expose the existing canonical renderer inputs
+        // only to diagnostic capture code. They do not add a second plan or
+        // participate in generation.
+        private static GameObject BuildPhase0RenderedSeed(
+            int seed,
+            out Bounds bounds,
+            out JObject seedReport,
+            out ElevationEdgeModel.BuildReport buildReport,
+            out Vector3 levelFieldOrigin,
+            out TieredLevelPlan renderedPlan)
+        {
             CurrentGenerationSettings = LoadActiveGenerationSettings();
             var rejectionHistogram = new Dictionary<string, int>(StringComparer.Ordinal);
             var random = new System.Random(seed);
@@ -3099,7 +3119,8 @@ namespace DungeonLab.Editor
                 throw new InvalidOperationException($"Seed {seed} could not reproduce boundary context: {boundaryError}");
             }
 
-            Vector3 levelFieldOrigin = CalculateCenteredLevelFieldOrigin(layout.floorCells, Vector3.zero);
+            levelFieldOrigin = CalculateCenteredLevelFieldOrigin(layout.floorCells, Vector3.zero);
+            renderedPlan = plan;
             GameObject root = ElevationEdgeModel.BuildLevelField(
                 levelFieldOrigin,
                 plan.cellLevels,
@@ -4468,6 +4489,23 @@ namespace DungeonLab.Editor
 
         private static void CapturePhase0SentinelImage(Bounds bounds, string path)
         {
+            CaptureDiagnosticReviewImage(path, camera =>
+            {
+                Vector3 center = bounds.center;
+                float radius = Mathf.Max(16f, bounds.extents.magnitude);
+                // Looking direction points down toward the floorplan; subtracting
+                // it therefore places the review camera above the dungeon.
+                Vector3 direction = new Vector3(-0.85f, -0.68f, -0.95f).normalized;
+                camera.transform.position = center - direction * (radius * 1.7f);
+                camera.transform.LookAt(center + Vector3.up * Mathf.Max(1.5f, bounds.extents.y * 0.1f));
+                camera.nearClipPlane = 0.1f;
+                camera.farClipPlane = Mathf.Max(250f, radius * 8f);
+                camera.fieldOfView = 35f;
+            });
+        }
+
+        private static void CaptureDiagnosticReviewImage(string path, Action<Camera> configureCamera)
+        {
             var cameraObject = new GameObject("DungeonLab Phase0 Sentinel Camera")
             {
                 hideFlags = HideFlags.HideAndDontSave
@@ -4489,16 +4527,7 @@ namespace DungeonLab.Editor
             RenderTexture previousActive = RenderTexture.active;
             try
             {
-                Vector3 center = bounds.center;
-                float radius = Mathf.Max(16f, bounds.extents.magnitude);
-                // Looking direction points down toward the floorplan; subtracting
-                // it therefore places the review camera above the dungeon.
-                Vector3 direction = new Vector3(-0.85f, -0.68f, -0.95f).normalized;
-                camera.transform.position = center - direction * (radius * 1.7f);
-                camera.transform.LookAt(center + Vector3.up * Mathf.Max(1.5f, bounds.extents.y * 0.1f));
-                camera.nearClipPlane = 0.1f;
-                camera.farClipPlane = Mathf.Max(250f, radius * 8f);
-                camera.fieldOfView = 35f;
+                configureCamera(camera);
                 camera.clearFlags = CameraClearFlags.SolidColor;
                 camera.backgroundColor = new Color(0.035f, 0.04f, 0.055f, 1f);
                 camera.targetTexture = renderTexture;
