@@ -1,6 +1,6 @@
 # Coherent floorplan generation plan
 
-Status: Phases 0-5 complete and verified; Phase 6 expansion ready and not started
+Status: Phases 0-5 and Phase 6a/6b complete and verified; Phase 6 expansion continues
 
 Last updated: 2026-07-21
 
@@ -435,6 +435,8 @@ Result: complete and verified on 2026-07-21. Two reviewed recipes now share one 
 ### Phase 6 — Expand topologies, recipes, and planned vistas
 
 Goal: add breadth in small increments after both planning and authoring foundations have been proven.
+
+Progress: Phase 6a completed the identity-preserving spine/branch/rejoin composition foundation on 2026-07-21. Phase 6b then completed and verified `atrium_ring_topology_01`: one structurally distinct second graph/embedding, selected deterministically alongside the processional spine while reusing the existing recipes, vista contract, canonical pipeline, renderer, abyss support, and collision export. The locked mixed corpus is 200/200 hard-valid with an exact 100/100 pattern split, and all 100 processional seeds preserve their Phase 6a hashes.
 
 Deliverables, added one at a time:
 

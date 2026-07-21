@@ -8,18 +8,25 @@ namespace DungeonLab.Editor
     // compiles it directly into the existing DungeonLayout.
     internal sealed partial class DungeonLabGenerator
     {
-        private const string RoutePlannerVersion = "processional-spine-v4";
+        private const string RoutePlannerVersion = "route-topologies-v5";
+        private const string ProcessionalPlannerVersion = "processional-spine-v4";
+        private const string AtriumRingPlannerVersion = "atrium-ring-v1";
         // Preserve the proven route embedding stream. Phase 5 changes only the
         // reviewed recipe contract/ports and uses named per-recipe streams.
         private const string RouteSpatialRandomVersion = "processional-spine-v1";
         private const string Phase1PatternId = "processional-spine";
+        private const string AtriumRingPatternId = "atrium-ring";
         private const int Phase1LayoutAttemptLimit = 2;
-        private const int Phase1MainNodeCount = 9;
-        private const int Phase1BranchNodeCount = 4;
+        private const int RouteMainNodeCount = 9;
+        private const int RouteBranchNodeCount = 4;
         private const int Phase1BranchAttachNode = 2;
         private const int Phase1BranchRejoinNode = 7;
         private const int Phase1VistaSourceNode = 9;
         private const int Phase1VistaTargetNode = 4;
+        private const int AtriumRingBranchAttachNode = 3;
+        private const int AtriumRingBranchRejoinNode = 6;
+        private const int AtriumRingVistaSourceNode = 10;
+        private const int AtriumRingVistaTargetNode = 4;
         private const int Phase1RoomEnvelopeRadius = 4;
         private const int Phase1BranchSearchExpansionLimit = 24;
         private const int Phase1RoomInflationAttemptLimit = 6;
@@ -50,9 +57,16 @@ namespace DungeonLab.Editor
             public readonly string catalogDigest;
             public readonly int bottomNode;
             public readonly int topNode;
+            public readonly int branchAttachNode;
+            public readonly int branchRejoinNode;
+            public readonly int requiredCycleLength;
+            public readonly RouteOverlookIntent[] plannedOverlooks;
+            public readonly bool allowGenericRoomWings;
 
             public RouteIntent(
                 int seed,
+                string plannerVersion,
+                string patternId,
                 RouteNodeIntent[] nodes,
                 RouteTraversalIntent[] traversalEdges,
                 RouteVistaIntent vista,
@@ -60,11 +74,16 @@ namespace DungeonLab.Editor
                 RecipeSlotIntent[] recipeSlots,
                 string catalogDigest,
                 int bottomNode,
-                int topNode)
+                int topNode,
+                int branchAttachNode,
+                int branchRejoinNode,
+                int requiredCycleLength,
+                RouteOverlookIntent[] plannedOverlooks,
+                bool allowGenericRoomWings)
             {
                 this.seed = seed;
-                plannerVersion = RoutePlannerVersion;
-                patternId = Phase1PatternId;
+                this.plannerVersion = plannerVersion;
+                this.patternId = patternId;
                 this.nodes = nodes;
                 this.traversalEdges = traversalEdges;
                 this.vista = vista;
@@ -73,7 +92,18 @@ namespace DungeonLab.Editor
                 this.catalogDigest = catalogDigest ?? string.Empty;
                 this.bottomNode = bottomNode;
                 this.topNode = topNode;
+                this.branchAttachNode = branchAttachNode;
+                this.branchRejoinNode = branchRejoinNode;
+                this.requiredCycleLength = requiredCycleLength;
+                this.plannedOverlooks = plannedOverlooks ?? Array.Empty<RouteOverlookIntent>();
+                this.allowGenericRoomWings = allowGenericRoomWings;
             }
+        }
+
+        private enum RoutePatternKind
+        {
+            ProcessionalSpine,
+            AtriumRing
         }
 
         private enum RouteTransitionKind
@@ -167,6 +197,18 @@ namespace DungeonLab.Editor
             }
         }
 
+        private readonly struct RouteOverlookIntent
+        {
+            public readonly int firstNode;
+            public readonly int secondNode;
+
+            public RouteOverlookIntent(int firstNode, int secondNode)
+            {
+                this.firstNode = firstNode;
+                this.secondNode = secondNode;
+            }
+        }
+
         // The narrow Phase 3/4 companion value. It carries the already-produced route
         // requirements and exact 2D vista reservation into the existing tier
         // planner, then dies with the generation attempt. It is not a canonical
@@ -230,7 +272,7 @@ namespace DungeonLab.Editor
             phase1LastFailureCode = string.Empty;
         }
 
-        private static bool TryBuildProcessionalSpineDungeonLayout(
+        private static bool TryBuildRouteFirstDungeonLayout(
             int dungeonSeed,
             int layoutAttempt,
             out DungeonLayout layout,
@@ -250,19 +292,29 @@ namespace DungeonLab.Editor
                 return RejectPhase1Route("RECIPE_CATALOG", rejectionReason, out rejectionReason);
             }
 
-            if (!TryBuildRequiredRecipeSlots(recipeCatalog, out RecipeSlotIntent[] recipeSlots, out rejectionReason))
+            RoutePatternKind pattern = SelectRoutePattern(dungeonSeed);
+            int landmarkNode = pattern == RoutePatternKind.AtriumRing
+                ? AtriumRingVistaTargetNode
+                : Phase1VistaTargetNode;
+            if (!TryBuildRequiredRecipeSlots(
+                    recipeCatalog,
+                    landmarkNode,
+                    out RecipeSlotIntent[] recipeSlots,
+                    out rejectionReason))
             {
                 return RejectPhase1Route("RECIPE_CATALOG", rejectionReason, out rejectionReason);
             }
 
-            RouteIntent intent = BuildProcessionalRouteIntent(dungeonSeed, recipeSlots, recipeCatalog.digest);
+            RouteIntent intent = pattern == RoutePatternKind.AtriumRing
+                ? BuildAtriumRingRouteIntent(dungeonSeed, recipeSlots, recipeCatalog.digest)
+                : BuildProcessionalRouteIntent(dungeonSeed, recipeSlots, recipeCatalog.digest);
             phase1LastRouteIntent = intent;
-            if (!TryValidateProcessionalRouteIntent(intent, out rejectionReason))
+            if (!TryValidateRouteIntent(intent, out rejectionReason))
             {
                 return RejectPhase1Route("ROUTE_INTENT_INVALID", rejectionReason, out rejectionReason);
             }
 
-            if (!TryEmbedProcessionalRoute(
+            if (!TryEmbedRoute(
                     dungeonSeed,
                     layoutAttempt,
                     intent,
@@ -501,6 +553,8 @@ namespace DungeonLab.Editor
 
             return new RouteIntent(
                 dungeonSeed,
+                ProcessionalPlannerVersion,
+                Phase1PatternId,
                 nodes,
                 edges,
                 new RouteVistaIntent(
@@ -512,10 +566,157 @@ namespace DungeonLab.Editor
                 recipeSlots,
                 catalogDigest,
                 bottomNode: 0,
-                topNode: Phase1MainNodeCount - 1);
+                topNode: RouteMainNodeCount - 1,
+                branchAttachNode: Phase1BranchAttachNode,
+                branchRejoinNode: Phase1BranchRejoinNode,
+                requiredCycleLength: 10,
+                plannedOverlooks: new[]
+                {
+                    new RouteOverlookIntent(1, 10),
+                    new RouteOverlookIntent(6, 9),
+                    new RouteOverlookIntent(7, 10)
+                },
+                allowGenericRoomWings: true);
         }
 
-        private static bool TryValidateProcessionalRouteIntent(RouteIntent intent, out string rejectionReason)
+        private static RoutePatternKind SelectRoutePattern(int dungeonSeed)
+        {
+            return (dungeonSeed & 1) == 0
+                ? RoutePatternKind.ProcessionalSpine
+                : RoutePatternKind.AtriumRing;
+        }
+
+        private static string SelectedRoutePatternId(int dungeonSeed)
+        {
+            return SelectRoutePattern(dungeonSeed) == RoutePatternKind.AtriumRing
+                ? AtriumRingPatternId
+                : Phase1PatternId;
+        }
+
+        private static RouteIntent BuildAtriumRingRouteIntent(
+            int dungeonSeed,
+            RecipeSlotIntent[] recipeSlots,
+            string catalogDigest)
+        {
+            var composer = new RouteGraphComposer();
+            var mainNodes = new[]
+            {
+                new RouteNodeIntent("atrium-arrival", "arrival", "arrival", 0, -1, 0),
+                new RouteNodeIntent("atrium-threshold", "connector", "compression", 1, -1, 0, DungeonRecipeIds.CompressionConnector),
+                new RouteNodeIntent("outer-approach", "processional-hall", "approach", 2, -1, 4),
+                new RouteNodeIntent("ring-entry", "junction", "choice", 3, -1, 4),
+                new RouteNodeIntent("atrium-landmark", "landmark", "landmark", 4, -1, 4, DungeonRecipeIds.ProcessionalLandmark),
+                new RouteNodeIntent("ring-ascent", "connector", "ascent", 5, -1, 8),
+                new RouteNodeIntent("ring-rejoin", "junction", "rejoin", 6, -1, 16),
+                new RouteNodeIntent("upper-approach", "processional-hall", "approach", 7, -1, 20),
+                new RouteNodeIntent("atrium-culmination", "culmination", "culmination", 8, -1, 24)
+            };
+            string[] mainEdgeIds =
+            {
+                "main-0-1",
+                "main-1-2",
+                "main-2-3",
+                "main-3-4",
+                "main-4-5",
+                "main-5-6",
+                "main-6-7",
+                "main-7-8"
+            };
+            RouteTransitionKind[] mainTransitionKinds =
+            {
+                RouteTransitionKind.LevelCorridor,
+                RouteTransitionKind.Stair,
+                RouteTransitionKind.LevelCorridor,
+                RouteTransitionKind.LevelCorridor,
+                RouteTransitionKind.Stair,
+                RouteTransitionKind.Stairwell,
+                RouteTransitionKind.Stair,
+                RouteTransitionKind.Stair
+            };
+            if (!composer.TryAddSpine(
+                    mainNodes,
+                    mainEdgeIds,
+                    mainTransitionKinds,
+                    out int[] mainNodeIndices,
+                    out string compositionError))
+            {
+                throw new InvalidOperationException($"Invalid atrium-ring spine definition: {compositionError}");
+            }
+
+            var branchNodes = new[]
+            {
+                new RouteNodeIntent("lower-ring-gallery", "connector", "branch", -1, 0, 8),
+                new RouteNodeIntent("ring-overlook", "overlook", "reveal", -1, 1, 8),
+                new RouteNodeIntent("far-ring-gallery", "optional-room", "reward", -1, 2, 12),
+                new RouteNodeIntent("upper-ring-gallery", "connector", "return", -1, 3, 16)
+            };
+            string[] branchEdgeIds =
+            {
+                "branch-3-9",
+                "branch-9-10",
+                "branch-10-11",
+                "branch-11-12"
+            };
+            RouteTransitionKind[] branchTransitionKinds =
+            {
+                RouteTransitionKind.Bridge,
+                RouteTransitionKind.LevelCorridor,
+                RouteTransitionKind.Stair,
+                RouteTransitionKind.Stair
+            };
+            if (!composer.TryAddBranch(
+                    mainNodeIndices[AtriumRingBranchAttachNode],
+                    branchNodes,
+                    branchEdgeIds,
+                    branchTransitionKinds,
+                    out int[] branchNodeIndices,
+                    out compositionError))
+            {
+                throw new InvalidOperationException($"Invalid atrium-ring branch definition: {compositionError}");
+            }
+
+            if (!composer.TryRejoin(
+                    branchNodeIndices[branchNodeIndices.Length - 1],
+                    mainNodeIndices[AtriumRingBranchRejoinNode],
+                    "rejoin-12-6",
+                    RouteTransitionKind.LevelCorridor,
+                    out compositionError))
+            {
+                throw new InvalidOperationException($"Invalid atrium-ring rejoin definition: {compositionError}");
+            }
+
+            if (!composer.TryPublish(
+                    out RouteNodeIntent[] nodes,
+                    out RouteTraversalIntent[] edges,
+                    out compositionError))
+            {
+                throw new InvalidOperationException($"Invalid atrium-ring graph definition: {compositionError}");
+            }
+
+            return new RouteIntent(
+                dungeonSeed,
+                AtriumRingPlannerVersion,
+                AtriumRingPatternId,
+                nodes,
+                edges,
+                new RouteVistaIntent(
+                    "ring-overlook-to-atrium-landmark",
+                    AtriumRingVistaSourceNode,
+                    AtriumRingVistaTargetNode,
+                    minimumReservedVoidCells: 3),
+                RouteElevationPolicy.AscendingSpine,
+                recipeSlots,
+                catalogDigest,
+                bottomNode: 0,
+                topNode: RouteMainNodeCount - 1,
+                branchAttachNode: AtriumRingBranchAttachNode,
+                branchRejoinNode: AtriumRingBranchRejoinNode,
+                requiredCycleLength: 8,
+                plannedOverlooks: Array.Empty<RouteOverlookIntent>(),
+                allowGenericRoomWings: false);
+        }
+
+        private static bool TryValidateRouteIntent(RouteIntent intent, out string rejectionReason)
         {
             rejectionReason = string.Empty;
             if (intent == null || intent.nodes == null || intent.traversalEdges == null)
@@ -524,9 +725,15 @@ namespace DungeonLab.Editor
                 return false;
             }
 
-            if (intent.nodes.Length != Phase1MainNodeCount + Phase1BranchNodeCount)
+            if (string.IsNullOrEmpty(intent.patternId) || string.IsNullOrEmpty(intent.plannerVersion))
             {
-                rejectionReason = $"route intent had {intent.nodes.Length} nodes instead of {Phase1MainNodeCount + Phase1BranchNodeCount}";
+                rejectionReason = "route intent did not declare a pattern and planner version";
+                return false;
+            }
+
+            if (intent.nodes.Length != RouteMainNodeCount + RouteBranchNodeCount)
+            {
+                rejectionReason = $"route intent had {intent.nodes.Length} nodes instead of {RouteMainNodeCount + RouteBranchNodeCount}";
                 return false;
             }
 
@@ -616,14 +823,18 @@ namespace DungeonLab.Editor
             }
 
             int loopEdges = intent.traversalEdges.Length - (intent.nodes.Length - 1);
+            int cycleLength = CountSingleCycleNodes(adjacency);
             if (visited.Count != intent.nodes.Length ||
                 loopEdges != 1 ||
-                adjacency[Phase1BranchAttachNode].Count != 3 ||
-                adjacency[Phase1BranchRejoinNode].Count != 3)
+                intent.branchAttachNode < 0 || intent.branchAttachNode >= intent.nodes.Length ||
+                intent.branchRejoinNode < 0 || intent.branchRejoinNode >= intent.nodes.Length ||
+                adjacency[intent.branchAttachNode].Count != 3 ||
+                adjacency[intent.branchRejoinNode].Count != 3 ||
+                cycleLength != intent.requiredCycleLength)
             {
                 rejectionReason =
-                    $"route graph reached {visited.Count}/{intent.nodes.Length} nodes with {loopEdges} loop edges; " +
-                    "the branch attach and rejoin nodes must each have degree 3";
+                    $"route graph reached {visited.Count}/{intent.nodes.Length} nodes with {loopEdges} loop edges and " +
+                    $"a {cycleLength}-node cycle; required cycle length {intent.requiredCycleLength}, with degree-3 branch endpoints";
                 return false;
             }
 
@@ -660,6 +871,85 @@ namespace DungeonLab.Editor
             }
 
             return true;
+        }
+
+        private static int CountSingleCycleNodes(IReadOnlyList<List<int>> adjacency)
+        {
+            var remainingDegrees = new int[adjacency.Count];
+            var leaves = new Queue<int>();
+            for (int node = 0; node < adjacency.Count; node++)
+            {
+                remainingDegrees[node] = adjacency[node].Count;
+                if (remainingDegrees[node] <= 1)
+                {
+                    leaves.Enqueue(node);
+                }
+            }
+
+            while (leaves.Count > 0)
+            {
+                int leaf = leaves.Dequeue();
+                if (remainingDegrees[leaf] == 0)
+                {
+                    continue;
+                }
+
+                remainingDegrees[leaf] = 0;
+                foreach (int neighbor in adjacency[leaf])
+                {
+                    if (remainingDegrees[neighbor] > 0 && --remainingDegrees[neighbor] == 1)
+                    {
+                        leaves.Enqueue(neighbor);
+                    }
+                }
+            }
+
+            int cycleNodes = 0;
+            foreach (int degree in remainingDegrees)
+            {
+                if (degree > 0)
+                {
+                    cycleNodes++;
+                }
+            }
+
+            return cycleNodes;
+        }
+
+        private static bool TryEmbedRoute(
+            int dungeonSeed,
+            int layoutAttempt,
+            RouteIntent intent,
+            out Vector2Int[] nodeCenters,
+            out string failureCode,
+            out string rejectionReason)
+        {
+            if (string.Equals(intent.patternId, AtriumRingPatternId, StringComparison.Ordinal))
+            {
+                return TryEmbedAtriumRingRoute(
+                    dungeonSeed,
+                    layoutAttempt,
+                    intent,
+                    out nodeCenters,
+                    out failureCode,
+                    out rejectionReason);
+            }
+
+            if (string.Equals(intent.patternId, Phase1PatternId, StringComparison.Ordinal))
+            {
+                return TryEmbedProcessionalRoute(
+                    dungeonSeed,
+                    layoutAttempt,
+                    intent,
+                    out nodeCenters,
+                    out failureCode,
+                    out rejectionReason);
+            }
+
+            nodeCenters = Array.Empty<Vector2Int>();
+            failureCode = "ROUTE_PATTERN_UNSUPPORTED";
+            rejectionReason = $"route pattern '{intent.patternId}' has no production embedding";
+            return false;
         }
 
         private static bool TryEmbedProcessionalRoute(
@@ -732,17 +1022,97 @@ namespace DungeonLab.Editor
                 branchCoarse.Add(secondBranchSegment[i]);
             }
 
-            if (branchCoarse.Count != Phase1BranchNodeCount)
+            if (branchCoarse.Count != RouteBranchNodeCount)
             {
                 failureCode = "ROUTE_BRANCH_EMBEDDING_INVALID";
-                rejectionReason = $"bounded branch search produced {branchCoarse.Count} branch nodes instead of {Phase1BranchNodeCount}";
+                rejectionReason = $"bounded branch search produced {branchCoarse.Count} branch nodes instead of {RouteBranchNodeCount}";
                 return false;
             }
 
-            System.Random placementRandom = Phase1Random(
+            var coarseEmbedding = new Vector2Int[intent.nodes.Length];
+            for (int node = 0; node < RouteMainNodeCount; node++)
+            {
+                coarseEmbedding[node] = mainCoarse[node];
+            }
+
+            for (int branch = 0; branch < RouteBranchNodeCount; branch++)
+            {
+                coarseEmbedding[RouteMainNodeCount + branch] = branchCoarse[branch];
+            }
+
+            return TryTransformCoarseEmbedding(
                 dungeonSeed,
                 layoutAttempt,
                 "route",
+                coarseEmbedding,
+                horizontalSpacing: 9,
+                verticalSpacing: 9,
+                out nodeCenters,
+                out rejectionReason);
+        }
+
+        private static bool TryEmbedAtriumRingRoute(
+            int dungeonSeed,
+            int layoutAttempt,
+            RouteIntent intent,
+            out Vector2Int[] nodeCenters,
+            out string failureCode,
+            out string rejectionReason)
+        {
+            failureCode = "ATRIUM_RING_EMBEDDING_EXHAUSTED";
+            phase1LastBranchSearchExpansions = 0;
+            var coarseEmbedding = new[]
+            {
+                new Vector2Int(4, 2),
+                new Vector2Int(4, 1),
+                new Vector2Int(4, 0),
+                new Vector2Int(2, 0),
+                new Vector2Int(2, 1),
+                new Vector2Int(2, 2),
+                new Vector2Int(2, 3),
+                new Vector2Int(3, 3),
+                new Vector2Int(3, 2),
+                new Vector2Int(0, 0),
+                new Vector2Int(0, 1),
+                new Vector2Int(0, 2),
+                new Vector2Int(0, 3)
+            };
+            if (coarseEmbedding.Length != intent.nodes.Length ||
+                new HashSet<Vector2Int>(coarseEmbedding).Count != coarseEmbedding.Length)
+            {
+                failureCode = "ATRIUM_RING_EMBEDDING_INVALID";
+                nodeCenters = Array.Empty<Vector2Int>();
+                rejectionReason = "atrium-ring coarse embedding did not match its graph or was not self-avoiding";
+                return false;
+            }
+
+            return TryTransformCoarseEmbedding(
+                dungeonSeed,
+                layoutAttempt,
+                AtriumRingPatternId,
+                coarseEmbedding,
+                horizontalSpacing: 7,
+                verticalSpacing: 9,
+                out nodeCenters,
+                out rejectionReason);
+        }
+
+        private static bool TryTransformCoarseEmbedding(
+            int dungeonSeed,
+            int layoutAttempt,
+            string stablePatternId,
+            IReadOnlyList<Vector2Int> coarseEmbedding,
+            int horizontalSpacing,
+            int verticalSpacing,
+            out Vector2Int[] nodeCenters,
+            out string rejectionReason)
+        {
+            nodeCenters = Array.Empty<Vector2Int>();
+            rejectionReason = string.Empty;
+            System.Random placementRandom = Phase1Random(
+                dungeonSeed,
+                layoutAttempt,
+                stablePatternId,
                 "orientation");
             int firstQuarterTurn = placementRandom.Next(4);
             bool mirror = placementRandom.Next(2) == 0;
@@ -750,18 +1120,13 @@ namespace DungeonLab.Editor
             {
                 phase1LastMainEmbeddingAttempts = orientationAttempt + 1;
                 int quarterTurns = (firstQuarterTurn + orientationAttempt) % 4;
-                var transformed = new Vector2Int[intent.nodes.Length];
-                for (int node = 0; node < Phase1MainNodeCount; node++)
+                var transformed = new Vector2Int[coarseEmbedding.Count];
+                for (int node = 0; node < coarseEmbedding.Count; node++)
                 {
-                    transformed[node] = TransformCoarseCell(mainCoarse[node], quarterTurns, mirror);
-                }
-
-                for (int branch = 0; branch < Phase1BranchNodeCount; branch++)
-                {
-                    transformed[Phase1MainNodeCount + branch] = TransformCoarseCell(
-                        branchCoarse[branch],
-                        quarterTurns,
-                        mirror);
+                    Vector2Int scaled = new Vector2Int(
+                        coarseEmbedding[node].x * horizontalSpacing,
+                        coarseEmbedding[node].y * verticalSpacing);
+                    transformed[node] = TransformCoarseCell(scaled, quarterTurns, mirror);
                 }
 
                 int minX = int.MaxValue;
@@ -776,10 +1141,8 @@ namespace DungeonLab.Editor
                     maxY = Mathf.Max(maxY, cell.y);
                 }
 
-                const int horizontalSpacing = 9;
-                const int verticalSpacing = 9;
-                int cellWidth = (maxX - minX) * horizontalSpacing + Phase1RoomEnvelopeRadius * 2 + 1;
-                int cellDepth = (maxY - minY) * verticalSpacing + Phase1RoomEnvelopeRadius * 2 + 1;
+                int cellWidth = maxX - minX + Phase1RoomEnvelopeRadius * 2 + 1;
+                int cellDepth = maxY - minY + Phase1RoomEnvelopeRadius * 2 + 1;
                 DungeonGenerationSettings settings = CurrentGenerationSettings.Validated();
                 if (cellWidth > settings.mapWidthMaxCells || cellDepth > settings.mapDepthMaxCells)
                 {
@@ -790,8 +1153,8 @@ namespace DungeonLab.Editor
                 for (int node = 0; node < transformed.Length; node++)
                 {
                     centers[node] = new Vector2Int(
-                        Phase1RoomEnvelopeRadius + 1 + (transformed[node].x - minX) * horizontalSpacing,
-                        Phase1RoomEnvelopeRadius + 1 + (transformed[node].y - minY) * verticalSpacing);
+                        Phase1RoomEnvelopeRadius + 1 + transformed[node].x - minX,
+                        Phase1RoomEnvelopeRadius + 1 + transformed[node].y - minY);
                 }
 
                 nodeCenters = centers;
@@ -896,13 +1259,14 @@ namespace DungeonLab.Editor
                         node.id,
                         $"room-shape-{attempt}");
                     List<RectInt> parts = BuildProcessionalRoomParts(
+                        intent,
                         node,
                         nodeIndex,
                         nodeCenters[nodeIndex],
                         nodeCenters,
                         intent.recipeSlots,
                         roomRandom,
-                        allowWing:
+                        allowWing: intent.allowGenericRoomWings &&
                             attempt < Phase1RoomInflationAttemptLimit - 1 &&
                             nodeIndex != intent.vista.sourceNode &&
                             nodeIndex != intent.vista.targetNode);
@@ -953,6 +1317,7 @@ namespace DungeonLab.Editor
         }
 
         private static List<RectInt> BuildProcessionalRoomParts(
+            RouteIntent intent,
             RouteNodeIntent node,
             int nodeIndex,
             Vector2Int center,
@@ -964,7 +1329,7 @@ namespace DungeonLab.Editor
             if (node.HasLandmarkSlot && TryGetRecipeSlot(recipeSlots, nodeIndex, out RecipeSlotIntent recipeSlot))
             {
                 Vector2Int primaryAxis = recipeSlot.orientationBinding == RecipeOrientationBinding.VistaSourceToTarget
-                    ? CardinalUnit(center - nodeCenters[Phase1VistaSourceNode])
+                    ? CardinalUnit(center - nodeCenters[intent.vista.sourceNode])
                     : CardinalUnit(nodeCenters[nodeIndex + 1] - center);
                 return BuildRecipeRoomParts(recipeSlot, center, primaryAxis, mirrored: false);
             }
@@ -994,12 +1359,7 @@ namespace DungeonLab.Editor
                     break;
             }
 
-            bool hasPlannedOverlookAppendage =
-                nodeIndex == 1 ||
-                nodeIndex == 6 ||
-                nodeIndex == 7 ||
-                nodeIndex == 9 ||
-                nodeIndex == 10;
+            bool hasPlannedOverlookAppendage = HasPlannedOverlookAppendage(intent, nodeIndex);
             if (hasPlannedOverlookAppendage)
             {
                 width = 4;
@@ -1009,7 +1369,7 @@ namespace DungeonLab.Editor
 
             RectInt dominant = CenteredRect(center, width, depth);
             var parts = new List<RectInt> { dominant };
-            AddPlannedOverlookAppendages(nodeIndex, center, nodeCenters, dominant, parts);
+            AddPlannedOverlookAppendages(intent, nodeIndex, center, nodeCenters, dominant, parts);
             if (!allowWing ||
                 node.role == "connector" ||
                 node.role == "arrival" ||
@@ -1057,29 +1417,24 @@ namespace DungeonLab.Editor
             return false;
         }
 
-        // Three non-traversal neighbor pairs receive narrow, facing room
+        // Declared non-traversal neighbor pairs receive narrow, facing room
         // appendages. They create deliberate adjacent gallery/cliff edges for
         // the unchanged elevation planner without turning those vistas into
         // traversal edges or consuming the reserved source-to-landmark void.
         private static void AddPlannedOverlookAppendages(
+            RouteIntent intent,
             int nodeIndex,
             Vector2Int center,
             IReadOnlyList<Vector2Int> nodeCenters,
             RectInt dominant,
             List<RectInt> parts)
         {
-            (int first, int second)[] pairs =
+            foreach (RouteOverlookIntent pair in intent.plannedOverlooks)
             {
-                (1, 10),
-                (6, 9),
-                (7, 10)
-            };
-            foreach ((int first, int second) pair in pairs)
-            {
-                int other = nodeIndex == pair.first
-                    ? pair.second
-                    : nodeIndex == pair.second
-                        ? pair.first
+                int other = nodeIndex == pair.firstNode
+                    ? pair.secondNode
+                    : nodeIndex == pair.secondNode
+                        ? pair.firstNode
                         : -1;
                 if (other < 0)
                 {
@@ -1109,6 +1464,19 @@ namespace DungeonLab.Editor
                     parts.Add(new RectInt(center.x - 1, yMin, 3, yMax - yMin));
                 }
             }
+        }
+
+        private static bool HasPlannedOverlookAppendage(RouteIntent intent, int nodeIndex)
+        {
+            foreach (RouteOverlookIntent pair in intent.plannedOverlooks)
+            {
+                if (nodeIndex == pair.firstNode || nodeIndex == pair.secondNode)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private static RectInt CenteredRect(Vector2Int center, int width, int height)

@@ -366,7 +366,7 @@ namespace DungeonLab.Editor
                 out ActiveDungeonRecipeCatalog catalog,
                 out string rejectionReason);
             return
-                $"schema={source.schemaVersion}; planner=processional-spine-v4; " +
+                $"schema={source.schemaVersion}; planner=route-topologies-v5; " +
                 $"digest={(active ? catalog.digest : "<invalid>")}; reviewed={reviewed}; " +
                 $"stale=[{string.Join(",", stale)}]; invalid=[{string.Join(",", invalid)}]; " +
                 $"status={(active ? "PASS" : rejectionReason)}";

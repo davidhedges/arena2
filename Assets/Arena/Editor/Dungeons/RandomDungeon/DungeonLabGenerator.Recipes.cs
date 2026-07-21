@@ -269,6 +269,7 @@ namespace DungeonLab.Editor
 
         private static bool TryBuildRequiredRecipeSlots(
             ActiveDungeonRecipeCatalog catalog,
+            int landmarkNode,
             out RecipeSlotIntent[] slots,
             out string rejectionReason)
         {
@@ -294,7 +295,7 @@ namespace DungeonLab.Editor
                         new RecipePortBinding("exit", "main-1-2")
                     }),
                 new RecipeSlotIntent(
-                    Phase1VistaTargetNode,
+                    landmarkNode,
                     throne,
                     RecipeOrientationBinding.VistaSourceToTarget,
                     new[]

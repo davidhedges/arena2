@@ -2027,7 +2027,7 @@ namespace DungeonLab.Editor
             for (int attempt = 0; attempt < Phase1LayoutAttemptLimit; attempt++)
             {
                 layoutAttemptsUsed = attempt + 1;
-                if (!TryBuildProcessionalSpineDungeonLayout(
+                if (!TryBuildRouteFirstDungeonLayout(
                         dungeonSeed,
                         layoutAttemptsUsed,
                         out DungeonLayout candidateLayout,

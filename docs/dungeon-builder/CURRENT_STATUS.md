@@ -4,7 +4,7 @@ Start here when returning to dungeon work. Keep this page short and update it at
 
 Last updated: 2026-07-21
 
-Active milestone: Phase 5 complete and verified; Phase 6a graph-composition foundation implemented and compile-verified, locked Unity/runtime gates pending
+Active milestone: Phase 6b atrium-ring topology complete and verified; Phase 6 expansion continues with the next increment not yet selected
 
 Production mode: the processional-spine route-first planner is the sole reachable layout builder
 
@@ -310,9 +310,41 @@ Phase 6a exits only on exact identity. The next topology increment is not select
 - `BuildProcessionalRouteIntent` now composes the exact existing nine-node spine, four-node branch, and rejoin in the original node/edge order. The former local `AddEdge` helper and manual edge loops are gone. Planner/report/random versions are unchanged.
 - Six focused EditMode tests assert the exact production node/edge/type/rise projection, the earned operation surface, one resulting cycle, invalid-ID/endpoint/self-edge/second-rejoin rejection, failed-operation atomicity, post-publication immutability, and fixed-seed determinism.
 - Compile-only verification passed for `Assembly-CSharp-Editor.csproj` and `Arena.EditModeTests.csproj` with 0 errors and 0 warnings after temporarily refreshing their generated compile item lists; those generated project-file edits were reverted.
-- Symbol and deletion audits find no hub, cross-link, long-return, atrium, twin-wing, topology-weight, selector, fallback, or local `AddEdge` production symbol in this slice. `git diff --check` passes.
-- The pinned Unity `6000.4.0f1` focused-test run could not reach compilation/test execution in batch mode. The sandboxed run first hit the expected local package-manager socket restriction; the approved unsandboxed run then failed before tests because the installed Unity Licensing Client reported unsupported protocol `1.18.1`, disconnected, and never wrote a test-results file. This is an environment blocker, not a test failure.
-- Because Unity did not execute the tests, the focused fixtures, two locked corpus sweeps, independent digest, six sentinels, and full EditMode suite remain pending. Phase 6a has not exited and no Phase 6b work is authorized.
+- The pinned Unity `6000.4.0f1` runtime gates pass: the new Phase 6a fixture is 6/6, and all Phase 0/1/3/4/5/6a focused fixtures are 39/39.
+- Both independent 200-seed sweeps are 200/200 accepted and hard-valid with attempts min/p50/p95/max/mean `1/1/1/2/1.005`, retry codes exactly `STAIR_PLACEMENT:32` and `PORT_GRAPH:11`, aggregate result hash `765ead1a87f95732fb66dfa617b33e91d1ea921cb91f0287226309d17af46155`, and independent ordered per-seed multi-hash digest `1d35718f9d9b0d31f752a3b630f64d5f2ee134cbc651a2e79759a3c0a1b01f01`. The two per-seed hash projections are identical.
+- All six real-renderer sentinels retain `REJECTED 0`. The full EditMode suite is 330/351: all six added tests pass, there is no dungeon failure, and the same 21 unrelated failures remain in `PredictedMeleeContactCueTests` (10), `RemotePresentationBufferTests` (8), `ProjectileVfxPoolingTests` (1), `SpellCueCatalogWriterTests` (1), and `UiInputContractTests` (1).
+- Symbol and deletion audits find one reachable composition path and no hub, cross-link, long-return, atrium, twin-wing, topology-weight, selector, fallback, or local `AddEdge` production symbol in this slice. `git diff --check` passes, the deletion ledger is empty, and Phase 6a exits on exact identity.
+
+## Phase 6b acceptance budget — locked before production edits
+
+The next increment is `atrium_ring_topology_01`: add one atrium-ring route intent and coarse embedding composed from the already-proven spine, branch, and rejoin operations. A stable seed-parity selector makes even seeds processional-spine and odd seeds atrium-ring, giving exactly 100 seeds per pattern in `2026072100..2026072299` and three seeds per pattern in the six existing visual sentinels. This slice adds no topology weight, profile field, serialized topology asset, recipe, hub, cross-link, long-return operation, alternate canonical plan, renderer branch, or collision branch.
+
+The atrium ring keeps the existing 13-node/13-edge budget, nine-node main route, four-node returning branch, two reviewed recipe slots, required vista, 0..24u elevation story, and stair/bridge/stairwell vocabulary. Its graph must be structurally distinct: branch attach at `ring-entry`, rejoin at `ring-rejoin`, one eight-edge cycle around a reserved central void, and `ring-overlook -> atrium-landmark` as the declared vista. Pattern identity, branch endpoints, vista endpoints, and planned-overlook relationships move into the ephemeral `RouteIntent` only where both production patterns consume them.
+
+Phase 6b passes only if all of these predeclared gates hold:
+
+- the selector reports exactly 100 processional-spine and 100 atrium-ring seeds in the locked corpus and is deterministic without consuming or perturbing the existing processional spatial random stream;
+- all 100 processional seeds preserve their Phase 6a per-seed route-intent, layout, tier, recipe-resolution, recipe-catalog, and canonical hashes exactly;
+- at least 95/100 atrium seeds and at least 195/200 overall seeds are accepted within the existing two-attempt ceiling; every accepted plan is hard-valid and passes route, transition, final-vista, recipe, renderer, abyss, and collision preconditions;
+- the atrium graph projection has exactly 13 nodes, 13 traversal edges, one loop, an eight-edge cycle, two compatible reviewed recipe slots, a 0u bottom, a 24u top, and at least one stair, bridge, and stairwell requirement;
+- the atrium embedding forms two traversable sides around a central reserved void; its declared vista endpoints are cardinally opposed, reserve at least three clear cells, and realize or reject before rendering;
+- two independent post-change corpus sweeps have identical aggregate result hashes and identical ordered per-seed multi-hash digests; no version is advanced between those sweeps;
+- all prior focused fixtures plus the new Phase 6b production tests pass; the six real-renderer sentinels retain `REJECTED 0` with three seeds from each pattern; the full EditMode suite has no dungeon failure and no regression beyond the same 21 unrelated baseline failures;
+- the processional-only branch-index, vista-index, and planned-overlook assumptions displaced by the second pattern are removed in the same increment, the deletion ledger is empty, and work stops before twin-wing, hub, cross-link, long-return, new-recipe, generalized vista-scoring, promontory, or runtime-generation work.
+
+Because production behavior and the report schema now expose a second named pattern, Phase 6b advances the report envelope to `dungeon-plan-v5`. The processional intent retains `processional-spine-v4` and `processional-spine-v1` so its locked per-seed hashes and spatial choices remain comparable; the new pattern begins at `atrium-ring-v1` and uses the same stable random service with atrium-specific stable IDs.
+
+## Phase 6b implementation status
+
+- `TryBuildRouteFirstDungeonLayout` is the sole reachable layout builder. Its stable parity selector chooses processional-spine for even seeds and atrium-ring for odd seeds; an unknown pattern rejects with `ROUTE_PATTERN_UNSUPPORTED` and never falls back.
+- `BuildAtriumRingRouteIntent` composes a distinct 13-node/13-edge graph through the existing spine, branch, and rejoin operations. The `ring-entry -> ring-rejoin` loop has eight nodes, and `ring-overlook -> atrium-landmark` reserves the central vista across the ring.
+- The second pattern earned only the narrow shared intent facts now consumed by both patterns: pattern/planner identity, branch endpoints, required cycle length, planned-overlook pairs, and generic-wing policy. Validation, recipe orientation, graph reporting, and overlook appendages consume those facts without a pattern-specific renderer, tier plan, canonical model, or collision path.
+- The compact atrium embedding uses 7-cell cross-ring spacing, 9-cell stair-bearing spacing, four rotations, and mirroring inside the existing 40x40 profile. It disables optional generic wings so the reviewed landmark episode retains its declared clearance; both reviewed recipes otherwise use the unchanged placement and validation path.
+- Six new production-facing tests cover selector stability, processional version retention, exact atrium nodes/edges/transitions, eight-node cycle structure, central-vista geometry, deterministic hard-valid planning, and unchanged renderer/collision consumption. All Phase 0/1/3/4/5/6a/6b focused fixtures pass 45/45.
+- The locked corpus selects exactly 100 processional and 100 atrium seeds. Both final sweeps are 200/200 accepted and hard-valid, every seed succeeds on its first attempt, and all accepted route/vista/recipe gates pass. The repeat result hash is `53a07a59b9fb260c49e780f8bab8b196633abd9e89494bd06c0a1f17bd8878db`; the ordered pattern-plus-per-seed multi-hash digest is `bd1b062804002623380551df4d43d5016ca8abb18a3bc222f896784b2dcf894f`.
+- All 100 processional seeds exactly preserve their Phase 6a route-intent, layout, tier, recipe-resolution, recipe-catalog, and canonical hashes. Processional canonical hashes retain the `dungeon-plan-v4` namespace while new atrium canonical hashes use `dungeon-plan-v5`; the report envelope is `dungeon-plan-v5` / `route-topologies-v5`.
+- The six real-renderer sentinels split three processional and three atrium and all retain `REJECTED 0`. The full EditMode suite is 336/357 with no dungeon failure and exactly the same 21 unrelated baseline failures.
+- Symbol and deletion audits find only spine, branch, rejoin, and publish graph operations; no hub, cross-link, long-return, twin-wing, topology weight, serialized topology asset, new recipe, runtime path, silent fallback, or alternate downstream pipeline exists. The displaced processional-only downstream assumptions are gone, `git diff --check` passes, and the Phase 6b deletion ledger is empty.
 
 ## Known implementation facts and blockers
 
@@ -322,18 +354,18 @@ Phase 6a exits only on exact identity. The next topology increment is not select
 - Gold reference scene: `Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/scenes/demoscene_dungeon_level_1_dungeon.unity`.
 - Baked destination: `Assets/Arena/Content/Scenes/OpenWorld/RandomDungeon.unity`.
 - `ActiveStepFormationPlacementEnabled` remains false, and `step_library_index.json` is absent. Do not enable the parked path by flipping the flag.
-- There is no dungeon design/code blocker for Phase 6a. Batch validation is currently blocked by the local Unity Licensing Client protocol mismatch described above; the 21 unrelated full-suite failures remain outside this workstream.
+- There is no current dungeon design, code, or validation blocker. The 21 unrelated full-suite failures remain outside this workstream.
 
 ## End-of-session handoff
 
 ```text
-Milestone/phase: Phase 5 complete and verified; Phase 6a graph-composition foundation implemented and compile-verified; locked Unity/runtime validation pending.
-Completed this session: read the full required handoff set; audited the active route-intent and canonical consumers; locked `processional_graph_composition_01` before production edits; added one internal spine/branch/rejoin composer; re-expressed the exact processional graph; added six focused tests; deleted the displaced local edge assembly; completed compile, symbol, and diff checks.
-Current validation result: editor and test assemblies compile with 0 errors/0 warnings; `git diff --check` passes. The retained last known runtime evidence is Phase 5: focused fixtures 33/33; locked corpus 200/200 hard-valid with p95 1 and max 2; repeat hash 765ead1a...46155 and per-seed multi-hash digest 1d35718f...01f01; six sentinels REJECTED 0; full EditMode 324/345 with the same 21 unrelated failures. No Phase 6a runtime result is claimed.
-Last known-good seed and report: 2026072140; DungeonLabReports/dungeon_plan_2026072100_2026072299.json and DungeonLabReports/visual_sentinels/manifest.json.
-Last diagnostic fact: production construction exposes only spine, branch, rejoin, and publish; it produces the same explicit 13 node IDs and 13 typed edge IDs in the original order. Processional validation, embedding, recipe/vista bindings, diagnostics, and accepted-route validation remain specialized.
-Deletion-ledger items added/closed: the local `AddEdge` helper and manual main/branch edge loops were deleted; no compatibility layer, unused operation, or temporary production symbol was added. Phase 6a code ledger is empty, but the phase remains open until validation.
-Exact next action: with a working Unity 6000.4 license channel, run `DungeonLabPhase6GraphCompositionTests`, then all Phase 0/1/3/4/5/6a focused fixtures, the locked 200-seed corpus twice with exact hash/digest comparison, six sentinels, and the full EditMode suite. Record results and stop; do not begin another topology.
-Blocker or decision needed: the installed Unity Licensing Client rejects the pinned editor's handshake as unsupported protocol `1.18.1`, so batch EditMode/corpus/render validation cannot currently start.
+Milestone/phase: Phase 6b atrium-ring topology complete and verified; two named production topologies now share one canonical pipeline.
+Completed this session: closed the pending Phase 6a Unity gates; audited and budget-locked `atrium_ring_topology_01`; added deterministic processional/atrium selection, the atrium graph and coarse embedding, only the shared intent facts earned by the second pattern, six focused tests, mixed-pattern diagnostics, and explicit unsupported-pattern rejection; completed every locked runtime, corpus, preservation, renderer, regression, symbol, and diff gate.
+Current validation result: focused fixtures 45/45; two final mixed corpus sweeps each 200/200 accepted and hard-valid with exactly 100 seeds per pattern, all attempts equal to 1, and only `PORT_GRAPH:3` internal candidate rejections; result hash 53a07a59...8878db and ordered multi-hash digest bd1b0628...cf894f repeat exactly; all 100 processional seeds preserve all six Phase 6a hashes; six sentinels split 3/3 and report REJECTED 0; full EditMode 336/357 with exactly the same 21 unrelated baseline failures and no dungeon failure; `git diff --check` passes.
+Last known-good seeds and reports: processional 2026072140; atrium 2026072101; DungeonLabReports/dungeon_plan_2026072100_2026072299.json and DungeonLabReports/visual_sentinels/manifest.json.
+Last diagnostic fact: even seeds select the unchanged 10-cycle processional graph; odd seeds select the new eight-cycle atrium ring. Both have 13 nodes/13 edges, two reviewed recipe slots, one required vista, a 0..24u route, and direct reuse of the existing tier, renderer, abyss, and collision consumers.
+Deletion-ledger items added/closed: processional-only downstream branch/vista/overlook assumptions and the single-pattern builder name were displaced; all were generalized or deleted. No compatibility layer, unused graph operation, profile weight, serialized topology, fallback, or temporary production symbol remains. Phase 6b ledger is empty and closed.
+Exact next action: begin the Phase 6c entry audit. Compare the remaining production needs—twin-wing topology, the next reviewed recipe, coarse vista scoring, named-target promontories, spacing/repetition rules, or explicit step motifs—select the smallest one with an immediate producer and consumer, and lock its acceptance budget before edits. Do not re-open Phase 6b unless one of its locked hashes or gates changes.
+Blocker or decision needed: none. Phase 6c scope and budget are the next decision.
 New chat necessary: no.
 ```

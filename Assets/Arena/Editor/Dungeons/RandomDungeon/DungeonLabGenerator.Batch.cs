@@ -16,7 +16,7 @@ namespace DungeonLab.Editor
     internal sealed partial class DungeonLabGenerator
     {
         private const string BatchReportDirectory = "DungeonLabReports";
-        private const string DungeonPlanSummaryVersion = "dungeon-plan-v4";
+        private const string DungeonPlanSummaryVersion = "dungeon-plan-v5";
         private const int Phase0BaselineFirstSeed = 2026072100;
         private const int Phase0BaselineSeedCount = 200;
         private const int LockedSeedCount = 100;
@@ -131,6 +131,8 @@ namespace DungeonLab.Editor
             var rejectionCodeHistogram = new Dictionary<string, int>(StringComparer.Ordinal);
             var validationFailureCodeHistogram = new Dictionary<string, int>(StringComparer.Ordinal);
             var archetypeCounts = new SortedDictionary<string, int>(StringComparer.Ordinal);
+            var selectedPatternCounts = new SortedDictionary<string, int>(StringComparer.Ordinal);
+            var acceptedPatternCounts = new SortedDictionary<string, int>(StringComparer.Ordinal);
             var tierSpanCounts = new SortedDictionary<int, int>();
             var correlations = new List<float>();
             var failedSeeds = new List<int>();
@@ -156,6 +158,9 @@ namespace DungeonLab.Editor
                 for (int i = 0; i < requestedSeedCount; i++)
                 {
                     int seed = firstSeed + i;
+                    string selectedPattern = SelectedRoutePatternId(seed);
+                    selectedPatternCounts.TryGetValue(selectedPattern, out int selectedPatternCount);
+                    selectedPatternCounts[selectedPattern] = selectedPatternCount + 1;
                     if (!Application.isBatchMode && EditorUtility.DisplayCancelableProgressBar(
                             "Dungeon Lab Batch Validate",
                             $"Seed {seed} ({i + 1}/{requestedSeedCount})",
@@ -179,6 +184,8 @@ namespace DungeonLab.Editor
                     }
 
                     successCount++;
+                    acceptedPatternCounts.TryGetValue(selectedPattern, out int acceptedPatternCount);
+                    acceptedPatternCounts[selectedPattern] = acceptedPatternCount + 1;
                     acceptedAttemptCounts.Add(layoutAttempts);
                     if (seedReport["validation"]?.Value<bool?>("passed") == true)
                     {
@@ -268,6 +275,8 @@ namespace DungeonLab.Editor
                 rejectionCodeHistogram,
                 validationFailureCodeHistogram,
                 archetypeCounts,
+                selectedPatternCounts,
+                acceptedPatternCounts,
                 correlations,
                 allAttemptCounts,
                 acceptedAttemptCounts,
@@ -474,12 +483,101 @@ namespace DungeonLab.Editor
             if (!DungeonRecipeCatalogService.TryLoadActiveCatalog(
                     out ActiveDungeonRecipeCatalog catalog,
                     out string rejectionReason) ||
-                !TryBuildRequiredRecipeSlots(catalog, out RecipeSlotIntent[] slots, out rejectionReason))
+                !TryBuildRequiredRecipeSlots(
+                    catalog,
+                    Phase1VistaTargetNode,
+                    out RecipeSlotIntent[] slots,
+                    out rejectionReason))
             {
                 throw new InvalidOperationException(rejectionReason);
             }
 
             return BuildProcessionalRouteIntent(seed, slots, catalog.digest);
+        }
+
+        private static RouteIntent BuildDiagnosticAtriumRingIntent(int seed)
+        {
+            if (!DungeonRecipeCatalogService.TryLoadActiveCatalog(
+                    out ActiveDungeonRecipeCatalog catalog,
+                    out string rejectionReason) ||
+                !TryBuildRequiredRecipeSlots(
+                    catalog,
+                    AtriumRingVistaTargetNode,
+                    out RecipeSlotIntent[] slots,
+                    out rejectionReason))
+            {
+                throw new InvalidOperationException(rejectionReason);
+            }
+
+            return BuildAtriumRingRouteIntent(seed, slots, catalog.digest);
+        }
+
+        private static string BuildPhase6bAtriumRingSnapshot(int seed)
+        {
+            CurrentGenerationSettings = LoadActiveGenerationSettings();
+            RouteIntent intent = BuildDiagnosticAtriumRingIntent(seed);
+            RouteIntent processional = BuildDiagnosticRouteIntent(seed - 1);
+            bool valid = TryValidateRouteIntent(intent, out string validationError);
+            var adjacency = new List<int>[intent.nodes.Length];
+            for (int node = 0; node < adjacency.Length; node++)
+            {
+                adjacency[node] = new List<int>();
+            }
+
+            var nodeIds = new List<string>(intent.nodes.Length);
+            foreach (RouteNodeIntent node in intent.nodes)
+            {
+                nodeIds.Add(node.id);
+            }
+
+            var edgeDetails = new List<string>(intent.traversalEdges.Length);
+            foreach (RouteTraversalIntent edge in intent.traversalEdges)
+            {
+                adjacency[edge.fromNode].Add(edge.toNode);
+                adjacency[edge.toNode].Add(edge.fromNode);
+                edgeDetails.Add(
+                    $"{edge.id}:{intent.nodes[edge.fromNode].id}>{intent.nodes[edge.toNode].id}:" +
+                    $"{edge.transitionKind}:{edge.requiredRiseLevels}");
+            }
+
+            bool embedded = TryEmbedAtriumRingRoute(
+                seed,
+                layoutAttempt: 1,
+                intent,
+                out Vector2Int[] nodeCenters,
+                out string embeddingFailureCode,
+                out string embeddingError);
+            Vector2Int vistaDelta = embedded
+                ? nodeCenters[intent.vista.targetNode] - nodeCenters[intent.vista.sourceNode]
+                : Vector2Int.zero;
+            int vistaCenterDistance = Mathf.Abs(vistaDelta.x) + Mathf.Abs(vistaDelta.y);
+            return string.Join("\n", new[]
+            {
+                $"selector.evenPattern={SelectedRoutePatternId(2026072100)}",
+                $"selector.oddPattern={SelectedRoutePatternId(2026072101)}",
+                $"processional.plannerVersion={processional.plannerVersion}",
+                $"processional.cycleLength={processional.requiredCycleLength}",
+                $"graph.pattern={intent.patternId}",
+                $"graph.plannerVersion={intent.plannerVersion}",
+                $"graph.nodeCount={intent.nodes.Length}",
+                $"graph.edgeCount={intent.traversalEdges.Length}",
+                $"graph.loopEdges={intent.traversalEdges.Length - (intent.nodes.Length - 1)}",
+                $"graph.cycleLength={CountSingleCycleNodes(adjacency)}",
+                $"graph.branchAttach={intent.nodes[intent.branchAttachNode].id}",
+                $"graph.branchRejoin={intent.nodes[intent.branchRejoinNode].id}",
+                $"graph.nodeIds={string.Join("|", nodeIds)}",
+                $"graph.edgeDetails={string.Join("|", edgeDetails)}",
+                $"vista.id={intent.vista.id}",
+                $"vista.source={intent.nodes[intent.vista.sourceNode].id}",
+                $"vista.target={intent.nodes[intent.vista.targetNode].id}",
+                $"vista.centerCardinallyAligned={vistaDelta != Vector2Int.zero && (vistaDelta.x == 0 || vistaDelta.y == 0)}",
+                $"vista.centerDistanceCells={vistaCenterDistance}",
+                $"route.valid={valid}",
+                $"route.validationError={validationError}",
+                $"embedding.succeeded={embedded}",
+                $"embedding.failureCode={embeddingFailureCode}",
+                $"embedding.error={embeddingError}"
+            });
         }
 
         private static string BuildRouteGraphCompositionSnapshot(int seed)
@@ -1197,8 +1295,14 @@ namespace DungeonLab.Editor
                 out _)
                 ? activeRecipeCatalog.digest
                 : string.Empty;
+            string canonicalHashVersion = string.Equals(
+                phase1LastRouteIntent?.patternId,
+                Phase1PatternId,
+                StringComparison.Ordinal)
+                ? "dungeon-plan-v4"
+                : DungeonPlanSummaryVersion;
             string canonicalHash = ComputeSha256(
-                $"{DungeonPlanSummaryVersion}\n{routeIntentHash}\n{layoutHash}\n{planHash}");
+                $"{canonicalHashVersion}\n{routeIntentHash}\n{layoutHash}\n{planHash}");
             float correlation = CalculateDepthLevelCorrelation(layout, plan);
             JObject validation = BuildPhase0ValidationSummary(layout, plan, random, out _);
             JObject graphSummary = BuildLayoutGraphSummary(layout);
@@ -1251,6 +1355,7 @@ namespace DungeonLab.Editor
                 ["hashes"] = new JObject
                 {
                     ["algorithm"] = "SHA-256",
+                    ["canonicalVersion"] = canonicalHashVersion,
                     ["layout"] = layoutHash,
                     ["tieredLevelPlan"] = planHash,
                     ["recipeResolutions"] = recipeResolutionHash,
@@ -1373,8 +1478,8 @@ namespace DungeonLab.Editor
                     ["traversalEdges"] = traversalEdges,
                     ["traversalEdgeCount"] = traversalEdges.Count,
                     ["loopEdges"] = loopEdges,
-                    ["branchAttachNode"] = intent.nodes[Phase1BranchAttachNode].id,
-                    ["branchRejoinNode"] = intent.nodes[Phase1BranchRejoinNode].id
+                    ["branchAttachNode"] = intent.nodes[intent.branchAttachNode].id,
+                    ["branchRejoinNode"] = intent.nodes[intent.branchRejoinNode].id
                 },
                 ["vista"] = new JObject
                 {
@@ -1843,7 +1948,7 @@ namespace DungeonLab.Editor
             }
 
             bool passed = resolution.transitions != null &&
-                resolution.transitions.Length == Phase1MainNodeCount + Phase1BranchNodeCount &&
+                resolution.transitions.Length == RouteMainNodeCount + RouteBranchNodeCount &&
                 resolution.bottomLevel == 0 &&
                 resolution.topLevel == MaxGeneratedLevel &&
                 resolution.RouteClimbLevels == MaxGeneratedLevel &&
@@ -2726,6 +2831,8 @@ namespace DungeonLab.Editor
             Dictionary<string, int> rejectionCodeHistogram,
             Dictionary<string, int> validationFailureCodeHistogram,
             SortedDictionary<string, int> archetypeCounts,
+            SortedDictionary<string, int> selectedPatternCounts,
+            SortedDictionary<string, int> acceptedPatternCounts,
             List<float> correlations,
             List<int> allAttemptCounts,
             List<int> acceptedAttemptCounts,
@@ -2747,6 +2854,9 @@ namespace DungeonLab.Editor
                 archetypes[entry.Key] = entry.Value;
             }
 
+            JObject selectedPatterns = HistogramToken(selectedPatternCounts);
+            JObject acceptedPatterns = HistogramToken(acceptedPatternCounts);
+
             string resultHash = ComputeSha256(seedReports.ToString(Formatting.None));
             JObject attemptDistribution = BuildIntDistribution(allAttemptCounts);
             var report = new JObject
@@ -2765,6 +2875,12 @@ namespace DungeonLab.Editor
                 ["attemptDistribution"] = attemptDistribution,
                 ["acceptedAttemptDistribution"] = BuildIntDistribution(acceptedAttemptCounts),
                 ["archetypes"] = archetypes,
+                ["topologySelection"] = new JObject
+                {
+                    ["method"] = "seed-parity-v1",
+                    ["selectedPatternCounts"] = selectedPatterns,
+                    ["acceptedPatternCounts"] = acceptedPatterns
+                },
                 ["depthLevelCorrelation"] = FormatCorrelationSummary(correlations),
                 ["metrics"] = new JObject
                 {
@@ -2945,6 +3061,64 @@ namespace DungeonLab.Editor
                     ["recipeSetsValid"] = recipeSetValidCount,
                     ["everyAcceptedRecipeSetValid"] = recipeSetsPassed,
                     ["reviewedRecipeCatalogLoaded"] = !string.IsNullOrEmpty(reviewedCatalogDigest)
+                };
+            }
+
+            if (isPhase3ReliabilityCorpus)
+            {
+                int processionalSelected = selectedPatternCounts.TryGetValue(Phase1PatternId, out int selectedProcessional)
+                    ? selectedProcessional
+                    : 0;
+                int atriumSelected = selectedPatternCounts.TryGetValue(AtriumRingPatternId, out int selectedAtrium)
+                    ? selectedAtrium
+                    : 0;
+                int processionalAccepted = acceptedPatternCounts.TryGetValue(Phase1PatternId, out int acceptedProcessional)
+                    ? acceptedProcessional
+                    : 0;
+                int atriumAccepted = acceptedPatternCounts.TryGetValue(AtriumRingPatternId, out int acceptedAtrium)
+                    ? acceptedAtrium
+                    : 0;
+                bool exactSplit = processionalSelected == 100 && atriumSelected == 100;
+                bool completionPassed = hardValidCount >= 195 &&
+                    processionalAccepted == processionalSelected &&
+                    atriumAccepted >= 95;
+                bool attemptCeilingPassed = attemptDistribution.Value<int>("max") <= Phase1LayoutAttemptLimit;
+                bool acceptedHardValid = hardValidCount == successCount;
+                bool routeRequirementsPassed = routeRequirementsValidCount == successCount;
+                bool finalVistasPassed = finalVistaValidCount == successCount;
+                bool recipeSetsPassed = recipeSetValidCount == successCount;
+                report["phase6bReliabilityBudget"] = new JObject
+                {
+                    ["corpus"] = $"{firstSeed}..{firstSeed + seedCount - 1}",
+                    ["selectionMethod"] = "seed-parity-v1",
+                    ["requiredProcessionalSeeds"] = 100,
+                    ["requiredAtriumRingSeeds"] = 100,
+                    ["requiredProcessionalAccepted"] = 100,
+                    ["atriumRingCompletionFloor"] = 95,
+                    ["overallHardValidCompletionFloor"] = 195,
+                    ["attemptCeiling"] = Phase1LayoutAttemptLimit
+                };
+                report["phase6bBudgetResult"] = new JObject
+                {
+                    ["passed"] = exactSplit &&
+                        completionPassed &&
+                        attemptCeilingPassed &&
+                        acceptedHardValid &&
+                        routeRequirementsPassed &&
+                        finalVistasPassed &&
+                        recipeSetsPassed &&
+                        FailuresAreReasonCoded(seedReports),
+                    ["exactPatternSplit"] = exactSplit,
+                    ["processionalAccepted"] = processionalAccepted,
+                    ["atriumRingAccepted"] = atriumAccepted,
+                    ["hardValidCompletions"] = hardValidCount,
+                    ["completionFloorPassed"] = completionPassed,
+                    ["attemptCeilingPassed"] = attemptCeilingPassed,
+                    ["everyAcceptedPlanHardValid"] = acceptedHardValid,
+                    ["everyAcceptedRouteRequirementValid"] = routeRequirementsPassed,
+                    ["everyAcceptedFinalVistaValid"] = finalVistasPassed,
+                    ["everyAcceptedRecipeSetValid"] = recipeSetsPassed,
+                    ["everyFailureReasonCoded"] = FailuresAreReasonCoded(seedReports)
                 };
             }
 
