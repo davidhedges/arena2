@@ -8,14 +8,16 @@ namespace DungeonLab.Editor
     // compiles it directly into the existing DungeonLayout.
     internal sealed partial class DungeonLabGenerator
     {
-        private const string RoutePlannerVersion = "route-topologies-v5";
+        private const string RoutePlannerVersion = "route-topologies-v6";
         private const string ProcessionalPlannerVersion = "processional-spine-v4";
         private const string AtriumRingPlannerVersion = "atrium-ring-v1";
+        private const string TwinWingPlannerVersion = "twin-wing-keep-v1";
         // Preserve the proven route embedding stream. Phase 5 changes only the
         // reviewed recipe contract/ports and uses named per-recipe streams.
         private const string RouteSpatialRandomVersion = "processional-spine-v1";
         private const string Phase1PatternId = "processional-spine";
         private const string AtriumRingPatternId = "atrium-ring";
+        private const string TwinWingPatternId = "twin-wing-keep";
         private const int Phase1LayoutAttemptLimit = 2;
         private const int RouteMainNodeCount = 9;
         private const int RouteBranchNodeCount = 4;
@@ -27,6 +29,10 @@ namespace DungeonLab.Editor
         private const int AtriumRingBranchRejoinNode = 6;
         private const int AtriumRingVistaSourceNode = 10;
         private const int AtriumRingVistaTargetNode = 4;
+        private const int TwinWingBranchAttachNode = 2;
+        private const int TwinWingBranchRejoinNode = 5;
+        private const int TwinWingVistaSourceNode = 8;
+        private const int TwinWingVistaTargetNode = 4;
         private const int Phase1RoomEnvelopeRadius = 4;
         private const int Phase1BranchSearchExpansionLimit = 24;
         private const int Phase1RoomInflationAttemptLimit = 6;
@@ -59,7 +65,9 @@ namespace DungeonLab.Editor
             public readonly int topNode;
             public readonly int branchAttachNode;
             public readonly int branchRejoinNode;
-            public readonly int requiredCycleLength;
+            public readonly int requiredCycleRank;
+            public readonly int requiredCycleCoreNodeCount;
+            public readonly int requiredJunctionDegree;
             public readonly RouteOverlookIntent[] plannedOverlooks;
             public readonly bool allowGenericRoomWings;
 
@@ -77,7 +85,9 @@ namespace DungeonLab.Editor
                 int topNode,
                 int branchAttachNode,
                 int branchRejoinNode,
-                int requiredCycleLength,
+                int requiredCycleRank,
+                int requiredCycleCoreNodeCount,
+                int requiredJunctionDegree,
                 RouteOverlookIntent[] plannedOverlooks,
                 bool allowGenericRoomWings)
             {
@@ -94,7 +104,9 @@ namespace DungeonLab.Editor
                 this.topNode = topNode;
                 this.branchAttachNode = branchAttachNode;
                 this.branchRejoinNode = branchRejoinNode;
-                this.requiredCycleLength = requiredCycleLength;
+                this.requiredCycleRank = requiredCycleRank;
+                this.requiredCycleCoreNodeCount = requiredCycleCoreNodeCount;
+                this.requiredJunctionDegree = requiredJunctionDegree;
                 this.plannedOverlooks = plannedOverlooks ?? Array.Empty<RouteOverlookIntent>();
                 this.allowGenericRoomWings = allowGenericRoomWings;
             }
@@ -103,7 +115,8 @@ namespace DungeonLab.Editor
         private enum RoutePatternKind
         {
             ProcessionalSpine,
-            AtriumRing
+            AtriumRing,
+            TwinWingKeep
         }
 
         private enum RouteTransitionKind
@@ -293,9 +306,7 @@ namespace DungeonLab.Editor
             }
 
             RoutePatternKind pattern = SelectRoutePattern(dungeonSeed);
-            int landmarkNode = pattern == RoutePatternKind.AtriumRing
-                ? AtriumRingVistaTargetNode
-                : Phase1VistaTargetNode;
+            int landmarkNode = LandmarkNodeForPattern(pattern);
             if (!TryBuildRequiredRecipeSlots(
                     recipeCatalog,
                     landmarkNode,
@@ -305,9 +316,11 @@ namespace DungeonLab.Editor
                 return RejectPhase1Route("RECIPE_CATALOG", rejectionReason, out rejectionReason);
             }
 
-            RouteIntent intent = pattern == RoutePatternKind.AtriumRing
-                ? BuildAtriumRingRouteIntent(dungeonSeed, recipeSlots, recipeCatalog.digest)
-                : BuildProcessionalRouteIntent(dungeonSeed, recipeSlots, recipeCatalog.digest);
+            RouteIntent intent = BuildSelectedRouteIntent(
+                pattern,
+                dungeonSeed,
+                recipeSlots,
+                recipeCatalog.digest);
             phase1LastRouteIntent = intent;
             if (!TryValidateRouteIntent(intent, out rejectionReason))
             {
@@ -569,7 +582,9 @@ namespace DungeonLab.Editor
                 topNode: RouteMainNodeCount - 1,
                 branchAttachNode: Phase1BranchAttachNode,
                 branchRejoinNode: Phase1BranchRejoinNode,
-                requiredCycleLength: 10,
+                requiredCycleRank: 1,
+                requiredCycleCoreNodeCount: 10,
+                requiredJunctionDegree: 3,
                 plannedOverlooks: new[]
                 {
                     new RouteOverlookIntent(1, 10),
@@ -581,16 +596,69 @@ namespace DungeonLab.Editor
 
         private static RoutePatternKind SelectRoutePattern(int dungeonSeed)
         {
-            return (dungeonSeed & 1) == 0
-                ? RoutePatternKind.ProcessionalSpine
-                : RoutePatternKind.AtriumRing;
+            int residue = dungeonSeed % 4;
+            if (residue < 0)
+            {
+                residue += 4;
+            }
+
+            if ((residue & 1) == 0)
+            {
+                return RoutePatternKind.ProcessionalSpine;
+            }
+
+            return residue == 1
+                ? RoutePatternKind.AtriumRing
+                : RoutePatternKind.TwinWingKeep;
         }
 
         private static string SelectedRoutePatternId(int dungeonSeed)
         {
-            return SelectRoutePattern(dungeonSeed) == RoutePatternKind.AtriumRing
-                ? AtriumRingPatternId
+            RoutePatternKind pattern = SelectRoutePattern(dungeonSeed);
+            if (pattern == RoutePatternKind.AtriumRing)
+            {
+                return AtriumRingPatternId;
+            }
+
+            return pattern == RoutePatternKind.TwinWingKeep
+                ? TwinWingPatternId
                 : Phase1PatternId;
+        }
+
+        private static int LandmarkNodeForPattern(RoutePatternKind pattern)
+        {
+            if (pattern == RoutePatternKind.AtriumRing)
+            {
+                return AtriumRingVistaTargetNode;
+            }
+
+            return pattern == RoutePatternKind.TwinWingKeep
+                ? TwinWingVistaTargetNode
+                : Phase1VistaTargetNode;
+        }
+
+        private static RouteIntent BuildSelectedRouteIntent(
+            RoutePatternKind pattern,
+            int dungeonSeed,
+            RecipeSlotIntent[] recipeSlots,
+            string catalogDigest)
+        {
+            if (pattern == RoutePatternKind.AtriumRing)
+            {
+                return BuildAtriumRingRouteIntent(dungeonSeed, recipeSlots, catalogDigest);
+            }
+
+            if (pattern == RoutePatternKind.TwinWingKeep)
+            {
+                return BuildTwinWingRouteIntent(dungeonSeed, recipeSlots, catalogDigest);
+            }
+
+            if (pattern == RoutePatternKind.ProcessionalSpine)
+            {
+                return BuildProcessionalRouteIntent(dungeonSeed, recipeSlots, catalogDigest);
+            }
+
+            throw new InvalidOperationException($"Unsupported route pattern kind '{pattern}'");
         }
 
         private static RouteIntent BuildAtriumRingRouteIntent(
@@ -711,7 +779,142 @@ namespace DungeonLab.Editor
                 topNode: RouteMainNodeCount - 1,
                 branchAttachNode: AtriumRingBranchAttachNode,
                 branchRejoinNode: AtriumRingBranchRejoinNode,
-                requiredCycleLength: 8,
+                requiredCycleRank: 1,
+                requiredCycleCoreNodeCount: 8,
+                requiredJunctionDegree: 3,
+                plannedOverlooks: Array.Empty<RouteOverlookIntent>(),
+                allowGenericRoomWings: false);
+        }
+
+        private static RouteIntent BuildTwinWingRouteIntent(
+            int dungeonSeed,
+            RecipeSlotIntent[] recipeSlots,
+            string catalogDigest)
+        {
+            var composer = new RouteGraphComposer();
+            var mainNodes = new[]
+            {
+                new RouteNodeIntent("keep-arrival", "arrival", "arrival", 0, -1, 0),
+                new RouteNodeIntent("keep-threshold", "connector", "compression", 1, -1, 0, DungeonRecipeIds.CompressionConnector),
+                new RouteNodeIntent("wing-hub", "junction", "choice", 2, -1, 0),
+                new RouteNodeIntent("keep-crossing", "connector", "approach", 3, -1, 0),
+                new RouteNodeIntent("keep-landmark", "landmark", "landmark", 4, -1, 8, DungeonRecipeIds.ProcessionalLandmark),
+                new RouteNodeIntent("wing-rejoin", "junction", "rejoin", 5, -1, 16),
+                new RouteNodeIntent("keep-culmination", "culmination", "culmination", 6, -1, 24)
+            };
+            string[] mainEdgeIds =
+            {
+                "main-0-1",
+                "main-1-2",
+                "main-2-3",
+                "main-3-4",
+                "main-4-5",
+                "main-5-6"
+            };
+            RouteTransitionKind[] mainTransitionKinds =
+            {
+                RouteTransitionKind.LevelCorridor,
+                RouteTransitionKind.LevelCorridor,
+                RouteTransitionKind.LevelCorridor,
+                RouteTransitionKind.Stair,
+                RouteTransitionKind.Stairwell,
+                RouteTransitionKind.Stair
+            };
+            if (!composer.TryAddSpine(
+                    mainNodes,
+                    mainEdgeIds,
+                    mainTransitionKinds,
+                    out int[] mainNodeIndices,
+                    out string compositionError))
+            {
+                throw new InvalidOperationException($"Invalid twin-wing spine definition: {compositionError}");
+            }
+
+            var firstWingNodes = new[]
+            {
+                new RouteNodeIntent("wing-a-entry", "connector", "branch", -1, 0, 8),
+                new RouteNodeIntent("wing-overlook", "overlook", "reveal", -1, 1, 12),
+                new RouteNodeIntent("wing-a-return", "connector", "return", -1, 2, 16)
+            };
+            if (!composer.TryAddBranch(
+                    mainNodeIndices[TwinWingBranchAttachNode],
+                    firstWingNodes,
+                    new[] { "wing-a-2-7", "wing-a-7-8", "wing-a-8-9" },
+                    new[]
+                    {
+                        RouteTransitionKind.Bridge,
+                        RouteTransitionKind.Stair,
+                        RouteTransitionKind.Stair
+                    },
+                    out int[] firstWingIndices,
+                    out compositionError) ||
+                !composer.TryRejoin(
+                    firstWingIndices[firstWingIndices.Length - 1],
+                    mainNodeIndices[TwinWingBranchRejoinNode],
+                    "wing-a-rejoin-9-5",
+                    RouteTransitionKind.LevelCorridor,
+                    out compositionError))
+            {
+                throw new InvalidOperationException($"Invalid twin-wing first branch definition: {compositionError}");
+            }
+
+            var secondWingNodes = new[]
+            {
+                new RouteNodeIntent("wing-b-entry", "connector", "branch", -1, 3, 4),
+                new RouteNodeIntent("wing-b-reward", "optional-room", "reward", -1, 4, 8),
+                new RouteNodeIntent("wing-b-return", "connector", "return", -1, 5, 12)
+            };
+            if (!composer.TryAddBranch(
+                    mainNodeIndices[TwinWingBranchAttachNode],
+                    secondWingNodes,
+                    new[] { "wing-b-2-10", "wing-b-10-11", "wing-b-11-12" },
+                    new[]
+                    {
+                        RouteTransitionKind.Stair,
+                        RouteTransitionKind.Stair,
+                        RouteTransitionKind.Stair
+                    },
+                    out int[] secondWingIndices,
+                    out compositionError) ||
+                !composer.TryRejoin(
+                    secondWingIndices[secondWingIndices.Length - 1],
+                    mainNodeIndices[TwinWingBranchRejoinNode],
+                    "wing-b-rejoin-12-5",
+                    RouteTransitionKind.Stair,
+                    out compositionError))
+            {
+                throw new InvalidOperationException($"Invalid twin-wing second branch definition: {compositionError}");
+            }
+
+            if (!composer.TryPublish(
+                    out RouteNodeIntent[] nodes,
+                    out RouteTraversalIntent[] edges,
+                    out compositionError))
+            {
+                throw new InvalidOperationException($"Invalid twin-wing graph definition: {compositionError}");
+            }
+
+            return new RouteIntent(
+                dungeonSeed,
+                TwinWingPlannerVersion,
+                TwinWingPatternId,
+                nodes,
+                edges,
+                new RouteVistaIntent(
+                    "wing-overlook-to-keep-landmark",
+                    TwinWingVistaSourceNode,
+                    TwinWingVistaTargetNode,
+                    minimumReservedVoidCells: 3),
+                RouteElevationPolicy.AscendingSpine,
+                recipeSlots,
+                catalogDigest,
+                bottomNode: 0,
+                topNode: 6,
+                branchAttachNode: TwinWingBranchAttachNode,
+                branchRejoinNode: TwinWingBranchRejoinNode,
+                requiredCycleRank: 2,
+                requiredCycleCoreNodeCount: 10,
+                requiredJunctionDegree: 4,
                 plannedOverlooks: Array.Empty<RouteOverlookIntent>(),
                 allowGenericRoomWings: false);
         }
@@ -822,19 +1025,20 @@ namespace DungeonLab.Editor
                 }
             }
 
-            int loopEdges = intent.traversalEdges.Length - (intent.nodes.Length - 1);
-            int cycleLength = CountSingleCycleNodes(adjacency);
+            int cycleRank = intent.traversalEdges.Length - (intent.nodes.Length - 1);
+            int cycleCoreNodeCount = CountCycleCoreNodes(adjacency);
             if (visited.Count != intent.nodes.Length ||
-                loopEdges != 1 ||
+                cycleRank != intent.requiredCycleRank ||
                 intent.branchAttachNode < 0 || intent.branchAttachNode >= intent.nodes.Length ||
                 intent.branchRejoinNode < 0 || intent.branchRejoinNode >= intent.nodes.Length ||
-                adjacency[intent.branchAttachNode].Count != 3 ||
-                adjacency[intent.branchRejoinNode].Count != 3 ||
-                cycleLength != intent.requiredCycleLength)
+                adjacency[intent.branchAttachNode].Count != intent.requiredJunctionDegree ||
+                adjacency[intent.branchRejoinNode].Count != intent.requiredJunctionDegree ||
+                cycleCoreNodeCount != intent.requiredCycleCoreNodeCount)
             {
                 rejectionReason =
-                    $"route graph reached {visited.Count}/{intent.nodes.Length} nodes with {loopEdges} loop edges and " +
-                    $"a {cycleLength}-node cycle; required cycle length {intent.requiredCycleLength}, with degree-3 branch endpoints";
+                    $"route graph reached {visited.Count}/{intent.nodes.Length} nodes with cycle rank {cycleRank} and " +
+                    $"a {cycleCoreNodeCount}-node cycle core; required rank {intent.requiredCycleRank}, " +
+                    $"core {intent.requiredCycleCoreNodeCount}, and degree-{intent.requiredJunctionDegree} branch endpoints";
                 return false;
             }
 
@@ -873,7 +1077,7 @@ namespace DungeonLab.Editor
             return true;
         }
 
-        private static int CountSingleCycleNodes(IReadOnlyList<List<int>> adjacency)
+        private static int CountCycleCoreNodes(IReadOnlyList<List<int>> adjacency)
         {
             var remainingDegrees = new int[adjacency.Count];
             var leaves = new Queue<int>();
@@ -927,6 +1131,17 @@ namespace DungeonLab.Editor
             if (string.Equals(intent.patternId, AtriumRingPatternId, StringComparison.Ordinal))
             {
                 return TryEmbedAtriumRingRoute(
+                    dungeonSeed,
+                    layoutAttempt,
+                    intent,
+                    out nodeCenters,
+                    out failureCode,
+                    out rejectionReason);
+            }
+
+            if (string.Equals(intent.patternId, TwinWingPatternId, StringComparison.Ordinal))
+            {
+                return TryEmbedTwinWingRoute(
                     dungeonSeed,
                     layoutAttempt,
                     intent,
@@ -1093,6 +1308,52 @@ namespace DungeonLab.Editor
                 coarseEmbedding,
                 horizontalSpacing: 7,
                 verticalSpacing: 9,
+                out nodeCenters,
+                out rejectionReason);
+        }
+
+        private static bool TryEmbedTwinWingRoute(
+            int dungeonSeed,
+            int layoutAttempt,
+            RouteIntent intent,
+            out Vector2Int[] nodeCenters,
+            out string failureCode,
+            out string rejectionReason)
+        {
+            failureCode = "TWIN_WING_EMBEDDING_EXHAUSTED";
+            phase1LastBranchSearchExpansions = 0;
+            var embedding = new[]
+            {
+                new Vector2Int(-11, 0),
+                new Vector2Int(-5, 0),
+                new Vector2Int(0, 0),
+                new Vector2Int(6, 0),
+                new Vector2Int(14, 0),
+                new Vector2Int(22, 0),
+                new Vector2Int(31, 0),
+                new Vector2Int(0, 10),
+                new Vector2Int(14, 10),
+                new Vector2Int(22, 10),
+                new Vector2Int(0, -9),
+                new Vector2Int(14, -9),
+                new Vector2Int(22, -9)
+            };
+            if (embedding.Length != intent.nodes.Length ||
+                new HashSet<Vector2Int>(embedding).Count != embedding.Length)
+            {
+                failureCode = "TWIN_WING_EMBEDDING_INVALID";
+                nodeCenters = Array.Empty<Vector2Int>();
+                rejectionReason = "twin-wing embedding did not match its graph or was not self-avoiding";
+                return false;
+            }
+
+            return TryTransformCoarseEmbedding(
+                dungeonSeed,
+                layoutAttempt,
+                TwinWingPatternId,
+                embedding,
+                horizontalSpacing: 1,
+                verticalSpacing: 1,
                 out nodeCenters,
                 out rejectionReason);
         }

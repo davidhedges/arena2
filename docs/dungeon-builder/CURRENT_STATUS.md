@@ -4,9 +4,9 @@ Start here when returning to dungeon work. Keep this page short and update it at
 
 Last updated: 2026-07-21
 
-Active milestone: Phase 6b atrium-ring topology complete and verified; Phase 6 expansion continues with the next increment not yet selected
+Active milestone: Phase 6c twin-wing topology complete and verified; the next Phase 6 increment is not yet selected
 
-Production mode: the processional-spine route-first planner is the sole reachable layout builder
+Production mode: one route-first layout builder deterministically selects processional-spine, atrium-ring, or twin-wing-keep and feeds the shared canonical pipeline
 
 Recipe authoring UI: implemented for the Phase 5 contract, validation, deterministic gallery, review, and promotion workflow
 
@@ -346,6 +346,40 @@ Because production behavior and the report schema now expose a second named patt
 - The six real-renderer sentinels split three processional and three atrium and all retain `REJECTED 0`. The full EditMode suite is 336/357 with no dungeon failure and exactly the same 21 unrelated baseline failures.
 - Symbol and deletion audits find only spine, branch, rejoin, and publish graph operations; no hub, cross-link, long-return, twin-wing, topology weight, serialized topology asset, new recipe, runtime path, silent fallback, or alternate downstream pipeline exists. The displaced processional-only downstream assumptions are gone, `git diff --check` passes, and the Phase 6b deletion ledger is empty.
 
+## Phase 6c acceptance budget — locked before production edits
+
+The next increment is `twin_wing_topology_01`: add one twin-wing keep graph and bounded embedding through the existing spine, branch, and rejoin operations. The selector advances from parity to stable seed modulo four: residues 0/2 remain processional-spine, residue 1 remains atrium-ring, and residue 3 becomes twin-wing-keep. The locked corpus therefore contains exactly 100 processional, 50 retained atrium, and 50 twin-wing seeds; the six fixed sentinels contain three processional, two atrium, and one twin-wing seed.
+
+The twin-wing graph has 13 nodes and 14 typed traversal edges: a seven-node main route plus two three-node wings attached at `wing-hub` and rejoined at `wing-rejoin`. It must have cycle rank two, a ten-node cycle core, degree four at both shared junctions, and structurally symmetric wing path lengths. The declared `wing-overlook -> keep-landmark` vista crosses the space between one wing and the main route, while the two existing reviewed recipes remain at the compression threshold and landmark using their existing port bindings.
+
+The symmetric embedding requires a 51-cell maximum dimension including room envelopes, so this slice increases only the active spacious profile's width/depth ceiling from 40 to 52 cells. Existing embeddings already fit their old bounds and must not move. No topology weight, new profile selector field, serialized topology asset, recipe, graph operation, renderer branch, canonical-plan variant, collision branch, cross-link, long-return, generalized vista scoring, promontory change, or runtime path is added.
+
+Phase 6c passes only if all of these predeclared gates hold:
+
+- the locked corpus selector reports exactly 100 processional-spine, 50 atrium-ring, and 50 twin-wing-keep seeds using `seed-modulo4-v1`;
+- all 100 processional seeds preserve their Phase 6b route-intent, layout, tier, recipe-resolution, recipe-catalog, and canonical hashes exactly, and all 50 retained atrium seeds with residue 1 preserve the same six hashes exactly;
+- at least 48/50 twin-wing seeds and at least 198/200 overall seeds are accepted within the existing two-attempt ceiling; every accepted plan is hard-valid and passes route, transition, final-vista, recipe, renderer, abyss, and collision preconditions;
+- the twin-wing projection has exactly 13 nodes, 14 edges, seven main nodes, six wing nodes, cycle rank two, a ten-node cycle core, two degree-four shared junctions, equal four-edge hub-to-rejoin wing paths, two compatible reviewed recipe slots, a 0u bottom, a 24u top, and stair/bridge/stairwell requirements;
+- the twin-wing embedding keeps both wings disjoint outside their shared hub/rejoin, keeps every edge cardinal, preserves the authored room envelopes, and realizes or rejects its cardinally opposed vista with at least three clear reserved cells before rendering;
+- the active 52x52 profile admits the twin-wing footprint without changing any preserved processional or retained-atrium hash;
+- two independent post-change corpus sweeps have identical aggregate result hashes and identical ordered pattern-plus-per-seed multi-hash digests;
+- all prior focused fixtures plus the new Phase 6c production tests pass; all six real-renderer sentinels retain `REJECTED 0` with all three patterns represented; the full EditMode suite has no dungeon failure and no regression beyond the same 21 unrelated baseline failures;
+- the single-cycle validator facts displaced by the third pattern are replaced by consumed cycle-rank, cycle-core, and junction-degree facts, no redundant hub combinator or fallback is introduced, the deletion ledger is empty, and work stops before additional Phase 6 content or topology work.
+
+Phase 6c advances the report envelope to `dungeon-plan-v6` and the active generator envelope to `route-topologies-v6`. Processional intent/canonical versions remain `processional-spine-v4` / `dungeon-plan-v4`; retained atrium intent/canonical versions remain `atrium-ring-v1` / `dungeon-plan-v5`; twin-wing begins at `twin-wing-keep-v1` / `dungeon-plan-v6`. All patterns continue to use the unchanged `processional-spine-v1` stable spatial-random service with pattern-specific stable IDs.
+
+## Phase 6c implementation status
+
+- The stable modulo-four selector retains processional-spine for residues 0/2 and atrium-ring for residue 1, and selects twin-wing-keep for residue 3. Unknown pattern identities reject explicitly; there is no compatibility fallback.
+- `BuildTwinWingRouteIntent` composes its seven-node spine and two three-node returning wings only through the existing spine, branch, rejoin, and publish operations. The result has 13 nodes, 14 typed edges, cycle rank two, a ten-node cycle core, degree-four `wing-hub`/`wing-rejoin` junctions, and equal four-edge wing paths.
+- The twin-wing embedding is cardinal, bounded to 51 cells including room envelopes, and realizes the declared `wing-overlook -> keep-landmark` vista with ten-cell center separation. The active spacious profile ceiling is 52x52; neither older embedding moved.
+- Cycle validation now consumes explicit rank, cycle-core-node-count, and junction-degree facts for all three patterns. Transition diagnostics consume the selected graph's actual edge count. Canonical namespaces remain v4 for processional, v5 for retained atrium, and v6 for twin-wing under the v6 report/generator envelope.
+- Six new production-facing tests cover selector/version stability, exact graph order and typed edges, twin-cycle structure, bounded vista geometry, deterministic hard-valid production, and unchanged renderer/collision consumption. All Phase 0/1/3/4/5/6a/6b/6c focused fixtures pass 51/51.
+- Both final locked-corpus sweeps are 200/200 accepted and hard-valid with exactly 100 processional, 50 atrium, and 50 twin-wing seeds. Every seed succeeds on attempt 1; the only internal candidate rejections are the retained `PORT_GRAPH:3`. Result hash `f7462647e9f079ef8a72b3c8f9f88f2ce939978ffa7125eb0b9081f4e1ab76f8` and ordered pattern-plus-per-seed multi-hash digest `62f1d8e9915cb26db8ba5ef0952462992b6999b91d1abe1ea61cc096a59ac383` repeat exactly.
+- All six locked hashes match Phase 6b for every one of the 100 processional seeds and all 50 retained atrium seeds. Canonical-version counts are exactly 100 v4, 50 v5, and 50 v6.
+- The six real-renderer sentinels split three processional, two atrium, and one twin-wing and all retain `REJECTED 0`. The full EditMode suite is 342/363 with no dungeon failure and exactly the same 21 unrelated baseline failures.
+- Symbol and deletion audits find one reachable layout builder, no redundant hub combinator, no cross-link or long-return operation, no new recipe or serialized topology, no renderer/collision branch, no unused compatibility scaffold, and no silent fallback. `git diff --check` passes and the Phase 6c deletion ledger is empty.
+
 ## Known implementation facts and blockers
 
 - Generator code: `Assets/Arena/Editor/Dungeons/RandomDungeon/`.
@@ -359,13 +393,13 @@ Because production behavior and the report schema now expose a second named patt
 ## End-of-session handoff
 
 ```text
-Milestone/phase: Phase 6b atrium-ring topology complete and verified; two named production topologies now share one canonical pipeline.
-Completed this session: closed the pending Phase 6a Unity gates; audited and budget-locked `atrium_ring_topology_01`; added deterministic processional/atrium selection, the atrium graph and coarse embedding, only the shared intent facts earned by the second pattern, six focused tests, mixed-pattern diagnostics, and explicit unsupported-pattern rejection; completed every locked runtime, corpus, preservation, renderer, regression, symbol, and diff gate.
-Current validation result: focused fixtures 45/45; two final mixed corpus sweeps each 200/200 accepted and hard-valid with exactly 100 seeds per pattern, all attempts equal to 1, and only `PORT_GRAPH:3` internal candidate rejections; result hash 53a07a59...8878db and ordered multi-hash digest bd1b0628...cf894f repeat exactly; all 100 processional seeds preserve all six Phase 6a hashes; six sentinels split 3/3 and report REJECTED 0; full EditMode 336/357 with exactly the same 21 unrelated baseline failures and no dungeon failure; `git diff --check` passes.
-Last known-good seeds and reports: processional 2026072140; atrium 2026072101; DungeonLabReports/dungeon_plan_2026072100_2026072299.json and DungeonLabReports/visual_sentinels/manifest.json.
-Last diagnostic fact: even seeds select the unchanged 10-cycle processional graph; odd seeds select the new eight-cycle atrium ring. Both have 13 nodes/13 edges, two reviewed recipe slots, one required vista, a 0..24u route, and direct reuse of the existing tier, renderer, abyss, and collision consumers.
-Deletion-ledger items added/closed: processional-only downstream branch/vista/overlook assumptions and the single-pattern builder name were displaced; all were generalized or deleted. No compatibility layer, unused graph operation, profile weight, serialized topology, fallback, or temporary production symbol remains. Phase 6b ledger is empty and closed.
-Exact next action: begin the Phase 6c entry audit. Compare the remaining production needs—twin-wing topology, the next reviewed recipe, coarse vista scoring, named-target promontories, spacing/repetition rules, or explicit step motifs—select the smallest one with an immediate producer and consumer, and lock its acceptance budget before edits. Do not re-open Phase 6b unless one of its locked hashes or gates changes.
-Blocker or decision needed: none. Phase 6c scope and budget are the next decision.
+Milestone/phase: Phase 6c twin-wing topology complete and verified; three named production topologies share one canonical downstream pipeline.
+Completed this session: budget-locked and implemented `twin_wing_topology_01`; added the stable modulo-four selector, the 13-node/14-edge twin-wing graph, its bounded 51-cell embedding, generalized cycle-rank/core/junction validation, dynamic transition-count diagnostics, v6 report contracts, six focused tests, and the active 52x52 spacious envelope; completed every locked corpus, preservation, determinism, renderer, regression, symbol, deletion, and diff gate.
+Current validation result: focused fixtures 51/51; two final corpus sweeps each 200/200 accepted and hard-valid with a 100/50/50 processional/atrium/twin split, all attempts equal to 1, and only `PORT_GRAPH:3` internal candidate rejections; result hash f7462647...1ab76f8 and ordered multi-hash digest 62f1d8e9...ac383 repeat exactly; all 100 processional and 50 retained atrium seeds preserve all six Phase 6b hashes; six sentinels split 3/2/1 and report REJECTED 0; full EditMode 342/363 with exactly the same 21 unrelated baseline failures and no dungeon failure; `git diff --check` passes.
+Last known-good seeds and reports: processional 2026072140; atrium 2026072101; twin-wing 2026072103; DungeonLabReports/dungeon_plan_2026072100_2026072299.json and DungeonLabReports/visual_sentinels/manifest.json.
+Last diagnostic fact: residues 0/2 select the unchanged ten-node-cycle processional graph, residue 1 selects the retained eight-node-cycle atrium ring, and residue 3 selects the new two-cycle twin-wing keep. All use the same two reviewed recipes, required-vista contract, 0..24u route, tier plan, renderer, abyss, and collision consumers.
+Deletion-ledger items added/closed: the single-cycle validator fields and fixed 13-edge diagnostic assumption were displaced by consumed per-intent graph facts. No compatibility layer, hub combinator, unused graph operation, profile weight, serialized topology, fallback, or temporary production symbol remains. Phase 6c ledger is empty and closed.
+Exact next action: begin the next Phase 6 entry audit. Compare the remaining needs—the next reviewed recipe, coarse vista scoring, named-target promontories, spacing/repetition rules, or explicit step motifs—select the smallest slice with an immediate producer and consumer, and lock its acceptance budget before production edits. Do not re-open Phase 6c unless one of its locked hashes or gates changes.
+Blocker or decision needed: none. The next Phase 6 slice is not yet selected.
 New chat necessary: no.
 ```
