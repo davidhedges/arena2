@@ -250,9 +250,11 @@ namespace DungeonLab.Editor
                     levelPlan.cellLevels,
                     levelPlan.transitions,
                     null,
-                    null,
+                    BuildExternalConnectorOpenEdges(levelPlan.externalConnectors),
                     roomBoundaryContext,
-                    CollectNamedPromontoryCells(levelPlan.namedPromontories),
+                    CollectRenderedPromontoryCells(
+                        levelPlan.namedPromontories,
+                        levelPlan.externalConnectors),
                     GeneratedRootName,
                     out report,
                     out bounds);
@@ -1141,6 +1143,7 @@ namespace DungeonLab.Editor
                     out List<(string gapId, ElevationEdgeModel.SynthesizedStairSetPiece setPiece)> synthesizedStairs,
                     out List<DaisShowpiece> daisShowpieces,
                     out NamedVistaPromontoryResolution[] namedPromontories,
+                    out ExternalConnectorPromontoryResolution[] externalConnectors,
                     out RecipeResolution[] recipeResolutions,
                     out rejectionReason);
             EndPhase7OutlierStage("tierAttempt.cellLevelField", cellLevelFieldStart);
@@ -1218,6 +1221,7 @@ namespace DungeonLab.Editor
                 FormatSynthesizedStairSummary(synthesizedStairs),
                 daisShowpieces,
                 namedPromontories,
+                externalConnectors,
                 recipeResolutions,
                 routeRequirementResolution);
             acceptedLayout = loopedLayout;
@@ -1578,6 +1582,7 @@ namespace DungeonLab.Editor
             out List<(string gapId, ElevationEdgeModel.SynthesizedStairSetPiece setPiece)> synthesizedStairs,
             out List<DaisShowpiece> daisShowpieces,
             out NamedVistaPromontoryResolution[] namedPromontories,
+            out ExternalConnectorPromontoryResolution[] externalConnectors,
             out RecipeResolution[] recipeResolutions,
             out string rejectionReason)
         {
@@ -1588,6 +1593,7 @@ namespace DungeonLab.Editor
             synthesizedStairs = new List<(string gapId, ElevationEdgeModel.SynthesizedStairSetPiece setPiece)>();
             daisShowpieces = new List<DaisShowpiece>();
             namedPromontories = Array.Empty<NamedVistaPromontoryResolution>();
+            externalConnectors = Array.Empty<ExternalConnectorPromontoryResolution>();
             recipeResolutions = Array.Empty<RecipeResolution>();
             rejectionReason = string.Empty;
 
@@ -2171,6 +2177,25 @@ namespace DungeonLab.Editor
                     promontoryCells,
                     recipeBaseLevels,
                     out recipeResolutions,
+                    out rejectionReason))
+            {
+                return false;
+            }
+
+            // Bounded corrective item: mandatory external connection stubs are
+            // the final plan mutation. Their hash-isolated policy consumes no
+            // shared random and cannot change existing bridge, stair, recipe,
+            // dais, sweep, or scenic placement.
+            if (!TryResolveExternalConnectorPromontories(
+                    dungeonSeed,
+                    layout,
+                    cellLevels,
+                    transitions,
+                    protectedStructuralCells,
+                    doorwayCells,
+                    plannedStairLedger,
+                    namedPromontories,
+                    out externalConnectors,
                     out rejectionReason))
             {
                 return false;
@@ -8160,6 +8185,9 @@ namespace DungeonLab.Editor
             // Phase 6e target-aware promontories. Canonical identity stays here;
             // renderer/abyss consumers receive only the derived cell projection.
             public readonly NamedVistaPromontoryResolution[] namedPromontories;
+            // Mandatory production-facing connection stubs remain canonical and
+            // separate from the optional scenic vista promontory.
+            public readonly ExternalConnectorPromontoryResolution[] externalConnectors;
             public readonly RecipeResolution[] recipeResolutions;
             public readonly RouteRequirementResolution routeRequirementResolution;
 
@@ -8183,6 +8211,7 @@ namespace DungeonLab.Editor
                 string synthesizedStairSummary,
                 List<DaisShowpiece> daisShowpieces,
                 NamedVistaPromontoryResolution[] namedPromontories,
+                ExternalConnectorPromontoryResolution[] externalConnectors,
                 RecipeResolution[] recipeResolutions,
                 RouteRequirementResolution routeRequirementResolution)
             {
@@ -8205,6 +8234,7 @@ namespace DungeonLab.Editor
                 this.synthesizedStairSummary = synthesizedStairSummary;
                 this.daisShowpieces = daisShowpieces;
                 this.namedPromontories = namedPromontories ?? Array.Empty<NamedVistaPromontoryResolution>();
+                this.externalConnectors = externalConnectors ?? Array.Empty<ExternalConnectorPromontoryResolution>();
                 this.recipeResolutions = recipeResolutions ?? Array.Empty<RecipeResolution>();
                 this.routeRequirementResolution = routeRequirementResolution;
             }

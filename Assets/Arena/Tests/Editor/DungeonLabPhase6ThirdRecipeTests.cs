@@ -118,8 +118,8 @@ namespace Arena.Tests.Editor
         {
             Dictionary<string, string> values = Snapshot.Value;
 
-            Assert.That(values["versions.summary"], Is.EqualTo("dungeon-plan-v8"));
-            Assert.That(values["versions.generator"], Is.EqualTo("route-topologies-v8"));
+            Assert.That(values["versions.summary"], Is.EqualTo("dungeon-plan-v9"));
+            Assert.That(values["versions.generator"], Is.EqualTo("route-topologies-v9"));
             Assert.That(values["versions.spatialRandom"], Is.EqualTo("processional-spine-v1"));
             Assert.That(values["recipe.schema"], Is.EqualTo("1"));
             Assert.That(values["lifecycle.staleDetected"], Is.EqualTo("True"));

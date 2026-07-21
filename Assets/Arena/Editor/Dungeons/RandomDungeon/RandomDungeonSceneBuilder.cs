@@ -210,6 +210,19 @@ namespace DungeonLab.Editor
                 throw new InvalidOperationException("Generated dungeon contains no enabled collision geometry.");
         }
 
+        // Focused validation reuses the exact production preparation steps
+        // without creating a second collision path.
+        internal static void PrepareGeneratedDungeonCollisionForValidation(
+            GameObject dungeonRoot,
+            Action<string>? beforeModelImporterMutation = null)
+        {
+            if (dungeonRoot == null)
+                throw new ArgumentNullException(nameof(dungeonRoot));
+
+            EnsureCollisionMeshesReadable(dungeonRoot, beforeModelImporterMutation);
+            MarkDungeonCollision(dungeonRoot);
+        }
+
         private static void EnsureCollisionMeshesReadable(
             GameObject dungeonRoot,
             Action<string>? beforeModelImporterMutation)

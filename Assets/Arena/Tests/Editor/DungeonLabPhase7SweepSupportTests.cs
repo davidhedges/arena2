@@ -61,8 +61,8 @@ namespace Arena.Tests.Editor
             Assert.That(values["determinism.identical"], Is.EqualTo("True"));
             Assert.That(values["determinism.changeDetected"], Is.EqualTo("True"));
             Assert.That(values["paths.distinct"], Is.EqualTo("True"));
-            Assert.That(values["versions.summary"], Is.EqualTo("dungeon-plan-v8"));
-            Assert.That(values["versions.generator"], Is.EqualTo("route-topologies-v8"));
+            Assert.That(values["versions.summary"], Is.EqualTo("dungeon-plan-v9"));
+            Assert.That(values["versions.generator"], Is.EqualTo("route-topologies-v9"));
         }
 
         [Test]
@@ -109,8 +109,11 @@ namespace Arena.Tests.Editor
             Assert.That(values["layoutAttempts"], Is.EqualTo("2"));
             Assert.That(values["stairPlacementRejections"], Is.EqualTo("32"));
             Assert.That(
+                values["preCorrectiveTieredLevelPlanHash"],
+                Is.EqualTo("f5886c96a90a8112aaa158602c40f97beff914845a4eb737ca3208db5a5398ce"));
+            Assert.That(
                 values["canonicalHash"],
-                Is.EqualTo("237cb023d29d8540ea6aa8cfb3bbd56055254612604d26cbd7731ec253288289"));
+                Is.EqualTo("2e63a3e5ac4298a05f0dfd01b3c6805bc84ebefe2cef12d0ea5c8e624332451c"));
         }
 
         private static Dictionary<string, string> BuildSnapshot()

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using UnityEditor;
@@ -16,7 +17,7 @@ namespace DungeonLab.Editor
     internal sealed partial class DungeonLabGenerator
     {
         private const string BatchReportDirectory = "DungeonLabReports";
-        private const string DungeonPlanSummaryVersion = "dungeon-plan-v8";
+        private const string DungeonPlanSummaryVersion = "dungeon-plan-v9";
         private const int Phase0BaselineFirstSeed = 2026072100;
         private const int Phase0BaselineSeedCount = 200;
         private const int LockedSeedCount = 100;
@@ -129,11 +130,15 @@ namespace DungeonLab.Editor
         private static string RunBatchValidation(
             int firstSeed,
             int requestedSeedCount,
-            int phase7SweepOrdinal = 0)
+            int phase7SweepOrdinal = 0,
+            int correctiveRunOrdinal = 0)
         {
             CurrentGenerationSettings = LoadActiveGenerationSettings();
             Phase7BatchEvidence phase7Evidence = phase7SweepOrdinal > 0
                 ? new Phase7BatchEvidence(phase7SweepOrdinal, Phase7WarmupSeedCount)
+                : null;
+            CorrectiveBatchEvidence correctiveEvidence = correctiveRunOrdinal > 0
+                ? new CorrectiveBatchEvidence(correctiveRunOrdinal)
                 : null;
             var rejectionHistogram = new Dictionary<string, int>(StringComparer.Ordinal);
             var rejectionCodeHistogram = new Dictionary<string, int>(StringComparer.Ordinal);
@@ -160,7 +165,7 @@ namespace DungeonLab.Editor
             int finalVistaValidCount = 0;
             int recipeSetValidCount = 0;
             int completedSeedCount = 0;
-            long measuredLoopStart = phase7Evidence == null
+            long measuredLoopStart = phase7Evidence == null && correctiveEvidence == null
                 ? 0L
                 : System.Diagnostics.Stopwatch.GetTimestamp();
 
@@ -180,13 +185,18 @@ namespace DungeonLab.Editor
                         break;
                     }
 
-                    long seedTimingStart = phase7Evidence == null
+                    long seedTimingStart = phase7Evidence == null && correctiveEvidence == null
                         ? 0L
                         : System.Diagnostics.Stopwatch.GetTimestamp();
                     JObject seedReport = BuildPhase0SeedReport(seed);
                     if (phase7Evidence != null)
                     {
                         phase7Evidence.planningMilliseconds.Add(
+                            ElapsedMilliseconds(seedTimingStart, System.Diagnostics.Stopwatch.GetTimestamp()));
+                    }
+                    if (correctiveEvidence != null)
+                    {
+                        correctiveEvidence.planningMilliseconds.Add(
                             ElapsedMilliseconds(seedTimingStart, System.Diagnostics.Stopwatch.GetTimestamp()));
                     }
                     seedReports.Add(seedReport);
@@ -267,6 +277,11 @@ namespace DungeonLab.Editor
                 phase7Evidence.measuredLoopSeconds =
                     ElapsedMilliseconds(measuredLoopStart, System.Diagnostics.Stopwatch.GetTimestamp()) / 1000d;
             }
+            if (correctiveEvidence != null)
+            {
+                correctiveEvidence.measuredLoopSeconds =
+                    ElapsedMilliseconds(measuredLoopStart, System.Diagnostics.Stopwatch.GetTimestamp()) / 1000d;
+            }
 
             if (completedSeedCount <= 0)
             {
@@ -316,7 +331,8 @@ namespace DungeonLab.Editor
                 finalVistaValidCount,
                 recipeSetValidCount,
                 seedReports,
-                phase7Evidence);
+                phase7Evidence,
+                correctiveEvidence);
             Debug.Log($"Dungeon Lab: batch validation report written to {reportPath}");
             return reportPath;
         }
@@ -377,6 +393,123 @@ namespace DungeonLab.Editor
                 EndPhase7OutlierStage("exceptionReportTotal", exceptionReportStart);
                 return exceptionReport;
             }
+        }
+
+        // Focused corrective-item diagnostic used by EditMode tests. It stays on
+        // the production resolver/report/renderer paths and does not create a
+        // second planner or mutate project assets.
+        private static string BuildCorrectiveConnectionSnapshot()
+        {
+            var lines = new List<string>
+            {
+                $"policy.version={ExternalConnectorPromontoryPolicyVersion}",
+                $"versions.summary={ActiveDiagnosticSummaryVersion}",
+                $"versions.generator={ActiveDiagnosticGeneratorVersion}"
+            };
+
+            var firstSeedByCount = new Dictionary<int, int>();
+            for (int seed = 0; seed < 4096 && firstSeedByCount.Count < 4; seed++)
+            {
+                int count = ExternalConnectorDesiredCount(seed);
+                if (!firstSeedByCount.ContainsKey(count))
+                    firstSeedByCount[count] = seed;
+            }
+
+            for (int count = 1; count <= 4; count++)
+            {
+                int seed = firstSeedByCount[count];
+                BuildCorrectiveResolverProbe(
+                    seed,
+                    excludeAllAnchors: false,
+                    out bool resolved,
+                    out ExternalConnectorPromontoryResolution[] resolutions,
+                    out int beforeCells,
+                    out int afterCells,
+                    out string error);
+                var directions = new HashSet<int>();
+                foreach (ExternalConnectorPromontoryResolution resolution in resolutions)
+                    directions.Add(resolution.direction);
+                lines.Add($"resolver.{count}.seed={seed}");
+                lines.Add($"resolver.{count}.resolved={resolved}");
+                lines.Add($"resolver.{count}.count={resolutions.Length}");
+                lines.Add($"resolver.{count}.uniqueDirections={directions.Count}");
+                lines.Add($"resolver.{count}.addedCells={afterCells - beforeCells}");
+                lines.Add($"resolver.{count}.error={error}");
+            }
+
+            int rejectionSeed = firstSeedByCount[4];
+            BuildCorrectiveResolverProbe(
+                rejectionSeed,
+                excludeAllAnchors: true,
+                out bool rejectedResolved,
+                out _,
+                out int rejectedBefore,
+                out int rejectedAfter,
+                out string rejectionError);
+            lines.Add($"atomic.rejected={!rejectedResolved}");
+            lines.Add($"atomic.unchanged={rejectedBefore == rejectedAfter}");
+            lines.Add($"atomic.code={rejectionError.Contains($"[{ExternalConnectorRejectionCode}]")}");
+
+            foreach (int seed in new[]
+                     {
+                         2026072100,
+                         2026072101,
+                         2026072103,
+                         2026072170,
+                         2026072220
+                     })
+            {
+                JObject report = BuildPhase0SeedReport(seed);
+                lines.Add($"production.{seed}.accepted={report.Value<bool?>("accepted") == true}");
+                lines.Add($"production.{seed}.hardValid={report["validation"]?.Value<bool?>("passed") == true}");
+                lines.Add($"production.{seed}.desired={ExternalConnectorDesiredCount(seed)}");
+                lines.Add($"production.{seed}.count={(report["externalConnectors"] as JArray)?.Count ?? 0}");
+                lines.Add($"production.{seed}.externalValid={report["validation"]?["externalConnectors"]?.Value<bool?>("passed") == true}");
+                lines.Add($"production.{seed}.transitionHash={report["hashes"]?.Value<string>("existingTransitions")}");
+                lines.Add($"production.{seed}.prechangePlanHash={report["hashes"]?.Value<string>("preCorrectiveTieredLevelPlan")}");
+            }
+
+            JObject renderer = JObject.Parse(BuildPhase0RendererProbeJson(2026072100));
+            lines.Add($"renderer.accepted={renderer.Value<bool?>("accepted") == true}");
+            lines.Add($"renderer.passed={renderer["renderer"]?.Value<bool?>("passed") == true}");
+            lines.Add($"renderer.rejected={renderer["renderer"]?.Value<int?>("rejectedPlacements") ?? -1}");
+            return string.Join("\n", lines);
+        }
+
+        private static void BuildCorrectiveResolverProbe(
+            int seed,
+            bool excludeAllAnchors,
+            out bool resolved,
+            out ExternalConnectorPromontoryResolution[] resolutions,
+            out int beforeCells,
+            out int afterCells,
+            out string error)
+        {
+            RoomFootprint room = RoomFootprint.FromRect(new RectInt(-3, -3, 7, 7));
+            var floorCells = new HashSet<Vector2Int>(room.cells);
+            var levels = new Dictionary<Vector2Int, int>();
+            foreach (Vector2Int cell in floorCells)
+                levels[cell] = 4;
+            var layout = new DungeonLayout(
+                floorCells,
+                new List<RoomFootprint> { room },
+                new List<RoomConnection>());
+            var protectedCells = new HashSet<Vector2Int>();
+            if (excludeAllAnchors)
+                protectedCells.UnionWith(floorCells);
+            beforeCells = levels.Count;
+            resolved = TryResolveExternalConnectorPromontories(
+                seed,
+                layout,
+                levels,
+                new List<ElevationEdgeModel.TransitionEdge>(),
+                protectedCells,
+                new HashSet<Vector2Int>(),
+                new StairPlacementLedger(),
+                Array.Empty<NamedVistaPromontoryResolution>(),
+                out resolutions,
+                out error);
+            afterCells = levels.Count;
         }
 
         // Reflection entry point for the edit-mode characterization tests. The
@@ -2063,12 +2196,18 @@ namespace DungeonLab.Editor
             long canonicalProjectionStart = BeginPhase7OutlierStage();
             JObject canonicalLayout = BuildCanonicalLayoutProjection(layout);
             JObject canonicalPlan = BuildCanonicalTieredLevelPlanProjection(plan);
+            JArray existingTransitions = BuildExistingTransitionProjection(plan.transitions);
+            JObject preservedCorePlan = BuildPreservedCorePlanProjection(plan);
+            JObject preCorrectivePlan = BuildPreCorrectiveTieredLevelPlanProjection(plan);
             JArray recipeResolutions = BuildRecipeResolutionsProjection(plan.recipeResolutions);
             EndPhase7OutlierStage("canonicalProjections", canonicalProjectionStart);
 
             long identityStart = BeginPhase7OutlierStage();
             string layoutHash = ComputeSha256(canonicalLayout.ToString(Formatting.None));
             string planHash = ComputeSha256(canonicalPlan.ToString(Formatting.None));
+            string existingTransitionHash = ComputeSha256(existingTransitions.ToString(Formatting.None));
+            string preservedCorePlanHash = ComputeSha256(preservedCorePlan.ToString(Formatting.None));
+            string preCorrectivePlanHash = ComputeSha256(preCorrectivePlan.ToString(Formatting.None));
             string recipeResolutionHash = ComputeSha256(recipeResolutions.ToString(Formatting.None));
             JObject routeIntentProjection = BuildPhase1RouteIntentProjection();
             string routeIntentHash = ComputeSha256(routeIntentProjection.ToString(Formatting.None));
@@ -2084,7 +2223,7 @@ namespace DungeonLab.Editor
 
             long validationStart = BeginPhase7OutlierStage();
             float correlation = CalculateDepthLevelCorrelation(layout, plan);
-            JObject validation = BuildPhase0ValidationSummary(layout, plan, random, out _);
+            JObject validation = BuildPhase0ValidationSummary(seed, layout, plan, random, out _);
             JObject graphSummary = BuildLayoutGraphSummary(layout);
             EndPhase7OutlierStage("metricsAndHardValidation", validationStart);
 
@@ -2131,6 +2270,8 @@ namespace DungeonLab.Editor
                     ["synthesizedStairs"] = plan.synthesizedStairs == null ? 0 : plan.synthesizedStairs.Count,
                     ["promontories"] = plan.namedPromontories?.Length ?? 0,
                     ["promontoryCells"] = CollectNamedPromontoryCells(plan.namedPromontories).Count,
+                    ["externalConnectorCount"] = plan.externalConnectors?.Length ?? 0,
+                    ["externalConnectorPierCells"] = CollectExternalConnectorPierCells(plan.externalConnectors).Count,
                     ["recipeCount"] = plan.recipeResolutions?.Length ?? 0,
                     ["depthLevelCorrelation"] = float.IsNaN(correlation) ? JValue.CreateNull() : new JValue(correlation)
                 },
@@ -2141,6 +2282,9 @@ namespace DungeonLab.Editor
                     ["canonicalVersion"] = canonicalHashVersion,
                     ["layout"] = layoutHash,
                     ["tieredLevelPlan"] = planHash,
+                    ["existingTransitions"] = existingTransitionHash,
+                    ["preservedCorePlan"] = preservedCorePlanHash,
+                    ["preCorrectiveTieredLevelPlan"] = preCorrectivePlanHash,
                     ["recipeResolutions"] = recipeResolutionHash,
                     ["recipeCatalog"] = recipeCatalogDigest,
                     ["canonical"] = canonicalHash
@@ -2151,6 +2295,8 @@ namespace DungeonLab.Editor
             report["routeResolution"] = BuildRouteRequirementResolutionProjection(plan.routeRequirementResolution);
             report["recipeResolutions"] = recipeResolutions;
             report["namedPromontories"] = BuildNamedPromontoryProjection(plan.namedPromontories);
+            report["externalConnectors"] = BuildExternalConnectorProjection(plan.externalConnectors);
+            report["existingTransitions"] = existingTransitions;
             report["schemaUsage"] = BuildRecipeSchemaUsageProjection();
             ((JObject)report["hashes"])["routeIntent"] = routeIntentHash;
             EndPhase7OutlierStage("reportAssemblyAndDiagnosticProjections", reportAssemblyStart);
@@ -2615,6 +2761,7 @@ namespace DungeonLab.Editor
         }
 
         private static JObject BuildPhase0ValidationSummary(
+            int seed,
             DungeonLayout layout,
             TieredLevelPlan plan,
             System.Random random,
@@ -2654,6 +2801,10 @@ namespace DungeonLab.Editor
             bool namedPromontoriesValid = TryValidateAcceptedNamedPromontories(
                 plan,
                 out string namedPromontoryMessage);
+            bool externalConnectorsValid = TryValidateAcceptedExternalConnectors(
+                seed,
+                plan,
+                out string externalConnectorMessage);
             bool headroomValid = TryValidateAcceptedPlanHeadroom(plan, out string headroomMessage);
             EndPhase7OutlierStage("hardValidation.routeRecipesPromontoriesHeadroom", contractStart);
 
@@ -2679,6 +2830,7 @@ namespace DungeonLab.Editor
                 routeRequirementsValid &&
                 recipesValid &&
                 namedPromontoriesValid &&
+                externalConnectorsValid &&
                 headroomValid &&
                 boundaryValid &&
                 rendererInputsValid;
@@ -2691,6 +2843,7 @@ namespace DungeonLab.Editor
             AddFailureCode(failureCodes, routeRequirementsValid, "ROUTE_REQUIREMENTS");
             AddFailureCode(failureCodes, recipesValid, "RECIPES");
             AddFailureCode(failureCodes, namedPromontoriesValid, "NAMED_PROMONTORY");
+            AddFailureCode(failureCodes, externalConnectorsValid, "EXTERNAL_CONNECTOR_PROMONTORY");
             AddFailureCode(failureCodes, headroomValid, "POST_PLAN_HEADROOM_CLEARANCE");
             AddFailureCode(failureCodes, boundaryValid, "BOUNDARY_CONTEXT");
             AddFailureCode(failureCodes, rendererInputsValid, "RENDERER_INPUT");
@@ -2711,6 +2864,7 @@ namespace DungeonLab.Editor
                 ["routeRequirements"] = CheckToken(routeRequirementsValid, routeRequirementsMessage),
                 ["recipes"] = CheckToken(recipesValid, recipesMessage),
                 ["namedPromontories"] = CheckToken(namedPromontoriesValid, namedPromontoryMessage),
+                ["externalConnectors"] = CheckToken(externalConnectorsValid, externalConnectorMessage),
                 ["headroom"] = CheckToken(headroomValid, headroomMessage),
                 ["boundary"] = CheckToken(boundaryValid, boundaryMessage),
                 ["rendererInputs"] = CheckToken(rendererInputsValid, rendererInputMessage)
@@ -2892,6 +3046,66 @@ namespace DungeonLab.Editor
 
             message = $"named promontory '{resolution.vistaId}' targets '{resolution.targetNodeId}' with {resolution.cells.Length} cell(s) and preserves {route.reservedVistaCells.Length} void cell(s)";
             return true;
+        }
+
+        private static bool TryValidateAcceptedExternalConnectors(
+            int seed,
+            TieredLevelPlan plan,
+            out string message)
+        {
+            ExternalConnectorPromontoryResolution[] resolutions =
+                plan.externalConnectors ?? Array.Empty<ExternalConnectorPromontoryResolution>();
+            int desiredCount = ExternalConnectorDesiredCount(seed);
+            if (resolutions.Length != desiredCount || desiredCount < 1 || desiredCount > 4)
+            {
+                message = $"desired {desiredCount} external connectors; resolved {resolutions.Length}";
+                return false;
+            }
+
+            var directions = new HashSet<int>();
+            var occupied = new HashSet<Vector2Int>();
+            foreach (ExternalConnectorPromontoryResolution resolution in resolutions)
+            {
+                Vector2Int outward = CardinalVector(resolution.direction);
+                if (!directions.Add(resolution.direction) ||
+                    outward == Vector2Int.zero ||
+                    !string.Equals(
+                        resolution.id,
+                        ExternalConnectorId(resolution.direction),
+                        StringComparison.Ordinal) ||
+                    resolution.occupiedCells == null ||
+                    resolution.occupiedCells.Length != ExternalConnectorAppendageCells + 1 ||
+                    resolution.occupiedCells[0] != resolution.anchorCell ||
+                    resolution.occupiedCells[1] != resolution.anchorCell + outward ||
+                    resolution.occupiedCells[2] != resolution.anchorCell + outward * 2 ||
+                    resolution.terminalCell != resolution.occupiedCells[2] ||
+                    plan.cellLevels.ContainsKey(resolution.terminalCell + outward))
+                {
+                    message = $"external connector '{resolution.id}' had invalid identity, direction, geometry, or terminal throat";
+                    return false;
+                }
+
+                foreach (Vector2Int cell in resolution.occupiedCells)
+                {
+                    if (!occupied.Add(cell) ||
+                        !plan.cellLevels.TryGetValue(cell, out int level) ||
+                        level != resolution.level)
+                    {
+                        message = $"external connector '{resolution.id}' overlapped another connector or changed level";
+                        return false;
+                    }
+                }
+            }
+
+            List<ElevationEdgeModel.OpenFloorEdge> openEdges =
+                BuildExternalConnectorOpenEdges(resolutions);
+            bool passed = directions.Count == desiredCount &&
+                occupied.Count == desiredCount * (ExternalConnectorAppendageCells + 1) &&
+                openEdges.Count == desiredCount * 2;
+            message = passed
+                ? $"resolved exact deterministic count {desiredCount} with unique directions, clear terminal throats, and {openEdges.Count} renderer openings"
+                : "external connector set was incomplete";
+            return passed;
         }
 
         private static bool TryValidateRoomGraphConnectivity(DungeonLayout layout, out string message)
@@ -3121,9 +3335,11 @@ namespace DungeonLab.Editor
                 plan.cellLevels,
                 plan.transitions,
                 null,
-                null,
+                BuildExternalConnectorOpenEdges(plan.externalConnectors),
                 boundaryContext,
-                CollectNamedPromontoryCells(plan.namedPromontories),
+                CollectRenderedPromontoryCells(
+                    plan.namedPromontories,
+                    plan.externalConnectors),
                 "DungeonLab Renderer Probe",
                 out buildReport,
                 out bounds);
@@ -3289,27 +3505,7 @@ namespace DungeonLab.Editor
                 });
             }
 
-            var transitions = new JArray();
-            for (int index = 0; index < plan.transitions.Count; index++)
-            {
-                ElevationEdgeModel.TransitionEdge transition = plan.transitions[index];
-                transitions.Add(new JObject
-                {
-                    ["index"] = index,
-                    ["firstCell"] = CellToken(transition.firstCell),
-                    ["secondCell"] = CellToken(transition.secondCell),
-                    ["stairPrefabPath"] = transition.stairPrefabPath,
-                    ["placementClass"] = transition.placementClass,
-                    ["hasLandings"] = transition.hasLandings,
-                    ["lowerLandingCells"] = CellsToken(transition.lowerLandingCells, sort: false),
-                    ["upperLandingCells"] = CellsToken(transition.upperLandingCells, sort: false),
-                    ["footprintCells"] = CellsToken(transition.footprintCells, sort: false),
-                    ["hasPortDirections"] = transition.hasPortDirections,
-                    ["lowerPortDirection"] = transition.lowerPortDirection,
-                    ["upperPortDirection"] = transition.upperPortDirection,
-                    ["synthesizedSetPiece"] = SynthesizedSetPieceToken(transition.synthesizedSetPiece)
-                });
-            }
+            JArray transitions = BuildExistingTransitionProjection(plan.transitions);
 
             var synthesizedStairs = new JArray();
             if (plan.synthesizedStairs != null)
@@ -3368,9 +3564,208 @@ namespace DungeonLab.Editor
                 ["daisShowpieces"] = showpieces,
                 ["promontoryCells"] = CellsToken(CollectNamedPromontoryCells(plan.namedPromontories), sort: true),
                 ["namedPromontories"] = BuildNamedPromontoryProjection(plan.namedPromontories),
+                ["externalConnectorPierCells"] = CellsToken(CollectExternalConnectorPierCells(plan.externalConnectors), sort: true),
+                ["externalConnectors"] = BuildExternalConnectorProjection(plan.externalConnectors),
                 ["recipeResolutions"] = BuildRecipeResolutionsProjection(plan.recipeResolutions),
                 ["routeRequirements"] = BuildRouteRequirementResolutionProjection(plan.routeRequirementResolution)
             };
+        }
+
+        private static JArray BuildExistingTransitionProjection(
+            IReadOnlyList<ElevationEdgeModel.TransitionEdge> source)
+        {
+            var transitions = new JArray();
+            for (int index = 0; index < (source?.Count ?? 0); index++)
+            {
+                ElevationEdgeModel.TransitionEdge transition = source[index];
+                transitions.Add(new JObject
+                {
+                    ["index"] = index,
+                    ["firstCell"] = CellToken(transition.firstCell),
+                    ["secondCell"] = CellToken(transition.secondCell),
+                    ["stairPrefabPath"] = transition.stairPrefabPath,
+                    ["placementClass"] = transition.placementClass,
+                    ["hasLandings"] = transition.hasLandings,
+                    ["lowerLandingCells"] = CellsToken(transition.lowerLandingCells, sort: false),
+                    ["upperLandingCells"] = CellsToken(transition.upperLandingCells, sort: false),
+                    ["footprintCells"] = CellsToken(transition.footprintCells, sort: false),
+                    ["hasPortDirections"] = transition.hasPortDirections,
+                    ["lowerPortDirection"] = transition.lowerPortDirection,
+                    ["upperPortDirection"] = transition.upperPortDirection,
+                    ["synthesizedSetPiece"] = SynthesizedSetPieceToken(transition.synthesizedSetPiece)
+                });
+            }
+
+            return transitions;
+        }
+
+        private static JObject BuildPreservedCorePlanProjection(TieredLevelPlan plan)
+        {
+            var externalPierCells = new HashSet<Vector2Int>(
+                CollectExternalConnectorPierCells(plan.externalConnectors));
+            var cells = new List<Vector2Int>(plan.cellLevels.Keys);
+            cells.Sort(CompareCells);
+            var levels = new JArray();
+            foreach (Vector2Int cell in cells)
+            {
+                if (externalPierCells.Contains(cell))
+                    continue;
+
+                levels.Add(new JObject
+                {
+                    ["cell"] = CellToken(cell),
+                    ["level"] = plan.cellLevels[cell]
+                });
+            }
+
+            return new JObject
+            {
+                ["cellLevelsBeforeExternalConnectors"] = levels,
+                ["transitions"] = BuildExistingTransitionProjection(plan.transitions),
+                ["synthesizedStairs"] = new JArray((plan.synthesizedStairs ??
+                    new List<(string gapId, ElevationEdgeModel.SynthesizedStairSetPiece setPiece)>())
+                    .ConvertAll(item => new JObject
+                    {
+                        ["gapId"] = item.gapId,
+                        ["setPiece"] = SynthesizedSetPieceToken(item.setPiece)
+                    })),
+                ["daisShowpieces"] = BuildDaisShowpieceProjection(plan.daisShowpieces),
+                ["namedPromontories"] = BuildNamedPromontoryProjection(plan.namedPromontories),
+                ["recipeResolutions"] = BuildRecipeResolutionsProjection(plan.recipeResolutions),
+                ["routeRequirements"] = BuildRouteRequirementResolutionProjection(plan.routeRequirementResolution)
+            };
+        }
+
+        // Reconstructs the exact v8 canonical plan projection with only the
+        // bounded external appendage removed. This makes the existing checked
+        // v8 200-seed report an exact structural baseline, including every
+        // optional bridge coordinate and synthesized set piece.
+        private static JObject BuildPreCorrectiveTieredLevelPlanProjection(TieredLevelPlan plan)
+        {
+            var externalPierCells = new HashSet<Vector2Int>(
+                CollectExternalConnectorPierCells(plan.externalConnectors));
+            var coreLevels = new Dictionary<Vector2Int, int>();
+            foreach (KeyValuePair<Vector2Int, int> item in plan.cellLevels)
+            {
+                if (!externalPierCells.Contains(item.Key))
+                    coreLevels[item.Key] = item.Value;
+            }
+
+            var levelCells = new List<Vector2Int>(coreLevels.Keys);
+            levelCells.Sort(CompareCells);
+            var levels = new JArray();
+            foreach (Vector2Int cell in levelCells)
+            {
+                levels.Add(new JObject
+                {
+                    ["cell"] = CellToken(cell),
+                    ["level"] = coreLevels[cell]
+                });
+            }
+
+            if (!TryBuildFloorStairPortGraph(
+                    coreLevels,
+                    plan.transitions,
+                    out FloorStairPortGraph corePortGraph,
+                    out string graphError))
+            {
+                throw new InvalidOperationException(
+                    $"Could not reconstruct pre-corrective port graph: {graphError}");
+            }
+            GetLevelRange(coreLevels, out int coreMinLevel, out int coreMaxLevel);
+
+            var synthesizedStairs = new JArray();
+            if (plan.synthesizedStairs != null)
+            {
+                foreach ((string gapId, ElevationEdgeModel.SynthesizedStairSetPiece setPiece) item in plan.synthesizedStairs)
+                {
+                    synthesizedStairs.Add(new JObject
+                    {
+                        ["gapId"] = item.gapId,
+                        ["setPiece"] = SynthesizedSetPieceToken(item.setPiece)
+                    });
+                }
+            }
+
+            return new JObject
+            {
+                ["cellLevels"] = levels,
+                ["transitions"] = BuildExistingTransitionProjection(plan.transitions),
+                ["levelCount"] = CountDistinctLevels(coreLevels),
+                ["minLevel"] = coreMinLevel,
+                ["maxLevel"] = coreMaxLevel,
+                ["roomsPerTierSummary"] = plan.roomsPerTierSummary,
+                ["overlookCount"] = CountSpatialOverlookEdges(coreLevels, plan.transitions),
+                ["transitionSummary"] = plan.transitionSummary,
+                ["connectorCandidateCount"] = plan.connectorCandidateCount,
+                ["stairUsageSummary"] = plan.stairUsageSummary,
+                ["topologySummary"] = plan.topologySummary,
+                ["placementClassSummary"] = plan.placementClassSummary,
+                ["stairCandidateSummary"] = plan.stairCandidateSummary,
+                ["portGraphSummary"] = corePortGraph.Summary,
+                ["archetypeName"] = plan.archetypeName,
+                ["synthesizedStairs"] = synthesizedStairs,
+                ["synthesizedStairSummary"] = plan.synthesizedStairSummary,
+                ["daisShowpieces"] = BuildDaisShowpieceProjection(plan.daisShowpieces),
+                ["promontoryCells"] = CellsToken(CollectNamedPromontoryCells(plan.namedPromontories), sort: true),
+                ["namedPromontories"] = BuildNamedPromontoryProjection(plan.namedPromontories),
+                ["recipeResolutions"] = BuildRecipeResolutionsProjection(plan.recipeResolutions),
+                ["routeRequirements"] = BuildRouteRequirementResolutionProjection(plan.routeRequirementResolution)
+            };
+        }
+
+        private static JArray BuildDaisShowpieceProjection(IReadOnlyList<DaisShowpiece> source)
+        {
+            var showpieces = new JArray();
+            foreach (DaisShowpiece showpiece in source ?? Array.Empty<DaisShowpiece>())
+            {
+                var pieces = new JArray();
+                foreach (ElevationEdgeModel.SynthesizedPiecePlacement piece in
+                         showpiece.pieces ?? Array.Empty<ElevationEdgeModel.SynthesizedPiecePlacement>())
+                {
+                    pieces.Add(SynthesizedPieceToken(piece));
+                }
+
+                showpieces.Add(new JObject
+                {
+                    ["designName"] = showpiece.designName,
+                    ["originCell"] = CellToken(showpiece.originCell),
+                    ["yawDegrees"] = showpiece.yawDegrees,
+                    ["roomLevel"] = showpiece.roomLevel,
+                    ["pieces"] = pieces
+                });
+            }
+
+            return showpieces;
+        }
+
+        private static JArray BuildExternalConnectorProjection(
+            IReadOnlyList<ExternalConnectorPromontoryResolution> resolutions)
+        {
+            var result = new JArray();
+            foreach (ExternalConnectorPromontoryResolution resolution in
+                     resolutions ?? Array.Empty<ExternalConnectorPromontoryResolution>())
+            {
+                result.Add(new JObject
+                {
+                    ["id"] = resolution.id,
+                    ["direction"] = DirectionName(resolution.direction),
+                    ["directionId"] = resolution.direction,
+                    ["anchorCell"] = CellToken(resolution.anchorCell),
+                    ["terminalCell"] = CellToken(resolution.terminalCell),
+                    ["level"] = resolution.level,
+                    ["occupiedCells"] = CellsToken(resolution.occupiedCells, sort: false),
+                    ["terminalPort"] = new JObject
+                    {
+                        ["cell"] = CellToken(resolution.terminalCell),
+                        ["direction"] = DirectionName(resolution.direction),
+                        ["widthCells"] = 1,
+                        ["level"] = resolution.level
+                    }
+                });
+            }
+
+            return result;
         }
 
         private static JArray BuildNamedPromontoryProjection(
@@ -3766,7 +4161,8 @@ namespace DungeonLab.Editor
             int finalVistaValidCount,
             int recipeSetValidCount,
             JArray seedReports,
-            Phase7BatchEvidence phase7Evidence)
+            Phase7BatchEvidence phase7Evidence,
+            CorrectiveBatchEvidence correctiveEvidence)
         {
             var archetypes = new JObject();
             foreach (KeyValuePair<string, int> entry in archetypeCounts)
@@ -4267,10 +4663,24 @@ namespace DungeonLab.Editor
                     phase7Evidence);
             }
 
+            if (correctiveEvidence != null)
+            {
+                AppendCorrectiveBatchEvidence(
+                    report,
+                    seedReports,
+                    selectedPatternCounts,
+                    attemptDistribution,
+                    successCount,
+                    hardValidCount,
+                    correctiveEvidence);
+            }
+
             Directory.CreateDirectory(BatchReportDirectory);
-            string phase7Suffix = phase7Evidence == null
-                ? string.Empty
-                : $"_phase7_run{phase7Evidence.sweepOrdinal}";
+            string phase7Suffix = phase7Evidence != null
+                ? $"_phase7_run{phase7Evidence.sweepOrdinal}"
+                : correctiveEvidence != null
+                    ? $"_corrective_run{correctiveEvidence.runOrdinal}"
+                    : string.Empty;
             string reportPath = Path.Combine(
                 BatchReportDirectory,
                 $"dungeon_plan_{firstSeed}_{firstSeed + seedCount - 1}{phase7Suffix}.json");
@@ -4385,6 +4795,10 @@ namespace DungeonLab.Editor
             }
 
             string raw = reason ?? string.Empty;
+            if (raw.StartsWith($"[{ExternalConnectorRejectionCode}]", StringComparison.Ordinal))
+            {
+                return ExternalConnectorRejectionCode;
+            }
             if (raw.StartsWith("[ROUTE_", StringComparison.Ordinal))
             {
                 int closingBracket = raw.IndexOf(']');

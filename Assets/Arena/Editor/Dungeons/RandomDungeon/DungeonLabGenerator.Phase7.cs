@@ -951,6 +951,7 @@ namespace DungeonLab.Editor
                 $"hardValid={report["validation"]?.Value<bool?>("passed") == true}",
                 $"layoutAttempts={report.Value<int?>("layoutAttempts") ?? 0}",
                 $"stairPlacementRejections={report["rejectionCodes"]?.Value<int?>("STAIR_PLACEMENT") ?? 0}",
+                $"preCorrectiveTieredLevelPlanHash={report["hashes"]?.Value<string>("preCorrectiveTieredLevelPlan") ?? string.Empty}",
                 $"canonicalHash={report["hashes"]?.Value<string>("canonical") ?? string.Empty}"
             });
         }

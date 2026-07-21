@@ -414,6 +414,7 @@ namespace DungeonLab.Editor
                 PlacePromontoryPiers(
                     promontorySet,
                     levels,
+                    transitionOpenEdges,
                     MinFloorLevel(levels) - AbyssDepthLevels,
                     origin,
                     contracts.levelHeight,
@@ -3399,6 +3400,7 @@ namespace DungeonLab.Editor
         private static void PlacePromontoryPiers(
             HashSet<Vector2Int> promontoryCells,
             IReadOnlyDictionary<Vector2Int, int> levels,
+            HashSet<OpenEdgeKey> plannedOpenEdges,
             int abyssBase,
             Vector3 origin,
             float levelHeight,
@@ -3501,6 +3503,16 @@ namespace DungeonLab.Editor
                     foreach (int direction in CardinalDirections)
                     {
                         if (levels.ContainsKey(Neighbor(cell, direction)))
+                        {
+                            continue;
+                        }
+
+                        // An external connector's terminal edge is an explicit
+                        // continuation port. Keep both fascia courses off that
+                        // one edge; scenic promontories declare no such opening
+                        // and retain their established deck cover treatment.
+                        if (plannedOpenEdges != null &&
+                            plannedOpenEdges.Contains(new OpenEdgeKey(cell, direction)))
                         {
                             continue;
                         }

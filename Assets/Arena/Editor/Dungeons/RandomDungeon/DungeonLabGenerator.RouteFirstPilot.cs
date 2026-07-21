@@ -8,7 +8,7 @@ namespace DungeonLab.Editor
     // compiles it directly into the existing DungeonLayout.
     internal sealed partial class DungeonLabGenerator
     {
-        private const string RoutePlannerVersion = "route-topologies-v8";
+        private const string RoutePlannerVersion = "route-topologies-v9";
         private const string ProcessionalPlannerVersion = "processional-spine-v5";
         private const string AtriumRingPlannerVersion = "atrium-ring-v2";
         private const string TwinWingPlannerVersion = "twin-wing-keep-v2";
