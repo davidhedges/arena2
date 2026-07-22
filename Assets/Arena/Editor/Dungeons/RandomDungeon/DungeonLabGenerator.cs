@@ -16,6 +16,9 @@ namespace DungeonLab.Editor
         private const string DenseGenerationProfilePath = "Assets/Arena/Content/Settings/Dungeons/RandomDungeon/generation_profile_dense.asset";
         private const string DefaultGenerationProfileId = "spacious";
         private const string GenerationProfileEnvironmentVariable = "ARENA_DUNGEON_GENERATION_PROFILE";
+        private const string GenerationProfileEditorPreferenceKey = "Arena.DungeonLab.GenerationProfileId";
+        private const string SpaciousGenerationProfileMenuPath = "Arena/Dungeons/Generation Profile/Spacious";
+        private const string DenseGenerationProfileMenuPath = "Arena/Dungeons/Generation Profile/Dense";
         // Forge output (design step 6): same contract shape, separate file; entries
         // join planning only with reviewStatus "reviewed" (human review gate).
         private const string ForgedStairContractsPath = "Assets/Arena/Content/Settings/Dungeons/RandomDungeon/forged_stair_contracts.json";
@@ -119,6 +122,55 @@ namespace DungeonLab.Editor
             EditorUtility.FocusProjectWindow();
         }
 
+        [MenuItem(SpaciousGenerationProfileMenuPath, false, 80)]
+        private static void SelectSpaciousGenerationProfile()
+        {
+            SelectEditorGenerationProfile("spacious");
+        }
+
+        [MenuItem(SpaciousGenerationProfileMenuPath, true)]
+        private static bool ValidateSpaciousGenerationProfile()
+        {
+            return UpdateGenerationProfileMenuItem(
+                SpaciousGenerationProfileMenuPath,
+                "spacious");
+        }
+
+        [MenuItem(DenseGenerationProfileMenuPath, false, 81)]
+        private static void SelectDenseGenerationProfile()
+        {
+            SelectEditorGenerationProfile("dense");
+        }
+
+        [MenuItem(DenseGenerationProfileMenuPath, true)]
+        private static bool ValidateDenseGenerationProfile()
+        {
+            return UpdateGenerationProfileMenuItem(
+                DenseGenerationProfileMenuPath,
+                "dense");
+        }
+
+        private static void SelectEditorGenerationProfile(string profileId)
+        {
+            string normalizedProfileId = string.IsNullOrWhiteSpace(profileId)
+                ? throw new InvalidOperationException("[GENERATION_PROFILE] profile id is required.")
+                : profileId.Trim().ToLowerInvariant();
+            ResolveGenerationProfilePath(normalizedProfileId);
+            EditorPrefs.SetString(GenerationProfileEditorPreferenceKey, normalizedProfileId);
+            Debug.Log($"[GENERATION_PROFILE] Unity editor selection is now '{normalizedProfileId}'.");
+        }
+
+        private static bool UpdateGenerationProfileMenuItem(string menuPath, string profileId)
+        {
+            Menu.SetChecked(
+                menuPath,
+                string.Equals(
+                    ResolveRequestedGenerationProfileId(),
+                    profileId,
+                    StringComparison.Ordinal));
+            return !HasGenerationProfileEnvironmentOverride();
+        }
+
         // Review tool: regenerate a specific dungeon — a seed the harness reports
         // (e.g. one that used synthesis) or one recovered from a logged
         // GENERATION_SUMMARY ("random dungeon seed N" in the console/Editor.log).
@@ -158,9 +210,30 @@ namespace DungeonLab.Editor
         private static string ResolveRequestedGenerationProfileId()
         {
             string configured = Environment.GetEnvironmentVariable(GenerationProfileEnvironmentVariable);
-            return string.IsNullOrWhiteSpace(configured)
+            if (!string.IsNullOrWhiteSpace(configured))
+            {
+                return configured.Trim().ToLowerInvariant();
+            }
+
+            return Application.isBatchMode
                 ? DefaultGenerationProfileId
-                : configured.Trim().ToLowerInvariant();
+                : ResolveEditorGenerationProfileId();
+        }
+
+        private static string ResolveEditorGenerationProfileId()
+        {
+            string selected = EditorPrefs.GetString(
+                GenerationProfileEditorPreferenceKey,
+                DefaultGenerationProfileId);
+            return string.IsNullOrWhiteSpace(selected)
+                ? DefaultGenerationProfileId
+                : selected.Trim().ToLowerInvariant();
+        }
+
+        private static bool HasGenerationProfileEnvironmentOverride()
+        {
+            return !string.IsNullOrWhiteSpace(
+                Environment.GetEnvironmentVariable(GenerationProfileEnvironmentVariable));
         }
 
         private static string ResolveGenerationProfilePath(string profileId)

@@ -25,6 +25,14 @@ Always read [`PROJECT_INVARIANTS.md`](PROJECT_INVARIANTS.md) before changing gen
 
 ## Regenerating the destination
 
+For interactive Unity testing, choose the active profile under
+**Arena > Dungeons > Generation Profile > Spacious/Dense**. The checked choice is
+stored in per-user editor preferences, applies to generation, rebuild, batch, and
+sentinel menu commands, and does not modify either profile asset. A non-empty
+`ARENA_DUNGEON_GENERATION_PROFILE` environment variable overrides the editor
+choice; command-line batch mode otherwise keeps the reproducible `spacious`
+default.
+
 In Unity, use **Arena > Dungeons > Rebuild Random Dungeon**. Use the specific-seed command when reproducing a layout. For command-line builds, invoke:
 
 ```text

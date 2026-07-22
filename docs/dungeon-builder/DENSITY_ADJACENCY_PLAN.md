@@ -518,6 +518,16 @@ Slice 7 is not outstanding work; reopening it requires new playtest evidence tha
 navigation feels monotonous or insufficiently interconnected and fresh explicit
 owner approval.
 
+## Editor profile selection follow-up (2026-07-23)
+
+The Unity editor now exposes the two existing profile identities as checked menu
+choices under **Arena > Dungeons > Generation Profile**. The per-user selection
+supplies only the profile ID to the existing resolver and never mutates a profile
+asset or creates another generation path. The environment variable remains the
+explicit command-line override, and batch mode without that override retains the
+reproducible `spacious` default. The focused selector behavior test passes 1/1,
+and the complete density/profile regression suite passes 32/32.
+
 ## Clean end state
 
 The plan exits at slice 6 with one profile resolver, one pattern-spatial

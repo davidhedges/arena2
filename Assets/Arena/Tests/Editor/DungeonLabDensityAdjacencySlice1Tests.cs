@@ -5,6 +5,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using NUnit.Framework;
+using UnityEditor;
+using UnityEngine;
 
 namespace Arena.Tests.Editor
 {
@@ -20,6 +22,8 @@ namespace Arena.Tests.Editor
             "Assets/Arena/Content/Settings/Dungeons/RandomDungeon/generation_profile.asset";
         private const string DenseProfilePath =
             "Assets/Arena/Content/Settings/Dungeons/RandomDungeon/generation_profile_dense.asset";
+        private const string ProfileEnvironmentVariable = "ARENA_DUNGEON_GENERATION_PROFILE";
+        private const string ProfileEditorPreferenceKey = "Arena.DungeonLab.GenerationProfileId";
 
         private static readonly Type GeneratorType = AppDomain.CurrentDomain
             .Load("Assembly-CSharp-Editor")
@@ -47,6 +51,55 @@ namespace Arena.Tests.Editor
             Assert.That(generator, Does.Contain("unknown profile id"));
             Assert.That(generator, Does.Not.Contain("AssetDatabase.CreateAsset(profile"));
             Assert.That(generator + profileSource, Does.Not.Contain("DungeonGenerationSettings.Default"));
+        }
+
+        [Test]
+        public void UnityProfileSelector_PersistsTheChoiceAndKeepsTheEnvironmentOverride()
+        {
+            string generator = File.ReadAllText(GeneratorPath);
+            MethodInfo select = GeneratorType.GetMethod(
+                "SelectEditorGenerationProfile",
+                BindingFlags.Static | BindingFlags.NonPublic)!;
+            MethodInfo resolve = GeneratorType.GetMethod(
+                "ResolveRequestedGenerationProfileId",
+                BindingFlags.Static | BindingFlags.NonPublic)!;
+            MethodInfo resolveEditor = GeneratorType.GetMethod(
+                "ResolveEditorGenerationProfileId",
+                BindingFlags.Static | BindingFlags.NonPublic)!;
+            string? originalEnvironment = Environment.GetEnvironmentVariable(ProfileEnvironmentVariable);
+            bool hadOriginalPreference = EditorPrefs.HasKey(ProfileEditorPreferenceKey);
+            string originalPreference = EditorPrefs.GetString(ProfileEditorPreferenceKey, string.Empty);
+
+            try
+            {
+                Environment.SetEnvironmentVariable(ProfileEnvironmentVariable, null);
+                select.Invoke(null, new object[] { "dense" });
+                Assert.That(EditorPrefs.GetString(ProfileEditorPreferenceKey), Is.EqualTo("dense"));
+                Assert.That((string)resolveEditor.Invoke(null, Array.Empty<object>())!, Is.EqualTo("dense"));
+                Assert.That(
+                    (string)resolve.Invoke(null, Array.Empty<object>())!,
+                    Is.EqualTo(Application.isBatchMode ? "spacious" : "dense"));
+
+                Environment.SetEnvironmentVariable(ProfileEnvironmentVariable, "spacious");
+                Assert.That((string)resolve.Invoke(null, Array.Empty<object>())!, Is.EqualTo("spacious"));
+
+                Assert.That(generator, Does.Contain("Arena/Dungeons/Generation Profile/Spacious"));
+                Assert.That(generator, Does.Contain("Arena/Dungeons/Generation Profile/Dense"));
+                Assert.That(Count(generator, "Menu.SetChecked("), Is.EqualTo(1));
+                Assert.That(Count(generator, "EditorPrefs.SetString(GenerationProfileEditorPreferenceKey"), Is.EqualTo(1));
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable(ProfileEnvironmentVariable, originalEnvironment);
+                if (hadOriginalPreference)
+                {
+                    EditorPrefs.SetString(ProfileEditorPreferenceKey, originalPreference);
+                }
+                else
+                {
+                    EditorPrefs.DeleteKey(ProfileEditorPreferenceKey);
+                }
+            }
         }
 
         [Test]
