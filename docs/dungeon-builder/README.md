@@ -11,6 +11,7 @@ If you are returning after time away, read these in order:
 3. [`PROJECT_INVARIANTS.md`](PROJECT_INVARIANTS.md) — hard geometry, traversal, and placement rules.
 4. [`RECIPE_AUTHORING_WORKFLOW.md`](RECIPE_AUTHORING_WORKFLOW.md) — the workflow to use once the recipe foundation is implemented.
 5. [`stair_forge_design.md`](stair_forge_design.md) — vertical-traversal design decisions and implementation history.
+6. [`DENSITY_ADJACENCY_PLAN.md`](DENSITY_ADJACENCY_PLAN.md) — proposed plan for denser floorplans, neighboring/abutting rooms, and tier seams (lightweight process; phase-budget ritual does not apply).
 
 Always read [`PROJECT_INVARIANTS.md`](PROJECT_INVARIANTS.md) before changing generator, measurement, contract, or placement code.
 

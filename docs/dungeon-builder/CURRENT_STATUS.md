@@ -4,7 +4,7 @@ Start here when returning to dungeon work. Keep this page short and update it at
 
 Last updated: 2026-07-22
 
-Active milestone: plan execution finished; Phase 6 is complete at verified Phase 6f, Phase 7 engineering and automated gates pass, the approved external-connector/stacked-crossing corrective item passes its bounded exit gate, and the complete Phase 7 exit gate is not passed because curated human review was explicitly skipped
+Active milestone: Phase 6 is complete at verified Phase 6f; the owner has closed Phase 7 as finished with all engineering and automated gates passing and the deliberately skipped curated human review recorded as non-blocking; the external-connector/stacked-crossing corrective item also passes its bounded exit gate; `DENSITY_ADJACENCY_PLAN.md` is the proposed, not-started next workstream and is currently under review
 
 Production mode: one route-first layout builder deterministically selects processional-spine, atrium-ring, or twin-wing-keep, resolves exactly three reviewed recipes plus any target-bearing named-vista promontory and 1-4 canonical external connector promontories, and feeds the shared canonical pipeline
 
@@ -15,8 +15,9 @@ Recipe authoring UI: implemented for the Phase 5 contract, validation, determini
 1. [`PROJECT_INVARIANTS.md`](PROJECT_INVARIANTS.md) — non-negotiable geometry and placement rules.
 2. This file — current evidence and exact handoff.
 3. [`COHERENT_FLOORPLAN_PLAN.md`](COHERENT_FLOORPLAN_PLAN.md) — architecture, phases, and exit gates.
-4. [`RECIPE_AUTHORING_WORKFLOW.md`](RECIPE_AUTHORING_WORKFLOW.md) — required contract for Phase 5 lifecycle, validation, preview, and review work.
-5. [`stair_forge_design.md`](stair_forge_design.md) — exact stair contracts already reused by the coupled twin-stair episode and any Phase 5 contrast recipe.
+4. [`DENSITY_ADJACENCY_PLAN.md`](DENSITY_ADJACENCY_PLAN.md) — proposed next workstream for denser floorplans, neighboring/abutting rooms, and tier seams; not started.
+5. [`RECIPE_AUTHORING_WORKFLOW.md`](RECIPE_AUTHORING_WORKFLOW.md) — required contract for Phase 5 lifecycle, validation, preview, and review work.
+6. [`stair_forge_design.md`](stair_forge_design.md) — exact stair contracts already reused by the coupled twin-stair episode and any Phase 5 contrast recipe.
 
 ## Locked context
 
@@ -586,14 +587,14 @@ Missing any locked gate requires revising the implementation or reporting the Ph
 - The first generated packet exposed unusable wall-facing views when an unrendered vista endpoint sat behind a full boundary wall. It is retained as ignored `DungeonLabReports/phase7_curated_gallery_invalid_framing`; it is not review evidence. The final packet at `DungeonLabReports/phase7_curated_gallery` uses the existing resolved recipe ports for those views and is the only packet reviewers should receive.
 - Gallery generation renders through `BuildPhase0RenderedSeed` and the existing canonical `TieredLevelPlan`; it adds no generator, recipe, topology, vista, motif, renderer, collision, schema, profile, catalog, random-stream, or canonical-report change. The synthesized-stair log was restored exactly at SHA-256 `f5218c7c...ab174`. The focused gallery fixture passes 5/5, all Dungeon Lab fixtures pass 88/88, and `git diff --check` passes. The known full-suite baseline remains 362/383 with 21 unrelated failures and was not rerun.
 
-## Phase 7 final production hardening — engineering complete; human gate skipped
+## Phase 7 final production hardening — finished by owner ruling; human review skipped
 
 - The final producer/consumer audit finds one production rebuild core: `RandomDungeonSceneBuilder` invokes the sole `DungeonLabGenerator.GenerateWithSeed` planner/renderer entry, then the sole shared collision exporter. Validation and gallery tools call that same canonical machinery through guarded diagnostic destinations; they do not form an alternate production plan, renderer, abyss, or collision path.
 - Missing `generation_profile.asset` now throws the explicit `[GENERATION_PROFILE]` failure instead of silently substituting defaults. The reviewed recipe catalog remains schema version 1 with exactly the same three current assets; unsupported/missing catalog and contract states keep their existing coded rejections. No schema migration mode, legacy adapter, old-builder fallback, or compatibility mode exists.
 - The final deletion ledger removed the permanently false late step-formation flag and room-scanning pass, its absent-index DTOs and reference-only formation records, orphaned pre-canonical layout and renderer helpers, validation structs used only by those paths, and the unreferenced `prefab_contracts.json` and `prefab_tags.schema.json` assets. The still-consumed connector configuration was narrowed to directory plus primary stair and renamed from `step_formation_modes.json` to `stair_connector_settings.json` with its Unity GUID preserved.
 - Phase 7 sweep, collision, and gallery harnesses remain as repeatable editor diagnostics. They are guarded, have no production caller, introduce no compatibility path, and are not scheduled for deletion. Symbol, required-asset, and serialized-reference audits find no remaining parked late pass, `step_library_index.json` contract, orphaned renderer family, temporary production flag, unreferenced settings asset, or scheduled deletion item. The Phase 7 deletion ledger is empty.
 - Focused final-hardening tests pass 3/3 and all Dungeon Lab tests pass 91/91. `git diff --check` passes. The fixed-seed/outlier preservation tests retain the canonical production results; the expensive accepted 2,000-seed and 30-floor collision evidence remains the previously recorded passing evidence and was not needlessly rerun after deleting unreachable/reference-only code. The known full-suite baseline remains 362/383 with 21 unrelated failures and was not rerun.
-- The user explicitly skipped the two-reviewer scoring step on 2026-07-22. Under the locked rule, the curated-review gate is unexecuted and the complete Phase 7 exit gate is not passed. This is the final plan outcome, not a threshold waiver or an engineering defect inferred from absent scores.
+- The user explicitly skipped the two-reviewer scoring step on 2026-07-22, so no reviewer scores or human-review pass result exist and none may be inferred. The owner subsequently confirmed that this piece of work is finished: the omitted review is recorded as a deliberate non-blocking closure decision, not an active Phase 7 item or engineering blocker.
 
 ## Bounded corrective item — external connectors restored; stacked crossings preserved
 
@@ -614,18 +615,18 @@ Missing any locked gate requires revising the implementation or reporting the Ph
 - Editor tests: `Assets/Arena/Tests/Editor/`.
 - Gold reference scene: `Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/scenes/demoscene_dungeon_level_1_dungeon.unity`.
 - Baked destination: `Assets/Arena/Content/Scenes/OpenWorld/RandomDungeon.unity`.
-- There is no current engineering blocker: the locked Phase 7 reliability, attempt, planning-performance, measurement-environment, determinism, real collision-export, artifact-safety, render-through-export performance, review-package, single-path, explicit-failure, asset-reference, and deletion-ledger requirements pass. The complete Phase 7 exit gate remains failed solely because human review was explicitly skipped. The 21 unrelated full-suite failures remain outside this workstream.
+- There is no current engineering blocker: the locked Phase 7 reliability, attempt, planning-performance, measurement-environment, determinism, real collision-export, artifact-safety, render-through-export performance, review-package, single-path, explicit-failure, asset-reference, and deletion-ledger requirements pass. Phase 7 is closed as finished by owner ruling; curated human scoring remains factually unexecuted but is not outstanding work. The 21 unrelated full-suite failures remain outside this workstream.
 
 ## End-of-session handoff
 
 ```text
-Milestone/phase: the approved plan remains exhausted and the separately approved bounded corrective item is complete. Phase 6 remains closed at verified Phase 6f. Phase 7 engineering and automated gates pass; its complete exit gate is not passed because the user explicitly skipped curated human review.
+Milestone/phase: Phase 6 remains closed at verified Phase 6f. Phase 7 and the separately approved bounded corrective item are finished. All Phase 7 engineering and automated gates pass; curated human scoring was deliberately skipped and the owner has ruled that it is not outstanding work. The proposed density/adjacency workstream is under review and has not started.
 Completed this session: restored 1-4 canonical external connector promontories through the existing plan/render/abyss/collision path, kept the optional named-vista feature separate, and added deterministic preservation evidence for the unchanged optional stacked-crossing capability without changing bridge policy.
 Current validation result: two repeat-identical 200-seed runs pass every approved reliability, attempt, preservation, scenic, and performance threshold; exactly nine production floors pass actual collision export and terminal-clearance gates; the stacked fixture passes actual shared export; all Dungeon Lab tests pass 98/98; and the full suite has only the same 21 unrelated failures (389/410).
 Last known-good seeds and reports: Phase 6f sentinels remain processional `2026072100`, atrium `2026072101`, and twin-wing `2026072103`. Corrective comparison, nine-floor collision, and stacked-export evidence is under `DungeonLabReports`; prior passing Phase 7 sweep/collision/gallery evidence remains there unchanged.
 Last diagnostic fact: external connectors are a hash-isolated final canonical plan mutation with deterministic atomic retry failure, while stacked crossings continue through the unchanged aerial-bridge, headroom, renderer, and collision paths. No 2,000-seed sweep or gallery review was rerun.
 Deletion-ledger items added/closed: none. The corrective item introduced no temporary production path, duplicate renderer/collision path, topology, recipe, motif, schema extension point, or follow-on deletion item.
-Exact next action: stop. No engineering plan item or later phase remains authorized. Human review was skipped rather than completed, so Phase 7 must not be described as fully accepted under the locked rubric.
-Blocker or decision needed: none for the approved engineering plan. The recorded Phase 7 outcome can change only if the user separately authorizes and completes the previously skipped human-review gate.
+Exact next action: review and revise `DENSITY_ADJACENCY_PLAN.md` as needed. This status records that proposal but does not itself authorize implementation.
+Blocker or decision needed: owner approval of the reviewed density/adjacency plan before implementation. No Phase 7 work remains open.
 New chat necessary: no.
 ```
