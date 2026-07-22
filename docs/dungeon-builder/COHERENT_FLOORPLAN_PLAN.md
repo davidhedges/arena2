@@ -61,7 +61,7 @@ However, the current spatial order is approximately:
 
 That is **room-first with route-aware later stages**, not strict route-first generation. It creates many different footprints, and it has named elevation archetypes, but it does not currently expose a catalog of named semantic macro-topologies such as a processional plan, an atrium ring, or a twin-wing keep. Those are the missing “overall floorplan variants” addressed below.
 
-Active step-formation placement is also currently parked. That means the late pass that scans completed rooms and drops a `wall_abutting` or `interior` step formation is skipped. It does **not** disable route transitions, stair forging, synthesized stairs, bridges, seam steps, daises, showpieces, or promontories. The parked pass should not simply be switched on: useful step formations should become declared recipe motifs with reservations and compatibility checks.
+Active step-formation placement is also currently parked. That means the late pass that scans completed rooms and drops a `wall_abutting` or `interior` step formation is skipped. It does **not** disable route transitions, stair forging, synthesized stairs, bridges, seam steps, recipe-owned daises/showpieces, or promontories. The parked pass should not simply be switched on: useful step formations should become declared recipe motifs with reservations and compatibility checks.
 
 The current implementation already exposes the migration seam:
 
@@ -109,21 +109,11 @@ Randomness still matters, but it chooses among valid intentions and variations. 
 
 ## 5. Planning vocabulary
 
-Use these terms consistently in code, reports, and review:
-
-| Term | Meaning |
-| --- | --- |
-| **Macro-topology pattern** | A semantic graph template defining a main route, branch opportunities, loops, landmark slots, and vista opportunities. It has no final world coordinates. |
-| **Beat** | A position in the player journey, such as arrival, compression, reveal, choice, ascent, respite, landmark, or culmination. |
-| **Room recipe** | An authored spatial contract for one room or tightly coupled room episode. It declares geometry rules, ports, elevation zones, protected areas, motifs, and allowed variation. |
-| **Episode** | A composition whose meaning spans more than one feature or chamber. A throne hall with a focal dais, twin stairs, side galleries, and controlled thresholds is an episode. |
-| **Motif** | A reusable subordinate composition—paired stairs, a dais, a bridge landing, a gallery edge, or a step formation—with an explicit contract. |
-| **Traversal edge** | A typed connection the player can use: doorway gap, open arch, corridor, stair, stairwell, bridge, or open gallery. |
-| **Vista edge** | A planned line of sight between two beats. It does not imply traversal or adjacency. |
-| **Route intent** | A minimal, ephemeral semantic graph containing only route, role, elevation, recipe, and vista requirements consumed by the current generation attempt. It is not a second renderer-facing plan. |
-| **DungeonLayout** | The existing canonical 2D spatial result: floor cells, room footprints, connections, and room zones, with only the additional intent metadata that an existing downstream consumer actually needs. |
-| **TieredLevelPlan** | The existing canonical resolved elevation/transition result consumed by boundary construction and rendering. |
-| **Plan report** | A serializable diagnostic projection of an attempt. It is evidence and replay metadata, not another mutable planning model. |
+[`GLOSSARY.md`](GLOSSARY.md) is the authoritative vocabulary for code, reports,
+recipe assets, documentation, and review. It also records which broader design
+terms are not yet represented by the current recipe schema. Do not create a
+second local definition when adding a term; update the glossary and its current
+implementation boundary instead.
 
 ## 6. Data contracts and ownership
 
@@ -535,7 +525,7 @@ These are migrations inside the single pipeline. “Retain” means call the exi
 | Stair prefab pool and stair forge | Retain as exact transition realizers behind typed stair ports. |
 | Synthesized stairs and bridges | Retain as declared compatible realizations, never silent plan repair. |
 | Stairwell fallback | Retain for eligible generic transitions; landmark stairwells are intentionally selected motifs. |
-| Daises and backed showpieces | Generic rooms may opt in; authored recipes declare them and reserve their protected space. |
+| Daises and backed showpieces | The global random-room opt-in and wall search are retired. Reviewed recipes declare focal placement and reserve protected space; StairForge and the canonical elevation renderer remain the only realization services. |
 | Promontories | Retain, but require a planned vista target and compatible boundary policy. |
 | Step formations | Keep the global late pass parked; migrate useful formations into reviewed motifs. |
 | Room shape randomization | Retain inside recipe-declared ranges and generic-room families. |

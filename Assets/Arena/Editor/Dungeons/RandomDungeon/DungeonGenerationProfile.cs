@@ -40,10 +40,6 @@ namespace DungeonLab.Editor
         [Tooltip("Chance that an eligible room splits into lower and raised 1u zones. The seam still requires valid landings.")]
         public float roomZoneSplitChance = 0.35f;
 
-        [Range(0f, 1f)]
-        [Tooltip("Chance per eligible unsplit room to try a dais. Failed dais placements are skipped, not repaired.")]
-        public float daisChancePerRoom = 0.25f;
-
         internal DungeonGenerationSettings ToSettings()
         {
             return new DungeonGenerationSettings
@@ -55,8 +51,7 @@ namespace DungeonLab.Editor
                 denseFloorplanMinFillPercent = denseFloorplanMinFillPercent,
                 loopConnectionFraction = loopConnectionFraction,
                 maxLoopCandidateDistanceCells = maxLoopCandidateDistanceCells,
-                roomZoneSplitChance = roomZoneSplitChance,
-                daisChancePerRoom = daisChancePerRoom
+                roomZoneSplitChance = roomZoneSplitChance
             }.Validated();
         }
     }
@@ -71,7 +66,6 @@ namespace DungeonLab.Editor
         public float loopConnectionFraction;
         public int maxLoopCandidateDistanceCells;
         public float roomZoneSplitChance;
-        public float daisChancePerRoom;
 
         public static DungeonGenerationSettings Default => new DungeonGenerationSettings
         {
@@ -82,8 +76,7 @@ namespace DungeonLab.Editor
             denseFloorplanMinFillPercent = 0.34f,
             loopConnectionFraction = 0.35f,
             maxLoopCandidateDistanceCells = 14,
-            roomZoneSplitChance = 0.35f,
-            daisChancePerRoom = 0.25f
+            roomZoneSplitChance = 0.35f
         }.Validated();
 
         public DungeonGenerationSettings Validated()
@@ -97,7 +90,6 @@ namespace DungeonLab.Editor
             value.loopConnectionFraction = Mathf.Clamp01(value.loopConnectionFraction);
             value.maxLoopCandidateDistanceCells = Mathf.Max(1, value.maxLoopCandidateDistanceCells);
             value.roomZoneSplitChance = Mathf.Clamp01(value.roomZoneSplitChance);
-            value.daisChancePerRoom = Mathf.Clamp01(value.daisChancePerRoom);
             return value;
         }
     }

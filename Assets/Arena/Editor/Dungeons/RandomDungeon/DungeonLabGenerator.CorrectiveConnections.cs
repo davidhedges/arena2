@@ -7,7 +7,7 @@ namespace DungeonLab.Editor
     // Bounded production correction: every accepted tier plan receives one to
     // four explicit, outward-facing connection stubs. Selection is isolated
     // from every existing random stream and runs only after the established
-    // route, recipe, stair, bridge, dais, sweep, and scenic work is complete.
+    // route, recipe/showpiece, stair, bridge, sweep, and scenic work is complete.
     internal sealed partial class DungeonLabGenerator
     {
         private const string ExternalConnectorPromontoryPolicyVersion =

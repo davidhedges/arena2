@@ -426,6 +426,16 @@ Measured truth from that scene is binding the way step-2 metrology is:
     on a top floor (expected). Pipeline reports "seeds with dais platforms" +
     DAIS-SEED lines.
 
+    Retirement (2026-07-22): the global random-dais producer, its frequency
+    setting, and its producer-only helpers/diagnostics were deleted after recipe
+    authoring became the owner of focal daises. The measured StairForge designs,
+    canonical showpiece renderer, and recipe-owned transition consumers remain.
+    `TryCarveSingleDais` was the mutation half of that same late producer, not an
+    independently consumed geometry service, so retaining it would have parked a
+    second planner path. Future sunken, rise-2, tiered, or freely sized authored
+    daises must enter through an explicit recipe contract and the existing
+    transition/showpiece realization services; they must not restore wall search.
+
 38. **Support columns — floor seams + ends, always when legal.** Under every
     externalSpan deck (aerial decks, bridge-style spans, pool bridges): column
     stacks beneath the deck's floor-piece anchor lines at both deck edges, at both
@@ -792,10 +802,9 @@ between two strips); _5=1u full-cell (the throne corner, pairs with floorRound c
     exactly three strip sides. NOTED FOR REVIEW: dais frequency jumped
     26->66 per 100 seeds with backed dominating (59) — wall spans rarely
     collide with corridor paths, so backed placements succeed where
-    interior rects failed, and four sides are tried. If too common,
-    tuning knobs: DaisChancePerRoom, DaisBackedChance, or trying only
-    the rolled side. The harness prints BACKED-DAIS-SEED lines
-    (stairCandidateSummary carries "backedDais:N").
+    interior rects failed, and four sides are tried. These former tuning
+    knobs and `backedDais` diagnostics were removed with the global random-dais
+    producer on 2026-07-22; backed showpieces are now recipe-owned.
 
     Sunken-dais carve fix found during integration review (user scene,
     2026-06-12): a generated 2x2 pit rendered with only THREE corner

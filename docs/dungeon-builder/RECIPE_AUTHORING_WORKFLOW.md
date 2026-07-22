@@ -5,6 +5,9 @@ Last updated: 2026-07-21
 
 This document is the operational checklist for creating or changing a room recipe after the planner foundation is solid. It is intentionally written for someone returning after weeks or months away.
 
+Use [`GLOSSARY.md`](GLOSSARY.md) as the authoritative definition of recipe,
+episode, motif, role, beat, room, port, zone, and related planning terms.
+
 Phase 5 implemented the required outcomes: explicit versioned contracts, five non-mutating validation layers, deterministic previews, stale-review detection, reviewed catalog admission, and an easy return-after-absence workflow. The menus below are the current implemented commands. The deliberately narrow schema contains only the recipe kinds, motif kinds, overlays, and review actions proven by the throne-hall probe and flexible-vestibule contrast recipe.
 
 ## Returning after a break
@@ -85,7 +88,7 @@ Create the recipe only after you can complete this brief. Keep the final brief i
 ```text
 Recipe ID:
 Display name:
-Kind: room | connector | episode | motif
+Recipe kind: connector | episode
 Purpose in the player journey:
 Eligible roles/beats:
 Required traversal sequence:
@@ -103,8 +106,8 @@ Symmetry or coupled-feature rules:
 Enclosure/boundary policy:
 Vista sockets and intended target types:
 
-Required motifs/prefabs:
-Optional compatible motifs:
+Declared motifs and implementation IDs:
+Weighted focal variations:
 Legal rotations/mirrors:
 Allowed dimensional or content variation:
 Explicit incompatibilities:
@@ -193,6 +196,13 @@ Reference only assets whose measured contracts are current. For each motif decla
 - fallback behavior if optional.
 
 Useful step formations belong here as motifs. The old global late placement pass stays parked.
+
+The current schema-v1 dais boundary is deliberately narrow: a reviewed recipe may
+select a measured backed `FocalVisual` inside its declared `ProtectedFocal` region,
+and recipe zones/transitions own any walkable elevation change. There is no global
+random-dais roll or arbitrary-room wall search. Sunken, rise-2, tiered, or freely
+sized dais motifs are not current authoring options; adding one requires an explicit
+recipe contract and consumer rather than reviving the retired late carver.
 
 ## 6. Add controlled variation
 

@@ -29,7 +29,7 @@ namespace DungeonLab.Editor
         private const int MaxGeneratedLevel = 24;
         // Magnificence decision A: inter-room/tier elevation lands on a 4u lattice.
         // A corridor climbs one major (4u) or a steeper double-major (8u); 1u and
-        // 2u are reserved for INTRA-room accents (zone seams, dais), never plain
+        // 2u are reserved for INTRA-room accents, never plain
         // corridors. Phase 3 route edges declare their 4u/8u structural transition
         // type before the tier planner reserves a concrete realization.
         private const int MajorRiseLevels = 4;
@@ -45,13 +45,10 @@ namespace DungeonLab.Editor
         // is a rise-1 step strip, so there is no free walk across the 1u delta.
         private const int MinZoneDepthCells = 2;
         private const string SeamStairPlacementClass = "seam";
-        // Dais platforms (step 9, decision 37): cosmetic interior 1u platforms
-        // ringed by the same step strips as zone seams, carved after level
-        // assignment from a per-room RNG. Distinct class for histograms and
-        // review; behaves exactly like "seam" everywhere it is consumed.
+        // Recipe-owned 1u transitions and intra-room completion strips share this
+        // measured transition class with the canonical edge renderer. Backed focal
+        // showpieces use their own synthesized piece plans below.
         private const string DaisStairPlacementClass = "dais";
-        private const int MaxDaisPerDungeon = 2;
-        private const int MaxDaisSpanCells = 2;
         // Magnificence decision J, hardened by Phase 6e: a promontory is now the
         // source-side walkable prefix of one already-declared named vista. The
         // route planner reserves it before structural fill and leaves the vista's
@@ -59,24 +56,6 @@ namespace DungeonLab.Editor
         // identity; the renderer still consumes only the exact projected cells.
         private const int InternalOpenPathMinRunCells = 3;
         private const int InternalOpenPathRailingPercent = 25;
-        // Dais variants (decision 41, gallery-approved 2026-06-12): sunken
-        // pits, rise-2 rims and a second tier draw from the same per-room RNG.
-        private const float DaisSunkenChance = 0.25f;
-        private const float DaisSteepChance = 0.25f;
-        private const float DaisTieredChance = 0.3f;
-        // Backed dais (decisions 44+46): a raised non-tiered dais tries a
-        // wall-flush placement half the time, falling back to its interior
-        // rect when no wall side is eligible. Proportions bias
-        // wide-along-wall (up to 3 cells along, depth bounded as usual).
-        private const float DaisBackedChance = 0.5f;
-        private const int BackedDaisMaxAlongWall = 3;
-        // Showpiece dais (decision 46 increment 2): both approved gallery
-        // showpieces (the bay and the gold scallop) occupy a 5-cells-along x
-        // 3-deep footprint against a TRUE outer wall. When a backed room
-        // fits one, it always gets one; plain rects serve smaller rooms.
-        private const int ShowpieceAlongCells = 5;
-        private const int ShowpieceDepthCells = 3;
-
         // A backed showpiece dais: the approved gallery design instantiated
         // verbatim at a wall anchor. Purely cosmetic in the plan — no
         // cellLevels change and no transitions; the covered cells are
@@ -92,9 +71,6 @@ namespace DungeonLab.Editor
             public int roomLevel;
             public ElevationEdgeModel.SynthesizedPiecePlacement[] pieces;
         }
-        // The 2u strip for rise-2 dais rims: same family one steepness up; the
-        // edge model validates the measured rise against the transition delta.
-        private const string SteepDaisStairPieceName = "P_MOD_Stairs_01_E_straight_3";
         // Name only selects WHICH piece to use for seam strips; the edge model
         // verifies the measured rise from the step piece library before placing.
         private const string SeamStairPieceName = "P_MOD_Stairs_01_E_straight_4";
@@ -649,18 +625,6 @@ namespace DungeonLab.Editor
 
             return cachedSeamStairPrefabPath;
         }
-
-        private static string ResolveSteepDaisStairPrefabPath()
-        {
-            if (string.IsNullOrEmpty(cachedSteepDaisStairPrefabPath))
-            {
-                cachedSteepDaisStairPrefabPath = ResolveInventoryPrefabPath(SteepDaisStairPieceName);
-            }
-
-            return cachedSteepDaisStairPrefabPath;
-        }
-
-        private static string cachedSteepDaisStairPrefabPath;
 
         private static string ResolveInventoryPrefabPath(string pieceName)
         {
@@ -1626,7 +1590,7 @@ namespace DungeonLab.Editor
 
                 // The two facing boundary cells are the final-view anchors. Treat
                 // them as shareable landings: route stairs may land there, while
-                // stair bodies and later dais carving cannot consume or re-level
+                // stair bodies and later structural passes cannot consume or re-level
                 // either endpoint.
                 plannedStairLedger.Register(
                     Array.Empty<Vector2Int>(),
@@ -2128,21 +2092,6 @@ namespace DungeonLab.Editor
                 return false;
             }
 
-            // Dais platforms (step 9, decision 37) carve last, over the finished
-            // cell field: every corridor, bridge and headroom decision is already
-            // made, so a dais can only decorate — never reject or re-roll.
-            int backedDaisCount = CarveDaisPlatforms(
-                layout,
-                dungeonSeed,
-                cellLevels,
-                transitions,
-                transitionKeys,
-                plannedStairLedger,
-                doorwayCells,
-                seamStairPrefabPath,
-                daisShowpieces,
-                CurrentGenerationSettings);
-
             // Decision 43(a): runs after every other level-field feature so
             // it sweeps the FINAL field.
             int sweep1uCount = SweepIntraRoom1uDrops(
@@ -2185,7 +2134,7 @@ namespace DungeonLab.Editor
             // Bounded corrective item: mandatory external connection stubs are
             // the final plan mutation. Their hash-isolated policy consumes no
             // shared random and cannot change existing bridge, stair, recipe,
-            // dais, sweep, or scenic placement.
+            // sweep, or scenic placement.
             if (!TryResolveExternalConnectorPromontories(
                     dungeonSeed,
                     layout,
@@ -2202,11 +2151,6 @@ namespace DungeonLab.Editor
             }
 
             stairCandidateSummary = FormatStairCandidateHistogram(stairCandidateCounts);
-
-            if (backedDaisCount > 0)
-            {
-                stairCandidateSummary += $" backedDais:{backedDaisCount}";
-            }
 
             if (namedPromontories.Length > 0)
             {
@@ -2605,312 +2549,6 @@ namespace DungeonLab.Editor
             return cells;
         }
 
-        // Step 9, decision 37: a dais is a cosmetic interior 1u platform — an
-        // interior rect raised one level inside an UNSPLIT room, ringed by the
-        // same 1u step strips as zone seams (the gold scene's throne dais: the
-        // rim IS walkable steps, so rule 3 holds with no exceptions; ring
-        // corners stay bare per the ledge policy until the round corner pieces
-        // are measured). The dais is not a level-plan node: it draws from a
-        // per-room RNG (the forge per-request pattern — other features never
-        // reshuffle a dais decision), and a dais that fails any check is
-        // skipped outright, never re-rolled. Flat dungeons are left untouched
-        // so the single-level rejection gate keeps its meaning.
-        private static int CarveDaisPlatforms(
-            DungeonLayout layout,
-            int dungeonSeed,
-            Dictionary<Vector2Int, int> cellLevels,
-            List<ElevationEdgeModel.TransitionEdge> transitions,
-            HashSet<string> transitionKeys,
-            StairPlacementLedger plannedStairLedger,
-            HashSet<Vector2Int> doorwayCells,
-            string seamStairPrefabPath,
-            List<DaisShowpiece> showpieces,
-            DungeonGenerationSettings settings)
-        {
-            if (CountDistinctLevels(cellLevels) <= 1)
-            {
-                return 0;
-            }
-
-            var splitRooms = new HashSet<int>();
-            foreach (RoomZonePlan zonePlan in layout.roomZones)
-            {
-                splitRooms.Add(zonePlan.roomIndex);
-            }
-
-            // Corridor paths cross room interiors; a raised path cell would break
-            // the corridor's level continuity, so the dais body avoids every path
-            // cell (raw paths — a superset of the cleaned walk is the safe side).
-            var pathCells = new HashSet<Vector2Int>();
-            foreach (RoomConnection connection in layout.connections)
-            {
-                foreach (Vector2Int cell in connection.path)
-                {
-                    pathCells.Add(cell);
-                }
-            }
-
-            int placed = 0;
-            int backedPlaced = 0;
-            for (int roomIndex = 0; roomIndex < layout.rooms.Count && placed < MaxDaisPerDungeon; roomIndex++)
-            {
-                if (splitRooms.Contains(roomIndex))
-                {
-                    continue;
-                }
-
-                RoomFootprint room = layout.rooms[roomIndex];
-                RectInt roomBox = room.bounds;
-                int interiorWidth = roomBox.width - 2;
-                int interiorDepth = roomBox.height - 2;
-                if (interiorWidth < 1 || interiorDepth < 1)
-                {
-                    continue;
-                }
-
-                var daisRandom = new System.Random(dungeonSeed ^ StairForge.StableHash($"dais:{roomIndex}"));
-                if (daisRandom.NextDouble() >= settings.daisChancePerRoom)
-                {
-                    continue;
-                }
-
-                // Variant draws (decision 41, gallery-approved constructions).
-                // Every draw happens unconditionally so adding eligibility
-                // rules later never reshuffles another room's dais.
-                bool sunken = daisRandom.NextDouble() < DaisSunkenChance;
-                int rise = daisRandom.NextDouble() < DaisSteepChance ? 2 : 1;
-                bool tiered = daisRandom.NextDouble() < DaisTieredChance;
-                // Pits need a 2x2 bowl minimum; a second tier needs a 3x3 base
-                // and only stacks on raised rise-1 (the approved design set).
-                if (sunken && (interiorWidth < 2 || interiorDepth < 2))
-                {
-                    sunken = false;
-                }
-
-                tiered = tiered && !sunken && rise == 1 && interiorWidth >= 3 && interiorDepth >= 3;
-                int minSize = sunken ? 2 : tiered ? 3 : 1;
-                int maxSize = tiered ? 3 : MaxDaisSpanCells;
-
-                // Interior rect with >= 1 cell margin on every side: doorway cells
-                // live on the room boundary, so they can never be dais cells.
-                int width = minSize + daisRandom.Next(Mathf.Min(maxSize, interiorWidth) - minSize + 1);
-                int depth = minSize + daisRandom.Next(Mathf.Min(maxSize, interiorDepth) - minSize + 1);
-                var daisRect = new RectInt(
-                    roomBox.xMin + 1 + daisRandom.Next(interiorWidth - width + 1),
-                    roomBox.yMin + 1 + daisRandom.Next(interiorDepth - depth + 1),
-                    width,
-                    depth);
-
-                // Backed placement (decisions 44+46): every backed draw is
-                // APPENDED after the existing draws so current dais stay
-                // byte-identical; eligibility never reshuffles anything. A
-                // raised non-tiered dais tries the four wall sides starting
-                // from a rolled one; if none carves, the interior rect
-                // already drawn above is the fallback.
-                bool backedRoll = daisRandom.NextDouble() < DaisBackedChance;
-                int sideRoll = daisRandom.Next(4);
-                int alongRoll = 1 + daisRandom.Next(BackedDaisMaxAlongWall);
-                int deepRoll = 1 + daisRandom.Next(MaxDaisSpanCells);
-                double offsetRoll = daisRandom.NextDouble();
-                // Increment-2 draws, appended after the increment-1 draws so
-                // every committed dais outcome stays byte-identical.
-                int showpieceKindRoll = daisRandom.Next(2);
-                int showpieceStyleRoll = daisRandom.Next(2);
-                bool carved = false;
-                if (backedRoll && !sunken && !tiered)
-                {
-                    // Showpiece pass first (decision 46: ALWAYS when it
-                    // fits): a wall side hosting the full 5x3 footprint at
-                    // uniform level, clear of paths/doorways/reservations,
-                    // with VOID behind all five wall cells (a true outer
-                    // wall — showpieces need a wall backdrop, not a cliff
-                    // or another room).
-                    string showpieceName = showpieceKindRoll == 0
-                        ? $"dais_backed_{(showpieceStyleRoll == 0 ? "angle" : "round")}_bay_r1"
-                        : "dais_gold_backed_scallop";
-                    for (int sideStep = 0; sideStep < 4 && !carved; sideStep++)
-                    {
-                        int side = (sideRoll + sideStep) & 3;
-                        Vector2Int backDirection = side == 0 ? Vector2Int.up
-                            : side == 1 ? Vector2Int.right
-                            : side == 2 ? Vector2Int.down
-                            : Vector2Int.left;
-                        bool alongX = backDirection.x == 0;
-                        // Non-rect rooms: the wall row is the room's true
-                        // outline facing this side, not the bbox edge — take
-                        // the longest straight boundary run.
-                        (Vector2Int start, int length) run = LongestBoundaryRun(room, backDirection);
-                        if (run.length < ShowpieceAlongCells + 2)
-                        {
-                            continue;
-                        }
-
-                        int wallLine = alongX ? run.start.y : run.start.x;
-                        int alongStart = (alongX ? run.start.x : run.start.y) + 1 +
-                            (int)(offsetRoll * (run.length - 2 - ShowpieceAlongCells + 1));
-                        bool eligible = true;
-                        bool hasPlatformLevel = false;
-                        int platformLevel = 0;
-                        var coveredCells = new List<Vector2Int>(ShowpieceAlongCells * ShowpieceDepthCells);
-                        for (int a = 0; a < ShowpieceAlongCells && eligible; a++)
-                        {
-                            Vector2Int wallCell = alongX
-                                ? new Vector2Int(alongStart + a, wallLine)
-                                : new Vector2Int(wallLine, alongStart + a);
-                            if (cellLevels.ContainsKey(wallCell + backDirection))
-                            {
-                                eligible = false;
-                                break;
-                            }
-
-                            for (int r = 0; r < ShowpieceDepthCells && eligible; r++)
-                            {
-                                Vector2Int cell = wallCell - backDirection * r;
-                                if (!room.Contains(cell) ||
-                                    !cellLevels.TryGetValue(cell, out int cellLevel) ||
-                                    pathCells.Contains(cell) ||
-                                    doorwayCells.Contains(cell) ||
-                                    plannedStairLedger.footprintCells.Contains(cell) ||
-                                    plannedStairLedger.landingCells.Contains(cell))
-                                {
-                                    eligible = false;
-                                    break;
-                                }
-
-                                if (!hasPlatformLevel)
-                                {
-                                    platformLevel = cellLevel;
-                                    hasPlatformLevel = true;
-                                }
-                                else if (cellLevel != platformLevel)
-                                {
-                                    eligible = false;
-                                    break;
-                                }
-
-                                coveredCells.Add(cell);
-                            }
-                        }
-
-                        if (!eligible)
-                        {
-                            continue;
-                        }
-
-                        if (!StairForge.TryGetBackedShowpieceDesign(showpieceName, out ElevationEdgeModel.SynthesizedPiecePlacement[] showpiecePieces))
-                        {
-                            break;
-                        }
-
-                        plannedStairLedger.Register(coveredCells.ToArray(), Array.Empty<Vector2Int>(), Array.Empty<Vector2Int>());
-                        Vector2Int originCell;
-                        float showpieceYaw;
-                        if (backDirection == Vector2Int.up)
-                        {
-                            originCell = new Vector2Int(alongStart, wallLine - 1);
-                            showpieceYaw = 0f;
-                        }
-                        else if (backDirection == Vector2Int.down)
-                        {
-                            originCell = new Vector2Int(alongStart + ShowpieceAlongCells, wallLine + 2);
-                            showpieceYaw = 180f;
-                        }
-                        else if (backDirection == Vector2Int.right)
-                        {
-                            originCell = new Vector2Int(wallLine - 1, alongStart + ShowpieceAlongCells);
-                            showpieceYaw = 90f;
-                        }
-                        else
-                        {
-                            originCell = new Vector2Int(wallLine + 2, alongStart);
-                            showpieceYaw = 270f;
-                        }
-
-                        showpieces.Add(new DaisShowpiece
-                        {
-                            designName = showpieceName,
-                            originCell = originCell,
-                            yawDegrees = showpieceYaw,
-                            roomLevel = platformLevel,
-                            pieces = showpiecePieces,
-                        });
-                        carved = true;
-                        backedPlaced++;
-                    }
-
-                    for (int sideStep = 0; sideStep < 4 && !carved; sideStep++)
-                    {
-                        int side = (sideRoll + sideStep) & 3;
-                        Vector2Int backDirection = side == 0 ? Vector2Int.up
-                            : side == 1 ? Vector2Int.right
-                            : side == 2 ? Vector2Int.down
-                            : Vector2Int.left;
-                        bool alongX = backDirection.x == 0;
-                        (Vector2Int start, int length) run = LongestBoundaryRun(room, backDirection);
-                        int depthSpan = alongX ? roomBox.height : roomBox.width;
-                        int along = Mathf.Min(alongRoll, run.length - 2);
-                        int deep = Mathf.Min(deepRoll, depthSpan - 1);
-                        if (along < 1 || deep < 1)
-                        {
-                            continue;
-                        }
-
-                        int wallLine = alongX ? run.start.y : run.start.x;
-                        int alongOffset = (alongX ? run.start.x : run.start.y) + 1 +
-                            (int)(offsetRoll * (run.length - 2 - along + 1));
-                        RectInt backedRect =
-                            backDirection == Vector2Int.up ? new RectInt(alongOffset, wallLine - deep + 1, along, deep)
-                            : backDirection == Vector2Int.down ? new RectInt(alongOffset, wallLine, along, deep)
-                            : backDirection == Vector2Int.right ? new RectInt(wallLine - deep + 1, alongOffset, deep, along)
-                            : new RectInt(wallLine, alongOffset, deep, along);
-                        carved = TryCarveSingleDais(
-                            room,
-                            backedRect,
-                            sunken: false,
-                            rise,
-                            tiered: false,
-                            cellLevels,
-                            pathCells,
-                            doorwayCells,
-                            plannedStairLedger,
-                            transitions,
-                            transitionKeys,
-                            seamStairPrefabPath,
-                            backDirection);
-                        if (carved)
-                        {
-                            backedPlaced++;
-                        }
-                    }
-                }
-
-                if (!carved)
-                {
-                    carved = TryCarveSingleDais(
-                        room,
-                        daisRect,
-                        sunken,
-                        rise,
-                        tiered,
-                        cellLevels,
-                        pathCells,
-                        doorwayCells,
-                        plannedStairLedger,
-                        transitions,
-                        transitionKeys,
-                        seamStairPrefabPath,
-                        default);
-                }
-
-                if (carved)
-                {
-                    placed++;
-                }
-            }
-
-            return backedPlaced;
-        }
-
         // Decision 43(a): a 1u drop WITHIN one room always climbs. Every
         // intra-room delta-1 adjacency not already carrying a transition
         // takes a dais-class strip — the full band, so the existing corner
@@ -3035,247 +2673,6 @@ namespace DungeonLab.Editor
                     bounds.Encapsulate(renderer.bounds);
                 }
             }
-        }
-
-        // backDirection (decisions 44+46): non-zero for a BACKED dais flush
-        // against a room wall on that side — the back face emits no strips
-        // (cells beyond the boundary belong to other features; a corridor
-        // hugging the far side of the wall must never gain a dais strip)
-        // and rise-2 corner sweeps exist only at the front corners.
-        // The longest straight outline run facing `direction` (ties keep the
-        // first in BoundaryRuns' deterministic order) — the non-rect room's
-        // stand-in for "the wall side" in backed dais and showpiece placement.
-        private static (Vector2Int start, int length) LongestBoundaryRun(RoomFootprint room, Vector2Int direction)
-        {
-            (Vector2Int start, int length) best = (default, 0);
-            foreach ((Vector2Int start, int length) run in room.BoundaryRuns(direction))
-            {
-                if (run.length > best.length)
-                {
-                    best = run;
-                }
-            }
-
-            return best;
-        }
-
-        private static bool TryCarveSingleDais(
-            RoomFootprint room,
-            RectInt daisRect,
-            bool sunken,
-            int rise,
-            bool tiered,
-            Dictionary<Vector2Int, int> cellLevels,
-            HashSet<Vector2Int> pathCells,
-            HashSet<Vector2Int> doorwayCells,
-            StairPlacementLedger plannedStairLedger,
-            List<ElevationEdgeModel.TransitionEdge> transitions,
-            HashSet<string> transitionKeys,
-            string seamStairPrefabPath,
-            Vector2Int backDirection)
-        {
-            int daisLevel = 0;
-            bool hasLevel = false;
-            for (int z = daisRect.yMin; z < daisRect.yMax; z++)
-            {
-                for (int x = daisRect.xMin; x < daisRect.xMax; x++)
-                {
-                    var cell = new Vector2Int(x, z);
-                    // Non-rect rooms: every dais cell must belong to THIS room
-                    // — a bbox-rolled rect can reach into a notch occupied by
-                    // void, a corridor, or another room at the same level.
-                    if (!room.Contains(cell) ||
-                        !cellLevels.TryGetValue(cell, out int level) ||
-                        pathCells.Contains(cell) ||
-                        doorwayCells.Contains(cell) ||
-                        plannedStairLedger.footprintCells.Contains(cell) ||
-                        plannedStairLedger.landingCells.Contains(cell))
-                    {
-                        return false;
-                    }
-
-                    if (!hasLevel)
-                    {
-                        daisLevel = level;
-                        hasLevel = true;
-                    }
-                    else if (level != daisLevel)
-                    {
-                        return false;
-                    }
-                }
-            }
-
-            // A pit floor never sinks below the ground plane.
-            if (sunken && daisLevel < rise)
-            {
-                return false;
-            }
-
-            string stripPrefabPath = rise == 1 ? seamStairPrefabPath : ResolveSteepDaisStairPrefabPath();
-
-            // Rise-2 raised rims put a full-cell corner sweep on each diagonal
-            // ring cell (gallery construction); those cells must be clean floor
-            // at the base level and register as ledger footprint so contract
-            // stairs stay off the sweep.
-            var sweepCells = new List<Vector2Int>();
-            if (!sunken && rise == 2)
-            {
-                foreach (Vector2Int diagonal in new[]
-                         {
-                             new Vector2Int(daisRect.xMin - 1, daisRect.yMin - 1),
-                             new Vector2Int(daisRect.xMax, daisRect.yMin - 1),
-                             new Vector2Int(daisRect.xMin - 1, daisRect.yMax),
-                             new Vector2Int(daisRect.xMax, daisRect.yMax)
-                         })
-                {
-                    // Backed: the wall-side corners take no sweeps.
-                    int cornerSignX = diagonal.x < daisRect.xMin ? -1 : 1;
-                    int cornerSignZ = diagonal.y < daisRect.yMin ? -1 : 1;
-                    if ((backDirection.x != 0 && cornerSignX == backDirection.x) ||
-                        (backDirection.y != 0 && cornerSignZ == backDirection.y))
-                    {
-                        continue;
-                    }
-
-                    if (!room.Contains(diagonal) ||
-                        !cellLevels.TryGetValue(diagonal, out int diagonalLevel) ||
-                        diagonalLevel != daisLevel ||
-                        pathCells.Contains(diagonal) ||
-                        doorwayCells.Contains(diagonal) ||
-                        plannedStairLedger.footprintCells.Contains(diagonal) ||
-                        plannedStairLedger.landingCells.Contains(diagonal))
-                    {
-                        return false;
-                    }
-
-                    sweepCells.Add(diagonal);
-                }
-            }
-
-            // Rim strips on every eligible ring face. The strip's geometry
-            // lives on the LOWER side of the edge — the ring cell for a raised
-            // dais, the pit cell for a sunken one — and that lower cell
-            // registers as ledger FOOTPRINT exactly like a seam strip. Doorway
-            // ring cells are skipped per rule 24; at least one strip must
-            // survive or the platform would be unreachable (pit corner cells
-            // render as concave sweeps instead of strips, but their transitions
-            // still carry the port-graph connectivity).
-            var strips = new List<(Vector2Int upperCell, Vector2Int lowerCell)>();
-            int exposedFaces = 0;
-            for (int z = daisRect.yMin; z < daisRect.yMax; z++)
-            {
-                for (int x = daisRect.xMin; x < daisRect.xMax; x++)
-                {
-                    var daisCell = new Vector2Int(x, z);
-                    foreach (Vector2Int ringCell in CardinalNeighbors(daisCell))
-                    {
-                        if (daisRect.Contains(ringCell))
-                        {
-                            continue;
-                        }
-
-                        if (backDirection != Vector2Int.zero && ringCell - daisCell == backDirection)
-                        {
-                            continue;
-                        }
-
-                        exposedFaces++;
-                        // An out-of-room ring cell can never take a strip; it
-                        // stays a bare exposed face, so the closed-band rule
-                        // below correctly rejects the carve.
-                        if (!room.Contains(ringCell) ||
-                            !cellLevels.TryGetValue(ringCell, out int ringLevel) ||
-                            ringLevel != daisLevel ||
-                            doorwayCells.Contains(ringCell) ||
-                            plannedStairLedger.footprintCells.Contains(ringCell) ||
-                            plannedStairLedger.landingCells.Contains(ringCell))
-                        {
-                            continue;
-                        }
-
-                        strips.Add(sunken ? (ringCell, daisCell) : (daisCell, ringCell));
-                    }
-                }
-            }
-
-            if (strips.Count == 0)
-            {
-                return false;
-            }
-
-            // The band model (decision 45), planning-side, universal (user
-            // rule 2026-06-13: "don't show a dais at all if there is no
-            // space for it"). Two in-scene defects established it: a 2x2
-            // pit rendered with three corner sweeps (a rim face was
-            // ledger-blocked, its corner cell lost its second face, the
-            // bowl broke), then a backed dais with a bare front face (its
-            // ring cell sat at another tier's level). A dais carves only
-            // when its rim is CLOSED — every exposed face takes a strip;
-            // the suppressed back face of a backed dais is wall-terminated
-            // and exempt by construction.
-            if (strips.Count < exposedFaces)
-            {
-                return false;
-            }
-
-            int carvedLevel = daisLevel + (sunken ? -rise : rise);
-            for (int z = daisRect.yMin; z < daisRect.yMax; z++)
-            {
-                for (int x = daisRect.xMin; x < daisRect.xMax; x++)
-                {
-                    cellLevels[new Vector2Int(x, z)] = carvedLevel;
-                }
-            }
-
-            // Second tier (raised rise-1 3x3 base only): the inner cell climbs
-            // one more level and rims against the first tier with plain 1u
-            // strips — just more dais transitions; the render derives the rest.
-            if (tiered)
-            {
-                var inner = new RectInt(daisRect.xMin + 1, daisRect.yMin + 1, daisRect.width - 2, daisRect.height - 2);
-                for (int z = inner.yMin; z < inner.yMax; z++)
-                {
-                    for (int x = inner.xMin; x < inner.xMax; x++)
-                    {
-                        var cell = new Vector2Int(x, z);
-                        cellLevels[cell] = carvedLevel + 1;
-                        foreach (Vector2Int tierRing in CardinalNeighbors(cell))
-                        {
-                            if (!inner.Contains(tierRing) && daisRect.Contains(tierRing))
-                            {
-                                strips.Add((cell, tierRing));
-                            }
-                        }
-                    }
-                }
-            }
-
-            foreach ((Vector2Int upperCell, Vector2Int lowerCell) in strips)
-            {
-                if (!transitionKeys.Add(TransitionKey(upperCell, lowerCell)))
-                {
-                    continue;
-                }
-
-                int stripDelta = Mathf.Abs(cellLevels[upperCell] - cellLevels[lowerCell]);
-                transitions.Add(new ElevationEdgeModel.TransitionEdge(
-                    upperCell,
-                    lowerCell,
-                    stripDelta == 1 ? seamStairPrefabPath : stripPrefabPath,
-                    DaisStairPlacementClass));
-                plannedStairLedger.Register(
-                    new[] { lowerCell },
-                    Array.Empty<Vector2Int>(),
-                    new[] { upperCell });
-            }
-
-            foreach (Vector2Int sweepCell in sweepCells)
-            {
-                plannedStairLedger.Register(new[] { sweepCell }, Array.Empty<Vector2Int>(), Array.Empty<Vector2Int>());
-            }
-
-            return true;
         }
 
         // Headroom gate (design decision 2): at least MinHeadroomLevels u of clearance

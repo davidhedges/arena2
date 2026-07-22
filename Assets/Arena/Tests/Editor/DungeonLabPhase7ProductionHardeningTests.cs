@@ -10,6 +10,12 @@ namespace Arena.Tests.Editor
     {
         private const string GeneratorPath =
             "Assets/Arena/Editor/Dungeons/RandomDungeon/DungeonLabGenerator.cs";
+        private const string GenerationProfilePath =
+            "Assets/Arena/Editor/Dungeons/RandomDungeon/DungeonGenerationProfile.cs";
+        private const string RecipeGeneratorPath =
+            "Assets/Arena/Editor/Dungeons/RandomDungeon/DungeonLabGenerator.Recipes.cs";
+        private const string StairForgePath =
+            "Assets/Arena/Editor/Dungeons/RandomDungeon/StairForge.cs";
 
         [Test]
         public void RequiredProductionSettingsAndAssets_AreResolvable()
@@ -60,11 +66,15 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
-        public void FinalDeletionLedger_HasNoParkedLatePassOrLegacyRendererScaffolding()
+        public void FinalDeletionLedger_HasNoRandomDaisProducerOrLegacyRendererScaffolding()
         {
             string source = File.ReadAllText(GeneratorPath) +
+                File.ReadAllText(GenerationProfilePath) +
                 File.ReadAllText("Assets/Arena/Editor/Dungeons/RandomDungeon/ElevationEdgeModel.cs") +
                 File.ReadAllText("Assets/Arena/Editor/Dungeons/RandomDungeon/StepLibraryData.cs");
+            string recipeSource = File.ReadAllText(RecipeGeneratorPath);
+            string stairForgeSource = File.ReadAllText(StairForgePath);
+            string allProductionSource = source + recipeSource + stairForgeSource;
 
             foreach (string retiredSymbol in new[]
                      {
@@ -78,16 +88,36 @@ namespace Arena.Tests.Editor
                          "StepLibraryIndexPath",
                          "StepFormationModeTable",
                          "StepLibraryIndex",
-                         "StepLibraryRecord"
+                         "StepLibraryRecord",
+                         "CarveDaisPlatforms",
+                         "TryCarveSingleDais",
+                         "daisChancePerRoom",
+                         "MaxDaisPerDungeon",
+                         "DaisBackedChance",
+                         "LongestBoundaryRun",
+                         "DaisSunkenChance",
+                         "DaisSteepChance",
+                         "DaisTieredChance",
+                         "SteepDaisStairPieceName",
+                         "ResolveSteepDaisStairPrefabPath"
                      })
             {
-                Assert.That(source, Does.Not.Contain(retiredSymbol), $"Retired symbol '{retiredSymbol}' survived.");
+                Assert.That(allProductionSource, Does.Not.Contain(retiredSymbol), $"Retired symbol '{retiredSymbol}' survived.");
             }
+
+            Assert.That(source, Does.Contain("PlaceDaisShowpieces"));
+            Assert.That(recipeSource, Does.Contain("StairForge.TryGetBackedShowpieceDesign"));
+            Assert.That(stairForgeSource, Does.Contain("TryGetBackedShowpieceDesign"));
+            Assert.That(stairForgeSource, Does.Contain("SynthesizeDaisDesigns"));
 
             string connectorSettings = File.ReadAllText(
                 "Assets/Arena/Content/Settings/Dungeons/RandomDungeon/stair_connector_settings.json");
             Assert.That(connectorSettings, Does.Not.Contain("\"formations\""));
             Assert.That(connectorSettings, Does.Not.Contain("\"contracts\""));
+
+            string generationProfile = File.ReadAllText(
+                "Assets/Arena/Content/Settings/Dungeons/RandomDungeon/generation_profile.asset");
+            Assert.That(generationProfile, Does.Not.Contain("daisChancePerRoom"));
         }
     }
 }
