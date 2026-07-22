@@ -2,9 +2,9 @@
 
 Start here when returning to dungeon work. Keep this page short and update it at the end of every dungeon-generation session.
 
-Last updated: 2026-07-22
+Last updated: 2026-07-23
 
-Active milestone: Phase 6, Phase 7, and the bounded corrective item remain closed; density/adjacency slices 0-5 are complete and slice 6 is not started
+Active milestone: Phase 6, Phase 7, and the bounded corrective item remain closed; the density/adjacency workstream is closed at slice 6 and slice 7 is tabled
 
 Production mode: one route-first layout builder deterministically selects processional-spine, atrium-ring, or twin-wing-keep, resolves exactly three reviewed recipes plus any target-bearing named-vista promontory and 1-4 canonical external connector promontories, and feeds the shared canonical pipeline
 
@@ -15,7 +15,7 @@ Recipe authoring UI: implemented for the Phase 5 contract, validation, determini
 1. [`PROJECT_INVARIANTS.md`](PROJECT_INVARIANTS.md) — non-negotiable geometry and placement rules.
 2. This file — current evidence and exact handoff.
 3. [`COHERENT_FLOORPLAN_PLAN.md`](COHERENT_FLOORPLAN_PLAN.md) — architecture, phases, and exit gates.
-4. [`DENSITY_ADJACENCY_PLAN.md`](DENSITY_ADJACENCY_PLAN.md) — approved density/adjacency workstream; slices 0-5 complete and slice 6 next.
+4. [`DENSITY_ADJACENCY_PLAN.md`](DENSITY_ADJACENCY_PLAN.md) — completed density/adjacency workstream; closed at slice 6 with slice 7 tabled by owner decision.
 5. [`RECIPE_AUTHORING_WORKFLOW.md`](RECIPE_AUTHORING_WORKFLOW.md) — required contract for Phase 5 lifecycle, validation, preview, and review work.
 6. [`stair_forge_design.md`](stair_forge_design.md) — exact stair contracts already reused by the coupled twin-stair episode and any Phase 5 contrast recipe.
 
@@ -620,13 +620,13 @@ Missing any locked gate requires revising the implementation or reporting the Ph
 ## End-of-session handoff
 
 ```text
-Milestone/phase: Phase 6, Phase 7, and the bounded corrective item remain closed. Density/adjacency slices 0-5 are complete; slice 6 is not started.
-Completed this session: completed Slice 5. The existing processional room-inflation path now applies a profile-owned rise-0 facing-wall bias (`spacious: 0`, `dense: 1`) to generic dominant rects only. The one connection compiler uses immutable embedded node anchors for generic endpoints and exact authored ports for recipes; thresholds remain derived from final footprint crossings. Atrium, twin-wing, recipe geometry, and stair-bearing gaps are unchanged.
-Current validation result: all density Slice 1-5 fixtures pass 25/25 and the editor assembly compiles with 0 errors. Spacious and dense smoke sweeps each accepted and hard-validated 50/50 with no validation failure. Spacious attempts are `1:50`; dense attempts are `1:44, 2:6`, within the existing two-attempt bound, with no `STAIR_PLACEMENT` rejection. All six real-render sentinels report `REJECTED 0`; the biased shared-wall fixture renders one doorway with enabled collision sources and no missing collider mesh.
-Last known-good seeds and reports: the active default-profile report is `DungeonLabReports/dungeon_plan_2026072100_2026072149.json`, and `DungeonLabReports/visual_sentinels/manifest.json` is the restored spacious capture. `spacious` uses settings digest `6260e93a291373413cf15d169df97947d0a2298db22c50622b6a8dfc8f85a980`; `dense` uses `8015ab0847a58ad2497cfb28d494d24e5a46b2085fec697ef38c26784b04f773`.
-Last diagnostic fact: across the fixed 25 processional smoke seeds, dense shared-wall doors increase from the Slice 1 spacious baseline total 43 / mean 1.72 to total 52 / mean 2.08, with no seed losing a door. Exterior corridor cells move from 1,433 to 1,097 (mean 57.32 to 43.88). The three processional visual sentinels move `1/2/1 -> 3/2/2` doors and `50/53/68 -> 38/41/53` exterior cells; all 13 atrium, 12 twin-wing, and three non-processional sentinel canonical plans match across profiles.
-Deletion-ledger items added/closed: route connections no longer use moving dominant-rect centers as logical anchors. No per-edge anchor state, duplicate spatial resolver, dense builder, alternate inflation/connection path, profile branch, renderer/collision branch, compatibility path, fallback, or temporary production flag remains.
-Exact next action: obtain explicit approval, then execute Slice 6 tier-seam adjacency by replacing the hardcoded planned-overlook producer with the approved count/eligibility policy. Do not begin it from this status alone.
-Blocker or decision needed: owner approval to begin Slice 6. No Slice 5 engineering blocker remains.
+Milestone/phase: Phase 6, Phase 7, and the bounded corrective item remain closed. The density/adjacency workstream is closed at slice 6; slice 7 is tabled and is not outstanding work.
+Completed this session: completed Slice 6. One validated per-pattern count/eligibility policy is now the sole producer of `RouteIntent.plannedOverlooks`. Processional requests the two declared 4u/8u non-traversal seams; atrium and twin-wing request zero. The existing appendage and elevation-edge paths consume the result unchanged. Geometry evidence showed the former 12u threshold/branch-passage declaration never abutted, so it was removed with owner approval instead of retained as compatibility slop.
+Current validation result: all density Slice 1-6 fixtures pass 31/31 and the editor assembly compiles with 0 errors. Spacious and dense smoke sweeps each passed twice at 50/50 accepted and hard-valid with identical settings digests, result hashes, and all per-seed canonical hashes. Spacious attempts are `1:50`; dense attempts are `1:44, 2:6`, with no validation failure or `STAIR_PLACEMENT` rejection. All twelve real-render captures across both profiles report `REJECTED 0`; the 4u and 8u processional contacts read as intentional cliff/railing seams.
+Last known-good seeds and reports: the active default-profile report is `DungeonLabReports/dungeon_plan_2026072100_2026072149.json`, and `DungeonLabReports/visual_sentinels/manifest.json` is the restored spacious capture. `spacious` uses settings digest `7537024491901b718f5cbc0a4921f1fadaca20e1df0cb56c2f850376a3112326` and result hash `318a9982b5d6a6f2119b0cc1f128f19c292c6c6488d9b4c6b4bdd08ec8399750`; `dense` uses `7c2e0459ed29d4912eb4a1a24721714a96a15404fc6694381733460ad1bca967` and result hash `4c6079fcfbab31dbf711ea49f4844d483edb4abf9c8e018580e88519b29b0d93`.
+Last diagnostic fact: the accepted processional policy is exactly `2@8`: approach/vista-source at 4u and rejoin/branch-passage at 8u each share three boundary edges. Across the fixed 25 processional smoke seeds, spacious has 43 shared-wall doors / mean 1.72 and 1,433 exterior cells / mean 57.32; dense has 53 doors / mean 2.12 and 1,097 exterior cells / mean 43.88. All 13 atrium and 12 twin-wing plans remain canonical-identical to Slice 5.
+Deletion-ledger items added/closed: the hardcoded overlook producer and ineffective 12u declaration are gone. Exactly one policy producer feeds all three pattern builders and the existing appendage consumer. No second producer, dense builder, alternate inflation/connection path, profile branch, renderer/collision branch, compatibility path, fallback, or temporary production flag remains.
+Exact next action: none for density/adjacency. Reopen slice 7 only with new playtest evidence of monotonous or insufficiently interconnected navigation and fresh explicit owner approval.
+Blocker or decision needed: none. Slice 6 is complete and slice 7 is intentionally tabled.
 New chat necessary: no.
 ```

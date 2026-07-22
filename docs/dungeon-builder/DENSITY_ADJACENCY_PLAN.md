@@ -1,6 +1,6 @@
 # Density and adjacency plan
 
-Status: approved; slices 0-5 complete (2026-07-22); slice 6 not started
+Status: closed at slice 6 (2026-07-23); slice 7 tabled by owner decision
 Owner intent: keep the cliffs/voids; add denser floorplans with neighboring rooms and
 directly abutting tiers, in the spirit of the gold-standard scene
 (`Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/scenes/demoscene_dungeon_level_1_dungeon.unity`).
@@ -8,9 +8,9 @@ directly abutting tiers, in the spirit of the gold-standard scene
 ## Goals
 
 - More rooms that share walls (door thresholds instead of long corridors).
-- More rooms with 3+ connections instead of one-in/one-out chains — **if** measured
-  final degrees confirm the gap (see Measurements; the loop pass already adds a
-  median of 3 edges per dungeon).
+- Evaluate whether more rooms need 3+ connections instead of one-in/one-out
+  chains. Final-degree measurements did not establish a strong enough gap to
+  justify another topology operation, so slice 7 is tabled.
 - Tiers that abut directly across cliff/railing seams (slice 6 — a goal, not optional).
 - Preserve the voids: vista reservations, the atrium center void, and the abyss are
   design features, not density failures.
@@ -25,6 +25,10 @@ directly abutting tiers, in the spirit of the gold-standard scene
   `generation_profile.asset` is the only reproducibility record — so slice 0
   experiments must end in a **revert with candidate values recorded**; tuned
   values are committed only after slice 1's identity support lands.
+  The owner-approved Slice 6 correction is the one explicit exception: the
+  ineffective legacy 12u overlook declaration was deleted instead of retained as
+  compatibility behavior after geometry evidence showed that its rooms never
+  abutted.
 - Voids untouched: no slice may shrink the atrium center void or vista reservations
   as a side effect (this constrains pitch work — see slice 4).
 - Locks, ability gates, runtime generation: still out of scope.
@@ -118,7 +122,8 @@ Extend the existing per-seed report (`BuildLayoutGraphSummary` already reports
 - void extent: reserved vista cells and atrium center void cell count, so "voids
   untouched" is checkable (`reservedVoidPreservedAfterTierLooping` already exists).
 
-These diagnostics are **slice 1 deliverables** — slices 3, 5, and 7 read them.
+These diagnostics are **slice 1 deliverables** — slices 3 and 5 read them, and the
+final-degree results informed the decision to table slice 7.
 
 "Denser" is done when these move — shorter corridors, doors > 0, degree
 distribution shifted — **and** the owner likes the sentinels, not when a screenshot
@@ -455,22 +460,71 @@ processional pairs become the `spacious` profile defaults.
 Done when: patterns can request N overlook adjacencies and they read as intentional
 tiered seams on the sentinels.
 
-### Slice 7 — connectivity topology (decision gated on data)
+#### Slice 6 result (2026-07-23)
+
+- `DungeonPatternSpatialSettings` owns one validated tier-seam policy: an exact
+  requested count and a 4u-or-8u eligibility ceiling. Every pattern builder calls
+  the same `BuildPlannedOverlooks` producer. Processional declares two eligible
+  non-traversal candidates and both profiles request exactly `2@8`; atrium and
+  twin-wing request `0@8`. An unsatisfied exact count fails explicitly with
+  `TIER_SEAM_ADJACENCY` instead of substituting a fallback pair.
+- The pre-slice processional list also contained a threshold/branch-passage pair
+  at 12u. A focused geometry probe showed zero shared boundary edges for that
+  pair, while approach/vista-source at 4u and rejoin/branch-passage at 8u each
+  share three. With owner approval, the ineffective 12u declaration was removed
+  rather than preserved as a second policy case. This intentionally changes the
+  processional canonical plan from Slice 5; all 13 atrium and 12 twin-wing plans
+  remain canonical-identical.
+- The producer feeds the existing `RouteIntent.plannedOverlooks` field and the
+  existing narrow appendage path. The elevation-edge renderer, railing/cliff
+  handling, canonical plans, abyss support, and collision export are unchanged.
+  There is no profile-identity branch, second overlook producer, alternate room
+  path, fallback, or renderer/collision seam.
+- Both profile smoke sweeps passed twice at 50/50 accepted and hard-valid with
+  identical settings digests, aggregate hashes, and every per-seed canonical
+  hash. Spacious attempts remain `1:50`; dense remains `1:44, 2:6`, with no
+  validation failure or `STAIR_PLACEMENT` rejection. Result hashes are
+  `318a9982...9750` spacious and `4c6079fc...0d93` dense.
+- Across the 25 processional seeds, spacious remains at 43 shared-wall doors
+  (mean 1.72) and 1,433 exterior corridor cells (mean 57.32). Dense has 53 doors
+  (mean 2.12) and 1,097 exterior cells (mean 43.88). The 4u and 8u contacts read
+  as bounded railing/cliff seams on all three processional sentinels; all twelve
+  real-render captures across both profiles report `REJECTED 0`.
+- Density Slice 1-6 regressions pass 31/31, `git diff --check` passes with the LFS
+  process disabled, the deletion ledger is empty, and the active ignored report
+  and sentinel capture are restored to `spacious`.
+
+### Slice 7 — connectivity topology (tabled; owner ruling 2026-07-23)
 
 Only if the slice 1 degree-distribution diagnostics show final degrees are still
 chain-like after slices 3-5: add the deferred cross-link/hub graph operation
 together with the first topology that consumes it, per the existing rule that graph
 operations are introduced only with a consumer. Note twin-wing already carries two
 degree-4 junctions and cycle rank 2 — it may already be the dense-connectivity
-pattern, wanting tuning rather than a new operation. Own arc; fresh session.
+pattern, wanting tuning rather than a new operation.
+
+#### Slice 7 decision
+
+Do not implement this slice now. Across the final 50-seed sample, every topology
+has median final room degree 2, but the layouts are not uniform chains: atrium has
+mean 2.13 / max 3, processional has mean 2.34-2.37 / max 4, and twin-wing has mean
+2.35 / max 4 with its existing degree-4 hubs. The loop pass and named junctions
+already provide meaningful branching, while slices 3-6 address the demonstrated
+geometry and adjacency gaps without changing graph architecture.
+
+The expected value does not justify introducing a new cross-link/hub operation and
+topology consumer. The density/adjacency workstream therefore closes at slice 6.
+Slice 7 is not outstanding work; reopening it requires new playtest evidence that
+navigation feels monotonous or insufficiently interconnected and fresh explicit
+owner approval.
 
 ## Clean end state
 
-One profile resolver, one pattern-spatial configuration source, one room-inflation
-path, one connection compiler, one planned-overlook producer. Each slice deletes
-its superseded constants, helpers, temporary flags, and unused fields before
-closing. When the plan exits, no dense-specific builder, renderer branch,
-compatibility path, or fallback profile remains.
+The plan exits at slice 6 with one profile resolver, one pattern-spatial
+configuration source, one room-inflation path, one connection compiler, and one
+planned-overlook producer. Each slice deletes its superseded constants, helpers,
+temporary flags, and unused fields before closing. No dense-specific builder,
+renderer branch, compatibility path, or fallback profile remains.
 
 ## Knob reference
 
@@ -481,6 +535,7 @@ compatibility path, or fallback profile remains.
 | Generic room dims | profile-driven processional role ranges; spacious baseline or dense 7x7 | `DungeonPatternSpatialSettings`, `ResolveGenericRoomDimensions` |
 | Inflation placement | centered base plus rise-0 facing-wall bias; spacious 0, dense 1 | `ApplyProcessionalNeighborBias` in `DungeonLabGenerator.RouteFirstPilot.cs` |
 | Connection anchors | immutable embedded node centers; exact authored recipe ports | `nodeCenters`, `TryConnectProcessionalRooms` |
+| Tier-seam adjacency | processional exact 2 at eligible 4/8u; atrium/twin-wing 0 | `DungeonTierSeamAdjacencySettings`, `BuildPlannedOverlooks` |
 | Wing chance/size | 0.4, 2x2 (hardcoded) | `BuildProcessionalRoomParts` |
 | Loop fraction (target) | 0.3 (profile); achieved p50 3 edges | `loopConnectionFraction`, report `loopEdges` |
 | Loop candidate distance | 18 (profile) | `maxLoopCandidateDistanceCells` |

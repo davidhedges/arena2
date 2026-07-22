@@ -34,12 +34,39 @@ namespace DungeonLab.Editor
     }
 
     [System.Serializable]
+    public struct DungeonTierSeamAdjacencySettings
+    {
+        [Min(0)]
+        [Tooltip("Exact number of declared non-traversal tier seams requested by this pattern.")]
+        public int requestedCount;
+
+        [Range(4, 8)]
+        [Tooltip("Eligible tier-seam rises: 4 allows 4u seams; 8 allows both 4u and 8u seams.")]
+        public int maximumRiseLevels;
+
+        public DungeonTierSeamAdjacencySettings(int requestedCount, int maximumRiseLevels)
+        {
+            this.requestedCount = requestedCount;
+            this.maximumRiseLevels = maximumRiseLevels;
+        }
+
+        internal DungeonTierSeamAdjacencySettings Validated()
+        {
+            var value = this;
+            value.requestedCount = Mathf.Max(0, value.requestedCount);
+            value.maximumRiseLevels = value.maximumRiseLevels >= 8 ? 8 : 4;
+            return value;
+        }
+    }
+
+    [System.Serializable]
     public struct DungeonPatternSpatialSettings
     {
         [Min(1)] public int horizontalPitchCells;
         [Min(1)] public int verticalPitchCells;
         [Min(4)] public int roomEnvelopeRadiusCells;
         [Min(0)] public int neighborBiasStrengthCells;
+        public DungeonTierSeamAdjacencySettings tierSeamAdjacency;
         public DungeonRoomSizeRange terminalRoomSize;
         public DungeonRoomSizeRange hallRoomSize;
         public DungeonRoomSizeRange connectorRoomSize;
@@ -49,6 +76,7 @@ namespace DungeonLab.Editor
             int verticalPitchCells,
             int roomEnvelopeRadiusCells,
             int neighborBiasStrengthCells,
+            DungeonTierSeamAdjacencySettings tierSeamAdjacency,
             DungeonRoomSizeRange terminalRoomSize,
             DungeonRoomSizeRange hallRoomSize,
             DungeonRoomSizeRange connectorRoomSize)
@@ -57,6 +85,7 @@ namespace DungeonLab.Editor
             this.verticalPitchCells = verticalPitchCells;
             this.roomEnvelopeRadiusCells = roomEnvelopeRadiusCells;
             this.neighborBiasStrengthCells = neighborBiasStrengthCells;
+            this.tierSeamAdjacency = tierSeamAdjacency;
             this.terminalRoomSize = terminalRoomSize;
             this.hallRoomSize = hallRoomSize;
             this.connectorRoomSize = connectorRoomSize;
@@ -71,6 +100,7 @@ namespace DungeonLab.Editor
             // authored footprint reaches four cells from its logical anchor.
             value.roomEnvelopeRadiusCells = Mathf.Max(4, value.roomEnvelopeRadiusCells);
             value.neighborBiasStrengthCells = Mathf.Max(0, value.neighborBiasStrengthCells);
+            value.tierSeamAdjacency = value.tierSeamAdjacency.Validated();
             value.terminalRoomSize = value.terminalRoomSize.Validated();
             value.hallRoomSize = value.hallRoomSize.Validated();
             value.connectorRoomSize = value.connectorRoomSize.Validated();
@@ -124,6 +154,7 @@ namespace DungeonLab.Editor
                 9,
                 4,
                 0,
+                new DungeonTierSeamAdjacencySettings(2, 8),
                 new DungeonRoomSizeRange(5, 5, 7, 7),
                 new DungeonRoomSizeRange(5, 5, 5, 6),
                 new DungeonRoomSizeRange(4, 5, 5, 5));

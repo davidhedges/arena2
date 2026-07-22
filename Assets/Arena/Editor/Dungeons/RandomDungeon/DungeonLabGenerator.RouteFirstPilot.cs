@@ -43,6 +43,11 @@ namespace DungeonLab.Editor
         private const int MinimumMainRouteNodesBetweenRecipeSlots = 2;
         private const int MaximumNamedVistaPromontoryCells = 4;
         private const int SharedReturnRecipeNode = 12;
+        private static readonly RouteOverlookIntent[] ProcessionalTierSeamCandidates =
+        {
+            new RouteOverlookIntent(6, 9),
+            new RouteOverlookIntent(7, 10)
+        };
 
         // Ephemeral diagnostic evidence for the most recent attempt.
         // It is never consumed by generation or carried into DungeonLayout.
@@ -691,13 +696,86 @@ namespace DungeonLab.Editor
                 requiredCycleRank: 1,
                 requiredCycleCoreNodeCount: 10,
                 requiredJunctionDegree: 3,
-                plannedOverlooks: new[]
-                {
-                    new RouteOverlookIntent(1, 10),
-                    new RouteOverlookIntent(6, 9),
-                    new RouteOverlookIntent(7, 10)
-                },
+                plannedOverlooks: BuildPlannedOverlooks(
+                    Phase1PatternId,
+                    nodes,
+                    edges,
+                    ResolvePatternSpatialSettings(Phase1PatternId).tierSeamAdjacency),
                 allowGenericRoomWings: true);
+        }
+
+        private static RouteOverlookIntent[] BuildPlannedOverlooks(
+            string patternId,
+            IReadOnlyList<RouteNodeIntent> nodes,
+            IReadOnlyList<RouteTraversalIntent> traversalEdges,
+            DungeonTierSeamAdjacencySettings requestedSettings)
+        {
+            DungeonTierSeamAdjacencySettings settings = requestedSettings.Validated();
+            IReadOnlyList<RouteOverlookIntent> candidates = DeclaredTierSeamCandidates(patternId);
+            var selected = new List<RouteOverlookIntent>(settings.requestedCount);
+            foreach (RouteOverlookIntent candidate in candidates)
+            {
+                if (selected.Count >= settings.requestedCount)
+                {
+                    break;
+                }
+
+                if (candidate.firstNode < 0 || candidate.firstNode >= nodes.Count ||
+                    candidate.secondNode < 0 || candidate.secondNode >= nodes.Count ||
+                    candidate.firstNode == candidate.secondNode)
+                {
+                    throw new InvalidOperationException(
+                        $"[TIER_SEAM_ADJACENCY] pattern '{patternId}' declared an invalid candidate");
+                }
+
+                bool isTraversal = false;
+                foreach (RouteTraversalIntent edge in traversalEdges)
+                {
+                    if ((edge.fromNode == candidate.firstNode && edge.toNode == candidate.secondNode) ||
+                        (edge.fromNode == candidate.secondNode && edge.toNode == candidate.firstNode))
+                    {
+                        isTraversal = true;
+                        break;
+                    }
+                }
+
+                int rise = Mathf.Abs(
+                    nodes[candidate.firstNode].relativeElevationLevels -
+                    nodes[candidate.secondNode].relativeElevationLevels);
+                if (!isTraversal &&
+                    rise >= MajorRiseLevels &&
+                    rise <= settings.maximumRiseLevels &&
+                    rise % MajorRiseLevels == 0)
+                {
+                    selected.Add(candidate);
+                }
+            }
+
+            if (selected.Count != settings.requestedCount)
+            {
+                throw new InvalidOperationException(
+                    $"[TIER_SEAM_ADJACENCY] pattern '{patternId}' requested {settings.requestedCount} " +
+                    $"eligible adjacencies but declared {selected.Count}");
+            }
+
+            return selected.ToArray();
+        }
+
+        private static IReadOnlyList<RouteOverlookIntent> DeclaredTierSeamCandidates(string patternId)
+        {
+            if (string.Equals(patternId, Phase1PatternId, StringComparison.Ordinal))
+            {
+                return ProcessionalTierSeamCandidates;
+            }
+
+            if (string.Equals(patternId, AtriumRingPatternId, StringComparison.Ordinal) ||
+                string.Equals(patternId, TwinWingPatternId, StringComparison.Ordinal))
+            {
+                return Array.Empty<RouteOverlookIntent>();
+            }
+
+            throw new InvalidOperationException(
+                $"[TIER_SEAM_ADJACENCY] pattern '{patternId}' has no candidate declaration");
         }
 
         private static RoutePatternKind SelectRoutePattern(int dungeonSeed)
@@ -888,7 +966,11 @@ namespace DungeonLab.Editor
                 requiredCycleRank: 1,
                 requiredCycleCoreNodeCount: 8,
                 requiredJunctionDegree: 3,
-                plannedOverlooks: Array.Empty<RouteOverlookIntent>(),
+                plannedOverlooks: BuildPlannedOverlooks(
+                    AtriumRingPatternId,
+                    nodes,
+                    edges,
+                    ResolvePatternSpatialSettings(AtriumRingPatternId).tierSeamAdjacency),
                 allowGenericRoomWings: false);
         }
 
@@ -1021,7 +1103,11 @@ namespace DungeonLab.Editor
                 requiredCycleRank: 2,
                 requiredCycleCoreNodeCount: 10,
                 requiredJunctionDegree: 4,
-                plannedOverlooks: Array.Empty<RouteOverlookIntent>(),
+                plannedOverlooks: BuildPlannedOverlooks(
+                    TwinWingPatternId,
+                    nodes,
+                    edges,
+                    ResolvePatternSpatialSettings(TwinWingPatternId).tierSeamAdjacency),
                 allowGenericRoomWings: false);
         }
 
@@ -1358,6 +1444,7 @@ namespace DungeonLab.Editor
                 verticalPitchCells,
                 roomEnvelopeRadiusCells: 4,
                 neighborBiasStrengthCells: 0,
+                new DungeonTierSeamAdjacencySettings(requestedCount: 0, maximumRiseLevels: 8),
                 BaselineRoomSizeRangeForRole("arrival"),
                 BaselineRoomSizeRangeForRole("processional-hall"),
                 BaselineRoomSizeRangeForRole("connector")).Validated();

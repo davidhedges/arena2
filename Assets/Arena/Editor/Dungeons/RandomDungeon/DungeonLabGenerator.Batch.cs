@@ -1108,11 +1108,10 @@ namespace DungeonLab.Editor
 
         private static string BuildDensityAdjacencySlice5Snapshot()
         {
-            const string spaciousBaselineCanonical =
-                "af4bce4800980db2d44ae2502600790a31cb0df287ed31100943f21baca5c4d9";
             DungeonGenerationSettings spaciousSettings = LoadActiveGenerationSettings("spacious");
             DungeonGenerationSettings denseSettings = LoadActiveGenerationSettings("dense");
             JObject spaciousProcessional = BuildPhase0SeedReport(2026072100, "spacious");
+            JObject spaciousProcessionalRepeat = BuildPhase0SeedReport(2026072100, "spacious");
             JObject denseProcessional = BuildPhase0SeedReport(2026072100, "dense");
             JObject denseProcessionalRepeat = BuildPhase0SeedReport(2026072100, "dense");
             JObject spaciousAtrium = BuildPhase0SeedReport(2026072101, "spacious");
@@ -1153,7 +1152,7 @@ namespace DungeonLab.Editor
                 $"spacious.accepted={spaciousProcessional.Value<bool>("accepted")}",
                 $"spacious.valid={spaciousProcessional["validation"]?.Value<bool>("passed")}",
                 $"spacious.canonical={spaciousProcessional["hashes"]?.Value<string>("canonical")}",
-                $"spacious.baselinePreserved={string.Equals(spaciousProcessional["hashes"]?.Value<string>("canonical"), spaciousBaselineCanonical, StringComparison.Ordinal)}",
+                $"spacious.deterministic={ReportsMatch(spaciousProcessional, spaciousProcessionalRepeat)}",
                 $"dense.accepted={denseProcessional.Value<bool>("accepted")}",
                 $"dense.valid={denseProcessional["validation"]?.Value<bool>("passed")}",
                 $"dense.deterministic={ReportsMatch(denseProcessional, denseProcessionalRepeat)}",
@@ -1317,10 +1316,149 @@ namespace DungeonLab.Editor
             });
         }
 
+        private static string BuildDensityAdjacencySlice6Snapshot()
+        {
+            const string spaciousProcessionalCanonical =
+                "af4bce4800980db2d44ae2502600790a31cb0df287ed31100943f21baca5c4d9";
+            const string denseProcessionalCanonical =
+                "fa2b89232ff1e3d2fe7efabe0326abdf795597dce411390e12ebb39ffe89063a";
+            DungeonGenerationSettings spaciousSettings = LoadActiveGenerationSettings("spacious");
+            DungeonGenerationSettings denseSettings = LoadActiveGenerationSettings("dense");
+
+            CurrentGenerationSettings = spaciousSettings;
+            RouteIntent processional = BuildDiagnosticRouteIntent(2026072100);
+            RouteOverlookIntent[] zeroRequested = BuildPlannedOverlooks(
+                processional.patternId,
+                processional.nodes,
+                processional.traversalEdges,
+                new DungeonTierSeamAdjacencySettings(requestedCount: 0, maximumRiseLevels: 8));
+            RouteOverlookIntent[] fourAndEightRequested = BuildPlannedOverlooks(
+                processional.patternId,
+                processional.nodes,
+                processional.traversalEdges,
+                new DungeonTierSeamAdjacencySettings(requestedCount: 2, maximumRiseLevels: 8));
+            bool unsatisfiedRejected = false;
+            string unsatisfiedError = string.Empty;
+            try
+            {
+                BuildPlannedOverlooks(
+                    processional.patternId,
+                    processional.nodes,
+                    processional.traversalEdges,
+                    new DungeonTierSeamAdjacencySettings(requestedCount: 3, maximumRiseLevels: 8));
+            }
+            catch (InvalidOperationException exception)
+            {
+                unsatisfiedRejected = true;
+                unsatisfiedError = exception.Message;
+            }
+
+            bool probeAccepted = TryBuildAcceptedPlan(
+                2026072100,
+                new System.Random(2026072100),
+                new Dictionary<string, int>(StringComparer.Ordinal),
+                out DungeonLayout probeLayout,
+                out _,
+                out _,
+                out string probeRejection);
+            var seamEvidence = new List<string>();
+            bool everyDefaultPairAbuts = probeAccepted;
+            if (probeAccepted)
+            {
+                foreach (RouteOverlookIntent pair in processional.plannedOverlooks)
+                {
+                    int sharedEdges = CountSharedRoomBoundaryEdges(
+                        probeLayout.rooms[pair.firstNode],
+                        probeLayout.rooms[pair.secondNode]);
+                    int rise = Mathf.Abs(
+                        processional.nodes[pair.firstNode].relativeElevationLevels -
+                        processional.nodes[pair.secondNode].relativeElevationLevels);
+                    seamEvidence.Add(
+                        $"{processional.nodes[pair.firstNode].id}>{processional.nodes[pair.secondNode].id}:" +
+                        $"r{rise}:e{sharedEdges}");
+                    everyDefaultPairAbuts &= sharedEdges > 0;
+                }
+            }
+
+            JObject spaciousProcessional = BuildPhase0SeedReport(2026072100, "spacious");
+            JObject spaciousProcessionalRepeat = BuildPhase0SeedReport(2026072100, "spacious");
+            JObject denseProcessional = BuildPhase0SeedReport(2026072100, "dense");
+            JObject denseProcessionalRepeat = BuildPhase0SeedReport(2026072100, "dense");
+            JObject spaciousAtrium = BuildPhase0SeedReport(2026072101, "spacious");
+            JObject denseAtrium = BuildPhase0SeedReport(2026072101, "dense");
+            JObject spaciousTwinWing = BuildPhase0SeedReport(2026072103, "spacious");
+            JObject denseTwinWing = BuildPhase0SeedReport(2026072103, "dense");
+
+            CurrentGenerationSettings = spaciousSettings;
+            DungeonPatternSpatialSettings atriumSpatial = ResolvePatternSpatialSettings(AtriumRingPatternId);
+            DungeonPatternSpatialSettings twinWingSpatial = ResolvePatternSpatialSettings(TwinWingPatternId);
+            return string.Join("\n", new[]
+            {
+                $"profiles.spaciousPolicy={TierSeamSettingsSnapshot(spaciousSettings.processionalSpatial.tierSeamAdjacency)}",
+                $"profiles.densePolicy={TierSeamSettingsSnapshot(denseSettings.processionalSpatial.tierSeamAdjacency)}",
+                $"profiles.atriumPolicy={TierSeamSettingsSnapshot(atriumSpatial.tierSeamAdjacency)}",
+                $"profiles.twinWingPolicy={TierSeamSettingsSnapshot(twinWingSpatial.tierSeamAdjacency)}",
+                $"policy.productionPairs={TierSeamPairsSnapshot(processional, processional.plannedOverlooks)}",
+                $"policy.zeroCount={zeroRequested.Length}",
+                $"policy.fourAndEightPairs={TierSeamPairsSnapshot(processional, fourAndEightRequested)}",
+                $"policy.unsatisfiedRejected={unsatisfiedRejected}",
+                $"policy.unsatisfiedError={unsatisfiedError}",
+                $"probe.accepted={probeAccepted}",
+                $"probe.rejection={probeRejection}",
+                $"probe.everyDefaultPairAbuts={everyDefaultPairAbuts}",
+                $"probe.seams={string.Join("|", seamEvidence)}",
+                $"spacious.changedFromSlice5={!string.Equals(spaciousProcessional["hashes"]?.Value<string>("canonical"), spaciousProcessionalCanonical, StringComparison.Ordinal)}",
+                $"spacious.deterministic={ReportsMatch(spaciousProcessional, spaciousProcessionalRepeat)}",
+                $"dense.changedFromSlice5={!string.Equals(denseProcessional["hashes"]?.Value<string>("canonical"), denseProcessionalCanonical, StringComparison.Ordinal)}",
+                $"dense.deterministic={ReportsMatch(denseProcessional, denseProcessionalRepeat)}",
+                $"atrium.canonicalSame={CanonicalReportsMatch(spaciousAtrium, denseAtrium)}",
+                $"atrium.measurementsSame={JToken.DeepEquals(spaciousAtrium["measurements"], denseAtrium["measurements"])}",
+                $"twinWing.canonicalSame={CanonicalReportsMatch(spaciousTwinWing, denseTwinWing)}",
+                $"twinWing.measurementsSame={JToken.DeepEquals(spaciousTwinWing["measurements"], denseTwinWing["measurements"])}"
+            });
+        }
+
+        private static int CountSharedRoomBoundaryEdges(RoomFootprint first, RoomFootprint second)
+        {
+            int count = 0;
+            foreach (Vector2Int cell in first.cells)
+            {
+                foreach (Vector2Int direction in CardinalDirections())
+                {
+                    if (second.Contains(cell + direction))
+                    {
+                        count++;
+                    }
+                }
+            }
+
+            return count;
+        }
+
+        private static string TierSeamPairsSnapshot(
+            RouteIntent intent,
+            IReadOnlyList<RouteOverlookIntent> pairs)
+        {
+            return string.Join("|", pairs.Select(pair =>
+            {
+                int rise = Mathf.Abs(
+                    intent.nodes[pair.firstNode].relativeElevationLevels -
+                    intent.nodes[pair.secondNode].relativeElevationLevels);
+                return $"{intent.nodes[pair.firstNode].id}>{intent.nodes[pair.secondNode].id}:r{rise}";
+            }));
+        }
+
+        private static string TierSeamSettingsSnapshot(DungeonTierSeamAdjacencySettings settings)
+        {
+            DungeonTierSeamAdjacencySettings validated = settings.Validated();
+            return $"{validated.requestedCount}@{validated.maximumRiseLevels}";
+        }
+
         private static string SpatialSettingsSnapshot(DungeonPatternSpatialSettings spatial)
         {
             return $"{spatial.horizontalPitchCells}x{spatial.verticalPitchCells}:r{spatial.roomEnvelopeRadiusCells}:" +
                 $"b{spatial.neighborBiasStrengthCells}:" +
+                $"t{spatial.tierSeamAdjacency.requestedCount}@{spatial.tierSeamAdjacency.maximumRiseLevels}:" +
                 $"{RoomSizeRangeSnapshot(spatial.terminalRoomSize)}|" +
                 $"{RoomSizeRangeSnapshot(spatial.hallRoomSize)}|" +
                 RoomSizeRangeSnapshot(spatial.connectorRoomSize);
