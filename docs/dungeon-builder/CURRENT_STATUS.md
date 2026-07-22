@@ -4,7 +4,7 @@ Start here when returning to dungeon work. Keep this page short and update it at
 
 Last updated: 2026-07-22
 
-Active milestone: Phase 6, Phase 7, and the bounded corrective item remain closed; density/adjacency slices 0-2 are complete and slice 3 is not started
+Active milestone: Phase 6, Phase 7, and the bounded corrective item remain closed; density/adjacency slices 0-3 are complete and slice 4 is not started
 
 Production mode: one route-first layout builder deterministically selects processional-spine, atrium-ring, or twin-wing-keep, resolves exactly three reviewed recipes plus any target-bearing named-vista promontory and 1-4 canonical external connector promontories, and feeds the shared canonical pipeline
 
@@ -15,7 +15,7 @@ Recipe authoring UI: implemented for the Phase 5 contract, validation, determini
 1. [`PROJECT_INVARIANTS.md`](PROJECT_INVARIANTS.md) — non-negotiable geometry and placement rules.
 2. This file — current evidence and exact handoff.
 3. [`COHERENT_FLOORPLAN_PLAN.md`](COHERENT_FLOORPLAN_PLAN.md) — architecture, phases, and exit gates.
-4. [`DENSITY_ADJACENCY_PLAN.md`](DENSITY_ADJACENCY_PLAN.md) — approved density/adjacency workstream; slices 0-2 complete and slice 3 next.
+4. [`DENSITY_ADJACENCY_PLAN.md`](DENSITY_ADJACENCY_PLAN.md) — approved density/adjacency workstream; slices 0-3 complete and slice 4 next.
 5. [`RECIPE_AUTHORING_WORKFLOW.md`](RECIPE_AUTHORING_WORKFLOW.md) — required contract for Phase 5 lifecycle, validation, preview, and review work.
 6. [`stair_forge_design.md`](stair_forge_design.md) — exact stair contracts already reused by the coupled twin-stair episode and any Phase 5 contrast recipe.
 
@@ -620,13 +620,13 @@ Missing any locked gate requires revising the implementation or reporting the Ph
 ## End-of-session handoff
 
 ```text
-Milestone/phase: Phase 6, Phase 7, and the bounded corrective item remain closed. Density/adjacency slices 0-2 are complete; slice 3 is not started.
-Completed this session: added and completed the bounded Slice 2 verification. Existing twin-wing seed `2026072103` has two zero-exterior, doorway-backed connections; touching rooms compile to one shared-wall doorway and render with collision-export-ready inputs; a biased junction fails first at footprint-center cardinal alignment. Chose stable embedded-node anchors and recorded their junction invariants. No production generator, renderer, or collision behavior changed.
-Current validation result: focused Slice 2 EditMode tests pass 5/5; the editor and focused test projects compile with 0 errors through the generated C# projects; `git diff --check` passes. The initial test-launch delay was an orphaned Unity 6000.4 licensing client created by this session, not an open Editor; only that orphan was stopped, after which Unity compiled and ran normally. Slice 1's prior validation evidence remains unchanged.
-Last known-good seeds and reports: the final default-profile report is `DungeonLabReports/dungeon_plan_2026072100_2026072149.json`; fixed sentinels remain unchanged. `spacious` uses settings digest `55b74a5f3827ae4127cecb14262c8d1beea3ccc04fd59ece51326ccb80c803a7`.
-Last diagnostic fact: shared-wall-door candidates already exist at baseline (processional p50 2, twin-wing p50 1, atrium p50 0); all 50 reserved vistas remain preserved and atrium center voids have p50 191 projected cells.
-Deletion-ledger items added/closed: the Slice 2 probe is diagnostic-only in the existing batch partial; it adds no alternate planner, connection compiler, boundary builder, renderer, collision path, or persistent per-edge anchor state.
-Exact next action: obtain explicit approval, then execute Slice 3 room-size profile knobs within its processional-only and stair-aware boundary. Do not begin it from this status alone.
-Blocker or decision needed: owner approval to begin Slice 3. No Slice 2 engineering blocker remains.
+Milestone/phase: Phase 6, Phase 7, and the bounded corrective item remain closed. Density/adjacency slices 0-3 are complete; slice 4 is not started.
+Completed this session: completed Slice 3. Three generic-room size ranges now flow through the existing generation settings seam. `spacious` exactly preserves the prior processional dimensions; `dense` uses 7x7 rooms only for processional generation. Stair-, stairwell-, and bridge-bearing axes retain the spacious face position. Atrium and twin-wing generation are untouched.
+Current validation result: focused Slice 3 EditMode tests pass 5/5 and the updated Slice 1 fixture passes 4/4; editor compilation passes with 0 errors. Spacious and dense 50-seed sweeps each accepted and hard-validated 50/50 on layout attempt 1 with the same single `PORT_GRAPH` retry rejection and no validation failure. All six real-render sentinels report `REJECTED 0`.
+Last known-good seeds and reports: the active default-profile report is `DungeonLabReports/dungeon_plan_2026072100_2026072149.json`, and `DungeonLabReports/visual_sentinels/manifest.json` is the restored spacious capture. `spacious` uses settings digest `6d51ab4706ef16f74c6c853a125b59d3b4bf024b75facc43826ed52f56a324ab`; `dense` uses `f16b9d3d7cd66040e91cc0be094f37ac77dc7526b8d9dd096cebd8ec1fdf6288`.
+Last diagnostic fact: across the fixed 25 processional smoke seeds, dense room growth shortened exterior corridors on 19, tied on six, lengthened none, and reduced the aggregate from 1,433 to 1,402 cells. All 13 atrium and 12 twin-wing canonical plans match across profiles. The three processional visual sentinels moved `50/53/68 -> 49/52/65`; the other three sentinel canonicals remained identical.
+Deletion-ledger items added/closed: the Slice 3 diagnostic snapshot and focused fixture call the existing generator and settings loader only. No alternate planner, layout, transition, renderer, collision, profile-loading, or profile-specific production path was added; no temporary production path remains.
+Exact next action: obtain explicit approval, then execute Slice 4 per-pattern processional pitch knobs and its single spatial-settings ownership cleanup. Do not begin it from this status alone.
+Blocker or decision needed: owner approval to begin Slice 4. No Slice 3 engineering blocker remains.
 New chat necessary: no.
 ```

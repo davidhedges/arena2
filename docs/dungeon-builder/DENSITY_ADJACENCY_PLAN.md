@@ -1,6 +1,6 @@
 # Density and adjacency plan
 
-Status: approved; slices 0-2 complete (2026-07-22); slice 3 not started
+Status: approved; slices 0-3 complete (2026-07-22); slice 4 not started
 Owner intent: keep the cliffs/voids; add denser floorplans with neighboring rooms and
 directly abutting tiers, in the spirit of the gold-standard scene
 (`Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/scenes/demoscene_dungeon_level_1_dungeon.unity`).
@@ -299,6 +299,35 @@ the smoke sweep; a spike means the cap is wrong.
 
 Done when: a `dense` profile variant (via slice 1 selection) visibly shortens
 corridors on the sentinels, hard gates pass, smoke sweep failure rates acceptable.
+
+#### Slice 3 result (2026-07-22)
+
+- The existing generation settings now own three processional generic-room ranges:
+  terminal, hall/default, and connector. `spacious` reproduces the prior
+  `5x7`, `5x(5-6)`, and `(4-5)x5` behavior exactly; `dense` sets all three to
+  `7x7`. Both profiles still resolve through `LoadActiveGenerationSettings`, and
+  production code does not branch on profile identity.
+- The size ranges affect only `processional-spine`. Across the fixed 50-seed smoke
+  sweep, all 25 processional canonical plans changed under `dense`; exterior
+  corridor cells shortened on 19 seeds, stayed equal on six, and lengthened on
+  none. The aggregate moved from `1,433` to `1,402` cells (mean `57.32` to
+  `56.08`). All 13 atrium and 12 twin-wing canonical plans and measurements were
+  identical between profiles.
+- Non-level incident edges preserve the known-good transition face: focused probes
+  produced `7x7` for an uncapped level edge, `5x7` for X-axis stair/stairwell
+  edges, and `7x5` for a Y-axis bridge edge. No concrete stair choice moved into
+  room inflation.
+- Both profile smoke sweeps accepted and hard-validated 50/50 seeds, all on layout
+  attempt 1, with the same single `PORT_GRAPH` pre-acceptance rejection and no
+  validation failure. Spacious seed `2026072100` retains the exact pre-slice
+  canonical hash `af4bce48...c4d9`; focused Slice 3 tests pass 5/5 and the updated
+  Slice 1 fixture passes 4/4.
+- All six real-render sentinels report `REJECTED 0`. The three processional
+  sentinels shorten from `50/53/68` to `49/52/65` exterior cells and visibly
+  expand floor plates into their former gaps without changing the vertical
+  composition. The other three sentinel canonical plans are unchanged. The
+  active ignored report and sentinel capture were restored to `spacious` after
+  comparison.
 
 ### Slice 4 — per-pattern pitch knobs
 

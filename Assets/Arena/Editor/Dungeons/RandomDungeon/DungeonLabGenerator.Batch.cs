@@ -852,6 +852,157 @@ namespace DungeonLab.Editor
                 firstRoom.Contains(doorway.secondCell) && secondRoom.Contains(doorway.firstCell);
         }
 
+        private static string BuildDensityAdjacencySlice3Snapshot()
+        {
+            const int processionalSeed = 2026072100;
+            const int atriumSeed = 2026072101;
+            const int twinWingSeed = 2026072103;
+            JObject spaciousProcessional = BuildPhase0SeedReport(processionalSeed, "spacious");
+            JObject spaciousProcessionalRepeat = BuildPhase0SeedReport(processionalSeed, "spacious");
+            JObject denseProcessional = BuildPhase0SeedReport(processionalSeed, "dense");
+            JObject denseProcessionalRepeat = BuildPhase0SeedReport(processionalSeed, "dense");
+            JObject spaciousAtrium = BuildPhase0SeedReport(atriumSeed, "spacious");
+            JObject denseAtrium = BuildPhase0SeedReport(atriumSeed, "dense");
+            JObject spaciousTwinWing = BuildPhase0SeedReport(twinWingSeed, "spacious");
+            JObject denseTwinWing = BuildPhase0SeedReport(twinWingSeed, "dense");
+            int[] processionalSentinels = { 2026072140, 2026072186, 2026072262 };
+            int spaciousSentinelExterior = 0;
+            int denseSentinelExterior = 0;
+            int shortenedSentinels = 0;
+            int validSentinelProfiles = 0;
+            foreach (int seed in processionalSentinels)
+            {
+                JObject spacious = BuildPhase0SeedReport(seed, "spacious");
+                JObject dense = BuildPhase0SeedReport(seed, "dense");
+                int spaciousExterior = spacious["measurements"]?["corridorEvidence"]
+                    ?.Value<int>("exteriorCorridorCellCount") ?? 0;
+                int denseExterior = dense["measurements"]?["corridorEvidence"]
+                    ?.Value<int>("exteriorCorridorCellCount") ?? 0;
+                spaciousSentinelExterior += spaciousExterior;
+                denseSentinelExterior += denseExterior;
+                if (denseExterior < spaciousExterior)
+                {
+                    shortenedSentinels++;
+                }
+
+                if (spacious.Value<bool?>("accepted") == true &&
+                    dense.Value<bool?>("accepted") == true &&
+                    spacious["validation"]?.Value<bool?>("passed") == true &&
+                    dense["validation"]?.Value<bool?>("passed") == true)
+                {
+                    validSentinelProfiles++;
+                }
+            }
+
+            DungeonGenerationSettings spaciousSettings = LoadActiveGenerationSettings("spacious");
+            DungeonGenerationSettings denseSettings = LoadActiveGenerationSettings("dense");
+            CurrentGenerationSettings = denseSettings;
+            Vector2Int levelSize = BuildSlice3SizeProbe(
+                "processional-hall",
+                RouteTransitionKind.LevelCorridor,
+                new Vector2Int(9, 0));
+            Vector2Int stairSize = BuildSlice3SizeProbe(
+                "processional-hall",
+                RouteTransitionKind.Stair,
+                new Vector2Int(9, 0));
+            Vector2Int bridgeSize = BuildSlice3SizeProbe(
+                "connector",
+                RouteTransitionKind.Bridge,
+                new Vector2Int(0, 9));
+            Vector2Int stairwellSize = BuildSlice3SizeProbe(
+                "arrival",
+                RouteTransitionKind.Stairwell,
+                new Vector2Int(9, 0));
+
+            var lines = new List<string>
+            {
+                $"profiles.valueCount={BuildGenerationSettingsValues(spaciousSettings).Properties().Count()}",
+                $"profiles.spaciousTerminal={RoomSizeRangeSnapshot(spaciousSettings.processionalTerminalRoomSize)}",
+                $"profiles.spaciousHall={RoomSizeRangeSnapshot(spaciousSettings.processionalHallRoomSize)}",
+                $"profiles.spaciousConnector={RoomSizeRangeSnapshot(spaciousSettings.processionalConnectorRoomSize)}",
+                $"profiles.denseTerminal={RoomSizeRangeSnapshot(denseSettings.processionalTerminalRoomSize)}",
+                $"profiles.denseHall={RoomSizeRangeSnapshot(denseSettings.processionalHallRoomSize)}",
+                $"profiles.denseConnector={RoomSizeRangeSnapshot(denseSettings.processionalConnectorRoomSize)}",
+                $"processional.spaciousAccepted={spaciousProcessional.Value<bool>("accepted")}",
+                $"processional.denseAccepted={denseProcessional.Value<bool>("accepted")}",
+                $"processional.spaciousValid={spaciousProcessional["validation"]?.Value<bool>("passed")}",
+                $"processional.denseValid={denseProcessional["validation"]?.Value<bool>("passed")}",
+                $"processional.spaciousCanonical={spaciousProcessional["hashes"]?.Value<string>("canonical")}",
+                $"processional.denseCanonical={denseProcessional["hashes"]?.Value<string>("canonical")}",
+                $"processional.spaciousExterior={spaciousProcessional["measurements"]?["corridorEvidence"]?.Value<int>("exteriorCorridorCellCount")}",
+                $"processional.denseExterior={denseProcessional["measurements"]?["corridorEvidence"]?.Value<int>("exteriorCorridorCellCount")}",
+                $"processional.spaciousLengthP50={spaciousProcessional["measurements"]?["corridorEvidence"]?["perConnectionExteriorLengthDistribution"]?.Value<int>("p50")}",
+                $"processional.denseLengthP50={denseProcessional["measurements"]?["corridorEvidence"]?["perConnectionExteriorLengthDistribution"]?.Value<int>("p50")}",
+                $"processional.spaciousDeterministic={string.Equals(spaciousProcessional["hashes"]?.Value<string>("canonical"), spaciousProcessionalRepeat["hashes"]?.Value<string>("canonical"), StringComparison.Ordinal)}",
+                $"processional.denseDeterministic={string.Equals(denseProcessional["hashes"]?.Value<string>("canonical"), denseProcessionalRepeat["hashes"]?.Value<string>("canonical"), StringComparison.Ordinal) && JToken.DeepEquals(denseProcessional["measurements"], denseProcessionalRepeat["measurements"])}",
+                $"sentinels.profileValidPairs={validSentinelProfiles}",
+                $"sentinels.shortened={shortenedSentinels}",
+                $"sentinels.spaciousExterior={spaciousSentinelExterior}",
+                $"sentinels.denseExterior={denseSentinelExterior}",
+                $"atrium.accepted={spaciousAtrium.Value<bool>("accepted") && denseAtrium.Value<bool>("accepted")}",
+                $"atrium.canonicalSame={string.Equals(spaciousAtrium["hashes"]?.Value<string>("canonical"), denseAtrium["hashes"]?.Value<string>("canonical"), StringComparison.Ordinal)}",
+                $"atrium.measurementsSame={JToken.DeepEquals(spaciousAtrium["measurements"], denseAtrium["measurements"])}",
+                $"twinWing.accepted={spaciousTwinWing.Value<bool>("accepted") && denseTwinWing.Value<bool>("accepted")}",
+                $"twinWing.canonicalSame={string.Equals(spaciousTwinWing["hashes"]?.Value<string>("canonical"), denseTwinWing["hashes"]?.Value<string>("canonical"), StringComparison.Ordinal)}",
+                $"twinWing.measurementsSame={JToken.DeepEquals(spaciousTwinWing["measurements"], denseTwinWing["measurements"])}",
+                $"cap.level={levelSize.x}x{levelSize.y}",
+                $"cap.stairX={stairSize.x}x{stairSize.y}",
+                $"cap.bridgeY={bridgeSize.x}x{bridgeSize.y}",
+                $"cap.stairwellX={stairwellSize.x}x{stairwellSize.y}"
+            };
+            return string.Join("\n", lines);
+        }
+
+        private static Vector2Int BuildSlice3SizeProbe(
+            string role,
+            RouteTransitionKind transitionKind,
+            Vector2Int neighborCenter)
+        {
+            var nodes = new[]
+            {
+                new RouteNodeIntent("slice3-source", role, "probe", 0, -1, 0),
+                new RouteNodeIntent("slice3-target", "connector", "probe", 1, -1, 0)
+            };
+            var intent = new RouteIntent(
+                0,
+                RoutePlannerVersion,
+                Phase1PatternId,
+                nodes,
+                new[]
+                {
+                    new RouteTraversalIntent("slice3-edge", 0, 1, 0, transitionKind)
+                },
+                new RouteVistaIntent("slice3-vista", 0, 1, 1),
+                RouteElevationPolicy.AscendingSpine,
+                Array.Empty<RecipeSlotIntent>(),
+                string.Empty,
+                0,
+                1,
+                0,
+                1,
+                0,
+                0,
+                0,
+                Array.Empty<RouteOverlookIntent>(),
+                allowGenericRoomWings: false);
+            var centers = new[] { Vector2Int.zero, neighborCenter };
+            ResolveGenericRoomDimensions(
+                intent,
+                nodes[0],
+                0,
+                Vector2Int.zero,
+                centers,
+                new System.Random(31),
+                out int width,
+                out int depth);
+            return new Vector2Int(width, depth);
+        }
+
+        private static string RoomSizeRangeSnapshot(DungeonRoomSizeRange range)
+        {
+            return $"{range.minWidthCells}-{range.maxWidthCells}x{range.minDepthCells}-{range.maxDepthCells}";
+        }
+
         private static string BuildCharacterizationSnapshot(int seed)
         {
             JObject report = BuildPhase0SeedReport(seed);

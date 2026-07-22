@@ -1813,30 +1813,15 @@ namespace DungeonLab.Editor
                 return BuildRecipeRoomParts(recipeSlot, center, primaryAxis, mirrored: false);
             }
 
-            int width;
-            int depth;
-            switch (node.role)
-            {
-                case "arrival":
-                case "culmination":
-                    width = 5;
-                    depth = 7;
-                    break;
-                case "grand-room":
-                case "landmark":
-                case "processional-hall":
-                    width = 5;
-                    depth = 5 + random.Next(2);
-                    break;
-                case "connector":
-                    width = 4 + random.Next(2);
-                    depth = 5;
-                    break;
-                default:
-                    width = 5;
-                    depth = 5 + random.Next(2);
-                    break;
-            }
+            ResolveGenericRoomDimensions(
+                intent,
+                node,
+                nodeIndex,
+                center,
+                nodeCenters,
+                random,
+                out int width,
+                out int depth);
 
             bool hasPlannedOverlookAppendage = HasPlannedOverlookAppendage(intent, nodeIndex);
             if (hasPlannedOverlookAppendage)
@@ -1876,6 +1861,131 @@ namespace DungeonLab.Editor
             }
 
             return parts;
+        }
+
+        private static void ResolveGenericRoomDimensions(
+            RouteIntent intent,
+            RouteNodeIntent node,
+            int nodeIndex,
+            Vector2Int center,
+            IReadOnlyList<Vector2Int> nodeCenters,
+            System.Random random,
+            out int width,
+            out int depth)
+        {
+            int baselineWidth;
+            int baselineDepth;
+            bool widthHasLegacyRoll;
+            bool depthHasLegacyRoll;
+            int legacyWidthMinimum;
+            int legacyDepthMinimum;
+            DungeonRoomSizeRange configuredRange;
+            DungeonGenerationSettings settings = CurrentGenerationSettings.Validated();
+            switch (node.role)
+            {
+                case "arrival":
+                case "culmination":
+                    baselineWidth = 5;
+                    baselineDepth = 7;
+                    widthHasLegacyRoll = false;
+                    depthHasLegacyRoll = false;
+                    legacyWidthMinimum = baselineWidth;
+                    legacyDepthMinimum = baselineDepth;
+                    configuredRange = settings.processionalTerminalRoomSize;
+                    break;
+                case "connector":
+                    baselineWidth = 4 + random.Next(2);
+                    baselineDepth = 5;
+                    widthHasLegacyRoll = true;
+                    depthHasLegacyRoll = false;
+                    legacyWidthMinimum = 4;
+                    legacyDepthMinimum = baselineDepth;
+                    configuredRange = settings.processionalConnectorRoomSize;
+                    break;
+                default:
+                    baselineWidth = 5;
+                    baselineDepth = 5 + random.Next(2);
+                    widthHasLegacyRoll = false;
+                    depthHasLegacyRoll = true;
+                    legacyWidthMinimum = baselineWidth;
+                    legacyDepthMinimum = 5;
+                    configuredRange = settings.processionalHallRoomSize;
+                    break;
+            }
+
+            // Slice 3 is intentionally processional-only. Atrium and twin-wing
+            // retain the exact pre-slice dimensions and random stream.
+            if (!string.Equals(intent.patternId, Phase1PatternId, StringComparison.Ordinal))
+            {
+                width = baselineWidth;
+                depth = baselineDepth;
+                return;
+            }
+
+            configuredRange = configuredRange.Validated();
+            width = SampleProcessionalRoomDimension(
+                configuredRange.minWidthCells,
+                configuredRange.maxWidthCells,
+                baselineWidth,
+                widthHasLegacyRoll,
+                legacyWidthMinimum,
+                random);
+            depth = SampleProcessionalRoomDimension(
+                configuredRange.minDepthCells,
+                configuredRange.maxDepthCells,
+                baselineDepth,
+                depthHasLegacyRoll,
+                legacyDepthMinimum,
+                random);
+
+            // The concrete stair prefab is selected later. Preserve the known-
+            // sufficient face position now: any non-level incident edge caps
+            // growth on its route axis to the spacious baseline. The orthogonal
+            // axis may still use the profile range.
+            foreach (RouteTraversalIntent edge in intent.traversalEdges)
+            {
+                if (edge.transitionKind == RouteTransitionKind.LevelCorridor ||
+                    (edge.fromNode != nodeIndex && edge.toNode != nodeIndex))
+                {
+                    continue;
+                }
+
+                int otherNode = edge.fromNode == nodeIndex ? edge.toNode : edge.fromNode;
+                Vector2Int delta = nodeCenters[otherNode] - center;
+                if (delta.x != 0)
+                {
+                    width = Mathf.Min(width, baselineWidth);
+                }
+
+                if (delta.y != 0)
+                {
+                    depth = Mathf.Min(depth, baselineDepth);
+                }
+            }
+        }
+
+        private static int SampleProcessionalRoomDimension(
+            int minimum,
+            int maximum,
+            int baselineValue,
+            bool hasLegacyRoll,
+            int legacyMinimum,
+            System.Random random)
+        {
+            if (minimum == maximum)
+            {
+                return minimum;
+            }
+
+            // Reuse the already-consumed binary legacy roll for any two-value
+            // range. That keeps the spacious profile byte-for-byte compatible
+            // without creating a second room-size random stream.
+            if (hasLegacyRoll && maximum - minimum == 1)
+            {
+                return minimum + baselineValue - legacyMinimum;
+            }
+
+            return minimum + random.Next(maximum - minimum + 1);
         }
 
         private static bool TryGetRecipeSlot(

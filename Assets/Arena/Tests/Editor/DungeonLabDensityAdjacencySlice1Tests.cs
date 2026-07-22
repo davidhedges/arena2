@@ -50,7 +50,7 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
-        public void Profiles_AreDistinctIdentitiesWithIdenticalSlice1BehaviorValues()
+        public void Profiles_AreDistinctIdentitiesAndExposeAllCurrentSettingsValues()
         {
             Dictionary<string, string> values = Snapshot.Value;
 
@@ -59,8 +59,8 @@ namespace Arena.Tests.Editor
             Assert.That(values["profiles.spaciousDigest"], Has.Length.EqualTo(64));
             Assert.That(values["profiles.denseDigest"], Has.Length.EqualTo(64));
             Assert.That(values["profiles.digestDistinct"], Is.EqualTo("True"));
-            Assert.That(values["profiles.behaviorValuesEqual"], Is.EqualTo("True"));
-            Assert.That(values["profiles.valueCount"], Is.EqualTo("8"));
+            Assert.That(values["profiles.behaviorValuesEqual"], Is.EqualTo("False"));
+            Assert.That(values["profiles.valueCount"], Is.EqualTo("11"));
         }
 
         [Test]
