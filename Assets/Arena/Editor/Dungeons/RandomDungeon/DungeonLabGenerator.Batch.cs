@@ -673,6 +673,7 @@ namespace DungeonLab.Editor
             bool touchingConnected = TryConnectProcessionalRooms(
                 touchingIntent,
                 touchingRooms,
+                new[] { Vector2Int.zero, new Vector2Int(5, 0) },
                 new HashSet<Vector2Int>(),
                 Array.Empty<RecipePlacement>(),
                 out HashSet<Vector2Int> touchingFloor,
@@ -752,9 +753,9 @@ namespace DungeonLab.Editor
 
             // The logical centers (0,0), (7,0), and (0,7) form a cardinal
             // junction. Biasing only the central dominant rect one cell east
-            // keeps the logical anchor inside the room but moves
-            // RoomFootprint.Center to (1,0). The current compiler must reject
-            // the north edge before corridor validation can run.
+            // keeps the immutable logical anchor inside the room. Slice 5's
+            // compiler must connect both edges from that anchor even though
+            // RoomFootprint.Center moved to (1,0).
             var biasedJunctionRooms = new List<RoomFootprint>
             {
                 RoomFootprint.FromRect(new RectInt(-1, -2, 5, 5)),
@@ -778,6 +779,7 @@ namespace DungeonLab.Editor
             bool biasedJunctionConnected = TryConnectProcessionalRooms(
                 biasedJunctionIntent,
                 biasedJunctionRooms,
+                new[] { Vector2Int.zero, new Vector2Int(7, 0), new Vector2Int(0, 7) },
                 new HashSet<Vector2Int>(),
                 Array.Empty<RecipePlacement>(),
                 out _,
@@ -1104,9 +1106,221 @@ namespace DungeonLab.Editor
             return string.Join("\n", lines);
         }
 
+        private static string BuildDensityAdjacencySlice5Snapshot()
+        {
+            const string spaciousBaselineCanonical =
+                "af4bce4800980db2d44ae2502600790a31cb0df287ed31100943f21baca5c4d9";
+            DungeonGenerationSettings spaciousSettings = LoadActiveGenerationSettings("spacious");
+            DungeonGenerationSettings denseSettings = LoadActiveGenerationSettings("dense");
+            JObject spaciousProcessional = BuildPhase0SeedReport(2026072100, "spacious");
+            JObject denseProcessional = BuildPhase0SeedReport(2026072100, "dense");
+            JObject denseProcessionalRepeat = BuildPhase0SeedReport(2026072100, "dense");
+            JObject spaciousAtrium = BuildPhase0SeedReport(2026072101, "spacious");
+            JObject denseAtrium = BuildPhase0SeedReport(2026072101, "dense");
+            JObject spaciousTwinWing = BuildPhase0SeedReport(2026072103, "spacious");
+            JObject denseTwinWing = BuildPhase0SeedReport(2026072103, "dense");
+
+            int validSentinelPairs = 0;
+            int spaciousSentinelDoors = 0;
+            int denseSentinelDoors = 0;
+            var sentinelResults = new List<string>();
+            foreach (int seed in new[] { 2026072140, 2026072186, 2026072262 })
+            {
+                JObject spacious = BuildPhase0SeedReport(seed, "spacious");
+                JObject dense = BuildPhase0SeedReport(seed, "dense");
+                int spaciousDoors = spacious["measurements"]?["corridorEvidence"]
+                    ?.Value<int>("sharedWallDoorCount") ?? 0;
+                int denseDoors = dense["measurements"]?["corridorEvidence"]
+                    ?.Value<int>("sharedWallDoorCount") ?? 0;
+                spaciousSentinelDoors += spaciousDoors;
+                denseSentinelDoors += denseDoors;
+                if (spacious.Value<bool?>("accepted") == true &&
+                    dense.Value<bool?>("accepted") == true &&
+                    spacious["validation"]?.Value<bool?>("passed") == true &&
+                    dense["validation"]?.Value<bool?>("passed") == true)
+                {
+                    validSentinelPairs++;
+                }
+
+                sentinelResults.Add($"{seed}:{spaciousDoors}->{denseDoors}");
+            }
+
+            string probe = BuildDensityAdjacencySlice5BiasProbe(denseSettings.processionalSpatial);
+            var lines = new List<string>
+            {
+                $"profiles.spaciousBias={spaciousSettings.processionalSpatial.neighborBiasStrengthCells}",
+                $"profiles.denseBias={denseSettings.processionalSpatial.neighborBiasStrengthCells}",
+                $"spacious.accepted={spaciousProcessional.Value<bool>("accepted")}",
+                $"spacious.valid={spaciousProcessional["validation"]?.Value<bool>("passed")}",
+                $"spacious.canonical={spaciousProcessional["hashes"]?.Value<string>("canonical")}",
+                $"spacious.baselinePreserved={string.Equals(spaciousProcessional["hashes"]?.Value<string>("canonical"), spaciousBaselineCanonical, StringComparison.Ordinal)}",
+                $"dense.accepted={denseProcessional.Value<bool>("accepted")}",
+                $"dense.valid={denseProcessional["validation"]?.Value<bool>("passed")}",
+                $"dense.deterministic={ReportsMatch(denseProcessional, denseProcessionalRepeat)}",
+                $"sentinels.validPairs={validSentinelPairs}",
+                $"sentinels.spaciousDoors={spaciousSentinelDoors}",
+                $"sentinels.denseDoors={denseSentinelDoors}",
+                $"sentinels.results={string.Join("|", sentinelResults)}",
+                $"atrium.canonicalSame={CanonicalReportsMatch(spaciousAtrium, denseAtrium)}",
+                $"atrium.measurementsSame={JToken.DeepEquals(spaciousAtrium["measurements"], denseAtrium["measurements"])}",
+                $"twinWing.canonicalSame={CanonicalReportsMatch(spaciousTwinWing, denseTwinWing)}",
+                $"twinWing.measurementsSame={JToken.DeepEquals(spaciousTwinWing["measurements"], denseTwinWing["measurements"])}",
+                probe
+            };
+            return string.Join("\n", lines);
+        }
+
+        private static string BuildDensityAdjacencySlice5BiasProbe(
+            DungeonPatternSpatialSettings spatial)
+        {
+            var nodes = new[]
+            {
+                new RouteNodeIntent("slice5-junction", "junction", "probe", 0, -1, 0),
+                new RouteNodeIntent("slice5-level", "processional-hall", "probe", 1, -1, 0),
+                new RouteNodeIntent("slice5-stair", "connector", "probe", 2, -1, 4)
+            };
+            var intent = new RouteIntent(
+                0,
+                RoutePlannerVersion,
+                Phase1PatternId,
+                nodes,
+                new[]
+                {
+                    new RouteTraversalIntent("slice5-level-edge", 0, 1, 0, RouteTransitionKind.LevelCorridor),
+                    new RouteTraversalIntent("slice5-stair-edge", 0, 2, 4, RouteTransitionKind.Stair)
+                },
+                new RouteVistaIntent("slice5-vista", 0, 1, 0),
+                RouteElevationPolicy.AscendingSpine,
+                Array.Empty<RecipeSlotIntent>(),
+                string.Empty,
+                0,
+                2,
+                0,
+                1,
+                0,
+                0,
+                0,
+                Array.Empty<RouteOverlookIntent>(),
+                allowGenericRoomWings: false);
+            var centers = new[]
+            {
+                Vector2Int.zero,
+                new Vector2Int(9, 0),
+                new Vector2Int(-9, 0)
+            };
+            var envelopes = centers.Select(center => RoomEnvelope(center, spatial)).ToArray();
+            var rooms = centers
+                .Select(center => RoomFootprint.FromRect(CenteredRect(center, 7, 7)))
+                .ToList();
+            int stairExteriorBefore = BuildStraightCardinalPath(centers[0], centers[2]).Count(cell =>
+                !rooms[0].Contains(cell) && !rooms[2].Contains(cell));
+
+            ApplyProcessionalNeighborBias(intent, spatial, centers, envelopes, rooms);
+            bool anchorsInside = rooms.Select((room, index) => room.Contains(centers[index])).All(value => value);
+            bool overlaps = rooms[0].Overlaps(rooms[1]) ||
+                rooms[0].Overlaps(rooms[2]) ||
+                rooms[1].Overlaps(rooms[2]);
+            bool connected = TryConnectProcessionalRooms(
+                intent,
+                rooms,
+                centers,
+                new HashSet<Vector2Int>(),
+                Array.Empty<RecipePlacement>(),
+                out _,
+                out List<RoomConnection> connections,
+                out string rejectionReason);
+            int levelExterior = connected
+                ? connections[0].path.Count(cell => !rooms.Any(room => room.Contains(cell)))
+                : -1;
+            int stairExteriorAfter = connected
+                ? connections[1].path.Count(cell => !rooms.Any(room => room.Contains(cell)))
+                : -1;
+            int doorwayCount = -1;
+            bool doorwayJoinsRooms = false;
+            int rendererRejected = -1;
+            int collisionSources = 0;
+            int collisionMissingMeshes = 0;
+            if (connected)
+            {
+                var levelRooms = new List<RoomFootprint> { rooms[0], rooms[1] };
+                var levelFloor = new HashSet<Vector2Int>(rooms[0].cells);
+                levelFloor.UnionWith(rooms[1].cells);
+                AddPathCells(levelFloor, connections[0].path);
+                var levelLayout = new DungeonLayout(
+                    levelFloor,
+                    levelRooms,
+                    new List<RoomConnection> { connections[0] });
+                var levelCells = levelFloor.ToDictionary(cell => cell, _ => 0);
+                List<ElevationEdgeModel.DoorwayEdge> doorways = BuildDoorwayEdges(levelLayout, levelCells);
+                doorwayCount = doorways.Count;
+                doorwayJoinsRooms = doorwayCount == 1 &&
+                    DoorwayJoinsRooms(doorways[0], rooms[0], rooms[1]);
+                if (TryBuildRoomBoundaryContext(
+                        levelLayout,
+                        levelCells,
+                        Array.Empty<ElevationEdgeModel.TransitionEdge>(),
+                        new System.Random(23),
+                        out ElevationEdgeModel.RoomBoundaryContext boundaryContext,
+                        out _))
+                {
+                    GameObject root = null;
+                    try
+                    {
+                        root = ElevationEdgeModel.BuildLevelField(
+                            Vector3.zero,
+                            levelCells,
+                            Array.Empty<ElevationEdgeModel.TransitionEdge>(),
+                            boundaryContext,
+                            "Density Adjacency Slice 5 Probe",
+                            out ElevationEdgeModel.BuildReport buildReport,
+                            out _);
+                        rendererRejected = buildReport.rejected;
+                        foreach (Collider collider in root.GetComponentsInChildren<Collider>(includeInactive: false))
+                        {
+                            if (collider == null || !collider.enabled || collider.isTrigger)
+                            {
+                                continue;
+                            }
+
+                            collisionSources++;
+                            if (collider is MeshCollider meshCollider && meshCollider.sharedMesh == null)
+                            {
+                                collisionMissingMeshes++;
+                            }
+                        }
+                    }
+                    finally
+                    {
+                        if (root != null)
+                        {
+                            DestroyImmediate(root);
+                        }
+                    }
+                }
+            }
+
+            return string.Join("\n", new[]
+            {
+                $"probe.connected={connected}",
+                $"probe.rejection={rejectionReason}",
+                $"probe.centers={rooms[0].Center.x},{rooms[0].Center.y}|{rooms[1].Center.x},{rooms[1].Center.y}|{rooms[2].Center.x},{rooms[2].Center.y}",
+                $"probe.anchorsInside={anchorsInside}",
+                $"probe.overlaps={overlaps}",
+                $"probe.levelExterior={levelExterior}",
+                $"probe.stairExteriorBefore={stairExteriorBefore}",
+                $"probe.stairExteriorAfter={stairExteriorAfter}",
+                $"probe.doorways={doorwayCount}",
+                $"probe.doorwayJoinsRooms={doorwayJoinsRooms}",
+                $"probe.rendererRejected={rendererRejected}",
+                $"probe.collisionSources={collisionSources}",
+                $"probe.collisionMissingMeshes={collisionMissingMeshes}"
+            });
+        }
+
         private static string SpatialSettingsSnapshot(DungeonPatternSpatialSettings spatial)
         {
             return $"{spatial.horizontalPitchCells}x{spatial.verticalPitchCells}:r{spatial.roomEnvelopeRadiusCells}:" +
+                $"b{spatial.neighborBiasStrengthCells}:" +
                 $"{RoomSizeRangeSnapshot(spatial.terminalRoomSize)}|" +
                 $"{RoomSizeRangeSnapshot(spatial.hallRoomSize)}|" +
                 RoomSizeRangeSnapshot(spatial.connectorRoomSize);

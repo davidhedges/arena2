@@ -39,6 +39,7 @@ namespace DungeonLab.Editor
         [Min(1)] public int horizontalPitchCells;
         [Min(1)] public int verticalPitchCells;
         [Min(4)] public int roomEnvelopeRadiusCells;
+        [Min(0)] public int neighborBiasStrengthCells;
         public DungeonRoomSizeRange terminalRoomSize;
         public DungeonRoomSizeRange hallRoomSize;
         public DungeonRoomSizeRange connectorRoomSize;
@@ -47,6 +48,7 @@ namespace DungeonLab.Editor
             int horizontalPitchCells,
             int verticalPitchCells,
             int roomEnvelopeRadiusCells,
+            int neighborBiasStrengthCells,
             DungeonRoomSizeRange terminalRoomSize,
             DungeonRoomSizeRange hallRoomSize,
             DungeonRoomSizeRange connectorRoomSize)
@@ -54,6 +56,7 @@ namespace DungeonLab.Editor
             this.horizontalPitchCells = horizontalPitchCells;
             this.verticalPitchCells = verticalPitchCells;
             this.roomEnvelopeRadiusCells = roomEnvelopeRadiusCells;
+            this.neighborBiasStrengthCells = neighborBiasStrengthCells;
             this.terminalRoomSize = terminalRoomSize;
             this.hallRoomSize = hallRoomSize;
             this.connectorRoomSize = connectorRoomSize;
@@ -67,6 +70,7 @@ namespace DungeonLab.Editor
             // Every route pattern carries the reviewed landmark recipe, whose
             // authored footprint reaches four cells from its logical anchor.
             value.roomEnvelopeRadiusCells = Mathf.Max(4, value.roomEnvelopeRadiusCells);
+            value.neighborBiasStrengthCells = Mathf.Max(0, value.neighborBiasStrengthCells);
             value.terminalRoomSize = value.terminalRoomSize.Validated();
             value.hallRoomSize = value.hallRoomSize.Validated();
             value.connectorRoomSize = value.connectorRoomSize.Validated();
@@ -113,12 +117,13 @@ namespace DungeonLab.Editor
         public float roomZoneSplitChance = 0.35f;
 
         [Header("Processional Spatial Configuration")]
-        [Tooltip("Processional X/Y pitch, independently validated room envelope, and generic role-size ranges. Reviewed recipe footprints remain authored.")]
+        [Tooltip("Processional X/Y pitch, independently validated room envelope, generic role-size ranges, and rise-0 neighbor bias. Reviewed recipe footprints remain authored.")]
         public DungeonPatternSpatialSettings processionalSpatial =
             new DungeonPatternSpatialSettings(
                 9,
                 9,
                 4,
+                0,
                 new DungeonRoomSizeRange(5, 5, 7, 7),
                 new DungeonRoomSizeRange(5, 5, 5, 6),
                 new DungeonRoomSizeRange(4, 5, 5, 5));

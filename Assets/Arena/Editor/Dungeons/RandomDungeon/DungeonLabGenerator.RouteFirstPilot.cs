@@ -422,6 +422,7 @@ namespace DungeonLab.Editor
             if (!TryConnectProcessionalRooms(
                     intent,
                     rooms,
+                    nodeCenters,
                     protectedVistaCells,
                     recipePlacements,
                     out HashSet<Vector2Int> floorCells,
@@ -1356,6 +1357,7 @@ namespace DungeonLab.Editor
                 horizontalPitchCells,
                 verticalPitchCells,
                 roomEnvelopeRadiusCells: 4,
+                neighborBiasStrengthCells: 0,
                 BaselineRoomSizeRangeForRole("arrival"),
                 BaselineRoomSizeRangeForRole("processional-hall"),
                 BaselineRoomSizeRangeForRole("connector")).Validated();
@@ -1831,6 +1833,194 @@ namespace DungeonLab.Editor
                 }
             }
 
+            ApplyProcessionalNeighborBias(
+                intent,
+                spatial,
+                nodeCenters,
+                envelopes,
+                rooms);
+            return true;
+        }
+
+        private static void ApplyProcessionalNeighborBias(
+            RouteIntent intent,
+            DungeonPatternSpatialSettings spatial,
+            IReadOnlyList<Vector2Int> nodeCenters,
+            IReadOnlyList<RectInt> envelopes,
+            List<RoomFootprint> rooms)
+        {
+            int strength = spatial.neighborBiasStrengthCells;
+            if (strength <= 0)
+            {
+                return;
+            }
+
+            for (int nodeIndex = 0; nodeIndex < intent.nodes.Length; nodeIndex++)
+            {
+                if (TryGetRecipeSlot(intent.recipeSlots, nodeIndex, out _))
+                {
+                    continue;
+                }
+
+                Vector2Int directionSum = Vector2Int.zero;
+                foreach (RouteTraversalIntent edge in intent.traversalEdges)
+                {
+                    if (edge.transitionKind != RouteTransitionKind.LevelCorridor ||
+                        edge.requiredRiseLevels != 0 ||
+                        (edge.fromNode != nodeIndex && edge.toNode != nodeIndex))
+                    {
+                        continue;
+                    }
+
+                    int otherNode = edge.fromNode == nodeIndex ? edge.toNode : edge.fromNode;
+                    directionSum += CardinalUnit(nodeCenters[otherNode] - nodeCenters[nodeIndex]);
+                }
+
+                var desired = new Vector2Int(
+                    Math.Sign(directionSum.x),
+                    Math.Sign(directionSum.y));
+                if (desired == Vector2Int.zero)
+                {
+                    continue;
+                }
+
+                // Inflation must never consume the known-sufficient gap on a
+                // stair, bridge, or stairwell edge. Growth away from that
+                // neighbor, or orthogonal to it, preserves the Slice 3 face.
+                foreach (RouteTraversalIntent edge in intent.traversalEdges)
+                {
+                    bool eligibleLevelEdge =
+                        edge.transitionKind == RouteTransitionKind.LevelCorridor &&
+                        edge.requiredRiseLevels == 0;
+                    if (eligibleLevelEdge ||
+                        (edge.fromNode != nodeIndex && edge.toNode != nodeIndex))
+                    {
+                        continue;
+                    }
+
+                    int otherNode = edge.fromNode == nodeIndex ? edge.toNode : edge.fromNode;
+                    Vector2Int direction = CardinalUnit(nodeCenters[otherNode] - nodeCenters[nodeIndex]);
+                    if (desired.x * direction.x > 0)
+                    {
+                        desired.x = 0;
+                    }
+
+                    if (desired.y * direction.y > 0)
+                    {
+                        desired.y = 0;
+                    }
+                }
+
+                // Resolve each axis and cell independently. Stable node order
+                // gives an odd one-cell closure to the first endpoint while
+                // preventing the second endpoint from overlapping it.
+                for (int step = 0; step < strength; step++)
+                {
+                    if (!TryApplyProcessionalRoomInflation(
+                            nodeIndex,
+                            new Vector2Int(desired.x, 0),
+                            nodeCenters,
+                            envelopes,
+                            rooms))
+                    {
+                        break;
+                    }
+                }
+
+                for (int step = 0; step < strength; step++)
+                {
+                    if (!TryApplyProcessionalRoomInflation(
+                            nodeIndex,
+                            new Vector2Int(0, desired.y),
+                            nodeCenters,
+                            envelopes,
+                            rooms))
+                    {
+                        break;
+                    }
+                }
+            }
+        }
+
+        private static bool TryApplyProcessionalRoomInflation(
+            int nodeIndex,
+            Vector2Int direction,
+            IReadOnlyList<Vector2Int> nodeCenters,
+            IReadOnlyList<RectInt> envelopes,
+            List<RoomFootprint> rooms)
+        {
+            if (direction == Vector2Int.zero)
+            {
+                return false;
+            }
+
+            var expandedParts = new List<RectInt>(rooms[nodeIndex].parts);
+            RectInt dominant = expandedParts[0];
+            if (direction.x < 0)
+            {
+                dominant = new RectInt(
+                    dominant.xMin - 1,
+                    dominant.yMin,
+                    dominant.width + 1,
+                    dominant.height);
+            }
+            else if (direction.x > 0)
+            {
+                dominant = new RectInt(
+                    dominant.xMin,
+                    dominant.yMin,
+                    dominant.width + 1,
+                    dominant.height);
+            }
+            else if (direction.y < 0)
+            {
+                dominant = new RectInt(
+                    dominant.xMin,
+                    dominant.yMin - 1,
+                    dominant.width,
+                    dominant.height + 1);
+            }
+            else
+            {
+                dominant = new RectInt(
+                    dominant.xMin,
+                    dominant.yMin,
+                    dominant.width,
+                    dominant.height + 1);
+            }
+
+            for (int partIndex = 1; partIndex < expandedParts.Count; partIndex++)
+            {
+                if (dominant.Overlaps(expandedParts[partIndex]))
+                {
+                    return false;
+                }
+            }
+
+            expandedParts[0] = dominant;
+            var candidate = new RoomFootprint(expandedParts);
+            if (!candidate.Contains(nodeCenters[nodeIndex]))
+            {
+                return false;
+            }
+
+            foreach (Vector2Int cell in candidate.cells)
+            {
+                if (!envelopes[nodeIndex].Contains(cell))
+                {
+                    return false;
+                }
+            }
+
+            for (int otherNode = 0; otherNode < rooms.Count; otherNode++)
+            {
+                if (otherNode != nodeIndex && candidate.Overlaps(rooms[otherNode]))
+                {
+                    return false;
+                }
+            }
+
+            rooms[nodeIndex] = candidate;
             return true;
         }
 
@@ -2239,6 +2429,7 @@ namespace DungeonLab.Editor
         private static bool TryConnectProcessionalRooms(
             RouteIntent intent,
             IReadOnlyList<RoomFootprint> rooms,
+            IReadOnlyList<Vector2Int> nodeCenters,
             HashSet<Vector2Int> reservedVistaCells,
             IReadOnlyList<RecipePlacement> recipePlacements,
             out HashSet<Vector2Int> floorCells,
@@ -2257,7 +2448,7 @@ namespace DungeonLab.Editor
             {
                 RoomFootprint fromRoom = rooms[edge.fromNode];
                 RoomFootprint toRoom = rooms[edge.toNode];
-                Vector2Int delta = toRoom.Center - fromRoom.Center;
+                Vector2Int delta = nodeCenters[edge.toNode] - nodeCenters[edge.fromNode];
                 if (delta.x != 0 && delta.y != 0 || delta == Vector2Int.zero)
                 {
                     rejectionReason = $"edge '{edge.id}' endpoints were not cardinally aligned";
@@ -2268,8 +2459,8 @@ namespace DungeonLab.Editor
                 RecipePlacement toRecipe = FindRecipePlacement(recipePlacements, edge.toNode);
                 bool fromAuthored = fromRecipe != null;
                 bool toAuthored = toRecipe != null;
-                Vector2Int pathStart = fromRoom.Center;
-                Vector2Int pathEnd = toRoom.Center;
+                Vector2Int pathStart = nodeCenters[edge.fromNode];
+                Vector2Int pathEnd = nodeCenters[edge.toNode];
                 if (fromAuthored || toAuthored)
                 {
                     RecipePlacement authored = fromRecipe ?? toRecipe;

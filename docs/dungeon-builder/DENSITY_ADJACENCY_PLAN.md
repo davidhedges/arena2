@@ -1,6 +1,6 @@
 # Density and adjacency plan
 
-Status: approved; slices 0-4 complete (2026-07-22); slice 5 not started
+Status: approved; slices 0-5 complete (2026-07-22); slice 6 not started
 Owner intent: keep the cliffs/voids; add denser floorplans with neighboring rooms and
 directly abutting tiers, in the spirit of the gold-standard scene
 (`Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/scenes/demoscene_dungeon_level_1_dungeon.unity`).
@@ -403,6 +403,45 @@ processional shared-wall door count **increases over the slice 1 baseline** (at
 least one new door — twin-wing may make the global count nonzero already); hard
 gates and collision parity pass.
 
+#### Slice 5 result (2026-07-22)
+
+- `DungeonPatternSpatialSettings` now owns one validated
+  `neighborBiasStrengthCells` value. `spacious` sets it to 0 and preserves the
+  exact pre-slice output; `dense` sets it to 1. Production code never branches on
+  profile identity, reviewed recipe footprints remain authored and immutable,
+  and atrium/twin-wing resolve the same fixed zero-bias spatial settings as before.
+- The existing room-inflation path extends a generic room's dominant rect only on
+  faces aimed at rise-0 route neighbors. Each one-cell extension must remain in
+  the existing envelope, retain the embedded node anchor, avoid every room and
+  secondary part, and must not grow toward a stair, stairwell, or bridge neighbor.
+  It never removes an existing room cell, so prior shared-wall adjacencies cannot
+  be opened into gaps. Stable node order resolves an odd final gap without an
+  overlap; no second inflation or fallback path exists.
+- `TryConnectProcessionalRooms` now derives cardinal alignment and generic path
+  endpoints from immutable `nodeCenters`; recipe endpoints still use their exact
+  authored ports. The existing path-derived threshold builder is unchanged. The
+  Slice 2 biased junction now connects both orthogonal edges, proving that an
+  asymmetric dominant rect does not create per-edge anchor state or a second
+  connection compiler.
+- Both 50-seed smoke sweeps accepted and hard-validated 50/50. Spacious remains
+  attempt `1:50` and retains seed `2026072100` canonical hash
+  `af4bce48...c4d9`. Dense remains `1:44, 2:6` (`p95/max 2/2`) with retry codes
+  `ROUTE_TRANSITION_RESERVATION:96`, `PORT_GRAPH:9`, and
+  `ROUTE_ROOM_INFLATION_EXHAUSTED:3`; there is no `STAIR_PLACEMENT` rejection or
+  post-plan failure.
+- Across the 25 processional smoke seeds, shared-wall doors increase from the
+  Slice 1 spacious baseline total `43` / mean `1.72` to total `52` / mean `2.08`.
+  This is also five new doors over the Slice 4 dense result, with no seed losing a
+  door. Exterior corridor cells move `1,433 -> 1,097` (mean `57.32 -> 43.88`),
+  while all 13 atrium and 12 twin-wing canonical plans remain identical across
+  profiles.
+- The three processional sentinels move from `1/2/1` to `3/2/2` shared-wall doors
+  and from `50/53/68` to `38/41/53` exterior cells. All six real-render captures
+  report `REJECTED 0`; the focused biased seam renders one working doorway with
+  enabled collision sources and no missing collider mesh. Density Slice 1-5
+  regressions pass 25/25. The active ignored report and sentinel capture are
+  restored to `spacious`.
+
 ### Slice 6 — tier-seam adjacency (abutting tiers — a stated goal)
 
 Generalize the planned-overlook mechanism: allow declared non-traversal adjacency
@@ -437,11 +476,11 @@ compatibility path, or fallback profile remains.
 
 | Driver | Today | Where |
 | --- | --- | --- |
-| Route pitch | 9/9 processional, 7/9 atrium, baked (twin-wing) | `TryEmbed*Route` spacing args, `DungeonLabGenerator.RouteFirstPilot.cs` |
-| Envelope radius | 4 (hardcoded, all patterns) | `Phase1RoomEnvelopeRadius` |
-| Generic room dims | 4-5 x 5-7 by role (hardcoded) | `BuildProcessionalRoomParts` |
-| Inflation placement | centered (hardcoded) | `CenteredRect` in `BuildProcessionalRoomParts` |
-| Connection anchors | dominant-rect centers, cardinal-aligned | `RoomFootprint.Center`, `TryConnectProcessionalRooms` |
+| Route pitch | profile-driven processional 9/9 spacious, 9/8 dense; fixed 7/9 atrium; baked twin-wing | `DungeonPatternSpatialSettings`, `ResolvePatternSpatialSettings` |
+| Envelope radius | independently validated per-pattern value; currently 4 | `DungeonPatternSpatialSettings`, `RoomEnvelope` |
+| Generic room dims | profile-driven processional role ranges; spacious baseline or dense 7x7 | `DungeonPatternSpatialSettings`, `ResolveGenericRoomDimensions` |
+| Inflation placement | centered base plus rise-0 facing-wall bias; spacious 0, dense 1 | `ApplyProcessionalNeighborBias` in `DungeonLabGenerator.RouteFirstPilot.cs` |
+| Connection anchors | immutable embedded node centers; exact authored recipe ports | `nodeCenters`, `TryConnectProcessionalRooms` |
 | Wing chance/size | 0.4, 2x2 (hardcoded) | `BuildProcessionalRoomParts` |
 | Loop fraction (target) | 0.3 (profile); achieved p50 3 edges | `loopConnectionFraction`, report `loopEdges` |
 | Loop candidate distance | 18 (profile) | `maxLoopCandidateDistanceCells` |

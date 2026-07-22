@@ -34,10 +34,10 @@ namespace Arena.Tests.Editor
             Assert.That(values["profiles.valueCount"], Is.EqualTo("9"));
             Assert.That(
                 values["profiles.spaciousSpatial"],
-                Is.EqualTo("9x9:r4:5-5x7-7|5-5x5-6|4-5x5-5"));
+                Is.EqualTo("9x9:r4:b0:5-5x7-7|5-5x5-6|4-5x5-5"));
             Assert.That(
                 values["profiles.denseSpatial"],
-                Is.EqualTo("9x8:r4:7-7x7-7|7-7x7-7|7-7x7-7"));
+                Is.EqualTo("9x8:r4:b1:7-7x7-7|7-7x7-7|7-7x7-7"));
             Assert.That(
                 Count(profileSource, "public DungeonPatternSpatialSettings processionalSpatial"),
                 Is.EqualTo(2));
@@ -107,10 +107,10 @@ namespace Arena.Tests.Editor
 
             Assert.That(
                 values["profiles.atriumSpatial"],
-                Is.EqualTo("7x9:r4:5-5x7-7|5-5x5-6|4-5x5-5"));
+                Is.EqualTo("7x9:r4:b0:5-5x7-7|5-5x5-6|4-5x5-5"));
             Assert.That(
                 values["profiles.twinWingSpatial"],
-                Is.EqualTo("1x1:r4:5-5x7-7|5-5x5-6|4-5x5-5"));
+                Is.EqualTo("1x1:r4:b0:5-5x7-7|5-5x5-6|4-5x5-5"));
             Assert.That(values["atrium.accepted"], Is.EqualTo("True"));
             Assert.That(values["atrium.canonicalSame"], Is.EqualTo("True"));
             Assert.That(values["atrium.measurementsSame"], Is.EqualTo("True"));

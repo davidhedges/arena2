@@ -56,15 +56,15 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
-        public void BiasedJunction_CurrentFootprintCenterFailsAtCardinalAlignmentFirst()
+        public void BiasedJunction_UsesStableEmbeddedAnchorsForEveryEdge()
         {
             Dictionary<string, string> values = Snapshot.Value;
 
             Assert.That(values["junction.logicalAnchorInsideBiasedRoom"], Is.EqualTo("True"));
             Assert.That(values["junction.footprintCenter"], Is.EqualTo("1,0"));
-            Assert.That(values["junction.connected"], Is.EqualTo("False"));
-            Assert.That(values["junction.connectionsBeforeFailure"], Is.EqualTo("0"));
-            Assert.That(values["junction.rejection"], Does.Contain("endpoints were not cardinally aligned"));
+            Assert.That(values["junction.connected"], Is.EqualTo("True"), values["junction.rejection"]);
+            Assert.That(values["junction.connectionsBeforeFailure"], Is.EqualTo("2"));
+            Assert.That(values["junction.rejection"], Is.Empty);
         }
 
         [Test]
