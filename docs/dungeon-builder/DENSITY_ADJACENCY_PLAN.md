@@ -1,6 +1,6 @@
 # Density and adjacency plan
 
-Status: proposed, not started (revised 2026-07-22 after review — topology counts corrected, reproducibility and anchor-alignment gaps addressed)
+Status: approved; slices 0-2 complete (2026-07-22); slice 3 not started
 Owner intent: keep the cliffs/voids; add denser floorplans with neighboring rooms and
 directly abutting tiers, in the spirit of the gold-standard scene
 (`Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/scenes/demoscene_dungeon_level_1_dungeon.unity`).
@@ -142,6 +142,26 @@ End state is explicit: **revert the asset and record the candidate values in thi
 file** (or a notes file). Committing tuned values waits for slice 1's identity
 support — slice 0 discovers numbers, it does not ship them.
 
+#### Slice 0 result (2026-07-22)
+
+Calibration used the fixed 50-seed smoke sample (`2026072100..2026072149`) and the
+six visual sentinels. The baseline `0.3 / 18` profile accepted all 50 seeds with all
+hard gates valid; loop edges were min 1 / p50 3 / p95 4 / max 4 (mean 2.88).
+Repeat runs produced the same aggregate result hash, per-seed canonical hashes,
+and sentinel canonical hashes.
+
+- Raising only `loopConnectionFraction` to `0.5` and `0.7` changed neither the loop
+  histogram nor any canonical dungeon in the batch or sentinel samples. The loop
+  pass is candidate-limited at today's layouts; these are re-test values only if a
+  later operation increases the surviving candidate set.
+- Lowering only `maxLoopCandidateDistanceCells` to `12` kept all 50 seeds hard-valid
+  but reduced loops to min 1 / p50 2 / p95 3 / max 3 (mean 2.10). Sentinel review
+  showed the expected removal of longer loop corridors; that is useful only as an
+  intentional pruning look, not for this plan's density goal.
+- Calibrated recommendation: retain `0.3 / 18`. No tuned value advances to
+  production from this slice. The asset and generated reports were restored to
+  that baseline after calibration.
+
 ### Slice 1 — profile identity and diagnostics (small, enables everything else)
 
 The generator loads exactly one fixed asset (`GenerationProfilePath`) and reports
@@ -164,6 +184,31 @@ record only the profile *name*. Before any behavior knob lands:
 Done when: a report from any build states which settings produced it **and**
 carries the Measurements fields.
 
+#### Slice 1 result (2026-07-22)
+
+- `LoadActiveGenerationSettings(profileId)` is the only settings-loading seam.
+  `ARENA_DUNGEON_GENERATION_PROFILE` supplies either `spacious` (the default) or
+  `dense`; unknown IDs, missing assets, and asset/ID mismatches fail explicitly.
+  The former default-settings fallback and profile-asset creation path are gone.
+- `spacious` and `dense` are separate assets and settings identities. Their Slice 1
+  behavior values are intentionally identical; 50-seed sweeps produced identical
+  canonical dungeons and measurement aggregates. No dense generation branch or
+  duplicated entry point exists.
+- Per-seed, rejected-seed, aggregate, sentinel, and renderer-probe reports now carry
+  the profile ID, a SHA-256 digest over every settings value, and the values used.
+  The report schema is `dungeon-plan-v10`.
+- `density-adjacency-v1` measurements report final room degrees, unique exterior
+  corridor cells, per-connection exterior lengths, shared-wall-door candidates,
+  reserved-vista extent/preservation, and the atrium's largest enclosed center
+  void. Aggregate distributions are separated by topology.
+- Baseline evidence corrects the shared-wall unknown: across the fixed 50 seeds,
+  processional shared-wall-door candidates have p50 2, twin-wing p50 1, and atrium
+  p50 0. Every reserved vista remained preserved; atrium center voids had p50 191
+  projected cells.
+- Exit gate: both profile sweeps accepted and hard-validated 50/50 seeds; repeated
+  spacious runs matched settings digest, aggregate result hash, canonical hashes,
+  and measurements. Focused Slice 1 tests pass 4/4.
+
 ### Slice 2 — shared-wall door spike (verification only)
 
 First check existing twin-wing output: its 5-6-cell spine spacing may already
@@ -184,6 +229,51 @@ Done when: each question has a yes/no with evidence, **and an anchor model is
 chosen** — per-edge threshold anchors vs stable embedded-node anchors — with its
 junction invariants written down. Slice 5 implements that model without reopening
 the choice. No production behavior change in this slice.
+
+#### Slice 2 anchor decision and junction invariants
+
+**Anchor model decision: stable embedded-node anchors.** Generic rooms have one
+immutable logical anchor per embedded route node: the existing `nodeCenters[i]`
+cell. Inflation may change the footprint around that anchor but may not move it or
+exclude it from the room. This keeps one source of route identity instead of
+adding stored per-edge anchor state.
+
+- Every generic rise-0 traversal is cardinally aligned between its two logical
+  anchors. Recipe endpoints keep using their existing authored ports.
+- Doorway thresholds are derived from the connection path crossing each final
+  footprint boundary; they are geometry results, not a second set of persistent
+  route anchors.
+- Junction edges derive their thresholds independently from the same room anchor.
+  Bias toward one neighbor cannot move the anchor or invalidate alignment with a
+  neighbor on another axis.
+- Stair, stairwell, and bridge edges retain their existing spacing and reviewed
+  transition contracts. Slice 5 applies bias only where its stated rise-0 scope
+  permits it.
+
+#### Slice 2 result (2026-07-22)
+
+- **Existing production evidence: yes.** Twin-wing seed `2026072103` is accepted
+  and hard-valid with two zero-exterior connections. Isolating each connection
+  through the existing boundary builder produces exactly one doorway joining its
+  two endpoint rooms.
+- **Degenerate connection compiler path: yes.** Two touching 5x5 rooms compile
+  through `TryConnectProcessionalRooms` as one six-cell cardinal path wholly
+  inside the endpoint rooms, with zero exterior corridor cells and no rejection.
+- **Boundary, renderer, and collision inputs: yes.** The shared seam becomes one
+  doorway rather than a partition wall. `ElevationEdgeModel` renders the 50-cell
+  fixture with one doorway and zero rejected placements; the generated root has
+  enabled collision sources and no missing collider meshes. Collision export has
+  no room/seam-specific branch after consuming those canonical colliders.
+- **Biased junction with footprint-center anchors: no.** Moving the junction
+  room's dominant-rect center one cell toward its east neighbor leaves the
+  original embedded node cell inside the room, but the north edge immediately
+  rejects as non-cardinal before any corridor is reserved. Alignment is the first
+  failure, not corridor validation or threshold derivation.
+- The anchor choice is therefore the stable embedded-node model above. Thresholds
+  remain derived boundary crossings, so Slice 5 adds neither persistent per-edge
+  identity nor a second connection compiler.
+- Exit gate: focused Slice 2 EditMode tests pass 5/5. No production generator,
+  boundary, renderer, or collision behavior changed.
 
 ### Slice 3 — room size becomes a profile knob (highest value per risk)
 

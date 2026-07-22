@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using UnityEditor;
@@ -17,7 +18,7 @@ namespace DungeonLab.Editor
     internal sealed partial class DungeonLabGenerator
     {
         private const string BatchReportDirectory = "DungeonLabReports";
-        private const string DungeonPlanSummaryVersion = "dungeon-plan-v9";
+        private const string DungeonPlanSummaryVersion = "dungeon-plan-v10";
         private const int Phase0BaselineFirstSeed = 2026072100;
         private const int Phase0BaselineSeedCount = 200;
         private const int LockedSeedCount = 100;
@@ -39,11 +40,51 @@ namespace DungeonLab.Editor
             (2026072223, "edge-b", "Phase 0 elevation-span edge selection retained for cross-phase comparison.")
         };
 
-        private static string phase0CatalogDigestCache;
+        private static readonly Dictionary<string, string> Phase0CatalogDigestCache =
+            new Dictionary<string, string>(StringComparer.Ordinal);
 
         private static string ActiveDiagnosticSummaryVersion => DungeonPlanSummaryVersion;
 
         private static string ActiveDiagnosticGeneratorVersion => RoutePlannerVersion;
+
+        private static JObject BuildGenerationSettingsValues(DungeonGenerationSettings settings)
+        {
+            var values = new JObject();
+            foreach (FieldInfo field in typeof(DungeonGenerationSettings)
+                         .GetFields(BindingFlags.Instance | BindingFlags.Public)
+                         .OrderBy(field => field.Name, StringComparer.Ordinal))
+            {
+                object value = field.GetValue(settings);
+                values[field.Name] = value == null ? JValue.CreateNull() : JToken.FromObject(value);
+            }
+
+            return values;
+        }
+
+        private static string GenerationSettingsDigest(DungeonGenerationSettings settings)
+        {
+            return ComputeSha256(BuildGenerationSettingsValues(settings).ToString(Formatting.None));
+        }
+
+        private static JObject BuildGenerationSettingsIdentity(DungeonGenerationSettings settings)
+        {
+            JObject values = BuildGenerationSettingsValues(settings);
+            return new JObject
+            {
+                ["profileId"] = settings.profileName,
+                ["digestAlgorithm"] = "SHA-256 over settings.values with ordinal field ordering",
+                ["digest"] = ComputeSha256(values.ToString(Formatting.None)),
+                ["values"] = values
+            };
+        }
+
+        private static void AddGenerationSettingsIdentity(JObject report)
+        {
+            JObject identity = BuildGenerationSettingsIdentity(CurrentGenerationSettings);
+            report["profile"] = identity.Value<string>("profileId");
+            report["settingsDigest"] = identity.Value<string>("digest");
+            report["settings"] = identity;
+        }
 
         [MenuItem("Tools/Dungeon Lab/Batch Validate (50 Fixed Seeds)")]
         public static void BatchValidate50Seeds()
@@ -97,6 +138,7 @@ namespace DungeonLab.Editor
                             ["annotation"] = sentinel.annotation,
                             ["image"] = path.Replace('\\', '/'),
                             ["canonicalHash"] = seedReport["hashes"]?["canonical"],
+                            ["measurements"] = seedReport["measurements"]?.DeepClone(),
                             ["rendererSummary"] = buildReport.Summary
                         });
                     }
@@ -122,6 +164,7 @@ namespace DungeonLab.Editor
                 ["captureHeight"] = Phase0SentinelImageHeight,
                 ["sentinels"] = manifestEntries
             };
+            AddGenerationSettingsIdentity(manifest);
             string manifestPath = Path.Combine(directory, "manifest.json");
             File.WriteAllText(manifestPath, manifest.ToString(Formatting.Indented));
             Debug.Log($"Dungeon Lab: visual sentinels written to {directory} (manifest {manifestPath}).");
@@ -133,7 +176,8 @@ namespace DungeonLab.Editor
             int phase7SweepOrdinal = 0,
             int correctiveRunOrdinal = 0)
         {
-            CurrentGenerationSettings = LoadActiveGenerationSettings();
+            string profileId = ResolveRequestedGenerationProfileId();
+            CurrentGenerationSettings = LoadActiveGenerationSettings(profileId);
             Phase7BatchEvidence phase7Evidence = phase7SweepOrdinal > 0
                 ? new Phase7BatchEvidence(phase7SweepOrdinal, Phase7WarmupSeedCount)
                 : null;
@@ -188,7 +232,7 @@ namespace DungeonLab.Editor
                     long seedTimingStart = phase7Evidence == null && correctiveEvidence == null
                         ? 0L
                         : System.Diagnostics.Stopwatch.GetTimestamp();
-                    JObject seedReport = BuildPhase0SeedReport(seed);
+                    JObject seedReport = BuildPhase0SeedReport(seed, profileId);
                     if (phase7Evidence != null)
                     {
                         phase7Evidence.planningMilliseconds.Add(
@@ -339,8 +383,13 @@ namespace DungeonLab.Editor
 
         private static JObject BuildPhase0SeedReport(int seed)
         {
+            return BuildPhase0SeedReport(seed, ResolveRequestedGenerationProfileId());
+        }
+
+        private static JObject BuildPhase0SeedReport(int seed, string profileId)
+        {
             long initializationStart = BeginPhase7OutlierStage();
-            CurrentGenerationSettings = LoadActiveGenerationSettings();
+            CurrentGenerationSettings = LoadActiveGenerationSettings(profileId);
             var rejectionHistogram = new Dictionary<string, int>(StringComparer.Ordinal);
             var random = new System.Random(seed);
             EndPhase7OutlierStage("settingsAndRandomInitialization", initializationStart);
@@ -516,12 +565,301 @@ namespace DungeonLab.Editor
         // returned JSON is a diagnostic projection, never a generation input.
         // Flat standard-library-only projection for the separate test assembly,
         // which intentionally has no compile-time dependency on Plastic's JSON DLL.
+        private static string BuildDensityAdjacencySlice1Snapshot()
+        {
+            DungeonGenerationSettings spaciousSettings = LoadActiveGenerationSettings("spacious");
+            DungeonGenerationSettings denseSettings = LoadActiveGenerationSettings("dense");
+            JObject spaciousValues = BuildGenerationSettingsValues(spaciousSettings);
+            JObject denseValues = BuildGenerationSettingsValues(denseSettings);
+            spaciousValues.Remove("profileName");
+            denseValues.Remove("profileName");
+
+            JObject processional = BuildPhase0SeedReport(2026072100, "spacious");
+            JObject processionalRepeat = BuildPhase0SeedReport(2026072100, "spacious");
+            JObject atrium = BuildPhase0SeedReport(2026072101, "spacious");
+            JObject twinWing = BuildPhase0SeedReport(2026072103, "spacious");
+            var lines = new List<string>
+            {
+                $"profiles.spaciousId={spaciousSettings.profileName}",
+                $"profiles.denseId={denseSettings.profileName}",
+                $"profiles.spaciousDigest={GenerationSettingsDigest(spaciousSettings)}",
+                $"profiles.denseDigest={GenerationSettingsDigest(denseSettings)}",
+                $"profiles.digestDistinct={!string.Equals(GenerationSettingsDigest(spaciousSettings), GenerationSettingsDigest(denseSettings), StringComparison.Ordinal)}",
+                $"profiles.behaviorValuesEqual={JToken.DeepEquals(spaciousValues, denseValues)}",
+                $"profiles.valueCount={BuildGenerationSettingsValues(spaciousSettings).Properties().Count()}",
+                $"processional.topology={processional["measurements"]?.Value<string>("topology")}",
+                $"processional.degreeSamples={processional["measurements"]?["finalRoomDegreeDistribution"]?.Value<int?>("sampleCount") ?? -1}",
+                $"processional.connectionLengthSamples={processional["measurements"]?["corridorEvidence"]?["perConnectionExteriorLengthDistribution"]?.Value<int?>("sampleCount") ?? -1}",
+                $"processional.connectionCount={processional["layout"]?.Value<int?>("connections") ?? -1}",
+                $"processional.sharedWallDoors={processional["measurements"]?["corridorEvidence"]?.Value<int?>("sharedWallDoorCount") ?? -1}",
+                $"processional.reservedVistaCells={processional["measurements"]?["voidExtent"]?.Value<int?>("reservedVistaCellCount") ?? -1}",
+                $"processional.atriumCenterVoidIsNull={processional["measurements"]?["voidExtent"]?["atriumCenterVoidCellCount"]?.Type == JTokenType.Null}",
+                $"atrium.topology={atrium["measurements"]?.Value<string>("topology")}",
+                $"atrium.centerVoidCells={atrium["measurements"]?["voidExtent"]?.Value<int?>("atriumCenterVoidCellCount") ?? -1}",
+                $"twinWing.topology={twinWing["measurements"]?.Value<string>("topology")}",
+                $"twinWing.atriumCenterVoidIsNull={twinWing["measurements"]?["voidExtent"]?["atriumCenterVoidCellCount"]?.Type == JTokenType.Null}",
+                $"determinism.settingsDigest={string.Equals(processional.Value<string>("settingsDigest"), processionalRepeat.Value<string>("settingsDigest"), StringComparison.Ordinal)}",
+                $"determinism.canonical={string.Equals(processional["hashes"]?.Value<string>("canonical"), processionalRepeat["hashes"]?.Value<string>("canonical"), StringComparison.Ordinal)}",
+                $"determinism.measurements={JToken.DeepEquals(processional["measurements"], processionalRepeat["measurements"])}"
+            };
+            return string.Join("\n", lines);
+        }
+
+        // Slice 2 is verification only. This snapshot exercises the existing
+        // connection, boundary, renderer, and collision-input seams without
+        // adding a second generation path or changing production behavior.
+        private static string BuildDensityAdjacencySlice2Snapshot()
+        {
+            const int twinWingSeed = 2026072103;
+            CurrentGenerationSettings = LoadActiveGenerationSettings("spacious");
+
+            var twinRandom = new System.Random(twinWingSeed);
+            bool twinAccepted = TryBuildAcceptedPlan(
+                twinWingSeed,
+                twinRandom,
+                new Dictionary<string, int>(StringComparer.Ordinal),
+                out DungeonLayout twinLayout,
+                out TieredLevelPlan twinPlan,
+                out _,
+                out string twinRejection);
+            if (!twinAccepted)
+            {
+                throw new InvalidOperationException(
+                    $"Twin-wing Slice 2 probe seed {twinWingSeed} was rejected: {twinRejection}");
+            }
+
+            int twinZeroExteriorConnections = 0;
+            int twinZeroExteriorDoorways = 0;
+            foreach (RoomConnection connection in twinLayout.connections)
+            {
+                RoomFootprint fromRoom = twinLayout.rooms[connection.fromRoom];
+                RoomFootprint toRoom = twinLayout.rooms[connection.toRoom];
+                int exteriorCells = connection.path.Count(cell =>
+                    !fromRoom.Contains(cell) && !toRoom.Contains(cell));
+                if (exteriorCells != 0)
+                {
+                    continue;
+                }
+
+                twinZeroExteriorConnections++;
+                var isolatedLayout = new DungeonLayout(
+                    twinLayout.floorCells,
+                    twinLayout.rooms,
+                    new List<RoomConnection> { connection });
+                List<ElevationEdgeModel.DoorwayEdge> doorways =
+                    BuildDoorwayEdges(isolatedLayout, twinPlan.cellLevels);
+                if (doorways.Count == 1 &&
+                    DoorwayJoinsRooms(doorways[0], fromRoom, toRoom))
+                {
+                    twinZeroExteriorDoorways++;
+                }
+            }
+
+            JObject twinReport = BuildPhase0SeedReport(twinWingSeed, "spacious");
+
+            var touchingRooms = new List<RoomFootprint>
+            {
+                RoomFootprint.FromRect(new RectInt(-2, -2, 5, 5)),
+                RoomFootprint.FromRect(new RectInt(3, -2, 5, 5))
+            };
+            RouteIntent touchingIntent = BuildSlice2ConnectionIntent(
+                touchingRooms.Count,
+                new RouteTraversalIntent(
+                    "touching-room-seam",
+                    0,
+                    1,
+                    0,
+                    RouteTransitionKind.LevelCorridor));
+            bool touchingConnected = TryConnectProcessionalRooms(
+                touchingIntent,
+                touchingRooms,
+                new HashSet<Vector2Int>(),
+                Array.Empty<RecipePlacement>(),
+                out HashSet<Vector2Int> touchingFloor,
+                out List<RoomConnection> touchingConnections,
+                out string touchingRejection);
+            int touchingExteriorCells = touchingConnected
+                ? touchingConnections[0].path.Count(cell =>
+                    !touchingRooms[0].Contains(cell) && !touchingRooms[1].Contains(cell))
+                : -1;
+
+            bool touchingBoundaryBuilt = false;
+            int touchingDoorways = -1;
+            bool touchingDoorwayJoinsRooms = false;
+            int rendererRejected = -1;
+            int rendererDoorways = -1;
+            int collisionSources = 0;
+            int collisionMissingMeshes = 0;
+            GameObject touchingRoot = null;
+            if (touchingConnected)
+            {
+                var touchingLevels = touchingFloor.ToDictionary(cell => cell, _ => 0);
+                var touchingLayout = new DungeonLayout(
+                    touchingFloor,
+                    touchingRooms,
+                    touchingConnections);
+                touchingBoundaryBuilt = TryBuildRoomBoundaryContext(
+                    touchingLayout,
+                    touchingLevels,
+                    Array.Empty<ElevationEdgeModel.TransitionEdge>(),
+                    new System.Random(17),
+                    out ElevationEdgeModel.RoomBoundaryContext boundaryContext,
+                    out _);
+                touchingDoorways = boundaryContext?.doorwayEdges?.Count ?? -1;
+                touchingDoorwayJoinsRooms = touchingDoorways == 1 &&
+                    DoorwayJoinsRooms(
+                        boundaryContext.doorwayEdges[0],
+                        touchingRooms[0],
+                        touchingRooms[1]);
+
+                if (touchingBoundaryBuilt)
+                {
+                    try
+                    {
+                        touchingRoot = ElevationEdgeModel.BuildLevelField(
+                            Vector3.zero,
+                            touchingLevels,
+                            Array.Empty<ElevationEdgeModel.TransitionEdge>(),
+                            boundaryContext,
+                            "Density Adjacency Slice 2 Probe",
+                            out ElevationEdgeModel.BuildReport buildReport,
+                            out _);
+                        rendererRejected = buildReport.rejected;
+                        rendererDoorways = buildReport.doorways;
+                        foreach (Collider collider in touchingRoot.GetComponentsInChildren<Collider>(includeInactive: false))
+                        {
+                            if (collider == null || !collider.enabled || collider.isTrigger)
+                            {
+                                continue;
+                            }
+
+                            collisionSources++;
+                            if (collider is MeshCollider meshCollider && meshCollider.sharedMesh == null)
+                            {
+                                collisionMissingMeshes++;
+                            }
+                        }
+                    }
+                    finally
+                    {
+                        if (touchingRoot != null)
+                        {
+                            DestroyImmediate(touchingRoot);
+                        }
+                    }
+                }
+            }
+
+            // The logical centers (0,0), (7,0), and (0,7) form a cardinal
+            // junction. Biasing only the central dominant rect one cell east
+            // keeps the logical anchor inside the room but moves
+            // RoomFootprint.Center to (1,0). The current compiler must reject
+            // the north edge before corridor validation can run.
+            var biasedJunctionRooms = new List<RoomFootprint>
+            {
+                RoomFootprint.FromRect(new RectInt(-1, -2, 5, 5)),
+                RoomFootprint.FromRect(new RectInt(5, -2, 5, 5)),
+                RoomFootprint.FromRect(new RectInt(-2, 5, 5, 5))
+            };
+            RouteIntent biasedJunctionIntent = BuildSlice2ConnectionIntent(
+                biasedJunctionRooms.Count,
+                new RouteTraversalIntent(
+                    "junction-north",
+                    0,
+                    2,
+                    0,
+                    RouteTransitionKind.LevelCorridor),
+                new RouteTraversalIntent(
+                    "junction-east",
+                    0,
+                    1,
+                    0,
+                    RouteTransitionKind.LevelCorridor));
+            bool biasedJunctionConnected = TryConnectProcessionalRooms(
+                biasedJunctionIntent,
+                biasedJunctionRooms,
+                new HashSet<Vector2Int>(),
+                Array.Empty<RecipePlacement>(),
+                out _,
+                out List<RoomConnection> biasedJunctionConnections,
+                out string biasedJunctionRejection);
+
+            var lines = new List<string>
+            {
+                $"twin.seed={twinWingSeed}",
+                $"twin.accepted={twinReport.Value<bool>("accepted")}",
+                $"twin.topology={twinReport["measurements"]?.Value<string>("topology")}",
+                $"twin.validation={twinReport["validation"]?.Value<bool>("passed")}",
+                $"twin.zeroExteriorConnections={twinZeroExteriorConnections}",
+                $"twin.zeroExteriorDoorways={twinZeroExteriorDoorways}",
+                $"touching.connected={touchingConnected}",
+                $"touching.rejection={touchingRejection}",
+                $"touching.pathCells={(touchingConnected ? touchingConnections[0].path.Count : -1)}",
+                $"touching.exteriorCells={touchingExteriorCells}",
+                $"touching.boundaryBuilt={touchingBoundaryBuilt}",
+                $"touching.doorways={touchingDoorways}",
+                $"touching.doorwayJoinsRooms={touchingDoorwayJoinsRooms}",
+                $"touching.rendererRejected={rendererRejected}",
+                $"touching.rendererDoorways={rendererDoorways}",
+                $"touching.collisionSources={collisionSources}",
+                $"touching.collisionMissingMeshes={collisionMissingMeshes}",
+                $"junction.logicalAnchorInsideBiasedRoom={biasedJunctionRooms[0].Contains(Vector2Int.zero)}",
+                $"junction.footprintCenter={biasedJunctionRooms[0].Center.x},{biasedJunctionRooms[0].Center.y}",
+                $"junction.connected={biasedJunctionConnected}",
+                $"junction.connectionsBeforeFailure={biasedJunctionConnections.Count}",
+                $"junction.rejection={biasedJunctionRejection}"
+            };
+            return string.Join("\n", lines);
+        }
+
+        private static RouteIntent BuildSlice2ConnectionIntent(
+            int roomCount,
+            params RouteTraversalIntent[] edges)
+        {
+            var nodes = new RouteNodeIntent[roomCount];
+            for (int i = 0; i < roomCount; i++)
+            {
+                nodes[i] = new RouteNodeIntent($"slice2-node-{i}", "connector", "probe", i, -1, 0);
+            }
+
+            return new RouteIntent(
+                0,
+                RoutePlannerVersion,
+                "density-adjacency-slice2-probe",
+                nodes,
+                edges,
+                new RouteVistaIntent("slice2-vista", 0, Math.Max(0, roomCount - 1), 0),
+                RouteElevationPolicy.AscendingSpine,
+                Array.Empty<RecipeSlotIntent>(),
+                string.Empty,
+                0,
+                Math.Max(0, roomCount - 1),
+                0,
+                Math.Max(0, roomCount - 1),
+                0,
+                0,
+                0,
+                Array.Empty<RouteOverlookIntent>(),
+                allowGenericRoomWings: false);
+        }
+
+        private static bool DoorwayJoinsRooms(
+            ElevationEdgeModel.DoorwayEdge doorway,
+            RoomFootprint firstRoom,
+            RoomFootprint secondRoom)
+        {
+            return firstRoom.Contains(doorway.firstCell) && secondRoom.Contains(doorway.secondCell) ||
+                firstRoom.Contains(doorway.secondCell) && secondRoom.Contains(doorway.firstCell);
+        }
+
         private static string BuildCharacterizationSnapshot(int seed)
         {
             JObject report = BuildPhase0SeedReport(seed);
             var lines = new List<string>
             {
                 SnapshotLine("accepted", report["accepted"]),
+                SnapshotLine("profile", report["profile"]),
+                SnapshotLine("settingsDigest", report["settingsDigest"]),
                 SnapshotLine("hash.layout", report["hashes"]?["layout"]),
                 SnapshotLine("hash.tieredLevelPlan", report["hashes"]?["tieredLevelPlan"]),
                 SnapshotLine("hash.canonical", report["hashes"]?["canonical"]),
@@ -537,6 +875,10 @@ namespace DungeonLab.Editor
                 SnapshotLine("validation.passed", report["validation"]?["passed"]),
                 SnapshotLine("metric.rootedRouteCount", report["layout"]?["graph"]?["rootedRouteCount"]),
                 SnapshotLine("metric.longestRootRouteRooms", report["layout"]?["graph"]?["longestRootRouteRooms"]),
+                SnapshotLine("metric.finalRoomDegreeSamples", report["measurements"]?["finalRoomDegreeDistribution"]?["sampleCount"]),
+                SnapshotLine("metric.exteriorCorridorCells", report["measurements"]?["corridorEvidence"]?["exteriorCorridorCellCount"]),
+                SnapshotLine("metric.sharedWallDoors", report["measurements"]?["corridorEvidence"]?["sharedWallDoorCount"]),
+                SnapshotLine("metric.reservedVistaCells", report["measurements"]?["voidExtent"]?["reservedVistaCellCount"]),
                 SnapshotLine("metric.transitionCount", report["tieredLevelPlan"]?["transitionCount"]),
                 SnapshotLine("metric.elevationSpan", report["tieredLevelPlan"]?["elevationSpan"]),
                 SnapshotLine("failure", report["lastRejection"])
@@ -724,7 +1066,7 @@ namespace DungeonLab.Editor
 
         private static string BuildPhase6bAtriumRingSnapshot(int seed)
         {
-            CurrentGenerationSettings = LoadActiveGenerationSettings();
+            CurrentGenerationSettings = LoadActiveGenerationSettings(ResolveRequestedGenerationProfileId());
             RouteIntent intent = BuildDiagnosticAtriumRingIntent(seed);
             RouteIntent processional = BuildDiagnosticRouteIntent(seed - 1);
             bool valid = TryValidateRouteIntent(intent, out string validationError);
@@ -792,7 +1134,7 @@ namespace DungeonLab.Editor
 
         private static string BuildPhase6cTwinWingSnapshot(int seed)
         {
-            CurrentGenerationSettings = LoadActiveGenerationSettings();
+            CurrentGenerationSettings = LoadActiveGenerationSettings(ResolveRequestedGenerationProfileId());
             RouteIntent intent = BuildDiagnosticTwinWingIntent(seed);
             RouteIntent processional = BuildDiagnosticRouteIntent(seed - 3);
             RouteIntent atrium = BuildDiagnosticAtriumRingIntent(seed - 2);
@@ -2058,13 +2400,17 @@ namespace DungeonLab.Editor
                 bool collisionPreconditionsPassed =
                     enabledCollisionSources > 0 &&
                     missingMeshCount == 0;
-                return new JObject
+                var report = new JObject
                 {
                     ["summaryVersion"] = ActiveDiagnosticSummaryVersion,
                     ["seed"] = seed,
                     ["accepted"] = true,
+                    ["profile"] = seedReport["profile"]?.DeepClone(),
+                    ["settingsDigest"] = seedReport["settingsDigest"]?.DeepClone(),
+                    ["settings"] = seedReport["settings"]?.DeepClone(),
                     ["seedReportHash"] = seedReport["hashes"]?["canonical"],
                     ["boundary"] = seedReport["validation"]?["boundary"],
+                    ["measurements"] = seedReport["measurements"]?.DeepClone(),
                     ["renderer"] = new JObject
                     {
                         ["passed"] = rendererPassed,
@@ -2085,7 +2431,8 @@ namespace DungeonLab.Editor
                         ["missingMeshes"] = missingMeshCount,
                         ["meshesRequiringReadWriteNormalization"] = unreadableMeshCount
                     }
-                }.ToString(Formatting.None);
+                };
+                return report.ToString(Formatting.None);
             }
             catch (Exception exception)
             {
@@ -2093,9 +2440,17 @@ namespace DungeonLab.Editor
                 {
                     ["summaryVersion"] = ActiveDiagnosticSummaryVersion,
                     ["seed"] = seed,
+                    ["profile"] = ResolveRequestedGenerationProfileId(),
+                    ["settingsDigest"] = JValue.CreateNull(),
+                    ["settings"] = JValue.CreateNull(),
                     ["accepted"] = false,
                     ["failureCode"] = Phase0RejectionCode(exception.Message, exception),
-                    ["failure"] = exception.Message
+                    ["failure"] = exception.Message,
+                    ["measurements"] = new JObject
+                    {
+                        ["available"] = false,
+                        ["reason"] = "render build failed before density and adjacency measurements were available"
+                    }
                 }.ToString(Formatting.None);
             }
             finally
@@ -2225,6 +2580,12 @@ namespace DungeonLab.Editor
             float correlation = CalculateDepthLevelCorrelation(layout, plan);
             JObject validation = BuildPhase0ValidationSummary(seed, layout, plan, random, out _);
             JObject graphSummary = BuildLayoutGraphSummary(layout);
+            JObject routePlacement = BuildPhase1RoutePlacementProjection(layout);
+            JObject densityAdjacencyMeasurements = BuildDensityAdjacencyMeasurements(
+                layout,
+                graphSummary,
+                routePlacement,
+                routeIntentProjection.Value<string>("patternId") ?? string.Empty);
             EndPhase7OutlierStage("metricsAndHardValidation", validationStart);
 
             long reportAssemblyStart = BeginPhase7OutlierStage();
@@ -2233,7 +2594,6 @@ namespace DungeonLab.Editor
                 ["summaryVersion"] = ActiveDiagnosticSummaryVersion,
                 ["generatorVersion"] = ActiveDiagnosticGeneratorVersion,
                 ["seed"] = seed,
-                ["profile"] = CurrentGenerationSettings.profileName,
                 ["catalogDigest"] = Phase0CatalogDigest(),
                 ["accepted"] = true,
                 ["layoutAttempts"] = layoutAttemptsUsed,
@@ -2290,8 +2650,10 @@ namespace DungeonLab.Editor
                     ["canonical"] = canonicalHash
                 }
             };
+            AddGenerationSettingsIdentity(report);
             report["routeIntent"] = routeIntentProjection;
-            report["routePlacement"] = BuildPhase1RoutePlacementProjection(layout);
+            report["routePlacement"] = routePlacement;
+            report["measurements"] = densityAdjacencyMeasurements;
             report["routeResolution"] = BuildRouteRequirementResolutionProjection(plan.routeRequirementResolution);
             report["recipeResolutions"] = recipeResolutions;
             report["namedPromontories"] = BuildNamedPromontoryProjection(plan.namedPromontories);
@@ -2316,7 +2678,6 @@ namespace DungeonLab.Editor
                 ["summaryVersion"] = ActiveDiagnosticSummaryVersion,
                 ["generatorVersion"] = ActiveDiagnosticGeneratorVersion,
                 ["seed"] = seed,
-                ["profile"] = CurrentGenerationSettings.profileName,
                 ["catalogDigest"] = Phase0CatalogDigest(),
                 ["accepted"] = false,
                 ["layoutAttempts"] = layoutAttemptsUsed,
@@ -2325,6 +2686,12 @@ namespace DungeonLab.Editor
                 ["exceptionType"] = exception?.GetType().FullName,
                 ["rejectionHistogram"] = HistogramToken(rejectionHistogram),
                 ["rejectionCodes"] = RejectionCodeHistogramToken(rejectionHistogram)
+            };
+            AddGenerationSettingsIdentity(report);
+            report["measurements"] = new JObject
+            {
+                ["available"] = false,
+                ["reason"] = "layout was rejected before density and adjacency measurements were available"
             };
             if (phase1LastRouteIntent != null)
             {
@@ -3270,7 +3637,7 @@ namespace DungeonLab.Editor
             out Vector3 levelFieldOrigin,
             out TieredLevelPlan renderedPlan)
         {
-            CurrentGenerationSettings = LoadActiveGenerationSettings();
+            CurrentGenerationSettings = LoadActiveGenerationSettings(ResolveRequestedGenerationProfileId());
             var rejectionHistogram = new Dictionary<string, int>(StringComparer.Ordinal);
             var random = new System.Random(seed);
             if (!TryBuildAcceptedPlan(
@@ -3361,11 +3728,13 @@ namespace DungeonLab.Editor
                     ["longestRootRouteRooms"] = 0,
                     ["branchNodes"] = 0,
                     ["leafNodes"] = 0,
-                    ["loopEdges"] = 0
+                    ["loopEdges"] = 0,
+                    ["finalRoomDegreeDistribution"] = BuildIntDistribution(new List<int>())
                 };
             }
 
             List<int>[] adjacency = BuildRoomAdjacency(layout.rooms.Count, layout.connections);
+            var finalRoomDegrees = new List<int>(adjacency.Length);
             var depths = new int[layout.rooms.Count];
             for (int i = 0; i < depths.Length; i++)
             {
@@ -3376,6 +3745,7 @@ namespace DungeonLab.Editor
             int leafNodes = 0;
             for (int i = 0; i < adjacency.Length; i++)
             {
+                finalRoomDegrees.Add(adjacency[i].Count);
                 if (adjacency[i].Count >= 3)
                 {
                     branchNodes++;
@@ -3414,8 +3784,157 @@ namespace DungeonLab.Editor
                 ["branchNodes"] = branchNodes,
                 ["leafNodes"] = leafNodes,
                 ["loopEdges"] = CountLoopEdges(layout),
+                ["finalRoomDegreeDistribution"] = BuildIntDistribution(finalRoomDegrees),
                 ["measurement"] = "current room graph rooted at room 0; no semantic route catalog exists"
             };
+        }
+
+        private static JObject BuildDensityAdjacencyMeasurements(
+            DungeonLayout layout,
+            JObject graphSummary,
+            JObject routePlacement,
+            string patternId)
+        {
+            var roomCells = new HashSet<Vector2Int>();
+            foreach (RoomFootprint room in layout.rooms)
+            {
+                roomCells.UnionWith(room.cells);
+            }
+
+            int exteriorCorridorCellCount = 0;
+            foreach (Vector2Int cell in layout.floorCells)
+            {
+                if (!roomCells.Contains(cell))
+                {
+                    exteriorCorridorCellCount++;
+                }
+            }
+
+            var perConnectionExteriorLengths = new List<int>(layout.connections.Count);
+            int sharedWallDoorCount = 0;
+            foreach (RoomConnection connection in layout.connections)
+            {
+                int exteriorLength = 0;
+                foreach (Vector2Int cell in connection.path)
+                {
+                    if (!roomCells.Contains(cell))
+                    {
+                        exteriorLength++;
+                    }
+                }
+
+                perConnectionExteriorLengths.Add(exteriorLength);
+                if (exteriorLength == 0)
+                {
+                    sharedWallDoorCount++;
+                }
+            }
+
+            JObject vista = routePlacement["vista"] as JObject ?? new JObject();
+            bool isAtrium = string.Equals(patternId, AtriumRingPatternId, StringComparison.Ordinal);
+            return new JObject
+            {
+                ["available"] = true,
+                ["topology"] = patternId,
+                ["finalRoomDegreeDistribution"] =
+                    graphSummary["finalRoomDegreeDistribution"]?.DeepClone() ?? BuildIntDistribution(new List<int>()),
+                ["corridorEvidence"] = new JObject
+                {
+                    ["exteriorCorridorCellCount"] = exteriorCorridorCellCount,
+                    ["perConnectionExteriorLengthDistribution"] = BuildIntDistribution(perConnectionExteriorLengths),
+                    ["sharedWallDoorCount"] = sharedWallDoorCount,
+                    ["measurement"] = "exterior cells are floor/path cells outside every room footprint; a zero-length connection is a shared-wall-door candidate"
+                },
+                ["voidExtent"] = new JObject
+                {
+                    ["reservedVistaCellCount"] = vista.Value<int?>("reservedVoidCellCount") ?? 0,
+                    ["reservedVistaPreservedAfterTierLooping"] =
+                        vista.Value<bool?>("reservedVoidPreservedAfterTierLooping") ?? false,
+                    ["atriumCenterVoidCellCount"] = isAtrium
+                        ? new JValue(CountLargestEnclosedVoidCells(layout.floorCells))
+                        : JValue.CreateNull(),
+                    ["atriumMeasurement"] = "largest enclosed non-floor component in the projected atrium floor mask; null for other topologies"
+                }
+            };
+        }
+
+        private static int CountLargestEnclosedVoidCells(HashSet<Vector2Int> floorCells)
+        {
+            if (floorCells == null || floorCells.Count == 0)
+            {
+                return 0;
+            }
+
+            RectInt floorBounds = GetCellRect(floorCells);
+            int minX = floorBounds.xMin - 1;
+            int maxX = floorBounds.xMax;
+            int minY = floorBounds.yMin - 1;
+            int maxY = floorBounds.yMax;
+            var directions = new[]
+            {
+                new Vector2Int(1, 0),
+                new Vector2Int(-1, 0),
+                new Vector2Int(0, 1),
+                new Vector2Int(0, -1)
+            };
+
+            var visited = new HashSet<Vector2Int>();
+            var queue = new Queue<Vector2Int>();
+            var exteriorStart = new Vector2Int(minX, minY);
+            visited.Add(exteriorStart);
+            queue.Enqueue(exteriorStart);
+            while (queue.Count > 0)
+            {
+                Vector2Int current = queue.Dequeue();
+                foreach (Vector2Int direction in directions)
+                {
+                    Vector2Int neighbor = current + direction;
+                    if (neighbor.x < minX || neighbor.x > maxX ||
+                        neighbor.y < minY || neighbor.y > maxY ||
+                        floorCells.Contains(neighbor) || !visited.Add(neighbor))
+                    {
+                        continue;
+                    }
+
+                    queue.Enqueue(neighbor);
+                }
+            }
+
+            int largestComponent = 0;
+            for (int y = floorBounds.yMin; y < floorBounds.yMax; y++)
+            {
+                for (int x = floorBounds.xMin; x < floorBounds.xMax; x++)
+                {
+                    var start = new Vector2Int(x, y);
+                    if (floorCells.Contains(start) || !visited.Add(start))
+                    {
+                        continue;
+                    }
+
+                    int componentSize = 0;
+                    queue.Enqueue(start);
+                    while (queue.Count > 0)
+                    {
+                        Vector2Int current = queue.Dequeue();
+                        componentSize++;
+                        foreach (Vector2Int direction in directions)
+                        {
+                            Vector2Int neighbor = current + direction;
+                            if (!floorBounds.Contains(neighbor) ||
+                                floorCells.Contains(neighbor) || !visited.Add(neighbor))
+                            {
+                                continue;
+                            }
+
+                            queue.Enqueue(neighbor);
+                        }
+                    }
+
+                    largestComponent = Mathf.Max(largestComponent, componentSize);
+                }
+            }
+
+            return largestComponent;
         }
 
         private static JObject BuildCanonicalLayoutProjection(DungeonLayout layout)
@@ -4128,6 +4647,118 @@ namespace DungeonLab.Editor
             };
         }
 
+        private sealed class DensityAdjacencyBatchAccumulator
+        {
+            public int acceptedSeeds;
+            public int reservedVistaPreservedSeeds;
+            public readonly List<int> finalRoomDegrees = new List<int>();
+            public readonly List<int> exteriorCorridorCellsPerSeed = new List<int>();
+            public readonly List<int> perConnectionExteriorLengths = new List<int>();
+            public readonly List<int> sharedWallDoorsPerSeed = new List<int>();
+            public readonly List<int> reservedVistaCellsPerSeed = new List<int>();
+            public readonly List<int> atriumCenterVoidCellsPerSeed = new List<int>();
+        }
+
+        private static JObject BuildDensityAdjacencyBatchMeasurements(JArray seedReports)
+        {
+            var byTopology = new SortedDictionary<string, DensityAdjacencyBatchAccumulator>(StringComparer.Ordinal);
+            foreach (JToken seedReport in seedReports ?? new JArray())
+            {
+                JObject measurements = seedReport["measurements"] as JObject;
+                if (seedReport.Value<bool?>("accepted") != true ||
+                    measurements?.Value<bool?>("available") != true)
+                {
+                    continue;
+                }
+
+                string topology = measurements.Value<string>("topology") ?? "unknown";
+                if (!byTopology.TryGetValue(topology, out DensityAdjacencyBatchAccumulator accumulator))
+                {
+                    accumulator = new DensityAdjacencyBatchAccumulator();
+                    byTopology[topology] = accumulator;
+                }
+
+                accumulator.acceptedSeeds++;
+                AppendDistributionValues(
+                    measurements["finalRoomDegreeDistribution"] as JObject,
+                    accumulator.finalRoomDegrees);
+                JObject corridorEvidence = measurements["corridorEvidence"] as JObject ?? new JObject();
+                accumulator.exteriorCorridorCellsPerSeed.Add(
+                    corridorEvidence.Value<int?>("exteriorCorridorCellCount") ?? 0);
+                accumulator.sharedWallDoorsPerSeed.Add(
+                    corridorEvidence.Value<int?>("sharedWallDoorCount") ?? 0);
+                AppendDistributionValues(
+                    corridorEvidence["perConnectionExteriorLengthDistribution"] as JObject,
+                    accumulator.perConnectionExteriorLengths);
+
+                JObject voidExtent = measurements["voidExtent"] as JObject ?? new JObject();
+                accumulator.reservedVistaCellsPerSeed.Add(
+                    voidExtent.Value<int?>("reservedVistaCellCount") ?? 0);
+                if (voidExtent.Value<bool?>("reservedVistaPreservedAfterTierLooping") == true)
+                {
+                    accumulator.reservedVistaPreservedSeeds++;
+                }
+
+                int? atriumCenterVoidCells = voidExtent.Value<int?>("atriumCenterVoidCellCount");
+                if (atriumCenterVoidCells.HasValue)
+                {
+                    accumulator.atriumCenterVoidCellsPerSeed.Add(atriumCenterVoidCells.Value);
+                }
+            }
+
+            var topologyReports = new JObject();
+            foreach (KeyValuePair<string, DensityAdjacencyBatchAccumulator> entry in byTopology)
+            {
+                DensityAdjacencyBatchAccumulator accumulator = entry.Value;
+                topologyReports[entry.Key] = new JObject
+                {
+                    ["acceptedSeeds"] = accumulator.acceptedSeeds,
+                    ["finalRoomDegreeDistribution"] = BuildIntDistribution(accumulator.finalRoomDegrees),
+                    ["corridorEvidence"] = new JObject
+                    {
+                        ["exteriorCorridorCellsPerSeed"] = BuildIntDistribution(accumulator.exteriorCorridorCellsPerSeed),
+                        ["perConnectionExteriorLengthDistribution"] = BuildIntDistribution(accumulator.perConnectionExteriorLengths),
+                        ["sharedWallDoorsPerSeed"] = BuildIntDistribution(accumulator.sharedWallDoorsPerSeed)
+                    },
+                    ["voidExtent"] = new JObject
+                    {
+                        ["reservedVistaCellsPerSeed"] = BuildIntDistribution(accumulator.reservedVistaCellsPerSeed),
+                        ["reservedVistaPreservedSeeds"] = accumulator.reservedVistaPreservedSeeds,
+                        ["atriumCenterVoidCellsPerSeed"] = BuildIntDistribution(accumulator.atriumCenterVoidCellsPerSeed)
+                    }
+                };
+            }
+
+            return new JObject
+            {
+                ["measurementVersion"] = "density-adjacency-v1",
+                ["byTopology"] = topologyReports
+            };
+        }
+
+        private static void AppendDistributionValues(JObject distribution, List<int> values)
+        {
+            JObject histogram = distribution?["histogram"] as JObject;
+            if (histogram == null)
+            {
+                return;
+            }
+
+            foreach (JProperty property in histogram.Properties())
+            {
+                if (!int.TryParse(property.Name, out int value))
+                {
+                    continue;
+                }
+
+                int count = property.Value.Value<int>();
+                for (int index = 0; index < count; index++)
+                {
+                    values.Add(value);
+                }
+            }
+        }
+
         private static int NearestRank(IReadOnlyList<int> sortedValues, double percentile)
         {
             int index = Math.Max(0, Math.Min(
@@ -4180,7 +4811,6 @@ namespace DungeonLab.Editor
                 ["generatedAtUtc"] = DateTime.UtcNow.ToString("o"),
                 ["summaryVersion"] = ActiveDiagnosticSummaryVersion,
                 ["generatorVersion"] = ActiveDiagnosticGeneratorVersion,
-                ["profile"] = CurrentGenerationSettings.profileName,
                 ["catalogDigest"] = Phase0CatalogDigest(),
                 ["firstSeed"] = firstSeed,
                 ["lastSeed"] = firstSeed + seedCount - 1,
@@ -4216,6 +4846,8 @@ namespace DungeonLab.Editor
                 ["deletionLedger"] = new JArray(),
                 ["seeds"] = seedReports
             };
+            AddGenerationSettingsIdentity(report);
+            report["measurements"] = BuildDensityAdjacencyBatchMeasurements(seedReports);
             bool isLockedReliabilityCorpus =
                 firstSeed == Phase0BaselineFirstSeed && seedCount == LockedSeedCount;
             if (isLockedReliabilityCorpus)
@@ -4833,14 +5465,15 @@ namespace DungeonLab.Editor
 
         private static string Phase0CatalogDigest()
         {
-            if (!string.IsNullOrEmpty(phase0CatalogDigestCache))
+            string settingsDigest = GenerationSettingsDigest(CurrentGenerationSettings);
+            if (Phase0CatalogDigestCache.TryGetValue(settingsDigest, out string cachedDigest))
             {
-                return phase0CatalogDigestCache;
+                return cachedDigest;
             }
 
             string[] paths =
             {
-                GenerationProfilePath,
+                ResolveGenerationProfilePath(CurrentGenerationSettings.profileName),
                 PackageInventoryPath,
                 StairProofContractsPath,
                 ForgedStairContractsPath,
@@ -4876,8 +5509,9 @@ namespace DungeonLab.Editor
                     .Append(">\n");
             }
 
-            phase0CatalogDigestCache = ComputeSha256(digestInput.ToString());
-            return phase0CatalogDigestCache;
+            string digest = ComputeSha256(digestInput.ToString());
+            Phase0CatalogDigestCache[settingsDigest] = digest;
+            return digest;
         }
 
         private static string ComputeSha256(string value)

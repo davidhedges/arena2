@@ -67,18 +67,6 @@ namespace DungeonLab.Editor
         public int maxLoopCandidateDistanceCells;
         public float roomZoneSplitChance;
 
-        public static DungeonGenerationSettings Default => new DungeonGenerationSettings
-        {
-            profileName = "default",
-            mapWidthMaxCells = 28,
-            mapDepthMaxCells = 28,
-            denseFloorplanMinRooms = 9,
-            denseFloorplanMinFillPercent = 0.34f,
-            loopConnectionFraction = 0.35f,
-            maxLoopCandidateDistanceCells = 14,
-            roomZoneSplitChance = 0.35f
-        }.Validated();
-
         public DungeonGenerationSettings Validated()
         {
             var value = this;

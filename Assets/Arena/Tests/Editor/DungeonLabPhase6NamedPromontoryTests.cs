@@ -51,7 +51,7 @@ namespace Arena.Tests.Editor
         {
             Dictionary<string, string> snapshot = PromontorySnapshot();
 
-            Assert.That(snapshot["versions.summary"], Is.EqualTo("dungeon-plan-v9"));
+            Assert.That(snapshot["versions.summary"], Is.EqualTo("dungeon-plan-v10"));
             Assert.That(snapshot["versions.generator"], Is.EqualTo("route-topologies-v9"));
             Assert.That(snapshot["processional.validation"], Is.EqualTo("True"));
             Assert.That(snapshot["atrium.validation"], Is.EqualTo("True"));

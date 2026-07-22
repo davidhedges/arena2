@@ -61,7 +61,7 @@ namespace Arena.Tests.Editor
             Assert.That(values["determinism.identical"], Is.EqualTo("True"));
             Assert.That(values["determinism.changeDetected"], Is.EqualTo("True"));
             Assert.That(values["paths.distinct"], Is.EqualTo("True"));
-            Assert.That(values["versions.summary"], Is.EqualTo("dungeon-plan-v9"));
+            Assert.That(values["versions.summary"], Is.EqualTo("dungeon-plan-v10"));
             Assert.That(values["versions.generator"], Is.EqualTo("route-topologies-v9"));
         }
 

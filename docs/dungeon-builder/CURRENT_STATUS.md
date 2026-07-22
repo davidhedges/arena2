@@ -4,7 +4,7 @@ Start here when returning to dungeon work. Keep this page short and update it at
 
 Last updated: 2026-07-22
 
-Active milestone: Phase 6 is complete at verified Phase 6f; the owner has closed Phase 7 as finished with all engineering and automated gates passing and the deliberately skipped curated human review recorded as non-blocking; the external-connector/stacked-crossing corrective item also passes its bounded exit gate; `DENSITY_ADJACENCY_PLAN.md` is the proposed, not-started next workstream and is currently under review
+Active milestone: Phase 6, Phase 7, and the bounded corrective item remain closed; density/adjacency slices 0-2 are complete and slice 3 is not started
 
 Production mode: one route-first layout builder deterministically selects processional-spine, atrium-ring, or twin-wing-keep, resolves exactly three reviewed recipes plus any target-bearing named-vista promontory and 1-4 canonical external connector promontories, and feeds the shared canonical pipeline
 
@@ -15,7 +15,7 @@ Recipe authoring UI: implemented for the Phase 5 contract, validation, determini
 1. [`PROJECT_INVARIANTS.md`](PROJECT_INVARIANTS.md) — non-negotiable geometry and placement rules.
 2. This file — current evidence and exact handoff.
 3. [`COHERENT_FLOORPLAN_PLAN.md`](COHERENT_FLOORPLAN_PLAN.md) — architecture, phases, and exit gates.
-4. [`DENSITY_ADJACENCY_PLAN.md`](DENSITY_ADJACENCY_PLAN.md) — proposed next workstream for denser floorplans, neighboring/abutting rooms, and tier seams; not started.
+4. [`DENSITY_ADJACENCY_PLAN.md`](DENSITY_ADJACENCY_PLAN.md) — approved density/adjacency workstream; slices 0-2 complete and slice 3 next.
 5. [`RECIPE_AUTHORING_WORKFLOW.md`](RECIPE_AUTHORING_WORKFLOW.md) — required contract for Phase 5 lifecycle, validation, preview, and review work.
 6. [`stair_forge_design.md`](stair_forge_design.md) — exact stair contracts already reused by the coupled twin-stair episode and any Phase 5 contrast recipe.
 
@@ -620,13 +620,13 @@ Missing any locked gate requires revising the implementation or reporting the Ph
 ## End-of-session handoff
 
 ```text
-Milestone/phase: Phase 6 remains closed at verified Phase 6f. Phase 7 and the separately approved bounded corrective item are finished. All Phase 7 engineering and automated gates pass; curated human scoring was deliberately skipped and the owner has ruled that it is not outstanding work. The proposed density/adjacency workstream is under review and has not started.
-Completed this session: restored 1-4 canonical external connector promontories through the existing plan/render/abyss/collision path, kept the optional named-vista feature separate, and added deterministic preservation evidence for the unchanged optional stacked-crossing capability without changing bridge policy.
-Current validation result: two repeat-identical 200-seed runs pass every approved reliability, attempt, preservation, scenic, and performance threshold; exactly nine production floors pass actual collision export and terminal-clearance gates; the stacked fixture passes actual shared export; all Dungeon Lab tests pass 98/98; and the full suite has only the same 21 unrelated failures (389/410).
-Last known-good seeds and reports: Phase 6f sentinels remain processional `2026072100`, atrium `2026072101`, and twin-wing `2026072103`. Corrective comparison, nine-floor collision, and stacked-export evidence is under `DungeonLabReports`; prior passing Phase 7 sweep/collision/gallery evidence remains there unchanged.
-Last diagnostic fact: external connectors are a hash-isolated final canonical plan mutation with deterministic atomic retry failure, while stacked crossings continue through the unchanged aerial-bridge, headroom, renderer, and collision paths. No 2,000-seed sweep or gallery review was rerun.
-Deletion-ledger items added/closed: none. The corrective item introduced no temporary production path, duplicate renderer/collision path, topology, recipe, motif, schema extension point, or follow-on deletion item.
-Exact next action: review and revise `DENSITY_ADJACENCY_PLAN.md` as needed. This status records that proposal but does not itself authorize implementation.
-Blocker or decision needed: owner approval of the reviewed density/adjacency plan before implementation. No Phase 7 work remains open.
+Milestone/phase: Phase 6, Phase 7, and the bounded corrective item remain closed. Density/adjacency slices 0-2 are complete; slice 3 is not started.
+Completed this session: added and completed the bounded Slice 2 verification. Existing twin-wing seed `2026072103` has two zero-exterior, doorway-backed connections; touching rooms compile to one shared-wall doorway and render with collision-export-ready inputs; a biased junction fails first at footprint-center cardinal alignment. Chose stable embedded-node anchors and recorded their junction invariants. No production generator, renderer, or collision behavior changed.
+Current validation result: focused Slice 2 EditMode tests pass 5/5; the editor and focused test projects compile with 0 errors through the generated C# projects; `git diff --check` passes. The initial test-launch delay was an orphaned Unity 6000.4 licensing client created by this session, not an open Editor; only that orphan was stopped, after which Unity compiled and ran normally. Slice 1's prior validation evidence remains unchanged.
+Last known-good seeds and reports: the final default-profile report is `DungeonLabReports/dungeon_plan_2026072100_2026072149.json`; fixed sentinels remain unchanged. `spacious` uses settings digest `55b74a5f3827ae4127cecb14262c8d1beea3ccc04fd59ece51326ccb80c803a7`.
+Last diagnostic fact: shared-wall-door candidates already exist at baseline (processional p50 2, twin-wing p50 1, atrium p50 0); all 50 reserved vistas remain preserved and atrium center voids have p50 191 projected cells.
+Deletion-ledger items added/closed: the Slice 2 probe is diagnostic-only in the existing batch partial; it adds no alternate planner, connection compiler, boundary builder, renderer, collision path, or persistent per-edge anchor state.
+Exact next action: obtain explicit approval, then execute Slice 3 room-size profile knobs within its processional-only and stair-aware boundary. Do not begin it from this status alone.
+Blocker or decision needed: owner approval to begin Slice 3. No Slice 2 engineering blocker remains.
 New chat necessary: no.
 ```

@@ -73,7 +73,7 @@ namespace Arena.Tests.Editor
         {
             Dictionary<string, string> values = Snapshot.Value;
 
-            Assert.That(values["versions.summary"], Is.EqualTo("dungeon-plan-v9"));
+            Assert.That(values["versions.summary"], Is.EqualTo("dungeon-plan-v10"));
             Assert.That(values["versions.generator"], Is.EqualTo("route-topologies-v9"));
             Assert.That(values["renderer.accepted"], Is.EqualTo("True"));
             Assert.That(values["renderer.passed"], Is.EqualTo("True"));

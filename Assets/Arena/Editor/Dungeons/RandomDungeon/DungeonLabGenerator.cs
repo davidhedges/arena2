@@ -12,14 +12,18 @@ namespace DungeonLab.Editor
     {
         private const string PackageInventoryPath = "Assets/Arena/Content/Settings/Dungeons/RandomDungeon/package_inventory.json";
         private const string StairProofContractsPath = "Assets/Arena/Content/Settings/Dungeons/RandomDungeon/stair_proof_contracts.json";
-        private const string GenerationProfilePath = "Assets/Arena/Content/Settings/Dungeons/RandomDungeon/generation_profile.asset";
+        private const string SpaciousGenerationProfilePath = "Assets/Arena/Content/Settings/Dungeons/RandomDungeon/generation_profile.asset";
+        private const string DenseGenerationProfilePath = "Assets/Arena/Content/Settings/Dungeons/RandomDungeon/generation_profile_dense.asset";
+        private const string DefaultGenerationProfileId = "spacious";
+        private const string GenerationProfileEnvironmentVariable = "ARENA_DUNGEON_GENERATION_PROFILE";
         // Forge output (design step 6): same contract shape, separate file; entries
         // join planning only with reviewStatus "reviewed" (human review gate).
         private const string ForgedStairContractsPath = "Assets/Arena/Content/Settings/Dungeons/RandomDungeon/forged_stair_contracts.json";
         private const string PackageAssetRoot = "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/";
         private const string GeneratedRootName = "Generated Dungeon";
-        // Active floorplan tuning lives in generation_profile.asset and is
-        // validated through DungeonGenerationSettings before planning.
+        // Every entry point supplies a profile ID to the single settings resolver.
+        // Downstream planning consumes only the resolved settings value and never
+        // branches on profile identity.
         // One generated level is 1u of world height (the elevation quantum since the
         // stair-forge recalibration). The plan grid stays 4u cells. MaxGeneratedLevel
         // is in 1u levels; magnificence decision A (2026-06-13) raised the world
@@ -90,7 +94,7 @@ namespace DungeonLab.Editor
         private int seed;
         private bool createPlayCamera = true;
         private Vector3 origin = Vector3.zero;
-        private static DungeonGenerationSettings CurrentGenerationSettings = DungeonGenerationSettings.Default;
+        private static DungeonGenerationSettings CurrentGenerationSettings;
 
         [MenuItem("Tools/Dungeon Lab/Generate")]
         public static void Generate()
@@ -101,19 +105,13 @@ namespace DungeonLab.Editor
         [MenuItem("Tools/Dungeon Lab/Open Generation Profile")]
         public static void OpenGenerationProfile()
         {
-            DungeonGenerationProfile profile = AssetDatabase.LoadAssetAtPath<DungeonGenerationProfile>(GenerationProfilePath);
+            string profileId = ResolveRequestedGenerationProfileId();
+            string profilePath = ResolveGenerationProfilePath(profileId);
+            DungeonGenerationProfile profile = AssetDatabase.LoadAssetAtPath<DungeonGenerationProfile>(profilePath);
             if (profile == null)
             {
-                string directory = Path.GetDirectoryName(GenerationProfilePath);
-                if (!string.IsNullOrEmpty(directory) && !AssetDatabase.IsValidFolder(directory))
-                {
-                    Directory.CreateDirectory(directory);
-                    AssetDatabase.Refresh();
-                }
-
-                profile = CreateInstance<DungeonGenerationProfile>();
-                AssetDatabase.CreateAsset(profile, GenerationProfilePath);
-                AssetDatabase.SaveAssets();
+                throw new InvalidOperationException(
+                    $"[GENERATION_PROFILE] missing required '{profileId}' profile at {profilePath}");
             }
 
             Selection.activeObject = profile;
@@ -148,7 +146,7 @@ namespace DungeonLab.Editor
                 generator.seed = seed;
                 generator.createPlayCamera = false;
                 generator.origin = Vector3.zero;
-                CurrentGenerationSettings = LoadActiveGenerationSettings();
+                CurrentGenerationSettings = LoadActiveGenerationSettings(ResolveRequestedGenerationProfileId());
                 generator.GenerateRandomDungeonLayout(new System.Random(seed));
             }
             finally
@@ -157,16 +155,49 @@ namespace DungeonLab.Editor
             }
         }
 
-        private static DungeonGenerationSettings LoadActiveGenerationSettings()
+        private static string ResolveRequestedGenerationProfileId()
         {
-            DungeonGenerationProfile profile = AssetDatabase.LoadAssetAtPath<DungeonGenerationProfile>(GenerationProfilePath);
+            string configured = Environment.GetEnvironmentVariable(GenerationProfileEnvironmentVariable);
+            return string.IsNullOrWhiteSpace(configured)
+                ? DefaultGenerationProfileId
+                : configured.Trim().ToLowerInvariant();
+        }
+
+        private static string ResolveGenerationProfilePath(string profileId)
+        {
+            switch (profileId)
+            {
+                case "spacious":
+                    return SpaciousGenerationProfilePath;
+                case "dense":
+                    return DenseGenerationProfilePath;
+                default:
+                    throw new InvalidOperationException(
+                        $"[GENERATION_PROFILE] unknown profile id '{profileId}'. Expected 'spacious' or 'dense'.");
+            }
+        }
+
+        private static DungeonGenerationSettings LoadActiveGenerationSettings(string profileId)
+        {
+            string normalizedProfileId = string.IsNullOrWhiteSpace(profileId)
+                ? throw new InvalidOperationException("[GENERATION_PROFILE] profile id is required.")
+                : profileId.Trim().ToLowerInvariant();
+            string profilePath = ResolveGenerationProfilePath(normalizedProfileId);
+            DungeonGenerationProfile profile = AssetDatabase.LoadAssetAtPath<DungeonGenerationProfile>(profilePath);
             if (profile == null)
             {
                 throw new InvalidOperationException(
-                    $"[GENERATION_PROFILE] missing required production profile at {GenerationProfilePath}");
+                    $"[GENERATION_PROFILE] missing required '{normalizedProfileId}' profile at {profilePath}");
             }
 
-            return profile.ToSettings();
+            DungeonGenerationSettings settings = profile.ToSettings();
+            if (!string.Equals(settings.profileName, normalizedProfileId, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    $"[GENERATION_PROFILE] profile at {profilePath} declares id '{settings.profileName}', expected '{normalizedProfileId}'.");
+            }
+
+            return settings;
         }
 
         private void GenerateRandomDungeonLayout(System.Random random)
@@ -264,7 +295,7 @@ namespace DungeonLab.Editor
             float floorFillPercent = CalculateFloorFillPercent(layout.floorCells);
             int loopEdges = CountLoopEdges(layout);
             Debug.Log(
-                $"Dungeon Lab: random dungeon seed {seed}, profile {CurrentGenerationSettings.profileName}, archetype {levelPlan.archetypeName}, cells {layout.floorCells.Count}, rooms {layout.rooms.Count}, largest_room {largestRoom.Area}c_{largestRoom.bounds.width}x{largestRoom.bounds.height}p{largestRoom.parts.Count}, " +
+                $"Dungeon Lab: random dungeon seed {seed}, profile {CurrentGenerationSettings.profileName}, settings {GenerationSettingsDigest(CurrentGenerationSettings)}, archetype {levelPlan.archetypeName}, cells {layout.floorCells.Count}, rooms {layout.rooms.Count}, largest_room {largestRoom.Area}c_{largestRoom.bounds.width}x{largestRoom.bounds.height}p{largestRoom.parts.Count}, " +
                 $"connections {layout.connections.Count}, loop edges {loopEdges} (=C-(R-1)), floor-fill {floorFillPercent * 100f:0.#}%, " +
                 $"connector candidates from tag = {levelPlan.connectorCandidateCount}, " +
                 $"stair usage {levelPlan.stairUsageSummary}, " +
@@ -273,6 +304,7 @@ namespace DungeonLab.Editor
             Debug.Log(
                 "Dungeon Lab GENERATION_SUMMARY " +
                 $"profile={CurrentGenerationSettings.profileName}; " +
+                $"settingsDigest={GenerationSettingsDigest(CurrentGenerationSettings)}; " +
                 $"archetype={levelPlan.archetypeName}; " +
                 $"rooms={layout.rooms.Count}; " +
                 $"floorRegions={layout.rooms.Count}; " +

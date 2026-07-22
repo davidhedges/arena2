@@ -23,6 +23,7 @@ namespace Arena.Tests.Editor
             string[] requiredPaths =
             {
                 "Assets/Arena/Content/Settings/Dungeons/RandomDungeon/generation_profile.asset",
+                "Assets/Arena/Content/Settings/Dungeons/RandomDungeon/generation_profile_dense.asset",
                 "Assets/Arena/Content/Settings/Dungeons/RandomDungeon/package_inventory.json",
                 "Assets/Arena/Content/Settings/Dungeons/RandomDungeon/stair_proof_contracts.json",
                 "Assets/Arena/Content/Settings/Dungeons/RandomDungeon/forged_stair_contracts.json",
@@ -59,7 +60,7 @@ namespace Arena.Tests.Editor
         {
             string source = File.ReadAllText(GeneratorPath);
 
-            Assert.That(source, Does.Contain("[GENERATION_PROFILE] missing required production profile"));
+            Assert.That(source, Does.Contain("[GENERATION_PROFILE] missing required"));
             Assert.That(
                 source,
                 Does.Not.Contain("profile != null ? profile.ToSettings() : DungeonGenerationSettings.Default"));
