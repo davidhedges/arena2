@@ -37,7 +37,6 @@ namespace DungeonLab.Editor
         private const int TwinWingBranchRejoinNode = 5;
         private const int TwinWingVistaSourceNode = 8;
         private const int TwinWingVistaTargetNode = 4;
-        private const int Phase1RoomEnvelopeRadius = 4;
         private const int Phase1BranchSearchExpansionLimit = 24;
         private const int Phase1RoomInflationAttemptLimit = 6;
         private const int MaxMainRouteRoleOccurrences = 2;
@@ -339,10 +338,13 @@ namespace DungeonLab.Editor
                 return RejectPhase1Route(RouteIntentInvalidFailureCode, rejectionReason, out rejectionReason);
             }
 
+            DungeonPatternSpatialSettings spatial = ResolvePatternSpatialSettings(intent.patternId);
+
             if (!TryEmbedRoute(
                     dungeonSeed,
                     layoutAttempt,
                     intent,
+                    spatial,
                     out Vector2Int[] nodeCenters,
                     out string embeddingFailureCode,
                     out rejectionReason))
@@ -355,17 +357,14 @@ namespace DungeonLab.Editor
             var roomEnvelopes = new RectInt[intent.nodes.Length];
             for (int node = 0; node < nodeCenters.Length; node++)
             {
-                roomEnvelopes[node] = new RectInt(
-                    nodeCenters[node].x - Phase1RoomEnvelopeRadius,
-                    nodeCenters[node].y - Phase1RoomEnvelopeRadius,
-                    Phase1RoomEnvelopeRadius * 2 + 1,
-                    Phase1RoomEnvelopeRadius * 2 + 1);
+                roomEnvelopes[node] = RoomEnvelope(nodeCenters[node], spatial);
             }
 
             if (!TryInflateProcessionalRooms(
                     dungeonSeed,
                     layoutAttempt,
                     intent,
+                    spatial,
                     nodeCenters,
                     roomEnvelopes,
                     out List<RoomFootprint> rooms,
@@ -1326,10 +1325,58 @@ namespace DungeonLab.Editor
             return cycleNodes;
         }
 
+        private static DungeonPatternSpatialSettings ResolvePatternSpatialSettings(string patternId)
+        {
+            if (string.Equals(patternId, Phase1PatternId, StringComparison.Ordinal))
+            {
+                return CurrentGenerationSettings.Validated().processionalSpatial;
+            }
+
+            if (string.Equals(patternId, AtriumRingPatternId, StringComparison.Ordinal))
+            {
+                return BaselinePatternSpatialSettings(horizontalPitchCells: 7, verticalPitchCells: 9);
+            }
+
+            if (string.Equals(patternId, TwinWingPatternId, StringComparison.Ordinal))
+            {
+                // Twin-wing coordinates are already expressed in final cell
+                // offsets, so its transform pitch remains one cell per unit.
+                return BaselinePatternSpatialSettings(horizontalPitchCells: 1, verticalPitchCells: 1);
+            }
+
+            throw new InvalidOperationException(
+                $"Route pattern '{patternId}' has no spatial configuration");
+        }
+
+        private static DungeonPatternSpatialSettings BaselinePatternSpatialSettings(
+            int horizontalPitchCells,
+            int verticalPitchCells)
+        {
+            return new DungeonPatternSpatialSettings(
+                horizontalPitchCells,
+                verticalPitchCells,
+                roomEnvelopeRadiusCells: 4,
+                BaselineRoomSizeRangeForRole("arrival"),
+                BaselineRoomSizeRangeForRole("processional-hall"),
+                BaselineRoomSizeRangeForRole("connector")).Validated();
+        }
+
+        private static RectInt RoomEnvelope(
+            Vector2Int center,
+            DungeonPatternSpatialSettings spatial)
+        {
+            return new RectInt(
+                center.x - spatial.roomEnvelopeRadiusCells,
+                center.y - spatial.roomEnvelopeRadiusCells,
+                spatial.roomEnvelopeRadiusCells * 2 + 1,
+                spatial.roomEnvelopeRadiusCells * 2 + 1);
+        }
+
         private static bool TryEmbedRoute(
             int dungeonSeed,
             int layoutAttempt,
             RouteIntent intent,
+            DungeonPatternSpatialSettings spatial,
             out Vector2Int[] nodeCenters,
             out string failureCode,
             out string rejectionReason)
@@ -1340,6 +1387,7 @@ namespace DungeonLab.Editor
                     dungeonSeed,
                     layoutAttempt,
                     intent,
+                    spatial,
                     out nodeCenters,
                     out failureCode,
                     out rejectionReason);
@@ -1351,6 +1399,7 @@ namespace DungeonLab.Editor
                     dungeonSeed,
                     layoutAttempt,
                     intent,
+                    spatial,
                     out nodeCenters,
                     out failureCode,
                     out rejectionReason);
@@ -1362,6 +1411,7 @@ namespace DungeonLab.Editor
                     dungeonSeed,
                     layoutAttempt,
                     intent,
+                    spatial,
                     out nodeCenters,
                     out failureCode,
                     out rejectionReason);
@@ -1377,6 +1427,7 @@ namespace DungeonLab.Editor
             int dungeonSeed,
             int layoutAttempt,
             RouteIntent intent,
+            DungeonPatternSpatialSettings spatial,
             out Vector2Int[] nodeCenters,
             out string failureCode,
             out string rejectionReason)
@@ -1466,8 +1517,7 @@ namespace DungeonLab.Editor
                 layoutAttempt,
                 "route",
                 coarseEmbedding,
-                horizontalSpacing: 9,
-                verticalSpacing: 9,
+                spatial,
                 out nodeCenters,
                 out rejectionReason);
         }
@@ -1476,6 +1526,7 @@ namespace DungeonLab.Editor
             int dungeonSeed,
             int layoutAttempt,
             RouteIntent intent,
+            DungeonPatternSpatialSettings spatial,
             out Vector2Int[] nodeCenters,
             out string failureCode,
             out string rejectionReason)
@@ -1512,8 +1563,7 @@ namespace DungeonLab.Editor
                 layoutAttempt,
                 AtriumRingPatternId,
                 coarseEmbedding,
-                horizontalSpacing: 7,
-                verticalSpacing: 9,
+                spatial,
                 out nodeCenters,
                 out rejectionReason);
         }
@@ -1522,6 +1572,7 @@ namespace DungeonLab.Editor
             int dungeonSeed,
             int layoutAttempt,
             RouteIntent intent,
+            DungeonPatternSpatialSettings spatial,
             out Vector2Int[] nodeCenters,
             out string failureCode,
             out string rejectionReason)
@@ -1558,8 +1609,7 @@ namespace DungeonLab.Editor
                 layoutAttempt,
                 TwinWingPatternId,
                 embedding,
-                horizontalSpacing: 1,
-                verticalSpacing: 1,
+                spatial,
                 out nodeCenters,
                 out rejectionReason);
         }
@@ -1569,8 +1619,7 @@ namespace DungeonLab.Editor
             int layoutAttempt,
             string stablePatternId,
             IReadOnlyList<Vector2Int> coarseEmbedding,
-            int horizontalSpacing,
-            int verticalSpacing,
+            DungeonPatternSpatialSettings spatial,
             out Vector2Int[] nodeCenters,
             out string rejectionReason)
         {
@@ -1591,8 +1640,8 @@ namespace DungeonLab.Editor
                 for (int node = 0; node < coarseEmbedding.Count; node++)
                 {
                     Vector2Int scaled = new Vector2Int(
-                        coarseEmbedding[node].x * horizontalSpacing,
-                        coarseEmbedding[node].y * verticalSpacing);
+                        coarseEmbedding[node].x * spatial.horizontalPitchCells,
+                        coarseEmbedding[node].y * spatial.verticalPitchCells);
                     transformed[node] = TransformCoarseCell(scaled, quarterTurns, mirror);
                 }
 
@@ -1608,8 +1657,8 @@ namespace DungeonLab.Editor
                     maxY = Mathf.Max(maxY, cell.y);
                 }
 
-                int cellWidth = maxX - minX + Phase1RoomEnvelopeRadius * 2 + 1;
-                int cellDepth = maxY - minY + Phase1RoomEnvelopeRadius * 2 + 1;
+                int cellWidth = maxX - minX + spatial.roomEnvelopeRadiusCells * 2 + 1;
+                int cellDepth = maxY - minY + spatial.roomEnvelopeRadiusCells * 2 + 1;
                 DungeonGenerationSettings settings = CurrentGenerationSettings.Validated();
                 if (cellWidth > settings.mapWidthMaxCells || cellDepth > settings.mapDepthMaxCells)
                 {
@@ -1620,8 +1669,8 @@ namespace DungeonLab.Editor
                 for (int node = 0; node < transformed.Length; node++)
                 {
                     centers[node] = new Vector2Int(
-                        Phase1RoomEnvelopeRadius + 1 + transformed[node].x - minX,
-                        Phase1RoomEnvelopeRadius + 1 + transformed[node].y - minY);
+                        spatial.roomEnvelopeRadiusCells + 1 + transformed[node].x - minX,
+                        spatial.roomEnvelopeRadiusCells + 1 + transformed[node].y - minY);
                 }
 
                 nodeCenters = centers;
@@ -1705,6 +1754,7 @@ namespace DungeonLab.Editor
             int dungeonSeed,
             int layoutAttempt,
             RouteIntent intent,
+            DungeonPatternSpatialSettings spatial,
             IReadOnlyList<Vector2Int> nodeCenters,
             IReadOnlyList<RectInt> envelopes,
             out List<RoomFootprint> rooms,
@@ -1729,6 +1779,7 @@ namespace DungeonLab.Editor
                         intent,
                         node,
                         nodeIndex,
+                        spatial,
                         nodeCenters[nodeIndex],
                         nodeCenters,
                         intent.recipeSlots,
@@ -1787,6 +1838,7 @@ namespace DungeonLab.Editor
             RouteIntent intent,
             RouteNodeIntent node,
             int nodeIndex,
+            DungeonPatternSpatialSettings spatial,
             Vector2Int center,
             IReadOnlyList<Vector2Int> nodeCenters,
             IReadOnlyList<RecipeSlotIntent> recipeSlots,
@@ -1817,6 +1869,7 @@ namespace DungeonLab.Editor
                 intent,
                 node,
                 nodeIndex,
+                spatial,
                 center,
                 nodeCenters,
                 random,
@@ -1833,7 +1886,14 @@ namespace DungeonLab.Editor
 
             RectInt dominant = CenteredRect(center, width, depth);
             var parts = new List<RectInt> { dominant };
-            AddPlannedOverlookAppendages(intent, nodeIndex, center, nodeCenters, dominant, parts);
+            AddPlannedOverlookAppendages(
+                intent,
+                nodeIndex,
+                spatial,
+                center,
+                nodeCenters,
+                dominant,
+                parts);
             if (!allowWing ||
                 node.role == "connector" ||
                 node.role == "arrival" ||
@@ -1867,75 +1927,35 @@ namespace DungeonLab.Editor
             RouteIntent intent,
             RouteNodeIntent node,
             int nodeIndex,
+            DungeonPatternSpatialSettings spatial,
             Vector2Int center,
             IReadOnlyList<Vector2Int> nodeCenters,
             System.Random random,
             out int width,
             out int depth)
         {
-            int baselineWidth;
-            int baselineDepth;
-            bool widthHasLegacyRoll;
-            bool depthHasLegacyRoll;
-            int legacyWidthMinimum;
-            int legacyDepthMinimum;
-            DungeonRoomSizeRange configuredRange;
-            DungeonGenerationSettings settings = CurrentGenerationSettings.Validated();
-            switch (node.role)
-            {
-                case "arrival":
-                case "culmination":
-                    baselineWidth = 5;
-                    baselineDepth = 7;
-                    widthHasLegacyRoll = false;
-                    depthHasLegacyRoll = false;
-                    legacyWidthMinimum = baselineWidth;
-                    legacyDepthMinimum = baselineDepth;
-                    configuredRange = settings.processionalTerminalRoomSize;
-                    break;
-                case "connector":
-                    baselineWidth = 4 + random.Next(2);
-                    baselineDepth = 5;
-                    widthHasLegacyRoll = true;
-                    depthHasLegacyRoll = false;
-                    legacyWidthMinimum = 4;
-                    legacyDepthMinimum = baselineDepth;
-                    configuredRange = settings.processionalConnectorRoomSize;
-                    break;
-                default:
-                    baselineWidth = 5;
-                    baselineDepth = 5 + random.Next(2);
-                    widthHasLegacyRoll = false;
-                    depthHasLegacyRoll = true;
-                    legacyWidthMinimum = baselineWidth;
-                    legacyDepthMinimum = 5;
-                    configuredRange = settings.processionalHallRoomSize;
-                    break;
-            }
+            DungeonRoomSizeRange baselineRange = BaselineRoomSizeRangeForRole(node.role).Validated();
+            DungeonRoomSizeRange configuredRange = RoomSizeRangeForRole(spatial, node.role).Validated();
+            bool widthHasBaselineRoll = baselineRange.maxWidthCells > baselineRange.minWidthCells;
+            bool depthHasBaselineRoll = baselineRange.maxDepthCells > baselineRange.minDepthCells;
+            int baselineWidth = baselineRange.minWidthCells +
+                (widthHasBaselineRoll ? random.Next(baselineRange.maxWidthCells - baselineRange.minWidthCells + 1) : 0);
+            int baselineDepth = baselineRange.minDepthCells +
+                (depthHasBaselineRoll ? random.Next(baselineRange.maxDepthCells - baselineRange.minDepthCells + 1) : 0);
 
-            // Slice 3 is intentionally processional-only. Atrium and twin-wing
-            // retain the exact pre-slice dimensions and random stream.
-            if (!string.Equals(intent.patternId, Phase1PatternId, StringComparison.Ordinal))
-            {
-                width = baselineWidth;
-                depth = baselineDepth;
-                return;
-            }
-
-            configuredRange = configuredRange.Validated();
-            width = SampleProcessionalRoomDimension(
+            width = SampleConfiguredRoomDimension(
                 configuredRange.minWidthCells,
                 configuredRange.maxWidthCells,
                 baselineWidth,
-                widthHasLegacyRoll,
-                legacyWidthMinimum,
+                widthHasBaselineRoll,
+                baselineRange.minWidthCells,
                 random);
-            depth = SampleProcessionalRoomDimension(
+            depth = SampleConfiguredRoomDimension(
                 configuredRange.minDepthCells,
                 configuredRange.maxDepthCells,
                 baselineDepth,
-                depthHasLegacyRoll,
-                legacyDepthMinimum,
+                depthHasBaselineRoll,
+                baselineRange.minDepthCells,
                 random);
 
             // The concrete stair prefab is selected later. Preserve the known-
@@ -1964,12 +1984,42 @@ namespace DungeonLab.Editor
             }
         }
 
-        private static int SampleProcessionalRoomDimension(
+        private static DungeonRoomSizeRange RoomSizeRangeForRole(
+            DungeonPatternSpatialSettings spatial,
+            string role)
+        {
+            switch (role)
+            {
+                case "arrival":
+                case "culmination":
+                    return spatial.terminalRoomSize;
+                case "connector":
+                    return spatial.connectorRoomSize;
+                default:
+                    return spatial.hallRoomSize;
+            }
+        }
+
+        private static DungeonRoomSizeRange BaselineRoomSizeRangeForRole(string role)
+        {
+            switch (role)
+            {
+                case "arrival":
+                case "culmination":
+                    return new DungeonRoomSizeRange(5, 5, 7, 7);
+                case "connector":
+                    return new DungeonRoomSizeRange(4, 5, 5, 5);
+                default:
+                    return new DungeonRoomSizeRange(5, 5, 5, 6);
+            }
+        }
+
+        private static int SampleConfiguredRoomDimension(
             int minimum,
             int maximum,
             int baselineValue,
-            bool hasLegacyRoll,
-            int legacyMinimum,
+            bool hasBaselineRoll,
+            int baselineMinimum,
             System.Random random)
         {
             if (minimum == maximum)
@@ -1977,12 +2027,12 @@ namespace DungeonLab.Editor
                 return minimum;
             }
 
-            // Reuse the already-consumed binary legacy roll for any two-value
+            // Reuse the already-consumed binary baseline roll for any two-value
             // range. That keeps the spacious profile byte-for-byte compatible
             // without creating a second room-size random stream.
-            if (hasLegacyRoll && maximum - minimum == 1)
+            if (hasBaselineRoll && maximum - minimum == 1)
             {
-                return minimum + baselineValue - legacyMinimum;
+                return minimum + baselineValue - baselineMinimum;
             }
 
             return minimum + random.Next(maximum - minimum + 1);
@@ -2013,6 +2063,7 @@ namespace DungeonLab.Editor
         private static void AddPlannedOverlookAppendages(
             RouteIntent intent,
             int nodeIndex,
+            DungeonPatternSpatialSettings spatial,
             Vector2Int center,
             IReadOnlyList<Vector2Int> nodeCenters,
             RectInt dominant,
@@ -2036,20 +2087,50 @@ namespace DungeonLab.Editor
                 {
                     int xMin = direction.x > 0
                         ? dominant.xMax
-                        : center.x - Phase1RoomEnvelopeRadius;
+                        : center.x - spatial.roomEnvelopeRadiusCells;
                     int xMax = direction.x > 0
-                        ? center.x + Phase1RoomEnvelopeRadius + 1
+                        ? center.x + spatial.roomEnvelopeRadiusCells + 1
                         : dominant.xMin;
+                    if (string.Equals(intent.patternId, Phase1PatternId, StringComparison.Ordinal) &&
+                        Mathf.Abs(delta.x) < spatial.roomEnvelopeRadiusCells * 2 + 1)
+                    {
+                        int sharedBoundary = Mathf.Min(center.x, nodeCenters[other].x) +
+                            (Mathf.Abs(delta.x) + 1) / 2;
+                        if (direction.x > 0)
+                        {
+                            xMax = Mathf.Min(xMax, sharedBoundary);
+                        }
+                        else
+                        {
+                            xMin = Mathf.Max(xMin, sharedBoundary);
+                        }
+                    }
+
                     parts.Add(new RectInt(xMin, center.y - 1, xMax - xMin, 3));
                 }
                 else
                 {
                     int yMin = direction.y > 0
                         ? dominant.yMax
-                        : center.y - Phase1RoomEnvelopeRadius;
+                        : center.y - spatial.roomEnvelopeRadiusCells;
                     int yMax = direction.y > 0
-                        ? center.y + Phase1RoomEnvelopeRadius + 1
+                        ? center.y + spatial.roomEnvelopeRadiusCells + 1
                         : dominant.yMin;
+                    if (string.Equals(intent.patternId, Phase1PatternId, StringComparison.Ordinal) &&
+                        Mathf.Abs(delta.y) < spatial.roomEnvelopeRadiusCells * 2 + 1)
+                    {
+                        int sharedBoundary = Mathf.Min(center.y, nodeCenters[other].y) +
+                            (Mathf.Abs(delta.y) + 1) / 2;
+                        if (direction.y > 0)
+                        {
+                            yMax = Mathf.Min(yMax, sharedBoundary);
+                        }
+                        else
+                        {
+                            yMin = Mathf.Max(yMin, sharedBoundary);
+                        }
+                    }
+
                     parts.Add(new RectInt(center.x - 1, yMin, 3, yMax - yMin));
                 }
             }

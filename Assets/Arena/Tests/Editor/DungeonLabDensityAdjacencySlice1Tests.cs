@@ -60,7 +60,7 @@ namespace Arena.Tests.Editor
             Assert.That(values["profiles.denseDigest"], Has.Length.EqualTo(64));
             Assert.That(values["profiles.digestDistinct"], Is.EqualTo("True"));
             Assert.That(values["profiles.behaviorValuesEqual"], Is.EqualTo("False"));
-            Assert.That(values["profiles.valueCount"], Is.EqualTo("11"));
+            Assert.That(values["profiles.valueCount"], Is.EqualTo("9"));
         }
 
         [Test]

@@ -26,7 +26,7 @@ namespace Arena.Tests.Editor
             Dictionary<string, string> values = Snapshot.Value;
             string routeSource = File.ReadAllText(RouteSourcePath);
 
-            Assert.That(values["profiles.valueCount"], Is.EqualTo("11"));
+            Assert.That(values["profiles.valueCount"], Is.EqualTo("9"));
             Assert.That(values["profiles.spaciousTerminal"], Is.EqualTo("5-5x7-7"));
             Assert.That(values["profiles.spaciousHall"], Is.EqualTo("5-5x5-6"));
             Assert.That(values["profiles.spaciousConnector"], Is.EqualTo("4-5x5-5"));

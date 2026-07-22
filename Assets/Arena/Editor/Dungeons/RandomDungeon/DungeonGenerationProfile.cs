@@ -33,6 +33,47 @@ namespace DungeonLab.Editor
         }
     }
 
+    [System.Serializable]
+    public struct DungeonPatternSpatialSettings
+    {
+        [Min(1)] public int horizontalPitchCells;
+        [Min(1)] public int verticalPitchCells;
+        [Min(4)] public int roomEnvelopeRadiusCells;
+        public DungeonRoomSizeRange terminalRoomSize;
+        public DungeonRoomSizeRange hallRoomSize;
+        public DungeonRoomSizeRange connectorRoomSize;
+
+        public DungeonPatternSpatialSettings(
+            int horizontalPitchCells,
+            int verticalPitchCells,
+            int roomEnvelopeRadiusCells,
+            DungeonRoomSizeRange terminalRoomSize,
+            DungeonRoomSizeRange hallRoomSize,
+            DungeonRoomSizeRange connectorRoomSize)
+        {
+            this.horizontalPitchCells = horizontalPitchCells;
+            this.verticalPitchCells = verticalPitchCells;
+            this.roomEnvelopeRadiusCells = roomEnvelopeRadiusCells;
+            this.terminalRoomSize = terminalRoomSize;
+            this.hallRoomSize = hallRoomSize;
+            this.connectorRoomSize = connectorRoomSize;
+        }
+
+        internal DungeonPatternSpatialSettings Validated()
+        {
+            var value = this;
+            value.horizontalPitchCells = Mathf.Max(1, value.horizontalPitchCells);
+            value.verticalPitchCells = Mathf.Max(1, value.verticalPitchCells);
+            // Every route pattern carries the reviewed landmark recipe, whose
+            // authored footprint reaches four cells from its logical anchor.
+            value.roomEnvelopeRadiusCells = Mathf.Max(4, value.roomEnvelopeRadiusCells);
+            value.terminalRoomSize = value.terminalRoomSize.Validated();
+            value.hallRoomSize = value.hallRoomSize.Validated();
+            value.connectorRoomSize = value.connectorRoomSize.Validated();
+            return value;
+        }
+    }
+
     [CreateAssetMenu(fileName = "generation_profile", menuName = "Dungeon Lab/Generation Profile")]
     public sealed class DungeonGenerationProfile : ScriptableObject
     {
@@ -71,18 +112,16 @@ namespace DungeonLab.Editor
         [Tooltip("Chance that an eligible room splits into lower and raised 1u zones. The seam still requires valid landings.")]
         public float roomZoneSplitChance = 0.35f;
 
-        [Header("Processional Generic Room Sizes")]
-        [Tooltip("Arrival and culmination room width/depth ranges. Slice 3 applies these only to the processional topology.")]
-        public DungeonRoomSizeRange processionalTerminalRoomSize =
-            new DungeonRoomSizeRange(5, 5, 7, 7);
-
-        [Tooltip("Grand-room, landmark, processional-hall, and other generic room ranges. Reviewed recipe footprints remain authored.")]
-        public DungeonRoomSizeRange processionalHallRoomSize =
-            new DungeonRoomSizeRange(5, 5, 5, 6);
-
-        [Tooltip("Generic connector room width/depth ranges. Faces carrying stairs, stairwells, or bridges are capped to the spacious baseline.")]
-        public DungeonRoomSizeRange processionalConnectorRoomSize =
-            new DungeonRoomSizeRange(4, 5, 5, 5);
+        [Header("Processional Spatial Configuration")]
+        [Tooltip("Processional X/Y pitch, independently validated room envelope, and generic role-size ranges. Reviewed recipe footprints remain authored.")]
+        public DungeonPatternSpatialSettings processionalSpatial =
+            new DungeonPatternSpatialSettings(
+                9,
+                9,
+                4,
+                new DungeonRoomSizeRange(5, 5, 7, 7),
+                new DungeonRoomSizeRange(5, 5, 5, 6),
+                new DungeonRoomSizeRange(4, 5, 5, 5));
 
         internal DungeonGenerationSettings ToSettings()
         {
@@ -96,9 +135,7 @@ namespace DungeonLab.Editor
                 loopConnectionFraction = loopConnectionFraction,
                 maxLoopCandidateDistanceCells = maxLoopCandidateDistanceCells,
                 roomZoneSplitChance = roomZoneSplitChance,
-                processionalTerminalRoomSize = processionalTerminalRoomSize,
-                processionalHallRoomSize = processionalHallRoomSize,
-                processionalConnectorRoomSize = processionalConnectorRoomSize
+                processionalSpatial = processionalSpatial
             }.Validated();
         }
     }
@@ -113,9 +150,7 @@ namespace DungeonLab.Editor
         public float loopConnectionFraction;
         public int maxLoopCandidateDistanceCells;
         public float roomZoneSplitChance;
-        public DungeonRoomSizeRange processionalTerminalRoomSize;
-        public DungeonRoomSizeRange processionalHallRoomSize;
-        public DungeonRoomSizeRange processionalConnectorRoomSize;
+        public DungeonPatternSpatialSettings processionalSpatial;
 
         public DungeonGenerationSettings Validated()
         {
@@ -128,9 +163,7 @@ namespace DungeonLab.Editor
             value.loopConnectionFraction = Mathf.Clamp01(value.loopConnectionFraction);
             value.maxLoopCandidateDistanceCells = Mathf.Max(1, value.maxLoopCandidateDistanceCells);
             value.roomZoneSplitChance = Mathf.Clamp01(value.roomZoneSplitChance);
-            value.processionalTerminalRoomSize = value.processionalTerminalRoomSize.Validated();
-            value.processionalHallRoomSize = value.processionalHallRoomSize.Validated();
-            value.processionalConnectorRoomSize = value.processionalConnectorRoomSize.Validated();
+            value.processionalSpatial = value.processionalSpatial.Validated();
             return value;
         }
     }

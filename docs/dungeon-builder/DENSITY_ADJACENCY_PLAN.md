@@ -1,6 +1,6 @@
 # Density and adjacency plan
 
-Status: approved; slices 0-3 complete (2026-07-22); slice 4 not started
+Status: approved; slices 0-4 complete (2026-07-22); slice 5 not started
 Owner intent: keep the cliffs/voids; add denser floorplans with neighboring rooms and
 directly abutting tiers, in the spirit of the gold-standard scene
 (`Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/scenes/demoscene_dungeon_level_1_dungeon.unity`).
@@ -350,6 +350,43 @@ old values.
 Done when: lowered processional pitch + slice 3 sizes produce visibly packed
 clusters on level plateaus; defaults reproduce today's output; atrium/twin-wing
 untouched; `Phase1RoomEnvelopeRadius` and the spacing literals are gone.
+
+#### Slice 4 result (2026-07-22)
+
+- One nested `DungeonPatternSpatialSettings` now owns processional X/Y pitch,
+  independently validated envelope radius, and all three Slice 3 role ranges.
+  `ResolvePatternSpatialSettings` is the single pattern-spatial source. Embedding,
+  room-envelope construction, map-bounds normalization, room inflation, planned
+  overlooks, and route-placement diagnostics consume the resolved value. The old
+  `Phase1RoomEnvelopeRadius` and embedding spacing arguments are deleted.
+- `spacious` is `9/9`, radius 4, with the exact Slice 3 baseline ranges. It retains
+  seed `2026072100` canonical hash `af4bce48...c4d9` and reproduces the complete
+  50-seed output. Atrium stays fixed at `7/9`, twin-wing stays on its baked `1/1`
+  transform, and all 13 atrium plus 12 twin-wing canonical plans and measurements
+  match across profiles.
+- The first dense calibration, `8/9`, was rejected because it shortened two
+  processional sentinel vista reservations from the required three void cells to
+  two. The accepted dense configuration is `9/8`, radius 4, with the Slice 3
+  `7x7` ranges. Tight processional overlook appendages divide their shared
+  envelope at a deterministic midpoint; default `9/9` geometry and both other
+  patterns remain unchanged.
+- Both fixed 50-seed smoke sweeps accepted and hard-validated 50/50 with no
+  validation failure. Spacious used attempt 1 for every seed. Dense used attempt
+  1 for 44 and attempt 2 for six (`p95/max 2/2`) with retry codes
+  `ROUTE_TRANSITION_RESERVATION:96`, `PORT_GRAPH:10`, and
+  `ROUTE_ROOM_INFLATION_EXHAUSTED:3`; there was no `STAIR_PLACEMENT` rejection
+  and no failed seed, so the bounded smoke criterion passes without weakening a
+  gate.
+- Across the 25 processional smoke seeds, exterior corridor cells move from
+  `1,433` to `1,235` (mean `57.32` to `49.40`), per-connection p50 moves from 4
+  to 3, and shared-wall candidates rise from mean `1.72` to `1.88`. Nineteen
+  seeds shorten, one ties, and five lengthen after deterministic retry/reorientation;
+  the intended result is aggregate packing, not a per-seed monotonic rule.
+- All six real-render sentinels report `REJECTED 0`. The three processional
+  sentinels shorten `50/53/68 -> 44/47/48` and visibly form tighter clusters while
+  retaining the cliffs, vista, and vertical stair composition. The other three
+  sentinel plans are canonical-identical. Density Slice 1-4 regressions pass
+  19/19, and the active ignored report/capture are restored to `spacious`.
 
 ### Slice 5 — neighbor-biased inflation (true abutment)
 

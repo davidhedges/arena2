@@ -896,33 +896,39 @@ namespace DungeonLab.Editor
 
             DungeonGenerationSettings spaciousSettings = LoadActiveGenerationSettings("spacious");
             DungeonGenerationSettings denseSettings = LoadActiveGenerationSettings("dense");
+            DungeonPatternSpatialSettings spaciousSpatial = spaciousSettings.processionalSpatial;
+            DungeonPatternSpatialSettings denseSpatial = denseSettings.processionalSpatial;
             CurrentGenerationSettings = denseSettings;
             Vector2Int levelSize = BuildSlice3SizeProbe(
                 "processional-hall",
                 RouteTransitionKind.LevelCorridor,
-                new Vector2Int(9, 0));
+                denseSpatial,
+                new Vector2Int(denseSpatial.horizontalPitchCells, 0));
             Vector2Int stairSize = BuildSlice3SizeProbe(
                 "processional-hall",
                 RouteTransitionKind.Stair,
-                new Vector2Int(9, 0));
+                denseSpatial,
+                new Vector2Int(denseSpatial.horizontalPitchCells, 0));
             Vector2Int bridgeSize = BuildSlice3SizeProbe(
                 "connector",
                 RouteTransitionKind.Bridge,
-                new Vector2Int(0, 9));
+                denseSpatial,
+                new Vector2Int(0, denseSpatial.verticalPitchCells));
             Vector2Int stairwellSize = BuildSlice3SizeProbe(
                 "arrival",
                 RouteTransitionKind.Stairwell,
-                new Vector2Int(9, 0));
+                denseSpatial,
+                new Vector2Int(denseSpatial.horizontalPitchCells, 0));
 
             var lines = new List<string>
             {
                 $"profiles.valueCount={BuildGenerationSettingsValues(spaciousSettings).Properties().Count()}",
-                $"profiles.spaciousTerminal={RoomSizeRangeSnapshot(spaciousSettings.processionalTerminalRoomSize)}",
-                $"profiles.spaciousHall={RoomSizeRangeSnapshot(spaciousSettings.processionalHallRoomSize)}",
-                $"profiles.spaciousConnector={RoomSizeRangeSnapshot(spaciousSettings.processionalConnectorRoomSize)}",
-                $"profiles.denseTerminal={RoomSizeRangeSnapshot(denseSettings.processionalTerminalRoomSize)}",
-                $"profiles.denseHall={RoomSizeRangeSnapshot(denseSettings.processionalHallRoomSize)}",
-                $"profiles.denseConnector={RoomSizeRangeSnapshot(denseSettings.processionalConnectorRoomSize)}",
+                $"profiles.spaciousTerminal={RoomSizeRangeSnapshot(spaciousSpatial.terminalRoomSize)}",
+                $"profiles.spaciousHall={RoomSizeRangeSnapshot(spaciousSpatial.hallRoomSize)}",
+                $"profiles.spaciousConnector={RoomSizeRangeSnapshot(spaciousSpatial.connectorRoomSize)}",
+                $"profiles.denseTerminal={RoomSizeRangeSnapshot(denseSpatial.terminalRoomSize)}",
+                $"profiles.denseHall={RoomSizeRangeSnapshot(denseSpatial.hallRoomSize)}",
+                $"profiles.denseConnector={RoomSizeRangeSnapshot(denseSpatial.connectorRoomSize)}",
                 $"processional.spaciousAccepted={spaciousProcessional.Value<bool>("accepted")}",
                 $"processional.denseAccepted={denseProcessional.Value<bool>("accepted")}",
                 $"processional.spaciousValid={spaciousProcessional["validation"]?.Value<bool>("passed")}",
@@ -956,6 +962,7 @@ namespace DungeonLab.Editor
         private static Vector2Int BuildSlice3SizeProbe(
             string role,
             RouteTransitionKind transitionKind,
+            DungeonPatternSpatialSettings spatial,
             Vector2Int neighborCenter)
         {
             var nodes = new[]
@@ -990,6 +997,7 @@ namespace DungeonLab.Editor
                 intent,
                 nodes[0],
                 0,
+                spatial,
                 Vector2Int.zero,
                 centers,
                 new System.Random(31),
@@ -1001,6 +1009,157 @@ namespace DungeonLab.Editor
         private static string RoomSizeRangeSnapshot(DungeonRoomSizeRange range)
         {
             return $"{range.minWidthCells}-{range.maxWidthCells}x{range.minDepthCells}-{range.maxDepthCells}";
+        }
+
+        private static string BuildDensityAdjacencySlice4Snapshot()
+        {
+            const int processionalSeed = 2026072100;
+            const int atriumSeed = 2026072101;
+            const int twinWingSeed = 2026072103;
+            DungeonGenerationSettings spaciousSettings = LoadActiveGenerationSettings("spacious");
+            DungeonGenerationSettings denseSettings = LoadActiveGenerationSettings("dense");
+            DungeonPatternSpatialSettings spaciousSpatial = spaciousSettings.processionalSpatial;
+            DungeonPatternSpatialSettings denseSpatial = denseSettings.processionalSpatial;
+
+            JObject spaciousProcessional = BuildPhase0SeedReport(processionalSeed, "spacious");
+            JObject spaciousProcessionalRepeat = BuildPhase0SeedReport(processionalSeed, "spacious");
+            JObject denseProcessional = BuildPhase0SeedReport(processionalSeed, "dense");
+            JObject denseProcessionalRepeat = BuildPhase0SeedReport(processionalSeed, "dense");
+            JObject spaciousAtrium = BuildPhase0SeedReport(atriumSeed, "spacious");
+            JObject denseAtrium = BuildPhase0SeedReport(atriumSeed, "dense");
+            JObject spaciousTwinWing = BuildPhase0SeedReport(twinWingSeed, "spacious");
+            JObject denseTwinWing = BuildPhase0SeedReport(twinWingSeed, "dense");
+
+            int spaciousSentinelExterior = 0;
+            int denseSentinelExterior = 0;
+            int shortenedSentinels = 0;
+            int validSentinelProfiles = 0;
+            var sentinelResults = new List<string>();
+            foreach (int seed in new[] { 2026072140, 2026072186, 2026072262 })
+            {
+                JObject spacious = BuildPhase0SeedReport(seed, "spacious");
+                JObject dense = BuildPhase0SeedReport(seed, "dense");
+                int spaciousExterior = spacious["measurements"]?["corridorEvidence"]
+                    ?.Value<int>("exteriorCorridorCellCount") ?? 0;
+                int denseExterior = dense["measurements"]?["corridorEvidence"]
+                    ?.Value<int>("exteriorCorridorCellCount") ?? 0;
+                spaciousSentinelExterior += spaciousExterior;
+                denseSentinelExterior += denseExterior;
+                if (denseExterior < spaciousExterior)
+                {
+                    shortenedSentinels++;
+                }
+
+                if (spacious.Value<bool?>("accepted") == true &&
+                    dense.Value<bool?>("accepted") == true &&
+                    spacious["validation"]?.Value<bool?>("passed") == true &&
+                    dense["validation"]?.Value<bool?>("passed") == true)
+                {
+                    validSentinelProfiles++;
+                }
+
+                sentinelResults.Add(
+                    $"{seed}:spacious={spacious.Value<bool?>("accepted")},dense={dense.Value<bool?>("accepted")}," +
+                    $"code={dense.Value<string>("lastRejectionCode")}," +
+                    $"builder={dense.Value<string>("routeBuilderFailureCode")}," +
+                    $"reason={dense.Value<string>("lastRejection")}");
+            }
+
+            CurrentGenerationSettings = spaciousSettings;
+            DungeonPatternSpatialSettings atriumSpatial = ResolvePatternSpatialSettings(AtriumRingPatternId);
+            DungeonPatternSpatialSettings twinWingSpatial = ResolvePatternSpatialSettings(TwinWingPatternId);
+            var lines = new List<string>
+            {
+                $"profiles.valueCount={BuildGenerationSettingsValues(spaciousSettings).Properties().Count()}",
+                $"profiles.spaciousSpatial={SpatialSettingsSnapshot(spaciousSpatial)}",
+                $"profiles.denseSpatial={SpatialSettingsSnapshot(denseSpatial)}",
+                $"profiles.atriumSpatial={SpatialSettingsSnapshot(atriumSpatial)}",
+                $"profiles.twinWingSpatial={SpatialSettingsSnapshot(twinWingSpatial)}",
+                $"processional.spaciousAccepted={spaciousProcessional.Value<bool>("accepted")}",
+                $"processional.spaciousValid={spaciousProcessional["validation"]?.Value<bool>("passed")}",
+                $"processional.spaciousCanonical={spaciousProcessional["hashes"]?.Value<string>("canonical")}",
+                $"processional.spaciousDeterministic={ReportsMatch(spaciousProcessional, spaciousProcessionalRepeat)}",
+                $"processional.spaciousHorizontalPitch={RoutePlacementDistance(spaciousProcessional, "arrival", "threshold")}",
+                $"processional.spaciousVerticalPitch={RoutePlacementDistance(spaciousProcessional, "reveal", "vista-target")}",
+                $"processional.spaciousEnvelope={RoutePlacementEnvelopeSize(spaciousProcessional, "arrival")}",
+                $"processional.denseAccepted={denseProcessional.Value<bool>("accepted")}",
+                $"processional.denseValid={denseProcessional["validation"]?.Value<bool>("passed")}",
+                $"processional.denseCanonical={denseProcessional["hashes"]?.Value<string>("canonical")}",
+                $"processional.denseDeterministic={ReportsMatch(denseProcessional, denseProcessionalRepeat)}",
+                $"processional.denseHorizontalPitch={RoutePlacementDistance(denseProcessional, "arrival", "threshold")}",
+                $"processional.denseVerticalPitch={RoutePlacementDistance(denseProcessional, "reveal", "vista-target")}",
+                $"processional.denseEnvelope={RoutePlacementEnvelopeSize(denseProcessional, "arrival")}",
+                $"sentinels.profileValidPairs={validSentinelProfiles}",
+                $"sentinels.shortened={shortenedSentinels}",
+                $"sentinels.spaciousExterior={spaciousSentinelExterior}",
+                $"sentinels.denseExterior={denseSentinelExterior}",
+                $"sentinels.results={string.Join("|", sentinelResults)}",
+                $"atrium.accepted={spaciousAtrium.Value<bool>("accepted") && denseAtrium.Value<bool>("accepted")}",
+                $"atrium.canonicalSame={CanonicalReportsMatch(spaciousAtrium, denseAtrium)}",
+                $"atrium.measurementsSame={JToken.DeepEquals(spaciousAtrium["measurements"], denseAtrium["measurements"])}",
+                $"twinWing.accepted={spaciousTwinWing.Value<bool>("accepted") && denseTwinWing.Value<bool>("accepted")}",
+                $"twinWing.canonicalSame={CanonicalReportsMatch(spaciousTwinWing, denseTwinWing)}",
+                $"twinWing.measurementsSame={JToken.DeepEquals(spaciousTwinWing["measurements"], denseTwinWing["measurements"])}"
+            };
+            return string.Join("\n", lines);
+        }
+
+        private static string SpatialSettingsSnapshot(DungeonPatternSpatialSettings spatial)
+        {
+            return $"{spatial.horizontalPitchCells}x{spatial.verticalPitchCells}:r{spatial.roomEnvelopeRadiusCells}:" +
+                $"{RoomSizeRangeSnapshot(spatial.terminalRoomSize)}|" +
+                $"{RoomSizeRangeSnapshot(spatial.hallRoomSize)}|" +
+                RoomSizeRangeSnapshot(spatial.connectorRoomSize);
+        }
+
+        private static bool ReportsMatch(JObject first, JObject second)
+        {
+            return CanonicalReportsMatch(first, second) &&
+                JToken.DeepEquals(first["measurements"], second["measurements"]);
+        }
+
+        private static bool CanonicalReportsMatch(JObject first, JObject second)
+        {
+            return string.Equals(
+                first["hashes"]?.Value<string>("canonical"),
+                second["hashes"]?.Value<string>("canonical"),
+                StringComparison.Ordinal);
+        }
+
+        private static int RoutePlacementDistance(JObject report, string firstNodeId, string secondNodeId)
+        {
+            Vector2Int first = RoutePlacementCenter(report, firstNodeId);
+            Vector2Int second = RoutePlacementCenter(report, secondNodeId);
+            return Mathf.Abs(first.x - second.x) + Mathf.Abs(first.y - second.y);
+        }
+
+        private static Vector2Int RoutePlacementCenter(JObject report, string nodeId)
+        {
+            foreach (JToken node in report["routePlacement"]?["nodeCenters"] ?? new JArray())
+            {
+                if (string.Equals(node.Value<string>("nodeId"), nodeId, StringComparison.Ordinal))
+                {
+                    return new Vector2Int(
+                        node["center"]?.Value<int>("x") ?? 0,
+                        node["center"]?.Value<int>("y") ?? 0);
+                }
+            }
+
+            throw new InvalidOperationException($"Route placement report had no node '{nodeId}'");
+        }
+
+        private static string RoutePlacementEnvelopeSize(JObject report, string nodeId)
+        {
+            foreach (JToken node in report["routePlacement"]?["nodeCenters"] ?? new JArray())
+            {
+                if (string.Equals(node.Value<string>("nodeId"), nodeId, StringComparison.Ordinal))
+                {
+                    return $"{node["envelope"]?.Value<int>("width")}x" +
+                        node["envelope"]?.Value<int>("height");
+                }
+            }
+
+            throw new InvalidOperationException($"Route placement report had no node '{nodeId}'");
         }
 
         private static string BuildCharacterizationSnapshot(int seed)
@@ -1247,6 +1406,7 @@ namespace DungeonLab.Editor
                 seed,
                 layoutAttempt: 1,
                 intent,
+                ResolvePatternSpatialSettings(intent.patternId),
                 out Vector2Int[] nodeCenters,
                 out string embeddingFailureCode,
                 out string embeddingError);
@@ -1326,6 +1486,7 @@ namespace DungeonLab.Editor
                 seed,
                 layoutAttempt: 1,
                 intent,
+                ResolvePatternSpatialSettings(intent.patternId),
                 out Vector2Int[] nodeCenters,
                 out string embeddingFailureCode,
                 out string embeddingError);
@@ -2989,17 +3150,15 @@ namespace DungeonLab.Editor
             if (phase1LastRouteIntent != null &&
                 phase1LastNodeCenters.Length == phase1LastRouteIntent.nodes.Length)
             {
+                DungeonPatternSpatialSettings spatial =
+                    ResolvePatternSpatialSettings(phase1LastRouteIntent.patternId);
                 for (int node = 0; node < phase1LastNodeCenters.Length; node++)
                 {
                     centers.Add(new JObject
                     {
                         ["nodeId"] = phase1LastRouteIntent.nodes[node].id,
                         ["center"] = CellToken(phase1LastNodeCenters[node]),
-                        ["envelope"] = RectToken(new RectInt(
-                            phase1LastNodeCenters[node].x - Phase1RoomEnvelopeRadius,
-                            phase1LastNodeCenters[node].y - Phase1RoomEnvelopeRadius,
-                            Phase1RoomEnvelopeRadius * 2 + 1,
-                            Phase1RoomEnvelopeRadius * 2 + 1))
+                        ["envelope"] = RectToken(RoomEnvelope(phase1LastNodeCenters[node], spatial))
                     });
                 }
             }
