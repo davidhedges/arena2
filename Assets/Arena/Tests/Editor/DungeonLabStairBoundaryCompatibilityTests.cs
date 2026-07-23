@@ -14,13 +14,18 @@ namespace Arena.Tests.Editor
     public sealed class DungeonLabStairBoundaryCompatibilityTests
     {
         private const int RegressionSeed = 2062860779;
+        private const int RoundedCornerRegressionSeed = 2026072100;
         private const string TargetStairName =
             "transition_stair_curved_stair_180_R_bridge_d4_18_14_to_19_14";
         private static readonly Type GeneratorType = AppDomain.CurrentDomain
             .Load("Assembly-CSharp-Editor")
             .GetType("DungeonLab.Editor.DungeonLabGenerator", throwOnError: true)!;
+        private static readonly Type ElevationEdgeModelType = AppDomain.CurrentDomain
+            .Load("Assembly-CSharp-Editor")
+            .GetType("DungeonLab.Editor.ElevationEdgeModel", throwOnError: true)!;
 
         private GameObject? root;
+        private GameObject? roundedCornerRoot;
         private object? buildReport;
 
         [OneTimeSetUp]
@@ -36,6 +41,15 @@ namespace Arena.Tests.Editor
 
             Assert.That(root, Is.Not.Null, $"Seed {RegressionSeed} did not produce a rendered dungeon.");
             Assert.That(buildReport, Is.Not.Null, $"Seed {RegressionSeed} did not produce a renderer report.");
+            root!.name = "Stair Boundary Regression Probe";
+
+            object?[] roundedCornerArguments = { RoundedCornerRegressionSeed, null, null, null };
+            roundedCornerRoot = (GameObject?)method.Invoke(null, roundedCornerArguments);
+            Assert.That(
+                roundedCornerRoot,
+                Is.Not.Null,
+                $"Seed {RoundedCornerRegressionSeed} did not produce a rounded-corner regression dungeon.");
+            roundedCornerRoot!.name = "Rounded Corner Regression Probe";
         }
 
         [OneTimeTearDown]
@@ -44,6 +58,10 @@ namespace Arena.Tests.Editor
             if (root != null)
             {
                 UnityEngine.Object.DestroyImmediate(root);
+            }
+            if (roundedCornerRoot != null)
+            {
+                UnityEngine.Object.DestroyImmediate(roundedCornerRoot);
             }
         }
 
@@ -232,6 +250,108 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void RoundedOuterShells_PreserveConvexAndConcaveOrientationInScreenshotSeed()
+        {
+            Transform shells = roundedCornerRoot!.transform.Find("Outer Shell Walls");
+            Transform corners = roundedCornerRoot.transform.Find("Elevation Edge Corners");
+            Assert.That(shells, Is.Not.Null);
+            Assert.That(corners, Is.Not.Null);
+
+            Transform[] roundedShells = shells.Cast<Transform>()
+                .Where(transform =>
+                    PrefabUtility.GetPrefabAssetPathOfNearestInstanceRoot(transform.gameObject)
+                        .Contains("_M_concave_", StringComparison.Ordinal))
+                .ToArray();
+            Assert.That(roundedShells, Is.Not.Empty, "The regression seed must exercise rounded outer shells.");
+
+            int convexCount = 0;
+            int concaveCount = 0;
+            foreach (Transform roundedShell in roundedShells)
+            {
+                Match match = Regex.Match(
+                    roundedShell.name,
+                    @"^shell_corner_(-?\d+)_(-?\d+)_\d+$",
+                    RegexOptions.CultureInvariant);
+                Assert.That(match.Success, Is.True, $"Unexpected rounded-shell name '{roundedShell.name}'.");
+
+                string cell = $"{match.Groups[1].Value}_{match.Groups[2].Value}";
+                Transform tierCorner = corners.Find($"tier_corner_{cell}_c0");
+                Assert.That(
+                    tierCorner,
+                    Is.Not.Null,
+                    $"Rounded shell '{roundedShell.name}' has no matching structural corner.");
+
+                bool concave = corners.Find($"tier_corner_floor_{cell}") != null;
+                if (concave)
+                {
+                    concaveCount++;
+                }
+                else
+                {
+                    convexCount++;
+                }
+
+                float expectedYawOffset = concave ? 0f : 180f;
+                Assert.That(
+                    Mathf.Abs(Mathf.DeltaAngle(roundedShell.eulerAngles.y, tierCorner.eulerAngles.y)),
+                    Is.EqualTo(expectedYawOffset).Within(0.01f),
+                    $"The shared PivotMiddle concave shell must keep the calibrated concave yaw and " +
+                    $"flip only convex uses; '{roundedShell.name}' was classified " +
+                    $"{(concave ? "concave" : "convex")}.");
+
+                Vector3 expectedShellPosition = concave
+                    ? tierCorner.position
+                    : tierCorner.position + tierCorner.rotation * new Vector3(-4f, 0f, 4f);
+                Assert.That(
+                    Vector2.Distance(
+                        new Vector2(roundedShell.position.x, roundedShell.position.z),
+                        new Vector2(expectedShellPosition.x, expectedShellPosition.z)),
+                    Is.LessThan(0.001f),
+                    $"Rounded shell '{roundedShell.name}' must recompute the full-cell pivot when its yaw flips.");
+            }
+
+            Assert.That(
+                convexCount,
+                Is.GreaterThan(0),
+                "The integration seed must exercise convex rounded-shell placement.");
+            Assert.That(
+                concaveCount,
+                Is.GreaterThan(0),
+                "The integration seed must exercise concave rounded-shell placement.");
+        }
+
+        [Test]
+        public void OuterShellCornerYawContract_CoversBothRoundPolaritiesAndAnglesAtEveryCardinalYaw()
+        {
+            MethodInfo method = ElevationEdgeModelType.GetMethod(
+                "CalculateOuterShellCornerYaw",
+                BindingFlags.Static | BindingFlags.NonPublic)!;
+            Assert.That(method, Is.Not.Null);
+
+            foreach (float structuralYaw in new[] { 0f, 90f, 180f, 270f })
+            {
+                Assert.That(
+                    InvokeOuterShellCornerYaw(method, structuralYaw, angleStyle: false, concave: true),
+                    Is.EqualTo(structuralYaw).Within(0.01f),
+                    $"Concave rounded shell at structural yaw {structuralYaw} must keep its calibrated orientation.");
+                Assert.That(
+                    InvokeOuterShellCornerYaw(method, structuralYaw, angleStyle: false, concave: false),
+                    Is.EqualTo(Mathf.Repeat(structuralYaw + 180f, 360f)).Within(0.01f),
+                    $"Convex use of the shared concave shell at structural yaw {structuralYaw} must flip 180 degrees.");
+
+                float expectedAngleYaw = Mathf.Repeat(structuralYaw + 180f, 360f);
+                Assert.That(
+                    InvokeOuterShellCornerYaw(method, structuralYaw, angleStyle: true, concave: true),
+                    Is.EqualTo(expectedAngleYaw).Within(0.01f),
+                    $"Concave angle shell at structural yaw {structuralYaw} must preserve its existing flip.");
+                Assert.That(
+                    InvokeOuterShellCornerYaw(method, structuralYaw, angleStyle: true, concave: false),
+                    Is.EqualTo(expectedAngleYaw).Within(0.01f),
+                    $"Convex angle shell at structural yaw {structuralYaw} must preserve its existing flip.");
+            }
+        }
+
+        [Test]
         public void AngledOuterShells_UseAuthoredVariantForCornerPolarity()
         {
             Transform shells = root!.transform.Find("Outer Shell Walls");
@@ -366,6 +486,15 @@ namespace Arena.Tests.Editor
             FieldInfo field = buildReport!.GetType().GetField(fieldName)!;
             Assert.That(field, Is.Not.Null, $"Renderer report did not contain '{fieldName}'.");
             return (int)field.GetValue(buildReport)!;
+        }
+
+        private static float InvokeOuterShellCornerYaw(
+            MethodInfo method,
+            float structuralYaw,
+            bool angleStyle,
+            bool concave)
+        {
+            return (float)method.Invoke(null, new object[] { structuralYaw, angleStyle, concave })!;
         }
 
         private static bool BoundsOverlapWithPositiveVolume(Bounds first, Bounds second)

@@ -3339,11 +3339,17 @@ namespace DungeonLab.Editor
             // angle_1 and concave corners take angle_2. Consecutive chamfer cells
             // alternate polarity, so this mates both their shared seam and their
             // straight-wall endpoints without a coordinate-dependent phase. Every
-            // vertical course in one cell stays on the same variant. Both variants
-            // use the angle_1 transform contract: rotate 180 degrees and recompute
-            // the full-cell pivot for the corrected yaw. Keeping the old pivot
-            // would move the authored footprint into the diagonally opposite cell.
-            // Bounds-center metrology is for hard L-corners and flips curves.
+            // vertical course in one cell stays on the same variant. Both angle
+            // variants use the angle_1 transform contract: rotate 180 degrees and
+            // recompute the full-cell pivot for the corrected yaw.
+            //
+            // The single rounded M_concave family is authored in the concave
+            // structural orientation. Concave uses therefore keep their calibrated
+            // yaw, while convex uses rotate 180 degrees to preserve the old
+            // E_convex/E_concave polarity distinction. Keeping the old pivot after
+            // either correction would move the authored footprint into the
+            // diagonally opposite cell. Bounds-center metrology is for hard
+            // L-corners and flips curves.
             int cornerSkips = 0;
             foreach (RoundTierCorner corner in roundTierCorners)
             {
@@ -3384,7 +3390,10 @@ namespace DungeonLab.Editor
                 TierStepPiece CourseCurved(int h) =>
                     h >= 6 && hasCurvedLarge ? curvedLarge : h <= 2 && hasCurvedSmall ? curvedSmall : curvedMed;
 
-                float shellYaw = corner.angleStyle ? Mathf.Repeat(corner.yaw + 180f, 360f) : corner.yaw;
+                float shellYaw = CalculateOuterShellCornerYaw(
+                    corner.yaw,
+                    corner.angleStyle,
+                    corner.concave);
                 Vector3 pivot = DaisFullCellPivotWorld(corner.cell, shellYaw, origin);
                 float y = corner.higherLevel * levelHeight;
                 int course = 0;
@@ -3408,6 +3417,17 @@ namespace DungeonLab.Editor
             }
 
             return guardEdges;
+        }
+
+        private static float CalculateOuterShellCornerYaw(
+            float structuralYaw,
+            bool angleStyle,
+            bool concave)
+        {
+            bool flipFullCellShell = angleStyle || !concave;
+            return flipFullCellShell
+                ? Mathf.Repeat(structuralYaw + 180f, 360f)
+                : structuralYaw;
         }
 
         // Void cells reachable from outside the floor footprint (4-adjacency over
