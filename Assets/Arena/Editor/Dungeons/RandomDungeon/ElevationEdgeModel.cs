@@ -3158,9 +3158,10 @@ namespace DungeonLab.Editor
         // (user 2026-06-16) through this allowed ladder: small(2) -> med(4) ->
         // large(6) -> med+med(8) -> large+med(10) -> large+large(12). large+large
         // is RESERVED for the HIGHEST tier; all other tiers cap at large+med(10).
-        private const string ShellWallLargeName = "COMP_Wall_01_M_straight_large";
-        private const string ShellWallMedName = "COMP_Wall_01_M_straight_med";
-        private const string ShellWallSmallName = "COMP_Wall_01_M_straight_small";
+        private const string ShellWallFamilyPrefix = "COMP_Wall_01_M_";
+        private const string ShellWallLargeName = ShellWallFamilyPrefix + "straight_large";
+        private const string ShellWallMedName = ShellWallFamilyPrefix + "straight_med";
+        private const string ShellWallSmallName = ShellWallFamilyPrefix + "straight_small";
         private const float MinShellUnits = 2f;
         private const float MaxShellUnits = 12f;
 
@@ -3328,13 +3329,15 @@ namespace DungeonLab.Editor
                 guardEdges.Add((edge.x, edge.z, edge.direction));
             }
 
-            // Rounded/angled corners: use the curve pieces from the SAME COMP
-            // family as the straight shells (user 2026-06-16) — COMP_Wall_01_E_
-            // {convex,concave,angle_1}. (The M family's "corner" is a HARD 90 piece,
-            // not a curve.) Place them with the cliff-corner kit's convention
-            // (DaisFullCellPivotWorld(cell, corner.yaw) + corner.yaw, stacked
-            // UPWARD) — that orientation was correct for the curve pieces; the
-            // bounds-center metrology FLIPS curves (it is built for hard L-corners).
+            // Rounded/angled corners must stay in the SAME PivotMiddle family as
+            // the straight shells. PivotMiddle authors one centered, double-sided
+            // curve (M_concave) whose two faces serve both convex and concave
+            // applications; there is no separate M_convex piece. M_angle_1 is
+            // authored opposite the tier-corner convention, so rotate that shell
+            // 180 degrees and recompute its full-cell pivot for the corrected yaw.
+            // Keeping the old pivot would move its (-x,+z) authored footprint into
+            // the diagonally opposite cell. Bounds-center metrology is for hard
+            // L-corners and flips curves.
             int cornerSkips = 0;
             foreach (RoundTierCorner corner in roundTierCorners)
             {
@@ -3355,25 +3358,26 @@ namespace DungeonLab.Editor
                 // floor cell of the same room the straight walls use.
                 var cornerRoomCell = new Vector2Int(corner.edgeA.x, corner.edgeA.z);
 
-                string family = corner.angleStyle ? "angle_1" : corner.concave ? "concave" : "convex";
-                if (!TryLoadTierStepPiece($"COMP_Wall_01_E_{family}_med", out TierStepPiece curvedMed))
+                string shape = corner.angleStyle ? "angle_1" : "concave";
+                if (!TryLoadTierStepPiece($"{ShellWallFamilyPrefix}{shape}_med", out TierStepPiece curvedMed))
                 {
                     cornerSkips++;
                     continue;
                 }
 
-                bool hasCurvedLarge = TryLoadTierStepPiece($"COMP_Wall_01_E_{family}_large", out TierStepPiece curvedLarge);
-                bool hasCurvedSmall = TryLoadTierStepPiece($"COMP_Wall_01_E_{family}_small", out TierStepPiece curvedSmall);
+                bool hasCurvedLarge = TryLoadTierStepPiece($"{ShellWallFamilyPrefix}{shape}_large", out TierStepPiece curvedLarge);
+                bool hasCurvedSmall = TryLoadTierStepPiece($"{ShellWallFamilyPrefix}{shape}_small", out TierStepPiece curvedSmall);
                 TierStepPiece CourseCurved(int h) =>
                     h >= 6 && hasCurvedLarge ? curvedLarge : h <= 2 && hasCurvedSmall ? curvedSmall : curvedMed;
 
-                Vector3 pivot = DaisFullCellPivotWorld(corner.cell, corner.yaw, origin);
+                float shellYaw = corner.angleStyle ? Mathf.Repeat(corner.yaw + 180f, 360f) : corner.yaw;
+                Vector3 pivot = DaisFullCellPivotWorld(corner.cell, shellYaw, origin);
                 float y = corner.higherLevel * levelHeight;
                 int course = 0;
                 foreach (int h in ShellCourseHeights(corner.higherLevel, minLevel, maxLevel, outer, RoomSizeCap(cornerRoomCell)))
                 {
                     TierStepPiece piece = CourseCurved(h);
-                    GameObject shell = InstantiatePrefab(piece.prefabPath, $"shell_corner_{corner.cell.x}_{corner.cell.y}_{course}", parent, pivot + Vector3.up * y, corner.yaw);
+                    GameObject shell = InstantiatePrefab(piece.prefabPath, $"shell_corner_{corner.cell.x}_{corner.cell.y}_{course}", parent, pivot + Vector3.up * y, shellYaw);
                     EncapsulateInstance(shell, ref bounds, ref hasBounds);
                     y += h;
                     course++;

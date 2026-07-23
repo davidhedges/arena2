@@ -4,6 +4,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
@@ -133,6 +134,96 @@ namespace Arena.Tests.Editor
                 }),
                 Is.True,
                 "At least one unrelated reviewed angle/round corner kit should remain in the accepted dungeon.");
+        }
+
+        [Test]
+        public void OuterShellCorners_UseTheStraightWallsPivotMiddleFamily()
+        {
+            Transform shells = root!.transform.Find("Outer Shell Walls");
+            Assert.That(shells, Is.Not.Null);
+
+            (Transform transform, string path)[] shellPieces = shells.Cast<Transform>()
+                .Where(transform => transform.name.StartsWith("shell_", StringComparison.Ordinal))
+                .Select(transform => (
+                    transform,
+                    PrefabUtility.GetPrefabAssetPathOfNearestInstanceRoot(transform.gameObject)))
+                .ToArray();
+
+            Assert.That(shellPieces, Is.Not.Empty);
+            Assert.That(
+                shellPieces.All(piece =>
+                    piece.path.Contains("/PivotMiddle/", StringComparison.Ordinal) &&
+                    Path.GetFileNameWithoutExtension(piece.path)
+                        .StartsWith("COMP_Wall_01_M_", StringComparison.Ordinal)),
+                Is.True,
+                "Above-floor straight and corner shells must use one PivotMiddle/M component family.");
+            Assert.That(
+                shellPieces.Any(piece => piece.path.Contains("_straight_", StringComparison.Ordinal)),
+                Is.True,
+                "The regression seed must exercise straight shell pieces.");
+            Assert.That(
+                shellPieces.Any(piece => piece.path.Contains("_angle_1_", StringComparison.Ordinal)),
+                Is.True,
+                "The regression seed must exercise angled shell pieces.");
+            Assert.That(
+                shellPieces.Any(piece => piece.path.Contains("_concave_", StringComparison.Ordinal)),
+                Is.True,
+                "The regression seed must exercise the centered curve used by rounded shell corners.");
+        }
+
+        [Test]
+        public void AngledOuterShells_RemapTheFullCellPivotForTheirCorrectedYaw()
+        {
+            Transform shells = root!.transform.Find("Outer Shell Walls");
+            Transform corners = root.transform.Find("Elevation Edge Corners");
+            Assert.That(shells, Is.Not.Null);
+            Assert.That(corners, Is.Not.Null);
+
+            Transform[] angledShells = shells.Cast<Transform>()
+                .Where(transform =>
+                    PrefabUtility.GetPrefabAssetPathOfNearestInstanceRoot(transform.gameObject)
+                        .Contains("_M_angle_1_", StringComparison.Ordinal))
+                .ToArray();
+            Assert.That(angledShells, Is.Not.Empty, "The regression seed must exercise angled outer shells.");
+
+            var exercisedStructuralYaws = new bool[4];
+            foreach (Transform angledShell in angledShells)
+            {
+                Match match = Regex.Match(
+                    angledShell.name,
+                    @"^shell_corner_(-?\d+)_(-?\d+)_\d+$",
+                    RegexOptions.CultureInvariant);
+                Assert.That(match.Success, Is.True, $"Unexpected angled-shell name '{angledShell.name}'.");
+
+                string tierCornerName = $"tier_corner_{match.Groups[1].Value}_{match.Groups[2].Value}_c0";
+                Transform tierCorner = corners.Find(tierCornerName);
+                Assert.That(
+                    tierCorner,
+                    Is.Not.Null,
+                    $"Angled shell '{angledShell.name}' has no matching structural corner '{tierCornerName}'.");
+                exercisedStructuralYaws[
+                    Mathf.RoundToInt(Mathf.Repeat(tierCorner.eulerAngles.y, 360f) / 90f) & 3] = true;
+                Assert.That(
+                    Mathf.Abs(Mathf.DeltaAngle(angledShell.eulerAngles.y, tierCorner.eulerAngles.y)),
+                    Is.EqualTo(180f).Within(0.01f),
+                    "The PivotMiddle angled shell must face exactly opposite the structural tier-corner kit.");
+
+                Vector3 expectedShellPosition =
+                    tierCorner.position +
+                    tierCorner.rotation * new Vector3(-4f, 0f, 4f);
+                Assert.That(
+                    Vector2.Distance(
+                        new Vector2(angledShell.position.x, angledShell.position.z),
+                        new Vector2(expectedShellPosition.x, expectedShellPosition.z)),
+                    Is.LessThan(0.001f),
+                    "The 180-degree angle correction must remap the (-x,+z) full-cell pivot, " +
+                    "not rotate the shell around the structural corner's old root.");
+            }
+
+            Assert.That(
+                exercisedStructuralYaws.All(exercised => exercised),
+                Is.True,
+                "The regression seed must prove the angled-shell pivot remap in all four cardinal orientations.");
         }
 
         [Test]

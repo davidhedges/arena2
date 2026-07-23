@@ -3667,6 +3667,14 @@ namespace DungeonLab.Editor
             }
 
             bool climbsFromConnectionStart = fromLevel < toLevel;
+            // Untyped connections use side-floor support to distinguish an embedded
+            // stair from an external span. A declared Stair must stay embedded even
+            // in its intentionally narrow corridor; the route contract forbids
+            // reclassifying it as a bridge.
+            bool requireEmbeddedSideFloorSupport = !string.Equals(
+                requiredPlacementClass,
+                EmbeddedStairPlacementClass,
+                StringComparison.Ordinal);
             var candidates = new List<StairTransitionCandidate>();
             AddReviewedActiveStairTransitionCandidates(
                 options,
@@ -3682,6 +3690,7 @@ namespace DungeonLab.Editor
                 Mathf.Max(fromLevel, toLevel),
                 allowExternalSpan,
                 preferredOnly: true,
+                requireEmbeddedSideFloorSupport,
                 candidates);
             RemoveCandidatesOutsideRequiredPlacementClass(candidates, requiredPlacementClass);
             RemovePlannedStairConflicts(candidates, plannedStairLedger);
@@ -3701,6 +3710,7 @@ namespace DungeonLab.Editor
                     Mathf.Max(fromLevel, toLevel),
                     allowExternalSpan,
                     preferredOnly: false,
+                    requireEmbeddedSideFloorSupport,
                     candidates);
                 RemoveCandidatesOutsideRequiredPlacementClass(candidates, requiredPlacementClass);
                 RemovePlannedStairConflicts(candidates, plannedStairLedger);
@@ -4777,6 +4787,7 @@ namespace DungeonLab.Editor
             int higherLevel,
             bool allowExternalSpan,
             bool preferredOnly,
+            bool requireEmbeddedSideFloorSupport,
             List<StairTransitionCandidate> candidates)
         {
             foreach (ReviewedActiveStairOption option in options)
@@ -4830,6 +4841,7 @@ namespace DungeonLab.Editor
                         cellLevels,
                         lowerLevel,
                         higherLevel,
+                        requireEmbeddedSideFloorSupport,
                         candidates);
                 }
                 else if (!option.isBridge &&
@@ -4846,6 +4858,7 @@ namespace DungeonLab.Editor
                         cellLevels,
                         lowerLevel,
                         higherLevel,
+                        requireEmbeddedSideFloorSupport,
                         candidates);
                 }
 
@@ -4990,6 +5003,7 @@ namespace DungeonLab.Editor
             IReadOnlyDictionary<Vector2Int, int> cellLevels,
             int lowerLevel,
             int higherLevel,
+            bool requireEmbeddedSideFloorSupport,
             List<StairTransitionCandidate> candidates)
         {
             int maxSpan = Mathf.Clamp(option.runLength + 3, 3, 8);
@@ -5018,7 +5032,8 @@ namespace DungeonLab.Editor
                                 placement.upperLandingCells,
                                 placement.footprintCells,
                                 lowerLevel,
-                                higherLevel))
+                                higherLevel,
+                                requireEmbeddedSideFloorSupport))
                         {
                             continue;
                         }
@@ -5065,7 +5080,8 @@ namespace DungeonLab.Editor
                             placement.upperLandingCells,
                             placement.footprintCells,
                             lowerLevel,
-                            higherLevel))
+                            higherLevel,
+                            requireEmbeddedSideFloorSupport))
                     {
                         continue;
                     }
@@ -5098,6 +5114,7 @@ namespace DungeonLab.Editor
             IReadOnlyDictionary<Vector2Int, int> cellLevels,
             int lowerLevel,
             int higherLevel,
+            bool requireEmbeddedSideFloorSupport,
             List<StairTransitionCandidate> candidates)
         {
             int clampedMin = climbsFromConnectionStart
@@ -5164,7 +5181,8 @@ namespace DungeonLab.Editor
                             placement.upperLandingCells,
                             placement.footprintCells,
                             lowerLevel,
-                            higherLevel))
+                            higherLevel,
+                            requireEmbeddedSideFloorSupport))
                     {
                         continue;
                     }
@@ -5236,7 +5254,8 @@ namespace DungeonLab.Editor
                         descendingPlacement.upperLandingCells,
                         descendingPlacement.footprintCells,
                         lowerLevel,
-                        higherLevel))
+                        higherLevel,
+                        requireEmbeddedSideFloorSupport))
                 {
                     continue;
                 }
@@ -5264,7 +5283,8 @@ namespace DungeonLab.Editor
             IReadOnlyList<Vector2Int> upperLandingCells,
             IReadOnlyList<Vector2Int> footprintCells,
             int lowerLevel,
-            int higherLevel)
+            int higherLevel,
+            bool requireSideFloorSupport)
         {
             if (cellLevels == null)
             {
@@ -5278,7 +5298,8 @@ namespace DungeonLab.Editor
                     layoutFloorCells,
                     lowerLandingCells,
                     upperLandingCells,
-                    footprintCells) &&
+                    footprintCells,
+                    requireSideFloorSupport) &&
                 !AnyOverlap(lowerLandingCells, footprintCells) &&
                 !AnyOverlap(upperLandingCells, footprintCells);
         }
@@ -5287,7 +5308,8 @@ namespace DungeonLab.Editor
             HashSet<Vector2Int> layoutFloorCells,
             IReadOnlyList<Vector2Int> lowerLandingCells,
             IReadOnlyList<Vector2Int> upperLandingCells,
-            IReadOnlyList<Vector2Int> footprintCells)
+            IReadOnlyList<Vector2Int> footprintCells,
+            bool requireSideFloorSupport)
         {
             if (layoutFloorCells == null)
             {
@@ -5302,6 +5324,11 @@ namespace DungeonLab.Editor
                 if (!layoutFloorCells.Contains(cell))
                 {
                     return false;
+                }
+
+                if (!requireSideFloorSupport)
+                {
+                    continue;
                 }
 
                 bool hasSideSupport = false;

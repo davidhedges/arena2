@@ -3,6 +3,7 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using NUnit.Framework;
 
 namespace Arena.Tests.Editor
@@ -60,6 +61,33 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void DeclaredProcessionalStair_ReservesEmbeddedFootprintInNarrowCorridor()
+        {
+            string report = InvokeReportText("BuildPhase0SeedReport", VerticalIntentSeed);
+            Match transition = Regex.Match(
+                report,
+                @"""edgeId"": ""main-1-2""(?:(?!""edgeId"").)*?""reservedBeforeFill"": true",
+                RegexOptions.CultureInvariant | RegexOptions.Singleline);
+            Match footprint = Regex.Match(
+                transition.Value,
+                @"""footprintCells"": \[(?<cells>.*?)\]\s*,\s*""reservedBeforeFill""",
+                RegexOptions.CultureInvariant | RegexOptions.Singleline);
+
+            Assert.That(report, Does.Contain("\"accepted\": true"), report);
+            Assert.That(transition.Success, Is.True, report);
+            Assert.That(transition.Value, Does.Contain("\"transitionKind\": \"Stair\""));
+            Assert.That(transition.Value, Does.Contain("\"requiredRiseLevels\": 4"));
+            Assert.That(transition.Value, Does.Contain("\"resolvedRiseLevels\": 4"));
+            Assert.That(transition.Value, Does.Contain("\"placementClass\": \"embedded\""));
+            Assert.That(transition.Value, Does.Contain("\"reservedBeforeFill\": true"));
+            Assert.That(footprint.Success, Is.True, transition.Value);
+            Assert.That(
+                Regex.Matches(footprint.Groups["cells"].Value, "\"x\":").Count,
+                Is.EqualTo(2),
+                "The declared one-lane stair must remain inside its two-cell corridor footprint.");
+        }
+
+        [Test]
         public void NamedVista_RemainsValidThroughFinalTierPlanning()
         {
             Dictionary<string, string> report = VerticalSnapshot();
@@ -110,9 +138,24 @@ namespace Arena.Tests.Editor
         {
             MethodInfo method = GeneratorType.GetMethod(
                 methodName,
-                BindingFlags.Static | BindingFlags.NonPublic)!;
+                BindingFlags.Static | BindingFlags.NonPublic,
+                binder: null,
+                types: new[] { typeof(int) },
+                modifiers: null)!;
             Assert.That(method, Is.Not.Null, $"Missing diagnostic method {methodName}.");
             return (string)method.Invoke(null, new object[] { seed })!;
+        }
+
+        private static string InvokeReportText(string methodName, int seed)
+        {
+            MethodInfo method = GeneratorType.GetMethod(
+                methodName,
+                BindingFlags.Static | BindingFlags.NonPublic,
+                binder: null,
+                types: new[] { typeof(int) },
+                modifiers: null)!;
+            Assert.That(method, Is.Not.Null, $"Missing diagnostic method {methodName}.");
+            return method.Invoke(null, new object[] { seed })!.ToString();
         }
 
         private static Dictionary<string, string> ParseSnapshot(string snapshot)
