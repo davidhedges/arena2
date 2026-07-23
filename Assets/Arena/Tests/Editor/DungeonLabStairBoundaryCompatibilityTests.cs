@@ -162,7 +162,9 @@ namespace Arena.Tests.Editor
                 Is.True,
                 "The regression seed must exercise straight shell pieces.");
             Assert.That(
-                shellPieces.Any(piece => piece.path.Contains("_angle_1_", StringComparison.Ordinal)),
+                shellPieces.Any(piece =>
+                    piece.path.Contains("_angle_1_", StringComparison.Ordinal) ||
+                    piece.path.Contains("_angle_2_", StringComparison.Ordinal)),
                 Is.True,
                 "The regression seed must exercise angled shell pieces.");
             Assert.That(
@@ -181,8 +183,11 @@ namespace Arena.Tests.Editor
 
             Transform[] angledShells = shells.Cast<Transform>()
                 .Where(transform =>
-                    PrefabUtility.GetPrefabAssetPathOfNearestInstanceRoot(transform.gameObject)
-                        .Contains("_M_angle_1_", StringComparison.Ordinal))
+                {
+                    string path = PrefabUtility.GetPrefabAssetPathOfNearestInstanceRoot(transform.gameObject);
+                    return path.Contains("_M_angle_1_", StringComparison.Ordinal) ||
+                        path.Contains("_M_angle_2_", StringComparison.Ordinal);
+                })
                 .ToArray();
             Assert.That(angledShells, Is.Not.Empty, "The regression seed must exercise angled outer shells.");
 
@@ -224,6 +229,121 @@ namespace Arena.Tests.Editor
                 exercisedStructuralYaws.All(exercised => exercised),
                 Is.True,
                 "The regression seed must prove the angled-shell pivot remap in all four cardinal orientations.");
+        }
+
+        [Test]
+        public void AngledOuterShells_UseAuthoredVariantForCornerPolarity()
+        {
+            Transform shells = root!.transform.Find("Outer Shell Walls");
+            Transform corners = root.transform.Find("Elevation Edge Corners");
+            Assert.That(shells, Is.Not.Null);
+            Assert.That(corners, Is.Not.Null);
+
+            Transform[] angledShells = shells.Cast<Transform>()
+                .Where(transform =>
+                {
+                    string path = PrefabUtility.GetPrefabAssetPathOfNearestInstanceRoot(transform.gameObject);
+                    return path.Contains("_M_angle_1_", StringComparison.Ordinal) ||
+                        path.Contains("_M_angle_2_", StringComparison.Ordinal);
+                })
+                .ToArray();
+            Assert.That(angledShells, Is.Not.Empty, "The regression seed must exercise angled outer shells.");
+
+            foreach (Transform angledShell in angledShells)
+            {
+                Match match = Regex.Match(
+                    angledShell.name,
+                    @"^shell_corner_(-?\d+)_(-?\d+)_\d+$",
+                    RegexOptions.CultureInvariant);
+                Assert.That(match.Success, Is.True, $"Unexpected angled-shell name '{angledShell.name}'.");
+
+                string cell = $"{match.Groups[1].Value}_{match.Groups[2].Value}";
+                bool concave = corners.Find($"tier_corner_floor_{cell}") != null;
+                string expectedVariant = concave ? "_M_angle_2_" : "_M_angle_1_";
+                string path = PrefabUtility.GetPrefabAssetPathOfNearestInstanceRoot(angledShell.gameObject);
+                Assert.That(
+                    path,
+                    Does.Contain(expectedVariant),
+                    $"Angled shell '{angledShell.name}' must use {expectedVariant.Trim('_')} for its " +
+                    $"{(concave ? "concave" : "convex")} authored endpoint profile.");
+            }
+
+            Assert.That(
+                angledShells.Select(transform =>
+                        PrefabUtility.GetPrefabAssetPathOfNearestInstanceRoot(transform.gameObject))
+                    .Any(path => path.Contains("_M_angle_1_", StringComparison.Ordinal)),
+                Is.True,
+                "The regression seed must exercise angle_1.");
+            Assert.That(
+                angledShells.Select(transform =>
+                        PrefabUtility.GetPrefabAssetPathOfNearestInstanceRoot(transform.gameObject))
+                    .Any(path => path.Contains("_M_angle_2_", StringComparison.Ordinal)),
+                Is.True,
+                "The regression seed must exercise angle_2.");
+        }
+
+        [Test]
+        public void ConsecutiveAngledOuterShells_AlternateCornerPolarityAndPrefabVariant()
+        {
+            Transform shells = root!.transform.Find("Outer Shell Walls");
+            Transform corners = root.transform.Find("Elevation Edge Corners");
+            Assert.That(shells, Is.Not.Null);
+            Assert.That(corners, Is.Not.Null);
+
+            var courseZeroAngles = shells.Cast<Transform>()
+                .Select(transform => (
+                    transform,
+                    match: Regex.Match(
+                        transform.name,
+                        @"^shell_corner_(-?\d+)_(-?\d+)_0$",
+                        RegexOptions.CultureInvariant),
+                    path: PrefabUtility.GetPrefabAssetPathOfNearestInstanceRoot(transform.gameObject)))
+                .Where(item =>
+                    item.match.Success &&
+                    (item.path.Contains("_M_angle_1_", StringComparison.Ordinal) ||
+                     item.path.Contains("_M_angle_2_", StringComparison.Ordinal)))
+                .Select(item => (
+                    item.transform,
+                    cell: new Vector2Int(
+                        int.Parse(item.match.Groups[1].Value),
+                        int.Parse(item.match.Groups[2].Value)),
+                    item.path))
+                .ToArray();
+
+            int consecutivePairs = 0;
+            for (int firstIndex = 0; firstIndex < courseZeroAngles.Length; firstIndex++)
+            {
+                for (int secondIndex = firstIndex + 1; secondIndex < courseZeroAngles.Length; secondIndex++)
+                {
+                    var first = courseZeroAngles[firstIndex];
+                    var second = courseZeroAngles[secondIndex];
+                    Vector2Int delta = second.cell - first.cell;
+                    if (Mathf.Abs(delta.x) != 1 ||
+                        Mathf.Abs(delta.y) != 1 ||
+                        Mathf.Abs(first.transform.position.y - second.transform.position.y) > 0.01f ||
+                        Mathf.Abs(Mathf.DeltaAngle(first.transform.eulerAngles.y, second.transform.eulerAngles.y)) > 0.01f)
+                    {
+                        continue;
+                    }
+
+                    bool firstConcave = corners.Find($"tier_corner_floor_{first.cell.x}_{first.cell.y}") != null;
+                    bool secondConcave = corners.Find($"tier_corner_floor_{second.cell.x}_{second.cell.y}") != null;
+                    Assert.That(
+                        firstConcave,
+                        Is.Not.EqualTo(secondConcave),
+                        $"Consecutive angled shells {first.transform.name} and {second.transform.name} must alternate corner polarity.");
+                    Assert.That(
+                        first.path.Contains("_M_angle_2_", StringComparison.Ordinal),
+                        Is.Not.EqualTo(second.path.Contains("_M_angle_2_", StringComparison.Ordinal)),
+                        $"Consecutive angled shells {first.transform.name} and {second.transform.name} must alternate prefab variants.");
+                    consecutivePairs++;
+                }
+            }
+
+            Assert.That(
+                consecutivePairs,
+                Is.GreaterThan(0),
+                "The regression seed must exercise at least one consecutive angled-shell pair.");
         }
 
         [Test]

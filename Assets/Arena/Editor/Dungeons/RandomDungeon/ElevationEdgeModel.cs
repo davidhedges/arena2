@@ -3332,12 +3332,18 @@ namespace DungeonLab.Editor
             // Rounded/angled corners must stay in the SAME PivotMiddle family as
             // the straight shells. PivotMiddle authors one centered, double-sided
             // curve (M_concave) whose two faces serve both convex and concave
-            // applications; there is no separate M_convex piece. M_angle_1 is
-            // authored opposite the tier-corner convention, so rotate that shell
-            // 180 degrees and recompute its full-cell pivot for the corrected yaw.
-            // Keeping the old pivot would move its (-x,+z) authored footprint into
-            // the diagonally opposite cell. Bounds-center metrology is for hard
-            // L-corners and flips curves.
+            // applications; there is no separate M_convex piece. The two full-cell
+            // M angle variants share a footprint but reverse their authored end
+            // profiles. Use the corner polarity already established by
+            // FindRoundTierCorners to anchor that handedness: convex corners take
+            // angle_1 and concave corners take angle_2. Consecutive chamfer cells
+            // alternate polarity, so this mates both their shared seam and their
+            // straight-wall endpoints without a coordinate-dependent phase. Every
+            // vertical course in one cell stays on the same variant. Both variants
+            // use the angle_1 transform contract: rotate 180 degrees and recompute
+            // the full-cell pivot for the corrected yaw. Keeping the old pivot
+            // would move the authored footprint into the diagonally opposite cell.
+            // Bounds-center metrology is for hard L-corners and flips curves.
             int cornerSkips = 0;
             foreach (RoundTierCorner corner in roundTierCorners)
             {
@@ -3358,15 +3364,23 @@ namespace DungeonLab.Editor
                 // floor cell of the same room the straight walls use.
                 var cornerRoomCell = new Vector2Int(corner.edgeA.x, corner.edgeA.z);
 
-                string shape = corner.angleStyle ? "angle_1" : "concave";
-                if (!TryLoadTierStepPiece($"{ShellWallFamilyPrefix}{shape}_med", out TierStepPiece curvedMed))
+                bool useAngleVariantTwo = corner.angleStyle && corner.concave;
+                string shape = corner.angleStyle
+                    ? useAngleVariantTwo ? "angle_2" : "angle_1"
+                    : "concave";
+                string CornerPieceName(string size) =>
+                    $"{ShellWallFamilyPrefix}{shape}_{size}" +
+                    (useAngleVariantTwo && size == "med" ? " " : string.Empty);
+                if (!TryLoadTierStepPiece(CornerPieceName("med"), out TierStepPiece curvedMed))
                 {
                     cornerSkips++;
                     continue;
                 }
 
-                bool hasCurvedLarge = TryLoadTierStepPiece($"{ShellWallFamilyPrefix}{shape}_large", out TierStepPiece curvedLarge);
-                bool hasCurvedSmall = TryLoadTierStepPiece($"{ShellWallFamilyPrefix}{shape}_small", out TierStepPiece curvedSmall);
+                // The vendor-authored angle_2 medium asset has a literal trailing
+                // space in its prefab name; the measured library preserves it.
+                bool hasCurvedLarge = TryLoadTierStepPiece(CornerPieceName("large"), out TierStepPiece curvedLarge);
+                bool hasCurvedSmall = TryLoadTierStepPiece(CornerPieceName("small"), out TierStepPiece curvedSmall);
                 TierStepPiece CourseCurved(int h) =>
                     h >= 6 && hasCurvedLarge ? curvedLarge : h <= 2 && hasCurvedSmall ? curvedSmall : curvedMed;
 
