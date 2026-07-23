@@ -82,6 +82,10 @@ Assets/ThirdParty/AssetStore/VFX/Piloto Studio.meta
 # Local VFX playground experiments
 Assets/Arena/Resources/CombatVFX/playground/
 
+# Local dungeon showcase scene
+Assets/Arena/Content/Scenes/OpenWorld/DungeonExamples.unity
+Assets/Arena/Content/Scenes/OpenWorld/DungeonExamples.unity.meta
+
 # Infrastructure local state and secrets
 .env
 .env.local
