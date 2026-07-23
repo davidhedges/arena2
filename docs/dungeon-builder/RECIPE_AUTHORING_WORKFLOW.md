@@ -191,6 +191,13 @@ the reusable asset.
 Never place a convenient approximate port and expect corridor routing or the
 renderer to repair it.
 
+Exact named ports remain the default and preserve the reviewed recipes'
+literal slot bindings. Only a recipe that explicitly selects
+`IncidentCardinalSockets` may declare the four north/east/south/west potential
+sockets and an active range within one through four. For that opt-in mode,
+placement binds the incident route edges to matching transformed directions;
+it does not change any other recipe's port behavior.
+
 ### 5.3 Declare composition intent
 
 Declare protected focal/circulation zones, symmetry pairs, transition atomic

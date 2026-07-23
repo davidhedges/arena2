@@ -22,6 +22,12 @@ namespace DungeonLab.Editor
         Corridor
     }
 
+    public enum DungeonRecipePortBindingMode
+    {
+        ExactNamedPorts,
+        IncidentCardinalSockets
+    }
+
     public enum DungeonRecipeMotifKind
     {
         StairTransition,
@@ -114,6 +120,13 @@ namespace DungeonLab.Editor
         public string[] eligibleRoles = Array.Empty<string>();
         [Tooltip("Journey beats for which this recipe may be selected, such as return or compression.")]
         public string[] eligibleBeats = Array.Empty<string>();
+        [Tooltip("Exact named ports preserve the existing slot contract. Incident cardinal sockets activate only the declared sides that have route neighbors.")]
+        public DungeonRecipePortBindingMode portBindingMode =
+            DungeonRecipePortBindingMode.ExactNamedPorts;
+        [Tooltip("Minimum number of active route-bound sockets. Ignored for exact named ports.")]
+        [Range(1, 4)] public int minimumActiveSockets = 1;
+        [Tooltip("Maximum number of active route-bound sockets. Ignored for exact named ports.")]
+        [Range(1, 4)] public int maximumActiveSockets = 4;
         [Tooltip("Allows the generator to reflect the recipe across its route-forward axis when matching neighbors.")]
         public bool allowMirror;
         [Tooltip("Allowed clockwise quarter-turns after the recipe's route-forward axis is resolved.")]
@@ -130,5 +143,8 @@ namespace DungeonLab.Editor
         public DungeonRecipeSymmetryPair[] symmetryPairs = Array.Empty<DungeonRecipeSymmetryPair>();
         [Tooltip("Weighted visual alternatives that preserve this recipe's structural contract.")]
         public DungeonRecipeVariation[] variations = Array.Empty<DungeonRecipeVariation>();
+
+        public bool UsesIncidentCardinalSockets =>
+            portBindingMode == DungeonRecipePortBindingMode.IncidentCardinalSockets;
     }
 }

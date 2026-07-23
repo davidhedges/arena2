@@ -241,7 +241,7 @@ namespace DungeonLab.Editor
             DungeonRecipePort second = null;
             foreach (DungeonRecipePort port in asset.ports ?? Array.Empty<DungeonRecipePort>())
             {
-                if (!port.mandatory) continue;
+                if (!port.mandatory && !asset.UsesIncidentCardinalSockets) continue;
                 if (first == null) first = port;
                 else
                 {
@@ -822,7 +822,7 @@ namespace DungeonLab.Editor
             DungeonRecipePort second = null;
             foreach (DungeonRecipePort port in recipe.ports ?? Array.Empty<DungeonRecipePort>())
             {
-                if (!port.mandatory) continue;
+                if (!port.mandatory && !recipe.UsesIncidentCardinalSockets) continue;
                 if (first == null) first = port;
                 else
                 {

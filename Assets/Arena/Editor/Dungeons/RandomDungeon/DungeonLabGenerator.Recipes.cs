@@ -109,12 +109,13 @@ namespace DungeonLab.Editor
                 int neighborRoomIndex,
                 Vector2Int cell,
                 Vector2Int outwardDirection,
-                int expectedRelativeLevel)
+                int expectedRelativeLevel,
+                bool requiredForPlacement = false)
             {
                 id = port.id;
                 this.edgeId = edgeId ?? string.Empty;
                 type = port.type;
-                mandatory = port.mandatory;
+                mandatory = requiredForPlacement || port.mandatory;
                 this.neighborRoomIndex = neighborRoomIndex;
                 this.cell = cell;
                 this.outwardDirection = outwardDirection;
@@ -684,9 +685,14 @@ namespace DungeonLab.Editor
                 mandatoryPortCount += port != null && port.mandatory ? 1 : 0;
             }
 
-            if (mandatoryPortCount != incidentDegree ||
+            bool incidentSockets = candidate.UsesIncidentCardinalSockets;
+            bool degreeCompatible = incidentSockets
+                ? incidentDegree >= candidate.minimumActiveSockets &&
+                  incidentDegree <= candidate.maximumActiveSockets
+                : mandatoryPortCount == incidentDegree;
+            if (!degreeCompatible ||
                 portBindings == null ||
-                portBindings.Count != incidentDegree)
+                !incidentSockets && portBindings.Count != incidentDegree)
             {
                 reasonCode = "TRAVERSAL_DEGREE_MISMATCH";
                 return false;
@@ -694,21 +700,25 @@ namespace DungeonLab.Editor
 
             var boundPorts = new HashSet<string>(StringComparer.Ordinal);
             var boundEdges = new HashSet<string>(StringComparer.Ordinal);
-            foreach (RecipePortBinding binding in portBindings)
+            if (!incidentSockets)
             {
-                if (!boundPorts.Add(binding.portId) ||
-                    !boundEdges.Add(binding.edgeId) ||
-                    !TryGetTraversal(intent, binding.edgeId, out RouteTraversalIntent edge) ||
-                    edge.fromNode != slotNode && edge.toNode != slotNode)
+                foreach (RecipePortBinding binding in portBindings)
                 {
-                    reasonCode = "PORT_BINDING_MISMATCH";
-                    return false;
+                    if (!boundPorts.Add(binding.portId) ||
+                        !boundEdges.Add(binding.edgeId) ||
+                        !TryGetTraversal(intent, binding.edgeId, out RouteTraversalIntent edge) ||
+                        edge.fromNode != slotNode && edge.toNode != slotNode)
+                    {
+                        reasonCode = "PORT_BINDING_MISMATCH";
+                        return false;
+                    }
                 }
             }
 
             foreach (DungeonRecipePort port in candidate.ports ?? Array.Empty<DungeonRecipePort>())
             {
-                if (port == null || !port.mandatory || !boundPorts.Contains(port.id))
+                if (port == null ||
+                    (!incidentSockets && (!port.mandatory || !boundPorts.Contains(port.id))))
                 {
                     reasonCode = "PORT_BINDING_MISMATCH";
                     return false;
@@ -730,12 +740,12 @@ namespace DungeonLab.Editor
             }
 
             bool orientationContextValid =
-                orientationBinding == RecipeOrientationBinding.RouteForward &&
-                boundPorts.Contains("exit") ||
-                orientationBinding == RecipeOrientationBinding.VistaSourceToTarget &&
-                intent.vista.targetNode == slotNode &&
-                intent.vista.sourceNode >= 0 &&
-                intent.vista.sourceNode < intent.nodes.Length;
+                (orientationBinding == RecipeOrientationBinding.RouteForward &&
+                 (incidentSockets || boundPorts.Contains("exit"))) ||
+                (orientationBinding == RecipeOrientationBinding.VistaSourceToTarget &&
+                 intent.vista.targetNode == slotNode &&
+                 intent.vista.sourceNode >= 0 &&
+                 intent.vista.sourceNode < intent.nodes.Length);
             if (!orientationContextValid ||
                 candidate.legalQuarterTurns == null ||
                 candidate.legalQuarterTurns.Length == 0)
@@ -1063,21 +1073,36 @@ namespace DungeonLab.Editor
             }
 
             var ports = new List<RecipePortPlacement>();
-            foreach (DungeonRecipePort port in slot.recipe.ports)
+            if (!TryResolveActiveRecipePortBindings(
+                    routeIntent,
+                    slot,
+                    nodeCenters,
+                    primaryAxis,
+                    transverseAxis,
+                    mirrored,
+                    out RecipePortBinding[] activePortBindings))
             {
-                if (!slot.TryGetEdgeId(port.id, out string edgeId))
+                rejectionReason = $"recipe '{slot.recipe.recipeId}' could not bind its active ports to route neighbors";
+                return false;
+            }
+
+            foreach (RecipePortBinding binding in activePortBindings)
+            {
+                DungeonRecipePort port = FindRecipePort(slot.recipe, binding.portId);
+                if (port == null)
                 {
-                    rejectionReason = $"recipe port '{port.id}' had no route-edge binding";
+                    rejectionReason = $"recipe port '{binding.portId}' had no route-edge binding";
                     return false;
                 }
 
                 ports.Add(new RecipePortPlacement(
                     port,
-                    edgeId,
-                    NeighborForEdge(routeIntent, edgeId, slot.slotNode),
+                    binding.edgeId,
+                    NeighborForEdge(routeIntent, binding.edgeId, slot.slotNode),
                     TransformRecipeCell(port.cell, center, primaryAxis, transverseAxis, mirrored),
                     TransformRecipeDirection(port.outwardDirection, primaryAxis, transverseAxis, mirrored),
-                    node.relativeElevationLevels + port.relativeLevel));
+                    node.relativeElevationLevels + port.relativeLevel,
+                    requiredForPlacement: true));
             }
 
             var transitions = new List<RecipeTransitionPlacement>();
@@ -1177,28 +1202,125 @@ namespace DungeonLab.Editor
             Vector2Int transverseAxis,
             bool mirrored)
         {
-            foreach (DungeonRecipePort port in slot.recipe.ports)
+            return TryResolveActiveRecipePortBindings(
+                intent,
+                slot,
+                nodeCenters,
+                primaryAxis,
+                transverseAxis,
+                mirrored,
+                out _);
+        }
+
+        private static bool TryResolveActiveRecipePortBindings(
+            RouteIntent intent,
+            RecipeSlotIntent slot,
+            IReadOnlyList<Vector2Int> nodeCenters,
+            Vector2Int primaryAxis,
+            Vector2Int transverseAxis,
+            bool mirrored,
+            out RecipePortBinding[] bindings)
+        {
+            bindings = Array.Empty<RecipePortBinding>();
+            if (intent == null || slot?.recipe == null || nodeCenters == null)
             {
-                if (!slot.TryGetEdgeId(port.id, out string edgeId) ||
-                    !TryGetTraversal(intent, edgeId, out RouteTraversalIntent edge))
+                return false;
+            }
+
+            if (!slot.recipe.UsesIncidentCardinalSockets)
+            {
+                foreach (DungeonRecipePort port in slot.recipe.ports)
                 {
-                    return false;
+                    if (!slot.TryGetEdgeId(port.id, out string edgeId) ||
+                        !TryGetTraversal(intent, edgeId, out RouteTraversalIntent edge))
+                    {
+                        return false;
+                    }
+
+                    int neighbor = edge.fromNode == slot.slotNode ? edge.toNode : edge.fromNode;
+                    Vector2Int actualOutward = CardinalUnit(nodeCenters[neighbor] - nodeCenters[slot.slotNode]);
+                    Vector2Int contractOutward = TransformRecipeDirection(
+                        port.outwardDirection,
+                        primaryAxis,
+                        transverseAxis,
+                        mirrored);
+                    if (actualOutward != contractOutward)
+                    {
+                        return false;
+                    }
+                }
+
+                bindings = slot.portBindings;
+                return true;
+            }
+
+            var resolved = new List<RecipePortBinding>();
+            var usedPorts = new HashSet<string>(StringComparer.Ordinal);
+            foreach (RouteTraversalIntent edge in intent.traversalEdges)
+            {
+                if (edge.fromNode != slot.slotNode && edge.toNode != slot.slotNode)
+                {
+                    continue;
                 }
 
                 int neighbor = edge.fromNode == slot.slotNode ? edge.toNode : edge.fromNode;
-                Vector2Int actualOutward = CardinalUnit(nodeCenters[neighbor] - nodeCenters[slot.slotNode]);
-                Vector2Int contractOutward = TransformRecipeDirection(
-                    port.outwardDirection,
-                    primaryAxis,
-                    transverseAxis,
-                    mirrored);
-                if (actualOutward != contractOutward)
+                Vector2Int delta = nodeCenters[neighbor] - nodeCenters[slot.slotNode];
+                if (delta == Vector2Int.zero || delta.x != 0 && delta.y != 0)
                 {
                     return false;
                 }
+
+                Vector2Int actualOutward = CardinalUnit(delta);
+                DungeonRecipePort matchingSocket = null;
+                foreach (DungeonRecipePort socket in slot.recipe.ports)
+                {
+                    if (socket != null &&
+                        TransformRecipeDirection(
+                            socket.outwardDirection,
+                            primaryAxis,
+                            transverseAxis,
+                            mirrored) == actualOutward)
+                    {
+                        if (matchingSocket != null)
+                        {
+                            return false;
+                        }
+
+                        matchingSocket = socket;
+                    }
+                }
+
+                if (matchingSocket == null || !usedPorts.Add(matchingSocket.id))
+                {
+                    return false;
+                }
+
+                resolved.Add(new RecipePortBinding(matchingSocket.id, edge.id));
             }
 
+            if (resolved.Count < slot.recipe.minimumActiveSockets ||
+                resolved.Count > slot.recipe.maximumActiveSockets)
+            {
+                return false;
+            }
+
+            bindings = resolved.ToArray();
             return true;
+        }
+
+        private static DungeonRecipePort FindRecipePort(
+            DungeonRecipeAsset recipe,
+            string portId)
+        {
+            foreach (DungeonRecipePort port in recipe?.ports ?? Array.Empty<DungeonRecipePort>())
+            {
+                if (port != null && string.Equals(port.id, portId, StringComparison.Ordinal))
+                {
+                    return port;
+                }
+            }
+
+            return null;
         }
 
         private static bool TryGetTraversal(
@@ -1227,9 +1349,30 @@ namespace DungeonLab.Editor
         {
             primaryAxis = Vector2Int.zero;
             if (intent == null || slot == null || nodeCenters == null ||
-                slot.slotNode < 0 || slot.slotNode >= nodeCenters.Count ||
-                !slot.TryGetEdgeId("exit", out string exitEdgeId) ||
-                !TryGetTraversal(intent, exitEdgeId, out RouteTraversalIntent exitEdge))
+                slot.slotNode < 0 || slot.slotNode >= nodeCenters.Count)
+            {
+                return false;
+            }
+
+            RouteTraversalIntent exitEdge = default;
+            bool foundExitEdge =
+                slot.TryGetEdgeId("exit", out string exitEdgeId) &&
+                TryGetTraversal(intent, exitEdgeId, out exitEdge) &&
+                (exitEdge.fromNode == slot.slotNode || exitEdge.toNode == slot.slotNode);
+            if (!foundExitEdge && slot.recipe?.UsesIncidentCardinalSockets == true)
+            {
+                foreach (RouteTraversalIntent edge in intent.traversalEdges)
+                {
+                    if (edge.fromNode == slot.slotNode || edge.toNode == slot.slotNode)
+                    {
+                        exitEdge = edge;
+                        foundExitEdge = true;
+                        break;
+                    }
+                }
+            }
+
+            if (!foundExitEdge)
             {
                 return false;
             }
@@ -1618,7 +1761,15 @@ namespace DungeonLab.Editor
                     return false;
                 }
 
-                int baseLevel = firstPortLevel - placement.slot.recipe.ports[0].relativeLevel;
+                DungeonRecipePort firstPortContract =
+                    FindRecipePort(placement.slot.recipe, placement.ports[0].id);
+                if (firstPortContract == null)
+                {
+                    rejectionReason = $"[RECIPE_LEVELS] '{placement.RecipeId}' had no source contract for its primary port";
+                    return false;
+                }
+
+                int baseLevel = firstPortLevel - firstPortContract.relativeLevel;
                 foreach (RecipePortPlacement port in placement.ports)
                 {
                     if (!cellLevels.TryGetValue(port.cell, out int portLevel) ||
@@ -2011,9 +2162,14 @@ namespace DungeonLab.Editor
         {
             resolution = default;
             rejectionReason = string.Empty;
+            bool portCountValid = placement != null &&
+                (placement.slot.recipe.UsesIncidentCardinalSockets
+                    ? placement.ports.Length >= placement.slot.recipe.minimumActiveSockets &&
+                      placement.ports.Length <= placement.slot.recipe.maximumActiveSockets
+                    : placement.ports.Length == placement.slot.recipe.ports.Length);
             if (placement == null ||
                 placement.transitions.Length != placement.slot.recipe.transitions.Length ||
-                placement.ports.Length != placement.slot.recipe.ports.Length)
+                !portCountValid)
             {
                 rejectionReason = "[RECIPE_ATOMICITY] final plan lacked a complete recipe group";
                 return false;

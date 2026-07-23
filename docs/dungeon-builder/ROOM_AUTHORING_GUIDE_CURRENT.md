@@ -19,7 +19,7 @@ A recipe is a `ScriptableObject` containing grid data:
 
 - rectangular floor zones;
 - optional raised floor zones;
-- two corridor openings;
+- exact named corridor openings, or an explicitly opted-in cardinal socket set;
 - optional internal rise-1 stairs;
 - protected cells;
 - legal rotations and mirroring;
@@ -53,6 +53,13 @@ Those names are internal labels for fixed insertion points. They do not create
 geometry. For the least surprising “make another room and put it in a pool”
 workflow, author a `required-compression` candidate. It will compete uniformly
 with the two existing compression candidates.
+
+`connector_generic_room_01` is an enabled catalog member for the generic room
+family. It opts into `IncidentCardinalSockets`, declares north/east/south/west
+potential openings, and allows one through four of those sockets to become
+active. Placement activates only the sides that match incident route edges.
+Every other current recipe remains in `ExactNamedPorts` mode and retains the
+literal `entry` / `exit` behavior described below.
 
 ## The shortest reliable path: make a flat 5-by-5 room
 
@@ -675,6 +682,9 @@ used by current recipes is the exact string `seam-rise-1`.
 | Disabled For Generation | `true` excludes ordinary generation; preview still works |
 | Eligible Roles | Nonempty exact-string list; compatibility requires a matching route-node role |
 | Eligible Beats | Nonempty exact-string list; compatibility requires a matching route-node beat |
+| Port Binding Mode | `ExactNamedPorts` preserves existing slot bindings; `IncidentCardinalSockets` activates declared cardinal sockets from incident route edges |
+| Minimum Active Sockets | Used only by `IncidentCardinalSockets`; must be within `1..4` |
+| Maximum Active Sockets | Used only by `IncidentCardinalSockets`; must be within `1..4` and not below the minimum |
 | Allow Mirror | If true, placement may mirror across the local primary/X axis |
 | Legal Quarter Turns | Nonempty unique values from `0`, `1`, `2`, `3` only |
 | Zones | Rectangular floor/elevation/protection declarations |
@@ -715,13 +725,18 @@ Every port has a stable unique Id. Current rules are:
 - Approach Depth Cells must be at least `1`;
 - Headroom Levels must be at least `3`;
 - Relative Level must equal the resolved level at Cell;
-- at least two ports must be Mandatory;
-- mandatory ports must use distinct outward directions.
+- exact named recipes require at least two Mandatory ports with distinct
+  outward directions;
+- incident-socket recipes require exactly four non-mandatory, level-0 Corridor
+  sockets covering north, east, south, and west;
+- all four socket cells must belong to one connected room footprint.
 
-The three implemented fixed slots also require every candidate port to be
-mandatory and bound by the slot. In practice, current usable recipes have
-exactly `entry` and `exit`; optional or additional ports are not supported by
-those bindings.
+Exact named candidates in the three implemented fixed slots require every port
+to be mandatory and bound by the slot. In practice those recipes have exactly
+`entry` and `exit`. The generic-room prototype's explicit
+`IncidentCardinalSockets` mode is the only current exception: its active subset
+is bound by direction after placement, and inactive sockets create no corridor
+opening.
 
 ### Motif
 
@@ -823,6 +838,10 @@ before the deterministic index is chosen.
 | `RECIPE_PROTECTED_ZONE` | Protected cells extend outside the floor footprint |
 | `RECIPE_PORT_GEOMETRY` | Port is not on an exact open boundary, has bad direction/level/width/approach/headroom |
 | `RECIPE_MANDATORY_PORTS` | Fewer than two ports are mandatory |
+| `RECIPE_PORT_BINDING_MODE` | Port Binding Mode is not a supported enum value |
+| `RECIPE_SOCKET_POLICY` | Incident socket minimum/maximum is outside `1..4` or inverted |
+| `RECIPE_CARDINAL_SOCKETS` | Incident socket recipe does not declare exactly four non-mandatory level-0 cardinal Corridor sockets |
+| `RECIPE_SOCKET_CONNECTIVITY` | One or more socket cells are disconnected from the common room footprint |
 | `RECIPE_NEIGHBOR_PORT` | Mandatory port is not Corridor or duplicates another mandatory outward direction |
 | `RECIPE_NEIGHBOR_MATRIX` | Fewer than two distinct mandatory approach directions exist |
 | `RECIPE_TRANSITION_CONTRACT` | Transition lacks the required stair motif/rise/lane/landing/footprint/headroom data |

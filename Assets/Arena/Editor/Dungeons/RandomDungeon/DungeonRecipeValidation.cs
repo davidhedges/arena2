@@ -180,6 +180,12 @@ namespace DungeonLab.Editor
             AppendStrings(canonical, "roles", recipe.eligibleRoles);
             AppendStrings(canonical, "beats", recipe.eligibleBeats);
             AppendInts(canonical, "turns", recipe.legalQuarterTurns);
+            if (recipe.UsesIncidentCardinalSockets)
+            {
+                Append(canonical, "portBindingMode", (int)recipe.portBindingMode);
+                Append(canonical, "minimumActiveSockets", recipe.minimumActiveSockets);
+                Append(canonical, "maximumActiveSockets", recipe.maximumActiveSockets);
+            }
 
             foreach (DungeonRecipeZone zone in recipe.zones ?? Array.Empty<DungeonRecipeZone>())
             {
@@ -300,6 +306,24 @@ namespace DungeonLab.Editor
                 result.Add(Layer, "RECIPE_ORIENTATION", "At least one legal orientation is required.");
             }
 
+            if (!Enum.IsDefined(typeof(DungeonRecipePortBindingMode), recipe.portBindingMode))
+            {
+                result.Add(
+                    Layer,
+                    "RECIPE_PORT_BINDING_MODE",
+                    $"Port binding mode '{recipe.portBindingMode}' is unsupported.");
+            }
+            else if (recipe.UsesIncidentCardinalSockets &&
+                (recipe.minimumActiveSockets < 1 ||
+                 recipe.maximumActiveSockets > 4 ||
+                 recipe.minimumActiveSockets > recipe.maximumActiveSockets))
+            {
+                result.Add(
+                    Layer,
+                    "RECIPE_SOCKET_POLICY",
+                    "Incident cardinal sockets require an active range within 1..4.");
+            }
+
             CheckIds(recipe.zones, value => value?.id, "zone", Layer, result);
             CheckIds(recipe.ports, value => value?.id, "port", Layer, result);
             CheckIds(recipe.motifs, value => value?.id, "motif", Layer, result);
@@ -388,7 +412,48 @@ namespace DungeonLab.Editor
                 }
             }
 
-            if (mandatoryPortCount < 2)
+            if (recipe.UsesIncidentCardinalSockets)
+            {
+                DungeonRecipePort[] sockets = recipe.ports ?? Array.Empty<DungeonRecipePort>();
+                var socketDirections = new HashSet<Vector2Int>();
+                bool socketContractValid =
+                    sockets.Length == 4 &&
+                    recipe.maximumActiveSockets <= sockets.Length;
+                foreach (DungeonRecipePort socket in sockets)
+                {
+                    socketContractValid &=
+                        socket != null &&
+                        !socket.mandatory &&
+                        socket.type == DungeonRecipePortType.Corridor &&
+                        socket.relativeLevel == 0 &&
+                        socketDirections.Add(socket.outwardDirection);
+                }
+
+                socketContractValid &=
+                    socketDirections.SetEquals(new[]
+                    {
+                        Vector2Int.up,
+                        Vector2Int.right,
+                        Vector2Int.down,
+                        Vector2Int.left
+                    });
+                if (!socketContractValid)
+                {
+                    result.Add(
+                        Layer,
+                        "RECIPE_CARDINAL_SOCKETS",
+                        "Incident socket recipes require exactly four non-mandatory level-0 corridor sockets, one on each cardinal side.");
+                }
+
+                if (!AllPortsShareConnectedFootprint(sockets, footprint))
+                {
+                    result.Add(
+                        Layer,
+                        "RECIPE_SOCKET_CONNECTIVITY",
+                        "Every cardinal socket must belong to the same connected room footprint.");
+                }
+            }
+            else if (mandatoryPortCount < 2)
             {
                 result.Add(Layer, "RECIPE_MANDATORY_PORTS", "The proven recipe seam requires at least two mandatory route ports.");
             }
@@ -490,10 +555,11 @@ namespace DungeonLab.Editor
                 return;
             }
 
+            bool incidentSockets = recipe.UsesIncidentCardinalSockets;
             var mandatoryOutward = new HashSet<Vector2Int>();
             foreach (DungeonRecipePort port in recipe.ports ?? Array.Empty<DungeonRecipePort>())
             {
-                if (port == null || !port.mandatory)
+                if (port == null || (!incidentSockets && !port.mandatory))
                 {
                     continue;
                 }
@@ -501,13 +567,20 @@ namespace DungeonLab.Editor
                 if (port.type != DungeonRecipePortType.Corridor ||
                     !mandatoryOutward.Add(port.outwardDirection))
                 {
-                    result.Add(Layer, "RECIPE_NEIGHBOR_PORT", $"Mandatory port '{port.id}' did not expose a distinct generic-corridor counterpart.");
+                    string memberKind = incidentSockets ? "Socket" : "Mandatory port";
+                    result.Add(Layer, "RECIPE_NEIGHBOR_PORT", $"{memberKind} '{port.id}' did not expose a distinct generic-corridor counterpart.");
                 }
             }
 
-            if (mandatoryOutward.Count < 2)
+            int requiredDirectionCount = incidentSockets ? 4 : 2;
+            if (mandatoryOutward.Count < requiredDirectionCount)
             {
-                result.Add(Layer, "RECIPE_NEIGHBOR_MATRIX", "Mandatory ports did not cover two distinct neighbor approach directions.");
+                result.Add(
+                    Layer,
+                    "RECIPE_NEIGHBOR_MATRIX",
+                    incidentSockets
+                        ? "Route-bound sockets did not cover all four neighbor approach directions."
+                        : "Mandatory ports did not cover two distinct neighbor approach directions.");
             }
         }
 
@@ -529,9 +602,13 @@ namespace DungeonLab.Editor
                 requiredPorts += port != null && port.mandatory ? 1 : 0;
             }
 
+            bool portEvidenceValid = recipe.UsesIncidentCardinalSockets
+                ? evidence.boundMandatoryPortCount >= recipe.minimumActiveSockets &&
+                  evidence.boundMandatoryPortCount <= recipe.maximumActiveSockets
+                : evidence.boundMandatoryPortCount == requiredPorts;
             if (!string.Equals(recipe.recipeId, evidence.recipeId, StringComparison.Ordinal) ||
                 !evidence.placedAtomically ||
-                evidence.boundMandatoryPortCount != requiredPorts ||
+                !portEvidenceValid ||
                 evidence.resolvedTransitionCount != (recipe.transitions?.Length ?? 0) ||
                 !evidence.canonicalPlanValid ||
                 !evidence.rendererValid ||
@@ -581,6 +658,50 @@ namespace DungeonLab.Editor
             foreach (Vector2Int cell in cells)
             {
                 if (!footprint.Contains(cell))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static bool AllPortsShareConnectedFootprint(
+            IReadOnlyList<DungeonRecipePort> ports,
+            HashSet<Vector2Int> footprint)
+        {
+            if (ports == null || ports.Count == 0 || ports[0] == null ||
+                !footprint.Contains(ports[0].cell))
+            {
+                return false;
+            }
+
+            var visited = new HashSet<Vector2Int> { ports[0].cell };
+            var queue = new Queue<Vector2Int>();
+            queue.Enqueue(ports[0].cell);
+            Vector2Int[] directions =
+            {
+                Vector2Int.up,
+                Vector2Int.right,
+                Vector2Int.down,
+                Vector2Int.left
+            };
+            while (queue.Count > 0)
+            {
+                Vector2Int current = queue.Dequeue();
+                foreach (Vector2Int direction in directions)
+                {
+                    Vector2Int neighbor = current + direction;
+                    if (footprint.Contains(neighbor) && visited.Add(neighbor))
+                    {
+                        queue.Enqueue(neighbor);
+                    }
+                }
+            }
+
+            foreach (DungeonRecipePort port in ports)
+            {
+                if (port == null || !visited.Contains(port.cell))
                 {
                     return false;
                 }

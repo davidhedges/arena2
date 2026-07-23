@@ -76,7 +76,7 @@ namespace Arena.Tests.Editor
             Assert.That(snapshot[$"{example}.isolatedAlternativeCount"], Is.EqualTo("1"));
             Assert.That(snapshot[$"{example}.isolatedCombinationCount"], Is.EqualTo("4"));
 
-            Assert.That(snapshot["schema.fieldCount"], Is.EqualTo("18"));
+            Assert.That(snapshot["schema.fieldCount"], Is.EqualTo("19"));
             Assert.That(snapshot["schema.allFieldsConsumed"], Is.EqualTo("True"));
         }
 

@@ -24,10 +24,14 @@ Assets/Arena/Content/Prefabs/Dungeons/FantasticDungeon/SetPieces/Generic_Room.pr
 
 ## Intended room family
 
-- Preserve the 3-by-3 footprint.
+- Use a 3-by-2 authored footprint. The shared legal-quarter-turn placement
+  contract supplies the 2-by-3 orientation; this is not a generic-room-only
+  dimension pathway.
 - Support variants with one, two, three, or four active cardinal exits.
 - Preserve authored wall-height variation per boundary segment.
-- Rotations and mirrors may produce additional legal placements.
+- Quarter-turn rotations produce the legal orientations. Mirroring is disabled
+  for this even-width footprint because it adds no orientation that rotation
+  does not already supply.
 - Gateways are openable doors in the eventual design.
 - Door visuals, open/closed state, collision, navigation, and replication are
   deferred. Until that work is explicitly approved, an active gateway is an
@@ -35,22 +39,39 @@ Assets/Arena/Content/Prefabs/Dungeons/FantasticDungeon/SetPieces/Generic_Room.pr
 - Embedded wall dressing is also deferred and may be absent from initial
   generated output.
 
-## Current schema-v1 attempt
+## Current schema-v1 route-bound socket attempt
 
 `connector_generic_room_01` is the first bounded attempt:
 
 - `Connector`, eligible for `connector` / `return`;
-- one 3-by-3 Walkable zone;
-- south `entry` and perpendicular `exit` matching the two demonstrated
-  gateways after normalizing the prefab's west-facing side to recipe-local
-  positive X, as required by the current route-forward orientation contract;
-- protected L-shaped circulation between the openings;
+- one 3-by-2 Walkable zone, with 2-by-3 supplied by the shared quarter-turn
+  transform;
+- four potential level-0 corridor sockets at the north, east, south, and west
+  boundaries;
+- `IncidentCardinalSockets` binding with an allowed active range of one through
+  four;
+- placement activates exactly the sockets whose transformed outward directions
+  have incident route edges; inactive sockets do not create openings;
+- protected T-shaped circulation joins all four potential openings;
+- like every recipe, placement uses the declared grid cells rather than the
+  eventual modular floor silhouette. Shared ledge-corner rendering may replace
+  eligible square floor corners with angled or curved modules after placement;
+  the same corner decision replaces both ledge-wall faces with the matching
+  angled/curved wall kit;
 - no runtime room-prefab binding: the prefab remains a reference design from
   which shape and treatment rules may be extracted;
 - no gateway behavior, transition, motif, wall-height contract, or dressing
   semantics in the schema-v1 prototype;
-- disabled and absent from the production catalog while under review.
+- enabled and explicitly present in the production catalog.
 
-This first asset represents only the two-exit corner member. Schema v1 and the
-three existing production recipe slots cannot yet consume one-, three-, or
-four-exit members, nor can they preserve per-boundary wall heights.
+The socket policy belongs only to recipes that explicitly select
+`IncidentCardinalSockets`; all existing reviewed recipes retain exact named
+mandatory `entry` / `exit` binding. The current `required-return` placement has
+two perpendicular incident route edges, so its present full-dungeon preview
+activates the matching two-socket corner. A future explicitly bound slot with
+degree one, three, or four can consume the same asset without changing its
+footprint or authoring four separate recipes.
+
+Schema v1 still cannot preserve per-boundary wall heights. Gateway visuals,
+open/closed behavior, collision behavior, navigation, replication, and embedded
+dressing remain deferred.

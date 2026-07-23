@@ -4093,7 +4093,7 @@ namespace DungeonLab.Editor
             foreach (DungeonRecipePort port in slot.recipe.ports)
             {
                 slot.TryGetEdgeId(port.id, out string edgeId);
-                ports.Add(new JObject
+                var portProjection = new JObject
                 {
                     ["id"] = port.id,
                     ["edgeId"] = edgeId,
@@ -4102,7 +4102,13 @@ namespace DungeonLab.Editor
                     ["cell"] = CellToken(port.cell),
                     ["outwardDirection"] = CellToken(port.outwardDirection),
                     ["relativeLevel"] = port.relativeLevel
-                });
+                };
+                if (slot.recipe.UsesIncidentCardinalSockets)
+                {
+                    portProjection["routeBoundSocket"] = true;
+                }
+
+                ports.Add(portProjection);
             }
 
             var compatibleCandidates = new JArray();
@@ -4145,6 +4151,13 @@ namespace DungeonLab.Editor
                 ["symmetryPairCount"] = slot.recipe.symmetryPairs.Length,
                 ["variationCount"] = slot.recipe.variations.Length
             };
+            if (slot.recipe.UsesIncidentCardinalSockets)
+            {
+                projection["portBindingMode"] = slot.recipe.portBindingMode.ToString();
+                projection["minimumActiveSockets"] = slot.recipe.minimumActiveSockets;
+                projection["maximumActiveSockets"] = slot.recipe.maximumActiveSockets;
+            }
+
             if (slot.forcedForAuthoringPreview)
             {
                 projection["authoringPreview"] = new JObject
@@ -4461,6 +4474,7 @@ namespace DungeonLab.Editor
             Add("transitions.atomicGroup", "recipe assets", "atomic transition validation");
             Add("variations/motifs", "recipe assets", "stable StairForge-backed visual selection");
             Add("ports.id/type/mandatory", "recipe assets", "route edge binding and neighbor validation");
+            Add("ports.bindingMode/activeSocketRange", "recipe assets and TryPlaceRecipe", "exact named binding or incident-edge cardinal socket activation");
             Add("ports.cell/outward/level", "TryPlaceRecipe", "exact corridor endpoint and tier validation");
             Add("ports.width/approach/headroom", "recipe assets", "planning-time approach reservation and clearance validation");
             Add("placement.primaryAxis/mirror", "TryPlaceRecipe", "orientation, variations, symmetry validation");
@@ -4664,11 +4678,16 @@ namespace DungeonLab.Editor
                 DungeonRecipeAsset recipe = slot.recipe;
                 string requiredId = recipe.recipeId;
                 RecipeResolution resolution = FindRecipeResolution(plan.recipeResolutions, requiredId);
+                bool portCountValid = resolution.ports != null &&
+                    (recipe.UsesIncidentCardinalSockets
+                        ? resolution.ports.Length >= recipe.minimumActiveSockets &&
+                          resolution.ports.Length <= recipe.maximumActiveSockets
+                        : resolution.ports.Length == recipe.ports.Length);
                 if (!catalog.TryGet(requiredId, out DungeonRecipeAsset catalogRecipe) ||
                     !ReferenceEquals(recipe, catalogRecipe) ||
                     !resolution.atomicAndValid ||
                     resolution.primaryAxis == Vector2Int.zero ||
-                    resolution.ports == null || resolution.ports.Length != recipe.ports.Length ||
+                    !portCountValid ||
                     resolution.transitions == null || resolution.transitions.Length != recipe.transitions.Length ||
                     resolution.protectedCells == null || resolution.protectedCells.Length == 0 ||
                     !string.Equals(
