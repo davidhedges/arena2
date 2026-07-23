@@ -1,9 +1,11 @@
 #nullable enable
 
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
 using NUnit.Framework;
+using UnityEngine;
 
 namespace Arena.Tests.Editor
 {
@@ -129,6 +131,20 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void RecipeStepStripLandings_DoNotOpenRemoteAbyssEdges()
+        {
+            HashSet<string> daisOpenEdges = TransitionOpenEdges("dais");
+            HashSet<string> embeddedOpenEdges = TransitionOpenEdges("embedded");
+
+            Assert.That(daisOpenEdges, Is.Empty,
+                "A seam/dais landing is traversal metadata; only its transition-cell face is filled by the step strip.");
+            Assert.That(embeddedOpenEdges, Does.Contain("2,0:2"),
+                "An actual embedded stair mouth must keep opening its upper landing's east face.");
+            Assert.That(embeddedOpenEdges, Does.Contain("0,-1:8"),
+                "An actual embedded stair mouth must keep opening its lower landing's west face.");
+        }
+
+        [Test]
         public void ValidationIsNonMutating_StaleReviewIsExcluded_AndInvalidCannotPromote()
         {
             Dictionary<string, string> snapshot = Snapshot("BuildPhase5LifecycleSnapshot");
@@ -192,6 +208,77 @@ namespace Arena.Tests.Editor
         private static Dictionary<string, string> Snapshot(string methodName)
         {
             return Parse(Invoke(methodName));
+        }
+
+        private static HashSet<string> TransitionOpenEdges(string placementClass)
+        {
+            Type edgeModelType = EditorAssembly.GetType(
+                "DungeonLab.Editor.ElevationEdgeModel",
+                throwOnError: true)!;
+            Type transitionType = edgeModelType.GetNestedType(
+                "TransitionEdge",
+                BindingFlags.Public)!;
+            ConstructorInfo constructor = transitionType.GetConstructor(new[]
+            {
+                typeof(Vector2Int),
+                typeof(Vector2Int),
+                typeof(string),
+                typeof(Vector2Int[]),
+                typeof(Vector2Int[]),
+                typeof(Vector2Int[]),
+                typeof(int),
+                typeof(int),
+                typeof(string)
+            })!;
+            Assert.That(constructor, Is.Not.Null, "Missing transition constructor used by recipe realization.");
+
+            object transition = constructor.Invoke(new object[]
+            {
+                new Vector2Int(1, 0),
+                new Vector2Int(0, 0),
+                "step-strip",
+                new[] { new Vector2Int(0, -1) },
+                new[] { new Vector2Int(2, 0) },
+                new[] { new Vector2Int(0, 0) },
+                2, // east
+                8, // west
+                placementClass
+            });
+            Array transitions = Array.CreateInstance(transitionType, 1);
+            transitions.SetValue(transition, 0);
+            var levels = new Dictionary<Vector2Int, int>
+            {
+                [new Vector2Int(0, 0)] = 12,
+                [new Vector2Int(1, 0)] = 13,
+                [new Vector2Int(0, -1)] = 12,
+                [new Vector2Int(2, 0)] = 13
+            };
+            MethodInfo buildTransitionKeys = edgeModelType.GetMethod(
+                "BuildTransitionKeys",
+                BindingFlags.Static | BindingFlags.NonPublic)!;
+            Assert.That(buildTransitionKeys, Is.Not.Null, "Missing renderer transition projection.");
+
+            object[] arguments = { levels, transitions, null!, null!, null! };
+            buildTransitionKeys.Invoke(null, arguments);
+
+            Type openEdgeType = edgeModelType.GetNestedType(
+                "OpenEdgeKey",
+                BindingFlags.NonPublic)!;
+            FieldInfo cellField = openEdgeType.GetField(
+                "cell",
+                BindingFlags.Instance | BindingFlags.NonPublic)!;
+            FieldInfo directionField = openEdgeType.GetField(
+                "direction",
+                BindingFlags.Instance | BindingFlags.NonPublic)!;
+            var result = new HashSet<string>(StringComparer.Ordinal);
+            foreach (object edge in (IEnumerable)arguments[2])
+            {
+                Vector2Int cell = (Vector2Int)cellField.GetValue(edge)!;
+                int direction = (int)directionField.GetValue(edge)!;
+                result.Add($"{cell.x},{cell.y}:{direction}");
+            }
+
+            return result;
         }
 
         private static string RecipePrefix(Dictionary<string, string> snapshot, string recipeId)

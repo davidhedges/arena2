@@ -1625,6 +1625,16 @@ namespace DungeonLab.Editor
             HashSet<OpenEdgeKey> bridgeSpanEdges,
             TransitionEdge transition)
         {
+            // Seam/dais landing cells describe traversal access to a step strip;
+            // they are not prefab mouths. The strip fills only the shared face
+            // between its transition cells, so opening a remote landing edge here
+            // would erase the abyss-support wall beneath an exposed floor edge.
+            if (string.Equals(transition.placementClass, SeamStairPlacementClass, StringComparison.Ordinal) ||
+                string.Equals(transition.placementClass, DaisStairPlacementClass, StringComparison.Ordinal))
+            {
+                return;
+            }
+
             bool externalSpan = string.Equals(transition.placementClass, ExternalSpanStairPlacementClass, StringComparison.Ordinal);
             HashSet<OpenEdgeKey> target = externalSpan ? bridgeSpanEdges : openEdges;
             int lowerFloorSide = OppositeDirection(transition.lowerPortDirection);
