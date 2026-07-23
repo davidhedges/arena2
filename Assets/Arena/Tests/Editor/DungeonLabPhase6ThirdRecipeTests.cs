@@ -17,17 +17,17 @@ namespace Arena.Tests.Editor
             new Lazy<Dictionary<string, string>>(BuildSnapshot);
 
         [Test]
-        public void ReviewedCatalog_ContainsTheCurrentCornerReturnContract()
+        public void ActiveCatalog_ContainsTheEnabledCurrentCornerReturnContract()
         {
             Dictionary<string, string> values = Snapshot.Value;
 
             Assert.That(values["catalog.valid"], Is.EqualTo("True"));
-            Assert.That(values["catalog.reviewedCount"], Is.EqualTo("3"));
+            Assert.That(values["catalog.activeCount"], Is.EqualTo("3"));
             Assert.That(values["catalog.digest"], Has.Length.EqualTo(64));
             Assert.That(values["recipe.id"], Is.EqualTo("connector_corner_return_01"));
             Assert.That(values["recipe.schema"], Is.EqualTo("1"));
-            Assert.That(values["recipe.lifecycle"], Is.EqualTo("Reviewed"));
-            Assert.That(values["recipe.reviewCurrent"], Is.EqualTo("True"));
+            Assert.That(values["recipe.disabledForGeneration"], Is.EqualTo("False"));
+            Assert.That(values["recipe.currentValid"], Is.EqualTo("True"));
             Assert.That(values["recipe.role"], Is.EqualTo("connector"));
             Assert.That(values["recipe.beat"], Is.EqualTo("return"));
         }
@@ -122,8 +122,8 @@ namespace Arena.Tests.Editor
             Assert.That(values["versions.generator"], Is.EqualTo("route-topologies-v9"));
             Assert.That(values["versions.spatialRandom"], Is.EqualTo("processional-spine-v1"));
             Assert.That(values["recipe.schema"], Is.EqualTo("1"));
-            Assert.That(values["lifecycle.staleDetected"], Is.EqualTo("True"));
-            Assert.That(values["lifecycle.staleExcluded"], Is.EqualTo("True"));
+            Assert.That(values["recipe.disabledForGeneration"], Is.EqualTo("False"));
+            Assert.That(values["recipe.currentValid"], Is.EqualTo("True"));
         }
 
         private static Dictionary<string, string> BuildSnapshot()

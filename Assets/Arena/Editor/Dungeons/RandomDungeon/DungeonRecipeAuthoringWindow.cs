@@ -39,11 +39,11 @@ namespace DungeonLab.Editor
                 DungeonRecipeValidator.ValidateContract(selected)));
         }
 
-        [MenuItem("Arena/Dungeons/Recipes/Build Review Gallery", false, 40)]
+        [MenuItem("Arena/Dungeons/Recipes/Build Preview Gallery", false, 40)]
         private static void BuildGalleryMenu()
         {
             DungeonRecipeAsset selected = Selection.activeObject as DungeonRecipeAsset;
-            if (!DungeonRecipeAuthoringService.TryBuildReviewGallery(
+            if (!DungeonRecipeAuthoringService.TryBuildPreviewGallery(
                     selected,
                     PreviewSeed,
                     out string manifestPath,
@@ -54,24 +54,6 @@ namespace DungeonLab.Editor
             }
 
             Debug.Log($"Dungeon recipe gallery: {manifestPath}\n{message}");
-        }
-
-        [MenuItem("Arena/Dungeons/Recipes/Promote Current Recipe", false, 50)]
-        private static void PromoteCurrentMenu()
-        {
-            DungeonRecipeAsset selected = Selection.activeObject as DungeonRecipeAsset;
-            if (!DungeonRecipeAuthoringService.TryPromote(
-                    selected,
-                    Environment.UserName,
-                    "Reviewed through the deterministic Phase 5 authoring workflow.",
-                    PreviewSeed,
-                    out string message))
-            {
-                Debug.LogError(message);
-                return;
-            }
-
-            Debug.Log(message);
         }
 
         private void OnSelectionChange()
@@ -96,12 +78,12 @@ namespace DungeonLab.Editor
             if (recipe == null)
             {
                 EditorGUILayout.Space();
-                EditorGUILayout.LabelField("Create Draft", EditorStyles.boldLabel);
+                EditorGUILayout.LabelField("Create disabled recipe", EditorStyles.boldLabel);
                 draftId = EditorGUILayout.TextField("Stable ID", draftId);
                 draftKind = (DungeonRecipeKind)EditorGUILayout.EnumPopup("Kind", draftKind);
-                if (GUILayout.Button("Create explicit Draft asset"))
+                if (GUILayout.Button("Create explicit disabled asset"))
                 {
-                    recipe = DungeonRecipeAuthoringService.CreateDraft(draftId, draftKind);
+                    recipe = DungeonRecipeAuthoringService.CreateDisabled(draftId, draftKind);
                     Selection.activeObject = recipe;
                 }
 
@@ -110,12 +92,16 @@ namespace DungeonLab.Editor
             }
 
             string digest = DungeonRecipeValidator.ComputeContentDigest(recipe);
-            EditorGUILayout.LabelField("Lifecycle", recipe.lifecycle.ToString());
             EditorGUILayout.LabelField("Schema / content", $"{recipe.schemaVersion} / {recipe.contentVersion}");
             EditorGUILayout.LabelField("Digest", digest);
-            EditorGUILayout.LabelField(
-                "Review",
-                DungeonRecipeValidator.ReviewIsCurrent(recipe) ? "current" : "draft or stale");
+            EditorGUI.BeginChangeCheck();
+            bool disabled = EditorGUILayout.Toggle("Disabled for generation", recipe.disabledForGeneration);
+            if (EditorGUI.EndChangeCheck())
+            {
+                Undo.RecordObject(recipe, "Change recipe availability");
+                recipe.disabledForGeneration = disabled;
+                EditorUtility.SetDirty(recipe);
+            }
 
             using (new EditorGUILayout.HorizontalScope())
             {
@@ -127,22 +113,12 @@ namespace DungeonLab.Editor
 
                 if (GUILayout.Button("Build deterministic gallery"))
                 {
-                    DungeonRecipeAuthoringService.TryBuildReviewGallery(
+                    DungeonRecipeAuthoringService.TryBuildPreviewGallery(
                         recipe,
                         PreviewSeed,
                         out string path,
                         out string message);
                     output = path + "\n" + message;
-                }
-
-                if (GUILayout.Button("Review and promote"))
-                {
-                    DungeonRecipeAuthoringService.TryPromote(
-                        recipe,
-                        Environment.UserName,
-                        "Reviewed in Dungeon Recipe Authoring.",
-                        PreviewSeed,
-                        out output);
                 }
             }
 
@@ -321,7 +297,7 @@ namespace DungeonLab.Editor
     {
         private const string ReportRoot = "DungeonLabReports/Recipes";
 
-        internal static DungeonRecipeAsset CreateDraft(string recipeId, DungeonRecipeKind kind)
+        internal static DungeonRecipeAsset CreateDisabled(string recipeId, DungeonRecipeKind kind)
         {
             if (string.IsNullOrWhiteSpace(recipeId))
                 throw new ArgumentException("A stable recipe ID is required.", nameof(recipeId));
@@ -338,7 +314,7 @@ namespace DungeonLab.Editor
             recipe.kind = kind;
             recipe.schemaVersion = DungeonRecipeAsset.CurrentSchemaVersion;
             recipe.contentVersion = 1;
-            recipe.lifecycle = DungeonRecipeLifecycle.Draft;
+            recipe.disabledForGeneration = true;
             AssetDatabase.CreateAsset(recipe, path);
             AssetDatabase.SaveAssets();
             return recipe;
@@ -351,15 +327,15 @@ namespace DungeonLab.Editor
             if (source == null)
                 return $"FAIL: missing catalog at {DungeonRecipeCatalogService.CatalogPath}";
 
-            int reviewed = 0;
-            var stale = new List<string>();
+            int disabled = 0;
+            int enabled = 0;
             var invalid = new List<string>();
             foreach (DungeonRecipeAsset recipe in source.recipes ?? Array.Empty<DungeonRecipeAsset>())
             {
                 DungeonRecipeValidationResult validation = DungeonRecipeValidator.ValidateContract(recipe);
                 if (!validation.Passed) invalid.Add(recipe?.recipeId ?? "<null>");
-                if (DungeonRecipeValidator.ReviewIsCurrent(recipe)) reviewed++;
-                else if (recipe != null && recipe.lifecycle == DungeonRecipeLifecycle.Reviewed) stale.Add(recipe.recipeId);
+                if (recipe?.disabledForGeneration == true) disabled++;
+                else if (recipe != null) enabled++;
             }
 
             bool active = DungeonRecipeCatalogService.TryLoadActiveCatalog(
@@ -367,8 +343,8 @@ namespace DungeonLab.Editor
                 out string rejectionReason);
             return
                 $"schema={source.schemaVersion}; planner={DungeonLabGenerator.ActiveRecipePlannerVersion}; " +
-                $"digest={(active ? catalog.digest : "<invalid>")}; reviewed={reviewed}; " +
-                $"stale=[{string.Join(",", stale)}]; invalid=[{string.Join(",", invalid)}]; " +
+                $"digest={(active ? catalog.digest : "<invalid>")}; cataloged={source.recipes?.Length ?? 0}; " +
+                $"enabled={enabled}; disabled={disabled}; invalid=[{string.Join(",", invalid)}]; " +
                 $"status={(active ? "PASS" : rejectionReason)}";
         }
 
@@ -394,7 +370,7 @@ namespace DungeonLab.Editor
             return string.Join("\n", lines);
         }
 
-        internal static bool TryBuildReviewGallery(
+        internal static bool TryBuildPreviewGallery(
             DungeonRecipeAsset recipe,
             int seed,
             out string manifestPath,
@@ -428,7 +404,8 @@ namespace DungeonLab.Editor
                     return false;
                 }
 
-                DungeonRecipeValidationResult all = DungeonRecipeValidator.ValidateForPromotion(recipe, evidence);
+                DungeonRecipeValidationResult all =
+                    DungeonRecipeValidator.ValidateWithFullDungeonEvidence(recipe, evidence);
                 if (!all.Passed)
                 {
                     message = FormatValidation(all);
@@ -439,52 +416,6 @@ namespace DungeonLab.Editor
                 message = FormatValidation(all);
                 return true;
             }
-        }
-
-        internal static bool TryPromote(
-            DungeonRecipeAsset recipe,
-            string reviewer,
-            string notes,
-            int seed,
-            out string message)
-        {
-            message = string.Empty;
-            if (!TryBuildReviewGallery(recipe, seed, out string manifestPath, out message))
-                return false;
-
-            using (IDisposable preview = DungeonRecipeCatalogService.BeginAuthoringPreview(
-                       recipe,
-                       out string previewError))
-            {
-                string evidenceMessage = string.Empty;
-                if (preview == null ||
-                    !DungeonLabGenerator.TryBuildRecipeFullDungeonEvidence(
-                        recipe.recipeId,
-                        seed,
-                        out DungeonRecipeFullDungeonEvidence evidence,
-                        out evidenceMessage))
-                {
-                    message = preview == null ? previewError : evidenceMessage;
-                    return false;
-                }
-
-                if (!DungeonRecipeLifecycleService.TryPromote(
-                        recipe,
-                        reviewer,
-                        notes,
-                        evidence,
-                        out DungeonRecipeValidationResult validation))
-                {
-                    message = FormatValidation(validation);
-                    return false;
-                }
-            }
-
-            EditorUtility.SetDirty(recipe);
-            AssetDatabase.SaveAssets();
-            message =
-                $"Promoted {recipe.recipeId}; digest={recipe.reviewedDigest}; gallery={manifestPath}";
-            return true;
         }
 
         private static string BuildGalleryFiles(

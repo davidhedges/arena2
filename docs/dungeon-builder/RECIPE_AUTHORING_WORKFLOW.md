@@ -1,58 +1,78 @@
 # Dungeon recipe authoring workflow
 
-Status: implemented and verified for the Phase 5 recipe contract
-Last updated: 2026-07-21
+Status: current for recipe schema v1 and Slice A availability
+Last updated: 2026-07-23
 
-This document is the operational checklist for creating or changing a room recipe after the planner foundation is solid. It is intentionally written for someone returning after weeks or months away.
+This is the operational checklist for creating or changing a room recipe. Use
+[`GLOSSARY.md`](GLOSSARY.md) for the authoritative definitions of recipe,
+recipe slot, availability, catalog, episode, motif, role, beat, room, port, and
+zone.
 
-Use [`GLOSSARY.md`](GLOSSARY.md) as the authoritative definition of recipe,
-episode, motif, role, beat, room, port, zone, and related planning terms.
+The current schema has only `Connector` and `Episode` recipe kinds. Validation
+and deterministic previews are authoring tools. Ordinary generation admits a
+recipe only when all three conditions hold:
 
-Phase 5 implemented the required outcomes: explicit versioned contracts, five non-mutating validation layers, deterministic previews, stale-review detection, reviewed catalog admission, and an easy return-after-absence workflow. The menus below are the current implemented commands. The deliberately narrow schema contains only the recipe kinds, motif kinds, overlays, and review actions proven by the throne-hall probe and flexible-vestibule contrast recipe.
+```text
+explicit catalog membership
+AND disabledForGeneration == false
+AND current contract validation passes
+```
+
+New recipe assets start disabled. Enabling a recipe is a direct owner action.
+There is no stored approval token or formal recipe lifecycle.
 
 ## Returning after a break
 
-Do this before editing a recipe:
-
-1. Read [`CURRENT_STATUS.md`](CURRENT_STATUS.md) for the active milestone, last verified commands, known failures, and next task.
-2. Re-read the locked decisions in [`PROJECT_INVARIANTS.md`](PROJECT_INVARIANTS.md) and the roadmap. Everything-rises-from-the-abyss is a hard invariant.
+1. Read [`CURRENT_STATUS.md`](CURRENT_STATUS.md) for the active milestone,
+   verified commands, known failures, and next task.
+2. Re-read [`PROJECT_INVARIANTS.md`](PROJECT_INVARIANTS.md) and the current
+   owner-approved plan item. Everything-rises-from-the-abyss is a hard
+   invariant.
 3. Open Unity at the committed editor version and let assets finish importing.
 4. Run **Arena > Dungeons > Recipes > Validate Catalog**.
-5. Rebuild one known-good production seed from `CURRENT_STATUS.md` before changing content.
-6. If the catalog or known seed is already failing, record that baseline and fix or isolate it before authoring.
+5. Rebuild one known-good production seed from `CURRENT_STATUS.md`.
+6. If the catalog or known seed already fails, record that baseline before
+   authoring.
 
-The catalog validation report should tell you the recipe schema version, planner version, catalog digest, reviewed recipe count, and any stale review digests. If it cannot, the foundation is not complete.
+The catalog report names the schema and planner versions, active catalog
+digest, cataloged/enabled/disabled counts, invalid assets, and explicit failure
+reason when an enabled asset is invalid.
 
 ## The short version
 
 ```text
 Write a one-page brief
-        -> Create a Draft recipe asset
-        -> Declare zones, typed ports, reservations, and intent
-        -> Attach only explicit compatible motifs/prefabs
-        -> Validate in isolation
-        -> Generate deterministic variation previews
-        -> Run neighbor and full-dungeon integration matrices
-        -> Review the rubric and known seeds
-        -> Promote to Reviewed
-        -> Update CURRENT_STATUS.md before stopping
+    -> Create a disabled recipe asset
+    -> Declare zones, typed ports, reservations, and intent
+    -> Attach only explicit compatible motifs and prefabs
+    -> Validate the current contract
+    -> Build deterministic preview evidence
+    -> Add it to the explicit catalog when intended
+    -> Enable it directly only after its current validation passes
 ```
 
-Only a `Reviewed` recipe whose validation digest still matches its content is eligible for ordinary generation.
+Slice A does not change production recipe bindings or add pool selection.
+Consequently, full-dungeon preview for a previously unknown recipe ID remains
+deferred to Slice C; do not add production C# bindings as an authoring
+workaround.
 
-## 1. Recipe lifecycle
+## 1. Availability
 
-| State | Meaning | Eligible for generation? |
+| State | Meaning | Ordinary generation |
 | --- | --- | --- |
-| `Draft` | Work in progress or changed since review | No, except explicit authoring previews |
-| `Reviewed` | Automated checks and human review pass; reviewer metadata matches the digest | Yes |
-| `Deprecated` | Kept for old plans/migrations but unavailable to new selection | No |
+| `disabledForGeneration: true` | Authorable and previewable, but intentionally unavailable | Excluded |
+| `disabledForGeneration: false` | Intended for ordinary generation | Admitted only when cataloged and currently valid |
 
-Validation is a result attached to the current content digest, not a lifecycle state. Editing a `Reviewed` recipe automatically returns it to `Draft`; alternatively, a digest mismatch makes it mechanically stale and ineligible until that transition is saved. Never preserve review status across a content, contract, prefab-reference, or schema change.
+Editing an enabled valid recipe makes the valid edit immediately eligible.
+Leaving an enabled recipe invalid makes catalog validation fail explicitly; it
+is not silently skipped. Disable the recipe while doing incomplete work when
+ordinary generation must remain available.
+
+The content digest remains computed evidence for deterministic catalog
+identity, diagnostics, and replay. It is not serialized back into the recipe as
+an approval field.
 
 ## 2. Source-of-truth layout
-
-Implemented locations:
 
 ```text
 Assets/Arena/Content/Settings/Dungeons/RandomDungeon/Recipes/
@@ -63,27 +83,27 @@ DungeonLabReports/Recipes/
   <recipe_id>/
 ```
 
-Motif declarations are embedded in the recipe asset and reference the existing reviewed StairForge/content libraries; Phase 5 did not create an unused standalone motif-asset family or prefab directory.
-
 - The recipe `ScriptableObject` is the semantic source of truth.
-- A composed prefab is an explicitly referenced visual payload, not a source of inferred ports or dimensions.
+- The explicit catalog asset owns membership.
+- A composed prefab is an explicitly referenced visual payload, not a source of
+  inferred ports or dimensions.
 - Generated reports and galleries are evidence, not authoring inputs.
-- Shared measured stairs, bridges, set pieces, and step formations stay in their existing content libraries and are referenced through explicit contracts.
+- Shared measured stairs, bridges, set pieces, and step formations stay in
+  their existing content libraries and are referenced through explicit
+  contracts.
 
 Use stable lowercase IDs with a category prefix, for example:
 
 ```text
-room_small_cross_01
 connector_stair_tower_01
 episode_throne_twin_stairs_01
-motif_gallery_balustrade_01
 ```
 
-Renaming a display label is harmless. Changing a stable ID is a migration and should not be done casually.
+Changing a stable ID is a migration. A display-label edit is not.
 
 ## 3. Start with a recipe brief
 
-Create the recipe only after you can complete this brief. Keep the final brief in the recipe's notes or adjacent documentation.
+Create the recipe only after this brief is concrete:
 
 ```text
 Recipe ID:
@@ -116,256 +136,167 @@ Reference scene/images:
 What must still read clearly with dressing removed:
 ```
 
-If the brief says only “cool room with random stairs,” it is not ready. State what the player approaches, sees, chooses, climbs, and leaves through.
+State what the player approaches, sees, chooses, climbs, and leaves through.
+“Cool room with random stairs” is not an implementable contract.
 
-## 4. Create the draft
+## 4. Create the disabled asset
 
-Use **Arena > Dungeons > Recipes > Create Recipe** and choose the narrowest kind that describes the content:
+Use **Arena > Dungeons > Recipes > Create Recipe** and choose:
 
-- **Connector** when traversal itself is the purpose, such as a stair tower or bridge landing;
-- **Episode** for multiple coupled architectural elements that must be selected and placed as a unit;
+- **Connector** when traversal itself is the purpose;
+- **Episode** when multiple architectural elements must be selected and placed
+  atomically.
 
-Those are the only Phase 5 recipe kinds. Subordinate `StairTransition` and `FocalVisual` motifs are embedded declarations inside a recipe, not independently selectable recipes.
-
-The creation flow should:
-
-1. allocate a stable ID and content version;
-2. create the asset in the correct folder;
-3. mark it `Draft`;
-4. select it in the authoring window and asset inspector;
-5. show the 4-unit cell grid and elevation legend;
-6. create no implicit ports or semantics.
+Creation allocates the asset in the matching folder, sets its stable ID,
+schema/content versions, and kind, and leaves
+`disabledForGeneration: true`. It creates no implicit port or semantic.
 
 ## 5. Author structure before decoration
 
-Work in this order.
+### 5.1 Declare spatial zones
 
-### 5.1 Paint spatial zones
+Use the existing schema-v1 zone kinds:
 
-Declare the smallest current zone set:
+- `Walkable`;
+- `Elevated` at an exact relative level;
+- `ProtectedCirculation`;
+- `ProtectedFocal`.
 
-- `Walkable` floor at the room base;
-- `Elevated` floor at an exact relative level;
-- `ProtectedCirculation` that generic fill and dressing cannot occlude;
-- `ProtectedFocal` that preserves the focal composition.
-
-Transitions separately declare their exact footprint, lower/upper cells, landing arrays, climb, lane count, rise, and headroom. Phase 5 intentionally leaves recipe-specific boundary, void, and generic-fill policy out of the schema; the existing canonical room/boundary services remain authoritative.
-
-Do not use the preview mesh as a substitute for these declarations.
+Transitions separately declare exact lower/upper cells, landing arrays,
+occupied footprint, climb direction, rise, lane count, headroom, and atomic
+group. The canonical room and boundary services remain authoritative.
 
 ### 5.2 Add typed ports
 
-Every connection has a stable port ID and declares:
+Every connection has a stable port ID and declares its current `Corridor` type,
+mandatory status, exact cell and outward direction, relative level, width,
+approach depth, and headroom. Route-edge binding remains in `RouteIntent`, not
+the reusable asset.
 
-- the current `Corridor` connection type;
-- mandatory or optional status;
-- exact edge, orientation, width, and walkable elevation;
-- approach clearance and landing depth;
-- headroom volume;
-- route-edge binding, which remains in `RouteIntent` rather than the reusable asset.
-
-A stair port additionally declares rise, run topology, lane width, top and bottom landings, and permitted stair contracts. A bridge port declares span rules and both landing contracts.
-
-Never put a port at a convenient room center and expect the corridor pass to find the architecture later.
+Never place a convenient approximate port and expect corridor routing or the
+renderer to repair it.
 
 ### 5.3 Declare composition intent
 
-Mark:
-
-- typed port directions and the route binding that derives the primary axis;
-- protected focal or circulation zones;
-- symmetry pairs between declared zones;
-- transition atomic-group IDs;
-- explicit focal alternatives through embedded motifs;
-- areas that generic fill and dressing must never occlude.
-
-Vista endpoints, route order, and node/edge bindings remain outside the reusable asset. Phase 6 may add a new semantic only after a working slice proves its consumer.
-
-For a throne-hall episode, the dais, throne/focal zone, twin stairs, both landings, side galleries, and their symmetry relationship belong to one contract. Do not author them as unrelated random chances.
+Declare protected focal/circulation zones, symmetry pairs, transition atomic
+groups, primary-axis inputs, and embedded focal alternatives explicitly.
+Vista endpoints, route order, and node/edge identity remain outside the asset.
 
 ### 5.4 Attach motifs and visuals
 
-Reference only assets whose measured contracts are current. For each motif declare:
+Reference only assets whose measured contracts are current. Schema v1 supports
+embedded `StairTransition` and `FocalVisual` motifs. It does not authorize
+dressing sets, prop anchors, a standalone motif catalog, new recipe kinds, or
+renderer-side repair.
 
-- required or optional;
-- allowed socket or region;
-- footprint and height reservation;
-- compatible rotations/mirrors;
-- collision and traversal effect;
-- symmetry-group behavior;
-- fallback behavior if optional.
+## 6. Keep variation inside the contract
 
-Useful step formations belong here as motifs. The old global late placement pass stays parked.
+Legal rotation/mirror states and weighted alternatives inside one recipe may
+vary. Variation weights do not select between recipes. Variations must preserve
+ports, rise, landings, protected space, atomic groups, and the recipe identity.
 
-The current schema-v1 dais boundary is deliberately narrow: a reviewed recipe may
-select a measured backed `FocalVisual` inside its declared `ProtectedFocal` region,
-and recipe zones/transitions own any walkable elevation change. There is no global
-random-dais roll or arbitrary-room wall search. Sunken, rise-2, tiered, or freely
-sized dais motifs are not current authoring options; adding one requires an explicit
-recipe contract and consumer rather than reviving the retired late carver.
-
-## 6. Add controlled variation
-
-Variation is allowed only inside the contract. Prefer a few meaningful choices over many independent rolls.
-
-Good variation:
-
-- legal rotation or mirror states;
-- a declared width/length range whose ports remain valid;
-- one of several compatible focal set pieces;
-- optional side bays inside reserved regions;
-- dressing sets that preserve protected space;
-- alternate stair assets satisfying the same exact transition contract.
-
-Bad variation:
-
-- independently enabling one half of a paired stair composition;
-- moving a port after route placement;
-- changing rise without changing the stair contract;
-- placing a dais, promontory, or step formation into leftover cells;
-- opening a wall because the room looks enclosed;
-- using a random feature that can obstruct a focal axis, vista, landing, or route.
-
-Variation choices must use stable per-recipe random streams so adding a decoration option does not change topology or port placement for the same seed.
+Use stable per-recipe random streams so adding a visual alternative does not
+perturb topology or port placement.
 
 ## 7. Validate in layers
 
-Use **Arena > Dungeons > Recipes > Validate Current Recipe**. Validation is non-mutating: it reports errors and never repairs the asset.
+Use **Arena > Dungeons > Recipes > Validate Current Recipe**. Validation is
+non-mutating and never repairs the asset.
 
 ### Layer A — Schema
 
-- IDs are unique and versions are supported;
-- all required fields are explicit;
-- asset and contract references resolve;
-- lifecycle and review metadata are internally consistent.
+- stable unique IDs and supported versions;
+- explicit required fields and resolved references;
+- eligible roles/beats and legal orientations.
 
 ### Layer B — Structural composition
 
-- walkable cells, elevations, and boundary declarations are coherent;
-- mandatory ports are reachable in the declared sequence;
-- every elevation delta has an eligible transition;
-- landings, headroom, and approaches are clear;
-- protected zones do not overlap incompatible features;
-- paired/symmetric elements are complete;
-- abyss-edge support can be emitted for every exposed boundary.
+- coherent walkable/elevated cells;
+- reachable mandatory ports;
+- complete transitions, landings, headroom, approaches, protected zones,
+  atomic groups, and symmetry;
+- abyss support for exposed boundaries.
 
 ### Layer C — Variation sweep
 
-- every legal rotation and mirror is valid;
-- optional motif combinations stay within the contract;
-- the same preview seed is deterministic.
+- every legal rotation/mirror and alternative remains valid;
+- the same preview inputs reproduce the same result.
 
 ### Layer D — Neighbor integration
 
-Test each port against a small matrix of compatible neighbors:
-
-- generic corridor;
-- minimum and maximum supported elevation context.
-
-Phase 5's only typed neighbor is the generic corridor at the port's exact declared level. Add generic-room, recipe-to-recipe, optional-closed, or stair/bridge neighbor states only with the Phase 6 content that consumes them.
+Each mandatory port must satisfy its generic-corridor neighbor contract at the
+declared level.
 
 ### Layer E — Full-dungeon integration
 
-Run the recipe through the current processional-spine pattern and eligible role using fixed seeds. The report must distinguish:
+For recipe IDs already bound by current production, the existing preview seam
+can run placement, `DungeonLayout`, `TieredLevelPlan`, renderer, abyss, and
+collision evidence. Previously unknown IDs wait for the explicitly deferred
+Slice C authoring-preview repair.
 
-- recipe incompatibility;
-- spatial-solver exhaustion;
-- unrelated plan failure;
-- renderer or collision-export failure.
+## 8. Build deterministic previews
 
-Do not weaken the recipe contract merely to make every topology accept it. Narrow eligibility is often the correct answer.
+Use **Arena > Dungeons > Recipes > Build Preview Gallery**. Current evidence
+includes contract, top-down, player-height, below-floor, legal
+orientation/mirror/alternative, generic-neighbor, and—where the existing
+binding supports it—full-dungeon views.
 
-## 8. Generate the review gallery
+The validator and serialized contract determine correctness. Images are
+diagnostic evidence.
 
-Use **Arena > Dungeons > Recipes > Build Review Gallery**. The gallery should include:
+## 9. Enable or disable directly
 
-- an undressed contract view with grid and port labels;
-- top-down and player-height views for every legal orientation;
-- every legal mirror state;
-- each meaningful motif alternative;
-- port-to-neighbor examples;
-- the recipe in the fixed full-dungeon review context;
-- focal-axis and vista overlays;
-- one below-floor view confirming abyss supports and transition structure.
+Availability is the `disabledForGeneration` checkbox in the recipe inspector or
+authoring window.
 
-Screenshots support review, but the validator and serialized contract determine correctness.
+Before enabling:
 
-## 9. Human review rubric
+1. ensure the asset is an explicit catalog member;
+2. run current-recipe validation;
+3. run catalog validation;
+4. reproduce the relevant deterministic preview evidence;
+5. rebuild a known production seed when the current exact binding can consume
+   the recipe.
 
-The reviewer answers these questions:
+After enabling, run catalog validation again. An enabled invalid catalog member
+must fail with a reason code and message. Disabling excludes the member without
+deleting it.
 
-1. From the primary approach, is the entrance and next action readable?
-2. Does the room's purpose remain obvious with decoration hidden?
-3. Do stairs, bridges, and landings look designed with the room rather than inserted later?
-4. Is the focal hierarchy clear, and are protected areas actually protected?
-5. Are symmetry and paired elements complete from all accepted approaches?
-6. Does each vista reveal a meaningful target rather than accidental empty space?
-7. Do enclosure and openings match the recipe's intended mood and route role?
-8. Do variations preserve identity without becoming visibly identical across seeds?
-9. Does the recipe integrate cleanly with generic connective tissue?
-10. Does every exposed edge still read as rising from the common abyss?
+## 10. Changing an existing recipe
 
-Record concise review notes against the content digest. “Looks good” is not enough if an exception or limitation was accepted.
+1. Reproduce a recorded known-good seed before editing.
+2. Disable the recipe first if incomplete edits must not interrupt ordinary
+   generation.
+3. Make the smallest explicit contract change.
+4. Increment `contentVersion` and record the reason in the change history.
+5. Re-run all affected validation layers and deterministic previews.
+6. Compare content/catalog digests and canonical output.
+7. Re-enable directly only when the current contract is valid.
 
-## 10. Promote to reviewed
+Do not silently reinterpret an old recipe ID when serialized plans need a
+migration.
 
-Promotion through **Arena > Dungeons > Recipes > Promote Current Recipe** requires:
-
-- all validation layers passing;
-- the required seed matrix saved in the report;
-- no unresolved critical review notes;
-- reviewer, date, schema version, and content digest recorded;
-- recipe version and changelog updated;
-- catalog validation passing after inclusion.
-
-Commit the recipe, authored prefab changes, contract changes, and human-readable changelog together. Generated galleries should follow the repository's eventual artifact policy; do not add large generated output by accident.
-
-## 11. Changing an existing recipe
-
-1. Reproduce one of its recorded known-good seeds before editing.
-2. Duplicate only when creating a genuinely separate architectural identity; otherwise edit the existing recipe.
-3. Make the smallest explicit contract change first.
-4. Increment the content version and write the reason.
-5. Confirm the asset is now `Draft`.
-6. Re-run all affected validation layers; port, footprint, rise, or protected-zone changes require the full matrix.
-7. Compare the old and new plan reports and gallery views.
-8. Re-review and promote.
-
-If a change breaks old serialized plans, add a migration or create a new recipe ID. Do not silently reinterpret an old ID.
-
-## 12. Deprecating a recipe
-
-Mark a recipe `Deprecated` instead of deleting it when existing plan reports or migrations may reference it. Record:
-
-- reason;
-- replacement ID, if any;
-- last compatible planner/schema version;
-- whether old baked scenes require regeneration.
-
-Delete only after references and migration obligations are proven absent.
-
-## 13. Troubleshooting
+## 11. Troubleshooting
 
 | Symptom | First thing to inspect |
 | --- | --- |
-| Recipe is never selected | lifecycle state, catalog digest, eligible roles/beats, and traversal degree |
-| Solver repeatedly rejects it | mandatory-port orientation, landing reservation, footprint domain, and overly broad eligibility |
-| One stair appears without its partner | symmetry/atomic group declaration; this is a contract error |
-| Corridor meets an awkward wall location | typed port placement and neighbor compatibility; do not add center-routing repair |
-| Promontory looks into nothing | missing or unrealized vista target |
-| Dressing blocks the room | protected route/focal/vista zones and decorator permissions |
-| A visual prefab fits but validation fails | trust the measured contract; fix the asset or contract explicitly |
-| Vertical supports are excessive | expected under the abyss invariant; do not suppress them as a recipe fix |
-| A reviewed recipe became unavailable | its content or dependency digest changed and it correctly returned to draft/stale status |
+| Recipe is absent from the active catalog | explicit membership, `disabledForGeneration`, then current validation |
+| Catalog validation fails | the named enabled recipe, reason code, and validation layer |
+| Solver rejects a bound recipe | mandatory-port orientation, landing reservation, footprint domain, and eligibility |
+| One stair appears without its pair | symmetry/atomic-group declaration |
+| Corridor meets an awkward wall | typed port and neighbor compatibility |
+| Dressing blocks circulation or focus | protected zones and decorator permissions |
+| A visual prefab fits but validation fails | measured contract; fix the asset or contract explicitly |
+| Vertical supports look excessive | the common-abyss invariant; do not suppress them as a recipe fix |
 
-## 14. End every authoring session
-
-Before leaving the project:
+## 12. End every authoring session
 
 1. Run current-recipe and catalog validation.
 2. Record the last known-good and known-bad seeds.
-3. Record whether Unity is left with uncommitted/generated asset changes.
-4. Update the active milestone, exact next action, command/menu path, and blockers in [`CURRENT_STATUS.md`](CURRENT_STATUS.md).
-5. If the recipe is not reviewed, leave it in `Draft` and state which validation layer is next.
+3. Record whether Unity has uncommitted/generated asset changes.
+4. Update the active milestone, exact next action, menu/command path, and
+   blockers in [`CURRENT_STATUS.md`](CURRENT_STATUS.md).
+5. Leave incomplete content disabled and name the next validation layer.
 
-The next session should begin with a reproducible state and one concrete next action, not “continue working on the dungeon.”
+The next session should begin from a reproducible state and one explicit
+owner-approved item.

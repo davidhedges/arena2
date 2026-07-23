@@ -16,7 +16,7 @@ namespace DungeonLab.Editor
         private const string NamedVistaPromontoryPolicyVersion = "named-vista-promontory-v1";
         internal static string ActiveRecipePlannerVersion => RoutePlannerVersion;
         // Preserve the proven route embedding stream. Phase 5 changes only the
-        // reviewed recipe contract/ports and uses named per-recipe streams.
+        // active recipe contract/ports and uses named per-recipe streams.
         private const string RouteSpatialRandomVersion = "processional-spine-v1";
         private const string Phase1PatternId = "processional-spine";
         private const string AtriumRingPatternId = "atrium-ring";
@@ -1153,7 +1153,7 @@ namespace DungeonLab.Editor
                 recipeSlotCount != 3 ||
                 string.IsNullOrEmpty(intent.catalogDigest))
             {
-                rejectionReason = "route intent did not declare exactly three reviewed recipe slots and a catalog digest";
+                rejectionReason = "route intent did not declare exactly three active recipe slots and a catalog digest";
                 return false;
             }
 

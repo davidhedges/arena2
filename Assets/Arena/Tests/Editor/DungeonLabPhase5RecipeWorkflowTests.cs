@@ -18,7 +18,7 @@ namespace Arena.Tests.Editor
             throwOnError: true)!;
 
         [Test]
-        public void ReviewedCatalog_ContainsThreeCurrentVersionedRecipes()
+        public void ActiveCatalog_ContainsThreeEnabledValidVersionedRecipes()
         {
             Dictionary<string, string> snapshot = Snapshot("BuildPhase5RecipeContractSnapshot");
             string throne = RecipePrefix(snapshot, "episode_throne_twin_stairs_01");
@@ -26,16 +26,19 @@ namespace Arena.Tests.Editor
             string cornerReturn = RecipePrefix(snapshot, "connector_corner_return_01");
 
             Assert.That(snapshot["catalog.valid"], Is.EqualTo("True"));
-            Assert.That(snapshot["catalog.reviewedCount"], Is.EqualTo("3"));
+            Assert.That(snapshot["catalog.activeCount"], Is.EqualTo("3"));
             Assert.That(snapshot["catalog.digest"], Has.Length.EqualTo(64));
             Assert.That(snapshot["route.recipeSlotCount"], Is.EqualTo("3"));
             Assert.That(snapshot["route.catalogDigestMatches"], Is.EqualTo("True"));
             Assert.That(snapshot[$"{throne}.schema"], Is.EqualTo("1"));
             Assert.That(snapshot[$"{vestibule}.schema"], Is.EqualTo("1"));
             Assert.That(snapshot[$"{cornerReturn}.schema"], Is.EqualTo("1"));
-            Assert.That(snapshot[$"{throne}.reviewCurrent"], Is.EqualTo("True"));
-            Assert.That(snapshot[$"{vestibule}.reviewCurrent"], Is.EqualTo("True"));
-            Assert.That(snapshot[$"{cornerReturn}.reviewCurrent"], Is.EqualTo("True"));
+            Assert.That(snapshot[$"{throne}.disabledForGeneration"], Is.EqualTo("False"));
+            Assert.That(snapshot[$"{vestibule}.disabledForGeneration"], Is.EqualTo("False"));
+            Assert.That(snapshot[$"{cornerReturn}.disabledForGeneration"], Is.EqualTo("False"));
+            Assert.That(snapshot[$"{throne}.currentValid"], Is.EqualTo("True"));
+            Assert.That(snapshot[$"{vestibule}.currentValid"], Is.EqualTo("True"));
+            Assert.That(snapshot[$"{cornerReturn}.currentValid"], Is.EqualTo("True"));
         }
 
         [Test]
@@ -145,25 +148,26 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
-        public void ValidationIsNonMutating_StaleReviewIsExcluded_AndInvalidCannotPromote()
+        public void AvailabilityExcludesDisabled_AndExplicitlyRejectsEnabledInvalidContent()
         {
-            Dictionary<string, string> snapshot = Snapshot("BuildPhase5LifecycleSnapshot");
+            Dictionary<string, string> snapshot = Snapshot("BuildPhase5AvailabilitySnapshot");
 
             Assert.That(snapshot["validation.passed"], Is.EqualTo("True"));
             Assert.That(snapshot["validation.nonMutating"], Is.EqualTo("True"));
-            Assert.That(snapshot["stale.detected"], Is.EqualTo("True"));
-            Assert.That(snapshot["stale.eligible"], Is.EqualTo("False"));
-            Assert.That(snapshot["invalid.promoted"], Is.EqualTo("False"));
+            Assert.That(snapshot["source.enabled"], Is.EqualTo("True"));
+            Assert.That(snapshot["source.digestLength"], Is.EqualTo("64"));
+            Assert.That(snapshot["edited.digestChanged"], Is.EqualTo("True"));
+            Assert.That(snapshot["disabled.catalogValid"], Is.EqualTo("True"));
+            Assert.That(snapshot["disabled.activeCount"], Is.EqualTo("0"));
+            Assert.That(snapshot["invalid.catalogValid"], Is.EqualTo("False"));
+            Assert.That(snapshot["invalid.catalogReason"], Does.Contain("enabled recipe"));
+            Assert.That(snapshot["invalid.catalogReason"], Does.Contain("RECIPE_TRANSITION_CONTRACT"));
             Assert.That(snapshot["invalid.structurePassed"], Is.EqualTo("False"));
-            Assert.That(snapshot["draft.promoted"], Is.EqualTo("True"));
-            Assert.That(snapshot["draft.allLayersPassed"], Is.EqualTo("True"));
-            Assert.That(snapshot["draft.reviewCurrent"], Is.EqualTo("True"));
-            Assert.That(snapshot["draft.reviewMetadataRecorded"], Is.EqualTo("True"));
-            Assert.That(snapshot["draft.ordinaryGenerationEligible"], Is.EqualTo("True"));
+            Assert.That(snapshot["fresh.disabledForGeneration"], Is.EqualTo("True"));
         }
 
         [Test]
-        public void AuthoringGallery_IsDeterministicAndCoversRequiredWorkflowViews()
+        public void AuthoringPreviewGallery_IsDeterministicAndCoversRequiredWorkflowViews()
         {
             Dictionary<string, string> snapshot = Snapshot("BuildPhase5WorkflowSnapshot");
 

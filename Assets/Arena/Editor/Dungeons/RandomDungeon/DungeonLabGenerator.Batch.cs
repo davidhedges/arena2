@@ -2256,17 +2256,7 @@ namespace DungeonLab.Editor
             DungeonRecipeTransition contractTransition = recipe?.transitions?.Length == 1
                 ? recipe.transitions[0]
                 : null;
-            DungeonRecipeAsset staleRecipe = recipe == null ? null : Instantiate(recipe);
-            if (staleRecipe != null)
-            {
-                staleRecipe.hideFlags = HideFlags.HideAndDontSave;
-                staleRecipe.contentVersion++;
-            }
-            bool staleReviewDetected = staleRecipe != null && !DungeonRecipeValidator.ReviewIsCurrent(staleRecipe);
-            bool staleExcluded = staleRecipe != null && !DungeonRecipeCatalogService.IsEligibleForOrdinaryGeneration(staleRecipe);
-            if (staleRecipe != null) DestroyImmediate(staleRecipe);
-
-            bool firstGalleryPassed = DungeonRecipeAuthoringService.TryBuildReviewGallery(
+            bool firstGalleryPassed = DungeonRecipeAuthoringService.TryBuildPreviewGallery(
                 recipe,
                 seed,
                 out string firstGalleryPath,
@@ -2274,7 +2264,7 @@ namespace DungeonLab.Editor
             JObject firstGallery = firstGalleryPassed
                 ? JObject.Parse(File.ReadAllText(firstGalleryPath))
                 : new JObject();
-            bool secondGalleryPassed = DungeonRecipeAuthoringService.TryBuildReviewGallery(
+            bool secondGalleryPassed = DungeonRecipeAuthoringService.TryBuildPreviewGallery(
                 recipe,
                 seed,
                 out string secondGalleryPath,
@@ -2300,12 +2290,12 @@ namespace DungeonLab.Editor
                 $"versions.spatialRandom={RouteSpatialRandomVersion}",
                 $"catalog.valid={catalogValid}",
                 $"catalog.error={catalogError}",
-                $"catalog.reviewedCount={catalog?.recipes.Length ?? 0}",
+                $"catalog.activeCount={catalog?.recipes.Length ?? 0}",
                 $"catalog.digest={catalog?.digest ?? string.Empty}",
                 $"recipe.id={recipe?.recipeId ?? string.Empty}",
                 $"recipe.schema={recipe?.schemaVersion ?? 0}",
-                $"recipe.lifecycle={recipe?.lifecycle.ToString() ?? string.Empty}",
-                $"recipe.reviewCurrent={DungeonRecipeValidator.ReviewIsCurrent(recipe)}",
+                $"recipe.disabledForGeneration={recipe?.disabledForGeneration == true}",
+                $"recipe.currentValid={contract.Passed}",
                 $"recipe.role={((recipe?.eligibleRoles?.Length ?? 0) == 1 ? recipe.eligibleRoles[0] : string.Empty)}",
                 $"recipe.beat={((recipe?.eligibleBeats?.Length ?? 0) == 1 ? recipe.eligibleBeats[0] : string.Empty)}",
                 $"recipe.zoneCount={recipe?.zones?.Length ?? 0}",
@@ -2325,8 +2315,6 @@ namespace DungeonLab.Editor
                 $"recipe.structureValid={contract.LayerPassed(DungeonRecipeValidationLayer.Structure)}",
                 $"recipe.variationValid={contract.LayerPassed(DungeonRecipeValidationLayer.Variation)}",
                 $"recipe.neighborValid={contract.LayerPassed(DungeonRecipeValidationLayer.Neighbor)}",
-                $"lifecycle.staleDetected={staleReviewDetected}",
-                $"lifecycle.staleExcluded={staleExcluded}",
                 $"gallery.firstPassed={firstGalleryPassed}",
                 $"gallery.secondPassed={secondGalleryPassed}",
                 $"gallery.samePath={string.Equals(firstGalleryPath, secondGalleryPath, StringComparison.Ordinal)}",
@@ -2673,7 +2661,7 @@ namespace DungeonLab.Editor
             {
                 $"catalog.valid={catalog != null}",
                 $"catalog.error={catalogError}",
-                $"catalog.reviewedCount={catalog?.recipes.Length ?? 0}",
+                $"catalog.activeCount={catalog?.recipes.Length ?? 0}",
                 $"catalog.digest={catalog?.digest ?? string.Empty}",
                 $"route.recipeSlotCount={intent.recipeSlots.Length}",
                 $"route.catalogDigestMatches={string.Equals(intent.catalogDigest, catalog?.digest, StringComparison.Ordinal)}",
@@ -2698,7 +2686,8 @@ namespace DungeonLab.Editor
                 lines.Add($"{prefix}.schema={recipe.schemaVersion}");
                 lines.Add($"{prefix}.slotNode={slot?.slotNode ?? -1}");
                 lines.Add($"{prefix}.orientationBinding={slot?.orientationBinding.ToString() ?? string.Empty}");
-                lines.Add($"{prefix}.reviewCurrent={DungeonRecipeValidator.ReviewIsCurrent(recipe)}");
+                lines.Add($"{prefix}.disabledForGeneration={recipe.disabledForGeneration}");
+                lines.Add($"{prefix}.currentValid={validation.Passed}");
                 lines.Add($"{prefix}.schemaValid={validation.LayerPassed(DungeonRecipeValidationLayer.Schema)}");
                 lines.Add($"{prefix}.structureValid={validation.LayerPassed(DungeonRecipeValidationLayer.Structure)}");
                 lines.Add($"{prefix}.variationValid={validation.LayerPassed(DungeonRecipeValidationLayer.Variation)}");
@@ -2896,7 +2885,7 @@ namespace DungeonLab.Editor
             }
         }
 
-        private static string BuildPhase5LifecycleSnapshot(int seed)
+        private static string BuildPhase5AvailabilitySnapshot(int seed)
         {
             DungeonRecipeCatalogService.TryLoadActiveCatalog(
                 out ActiveDungeonRecipeCatalog catalog,
@@ -2907,67 +2896,57 @@ namespace DungeonLab.Editor
             DungeonRecipeValidationResult validation = DungeonRecipeValidator.ValidateContract(source);
             string after = EditorJsonUtility.ToJson(source);
 
-            var stale = Instantiate(source);
-            stale.hideFlags = HideFlags.HideAndDontSave;
-            stale.contentVersion++;
-            bool staleReview = !DungeonRecipeValidator.ReviewIsCurrent(stale);
-            bool staleEligible = DungeonRecipeCatalogService.IsEligibleForOrdinaryGeneration(stale);
+            string sourceDigest = DungeonRecipeValidator.ComputeContentDigest(source);
+            var edited = Instantiate(source);
+            edited.hideFlags = HideFlags.HideAndDontSave;
+            edited.contentVersion++;
+            bool editedDigestChanged = !string.Equals(
+                sourceDigest,
+                DungeonRecipeValidator.ComputeContentDigest(edited),
+                StringComparison.Ordinal);
 
-            TryBuildRecipeFullDungeonEvidence(
-                source.recipeId,
-                seed,
-                out DungeonRecipeFullDungeonEvidence evidence,
-                out _);
+            var disabled = Instantiate(source);
+            disabled.hideFlags = HideFlags.HideAndDontSave;
+            disabled.disabledForGeneration = true;
+            bool disabledCatalogValid = DungeonRecipeCatalogService.TryBuildActiveCatalog(
+                new[] { disabled },
+                out ActiveDungeonRecipeCatalog disabledCatalog,
+                out string disabledReason);
+
             var invalid = Instantiate(source);
             invalid.hideFlags = HideFlags.HideAndDontSave;
-            invalid.lifecycle = DungeonRecipeLifecycle.Draft;
-            invalid.reviewedDigest = string.Empty;
-            invalid.reviewer = string.Empty;
-            invalid.reviewedAtUtc = string.Empty;
+            invalid.disabledForGeneration = false;
             invalid.transitions[0].upperLandingCells = Array.Empty<Vector2Int>();
-            bool invalidPromoted = DungeonRecipeLifecycleService.TryPromote(
-                invalid,
-                "test-reviewer",
-                "invalid",
-                evidence,
-                out DungeonRecipeValidationResult invalidValidation);
+            DungeonRecipeValidationResult invalidValidation =
+                DungeonRecipeValidator.ValidateContract(invalid);
+            bool invalidCatalogValid = DungeonRecipeCatalogService.TryBuildActiveCatalog(
+                new[] { invalid },
+                out _,
+                out string invalidReason);
 
-            var draft = Instantiate(source);
-            draft.hideFlags = HideFlags.HideAndDontSave;
-            draft.lifecycle = DungeonRecipeLifecycle.Draft;
-            draft.reviewedDigest = string.Empty;
-            draft.reviewer = string.Empty;
-            draft.reviewedAtUtc = string.Empty;
-            bool draftPromoted = DungeonRecipeLifecycleService.TryPromote(
-                draft,
-                "test-reviewer",
-                "valid",
-                evidence,
-                out DungeonRecipeValidationResult promotionValidation);
-            bool promotedCurrent = DungeonRecipeValidator.ReviewIsCurrent(draft);
-            bool promotionMetadataRecorded =
-                !string.IsNullOrEmpty(draft.reviewedDigest) &&
-                !string.IsNullOrEmpty(draft.reviewer) &&
-                !string.IsNullOrEmpty(draft.reviewedAtUtc);
-            bool promotedEligible = DungeonRecipeCatalogService.IsEligibleForOrdinaryGeneration(draft);
+            var fresh = ScriptableObject.CreateInstance<DungeonRecipeAsset>();
+            fresh.hideFlags = HideFlags.HideAndDontSave;
+            bool freshDisabled = fresh.disabledForGeneration;
 
-            DestroyImmediate(stale);
+            DestroyImmediate(edited);
+            DestroyImmediate(disabled);
             DestroyImmediate(invalid);
-            DestroyImmediate(draft);
+            DestroyImmediate(fresh);
             return string.Join("\n", new[]
             {
                 $"catalog.error={catalogError}",
                 $"validation.passed={validation.Passed}",
                 $"validation.nonMutating={string.Equals(before, after, StringComparison.Ordinal)}",
-                $"stale.detected={staleReview}",
-                $"stale.eligible={staleEligible}",
-                $"invalid.promoted={invalidPromoted}",
+                $"source.enabled={source != null && !source.disabledForGeneration}",
+                $"source.digestLength={sourceDigest.Length}",
+                $"edited.digestChanged={editedDigestChanged}",
+                $"disabled.catalogValid={disabledCatalogValid}",
+                $"disabled.catalogReason={disabledReason}",
+                $"disabled.activeCount={disabledCatalog?.recipes.Length ?? -1}",
+                $"invalid.catalogValid={invalidCatalogValid}",
+                $"invalid.catalogReason={invalidReason}",
                 $"invalid.structurePassed={invalidValidation.LayerPassed(DungeonRecipeValidationLayer.Structure)}",
-                $"draft.promoted={draftPromoted}",
-                $"draft.allLayersPassed={promotionValidation.Passed}",
-                $"draft.reviewCurrent={promotedCurrent}",
-                $"draft.reviewMetadataRecorded={promotionMetadataRecorded}",
-                $"draft.ordinaryGenerationEligible={promotedEligible}"
+                $"fresh.disabledForGeneration={freshDisabled}"
             });
         }
 
@@ -2982,19 +2961,19 @@ namespace DungeonLab.Editor
             catalog?.TryGet(DungeonRecipeIds.ProcessionalLandmark, out throne);
             catalog?.TryGet(DungeonRecipeIds.CompressionConnector, out vestibule);
             catalog?.TryGet(DungeonRecipeIds.CornerReturnConnector, out cornerReturn);
-            bool firstPassed = DungeonRecipeAuthoringService.TryBuildReviewGallery(
+            bool firstPassed = DungeonRecipeAuthoringService.TryBuildPreviewGallery(
                 throne,
                 seed,
                 out string firstPath,
                 out string firstMessage);
             JObject first = firstPassed ? JObject.Parse(File.ReadAllText(firstPath)) : new JObject();
-            bool secondPassed = DungeonRecipeAuthoringService.TryBuildReviewGallery(
+            bool secondPassed = DungeonRecipeAuthoringService.TryBuildPreviewGallery(
                 throne,
                 seed,
                 out string secondPath,
                 out string secondMessage);
             JObject second = secondPassed ? JObject.Parse(File.ReadAllText(secondPath)) : new JObject();
-            bool contrastFirstPassed = DungeonRecipeAuthoringService.TryBuildReviewGallery(
+            bool contrastFirstPassed = DungeonRecipeAuthoringService.TryBuildPreviewGallery(
                 vestibule,
                 seed,
                 out string contrastFirstPath,
@@ -3002,7 +2981,7 @@ namespace DungeonLab.Editor
             JObject contrastFirst = contrastFirstPassed
                 ? JObject.Parse(File.ReadAllText(contrastFirstPath))
                 : new JObject();
-            bool contrastSecondPassed = DungeonRecipeAuthoringService.TryBuildReviewGallery(
+            bool contrastSecondPassed = DungeonRecipeAuthoringService.TryBuildPreviewGallery(
                 vestibule,
                 seed,
                 out string contrastSecondPath,
@@ -3010,7 +2989,7 @@ namespace DungeonLab.Editor
             JObject contrastSecond = contrastSecondPassed
                 ? JObject.Parse(File.ReadAllText(contrastSecondPath))
                 : new JObject();
-            bool thirdFirstPassed = DungeonRecipeAuthoringService.TryBuildReviewGallery(
+            bool thirdFirstPassed = DungeonRecipeAuthoringService.TryBuildPreviewGallery(
                 cornerReturn,
                 seed,
                 out string thirdFirstPath,
@@ -3018,7 +2997,7 @@ namespace DungeonLab.Editor
             JObject thirdFirst = thirdFirstPassed
                 ? JObject.Parse(File.ReadAllText(thirdFirstPath))
                 : new JObject();
-            bool thirdSecondPassed = DungeonRecipeAuthoringService.TryBuildReviewGallery(
+            bool thirdSecondPassed = DungeonRecipeAuthoringService.TryBuildPreviewGallery(
                 cornerReturn,
                 seed,
                 out string thirdSecondPath,
@@ -3877,24 +3856,24 @@ namespace DungeonLab.Editor
                 });
             }
 
-            Add("asset.recipeId/schemaVersion/contentVersion", "reviewed recipe assets", "stable streams, digest, catalog, diagnostics");
+            Add("asset.recipeId/schemaVersion/contentVersion", "recipe assets", "stable streams, digest, catalog, diagnostics");
             Add("routeSlot.node/recipeId", "BuildProcessionalRouteIntent", "eligibility, room inflation, tier handoff");
             Add("routeSlot.orientationBinding", "BuildProcessionalRouteIntent", "route/vista-bound primary axis");
-            Add("zones.walkable", "reviewed recipe assets", "atomic room footprint");
-            Add("zones.protected", "reviewed recipe assets", "late-feature and dressing protection");
-            Add("zones.elevated", "reviewed recipe assets", "canonical cell levels");
-            Add("zones.relativeLevel", "reviewed recipe assets", "level and transition validation");
-            Add("transitions.atomicGroup", "reviewed recipe assets", "atomic transition validation");
-            Add("variations/motifs", "reviewed recipe assets", "stable StairForge-backed visual selection");
-            Add("ports.id/type/mandatory", "reviewed recipe assets", "route edge binding and neighbor validation");
+            Add("zones.walkable", "recipe assets", "atomic room footprint");
+            Add("zones.protected", "recipe assets", "late-feature and dressing protection");
+            Add("zones.elevated", "recipe assets", "canonical cell levels");
+            Add("zones.relativeLevel", "recipe assets", "level and transition validation");
+            Add("transitions.atomicGroup", "recipe assets", "atomic transition validation");
+            Add("variations/motifs", "recipe assets", "stable StairForge-backed visual selection");
+            Add("ports.id/type/mandatory", "recipe assets", "route edge binding and neighbor validation");
             Add("ports.cell/outward/level", "TryPlaceRecipe", "exact corridor endpoint and tier validation");
-            Add("ports.width/approach/headroom", "reviewed recipe assets", "planning-time approach reservation and clearance validation");
+            Add("ports.width/approach/headroom", "recipe assets", "planning-time approach reservation and clearance validation");
             Add("placement.primaryAxis/mirror", "TryPlaceRecipe", "orientation, variations, symmetry validation");
             Add("placement.protectedCells", "TryPlaceRecipe", "generic feature exclusions and final validation");
             Add("placement.zoneCells", "TryPlaceRecipe", "canonical levels and structural validation");
             Add("transition.cells/landings/footprint/climb", "TryPlaceRecipe", "StairPlacementLedger, TransitionEdge, headroom, port graph");
             Add("selected variation/visual", "TryPlaceRecipe", "StairForge footprint contract, DaisShowpiece, and renderer");
-            Add("reviewDigest/lifecycle", "review action", "stale-review detection and active catalog admission");
+            Add("disabledForGeneration", "recipe asset", "active catalog admission");
             return new JObject
             {
                 ["probeId"] = "dungeon-recipe-v1",
@@ -4119,7 +4098,7 @@ namespace DungeonLab.Editor
                 }
             }
 
-            message = $"three reviewed recipes resolved atomically with catalog {catalog.digest}";
+            message = $"three active recipes resolved atomically with catalog {catalog.digest}";
             return true;
         }
 
@@ -5747,7 +5726,7 @@ namespace DungeonLab.Editor
                 bool routeRequirementsPassed = routeRequirementsValidCount == successCount;
                 bool finalVistasPassed = finalVistaValidCount == successCount;
                 bool recipeSetsPassed = recipeSetValidCount == successCount;
-                string reviewedCatalogDigest = DungeonRecipeCatalogService.TryLoadActiveCatalog(
+                string activeCatalogDigest = DungeonRecipeCatalogService.TryLoadActiveCatalog(
                     out ActiveDungeonRecipeCatalog activeCatalog,
                     out _)
                     ? activeCatalog.digest
@@ -5762,7 +5741,7 @@ namespace DungeonLab.Editor
                     ["requiredRecipeIdsAtBoundary"] = new JArray(
                         DungeonRecipeIds.ProcessionalLandmark,
                         DungeonRecipeIds.CompressionConnector),
-                    ["reviewedRecipeCatalogDigest"] = reviewedCatalogDigest,
+                    ["activeRecipeCatalogDigest"] = activeCatalogDigest,
                     ["supersededBy"] = "phase6fReliabilityBudget"
                 };
                 report["phase5HistoricalResult"] = new JObject
@@ -5775,7 +5754,7 @@ namespace DungeonLab.Editor
                         routeRequirementsPassed &&
                         finalVistasPassed &&
                         recipeSetsPassed &&
-                        !string.IsNullOrEmpty(reviewedCatalogDigest),
+                        !string.IsNullOrEmpty(activeCatalogDigest),
                     ["hardValidCompletions"] = hardValidCount,
                     ["completionFloorPassed"] = completionPassed,
                     ["attemptCeilingPassed"] = attemptCeilingPassed,
@@ -5786,7 +5765,7 @@ namespace DungeonLab.Editor
                     ["everyAcceptedFinalVistaValid"] = finalVistasPassed,
                     ["recipeSetsValid"] = recipeSetValidCount,
                     ["everyAcceptedRecipeSetValid"] = recipeSetsPassed,
-                    ["reviewedRecipeCatalogLoaded"] = !string.IsNullOrEmpty(reviewedCatalogDigest)
+                    ["activeRecipeCatalogLoaded"] = !string.IsNullOrEmpty(activeCatalogDigest)
                 };
             }
 
@@ -6010,7 +5989,8 @@ namespace DungeonLab.Editor
                     phase6fCatalog.recipes.Length == 3 &&
                     phase6fCatalog.TryGet(DungeonRecipeIds.CornerReturnConnector, out DungeonRecipeAsset phase6fRecipe) &&
                     phase6fRecipe.schemaVersion == DungeonRecipeAsset.CurrentSchemaVersion &&
-                    DungeonRecipeValidator.ReviewIsCurrent(phase6fRecipe);
+                    !phase6fRecipe.disabledForGeneration &&
+                    DungeonRecipeValidator.ValidateContract(phase6fRecipe).Passed;
                 report["phase6fReliabilityBudget"] = new JObject
                 {
                     ["corpus"] = $"{firstSeed}..{firstSeed + seedCount - 1}",

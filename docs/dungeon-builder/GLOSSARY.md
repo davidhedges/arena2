@@ -1,7 +1,7 @@
 # Dungeon generation glossary
 
 Status: authoritative vocabulary for the current dungeon-builder pipeline  
-Last updated: 2026-07-22
+Last updated: 2026-07-23
 
 Use these terms consistently in code, recipe assets, reports, documentation, and
 review. Where the broader design vocabulary is larger than the current schema,
@@ -35,7 +35,7 @@ journey timing**, and **recipe describes authored construction**.
 | **Beat** | Where the node sits in the player's journey or pacing sequence. Current examples include `arrival`, `compression`, `choice`, `reveal`, `landmark`, `ascent`, `approach`, `rejoin`, `culmination`, `branch`, `reward`, and `return`. A beat is a semantic label—not a combat state, victory condition, or claim that the room can be “beaten.” |
 | **Eligible role / eligible beat** | Exact compatibility filters on a recipe. A recipe can fill a slot only when both the node's role and beat occur in its eligible lists. Eligibility means “may be selected here”; it does not guarantee selection and does not confer gameplay behavior. |
 | **Reward beat** | A pacing slot intended to feel rewarding, currently used on optional branches. The label does not itself spawn loot or consume a separately implemented loot-room quota. Actual rewards remain a gameplay/content responsibility. |
-| **Recipe slot** | A route node binding that requires a particular reviewed recipe. Current production has three required recipe bindings. Nodes without a recipe slot may use generic room construction; missing required recipes are not silently replaced by generic rooms. |
+| **Recipe slot** | A route-node binding that requires one compatible enabled recipe selected from the active catalog. Current production has three required recipe slots. Nodes without a recipe slot use generic-room construction. If a required slot has no compatible recipe, generation rejects instead of silently substituting a generic room. |
 | **Traversal edge** | A graph connection the player can physically use. Current transition kinds are level corridor, stair, bridge, and stairwell. |
 | **Vista edge** | A planned line of sight from a source node to a target node. It does not imply adjacency or a traversable connection. |
 | **Main route** | The ordered entrance-to-culmination path through the route graph. |
@@ -49,13 +49,13 @@ journey timing**, and **recipe describes authored construction**.
 | --- | --- |
 | **Room** | A realized spatial footprint in the dungeon: a connected set of floor cells with boundaries and connections. A room may be generic or may realize a recipe. “Room” is not currently a `DungeonRecipeKind` enum value. |
 | **Room recipe** | General prose for a recipe that produces one room or one tightly coupled room composition. In the implemented schema, the actual recipe kinds are only `Connector` and `Episode`. |
-| **Recipe** | A reviewed, versioned authored spatial contract. It declares eligible roles/beats, zones, ports, transitions, motifs, legal orientations, symmetry, and controlled variations. It is not a prefab and it does not infer semantics from a scene hierarchy. |
+| **Recipe** | A versioned authored spatial contract. It declares eligible roles and beats, zones, ports, transitions, motifs, legal orientations, symmetry, and controlled variations. It is not a prefab and it does not infer semantics from a scene hierarchy. |
 | **Connector recipe** | The current recipe kind for a compact composition whose main purpose is traversal, such as a vestibule or corner return. It is stored under `Recipes/Rooms/`. This is distinct from the route-node role named `connector`, although they commonly match. |
 | **Episode** | The current recipe kind for a composition whose identity depends on several coupled architectural elements that must be selected and placed atomically. Schema v1 realizes an episode inside one room footprint; “episode” does not currently mean a multi-room floorplan. The throne hall is an episode because its focal showpiece, protected axis, paired stairs, elevated regions, landings, and thresholds belong to one composition. Episode assets live under `Recipes/Episodes/`. |
 | **Motif** | A subordinate implementation declaration inside a recipe, not an independently selectable room. Current motif kinds are `StairTransition` and `FocalVisual`. A dais, paired stair arrangement, bridge landing, or gallery edge can be a motif when it has an explicit consumer and contract. There is no standalone motif-asset catalog today. |
 | **StairTransition motif** | A motif identifying the implementation family used by an explicit recipe transition. The transition itself owns exact cells, rise, lane, landings, footprint, and headroom. |
-| **FocalVisual motif** | A measured visual payload used as a recipe's focal composition. Current production uses it for reviewed backed-dais showpieces. It does not independently change the cell-level floorplan. |
-| **Variation** | A weighted, reviewed alternative inside one recipe contract. Current throne-hall variations choose between compatible focal visuals; they do not independently add or remove the paired stairs or elevated regions. |
+| **FocalVisual motif** | A measured visual payload used as a recipe's focal composition. Current production uses it for backed-dais showpieces. It does not independently change the cell-level floorplan. |
+| **Variation** | A weighted alternative inside one recipe contract. Current throne-hall variations choose between compatible focal visuals; they do not independently add or remove the paired stairs or elevated regions. Variation weights do not control selection between recipes. |
 | **Zone** | A rectangular recipe declaration with an exact offset, size, relative level, and kind. Current kinds are `Walkable`, `Elevated`, `ProtectedCirculation`, and `ProtectedFocal`. |
 | **Walkable zone** | Base traversable floor belonging to the recipe footprint. |
 | **Elevated zone** | Traversable floor at an exact relative elevation. It must connect through declared transitions rather than an implicit repair. |
@@ -66,8 +66,8 @@ journey timing**, and **recipe describes authored construction**.
 | **Reservation** | Cells or volume made unavailable to unrelated placement because a port, stair, landing, protected zone, showpiece, vista, or other contract needs them. Reservations prevent overlap; they are not a parallel geometry system. |
 | **Atomic group** | A transition grouping whose members belong to one composition. It prevents coupled features such as paired stairs from being treated as unrelated random options. |
 | **Symmetry pair** | Two declared zones that must mirror across the recipe's primary axis. It is a structural contract, not a request for the renderer to guess symmetry. |
-| **Recipe lifecycle** | `Draft` means work in progress, `Reviewed` means current validation and human review passed, and `Deprecated` means unavailable for new selection. Editing reviewed content makes its digest stale until it is reviewed again. |
-| **Recipe catalog** | The explicit list of recipe assets eligible for catalog validation and production admission. Only current, valid, reviewed recipes are admitted. |
+| **Recipe availability** | A cataloged recipe is eligible for ordinary selection when `disabledForGeneration` is false and its current contract validation passes. Disabled recipes remain available for editing and deterministic preview but cannot enter ordinary generation. Editing does not require promotion or human review. |
+| **Recipe catalog** | The explicit list of recipe assets eligible for catalog validation and production admission. Only enabled, currently valid recipes enter the active selection pool. |
 
 ## Geometry and realization
 
@@ -78,7 +78,7 @@ journey timing**, and **recipe describes authored construction**.
 | **Room footprint** | The exact set of cells belonging to one realized room. It can be non-rectangular even though individual recipe zones are rectangular. |
 | **`DungeonLayout`** | The canonical 2D spatial result: room footprints, floor cells, connections, room zones, and only the intent metadata required by downstream consumers. |
 | **`TieredLevelPlan`** | The canonical resolved elevation and transition result consumed by boundary construction, rendering, abyss support, and collision export. |
-| **Showpiece** | A reviewed synthesized piece plan instantiated as one visual composition. The current backed dais focal visuals are showpieces. |
+| **Showpiece** | A synthesized piece plan instantiated as one visual composition. The current backed dais focal visuals are showpieces. |
 | **Dais** | An architectural raised platform, often supporting a focal object such as a throne or shrine. Current production placement is recipe-owned through measured backed `FocalVisual` showpieces and explicit recipe elevation transitions. The former random-room dais roll and wall search are retired. Sunken, rise-2, tiered, or freely sized recipe daises are not schema-v1 authoring options. |
 | **Approach** | The spatial sequence leading toward a room or focal feature. It may be expressed by route order, a threshold/connector, protected circulation, elevation, or room geometry; it is not currently a separate recipe kind. |
 | **Dressing / props** | Decorative content that gives a space character without defining its required topology. Junk, shelves, tables, bones, books, and similar objects belong here unless their placement becomes structurally contractual. Schema v1 does not yet provide a prop-set field. |

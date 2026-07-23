@@ -142,7 +142,7 @@ namespace DungeonLab.Editor
             return result;
         }
 
-        public static DungeonRecipeValidationResult ValidateForPromotion(
+        public static DungeonRecipeValidationResult ValidateWithFullDungeonEvidence(
             DungeonRecipeAsset recipe,
             DungeonRecipeFullDungeonEvidence fullDungeonEvidence)
         {
@@ -241,17 +241,6 @@ namespace DungeonLab.Editor
             }
         }
 
-        public static bool ReviewIsCurrent(DungeonRecipeAsset recipe)
-        {
-            return recipe != null &&
-                recipe.lifecycle == DungeonRecipeLifecycle.Reviewed &&
-                !string.IsNullOrEmpty(recipe.reviewedDigest) &&
-                string.Equals(
-                    recipe.reviewedDigest,
-                    ComputeContentDigest(recipe),
-                    StringComparison.Ordinal);
-        }
-
         private static void ValidateSchema(
             DungeonRecipeAsset recipe,
             DungeonRecipeValidationResult result)
@@ -306,13 +295,6 @@ namespace DungeonLab.Editor
             CheckIds(recipe.symmetryPairs, value => value?.id, "symmetry", Layer, result);
             CheckIds(recipe.variations, value => value?.id, "variation", Layer, result);
 
-            if (recipe.lifecycle == DungeonRecipeLifecycle.Reviewed &&
-                (string.IsNullOrEmpty(recipe.reviewedDigest) ||
-                 string.IsNullOrEmpty(recipe.reviewer) ||
-                 string.IsNullOrEmpty(recipe.reviewedAtUtc)))
-            {
-                result.Add(Layer, "RECIPE_REVIEW_METADATA", "Reviewed content requires digest, reviewer, and UTC review time.");
-            }
         }
 
         private static void ValidateStructure(
@@ -480,7 +462,7 @@ namespace DungeonLab.Editor
                         out ElevationEdgeModel.SynthesizedPiecePlacement[] pieces) ||
                     pieces == null || pieces.Length == 0)
                 {
-                    result.Add(Layer, "RECIPE_VARIATION", $"Variation '{variation?.id}' did not resolve to a weighted reviewed focal motif.");
+                    result.Add(Layer, "RECIPE_VARIATION", $"Variation '{variation?.id}' did not resolve to a weighted backed focal motif.");
                 }
             }
         }
@@ -720,35 +702,4 @@ namespace DungeonLab.Editor
         }
     }
 
-    public static class DungeonRecipeLifecycleService
-    {
-        public static bool TryPromote(
-            DungeonRecipeAsset recipe,
-            string reviewer,
-            string notes,
-            DungeonRecipeFullDungeonEvidence evidence,
-            out DungeonRecipeValidationResult validation)
-        {
-            validation = DungeonRecipeValidator.ValidateForPromotion(recipe, evidence);
-            if (!validation.Passed || string.IsNullOrWhiteSpace(reviewer))
-            {
-                return false;
-            }
-
-            recipe.reviewedDigest = DungeonRecipeValidator.ComputeContentDigest(recipe);
-            recipe.reviewer = reviewer.Trim();
-            recipe.reviewedAtUtc = DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture);
-            recipe.reviewNotes = notes ?? string.Empty;
-            recipe.lifecycle = DungeonRecipeLifecycle.Reviewed;
-            return true;
-        }
-
-        public static void Deprecate(DungeonRecipeAsset recipe)
-        {
-            if (recipe != null)
-            {
-                recipe.lifecycle = DungeonRecipeLifecycle.Deprecated;
-            }
-        }
-    }
 }

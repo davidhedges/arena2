@@ -9,13 +9,6 @@ namespace DungeonLab.Editor
         Episode
     }
 
-    public enum DungeonRecipeLifecycle
-    {
-        Draft,
-        Reviewed,
-        Deprecated
-    }
-
     public enum DungeonRecipeZoneKind
     {
         Walkable,
@@ -110,7 +103,7 @@ namespace DungeonLab.Editor
         public DungeonRecipeKind kind;
         public int schemaVersion = CurrentSchemaVersion;
         public int contentVersion = 1;
-        public DungeonRecipeLifecycle lifecycle = DungeonRecipeLifecycle.Draft;
+        public bool disabledForGeneration = true;
         public string[] eligibleRoles = Array.Empty<string>();
         public string[] eligibleBeats = Array.Empty<string>();
         public bool allowMirror;
@@ -121,12 +114,5 @@ namespace DungeonLab.Editor
         public DungeonRecipeTransition[] transitions = Array.Empty<DungeonRecipeTransition>();
         public DungeonRecipeSymmetryPair[] symmetryPairs = Array.Empty<DungeonRecipeSymmetryPair>();
         public DungeonRecipeVariation[] variations = Array.Empty<DungeonRecipeVariation>();
-
-        // Review metadata is deliberately separate from content. Validation is
-        // always recomputed and is never serialized as lifecycle state.
-        public string reviewedDigest = string.Empty;
-        public string reviewer = string.Empty;
-        public string reviewedAtUtc = string.Empty;
-        [TextArea(2, 8)] public string reviewNotes = string.Empty;
     }
 }

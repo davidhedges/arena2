@@ -14,7 +14,7 @@ These are the durable rules carried over from the original Dungeon Builder proje
 
 Floor and stair placement contracts may use only:
 
-- explicit authored contracts reviewed as data;
+- explicit authored contracts validated as data;
 - deterministic mesh/grid arithmetic from Floor and Stair prefab-family children;
 - existing `.meta` GUIDs and prefab references that preserve authored assets.
 

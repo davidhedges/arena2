@@ -6,9 +6,12 @@ Last updated: 2026-07-23
 
 Active milestone: Phase 6, Phase 7, and the bounded corrective item remain closed; the density/adjacency workstream is closed at slice 6 and slice 7 is tabled
 
-Production mode: one route-first layout builder deterministically selects processional-spine, atrium-ring, or twin-wing-keep, resolves exactly three reviewed recipes plus any target-bearing named-vista promontory and 1-4 canonical external connector promontories, and feeds the shared canonical pipeline
+Production mode: one route-first layout builder deterministically selects processional-spine, atrium-ring, or twin-wing-keep, resolves exactly three enabled and currently valid catalog recipes through the existing exact bindings, plus any target-bearing named-vista promontory and 1-4 canonical external connector promontories, and feeds the shared canonical pipeline
 
-Recipe authoring UI: implemented for the Phase 5 contract, validation, deterministic gallery, review, and promotion workflow
+Recipe authoring UI: implemented for contract validation, deterministic preview galleries, direct availability control, and disabled-by-default creation
+
+Recipe availability: `RECIPE_POOL_SELECTION_PLAN.md` Slice A is complete; work
+stops before Slice B pool selection
 
 ## Read next
 
@@ -16,7 +19,7 @@ Recipe authoring UI: implemented for the Phase 5 contract, validation, determini
 2. This file — current evidence and exact handoff.
 3. [`COHERENT_FLOORPLAN_PLAN.md`](COHERENT_FLOORPLAN_PLAN.md) — architecture, phases, and exit gates.
 4. [`DENSITY_ADJACENCY_PLAN.md`](DENSITY_ADJACENCY_PLAN.md) — completed density/adjacency workstream; closed at slice 6 with slice 7 tabled by owner decision.
-5. [`RECIPE_AUTHORING_WORKFLOW.md`](RECIPE_AUTHORING_WORKFLOW.md) — required contract for Phase 5 lifecycle, validation, preview, and review work.
+5. [`RECIPE_AUTHORING_WORKFLOW.md`](RECIPE_AUTHORING_WORKFLOW.md) — current recipe availability, validation, and deterministic-preview workflow.
 6. [`stair_forge_design.md`](stair_forge_design.md) — exact stair contracts already reused by the coupled twin-stair episode and any Phase 5 contrast recipe.
 
 ## Locked context
@@ -29,10 +32,40 @@ Recipe authoring UI: implemented for the Phase 5 contract, validation, determini
 - Traversal and visibility are separate graphs. Phase 3 proved one final source-to-target vista, not merely an adjacent elevation delta; later phases must preserve it.
 - `DungeonLayout` and `TieredLevelPlan` remain the canonical downstream plans. Do not create parallel intent/placed/compiled DTO families or a legacy adapter.
 - The ephemeral `RouteIntent` is the sole pre-coordinate graph. Named topology variants must eventually compose shared graph operations rather than become separate planner implementations.
-- Recipes complement generic generation; they do not replace the floor with a large prefab pool. The reviewed schema, lifecycle, catalog, and authoring workflow are now the Phase 5 production foundation.
+- Recipes complement generic generation; they do not replace the floor with a large prefab pool. Explicit catalog membership, `disabledForGeneration == false`, and current contract validity define active availability.
 - Locks, ability gates, and one-way traversal remain out of scope.
 - Each phase has a deletion ledger. A phase is incomplete if its scheduled temporary or superseded code remains reachable.
-- Phase 5 proved two structurally different reviewed recipes on one existing route/tier seam; Phase 6f now proves a third. Further breadth must use this contract and must not introduce another plan, stair, visibility, renderer, or collision path.
+- Phase 5 proved two structurally different recipes on one existing route/tier seam; Phase 6f proved a third. Further breadth must use this contract and must not introduce another plan, stair, visibility, renderer, or collision path.
+
+## Recipe availability Slice A result
+
+- `DungeonRecipeAsset` now has one
+  `disabledForGeneration = true` availability flag. The three existing catalog
+  assets explicitly serialize `false`; newly created assets remain disabled.
+- Active catalog admission is explicit membership plus enabled plus current
+  contract validity. Disabled content is excluded, while an enabled invalid
+  member rejects catalog loading with its first validation code and message.
+- Content digests remain computed for catalog identity, diagnostics, and replay.
+  Stored approval metadata, lifecycle states/services, promotion actions, and
+  stale-approval diagnostics/tests are deleted.
+- Contract validation and deterministic preview galleries remain available.
+  Slice A does not change the three exact production bindings, route slots,
+  placement, geometry, or downstream consumers.
+- The active recipe catalog still contains the same three valid assets with
+  digest `f907a758c49c25a84d5931004a81f673904b86db6bd4109e130d8631528cdaf4`.
+- A matched Git `HEAD` versus Slice A run over fixed seeds
+  `2026072100..2026072149` accepted and hard-validated 50/50 in both builds.
+  Every per-seed route-intent, layout, tier-plan, recipe-resolution,
+  recipe-catalog, and canonical SHA-256 value is identical.
+- The focused availability/recipe fixtures pass 17/17. The complete Dungeon Lab
+  suite is 142/145 in both Git `HEAD` and Slice A with the same three unrelated
+  pre-existing failures:
+  `FixedAndRegressionProductionSeeds_AreHardValidAndPreservePlans`,
+  `FinalDeletionLedger_HasNoRandomDaisProducerOrLegacyRendererScaffolding`, and
+  `TierRetryOptimization_PreservesTheExactOutlierSeedResult`.
+- Both editor projects compile with zero errors; the test assembly has zero
+  warnings and the editor assembly retains its existing warnings.
+  `git diff --check` and the recipe-review symbol/consumer deletion audit pass.
 
 ## Foundation already established
 
@@ -87,6 +120,8 @@ Phase 4 used one throne-hall episode as a schema probe and closed its deletion l
 ## Phase 5 result
 
 Phase 5 generalized the proven recipe semantics, completed the authoring workflow, and closed its deletion ledger.
+The lifecycle statements in this historical section describe the Phase 5 exit
+state and were superseded by the Slice A result above.
 
 - `DungeonRecipeAsset` is the single versioned recipe contract. Its current kinds are only `Connector` and `Episode`; embedded motifs are only `StairTransition` and `FocalVisual`. The schema has no field named for either shipped recipe and no future topology, lock, runtime, renderer, or collision extension point.
 - The reviewed catalog contains `episode_throne_twin_stairs_01` and the structurally different `connector_flexible_vestibule_01`. The vestibule has two opposed corridor ports, one protected circulation strip, one offset raised bay, and one rise-1 stair; it has no symmetry pair or focal alternative. Both recipes use the same slot, placement, canonical-plan, stair, validation, render, abyss, dressing-protection, and collision path.

@@ -69,9 +69,19 @@ namespace DungeonLab.Editor
                 return false;
             }
 
+            return TryBuildActiveCatalog(source.recipes, out activeCatalog, out rejectionReason);
+        }
+
+        internal static bool TryBuildActiveCatalog(
+            IEnumerable<DungeonRecipeAsset> catalogMembers,
+            out ActiveDungeonRecipeCatalog activeCatalog,
+            out string rejectionReason)
+        {
+            activeCatalog = null;
+            rejectionReason = string.Empty;
             var active = new List<DungeonRecipeAsset>();
             var ids = new HashSet<string>(StringComparer.Ordinal);
-            foreach (DungeonRecipeAsset recipe in source.recipes ?? Array.Empty<DungeonRecipeAsset>())
+            foreach (DungeonRecipeAsset recipe in catalogMembers ?? Array.Empty<DungeonRecipeAsset>())
             {
                 if (recipe == null)
                 {
@@ -85,8 +95,7 @@ namespace DungeonLab.Editor
                     return false;
                 }
 
-                if (recipe.lifecycle != DungeonRecipeLifecycle.Reviewed ||
-                    !DungeonRecipeValidator.ReviewIsCurrent(recipe))
+                if (recipe.disabledForGeneration)
                 {
                     continue;
                 }
@@ -94,7 +103,14 @@ namespace DungeonLab.Editor
                 DungeonRecipeValidationResult validation = DungeonRecipeValidator.ValidateContract(recipe);
                 if (!validation.Passed)
                 {
-                    rejectionReason = $"[RECIPE_CATALOG] reviewed recipe '{recipe.recipeId}' failed current validation";
+                    DungeonRecipeValidationFinding finding = validation.Findings.Count > 0
+                        ? validation.Findings[0]
+                        : default;
+                    rejectionReason =
+                        $"[RECIPE_CATALOG] enabled recipe '{recipe.recipeId}' failed current validation" +
+                        (string.IsNullOrEmpty(finding.code)
+                            ? string.Empty
+                            : $": {finding.code}: {finding.message}");
                     return false;
                 }
 
@@ -104,14 +120,6 @@ namespace DungeonLab.Editor
             active.Sort((first, second) => string.CompareOrdinal(first.recipeId, second.recipeId));
             activeCatalog = new ActiveDungeonRecipeCatalog(active.ToArray(), ComputeCatalogDigest(active));
             return true;
-        }
-
-        internal static bool IsEligibleForOrdinaryGeneration(DungeonRecipeAsset recipe)
-        {
-            return recipe != null &&
-                recipe.lifecycle == DungeonRecipeLifecycle.Reviewed &&
-                DungeonRecipeValidator.ReviewIsCurrent(recipe) &&
-                DungeonRecipeValidator.ValidateContract(recipe).Passed;
         }
 
         internal static IDisposable BeginAuthoringPreview(
@@ -139,26 +147,35 @@ namespace DungeonLab.Editor
                 return null;
             }
 
-            var active = new List<DungeonRecipeAsset>();
-            bool replaced = false;
+            var remainingMembers = new List<DungeonRecipeAsset>();
+            int matchingMemberCount = 0;
             foreach (DungeonRecipeAsset recipe in source.recipes ?? Array.Empty<DungeonRecipeAsset>())
             {
                 if (recipe != null && string.Equals(recipe.recipeId, previewRecipe.recipeId, StringComparison.Ordinal))
                 {
-                    active.Add(previewRecipe);
-                    replaced = true;
+                    matchingMemberCount++;
                 }
-                else if (recipe != null && DungeonRecipeValidator.ReviewIsCurrent(recipe))
+                else
                 {
-                    active.Add(recipe);
+                    remainingMembers.Add(recipe);
                 }
             }
 
-            if (!replaced)
+            if (matchingMemberCount > 1)
             {
-                active.Add(previewRecipe);
+                rejectionReason = $"[RECIPE_CATALOG] duplicate recipe ID '{previewRecipe.recipeId}'";
+                return null;
             }
 
+            if (!TryBuildActiveCatalog(
+                    remainingMembers,
+                    out ActiveDungeonRecipeCatalog currentCatalog,
+                    out rejectionReason))
+            {
+                return null;
+            }
+
+            var active = new List<DungeonRecipeAsset>(currentCatalog.recipes) { previewRecipe };
             active.Sort((first, second) => string.CompareOrdinal(first.recipeId, second.recipeId));
             previewCatalog = new ActiveDungeonRecipeCatalog(active.ToArray(), ComputeCatalogDigest(active));
             return new PreviewCatalogScope();
