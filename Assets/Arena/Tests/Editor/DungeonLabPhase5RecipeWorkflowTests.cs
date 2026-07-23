@@ -202,11 +202,90 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void RecipePoolSelection_UsesStableSlotsAndSoleCompatibleCandidates()
+        {
+            Dictionary<string, string> snapshot = Snapshot("BuildRecipePoolSelectionSnapshot");
+
+            Assert.That(snapshot["catalog.activeCount"], Is.EqualTo("3"));
+            Assert.That(snapshot["catalog.digest"], Has.Length.EqualTo(64));
+            Assert.That(snapshot["route.recipeSlotCount"], Is.EqualTo("3"));
+            Assert.That(snapshot["report.repeatable"], Is.EqualTo("True"));
+            Assert.That(snapshot["report.hash"], Has.Length.EqualTo(64));
+
+            AssertSlot(
+                snapshot,
+                "required-compression",
+                "connector",
+                "compression",
+                "connector_flexible_vestibule_01",
+                "connector_corner_return_01:BEAT_INELIGIBLE,episode_throne_twin_stairs_01:ROLE_INELIGIBLE");
+            AssertSlot(
+                snapshot,
+                "required-landmark",
+                "landmark",
+                "landmark",
+                "episode_throne_twin_stairs_01",
+                "connector_corner_return_01:ROLE_INELIGIBLE,connector_flexible_vestibule_01:ROLE_INELIGIBLE");
+            AssertSlot(
+                snapshot,
+                "required-return",
+                "connector",
+                "return",
+                "connector_corner_return_01",
+                "connector_flexible_vestibule_01:BEAT_INELIGIBLE,episode_throne_twin_stairs_01:ROLE_INELIGIBLE");
+
+            Assert.That(snapshot["noCandidate.rejected"], Is.EqualTo("True"));
+            Assert.That(snapshot["noCandidate.reason"], Does.Contain("had no compatible active recipe"));
+        }
+
+        [Test]
+        public void RecipePoolSelection_DeletesRecipeIdentityFromRouteSlotDeclarations()
+        {
+            Assert.That(
+                EditorAssembly.GetType("DungeonLab.Editor.DungeonRecipeIds", throwOnError: false),
+                Is.Null);
+
+            Type routeNodeType = GeneratorType.GetNestedType(
+                "RouteNodeIntent",
+                BindingFlags.NonPublic)!;
+            Assert.That(routeNodeType, Is.Not.Null);
+            Assert.That(
+                routeNodeType.GetField(
+                    "recipeSlotId",
+                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic),
+                Is.Not.Null);
+            Assert.That(
+                routeNodeType.GetField(
+                    "landmarkSlotId",
+                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic),
+                Is.Null);
+        }
+
+        [Test]
         public void FixedSeed_RecipeResolutionsRemainDeterministic()
         {
             string first = Invoke("BuildPhase5FullDungeonSnapshot");
             string second = Invoke("BuildPhase5FullDungeonSnapshot");
             Assert.That(first, Is.EqualTo(second));
+        }
+
+        private static void AssertSlot(
+            IReadOnlyDictionary<string, string> snapshot,
+            string slotId,
+            string role,
+            string beat,
+            string recipeId,
+            string rejected)
+        {
+            string prefix = $"slot.{slotId}";
+            Assert.That(snapshot[$"{prefix}.node"], Is.Not.Empty);
+            Assert.That(snapshot[$"{prefix}.role"], Is.EqualTo(role));
+            Assert.That(snapshot[$"{prefix}.beat"], Is.EqualTo(beat));
+            Assert.That(snapshot[$"{prefix}.catalogDigestMatches"], Is.EqualTo("True"));
+            Assert.That(snapshot[$"{prefix}.candidates"], Is.EqualTo(recipeId));
+            Assert.That(snapshot[$"{prefix}.rejected"], Is.EqualTo(rejected));
+            Assert.That(snapshot[$"{prefix}.selected"], Is.EqualTo(recipeId));
+            Assert.That(snapshot[$"{prefix}.stream"], Is.EqualTo("recipe-selection-v1"));
         }
 
         private static Dictionary<string, string> Snapshot(string methodName)

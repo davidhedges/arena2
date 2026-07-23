@@ -2,16 +2,16 @@
 
 Start here when returning to dungeon work. Keep this page short and update it at the end of every dungeon-generation session.
 
-Last updated: 2026-07-23
+Last updated: 2026-07-24
 
 Active milestone: Phase 6, Phase 7, and the bounded corrective item remain closed; the density/adjacency workstream is closed at slice 6 and slice 7 is tabled
 
-Production mode: one route-first layout builder deterministically selects processional-spine, atrium-ring, or twin-wing-keep, resolves exactly three enabled and currently valid catalog recipes through the existing exact bindings, plus any target-bearing named-vista promontory and 1-4 canonical external connector promontories, and feeds the shared canonical pipeline
+Production mode: one route-first layout builder deterministically selects processional-spine, atrium-ring, or twin-wing-keep, resolves exactly three enabled and currently valid catalog recipes through stable compatible route slots, plus any target-bearing named-vista promontory and 1-4 canonical external connector promontories, and feeds the shared canonical pipeline
 
 Recipe authoring UI: implemented for contract validation, deterministic preview galleries, direct availability control, and disabled-by-default creation
 
-Recipe availability: `RECIPE_POOL_SELECTION_PLAN.md` Slice A is complete; work
-stops before Slice B pool selection
+Recipe availability and selection: `RECIPE_POOL_SELECTION_PLAN.md` Slices A and
+B are complete; work stops before Slice C authoring-preview repair
 
 ## Read next
 
@@ -19,8 +19,9 @@ stops before Slice B pool selection
 2. This file — current evidence and exact handoff.
 3. [`COHERENT_FLOORPLAN_PLAN.md`](COHERENT_FLOORPLAN_PLAN.md) — architecture, phases, and exit gates.
 4. [`DENSITY_ADJACENCY_PLAN.md`](DENSITY_ADJACENCY_PLAN.md) — completed density/adjacency workstream; closed at slice 6 with slice 7 tabled by owner decision.
-5. [`RECIPE_AUTHORING_WORKFLOW.md`](RECIPE_AUTHORING_WORKFLOW.md) — current recipe availability, validation, and deterministic-preview workflow.
-6. [`stair_forge_design.md`](stair_forge_design.md) — exact stair contracts already reused by the coupled twin-stair episode and any Phase 5 contrast recipe.
+5. [`RECIPE_POOL_SELECTION_PLAN.md`](RECIPE_POOL_SELECTION_PLAN.md) — active recipe-pool migration; complete through Slice B only.
+6. [`RECIPE_AUTHORING_WORKFLOW.md`](RECIPE_AUTHORING_WORKFLOW.md) — current recipe availability, selection, validation, and deterministic-preview workflow.
+7. [`stair_forge_design.md`](stair_forge_design.md) — exact stair contracts already reused by the coupled twin-stair episode and any Phase 5 contrast recipe.
 
 ## Locked context
 
@@ -66,6 +67,47 @@ stops before Slice B pool selection
 - Both editor projects compile with zero errors; the test assembly has zero
   warnings and the editor assembly retains its existing warnings.
   `git diff --check` and the recipe-review symbol/consumer deletion audit pass.
+
+## Recipe pool selection Slice B result
+
+- The three existing required route nodes now declare stable slot identities
+  (`required-compression`, `required-landmark`, and `required-return`) rather
+  than recipe asset IDs. Their nodes, roles, beats, route-edge/port bindings,
+  orientation rules, relative elevations, and traversal context are unchanged.
+- Each slot enumerates the active catalog in recipe-ID order and retains only
+  candidates satisfying role, beat, incident-degree, exact port binding,
+  orientation, port elevation/clearance, transition rise/landing/headroom, and
+  current contract validation. Every incompatible candidate receives one stable
+  reason code; an empty compatible set rejects with `RECIPE_SELECTION`.
+- Uniform selection uses the independent
+  `(seed, topology ID, route-node ID, "recipe-selection")` stream identified as
+  `recipe-selection-v1`. A sole candidate selects index zero without creating
+  or consuming random state, so embedding, placement, tier, motif, and generic
+  room streams remain unchanged.
+- Plan diagnostics record slot/node/role/beat, active catalog digest, ordered
+  compatible IDs, ordered rejected IDs and reason codes, selected ID, and
+  selection-stream identity. The report/planner envelopes are
+  `dungeon-plan-v11` / `route-topologies-v10`; pattern planner versions are
+  `processional-spine-v6`, `atrium-ring-v3`, and `twin-wing-keep-v3`.
+  Spatial randomness remains `processional-spine-v1`.
+- Production `DungeonRecipeIds`, exact-ID slot population, and the
+  route-node field that conflated slot and selected-recipe identity are
+  deleted. Exact asset IDs remain only in narrowly scoped content diagnostics
+  and tests. There is no fixed selector, compatibility toggle, generic-room
+  substitution, or fallback path.
+- Two fixed runs over `2026072100..2026072149` each accepted and hard-validated
+  50/50, resolved exactly three recipes per floor, gave every slot exactly one
+  compatible current candidate, and produced identical result hash
+  `80d838c9a61348ede04569427f6963d31571e046f8ce304970d241966fa836b8`.
+  Against the Slice A report, all 50 seeds exactly preserve layout, tier plan,
+  validation, route placement/resolution, recipe resolutions, existing
+  transitions, named vistas/promontories, external connectors, measurements,
+  and all corresponding downstream hashes.
+- Focused recipe/selection fixtures pass 11/11. The complete Dungeon Lab suite
+  is 144/147 with exactly the same three pre-existing failures recorded for
+  Slice A. Both editor and test assemblies compile with zero errors;
+  `git diff --check` and the Slice B symbol/producer audit pass.
+- Slice C authoring-preview repair and all new recipe content remain unstarted.
 
 ## Foundation already established
 

@@ -8,10 +8,10 @@ namespace DungeonLab.Editor
     // compiles it directly into the existing DungeonLayout.
     internal sealed partial class DungeonLabGenerator
     {
-        private const string RoutePlannerVersion = "route-topologies-v9";
-        private const string ProcessionalPlannerVersion = "processional-spine-v5";
-        private const string AtriumRingPlannerVersion = "atrium-ring-v2";
-        private const string TwinWingPlannerVersion = "twin-wing-keep-v2";
+        private const string RoutePlannerVersion = "route-topologies-v10";
+        private const string ProcessionalPlannerVersion = "processional-spine-v6";
+        private const string AtriumRingPlannerVersion = "atrium-ring-v3";
+        private const string TwinWingPlannerVersion = "twin-wing-keep-v3";
         private const string RouteRhythmPolicyVersion = "route-rhythm-v1";
         private const string NamedVistaPromontoryPolicyVersion = "named-vista-promontory-v1";
         internal static string ActiveRecipePlannerVersion => RoutePlannerVersion;
@@ -22,6 +22,7 @@ namespace DungeonLab.Editor
         private const string AtriumRingPatternId = "atrium-ring";
         private const string TwinWingPatternId = "twin-wing-keep";
         private const string RouteIntentInvalidFailureCode = "ROUTE_INTENT_INVALID";
+        private const string RecipeSelectionFailureCode = "RECIPE_SELECTION";
         private const int Phase1LayoutAttemptLimit = 2;
         private const int RouteMainNodeCount = 9;
         private const int RouteBranchNodeCount = 4;
@@ -43,6 +44,9 @@ namespace DungeonLab.Editor
         private const int MinimumMainRouteNodesBetweenRecipeSlots = 2;
         private const int MaximumNamedVistaPromontoryCells = 4;
         private const int SharedReturnRecipeNode = 12;
+        private const string CompressionRecipeSlotId = "required-compression";
+        private const string LandmarkRecipeSlotId = "required-landmark";
+        private const string ReturnRecipeSlotId = "required-return";
         private static readonly RouteOverlookIntent[] ProcessionalTierSeamCandidates =
         {
             new RouteOverlookIntent(6, 9),
@@ -71,8 +75,8 @@ namespace DungeonLab.Editor
             public readonly RouteTraversalIntent[] traversalEdges;
             public readonly RouteVistaIntent vista;
             public readonly RouteElevationPolicy elevationPolicy;
-            public readonly RecipeSlotIntent[] recipeSlots;
-            public readonly string catalogDigest;
+            public RecipeSlotIntent[] recipeSlots;
+            public string catalogDigest;
             public readonly int bottomNode;
             public readonly int topNode;
             public readonly int branchAttachNode;
@@ -122,6 +126,19 @@ namespace DungeonLab.Editor
                 this.plannedOverlooks = plannedOverlooks ?? Array.Empty<RouteOverlookIntent>();
                 this.allowGenericRoomWings = allowGenericRoomWings;
             }
+
+            public void ResolveRecipeSlots(
+                RecipeSlotIntent[] resolvedRecipeSlots,
+                string activeCatalogDigest)
+            {
+                if (recipeSlots.Length != 0 || !string.IsNullOrEmpty(catalogDigest))
+                {
+                    throw new InvalidOperationException("route intent recipe slots were already resolved");
+                }
+
+                recipeSlots = resolvedRecipeSlots ?? Array.Empty<RecipeSlotIntent>();
+                catalogDigest = activeCatalogDigest ?? string.Empty;
+            }
         }
 
         private enum RoutePatternKind
@@ -152,7 +169,7 @@ namespace DungeonLab.Editor
             public readonly int mainRouteOrder;
             public readonly int branchOrder;
             public readonly int relativeElevationLevels;
-            public readonly string landmarkSlotId;
+            public readonly string recipeSlotId;
 
             public RouteNodeIntent(
                 string id,
@@ -161,7 +178,7 @@ namespace DungeonLab.Editor
                 int mainRouteOrder,
                 int branchOrder,
                 int relativeElevationLevels,
-                string landmarkSlotId = "")
+                string recipeSlotId = "")
             {
                 this.id = id;
                 this.role = role;
@@ -169,12 +186,12 @@ namespace DungeonLab.Editor
                 this.mainRouteOrder = mainRouteOrder;
                 this.branchOrder = branchOrder;
                 this.relativeElevationLevels = relativeElevationLevels;
-                this.landmarkSlotId = landmarkSlotId ?? string.Empty;
+                this.recipeSlotId = recipeSlotId ?? string.Empty;
             }
 
             public bool IsOnMainRoute => mainRouteOrder >= 0;
 
-            public bool HasLandmarkSlot => !string.IsNullOrEmpty(landmarkSlotId);
+            public bool HasRecipeSlot => !string.IsNullOrEmpty(recipeSlotId);
         }
 
         private readonly struct RouteTraversalIntent
@@ -321,22 +338,24 @@ namespace DungeonLab.Editor
             }
 
             RoutePatternKind pattern = SelectRoutePattern(dungeonSeed);
-            int landmarkNode = LandmarkNodeForPattern(pattern);
-            if (!TryBuildRequiredRecipeSlots(
-                    recipeCatalog,
-                    pattern,
-                    landmarkNode,
-                    out RecipeSlotIntent[] recipeSlots,
-                    out rejectionReason))
-            {
-                return RejectPhase1Route("RECIPE_CATALOG", rejectionReason, out rejectionReason);
-            }
-
             RouteIntent intent = BuildSelectedRouteIntent(
                 pattern,
                 dungeonSeed,
-                recipeSlots,
-                recipeCatalog.digest);
+                Array.Empty<RecipeSlotIntent>(),
+                string.Empty);
+            if (!TryResolveRequiredRecipeSlots(
+                    recipeCatalog,
+                    intent,
+                    out RecipeSlotIntent[] recipeSlots,
+                    out rejectionReason))
+            {
+                return RejectPhase1Route(
+                    RecipeSelectionFailureCode,
+                    rejectionReason,
+                    out rejectionReason);
+            }
+
+            intent.ResolveRecipeSlots(recipeSlots, recipeCatalog.digest);
             phase1LastRouteIntent = intent;
             if (!TryValidateRouteIntent(intent, out rejectionReason))
             {
@@ -584,10 +603,10 @@ namespace DungeonLab.Editor
             var mainNodes = new[]
             {
                 new RouteNodeIntent("arrival", "arrival", "arrival", 0, -1, 0),
-                new RouteNodeIntent("threshold", "connector", "compression", 1, -1, 0, DungeonRecipeIds.CompressionConnector),
+                new RouteNodeIntent("threshold", "connector", "compression", 1, -1, 0, CompressionRecipeSlotId),
                 new RouteNodeIntent("choice", "junction", "choice", 2, -1, 4),
                 new RouteNodeIntent("reveal", "grand-room", "reveal", 3, -1, 4),
-                new RouteNodeIntent("vista-target", "landmark", "landmark", 4, -1, 8, DungeonRecipeIds.ProcessionalLandmark),
+                new RouteNodeIntent("vista-target", "landmark", "landmark", 4, -1, 8, LandmarkRecipeSlotId),
                 new RouteNodeIntent("ascent", "connector", "ascent", 5, -1, 12),
                 new RouteNodeIntent("approach", "processional-hall", "approach", 6, -1, 16),
                 new RouteNodeIntent("rejoin", "return-hall", "rejoin", 7, -1, 20),
@@ -630,7 +649,7 @@ namespace DungeonLab.Editor
                 new RouteNodeIntent("vista-source", "overlook", "reveal", -1, 0, 12),
                 new RouteNodeIntent("branch-passage", "connector", "branch", -1, 1, 12),
                 new RouteNodeIntent("branch-reward", "optional-room", "reward", -1, 2, 16),
-                new RouteNodeIntent("branch-return", "connector", "return", -1, 3, 20, DungeonRecipeIds.CornerReturnConnector)
+                new RouteNodeIntent("branch-return", "connector", "return", -1, 3, 20, ReturnRecipeSlotId)
             };
             string[] branchEdgeIds =
             {
@@ -809,18 +828,6 @@ namespace DungeonLab.Editor
                 : Phase1PatternId;
         }
 
-        private static int LandmarkNodeForPattern(RoutePatternKind pattern)
-        {
-            if (pattern == RoutePatternKind.AtriumRing)
-            {
-                return AtriumRingVistaTargetNode;
-            }
-
-            return pattern == RoutePatternKind.TwinWingKeep
-                ? TwinWingVistaTargetNode
-                : Phase1VistaTargetNode;
-        }
-
         private static RouteIntent BuildSelectedRouteIntent(
             RoutePatternKind pattern,
             int dungeonSeed,
@@ -854,10 +861,10 @@ namespace DungeonLab.Editor
             var mainNodes = new[]
             {
                 new RouteNodeIntent("atrium-arrival", "arrival", "arrival", 0, -1, 0),
-                new RouteNodeIntent("atrium-threshold", "connector", "compression", 1, -1, 0, DungeonRecipeIds.CompressionConnector),
+                new RouteNodeIntent("atrium-threshold", "connector", "compression", 1, -1, 0, CompressionRecipeSlotId),
                 new RouteNodeIntent("outer-approach", "processional-hall", "approach", 2, -1, 4),
                 new RouteNodeIntent("ring-entry", "junction", "choice", 3, -1, 4),
-                new RouteNodeIntent("atrium-landmark", "landmark", "landmark", 4, -1, 4, DungeonRecipeIds.ProcessionalLandmark),
+                new RouteNodeIntent("atrium-landmark", "landmark", "landmark", 4, -1, 4, LandmarkRecipeSlotId),
                 new RouteNodeIntent("ring-ascent", "connector", "ascent", 5, -1, 8),
                 new RouteNodeIntent("ring-rejoin", "junction", "rejoin", 6, -1, 16),
                 new RouteNodeIntent("upper-approach", "processional-hall", "approach", 7, -1, 20),
@@ -900,7 +907,7 @@ namespace DungeonLab.Editor
                 new RouteNodeIntent("lower-ring-gallery", "connector", "branch", -1, 0, 8),
                 new RouteNodeIntent("ring-overlook", "overlook", "reveal", -1, 1, 8),
                 new RouteNodeIntent("far-ring-gallery", "optional-room", "reward", -1, 2, 12),
-                new RouteNodeIntent("upper-ring-gallery", "connector", "return", -1, 3, 16, DungeonRecipeIds.CornerReturnConnector)
+                new RouteNodeIntent("upper-ring-gallery", "connector", "return", -1, 3, 16, ReturnRecipeSlotId)
             };
             string[] branchEdgeIds =
             {
@@ -983,10 +990,10 @@ namespace DungeonLab.Editor
             var mainNodes = new[]
             {
                 new RouteNodeIntent("keep-arrival", "arrival", "arrival", 0, -1, 0),
-                new RouteNodeIntent("keep-threshold", "connector", "compression", 1, -1, 0, DungeonRecipeIds.CompressionConnector),
+                new RouteNodeIntent("keep-threshold", "connector", "compression", 1, -1, 0, CompressionRecipeSlotId),
                 new RouteNodeIntent("wing-hub", "junction", "choice", 2, -1, 0),
                 new RouteNodeIntent("keep-crossing", "connector", "approach", 3, -1, 0),
-                new RouteNodeIntent("keep-landmark", "landmark", "landmark", 4, -1, 8, DungeonRecipeIds.ProcessionalLandmark),
+                new RouteNodeIntent("keep-landmark", "landmark", "landmark", 4, -1, 8, LandmarkRecipeSlotId),
                 new RouteNodeIntent("wing-rejoin", "junction", "rejoin", 5, -1, 16),
                 new RouteNodeIntent("keep-culmination", "culmination", "culmination", 6, -1, 24)
             };
@@ -1050,7 +1057,7 @@ namespace DungeonLab.Editor
             {
                 new RouteNodeIntent("wing-b-entry", "connector", "branch", -1, 3, 4),
                 new RouteNodeIntent("wing-b-reward", "optional-room", "reward", -1, 4, 8),
-                new RouteNodeIntent("wing-b-return", "connector", "return", -1, 5, 12, DungeonRecipeIds.CornerReturnConnector)
+                new RouteNodeIntent("wing-b-return", "connector", "return", -1, 5, 12, ReturnRecipeSlotId)
             };
             if (!composer.TryAddBranch(
                     mainNodeIndices[TwinWingBranchAttachNode],
@@ -1142,7 +1149,7 @@ namespace DungeonLab.Editor
                     return false;
                 }
 
-                if (node.HasLandmarkSlot)
+                if (node.HasRecipeSlot)
                 {
                     recipeSlotCount++;
                 }
@@ -1162,13 +1169,31 @@ namespace DungeonLab.Editor
                 return false;
             }
 
+            var resolvedSlotIds = new HashSet<string>(StringComparer.Ordinal);
+            var resolvedSlotNodes = new HashSet<int>();
             foreach (RecipeSlotIntent slot in intent.recipeSlots)
             {
                 if (slot == null || slot.recipe == null ||
                     slot.slotNode < 0 || slot.slotNode >= intent.nodes.Length ||
-                    !string.Equals(intent.nodes[slot.slotNode].landmarkSlotId, slot.recipe.recipeId, StringComparison.Ordinal) ||
+                    string.IsNullOrEmpty(slot.slotId) ||
+                    !resolvedSlotIds.Add(slot.slotId) ||
+                    !resolvedSlotNodes.Add(slot.slotNode) ||
+                    !string.Equals(intent.nodes[slot.slotNode].recipeSlotId, slot.slotId, StringComparison.Ordinal) ||
+                    !string.Equals(slot.catalogDigest, intent.catalogDigest, StringComparison.Ordinal) ||
+                    !string.Equals(
+                        slot.selectionStreamIdentity,
+                        RecipeSelectionStreamIdentity,
+                        StringComparison.Ordinal) ||
+                    Array.IndexOf(slot.compatibleCandidateIds, slot.recipe.recipeId) < 0 ||
                     Array.IndexOf(slot.recipe.eligibleRoles, intent.nodes[slot.slotNode].role) < 0 ||
-                    Array.IndexOf(slot.recipe.eligibleBeats, intent.nodes[slot.slotNode].beat) < 0)
+                    Array.IndexOf(slot.recipe.eligibleBeats, intent.nodes[slot.slotNode].beat) < 0 ||
+                    !TryValidateRecipeCandidate(
+                        intent,
+                        slot.slotNode,
+                        slot.recipe,
+                        slot.orientationBinding,
+                        slot.portBindings,
+                        out _))
                 {
                     rejectionReason = "route intent contained an incompatible recipe slot binding";
                     return false;
@@ -1349,7 +1374,7 @@ namespace DungeonLab.Editor
                     }
                 }
 
-                if (node.HasLandmarkSlot)
+                if (node.HasRecipeSlot)
                 {
                     if (previousRecipeOrder >= 0 &&
                         node.mainRouteOrder - previousRecipeOrder - 1 <
@@ -2122,7 +2147,7 @@ namespace DungeonLab.Editor
             System.Random random,
             bool allowWing)
         {
-            if (node.HasLandmarkSlot && TryGetRecipeSlot(recipeSlots, nodeIndex, out RecipeSlotIntent recipeSlot))
+            if (node.HasRecipeSlot && TryGetRecipeSlot(recipeSlots, nodeIndex, out RecipeSlotIntent recipeSlot))
             {
                 Vector2Int primaryAxis;
                 if (recipeSlot.orientationBinding == RecipeOrientationBinding.VistaSourceToTarget)

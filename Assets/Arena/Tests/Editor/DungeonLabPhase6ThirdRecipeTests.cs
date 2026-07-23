@@ -73,9 +73,9 @@ namespace Arena.Tests.Editor
             Assert.That(values["gallery.collision"], Is.EqualTo("True"));
         }
 
-        [TestCase("processional", "processional-spine-v5", "branch-11-12", "rejoin-12-7")]
-        [TestCase("atrium", "atrium-ring-v2", "branch-11-12", "rejoin-12-6")]
-        [TestCase("twinWing", "twin-wing-keep-v2", "wing-b-11-12", "wing-b-rejoin-12-5")]
+        [TestCase("processional", "processional-spine-v6", "branch-11-12", "rejoin-12-7")]
+        [TestCase("atrium", "atrium-ring-v3", "branch-11-12", "rejoin-12-6")]
+        [TestCase("twinWing", "twin-wing-keep-v3", "wing-b-11-12", "wing-b-rejoin-12-5")]
         public void EveryTopology_BindsAndResolvesTheSharedCornerReturn(
             string prefix,
             string plannerVersion,
@@ -118,8 +118,8 @@ namespace Arena.Tests.Editor
         {
             Dictionary<string, string> values = Snapshot.Value;
 
-            Assert.That(values["versions.summary"], Is.EqualTo("dungeon-plan-v10"));
-            Assert.That(values["versions.generator"], Is.EqualTo("route-topologies-v9"));
+            Assert.That(values["versions.summary"], Is.EqualTo("dungeon-plan-v11"));
+            Assert.That(values["versions.generator"], Is.EqualTo("route-topologies-v10"));
             Assert.That(values["versions.spatialRandom"], Is.EqualTo("processional-spine-v1"));
             Assert.That(values["recipe.schema"], Is.EqualTo("1"));
             Assert.That(values["recipe.disabledForGeneration"], Is.EqualTo("False"));

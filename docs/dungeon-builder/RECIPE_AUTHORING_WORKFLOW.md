@@ -1,7 +1,7 @@
 # Dungeon recipe authoring workflow
 
-Status: current for recipe schema v1 and Slice A availability
-Last updated: 2026-07-23
+Status: current for recipe schema v1 and Slice B catalog selection
+Last updated: 2026-07-24
 
 This is the operational checklist for creating or changing a room recipe. Use
 [`GLOSSARY.md`](GLOSSARY.md) for the authoritative definitions of recipe,
@@ -51,10 +51,12 @@ Write a one-page brief
     -> Enable it directly only after its current validation passes
 ```
 
-Slice A does not change production recipe bindings or add pool selection.
-Consequently, full-dungeon preview for a previously unknown recipe ID remains
-deferred to Slice C; do not add production C# bindings as an authoring
-workaround.
+Production recipe slots now discover compatible enabled catalog members by
+role, beat, route-edge/port, orientation, elevation, transition, landing,
+headroom, and current-validation contracts. Selection is deterministic and
+uniform within the compatible set. Full-dungeon preview repair for a disabled
+previously unknown recipe remains deferred to Slice C; do not add production
+C# bindings as an authoring workaround.
 
 ## 1. Availability
 
@@ -255,8 +257,8 @@ Before enabling:
 2. run current-recipe validation;
 3. run catalog validation;
 4. reproduce the relevant deterministic preview evidence;
-5. rebuild a known production seed when the current exact binding can consume
-   the recipe.
+5. rebuild a known production seed when an existing route slot can consume the
+   enabled recipe.
 
 After enabling, run catalog validation again. An enabled invalid catalog member
 must fail with a reason code and message. Disabling excludes the member without

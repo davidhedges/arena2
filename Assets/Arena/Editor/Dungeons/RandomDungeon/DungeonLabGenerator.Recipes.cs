@@ -24,23 +24,50 @@ namespace DungeonLab.Editor
             }
         }
 
+        private readonly struct RecipeCandidateRejection
+        {
+            public readonly string recipeId;
+            public readonly string reasonCode;
+
+            public RecipeCandidateRejection(string recipeId, string reasonCode)
+            {
+                this.recipeId = recipeId ?? string.Empty;
+                this.reasonCode = reasonCode ?? string.Empty;
+            }
+        }
+
         private sealed class RecipeSlotIntent
         {
+            public readonly string slotId;
             public readonly int slotNode;
             public readonly DungeonRecipeAsset recipe;
             public readonly RecipeOrientationBinding orientationBinding;
             public readonly RecipePortBinding[] portBindings;
+            public readonly string catalogDigest;
+            public readonly string[] compatibleCandidateIds;
+            public readonly RecipeCandidateRejection[] rejectedCandidates;
+            public readonly string selectionStreamIdentity;
 
             public RecipeSlotIntent(
+                string slotId,
                 int slotNode,
                 DungeonRecipeAsset recipe,
                 RecipeOrientationBinding orientationBinding,
-                RecipePortBinding[] portBindings)
+                RecipePortBinding[] portBindings,
+                string catalogDigest = "",
+                string[] compatibleCandidateIds = null,
+                RecipeCandidateRejection[] rejectedCandidates = null,
+                string selectionStreamIdentity = "")
             {
+                this.slotId = slotId ?? string.Empty;
                 this.slotNode = slotNode;
                 this.recipe = recipe;
                 this.orientationBinding = orientationBinding;
                 this.portBindings = portBindings ?? Array.Empty<RecipePortBinding>();
+                this.catalogDigest = catalogDigest ?? string.Empty;
+                this.compatibleCandidateIds = compatibleCandidateIds ?? Array.Empty<string>();
+                this.rejectedCandidates = rejectedCandidates ?? Array.Empty<RecipeCandidateRejection>();
+                this.selectionStreamIdentity = selectionStreamIdentity ?? string.Empty;
             }
 
             public bool TryGetEdgeId(string portId, out string edgeId)
@@ -295,71 +322,307 @@ namespace DungeonLab.Editor
             }
         }
 
-        private static bool TryBuildRequiredRecipeSlots(
+        private const string RecipeSelectionStreamIdentity = "recipe-selection-v1";
+
+        private static bool TryResolveRequiredRecipeSlots(
             ActiveDungeonRecipeCatalog catalog,
-            RoutePatternKind pattern,
-            int landmarkNode,
+            RouteIntent intent,
             out RecipeSlotIntent[] slots,
             out string rejectionReason)
         {
             slots = Array.Empty<RecipeSlotIntent>();
             rejectionReason = string.Empty;
-            if (catalog == null ||
-                !catalog.TryGet(DungeonRecipeIds.ProcessionalLandmark, out DungeonRecipeAsset throne) ||
-                !catalog.TryGet(DungeonRecipeIds.CompressionConnector, out DungeonRecipeAsset vestibule) ||
-                !catalog.TryGet(DungeonRecipeIds.CornerReturnConnector, out DungeonRecipeAsset cornerReturn))
+            if (catalog == null || intent?.nodes == null || intent.traversalEdges == null)
             {
-                rejectionReason = "[RECIPE_CATALOG] required reviewed production recipes were not active";
+                rejectionReason = "[RECIPE_SELECTION] catalog or route intent was unavailable";
                 return false;
             }
 
-            RecipePortBinding[] cornerBindings;
-            if (pattern == RoutePatternKind.TwinWingKeep)
+            var resolved = new List<RecipeSlotIntent>(3);
+            for (int nodeIndex = 0; nodeIndex < intent.nodes.Length; nodeIndex++)
             {
-                cornerBindings = new[]
+                RouteNodeIntent node = intent.nodes[nodeIndex];
+                if (!node.HasRecipeSlot)
                 {
-                    new RecipePortBinding("entry", "wing-b-11-12"),
-                    new RecipePortBinding("exit", "wing-b-rejoin-12-5")
-                };
-            }
-            else
-            {
-                cornerBindings = new[]
+                    continue;
+                }
+
+                if (!TryBuildRecipeSlotBindings(
+                        intent,
+                        nodeIndex,
+                        out RecipeOrientationBinding orientationBinding,
+                        out RecipePortBinding[] portBindings))
                 {
-                    new RecipePortBinding("entry", "branch-11-12"),
-                    new RecipePortBinding(
-                        "exit",
-                        pattern == RoutePatternKind.AtriumRing ? "rejoin-12-6" : "rejoin-12-7")
-                };
+                    rejectionReason =
+                        $"[RECIPE_SELECTION] slot '{node.recipeSlotId}' had no declared route-edge binding contract";
+                    return false;
+                }
+
+                var compatible = new List<DungeonRecipeAsset>();
+                var rejections = new List<RecipeCandidateRejection>();
+                foreach (DungeonRecipeAsset candidate in catalog.recipes)
+                {
+                    if (TryValidateRecipeCandidate(
+                            intent,
+                            nodeIndex,
+                            candidate,
+                            orientationBinding,
+                            portBindings,
+                            out string reasonCode))
+                    {
+                        compatible.Add(candidate);
+                    }
+                    else
+                    {
+                        rejections.Add(new RecipeCandidateRejection(candidate?.recipeId, reasonCode));
+                    }
+                }
+
+                if (compatible.Count == 0)
+                {
+                    rejectionReason =
+                        $"[RECIPE_SELECTION] slot '{node.recipeSlotId}' at node '{node.id}' had no compatible active recipe";
+                    return false;
+                }
+
+                int selectedIndex = compatible.Count == 1
+                    ? 0
+                    : RecipeSelectionRandom(intent.seed, intent.patternId, node.id).Next(compatible.Count);
+                var compatibleIds = new string[compatible.Count];
+                for (int index = 0; index < compatible.Count; index++)
+                {
+                    compatibleIds[index] = compatible[index].recipeId;
+                }
+
+                resolved.Add(new RecipeSlotIntent(
+                    node.recipeSlotId,
+                    nodeIndex,
+                    compatible[selectedIndex],
+                    orientationBinding,
+                    portBindings,
+                    catalog.digest,
+                    compatibleIds,
+                    rejections.ToArray(),
+                    RecipeSelectionStreamIdentity));
             }
 
-            slots = new[]
+            if (resolved.Count != 3)
             {
-                new RecipeSlotIntent(
-                    1,
-                    vestibule,
-                    RecipeOrientationBinding.RouteForward,
-                    new[]
-                    {
-                        new RecipePortBinding("entry", "main-0-1"),
-                        new RecipePortBinding("exit", "main-1-2")
-                    }),
-                new RecipeSlotIntent(
-                    landmarkNode,
-                    throne,
-                    RecipeOrientationBinding.VistaSourceToTarget,
-                    new[]
-                    {
-                        new RecipePortBinding("entry", "main-3-4"),
-                        new RecipePortBinding("exit", "main-4-5")
-                    }),
-                new RecipeSlotIntent(
-                    SharedReturnRecipeNode,
-                    cornerReturn,
-                    RecipeOrientationBinding.RouteForward,
-                    cornerBindings)
-            };
+                rejectionReason =
+                    $"[RECIPE_SELECTION] route declared {resolved.Count} recipe slots instead of 3";
+                return false;
+            }
+
+            slots = resolved.ToArray();
             return true;
+        }
+
+        private static bool TryBuildRecipeSlotBindings(
+            RouteIntent intent,
+            int slotNode,
+            out RecipeOrientationBinding orientationBinding,
+            out RecipePortBinding[] portBindings)
+        {
+            orientationBinding = RecipeOrientationBinding.RouteForward;
+            portBindings = Array.Empty<RecipePortBinding>();
+            if (intent == null || slotNode < 0 || slotNode >= intent.nodes.Length)
+            {
+                return false;
+            }
+
+            string slotId = intent.nodes[slotNode].recipeSlotId;
+            if (string.Equals(slotId, CompressionRecipeSlotId, StringComparison.Ordinal))
+            {
+                portBindings = new[]
+                {
+                    new RecipePortBinding("entry", "main-0-1"),
+                    new RecipePortBinding("exit", "main-1-2")
+                };
+                return true;
+            }
+
+            if (string.Equals(slotId, LandmarkRecipeSlotId, StringComparison.Ordinal))
+            {
+                orientationBinding = RecipeOrientationBinding.VistaSourceToTarget;
+                portBindings = new[]
+                {
+                    new RecipePortBinding("entry", "main-3-4"),
+                    new RecipePortBinding("exit", "main-4-5")
+                };
+                return true;
+            }
+
+            if (string.Equals(slotId, ReturnRecipeSlotId, StringComparison.Ordinal))
+            {
+                string entryEdgeId = string.Equals(intent.patternId, TwinWingPatternId, StringComparison.Ordinal)
+                    ? "wing-b-11-12"
+                    : "branch-11-12";
+                string exitEdgeId = string.Equals(intent.patternId, TwinWingPatternId, StringComparison.Ordinal)
+                    ? "wing-b-rejoin-12-5"
+                    : string.Equals(intent.patternId, AtriumRingPatternId, StringComparison.Ordinal)
+                        ? "rejoin-12-6"
+                        : "rejoin-12-7";
+                portBindings = new[]
+                {
+                    new RecipePortBinding("entry", entryEdgeId),
+                    new RecipePortBinding("exit", exitEdgeId)
+                };
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool TryValidateRecipeCandidate(
+            RouteIntent intent,
+            int slotNode,
+            DungeonRecipeAsset candidate,
+            RecipeOrientationBinding orientationBinding,
+            IReadOnlyList<RecipePortBinding> portBindings,
+            out string reasonCode)
+        {
+            RouteNodeIntent node = intent.nodes[slotNode];
+            if (candidate == null)
+            {
+                reasonCode = "CANDIDATE_NULL";
+                return false;
+            }
+
+            if (Array.IndexOf(candidate.eligibleRoles, node.role) < 0)
+            {
+                reasonCode = "ROLE_INELIGIBLE";
+                return false;
+            }
+
+            if (Array.IndexOf(candidate.eligibleBeats, node.beat) < 0)
+            {
+                reasonCode = "BEAT_INELIGIBLE";
+                return false;
+            }
+
+            int incidentDegree = 0;
+            foreach (RouteTraversalIntent edge in intent.traversalEdges)
+            {
+                if (edge.fromNode == slotNode || edge.toNode == slotNode)
+                {
+                    incidentDegree++;
+                }
+            }
+
+            int mandatoryPortCount = 0;
+            foreach (DungeonRecipePort port in candidate.ports ?? Array.Empty<DungeonRecipePort>())
+            {
+                mandatoryPortCount += port != null && port.mandatory ? 1 : 0;
+            }
+
+            if (mandatoryPortCount != incidentDegree ||
+                portBindings == null ||
+                portBindings.Count != incidentDegree)
+            {
+                reasonCode = "TRAVERSAL_DEGREE_MISMATCH";
+                return false;
+            }
+
+            var boundPorts = new HashSet<string>(StringComparer.Ordinal);
+            var boundEdges = new HashSet<string>(StringComparer.Ordinal);
+            foreach (RecipePortBinding binding in portBindings)
+            {
+                if (!boundPorts.Add(binding.portId) ||
+                    !boundEdges.Add(binding.edgeId) ||
+                    !TryGetTraversal(intent, binding.edgeId, out RouteTraversalIntent edge) ||
+                    edge.fromNode != slotNode && edge.toNode != slotNode)
+                {
+                    reasonCode = "PORT_BINDING_MISMATCH";
+                    return false;
+                }
+            }
+
+            foreach (DungeonRecipePort port in candidate.ports ?? Array.Empty<DungeonRecipePort>())
+            {
+                if (port == null || !port.mandatory || !boundPorts.Contains(port.id))
+                {
+                    reasonCode = "PORT_BINDING_MISMATCH";
+                    return false;
+                }
+
+                if (port.widthCells != 1 ||
+                    port.approachDepthCells < 1 ||
+                    port.headroomLevels < MinHeadroomLevels)
+                {
+                    reasonCode = "PORT_CLEARANCE_INCOMPATIBLE";
+                    return false;
+                }
+
+                if (port.relativeLevel != 0)
+                {
+                    reasonCode = "PORT_ELEVATION_INCOMPATIBLE";
+                    return false;
+                }
+            }
+
+            bool orientationContextValid =
+                orientationBinding == RecipeOrientationBinding.RouteForward &&
+                boundPorts.Contains("exit") ||
+                orientationBinding == RecipeOrientationBinding.VistaSourceToTarget &&
+                intent.vista.targetNode == slotNode &&
+                intent.vista.sourceNode >= 0 &&
+                intent.vista.sourceNode < intent.nodes.Length;
+            if (!orientationContextValid ||
+                candidate.legalQuarterTurns == null ||
+                candidate.legalQuarterTurns.Length == 0)
+            {
+                reasonCode = "ORIENTATION_UNSUPPORTED";
+                return false;
+            }
+
+            foreach (DungeonRecipeTransition transition in
+                     candidate.transitions ?? Array.Empty<DungeonRecipeTransition>())
+            {
+                if (transition == null ||
+                    transition.riseLevels != 1 ||
+                    transition.laneCount != 1 ||
+                    transition.headroomLevels < MinHeadroomLevels ||
+                    transition.lowerLandingCells == null ||
+                    transition.lowerLandingCells.Length == 0 ||
+                    transition.upperLandingCells == null ||
+                    transition.upperLandingCells.Length == 0 ||
+                    transition.footprintCells == null ||
+                    transition.footprintCells.Length == 0)
+                {
+                    reasonCode = "TRANSITION_CONTEXT_INCOMPATIBLE";
+                    return false;
+                }
+            }
+
+            DungeonRecipeValidationResult validation = DungeonRecipeValidator.ValidateContract(candidate);
+            if (!validation.Passed)
+            {
+                reasonCode = "CONTRACT_INVALID";
+                return false;
+            }
+
+            reasonCode = string.Empty;
+            return true;
+        }
+
+        private static System.Random RecipeSelectionRandom(
+            int dungeonSeed,
+            string topologyId,
+            string routeNodeId)
+        {
+            // This stream intentionally excludes layout attempt and the spatial
+            // random version so selection cannot perturb embedding or placement.
+            unchecked
+            {
+                uint hash = 2166136261u;
+                MixPhase1Hash(
+                    ref hash,
+                    dungeonSeed.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                MixPhase1Hash(ref hash, topologyId ?? string.Empty);
+                MixPhase1Hash(ref hash, routeNodeId ?? string.Empty);
+                MixPhase1Hash(ref hash, "recipe-selection");
+                return new System.Random((int)hash);
+            }
         }
 
         private static List<RectInt> BuildRecipeRoomParts(

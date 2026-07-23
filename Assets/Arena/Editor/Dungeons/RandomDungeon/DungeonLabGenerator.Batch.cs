@@ -18,7 +18,10 @@ namespace DungeonLab.Editor
     internal sealed partial class DungeonLabGenerator
     {
         private const string BatchReportDirectory = "DungeonLabReports";
-        private const string DungeonPlanSummaryVersion = "dungeon-plan-v10";
+        private const string DungeonPlanSummaryVersion = "dungeon-plan-v11";
+        private const string ThroneRecipeFixtureId = "episode_throne_twin_stairs_01";
+        private const string VestibuleRecipeFixtureId = "connector_flexible_vestibule_01";
+        private const string CornerReturnRecipeFixtureId = "connector_corner_return_01";
         private const int Phase0BaselineFirstSeed = 2026072100;
         private const int Phase0BaselineSeedCount = 200;
         private const int LockedSeedCount = 100;
@@ -1685,7 +1688,7 @@ namespace DungeonLab.Editor
             JObject intent = BuildPhase1RouteIntentProjection();
             JObject phase4Recipe = FindRecipeProjection(
                 intent["recipeSlots"] as JArray,
-                DungeonRecipeIds.ProcessionalLandmark);
+                ThroneRecipeFixtureId);
             bool containsSpatialCoordinates = intent.ToString(Formatting.None).Contains("\"center\"");
             int requiredStairs = 0;
             int requiredBridges = 0;
@@ -1731,54 +1734,51 @@ namespace DungeonLab.Editor
         {
             if (!DungeonRecipeCatalogService.TryLoadActiveCatalog(
                     out ActiveDungeonRecipeCatalog catalog,
-                    out string rejectionReason) ||
-                !TryBuildRequiredRecipeSlots(
-                    catalog,
-                    RoutePatternKind.ProcessionalSpine,
-                    Phase1VistaTargetNode,
-                    out RecipeSlotIntent[] slots,
-                    out rejectionReason))
+                    out string rejectionReason))
             {
                 throw new InvalidOperationException(rejectionReason);
             }
 
-            return BuildProcessionalRouteIntent(seed, slots, catalog.digest);
+            return ResolveDiagnosticRouteIntent(
+                BuildProcessionalRouteIntent(
+                    seed,
+                    Array.Empty<RecipeSlotIntent>(),
+                    string.Empty),
+                catalog);
         }
 
         private static RouteIntent BuildDiagnosticAtriumRingIntent(int seed)
         {
             if (!DungeonRecipeCatalogService.TryLoadActiveCatalog(
                     out ActiveDungeonRecipeCatalog catalog,
-                    out string rejectionReason) ||
-                !TryBuildRequiredRecipeSlots(
-                    catalog,
-                    RoutePatternKind.AtriumRing,
-                    AtriumRingVistaTargetNode,
-                    out RecipeSlotIntent[] slots,
-                    out rejectionReason))
+                    out string rejectionReason))
             {
                 throw new InvalidOperationException(rejectionReason);
             }
 
-            return BuildAtriumRingRouteIntent(seed, slots, catalog.digest);
+            return ResolveDiagnosticRouteIntent(
+                BuildAtriumRingRouteIntent(
+                    seed,
+                    Array.Empty<RecipeSlotIntent>(),
+                    string.Empty),
+                catalog);
         }
 
         private static RouteIntent BuildDiagnosticTwinWingIntent(int seed)
         {
             if (!DungeonRecipeCatalogService.TryLoadActiveCatalog(
                     out ActiveDungeonRecipeCatalog catalog,
-                    out string rejectionReason) ||
-                !TryBuildRequiredRecipeSlots(
-                    catalog,
-                    RoutePatternKind.TwinWingKeep,
-                    TwinWingVistaTargetNode,
-                    out RecipeSlotIntent[] slots,
-                    out rejectionReason))
+                    out string rejectionReason))
             {
                 throw new InvalidOperationException(rejectionReason);
             }
 
-            return BuildTwinWingRouteIntent(seed, slots, catalog.digest);
+            return ResolveDiagnosticRouteIntent(
+                BuildTwinWingRouteIntent(
+                    seed,
+                    Array.Empty<RecipeSlotIntent>(),
+                    string.Empty),
+                catalog);
         }
 
         private static RouteIntent BuildDiagnosticSelectedRouteIntent(int seed)
@@ -1786,18 +1786,35 @@ namespace DungeonLab.Editor
             RoutePatternKind pattern = SelectRoutePattern(seed);
             if (!DungeonRecipeCatalogService.TryLoadActiveCatalog(
                     out ActiveDungeonRecipeCatalog catalog,
-                    out string rejectionReason) ||
-                !TryBuildRequiredRecipeSlots(
-                    catalog,
-                    pattern,
-                    LandmarkNodeForPattern(pattern),
-                    out RecipeSlotIntent[] slots,
-                    out rejectionReason))
+                    out string rejectionReason))
             {
                 throw new InvalidOperationException(rejectionReason);
             }
 
-            return BuildSelectedRouteIntent(pattern, seed, slots, catalog.digest);
+            return ResolveDiagnosticRouteIntent(
+                BuildSelectedRouteIntent(
+                    pattern,
+                    seed,
+                    Array.Empty<RecipeSlotIntent>(),
+                    string.Empty),
+                catalog);
+        }
+
+        private static RouteIntent ResolveDiagnosticRouteIntent(
+            RouteIntent intent,
+            ActiveDungeonRecipeCatalog catalog)
+        {
+            if (!TryResolveRequiredRecipeSlots(
+                    catalog,
+                    intent,
+                    out RecipeSlotIntent[] slots,
+                    out string rejectionReason))
+            {
+                throw new InvalidOperationException(rejectionReason);
+            }
+
+            intent.ResolveRecipeSlots(slots, catalog.digest);
+            return intent;
         }
 
         private static string BuildPhase6bAtriumRingSnapshot(int seed)
@@ -2016,7 +2033,7 @@ namespace DungeonLab.Editor
                 invalidSecond.mainRouteOrder,
                 invalidSecond.branchOrder,
                 invalidSecond.relativeElevationLevels,
-                invalidSecond.landmarkSlotId);
+                invalidSecond.recipeSlotId);
             var invalidIntent = new RouteIntent(
                 processional.seed,
                 processional.plannerVersion,
@@ -2226,7 +2243,7 @@ namespace DungeonLab.Editor
                 out ActiveDungeonRecipeCatalog catalog,
                 out string catalogError);
             DungeonRecipeAsset recipe = null;
-            catalog?.TryGet(DungeonRecipeIds.CornerReturnConnector, out recipe);
+            catalog?.TryGet(CornerReturnRecipeFixtureId, out recipe);
             DungeonRecipeValidationResult contract = DungeonRecipeValidator.ValidateContract(recipe);
             int walkableCellCount = 0;
             int elevatedCellCount = 0;
@@ -2340,10 +2357,10 @@ namespace DungeonLab.Editor
                 JObject report = BuildPhase0SeedReport(sample.patternSeed);
                 JObject slot = FindRecipeProjection(
                     report["routeIntent"]?["recipeSlots"] as JArray,
-                    DungeonRecipeIds.CornerReturnConnector);
+                    CornerReturnRecipeFixtureId);
                 JObject resolution = FindRecipeProjection(
                     report["recipeResolutions"] as JArray,
-                    DungeonRecipeIds.CornerReturnConnector);
+                    CornerReturnRecipeFixtureId);
                 JObject node = report["routeIntent"]?["nodes"]?[SharedReturnRecipeNode] as JObject;
                 JObject entryPort = null;
                 JObject exitPort = null;
@@ -2389,7 +2406,7 @@ namespace DungeonLab.Editor
             RecipeSlotIntent validSlot = null;
             foreach (RecipeSlotIntent slot in probeIntent?.recipeSlots ?? Array.Empty<RecipeSlotIntent>())
             {
-                if (string.Equals(slot?.recipe?.recipeId, DungeonRecipeIds.CornerReturnConnector, StringComparison.Ordinal))
+                if (string.Equals(slot?.recipe?.recipeId, CornerReturnRecipeFixtureId, StringComparison.Ordinal))
                 {
                     validSlot = slot;
                     break;
@@ -2402,6 +2419,7 @@ namespace DungeonLab.Editor
                 phase1LastNodeCenters,
                 out Vector2Int validAxis);
             var missingExitSlot = new RecipeSlotIntent(
+                ReturnRecipeSlotId,
                 SharedReturnRecipeNode,
                 recipe,
                 RecipeOrientationBinding.RouteForward,
@@ -2412,6 +2430,7 @@ namespace DungeonLab.Editor
                 phase1LastNodeCenters,
                 out _);
             var unrelatedExitSlot = new RecipeSlotIntent(
+                ReturnRecipeSlotId,
                 SharedReturnRecipeNode,
                 recipe,
                 RecipeOrientationBinding.RouteForward,
@@ -2511,7 +2530,7 @@ namespace DungeonLab.Editor
             int mainRouteOrder,
             string role,
             string beat,
-            string recipeId = "")
+            string recipeSlotId = "")
         {
             return new RouteNodeIntent(
                 id,
@@ -2520,7 +2539,7 @@ namespace DungeonLab.Editor
                 mainRouteOrder,
                 branchOrder: -1,
                 relativeElevationLevels: mainRouteOrder * MajorRiseLevels,
-                landmarkSlotId: recipeId);
+                recipeSlotId: recipeSlotId);
         }
 
         private static string BuildRouteGraphCompositionSnapshot(int seed)
@@ -2891,7 +2910,7 @@ namespace DungeonLab.Editor
                 out ActiveDungeonRecipeCatalog catalog,
                 out string catalogError);
             DungeonRecipeAsset source = null;
-            catalog?.TryGet(DungeonRecipeIds.CompressionConnector, out source);
+            catalog?.TryGet(VestibuleRecipeFixtureId, out source);
             string before = EditorJsonUtility.ToJson(source);
             DungeonRecipeValidationResult validation = DungeonRecipeValidator.ValidateContract(source);
             string after = EditorJsonUtility.ToJson(source);
@@ -2950,6 +2969,69 @@ namespace DungeonLab.Editor
             });
         }
 
+        private static string BuildRecipePoolSelectionSnapshot(int seed)
+        {
+            if (!DungeonRecipeCatalogService.TryLoadActiveCatalog(
+                    out ActiveDungeonRecipeCatalog catalog,
+                    out string rejectionReason))
+            {
+                throw new InvalidOperationException(rejectionReason);
+            }
+
+            RouteIntent intent = BuildDiagnosticSelectedRouteIntent(seed);
+            phase1LastRouteIntent = intent;
+            JObject firstProjection = BuildPhase1RouteIntentProjection();
+            JObject secondProjection = BuildPhase1RouteIntentProjection();
+            var lines = new List<string>
+            {
+                $"catalog.activeCount={catalog.recipes.Length}",
+                $"catalog.digest={catalog.digest}",
+                $"route.recipeSlotCount={intent.recipeSlots.Length}",
+                $"report.repeatable={string.Equals(firstProjection.ToString(Formatting.None), secondProjection.ToString(Formatting.None), StringComparison.Ordinal)}",
+                $"report.hash={ComputeSha256(firstProjection.ToString(Formatting.None))}"
+            };
+
+            foreach (RecipeSlotIntent slot in intent.recipeSlots)
+            {
+                RouteNodeIntent node = intent.nodes[slot.slotNode];
+                var rejected = new List<string>(slot.rejectedCandidates.Length);
+                foreach (RecipeCandidateRejection candidate in slot.rejectedCandidates)
+                {
+                    rejected.Add($"{candidate.recipeId}:{candidate.reasonCode}");
+                }
+
+                string prefix = $"slot.{slot.slotId}";
+                lines.Add($"{prefix}.node={node.id}");
+                lines.Add($"{prefix}.role={node.role}");
+                lines.Add($"{prefix}.beat={node.beat}");
+                lines.Add($"{prefix}.catalogDigestMatches={string.Equals(slot.catalogDigest, catalog.digest, StringComparison.Ordinal)}");
+                lines.Add($"{prefix}.candidates={string.Join(",", slot.compatibleCandidateIds)}");
+                lines.Add($"{prefix}.rejected={string.Join(",", rejected)}");
+                lines.Add($"{prefix}.selected={slot.recipe.recipeId}");
+                lines.Add($"{prefix}.stream={slot.selectionStreamIdentity}");
+            }
+
+            DungeonRecipeAsset landmarkOnly = null;
+            catalog.TryGet(ThroneRecipeFixtureId, out landmarkOnly);
+            var incompatibleCatalog = new ActiveDungeonRecipeCatalog(
+                new[] { landmarkOnly },
+                "diagnostic-incompatible-catalog");
+            RoutePatternKind pattern = SelectRoutePattern(seed);
+            RouteIntent unresolved = BuildSelectedRouteIntent(
+                pattern,
+                seed,
+                Array.Empty<RecipeSlotIntent>(),
+                string.Empty);
+            bool noCandidateRejected = !TryResolveRequiredRecipeSlots(
+                incompatibleCatalog,
+                unresolved,
+                out _,
+                out string noCandidateReason);
+            lines.Add($"noCandidate.rejected={noCandidateRejected}");
+            lines.Add($"noCandidate.reason={noCandidateReason}");
+            return string.Join("\n", lines);
+        }
+
         private static string BuildPhase5WorkflowSnapshot(int seed)
         {
             DungeonRecipeCatalogService.TryLoadActiveCatalog(
@@ -2958,9 +3040,9 @@ namespace DungeonLab.Editor
             DungeonRecipeAsset throne = null;
             DungeonRecipeAsset vestibule = null;
             DungeonRecipeAsset cornerReturn = null;
-            catalog?.TryGet(DungeonRecipeIds.ProcessionalLandmark, out throne);
-            catalog?.TryGet(DungeonRecipeIds.CompressionConnector, out vestibule);
-            catalog?.TryGet(DungeonRecipeIds.CornerReturnConnector, out cornerReturn);
+            catalog?.TryGet(ThroneRecipeFixtureId, out throne);
+            catalog?.TryGet(VestibuleRecipeFixtureId, out vestibule);
+            catalog?.TryGet(CornerReturnRecipeFixtureId, out cornerReturn);
             bool firstPassed = DungeonRecipeAuthoringService.TryBuildPreviewGallery(
                 throne,
                 seed,
@@ -3087,7 +3169,7 @@ namespace DungeonLab.Editor
                 int selectedShowpieceCount = 0;
                 JObject visualRecipe = FindRecipeProjection(
                     seedReport["recipeResolutions"] as JArray,
-                    DungeonRecipeIds.ProcessionalLandmark);
+                    ThroneRecipeFixtureId);
                 string focalDesignId = visualRecipe?.Value<string>("selectedVisualImplementationId") ?? string.Empty;
                 string focalRootPrefix = $"dais_showpiece_{focalDesignId}_";
                 foreach (Transform child in root.GetComponentsInChildren<Transform>(includeInactive: false))
@@ -3456,7 +3538,7 @@ namespace DungeonLab.Editor
                     ["mainRouteOrder"] = node.mainRouteOrder,
                     ["branchOrder"] = node.branchOrder,
                     ["relativeElevationLevels"] = node.relativeElevationLevels,
-                    ["landmarkSlotId"] = node.landmarkSlotId
+                    ["recipeSlotId"] = node.recipeSlotId
                 });
                 if (node.IsOnMainRoute)
                 {
@@ -3486,7 +3568,7 @@ namespace DungeonLab.Editor
             var recipeSlots = new JArray();
             foreach (RecipeSlotIntent slot in intent.recipeSlots)
             {
-                recipeSlots.Add(BuildRecipeSlotIntentProjection(slot));
+                recipeSlots.Add(BuildRecipeSlotIntentProjection(intent, slot));
             }
 
             return new JObject
@@ -3525,13 +3607,19 @@ namespace DungeonLab.Editor
             };
         }
 
-        private static JObject BuildRecipeSlotIntentProjection(RecipeSlotIntent slot)
+        private static JObject BuildRecipeSlotIntentProjection(
+            RouteIntent intent,
+            RecipeSlotIntent slot)
         {
-            if (slot?.recipe == null)
+            if (intent == null ||
+                slot?.recipe == null ||
+                slot.slotNode < 0 ||
+                slot.slotNode >= intent.nodes.Length)
             {
                 return new JObject();
             }
 
+            RouteNodeIntent node = intent.nodes[slot.slotNode];
             var ports = new JArray();
             foreach (DungeonRecipePort port in slot.recipe.ports)
             {
@@ -3548,10 +3636,35 @@ namespace DungeonLab.Editor
                 });
             }
 
+            var compatibleCandidates = new JArray();
+            foreach (string recipeId in slot.compatibleCandidateIds)
+            {
+                compatibleCandidates.Add(recipeId);
+            }
+
+            var rejectedCandidates = new JArray();
+            foreach (RecipeCandidateRejection rejection in slot.rejectedCandidates)
+            {
+                rejectedCandidates.Add(new JObject
+                {
+                    ["id"] = rejection.recipeId,
+                    ["reasonCode"] = rejection.reasonCode
+                });
+            }
+
             return new JObject
             {
                 ["id"] = slot.recipe.recipeId,
+                ["recipeSlotId"] = slot.slotId,
                 ["slotNode"] = slot.slotNode,
+                ["routeNodeId"] = node.id,
+                ["role"] = node.role,
+                ["beat"] = node.beat,
+                ["catalogDigest"] = slot.catalogDigest,
+                ["compatibleCandidateIds"] = compatibleCandidates,
+                ["rejectedCandidates"] = rejectedCandidates,
+                ["selectedRecipeId"] = slot.recipe.recipeId,
+                ["selectionStreamIdentity"] = slot.selectionStreamIdentity,
                 ["kind"] = slot.recipe.kind.ToString(),
                 ["schemaVersion"] = slot.recipe.schemaVersion,
                 ["contentVersion"] = slot.recipe.contentVersion,
@@ -3857,8 +3970,8 @@ namespace DungeonLab.Editor
             }
 
             Add("asset.recipeId/schemaVersion/contentVersion", "recipe assets", "stable streams, digest, catalog, diagnostics");
-            Add("routeSlot.node/recipeId", "BuildProcessionalRouteIntent", "eligibility, room inflation, tier handoff");
-            Add("routeSlot.orientationBinding", "BuildProcessionalRouteIntent", "route/vista-bound primary axis");
+            Add("routeSlot.slotId/node/selectedRecipe", "route topology and catalog selector", "eligibility, room inflation, tier handoff");
+            Add("routeSlot.orientationBinding", "catalog selector", "route/vista-bound primary axis");
             Add("zones.walkable", "recipe assets", "atomic room footprint");
             Add("zones.protected", "recipe assets", "late-feature and dressing protection");
             Add("zones.elevated", "recipe assets", "canonical cell levels");
@@ -4065,9 +4178,9 @@ namespace DungeonLab.Editor
 
             foreach (string requiredId in new[]
                      {
-                         DungeonRecipeIds.ProcessionalLandmark,
-                         DungeonRecipeIds.CompressionConnector,
-                         DungeonRecipeIds.CornerReturnConnector
+                         ThroneRecipeFixtureId,
+                         VestibuleRecipeFixtureId,
+                         CornerReturnRecipeFixtureId
                      })
             {
                 RecipeResolution resolution = FindRecipeResolution(plan.recipeResolutions, requiredId);
@@ -5690,7 +5803,7 @@ namespace DungeonLab.Editor
                     ["hardValidCompletionFloor"] = Phase3HardValidCompletionFloor,
                     ["attemptCeiling"] = Phase1LayoutAttemptLimit,
                     ["p95AttemptTarget"] = 1,
-                    ["requiredEpisodeId"] = DungeonRecipeIds.ProcessionalLandmark,
+                    ["requiredEpisodeId"] = ThroneRecipeFixtureId,
                     ["requiredAtomicEpisode"] = true
                 };
                 report["phase4BudgetResult"] = new JObject
@@ -5739,8 +5852,8 @@ namespace DungeonLab.Editor
                     ["p95AttemptTarget"] = 1,
                     ["requiredRecipeCountAtBoundary"] = 2,
                     ["requiredRecipeIdsAtBoundary"] = new JArray(
-                        DungeonRecipeIds.ProcessionalLandmark,
-                        DungeonRecipeIds.CompressionConnector),
+                        ThroneRecipeFixtureId,
+                        VestibuleRecipeFixtureId),
                     ["activeRecipeCatalogDigest"] = activeCatalogDigest,
                     ["supersededBy"] = "phase6fReliabilityBudget"
                 };
@@ -5948,7 +6061,7 @@ namespace DungeonLab.Editor
                     {
                         if (string.Equals(
                                 recipe.Value<string>("id"),
-                                DungeonRecipeIds.CornerReturnConnector,
+                                CornerReturnRecipeFixtureId,
                                 StringComparison.Ordinal))
                         {
                             seedCornerReturns++;
@@ -5987,7 +6100,7 @@ namespace DungeonLab.Editor
                     out ActiveDungeonRecipeCatalog phase6fCatalog,
                     out _) &&
                     phase6fCatalog.recipes.Length == 3 &&
-                    phase6fCatalog.TryGet(DungeonRecipeIds.CornerReturnConnector, out DungeonRecipeAsset phase6fRecipe) &&
+                    phase6fCatalog.TryGet(CornerReturnRecipeFixtureId, out DungeonRecipeAsset phase6fRecipe) &&
                     phase6fRecipe.schemaVersion == DungeonRecipeAsset.CurrentSchemaVersion &&
                     !phase6fRecipe.disabledForGeneration &&
                     DungeonRecipeValidator.ValidateContract(phase6fRecipe).Passed;
@@ -6000,7 +6113,7 @@ namespace DungeonLab.Editor
                     ["requiredMaximumAttempt"] = Phase1LayoutAttemptLimit,
                     ["requiredRecipeCountPerSeed"] = 3,
                     ["requiredCornerReturnResolutions"] = Phase0BaselineSeedCount,
-                    ["requiredRecipeId"] = DungeonRecipeIds.CornerReturnConnector,
+                    ["requiredRecipeId"] = CornerReturnRecipeFixtureId,
                     ["requiredSummaryVersion"] = DungeonPlanSummaryVersion,
                     ["requiredGeneratorVersion"] = RoutePlannerVersion
                 };

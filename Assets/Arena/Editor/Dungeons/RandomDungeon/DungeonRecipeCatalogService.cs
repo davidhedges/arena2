@@ -7,13 +7,6 @@ using UnityEditor;
 
 namespace DungeonLab.Editor
 {
-    internal static class DungeonRecipeIds
-    {
-        internal const string ProcessionalLandmark = "episode_throne_twin_stairs_01";
-        internal const string CompressionConnector = "connector_flexible_vestibule_01";
-        internal const string CornerReturnConnector = "connector_corner_return_01";
-    }
-
     internal sealed class ActiveDungeonRecipeCatalog
     {
         private readonly Dictionary<string, DungeonRecipeAsset> byId;
