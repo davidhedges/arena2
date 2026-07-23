@@ -6,13 +6,13 @@ Last updated: 2026-07-24
 
 Active milestone: Phase 6, Phase 7, and the bounded corrective item remain closed; the density/adjacency workstream is closed at slice 6 and slice 7 is tabled
 
-Production mode: one route-first layout builder deterministically selects processional-spine, atrium-ring, or twin-wing-keep, resolves exactly three enabled and currently valid catalog recipes through stable compatible route slots, plus any target-bearing named-vista promontory and 1-4 canonical external connector promontories, and feeds the shared canonical pipeline
+Production mode: one route-first layout builder deterministically selects processional-spine, atrium-ring, or twin-wing-keep, resolves exactly three recipes from four enabled and currently valid catalog members through stable compatible route slots, plus any target-bearing named-vista promontory and 1-4 canonical external connector promontories, and feeds the shared canonical pipeline
 
 Recipe authoring UI: implemented for contract validation, deterministic preview galleries, direct availability control, and disabled-by-default creation
 
 Recipe availability and selection: `RECIPE_POOL_SELECTION_PLAN.md` Slices A and
-B are complete; Slice C authoring-preview repair is complete; work stops before
-Slice D content
+B are complete; Slice C authoring-preview repair and the one owner-approved
+Slice D pool proof are complete; work stops before any additional recipe content
 
 ## Read next
 
@@ -20,7 +20,7 @@ Slice D content
 2. This file — current evidence and exact handoff.
 3. [`COHERENT_FLOORPLAN_PLAN.md`](COHERENT_FLOORPLAN_PLAN.md) — architecture, phases, and exit gates.
 4. [`DENSITY_ADJACENCY_PLAN.md`](DENSITY_ADJACENCY_PLAN.md) — completed density/adjacency workstream; closed at slice 6 with slice 7 tabled by owner decision.
-5. [`RECIPE_POOL_SELECTION_PLAN.md`](RECIPE_POOL_SELECTION_PLAN.md) — active recipe-pool migration; complete through Slice C only.
+5. [`RECIPE_POOL_SELECTION_PLAN.md`](RECIPE_POOL_SELECTION_PLAN.md) — recipe-pool migration; complete through Slice D and stopped.
 6. [`RECIPE_AUTHORING_WORKFLOW.md`](RECIPE_AUTHORING_WORKFLOW.md) — current recipe availability, selection, validation, and deterministic-preview workflow.
 7. [`stair_forge_design.md`](stair_forge_design.md) — exact stair contracts already reused by the coupled twin-stair episode and any Phase 5 contrast recipe.
 
@@ -136,7 +136,42 @@ Slice D content
   50/50 and reproduced the unchanged Slice B result hash
   `80d838c9a61348ede04569427f6963d31571e046f8ce304970d241966fa836b8`.
   Both editor projects and the test assembly compile with zero errors.
-- Slice D and all new production recipe content remain unstarted.
+- Slice D was subsequently completed with the one owner-approved recipe recorded
+  below.
+
+## Recipe pool content proof Slice D result
+
+- Owner-approved `connector_example_01` is an enabled schema-v1 `Connector`
+  catalog member for `required-compression`. Its `5x5` footprint contains a
+  protected level route, a centered `3x3` raised gallery, two opposed mandatory
+  corridor ports, and one existing reviewed `seam-rise-1` stair contract.
+- The active catalog has four enabled current recipes with digest
+  `d138ea7e38e463cd032994f9e4cdc8f47a53e82fd3626d9dfcf533b3cdd1b219`.
+  Generation still resolves exactly three required slots. No selector,
+  topology, placement, renderer, abyss, collision, schema, or version change
+  was required.
+- Its deterministic authoring gallery contains 18 isolated/neighbor views with
+  hash `10c2c98737db97622841934e546b3692d70d851c60cbde32555141be2077935b`.
+  Forced full-dungeon evidence passes atomic placement, both mandatory ports,
+  its transition, canonical validation, renderer, abyss support, and collision
+  in `processional-spine/required-compression/threshold`.
+- Fixed seeds `2026072100..2026072149` select
+  `connector_example_01` 30 times and
+  `connector_flexible_vestibule_01` 20 times. Two independent runs accepted
+  and hard-validated 50/50 and reproduced result hash
+  `7103bc8cee5dcaf118398ca0c1588b1e003418708ca992175dbdbcaf51d07e61`.
+- Disabling either compression candidate leaves the other as the sole selected
+  recipe. Disabling both yields an explicit `RECIPE_SELECTION` rejection before
+  rendering with no generic-room substitution.
+- The landmark and return selections and resolutions are unchanged for all 50
+  seeds. On all 20 seeds retaining the existing vestibule, its resolution plus
+  the layout and tier-plan hashes are identical to Slice C.
+- The recipe workflow fixture passes 13/13. The complete Dungeon Lab suite is
+  146/149 with exactly the same three pre-existing failures recorded for Slices
+  A-C. Both editor projects and the test assembly compile with zero errors.
+- The recipe-pool plan is complete. Work stops after this proof; any additional
+  recipe requires separate explicit owner approval as one bounded asset
+  increment.
 
 ## Foundation already established
 

@@ -22,6 +22,7 @@ namespace DungeonLab.Editor
         private const string ThroneRecipeFixtureId = "episode_throne_twin_stairs_01";
         private const string VestibuleRecipeFixtureId = "connector_flexible_vestibule_01";
         private const string CornerReturnRecipeFixtureId = "connector_corner_return_01";
+        private const string ExampleRecipeFixtureId = "connector_example_01";
         private const string UnknownDisabledPreviewFixtureId =
             "preview_disabled_connector_slice_c_01";
         private const int Phase0BaselineFirstSeed = 2026072100;
@@ -2695,6 +2696,7 @@ namespace DungeonLab.Editor
                 DungeonRecipeValidationResult validation = DungeonRecipeValidator.ValidateContract(recipe);
                 string prefix = $"recipe{recipeIndex++}";
                 RecipeSlotIntent slot = null;
+                RouteIntent recipeIntent = intent;
                 foreach (RecipeSlotIntent candidate in intent.recipeSlots)
                 {
                     if (string.Equals(candidate.recipe.recipeId, recipe.recipeId, StringComparison.Ordinal))
@@ -2703,6 +2705,36 @@ namespace DungeonLab.Editor
                         break;
                     }
                 }
+
+                if (slot == null)
+                {
+                    using (IDisposable previewScope =
+                           DungeonRecipeCatalogService.BeginAuthoringPreview(
+                               recipe,
+                               out string previewError))
+                    {
+                        if (previewScope == null)
+                        {
+                            lines.Add($"{prefix}.previewError={previewError}");
+                        }
+                        else
+                        {
+                            recipeIntent = BuildDiagnosticRouteIntent(seed);
+                            foreach (RecipeSlotIntent candidate in recipeIntent.recipeSlots)
+                            {
+                                if (string.Equals(
+                                        candidate.recipe.recipeId,
+                                        recipe.recipeId,
+                                        StringComparison.Ordinal))
+                                {
+                                    slot = candidate;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+
                 lines.Add($"{prefix}.id={recipe.recipeId}");
                 lines.Add($"{prefix}.schema={recipe.schemaVersion}");
                 lines.Add($"{prefix}.slotNode={slot?.slotNode ?? -1}");
@@ -2717,7 +2749,7 @@ namespace DungeonLab.Editor
                 lines.Add($"{prefix}.transitions={recipe.transitions.Length}");
                 lines.Add($"{prefix}.symmetryPairs={recipe.symmetryPairs.Length}");
                 lines.Add($"{prefix}.variations={recipe.variations.Length}");
-                AppendIsolatedRecipeEvidence(lines, prefix, seed, intent, slot);
+                AppendIsolatedRecipeEvidence(lines, prefix, seed, recipeIntent, slot);
             }
 
             return string.Join("\n", lines);
@@ -3032,6 +3064,301 @@ namespace DungeonLab.Editor
             lines.Add($"noCandidate.rejected={noCandidateRejected}");
             lines.Add($"noCandidate.reason={noCandidateReason}");
             return string.Join("\n", lines);
+        }
+
+        private static string BuildSliceDRecipePoolProofSnapshot(int seed)
+        {
+            if (!DungeonRecipeCatalogService.TryLoadActiveCatalog(
+                    out ActiveDungeonRecipeCatalog catalog,
+                    out string rejectionReason) ||
+                !catalog.TryGet(ExampleRecipeFixtureId, out DungeonRecipeAsset exampleRecipe))
+            {
+                throw new InvalidOperationException(rejectionReason);
+            }
+
+            DungeonRecipeValidationResult contract =
+                DungeonRecipeValidator.ValidateContract(exampleRecipe);
+            bool firstGalleryPassed = DungeonRecipeAuthoringService.TryBuildPreviewGallery(
+                exampleRecipe,
+                seed,
+                out string firstGalleryPath,
+                out string firstGalleryMessage);
+            JObject firstGallery = firstGalleryPassed
+                ? JObject.Parse(File.ReadAllText(firstGalleryPath))
+                : new JObject();
+            bool secondGalleryPassed = DungeonRecipeAuthoringService.TryBuildPreviewGallery(
+                exampleRecipe,
+                seed,
+                out string secondGalleryPath,
+                out string secondGalleryMessage);
+            JObject secondGallery = secondGalleryPassed
+                ? JObject.Parse(File.ReadAllText(secondGalleryPath))
+                : new JObject();
+            var galleryKinds = new HashSet<string>(StringComparer.Ordinal);
+            foreach (JToken entry in firstGallery["entries"] as JArray ?? new JArray())
+            {
+                galleryKinds.Add(entry.Value<string>("kind") ?? string.Empty);
+            }
+
+            const int corpusFirstSeed = 2026072100;
+            const int corpusSeedCount = 50;
+            var firstSelections = new HashSet<string>(StringComparer.Ordinal);
+            var secondSelections = new HashSet<string>(StringComparer.Ordinal);
+            var firstRows = new List<string>(corpusSeedCount);
+            var secondRows = new List<string>(corpusSeedCount);
+            int firstAccepted = 0;
+            int secondAccepted = 0;
+            bool nonTargetSelectionsPreserved = true;
+            string firstCandidates = string.Empty;
+            for (int offset = 0; offset < corpusSeedCount; offset++)
+            {
+                int corpusSeed = corpusFirstSeed + offset;
+                JObject first = BuildPhase0SeedReport(corpusSeed);
+                JObject second = BuildPhase0SeedReport(corpusSeed);
+                firstAccepted += first.Value<bool?>("accepted") == true ? 1 : 0;
+                secondAccepted += second.Value<bool?>("accepted") == true ? 1 : 0;
+                JObject firstCompression = FindRecipeSlotProjection(
+                    first["routeIntent"]?["recipeSlots"] as JArray,
+                    CompressionRecipeSlotId);
+                JObject secondCompression = FindRecipeSlotProjection(
+                    second["routeIntent"]?["recipeSlots"] as JArray,
+                    CompressionRecipeSlotId);
+                JObject firstLandmark = FindRecipeSlotProjection(
+                    first["routeIntent"]?["recipeSlots"] as JArray,
+                    LandmarkRecipeSlotId);
+                JObject secondLandmark = FindRecipeSlotProjection(
+                    second["routeIntent"]?["recipeSlots"] as JArray,
+                    LandmarkRecipeSlotId);
+                JObject firstReturn = FindRecipeSlotProjection(
+                    first["routeIntent"]?["recipeSlots"] as JArray,
+                    ReturnRecipeSlotId);
+                JObject secondReturn = FindRecipeSlotProjection(
+                    second["routeIntent"]?["recipeSlots"] as JArray,
+                    ReturnRecipeSlotId);
+                string firstSelection = firstCompression?.Value<string>("id") ?? string.Empty;
+                string secondSelection = secondCompression?.Value<string>("id") ?? string.Empty;
+                firstSelections.Add(firstSelection);
+                secondSelections.Add(secondSelection);
+                if (offset == 0)
+                {
+                    var candidates = new List<string>();
+                    foreach (JToken candidate in
+                             firstCompression?["compatibleCandidateIds"] as JArray ??
+                             new JArray())
+                    {
+                        candidates.Add(candidate.Value<string>() ?? string.Empty);
+                    }
+
+                    firstCandidates = string.Join(",", candidates);
+                }
+
+                nonTargetSelectionsPreserved &=
+                    string.Equals(
+                        firstLandmark?.Value<string>("id"),
+                        ThroneRecipeFixtureId,
+                        StringComparison.Ordinal) &&
+                    string.Equals(
+                        secondLandmark?.Value<string>("id"),
+                        ThroneRecipeFixtureId,
+                        StringComparison.Ordinal) &&
+                    string.Equals(
+                        firstReturn?.Value<string>("id"),
+                        CornerReturnRecipeFixtureId,
+                        StringComparison.Ordinal) &&
+                    string.Equals(
+                        secondReturn?.Value<string>("id"),
+                        CornerReturnRecipeFixtureId,
+                        StringComparison.Ordinal);
+                firstRows.Add(SliceDSeedRow(corpusSeed, firstSelection, first));
+                secondRows.Add(SliceDSeedRow(corpusSeed, secondSelection, second));
+            }
+
+            bool withoutExampleResolved = TryResolveSliceDDisabledScenario(
+                catalog,
+                new[] { ExampleRecipeFixtureId },
+                seed,
+                out int withoutExampleActiveCount,
+                out string withoutExampleCompression,
+                out string withoutExampleLandmark,
+                out string withoutExampleReturn,
+                out string withoutExampleReason);
+            bool withoutVestibuleResolved = TryResolveSliceDDisabledScenario(
+                catalog,
+                new[] { VestibuleRecipeFixtureId },
+                seed,
+                out int withoutVestibuleActiveCount,
+                out string withoutVestibuleCompression,
+                out string withoutVestibuleLandmark,
+                out string withoutVestibuleReturn,
+                out string withoutVestibuleReason);
+            bool withoutBothResolved = TryResolveSliceDDisabledScenario(
+                catalog,
+                new[] { ExampleRecipeFixtureId, VestibuleRecipeFixtureId },
+                seed,
+                out int withoutBothActiveCount,
+                out string withoutBothCompression,
+                out _,
+                out _,
+                out string withoutBothReason);
+
+            string firstDigest = ComputeSha256(string.Join("\n", firstRows));
+            string secondDigest = ComputeSha256(string.Join("\n", secondRows));
+            JObject previewContext = firstGallery["previewContext"] as JObject;
+            return string.Join("\n", new[]
+            {
+                $"catalog.activeCount={catalog.recipes.Length}",
+                $"catalog.digest={catalog.digest}",
+                $"recipe.id={exampleRecipe.recipeId}",
+                $"recipe.kind={exampleRecipe.kind}",
+                $"recipe.disabledForGeneration={exampleRecipe.disabledForGeneration}",
+                $"recipe.contract={contract.Passed}",
+                $"recipe.schema={contract.LayerPassed(DungeonRecipeValidationLayer.Schema)}",
+                $"recipe.structure={contract.LayerPassed(DungeonRecipeValidationLayer.Structure)}",
+                $"recipe.variation={contract.LayerPassed(DungeonRecipeValidationLayer.Variation)}",
+                $"recipe.neighbor={contract.LayerPassed(DungeonRecipeValidationLayer.Neighbor)}",
+                $"recipe.transitionImplementation={(exampleRecipe.motifs.Length == 1 ? exampleRecipe.motifs[0].implementationId : string.Empty)}",
+                $"gallery.firstPassed={firstGalleryPassed}",
+                $"gallery.secondPassed={secondGalleryPassed}",
+                $"gallery.samePath={string.Equals(firstGalleryPath, secondGalleryPath, StringComparison.Ordinal)}",
+                $"gallery.sameHash={string.Equals(firstGallery.Value<string>("galleryHash"), secondGallery.Value<string>("galleryHash"), StringComparison.Ordinal)}",
+                $"gallery.isolated={galleryKinds.IsSupersetOf(new[] { "contract", "top_down", "player_height", "below_floor" })}",
+                $"gallery.neighbor={galleryKinds.Contains("neighbor")}",
+                $"gallery.canonical={firstGallery["fullDungeon"]?.Value<bool?>("canonicalPlan") == true}",
+                $"gallery.renderer={firstGallery["fullDungeon"]?.Value<bool?>("renderer") == true}",
+                $"gallery.abyss={firstGallery["fullDungeon"]?.Value<bool?>("abyssSupport") == true}",
+                $"gallery.collision={firstGallery["fullDungeon"]?.Value<bool?>("collision") == true}",
+                $"gallery.message={firstGalleryMessage}",
+                $"gallery.secondMessage={secondGalleryMessage}",
+                $"context.forced={previewContext?.Value<bool?>("forced") == true}",
+                $"context.recipeId={previewContext?.Value<string>("forcedRecipeId") ?? string.Empty}",
+                $"context.slotId={previewContext?.Value<string>("recipeSlotId") ?? string.Empty}",
+                $"corpus.firstSeed={corpusFirstSeed}",
+                $"corpus.seedCount={corpusSeedCount}",
+                $"corpus.firstAccepted={firstAccepted}",
+                $"corpus.secondAccepted={secondAccepted}",
+                $"corpus.firstSelections={string.Join(",", firstSelections.OrderBy(value => value, StringComparer.Ordinal))}",
+                $"corpus.secondSelections={string.Join(",", secondSelections.OrderBy(value => value, StringComparer.Ordinal))}",
+                $"corpus.candidates={firstCandidates}",
+                $"corpus.firstDigest={firstDigest}",
+                $"corpus.secondDigest={secondDigest}",
+                $"corpus.repeatable={string.Equals(firstDigest, secondDigest, StringComparison.Ordinal)}",
+                $"corpus.nonTargetSelectionsPreserved={nonTargetSelectionsPreserved}",
+                $"withoutExample.resolved={withoutExampleResolved}",
+                $"withoutExample.activeCount={withoutExampleActiveCount}",
+                $"withoutExample.compression={withoutExampleCompression}",
+                $"withoutExample.landmark={withoutExampleLandmark}",
+                $"withoutExample.return={withoutExampleReturn}",
+                $"withoutExample.reason={withoutExampleReason}",
+                $"withoutVestibule.resolved={withoutVestibuleResolved}",
+                $"withoutVestibule.activeCount={withoutVestibuleActiveCount}",
+                $"withoutVestibule.compression={withoutVestibuleCompression}",
+                $"withoutVestibule.landmark={withoutVestibuleLandmark}",
+                $"withoutVestibule.return={withoutVestibuleReturn}",
+                $"withoutVestibule.reason={withoutVestibuleReason}",
+                $"withoutBoth.resolved={withoutBothResolved}",
+                $"withoutBoth.activeCount={withoutBothActiveCount}",
+                $"withoutBoth.compression={withoutBothCompression}",
+                $"withoutBoth.reason={withoutBothReason}"
+            });
+        }
+
+        private static JObject FindRecipeSlotProjection(JArray slots, string slotId)
+        {
+            foreach (JToken slot in slots ?? new JArray())
+            {
+                if (string.Equals(
+                        slot.Value<string>("recipeSlotId"),
+                        slotId,
+                        StringComparison.Ordinal))
+                {
+                    return slot as JObject;
+                }
+            }
+
+            return null;
+        }
+
+        private static string SliceDSeedRow(int seed, string selection, JObject report)
+        {
+            return string.Join("|", new[]
+            {
+                seed.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                selection ?? string.Empty,
+                report["hashes"]?.Value<string>("routeIntent") ?? string.Empty,
+                report["hashes"]?.Value<string>("recipeResolutions") ?? string.Empty,
+                report["hashes"]?.Value<string>("canonical") ?? string.Empty
+            });
+        }
+
+        private static bool TryResolveSliceDDisabledScenario(
+            ActiveDungeonRecipeCatalog sourceCatalog,
+            IReadOnlyCollection<string> disabledRecipeIds,
+            int seed,
+            out int activeCount,
+            out string compressionRecipeId,
+            out string landmarkRecipeId,
+            out string returnRecipeId,
+            out string rejectionReason)
+        {
+            activeCount = 0;
+            compressionRecipeId = string.Empty;
+            landmarkRecipeId = string.Empty;
+            returnRecipeId = string.Empty;
+            rejectionReason = string.Empty;
+            var clones = new List<DungeonRecipeAsset>(sourceCatalog.recipes.Length);
+            try
+            {
+                foreach (DungeonRecipeAsset source in sourceCatalog.recipes)
+                {
+                    DungeonRecipeAsset clone = Instantiate(source);
+                    clone.hideFlags = HideFlags.HideAndDontSave;
+                    clone.disabledForGeneration =
+                        disabledRecipeIds.Contains(source.recipeId);
+                    clones.Add(clone);
+                }
+
+                if (!DungeonRecipeCatalogService.TryBuildActiveCatalog(
+                        clones,
+                        out ActiveDungeonRecipeCatalog scenarioCatalog,
+                        out rejectionReason))
+                {
+                    return false;
+                }
+
+                activeCount = scenarioCatalog.recipes.Length;
+                RouteIntent unresolved = BuildSelectedRouteIntent(
+                    SelectRoutePattern(seed),
+                    seed,
+                    Array.Empty<RecipeSlotIntent>(),
+                    string.Empty);
+                if (!TryResolveRequiredRecipeSlots(
+                        scenarioCatalog,
+                        unresolved,
+                        out RecipeSlotIntent[] slots,
+                        out rejectionReason))
+                {
+                    return false;
+                }
+
+                foreach (RecipeSlotIntent slot in slots)
+                {
+                    if (string.Equals(slot.slotId, CompressionRecipeSlotId, StringComparison.Ordinal))
+                        compressionRecipeId = slot.recipe.recipeId;
+                    if (string.Equals(slot.slotId, LandmarkRecipeSlotId, StringComparison.Ordinal))
+                        landmarkRecipeId = slot.recipe.recipeId;
+                    if (string.Equals(slot.slotId, ReturnRecipeSlotId, StringComparison.Ordinal))
+                        returnRecipeId = slot.recipe.recipeId;
+                }
+
+                return true;
+            }
+            finally
+            {
+                foreach (DungeonRecipeAsset clone in clones)
+                {
+                    DestroyImmediate(clone);
+                }
+            }
         }
 
         private static string BuildRecipeAuthoringPreviewIsolationSnapshot(int seed)
@@ -4322,20 +4649,24 @@ namespace DungeonLab.Editor
             if (!DungeonRecipeCatalogService.TryLoadActiveCatalog(
                     out ActiveDungeonRecipeCatalog catalog,
                     out message) ||
+                phase1LastRouteIntent?.recipeSlots == null ||
                 plan.recipeResolutions == null ||
-                plan.recipeResolutions.Length != catalog.recipes.Length)
+                plan.recipeResolutions.Length != phase1LastRouteIntent.recipeSlots.Length)
             {
                 message = string.IsNullOrEmpty(message)
-                    ? $"expected {catalog?.recipes.Length ?? 0} recipe resolutions; found {plan.recipeResolutions?.Length ?? 0}"
+                    ? $"expected {phase1LastRouteIntent?.recipeSlots?.Length ?? 0} selected recipe resolutions; found {plan.recipeResolutions?.Length ?? 0}"
                     : message;
                 return false;
             }
 
-            foreach (DungeonRecipeAsset recipe in catalog.recipes)
+            foreach (RecipeSlotIntent slot in phase1LastRouteIntent.recipeSlots)
             {
+                DungeonRecipeAsset recipe = slot.recipe;
                 string requiredId = recipe.recipeId;
                 RecipeResolution resolution = FindRecipeResolution(plan.recipeResolutions, requiredId);
-                if (!resolution.atomicAndValid ||
+                if (!catalog.TryGet(requiredId, out DungeonRecipeAsset catalogRecipe) ||
+                    !ReferenceEquals(recipe, catalogRecipe) ||
+                    !resolution.atomicAndValid ||
                     resolution.primaryAxis == Vector2Int.zero ||
                     resolution.ports == null || resolution.ports.Length != recipe.ports.Length ||
                     resolution.transitions == null || resolution.transitions.Length != recipe.transitions.Length ||
@@ -4361,7 +4692,7 @@ namespace DungeonLab.Editor
                 }
             }
 
-            message = $"three active recipes resolved atomically with catalog {catalog.digest}";
+            message = $"three selected recipes resolved atomically with catalog {catalog.digest}";
             return true;
         }
 

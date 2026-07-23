@@ -1,6 +1,6 @@
 # Dungeon recipe authoring workflow
 
-Status: current for recipe schema v1 and Slice C authoring preview
+Status: current for recipe schema v1 and the completed Slice D pool proof
 Last updated: 2026-07-24
 
 This is the operational checklist for creating or changing a room recipe. Use
@@ -59,6 +59,12 @@ previously unknown recipe is forced into one compatible existing required slot
 without a production C# binding. The scope temporarily replaces the production
 candidate that ordinary selection would use and is always disposed before
 ordinary generation resumes.
+
+The proven `required-compression` pool currently contains
+`connector_example_01` and `connector_flexible_vestibule_01`. Both use the same
+selector, placement, canonical-plan, renderer, abyss, and collision paths.
+Additional recipe content requires separate explicit owner approval, one
+bounded asset increment at a time.
 
 ## 1. Availability
 

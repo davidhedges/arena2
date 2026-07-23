@@ -48,7 +48,7 @@ namespace Arena.Tests.Editor
             var serializedCatalog = new SerializedObject(catalog);
             Assert.That(serializedCatalog.FindProperty("schemaVersion").intValue, Is.EqualTo(1));
             SerializedProperty recipes = serializedCatalog.FindProperty("recipes");
-            Assert.That(recipes.arraySize, Is.EqualTo(3));
+            Assert.That(recipes.arraySize, Is.EqualTo(4));
             for (int index = 0; index < recipes.arraySize; index++)
             {
                 Assert.That(recipes.GetArrayElementAtIndex(index).objectReferenceValue, Is.Not.Null);
