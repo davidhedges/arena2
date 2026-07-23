@@ -98,21 +98,37 @@ namespace DungeonLab.Editor
     {
         public const int CurrentSchemaVersion = 1;
 
+        [Tooltip("Stable lowercase identifier used by catalogs, deterministic selection, reports, and generated hierarchy names.")]
         public string recipeId = string.Empty;
+        [Tooltip("Human-readable recipe name shown in authoring and review tools.")]
         public string displayName = string.Empty;
+        [Tooltip("Connector recipes describe traversal rooms; Episode recipes describe larger atomic compositions.")]
         public DungeonRecipeKind kind;
+        [Tooltip("Serialized recipe schema version. This must match the version supported by the current generator.")]
         public int schemaVersion = CurrentSchemaVersion;
+        [Tooltip("Owner-maintained revision number for authored content changes that keep the same stable recipe ID.")]
         public int contentVersion = 1;
+        [Tooltip("Excludes this recipe from ordinary catalog generation while still allowing explicit authoring previews.")]
         public bool disabledForGeneration = true;
+        [Tooltip("Route node roles for which this recipe may be selected, such as connector.")]
         public string[] eligibleRoles = Array.Empty<string>();
+        [Tooltip("Journey beats for which this recipe may be selected, such as return or compression.")]
         public string[] eligibleBeats = Array.Empty<string>();
+        [Tooltip("Allows the generator to reflect the recipe across its route-forward axis when matching neighbors.")]
         public bool allowMirror;
+        [Tooltip("Allowed clockwise quarter-turns after the recipe's route-forward axis is resolved.")]
         public int[] legalQuarterTurns = { 0, 1, 2, 3 };
+        [Tooltip("Walkable, elevated, and protected spatial regions declared on the recipe-local cell grid.")]
         public DungeonRecipeZone[] zones = Array.Empty<DungeonRecipeZone>();
+        [Tooltip("Typed corridor connections bound to route edges when the recipe is placed.")]
         public DungeonRecipePort[] ports = Array.Empty<DungeonRecipePort>();
+        [Tooltip("Named stair or focal visual implementations used by transitions and weighted variations.")]
         public DungeonRecipeMotif[] motifs = Array.Empty<DungeonRecipeMotif>();
+        [Tooltip("Atomic elevation changes with exact cells, landings, footprint, rise, lane, and headroom requirements.")]
         public DungeonRecipeTransition[] transitions = Array.Empty<DungeonRecipeTransition>();
+        [Tooltip("Pairs of zones that must remain mirrored across the recipe's primary route axis.")]
         public DungeonRecipeSymmetryPair[] symmetryPairs = Array.Empty<DungeonRecipeSymmetryPair>();
+        [Tooltip("Weighted visual alternatives that preserve this recipe's structural contract.")]
         public DungeonRecipeVariation[] variations = Array.Empty<DungeonRecipeVariation>();
     }
 }

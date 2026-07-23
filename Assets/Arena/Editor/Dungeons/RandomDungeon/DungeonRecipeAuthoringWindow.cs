@@ -13,6 +13,46 @@ namespace DungeonLab.Editor
     internal sealed class DungeonRecipeAuthoringWindow : EditorWindow
     {
         private const int PreviewSeed = 2026072100;
+        private static readonly GUIContent RecipeSourceHeading = new GUIContent(
+            "Recipe source of truth",
+            "Select the DungeonRecipeAsset whose availability, validation result, and contract overlay this window displays.");
+        private static readonly GUIContent RecipeField = new GUIContent(
+            "Recipe",
+            "The DungeonRecipeAsset to inspect. Detailed zones, ports, motifs, transitions, symmetry pairs, and variations are edited in the asset's normal Inspector.");
+        private static readonly GUIContent CreateDisabledHeading = new GUIContent(
+            "Create disabled recipe",
+            "Creates a new empty recipe asset that is disabled for ordinary dungeon generation until you explicitly enable it.");
+        private static readonly GUIContent StableIdField = new GUIContent(
+            "Stable ID",
+            "The permanent unique recipe ID and asset filename. Use only lowercase letters, digits, and underscores, for example connector_my_room_01.");
+        private static readonly GUIContent KindField = new GUIContent(
+            "Kind",
+            "Connector creates a traversal-focused recipe under Recipes/Rooms. Episode creates an atomic architectural composition under Recipes/Episodes.");
+        private static readonly GUIContent CreateButton = new GUIContent(
+            "Create explicit disabled asset",
+            "Creates the empty recipe asset with schema version 1, content version 1, and Disabled For Generation enabled. It does not add ports, zones, or catalog membership.");
+        private static readonly GUIContent SchemaContentField = new GUIContent(
+            "Schema / content",
+            "The serialized recipe schema version followed by its owner-maintained content version. Schema must be 1 and content must be positive.");
+        private static readonly GUIContent DigestField = new GUIContent(
+            "Digest",
+            "The computed SHA-256 identity of the recipe's current authored content. It is diagnostic evidence, not an approval or availability state.");
+        private static readonly GUIContent DisabledField = new GUIContent(
+            "Disabled for generation",
+            "When checked, ordinary dungeon generation excludes this recipe even if it belongs to the catalog. Valid disabled recipes can still be previewed.");
+        private static readonly GUIContent ValidateButton = new GUIContent(
+            "Validate",
+            "Runs the current schema, structure, variation, and generic-neighbor contract checks without changing the recipe.");
+        private static readonly GUIContent GalleryButton = new GUIContent(
+            "Build deterministic gallery",
+            $"Forces this valid recipe into one compatible existing route slot using fixed seed {PreviewSeed}, runs full-dungeon evidence, and writes diagnostic overlays plus a manifest under DungeonLabReports/Recipes/<recipe-id>/.");
+        private static readonly GUIContent ContractOverlayHeading = new GUIContent(
+            "Contract overlay",
+            "A schematic local-grid view of the recipe's zones, ports, transition reservations, headroom, and protected axis. It is not a rendered room screenshot.");
+        private static readonly GUIContent OutputField = new GUIContent(
+            "Validation / gallery output",
+            "The most recent validation result or deterministic-gallery path and result produced by this window.");
+
         private DungeonRecipeAsset recipe;
         private string draftId = "connector_new_01";
         private DungeonRecipeKind draftKind = DungeonRecipeKind.Connector;
@@ -68,9 +108,9 @@ namespace DungeonLab.Editor
         private void OnGUI()
         {
             scroll = EditorGUILayout.BeginScrollView(scroll);
-            EditorGUILayout.LabelField("Recipe source of truth", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField(RecipeSourceHeading, EditorStyles.boldLabel);
             recipe = (DungeonRecipeAsset)EditorGUILayout.ObjectField(
-                "Recipe",
+                RecipeField,
                 recipe,
                 typeof(DungeonRecipeAsset),
                 allowSceneObjects: false);
@@ -78,10 +118,10 @@ namespace DungeonLab.Editor
             if (recipe == null)
             {
                 EditorGUILayout.Space();
-                EditorGUILayout.LabelField("Create disabled recipe", EditorStyles.boldLabel);
-                draftId = EditorGUILayout.TextField("Stable ID", draftId);
-                draftKind = (DungeonRecipeKind)EditorGUILayout.EnumPopup("Kind", draftKind);
-                if (GUILayout.Button("Create explicit disabled asset"))
+                EditorGUILayout.LabelField(CreateDisabledHeading, EditorStyles.boldLabel);
+                draftId = EditorGUILayout.TextField(StableIdField, draftId);
+                draftKind = (DungeonRecipeKind)EditorGUILayout.EnumPopup(KindField, draftKind);
+                if (GUILayout.Button(CreateButton))
                 {
                     recipe = DungeonRecipeAuthoringService.CreateDisabled(draftId, draftKind);
                     Selection.activeObject = recipe;
@@ -92,26 +132,27 @@ namespace DungeonLab.Editor
             }
 
             string digest = DungeonRecipeValidator.ComputeContentDigest(recipe);
-            EditorGUILayout.LabelField("Schema / content", $"{recipe.schemaVersion} / {recipe.contentVersion}");
-            EditorGUILayout.LabelField("Digest", digest);
+            EditorGUILayout.LabelField(
+                SchemaContentField,
+                new GUIContent($"{recipe.schemaVersion} / {recipe.contentVersion}"));
+            EditorGUILayout.LabelField(DigestField, new GUIContent(digest));
             EditorGUI.BeginChangeCheck();
-            bool disabled = EditorGUILayout.Toggle("Disabled for generation", recipe.disabledForGeneration);
+            bool disabled = EditorGUILayout.Toggle(DisabledField, recipe.disabledForGeneration);
             if (EditorGUI.EndChangeCheck())
             {
                 Undo.RecordObject(recipe, "Change recipe availability");
                 recipe.disabledForGeneration = disabled;
                 EditorUtility.SetDirty(recipe);
             }
-
             using (new EditorGUILayout.HorizontalScope())
             {
-                if (GUILayout.Button("Validate"))
+                if (GUILayout.Button(ValidateButton))
                 {
                     output = DungeonRecipeAuthoringService.FormatValidation(
                         DungeonRecipeValidator.ValidateContract(recipe));
                 }
 
-                if (GUILayout.Button("Build deterministic gallery"))
+                if (GUILayout.Button(GalleryButton))
                 {
                     DungeonRecipeAuthoringService.TryBuildPreviewGallery(
                         recipe,
@@ -123,12 +164,13 @@ namespace DungeonLab.Editor
             }
 
             EditorGUILayout.Space();
-            EditorGUILayout.LabelField("Contract overlay", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField(ContractOverlayHeading, EditorStyles.boldLabel);
             Rect previewRect = GUILayoutUtility.GetRect(320f, 320f, GUILayout.ExpandWidth(false));
             DrawContractOverlay(previewRect, recipe);
             EditorGUILayout.HelpBox(
                 "Blue: walkable, orange: elevated, green: protected circulation, magenta: protected focal, white: labeled ports, red: transition footprints/landings, cyan: protected route or focal axis. H labels show reserved headroom; exact numeric data remains in the asset inspector and validation report.",
                 MessageType.Info);
+            EditorGUILayout.LabelField(OutputField);
             EditorGUILayout.TextArea(output ?? string.Empty, GUILayout.MinHeight(100f));
             EditorGUILayout.EndScrollView();
         }
@@ -290,6 +332,135 @@ namespace DungeonLab.Editor
             for (int x = zone.offset.x; x < zone.offset.x + zone.size.x; x++)
             for (int y = zone.offset.y; y < zone.offset.y + zone.size.y; y++)
                 yield return new Vector2Int(x, y);
+        }
+    }
+
+    public static class DungeonRecipeBatchPreview
+    {
+        private const string RecipeAssetEnvironmentVariable =
+            "ARENA_DUNGEON_RECIPE_PREVIEW_ASSET";
+        private const string PreviewSeedEnvironmentVariable =
+            "ARENA_DUNGEON_RECIPE_PREVIEW_SEED";
+        private const int DefaultPreviewSeed = 2026072100;
+        private const string QueuedRequestPath =
+            "Temp/DungeonRecipePreviewRequest.txt";
+        private const string QueuedResultPath =
+            "Temp/DungeonRecipePreviewResult.txt";
+
+        [InitializeOnLoadMethod]
+        private static void ScheduleQueuedPreview()
+        {
+            EditorApplication.delayCall += ProcessQueuedPreview;
+        }
+
+        [MenuItem("Arena/Dungeons/Recipes/Process Queued Preview")]
+        private static void ProcessQueuedPreviewFromMenu()
+        {
+            ProcessQueuedPreview();
+        }
+
+        private static void ProcessQueuedPreview()
+        {
+            if (!File.Exists(QueuedRequestPath))
+            {
+                return;
+            }
+
+            if (EditorApplication.isCompiling || EditorApplication.isUpdating)
+            {
+                EditorApplication.delayCall += ProcessQueuedPreview;
+                return;
+            }
+
+            string assetPath = File.ReadAllText(QueuedRequestPath).Trim();
+            File.Delete(QueuedRequestPath);
+            try
+            {
+                AssetDatabase.ImportAsset(assetPath, ImportAssetOptions.ForceUpdate);
+                DungeonRecipeAsset recipe =
+                    AssetDatabase.LoadAssetAtPath<DungeonRecipeAsset>(assetPath);
+                if (recipe == null)
+                {
+                    throw new InvalidOperationException(
+                        $"No DungeonRecipeAsset exists at '{assetPath}'.");
+                }
+
+                if (!DungeonRecipeAuthoringService.TryBuildPreviewGallery(
+                        recipe,
+                        DefaultPreviewSeed,
+                        out string manifestPath,
+                        out string message))
+                {
+                    throw new InvalidOperationException(message);
+                }
+
+                using (IDisposable preview =
+                       DungeonRecipeCatalogService.BeginAuthoringPreview(
+                           recipe,
+                           out string previewError))
+                {
+                    if (preview == null)
+                    {
+                        throw new InvalidOperationException(previewError);
+                    }
+
+                    DungeonLabGenerator.GenerateWithSeed(DefaultPreviewSeed);
+                }
+
+                string result =
+                    $"PASS\nrecipe={recipe.recipeId}\nmanifest={manifestPath}\n" +
+                    $"scenePreview=Generated Dungeon\n{message}";
+                File.WriteAllText(QueuedResultPath, result);
+                Debug.Log($"Dungeon recipe queued preview passed:\n{result}");
+            }
+            catch (Exception exception)
+            {
+                string result = $"FAIL\nasset={assetPath}\n{exception}";
+                File.WriteAllText(QueuedResultPath, result);
+                Debug.LogError($"Dungeon recipe queued preview failed:\n{result}");
+            }
+        }
+
+        public static void BuildFromEnvironment()
+        {
+            string assetPath =
+                Environment.GetEnvironmentVariable(RecipeAssetEnvironmentVariable) ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(assetPath))
+            {
+                throw new InvalidOperationException(
+                    $"{RecipeAssetEnvironmentVariable} must name a DungeonRecipeAsset under Assets/.");
+            }
+
+            assetPath = assetPath.Trim().Replace('\\', '/');
+            DungeonRecipeAsset recipe = AssetDatabase.LoadAssetAtPath<DungeonRecipeAsset>(assetPath);
+            if (recipe == null)
+            {
+                throw new InvalidOperationException(
+                    $"No DungeonRecipeAsset exists at '{assetPath}'.");
+            }
+
+            int seed = DefaultPreviewSeed;
+            string configuredSeed =
+                Environment.GetEnvironmentVariable(PreviewSeedEnvironmentVariable) ?? string.Empty;
+            if (!string.IsNullOrWhiteSpace(configuredSeed) &&
+                !int.TryParse(configuredSeed, out seed))
+            {
+                throw new InvalidOperationException(
+                    $"{PreviewSeedEnvironmentVariable} must be an integer when provided.");
+            }
+
+            if (!DungeonRecipeAuthoringService.TryBuildPreviewGallery(
+                    recipe,
+                    seed,
+                    out string manifestPath,
+                    out string message))
+            {
+                throw new InvalidOperationException(
+                    $"Dungeon recipe batch preview failed for '{recipe.recipeId}'.\n{message}");
+            }
+
+            Debug.Log(
+                $"Dungeon recipe batch preview passed for '{recipe.recipeId}': {manifestPath}\n{message}");
         }
     }
 

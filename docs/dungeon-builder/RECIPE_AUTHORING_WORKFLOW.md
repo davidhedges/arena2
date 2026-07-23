@@ -8,6 +8,10 @@ This is the operational checklist for creating or changing a room recipe. Use
 recipe slot, availability, catalog, episode, motif, role, beat, room, port, and
 zone.
 
+For the literal click-by-click procedure, complete flat-room template, every
+schema-v1 field, current fixed-slot limitations, and exact error checklist, use
+[`ROOM_AUTHORING_GUIDE_CURRENT.md`](ROOM_AUTHORING_GUIDE_CURRENT.md).
+
 The current schema has only `Connector` and `Episode` recipe kinds. Validation
 and deterministic previews are authoring tools. Ordinary generation admits a
 recipe only when all three conditions hold:
@@ -44,7 +48,7 @@ reason when an enabled asset is invalid.
 Write a one-page brief
     -> Create a disabled recipe asset
     -> Declare zones, typed ports, reservations, and intent
-    -> Attach only explicit compatible motifs and prefabs
+    -> Attach only explicit compatible motif implementation IDs
     -> Validate the current contract
     -> Build deterministic preview evidence
     -> Add it to the explicit catalog when intended
@@ -95,8 +99,9 @@ DungeonLabReports/Recipes/
 
 - The recipe `ScriptableObject` is the semantic source of truth.
 - The explicit catalog asset owns membership.
-- A composed prefab is an explicitly referenced visual payload, not a source of
-  inferred ports or dimensions.
+- Schema v1 has no room-prefab field. A recipe cannot point at an arbitrary
+  room prefab. Its motifs may resolve existing reviewed visual implementations
+  by explicit string ID; ports and dimensions still come only from recipe data.
 - Generated reports and galleries are evidence, not authoring inputs.
 - Shared measured stairs, bridges, set pieces, and step formations stay in
   their existing content libraries and are referenced through explicit
