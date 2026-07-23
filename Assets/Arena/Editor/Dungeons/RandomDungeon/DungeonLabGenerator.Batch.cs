@@ -1592,6 +1592,11 @@ namespace DungeonLab.Editor
                 SnapshotLine("validation.routeRequirements", report["validation"]?["routeRequirements"]?["passed"]),
                 SnapshotLine("validation.recipes", report["validation"]?["recipes"]?["passed"]),
                 SnapshotLine("validation.headroom", report["validation"]?["headroom"]?["passed"]),
+                SnapshotLine(
+                    "recipe.approachTransitionConflicts",
+                    CountReservedRecipeApproachTransitionConflicts(
+                        report["recipeResolutions"] as JArray,
+                        report["existingTransitions"] as JArray)),
                 SnapshotLine("metric.rooms", report["layout"]?["rooms"]),
                 SnapshotLine("metric.connections", report["layout"]?["connections"]),
                 SnapshotLine("metric.loopEdges", report["layout"]?["graph"]?["loopEdges"]),
@@ -1602,6 +1607,75 @@ namespace DungeonLab.Editor
                 lines,
                 report["recipeResolutions"] as JArray);
             return string.Join("\n", lines);
+        }
+
+        private static int CountReservedRecipeApproachTransitionConflicts(
+            JArray recipeResolutions,
+            JArray existingTransitions)
+        {
+            var requiredApproachCells = new HashSet<Vector2Int>();
+            foreach (JToken recipe in recipeResolutions ?? new JArray())
+            {
+                foreach (JToken port in recipe["ports"] as JArray ?? new JArray())
+                {
+                    Vector2Int portCell = ProjectedCell(port["cell"]);
+                    Vector2Int outward = ProjectedCell(port["outwardDirection"]);
+                    bool transitionAbutsWallEnd = false;
+                    foreach (JToken transition in recipe["transitions"] as JArray ?? new JArray())
+                    {
+                        foreach (JToken footprint in
+                                 transition["footprintCells"] as JArray ?? new JArray())
+                        {
+                            Vector2Int offset = ProjectedCell(footprint) - portCell;
+                            transitionAbutsWallEnd |=
+                                Mathf.Abs(offset.x) + Mathf.Abs(offset.y) == 1 &&
+                                offset.x * outward.x + offset.y * outward.y == 0;
+                        }
+                    }
+
+                    if (!transitionAbutsWallEnd)
+                    {
+                        continue;
+                    }
+
+                    foreach (JToken approach in port["approachCells"] as JArray ?? new JArray())
+                    {
+                        requiredApproachCells.Add(ProjectedCell(approach));
+                    }
+                }
+            }
+
+            int conflicts = 0;
+            foreach (JToken transition in existingTransitions ?? new JArray())
+            {
+                var occupied = new HashSet<Vector2Int>
+                {
+                    ProjectedCell(transition["firstCell"]),
+                    ProjectedCell(transition["secondCell"])
+                };
+                foreach (JToken footprint in
+                         transition["footprintCells"] as JArray ?? new JArray())
+                {
+                    occupied.Add(ProjectedCell(footprint));
+                }
+
+                foreach (Vector2Int cell in occupied)
+                {
+                    if (requiredApproachCells.Contains(cell))
+                    {
+                        conflicts++;
+                    }
+                }
+            }
+
+            return conflicts;
+        }
+
+        private static Vector2Int ProjectedCell(JToken token)
+        {
+            return new Vector2Int(
+                token?.Value<int?>("x") ?? int.MinValue,
+                token?.Value<int?>("y") ?? int.MinValue);
         }
 
         private static string BuildRouteIntentOnlySnapshot(int seed)
@@ -2763,6 +2837,7 @@ namespace DungeonLab.Editor
                 string prefix = $"recipe{index}";
                 int elevatedZoneCount = 0;
                 int protectedFocalCellCount = 0;
+                int approachCellCount = 0;
                 int elevatedLevel = token.Value<int?>("baseLevel") ?? 0;
                 foreach (JToken zone in token["zones"] as JArray ?? new JArray())
                 {
@@ -2787,14 +2862,29 @@ namespace DungeonLab.Editor
                     }
                 }
 
+                foreach (JToken port in token["ports"] as JArray ?? new JArray())
+                {
+                    approachCellCount += (port["approachCells"] as JArray)?.Count ?? 0;
+                }
+
                 lines.Add(SnapshotLine($"{prefix}.id", token["id"]));
                 lines.Add(SnapshotLine($"{prefix}.atomic", token["atomicAndValid"]));
                 lines.Add(SnapshotLine($"{prefix}.roomIndex", token["roomIndex"]));
                 lines.Add(SnapshotLine($"{prefix}.primaryAxis", token["primaryAxis"]));
                 lines.Add(SnapshotLine($"{prefix}.ports", token["ports"] is JArray ports ? ports.Count : 0));
                 lines.Add(SnapshotLine($"{prefix}.portsBound", token["mandatoryPortsBound"]));
+                lines.Add(SnapshotLine($"{prefix}.approachCells", approachCellCount));
                 lines.Add(SnapshotLine($"{prefix}.transitions", token["transitions"] is JArray transitions ? transitions.Count : 0));
                 lines.Add(SnapshotLine($"{prefix}.reservationsComplete", token["reservationsComplete"]));
+                lines.Add(SnapshotLine(
+                    $"{prefix}.showpieceRequiredFloorCells",
+                    token["showpieceRequiredFloorCells"] is JArray requiredFloor ? requiredFloor.Count : 0));
+                lines.Add(SnapshotLine(
+                    $"{prefix}.showpieceWallMarginCells",
+                    token["showpieceWallMarginCells"] is JArray wallMargins ? wallMargins.Count : 0));
+                lines.Add(SnapshotLine(
+                    $"{prefix}.showpieceBackdropVoidCells",
+                    token["showpieceBackdropVoidCells"] is JArray backdropVoid ? backdropVoid.Count : 0));
                 lines.Add(SnapshotLine($"{prefix}.protected", token["protectedCells"] is JArray protectedCells ? protectedCells.Count : 0));
                 lines.Add(SnapshotLine($"{prefix}.protectedZonesValid", token["protectedZonesValid"]));
                 lines.Add(SnapshotLine($"{prefix}.elevatedZones", elevatedZoneCount));
@@ -3662,8 +3752,12 @@ namespace DungeonLab.Editor
             }
 
             var ports = new JArray();
+            bool reservationsComplete = true;
             foreach (RecipePortPlacement port in resolution.ports ?? Array.Empty<RecipePortPlacement>())
             {
+                Vector2Int[] approachCells = BuildRecipePortApproachReservationCells(port);
+                reservationsComplete &= approachCells.Length ==
+                    port.widthCells * port.approachDepthCells;
                 ports.Add(new JObject
                 {
                     ["id"] = port.id,
@@ -3673,12 +3767,15 @@ namespace DungeonLab.Editor
                     ["neighborRoomIndex"] = port.neighborRoomIndex,
                     ["cell"] = CellToken(port.cell),
                     ["outwardDirection"] = CellToken(port.outwardDirection),
-                    ["expectedRelativeLevel"] = port.expectedRelativeLevel
+                    ["expectedRelativeLevel"] = port.expectedRelativeLevel,
+                    ["widthCells"] = port.widthCells,
+                    ["approachDepthCells"] = port.approachDepthCells,
+                    ["headroomLevels"] = port.headroomLevels,
+                    ["approachCells"] = CellsToken(approachCells, sort: false)
                 });
             }
 
             var recipeTransitions = new JArray();
-            bool reservationsComplete = true;
             foreach (RecipeTransitionPlacement transition in
                      resolution.transitions ?? Array.Empty<RecipeTransitionPlacement>())
             {
@@ -3698,6 +3795,14 @@ namespace DungeonLab.Editor
                 });
             }
 
+            if (!string.IsNullOrEmpty(resolution.selectedVisualImplementationId))
+            {
+                reservationsComplete &=
+                    (resolution.showpieceReservation.requiredFloorCells?.Length ?? 0) > 0 &&
+                    (resolution.showpieceReservation.wallMarginCells?.Length ?? 0) > 0 &&
+                    (resolution.showpieceReservation.backdropVoidCells?.Length ?? 0) > 0;
+            }
+
             return new JObject
             {
                 ["id"] = resolution.id,
@@ -3714,6 +3819,15 @@ namespace DungeonLab.Editor
                 ["selectedVisualImplementationId"] = resolution.selectedVisualImplementationId,
                 ["showpieceOriginCell"] = CellToken(resolution.showpieceOriginCell),
                 ["showpieceYawDegrees"] = resolution.showpieceYawDegrees,
+                ["showpieceRequiredFloorCells"] = CellsToken(
+                    resolution.showpieceReservation.requiredFloorCells,
+                    sort: false),
+                ["showpieceWallMarginCells"] = CellsToken(
+                    resolution.showpieceReservation.wallMarginCells,
+                    sort: false),
+                ["showpieceBackdropVoidCells"] = CellsToken(
+                    resolution.showpieceReservation.backdropVoidCells,
+                    sort: false),
                 ["baseLevel"] = resolution.baseLevel,
                 ["atomicAndValid"] = resolution.atomicAndValid,
                 ["mandatoryPortsBound"] = resolution.atomicAndValid && ports.Count > 0,
@@ -3774,11 +3888,12 @@ namespace DungeonLab.Editor
             Add("variations/motifs", "reviewed recipe assets", "stable StairForge-backed visual selection");
             Add("ports.id/type/mandatory", "reviewed recipe assets", "route edge binding and neighbor validation");
             Add("ports.cell/outward/level", "TryPlaceRecipe", "exact corridor endpoint and tier validation");
+            Add("ports.width/approach/headroom", "reviewed recipe assets", "planning-time approach reservation and clearance validation");
             Add("placement.primaryAxis/mirror", "TryPlaceRecipe", "orientation, variations, symmetry validation");
             Add("placement.protectedCells", "TryPlaceRecipe", "generic feature exclusions and final validation");
             Add("placement.zoneCells", "TryPlaceRecipe", "canonical levels and structural validation");
             Add("transition.cells/landings/footprint/climb", "TryPlaceRecipe", "StairPlacementLedger, TransitionEdge, headroom, port graph");
-            Add("selected variation/visual", "TryPlaceRecipe", "DaisShowpiece and renderer");
+            Add("selected variation/visual", "TryPlaceRecipe", "StairForge footprint contract, DaisShowpiece, and renderer");
             Add("reviewDigest/lifecycle", "review action", "stale-review detection and active catalog admission");
             return new JObject
             {

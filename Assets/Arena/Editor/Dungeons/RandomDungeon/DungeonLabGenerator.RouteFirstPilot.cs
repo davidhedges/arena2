@@ -1068,7 +1068,7 @@ namespace DungeonLab.Editor
                     secondWingIndices[secondWingIndices.Length - 1],
                     mainNodeIndices[TwinWingBranchRejoinNode],
                     "wing-b-rejoin-12-5",
-                    RouteTransitionKind.Stair,
+                    RouteTransitionKind.Bridge,
                     out compositionError))
             {
                 throw new InvalidOperationException($"Invalid twin-wing second branch definition: {compositionError}");

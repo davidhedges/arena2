@@ -665,6 +665,8 @@ namespace DungeonLab.Editor
             RoomFootprint fromRoom,
             RoomFootprint toRoom,
             HashSet<Vector2Int> doorwayCells,
+            StairPlacementLedger plannedStairLedger,
+            bool fromSideIsLower,
             out int transitionIndex)
         {
             int fromThresholdIndex = 0;
@@ -695,14 +697,30 @@ namespace DungeonLab.Editor
             int midpoint = (fromThresholdIndex + toThresholdIndex) / 2;
             int bestIndex = -1;
             int bestDistance = int.MaxValue;
+            int fallbackIndex = -1;
+            int fallbackDistance = int.MaxValue;
             for (int i = fromThresholdIndex; i < toThresholdIndex; i++)
             {
-                if (doorwayCells.Contains(path[i]) || doorwayCells.Contains(path[i + 1]))
+                Vector2Int lowerCell = fromSideIsLower ? path[i] : path[i + 1];
+                if (plannedStairLedger.BlocksFootprint(lowerCell) ||
+                    plannedStairLedger.BlocksTransitionMouth(path[i]) ||
+                    plannedStairLedger.BlocksTransitionMouth(path[i + 1]))
                 {
                     continue;
                 }
 
                 int distance = Mathf.Abs(i - midpoint);
+                if (distance < fallbackDistance)
+                {
+                    fallbackDistance = distance;
+                    fallbackIndex = i;
+                }
+
+                if (doorwayCells.Contains(path[i]) || doorwayCells.Contains(path[i + 1]))
+                {
+                    continue;
+                }
+
                 if (distance < bestDistance)
                 {
                     bestDistance = distance;
@@ -710,8 +728,8 @@ namespace DungeonLab.Editor
                 }
             }
 
-            transitionIndex = bestIndex >= 0 ? bestIndex : midpoint;
-            return true;
+            transitionIndex = bestIndex >= 0 ? bestIndex : fallbackIndex;
+            return transitionIndex >= 0;
         }
 
         private static string cachedSeamStairPrefabPath;
@@ -1732,7 +1750,7 @@ namespace DungeonLab.Editor
             string seamStairPrefabPath = ResolveSeamStairPrefabPath();
             if (!TryRealizeRecipes(
                     routeRequirements?.recipes,
-                    layout.rooms,
+                    layout,
                     cellLevels,
                     transitions,
                     transitionKeys,
@@ -1774,6 +1792,12 @@ namespace DungeonLab.Editor
                         continue;
                     }
 
+                    if (plannedStairLedger.BlocksTransitionMouth(lowerCell) ||
+                        plannedStairLedger.BlocksTransitionMouth(raisedCell))
+                    {
+                        continue;
+                    }
+
                     string key = TransitionKey(raisedCell, lowerCell);
                     if (!transitionKeys.Add(key))
                     {
@@ -1788,7 +1812,10 @@ namespace DungeonLab.Editor
                     plannedStairLedger.Register(
                         new[] { lowerCell },
                         Array.Empty<Vector2Int>(),
-                        new[] { raisedCell });
+                        new[] { raisedCell },
+                        new[] { lowerCell, raisedCell },
+                        Array.Empty<Vector2Int>(),
+                        Array.Empty<Vector2Int>());
                 }
             }
 
@@ -1872,6 +1899,8 @@ namespace DungeonLab.Editor
                         layout.rooms[connection.fromRoom],
                         layout.rooms[connection.toRoom],
                         doorwayCells,
+                        plannedStairLedger,
+                        fromLevel <= toLevel,
                         out transitionIndex))
                 {
                     rejectionReason = $"connection {connection.fromRoom}->{connection.toRoom} had no corridor cell pair for a 1u step strip";
@@ -2089,7 +2118,10 @@ namespace DungeonLab.Editor
                         plannedStairLedger.Register(
                             new[] { stripLowerCell },
                             Array.Empty<Vector2Int>(),
-                            new[] { stripRaisedCell });
+                            new[] { stripRaisedCell },
+                            new[] { stripLowerCell, stripRaisedCell },
+                            Array.Empty<Vector2Int>(),
+                            Array.Empty<Vector2Int>());
                     }
                 }
 
@@ -2113,7 +2145,14 @@ namespace DungeonLab.Editor
                     plannedStairLedger.Register(
                         stairOptionPlannedFootprintCells,
                         stairOptionPlannedLowerLandingCells,
-                        stairOptionPlannedUpperLandingCells);
+                        stairOptionPlannedUpperLandingCells,
+                        new[]
+                        {
+                            stairOptionPlannedTransitionFirstCell,
+                            stairOptionPlannedTransitionSecondCell
+                        },
+                        Array.Empty<Vector2Int>(),
+                        Array.Empty<Vector2Int>());
                 }
 
                 if (delta > 1)
@@ -2705,10 +2744,10 @@ namespace DungeonLab.Editor
                             Vector2Int lowerCell = cellLevel > neighborLevel ? neighbor : cell;
                             if (doorwayCells.Contains(upperCell) ||
                                 doorwayCells.Contains(lowerCell) ||
-                                plannedStairLedger.footprintCells.Contains(lowerCell) ||
-                                plannedStairLedger.landingCells.Contains(lowerCell) ||
-                                plannedStairLedger.footprintCells.Contains(upperCell) ||
-                                plannedStairLedger.landingCells.Contains(upperCell))
+                                plannedStairLedger.BlocksFootprint(lowerCell) ||
+                                plannedStairLedger.BlocksFootprint(upperCell) ||
+                                plannedStairLedger.BlocksTransitionMouth(lowerCell) ||
+                                plannedStairLedger.BlocksTransitionMouth(upperCell))
                             {
                                 continue;
                             }
@@ -2726,7 +2765,10 @@ namespace DungeonLab.Editor
                             plannedStairLedger.Register(
                                 new[] { lowerCell },
                                 Array.Empty<Vector2Int>(),
-                                new[] { upperCell });
+                                new[] { upperCell },
+                                new[] { lowerCell, upperCell },
+                                Array.Empty<Vector2Int>(),
+                                Array.Empty<Vector2Int>());
                             added++;
                         }
                     }
@@ -4392,7 +4434,13 @@ namespace DungeonLab.Editor
                 exitPortDirection,
                 ExternalSpanStairPlacementClass,
                 setPiece));
-            plannedStairLedger.Register(footprint, new[] { lowerLanding }, new[] { upperLanding });
+            plannedStairLedger.Register(
+                footprint,
+                new[] { lowerLanding },
+                new[] { upperLanding },
+                new[] { lowerLanding, upperLanding },
+                Array.Empty<Vector2Int>(),
+                Array.Empty<Vector2Int>());
             // Conservative MIN landing level over every span cell (decision 34):
             // a sloped deck is never lower than this anywhere along its run.
             foreach (Vector2Int cell in footprint)
@@ -5226,13 +5274,19 @@ namespace DungeonLab.Editor
             return PlannedCellsAreCompatible(cellLevels, lowerLandingCells, lowerLevel) &&
                 PlannedCellsAreCompatible(cellLevels, upperLandingCells, higherLevel) &&
                 PlannedCellsAreCompatible(cellLevels, footprintCells, lowerLevel) &&
-                PlannedEmbeddedFootprintCellsHaveFloorSupport(layoutFloorCells, footprintCells) &&
+                PlannedEmbeddedFootprintCellsHaveFloorSupport(
+                    layoutFloorCells,
+                    lowerLandingCells,
+                    upperLandingCells,
+                    footprintCells) &&
                 !AnyOverlap(lowerLandingCells, footprintCells) &&
                 !AnyOverlap(upperLandingCells, footprintCells);
         }
 
         private static bool PlannedEmbeddedFootprintCellsHaveFloorSupport(
             HashSet<Vector2Int> layoutFloorCells,
+            IReadOnlyList<Vector2Int> lowerLandingCells,
+            IReadOnlyList<Vector2Int> upperLandingCells,
             IReadOnlyList<Vector2Int> footprintCells)
         {
             if (layoutFloorCells == null)
@@ -5240,9 +5294,31 @@ namespace DungeonLab.Editor
                 return true;
             }
 
+            var stairCells = new HashSet<Vector2Int>(footprintCells);
+            stairCells.UnionWith(lowerLandingCells);
+            stairCells.UnionWith(upperLandingCells);
             foreach (Vector2Int cell in footprintCells)
             {
                 if (!layoutFloorCells.Contains(cell))
+                {
+                    return false;
+                }
+
+                bool hasSideSupport = false;
+                foreach (Vector2Int neighbor in CardinalNeighbors(cell))
+                {
+                    if (layoutFloorCells.Contains(neighbor) && !stairCells.Contains(neighbor))
+                    {
+                        hasSideSupport = true;
+                        break;
+                    }
+                }
+
+                // The renderer removes the floor beneath an embedded stair body.
+                // Requiring adjacent floor outside the stair and its landings keeps
+                // a one-cell corridor over void from qualifying as an embedded stair;
+                // that geometry belongs to an externalSpan bridge contract.
+                if (!hasSideSupport)
                 {
                     return false;
                 }
@@ -5842,20 +5918,39 @@ namespace DungeonLab.Editor
             return false;
         }
 
-        // Cells already claimed by planned stairs in the current level field. Every stair
-        // lane must keep at least one walkable floor cell at each landing, so a new
-        // stair may not put its footprint on another stair's landing (or footprint), and
-        // may not place its own landings on another stair's footprint. Landings may be
-        // shared: a shared flat cell still gives both stairs their walkable landing.
+        // Canonical occupancy for every planned elevation transition. Footprints,
+        // landings and transition mouths retain their existing sharing rules; recipe
+        // features can additionally reserve cells that must remain clear of a body or
+        // transition mouth. All producers consult this ledger before acceptance.
         private sealed class StairPlacementLedger
         {
             public readonly HashSet<Vector2Int> footprintCells = new HashSet<Vector2Int>();
             public readonly HashSet<Vector2Int> landingCells = new HashSet<Vector2Int>();
+            public readonly HashSet<Vector2Int> transitionCells = new HashSet<Vector2Int>();
+            public readonly HashSet<Vector2Int> clearanceCells = new HashSet<Vector2Int>();
+            public readonly HashSet<Vector2Int> transitionClearanceCells = new HashSet<Vector2Int>();
 
             public void Register(
                 IReadOnlyList<Vector2Int> footprint,
                 IReadOnlyList<Vector2Int> lowerLandings,
                 IReadOnlyList<Vector2Int> upperLandings)
+            {
+                Register(
+                    footprint,
+                    lowerLandings,
+                    upperLandings,
+                    Array.Empty<Vector2Int>(),
+                    Array.Empty<Vector2Int>(),
+                    Array.Empty<Vector2Int>());
+            }
+
+            public void Register(
+                IReadOnlyList<Vector2Int> footprint,
+                IReadOnlyList<Vector2Int> lowerLandings,
+                IReadOnlyList<Vector2Int> upperLandings,
+                IReadOnlyList<Vector2Int> transitionMouths,
+                IReadOnlyList<Vector2Int> requiredClearance,
+                IReadOnlyList<Vector2Int> requiredTransitionClearance)
             {
                 foreach (Vector2Int cell in footprint)
                 {
@@ -5871,13 +5966,97 @@ namespace DungeonLab.Editor
                 {
                     landingCells.Add(cell);
                 }
+
+                foreach (Vector2Int cell in transitionMouths)
+                {
+                    transitionCells.Add(cell);
+                }
+
+                foreach (Vector2Int cell in requiredClearance)
+                {
+                    clearanceCells.Add(cell);
+                }
+
+                foreach (Vector2Int cell in requiredTransitionClearance)
+                {
+                    transitionClearanceCells.Add(cell);
+                }
+            }
+
+            public bool BlocksFootprint(Vector2Int cell)
+            {
+                return footprintCells.Contains(cell) ||
+                    landingCells.Contains(cell) ||
+                    clearanceCells.Contains(cell);
+            }
+
+            public bool BlocksTransitionMouth(Vector2Int cell)
+            {
+                return transitionClearanceCells.Contains(cell);
+            }
+
+            public bool ConflictsWithReservation(
+                IEnumerable<Vector2Int> footprint,
+                IEnumerable<Vector2Int> landings,
+                IEnumerable<Vector2Int> transitionMouths,
+                IEnumerable<Vector2Int> requiredClearance,
+                IEnumerable<Vector2Int> requiredTransitionClearance,
+                out Vector2Int conflictCell)
+            {
+                foreach (Vector2Int cell in footprint)
+                {
+                    if (BlocksFootprint(cell))
+                    {
+                        conflictCell = cell;
+                        return true;
+                    }
+                }
+
+                foreach (Vector2Int cell in landings)
+                {
+                    if (footprintCells.Contains(cell))
+                    {
+                        conflictCell = cell;
+                        return true;
+                    }
+                }
+
+                foreach (Vector2Int cell in transitionMouths)
+                {
+                    if (transitionClearanceCells.Contains(cell))
+                    {
+                        conflictCell = cell;
+                        return true;
+                    }
+                }
+
+                foreach (Vector2Int cell in requiredClearance)
+                {
+                    if (footprintCells.Contains(cell))
+                    {
+                        conflictCell = cell;
+                        return true;
+                    }
+                }
+
+                foreach (Vector2Int cell in requiredTransitionClearance)
+                {
+                    if (transitionCells.Contains(cell))
+                    {
+                        conflictCell = cell;
+                        return true;
+                    }
+                }
+
+                conflictCell = default;
+                return false;
             }
 
             public bool ConflictsWith(StairTransitionCandidate candidate)
             {
                 foreach (Vector2Int cell in candidate.footprintCells)
                 {
-                    if (footprintCells.Contains(cell) || landingCells.Contains(cell))
+                    if (BlocksFootprint(cell))
                     {
                         return true;
                     }
@@ -5897,6 +6076,12 @@ namespace DungeonLab.Editor
                     {
                         return true;
                     }
+                }
+
+                if (transitionClearanceCells.Contains(candidate.transitionFirstCell) ||
+                    transitionClearanceCells.Contains(candidate.transitionSecondCell))
+                {
+                    return true;
                 }
 
                 return false;

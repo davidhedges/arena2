@@ -10,6 +10,7 @@ namespace Arena.Tests.Editor
     public sealed class DungeonLabPhase4ThroneHallEpisodeTests
     {
         private const int EpisodeSeed = 2026072100;
+        private const int HallwayEndClearanceSeed = 2062860779;
         private static readonly Type GeneratorType = AppDomain.CurrentDomain
             .Load("Assembly-CSharp-Editor")
             .GetType("DungeonLab.Editor.DungeonLabGenerator", throwOnError: true)!;
@@ -125,6 +126,39 @@ namespace Arena.Tests.Editor
             Assert.That(report["collision.passed"], Is.EqualTo("true"), snapshot);
             Assert.That(int.Parse(report["collision.enabledNonTriggerColliders"]), Is.GreaterThan(0));
             Assert.That(int.Parse(report["collision.missingMeshes"]), Is.Zero);
+        }
+
+        [Test]
+        public void HallwayEndRegression_PortApproachesAndBackedWallFitAreReservedBeforeStairs()
+        {
+            string snapshot = InvokeSnapshot(
+                "BuildRouteCharacterizationSnapshot",
+                HallwayEndClearanceSeed);
+            Dictionary<string, string> report = ParseSnapshot(snapshot);
+            string recipe = RecipePrefix(report);
+
+            Assert.That(report["accepted"], Is.EqualTo("true"), snapshot);
+            Assert.That(report[$"{recipe}.atomic"], Is.EqualTo("true"), snapshot);
+            Assert.That(report[$"{recipe}.reservationsComplete"], Is.EqualTo("true"), snapshot);
+            Assert.That(report[$"{recipe}.approachCells"], Is.EqualTo("2"), snapshot);
+            Assert.That(report[$"{recipe}.showpieceRequiredFloorCells"], Is.EqualTo("15"), snapshot);
+            Assert.That(report[$"{recipe}.showpieceWallMarginCells"], Is.EqualTo("2"), snapshot);
+            Assert.That(report[$"{recipe}.showpieceBackdropVoidCells"], Is.EqualTo("7"), snapshot);
+            Assert.That(report["recipe.approachTransitionConflicts"], Is.EqualTo("0"), snapshot);
+        }
+
+        [Test]
+        public void HallwayEndRegression_RendererAndCollisionConsumeOnlyTheValidatedPlan()
+        {
+            string snapshot = InvokeSnapshot(
+                "BuildRendererProbeSnapshot",
+                HallwayEndClearanceSeed);
+            Dictionary<string, string> report = ParseSnapshot(snapshot);
+
+            Assert.That(report["accepted"], Is.EqualTo("true"), snapshot);
+            Assert.That(report["renderer.passed"], Is.EqualTo("true"), snapshot);
+            Assert.That(int.Parse(report["renderer.rejectedPlacements"]), Is.Zero, snapshot);
+            Assert.That(report["collision.passed"], Is.EqualTo("true"), snapshot);
         }
 
         private static Dictionary<string, string> EpisodeSnapshot()

@@ -2871,6 +2871,36 @@ namespace DungeonLab.Editor
             public HashSet<Vector2Int> cells;
         }
 
+        // Placement metadata for the backed-dais grammar. The generator must
+        // validate this contract before it accepts a recipe; the renderer still
+        // consumes only the immutable piece plan.
+        internal readonly struct BackedShowpiecePlacementContract
+        {
+            public readonly string designName;
+            public readonly int widthCells;
+            public readonly int platformDepthCells;
+            public readonly int requiredFloorDepthCells;
+            public readonly int wallEndMarginCells;
+            public readonly ElevationEdgeModel.SynthesizedPiecePlacement[] pieces;
+
+            public BackedShowpiecePlacementContract(DaisDesign design)
+            {
+                designName = design.name ?? string.Empty;
+                widthCells = design.sizeCellsX;
+                platformDepthCells = design.sizeCellsZ;
+                // Raised backed contours descend through a one-cell step apron
+                // in front of their platform mass. This is the same 5x3 floor
+                // envelope enforced by the retired wall-search producer, now
+                // derived from the selected design instead of hard-coded.
+                requiredFloorDepthCells = design.sizeCellsZ + 1;
+                // A backed composition cannot terminate at a wall corner. One
+                // full wall cell at each end keeps its flank strips and returns
+                // supported, matching the reviewed producer's fit invariant.
+                wallEndMarginCells = 1;
+                pieces = design.pieces.ToArray();
+            }
+        }
+
         // Top-down ASCII raster of a design from MEASURED piece bounds —
         // the headless eye for contour work (decision 45): band gaps,
         // overlaps and chopped noses are visible in the probe dump before
@@ -3107,6 +3137,22 @@ namespace DungeonLab.Editor
 
         internal static bool TryGetBackedShowpieceDesign(string designName, out ElevationEdgeModel.SynthesizedPiecePlacement[] pieces)
         {
+            if (!TryGetBackedShowpiecePlacementContract(
+                    designName,
+                    out BackedShowpiecePlacementContract contract))
+            {
+                pieces = null;
+                return false;
+            }
+
+            pieces = contract.pieces;
+            return true;
+        }
+
+        internal static bool TryGetBackedShowpiecePlacementContract(
+            string designName,
+            out BackedShowpiecePlacementContract contract)
+        {
             if (cachedShowpieceDesigns == null)
             {
                 cachedShowpieceDesigns = new Dictionary<string, DaisDesign>();
@@ -3116,13 +3162,16 @@ namespace DungeonLab.Editor
                 }
             }
 
-            if (!cachedShowpieceDesigns.TryGetValue(designName, out DaisDesign match))
+            if (!cachedShowpieceDesigns.TryGetValue(designName, out DaisDesign match) ||
+                !match.backed ||
+                match.sizeCellsX <= 0 ||
+                match.sizeCellsZ <= 0)
             {
-                pieces = null;
+                contract = default;
                 return false;
             }
 
-            pieces = match.pieces.ToArray();
+            contract = new BackedShowpiecePlacementContract(match);
             return true;
         }
 

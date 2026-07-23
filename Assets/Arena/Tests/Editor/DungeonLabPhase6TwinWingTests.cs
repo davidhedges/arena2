@@ -71,7 +71,7 @@ namespace Arena.Tests.Editor
                 "wing-b-2-10:wing-hub>wing-b-entry:Stair:4|" +
                 "wing-b-10-11:wing-b-entry>wing-b-reward:Stair:4|" +
                 "wing-b-11-12:wing-b-reward>wing-b-return:Stair:4|" +
-                "wing-b-rejoin-12-5:wing-b-return>wing-rejoin:Stair:4"));
+                "wing-b-rejoin-12-5:wing-b-return>wing-rejoin:Bridge:4"));
         }
 
         [Test]

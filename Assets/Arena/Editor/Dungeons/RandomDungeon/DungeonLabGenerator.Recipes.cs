@@ -69,6 +69,9 @@ namespace DungeonLab.Editor
             public readonly Vector2Int cell;
             public readonly Vector2Int outwardDirection;
             public readonly int expectedRelativeLevel;
+            public readonly int widthCells;
+            public readonly int approachDepthCells;
+            public readonly int headroomLevels;
 
             public RecipePortPlacement(
                 DungeonRecipePort port,
@@ -86,6 +89,9 @@ namespace DungeonLab.Editor
                 this.cell = cell;
                 this.outwardDirection = outwardDirection;
                 this.expectedRelativeLevel = expectedRelativeLevel;
+                widthCells = port.widthCells;
+                approachDepthCells = port.approachDepthCells;
+                headroomLevels = port.headroomLevels;
             }
         }
 
@@ -140,6 +146,23 @@ namespace DungeonLab.Editor
             }
         }
 
+        private readonly struct RecipeShowpieceReservation
+        {
+            public readonly Vector2Int[] requiredFloorCells;
+            public readonly Vector2Int[] wallMarginCells;
+            public readonly Vector2Int[] backdropVoidCells;
+
+            public RecipeShowpieceReservation(
+                Vector2Int[] requiredFloorCells,
+                Vector2Int[] wallMarginCells,
+                Vector2Int[] backdropVoidCells)
+            {
+                this.requiredFloorCells = requiredFloorCells ?? Array.Empty<Vector2Int>();
+                this.wallMarginCells = wallMarginCells ?? Array.Empty<Vector2Int>();
+                this.backdropVoidCells = backdropVoidCells ?? Array.Empty<Vector2Int>();
+            }
+        }
+
         private sealed class RecipePlacement
         {
             public readonly RecipeSlotIntent slot;
@@ -157,6 +180,7 @@ namespace DungeonLab.Editor
             public readonly string selectedVisualImplementationId;
             public readonly Vector2Int showpieceOriginCell;
             public readonly float showpieceYawDegrees;
+            public readonly RecipeShowpieceReservation showpieceReservation;
 
             public RecipePlacement(
                 RecipeSlotIntent slot,
@@ -173,7 +197,8 @@ namespace DungeonLab.Editor
                 string selectedVariationId,
                 string selectedVisualImplementationId,
                 Vector2Int showpieceOriginCell,
-                float showpieceYawDegrees)
+                float showpieceYawDegrees,
+                RecipeShowpieceReservation showpieceReservation)
             {
                 this.slot = slot;
                 this.roomIndex = roomIndex;
@@ -190,6 +215,7 @@ namespace DungeonLab.Editor
                 this.selectedVisualImplementationId = selectedVisualImplementationId ?? string.Empty;
                 this.showpieceOriginCell = showpieceOriginCell;
                 this.showpieceYawDegrees = showpieceYawDegrees;
+                this.showpieceReservation = showpieceReservation;
             }
 
             public string RecipeId => slot?.recipe?.recipeId ?? string.Empty;
@@ -241,6 +267,7 @@ namespace DungeonLab.Editor
             public readonly string selectedVisualImplementationId;
             public readonly Vector2Int showpieceOriginCell;
             public readonly float showpieceYawDegrees;
+            public readonly RecipeShowpieceReservation showpieceReservation;
             public readonly int baseLevel;
             public readonly bool atomicAndValid;
 
@@ -262,6 +289,7 @@ namespace DungeonLab.Editor
                 selectedVisualImplementationId = placement?.selectedVisualImplementationId ?? string.Empty;
                 showpieceOriginCell = placement?.showpieceOriginCell ?? default;
                 showpieceYawDegrees = placement?.showpieceYawDegrees ?? 0f;
+                showpieceReservation = placement?.showpieceReservation ?? default;
                 this.baseLevel = baseLevel;
                 this.atomicAndValid = atomicAndValid;
             }
@@ -637,6 +665,7 @@ namespace DungeonLab.Editor
             string visualImplementationId = string.Empty;
             Vector2Int showpieceOrigin = default;
             float showpieceYaw = 0f;
+            RecipeShowpieceReservation showpieceReservation = default;
             if (slot.recipe.variations.Length > 0)
             {
                 DungeonRecipeVariation variation = SelectRecipeVariation(
@@ -645,13 +674,37 @@ namespace DungeonLab.Editor
                 DungeonRecipeMotif motif = FindRecipeMotif(slot.recipe, variation.motifId);
                 variationId = variation.id;
                 visualImplementationId = motif.implementationId;
+                if (!StairForge.TryGetBackedShowpiecePlacementContract(
+                        visualImplementationId,
+                        out StairForge.BackedShowpiecePlacementContract showpieceContract))
+                {
+                    rejectionReason =
+                        $"recipe '{slot.recipe.recipeId}' selected unavailable backed visual '{visualImplementationId}'";
+                    return false;
+                }
+
                 ResolvePrimaryVisualTransform(
                     slot.recipe,
                     center,
                     primaryAxis,
                     transverseAxis,
+                    showpieceContract,
                     out showpieceOrigin,
                     out showpieceYaw);
+                if (!TryBuildBackedShowpieceReservation(
+                        slot.recipe,
+                        room,
+                        rooms,
+                        center,
+                        primaryAxis,
+                        transverseAxis,
+                        mirrored,
+                        showpieceContract,
+                        out showpieceReservation,
+                        out rejectionReason))
+                {
+                    return false;
+                }
             }
 
             Vector2Int[] roomCells = SortedCells(room.cells).ToArray();
@@ -679,7 +732,8 @@ namespace DungeonLab.Editor
                 variationId,
                 visualImplementationId,
                 showpieceOrigin,
-                showpieceYaw);
+                showpieceYaw,
+                showpieceReservation);
             return true;
         }
 
@@ -900,11 +954,139 @@ namespace DungeonLab.Editor
             return true;
         }
 
+        private static bool TryBuildBackedShowpieceReservation(
+            DungeonRecipeAsset recipe,
+            RoomFootprint room,
+            IReadOnlyList<RoomFootprint> allRooms,
+            Vector2Int center,
+            Vector2Int primaryAxis,
+            Vector2Int transverseAxis,
+            bool mirrored,
+            StairForge.BackedShowpiecePlacementContract contract,
+            out RecipeShowpieceReservation reservation,
+            out string rejectionReason)
+        {
+            reservation = default;
+            rejectionReason = string.Empty;
+            DungeonRecipeZone primary = null;
+            DungeonRecipeZone focal = null;
+            foreach (DungeonRecipeZone zone in recipe.zones)
+            {
+                if (zone.kind == DungeonRecipeZoneKind.Walkable && primary == null)
+                {
+                    primary = zone;
+                }
+
+                if (zone.kind == DungeonRecipeZoneKind.ProtectedFocal && focal == null)
+                {
+                    focal = zone;
+                }
+            }
+
+            if (primary == null ||
+                focal == null ||
+                focal.size.y != contract.widthCells ||
+                contract.requiredFloorDepthCells <= 0 ||
+                contract.wallEndMarginCells < 1)
+            {
+                rejectionReason =
+                    $"[RECIPE_SHOWPIECE_FIT] '{recipe.recipeId}' did not provide a focal wall span matching '{contract.designName}'";
+                return false;
+            }
+
+            int wallPrimary = primary.offset.x + primary.size.x - 1;
+            int alongStart = focal.offset.y;
+            int alongEnd = alongStart + contract.widthCells - 1;
+            var requiredFloor = new HashSet<Vector2Int>();
+            var wallMargins = new HashSet<Vector2Int>();
+            var backdropVoid = new HashSet<Vector2Int>();
+            for (int along = alongStart; along <= alongEnd; along++)
+            {
+                for (int depth = 0; depth < contract.requiredFloorDepthCells; depth++)
+                {
+                    requiredFloor.Add(TransformRecipeCell(
+                        new Vector2Int(wallPrimary - depth, along),
+                        center,
+                        primaryAxis,
+                        transverseAxis,
+                        mirrored));
+                }
+            }
+
+            for (int margin = 1; margin <= contract.wallEndMarginCells; margin++)
+            {
+                wallMargins.Add(TransformRecipeCell(
+                    new Vector2Int(wallPrimary, alongStart - margin),
+                    center,
+                    primaryAxis,
+                    transverseAxis,
+                    mirrored));
+                wallMargins.Add(TransformRecipeCell(
+                    new Vector2Int(wallPrimary, alongEnd + margin),
+                    center,
+                    primaryAxis,
+                    transverseAxis,
+                    mirrored));
+            }
+
+            for (int along = alongStart - contract.wallEndMarginCells;
+                 along <= alongEnd + contract.wallEndMarginCells;
+                 along++)
+            {
+                backdropVoid.Add(TransformRecipeCell(
+                    new Vector2Int(wallPrimary + 1, along),
+                    center,
+                    primaryAxis,
+                    transverseAxis,
+                    mirrored));
+            }
+
+            foreach (Vector2Int cell in requiredFloor)
+            {
+                if (!room.Contains(cell))
+                {
+                    rejectionReason =
+                        $"[RECIPE_SHOWPIECE_FIT] '{contract.designName}' required unsupported floor cell {cell}";
+                    return false;
+                }
+            }
+
+            foreach (Vector2Int cell in wallMargins)
+            {
+                if (!room.Contains(cell))
+                {
+                    rejectionReason =
+                        $"[RECIPE_SHOWPIECE_FIT] wall behind '{contract.designName}' ended without its required margin at {cell}";
+                    return false;
+                }
+            }
+
+            foreach (Vector2Int cell in backdropVoid)
+            {
+                foreach (RoomFootprint candidateRoom in allRooms)
+                {
+                    if (candidateRoom.Contains(cell))
+                    {
+                        rejectionReason =
+                            $"[RECIPE_SHOWPIECE_FIT] '{contract.designName}' had no exterior wall backdrop at {cell}";
+                        return false;
+                    }
+                }
+            }
+
+            reservation = new RecipeShowpieceReservation(
+                SortedCells(requiredFloor).ToArray(),
+                SortedCells(wallMargins).ToArray(),
+                SortedCells(backdropVoid).ToArray());
+            return true;
+        }
+
         private static void ResolvePrimaryVisualTransform(
             DungeonRecipeAsset recipe,
             Vector2Int center,
             Vector2Int primaryAxis,
             Vector2Int transverseAxis,
+            StairForge.BackedShowpiecePlacementContract contract,
             out Vector2Int originCell,
             out float yawDegrees)
         {
@@ -924,34 +1106,46 @@ namespace DungeonLab.Editor
             }
 
             int primaryMax = primary.offset.x + primary.size.x - 1;
-            int transverseRadius = focal.size.y / 2;
             Vector2Int wallCenter = RecipeCell(center, primaryAxis, transverseAxis, primaryMax, 0);
-            Vector2Int alongStart = RecipeCell(center, primaryAxis, transverseAxis, primaryMax, -transverseRadius);
+            Vector2Int alongStart = RecipeCell(
+                center,
+                primaryAxis,
+                transverseAxis,
+                primaryMax,
+                focal.offset.y);
             if (primaryAxis == Vector2Int.up)
             {
-                originCell = new Vector2Int(alongStart.x, wallCenter.y - 1);
+                originCell = new Vector2Int(
+                    alongStart.x,
+                    wallCenter.y - (contract.platformDepthCells - 1));
                 yawDegrees = 0f;
             }
             else if (primaryAxis == Vector2Int.down)
             {
-                originCell = new Vector2Int(alongStart.x + 5, wallCenter.y + 2);
+                originCell = new Vector2Int(
+                    alongStart.x + contract.widthCells,
+                    wallCenter.y + contract.platformDepthCells);
                 yawDegrees = 180f;
             }
             else if (primaryAxis == Vector2Int.right)
             {
-                originCell = new Vector2Int(wallCenter.x - 1, alongStart.y + 5);
+                originCell = new Vector2Int(
+                    wallCenter.x - (contract.platformDepthCells - 1),
+                    alongStart.y + contract.widthCells);
                 yawDegrees = 90f;
             }
             else
             {
-                originCell = new Vector2Int(wallCenter.x + 2, alongStart.y);
+                originCell = new Vector2Int(
+                    wallCenter.x + contract.platformDepthCells,
+                    alongStart.y);
                 yawDegrees = 270f;
             }
         }
 
         private static bool TryRealizeRecipes(
             IReadOnlyList<RecipePlacement> placements,
-            IReadOnlyList<RoomFootprint> rooms,
+            DungeonLayout layout,
             Dictionary<Vector2Int, int> cellLevels,
             List<ElevationEdgeModel.TransitionEdge> transitions,
             HashSet<string> transitionKeys,
@@ -969,9 +1163,17 @@ namespace DungeonLab.Editor
                 return false;
             }
 
+            var pathCells = new HashSet<Vector2Int>();
+            foreach (RoomConnection connection in layout.connections)
+            {
+                pathCells.UnionWith(connection.path);
+            }
+
             foreach (RecipePlacement placement in placements)
             {
-                if (placement == null || placement.roomIndex < 0 || placement.roomIndex >= rooms.Count)
+                if (placement == null ||
+                    placement.roomIndex < 0 ||
+                    placement.roomIndex >= layout.rooms.Count)
                 {
                     rejectionReason = "[RECIPE_ATOMICITY] tier planning received an incomplete recipe placement";
                     return false;
@@ -995,6 +1197,129 @@ namespace DungeonLab.Editor
                     }
                 }
 
+                var recipeFootprints = new HashSet<Vector2Int>(
+                    placement.showpieceReservation.requiredFloorCells ?? Array.Empty<Vector2Int>());
+                var recipeLandings = new HashSet<Vector2Int>();
+                var recipeTransitionCells = new HashSet<Vector2Int>();
+                var recipeClearance = new HashSet<Vector2Int>(
+                    placement.showpieceReservation.wallMarginCells ?? Array.Empty<Vector2Int>());
+                recipeClearance.UnionWith(
+                    placement.showpieceReservation.backdropVoidCells ?? Array.Empty<Vector2Int>());
+                var recipeTransitionClearance = new HashSet<Vector2Int>(recipeClearance);
+
+                foreach (RecipePortPlacement port in placement.ports)
+                {
+                    if (!TryCollectRecipePortApproachCells(
+                            placement,
+                            port,
+                            layout,
+                            out Vector2Int[] approachCells,
+                            out rejectionReason))
+                    {
+                        return false;
+                    }
+
+                    if (RecipeTransitionAbutsPortWallEnd(placement, port))
+                    {
+                        recipeClearance.UnionWith(approachCells);
+                        recipeTransitionClearance.UnionWith(approachCells);
+                    }
+                }
+
+                foreach (RecipeTransitionPlacement recipeTransition in placement.transitions)
+                {
+                    recipeFootprints.UnionWith(recipeTransition.footprintCells);
+                    recipeLandings.UnionWith(recipeTransition.lowerLandingCells);
+                    recipeLandings.UnionWith(recipeTransition.upperLandingCells);
+                    recipeTransitionCells.Add(recipeTransition.lowerTransitionCell);
+                    recipeTransitionCells.Add(recipeTransition.upperTransitionCell);
+                    if (transitionKeys.Contains(TransitionKey(
+                            recipeTransition.upperTransitionCell,
+                            recipeTransition.lowerTransitionCell)))
+                    {
+                        rejectionReason =
+                            $"[RECIPE_ATOMICITY] transition '{recipeTransition.id}' on '{placement.RecipeId}' conflicted with an existing transition";
+                        return false;
+                    }
+                }
+
+                foreach (Vector2Int cell in
+                         placement.showpieceReservation.requiredFloorCells ?? Array.Empty<Vector2Int>())
+                {
+                    if (!cellLevels.TryGetValue(cell, out int level) ||
+                        level != baseLevel ||
+                        ResolvedRecipeRelativeLevel(placement.zones, cell) != 0 ||
+                        pathCells.Contains(cell))
+                    {
+                        rejectionReason =
+                            $"[RECIPE_SHOWPIECE_FIT] '{placement.selectedVisualImplementationId}' lacked clear, uniform floor support at {cell}";
+                        return false;
+                    }
+                }
+
+                foreach (Vector2Int cell in
+                         placement.showpieceReservation.wallMarginCells ?? Array.Empty<Vector2Int>())
+                {
+                    if (!layout.floorCells.Contains(cell) || pathCells.Contains(cell))
+                    {
+                        rejectionReason =
+                            $"[RECIPE_SHOWPIECE_FIT] '{placement.selectedVisualImplementationId}' lacked a clear wall-end margin at {cell}";
+                        return false;
+                    }
+                }
+
+                foreach (Vector2Int cell in
+                         placement.showpieceReservation.backdropVoidCells ?? Array.Empty<Vector2Int>())
+                {
+                    if (layout.floorCells.Contains(cell) || pathCells.Contains(cell))
+                    {
+                        rejectionReason =
+                            $"[RECIPE_SHOWPIECE_FIT] '{placement.selectedVisualImplementationId}' did not abut an exterior wall at {cell}";
+                        return false;
+                    }
+                }
+
+                foreach (Vector2Int cell in recipeFootprints)
+                {
+                    if (recipeLandings.Contains(cell) || recipeClearance.Contains(cell))
+                    {
+                        rejectionReason =
+                            $"[RECIPE_CLEARANCE] '{placement.RecipeId}' overlapped occupied and required-clear geometry at {cell}";
+                        return false;
+                    }
+                }
+
+                foreach (Vector2Int cell in recipeTransitionCells)
+                {
+                    if (recipeTransitionClearance.Contains(cell))
+                    {
+                        rejectionReason =
+                            $"[RECIPE_CLEARANCE] '{placement.RecipeId}' placed a transition mouth in required-clear geometry at {cell}";
+                        return false;
+                    }
+                }
+
+                if (stairLedger.ConflictsWithReservation(
+                        recipeFootprints,
+                        recipeLandings,
+                        recipeTransitionCells,
+                        recipeClearance,
+                        recipeTransitionClearance,
+                        out Vector2Int conflictCell))
+                {
+                    rejectionReason =
+                        $"[RECIPE_CLEARANCE] '{placement.RecipeId}' conflicted with an existing structural reservation at {conflictCell}";
+                    return false;
+                }
+
+                stairLedger.Register(
+                    SortedCells(recipeFootprints).ToArray(),
+                    SortedCells(recipeLandings).ToArray(),
+                    Array.Empty<Vector2Int>(),
+                    SortedCells(recipeTransitionCells).ToArray(),
+                    SortedCells(recipeClearance).ToArray(),
+                    SortedCells(recipeTransitionClearance).ToArray());
+
                 foreach (RecipeZonePlacement zone in placement.zones)
                 {
                     if (zone.kind != DungeonRecipeZoneKind.Elevated)
@@ -1016,13 +1341,9 @@ namespace DungeonLab.Editor
 
                 foreach (RecipeTransitionPlacement recipeTransition in placement.transitions)
                 {
-                    if (!transitionKeys.Add(TransitionKey(
-                            recipeTransition.upperTransitionCell,
-                            recipeTransition.lowerTransitionCell)))
-                    {
-                        rejectionReason = $"[RECIPE_ATOMICITY] transition '{recipeTransition.id}' on '{placement.RecipeId}' conflicted with an existing transition";
-                        return false;
-                    }
+                    transitionKeys.Add(TransitionKey(
+                        recipeTransition.upperTransitionCell,
+                        recipeTransition.lowerTransitionCell));
 
                     int lowerPortDirection = DirectionFromVector(new Vector2(
                         recipeTransition.climbDirection.x,
@@ -1037,17 +1358,13 @@ namespace DungeonLab.Editor
                         lowerPortDirection,
                         OppositeDirection(lowerPortDirection),
                         DaisStairPlacementClass));
-                    stairLedger.Register(
-                        recipeTransition.footprintCells,
-                        recipeTransition.lowerLandingCells,
-                        recipeTransition.upperLandingCells);
                 }
 
                 if (!string.IsNullOrEmpty(placement.selectedVisualImplementationId))
                 {
-                    if (!StairForge.TryGetBackedShowpieceDesign(
+                    if (!StairForge.TryGetBackedShowpiecePlacementContract(
                             placement.selectedVisualImplementationId,
-                            out ElevationEdgeModel.SynthesizedPiecePlacement[] pieces))
+                            out StairForge.BackedShowpiecePlacementContract showpieceContract))
                     {
                         rejectionReason = $"[RECIPE_VARIATION] reviewed visual '{placement.selectedVisualImplementationId}' was unavailable";
                         return false;
@@ -1059,7 +1376,7 @@ namespace DungeonLab.Editor
                         originCell = placement.showpieceOriginCell,
                         yawDegrees = placement.showpieceYawDegrees,
                         roomLevel = baseLevel,
-                        pieces = pieces
+                        pieces = showpieceContract.pieces
                     });
                 }
 
@@ -1071,6 +1388,138 @@ namespace DungeonLab.Editor
             }
 
             return true;
+        }
+
+        private static bool TryCollectRecipePortApproachCells(
+            RecipePlacement placement,
+            RecipePortPlacement port,
+            DungeonLayout layout,
+            out Vector2Int[] approachCells,
+            out string rejectionReason)
+        {
+            approachCells = Array.Empty<Vector2Int>();
+            rejectionReason = string.Empty;
+            if (port.widthCells < 1 ||
+                (port.widthCells & 1) == 0 ||
+                port.approachDepthCells < 1 ||
+                port.headroomLevels < MinHeadroomLevels)
+            {
+                rejectionReason =
+                    $"[RECIPE_PORT_APPROACH] typed port '{port.id}' on '{placement.RecipeId}' had an invalid width, depth, or headroom contract";
+                return false;
+            }
+
+            RoomConnection boundConnection = default;
+            bool found = false;
+            bool recipeAtStart = false;
+            foreach (RoomConnection connection in layout.connections)
+            {
+                if (connection.fromRoom == placement.roomIndex &&
+                    connection.toRoom == port.neighborRoomIndex)
+                {
+                    boundConnection = connection;
+                    recipeAtStart = true;
+                    found = true;
+                    break;
+                }
+
+                if (connection.toRoom == placement.roomIndex &&
+                    connection.fromRoom == port.neighborRoomIndex)
+                {
+                    boundConnection = connection;
+                    recipeAtStart = false;
+                    found = true;
+                    break;
+                }
+            }
+
+            if (!found ||
+                boundConnection.path == null ||
+                boundConnection.path.Count <= port.approachDepthCells)
+            {
+                rejectionReason =
+                    $"[RECIPE_PORT_APPROACH] edge '{port.edgeId}' did not provide {port.approachDepthCells} clear approach cells for port '{port.id}'";
+                return false;
+            }
+
+            Vector2Int pathPortCell = recipeAtStart
+                ? boundConnection.path[0]
+                : boundConnection.path[boundConnection.path.Count - 1];
+            if (pathPortCell != port.cell)
+            {
+                rejectionReason =
+                    $"[RECIPE_PORT_APPROACH] edge '{port.edgeId}' did not begin at typed port '{port.id}'";
+                return false;
+            }
+
+            for (int depth = 1; depth <= port.approachDepthCells; depth++)
+            {
+                Vector2Int centerCell = port.cell + port.outwardDirection * depth;
+                Vector2Int actualPathCell = recipeAtStart
+                    ? boundConnection.path[depth]
+                    : boundConnection.path[boundConnection.path.Count - 1 - depth];
+                if (actualPathCell != centerCell)
+                {
+                    rejectionReason =
+                        $"[RECIPE_PORT_APPROACH] edge '{port.edgeId}' turned inside port '{port.id}' approach at depth {depth}";
+                    return false;
+                }
+            }
+
+            Vector2Int[] declaredCells = BuildRecipePortApproachReservationCells(port);
+            foreach (Vector2Int cell in declaredCells)
+            {
+                if (!layout.floorCells.Contains(cell))
+                {
+                    rejectionReason =
+                        $"[RECIPE_PORT_APPROACH] port '{port.id}' on '{placement.RecipeId}' lacked floor width at {cell}";
+                    return false;
+                }
+            }
+
+            approachCells = declaredCells;
+            return true;
+        }
+
+        private static bool RecipeTransitionAbutsPortWallEnd(
+            RecipePlacement placement,
+            RecipePortPlacement port)
+        {
+            foreach (RecipeTransitionPlacement transition in placement.transitions)
+            {
+                foreach (Vector2Int footprintCell in transition.footprintCells)
+                {
+                    Vector2Int offset = footprintCell - port.cell;
+                    if (Mathf.Abs(offset.x) + Mathf.Abs(offset.y) == 1 &&
+                        offset.x * port.outwardDirection.x +
+                        offset.y * port.outwardDirection.y == 0)
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        private static Vector2Int[] BuildRecipePortApproachReservationCells(
+            RecipePortPlacement port)
+        {
+            Vector2Int lateral = new Vector2Int(
+                -port.outwardDirection.y,
+                port.outwardDirection.x);
+            int halfWidth = port.widthCells / 2;
+            var cells = new HashSet<Vector2Int>();
+            for (int depth = 1; depth <= port.approachDepthCells; depth++)
+            {
+                Vector2Int centerCell = port.cell + port.outwardDirection * depth;
+                for (int offset = -halfWidth; offset <= halfWidth; offset++)
+                {
+                    cells.Add(centerCell + lateral * offset);
+                }
+            }
+
+            return SortedCells(cells).ToArray();
         }
 
         private static bool TryValidateResolvedRecipes(
@@ -1162,6 +1611,37 @@ namespace DungeonLab.Editor
                 {
                     rejectionReason = $"[RECIPE_PORT_BINDING] edge '{port.edgeId}' did not terminate at typed port '{port.id}' on '{placement.RecipeId}'";
                     return false;
+                }
+
+                if (!TryCollectRecipePortApproachCells(
+                        placement,
+                        port,
+                        layout,
+                        out Vector2Int[] approachCells,
+                        out rejectionReason))
+                {
+                    return false;
+                }
+
+                bool transitionMouthMustStayClear =
+                    RecipeTransitionAbutsPortWallEnd(placement, port);
+                foreach (ElevationEdgeModel.TransitionEdge transition in transitions)
+                {
+                    foreach (Vector2Int approachCell in approachCells)
+                    {
+                        bool transitionMouthConflict =
+                            transition.firstCell == approachCell ||
+                            transition.secondCell == approachCell;
+                        bool footprintConflict =
+                            Array.IndexOf(transition.footprintCells, approachCell) >= 0;
+                        if (transitionMouthMustStayClear &&
+                            (transitionMouthConflict || footprintConflict))
+                        {
+                            rejectionReason =
+                                $"[RECIPE_PORT_APPROACH] transition '{transition.placementClass}' consumed port '{port.id}' approach cell {approachCell}";
+                            return false;
+                        }
+                    }
                 }
             }
 

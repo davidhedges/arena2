@@ -21,4 +21,4 @@
 - `docs/dungeon-builder/COHERENT_FLOORPLAN_PLAN.md` defines the approved phase sequence.
 - `docs/dungeon-builder/CURRENT_STATUS.md` is evidence and handoff context, not independent scope authority.
 - Phase 6 is closed at Phase 6f. Do not add another Phase 6 content increment without explicit user approval.
-- The next plan item is Phase 7 production hardening. It begins by locking reliability, attempt, performance, and curated-review thresholds before judging a larger deterministic sweep.
+- Phase 7 production hardening has been deferred. It begins by locking reliability, attempt, performance, and curated-review thresholds before judging a larger deterministic sweep.

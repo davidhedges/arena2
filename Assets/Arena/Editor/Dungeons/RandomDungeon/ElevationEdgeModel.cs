@@ -226,7 +226,8 @@ namespace DungeonLab.Editor
             // railings, corner columns and square corner stacks all suppress by
             // construction. Convex corner cells also swap their floor for the
             // rounded variant (handled in the floor loop below).
-            List<RoundTierCorner> roundTierCorners = FindRoundTierCorners(wallEdges, levels, reservedCells, transitions);
+            List<RoundTierCorner> roundTierCorners = FindRoundTierCorners(wallEdges, levels, reservedCells);
+            ValidateTierCornerCompatibility(roundTierCorners, transitions);
             var roundCornerFloorSwap = new Dictionary<Vector2Int, RoundTierCorner>();
             if (roundTierCorners.Count > 0)
             {
@@ -290,6 +291,22 @@ namespace DungeonLab.Editor
             // the pack has no railing piece that can step 1u mid-run.
             HashSet<(int roomId, int direction)> wallGuardSides = FindWallGuardSides(wallEdges, roomBoundaryContext);
 
+            // Tall shell walls own the guard line above every edge where they are
+            // successfully placed. Resolve that ownership before ordinary guards so
+            // a railing/parapet and a shell can never occupy the same edge.
+            HashSet<(int x, int z, int direction)> shellGuardEdges = PlaceOuterShellWalls(
+                levels,
+                promontorySet,
+                roundTierCorners,
+                wallEdges,
+                roomBoundaryContext,
+                origin,
+                contracts.levelHeight,
+                shellRoot.transform,
+                ref bounds,
+                ref hasBounds,
+                ref stats);
+
             foreach (WallEdge wallEdge in wallEdges)
             {
                 if (wallEdge.isPartition)
@@ -314,7 +331,8 @@ namespace DungeonLab.Editor
                     contracts.levelHeight,
                     ref bounds,
                     ref hasBounds);
-                if (wallEdge.suppressRailing)
+                if (wallEdge.suppressRailing ||
+                    shellGuardEdges.Contains((wallEdge.edge.x, wallEdge.edge.z, wallEdge.edge.direction)))
                 {
                     continue;
                 }
@@ -352,6 +370,8 @@ namespace DungeonLab.Editor
                 stats.railings++;
             }
 
+            railingOnlyEdges.RemoveAll(edge =>
+                shellGuardEdges.Contains((edge.x, edge.z, edge.direction)));
             foreach (PlatformEdge railingEdge in railingOnlyEdges)
             {
                 PlaceRailingEdge(
@@ -373,6 +393,7 @@ namespace DungeonLab.Editor
             foreach (WallEdge wallEdge in wallEdges)
             {
                 if (!wallEdge.suppressRailing &&
+                    !shellGuardEdges.Contains((wallEdge.edge.x, wallEdge.edge.z, wallEdge.edge.direction)) &&
                     DropGetsRailing(wallEdge.higherLevel - wallEdge.lowerLevel) &&
                     !(TryGetRoomSide(roomBoundaryContext, wallEdge, out (int roomId, int direction) cornerSide) &&
                       wallGuardSides.Contains(cornerSide)))
@@ -423,12 +444,6 @@ namespace DungeonLab.Editor
                     ref hasBounds,
                     ref stats);
             }
-
-            // Decision K: tall modular shell walls rise ABOVE the floor on the
-            // dungeon's outer (exterior-void-facing) edges, scaling with tier
-            // height. Inner/overlook edges are left to their railing/none
-            // treatment; piers stay open.
-            PlaceOuterShellWalls(levels, promontorySet, roundTierCorners, wallEdges, roomBoundaryContext, origin, contracts.levelHeight, shellRoot.transform, ref bounds, ref hasBounds, ref stats);
 
             List<CornerPlacement> cornerPlacements = BuildCornerPlacements(wallEdges, setPieceReservedCells);
             stats.corners = cornerPlacements.Count;
@@ -680,6 +695,7 @@ namespace DungeonLab.Editor
 
             PlaceRoundTierCornerKits(
                 roundTierCorners,
+                shellGuardEdges,
                 origin,
                 contracts.levelHeight,
                 cornersRoot.transform,
@@ -2206,7 +2222,7 @@ namespace DungeonLab.Editor
                         // sits on the underworld — the cliff face drops to the abyss
                         // base beneath it. The top guard (railing/partition above) is
                         // handled just above, so this cliff suppresses its own railing.
-                        if (!deckOwnsEdgeTop && level > abyssBase)
+                        if (level > abyssBase)
                         {
                             wallEdges.Add(new WallEdge(new PlatformEdge(cell.x, cell.y, direction), abyssBase, level, false, false, suppressRailing: true));
                             stats.cliffEdges++;
@@ -3198,7 +3214,7 @@ namespace DungeonLab.Editor
         // interior chasms/overlooks (railings/D) or piers (open). Height scales
         // with the floor's tier height; each side is a uniform height for v1
         // (stepped med->small transitions + windows are later increments).
-        private static void PlaceOuterShellWalls(
+        private static HashSet<(int x, int z, int direction)> PlaceOuterShellWalls(
             IReadOnlyDictionary<Vector2Int, int> levels,
             HashSet<Vector2Int> promontoryCells,
             IReadOnlyList<RoundTierCorner> roundTierCorners,
@@ -3211,6 +3227,7 @@ namespace DungeonLab.Editor
             ref bool hasBounds,
             ref TieredPlatformBuildStats stats)
         {
+            var guardEdges = new HashSet<(int x, int z, int direction)>();
             MeasuredPrefab large = default, med = default, small = default;
             bool haveLarge = false, haveMed = false, haveSmall = false;
             try { large = MeasurePrefab(PackageInventory.Load().GetPrefabPath(ShellWallLargeName), PrefabRole.StraightWall); haveLarge = true; } catch { }
@@ -3219,7 +3236,7 @@ namespace DungeonLab.Editor
             if (!haveMed)
             {
                 Debug.LogWarning("Dungeon Lab Elevation Edge Model: shell wall pieces unavailable; outer shells skipped.");
-                return;
+                return guardEdges;
             }
 
             // Pick the modular piece whose nominal height matches a course (6/4/2u),
@@ -3307,6 +3324,8 @@ namespace DungeonLab.Editor
                     course++;
                     shells++;
                 }
+
+                guardEdges.Add((edge.x, edge.z, edge.direction));
             }
 
             // Rounded/angled corners: use the curve pieces from the SAME COMP
@@ -3360,12 +3379,17 @@ namespace DungeonLab.Editor
                     course++;
                     shells++;
                 }
+
+                guardEdges.Add(corner.edgeA);
+                guardEdges.Add(corner.edgeB);
             }
 
             if (shells > 0)
             {
                 stats.stairSummaries.Add($"outer shell wall pieces: {shells}" + (cornerSkips > 0 ? $" ({cornerSkips} corners skipped)" : string.Empty));
             }
+
+            return guardEdges;
         }
 
         // Void cells reachable from outside the floor footprint (4-adjacency over
@@ -6111,49 +6135,17 @@ namespace DungeonLab.Editor
         private static List<RoundTierCorner> FindRoundTierCorners(
             List<WallEdge> wallEdges,
             IReadOnlyDictionary<Vector2Int, int> levels,
-            HashSet<Vector2Int> reservedCells,
-            IReadOnlyList<TransitionEdge> transitions)
+            HashSet<Vector2Int> reservedCells)
         {
-            // Cells covered by CURVED stair set pieces: their tier corners may
-            // round wall-only even though the stair reserves the cell and owns
-            // its wall tops (user review 2026-06-12: a square corner under a
-            // curved stair reads wrong). Straight stairs and bridge ports keep
-            // square corners — rounding under a deck entry would cut the wall
-            // the deck lands on.
-            var curvedStairCells = new HashSet<Vector2Int>();
-            foreach (TransitionEdge transition in transitions)
-            {
-                bool curved =
-                    (!string.IsNullOrEmpty(transition.stairPrefabPath) &&
-                     transition.stairPrefabPath.IndexOf("curve", StringComparison.OrdinalIgnoreCase) >= 0) ||
-                    (transition.synthesizedSetPiece != null &&
-                     transition.synthesizedSetPiece.name.IndexOf("curve", StringComparison.OrdinalIgnoreCase) >= 0);
-                if (!curved)
-                {
-                    continue;
-                }
-
-                curvedStairCells.Add(transition.firstCell);
-                curvedStairCells.Add(transition.secondCell);
-                foreach (Vector2Int cell in transition.footprintCells)
-                {
-                    curvedStairCells.Add(cell);
-                }
-            }
-
             var corners = new List<RoundTierCorner>();
             var concaveCandidates = new List<RoundTierCorner>();
             var cliffEdges = new Dictionary<(Vector2Int cell, int dx, int dz), WallEdge>();
             foreach (WallEdge edge in wallEdges)
             {
-                if (edge.isPartition || edge.isRetaining)
-                {
-                    continue;
-                }
-
-                // Suppressed-railing edges (stair-owned tops) participate only
-                // for curved-stair wall-only corners.
-                if (edge.suppressRailing && !curvedStairCells.Contains(new Vector2Int(edge.edge.x, edge.edge.z)))
+                // Edges whose top guard is already owned by a stair or another
+                // structural treatment keep their square wall faces. In particular,
+                // an angle/round replacement here would sweep into a stair volume.
+                if (edge.isPartition || edge.isRetaining || edge.suppressRailing)
                 {
                     continue;
                 }
@@ -6194,8 +6186,7 @@ namespace DungeonLab.Editor
                             continue;
                         }
 
-                        bool wallOnly = reservedCells.Contains(cell) || edgeA.suppressRailing || edgeB.suppressRailing;
-                        if (wallOnly && !curvedStairCells.Contains(cell))
+                        if (reservedCells.Contains(cell))
                         {
                             continue;
                         }
@@ -6223,7 +6214,7 @@ namespace DungeonLab.Editor
 
                         bool angleStyle = style == TierCornerStyleAngle;
                         float yaw = Mathf.Repeat(QuadrantBaseYaw(sx, sz) + 270f, 360f);
-                        corners.Add(new RoundTierCorner(cell, keyA, keyB, edgeA.lowerLevel, edgeA.higherLevel, concave: false, angleStyle, yaw, wallOnly));
+                        corners.Add(new RoundTierCorner(cell, keyA, keyB, edgeA.lowerLevel, edgeA.higherLevel, concave: false, angleStyle, yaw));
                         claimedEdges.Add(keyA);
                         claimedEdges.Add(keyB);
                     }
@@ -6270,10 +6261,9 @@ namespace DungeonLab.Editor
                             continue;
                         }
 
-                        bool concaveWallOnly = edgeA.suppressRailing || edgeB.suppressRailing;
                         bool angleStyle = style == TierCornerStyleAngle;
                         float yaw = Mathf.Repeat(QuadrantBaseYaw(mx, mz) + 90f, 360f);
-                        concaveCandidates.Add(new RoundTierCorner(notch, keyA, keyB, edgeA.lowerLevel, edgeA.higherLevel, concave: true, angleStyle, yaw, concaveWallOnly));
+                        concaveCandidates.Add(new RoundTierCorner(notch, keyA, keyB, edgeA.lowerLevel, edgeA.higherLevel, concave: true, angleStyle, yaw));
                     }
                 }
             }
@@ -6352,6 +6342,115 @@ namespace DungeonLab.Editor
             return corners;
         }
 
+        private static void ValidateTierCornerCompatibility(
+            IReadOnlyList<RoundTierCorner> corners,
+            IReadOnlyList<TransitionEdge> transitions)
+        {
+            if (corners == null || corners.Count == 0)
+            {
+                return;
+            }
+
+            var footprintOwners = new Dictionary<Vector2Int, TransitionEdge>();
+            var portEdgeOwners = new Dictionary<(int x, int z, int direction), TransitionEdge>();
+            if (transitions != null)
+            {
+                foreach (TransitionEdge transition in transitions)
+                {
+                    if (transition.footprintCells != null)
+                    {
+                        foreach (Vector2Int cell in transition.footprintCells)
+                        {
+                            if (!footprintOwners.ContainsKey(cell))
+                            {
+                                footprintOwners.Add(cell, transition);
+                            }
+                        }
+                    }
+
+                    if (!transition.hasPortDirections)
+                    {
+                        continue;
+                    }
+
+                    AddTierCornerPortClaims(
+                        transition.lowerLandingCells,
+                        OppositeDirection(transition.lowerPortDirection),
+                        transition,
+                        portEdgeOwners);
+                    AddTierCornerPortClaims(
+                        transition.upperLandingCells,
+                        OppositeDirection(transition.upperPortDirection),
+                        transition,
+                        portEdgeOwners);
+                }
+            }
+
+            foreach (RoundTierCorner corner in corners)
+            {
+                if (footprintOwners.TryGetValue(corner.cell, out TransitionEdge footprintOwner))
+                {
+                    ThrowTierCornerCompatibilityError(corner, footprintOwner, "corner cell overlaps the stair footprint");
+                }
+
+                Vector2Int edgeAOwnerCell = new Vector2Int(corner.edgeA.Item1, corner.edgeA.Item2);
+                Vector2Int edgeBOwnerCell = new Vector2Int(corner.edgeB.Item1, corner.edgeB.Item2);
+                if (footprintOwners.TryGetValue(edgeAOwnerCell, out TransitionEdge edgeOwner) ||
+                    footprintOwners.TryGetValue(edgeBOwnerCell, out edgeOwner))
+                {
+                    ThrowTierCornerCompatibilityError(corner, edgeOwner, "corner replaces an edge owned by the stair footprint");
+                }
+
+                if (portEdgeOwners.TryGetValue(corner.edgeA, out TransitionEdge portOwnerA) ||
+                    portEdgeOwners.TryGetValue(corner.edgeB, out portOwnerA))
+                {
+                    ThrowTierCornerCompatibilityError(corner, portOwnerA, "corner replaces a stair landing port edge");
+                }
+            }
+        }
+
+        private static void AddTierCornerPortClaims(
+            IReadOnlyList<Vector2Int> landingCells,
+            int floorSide,
+            TransitionEdge transition,
+            Dictionary<(int x, int z, int direction), TransitionEdge> owners)
+        {
+            if (landingCells == null)
+            {
+                return;
+            }
+
+            foreach (Vector2Int cell in landingCells)
+            {
+                var key = (cell.x, cell.y, floorSide);
+                if (!owners.ContainsKey(key))
+                {
+                    owners.Add(key, transition);
+                }
+            }
+        }
+
+        private static void ThrowTierCornerCompatibilityError(
+            RoundTierCorner corner,
+            TransitionEdge transition,
+            string reason)
+        {
+            string stairName = transition.synthesizedSetPiece != null
+                ? transition.synthesizedSetPiece.name
+                : string.IsNullOrEmpty(transition.stairPrefabPath)
+                    ? "<unnamed>"
+                    : Path.GetFileNameWithoutExtension(transition.stairPrefabPath);
+            throw new InvalidOperationException(
+                $"[STAIR_BOUNDARY_CONFLICT] stair '{stairName}' placementClass '{transition.placementClass}' " +
+                $"at tier corner {corner.cell}: {reason}; edges {FormatTierCornerEdges(corner)}.");
+        }
+
+        private static string FormatTierCornerEdges(RoundTierCorner corner)
+        {
+            return $"({corner.edgeA.Item1},{corner.edgeA.Item2},d{corner.edgeA.Item3})/" +
+                $"({corner.edgeB.Item1},{corner.edgeB.Item2},d{corner.edgeB.Item3})";
+        }
+
         // Decision 42 at tier scale: one corner style per contiguous same-level
         // floor region (the tier mass), anchored like the dais clusters.
         // Weighted three ways (user review 2026-06-12: unweighted angle/round
@@ -6415,6 +6514,7 @@ namespace DungeonLab.Editor
 
         private static void PlaceRoundTierCornerKits(
             IReadOnlyList<RoundTierCorner> corners,
+            HashSet<(int x, int z, int direction)> shellGuardEdges,
             Vector3 origin,
             float levelHeight,
             Transform parent,
@@ -6489,7 +6589,11 @@ namespace DungeonLab.Editor
                 // concave guards rotate 180 with the pivot recomputed through
                 // the quadrant map — the arc lands back on the curve. Convex
                 // corners stay co-located (approved).
-                if (!corner.wallOnly && DropGetsRailing(corner.higherLevel - corner.lowerLevel))
+                bool shellOwnsGuard = shellGuardEdges != null &&
+                    (shellGuardEdges.Contains(corner.edgeA) || shellGuardEdges.Contains(corner.edgeB));
+                if (!corner.wallOnly &&
+                    !shellOwnsGuard &&
+                    DropGetsRailing(corner.higherLevel - corner.lowerLevel))
                 {
                     // The TRIM families author like the WALL families (concave
                     // trim co-locates with the concave shell); only the RAILING
