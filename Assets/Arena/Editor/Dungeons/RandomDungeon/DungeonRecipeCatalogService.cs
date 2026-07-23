@@ -36,6 +36,17 @@ namespace DungeonLab.Editor
         internal const string CatalogPath =
             "Assets/Arena/Content/Settings/Dungeons/RandomDungeon/Recipes/Catalog/dungeon_recipe_catalog.asset";
         private static ActiveDungeonRecipeCatalog previewCatalog;
+        private static string previewRecipeId = string.Empty;
+        private static string previewReplacedRecipeId = string.Empty;
+
+        internal static bool TryGetAuthoringPreviewContext(
+            out string recipeId,
+            out string replacedRecipeId)
+        {
+            recipeId = previewRecipeId;
+            replacedRecipeId = previewReplacedRecipeId;
+            return previewCatalog != null && !string.IsNullOrEmpty(recipeId);
+        }
 
         internal static bool TryLoadActiveCatalog(
             out ActiveDungeonRecipeCatalog activeCatalog,
@@ -171,7 +182,65 @@ namespace DungeonLab.Editor
             var active = new List<DungeonRecipeAsset>(currentCatalog.recipes) { previewRecipe };
             active.Sort((first, second) => string.CompareOrdinal(first.recipeId, second.recipeId));
             previewCatalog = new ActiveDungeonRecipeCatalog(active.ToArray(), ComputeCatalogDigest(active));
+            previewRecipeId = previewRecipe.recipeId;
+            previewReplacedRecipeId =
+                matchingMemberCount == 1 ? previewRecipe.recipeId : string.Empty;
             return new PreviewCatalogScope();
+        }
+
+        internal static bool TryReplaceAuthoringPreviewCatalogMember(
+            string replacedRecipeId,
+            out ActiveDungeonRecipeCatalog activeCatalog,
+            out string rejectionReason)
+        {
+            activeCatalog = null;
+            rejectionReason = string.Empty;
+            if (previewCatalog == null || string.IsNullOrEmpty(previewRecipeId))
+            {
+                rejectionReason = "[RECIPE_PREVIEW] no authoring preview catalog was active";
+                return false;
+            }
+
+            if (!string.IsNullOrEmpty(previewReplacedRecipeId))
+            {
+                if (!string.Equals(
+                        previewReplacedRecipeId,
+                        replacedRecipeId,
+                        StringComparison.Ordinal))
+                {
+                    rejectionReason =
+                        $"[RECIPE_PREVIEW] preview already replaced recipe '{previewReplacedRecipeId}'";
+                    return false;
+                }
+
+                activeCatalog = previewCatalog;
+                return true;
+            }
+
+            if (string.IsNullOrEmpty(replacedRecipeId) ||
+                string.Equals(replacedRecipeId, previewRecipeId, StringComparison.Ordinal) ||
+                !previewCatalog.TryGet(replacedRecipeId, out _))
+            {
+                rejectionReason =
+                    $"[RECIPE_PREVIEW] replacement recipe '{replacedRecipeId}' was not an active production candidate";
+                return false;
+            }
+
+            var active = new List<DungeonRecipeAsset>(previewCatalog.recipes.Length - 1);
+            foreach (DungeonRecipeAsset recipe in previewCatalog.recipes)
+            {
+                if (!string.Equals(recipe.recipeId, replacedRecipeId, StringComparison.Ordinal))
+                {
+                    active.Add(recipe);
+                }
+            }
+
+            previewCatalog = new ActiveDungeonRecipeCatalog(
+                active.ToArray(),
+                ComputeCatalogDigest(active));
+            previewReplacedRecipeId = replacedRecipeId;
+            activeCatalog = previewCatalog;
+            return true;
         }
 
         internal static string ComputeCatalogDigest(IEnumerable<DungeonRecipeAsset> recipes)
@@ -208,6 +277,8 @@ namespace DungeonLab.Editor
                 {
                     disposed = true;
                     previewCatalog = null;
+                    previewRecipeId = string.Empty;
+                    previewReplacedRecipeId = string.Empty;
                 }
             }
         }

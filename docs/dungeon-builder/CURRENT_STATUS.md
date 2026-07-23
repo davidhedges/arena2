@@ -11,7 +11,8 @@ Production mode: one route-first layout builder deterministically selects proces
 Recipe authoring UI: implemented for contract validation, deterministic preview galleries, direct availability control, and disabled-by-default creation
 
 Recipe availability and selection: `RECIPE_POOL_SELECTION_PLAN.md` Slices A and
-B are complete; work stops before Slice C authoring-preview repair
+B are complete; Slice C authoring-preview repair is complete; work stops before
+Slice D content
 
 ## Read next
 
@@ -19,7 +20,7 @@ B are complete; work stops before Slice C authoring-preview repair
 2. This file — current evidence and exact handoff.
 3. [`COHERENT_FLOORPLAN_PLAN.md`](COHERENT_FLOORPLAN_PLAN.md) — architecture, phases, and exit gates.
 4. [`DENSITY_ADJACENCY_PLAN.md`](DENSITY_ADJACENCY_PLAN.md) — completed density/adjacency workstream; closed at slice 6 with slice 7 tabled by owner decision.
-5. [`RECIPE_POOL_SELECTION_PLAN.md`](RECIPE_POOL_SELECTION_PLAN.md) — active recipe-pool migration; complete through Slice B only.
+5. [`RECIPE_POOL_SELECTION_PLAN.md`](RECIPE_POOL_SELECTION_PLAN.md) — active recipe-pool migration; complete through Slice C only.
 6. [`RECIPE_AUTHORING_WORKFLOW.md`](RECIPE_AUTHORING_WORKFLOW.md) — current recipe availability, selection, validation, and deterministic-preview workflow.
 7. [`stair_forge_design.md`](stair_forge_design.md) — exact stair contracts already reused by the coupled twin-stair episode and any Phase 5 contrast recipe.
 
@@ -107,7 +108,35 @@ B are complete; work stops before Slice C authoring-preview repair
   is 144/147 with exactly the same three pre-existing failures recorded for
   Slice A. Both editor and test assemblies compile with zero errors;
   `git diff --check` and the Slice B symbol/producer audit pass.
-- Slice C authoring-preview repair and all new recipe content remain unstarted.
+- Slice C authoring-preview repair is complete; all new recipe content remains
+  unstarted.
+
+## Recipe authoring preview Slice C result
+
+- A disabled recipe with a previously unknown ID is admitted only inside the
+  existing authoring-preview catalog scope. The selector discovers compatible
+  required route slots in stable route-node order, chooses the matching
+  production candidate with the ordinary recipe-selection stream, temporarily
+  replaces that candidate, and forces the preview recipe in the chosen slot.
+- The preview then uses the existing placement, `DungeonLayout`,
+  `TieredLevelPlan`, renderer, abyss, and collision path. The gallery manifest
+  names the forced recipe and its topology, slot, and route-node context in
+  addition to the existing isolated and neighbor evidence.
+- Preview catalog replacement is scoped and disposable. The focused gate proves
+  that an incompatible unknown recipe rejects, the unknown ID is absent before
+  and after preview, catalog count and digest are restored, and ordinary route
+  and canonical hashes are unchanged.
+- Enabling and catalog membership remain direct owner actions. Slice C added no
+  production recipe ID, asset, topology, planner, renderer, promotion action, or
+  alternative generation path.
+- The recipe workflow fixture passes 12/12. The complete Dungeon Lab suite is
+  145/148 with exactly the same three pre-existing failures recorded for Slices
+  A and B.
+- Two fixed runs over `2026072100..2026072149` each accepted and hard-validated
+  50/50 and reproduced the unchanged Slice B result hash
+  `80d838c9a61348ede04569427f6963d31571e046f8ce304970d241966fa836b8`.
+  Both editor projects and the test assembly compile with zero errors.
+- Slice D and all new production recipe content remain unstarted.
 
 ## Foundation already established
 

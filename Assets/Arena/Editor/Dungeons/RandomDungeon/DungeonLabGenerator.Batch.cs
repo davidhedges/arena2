@@ -22,6 +22,8 @@ namespace DungeonLab.Editor
         private const string ThroneRecipeFixtureId = "episode_throne_twin_stairs_01";
         private const string VestibuleRecipeFixtureId = "connector_flexible_vestibule_01";
         private const string CornerReturnRecipeFixtureId = "connector_corner_return_01";
+        private const string UnknownDisabledPreviewFixtureId =
+            "preview_disabled_connector_slice_c_01";
         private const int Phase0BaselineFirstSeed = 2026072100;
         private const int Phase0BaselineSeedCount = 200;
         private const int LockedSeedCount = 100;
@@ -3032,6 +3034,112 @@ namespace DungeonLab.Editor
             return string.Join("\n", lines);
         }
 
+        private static string BuildRecipeAuthoringPreviewIsolationSnapshot(int seed)
+        {
+            if (!DungeonRecipeCatalogService.TryLoadActiveCatalog(
+                    out ActiveDungeonRecipeCatalog beforeCatalog,
+                    out string rejectionReason) ||
+                !beforeCatalog.TryGet(
+                    VestibuleRecipeFixtureId,
+                    out DungeonRecipeAsset source))
+            {
+                throw new InvalidOperationException(rejectionReason);
+            }
+
+            JObject beforeReport = BuildPhase0SeedReport(seed);
+            DungeonRecipeAsset previewRecipe = Instantiate(source);
+            DungeonRecipeAsset incompatibleRecipe = Instantiate(source);
+            previewRecipe.hideFlags = HideFlags.HideAndDontSave;
+            incompatibleRecipe.hideFlags = HideFlags.HideAndDontSave;
+            try
+            {
+                previewRecipe.recipeId = UnknownDisabledPreviewFixtureId;
+                previewRecipe.displayName = "Slice C Unknown Disabled Preview";
+                previewRecipe.disabledForGeneration = true;
+                bool firstPassed = DungeonRecipeAuthoringService.TryBuildPreviewGallery(
+                    previewRecipe,
+                    seed,
+                    out string firstPath,
+                    out string firstMessage);
+                JObject firstManifest = firstPassed
+                    ? JObject.Parse(File.ReadAllText(firstPath))
+                    : new JObject();
+                bool secondPassed = DungeonRecipeAuthoringService.TryBuildPreviewGallery(
+                    previewRecipe,
+                    seed,
+                    out string secondPath,
+                    out string secondMessage);
+                JObject secondManifest = secondPassed
+                    ? JObject.Parse(File.ReadAllText(secondPath))
+                    : new JObject();
+
+                incompatibleRecipe.recipeId = "preview_incompatible_connector_slice_c_01";
+                incompatibleRecipe.displayName = "Slice C Incompatible Disabled Preview";
+                incompatibleRecipe.disabledForGeneration = true;
+                incompatibleRecipe.eligibleRoles = new[] { "preview-only-role" };
+                incompatibleRecipe.eligibleBeats = new[] { "preview-only-beat" };
+                bool incompatiblePassed =
+                    DungeonRecipeAuthoringService.TryBuildPreviewGallery(
+                        incompatibleRecipe,
+                        seed,
+                        out _,
+                        out string incompatibleMessage);
+
+                bool afterCatalogValid = DungeonRecipeCatalogService.TryLoadActiveCatalog(
+                    out ActiveDungeonRecipeCatalog afterCatalog,
+                    out string afterCatalogError);
+                JObject afterReport = BuildPhase0SeedReport(seed);
+                JObject context = firstManifest["previewContext"] as JObject;
+                var previewKinds = new HashSet<string>(StringComparer.Ordinal);
+                foreach (JToken entry in firstManifest["entries"] as JArray ?? new JArray())
+                {
+                    previewKinds.Add(entry.Value<string>("kind") ?? string.Empty);
+                }
+
+                bool previewCatalogMember =
+                    afterCatalog != null &&
+                    afterCatalog.TryGet(previewRecipe.recipeId, out _);
+                return string.Join("\n", new[]
+                {
+                    $"preview.recipeId={previewRecipe.recipeId}",
+                    $"preview.disabledForGeneration={previewRecipe.disabledForGeneration}",
+                    $"preview.catalogMember={previewCatalogMember}",
+                    $"preview.firstPassed={firstPassed}",
+                    $"preview.secondPassed={secondPassed}",
+                    $"preview.samePath={string.Equals(firstPath, secondPath, StringComparison.Ordinal)}",
+                    $"preview.sameHash={string.Equals(firstManifest.Value<string>("galleryHash"), secondManifest.Value<string>("galleryHash"), StringComparison.Ordinal)}",
+                    $"preview.isolatedEvidence={previewKinds.IsSupersetOf(new[] { "contract", "top_down", "player_height", "below_floor" })}",
+                    $"preview.neighborEvidence={previewKinds.Contains("neighbor")}",
+                    $"preview.firstMessage={firstMessage}",
+                    $"preview.secondMessage={secondMessage}",
+                    $"context.forced={context?.Value<bool?>("forced") == true}",
+                    $"context.recipeId={context?.Value<string>("forcedRecipeId") ?? string.Empty}",
+                    $"context.topologyId={context?.Value<string>("topologyId") ?? string.Empty}",
+                    $"context.recipeSlotId={context?.Value<string>("recipeSlotId") ?? string.Empty}",
+                    $"context.routeNodeId={context?.Value<string>("routeNodeId") ?? string.Empty}",
+                    $"fullDungeon.canonical={firstManifest["fullDungeon"]?.Value<bool?>("canonicalPlan") == true}",
+                    $"fullDungeon.renderer={firstManifest["fullDungeon"]?.Value<bool?>("renderer") == true}",
+                    $"fullDungeon.abyss={firstManifest["fullDungeon"]?.Value<bool?>("abyssSupport") == true}",
+                    $"fullDungeon.collision={firstManifest["fullDungeon"]?.Value<bool?>("collision") == true}",
+                    $"incompatible.passed={incompatiblePassed}",
+                    $"incompatible.message={incompatibleMessage}",
+                    $"ordinary.catalogValid={afterCatalogValid}",
+                    $"ordinary.catalogError={afterCatalogError}",
+                    $"ordinary.activeCount={afterCatalog?.recipes.Length ?? 0}",
+                    $"ordinary.catalogDigestPreserved={string.Equals(beforeCatalog.digest, afterCatalog?.digest, StringComparison.Ordinal)}",
+                    $"ordinary.previewAbsentBefore={FindRecipeProjection(beforeReport["recipeResolutions"] as JArray, previewRecipe.recipeId) == null}",
+                    $"ordinary.previewAbsentAfter={FindRecipeProjection(afterReport["recipeResolutions"] as JArray, previewRecipe.recipeId) == null}",
+                    $"ordinary.routeHashPreserved={string.Equals(beforeReport["hashes"]?.Value<string>("routeIntent"), afterReport["hashes"]?.Value<string>("routeIntent"), StringComparison.Ordinal)}",
+                    $"ordinary.canonicalHashPreserved={string.Equals(beforeReport["hashes"]?.Value<string>("canonical"), afterReport["hashes"]?.Value<string>("canonical"), StringComparison.Ordinal)}"
+                });
+            }
+            finally
+            {
+                DestroyImmediate(previewRecipe);
+                DestroyImmediate(incompatibleRecipe);
+            }
+        }
+
         private static string BuildPhase5WorkflowSnapshot(int seed)
         {
             DungeonRecipeCatalogService.TryLoadActiveCatalog(
@@ -3327,11 +3435,38 @@ namespace DungeonLab.Editor
                 return false;
             }
 
+            JObject previewContext = null;
+            foreach (JToken token in
+                     seedReport["routeIntent"]?["recipeSlots"] as JArray ?? new JArray())
+            {
+                JObject candidateContext = token["authoringPreview"] as JObject;
+                if (candidateContext?.Value<bool?>("forced") == true &&
+                    string.Equals(
+                        candidateContext.Value<string>("recipeId"),
+                        recipeId,
+                        StringComparison.Ordinal))
+                {
+                    previewContext = candidateContext;
+                    break;
+                }
+            }
+
             JObject rendererReport = JObject.Parse(BuildPhase0RendererProbeJson(seed));
             bool canonicalValid = seedReport["validation"]?.Value<bool?>("passed") == true;
             bool rendererValid = rendererReport["renderer"]?.Value<bool?>("passed") == true;
             bool boundaryValid = rendererReport["boundary"]?.Value<bool?>("passed") == true;
             bool collisionValid = rendererReport["collisionPreconditions"]?.Value<bool?>("passed") == true;
+            bool previewContextValid =
+                previewContext?.Value<bool?>("forced") == true &&
+                !string.IsNullOrEmpty(previewContext.Value<string>("topologyId")) &&
+                !string.IsNullOrEmpty(previewContext.Value<string>("recipeSlotId")) &&
+                !string.IsNullOrEmpty(previewContext.Value<string>("routeNodeId"));
+            bool fullDungeonValid =
+                canonicalValid &&
+                rendererValid &&
+                boundaryValid &&
+                collisionValid &&
+                previewContextValid;
             int mandatoryPorts = 0;
             foreach (JToken port in recipe["ports"] as JArray ?? new JArray())
             {
@@ -3346,12 +3481,19 @@ namespace DungeonLab.Editor
                 canonicalValid,
                 rendererValid,
                 boundaryValid && rendererValid,
-                collisionValid);
-            message = canonicalValid && rendererValid && boundaryValid && collisionValid
-                ? "canonical plan, renderer, abyss boundary, and collision evidence passed"
-                : $"full-dungeon evidence failed: canonical={canonicalValid}, renderer={rendererValid}, boundary={boundaryValid}, collision={collisionValid}; " +
+                collisionValid,
+                previewContextValid,
+                previewContext?.Value<string>("topologyId"),
+                previewContext?.Value<string>("recipeSlotId"),
+                previewContext?.Value<string>("routeNodeId"));
+            message = fullDungeonValid
+                ? $"canonical plan, renderer, abyss boundary, and collision evidence passed in preview context " +
+                  $"{previewContext?.Value<string>("topologyId")}/" +
+                  $"{previewContext?.Value<string>("recipeSlotId")}/" +
+                  $"{previewContext?.Value<string>("routeNodeId")}"
+                : $"full-dungeon evidence failed: canonical={canonicalValid}, renderer={rendererValid}, boundary={boundaryValid}, collision={collisionValid}, previewContext={previewContextValid}; " +
                   $"validation={seedReport["validation"]?.ToString(Formatting.None)}; rendererReport={rendererReport.ToString(Formatting.None)}";
-            return canonicalValid && rendererValid && boundaryValid && collisionValid;
+            return fullDungeonValid;
         }
 
         private static JObject CreateAcceptedPhase0SeedReport(
@@ -3652,7 +3794,7 @@ namespace DungeonLab.Editor
                 });
             }
 
-            return new JObject
+            var projection = new JObject
             {
                 ["id"] = slot.recipe.recipeId,
                 ["recipeSlotId"] = slot.slotId,
@@ -3676,6 +3818,19 @@ namespace DungeonLab.Editor
                 ["symmetryPairCount"] = slot.recipe.symmetryPairs.Length,
                 ["variationCount"] = slot.recipe.variations.Length
             };
+            if (slot.forcedForAuthoringPreview)
+            {
+                projection["authoringPreview"] = new JObject
+                {
+                    ["forced"] = true,
+                    ["recipeId"] = slot.recipe.recipeId,
+                    ["topologyId"] = intent.patternId,
+                    ["recipeSlotId"] = slot.slotId,
+                    ["routeNodeId"] = node.id
+                };
+            }
+
+            return projection;
         }
 
         private static JObject BuildPhase1RoutePlacementProjection(DungeonLayout layout)
@@ -4168,24 +4323,19 @@ namespace DungeonLab.Editor
                     out ActiveDungeonRecipeCatalog catalog,
                     out message) ||
                 plan.recipeResolutions == null ||
-                plan.recipeResolutions.Length != 3)
+                plan.recipeResolutions.Length != catalog.recipes.Length)
             {
                 message = string.IsNullOrEmpty(message)
-                    ? $"expected three recipe resolutions; found {plan.recipeResolutions?.Length ?? 0}"
+                    ? $"expected {catalog?.recipes.Length ?? 0} recipe resolutions; found {plan.recipeResolutions?.Length ?? 0}"
                     : message;
                 return false;
             }
 
-            foreach (string requiredId in new[]
-                     {
-                         ThroneRecipeFixtureId,
-                         VestibuleRecipeFixtureId,
-                         CornerReturnRecipeFixtureId
-                     })
+            foreach (DungeonRecipeAsset recipe in catalog.recipes)
             {
+                string requiredId = recipe.recipeId;
                 RecipeResolution resolution = FindRecipeResolution(plan.recipeResolutions, requiredId);
-                if (!catalog.TryGet(requiredId, out DungeonRecipeAsset recipe) ||
-                    !resolution.atomicAndValid ||
+                if (!resolution.atomicAndValid ||
                     resolution.primaryAxis == Vector2Int.zero ||
                     resolution.ports == null || resolution.ports.Length != recipe.ports.Length ||
                     resolution.transitions == null || resolution.transitions.Length != recipe.transitions.Length ||

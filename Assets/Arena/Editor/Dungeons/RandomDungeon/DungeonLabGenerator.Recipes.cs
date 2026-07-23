@@ -47,6 +47,7 @@ namespace DungeonLab.Editor
             public readonly string[] compatibleCandidateIds;
             public readonly RecipeCandidateRejection[] rejectedCandidates;
             public readonly string selectionStreamIdentity;
+            public readonly bool forcedForAuthoringPreview;
 
             public RecipeSlotIntent(
                 string slotId,
@@ -57,7 +58,8 @@ namespace DungeonLab.Editor
                 string catalogDigest = "",
                 string[] compatibleCandidateIds = null,
                 RecipeCandidateRejection[] rejectedCandidates = null,
-                string selectionStreamIdentity = "")
+                string selectionStreamIdentity = "",
+                bool forcedForAuthoringPreview = false)
             {
                 this.slotId = slotId ?? string.Empty;
                 this.slotNode = slotNode;
@@ -68,6 +70,7 @@ namespace DungeonLab.Editor
                 this.compatibleCandidateIds = compatibleCandidateIds ?? Array.Empty<string>();
                 this.rejectedCandidates = rejectedCandidates ?? Array.Empty<RecipeCandidateRejection>();
                 this.selectionStreamIdentity = selectionStreamIdentity ?? string.Empty;
+                this.forcedForAuthoringPreview = forcedForAuthoringPreview;
             }
 
             public bool TryGetEdgeId(string portId, out string edgeId)
@@ -338,6 +341,104 @@ namespace DungeonLab.Editor
                 return false;
             }
 
+            bool authoringPreviewActive =
+                DungeonRecipeCatalogService.TryGetAuthoringPreviewContext(
+                    out string authoringPreviewRecipeId,
+                    out string authoringPreviewReplacedRecipeId);
+            int authoringPreviewSlotNode = -1;
+            if (authoringPreviewActive)
+            {
+                for (int nodeIndex = 0; nodeIndex < intent.nodes.Length; nodeIndex++)
+                {
+                    RouteNodeIntent node = intent.nodes[nodeIndex];
+                    if (!node.HasRecipeSlot)
+                    {
+                        continue;
+                    }
+
+                    if (!TryBuildRecipeSlotBindings(
+                            intent,
+                            nodeIndex,
+                            out RecipeOrientationBinding orientationBinding,
+                            out RecipePortBinding[] portBindings))
+                    {
+                        rejectionReason =
+                            $"[RECIPE_SELECTION] slot '{node.recipeSlotId}' had no declared route-edge binding contract";
+                        return false;
+                    }
+
+                    DungeonRecipeAsset previewRecipe = null;
+                    var productionCandidates = new List<DungeonRecipeAsset>();
+                    foreach (DungeonRecipeAsset candidate in catalog.recipes)
+                    {
+                        if (!TryValidateRecipeCandidate(
+                                intent,
+                                nodeIndex,
+                                candidate,
+                                orientationBinding,
+                                portBindings,
+                                out _))
+                        {
+                            continue;
+                        }
+
+                        if (string.Equals(
+                                candidate.recipeId,
+                                authoringPreviewRecipeId,
+                                StringComparison.Ordinal))
+                        {
+                            previewRecipe = candidate;
+                        }
+                        else
+                        {
+                            productionCandidates.Add(candidate);
+                        }
+                    }
+
+                    if (previewRecipe == null)
+                    {
+                        continue;
+                    }
+
+                    authoringPreviewSlotNode = nodeIndex;
+                    if (string.IsNullOrEmpty(authoringPreviewReplacedRecipeId))
+                    {
+                        if (productionCandidates.Count == 0)
+                        {
+                            rejectionReason =
+                                $"[RECIPE_PREVIEW] recipe '{authoringPreviewRecipeId}' had no production candidate to replace at slot '{node.recipeSlotId}'";
+                            return false;
+                        }
+
+                        int replacedIndex = productionCandidates.Count == 1
+                            ? 0
+                            : RecipeSelectionRandom(
+                                intent.seed,
+                                intent.patternId,
+                                node.id).Next(productionCandidates.Count);
+                        authoringPreviewReplacedRecipeId =
+                            productionCandidates[replacedIndex].recipeId;
+                        if (!DungeonRecipeCatalogService.TryReplaceAuthoringPreviewCatalogMember(
+                                authoringPreviewReplacedRecipeId,
+                                out catalog,
+                                out rejectionReason))
+                        {
+                            return false;
+                        }
+                    }
+
+                    break;
+                }
+
+                if (authoringPreviewSlotNode < 0)
+                {
+                    rejectionReason =
+                        $"[RECIPE_PREVIEW] recipe '{authoringPreviewRecipeId}' had no compatible required route slot";
+                    return false;
+                }
+            }
+
+            bool authoringPreviewForced = false;
             var resolved = new List<RecipeSlotIntent>(3);
             for (int nodeIndex = 0; nodeIndex < intent.nodes.Length; nodeIndex++)
             {
@@ -385,9 +486,69 @@ namespace DungeonLab.Editor
                     return false;
                 }
 
-                int selectedIndex = compatible.Count == 1
-                    ? 0
-                    : RecipeSelectionRandom(intent.seed, intent.patternId, node.id).Next(compatible.Count);
+                int previewCandidateIndex = -1;
+                if (authoringPreviewActive)
+                {
+                    for (int index = 0; index < compatible.Count; index++)
+                    {
+                        if (string.Equals(
+                                compatible[index].recipeId,
+                                authoringPreviewRecipeId,
+                                StringComparison.Ordinal))
+                        {
+                            previewCandidateIndex = index;
+                            break;
+                        }
+                    }
+                }
+
+                bool forceAuthoringPreview =
+                    authoringPreviewActive &&
+                    !authoringPreviewForced &&
+                    nodeIndex == authoringPreviewSlotNode &&
+                    previewCandidateIndex >= 0;
+                DungeonRecipeAsset selectedRecipe;
+                if (forceAuthoringPreview)
+                {
+                    selectedRecipe = compatible[previewCandidateIndex];
+                    authoringPreviewForced = true;
+                }
+                else
+                {
+                    var selectionCandidates = compatible;
+                    if (authoringPreviewActive &&
+                        authoringPreviewForced &&
+                        previewCandidateIndex >= 0)
+                    {
+                        selectionCandidates = new List<DungeonRecipeAsset>(compatible.Count - 1);
+                        foreach (DungeonRecipeAsset candidate in compatible)
+                        {
+                            if (!string.Equals(
+                                    candidate.recipeId,
+                                    authoringPreviewRecipeId,
+                                    StringComparison.Ordinal))
+                            {
+                                selectionCandidates.Add(candidate);
+                            }
+                        }
+
+                        if (selectionCandidates.Count == 0)
+                        {
+                            rejectionReason =
+                                $"[RECIPE_PREVIEW] forced recipe '{authoringPreviewRecipeId}' was the only candidate for multiple slots";
+                            return false;
+                        }
+                    }
+
+                    int selectedIndex = selectionCandidates.Count == 1
+                        ? 0
+                        : RecipeSelectionRandom(
+                            intent.seed,
+                            intent.patternId,
+                            node.id).Next(selectionCandidates.Count);
+                    selectedRecipe = selectionCandidates[selectedIndex];
+                }
+
                 var compatibleIds = new string[compatible.Count];
                 for (int index = 0; index < compatible.Count; index++)
                 {
@@ -397,13 +558,21 @@ namespace DungeonLab.Editor
                 resolved.Add(new RecipeSlotIntent(
                     node.recipeSlotId,
                     nodeIndex,
-                    compatible[selectedIndex],
+                    selectedRecipe,
                     orientationBinding,
                     portBindings,
                     catalog.digest,
                     compatibleIds,
                     rejections.ToArray(),
-                    RecipeSelectionStreamIdentity));
+                    RecipeSelectionStreamIdentity,
+                    forceAuthoringPreview));
+            }
+
+            if (authoringPreviewActive && !authoringPreviewForced)
+            {
+                rejectionReason =
+                    $"[RECIPE_PREVIEW] recipe '{authoringPreviewRecipeId}' had no compatible required route slot";
+                return false;
             }
 
             if (resolved.Count != 3)

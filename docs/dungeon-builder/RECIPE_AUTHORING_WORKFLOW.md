@@ -1,6 +1,6 @@
 # Dungeon recipe authoring workflow
 
-Status: current for recipe schema v1 and Slice B catalog selection
+Status: current for recipe schema v1 and Slice C authoring preview
 Last updated: 2026-07-24
 
 This is the operational checklist for creating or changing a room recipe. Use
@@ -54,9 +54,11 @@ Write a one-page brief
 Production recipe slots now discover compatible enabled catalog members by
 role, beat, route-edge/port, orientation, elevation, transition, landing,
 headroom, and current-validation contracts. Selection is deterministic and
-uniform within the compatible set. Full-dungeon preview repair for a disabled
-previously unknown recipe remains deferred to Slice C; do not add production
-C# bindings as an authoring workaround.
+uniform within the compatible set. In authoring-preview scope, a disabled
+previously unknown recipe is forced into one compatible existing required slot
+without a production C# binding. The scope temporarily replaces the production
+candidate that ordinary selection would use and is always disposed before
+ordinary generation resumes.
 
 ## 1. Availability
 
@@ -231,17 +233,19 @@ declared level.
 
 ### Layer E — Full-dungeon integration
 
-For recipe IDs already bound by current production, the existing preview seam
-can run placement, `DungeonLayout`, `TieredLevelPlan`, renderer, abyss, and
-collision evidence. Previously unknown IDs wait for the explicitly deferred
-Slice C authoring-preview repair.
+The authoring-preview seam discovers a compatible existing required slot,
+forces the current recipe there for the preview scope, and runs the existing
+placement, `DungeonLayout`, `TieredLevelPlan`, renderer, abyss, and collision
+evidence. The recipe may remain disabled and absent from the explicit
+production catalog. A recipe with no compatible required slot fails explicitly.
 
 ## 8. Build deterministic previews
 
 Use **Arena > Dungeons > Recipes > Build Preview Gallery**. Current evidence
 includes contract, top-down, player-height, below-floor, legal
-orientation/mirror/alternative, generic-neighbor, and—where the existing
-binding supports it—full-dungeon views.
+orientation/mirror/alternative, generic-neighbor, and full-dungeon views. The
+gallery manifest records the forced recipe ID plus the topology, recipe-slot,
+and route-node context used for full-dungeon evidence.
 
 The validator and serialized contract determine correctness. Images are
 diagnostic evidence.

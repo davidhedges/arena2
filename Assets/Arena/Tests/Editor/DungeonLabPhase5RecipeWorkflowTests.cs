@@ -262,6 +262,53 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void UnknownDisabledRecipe_PreviewsInForcedCanonicalContextWithoutLeaking()
+        {
+            Dictionary<string, string> snapshot =
+                Snapshot("BuildRecipeAuthoringPreviewIsolationSnapshot");
+
+            Assert.That(
+                snapshot["preview.recipeId"],
+                Is.EqualTo("preview_disabled_connector_slice_c_01"));
+            Assert.That(snapshot["preview.disabledForGeneration"], Is.EqualTo("True"));
+            Assert.That(snapshot["preview.catalogMember"], Is.EqualTo("False"));
+            Assert.That(
+                snapshot["preview.firstPassed"],
+                Is.EqualTo("True"),
+                snapshot["preview.firstMessage"]);
+            Assert.That(
+                snapshot["preview.secondPassed"],
+                Is.EqualTo("True"),
+                snapshot["preview.secondMessage"]);
+            Assert.That(snapshot["preview.samePath"], Is.EqualTo("True"));
+            Assert.That(snapshot["preview.sameHash"], Is.EqualTo("True"));
+            Assert.That(snapshot["preview.isolatedEvidence"], Is.EqualTo("True"));
+            Assert.That(snapshot["preview.neighborEvidence"], Is.EqualTo("True"));
+            Assert.That(snapshot["context.forced"], Is.EqualTo("True"));
+            Assert.That(
+                snapshot["context.recipeId"],
+                Is.EqualTo("preview_disabled_connector_slice_c_01"));
+            Assert.That(snapshot["context.topologyId"], Is.EqualTo("processional-spine"));
+            Assert.That(snapshot["context.recipeSlotId"], Is.EqualTo("required-compression"));
+            Assert.That(snapshot["context.routeNodeId"], Is.EqualTo("threshold"));
+            Assert.That(snapshot["fullDungeon.canonical"], Is.EqualTo("True"));
+            Assert.That(snapshot["fullDungeon.renderer"], Is.EqualTo("True"));
+            Assert.That(snapshot["fullDungeon.abyss"], Is.EqualTo("True"));
+            Assert.That(snapshot["fullDungeon.collision"], Is.EqualTo("True"));
+            Assert.That(snapshot["incompatible.passed"], Is.EqualTo("False"));
+            Assert.That(
+                snapshot["incompatible.message"],
+                Does.Contain("had no compatible required route slot"));
+            Assert.That(snapshot["ordinary.catalogValid"], Is.EqualTo("True"));
+            Assert.That(snapshot["ordinary.activeCount"], Is.EqualTo("3"));
+            Assert.That(snapshot["ordinary.catalogDigestPreserved"], Is.EqualTo("True"));
+            Assert.That(snapshot["ordinary.previewAbsentBefore"], Is.EqualTo("True"));
+            Assert.That(snapshot["ordinary.previewAbsentAfter"], Is.EqualTo("True"));
+            Assert.That(snapshot["ordinary.routeHashPreserved"], Is.EqualTo("True"));
+            Assert.That(snapshot["ordinary.canonicalHashPreserved"], Is.EqualTo("True"));
+        }
+
+        [Test]
         public void FixedSeed_RecipeResolutionsRemainDeterministic()
         {
             string first = Invoke("BuildPhase5FullDungeonSnapshot");

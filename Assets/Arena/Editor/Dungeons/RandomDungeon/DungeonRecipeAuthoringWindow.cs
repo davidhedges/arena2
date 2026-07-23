@@ -481,6 +481,14 @@ namespace DungeonLab.Editor
                 ["contentVersion"] = recipe.contentVersion,
                 ["contentDigest"] = DungeonRecipeValidator.ComputeContentDigest(recipe),
                 ["previewSeed"] = seed,
+                ["previewContext"] = new JObject
+                {
+                    ["forced"] = evidence.forcedAuthoringPreview,
+                    ["forcedRecipeId"] = recipe.recipeId,
+                    ["topologyId"] = evidence.previewTopologyId,
+                    ["recipeSlotId"] = evidence.previewRecipeSlotId,
+                    ["routeNodeId"] = evidence.previewRouteNodeId
+                },
                 ["entries"] = entries,
                 ["fullDungeon"] = new JObject
                 {

@@ -108,6 +108,10 @@ namespace DungeonLab.Editor
         public readonly bool rendererValid;
         public readonly bool abyssSupportValid;
         public readonly bool collisionValid;
+        public readonly bool forcedAuthoringPreview;
+        public readonly string previewTopologyId;
+        public readonly string previewRecipeSlotId;
+        public readonly string previewRouteNodeId;
 
         public DungeonRecipeFullDungeonEvidence(
             string recipeId,
@@ -117,7 +121,11 @@ namespace DungeonLab.Editor
             bool canonicalPlanValid,
             bool rendererValid,
             bool abyssSupportValid,
-            bool collisionValid)
+            bool collisionValid,
+            bool forcedAuthoringPreview,
+            string previewTopologyId,
+            string previewRecipeSlotId,
+            string previewRouteNodeId)
         {
             this.recipeId = recipeId ?? string.Empty;
             this.placedAtomically = placedAtomically;
@@ -127,6 +135,10 @@ namespace DungeonLab.Editor
             this.rendererValid = rendererValid;
             this.abyssSupportValid = abyssSupportValid;
             this.collisionValid = collisionValid;
+            this.forcedAuthoringPreview = forcedAuthoringPreview;
+            this.previewTopologyId = previewTopologyId ?? string.Empty;
+            this.previewRecipeSlotId = previewRecipeSlotId ?? string.Empty;
+            this.previewRouteNodeId = previewRouteNodeId ?? string.Empty;
         }
     }
 
@@ -524,7 +536,11 @@ namespace DungeonLab.Editor
                 !evidence.canonicalPlanValid ||
                 !evidence.rendererValid ||
                 !evidence.abyssSupportValid ||
-                !evidence.collisionValid)
+                !evidence.collisionValid ||
+                !evidence.forcedAuthoringPreview ||
+                string.IsNullOrEmpty(evidence.previewTopologyId) ||
+                string.IsNullOrEmpty(evidence.previewRecipeSlotId) ||
+                string.IsNullOrEmpty(evidence.previewRouteNodeId))
             {
                 result.Add(Layer, "RECIPE_FULL_DUNGEON", "The recipe lacked complete canonical-plan, renderer, abyss, collision, port, or transition evidence.");
             }
