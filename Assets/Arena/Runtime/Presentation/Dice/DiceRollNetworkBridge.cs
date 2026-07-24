@@ -2,9 +2,11 @@
 
 using System;
 using Arena.Network;
+using SpacetimeDB;
 using SpacetimeDB.ClientApi;
 using SpacetimeDB.Types;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace Arena.Presentation.Dice
 {
@@ -17,6 +19,10 @@ namespace Arena.Presentation.Dice
     [DisallowMultipleComponent]
     public sealed class DiceRollNetworkBridge : MonoBehaviour
     {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        private const string DiceOverlayLabSceneName = "DiceOverlayLab";
+#endif
+
         private readonly struct RollKey : IEquatable<RollKey>
         {
             private readonly string _requestId;
@@ -45,13 +51,19 @@ namespace Arena.Presentation.Dice
         private RollKey? _lastPresented;
         private bool _ownsCurrentPresentation;
 
-        public static bool IsConnected => NetworkManager.Instance?.Conn != null;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        private DbConnection? _labConnection;
+        private SubscriptionHandle? _labSubscription;
+        private float _nextLabConnectAttemptAt;
+#endif
+
+        public static bool IsConnected => s_instance?._connection?.Identity != null;
         public static string Status { get; private set; } = "Waiting for server connection";
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
         {
-            if (s_instance != null || !ArenaRuntimeSceneGate.ShouldRunArenaRuntimeInActiveScene())
+            if (s_instance != null || !ShouldBootstrapInActiveScene())
                 return;
 
             GameObject host = new(nameof(DiceRollNetworkBridge));
@@ -61,7 +73,7 @@ namespace Arena.Presentation.Dice
 
         public static bool RequestPreview(string requestId, uint dieSides)
         {
-            DbConnection? connection = NetworkManager.Instance?.Conn;
+            DbConnection? connection = s_instance?._connection;
             if (connection == null)
             {
                 Status = "Server Roll unavailable: not connected";
@@ -79,7 +91,7 @@ namespace Arena.Presentation.Dice
             if (s_instance != null)
                 s_instance._ownsCurrentPresentation = false;
 
-            DbConnection? connection = NetworkManager.Instance?.Conn;
+            DbConnection? connection = s_instance?._connection;
             if (connection == null)
             {
                 Status = "Local overlay dismissed; server is not connected";
@@ -105,7 +117,22 @@ namespace Arena.Presentation.Dice
 
         private void Update()
         {
-            BindConnection(NetworkManager.Instance?.Conn);
+            DbConnection? targetConnection = NetworkManager.Instance?.Conn;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            if (targetConnection == null && IsDiceOverlayLabActive())
+            {
+                EnsureLabConnection();
+                _labConnection?.FrameTick();
+                if (_labConnection?.Identity != null)
+                    targetConnection = _labConnection;
+            }
+            else if (_labConnection != null)
+            {
+                ShutdownLabConnection();
+            }
+#endif
+
+            BindConnection(targetConnection);
             if (_connection?.Identity is not { } localIdentity)
                 return;
 
@@ -116,10 +143,138 @@ namespace Arena.Presentation.Dice
 
         private void OnDestroy()
         {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            ShutdownLabConnection();
+#endif
             BindConnection(null);
             if (s_instance == this)
                 s_instance = null;
         }
+
+        private static bool ShouldBootstrapInActiveScene()
+        {
+            if (ArenaRuntimeSceneGate.ShouldRunArenaRuntimeInActiveScene())
+                return true;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            return IsDiceOverlayLabActive();
+#else
+            return false;
+#endif
+        }
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        private static bool IsDiceOverlayLabActive()
+        {
+            Scene scene = SceneManager.GetActiveScene();
+            return scene.IsValid() &&
+                   scene.isLoaded &&
+                   string.Equals(scene.name, DiceOverlayLabSceneName, StringComparison.Ordinal);
+        }
+
+        private void EnsureLabConnection()
+        {
+            if (_labConnection != null || Time.unscaledTime < _nextLabConnectAttemptAt)
+                return;
+
+            NetworkEnvironmentEndpoint endpoint =
+                NetworkEnvironmentConfig.EndpointFor(NetworkEnvironmentKind.Local);
+            Status = $"Connecting dice lab to {endpoint.ServerUri}/{endpoint.ModuleName}...";
+            _labConnection = DbConnection.Builder()
+                .WithUri(endpoint.ServerUri)
+                .WithDatabaseName(endpoint.ModuleName)
+                .WithToken(NetworkEnvironmentConfig.LoadAuthToken(endpoint))
+                .OnConnect(OnLabConnected)
+                .OnConnectError(OnLabConnectError)
+                .OnDisconnect(OnLabDisconnected)
+                .Build();
+        }
+
+        private void OnLabConnected(DbConnection connection, Identity identity, string token)
+        {
+            if (!ReferenceEquals(connection, _labConnection))
+                return;
+
+            NetworkEnvironmentEndpoint endpoint =
+                NetworkEnvironmentConfig.EndpointFor(NetworkEnvironmentKind.Local);
+            NetworkEnvironmentConfig.SaveAuthToken(endpoint, token);
+            BindConnection(connection);
+            Status = "Dice lab connected; subscribing to authoritative rolls...";
+            _labSubscription = connection
+                .SubscriptionBuilder()
+                .OnApplied(OnLabSubscriptionApplied)
+                .OnError(OnLabSubscriptionError)
+                .Subscribe(new[]
+                {
+                    new QueryBuilder()
+                        .From
+                        .ActiveDiceRoll()
+                        .Where(columns => columns.Owner.Eq(identity))
+                        .ToSql()
+                });
+        }
+
+        private void OnLabConnectError(Exception error)
+        {
+            _labConnection = null;
+            _labSubscription = null;
+            _nextLabConnectAttemptAt = Time.unscaledTime + 2f;
+            Status = $"Dice lab connection failed: {error.Message}";
+            Debug.LogWarning($"[DiceRollNetworkBridge] {Status}");
+        }
+
+        private void OnLabDisconnected(DbConnection connection, Exception? error)
+        {
+            if (!ReferenceEquals(connection, _labConnection))
+                return;
+
+            BindConnection(null);
+            _labConnection = null;
+            _labSubscription = null;
+            _nextLabConnectAttemptAt = Time.unscaledTime + 2f;
+            Status = error == null
+                ? "Dice lab disconnected"
+                : $"Dice lab disconnected: {error.Message}";
+        }
+
+        private void OnLabSubscriptionApplied(SubscriptionEventContext context)
+        {
+            if (_labConnection == null || !ReferenceEquals(context.Db, _labConnection.Db))
+                return;
+
+            Status = "Dice lab connected to local arena";
+        }
+
+        private void OnLabSubscriptionError(ErrorContext context, Exception error)
+        {
+            if (_labConnection == null || !ReferenceEquals(context.Db, _labConnection.Db))
+                return;
+
+            Status = $"Dice lab subscription failed: {error.Message}";
+            Debug.LogWarning($"[DiceRollNetworkBridge] {Status}");
+        }
+
+        private void ShutdownLabConnection()
+        {
+            DbConnection? connection = _labConnection;
+            _labConnection = null;
+            _labSubscription = null;
+            if (connection == null)
+                return;
+
+            if (ReferenceEquals(_connection, connection))
+                BindConnection(null);
+
+            try
+            {
+                connection.Disconnect();
+            }
+            catch (Exception error)
+            {
+                Debug.LogWarning(
+                    $"[DiceRollNetworkBridge] Dice lab disconnect failed: {error.Message}");
+            }
+        }
+#endif
 
         private void BindConnection(DbConnection? connection)
         {
