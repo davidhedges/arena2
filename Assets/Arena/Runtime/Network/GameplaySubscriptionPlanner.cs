@@ -61,6 +61,7 @@ namespace Arena.Network
                 new QueryBuilder().From.GlobalCooldown().Where(c => c.Caster.Eq(localIdentity)).ToSql(),
                 new QueryBuilder().From.SpellCooldown().Where(c => c.Caster.Eq(localIdentity)).ToSql(),
                 new QueryBuilder().From.PredictedActionResult().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
+                new QueryBuilder().From.ActiveDiceRoll().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
                 new QueryBuilder().From.FixedActionChargeState().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
                 new QueryBuilder().From.ActiveCombatDiscipline().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
                 new QueryBuilder().From.CharacterCombatDisciplineWeaponLoadout().Where(c => c.Owner.Eq(localIdentity)).ToSql(),

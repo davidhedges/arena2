@@ -33,6 +33,7 @@ namespace SpacetimeDB.Types
             AddTable(ActiveCast = new(conn));
             AddTable(ActiveCombatDiscipline = new(conn));
             AddTable(ActiveCombatMode = new(conn));
+            AddTable(ActiveDiceRoll = new(conn));
             AddTable(ActiveRadialEffect = new(conn));
             AddTable(ActiveWorldObstacle = new(conn));
             AddTable(ArenaInstance = new(conn));
@@ -600,6 +601,7 @@ namespace SpacetimeDB.Types
             new QueryBuilder().From.ActiveCast().ToSql(),
             new QueryBuilder().From.ActiveCombatDiscipline().ToSql(),
             new QueryBuilder().From.ActiveCombatMode().ToSql(),
+            new QueryBuilder().From.ActiveDiceRoll().ToSql(),
             new QueryBuilder().From.ActiveRadialEffect().ToSql(),
             new QueryBuilder().From.ActiveWorldObstacle().ToSql(),
             new QueryBuilder().From.ArenaInstance().ToSql(),
@@ -677,6 +679,7 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Table<ActiveCast, ActiveCastCols, ActiveCastIxCols> ActiveCast() => new("active_cast", new ActiveCastCols("active_cast"), new ActiveCastIxCols("active_cast"));
         public global::SpacetimeDB.Table<ActiveCombatDiscipline, ActiveCombatDisciplineCols, ActiveCombatDisciplineIxCols> ActiveCombatDiscipline() => new("active_combat_discipline", new ActiveCombatDisciplineCols("active_combat_discipline"), new ActiveCombatDisciplineIxCols("active_combat_discipline"));
         public global::SpacetimeDB.Table<ActiveCombatMode, ActiveCombatModeCols, ActiveCombatModeIxCols> ActiveCombatMode() => new("active_combat_mode", new ActiveCombatModeCols("active_combat_mode"), new ActiveCombatModeIxCols("active_combat_mode"));
+        public global::SpacetimeDB.Table<ActiveDiceRoll, ActiveDiceRollCols, ActiveDiceRollIxCols> ActiveDiceRoll() => new("active_dice_roll", new ActiveDiceRollCols("active_dice_roll"), new ActiveDiceRollIxCols("active_dice_roll"));
         public global::SpacetimeDB.Table<ActiveRadialEffect, ActiveRadialEffectCols, ActiveRadialEffectIxCols> ActiveRadialEffect() => new("active_radial_effect", new ActiveRadialEffectCols("active_radial_effect"), new ActiveRadialEffectIxCols("active_radial_effect"));
         public global::SpacetimeDB.Table<ActiveWorldObstacle, ActiveWorldObstacleCols, ActiveWorldObstacleIxCols> ActiveWorldObstacle() => new("active_world_obstacle", new ActiveWorldObstacleCols("active_world_obstacle"), new ActiveWorldObstacleIxCols("active_world_obstacle"));
         public global::SpacetimeDB.Table<ArenaInstance, ArenaInstanceCols, ArenaInstanceIxCols> ArenaInstance() => new("arena_instance", new ArenaInstanceCols("arena_instance"), new ArenaInstanceIxCols("arena_instance"));
@@ -843,6 +846,7 @@ namespace SpacetimeDB.Types
                 Reducer.DespawnAllPlaygroundTargets args => Reducers.InvokeDespawnAllPlaygroundTargets(eventContext, args),
                 Reducer.DespawnNpc args => Reducers.InvokeDespawnNpc(eventContext, args),
                 Reducer.DespawnPlaygroundTarget args => Reducers.InvokeDespawnPlaygroundTarget(eventContext, args),
+                Reducer.DismissDiceRoll args => Reducers.InvokeDismissDiceRoll(eventContext, args),
                 Reducer.EquipItem args => Reducers.InvokeEquipItem(eventContext, args),
                 Reducer.InviteToParty args => Reducers.InvokeInviteToParty(eventContext, args),
                 Reducer.JoinInstance args => Reducers.InvokeJoinInstance(eventContext, args),
@@ -864,6 +868,7 @@ namespace SpacetimeDB.Types
                 Reducer.PublishSpellDefinitions args => Reducers.InvokePublishSpellDefinitions(eventContext, args),
                 Reducer.QuickLoot args => Reducers.InvokeQuickLoot(eventContext, args),
                 Reducer.ReleaseCastRequest args => Reducers.InvokeReleaseCastRequest(eventContext, args),
+                Reducer.RequestDiceRollPreview args => Reducers.InvokeRequestDiceRollPreview(eventContext, args),
                 Reducer.RunKnockbackProbeShove args => Reducers.InvokeRunKnockbackProbeShove(eventContext, args),
                 Reducer.RunProjectileLoadHarness args => Reducers.InvokeRunProjectileLoadHarness(eventContext, args),
                 Reducer.RunStatusRuntimeHarness args => Reducers.InvokeRunStatusRuntimeHarness(eventContext, args),

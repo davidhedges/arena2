@@ -23,6 +23,7 @@ mod combat;
 mod contract_version;
 mod defense;
 mod derived_stats;
+mod dice;
 pub(crate) mod game_loop;
 mod inventory;
 mod melee;

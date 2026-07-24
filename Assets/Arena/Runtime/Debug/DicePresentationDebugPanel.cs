@@ -107,7 +107,7 @@ namespace Arena.Debugging
             const float width = 370f;
             GUILayout.BeginArea(new Rect(20f, 20f, width, 440f), GUI.skin.box);
             GUILayout.Label("D20 OVERLAY LAB");
-            GUILayout.Label("LOCAL PREVIEW • NO NETWORK OR GAME STATE");
+            GUILayout.Label("LOCAL PREVIEW + AUTHORITATIVE SERVER ROLL");
             GUILayout.Space(8f);
 
             GUILayout.Label($"State: {(presenter != null ? presenter.State.ToString() : "Presenter unavailable")}");
@@ -159,12 +159,17 @@ namespace Arena.Debugging
             GUILayout.BeginHorizontal();
             if (GUILayout.Button("Play / Replay"))
                 ShowCurrent(_requestId);
+            if (GUILayout.Button("Server Roll"))
+            {
+                _sequenceActive = false;
+                DiceRollNetworkBridge.RequestPreview(_requestId, 20);
+            }
             if (GUILayout.Button("Skip"))
                 presenter?.SkipToResult();
             if (GUILayout.Button("Dismiss"))
             {
                 _sequenceActive = false;
-                presenter?.Dismiss();
+                DiceRollNetworkBridge.DismissActiveRoll();
             }
             GUILayout.EndHorizontal();
 
@@ -189,7 +194,7 @@ namespace Arena.Debugging
             GUILayout.Label("Held results ignore input and remain until Dismiss.");
             GUILayout.Label("F9 toggles this panel in runtime scenes.");
             GUILayout.Space(6f);
-            GUILayout.Label("Server Roll becomes available in Phase 3.");
+            GUILayout.Label($"Server: {DiceRollNetworkBridge.Status}");
             GUILayout.EndArea();
         }
 
