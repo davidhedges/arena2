@@ -133,6 +133,8 @@ namespace Arena.Debugging
                 SetResult(ParseResult() - 1);
             if (GUILayout.Button("+", GUILayout.Width(34f)))
                 SetResult(ParseResult() + 1);
+            if (GUILayout.Button("Random", GUILayout.Width(72f)))
+                _resultText = UnityEngine.Random.Range(1, 21).ToString();
             GUILayout.EndHorizontal();
 
             GUILayout.BeginHorizontal();
