@@ -1,7 +1,9 @@
 # Dice Overlay Animation — Implementation Plan
 
-Status: proposed plan, awaiting approval. This document does not authorize any
-implementation work by itself.
+Status: implemented through Phase 5; combined manual visual approval is pending.
+The user explicitly deferred all tests during this iterative pass, so the
+recorded verification is limited to non-test builds, authoring validation, and
+static checks until tests are requested.
 
 Design source:
 [`dice-overlay-animation-design-spec-2026-07-24.md`](dice-overlay-animation-design-spec-2026-07-24.md)

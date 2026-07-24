@@ -396,6 +396,7 @@ namespace Arena.Presentation.Dice
         private static Mesh BuildAnnulusMesh(string name, float innerRadius, float outerRadius, int segments)
         {
             Vector3[] vertices = new Vector3[segments * 2];
+            Color[] colors = new Color[vertices.Length];
             int[] triangles = new int[segments * 6];
             for (int i = 0; i < segments; i++)
             {
@@ -403,6 +404,8 @@ namespace Arena.Presentation.Dice
                 Vector3 radial = new(Mathf.Cos(angle), Mathf.Sin(angle), 0f);
                 vertices[i * 2] = radial * innerRadius;
                 vertices[i * 2 + 1] = radial * outerRadius;
+                colors[i * 2] = Color.white;
+                colors[i * 2 + 1] = Color.white;
 
                 int next = (i + 1) % segments;
                 int triangle = i * 6;
@@ -416,6 +419,7 @@ namespace Arena.Presentation.Dice
 
             Mesh mesh = new() { name = name };
             mesh.vertices = vertices;
+            mesh.colors = colors;
             mesh.triangles = triangles;
             mesh.RecalculateBounds();
             return mesh;
@@ -429,9 +433,12 @@ namespace Arena.Presentation.Dice
             Vector3[] ringVertices = ring.vertices;
             int[] ringTriangles = ring.triangles;
             Vector3[] vertices = new Vector3[ringVertices.Length + runeCount * 4];
+            Color[] colors = new Color[vertices.Length];
             int[] triangles = new int[ringTriangles.Length + runeCount * 6];
             Array.Copy(ringVertices, vertices, ringVertices.Length);
             Array.Copy(ringTriangles, triangles, ringTriangles.Length);
+            for (int i = 0; i < colors.Length; i++)
+                colors[i] = Color.white;
 
             for (int i = 0; i < runeCount; i++)
             {
@@ -457,6 +464,7 @@ namespace Arena.Presentation.Dice
 
             Mesh mesh = new() { name = "Dice Rune Halo" };
             mesh.vertices = vertices;
+            mesh.colors = colors;
             mesh.triangles = triangles;
             mesh.RecalculateBounds();
             UnityEngine.Object.Destroy(ring);

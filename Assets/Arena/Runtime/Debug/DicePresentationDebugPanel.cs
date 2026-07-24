@@ -18,6 +18,16 @@ namespace Arena.Debugging
         private const string DiceOverlayLabSceneName = "DiceOverlayLab";
         private const KeyCode ToggleKey = KeyCode.Minus;
 
+        private static readonly string[] DieIds =
+        {
+            "d4", "d6", "d8", "d10", "d12", "d20"
+        };
+
+        private static readonly int[] DieSides =
+        {
+            4, 6, 8, 10, 12, 20
+        };
+
         private static readonly Rect[] PreviewRegions =
         {
             new(0f, 0f, 1f, 1f),
@@ -36,6 +46,7 @@ namespace Arena.Debugging
 
         private string _requestId = "local-d20-review";
         private string _resultText = "20";
+        private int _dieIndex = 5;
         private int _profileIndex = -1;
         private int _regionIndex;
         private bool _sequenceActive;
@@ -101,7 +112,7 @@ namespace Arena.Debugging
                 return;
 
             int current = ParseResult();
-            if (current >= 20)
+            if (current >= CurrentSides)
             {
                 _sequenceActive = false;
                 _heldSince = -1f;
@@ -118,13 +129,28 @@ namespace Arena.Debugging
             if (!visible)
                 return;
 
-            const float width = 370f;
-            GUILayout.BeginArea(new Rect(20f, 20f, width, 440f), GUI.skin.box);
-            GUILayout.Label("D20 OVERLAY LAB");
+            const float width = 420f;
+            GUILayout.BeginArea(new Rect(20f, 20f, width, 500f), GUI.skin.box);
+            GUILayout.Label("COMPLETE DICE OVERLAY LAB");
             GUILayout.Label("LOCAL PREVIEW + AUTHORITATIVE SERVER ROLL");
             GUILayout.Space(8f);
 
             GUILayout.Label($"State: {(presenter != null ? presenter.State.ToString() : "Presenter unavailable")}");
+
+            GUILayout.Label("Die");
+            GUILayout.BeginHorizontal();
+            for (int i = 0; i < DieIds.Length; i++)
+            {
+                if (GUILayout.Toggle(_dieIndex == i, DieIds[i].ToUpperInvariant(), GUI.skin.button) &&
+                    _dieIndex != i)
+                {
+                    _dieIndex = i;
+                    _sequenceActive = false;
+                    _resultText = CurrentSides.ToString();
+                    presenter?.Dismiss();
+                }
+            }
+            GUILayout.EndHorizontal();
 
             GUILayout.BeginHorizontal();
             GUILayout.Label("Result", GUILayout.Width(64f));
@@ -134,7 +160,7 @@ namespace Arena.Debugging
             if (GUILayout.Button("+", GUILayout.Width(34f)))
                 SetResult(ParseResult() + 1);
             if (GUILayout.Button("Random", GUILayout.Width(72f)))
-                _resultText = UnityEngine.Random.Range(1, 21).ToString();
+                _resultText = UnityEngine.Random.Range(1, CurrentSides + 1).ToString();
             GUILayout.EndHorizontal();
 
             GUILayout.BeginHorizontal();
@@ -178,7 +204,7 @@ namespace Arena.Debugging
             if (GUILayout.Button("Server Roll"))
             {
                 _sequenceActive = false;
-                DiceRollNetworkBridge.RequestPreview(_requestId, 20);
+                DiceRollNetworkBridge.RequestPreview(_requestId, (uint)CurrentSides);
             }
             if (GUILayout.Button("Skip"))
                 presenter?.SkipToResult();
@@ -189,7 +215,10 @@ namespace Arena.Debugging
             }
             GUILayout.EndHorizontal();
 
-            if (GUILayout.Button(_sequenceActive ? "Stop 1–20 sequence" : "Run results 1–20"))
+            if (GUILayout.Button(
+                    _sequenceActive
+                        ? $"Stop 1–{CurrentSides} sequence"
+                        : $"Run results 1–{CurrentSides}"))
             {
                 if (_sequenceActive)
                 {
@@ -244,7 +273,7 @@ namespace Arena.Debugging
                 ? presenter.MotionProfiles[_profileIndex]
                 : null;
             presenter.Show(
-                new ResolvedDiceRoll(requestId, "d20", result),
+                new ResolvedDiceRoll(requestId, DieIds[_dieIndex], result),
                 profile,
                 PreviewRegions[_regionIndex]);
         }
@@ -252,14 +281,16 @@ namespace Arena.Debugging
         private int ParseResult()
         {
             return int.TryParse(_resultText, out int value)
-                ? Mathf.Clamp(value, 1, 20)
-                : 20;
+                ? Mathf.Clamp(value, 1, CurrentSides)
+                : CurrentSides;
         }
 
         private void SetResult(int value)
         {
-            _resultText = (1 + Mod(value - 1, 20)).ToString();
+            _resultText = (1 + Mod(value - 1, CurrentSides)).ToString();
         }
+
+        private int CurrentSides => DieSides[_dieIndex];
 
         private static int Mod(int value, int modulus)
         {

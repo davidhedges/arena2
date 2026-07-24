@@ -45,6 +45,8 @@ namespace Arena.Presentation.Dice
         private GameObject? _renderRoot;
         private Camera? _overlayCamera;
         private RenderTexture? _renderTexture;
+        private readonly Dictionary<string, WarmedDie> _warmedDice =
+            new(StringComparer.OrdinalIgnoreCase);
         private GameObject? _diceObject;
         private Transform? _diceTransform;
         private DiceFaceLabel[] _labels = Array.Empty<DiceFaceLabel>();
@@ -149,7 +151,7 @@ namespace Arena.Presentation.Dice
             DiceMotionProfile? motionOverride = null,
             Rect? normalizedRegion = null)
         {
-            if (!_initialized || _catalog == null || _diceObject == null || _diceTransform == null)
+            if (!_initialized || _catalog == null)
                 return false;
             if (IsActive)
                 return false;
@@ -171,6 +173,8 @@ namespace Arena.Presentation.Dice
                 Debug.LogError("[DiceOverlayPresenter] The dice catalog has no motion profiles.");
                 return false;
             }
+            if (!ActivateWarmedDie(definition))
+                return false;
 
             _activeRequest = resolvedRoll;
             _activeDefinition = definition;
@@ -196,7 +200,7 @@ namespace Arena.Presentation.Dice
 
             _resultEffects?.HideImmediate();
             SetHeldShimmer(enabled: false);
-            _diceObject.SetActive(true);
+            _diceObject!.SetActive(true);
             if (_overlayCamera != null)
                 _overlayCamera.enabled = true;
             if (_overlayRoot != null)
@@ -273,7 +277,7 @@ namespace Arena.Presentation.Dice
             {
                 Debug.LogError(
                     $"[DiceOverlayPresenter] Missing Resources/{CatalogResourcePath}. " +
-                    "Rebuild the d20 overlay assets from the Arena/Dice menu.");
+                    "Rebuild the complete dice overlay assets from the Arena/Dice menu.");
                 return;
             }
 
@@ -286,12 +290,12 @@ namespace Arena.Presentation.Dice
 
             BuildUi();
             BuildRenderRig();
-            WarmD20();
+            WarmDiceSet();
             EnsureRenderTexture(force: true);
             _initialized = _overlayRoot != null &&
                            _viewport != null &&
                            _overlayCamera != null &&
-                           _diceObject != null;
+                           _warmedDice.Count == _catalog.Definitions.Count;
         }
 
         private void BuildUi()
@@ -366,13 +370,11 @@ namespace Arena.Presentation.Dice
             _resultEffects.Initialize(_overlayLayer);
         }
 
-        private void WarmD20()
+        private void WarmDiceSet()
         {
-            if (_catalog == null ||
-                !_catalog.TryGetDefinition("d20", out DiceDefinition definition) ||
-                definition.VisualPrefab == null)
+            if (_catalog == null || _renderRoot == null)
             {
-                Debug.LogError("[DiceOverlayPresenter] The default catalog has no usable d20.");
+                Debug.LogError("[DiceOverlayPresenter] The default catalog is unavailable.");
                 return;
             }
             if (_catalog.ResinMaterial == null || _catalog.NumeralMaterial == null)
@@ -391,21 +393,64 @@ namespace Arena.Presentation.Dice
                 name = "DiceOverlay Numeral Instance"
             };
 
-            _diceObject = Instantiate(definition.VisualPrefab, _renderRoot!.transform);
-            _diceObject.name = "WarmedD20";
-            _diceTransform = _diceObject.transform;
-            _diceTransform.localPosition = Vector3.zero;
-            _diceTransform.localRotation = Quaternion.identity;
-            _diceTransform.localScale = Vector3.one * definition.PresentationScale;
-            SetLayerRecursively(_diceObject, _overlayLayer);
+            for (int definitionIndex = 0;
+                 definitionIndex < _catalog.Definitions.Count;
+                 definitionIndex++)
+            {
+                DiceDefinition definition = _catalog.Definitions[definitionIndex];
+                if (definition == null ||
+                    string.IsNullOrWhiteSpace(definition.DieId) ||
+                    definition.VisualPrefab == null)
+                {
+                    Debug.LogError(
+                        $"[DiceOverlayPresenter] Catalog definition {definitionIndex} is not usable.");
+                    continue;
+                }
+                if (_warmedDice.ContainsKey(definition.DieId))
+                {
+                    Debug.LogError(
+                        $"[DiceOverlayPresenter] Duplicate die id '{definition.DieId}' in catalog.");
+                    continue;
+                }
 
-            MeshRenderer? bodyRenderer = _diceObject.GetComponent<MeshRenderer>();
-            if (bodyRenderer != null)
-                bodyRenderer.sharedMaterial = _resinMaterialInstance;
-            _labels = _diceObject.GetComponentsInChildren<DiceFaceLabel>(includeInactive: true);
-            for (int i = 0; i < _labels.Length; i++)
-                _labels[i].Text.fontSharedMaterial = _numeralMaterialInstance;
-            _diceObject.SetActive(false);
+                GameObject diceObject = Instantiate(definition.VisualPrefab, _renderRoot.transform);
+                diceObject.name = $"Warmed{definition.DieId.ToUpperInvariant()}";
+                Transform diceTransform = diceObject.transform;
+                diceTransform.localPosition = Vector3.zero;
+                diceTransform.localRotation = Quaternion.identity;
+                diceTransform.localScale = Vector3.one * definition.PresentationScale;
+                SetLayerRecursively(diceObject, _overlayLayer);
+
+                MeshRenderer? bodyRenderer = diceObject.GetComponent<MeshRenderer>();
+                if (bodyRenderer != null)
+                    bodyRenderer.sharedMaterial = _resinMaterialInstance;
+                DiceFaceLabel[] labels =
+                    diceObject.GetComponentsInChildren<DiceFaceLabel>(includeInactive: true);
+                for (int labelIndex = 0; labelIndex < labels.Length; labelIndex++)
+                    labels[labelIndex].Text.fontSharedMaterial = _numeralMaterialInstance;
+                diceObject.SetActive(false);
+                _warmedDice.Add(
+                    definition.DieId,
+                    new WarmedDie(diceObject, diceTransform, labels));
+            }
+        }
+
+        private bool ActivateWarmedDie(DiceDefinition definition)
+        {
+            if (!_warmedDice.TryGetValue(definition.DieId, out WarmedDie warmedDie))
+            {
+                Debug.LogError(
+                    $"[DiceOverlayPresenter] No warmed visual exists for '{definition.DieId}'.");
+                return false;
+            }
+
+            if (_diceObject != null && _diceObject != warmedDie.Object)
+                _diceObject.SetActive(false);
+            _diceObject = warmedDie.Object;
+            _diceTransform = warmedDie.Transform;
+            _labels = warmedDie.Labels;
+            _diceTransform.localScale = Vector3.one * definition.PresentationScale;
+            return true;
         }
 
         private void CreateOverlayLight(
@@ -694,6 +739,23 @@ namespace Arena.Presentation.Dice
         {
             float normalized = ((hash >> shift) & 0xffu) / 255f;
             return Mathf.Lerp(minimum, maximum, normalized);
+        }
+
+        private sealed class WarmedDie
+        {
+            public GameObject Object { get; }
+            public Transform Transform { get; }
+            public DiceFaceLabel[] Labels { get; }
+
+            public WarmedDie(
+                GameObject diceObject,
+                Transform diceTransform,
+                DiceFaceLabel[] labels)
+            {
+                Object = diceObject;
+                Transform = diceTransform;
+                Labels = labels;
+            }
         }
     }
 }

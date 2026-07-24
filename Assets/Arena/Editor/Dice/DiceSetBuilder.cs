@@ -35,6 +35,12 @@ namespace Arena.Editor.Dice
             "Assets/Arena/Content/Scenes/Authoring/DiceOverlayLab.unity";
         internal const string ResinShaderPath =
             "Assets/Arena/Content/Shaders/Dice/DiceResin.shader";
+
+        internal static readonly string[] SupportedDieIds =
+        {
+            "d4", "d6", "d8", "d10", "d12", "d20"
+        };
+
         internal static readonly string[] MotionProfilePaths =
         {
             "Assets/Arena/Content/Dice/Motion/D20_Crescent.asset",
@@ -47,11 +53,9 @@ namespace Arena.Editor.Dice
         private const float RecessFraction = 0.19f;
         private const float RecessDepth = 0.026f;
         private const float LabelLift = 0.003f;
-        private const float PresentationScale = 1.15f;
 
-        // Values are distributed across the canonical face order with opposite
-        // faces summing to 21. This is stable authoring data, not roll logic.
-        private static readonly int[] ValuesByFaceIndex =
+        // Stable d20 authoring order with opposite faces summing to 21.
+        private static readonly int[] D20ValuesByFaceIndex =
         {
             11, 17, 5, 18, 8,
             2, 6, 7, 1, 9,
@@ -59,52 +63,109 @@ namespace Arena.Editor.Dice
             20, 12, 19, 15, 14
         };
 
-        private static readonly int[,] CanonicalFaceIndices =
+        private static readonly int[][] IcosahedronFaces =
         {
-            { 0, 11, 5 }, { 0, 5, 1 }, { 0, 1, 7 }, { 0, 7, 10 }, { 0, 10, 11 },
-            { 1, 5, 9 }, { 5, 11, 4 }, { 11, 10, 2 }, { 10, 7, 6 }, { 7, 1, 8 },
-            { 3, 9, 4 }, { 3, 4, 2 }, { 3, 2, 6 }, { 3, 6, 8 }, { 3, 8, 9 },
-            { 4, 9, 5 }, { 2, 4, 11 }, { 6, 2, 10 }, { 8, 6, 7 }, { 9, 8, 1 }
+            new[] { 0, 11, 5 }, new[] { 0, 5, 1 }, new[] { 0, 1, 7 },
+            new[] { 0, 7, 10 }, new[] { 0, 10, 11 }, new[] { 1, 5, 9 },
+            new[] { 5, 11, 4 }, new[] { 11, 10, 2 }, new[] { 10, 7, 6 },
+            new[] { 7, 1, 8 }, new[] { 3, 9, 4 }, new[] { 3, 4, 2 },
+            new[] { 3, 2, 6 }, new[] { 3, 6, 8 }, new[] { 3, 8, 9 },
+            new[] { 4, 9, 5 }, new[] { 2, 4, 11 }, new[] { 6, 2, 10 },
+            new[] { 8, 6, 7 }, new[] { 9, 8, 1 }
         };
 
-        [MenuItem("Arena/Dice/Rebuild and Open D20 Overlay Lab")]
-        private static void RebuildAndOpenD20OverlayLab()
+        [MenuItem("Arena/Dice/Rebuild and Open Complete Dice Overlay Lab")]
+        private static void RebuildAndOpenCompleteDiceOverlayLab()
         {
-            if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo())
+            RebuildCompleteDiceOverlayLab(promptToSave: true);
+        }
+
+        internal static void RebuildCompleteDiceOverlayLab(bool promptToSave)
+        {
+            if (EditorApplication.isPlayingOrWillChangePlaymode)
+            {
+                Debug.LogWarning("[DiceSetBuilder] Exit Play Mode before rebuilding dice assets.");
                 return;
+            }
+            if (promptToSave && !EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo())
+                return;
+            if (!promptToSave)
+            {
+                Scene currentScene = SceneManager.GetActiveScene();
+                if (currentScene.isDirty &&
+                    !string.Equals(
+                        currentScene.path,
+                        ReviewScenePath,
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new InvalidOperationException(
+                        $"Refusing to replace dirty scene '{currentScene.path}' during automatic dice generation.");
+                }
+            }
 
             try
             {
+                IReadOnlyList<DieBlueprint> blueprints = BuildBlueprints();
                 EnsureFolders();
                 AssetDatabase.ImportAsset(ResinShaderPath, ImportAssetOptions.ForceUpdate);
-
-                DeleteGeneratedAssets();
-
-                Mesh mesh = BuildD20Mesh(out List<FaceGeometry> faces);
-                AssetDatabase.CreateAsset(mesh, MeshPath);
+                DeleteGeneratedAssets(blueprints);
 
                 TMP_FontAsset fontAsset = BuildNumeralFontAsset();
                 Material resinMaterial = BuildResinMaterial();
                 Material numeralMaterial = BuildNumeralMaterial(fontAsset);
-                GameObject prefab = BuildD20Prefab(mesh, resinMaterial, numeralMaterial, fontAsset, faces);
-                DiceDefinition definition = BuildDefinition(prefab, faces);
+                List<DiceDefinition> definitions = new(blueprints.Count);
+                for (int i = 0; i < blueprints.Count; i++)
+                {
+                    DieBlueprint blueprint = blueprints[i];
+                    Mesh mesh = BuildDieMesh(blueprint, out List<FaceGeometry> geometry);
+                    AssetDatabase.CreateAsset(mesh, MeshPathFor(blueprint));
+                    GameObject prefab = BuildPrefab(
+                        blueprint,
+                        mesh,
+                        resinMaterial,
+                        numeralMaterial,
+                        fontAsset,
+                        geometry);
+                    definitions.Add(BuildDefinition(blueprint, prefab, geometry));
+                }
+
                 List<DiceMotionProfile> motionProfiles = BuildMotionProfiles();
-                BuildCatalog(definition, motionProfiles, resinMaterial, numeralMaterial);
+                BuildCatalog(definitions, motionProfiles, resinMaterial, numeralMaterial);
 
                 AssetDatabase.SaveAssets();
                 AssetDatabase.Refresh();
                 BuildReviewScene();
                 AssetDatabase.SaveAssets();
 
-                bool valid = DiceAuthoringValidator.ValidateD20Foundation(logSuccess: true);
+                bool valid = DiceAuthoringValidator.ValidateCompleteSet(logSuccess: true);
                 Debug.Log(valid
-                    ? "[DiceSetBuilder] Rebuilt the Phase 2 d20 overlay lab. Enter Play Mode to review it."
-                    : "[DiceSetBuilder] Rebuilt the d20 overlay assets, but authoring validation reported errors.");
+                    ? "[DiceSetBuilder] Rebuilt the complete d4-d20 overlay lab. Enter Play Mode to review it."
+                    : "[DiceSetBuilder] Rebuilt the complete dice set, but authoring validation reported errors.");
             }
             catch (Exception exception)
             {
                 Debug.LogException(exception);
             }
+        }
+
+        internal static string DefinitionPathFor(string dieId)
+        {
+            return $"Assets/Arena/Content/Dice/Generated/Definitions/{dieId.ToUpperInvariant()}.asset";
+        }
+
+        private static string DefinitionPathFor(DieBlueprint blueprint)
+        {
+            return $"Assets/Arena/Content/Dice/Generated/Definitions/{blueprint.AssetName}.asset";
+        }
+
+        private static string MeshPathFor(DieBlueprint blueprint)
+        {
+            return $"Assets/Arena/Content/Dice/Generated/Meshes/{blueprint.AssetName}_Resin.asset";
+        }
+
+        private static string PrefabPathFor(DieBlueprint blueprint)
+        {
+            return $"Assets/Arena/Content/Dice/Generated/Prefabs/{blueprint.AssetName}_Resin.prefab";
         }
 
         private static void EnsureFolders()
@@ -132,35 +193,298 @@ namespace Arena.Editor.Dice
             }
         }
 
-        private static void DeleteGeneratedAssets()
+        private static void DeleteGeneratedAssets(IReadOnlyList<DieBlueprint> blueprints)
         {
-            string[] paths =
+            List<string> paths = new()
             {
                 ReviewScenePath,
                 CatalogPath,
-                DefinitionPath,
-                PrefabPath,
                 NumeralMaterialPath,
                 ResinMaterialPath,
-                FontAssetPath,
-                MeshPath,
-                MotionProfilePaths[0],
-                MotionProfilePaths[1],
-                MotionProfilePaths[2]
+                FontAssetPath
             };
+            paths.AddRange(MotionProfilePaths);
+            for (int i = 0; i < blueprints.Count; i++)
+            {
+                paths.Add(DefinitionPathFor(blueprints[i]));
+                paths.Add(MeshPathFor(blueprints[i]));
+                paths.Add(PrefabPathFor(blueprints[i]));
+            }
 
-            for (int i = 0; i < paths.Length; i++)
+            for (int i = 0; i < paths.Count; i++)
             {
                 if (AssetDatabase.LoadMainAssetAtPath(paths[i]) != null)
                     AssetDatabase.DeleteAsset(paths[i]);
             }
         }
 
-        private static Mesh BuildD20Mesh(out List<FaceGeometry> faces)
+        private static IReadOnlyList<DieBlueprint> BuildBlueprints()
         {
-            Vector3[] vertices = BuildCanonicalVertices();
-            faces = BuildFaceGeometry(vertices);
+            Vector3[] icosahedronVertices = BuildIcosahedronVertices();
+            Polyhedron dodecahedron = BuildDual(icosahedronVertices, IcosahedronFaces);
+            Polyhedron trapezohedron = BuildPentagonalTrapezohedron();
 
+            return new[]
+            {
+                new DieBlueprint(
+                    "d4",
+                    "D4",
+                    4,
+                    1.27f,
+                    new Vector2(0.50f, 0.32f),
+                    2.15f,
+                    NormalizeToUnitRadius(new[]
+                    {
+                        new Vector3(1f, 1f, 1f),
+                        new Vector3(-1f, -1f, 1f),
+                        new Vector3(-1f, 1f, -1f),
+                        new Vector3(1f, -1f, -1f)
+                    }),
+                    new[]
+                    {
+                        new[] { 0, 2, 1 },
+                        new[] { 0, 1, 3 },
+                        new[] { 0, 3, 2 },
+                        new[] { 1, 2, 3 }
+                    },
+                    SequentialValues(4)),
+                new DieBlueprint(
+                    "d6",
+                    "D6",
+                    6,
+                    1.18f,
+                    new Vector2(0.72f, 0.48f),
+                    2.35f,
+                    NormalizeToUnitRadius(new[]
+                    {
+                        new Vector3(-1f, -1f, -1f),
+                        new Vector3(1f, -1f, -1f),
+                        new Vector3(1f, 1f, -1f),
+                        new Vector3(-1f, 1f, -1f),
+                        new Vector3(-1f, -1f, 1f),
+                        new Vector3(1f, -1f, 1f),
+                        new Vector3(1f, 1f, 1f),
+                        new Vector3(-1f, 1f, 1f)
+                    }),
+                    new[]
+                    {
+                        new[] { 4, 5, 6, 7 },
+                        new[] { 1, 0, 3, 2 },
+                        new[] { 5, 1, 2, 6 },
+                        new[] { 0, 4, 7, 3 },
+                        new[] { 7, 6, 2, 3 },
+                        new[] { 0, 1, 5, 4 }
+                    },
+                    new[] { 1, 6, 3, 4, 2, 5 }),
+                new DieBlueprint(
+                    "d8",
+                    "D8",
+                    8,
+                    1.20f,
+                    new Vector2(0.56f, 0.36f),
+                    2.2f,
+                    new[]
+                    {
+                        Vector3.right,
+                        Vector3.left,
+                        Vector3.up,
+                        Vector3.down,
+                        Vector3.forward,
+                        Vector3.back
+                    },
+                    new[]
+                    {
+                        new[] { 2, 0, 4 },
+                        new[] { 2, 4, 1 },
+                        new[] { 2, 1, 5 },
+                        new[] { 2, 5, 0 },
+                        new[] { 3, 4, 0 },
+                        new[] { 3, 1, 4 },
+                        new[] { 3, 5, 1 },
+                        new[] { 3, 0, 5 }
+                    },
+                    SequentialValues(8)),
+                new DieBlueprint(
+                    "d10",
+                    "D10",
+                    10,
+                    1.18f,
+                    new Vector2(0.51f, 0.33f),
+                    2.05f,
+                    trapezohedron.Vertices,
+                    trapezohedron.Faces,
+                    SequentialValues(10)),
+                new DieBlueprint(
+                    "d12",
+                    "D12",
+                    12,
+                    1.16f,
+                    new Vector2(0.58f, 0.38f),
+                    2.15f,
+                    dodecahedron.Vertices,
+                    dodecahedron.Faces,
+                    SequentialValues(12)),
+                new DieBlueprint(
+                    "d20",
+                    "D20",
+                    20,
+                    1.15f,
+                    new Vector2(0.54f, 0.34f),
+                    2.2f,
+                    icosahedronVertices,
+                    CloneFaces(IcosahedronFaces),
+                    (int[])D20ValuesByFaceIndex.Clone())
+            };
+        }
+
+        private static Vector3[] BuildIcosahedronVertices()
+        {
+            float phi = (1f + Mathf.Sqrt(5f)) * 0.5f;
+            return NormalizeToUnitRadius(new[]
+            {
+                new Vector3(-1f, phi, 0f), new Vector3(1f, phi, 0f),
+                new Vector3(-1f, -phi, 0f), new Vector3(1f, -phi, 0f),
+                new Vector3(0f, -1f, phi), new Vector3(0f, 1f, phi),
+                new Vector3(0f, -1f, -phi), new Vector3(0f, 1f, -phi),
+                new Vector3(phi, 0f, -1f), new Vector3(phi, 0f, 1f),
+                new Vector3(-phi, 0f, -1f), new Vector3(-phi, 0f, 1f)
+            });
+        }
+
+        private static Polyhedron BuildPentagonalTrapezohedron()
+        {
+            const int ringCount = 5;
+            Vector3[] primalVertices = new Vector3[ringCount * 2];
+            for (int i = 0; i < ringCount; i++)
+            {
+                float topAngle = i / (float)ringCount * Mathf.PI * 2f;
+                float bottomAngle = topAngle + Mathf.PI / ringCount;
+                primalVertices[i] = new Vector3(
+                    Mathf.Cos(topAngle),
+                    0.48f,
+                    Mathf.Sin(topAngle));
+                primalVertices[ringCount + i] = new Vector3(
+                    Mathf.Cos(bottomAngle),
+                    -0.48f,
+                    Mathf.Sin(bottomAngle));
+            }
+
+            List<int[]> primalFaces = new()
+            {
+                new[] { 0, 1, 2, 3, 4 },
+                new[] { 9, 8, 7, 6, 5 }
+            };
+            for (int i = 0; i < ringCount; i++)
+            {
+                int next = (i + 1) % ringCount;
+                primalFaces.Add(new[] { i, ringCount + i, next });
+                primalFaces.Add(new[] { next, ringCount + i, ringCount + next });
+            }
+
+            return BuildDual(primalVertices, primalFaces);
+        }
+
+        private static Polyhedron BuildDual(
+            IReadOnlyList<Vector3> primalVertices,
+            IReadOnlyList<int[]> primalFaces)
+        {
+            Vector3[] dualVertices = new Vector3[primalFaces.Count];
+            for (int faceIndex = 0; faceIndex < primalFaces.Count; faceIndex++)
+            {
+                int[] face = (int[])primalFaces[faceIndex].Clone();
+                Vector3 centroid = CalculateCentroid(primalVertices, face);
+                Vector3 normal = CalculatePolygonNormal(primalVertices, face);
+                if (Vector3.Dot(normal, centroid) < 0f)
+                    normal = -normal;
+                float planeDistance = Vector3.Dot(normal, centroid);
+                if (planeDistance <= 0.0001f)
+                    throw new InvalidOperationException("Cannot construct a centered dual from a face through the origin.");
+                dualVertices[faceIndex] = normal / planeDistance;
+            }
+            dualVertices = NormalizeToUnitRadius(dualVertices);
+
+            int[][] dualFaces = new int[primalVertices.Count][];
+            for (int vertexIndex = 0; vertexIndex < primalVertices.Count; vertexIndex++)
+            {
+                List<int> incidentFaces = new();
+                for (int faceIndex = 0; faceIndex < primalFaces.Count; faceIndex++)
+                {
+                    int[] face = primalFaces[faceIndex];
+                    for (int corner = 0; corner < face.Length; corner++)
+                    {
+                        if (face[corner] != vertexIndex)
+                            continue;
+                        incidentFaces.Add(faceIndex);
+                        break;
+                    }
+                }
+
+                if (incidentFaces.Count < 3)
+                    throw new InvalidOperationException($"Dual vertex {vertexIndex} has only {incidentFaces.Count} faces.");
+
+                Vector3 outward = primalVertices[vertexIndex].normalized;
+                Vector3 center = Vector3.zero;
+                for (int i = 0; i < incidentFaces.Count; i++)
+                    center += dualVertices[incidentFaces[i]];
+                center /= incidentFaces.Count;
+                Vector3 tangent =
+                    Vector3.ProjectOnPlane(dualVertices[incidentFaces[0]] - center, outward).normalized;
+                if (tangent.sqrMagnitude < 0.001f)
+                    tangent = Vector3.ProjectOnPlane(Vector3.up, outward).normalized;
+                Vector3 bitangent = Vector3.Cross(outward, tangent);
+                incidentFaces.Sort((left, right) =>
+                {
+                    Vector3 leftOffset = dualVertices[left] - center;
+                    Vector3 rightOffset = dualVertices[right] - center;
+                    float leftAngle = Mathf.Atan2(
+                        Vector3.Dot(leftOffset, bitangent),
+                        Vector3.Dot(leftOffset, tangent));
+                    float rightAngle = Mathf.Atan2(
+                        Vector3.Dot(rightOffset, bitangent),
+                        Vector3.Dot(rightOffset, tangent));
+                    return leftAngle.CompareTo(rightAngle);
+                });
+                dualFaces[vertexIndex] = incidentFaces.ToArray();
+            }
+
+            return new Polyhedron(dualVertices, dualFaces);
+        }
+
+        private static Vector3[] NormalizeToUnitRadius(IReadOnlyList<Vector3> source)
+        {
+            float maximumRadius = 0f;
+            for (int i = 0; i < source.Count; i++)
+                maximumRadius = Mathf.Max(maximumRadius, source[i].magnitude);
+            if (maximumRadius <= 0.0001f)
+                throw new InvalidOperationException("A die polyhedron cannot have zero radius.");
+
+            Vector3[] normalized = new Vector3[source.Count];
+            for (int i = 0; i < source.Count; i++)
+                normalized[i] = source[i] / maximumRadius;
+            return normalized;
+        }
+
+        private static int[][] CloneFaces(IReadOnlyList<int[]> source)
+        {
+            int[][] clone = new int[source.Count][];
+            for (int i = 0; i < source.Count; i++)
+                clone[i] = (int[])source[i].Clone();
+            return clone;
+        }
+
+        private static int[] SequentialValues(int count)
+        {
+            int[] values = new int[count];
+            for (int i = 0; i < count; i++)
+                values[i] = i + 1;
+            return values;
+        }
+
+        private static Mesh BuildDieMesh(
+            DieBlueprint blueprint,
+            out List<FaceGeometry> faces)
+        {
+            faces = BuildFaceGeometry(blueprint.Vertices, blueprint.FaceIndices);
             List<Vector3> meshVertices = new();
             List<Vector3> meshNormals = new();
             List<int> triangles = new();
@@ -168,9 +492,9 @@ namespace Arena.Editor.Dice
             for (int faceIndex = 0; faceIndex < faces.Count; faceIndex++)
             {
                 FaceGeometry face = faces[faceIndex];
-                for (int edge = 0; edge < 3; edge++)
+                for (int edge = 0; edge < face.CornerCount; edge++)
                 {
-                    int next = (edge + 1) % 3;
+                    int next = (edge + 1) % face.CornerCount;
                     AddQuad(
                         meshVertices,
                         meshNormals,
@@ -194,22 +518,25 @@ namespace Arena.Editor.Dice
                         wallHint);
                 }
 
-                AddTriangle(
-                    meshVertices,
-                    meshNormals,
-                    triangles,
-                    face.RecessFloor[0],
-                    face.RecessFloor[1],
-                    face.RecessFloor[2],
-                    face.Normal);
+                for (int triangle = 1; triangle < face.CornerCount - 1; triangle++)
+                {
+                    AddTriangle(
+                        meshVertices,
+                        meshNormals,
+                        triangles,
+                        face.RecessFloor[0],
+                        face.RecessFloor[triangle],
+                        face.RecessFloor[triangle + 1],
+                        face.Normal);
+                }
             }
 
-            AddEdgeChamfers(faces, meshVertices, meshNormals, triangles);
-            AddVertexCaps(vertices, faces, meshVertices, meshNormals, triangles);
+            AddEdgeChamfers(blueprint, faces, meshVertices, meshNormals, triangles);
+            AddVertexCaps(blueprint, faces, meshVertices, meshNormals, triangles);
 
-            Mesh mesh = new Mesh
+            Mesh mesh = new()
             {
-                name = "D20_Resin_BeveledRecessed"
+                name = $"{blueprint.AssetName}_Resin_BeveledRecessed"
             };
             mesh.SetVertices(meshVertices);
             mesh.SetNormals(meshNormals);
@@ -218,52 +545,72 @@ namespace Arena.Editor.Dice
             return mesh;
         }
 
-        private static Vector3[] BuildCanonicalVertices()
+        private static List<FaceGeometry> BuildFaceGeometry(
+            IReadOnlyList<Vector3> vertices,
+            IReadOnlyList<int[]> faceIndices)
         {
-            float phi = (1f + Mathf.Sqrt(5f)) * 0.5f;
-            Vector3[] vertices =
+            List<FaceGeometry> faces = new(faceIndices.Count);
+            for (int faceIndex = 0; faceIndex < faceIndices.Count; faceIndex++)
             {
-                new(-1f, phi, 0f), new(1f, phi, 0f),
-                new(-1f, -phi, 0f), new(1f, -phi, 0f),
-                new(0f, -1f, phi), new(0f, 1f, phi),
-                new(0f, -1f, -phi), new(0f, 1f, -phi),
-                new(phi, 0f, -1f), new(phi, 0f, 1f),
-                new(-phi, 0f, -1f), new(-phi, 0f, 1f)
-            };
-
-            for (int i = 0; i < vertices.Length; i++)
-                vertices[i] = vertices[i].normalized;
-            return vertices;
-        }
-
-        private static List<FaceGeometry> BuildFaceGeometry(Vector3[] vertices)
-        {
-            List<FaceGeometry> faces = new(CanonicalFaceIndices.GetLength(0));
-            for (int faceIndex = 0; faceIndex < CanonicalFaceIndices.GetLength(0); faceIndex++)
-            {
-                int a = CanonicalFaceIndices[faceIndex, 0];
-                int b = CanonicalFaceIndices[faceIndex, 1];
-                int c = CanonicalFaceIndices[faceIndex, 2];
-                Vector3 centroid = (vertices[a] + vertices[b] + vertices[c]) / 3f;
-                Vector3 normal = Vector3.Cross(vertices[b] - vertices[a], vertices[c] - vertices[a]);
+                int[] indices = (int[])faceIndices[faceIndex].Clone();
+                Vector3 centroid = CalculateCentroid(vertices, indices);
+                Vector3 normal = CalculatePolygonNormal(vertices, indices);
                 if (Vector3.Dot(normal, centroid) < 0f)
-                    (b, c) = (c, b);
+                {
+                    Array.Reverse(indices);
+                    normal = CalculatePolygonNormal(vertices, indices);
+                }
 
-                centroid = (vertices[a] + vertices[b] + vertices[c]) / 3f;
-                normal = Vector3.Cross(vertices[b] - vertices[a], vertices[c] - vertices[a]).normalized;
-                Vector3 upright = Vector3.ProjectOnPlane(vertices[a] - centroid, normal).normalized;
-                faces.Add(new FaceGeometry(
-                    new[] { a, b, c },
-                    new[] { vertices[a], vertices[b], vertices[c] },
-                    centroid,
-                    normal,
-                    upright));
+                Vector3[] polygon = new Vector3[indices.Length];
+                for (int i = 0; i < indices.Length; i++)
+                    polygon[i] = vertices[indices[i]];
+                centroid = CalculateCentroid(polygon);
+                Vector3 upright = Vector3.ProjectOnPlane(polygon[0] - centroid, normal).normalized;
+                if (upright.sqrMagnitude < 0.001f)
+                    upright = Vector3.ProjectOnPlane(Vector3.up, normal).normalized;
+                faces.Add(new FaceGeometry(indices, polygon, centroid, normal, upright));
             }
-
             return faces;
         }
 
+        private static Vector3 CalculateCentroid(
+            IReadOnlyList<Vector3> vertices,
+            IReadOnlyList<int> indices)
+        {
+            Vector3 centroid = Vector3.zero;
+            for (int i = 0; i < indices.Count; i++)
+                centroid += vertices[indices[i]];
+            return centroid / indices.Count;
+        }
+
+        private static Vector3 CalculateCentroid(IReadOnlyList<Vector3> vertices)
+        {
+            Vector3 centroid = Vector3.zero;
+            for (int i = 0; i < vertices.Count; i++)
+                centroid += vertices[i];
+            return centroid / vertices.Count;
+        }
+
+        private static Vector3 CalculatePolygonNormal(
+            IReadOnlyList<Vector3> vertices,
+            IReadOnlyList<int> indices)
+        {
+            Vector3 normal = Vector3.zero;
+            for (int i = 0; i < indices.Count; i++)
+            {
+                Vector3 current = vertices[indices[i]];
+                Vector3 next = vertices[indices[(i + 1) % indices.Count]];
+                normal.x += (current.y - next.y) * (current.z + next.z);
+                normal.y += (current.z - next.z) * (current.x + next.x);
+                normal.z += (current.x - next.x) * (current.y + next.y);
+            }
+            if (normal.sqrMagnitude < 0.000001f)
+                throw new InvalidOperationException("A die face has zero area.");
+            return normal.normalized;
+        }
+
         private static void AddEdgeChamfers(
+            DieBlueprint blueprint,
             IReadOnlyList<FaceGeometry> faces,
             List<Vector3> vertices,
             List<Vector3> normals,
@@ -273,16 +620,15 @@ namespace Arena.Editor.Dice
             for (int faceIndex = 0; faceIndex < faces.Count; faceIndex++)
             {
                 FaceGeometry face = faces[faceIndex];
-                for (int edgeIndex = 0; edgeIndex < 3; edgeIndex++)
+                for (int edgeIndex = 0; edgeIndex < face.CornerCount; edgeIndex++)
                 {
-                    int next = (edgeIndex + 1) % 3;
+                    int next = (edgeIndex + 1) % face.CornerCount;
                     EdgeKey key = new(face.VertexIndices[edgeIndex], face.VertexIndices[next]);
                     if (!edges.TryGetValue(key, out List<FaceEdge>? entries))
                     {
                         entries = new List<FaceEdge>(2);
                         edges.Add(key, entries);
                     }
-
                     entries.Add(new FaceEdge(face, edgeIndex, next));
                 }
             }
@@ -290,7 +636,10 @@ namespace Arena.Editor.Dice
             foreach (KeyValuePair<EdgeKey, List<FaceEdge>> pair in edges)
             {
                 if (pair.Value.Count != 2)
-                    throw new InvalidOperationException($"D20 edge {pair.Key} is not shared by exactly two faces.");
+                {
+                    throw new InvalidOperationException(
+                        $"{blueprint.AssetName} edge {pair.Key} is shared by {pair.Value.Count} faces.");
+                }
 
                 FaceEdge first = pair.Value[0];
                 FaceEdge second = pair.Value[1];
@@ -300,7 +649,6 @@ namespace Arena.Editor.Dice
                 Vector3 secondAtB = second.PointForVertex(pair.Key.B);
                 Vector3 outwardHint =
                     (firstAtA + firstAtB + secondAtA + secondAtB).normalized;
-
                 AddQuad(
                     vertices,
                     normals,
@@ -314,34 +662,33 @@ namespace Arena.Editor.Dice
         }
 
         private static void AddVertexCaps(
-            IReadOnlyList<Vector3> canonicalVertices,
+            DieBlueprint blueprint,
             IReadOnlyList<FaceGeometry> faces,
             List<Vector3> vertices,
             List<Vector3> normals,
             List<int> triangles)
         {
-            for (int vertexIndex = 0; vertexIndex < canonicalVertices.Count; vertexIndex++)
+            for (int vertexIndex = 0; vertexIndex < blueprint.Vertices.Length; vertexIndex++)
             {
-                List<Vector3> ring = new(5);
+                List<Vector3> ring = new();
                 for (int faceIndex = 0; faceIndex < faces.Count; faceIndex++)
                 {
                     FaceGeometry face = faces[faceIndex];
-                    for (int corner = 0; corner < 3; corner++)
+                    for (int corner = 0; corner < face.CornerCount; corner++)
                     {
                         if (face.VertexIndices[corner] == vertexIndex)
                             ring.Add(face.Cut[corner]);
                     }
                 }
 
-                if (ring.Count != 5)
-                    throw new InvalidOperationException($"D20 vertex {vertexIndex} has {ring.Count} incident faces.");
+                if (ring.Count < 3)
+                {
+                    throw new InvalidOperationException(
+                        $"{blueprint.AssetName} vertex {vertexIndex} has only {ring.Count} incident faces.");
+                }
 
-                Vector3 outward = canonicalVertices[vertexIndex].normalized;
-                Vector3 center = Vector3.zero;
-                for (int i = 0; i < ring.Count; i++)
-                    center += ring[i];
-                center /= ring.Count;
-
+                Vector3 outward = blueprint.Vertices[vertexIndex].normalized;
+                Vector3 center = CalculateCentroid(ring);
                 Vector3 tangent = Vector3.ProjectOnPlane(ring[0] - center, outward).normalized;
                 Vector3 bitangent = Vector3.Cross(outward, tangent);
                 ring.Sort((left, right) =>
@@ -449,18 +796,18 @@ namespace Arena.Editor.Dice
 
             fontAsset.name = "Cinzel_DiceNumerals";
             AssetDatabase.CreateAsset(fontAsset, FontAssetPath);
-
             Texture2D atlas = fontAsset.atlasTextures[0];
             atlas.name = "Cinzel_DiceNumerals Atlas";
             AssetDatabase.AddObjectToAsset(atlas, fontAsset);
-
             Material fontMaterial = fontAsset.material;
             fontMaterial.name = "Cinzel_DiceNumerals Atlas Material";
             AssetDatabase.AddObjectToAsset(fontMaterial, fontAsset);
 
             if (!fontAsset.TryAddCharacters("0123456789", out string missingCharacters))
+            {
                 throw new InvalidOperationException(
                     $"Cinzel numeric font generation missed glyphs: {missingCharacters}");
+            }
 
             fontAsset.atlasPopulationMode = AtlasPopulationMode.Static;
             EditorUtility.SetDirty(fontAsset);
@@ -476,7 +823,7 @@ namespace Arena.Editor.Dice
             if (shader == null)
                 throw new InvalidOperationException("Arena/Dice/Resin did not import successfully.");
 
-            Material material = new Material(shader)
+            Material material = new(shader)
             {
                 name = "M_DiceResin_DarkRed",
                 renderQueue = 3000
@@ -490,7 +837,7 @@ namespace Arena.Editor.Dice
             material.SetFloat("_EdgeOpacity", 0.05f);
             material.SetFloat("_VariationStrength", 0.07f);
             material.SetFloat("_VariationScale", 3.15f);
-            material.SetFloat("_ShimmerAmount", 0.01f);
+            material.SetFloat("_ShimmerAmount", 0f);
             material.SetFloat("_ShimmerSpeed", 0.16f);
             AssetDatabase.CreateAsset(material, ResinMaterialPath);
             return material;
@@ -498,7 +845,7 @@ namespace Arena.Editor.Dice
 
         private static Material BuildNumeralMaterial(TMP_FontAsset fontAsset)
         {
-            Material material = new Material(fontAsset.material)
+            Material material = new(fontAsset.material)
             {
                 name = "M_DiceNumeral_Ivory",
                 renderQueue = 3001
@@ -516,14 +863,15 @@ namespace Arena.Editor.Dice
             return material;
         }
 
-        private static GameObject BuildD20Prefab(
+        private static GameObject BuildPrefab(
+            DieBlueprint blueprint,
             Mesh mesh,
             Material resinMaterial,
             Material numeralMaterial,
             TMP_FontAsset fontAsset,
             IReadOnlyList<FaceGeometry> faces)
         {
-            GameObject root = new GameObject("D20_Resin");
+            GameObject root = new($"{blueprint.AssetName}_Resin");
             try
             {
                 MeshFilter filter = root.AddComponent<MeshFilter>();
@@ -533,19 +881,23 @@ namespace Arena.Editor.Dice
                 renderer.shadowCastingMode = ShadowCastingMode.On;
                 renderer.receiveShadows = true;
 
-                GameObject labelRoot = new GameObject("FaceLabels");
+                GameObject labelRoot = new("FaceLabels");
                 labelRoot.transform.SetParent(root.transform, false);
-
                 for (int faceIndex = 0; faceIndex < faces.Count; faceIndex++)
                 {
-                    FaceGeometry face = faces[faceIndex];
-                    int value = ValuesByFaceIndex[faceIndex];
-                    BuildFaceLabel(labelRoot.transform, face, value, fontAsset, numeralMaterial);
+                    BuildFaceLabel(
+                        labelRoot.transform,
+                        faces[faceIndex],
+                        blueprint.ValuesByFaceIndex[faceIndex],
+                        blueprint,
+                        fontAsset,
+                        numeralMaterial);
                 }
 
-                GameObject prefab = PrefabUtility.SaveAsPrefabAsset(root, PrefabPath);
+                string prefabPath = PrefabPathFor(blueprint);
+                GameObject prefab = PrefabUtility.SaveAsPrefabAsset(root, prefabPath);
                 if (prefab == null)
-                    throw new InvalidOperationException($"Could not save the d20 prefab at {PrefabPath}.");
+                    throw new InvalidOperationException($"Could not save {blueprint.DieId} at {prefabPath}.");
                 return prefab;
             }
             finally
@@ -558,10 +910,11 @@ namespace Arena.Editor.Dice
             Transform parent,
             FaceGeometry face,
             int value,
+            DieBlueprint blueprint,
             TMP_FontAsset fontAsset,
             Material numeralMaterial)
         {
-            GameObject labelObject = new GameObject(
+            GameObject labelObject = new(
                 $"Face_{value:00}",
                 typeof(RectTransform),
                 typeof(TextMeshPro),
@@ -572,16 +925,16 @@ namespace Arena.Editor.Dice
             // World-space TextMeshPro renders its front toward local -Z.
             rect.localRotation = Quaternion.LookRotation(-face.Normal, face.Upright);
             rect.localScale = Vector3.one;
-            rect.sizeDelta = new Vector2(0.54f, 0.34f);
+            rect.sizeDelta = blueprint.LabelSize;
 
             TextMeshPro text = labelObject.GetComponent<TextMeshPro>();
             text.text = value.ToString(CultureInfo.InvariantCulture);
             text.font = fontAsset;
             text.fontSharedMaterial = numeralMaterial;
-            text.fontSize = 2.2f;
+            text.fontSize = blueprint.FontSizeMax;
             text.enableAutoSizing = true;
-            text.fontSizeMin = 0.8f;
-            text.fontSizeMax = 2.2f;
+            text.fontSizeMin = blueprint.FontSizeMax * 0.38f;
+            text.fontSizeMax = blueprint.FontSizeMax;
             text.alignment = TextAlignmentOptions.Center;
             text.textWrappingMode = TextWrappingModes.NoWrap;
             text.margin = Vector4.zero;
@@ -593,27 +946,33 @@ namespace Arena.Editor.Dice
         }
 
         private static DiceDefinition BuildDefinition(
+            DieBlueprint blueprint,
             GameObject prefab,
             IReadOnlyList<FaceGeometry> geometry)
         {
-            DiceFace[] facesByResult = new DiceFace[ValuesByFaceIndex.Length];
+            DiceFace[] facesByResult = new DiceFace[blueprint.SideCount];
             for (int faceIndex = 0; faceIndex < geometry.Count; faceIndex++)
             {
-                int value = ValuesByFaceIndex[faceIndex];
+                int value = blueprint.ValuesByFaceIndex[faceIndex];
                 FaceGeometry face = geometry[faceIndex];
                 facesByResult[value - 1] = new DiceFace(value, face.Normal, face.Upright);
             }
 
             DiceDefinition definition = ScriptableObject.CreateInstance<DiceDefinition>();
-            definition.name = "D20";
-            definition.SetAuthoringData("d20", 20, prefab, PresentationScale, facesByResult);
-            AssetDatabase.CreateAsset(definition, DefinitionPath);
+            definition.name = blueprint.AssetName;
+            definition.SetAuthoringData(
+                blueprint.DieId,
+                blueprint.SideCount,
+                prefab,
+                blueprint.PresentationScale,
+                facesByResult);
+            AssetDatabase.CreateAsset(definition, DefinitionPathFor(blueprint));
             return definition;
         }
 
         private static List<DiceMotionProfile> BuildMotionProfiles()
         {
-            List<DiceMotionProfile> profiles = new(3)
+            return new List<DiceMotionProfile>(3)
             {
                 CreateMotionProfile(
                     MotionProfilePaths[0],
@@ -658,7 +1017,6 @@ namespace Arena.Editor.Dice
                     Curve((0f, 0.48f), (0.20f, -0.30f), (0.46f, 0.38f), (0.69f, -0.18f), (0.85f, 0.16f), (1f, 0f)),
                     Curve((0f, 0.66f), (0.17f, 0.90f), (0.45f, 1.12f), (0.72f, 0.92f), (0.86f, 1.04f), (1f, 1f)))
             };
-            return profiles;
         }
 
         private static DiceMotionProfile CreateMotionProfile(
@@ -677,7 +1035,7 @@ namespace Arena.Editor.Dice
             AnimationCurve scale)
         {
             DiceMotionProfile profile = ScriptableObject.CreateInstance<DiceMotionProfile>();
-            profile.name = $"D20_{displayName}";
+            profile.name = $"Dice_{displayName}";
             profile.SetAuthoringData(
                 profileId,
                 displayName,
@@ -713,7 +1071,7 @@ namespace Arena.Editor.Dice
         }
 
         private static void BuildCatalog(
-            DiceDefinition definition,
+            IReadOnlyList<DiceDefinition> definitions,
             IReadOnlyList<DiceMotionProfile> motionProfiles,
             Material resinMaterial,
             Material numeralMaterial)
@@ -722,7 +1080,7 @@ namespace Arena.Editor.Dice
             catalog.name = "DefaultDiceSet";
             catalog.SetAuthoringData(
                 "default",
-                new[] { definition },
+                definitions,
                 motionProfiles,
                 resinMaterial,
                 numeralMaterial);
@@ -732,14 +1090,13 @@ namespace Arena.Editor.Dice
         private static void BuildReviewScene()
         {
             Scene scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
-
             RenderSettings.fog = false;
             RenderSettings.ambientMode = AmbientMode.Trilight;
             RenderSettings.ambientSkyColor = new Color(0.12f, 0.085f, 0.10f);
             RenderSettings.ambientEquatorColor = new Color(0.045f, 0.025f, 0.032f);
             RenderSettings.ambientGroundColor = new Color(0.008f, 0.006f, 0.012f);
 
-            GameObject cameraObject = new GameObject("InspectionCamera");
+            GameObject cameraObject = new("InspectionCamera");
             cameraObject.tag = "MainCamera";
             cameraObject.transform.position = new Vector3(0f, 0f, -4.6f);
             cameraObject.transform.rotation = Quaternion.LookRotation(Vector3.forward, Vector3.up);
@@ -752,9 +1109,9 @@ namespace Arena.Editor.Dice
             camera.allowHDR = true;
             camera.allowMSAA = true;
 
-            GameObject presenterObject = new GameObject("DiceOverlayPresenter");
+            GameObject presenterObject = new("DiceOverlayPresenter");
             DiceOverlayPresenter presenter = presenterObject.AddComponent<DiceOverlayPresenter>();
-            GameObject panelObject = new GameObject("DicePresentationDebugPanel");
+            GameObject panelObject = new("DicePresentationDebugPanel");
             DicePresentationDebugPanel panel = panelObject.AddComponent<DicePresentationDebugPanel>();
             panel.SetAuthoringData(presenter, startVisible: true);
 
@@ -776,9 +1133,63 @@ namespace Arena.Editor.Dice
                 material.SetFloat(property, value);
         }
 
+        private sealed class DieBlueprint
+        {
+            public string DieId { get; }
+            public string AssetName { get; }
+            public int SideCount { get; }
+            public float PresentationScale { get; }
+            public Vector2 LabelSize { get; }
+            public float FontSizeMax { get; }
+            public Vector3[] Vertices { get; }
+            public int[][] FaceIndices { get; }
+            public int[] ValuesByFaceIndex { get; }
+
+            public DieBlueprint(
+                string dieId,
+                string assetName,
+                int sideCount,
+                float presentationScale,
+                Vector2 labelSize,
+                float fontSizeMax,
+                Vector3[] vertices,
+                int[][] faceIndices,
+                int[] valuesByFaceIndex)
+            {
+                if (faceIndices.Length != sideCount || valuesByFaceIndex.Length != sideCount)
+                {
+                    throw new ArgumentException(
+                        $"{assetName} must have exactly {sideCount} faces and values.");
+                }
+
+                DieId = dieId;
+                AssetName = assetName;
+                SideCount = sideCount;
+                PresentationScale = presentationScale;
+                LabelSize = labelSize;
+                FontSizeMax = fontSizeMax;
+                Vertices = vertices;
+                FaceIndices = faceIndices;
+                ValuesByFaceIndex = valuesByFaceIndex;
+            }
+        }
+
+        private sealed class Polyhedron
+        {
+            public Vector3[] Vertices { get; }
+            public int[][] Faces { get; }
+
+            public Polyhedron(Vector3[] vertices, int[][] faces)
+            {
+                Vertices = vertices;
+                Faces = faces;
+            }
+        }
+
         private sealed class FaceGeometry
         {
             public int[] VertexIndices { get; }
+            public int CornerCount => VertexIndices.Length;
             public Vector3 Centroid { get; }
             public Vector3 Normal { get; }
             public Vector3 Upright { get; }
@@ -788,7 +1199,7 @@ namespace Arena.Editor.Dice
 
             public FaceGeometry(
                 int[] vertexIndices,
-                Vector3[] vertices,
+                IReadOnlyList<Vector3> vertices,
                 Vector3 centroid,
                 Vector3 normal,
                 Vector3 upright)
@@ -797,10 +1208,10 @@ namespace Arena.Editor.Dice
                 Centroid = centroid;
                 Normal = normal;
                 Upright = upright;
-                Cut = new Vector3[3];
-                RecessRim = new Vector3[3];
-                RecessFloor = new Vector3[3];
-                for (int i = 0; i < 3; i++)
+                Cut = new Vector3[vertices.Count];
+                RecessRim = new Vector3[vertices.Count];
+                RecessFloor = new Vector3[vertices.Count];
+                for (int i = 0; i < vertices.Count; i++)
                 {
                     Cut[i] = Vector3.Lerp(vertices[i], centroid, BevelFraction);
                     RecessRim[i] = Vector3.Lerp(Cut[i], centroid, RecessFraction);
