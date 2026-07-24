@@ -61,8 +61,20 @@ namespace DungeonLab.Editor
         private const string RailingName = "P_MOD_Railing_01_straight";
         private const string RailingColumnName = "P_MOD_Railing_01_column";
         private const string AuthoredFlatRailingModuleName = "LVL_01_O_rail_straight_S";
-        private const string PartitionWallName = "COMP_Wall_01_M_straight_med";
-        private const string PartitionCornerName = "COMP_Wall_01_M_corner_med";
+        private const string PartitionWallMediumName = "COMP_Wall_01_M_straight_med";
+        private const string PartitionWallLargeName = "COMP_Wall_01_M_straight_large";
+        private const string PartitionCornerMediumName = "COMP_Wall_01_M_corner_med";
+        private const string PartitionCornerLargeName = "COMP_Wall_01_M_corner_large";
+        private const string GatewayMediumMetalName = "COMP_Door_01_med_01";
+        private const string GatewayLargeWallMetalName = "COMP_Door_01_med_01_M";
+        private const string GatewayMediumWoodName = "COMP_Door_01_med_02";
+        private const string GatewayLargeWallWoodName = "COMP_Door_01_med_02_M";
+        private const string GatewayLargeWoodName = "COMP_Door_01_large";
+        private const string GatewayBarsName = "P_PROP_bars_doorway_dungeon_01";
+        private const int GatewayPlacementPercent = 35;
+        // The reviewed PivotMiddle wall library measures 4.354-4.367u and
+        // 6.354-6.367u because caps/trim extend above the nominal masonry course.
+        private const float WallFamilyDecorationTolerance = 0.5f;
         private const string AuthoredLevelModuleOneSidedStairsFolder = "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/03_LEVEL_MODULES/01/OneSided/Stairs/";
         private const string AuthoredCompFloorFolder = "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/02_COMPS/Floor/";
         private const string AuthoredPartStairsFolder = "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/";
@@ -213,6 +225,7 @@ namespace DungeonLab.Editor
             var stairsRoot = CreateChild(root.transform, "Transition Stairs");
             var piersRoot = CreateChild(root.transform, "Promontory Piers");
             var shellRoot = CreateChild(root.transform, "Outer Shell Walls");
+            var gatewaysRoot = CreateChild(root.transform, "Gateways");
 
             bounds = new Bounds(origin, Vector3.zero);
             bool hasBounds = false;
@@ -294,7 +307,7 @@ namespace DungeonLab.Editor
             // Tall shell walls own the guard line above every edge where they are
             // successfully placed. Resolve that ownership before ordinary guards so
             // a railing/parapet and a shell can never occupy the same edge.
-            HashSet<(int x, int z, int direction)> shellGuardEdges = PlaceOuterShellWalls(
+            OuterShellPlacementResult shellPlacement = PlaceOuterShellWalls(
                 levels,
                 promontorySet,
                 roundTierCorners,
@@ -306,13 +319,36 @@ namespace DungeonLab.Editor
                 ref bounds,
                 ref hasBounds,
                 ref stats);
+            HashSet<(int x, int z, int direction)> shellGuardEdges = shellPlacement.guardEdges;
+            ApplyPartitionHeightPlan(
+                wallEdges,
+                roomBoundaryContext,
+                shellPlacement.largeWallRooms,
+                ref stats);
+
+            List<GatewayPlacement> gatewayPlacements = BuildGatewayPlacements(
+                levels,
+                wallEdges,
+                roomBoundaryContext,
+                contracts.gateways);
+            foreach (GatewayPlacement gateway in gatewayPlacements)
+            {
+                PlaceGateway(
+                    gateway,
+                    gatewaysRoot.transform,
+                    origin,
+                    contracts.levelHeight,
+                    ref bounds,
+                    ref hasBounds,
+                    ref stats);
+            }
 
             foreach (WallEdge wallEdge in wallEdges)
             {
                 if (wallEdge.isPartition)
                 {
                     PlacePartitionWall(
-                        contracts.partitions.wall,
+                        contracts.partitions,
                         wallsRoot.transform,
                         wallEdge,
                         origin,
@@ -452,7 +488,7 @@ namespace DungeonLab.Editor
                 if (corner.isPartition)
                 {
                     PlacePartitionCorner(
-                        contracts.partitions.corner,
+                        contracts.partitions,
                         cornersRoot.transform,
                         corner,
                         origin,
@@ -721,6 +757,11 @@ namespace DungeonLab.Editor
                 stats.totalRooms,
                 stats.partitionWalls,
                 stats.doorways,
+                stats.gateways,
+                stats.largeGateways,
+                stats.barredGateways,
+                stats.largePerimeterRooms,
+                stats.largePartitionWalls,
                 stats.partitionWallChecks,
                 stats.stairFootprintChecks,
                 stats.multiRiseStairChecks,
@@ -776,6 +817,7 @@ namespace DungeonLab.Editor
             DropFaceStack dropFaceStack = BuildDropFaceStack(inventory, WallCourseHeight);
             DropFaceStack cornerStack = BuildCornerStack(inventory, WallCourseHeight);
             PartitionWallContracts partitions = BuildPartitionWallContracts(inventory);
+            GatewayContracts gateways = BuildGatewayContracts(inventory);
             return new TieredPlatformContracts(
                 levelHeight,
                 floor,
@@ -785,6 +827,7 @@ namespace DungeonLab.Editor
                 cornerStack,
                 railings,
                 partitions,
+                gateways,
                 stairCatalog.rejectedContracts,
                 stairCatalog.rejectedContractReasons,
                 stairCatalog.unsupportedContracts,
@@ -2530,7 +2573,7 @@ namespace DungeonLab.Editor
         }
 
         private static void PlacePartitionWall(
-            MeasuredPrefab wall,
+            PartitionWallContracts contracts,
             Transform parent,
             WallEdge wallEdge,
             Vector3 origin,
@@ -2539,6 +2582,7 @@ namespace DungeonLab.Editor
             ref bool hasBounds,
             ref TieredPlatformBuildStats stats)
         {
+            MeasuredPrefab wall = contracts.ForHeight(wallEdge.partitionHeightUnits);
             Vector3 cellMin = CellMin(origin, wallEdge.edge.x, wallEdge.edge.z, wallEdge.lowerLevel * levelHeight);
             Vector3 cellMax = cellMin + new Vector3(CellSize, 0f, CellSize);
             GetEdgePlacement(wallEdge.edge, cellMin, cellMax, out Vector3 edgeA, out Vector3 edgeB, out Vector2 outwardNormal);
@@ -2641,17 +2685,41 @@ namespace DungeonLab.Editor
                 if (TryFindCornerTurnEdges(item.Value, vertex, isPartition: true, out int partitionQuadrant))
                 {
                     corners.Add(new CornerPlacement(
-                        vertex, partitionQuadrant, levels[item.Key], MinDropLevels(item.Value, isPartition: true), isPartition: true));
+                        vertex,
+                        partitionQuadrant,
+                        levels[item.Key],
+                        MinDropLevels(item.Value, isPartition: true),
+                        isPartition: true,
+                        partitionHeightUnits: MaxPartitionHeightUnits(item.Value)));
                 }
 
                 if (TryFindCornerTurnEdges(item.Value, vertex, isPartition: false, out int retainingQuadrant))
                 {
                     corners.Add(new CornerPlacement(
-                        vertex, retainingQuadrant, levels[item.Key], MinDropLevels(item.Value, isPartition: false), isPartition: false));
+                        vertex,
+                        retainingQuadrant,
+                        levels[item.Key],
+                        MinDropLevels(item.Value, isPartition: false),
+                        isPartition: false,
+                        partitionHeightUnits: 0));
                 }
             }
 
             return corners;
+        }
+
+        private static int MaxPartitionHeightUnits(IReadOnlyList<WallEdge> edges)
+        {
+            int height = 4;
+            foreach (WallEdge edge in edges)
+            {
+                if (edge.isPartition)
+                {
+                    height = Mathf.Max(height, edge.partitionHeightUnits);
+                }
+            }
+
+            return height;
         }
 
         private static int MinDropLevels(List<WallEdge> edges, bool isPartition)
@@ -3215,7 +3283,7 @@ namespace DungeonLab.Editor
         // interior chasms/overlooks (railings/D) or piers (open). Height scales
         // with the floor's tier height; each side is a uniform height for v1
         // (stepped med->small transitions + windows are later increments).
-        private static HashSet<(int x, int z, int direction)> PlaceOuterShellWalls(
+        private static OuterShellPlacementResult PlaceOuterShellWalls(
             IReadOnlyDictionary<Vector2Int, int> levels,
             HashSet<Vector2Int> promontoryCells,
             IReadOnlyList<RoundTierCorner> roundTierCorners,
@@ -3229,6 +3297,7 @@ namespace DungeonLab.Editor
             ref TieredPlatformBuildStats stats)
         {
             var guardEdges = new HashSet<(int x, int z, int direction)>();
+            var largeWallRooms = new HashSet<int>();
             MeasuredPrefab large = default, med = default, small = default;
             bool haveLarge = false, haveMed = false, haveSmall = false;
             try { large = MeasurePrefab(PackageInventory.Load().GetPrefabPath(ShellWallLargeName), PrefabRole.StraightWall); haveLarge = true; } catch { }
@@ -3237,7 +3306,7 @@ namespace DungeonLab.Editor
             if (!haveMed)
             {
                 Debug.LogWarning("Dungeon Lab Elevation Edge Model: shell wall pieces unavailable; outer shells skipped.");
-                return guardEdges;
+                return new OuterShellPlacementResult(guardEdges, largeWallRooms);
             }
 
             // Pick the modular piece whose nominal height matches a course (6/4/2u),
@@ -3286,6 +3355,30 @@ namespace DungeonLab.Editor
                 return 4;                                     // small room: up to med only
             }
 
+            void RecordLargePerimeterRoom(
+                Vector2Int cell,
+                bool outer,
+                bool largeCourseAvailable,
+                IReadOnlyList<int> courseHeights)
+            {
+                if (!outer ||
+                    !largeCourseAvailable ||
+                    roomBoundaryContext?.cellRoomIds == null ||
+                    !roomBoundaryContext.cellRoomIds.TryGetValue(cell, out int roomId))
+                {
+                    return;
+                }
+
+                foreach (int height in courseHeights)
+                {
+                    if (height >= 6)
+                    {
+                        largeWallRooms.Add(roomId);
+                        return;
+                    }
+                }
+            }
+
             // Build shells on top of existing drop faces (the C cliff walls AND the
             // interior retaining tier-steps). BuildWallEdges already excludes stair
             // footprints, transitions, ports and reserved cells, and flags every
@@ -3314,7 +3407,9 @@ namespace DungeonLab.Editor
                 PlatformEdge edge = wall.edge;
                 float y = level * levelHeight;
                 int course = 0;
-                foreach (int h in ShellCourseHeights(level, minLevel, maxLevel, outer, RoomSizeCap(cell)))
+                int[] courseHeights = ShellCourseHeights(level, minLevel, maxLevel, outer, RoomSizeCap(cell));
+                RecordLargePerimeterRoom(cell, outer, haveLarge, courseHeights);
+                foreach (int h in courseHeights)
                 {
                     MeasuredPrefab piece = CourseStraight(h);
                     Vector3 cellMin = CellMin(origin, edge.x, edge.z, y);
@@ -3397,7 +3492,18 @@ namespace DungeonLab.Editor
                 Vector3 pivot = DaisFullCellPivotWorld(corner.cell, shellYaw, origin);
                 float y = corner.higherLevel * levelHeight;
                 int course = 0;
-                foreach (int h in ShellCourseHeights(corner.higherLevel, minLevel, maxLevel, outer, RoomSizeCap(cornerRoomCell)))
+                int[] courseHeights = ShellCourseHeights(
+                    corner.higherLevel,
+                    minLevel,
+                    maxLevel,
+                    outer,
+                    RoomSizeCap(cornerRoomCell));
+                RecordLargePerimeterRoom(
+                    cornerRoomCell,
+                    outer,
+                    hasCurvedLarge,
+                    courseHeights);
+                foreach (int h in courseHeights)
                 {
                     TierStepPiece piece = CourseCurved(h);
                     GameObject shell = InstantiatePrefab(piece.prefabPath, $"shell_corner_{corner.cell.x}_{corner.cell.y}_{course}", parent, pivot + Vector3.up * y, shellYaw);
@@ -3416,7 +3522,358 @@ namespace DungeonLab.Editor
                 stats.stairSummaries.Add($"outer shell wall pieces: {shells}" + (cornerSkips > 0 ? $" ({cornerSkips} corners skipped)" : string.Empty));
             }
 
-            return guardEdges;
+            stats.largePerimeterRooms = largeWallRooms.Count;
+            return new OuterShellPlacementResult(guardEdges, largeWallRooms);
+        }
+
+        private static void ApplyPartitionHeightPlan(
+            List<WallEdge> wallEdges,
+            RoomBoundaryContext roomBoundaryContext,
+            IReadOnlyCollection<int> largeWallRooms,
+            ref TieredPlatformBuildStats stats)
+        {
+            // The shell result is the only authority for a large interior wall.
+            // Do not infer this from tier/elevation: a room qualifies only when
+            // its actual exterior perimeter used a 6u wall course.
+            var largeRooms = largeWallRooms != null
+                ? new HashSet<int>(largeWallRooms)
+                : new HashSet<int>();
+            for (int index = 0; index < wallEdges.Count; index++)
+            {
+                WallEdge wall = wallEdges[index];
+                if (!wall.isPartition)
+                {
+                    continue;
+                }
+
+                Vector2Int firstCell = new Vector2Int(wall.edge.x, wall.edge.z);
+                Vector2Int secondCell = Neighbor(firstCell, wall.edge.direction);
+                int firstRoom = GetRoomId(roomBoundaryContext, firstCell);
+                int secondRoom = GetRoomId(roomBoundaryContext, secondCell);
+                bool firstKnown = firstRoom >= 0;
+                bool secondKnown = secondRoom >= 0;
+                bool large = firstKnown && secondKnown
+                    ? largeRooms.Contains(firstRoom) && largeRooms.Contains(secondRoom)
+                    : firstKnown
+                        ? largeRooms.Contains(firstRoom)
+                        : secondKnown && largeRooms.Contains(secondRoom);
+                int heightUnits = large ? 6 : 4;
+                wallEdges[index] = wall.WithPartitionHeight(heightUnits);
+                if (large)
+                {
+                    stats.largePartitionWalls++;
+                }
+            }
+        }
+
+        private static List<GatewayPlacement> BuildGatewayPlacements(
+            IReadOnlyDictionary<Vector2Int, int> levels,
+            IReadOnlyList<WallEdge> wallEdges,
+            RoomBoundaryContext roomBoundaryContext,
+            GatewayContracts contracts)
+        {
+            // Door material/style is seed-varied, never tier-selected. Height is
+            // accepted only from the two already-planned walls flanking the port.
+            var placements = new List<GatewayPlacement>();
+            if (roomBoundaryContext?.doorwayEdges == null ||
+                roomBoundaryContext.doorwayEdges.Count == 0)
+            {
+                return placements;
+            }
+
+            var partitionHeights = new Dictionary<EdgeKey, int>();
+            foreach (WallEdge wall in wallEdges)
+            {
+                if (!wall.isPartition)
+                {
+                    continue;
+                }
+
+                Vector2Int cell = new Vector2Int(wall.edge.x, wall.edge.z);
+                partitionHeights[new EdgeKey(cell, Neighbor(cell, wall.edge.direction))] =
+                    wall.partitionHeightUnits;
+            }
+
+            var selectedByConnection = new Dictionary<string, GatewayCandidate>();
+            foreach (DoorwayEdge doorway in roomBoundaryContext.doorwayEdges)
+            {
+                if (!TryBuildGatewayCandidate(
+                        doorway,
+                        levels,
+                        partitionHeights,
+                        roomBoundaryContext,
+                        out GatewayCandidate candidate))
+                {
+                    continue;
+                }
+
+                string groupKey = doorway.connectionIndex >= 0
+                    ? $"connection:{doorway.connectionIndex}"
+                    : $"edge:{candidate.edgeKey}";
+                int coverageRoll = StairForge.StableHash(
+                        $"{roomBoundaryContext.gatewaySelectionSalt}:gateway-coverage:{groupKey}") &
+                    int.MaxValue;
+                if (coverageRoll % 100 >= GatewayPlacementPercent)
+                {
+                    continue;
+                }
+
+                candidate = candidate.WithSelection(
+                    groupKey,
+                    StairForge.StableHash(
+                            $"{roomBoundaryContext.gatewaySelectionSalt}:gateway-end:{groupKey}:{candidate.edgeKey}") &
+                        int.MaxValue);
+                if (!selectedByConnection.TryGetValue(groupKey, out GatewayCandidate existing) ||
+                    candidate.selectionScore < existing.selectionScore)
+                {
+                    selectedByConnection[groupKey] = candidate;
+                }
+            }
+
+            var groupKeys = new List<string>(selectedByConnection.Keys);
+            groupKeys.Sort(StringComparer.Ordinal);
+            foreach (string groupKey in groupKeys)
+            {
+                GatewayCandidate candidate = selectedByConnection[groupKey];
+                GatewayStyle[] compatibleStyles = candidate.wallHeightUnits >= 6
+                    ? new[]
+                    {
+                        GatewayStyle.Metal,
+                        GatewayStyle.Wood,
+                        GatewayStyle.LargeWood,
+                        GatewayStyle.Barred,
+                        GatewayStyle.OpenArch
+                    }
+                    : new[]
+                    {
+                        GatewayStyle.Metal,
+                        GatewayStyle.Wood,
+                        GatewayStyle.Barred,
+                        GatewayStyle.OpenArch
+                    };
+                int styleRoll = StairForge.StableHash(
+                        $"{roomBoundaryContext.gatewaySelectionSalt}:gateway-style:{groupKey}:{candidate.edgeKey}") &
+                    int.MaxValue;
+                GatewayStyle style = compatibleStyles[styleRoll % compatibleStyles.Length];
+                placements.Add(new GatewayPlacement(
+                    candidate.edge,
+                    candidate.floorLevel,
+                    candidate.wallHeightUnits,
+                    contracts.For(style, candidate.wallHeightUnits)));
+            }
+
+            return placements;
+        }
+
+        private static bool TryBuildGatewayCandidate(
+            DoorwayEdge doorway,
+            IReadOnlyDictionary<Vector2Int, int> levels,
+            IReadOnlyDictionary<EdgeKey, int> partitionHeights,
+            RoomBoundaryContext roomBoundaryContext,
+            out GatewayCandidate candidate)
+        {
+            candidate = default;
+            if (!AreCardinalNeighbors(doorway.firstCell, doorway.secondCell) ||
+                !levels.TryGetValue(doorway.firstCell, out int firstLevel) ||
+                !levels.TryGetValue(doorway.secondCell, out int secondLevel) ||
+                firstLevel != secondLevel)
+            {
+                return false;
+            }
+
+            int firstRoom = GetRoomId(roomBoundaryContext, doorway.firstCell);
+            int secondRoom = GetRoomId(roomBoundaryContext, doorway.secondCell);
+            bool firstEnclosed = IsEnclosedRoom(roomBoundaryContext, firstRoom);
+            bool secondEnclosed = IsEnclosedRoom(roomBoundaryContext, secondRoom);
+            if (!firstEnclosed && !secondEnclosed)
+            {
+                return false;
+            }
+
+            Vector2Int ownerCell;
+            Vector2Int otherCell;
+            if (firstEnclosed && !secondEnclosed ||
+                firstEnclosed && secondEnclosed && firstRoom <= secondRoom)
+            {
+                ownerCell = doorway.firstCell;
+                otherCell = doorway.secondCell;
+            }
+            else
+            {
+                ownerCell = doorway.secondCell;
+                otherCell = doorway.firstCell;
+            }
+
+            Vector2Int outward = otherCell - ownerCell;
+            Vector2Int tangent = outward.x != 0 ? Vector2Int.up : Vector2Int.right;
+            Vector2Int firstFlankCell = ownerCell + tangent;
+            Vector2Int secondFlankCell = ownerCell - tangent;
+            var firstFlank = new EdgeKey(firstFlankCell, firstFlankCell + outward);
+            var secondFlank = new EdgeKey(secondFlankCell, secondFlankCell + outward);
+            if (!partitionHeights.TryGetValue(firstFlank, out int firstHeight) ||
+                !partitionHeights.TryGetValue(secondFlank, out int secondHeight) ||
+                firstHeight != secondHeight ||
+                (firstHeight != 4 && firstHeight != 6))
+            {
+                return false;
+            }
+
+            PlatformEdge edge = EdgeFromCellToward(ownerCell, otherCell);
+            candidate = new GatewayCandidate(
+                edge,
+                firstLevel,
+                firstHeight,
+                new EdgeKey(ownerCell, otherCell).ToString());
+            return true;
+        }
+
+        private static void PlaceGateway(
+            GatewayPlacement gateway,
+            Transform parent,
+            Vector3 origin,
+            float levelHeight,
+            ref Bounds bounds,
+            ref bool hasBounds,
+            ref TieredPlatformBuildStats stats)
+        {
+            Vector3 cellMin = CellMin(
+                origin,
+                gateway.edge.x,
+                gateway.edge.z,
+                gateway.floorLevel * levelHeight);
+            Vector3 cellMax = cellMin + new Vector3(CellSize, 0f, CellSize);
+            GetEdgePlacement(
+                gateway.edge,
+                cellMin,
+                cellMax,
+                out Vector3 edgeA,
+                out Vector3 edgeB,
+                out Vector2 outwardNormal);
+            string styleName = gateway.contract.style.ToString().ToLowerInvariant();
+            GameObject instance = PlaceEdgePrefab(
+                gateway.contract.prefab,
+                parent,
+                $"gateway_{styleName}_{gateway.edge.x}_{gateway.edge.z}_{gateway.edge.direction}",
+                edgeA,
+                edgeB,
+                outwardNormal,
+                ref bounds,
+                ref hasBounds);
+            ConfigureGatewayInstance(instance, gateway.contract.style);
+            EncapsulateInstance(instance, ref bounds, ref hasBounds);
+            ValidatePlacedEdgePrefab(
+                instance,
+                gateway.contract.prefab,
+                edgeA,
+                edgeB,
+                outwardNormal);
+
+            if (gateway.contract.style == GatewayStyle.Barred)
+            {
+                Vector2 localMidpoint =
+                    (gateway.contract.prefab.localSegmentStart +
+                     gateway.contract.prefab.localSegmentEnd) * 0.5f;
+                Vector3 worldMidpoint = instance.transform.TransformPoint(
+                    new Vector3(localMidpoint.x, 0f, localMidpoint.y));
+                GameObject bars = InstantiatePrefab(
+                    gateway.contract.auxiliaryPrefabPath,
+                    $"gateway_bars_{gateway.edge.x}_{gateway.edge.z}_{gateway.edge.direction}",
+                    instance.transform,
+                    worldMidpoint,
+                    instance.transform.eulerAngles.y);
+                ConfigureBarredGatewayInstance(bars);
+                EncapsulateInstance(bars, ref bounds, ref hasBounds);
+                stats.barredGateways++;
+            }
+
+            stats.gateways++;
+            if (gateway.wallHeightUnits >= 6)
+            {
+                stats.largeGateways++;
+            }
+        }
+
+        private static void ConfigureGatewayInstance(GameObject instance, GatewayStyle style)
+        {
+            if (style == GatewayStyle.OpenArch || style == GatewayStyle.Barred)
+            {
+                Transform doorAssembly = FindFirstDescendant(
+                    instance.transform,
+                    name => name.StartsWith(
+                        "P_MOD_Gateway_Door_01_med",
+                        StringComparison.Ordinal));
+                if (doorAssembly == null)
+                {
+                    throw new InvalidOperationException(
+                        $"Gateway '{instance.name}' had no medium door assembly to remove for {style}.");
+                }
+
+                doorAssembly.gameObject.SetActive(false);
+                return;
+            }
+
+            if (style == GatewayStyle.LargeWood)
+            {
+                Transform left = FindRequiredGatewayDescendant(
+                    instance,
+                    "MOD_Gateway_Door_01_large_door_L");
+                Transform right = FindRequiredGatewayDescendant(
+                    instance,
+                    "MOD_Gateway_Door_01_large_door_R");
+                OpenStaticGatewayLeaf(left, 100f);
+                OpenStaticGatewayLeaf(right, -100f);
+                foreach (Transform child in instance.GetComponentsInChildren<Transform>(true))
+                {
+                    if (child.name.StartsWith(
+                            "MOD_Gateway_Door_01_large_plank_",
+                            StringComparison.Ordinal))
+                    {
+                        child.gameObject.SetActive(false);
+                    }
+                }
+
+                return;
+            }
+
+            string leafName = style == GatewayStyle.Metal
+                ? "MOD_Gateway_Door_01_med_01_door"
+                : "MOD_Gateway_Door_01_med_02_door";
+            OpenStaticGatewayLeaf(
+                FindRequiredGatewayDescendant(instance, leafName),
+                95f);
+        }
+
+        private static void ConfigureBarredGatewayInstance(GameObject instance)
+        {
+            Transform leaf = FindRequiredGatewayDescendant(
+                instance,
+                "SM_PROP_bars_door_01_dungeon");
+            OpenStaticGatewayLeaf(leaf, -75f);
+        }
+
+        private static Transform FindRequiredGatewayDescendant(
+            GameObject instance,
+            string exactName)
+        {
+            Transform child = FindFirstDescendant(
+                instance.transform,
+                name => string.Equals(name, exactName, StringComparison.Ordinal));
+            if (child == null)
+            {
+                throw new InvalidOperationException(
+                    $"Gateway '{instance.name}' is missing required authored child '{exactName}'.");
+            }
+
+            return child;
+        }
+
+        private static void OpenStaticGatewayLeaf(Transform leaf, float localYaw)
+        {
+            leaf.localRotation = Quaternion.Euler(0f, localYaw, 0f);
+            foreach (Collider collider in leaf.GetComponentsInChildren<Collider>(true))
+            {
+                collider.enabled = false;
+            }
         }
 
         private static float CalculateOuterShellCornerYaw(
@@ -5249,16 +5706,111 @@ namespace DungeonLab.Editor
 
         private static PartitionWallContracts BuildPartitionWallContracts(PackageInventory inventory)
         {
-            string wallPath = inventory.GetPrefabPath(PartitionWallName);
-            string cornerPath = inventory.GetPrefabPath(PartitionCornerName);
-            ValidateDoubleSidedWallPrefab(wallPath, PartitionWallName);
-            MeasuredPrefab wall = MeasurePrefab(wallPath, PrefabRole.StraightWall).WithName(PartitionWallName);
-            MeasuredPrefab corner = MeasurePrefab(cornerPath, PrefabRole.HardCorner).WithName(PartitionCornerName);
+            string mediumWallPath = inventory.GetPrefabPath(PartitionWallMediumName);
+            string largeWallPath = inventory.GetPrefabPath(PartitionWallLargeName);
+            string mediumCornerPath = inventory.GetPrefabPath(PartitionCornerMediumName);
+            string largeCornerPath = inventory.GetPrefabPath(PartitionCornerLargeName);
+            ValidateDoubleSidedWallPrefab(mediumWallPath, PartitionWallMediumName);
+            ValidateDoubleSidedWallPrefab(largeWallPath, PartitionWallLargeName);
+            MeasuredPrefab mediumWall = MeasurePrefab(
+                mediumWallPath,
+                PrefabRole.StraightWall).WithName(PartitionWallMediumName);
+            MeasuredPrefab largeWall = MeasurePrefab(
+                largeWallPath,
+                PrefabRole.StraightWall).WithName(PartitionWallLargeName);
+            MeasuredPrefab mediumCorner = MeasurePrefab(
+                mediumCornerPath,
+                PrefabRole.HardCorner).WithName(PartitionCornerMediumName);
+            MeasuredPrefab largeCorner = MeasurePrefab(
+                largeCornerPath,
+                PrefabRole.HardCorner).WithName(PartitionCornerLargeName);
+            ValidateNominalWallHeight(mediumWall, 4);
+            ValidateNominalWallHeight(largeWall, 6);
+            ValidateNominalWallHeight(mediumCorner, 4);
+            ValidateNominalWallHeight(largeCorner, 6);
             Debug.Log(
                 $"Dungeon Lab Elevation Edge Model: measured PivotMiddle partition contracts. " +
-                $"wall {PartitionWallName} segment {wall.localSegmentStart}->{wall.localSegmentEnd}, bounds {wall.localPlanBounds}, face {wall.faceNormal}, height {wall.height:0.###}u; " +
-                $"corner {PartitionCornerName} bounds {corner.localPlanBounds}, base {CornerQuadrantName(corner.baseQuadrant)}, height {corner.height:0.###}u.");
-            return new PartitionWallContracts(wall, corner);
+                $"medium wall {PartitionWallMediumName} height {mediumWall.height:0.###}u, " +
+                $"large wall {PartitionWallLargeName} height {largeWall.height:0.###}u; " +
+                $"medium corner {PartitionCornerMediumName} height {mediumCorner.height:0.###}u, " +
+                $"large corner {PartitionCornerLargeName} height {largeCorner.height:0.###}u.");
+            return new PartitionWallContracts(
+                mediumWall,
+                largeWall,
+                mediumCorner,
+                largeCorner);
+        }
+
+        private static GatewayContracts BuildGatewayContracts(PackageInventory inventory)
+        {
+            MeasuredPrefab mediumMetal = MeasureGatewayPrefab(
+                inventory,
+                GatewayMediumMetalName,
+                4);
+            MeasuredPrefab largeWallMetal = MeasureGatewayPrefab(
+                inventory,
+                GatewayLargeWallMetalName,
+                6);
+            MeasuredPrefab mediumWood = MeasureGatewayPrefab(
+                inventory,
+                GatewayMediumWoodName,
+                4);
+            MeasuredPrefab largeWallWood = MeasureGatewayPrefab(
+                inventory,
+                GatewayLargeWallWoodName,
+                6);
+            MeasuredPrefab largeWood = MeasureGatewayPrefab(
+                inventory,
+                GatewayLargeWoodName,
+                6);
+            string barsPrefabPath = inventory.GetPrefabPath(GatewayBarsName);
+
+            Debug.Log(
+                "Dungeon Lab Elevation Edge Model: measured static gateway contracts. " +
+                $"{GatewayMediumMetalName}=4u metal, {GatewayLargeWallMetalName}=6u metal, " +
+                $"{GatewayMediumWoodName}=4u wood, {GatewayLargeWallWoodName}=6u wood, " +
+                $"{GatewayLargeWoodName}=6u double wood; barred openings use {GatewayBarsName}.");
+            return new GatewayContracts(
+                mediumMetal,
+                largeWallMetal,
+                mediumWood,
+                largeWallWood,
+                largeWood,
+                barsPrefabPath);
+        }
+
+        private static MeasuredPrefab MeasureGatewayPrefab(
+            PackageInventory inventory,
+            string prefabName,
+            int nominalHeightUnits)
+        {
+            MeasuredPrefab measured = MeasurePrefab(
+                inventory.GetPrefabPath(prefabName),
+                PrefabRole.StraightWall).WithName(prefabName);
+            float segmentLength = Vector2.Distance(
+                measured.localSegmentStart,
+                measured.localSegmentEnd);
+            if (Mathf.Abs(segmentLength - CellSize) > 0.08f)
+            {
+                throw new InvalidOperationException(
+                    $"Gateway prefab '{prefabName}' measured {segmentLength:0.###}u along its boundary segment; expected one {CellSize:0.###}u cell edge.");
+            }
+
+            ValidateNominalWallHeight(measured, nominalHeightUnits);
+            return measured;
+        }
+
+        private static void ValidateNominalWallHeight(
+            MeasuredPrefab measured,
+            int nominalHeightUnits)
+        {
+            if (Mathf.Abs(measured.height - nominalHeightUnits) >
+                WallFamilyDecorationTolerance)
+            {
+                throw new InvalidOperationException(
+                    $"Prefab '{measured.name}' measured {measured.height:0.###}u high; expected the nominal {nominalHeightUnits}u wall family " +
+                    $"within {WallFamilyDecorationTolerance:0.###}u of authored cap/trim overhang.");
+            }
         }
 
         private static void ValidateDoubleSidedWallPrefab(string prefabPath, string prefabName)
@@ -5621,7 +6173,7 @@ namespace DungeonLab.Editor
         }
 
         private static void PlacePartitionCorner(
-            MeasuredPrefab piece,
+            PartitionWallContracts contracts,
             Transform parent,
             CornerPlacement corner,
             Vector3 origin,
@@ -5629,6 +6181,7 @@ namespace DungeonLab.Editor
             ref Bounds bounds,
             ref bool hasBounds)
         {
+            MeasuredPrefab piece = contracts.CornerForHeight(corner.partitionHeightUnits);
             Vector3 vertexPosition = origin + new Vector3(corner.vertex.x * CellSize, corner.baseLevel * levelHeight, corner.vertex.y * CellSize);
             float yRotation = CalculateCornerYaw(piece.baseQuadrant, corner.targetQuadrant);
             if (!DoesRotatedBoundsOccupyQuadrant(piece.localPlanBounds, yRotation, corner.targetQuadrant))
@@ -8307,6 +8860,11 @@ namespace DungeonLab.Editor
             public int enclosedRooms;
             public int partitionWalls;
             public int doorways;
+            public int gateways;
+            public int largeGateways;
+            public int barredGateways;
+            public int largePerimeterRooms;
+            public int largePartitionWalls;
             public int partitionWallChecks;
             public int internalPathEdges;
             public int internalPathRailings;
@@ -8549,17 +9107,20 @@ namespace DungeonLab.Editor
             public readonly IReadOnlyList<bool> enclosedRooms;
             public readonly IReadOnlyList<DoorwayEdge> doorwayEdges;
             public readonly IReadOnlyList<InternalPathEdge> internalPathEdges;
+            public readonly int gatewaySelectionSalt;
 
             public RoomBoundaryContext(
                 IReadOnlyDictionary<Vector2Int, int> cellRoomIds,
                 IReadOnlyList<bool> enclosedRooms,
                 IReadOnlyList<DoorwayEdge> doorwayEdges,
-                IReadOnlyList<InternalPathEdge> internalPathEdges = null)
+                IReadOnlyList<InternalPathEdge> internalPathEdges = null,
+                int gatewaySelectionSalt = 0)
             {
                 this.cellRoomIds = cellRoomIds;
                 this.enclosedRooms = enclosedRooms;
                 this.doorwayEdges = doorwayEdges;
                 this.internalPathEdges = internalPathEdges ?? Array.Empty<InternalPathEdge>();
+                this.gatewaySelectionSalt = gatewaySelectionSalt;
             }
         }
 
@@ -8587,11 +9148,21 @@ namespace DungeonLab.Editor
         {
             public readonly Vector2Int firstCell;
             public readonly Vector2Int secondCell;
+            public readonly int connectionIndex;
 
             public DoorwayEdge(Vector2Int firstCell, Vector2Int secondCell)
+                : this(firstCell, secondCell, -1)
+            {
+            }
+
+            public DoorwayEdge(
+                Vector2Int firstCell,
+                Vector2Int secondCell,
+                int connectionIndex)
             {
                 this.firstCell = firstCell;
                 this.secondCell = secondCell;
+                this.connectionIndex = connectionIndex;
             }
         }
 
@@ -8621,6 +9192,11 @@ namespace DungeonLab.Editor
             public readonly int totalRooms;
             public readonly int partitionWalls;
             public readonly int doorways;
+            public readonly int gateways;
+            public readonly int largeGateways;
+            public readonly int barredGateways;
+            public readonly int largePerimeterRooms;
+            public readonly int largePartitionWalls;
             public readonly int partitionWallChecks;
             public readonly int stairFootprintChecks;
             public readonly int multiRiseStairChecks;
@@ -8635,7 +9211,7 @@ namespace DungeonLab.Editor
             public readonly string unsupportedContractReasons;
             public readonly string stairSummary;
             public string Summary =>
-                $"levelHeight {levelHeight:0.###}u; cells {floorCells}; interior {interiorEdges}; cliffs {cliffEdges}; retaining {retainingEdges}; transitions {transitionEdges}; enclosed rooms {enclosedRooms}/{totalRooms}, partition walls {partitionWalls}, railings {railings}, internal path edges {internalPathEdges}, internal path railings {internalPathRailings}, internal path bare edges {internalPathBareEdges}, bare boundary edges {bareBoundaryEdges}, doorways {doorways}, partitionWallChecks {partitionWallChecks} passed; stairFootprintChecks {stairFootprintChecks} passed; multiRiseStairChecks {multiRiseStairChecks} passed; corners {corners}; REJECTED {rejected}; {stairSummary}";
+                $"levelHeight {levelHeight:0.###}u; cells {floorCells}; interior {interiorEdges}; cliffs {cliffEdges}; retaining {retainingEdges}; transitions {transitionEdges}; enclosed rooms {enclosedRooms}/{totalRooms}, partition walls {partitionWalls} ({largePartitionWalls} large), large-perimeter rooms {largePerimeterRooms}, railings {railings}, internal path edges {internalPathEdges}, internal path railings {internalPathRailings}, internal path bare edges {internalPathBareEdges}, bare boundary edges {bareBoundaryEdges}, doorways {doorways}, static gateways {gateways} ({largeGateways} at 6u, {barredGateways} barred), partitionWallChecks {partitionWallChecks} passed; stairFootprintChecks {stairFootprintChecks} passed; multiRiseStairChecks {multiRiseStairChecks} passed; corners {corners}; REJECTED {rejected}; {stairSummary}";
 
             public BuildReport(
                 float levelHeight,
@@ -8650,6 +9226,11 @@ namespace DungeonLab.Editor
                 int totalRooms,
                 int partitionWalls,
                 int doorways,
+                int gateways,
+                int largeGateways,
+                int barredGateways,
+                int largePerimeterRooms,
+                int largePartitionWalls,
                 int partitionWallChecks,
                 int stairFootprintChecks,
                 int multiRiseStairChecks,
@@ -8676,6 +9257,11 @@ namespace DungeonLab.Editor
                 this.totalRooms = totalRooms;
                 this.partitionWalls = partitionWalls;
                 this.doorways = doorways;
+                this.gateways = gateways;
+                this.largeGateways = largeGateways;
+                this.barredGateways = barredGateways;
+                this.largePerimeterRooms = largePerimeterRooms;
+                this.largePartitionWalls = largePartitionWalls;
                 this.partitionWallChecks = partitionWallChecks;
                 this.stairFootprintChecks = stairFootprintChecks;
                 this.multiRiseStairChecks = multiRiseStairChecks;
@@ -8699,17 +9285,44 @@ namespace DungeonLab.Editor
             public readonly int higherLevel;
             public readonly bool isRetaining;
             public readonly bool isPartition;
+            public readonly int partitionHeightUnits;
 
             // The wall face still renders, but the top of this edge is owned by a stair
             // body (its authored railings guard it), so the engine must not add a railing.
             public readonly bool suppressRailing;
 
             public WallEdge(PlatformEdge edge, int lowerLevel, int higherLevel, bool isRetaining, bool isPartition)
-                : this(edge, lowerLevel, higherLevel, isRetaining, isPartition, suppressRailing: false)
+                : this(
+                    edge,
+                    lowerLevel,
+                    higherLevel,
+                    isRetaining,
+                    isPartition,
+                    suppressRailing: false,
+                    partitionHeightUnits: isPartition ? 4 : 0)
             {
             }
 
             public WallEdge(PlatformEdge edge, int lowerLevel, int higherLevel, bool isRetaining, bool isPartition, bool suppressRailing)
+                : this(
+                    edge,
+                    lowerLevel,
+                    higherLevel,
+                    isRetaining,
+                    isPartition,
+                    suppressRailing,
+                    partitionHeightUnits: isPartition ? 4 : 0)
+            {
+            }
+
+            private WallEdge(
+                PlatformEdge edge,
+                int lowerLevel,
+                int higherLevel,
+                bool isRetaining,
+                bool isPartition,
+                bool suppressRailing,
+                int partitionHeightUnits)
             {
                 this.edge = edge;
                 this.lowerLevel = lowerLevel;
@@ -8717,6 +9330,25 @@ namespace DungeonLab.Editor
                 this.isRetaining = isRetaining;
                 this.isPartition = isPartition;
                 this.suppressRailing = suppressRailing;
+                this.partitionHeightUnits = partitionHeightUnits;
+            }
+
+            public WallEdge WithPartitionHeight(int heightUnits)
+            {
+                if (!isPartition || (heightUnits != 4 && heightUnits != 6))
+                {
+                    throw new InvalidOperationException(
+                        $"Partition wall height must be 4u or 6u; received {heightUnits}u.");
+                }
+
+                return new WallEdge(
+                    edge,
+                    lowerLevel,
+                    higherLevel,
+                    isRetaining,
+                    isPartition,
+                    suppressRailing,
+                    heightUnits);
             }
         }
 
@@ -8745,6 +9377,21 @@ namespace DungeonLab.Editor
             }
         }
 
+        private readonly struct OuterShellPlacementResult
+        {
+            public readonly HashSet<(int x, int z, int direction)> guardEdges;
+            public readonly HashSet<int> largeWallRooms;
+
+            public OuterShellPlacementResult(
+                HashSet<(int x, int z, int direction)> guardEdges,
+                HashSet<int> largeWallRooms)
+            {
+                this.guardEdges =
+                    guardEdges ?? new HashSet<(int x, int z, int direction)>();
+                this.largeWallRooms = largeWallRooms ?? new HashSet<int>();
+            }
+        }
+
         private readonly struct OpenEdgeKey
         {
             private readonly Vector2Int cell;
@@ -8767,6 +9414,7 @@ namespace DungeonLab.Editor
             public readonly DropFaceStack cornerStack;
             public readonly RailingContracts railings;
             public readonly PartitionWallContracts partitions;
+            public readonly GatewayContracts gateways;
             public readonly int rejectedContracts;
             public readonly string rejectedContractReasons;
             public readonly int unsupportedContracts;
@@ -8781,6 +9429,7 @@ namespace DungeonLab.Editor
                 DropFaceStack cornerStack,
                 RailingContracts railings,
                 PartitionWallContracts partitions,
+                GatewayContracts gateways,
                 int rejectedContracts,
                 string rejectedContractReasons,
                 int unsupportedContracts,
@@ -8794,6 +9443,7 @@ namespace DungeonLab.Editor
                 this.cornerStack = cornerStack;
                 this.railings = railings;
                 this.partitions = partitions;
+                this.gateways = gateways;
                 this.rejectedContracts = rejectedContracts;
                 this.rejectedContractReasons = rejectedContractReasons ?? "[]";
                 this.unsupportedContracts = unsupportedContracts;
@@ -8829,13 +9479,211 @@ namespace DungeonLab.Editor
 
         private readonly struct PartitionWallContracts
         {
-            public readonly MeasuredPrefab wall;
-            public readonly MeasuredPrefab corner;
+            public readonly MeasuredPrefab mediumWall;
+            public readonly MeasuredPrefab largeWall;
+            public readonly MeasuredPrefab mediumCorner;
+            public readonly MeasuredPrefab largeCorner;
 
-            public PartitionWallContracts(MeasuredPrefab wall, MeasuredPrefab corner)
+            public PartitionWallContracts(
+                MeasuredPrefab mediumWall,
+                MeasuredPrefab largeWall,
+                MeasuredPrefab mediumCorner,
+                MeasuredPrefab largeCorner)
             {
-                this.wall = wall;
-                this.corner = corner;
+                this.mediumWall = mediumWall;
+                this.largeWall = largeWall;
+                this.mediumCorner = mediumCorner;
+                this.largeCorner = largeCorner;
+            }
+
+            public MeasuredPrefab ForHeight(int heightUnits)
+            {
+                return heightUnits >= 6 ? largeWall : mediumWall;
+            }
+
+            public MeasuredPrefab CornerForHeight(int heightUnits)
+            {
+                return heightUnits >= 6 ? largeCorner : mediumCorner;
+            }
+        }
+
+        private enum GatewayStyle
+        {
+            Metal,
+            Wood,
+            LargeWood,
+            Barred,
+            OpenArch
+        }
+
+        private readonly struct GatewayContract
+        {
+            public readonly GatewayStyle style;
+            public readonly int wallHeightUnits;
+            public readonly MeasuredPrefab prefab;
+            public readonly string auxiliaryPrefabPath;
+
+            public GatewayContract(
+                GatewayStyle style,
+                int wallHeightUnits,
+                MeasuredPrefab prefab,
+                string auxiliaryPrefabPath = "")
+            {
+                this.style = style;
+                this.wallHeightUnits = wallHeightUnits;
+                this.prefab = prefab;
+                this.auxiliaryPrefabPath = auxiliaryPrefabPath ?? string.Empty;
+            }
+        }
+
+        private readonly struct GatewayContracts
+        {
+            private readonly MeasuredPrefab mediumMetal;
+            private readonly MeasuredPrefab largeWallMetal;
+            private readonly MeasuredPrefab mediumWood;
+            private readonly MeasuredPrefab largeWallWood;
+            private readonly MeasuredPrefab largeWood;
+            private readonly string barsPrefabPath;
+
+            public GatewayContracts(
+                MeasuredPrefab mediumMetal,
+                MeasuredPrefab largeWallMetal,
+                MeasuredPrefab mediumWood,
+                MeasuredPrefab largeWallWood,
+                MeasuredPrefab largeWood,
+                string barsPrefabPath)
+            {
+                this.mediumMetal = mediumMetal;
+                this.largeWallMetal = largeWallMetal;
+                this.mediumWood = mediumWood;
+                this.largeWallWood = largeWallWood;
+                this.largeWood = largeWood;
+                this.barsPrefabPath = barsPrefabPath ?? string.Empty;
+            }
+
+            public GatewayContract For(GatewayStyle style, int wallHeightUnits)
+            {
+                bool largeWall = wallHeightUnits == 6;
+                if (!largeWall && wallHeightUnits != 4)
+                {
+                    throw new InvalidOperationException(
+                        $"Gateway selection requires equal 4u or 6u flanking walls; received {wallHeightUnits}u.");
+                }
+
+                switch (style)
+                {
+                    case GatewayStyle.Metal:
+                        return new GatewayContract(
+                            style,
+                            wallHeightUnits,
+                            largeWall ? largeWallMetal : mediumMetal);
+                    case GatewayStyle.Wood:
+                        return new GatewayContract(
+                            style,
+                            wallHeightUnits,
+                            largeWall ? largeWallWood : mediumWood);
+                    case GatewayStyle.LargeWood:
+                        if (!largeWall)
+                        {
+                            throw new InvalidOperationException(
+                                "The double-leaf large wood gateway requires 6u flanking walls.");
+                        }
+
+                        return new GatewayContract(style, wallHeightUnits, largeWood);
+                    case GatewayStyle.Barred:
+                        return new GatewayContract(
+                            style,
+                            wallHeightUnits,
+                            largeWall ? largeWallMetal : mediumMetal,
+                            barsPrefabPath);
+                    case GatewayStyle.OpenArch:
+                        return new GatewayContract(
+                            style,
+                            wallHeightUnits,
+                            largeWall ? largeWallMetal : mediumMetal);
+                    default:
+                        throw new ArgumentOutOfRangeException(nameof(style), style, null);
+                }
+            }
+        }
+
+        private readonly struct GatewayCandidate
+        {
+            public readonly PlatformEdge edge;
+            public readonly int floorLevel;
+            public readonly int wallHeightUnits;
+            public readonly string edgeKey;
+            public readonly string selectionGroup;
+            public readonly int selectionScore;
+
+            public GatewayCandidate(
+                PlatformEdge edge,
+                int floorLevel,
+                int wallHeightUnits,
+                string edgeKey)
+                : this(
+                    edge,
+                    floorLevel,
+                    wallHeightUnits,
+                    edgeKey,
+                    string.Empty,
+                    int.MaxValue)
+            {
+            }
+
+            private GatewayCandidate(
+                PlatformEdge edge,
+                int floorLevel,
+                int wallHeightUnits,
+                string edgeKey,
+                string selectionGroup,
+                int selectionScore)
+            {
+                this.edge = edge;
+                this.floorLevel = floorLevel;
+                this.wallHeightUnits = wallHeightUnits;
+                this.edgeKey = edgeKey ?? string.Empty;
+                this.selectionGroup = selectionGroup ?? string.Empty;
+                this.selectionScore = selectionScore;
+            }
+
+            public GatewayCandidate WithSelection(
+                string selectionGroup,
+                int selectionScore)
+            {
+                return new GatewayCandidate(
+                    edge,
+                    floorLevel,
+                    wallHeightUnits,
+                    edgeKey,
+                    selectionGroup,
+                    selectionScore);
+            }
+        }
+
+        private readonly struct GatewayPlacement
+        {
+            public readonly PlatformEdge edge;
+            public readonly int floorLevel;
+            public readonly int wallHeightUnits;
+            public readonly GatewayContract contract;
+
+            public GatewayPlacement(
+                PlatformEdge edge,
+                int floorLevel,
+                int wallHeightUnits,
+                GatewayContract contract)
+            {
+                if (contract.wallHeightUnits != wallHeightUnits)
+                {
+                    throw new InvalidOperationException(
+                        $"Gateway contract height {contract.wallHeightUnits}u did not match its {wallHeightUnits}u flanking walls.");
+                }
+
+                this.edge = edge;
+                this.floorLevel = floorLevel;
+                this.wallHeightUnits = wallHeightUnits;
+                this.contract = contract;
             }
         }
 
@@ -9292,14 +10140,22 @@ namespace DungeonLab.Editor
             public readonly int baseLevel;
             public readonly int dropLevels;
             public readonly bool isPartition;
+            public readonly int partitionHeightUnits;
 
-            public CornerPlacement(Vector2Int vertex, int targetQuadrant, int baseLevel, int dropLevels, bool isPartition)
+            public CornerPlacement(
+                Vector2Int vertex,
+                int targetQuadrant,
+                int baseLevel,
+                int dropLevels,
+                bool isPartition,
+                int partitionHeightUnits)
             {
                 this.vertex = vertex;
                 this.targetQuadrant = targetQuadrant;
                 this.baseLevel = baseLevel;
                 this.dropLevels = dropLevels;
                 this.isPartition = isPartition;
+                this.partitionHeightUnits = partitionHeightUnits;
             }
         }
 

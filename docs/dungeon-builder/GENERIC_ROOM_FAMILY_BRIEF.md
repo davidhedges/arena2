@@ -32,10 +32,12 @@ Assets/Arena/Content/Prefabs/Dungeons/FantasticDungeon/SetPieces/Generic_Room.pr
 - Quarter-turn rotations produce the legal orientations. Mirroring is disabled
   for this even-width footprint because it adds no orientation that rotation
   does not already supply.
-- Gateways are openable doors in the eventual design.
-- Door visuals, open/closed state, collision, navigation, and replication are
-  deferred. Until that work is explicitly approved, an active gateway is an
-  unobstructed opening.
+- An active route socket remains an unobstructed opening. The shared boundary
+  renderer may dress some such openings with a static traversable gateway whose
+  authored height exactly matches both flanking walls; a plain opening remains
+  valid.
+- Gateway material and size are renderer choices, not tier or recipe semantics.
+  Interactive open/closed state, navigation, and replication remain deferred.
 - Embedded wall dressing is also deferred and may be absent from initial
   generated output.
 
@@ -60,8 +62,8 @@ Assets/Arena/Content/Prefabs/Dungeons/FantasticDungeon/SetPieces/Generic_Room.pr
   angled/curved wall kit;
 - no runtime room-prefab binding: the prefab remains a reference design from
   which shape and treatment rules may be extracted;
-- no gateway behavior, transition, motif, wall-height contract, or dressing
-  semantics in the schema-v1 prototype;
+- no recipe-owned gateway behavior, transition, motif, wall-height contract, or
+  dressing semantics in the schema-v1 prototype;
 - enabled and explicitly present in the production catalog.
 
 The socket policy belongs only to recipes that explicitly select
@@ -72,6 +74,7 @@ activates the matching two-socket corner. A future explicitly bound slot with
 degree one, three, or four can consume the same asset without changing its
 footprint or authoring four separate recipes.
 
-Schema v1 still cannot preserve per-boundary wall heights. Gateway visuals,
-open/closed behavior, collision behavior, navigation, replication, and embedded
-dressing remain deferred.
+Schema v1 still cannot preserve per-boundary wall heights. Compatible static
+gateway selection therefore belongs to the shared boundary renderer. Recipe-
+owned selection, interactive open/closed behavior, navigation, replication, and
+embedded dressing remain deferred.

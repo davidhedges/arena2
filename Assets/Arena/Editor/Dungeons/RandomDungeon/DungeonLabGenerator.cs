@@ -3180,7 +3180,12 @@ namespace DungeonLab.Editor
                 return false;
             }
 
-            context = new ElevationEdgeModel.RoomBoundaryContext(cellRoomIds, enclosedRooms, doorways, internalPathEdges);
+            context = new ElevationEdgeModel.RoomBoundaryContext(
+                cellRoomIds,
+                enclosedRooms,
+                doorways,
+                internalPathEdges,
+                random?.Next() ?? 0);
             return true;
         }
 
@@ -3411,11 +3416,24 @@ namespace DungeonLab.Editor
         {
             var doorways = new List<ElevationEdgeModel.DoorwayEdge>();
             var keys = new HashSet<string>();
-            foreach (RoomConnection connection in layout.connections)
+            for (int connectionIndex = 0; connectionIndex < layout.connections.Count; connectionIndex++)
             {
+                RoomConnection connection = layout.connections[connectionIndex];
                 List<Vector2Int> path = CleanPath(connection.path, layout.floorCells);
-                AddRoomDoorwayEdge(layout.rooms[connection.fromRoom], path, cellLevels, keys, doorways);
-                AddRoomDoorwayEdge(layout.rooms[connection.toRoom], path, cellLevels, keys, doorways);
+                AddRoomDoorwayEdge(
+                    layout.rooms[connection.fromRoom],
+                    path,
+                    cellLevels,
+                    connectionIndex,
+                    keys,
+                    doorways);
+                AddRoomDoorwayEdge(
+                    layout.rooms[connection.toRoom],
+                    path,
+                    cellLevels,
+                    connectionIndex,
+                    keys,
+                    doorways);
             }
 
             return doorways;
@@ -3425,6 +3443,7 @@ namespace DungeonLab.Editor
             RoomFootprint room,
             IReadOnlyList<Vector2Int> path,
             IReadOnlyDictionary<Vector2Int, int> cellLevels,
+            int connectionIndex,
             HashSet<string> keys,
             List<ElevationEdgeModel.DoorwayEdge> doorways)
         {
@@ -3446,7 +3465,10 @@ namespace DungeonLab.Editor
                 string key = TransitionKey(path[i], path[i + 1]);
                 if (keys.Add(key))
                 {
-                    doorways.Add(new ElevationEdgeModel.DoorwayEdge(path[i], path[i + 1]));
+                    doorways.Add(new ElevationEdgeModel.DoorwayEdge(
+                        path[i],
+                        path[i + 1],
+                        connectionIndex));
                 }
 
                 return;
