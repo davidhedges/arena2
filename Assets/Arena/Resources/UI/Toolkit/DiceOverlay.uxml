@@ -1,0 +1,7 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <Style src="DiceOverlay.uss" />
+
+    <ui:VisualElement name="DiceOverlay" class="dice-overlay" picking-mode="Ignore">
+        <ui:Image name="DiceViewport" class="dice-viewport" picking-mode="Ignore" />
+    </ui:VisualElement>
+</ui:UXML>

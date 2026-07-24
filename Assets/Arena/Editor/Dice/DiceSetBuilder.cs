@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using Arena.Debugging;
 using Arena.Presentation.Dice;
 using TMPro;
 using UnityEditor;
@@ -34,6 +35,12 @@ namespace Arena.Editor.Dice
             "Assets/Arena/Content/Scenes/Authoring/DiceOverlayLab.unity";
         internal const string ResinShaderPath =
             "Assets/Arena/Content/Shaders/Dice/DiceResin.shader";
+        internal static readonly string[] MotionProfilePaths =
+        {
+            "Assets/Arena/Content/Dice/Motion/D20_Crescent.asset",
+            "Assets/Arena/Content/Dice/Motion/D20_Crosswind.asset",
+            "Assets/Arena/Content/Dice/Motion/D20_Helix.asset"
+        };
 
         private const string CinzelSourcePath = "Assets/Arena/Content/UI/Fonts/Cinzel.ttf";
         private const float BevelFraction = 0.115f;
@@ -60,8 +67,8 @@ namespace Arena.Editor.Dice
             { 4, 9, 5 }, { 2, 4, 11 }, { 6, 2, 10 }, { 8, 6, 7 }, { 9, 8, 1 }
         };
 
-        [MenuItem("Arena/Dice/Rebuild and Open D20 Foundation")]
-        private static void RebuildAndOpenD20Foundation()
+        [MenuItem("Arena/Dice/Rebuild and Open D20 Overlay Lab")]
+        private static void RebuildAndOpenD20OverlayLab()
         {
             if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo())
                 return;
@@ -81,17 +88,18 @@ namespace Arena.Editor.Dice
                 Material numeralMaterial = BuildNumeralMaterial(fontAsset);
                 GameObject prefab = BuildD20Prefab(mesh, resinMaterial, numeralMaterial, fontAsset, faces);
                 DiceDefinition definition = BuildDefinition(prefab, faces);
-                BuildCatalog(definition, resinMaterial, numeralMaterial);
+                List<DiceMotionProfile> motionProfiles = BuildMotionProfiles();
+                BuildCatalog(definition, motionProfiles, resinMaterial, numeralMaterial);
 
                 AssetDatabase.SaveAssets();
                 AssetDatabase.Refresh();
-                BuildReviewScene(prefab, definition);
+                BuildReviewScene();
                 AssetDatabase.SaveAssets();
 
                 bool valid = DiceAuthoringValidator.ValidateD20Foundation(logSuccess: true);
                 Debug.Log(valid
-                    ? "[DiceSetBuilder] Rebuilt the Phase 1 d20 foundation. The review scene is ready."
-                    : "[DiceSetBuilder] Rebuilt the d20 assets, but authoring validation reported errors.");
+                    ? "[DiceSetBuilder] Rebuilt the Phase 2 d20 overlay lab. Enter Play Mode to review it."
+                    : "[DiceSetBuilder] Rebuilt the d20 overlay assets, but authoring validation reported errors.");
             }
             catch (Exception exception)
             {
@@ -106,6 +114,7 @@ namespace Arena.Editor.Dice
             EnsureFolder("Assets/Arena/Content/Dice/Generated/Meshes");
             EnsureFolder("Assets/Arena/Content/Dice/Generated/Prefabs");
             EnsureFolder("Assets/Arena/Content/Dice/Generated/Typography");
+            EnsureFolder("Assets/Arena/Content/Dice/Motion");
             EnsureFolder("Assets/Arena/Resources/Dice");
             EnsureFolder("Assets/Arena/Content/Scenes/Authoring");
         }
@@ -134,7 +143,10 @@ namespace Arena.Editor.Dice
                 NumeralMaterialPath,
                 ResinMaterialPath,
                 FontAssetPath,
-                MeshPath
+                MeshPath,
+                MotionProfilePaths[0],
+                MotionProfilePaths[1],
+                MotionProfilePaths[2]
             };
 
             for (int i = 0; i < paths.Length; i++)
@@ -599,8 +611,110 @@ namespace Arena.Editor.Dice
             return definition;
         }
 
+        private static List<DiceMotionProfile> BuildMotionProfiles()
+        {
+            List<DiceMotionProfile> profiles = new(3)
+            {
+                CreateMotionProfile(
+                    MotionProfilePaths[0],
+                    "crescent",
+                    "Crescent",
+                    0.28f,
+                    1.22f,
+                    0.67f,
+                    new Vector3(18f, -38f, 12f),
+                    new Vector3(0.72f, 0.58f, 0.24f),
+                    4.6f,
+                    Curve((0f, -0.28f), (0.14f, -0.34f), (0.42f, 0.24f), (0.67f, -0.12f), (1f, 0f)),
+                    Curve((0f, 0.12f), (0.16f, 0.20f), (0.46f, -0.18f), (0.73f, 0.11f), (1f, 0f)),
+                    Curve((0f, 0.42f), (0.18f, 0.10f), (0.48f, -0.35f), (0.72f, 0.28f), (1f, 0f)),
+                    Curve((0f, 0.70f), (0.16f, 0.82f), (0.48f, 1.07f), (0.78f, 0.96f), (1f, 1f))),
+                CreateMotionProfile(
+                    MotionProfilePaths[1],
+                    "crosswind",
+                    "Crosswind",
+                    0.32f,
+                    1.30f,
+                    0.70f,
+                    new Vector3(-24f, 32f, -18f),
+                    new Vector3(-0.45f, 0.78f, 0.43f),
+                    5.2f,
+                    Curve((0f, 0.30f), (0.17f, 0.36f), (0.43f, -0.30f), (0.69f, 0.16f), (1f, 0f)),
+                    Curve((0f, -0.13f), (0.18f, -0.20f), (0.45f, 0.24f), (0.72f, -0.08f), (1f, 0f)),
+                    Curve((0f, 0.34f), (0.24f, -0.22f), (0.52f, 0.42f), (0.78f, -0.12f), (1f, 0f)),
+                    Curve((0f, 0.73f), (0.18f, 0.88f), (0.52f, 1.10f), (0.80f, 0.95f), (1f, 1f))),
+                CreateMotionProfile(
+                    MotionProfilePaths[2],
+                    "helix",
+                    "Helix",
+                    0.24f,
+                    1.38f,
+                    0.72f,
+                    new Vector3(35f, 12f, 28f),
+                    new Vector3(0.34f, -0.61f, 0.72f),
+                    5.8f,
+                    Curve((0f, -0.17f), (0.18f, -0.32f), (0.40f, 0.29f), (0.63f, -0.22f), (0.82f, 0.10f), (1f, 0f)),
+                    Curve((0f, -0.25f), (0.19f, 0.19f), (0.43f, 0.27f), (0.66f, -0.16f), (0.84f, 0.07f), (1f, 0f)),
+                    Curve((0f, 0.48f), (0.20f, -0.30f), (0.46f, 0.38f), (0.69f, -0.18f), (0.85f, 0.16f), (1f, 0f)),
+                    Curve((0f, 0.66f), (0.17f, 0.90f), (0.45f, 1.12f), (0.72f, 0.92f), (0.86f, 1.04f), (1f, 1f)))
+            };
+            return profiles;
+        }
+
+        private static DiceMotionProfile CreateMotionProfile(
+            string path,
+            string profileId,
+            string displayName,
+            float anticipationDuration,
+            float movingDuration,
+            float settleStart,
+            Vector3 entryEuler,
+            Vector3 spinAxis,
+            float turnCount,
+            AnimationCurve horizontal,
+            AnimationCurve vertical,
+            AnimationCurve depth,
+            AnimationCurve scale)
+        {
+            DiceMotionProfile profile = ScriptableObject.CreateInstance<DiceMotionProfile>();
+            profile.name = $"D20_{displayName}";
+            profile.SetAuthoringData(
+                profileId,
+                displayName,
+                anticipationDuration,
+                movingDuration,
+                settleStart,
+                entryEuler,
+                spinAxis,
+                turnCount,
+                horizontal,
+                vertical,
+                depth,
+                scale,
+                Curve((0f, 0f), (0.18f, 0.08f), (0.72f, 0.86f), (1f, 1f)),
+                Curve((0f, 0f), (0.34f, 0.08f), (0.72f, 0.58f), (1f, 1f)));
+            AssetDatabase.CreateAsset(profile, path);
+            return profile;
+        }
+
+        private static AnimationCurve Curve(params (float time, float value)[] authoredKeys)
+        {
+            Keyframe[] keys = new Keyframe[authoredKeys.Length];
+            for (int i = 0; i < authoredKeys.Length; i++)
+                keys[i] = new Keyframe(authoredKeys[i].time, authoredKeys[i].value);
+
+            AnimationCurve curve = new(keys);
+            for (int i = 0; i < keys.Length; i++)
+            {
+                AnimationUtility.SetKeyLeftTangentMode(curve, i, AnimationUtility.TangentMode.ClampedAuto);
+                AnimationUtility.SetKeyRightTangentMode(curve, i, AnimationUtility.TangentMode.ClampedAuto);
+            }
+            return curve;
+        }
+
         private static void BuildCatalog(
             DiceDefinition definition,
+            IReadOnlyList<DiceMotionProfile> motionProfiles,
             Material resinMaterial,
             Material numeralMaterial)
         {
@@ -609,12 +723,13 @@ namespace Arena.Editor.Dice
             catalog.SetAuthoringData(
                 "default",
                 new[] { definition },
+                motionProfiles,
                 resinMaterial,
                 numeralMaterial);
             AssetDatabase.CreateAsset(catalog, CatalogPath);
         }
 
-        private static void BuildReviewScene(GameObject prefab, DiceDefinition definition)
+        private static void BuildReviewScene()
         {
             Scene scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 
@@ -637,64 +752,16 @@ namespace Arena.Editor.Dice
             camera.allowHDR = true;
             camera.allowMSAA = true;
 
-            GameObject dice = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
-            dice.name = "D20_InspectionTarget";
-            dice.transform.position = Vector3.zero;
-            dice.transform.localScale = Vector3.one * definition.PresentationScale;
-
-            CreateSpotLight(
-                "WarmKey",
-                new Vector3(-2.6f, 2.4f, -3.4f),
-                new Color(1f, 0.72f, 0.54f),
-                12f,
-                12f,
-                48f);
-            CreateSpotLight(
-                "CoolFill",
-                new Vector3(2.8f, 0.5f, -2.5f),
-                new Color(0.40f, 0.56f, 1f),
-                5.5f,
-                12f,
-                52f);
-            CreateSpotLight(
-                "EmberRim",
-                new Vector3(0.6f, 2.2f, 3.2f),
-                new Color(1f, 0.12f, 0.025f),
-                10f,
-                12f,
-                46f);
-
-            GameObject reviewObject = new GameObject("D20FoundationReview");
-            DiceFoundationReviewController review =
-                reviewObject.AddComponent<DiceFoundationReviewController>();
-            review.SetAuthoringData(definition, dice.transform, camera, 20);
+            GameObject presenterObject = new GameObject("DiceOverlayPresenter");
+            DiceOverlayPresenter presenter = presenterObject.AddComponent<DiceOverlayPresenter>();
+            GameObject panelObject = new GameObject("DicePresentationDebugPanel");
+            DicePresentationDebugPanel panel = panelObject.AddComponent<DicePresentationDebugPanel>();
+            panel.SetAuthoringData(presenter, startVisible: true);
 
             EditorSceneManager.MarkSceneDirty(scene);
             if (!EditorSceneManager.SaveScene(scene, ReviewScenePath))
                 throw new InvalidOperationException($"Could not save the review scene at {ReviewScenePath}.");
-            Selection.activeGameObject = dice;
-        }
-
-        private static void CreateSpotLight(
-            string name,
-            Vector3 position,
-            Color color,
-            float intensity,
-            float range,
-            float spotAngle)
-        {
-            GameObject lightObject = new GameObject(name);
-            lightObject.transform.position = position;
-            lightObject.transform.rotation =
-                Quaternion.LookRotation(-position.normalized, Vector3.up);
-            Light light = lightObject.AddComponent<Light>();
-            light.type = LightType.Spot;
-            light.color = color;
-            light.intensity = intensity;
-            light.range = range;
-            light.spotAngle = spotAngle;
-            light.innerSpotAngle = spotAngle * 0.58f;
-            light.shadows = LightShadows.Soft;
+            Selection.activeGameObject = presenterObject;
         }
 
         private static void SetColorIfPresent(Material material, string property, Color value)

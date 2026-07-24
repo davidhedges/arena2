@@ -5,6 +5,7 @@ using TMPro;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.TextCore.LowLevel;
+using UnityEngine.UIElements;
 
 namespace Arena.Editor.Dice
 {
@@ -13,7 +14,7 @@ namespace Arena.Editor.Dice
         private const float VectorTolerance = 0.001f;
         private const float PoseTolerance = 0.9995f;
 
-        [MenuItem("Arena/Dice/Validate D20 Foundation")]
+        [MenuItem("Arena/Dice/Validate D20 Overlay Assets")]
         private static void ValidateFromMenu()
         {
             ValidateD20Foundation(logSuccess: true);
@@ -55,6 +56,7 @@ namespace Arena.Editor.Dice
             {
                 errors.Add("The resin material does not use Arena/Dice/Resin.");
             }
+            ValidateOverlayResources(errors);
 
             for (int i = 0; i < errors.Count; i++)
                 Debug.LogError($"[DiceAuthoringValidator] {errors[i]}");
@@ -62,9 +64,9 @@ namespace Arena.Editor.Dice
             if (errors.Count == 0 && logSuccess)
             {
                 Debug.Log(
-                    "[DiceAuthoringValidator] D20 foundation is structurally valid: " +
+                    "[DiceAuthoringValidator] D20 overlay assets are structurally valid: " +
                     "20 unique faces, matching labels, normalized pose data, prefab references, " +
-                    "static Cinzel digits, and default catalog references.");
+                    "static Cinzel digits, three motion paths, overlay resources, layer, and catalog references.");
             }
 
             return errors.Count == 0;
@@ -218,6 +220,41 @@ namespace Arena.Editor.Dice
                 errors.Add("Catalog does not reference the generated resin material.");
             if (catalog.NumeralMaterial != numeralMaterial)
                 errors.Add("Catalog does not reference the generated numeral material.");
+
+            if (catalog.MotionProfiles.Count != DiceSetBuilder.MotionProfilePaths.Length)
+            {
+                errors.Add(
+                    $"Catalog has {catalog.MotionProfiles.Count} motion profiles, " +
+                    $"expected {DiceSetBuilder.MotionProfilePaths.Length}.");
+                return;
+            }
+
+            HashSet<string> profileIds = new();
+            for (int i = 0; i < DiceSetBuilder.MotionProfilePaths.Length; i++)
+            {
+                DiceMotionProfile expected =
+                    AssetDatabase.LoadAssetAtPath<DiceMotionProfile>(DiceSetBuilder.MotionProfilePaths[i]);
+                if (expected == null)
+                {
+                    errors.Add($"Missing motion profile: {DiceSetBuilder.MotionProfilePaths[i]}");
+                    continue;
+                }
+                if (catalog.MotionProfiles[i] != expected)
+                    errors.Add($"Catalog motion profile {i} does not reference {expected.name}.");
+                if (!profileIds.Add(expected.ProfileId))
+                    errors.Add($"Duplicate motion profile id '{expected.ProfileId}'.");
+                if (expected.TotalDuration < 1f || expected.TotalDuration > 2.2f)
+                    errors.Add($"Motion profile '{expected.ProfileId}' has an invalid duration.");
+                if (expected.SettleStart <= 0f || expected.SettleStart >= 1f)
+                    errors.Add($"Motion profile '{expected.ProfileId}' has an invalid settle start.");
+                if (Mathf.Abs(expected.EvaluateHorizontal(1f)) > 0.0001f ||
+                    Mathf.Abs(expected.EvaluateVertical(1f)) > 0.0001f ||
+                    Mathf.Abs(expected.EvaluateDepth(1f)) > 0.0001f ||
+                    Mathf.Abs(expected.EvaluateScale(1f) - 1f) > 0.0001f)
+                {
+                    errors.Add($"Motion profile '{expected.ProfileId}' does not finish at the canonical hold pose.");
+                }
+            }
         }
 
         private static void ValidateFont(TMP_FontAsset fontAsset, List<string> errors)
@@ -230,6 +267,25 @@ namespace Arena.Editor.Dice
                 if (!fontAsset.characterLookupTable.ContainsKey(digit))
                     errors.Add($"Cinzel dice font is missing digit '{digit}'.");
             }
+        }
+
+        private static void ValidateOverlayResources(List<string> errors)
+        {
+            if (LayerMask.NameToLayer("DiceOverlay3D") < 0)
+                errors.Add("ProjectSettings/TagManager.asset is missing the DiceOverlay3D layer.");
+
+            VisualTreeAsset overlay = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(
+                "Assets/Arena/Resources/UI/Toolkit/DiceOverlay.uxml");
+            if (overlay == null)
+                errors.Add("Missing DiceOverlay.uxml.");
+
+            StyleSheet style = AssetDatabase.LoadAssetAtPath<StyleSheet>(
+                "Assets/Arena/Resources/UI/Toolkit/DiceOverlay.uss");
+            if (style == null)
+                errors.Add("Missing DiceOverlay.uss.");
+
+            if (AssetDatabase.LoadAssetAtPath<SceneAsset>(DiceSetBuilder.ReviewScenePath) == null)
+                errors.Add($"Missing review scene: {DiceSetBuilder.ReviewScenePath}");
         }
     }
 }
