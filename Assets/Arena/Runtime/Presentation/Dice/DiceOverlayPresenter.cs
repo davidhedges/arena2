@@ -31,9 +31,11 @@ namespace Arena.Presentation.Dice
         private const int MinimumRenderDimension = 320;
         private const int MaximumRenderDimension = 2048;
         private const int MaterialResizeThreshold = 64;
+        private const float HeldShimmerAmount = 0.018f;
 
         private static readonly Vector3 IsolatedWorldOrigin = new(10000f, 10000f, 10000f);
         private static readonly Rect FullRegion = new(0f, 0f, 1f, 1f);
+        private static readonly int ShimmerAmountId = Shader.PropertyToID("_ShimmerAmount");
         private static DiceOverlayPresenter? s_instance;
 
         private DiceSetCatalog? _catalog;
@@ -48,6 +50,7 @@ namespace Arena.Presentation.Dice
         private DiceFaceLabel[] _labels = Array.Empty<DiceFaceLabel>();
         private Material? _resinMaterialInstance;
         private Material? _numeralMaterialInstance;
+        private DiceResultEffectController? _resultEffects;
         private DiceDefinition? _activeDefinition;
         private DiceMotionProfile? _activeProfile;
         private DiceFace? _activeFace;
@@ -191,6 +194,8 @@ namespace Arena.Presentation.Dice
             _entryRotation = Quaternion.Euler(_activeProfile.EntryEuler + variation);
             _elapsed = 0f;
 
+            _resultEffects?.HideImmediate();
+            SetHeldShimmer(enabled: false);
             _diceObject.SetActive(true);
             if (_overlayCamera != null)
                 _overlayCamera.enabled = true;
@@ -221,6 +226,8 @@ namespace Arena.Presentation.Dice
 
             if (_diceObject != null)
                 _diceObject.SetActive(false);
+            _resultEffects?.HideImmediate();
+            SetHeldShimmer(enabled: false);
             if (_overlayCamera != null)
                 _overlayCamera.enabled = false;
             if (_overlayRoot != null)
@@ -354,6 +361,9 @@ namespace Arena.Presentation.Dice
                 10f,
                 12f,
                 46f);
+
+            _resultEffects = _renderRoot.AddComponent<DiceResultEffectController>();
+            _resultEffects.Initialize(_overlayLayer);
         }
 
         private void WarmD20()
@@ -375,6 +385,7 @@ namespace Arena.Presentation.Dice
             {
                 name = "DiceOverlay Resin Instance"
             };
+            SetHeldShimmer(enabled: false);
             _numeralMaterialInstance = new Material(_catalog.NumeralMaterial)
             {
                 name = "DiceOverlay Numeral Instance"
@@ -505,6 +516,13 @@ namespace Arena.Presentation.Dice
             _diceTransform.position = _finalPosition;
             _diceTransform.rotation = _finalRotation;
             _diceTransform.localScale = Vector3.one * _activeDefinition.PresentationScale;
+            if (State == DicePresentationState.Held && _overlayCamera != null)
+            {
+                _resultEffects?.SetAnchor(
+                    _finalPosition,
+                    _overlayCamera.transform.position - _finalPosition,
+                    _overlayCamera.transform.up);
+            }
             UpdateLabelVisibility();
         }
 
@@ -512,6 +530,29 @@ namespace Arena.Presentation.Dice
         {
             SetMovingPicking(enabled: false);
             SetState(DicePresentationState.Held);
+            SetHeldShimmer(enabled: true);
+            if (_activeDefinition != null && _overlayCamera != null)
+            {
+                _resultEffects?.Play(
+                    DiceResultClassifier.Classify(_activeDefinition, _activeRequest.Value),
+                    _finalPosition,
+                    _overlayCamera.transform.position - _finalPosition,
+                    _overlayCamera.transform.up,
+                    StableHash(_activeRequest.RequestId));
+            }
+        }
+
+        private void SetHeldShimmer(bool enabled)
+        {
+            if (_resinMaterialInstance == null ||
+                !_resinMaterialInstance.HasProperty(ShimmerAmountId))
+            {
+                return;
+            }
+
+            _resinMaterialInstance.SetFloat(
+                ShimmerAmountId,
+                enabled ? HeldShimmerAmount : 0f);
         }
 
         private void SetState(DicePresentationState state)
