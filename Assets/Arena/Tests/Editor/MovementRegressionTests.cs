@@ -108,6 +108,31 @@ namespace Arena.Tests.Editor
             Assert.That(ground, Is.EqualTo(16.493927f).Within(PositionTolerance));
         }
 
+        [Test]
+        public void RandomDungeonEnvironment_UsesBakedLowerFloorWithoutFlatGroundPlane()
+        {
+            object environment = InvokeStaticMethod(
+                "Arena.Input.OpenWorldMovementEnvironment",
+                "SharedForScene",
+                "RandomDungeon");
+            MethodInfo trySample = RequireMethod(
+                environment.GetType(),
+                "TrySampleGroundHeight",
+                typeof(float),
+                typeof(float),
+                typeof(float),
+                typeof(float).MakeByRefType());
+
+            object[] lowerFloorArgs = { 7.3333335f, -3.3333333f, -8.0f, 0.0f };
+            bool foundLowerFloor = (bool)trySample.Invoke(environment, lowerFloorArgs)!;
+            Assert.That(foundLowerFloor, Is.True);
+            Assert.That((float)lowerFloorArgs[3], Is.EqualTo(-8.0f).Within(0.01f));
+
+            object[] emptySpaceArgs = { 10_000.0f, 10_000.0f, 0.0f, 0.0f };
+            bool foundSyntheticPlane = (bool)trySample.Invoke(environment, emptySpaceArgs)!;
+            Assert.That(foundSyntheticPlane, Is.False);
+        }
+
         private static string ProjectPath(string relativePath)
             => Path.Combine(ProjectRootPath, relativePath);
 

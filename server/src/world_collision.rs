@@ -254,6 +254,7 @@ struct GameplayBoxBroadphase {
     cell_size: f32,
     cells: HashMap<(i32, i32, i32), Vec<usize>>,
     collider_count: usize,
+    min_y: f32,
     index_entries: usize,
     max_cell_occupancy: usize,
     max_cells_per_collider: usize,
@@ -477,14 +478,33 @@ pub fn surface_height_for_world_at_y_with_layout_for_scene(
     z: f32,
     current_y: f32,
 ) -> f32 {
+    try_surface_height_for_world_at_y_with_layout_for_scene(
+        arena_seed,
+        flat_ground_only,
+        open_world_scene_name,
+        x,
+        z,
+        current_y,
+    )
+    .unwrap_or(current_y)
+}
+
+pub fn try_surface_height_for_world_at_y_with_layout_for_scene(
+    arena_seed: Option<u64>,
+    flat_ground_only: bool,
+    open_world_scene_name: Option<&str>,
+    x: f32,
+    z: f32,
+    current_y: f32,
+) -> Option<f32> {
     if flat_ground_only {
-        return GROUND_Y;
+        return Some(GROUND_Y);
     }
 
     if let Some(seed) = arena_seed {
-        return surface_height_at_y(seed, x, z, current_y);
+        return Some(surface_height_at_y(seed, x, z, current_y));
     }
-    open_world_surface_height_at_y(
+    try_open_world_surface_height_at_y(
         open_world_profile_from_name(open_world_scene_name),
         x,
         z,
@@ -1438,7 +1458,21 @@ fn open_world_surface_height_at_y(
     z: f32,
     current_y: f32,
 ) -> f32 {
-    let mut surface = open_world_surface_height_for_profile(profile, x, z);
+    try_open_world_surface_height_at_y(profile, x, z, current_y).unwrap_or(current_y)
+}
+
+fn try_open_world_surface_height_at_y(
+    profile: &OpenWorldSceneProfile,
+    x: f32,
+    z: f32,
+    current_y: f32,
+) -> Option<f32> {
+    let mut surface =
+        if profile.use_ground_plane || open_world_heightfield_enabled_for_profile(profile) {
+            Some(open_world_surface_height_for_profile(profile, x, z))
+        } else {
+            None
+        };
     let ceiling = current_y + SURFACE_SNAP_UP;
     let gameplay_step_ceiling = current_y + GAMEPLAY_BOX_STEP_UP_HEIGHT;
 
@@ -1472,16 +1506,16 @@ fn open_world_surface_height_at_y(
                     radius_top,
                     radius,
                 ) {
-                    if y > surface {
-                        surface = y;
+                    if surface.map_or(true, |current| y > current) {
+                        surface = Some(y);
                     }
                 }
                 false
             }
         };
 
-        if inside && collider.y_max > surface {
-            surface = collider.y_max;
+        if inside && surface.map_or(true, |current| collider.y_max > current) {
+            surface = Some(collider.y_max);
         }
     });
 
@@ -1490,15 +1524,19 @@ fn open_world_surface_height_at_y(
         if top_y > gameplay_step_ceiling {
             continue;
         }
-        if gameplay_box_contains_point_2d(*collider, x, z) && top_y > surface {
-            surface = top_y;
+        if gameplay_box_contains_point_2d(*collider, x, z)
+            && surface.map_or(true, |current| top_y > current)
+        {
+            surface = Some(top_y);
         }
     }
 
     let mesh_query_bounds = if ceiling.is_finite() {
+        let min_y =
+            surface.unwrap_or_else(|| open_world_gameplay_movement_mesh_broadphase(profile).min_y);
         Some(Aabb3 {
             min_x: x - COLLISION_EPSILON,
-            min_y: surface - COLLISION_EPSILON,
+            min_y: min_y - COLLISION_EPSILON,
             min_z: z - COLLISION_EPSILON,
             max_x: x + COLLISION_EPSILON,
             max_y: ceiling,
@@ -1519,8 +1557,8 @@ fn open_world_surface_height_at_y(
         let Some(y) = gameplay_movement_mesh_hull_surface_height_at_xz(hull, x, z) else {
             continue;
         };
-        if y <= ceiling + COLLISION_EPSILON && y > surface {
-            surface = y;
+        if y <= ceiling + COLLISION_EPSILON && surface.map_or(true, |current| y > current) {
+            surface = Some(y);
         }
     }
 
@@ -3244,6 +3282,12 @@ impl GameplayBoxBroadphase {
         bounds_iter: impl IntoIterator<Item = Aabb3>,
     ) -> Self {
         let bounds: Vec<Aabb3> = bounds_iter.into_iter().collect();
+        let min_y = bounds
+            .iter()
+            .filter(|aabb| aabb.is_finite())
+            .map(|aabb| aabb.min_y)
+            .min_by(f32::total_cmp)
+            .unwrap_or(0.0);
         let mut extents = Vec::with_capacity(bounds.len());
         for aabb in &bounds {
             if aabb.is_finite() {
@@ -3304,6 +3348,7 @@ impl GameplayBoxBroadphase {
             cell_size,
             cells,
             collider_count,
+            min_y,
             index_entries,
             max_cell_occupancy,
             max_cells_per_collider,
@@ -4973,8 +5018,9 @@ mod tests {
         raycast_gameplay_query_meshes, raycast_query_mesh_geometry_bvh,
         raycast_query_mesh_geometry_linear, resolve_swept_convex_footprint_2d,
         resolve_swept_gameplay_box_2d, resolve_world_spawn_position_with_layout_for_scene,
-        transform_point, transform_vector, triangle_normal_y_abs, try_world_gameplay_box_hit,
-        Aabb3, GameplayBoxBroadphase, GameplayCollisionBox, GameplayCollisionBoxFile,
+        transform_point, transform_vector, triangle_normal_y_abs,
+        try_open_world_surface_height_at_y, try_world_gameplay_box_hit, Aabb3,
+        GameplayBoxBroadphase, GameplayCollisionBox, GameplayCollisionBoxFile,
         GameplayCollisionLayoutFile, GameplayMovementMeshHull, GameplayQueryMeshBvh,
         GameplayQueryMeshGeometry, GameplayQueryMeshGeometryFile, GameplayQueryMeshInstance,
         GameplayQueryMeshInstanceFile, GameplayQueryMeshSet, MAX_QUERY_MESH_TRIANGLES_PER_COLLIDER,
@@ -6658,6 +6704,27 @@ mod tests {
         assert!(
             spawn_y.abs() < 0.01,
             "Dungeon spawn missed origin floor: {spawn_y}"
+        );
+    }
+
+    #[test]
+    fn random_dungeon_uses_baked_lower_floors_without_a_flat_ground_plane() {
+        let lower_floor = try_open_world_surface_height_at_y(
+            &RANDOM_DUNGEON_PROFILE,
+            7.3333335,
+            -3.3333333,
+            -8.0,
+        )
+        .expect("baked lower dungeon floor should be walkable");
+        assert!(
+            (lower_floor + 8.0).abs() < 0.01,
+            "expected baked floor at y=-8, got {lower_floor}"
+        );
+
+        assert!(
+            try_open_world_surface_height_at_y(&RANDOM_DUNGEON_PROFILE, 10_000.0, 10_000.0, 0.0,)
+                .is_none(),
+            "RandomDungeon must not synthesize a flat y=0 ground plane"
         );
     }
 

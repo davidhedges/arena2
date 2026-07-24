@@ -78,6 +78,7 @@ namespace Arena.Input
     public interface IMovementEnvironment
     {
         float SampleGroundHeight(float x, float z, float probeY);
+        bool TrySampleGroundHeight(float x, float z, float probeY, out float groundY);
         Vector2 ResolveHorizontalCollision(
             float startX,
             float startZ,
@@ -121,7 +122,14 @@ namespace Arena.Input
             if (grounded)
             {
                 // Pre-step stabilization matches the server's snap to sampled ground.
-                position.y = environment.SampleGroundHeight(position.x, position.z, position.y);
+                if (environment.TrySampleGroundHeight(position.x, position.z, position.y, out float groundY))
+                {
+                    position.y = groundY;
+                }
+                else
+                {
+                    grounded = false;
+                }
             }
 
             if (grounded)
@@ -174,11 +182,19 @@ namespace Arena.Input
 
             if (grounded)
             {
-                float groundY = environment.SampleGroundHeight(position.x, position.z, position.y);
-                float dropToGround = position.y - groundY;
-                if (dropToGround <= MaxGroundedSnapDown)
+                if (environment.TrySampleGroundHeight(position.x, position.z, position.y, out float groundY))
                 {
-                    position.y = groundY;
+                    float dropToGround = position.y - groundY;
+                    if (dropToGround <= MaxGroundedSnapDown)
+                    {
+                        position.y = groundY;
+                    }
+                    else
+                    {
+                        grounded = false;
+                        velocity.y = Gravity * dt;
+                        position.y += velocity.y * dt;
+                    }
                 }
                 else
                 {
@@ -191,8 +207,9 @@ namespace Arena.Input
             {
                 float previousY = position.y;
                 position.y += velocity.y * dt;
-                float groundY = environment.SampleGroundHeight(position.x, position.z, previousY);
-                if (position.y <= groundY && velocity.y <= 0.0f)
+                if (environment.TrySampleGroundHeight(position.x, position.z, previousY, out float groundY) &&
+                    position.y <= groundY &&
+                    velocity.y <= 0.0f)
                 {
                     position.y = groundY;
                     velocity.y = 0.0f;

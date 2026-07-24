@@ -20,6 +20,12 @@ namespace Arena.Input
             return GroundY;
         }
 
+        public bool TrySampleGroundHeight(float x, float z, float probeY, out float groundY)
+        {
+            groundY = GroundY;
+            return true;
+        }
+
         public Vector2 ResolveHorizontalCollision(
             float startX,
             float startZ,

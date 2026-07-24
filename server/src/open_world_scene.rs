@@ -102,6 +102,7 @@ pub struct OpenWorldSceneProfile {
     pub gameplay_collision_json: &'static str,
     pub gameplay_query_collision_json: &'static str,
     pub use_procedural_fallback_colliders: bool,
+    pub use_ground_plane: bool,
 }
 
 pub const OASIS_DAY_PROFILE: OpenWorldSceneProfile = OpenWorldSceneProfile {
@@ -115,6 +116,7 @@ pub const OASIS_DAY_PROFILE: OpenWorldSceneProfile = OpenWorldSceneProfile {
     gameplay_collision_json: OASIS_DAY_GAMEPLAY_COLLISION_JSON,
     gameplay_query_collision_json: OASIS_DAY_GAMEPLAY_QUERY_COLLISION_JSON,
     use_procedural_fallback_colliders: true,
+    use_ground_plane: true,
 };
 
 pub const ADVENTURE_ISLAND_PROFILE: OpenWorldSceneProfile = OpenWorldSceneProfile {
@@ -128,6 +130,7 @@ pub const ADVENTURE_ISLAND_PROFILE: OpenWorldSceneProfile = OpenWorldSceneProfil
     gameplay_collision_json: ADVENTURE_ISLAND_GAMEPLAY_COLLISION_JSON,
     gameplay_query_collision_json: ADVENTURE_ISLAND_GAMEPLAY_QUERY_COLLISION_JSON,
     use_procedural_fallback_colliders: true,
+    use_ground_plane: true,
 };
 
 pub const DESERT_DAY_PROFILE: OpenWorldSceneProfile = OpenWorldSceneProfile {
@@ -141,6 +144,7 @@ pub const DESERT_DAY_PROFILE: OpenWorldSceneProfile = OpenWorldSceneProfile {
     gameplay_collision_json: DESERT_DAY_GAMEPLAY_COLLISION_JSON,
     gameplay_query_collision_json: DESERT_DAY_GAMEPLAY_QUERY_COLLISION_JSON,
     use_procedural_fallback_colliders: true,
+    use_ground_plane: true,
 };
 
 pub const DOCKS_DAY_PROFILE: OpenWorldSceneProfile = OpenWorldSceneProfile {
@@ -154,6 +158,7 @@ pub const DOCKS_DAY_PROFILE: OpenWorldSceneProfile = OpenWorldSceneProfile {
     gameplay_collision_json: DOCKS_DAY_GAMEPLAY_COLLISION_JSON,
     gameplay_query_collision_json: DOCKS_DAY_GAMEPLAY_QUERY_COLLISION_JSON,
     use_procedural_fallback_colliders: true,
+    use_ground_plane: true,
 };
 
 pub const GIANT_SKELETON_PROFILE: OpenWorldSceneProfile = OpenWorldSceneProfile {
@@ -167,6 +172,7 @@ pub const GIANT_SKELETON_PROFILE: OpenWorldSceneProfile = OpenWorldSceneProfile 
     gameplay_collision_json: GIANT_SKELETON_GAMEPLAY_COLLISION_JSON,
     gameplay_query_collision_json: GIANT_SKELETON_GAMEPLAY_QUERY_COLLISION_JSON,
     use_procedural_fallback_colliders: true,
+    use_ground_plane: true,
 };
 
 pub const GOLDEN_VALLEY_OVERCAST_PROFILE: OpenWorldSceneProfile = OpenWorldSceneProfile {
@@ -180,6 +186,7 @@ pub const GOLDEN_VALLEY_OVERCAST_PROFILE: OpenWorldSceneProfile = OpenWorldScene
     gameplay_collision_json: GOLDEN_VALLEY_SUNNY_GAMEPLAY_COLLISION_JSON,
     gameplay_query_collision_json: GOLDEN_VALLEY_SUNNY_GAMEPLAY_QUERY_COLLISION_JSON,
     use_procedural_fallback_colliders: true,
+    use_ground_plane: true,
 };
 
 pub const GOLDEN_VALLEY_SUNNY_PROFILE: OpenWorldSceneProfile = OpenWorldSceneProfile {
@@ -193,6 +200,7 @@ pub const GOLDEN_VALLEY_SUNNY_PROFILE: OpenWorldSceneProfile = OpenWorldScenePro
     gameplay_collision_json: GOLDEN_VALLEY_SUNNY_GAMEPLAY_COLLISION_JSON,
     gameplay_query_collision_json: GOLDEN_VALLEY_SUNNY_GAMEPLAY_QUERY_COLLISION_JSON,
     use_procedural_fallback_colliders: true,
+    use_ground_plane: true,
 };
 
 pub const GREAT_HALL_DAY_PROFILE: OpenWorldSceneProfile = OpenWorldSceneProfile {
@@ -206,6 +214,7 @@ pub const GREAT_HALL_DAY_PROFILE: OpenWorldSceneProfile = OpenWorldSceneProfile 
     gameplay_collision_json: GREAT_HALL_DAY_GAMEPLAY_COLLISION_JSON,
     gameplay_query_collision_json: GREAT_HALL_DAY_GAMEPLAY_QUERY_COLLISION_JSON,
     use_procedural_fallback_colliders: false,
+    use_ground_plane: true,
 };
 
 pub const IDOL_DAY_PROFILE: OpenWorldSceneProfile = OpenWorldSceneProfile {
@@ -219,6 +228,7 @@ pub const IDOL_DAY_PROFILE: OpenWorldSceneProfile = OpenWorldSceneProfile {
     gameplay_collision_json: IDOL_DAY_GAMEPLAY_COLLISION_JSON,
     gameplay_query_collision_json: IDOL_DAY_GAMEPLAY_QUERY_COLLISION_JSON,
     use_procedural_fallback_colliders: true,
+    use_ground_plane: true,
 };
 
 pub const RANDOM_DUNGEON_PROFILE: OpenWorldSceneProfile = OpenWorldSceneProfile {
@@ -232,6 +242,7 @@ pub const RANDOM_DUNGEON_PROFILE: OpenWorldSceneProfile = OpenWorldSceneProfile 
     gameplay_collision_json: RANDOM_DUNGEON_GAMEPLAY_COLLISION_JSON,
     gameplay_query_collision_json: RANDOM_DUNGEON_GAMEPLAY_QUERY_COLLISION_JSON,
     use_procedural_fallback_colliders: false,
+    use_ground_plane: false,
 };
 
 pub const TEMPLE_GARDENS_PROFILE: OpenWorldSceneProfile = OpenWorldSceneProfile {
@@ -245,6 +256,7 @@ pub const TEMPLE_GARDENS_PROFILE: OpenWorldSceneProfile = OpenWorldSceneProfile 
     gameplay_collision_json: TEMPLE_GARDENS_GAMEPLAY_COLLISION_JSON,
     gameplay_query_collision_json: TEMPLE_GARDENS_GAMEPLAY_QUERY_COLLISION_JSON,
     use_procedural_fallback_colliders: false,
+    use_ground_plane: true,
 };
 
 pub const OPEN_WORLD_SPAWN_X: f32 = OASIS_DAY_PROFILE.spawn_x;

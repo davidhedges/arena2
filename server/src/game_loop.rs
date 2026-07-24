@@ -100,6 +100,7 @@ use crate::tick_metrics::{
 use crate::world_collision::{
     preload_world_collision_data, resolve_world_horizontal_sweep_collision_y_with_layout_for_scene,
     surface_height_for_world_at_y_with_layout, surface_height_for_world_at_y_with_layout_for_scene,
+    try_surface_height_for_world_at_y_with_layout_for_scene,
 };
 use crate::world_obstacles::{expire_world_obstacles, resolve_active_world_obstacle_movement};
 
@@ -1316,8 +1317,8 @@ fn simulate_non_dummy_player_kinematics(
     hit_radius: f32,
     hit_height: f32,
 ) {
-    let ground_at = |x: f32, z: f32, probe_y: f32| -> f32 {
-        surface_height_for_world_at_y_with_layout_for_scene(
+    let ground_at = |x: f32, z: f32, probe_y: f32| -> Option<f32> {
+        try_surface_height_for_world_at_y_with_layout_for_scene(
             arena_seed,
             flat_ground_only,
             Some(open_world_scene_name.as_str()),
@@ -1330,7 +1331,11 @@ fn simulate_non_dummy_player_kinematics(
     if physics.grounded {
         // Pre-step stabilization: terrain can shift under the player between ticks.
         // We still resnap after integration for final authoritative placement.
-        physics.pos_y = ground_at(physics.pos_x, physics.pos_z, physics.pos_y);
+        if let Some(ground_y) = ground_at(physics.pos_x, physics.pos_z, physics.pos_y) {
+            physics.pos_y = ground_y;
+        } else {
+            physics.grounded = false;
+        }
     }
 
     // === Step 1: Always update yaw from intent ===
@@ -1436,14 +1441,20 @@ fn simulate_non_dummy_player_kinematics(
     physics.pos_z = next_z;
 
     if physics.grounded {
-        let ground_y = ground_at(physics.pos_x, physics.pos_z, physics.pos_y);
-        let drop_to_ground = physics.pos_y - ground_y;
-        if drop_to_ground <= MAX_GROUNDED_SNAP_DOWN {
-            // Small step-down or incline change: keep grounded and snap.
-            physics.pos_y = ground_y;
+        if let Some(ground_y) = ground_at(physics.pos_x, physics.pos_z, physics.pos_y) {
+            let drop_to_ground = physics.pos_y - ground_y;
+            if drop_to_ground <= MAX_GROUNDED_SNAP_DOWN {
+                // Small step-down or incline change: keep grounded and snap.
+                physics.pos_y = ground_y;
+            } else {
+                // Walking off a ledge: transition to airborne instead of teleporting down.
+                // We intentionally defer landing checks until the next fully-airborne frame.
+                physics.grounded = false;
+                physics.vel_y = GRAVITY * dt;
+                physics.pos_y += physics.vel_y * dt;
+            }
         } else {
-            // Walking off a ledge: transition to airborne instead of teleporting down.
-            // We intentionally defer landing checks until the next fully-airborne frame.
+            // No authored ground exists beneath this point.
             physics.grounded = false;
             physics.vel_y = GRAVITY * dt;
             physics.pos_y += physics.vel_y * dt;
@@ -1459,7 +1470,9 @@ fn simulate_non_dummy_player_kinematics(
         // We probe with previous_y so high-speed falls cannot skip narrow tops.
         // Both conditions required - prevents landing while ascending.
         // This check happens AFTER integration - player has moved.
-        if physics.pos_y <= ground_y && physics.vel_y <= 0.0 {
+        if let Some(ground_y) =
+            ground_y.filter(|ground_y| physics.pos_y <= *ground_y && physics.vel_y <= 0.0)
+        {
             // === LANDING TRANSITION ===
             // This is the ONLY place grounded becomes true (after initial spawn)
             log::debug!(

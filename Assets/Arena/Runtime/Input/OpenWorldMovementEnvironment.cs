@@ -26,7 +26,8 @@ namespace Arena.World
             float groundY,
             float spawnYawDegrees,
             Vector3 spawnPosition,
-            bool useProceduralFallbackColliders = true)
+            bool useProceduralFallbackColliders = true,
+            bool useGroundPlane = true)
         {
             SceneName = sceneName;
             DataKey = dataKey;
@@ -34,6 +35,7 @@ namespace Arena.World
             SpawnYawDegrees = spawnYawDegrees;
             SpawnPosition = spawnPosition;
             UseProceduralFallbackColliders = useProceduralFallbackColliders;
+            UseGroundPlane = useGroundPlane;
             HeightfieldResourcePath = $"SharedData/Worlds/{dataKey}.heightfield.shared";
             CollisionResourcePath = $"SharedData/Worlds/{dataKey}.collision.shared";
         }
@@ -46,6 +48,7 @@ namespace Arena.World
         public string CollisionResourcePath { get; }
         public Vector3 SpawnPosition { get; }
         public bool UseProceduralFallbackColliders { get; }
+        public bool UseGroundPlane { get; }
 
         public static OpenWorldSceneProfile OasisDay { get; } = new(
             OasisDaySceneName,
@@ -117,7 +120,8 @@ namespace Arena.World
             0.0f,
             0.0f,
             Vector3.zero,
-            useProceduralFallbackColliders: false);
+            useProceduralFallbackColliders: false,
+            useGroundPlane: false);
 
         public static OpenWorldSceneProfile TempleGardens { get; } = new(
             TempleGardensSceneName,
@@ -486,26 +490,39 @@ namespace Arena.Input
             private readonly Dictionary<(int, int, int), List<int>> _cells;
             private readonly int _colliderCount;
             private readonly int _unindexedColliderCount;
+            private readonly float _minY;
 
             private GameplayMovementBroadphase(
                 float cellSize,
                 Dictionary<(int, int, int), List<int>> cells,
                 int colliderCount,
-                int unindexedColliderCount)
+                int unindexedColliderCount,
+                float minY)
             {
                 _cellSize = cellSize;
                 _cells = cells;
                 _colliderCount = colliderCount;
                 _unindexedColliderCount = unindexedColliderCount;
+                _minY = minY;
             }
+
+            public float MinY => _minY;
 
             public static GameplayMovementBroadphase Build(IReadOnlyList<GameplayBroadphaseAabb> bounds)
             {
                 var extents = new List<float>(bounds.Count);
+                float minimumBoundsY = 0.0f;
+                bool hasFiniteBounds = false;
                 foreach (GameplayBroadphaseAabb aabb in bounds)
                 {
                     if (aabb.IsFinite)
+                    {
                         extents.Add(aabb.MaxExtent);
+                        minimumBoundsY = hasFiniteBounds
+                            ? Mathf.Min(minimumBoundsY, aabb.MinY)
+                            : aabb.MinY;
+                        hasFiniteBounds = true;
+                    }
                 }
 
                 extents.Sort();
@@ -541,7 +558,12 @@ namespace Arena.Input
                     }
                 }
 
-                return new GameplayMovementBroadphase(cellSize, cells, bounds.Count, unindexedColliderCount);
+                return new GameplayMovementBroadphase(
+                    cellSize,
+                    cells,
+                    bounds.Count,
+                    unindexedColliderCount,
+                    hasFiniteBounds ? minimumBoundsY : 0.0f);
             }
 
             public bool Query(GameplayBroadphaseAabb queryBounds, List<int> candidates)
@@ -787,7 +809,16 @@ namespace Arena.Input
 
         public float SampleGroundHeight(float x, float z, float probeY)
         {
-            float surface = _heightfield?.SampleHeight(x, z) ?? _profile.GroundY;
+            return TrySampleGroundHeight(x, z, probeY, out float groundY)
+                ? groundY
+                : probeY;
+        }
+
+        public bool TrySampleGroundHeight(float x, float z, float probeY, out float groundY)
+        {
+            bool hasSurface = _heightfield.HasValue || _profile.UseGroundPlane;
+            float surface = _heightfield?.SampleHeight(x, z) ??
+                            (_profile.UseGroundPlane ? _profile.GroundY : float.NegativeInfinity);
             float ceiling = probeY + SurfaceSnapUp;
             float gameplayStepCeiling = probeY + GameplayBoxStepUpHeight;
 
@@ -803,7 +834,10 @@ namespace Arena.Input
                         float dx = x - collider.CenterX;
                         float dz = z - collider.CenterZ;
                         if (dx * dx + dz * dz <= collider.Radius * collider.Radius && collider.YMax > surface)
+                        {
                             surface = collider.YMax;
+                            hasSurface = true;
+                        }
                         break;
                     }
                     case OpenWorldColliderShape.RadialSlope:
@@ -818,7 +852,10 @@ namespace Arena.Input
                             collider.RadiusTop,
                             radius);
                         if (y.HasValue && y.Value > surface)
+                        {
                             surface = y.Value;
+                            hasSurface = true;
+                        }
                         break;
                     }
                 }
@@ -832,12 +869,15 @@ namespace Arena.Input
                 if (!GameplayBoxContainsPoint2D(collider, x, z))
                     continue;
                 if (topY > surface)
+                {
                     surface = topY;
+                    hasSurface = true;
+                }
             }
 
             GameplayBroadphaseAabb meshQueryBounds = new(
                 x - CollisionEpsilon,
-                surface - CollisionEpsilon,
+                (hasSurface ? surface : _gameplayMeshHullBroadphase.MinY) - CollisionEpsilon,
                 z - CollisionEpsilon,
                 x + CollisionEpsilon,
                 ceiling,
@@ -848,16 +888,36 @@ namespace Arena.Input
                 foreach (int index in _gameplayBroadphaseCandidates)
                 {
                     if (index >= 0 && index < _gameplayMeshHulls.Length)
-                        surface = SampleGameplayMeshHullGround(_gameplayMeshHulls[index], x, z, ceiling, surface);
+                    {
+                        float sampled = SampleGameplayMeshHullGround(
+                            _gameplayMeshHulls[index],
+                            x,
+                            z,
+                            ceiling,
+                            surface);
+                        if (sampled > surface)
+                        {
+                            surface = sampled;
+                            hasSurface = true;
+                        }
+                    }
                 }
             }
             else
             {
                 foreach (GameplayMovementMeshHull hull in _gameplayMeshHulls)
-                    surface = SampleGameplayMeshHullGround(hull, x, z, ceiling, surface);
+                {
+                    float sampled = SampleGameplayMeshHullGround(hull, x, z, ceiling, surface);
+                    if (sampled > surface)
+                    {
+                        surface = sampled;
+                        hasSurface = true;
+                    }
+                }
             }
 
-            return surface;
+            groundY = hasSurface ? surface : 0.0f;
+            return hasSurface;
         }
 
         public Vector2 ResolveHorizontalCollision(
