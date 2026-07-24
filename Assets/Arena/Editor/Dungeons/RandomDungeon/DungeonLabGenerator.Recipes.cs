@@ -1140,14 +1140,6 @@ namespace DungeonLab.Editor
                     return false;
                 }
 
-                ResolvePrimaryVisualTransform(
-                    slot.recipe,
-                    center,
-                    primaryAxis,
-                    transverseAxis,
-                    showpieceContract,
-                    out showpieceOrigin,
-                    out showpieceYaw);
                 if (!TryBuildBackedShowpieceReservation(
                         slot.recipe,
                         room,
@@ -1158,6 +1150,20 @@ namespace DungeonLab.Editor
                         mirrored,
                         showpieceContract,
                         out showpieceReservation,
+                        out rejectionReason))
+                {
+                    return false;
+                }
+
+                // The reservation already owns the recipe's turn and mirror.
+                // Anchor the visual from that validated world-space envelope so
+                // its root cannot drift away from the support that it reserved.
+                if (!TryResolvePrimaryVisualTransform(
+                        showpieceReservation,
+                        primaryAxis,
+                        showpieceContract,
+                        out showpieceOrigin,
+                        out showpieceYaw,
                         out rejectionReason))
                 {
                     return false;
@@ -1656,66 +1662,90 @@ namespace DungeonLab.Editor
             return true;
         }
 
-        private static void ResolvePrimaryVisualTransform(
-            DungeonRecipeAsset recipe,
-            Vector2Int center,
+        private static bool TryResolvePrimaryVisualTransform(
+            RecipeShowpieceReservation reservation,
             Vector2Int primaryAxis,
-            Vector2Int transverseAxis,
             StairForge.BackedShowpiecePlacementContract contract,
             out Vector2Int originCell,
-            out float yawDegrees)
+            out float yawDegrees,
+            out string rejectionReason)
         {
-            DungeonRecipeZone primary = null;
-            DungeonRecipeZone focal = null;
-            foreach (DungeonRecipeZone zone in recipe.zones)
+            originCell = default;
+            yawDegrees = 0f;
+            rejectionReason = string.Empty;
+            Vector2Int[] requiredFloorCells =
+                reservation.requiredFloorCells ?? Array.Empty<Vector2Int>();
+            var uniqueFloorCells = new HashSet<Vector2Int>(requiredFloorCells);
+            int expectedCellCount = contract.widthCells * contract.requiredFloorDepthCells;
+            if (contract.widthCells <= 0 ||
+                contract.platformDepthCells <= 0 ||
+                contract.requiredFloorDepthCells < contract.platformDepthCells ||
+                uniqueFloorCells.Count != expectedCellCount)
             {
-                if (zone.kind == DungeonRecipeZoneKind.Walkable && primary == null)
-                {
-                    primary = zone;
-                }
-
-                if (zone.kind == DungeonRecipeZoneKind.ProtectedFocal && focal == null)
-                {
-                    focal = zone;
-                }
+                rejectionReason =
+                    $"[RECIPE_SHOWPIECE_FIT] '{contract.designName}' did not reserve its complete floor-support envelope";
+                return false;
             }
 
-            int primaryMax = primary.offset.x + primary.size.x - 1;
-            Vector2Int wallCenter = RecipeCell(center, primaryAxis, transverseAxis, primaryMax, 0);
-            Vector2Int alongStart = RecipeCell(
-                center,
-                primaryAxis,
-                transverseAxis,
-                primaryMax,
-                focal.offset.y);
+            int minX = int.MaxValue;
+            int maxX = int.MinValue;
+            int minY = int.MaxValue;
+            int maxY = int.MinValue;
+            foreach (Vector2Int cell in uniqueFloorCells)
+            {
+                minX = Mathf.Min(minX, cell.x);
+                maxX = Mathf.Max(maxX, cell.x);
+                minY = Mathf.Min(minY, cell.y);
+                maxY = Mathf.Max(maxY, cell.y);
+            }
+
+            int spanX = maxX - minX + 1;
+            int spanY = maxY - minY + 1;
+            bool verticalPrimary = primaryAxis == Vector2Int.up || primaryAxis == Vector2Int.down;
+            bool horizontalPrimary = primaryAxis == Vector2Int.right || primaryAxis == Vector2Int.left;
+            if ((!verticalPrimary && !horizontalPrimary) ||
+                (verticalPrimary &&
+                 (spanX != contract.widthCells ||
+                  spanY != contract.requiredFloorDepthCells)) ||
+                (horizontalPrimary &&
+                 (spanX != contract.requiredFloorDepthCells ||
+                  spanY != contract.widthCells)))
+            {
+                rejectionReason =
+                    $"[RECIPE_SHOWPIECE_FIT] '{contract.designName}' reserved a floor envelope that did not match its orientation";
+                return false;
+            }
+
             if (primaryAxis == Vector2Int.up)
             {
                 originCell = new Vector2Int(
-                    alongStart.x,
-                    wallCenter.y - (contract.platformDepthCells - 1));
+                    minX,
+                    maxY - (contract.platformDepthCells - 1));
                 yawDegrees = 0f;
             }
             else if (primaryAxis == Vector2Int.down)
             {
                 originCell = new Vector2Int(
-                    alongStart.x + contract.widthCells,
-                    wallCenter.y + contract.platformDepthCells);
+                    maxX + 1,
+                    minY + contract.platformDepthCells);
                 yawDegrees = 180f;
             }
             else if (primaryAxis == Vector2Int.right)
             {
                 originCell = new Vector2Int(
-                    wallCenter.x - (contract.platformDepthCells - 1),
-                    alongStart.y + contract.widthCells);
+                    maxX - (contract.platformDepthCells - 1),
+                    maxY + 1);
                 yawDegrees = 90f;
             }
             else
             {
                 originCell = new Vector2Int(
-                    wallCenter.x + contract.platformDepthCells,
-                    alongStart.y);
+                    minX + contract.platformDepthCells,
+                    minY);
                 yawDegrees = 270f;
             }
+
+            return true;
         }
 
         private static bool TryRealizeRecipes(

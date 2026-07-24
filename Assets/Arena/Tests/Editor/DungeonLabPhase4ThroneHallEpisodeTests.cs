@@ -2,8 +2,10 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using NUnit.Framework;
+using UnityEngine;
 
 namespace Arena.Tests.Editor
 {
@@ -11,6 +13,8 @@ namespace Arena.Tests.Editor
     {
         private const int EpisodeSeed = 2026072100;
         private const int HallwayEndClearanceSeed = 2062860779;
+        private const int ShowpieceFitRegressionSeed = -2078245253;
+        private const string ShowpieceFitRegressionDesign = "dais_backed_angle_bay_r1";
         private static readonly Type GeneratorType = AppDomain.CurrentDomain
             .Load("Assembly-CSharp-Editor")
             .GetType("DungeonLab.Editor.DungeonLabGenerator", throwOnError: true)!;
@@ -161,9 +165,96 @@ namespace Arena.Tests.Editor
             Assert.That(report["collision.passed"], Is.EqualTo("true"), snapshot);
         }
 
+        [Test]
+        public void ShowpieceFitRegression_RenderedVisualStaysInsideItsReservedFloorEnvelope()
+        {
+            MethodInfo method = GeneratorType.GetMethods(BindingFlags.Static | BindingFlags.NonPublic)
+                .Single(candidate =>
+                    candidate.Name == "BuildPhase0RenderedSeed" &&
+                    candidate.GetParameters().Length == 6);
+            object?[] arguments = { ShowpieceFitRegressionSeed, null, null, null, null, null };
+            GameObject? root = null;
+            try
+            {
+                root = (GameObject?)method.Invoke(null, arguments);
+                Assert.That(
+                    root,
+                    Is.Not.Null,
+                    $"Seed {ShowpieceFitRegressionSeed} did not produce a rendered dungeon.");
+
+                object renderedPlan = arguments[5]!;
+                Array resolutions = (Array)ReadField(renderedPlan, "recipeResolutions");
+                object resolution = resolutions.Cast<object>().Single(candidate =>
+                    string.Equals(
+                        (string)ReadField(candidate, "selectedVisualImplementationId"),
+                        ShowpieceFitRegressionDesign,
+                        StringComparison.Ordinal));
+                Vector2Int showpieceOrigin =
+                    (Vector2Int)ReadField(resolution, "showpieceOriginCell");
+                Assert.That(
+                    showpieceOrigin,
+                    Is.EqualTo(new Vector2Int(20, 17)),
+                    "The backed dais must anchor to the same west edge as its reserved support.");
+
+                object reservation = ReadField(resolution, "showpieceReservation");
+                Vector2Int[] requiredFloorCells =
+                    (Vector2Int[])ReadField(reservation, "requiredFloorCells");
+                Assert.That(requiredFloorCells, Has.Length.EqualTo(15));
+
+                string rootName =
+                    $"dais_showpiece_{ShowpieceFitRegressionDesign}_{showpieceOrigin.x}_{showpieceOrigin.y}";
+                Transform showpiece = root!.GetComponentsInChildren<Transform>(includeInactive: true)
+                    .Single(transform => string.Equals(transform.name, rootName, StringComparison.Ordinal));
+                Renderer[] renderers =
+                    showpiece.GetComponentsInChildren<Renderer>(includeInactive: true);
+                Assert.That(renderers, Is.Not.Empty);
+                Bounds visualBounds = renderers[0].bounds;
+                foreach (Renderer renderer in renderers.Skip(1))
+                {
+                    visualBounds.Encapsulate(renderer.bounds);
+                }
+
+                const float cellSize = 4f;
+                const float boundsTolerance = 0.1f;
+                Vector3 levelFieldOrigin = (Vector3)arguments[4]!;
+                float supportMinX =
+                    levelFieldOrigin.x + requiredFloorCells.Min(cell => cell.x) * cellSize;
+                float supportMaxX =
+                    levelFieldOrigin.x + (requiredFloorCells.Max(cell => cell.x) + 1) * cellSize;
+                float supportMinZ =
+                    levelFieldOrigin.z + requiredFloorCells.Min(cell => cell.y) * cellSize;
+                float supportMaxZ =
+                    levelFieldOrigin.z + (requiredFloorCells.Max(cell => cell.y) + 1) * cellSize;
+
+                Assert.That(visualBounds.min.x, Is.GreaterThanOrEqualTo(supportMinX - boundsTolerance));
+                Assert.That(visualBounds.max.x, Is.LessThanOrEqualTo(supportMaxX + boundsTolerance));
+                Assert.That(visualBounds.min.z, Is.GreaterThanOrEqualTo(supportMinZ - boundsTolerance));
+                Assert.That(visualBounds.max.z, Is.LessThanOrEqualTo(supportMaxZ + boundsTolerance));
+            }
+            finally
+            {
+                if (root != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(root);
+                }
+            }
+        }
+
         private static Dictionary<string, string> EpisodeSnapshot()
         {
             return ParseSnapshot(InvokeSnapshot("BuildRouteCharacterizationSnapshot", EpisodeSeed));
+        }
+
+        private static object ReadField(object instance, string fieldName)
+        {
+            FieldInfo? field = instance.GetType().GetField(
+                fieldName,
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            Assert.That(
+                field,
+                Is.Not.Null,
+                $"'{instance.GetType().Name}' did not expose expected field '{fieldName}'.");
+            return field!.GetValue(instance)!;
         }
 
         private static string RecipePrefix(Dictionary<string, string> snapshot)
