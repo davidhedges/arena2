@@ -1,5 +1,4 @@
 #nullable enable
-using System;
 using UnityEngine;
 using UnityEngine.Rendering;
 
@@ -10,6 +9,7 @@ namespace Arena.Presentation.Dice
     {
         private const int MaximumParticles = 24;
         private static readonly int TintId = Shader.PropertyToID("_Tint");
+        private static readonly int CullId = Shader.PropertyToID("_Cull");
 
         private readonly Spark[] _sparks = new Spark[MaximumParticles];
         private readonly Vector3[] _sparkVertices = new Vector3[MaximumParticles * 4];
@@ -18,19 +18,22 @@ namespace Arena.Presentation.Dice
 
         private Transform? _effectRoot;
         private Transform? _pulseTransform;
-        private Transform? _haloTransform;
+        private Transform? _silhouetteTransform;
         private MeshRenderer? _pulseRenderer;
-        private MeshRenderer? _haloRenderer;
+        private MeshFilter? _silhouetteFilter;
+        private MeshRenderer? _silhouetteRenderer;
         private MeshRenderer? _sparkRenderer;
         private Mesh? _pulseMesh;
-        private Mesh? _haloMesh;
         private Mesh? _sparkMesh;
         private Material? _material;
-        private readonly MaterialPropertyBlock _pulseProperties = new();
-        private readonly MaterialPropertyBlock _haloProperties = new();
-        private readonly MaterialPropertyBlock _sparkProperties = new();
+        private Material? _silhouetteMaterial;
+        private MaterialPropertyBlock _pulseProperties = null!;
+        private MaterialPropertyBlock _silhouetteProperties = null!;
+        private MaterialPropertyBlock _sparkProperties = null!;
+        private Transform? _activeDieTransform;
         private DiceResultClass _resultClass;
         private float _effectElapsed;
+        private float _silhouetteExpansion = 1.035f;
         private bool _playing;
         private int _activeSparkCount;
         private int _overlayLayer;
@@ -38,6 +41,9 @@ namespace Arena.Presentation.Dice
         public void Initialize(int overlayLayer)
         {
             _overlayLayer = overlayLayer;
+            _pulseProperties = new MaterialPropertyBlock();
+            _silhouetteProperties = new MaterialPropertyBlock();
+            _sparkProperties = new MaterialPropertyBlock();
             Shader? shader = Shader.Find("Arena/Dice/ResultVfx");
             if (shader == null)
             {
@@ -51,6 +57,12 @@ namespace Arena.Presentation.Dice
                 name = "Dice Result VFX Material",
                 renderQueue = (int)RenderQueue.Transparent + 40
             };
+            _silhouetteMaterial = new Material(shader)
+            {
+                name = "Dice Silhouette Highlight Material",
+                renderQueue = (int)RenderQueue.Transparent + 39
+            };
+            _silhouetteMaterial.SetFloat(CullId, (float)CullMode.Front);
 
             GameObject effectObject = new("DiceResultEffects");
             effectObject.layer = overlayLayer;
@@ -58,17 +70,16 @@ namespace Arena.Presentation.Dice
             _effectRoot.SetParent(transform, false);
 
             _pulseMesh = BuildAnnulusMesh("Dice Settle Pulse", 0.79f, 1f, 64);
-            _haloMesh = BuildRuneHaloMesh();
             _sparkMesh = BuildSparkMesh();
 
             (_pulseTransform, _pulseRenderer) = CreateRenderer("SettlePulse", _pulseMesh);
-            (_haloTransform, _haloRenderer) = CreateRenderer("RuneHalo", _haloMesh);
             (_, _sparkRenderer) = CreateRenderer("ResultMotes", _sparkMesh);
             _sparkRenderer.shadowCastingMode = ShadowCastingMode.Off;
             _sparkRenderer.receiveShadows = false;
             _sparkRenderer.sharedMaterial = _material;
             _sparkProperties.SetColor(TintId, Color.white);
             _sparkRenderer.SetPropertyBlock(_sparkProperties);
+            CreateSilhouetteRenderer();
 
             for (int i = 0; i < MaximumParticles; i++)
             {
@@ -90,6 +101,8 @@ namespace Arena.Presentation.Dice
             Vector3 anchor,
             Vector3 towardCamera,
             Vector3 cameraUp,
+            Transform dieTransform,
+            Mesh silhouetteMesh,
             uint cosmeticSeed)
         {
             if (!enabled || _effectRoot == null)
@@ -98,20 +111,26 @@ namespace Arena.Presentation.Dice
             _resultClass = resultClass;
             _effectElapsed = 0f;
             _playing = true;
+            _activeDieTransform = dieTransform;
+            if (_silhouetteFilter != null)
+                _silhouetteFilter.sharedMesh = silhouetteMesh;
             SetAnchor(anchor, towardCamera, cameraUp);
             ClearSparks();
 
             if (_pulseRenderer != null)
-                _pulseRenderer.enabled = true;
-            if (_haloRenderer != null)
-                _haloRenderer.enabled = resultClass != DiceResultClass.Ordinary;
+                _pulseRenderer.enabled = resultClass != DiceResultClass.Positive;
+            if (_silhouetteRenderer != null)
+                _silhouetteRenderer.enabled = resultClass != DiceResultClass.Ordinary;
 
             switch (resultClass)
             {
                 case DiceResultClass.Positive:
-                    EmitPositiveSparks(cosmeticSeed);
+                    _silhouetteExpansion = 1.055f;
+                    SyncSilhouette();
                     break;
                 case DiceResultClass.Negative:
+                    _silhouetteExpansion = 1.04f;
+                    SyncSilhouette();
                     EmitNegativeMotes(cosmeticSeed);
                     break;
             }
@@ -132,6 +151,7 @@ namespace Arena.Presentation.Dice
             // Sit just behind the die so the pulse wraps it without obscuring the result.
             _effectRoot.position = anchor - facing * 0.17f;
             _effectRoot.rotation = Quaternion.LookRotation(facing, up);
+            SyncSilhouette();
         }
 
         public void HideImmediate()
@@ -141,10 +161,13 @@ namespace Arena.Presentation.Dice
             ClearSparks();
             if (_pulseRenderer != null)
                 _pulseRenderer.enabled = false;
-            if (_haloRenderer != null)
-                _haloRenderer.enabled = false;
+            if (_silhouetteRenderer != null)
+                _silhouetteRenderer.enabled = false;
+            if (_silhouetteFilter != null)
+                _silhouetteFilter.sharedMesh = null;
             if (_sparkRenderer != null)
                 _sparkRenderer.enabled = false;
+            _activeDieTransform = null;
         }
 
         private void Update()
@@ -167,8 +190,6 @@ namespace Arena.Presentation.Dice
             {
                 if (_pulseRenderer != null)
                     _pulseRenderer.enabled = false;
-                if (_haloRenderer != null)
-                    _haloRenderer.enabled = false;
             }
 
             if (_effectElapsed >= 1.35f && _activeSparkCount == 0)
@@ -181,25 +202,14 @@ namespace Arena.Presentation.Dice
             {
                 case DiceResultClass.Positive:
                 {
-                    float pulseTime = Mathf.Clamp01(_effectElapsed / 0.62f);
-                    float pulseEase = 1f - Mathf.Pow(1f - pulseTime, 3f);
-                    SetRing(
-                        _pulseTransform,
-                        _pulseRenderer,
-                        _pulseProperties,
-                        Mathf.Lerp(0.42f, 1.34f, pulseEase),
-                        new Color(1f, 0.48f, 0.08f, (1f - pulseTime) * 0.72f));
-
-                    float haloTime = Mathf.Clamp01(_effectElapsed / 1.05f);
-                    if (_haloTransform != null)
-                    {
-                        _haloTransform.localScale = Vector3.one * Mathf.Lerp(0.70f, 1.14f, haloTime);
-                        _haloTransform.localRotation = Quaternion.Euler(0f, 0f, haloTime * 34f);
-                    }
+                    float highlightTime = Mathf.Clamp01(_effectElapsed / 0.72f);
+                    float ease = 1f - Mathf.Pow(1f - highlightTime, 3f);
+                    _silhouetteExpansion = Mathf.Lerp(1.055f, 1.032f, ease);
+                    SyncSilhouette();
                     SetTint(
-                        _haloRenderer,
-                        _haloProperties,
-                        new Color(1f, 0.69f, 0.17f, Mathf.Sin(haloTime * Mathf.PI) * 0.66f));
+                        _silhouetteRenderer,
+                        _silhouetteProperties,
+                        new Color(1f, 0.63f, 0.12f, Mathf.Lerp(0.82f, 0.34f, ease)));
                     break;
                 }
                 case DiceResultClass.Negative:
@@ -213,16 +223,13 @@ namespace Arena.Presentation.Dice
                         Mathf.Lerp(0.58f, 1.34f, inward),
                         new Color(0.74f, 0.015f, 0.035f, (1f - pulseTime) * 0.72f));
 
-                    float haloTime = Mathf.Clamp01(_effectElapsed / 0.82f);
-                    if (_haloTransform != null)
-                    {
-                        _haloTransform.localScale = Vector3.one * Mathf.Lerp(1.18f, 0.72f, haloTime);
-                        _haloTransform.localRotation = Quaternion.Euler(0f, 0f, -haloTime * 22f);
-                    }
+                    float highlightTime = Mathf.Clamp01(_effectElapsed / 0.82f);
+                    _silhouetteExpansion = Mathf.Lerp(1.052f, 1.03f, highlightTime);
+                    SyncSilhouette();
                     SetTint(
-                        _haloRenderer,
-                        _haloProperties,
-                        new Color(0.48f, 0.006f, 0.02f, Mathf.Sin(haloTime * Mathf.PI) * 0.46f));
+                        _silhouetteRenderer,
+                        _silhouetteProperties,
+                        new Color(0.62f, 0.006f, 0.02f, Mathf.Lerp(0.62f, 0.28f, highlightTime)));
                     break;
                 }
                 default:
@@ -261,29 +268,6 @@ namespace Arena.Presentation.Dice
                 return;
             properties.SetColor(TintId, tint);
             renderer.SetPropertyBlock(properties);
-        }
-
-        private void EmitPositiveSparks(uint seed)
-        {
-            LocalRandom random = new(seed ^ 0x9e3779b9u);
-            const int count = 20;
-            for (int i = 0; i < count; i++)
-            {
-                float angle = random.Range(0f, Mathf.PI * 2f);
-                float radius = random.Range(0.18f, 0.78f);
-                Vector2 radial = new(Mathf.Cos(angle), Mathf.Sin(angle));
-                _sparks[i] = new Spark(
-                    new Vector3(radial.x * radius, radial.y * radius - 0.12f, -0.025f),
-                    new Vector3(radial.x * random.Range(0.08f, 0.25f), random.Range(0.72f, 1.42f), 0f),
-                    random.Range(0.045f, 0.095f),
-                    random.Range(0.58f, 1.04f),
-                    random.Range(-150f, 150f),
-                    new Color(1f, random.Range(0.42f, 0.76f), 0.08f, 1f));
-            }
-
-            _activeSparkCount = count;
-            if (_sparkRenderer != null)
-                _sparkRenderer.enabled = true;
         }
 
         private void EmitNegativeMotes(uint seed)
@@ -393,6 +377,31 @@ namespace Arena.Presentation.Dice
             return (rendererTransform, renderer);
         }
 
+        private void CreateSilhouetteRenderer()
+        {
+            GameObject silhouetteObject = new("SilhouetteHighlight");
+            silhouetteObject.layer = _overlayLayer;
+            _silhouetteTransform = silhouetteObject.transform;
+            _silhouetteTransform.SetParent(transform, false);
+            _silhouetteFilter = silhouetteObject.AddComponent<MeshFilter>();
+            _silhouetteRenderer = silhouetteObject.AddComponent<MeshRenderer>();
+            _silhouetteRenderer.sharedMaterial = _silhouetteMaterial;
+            _silhouetteRenderer.shadowCastingMode = ShadowCastingMode.Off;
+            _silhouetteRenderer.receiveShadows = false;
+            _silhouetteRenderer.enabled = false;
+        }
+
+        private void SyncSilhouette()
+        {
+            if (_silhouetteTransform == null || _activeDieTransform == null)
+                return;
+
+            _silhouetteTransform.position = _activeDieTransform.position;
+            _silhouetteTransform.rotation = _activeDieTransform.rotation;
+            _silhouetteTransform.localScale =
+                Vector3.Scale(_activeDieTransform.lossyScale, Vector3.one * _silhouetteExpansion);
+        }
+
         private static Mesh BuildAnnulusMesh(string name, float innerRadius, float outerRadius, int segments)
         {
             Vector3[] vertices = new Vector3[segments * 2];
@@ -425,52 +434,6 @@ namespace Arena.Presentation.Dice
             return mesh;
         }
 
-        private static Mesh BuildRuneHaloMesh()
-        {
-            const int runeCount = 12;
-            const int ringSegments = 64;
-            Mesh ring = BuildAnnulusMesh("Dice Rune Halo", 0.965f, 1f, ringSegments);
-            Vector3[] ringVertices = ring.vertices;
-            int[] ringTriangles = ring.triangles;
-            Vector3[] vertices = new Vector3[ringVertices.Length + runeCount * 4];
-            Color[] colors = new Color[vertices.Length];
-            int[] triangles = new int[ringTriangles.Length + runeCount * 6];
-            Array.Copy(ringVertices, vertices, ringVertices.Length);
-            Array.Copy(ringTriangles, triangles, ringTriangles.Length);
-            for (int i = 0; i < colors.Length; i++)
-                colors[i] = Color.white;
-
-            for (int i = 0; i < runeCount; i++)
-            {
-                float angle = i / (float)runeCount * Mathf.PI * 2f;
-                Vector3 radial = new(Mathf.Cos(angle), Mathf.Sin(angle), 0f);
-                Vector3 tangent = new(-radial.y, radial.x, 0f);
-                Vector3 center = radial * 1.075f;
-                float length = i % 3 == 0 ? 0.13f : 0.085f;
-                int vertex = ringVertices.Length + i * 4;
-                vertices[vertex] = center - tangent * 0.022f - radial * length;
-                vertices[vertex + 1] = center + tangent * 0.022f - radial * length;
-                vertices[vertex + 2] = center + tangent * 0.022f + radial * length;
-                vertices[vertex + 3] = center - tangent * 0.022f + radial * length;
-
-                int triangle = ringTriangles.Length + i * 6;
-                triangles[triangle] = vertex;
-                triangles[triangle + 1] = vertex + 1;
-                triangles[triangle + 2] = vertex + 2;
-                triangles[triangle + 3] = vertex;
-                triangles[triangle + 4] = vertex + 2;
-                triangles[triangle + 5] = vertex + 3;
-            }
-
-            Mesh mesh = new() { name = "Dice Rune Halo" };
-            mesh.vertices = vertices;
-            mesh.colors = colors;
-            mesh.triangles = triangles;
-            mesh.RecalculateBounds();
-            UnityEngine.Object.Destroy(ring);
-            return mesh;
-        }
-
         private static Mesh BuildSparkMesh()
         {
             Mesh mesh = new()
@@ -486,10 +449,10 @@ namespace Arena.Presentation.Dice
         {
             if (_material != null)
                 Destroy(_material);
+            if (_silhouetteMaterial != null)
+                Destroy(_silhouetteMaterial);
             if (_pulseMesh != null)
                 Destroy(_pulseMesh);
-            if (_haloMesh != null)
-                Destroy(_haloMesh);
             if (_sparkMesh != null)
                 Destroy(_sparkMesh);
         }

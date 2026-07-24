@@ -406,38 +406,53 @@ namespace Arena.Presentation.Dice
                         $"[DiceOverlayPresenter] Catalog definition {definitionIndex} is not usable.");
                     continue;
                 }
-                if (_warmedDice.ContainsKey(definition.DieId))
+                if (!TryWarmDie(definition))
                 {
                     Debug.LogError(
-                        $"[DiceOverlayPresenter] Duplicate die id '{definition.DieId}' in catalog.");
-                    continue;
+                        $"[DiceOverlayPresenter] Could not warm visual '{definition.DieId}'.");
                 }
-
-                GameObject diceObject = Instantiate(definition.VisualPrefab, _renderRoot.transform);
-                diceObject.name = $"Warmed{definition.DieId.ToUpperInvariant()}";
-                Transform diceTransform = diceObject.transform;
-                diceTransform.localPosition = Vector3.zero;
-                diceTransform.localRotation = Quaternion.identity;
-                diceTransform.localScale = Vector3.one * definition.PresentationScale;
-                SetLayerRecursively(diceObject, _overlayLayer);
-
-                MeshRenderer? bodyRenderer = diceObject.GetComponent<MeshRenderer>();
-                if (bodyRenderer != null)
-                    bodyRenderer.sharedMaterial = _resinMaterialInstance;
-                DiceFaceLabel[] labels =
-                    diceObject.GetComponentsInChildren<DiceFaceLabel>(includeInactive: true);
-                for (int labelIndex = 0; labelIndex < labels.Length; labelIndex++)
-                    labels[labelIndex].Text.fontSharedMaterial = _numeralMaterialInstance;
-                diceObject.SetActive(false);
-                _warmedDice.Add(
-                    definition.DieId,
-                    new WarmedDie(diceObject, diceTransform, labels));
             }
+        }
+
+        private bool TryWarmDie(DiceDefinition definition)
+        {
+            if (_warmedDice.ContainsKey(definition.DieId))
+                return true;
+            if (_renderRoot == null ||
+                definition.VisualPrefab == null ||
+                _resinMaterialInstance == null ||
+                _numeralMaterialInstance == null)
+            {
+                return false;
+            }
+
+            GameObject diceObject = Instantiate(definition.VisualPrefab, _renderRoot.transform);
+            diceObject.name = $"Warmed{definition.DieId.ToUpperInvariant()}";
+            Transform diceTransform = diceObject.transform;
+            diceTransform.localPosition = Vector3.zero;
+            diceTransform.localRotation = Quaternion.identity;
+            diceTransform.localScale = Vector3.one * definition.PresentationScale;
+            SetLayerRecursively(diceObject, _overlayLayer);
+
+            MeshRenderer? bodyRenderer = diceObject.GetComponent<MeshRenderer>();
+            if (bodyRenderer != null)
+                bodyRenderer.sharedMaterial = _resinMaterialInstance;
+            DiceFaceLabel[] labels =
+                diceObject.GetComponentsInChildren<DiceFaceLabel>(includeInactive: true);
+            for (int labelIndex = 0; labelIndex < labels.Length; labelIndex++)
+                labels[labelIndex].Text.fontSharedMaterial = _numeralMaterialInstance;
+            diceObject.SetActive(false);
+            _warmedDice.Add(
+                definition.DieId,
+                new WarmedDie(diceObject, diceTransform, labels));
+            return true;
         }
 
         private bool ActivateWarmedDie(DiceDefinition definition)
         {
-            if (!_warmedDice.TryGetValue(definition.DieId, out WarmedDie warmedDie))
+            if (!_warmedDice.TryGetValue(definition.DieId, out WarmedDie warmedDie) &&
+                (!TryWarmDie(definition) ||
+                 !_warmedDice.TryGetValue(definition.DieId, out warmedDie)))
             {
                 Debug.LogError(
                     $"[DiceOverlayPresenter] No warmed visual exists for '{definition.DieId}'.");
@@ -576,13 +591,20 @@ namespace Arena.Presentation.Dice
             SetMovingPicking(enabled: false);
             SetState(DicePresentationState.Held);
             SetHeldShimmer(enabled: true);
-            if (_activeDefinition != null && _overlayCamera != null)
+            MeshFilter? meshFilter =
+                _diceObject != null ? _diceObject.GetComponent<MeshFilter>() : null;
+            if (_activeDefinition != null &&
+                _overlayCamera != null &&
+                _diceTransform != null &&
+                meshFilter?.sharedMesh != null)
             {
                 _resultEffects?.Play(
                     DiceResultClassifier.Classify(_activeDefinition, _activeRequest.Value),
                     _finalPosition,
                     _overlayCamera.transform.position - _finalPosition,
                     _overlayCamera.transform.up,
+                    _diceTransform,
+                    meshFilter.sharedMesh,
                     StableHash(_activeRequest.RequestId));
             }
         }

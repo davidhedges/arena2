@@ -361,11 +361,11 @@ namespace Arena.Editor.Dice
                 float bottomAngle = topAngle + Mathf.PI / ringCount;
                 primalVertices[i] = new Vector3(
                     Mathf.Cos(topAngle),
-                    0.48f,
+                0.88f,
                     Mathf.Sin(topAngle));
                 primalVertices[ringCount + i] = new Vector3(
                     Mathf.Cos(bottomAngle),
-                    -0.48f,
+                    -0.88f,
                     Mathf.Sin(bottomAngle));
             }
 
@@ -484,7 +484,7 @@ namespace Arena.Editor.Dice
             DieBlueprint blueprint,
             out List<FaceGeometry> faces)
         {
-            faces = BuildFaceGeometry(blueprint.Vertices, blueprint.FaceIndices);
+            faces = BuildFaceGeometry(blueprint);
             List<Vector3> meshVertices = new();
             List<Vector3> meshNormals = new();
             List<int> triangles = new();
@@ -545,10 +545,10 @@ namespace Arena.Editor.Dice
             return mesh;
         }
 
-        private static List<FaceGeometry> BuildFaceGeometry(
-            IReadOnlyList<Vector3> vertices,
-            IReadOnlyList<int[]> faceIndices)
+        private static List<FaceGeometry> BuildFaceGeometry(DieBlueprint blueprint)
         {
+            IReadOnlyList<Vector3> vertices = blueprint.Vertices;
+            IReadOnlyList<int[]> faceIndices = blueprint.FaceIndices;
             List<FaceGeometry> faces = new(faceIndices.Count);
             for (int faceIndex = 0; faceIndex < faceIndices.Count; faceIndex++)
             {
@@ -565,7 +565,11 @@ namespace Arena.Editor.Dice
                 for (int i = 0; i < indices.Length; i++)
                     polygon[i] = vertices[indices[i]];
                 centroid = CalculateCentroid(polygon);
-                Vector3 upright = Vector3.ProjectOnPlane(polygon[0] - centroid, normal).normalized;
+                Vector3 uprightSource =
+                    string.Equals(blueprint.DieId, "d6", StringComparison.Ordinal)
+                        ? (polygon[0] + polygon[1]) * 0.5f - centroid
+                        : polygon[0] - centroid;
+                Vector3 upright = Vector3.ProjectOnPlane(uprightSource, normal).normalized;
                 if (upright.sqrMagnitude < 0.001f)
                     upright = Vector3.ProjectOnPlane(Vector3.up, normal).normalized;
                 faces.Add(new FaceGeometry(indices, polygon, centroid, normal, upright));

@@ -3,6 +3,7 @@ Shader "Arena/Dice/ResultVfx"
     Properties
     {
         [HDR] _Tint ("Tint", Color) = (1, 1, 1, 1)
+        [Enum(UnityEngine.Rendering.CullMode)] _Cull ("Cull", Float) = 0
     }
 
     SubShader
@@ -20,7 +21,7 @@ Shader "Arena/Dice/ResultVfx"
             Tags { "LightMode" = "UniversalForward" }
 
             Blend SrcAlpha One
-            Cull Off
+            Cull [_Cull]
             ZWrite Off
             ZTest LEqual
 
