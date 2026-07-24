@@ -13,6 +13,8 @@ namespace Arena.Debugging
     public sealed class DicePresentationDebugPanel : MonoBehaviour
     {
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
+        private const KeyCode ToggleKey = KeyCode.Minus;
+
         private static readonly Rect[] PreviewRegions =
         {
             new(0f, 0f, 1f, 1f),
@@ -64,8 +66,11 @@ namespace Arena.Debugging
 
         private void Update()
         {
-            if (UnityEngine.Input.GetKeyDown(KeyCode.F9))
+            if (UnityEngine.Input.GetKeyDown(ToggleKey) ||
+                UnityEngine.Input.GetKeyDown(KeyCode.KeypadMinus))
+            {
                 visible = !visible;
+            }
 
             ResolvePresenter();
             if (!_sequenceActive || presenter == null)
@@ -192,7 +197,7 @@ namespace Arena.Debugging
             GUILayout.Space(10f);
             GUILayout.Label("Click/tap the moving die to skip.");
             GUILayout.Label("Held results ignore input and remain until Dismiss.");
-            GUILayout.Label("F9 toggles this panel in runtime scenes.");
+            GUILayout.Label("- or keypad - toggles this panel in runtime scenes.");
             GUILayout.Space(6f);
             GUILayout.Label($"Server: {DiceRollNetworkBridge.Status}");
             GUILayout.EndArea();
