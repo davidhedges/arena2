@@ -3723,6 +3723,20 @@ namespace DungeonLab.Editor
 
             AccumulateStairCandidateCounts(candidates, stairCandidateCounts);
             StairTransitionCandidate candidate = ChooseStairTransitionCandidate(candidates, random);
+            // Keep the original weighted draw stable. Only a drawn multi-lane
+            // candidate that immediately narrows at either port is replaced, and
+            // the replacement consumes no extra shared random draw.
+            if (!StairCandidateHasFullWidthLandingContinuation(
+                    candidate,
+                    layoutFloorCells,
+                    cellLevels,
+                    Mathf.Min(fromLevel, toLevel),
+                    Mathf.Max(fromLevel, toLevel)) &&
+                !TryChooseSingleLaneFallback(candidates, candidate, out candidate))
+            {
+                return false;
+            }
+
             transitionIndex = candidate.transitionIndex;
             lowerLandingCell = candidate.lowerLandingCell;
             upperLandingCell = candidate.upperLandingCell;
@@ -4771,6 +4785,111 @@ namespace DungeonLab.Editor
             }
 
             candidates.RemoveAll(plannedStairLedger.ConflictsWith);
+        }
+
+        private static bool StairCandidateHasFullWidthLandingContinuation(
+            StairTransitionCandidate candidate,
+            HashSet<Vector2Int> layoutFloorCells,
+            IReadOnlyDictionary<Vector2Int, int> cellLevels,
+            int lowerLevel,
+            int higherLevel)
+        {
+            return LandingSpanHasFullWidthContinuation(
+                layoutFloorCells,
+                cellLevels,
+                candidate.lowerLandingCells,
+                candidate.lowerPortDirection,
+                lowerLevel,
+                candidate.option.laneCount) &&
+                LandingSpanHasFullWidthContinuation(
+                    layoutFloorCells,
+                    cellLevels,
+                    candidate.upperLandingCells,
+                    candidate.upperPortDirection,
+                    higherLevel,
+                    candidate.option.laneCount);
+        }
+
+        private static bool TryChooseSingleLaneFallback(
+            IReadOnlyList<StairTransitionCandidate> candidates,
+            StairTransitionCandidate rejected,
+            out StairTransitionCandidate fallback)
+        {
+            fallback = default;
+            int bestScore = -1;
+            foreach (StairTransitionCandidate candidate in candidates)
+            {
+                if (candidate.option.laneCount != 1 ||
+                    !string.Equals(candidate.placementClass, rejected.placementClass, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                int score = 0;
+                if (candidate.transitionIndex == rejected.transitionIndex)
+                {
+                    score += 4;
+                }
+                if (candidate.lowerLandingCell == rejected.lowerLandingCell)
+                {
+                    score += 2;
+                }
+                if (candidate.upperLandingCell == rejected.upperLandingCell)
+                {
+                    score += 2;
+                }
+
+                if (score <= bestScore)
+                {
+                    continue;
+                }
+
+                bestScore = score;
+                fallback = candidate;
+            }
+
+            return bestScore >= 0;
+        }
+
+        private static bool LandingSpanHasFullWidthContinuation(
+            HashSet<Vector2Int> layoutFloorCells,
+            IReadOnlyDictionary<Vector2Int, int> cellLevels,
+            IReadOnlyList<Vector2Int> landingCells,
+            int outwardDirection,
+            int expectedLevel,
+            int laneCount)
+        {
+            if (laneCount <= 1)
+            {
+                return true;
+            }
+
+            if (layoutFloorCells == null ||
+                landingCells == null ||
+                landingCells.Count != laneCount)
+            {
+                return false;
+            }
+
+            Vector2Int outward = CardinalVector(outwardDirection);
+            if (outward == Vector2Int.zero)
+            {
+                return false;
+            }
+
+            foreach (Vector2Int landingCell in landingCells)
+            {
+                Vector2Int continuationCell = landingCell + outward;
+                if (!layoutFloorCells.Contains(continuationCell) ||
+                    cellLevels != null &&
+                    cellLevels.TryGetValue(continuationCell, out int continuationLevel) &&
+                    continuationLevel != expectedLevel)
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         private static void AddReviewedActiveStairTransitionCandidates(
