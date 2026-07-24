@@ -1,6 +1,8 @@
 #nullable enable
+using System;
 using Arena.Presentation.Dice;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace Arena.Debugging
 {
@@ -13,6 +15,7 @@ namespace Arena.Debugging
     public sealed class DicePresentationDebugPanel : MonoBehaviour
     {
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
+        private const string DiceOverlayLabSceneName = "DiceOverlayLab";
         private const KeyCode ToggleKey = KeyCode.Minus;
 
         private static readonly Rect[] PreviewRegions =
@@ -61,13 +64,19 @@ namespace Arena.Debugging
 
         private void Awake()
         {
+            if (IsDiceOverlayLabActive())
+                visible = true;
             ResolvePresenter();
         }
 
         private void Update()
         {
-            if (UnityEngine.Input.GetKeyDown(ToggleKey) ||
-                UnityEngine.Input.GetKeyDown(KeyCode.KeypadMinus))
+            if (IsDiceOverlayLabActive())
+            {
+                visible = true;
+            }
+            else if (UnityEngine.Input.GetKeyDown(ToggleKey) ||
+                     UnityEngine.Input.GetKeyDown(KeyCode.KeypadMinus))
             {
                 visible = !visible;
             }
@@ -197,10 +206,21 @@ namespace Arena.Debugging
             GUILayout.Space(10f);
             GUILayout.Label("Click/tap the moving die to skip.");
             GUILayout.Label("Held results ignore input and remain until Dismiss.");
-            GUILayout.Label("- or keypad - toggles this panel in runtime scenes.");
+            GUILayout.Label(
+                IsDiceOverlayLabActive()
+                    ? "Dice lab controls remain visible in this scene."
+                    : "- or keypad - toggles this panel in runtime scenes.");
             GUILayout.Space(6f);
             GUILayout.Label($"Server: {DiceRollNetworkBridge.Status}");
             GUILayout.EndArea();
+        }
+
+        private static bool IsDiceOverlayLabActive()
+        {
+            Scene scene = SceneManager.GetActiveScene();
+            return scene.IsValid() &&
+                   scene.isLoaded &&
+                   string.Equals(scene.name, DiceOverlayLabSceneName, StringComparison.Ordinal);
         }
 
         private void ResolvePresenter()
