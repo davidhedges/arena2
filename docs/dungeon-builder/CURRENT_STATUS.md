@@ -296,9 +296,17 @@ passes all three at both profiles (report in
 three topologies rebuild end to end — plan, renderer, collision export — into a
 throwaway scene.
 
-**Not verified: whether the result reads well.** The rubber sheet spreads rooms
-apart, so plans have longer corridors and more void than before. Look at several
-seeds before step 3.
+**Looked at, 2026-07-25: the rooms are too spaced out.** Owner verdict on the
+rebaselined output. The rubber sheet buys variety by pushing rooms apart, and at
+`latticeSlackMaxCells: 8` that reads as long corridors and too much void — which
+is also what the fill numbers above say, from 42% down to 31%.
+
+**Deliberately not addressed here — owner ruling: it is part of a larger
+problem.** Do not tune `latticeSlackMaxCells` down as a spot fix. The knob is
+one-dimensional (it can only trade variety against density), and the real
+question is whether variety has to come from moving rooms apart at all when
+rooms, corridors and floor budget are all fixed. Whatever that turns into, it is
+its own slice.
 
 Still ahead: **step 3** (the four drafted topologies, one file plus a validator
 pass each).
