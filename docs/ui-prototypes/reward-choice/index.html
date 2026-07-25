@@ -1,0 +1,455 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Arena — Reward Choice Flow (UI spec)</title>
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../kit.css">
+<link rel="stylesheet" href="reward-choice.css">
+<style>
+/* ============ SCAFFOLD — browser-only, never translated ============
+ * The stage renders at the game's 1920x1080 reference resolution and scales
+ * to fit the browser. reward-choice.css remains the USS-translatable spec. */
+
+@font-face {
+  font-family: "Cinzel";
+  font-weight: 400 900;
+  src: url("../../../Assets/Arena/Content/UI/Fonts/Cinzel.ttf") format("truetype");
+}
+@font-face {
+  font-family: "Alegreya";
+  font-weight: 400 900;
+  src: url("../../../Assets/Arena/Content/UI/Fonts/Alegreya.ttf") format("truetype");
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+button { outline: none; }
+
+html, body {
+  height: 100%;
+  background: #08090b;
+  color: #a89f8d;
+  font-family: "Alegreya", Georgia, serif;
+  overflow: hidden;
+}
+
+.sc-shell { height: 100%; display: flex; flex-direction: column; }
+
+.sc-stagewrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.sc-stage {
+  position: relative;
+  width: 1920px;
+  height: 1080px;
+  flex: none;
+  transform-origin: center center;
+  outline: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.sc-backdrop { position: absolute; inset: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .reward-layout,
+  .reward-screen,
+  .choice-card,
+  .choice-flourish {
+    transition-duration: 0s !important;
+  }
+}
+</style>
+</head>
+<body>
+<div class="sc-shell">
+  <div class="sc-stagewrap">
+    <div class="sc-stage" id="Stage">
+      <canvas class="sc-backdrop" id="Backdrop" width="1920" height="1080"></canvas>
+
+      <!-- ================= SPEC MARKUP =================
+           ids are the binding contract for the future UXML/controller. -->
+      <div class="reward-choice" id="RewardChoice">
+        <div class="menu-veil" id="Veil"></div>
+
+        <div class="reward-layout" id="RewardWindow">
+          <div class="reward-heading">
+            <div class="heading-flourish heading-flourish--left">✦</div>
+            <div class="window-title" id="WindowTitle">CLAIM YOUR REWARD</div>
+            <div class="heading-flourish heading-flourish--right">✦</div>
+          </div>
+
+          <div class="reward-content">
+            <div class="reward-instruction" id="Instruction" role="status" aria-live="polite">Choose how you want to grow.</div>
+            <div class="reward-rule"></div>
+
+            <div class="reward-stage">
+                <div class="reward-screen is-active" id="RewardTypeScreen" data-screen="path">
+                  <div class="choice-grid choice-grid--paths" id="RewardTypeGrid">
+                    <button class="choice-card choice-card--path" id="PathSpell" type="button"
+                            data-choice="spell" aria-pressed="false">
+                      <div class="card-art art-path-spell"></div>
+                      <div class="card-label">LEARN A SPELL</div>
+                    </button>
+
+                    <button class="choice-card choice-card--path" id="PathTechnique" type="button"
+                            data-choice="technique" aria-pressed="false">
+                      <div class="card-art art-path-technique"></div>
+                      <div class="card-label">LEARN A WEAPON TECHNIQUE</div>
+                    </button>
+                  </div>
+                </div>
+
+                <div class="reward-screen" id="SpellSchoolScreen" data-screen="school">
+                  <div class="choice-grid choice-grid--schools" id="SpellSchoolGrid">
+                    <button class="choice-card" id="SchoolAir" type="button" data-choice="air" aria-pressed="false">
+                      <div class="card-art art-air"></div>
+                      <div class="card-label">AIR</div>
+                    </button>
+                    <button class="choice-card" id="SchoolArcane" type="button" data-choice="arcane" aria-pressed="false">
+                      <div class="card-art art-arcane"></div>
+                      <div class="card-label">ARCANE</div>
+                    </button>
+                    <button class="choice-card" id="SchoolFire" type="button" data-choice="fire" aria-pressed="false">
+                      <div class="card-art art-fire"></div>
+                      <div class="card-label">FIRE</div>
+                    </button>
+                    <button class="choice-card" id="SchoolFrost" type="button" data-choice="frost" aria-pressed="false">
+                      <div class="card-art art-frost"></div>
+                      <div class="card-label">FROST</div>
+                    </button>
+                    <button class="choice-card" id="SchoolHoly" type="button" data-choice="holy" aria-pressed="false">
+                      <div class="card-art art-holy"></div>
+                      <div class="card-label">HOLY</div>
+                    </button>
+                    <button class="choice-card" id="SchoolLightning" type="button" data-choice="lightning" aria-pressed="false">
+                      <div class="card-art art-lightning"></div>
+                      <div class="card-label">LIGHTNING</div>
+                    </button>
+                    <button class="choice-card" id="SchoolNecromancy" type="button" data-choice="necromancy" aria-pressed="false">
+                      <div class="card-art art-necromancy"></div>
+                      <div class="card-label">NECROMANCY</div>
+                    </button>
+                    <button class="choice-card" id="SchoolShadow" type="button" data-choice="shadow" aria-pressed="false">
+                      <div class="card-art art-shadow"></div>
+                      <div class="card-label">SHADOW</div>
+                    </button>
+                  </div>
+                </div>
+
+                <div class="reward-screen" id="WeaponStyleScreen" data-screen="weapon">
+                  <div class="choice-grid choice-grid--weapons" id="WeaponStyleGrid">
+                    <button class="choice-card" id="WeaponDaggers" type="button" data-choice="daggers" aria-pressed="false">
+                      <div class="card-art art-daggers"></div>
+                      <div class="card-label">DAGGERS</div>
+                    </button>
+                    <button class="choice-card" id="WeaponGreatsword" type="button" data-choice="greatsword" aria-pressed="false">
+                      <div class="card-art art-greatsword"></div>
+                      <div class="card-label">GREATSWORD</div>
+                    </button>
+                    <button class="choice-card" id="WeaponSwordShield" type="button" data-choice="sword-shield" aria-pressed="false">
+                      <div class="card-art art-sword-shield"></div>
+                      <div class="card-label">SWORD &amp; SHIELD</div>
+                    </button>
+                    <button class="choice-card" id="WeaponStaff" type="button" data-choice="staff" aria-pressed="false">
+                      <div class="card-art art-staff"></div>
+                      <div class="card-label">STAFF</div>
+                    </button>
+                    <button class="choice-card" id="WeaponBow" type="button" data-choice="bow" aria-pressed="false">
+                      <div class="card-art art-bow"></div>
+                      <div class="card-label">BOW</div>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+            <div class="reward-footer" id="RewardFooter">
+              <div class="footer-slot footer-slot--left is-empty" id="BackSlot">
+                <button class="reward-action" id="BackButton" type="button">← OTHER REWARD</button>
+              </div>
+              <div class="footer-slot footer-slot--center is-empty" id="RandomizeSlot">
+                <button class="reward-action reward-action--random" id="RandomizeButton" type="button">✦ RANDOMIZE ✦</button>
+              </div>
+              <div class="footer-slot footer-slot--right"></div>
+            </div>
+          </div>
+
+          <div class="choice-flourish" id="ChoiceFlourish" aria-hidden="true">
+            <div class="flourish-ring flourish-ring--outer"></div>
+            <div class="flourish-ring flourish-ring--inner"></div>
+            <div class="flourish-ray flourish-ray--vertical"></div>
+            <div class="flourish-ray flourish-ray--horizontal"></div>
+            <div class="flourish-core">✦</div>
+          </div>
+        </div>
+      </div>
+      <!-- =============== END SPEC MARKUP =============== -->
+    </div>
+  </div>
+</div>
+
+<script>
+/* Scaffold JS — throwaway. It demonstrates direct card-driven transitions,
+ * selection persistence, flourish feedback, and independent uniform
+ * Randomize behavior that the future controller will own. */
+(function () {
+  "use strict";
+
+  var $ = function (id) { return document.getElementById(id); };
+  var stage = $("Stage");
+  var screens = {
+    path: $("RewardTypeScreen"),
+    school: $("SpellSchoolScreen"),
+    weapon: $("WeaponStyleScreen")
+  };
+  var copy = {
+    path: {
+      title: "CLAIM YOUR REWARD",
+      instruction: "Choose how you want to grow."
+    },
+    school: {
+      title: "CHOOSE A SPELL SCHOOL",
+      instruction: "Choose the tradition your new spell will come from."
+    },
+    weapon: {
+      title: "CHOOSE A WEAPON STYLE",
+      instruction: "Choose the weapon you want to deepen your mastery with."
+    }
+  };
+  var state = {
+    screen: "path",
+    selected: { path: "", school: "", weapon: "" }
+  };
+  var interactionLocked = false;
+  var flourishTimers = [];
+
+  function fitStage() {
+    var wrap = stage.parentElement;
+    var scale = Math.min(wrap.clientWidth / 1920, wrap.clientHeight / 1080);
+    stage.style.transform = "scale(" + scale + ")";
+  }
+  window.addEventListener("resize", fitStage);
+  fitStage();
+
+  (function paintBackdrop() {
+    var ctx = $("Backdrop").getContext("2d");
+    var g = ctx.createLinearGradient(0, 0, 0, 1080);
+    g.addColorStop(0, "#15171b");
+    g.addColorStop(0.52, "#0c0d10");
+    g.addColorStop(1, "#181108");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 1920, 1080);
+
+    var hall = ctx.createRadialGradient(960, 490, 60, 960, 520, 700);
+    hall.addColorStop(0, "rgba(130, 99, 54, 0.24)");
+    hall.addColorStop(0.48, "rgba(62, 48, 34, 0.10)");
+    hall.addColorStop(1, "rgba(0, 0, 0, 0)");
+    ctx.fillStyle = hall;
+    ctx.fillRect(0, 0, 1920, 1080);
+
+    ctx.fillStyle = "rgba(0, 0, 0, 0.34)";
+    for (var i = 0; i < 7; i++) {
+      var x = 160 + i * 270;
+      ctx.fillRect(x, 0, 84, 1080);
+    }
+
+    var ember = ctx.createRadialGradient(960, 1140, 80, 960, 1140, 640);
+    ember.addColorStop(0, "rgba(216, 125, 36, 0.30)");
+    ember.addColorStop(1, "rgba(216, 125, 36, 0)");
+    ctx.fillStyle = ember;
+    ctx.fillRect(0, 0, 1920, 1080);
+
+    var vig = ctx.createRadialGradient(960, 540, 380, 960, 540, 1180);
+    vig.addColorStop(0, "rgba(0, 0, 0, 0)");
+    vig.addColorStop(1, "rgba(0, 0, 0, 0.68)");
+    ctx.fillStyle = vig;
+    ctx.fillRect(0, 0, 1920, 1080);
+  })();
+
+  function activeCards() {
+    return Array.prototype.slice.call(
+      screens[state.screen].querySelectorAll(".choice-card")
+    );
+  }
+
+  function pulse(card) {
+    card.classList.remove("is-settling");
+    void card.offsetWidth;
+    card.classList.add("is-settling");
+    setTimeout(function () { card.classList.remove("is-settling"); }, 260);
+  }
+
+  function playFlourish() {
+    var flourish = $("ChoiceFlourish");
+    flourishTimers.forEach(clearTimeout);
+    flourishTimers = [];
+    flourish.classList.remove("is-blooming", "is-fading");
+    void flourish.offsetWidth;
+    flourish.classList.add("is-blooming");
+    flourishTimers.push(setTimeout(function () {
+      flourish.classList.remove("is-blooming");
+      flourish.classList.add("is-fading");
+    }, 220));
+    flourishTimers.push(setTimeout(function () {
+      flourish.classList.remove("is-fading");
+    }, 520));
+  }
+
+  function selectCard(card, focusCard) {
+    var value = card.dataset.choice;
+    state.selected[state.screen] = value;
+    activeCards().forEach(function (candidate) {
+      var selected = candidate.dataset.choice === value;
+      candidate.classList.toggle("is-selected", selected);
+      candidate.setAttribute("aria-pressed", selected ? "true" : "false");
+    });
+    pulse(card);
+    if (focusCard) card.focus();
+    refreshFooter();
+  }
+
+  function announceChoice(card) {
+    var label = card.querySelector(".card-label").textContent.trim();
+    $("Instruction").textContent = state.screen === "school"
+      ? label + " will shape the spell you learn."
+      : label + " will shape the technique you learn.";
+  }
+
+  function refreshFooter() {
+    var branch = state.screen !== "path";
+    $("BackSlot").classList.toggle("is-empty", !branch);
+    $("RandomizeSlot").classList.toggle("is-empty", !branch);
+  }
+
+  function setScreen(next, focusFirst, animateIn) {
+    state.screen = next;
+    Object.keys(screens).forEach(function (key) {
+      screens[key].classList.remove("is-active", "is-departing", "is-entering");
+    });
+    screens[next].classList.add("is-active");
+    if (animateIn) {
+      screens[next].classList.add("is-entering");
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () {
+          screens[next].classList.remove("is-entering");
+        });
+      });
+    }
+    $("WindowTitle").textContent = copy[next].title;
+    $("Instruction").textContent = copy[next].instruction;
+    if (next !== "path" && state.selected[next]) {
+      var retained = screens[next].querySelector(
+        '.choice-card[data-choice="' + state.selected[next] + '"]'
+      );
+      if (retained) announceChoice(retained);
+    }
+    refreshFooter();
+    if (focusFirst) {
+      var selected = screens[next].querySelector(".choice-card.is-selected");
+      var first = screens[next].querySelector(".choice-card");
+      (selected || first).focus();
+    }
+  }
+
+  function choosePath(card) {
+    interactionLocked = true;
+    card.classList.add("is-choosing");
+    playFlourish();
+    setTimeout(function () {
+      screens.path.classList.add("is-departing");
+    }, 150);
+    setTimeout(function () {
+      var next = state.selected.path === "spell" ? "school" : "weapon";
+      card.classList.remove("is-choosing");
+      setScreen(next, true, true);
+      interactionLocked = false;
+    }, 430);
+  }
+
+  document.querySelectorAll(".choice-card").forEach(function (card) {
+    card.addEventListener("click", function () {
+      if (interactionLocked) return;
+      selectCard(card, false);
+      if (state.screen === "path") {
+        choosePath(card);
+      } else {
+        announceChoice(card);
+        playFlourish();
+      }
+    });
+  });
+
+  $("BackButton").addEventListener("click", function () {
+    if (state.screen !== "path" && !interactionLocked) {
+      setScreen("path", true, true);
+    }
+  });
+
+  $("RandomizeButton").addEventListener("click", function () {
+    if (state.screen === "path") return;
+    var cards = activeCards();
+    var index = Math.floor(Math.random() * cards.length);
+    selectCard(cards[index], true);
+    announceChoice(cards[index]);
+    playFlourish();
+  });
+
+  document.addEventListener("keydown", function (event) {
+    if (event.key === "Escape" && state.screen !== "path") {
+      setScreen("path", true, true);
+      event.preventDefault();
+      return;
+    }
+
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight" &&
+        event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+
+    var cards = activeCards();
+    var current = cards.indexOf(document.activeElement);
+    if (current < 0) return;
+
+    var columns = state.screen === "school" ? 4 : (state.screen === "weapon" ? 5 : 2);
+    var delta = 0;
+    if (event.key === "ArrowLeft") delta = -1;
+    if (event.key === "ArrowRight") delta = 1;
+    if (event.key === "ArrowUp") delta = -columns;
+    if (event.key === "ArrowDown") delta = columns;
+    var next = Math.max(0, Math.min(cards.length - 1, current + delta));
+    cards[next].focus();
+    event.preventDefault();
+  });
+
+  function applyQueryState() {
+    var params = new URLSearchParams(location.search);
+    var requestedScreen = params.get("screen");
+    if (requestedScreen !== "school" && requestedScreen !== "weapon") {
+      requestedScreen = "path";
+    }
+    setScreen(requestedScreen, false, false);
+
+    var selected = params.get("selected");
+    if (selected) {
+      var card = screens[requestedScreen].querySelector(
+        '.choice-card[data-choice="' + selected + '"]'
+      );
+      if (card) {
+        selectCard(card, false);
+        if (requestedScreen !== "path") announceChoice(card);
+      }
+    }
+  }
+
+  applyQueryState();
+  requestAnimationFrame(function () {
+    requestAnimationFrame(function () {
+      $("RewardWindow").classList.add("is-open");
+    });
+  });
+})();
+</script>
+</body>
+</html>

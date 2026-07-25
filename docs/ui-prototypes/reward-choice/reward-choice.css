@@ -1,0 +1,467 @@
+/* Reward Choice Flow — browser prototype screen spec.
+ * The reward hangs directly over the world rather than inside a modal.
+ * Choice cards use a parchment surface and card clicks own progression.
+ * Must pass ops/uss_dialect_lint.py. */
+
+.reward-choice {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: "Alegreya", Georgia, serif;
+}
+
+.reward-layout {
+    position: relative;
+    width: 1500px;
+    height: 960px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    opacity: 0;
+    scale: 0.98;
+    transition-property: opacity, scale;
+    transition-duration: 0.28s;
+    transition-timing-function: ease-out;
+}
+
+.reward-layout.is-open {
+    opacity: 1;
+    scale: 1;
+}
+
+.reward-heading {
+    width: 1040px;
+    height: 82px;
+    margin-top: 22px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+}
+
+.window-title {
+    min-width: 500px;
+    padding-left: 28px;
+    padding-right: 28px;
+    color: #E7C56F;
+    font-family: "Cinzel", "Times New Roman", serif;
+    font-size: 38px;
+    letter-spacing: 4px;
+    text-align: center;
+}
+
+.heading-flourish {
+    width: 170px;
+    color: #A8752E;
+    font-family: "Cinzel", "Times New Roman", serif;
+    font-size: 24px;
+    opacity: 0.72;
+}
+
+.heading-flourish--left {
+    text-align: right;
+}
+
+.heading-flourish--right {
+    text-align: left;
+}
+
+.reward-content {
+    width: 100%;
+    padding-left: 40px;
+    padding-right: 40px;
+    padding-bottom: 18px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex-grow: 1;
+}
+
+.reward-instruction {
+    height: 38px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #C5B89D;
+    font-size: 19px;
+    letter-spacing: 0.6px;
+}
+
+.reward-rule {
+    width: 430px;
+    height: 12px;
+    margin-top: 2px;
+    background-image: url("../../../Assets/Arena/Content/UI/Art/section_rule.png");
+    background-size: 100% 100%;
+    flex-shrink: 0;
+    opacity: 0.72;
+}
+
+.reward-stage {
+    position: relative;
+    width: 100%;
+    flex-grow: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.reward-screen {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    scale: 0.96;
+    transition-property: opacity, scale;
+    transition-duration: 0.24s;
+    transition-timing-function: ease-out;
+}
+
+.reward-screen.is-active {
+    display: flex;
+    opacity: 1;
+    scale: 1;
+}
+
+.reward-screen.is-active.is-entering,
+.reward-screen.is-active.is-departing {
+    opacity: 0;
+    scale: 0.94;
+}
+
+.choice-grid {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-content: center;
+    justify-content: center;
+}
+
+.choice-grid--paths {
+    width: 920px;
+}
+
+.choice-grid--schools {
+    width: 1040px;
+}
+
+.choice-grid--weapons {
+    width: 1300px;
+}
+
+.choice-card {
+    position: relative;
+    width: 226px;
+    height: 286px;
+    margin: 12px;
+    padding: 0;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    overflow: hidden;
+    background-color: transparent;
+    background-image: url("assets/parchment-choice-card.png");
+    background-position: center center;
+    background-repeat: no-repeat;
+    background-size: 100% 100%;
+    border-width: 2px;
+    border-style: solid;
+    border-color: rgba(212, 166, 70, 0);
+    color: #2B1B0E;
+    cursor: pointer;
+    opacity: 0.93;
+    scale: 1;
+    translate: 0 0;
+    transition-property: scale, translate, border-color, opacity;
+    transition-duration: 0.16s;
+    transition-timing-function: ease-out;
+}
+
+.choice-card:hover,
+.choice-card:focus {
+    translate: 0 -7px;
+    scale: 1.045;
+    border-color: rgba(224, 183, 84, 0.78);
+    opacity: 1;
+}
+
+.choice-card:active {
+    translate: 0 -3px;
+    scale: 1.015;
+}
+
+.choice-card.is-selected {
+    translate: 0 -5px;
+    scale: 1.04;
+    border-color: #D6A844;
+    opacity: 1;
+}
+
+.choice-card.is-selected:hover,
+.choice-card.is-selected:focus {
+    border-color: #F0CA70;
+}
+
+.choice-card.is-settling {
+    scale: 1.075;
+}
+
+.choice-card.is-choosing {
+    translate: 0 -11px;
+    scale: 1.10;
+    border-color: #F3D889;
+    opacity: 1;
+}
+
+.card-art {
+    width: 178px;
+    height: 178px;
+    margin-top: 34px;
+    flex-shrink: 0;
+    background-position: center center;
+    background-repeat: no-repeat;
+    background-size: 100% 100%;
+    border-width: 2px;
+    border-style: solid;
+    border-color: #4A2E17;
+    opacity: 0.90;
+    transition-property: border-color, opacity;
+    transition-duration: 0.16s;
+}
+
+.choice-card:hover .card-art,
+.choice-card:focus .card-art,
+.choice-card.is-selected .card-art {
+    border-color: #8B5A22;
+    opacity: 1;
+}
+
+.card-label {
+    width: 188px;
+    height: 48px;
+    padding-left: 7px;
+    padding-right: 7px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #2A190C;
+    font-family: "Cinzel", "Times New Roman", serif;
+    font-size: 15px;
+    letter-spacing: 1.35px;
+    text-align: center;
+}
+
+.choice-card.is-selected .card-label {
+    color: #5D310D;
+}
+
+.choice-card--path {
+    width: 374px;
+    height: 488px;
+    margin: 28px;
+}
+
+.choice-card--path .card-art {
+    width: 306px;
+    height: 306px;
+    margin-top: 54px;
+}
+
+.choice-card--path .card-label {
+    width: 326px;
+    height: 68px;
+    padding-left: 14px;
+    padding-right: 14px;
+    font-size: 21px;
+    letter-spacing: 1.8px;
+}
+
+.reward-footer {
+    width: 1420px;
+    height: 64px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+}
+
+.footer-slot {
+    width: 473px;
+    height: 64px;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.footer-slot--left {
+    justify-content: flex-start;
+}
+
+.footer-slot--center {
+    justify-content: center;
+}
+
+.footer-slot--right {
+    justify-content: flex-end;
+}
+
+.reward-action {
+    min-width: 230px;
+    height: 46px;
+    padding-left: 18px;
+    padding-right: 18px;
+    background-color: transparent;
+    border-width: 0;
+    color: #B8954B;
+    cursor: pointer;
+    font-family: "Cinzel", "Times New Roman", serif;
+    font-size: 14px;
+    letter-spacing: 1.5px;
+    opacity: 0.82;
+    scale: 1;
+    transition-property: color, opacity, scale;
+    transition-duration: 0.14s;
+}
+
+.reward-action--random {
+    font-size: 17px;
+    letter-spacing: 2.2px;
+}
+
+.reward-action:hover,
+.reward-action:focus {
+    color: #F0CD79;
+    opacity: 1;
+    scale: 1.045;
+}
+
+.reward-action:active {
+    color: #D09335;
+    scale: 0.98;
+}
+
+.footer-slot.is-empty .reward-action {
+    display: none;
+}
+
+.choice-flourish {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 360px;
+    height: 360px;
+    margin-left: -180px;
+    margin-top: -180px;
+    opacity: 0;
+    pointer-events: none;
+    rotate: -12deg;
+    scale: 0.54;
+    transition-property: opacity, rotate, scale;
+    transition-duration: 0.22s;
+    transition-timing-function: ease-out;
+}
+
+.choice-flourish.is-blooming {
+    opacity: 0.92;
+    rotate: 0deg;
+    scale: 1;
+}
+
+.choice-flourish.is-fading {
+    opacity: 0;
+    rotate: 10deg;
+    scale: 1.36;
+}
+
+.flourish-ring {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    border-style: solid;
+    border-color: rgba(238, 199, 104, 0.82);
+    border-radius: 50%;
+}
+
+.flourish-ring--outer {
+    width: 320px;
+    height: 320px;
+    margin-left: -160px;
+    margin-top: -160px;
+    border-width: 2px;
+}
+
+.flourish-ring--inner {
+    width: 214px;
+    height: 214px;
+    margin-left: -107px;
+    margin-top: -107px;
+    border-width: 1px;
+    rotate: 45deg;
+}
+
+.flourish-ray {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    background-color: rgba(240, 204, 116, 0.68);
+}
+
+.flourish-ray--vertical {
+    width: 2px;
+    height: 356px;
+    margin-left: -1px;
+    margin-top: -178px;
+}
+
+.flourish-ray--horizontal {
+    width: 356px;
+    height: 2px;
+    margin-left: -178px;
+    margin-top: -1px;
+}
+
+.flourish-core {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 72px;
+    height: 72px;
+    margin-left: -36px;
+    margin-top: -42px;
+    color: #F7D98C;
+    font-family: "Cinzel", "Times New Roman", serif;
+    font-size: 58px;
+    text-align: center;
+}
+
+.art-path-spell { background-image: url("assets/path-spell.png"); }
+.art-path-technique { background-image: url("assets/path-technique.png"); }
+
+.art-air { background-image: url("assets/school-air.png"); }
+.art-arcane { background-image: url("assets/school-arcane.png"); }
+.art-fire { background-image: url("assets/school-fire.png"); }
+.art-frost { background-image: url("assets/school-frost.png"); }
+.art-holy { background-image: url("assets/school-holy.png"); }
+.art-lightning { background-image: url("assets/school-lightning.png"); }
+.art-necromancy { background-image: url("assets/school-necromancy.png"); }
+.art-shadow { background-image: url("assets/school-shadow.png"); }
+
+.art-daggers { background-image: url("assets/style-daggers.png"); }
+.art-greatsword { background-image: url("assets/style-greatsword.png"); }
+.art-sword-shield { background-image: url("assets/style-sword-shield.png"); }
+.art-staff { background-image: url("assets/style-staff.png"); }
+.art-bow { background-image: url("assets/style-bow.png"); }
