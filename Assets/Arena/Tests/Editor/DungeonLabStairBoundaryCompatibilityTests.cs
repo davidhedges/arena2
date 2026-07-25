@@ -1,6 +1,7 @@
 #nullable enable
 
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -15,6 +16,10 @@ namespace Arena.Tests.Editor
     {
         private const int RegressionSeed = 2062860779;
         private const int RoundedCornerRegressionSeed = 2026072100;
+        private const int North = 1;
+        private const int East = 2;
+        private const int South = 4;
+        private const int West = 8;
         private const string TargetStairName =
             "transition_stair_curved_stair_180_R_bridge_d4_18_14_to_19_14";
         private static readonly Type GeneratorType = AppDomain.CurrentDomain
@@ -467,6 +472,101 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void LandingShellContinuity_PrunesParallelSingletonsAtOneCellLanding()
+        {
+            var landing = new Vector2Int(23, 10);
+            var shellEdges = new List<(Vector2Int cell, int direction, int higherLevel)>
+            {
+                (landing, West, 24),
+                (landing, East, 24)
+            };
+
+            HashSet<(Vector2Int cell, int direction, int higherLevel)> orphanEdges =
+                FindOrphanLandingShellEdges(shellEdges, landing);
+
+            Assert.That(
+                orphanEdges,
+                Is.EquivalentTo(shellEdges),
+                "Parallel walls on opposite sides of a one-cell landing do not form a wall run; both are orphan shells.");
+        }
+
+        [Test]
+        public void LandingShellContinuity_KeepsLandingWallJoinedToRunOrCorner()
+        {
+            var landing = new Vector2Int(4, 4);
+            var collinearLandingEdge = (cell: landing, direction: North, higherLevel: 12);
+            var cornerLandingEdge = (cell: landing, direction: East, higherLevel: 12);
+            var unrelatedSingleton = (
+                cell: new Vector2Int(20, 20),
+                direction: South,
+                higherLevel: 12);
+            var shellEdges = new List<(Vector2Int cell, int direction, int higherLevel)>
+            {
+                collinearLandingEdge,
+                (new Vector2Int(5, 4), North, 12),
+                cornerLandingEdge,
+                unrelatedSingleton
+            };
+
+            HashSet<(Vector2Int cell, int direction, int higherLevel)> orphanEdges =
+                FindOrphanLandingShellEdges(shellEdges, landing);
+
+            Assert.That(orphanEdges.Contains(collinearLandingEdge), Is.False);
+            Assert.That(orphanEdges.Contains(cornerLandingEdge), Is.False);
+            Assert.That(
+                orphanEdges.Contains(unrelatedSingleton),
+                Is.False,
+                "Singleton pruning must remain scoped to stair landing cells.");
+        }
+
+        [Test]
+        public void LandingShellContinuity_DifferentElevationDoesNotCreateFalseConnection()
+        {
+            var landing = new Vector2Int(4, 4);
+            var landingEdge = (cell: landing, direction: North, higherLevel: 12);
+            var shellEdges = new List<(Vector2Int cell, int direction, int higherLevel)>
+            {
+                landingEdge,
+                (new Vector2Int(5, 4), North, 11)
+            };
+
+            HashSet<(Vector2Int cell, int direction, int higherLevel)> orphanEdges =
+                FindOrphanLandingShellEdges(shellEdges, landing);
+
+            Assert.That(
+                orphanEdges.Contains(landingEdge),
+                Is.True,
+                "Walls that only touch in plan at different floor elevations are not one continuous shell run.");
+        }
+
+        [Test]
+        public void OrphanLandingEdge_SuppressesFallbackRailingAndTrim()
+        {
+            var orphanLandingEdge = (x: 23, z: 10, direction: West);
+            var bareLandingEdges = new HashSet<(int x, int z, int direction)>
+            {
+                orphanLandingEdge
+            };
+
+            Assert.That(
+                SuppressesGeneratedTopGuard(
+                    false,
+                    orphanLandingEdge,
+                    new HashSet<(int x, int z, int direction)>(),
+                    bareLandingEdges),
+                Is.True,
+                "An orphan landing edge must not replace its pruned shell with a generated railing or trim.");
+            Assert.That(
+                SuppressesGeneratedTopGuard(
+                    false,
+                    (24, 10, West),
+                    new HashSet<(int x, int z, int direction)>(),
+                    bareLandingEdges),
+                Is.False,
+                "The bare treatment must remain scoped to the exact orphan landing edge.");
+        }
+
+        [Test]
         public void CornerCompatibility_DoesNotInferStairGeometryFromAssetNames()
         {
             string source = File.ReadAllText(
@@ -495,6 +595,44 @@ namespace Arena.Tests.Editor
             bool concave)
         {
             return (float)method.Invoke(null, new object[] { structuralYaw, angleStyle, concave })!;
+        }
+
+        private static HashSet<(Vector2Int cell, int direction, int higherLevel)> FindOrphanLandingShellEdges(
+            IReadOnlyList<(Vector2Int cell, int direction, int higherLevel)> shellEdges,
+            params Vector2Int[] landingCells)
+        {
+            MethodInfo method = ElevationEdgeModelType.GetMethod(
+                "FindOrphanLandingShellEdges",
+                BindingFlags.Static | BindingFlags.NonPublic)!;
+            Assert.That(method, Is.Not.Null);
+            return (HashSet<(Vector2Int cell, int direction, int higherLevel)>)method.Invoke(
+                null,
+                new object[]
+                {
+                    shellEdges,
+                    new HashSet<Vector2Int>(landingCells)
+                })!;
+        }
+
+        private static bool SuppressesGeneratedTopGuard(
+            bool wallSuppressesRailing,
+            (int x, int z, int direction) edge,
+            ISet<(int x, int z, int direction)> shellGuardEdges,
+            ISet<(int x, int z, int direction)> bareLandingEdges)
+        {
+            MethodInfo method = ElevationEdgeModelType.GetMethod(
+                "SuppressesGeneratedTopGuard",
+                BindingFlags.Static | BindingFlags.NonPublic)!;
+            Assert.That(method, Is.Not.Null);
+            return (bool)method.Invoke(
+                null,
+                new object[]
+                {
+                    wallSuppressesRailing,
+                    edge,
+                    shellGuardEdges,
+                    bareLandingEdges
+                })!;
         }
 
         private static bool BoundsOverlapWithPositiveVolume(Bounds first, Bounds second)

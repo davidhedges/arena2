@@ -72,9 +72,6 @@ namespace DungeonLab.Editor
         private const string GatewayLargeWoodName = "COMP_Door_01_large";
         private const string GatewayBarsName = "P_PROP_bars_doorway_dungeon_01";
         private const int GatewayPlacementPercent = 35;
-        // The reviewed PivotMiddle wall library measures 4.354-4.367u and
-        // 6.354-6.367u because caps/trim extend above the nominal masonry course.
-        private const float WallFamilyDecorationTolerance = 0.5f;
         private const string AuthoredLevelModuleOneSidedStairsFolder = "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/03_LEVEL_MODULES/01/OneSided/Stairs/";
         private const string AuthoredCompFloorFolder = "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/02_COMPS/Floor/";
         private const string AuthoredPartStairsFolder = "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/";
@@ -304,14 +301,15 @@ namespace DungeonLab.Editor
             // the pack has no railing piece that can step 1u mid-run.
             HashSet<(int roomId, int direction)> wallGuardSides = FindWallGuardSides(wallEdges, roomBoundaryContext);
 
-            // Tall shell walls own the guard line above every edge where they are
-            // successfully placed. Resolve that ownership before ordinary guards so
-            // a railing/parapet and a shell can never occupy the same edge.
+            // Resolve both placed shell ownership and intentionally bare orphan
+            // landing edges before ordinary guards, so neither can receive a
+            // fallback railing/parapet or its trim.
             OuterShellPlacementResult shellPlacement = PlaceOuterShellWalls(
                 levels,
                 promontorySet,
                 roundTierCorners,
                 wallEdges,
+                transitions,
                 roomBoundaryContext,
                 origin,
                 contracts.levelHeight,
@@ -320,6 +318,8 @@ namespace DungeonLab.Editor
                 ref hasBounds,
                 ref stats);
             HashSet<(int x, int z, int direction)> shellGuardEdges = shellPlacement.guardEdges;
+            HashSet<(int x, int z, int direction)> bareLandingEdges =
+                shellPlacement.bareLandingEdges;
             ApplyPartitionHeightPlan(
                 wallEdges,
                 roomBoundaryContext,
@@ -329,8 +329,10 @@ namespace DungeonLab.Editor
             List<GatewayPlacement> gatewayPlacements = BuildGatewayPlacements(
                 levels,
                 wallEdges,
+                shellPlacement.wallHeights,
                 roomBoundaryContext,
-                contracts.gateways);
+                contracts.gateways,
+                contracts.partitions);
             foreach (GatewayPlacement gateway in gatewayPlacements)
             {
                 PlaceGateway(
@@ -367,8 +369,11 @@ namespace DungeonLab.Editor
                     contracts.levelHeight,
                     ref bounds,
                     ref hasBounds);
-                if (wallEdge.suppressRailing ||
-                    shellGuardEdges.Contains((wallEdge.edge.x, wallEdge.edge.z, wallEdge.edge.direction)))
+                if (SuppressesGeneratedTopGuard(
+                        wallEdge.suppressRailing,
+                        (wallEdge.edge.x, wallEdge.edge.z, wallEdge.edge.direction),
+                        shellGuardEdges,
+                        bareLandingEdges))
                 {
                     continue;
                 }
@@ -407,7 +412,11 @@ namespace DungeonLab.Editor
             }
 
             railingOnlyEdges.RemoveAll(edge =>
-                shellGuardEdges.Contains((edge.x, edge.z, edge.direction)));
+                SuppressesGeneratedTopGuard(
+                    false,
+                    (edge.x, edge.z, edge.direction),
+                    shellGuardEdges,
+                    bareLandingEdges));
             foreach (PlatformEdge railingEdge in railingOnlyEdges)
             {
                 PlaceRailingEdge(
@@ -422,14 +431,18 @@ namespace DungeonLab.Editor
                 stats.railings++;
             }
 
-            // Railing corner columns accompany railings, so skip railing-suppressed wall
-            // edges and block columns on stair cells; cliff corner stacks accompany the
-            // walls themselves, so only full set-piece reservations block those.
+            // Railing corner columns accompany railings, so skip every edge whose
+            // generated top guard is suppressed (including bare landing edges) and
+            // block columns on stair cells; cliff corner stacks accompany the walls
+            // themselves, so only full set-piece reservations block those.
             var railingWallEdges = new List<WallEdge>(wallEdges.Count);
             foreach (WallEdge wallEdge in wallEdges)
             {
-                if (!wallEdge.suppressRailing &&
-                    !shellGuardEdges.Contains((wallEdge.edge.x, wallEdge.edge.z, wallEdge.edge.direction)) &&
+                if (!SuppressesGeneratedTopGuard(
+                        wallEdge.suppressRailing,
+                        (wallEdge.edge.x, wallEdge.edge.z, wallEdge.edge.direction),
+                        shellGuardEdges,
+                        bareLandingEdges) &&
                     DropGetsRailing(wallEdge.higherLevel - wallEdge.lowerLevel) &&
                     !(TryGetRoomSide(roomBoundaryContext, wallEdge, out (int roomId, int direction) cornerSide) &&
                       wallGuardSides.Contains(cornerSide)))
@@ -3278,6 +3291,152 @@ namespace DungeonLab.Editor
             }
         }
 
+        private static HashSet<(Vector2Int cell, int direction, int higherLevel)> FindOrphanLandingShellEdges(
+            IReadOnlyList<(Vector2Int cell, int direction, int higherLevel)> shellEdges,
+            ISet<Vector2Int> stairLandingCells)
+        {
+            var orphanEdges = new HashSet<(Vector2Int cell, int direction, int higherLevel)>();
+            if (shellEdges == null ||
+                shellEdges.Count == 0 ||
+                stairLandingCells == null ||
+                stairLandingCells.Count == 0)
+            {
+                return orphanEdges;
+            }
+
+            var uniqueEdges = new HashSet<(Vector2Int cell, int direction, int higherLevel)>(shellEdges);
+            var endpointCounts = new Dictionary<(Vector2Int vertex, int higherLevel), int>();
+            foreach ((Vector2Int cell, int direction, int higherLevel) shellEdge in uniqueEdges)
+            {
+                GetEdgeVertices(
+                    new PlatformEdge(shellEdge.cell.x, shellEdge.cell.y, shellEdge.direction),
+                    out Vector2Int first,
+                    out Vector2Int second);
+                IncrementShellEndpoint(endpointCounts, first, shellEdge.higherLevel);
+                IncrementShellEndpoint(endpointCounts, second, shellEdge.higherLevel);
+            }
+
+            foreach ((Vector2Int cell, int direction, int higherLevel) shellEdge in uniqueEdges)
+            {
+                if (!stairLandingCells.Contains(shellEdge.cell))
+                {
+                    continue;
+                }
+
+                GetEdgeVertices(
+                    new PlatformEdge(shellEdge.cell.x, shellEdge.cell.y, shellEdge.direction),
+                    out Vector2Int first,
+                    out Vector2Int second);
+                if (endpointCounts[(first, shellEdge.higherLevel)] == 1 &&
+                    endpointCounts[(second, shellEdge.higherLevel)] == 1)
+                {
+                    orphanEdges.Add(shellEdge);
+                }
+            }
+
+            return orphanEdges;
+        }
+
+        private static void IncrementShellEndpoint(
+            Dictionary<(Vector2Int vertex, int higherLevel), int> endpointCounts,
+            Vector2Int vertex,
+            int higherLevel)
+        {
+            var key = (vertex, higherLevel);
+            endpointCounts.TryGetValue(key, out int count);
+            endpointCounts[key] = count + 1;
+        }
+
+        private static HashSet<Vector2Int> CollectStructuralStairLandingCells(
+            IReadOnlyList<TransitionEdge> transitions)
+        {
+            var landingCells = new HashSet<Vector2Int>();
+            if (transitions == null)
+            {
+                return landingCells;
+            }
+
+            foreach (TransitionEdge transition in transitions)
+            {
+                if (!transition.hasLandings ||
+                    string.Equals(transition.placementClass, SeamStairPlacementClass, StringComparison.Ordinal) ||
+                    string.Equals(transition.placementClass, DaisStairPlacementClass, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                foreach (Vector2Int cell in transition.lowerLandingCells)
+                {
+                    landingCells.Add(cell);
+                }
+
+                foreach (Vector2Int cell in transition.upperLandingCells)
+                {
+                    landingCells.Add(cell);
+                }
+            }
+
+            return landingCells;
+        }
+
+        private static List<(Vector2Int cell, int direction, int higherLevel)> CollectOuterShellContinuityEdges(
+            IReadOnlyList<WallEdge> wallEdges,
+            IReadOnlyList<RoundTierCorner> roundTierCorners,
+            HashSet<Vector2Int> promontoryCells)
+        {
+            var shellEdges = new List<(Vector2Int cell, int direction, int higherLevel)>();
+            if (wallEdges != null)
+            {
+                foreach (WallEdge wall in wallEdges)
+                {
+                    var cell = new Vector2Int(wall.edge.x, wall.edge.z);
+                    if (wall.isPartition ||
+                        wall.suppressRailing ||
+                        promontoryCells.Contains(cell))
+                    {
+                        continue;
+                    }
+
+                    shellEdges.Add((cell, wall.edge.direction, wall.higherLevel));
+                }
+            }
+
+            if (roundTierCorners == null)
+            {
+                return shellEdges;
+            }
+
+            foreach (RoundTierCorner corner in roundTierCorners)
+            {
+                if (corner.wallOnly || promontoryCells.Contains(corner.cell))
+                {
+                    continue;
+                }
+
+                shellEdges.Add((
+                    new Vector2Int(corner.edgeA.x, corner.edgeA.z),
+                    corner.edgeA.direction,
+                    corner.higherLevel));
+                shellEdges.Add((
+                    new Vector2Int(corner.edgeB.x, corner.edgeB.z),
+                    corner.edgeB.direction,
+                    corner.higherLevel));
+            }
+
+            return shellEdges;
+        }
+
+        private static bool SuppressesGeneratedTopGuard(
+            bool wallSuppressesRailing,
+            (int x, int z, int direction) edge,
+            ISet<(int x, int z, int direction)> shellGuardEdges,
+            ISet<(int x, int z, int direction)> bareLandingEdges)
+        {
+            return wallSuppressesRailing ||
+                shellGuardEdges != null && shellGuardEdges.Contains(edge) ||
+                bareLandingEdges != null && bareLandingEdges.Contains(edge);
+        }
+
         // Tall shell walls on the dungeon's OUTER edges only — those facing void
         // that is reachable from outside the footprint (the true perimeter), not
         // interior chasms/overlooks (railings/D) or piers (open). Height scales
@@ -3288,6 +3447,7 @@ namespace DungeonLab.Editor
             HashSet<Vector2Int> promontoryCells,
             IReadOnlyList<RoundTierCorner> roundTierCorners,
             List<WallEdge> wallEdges,
+            IReadOnlyList<TransitionEdge> transitions,
             RoomBoundaryContext roomBoundaryContext,
             Vector3 origin,
             float levelHeight,
@@ -3297,7 +3457,26 @@ namespace DungeonLab.Editor
             ref TieredPlatformBuildStats stats)
         {
             var guardEdges = new HashSet<(int x, int z, int direction)>();
+            var bareLandingEdges = new HashSet<(int x, int z, int direction)>();
             var largeWallRooms = new HashSet<int>();
+            var wallHeights = new Dictionary<EdgeKey, int>();
+            HashSet<Vector2Int> stairLandingCells =
+                CollectStructuralStairLandingCells(transitions);
+            HashSet<(Vector2Int cell, int direction, int higherLevel)> orphanLandingShellEdges =
+                FindOrphanLandingShellEdges(
+                    CollectOuterShellContinuityEdges(
+                        wallEdges,
+                        roundTierCorners,
+                        promontoryCells),
+                    stairLandingCells);
+            foreach ((Vector2Int cell, int direction, int higherLevel) orphanEdge in orphanLandingShellEdges)
+            {
+                bareLandingEdges.Add((
+                    orphanEdge.cell.x,
+                    orphanEdge.cell.y,
+                    orphanEdge.direction));
+            }
+
             MeasuredPrefab large = default, med = default, small = default;
             bool haveLarge = false, haveMed = false, haveSmall = false;
             try { large = MeasurePrefab(PackageInventory.Load().GetPrefabPath(ShellWallLargeName), PrefabRole.StraightWall); haveLarge = true; } catch { }
@@ -3306,7 +3485,11 @@ namespace DungeonLab.Editor
             if (!haveMed)
             {
                 Debug.LogWarning("Dungeon Lab Elevation Edge Model: shell wall pieces unavailable; outer shells skipped.");
-                return new OuterShellPlacementResult(guardEdges, largeWallRooms);
+                return new OuterShellPlacementResult(
+                    guardEdges,
+                    bareLandingEdges,
+                    largeWallRooms,
+                    wallHeights);
             }
 
             // Pick the modular piece whose nominal height matches a course (6/4/2u),
@@ -3379,15 +3562,28 @@ namespace DungeonLab.Editor
                 }
             }
 
+            void RecordWallHeight(PlatformEdge edge, IReadOnlyList<int> courseHeights)
+            {
+                int totalHeight = 0;
+                foreach (int height in courseHeights)
+                {
+                    totalHeight += height;
+                }
+
+                Vector2Int cell = new Vector2Int(edge.x, edge.z);
+                wallHeights[new EdgeKey(cell, Neighbor(cell, edge.direction))] =
+                    totalHeight;
+            }
+
             // Build shells on top of existing drop faces (the C cliff walls AND the
-            // interior retaining tier-steps). BuildWallEdges already excludes stair
-            // footprints, transitions, ports and reserved cells, and flags every
-            // walkway-connection face (stair / bridge port / aerial-deck landing)
-            // with suppressRailing. So skipping partition AND suppressRailing edges
-            // guarantees a shell NEVER blocks a stair/bridge landing. A face is
-            // OUTER (taller) when it fronts the exterior void, else INNER (shorter).
-            // Round-tier corners are removed from wallEdges and shelled as curved
-            // pieces below.
+            // interior retaining tier-steps). Stair mouths and authored stair-owned
+            // tops are already excluded or suppressed. Lateral landing walls remain
+            // eligible when they continue a same-level shell run or corner, but an
+            // isolated one-cell landing shell is pruned here; its structural drop
+            // face remains in wallEdges and the normal railing pass may guard it.
+            // A face is OUTER (taller) when it fronts the exterior void, else INNER
+            // (shorter). Round-tier corners are removed from wallEdges and shelled
+            // as curved pieces below.
             int shells = 0;
             foreach (WallEdge wall in wallEdges)
             {
@@ -3397,7 +3593,9 @@ namespace DungeonLab.Editor
                 }
 
                 var cell = new Vector2Int(wall.edge.x, wall.edge.z);
-                if (promontoryCells.Contains(cell))
+                if (promontoryCells.Contains(cell) ||
+                    orphanLandingShellEdges.Contains(
+                        (cell, wall.edge.direction, wall.higherLevel)))
                 {
                     continue;
                 }
@@ -3409,6 +3607,7 @@ namespace DungeonLab.Editor
                 int course = 0;
                 int[] courseHeights = ShellCourseHeights(level, minLevel, maxLevel, outer, RoomSizeCap(cell));
                 RecordLargePerimeterRoom(cell, outer, haveLarge, courseHeights);
+                RecordWallHeight(edge, courseHeights);
                 foreach (int h in courseHeights)
                 {
                     MeasuredPrefab piece = CourseStraight(h);
@@ -3503,6 +3702,18 @@ namespace DungeonLab.Editor
                     outer,
                     hasCurvedLarge,
                     courseHeights);
+                RecordWallHeight(
+                    new PlatformEdge(
+                        corner.edgeA.x,
+                        corner.edgeA.z,
+                        corner.edgeA.direction),
+                    courseHeights);
+                RecordWallHeight(
+                    new PlatformEdge(
+                        corner.edgeB.x,
+                        corner.edgeB.z,
+                        corner.edgeB.direction),
+                    courseHeights);
                 foreach (int h in courseHeights)
                 {
                     TierStepPiece piece = CourseCurved(h);
@@ -3523,7 +3734,11 @@ namespace DungeonLab.Editor
             }
 
             stats.largePerimeterRooms = largeWallRooms.Count;
-            return new OuterShellPlacementResult(guardEdges, largeWallRooms);
+            return new OuterShellPlacementResult(
+                guardEdges,
+                bareLandingEdges,
+                largeWallRooms,
+                wallHeights);
         }
 
         private static void ApplyPartitionHeightPlan(
@@ -3569,11 +3784,14 @@ namespace DungeonLab.Editor
         private static List<GatewayPlacement> BuildGatewayPlacements(
             IReadOnlyDictionary<Vector2Int, int> levels,
             IReadOnlyList<WallEdge> wallEdges,
+            IReadOnlyDictionary<EdgeKey, int> shellWallHeights,
             RoomBoundaryContext roomBoundaryContext,
-            GatewayContracts contracts)
+            GatewayContracts contracts,
+            PartitionWallContracts partitionContracts)
         {
             // Door material/style is seed-varied, never tier-selected. Height is
-            // accepted only from the two already-planned walls flanking the port.
+            // read from whichever planned flanking walls actually exist. If both
+            // exist they must agree; a corner/one-sided entrance may use one.
             var placements = new List<GatewayPlacement>();
             if (roomBoundaryContext?.doorwayEdges == null ||
                 roomBoundaryContext.doorwayEdges.Count == 0)
@@ -3581,7 +3799,9 @@ namespace DungeonLab.Editor
                 return placements;
             }
 
-            var partitionHeights = new Dictionary<EdgeKey, int>();
+            var flankHeights = shellWallHeights != null
+                ? new Dictionary<EdgeKey, int>(shellWallHeights)
+                : new Dictionary<EdgeKey, int>();
             foreach (WallEdge wall in wallEdges)
             {
                 if (!wall.isPartition)
@@ -3590,17 +3810,20 @@ namespace DungeonLab.Editor
                 }
 
                 Vector2Int cell = new Vector2Int(wall.edge.x, wall.edge.z);
-                partitionHeights[new EdgeKey(cell, Neighbor(cell, wall.edge.direction))] =
+                flankHeights[new EdgeKey(cell, Neighbor(cell, wall.edge.direction))] =
                     wall.partitionHeightUnits;
             }
 
             var selectedByConnection = new Dictionary<string, GatewayCandidate>();
+            GatewayCandidate guaranteedCandidate = default;
+            string guaranteedGroupKey = string.Empty;
+            bool hasGuaranteedCandidate = false;
             foreach (DoorwayEdge doorway in roomBoundaryContext.doorwayEdges)
             {
                 if (!TryBuildGatewayCandidate(
                         doorway,
                         levels,
-                        partitionHeights,
+                        flankHeights,
                         roomBoundaryContext,
                         out GatewayCandidate candidate))
                 {
@@ -3610,6 +3833,19 @@ namespace DungeonLab.Editor
                 string groupKey = doorway.connectionIndex >= 0
                     ? $"connection:{doorway.connectionIndex}"
                     : $"edge:{candidate.edgeKey}";
+                candidate = candidate.WithSelection(
+                    groupKey,
+                    StairForge.StableHash(
+                            $"{roomBoundaryContext.gatewaySelectionSalt}:gateway-end:{groupKey}:{candidate.edgeKey}") &
+                        int.MaxValue);
+                if (!hasGuaranteedCandidate ||
+                    candidate.selectionScore < guaranteedCandidate.selectionScore)
+                {
+                    guaranteedCandidate = candidate;
+                    guaranteedGroupKey = groupKey;
+                    hasGuaranteedCandidate = true;
+                }
+
                 int coverageRoll = StairForge.StableHash(
                         $"{roomBoundaryContext.gatewaySelectionSalt}:gateway-coverage:{groupKey}") &
                     int.MaxValue;
@@ -3618,11 +3854,6 @@ namespace DungeonLab.Editor
                     continue;
                 }
 
-                candidate = candidate.WithSelection(
-                    groupKey,
-                    StairForge.StableHash(
-                            $"{roomBoundaryContext.gatewaySelectionSalt}:gateway-end:{groupKey}:{candidate.edgeKey}") &
-                        int.MaxValue);
                 if (!selectedByConnection.TryGetValue(groupKey, out GatewayCandidate existing) ||
                     candidate.selectionScore < existing.selectionScore)
                 {
@@ -3630,12 +3861,29 @@ namespace DungeonLab.Editor
                 }
             }
 
+            if (!hasGuaranteedCandidate)
+            {
+                throw new InvalidOperationException(
+                    $"Dungeon had {roomBoundaryContext.doorwayEdges.Count} doorway ports but no height-compatible gateway location. " +
+                    "Refusing to emit a doorless dungeon.");
+            }
+
+            if (selectedByConnection.Count == 0)
+            {
+                selectedByConnection[guaranteedGroupKey] = guaranteedCandidate;
+            }
+
             var groupKeys = new List<string>(selectedByConnection.Keys);
             groupKeys.Sort(StringComparer.Ordinal);
             foreach (string groupKey in groupKeys)
             {
                 GatewayCandidate candidate = selectedByConnection[groupKey];
-                GatewayStyle[] compatibleStyles = candidate.wallHeightUnits >= 6
+                int gatewayHeightUnits =
+                    candidate.wallHeightUnits == 4 ||
+                    candidate.wallHeightUnits == 8
+                        ? 4
+                        : 6;
+                GatewayStyle[] compatibleStyles = gatewayHeightUnits >= 6
                     ? new[]
                     {
                         GatewayStyle.Metal,
@@ -3655,11 +3903,17 @@ namespace DungeonLab.Editor
                         $"{roomBoundaryContext.gatewaySelectionSalt}:gateway-style:{groupKey}:{candidate.edgeKey}") &
                     int.MaxValue;
                 GatewayStyle style = compatibleStyles[styleRoll % compatibleStyles.Length];
+                int headerHeightUnits =
+                    candidate.wallHeightUnits - gatewayHeightUnits;
                 placements.Add(new GatewayPlacement(
                     candidate.edge,
                     candidate.floorLevel,
                     candidate.wallHeightUnits,
-                    contracts.For(style, candidate.wallHeightUnits)));
+                    contracts.For(style, gatewayHeightUnits),
+                    headerHeightUnits > 0
+                        ? partitionContracts.ForHeight(headerHeightUnits)
+                        : default,
+                    headerHeightUnits));
             }
 
             return placements;
@@ -3668,7 +3922,7 @@ namespace DungeonLab.Editor
         private static bool TryBuildGatewayCandidate(
             DoorwayEdge doorway,
             IReadOnlyDictionary<Vector2Int, int> levels,
-            IReadOnlyDictionary<EdgeKey, int> partitionHeights,
+            IReadOnlyDictionary<EdgeKey, int> flankHeights,
             RoomBoundaryContext roomBoundaryContext,
             out GatewayCandidate candidate)
         {
@@ -3710,10 +3964,27 @@ namespace DungeonLab.Editor
             Vector2Int secondFlankCell = ownerCell - tangent;
             var firstFlank = new EdgeKey(firstFlankCell, firstFlankCell + outward);
             var secondFlank = new EdgeKey(secondFlankCell, secondFlankCell + outward);
-            if (!partitionHeights.TryGetValue(firstFlank, out int firstHeight) ||
-                !partitionHeights.TryGetValue(secondFlank, out int secondHeight) ||
-                firstHeight != secondHeight ||
-                (firstHeight != 4 && firstHeight != 6))
+            bool hasFirstFlank = flankHeights.TryGetValue(
+                firstFlank,
+                out int firstHeight);
+            bool hasSecondFlank = flankHeights.TryGetValue(
+                secondFlank,
+                out int secondHeight);
+            if (hasFirstFlank && hasSecondFlank && firstHeight != secondHeight)
+            {
+                return false;
+            }
+
+            int wallHeight = hasFirstFlank
+                ? firstHeight
+                : hasSecondFlank
+                    ? secondHeight
+                    : 4;
+            if (wallHeight != 4 &&
+                wallHeight != 6 &&
+                wallHeight != 8 &&
+                wallHeight != 10 &&
+                wallHeight != 12)
             {
                 return false;
             }
@@ -3722,7 +3993,7 @@ namespace DungeonLab.Editor
             candidate = new GatewayCandidate(
                 edge,
                 firstLevel,
-                firstHeight,
+                wallHeight,
                 new EdgeKey(ownerCell, otherCell).ToString());
             return true;
         }
@@ -3768,6 +4039,26 @@ namespace DungeonLab.Editor
                 edgeB,
                 outwardNormal);
 
+            if (gateway.headerHeightUnits > 0)
+            {
+                MeasuredPrefab header = gateway.headerPrefab;
+                GameObject headerInstance = PlaceEdgePrefab(
+                    header,
+                    parent,
+                    $"gateway_header_{gateway.edge.x}_{gateway.edge.z}_{gateway.edge.direction}",
+                    edgeA + Vector3.up * gateway.contract.wallHeightUnits,
+                    edgeB + Vector3.up * gateway.contract.wallHeightUnits,
+                    outwardNormal,
+                    ref bounds,
+                    ref hasBounds);
+                ValidatePlacedEdgePrefab(
+                    headerInstance,
+                    header,
+                    edgeA + Vector3.up * gateway.contract.wallHeightUnits,
+                    edgeB + Vector3.up * gateway.contract.wallHeightUnits,
+                    outwardNormal);
+            }
+
             if (gateway.contract.style == GatewayStyle.Barred)
             {
                 Vector2 localMidpoint =
@@ -3787,7 +4078,7 @@ namespace DungeonLab.Editor
             }
 
             stats.gateways++;
-            if (gateway.wallHeightUnits >= 6)
+            if (gateway.contract.wallHeightUnits >= 6)
             {
                 stats.largeGateways++;
             }
@@ -5724,10 +6015,6 @@ namespace DungeonLab.Editor
             MeasuredPrefab largeCorner = MeasurePrefab(
                 largeCornerPath,
                 PrefabRole.HardCorner).WithName(PartitionCornerLargeName);
-            ValidateNominalWallHeight(mediumWall, 4);
-            ValidateNominalWallHeight(largeWall, 6);
-            ValidateNominalWallHeight(mediumCorner, 4);
-            ValidateNominalWallHeight(largeCorner, 6);
             Debug.Log(
                 $"Dungeon Lab Elevation Edge Model: measured PivotMiddle partition contracts. " +
                 $"medium wall {PartitionWallMediumName} height {mediumWall.height:0.###}u, " +
@@ -5745,24 +6032,19 @@ namespace DungeonLab.Editor
         {
             MeasuredPrefab mediumMetal = MeasureGatewayPrefab(
                 inventory,
-                GatewayMediumMetalName,
-                4);
+                GatewayMediumMetalName);
             MeasuredPrefab largeWallMetal = MeasureGatewayPrefab(
                 inventory,
-                GatewayLargeWallMetalName,
-                6);
+                GatewayLargeWallMetalName);
             MeasuredPrefab mediumWood = MeasureGatewayPrefab(
                 inventory,
-                GatewayMediumWoodName,
-                4);
+                GatewayMediumWoodName);
             MeasuredPrefab largeWallWood = MeasureGatewayPrefab(
                 inventory,
-                GatewayLargeWallWoodName,
-                6);
+                GatewayLargeWallWoodName);
             MeasuredPrefab largeWood = MeasureGatewayPrefab(
                 inventory,
-                GatewayLargeWoodName,
-                6);
+                GatewayLargeWoodName);
             string barsPrefabPath = inventory.GetPrefabPath(GatewayBarsName);
 
             Debug.Log(
@@ -5781,36 +6063,15 @@ namespace DungeonLab.Editor
 
         private static MeasuredPrefab MeasureGatewayPrefab(
             PackageInventory inventory,
-            string prefabName,
-            int nominalHeightUnits)
+            string prefabName)
         {
             MeasuredPrefab measured = MeasurePrefab(
                 inventory.GetPrefabPath(prefabName),
                 PrefabRole.StraightWall).WithName(prefabName);
-            float segmentLength = Vector2.Distance(
-                measured.localSegmentStart,
-                measured.localSegmentEnd);
-            if (Mathf.Abs(segmentLength - CellSize) > 0.08f)
-            {
-                throw new InvalidOperationException(
-                    $"Gateway prefab '{prefabName}' measured {segmentLength:0.###}u along its boundary segment; expected one {CellSize:0.###}u cell edge.");
-            }
-
-            ValidateNominalWallHeight(measured, nominalHeightUnits);
-            return measured;
-        }
-
-        private static void ValidateNominalWallHeight(
-            MeasuredPrefab measured,
-            int nominalHeightUnits)
-        {
-            if (Mathf.Abs(measured.height - nominalHeightUnits) >
-                WallFamilyDecorationTolerance)
-            {
-                throw new InvalidOperationException(
-                    $"Prefab '{measured.name}' measured {measured.height:0.###}u high; expected the nominal {nominalHeightUnits}u wall family " +
-                    $"within {WallFamilyDecorationTolerance:0.###}u of authored cap/trim overhang.");
-            }
+            // Gateway columns/caps may overhang the authored socket line. Keep
+            // their geometry intact, but attach the prefab by the package's exact
+            // one-cell module span rather than by total collider bounds.
+            return measured.WithSegmentLength(CellSize);
         }
 
         private static void ValidateDoubleSidedWallPrefab(string prefabPath, string prefabName)
@@ -9380,15 +9641,22 @@ namespace DungeonLab.Editor
         private readonly struct OuterShellPlacementResult
         {
             public readonly HashSet<(int x, int z, int direction)> guardEdges;
+            public readonly HashSet<(int x, int z, int direction)> bareLandingEdges;
             public readonly HashSet<int> largeWallRooms;
+            public readonly Dictionary<EdgeKey, int> wallHeights;
 
             public OuterShellPlacementResult(
                 HashSet<(int x, int z, int direction)> guardEdges,
-                HashSet<int> largeWallRooms)
+                HashSet<(int x, int z, int direction)> bareLandingEdges,
+                HashSet<int> largeWallRooms,
+                Dictionary<EdgeKey, int> wallHeights)
             {
                 this.guardEdges =
                     guardEdges ?? new HashSet<(int x, int z, int direction)>();
+                this.bareLandingEdges =
+                    bareLandingEdges ?? new HashSet<(int x, int z, int direction)>();
                 this.largeWallRooms = largeWallRooms ?? new HashSet<int>();
+                this.wallHeights = wallHeights ?? new Dictionary<EdgeKey, int>();
             }
         }
 
@@ -9667,23 +9935,32 @@ namespace DungeonLab.Editor
             public readonly int floorLevel;
             public readonly int wallHeightUnits;
             public readonly GatewayContract contract;
+            public readonly MeasuredPrefab headerPrefab;
+            public readonly int headerHeightUnits;
 
             public GatewayPlacement(
                 PlatformEdge edge,
                 int floorLevel,
                 int wallHeightUnits,
-                GatewayContract contract)
+                GatewayContract contract,
+                MeasuredPrefab headerPrefab,
+                int headerHeightUnits)
             {
-                if (contract.wallHeightUnits != wallHeightUnits)
+                if (contract.wallHeightUnits + headerHeightUnits != wallHeightUnits ||
+                    (headerHeightUnits != 0 &&
+                     headerHeightUnits != 4 &&
+                     headerHeightUnits != 6))
                 {
                     throw new InvalidOperationException(
-                        $"Gateway contract height {contract.wallHeightUnits}u did not match its {wallHeightUnits}u flanking walls.");
+                        $"Gateway assembly {contract.wallHeightUnits}u + {headerHeightUnits}u did not match its {wallHeightUnits}u flanking walls.");
                 }
 
                 this.edge = edge;
                 this.floorLevel = floorLevel;
                 this.wallHeightUnits = wallHeightUnits;
                 this.contract = contract;
+                this.headerPrefab = headerPrefab;
+                this.headerHeightUnits = headerHeightUnits;
             }
         }
 
@@ -10096,6 +10373,30 @@ namespace DungeonLab.Editor
             public MeasuredPrefab WithName(string newName)
             {
                 return new MeasuredPrefab(newName, prefabPath, role, localPlanBounds, localSegmentStart, localSegmentEnd, faceNormal, height, localTopY, baseQuadrant);
+            }
+
+            public MeasuredPrefab WithSegmentLength(float segmentLength)
+            {
+                Vector2 direction = localSegmentEnd - localSegmentStart;
+                if (direction.sqrMagnitude <= 0.0001f || segmentLength <= 0f)
+                {
+                    throw new InvalidOperationException(
+                        $"Prefab '{name}' cannot normalize an invalid boundary segment.");
+                }
+
+                Vector2 center = (localSegmentStart + localSegmentEnd) * 0.5f;
+                Vector2 halfSegment = direction.normalized * (segmentLength * 0.5f);
+                return new MeasuredPrefab(
+                    name,
+                    prefabPath,
+                    role,
+                    localPlanBounds,
+                    center - halfSegment,
+                    center + halfSegment,
+                    faceNormal,
+                    height,
+                    localTopY,
+                    baseQuadrant);
             }
         }
 

@@ -1877,8 +1877,58 @@ namespace DungeonLab.Editor
             rooms = new List<RoomFootprint>(intent.nodes.Length);
             rejectionReason = string.Empty;
             phase1LastRoomInflationAttempts = 0;
+
+            // Recipe rooms have authored, fixed footprints: rebuilding one with
+            // six random streams does not produce six alternatives. Reserve
+            // those constrained footprints first so an earlier generic room
+            // cannot greedily occupy their required space.
+            var placedRooms = new RoomFootprint[intent.nodes.Length];
             for (int nodeIndex = 0; nodeIndex < intent.nodes.Length; nodeIndex++)
             {
+                RouteNodeIntent node = intent.nodes[nodeIndex];
+                if (!node.HasRecipeSlot)
+                {
+                    continue;
+                }
+
+                phase1LastRoomInflationAttempts++;
+                System.Random roomRandom = Phase1Random(
+                    dungeonSeed,
+                    layoutAttempt,
+                    node.id,
+                    "room-shape-0");
+                var candidate = new RoomFootprint(BuildProcessionalRoomParts(
+                    intent,
+                    node,
+                    nodeIndex,
+                    spatial,
+                    nodeCenters[nodeIndex],
+                    nodeCenters,
+                    intent.recipeSlots,
+                    roomRandom,
+                    allowWing: false));
+                if (!RoomFitsEnvelope(candidate, envelopes[nodeIndex]))
+                {
+                    rejectionReason = $"fixed recipe room node '{node.id}' exceeded its placement envelope";
+                    return false;
+                }
+
+                if (OverlapsPlacedRoom(candidate, placedRooms))
+                {
+                    rejectionReason = $"fixed recipe room node '{node.id}' overlapped another fixed recipe room";
+                    return false;
+                }
+
+                placedRooms[nodeIndex] = candidate;
+            }
+
+            for (int nodeIndex = 0; nodeIndex < intent.nodes.Length; nodeIndex++)
+            {
+                if (placedRooms[nodeIndex] != null)
+                {
+                    continue;
+                }
+
                 RouteNodeIntent node = intent.nodes[nodeIndex];
                 bool placed = false;
                 for (int attempt = 0; attempt < Phase1RoomInflationAttemptLimit; attempt++)
@@ -1903,37 +1953,17 @@ namespace DungeonLab.Editor
                             nodeIndex != intent.vista.sourceNode &&
                             nodeIndex != intent.vista.targetNode);
                     var candidate = new RoomFootprint(parts);
-                    bool insideEnvelope = true;
-                    foreach (Vector2Int cell in candidate.cells)
-                    {
-                        if (!envelopes[nodeIndex].Contains(cell))
-                        {
-                            insideEnvelope = false;
-                            break;
-                        }
-                    }
-
-                    if (!insideEnvelope)
+                    if (!RoomFitsEnvelope(candidate, envelopes[nodeIndex]))
                     {
                         continue;
                     }
 
-                    bool overlaps = false;
-                    foreach (RoomFootprint existing in rooms)
-                    {
-                        if (candidate.Overlaps(existing))
-                        {
-                            overlaps = true;
-                            break;
-                        }
-                    }
-
-                    if (overlaps)
+                    if (OverlapsPlacedRoom(candidate, placedRooms))
                     {
                         continue;
                     }
 
-                    rooms.Add(candidate);
+                    placedRooms[nodeIndex] = candidate;
                     placed = true;
                     break;
                 }
@@ -1945,6 +1975,7 @@ namespace DungeonLab.Editor
                 }
             }
 
+            rooms.AddRange(placedRooms);
             ApplyProcessionalNeighborBias(
                 intent,
                 spatial,
@@ -1952,6 +1983,34 @@ namespace DungeonLab.Editor
                 envelopes,
                 rooms);
             return true;
+        }
+
+        private static bool RoomFitsEnvelope(RoomFootprint room, RectInt envelope)
+        {
+            foreach (Vector2Int cell in room.cells)
+            {
+                if (!envelope.Contains(cell))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static bool OverlapsPlacedRoom(
+            RoomFootprint candidate,
+            IReadOnlyList<RoomFootprint> placedRooms)
+        {
+            foreach (RoomFootprint existing in placedRooms)
+            {
+                if (existing != null && candidate.Overlaps(existing))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private static void ApplyProcessionalNeighborBias(
