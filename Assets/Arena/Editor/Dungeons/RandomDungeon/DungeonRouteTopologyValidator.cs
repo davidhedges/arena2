@@ -1,0 +1,1082 @@
+using System;
+using System.Collections.Generic;
+
+using System.IO;
+using System.Text;
+using UnityEditor;
+using UnityEngine;
+
+namespace DungeonLab.Editor
+{
+    // Tools > Dungeon Lab > Validate Topologies.
+    //
+    // Hand-verifying a topology draft against the authoring rules is the
+    // expensive part of adding one. This answers in one second instead of an
+    // afternoon: every rule, by node/edge key, with the offending value; the map
+    // re-rendered with its edges drawn; the vista lane with its worst-case clear
+    // cell count at each profile; the plan envelope across all eight
+    // orientations; and the derived graph metrics.
+    //
+    // It is author-time only. It never runs during generation and it never
+    // decides anything: a topology that fails here still fails at generation,
+    // loudly, through TryValidateRouteIntent.
+    internal sealed partial class DungeonLabGenerator
+    {
+        private const string RouteTopologyValidationReportPath =
+            "DungeonLabReports/route_topology_validation.txt";
+        private static readonly string[] RouteTopologyValidationProfileIds = { "spacious", "dense" };
+
+        [MenuItem("Tools/Dungeon Lab/Validate Topologies")]
+        private static void ValidateRouteTopologiesMenuItem()
+        {
+            string report;
+            bool passed;
+            int topologyCount;
+            try
+            {
+                report = BuildRouteTopologyValidationReport(out passed, out topologyCount);
+            }
+            catch (Exception exception)
+            {
+                Debug.LogError($"[ROUTE_TOPOLOGY] validation could not run: {exception.Message}");
+                EditorUtility.DisplayDialog(
+                    "Validate Topologies",
+                    $"Validation could not run:\n\n{exception.Message}",
+                    "Close");
+                return;
+            }
+
+            Directory.CreateDirectory(Path.GetDirectoryName(RouteTopologyValidationReportPath));
+            File.WriteAllText(RouteTopologyValidationReportPath, report);
+            if (passed)
+            {
+                Debug.Log(report);
+            }
+            else
+            {
+                Debug.LogError(report);
+            }
+
+            EditorUtility.DisplayDialog(
+                "Validate Topologies",
+                (passed
+                    ? $"All {topologyCount} topologies satisfy every authoring rule."
+                    : $"At least one of {topologyCount} topologies violates an authoring rule. See the console.") +
+                $"\n\nReport written to {RouteTopologyValidationReportPath}",
+                "Close");
+        }
+
+        private static string BuildRouteTopologyValidationReport(out bool passed, out int topologyCount)
+        {
+            // Restore whatever profile the rest of the editor session was using.
+            DungeonGenerationSettings restoreSettings = CurrentGenerationSettings;
+            var report = new StringBuilder();
+            passed = true;
+            try
+            {
+                List<DungeonRouteTopology> topologies = AllRouteTopologiesByFileOrder();
+                topologyCount = topologies.Count;
+                report.Append("Route topology validation — ")
+                    .Append(RouteTopologyDirectory)
+                    .Append(", ")
+                    .Append(topologyCount)
+                    .AppendLine(" topologies");
+                if (topologyCount == 0)
+                {
+                    passed = false;
+                    report.AppendLine("FAIL: no topology files found.");
+                    return report.ToString();
+                }
+
+                foreach (DungeonRouteTopology topology in topologies)
+                {
+                    var violations = new List<string>();
+                    var notes = new List<string>();
+                    AppendRouteTopologyGraphRules(topology, violations);
+                    AppendRouteTopologyLatticeRules(topology, violations);
+                    AppendRouteTopologyRhythmRules(topology, violations);
+                    foreach (string profileId in RouteTopologyValidationProfileIds)
+                    {
+                        CurrentGenerationSettings = LoadActiveGenerationSettings(profileId);
+                        AppendRouteTopologyProfileRules(topology, profileId, violations, notes);
+                    }
+
+                    passed &= violations.Count == 0;
+                    report.AppendLine()
+                        .Append(violations.Count == 0 ? "PASS  " : "FAIL  ")
+                        .Append(topology.id)
+                        .Append("  (")
+                        .Append(topology.displayName)
+                        .Append(", ")
+                        .Append(topology.plannerVersion)
+                        .AppendLine(")");
+                    report.Append(RenderRouteTopologyMap(topology));
+                    report.AppendLine(RenderRouteTopologyMetrics(topology));
+                    foreach (string note in notes)
+                    {
+                        report.Append("    ").AppendLine(note);
+                    }
+
+                    foreach (string violation in violations)
+                    {
+                        report.Append("    VIOLATION: ").AppendLine(violation);
+                    }
+                }
+            }
+            finally
+            {
+                CurrentGenerationSettings = restoreSettings;
+            }
+
+            report.AppendLine()
+                .AppendLine(passed
+                    ? "RESULT: every topology satisfies every authoring rule."
+                    : "RESULT: at least one topology violates an authoring rule.");
+            return report.ToString();
+        }
+
+        // ---- rules --------------------------------------------------------
+
+        private static void AppendRouteTopologyGraphRules(
+            DungeonRouteTopology topology,
+            List<string> violations)
+        {
+            if (topology.nodes.Length != RouteNodeCount)
+            {
+                violations.Add(
+                    $"node count is {topology.nodes.Length}; the generator locks it to {RouteNodeCount}");
+            }
+
+            var mainRoute = new List<RouteTopologyNode>();
+            var branchNodes = new List<RouteTopologyNode>();
+            foreach (RouteTopologyNode node in topology.nodes)
+            {
+                (node.IsOnMainRoute ? mainRoute : branchNodes).Add(node);
+                if (node.level < 0 || node.level > MaxGeneratedLevel)
+                {
+                    violations.Add(
+                        $"node '{node.key}' ({node.id}) level {node.level} is outside 0..{MaxGeneratedLevel}");
+                }
+
+                if (node.level % MajorRiseLevels != 0)
+                {
+                    violations.Add(
+                        $"node '{node.key}' ({node.id}) level {node.level} is not a multiple of {MajorRiseLevels}");
+                }
+            }
+
+            for (int index = 0; index < mainRoute.Count; index++)
+            {
+                if (mainRoute[index].mainRouteOrder != index)
+                {
+                    violations.Add(
+                        $"main-route orders are not contiguous from 0: position {index} is " +
+                        $"'{mainRoute[index].key}' with order {mainRoute[index].mainRouteOrder}");
+                }
+            }
+
+            for (int index = 0; index < branchNodes.Count; index++)
+            {
+                if (branchNodes[index].branchOrder != index)
+                {
+                    violations.Add(
+                        $"branch orders are not contiguous from 0: position {index} is " +
+                        $"'{branchNodes[index].key}' with order {branchNodes[index].branchOrder}");
+                }
+            }
+
+            var kinds = new HashSet<RouteTransitionKind>();
+            foreach (RouteTopologyEdge edge in topology.edges)
+            {
+                kinds.Add(edge.transitionKind);
+                int rise = topology.nodes[edge.toNode].level - topology.nodes[edge.fromNode].level;
+                string label = $"edge '{edge.id}' " +
+                    $"({topology.nodes[edge.fromNode].key}->{topology.nodes[edge.toNode].key})";
+                if (edge.transitionKind == RouteTransitionKind.LevelCorridor)
+                {
+                    if (rise != 0)
+                    {
+                        violations.Add($"{label} is a LevelCorridor across a {rise}u rise; must be 0");
+                    }
+                }
+                else if (rise != MajorRiseLevels && rise != DoubleMajorRiseLevels)
+                {
+                    violations.Add(
+                        $"{label} is a {edge.transitionKind} across a {rise}u rise; the generator accepts " +
+                        $"only +{MajorRiseLevels} or +{DoubleMajorRiseLevels} " +
+                        "(write descending edges low-node-first until step 2 allows a sign)");
+                }
+            }
+
+            foreach (RouteTransitionKind required in new[]
+                     {
+                         RouteTransitionKind.Stair,
+                         RouteTransitionKind.Bridge,
+                         RouteTransitionKind.Stairwell
+                     })
+            {
+                if (!kinds.Contains(required))
+                {
+                    violations.Add($"no edge declares a {required}; the generator requires at least one");
+                }
+            }
+
+            if (topology.nodes[topology.bottomNode].level != 0)
+            {
+                violations.Add(
+                    $"bottom anchor '{topology.nodes[topology.bottomNode].key}' is at level " +
+                    $"{topology.nodes[topology.bottomNode].level}; must be 0");
+            }
+
+            if (topology.nodes[topology.topNode].level != MaxGeneratedLevel)
+            {
+                violations.Add(
+                    $"top anchor '{topology.nodes[topology.topNode].key}' is at level " +
+                    $"{topology.nodes[topology.topNode].level}; must be {MaxGeneratedLevel}");
+            }
+
+            int vistaDrop = topology.nodes[topology.vistaSourceNode].level -
+                topology.nodes[topology.vistaTargetNode].level;
+            if (vistaDrop < MajorRiseLevels)
+            {
+                violations.Add(
+                    $"vista source '{topology.nodes[topology.vistaSourceNode].key}' is only {vistaDrop}u " +
+                    $"above its target; must be at least {MajorRiseLevels}u");
+            }
+
+            List<int>[] adjacency = topology.BuildAdjacency();
+            var visited = new HashSet<int> { topology.bottomNode };
+            var queue = new Queue<int>();
+            queue.Enqueue(topology.bottomNode);
+            while (queue.Count > 0)
+            {
+                foreach (int neighbor in adjacency[queue.Dequeue()])
+                {
+                    if (visited.Add(neighbor))
+                    {
+                        queue.Enqueue(neighbor);
+                    }
+                }
+            }
+
+            if (visited.Count != topology.nodes.Length)
+            {
+                var unreached = new List<string>();
+                for (int node = 0; node < topology.nodes.Length; node++)
+                {
+                    if (!visited.Contains(node))
+                    {
+                        unreached.Add(topology.nodes[node].key);
+                    }
+                }
+
+                violations.Add($"nodes unreachable from the bottom anchor: {string.Join(", ", unreached)}");
+            }
+
+            int cycleRank = topology.edges.Length - (topology.nodes.Length - 1);
+            if (cycleRank < 1)
+            {
+                violations.Add($"cycle rank is {cycleRank}; a route needs at least one loop");
+            }
+
+            int junctionCount = 0;
+            foreach (List<int> incident in adjacency)
+            {
+                junctionCount += incident.Count >= 3 ? 1 : 0;
+            }
+
+            if (junctionCount < 2)
+            {
+                violations.Add($"only {junctionCount} nodes have degree >= 3; a route needs at least two branch points");
+            }
+
+            AppendRouteTopologySlotRules(topology, adjacency, violations);
+        }
+
+        private static void AppendRouteTopologySlotRules(
+            DungeonRouteTopology topology,
+            List<int>[] adjacency,
+            List<string> violations)
+        {
+            if (topology.slots.Length != 3)
+            {
+                violations.Add(
+                    $"{topology.slots.Length} recipe slots are declared; the generator requires exactly 3");
+            }
+
+            foreach (string required in new[]
+                     {
+                         CompressionRecipeSlotId,
+                         LandmarkRecipeSlotId,
+                         ReturnRecipeSlotId
+                     })
+            {
+                bool found = false;
+                foreach (RouteTopologySlot slot in topology.slots)
+                {
+                    found |= string.Equals(slot.slotId, required, StringComparison.Ordinal);
+                }
+
+                if (!found)
+                {
+                    violations.Add($"no slot declares id '{required}'");
+                }
+            }
+
+            foreach (RouteTopologySlot slot in topology.slots)
+            {
+                RouteTopologyNode node = topology.nodes[slot.node];
+                if (adjacency[slot.node].Count != 2)
+                {
+                    violations.Add(
+                        $"slot '{slot.slotId}' sits on '{node.key}' with degree " +
+                        $"{adjacency[slot.node].Count}; a two-port recipe room needs degree 2");
+                }
+
+                foreach (string edgeId in new[] { slot.entryEdgeId, slot.exitEdgeId })
+                {
+                    if (!topology.TryGetEdgeIndex(edgeId, out int edge) ||
+                        topology.edges[edge].fromNode != slot.node &&
+                        topology.edges[edge].toNode != slot.node)
+                    {
+                        violations.Add(
+                            $"slot '{slot.slotId}' bound edge '{edgeId}', which is not incident to '{node.key}'");
+                    }
+                }
+
+                if (slot.orientationBinding == RecipeOrientationBinding.VistaSourceToTarget &&
+                    slot.node != topology.vistaTargetNode &&
+                    slot.node != topology.vistaSourceNode)
+                {
+                    violations.Add(
+                        $"slot '{slot.slotId}' orients off the vista axis but '{node.key}' is neither " +
+                        "vista endpoint");
+                }
+            }
+        }
+
+        private static void AppendRouteTopologyLatticeRules(
+            DungeonRouteTopology topology,
+            List<string> violations)
+        {
+            foreach (RouteTopologyEdge edge in topology.edges)
+            {
+                Vector2Int from = topology.nodes[edge.fromNode].lattice;
+                Vector2Int to = topology.nodes[edge.toNode].lattice;
+                if (from.x != to.x && from.y != to.y)
+                {
+                    violations.Add(
+                        $"edge '{edge.id}' joins '{topology.nodes[edge.fromNode].key}' at {from} to " +
+                        $"'{topology.nodes[edge.toNode].key}' at {to}, which is not cardinally aligned; " +
+                        "the corridor builder cannot route it");
+                }
+            }
+
+            // A corridor is a straight cardinal run between its endpoints, so any
+            // third node on the same lane between them is a room it would cross.
+            foreach (RouteTopologyEdge edge in topology.edges)
+            {
+                foreach (int blocking in RouteTopologyNodesBetween(topology, edge.fromNode, edge.toNode))
+                {
+                    violations.Add(
+                        $"edge '{edge.id}' runs straight through node " +
+                        $"'{topology.nodes[blocking].key}' ({topology.nodes[blocking].id})");
+                }
+            }
+
+            Vector2Int sourceCell = topology.nodes[topology.vistaSourceNode].lattice;
+            Vector2Int targetCell = topology.nodes[topology.vistaTargetNode].lattice;
+            if (sourceCell.x != targetCell.x && sourceCell.y != targetCell.y)
+            {
+                violations.Add(
+                    $"vista '{topology.vistaId}' joins {sourceCell} to {targetCell}, which is not " +
+                    "cardinally aligned");
+                return;
+            }
+
+            int steps = Mathf.Abs(targetCell.x - sourceCell.x) + Mathf.Abs(targetCell.y - sourceCell.y);
+            if (steps < 1)
+            {
+                violations.Add($"vista '{topology.vistaId}' has identical endpoints");
+                return;
+            }
+
+            foreach (int blocking in RouteTopologyNodesBetween(
+                         topology,
+                         topology.vistaSourceNode,
+                         topology.vistaTargetNode))
+            {
+                violations.Add(
+                    $"vista '{topology.vistaId}' looks through node " +
+                    $"'{topology.nodes[blocking].key}' ({topology.nodes[blocking].id})");
+            }
+
+            // A corridor that shares the vista lane consumes the reserved void.
+            foreach (RouteTopologyEdge edge in topology.edges)
+            {
+                if (RouteTopologyEdgeSharesVistaLane(topology, edge, sourceCell, targetCell))
+                {
+                    violations.Add(
+                        $"edge '{edge.id}' runs inside the vista lane between {sourceCell} and " +
+                        $"{targetCell}; the reservation forbids a corridor there");
+                }
+            }
+        }
+
+        private static IEnumerable<int> RouteTopologyNodesBetween(
+            DungeonRouteTopology topology,
+            int firstNode,
+            int secondNode)
+        {
+            Vector2Int first = topology.nodes[firstNode].lattice;
+            Vector2Int second = topology.nodes[secondNode].lattice;
+            if (first.x != second.x && first.y != second.y)
+            {
+                yield break;
+            }
+
+            for (int node = 0; node < topology.nodes.Length; node++)
+            {
+                if (node == firstNode || node == secondNode)
+                {
+                    continue;
+                }
+
+                Vector2Int cell = topology.nodes[node].lattice;
+                bool onLane = first.x == second.x
+                    ? cell.x == first.x &&
+                      cell.y > Mathf.Min(first.y, second.y) &&
+                      cell.y < Mathf.Max(first.y, second.y)
+                    : cell.y == first.y &&
+                      cell.x > Mathf.Min(first.x, second.x) &&
+                      cell.x < Mathf.Max(first.x, second.x);
+                if (onLane)
+                {
+                    yield return node;
+                }
+            }
+        }
+
+        private static bool RouteTopologyEdgeSharesVistaLane(
+            DungeonRouteTopology topology,
+            RouteTopologyEdge edge,
+            Vector2Int sourceCell,
+            Vector2Int targetCell)
+        {
+            Vector2Int from = topology.nodes[edge.fromNode].lattice;
+            Vector2Int to = topology.nodes[edge.toNode].lattice;
+            if (from.x != to.x && from.y != to.y)
+            {
+                return false;
+            }
+
+            bool vistaRunsOnY = sourceCell.x == targetCell.x;
+            bool edgeRunsOnY = from.x == to.x;
+            if (vistaRunsOnY != edgeRunsOnY)
+            {
+                return false;
+            }
+
+            if (vistaRunsOnY)
+            {
+                if (from.x != sourceCell.x)
+                {
+                    return false;
+                }
+
+                return Mathf.Min(from.y, to.y) < Mathf.Max(sourceCell.y, targetCell.y) &&
+                    Mathf.Max(from.y, to.y) > Mathf.Min(sourceCell.y, targetCell.y);
+            }
+
+            if (from.y != sourceCell.y)
+            {
+                return false;
+            }
+
+            return Mathf.Min(from.x, to.x) < Mathf.Max(sourceCell.x, targetCell.x) &&
+                Mathf.Max(from.x, to.x) > Mathf.Min(sourceCell.x, targetCell.x);
+        }
+
+        private static void AppendRouteTopologyRhythmRules(
+            DungeonRouteTopology topology,
+            List<string> violations)
+        {
+            var mainRoute = new List<RouteTopologyNode>();
+            foreach (RouteTopologyNode node in topology.nodes)
+            {
+                if (node.IsOnMainRoute)
+                {
+                    mainRoute.Add(node);
+                }
+            }
+
+            var roleOccurrences = new Dictionary<string, int>(StringComparer.Ordinal);
+            int previousSlotOrder = -1;
+            for (int index = 0; index < mainRoute.Count; index++)
+            {
+                RouteTopologyNode node = mainRoute[index];
+                roleOccurrences.TryGetValue(node.role, out int seen);
+                roleOccurrences[node.role] = seen + 1;
+                if (seen + 1 > MaxMainRouteRoleOccurrences)
+                {
+                    violations.Add(
+                        $"main route uses role '{node.role}' {seen + 1} times (at '{node.key}'); " +
+                        $"the limit is {MaxMainRouteRoleOccurrences}");
+                }
+
+                if (index > 0)
+                {
+                    RouteTopologyNode previous = mainRoute[index - 1];
+                    if (string.Equals(previous.role, node.role, StringComparison.Ordinal))
+                    {
+                        violations.Add(
+                            $"main-route nodes '{previous.key}' and '{node.key}' repeat role '{node.role}'");
+                    }
+
+                    if (string.Equals(previous.beat, node.beat, StringComparison.Ordinal))
+                    {
+                        violations.Add(
+                            $"main-route nodes '{previous.key}' and '{node.key}' repeat beat '{node.beat}'");
+                    }
+                }
+
+                if (string.IsNullOrEmpty(node.recipeSlotId))
+                {
+                    continue;
+                }
+
+                if (previousSlotOrder >= 0 &&
+                    node.mainRouteOrder - previousSlotOrder - 1 < MinimumMainRouteNodesBetweenRecipeSlots)
+                {
+                    violations.Add(
+                        $"recipe-bearing node '{node.key}' is only " +
+                        $"{node.mainRouteOrder - previousSlotOrder - 1} main-route nodes after the " +
+                        $"previous one; the minimum is {MinimumMainRouteNodesBetweenRecipeSlots}");
+                }
+
+                previousSlotOrder = node.mainRouteOrder;
+            }
+        }
+
+        // ---- per-profile rules --------------------------------------------
+
+        private static void AppendRouteTopologyProfileRules(
+            DungeonRouteTopology topology,
+            string profileId,
+            List<string> violations,
+            List<string> notes)
+        {
+            DungeonGenerationSettings settings = CurrentGenerationSettings.Validated();
+            DungeonPatternSpatialSettings spatial = ResolveTopologySpatialSettings(topology);
+            int[] columnOffsets = ResolveLatticeLaneOffsets(
+                topology.columnGapCells,
+                spatial.horizontalPitchCells,
+                topology.latticeColumnCount);
+            int[] rowOffsets = ResolveLatticeLaneOffsets(
+                topology.rowGapCells,
+                spatial.verticalPitchCells,
+                topology.latticeRowCount);
+
+            int worstWidth = 0;
+            int worstDepth = 0;
+            var overflowing = new List<string>();
+            for (int quarterTurns = 0; quarterTurns < 4; quarterTurns++)
+            {
+                for (int mirror = 0; mirror < 2; mirror++)
+                {
+                    int minX = int.MaxValue;
+                    int minY = int.MaxValue;
+                    int maxX = int.MinValue;
+                    int maxY = int.MinValue;
+                    foreach (RouteTopologyNode node in topology.nodes)
+                    {
+                        Vector2Int cell = TransformCoarseCell(
+                            new Vector2Int(columnOffsets[node.lattice.x], rowOffsets[node.lattice.y]),
+                            quarterTurns,
+                            mirror == 1);
+                        minX = Mathf.Min(minX, cell.x);
+                        minY = Mathf.Min(minY, cell.y);
+                        maxX = Mathf.Max(maxX, cell.x);
+                        maxY = Mathf.Max(maxY, cell.y);
+                    }
+
+                    int width = maxX - minX + spatial.roomEnvelopeRadiusCells * 2 + 1;
+                    int depth = maxY - minY + spatial.roomEnvelopeRadiusCells * 2 + 1;
+                    worstWidth = Mathf.Max(worstWidth, width);
+                    worstDepth = Mathf.Max(worstDepth, depth);
+                    if (width > settings.mapWidthMaxCells || depth > settings.mapDepthMaxCells)
+                    {
+                        overflowing.Add($"turn {quarterTurns}{(mirror == 1 ? "+mirror" : "")} {width}x{depth}");
+                    }
+                }
+            }
+
+            notes.Add(
+                $"{profileId}: envelope worst case {worstWidth}x{worstDepth} of " +
+                $"{settings.mapWidthMaxCells}x{settings.mapDepthMaxCells} across all 8 orientations; " +
+                $"lane offsets x[{string.Join(",", columnOffsets)}] y[{string.Join(",", rowOffsets)}]");
+            if (overflowing.Count > 0)
+            {
+                violations.Add(
+                    $"{profileId}: plan exceeds {settings.mapWidthMaxCells}x{settings.mapDepthMaxCells} in " +
+                    $"{overflowing.Count} of 8 orientations ({string.Join("; ", overflowing)}); " +
+                    "TryTransformCoarseEmbedding only tries 4 quarter-turns against one mirror choice, " +
+                    "so an overflow here can reject the whole layout attempt");
+            }
+
+            AppendRouteTopologyOverlookRules(topology, profileId, spatial, violations, notes);
+            AppendRouteTopologyRoomSizeRules(
+                topology,
+                profileId,
+                spatial,
+                columnOffsets,
+                rowOffsets,
+                violations,
+                notes);
+            AppendRouteTopologyVistaLaneRules(
+                topology,
+                profileId,
+                spatial,
+                columnOffsets,
+                rowOffsets,
+                violations,
+                notes);
+        }
+
+        private static void AppendRouteTopologyRoomSizeRules(
+            DungeonRouteTopology topology,
+            string profileId,
+            DungeonPatternSpatialSettings spatial,
+            int[] columnOffsets,
+            int[] rowOffsets,
+            List<string> violations,
+            List<string> notes)
+        {
+            int envelopeSpan = spatial.roomEnvelopeRadiusCells * 2 + 1;
+            int largestExtent = 0;
+            var reported = new HashSet<string>(StringComparer.Ordinal);
+            foreach (RouteTopologyNode node in topology.nodes)
+            {
+                if (!string.IsNullOrEmpty(node.recipeSlotId) || !reported.Add(node.role))
+                {
+                    continue;
+                }
+
+                DungeonRoomSizeRange range = RoomSizeRangeForRole(spatial, node.role).Validated();
+                largestExtent = Mathf.Max(
+                    largestExtent,
+                    Mathf.Max(range.maxWidthCells, range.maxDepthCells));
+
+                // The envelope is a hard check: RoomFitsEnvelope rejects a room
+                // that leaves it, and a recipe room that does so fails the whole
+                // layout attempt rather than retrying.
+                if (range.maxWidthCells > envelopeSpan || range.maxDepthCells > envelopeSpan)
+                {
+                    violations.Add(
+                        $"{profileId}: role '{node.role}' may reach " +
+                        $"{range.maxWidthCells}x{range.maxDepthCells}, outside the {envelopeSpan}-cell " +
+                        "placement envelope");
+                }
+            }
+
+            // Lane gap vs room extent is a pressure reading, not a rule: room
+            // inflation retries six alternatives and rejects overlaps, so a tight
+            // lane costs attempts rather than failing. Reported so an author can
+            // see which lane is doing the squeezing.
+            int tightestGap = int.MaxValue;
+            string tightestLane = string.Empty;
+            for (int lane = 1; lane < columnOffsets.Length; lane++)
+            {
+                int gap = columnOffsets[lane] - columnOffsets[lane - 1];
+                if (gap < tightestGap)
+                {
+                    tightestGap = gap;
+                    tightestLane = $"x{lane - 1}->x{lane}";
+                }
+            }
+
+            for (int lane = 1; lane < rowOffsets.Length; lane++)
+            {
+                int gap = rowOffsets[lane] - rowOffsets[lane - 1];
+                if (gap < tightestGap)
+                {
+                    tightestGap = gap;
+                    tightestLane = $"y{lane - 1}->y{lane}";
+                }
+            }
+
+            if (tightestGap != int.MaxValue)
+            {
+                notes.Add(
+                    $"{profileId}: tightest lane gap {tightestGap} cells ({tightestLane}) against a " +
+                    $"largest generic room extent of {largestExtent}" +
+                    (largestExtent >= tightestGap
+                        ? " — rooms there can end up wall to wall, so expect inflation retries"
+                        : string.Empty));
+            }
+        }
+
+        private static void AppendRouteTopologyVistaLaneRules(
+            DungeonRouteTopology topology,
+            string profileId,
+            DungeonPatternSpatialSettings spatial,
+            int[] columnOffsets,
+            int[] rowOffsets,
+            List<string> violations,
+            List<string> notes)
+        {
+            Vector2Int sourceCell = topology.nodes[topology.vistaSourceNode].lattice;
+            Vector2Int targetCell = topology.nodes[topology.vistaTargetNode].lattice;
+            if (sourceCell.x != targetCell.x && sourceCell.y != targetCell.y)
+            {
+                return;
+            }
+
+            int laneCells = sourceCell.x == targetCell.x
+                ? Mathf.Abs(rowOffsets[targetCell.y] - rowOffsets[sourceCell.y])
+                : Mathf.Abs(columnOffsets[targetCell.x] - columnOffsets[sourceCell.x]);
+            int sourceReach = RouteTopologyWorstCaseHalfExtent(topology, topology.vistaSourceNode, spatial);
+            int targetReach = RouteTopologyWorstCaseHalfExtent(topology, topology.vistaTargetNode, spatial);
+            // TryReserveProcessionalVista walks from the source room's boundary
+            // cell to the target's, so the clear count is the gap between faces.
+            int clearCells = laneCells - sourceReach - targetReach - 1;
+            int steps = Mathf.Abs(targetCell.x - sourceCell.x) + Mathf.Abs(targetCell.y - sourceCell.y);
+            notes.Add(
+                $"{profileId}: vista '{topology.vistaId}' {steps} lattice step(s), {laneCells} cells " +
+                $"centre to centre, worst-case reach {sourceReach}+{targetReach} => " +
+                $"{clearCells} clear cell(s), required {topology.vistaMinimumVoidCells}" +
+                (clearCells == topology.vistaMinimumVoidCells ? " (zero margin)" : string.Empty));
+            if (clearCells < topology.vistaMinimumVoidCells)
+            {
+                violations.Add(
+                    $"{profileId}: vista '{topology.vistaId}' can shrink to {clearCells} clear cell(s), " +
+                    $"below the required {topology.vistaMinimumVoidCells}; move the pair at least one more " +
+                    "lattice step apart");
+            }
+        }
+
+        // The largest number of cells a room at this node can put between its
+        // centre and the vista lane, taken over every orientation. Recipe rooms
+        // use their authored zones; generic rooms use the profile's role range,
+        // narrowed by the planned-overlook force-shrink.
+        private static int RouteTopologyWorstCaseHalfExtent(
+            DungeonRouteTopology topology,
+            int node,
+            DungeonPatternSpatialSettings spatial)
+        {
+            RouteTopologyNode declared = topology.nodes[node];
+            if (!string.IsNullOrEmpty(declared.recipeSlotId))
+            {
+                return RouteTopologyWorstCaseRecipeReach(topology, node, declared, spatial);
+            }
+
+            int width;
+            int depth;
+            if (RouteTopologyHasOverlookAppendage(topology, node))
+            {
+                // BuildProcessionalRoomParts forces this footprint.
+                width = 4;
+                depth = 5;
+            }
+            else
+            {
+                DungeonRoomSizeRange range = RoomSizeRangeForRole(spatial, declared.role).Validated();
+                width = range.maxWidthCells;
+                depth = range.maxDepthCells;
+            }
+
+            // CenteredRect puts the far face at ceil(size / 2) - 1 on the plus
+            // side and size / 2 on the minus side; a rotation can face either.
+            return Mathf.Max(width / 2, depth / 2);
+        }
+
+        private static int RouteTopologyWorstCaseRecipeReach(
+            DungeonRouteTopology topology,
+            int node,
+            RouteTopologyNode declared,
+            DungeonPatternSpatialSettings spatial)
+        {
+            // A slot oriented off the vista axis puts its recipe's PRIMARY axis
+            // along the lane, so only the primary extent faces the vista. A
+            // route-forward slot's axis follows its exit edge, which may be
+            // either, so both extents count.
+            bool primaryAxisOnly = false;
+            foreach (RouteTopologySlot slot in topology.slots)
+            {
+                if (slot.node == node &&
+                    slot.orientationBinding == RecipeOrientationBinding.VistaSourceToTarget)
+                {
+                    primaryAxisOnly = true;
+                }
+            }
+
+            int reach = 0;
+            bool sawCandidate = false;
+            if (DungeonRecipeCatalogService.TryLoadActiveCatalog(
+                    out ActiveDungeonRecipeCatalog catalog,
+                    out _))
+            {
+                foreach (DungeonRecipeAsset candidate in catalog.recipes)
+                {
+                    if (candidate == null ||
+                        Array.IndexOf(candidate.eligibleRoles, declared.role) < 0 ||
+                        Array.IndexOf(candidate.eligibleBeats, declared.beat) < 0)
+                    {
+                        continue;
+                    }
+
+                    sawCandidate = true;
+                    foreach (DungeonRecipeZone zone in candidate.zones ?? Array.Empty<DungeonRecipeZone>())
+                    {
+                        if (zone == null ||
+                            zone.kind != DungeonRecipeZoneKind.Walkable &&
+                            zone.kind != DungeonRecipeZoneKind.Elevated)
+                        {
+                            continue;
+                        }
+
+                        reach = Mathf.Max(reach, Mathf.Abs(zone.offset.x));
+                        reach = Mathf.Max(reach, Mathf.Abs(zone.offset.x + zone.size.x - 1));
+                        if (primaryAxisOnly)
+                        {
+                            continue;
+                        }
+
+                        reach = Mathf.Max(reach, Mathf.Abs(zone.offset.y));
+                        reach = Mathf.Max(reach, Mathf.Abs(zone.offset.y + zone.size.y - 1));
+                    }
+                }
+            }
+
+            // No readable catalog, or no eligible recipe yet: fall back to the
+            // hard cap every recipe footprint has to fit inside.
+            return sawCandidate ? reach : spatial.roomEnvelopeRadiusCells;
+        }
+
+        // BuildPlannedOverlooks accepts only non-traversal pairs whose rise is a
+        // whole number of majors inside the profile's ceiling, and it throws when
+        // fewer than the requested count survive. Same filter, reported instead.
+        private static List<RouteOverlookIntent> RouteTopologySelectedOverlooks(
+            DungeonRouteTopology topology,
+            DungeonTierSeamAdjacencySettings seams)
+        {
+            var selected = new List<RouteOverlookIntent>(seams.requestedCount);
+            foreach (RouteOverlookIntent pair in topology.overlooks)
+            {
+                if (selected.Count >= seams.requestedCount)
+                {
+                    break;
+                }
+
+                bool isTraversal = false;
+                foreach (RouteTopologyEdge edge in topology.edges)
+                {
+                    isTraversal |=
+                        edge.fromNode == pair.firstNode && edge.toNode == pair.secondNode ||
+                        edge.fromNode == pair.secondNode && edge.toNode == pair.firstNode;
+                }
+
+                int rise = Mathf.Abs(
+                    topology.nodes[pair.firstNode].level - topology.nodes[pair.secondNode].level);
+                if (!isTraversal &&
+                    rise >= MajorRiseLevels &&
+                    rise <= seams.maximumRiseLevels &&
+                    rise % MajorRiseLevels == 0)
+                {
+                    selected.Add(pair);
+                }
+            }
+
+            return selected;
+        }
+
+        private static void AppendRouteTopologyOverlookRules(
+            DungeonRouteTopology topology,
+            string profileId,
+            DungeonPatternSpatialSettings spatial,
+            List<string> violations,
+            List<string> notes)
+        {
+            DungeonTierSeamAdjacencySettings seams = spatial.tierSeamAdjacency.Validated();
+            List<RouteOverlookIntent> selected = RouteTopologySelectedOverlooks(topology, seams);
+            if (selected.Count != seams.requestedCount)
+            {
+                violations.Add(
+                    $"{profileId}: the profile requests {seams.requestedCount} tier-seam adjacencies but " +
+                    $"only {selected.Count} of the {topology.overlooks.Length} declared 'overlooks' pairs " +
+                    $"are eligible (non-traversal, rise a multiple of {MajorRiseLevels} up to " +
+                    $"{seams.maximumRiseLevels}u); generation throws on this");
+                return;
+            }
+
+            if (selected.Count == 0)
+            {
+                return;
+            }
+
+            var described = new List<string>(selected.Count);
+            foreach (RouteOverlookIntent pair in selected)
+            {
+                described.Add(
+                    $"{topology.nodes[pair.firstNode].key}/{topology.nodes[pair.secondNode].key} " +
+                    $"({Mathf.Abs(topology.nodes[pair.firstNode].level - topology.nodes[pair.secondNode].level)}u)");
+            }
+
+            notes.Add($"{profileId}: tier seams {string.Join(", ", described)} (these rooms shrink to 4x5)");
+        }
+
+        private static bool RouteTopologyHasOverlookAppendage(DungeonRouteTopology topology, int node)
+        {
+            DungeonPatternSpatialSettings spatial = ResolveTopologySpatialSettings(topology);
+            foreach (RouteOverlookIntent pair in RouteTopologySelectedOverlooks(
+                         topology,
+                         spatial.tierSeamAdjacency.Validated()))
+            {
+                if (pair.firstNode == node || pair.secondNode == node)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        // ---- rendering ----------------------------------------------------
+
+        // The map with its edges drawn between cells, so a misalignment or a
+        // corridor through a third room is visible rather than inferred.
+        private static string RenderRouteTopologyMap(DungeonRouteTopology topology)
+        {
+            const int cellWidth = 4;
+            int width = topology.latticeColumnCount * cellWidth;
+            int height = topology.latticeRowCount * 2 - 1;
+            var canvas = new char[height, width];
+            for (int row = 0; row < height; row++)
+            {
+                for (int column = 0; column < width; column++)
+                {
+                    canvas[row, column] = ' ';
+                }
+            }
+
+            foreach (RouteTopologyNode node in topology.nodes)
+            {
+                int row = (topology.latticeRowCount - 1 - node.lattice.y) * 2;
+                canvas[row, node.lattice.x * cellWidth] = node.key.Length > 0 ? node.key[0] : '?';
+            }
+
+            foreach (RouteTopologyEdge edge in topology.edges)
+            {
+                Vector2Int from = topology.nodes[edge.fromNode].lattice;
+                Vector2Int to = topology.nodes[edge.toNode].lattice;
+                char glyph = RouteTopologyEdgeGlyph(edge.transitionKind, from.y == to.y);
+                if (from.y == to.y && from.x != to.x)
+                {
+                    int row = (topology.latticeRowCount - 1 - from.y) * 2;
+                    int firstColumn = Mathf.Min(from.x, to.x) * cellWidth + 1;
+                    int lastColumn = Mathf.Max(from.x, to.x) * cellWidth - 1;
+                    for (int column = firstColumn; column <= lastColumn; column++)
+                    {
+                        canvas[row, column] = canvas[row, column] == ' ' ? glyph : canvas[row, column];
+                    }
+                }
+                else if (from.x == to.x && from.y != to.y)
+                {
+                    int column = from.x * cellWidth;
+                    int firstRow = (topology.latticeRowCount - 1 - Mathf.Max(from.y, to.y)) * 2 + 1;
+                    int lastRow = (topology.latticeRowCount - 1 - Mathf.Min(from.y, to.y)) * 2 - 1;
+                    for (int row = firstRow; row <= lastRow; row++)
+                    {
+                        canvas[row, column] = canvas[row, column] == ' ' ? glyph : canvas[row, column];
+                    }
+                }
+            }
+
+            var rendered = new StringBuilder();
+            for (int row = 0; row < height; row++)
+            {
+                rendered.Append("    ");
+                for (int column = 0; column < width; column++)
+                {
+                    rendered.Append(canvas[row, column]);
+                }
+
+                rendered.AppendLine();
+            }
+
+            rendered.AppendLine("    legend  - | level  = : stair  ~ ! stairwell  + bridge");
+            return rendered.ToString();
+        }
+
+        private static char RouteTopologyEdgeGlyph(RouteTransitionKind kind, bool horizontal)
+        {
+            switch (kind)
+            {
+                case RouteTransitionKind.Stair:
+                    return horizontal ? '=' : ':';
+                case RouteTransitionKind.Stairwell:
+                    return horizontal ? '~' : '!';
+                case RouteTransitionKind.Bridge:
+                    return '+';
+                default:
+                    return horizontal ? '-' : '|';
+            }
+        }
+
+        private static string RenderRouteTopologyMetrics(DungeonRouteTopology topology)
+        {
+            List<int>[] adjacency = topology.BuildAdjacency();
+            var junctions = new List<string>();
+            for (int node = 0; node < topology.nodes.Length; node++)
+            {
+                if (adjacency[node].Count >= 3)
+                {
+                    junctions.Add($"{topology.nodes[node].key}:{adjacency[node].Count}");
+                }
+            }
+
+            var kinds = new SortedDictionary<string, int>(StringComparer.Ordinal);
+            foreach (RouteTopologyEdge edge in topology.edges)
+            {
+                string kind = edge.transitionKind.ToString();
+                kinds.TryGetValue(kind, out int seen);
+                kinds[kind] = seen + 1;
+            }
+
+            var kindSummary = new List<string>(kinds.Count);
+            foreach (KeyValuePair<string, int> entry in kinds)
+            {
+                kindSummary.Add($"{entry.Key} {entry.Value}");
+            }
+
+            int mainRouteCount = 0;
+            int minLevel = int.MaxValue;
+            int maxLevel = int.MinValue;
+            foreach (RouteTopologyNode node in topology.nodes)
+            {
+                mainRouteCount += node.IsOnMainRoute ? 1 : 0;
+                minLevel = Mathf.Min(minLevel, node.level);
+                maxLevel = Mathf.Max(maxLevel, node.level);
+            }
+
+            var metrics = new StringBuilder();
+            metrics.Append("    derived  ")
+                .Append(topology.nodes.Length).Append(" nodes (")
+                .Append(mainRouteCount).Append(" main), ")
+                .Append(topology.edges.Length).Append(" edges, cycle rank ")
+                .Append(topology.edges.Length - (topology.nodes.Length - 1))
+                .Append(", cycle core ").Append(CountCycleCoreNodes(adjacency))
+                .Append(", levels ").Append(minLevel).Append("..").Append(maxLevel)
+                .AppendLine();
+            metrics.Append("    junctions  ")
+                .AppendLine(junctions.Count > 0 ? string.Join(", ", junctions) : "none");
+            metrics.Append("    edge kinds  ").AppendLine(string.Join(", ", kindSummary));
+            metrics.Append("    anchors  bottom ")
+                .Append(topology.nodes[topology.bottomNode].key)
+                .Append(" @0u, top ")
+                .Append(topology.nodes[topology.topNode].key)
+                .Append(" @").Append(topology.nodes[topology.topNode].level).Append('u');
+            return metrics.ToString();
+        }
+    }
+}

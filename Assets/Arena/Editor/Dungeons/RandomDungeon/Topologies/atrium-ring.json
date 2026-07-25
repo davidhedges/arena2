@@ -1,0 +1,81 @@
+{
+  // Route topology: one authored diagram per file. See
+  // docs/dungeon-builder/route-topology-authoring-2026-07-25.md for the schema
+  // and docs/dungeon-builder/ROUTE_TOPOLOGY_AUTHORING.md for the rule list.
+  // Check a draft with Tools > Dungeon Lab > Validate Topologies.
+  "id": "atrium-ring",
+  "displayName": "Atrium Ring",
+  "plannerVersion": "atrium-ring-v3",
+
+  // Lattice column x1 is deliberately empty: it is the atrium void the ring
+  // gallery looks across, and it is the vista lane J..M -> D..G.
+  "map": [
+    "M  .  G  H  .",
+    "L  .  F  I  A",
+    "K  .  E  .  B",
+    "J  .  D  .  C"
+  ],
+
+  "spatial": {
+    // "baseline" is the pre-port BaselinePatternSpatialSettings: envelope
+    // radius 4, no neighbour bias, no tier seams, spacious role sizes.
+    // Scalar gaps are uniform lane pitch.
+    "settings": "baseline",
+    "columnGapCells": 7,
+    "rowGapCells": 9
+  },
+
+  "nodes": {
+    "A": ["atrium-arrival",     "arrival",           "arrival",      0,  { "main": 0 }],
+    "B": ["atrium-threshold",   "connector",         "compression",  0,  { "main": 1 }],
+    "C": ["outer-approach",     "processional-hall", "approach",     4,  { "main": 2 }],
+    "D": ["ring-entry",         "junction",          "choice",       4,  { "main": 3 }],
+    "E": ["atrium-landmark",    "landmark",          "landmark",     4,  { "main": 4 }],
+    "F": ["ring-ascent",        "connector",         "ascent",       8,  { "main": 5 }],
+    "G": ["ring-rejoin",        "junction",          "rejoin",       16, { "main": 6 }],
+    "H": ["upper-approach",     "processional-hall", "approach",     20, { "main": 7 }],
+    "I": ["atrium-culmination", "culmination",       "culmination",  24, { "main": 8 }],
+    "J": ["lower-ring-gallery", "connector",         "branch",       8,  { "branch": 0 }],
+    "K": ["ring-overlook",      "overlook",          "reveal",       8,  { "branch": 1 }],
+    "L": ["far-ring-gallery",   "optional-room",     "reward",       12, { "branch": 2 }],
+    "M": ["upper-ring-gallery", "connector",         "return",       16, { "branch": 3 }]
+  },
+
+  "edges": [
+    ["A", "B", "LevelCorridor", "main-0-1"],
+    ["B", "C", "Stair",         "main-1-2"],
+    ["C", "D", "LevelCorridor", "main-2-3"],
+    ["D", "E", "LevelCorridor", "main-3-4"],
+    ["E", "F", "Stair",         "main-4-5"],
+    ["F", "G", "Stairwell",     "main-5-6"],
+    ["G", "H", "Stair",         "main-6-7"],
+    ["H", "I", "Stair",         "main-7-8"],
+    ["D", "J", "Bridge",        "branch-3-9"],
+    ["J", "K", "LevelCorridor", "branch-9-10"],
+    ["K", "L", "Stair",         "branch-10-11"],
+    ["L", "M", "Stair",         "branch-11-12"],
+    ["M", "G", "LevelCorridor", "rejoin-12-6"]
+  ],
+
+  "slots": [
+    { "id": "required-compression", "at": "B", "entry": "main-0-1",     "exit": "main-1-2" },
+    { "id": "required-landmark",    "at": "E", "entry": "main-3-4",     "exit": "main-4-5",
+      "orientation": "vista-source-to-target" },
+    { "id": "required-return",      "at": "M", "entry": "branch-11-12", "exit": "rejoin-12-6" }
+  ],
+
+  "vista": { "id": "ring-overlook-to-atrium-landmark", "from": "K", "to": "E", "minVoidCells": 3 },
+
+  "overlooks": [],
+
+  "anchors": { "bottom": "A", "top": "I" },
+  "allowGenericRoomWings": false,
+
+  // Hash-compat only: values the pre-port per-pattern C# embedders reported.
+  // Step 2 unifies them and the batch hash moves anyway — delete this block then.
+  "legacy": {
+    "orientationStreamId": "atrium-ring",
+    "embeddingFailureCode": "ATRIUM_RING_EMBEDDING_EXHAUSTED",
+    "branchSearchExpansions": 0
+  }
+}

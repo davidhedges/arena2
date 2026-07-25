@@ -600,42 +600,20 @@ namespace DungeonLab.Editor
                 return false;
             }
 
-            string slotId = intent.nodes[slotNode].recipeSlotId;
-            if (string.Equals(slotId, CompressionRecipeSlotId, StringComparison.Ordinal))
+            // The slot's node, its entry/exit edges and its orientation all come
+            // from the topology file, so adding a topology adds no code here.
+            foreach (RouteTopologySlot slot in intent.topology.slots)
             {
-                portBindings = new[]
+                if (slot.node != slotNode)
                 {
-                    new RecipePortBinding("entry", "main-0-1"),
-                    new RecipePortBinding("exit", "main-1-2")
-                };
-                return true;
-            }
+                    continue;
+                }
 
-            if (string.Equals(slotId, LandmarkRecipeSlotId, StringComparison.Ordinal))
-            {
-                orientationBinding = RecipeOrientationBinding.VistaSourceToTarget;
+                orientationBinding = slot.orientationBinding;
                 portBindings = new[]
                 {
-                    new RecipePortBinding("entry", "main-3-4"),
-                    new RecipePortBinding("exit", "main-4-5")
-                };
-                return true;
-            }
-
-            if (string.Equals(slotId, ReturnRecipeSlotId, StringComparison.Ordinal))
-            {
-                string entryEdgeId = string.Equals(intent.patternId, TwinWingPatternId, StringComparison.Ordinal)
-                    ? "wing-b-11-12"
-                    : "branch-11-12";
-                string exitEdgeId = string.Equals(intent.patternId, TwinWingPatternId, StringComparison.Ordinal)
-                    ? "wing-b-rejoin-12-5"
-                    : string.Equals(intent.patternId, AtriumRingPatternId, StringComparison.Ordinal)
-                        ? "rejoin-12-6"
-                        : "rejoin-12-7";
-                portBindings = new[]
-                {
-                    new RecipePortBinding("entry", entryEdgeId),
-                    new RecipePortBinding("exit", exitEdgeId)
+                    new RecipePortBinding("entry", slot.entryEdgeId),
+                    new RecipePortBinding("exit", slot.exitEdgeId)
                 };
                 return true;
             }

@@ -138,9 +138,22 @@ the sole path. Not a subjective impression — measured over 200 seeds:
 The archived plan listed "multiple elevation archetypes" under *pieces worth
 preserving*, so this was preservation that did not happen, not a considered trade.
 
-**Item 1 — room size ranges (done, unverified).** Both profiles widened.
-`dense` was pinned at exactly 7x7 for every role because 7 is its vertical
-ceiling; it now spreads 6-8 x 5-7. `spacious` now spreads 4-7 x 4-8.
+**Item 1 — room size ranges (done, measured 2026-07-25, and it cost a seed).**
+Both profiles widened. `dense` was pinned at exactly 7x7 for every role because 7
+is its vertical ceiling; it now spreads 6-8 x 5-7. `spacious` now spreads
+4-7 x 4-8.
+
+Measured over `2026072100..2026072299` at `dense`: **198/200 accepted**, down from
+199/200 before the widening. The new failure is **2026072246**, a
+`processional-spine` seed whose `branch-2-9` Bridge cannot reserve its 8u rise —
+the same void-starvation failure mode as 2026072295's stairwell, and exactly what
+larger rooms cause. Consistent with Finding A: only `processional-spine` reads the
+widened profile, and only a processional seed regressed. `atrium-ring` is 50/50
+with zero retries because it still uses `BaselinePatternSpatialSettings`.
+
+So the widening's net effect so far is: half the seeds get more varied rooms, one
+seed stops generating. Worth a look when step 2 rebaselines anyway — the honest
+options are a slightly narrower `dense` range or accepting 198/200.
 
 Hard constraints when tuning these: room size <= `pitch - 1` on each axis (the
 gap between adjacent rooms is `pitch - size`), and <= `roomEnvelopeRadiusCells
@@ -174,7 +187,56 @@ redesigning to scale past four.
 JSON topology files (ASCII lattice map + node/edge/slot tables), derived graph
 metrics, a rubber-sheet lattice, weighted selection, and four hand-verified new
 topologies (descent 13, basin 14, terraces 16, ridge/ravine 12 rooms). All three
-forks ruled by the owner in its §8. Not implemented yet.
+forks ruled by the owner in its §8.
+
+**Step 1 landed 2026-07-25 — data cutover, output-neutral.** The three existing
+topologies are now files under
+`Assets/Arena/Editor/Dungeons/RandomDungeon/Topologies/`; see
+[`ROUTE_TOPOLOGY_AUTHORING.md`](ROUTE_TOPOLOGY_AUTHORING.md) for the format and
+the rule list. Deleted: the three `Build*RouteIntent` factories, the three
+`TryEmbed*Route` embedders, `TryFindBoundedCoarsePath`, `RouteGraphComposer`, the
+switch arms in `TryEmbedRoute`/`ResolvePatternSpatialSettings`/`SelectRoutePattern`,
+the `Recipes.cs` pattern ternaries, and every self-declared graph metric
+(`requiredCycleRank`, `requiredCycleCoreNodeCount`, `requiredJunctionDegree`,
+`branchAttach`/`RejoinNode`, per-edge `requiredRiseLevels`, edge ids) — all now
+derived. New: **Tools > Dungeon Lab > Validate Topologies**, which checks a draft
+against the whole rule list, redraws its map with edges, and computes the vista
+lane's clear-cell count.
+
+The win is per topology, not in total lines. Adding a topology cost 180–230 lines
+of hand-written C#; it now costs one data file of ~55 significant lines. Paying for
+that: 1,285 lines of generator C# deleted, 350 added back as the generic builder
+and embedder, 1,070 added as the loader, 1,080 added as the validator — so the tree
+is ~1,220 lines of editor C# heavier. Roughly 1,080 of that is the validator, which
+is new capability rather than a port; the port itself is about line-neutral and
+buys the per-topology cost.
+
+Step 1 was verified output-neutral **before** the batch run: node centres are
+byte-identical to the old embedders across all 8 orientations and both profiles,
+and the ported graph tables match the old C# literals field for field. The
+processional's four BFS-placed branch nodes are the constant `(2,1) (1,1) (0,1)
+(0,2)` at 7 search expansions, confirmed by running the pre-port BFS rather than
+by assumption.
+
+**Gate: PASSED, verified 2026-07-25.** `ops/dungeon-port-ab.sh` ran the 200-seed
+`dense` batch twice on the same tree — once with the port stashed, once with it
+restored — and both legs produced the byte-identical
+`resultHash e3fb0480892978f107b31b50b0535e8feccb1f8ee83438e8f689dd3350143db2`,
+198/200, with the same two failed seeds. Each leg was proved to be the leg it
+claimed: the pre-port log mentions neither `Topologies/` nor
+`DungeonRouteTopology`, and the post-port assembly
+(`Library/ScriptAssemblies/Assembly-CSharp-Editor.dll`, rebuilt 31s before its
+report) contains `DungeonRouteTopology` / `RouteTopologyNode` /
+`BuildTopologyRouteIntent` and no longer contains `RouteGraphComposer`.
+
+The `3092863a…` hash the plan named cannot be reproduced by any run after commit
+`3123a06d` — see the box further down. Both failures are accounted for: 2026072295
+is the known stairwell defect, 2026072246 is item 1's widening.
+
+Still ahead: **step 2** (weighted selection, rubber-sheet lattice, per-topology
+spatial overrides which close Finding A, the ±4/±8 rise sign, the node-count
+range — one deliberate rebaseline, every seed moves once) and **step 3** (the four
+drafted topologies, one file plus a validator pass each).
 
 The question below is settled in favour of authoring-as-data; kept for the
 reasoning: **author more diagrams as data, or replace the hand-drawn diagram with
@@ -196,8 +258,10 @@ has exactly 13 rooms.
 
 ### Next, in order
 
-1. **Confirm the split preserved identity** — run Batch Validate and expect the
-   unchanged hash (see below).
+1. **Look at the dungeons.** **Arena > Dungeons > Rebuild Random Dungeon** on a few
+   seeds. The route-topology data cutover is already confirmed output-neutral by
+   `ops/dungeon-port-ab.sh` (see above), and no hash tells you whether a dungeon
+   reads well.
 2. **Seed 2026072295 is a real defect, not noise.** Its `main-4-5` edge needs a
    `Stairwell` for an 8u rise; a stairwell tower needs void cells beside the
    corridor and the `dense` profile leaves fewer, so the reservation is
@@ -239,6 +303,20 @@ That hash is a **transient comparison value, not a lock.** Do not assert it in a
 test or re-baseline it per change — that ritual is what left three tests
 permanently red. Any intentional change to generation is expected to move it.
 
+> **`3092863a…` is dead. Do not use it as a gate — it belongs to commit `90feceb3`
+> only.** The very next commit, `3123a06d` (widen room sizes), edited
+> `generation_profile_dense.asset`, and `ActiveContentDigest()` hashes that file's
+> bytes into every seed report's `catalogDigest`. Recomputing that digest from git
+> proves it: `8c0f30b2` at `90feceb3`, `3389fba8` at `3123a06d` and every commit
+> since. So from `3123a06d` onward no run could reproduce `3092863a`, whatever the
+> generator did.
+>
+> This is the trap in comparing against a *recorded* hash: unrelated content drift
+> is indistinguishable from a regression. Compare against **the current commit**
+> instead — `ops/dungeon-port-ab.sh` runs the same batch with the working tree
+> stashed and restored and diffs the two reports seed by seed. Current value, for
+> reference only: `e3fb0480…` (catalog `3389fba8`, profile `dense`, 198/200).
+
 ### `TryBuildCellLevelField` split — landed 2026-07-25 (review §12, 1.2)
 
 660 -> 268 lines of orchestration. Two blocks became named steps:
@@ -251,9 +329,11 @@ permanently red. Any intentional change to generation is expected to move it.
 Both were verified statement-for-statement identical to the code they replaced
 before compiling, so this is an identity-preserving refactor.
 
-**Verification: run Batch Validate (200 Fixed Seeds) and expect the SAME hash,
-`3092863a…`.** Unlike the RNG rebaseline, a pure extraction must not move it. A
-different hash means the extraction changed behaviour and should be reverted.
+**Verification: this was gated on `3092863a…`, which is now unreachable — see the
+box above.** The split was verified statement-for-statement against the code it
+replaced, so treat it as confirmed; re-check identity-preserving work with
+`ops/dungeon-port-ab.sh`, which compares against the current commit instead of a
+recorded value.
 
 Also worth doing at some point: **Arena > Dungeons > Rebuild Random Dungeon** and
 look at the result. No hash can tell you whether the dungeon still reads well.

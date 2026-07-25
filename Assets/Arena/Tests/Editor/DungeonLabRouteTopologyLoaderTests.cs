@@ -7,17 +7,17 @@ using NUnit.Framework;
 
 namespace Arena.Tests.Editor
 {
-    public sealed class DungeonLabRouteGraphCompositionTests
+    public sealed class DungeonLabRouteTopologyLoaderTests
     {
-        private const int CompositionSeed = 2026072100;
+        private const int TopologySeed = 2026072100;
         private static readonly Type GeneratorType = AppDomain.CurrentDomain
             .Load("Assembly-CSharp-Editor")
             .GetType("DungeonLab.Editor.DungeonLabGenerator", throwOnError: true)!;
 
         [Test]
-        public void ProductionGraph_ComposesTheExistingNodeOrderExactly()
+        public void ProductionGraph_KeepsTheExistingNodeOrderExactly()
         {
-            Dictionary<string, string> graph = CompositionSnapshot();
+            Dictionary<string, string> graph = TopologySnapshot();
 
             Assert.That(graph["graph.pattern"], Is.EqualTo("processional-spine"));
             Assert.That(graph["graph.nodeIds"], Is.EqualTo(
@@ -26,9 +26,9 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
-        public void ProductionGraph_ComposesTheExistingEdgeOrderExactly()
+        public void ProductionGraph_KeepsTheExistingEdgeOrderExactly()
         {
-            Dictionary<string, string> graph = CompositionSnapshot();
+            Dictionary<string, string> graph = TopologySnapshot();
 
             Assert.That(graph["graph.edgeIds"], Is.EqualTo(
                 "main-0-1|main-1-2|main-2-3|main-3-4|main-4-5|main-5-6|main-6-7|main-7-8|" +
@@ -50,46 +50,65 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
-        public void Composer_ExposesOnlyTheEarnedOperationsAndOneResultingCycle()
+        public void LoaderDerivesTheGraphMetricsRatherThanReadingThem()
         {
-            Dictionary<string, string> graph = CompositionSnapshot();
+            Dictionary<string, string> graph = TopologySnapshot();
 
-            Assert.That(graph["graph.operations"], Is.EqualTo("spine,branch,rejoin"));
+            Assert.That(graph["derived.riseFromLevels"], Is.EqualTo("True"));
+            Assert.That(graph["derived.cycleRank"], Is.EqualTo("1"));
             Assert.That(graph["graph.loopEdges"], Is.EqualTo("1"));
-            Assert.That(graph["contract.spineAdded"], Is.EqualTo("True"));
-            Assert.That(graph["contract.branchAdded"], Is.EqualTo("True"));
-            Assert.That(graph["contract.rejoinAdded"], Is.EqualTo("True"));
-            Assert.That(graph["contract.publishedGraphHasOneCycle"], Is.EqualTo("True"));
+            Assert.That(graph["derived.cycleCoreNodeCount"], Is.EqualTo("10"));
+            Assert.That(graph["derived.junctions"], Is.EqualTo("choice:3|rejoin:3"));
+            Assert.That(graph["derived.branchAttach"], Is.EqualTo("choice"));
+            Assert.That(graph["derived.branchRejoin"], Is.EqualTo("rejoin"));
         }
 
         [Test]
-        public void Composer_RejectsInvalidIdsEndpointsSelfEdgesAndSecondRejoin()
+        public void LoaderReadsTheGraphFromItsTopologyFile()
         {
-            Dictionary<string, string> graph = CompositionSnapshot();
+            Dictionary<string, string> graph = TopologySnapshot();
 
-            Assert.That(graph["contract.duplicateNodeRejected"], Is.EqualTo("True"));
-            Assert.That(graph["contract.duplicateEdgeRejected"], Is.EqualTo("True"));
-            Assert.That(graph["contract.missingEndpointRejected"], Is.EqualTo("True"));
-            Assert.That(graph["contract.selfEdgeRejected"], Is.EqualTo("True"));
-            Assert.That(graph["contract.missingRejoinTargetRejected"], Is.EqualTo("True"));
-            Assert.That(graph["contract.secondRejoinRejected"], Is.EqualTo("True"));
+            Assert.That(
+                graph["graph.source"],
+                Does.EndWith("Topologies/processional-spine.json"));
+            Assert.That(graph["contract.probeLoaded"], Is.EqualTo("True"));
+            Assert.That(graph["contract.probeNodeIds"], Is.EqualTo("probe-a|probe-b|probe-c"));
+            // An edge id is derived from its endpoints unless a legacy id is pinned.
+            Assert.That(graph["contract.probeEdgeIds"], Is.EqualTo("A-B|B-C"));
+            Assert.That(graph["contract.nodeOrderIsDerived"], Is.EqualTo("True"));
         }
 
         [Test]
-        public void Composer_FailedOperationsAreAtomicAndPublishedGraphIsImmutable()
+        public void LoaderRejectsMalformedTopologies()
         {
-            Dictionary<string, string> graph = CompositionSnapshot();
+            Dictionary<string, string> graph = TopologySnapshot();
 
-            Assert.That(graph["contract.failedBranchesWereAtomic"], Is.EqualTo("True"));
-            Assert.That(graph["contract.failedRejoinsWereAtomic"], Is.EqualTo("True"));
-            Assert.That(graph["contract.publishedGraphIsImmutable"], Is.EqualTo("True"));
+            foreach (string contract in new[]
+                     {
+                         "contract.duplicateNodeIdRejected",
+                         "contract.duplicateEdgeIdRejected",
+                         "contract.unknownEndpointRejected",
+                         "contract.selfEdgeRejected",
+                         "contract.parallelEdgeRejected",
+                         "contract.unknownTransitionKindRejected",
+                         "contract.mapCellWithoutNodeRejected",
+                         "contract.nodeWithoutMapCellRejected",
+                         "contract.slotOnUnknownEdgeRejected",
+                         "contract.repeatedMainOrderRejected",
+                         "contract.unknownAnchorRejected",
+                         "contract.laneGapCountRejected",
+                         "contract.idMustMatchFileNameRejected"
+                     })
+            {
+                Assert.That(graph[contract], Is.EqualTo("True"), contract);
+            }
         }
 
         [Test]
         public void FixedSeed_StillProducesOneDeterministicCanonicalPlan()
         {
-            string firstText = InvokeSnapshot("BuildRouteCharacterizationSnapshot", CompositionSeed);
-            string secondText = InvokeSnapshot("BuildRouteCharacterizationSnapshot", CompositionSeed);
+            string firstText = InvokeSnapshot("BuildRouteCharacterizationSnapshot", TopologySeed);
+            string secondText = InvokeSnapshot("BuildRouteCharacterizationSnapshot", TopologySeed);
             Dictionary<string, string> first = ParseSnapshot(firstText);
 
             Assert.That(first["accepted"], Is.EqualTo("true"), firstText);
@@ -98,9 +117,9 @@ namespace Arena.Tests.Editor
             Assert.That(firstText, Is.EqualTo(secondText));
         }
 
-        private static Dictionary<string, string> CompositionSnapshot()
+        private static Dictionary<string, string> TopologySnapshot()
         {
-            return ParseSnapshot(InvokeSnapshot("BuildRouteGraphCompositionSnapshot", CompositionSeed));
+            return ParseSnapshot(InvokeSnapshot("BuildRouteGraphCompositionSnapshot", TopologySeed));
         }
 
         private static string InvokeSnapshot(string methodName, int seed)

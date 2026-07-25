@@ -1,0 +1,86 @@
+{
+  // Route topology: one authored diagram per file. See
+  // docs/dungeon-builder/route-topology-authoring-2026-07-25.md for the schema
+  // and docs/dungeon-builder/ROUTE_TOPOLOGY_AUTHORING.md for the rule list.
+  // Check a draft with Tools > Dungeon Lab > Validate Topologies.
+  "id": "processional-spine",
+  "displayName": "Processional Spine",
+  "plannerVersion": "processional-spine-v6",
+
+  // One whitespace-separated token per lattice cell; '.' is an empty cell.
+  // The FIRST row is the TOP row (highest lattice y).
+  "map": [
+    ".  I  .  .",
+    "M  H  G  F",
+    "L  K  J  E",
+    "A  B  C  D"
+  ],
+
+  "spatial": {
+    // "profile" takes the generation profile's processionalSpatial verbatim,
+    // including its pitch, which becomes the uniform lattice lane gap.
+    "settings": "profile"
+  },
+
+  // key: [ id, role, beat, level, order ]. Level is absolute in 4u units.
+  // Node index order is derived: main-route nodes by "main", then off-main
+  // nodes by "branch".
+  "nodes": {
+    "A": ["arrival",        "arrival",           "arrival",      0,  { "main": 0 }],
+    "B": ["threshold",      "connector",         "compression",  0,  { "main": 1 }],
+    "C": ["choice",         "junction",          "choice",       4,  { "main": 2 }],
+    "D": ["reveal",         "grand-room",        "reveal",       4,  { "main": 3 }],
+    "E": ["vista-target",   "landmark",          "landmark",     8,  { "main": 4 }],
+    "F": ["ascent",         "connector",         "ascent",       12, { "main": 5 }],
+    "G": ["approach",       "processional-hall", "approach",     16, { "main": 6 }],
+    "H": ["rejoin",         "return-hall",       "rejoin",       20, { "main": 7 }],
+    "I": ["culmination",    "culmination",       "culmination",  24, { "main": 8 }],
+    "J": ["vista-source",   "overlook",          "reveal",       12, { "branch": 0 }],
+    "K": ["branch-passage", "connector",         "branch",       12, { "branch": 1 }],
+    "L": ["branch-reward",  "optional-room",     "reward",       16, { "branch": 2 }],
+    "M": ["branch-return",  "connector",         "return",       20, { "branch": 3 }]
+  },
+
+  // [ from, to, kind ] — rise is derived from the two node levels and the id
+  // derives as "{from}-{to}". The optional 4th element pins a legacy edge id;
+  // these three ported topologies carry theirs so the batch hash is unmoved.
+  "edges": [
+    ["A", "B", "LevelCorridor", "main-0-1"],
+    ["B", "C", "Stair",         "main-1-2"],
+    ["C", "D", "LevelCorridor", "main-2-3"],
+    ["D", "E", "Stair",         "main-3-4"],
+    ["E", "F", "Stair",         "main-4-5"],
+    ["F", "G", "Stairwell",     "main-5-6"],
+    ["G", "H", "Stair",         "main-6-7"],
+    ["H", "I", "Stair",         "main-7-8"],
+    ["C", "J", "Bridge",        "branch-2-9"],
+    ["J", "K", "LevelCorridor", "branch-9-10"],
+    ["K", "L", "Stair",         "branch-10-11"],
+    ["L", "M", "Stair",         "branch-11-12"],
+    ["M", "H", "LevelCorridor", "rejoin-12-7"]
+  ],
+
+  "slots": [
+    { "id": "required-compression", "at": "B", "entry": "main-0-1",     "exit": "main-1-2" },
+    { "id": "required-landmark",    "at": "E", "entry": "main-3-4",     "exit": "main-4-5",
+      "orientation": "vista-source-to-target" },
+    { "id": "required-return",      "at": "M", "entry": "branch-11-12", "exit": "rejoin-12-7" }
+  ],
+
+  "vista": { "id": "branch-overlook-to-landmark", "from": "J", "to": "E", "minVoidCells": 3 },
+
+  // Non-traversal neighbour pairs that receive facing room appendages, so the
+  // elevation planner gets deliberate gallery/cliff seams.
+  "overlooks": [["G", "J"], ["H", "K"]],
+
+  "anchors": { "bottom": "A", "top": "I" },
+  "allowGenericRoomWings": true,
+
+  // Hash-compat only: values the pre-port per-pattern C# embedders reported.
+  // Step 2 unifies them and the batch hash moves anyway — delete this block then.
+  "legacy": {
+    "orientationStreamId": "route",
+    "embeddingFailureCode": "ROUTE_MAIN_EMBEDDING_EXHAUSTED",
+    "branchSearchExpansions": 7
+  }
+}

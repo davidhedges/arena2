@@ -1,7 +1,17 @@
 # Route topology authoring — proposal
 
-Date: 2026-07-25. Status: **authoring model agreed; §8 forks all ruled. Not yet
-implemented — no generator code has changed.**
+Date: 2026-07-25. Status: **authoring model agreed; §8 forks all ruled. §5 step 1
+(the output-neutral data cutover) is implemented — see
+[`ROUTE_TOPOLOGY_AUTHORING.md`](ROUTE_TOPOLOGY_AUTHORING.md) for the shipped
+format and `CURRENT_STATUS.md` for what landed. Steps 2 and 3 are not started.**
+
+Two deliberate departures from the §3 sketch below, both because step 1 must not
+move output: lane gaps are fixed scalars or fixed per-lane arrays rather than
+`[min, max]` ranges (the rubber sheet is step 2), and `weight` is not parsed at
+all (weighted selection is step 2, so the field would be dead data). The shipped
+schema also carries `vista.id`, `allowGenericRoomWings`, `spatial.settings`, and a
+quarantined `legacy` block of hash-compatibility values; §7's table did not
+anticipate those.
 
 Context: `CURRENT_STATUS.md` "Open: variation regression". Owner ruling 2026-07-25:
 **an archetype is a different route graph entirely.** This page proposes how a

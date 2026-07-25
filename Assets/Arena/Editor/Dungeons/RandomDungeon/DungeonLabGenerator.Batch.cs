@@ -211,7 +211,7 @@ namespace DungeonLab.Editor
                 for (int i = 0; i < requestedSeedCount; i++)
                 {
                     int seed = firstSeed + i;
-                    string selectedPattern = SelectedRoutePatternId(seed);
+                    string selectedPattern = SelectRouteTopologyId(seed);
                     selectedPatternCounts.TryGetValue(selectedPattern, out int selectedPatternCount);
                     selectedPatternCounts[selectedPattern] = selectedPatternCount + 1;
                     if (!Application.isBatchMode && EditorUtility.DisplayCancelableProgressBar(
@@ -794,7 +794,8 @@ namespace DungeonLab.Editor
             }
 
             return ResolveDiagnosticRouteIntent(
-                BuildProcessionalRouteIntent(
+                BuildTopologyRouteIntent(
+                    RequireRouteTopology(ProcessionalPatternId),
                     seed,
                     Array.Empty<RecipeSlotIntent>(),
                     string.Empty),
@@ -811,7 +812,8 @@ namespace DungeonLab.Editor
             }
 
             return ResolveDiagnosticRouteIntent(
-                BuildAtriumRingRouteIntent(
+                BuildTopologyRouteIntent(
+                    RequireRouteTopology(AtriumRingPatternId),
                     seed,
                     Array.Empty<RecipeSlotIntent>(),
                     string.Empty),
@@ -828,7 +830,8 @@ namespace DungeonLab.Editor
             }
 
             return ResolveDiagnosticRouteIntent(
-                BuildTwinWingRouteIntent(
+                BuildTopologyRouteIntent(
+                    RequireRouteTopology(TwinWingPatternId),
                     seed,
                     Array.Empty<RecipeSlotIntent>(),
                     string.Empty),
@@ -837,7 +840,6 @@ namespace DungeonLab.Editor
 
         private static RouteIntent BuildDiagnosticSelectedRouteIntent(int seed)
         {
-            RoutePatternKind pattern = SelectRoutePattern(seed);
             if (!DungeonRecipeCatalogService.TryLoadActiveCatalog(
                     out ActiveDungeonRecipeCatalog catalog,
                     out string rejectionReason))
@@ -847,7 +849,6 @@ namespace DungeonLab.Editor
 
             return ResolveDiagnosticRouteIntent(
                 BuildSelectedRouteIntent(
-                    pattern,
                     seed,
                     Array.Empty<RecipeSlotIntent>(),
                     string.Empty),
@@ -899,11 +900,11 @@ namespace DungeonLab.Editor
                     $"{edge.transitionKind}:{edge.requiredRiseLevels}");
             }
 
-            bool embedded = TryEmbedAtriumRingRoute(
+            bool embedded = TryEmbedRoute(
                 seed,
                 layoutAttempt: 1,
                 intent,
-                ResolvePatternSpatialSettings(intent.patternId),
+                ResolveTopologySpatialSettings(intent.topology),
                 out Vector2Int[] nodeCenters,
                 out string embeddingFailureCode,
                 out string embeddingError);
@@ -913,10 +914,10 @@ namespace DungeonLab.Editor
             int vistaCenterDistance = Mathf.Abs(vistaDelta.x) + Mathf.Abs(vistaDelta.y);
             return string.Join("\n", new[]
             {
-                $"selector.evenPattern={SelectedRoutePatternId(2026072100)}",
-                $"selector.oddPattern={SelectedRoutePatternId(2026072101)}",
+                $"selector.evenPattern={SelectRouteTopologyId(2026072100)}",
+                $"selector.oddPattern={SelectRouteTopologyId(2026072101)}",
                 $"processional.plannerVersion={processional.plannerVersion}",
-                $"processional.cycleLength={processional.requiredCycleCoreNodeCount}",
+                $"processional.cycleLength={processional.cycleCoreNodeCount}",
                 $"graph.pattern={intent.patternId}",
                 $"graph.plannerVersion={intent.plannerVersion}",
                 $"graph.nodeCount={intent.nodes.Length}",
@@ -979,11 +980,11 @@ namespace DungeonLab.Editor
                     $"{edge.transitionKind}:{edge.requiredRiseLevels}");
             }
 
-            bool embedded = TryEmbedTwinWingRoute(
+            bool embedded = TryEmbedRoute(
                 seed,
                 layoutAttempt: 1,
                 intent,
-                ResolvePatternSpatialSettings(intent.patternId),
+                ResolveTopologySpatialSettings(intent.topology),
                 out Vector2Int[] nodeCenters,
                 out string embeddingFailureCode,
                 out string embeddingError);
@@ -993,10 +994,10 @@ namespace DungeonLab.Editor
             int vistaCenterDistance = Mathf.Abs(vistaDelta.x) + Mathf.Abs(vistaDelta.y);
             return string.Join("\n", new[]
             {
-                $"selector.residue0Pattern={SelectedRoutePatternId(2026072100)}",
-                $"selector.residue1Pattern={SelectedRoutePatternId(2026072101)}",
-                $"selector.residue2Pattern={SelectedRoutePatternId(2026072102)}",
-                $"selector.residue3Pattern={SelectedRoutePatternId(2026072103)}",
+                $"selector.residue0Pattern={SelectRouteTopologyId(2026072100)}",
+                $"selector.residue1Pattern={SelectRouteTopologyId(2026072101)}",
+                $"selector.residue2Pattern={SelectRouteTopologyId(2026072102)}",
+                $"selector.residue3Pattern={SelectRouteTopologyId(2026072103)}",
                 $"processional.plannerVersion={processional.plannerVersion}",
                 $"atrium.plannerVersion={atrium.plannerVersion}",
                 $"graph.pattern={intent.patternId}",
@@ -1091,7 +1092,7 @@ namespace DungeonLab.Editor
             var invalidIntent = new RouteIntent(
                 processional.seed,
                 processional.plannerVersion,
-                processional.patternId,
+                processional.topology,
                 invalidNodes,
                 processional.traversalEdges,
                 processional.vista,
@@ -1100,11 +1101,6 @@ namespace DungeonLab.Editor
                 processional.catalogDigest,
                 processional.bottomNode,
                 processional.topNode,
-                processional.branchAttachNode,
-                processional.branchRejoinNode,
-                processional.requiredCycleRank,
-                processional.requiredCycleCoreNodeCount,
-                processional.requiredJunctionDegree,
                 processional.plannedOverlooks,
                 processional.allowGenericRoomWings);
             bool fullValidatorRejected = !TryValidateRouteIntent(
@@ -1528,7 +1524,7 @@ namespace DungeonLab.Editor
             return new RouteIntent(
                 source.seed,
                 source.plannerVersion,
-                source.patternId,
+                source.topology,
                 source.nodes,
                 source.traversalEdges,
                 vista,
@@ -1537,11 +1533,6 @@ namespace DungeonLab.Editor
                 source.catalogDigest,
                 source.bottomNode,
                 source.topNode,
-                source.branchAttachNode,
-                source.branchRejoinNode,
-                source.requiredCycleRank,
-                source.requiredCycleCoreNodeCount,
-                source.requiredJunctionDegree,
                 source.plannedOverlooks,
                 source.allowGenericRoomWings);
         }
@@ -1596,6 +1587,9 @@ namespace DungeonLab.Editor
                 recipeSlotId: recipeSlotId);
         }
 
+        // The graph is authored data now, so the contract this exercises is the
+        // topology loader's: what it rejects, and which facts it derives rather
+        // than reads.
         private static string BuildRouteGraphCompositionSnapshot(int seed)
         {
             RouteIntent intent = BuildDiagnosticRouteIntent(seed);
@@ -1615,114 +1609,126 @@ namespace DungeonLab.Editor
                     $"{edge.transitionKind}:{edge.requiredRiseLevels}");
             }
 
-            var contract = new RouteGraphComposer();
-            bool spineAdded = contract.TryAddSpine(
-                new[]
-                {
-                    new RouteNodeIntent("test-a", "arrival", "arrival", 0, -1, 0),
-                    new RouteNodeIntent("test-b", "culmination", "culmination", 1, -1, MajorRiseLevels)
-                },
-                new[] { "test-main" },
-                new[] { RouteTransitionKind.Stair },
-                out int[] contractSpine,
-                out _);
-            int nodesAfterSpine = contract.NodeCount;
-            int edgesAfterSpine = contract.EdgeCount;
-            bool duplicateNodeRejected = !contract.TryAddBranch(
-                contractSpine[0],
-                new[] { new RouteNodeIntent("test-b", "connector", "branch", -1, 0, 0) },
-                new[] { "test-duplicate-node" },
-                new[] { RouteTransitionKind.LevelCorridor },
-                out _,
-                out _);
-            bool duplicateEdgeRejected = !contract.TryAddBranch(
-                contractSpine[0],
-                new[] { new RouteNodeIntent("test-c", "connector", "branch", -1, 0, 0) },
-                new[] { "test-main" },
-                new[] { RouteTransitionKind.LevelCorridor },
-                out _,
-                out _);
-            bool missingEndpointRejected = !contract.TryAddBranch(
-                99,
-                new[] { new RouteNodeIntent("test-c", "connector", "branch", -1, 0, 0) },
-                new[] { "test-branch" },
-                new[] { RouteTransitionKind.LevelCorridor },
-                out _,
-                out _);
-            bool failedBranchesWereAtomic = contract.NodeCount == nodesAfterSpine &&
-                contract.EdgeCount == edgesAfterSpine;
-            bool branchAdded = contract.TryAddBranch(
-                contractSpine[0],
-                new[] { new RouteNodeIntent("test-c", "connector", "branch", -1, 0, 0) },
-                new[] { "test-branch" },
-                new[] { RouteTransitionKind.LevelCorridor },
-                out int[] contractBranch,
-                out _);
-            int nodesBeforeInvalidRejoins = contract.NodeCount;
-            int edgesBeforeInvalidRejoins = contract.EdgeCount;
-            bool selfEdgeRejected = !contract.TryRejoin(
-                contractBranch[0],
-                contractBranch[0],
-                "test-self",
-                RouteTransitionKind.LevelCorridor,
-                out _);
-            bool missingRejoinTargetRejected = !contract.TryRejoin(
-                contractBranch[0],
-                99,
-                "test-missing-target",
-                RouteTransitionKind.LevelCorridor,
-                out _);
-            bool failedRejoinsWereAtomic = contract.NodeCount == nodesBeforeInvalidRejoins &&
-                contract.EdgeCount == edgesBeforeInvalidRejoins;
-            bool rejoinAdded = contract.TryRejoin(
-                contractBranch[0],
-                contractSpine[1],
-                "test-rejoin",
-                RouteTransitionKind.Stair,
-                out _);
-            bool secondRejoinRejected = !contract.TryRejoin(
-                contractBranch[0],
-                contractSpine[0],
-                "test-second-rejoin",
-                RouteTransitionKind.LevelCorridor,
-                out _);
-            bool published = contract.TryPublish(
-                out RouteNodeIntent[] contractNodes,
-                out RouteTraversalIntent[] contractEdges,
-                out _);
-            bool publishedGraphHasOneCycle = published &&
-                contractEdges.Length - (contractNodes.Length - 1) == 1;
-            bool publishedGraphIsImmutable = !contract.TryAddBranch(
-                contractSpine[0],
-                new[] { new RouteNodeIntent("test-d", "connector", "branch", -1, 1, 0) },
-                new[] { "test-after-publish" },
-                new[] { RouteTransitionKind.LevelCorridor },
-                out _,
-                out _);
+            bool riseIsDerived = true;
+            foreach (RouteTraversalIntent edge in intent.traversalEdges)
+            {
+                riseIsDerived &= edge.requiredRiseLevels ==
+                    intent.nodes[edge.toNode].relativeElevationLevels -
+                    intent.nodes[edge.fromNode].relativeElevationLevels;
+            }
+
+            var junctionIds = new List<string>(intent.junctionNodes.Length);
+            foreach (int junction in intent.junctionNodes)
+            {
+                junctionIds.Add($"{intent.nodes[junction].id}:{intent.adjacency[junction].Count}");
+            }
+
+            bool probeLoaded = TryParseRouteTopologyProbe(RouteTopologyProbeJson, out DungeonRouteTopology probe);
+            var probeNodeIds = new List<string>(probe?.nodes.Length ?? 0);
+            var probeEdgeIds = new List<string>(probe?.edges.Length ?? 0);
+            foreach (RouteTopologyNode node in probe?.nodes ?? Array.Empty<RouteTopologyNode>())
+            {
+                probeNodeIds.Add(node.id);
+            }
+
+            foreach (RouteTopologyEdge edge in probe?.edges ?? Array.Empty<RouteTopologyEdge>())
+            {
+                probeEdgeIds.Add(edge.id);
+            }
+
+            // Reformatting the file cannot renumber the graph: the node index
+            // order is derived from the declared main/branch orders.
+            bool nodeOrderIsDerived =
+                TryMutateRouteTopologyProbe(
+                    "\"A\": [\"probe-a\", \"arrival\", \"arrival\", 0, { \"main\": 0 }],\n    " +
+                    "\"B\": [\"probe-b\", \"connector\", \"compression\", 4, { \"main\": 1 }],\n    " +
+                    "\"C\": [\"probe-c\", \"culmination\", \"culmination\", 8, { \"main\": 2 }]",
+                    "\"C\": [\"probe-c\", \"culmination\", \"culmination\", 8, { \"main\": 2 }],\n    " +
+                    "\"B\": [\"probe-b\", \"connector\", \"compression\", 4, { \"main\": 1 }],\n    " +
+                    "\"A\": [\"probe-a\", \"arrival\", \"arrival\", 0, { \"main\": 0 }]",
+                    out string permutedJson) &&
+                TryParseRouteTopologyProbe(permutedJson, out DungeonRouteTopology permuted) &&
+                permuted.nodes.Length == 3 &&
+                string.Equals(permuted.nodes[0].id, "probe-a", StringComparison.Ordinal) &&
+                string.Equals(permuted.nodes[1].id, "probe-b", StringComparison.Ordinal) &&
+                string.Equals(permuted.nodes[2].id, "probe-c", StringComparison.Ordinal);
 
             return string.Join("\n", new[]
             {
                 $"graph.pattern={intent.patternId}",
-                $"graph.operations=spine,branch,rejoin",
+                $"graph.source={intent.topology.sourcePath}",
                 $"graph.nodeIds={string.Join("|", nodeIds)}",
                 $"graph.edgeIds={string.Join("|", edgeIds)}",
                 $"graph.edgeDetails={string.Join("|", edgeDetails)}",
                 $"graph.loopEdges={intent.traversalEdges.Length - (intent.nodes.Length - 1)}",
-                $"contract.spineAdded={spineAdded}",
-                $"contract.branchAdded={branchAdded}",
-                $"contract.rejoinAdded={rejoinAdded}",
-                $"contract.duplicateNodeRejected={duplicateNodeRejected}",
-                $"contract.duplicateEdgeRejected={duplicateEdgeRejected}",
-                $"contract.missingEndpointRejected={missingEndpointRejected}",
-                $"contract.selfEdgeRejected={selfEdgeRejected}",
-                $"contract.missingRejoinTargetRejected={missingRejoinTargetRejected}",
-                $"contract.secondRejoinRejected={secondRejoinRejected}",
-                $"contract.failedBranchesWereAtomic={failedBranchesWereAtomic}",
-                $"contract.failedRejoinsWereAtomic={failedRejoinsWereAtomic}",
-                $"contract.publishedGraphHasOneCycle={publishedGraphHasOneCycle}",
-                $"contract.publishedGraphIsImmutable={publishedGraphIsImmutable}"
+                $"derived.riseFromLevels={riseIsDerived}",
+                $"derived.cycleRank={intent.cycleRank}",
+                $"derived.cycleCoreNodeCount={intent.cycleCoreNodeCount}",
+                $"derived.junctions={string.Join("|", junctionIds)}",
+                $"derived.branchAttach={intent.nodes[intent.branchAttachNode].id}",
+                $"derived.branchRejoin={intent.nodes[intent.branchRejoinNode].id}",
+                $"contract.probeLoaded={probeLoaded}",
+                $"contract.probeNodeIds={string.Join("|", probeNodeIds)}",
+                $"contract.probeEdgeIds={string.Join("|", probeEdgeIds)}",
+                $"contract.nodeOrderIsDerived={nodeOrderIsDerived}",
+                $"contract.duplicateNodeIdRejected={RouteTopologyProbeRejects("\"probe-c\", \"culmination\"", "\"probe-a\", \"culmination\"")}",
+                $"contract.duplicateEdgeIdRejected={RouteTopologyProbeRejects("[\"A\", \"B\", \"Stair\"], [\"B\", \"C\", \"Stair\"]", "[\"A\", \"B\", \"Stair\", \"dup\"], [\"B\", \"C\", \"Stair\", \"dup\"]")}",
+                $"contract.unknownEndpointRejected={RouteTopologyProbeRejects("[\"A\", \"B\", \"Stair\"]", "[\"A\", \"Z\", \"Stair\"]")}",
+                $"contract.selfEdgeRejected={RouteTopologyProbeRejects("[\"A\", \"B\", \"Stair\"]", "[\"A\", \"A\", \"Stair\"]")}",
+                $"contract.parallelEdgeRejected={RouteTopologyProbeRejects("[\"B\", \"C\", \"Stair\"]", "[\"B\", \"A\", \"Stair\"]")}",
+                $"contract.unknownTransitionKindRejected={RouteTopologyProbeRejects("[\"A\", \"B\", \"Stair\"]", "[\"A\", \"B\", \"Escalator\"]")}",
+                $"contract.mapCellWithoutNodeRejected={RouteTopologyProbeRejects("\"A  B  C\"", "\"A  B  C  D\"")}",
+                $"contract.nodeWithoutMapCellRejected={RouteTopologyProbeRejects("{ \"main\": 2 }]\n  }", "{ \"main\": 2 }],\n    \"D\": [\"probe-d\", \"connector\", \"return\", 8, { \"branch\": 0 }]\n  }")}",
+                $"contract.slotOnUnknownEdgeRejected={RouteTopologyProbeRejects("\"exit\": \"B-C\"", "\"exit\": \"nope\"")}",
+                $"contract.repeatedMainOrderRejected={RouteTopologyProbeRejects("8, { \"main\": 2 }]", "8, { \"main\": 1 }]")}",
+                $"contract.unknownAnchorRejected={RouteTopologyProbeRejects("\"top\": \"C\"", "\"top\": \"Z\"")}",
+                // Three gaps for three lanes: a per-lane array needs lanes - 1.
+                $"contract.laneGapCountRejected={RouteTopologyProbeRejects("\"columnGapCells\": 9", "\"columnGapCells\": [9, 9, 9]")}",
+                $"contract.idMustMatchFileNameRejected={RouteTopologyProbeRejects("\"id\": \"probe\"", "\"id\": \"not-probe\"")}"
             });
         }
+
+        // A deliberately tiny valid topology. Each contract probe below mutates
+        // exactly one thing in it and expects the loader to refuse the result.
+        private const string RouteTopologyProbeJson = @"{
+  ""id"": ""probe"",
+  ""displayName"": ""Loader Probe"",
+  ""plannerVersion"": ""probe-v1"",
+  ""map"": [""A  B  C""],
+  ""spatial"": { ""settings"": ""baseline"", ""columnGapCells"": 9, ""rowGapCells"": 9 },
+  ""nodes"": {
+    ""A"": [""probe-a"", ""arrival"", ""arrival"", 0, { ""main"": 0 }],
+    ""B"": [""probe-b"", ""connector"", ""compression"", 4, { ""main"": 1 }],
+    ""C"": [""probe-c"", ""culmination"", ""culmination"", 8, { ""main"": 2 }]
+  },
+  ""edges"": [[""A"", ""B"", ""Stair""], [""B"", ""C"", ""Stair""]],
+  ""slots"": [{ ""id"": ""probe-slot"", ""at"": ""B"", ""entry"": ""A-B"", ""exit"": ""B-C"" }],
+  ""vista"": { ""id"": ""probe-vista"", ""from"": ""C"", ""to"": ""A"", ""minVoidCells"": 3 },
+  ""anchors"": { ""bottom"": ""A"", ""top"": ""C"" }
+}";
+
+        private static bool TryParseRouteTopologyProbe(string json, out DungeonRouteTopology topology)
+        {
+            return TryParseRouteTopology(json, "<probe>/probe.json", out topology, out _);
+        }
+
+        // A probe that silently failed to apply would pass vacuously, so every
+        // mutation reports whether it changed anything.
+        private static bool TryMutateRouteTopologyProbe(
+            string find,
+            string replaceWith,
+            out string mutated)
+        {
+            mutated = RouteTopologyProbeJson.Replace(find, replaceWith);
+            return !string.Equals(mutated, RouteTopologyProbeJson, StringComparison.Ordinal);
+        }
+
+        private static bool RouteTopologyProbeRejects(string find, string replaceWith)
+        {
+            return TryMutateRouteTopologyProbe(find, replaceWith, out string mutated) &&
+                !TryParseRouteTopologyProbe(mutated, out _);
+        }
+
 
         private static string BuildRecipeContractSnapshot(int seed)
         {
@@ -2101,9 +2107,7 @@ namespace DungeonLab.Editor
             var incompatibleCatalog = new ActiveDungeonRecipeCatalog(
                 new[] { landmarkOnly },
                 "diagnostic-incompatible-catalog");
-            RoutePatternKind pattern = SelectRoutePattern(seed);
             RouteIntent unresolved = BuildSelectedRouteIntent(
-                pattern,
                 seed,
                 Array.Empty<RecipeSlotIntent>(),
                 string.Empty);
@@ -2378,7 +2382,6 @@ namespace DungeonLab.Editor
 
                 activeCount = scenarioCatalog.recipes.Length;
                 RouteIntent unresolved = BuildSelectedRouteIntent(
-                    SelectRoutePattern(seed),
                     seed,
                     Array.Empty<RecipeSlotIntent>(),
                     string.Empty);
@@ -3226,7 +3229,7 @@ namespace DungeonLab.Editor
                 lastNodeCenters.Length == lastRouteIntent.nodes.Length)
             {
                 DungeonPatternSpatialSettings spatial =
-                    ResolvePatternSpatialSettings(lastRouteIntent.patternId);
+                    ResolveTopologySpatialSettings(lastRouteIntent.topology);
                 for (int node = 0; node < lastNodeCenters.Length; node++)
                 {
                     centers.Add(new JObject
