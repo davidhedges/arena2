@@ -146,15 +146,45 @@ Hard constraints when tuning these: room size <= `pitch - 1` on each axis (the
 gap between adjacent rooms is `pitch - size`), and <= `roomEnvelopeRadiusCells
 * 2 + 1`. Spacious pitch 9/9 -> ceiling 8x8. Dense pitch 9/8 -> ceiling 8x7.
 
-**Item 2 (next) — route node elevations are literals.** The `RouteNodeIntent`
-elevation field already exists; it is populated with constants that always run
-0 -> 24. Making it data is the real fix for the identical vertical profile and
-does not require reinstating the old system.
+**Items 2 and 3 merged — owner ruling 2026-07-25: an archetype is a different
+graph entirely**, not a different elevation profile over the same graph. That
+makes "turn node elevations into data" not worth doing on its own: elevations
+are fields of a graph, so they become data when graphs do.
 
-**Item 3 (after) — restore topography variety.** Design question, not a
-refactor: does an archetype choose an elevation profile for an existing route
-graph, or select among different graphs? Note the 13-node coincidence above —
-room count needs to vary too.
+The slice is therefore **make a topology cheap to author**. It is not cheap now.
+Adding one costs roughly 180-230 lines of hand-written C#:
+
+| Per topology, today | Size |
+| --- | --- |
+| `Build*RouteIntent` — nodes, roles, beats, elevations, edge ids, transition kinds, all literals | ~130 lines |
+| `TryEmbed*Route` — including a **hand-drawn coarse coordinate array**, one `Vector2Int` per node | 45-98 lines |
+| branches in `TryEmbedRoute`, `ResolvePatternSpatialSettings`, `SelectRoutePattern` | 3 switches |
+
+The layout is not procedural. Each pattern is one hand-drawn diagram — the
+processional main route is literally `(0,0)(1,0)(2,0)(3,0)(3,1)(3,2)(2,2)(1,2)
+(1,3)`, an S on a 4x4 grid — fed to `TryTransformCoarseEmbedding`, which tries
+at most 4 quarter-turns against one mirror choice. **So each topology has <= 8
+spatial arrangements, ever.** That, more than room size, is why plans read alike.
+
+`SelectRoutePattern` is `seed % 4` mapped to 3 patterns, so it also needs
+redesigning to scale past four.
+
+The open question is now narrower: **author more diagrams as data, or replace
+the hand-drawn diagram with a general graph embedder?** Authoring keeps
+authorial control and suits "designed places"; a general embedder unlocks more
+variety but risks legibility and is real work. Per the archived plan's decision
+11 ("abstractions are earned by a working slice"), authoring two or three new
+topologies first — and only then extracting — is the lower-risk order.
+
+Encouragingly, the vocabulary for the owner's eventual goal already exists:
+`RouteTransitionKind` covers `LevelCorridor`, `Stair`, `Bridge`, `Stairwell`,
+and `RouteVistaIntent` / `RouteOverlookIntent` cover sightlines. Bridges,
+balconies and overlooks are mostly a matter of *authoring* those edge kinds in
+new graphs rather than building new systems — which is a further argument for
+doing the graph-as-data work as the vehicle.
+
+Room count also needs to vary: all three graphs have 13 nodes, so every dungeon
+has exactly 13 rooms.
 
 ### Next, in order
 
