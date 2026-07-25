@@ -1,0 +1,106 @@
+{
+  // Route topology: one authored diagram per file. See
+  // docs/dungeon-builder/ROUTE_TOPOLOGY_AUTHORING.md for the schema and the
+  // rule list. Check a draft with Tools > Dungeon Lab > Validate Topologies.
+  "id": "descent-shaft",
+  "displayName": "Cataract Shaft",
+  "plannerVersion": "descent-shaft-v1",
+  "weight": 1,
+
+  // Arrive on a high rim, turn down a shaft, end in a flooded vault on the
+  // abyss datum. Levels run 24 -> 0, so this is the first graph in the set
+  // whose edges carry a NEGATIVE rise: every main-route transition after the
+  // rim descends, and the branch descends with it.
+  //
+  // The empty column x1 is the void the shaft overlook looks across, and it is
+  // the vista lane K -> E.
+  "map": [
+    "J  .  C  B  A",
+    ".  .  D  .  .",
+    "K  .  E  .  .",
+    "L  M  F  .  .",
+    "I  H  G  .  ."
+  ],
+
+  "spatial": {
+    // Five lattice lanes on BOTH axes - the widest lattice in the set - with
+    // only 13 rooms to fill it. At the profile's own pitch and its full 8-cell
+    // rubber sheet the floor bounding box works out at ~50x47 cells, which puts
+    // 13 rooms around 25% fill, under denseFloorplanMinFillPercent - and since
+    // the sheet always spends its whole budget, that is every seed and not an
+    // unlucky few. So the lanes start one cell under the pitch (8 is still >=
+    // the largest room extent on either axis in either profile, so adjacent
+    // rooms touch at worst, they never overlap) and the sheet spends at most 4
+    // cells per axis. Measured that way: 27.0% minimum / 29.3% median on dense.
+    // That still leaves 35 lattices per axis, and it is the horizontal knob
+    // only - it does not touch the tier-void ratio, which lives in CellSize vs
+    // StairForge.LevelHeight.
+    "columnGapCells": { "min": 8, "max": 10 },
+    "rowGapCells": { "min": 8, "max": 10 },
+    "latticeSlackMaxCells": 4,
+
+    // Same argument, second half: the spacious profile's rooms are smaller than
+    // dense's, and a 5x5 lattice cannot afford them - it measured 26.3% fill on
+    // spacious, right on the floor. This topology therefore declares the LARGER
+    // (dense) room sizes for both profiles rather than shrinking its lattice
+    // further. On dense the override is a no-op; on spacious it trades some of
+    // that profile's airiness for the floor this shape needs.
+    "roomSizes": {
+      "terminal":  [7, 8, 6, 7],
+      "hall":      [6, 8, 6, 7],
+      "connector": [6, 8, 5, 7]
+    },
+
+    // This graph declares no overlook pairs, so it asks for no tier seams.
+    // The profile's default of 2 would throw for want of eligible candidates.
+    "tierSeamCount": 0
+  },
+
+  // key: [ id, role, beat, level, order ]. Level is absolute in 4u units.
+  "nodes": {
+    "A": ["rim-arrival",    "arrival",           "arrival",     24, { "main": 0 }],
+    "B": ["rim-gate",       "connector",         "compression", 24, { "main": 1 }],
+    "C": ["shaft-head",     "junction",          "choice",      20, { "main": 2 }],
+    "D": ["upper-gallery",  "processional-hall", "approach",    16, { "main": 3 }],
+    "E": ["hanging-shrine", "landmark",          "landmark",    12, { "main": 4 }],
+    "F": ["descent-well",   "connector",         "descent",      4, { "main": 5 }],
+    "G": ["lower-hall",     "grand-room",        "reveal",       4, { "main": 6 }],
+    "H": ["vault-approach", "return-hall",       "rejoin",       4, { "main": 7 }],
+    "I": ["flooded-vault",  "culmination",       "culmination",  0, { "main": 8 }],
+    "J": ["rim-ledge",      "connector",         "branch",      24, { "branch": 0 }],
+    "K": ["shaft-overlook", "overlook",          "reveal",      20, { "branch": 1 }],
+    "L": ["cistern",        "optional-room",     "reward",      12, { "branch": 2 }],
+    "M": ["vault-return",   "connector",         "return",       4, { "branch": 3 }]
+  },
+
+  // Written in travel order, so every descending edge derives a negative rise.
+  "edges": [
+    ["A", "B", "LevelCorridor"],
+    ["B", "C", "Stair"],
+    ["C", "D", "Stair"],
+    ["D", "E", "Stair"],
+    ["E", "F", "Stairwell"],
+    ["F", "G", "LevelCorridor"],
+    ["G", "H", "LevelCorridor"],
+    ["H", "I", "Stair"],
+    ["C", "J", "Bridge"],
+    ["J", "K", "Stair"],
+    ["K", "L", "Stairwell"],
+    ["L", "M", "Stair"],
+    ["M", "H", "LevelCorridor"]
+  ],
+
+  "slots": [
+    { "id": "required-compression", "at": "B", "entry": "A-B", "exit": "B-C" },
+    { "id": "required-landmark",    "at": "E", "entry": "D-E", "exit": "E-F",
+      "orientation": "vista-source-to-target" },
+    { "id": "required-return",      "at": "M", "entry": "L-M", "exit": "M-H" }
+  ],
+
+  "vista": { "id": "shaft-overlook-to-hanging-shrine", "from": "K", "to": "E", "minVoidCells": 3 },
+
+  "overlooks": [],
+
+  "anchors": { "bottom": "I", "top": "A" },
+  "allowGenericRoomWings": true
+}

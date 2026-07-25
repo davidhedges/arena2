@@ -1,0 +1,96 @@
+{
+  // Route topology: one authored diagram per file. See
+  // docs/dungeon-builder/ROUTE_TOPOLOGY_AUTHORING.md for the schema and the
+  // rule list. Check a draft with Tools > Dungeon Lab > Validate Topologies.
+  "id": "ridge-ravine",
+  "displayName": "Ridge And Ravine",
+  "plannerVersion": "ridge-ravine-v1",
+  "weight": 1,
+
+  // A ridge climbing to 24 over a ravine floor at 0: the route runs the length
+  // of the ravine, climbs its head wall, and finishes along the ridge. The
+  // branch bridges the ravine at mid height to an east ledge that only looks
+  // back at the shrine - a deliberate degree-1 dead end - and drops from the
+  // span down to a pool that returns along the ravine floor. Smallest room
+  // count in the set (12).
+  //
+  // Row y2 east of the shrine is the vista lane H -> D.
+  "map": [
+    ".  .  E  F  G",
+    ".  .  D  .  H",
+    ".  .  C  .  I",
+    "A  B  J  K  L"
+  ],
+
+  "spatial": {
+    // Twelve rooms is the fewest in the set, so this graph has the least floor
+    // to fill its bounding box with: the lanes start one cell under the profile
+    // pitch (8 is still >= the largest room extent on either axis in either
+    // profile, so adjacent rooms touch at worst, they never overlap) and the
+    // rubber sheet is capped at 6 rather than the profile's 8. Measured rather
+    // than guessed - see the step 3 block in CURRENT_STATUS.md. This is the
+    // horizontal knob only; it does not touch the tier-void ratio, which lives
+    // in CellSize vs StairForge.LevelHeight.
+    "columnGapCells": { "min": 8, "max": 11 },
+    "rowGapCells": { "min": 8, "max": 11 },
+    "latticeSlackMaxCells": 6,
+
+    // Same reason again, on the other axis of the same trade: the spacious
+    // profile's rooms are smaller, and twelve of them measured 26.9% fill there
+    // - on the floor. This topology therefore declares the LARGER (dense) room
+    // sizes for both profiles rather than giving up more of its rubber sheet.
+    // On dense the override is a no-op.
+    "roomSizes": {
+      "terminal":  [7, 8, 6, 7],
+      "hall":      [6, 8, 6, 7],
+      "connector": [6, 8, 5, 7]
+    },
+
+    // This graph declares no overlook pairs, so it asks for no tier seams.
+    "tierSeamCount": 0
+  },
+
+  "nodes": {
+    "A": ["ravine-mouth",  "arrival",           "arrival",      0, { "main": 0 }],
+    "B": ["mouth-gate",    "connector",         "compression",  0, { "main": 1 }],
+    "J": ["ravine-floor",  "grand-room",        "reveal",       0, { "main": 2 }],
+    "C": ["ravine-stair",  "junction",          "choice",       8, { "main": 3 }],
+    "D": ["ridge-shrine",  "landmark",          "landmark",    16, { "main": 4 }],
+    "E": ["ridge-walk",    "processional-hall", "approach",    16, { "main": 5 }],
+    "F": ["far-ridge",     "return-hall",       "rejoin",      20, { "main": 6 }],
+    "G": ["ridge-crown",   "culmination",       "culmination", 24, { "main": 7 }],
+    "I": ["ravine-span",   "connector",         "branch",      16, { "branch": 0 }],
+    "H": ["east-ledge",    "overlook",          "reveal",      20, { "branch": 1 }],
+    "L": ["mouth-return",  "connector",         "return",       8, { "branch": 2 }],
+    "K": ["sump-pool",     "optional-room",     "reward",       4, { "branch": 3 }]
+  },
+
+  "edges": [
+    ["A", "B", "LevelCorridor"],
+    ["B", "J", "LevelCorridor"],
+    ["J", "C", "Stairwell"],
+    ["C", "D", "Stair"],
+    ["D", "E", "LevelCorridor"],
+    ["E", "F", "Stair"],
+    ["F", "G", "Stair"],
+    ["C", "I", "Bridge"],
+    ["I", "H", "Stair"],
+    ["I", "L", "Stairwell"],
+    ["L", "K", "Stair"],
+    ["K", "J", "Stair"]
+  ],
+
+  "slots": [
+    { "id": "required-compression", "at": "B", "entry": "A-B", "exit": "B-J" },
+    { "id": "required-landmark",    "at": "D", "entry": "C-D", "exit": "D-E",
+      "orientation": "vista-source-to-target" },
+    { "id": "required-return",      "at": "L", "entry": "I-L", "exit": "L-K" }
+  ],
+
+  "vista": { "id": "east-ledge-to-ridge-shrine", "from": "H", "to": "D", "minVoidCells": 3 },
+
+  "overlooks": [],
+
+  "anchors": { "bottom": "A", "top": "G" },
+  "allowGenericRoomWings": true
+}

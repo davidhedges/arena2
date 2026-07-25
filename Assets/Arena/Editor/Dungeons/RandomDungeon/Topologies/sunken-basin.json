@@ -1,0 +1,89 @@
+{
+  // Route topology: one authored diagram per file. See
+  // docs/dungeon-builder/ROUTE_TOPOLOGY_AUTHORING.md for the schema and the
+  // rule list. Check a draft with Tools > Dungeon Lab > Validate Topologies.
+  "id": "sunken-basin",
+  "displayName": "Sunken Basin",
+  "plannerVersion": "sunken-basin-v1",
+  "weight": 1,
+
+  // Two rims at 24 either side of a basin, the island shrine at 0 on the basin
+  // floor, a bridge across the north lip and a sump shelf below the south. The
+  // route descends the west wall to the floor and climbs the east wall out, so
+  // both signs of rise appear on the main route.
+  //
+  // Column x3 above the shrine is the vista lane K -> F.
+  "map": [
+    "A  J  .  K  I",
+    "B  .  .  .  H",
+    "C  D  E  F  G",
+    ".  L  M  .  N"
+  ],
+
+  "spatial": {
+    // Five columns and four rows is the same lattice as atrium-ring. At the
+    // profile's own pitch that measured 26.8% floor fill on spacious against a
+    // 26% floor - the same knife edge atrium-ring sits on, where half the seeds
+    // are rejected for density. So the lanes start one cell under the pitch (8
+    // is still >= the largest room extent on either axis in either profile, so
+    // adjacent rooms touch at worst, they never overlap), which buys ~4 points
+    // of fill and costs nothing else. The rubber sheet keeps the profile's full
+    // 8 cells per axis.
+    "columnGapCells": { "min": 8, "max": 11 },
+    "rowGapCells": { "min": 8, "max": 11 },
+
+    // This graph declares no overlook pairs, so it asks for no tier seams.
+    "tierSeamCount": 0
+  },
+
+  "nodes": {
+    "A": ["west-rim",        "arrival",           "arrival",     24, { "main": 0 }],
+    "B": ["rim-gate",        "connector",         "compression", 24, { "main": 1 }],
+    "C": ["west-stair-head", "junction",          "choice",      20, { "main": 2 }],
+    "D": ["west-terrace",    "processional-hall", "approach",    12, { "main": 3 }],
+    "E": ["basin-floor",     "grand-room",        "reveal",       4, { "main": 4 }],
+    "F": ["island-shrine",   "landmark",          "landmark",     0, { "main": 5 }],
+    "G": ["east-terrace",    "return-hall",       "rejoin",       8, { "main": 6 }],
+    "H": ["east-ascent",     "connector",         "ascent",      16, { "main": 7 }],
+    "I": ["east-rim",        "culmination",       "culmination", 24, { "main": 8 }],
+    "J": ["north-rim-walk",  "connector",         "branch",      24, { "branch": 0 }],
+    "K": ["north-overlook",  "overlook",          "reveal",      16, { "branch": 1 }],
+    "L": ["south-shelf",     "connector",         "branch",      12, { "branch": 2 }],
+    "M": ["sump",            "optional-room",     "reward",       4, { "branch": 3 }],
+    "N": ["east-return",     "connector",         "return",       8, { "branch": 4 }]
+  },
+
+  "edges": [
+    ["A", "B", "LevelCorridor"],
+    ["B", "C", "Stairwell"],
+    ["C", "D", "Stair"],
+    ["D", "E", "Stair"],
+    ["E", "F", "Stair"],
+    ["F", "G", "Stair"],
+    ["G", "H", "Stair"],
+    ["H", "I", "Stair"],
+    ["A", "J", "LevelCorridor"],
+    ["J", "K", "Bridge"],
+    ["K", "I", "Stair"],
+    ["D", "L", "LevelCorridor"],
+    ["L", "M", "Stair"],
+    ["M", "N", "Stair"],
+    ["N", "G", "LevelCorridor"]
+  ],
+
+  "slots": [
+    { "id": "required-compression", "at": "B", "entry": "A-B", "exit": "B-C" },
+    { "id": "required-landmark",    "at": "F", "entry": "E-F", "exit": "F-G",
+      "orientation": "vista-source-to-target" },
+    { "id": "required-return",      "at": "N", "entry": "M-N", "exit": "N-G" }
+  ],
+
+  // The landmark is also the single lowest point and the bottom anchor: the
+  // basin's whole point is that the shrine sits at the bottom of it.
+  "vista": { "id": "north-overlook-to-island-shrine", "from": "K", "to": "F", "minVoidCells": 3 },
+
+  "overlooks": [],
+
+  "anchors": { "bottom": "F", "top": "I" },
+  "allowGenericRoomWings": true
+}

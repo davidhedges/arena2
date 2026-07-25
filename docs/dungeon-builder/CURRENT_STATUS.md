@@ -38,7 +38,7 @@ Always publish/restart the server module after regenerating, so server movement 
 
 ## Current shape
 
-- Three route patterns selected deterministically from the seed: processional spine, atrium ring, twin-wing keep.
+- Seven route topologies, one drawn per seed by weight: processional spine, atrium ring, twin-wing keep, cataract shaft (descending), sunken basin, terraced cascade, ridge and ravine. Each is one JSON file under `Assets/Arena/Editor/Dungeons/RandomDungeon/Topologies/`; adding one costs no C#.
 - Three required recipe slots (`required-compression`, `required-landmark`, `required-return`) filled from an explicit catalog; four enabled recipes currently.
 - Vertical traversal from reviewed stair contracts, forged contracts, online synthesis, stairwell towers, and bridges — in that fallback order.
 - One planned vista with a reserved sight corridor, plus 1–4 external connector promontories.
@@ -132,7 +132,7 @@ the sole path. Not a subjective impression — measured over 200 seeds:
 | --- | --- | --- |
 | One topography | `elevationSpan` and `routeClimbLevels` are 24 for 199/199 seeds; `archetypes = AscendingSpine: 199` | `ElevationArchetype` had **11** members (Basin, Mesa, Ridge, Canyon, AscendingSpine, Descent, SplitPlateau, Crater, Helix, Terraces, Atrium) chosen per seed by `ElevationArchetypePlanner.Choose(random)`. It is now `enum RouteElevationPolicy { AscendingSpine }` — one member |
 | Same connectivity | 3 fixed graphs on `seed % 4` (processional 50%, atrium 25%, twin-wing 25%) | All three `Build*RouteIntent` factories hardcode every node id, role, beat, edge **and elevation** as literals |
-| Always 13 rooms | `rooms` min 13, p50 13, max 13 | All three route graphs happen to have 13 nodes. Step 2 removed the 13-node *lock* (the range is now 9–20), but the three shipped graphs still have 13 nodes each, so room count does not vary until step 3 adds graphs that differ |
+| Always 13 rooms *(closed by step 3)* | `rooms` min 13, p50 13, max 13 | All three route graphs happened to have 13 nodes. Step 2 removed the 13-node *lock* (the range is 9–20); step 3 added graphs that differ, and the same 200 seeds now measure 12/13/14/16 rooms |
 | Identical room shapes | — | The same commit cut `DungeonGenerationProfile` 68 -> 24 settings, deleting the room size-class vocabulary (`largeRoom/midRoom/smallRoom` area ranges *and* counts, `nonRectChanceGrand`, `nonRectChanceMid`, `wingMinDimCells`, `wingMaxDepthCells`, `roomMaxSideCells`, `roomMaxAspectRatio`, `floorBudgetCells`) |
 
 The archived plan listed "multiple elevation archetypes" under *pieces worth
@@ -329,8 +329,88 @@ problem.** Two things follow:
   runs 24 -> 0 — but every graph still lands 4–8 unit rises across 36+ unit gaps,
   because the ratio lives in the constants above, not in a topology file.
 
-Still ahead: **step 3** (the four drafted topologies, one file plus a validator
-pass each).
+**Step 3 landed 2026-07-25 — the four drafted topologies. Every seed moves again.**
+
+Seven topologies now, drawn with equal weight. Four new files, no generator C#;
+the only code-side change is three new role strings in both profile assets'
+`roleSizeClasses`.
+
+| topology | rooms | lattice | shape |
+| --- | --- | --- | --- |
+| `descent-shaft` | 13 | 5×5 | arrive on a rim, turn down a shaft, end in a flooded vault at the abyss datum — levels run **24 → 0** |
+| `sunken-basin` | 14 | 5×4 | two rims at 24, the island shrine at 0 on the basin floor, a bridge across the north lip, two loops |
+| `terraced-cascade` | 16 | 5×5 | eleven main-route nodes stepping 4u across a terrace field, plus a cascade spur that falls back to the arrival |
+| `ridge-ravine` | 12 | 5×4 | a ridge climbing to 24 over a ravine floor at 0; the overlook is a deliberate degree-1 dead end |
+
+**Gate: PASSED.** `ops/dungeon-step2-verify.sh dense` (it is generic) ran the
+200-seed batch twice on the same tree: byte-identical `resultHash`
+`eb3ffd0c0df09586a2f50c0f20dab9ad7d652433f7c47b9dd9c786e126e78af8`, **200/200
+accepted**, `hardValid 200/200`, `validationFailureCodes none`. That hash is a
+**transient comparison value, not a lock** — do not assert it in a test.
+`Tools > Dungeon Lab > Validate Topologies` passes all seven at both profiles.
+
+```text
+                        step 2            step 3
+accepted (dense)        199/200           200/200
+topologies              3                 7
+room counts             13 × 200          12 × 33, 13 × 106, 14 × 33, 16 × 28
+floor fill, median      30.7%             30.6%
+floor fill, minimum     27.1%             27.0%   against a 26% floor
+layoutAttempts          mean 1.03 max 2   mean 1.015 max 2
+```
+
+Per topology, `dense`, floor fill min / median: `processional-spine` 30.1/31.4 ·
+`sunken-basin` 29.5/32.5 · `terraced-cascade` 29.6/31.8 · `atrium-ring`
+28.4/30.1 · `descent-shaft` 27.0/29.3 · `ridge-ravine` 27.1/28.3 ·
+`twin-wing-keep` 27.1/30.3.
+
+Four things worth carrying forward:
+
+- **200/200 does not mean the stairwell defect is fixed.** Step 2's failure
+  `2026072228` now draws `terraced-cascade` instead of `twin-wing-keep`, so no
+  seed in this window lands on the broken combination. The defect is still
+  visible as recovered `ROUTE_TRANSITION_RESERVATION` retries on `2026072219`
+  and `2026072257` (both twin-wing) and `2026072135` (descent-shaft).
+- **The rubber sheet always spends its whole budget**, so a topology's floor
+  bounding box — and therefore its floor fill — is effectively a constant, and a
+  topology that misses the 26% floor misses it on *every* seed rather than a few.
+  Two of the four needed their lane minimums authored one cell under the profile
+  pitch, and two needed a `roomSizes` or `latticeSlackMaxCells` override, all
+  measured rather than guessed. Details and the reason live in each file.
+- **The `±4/±8` rise sign is now exercised**: 20 descending edges across the four
+  new graphs, on 119 of 200 seeds. `descent-shaft` descends for eight of its
+  thirteen edges.
+- **Recipe port geometry is an authoring rule that nothing checks.** The
+  compression slot's node must be straight through, the landmark's must be
+  straight through *and* perpendicular to the vista, and the return's must be a
+  corner — see the new section in
+  [`ROUTE_TOPOLOGY_AUTHORING.md`](ROUTE_TOPOLOGY_AUTHORING.md). Two of the four
+  §6 drafts broke this and were redrawn. Teaching `Validate Topologies` to check
+  it is the first follow-up.
+
+**Spacious got better, and what is left there is not new.** Measured over the
+same 200 seeds at `spacious`: **184/200**, and every one of the 16 failures is
+`atrium-ring` (3/19 accepted) rejected for `ROUTE_DENSITY_PRECONDITION`. The four
+new topologies accept all 119 of their spacious seeds. For comparison, `main`
+before step 3 accepted 40/50 spacious seeds with `atrium-ring` at 6/16 — so
+`atrium-ring`'s spacious density failure is a **pre-existing step 2 defect**, not
+something step 3 introduced. The same one-line fix the new topologies use would
+very likely close it (`"columnGapCells": { "min": 8, … }`, `rowGapCells` the
+same), but that changes a shipped topology's dense output too, so it is left for
+an owner call rather than folded in here.
+
+**The editor suite came out one test better than it went in**: `main` runs the
+`DungeonLab*` filter at 78 passed / 29 failed, this tree at 79 / 28. Two tests
+were updated because step 3 invalidated what they pinned — the registry weight
+list in `Selector_DrawsEveryTopologyByWeightRatherThanBySeedResidue`, and an
+absolute `baseLevel` in `TwinStairs_Landings…`, whose seed now draws
+`sunken-basin` and so hands the episode a landmark at level 0 (that assertion now
+pins the *coupling*, `elevatedLevel == baseLevel + 1`, instead of the absolute).
+The one test that is red here and green on `main`,
+`HallwayEndRegression_RendererAndCollisionConsumeOnlyTheValidatedPlan`, fails on
+`collision.missingMeshes=2` with the plan and renderer both passing — the same
+signature nine tests already carry on `main`, on a seed that moved into it while
+two others moved out.
 
 The question below is settled in favour of authoring-as-data; kept for the
 reasoning: **author more diagrams as data, or replace the hand-drawn diagram with
@@ -347,23 +427,28 @@ balconies and overlooks are mostly a matter of *authoring* those edge kinds in
 new graphs rather than building new systems — which is a further argument for
 doing the graph-as-data work as the vehicle.
 
-Room count also needs to vary: all three graphs have 13 nodes, so every dungeon
-has exactly 13 rooms.
-
 ### Next, in order
 
 1. **Look at the dungeons.** **Arena > Dungeons > Rebuild Random Dungeon** on a few
-   seeds. The route-topology data cutover is already confirmed output-neutral by
-   `ops/dungeon-port-ab.sh` (see above), and no hash tells you whether a dungeon
-   reads well.
-2. **Seed 2026072295 is a real defect, not noise.** Its `main-4-5` edge needs a
-   `Stairwell` for an 8u rise; a stairwell tower needs void cells beside the
-   corridor and the `dense` profile leaves fewer, so the reservation is
-   structurally impossible and the planner retries it until the ceiling. Worth
-   understanding before adding route content. It sits outside
-   `2026072100..2026072149`, the 50-seed window the last catalog change was
-   validated against — that window was too narrow to have caught it.
-3. **Remaining review items**, none urgent: unify the two floor representations
+   seeds. No hash tells you whether a dungeon reads well. One rendered shot per
+   new topology is in `DungeonLabReports/step3_topology_shots/` (dense, seeds
+   2026072104 / 2026072100 / 2026072101 / 2026072105); the four also rebuild end
+   to end — plan, renderer, collision export, scene save — into throwaway scenes.
+2. **Teach `Validate Topologies` the slot-geometry rule.** It is the one
+   authoring rule with real teeth that nothing checks, and it cost two of the
+   four step 3 drafts a redraw. See "Slot geometry" in
+   [`ROUTE_TOPOLOGY_AUTHORING.md`](ROUTE_TOPOLOGY_AUTHORING.md).
+3. **The stairwell reservation defect is still open**, and step 3's 200/200 hides
+   it: a stairwell tower needs void cells beside its corridor and `dense` leaves
+   fewer, so an interior stairwell in a dense cluster is structurally
+   impossible. It now shows up as recovered retries (`2026072219`, `2026072257`,
+   `2026072135`) rather than as a failed seed.
+4. **`atrium-ring` fails 16 of its 19 spacious seeds for density** — pre-existing,
+   see the step 3 block above for the one-line fix and why it was not folded in.
+5. **The tier-void ratio** the owner called out is still untouched and still its
+   own slice. New topologies redistribute elevation; they cannot change 4u of
+   rise across a 36u+ gap.
+6. **Remaining review items**, none urgent: unify the two floor representations
    (§12, 2.5), move the headroom gate after the late passes and delete the
    duplicated deck formula (2.4), carry `RouteIntent` into the plan to remove the
    `lastRouteIntent` static (2.7), and take the display strings out of

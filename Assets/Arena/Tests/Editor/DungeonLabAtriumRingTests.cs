@@ -19,7 +19,8 @@ namespace Arena.Tests.Editor
             Dictionary<string, string> snapshot = AtriumIntentSnapshot();
 
             Assert.That(snapshot["selector.weights"], Is.EqualTo(
-                "atrium-ring:1|processional-spine:1|twin-wing-keep:1"));
+                "atrium-ring:1|descent-shaft:1|processional-spine:1|ridge-ravine:1|" +
+                "sunken-basin:1|terraced-cascade:1|twin-wing-keep:1"));
             // Every weighted topology has to actually appear over a 200-seed
             // window, or the draw is not doing what the weights say.
             foreach (string entry in snapshot["selector.distribution"].Split('|'))

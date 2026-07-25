@@ -1,0 +1,93 @@
+{
+  // Route topology: one authored diagram per file. See
+  // docs/dungeon-builder/ROUTE_TOPOLOGY_AUTHORING.md for the schema and the
+  // rule list. Check a draft with Tools > Dungeon Lab > Validate Topologies.
+  "id": "terraced-cascade",
+  "displayName": "Terraced Cascade",
+  "plannerVersion": "terraced-cascade-v1",
+  "weight": 1,
+
+  // Broad and shallow: eleven main-route nodes stepping up 4u at a time across
+  // a terrace field, so the climb is spread over more, smaller risers than any
+  // other graph in the set. Largest room count here (16). Two spurs: an east
+  // return that rejoins the mid terrace, and a west cascade that falls from the
+  // crown back down to the arrival.
+  //
+  // Row y3 is deliberately empty. It is the terrace void the crown walk stands
+  // over, and it is what makes the vista I -> F two lattice steps rather than
+  // one (a one-step vista does not clear its required void - see Finding C in
+  // the authoring notes).
+  "map": [
+    "N  H  I  J  K",
+    ".  .  .  .  .",
+    "O  G  F  E  M",
+    "P  .  .  .  .",
+    "A  B  C  D  L"
+  ],
+
+  "spatial": {
+    // Five lanes on both axes. The lanes start one cell under the profile
+    // pitch (8 is still >= the largest room extent on either axis in either
+    // profile, so adjacent rooms touch at worst, they never overlap), which
+    // buys back the floor fill that a 5x5 lattice would otherwise lose, and
+    // lets this topology keep the profile's whole 8-cell rubber sheet.
+    "columnGapCells": { "min": 8, "max": 11 },
+    "rowGapCells": { "min": 8, "max": 11 },
+
+    // This graph declares no overlook pairs, so it asks for no tier seams.
+    "tierSeamCount": 0
+  },
+
+  "nodes": {
+    "A": ["field-arrival",     "arrival",       "arrival",      0, { "main": 0 }],
+    "B": ["first-gate",        "connector",     "compression",  0, { "main": 1 }],
+    "C": ["lower-terrace",     "terrace-hall",  "approach",     4, { "main": 2 }],
+    "D": ["terrace-junction",  "junction",      "choice",       4, { "main": 3 }],
+    "E": ["mid-terrace",       "terrace-hall",  "reveal",       8, { "main": 4 }],
+    "F": ["mid-shrine",        "landmark",      "landmark",    12, { "main": 5 }],
+    "G": ["upper-junction",    "junction",      "rejoin",      16, { "main": 6 }],
+    "H": ["high-stair",        "stair-hall",    "ascent",      20, { "main": 7 }],
+    "I": ["terrace-overlook",  "overlook",      "reveal",      20, { "main": 8 }],
+    "J": ["crown-walk",        "gallery",       "approach",    24, { "main": 9 }],
+    "K": ["summit",            "culmination",   "culmination", 24, { "main": 10 }],
+    "L": ["east-spur",         "connector",     "branch",       4, { "branch": 0 }],
+    "M": ["east-return",       "connector",     "return",       8, { "branch": 1 }],
+    "N": ["cascade-crown",     "gallery",       "reward",      20, { "branch": 2 }],
+    "O": ["cascade-span",      "optional-room", "reward",      12, { "branch": 3 }],
+    "P": ["cascade-foot",      "gallery",       "reward",       8, { "branch": 4 }]
+  },
+
+  "edges": [
+    ["A", "B", "LevelCorridor"],
+    ["B", "C", "Stair"],
+    ["C", "D", "LevelCorridor"],
+    ["D", "E", "Stair"],
+    ["E", "F", "Stair"],
+    ["F", "G", "Stair"],
+    ["G", "H", "Stair"],
+    ["H", "I", "LevelCorridor"],
+    ["I", "J", "Stair"],
+    ["J", "K", "LevelCorridor"],
+    ["D", "L", "LevelCorridor"],
+    ["L", "M", "Stairwell"],
+    ["M", "E", "LevelCorridor"],
+    ["H", "N", "LevelCorridor"],
+    ["N", "O", "Bridge"],
+    ["O", "P", "Stair"],
+    ["P", "A", "Stair"]
+  ],
+
+  "slots": [
+    { "id": "required-compression", "at": "B", "entry": "A-B", "exit": "B-C" },
+    { "id": "required-landmark",    "at": "F", "entry": "E-F", "exit": "F-G",
+      "orientation": "vista-source-to-target" },
+    { "id": "required-return",      "at": "M", "entry": "L-M", "exit": "M-E" }
+  ],
+
+  "vista": { "id": "terrace-overlook-to-mid-shrine", "from": "I", "to": "F", "minVoidCells": 3 },
+
+  "overlooks": [],
+
+  "anchors": { "bottom": "A", "top": "K" },
+  "allowGenericRoomWings": true
+}

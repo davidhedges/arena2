@@ -92,8 +92,12 @@ namespace Arena.Tests.Editor
             Assert.That(report[$"{recipe}.protectedFocalCells"], Is.EqualTo("15"));
             Assert.That(report[$"{recipe}.elevatedZones"], Is.EqualTo("2"));
             Assert.That(report[$"{recipe}.transitions"], Is.EqualTo("2"));
-            Assert.That(report[$"{recipe}.baseLevel"], Is.EqualTo("8"));
-            Assert.That(report[$"{recipe}.elevatedLevel"], Is.EqualTo("9"));
+            // The absolute level is a property of whichever node this seed's
+            // topology hands the episode - sunken-basin puts its landmark on the
+            // basin floor at 0 - so what is worth pinning is the coupling: the
+            // raised zone sits exactly one level above the recipe's own floor.
+            int baseLevel = int.Parse(report[$"{recipe}.baseLevel"]);
+            Assert.That(report[$"{recipe}.elevatedLevel"], Is.EqualTo((baseLevel + 1).ToString()));
             Assert.That(report[$"{recipe}.reservationsComplete"], Is.EqualTo("true"));
             Assert.That(contract[$"{contractRecipe}.symmetryPairs"], Is.EqualTo("1"));
             Assert.That(report[$"{recipe}.protectedZonesValid"], Is.EqualTo("true"));

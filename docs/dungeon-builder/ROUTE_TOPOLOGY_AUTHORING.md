@@ -120,6 +120,40 @@ Hard rules, all enforced by the generator and all reported by the validator:
 | Every role appears in the profile's `roleSizeClasses` map | a new role name is an authoring error, not silently a hall |
 | Role size range ≤ 9 cells per axis | `roomEnvelopeRadiusCells` is pinned at 4 by the landmark recipe's reach |
 
+## Slot geometry: the rule the validator cannot see
+
+**Read this before drawing a slot.** A recipe's ports are fixed in its own
+frame, and `TryResolveActiveRecipePortBindings` demands that each port's
+transformed outward direction *equals* the direction of the route neighbour it
+is bound to. So the catalog decides the shape of every slot node's corner:
+
+| Slot | Node must be | Because |
+| --- | --- | --- |
+| `required-compression` | **straight through** — its two edges leave in opposite directions | `connector_example_01` and `connector_flexible_vestibule_01` both put their two mandatory ports on opposite faces (`-x` / `+x`), and `route-forward` binds `+x` to the exit edge |
+| `required-landmark` | **straight through, and perpendicular to the vista** | `episode_throne_twin_stairs_01` puts its ports on the *transverse* axis (`-y` / `+y`), while `vista-source-to-target` binds the *primary* axis to the vista line |
+| `required-return` | **a corner** — its two edges leave at 90° | `connector_corner_return_01` puts its ports on adjacent faces (`-y` / `+x`) |
+
+Mirroring is not an escape: `allowMirror` flips the transverse axis, so it
+chooses which *side* a port faces, never whether the pair is opposite or
+adjacent.
+
+Getting this wrong is expensive and silent:
+
+- **Validate Topologies does not check it.** It reports the graph, the lattice
+  and the envelope; recipe port geometry is resolved at placement time.
+- **`TryValidateRecipeCandidate` does not check it either**, so the wrong-shaped
+  recipe still enters the candidate pool for that slot.
+- **The retry cannot save it.** `RecipeSelectionRandom` is keyed on
+  `(seed, topologyId, nodeId)` with no layout attempt in the key, so every
+  layout attempt reselects the same recipe and fails the same way. A
+  straight-through `required-return` node does not cost a retry — it loses
+  roughly half that topology's seeds outright to `RECIPE_PLACEMENT`.
+
+Two of the four §6 drafts in
+[`route-topology-authoring-2026-07-25.md`](route-topology-authoring-2026-07-25.md)
+were hand-verified against the rule table above and still broke this, because
+the rule was not written down anywhere. It is now.
+
 ## The rubber sheet
 
 Rigid transforms are exhausted at 8 — D4 is complete — so a topology with fixed
@@ -161,6 +195,19 @@ Things worth knowing:
 - The minimum lattice is the worst case for **every other rule** — a shorter
   vista lane, tighter rooms — so that is what the validator checks against. The
   widest lattice is the worst case for the envelope only.
+- **The sheet always spends its whole budget.** `ResolveLatticeLaneOffsets`
+  hands out every available cell; only *which lane* gets each one is drawn. So
+  the total span, and therefore the floor bounding box, is effectively a
+  constant per topology per profile — and so is floor fill, to within the ±2
+  points that room-size jitter contributes. A topology that misses the fill
+  floor misses it on **every** seed, not on an unlucky few.
+- **A wide lattice is the thing that misses it.** Five lanes at the 9-cell pitch
+  span 36 cells before rooms; add the 8-cell sheet and the box is ~50 cells wide
+  with the same rooms to fill it. The knob is the lane *minimum*: authoring
+  `{ "min": 8 }` is safe on either axis in either profile — 8 is ≥ the largest
+  room extent anywhere in the two profiles, so adjacent rooms touch at worst and
+  never overlap — and it buys about four points of fill per axis. Reach for that
+  before giving up rubber sheet with `latticeSlackMaxCells`.
 
 ## Things that bite
 

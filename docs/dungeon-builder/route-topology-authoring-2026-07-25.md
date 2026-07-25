@@ -1,10 +1,32 @@
 # Route topology authoring — proposal
 
-Date: 2026-07-25. Status: **authoring model agreed; §8 forks all ruled. §5 steps
-1 and 2 are both implemented — see
+Date: 2026-07-25. Status: **all of §5 is implemented, steps 1, 2 and 3.** See
 [`ROUTE_TOPOLOGY_AUTHORING.md`](ROUTE_TOPOLOGY_AUTHORING.md) for the shipped
-format and `CURRENT_STATUS.md` for what landed and what it measured. Step 3 (the
-drafted topologies in §6) is not started.**
+format and `CURRENT_STATUS.md` for what each step landed and measured. This page
+is now design background; where it disagrees with those two, they win.
+
+Where the shipped step 3 differs from the §6 drafts:
+
+- **`terraced-cascade` and `ridge-ravine` were redrawn.** Their recipe slots sat
+  at the wrong lattice corners: the terraced landmark had its entry and exit at
+  90°, and both returns ran straight through. A recipe's ports are fixed in its
+  own frame, so the catalog dictates the shape of each slot node — compression
+  straight through, landmark straight through *and* perpendicular to the vista,
+  return a corner. §2's rule list does not mention this and neither does the
+  validator, which is why hand-verification missed it. The rule is now written
+  down in `ROUTE_TOPOLOGY_AUTHORING.md` ("Slot geometry"). Both keep their room
+  counts (16 and 12), their loop counts, their stairwell-on-open-ground
+  placement and their character; the node tables differ in detail.
+- **`descent-shaft` and `sunken-basin` shipped as drafted**, node ids, levels and
+  edges verbatim.
+- **Every file also carries a `spatial` block**, which §6 did not draft. Three of
+  the four author lane minimums one cell under the profile pitch, and two also
+  override `latticeSlackMaxCells` or `roomSizes`, because floor fill is the
+  binding constraint on a five-lane lattice. Each file states its reason and
+  `CURRENT_STATUS.md` carries the measurements.
+- **All four declare `tierSeamCount: 0`** (they declare no `overlooks` pairs, and
+  `BuildPlannedOverlooks` throws rather than rejects), **`allowGenericRoomWings:
+  true`**, a `vista.id`, and `weight: 1`.
 
 Where the shipped step 2 differs from the §3/§4 sketch below:
 
@@ -325,6 +347,11 @@ cluster. Drafts below follow this.
 
 Four hand-verified against every rule in §2; three deferred with reasons. Maps use
 `x` right, `y` up, one char per lattice cell.
+
+> **These are the drafts, not the shipped files.** 6.1 and 6.2 shipped as drawn;
+> 6.3 and 6.4 were redrawn for slot geometry (see the status note at the top).
+> The files under `Assets/Arena/Editor/Dungeons/RandomDungeon/Topologies/` are
+> the current truth.
 
 Notation: `▣` recipe slot · `◀b` bottom anchor (level 0) · `◀t` top anchor (24) ·
 `◀src`/`◀tgt` vista endpoints. Main-route order is the `#` column; `–` is off-main.
