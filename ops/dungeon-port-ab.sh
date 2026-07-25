@@ -9,7 +9,8 @@
 # unrelated content drift cannot masquerade as a regression.
 #
 # Usage:  ops/dungeon-port-ab.sh [profile]     # profile defaults to dense
-# Needs:  Unity closed (batchmode cannot take Temp/UnityLockfile).
+# Needs:  Unity closed. The shared batch preflight rejects a live editor,
+#         clears orphaned project batch state, and moves an unowned lockfile.
 # Exit:   0 = byte-identical reports, 1 = a real difference, 2 = could not run.
 
 set -uo pipefail
@@ -23,15 +24,17 @@ LIVE="$REPORTS/dungeon_plan_2026072100_2026072299.json"
 PRE="$REPORTS/ab_preport_$PROFILE.json"
 POST="$REPORTS/ab_postport_$PROFILE.json"
 LOGS="$REPORTS/ab_logs"
+PREFLIGHT="${UNITY_BATCH_PREFLIGHT:-$PWD/ops/unity-batch-preflight.sh}"
 
-if [ -e Temp/UnityLockfile ]; then
-  echo "REFUSING: Temp/UnityLockfile exists — quit the Unity editor first."
+if [ ! -x "$PREFLIGHT" ]; then
+  echo "REFUSING: Unity batch preflight is not executable at $PREFLIGHT."
   exit 2
 fi
 if [ ! -x "$UNITY" ]; then
   echo "REFUSING: no Unity at $UNITY (set UNITY_PATH)."
   exit 2
 fi
+"$PREFLIGHT" "$PWD" || exit 2
 
 mkdir -p "$LOGS"
 STASH_TAG="dungeon-port-ab-$$"

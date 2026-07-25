@@ -11,7 +11,8 @@
 # stashes the working tree) is the wrong tool here and is deliberately not used.
 #
 # Usage:  ops/dungeon-step2-verify.sh [profile]     # profile defaults to dense
-# Needs:  Unity closed (batchmode cannot take Temp/UnityLockfile).
+# Needs:  Unity closed. The shared batch preflight rejects a live editor,
+#         clears orphaned project batch state, and moves an unowned lockfile.
 # Exit:   0 = deterministic and >= 199/200, 1 = a real problem, 2 = could not run.
 
 set -uo pipefail
@@ -23,15 +24,17 @@ LIVE="$REPORTS/dungeon_plan_2026072100_2026072299.json"
 RUN1="$REPORTS/step2_run1_$PROFILE.json"
 RUN2="$REPORTS/step2_run2_$PROFILE.json"
 LOGS="$REPORTS/step2_logs"
+PREFLIGHT="${UNITY_BATCH_PREFLIGHT:-$PWD/ops/unity-batch-preflight.sh}"
 
-if [ -e Temp/UnityLockfile ]; then
-  echo "REFUSING: Temp/UnityLockfile exists — quit the Unity editor first."
+if [ ! -x "$PREFLIGHT" ]; then
+  echo "REFUSING: Unity batch preflight is not executable at $PREFLIGHT."
   exit 2
 fi
 if [ ! -x "$UNITY" ]; then
   echo "REFUSING: no Unity at $UNITY (set UNITY_PATH)."
   exit 2
 fi
+"$PREFLIGHT" "$PWD" || exit 2
 
 mkdir -p "$LOGS"
 

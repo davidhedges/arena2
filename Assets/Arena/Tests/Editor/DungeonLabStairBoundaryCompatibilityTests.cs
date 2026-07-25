@@ -491,6 +491,25 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void LandingShellContinuity_PrunesLandingOnlyCornerIsland()
+        {
+            var upperLanding = new Vector2Int(15, 9);
+            var shellEdges = new List<(Vector2Int cell, int direction, int higherLevel)>
+            {
+                (upperLanding, South, 16),
+                (upperLanding, East, 16)
+            };
+
+            HashSet<(Vector2Int cell, int direction, int higherLevel)> orphanEdges =
+                FindOrphanLandingShellEdges(shellEdges, upperLanding);
+
+            Assert.That(
+                orphanEdges,
+                Is.EquivalentTo(shellEdges),
+                "The named walled-well180 regression is a two-edge L component on its upper landing; sharing one corner must not make that island a valid shell run.");
+        }
+
+        [Test]
         public void LandingShellContinuity_KeepsLandingWallJoinedToRunOrCorner()
         {
             var landing = new Vector2Int(4, 4);
@@ -566,6 +585,46 @@ namespace Arena.Tests.Editor
                 "The bare treatment must remain scoped to the exact orphan landing edge.");
         }
 
+        [TestCase(false, 0, false, 0)]
+        [TestCase(true, 4, false, 0)]
+        [TestCase(false, 0, true, 4)]
+        [TestCase(true, 4, true, 6)]
+        public void GatewayFlankInvariant_RejectsMissingOrUnequalWallPairs(
+            bool hasFirstFlank,
+            int firstHeight,
+            bool hasSecondFlank,
+            int secondHeight)
+        {
+            (bool accepted, int wallHeight) = TryResolveGatewayWallHeight(
+                hasFirstFlank,
+                firstHeight,
+                hasSecondFlank,
+                secondHeight);
+
+            Assert.That(accepted, Is.False);
+            Assert.That(
+                wallHeight,
+                Is.Zero,
+                "A rejected gateway candidate must not receive a fabricated wall height.");
+        }
+
+        [TestCase(4)]
+        [TestCase(6)]
+        [TestCase(8)]
+        [TestCase(10)]
+        [TestCase(12)]
+        public void GatewayFlankInvariant_AcceptsEqualSupportedWallPairs(int height)
+        {
+            (bool accepted, int wallHeight) = TryResolveGatewayWallHeight(
+                true,
+                height,
+                true,
+                height);
+
+            Assert.That(accepted, Is.True);
+            Assert.That(wallHeight, Is.EqualTo(height));
+        }
+
         [Test]
         public void CornerCompatibility_DoesNotInferStairGeometryFromAssetNames()
         {
@@ -633,6 +692,28 @@ namespace Arena.Tests.Editor
                     shellGuardEdges,
                     bareLandingEdges
                 })!;
+        }
+
+        private static (bool accepted, int wallHeight) TryResolveGatewayWallHeight(
+            bool hasFirstFlank,
+            int firstHeight,
+            bool hasSecondFlank,
+            int secondHeight)
+        {
+            MethodInfo method = ElevationEdgeModelType.GetMethod(
+                "TryResolveGatewayWallHeight",
+                BindingFlags.Static | BindingFlags.NonPublic)!;
+            Assert.That(method, Is.Not.Null);
+            object[] arguments =
+            {
+                hasFirstFlank,
+                firstHeight,
+                hasSecondFlank,
+                secondHeight,
+                0
+            };
+            bool accepted = (bool)method.Invoke(null, arguments)!;
+            return (accepted, (int)arguments[4]);
         }
 
         private static bool BoundsOverlapWithPositiveVolume(Bounds first, Bounds second)

@@ -33,6 +33,11 @@ Decorative children may render, but cannot widen ports, change lane count or ris
 - Every dungeon must have at least one connected bottom-to-top route.
 - Validation fails loudly for bad placement, missing ports, incorrect landing width, floor clipping, disconnected floor/stair nodes, or stale contracts.
 
+## Gateways
+
+- Every emitted gateway must be flanked on both lateral sides by real emitted wall segments of equal supported height.
+- A doorway with a missing or mismatched flank remains open. If no properly framed doorway survives, emit no gateway rather than throwing or fabricating support.
+
 ## Set pieces
 
 - Reuse artist-authored composed prefabs whole. New loose-part compositions must become first-class authored assets.

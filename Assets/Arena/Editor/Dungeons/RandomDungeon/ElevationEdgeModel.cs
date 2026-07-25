@@ -71,7 +71,7 @@ namespace DungeonLab.Editor
         private const string GatewayLargeWallWoodName = "COMP_Door_01_med_02_M";
         private const string GatewayLargeWoodName = "COMP_Door_01_large";
         private const string GatewayBarsName = "P_PROP_bars_doorway_dungeon_01";
-        private const int GatewayPlacementPercent = 35;
+        private const int GatewayPlacementPercent = 100;
         private const string AuthoredLevelModuleOneSidedStairsFolder = "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/03_LEVEL_MODULES/01/OneSided/Stairs/";
         private const string AuthoredCompFloorFolder = "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/02_COMPS/Floor/";
         private const string AuthoredPartStairsFolder = "Assets/ThirdParty/AssetStore/Environments/FantasticDungeonPack/prefabs/MODULAR/01_PARTS/Stairs/";
@@ -329,7 +329,7 @@ namespace DungeonLab.Editor
             List<GatewayPlacement> gatewayPlacements = BuildGatewayPlacements(
                 levels,
                 wallEdges,
-                shellPlacement.wallHeights,
+                shellPlacement.gatewayFlankWallHeights,
                 roomBoundaryContext,
                 contracts.gateways,
                 contracts.partitions);
@@ -3292,47 +3292,131 @@ namespace DungeonLab.Editor
                 return orphanEdges;
             }
 
-            var uniqueEdges = new HashSet<(Vector2Int cell, int direction, int higherLevel)>(shellEdges);
-            var endpointCounts = new Dictionary<(Vector2Int vertex, int higherLevel), int>();
+            var uniqueEdges =
+                new HashSet<(Vector2Int cell, int direction, int higherLevel)>(
+                    shellEdges);
+            var edgesByEndpoint =
+                new Dictionary<
+                    (Vector2Int vertex, int higherLevel),
+                    List<(Vector2Int cell, int direction, int higherLevel)>>();
             foreach ((Vector2Int cell, int direction, int higherLevel) shellEdge in uniqueEdges)
             {
                 GetEdgeVertices(
                     new PlatformEdge(shellEdge.cell.x, shellEdge.cell.y, shellEdge.direction),
                     out Vector2Int first,
                     out Vector2Int second);
-                IncrementShellEndpoint(endpointCounts, first, shellEdge.higherLevel);
-                IncrementShellEndpoint(endpointCounts, second, shellEdge.higherLevel);
+                AddShellEdgeAtEndpoint(
+                    edgesByEndpoint,
+                    first,
+                    shellEdge);
+                AddShellEdgeAtEndpoint(
+                    edgesByEndpoint,
+                    second,
+                    shellEdge);
             }
 
+            var visited =
+                new HashSet<(Vector2Int cell, int direction, int higherLevel)>();
             foreach ((Vector2Int cell, int direction, int higherLevel) shellEdge in uniqueEdges)
             {
-                if (!stairLandingCells.Contains(shellEdge.cell))
+                if (!visited.Add(shellEdge))
                 {
                     continue;
                 }
 
-                GetEdgeVertices(
-                    new PlatformEdge(shellEdge.cell.x, shellEdge.cell.y, shellEdge.direction),
-                    out Vector2Int first,
-                    out Vector2Int second);
-                if (endpointCounts[(first, shellEdge.higherLevel)] == 1 &&
-                    endpointCounts[(second, shellEdge.higherLevel)] == 1)
+                var component =
+                    new List<(Vector2Int cell, int direction, int higherLevel)>();
+                var pending =
+                    new Queue<(Vector2Int cell, int direction, int higherLevel)>();
+                pending.Enqueue(shellEdge);
+                bool touchesLanding = false;
+                bool touchesNonLanding = false;
+                while (pending.Count > 0)
                 {
-                    orphanEdges.Add(shellEdge);
+                    (Vector2Int cell, int direction, int higherLevel) current =
+                        pending.Dequeue();
+                    component.Add(current);
+                    if (stairLandingCells.Contains(current.cell))
+                    {
+                        touchesLanding = true;
+                    }
+                    else
+                    {
+                        touchesNonLanding = true;
+                    }
+
+                    GetEdgeVertices(
+                        new PlatformEdge(
+                            current.cell.x,
+                            current.cell.y,
+                            current.direction),
+                        out Vector2Int first,
+                        out Vector2Int second);
+                    EnqueueConnectedShellEdges(
+                        edgesByEndpoint,
+                        first,
+                        current.higherLevel,
+                        visited,
+                        pending);
+                    EnqueueConnectedShellEdges(
+                        edgesByEndpoint,
+                        second,
+                        current.higherLevel,
+                        visited,
+                        pending);
+                }
+
+                if (touchesLanding && !touchesNonLanding)
+                {
+                    orphanEdges.UnionWith(component);
                 }
             }
 
             return orphanEdges;
         }
 
-        private static void IncrementShellEndpoint(
-            Dictionary<(Vector2Int vertex, int higherLevel), int> endpointCounts,
+        private static void AddShellEdgeAtEndpoint(
+            Dictionary<
+                (Vector2Int vertex, int higherLevel),
+                List<(Vector2Int cell, int direction, int higherLevel)>> edgesByEndpoint,
             Vector2Int vertex,
-            int higherLevel)
+            (Vector2Int cell, int direction, int higherLevel) shellEdge)
         {
-            var key = (vertex, higherLevel);
-            endpointCounts.TryGetValue(key, out int count);
-            endpointCounts[key] = count + 1;
+            var key = (vertex, shellEdge.higherLevel);
+            if (!edgesByEndpoint.TryGetValue(
+                    key,
+                    out List<(Vector2Int cell, int direction, int higherLevel)> edges))
+            {
+                edges =
+                    new List<(Vector2Int cell, int direction, int higherLevel)>();
+                edgesByEndpoint.Add(key, edges);
+            }
+            edges.Add(shellEdge);
+        }
+
+        private static void EnqueueConnectedShellEdges(
+            IReadOnlyDictionary<
+                (Vector2Int vertex, int higherLevel),
+                List<(Vector2Int cell, int direction, int higherLevel)>> edgesByEndpoint,
+            Vector2Int vertex,
+            int higherLevel,
+            ISet<(Vector2Int cell, int direction, int higherLevel)> visited,
+            Queue<(Vector2Int cell, int direction, int higherLevel)> pending)
+        {
+            if (!edgesByEndpoint.TryGetValue(
+                    (vertex, higherLevel),
+                    out List<(Vector2Int cell, int direction, int higherLevel)> edges))
+            {
+                return;
+            }
+
+            foreach ((Vector2Int cell, int direction, int higherLevel) edge in edges)
+            {
+                if (visited.Add(edge))
+                {
+                    pending.Enqueue(edge);
+                }
+            }
         }
 
         private static HashSet<Vector2Int> CollectStructuralStairLandingCells(
@@ -3447,7 +3531,7 @@ namespace DungeonLab.Editor
             var guardEdges = new HashSet<(int x, int z, int direction)>();
             var bareLandingEdges = new HashSet<(int x, int z, int direction)>();
             var largeWallRooms = new HashSet<int>();
-            var wallHeights = new Dictionary<EdgeKey, int>();
+            var gatewayFlankWallHeights = new Dictionary<EdgeKey, int>();
             HashSet<Vector2Int> stairLandingCells =
                 CollectStructuralStairLandingCells(transitions);
             HashSet<(Vector2Int cell, int direction, int higherLevel)> orphanLandingShellEdges =
@@ -3477,7 +3561,7 @@ namespace DungeonLab.Editor
                     guardEdges,
                     bareLandingEdges,
                     largeWallRooms,
-                    wallHeights);
+                    gatewayFlankWallHeights);
             }
 
             // Pick the modular piece whose nominal height matches a course (6/4/2u),
@@ -3550,7 +3634,9 @@ namespace DungeonLab.Editor
                 }
             }
 
-            void RecordWallHeight(PlatformEdge edge, IReadOnlyList<int> courseHeights)
+            void RecordGatewayFlankHeight(
+                PlatformEdge edge,
+                IReadOnlyList<int> courseHeights)
             {
                 int totalHeight = 0;
                 foreach (int height in courseHeights)
@@ -3559,16 +3645,17 @@ namespace DungeonLab.Editor
                 }
 
                 Vector2Int cell = new Vector2Int(edge.x, edge.z);
-                wallHeights[new EdgeKey(cell, Neighbor(cell, edge.direction))] =
-                    totalHeight;
+                gatewayFlankWallHeights[
+                    new EdgeKey(cell, Neighbor(cell, edge.direction))] = totalHeight;
             }
 
             // Build shells on top of existing drop faces (the C cliff walls AND the
             // interior retaining tier-steps). Stair mouths and authored stair-owned
             // tops are already excluded or suppressed. Lateral landing walls remain
             // eligible when they continue a same-level shell run or corner, but an
-            // isolated one-cell landing shell is pruned here; its structural drop
-            // face remains in wallEdges and the normal railing pass may guard it.
+            // shell component made entirely from landing-cell edges is pruned here;
+            // its structural drop face remains in wallEdges and stays intentionally
+            // bare rather than receiving replacement railing or trim.
             // A face is OUTER (taller) when it fronts the exterior void, else INNER
             // (shorter). Round-tier corners are removed from wallEdges and shelled
             // as curved pieces below.
@@ -3595,7 +3682,7 @@ namespace DungeonLab.Editor
                 int course = 0;
                 int[] courseHeights = ShellCourseHeights(level, minLevel, maxLevel, outer, RoomSizeCap(cell));
                 RecordLargePerimeterRoom(cell, outer, haveLarge, courseHeights);
-                RecordWallHeight(edge, courseHeights);
+                RecordGatewayFlankHeight(edge, courseHeights);
                 foreach (int h in courseHeights)
                 {
                     MeasuredPrefab piece = CourseStraight(h);
@@ -3690,18 +3777,6 @@ namespace DungeonLab.Editor
                     outer,
                     hasCurvedLarge,
                     courseHeights);
-                RecordWallHeight(
-                    new PlatformEdge(
-                        corner.edgeA.x,
-                        corner.edgeA.z,
-                        corner.edgeA.direction),
-                    courseHeights);
-                RecordWallHeight(
-                    new PlatformEdge(
-                        corner.edgeB.x,
-                        corner.edgeB.z,
-                        corner.edgeB.direction),
-                    courseHeights);
                 foreach (int h in courseHeights)
                 {
                     TierStepPiece piece = CourseCurved(h);
@@ -3726,7 +3801,7 @@ namespace DungeonLab.Editor
                 guardEdges,
                 bareLandingEdges,
                 largeWallRooms,
-                wallHeights);
+                gatewayFlankWallHeights);
         }
 
         private static void ApplyPartitionHeightPlan(
@@ -3772,14 +3847,14 @@ namespace DungeonLab.Editor
         private static List<GatewayPlacement> BuildGatewayPlacements(
             IReadOnlyDictionary<Vector2Int, int> levels,
             IReadOnlyList<WallEdge> wallEdges,
-            IReadOnlyDictionary<EdgeKey, int> shellWallHeights,
+            IReadOnlyDictionary<EdgeKey, int> shellGatewayFlankWallHeights,
             RoomBoundaryContext roomBoundaryContext,
             GatewayContracts contracts,
             PartitionWallContracts partitionContracts)
         {
-            // Door material/style is seed-varied, never tier-selected. Height is
-            // read from whichever planned flanking walls actually exist. If both
-            // exist they must agree; a corner/one-sided entrance may use one.
+            // Door material/style is seed-varied, never tier-selected. A gateway
+            // is eligible only when both full-edge emitted flanking walls exist at
+            // the same height; open, partial, and one-sided ports remain open.
             var placements = new List<GatewayPlacement>();
             if (roomBoundaryContext?.doorwayEdges == null ||
                 roomBoundaryContext.doorwayEdges.Count == 0)
@@ -3787,8 +3862,8 @@ namespace DungeonLab.Editor
                 return placements;
             }
 
-            var flankHeights = shellWallHeights != null
-                ? new Dictionary<EdgeKey, int>(shellWallHeights)
+            var flankHeights = shellGatewayFlankWallHeights != null
+                ? new Dictionary<EdgeKey, int>(shellGatewayFlankWallHeights)
                 : new Dictionary<EdgeKey, int>();
             foreach (WallEdge wall in wallEdges)
             {
@@ -3851,9 +3926,9 @@ namespace DungeonLab.Editor
 
             if (!hasGuaranteedCandidate)
             {
-                throw new InvalidOperationException(
-                    $"Dungeon had {roomBoundaryContext.doorwayEdges.Count} doorway ports but no height-compatible gateway location. " +
-                    "Refusing to emit a doorless dungeon.");
+                Debug.LogWarning(
+                    $"Dungeon has {roomBoundaryContext.doorwayEdges.Count} doorway ports but no port with two full-edge, equal-height wall flanks; leaving all ports open.");
+                return placements;
             }
 
             if (selectedByConnection.Count == 0)
@@ -3958,21 +4033,12 @@ namespace DungeonLab.Editor
             bool hasSecondFlank = flankHeights.TryGetValue(
                 secondFlank,
                 out int secondHeight);
-            if (hasFirstFlank && hasSecondFlank && firstHeight != secondHeight)
-            {
-                return false;
-            }
-
-            int wallHeight = hasFirstFlank
-                ? firstHeight
-                : hasSecondFlank
-                    ? secondHeight
-                    : 4;
-            if (wallHeight != 4 &&
-                wallHeight != 6 &&
-                wallHeight != 8 &&
-                wallHeight != 10 &&
-                wallHeight != 12)
+            if (!TryResolveGatewayWallHeight(
+                    hasFirstFlank,
+                    firstHeight,
+                    hasSecondFlank,
+                    secondHeight,
+                    out int wallHeight))
             {
                 return false;
             }
@@ -3983,6 +4049,34 @@ namespace DungeonLab.Editor
                 firstLevel,
                 wallHeight,
                 new EdgeKey(ownerCell, otherCell).ToString());
+            return true;
+        }
+
+        private static bool TryResolveGatewayWallHeight(
+            bool hasFirstFlank,
+            int firstHeight,
+            bool hasSecondFlank,
+            int secondHeight,
+            out int wallHeight)
+        {
+            wallHeight = 0;
+            if (!hasFirstFlank ||
+                !hasSecondFlank ||
+                firstHeight != secondHeight)
+            {
+                return false;
+            }
+
+            wallHeight = firstHeight;
+            if (wallHeight != 4 &&
+                wallHeight != 6 &&
+                wallHeight != 8 &&
+                wallHeight != 10 &&
+                wallHeight != 12)
+            {
+                return false;
+            }
+
             return true;
         }
 
@@ -9636,20 +9730,21 @@ namespace DungeonLab.Editor
             public readonly HashSet<(int x, int z, int direction)> guardEdges;
             public readonly HashSet<(int x, int z, int direction)> bareLandingEdges;
             public readonly HashSet<int> largeWallRooms;
-            public readonly Dictionary<EdgeKey, int> wallHeights;
+            public readonly Dictionary<EdgeKey, int> gatewayFlankWallHeights;
 
             public OuterShellPlacementResult(
                 HashSet<(int x, int z, int direction)> guardEdges,
                 HashSet<(int x, int z, int direction)> bareLandingEdges,
                 HashSet<int> largeWallRooms,
-                Dictionary<EdgeKey, int> wallHeights)
+                Dictionary<EdgeKey, int> gatewayFlankWallHeights)
             {
                 this.guardEdges =
                     guardEdges ?? new HashSet<(int x, int z, int direction)>();
                 this.bareLandingEdges =
                     bareLandingEdges ?? new HashSet<(int x, int z, int direction)>();
                 this.largeWallRooms = largeWallRooms ?? new HashSet<int>();
-                this.wallHeights = wallHeights ?? new Dictionary<EdgeKey, int>();
+                this.gatewayFlankWallHeights =
+                    gatewayFlankWallHeights ?? new Dictionary<EdgeKey, int>();
             }
         }
 
