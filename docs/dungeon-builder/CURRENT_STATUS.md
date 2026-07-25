@@ -296,17 +296,38 @@ passes all three at both profiles (report in
 three topologies rebuild end to end — plan, renderer, collision export — into a
 throwaway scene.
 
-**Looked at, 2026-07-25: the rooms are too spaced out.** Owner verdict on the
-rebaselined output. The rubber sheet buys variety by pushing rooms apart, and at
-`latticeSlackMaxCells: 8` that reads as long corridors and too much void — which
-is also what the fill numbers above say, from 42% down to 31%.
+**Looked at, 2026-07-25: too much void between tiers.** Owner verdict on the
+rebaselined output. Not "the corridors are long" — the complaint is the empty
+space between platforms at different elevations.
+
+The measurement behind it is an axis ratio, and none of its terms is topology
+data:
+
+| | constant | value |
+| --- | --- | --- |
+| horizontal | `CellSize` | 4 units per grid cell |
+| vertical | `StairForge.LevelHeight` | **1 unit per level** |
+| rise per edge | `MajorRiseLevels` / `DoubleMajorRiseLevels` | 4 or 8 levels, so 4 or 8 units |
+| total climb | `MaxGeneratedLevel` | 24 units |
+| abyss skirt | `AbyssDepthLevels` | 20 units below the lowest floor |
+
+A tier change is 4–8 units of height across a lane gap of 36–52 units. Two
+adjacent platforms that used to have roughly 8 units of void between them now
+have up to ~24, while the drop between them is unchanged — and that gap is open
+air down to the shared abyss base, not floor. The rubber sheet widened the
+horizontal term only, so it made the ratio worse; the fill drop from 42% to 31%
+is the same fact counted differently.
 
 **Deliberately not addressed here — owner ruling: it is part of a larger
-problem.** Do not tune `latticeSlackMaxCells` down as a spot fix. The knob is
-one-dimensional (it can only trade variety against density), and the real
-question is whether variety has to come from moving rooms apart at all when
-rooms, corridors and floor budget are all fixed. Whatever that turns into, it is
-its own slice.
+problem.** Two things follow:
+
+- **Do not spot-fix it by lowering `latticeSlackMaxCells`.** That knob only
+  trades variety against density along the horizontal axis; it cannot change the
+  ratio, and turning it down just gives back step 2's variety.
+- **Step 3 neither fixes it nor is blocked by it.** New topologies redistribute
+  elevation — `terraced-cascade` steps 4u across eleven nodes, `descent-shaft`
+  runs 24 -> 0 — but every graph still lands 4–8 unit rises across 36+ unit gaps,
+  because the ratio lives in the constants above, not in a topology file.
 
 Still ahead: **step 3** (the four drafted topologies, one file plus a validator
 pass each).
