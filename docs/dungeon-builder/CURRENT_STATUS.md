@@ -169,8 +169,16 @@ spatial arrangements, ever.** That, more than room size, is why plans read alike
 `SelectRoutePattern` is `seed % 4` mapped to 3 patterns, so it also needs
 redesigning to scale past four.
 
-The open question is now narrower: **author more diagrams as data, or replace
-the hand-drawn diagram with a general graph embedder?** Authoring keeps
+**Answered 2026-07-25 — the authoring model is agreed:**
+[`route-topology-authoring-2026-07-25.md`](route-topology-authoring-2026-07-25.md).
+JSON topology files (ASCII lattice map + node/edge/slot tables), derived graph
+metrics, a rubber-sheet lattice, weighted selection, and four hand-verified new
+topologies (descent 13, basin 14, terraces 16, ridge/ravine 12 rooms). All three
+forks ruled by the owner in its §8. Not implemented yet.
+
+The question below is settled in favour of authoring-as-data; kept for the
+reasoning: **author more diagrams as data, or replace the hand-drawn diagram with
+a general graph embedder?** Authoring keeps
 authorial control and suits "designed places"; a general embedder unlocks more
 variety but risks legibility and is real work. Per the archived plan's decision
 11 ("abstractions are earned by a working slice"), authoring two or three new
