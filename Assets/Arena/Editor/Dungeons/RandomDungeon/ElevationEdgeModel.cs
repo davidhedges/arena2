@@ -6068,10 +6068,15 @@ namespace DungeonLab.Editor
             MeasuredPrefab measured = MeasurePrefab(
                 inventory.GetPrefabPath(prefabName),
                 PrefabRole.StraightWall).WithName(prefabName);
-            // Gateway columns/caps may overhang the authored socket line. Keep
-            // their geometry intact, but attach the prefab by the package's exact
-            // one-cell module span rather than by total collider bounds.
-            return measured.WithSegmentLength(CellSize);
+            // Every reviewed package gateway (metal, wood, tall, and double-door)
+            // authors the same one-cell socket: the frame columns sit at local
+            // x=-4 and x=0 on the z=0 wall plane. Door leaves and ornament can
+            // extend farther in plan, so renderer/collider bounds are not a valid
+            // attachment axis or center.
+            return measured.WithAttachmentSegment(
+                new Vector2(-CellSize, 0f),
+                Vector2.zero,
+                Vector2.down);
         }
 
         private static void ValidateDoubleSidedWallPrefab(string prefabPath, string prefabName)
@@ -10375,25 +10380,30 @@ namespace DungeonLab.Editor
                 return new MeasuredPrefab(newName, prefabPath, role, localPlanBounds, localSegmentStart, localSegmentEnd, faceNormal, height, localTopY, baseQuadrant);
             }
 
-            public MeasuredPrefab WithSegmentLength(float segmentLength)
+            public MeasuredPrefab WithAttachmentSegment(
+                Vector2 segmentStart,
+                Vector2 segmentEnd,
+                Vector2 segmentFaceNormal)
             {
-                Vector2 direction = localSegmentEnd - localSegmentStart;
-                if (direction.sqrMagnitude <= 0.0001f || segmentLength <= 0f)
+                Vector2 direction = segmentEnd - segmentStart;
+                if (direction.sqrMagnitude <= 0.0001f ||
+                    segmentFaceNormal.sqrMagnitude <= 0.0001f ||
+                    Mathf.Abs(Vector2.Dot(
+                        direction.normalized,
+                        segmentFaceNormal.normalized)) > 0.01f)
                 {
                     throw new InvalidOperationException(
-                        $"Prefab '{name}' cannot normalize an invalid boundary segment.");
+                        $"Prefab '{name}' cannot use an invalid boundary attachment segment.");
                 }
 
-                Vector2 center = (localSegmentStart + localSegmentEnd) * 0.5f;
-                Vector2 halfSegment = direction.normalized * (segmentLength * 0.5f);
                 return new MeasuredPrefab(
                     name,
                     prefabPath,
                     role,
                     localPlanBounds,
-                    center - halfSegment,
-                    center + halfSegment,
-                    faceNormal,
+                    segmentStart,
+                    segmentEnd,
+                    segmentFaceNormal.normalized,
                     height,
                     localTopY,
                     baseQuadrant);
