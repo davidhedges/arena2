@@ -3292,6 +3292,8 @@ namespace DungeonLab.Editor
 
             Dictionary<Vector2Int, int> cellRoomIds = BuildCellRoomIds(layout);
             List<ElevationEdgeModel.DoorwayEdge> doorways = BuildDoorwayEdges(layout, cellLevels);
+            List<ElevationEdgeModel.GatewayConnectionEnd> gatewayConnectionEnds =
+                BuildGatewayConnectionEnds(layout, cellLevels);
             List<ElevationEdgeModel.InternalPathEdge> internalPathEdges = BuildInternalPathEdges(layout, cellLevels, cellRoomIds, transitions);
             bool[] enclosedRooms = ChooseEnclosedRooms(layout.rooms.Count, random);
             DemoteSealedEnclosedRooms(enclosedRooms, doorways, cellRoomIds);
@@ -3305,7 +3307,8 @@ namespace DungeonLab.Editor
                 enclosedRooms,
                 doorways,
                 internalPathEdges,
-                random?.Next() ?? 0);
+                random?.Next() ?? 0,
+                gatewayConnectionEnds);
             return true;
         }
 
@@ -3557,6 +3560,135 @@ namespace DungeonLab.Editor
             }
 
             return doorways;
+        }
+
+        private static List<ElevationEdgeModel.GatewayConnectionEnd> BuildGatewayConnectionEnds(
+            DungeonLayout layout,
+            IReadOnlyDictionary<Vector2Int, int> cellLevels)
+        {
+            var connectionEnds =
+                new List<ElevationEdgeModel.GatewayConnectionEnd>(
+                    layout.connections.Count * 2);
+            for (int connectionIndex = 0;
+                 connectionIndex < layout.connections.Count;
+                 connectionIndex++)
+            {
+                RoomConnection connection = layout.connections[connectionIndex];
+                List<Vector2Int> path = CleanPath(
+                    connection.path,
+                    layout.floorCells);
+                AddGatewayConnectionEnd(
+                    layout.rooms[connection.fromRoom],
+                    layout.rooms,
+                    connection.fromRoom,
+                    path,
+                    cellLevels,
+                    connectionIndex,
+                    endIndex: 0,
+                    scanForward: true,
+                    connectionEnds);
+                AddGatewayConnectionEnd(
+                    layout.rooms[connection.toRoom],
+                    layout.rooms,
+                    connection.toRoom,
+                    path,
+                    cellLevels,
+                    connectionIndex,
+                    endIndex: 1,
+                    scanForward: false,
+                    connectionEnds);
+            }
+
+            return connectionEnds;
+        }
+
+        private static void AddGatewayConnectionEnd(
+            RoomFootprint room,
+            IReadOnlyList<RoomFootprint> rooms,
+            int roomId,
+            IReadOnlyList<Vector2Int> path,
+            IReadOnlyDictionary<Vector2Int, int> cellLevels,
+            int connectionIndex,
+            int endIndex,
+            bool scanForward,
+            List<ElevationEdgeModel.GatewayConnectionEnd> connectionEnds)
+        {
+            if (path == null || path.Count < 2)
+            {
+                return;
+            }
+
+            int index = scanForward ? 0 : path.Count - 2;
+            int limit = scanForward ? path.Count - 1 : -1;
+            int scanStep = scanForward ? 1 : -1;
+            for (; index != limit; index += scanStep)
+            {
+                bool firstInside = room.Contains(path[index]);
+                bool secondInside = room.Contains(path[index + 1]);
+                if (firstInside == secondInside)
+                {
+                    continue;
+                }
+
+                if (cellLevels != null &&
+                    (!cellLevels.ContainsKey(path[index]) ||
+                     !cellLevels.ContainsKey(path[index + 1])))
+                {
+                    return;
+                }
+
+                int insideIndex = firstInside ? index : index + 1;
+                int outsideIndex = firstInside ? index + 1 : index;
+                int outwardStep = outsideIndex > insideIndex ? 1 : -1;
+                var outwardPath = new List<Vector2Int>
+                {
+                    path[insideIndex]
+                };
+                for (int pathIndex = outsideIndex;
+                     pathIndex >= 0 && pathIndex < path.Count;
+                     pathIndex += outwardStep)
+                {
+                    if (pathIndex != outsideIndex &&
+                        (room.Contains(path[pathIndex]) ||
+                         CellBelongsToOtherRoom(
+                             path[pathIndex],
+                             rooms,
+                             roomId)))
+                    {
+                        break;
+                    }
+
+                    outwardPath.Add(path[pathIndex]);
+                }
+
+                connectionEnds.Add(
+                    new ElevationEdgeModel.GatewayConnectionEnd(
+                        new ElevationEdgeModel.DoorwayEdge(
+                            path[index],
+                            path[index + 1],
+                            connectionIndex),
+                        endIndex,
+                        roomId,
+                        outwardPath));
+                return;
+            }
+        }
+
+        private static bool CellBelongsToOtherRoom(
+            Vector2Int cell,
+            IReadOnlyList<RoomFootprint> rooms,
+            int owningRoomId)
+        {
+            for (int roomIndex = 0; roomIndex < rooms.Count; roomIndex++)
+            {
+                if (roomIndex != owningRoomId &&
+                    rooms[roomIndex].Contains(cell))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private static void AddRoomDoorwayEdge(

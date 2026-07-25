@@ -228,6 +228,31 @@ namespace DungeonLab.Editor
             bool hasBounds = false;
 
             List<WallEdge> wallEdges = BuildWallEdges(levels, setPieceReservedCells, stairReservations.floorBlockedCells, reservedCells, transitionKeys, transitionOpenEdges, bridgeSpanEdges, aerialDeckCellLevels, roomBoundaryContext, promontorySet, out List<PlatformEdge> railingOnlyEdges, ref stats);
+            RawOuterShellPlan rawOuterShellPlan = BuildRawOuterShellPlan(
+                levels,
+                wallEdges,
+                transitions,
+                roomBoundaryContext,
+                promontorySet);
+            ApplyPartitionHeightPlan(
+                wallEdges,
+                roomBoundaryContext,
+                rawOuterShellPlan.largeWallRooms,
+                ref stats);
+            GatewayWallPlan gatewayWallPlan = BuildGatewayWallPlan(
+                wallEdges,
+                rawOuterShellPlan);
+            GatewaySocketPlan gatewaySocketPlan = BuildGatewaySocketPlan(
+                levels,
+                roomBoundaryContext,
+                gatewayWallPlan,
+                BuildGatewayBlockedCells(reservedCells, transitions),
+                BuildGatewayBlockedPathEdgeKeys(
+                    roomBoundaryContext,
+                    transitionKeys,
+                    transitionOpenEdges,
+                    bridgeSpanEdges),
+                contracts.gateways.socketWidth);
 
             // Round tier corners (step 9, decision 36): eligible cliff corners
             // swap their two straight wall faces for the gallery-approved
@@ -236,7 +261,11 @@ namespace DungeonLab.Editor
             // railings, corner columns and square corner stacks all suppress by
             // construction. Convex corner cells also swap their floor for the
             // rounded variant (handled in the floor loop below).
-            List<RoundTierCorner> roundTierCorners = FindRoundTierCorners(wallEdges, levels, reservedCells);
+            List<RoundTierCorner> roundTierCorners = FindRoundTierCorners(
+                wallEdges,
+                levels,
+                reservedCells,
+                gatewaySocketPlan.reservedFlankEdges);
             ValidateTierCornerCompatibility(roundTierCorners, transitions);
             var roundCornerFloorSwap = new Dictionary<Vector2Int, RoundTierCorner>();
             if (roundTierCorners.Count > 0)
@@ -305,12 +334,12 @@ namespace DungeonLab.Editor
             // landing edges before ordinary guards, so neither can receive a
             // fallback railing/parapet or its trim.
             OuterShellPlacementResult shellPlacement = PlaceOuterShellWalls(
-                levels,
                 promontorySet,
                 roundTierCorners,
                 wallEdges,
-                transitions,
                 roomBoundaryContext,
+                rawOuterShellPlan,
+                gatewaySocketPlan,
                 origin,
                 contracts.levelHeight,
                 shellRoot.transform,
@@ -320,16 +349,12 @@ namespace DungeonLab.Editor
             HashSet<(int x, int z, int direction)> shellGuardEdges = shellPlacement.guardEdges;
             HashSet<(int x, int z, int direction)> bareLandingEdges =
                 shellPlacement.bareLandingEdges;
-            ApplyPartitionHeightPlan(
-                wallEdges,
-                roomBoundaryContext,
-                shellPlacement.largeWallRooms,
-                ref stats);
 
             List<GatewayPlacement> gatewayPlacements = BuildGatewayPlacements(
                 levels,
                 wallEdges,
                 shellPlacement.gatewayFlankWallHeights,
+                gatewaySocketPlan,
                 roomBoundaryContext,
                 contracts.gateways,
                 contracts.partitions);
@@ -2116,6 +2141,41 @@ namespace DungeonLab.Editor
                     }
                 }
             }
+
+            if (context.gatewayConnectionEnds != null)
+            {
+                var endKeys = new HashSet<(int connectionIndex, int endIndex)>();
+                foreach (GatewayConnectionEnd connectionEnd in
+                         context.gatewayConnectionEnds)
+                {
+                    if (!endKeys.Add(
+                            (
+                                connectionEnd.roomThreshold.connectionIndex,
+                                connectionEnd.endIndex)))
+                    {
+                        throw new InvalidOperationException(
+                            $"Gateway connection end {connectionEnd.roomThreshold.connectionIndex}:{connectionEnd.endIndex} was duplicated.");
+                    }
+
+                    if (connectionEnd.outwardPath == null ||
+                        connectionEnd.outwardPath.Count < 2 ||
+                        !AreCardinalNeighbors(
+                            connectionEnd.roomThreshold.firstCell,
+                            connectionEnd.roomThreshold.secondCell) ||
+                        !(connectionEnd.outwardPath[0] ==
+                              connectionEnd.roomThreshold.firstCell &&
+                          connectionEnd.outwardPath[1] ==
+                              connectionEnd.roomThreshold.secondCell) &&
+                        !(connectionEnd.outwardPath[0] ==
+                              connectionEnd.roomThreshold.secondCell &&
+                          connectionEnd.outwardPath[1] ==
+                              connectionEnd.roomThreshold.firstCell))
+                    {
+                        throw new InvalidOperationException(
+                            $"Gateway connection end {connectionEnd.roomThreshold.connectionIndex}:{connectionEnd.endIndex} did not begin at its room threshold.");
+                    }
+                }
+            }
         }
 
         // Walls and floors have different jobs: a stair footprint replaces the FLOOR
@@ -3279,6 +3339,270 @@ namespace DungeonLab.Editor
             }
         }
 
+        private static RawOuterShellPlan BuildRawOuterShellPlan(
+            IReadOnlyDictionary<Vector2Int, int> levels,
+            IReadOnlyList<WallEdge> wallEdges,
+            IReadOnlyList<TransitionEdge> transitions,
+            RoomBoundaryContext roomBoundaryContext,
+            HashSet<Vector2Int> promontoryCells)
+        {
+            HashSet<Vector2Int> exterior = FloodExteriorVoid(levels);
+            int minLevel = MinFloorLevel(levels);
+            int maxLevel = minLevel;
+            foreach (int level in levels.Values)
+            {
+                if (level > maxLevel)
+                {
+                    maxLevel = level;
+                }
+            }
+
+            var roomArea = new Dictionary<int, int>();
+            if (roomBoundaryContext?.cellRoomIds != null)
+            {
+                foreach (KeyValuePair<Vector2Int, int> entry in roomBoundaryContext.cellRoomIds)
+                {
+                    roomArea.TryGetValue(entry.Value, out int count);
+                    roomArea[entry.Value] = count + 1;
+                }
+            }
+
+            HashSet<Vector2Int> stairLandingCells =
+                CollectStructuralStairLandingCells(transitions);
+            HashSet<(Vector2Int cell, int direction, int higherLevel)> orphanLandingEdges =
+                FindOrphanLandingShellEdges(
+                    CollectOuterShellContinuityEdges(
+                        wallEdges,
+                        roundTierCorners: null,
+                        promontoryCells),
+                    stairLandingCells);
+            var straightCourseHeights =
+                new Dictionary<(int x, int z, int direction), int[]>();
+            var largeWallRooms = new HashSet<int>();
+            var plan = new RawOuterShellPlan(
+                exterior,
+                minLevel,
+                maxLevel,
+                roomArea,
+                orphanLandingEdges,
+                straightCourseHeights,
+                largeWallRooms,
+                roomBoundaryContext);
+
+            foreach (WallEdge wall in wallEdges)
+            {
+                if (wall.isPartition || wall.suppressRailing)
+                {
+                    continue;
+                }
+
+                var cell = new Vector2Int(wall.edge.x, wall.edge.z);
+                if (promontoryCells.Contains(cell) ||
+                    orphanLandingEdges.Contains(
+                        (cell, wall.edge.direction, wall.higherLevel)))
+                {
+                    continue;
+                }
+
+                bool outer = exterior.Contains(
+                    Neighbor(cell, wall.edge.direction));
+                int[] courseHeights = ShellCourseHeights(
+                    wall.higherLevel,
+                    minLevel,
+                    maxLevel,
+                    outer,
+                    ShellRoomSizeCap(plan, cell));
+                straightCourseHeights[
+                    (wall.edge.x, wall.edge.z, wall.edge.direction)] =
+                    courseHeights;
+
+                if (!outer ||
+                    roomBoundaryContext?.cellRoomIds == null ||
+                    !roomBoundaryContext.cellRoomIds.TryGetValue(
+                        cell,
+                        out int roomId))
+                {
+                    continue;
+                }
+
+                foreach (int height in courseHeights)
+                {
+                    if (height >= 6)
+                    {
+                        largeWallRooms.Add(roomId);
+                        break;
+                    }
+                }
+            }
+
+            return plan;
+        }
+
+        private static int ShellRoomSizeCap(
+            RawOuterShellPlan plan,
+            Vector2Int cell)
+        {
+            if (plan.roomBoundaryContext?.cellRoomIds == null)
+            {
+                return 12;
+            }
+
+            if (!plan.roomBoundaryContext.cellRoomIds.TryGetValue(
+                    cell,
+                    out int roomId) ||
+                !plan.roomArea.TryGetValue(roomId, out int area))
+            {
+                return 4;
+            }
+
+            if (area >= LargeRoomMinAreaCells)
+            {
+                return 12;
+            }
+
+            return area >= MidRoomMinAreaCells ? 8 : 4;
+        }
+
+        private static GatewayWallPlan BuildGatewayWallPlan(
+            IReadOnlyList<WallEdge> wallEdges,
+            RawOuterShellPlan rawOuterShellPlan)
+        {
+            var supports =
+                new Dictionary<string, GatewayWallSupport>(
+                    StringComparer.Ordinal);
+            var supportHeights =
+                new Dictionary<string, (int baseLevel, int heightUnits)>(
+                    StringComparer.Ordinal);
+            foreach (WallEdge wall in wallEdges)
+            {
+                int baseLevel;
+                int heightUnits;
+                if (wall.isPartition)
+                {
+                    baseLevel = wall.lowerLevel;
+                    heightUnits = wall.partitionHeightUnits;
+                }
+                else if (rawOuterShellPlan.straightCourseHeights.TryGetValue(
+                             (
+                                 wall.edge.x,
+                                 wall.edge.z,
+                                 wall.edge.direction),
+                             out int[] courseHeights))
+                {
+                    baseLevel = wall.higherLevel;
+                    heightUnits = 0;
+                    foreach (int height in courseHeights)
+                    {
+                        heightUnits += height;
+                    }
+                }
+                else
+                {
+                    continue;
+                }
+
+                Vector2Int cell = new Vector2Int(
+                    wall.edge.x,
+                    wall.edge.z);
+                string key = new EdgeKey(
+                    cell,
+                    Neighbor(cell, wall.edge.direction)).ToString();
+                var support = new GatewayWallSupport(
+                    (wall.edge.x, wall.edge.z, wall.edge.direction));
+                supports[key] = support;
+                supportHeights[key] = (baseLevel, heightUnits);
+            }
+
+            return new GatewayWallPlan(supports, supportHeights);
+        }
+
+        private static HashSet<Vector2Int> BuildGatewayBlockedCells(
+            ISet<Vector2Int> reservedCells,
+            IReadOnlyList<TransitionEdge> transitions)
+        {
+            var blocked = reservedCells != null
+                ? new HashSet<Vector2Int>(reservedCells)
+                : new HashSet<Vector2Int>();
+            if (transitions == null)
+            {
+                return blocked;
+            }
+
+            foreach (TransitionEdge transition in transitions)
+            {
+                blocked.Add(transition.firstCell);
+                blocked.Add(transition.secondCell);
+                if (transition.lowerLandingCells != null)
+                {
+                    blocked.UnionWith(transition.lowerLandingCells);
+                }
+                if (transition.upperLandingCells != null)
+                {
+                    blocked.UnionWith(transition.upperLandingCells);
+                }
+                if (transition.footprintCells != null)
+                {
+                    blocked.UnionWith(transition.footprintCells);
+                }
+            }
+
+            return blocked;
+        }
+
+        private static HashSet<string> BuildGatewayBlockedPathEdgeKeys(
+            RoomBoundaryContext roomBoundaryContext,
+            ISet<EdgeKey> transitionKeys,
+            ISet<OpenEdgeKey> transitionOpenEdges,
+            ISet<OpenEdgeKey> bridgeSpanEdges)
+        {
+            var blocked = new HashSet<string>(StringComparer.Ordinal);
+            if (roomBoundaryContext?.gatewayConnectionEnds == null)
+            {
+                return blocked;
+            }
+
+            foreach (GatewayConnectionEnd connectionEnd in
+                     roomBoundaryContext.gatewayConnectionEnds)
+            {
+                IReadOnlyList<Vector2Int> path = connectionEnd.outwardPath;
+                for (int index = 0; index + 1 < path.Count; index++)
+                {
+                    Vector2Int first = path[index];
+                    Vector2Int second = path[index + 1];
+                    if (!AreCardinalNeighbors(first, second))
+                    {
+                        continue;
+                    }
+
+                    var edgeKey = new EdgeKey(first, second);
+                    int direction = EdgeFromCellToward(first, second).direction;
+                    bool isBlocked =
+                        (transitionKeys != null &&
+                         transitionKeys.Contains(edgeKey)) ||
+                        (transitionOpenEdges != null &&
+                         (transitionOpenEdges.Contains(
+                              new OpenEdgeKey(first, direction)) ||
+                          transitionOpenEdges.Contains(
+                              new OpenEdgeKey(
+                                  second,
+                                  OppositeDirection(direction))))) ||
+                        (bridgeSpanEdges != null &&
+                         (bridgeSpanEdges.Contains(
+                              new OpenEdgeKey(first, direction)) ||
+                          bridgeSpanEdges.Contains(
+                              new OpenEdgeKey(
+                                  second,
+                                  OppositeDirection(direction)))));
+                    if (isBlocked)
+                    {
+                        blocked.Add(edgeKey.ToString());
+                    }
+                }
+            }
+
+            return blocked;
+        }
+
         private static HashSet<(Vector2Int cell, int direction, int higherLevel)> FindOrphanLandingShellEdges(
             IReadOnlyList<(Vector2Int cell, int direction, int higherLevel)> shellEdges,
             ISet<Vector2Int> stairLandingCells)
@@ -3515,12 +3839,12 @@ namespace DungeonLab.Editor
         // with the floor's tier height; each side is a uniform height for v1
         // (stepped med->small transitions + windows are later increments).
         private static OuterShellPlacementResult PlaceOuterShellWalls(
-            IReadOnlyDictionary<Vector2Int, int> levels,
             HashSet<Vector2Int> promontoryCells,
             IReadOnlyList<RoundTierCorner> roundTierCorners,
             List<WallEdge> wallEdges,
-            IReadOnlyList<TransitionEdge> transitions,
             RoomBoundaryContext roomBoundaryContext,
+            RawOuterShellPlan rawOuterShellPlan,
+            GatewaySocketPlan gatewaySocketPlan,
             Vector3 origin,
             float levelHeight,
             Transform parent,
@@ -3532,15 +3856,8 @@ namespace DungeonLab.Editor
             var bareLandingEdges = new HashSet<(int x, int z, int direction)>();
             var largeWallRooms = new HashSet<int>();
             var gatewayFlankWallHeights = new Dictionary<EdgeKey, int>();
-            HashSet<Vector2Int> stairLandingCells =
-                CollectStructuralStairLandingCells(transitions);
             HashSet<(Vector2Int cell, int direction, int higherLevel)> orphanLandingShellEdges =
-                FindOrphanLandingShellEdges(
-                    CollectOuterShellContinuityEdges(
-                        wallEdges,
-                        roundTierCorners,
-                        promontoryCells),
-                    stairLandingCells);
+                rawOuterShellPlan.orphanLandingEdges;
             foreach ((Vector2Int cell, int direction, int higherLevel) orphanEdge in orphanLandingShellEdges)
             {
                 bareLandingEdges.Add((
@@ -3560,7 +3877,6 @@ namespace DungeonLab.Editor
                 return new OuterShellPlacementResult(
                     guardEdges,
                     bareLandingEdges,
-                    largeWallRooms,
                     gatewayFlankWallHeights);
             }
 
@@ -3568,47 +3884,6 @@ namespace DungeonLab.Editor
             // falling back to med if the large/small variant is missing.
             MeasuredPrefab CourseStraight(int h) =>
                 h >= 6 && haveLarge ? large : h <= 2 && haveSmall ? small : med;
-
-            HashSet<Vector2Int> exterior = FloodExteriorVoid(levels);
-            int minLevel = MinFloorLevel(levels);
-            int maxLevel = minLevel;
-            foreach (int level in levels.Values)
-            {
-                if (level > maxLevel)
-                {
-                    maxLevel = level;
-                }
-            }
-
-            // Room-size cap on shell height (user 2026-06-16): the tall shells —
-            // BOTH large+large(12u) AND med+large(10u) — are restricted to LARGE
-            // rooms; medium rooms cap at med+med(8u) and small rooms at med(4u).
-            // Room area = cell count per existing room id (no new measuring); the
-            // thresholds mirror DungeonLabGenerator's room mix.
-            var roomArea = new Dictionary<int, int>();
-            if (roomBoundaryContext?.cellRoomIds != null)
-            {
-                foreach (KeyValuePair<Vector2Int, int> entry in roomBoundaryContext.cellRoomIds)
-                {
-                    roomArea.TryGetValue(entry.Value, out int count);
-                    roomArea[entry.Value] = count + 1;
-                }
-            }
-
-            int RoomSizeCap(Vector2Int cell)
-            {
-                if (roomBoundaryContext?.cellRoomIds == null)
-                {
-                    return 12; // no room data -> feature off, preserve old behavior
-                }
-                if (!roomBoundaryContext.cellRoomIds.TryGetValue(cell, out int id) || !roomArea.TryGetValue(id, out int area))
-                {
-                    return 4; // classifiable dungeon but cell isn't a known room -> conservative
-                }
-                if (area >= LargeRoomMinAreaCells) return 12; // large room: large+large AND med+large allowed
-                if (area >= MidRoomMinAreaCells) return 8;    // medium room: up to med+med
-                return 4;                                     // small room: up to med only
-            }
 
             void RecordLargePerimeterRoom(
                 Vector2Int cell,
@@ -3662,25 +3937,20 @@ namespace DungeonLab.Editor
             int shells = 0;
             foreach (WallEdge wall in wallEdges)
             {
-                if (wall.isPartition || wall.suppressRailing)
-                {
-                    continue;
-                }
-
                 var cell = new Vector2Int(wall.edge.x, wall.edge.z);
-                if (promontoryCells.Contains(cell) ||
-                    orphanLandingShellEdges.Contains(
-                        (cell, wall.edge.direction, wall.higherLevel)))
+                if (!rawOuterShellPlan.straightCourseHeights.TryGetValue(
+                        (wall.edge.x, wall.edge.z, wall.edge.direction),
+                        out int[] courseHeights))
                 {
                     continue;
                 }
 
-                bool outer = exterior.Contains(Neighbor(cell, wall.edge.direction));
+                bool outer = rawOuterShellPlan.exterior.Contains(
+                    Neighbor(cell, wall.edge.direction));
                 int level = wall.higherLevel;
                 PlatformEdge edge = wall.edge;
                 float y = level * levelHeight;
                 int course = 0;
-                int[] courseHeights = ShellCourseHeights(level, minLevel, maxLevel, outer, RoomSizeCap(cell));
                 RecordLargePerimeterRoom(cell, outer, haveLarge, courseHeights);
                 RecordGatewayFlankHeight(edge, courseHeights);
                 foreach (int h in courseHeights)
@@ -3728,8 +3998,8 @@ namespace DungeonLab.Editor
                 }
 
                 bool outer =
-                    exterior.Contains(Neighbor(new Vector2Int(corner.edgeA.x, corner.edgeA.z), corner.edgeA.direction)) ||
-                    exterior.Contains(Neighbor(new Vector2Int(corner.edgeB.x, corner.edgeB.z), corner.edgeB.direction));
+                    rawOuterShellPlan.exterior.Contains(Neighbor(new Vector2Int(corner.edgeA.x, corner.edgeA.z), corner.edgeA.direction)) ||
+                    rawOuterShellPlan.exterior.Contains(Neighbor(new Vector2Int(corner.edgeB.x, corner.edgeB.z), corner.edgeB.direction));
 
                 // Size the corner by a real FLOOR cell of the room, not corner.cell:
                 // a CONCAVE corner's cell is the void notch it sweeps into (never a
@@ -3768,10 +4038,12 @@ namespace DungeonLab.Editor
                 int course = 0;
                 int[] courseHeights = ShellCourseHeights(
                     corner.higherLevel,
-                    minLevel,
-                    maxLevel,
+                    rawOuterShellPlan.minLevel,
+                    rawOuterShellPlan.maxLevel,
                     outer,
-                    RoomSizeCap(cornerRoomCell));
+                    ShellRoomSizeCap(
+                        rawOuterShellPlan,
+                        cornerRoomCell));
                 RecordLargePerimeterRoom(
                     cornerRoomCell,
                     outer,
@@ -3796,12 +4068,51 @@ namespace DungeonLab.Editor
                 stats.stairSummaries.Add($"outer shell wall pieces: {shells}" + (cornerSkips > 0 ? $" ({cornerSkips} corners skipped)" : string.Empty));
             }
 
+            ValidateGatewayShellFlankEmission(
+                gatewaySocketPlan,
+                rawOuterShellPlan,
+                gatewayFlankWallHeights);
             stats.largePerimeterRooms = largeWallRooms.Count;
             return new OuterShellPlacementResult(
                 guardEdges,
                 bareLandingEdges,
-                largeWallRooms,
                 gatewayFlankWallHeights);
+        }
+
+        private static void ValidateGatewayShellFlankEmission(
+            GatewaySocketPlan gatewaySocketPlan,
+            RawOuterShellPlan rawOuterShellPlan,
+            IReadOnlyDictionary<EdgeKey, int> emittedShellHeights)
+        {
+            if (gatewaySocketPlan == null)
+            {
+                return;
+            }
+
+            foreach (GatewaySocket socket in gatewaySocketPlan.sockets)
+            {
+                ValidateFlank(socket.firstFlankEdge);
+                ValidateFlank(socket.secondFlankEdge);
+            }
+
+            void ValidateFlank((int x, int z, int direction) flank)
+            {
+                if (!rawOuterShellPlan.straightCourseHeights.ContainsKey(
+                        flank))
+                {
+                    return;
+                }
+
+                var cell = new Vector2Int(flank.x, flank.z);
+                var key = new EdgeKey(
+                    cell,
+                    Neighbor(cell, flank.direction));
+                if (!emittedShellHeights.ContainsKey(key))
+                {
+                    throw new InvalidOperationException(
+                        $"Reserved gateway flank {key} was not emitted as its planned straight shell wall.");
+                }
+            }
         }
 
         private static void ApplyPartitionHeightPlan(
@@ -3810,9 +4121,9 @@ namespace DungeonLab.Editor
             IReadOnlyCollection<int> largeWallRooms,
             ref TieredPlatformBuildStats stats)
         {
-            // The shell result is the only authority for a large interior wall.
-            // Do not infer this from tier/elevation: a room qualifies only when
-            // its actual exterior perimeter used a 6u wall course.
+            // The raw straight-shell plan is the only authority for a large
+            // interior wall. Do not infer this from tier/elevation: a room
+            // qualifies only when its exterior perimeter plans a 6u wall course.
             var largeRooms = largeWallRooms != null
                 ? new HashSet<int>(largeWallRooms)
                 : new HashSet<int>();
@@ -3844,69 +4155,108 @@ namespace DungeonLab.Editor
             }
         }
 
-        private static List<GatewayPlacement> BuildGatewayPlacements(
+        private static GatewaySocketPlan BuildGatewaySocketPlan(
             IReadOnlyDictionary<Vector2Int, int> levels,
-            IReadOnlyList<WallEdge> wallEdges,
-            IReadOnlyDictionary<EdgeKey, int> shellGatewayFlankWallHeights,
             RoomBoundaryContext roomBoundaryContext,
-            GatewayContracts contracts,
-            PartitionWallContracts partitionContracts)
+            GatewayWallPlan gatewayWallPlan,
+            ISet<Vector2Int> blockedCells,
+            ISet<string> blockedPathEdges,
+            float requiredSocketWidth)
         {
-            // Door material/style is seed-varied, never tier-selected. A gateway
-            // is eligible only when both full-edge emitted flanking walls exist at
-            // the same height; open, partial, and one-sided ports remain open.
-            var placements = new List<GatewayPlacement>();
-            if (roomBoundaryContext?.doorwayEdges == null ||
-                roomBoundaryContext.doorwayEdges.Count == 0)
+            var validByConnection =
+                new Dictionary<string, GatewaySocket>(StringComparer.Ordinal);
+            if (roomBoundaryContext?.gatewayConnectionEnds == null ||
+                roomBoundaryContext.gatewayConnectionEnds.Count == 0)
             {
-                return placements;
+                return new GatewaySocketPlan(Array.Empty<GatewaySocket>());
             }
 
-            var flankHeights = shellGatewayFlankWallHeights != null
-                ? new Dictionary<EdgeKey, int>(shellGatewayFlankWallHeights)
-                : new Dictionary<EdgeKey, int>();
-            foreach (WallEdge wall in wallEdges)
+            var orderedEnds = new List<GatewayConnectionEnd>(
+                roomBoundaryContext.gatewayConnectionEnds);
+            orderedEnds.Sort((left, right) =>
             {
-                if (!wall.isPartition)
-                {
-                    continue;
-                }
-
-                Vector2Int cell = new Vector2Int(wall.edge.x, wall.edge.z);
-                flankHeights[new EdgeKey(cell, Neighbor(cell, wall.edge.direction))] =
-                    wall.partitionHeightUnits;
-            }
-
-            var selectedByConnection = new Dictionary<string, GatewayCandidate>();
-            GatewayCandidate guaranteedCandidate = default;
-            string guaranteedGroupKey = string.Empty;
-            bool hasGuaranteedCandidate = false;
-            foreach (DoorwayEdge doorway in roomBoundaryContext.doorwayEdges)
+                int byConnection =
+                    left.roomThreshold.connectionIndex.CompareTo(
+                        right.roomThreshold.connectionIndex);
+                return byConnection != 0
+                    ? byConnection
+                    : left.endIndex.CompareTo(right.endIndex);
+            });
+            foreach (GatewayConnectionEnd connectionEnd in orderedEnds)
             {
-                if (!TryBuildGatewayCandidate(
-                        doorway,
-                        levels,
-                        flankHeights,
+                if (!IsEnclosedRoom(
                         roomBoundaryContext,
-                        out GatewayCandidate candidate))
+                        connectionEnd.roomId) ||
+                    !TryResolveGatewaySocket(
+                        connectionEnd.outwardPath,
+                        levels,
+                        gatewayWallPlan.supportHeights,
+                        blockedCells,
+                        blockedPathEdges,
+                        requiredSocketWidth,
+                        out GatewaySocketCandidate candidate))
                 {
                     continue;
                 }
 
-                string groupKey = doorway.connectionIndex >= 0
-                    ? $"connection:{doorway.connectionIndex}"
+                string groupKey = connectionEnd.roomThreshold.connectionIndex >= 0
+                    ? $"connection:{connectionEnd.roomThreshold.connectionIndex}"
                     : $"edge:{candidate.edgeKey}";
-                candidate = candidate.WithSelection(
+                int selectionScore = StairForge.StableHash(
+                        $"{roomBoundaryContext.gatewaySelectionSalt}:gateway-end:{groupKey}:{candidate.edgeKey}") &
+                    int.MaxValue;
+                GatewayWallSupport firstSupport =
+                    gatewayWallPlan.supports[candidate.firstFlankKey];
+                GatewayWallSupport secondSupport =
+                    gatewayWallPlan.supports[candidate.secondFlankKey];
+                var socket = new GatewaySocket(
+                    connectionEnd.endIndex,
+                    candidate.edge,
+                    candidate.floorLevel,
+                    candidate.wallHeightUnits,
+                    candidate.edgeKey,
+                    candidate.firstFlankKey,
+                    firstSupport.edge,
+                    candidate.secondFlankKey,
+                    secondSupport.edge,
                     groupKey,
-                    StairForge.StableHash(
-                            $"{roomBoundaryContext.gatewaySelectionSalt}:gateway-end:{groupKey}:{candidate.edgeKey}") &
-                        int.MaxValue);
-                if (!hasGuaranteedCandidate ||
-                    candidate.selectionScore < guaranteedCandidate.selectionScore)
+                    selectionScore);
+                if (!validByConnection.TryGetValue(
+                        groupKey,
+                        out GatewaySocket existing) ||
+                    IsPreferredGatewaySocket(socket, existing))
                 {
-                    guaranteedCandidate = candidate;
-                    guaranteedGroupKey = groupKey;
-                    hasGuaranteedCandidate = true;
+                    validByConnection[groupKey] = socket;
+                }
+            }
+
+            var groupKeys = new List<string>(validByConnection.Keys);
+            groupKeys.Sort(StringComparer.Ordinal);
+            var selected = new List<GatewaySocket>();
+            GatewaySocket guaranteedSocket = default;
+            bool hasGuaranteedSocket = false;
+            var claimedSocketEdges =
+                new HashSet<string>(StringComparer.Ordinal);
+            var claimedFlankEdges =
+                new HashSet<string>(StringComparer.Ordinal);
+            foreach (string groupKey in groupKeys)
+            {
+                GatewaySocket socket = validByConnection[groupKey];
+                if (claimedSocketEdges.Contains(socket.edgeKey) ||
+                    claimedFlankEdges.Contains(socket.edgeKey) ||
+                    claimedSocketEdges.Contains(socket.firstFlankKey) ||
+                    claimedSocketEdges.Contains(socket.secondFlankKey) ||
+                    claimedFlankEdges.Contains(socket.firstFlankKey) ||
+                    claimedFlankEdges.Contains(socket.secondFlankKey))
+                {
+                    continue;
+                }
+
+                if (!hasGuaranteedSocket ||
+                    IsPreferredGatewaySocket(socket, guaranteedSocket))
+                {
+                    guaranteedSocket = socket;
+                    hasGuaranteedSocket = true;
                 }
 
                 int coverageRoll = StairForge.StableHash(
@@ -3917,33 +4267,290 @@ namespace DungeonLab.Editor
                     continue;
                 }
 
-                if (!selectedByConnection.TryGetValue(groupKey, out GatewayCandidate existing) ||
-                    candidate.selectionScore < existing.selectionScore)
+                selected.Add(socket);
+                claimedSocketEdges.Add(socket.edgeKey);
+                claimedFlankEdges.Add(socket.firstFlankKey);
+                claimedFlankEdges.Add(socket.secondFlankKey);
+            }
+
+            if (selected.Count == 0 && hasGuaranteedSocket)
+            {
+                selected.Add(guaranteedSocket);
+            }
+
+            return new GatewaySocketPlan(selected);
+        }
+
+        private static bool IsPreferredGatewaySocket(
+            GatewaySocket candidate,
+            GatewaySocket existing)
+        {
+            if (candidate.selectionScore != existing.selectionScore)
+            {
+                return candidate.selectionScore < existing.selectionScore;
+            }
+
+            int byEdge = string.CompareOrdinal(
+                candidate.edgeKey,
+                existing.edgeKey);
+            return byEdge != 0
+                ? byEdge < 0
+                : candidate.endIndex < existing.endIndex;
+        }
+
+        private static bool TryResolveGatewaySocket(
+            IReadOnlyList<Vector2Int> outwardPath,
+            IReadOnlyDictionary<Vector2Int, int> levels,
+            IReadOnlyDictionary<
+                string,
+                (int baseLevel, int heightUnits)> wallSupports,
+            ISet<Vector2Int> blockedCells,
+            ISet<string> blockedPathEdges,
+            float requiredSocketWidth,
+            out GatewaySocketCandidate candidate)
+        {
+            candidate = default;
+            if (outwardPath == null ||
+                outwardPath.Count < 3 ||
+                levels == null ||
+                wallSupports == null ||
+                Mathf.Abs(requiredSocketWidth - CellSize) > 0.08f)
+            {
+                return false;
+            }
+
+            for (int index = 0; index + 1 < outwardPath.Count; index++)
+            {
+                Vector2Int firstCell = outwardPath[index];
+                Vector2Int secondCell = outwardPath[index + 1];
+                if (!AreCardinalNeighbors(firstCell, secondCell) ||
+                    !levels.TryGetValue(firstCell, out int firstLevel) ||
+                    !levels.TryGetValue(secondCell, out int secondLevel) ||
+                    firstLevel != secondLevel ||
+                    blockedCells != null &&
+                    (blockedCells.Contains(firstCell) ||
+                     blockedCells.Contains(secondCell)))
                 {
-                    selectedByConnection[groupKey] = candidate;
+                    continue;
+                }
+
+                string edgeKey = new EdgeKey(
+                    firstCell,
+                    secondCell).ToString();
+                if (blockedPathEdges != null &&
+                    blockedPathEdges.Contains(edgeKey))
+                {
+                    continue;
+                }
+
+                Vector2Int outward = secondCell - firstCell;
+                if ((index > 0 &&
+                     firstCell - outwardPath[index - 1] != outward) ||
+                    (index + 2 < outwardPath.Count &&
+                     outwardPath[index + 2] - secondCell != outward))
+                {
+                    continue;
+                }
+
+                Vector2Int tangent = outward.x != 0
+                    ? Vector2Int.up
+                    : Vector2Int.right;
+                Vector2Int firstTransverseStart = firstCell + tangent;
+                Vector2Int firstTransverseEnd = secondCell + tangent;
+                Vector2Int secondTransverseStart = firstCell - tangent;
+                Vector2Int secondTransverseEnd = secondCell - tangent;
+                string firstTransverseFlank = new EdgeKey(
+                    firstTransverseStart,
+                    firstTransverseEnd).ToString();
+                string secondTransverseFlank = new EdgeKey(
+                    secondTransverseStart,
+                    secondTransverseEnd).ToString();
+                if (IsGatewayFlankPairClear(
+                        firstTransverseStart,
+                        firstTransverseEnd,
+                        secondTransverseStart,
+                        secondTransverseEnd,
+                        blockedCells) &&
+                    TryResolveGatewayFlankPair(
+                        firstTransverseFlank,
+                        secondTransverseFlank,
+                        firstLevel,
+                        wallSupports,
+                        out int transverseHeight))
+                {
+                    candidate = new GatewaySocketCandidate(
+                        EdgeFromCellToward(firstCell, secondCell),
+                        firstLevel,
+                        transverseHeight,
+                        edgeKey,
+                        firstTransverseFlank,
+                        secondTransverseFlank,
+                        index);
+                    return true;
+                }
+
+                Vector2Int firstCorridorEnd = secondCell + tangent;
+                Vector2Int secondCorridorEnd = secondCell - tangent;
+                string firstCorridorFlank = new EdgeKey(
+                    secondCell,
+                    firstCorridorEnd).ToString();
+                string secondCorridorFlank = new EdgeKey(
+                    secondCell,
+                    secondCorridorEnd).ToString();
+                if (IsGatewayFlankPairClear(
+                        secondCell,
+                        firstCorridorEnd,
+                        secondCell,
+                        secondCorridorEnd,
+                        blockedCells) &&
+                    TryResolveGatewayFlankPair(
+                        firstCorridorFlank,
+                        secondCorridorFlank,
+                        firstLevel,
+                        wallSupports,
+                        out int corridorHeight))
+                {
+                    candidate = new GatewaySocketCandidate(
+                        EdgeFromCellToward(firstCell, secondCell),
+                        firstLevel,
+                        corridorHeight,
+                        edgeKey,
+                        firstCorridorFlank,
+                        secondCorridorFlank,
+                        index);
+                    return true;
                 }
             }
 
-            if (!hasGuaranteedCandidate)
+            return false;
+        }
+
+        private static bool IsGatewayFlankPairClear(
+            Vector2Int firstFlankStart,
+            Vector2Int firstFlankEnd,
+            Vector2Int secondFlankStart,
+            Vector2Int secondFlankEnd,
+            ISet<Vector2Int> blockedCells)
+        {
+            return blockedCells == null ||
+                (!blockedCells.Contains(firstFlankStart) &&
+                 !blockedCells.Contains(firstFlankEnd) &&
+                 !blockedCells.Contains(secondFlankStart) &&
+                 !blockedCells.Contains(secondFlankEnd));
+        }
+
+        private static bool TryResolveGatewayFlankPair(
+            string firstFlankKey,
+            string secondFlankKey,
+            int floorLevel,
+            IReadOnlyDictionary<
+                string,
+                (int baseLevel, int heightUnits)> wallSupports,
+            out int wallHeight)
+        {
+            wallHeight = 0;
+            if (!wallSupports.TryGetValue(
+                    firstFlankKey,
+                    out (int baseLevel, int heightUnits) first) ||
+                !wallSupports.TryGetValue(
+                    secondFlankKey,
+                    out (int baseLevel, int heightUnits) second) ||
+                first.baseLevel != floorLevel ||
+                second.baseLevel != floorLevel)
             {
-                Debug.LogWarning(
-                    $"Dungeon has {roomBoundaryContext.doorwayEdges.Count} doorway ports but no port with two full-edge, equal-height wall flanks; leaving all ports open.");
+                return false;
+            }
+
+            return TryResolveGatewayWallHeight(
+                true,
+                first.heightUnits,
+                true,
+                second.heightUnits,
+                out wallHeight);
+        }
+
+        private static List<GatewayPlacement> BuildGatewayPlacements(
+            IReadOnlyDictionary<Vector2Int, int> levels,
+            IReadOnlyList<WallEdge> wallEdges,
+            IReadOnlyDictionary<EdgeKey, int> shellGatewayFlankWallHeights,
+            GatewaySocketPlan gatewaySocketPlan,
+            RoomBoundaryContext roomBoundaryContext,
+            GatewayContracts contracts,
+            PartitionWallContracts partitionContracts)
+        {
+            // Door material/style is seed-varied, never tier-selected. A gateway
+            // is eligible only when both full-edge emitted flanking walls exist at
+            // the same height; open, partial, and one-sided ports remain open.
+            var placements = new List<GatewayPlacement>();
+            if (gatewaySocketPlan == null ||
+                gatewaySocketPlan.sockets.Count == 0)
+            {
                 return placements;
             }
 
-            if (selectedByConnection.Count == 0)
+            var flankHeights =
+                new Dictionary<string, int>(StringComparer.Ordinal);
+            if (shellGatewayFlankWallHeights != null)
             {
-                selectedByConnection[guaranteedGroupKey] = guaranteedCandidate;
+                foreach (KeyValuePair<EdgeKey, int> entry in
+                         shellGatewayFlankWallHeights)
+                {
+                    flankHeights[entry.Key.ToString()] = entry.Value;
+                }
+            }
+            foreach (WallEdge wall in wallEdges)
+            {
+                if (!wall.isPartition)
+                {
+                    continue;
+                }
+
+                Vector2Int cell = new Vector2Int(wall.edge.x, wall.edge.z);
+                flankHeights[new EdgeKey(
+                    cell,
+                    Neighbor(cell, wall.edge.direction)).ToString()] =
+                    wall.partitionHeightUnits;
             }
 
-            var groupKeys = new List<string>(selectedByConnection.Keys);
-            groupKeys.Sort(StringComparer.Ordinal);
-            foreach (string groupKey in groupKeys)
+            foreach (GatewaySocket socket in gatewaySocketPlan.sockets)
             {
-                GatewayCandidate candidate = selectedByConnection[groupKey];
+                bool hasFirstFlank = flankHeights.TryGetValue(
+                    socket.firstFlankKey,
+                    out int firstHeight);
+                bool hasSecondFlank = flankHeights.TryGetValue(
+                    socket.secondFlankKey,
+                    out int secondHeight);
+                if (!TryResolveGatewayWallHeight(
+                        hasFirstFlank,
+                        firstHeight,
+                        hasSecondFlank,
+                        secondHeight,
+                        out int wallHeight) ||
+                    wallHeight != socket.wallHeightUnits)
+                {
+                    continue;
+                }
+
+                var firstSocketCell =
+                    new Vector2Int(socket.edge.x, socket.edge.z);
+                Vector2Int secondSocketCell = Neighbor(
+                    firstSocketCell,
+                    socket.edge.direction);
+                if (!levels.TryGetValue(
+                        firstSocketCell,
+                        out int firstFloorLevel) ||
+                    !levels.TryGetValue(
+                        secondSocketCell,
+                        out int secondFloorLevel) ||
+                    firstFloorLevel != socket.floorLevel ||
+                    secondFloorLevel != socket.floorLevel)
+                {
+                    continue;
+                }
+
                 int gatewayHeightUnits =
-                    candidate.wallHeightUnits == 4 ||
-                    candidate.wallHeightUnits == 8
+                    wallHeight == 4 ||
+                    wallHeight == 8
                         ? 4
                         : 6;
                 GatewayStyle[] compatibleStyles = gatewayHeightUnits >= 6
@@ -3963,15 +4570,15 @@ namespace DungeonLab.Editor
                         GatewayStyle.OpenArch
                     };
                 int styleRoll = StairForge.StableHash(
-                        $"{roomBoundaryContext.gatewaySelectionSalt}:gateway-style:{groupKey}:{candidate.edgeKey}") &
+                        $"{roomBoundaryContext.gatewaySelectionSalt}:gateway-style:{socket.selectionGroup}:{socket.edgeKey}") &
                     int.MaxValue;
                 GatewayStyle style = compatibleStyles[styleRoll % compatibleStyles.Length];
                 int headerHeightUnits =
-                    candidate.wallHeightUnits - gatewayHeightUnits;
+                    wallHeight - gatewayHeightUnits;
                 placements.Add(new GatewayPlacement(
-                    candidate.edge,
-                    candidate.floorLevel,
-                    candidate.wallHeightUnits,
+                    socket.edge,
+                    socket.floorLevel,
+                    wallHeight,
                     contracts.For(style, gatewayHeightUnits),
                     headerHeightUnits > 0
                         ? partitionContracts.ForHeight(headerHeightUnits)
@@ -3980,76 +4587,6 @@ namespace DungeonLab.Editor
             }
 
             return placements;
-        }
-
-        private static bool TryBuildGatewayCandidate(
-            DoorwayEdge doorway,
-            IReadOnlyDictionary<Vector2Int, int> levels,
-            IReadOnlyDictionary<EdgeKey, int> flankHeights,
-            RoomBoundaryContext roomBoundaryContext,
-            out GatewayCandidate candidate)
-        {
-            candidate = default;
-            if (!AreCardinalNeighbors(doorway.firstCell, doorway.secondCell) ||
-                !levels.TryGetValue(doorway.firstCell, out int firstLevel) ||
-                !levels.TryGetValue(doorway.secondCell, out int secondLevel) ||
-                firstLevel != secondLevel)
-            {
-                return false;
-            }
-
-            int firstRoom = GetRoomId(roomBoundaryContext, doorway.firstCell);
-            int secondRoom = GetRoomId(roomBoundaryContext, doorway.secondCell);
-            bool firstEnclosed = IsEnclosedRoom(roomBoundaryContext, firstRoom);
-            bool secondEnclosed = IsEnclosedRoom(roomBoundaryContext, secondRoom);
-            if (!firstEnclosed && !secondEnclosed)
-            {
-                return false;
-            }
-
-            Vector2Int ownerCell;
-            Vector2Int otherCell;
-            if (firstEnclosed && !secondEnclosed ||
-                firstEnclosed && secondEnclosed && firstRoom <= secondRoom)
-            {
-                ownerCell = doorway.firstCell;
-                otherCell = doorway.secondCell;
-            }
-            else
-            {
-                ownerCell = doorway.secondCell;
-                otherCell = doorway.firstCell;
-            }
-
-            Vector2Int outward = otherCell - ownerCell;
-            Vector2Int tangent = outward.x != 0 ? Vector2Int.up : Vector2Int.right;
-            Vector2Int firstFlankCell = ownerCell + tangent;
-            Vector2Int secondFlankCell = ownerCell - tangent;
-            var firstFlank = new EdgeKey(firstFlankCell, firstFlankCell + outward);
-            var secondFlank = new EdgeKey(secondFlankCell, secondFlankCell + outward);
-            bool hasFirstFlank = flankHeights.TryGetValue(
-                firstFlank,
-                out int firstHeight);
-            bool hasSecondFlank = flankHeights.TryGetValue(
-                secondFlank,
-                out int secondHeight);
-            if (!TryResolveGatewayWallHeight(
-                    hasFirstFlank,
-                    firstHeight,
-                    hasSecondFlank,
-                    secondHeight,
-                    out int wallHeight))
-            {
-                return false;
-            }
-
-            PlatformEdge edge = EdgeFromCellToward(ownerCell, otherCell);
-            candidate = new GatewayCandidate(
-                edge,
-                firstLevel,
-                wallHeight,
-                new EdgeKey(ownerCell, otherCell).ToString());
-            return true;
         }
 
         private static bool TryResolveGatewayWallHeight(
@@ -7074,7 +7611,8 @@ namespace DungeonLab.Editor
         private static List<RoundTierCorner> FindRoundTierCorners(
             List<WallEdge> wallEdges,
             IReadOnlyDictionary<Vector2Int, int> levels,
-            HashSet<Vector2Int> reservedCells)
+            HashSet<Vector2Int> reservedCells,
+            ISet<(int x, int z, int direction)> reservedGatewayFlanks = null)
         {
             var corners = new List<RoundTierCorner>();
             var concaveCandidates = new List<RoundTierCorner>();
@@ -7132,7 +7670,12 @@ namespace DungeonLab.Editor
 
                         var keyA = (edgeA.edge.x, edgeA.edge.z, edgeA.edge.direction);
                         var keyB = (edgeB.edge.x, edgeB.edge.z, edgeB.edge.direction);
-                        if (claimedEdges.Contains(keyA) || claimedEdges.Contains(keyB))
+                        if (claimedEdges.Contains(keyA) ||
+                            claimedEdges.Contains(keyB) ||
+                            ConsumesReservedGatewayFlank(
+                                keyA,
+                                keyB,
+                                reservedGatewayFlanks))
                         {
                             continue;
                         }
@@ -7189,7 +7732,12 @@ namespace DungeonLab.Editor
 
                         var keyA = (edgeA.edge.x, edgeA.edge.z, edgeA.edge.direction);
                         var keyB = (edgeB.edge.x, edgeB.edge.z, edgeB.edge.direction);
-                        if (claimedEdges.Contains(keyA) || claimedEdges.Contains(keyB))
+                        if (claimedEdges.Contains(keyA) ||
+                            claimedEdges.Contains(keyB) ||
+                            ConsumesReservedGatewayFlank(
+                                keyA,
+                                keyB,
+                                reservedGatewayFlanks))
                         {
                             continue;
                         }
@@ -7244,6 +7792,10 @@ namespace DungeonLab.Editor
                     {
                         if (claimedEdges.Contains(member.edgeA) ||
                             claimedEdges.Contains(member.edgeB) ||
+                            ConsumesReservedGatewayFlank(
+                                member.edgeA,
+                                member.edgeB,
+                                reservedGatewayFlanks) ||
                             member.angleStyle != group[0].angleStyle)
                         {
                             fullRing = false;
@@ -7266,7 +7818,12 @@ namespace DungeonLab.Editor
 
                 foreach (RoundTierCorner member in group)
                 {
-                    if (claimedEdges.Contains(member.edgeA) || claimedEdges.Contains(member.edgeB))
+                    if (claimedEdges.Contains(member.edgeA) ||
+                        claimedEdges.Contains(member.edgeB) ||
+                        ConsumesReservedGatewayFlank(
+                            member.edgeA,
+                            member.edgeB,
+                            reservedGatewayFlanks))
                     {
                         continue;
                     }
@@ -7279,6 +7836,16 @@ namespace DungeonLab.Editor
             }
 
             return corners;
+        }
+
+        private static bool ConsumesReservedGatewayFlank(
+            (int x, int z, int direction) firstEdge,
+            (int x, int z, int direction) secondEdge,
+            ISet<(int x, int z, int direction)> reservedGatewayFlanks)
+        {
+            return reservedGatewayFlanks != null &&
+                (reservedGatewayFlanks.Contains(firstEdge) ||
+                 reservedGatewayFlanks.Contains(secondEdge));
         }
 
         private static void ValidateTierCornerCompatibility(
@@ -9456,19 +10023,23 @@ namespace DungeonLab.Editor
             public readonly IReadOnlyList<DoorwayEdge> doorwayEdges;
             public readonly IReadOnlyList<InternalPathEdge> internalPathEdges;
             public readonly int gatewaySelectionSalt;
+            public readonly IReadOnlyList<GatewayConnectionEnd> gatewayConnectionEnds;
 
             public RoomBoundaryContext(
                 IReadOnlyDictionary<Vector2Int, int> cellRoomIds,
                 IReadOnlyList<bool> enclosedRooms,
                 IReadOnlyList<DoorwayEdge> doorwayEdges,
                 IReadOnlyList<InternalPathEdge> internalPathEdges = null,
-                int gatewaySelectionSalt = 0)
+                int gatewaySelectionSalt = 0,
+                IReadOnlyList<GatewayConnectionEnd> gatewayConnectionEnds = null)
             {
                 this.cellRoomIds = cellRoomIds;
                 this.enclosedRooms = enclosedRooms;
                 this.doorwayEdges = doorwayEdges;
                 this.internalPathEdges = internalPathEdges ?? Array.Empty<InternalPathEdge>();
                 this.gatewaySelectionSalt = gatewaySelectionSalt;
+                this.gatewayConnectionEnds =
+                    gatewayConnectionEnds ?? Array.Empty<GatewayConnectionEnd>();
             }
         }
 
@@ -9511,6 +10082,37 @@ namespace DungeonLab.Editor
                 this.firstCell = firstCell;
                 this.secondCell = secondCell;
                 this.connectionIndex = connectionIndex;
+            }
+        }
+
+        public sealed class GatewayConnectionEnd
+        {
+            public readonly DoorwayEdge roomThreshold;
+            public readonly int endIndex;
+            public readonly int roomId;
+            public readonly IReadOnlyList<Vector2Int> outwardPath;
+
+            public GatewayConnectionEnd(
+                DoorwayEdge roomThreshold,
+                int endIndex,
+                int roomId,
+                IReadOnlyList<Vector2Int> outwardPath)
+            {
+                this.roomThreshold = roomThreshold;
+                this.endIndex = endIndex;
+                this.roomId = roomId;
+                if (outwardPath == null)
+                {
+                    this.outwardPath = Array.Empty<Vector2Int>();
+                    return;
+                }
+
+                var pathCopy = new Vector2Int[outwardPath.Count];
+                for (int index = 0; index < outwardPath.Count; index++)
+                {
+                    pathCopy[index] = outwardPath[index];
+                }
+                this.outwardPath = Array.AsReadOnly(pathCopy);
             }
         }
 
@@ -9729,20 +10331,17 @@ namespace DungeonLab.Editor
         {
             public readonly HashSet<(int x, int z, int direction)> guardEdges;
             public readonly HashSet<(int x, int z, int direction)> bareLandingEdges;
-            public readonly HashSet<int> largeWallRooms;
             public readonly Dictionary<EdgeKey, int> gatewayFlankWallHeights;
 
             public OuterShellPlacementResult(
                 HashSet<(int x, int z, int direction)> guardEdges,
                 HashSet<(int x, int z, int direction)> bareLandingEdges,
-                HashSet<int> largeWallRooms,
                 Dictionary<EdgeKey, int> gatewayFlankWallHeights)
             {
                 this.guardEdges =
                     guardEdges ?? new HashSet<(int x, int z, int direction)>();
                 this.bareLandingEdges =
                     bareLandingEdges ?? new HashSet<(int x, int z, int direction)>();
-                this.largeWallRooms = largeWallRooms ?? new HashSet<int>();
                 this.gatewayFlankWallHeights =
                     gatewayFlankWallHeights ?? new Dictionary<EdgeKey, int>();
             }
@@ -9900,6 +10499,7 @@ namespace DungeonLab.Editor
             private readonly MeasuredPrefab largeWallWood;
             private readonly MeasuredPrefab largeWood;
             private readonly string barsPrefabPath;
+            public readonly float socketWidth;
 
             public GatewayContracts(
                 MeasuredPrefab mediumMetal,
@@ -9915,6 +10515,25 @@ namespace DungeonLab.Editor
                 this.largeWallWood = largeWallWood;
                 this.largeWood = largeWood;
                 this.barsPrefabPath = barsPrefabPath ?? string.Empty;
+                socketWidth = Vector2.Distance(
+                    mediumMetal.localSegmentStart,
+                    mediumMetal.localSegmentEnd);
+                ValidateSocketWidth(largeWallMetal);
+                ValidateSocketWidth(mediumWood);
+                ValidateSocketWidth(largeWallWood);
+                ValidateSocketWidth(largeWood);
+            }
+
+            private void ValidateSocketWidth(MeasuredPrefab prefab)
+            {
+                float width = Vector2.Distance(
+                    prefab.localSegmentStart,
+                    prefab.localSegmentEnd);
+                if (Mathf.Abs(width - socketWidth) > 0.01f)
+                {
+                    throw new InvalidOperationException(
+                        $"Gateway prefab '{prefab.name}' has a {width:0.###}u socket but the gateway family requires {socketWidth:0.###}u.");
+                }
             }
 
             public GatewayContract For(GatewayStyle style, int wallHeightUnits)
@@ -9963,57 +10582,181 @@ namespace DungeonLab.Editor
             }
         }
 
-        private readonly struct GatewayCandidate
+        private sealed class RawOuterShellPlan
+        {
+            public readonly HashSet<Vector2Int> exterior;
+            public readonly int minLevel;
+            public readonly int maxLevel;
+            public readonly Dictionary<int, int> roomArea;
+            public readonly HashSet<
+                (Vector2Int cell, int direction, int higherLevel)>
+                orphanLandingEdges;
+            public readonly Dictionary<
+                (int x, int z, int direction),
+                int[]> straightCourseHeights;
+            public readonly HashSet<int> largeWallRooms;
+            public readonly RoomBoundaryContext roomBoundaryContext;
+
+            public RawOuterShellPlan(
+                HashSet<Vector2Int> exterior,
+                int minLevel,
+                int maxLevel,
+                Dictionary<int, int> roomArea,
+                HashSet<
+                    (Vector2Int cell, int direction, int higherLevel)>
+                    orphanLandingEdges,
+                Dictionary<
+                    (int x, int z, int direction),
+                    int[]> straightCourseHeights,
+                HashSet<int> largeWallRooms,
+                RoomBoundaryContext roomBoundaryContext)
+            {
+                this.exterior = exterior ?? new HashSet<Vector2Int>();
+                this.minLevel = minLevel;
+                this.maxLevel = maxLevel;
+                this.roomArea = roomArea ?? new Dictionary<int, int>();
+                this.orphanLandingEdges =
+                    orphanLandingEdges ??
+                    new HashSet<
+                        (Vector2Int cell, int direction, int higherLevel)>();
+                this.straightCourseHeights =
+                    straightCourseHeights ??
+                    new Dictionary<
+                        (int x, int z, int direction),
+                        int[]>();
+                this.largeWallRooms =
+                    largeWallRooms ?? new HashSet<int>();
+                this.roomBoundaryContext = roomBoundaryContext;
+            }
+        }
+
+        private readonly struct GatewayWallSupport
+        {
+            public readonly (int x, int z, int direction) edge;
+
+            public GatewayWallSupport(
+                (int x, int z, int direction) edge)
+            {
+                this.edge = edge;
+            }
+        }
+
+        private sealed class GatewayWallPlan
+        {
+            public readonly Dictionary<string, GatewayWallSupport> supports;
+            public readonly Dictionary<
+                string,
+                (int baseLevel, int heightUnits)> supportHeights;
+
+            public GatewayWallPlan(
+                Dictionary<string, GatewayWallSupport> supports,
+                Dictionary<
+                    string,
+                    (int baseLevel, int heightUnits)> supportHeights)
+            {
+                this.supports =
+                    supports ??
+                    new Dictionary<string, GatewayWallSupport>(
+                        StringComparer.Ordinal);
+                this.supportHeights =
+                    supportHeights ??
+                    new Dictionary<
+                        string,
+                        (int baseLevel, int heightUnits)>(
+                        StringComparer.Ordinal);
+            }
+        }
+
+        private readonly struct GatewaySocketCandidate
         {
             public readonly PlatformEdge edge;
             public readonly int floorLevel;
             public readonly int wallHeightUnits;
             public readonly string edgeKey;
-            public readonly string selectionGroup;
-            public readonly int selectionScore;
+            public readonly string firstFlankKey;
+            public readonly string secondFlankKey;
+            public readonly int pathDistance;
 
-            public GatewayCandidate(
-                PlatformEdge edge,
-                int floorLevel,
-                int wallHeightUnits,
-                string edgeKey)
-                : this(
-                    edge,
-                    floorLevel,
-                    wallHeightUnits,
-                    edgeKey,
-                    string.Empty,
-                    int.MaxValue)
-            {
-            }
-
-            private GatewayCandidate(
+            public GatewaySocketCandidate(
                 PlatformEdge edge,
                 int floorLevel,
                 int wallHeightUnits,
                 string edgeKey,
-                string selectionGroup,
-                int selectionScore)
+                string firstFlankKey,
+                string secondFlankKey,
+                int pathDistance)
             {
                 this.edge = edge;
                 this.floorLevel = floorLevel;
                 this.wallHeightUnits = wallHeightUnits;
                 this.edgeKey = edgeKey ?? string.Empty;
-                this.selectionGroup = selectionGroup ?? string.Empty;
-                this.selectionScore = selectionScore;
+                this.firstFlankKey = firstFlankKey ?? string.Empty;
+                this.secondFlankKey = secondFlankKey ?? string.Empty;
+                this.pathDistance = pathDistance;
             }
+        }
 
-            public GatewayCandidate WithSelection(
+        private readonly struct GatewaySocket
+        {
+            public readonly int endIndex;
+            public readonly PlatformEdge edge;
+            public readonly int floorLevel;
+            public readonly int wallHeightUnits;
+            public readonly string edgeKey;
+            public readonly string firstFlankKey;
+            public readonly (int x, int z, int direction) firstFlankEdge;
+            public readonly string secondFlankKey;
+            public readonly (int x, int z, int direction) secondFlankEdge;
+            public readonly string selectionGroup;
+            public readonly int selectionScore;
+
+            public GatewaySocket(
+                int endIndex,
+                PlatformEdge edge,
+                int floorLevel,
+                int wallHeightUnits,
+                string edgeKey,
+                string firstFlankKey,
+                (int x, int z, int direction) firstFlankEdge,
+                string secondFlankKey,
+                (int x, int z, int direction) secondFlankEdge,
                 string selectionGroup,
                 int selectionScore)
             {
-                return new GatewayCandidate(
-                    edge,
-                    floorLevel,
-                    wallHeightUnits,
-                    edgeKey,
-                    selectionGroup,
-                    selectionScore);
+                this.endIndex = endIndex;
+                this.edge = edge;
+                this.floorLevel = floorLevel;
+                this.wallHeightUnits = wallHeightUnits;
+                this.edgeKey = edgeKey ?? string.Empty;
+                this.firstFlankKey = firstFlankKey ?? string.Empty;
+                this.firstFlankEdge = firstFlankEdge;
+                this.secondFlankKey = secondFlankKey ?? string.Empty;
+                this.secondFlankEdge = secondFlankEdge;
+                this.selectionGroup = selectionGroup ?? string.Empty;
+                this.selectionScore = selectionScore;
+            }
+        }
+
+        private sealed class GatewaySocketPlan
+        {
+            public readonly IReadOnlyList<GatewaySocket> sockets;
+            public readonly HashSet<
+                (int x, int z, int direction)> reservedFlankEdges;
+
+            public GatewaySocketPlan(
+                IReadOnlyList<GatewaySocket> sockets)
+            {
+                var socketCopy = sockets != null
+                    ? new List<GatewaySocket>(sockets)
+                    : new List<GatewaySocket>();
+                this.sockets = socketCopy.AsReadOnly();
+                reservedFlankEdges =
+                    new HashSet<(int x, int z, int direction)>();
+                foreach (GatewaySocket socket in socketCopy)
+                {
+                    reservedFlankEdges.Add(socket.firstFlankEdge);
+                    reservedFlankEdges.Add(socket.secondFlankEdge);
+                }
             }
         }
 

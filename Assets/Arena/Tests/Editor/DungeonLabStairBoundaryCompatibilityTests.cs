@@ -626,6 +626,271 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void GatewaySocketResolver_SkipsBroadAndPartialEdgesForNearestTwoFlankThroat()
+        {
+            List<Vector2Int> path = StraightPath(0, 4);
+            Dictionary<Vector2Int, int> levels = LevelPath(path, 4);
+            var supports =
+                new Dictionary<string, (int baseLevel, int heightUnits)>
+                {
+                    [EdgeKey(new Vector2Int(2, 0), new Vector2Int(2, 1))] =
+                        (4, 4),
+                    [EdgeKey(new Vector2Int(3, 0), new Vector2Int(3, 1))] =
+                        (4, 4),
+                    [EdgeKey(new Vector2Int(3, 0), new Vector2Int(3, -1))] =
+                        (4, 4)
+                };
+
+            (bool accepted, string socketEdge, _, _, int distance, int height) =
+                ResolveGatewaySocket(path, levels, supports);
+
+            Assert.That(accepted, Is.True);
+            Assert.That(
+                socketEdge,
+                Is.EqualTo(EdgeKey(path[2], path[3])),
+                "The 0/2 room threshold and next 1/2 path edge must remain open; the nearest 2/2 corridor throat owns the socket.");
+            Assert.That(distance, Is.EqualTo(2));
+            Assert.That(height, Is.EqualTo(4));
+        }
+
+        [Test]
+        public void GatewaySocketResolver_KeepsRoomThresholdDistinctFromMovedSocket()
+        {
+            List<Vector2Int> path = StraightPath(10, 14);
+            Dictionary<Vector2Int, int> levels = LevelPath(path, 8);
+            var supports =
+                new Dictionary<string, (int baseLevel, int heightUnits)>
+                {
+                    [EdgeKey(new Vector2Int(13, 0), new Vector2Int(13, 1))] =
+                        (8, 6),
+                    [EdgeKey(new Vector2Int(13, 0), new Vector2Int(13, -1))] =
+                        (8, 6)
+                };
+            string roomThreshold = EdgeKey(path[0], path[1]);
+
+            (bool accepted, string socketEdge, _, _, _, _) =
+                ResolveGatewaySocket(path, levels, supports);
+
+            Assert.That(accepted, Is.True);
+            Assert.That(roomThreshold, Is.EqualTo("10,0|11,0"));
+            Assert.That(socketEdge, Is.EqualTo("12,0|13,0"));
+            Assert.That(socketEdge, Is.Not.EqualTo(roomThreshold));
+        }
+
+        [Test]
+        public void GatewaySocketResolver_RejectsUnequalFlankHeights()
+        {
+            List<Vector2Int> path = StraightPath(0, 3);
+            Dictionary<Vector2Int, int> levels = LevelPath(path, 4);
+            var supports =
+                new Dictionary<string, (int baseLevel, int heightUnits)>
+                {
+                    [EdgeKey(new Vector2Int(2, 0), new Vector2Int(2, 1))] =
+                        (4, 4),
+                    [EdgeKey(new Vector2Int(2, 0), new Vector2Int(2, -1))] =
+                        (4, 6)
+                };
+
+            Assert.That(
+                ResolveGatewaySocket(path, levels, supports).accepted,
+                Is.False);
+        }
+
+        [Test]
+        public void GatewaySocketResolver_ReturnsNoSocketWhenNoTwoFlankThroatExists()
+        {
+            List<Vector2Int> path = StraightPath(0, 4);
+            Dictionary<Vector2Int, int> levels = LevelPath(path, 4);
+
+            Assert.That(
+                ResolveGatewaySocket(
+                    path,
+                    levels,
+                    new Dictionary<
+                        string,
+                        (int baseLevel, int heightUnits)>()).accepted,
+                Is.False);
+        }
+
+        [Test]
+        public void GatewaySocketResolver_RejectsCandidateWithMissingFloor()
+        {
+            List<Vector2Int> path = StraightPath(0, 4);
+            Dictionary<Vector2Int, int> levels = LevelPath(path, 4);
+            levels.Remove(new Vector2Int(3, 0));
+            Dictionary<string, (int baseLevel, int heightUnits)> supports =
+                CorridorFlanks(new Vector2Int(3, 0), 4, 4);
+
+            Assert.That(
+                ResolveGatewaySocket(path, levels, supports).accepted,
+                Is.False);
+        }
+
+        [Test]
+        public void GatewaySocketResolver_RejectsStairTransitionAndReservedGeometryConflicts()
+        {
+            List<Vector2Int> path = StraightPath(0, 4);
+            Dictionary<Vector2Int, int> levels = LevelPath(path, 4);
+            Dictionary<string, (int baseLevel, int heightUnits)> supports =
+                CorridorFlanks(new Vector2Int(3, 0), 4, 4);
+            string candidateEdge = EdgeKey(path[2], path[3]);
+
+            Assert.That(
+                ResolveGatewaySocket(
+                    path,
+                    levels,
+                    supports,
+                    blockedCells: new HashSet<Vector2Int>
+                    {
+                        path[3]
+                    }).accepted,
+                Is.False,
+                "A stair or reserved cell occupying the throat must block it.");
+            Assert.That(
+                ResolveGatewaySocket(
+                    path,
+                    levels,
+                    supports,
+                    blockedCells: new HashSet<Vector2Int>
+                    {
+                        new Vector2Int(3, 1)
+                    }).accepted,
+                Is.False,
+                "A stair, transition, or reservation touching a required flank must block the throat.");
+            Assert.That(
+                ResolveGatewaySocket(
+                    path,
+                    levels,
+                    supports,
+                    blockedEdges: new HashSet<string>
+                    {
+                        candidateEdge
+                    }).accepted,
+                Is.False,
+                "A transition or planned-open edge at the throat must block it.");
+        }
+
+        [Test]
+        public void GatewaySocketResolver_UsesDeterministicFlankOrientationTieBreak()
+        {
+            List<Vector2Int> path = StraightPath(0, 2);
+            Dictionary<Vector2Int, int> levels = LevelPath(path, 4);
+            var supports =
+                new Dictionary<string, (int baseLevel, int heightUnits)>
+                {
+                    [EdgeKey(new Vector2Int(0, 1), new Vector2Int(1, 1))] =
+                        (4, 4),
+                    [EdgeKey(new Vector2Int(0, -1), new Vector2Int(1, -1))] =
+                        (4, 4),
+                    [EdgeKey(new Vector2Int(1, 0), new Vector2Int(1, 1))] =
+                        (4, 4),
+                    [EdgeKey(new Vector2Int(1, 0), new Vector2Int(1, -1))] =
+                        (4, 4)
+                };
+
+            (
+                bool accepted,
+                _,
+                string firstFlank,
+                string secondFlank,
+                _,
+                _) = ResolveGatewaySocket(path, levels, supports);
+
+            Assert.That(accepted, Is.True);
+            Assert.That(
+                firstFlank,
+                Is.EqualTo("0,1|1,1"));
+            Assert.That(
+                secondFlank,
+                Is.EqualTo("0,-1|1,-1"),
+                "When both compatible flank orientations exist, the resolver must always prefer the threshold-plane pair.");
+        }
+
+        [Test]
+        public void GatewaySocketReservation_PreventsAngledCornerFromConsumingFlank()
+        {
+            Type platformEdgeType = ElevationEdgeModelType.GetNestedType(
+                "PlatformEdge",
+                BindingFlags.NonPublic)!;
+            Type wallEdgeType = ElevationEdgeModelType.GetNestedType(
+                "WallEdge",
+                BindingFlags.NonPublic)!;
+            Vector2Int cell = FindNonSquareTierCornerCell();
+            object northEdge = Activator.CreateInstance(
+                platformEdgeType,
+                BindingFlags.Instance |
+                BindingFlags.Public |
+                BindingFlags.NonPublic,
+                binder: null,
+                args: new object[] { cell.x, cell.y, North },
+                culture: null)!;
+            object eastEdge = Activator.CreateInstance(
+                platformEdgeType,
+                BindingFlags.Instance |
+                BindingFlags.Public |
+                BindingFlags.NonPublic,
+                binder: null,
+                args: new object[] { cell.x, cell.y, East },
+                culture: null)!;
+            object northWall = Activator.CreateInstance(
+                wallEdgeType,
+                BindingFlags.Instance |
+                BindingFlags.Public |
+                BindingFlags.NonPublic,
+                binder: null,
+                args: new[] { northEdge, -20, 4, false, false },
+                culture: null)!;
+            object eastWall = Activator.CreateInstance(
+                wallEdgeType,
+                BindingFlags.Instance |
+                BindingFlags.Public |
+                BindingFlags.NonPublic,
+                binder: null,
+                args: new[] { eastEdge, -20, 4, false, false },
+                culture: null)!;
+            Type wallListType = typeof(List<>).MakeGenericType(wallEdgeType);
+            var wallEdges = (System.Collections.IList)Activator.CreateInstance(
+                wallListType)!;
+            wallEdges.Add(northWall);
+            wallEdges.Add(eastWall);
+            var levels = new Dictionary<Vector2Int, int>
+            {
+                [cell] = 4
+            };
+            MethodInfo findCorners = ElevationEdgeModelType.GetMethod(
+                "FindRoundTierCorners",
+                BindingFlags.Static | BindingFlags.NonPublic)!;
+
+            object unreserved = findCorners.Invoke(
+                null,
+                new object[]
+                {
+                    wallEdges,
+                    levels,
+                    new HashSet<Vector2Int>(),
+                    new HashSet<(int x, int z, int direction)>()
+                })!;
+            object reserved = findCorners.Invoke(
+                null,
+                new object[]
+                {
+                    wallEdges,
+                    levels,
+                    new HashSet<Vector2Int>(),
+                    new HashSet<(int x, int z, int direction)>
+                    {
+                        (cell.x, cell.y, North)
+                    }
+                })!;
+
+            Assert.That(CollectionCount(unreserved), Is.GreaterThan(0));
+            Assert.That(
+                CollectionCount(reserved),
+                Is.Zero,
+                "A corner substitution must keep both raw straight faces when either one is a reserved GatewaySocket flank.");
+        }
+
+        [Test]
         public void CornerCompatibility_DoesNotInferStairGeometryFromAssetNames()
         {
             string source = File.ReadAllText(
@@ -714,6 +979,134 @@ namespace Arena.Tests.Editor
             };
             bool accepted = (bool)method.Invoke(null, arguments)!;
             return (accepted, (int)arguments[4]);
+        }
+
+        private static (
+            bool accepted,
+            string socketEdge,
+            string firstFlank,
+            string secondFlank,
+            int distance,
+            int height) ResolveGatewaySocket(
+                IReadOnlyList<Vector2Int> path,
+                IReadOnlyDictionary<Vector2Int, int> levels,
+                IReadOnlyDictionary<
+                    string,
+                    (int baseLevel, int heightUnits)> supports,
+                ISet<Vector2Int>? blockedCells = null,
+                ISet<string>? blockedEdges = null,
+                float socketWidth = 4f)
+        {
+            MethodInfo method = ElevationEdgeModelType.GetMethod(
+                "TryResolveGatewaySocket",
+                BindingFlags.Static | BindingFlags.NonPublic)!;
+            Assert.That(method, Is.Not.Null);
+            object?[] arguments =
+            {
+                path,
+                levels,
+                supports,
+                blockedCells ?? new HashSet<Vector2Int>(),
+                blockedEdges ?? new HashSet<string>(StringComparer.Ordinal),
+                socketWidth,
+                null
+            };
+            bool accepted = (bool)method.Invoke(null, arguments)!;
+            if (!accepted)
+            {
+                return (false, string.Empty, string.Empty, string.Empty, -1, 0);
+            }
+
+            object candidate = arguments[6]!;
+            Type candidateType = candidate.GetType();
+            return (
+                true,
+                (string)candidateType.GetField("edgeKey")!.GetValue(candidate)!,
+                (string)candidateType.GetField("firstFlankKey")!.GetValue(candidate)!,
+                (string)candidateType.GetField("secondFlankKey")!.GetValue(candidate)!,
+                (int)candidateType.GetField("pathDistance")!.GetValue(candidate)!,
+                (int)candidateType.GetField("wallHeightUnits")!.GetValue(candidate)!);
+        }
+
+        private static List<Vector2Int> StraightPath(int firstX, int lastX)
+        {
+            var path = new List<Vector2Int>();
+            for (int x = firstX; x <= lastX; x++)
+            {
+                path.Add(new Vector2Int(x, 0));
+            }
+            return path;
+        }
+
+        private static Dictionary<Vector2Int, int> LevelPath(
+            IEnumerable<Vector2Int> path,
+            int level)
+        {
+            return path.ToDictionary(cell => cell, _ => level);
+        }
+
+        private static Dictionary<
+            string,
+            (int baseLevel, int heightUnits)> CorridorFlanks(
+                Vector2Int cell,
+                int baseLevel,
+                int heightUnits)
+        {
+            return new Dictionary<
+                string,
+                (int baseLevel, int heightUnits)>
+            {
+                [EdgeKey(cell, cell + Vector2Int.up)] =
+                    (baseLevel, heightUnits),
+                [EdgeKey(cell, cell + Vector2Int.down)] =
+                    (baseLevel, heightUnits)
+            };
+        }
+
+        private static string EdgeKey(Vector2Int first, Vector2Int second)
+        {
+            if (first.x > second.x ||
+                first.x == second.x && first.y > second.y)
+            {
+                (first, second) = (second, first);
+            }
+
+            return $"{first.x},{first.y}|{second.x},{second.y}";
+        }
+
+        private static Vector2Int FindNonSquareTierCornerCell()
+        {
+            MethodInfo chooseStyle = ElevationEdgeModelType.GetMethod(
+                "ChooseTierCornerStyle",
+                BindingFlags.Static | BindingFlags.NonPublic)!;
+            for (int x = 0; x < 32; x++)
+            {
+                var cell = new Vector2Int(x, 0);
+                int style = (int)chooseStyle.Invoke(
+                    null,
+                    new object[]
+                    {
+                        cell,
+                        new Dictionary<Vector2Int, int>
+                        {
+                            [cell] = 4
+                        }
+                    })!;
+                if (style != 0)
+                {
+                    return cell;
+                }
+            }
+
+            Assert.Fail("Could not find a deterministic non-square tier-corner cell.");
+            return default;
+        }
+
+        private static int CollectionCount(object collection)
+        {
+            return (int)collection.GetType()
+                .GetProperty("Count")!
+                .GetValue(collection)!;
         }
 
         private static bool BoundsOverlapWithPositiveVolume(Bounds first, Bounds second)
