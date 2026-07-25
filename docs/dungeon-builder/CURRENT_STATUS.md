@@ -122,6 +122,40 @@ on how many attempts preceded it.
 
 **This is a deliberate one-time rebaseline. Every seed's output changes once.**
 
+## Open: variation regression from the route-first cutover
+
+Owner reported 2026-07-25 that dungeons all read the same. Traced to
+**`6657465f floorplan refactor phase 2` (2026-07-21)**, which made route-first
+the sole path. Not a subjective impression — measured over 200 seeds:
+
+| Symptom | Evidence | Cause |
+| --- | --- | --- |
+| One topography | `elevationSpan` and `routeClimbLevels` are 24 for 199/199 seeds; `archetypes = AscendingSpine: 199` | `ElevationArchetype` had **11** members (Basin, Mesa, Ridge, Canyon, AscendingSpine, Descent, SplitPlateau, Crater, Helix, Terraces, Atrium) chosen per seed by `ElevationArchetypePlanner.Choose(random)`. It is now `enum RouteElevationPolicy { AscendingSpine }` — one member |
+| Same connectivity | 3 fixed graphs on `seed % 4` (processional 50%, atrium 25%, twin-wing 25%) | All three `Build*RouteIntent` factories hardcode every node id, role, beat, edge **and elevation** as literals |
+| Always 13 rooms | `rooms` min 13, p50 13, max 13 | All three route graphs happen to have 13 nodes |
+| Identical room shapes | — | The same commit cut `DungeonGenerationProfile` 68 -> 24 settings, deleting the room size-class vocabulary (`largeRoom/midRoom/smallRoom` area ranges *and* counts, `nonRectChanceGrand`, `nonRectChanceMid`, `wingMinDimCells`, `wingMaxDepthCells`, `roomMaxSideCells`, `roomMaxAspectRatio`, `floorBudgetCells`) |
+
+The archived plan listed "multiple elevation archetypes" under *pieces worth
+preserving*, so this was preservation that did not happen, not a considered trade.
+
+**Item 1 — room size ranges (done, unverified).** Both profiles widened.
+`dense` was pinned at exactly 7x7 for every role because 7 is its vertical
+ceiling; it now spreads 6-8 x 5-7. `spacious` now spreads 4-7 x 4-8.
+
+Hard constraints when tuning these: room size <= `pitch - 1` on each axis (the
+gap between adjacent rooms is `pitch - size`), and <= `roomEnvelopeRadiusCells
+* 2 + 1`. Spacious pitch 9/9 -> ceiling 8x8. Dense pitch 9/8 -> ceiling 8x7.
+
+**Item 2 (next) — route node elevations are literals.** The `RouteNodeIntent`
+elevation field already exists; it is populated with constants that always run
+0 -> 24. Making it data is the real fix for the identical vertical profile and
+does not require reinstating the old system.
+
+**Item 3 (after) — restore topography variety.** Design question, not a
+refactor: does an archetype choose an elevation profile for an existing route
+graph, or select among different graphs? Note the 13-node coincidence above —
+room count needs to vary too.
+
 ### Next, in order
 
 1. **Confirm the split preserved identity** — run Batch Validate and expect the

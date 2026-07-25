@@ -49,11 +49,19 @@ if missing:
 open(gate, 'w', encoding='utf-8').write(src)
 PY
 
+  # Build ONCE and analyse the captured log. Building twice raced the first
+  # build's file locks and produced spurious failures.
   echo "=== $proj ==="
-  if ! dotnet build "$gate" -t:Rebuild -v:q -nologo 2>&1 | grep -E "error|Error\(s\)"; then
-    echo "  (no output)"
+  log="$OUT/$proj.build.log"
+  dotnet build "$gate" -t:Rebuild -v:q -nologo >"$log" 2>&1
+  rc=$?
+  grep -E "error [A-Z]+[0-9]+" "$log" | sed "s|$ROOT/||" | sort -u | head -40
+  if [ "$rc" -ne 0 ] || ! grep -q "0 Error(s)" "$log"; then
+    status=1
+    echo "  build failed (rc=$rc) — full log: $log"
+  else
+    echo "  0 errors"
   fi
-  dotnet build "$gate" -v:q -nologo 2>&1 | grep -q "0 Error(s)" || status=1
   rm -f "$gate"
 done
 
