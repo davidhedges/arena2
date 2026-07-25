@@ -141,11 +141,13 @@ namespace DungeonLab.Editor
             DungeonRouteTopology topology,
             List<string> violations)
         {
-            if (topology.nodes.Length != RouteNodeCount)
+            if (topology.nodes.Length < MinRouteNodeCount || topology.nodes.Length > MaxRouteNodeCount)
             {
                 violations.Add(
-                    $"node count is {topology.nodes.Length}; the generator locks it to {RouteNodeCount}");
+                    $"node count is {topology.nodes.Length}; the generator accepts " +
+                    $"{MinRouteNodeCount}..{MaxRouteNodeCount}");
             }
+
 
             var mainRoute = new List<RouteTopologyNode>();
             var branchNodes = new List<RouteTopologyNode>();
@@ -192,19 +194,20 @@ namespace DungeonLab.Editor
                 int rise = topology.nodes[edge.toNode].level - topology.nodes[edge.fromNode].level;
                 string label = $"edge '{edge.id}' " +
                     $"({topology.nodes[edge.fromNode].key}->{topology.nodes[edge.toNode].key})";
+                int riseMagnitude = Mathf.Abs(rise);
                 if (edge.transitionKind == RouteTransitionKind.LevelCorridor)
                 {
-                    if (rise != 0)
+                    if (riseMagnitude != 0)
                     {
                         violations.Add($"{label} is a LevelCorridor across a {rise}u rise; must be 0");
                     }
                 }
-                else if (rise != MajorRiseLevels && rise != DoubleMajorRiseLevels)
+                else if (riseMagnitude != MajorRiseLevels && riseMagnitude != DoubleMajorRiseLevels)
                 {
                     violations.Add(
                         $"{label} is a {edge.transitionKind} across a {rise}u rise; the generator accepts " +
-                        $"only +{MajorRiseLevels} or +{DoubleMajorRiseLevels} " +
-                        "(write descending edges low-node-first until step 2 allows a sign)");
+                        $"+/-{MajorRiseLevels} or +/-{DoubleMajorRiseLevels}, so an edge may be written " +
+                        "in travel order in either direction");
                 }
             }
 
@@ -568,58 +571,40 @@ namespace DungeonLab.Editor
         {
             DungeonGenerationSettings settings = CurrentGenerationSettings.Validated();
             DungeonPatternSpatialSettings spatial = ResolveTopologySpatialSettings(topology);
-            int[] columnOffsets = ResolveLatticeLaneOffsets(
-                topology.columnGapCells,
+            // The tightest lattice the rubber sheet can produce. Every other
+            // rule below is worst-cased against it: more slack only ever moves
+            // rooms apart, so the minimum lattice is where a vista lane is
+            // shortest and rooms are most likely to collide.
+            int[] columnOffsets = MinimumLatticeLaneOffsets(
+                topology.columnGaps,
                 spatial.horizontalPitchCells,
                 topology.latticeColumnCount);
-            int[] rowOffsets = ResolveLatticeLaneOffsets(
-                topology.rowGapCells,
+            int[] rowOffsets = MinimumLatticeLaneOffsets(
+                topology.rowGaps,
                 spatial.verticalPitchCells,
                 topology.latticeRowCount);
+            AppendRouteTopologyRubberSheetNotes(topology, profileId, spatial, columnOffsets, rowOffsets, notes);
+            AppendRouteTopologyRoleSizeClassRules(topology, profileId, settings, violations);
 
-            int worstWidth = 0;
-            int worstDepth = 0;
-            var overflowing = new List<string>();
-            for (int quarterTurns = 0; quarterTurns < 4; quarterTurns++)
-            {
-                for (int mirror = 0; mirror < 2; mirror++)
-                {
-                    int minX = int.MaxValue;
-                    int minY = int.MaxValue;
-                    int maxX = int.MinValue;
-                    int maxY = int.MinValue;
-                    foreach (RouteTopologyNode node in topology.nodes)
-                    {
-                        Vector2Int cell = TransformCoarseCell(
-                            new Vector2Int(columnOffsets[node.lattice.x], rowOffsets[node.lattice.y]),
-                            quarterTurns,
-                            mirror == 1);
-                        minX = Mathf.Min(minX, cell.x);
-                        minY = Mathf.Min(minY, cell.y);
-                        maxX = Mathf.Max(maxX, cell.x);
-                        maxY = Mathf.Max(maxY, cell.y);
-                    }
-
-                    int width = maxX - minX + spatial.roomEnvelopeRadiusCells * 2 + 1;
-                    int depth = maxY - minY + spatial.roomEnvelopeRadiusCells * 2 + 1;
-                    worstWidth = Mathf.Max(worstWidth, width);
-                    worstDepth = Mathf.Max(worstDepth, depth);
-                    if (width > settings.mapWidthMaxCells || depth > settings.mapDepthMaxCells)
-                    {
-                        overflowing.Add($"turn {quarterTurns}{(mirror == 1 ? "+mirror" : "")} {width}x{depth}");
-                    }
-                }
-            }
-
+            // Across the 8 orientations a quarter turn swaps the two spans, so
+            // the worst case on each axis is simply the wider of them — plus
+            // whatever slack the rubber sheet may spend on that axis.
+            int envelopeSpan = spatial.roomEnvelopeRadiusCells * 2 + 1;
+            int columnSpan = columnOffsets[columnOffsets.Length - 1] +
+                LatticeSlackBudget(topology.columnGaps, spatial.horizontalPitchCells, spatial);
+            int rowSpan = rowOffsets[rowOffsets.Length - 1] +
+                LatticeSlackBudget(topology.rowGaps, spatial.verticalPitchCells, spatial);
+            int worstAxis = Mathf.Max(columnSpan, rowSpan) + envelopeSpan;
             notes.Add(
-                $"{profileId}: envelope worst case {worstWidth}x{worstDepth} of " +
-                $"{settings.mapWidthMaxCells}x{settings.mapDepthMaxCells} across all 8 orientations; " +
-                $"lane offsets x[{string.Join(",", columnOffsets)}] y[{string.Join(",", rowOffsets)}]");
-            if (overflowing.Count > 0)
+                $"{profileId}: envelope worst case {worstAxis}x{worstAxis} of " +
+                $"{settings.mapWidthMaxCells}x{settings.mapDepthMaxCells} across all 8 orientations " +
+                $"at the widest lattice; minimum lane offsets x[{string.Join(",", columnOffsets)}] " +
+                $"y[{string.Join(",", rowOffsets)}]");
+            if (worstAxis > settings.mapWidthMaxCells || worstAxis > settings.mapDepthMaxCells)
             {
                 violations.Add(
-                    $"{profileId}: plan exceeds {settings.mapWidthMaxCells}x{settings.mapDepthMaxCells} in " +
-                    $"{overflowing.Count} of 8 orientations ({string.Join("; ", overflowing)}); " +
+                    $"{profileId}: plan reaches {worstAxis} cells against " +
+                    $"{settings.mapWidthMaxCells}x{settings.mapDepthMaxCells}; " +
                     "TryTransformCoarseEmbedding only tries 4 quarter-turns against one mirror choice, " +
                     "so an overflow here can reject the whole layout attempt");
             }
@@ -641,6 +626,66 @@ namespace DungeonLab.Editor
                 rowOffsets,
                 violations,
                 notes);
+        }
+
+        // The rubber sheet is invisible in the map, so the report says how much
+        // it can actually move — and where the ceiling comes from, since the
+        // envelope and the profile cap both bite before the authored range does.
+        private static void AppendRouteTopologyRubberSheetNotes(
+            DungeonRouteTopology topology,
+            string profileId,
+            DungeonPatternSpatialSettings spatial,
+            int[] columnOffsets,
+            int[] rowOffsets,
+            List<string> notes)
+        {
+            int columnSlack = LatticeSlackBudget(
+                topology.columnGaps,
+                spatial.horizontalPitchCells,
+                spatial);
+            int rowSlack = LatticeSlackBudget(topology.rowGaps, spatial.verticalPitchCells, spatial);
+            int columnHeadroom = LatticeAuthoredHeadroom(topology.columnGaps, spatial.horizontalPitchCells);
+            int rowHeadroom = LatticeAuthoredHeadroom(topology.rowGaps, spatial.verticalPitchCells);
+            notes.Add(
+                $"{profileId}: rubber sheet may add {columnSlack} cells across the columns and " +
+                $"{rowSlack} across the rows (authored headroom {columnHeadroom}/{rowHeadroom}, " +
+                $"profile cap {spatial.latticeSlackMaxCells}); " +
+                (columnSlack == 0 && rowSlack == 0
+                    ? "every lane is fixed, so this topology has one lattice"
+                    : $"lattices per axis are combinatorial in that slack"));
+            if (columnSlack < columnHeadroom || rowSlack < rowHeadroom)
+            {
+                notes.Add(
+                    $"{profileId}: the authored gap ranges are wider than the budget — the map envelope " +
+                    $"({columnOffsets[columnOffsets.Length - 1]}/{rowOffsets[rowOffsets.Length - 1]} " +
+                    $"minimum span) or latticeSlackMaxCells is the binding constraint, not the ranges");
+            }
+        }
+
+        // Every role a topology declares has to name a size class, or its rooms
+        // would silently render at the hall size. Reported per profile because
+        // the map is a profile field.
+        private static void AppendRouteTopologyRoleSizeClassRules(
+            DungeonRouteTopology topology,
+            string profileId,
+            DungeonGenerationSettings settings,
+            List<string> violations)
+        {
+            var reported = new HashSet<string>(StringComparer.Ordinal);
+            foreach (RouteTopologyNode node in topology.nodes)
+            {
+                if (!string.IsNullOrEmpty(node.recipeSlotId) || !reported.Add(node.role))
+                {
+                    continue;
+                }
+
+                if (!settings.TryResolveRoomSizeClass(node.role, out _))
+                {
+                    violations.Add(
+                        $"{profileId}: node '{node.key}' ({node.id}) declares role '{node.role}', which the " +
+                        "profile's roleSizeClasses map does not cover; add it there with a size class");
+                }
+            }
         }
 
         private static void AppendRouteTopologyRoomSizeRules(
@@ -1075,7 +1120,13 @@ namespace DungeonLab.Editor
                 .Append(topology.nodes[topology.bottomNode].key)
                 .Append(" @0u, top ")
                 .Append(topology.nodes[topology.topNode].key)
-                .Append(" @").Append(topology.nodes[topology.topNode].level).Append('u');
+                .Append(" @").Append(topology.nodes[topology.topNode].level).AppendLine("u");
+            metrics.Append("    selection  weight ")
+                .Append(topology.weight)
+                .Append(topology.weight == 0 ? " (disabled)" : string.Empty)
+                .Append(topology.spatialOverrides.DeclaresAnything
+                    ? ", declares per-topology spatial overrides"
+                    : ", takes the profile's spatial settings verbatim");
             return metrics.ToString();
         }
     }

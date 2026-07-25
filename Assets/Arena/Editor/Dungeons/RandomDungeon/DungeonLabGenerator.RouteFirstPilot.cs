@@ -8,7 +8,7 @@ namespace DungeonLab.Editor
     // compiles it directly into the existing DungeonLayout.
     internal sealed partial class DungeonLabGenerator
     {
-        private const string RoutePlannerVersion = "route-topologies-v10";
+        private const string RoutePlannerVersion = "route-topologies-v11";
         private const string RouteRhythmPolicyVersion = "route-rhythm-v1";
         private const string NamedVistaPromontoryPolicyVersion = "named-vista-promontory-v1";
         internal static string ActiveRecipePlannerVersion => RoutePlannerVersion;
@@ -21,26 +21,19 @@ namespace DungeonLab.Editor
         private const string RouteIntentInvalidFailureCode = "ROUTE_INTENT_INVALID";
         private const string RecipeSelectionFailureCode = "RECIPE_SELECTION";
         private const int LayoutAttemptLimit = 2;
-        // The "always 13 rooms" lock. Step 2 of the topology cutover turns this
-        // into a range; until then every topology file must declare 13 nodes.
-        private const int RouteNodeCount = 13;
+        // Room count is a property of the graph now, not a dial: a topology
+        // declares as many nodes as its shape needs. The bounds are sanity
+        // rails, not a target — the profile's denseFloorplanMinRooms is the
+        // binding floor in practice.
+        private const int MinRouteNodeCount = 9;
+        private const int MaxRouteNodeCount = 20;
         private const int RoomInflationAttemptLimit = 6;
         private const int MaxMainRouteRoleOccurrences = 2;
         private const int MinimumMainRouteNodesBetweenRecipeSlots = 2;
         private const int MaximumNamedVistaPromontoryCells = 4;
-        private const int SharedReturnRecipeNode = 12;
         private const string CompressionRecipeSlotId = "required-compression";
         private const string LandmarkRecipeSlotId = "required-landmark";
         private const string ReturnRecipeSlotId = "required-return";
-        // Step 1 keeps the historical residue mapping verbatim so the port cannot
-        // move output. Step 2 replaces it with a weighted draw over the registry.
-        private static readonly string[] SeedResidueTopologyIds =
-        {
-            ProcessionalPatternId,
-            AtriumRingPatternId,
-            ProcessionalPatternId,
-            TwinWingPatternId
-        };
 
         // Ephemeral diagnostic evidence for the most recent attempt.
         // It is never consumed by generation or carried into DungeonLayout.
@@ -51,7 +44,8 @@ namespace DungeonLab.Editor
         private static Vector2Int lastVistaTargetFacing;
         private static int lastLayoutAttempt;
         private static int lastMainEmbeddingAttempts;
-        private static int lastBranchSearchExpansions;
+        private static int lastLatticeSlackSpentCells;
+        private static int lastLatticeSlackAvailableCells;
         private static int lastRoomInflationAttempts;
         private static string lastRouteFailureCode = string.Empty;
 
@@ -140,15 +134,6 @@ namespace DungeonLab.Editor
                 cycleRank = traversalEdges.Length - (nodes.Length - 1);
                 cycleCoreNodeCount = CountCycleCoreNodes(adjacency);
             }
-
-            // The two ends of the branch structure, reported in node order. A
-            // general graph has no single attach/rejoin pair, so these are the
-            // first and last of every node with degree >= 3.
-            public int branchAttachNode =>
-                junctionNodes.Length > 0 ? junctionNodes[0] : bottomNode;
-
-            public int branchRejoinNode =>
-                junctionNodes.Length > 0 ? junctionNodes[junctionNodes.Length - 1] : topNode;
 
             public void ResolveRecipeSlots(
                 RecipeSlotIntent[] resolvedRecipeSlots,
@@ -328,7 +313,8 @@ namespace DungeonLab.Editor
             lastVistaTargetFacing = Vector2Int.zero;
             lastLayoutAttempt = 0;
             lastMainEmbeddingAttempts = 0;
-            lastBranchSearchExpansions = 0;
+            lastLatticeSlackSpentCells = 0;
+            lastLatticeSlackAvailableCells = 0;
             lastRoomInflationAttempts = 0;
             lastRouteFailureCode = string.Empty;
         }
@@ -725,15 +711,38 @@ namespace DungeonLab.Editor
             return selected.ToArray();
         }
 
+        // A weighted draw over the registry, keyed on the SEED ALONE — never on
+        // the layout attempt. A retry must not be able to change which dungeon
+        // it is retrying, and the derived-RNG doctrine wants the key to name
+        // exactly what the decision depends on. weight 0 disables a topology
+        // without renumbering anything.
         private static string SelectRouteTopologyId(int dungeonSeed)
         {
-            int residue = dungeonSeed % SeedResidueTopologyIds.Length;
-            if (residue < 0)
+            List<DungeonRouteTopology> candidates = AllRouteTopologiesByFileOrder();
+            int totalWeight = 0;
+            foreach (DungeonRouteTopology candidate in candidates)
             {
-                residue += SeedResidueTopologyIds.Length;
+                totalWeight += candidate.weight;
             }
 
-            return SeedResidueTopologyIds[residue];
+            if (totalWeight <= 0)
+            {
+                throw new InvalidOperationException(
+                    $"[ROUTE_TOPOLOGY] every topology under {RouteTopologyDirectory} has weight 0, " +
+                    "so no route can be selected");
+            }
+
+            int roll = DerivedRandom(dungeonSeed, 0, "topology", "select").Next(totalWeight);
+            foreach (DungeonRouteTopology candidate in candidates)
+            {
+                roll -= candidate.weight;
+                if (roll < 0)
+                {
+                    return candidate.id;
+                }
+            }
+
+            return candidates[candidates.Count - 1].id;
         }
 
         private static RouteIntent BuildSelectedRouteIntent(
@@ -763,12 +772,15 @@ namespace DungeonLab.Editor
                 return false;
             }
 
-            if (intent.nodes.Length != RouteNodeCount)
+            if (intent.nodes.Length < MinRouteNodeCount || intent.nodes.Length > MaxRouteNodeCount)
             {
-                rejectionReason = $"route intent had {intent.nodes.Length} nodes instead of {RouteNodeCount}";
+                rejectionReason =
+                    $"route intent had {intent.nodes.Length} nodes, outside the accepted " +
+                    $"{MinRouteNodeCount}..{MaxRouteNodeCount}";
                 return false;
             }
 
+            DungeonGenerationSettings activeSettings = CurrentGenerationSettings.Validated();
             var ids = new HashSet<string>(StringComparer.Ordinal);
             int recipeSlotCount = 0;
             foreach (RouteNodeIntent node in intent.nodes)
@@ -776,6 +788,18 @@ namespace DungeonLab.Editor
                 if (string.IsNullOrEmpty(node.id) || !ids.Add(node.id))
                 {
                     rejectionReason = $"route intent contained a missing or duplicate node id '{node.id}'";
+                    return false;
+                }
+
+                // A role with no size class would silently render as a hall.
+                // Catching it here means a new role name is an authoring error
+                // with a node in the message, not a shape nobody ordered.
+                if (!node.HasRecipeSlot &&
+                    !activeSettings.TryResolveRoomSizeClass(node.role, out _))
+                {
+                    rejectionReason =
+                        $"route node '{node.id}' declares role '{node.role}', which profile " +
+                        $"'{activeSettings.profileName}' does not map to a room size class";
                     return false;
                 }
 
@@ -841,11 +865,17 @@ namespace DungeonLab.Editor
                     return false;
                 }
 
+                // Signed +-4/+-8: an author writes an edge in travel order and
+                // stops thinking about it. Every downstream consumer already
+                // compares the directed rise against this same signed value or
+                // takes its absolute value, so a descending edge is a rise of
+                // -4 rather than a rule.
+                int riseMagnitude = Mathf.Abs(edge.requiredRiseLevels);
                 if (edge.transitionKind == RouteTransitionKind.LevelCorridor &&
-                        edge.requiredRiseLevels != 0 ||
+                        riseMagnitude != 0 ||
                     edge.transitionKind != RouteTransitionKind.LevelCorridor &&
-                    edge.requiredRiseLevels != MajorRiseLevels &&
-                    edge.requiredRiseLevels != DoubleMajorRiseLevels)
+                    riseMagnitude != MajorRiseLevels &&
+                    riseMagnitude != DoubleMajorRiseLevels)
                 {
                     rejectionReason = $"route edge '{edge.id}' had an incompatible elevation/transition requirement";
                     return false;
@@ -1055,21 +1085,6 @@ namespace DungeonLab.Editor
             return cycleNodes;
         }
 
-        private static DungeonPatternSpatialSettings BaselinePatternSpatialSettings(
-            int horizontalPitchCells,
-            int verticalPitchCells)
-        {
-            return new DungeonPatternSpatialSettings(
-                horizontalPitchCells,
-                verticalPitchCells,
-                roomEnvelopeRadiusCells: 4,
-                neighborBiasStrengthCells: 0,
-                new DungeonTierSeamAdjacencySettings(requestedCount: 0, maximumRiseLevels: 8),
-                BaselineRoomSizeRangeForRole("arrival"),
-                BaselineRoomSizeRangeForRole("processional-hall"),
-                BaselineRoomSizeRangeForRole("connector")).Validated();
-        }
-
         private static RectInt RoomEnvelope(
             Vector2Int center,
             DungeonPatternSpatialSettings spatial)
@@ -1095,17 +1110,32 @@ namespace DungeonLab.Editor
         {
             DungeonRouteTopology topology = intent.topology;
             nodeCenters = Array.Empty<Vector2Int>();
-            failureCode = topology.embeddingFailureCode;
+            failureCode = RouteEmbeddingFailureCode;
             rejectionReason = string.Empty;
-            lastBranchSearchExpansions = topology.legacyBranchSearchExpansions;
             int[] columnOffsets = ResolveLatticeLaneOffsets(
-                topology.columnGapCells,
+                dungeonSeed,
+                layoutAttempt,
+                topology,
+                topology.columnGaps,
                 spatial.horizontalPitchCells,
-                topology.latticeColumnCount);
+                topology.latticeColumnCount,
+                spatial,
+                "lattice-x",
+                out int columnSlackSpent,
+                out int columnSlackAvailable);
             int[] rowOffsets = ResolveLatticeLaneOffsets(
-                topology.rowGapCells,
+                dungeonSeed,
+                layoutAttempt,
+                topology,
+                topology.rowGaps,
                 spatial.verticalPitchCells,
-                topology.latticeRowCount);
+                topology.latticeRowCount,
+                spatial,
+                "lattice-y",
+                out int rowSlackSpent,
+                out int rowSlackAvailable);
+            lastLatticeSlackSpentCells = columnSlackSpent + rowSlackSpent;
+            lastLatticeSlackAvailableCells = columnSlackAvailable + rowSlackAvailable;
             var embedding = new Vector2Int[topology.nodes.Length];
             for (int node = 0; node < embedding.Length; node++)
             {
@@ -1116,7 +1146,7 @@ namespace DungeonLab.Editor
             return TryTransformCoarseEmbedding(
                 dungeonSeed,
                 layoutAttempt,
-                topology.orientationStreamId,
+                topology.id,
                 embedding,
                 spatial,
                 out nodeCenters,
@@ -1671,30 +1701,40 @@ namespace DungeonLab.Editor
             }
         }
 
+        // Role -> size class is authored in the profile, so a topology may invent
+        // a role name without it silently becoming a hall. An unmapped role is
+        // rejected by TryValidateRouteIntent long before this runs; reaching it
+        // here means the map and the graph disagree, which is a bug, not a shape.
+        private static DungeonRoomSizeClass RequireRoomSizeClass(string role)
+        {
+            if (CurrentGenerationSettings.Validated().TryResolveRoomSizeClass(
+                    role,
+                    out DungeonRoomSizeClass sizeClass))
+            {
+                return sizeClass;
+            }
+
+            throw new InvalidOperationException(
+                $"[ROUTE_ROOM_SIZE] role '{role}' has no size class in the active generation profile");
+        }
+
         private static DungeonRoomSizeRange RoomSizeRangeForRole(
             DungeonPatternSpatialSettings spatial,
             string role)
         {
-            switch (role)
-            {
-                case "arrival":
-                case "culmination":
-                    return spatial.terminalRoomSize;
-                case "connector":
-                    return spatial.connectorRoomSize;
-                default:
-                    return spatial.hallRoomSize;
-            }
+            return spatial.RoomSizeForClass(RequireRoomSizeClass(role));
         }
 
+        // The spacious baseline, kept as the stair-clearance cap in
+        // ResolveGenericRoomDimensions. It is a fixed table on purpose: it is a
+        // known-sufficient face position, not a tunable.
         private static DungeonRoomSizeRange BaselineRoomSizeRangeForRole(string role)
         {
-            switch (role)
+            switch (RequireRoomSizeClass(role))
             {
-                case "arrival":
-                case "culmination":
+                case DungeonRoomSizeClass.Terminal:
                     return new DungeonRoomSizeRange(5, 5, 7, 7);
-                case "connector":
+                case DungeonRoomSizeClass.Connector:
                     return new DungeonRoomSizeRange(4, 5, 5, 5);
                 default:
                     return new DungeonRoomSizeRange(5, 5, 5, 6);
@@ -1761,8 +1801,12 @@ namespace DungeonLab.Editor
                     int xMax = direction.x > 0
                         ? center.x + spatial.roomEnvelopeRadiusCells + 1
                         : dominant.xMin;
-                    if (string.Equals(intent.patternId, ProcessionalPatternId, StringComparison.Ordinal) &&
-                        Mathf.Abs(delta.x) < spatial.roomEnvelopeRadiusCells * 2 + 1)
+                    // Two overlook rooms closer than an envelope span would grow
+                    // their appendages into each other, so they meet at the
+                    // shared boundary instead. This used to be gated on the
+                    // processional pattern id; the distance test is the actual
+                    // condition, and it holds for any topology.
+                    if (Mathf.Abs(delta.x) < spatial.roomEnvelopeRadiusCells * 2 + 1)
                     {
                         int sharedBoundary = Mathf.Min(center.x, nodeCenters[other].x) +
                             (Mathf.Abs(delta.x) + 1) / 2;
@@ -1786,8 +1830,7 @@ namespace DungeonLab.Editor
                     int yMax = direction.y > 0
                         ? center.y + spatial.roomEnvelopeRadiusCells + 1
                         : dominant.yMin;
-                    if (string.Equals(intent.patternId, ProcessionalPatternId, StringComparison.Ordinal) &&
-                        Mathf.Abs(delta.y) < spatial.roomEnvelopeRadiusCells * 2 + 1)
+                    if (Mathf.Abs(delta.y) < spatial.roomEnvelopeRadiusCells * 2 + 1)
                     {
                         int sharedBoundary = Mathf.Min(center.y, nodeCenters[other].y) +
                             (Mathf.Abs(delta.y) + 1) / 2;

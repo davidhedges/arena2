@@ -19,14 +19,64 @@ namespace DungeonLab.Editor
     {
         private const string RouteTopologyDirectory =
             "Assets/Arena/Editor/Dungeons/RandomDungeon/Topologies";
-        private const string DefaultRouteEmbeddingFailureCode = "ROUTE_MAIN_EMBEDDING_EXHAUSTED";
+        private const string RouteEmbeddingFailureCode = "ROUTE_MAIN_EMBEDDING_EXHAUSTED";
         private const string RouteForwardOrientationToken = "route-forward";
         private const string VistaOrientationToken = "vista-source-to-target";
-        private const string BaselineSpatialToken = "baseline";
-        private const string ProfileSpatialToken = "profile";
 
         private static Dictionary<string, DungeonRouteTopology> routeTopologyCache;
         private static string routeTopologyCacheSignature = string.Empty;
+
+        // One lattice lane gap. A gap that names no minimum takes the profile's
+        // pitch, so a topology only has to say what it wants to be different.
+        // minCells == maxCells is a fixed, authored gap: the rubber sheet cannot
+        // move it and draws no random number for it.
+        private readonly struct RouteLaneGap
+        {
+            public readonly int minCells;
+            public readonly int maxCells;
+
+            public RouteLaneGap(int minCells, int maxCells)
+            {
+                this.minCells = minCells;
+                this.maxCells = maxCells;
+            }
+
+            public int ResolvedMinimum(int pitchCells)
+            {
+                return minCells >= 0 ? minCells : pitchCells;
+            }
+
+            public int ResolvedMaximum(int pitchCells)
+            {
+                int minimum = ResolvedMinimum(pitchCells);
+                return maxCells >= 0 ? Mathf.Max(minimum, maxCells) : minimum;
+            }
+        }
+
+        // Per-topology spatial overrides. Every field is "unset" by default and
+        // falls back to the profile, so there is one code path and no second
+        // hardcoded settings table to forget to update.
+        private sealed class RouteTopologySpatialOverrides
+        {
+            public int roomEnvelopeRadiusCells = -1;
+            public int neighborBiasStrengthCells = -1;
+            public int latticeSlackMaxCells = -1;
+            public int tierSeamCount = -1;
+            public int tierSeamMaxRiseLevels = -1;
+            public DungeonRoomSizeRange? terminalRoomSize;
+            public DungeonRoomSizeRange? hallRoomSize;
+            public DungeonRoomSizeRange? connectorRoomSize;
+
+            public bool DeclaresAnything =>
+                roomEnvelopeRadiusCells >= 0 ||
+                neighborBiasStrengthCells >= 0 ||
+                latticeSlackMaxCells >= 0 ||
+                tierSeamCount >= 0 ||
+                tierSeamMaxRiseLevels >= 0 ||
+                terminalRoomSize.HasValue ||
+                hallRoomSize.HasValue ||
+                connectorRoomSize.HasValue;
+        }
 
         private sealed class RouteTopologyNode
         {
@@ -123,17 +173,13 @@ namespace DungeonLab.Editor
             public readonly int bottomNode;
             public readonly int topNode;
             public readonly bool allowGenericRoomWings;
-            public readonly bool useProfileSpatial;
-            public readonly int baselineColumnPitchCells;
-            public readonly int baselineRowPitchCells;
-            // Null means "uniform lane gaps at the resolved spatial pitch".
-            public readonly int[] columnGapCells;
-            public readonly int[] rowGapCells;
+            public readonly int weight;
+            public readonly RouteTopologySpatialOverrides spatialOverrides;
+            // One entry per gap between adjacent lanes, so length == lanes - 1.
+            public readonly RouteLaneGap[] columnGaps;
+            public readonly RouteLaneGap[] rowGaps;
             public readonly int latticeColumnCount;
             public readonly int latticeRowCount;
-            public readonly string orientationStreamId;
-            public readonly string embeddingFailureCode;
-            public readonly int legacyBranchSearchExpansions;
 
             public DungeonRouteTopology(
                 string id,
@@ -151,16 +197,12 @@ namespace DungeonLab.Editor
                 int bottomNode,
                 int topNode,
                 bool allowGenericRoomWings,
-                bool useProfileSpatial,
-                int baselineColumnPitchCells,
-                int baselineRowPitchCells,
-                int[] columnGapCells,
-                int[] rowGapCells,
+                int weight,
+                RouteTopologySpatialOverrides spatialOverrides,
+                RouteLaneGap[] columnGaps,
+                RouteLaneGap[] rowGaps,
                 int latticeColumnCount,
-                int latticeRowCount,
-                string orientationStreamId,
-                string embeddingFailureCode,
-                int legacyBranchSearchExpansions)
+                int latticeRowCount)
             {
                 this.id = id;
                 this.displayName = displayName;
@@ -177,16 +219,12 @@ namespace DungeonLab.Editor
                 this.bottomNode = bottomNode;
                 this.topNode = topNode;
                 this.allowGenericRoomWings = allowGenericRoomWings;
-                this.useProfileSpatial = useProfileSpatial;
-                this.baselineColumnPitchCells = baselineColumnPitchCells;
-                this.baselineRowPitchCells = baselineRowPitchCells;
-                this.columnGapCells = columnGapCells;
-                this.rowGapCells = rowGapCells;
+                this.weight = weight;
+                this.spatialOverrides = spatialOverrides;
+                this.columnGaps = columnGaps;
+                this.rowGaps = rowGaps;
                 this.latticeColumnCount = latticeColumnCount;
                 this.latticeRowCount = latticeRowCount;
-                this.orientationStreamId = orientationStreamId;
-                this.embeddingFailureCode = embeddingFailureCode;
-                this.legacyBranchSearchExpansions = legacyBranchSearchExpansions;
             }
 
             public bool TryGetEdgeIndex(string edgeId, out int index)
@@ -433,16 +471,28 @@ namespace DungeonLab.Editor
                     columnCount,
                     rowCount,
                     errors,
-                    out bool useProfileSpatial,
-                    out int baselineColumnPitchCells,
-                    out int baselineRowPitchCells,
-                    out int[] columnGapCells,
-                    out int[] rowGapCells))
+                    out RouteTopologySpatialOverrides spatialOverrides,
+                    out RouteLaneGap[] columnGaps,
+                    out RouteLaneGap[] rowGaps))
             {
                 return false;
             }
 
-            JObject legacy = root["legacy"] as JObject ?? new JObject();
+            int weight = root.Value<int?>("weight") ?? 1;
+            if (weight < 0)
+            {
+                errors.Add($"'weight' is {weight}; it must be 0 (disabled) or greater");
+                return false;
+            }
+
+            if (root["legacy"] != null)
+            {
+                errors.Add(
+                    "'legacy' was the step 1 hash-compatibility block and no longer exists; " +
+                    "delete it (orientationStreamId, embeddingFailureCode, branchSearchExpansions)");
+                return false;
+            }
+
             topology = new DungeonRouteTopology(
                 id,
                 displayName,
@@ -459,16 +509,12 @@ namespace DungeonLab.Editor
                 bottomNode,
                 topNode,
                 root.Value<bool?>("allowGenericRoomWings") ?? false,
-                useProfileSpatial,
-                baselineColumnPitchCells,
-                baselineRowPitchCells,
-                columnGapCells,
-                rowGapCells,
+                weight,
+                spatialOverrides,
+                columnGaps,
+                rowGaps,
                 columnCount,
-                rowCount,
-                legacy.Value<string>("orientationStreamId") ?? id,
-                legacy.Value<string>("embeddingFailureCode") ?? DefaultRouteEmbeddingFailureCode,
-                legacy.Value<int?>("branchSearchExpansions") ?? 0);
+                rowCount);
             return errors.Count == 0;
         }
 
@@ -663,9 +709,11 @@ namespace DungeonLab.Editor
             var endpointPairs = new HashSet<string>(StringComparer.Ordinal);
             for (int index = 0; index < declared.Count; index++)
             {
-                if (!(declared[index] is JArray fields) || fields.Count < 3)
+                if (!(declared[index] is JArray fields) || fields.Count != 3)
                 {
-                    errors.Add($"edge {index} must be [from, to, kind] with an optional legacy id");
+                    errors.Add(
+                        $"edge {index} must be exactly [from, to, kind]; the id derives as " +
+                        "\"{from}-{to}\" and the rise derives from the two node levels");
                     return false;
                 }
 
@@ -694,12 +742,10 @@ namespace DungeonLab.Editor
                     return false;
                 }
 
-                string edgeId = fields.Count > 3
-                    ? fields[3].Value<string>() ?? string.Empty
-                    : $"{fromKey}-{toKey}";
-                if (string.IsNullOrEmpty(edgeId) || !edgeIds.Add(edgeId))
+                string edgeId = $"{fromKey}-{toKey}";
+                if (!edgeIds.Add(edgeId))
                 {
-                    errors.Add($"edge '{fromKey}-{toKey}' has a missing or duplicate id '{edgeId}'");
+                    errors.Add($"edge '{fromKey}-{toKey}' has a duplicate derived id '{edgeId}'");
                     return false;
                 }
 
@@ -917,33 +963,21 @@ namespace DungeonLab.Editor
             int columnCount,
             int rowCount,
             List<string> errors,
-            out bool useProfileSpatial,
-            out int baselineColumnPitchCells,
-            out int baselineRowPitchCells,
-            out int[] columnGapCells,
-            out int[] rowGapCells)
+            out RouteTopologySpatialOverrides overrides,
+            out RouteLaneGap[] columnGaps,
+            out RouteLaneGap[] rowGaps)
         {
-            useProfileSpatial = false;
-            baselineColumnPitchCells = 1;
-            baselineRowPitchCells = 1;
-            columnGapCells = null;
-            rowGapCells = null;
-            if (declared == null)
-            {
-                errors.Add("'spatial' is missing");
-                return false;
-            }
-
-            string settingsToken = declared.Value<string>("settings") ?? string.Empty;
-            if (string.Equals(settingsToken, ProfileSpatialToken, StringComparison.Ordinal))
-            {
-                useProfileSpatial = true;
-            }
-            else if (!string.Equals(settingsToken, BaselineSpatialToken, StringComparison.Ordinal))
+            overrides = new RouteTopologySpatialOverrides();
+            columnGaps = Array.Empty<RouteLaneGap>();
+            rowGaps = Array.Empty<RouteLaneGap>();
+            // 'spatial' is optional now: a topology that wants the profile
+            // verbatim, at the profile's own pitch, declares nothing.
+            declared = declared ?? new JObject();
+            if (declared["settings"] != null)
             {
                 errors.Add(
-                    $"'spatial.settings' is '{settingsToken}'; expected " +
-                    $"'{ProfileSpatialToken}' or '{BaselineSpatialToken}'");
+                    "'spatial.settings' was the step 1 profile/baseline fork and no longer exists; " +
+                    "the profile is always the default, and a topology overrides only what it needs");
                 return false;
             }
 
@@ -951,121 +985,430 @@ namespace DungeonLab.Editor
                     declared["columnGapCells"],
                     "columnGapCells",
                     columnCount,
-                    useProfileSpatial,
                     errors,
-                    out baselineColumnPitchCells,
-                    out columnGapCells) ||
+                    out columnGaps) ||
                 !TryParseRouteTopologyLaneGaps(
                     declared["rowGapCells"],
                     "rowGapCells",
                     rowCount,
-                    useProfileSpatial,
                     errors,
-                    out baselineRowPitchCells,
-                    out rowGapCells))
+                    out rowGaps))
             {
+                return false;
+            }
+
+            return TryParseRouteTopologySpatialOverride(
+                       declared,
+                       "roomEnvelopeRadiusCells",
+                       4,
+                       errors,
+                       out overrides.roomEnvelopeRadiusCells) &&
+                   TryParseRouteTopologySpatialOverride(
+                       declared,
+                       "neighborBiasStrengthCells",
+                       0,
+                       errors,
+                       out overrides.neighborBiasStrengthCells) &&
+                   TryParseRouteTopologySpatialOverride(
+                       declared,
+                       "latticeSlackMaxCells",
+                       0,
+                       errors,
+                       out overrides.latticeSlackMaxCells) &&
+                   TryParseRouteTopologySpatialOverride(
+                       declared,
+                       "tierSeamCount",
+                       0,
+                       errors,
+                       out overrides.tierSeamCount) &&
+                   TryParseRouteTopologySpatialOverride(
+                       declared,
+                       "tierSeamMaxRiseLevels",
+                       4,
+                       errors,
+                       out overrides.tierSeamMaxRiseLevels) &&
+                   TryParseRouteTopologyRoomSizes(declared["roomSizes"], errors, overrides);
+        }
+
+        private static bool TryParseRouteTopologySpatialOverride(
+            JObject declared,
+            string field,
+            int minimum,
+            List<string> errors,
+            out int value)
+        {
+            value = -1;
+            JToken token = declared[field];
+            if (token == null || token.Type == JTokenType.Null)
+            {
+                return true;
+            }
+
+            if (token.Type != JTokenType.Integer)
+            {
+                errors.Add($"'spatial.{field}' must be a whole number");
+                return false;
+            }
+
+            value = token.Value<int>();
+            if (value < minimum)
+            {
+                errors.Add($"'spatial.{field}' must be at least {minimum} (declared {value})");
                 return false;
             }
 
             return true;
         }
 
-        private static bool TryParseRouteTopologyLaneGaps(
+        private static bool TryParseRouteTopologyRoomSizes(
             JToken declared,
-            string field,
-            int laneCount,
-            bool useProfileSpatial,
             List<string> errors,
-            out int uniformPitchCells,
-            out int[] perLaneGapCells)
+            RouteTopologySpatialOverrides overrides)
         {
-            uniformPitchCells = 1;
-            perLaneGapCells = null;
             if (declared == null || declared.Type == JTokenType.Null)
             {
                 return true;
             }
 
-            if (useProfileSpatial)
+            if (!(declared is JObject sizes))
             {
-                errors.Add(
-                    $"'spatial.{field}' cannot be declared alongside 'settings: {ProfileSpatialToken}'; " +
-                    "the profile's pitch is the lane gap");
+                errors.Add("'spatial.roomSizes' must be an object keyed by size class");
                 return false;
             }
 
-            if (declared.Type == JTokenType.Integer)
+            foreach (JProperty property in sizes.Properties())
             {
-                uniformPitchCells = declared.Value<int>();
-                if (uniformPitchCells < 1)
+                if (!(property.Value is JArray range) || range.Count != 4)
                 {
-                    errors.Add($"'spatial.{field}' must be at least 1 (declared {uniformPitchCells})");
+                    errors.Add(
+                        $"'spatial.roomSizes.{property.Name}' must be " +
+                        "[minWidth, maxWidth, minDepth, maxDepth]");
                     return false;
+                }
+
+                var parsed = new DungeonRoomSizeRange(
+                    range[0].Value<int>(),
+                    range[1].Value<int>(),
+                    range[2].Value<int>(),
+                    range[3].Value<int>());
+                switch (property.Name)
+                {
+                    case "terminal":
+                        overrides.terminalRoomSize = parsed;
+                        break;
+                    case "hall":
+                        overrides.hallRoomSize = parsed;
+                        break;
+                    case "connector":
+                        overrides.connectorRoomSize = parsed;
+                        break;
+                    default:
+                        errors.Add(
+                            $"'spatial.roomSizes' declared unknown size class '{property.Name}'; " +
+                            "expected terminal, hall or connector");
+                        return false;
+                }
+            }
+
+            return true;
+        }
+
+        // A lane gap is a number (fixed), an object {min?, max?} (a rubber-sheet
+        // range, either bound falling back to the profile pitch), or an array of
+        // one such entry per gap between adjacent lanes.
+        private static bool TryParseRouteTopologyLaneGaps(
+            JToken declared,
+            string field,
+            int laneCount,
+            List<string> errors,
+            out RouteLaneGap[] gaps)
+        {
+            int gapCount = Mathf.Max(0, laneCount - 1);
+            gaps = new RouteLaneGap[gapCount];
+            for (int index = 0; index < gapCount; index++)
+            {
+                // Unset on both bounds means "the profile's pitch, fixed".
+                gaps[index] = new RouteLaneGap(-1, -1);
+            }
+
+            if (declared == null || declared.Type == JTokenType.Null)
+            {
+                return true;
+            }
+
+            if (declared is JArray perLane)
+            {
+                if (perLane.Count != gapCount)
+                {
+                    errors.Add(
+                        $"'spatial.{field}' declared {perLane.Count} gaps for {laneCount} lanes; " +
+                        $"expected {gapCount}");
+                    return false;
+                }
+
+                for (int index = 0; index < gapCount; index++)
+                {
+                    if (!TryParseRouteTopologyLaneGap(
+                            perLane[index],
+                            $"{field}[{index}]",
+                            errors,
+                            out gaps[index]))
+                    {
+                        return false;
+                    }
                 }
 
                 return true;
             }
 
-            if (!(declared is JArray gaps))
+            if (!TryParseRouteTopologyLaneGap(declared, field, errors, out RouteLaneGap uniform))
             {
-                errors.Add($"'spatial.{field}' must be a number or an array of numbers");
                 return false;
             }
 
-            if (gaps.Count != laneCount - 1)
+            for (int index = 0; index < gapCount; index++)
             {
-                errors.Add(
-                    $"'spatial.{field}' declared {gaps.Count} gaps for {laneCount} lanes; expected {laneCount - 1}");
-                return false;
+                gaps[index] = uniform;
             }
 
-            var parsed = new int[gaps.Count];
-            for (int index = 0; index < gaps.Count; index++)
+            return true;
+        }
+
+        private static bool TryParseRouteTopologyLaneGap(
+            JToken declared,
+            string field,
+            List<string> errors,
+            out RouteLaneGap gap)
+        {
+            gap = new RouteLaneGap(-1, -1);
+            if (declared.Type == JTokenType.Integer)
             {
-                parsed[index] = gaps[index].Value<int>();
-                if (parsed[index] < 1)
+                int fixedCells = declared.Value<int>();
+                if (fixedCells < 1)
                 {
-                    errors.Add($"'spatial.{field}[{index}]' must be at least 1 (declared {parsed[index]})");
+                    errors.Add($"'spatial.{field}' must be at least 1 (declared {fixedCells})");
                     return false;
                 }
+
+                gap = new RouteLaneGap(fixedCells, fixedCells);
+                return true;
             }
 
-            perLaneGapCells = parsed;
+            if (!(declared is JObject range))
+            {
+                errors.Add(
+                    $"'spatial.{field}' must be a number, an object {{ min, max }}, or an array of those");
+                return false;
+            }
+
+            int minimum = range.Value<int?>("min") ?? -1;
+            int maximum = range.Value<int?>("max") ?? -1;
+            if (minimum == 0 || maximum == 0 || minimum < -1 || maximum < -1)
+            {
+                errors.Add($"'spatial.{field}' bounds must be at least 1");
+                return false;
+            }
+
+            if (minimum > 0 && maximum > 0 && maximum < minimum)
+            {
+                errors.Add($"'spatial.{field}' has max {maximum} below min {minimum}");
+                return false;
+            }
+
+            gap = new RouteLaneGap(minimum, maximum);
             return true;
         }
 
         // ---- lane offsets --------------------------------------------------
 
         // All nodes in one lattice lane share a world offset, which is what keeps
-        // every edge cardinally aligned by construction.
+        // every edge cardinally aligned by construction — the one invariant a
+        // general graph embedder would have to solve for.
+        //
+        // The rubber sheet spends slack on top of that: each lane's authored
+        // minimum is the floor, its authored maximum the ceiling, and the total
+        // spend is capped by the map envelope and by the profile's
+        // latticeSlackMaxCells. A topology whose gaps are all fixed draws no
+        // random number at all.
         private static int[] ResolveLatticeLaneOffsets(
-            int[] perLaneGapCells,
-            int uniformGapCells,
-            int laneCount)
+            int dungeonSeed,
+            int layoutAttempt,
+            DungeonRouteTopology topology,
+            RouteLaneGap[] gaps,
+            int pitchCells,
+            int laneCount,
+            DungeonPatternSpatialSettings spatial,
+            string streamPurpose,
+            out int spentSlackCells,
+            out int availableSlackCells)
         {
             var offsets = new int[laneCount];
+            var minimums = new int[gaps.Length];
+            var headroom = new int[gaps.Length];
+            int baseSpan = 0;
+            int totalHeadroom = 0;
+            for (int gap = 0; gap < gaps.Length; gap++)
+            {
+                minimums[gap] = gaps[gap].ResolvedMinimum(pitchCells);
+                headroom[gap] = gaps[gap].ResolvedMaximum(pitchCells) - minimums[gap];
+                baseSpan += minimums[gap];
+                totalHeadroom += headroom[gap];
+            }
+
+            availableSlackCells = ResolveLatticeSlackBudget(baseSpan, totalHeadroom, spatial);
+            spentSlackCells = 0;
+            var extra = new int[gaps.Length];
+            if (availableSlackCells > 0)
+            {
+                System.Random random = DerivedRandom(
+                    dungeonSeed,
+                    layoutAttempt,
+                    topology.id,
+                    streamPurpose);
+                var eligible = new List<int>(gaps.Length);
+                for (int gap = 0; gap < gaps.Length; gap++)
+                {
+                    if (headroom[gap] > 0)
+                    {
+                        eligible.Add(gap);
+                    }
+                }
+
+                while (spentSlackCells < availableSlackCells && eligible.Count > 0)
+                {
+                    int pick = random.Next(eligible.Count);
+                    int gap = eligible[pick];
+                    extra[gap]++;
+                    spentSlackCells++;
+                    if (extra[gap] >= headroom[gap])
+                    {
+                        eligible.RemoveAt(pick);
+                    }
+                }
+            }
+
             for (int lane = 1; lane < laneCount; lane++)
             {
-                int gap = perLaneGapCells != null && perLaneGapCells.Length >= lane
-                    ? perLaneGapCells[lane - 1]
-                    : uniformGapCells;
-                offsets[lane] = offsets[lane - 1] + gap;
+                offsets[lane] = offsets[lane - 1] + minimums[lane - 1] + extra[lane - 1];
             }
 
             return offsets;
         }
 
+        // The lattice with every lane at its authored minimum. This is the
+        // tightest the rubber sheet can make a topology, and therefore the case
+        // every author-time rule is checked against.
+        private static int[] MinimumLatticeLaneOffsets(
+            RouteLaneGap[] gaps,
+            int pitchCells,
+            int laneCount)
+        {
+            var offsets = new int[laneCount];
+            for (int lane = 1; lane < laneCount; lane++)
+            {
+                offsets[lane] = offsets[lane - 1] + gaps[lane - 1].ResolvedMinimum(pitchCells);
+            }
+
+            return offsets;
+        }
+
+        private static int LatticeAuthoredHeadroom(RouteLaneGap[] gaps, int pitchCells)
+        {
+            int headroom = 0;
+            foreach (RouteLaneGap gap in gaps)
+            {
+                headroom += gap.ResolvedMaximum(pitchCells) - gap.ResolvedMinimum(pitchCells);
+            }
+
+            return headroom;
+        }
+
+        private static int LatticeSlackBudget(
+            RouteLaneGap[] gaps,
+            int pitchCells,
+            DungeonPatternSpatialSettings spatial)
+        {
+            int baseSpan = 0;
+            foreach (RouteLaneGap gap in gaps)
+            {
+                baseSpan += gap.ResolvedMinimum(pitchCells);
+            }
+
+            return ResolveLatticeSlackBudget(
+                baseSpan,
+                LatticeAuthoredHeadroom(gaps, pitchCells),
+                spatial);
+        }
+
+        // Slack is bounded three ways: what the authored ranges allow, what the
+        // map envelope has room for in EVERY orientation (a quarter turn swaps
+        // the axes, so each axis is held to the smaller of the two maxima), and
+        // the profile's own cap. The envelope term is what keeps a widened
+        // lattice from being rejected by TryTransformCoarseEmbedding instead of
+        // simply being narrower.
+        private static int ResolveLatticeSlackBudget(
+            int baseSpanCells,
+            int totalHeadroomCells,
+            DungeonPatternSpatialSettings spatial)
+        {
+            DungeonGenerationSettings settings = CurrentGenerationSettings.Validated();
+            int axisMaxCells = Mathf.Min(settings.mapWidthMaxCells, settings.mapDepthMaxCells);
+            int envelopeSlack = axisMaxCells -
+                (baseSpanCells + spatial.roomEnvelopeRadiusCells * 2 + 1);
+            return Mathf.Max(
+                0,
+                Mathf.Min(totalHeadroomCells, Mathf.Min(envelopeSlack, spatial.latticeSlackMaxCells)));
+        }
+
+        // One profile default plus per-topology overrides. There is no second
+        // settings table, so a widened profile cannot reach only some topologies.
         private static DungeonPatternSpatialSettings ResolveTopologySpatialSettings(
             DungeonRouteTopology topology)
         {
-            if (topology.useProfileSpatial)
+            DungeonPatternSpatialSettings spatial =
+                CurrentGenerationSettings.Validated().processionalSpatial;
+            RouteTopologySpatialOverrides overrides = topology.spatialOverrides;
+            if (overrides.roomEnvelopeRadiusCells >= 0)
             {
-                return CurrentGenerationSettings.Validated().processionalSpatial;
+                spatial.roomEnvelopeRadiusCells = overrides.roomEnvelopeRadiusCells;
             }
 
-            return BaselinePatternSpatialSettings(
-                topology.baselineColumnPitchCells,
-                topology.baselineRowPitchCells);
+            if (overrides.neighborBiasStrengthCells >= 0)
+            {
+                spatial.neighborBiasStrengthCells = overrides.neighborBiasStrengthCells;
+            }
+
+            if (overrides.latticeSlackMaxCells >= 0)
+            {
+                spatial.latticeSlackMaxCells = overrides.latticeSlackMaxCells;
+            }
+
+            if (overrides.tierSeamCount >= 0)
+            {
+                spatial.tierSeamAdjacency.requestedCount = overrides.tierSeamCount;
+            }
+
+            if (overrides.tierSeamMaxRiseLevels >= 0)
+            {
+                spatial.tierSeamAdjacency.maximumRiseLevels = overrides.tierSeamMaxRiseLevels;
+            }
+
+            if (overrides.terminalRoomSize.HasValue)
+            {
+                spatial.terminalRoomSize = overrides.terminalRoomSize.Value;
+            }
+
+            if (overrides.hallRoomSize.HasValue)
+            {
+                spatial.hallRoomSize = overrides.hallRoomSize.Value;
+            }
+
+            if (overrides.connectorRoomSize.HasValue)
+            {
+                spatial.connectorRoomSize = overrides.connectorRoomSize.Value;
+            }
+
+            return spatial.Validated();
         }
     }
 }

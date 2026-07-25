@@ -9,20 +9,20 @@ namespace Arena.Tests.Editor
 {
     public sealed class DungeonLabTwinWingTests
     {
-        private const int TwinWingSeed = 2026072103;
         private static readonly Type GeneratorType = AppDomain.CurrentDomain
             .Load("Assembly-CSharp-Editor")
             .GetType("DungeonLab.Editor.DungeonLabGenerator", throwOnError: true)!;
 
         [Test]
-        public void Selector_UsesStableModuloFourAndPreservesExistingPlannerVersions()
+        public void Selector_DrawsThisTopologyByWeightRatherThanBySeedResidue()
         {
             Dictionary<string, string> snapshot = TwinWingIntentSnapshot();
 
-            Assert.That(snapshot["selector.residue0Pattern"], Is.EqualTo("processional-spine"));
-            Assert.That(snapshot["selector.residue1Pattern"], Is.EqualTo("atrium-ring"));
-            Assert.That(snapshot["selector.residue2Pattern"], Is.EqualTo("processional-spine"));
-            Assert.That(snapshot["selector.residue3Pattern"], Is.EqualTo("twin-wing-keep"));
+            Assert.That(snapshot["selector.weights"], Does.Contain("twin-wing-keep:1"));
+            Assert.That(
+                snapshot["selector.distribution"],
+                Does.Not.Contain("twin-wing-keep:0"),
+                snapshot["selector.distribution"]);
         }
 
         [Test]
@@ -37,11 +37,9 @@ namespace Arena.Tests.Editor
             Assert.That(snapshot["graph.branchNodeCount"], Is.EqualTo("6"));
             Assert.That(snapshot["graph.loopEdges"], Is.EqualTo("2"));
             Assert.That(snapshot["graph.cycleCoreNodes"], Is.EqualTo("10"));
-            Assert.That(snapshot["graph.branchAttach"], Is.EqualTo("wing-hub"));
-            Assert.That(snapshot["graph.branchAttachDegree"], Is.EqualTo("4"));
-            Assert.That(snapshot["graph.branchRejoin"], Is.EqualTo("wing-rejoin"));
-            Assert.That(snapshot["graph.branchRejoinDegree"], Is.EqualTo("4"));
-            Assert.That(snapshot["graph.wingPathLengths"], Is.EqualTo("4|4"));
+            // Both wings fork off one hub and rejoin at one node, which is why
+            // a single attach/rejoin pair never described this graph.
+            Assert.That(snapshot["graph.junctions"], Is.EqualTo("wing-hub:4|wing-rejoin:4"));
             Assert.That(snapshot["route.valid"], Is.EqualTo("True"), snapshot["route.validationError"]);
         }
 
@@ -55,20 +53,20 @@ namespace Arena.Tests.Editor
                 "keep-culmination|wing-a-entry|wing-overlook|wing-a-return|wing-b-entry|" +
                 "wing-b-reward|wing-b-return"));
             Assert.That(snapshot["graph.edgeDetails"], Is.EqualTo(
-                "main-0-1:keep-arrival>keep-threshold:LevelCorridor:0|" +
-                "main-1-2:keep-threshold>wing-hub:LevelCorridor:0|" +
-                "main-2-3:wing-hub>keep-crossing:LevelCorridor:0|" +
-                "main-3-4:keep-crossing>keep-landmark:Stair:8|" +
-                "main-4-5:keep-landmark>wing-rejoin:Stairwell:8|" +
-                "main-5-6:wing-rejoin>keep-culmination:Stair:8|" +
-                "wing-a-2-7:wing-hub>wing-a-entry:Bridge:8|" +
-                "wing-a-7-8:wing-a-entry>wing-overlook:Stair:4|" +
-                "wing-a-8-9:wing-overlook>wing-a-return:Stair:4|" +
-                "wing-a-rejoin-9-5:wing-a-return>wing-rejoin:LevelCorridor:0|" +
-                "wing-b-2-10:wing-hub>wing-b-entry:Stair:4|" +
-                "wing-b-10-11:wing-b-entry>wing-b-reward:Stair:4|" +
-                "wing-b-11-12:wing-b-reward>wing-b-return:Stair:4|" +
-                "wing-b-rejoin-12-5:wing-b-return>wing-rejoin:Bridge:4"));
+                "A-B:keep-arrival>keep-threshold:LevelCorridor:0|" +
+                "B-C:keep-threshold>wing-hub:LevelCorridor:0|" +
+                "C-D:wing-hub>keep-crossing:LevelCorridor:0|" +
+                "D-E:keep-crossing>keep-landmark:Stair:8|" +
+                "E-F:keep-landmark>wing-rejoin:Stairwell:8|" +
+                "F-G:wing-rejoin>keep-culmination:Stair:8|" +
+                "C-H:wing-hub>wing-a-entry:Bridge:8|" +
+                "H-I:wing-a-entry>wing-overlook:Stair:4|" +
+                "I-J:wing-overlook>wing-a-return:Stair:4|" +
+                "J-F:wing-a-return>wing-rejoin:LevelCorridor:0|" +
+                "C-K:wing-hub>wing-b-entry:Stair:4|" +
+                "K-L:wing-b-entry>wing-b-reward:Stair:4|" +
+                "L-M:wing-b-reward>wing-b-return:Stair:4|" +
+                "M-F:wing-b-return>wing-rejoin:Bridge:4"));
         }
 
         [Test]
@@ -83,18 +81,21 @@ namespace Arena.Tests.Editor
             Assert.That(intent["vista.source"], Is.EqualTo("wing-overlook"));
             Assert.That(intent["vista.target"], Is.EqualTo("keep-landmark"));
             Assert.That(intent["vista.centerCardinallyAligned"], Is.EqualTo("True"));
-            Assert.That(intent["vista.centerDistanceCells"], Is.EqualTo("10"));
-            Assert.That(report["vista.facingOpposed"], Is.EqualTo("true"), SnapshotText("BuildRouteCharacterizationSnapshot", TwinWingSeed));
+            // One lattice step on the row axis, whose authored gap is 10 with
+            // rubber-sheet headroom on top.
+            Assert.That(int.Parse(intent["vista.centerDistanceCells"]), Is.GreaterThanOrEqualTo(10));
+            Assert.That(report["vista.facingOpposed"], Is.EqualTo("true"), SnapshotText("BuildRouteCharacterizationSnapshot", TwinWingSeed()));
             Assert.That(report["vista.unobstructed"], Is.EqualTo("true"));
             Assert.That(report["vista.finalValid"], Is.EqualTo("true"));
             Assert.That(int.Parse(report["vista.finalReservedVoidCells"]), Is.GreaterThanOrEqualTo(3));
         }
 
         [Test]
-        public void ResidueThreeSeed_ProducesOneDeterministicHardValidTwinWingPlan()
+        public void ASelectedSeed_ProducesOneDeterministicHardValidTwinWingPlan()
         {
-            string firstText = SnapshotText("BuildRouteCharacterizationSnapshot", TwinWingSeed);
-            string secondText = SnapshotText("BuildRouteCharacterizationSnapshot", TwinWingSeed);
+            int seed = TwinWingSeed();
+            string firstText = SnapshotText("BuildRouteCharacterizationSnapshot", seed);
+            string secondText = SnapshotText("BuildRouteCharacterizationSnapshot", seed);
             Dictionary<string, string> report = ParseSnapshot(firstText);
 
             Assert.That(report["accepted"], Is.EqualTo("true"), firstText);
@@ -114,7 +115,7 @@ namespace Arena.Tests.Editor
         [Test]
         public void ExistingRendererAndCollision_ConsumeTheTwinWingWithoutRepair()
         {
-            string snapshotText = SnapshotText("BuildRendererProbeSnapshot", TwinWingSeed);
+            string snapshotText = SnapshotText("BuildRendererProbeSnapshot", TwinWingSeed());
             Dictionary<string, string> report = ParseSnapshot(snapshotText);
 
             Assert.That(report["accepted"], Is.EqualTo("true"), snapshotText);
@@ -125,14 +126,21 @@ namespace Arena.Tests.Editor
             Assert.That(int.Parse(report["collision.missingMeshes"]), Is.Zero);
         }
 
+        // A weighted draw means no seed is guaranteed to be a twin-wing seed,
+        // so the snapshot reports the first one that is.
+        private static int TwinWingSeed()
+        {
+            return int.Parse(TwinWingIntentSnapshot()["selector.firstSeed"]);
+        }
+
         private static Dictionary<string, string> TwinWingIntentSnapshot()
         {
-            return ParseSnapshot(SnapshotText("BuildTwinWingSnapshot", TwinWingSeed));
+            return ParseSnapshot(SnapshotText("BuildTwinWingSnapshot", 2026072100));
         }
 
         private static Dictionary<string, string> TwinWingProductionSnapshot()
         {
-            return ParseSnapshot(SnapshotText("BuildRouteCharacterizationSnapshot", TwinWingSeed));
+            return ParseSnapshot(SnapshotText("BuildRouteCharacterizationSnapshot", TwinWingSeed()));
         }
 
         private static string SnapshotText(string methodName, int seed)

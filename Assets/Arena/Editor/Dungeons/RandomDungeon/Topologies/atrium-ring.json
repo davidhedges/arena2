@@ -1,11 +1,11 @@
 {
   // Route topology: one authored diagram per file. See
-  // docs/dungeon-builder/route-topology-authoring-2026-07-25.md for the schema
-  // and docs/dungeon-builder/ROUTE_TOPOLOGY_AUTHORING.md for the rule list.
-  // Check a draft with Tools > Dungeon Lab > Validate Topologies.
+  // docs/dungeon-builder/ROUTE_TOPOLOGY_AUTHORING.md for the schema and the
+  // rule list. Check a draft with Tools > Dungeon Lab > Validate Topologies.
   "id": "atrium-ring",
   "displayName": "Atrium Ring",
-  "plannerVersion": "atrium-ring-v3",
+  "plannerVersion": "atrium-ring-v4",
+  "weight": 1,
 
   // Lattice column x1 is deliberately empty: it is the atrium void the ring
   // gallery looks across, and it is the vista lane J..M -> D..G.
@@ -17,12 +17,16 @@
   ],
 
   "spatial": {
-    // "baseline" is the pre-port BaselinePatternSpatialSettings: envelope
-    // radius 4, no neighbour bias, no tier seams, spacious role sizes.
-    // Scalar gaps are uniform lane pitch.
-    "settings": "baseline",
-    "columnGapCells": 7,
-    "rowGapCells": 9
+    // Was a fixed 7-cell column pitch under the old baseline settings, which
+    // only worked because that path also forced small rooms. On the profile's
+    // own room sizes a 7-cell lane puts adjacent rooms wall to wall, so the
+    // minimum is now the profile pitch.
+    "columnGapCells": { "max": 13 },
+    "rowGapCells": { "max": 13 },
+
+    // This graph declares no overlook pairs, so it asks for no tier seams.
+    // The profile's default of 2 would throw for want of eligible candidates.
+    "tierSeamCount": 0
   },
 
   "nodes": {
@@ -42,26 +46,26 @@
   },
 
   "edges": [
-    ["A", "B", "LevelCorridor", "main-0-1"],
-    ["B", "C", "Stair",         "main-1-2"],
-    ["C", "D", "LevelCorridor", "main-2-3"],
-    ["D", "E", "LevelCorridor", "main-3-4"],
-    ["E", "F", "Stair",         "main-4-5"],
-    ["F", "G", "Stairwell",     "main-5-6"],
-    ["G", "H", "Stair",         "main-6-7"],
-    ["H", "I", "Stair",         "main-7-8"],
-    ["D", "J", "Bridge",        "branch-3-9"],
-    ["J", "K", "LevelCorridor", "branch-9-10"],
-    ["K", "L", "Stair",         "branch-10-11"],
-    ["L", "M", "Stair",         "branch-11-12"],
-    ["M", "G", "LevelCorridor", "rejoin-12-6"]
+    ["A", "B", "LevelCorridor"],
+    ["B", "C", "Stair"],
+    ["C", "D", "LevelCorridor"],
+    ["D", "E", "LevelCorridor"],
+    ["E", "F", "Stair"],
+    ["F", "G", "Stairwell"],
+    ["G", "H", "Stair"],
+    ["H", "I", "Stair"],
+    ["D", "J", "Bridge"],
+    ["J", "K", "LevelCorridor"],
+    ["K", "L", "Stair"],
+    ["L", "M", "Stair"],
+    ["M", "G", "LevelCorridor"]
   ],
 
   "slots": [
-    { "id": "required-compression", "at": "B", "entry": "main-0-1",     "exit": "main-1-2" },
-    { "id": "required-landmark",    "at": "E", "entry": "main-3-4",     "exit": "main-4-5",
+    { "id": "required-compression", "at": "B", "entry": "A-B", "exit": "B-C" },
+    { "id": "required-landmark",    "at": "E", "entry": "D-E", "exit": "E-F",
       "orientation": "vista-source-to-target" },
-    { "id": "required-return",      "at": "M", "entry": "branch-11-12", "exit": "rejoin-12-6" }
+    { "id": "required-return",      "at": "M", "entry": "L-M", "exit": "M-G" }
   ],
 
   "vista": { "id": "ring-overlook-to-atrium-landmark", "from": "K", "to": "E", "minVoidCells": 3 },
@@ -69,13 +73,5 @@
   "overlooks": [],
 
   "anchors": { "bottom": "A", "top": "I" },
-  "allowGenericRoomWings": false,
-
-  // Hash-compat only: values the pre-port per-pattern C# embedders reported.
-  // Step 2 unifies them and the batch hash moves anyway — delete this block then.
-  "legacy": {
-    "orientationStreamId": "atrium-ring",
-    "embeddingFailureCode": "ATRIUM_RING_EMBEDDING_EXHAUSTED",
-    "branchSearchExpansions": 0
-  }
+  "allowGenericRoomWings": false
 }

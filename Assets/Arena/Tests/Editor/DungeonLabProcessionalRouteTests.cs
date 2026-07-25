@@ -9,7 +9,10 @@ namespace Arena.Tests.Editor
 {
     public sealed class DungeonLabProcessionalRouteTests
     {
-        private const int PilotSeed = 2026072100;
+        // BuildRouteIntentOnlySnapshot forces this topology, so any seed builds
+        // its graph; the production snapshots below need a seed the weighted
+        // selector actually lands on, which that snapshot reports.
+        private const int AnySeed = 2026072100;
         private static readonly Type GeneratorType = AppDomain.CurrentDomain
             .Load("Assembly-CSharp-Editor")
             .GetType("DungeonLab.Editor.DungeonLabGenerator", throwOnError: true)!;
@@ -18,7 +21,7 @@ namespace Arena.Tests.Editor
         public void RouteIntent_ExistsBeforeSpatialCoordinates()
         {
             Dictionary<string, string> intent = ParseSnapshot(
-                InvokeSnapshot("BuildRouteIntentOnlySnapshot", PilotSeed));
+                InvokeSnapshot("BuildRouteIntentOnlySnapshot", AnySeed));
 
             Assert.That(intent["route.pattern"], Is.EqualTo("processional-spine"));
             Assert.That(intent["route.nodeCount"], Is.EqualTo("13"));
@@ -33,8 +36,9 @@ namespace Arena.Tests.Editor
         [Test]
         public void FixedSeed_ProducesIdenticalIntentLayoutAndTierHashes()
         {
-            string firstText = InvokeSnapshot("BuildRouteCharacterizationSnapshot", PilotSeed);
-            string secondText = InvokeSnapshot("BuildRouteCharacterizationSnapshot", PilotSeed);
+            int seed = PilotSeed();
+            string firstText = InvokeSnapshot("BuildRouteCharacterizationSnapshot", seed);
+            string secondText = InvokeSnapshot("BuildRouteCharacterizationSnapshot", seed);
             Dictionary<string, string> first = ParseSnapshot(firstText);
             Dictionary<string, string> second = ParseSnapshot(secondText);
 
@@ -90,7 +94,7 @@ namespace Arena.Tests.Editor
         [Test]
         public void Pilot_ExistingRendererProducesCollisionInputsWithoutRepair()
         {
-            string snapshot = InvokeSnapshot("BuildRendererProbeSnapshot", PilotSeed);
+            string snapshot = InvokeSnapshot("BuildRendererProbeSnapshot", PilotSeed());
             Dictionary<string, string> report = ParseSnapshot(snapshot);
 
             Assert.That(report["accepted"], Is.EqualTo("true"), snapshot);
@@ -102,9 +106,15 @@ namespace Arena.Tests.Editor
             Assert.That(int.Parse(report["collision.missingMeshes"]), Is.Zero);
         }
 
+        private static int PilotSeed()
+        {
+            return int.Parse(ParseSnapshot(
+                InvokeSnapshot("BuildRouteIntentOnlySnapshot", AnySeed))["selector.firstSeed"]);
+        }
+
         private static Dictionary<string, string> PilotSnapshot()
         {
-            return ParseSnapshot(InvokeSnapshot("BuildRouteCharacterizationSnapshot", PilotSeed));
+            return ParseSnapshot(InvokeSnapshot("BuildRouteCharacterizationSnapshot", PilotSeed()));
         }
 
         private static string InvokeSnapshot(string methodName, int seed)

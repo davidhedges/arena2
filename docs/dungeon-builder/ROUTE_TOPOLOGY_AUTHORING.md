@@ -7,8 +7,9 @@ places every node. Adding one costs no C#.
 
 Check a draft with **Tools > Dungeon Lab > Validate Topologies**. It reports every
 rule below by node/edge key with the offending value, re-renders the map with its
-edges drawn, and computes the vista lane's clear-cell count at both profiles. A
-report is also written to `DungeonLabReports/route_topology_validation.txt`.
+edges drawn, computes the vista lane's clear-cell count at both profiles, and says
+how much the rubber sheet can move each axis. A report is also written to
+`DungeonLabReports/route_topology_validation.txt`.
 
 Design background and the drafted topology set:
 [`route-topology-authoring-2026-07-25.md`](route-topology-authoring-2026-07-25.md).
@@ -21,6 +22,11 @@ Design background and the drafted topology set:
   "displayName": "Cataract Shaft",
   "plannerVersion": "descent-shaft-v1",
 
+  // Selection weight. The generator draws one topology per seed, weighted, from
+  // DerivedRandom(seed, 0, "topology", "select"). Omit for 1; 0 disables the
+  // topology without renumbering anything.
+  "weight": 1,
+
   // One whitespace-separated token per lattice cell; '.' is empty.
   // The FIRST row is the TOP row (highest lattice y).
   "map": [
@@ -29,14 +35,29 @@ Design background and the drafted topology set:
     "K  .  E  .  ."
   ],
 
+  // Every field is optional. Anything absent comes from the generation
+  // profile's `processionalSpatial`. There is no second settings table.
   "spatial": {
-    // "profile": take the generation profile's processionalSpatial verbatim,
-    //            including its pitch, which becomes the uniform lane gap.
-    // "baseline": the fixed baseline settings (envelope radius 4, no neighbour
-    //            bias, no tier seams, spacious role sizes) with the gaps below.
-    "settings": "baseline",
-    "columnGapCells": 9,              // a number is a uniform lane pitch
-    "rowGapCells": [9, 12]            // an array is one gap per lane pair
+    // A lane gap is a number (fixed), an object { min, max } (a rubber-sheet
+    // range), or an array with one such entry per gap between adjacent lanes
+    // (so length == lanes - 1). Either bound may be omitted and falls back to
+    // the profile's pitch on that axis.
+    "columnGapCells": { "max": 13 },                 // [profile pitch, 13]
+    "rowGapCells": [9, { "min": 10, "max": 15 }],    // first lane fixed at 9
+
+    // Overrides of the profile's spatial settings, for a topology whose shape
+    // genuinely cannot take the profile's defaults. State the reason in a
+    // comment - an override that is not explained is a bug waiting to happen.
+    "roomEnvelopeRadiusCells": 4,
+    "neighborBiasStrengthCells": 1,
+    "latticeSlackMaxCells": 8,
+    "tierSeamCount": 0,
+    "tierSeamMaxRiseLevels": 8,
+    "roomSizes": {                                   // [minW, maxW, minD, maxD]
+      "terminal":  [5, 5, 7, 7],
+      "hall":      [5, 5, 5, 6],
+      "connector": [4, 5, 5, 5]
+    }
   },
 
   // key: [ id, role, beat, level, order ]. Level is absolute, in 4u units.
@@ -46,8 +67,9 @@ Design background and the drafted topology set:
     "J": ["rim-ledge",   "connector", "branch",      24, { "branch": 0 }]
   },
 
-  // [ from, to, kind ]. Rise is derived from the two levels; the id derives as
-  // "{from}-{to}". Kind is LevelCorridor | Stair | Bridge | Stairwell.
+  // [ from, to, kind ] and nothing else. The id derives as "{from}-{to}"; the
+  // rise derives from the two levels, signed in travel order.
+  // Kind is LevelCorridor | Stair | Bridge | Stairwell.
   "edges": [["A", "B", "LevelCorridor"], ["B", "C", "Stair"]],
 
   "slots": [
@@ -67,8 +89,10 @@ Design background and the drafted topology set:
 ### Derived, never authored
 
 Edge ids, per-edge rise, node index order, cycle rank, cycle-core size, junction
-degrees, branch attach/rejoin nodes, node count, main-route contiguity. There is
-no field for any of them, so a file cannot disagree with itself.
+degrees, node count, main-route contiguity. There is no field for any of them, so
+a file cannot disagree with itself. An edge that carries a fourth element is
+rejected, and so is a `legacy` block or a `spatial.settings` token — both were
+step 1 scaffolding.
 
 Node index order — the order the graph is numbered in reports and in the plan — is
 **main-route nodes by `main`, then off-main nodes by `branch`**. Reformatting or
@@ -80,11 +104,11 @@ Hard rules, all enforced by the generator and all reported by the validator:
 
 | Rule | Why |
 | --- | --- |
-| Exactly 13 nodes | the current room-count lock; becomes a range in step 2 |
+| 9 to 20 nodes | the sanity rails on room count; the profile's `denseFloorplanMinRooms` is the binding floor in practice |
 | Exactly 3 slots: `required-compression`, `required-landmark`, `required-return` | the recipe catalog's `eligibleRoles`/`eligibleBeats` |
 | Every level in `[0, 24]` and `% 4 == 0` | the level grammar |
 | Every slot node has degree 2 | a two-port recipe room |
-| Edge rise `+4` or `+8` for Stair/Bridge/Stairwell, exactly `0` for LevelCorridor | **positive only** — write descending edges low-node-first until step 2 |
+| Edge rise `±4` or `±8` for Stair/Bridge/Stairwell, exactly `0` for LevelCorridor | write an edge in travel order in either direction; a descending edge is a rise of `-4` |
 | At least one Stair, one Bridge, one Stairwell | the transition-kind coverage check |
 | `anchors.bottom` at level 0, `anchors.top` at level 24 | the abyss datum and the ceiling |
 | Connected graph, cycle rank ≥ 1, at least two degree-≥3 nodes | a route loops |
@@ -92,15 +116,58 @@ Hard rules, all enforced by the generator and all reported by the validator:
 | Vista source ≥4u above its target, cardinally aligned, nothing between | `TryValidateRouteIntent` + `TryReserveProcessionalVista` |
 | Every edge cardinally aligned in the lattice, with no third node on its lane | `TryConnectProcessionalRooms`, `PathCrossesThirdRoom` |
 | No edge inside the vista lane | the vista reservation |
-| Plan fits 52×52 **in every orientation** | `TryTransformCoarseEmbedding` tries only 4 quarter-turns against one mirror choice |
+| Plan fits 52×52 **in every orientation, at the widest lattice** | `TryTransformCoarseEmbedding` tries only 4 quarter-turns against one mirror choice |
+| Every role appears in the profile's `roleSizeClasses` map | a new role name is an authoring error, not silently a hall |
 | Role size range ≤ 9 cells per axis | `roomEnvelopeRadiusCells` is pinned at 4 by the landmark recipe's reach |
 
-### Things that bite
+## The rubber sheet
+
+Rigid transforms are exhausted at 8 — D4 is complete — so a topology with fixed
+lane gaps has exactly 8 spatial arrangements and no more. The rubber sheet is the
+second axis: **every lane gets its own gap, drawn per seed.** All nodes in one
+lattice lane share a world offset, so cardinal alignment survives by construction.
+
+Per axis, per layout attempt, from `DerivedRandom(seed, attempt, topologyId,
+"lattice-x" | "lattice-y")`:
+
+```
+minimum span = sum of every lane's authored minimum
+slack        = min( sum of authored headroom,
+                    envelope room: min(mapWidth, mapDepth) - (minimum span + 2*radius + 1),
+                    the profile's latticeSlackMaxCells )
+```
+
+then the slack is handed out one cell at a time to a uniformly chosen lane that
+still has headroom. A topology whose gaps are all fixed draws no random number at
+all, so an authored lattice stays exactly as drawn.
+
+Things worth knowing:
+
+- **The envelope term is a cap, not a rejection.** More lanes means a longer
+  minimum span means less slack. A seven-column lattice at a 9-cell pitch spans
+  54 cells before rooms, does not fit 52, and cannot be widened into fitting —
+  that is an authoring problem, and the validator says so.
+- **Bigger gaps grow the floor bounding box without growing rooms**, so
+  `denseFloorplanMinFillPercent` (0.26) is the thing that bites, and it bites
+  suddenly. Measured over `2026072100..2026072299` at `dense`:
+
+  | `latticeSlackMaxCells` | accepted | floor fill min / median | `ROUTE_DENSITY_PRECONDITION` |
+  | --- | --- | --- | --- |
+  | 8 (shipped) | 199/200 | 27.1% / 30.7% | 0 |
+  | 14 | 154/200 | 26.0% / 27.4% | 117 |
+
+  So 8 is not an arbitrary constant — it is most of the available room, with
+  about one point of fill to spare. Raise it and re-measure, or don't raise it.
+- The minimum lattice is the worst case for **every other rule** — a shorter
+  vista lane, tighter rooms — so that is what the validator checks against. The
+  widest lattice is the worst case for the envelope only.
+
+## Things that bite
 
 - **A vista pair needs 2+ lattice steps.** At pitch 9 a 1-step vista yields
   `9 − sourceReach − targetReach − 1` clear cells, against a required minimum of 3.
-  The processional's 1-step vista only clears 3 because its source is a tier-seam
-  node, which force-shrinks that room to 4×5. Zero margin. Use 2+ steps.
+  Both `processional-spine` and `twin-wing-keep` clear exactly 3, with zero
+  margin, because their source is a small room. Use 2+ steps.
 - **Deep excursions cost nodes.** The 4/8 rise grammar prices a spur that drops
   from 24 to 0 and returns at ~6 nodes. A shape whose whole rim sits at 20–24
   cannot close inside 13.
@@ -108,15 +175,12 @@ Hard rules, all enforced by the generator and all reported by the validator:
   A stairwell tower needs void cells beside its corridor, and the `dense` profile
   leaves fewer; seed 2026072295's failure is exactly this, in the interior of a
   dense cluster.
-- **New role strings fall through to `hallRoomSize`.** `RoomSizeRangeForRole` maps
-  only `arrival`/`culmination` and `connector` explicitly; anything else is a hall.
-- **`weight` and gap ranges do not exist yet.** Selection is still `seed % 4` over
-  a fixed table, and lane gaps are fixed. Both land in step 2.
-
-## The `legacy` block
-
-The three ported topologies carry a `legacy` object and pinned per-edge ids. Those
-exist only so the data cutover held the batch hash: they reproduce values the
-pre-port per-pattern C# embedders reported (`orientationStreamId`,
-`embeddingFailureCode`, `branchSearchExpansions`). **Do not add them to a new
-topology.** Step 2 unifies them and deletes the block.
+- **A lane gap must be at least the largest room extent on that axis.** Two
+  adjacent centred rooms of width `w` need `w ≤ gap` not to overlap. Under-sizing
+  a lane does not fail loudly — it burns the six room-inflation retries and then
+  fails the layout attempt.
+- **The profile's `tierSeamCount` is a request, and `BuildPlannedOverlooks`
+  throws when a topology cannot meet it.** A topology with no `overlooks` pairs
+  must override `tierSeamCount` to 0.
+- **New role strings must be added to the profile's `roleSizeClasses`** — in both
+  `generation_profile.asset` and `generation_profile_dense.asset`.

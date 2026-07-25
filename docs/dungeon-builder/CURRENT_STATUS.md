@@ -132,7 +132,7 @@ the sole path. Not a subjective impression — measured over 200 seeds:
 | --- | --- | --- |
 | One topography | `elevationSpan` and `routeClimbLevels` are 24 for 199/199 seeds; `archetypes = AscendingSpine: 199` | `ElevationArchetype` had **11** members (Basin, Mesa, Ridge, Canyon, AscendingSpine, Descent, SplitPlateau, Crater, Helix, Terraces, Atrium) chosen per seed by `ElevationArchetypePlanner.Choose(random)`. It is now `enum RouteElevationPolicy { AscendingSpine }` — one member |
 | Same connectivity | 3 fixed graphs on `seed % 4` (processional 50%, atrium 25%, twin-wing 25%) | All three `Build*RouteIntent` factories hardcode every node id, role, beat, edge **and elevation** as literals |
-| Always 13 rooms | `rooms` min 13, p50 13, max 13 | All three route graphs happen to have 13 nodes |
+| Always 13 rooms | `rooms` min 13, p50 13, max 13 | All three route graphs happen to have 13 nodes. Step 2 removed the 13-node *lock* (the range is now 9–20), but the three shipped graphs still have 13 nodes each, so room count does not vary until step 3 adds graphs that differ |
 | Identical room shapes | — | The same commit cut `DungeonGenerationProfile` 68 -> 24 settings, deleting the room size-class vocabulary (`largeRoom/midRoom/smallRoom` area ranges *and* counts, `nonRectChanceGrand`, `nonRectChanceMid`, `wingMinDimCells`, `wingMaxDepthCells`, `roomMaxSideCells`, `roomMaxAspectRatio`, `floorBudgetCells`) |
 
 The archived plan listed "multiple elevation archetypes" under *pieces worth
@@ -151,9 +151,13 @@ larger rooms cause. Consistent with Finding A: only `processional-spine` reads t
 widened profile, and only a processional seed regressed. `atrium-ring` is 50/50
 with zero retries because it still uses `BaselinePatternSpatialSettings`.
 
-So the widening's net effect so far is: half the seeds get more varied rooms, one
-seed stops generating. Worth a look when step 2 rebaselines anyway — the honest
-options are a slightly narrower `dense` range or accepting 198/200.
+**Resolved by step 2, 2026-07-25.** Closing Finding A gave `atrium-ring` the
+widened profile sizes too, and `2026072246` generates again — so the widened
+`dense` range is kept as authored and no narrowing was needed. `twin-wing-keep`
+is the exception: seven lattice columns at a 9-cell pitch do not fit the 52-cell
+envelope, so its lanes stay tight and it declares its own narrower room sizes as
+a per-topology override. That override is visible in its topology file, with the
+reason, rather than hidden in a settings table.
 
 Hard constraints when tuning these: room size <= `pitch - 1` on each axis (the
 gap between adjacent rooms is `pitch - size`), and <= `roomEnvelopeRadiusCells
@@ -178,9 +182,12 @@ processional main route is literally `(0,0)(1,0)(2,0)(3,0)(3,1)(3,2)(2,2)(1,2)
 (1,3)`, an S on a 4x4 grid — fed to `TryTransformCoarseEmbedding`, which tries
 at most 4 quarter-turns against one mirror choice. **So each topology has <= 8
 spatial arrangements, ever.** That, more than room size, is why plans read alike.
+*(Step 2's rubber-sheet lattice is the fix: per-lane gaps drawn per seed, so a
+topology now has hundreds of lattices x 8 orientations rather than 8 in total.)*
 
 `SelectRoutePattern` is `seed % 4` mapped to 3 patterns, so it also needs
-redesigning to scale past four.
+redesigning to scale past four. *(Done in step 2: a weighted draw over the
+registry, keyed on the seed alone.)*
 
 **Answered 2026-07-25 — the authoring model is agreed:**
 [`route-topology-authoring-2026-07-25.md`](route-topology-authoring-2026-07-25.md).
@@ -233,10 +240,68 @@ The `3092863a…` hash the plan named cannot be reproduced by any run after comm
 `3123a06d` — see the box further down. Both failures are accounted for: 2026072295
 is the known stairwell defect, 2026072246 is item 1's widening.
 
-Still ahead: **step 2** (weighted selection, rubber-sheet lattice, per-topology
-spatial overrides which close Finding A, the ±4/±8 rise sign, the node-count
-range — one deliberate rebaseline, every seed moves once) and **step 3** (the four
-drafted topologies, one file plus a validator pass each).
+**Step 2 landed 2026-07-25 — the deliberate rebaseline. Every seed moved once.**
+
+Shipped in one commit: weighted selection over the registry, the rubber-sheet
+lattice, per-topology spatial overrides (which close Finding A by deleting the
+second settings table), the ±4/±8 rise sign, a node-count range in place of the
+13-node lock, a role→size-class map in the profile, and the deletion of the
+step 1 `legacy` blocks and pinned edge ids. The full deviation list is in the
+commit message; the format is in
+[`ROUTE_TOPOLOGY_AUTHORING.md`](ROUTE_TOPOLOGY_AUTHORING.md).
+
+**Gate: PASSED.** `ops/dungeon-step2-verify.sh` ran the 200-seed `dense` batch
+twice on the same tree — two independent runs, byte-identical `resultHash`
+`09b04b4e32aa4e74c3cf6cebcded94582b9394dee5e918749f7d7e2095795856`, **199/200
+accepted**, `hardValid 199/199`, `validationFailureCodes none`. The one failure
+is `2026072228`, a `twin-wing-keep` seed whose `E-F` Stairwell cannot reserve its
+8u rise: the same structural defect as the old `2026072295`, at a different seed
+because the topology mix moved. Item 1's casualty `2026072246` and the old
+`2026072295` both generate again.
+
+That hash is a **transient comparison value, not a lock.** Do not assert it in a
+test; the very next content edit moves it.
+
+```text
+                        before (step 1)   after (step 2)
+accepted                198/200           199/200
+topology mix            100/50/50         70/55/75   (processional/atrium/twin-wing)
+                        seed % 4          weighted draw, equal weights
+room counts             13 x 200          13 x 200   (the three graphs still have 13 nodes)
+layoutAttempts          mean 1.07 max 2   mean 1.03 max 2
+lattice slack spent     n/a               16 processional, 15 atrium, 8 twin-wing (cells/plan)
+floor fill, median      42.1%             30.7%
+floor fill, minimum     33.3%             27.1%   against a 26% floor
+```
+
+**The measured cost of the rubber sheet is floor fill, exactly as §4 predicted.**
+Wider lane gaps grow the floor bounding box without growing rooms, so fill fell
+~11 points and the margin over `denseFloorplanMinFillPercent` (0.26) fell from
+7.3 points to 1.1. Nothing was rejected for density — `rejectionCodes` has no
+`ROUTE_DENSITY_PRECONDITION` at all — but that margin is thin, so the cap was
+measured rather than guessed:
+
+| `latticeSlackMaxCells` | accepted | floor fill min / median | `ROUTE_DENSITY_PRECONDITION` |
+| --- | --- | --- | --- |
+| 8 (shipped) | 199/200 | 27.1% / 30.7% | 0 |
+| 14 | 154/200 | 26.0% / 27.4% | 117 |
+
+That is the whole trade: the cap is a per-profile knob rather than a lowered fill
+floor, and 8 is most of the room the floor allows. **Step 3 must re-measure
+fill** — a sparser new topology is the thing most likely to cross it.
+
+Also verified rather than assumed: **Tools > Dungeon Lab > Validate Topologies**
+passes all three at both profiles (report in
+`DungeonLabReports/route_topology_validation.txt`), and six seeds covering all
+three topologies rebuild end to end — plan, renderer, collision export — into a
+throwaway scene.
+
+**Not verified: whether the result reads well.** The rubber sheet spreads rooms
+apart, so plans have longer corridors and more void than before. Look at several
+seeds before step 3.
+
+Still ahead: **step 3** (the four drafted topologies, one file plus a validator
+pass each).
 
 The question below is settled in favour of authoring-as-data; kept for the
 reasoning: **author more diagrams as data, or replace the hand-drawn diagram with

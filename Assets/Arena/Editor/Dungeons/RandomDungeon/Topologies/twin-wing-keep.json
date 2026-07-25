@@ -1,11 +1,11 @@
 {
   // Route topology: one authored diagram per file. See
-  // docs/dungeon-builder/route-topology-authoring-2026-07-25.md for the schema
-  // and docs/dungeon-builder/ROUTE_TOPOLOGY_AUTHORING.md for the rule list.
-  // Check a draft with Tools > Dungeon Lab > Validate Topologies.
+  // docs/dungeon-builder/ROUTE_TOPOLOGY_AUTHORING.md for the schema and the
+  // rule list. Check a draft with Tools > Dungeon Lab > Validate Topologies.
   "id": "twin-wing-keep",
   "displayName": "Twin-Wing Keep",
-  "plannerVersion": "twin-wing-keep-v3",
+  "plannerVersion": "twin-wing-keep-v4",
+  "weight": 1,
 
   // A long keep spine with a wing above and a wing below, both forking off the
   // hub C and rejoining at F.
@@ -16,12 +16,28 @@
   ],
 
   "spatial": {
-    "settings": "baseline",
-    // Per-lane gaps: this topology was authored in absolute cells with unequal
-    // spacing, which is why its lattice is non-uniform. One entry per gap
-    // between adjacent lanes, so length == lane count - 1.
+    // Seven lattice columns is the constraint that shapes everything else here.
+    // At the profile's 9-cell pitch the six gaps alone would span 54 cells and
+    // the plan would not fit 52 in any orientation, so the columns keep their
+    // authored, deliberately tight spacing and are FIXED: no rubber sheet.
     "columnGapCells": [6, 5, 6, 8, 8, 9],
-    "rowGapCells": [9, 10]
+
+    // Three rows, on the other hand, leave the depth axis plenty of room.
+    "rowGapCells": [{ "min": 9, "max": 14 }, { "min": 10, "max": 15 }],
+
+    // A 5-cell column lane cannot host the profile's 6-8 cell rooms: adjacent
+    // rooms would overlap on every draw and exhaust room inflation. This
+    // topology therefore declares its own, narrower sizes. The override is the
+    // point of the mechanism - it is visible in the data, with a reason, rather
+    // than hidden in a second settings table the profile never reaches.
+    "roomSizes": {
+      "terminal":  [5, 5, 7, 7],
+      "hall":      [5, 5, 5, 6],
+      "connector": [4, 5, 5, 5]
+    },
+
+    // No overlook pairs are declared, so no tier seams are requested.
+    "tierSeamCount": 0
   },
 
   "nodes": {
@@ -41,27 +57,27 @@
   },
 
   "edges": [
-    ["A", "B", "LevelCorridor", "main-0-1"],
-    ["B", "C", "LevelCorridor", "main-1-2"],
-    ["C", "D", "LevelCorridor", "main-2-3"],
-    ["D", "E", "Stair",         "main-3-4"],
-    ["E", "F", "Stairwell",     "main-4-5"],
-    ["F", "G", "Stair",         "main-5-6"],
-    ["C", "H", "Bridge",        "wing-a-2-7"],
-    ["H", "I", "Stair",         "wing-a-7-8"],
-    ["I", "J", "Stair",         "wing-a-8-9"],
-    ["J", "F", "LevelCorridor", "wing-a-rejoin-9-5"],
-    ["C", "K", "Stair",         "wing-b-2-10"],
-    ["K", "L", "Stair",         "wing-b-10-11"],
-    ["L", "M", "Stair",         "wing-b-11-12"],
-    ["M", "F", "Bridge",        "wing-b-rejoin-12-5"]
+    ["A", "B", "LevelCorridor"],
+    ["B", "C", "LevelCorridor"],
+    ["C", "D", "LevelCorridor"],
+    ["D", "E", "Stair"],
+    ["E", "F", "Stairwell"],
+    ["F", "G", "Stair"],
+    ["C", "H", "Bridge"],
+    ["H", "I", "Stair"],
+    ["I", "J", "Stair"],
+    ["J", "F", "LevelCorridor"],
+    ["C", "K", "Stair"],
+    ["K", "L", "Stair"],
+    ["L", "M", "Stair"],
+    ["M", "F", "Bridge"]
   ],
 
   "slots": [
-    { "id": "required-compression", "at": "B", "entry": "main-0-1",      "exit": "main-1-2" },
-    { "id": "required-landmark",    "at": "E", "entry": "main-3-4",      "exit": "main-4-5",
+    { "id": "required-compression", "at": "B", "entry": "A-B", "exit": "B-C" },
+    { "id": "required-landmark",    "at": "E", "entry": "D-E", "exit": "E-F",
       "orientation": "vista-source-to-target" },
-    { "id": "required-return",      "at": "M", "entry": "wing-b-11-12",  "exit": "wing-b-rejoin-12-5" }
+    { "id": "required-return",      "at": "M", "entry": "L-M", "exit": "M-F" }
   ],
 
   "vista": { "id": "wing-overlook-to-keep-landmark", "from": "I", "to": "E", "minVoidCells": 3 },
@@ -69,13 +85,5 @@
   "overlooks": [],
 
   "anchors": { "bottom": "A", "top": "G" },
-  "allowGenericRoomWings": false,
-
-  // Hash-compat only: values the pre-port per-pattern C# embedders reported.
-  // Step 2 unifies them and the batch hash moves anyway — delete this block then.
-  "legacy": {
-    "orientationStreamId": "twin-wing-keep",
-    "embeddingFailureCode": "TWIN_WING_EMBEDDING_EXHAUSTED",
-    "branchSearchExpansions": 0
-  }
+  "allowGenericRoomWings": false
 }

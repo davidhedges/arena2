@@ -1,17 +1,30 @@
 # Route topology authoring — proposal
 
-Date: 2026-07-25. Status: **authoring model agreed; §8 forks all ruled. §5 step 1
-(the output-neutral data cutover) is implemented — see
+Date: 2026-07-25. Status: **authoring model agreed; §8 forks all ruled. §5 steps
+1 and 2 are both implemented — see
 [`ROUTE_TOPOLOGY_AUTHORING.md`](ROUTE_TOPOLOGY_AUTHORING.md) for the shipped
-format and `CURRENT_STATUS.md` for what landed. Steps 2 and 3 are not started.**
+format and `CURRENT_STATUS.md` for what landed and what it measured. Step 3 (the
+drafted topologies in §6) is not started.**
 
-Two deliberate departures from the §3 sketch below, both because step 1 must not
-move output: lane gaps are fixed scalars or fixed per-lane arrays rather than
-`[min, max]` ranges (the rubber sheet is step 2), and `weight` is not parsed at
-all (weighted selection is step 2, so the field would be dead data). The shipped
-schema also carries `vista.id`, `allowGenericRoomWings`, `spatial.settings`, and a
-quarantined `legacy` block of hash-compatibility values; §7's table did not
-anticipate those.
+Where the shipped step 2 differs from the §3/§4 sketch below:
+
+- A lane gap range is `{ min, max }`, not a two-element array. `[9, 12]` already
+  meant "two fixed per-lane gaps" in the step 1 format (twin-wing authors
+  `[6,5,6,8,8,9]`), so a two-element array could not also mean a range without
+  silently reinterpreting an existing file. Either bound may be omitted and falls
+  back to the profile pitch.
+- §4's `minGap = maxRoomExtentOnAxis + 1` is not computed; the profile's own
+  pitch is the default minimum, and the validator reports when a lane is tighter
+  than the largest room that can land in it.
+- The slack budget is capped by a new per-profile `latticeSlackMaxCells` (shipped
+  at 8) as well as by the envelope. §4 called that the honest fix if fill bit; it
+  does bite, and the measurement is in `CURRENT_STATUS.md`.
+- Spatial settings are one profile default plus per-topology *overrides* of any
+  field, rather than the three fields §3 sketched. `twin-wing-keep` needs a
+  room-size override to fit its seven-column lattice at all.
+- The shipped schema also carries `vista.id` and `allowGenericRoomWings`, which
+  §7's table did not anticipate. The step 1 `legacy` block and `spatial.settings`
+  token are gone, and the loader now rejects both by name.
 
 Context: `CURRENT_STATUS.md` "Open: variation regression". Owner ruling 2026-07-25:
 **an archetype is a different route graph entirely.** This page proposes how a
@@ -37,7 +50,7 @@ corridors, stair candidate choice, aerial bridges, 1u zone splits — perturbs a
 skeleton drawn from a set of 24. That is the whole regression. Room size (item 1)
 was a real but second-order contributor.
 
-### Finding A — item 1's room-size widening reaches only half the seeds
+### Finding A — item 1's room-size widening reaches only half the seeds *(closed in step 2)*
 
 `ResolvePatternSpatialSettings` returns `settings.processionalSpatial` (the
 profile asset, widened on 2026-07-25) **only for `processional-spine`**. Atrium-ring

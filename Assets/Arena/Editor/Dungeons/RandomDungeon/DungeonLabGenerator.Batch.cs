@@ -735,6 +735,19 @@ namespace DungeonLab.Editor
                 token?.Value<int?>("y") ?? int.MinValue);
         }
 
+        private static JObject FindRouteNodeProjection(JObject routeIntent, string nodeId)
+        {
+            foreach (JToken node in routeIntent?["nodes"] as JArray ?? new JArray())
+            {
+                if (string.Equals(node.Value<string>("id"), nodeId, StringComparison.Ordinal))
+                {
+                    return node as JObject;
+                }
+            }
+
+            return null;
+        }
+
         private static string BuildRouteIntentOnlySnapshot(int seed)
         {
             ResetRouteDiagnostics();
@@ -756,6 +769,7 @@ namespace DungeonLab.Editor
 
             var lines = new List<string>
             {
+                $"selector.firstSeed={FirstSeedSelectingTopology(ProcessionalPatternId, BaselineFirstSeed, 2000)}",
                 SnapshotLine("route.pattern", intent["patternId"]),
                 SnapshotLine("route.nodeCount", intent["nodeCount"]),
                 SnapshotLine("route.mainRouteCount", intent["graph"]?["mainRouteCount"]),
@@ -766,8 +780,15 @@ namespace DungeonLab.Editor
                 SnapshotLine("vista.facingRequirement", intent["vista"]?["facingRequirement"]),
                 SnapshotLine("vista.minimumReservedVoidCells", intent["vista"]?["minimumReservedVoidCells"]),
                 SnapshotLine("vertical.elevationPolicy", intent["elevationPolicy"]),
-                SnapshotLine("vertical.bottomRelativeLevel", intent["nodes"]?[0]?["relativeElevationLevels"]),
-                SnapshotLine("vertical.topRelativeLevel", intent["nodes"]?[8]?["relativeElevationLevels"]),
+                // The anchors are declared, so read them by id. Indices 0 and 8
+                // only ever happened to be the anchors of a 13-node ascending
+                // graph.
+                SnapshotLine(
+                    "vertical.bottomRelativeLevel",
+                    FindRouteNodeProjection(intent, intent.Value<string>("bottomNode"))?["relativeElevationLevels"]),
+                SnapshotLine(
+                    "vertical.topRelativeLevel",
+                    FindRouteNodeProjection(intent, intent.Value<string>("topNode"))?["relativeElevationLevels"]),
                 SnapshotLine("episode.id", phase4Recipe?["id"]),
                 SnapshotLine("episode.slotNode", phase4Recipe?["slotNode"]),
                 SnapshotLine("episode.focalAxisBinding", phase4Recipe?["orientationBinding"]),
@@ -782,6 +803,74 @@ namespace DungeonLab.Editor
                 $"containsSpatialCoordinates={containsSpatialCoordinates}"
             };
             return string.Join("\n", lines);
+        }
+
+        // Every node of degree >= 3, with its degree. A general graph has no
+        // single attach/rejoin pair — twin-wing already forks twice off one hub
+        // — so the honest report is the whole junction set.
+        private static string RouteJunctionSummary(RouteIntent intent)
+        {
+            var junctions = new List<string>(intent.junctionNodes.Length);
+            foreach (int node in intent.junctionNodes)
+            {
+                junctions.Add($"{intent.nodes[node].id}:{intent.adjacency[node].Count}");
+            }
+
+            return string.Join("|", junctions);
+        }
+
+        // Diagnostics that want a specific topology have to ask for one: with a
+        // weighted draw, no seed is guaranteed to select any particular graph.
+        private static int FirstSeedSelectingTopology(string topologyId, int firstSeed, int seedLimit)
+        {
+            for (int index = 0; index < seedLimit; index++)
+            {
+                if (string.Equals(SelectRouteTopologyId(firstSeed + index), topologyId, StringComparison.Ordinal))
+                {
+                    return firstSeed + index;
+                }
+            }
+
+            throw new InvalidOperationException(
+                $"[ROUTE_TOPOLOGY] no seed in {firstSeed}..{firstSeed + seedLimit - 1} selects '{topologyId}'; " +
+                "check its weight");
+        }
+
+        private static string TopologyWeightSummary()
+        {
+            var weights = new List<string>();
+            foreach (DungeonRouteTopology topology in AllRouteTopologiesByFileOrder())
+            {
+                weights.Add($"{topology.id}:{topology.weight}");
+            }
+
+            return string.Join("|", weights);
+        }
+
+        // A weighted draw has no residue table to read off, so the selector is
+        // characterised by the distribution it actually produces over a window.
+        private static string TopologySelectionSummary(int firstSeed, int seedCount)
+        {
+            var counts = new SortedDictionary<string, int>(StringComparer.Ordinal);
+            foreach (DungeonRouteTopology topology in AllRouteTopologiesByFileOrder())
+            {
+                counts[topology.id] = 0;
+            }
+
+            for (int index = 0; index < seedCount; index++)
+            {
+                string selected = SelectRouteTopologyId(firstSeed + index);
+                counts.TryGetValue(selected, out int seen);
+                counts[selected] = seen + 1;
+            }
+
+            var summary = new List<string>(counts.Count);
+            foreach (KeyValuePair<string, int> entry in counts)
+            {
+                summary.Add($"{entry.Key}:{entry.Value}");
+            }
+
+            return string.Join("|", summary);
         }
 
         private static RouteIntent BuildDiagnosticRouteIntent(int seed)
@@ -914,8 +1003,9 @@ namespace DungeonLab.Editor
             int vistaCenterDistance = Mathf.Abs(vistaDelta.x) + Mathf.Abs(vistaDelta.y);
             return string.Join("\n", new[]
             {
-                $"selector.evenPattern={SelectRouteTopologyId(2026072100)}",
-                $"selector.oddPattern={SelectRouteTopologyId(2026072101)}",
+                $"selector.weights={TopologyWeightSummary()}",
+                $"selector.distribution={TopologySelectionSummary(BaselineFirstSeed, 200)}",
+                $"selector.firstSeed={FirstSeedSelectingTopology(AtriumRingPatternId, BaselineFirstSeed, 2000)}",
                 $"processional.plannerVersion={processional.plannerVersion}",
                 $"processional.cycleLength={processional.cycleCoreNodeCount}",
                 $"graph.pattern={intent.patternId}",
@@ -924,8 +1014,7 @@ namespace DungeonLab.Editor
                 $"graph.edgeCount={intent.traversalEdges.Length}",
                 $"graph.loopEdges={intent.traversalEdges.Length - (intent.nodes.Length - 1)}",
                 $"graph.cycleLength={CountCycleCoreNodes(adjacency)}",
-                $"graph.branchAttach={intent.nodes[intent.branchAttachNode].id}",
-                $"graph.branchRejoin={intent.nodes[intent.branchRejoinNode].id}",
+                $"graph.junctions={RouteJunctionSummary(intent)}",
                 $"graph.nodeIds={string.Join("|", nodeIds)}",
                 $"graph.edgeDetails={string.Join("|", edgeDetails)}",
                 $"vista.id={intent.vista.id}",
@@ -994,10 +1083,9 @@ namespace DungeonLab.Editor
             int vistaCenterDistance = Mathf.Abs(vistaDelta.x) + Mathf.Abs(vistaDelta.y);
             return string.Join("\n", new[]
             {
-                $"selector.residue0Pattern={SelectRouteTopologyId(2026072100)}",
-                $"selector.residue1Pattern={SelectRouteTopologyId(2026072101)}",
-                $"selector.residue2Pattern={SelectRouteTopologyId(2026072102)}",
-                $"selector.residue3Pattern={SelectRouteTopologyId(2026072103)}",
+                $"selector.weights={TopologyWeightSummary()}",
+                $"selector.distribution={TopologySelectionSummary(BaselineFirstSeed, 200)}",
+                $"selector.firstSeed={FirstSeedSelectingTopology(TwinWingPatternId, BaselineFirstSeed, 2000)}",
                 $"processional.plannerVersion={processional.plannerVersion}",
                 $"atrium.plannerVersion={atrium.plannerVersion}",
                 $"graph.pattern={intent.patternId}",
@@ -1008,11 +1096,7 @@ namespace DungeonLab.Editor
                 $"graph.branchNodeCount={branchNodeCount}",
                 $"graph.loopEdges={intent.traversalEdges.Length - (intent.nodes.Length - 1)}",
                 $"graph.cycleCoreNodes={CountCycleCoreNodes(adjacency)}",
-                $"graph.branchAttach={intent.nodes[intent.branchAttachNode].id}",
-                $"graph.branchAttachDegree={adjacency[intent.branchAttachNode].Count}",
-                $"graph.branchRejoin={intent.nodes[intent.branchRejoinNode].id}",
-                $"graph.branchRejoinDegree={adjacency[intent.branchRejoinNode].Count}",
-                "graph.wingPathLengths=4|4",
+                $"graph.junctions={RouteJunctionSummary(intent)}",
                 $"graph.nodeIds={string.Join("|", nodeIds)}",
                 $"graph.edgeDetails={string.Join("|", edgeDetails)}",
                 $"vista.id={intent.vista.id}",
@@ -1032,9 +1116,12 @@ namespace DungeonLab.Editor
 
         private static string BuildRouteRhythmSnapshot(int seed)
         {
-            RouteIntent processional = BuildDiagnosticSelectedRouteIntent(2026072100);
-            RouteIntent atrium = BuildDiagnosticSelectedRouteIntent(2026072101);
-            RouteIntent twinWing = BuildDiagnosticSelectedRouteIntent(2026072103);
+            RouteIntent processional = BuildDiagnosticSelectedRouteIntent(
+                FirstSeedSelectingTopology(ProcessionalPatternId, BaselineFirstSeed, 2000));
+            RouteIntent atrium = BuildDiagnosticSelectedRouteIntent(
+                FirstSeedSelectingTopology(AtriumRingPatternId, BaselineFirstSeed, 2000));
+            RouteIntent twinWing = BuildDiagnosticSelectedRouteIntent(
+                FirstSeedSelectingTopology(TwinWingPatternId, BaselineFirstSeed, 2000));
             bool processionalValid = TryValidateRouteRhythm(processional.nodes, out string processionalError);
             bool atriumValid = TryValidateRouteRhythm(atrium.nodes, out string atriumError);
             bool twinWingValid = TryValidateRouteRhythm(twinWing.nodes, out string twinWingError);
@@ -1139,12 +1226,15 @@ namespace DungeonLab.Editor
 
         private static string BuildNamedPromontorySnapshot(int seed)
         {
-            JObject processional = BuildSeedReport(2026072124);
-            JObject noSurplus = BuildSeedReport(2026072100);
-            JObject atrium = BuildSeedReport(2026072101);
-            JObject twinWing = BuildSeedReport(2026072103);
+            JObject processional = BuildSeedReport(
+                FirstSeedSelectingTopology(ProcessionalPatternId, 2026072124, 2000));
+            JObject noSurplus = BuildSeedReport(BaselineFirstSeed);
+            JObject atrium = BuildSeedReport(
+                FirstSeedSelectingTopology(AtriumRingPatternId, BaselineFirstSeed, 2000));
+            JObject twinWing = BuildSeedReport(
+                FirstSeedSelectingTopology(TwinWingPatternId, BaselineFirstSeed, 2000));
 
-            RouteIntent probeIntent = BuildDiagnosticSelectedRouteIntent(2026072100);
+            RouteIntent probeIntent = BuildDiagnosticSelectedRouteIntent(BaselineFirstSeed);
             Vector2Int probeSource = Vector2Int.zero;
             Vector2Int probeTarget = new Vector2Int(0, 5);
             Vector2Int probeFacing = Vector2Int.up;
@@ -1397,21 +1487,24 @@ namespace DungeonLab.Editor
                 $"gallery.secondMessage={secondGalleryMessage}"
             };
 
-            foreach ((string prefix, int patternSeed) sample in new[]
+            // Selection is a weighted draw now, so a seed no longer names a
+            // topology. Find the first seed that actually selects each one.
+            foreach ((string prefix, string topologyId) sample in new[]
                      {
-                         ("processional", 2026072100),
-                         ("atrium", 2026072101),
-                         ("twinWing", 2026072103)
+                         ("processional", ProcessionalPatternId),
+                         ("atrium", AtriumRingPatternId),
+                         ("twinWing", TwinWingPatternId)
                      })
             {
-                JObject report = BuildSeedReport(sample.patternSeed);
+                JObject report = BuildSeedReport(
+                    FirstSeedSelectingTopology(sample.topologyId, 2026072100, 2000));
                 JObject slot = FindRecipeProjection(
                     report["routeIntent"]?["recipeSlots"] as JArray,
                     CornerReturnRecipeFixtureId);
                 JObject resolution = FindRecipeProjection(
                     report["recipeResolutions"] as JArray,
                     CornerReturnRecipeFixtureId);
-                JObject node = report["routeIntent"]?["nodes"]?[SharedReturnRecipeNode] as JObject;
+                JObject node = report["routeIntent"]?["nodes"]?[slot?.Value<int?>("slotNode") ?? 0] as JObject;
                 JObject entryPort = null;
                 JObject exitPort = null;
                 foreach (JToken port in slot?["ports"] as JArray ?? new JArray())
@@ -1463,6 +1556,30 @@ namespace DungeonLab.Editor
                 }
             }
 
+            // The return slot's node and its edge ids come from the topology
+            // file, not from a pinned node index and a pinned edge name.
+            RouteTopologySlot probeReturnSlot = null;
+            foreach (RouteTopologySlot slot in probeIntent?.topology.slots ?? Array.Empty<RouteTopologySlot>())
+            {
+                if (string.Equals(slot.slotId, ReturnRecipeSlotId, StringComparison.Ordinal))
+                {
+                    probeReturnSlot = slot;
+                    break;
+                }
+            }
+
+            int returnSlotNode = probeReturnSlot?.node ?? 0;
+            string returnEntryEdgeId = probeReturnSlot?.entryEdgeId ?? string.Empty;
+            string unrelatedEdgeId = string.Empty;
+            foreach (RouteTopologyEdge edge in probeIntent?.topology.edges ?? Array.Empty<RouteTopologyEdge>())
+            {
+                if (edge.fromNode != returnSlotNode && edge.toNode != returnSlotNode)
+                {
+                    unrelatedEdgeId = edge.id;
+                    break;
+                }
+            }
+
             bool validAxisResolved = TryResolveRouteForwardRecipeAxis(
                 probeIntent,
                 validSlot,
@@ -1470,10 +1587,10 @@ namespace DungeonLab.Editor
                 out Vector2Int validAxis);
             var missingExitSlot = new RecipeSlotIntent(
                 ReturnRecipeSlotId,
-                SharedReturnRecipeNode,
+                returnSlotNode,
                 recipe,
                 RecipeOrientationBinding.RouteForward,
-                new[] { new RecipePortBinding("entry", "wing-b-11-12") });
+                new[] { new RecipePortBinding("entry", returnEntryEdgeId) });
             bool missingExitRejected = !TryResolveRouteForwardRecipeAxis(
                 probeIntent,
                 missingExitSlot,
@@ -1481,13 +1598,13 @@ namespace DungeonLab.Editor
                 out _);
             var unrelatedExitSlot = new RecipeSlotIntent(
                 ReturnRecipeSlotId,
-                SharedReturnRecipeNode,
+                returnSlotNode,
                 recipe,
                 RecipeOrientationBinding.RouteForward,
                 new[]
                 {
-                    new RecipePortBinding("entry", "wing-b-11-12"),
-                    new RecipePortBinding("exit", "main-0-1")
+                    new RecipePortBinding("entry", returnEntryEdgeId),
+                    new RecipePortBinding("exit", unrelatedEdgeId)
                 });
             bool unrelatedExitRejected = !TryResolveRouteForwardRecipeAxis(
                 probeIntent,
@@ -1665,14 +1782,20 @@ namespace DungeonLab.Editor
                 $"derived.cycleRank={intent.cycleRank}",
                 $"derived.cycleCoreNodeCount={intent.cycleCoreNodeCount}",
                 $"derived.junctions={string.Join("|", junctionIds)}",
-                $"derived.branchAttach={intent.nodes[intent.branchAttachNode].id}",
-                $"derived.branchRejoin={intent.nodes[intent.branchRejoinNode].id}",
+                $"derived.weight={intent.topology.weight}",
+                $"selector.weights={TopologyWeightSummary()}",
+                $"selector.firstSeed={FirstSeedSelectingTopology(ProcessionalPatternId, BaselineFirstSeed, 2000)}",
                 $"contract.probeLoaded={probeLoaded}",
                 $"contract.probeNodeIds={string.Join("|", probeNodeIds)}",
                 $"contract.probeEdgeIds={string.Join("|", probeEdgeIds)}",
                 $"contract.nodeOrderIsDerived={nodeOrderIsDerived}",
                 $"contract.duplicateNodeIdRejected={RouteTopologyProbeRejects("\"probe-c\", \"culmination\"", "\"probe-a\", \"culmination\"")}",
-                $"contract.duplicateEdgeIdRejected={RouteTopologyProbeRejects("[\"A\", \"B\", \"Stair\"], [\"B\", \"C\", \"Stair\"]", "[\"A\", \"B\", \"Stair\", \"dup\"], [\"B\", \"C\", \"Stair\", \"dup\"]")}",
+                $"contract.pinnedEdgeIdRejected={RouteTopologyProbeRejects("[\"A\", \"B\", \"Stair\"]", "[\"A\", \"B\", \"Stair\", \"main-0-1\"]")}",
+                $"contract.legacyBlockRejected={RouteTopologyProbeRejects("\"plannerVersion\": \"probe-v1\",", "\"plannerVersion\": \"probe-v1\",\n  \"legacy\": { \"orientationStreamId\": \"route\" },")}",
+                $"contract.spatialSettingsTokenRejected={RouteTopologyProbeRejects("\"spatial\": {", "\"spatial\": { \"settings\": \"baseline\",")}",
+                $"contract.invertedLaneGapRejected={RouteTopologyProbeRejects("\"columnGapCells\": 9", "\"columnGapCells\": { \"min\": 12, \"max\": 9 }")}",
+                $"contract.unknownRoomSizeClassRejected={RouteTopologyProbeRejects("\"rowGapCells\": 9", "\"rowGapCells\": 9, \"roomSizes\": { \"gallery\": [5, 5, 5, 5] }")}",
+                $"contract.negativeWeightRejected={RouteTopologyProbeRejects("\"plannerVersion\": \"probe-v1\",", "\"plannerVersion\": \"probe-v1\",\n  \"weight\": -1,")}",
                 $"contract.unknownEndpointRejected={RouteTopologyProbeRejects("[\"A\", \"B\", \"Stair\"]", "[\"A\", \"Z\", \"Stair\"]")}",
                 $"contract.selfEdgeRejected={RouteTopologyProbeRejects("[\"A\", \"B\", \"Stair\"]", "[\"A\", \"A\", \"Stair\"]")}",
                 $"contract.parallelEdgeRejected={RouteTopologyProbeRejects("[\"B\", \"C\", \"Stair\"]", "[\"B\", \"A\", \"Stair\"]")}",
@@ -1695,7 +1818,7 @@ namespace DungeonLab.Editor
   ""displayName"": ""Loader Probe"",
   ""plannerVersion"": ""probe-v1"",
   ""map"": [""A  B  C""],
-  ""spatial"": { ""settings"": ""baseline"", ""columnGapCells"": 9, ""rowGapCells"": 9 },
+  ""spatial"": { ""columnGapCells"": 9, ""rowGapCells"": 9 },
   ""nodes"": {
     ""A"": [""probe-a"", ""arrival"", ""arrival"", 0, { ""main"": 0 }],
     ""B"": [""probe-b"", ""connector"", ""compression"", 4, { ""main"": 1 }],
@@ -3083,6 +3206,16 @@ namespace DungeonLab.Editor
             }
 
             int loopEdges = intent.traversalEdges.Length - (intent.nodes.Length - 1);
+            var junctionNodes = new JArray();
+            foreach (int junction in intent.junctionNodes)
+            {
+                junctionNodes.Add(new JObject
+                {
+                    ["nodeId"] = intent.nodes[junction].id,
+                    ["degree"] = intent.adjacency[junction].Count
+                });
+            }
+
             var recipeSlots = new JArray();
             foreach (RecipeSlotIntent slot in intent.recipeSlots)
             {
@@ -3109,8 +3242,7 @@ namespace DungeonLab.Editor
                     ["traversalEdges"] = traversalEdges,
                     ["traversalEdgeCount"] = traversalEdges.Count,
                     ["loopEdges"] = loopEdges,
-                    ["branchAttachNode"] = intent.nodes[intent.branchAttachNode].id,
-                    ["branchRejoinNode"] = intent.nodes[intent.branchRejoinNode].id
+                    ["junctionNodes"] = junctionNodes
                 },
                 ["vista"] = new JObject
                 {
@@ -3274,7 +3406,8 @@ namespace DungeonLab.Editor
             {
                 ["layoutAttempt"] = lastLayoutAttempt,
                 ["mainEmbeddingAttempts"] = lastMainEmbeddingAttempts,
-                ["branchSearchExpansions"] = lastBranchSearchExpansions,
+                ["latticeSlackSpentCells"] = lastLatticeSlackSpentCells,
+                ["latticeSlackAvailableCells"] = lastLatticeSlackAvailableCells,
                 ["roomInflationAttempts"] = lastRoomInflationAttempts,
                 ["nodeCenters"] = centers,
                 ["pinnedApproaches"] = approaches,
@@ -5128,7 +5261,8 @@ namespace DungeonLab.Editor
                 ["archetypes"] = archetypes,
                 ["topologySelection"] = new JObject
                 {
-                    ["method"] = "seed-modulo4-v1",
+                    ["method"] = "weighted-registry-draw-v1",
+                    ["weights"] = TopologyWeightSummary(),
                     ["selectedPatternCounts"] = selectedPatterns,
                     ["acceptedPatternCounts"] = acceptedPatterns
                 },

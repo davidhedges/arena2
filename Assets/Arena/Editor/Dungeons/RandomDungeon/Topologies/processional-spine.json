@@ -1,11 +1,13 @@
 {
   // Route topology: one authored diagram per file. See
-  // docs/dungeon-builder/route-topology-authoring-2026-07-25.md for the schema
-  // and docs/dungeon-builder/ROUTE_TOPOLOGY_AUTHORING.md for the rule list.
-  // Check a draft with Tools > Dungeon Lab > Validate Topologies.
+  // docs/dungeon-builder/ROUTE_TOPOLOGY_AUTHORING.md for the schema and the
+  // rule list. Check a draft with Tools > Dungeon Lab > Validate Topologies.
   "id": "processional-spine",
   "displayName": "Processional Spine",
-  "plannerVersion": "processional-spine-v6",
+  "plannerVersion": "processional-spine-v7",
+
+  // Selection weight. Every topology draws equally until one earns otherwise.
+  "weight": 1,
 
   // One whitespace-separated token per lattice cell; '.' is an empty cell.
   // The FIRST row is the TOP row (highest lattice y).
@@ -17,9 +19,11 @@
   ],
 
   "spatial": {
-    // "profile" takes the generation profile's processionalSpatial verbatim,
-    // including its pitch, which becomes the uniform lattice lane gap.
-    "settings": "profile"
+    // Both bounds default to the profile's pitch, so the minimum lane gap is
+    // whatever the active profile calls one step and the rubber sheet spends
+    // up to four more cells per lane on top of it.
+    "columnGapCells": { "max": 13 },
+    "rowGapCells": { "max": 13 }
   },
 
   // key: [ id, role, beat, level, order ]. Level is absolute in 4u units.
@@ -41,30 +45,29 @@
     "M": ["branch-return",  "connector",         "return",       20, { "branch": 3 }]
   },
 
-  // [ from, to, kind ] — rise is derived from the two node levels and the id
-  // derives as "{from}-{to}". The optional 4th element pins a legacy edge id;
-  // these three ported topologies carry theirs so the batch hash is unmoved.
+  // [ from, to, kind ] and nothing else: the id derives as "{from}-{to}" and
+  // the rise derives from the two node levels, signed in travel order.
   "edges": [
-    ["A", "B", "LevelCorridor", "main-0-1"],
-    ["B", "C", "Stair",         "main-1-2"],
-    ["C", "D", "LevelCorridor", "main-2-3"],
-    ["D", "E", "Stair",         "main-3-4"],
-    ["E", "F", "Stair",         "main-4-5"],
-    ["F", "G", "Stairwell",     "main-5-6"],
-    ["G", "H", "Stair",         "main-6-7"],
-    ["H", "I", "Stair",         "main-7-8"],
-    ["C", "J", "Bridge",        "branch-2-9"],
-    ["J", "K", "LevelCorridor", "branch-9-10"],
-    ["K", "L", "Stair",         "branch-10-11"],
-    ["L", "M", "Stair",         "branch-11-12"],
-    ["M", "H", "LevelCorridor", "rejoin-12-7"]
+    ["A", "B", "LevelCorridor"],
+    ["B", "C", "Stair"],
+    ["C", "D", "LevelCorridor"],
+    ["D", "E", "Stair"],
+    ["E", "F", "Stair"],
+    ["F", "G", "Stairwell"],
+    ["G", "H", "Stair"],
+    ["H", "I", "Stair"],
+    ["C", "J", "Bridge"],
+    ["J", "K", "LevelCorridor"],
+    ["K", "L", "Stair"],
+    ["L", "M", "Stair"],
+    ["M", "H", "LevelCorridor"]
   ],
 
   "slots": [
-    { "id": "required-compression", "at": "B", "entry": "main-0-1",     "exit": "main-1-2" },
-    { "id": "required-landmark",    "at": "E", "entry": "main-3-4",     "exit": "main-4-5",
+    { "id": "required-compression", "at": "B", "entry": "A-B", "exit": "B-C" },
+    { "id": "required-landmark",    "at": "E", "entry": "D-E", "exit": "E-F",
       "orientation": "vista-source-to-target" },
-    { "id": "required-return",      "at": "M", "entry": "branch-11-12", "exit": "rejoin-12-7" }
+    { "id": "required-return",      "at": "M", "entry": "L-M", "exit": "M-H" }
   ],
 
   "vista": { "id": "branch-overlook-to-landmark", "from": "J", "to": "E", "minVoidCells": 3 },
@@ -74,13 +77,5 @@
   "overlooks": [["G", "J"], ["H", "K"]],
 
   "anchors": { "bottom": "A", "top": "I" },
-  "allowGenericRoomWings": true,
-
-  // Hash-compat only: values the pre-port per-pattern C# embedders reported.
-  // Step 2 unifies them and the batch hash moves anyway — delete this block then.
-  "legacy": {
-    "orientationStreamId": "route",
-    "embeddingFailureCode": "ROUTE_MAIN_EMBEDDING_EXHAUSTED",
-    "branchSearchExpansions": 7
-  }
+  "allowGenericRoomWings": true
 }
