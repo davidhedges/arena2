@@ -380,26 +380,11 @@ namespace DungeonLab.Editor
             unchecked
             {
                 uint hash = 2166136261u;
-                MixExternalConnectorHash(ref hash, dungeonSeed.ToString(
+                MixDerivedSeedHash(ref hash, dungeonSeed.ToString(
                     System.Globalization.CultureInfo.InvariantCulture));
-                MixExternalConnectorHash(ref hash, ExternalConnectorPromontoryPolicyVersion);
-                MixExternalConnectorHash(ref hash, purpose ?? string.Empty);
+                MixDerivedSeedHash(ref hash, ExternalConnectorPromontoryPolicyVersion);
+                MixDerivedSeedHash(ref hash, purpose ?? string.Empty);
                 return hash;
-            }
-        }
-
-        private static void MixExternalConnectorHash(ref uint hash, string value)
-        {
-            unchecked
-            {
-                foreach (char character in value)
-                {
-                    hash ^= character;
-                    hash *= 16777619u;
-                }
-
-                hash ^= 0xffu;
-                hash *= 16777619u;
             }
         }
 

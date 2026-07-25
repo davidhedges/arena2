@@ -1,5 +1,13 @@
 # Dungeon generator architectural review
 
+> **Implementation status, 2026-07-25.** Level 0, most of Level 1, and
+> recommendations 2.1 (validation gate), 2.2/2.3 (derived RNG) and 1.2 (splitting
+> `TryBuildCellLevelField`) all landed on the day of the review, in that order,
+> each gated on the measurement the previous one made possible. See
+> [`CURRENT_STATUS.md`](CURRENT_STATUS.md) for the landed list and the numbers.
+> The findings below are preserved as written at review time; where a finding has
+> been addressed it is marked **[FIXED 2026-07-25]** inline.
+
 Date: 2026-07-25
 Scope: `Assets/Arena/Editor/Dungeons/RandomDungeon` (24 files, ~47.6k lines), `Assets/Arena/Tests/Editor/DungeonLab*` (25 files, ~4.4k lines), `docs/dungeon-builder/*`, generated data under `Assets/Arena/Content/Settings/Dungeons/RandomDungeon`.
 Method: end-to-end reconstruction from `RandomDungeonSceneBuilder.RebuildWithSeed` through to the saved scene and exported collision payloads. No production code was modified.
@@ -440,33 +448,33 @@ These are not consolation prizes; they are the reason a rewrite would be a mista
 
 ### Critical
 
-**C1 — Production generation has no acceptance gate.**
+**C1 — Production generation has no acceptance gate.** **[FIXED 2026-07-25]** — checks moved to `DungeonLabGenerator.Validation.cs`, called from `TryBuildTieredLevelPlanAttempt`; the four renderer soft-skips now throw.
 Files: [DungeonLabGenerator.cs:328–404](Assets/Arena/Editor/Dungeons/RandomDungeon/DungeonLabGenerator.cs#L328-L404), [Batch.cs:4495](Assets/Arena/Editor/Dungeons/RandomDungeon/DungeonLabGenerator.Batch.cs#L4495) (single call site at 3865), four soft-continue sites in [ElevationEdgeModel.cs](Assets/Arena/Editor/Dungeons/RandomDungeon/ElevationEdgeModel.cs#L537) (537, 553, 1629, 1677 — two of which are invisible even to `stats.rejected`), [RandomDungeonSceneBuilder.cs:119–158](Assets/Arena/Editor/Dungeons/RandomDungeon/RandomDungeonSceneBuilder.cs#L119-L158).
 The strongest validation the project owns runs only when building reports, and the renderer's soft rejections do not stop the scene from being saved and exported. Documented invariant "the renderer does not repair plans; rendering either consumes valid canonical plan data or rejects it" is not enforced.
 
-**C2 — Shared RNG stream through nested retry loops.**
+**C2 — Shared RNG stream through nested retry loops.** **[FIXED 2026-07-25]** — replaced by `DungeonRandomScope`, which derives one stream per (seed, layout attempt, tier attempt, purpose, subject). No stream is threaded sequentially between stages. `TierPlacementAttempts` then dropped 32 -> 4 output-neutrally.
 Files: [cs:202](Assets/Arena/Editor/Dungeons/RandomDungeon/DungeonLabGenerator.cs#L202), [cs:949–997](Assets/Arena/Editor/Dungeons/RandomDungeon/DungeonLabGenerator.cs#L949-L997), [cs:1121–1140](Assets/Arena/Editor/Dungeons/RandomDungeon/DungeonLabGenerator.cs#L1121-L1140), [cs:3176](Assets/Arena/Editor/Dungeons/RandomDungeon/DungeonLabGenerator.cs#L3176), [cs:5564](Assets/Arena/Editor/Dungeons/RandomDungeon/DungeonLabGenerator.cs#L5564), [cs:1389](Assets/Arena/Editor/Dungeons/RandomDungeon/DungeonLabGenerator.cs#L1389).
 Retry count and rejected-candidate counts leak into unrelated downstream decisions. This is the root cause of the hash-lock ceremony and the reason every change requires a 50-seed proof.
 
 ### High
 
-**H1 — `TryBuildCellLevelField` is a collapsed phase boundary.** 660 lines, six responsibilities, three mutable containers, twelve sequential steps, three of which each claim to be "last". Any new elevation, transition or decoration feature has nowhere else to go.
+**H1 — `TryBuildCellLevelField` is a collapsed phase boundary.** **[FIXED 2026-07-25]** — 660 -> 268 lines of orchestration. The 385-line per-connection body became `TryResolveConnectionTransition`, and the seam pass became `AddZoneSeamStepStrips`. Verified statement-for-statement identical to the originals, then end-to-end by an unchanged `resultHash`. 660 lines, six responsibilities, three mutable containers, twelve sequential steps, three of which each claim to be "last". Any new elevation, transition or decoration feature has nowhere else to go.
 
 **H2 — Two representations of the floor.** `DungeonLayout.floorCells` vs `TieredLevelPlan.cellLevels` diverge at CorrectiveConnections.cs:153.
 
-**H3 — Repair passes run after their own validation.** Headroom gate at cs:2234 precedes three mutating passes; the only backstop is a duplicated formula in the report path. Plus the silent `level = 0` fallback at cs:6455.
+**H3 — Repair passes run after their own validation.** **[PARTLY ADDRESSED 2026-07-25]** — the silent `level = 0` fallback in `FillUnassignedFloorCells` now returns a count and logs a warning naming it as a guess. It is deliberately *not* a rejection: it has never been observed firing, and promoting it without evidence could reject seeds that render correctly. The ordering problem itself (2.4) is unchanged. Headroom gate at cs:2234 precedes three mutating passes; the only backstop is a duplicated formula in the report path. Plus the silent `level = 0` fallback at cs:6455.
 
-**H4 — No API boundary; reflection-based test seam.** 24 test files, 46 `NonPublic` bindings, ~40 private snapshot builders, ~14.9k lines of evidence code `partial`-fused into the production class.
+**H4 — No API boundary; reflection-based test seam.** **[PARTLY ADDRESSED 2026-07-25]** — the ~5.4k-line evidence archive is deleted and the reflected surface shrank accordingly, but the reflection seam itself remains and is *forced*: `Arena.EditModeTests.asmdef` is the only asmdef under `Assets/Arena`, so the tests live in an asmdef assembly while the generator lives in the predefined `Assembly-CSharp-Editor`, and Unity does not permit an asmdef to reference a predefined assembly. Fixing this needs an asmdef migration of `Assets/Arena/Editor` as a whole (`GameplayCollisionExporter` included), not a change local to the dungeon code. 24 test files, 46 `NonPublic` bindings, ~40 private snapshot builders, ~14.9k lines of evidence code `partial`-fused into the production class.
 
 **H5 — The semantic model does not survive the pipeline.** `RouteIntent` is consumed and discarded; `TieredLevelPlan` receives derived resolutions but not node identity. The intent survives only in `static phase1LastRouteIntent` for report building. Nothing downstream — renderer, collision, scene — can answer "which route node is this room?", which blocks gameplay features (spawn by beat, encounter pacing by role) that the vocabulary already anticipates.
 
 ### Medium
 
-- **M1** Hash-preservation vestiges in production: `BaselineRoomSizeRangeForRole` + `SampleConfiguredRoomDimension` (RouteFirstPilot.cs:2364–2400). Config width changes RNG draw counts.
+- **M1** **[FIXED 2026-07-25]** the draw-reuse hack is gone (`SampleRoomDimension` is a plain sampler); the spacious baseline is kept because it is load-bearing as the stair-clearance cap, which my first draft missed. Was: hash-preservation vestiges in `BaselineRoomSizeRangeForRole` + `SampleConfiguredRoomDimension` (RouteFirstPilot.cs:2364–2400). Config width changes RNG draw counts.
 - **M2** `TieredLevelPlan` (cs:8016) carries 9 pre-formatted display strings (`transitionSummary`, `stairUsageSummary`, `topologySummary`, `placementClassSummary`, `stairCandidateSummary`, `portGraphSummary`, `roomsPerTierSummary`, `synthesizedStairSummary`, `archetypeName`) as canonical plan data. Log formatting is baked into the data model, and `stairCandidateSummary` is string-appended by four unrelated features (cs:2297–2312).
-- **M3** `LevelAssignmentAttempts = 32` names a stage that is now fully deterministic (`TryAssignRoomLevels` copies intent). The loop exists only to re-roll the shared stream — a retry compensating for weak construction rules.
+- **M3** **[INSTRUMENTED 2026-07-25]** renamed `TierPlacementAttempts`, with a `tierAttempts` field per seed and a `tierAttemptDistribution` in the batch report so the ceiling can be sized from data. The constant still names a stage that is now fully deterministic (`TryAssignRoomLevels` copies intent). The loop exists only to re-roll the shared stream — a retry compensating for weak construction rules.
 - **M4** Deck-level formula duplicated (cs:2062 vs Batch.cs:4903).
-- **M5** Dependency cycle: `RandomDungeonSceneBuilder` → `DungeonLabGenerator.GenerateWithSeed`; `DungeonLabGenerator.Phase7Collision` → `RandomDungeonSceneBuilder.RebuildWithSeedForValidation` (Phase7Collision.cs:589, 676, 1120).
+- **M5** **[FIXED 2026-07-25]** — broken by deleting `Phase7Collision`. Was: dependency cycle `RandomDungeonSceneBuilder` → `DungeonLabGenerator.GenerateWithSeed`; `DungeonLabGenerator.Phase7Collision` → `RandomDungeonSceneBuilder.RebuildWithSeedForValidation` (Phase7Collision.cs:589, 676, 1120).
 - **M6** Generation writes tracked project assets: `StairForge.AppendSynthesisLog` (StairForge.cs:2648) rewrites an 872 KB checked-in JSON with `DateTime.UtcNow` stamps as a side effect of every generate.
 - **M7** Contract inputs (`forged_stair_contracts.json` etc.) change generation output over time and are hashed only in the report path; the saved scene records only the seed.
 - **M8** `ElevationEdgeModel.BuildLevelField` has five overloads forming a parameter-accretion chain (3 → 4 → 5 → 6 → 7 optional inputs), each added by a feature.
@@ -475,7 +483,7 @@ Retry count and rejected-candidate counts leak into unrelated downstream decisio
 
 - **L1** Two unrelated `WallEdge` types (cs:8124 = cell+direction; ElevationEdgeModel.cs:9547 = edge+levels+partition).
 - **L2** Unstable `List.Sort` on a tie-heavy comparator (cs:1379).
-- **L3** `MixExternalConnectorHash` (CorrectiveConnections.cs:391) is a byte-identical copy of `MixPhase1Hash` (RouteFirstPilot.cs:2792); `StairForge.StableHash` is a third variant.
+- **L3** **[FIXED 2026-07-25]** `MixExternalConnectorHash` (CorrectiveConnections.cs:391) is a byte-identical copy of `MixPhase1Hash` (RouteFirstPilot.cs:2792); `StairForge.StableHash` is a third variant.
 - **L4** `random_dungeon.collision.shared.json` and `random_dungeon.query_collision.shared.json` are byte-identical 5 MB files (verified: same MD5), regenerated on every rebuild. **Note for the LOS contract in `CLAUDE.md`:** the dungeon is exported with `reuseMovementCollisionForQueries: true`, so unlike seeded arenas, its query geometry *is* its (deliberately oversized) movement geometry. That is a defensible choice, but it is the opposite of the stated project rule and is worth recording explicitly rather than leaving as an emergent property of an exporter flag.
 
 ---
@@ -544,7 +552,27 @@ Added 2026-07-25 after you confirmed the phases are closed and that the status l
 | **R0.2** | Delete the ~20 phase/slice test files (`DungeonLabPhase3*`–`Phase7*`, `DungeonLabDensityAdjacencySlice1-6*`, `DungeonLabCorrective*`), including all three stale-hash failures | The suite's red baseline | Tests | Suite goes green; stale locks stop training you to ignore failures | Low | 2 h | No | Suite green |
 | **R0.3** | Keep and consolidate the genuinely reusable fixtures: characterization (determinism), stair boundary compatibility, recipe workflow, route-graph composition. Retarget them at the 2.6 API when it exists | Preserves real coverage | Tests | ~5 meaningful test files instead of 25 | Low | 4 h | No | Retained tests pass |
 | **R0.4** | Archive `CURRENT_STATUS.md`'s phase log and replace it with a short current-state page | The file confuses LLM assistants and humans returning to the work | Docs | Context cost per session drops sharply | None | 30 min | No | **Done 2026-07-25** — archived to `docs/archive/2026-07-dungeon-phase-log/` |
-| R0.5 | Consider archiving `COHERENT_FLOORPLAN_PLAN.md`, `DENSITY_ADJACENCY_PLAN.md`, `RECIPE_POOL_SELECTION_PLAN.md` alongside it; keep `PROJECT_INVARIANTS.md`, `GLOSSARY.md`, `ROOM_AUTHORING_GUIDE_CURRENT.md`, `RECIPE_AUTHORING_WORKFLOW.md`, `stair_forge_design.md` | Same | Docs | Reading path shrinks from 12 docs to 6 | None | 15 min | No | `README.md` reading order updated |
+| R0.5 | Consider archiving `COHERENT_FLOORPLAN_PLAN.md`, `DENSITY_ADJACENCY_PLAN.md`, `RECIPE_POOL_SELECTION_PLAN.md` alongside it; keep `PROJECT_INVARIANTS.md`, `GLOSSARY.md`, `ROOM_AUTHORING_GUIDE_CURRENT.md`, `RECIPE_AUTHORING_WORKFLOW.md`, `stair_forge_design.md` | Same | Docs | Reading path shrinks from 12 docs to 6 | None | 15 min | No | **Done 2026-07-25** — `README.md` reading order updated |
+
+**What R0 actually removed (2026-07-25).** One correction to my own scoping: the
+first draft implied all ~20 phase/slice test files were archaeology. On reading
+them, most were **live feature coverage that merely happened to be built during a
+phase** — the atrium-ring and twin-wing tests assert structural properties of two
+of the three production route patterns. Deleting them would have destroyed real
+coverage. What was actually archaeology was narrower:
+
+- the *measurement harness* (2000-seed sweeps, curated gallery, collision-export
+  parity, deletion-ledger source-text assertions) — deleted;
+- the density/adjacency slice snapshots for a closed, tabled workstream — deleted;
+- the per-phase acceptance-budget blocks in the batch report — deleted;
+- stale hardcoded plan hashes and planner-version equality assertions — deleted;
+- 59 diagnostic stage timers threaded through the planning path — deleted.
+
+Everything else was **renamed off phase vocabulary and kept**. Net: −5,428 lines
+in the generator, ~−1,100 in tests, 15 test files retained. The lesson worth
+keeping: "was built during a closed phase" is not the same as "is closed-phase
+evidence", and only reading each file distinguishes them.
+
 
 **Interpretation:** roughly 9k lines of code and 120 KB of prose exist to prove that finished work was finished. That proof has been recorded; the machinery that produced it has no remaining consumer. For a solo developer working with LLM assistance, this archive is not neutral — every assistant that reads the repo pays for it in context and is actively misled by phase vocabulary that no longer describes the system.
 

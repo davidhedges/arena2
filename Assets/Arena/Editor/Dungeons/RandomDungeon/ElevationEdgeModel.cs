@@ -532,34 +532,26 @@ namespace DungeonLab.Editor
                 if (!levels.TryGetValue(transition.firstCell, out int firstLevel) ||
                     !levels.TryGetValue(transition.secondCell, out int secondLevel))
                 {
-                    if (!string.IsNullOrEmpty(transition.stairPrefabPath))
-                    {
-                        Debug.LogError(
-                            $"Dungeon Lab Elevation Edge Model: rejected named set-piece stair transition because it referenced a missing floor cell: " +
-                            $"{transition.firstCell} <-> {transition.secondCell} prefab '{transition.stairPrefabPath}'. Continuing without aborting the build.");
-                        stats.rejected++;
-                        stats.stairSummaries.Add("multi-rise stair rejected missing-cell");
-                        continue;
-                    }
-
-                    throw new InvalidOperationException($"Transition edge references a missing floor cell: {transition.firstCell} <-> {transition.secondCell}.");
+                    // Was a logged skip until 2026-07-25. A skipped stair can
+                    // strand a whole tier, and the resulting scene was still saved
+                    // and exported. A named prefab is not a reason to ship a
+                    // dungeon with a missing staircase.
+                    stats.rejected++;
+                    stats.stairSummaries.Add("multi-rise stair rejected missing-cell");
+                    throw new InvalidOperationException(
+                        $"Transition edge references a missing floor cell: {transition.firstCell} <-> {transition.secondCell} " +
+                        $"prefab '{transition.stairPrefabPath}'.");
                 }
 
                 // Aerial decks (decisions 29-31) are legitimate rise-0 transitions;
                 // anything else at equal levels is a planning error.
                 if (firstLevel == secondLevel && transition.synthesizedSetPiece == null)
                 {
-                    if (!string.IsNullOrEmpty(transition.stairPrefabPath))
-                    {
-                        Debug.LogError(
-                            $"Dungeon Lab Elevation Edge Model: rejected named set-piece stair transition {transition.firstCell} <-> {transition.secondCell} " +
-                            $"because it had no level difference. Continuing without aborting the build.");
-                        stats.rejected++;
-                        stats.stairSummaries.Add("multi-rise stair rejected d0");
-                        continue;
-                    }
-
-                    throw new InvalidOperationException($"Transition edge {transition.firstCell} <-> {transition.secondCell} has no level difference.");
+                    stats.rejected++;
+                    stats.stairSummaries.Add("multi-rise stair rejected d0");
+                    throw new InvalidOperationException(
+                        $"Transition edge {transition.firstCell} <-> {transition.secondCell} has no level difference " +
+                        $"(prefab '{transition.stairPrefabPath}').");
                 }
 
                 Vector2Int higherCell = firstLevel > secondLevel ? transition.firstCell : transition.secondCell;
@@ -1624,15 +1616,12 @@ namespace DungeonLab.Editor
 
                 if (!levels.ContainsKey(transition.firstCell) || !levels.ContainsKey(transition.secondCell))
                 {
-                    if (!string.IsNullOrEmpty(transition.stairPrefabPath))
-                    {
-                        Debug.LogError(
-                            $"Dungeon Lab Elevation Edge Model: skipped named set-piece transition because it referenced a missing level cell: " +
-                            $"{transition.firstCell} <-> {transition.secondCell} prefab '{transition.stairPrefabPath}'. Continuing without aborting the build.");
-                        continue;
-                    }
-
-                    throw new InvalidOperationException($"Transition references a missing level cell: {transition.firstCell} <-> {transition.secondCell}.");
+                    // Skipping here silently omitted an opening from the wall
+                    // plan, which can seal a stair mouth. It never incremented
+                    // stats.rejected, so it was invisible even to the summary line.
+                    throw new InvalidOperationException(
+                        $"Transition references a missing level cell: {transition.firstCell} <-> {transition.secondCell} " +
+                        $"prefab '{transition.stairPrefabPath}'.");
                 }
 
                 if (AreCardinalNeighbors(transition.firstCell, transition.secondCell))
@@ -1674,11 +1663,10 @@ namespace DungeonLab.Editor
                 Vector2Int lowerCell = firstLevel > secondLevel ? transition.secondCell : transition.firstCell;
                 if (!TryDirectionFromCellToward(higherCell, lowerCell, out int lowerDirection))
                 {
-                    Debug.LogError(
-                        $"Dungeon Lab Elevation Edge Model: skipped non-straight named set-piece transition {higherCell}(L{Mathf.Max(firstLevel, secondLevel)}) -> " +
+                    throw new InvalidOperationException(
+                        $"Non-straight named set-piece transition {higherCell}(L{Mathf.Max(firstLevel, secondLevel)}) -> " +
                         $"{lowerCell}(L{Mathf.Min(firstLevel, secondLevel)}) prefab '{transition.stairPrefabPath}'. " +
-                        "Reserve-first currently accepts only measured straight-through connectors. Continuing without aborting the build.");
-                    continue;
+                        "Reserve-first accepts only measured straight-through connectors.");
                 }
 
                 openEdges.Add(new OpenEdgeKey(higherCell, lowerDirection));

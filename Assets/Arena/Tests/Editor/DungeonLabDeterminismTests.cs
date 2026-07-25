@@ -7,7 +7,7 @@ using NUnit.Framework;
 
 namespace Arena.Tests.Editor
 {
-    public sealed class DungeonLabPhase0CharacterizationTests
+    public sealed class DungeonLabDeterminismTests
     {
         private const int CharacterizationSeed = 2026072100;
         private static readonly Type GeneratorType = AppDomain.CurrentDomain

@@ -7,7 +7,7 @@ using NUnit.Framework;
 
 namespace Arena.Tests.Editor
 {
-    public sealed class DungeonLabPhase6ThirdRecipeTests
+    public sealed class DungeonLabCornerReturnRecipeTests
     {
         private const int Seed = 2026072100;
         private static readonly Type GeneratorType = AppDomain.CurrentDomain
@@ -118,9 +118,6 @@ namespace Arena.Tests.Editor
         {
             Dictionary<string, string> values = Snapshot.Value;
 
-            Assert.That(values["versions.summary"], Is.EqualTo("dungeon-plan-v11"));
-            Assert.That(values["versions.generator"], Is.EqualTo("route-topologies-v10"));
-            Assert.That(values["versions.spatialRandom"], Is.EqualTo("processional-spine-v1"));
             Assert.That(values["recipe.schema"], Is.EqualTo("1"));
             Assert.That(values["recipe.disabledForGeneration"], Is.EqualTo("False"));
             Assert.That(values["recipe.currentValid"], Is.EqualTo("True"));
@@ -129,7 +126,7 @@ namespace Arena.Tests.Editor
         private static Dictionary<string, string> BuildSnapshot()
         {
             MethodInfo method = GeneratorType.GetMethod(
-                "BuildPhase6fCornerReturnSnapshot",
+                "BuildCornerReturnRecipeSnapshot",
                 BindingFlags.Static | BindingFlags.NonPublic)!;
             Assert.That(method, Is.Not.Null, "Missing Phase 6f third-recipe diagnostic.");
             return Parse((string)method.Invoke(null, new object[] { Seed })!);

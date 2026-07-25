@@ -8,7 +8,7 @@ using NUnit.Framework;
 
 namespace Arena.Tests.Editor
 {
-    public sealed class DungeonLabPhase3VerticalIntentTests
+    public sealed class DungeonLabVerticalIntentTests
     {
         private const int VerticalIntentSeed = 2026072100;
         private static readonly Type GeneratorType = AppDomain.CurrentDomain
@@ -63,7 +63,7 @@ namespace Arena.Tests.Editor
         [Test]
         public void DeclaredProcessionalStair_ReservesEmbeddedFootprintInNarrowCorridor()
         {
-            string report = InvokeReportText("BuildPhase0SeedReport", VerticalIntentSeed);
+            string report = InvokeReportText("BuildSeedReport", VerticalIntentSeed);
             Match transition = Regex.Match(
                 report,
                 @"""edgeId"": ""main-1-2""(?:(?!""edgeId"").)*?""reservedBeforeFill"": true",

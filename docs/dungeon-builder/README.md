@@ -4,16 +4,17 @@ The former `dungeon_builder` Unity project is integrated as an Arena feature ins
 
 ## Start here
 
-If you are returning after time away, read these in order:
+1. [`CURRENT_STATUS.md`](CURRENT_STATUS.md) — what the generator is, how to run it, where the work stands.
+2. [`PROJECT_INVARIANTS.md`](PROJECT_INVARIANTS.md) — hard geometry, traversal, and placement rules. Read before changing generator, measurement, contract, or placement code.
+3. [`GLOSSARY.md`](GLOSSARY.md) — authoritative vocabulary (role vs. beat, room vs. recipe, zone, port, transition, reservation).
+4. [`ARCHITECTURE_REVIEW_2026-07-25.md`](ARCHITECTURE_REVIEW_2026-07-25.md) — current system model, findings, and recommended work.
+5. [`ROOM_AUTHORING_GUIDE_CURRENT.md`](ROOM_AUTHORING_GUIDE_CURRENT.md) and [`RECIPE_AUTHORING_WORKFLOW.md`](RECIPE_AUTHORING_WORKFLOW.md) — adding content.
+6. [`stair_forge_design.md`](stair_forge_design.md) — vertical-traversal design decisions and implementation history.
 
-1. [`CURRENT_STATUS.md`](CURRENT_STATUS.md) — active milestone, exact next action, and known state.
-2. [`COHERENT_FLOORPLAN_PLAN.md`](COHERENT_FLOORPLAN_PLAN.md) — the route-first implementation roadmap and exit gates.
-3. [`PROJECT_INVARIANTS.md`](PROJECT_INVARIANTS.md) — hard geometry, traversal, and placement rules.
-4. [`RECIPE_AUTHORING_WORKFLOW.md`](RECIPE_AUTHORING_WORKFLOW.md) — the workflow to use once the recipe foundation is implemented.
-5. [`stair_forge_design.md`](stair_forge_design.md) — vertical-traversal design decisions and implementation history.
-6. [`DENSITY_ADJACENCY_PLAN.md`](DENSITY_ADJACENCY_PLAN.md) — completed denser-floorplan, neighboring-room, and tier-seam workstream; closed at slice 6 with connectivity-topology slice 7 tabled.
-
-Always read [`PROJECT_INVARIANTS.md`](PROJECT_INVARIANTS.md) before changing generator, measurement, contract, or placement code.
+The completed phase plans and their evidence log live in
+[`docs/archive/2026-07-dungeon-phase-log/`](../archive/2026-07-dungeon-phase-log/).
+They are history, not instructions — do not treat their acceptance budgets or
+locked hashes as current constraints.
 
 ## Repository locations
 

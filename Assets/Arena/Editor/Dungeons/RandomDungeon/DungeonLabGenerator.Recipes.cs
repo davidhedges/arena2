@@ -794,12 +794,12 @@ namespace DungeonLab.Editor
             unchecked
             {
                 uint hash = 2166136261u;
-                MixPhase1Hash(
+                MixDerivedSeedHash(
                     ref hash,
                     dungeonSeed.ToString(System.Globalization.CultureInfo.InvariantCulture));
-                MixPhase1Hash(ref hash, topologyId ?? string.Empty);
-                MixPhase1Hash(ref hash, routeNodeId ?? string.Empty);
-                MixPhase1Hash(ref hash, "recipe-selection");
+                MixDerivedSeedHash(ref hash, topologyId ?? string.Empty);
+                MixDerivedSeedHash(ref hash, routeNodeId ?? string.Empty);
+                MixDerivedSeedHash(ref hash, "recipe-selection");
                 return new System.Random((int)hash);
             }
         }
@@ -1009,7 +1009,7 @@ namespace DungeonLab.Editor
 
             Vector2Int transverseAxis = new Vector2Int(-primaryAxis.y, primaryAxis.x);
             bool firstMirror = slot.recipe.allowMirror &&
-                Phase1Random(dungeonSeed, layoutAttempt, slot.recipe.recipeId, "mirror").Next(2) == 1;
+                DerivedRandom(dungeonSeed, layoutAttempt, slot.recipe.recipeId, "mirror").Next(2) == 1;
             bool mirrorMatched = false;
             bool mirrored = false;
             int mirrorAttempts = slot.recipe.allowMirror ? 2 : 1;
@@ -1127,7 +1127,7 @@ namespace DungeonLab.Editor
             {
                 DungeonRecipeVariation variation = SelectRecipeVariation(
                     slot.recipe,
-                    Phase1Random(dungeonSeed, layoutAttempt, slot.recipe.recipeId, "variation"));
+                    DerivedRandom(dungeonSeed, layoutAttempt, slot.recipe.recipeId, "variation"));
                 DungeonRecipeMotif motif = FindRecipeMotif(slot.recipe, variation.motifId);
                 variationId = variation.id;
                 visualImplementationId = motif.implementationId;

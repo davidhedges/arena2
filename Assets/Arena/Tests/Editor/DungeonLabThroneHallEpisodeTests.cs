@@ -9,7 +9,7 @@ using UnityEngine;
 
 namespace Arena.Tests.Editor
 {
-    public sealed class DungeonLabPhase4ThroneHallEpisodeTests
+    public sealed class DungeonLabThroneHallEpisodeTests
     {
         private const int EpisodeSeed = 2026072100;
         private const int HallwayEndClearanceSeed = 2062860779;
@@ -38,7 +38,7 @@ namespace Arena.Tests.Editor
         public void IsolatedProbe_CoversEveryAllowedOrientationAndFocalVariation()
         {
             Dictionary<string, string> isolated = ParseSnapshot(
-                InvokeSnapshot("BuildPhase5RecipeContractSnapshot", EpisodeSeed));
+                InvokeSnapshot("BuildRecipeContractSnapshot", EpisodeSeed));
             string recipe = RecipePrefix(isolated);
 
             Assert.That(isolated[$"{recipe}.id"], Is.EqualTo("episode_throne_twin_stairs_01"));
@@ -85,7 +85,7 @@ namespace Arena.Tests.Editor
         {
             Dictionary<string, string> report = EpisodeSnapshot();
             Dictionary<string, string> contract = ParseSnapshot(
-                InvokeSnapshot("BuildPhase5RecipeContractSnapshot", EpisodeSeed));
+                InvokeSnapshot("BuildRecipeContractSnapshot", EpisodeSeed));
             string recipe = RecipePrefix(report);
             string contractRecipe = RecipePrefix(contract);
 
@@ -170,7 +170,7 @@ namespace Arena.Tests.Editor
         {
             MethodInfo method = GeneratorType.GetMethods(BindingFlags.Static | BindingFlags.NonPublic)
                 .Single(candidate =>
-                    candidate.Name == "BuildPhase0RenderedSeed" &&
+                    candidate.Name == "BuildRenderedSeed" &&
                     candidate.GetParameters().Length == 6);
             object?[] arguments = { ShowpieceFitRegressionSeed, null, null, null, null, null };
             GameObject? root = null;

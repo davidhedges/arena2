@@ -7,7 +7,7 @@ using NUnit.Framework;
 
 namespace Arena.Tests.Editor
 {
-    public sealed class DungeonLabPhase6RouteRhythmTests
+    public sealed class DungeonLabRouteRhythmTests
     {
         private const int Seed = 2026072100;
         private static readonly Type GeneratorType = AppDomain.CurrentDomain
@@ -81,7 +81,7 @@ namespace Arena.Tests.Editor
         private static Dictionary<string, string> RhythmSnapshot()
         {
             MethodInfo method = GeneratorType.GetMethod(
-                "BuildPhase6dRouteRhythmSnapshot",
+                "BuildRouteRhythmSnapshot",
                 BindingFlags.Static | BindingFlags.NonPublic)!;
             Assert.That(method, Is.Not.Null, "Missing Phase 6d route-rhythm diagnostic.");
             return ParseSnapshot((string)method.Invoke(null, new object[] { Seed })!);

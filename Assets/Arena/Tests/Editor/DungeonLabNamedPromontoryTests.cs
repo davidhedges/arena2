@@ -7,7 +7,7 @@ using NUnit.Framework;
 
 namespace Arena.Tests.Editor
 {
-    public sealed class DungeonLabPhase6NamedPromontoryTests
+    public sealed class DungeonLabNamedPromontoryTests
     {
         private const int Seed = 2026072100;
         private static readonly Type GeneratorType = AppDomain.CurrentDomain
@@ -51,8 +51,6 @@ namespace Arena.Tests.Editor
         {
             Dictionary<string, string> snapshot = PromontorySnapshot();
 
-            Assert.That(snapshot["versions.summary"], Is.EqualTo("dungeon-plan-v11"));
-            Assert.That(snapshot["versions.generator"], Is.EqualTo("route-topologies-v10"));
             Assert.That(snapshot["processional.validation"], Is.EqualTo("True"));
             Assert.That(snapshot["atrium.validation"], Is.EqualTo("True"));
             Assert.That(snapshot["twinWing.validation"], Is.EqualTo("True"));
@@ -99,7 +97,7 @@ namespace Arena.Tests.Editor
         private static Dictionary<string, string> PromontorySnapshot()
         {
             MethodInfo method = GeneratorType.GetMethod(
-                "BuildPhase6eNamedPromontorySnapshot",
+                "BuildNamedPromontorySnapshot",
                 BindingFlags.Static | BindingFlags.NonPublic)!;
             Assert.That(method, Is.Not.Null, "Missing Phase 6e named-promontory diagnostic.");
             return ParseSnapshot((string)method.Invoke(null, new object[] { Seed })!);

@@ -38,7 +38,7 @@ namespace Arena.Tests.Editor
         {
             MethodInfo method = GeneratorType.GetMethods(BindingFlags.Static | BindingFlags.NonPublic)
                 .Single(candidate =>
-                    candidate.Name == "BuildPhase0RenderedSeed" &&
+                    candidate.Name == "BuildRenderedSeed" &&
                     candidate.GetParameters().Length == 4);
             object?[] arguments = { RegressionSeed, null, null, null };
             root = (GameObject?)method.Invoke(null, arguments);

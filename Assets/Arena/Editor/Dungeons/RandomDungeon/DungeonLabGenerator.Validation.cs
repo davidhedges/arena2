@@ -1,0 +1,224 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+namespace DungeonLab.Editor
+{
+    // One dungeon-plan validation gate, called from exactly one place in the
+    // generation path and reused verbatim by the batch report.
+    //
+    // Before 2026-07-25 these checks existed only inside the batch reporting
+    // path, so the strongest guarantee the project owned gated nothing: a plan
+    // that failed them was still rendered, saved, and exported. The checks now
+    // run inside the tier-attempt loop, where a failure is an ordinary retry
+    // reason, and the report projects the same result instead of recomputing it.
+    internal sealed partial class DungeonLabGenerator
+    {
+        // Named, independently derived random streams for the tier planner.
+        //
+        // Before 2026-07-25 one System.Random was threaded sequentially through
+        // both retry loops, so how many attempts had already failed decided which
+        // rooms were enclosed, which loops appeared, and which stair prefabs were
+        // picked. That is why unrelated edits reshuffled every seed and why stored
+        // hashes rotted. Every draw now comes from a stream keyed by
+        // (seed, layout attempt, tier attempt, purpose, subject), so a change to
+        // one decision provably cannot perturb another.
+        //
+        // The route planner already worked this way; this extends the same pattern
+        // across the tier seam rather than inventing a second mechanism.
+        private readonly struct DungeonRandomScope
+        {
+            private readonly int dungeonSeed;
+            private readonly int layoutAttempt;
+            private readonly int tierAttempt;
+
+            public DungeonRandomScope(int dungeonSeed, int layoutAttempt, int tierAttempt)
+            {
+                this.dungeonSeed = dungeonSeed;
+                this.layoutAttempt = layoutAttempt;
+                this.tierAttempt = tierAttempt;
+            }
+
+            public DungeonRandomScope ForTierAttempt(int attempt)
+            {
+                return new DungeonRandomScope(dungeonSeed, layoutAttempt, attempt);
+            }
+
+            /// <summary>One independent stream for a whole-plan decision.</summary>
+            public System.Random Stream(string purpose)
+            {
+                return DerivedRandom(
+                    dungeonSeed,
+                    layoutAttempt,
+                    purpose,
+                    $"tier-{tierAttempt.ToString(System.Globalization.CultureInfo.InvariantCulture)}");
+            }
+
+            /// <summary>One independent stream per subject, so per-item decisions cannot influence each other.</summary>
+            public System.Random Stream(string purpose, string subject)
+            {
+                return DerivedRandom(
+                    dungeonSeed,
+                    layoutAttempt,
+                    $"{purpose}:{subject}",
+                    $"tier-{tierAttempt.ToString(System.Globalization.CultureInfo.InvariantCulture)}");
+            }
+        }
+
+        internal readonly struct DungeonPlanCheck
+        {
+            public readonly string id;
+            public readonly string failureCode;
+            public readonly bool passed;
+            public readonly string message;
+
+            public DungeonPlanCheck(string id, string failureCode, bool passed, string message)
+            {
+                this.id = id;
+                this.failureCode = failureCode;
+                this.passed = passed;
+                this.message = message ?? string.Empty;
+            }
+        }
+
+        internal sealed class DungeonPlanValidation
+        {
+            public readonly bool passed;
+            public readonly DungeonPlanCheck[] checks;
+
+            public DungeonPlanValidation(DungeonPlanCheck[] checks)
+            {
+                this.checks = checks ?? Array.Empty<DungeonPlanCheck>();
+                passed = true;
+                foreach (DungeonPlanCheck check in this.checks)
+                {
+                    if (!check.passed)
+                    {
+                        passed = false;
+                        break;
+                    }
+                }
+            }
+
+            public IEnumerable<string> FailureCodes()
+            {
+                foreach (DungeonPlanCheck check in checks)
+                {
+                    if (!check.passed)
+                    {
+                        yield return check.failureCode;
+                    }
+                }
+            }
+
+            public string FirstFailure()
+            {
+                foreach (DungeonPlanCheck check in checks)
+                {
+                    if (!check.passed)
+                    {
+                        return $"[{check.failureCode}] {check.message}";
+                    }
+                }
+
+                return string.Empty;
+            }
+        }
+
+        // The boundary context is built here rather than after acceptance because
+        // it is both a validation input and a renderer input, and building it
+        // twice would consume the shared draw stream twice.
+        private static DungeonPlanValidation ValidateDungeonPlan(
+            int seed,
+            DungeonLayout layout,
+            TieredLevelPlan plan,
+            bool boundaryValid,
+            string boundaryMessage)
+        {
+            bool layoutConnected = IsConnected(layout.floorCells);
+            bool roomGraphConnected = TryValidateRoomGraphConnectivity(layout, out string roomGraphMessage);
+            bool transitionContractsValid = TryValidateTransitionLevelDeltas(
+                plan.cellLevels,
+                plan.transitions,
+                out string transitionMessage);
+
+            bool portGraphBuilt = TryBuildFloorStairPortGraph(
+                plan.cellLevels,
+                plan.transitions,
+                out FloorStairPortGraph portGraph,
+                out string portGraphBuildMessage);
+            bool portGraphConnected = false;
+            string portGraphConnectedMessage = portGraphBuildMessage;
+            if (portGraphBuilt)
+            {
+                portGraphConnected = portGraph.IsGloballyConnected(out portGraphConnectedMessage);
+            }
+
+            bool bottomToTop = portGraphConnected && plan.minLevel < plan.maxLevel;
+            bool routeRequirementsValid = TryValidateAcceptedRouteRequirements(plan, out string routeRequirementsMessage);
+            bool recipesValid = TryValidateAcceptedRecipes(plan, out string recipesMessage);
+            bool namedPromontoriesValid = TryValidateAcceptedNamedPromontories(plan, out string namedPromontoryMessage);
+            bool externalConnectorsValid = TryValidateAcceptedExternalConnectors(seed, plan, out string externalConnectorMessage);
+            bool headroomValid = TryValidateAcceptedPlanHeadroom(plan, out string headroomMessage);
+            bool rendererInputsValid = TryValidateRendererInputs(plan, out string rendererInputMessage);
+
+            return new DungeonPlanValidation(new[]
+            {
+                new DungeonPlanCheck(
+                    "layoutConnectivity",
+                    "FLOOR_CONNECTIVITY",
+                    layoutConnected,
+                    layoutConnected ? "floor mask connected" : "floor mask disconnected"),
+                new DungeonPlanCheck(
+                    "roomGraphConnectivity",
+                    "ROOM_GRAPH_CONNECTIVITY",
+                    roomGraphConnected,
+                    roomGraphMessage),
+                new DungeonPlanCheck(
+                    "transitionContracts",
+                    "TRANSITION_CONTRACT",
+                    transitionContractsValid,
+                    transitionMessage),
+                new DungeonPlanCheck(
+                    "verticalTraversal",
+                    "VERTICAL_TRAVERSAL",
+                    portGraphConnected,
+                    portGraphConnectedMessage),
+                new DungeonPlanCheck(
+                    "bottomToTopTraversal",
+                    "BOTTOM_TO_TOP_TRAVERSAL",
+                    bottomToTop,
+                    bottomToTop
+                        ? $"connected traversal spans levels {plan.minLevel}..{plan.maxLevel}"
+                        : $"traversal did not span distinct bottom/top levels ({plan.minLevel}..{plan.maxLevel})"),
+                new DungeonPlanCheck(
+                    "routeRequirements",
+                    "ROUTE_REQUIREMENTS",
+                    routeRequirementsValid,
+                    routeRequirementsMessage),
+                new DungeonPlanCheck("recipes", "RECIPES", recipesValid, recipesMessage),
+                new DungeonPlanCheck(
+                    "namedPromontories",
+                    "NAMED_PROMONTORY",
+                    namedPromontoriesValid,
+                    namedPromontoryMessage),
+                new DungeonPlanCheck(
+                    "externalConnectors",
+                    "EXTERNAL_CONNECTOR_PROMONTORY",
+                    externalConnectorsValid,
+                    externalConnectorMessage),
+                new DungeonPlanCheck(
+                    "headroom",
+                    "POST_PLAN_HEADROOM_CLEARANCE",
+                    headroomValid,
+                    headroomMessage),
+                new DungeonPlanCheck("boundary", "BOUNDARY_CONTEXT", boundaryValid, boundaryMessage),
+                new DungeonPlanCheck(
+                    "rendererInputs",
+                    "RENDERER_INPUT",
+                    rendererInputsValid,
+                    rendererInputMessage)
+            });
+        }
+    }
+}

@@ -18,18 +18,18 @@ namespace DungeonLab.Editor
         // Preserve the proven route embedding stream. Phase 5 changes only the
         // active recipe contract/ports and uses named per-recipe streams.
         private const string RouteSpatialRandomVersion = "processional-spine-v1";
-        private const string Phase1PatternId = "processional-spine";
+        private const string ProcessionalPatternId = "processional-spine";
         private const string AtriumRingPatternId = "atrium-ring";
         private const string TwinWingPatternId = "twin-wing-keep";
         private const string RouteIntentInvalidFailureCode = "ROUTE_INTENT_INVALID";
         private const string RecipeSelectionFailureCode = "RECIPE_SELECTION";
-        private const int Phase1LayoutAttemptLimit = 2;
+        private const int LayoutAttemptLimit = 2;
         private const int RouteMainNodeCount = 9;
         private const int RouteBranchNodeCount = 4;
-        private const int Phase1BranchAttachNode = 2;
-        private const int Phase1BranchRejoinNode = 7;
-        private const int Phase1VistaSourceNode = 9;
-        private const int Phase1VistaTargetNode = 4;
+        private const int ProcessionalBranchAttachNode = 2;
+        private const int ProcessionalBranchRejoinNode = 7;
+        private const int ProcessionalVistaSourceNode = 9;
+        private const int ProcessionalVistaTargetNode = 4;
         private const int AtriumRingBranchAttachNode = 3;
         private const int AtriumRingBranchRejoinNode = 6;
         private const int AtriumRingVistaSourceNode = 10;
@@ -38,8 +38,8 @@ namespace DungeonLab.Editor
         private const int TwinWingBranchRejoinNode = 5;
         private const int TwinWingVistaSourceNode = 8;
         private const int TwinWingVistaTargetNode = 4;
-        private const int Phase1BranchSearchExpansionLimit = 24;
-        private const int Phase1RoomInflationAttemptLimit = 6;
+        private const int BranchSearchExpansionLimit = 24;
+        private const int RoomInflationAttemptLimit = 6;
         private const int MaxMainRouteRoleOccurrences = 2;
         private const int MinimumMainRouteNodesBetweenRecipeSlots = 2;
         private const int MaximumNamedVistaPromontoryCells = 4;
@@ -55,16 +55,16 @@ namespace DungeonLab.Editor
 
         // Ephemeral diagnostic evidence for the most recent attempt.
         // It is never consumed by generation or carried into DungeonLayout.
-        private static RouteIntent phase1LastRouteIntent;
-        private static Vector2Int[] phase1LastNodeCenters = Array.Empty<Vector2Int>();
-        private static Vector2Int[] phase1LastVistaCells = Array.Empty<Vector2Int>();
-        private static Vector2Int phase1LastVistaSourceFacing;
-        private static Vector2Int phase1LastVistaTargetFacing;
-        private static int phase1LastLayoutAttempt;
-        private static int phase1LastMainEmbeddingAttempts;
-        private static int phase1LastBranchSearchExpansions;
-        private static int phase1LastRoomInflationAttempts;
-        private static string phase1LastFailureCode = string.Empty;
+        private static RouteIntent lastRouteIntent;
+        private static Vector2Int[] lastNodeCenters = Array.Empty<Vector2Int>();
+        private static Vector2Int[] lastVistaCells = Array.Empty<Vector2Int>();
+        private static Vector2Int lastVistaSourceFacing;
+        private static Vector2Int lastVistaTargetFacing;
+        private static int lastLayoutAttempt;
+        private static int lastMainEmbeddingAttempts;
+        private static int lastBranchSearchExpansions;
+        private static int lastRoomInflationAttempts;
+        private static string lastRouteFailureCode = string.Empty;
 
         private sealed class RouteIntent
         {
@@ -303,18 +303,18 @@ namespace DungeonLab.Editor
             }
         }
 
-        private static void ResetPhase1RouteDiagnostics()
+        private static void ResetRouteDiagnostics()
         {
-            phase1LastRouteIntent = null;
-            phase1LastNodeCenters = Array.Empty<Vector2Int>();
-            phase1LastVistaCells = Array.Empty<Vector2Int>();
-            phase1LastVistaSourceFacing = Vector2Int.zero;
-            phase1LastVistaTargetFacing = Vector2Int.zero;
-            phase1LastLayoutAttempt = 0;
-            phase1LastMainEmbeddingAttempts = 0;
-            phase1LastBranchSearchExpansions = 0;
-            phase1LastRoomInflationAttempts = 0;
-            phase1LastFailureCode = string.Empty;
+            lastRouteIntent = null;
+            lastNodeCenters = Array.Empty<Vector2Int>();
+            lastVistaCells = Array.Empty<Vector2Int>();
+            lastVistaSourceFacing = Vector2Int.zero;
+            lastVistaTargetFacing = Vector2Int.zero;
+            lastLayoutAttempt = 0;
+            lastMainEmbeddingAttempts = 0;
+            lastBranchSearchExpansions = 0;
+            lastRoomInflationAttempts = 0;
+            lastRouteFailureCode = string.Empty;
         }
 
         private static bool TryBuildRouteFirstDungeonLayout(
@@ -327,14 +327,14 @@ namespace DungeonLab.Editor
             layout = default;
             routeRequirements = null;
             rejectionReason = string.Empty;
-            ResetPhase1RouteDiagnostics();
-            phase1LastLayoutAttempt = layoutAttempt;
+            ResetRouteDiagnostics();
+            lastLayoutAttempt = layoutAttempt;
 
             if (!DungeonRecipeCatalogService.TryLoadActiveCatalog(
                     out ActiveDungeonRecipeCatalog recipeCatalog,
                     out rejectionReason))
             {
-                return RejectPhase1Route("RECIPE_CATALOG", rejectionReason, out rejectionReason);
+                return RejectRoute("RECIPE_CATALOG", rejectionReason, out rejectionReason);
             }
 
             RoutePatternKind pattern = SelectRoutePattern(dungeonSeed);
@@ -349,17 +349,17 @@ namespace DungeonLab.Editor
                     out RecipeSlotIntent[] recipeSlots,
                     out rejectionReason))
             {
-                return RejectPhase1Route(
+                return RejectRoute(
                     RecipeSelectionFailureCode,
                     rejectionReason,
                     out rejectionReason);
             }
 
             intent.ResolveRecipeSlots(recipeSlots, recipeCatalog.digest);
-            phase1LastRouteIntent = intent;
+            lastRouteIntent = intent;
             if (!TryValidateRouteIntent(intent, out rejectionReason))
             {
-                return RejectPhase1Route(RouteIntentInvalidFailureCode, rejectionReason, out rejectionReason);
+                return RejectRoute(RouteIntentInvalidFailureCode, rejectionReason, out rejectionReason);
             }
 
             DungeonPatternSpatialSettings spatial = ResolvePatternSpatialSettings(intent.patternId);
@@ -373,10 +373,10 @@ namespace DungeonLab.Editor
                     out string embeddingFailureCode,
                     out rejectionReason))
             {
-                return RejectPhase1Route(embeddingFailureCode, rejectionReason, out rejectionReason);
+                return RejectRoute(embeddingFailureCode, rejectionReason, out rejectionReason);
             }
 
-            phase1LastNodeCenters = nodeCenters;
+            lastNodeCenters = nodeCenters;
             DungeonGenerationSettings settings = CurrentGenerationSettings.Validated();
             var roomEnvelopes = new RectInt[intent.nodes.Length];
             for (int node = 0; node < nodeCenters.Length; node++)
@@ -394,7 +394,7 @@ namespace DungeonLab.Editor
                     out List<RoomFootprint> rooms,
                     out rejectionReason))
             {
-                return RejectPhase1Route("ROUTE_ROOM_INFLATION_EXHAUSTED", rejectionReason, out rejectionReason);
+                return RejectRoute("ROUTE_ROOM_INFLATION_EXHAUSTED", rejectionReason, out rejectionReason);
             }
 
             if (!TryReserveProcessionalVista(
@@ -408,7 +408,7 @@ namespace DungeonLab.Editor
                     out Vector2Int targetFacing,
                     out rejectionReason))
             {
-                return RejectPhase1Route("ROUTE_VISTA_RESERVATION_BLOCKED", rejectionReason, out rejectionReason);
+                return RejectRoute("ROUTE_VISTA_RESERVATION_BLOCKED", rejectionReason, out rejectionReason);
             }
 
             var protectedVistaCells = new HashSet<Vector2Int>(reservedVistaCells);
@@ -422,12 +422,12 @@ namespace DungeonLab.Editor
                     out Vector2Int[] namedPromontoryCells,
                     out rejectionReason))
             {
-                return RejectPhase1Route("ROUTE_PROMONTORY_RESERVATION_INVALID", rejectionReason, out rejectionReason);
+                return RejectRoute("ROUTE_PROMONTORY_RESERVATION_INVALID", rejectionReason, out rejectionReason);
             }
 
-            phase1LastVistaCells = SortedCells(reservedVistaCells).ToArray();
-            phase1LastVistaSourceFacing = sourceFacing;
-            phase1LastVistaTargetFacing = targetFacing;
+            lastVistaCells = SortedCells(reservedVistaCells).ToArray();
+            lastVistaSourceFacing = sourceFacing;
+            lastVistaTargetFacing = targetFacing;
 
             if (!TryPlaceRouteRecipes(
                     dungeonSeed,
@@ -440,7 +440,7 @@ namespace DungeonLab.Editor
                     out RecipePlacement[] recipePlacements,
                     out rejectionReason))
             {
-                return RejectPhase1Route("RECIPE_PLACEMENT", rejectionReason, out rejectionReason);
+                return RejectRoute("RECIPE_PLACEMENT", rejectionReason, out rejectionReason);
             }
 
             if (!TryConnectProcessionalRooms(
@@ -453,12 +453,12 @@ namespace DungeonLab.Editor
                     out List<RoomConnection> connections,
                     out rejectionReason))
             {
-                return RejectPhase1Route("ROUTE_CORRIDOR_EMBEDDING_EXHAUSTED", rejectionReason, out rejectionReason);
+                return RejectRoute("ROUTE_CORRIDOR_EMBEDDING_EXHAUSTED", rejectionReason, out rejectionReason);
             }
 
             if (!IsConnected(floorCells))
             {
-                return RejectPhase1Route(
+                return RejectRoute(
                     "ROUTE_FLOOR_DISCONNECTED",
                     "compiled route-first floor mask was disconnected",
                     out rejectionReason);
@@ -467,7 +467,7 @@ namespace DungeonLab.Editor
             if (rooms.Count < settings.denseFloorplanMinRooms ||
                 CalculateFloorFillPercent(floorCells) < settings.denseFloorplanMinFillPercent)
             {
-                return RejectPhase1Route(
+                return RejectRoute(
                     "ROUTE_DENSITY_PRECONDITION",
                     $"compiled {rooms.Count} rooms at {CalculateFloorFillPercent(floorCells) * 100f:0.#}% fill; " +
                     $"profile requires {settings.denseFloorplanMinRooms} rooms and {settings.denseFloorplanMinFillPercent * 100f:0.#}% fill",
@@ -475,7 +475,7 @@ namespace DungeonLab.Editor
             }
 
             Dictionary<int, HashSet<Vector2Int>> thresholds = BuildRoomThresholdCells(rooms, connections);
-            System.Random zoneRandom = Phase1Random(
+            System.Random zoneRandom = DerivedRandom(
                 dungeonSeed,
                 layoutAttempt,
                 "layout",
@@ -511,7 +511,7 @@ namespace DungeonLab.Editor
                 targetFacing,
                 namedPromontoryCells,
                 recipePlacements);
-            phase1LastFailureCode = string.Empty;
+            lastRouteFailureCode = string.Empty;
             return true;
         }
 
@@ -666,7 +666,7 @@ namespace DungeonLab.Editor
                 RouteTransitionKind.Stair
             };
             if (!composer.TryAddBranch(
-                    mainNodeIndices[Phase1BranchAttachNode],
+                    mainNodeIndices[ProcessionalBranchAttachNode],
                     branchNodes,
                     branchEdgeIds,
                     branchTransitionKinds,
@@ -678,7 +678,7 @@ namespace DungeonLab.Editor
 
             if (!composer.TryRejoin(
                     branchNodeIndices[branchNodeIndices.Length - 1],
-                    mainNodeIndices[Phase1BranchRejoinNode],
+                    mainNodeIndices[ProcessionalBranchRejoinNode],
                     "rejoin-12-7",
                     RouteTransitionKind.LevelCorridor,
                     out compositionError))
@@ -697,29 +697,29 @@ namespace DungeonLab.Editor
             return new RouteIntent(
                 dungeonSeed,
                 ProcessionalPlannerVersion,
-                Phase1PatternId,
+                ProcessionalPatternId,
                 nodes,
                 edges,
                 new RouteVistaIntent(
                     "branch-overlook-to-landmark",
-                    Phase1VistaSourceNode,
-                    Phase1VistaTargetNode,
+                    ProcessionalVistaSourceNode,
+                    ProcessionalVistaTargetNode,
                     minimumReservedVoidCells: 3),
                 RouteElevationPolicy.AscendingSpine,
                 recipeSlots,
                 catalogDigest,
                 bottomNode: 0,
                 topNode: RouteMainNodeCount - 1,
-                branchAttachNode: Phase1BranchAttachNode,
-                branchRejoinNode: Phase1BranchRejoinNode,
+                branchAttachNode: ProcessionalBranchAttachNode,
+                branchRejoinNode: ProcessionalBranchRejoinNode,
                 requiredCycleRank: 1,
                 requiredCycleCoreNodeCount: 10,
                 requiredJunctionDegree: 3,
                 plannedOverlooks: BuildPlannedOverlooks(
-                    Phase1PatternId,
+                    ProcessionalPatternId,
                     nodes,
                     edges,
-                    ResolvePatternSpatialSettings(Phase1PatternId).tierSeamAdjacency),
+                    ResolvePatternSpatialSettings(ProcessionalPatternId).tierSeamAdjacency),
                 allowGenericRoomWings: true);
         }
 
@@ -782,7 +782,7 @@ namespace DungeonLab.Editor
 
         private static IReadOnlyList<RouteOverlookIntent> DeclaredTierSeamCandidates(string patternId)
         {
-            if (string.Equals(patternId, Phase1PatternId, StringComparison.Ordinal))
+            if (string.Equals(patternId, ProcessionalPatternId, StringComparison.Ordinal))
             {
                 return ProcessionalTierSeamCandidates;
             }
@@ -825,7 +825,7 @@ namespace DungeonLab.Editor
 
             return pattern == RoutePatternKind.TwinWingKeep
                 ? TwinWingPatternId
-                : Phase1PatternId;
+                : ProcessionalPatternId;
         }
 
         private static RouteIntent BuildSelectedRouteIntent(
@@ -1439,7 +1439,7 @@ namespace DungeonLab.Editor
 
         private static DungeonPatternSpatialSettings ResolvePatternSpatialSettings(string patternId)
         {
-            if (string.Equals(patternId, Phase1PatternId, StringComparison.Ordinal))
+            if (string.Equals(patternId, ProcessionalPatternId, StringComparison.Ordinal))
             {
                 return CurrentGenerationSettings.Validated().processionalSpatial;
             }
@@ -1519,7 +1519,7 @@ namespace DungeonLab.Editor
                     out rejectionReason);
             }
 
-            if (string.Equals(intent.patternId, Phase1PatternId, StringComparison.Ordinal))
+            if (string.Equals(intent.patternId, ProcessionalPatternId, StringComparison.Ordinal))
             {
                 return TryEmbedProcessionalRoute(
                     dungeonSeed,
@@ -1571,7 +1571,7 @@ namespace DungeonLab.Editor
             }
 
             if (!TryFindBoundedCoarsePath(
-                    mainCoarse[Phase1BranchAttachNode],
+                    mainCoarse[ProcessionalBranchAttachNode],
                     new Vector2Int(0, 1),
                     occupied,
                     allowGoal: true,
@@ -1590,7 +1590,7 @@ namespace DungeonLab.Editor
 
             if (!TryFindBoundedCoarsePath(
                     new Vector2Int(0, 1),
-                    mainCoarse[Phase1BranchRejoinNode],
+                    mainCoarse[ProcessionalBranchRejoinNode],
                     occupied,
                     allowGoal: true,
                     out List<Vector2Int> secondBranchSegment,
@@ -1601,7 +1601,7 @@ namespace DungeonLab.Editor
                 return false;
             }
 
-            phase1LastBranchSearchExpansions = firstExpansions + secondExpansions;
+            lastBranchSearchExpansions = firstExpansions + secondExpansions;
             var branchCoarse = new List<Vector2Int>(firstBranchSegment);
             for (int i = 0; i < secondBranchSegment.Count - 1; i++)
             {
@@ -1646,7 +1646,7 @@ namespace DungeonLab.Editor
             out string rejectionReason)
         {
             failureCode = "ATRIUM_RING_EMBEDDING_EXHAUSTED";
-            phase1LastBranchSearchExpansions = 0;
+            lastBranchSearchExpansions = 0;
             var coarseEmbedding = new[]
             {
                 new Vector2Int(4, 2),
@@ -1692,7 +1692,7 @@ namespace DungeonLab.Editor
             out string rejectionReason)
         {
             failureCode = "TWIN_WING_EMBEDDING_EXHAUSTED";
-            phase1LastBranchSearchExpansions = 0;
+            lastBranchSearchExpansions = 0;
             var embedding = new[]
             {
                 new Vector2Int(-11, 0),
@@ -1739,7 +1739,7 @@ namespace DungeonLab.Editor
         {
             nodeCenters = Array.Empty<Vector2Int>();
             rejectionReason = string.Empty;
-            System.Random placementRandom = Phase1Random(
+            System.Random placementRandom = DerivedRandom(
                 dungeonSeed,
                 layoutAttempt,
                 stablePatternId,
@@ -1748,7 +1748,7 @@ namespace DungeonLab.Editor
             bool mirror = placementRandom.Next(2) == 0;
             for (int orientationAttempt = 0; orientationAttempt < 4; orientationAttempt++)
             {
-                phase1LastMainEmbeddingAttempts = orientationAttempt + 1;
+                lastMainEmbeddingAttempts = orientationAttempt + 1;
                 int quarterTurns = (firstQuarterTurn + orientationAttempt) % 4;
                 var transformed = new Vector2Int[coarseEmbedding.Count];
                 for (int node = 0; node < coarseEmbedding.Count; node++)
@@ -1817,7 +1817,7 @@ namespace DungeonLab.Editor
                 Vector2Int.down
             };
 
-            while (queue.Count > 0 && expansionCount < Phase1BranchSearchExpansionLimit)
+            while (queue.Count > 0 && expansionCount < BranchSearchExpansionLimit)
             {
                 Vector2Int current = queue.Dequeue();
                 expansionCount++;
@@ -1876,7 +1876,7 @@ namespace DungeonLab.Editor
         {
             rooms = new List<RoomFootprint>(intent.nodes.Length);
             rejectionReason = string.Empty;
-            phase1LastRoomInflationAttempts = 0;
+            lastRoomInflationAttempts = 0;
 
             // Recipe rooms have authored, fixed footprints: rebuilding one with
             // six random streams does not produce six alternatives. Reserve
@@ -1891,8 +1891,8 @@ namespace DungeonLab.Editor
                     continue;
                 }
 
-                phase1LastRoomInflationAttempts++;
-                System.Random roomRandom = Phase1Random(
+                lastRoomInflationAttempts++;
+                System.Random roomRandom = DerivedRandom(
                     dungeonSeed,
                     layoutAttempt,
                     node.id,
@@ -1931,10 +1931,10 @@ namespace DungeonLab.Editor
 
                 RouteNodeIntent node = intent.nodes[nodeIndex];
                 bool placed = false;
-                for (int attempt = 0; attempt < Phase1RoomInflationAttemptLimit; attempt++)
+                for (int attempt = 0; attempt < RoomInflationAttemptLimit; attempt++)
                 {
-                    phase1LastRoomInflationAttempts++;
-                    System.Random roomRandom = Phase1Random(
+                    lastRoomInflationAttempts++;
+                    System.Random roomRandom = DerivedRandom(
                         dungeonSeed,
                         layoutAttempt,
                         node.id,
@@ -1949,7 +1949,7 @@ namespace DungeonLab.Editor
                         intent.recipeSlots,
                         roomRandom,
                         allowWing: intent.allowGenericRoomWings &&
-                            attempt < Phase1RoomInflationAttemptLimit - 1 &&
+                            attempt < RoomInflationAttemptLimit - 1 &&
                             nodeIndex != intent.vista.sourceNode &&
                             nodeIndex != intent.vista.targetNode);
                     var candidate = new RoomFootprint(parts);
@@ -1970,7 +1970,7 @@ namespace DungeonLab.Editor
 
                 if (!placed)
                 {
-                    rejectionReason = $"room node '{node.id}' exhausted {Phase1RoomInflationAttemptLimit} inflation alternatives";
+                    rejectionReason = $"room node '{node.id}' exhausted {RoomInflationAttemptLimit} inflation alternatives";
                     return false;
                 }
             }
@@ -2295,29 +2295,20 @@ namespace DungeonLab.Editor
             out int width,
             out int depth)
         {
+            // The baseline is the spacious-profile size for this role. It stays
+            // load-bearing as the stair-clearance cap below, so it is sampled even
+            // when the active profile is wider. What was removed on 2026-07-25 is
+            // the draw-REUSE that used to fold the baseline roll into the
+            // configured roll whenever a range happened to span exactly two
+            // values — that existed only to keep the spacious profile
+            // byte-compatible with an older hash, and it made the number of random
+            // draws depend on configuration.
             DungeonRoomSizeRange baselineRange = BaselineRoomSizeRangeForRole(node.role).Validated();
             DungeonRoomSizeRange configuredRange = RoomSizeRangeForRole(spatial, node.role).Validated();
-            bool widthHasBaselineRoll = baselineRange.maxWidthCells > baselineRange.minWidthCells;
-            bool depthHasBaselineRoll = baselineRange.maxDepthCells > baselineRange.minDepthCells;
-            int baselineWidth = baselineRange.minWidthCells +
-                (widthHasBaselineRoll ? random.Next(baselineRange.maxWidthCells - baselineRange.minWidthCells + 1) : 0);
-            int baselineDepth = baselineRange.minDepthCells +
-                (depthHasBaselineRoll ? random.Next(baselineRange.maxDepthCells - baselineRange.minDepthCells + 1) : 0);
-
-            width = SampleConfiguredRoomDimension(
-                configuredRange.minWidthCells,
-                configuredRange.maxWidthCells,
-                baselineWidth,
-                widthHasBaselineRoll,
-                baselineRange.minWidthCells,
-                random);
-            depth = SampleConfiguredRoomDimension(
-                configuredRange.minDepthCells,
-                configuredRange.maxDepthCells,
-                baselineDepth,
-                depthHasBaselineRoll,
-                baselineRange.minDepthCells,
-                random);
+            int baselineWidth = SampleRoomDimension(baselineRange.minWidthCells, baselineRange.maxWidthCells, random);
+            int baselineDepth = SampleRoomDimension(baselineRange.minDepthCells, baselineRange.maxDepthCells, random);
+            width = SampleRoomDimension(configuredRange.minWidthCells, configuredRange.maxWidthCells, random);
+            depth = SampleRoomDimension(configuredRange.minDepthCells, configuredRange.maxDepthCells, random);
 
             // The concrete stair prefab is selected later. Preserve the known-
             // sufficient face position now: any non-level incident edge caps
@@ -2375,28 +2366,11 @@ namespace DungeonLab.Editor
             }
         }
 
-        private static int SampleConfiguredRoomDimension(
-            int minimum,
-            int maximum,
-            int baselineValue,
-            bool hasBaselineRoll,
-            int baselineMinimum,
-            System.Random random)
+        private static int SampleRoomDimension(int minimum, int maximum, System.Random random)
         {
-            if (minimum == maximum)
-            {
-                return minimum;
-            }
-
-            // Reuse the already-consumed binary baseline roll for any two-value
-            // range. That keeps the spacious profile byte-for-byte compatible
-            // without creating a second room-size random stream.
-            if (hasBaselineRoll && maximum - minimum == 1)
-            {
-                return minimum + baselineValue - baselineMinimum;
-            }
-
-            return minimum + random.Next(maximum - minimum + 1);
+            return maximum <= minimum
+                ? minimum
+                : minimum + random.Next(maximum - minimum + 1);
         }
 
         private static bool TryGetRecipeSlot(
@@ -2452,7 +2426,7 @@ namespace DungeonLab.Editor
                     int xMax = direction.x > 0
                         ? center.x + spatial.roomEnvelopeRadiusCells + 1
                         : dominant.xMin;
-                    if (string.Equals(intent.patternId, Phase1PatternId, StringComparison.Ordinal) &&
+                    if (string.Equals(intent.patternId, ProcessionalPatternId, StringComparison.Ordinal) &&
                         Mathf.Abs(delta.x) < spatial.roomEnvelopeRadiusCells * 2 + 1)
                     {
                         int sharedBoundary = Mathf.Min(center.x, nodeCenters[other].x) +
@@ -2477,7 +2451,7 @@ namespace DungeonLab.Editor
                     int yMax = direction.y > 0
                         ? center.y + spatial.roomEnvelopeRadiusCells + 1
                         : dominant.yMin;
-                    if (string.Equals(intent.patternId, Phase1PatternId, StringComparison.Ordinal) &&
+                    if (string.Equals(intent.patternId, ProcessionalPatternId, StringComparison.Ordinal) &&
                         Mathf.Abs(delta.y) < spatial.roomEnvelopeRadiusCells * 2 + 1)
                     {
                         int sharedBoundary = Mathf.Min(center.y, nodeCenters[other].y) +
@@ -2761,17 +2735,17 @@ namespace DungeonLab.Editor
             return result;
         }
 
-        private static bool RejectPhase1Route(
+        private static bool RejectRoute(
             string code,
             string detail,
             out string rejectionReason)
         {
-            phase1LastFailureCode = code;
+            lastRouteFailureCode = code;
             rejectionReason = $"[{code}] {detail}";
             return false;
         }
 
-        private static System.Random Phase1Random(
+        private static System.Random DerivedRandom(
             int dungeonSeed,
             int layoutAttempt,
             string stableId,
@@ -2780,16 +2754,16 @@ namespace DungeonLab.Editor
             unchecked
             {
                 uint hash = 2166136261u;
-                MixPhase1Hash(ref hash, dungeonSeed.ToString(System.Globalization.CultureInfo.InvariantCulture));
-                MixPhase1Hash(ref hash, RouteSpatialRandomVersion);
-                MixPhase1Hash(ref hash, layoutAttempt.ToString(System.Globalization.CultureInfo.InvariantCulture));
-                MixPhase1Hash(ref hash, stableId ?? string.Empty);
-                MixPhase1Hash(ref hash, purpose ?? string.Empty);
+                MixDerivedSeedHash(ref hash, dungeonSeed.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                MixDerivedSeedHash(ref hash, RouteSpatialRandomVersion);
+                MixDerivedSeedHash(ref hash, layoutAttempt.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                MixDerivedSeedHash(ref hash, stableId ?? string.Empty);
+                MixDerivedSeedHash(ref hash, purpose ?? string.Empty);
                 return new System.Random((int)hash);
             }
         }
 
-        private static void MixPhase1Hash(ref uint hash, string value)
+        private static void MixDerivedSeedHash(ref uint hash, string value)
         {
             unchecked
             {

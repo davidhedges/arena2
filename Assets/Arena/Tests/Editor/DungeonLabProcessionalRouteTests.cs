@@ -7,7 +7,7 @@ using NUnit.Framework;
 
 namespace Arena.Tests.Editor
 {
-    public sealed class DungeonLabPhase1RouteFirstPilotTests
+    public sealed class DungeonLabProcessionalRouteTests
     {
         private const int PilotSeed = 2026072100;
         private static readonly Type GeneratorType = AppDomain.CurrentDomain

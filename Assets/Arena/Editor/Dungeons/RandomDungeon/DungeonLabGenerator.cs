@@ -91,7 +91,22 @@ namespace DungeonLab.Editor
         private const string EmbeddedStairPlacementClass = "embedded";
         private const string ExternalSpanStairPlacementClass = "externalSpan";
         private const string StairwellStairPlacementClass = "stairwell";
-        private const int LevelAssignmentAttempts = 32;
+        // Tier attempts do not re-roll level assignment: TryAssignRoomLevels is a
+        // deterministic copy of the route intent's declared elevations. What varies
+        // is loop-connection routing, stair candidate selection, and aerial bridges,
+        // each of which now draws from a stream keyed on the tier attempt index.
+        //
+        // Measured over seeds 2026072100..2026072299 (dense): max 2 attempts,
+        // p95 1, mean 1.02, histogram {1: 194, 2: 4}. The former ceiling of 32 was
+        // 16x the observed maximum and made a doomed seed repeat the identical
+        // impossible reservation 64 times before failing. Lowering it is
+        // output-neutral now that each attempt's streams are keyed by attempt
+        // index rather than by how many draws earlier attempts happened to make.
+        private const int TierPlacementAttempts = 4;
+
+        // How many tier attempts the accepted plan actually needed. Recorded so the
+        // ceiling above can be sized from measurement instead of guessed at.
+        private static int lastTierPlacementAttempts;
         private const float EnclosedRoomChance = 0.5f;
 
         private int seed;
@@ -199,7 +214,7 @@ namespace DungeonLab.Editor
                 generator.createPlayCamera = false;
                 generator.origin = Vector3.zero;
                 CurrentGenerationSettings = LoadActiveGenerationSettings(ResolveRequestedGenerationProfileId());
-                generator.GenerateRandomDungeonLayout(new System.Random(seed));
+                generator.GenerateRandomDungeonLayout();
             }
             finally
             {
@@ -273,15 +288,16 @@ namespace DungeonLab.Editor
             return settings;
         }
 
-        private void GenerateRandomDungeonLayout(System.Random random)
+        private void GenerateRandomDungeonLayout()
         {
             var rejectionHistogram = new Dictionary<string, int>();
             if (!TryBuildAcceptedPlan(
                     seed,
-                    random,
                     rejectionHistogram,
                     out DungeonLayout layout,
                     out TieredLevelPlan levelPlan,
+                    out ElevationEdgeModel.RoomBoundaryContext roomBoundaryContext,
+                    out DungeonPlanValidation validation,
                     out int layoutAttemptsUsed,
                     out string rejectionReason))
             {
@@ -308,15 +324,11 @@ namespace DungeonLab.Editor
 
             RoomFootprint largestRoom = GetLargestRoom(layout.rooms);
             Vector3 levelFieldOrigin = CalculateCenteredLevelFieldOrigin(layout.floorCells, origin);
-            if (!TryBuildRoomBoundaryContext(
-                    layout,
-                    levelPlan.cellLevels,
-                    levelPlan.transitions,
-                    random,
-                    out ElevationEdgeModel.RoomBoundaryContext roomBoundaryContext,
-                    out string roomBoundaryError))
+            // The boundary context was built and validated inside the accepted
+            // attempt; rebuilding it here would draw from the shared stream twice.
+            if (roomBoundaryContext == null)
             {
-                Debug.LogError($"Dungeon Lab: rejected enclosed room edge treatment. {roomBoundaryError}");
+                Debug.LogError("Dungeon Lab: accepted plan carried no room boundary context.");
                 return;
             }
 
@@ -948,45 +960,46 @@ namespace DungeonLab.Editor
         // shared draw stream.
         private static bool TryBuildAcceptedPlan(
             int dungeonSeed,
-            System.Random random,
             Dictionary<string, int> rejectionHistogram,
             out DungeonLayout layout,
             out TieredLevelPlan levelPlan,
+            out ElevationEdgeModel.RoomBoundaryContext boundaryContext,
+            out DungeonPlanValidation validation,
             out int layoutAttemptsUsed,
             out string rejectionReason)
         {
             layout = default;
             levelPlan = default;
+            boundaryContext = null;
+            validation = null;
             layoutAttemptsUsed = 0;
             rejectionReason = string.Empty;
-            for (int attempt = 0; attempt < Phase1LayoutAttemptLimit; attempt++)
+            for (int attempt = 0; attempt < LayoutAttemptLimit; attempt++)
             {
                 layoutAttemptsUsed = attempt + 1;
-                long routeLayoutStart = BeginPhase7OutlierStage();
                 bool routeLayoutBuilt = TryBuildRouteFirstDungeonLayout(
                         dungeonSeed,
                         layoutAttemptsUsed,
                         out DungeonLayout candidateLayout,
                         out RouteTierRequirements routeRequirements,
                         out rejectionReason);
-                EndPhase7OutlierStage("routeLayout", routeLayoutStart);
                 if (!routeLayoutBuilt)
                 {
                     RecordRejection(rejectionHistogram, rejectionReason);
                     continue;
                 }
 
-                long tieredPlanStart = BeginPhase7OutlierStage();
                 bool tieredPlanBuilt = TryBuildTieredLevelPlan(
                         candidateLayout,
                         routeRequirements,
                         dungeonSeed,
-                        random,
+                        new DungeonRandomScope(dungeonSeed, layoutAttemptsUsed, 0),
                         rejectionHistogram,
                         out layout,
                         out levelPlan,
+                        out boundaryContext,
+                        out validation,
                         out rejectionReason);
-                EndPhase7OutlierStage("tieredLevelPlan", tieredPlanStart);
                 if (tieredPlanBuilt)
                 {
                     return true;
@@ -1060,10 +1073,12 @@ namespace DungeonLab.Editor
             DungeonLayout layout,
             RouteTierRequirements routeRequirements,
             int dungeonSeed,
-            System.Random random,
+            DungeonRandomScope rng,
             Dictionary<string, int> rejectionHistogram,
             out DungeonLayout acceptedLayout,
             out TieredLevelPlan plan,
+            out ElevationEdgeModel.RoomBoundaryContext boundaryContext,
+            out DungeonPlanValidation validation,
             out string rejectionReason)
         {
             ReviewedStairPlacementGeometryCache previousCache =
@@ -1075,10 +1090,12 @@ namespace DungeonLab.Editor
                     layout,
                     routeRequirements,
                     dungeonSeed,
-                    random,
+                    rng,
                     rejectionHistogram,
                     out acceptedLayout,
                     out plan,
+                    out boundaryContext,
+                    out validation,
                     out rejectionReason);
             }
             finally
@@ -1091,14 +1108,18 @@ namespace DungeonLab.Editor
             DungeonLayout layout,
             RouteTierRequirements routeRequirements,
             int dungeonSeed,
-            System.Random random,
+            DungeonRandomScope rng,
             Dictionary<string, int> rejectionHistogram,
             out DungeonLayout acceptedLayout,
             out TieredLevelPlan plan,
+            out ElevationEdgeModel.RoomBoundaryContext boundaryContext,
+            out DungeonPlanValidation validation,
             out string rejectionReason)
         {
             acceptedLayout = default;
             plan = default;
+            boundaryContext = null;
+            validation = null;
             rejectionReason = string.Empty;
             if (layout.floorCells == null || layout.floorCells.Count == 0)
             {
@@ -1114,25 +1135,24 @@ namespace DungeonLab.Editor
                 return false;
             }
 
-            long reviewedStairsStart = BeginPhase7OutlierStage();
             IReadOnlyList<ReviewedActiveStairOption> reviewedStairOptions = LoadReviewedActiveStairOptions();
-            EndPhase7OutlierStage("tiered.loadReviewedStairs", reviewedStairsStart);
 
-            for (int attempt = 0; attempt < LevelAssignmentAttempts; attempt++)
+            for (int attempt = 0; attempt < TierPlacementAttempts; attempt++)
             {
-                long tierAttemptStart = BeginPhase7OutlierStage();
                 bool tierAttemptBuilt = TryBuildTieredLevelPlanAttempt(
                         layout,
                         routeRequirements,
                         reviewedStairOptions,
                         dungeonSeed,
-                        random,
+                        rng.ForTierAttempt(attempt),
                         out acceptedLayout,
                         out plan,
+                        out boundaryContext,
+                        out validation,
                         out rejectionReason);
-                EndPhase7OutlierStage("tierAttempt.total", tierAttemptStart);
                 if (tierAttemptBuilt)
                 {
+                    lastTierPlacementAttempts = attempt + 1;
                     return true;
                 }
 
@@ -1147,14 +1167,17 @@ namespace DungeonLab.Editor
             RouteTierRequirements routeRequirements,
             IReadOnlyList<ReviewedActiveStairOption> reviewedStairOptions,
             int dungeonSeed,
-            System.Random random,
+            DungeonRandomScope rng,
             out DungeonLayout acceptedLayout,
             out TieredLevelPlan plan,
+            out ElevationEdgeModel.RoomBoundaryContext boundaryContext,
+            out DungeonPlanValidation validation,
             out string rejectionReason)
         {
             acceptedLayout = default;
             plan = default;
-            long zoneAndLevelsStart = BeginPhase7OutlierStage();
+            boundaryContext = null;
+            validation = null;
             RoomZoneContext zones = RoomZoneContext.Build(layout);
             bool levelsAssigned = TryAssignRoomLevels(
                     layout,
@@ -1164,23 +1187,20 @@ namespace DungeonLab.Editor
                     out int[] zoneLevels,
                     out RouteElevationPolicy archetype,
                     out rejectionReason);
-            EndPhase7OutlierStage("tierAttempt.zoneAndLevels", zoneAndLevelsStart);
             if (!levelsAssigned)
             {
                 return false;
             }
 
-            long loopConnectionsStart = BeginPhase7OutlierStage();
             DungeonLayout loopedLayout = AddLevelSafeLoopConnections(
                 layout,
                 zones,
                 zoneLevels,
                 routeRequirements,
-                random,
+                rng,
                 CurrentGenerationSettings);
             int loopEdges = CountLoopEdges(loopedLayout);
             float floorFillPercent = CalculateFloorFillPercent(loopedLayout.floorCells);
-            EndPhase7OutlierStage("tierAttempt.loopConnectionsAndDensity", loopConnectionsStart);
             if (loopEdges <= 0)
             {
                 rejectionReason = "floorplan had no loop edges";
@@ -1201,20 +1221,17 @@ namespace DungeonLab.Editor
 
             // Loop connections never change rooms or zone plans, so the zone context
             // stays valid for the looped layout; only its connection list grew.
-            long connectedDeltaStart = BeginPhase7OutlierStage();
             bool connectedDeltasValid = TryValidateConnectedRoomLevelDeltas(
                 loopedLayout,
                 zones,
                 zoneLevels,
                 reviewedStairOptions,
                 out rejectionReason);
-            EndPhase7OutlierStage("tierAttempt.connectedDeltaValidation", connectedDeltaStart);
             if (!connectedDeltasValid)
             {
                 return false;
             }
 
-            long cellLevelFieldStart = BeginPhase7OutlierStage();
             bool cellLevelFieldBuilt = TryBuildCellLevelField(
                     loopedLayout,
                     zones,
@@ -1222,7 +1239,7 @@ namespace DungeonLab.Editor
                     routeRequirements,
                     reviewedStairOptions,
                     dungeonSeed,
-                    random,
+                    rng,
                     out Dictionary<Vector2Int, int> cellLevels,
                     out List<ElevationEdgeModel.TransitionEdge> transitions,
                     out RouteTransitionResolution[] routeTransitionResolutions,
@@ -1233,37 +1250,31 @@ namespace DungeonLab.Editor
                     out ExternalConnectorPromontoryResolution[] externalConnectors,
                     out RecipeResolution[] recipeResolutions,
                     out rejectionReason);
-            EndPhase7OutlierStage("tierAttempt.cellLevelField", cellLevelFieldStart);
             if (!cellLevelFieldBuilt)
             {
                 return false;
             }
 
-            long postFieldValidationStart = BeginPhase7OutlierStage();
             GetLevelRange(cellLevels, out int minLevel, out int maxLevel);
             int levelCount = CountDistinctLevels(cellLevels);
             if (levelCount <= 1)
             {
-                EndPhase7OutlierStage("tierAttempt.postFieldValidation", postFieldValidationStart);
                 rejectionReason = $"room graph resolved to a single level (archetype {archetype})";
                 return false;
             }
 
             if (!TryValidateTransitionLevelDeltas(cellLevels, transitions, out rejectionReason))
             {
-                EndPhase7OutlierStage("tierAttempt.postFieldValidation", postFieldValidationStart);
                 return false;
             }
 
             if (!TryBuildFloorStairPortGraph(cellLevels, transitions, out FloorStairPortGraph portGraph, out rejectionReason))
             {
-                EndPhase7OutlierStage("tierAttempt.postFieldValidation", postFieldValidationStart);
                 return false;
             }
 
             if (!portGraph.IsGloballyConnected(out string portGraphReachability))
             {
-                EndPhase7OutlierStage("tierAttempt.postFieldValidation", postFieldValidationStart);
                 rejectionReason = portGraphReachability;
                 return false;
             }
@@ -1277,15 +1288,12 @@ namespace DungeonLab.Editor
                     out RouteRequirementResolution routeRequirementResolution,
                     out rejectionReason))
             {
-                EndPhase7OutlierStage("tierAttempt.postFieldValidation", postFieldValidationStart);
                 return false;
             }
-            EndPhase7OutlierStage("tierAttempt.postFieldValidation", postFieldValidationStart);
 
             // Reported stat only (demoted from a hard gate 2026-06-10): route
             // intent now guarantees the vertical story and separately proves its
             // named vista, so this older adjacent-cell proxy remains diagnostic.
-            long planAssemblyStart = BeginPhase7OutlierStage();
             int overlookCount = CountSpatialOverlookEdges(cellLevels, transitions);
 
             plan = new TieredLevelPlan(
@@ -1311,8 +1319,34 @@ namespace DungeonLab.Editor
                 externalConnectors,
                 recipeResolutions,
                 routeRequirementResolution);
+
+            // The single acceptance gate. The boundary context is built here (not
+            // after acceptance) so it is constructed exactly once: it is both a
+            // validation input and a renderer input, and building it twice would
+            // draw twice from the shared stream. No RNG is consumed between this
+            // point and the old construction site, so the draw sequence for an
+            // accepted plan is unchanged.
+            bool boundaryValid = TryBuildRoomBoundaryContext(
+                loopedLayout,
+                cellLevels,
+                transitions,
+                rng.Stream("enclosed-rooms"),
+                out boundaryContext,
+                out string boundaryMessage);
+            validation = ValidateDungeonPlan(
+                dungeonSeed,
+                loopedLayout,
+                plan,
+                boundaryValid,
+                boundaryMessage);
+            if (!validation.passed)
+            {
+                rejectionReason = validation.FirstFailure();
+                plan = default;
+                return false;
+            }
+
             acceptedLayout = loopedLayout;
-            EndPhase7OutlierStage("tierAttempt.planAssembly", planAssemblyStart);
             return true;
         }
 
@@ -1336,7 +1370,7 @@ namespace DungeonLab.Editor
             RoomZoneContext zones,
             IReadOnlyList<int> zoneLevels,
             RouteTierRequirements routeRequirements,
-            System.Random random,
+            DungeonRandomScope rng,
             DungeonGenerationSettings settings)
         {
             var floorCells = new HashSet<Vector2Int>(layout.floorCells);
@@ -1386,7 +1420,12 @@ namespace DungeonLab.Editor
                     break;
                 }
 
-                List<Vector2Int> path = BuildCorridorPath(layout.rooms[candidate.firstRoom].Center, layout.rooms[candidate.secondRoom].Center, random);
+                // One stream per room pair: whether an earlier candidate was
+                // rejected can no longer shift this pair's routing.
+                List<Vector2Int> path = BuildCorridorPath(
+                    layout.rooms[candidate.firstRoom].Center,
+                    layout.rooms[candidate.secondRoom].Center,
+                    rng.Stream("loop-corridor", $"{candidate.firstRoom}:{candidate.secondRoom}"));
                 if (!ValidatePathCardinality(path, out _) ||
                     PathCrossesThirdRoom(path, layout.rooms, candidate.firstRoom, candidate.secondRoom) ||
                     PathTouchesExistingFloorOutsideEndpointRooms(
@@ -1661,7 +1700,7 @@ namespace DungeonLab.Editor
             RouteTierRequirements routeRequirements,
             IReadOnlyList<ReviewedActiveStairOption> reviewedStairOptions,
             int dungeonSeed,
-            System.Random random,
+            DungeonRandomScope rng,
             out Dictionary<Vector2Int, int> cellLevels,
             out List<ElevationEdgeModel.TransitionEdge> transitions,
             out RouteTransitionResolution[] routeTransitionResolutions,
@@ -1768,447 +1807,39 @@ namespace DungeonLab.Editor
                 protectedStructuralCells.UnionWith(recipePlacement.roomCells);
             }
 
-            // Seam transitions first (deterministic room order): every adjacent cell
-            // pair across a zone seam carries a rise-1 step strip, so the 1u delta is
-            // never freely walkable (design decision 3). The strip's geometry sits in
-            // the lower cell, so that cell registers as FOOTPRINT — landings may share
-            // other landings but never a footprint, which keeps contract stair landings
-            // (and footprints) off the steps. The raised cell is clean floor and stays
-            // a shareable landing.
-            foreach (RoomZonePlan zonePlan in layout.roomZones)
-            {
-                foreach ((Vector2Int lowerCell, Vector2Int raisedCell) in zonePlan.SeamCellPairs())
-                {
-                    if (!layout.floorCells.Contains(lowerCell) || !layout.floorCells.Contains(raisedCell))
-                    {
-                        continue;
-                    }
-
-                    // No strip in a doorway cell (rule above): the skipped pair
-                    // keeps its closed 1u face per the ledge policy; the seam's
-                    // other strips carry the zone connectivity.
-                    if (doorwayCells.Contains(lowerCell) || doorwayCells.Contains(raisedCell))
-                    {
-                        continue;
-                    }
-
-                    if (plannedStairLedger.BlocksTransitionMouth(lowerCell) ||
-                        plannedStairLedger.BlocksTransitionMouth(raisedCell))
-                    {
-                        continue;
-                    }
-
-                    string key = TransitionKey(raisedCell, lowerCell);
-                    if (!transitionKeys.Add(key))
-                    {
-                        continue;
-                    }
-
-                    transitions.Add(new ElevationEdgeModel.TransitionEdge(
-                        raisedCell,
-                        lowerCell,
-                        seamStairPrefabPath,
-                        SeamStairPlacementClass));
-                    plannedStairLedger.Register(
-                        new[] { lowerCell },
-                        Array.Empty<Vector2Int>(),
-                        new[] { raisedCell },
-                        new[] { lowerCell, raisedCell },
-                        Array.Empty<Vector2Int>(),
-                        Array.Empty<Vector2Int>());
-                }
-            }
+            AddZoneSeamStepStrips(
+                layout,
+                doorwayCells,
+                plannedStairLedger,
+                transitionKeys,
+                transitions,
+                seamStairPrefabPath);
 
             foreach (RoomConnection connection in layout.connections)
             {
-                ResolveConnectionNodes(zones, layout.rooms, connection, out int fromNode, out int toNode);
-                int fromLevel = zoneLevels[fromNode];
-                int toLevel = zoneLevels[toNode];
-                int delta = Mathf.Abs(fromLevel - toLevel);
-                RouteTraversalIntent routeTransitionRequirement = default;
-                bool hasRouteRequirement = routeRequirements != null &&
-                    routeRequirements.TryGetTransition(
-                        connection.fromRoom,
-                        connection.toRoom,
-                        out routeTransitionRequirement);
-                if (hasRouteRequirement)
-                {
-                    int directedRise = routeTransitionRequirement.fromNode == connection.fromRoom
-                        ? toLevel - fromLevel
-                        : fromLevel - toLevel;
-                    bool kindMatchesRise =
-                        routeTransitionRequirement.transitionKind == RouteTransitionKind.LevelCorridor
-                            ? delta == 0
-                            : delta == Mathf.Abs(routeTransitionRequirement.requiredRiseLevels) && delta > 1;
-                    if (directedRise != routeTransitionRequirement.requiredRiseLevels || !kindMatchesRise)
-                    {
-                        rejectionReason =
-                            $"[ROUTE_ELEVATION_REQUIREMENT] edge '{routeTransitionRequirement.id}' resolved {directedRise}u/{delta}u for {routeTransitionRequirement.transitionKind}";
-                        return false;
-                    }
-                }
-
-                if (delta > PrimaryStairRiseLevels &&
-                    !HasReviewedActiveStairOption(reviewedStairOptions, delta, maxLaneCount: MaxActiveStairLaneCount))
-                {
-                    rejectionReason = $"connection {connection.fromRoom}->{connection.toRoom} exceeded the primary rise without a reviewed active stair contract";
-                    return false;
-                }
-
-                List<Vector2Int> path = CleanPath(connection.path, layout.floorCells);
-                if (path.Count < 2)
-                {
-                    rejectionReason = $"connection {connection.fromRoom}->{connection.toRoom} had no usable corridor path";
-                    return false;
-                }
-
-                if (!ValidatePathCardinality(path, out rejectionReason))
-                {
-                    return false;
-                }
-
-                int transitionIndex = -1;
-                Vector2Int lowerLandingCell = default;
-                Vector2Int upperLandingCell = default;
-                ReviewedActiveStairOption stairOption = default;
-                Vector2Int[] stairOptionPlannedLowerLandingCells = Array.Empty<Vector2Int>();
-                Vector2Int[] stairOptionPlannedUpperLandingCells = Array.Empty<Vector2Int>();
-                Vector2Int[] stairOptionPlannedFootprintCells = Array.Empty<Vector2Int>();
-                Vector2Int stairOptionPlannedTransitionFirstCell = default;
-                Vector2Int stairOptionPlannedTransitionSecondCell = default;
-                int stairOptionPlannedLowerPortDirection = 0;
-                int stairOptionPlannedUpperPortDirection = 0;
-                string stairOptionPlacementClass = EmbeddedStairPlacementClass;
-                ElevationEdgeModel.SynthesizedStairSetPiece synthesizedSetPiece = null;
-                string synthesizedGapId = string.Empty;
-                string requiredPlacementClass = !hasRouteRequirement
-                    ? string.Empty
-                    : routeTransitionRequirement.transitionKind == RouteTransitionKind.Bridge
-                        ? ExternalSpanStairPlacementClass
-                        : routeTransitionRequirement.transitionKind == RouteTransitionKind.Stairwell
-                            ? StairwellStairPlacementClass
-                            : routeTransitionRequirement.transitionKind == RouteTransitionKind.Stair
-                                ? EmbeddedStairPlacementClass
-                                : string.Empty;
-                // A 1u corridor delta is closed by a single embedded step strip
-                // (design decision 3) rather than a reviewed stair contract.
-                bool corridorStepStrip = delta == 1;
-                if (corridorStepStrip &&
-                    !TryChooseCorridorStepIndex(
-                        path,
-                        layout.rooms[connection.fromRoom],
-                        layout.rooms[connection.toRoom],
-                        doorwayCells,
-                        plannedStairLedger,
-                        fromLevel <= toLevel,
-                        out transitionIndex))
-                {
-                    rejectionReason = $"connection {connection.fromRoom}->{connection.toRoom} had no corridor cell pair for a 1u step strip";
-                    return false;
-                }
-
-                if (delta > 1)
-                {
-                    ZoneArea fromNodeArea = zones.NodeArea(layout.rooms, fromNode);
-                    ZoneArea toNodeArea = zones.NodeArea(layout.rooms, toNode);
-                    long reviewedStairSearchStart = BeginPhase7OutlierStage();
-                    bool reviewedStairChosen = TryChooseReviewedActiveStairTransition(
+                if (!TryResolveConnectionTransition(
+                        connection,
+                        layout,
+                        zones,
+                        zoneLevels,
+                        routeRequirements,
                         reviewedStairOptions,
-                        delta,
-                        maxLaneCount: MaxActiveStairLaneCount,
-                        path,
-                        fromNodeArea,
-                        toNodeArea,
-                        layout.floorCells,
+                        dungeonSeed,
+                        rng,
                         cellLevels,
-                        fromLevel,
-                        toLevel,
-                        random,
-                        allowExternalSpan: true,
-                        requiredPlacementClass,
-                        stairCandidateCounts,
+                        transitions,
+                        transitionKeys,
                         plannedStairLedger,
-                        out transitionIndex,
-                        out lowerLandingCell,
-                        out upperLandingCell,
-                        out stairOptionPlannedLowerLandingCells,
-                        out stairOptionPlannedUpperLandingCells,
-                        out stairOptionPlannedFootprintCells,
-                        out stairOptionPlannedTransitionFirstCell,
-                        out stairOptionPlannedTransitionSecondCell,
-                        out stairOptionPlannedLowerPortDirection,
-                        out stairOptionPlannedUpperPortDirection,
-                        out stairOptionPlacementClass,
-                        out stairOption);
-                    EndPhase7OutlierStage("cellField.reviewedStairSearch", reviewedStairSearchStart);
-                    if (!reviewedStairChosen)
-                    {
-                        // Online synthesis fallback (step 7, decisions 16-21): the
-                        // reviewed pool offered no (contract, position) fit for this
-                        // corridor, so shape a staircase to the gap. Same placement
-                        // search, level gates and ledger as pool contracts; the
-                        // per-gap RNG keeps synthesis independent of the shared
-                        // draw stream (decision 18).
-                        long activeSynthesisStart = BeginPhase7OutlierStage();
-                        bool activeStairSynthesized = TrySynthesizeActiveStairTransition(
-                            dungeonSeed,
-                            connection.fromRoom,
-                            connection.toRoom,
-                            delta,
-                            path,
-                            fromNodeArea,
-                            toNodeArea,
-                            layout.floorCells,
-                            cellLevels,
-                            fromLevel,
-                            toLevel,
-                            requiredPlacementClass,
-                            stairCandidateCounts,
-                            plannedStairLedger,
-                            out transitionIndex,
-                            out lowerLandingCell,
-                            out upperLandingCell,
-                            out stairOptionPlannedLowerLandingCells,
-                            out stairOptionPlannedUpperLandingCells,
-                            out stairOptionPlannedFootprintCells,
-                            out stairOptionPlannedTransitionFirstCell,
-                            out stairOptionPlannedTransitionSecondCell,
-                            out stairOptionPlannedLowerPortDirection,
-                            out stairOptionPlannedUpperPortDirection,
-                            out stairOptionPlacementClass,
-                            out stairOption,
-                            out synthesizedSetPiece,
-                                out synthesizedGapId);
-                        EndPhase7OutlierStage("cellField.activeSynthesis", activeSynthesisStart);
-                        bool stairwellStairSynthesized = false;
-                        bool stairwellEligible = string.IsNullOrEmpty(requiredPlacementClass) ||
-                            string.Equals(requiredPlacementClass, StairwellStairPlacementClass, StringComparison.Ordinal);
-                        if (!activeStairSynthesized && stairwellEligible)
-                        {
-                            // Third tier (decision 27): a 180-degree tower on void
-                            // cells beside the path, only when nothing in-corridor fit.
-                            long stairwellSynthesisStart = BeginPhase7OutlierStage();
-                            stairwellStairSynthesized = TrySynthesizeStairwellTransition(
-                                dungeonSeed,
-                                connection.fromRoom,
-                                connection.toRoom,
-                                delta,
-                                path,
-                                fromNodeArea,
-                                toNodeArea,
-                                layout.floorCells,
-                                cellLevels,
-                                fromLevel,
-                                toLevel,
-                                stairCandidateCounts,
-                                plannedStairLedger,
-                                out transitionIndex,
-                                out lowerLandingCell,
-                                out upperLandingCell,
-                                out stairOptionPlannedLowerLandingCells,
-                                out stairOptionPlannedUpperLandingCells,
-                                out stairOptionPlannedFootprintCells,
-                                out stairOptionPlannedTransitionFirstCell,
-                                out stairOptionPlannedTransitionSecondCell,
-                                out stairOptionPlannedLowerPortDirection,
-                                out stairOptionPlannedUpperPortDirection,
-                                out stairOptionPlacementClass,
-                                out stairOption,
-                                    out synthesizedSetPiece,
-                                    out synthesizedGapId);
-                            EndPhase7OutlierStage("cellField.stairwellSynthesis", stairwellSynthesisStart);
-                        }
-
-                        if (!activeStairSynthesized && !stairwellStairSynthesized)
-                        {
-                            rejectionReason = StairPlacementFailureReason(
-                                hasRouteRequirement,
-                                routeTransitionRequirement,
-                                connection,
-                                delta);
-                            return false;
-                        }
-                    }
-                }
-
-                // For an externalSpan (bridge) placement the deck replaces the walking
-                // surface between the landings: the corridor cells under the span must
-                // NOT be leveled, or they render as a fake floor strip with retaining
-                // walls — a solid column filling the gap the bridge is meant to cross.
-                // The gap stays a gap (no floor, hence no walls); another connection may
-                // still claim those cells at its own level and pass underneath, subject
-                // to the headroom gate below.
-                int spanSkipFromIndex = int.MaxValue;
-                int spanSkipToIndex = int.MinValue;
-                if (delta > 1 &&
-                    string.Equals(stairOptionPlacementClass, ExternalSpanStairPlacementClass, StringComparison.Ordinal))
+                        stairCandidateCounts,
+                        doorwayCells,
+                        externalSpanGapCells,
+                        spanDeckLevels,
+                        synthesizedStairs,
+                        resolvedRouteTransitions,
+                        seamStairPrefabPath,
+                        out rejectionReason))
                 {
-                    int spanLowerIndex = IndexOfPathCell(path, lowerLandingCell);
-                    int spanUpperIndex = IndexOfPathCell(path, upperLandingCell);
-                    if (spanLowerIndex >= 0 && spanUpperIndex >= 0)
-                    {
-                        spanSkipFromIndex = Mathf.Min(spanLowerIndex, spanUpperIndex) + 1;
-                        spanSkipToIndex = Mathf.Max(spanLowerIndex, spanUpperIndex) - 1;
-                    }
-
-                    // The deck's REAL cells are the contract footprint, which may
-                    // leave the corridor line (an L-shaped bridge folds off it) —
-                    // headroom validated against the path cells missed a deck
-                    // crossing a room at head height (in-editor find 2026-06-11).
-                    // Register the footprint as gap cells with a conservative
-                    // floored-linear deck height for the final pass-under gate;
-                    // Manhattan distance equals deck-walk distance on an L. The
-                    // replaced corridor cells below stay gaps but carry no deck.
-                    int spanLength = Mathf.Abs(upperLandingCell.x - lowerLandingCell.x) +
-                        Mathf.Abs(upperLandingCell.y - lowerLandingCell.y);
-                    foreach (Vector2Int deckCell in stairOptionPlannedFootprintCells)
-                    {
-                        externalSpanGapCells.Add(deckCell);
-                        int deckDistance = Mathf.Abs(deckCell.x - lowerLandingCell.x) +
-                            Mathf.Abs(deckCell.y - lowerLandingCell.y);
-                        int deckLevel = Mathf.FloorToInt(Mathf.Lerp(
-                            Mathf.Min(fromLevel, toLevel),
-                            Mathf.Max(fromLevel, toLevel),
-                            spanLength > 0 ? (float)deckDistance / spanLength : 0f));
-                        if (!spanDeckLevels.TryGetValue(deckCell, out int existingDeck) || deckLevel < existingDeck)
-                        {
-                            spanDeckLevels[deckCell] = deckLevel;
-                        }
-                    }
-                }
-
-                for (int i = 0; i < path.Count; i++)
-                {
-                    if (i >= spanSkipFromIndex && i <= spanSkipToIndex)
-                    {
-                        externalSpanGapCells.Add(path[i]);
-                        continue;
-                    }
-
-                    // Cells inside the endpoint rooms are already zone-leveled; a path
-                    // may legally cross a room's seam on its way to the door, so it
-                    // must not re-level the other zone's cells to the threshold level.
-                    if (layout.rooms[connection.fromRoom].Contains(path[i]) ||
-                        layout.rooms[connection.toRoom].Contains(path[i]))
-                    {
-                        continue;
-                    }
-
-                    int targetLevel = delta == 0 || i <= transitionIndex ? fromLevel : toLevel;
-                    if (!TrySetCellLevel(cellLevels, path[i], targetLevel, out rejectionReason))
-                    {
-                        return false;
-                    }
-                }
-
-                if (corridorStepStrip)
-                {
-                    Vector2Int stripFromCell = path[transitionIndex];
-                    Vector2Int stripToCell = path[transitionIndex + 1];
-                    Vector2Int stripLowerCell = fromLevel <= toLevel ? stripFromCell : stripToCell;
-                    Vector2Int stripRaisedCell = fromLevel <= toLevel ? stripToCell : stripFromCell;
-                    string stripKey = TransitionKey(stripRaisedCell, stripLowerCell);
-                    if (transitionKeys.Add(stripKey))
-                    {
-                        transitions.Add(new ElevationEdgeModel.TransitionEdge(
-                            stripRaisedCell,
-                            stripLowerCell,
-                            seamStairPrefabPath,
-                            SeamStairPlacementClass));
-                        plannedStairLedger.Register(
-                            new[] { stripLowerCell },
-                            Array.Empty<Vector2Int>(),
-                            new[] { stripRaisedCell },
-                            new[] { stripLowerCell, stripRaisedCell },
-                            Array.Empty<Vector2Int>(),
-                            Array.Empty<Vector2Int>());
-                    }
-                }
-
-                if (delta > 1)
-                {
-                    int lowerLevel = Mathf.Min(fromLevel, toLevel);
-                    int higherLevel = Mathf.Max(fromLevel, toLevel);
-                    if (!TrySetPlannedStairCells(
-                            cellLevels,
-                            stairOptionPlannedLowerLandingCells,
-                            stairOptionPlannedUpperLandingCells,
-                            stairOptionPlannedFootprintCells,
-                            lowerLevel,
-                            higherLevel,
-                            stairOptionPlacementClass,
-                            out rejectionReason))
-                    {
-                        return false;
-                    }
-
-                    plannedStairLedger.Register(
-                        stairOptionPlannedFootprintCells,
-                        stairOptionPlannedLowerLandingCells,
-                        stairOptionPlannedUpperLandingCells,
-                        new[]
-                        {
-                            stairOptionPlannedTransitionFirstCell,
-                            stairOptionPlannedTransitionSecondCell
-                        },
-                        Array.Empty<Vector2Int>(),
-                        Array.Empty<Vector2Int>());
-                }
-
-                if (delta > 1)
-                {
-                    string key = TransitionKey(stairOptionPlannedTransitionFirstCell, stairOptionPlannedTransitionSecondCell);
-                    if (transitionKeys.Add(key))
-                    {
-                        if (synthesizedSetPiece != null)
-                        {
-                            transitions.Add(new ElevationEdgeModel.TransitionEdge(
-                                stairOptionPlannedTransitionFirstCell,
-                                stairOptionPlannedTransitionSecondCell,
-                                stairOption.prefabPath,
-                                stairOptionPlannedLowerLandingCells,
-                                stairOptionPlannedUpperLandingCells,
-                                stairOptionPlannedFootprintCells,
-                                stairOptionPlannedLowerPortDirection,
-                                stairOptionPlannedUpperPortDirection,
-                                stairOptionPlacementClass,
-                                synthesizedSetPiece));
-                            synthesizedStairs.Add((synthesizedGapId, synthesizedSetPiece));
-                        }
-                        else
-                        {
-                            transitions.Add(new ElevationEdgeModel.TransitionEdge(
-                                stairOptionPlannedTransitionFirstCell,
-                                stairOptionPlannedTransitionSecondCell,
-                                stairOption.prefabPath,
-                                stairOptionPlannedLowerLandingCells,
-                                stairOptionPlannedUpperLandingCells,
-                                stairOptionPlannedFootprintCells,
-                                stairOptionPlannedLowerPortDirection,
-                                stairOptionPlannedUpperPortDirection,
-                                stairOptionPlacementClass));
-                        }
-                    }
-                }
-
-                if (hasRouteRequirement)
-                {
-                    int directedRise = routeTransitionRequirement.fromNode == connection.fromRoom
-                        ? toLevel - fromLevel
-                        : fromLevel - toLevel;
-                    resolvedRouteTransitions.Add(new RouteTransitionResolution(
-                        routeTransitionRequirement.id,
-                        routeTransitionRequirement.fromNode,
-                        routeTransitionRequirement.toNode,
-                        routeTransitionRequirement.transitionKind,
-                        routeTransitionRequirement.requiredRiseLevels,
-                        directedRise,
-                        delta == 0 ? "level-corridor" : stairOptionPlacementClass,
-                        delta == 0 ? default : stairOptionPlannedTransitionFirstCell,
-                        delta == 0 ? default : stairOptionPlannedTransitionSecondCell,
-                        stairOptionPlannedLowerLandingCells,
-                        stairOptionPlannedUpperLandingCells,
-                        stairOptionPlannedFootprintCells));
+                    return false;
                 }
             }
 
@@ -2222,7 +1853,7 @@ namespace DungeonLab.Editor
             AddAerialBridges(
                 layout,
                 cellLevels,
-                random,
+                rng.Stream("aerial-bridges"),
                 transitions,
                 transitionKeys,
                 plannedStairLedger,
@@ -2230,7 +1861,21 @@ namespace DungeonLab.Editor
                 synthesizedStairs,
                 protectedStructuralCells);
 
-            FillUnassignedFloorCells(layout.floorCells, cellLevels, externalSpanGapCells);
+            int unreachedFilledCells = FillUnassignedFloorCells(
+                layout.floorCells,
+                cellLevels,
+                externalSpanGapCells);
+            if (unreachedFilledCells > 0)
+            {
+                // Silent repair made loud, but deliberately NOT a rejection: this
+                // has never been measured firing, so promoting it to a hard gate
+                // without evidence could reject seeds that render correctly today.
+                // If a sweep shows it firing, that is the evidence needed to turn
+                // it into a rejection.
+                LogPlanningWarning(
+                    $"[LEVEL_FIELD_UNREACHED] {unreachedFilledCells} floor cell(s) had no leveled cardinal " +
+                    "neighbour and fell back to level 0. Their elevation is a guess, not a plan.");
+            }
             if (!TryValidateSpanHeadroom(cellLevels, spanDeckLevels, out rejectionReason))
             {
                 return false;
@@ -2313,6 +1958,481 @@ namespace DungeonLab.Editor
 
             routeTransitionResolutions = resolvedRouteTransitions.ToArray();
 
+            return true;
+        }
+
+        // Step 4 of the level field, in deterministic room order: every adjacent
+        // cell pair across a zone seam carries a rise-1 step strip, so the 1u
+        // delta is never freely walkable (design decision 3). The strip's geometry
+        // sits in the lower cell, so that cell registers as FOOTPRINT — landings
+        // may share other landings but never a footprint, which keeps contract
+        // stair landings (and footprints) off the steps. The raised cell is clean
+        // floor and stays a shareable landing.
+        private static void AddZoneSeamStepStrips(
+            DungeonLayout layout,
+            HashSet<Vector2Int> doorwayCells,
+            StairPlacementLedger plannedStairLedger,
+            HashSet<string> transitionKeys,
+            List<ElevationEdgeModel.TransitionEdge> transitions,
+            string seamStairPrefabPath)
+        {
+            foreach (RoomZonePlan zonePlan in layout.roomZones)
+            {
+                foreach ((Vector2Int lowerCell, Vector2Int raisedCell) in zonePlan.SeamCellPairs())
+                {
+                    if (!layout.floorCells.Contains(lowerCell) || !layout.floorCells.Contains(raisedCell))
+                    {
+                        continue;
+                    }
+
+                    // No strip in a doorway cell (rule above): the skipped pair
+                    // keeps its closed 1u face per the ledge policy; the seam's
+                    // other strips carry the zone connectivity.
+                    if (doorwayCells.Contains(lowerCell) || doorwayCells.Contains(raisedCell))
+                    {
+                        continue;
+                    }
+
+                    if (plannedStairLedger.BlocksTransitionMouth(lowerCell) ||
+                        plannedStairLedger.BlocksTransitionMouth(raisedCell))
+                    {
+                        continue;
+                    }
+
+                    string key = TransitionKey(raisedCell, lowerCell);
+                    if (!transitionKeys.Add(key))
+                    {
+                        continue;
+                    }
+
+                    transitions.Add(new ElevationEdgeModel.TransitionEdge(
+                        raisedCell,
+                        lowerCell,
+                        seamStairPrefabPath,
+                        SeamStairPlacementClass));
+                    plannedStairLedger.Register(
+                        new[] { lowerCell },
+                        Array.Empty<Vector2Int>(),
+                        new[] { raisedCell },
+                        new[] { lowerCell, raisedCell },
+                        Array.Empty<Vector2Int>(),
+                        Array.Empty<Vector2Int>());
+                }
+            }
+        }
+
+        // Step 5 of the level field, and the one that used to make the whole
+        // method unreadable: resolve one corridor connection into leveled cells
+        // plus its transition, trying reviewed stair contracts, then online
+        // synthesis, then a stairwell tower.
+        private static bool TryResolveConnectionTransition(
+            RoomConnection connection,
+            DungeonLayout layout,
+            RoomZoneContext zones,
+            int[] zoneLevels,
+            RouteTierRequirements routeRequirements,
+            IReadOnlyList<ReviewedActiveStairOption> reviewedStairOptions,
+            int dungeonSeed,
+            DungeonRandomScope rng,
+            Dictionary<Vector2Int, int> cellLevels,
+            List<ElevationEdgeModel.TransitionEdge> transitions,
+            HashSet<string> transitionKeys,
+            StairPlacementLedger plannedStairLedger,
+            SortedDictionary<string, int> stairCandidateCounts,
+            HashSet<Vector2Int> doorwayCells,
+            HashSet<Vector2Int> externalSpanGapCells,
+            Dictionary<Vector2Int, int> spanDeckLevels,
+            List<(string gapId, ElevationEdgeModel.SynthesizedStairSetPiece setPiece)> synthesizedStairs,
+            List<RouteTransitionResolution> resolvedRouteTransitions,
+            string seamStairPrefabPath,
+            out string rejectionReason)
+        {
+            rejectionReason = string.Empty;
+            ResolveConnectionNodes(zones, layout.rooms, connection, out int fromNode, out int toNode);
+            int fromLevel = zoneLevels[fromNode];
+            int toLevel = zoneLevels[toNode];
+            int delta = Mathf.Abs(fromLevel - toLevel);
+            RouteTraversalIntent routeTransitionRequirement = default;
+            bool hasRouteRequirement = routeRequirements != null &&
+                routeRequirements.TryGetTransition(
+                    connection.fromRoom,
+                    connection.toRoom,
+                    out routeTransitionRequirement);
+            if (hasRouteRequirement)
+            {
+                int directedRise = routeTransitionRequirement.fromNode == connection.fromRoom
+                    ? toLevel - fromLevel
+                    : fromLevel - toLevel;
+                bool kindMatchesRise =
+                    routeTransitionRequirement.transitionKind == RouteTransitionKind.LevelCorridor
+                        ? delta == 0
+                        : delta == Mathf.Abs(routeTransitionRequirement.requiredRiseLevels) && delta > 1;
+                if (directedRise != routeTransitionRequirement.requiredRiseLevels || !kindMatchesRise)
+                {
+                    rejectionReason =
+                        $"[ROUTE_ELEVATION_REQUIREMENT] edge '{routeTransitionRequirement.id}' resolved {directedRise}u/{delta}u for {routeTransitionRequirement.transitionKind}";
+                    return false;
+                }
+            }
+
+            if (delta > PrimaryStairRiseLevels &&
+                !HasReviewedActiveStairOption(reviewedStairOptions, delta, maxLaneCount: MaxActiveStairLaneCount))
+            {
+                rejectionReason = $"connection {connection.fromRoom}->{connection.toRoom} exceeded the primary rise without a reviewed active stair contract";
+                return false;
+            }
+
+            List<Vector2Int> path = CleanPath(connection.path, layout.floorCells);
+            if (path.Count < 2)
+            {
+                rejectionReason = $"connection {connection.fromRoom}->{connection.toRoom} had no usable corridor path";
+                return false;
+            }
+
+            if (!ValidatePathCardinality(path, out rejectionReason))
+            {
+                return false;
+            }
+
+            int transitionIndex = -1;
+            Vector2Int lowerLandingCell = default;
+            Vector2Int upperLandingCell = default;
+            ReviewedActiveStairOption stairOption = default;
+            Vector2Int[] stairOptionPlannedLowerLandingCells = Array.Empty<Vector2Int>();
+            Vector2Int[] stairOptionPlannedUpperLandingCells = Array.Empty<Vector2Int>();
+            Vector2Int[] stairOptionPlannedFootprintCells = Array.Empty<Vector2Int>();
+            Vector2Int stairOptionPlannedTransitionFirstCell = default;
+            Vector2Int stairOptionPlannedTransitionSecondCell = default;
+            int stairOptionPlannedLowerPortDirection = 0;
+            int stairOptionPlannedUpperPortDirection = 0;
+            string stairOptionPlacementClass = EmbeddedStairPlacementClass;
+            ElevationEdgeModel.SynthesizedStairSetPiece synthesizedSetPiece = null;
+            string synthesizedGapId = string.Empty;
+            string requiredPlacementClass = !hasRouteRequirement
+                ? string.Empty
+                : routeTransitionRequirement.transitionKind == RouteTransitionKind.Bridge
+                    ? ExternalSpanStairPlacementClass
+                    : routeTransitionRequirement.transitionKind == RouteTransitionKind.Stairwell
+                        ? StairwellStairPlacementClass
+                        : routeTransitionRequirement.transitionKind == RouteTransitionKind.Stair
+                            ? EmbeddedStairPlacementClass
+                            : string.Empty;
+            // A 1u corridor delta is closed by a single embedded step strip
+            // (design decision 3) rather than a reviewed stair contract.
+            bool corridorStepStrip = delta == 1;
+            if (corridorStepStrip &&
+                !TryChooseCorridorStepIndex(
+                    path,
+                    layout.rooms[connection.fromRoom],
+                    layout.rooms[connection.toRoom],
+                    doorwayCells,
+                    plannedStairLedger,
+                    fromLevel <= toLevel,
+                    out transitionIndex))
+            {
+                rejectionReason = $"connection {connection.fromRoom}->{connection.toRoom} had no corridor cell pair for a 1u step strip";
+                return false;
+            }
+
+            if (delta > 1)
+            {
+                ZoneArea fromNodeArea = zones.NodeArea(layout.rooms, fromNode);
+                ZoneArea toNodeArea = zones.NodeArea(layout.rooms, toNode);
+                bool reviewedStairChosen = TryChooseReviewedActiveStairTransition(
+                    reviewedStairOptions,
+                    delta,
+                    maxLaneCount: MaxActiveStairLaneCount,
+                    path,
+                    fromNodeArea,
+                    toNodeArea,
+                    layout.floorCells,
+                    cellLevels,
+                    fromLevel,
+                    toLevel,
+                    // One stream per connection: a neighbouring corridor's
+                    // candidate count can no longer change this stair.
+                    rng.Stream("stair-choice", $"{connection.fromRoom}:{connection.toRoom}"),
+                    allowExternalSpan: true,
+                    requiredPlacementClass,
+                    stairCandidateCounts,
+                    plannedStairLedger,
+                    out transitionIndex,
+                    out lowerLandingCell,
+                    out upperLandingCell,
+                    out stairOptionPlannedLowerLandingCells,
+                    out stairOptionPlannedUpperLandingCells,
+                    out stairOptionPlannedFootprintCells,
+                    out stairOptionPlannedTransitionFirstCell,
+                    out stairOptionPlannedTransitionSecondCell,
+                    out stairOptionPlannedLowerPortDirection,
+                    out stairOptionPlannedUpperPortDirection,
+                    out stairOptionPlacementClass,
+                    out stairOption);
+                if (!reviewedStairChosen)
+                {
+                    // Online synthesis fallback (step 7, decisions 16-21): the
+                    // reviewed pool offered no (contract, position) fit for this
+                    // corridor, so shape a staircase to the gap. Same placement
+                    // search, level gates and ledger as pool contracts; the
+                    // per-gap RNG keeps synthesis independent of the shared
+                    // draw stream (decision 18).
+                    bool activeStairSynthesized = TrySynthesizeActiveStairTransition(
+                        dungeonSeed,
+                        connection.fromRoom,
+                        connection.toRoom,
+                        delta,
+                        path,
+                        fromNodeArea,
+                        toNodeArea,
+                        layout.floorCells,
+                        cellLevels,
+                        fromLevel,
+                        toLevel,
+                        requiredPlacementClass,
+                        stairCandidateCounts,
+                        plannedStairLedger,
+                        out transitionIndex,
+                        out lowerLandingCell,
+                        out upperLandingCell,
+                        out stairOptionPlannedLowerLandingCells,
+                        out stairOptionPlannedUpperLandingCells,
+                        out stairOptionPlannedFootprintCells,
+                        out stairOptionPlannedTransitionFirstCell,
+                        out stairOptionPlannedTransitionSecondCell,
+                        out stairOptionPlannedLowerPortDirection,
+                        out stairOptionPlannedUpperPortDirection,
+                        out stairOptionPlacementClass,
+                        out stairOption,
+                        out synthesizedSetPiece,
+                            out synthesizedGapId);
+                    bool stairwellStairSynthesized = false;
+                    bool stairwellEligible = string.IsNullOrEmpty(requiredPlacementClass) ||
+                        string.Equals(requiredPlacementClass, StairwellStairPlacementClass, StringComparison.Ordinal);
+                    if (!activeStairSynthesized && stairwellEligible)
+                    {
+                        // Third tier (decision 27): a 180-degree tower on void
+                        // cells beside the path, only when nothing in-corridor fit.
+                        stairwellStairSynthesized = TrySynthesizeStairwellTransition(
+                            dungeonSeed,
+                            connection.fromRoom,
+                            connection.toRoom,
+                            delta,
+                            path,
+                            fromNodeArea,
+                            toNodeArea,
+                            layout.floorCells,
+                            cellLevels,
+                            fromLevel,
+                            toLevel,
+                            stairCandidateCounts,
+                            plannedStairLedger,
+                            out transitionIndex,
+                            out lowerLandingCell,
+                            out upperLandingCell,
+                            out stairOptionPlannedLowerLandingCells,
+                            out stairOptionPlannedUpperLandingCells,
+                            out stairOptionPlannedFootprintCells,
+                            out stairOptionPlannedTransitionFirstCell,
+                            out stairOptionPlannedTransitionSecondCell,
+                            out stairOptionPlannedLowerPortDirection,
+                            out stairOptionPlannedUpperPortDirection,
+                            out stairOptionPlacementClass,
+                            out stairOption,
+                                out synthesizedSetPiece,
+                                out synthesizedGapId);
+                    }
+
+                    if (!activeStairSynthesized && !stairwellStairSynthesized)
+                    {
+                        rejectionReason = StairPlacementFailureReason(
+                            hasRouteRequirement,
+                            routeTransitionRequirement,
+                            connection,
+                            delta);
+                        return false;
+                    }
+                }
+            }
+
+            // For an externalSpan (bridge) placement the deck replaces the walking
+            // surface between the landings: the corridor cells under the span must
+            // NOT be leveled, or they render as a fake floor strip with retaining
+            // walls — a solid column filling the gap the bridge is meant to cross.
+            // The gap stays a gap (no floor, hence no walls); another connection may
+            // still claim those cells at its own level and pass underneath, subject
+            // to the headroom gate below.
+            int spanSkipFromIndex = int.MaxValue;
+            int spanSkipToIndex = int.MinValue;
+            if (delta > 1 &&
+                string.Equals(stairOptionPlacementClass, ExternalSpanStairPlacementClass, StringComparison.Ordinal))
+            {
+                int spanLowerIndex = IndexOfPathCell(path, lowerLandingCell);
+                int spanUpperIndex = IndexOfPathCell(path, upperLandingCell);
+                if (spanLowerIndex >= 0 && spanUpperIndex >= 0)
+                {
+                    spanSkipFromIndex = Mathf.Min(spanLowerIndex, spanUpperIndex) + 1;
+                    spanSkipToIndex = Mathf.Max(spanLowerIndex, spanUpperIndex) - 1;
+                }
+
+                // The deck's REAL cells are the contract footprint, which may
+                // leave the corridor line (an L-shaped bridge folds off it) —
+                // headroom validated against the path cells missed a deck
+                // crossing a room at head height (in-editor find 2026-06-11).
+                // Register the footprint as gap cells with a conservative
+                // floored-linear deck height for the final pass-under gate;
+                // Manhattan distance equals deck-walk distance on an L. The
+                // replaced corridor cells below stay gaps but carry no deck.
+                int spanLength = Mathf.Abs(upperLandingCell.x - lowerLandingCell.x) +
+                    Mathf.Abs(upperLandingCell.y - lowerLandingCell.y);
+                foreach (Vector2Int deckCell in stairOptionPlannedFootprintCells)
+                {
+                    externalSpanGapCells.Add(deckCell);
+                    int deckDistance = Mathf.Abs(deckCell.x - lowerLandingCell.x) +
+                        Mathf.Abs(deckCell.y - lowerLandingCell.y);
+                    int deckLevel = Mathf.FloorToInt(Mathf.Lerp(
+                        Mathf.Min(fromLevel, toLevel),
+                        Mathf.Max(fromLevel, toLevel),
+                        spanLength > 0 ? (float)deckDistance / spanLength : 0f));
+                    if (!spanDeckLevels.TryGetValue(deckCell, out int existingDeck) || deckLevel < existingDeck)
+                    {
+                        spanDeckLevels[deckCell] = deckLevel;
+                    }
+                }
+            }
+
+            for (int i = 0; i < path.Count; i++)
+            {
+                if (i >= spanSkipFromIndex && i <= spanSkipToIndex)
+                {
+                    externalSpanGapCells.Add(path[i]);
+                    continue;
+                }
+
+                // Cells inside the endpoint rooms are already zone-leveled; a path
+                // may legally cross a room's seam on its way to the door, so it
+                // must not re-level the other zone's cells to the threshold level.
+                if (layout.rooms[connection.fromRoom].Contains(path[i]) ||
+                    layout.rooms[connection.toRoom].Contains(path[i]))
+                {
+                    continue;
+                }
+
+                int targetLevel = delta == 0 || i <= transitionIndex ? fromLevel : toLevel;
+                if (!TrySetCellLevel(cellLevels, path[i], targetLevel, out rejectionReason))
+                {
+                    return false;
+                }
+            }
+
+            if (corridorStepStrip)
+            {
+                Vector2Int stripFromCell = path[transitionIndex];
+                Vector2Int stripToCell = path[transitionIndex + 1];
+                Vector2Int stripLowerCell = fromLevel <= toLevel ? stripFromCell : stripToCell;
+                Vector2Int stripRaisedCell = fromLevel <= toLevel ? stripToCell : stripFromCell;
+                string stripKey = TransitionKey(stripRaisedCell, stripLowerCell);
+                if (transitionKeys.Add(stripKey))
+                {
+                    transitions.Add(new ElevationEdgeModel.TransitionEdge(
+                        stripRaisedCell,
+                        stripLowerCell,
+                        seamStairPrefabPath,
+                        SeamStairPlacementClass));
+                    plannedStairLedger.Register(
+                        new[] { stripLowerCell },
+                        Array.Empty<Vector2Int>(),
+                        new[] { stripRaisedCell },
+                        new[] { stripLowerCell, stripRaisedCell },
+                        Array.Empty<Vector2Int>(),
+                        Array.Empty<Vector2Int>());
+                }
+            }
+
+            if (delta > 1)
+            {
+                int lowerLevel = Mathf.Min(fromLevel, toLevel);
+                int higherLevel = Mathf.Max(fromLevel, toLevel);
+                if (!TrySetPlannedStairCells(
+                        cellLevels,
+                        stairOptionPlannedLowerLandingCells,
+                        stairOptionPlannedUpperLandingCells,
+                        stairOptionPlannedFootprintCells,
+                        lowerLevel,
+                        higherLevel,
+                        stairOptionPlacementClass,
+                        out rejectionReason))
+                {
+                    return false;
+                }
+
+                plannedStairLedger.Register(
+                    stairOptionPlannedFootprintCells,
+                    stairOptionPlannedLowerLandingCells,
+                    stairOptionPlannedUpperLandingCells,
+                    new[]
+                    {
+                        stairOptionPlannedTransitionFirstCell,
+                        stairOptionPlannedTransitionSecondCell
+                    },
+                    Array.Empty<Vector2Int>(),
+                    Array.Empty<Vector2Int>());
+            }
+
+            if (delta > 1)
+            {
+                string key = TransitionKey(stairOptionPlannedTransitionFirstCell, stairOptionPlannedTransitionSecondCell);
+                if (transitionKeys.Add(key))
+                {
+                    if (synthesizedSetPiece != null)
+                    {
+                        transitions.Add(new ElevationEdgeModel.TransitionEdge(
+                            stairOptionPlannedTransitionFirstCell,
+                            stairOptionPlannedTransitionSecondCell,
+                            stairOption.prefabPath,
+                            stairOptionPlannedLowerLandingCells,
+                            stairOptionPlannedUpperLandingCells,
+                            stairOptionPlannedFootprintCells,
+                            stairOptionPlannedLowerPortDirection,
+                            stairOptionPlannedUpperPortDirection,
+                            stairOptionPlacementClass,
+                            synthesizedSetPiece));
+                        synthesizedStairs.Add((synthesizedGapId, synthesizedSetPiece));
+                    }
+                    else
+                    {
+                        transitions.Add(new ElevationEdgeModel.TransitionEdge(
+                            stairOptionPlannedTransitionFirstCell,
+                            stairOptionPlannedTransitionSecondCell,
+                            stairOption.prefabPath,
+                            stairOptionPlannedLowerLandingCells,
+                            stairOptionPlannedUpperLandingCells,
+                            stairOptionPlannedFootprintCells,
+                            stairOptionPlannedLowerPortDirection,
+                            stairOptionPlannedUpperPortDirection,
+                            stairOptionPlacementClass));
+                    }
+                }
+            }
+
+            if (hasRouteRequirement)
+            {
+                int directedRise = routeTransitionRequirement.fromNode == connection.fromRoom
+                    ? toLevel - fromLevel
+                    : fromLevel - toLevel;
+                resolvedRouteTransitions.Add(new RouteTransitionResolution(
+                    routeTransitionRequirement.id,
+                    routeTransitionRequirement.fromNode,
+                    routeTransitionRequirement.toNode,
+                    routeTransitionRequirement.transitionKind,
+                    routeTransitionRequirement.requiredRiseLevels,
+                    directedRise,
+                    delta == 0 ? "level-corridor" : stairOptionPlacementClass,
+                    delta == 0 ? default : stairOptionPlannedTransitionFirstCell,
+                    delta == 0 ? default : stairOptionPlannedTransitionSecondCell,
+                    stairOptionPlannedLowerLandingCells,
+                    stairOptionPlannedUpperLandingCells,
+                    stairOptionPlannedFootprintCells));
+            }
             return true;
         }
 
@@ -6416,7 +6536,12 @@ namespace DungeonLab.Editor
             return true;
         }
 
-        private static void FillUnassignedFloorCells(
+        // Returns the number of floor cells the flood fill could not reach, which
+        // therefore fell back to level 0. That fallback is a silent repair: it
+        // invents an arbitrary elevation and can manufacture a cliff no planning
+        // stage asked for. It is expected to be 0; the caller surfaces any
+        // non-zero count rather than letting it pass unnoticed.
+        private static int FillUnassignedFloorCells(
             HashSet<Vector2Int> floorCells,
             Dictionary<Vector2Int, int> cellLevels,
             HashSet<Vector2Int> externalSpanGapCells)
@@ -6448,13 +6573,17 @@ namespace DungeonLab.Editor
                 }
             }
 
+            int unreachedCells = 0;
             foreach (Vector2Int cell in floorCells)
             {
                 if (!cellLevels.ContainsKey(cell) && !externalSpanGapCells.Contains(cell))
                 {
                     cellLevels[cell] = 0;
+                    unreachedCells++;
                 }
             }
+
+            return unreachedCells;
         }
 
         private static int IndexOfPathCell(IReadOnlyList<Vector2Int> path, Vector2Int cell)

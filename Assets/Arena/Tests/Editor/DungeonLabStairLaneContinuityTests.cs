@@ -24,7 +24,7 @@ namespace Arena.Tests.Editor
         public void ScreenshotSeed_AcceptsWithTheLaneContinuityGate()
         {
             MethodInfo method = GeneratorType.GetMethod(
-                "BuildPhase0SeedReport",
+                "BuildSeedReport",
                 BindingFlags.Static | BindingFlags.NonPublic,
                 binder: null,
                 new[] { typeof(int), typeof(string) },

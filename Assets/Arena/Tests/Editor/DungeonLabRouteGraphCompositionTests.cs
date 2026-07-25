@@ -7,7 +7,7 @@ using NUnit.Framework;
 
 namespace Arena.Tests.Editor
 {
-    public sealed class DungeonLabPhase6GraphCompositionTests
+    public sealed class DungeonLabRouteGraphCompositionTests
     {
         private const int CompositionSeed = 2026072100;
         private static readonly Type GeneratorType = AppDomain.CurrentDomain

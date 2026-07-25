@@ -7,7 +7,7 @@ using NUnit.Framework;
 
 namespace Arena.Tests.Editor
 {
-    public sealed class DungeonLabPhase6TwinWingTests
+    public sealed class DungeonLabTwinWingTests
     {
         private const int TwinWingSeed = 2026072103;
         private static readonly Type GeneratorType = AppDomain.CurrentDomain
@@ -23,8 +23,6 @@ namespace Arena.Tests.Editor
             Assert.That(snapshot["selector.residue1Pattern"], Is.EqualTo("atrium-ring"));
             Assert.That(snapshot["selector.residue2Pattern"], Is.EqualTo("processional-spine"));
             Assert.That(snapshot["selector.residue3Pattern"], Is.EqualTo("twin-wing-keep"));
-            Assert.That(snapshot["processional.plannerVersion"], Is.EqualTo("processional-spine-v6"));
-            Assert.That(snapshot["atrium.plannerVersion"], Is.EqualTo("atrium-ring-v3"));
         }
 
         [Test]
@@ -33,7 +31,6 @@ namespace Arena.Tests.Editor
             Dictionary<string, string> snapshot = TwinWingIntentSnapshot();
 
             Assert.That(snapshot["graph.pattern"], Is.EqualTo("twin-wing-keep"));
-            Assert.That(snapshot["graph.plannerVersion"], Is.EqualTo("twin-wing-keep-v3"));
             Assert.That(snapshot["graph.nodeCount"], Is.EqualTo("13"));
             Assert.That(snapshot["graph.edgeCount"], Is.EqualTo("14"));
             Assert.That(snapshot["graph.mainRouteCount"], Is.EqualTo("7"));
@@ -130,7 +127,7 @@ namespace Arena.Tests.Editor
 
         private static Dictionary<string, string> TwinWingIntentSnapshot()
         {
-            return ParseSnapshot(SnapshotText("BuildPhase6cTwinWingSnapshot", TwinWingSeed));
+            return ParseSnapshot(SnapshotText("BuildTwinWingSnapshot", TwinWingSeed));
         }
 
         private static Dictionary<string, string> TwinWingProductionSnapshot()

@@ -10,7 +10,7 @@ using UnityEngine;
 
 namespace Arena.Tests.Editor
 {
-    public sealed class DungeonLabPhase5RecipeWorkflowTests
+    public sealed class DungeonLabRecipeWorkflowTests
     {
         private const int Seed = 2026072100;
         private static readonly Assembly EditorAssembly = AppDomain.CurrentDomain.Load("Assembly-CSharp-Editor");
@@ -21,7 +21,7 @@ namespace Arena.Tests.Editor
         [Test]
         public void ActiveCatalog_ContainsFourEnabledValidVersionedRecipes()
         {
-            Dictionary<string, string> snapshot = Snapshot("BuildPhase5RecipeContractSnapshot");
+            Dictionary<string, string> snapshot = Snapshot("BuildRecipeContractSnapshot");
             string throne = RecipePrefix(snapshot, "episode_throne_twin_stairs_01");
             string vestibule = RecipePrefix(snapshot, "connector_flexible_vestibule_01");
             string cornerReturn = RecipePrefix(snapshot, "connector_corner_return_01");
@@ -49,7 +49,7 @@ namespace Arena.Tests.Editor
         [Test]
         public void ContractValidators_PassSchemaStructureVariationAndNeighbors()
         {
-            Dictionary<string, string> snapshot = Snapshot("BuildPhase5RecipeContractSnapshot");
+            Dictionary<string, string> snapshot = Snapshot("BuildRecipeContractSnapshot");
             string throne = RecipePrefix(snapshot, "episode_throne_twin_stairs_01");
             string vestibule = RecipePrefix(snapshot, "connector_flexible_vestibule_01");
             string cornerReturn = RecipePrefix(snapshot, "connector_corner_return_01");
@@ -83,7 +83,7 @@ namespace Arena.Tests.Editor
         [Test]
         public void ContrastRecipe_IsStructurallyDifferentWithoutSpecialCaseSchema()
         {
-            Dictionary<string, string> snapshot = Snapshot("BuildPhase5RecipeContractSnapshot");
+            Dictionary<string, string> snapshot = Snapshot("BuildRecipeContractSnapshot");
             string throne = RecipePrefix(snapshot, "episode_throne_twin_stairs_01");
             string vestibule = RecipePrefix(snapshot, "connector_flexible_vestibule_01");
             string cornerReturn = RecipePrefix(snapshot, "connector_corner_return_01");
@@ -115,7 +115,7 @@ namespace Arena.Tests.Editor
         [Test]
         public void FullDungeon_ResolvesAllThreeSelectedRecipesThroughCanonicalConsumers()
         {
-            Dictionary<string, string> snapshot = Snapshot("BuildPhase5FullDungeonSnapshot");
+            Dictionary<string, string> snapshot = Snapshot("BuildRecipeFullDungeonSnapshot");
             Dictionary<string, string> pool = Snapshot("BuildRecipePoolSelectionSnapshot");
             string throne = RecipePrefix(snapshot, "episode_throne_twin_stairs_01");
             string cornerReturn = RecipePrefix(snapshot, "connector_corner_return_01");
@@ -141,7 +141,7 @@ namespace Arena.Tests.Editor
         [Test]
         public void RendererAbyssAndCollision_ConsumeAllRecipesWithoutRepair()
         {
-            Dictionary<string, string> snapshot = Snapshot("BuildPhase5FullDungeonSnapshot");
+            Dictionary<string, string> snapshot = Snapshot("BuildRecipeFullDungeonSnapshot");
 
             Assert.That(snapshot["renderer.passed"], Is.EqualTo("true"));
             Assert.That(snapshot["renderer.rejectedPlacements"], Is.EqualTo("0"));
@@ -166,7 +166,7 @@ namespace Arena.Tests.Editor
         [Test]
         public void AvailabilityExcludesDisabled_AndExplicitlyRejectsEnabledInvalidContent()
         {
-            Dictionary<string, string> snapshot = Snapshot("BuildPhase5AvailabilitySnapshot");
+            Dictionary<string, string> snapshot = Snapshot("BuildRecipeAvailabilitySnapshot");
 
             Assert.That(snapshot["validation.passed"], Is.EqualTo("True"));
             Assert.That(snapshot["validation.nonMutating"], Is.EqualTo("True"));
@@ -185,7 +185,7 @@ namespace Arena.Tests.Editor
         [Test]
         public void AuthoringPreviewGallery_IsDeterministicAndCoversRequiredWorkflowViews()
         {
-            Dictionary<string, string> snapshot = Snapshot("BuildPhase5WorkflowSnapshot");
+            Dictionary<string, string> snapshot = Snapshot("BuildRecipeWorkflowSnapshot");
 
             Assert.That(snapshot["gallery.firstPassed"], Is.EqualTo("True"));
             Assert.That(snapshot["gallery.secondPassed"], Is.EqualTo("True"));
@@ -335,7 +335,7 @@ namespace Arena.Tests.Editor
         public void SliceD_ApprovedCompressionRecipeProvesDeterministicPoolAndDisableBehavior()
         {
             Dictionary<string, string> snapshot =
-                Snapshot("BuildSliceDRecipePoolProofSnapshot");
+                Snapshot("BuildRecipePoolProofSnapshot");
 
             Assert.That(snapshot["catalog.activeCount"], Is.EqualTo("4"));
             Assert.That(snapshot["catalog.digest"], Has.Length.EqualTo(64));
@@ -429,8 +429,8 @@ namespace Arena.Tests.Editor
         [Test]
         public void FixedSeed_RecipeResolutionsRemainDeterministic()
         {
-            string first = Invoke("BuildPhase5FullDungeonSnapshot");
-            string second = Invoke("BuildPhase5FullDungeonSnapshot");
+            string first = Invoke("BuildRecipeFullDungeonSnapshot");
+            string second = Invoke("BuildRecipeFullDungeonSnapshot");
             Assert.That(first, Is.EqualTo(second));
         }
 
