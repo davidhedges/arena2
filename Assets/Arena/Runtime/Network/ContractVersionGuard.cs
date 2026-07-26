@@ -114,6 +114,13 @@ namespace Arena.Network
                 yield return ($"world_data/{asset.name}.json", asset);
             }
 
+            foreach (TextAsset asset in Resources.LoadAll<TextAsset>(
+                         "SharedData/WorldInteractions"))
+            {
+                seen.Add(asset);
+                yield return ($"world_data/{asset.name}.json", asset);
+            }
+
             foreach (TextAsset asset in Resources.LoadAll<TextAsset>("SharedData"))
             {
                 if (seen.Add(asset))

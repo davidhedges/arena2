@@ -529,6 +529,30 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void ContractVersionGuard_MapsWorldInteractionProfilesToServerWorldDataKey()
+        {
+            Type guardType = RequireRuntimeType("Arena.Network.ContractVersionGuard");
+            var mappings = (IEnumerable)RequireMethod(guardType, "ClientSharedFiles")
+                .Invoke(null, null)!;
+
+            string? serverKey = null;
+            foreach (object mapping in mappings)
+            {
+                Type mappingType = mapping.GetType();
+                var asset = (TextAsset)mappingType.GetField("Item2")!.GetValue(mapping)!;
+                if (asset.name == "world_interaction_profiles.shared")
+                {
+                    serverKey = (string)mappingType.GetField("Item1")!.GetValue(mapping)!;
+                    break;
+                }
+            }
+
+            Assert.That(
+                serverKey,
+                Is.EqualTo("world_data/world_interaction_profiles.shared.json"));
+        }
+
+        [Test]
         public void LocalCombatState_IgnoresRowsForNonLocalIdentity()
         {
             object state = GetLocalCombatState();
